@@ -1,4 +1,7 @@
 html, body {
+  height: 100%;
+  width: 100%;
+
   font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
   font-family: "HelveticaNeue-Light", "Helvetica Neue Light", "Helvetica Neue", Helvetica, Arial, "Lucida Grande", sans-serif;
@@ -8,8 +11,21 @@ html, body {
 body {
   background-color: #2c3e50;
   color: #ecf0f1;
-  padding-top: 10px;
-  padding-bottom: 20px;
+}
+
+/* bs grid shit */
+.table {
+  display: table;
+  height: 100%;
+  width: 100%;
+}
+.cell {
+  display: table-cell;
+  vertical-align: middle;
+  padding: 0.5em;
+}
+.content {
+  margin: 0 auto;
 }
 
 /* photo stuff */
