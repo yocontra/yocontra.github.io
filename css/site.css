@@ -81,5 +81,4 @@ only screen and (min-device-pixel-ratio: 1.5) {
   font-size: 20px;
   text-decoration: none;
   color: #2ecc71;
-  transition: all .2s ease-in-out;
 }
