@@ -52,7 +52,7 @@ only screen and (-o-min-device-pixel-ratio: 3/2),
 only screen and (-webkit-min-device-pixel-ratio: 1.5),
 only screen and (min-device-pixel-ratio: 1.5) {
   .my-photo {
-    background: url('https://secure.gravatar.com/avatar/e421e88e9248d199ac126fb56941b0e3?size=400px') center no-repeat;
+    background: url('https://secure.gravatar.com/avatar/e421e88e9248d199ac126fb56941b0e3?size=500px') center no-repeat;
     background-size: 250px;
   }
 }
