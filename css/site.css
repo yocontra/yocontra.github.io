@@ -26,9 +26,6 @@ body {
   padding-top: 30px;
   padding-bottom: 30px;
 }
-.content {
-  margin: 0 auto;
-}
 
 /* photo stuff */
 /* you need to replace /avatar/* with the md5 of your gravatar email */
