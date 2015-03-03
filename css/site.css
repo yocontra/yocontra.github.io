@@ -11,9 +11,11 @@ html, body {
 
 body {
   background-color: #222;
+  /*
   background-image: url('/img/bg.jpg');
   background-size: cover;
   background-position: 50% 50%;
+  */
   color: #ecf0f1;
 }
 
