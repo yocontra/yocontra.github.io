@@ -10,13 +10,19 @@ html, body {
 }
 
 body {
-  background-color: #222;
-  /*
-  background-image: url('/img/bg.jpg');
-  background-size: cover;
-  background-position: 50% 50%;
-  */
+  background-color: #000;
   color: #ecf0f1;
+}
+
+#bg {
+  position: fixed;
+  right: 0;
+  bottom: 0;
+  min-width: 100%;
+  min-height: 100%;
+  width: auto;
+  height: auto;
+  z-index: -100;
 }
 
 /* bs grid shit */
