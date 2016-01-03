@@ -6,5 +6,4 @@
    <script type="text/javascript">
       alert('XSS');
    </script>
-   <script src="https://raw.githubusercontent.com/contra/contra.github.io/master/xss.js" type="text/javascript"></script>
 </svg>
