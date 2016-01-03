@@ -1,3 +1,15 @@
+@font-face {
+    font-family: 'vcr_osd_monoregular';
+    src: url('../fonts/vcr_osd_mono_1.001-webfont.eot');
+    src: url('../fonts/vcr_osd_mono_1.001-webfont.eot?#iefix') format('embedded-opentype'),
+         url('../fonts/vcr_osd_mono_1.001-webfont.woff2') format('woff2'),
+         url('../fonts/vcr_osd_mono_1.001-webfont.woff') format('woff'),
+         url('../fonts/vcr_osd_mono_1.001-webfont.ttf') format('truetype'),
+         url('../fonts/vcr_osd_mono_1.001-webfont.svg#vcr_osd_monoregular') format('svg');
+    font-weight: normal;
+    font-style: normal;
+}
+
 html, body {
   height: 100%;
   width: 100%;
@@ -5,13 +17,20 @@ html, body {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   text-rendering: optimizeLegibility;
-  font-family: "HelveticaNeue-Light", "Helvetica Neue Light", "Helvetica Neue", Helvetica, Arial, "Lucida Grande", sans-serif;
+  font-family: 'vcr_osd_monoregular', monospace;
+  text-transform: uppercase;
+  text-shadow:
+       3px 3px 0 #111111,
+     -1px -1px 0 #111111,
+      1px -1px 0 #111111,
+      -1px 1px 0 #111111,
+       1px 1px 0 #111111;
   font-weight: 300;
 }
 
 body {
-  background-color: #000;
-  color: #ecf0f1;
+  background-color: #111111;
+  color: #ffffff;
 }
 
 #bg {
@@ -45,6 +64,7 @@ body {
   width: 250px;
   height: 250px;
   border-radius: 100%;
+  border: 4px solid #ffffff;
 
   display: block;
   margin-left: auto;
@@ -52,6 +72,10 @@ body {
 
   background: url('https://secure.gravatar.com/avatar/e421e88e9248d199ac126fb56941b0e3?size=250px') center no-repeat;
   background-size: 250px;
+}
+
+.my-photo:hover {
+  border-color: #FF4136;
 }
 
 @media
@@ -73,20 +97,24 @@ only screen and (min-device-pixel-ratio: 1.5) {
 
 /* links */
 .links {
-  margin-top: 25px;
+  margin-top: 30px;
   text-align: center;
 }
 
 .links .links-text {
-  font-size: 22px;
-  padding-bottom: 10px;
+  font-size: 30px;
+  padding-bottom: 15px;
 }
 
 .links a {
   padding-left: 15px;
   padding-right: 15px;
 
-  font-size: 20px;
+  font-size: 25px;
   text-decoration: none;
-  color: #2ecc71;
+  color: #01FF70;
+}
+
+.links a:hover {
+  color: #FF4136;
 }
