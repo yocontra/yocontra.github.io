@@ -70,7 +70,7 @@ body {
   margin-left: auto;
   margin-right: auto;
 
-  background: url('https://secure.gravatar.com/avatar/e421e88e9248d199ac126fb56941b0e3?size=250px') center no-repeat;
+  background: url('https://avatars2.githubusercontent.com/u/425716?s=250&v=4') center no-repeat;
   background-size: 250px;
 }
 
@@ -84,7 +84,7 @@ only screen and (-o-min-device-pixel-ratio: 3/2),
 only screen and (-webkit-min-device-pixel-ratio: 1.5),
 only screen and (min-device-pixel-ratio: 1.5) {
   .my-photo {
-    background: url('https://secure.gravatar.com/avatar/e421e88e9248d199ac126fb56941b0e3?size=500px') center no-repeat;
+    background: url('https://avatars2.githubusercontent.com/u/425716?s=500&v=4') center no-repeat;
     background-size: 250px;
   }
 }
