@@ -100,7 +100,11 @@ function RandomImages(ctx) {
     'https://i.imgur.com/ADeIE5g.png',
     'https://i.imgur.com/AKdI45U.png',
     'https://i.imgur.com/Sd5rO7B.png',
-    'https://i.imgur.com/0vdYe7j.png'
+    'https://i.imgur.com/0vdYe7j.png',
+    'https://i.imgur.com/ditXM5z.png',
+    'https://i.imgur.com/Dx3DprQ.png',
+    'https://i.imgur.com/2S9TUF0.png',
+    'https://i.imgur.com/bLSgefN.png'
   ]
 }
 
