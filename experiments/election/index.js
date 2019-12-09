@@ -189,7 +189,7 @@ function trip(el) {
   el.style['filter'] = el.style['-webkit-filter'] = randomFilter
 }
 
-var music = '<iframe id="music" frameborder="0" src="https://www.youtube-nocookie.com/embed/wh-07BzfgYY?autoplay=1&start=30&controls=0&showinfo=0&rel=0&iv_load_policy=3&modestbranding=1&loop=1&theme=dark" allowfullscreen="allowfullscreen" allow="autoplay; encrypted-media"></iframe>'
+var music = '<iframe id="music" frameborder="0" src="https://www.youtube-nocookie.com/embed/wh-07BzfgYY?autoplay=1&start=23&controls=0&showinfo=0&autohide=1&rel=0&iv_load_policy=3&modestbranding=1&loop=1&theme=dark" allowfullscreen="allowfullscreen" allow="autoplay; encrypted-media"></iframe>'
 /* internal to scene player */
 var scenes = [RandomSlogans, RandomLogos, RandomImages]
 
