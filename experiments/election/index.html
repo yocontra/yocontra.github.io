@@ -10,6 +10,19 @@
             height: 100%;
             width: 100%;
             overflow: hidden;
+            cursor: pointer;
+        }
+
+        .start {
+          cursor: pointer;
+          z-index: 99;
+          margin: 25vh 25vw;
+          font-size: 3rem;
+          text-transform: uppercase;
+          letter-spacing: 3px;
+        }
+        .started .start {
+          display: none;
         }
 
         #content {
@@ -32,7 +45,7 @@
   </head>
   <body translate="no">
       <canvas id="content"></canvas>
-      <iframe id="music" frameborder="0" src="https://www.youtube-nocookie.com/embed/wh-07BzfgYY?autoplay=1&start=49&controls=0&showinfo=0&rel=0&iv_load_policy=3&modestbranding=1&loop=1&theme=dark" allowfullscreen="allowfullscreen" allow="autoplay; encrypted-media"></iframe>
+      <div class="start">Click to begin</div>
       <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/2.1.3/jquery.min.js"></script>
       <script src="https://cdnjs.cloudflare.com/ajax/libs/async/0.9.0/async.js"></script>
       <script src="https://cdnjs.cloudflare.com/ajax/libs/lodash.js/2.4.1/lodash.min.js"></script>

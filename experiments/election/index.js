@@ -185,14 +185,11 @@ function trip(el) {
   el.style['filter'] = el.style['-webkit-filter'] = randomFilter
 }
 
+var music = '<iframe id="music" frameborder="0" src="https://www.youtube-nocookie.com/embed/wh-07BzfgYY?autoplay=1&start=30&controls=0&showinfo=0&rel=0&iv_load_policy=3&modestbranding=1&loop=1&theme=dark" allowfullscreen="allowfullscreen" allow="autoplay; encrypted-media"></iframe>'
 /* internal to scene player */
 var scenes = [RandomSlogans, RandomLogos, RandomImages]
 
-$(function() {
-  if (!window.chrome) {
-    alert('This experiment requires chrome')
-    return
-  }
+function startUp() {
   var can = document.getElementById('content')
   var ctx = can.getContext('2d')
   var container = $(can).parent()
@@ -206,7 +203,7 @@ $(function() {
   $(window).resize(resize)
   runScenes(ctx)
   setInterval(trip.bind(null, can), 1000)
-})
+}
 
 function runScenes(ctx) {
   var display = runScene.bind(null, ctx)
@@ -220,3 +217,12 @@ function runScene(ctx, scene) {
   }
   tick()
 }
+
+
+function begin() {
+  document.body.removeEventListener('click', begin)
+  document.body.className += 'started'
+  document.body.innerHTML += music
+  startUp()
+}
+document.body.addEventListener('click', begin)
