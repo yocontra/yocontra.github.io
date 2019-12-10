@@ -32,7 +32,7 @@ RandomSlogans.prototype.tick = function(cb) {
   var loc = randomLocation(this.context)
   var fontSize = randomBetween(30, 80)
 
-  this.context.font = 'bold ' + fontSize + 'px sans-serif'
+  this.context.font = 'bold ' + fontSize + 'px Arial'
   this.context.shadowColor = 'black'
   this.context.shadowOffsetX = 5
   this.context.shadowOffsetY = 5
