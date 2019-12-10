@@ -14,7 +14,26 @@
             background: #000;
             color: #fff;
         }
-
+        .bounce {
+          position: absolute;
+          animation: bounce-x 4.05s linear 0s infinite alternate, bounce-y 4.4s linear 0s infinite alternate;
+        }
+        @keyframes bounce-y {
+          0% {
+            top: 0;
+          }
+          100% {
+            top: calc(100% - 500px);
+          }
+        }
+        @keyframes bounce-x {
+          0% {
+            left: 0;
+          }
+          100% {
+            left: calc(100% - 281px);
+          }
+        }
         .start {
           cursor: pointer;
           z-index: 99;
@@ -59,15 +78,15 @@
             position: absolute;
             bottom: 0;
             z-index: 20;
-            height: 200px;
-            width: 200px;
-            border-radius: 100%;
+            height: 500px;
+            border-radius: 12px;
+            opacity: 0.9;
         }
     </style>
   </head>
   <body translate="no">
       <video id="music" preload playsinline loop src="./vid.mp4"></video>
-      <video id="pete" autoplay preload playsinline muted loop src="./pete.mp4"></video>
+      <video id="pete" class="bounce" autoplay preload playsinline muted loop src="./pete.mp4"></video>
       <canvas id="content"></canvas>
       <div class="start">Click to begin</div>
       <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/2.1.3/jquery.min.js"></script>
