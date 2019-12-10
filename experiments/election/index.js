@@ -223,6 +223,7 @@ function begin() {
   document.body.removeEventListener('click', begin)
   document.body.className += 'started'
   document.getElementById('music').play()
+  document.getElementById('pete').play()
   startUp()
 }
 document.body.addEventListener('click', begin)
