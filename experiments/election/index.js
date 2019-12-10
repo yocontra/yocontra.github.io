@@ -1,7 +1,7 @@
 /* random words scene */
 function RandomSlogans(ctx) {
   this.context = ctx
-  this.throttle = 30
+  this.throttle = 40
   this.messages = [
     'For Everyone',
     'Win With Warren',
@@ -40,13 +40,13 @@ RandomSlogans.prototype.tick = function(cb) {
   this.context.rotate(randomBetween(-1, 1, false))
   this.context.fillStyle = randomLinearGradient(this.context, loc)
   this.context.fillText(txt, loc.x, loc.y, this.context.canvas.width)
-  requestAnimationFrame(cb)
+  schedule(cb, this.throttle)
 }
 
 /* random orbs scene */
 function RandomLogos(ctx) {
   this.context = ctx
-  this.throttle = 100
+  this.throttle = 30
   this.logos = [
     'https://i.imgur.com/rH8YhDY.png',
     'https://i.imgur.com/8UohASg.png',
@@ -74,13 +74,13 @@ RandomLogos.prototype.tick = function(cb) {
   var loc = randomLocation(this.context)
   var imgEl = getImage(logo, 5, 20)
   this.context.drawImage(imgEl, loc.x, loc.y)
-  requestAnimationFrame(cb)
+  schedule(cb, this.throttle)
 }
 
 /* random imgs scene */
-function RandomImages(ctx) {
+function RandomFaces(ctx) {
   this.context = ctx
-  this.throttle = 25
+  this.throttle = 0
   this.images = [
     'https://i.imgur.com/8slJMlD.png',
     'https://i.imgur.com/QHNn7aU.png',
@@ -108,15 +108,19 @@ function RandomImages(ctx) {
   ]
 }
 
-RandomImages.prototype.tick = function(cb) {
+RandomFaces.prototype.tick = function(cb) {
   var img = this.images[randomBetween(0, this.images.length - 1)]
   var loc = randomLocation(this.context)
   var imgEl = getImage(img, 15, 40)
   this.context.drawImage(imgEl, loc.x, loc.y)
-  requestAnimationFrame(cb)
+  schedule(cb, this.throttle)
 }
 
 /* utilities */
+function schedule(fn, time) {
+  if (time > 16) return setTimeout(fn, time)
+  requestAnimationFrame(fn)
+}
 function randomLocation(ctx) {
   return {
     x: randomBetween(0, ctx.canvas.width),
@@ -127,9 +131,7 @@ function randomLocation(ctx) {
 function randomBetween(min, max, floor) {
   floor = typeof floor === 'boolean' ? floor : true
   var rand = Math.random() * (max - min + 1) + min
-  if (floor) {
-    return Math.floor(rand)
-  }
+  if (floor) return Math.floor(rand)
   return rand
 }
 
@@ -186,12 +188,11 @@ function trip(el) {
     })
     .join(' ')
 
-  el.style['filter'] = el.style['-webkit-filter'] = randomFilter
+  el.style['filter'] = randomFilter
 }
 
-var music = '<iframe id="music" frameborder="0" src="https://www.youtube-nocookie.com/embed/wh-07BzfgYY?autoplay=1&start=23&controls=0&showinfo=0&autohide=1&rel=0&iv_load_policy=3&modestbranding=1&loop=1&theme=dark" allowfullscreen="allowfullscreen" allow="autoplay; encrypted-media; camera; microphone"></iframe>'
 /* internal to scene player */
-var scenes = [RandomSlogans, RandomLogos, RandomImages]
+var scenes = [RandomSlogans, RandomLogos, RandomFaces]
 
 function startUp() {
   var can = document.getElementById('content')
@@ -205,16 +206,11 @@ function startUp() {
 
   resize()
   $(window).resize(resize)
-  runScenes(ctx)
+  scenes.forEach((scene) => runScene(scene, ctx))
   setInterval(trip.bind(null, can), 1000)
 }
 
-function runScenes(ctx) {
-  var display = runScene.bind(null, ctx)
-  async.forEach(scenes, display)
-}
-
-function runScene(ctx, scene) {
+function runScene(scene, ctx) {
   var inst = new scene(ctx)
   var tick = function() {
     inst.tick(tick)
@@ -226,7 +222,7 @@ function runScene(ctx, scene) {
 function begin() {
   document.body.removeEventListener('click', begin)
   document.body.className += 'started'
-  document.body.innerHTML += music
+  document.getElementById('music').play()
   startUp()
 }
 document.body.addEventListener('click', begin)
