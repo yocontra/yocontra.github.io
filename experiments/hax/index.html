@@ -1,0 +1,55 @@
+<html>
+  <head>
+    <meta charset="UTF-8">
+    <title>HACKED</title>
+    <style>
+      body {
+        cursor: pointer;
+        background: url("https://media.giphy.com/media/CiaYT6K1II5Og/giphy.gif");
+      }
+      #full {
+        height: 100%;
+        width: 100%;
+      }
+      #hidden {
+        display: none;
+      }
+      #hacked {
+        position: absolute;
+        left: 50%;
+        top: 50%;
+        transform: translate(-50%, -50%);
+        text-align: center;
+        animation: blink 1s steps(1) infinite;
+        background: red;
+        color: white;
+        font-size: 120px;
+        padding: 64px;
+      }
+      
+      @keyframes blink {
+       0% {
+          opacity: 1;
+       }
+       50% {
+          opacity: 0;
+       }
+       100% {
+          opacity: 1;
+       }
+     }
+    </style>
+  </head>
+  <body>
+    <div id="hacked">YOU GOT HACKED</div>
+    <audio src="jolly.mp4" loop autoplay playsinline id="full" />
+    <audio src="boom.mp4" loop autoplay playsinline id="hidden" />
+
+    <script>
+      document.addEventListener('click', () => {
+        document.getElementById('full').play()
+        document.getElementById('hidden').play()
+      })
+    </script>
+  </body>
+</html>
