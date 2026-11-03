@@ -1,0 +1,63 @@
+---
+import Bare from '~/layouts/Bare.astro'
+import '~/experiments/out-west/ui/out-west.css'
+import '~/experiments/out-west/ui/out-west-menus.css'
+import '~/experiments/out-west/ui/account.css'
+import '~/experiments/out-west/ui/hub.css'
+---
+
+<Bare
+  title="out west · delete your account"
+  description="Hang up your hat: delete your out west account, passkeys, wallet and ledger."
+  viewport="width=device-width, initial-scale=1, viewport-fit=cover"
+  noindex
+>
+  <Fragment slot="head">
+    <meta name="theme-color" content="#140c08" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Alfa+Slab+One&display=swap"
+    />
+  </Fragment>
+  <main id="ow" class="ow ow-page">
+    <div class="ow-hub-panel ow-page-panel">
+      <h1 class="ow-hub-h">Hang up your hat</h1>
+      <p class="ow-hub-note">
+        Sign in, then choose “Delete account”. It removes your account, passkeys, profile, wallet,
+        inventory, ghost and ledger for good. Past duels stay on the books without your name.
+      </p>
+      <div class="ow-page-host"></div>
+      <p class="ow-hub-note"><a href="/experiments/out-west/">Back to out west</a></p>
+    </div>
+  </main>
+</Bare>
+
+<style is:global>
+  .ow-page {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: max(16px, env(safe-area-inset-top)) 16px max(16px, env(safe-area-inset-bottom));
+    box-sizing: border-box;
+    background: radial-gradient(circle at 50% 30%, #3a1a10, #0a0604);
+    overflow-y: auto;
+    touch-action: pan-y;
+  }
+  .ow-page-panel {
+    width: min(30rem, 100%);
+  }
+  .ow-page a {
+    color: #f2d27a;
+  }
+</style>
+
+<script>
+  import { mountAccount } from '~/experiments/out-west/ui/account.ts'
+
+  const host = document.querySelector<HTMLElement>('.ow-page-host')
+  if (host) {
+    mountAccount(host)
+  }
+</script>
