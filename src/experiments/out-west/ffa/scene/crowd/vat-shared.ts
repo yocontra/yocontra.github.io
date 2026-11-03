@@ -23,6 +23,9 @@ export interface VatResult {
   pos: Uint16Array
   nrm: Uint8Array
   color: Float32Array
+  /** Atlas UV and recolour luminance per kept vertex (see scene/shade.ts). */
+  uv: Float32Array
+  lum: Float32Array
   slot: Float32Array
   index: Uint32Array
   rows: number

@@ -7,25 +7,25 @@ Music (`intro.m4a`, `boss.m4a`) and the original sounds (`cocking`, `fire`, `fir
 Every third-party asset below is CC0 (public domain). No attribution is legally required; it is
 given anyway. All models were downloaded as GLB, trimmed and recompressed (meshopt + WebP).
 
-## Characters (Quaternius, CC0, via Poly Pizza)
+## Characters (Quaternius, CC0)
 
-| File | Source | Licence |
-|---|---|---|
-| `models/player.glb` | "Farmer" by Quaternius — https://poly.pizza/m/7pn3R6hPvE | CC0 1.0 |
-| `models/suit.glb` | "Business Man" by Quaternius — https://poly.pizza/m/JFrLIKqvCH | CC0 1.0 |
-| `models/rugged.glb` | "Adventurer" by Quaternius — https://poly.pizza/m/5EGWBMpuXq | CC0 1.0 |
-| `models/woman.glb` | "Adventurer" by Quaternius — https://poly.pizza/m/ZwF0K7WBmu | CC0 1.0 |
-| `models/casual.glb` | "Casual Character" by Quaternius — https://poly.pizza/m/kZ3DmIoGip | CC0 1.0 |
-| `models/worker.glb` | "Worker" by Quaternius — https://poly.pizza/m/Yg2bQZO6Hj | CC0 1.0 |
-| `models/king.glb` | "King" by Quaternius — https://poly.pizza/m/I1gTjmuK2m | CC0 1.0 |
-| `models/punk.glb` | "Punk" by Quaternius — https://poly.pizza/m/BTALZymknF | CC0 1.0 |
+Every base body (`models/{player,casual,worker,suit,rugged,king,punk,woman}.glb`) and the shared
+character atlas (`tex/char_{diff,nor,arm}.webp`) are built by `tools/build-characters.ts` from the
+free (standard) editions of three Quaternius packs, all CC0 1.0 (licence files in the downloads):
 
-All of these share one rig (the Woman has her own). Each outlaw is ONE whole character from this
-list, never parts of several: recoloured, uniformly scaled, and dressed at runtime in procedural
-hats, coats, ponchos, bandanas, masks, bandoliers, beards, moustaches and badges that are fitted to
-his own posed surface and skinned to his bones, then baked with him into a single skinned mesh.
-The worker's hard hat, the king's crown, the punk's mohawk and the rugged adventurer's backpack are
-removed. No fabric textures are used.
+| Pack | Source | Used for | Licence |
+|---|---|---|---|
+| Universal Base Characters [Standard] | https://quaternius.com/packs/universalbasecharacters.html (https://quaternius.itch.io/universal-base-characters) | heads, faces, eyes, brows, hairstyles, beards (Superhero male/female bodies; only the head is kept) | CC0 1.0 |
+| Modular Character Outfits – Fantasy [Standard] | https://quaternius.com/packs/modularcharacteroutfitsfantasy.html (https://quaternius.itch.io/modular-character-outfits-fantasy) | the Peasant and Ranger outfits (shirts, sleeves, trousers, boots, belts, bracers, pauldron), mixed and matched per base on their shared skeleton | CC0 1.0 |
+| Universal Animation Library [Standard] | https://quaternius.com/packs/universalanimationlibrary.html (https://quaternius.itch.io/universal-animation-library) | every clip (idle, walk, jog, pistol idle/aim/shoot, hit, death...), renamed to the game's clip names | CC0 1.0 |
+
+The parts are rebound to one skeleton, simplified with meshoptimizer to ~14–18k triangles a
+body, and their textures (4K/2K) are packed into one 2048×3072 atlas (normal and ARM at half
+size; AO baked into the albedo). The ranger set's forest green is recoloured to western colours
+at runtime, and each outlaw's garment colours recolour only the main fabric of each garment
+(mask from the texture). Hats, coats, ponchos, bandanas, masks, bandoliers, moustaches, stars
+and holsters are procedural, fitted to each body and woven from the Poly Haven fabric swatches
+below.
 
 Quaternius: https://quaternius.com
 
@@ -56,6 +56,11 @@ fetched and converted to WebP with `tools/polyhaven.ts`.
 | `tex/ground_*.webp` | "Gravelly Sand" — https://polyhaven.com/a/gravelly_sand | CC0 1.0 |
 | `tex/planks_*.webp` | "Weathered Plank Siding" — https://polyhaven.com/a/weathered_plank_siding | CC0 1.0 |
 | `tex/vplanks_*.webp` | "Old Planks 02" — https://polyhaven.com/a/old_planks_02 | CC0 1.0 |
+| `tex/char_*.webp` swatches: leather | "Brown Leather" — https://polyhaven.com/a/brown_leather | CC0 1.0 |
+| swatch: wool (coats) | "Caban" — https://polyhaven.com/a/caban | CC0 1.0 |
+| swatch: felt (hats, moustaches) | "Scuba Suede" — https://polyhaven.com/a/scuba_suede | CC0 1.0 |
+| swatch: linen (bandanas, masks) | "Rough Linen" — https://polyhaven.com/a/rough_linen | CC0 1.0 |
+| swatch: hessian (ponchos) | "Hessian 230" — https://polyhaven.com/a/hessian_230 | CC0 1.0 |
 
 ## Sound effects (freesound.org, CC0)
 
