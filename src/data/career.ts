@@ -10,7 +10,7 @@ export interface Role {
 export const career: readonly Role[] = [
   {
     company: 'Apple',
-    title: 'Software Engineer · SEAR',
+    title: 'Senior Staff Engineer · SEAR',
     years: '2024 — 2026',
     blurb:
       'Worked on macOS and iOS security in SEAR, building tools and infrastructure. Not much more I can say about it.',
@@ -34,7 +34,7 @@ export const career: readonly Role[] = [
   {
     company: 'Charmed',
     href: 'https://becharmed.co/',
-    title: 'TODO: role',
+    title: 'Co-founder / CTO',
   },
   {
     company: 'Factory X',
