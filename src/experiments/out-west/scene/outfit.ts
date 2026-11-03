@@ -66,38 +66,6 @@ export interface Fit {
   readonly neck: { lo: number; hi: number }
 }
 
-/**
- * X of the outside of his thigh at height `y` (side 1 = his right, -X), over
- * anything he wears there, so a holster sits on the coat rather than in it.
- */
-export function outerThigh(
-  f: Fit,
-  clothes: readonly Piece[],
-  at: { side: 1 | -1; y: number; near: Vector3 },
-): number {
-  const { side, y, near } = at
-  // Work in "outward" units: larger = further out on this side.
-  let out = Number.NEGATIVE_INFINITY
-  const leg = onBones(f.body, [side === 1 ? 'UpperLegR' : 'UpperLegL', 'Hips'])
-  const consider = (x: number, py: number, pz: number, dy: number): void => {
-    if (Math.abs(py - y) < dy && Math.abs(pz - near.z) < 0.08 && side * (x - near.x) < 0) {
-      out = Math.max(out, -side * x)
-    }
-  }
-  for (const s of leg) {
-    consider(s.p.x, s.p.y, s.p.z, 0.05)
-  }
-  const v = new Vector3()
-  for (const c of clothes) {
-    const pos = c.geo.getAttribute('position')
-    for (let k = 0; k < pos.count; k++) {
-      v.fromBufferAttribute(pos, k)
-      consider(v.x, v.y, v.z, 0.06)
-    }
-  }
-  return Number.isFinite(out) ? -side * out : near.x - side * 0.1
-}
-
 const HEAD_BONES = ['Head']
 const NECK_BONES = ['Neck']
 const TORSO_BONES = ['Chest', 'Torso', 'Abdomen', 'Hips', 'Neck', 'ShoulderL', 'ShoulderR']
