@@ -283,6 +283,8 @@ export class Hud {
       change: (s: Settings) => void
       restart: () => void
       leaderboard: () => void
+      /** Back to the hub, keeping the run's save (absent where there's no hub). */
+      saloon?: () => void
       remap: (a: Action, done: (code: string) => void) => void
     },
   ): void {
@@ -341,6 +343,12 @@ export class Hud {
     const restart = el('button', 'ow-btn', btns, 'Restart gauntlet')
     restart.type = 'button'
     restart.addEventListener('click', handlers.restart)
+    if (handlers.saloon) {
+      const saloon = el('button', 'ow-btn', btns, 'Saloon')
+      saloon.type = 'button'
+      saloon.title = 'Back to the saloon. Your run is saved where you left it.'
+      saloon.addEventListener('click', handlers.saloon)
+    }
     resume.focus()
   }
 

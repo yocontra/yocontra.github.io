@@ -53,6 +53,8 @@ export class Director extends DuelState {
   readonly board: Board
   clock: DuelClock
   connectRanked = null as RankedConnect | null
+  /** Pause → Saloon: back to the hub without a reload (null where there's no hub). */
+  onSaloon = null as (() => void) | null
   /** Bumped by every ranked attempt and every drop to practice; stale connects are closed. */
   rankedTry = 0
   lineupActors: Actor[] = []

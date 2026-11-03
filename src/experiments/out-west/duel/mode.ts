@@ -1,6 +1,7 @@
 import { save as persist, resetRun } from '../save.ts'
 import { LocalDuelClock } from './clock.ts'
 import type { Director } from './director.ts'
+import { titleShot } from './framing.ts'
 import { RankedDuelClock } from './ranked-clock.ts'
 import { standoffSpec } from './standoff.ts'
 
@@ -107,4 +108,52 @@ export function restartRun(d: Director, legend: boolean): void {
   d.level = 0
   tryRanked(d).catch(() => undefined)
   d.startLevel(0, false)
+}
+
+/** The street with nobody on it: the HUD cleared, his body gone, the title camera. */
+export function emptyStreet(d: Director): void {
+  const c = d.c
+  d.enemy?.dispose()
+  d.enemy = null
+  d.rifleman?.dispose()
+  d.rifleman = null
+  d.dying = null
+  d.fallers = []
+  c.physics.clear()
+  const hud = c.hud
+  hud.hideCard()
+  hud.clearCall()
+  hud.clearCaptions()
+  hud.letterbox(false)
+  hud.show(false)
+  c.audio.heartbeat(0)
+  d.timeScale = 1
+  d.player.root.visible = false
+  d.enter('title')
+  titleShot(d)
+}
+
+/**
+ * Pause → Saloon: walk off the street and back to the hub, no reload. The save keeps your outlaw,
+ * so the hub offers to continue (as practice: a ranked session can't be picked up again).
+ */
+export function toSaloon(d: Director): void {
+  const c = d.c
+  d.paused = false
+  d.pausedPhase = null
+  c.hud.closeMenu()
+  c.input.enabled = true
+  c.audio.resume()
+  d.bellVoice?.stop()
+  d.bellVoice = null
+  d.pianoVoice?.stop()
+  d.pianoVoice = null
+  d.board.close()
+  c.hud.hideEnd()
+  setPractice(d, '')
+  d.duelId = -1
+  d.standoffSent = false
+  persist(c.save)
+  emptyStreet(d)
+  d.onSaloon?.()
 }
