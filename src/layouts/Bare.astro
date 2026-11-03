@@ -11,6 +11,8 @@ interface Props {
   noindex?: boolean
   /** Legacy pages that had no viewport meta can opt out to match their original rendering. */
   viewport?: string | false
+  /** Benchmarks: skip the spinning favicon so it never shows up in a profile. */
+  staticFavicon?: boolean
 }
 
 const {
@@ -18,11 +20,12 @@ const {
   description,
   noindex = false,
   viewport = 'width=device-width, initial-scale=1',
+  staticFavicon = false,
 } = Astro.props
 ---
 
 <!doctype html>
-<html lang="en">
+<html lang="en" data-static-favicon={staticFavicon ? '' : undefined}>
   <head>
     <meta charset="utf-8" />
     {viewport && <meta name="viewport" content={viewport} />}
