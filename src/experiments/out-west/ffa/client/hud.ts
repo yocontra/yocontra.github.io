@@ -270,14 +270,21 @@ export class Hud {
     }
   }
 
+  /**
+   * One line in the kill feed. Portrait phones keep 3 single-line rows that fade after 3 s (the
+   * feed shares the narrow top-right with the map); everywhere else, 5 rows for 5 s.
+   */
   feed(html: string, kind: FeedKind): void {
+    const portrait = matchMedia('(orientation: portrait)').matches
     const row = el('div', `fr-feed-row fr-feed-${kind}`, this.feedEl)
     row.textContent = html
-    while (this.feedEl.childElementCount > 5) {
+    row.title = html
+    while (this.feedEl.childElementCount > (portrait ? 3 : 5)) {
       this.feedEl.firstElementChild?.remove()
     }
-    setTimeout(() => row.classList.add('out'), 5000)
-    setTimeout(() => row.remove(), 5600)
+    const ms = portrait ? 3000 : 5000
+    setTimeout(() => row.classList.add('out'), ms)
+    setTimeout(() => row.remove(), ms + 500)
   }
 
   toast(text: string, kind = '', ms = 1800): void {

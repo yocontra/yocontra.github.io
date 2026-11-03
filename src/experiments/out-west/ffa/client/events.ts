@@ -249,7 +249,7 @@ function killLine(s: Sink, ev: Extract<WireEvent, { type: typeof EV_KILL }>): st
     marks.push('Most Wanted')
   }
   if (ev.flags & KILL_PARDON) {
-    marks.push("sheriff's pardon")
+    marks.push('pardoned')
   }
   const tail = marks.length > 0 ? ` (${marks.join(', ')})` : ''
   if (ev.killer === NONE || ev.killer === ev.victim) {

@@ -14,6 +14,7 @@
  */
 import type { AudioEngine } from '../../audio/audio.ts'
 import { FrontierGame } from './game.ts'
+import type { FeedKind } from './hud.ts'
 import { type JoinError, openLoopback, openRemote } from './transport.ts'
 import '../../ui/tokens.css'
 import './frontier.css'
@@ -181,6 +182,9 @@ export function mountFrontier(root: HTMLElement, opts: FrontierOptions = {}): Fr
   if (import.meta.env.DEV) {
     // Dev harness only: state for Playwright scripts (positions would be a wallhack in prod).
     Reflect.set(globalThis, '__frontier', () => game.debug())
+    Reflect.set(globalThis, '__frontierFeed', (text: string, kind: FeedKind) =>
+      game.hud.feed(text, kind),
+    )
   }
   const ap = game.autopilot
   if (import.meta.env.DEV && ap) {

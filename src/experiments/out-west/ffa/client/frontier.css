@@ -996,8 +996,22 @@
     font-size: 30px;
   }
 
+  /* 3 single-line rows (hud.ts caps and fades them), tucked under the map, clear of the death
+     card and the thumbs */
   .fr-feed {
-    max-width: 60vw;
+    max-width: 62vw;
+    gap: 2px;
+  }
+
+  .fr-feed-row {
+    font-size: 13px;
+    line-height: 1.2;
+    padding: 2px 8px 3px;
+    max-width: 100%;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    transition: opacity 0.4s;
   }
 
   .fr-toast {
