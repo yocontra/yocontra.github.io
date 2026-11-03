@@ -94,6 +94,7 @@ export function killEnemyAnim(s: DuelState): void {
       hat,
       V(between(-0.4, 0.4), big ? 4.5 : 2.2, 0).addScaledVector(away, big ? 1.6 : 1.0),
       V(between(-6, 6), between(-4, 4), big ? 14 : 6),
+      { floor: 0.002 },
     )
   }
 }

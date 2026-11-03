@@ -271,7 +271,7 @@ export function onCall(d: Director, duel: number): void {
     if (d.outlaw.gimmick === 'shaky' && d.enemy) {
       const hat = d.enemy.popHat()
       if (hat) {
-        c.physics.add(hat, V(0.3, 1.4, -0.4), V(2, 1, 3))
+        c.physics.add(hat, V(0.3, 1.4, -0.4), V(2, 1, 3), { floor: 0.002 })
       }
     }
   }

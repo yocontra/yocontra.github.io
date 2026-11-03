@@ -3,6 +3,7 @@
 // biome-ignore-all lint/suspicious/noUnnecessaryConditions: class fields are flags mutated from outside the method; Biome narrows them to their literal initializer
 import {
   AdditiveBlending,
+  Box3,
   BufferAttribute,
   BufferGeometry,
   CanvasTexture,
@@ -423,8 +424,12 @@ interface Body {
   flutter: number
   /** Settle lying on its side (local Z up), not standing on its foot: a dropped gun. */
   side: boolean
+  /** Settle on its lowest point at this height (a hat on its brim), not on its origin. */
+  floor: number | null
   sleep: boolean
 }
+
+const settleBox = new Box3()
 
 /** Minimal rigid-body toss for hats, guns and playing cards. */
 export class Physics {
@@ -435,7 +440,7 @@ export class Physics {
     obj: Object3D,
     v: Vector3,
     w: Vector3,
-    o: { rest?: number; ground?: number; flutter?: number; side?: boolean } = {},
+    o: { rest?: number; ground?: number; flutter?: number; side?: boolean; floor?: number } = {},
   ): void {
     this.bodies.push({
       obj,
@@ -445,6 +450,7 @@ export class Physics {
       ground: o.ground ?? 0.02,
       flutter: o.flutter ?? 0,
       side: o.side ?? false,
+      floor: o.floor ?? null,
       sleep: false,
     })
   }
@@ -500,6 +506,14 @@ function settle(b: Body): void {
   } else {
     b.obj.rotation.x = 0
     b.obj.rotation.z = 0
+  }
+  if (b.floor !== null) {
+    // rest its lowest point (a hat's brim) on the street, not its origin
+    b.obj.updateMatrixWorld(true)
+    settleBox.setFromObject(b.obj, true)
+    if (Number.isFinite(settleBox.min.y)) {
+      b.obj.position.y += b.floor - settleBox.min.y
+    }
   }
   b.sleep = true
 }

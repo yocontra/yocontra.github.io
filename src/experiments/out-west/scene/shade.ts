@@ -174,7 +174,7 @@ diffuseColor.rgb *= mix(0.72, 1.0, smoothstep(0.0, 0.85, vStyY - styFloor));`,
   float ndv = clamp(dot(normalize(normal), normalize(vViewPosition)), 0.0, 1.0);
   float fr = smoothstep(0.35, 1.0, 1.0 - ndv);
   totalEmissiveRadiance += styRim * (styRimK * styRimMat * fr) * (0.55 + 0.45 * diffuseColor.rgb);
-  totalEmissiveRadiance += vec3(1.0, 0.78, 0.42) * styGlow * (0.18 + 1.6 * fr);
+  totalEmissiveRadiance += vec3(1.0, 0.78, 0.42) * styGlow * (0.3 + 2.2 * fr);
 }`,
       )
   }

@@ -623,7 +623,7 @@ export class Crowd {
     }
     // Spawn protection: a warm pulsing glow on the body (never a blink, never see-through)
     holder.visible = true
-    actor.glow.value = p.flags & EF_PROTECTED ? 0.45 + 0.35 * Math.sin(nowS * Math.PI * 2 * 2.2) : 0
+    actor.glow.value = p.flags & EF_PROTECTED ? 0.6 + 0.4 * Math.sin(nowS * Math.PI * 2 * 2.2) : 0
     holder.position.set(p.x, 0, p.z)
     holder.rotation.y = facing(p.aim)
     const mesh = actor.meshes[0] as SkinnedMesh | undefined
