@@ -130,7 +130,29 @@ function wear(
   ctx.restore()
 }
 
-/** Paint ink on its own layer (so wear only eats ink, never the paper), then lay it down. */
+/**
+ * Uneven pressure: a forme inked by hand prints lighter in broad soft patches, not just in specks.
+ */
+function unevenInk(ctx: CanvasRenderingContext2D, r: () => number): void {
+  ctx.save()
+  ctx.globalCompositeOperation = 'destination-out'
+  for (let i = 0; i < 16; i++) {
+    const x = r() * W
+    const y = r() * H
+    const rad = 60 + r() * 160
+    const g = ctx.createRadialGradient(x, y, 0, x, y, rad)
+    g.addColorStop(0, `rgba(0,0,0,${0.06 + r() * 0.14})`)
+    g.addColorStop(1, 'rgba(0,0,0,0)')
+    ctx.fillStyle = g
+    ctx.fillRect(x - rad, y - rad, rad * 2, rad * 2)
+  }
+  ctx.restore()
+}
+
+/**
+ * Paint ink on its own layer (so wear only eats ink, never the paper), then lay it down: first a
+ * faint spread where the ink wicked into the fibres, then the crisp impression.
+ */
 function inkLayer(
   base: CanvasRenderingContext2D,
   r: () => number,
@@ -145,12 +167,106 @@ function inkLayer(
     return
   }
   paint(ctx)
+  unevenInk(ctx, r)
   wear(ctx, [0, 0, W, H], r)
   base.save()
-  base.globalAlpha = 0.94
   base.globalCompositeOperation = 'multiply'
+  base.globalAlpha = 0.3
+  base.filter = 'blur(1.2px)'
+  base.drawImage(layer, 0, 0)
+  base.filter = 'none'
+  base.globalAlpha = 0.94
   base.drawImage(layer, 0, 0)
   base.restore()
+}
+
+/** The frame of the mugshot. */
+const MUG = { x: 140, y: 236, w: W - 280, h: 286 } as const
+
+/** Tone levels of a portrait: luminance stretched between its 2nd and 98th percentiles. */
+function levels(px: Uint8ClampedArray): Float32Array {
+  const n = px.length / 4
+  const lum = new Float32Array(n)
+  const hist = new Uint32Array(256)
+  for (let i = 0; i < n; i++) {
+    const a = (px[i * 4 + 3] ?? 0) / 255
+    // transparent pixels are bare paper
+    const l =
+      (0.299 * (px[i * 4] ?? 0) + 0.587 * (px[i * 4 + 1] ?? 0) + 0.114 * (px[i * 4 + 2] ?? 0)) * a +
+      255 * (1 - a)
+    lum[i] = l
+    hist[Math.min(255, Math.round(l))] = (hist[Math.min(255, Math.round(l))] ?? 0) + 1
+  }
+  const pct = (p: number): number => {
+    let acc = 0
+    for (let v = 0; v < 256; v++) {
+      acc += hist[v] ?? 0
+      if (acc >= n * p) {
+        return v
+      }
+    }
+    return 255
+  }
+  const lo = pct(0.02)
+  const hi = Math.max(lo + 1, pct(0.98))
+  for (let i = 0; i < n; i++) {
+    lum[i] = Math.min(1, Math.max(0, ((lum[i] ?? 0) - lo) / (hi - lo)))
+  }
+  return lum
+}
+
+/** A per-pixel hash in [0, 1): the grain of the screen (stable per poster, no allocation). */
+function grain(i: number, j: number): number {
+  let h = (i * 374_761_393 + j * 668_265_263) | 0
+  h = Math.imul(h ^ (h >>> 13), 1_274_126_177)
+  return ((h ^ (h >>> 16)) >>> 0) / 4_294_967_296
+}
+
+const smoothstep = (a: number, b: number, v: number): number => {
+  const t = Math.min(1, Math.max(0, (v - a) / (b - a)))
+  return t * t * (3 - 2 * t)
+}
+
+/**
+ * Print the mugshot the way a cheap jobbing press did: a coarse stochastic screen of ink on the
+ * stock (soft-thresholded noise, so it reads as grainy print up close and averages to clean tone
+ * when the poster is small; a regular line screen moirés), midtones lifted so a face survives,
+ * and an oval vignette fading the sitter into bare paper like a period cabinet card.
+ */
+function engrave(ctx: CanvasRenderingContext2D, src: HTMLCanvasElement): void {
+  const { x, y, w, h } = MUG
+  const off = document.createElement('canvas')
+  off.width = w
+  off.height = h
+  const o = off.getContext('2d', { willReadFrequently: true })
+  if (!o) {
+    return
+  }
+  const k = Math.max(w / src.width, h / src.height)
+  o.drawImage(src, (w - src.width * k) / 2, (h - src.height * k) / 2, src.width * k, src.height * k)
+  const img = o.getImageData(0, 0, w, h)
+  const lum = levels(img.data)
+  const out = o.createImageData(w, h)
+  const d = out.data
+  // INK, as bytes
+  const ink = [0x1d, 0x14, 0x0c]
+  for (let j = 0; j < h; j++) {
+    for (let i = 0; i < w; i++) {
+      const p = j * w + i
+      const u = (i / w - 0.5) * 2
+      const v = (j / h - 0.42) * 2
+      const oval = 1 - smoothstep(0.62, 1.02, Math.hypot(u * 0.92, v * 0.78))
+      const dark = smoothstep(0.2, 1, 1 - (lum[p] ?? 1)) ** 1.4 * oval
+      const n = grain(i, j)
+      const cover = smoothstep(n - 0.28, n + 0.28, dark)
+      d[p * 4] = ink[0] ?? 0
+      d[p * 4 + 1] = ink[1] ?? 0
+      d[p * 4 + 2] = ink[2] ?? 0
+      d[p * 4 + 3] = Math.round(cover * 255)
+    }
+  }
+  o.putImageData(out, 0, 0)
+  ctx.drawImage(off, x, y)
 }
 
 /** Set a line of type at the largest size (≤ max) that fits the measure. */
@@ -192,23 +308,40 @@ function rule(ctx: CanvasRenderingContext2D, y: number, x0: number, x1: number):
   ctx.fill()
 }
 
-function portraitBox(ctx: CanvasRenderingContext2D, o: Outlaw, opts: PosterOpts): void {
-  const px = 140
-  const py = 236
-  const pw = W - 280
-  const ph = 286
+function portraitBox(
+  ctx: CanvasRenderingContext2D,
+  o: Outlaw,
+  opts: PosterOpts,
+  r: () => number,
+): void {
+  const { x: px, y: py, w: pw, h: ph } = MUG
+  if (opts.portrait) {
+    const pr = opts.portrait
+    // a whisper of the photograph's tone under the engraving, then the engraving in ink
+    ctx.save()
+    ctx.beginPath()
+    ctx.rect(px, py, pw, ph)
+    ctx.clip()
+    const k = Math.max(pw / pr.width, ph / pr.height)
+    ctx.globalCompositeOperation = 'multiply'
+    ctx.globalAlpha = 0.22
+    ctx.filter = 'grayscale(1) sepia(0.5)'
+    ctx.drawImage(
+      pr,
+      px + (pw - pr.width * k) / 2,
+      py + (ph - pr.height * k) / 2,
+      pr.width * k,
+      pr.height * k,
+    )
+    ctx.restore()
+    inkLayer(ctx, r, (k2) => engrave(k2, pr))
+    return
+  }
   ctx.save()
   ctx.beginPath()
   ctx.rect(px, py, pw, ph)
   ctx.clip()
-  if (opts.portrait) {
-    const pr = opts.portrait
-    const k = Math.max(pw / pr.width, ph / pr.height)
-    const dw = pr.width * k
-    const dh = pr.height * k
-    ctx.globalCompositeOperation = 'multiply'
-    ctx.drawImage(pr, px + (pw - dw) / 2, py + (ph - dh) / 2, dw, dh)
-  } else {
+  {
     // silhouette while his model streams in
     ctx.fillStyle = 'rgba(201,173,122,0.6)'
     ctx.fillRect(px, py, pw, ph)
@@ -239,7 +372,7 @@ export function drawPoster(canvas: HTMLCanvasElement, o: Outlaw, opts: PosterOpt
   const r = rnd(opts.index * 7919 + 13)
   paper(ctx, r)
   // the mugshot is printed first, so the type and frame overprint its edge like a real forme
-  portraitBox(ctx, o, opts)
+  portraitBox(ctx, o, opts, r)
 
   inkLayer(ctx, r, (k) => {
     k.fillStyle = INK
