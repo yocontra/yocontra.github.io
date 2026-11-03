@@ -118,7 +118,44 @@ function curl(v: Vector3, b: Box): void {
   }
 }
 
-/** Keep only the triangles of one sculpted beard mesh inside `region`. Returns how many. */
+/**
+ * The triangles to keep, along the sculpt's own edge loops: a triangle stays when at least two of
+ * its corners are inside, so the cut follows edges instead of leaving lone teeth.
+ */
+function keepAlongLoops(tri: readonly number[], inside: readonly boolean[]): number[] {
+  const kept: number[] = []
+  for (let i = 0; i + 2 < tri.length; i += 3) {
+    const corners = [tri[i] ?? 0, tri[i + 1] ?? 0, tri[i + 2] ?? 0]
+    if (corners.filter((k) => inside[k]).length >= 2) {
+      kept.push(...corners)
+    }
+  }
+  return kept
+}
+
+/**
+ * Taper the cut edge: each corner left outside the region is drawn most of the way to its inside
+ * neighbours, so the whiskers thin to a soft point rather than ending in a ragged step.
+ */
+function taper(pts: Vector3[], kept: readonly number[], inside: readonly boolean[]): void {
+  const sum = new Map<number, { p: Vector3; n: number }>()
+  for (let i = 0; i + 2 < kept.length; i += 3) {
+    const corners = [kept[i] ?? 0, kept[i + 1] ?? 0, kept[i + 2] ?? 0]
+    for (const o of corners.filter((k) => !inside[k])) {
+      for (const k of corners.filter((c) => inside[c])) {
+        const acc = sum.get(o) ?? { p: new Vector3(), n: 0 }
+        acc.p.add(pts[k] ?? acc.p)
+        acc.n++
+        sum.set(o, acc)
+      }
+    }
+  }
+  for (const [o, acc] of sum) {
+    pts[o]?.lerp(acc.p.multiplyScalar(1 / acc.n), 0.7)
+  }
+}
+
+/** Keep only the part of one sculpted beard mesh inside `region`. Returns the index count. */
 function cut(sm: SkinnedMesh, region: Region, handlebar: boolean): number {
   const geo = sm.geometry.clone()
   sm.geometry = geo
@@ -128,33 +165,19 @@ function cut(sm: SkinnedMesh, region: Region, handlebar: boolean): number {
     pts.push(new Vector3().fromBufferAttribute(pos, k).applyMatrix4(sm.bindMatrix))
   }
   const box = boxOf(pts)
+  const inside = pts.map((p) => region(...units(p, box)))
   const index = geo.index
   const tri = index ? Array.from(index.array) : pts.map((_, i) => i)
-  const kept: number[] = []
-  const c = new Vector3()
-  for (let i = 0; i + 2 < tri.length; i += 3) {
-    const a = tri[i] ?? 0
-    const b = tri[i + 1] ?? 0
-    const d = tri[i + 2] ?? 0
-    c.set(0, 0, 0)
-    for (const k of [a, b, d]) {
-      const p = pts[k]
-      if (p) {
-        c.add(p)
-      }
-    }
-    if (region(...units(c.multiplyScalar(1 / 3), box))) {
-      kept.push(a, b, d)
-    }
-  }
-  if (handlebar) {
-    for (const [k, v] of pts.entries()) {
+  const kept = keepAlongLoops(tri, inside)
+  taper(pts, kept, inside)
+  for (const [k, v] of pts.entries()) {
+    if (handlebar) {
       curl(v, box)
-      v.applyMatrix4(sm.bindMatrixInverse)
-      pos.setXYZ(k, v.x, v.y, v.z)
     }
-    pos.needsUpdate = true
+    v.applyMatrix4(sm.bindMatrixInverse)
+    pos.setXYZ(k, v.x, v.y, v.z)
   }
+  pos.needsUpdate = true
   geo.setIndex(kept)
   geo.computeBoundingSphere()
   return kept.length

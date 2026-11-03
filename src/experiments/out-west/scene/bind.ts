@@ -33,7 +33,7 @@ export interface Land {
 }
 
 /** Bind-space bone positions by name, from a skeleton's inverse bind matrices. */
-function bindBones(sm: SkinnedMesh): Map<string, Vector3> {
+export function bindBones(sm: SkinnedMesh): Map<string, Vector3> {
   const out = new Map<string, Vector3>()
   sm.skeleton.bones.forEach((b, i) => {
     const inv = sm.skeleton.boneInverses[i]

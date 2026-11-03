@@ -46,7 +46,7 @@ import { VAT_W, type VatClipInfo, type VatJob, type VatResult } from './vat-shar
 
 export const VAT_FPS = 15
 /** Bump when the bake changes; also part of the IndexedDB key. */
-const VAT_VERSION = 'vat8-skinhair'
+const VAT_VERSION = 'vat9-collar'
 const LOD2_TRIS = 1500
 
 /** Clothing materials per base, recoloured per player (slot 1 top, slot 2 bottoms). */
