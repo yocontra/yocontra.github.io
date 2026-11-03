@@ -10,6 +10,11 @@ Numbers are reserved per workstream, so parallel work never collides:
 | `0005_*.sql`                         | stream B: matches, ghosts, pair stats            |
 | `0006_*.sql`                         | stream F: Frontier deposits and lobby state      |
 | `0007_budget.sql`                    | lead: usage meter for the spend cap              |
+| `0011_ledger_standoff_kinds.sql`     | stream B: `duel_draw`/`duel_froze` ledger kinds  |
 
 A stream that needs a second migration takes the next free number above 0010 and notes it here.
 Never edit a migration after it has been applied anywhere.
+
+`0011` rebuilds `ledger` (SQLite can't alter a CHECK): every row is copied with its id, amounts,
+balances and keys, and the AUTOINCREMENT high-water mark is carried over. Apply it before deploying
+the Worker that books the new kinds.

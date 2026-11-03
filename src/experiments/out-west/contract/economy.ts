@@ -21,6 +21,10 @@ export const LEDGER_KINDS = [
   'gauntlet_clear',
   'duel_win',
   'duel_loss',
+  /** A standoff that ended level (a dead heat never broken): XP only. */
+  'duel_draw',
+  /** Both players froze: XP only. */
+  'duel_froze',
   'ghost_win',
   'ghost_royalty',
   'ffa_kill_mint',

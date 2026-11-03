@@ -133,6 +133,15 @@ describe('settlement (real D1)', () => {
       }),
     )
     expect(froze.settlements[1]).toMatchObject({ delta: 0, xp: 25 })
+    // booked as standoffs, not wins: the hub labels them "Standoff: …", never "Bounty Hunt win"
+    const kinds = await t.db
+      .prepare('SELECT kind, delta, xp FROM ledger WHERE account_id = ? AND ref LIKE ? ORDER BY id')
+      .bind(a, 'room%')
+      .all<{ kind: string; delta: number; xp: number }>()
+    expect(kinds.results).toEqual([
+      { kind: 'duel_draw', delta: 0, xp: 50 },
+      { kind: 'duel_froze', delta: 0, xp: 25 },
+    ])
   })
 
   it('a dodge costs half and pays the other nothing', async () => {

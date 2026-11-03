@@ -254,7 +254,7 @@ function seatMoney(input: SettleInput, seat: Seat, h: HumanSeat): SeatMoney {
     })
     money.entries.push({
       accountId: h.accountId,
-      kind: 'duel_win',
+      kind: result === 'froze' ? 'duel_froze' : 'duel_draw',
       amount: 0,
       xp,
       ref: input.matchId,

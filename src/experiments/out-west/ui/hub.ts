@@ -4,7 +4,7 @@
  * account panel, the Outfitter, the ledger and the leaderboard. Signed out, single player works
  * fully and the online modes ask for a passkey.
  */
-import type { MeResponse } from '../contract/economy.ts'
+import type { LedgerKind, MeResponse } from '../contract/economy.ts'
 import { DEFAULT_LOADOUT, type Loadout, normalizeLoadout } from '../data/catalog.ts'
 import { money } from '../data/economy.ts'
 import { bountyForLevel, levelProgress, titleFor } from '../data/progression.ts'
@@ -38,12 +38,14 @@ export interface HubDeps {
   openBoard: () => void
 }
 
-const LEDGER_LABEL: Record<string, string> = {
+const LEDGER_LABEL: Record<LedgerKind, string> = {
   // biome-ignore-start lint/style/useNamingConvention: ledger kinds are snake_case on the wire
   start_grant: 'Grubstake',
   gauntlet_clear: 'Gauntlet bounty',
   duel_win: 'Bounty Hunt win',
   duel_loss: 'Bounty Hunt loss',
+  duel_draw: 'Standoff: dead heat',
+  duel_froze: 'Standoff: both froze',
   ghost_win: 'Ghost duel',
   ghost_royalty: 'Your ghost’s cut',
   ffa_kill_mint: 'Frontier kill',
