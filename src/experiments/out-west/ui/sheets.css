@@ -35,12 +35,15 @@
     var(--ow-shadow-2);
 }
 .ow-sheet-panel {
+  container-type: inline-size;
   width: min(32rem, 100%);
   max-height: 100%;
   overflow-y: auto;
   animation: ow-paper-in var(--ow-t-mid) var(--ow-ease-out) both;
 }
-.ow-sheet-head {
+/* the title and its Close share one line: a long title wraps (or breaks) before Close moves */
+.ow-hub-row.ow-sheet-head {
+  flex-wrap: nowrap;
   justify-content: space-between;
   align-items: center;
   padding-bottom: var(--ow-s2);
@@ -60,6 +63,14 @@
   letter-spacing: 0.04em;
   text-transform: uppercase;
   color: var(--ow-bone);
+}
+.ow-sheet-head > .ow-hub-h {
+  flex: 1 1 auto;
+  min-width: 0;
+  /* shrinks with the sheet before a word has to break beside Close */
+  font-size: clamp(var(--ow-fs-lead), 6.5cqi, var(--ow-fs-h3));
+  overflow-wrap: anywhere;
+  text-wrap: balance;
 }
 .ow-hub-note {
   margin: 0;

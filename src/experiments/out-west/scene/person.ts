@@ -35,6 +35,7 @@ import type {
 } from '../data/outlaws.ts'
 import type { Piece } from './bake.ts'
 import { isSkinned, type Land, landmarks, matName, weightsOf } from './bind.ts'
+import { tuckNeck } from './collar.ts'
 import { type Body, boneKey } from './fit.ts'
 import { prune } from './outfit.ts'
 import { trimWhiskers, type WhiskerLook, wearsWhiskers } from './whiskers.ts'
@@ -180,6 +181,7 @@ export function becomeHimself(
     }
   })
   swapHair(model, bones, o.hair, o.hairFrom ?? null)
+  tuckNeck(model)
   reshape(model, o.build, o.face)
   applyBuild(bones, o.build)
   return sculpted

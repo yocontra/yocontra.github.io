@@ -7,8 +7,10 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
+  /* safe: when the posters and buttons outgrow a short screen, it scrolls from the top */
+  justify-content: safe center;
   gap: var(--ow-s3);
+  overflow-y: auto;
   padding: max(var(--ow-s3), var(--ow-sai-t)) max(var(--ow-s3), var(--ow-sai-r))
     max(var(--ow-s3), var(--ow-sai-b)) max(var(--ow-s3), var(--ow-sai-l));
   background: radial-gradient(circle at 50% 45%, rgb(10 6 4 / 0.78), rgb(10 6 4 / 0.95));
@@ -206,6 +208,7 @@
   opacity: 1;
 }
 .ow-results-panel {
+  container-type: inline-size;
   position: relative;
   width: min(34rem, 100%);
   max-height: 100%;
@@ -231,11 +234,14 @@
   max-width: 100%;
   font-family: var(--ow-font-display);
   font-weight: 400;
-  font-size: clamp(1.5rem, 6vw, 2.25rem);
+  /* "<a 16-letter name> is dead": shrinks with the receipt, then wraps (anywhere, as a last resort) */
+  font-size: clamp(1.25rem, 7cqi, 2.25rem);
   line-height: 1;
   letter-spacing: 0.02em;
   text-align: center;
   text-transform: uppercase;
+  text-wrap: balance;
+  overflow-wrap: anywhere;
   color: var(--ow-ink);
   border: 3px solid currentColor;
   animation: ow-stamp 0.45s 0.25s var(--ow-ease-slam) both;
@@ -342,6 +348,17 @@
 }
 .ow-results-vote:empty {
   display: none;
+}
+
+/* short landscape phones: posters sized to the height, so READY stays on screen */
+@media (max-height: 480px) and (min-aspect-ratio: 1 / 1) {
+  .ow-match {
+    gap: var(--ow-s2);
+  }
+  .ow-wanted {
+    width: min(16rem, 34vh);
+    padding: 5px;
+  }
 }
 
 /* ---------------------------------------------------------- portrait phones */

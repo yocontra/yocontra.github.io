@@ -276,9 +276,11 @@ export function bandana(f: Fit, color: number): Piece[] {
 export function mask(f: Fit, color: number): Piece[] {
   const h = f.head
   const yTop = h.eye - 0.48 * (h.eye - h.chin)
-  const yBot = f.neck.lo + 0.3 * (f.neck.hi - f.neck.lo)
-  // the face and neck only: long hair hanging past the jaw would balloon it
-  const face = onBones(f.body, ['Head', 'Neck']).filter((s) => s.mat !== 'Hair')
+  // it ends mid-neck, tucked toward the collar: lower, it caught the shoulders and flared to a cowl
+  const yBot = f.neck.lo + 0.55 * (f.neck.hi - f.neck.lo)
+  // shrink-wrapped to the skin of his face and neck: hair, whiskers and a standing collar would
+  // hold it off the face like a board
+  const face = onBones(f.body, ['Head', 'Neck']).filter((s) => s.mat === 'Skin')
   const geo = shell({
     samples: face,
     cx: h.cx,
@@ -287,10 +289,10 @@ export function mask(f: Fit, color: number): Piece[] {
     yBot,
     arc: 0,
     half: Math.PI,
-    rings: 6,
-    segs: 22,
-    margin: 0.012,
-    band: 0.012,
+    rings: 10,
+    segs: 26,
+    margin: 0.006,
+    band: 0.008,
     color: lin(color),
   })
   return [

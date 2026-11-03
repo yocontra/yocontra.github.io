@@ -16,7 +16,9 @@ export type HubShot = 'hub' | 'store'
 
 /** How far the look point slides right of him (landscape), and drops (portrait). */
 const SIDE: Record<HubShot, number> = { hub: 1.1, store: 1.1 }
-const LIFT: Record<HubShot, number> = { hub: -0.75, store: -0.55 }
+const LIFT: Record<HubShot, number> = { hub: -0.38, store: -0.55 }
+/** Portrait pulls back further for the hub: the name plate above and the tiles below leave a short band. */
+const PORTRAIT_PULL: Record<HubShot, number> = { hub: 1.6, store: 1.35 }
 
 /** Swap your character for one wearing `loadout`; the duel reads `player` fresh every frame. */
 export function wearLoadout(s: DuelState, loadout: unknown, dyes: Dyes = {}): void {
@@ -55,7 +57,9 @@ export function hubShot(s: DuelState, shot: HubShot): void {
         s.player.root.rotation.y = 0.4 + Math.sin(t * 0.35) * 0.9
       }
       const k = easeInOutCubic(clamp01(t / 2.4))
-      const dist = MathUtils.lerp(store ? 5.6 : 7.5, store ? 4.4 : 5.8, k) * (portrait ? 1.35 : 1)
+      const dist =
+        MathUtils.lerp(store ? 5.6 : 7.5, store ? 4.4 : 5.8, k) *
+        (portrait ? PORTRAIT_PULL[shot] : 1)
       // the panel sits right (landscape) or below (portrait): push him the other way in frame
       const side = SIDE[shot] * (portrait ? 0 : 1)
       const lift = portrait ? LIFT[shot] : 0

@@ -1,10 +1,27 @@
+import { DEFAULT_LOADOUT, type Loadout } from '../data/catalog.ts'
+import type { Dyes } from '../data/dye.ts'
 import { type Look, OUTLAWS, type Outlaw, RIFLEMAN_LOOK } from '../data/outlaws.ts'
 import type { Actor } from '../scene/actor.ts'
 import { castActor } from '../scene/cast.ts'
+import { dressedActor } from '../scene/loadout.ts'
 import type { PortraitStudio } from '../scene/portrait.ts'
 import { propObject } from '../scene/props.ts'
 import { drawPoster } from '../ui/poster.ts'
 import { type DuelState, V } from './state.ts'
+
+/** The player's starter kit and a dyed outfitter look, for `#lineup&kit`. */
+const KITS: readonly { loadout: Loadout; dyes: Dyes }[] = [
+  { loadout: { ...DEFAULT_LOADOUT }, dyes: {} },
+  {
+    loadout: {
+      ...DEFAULT_LOADOUT,
+      outfit: 'outfit.gamblers-frock',
+      hat: 'hat.plainsman',
+      extra: 'extra.handlebar',
+    },
+    dyes: { 'outfit.gamblers-frock': 'oxblood', 'hat.plainsman': 'indigo' },
+  },
+]
 
 /** #lineup: every outlaw side by side in the street (for review screenshots). */
 export async function lineup(s: DuelState, day: number): Promise<Actor[]> {
@@ -26,6 +43,10 @@ export async function lineup(s: DuelState, day: number): Promise<Actor[]> {
       gun: c.gun ? propObject(c.gun) : null,
       offGun: o?.gimmick === 'two-guns' || o?.gimmick === 'boss',
     })
+    stand(a, i)
+  }
+  /** Stand him in the line at slot `i` (nine in front, the rest behind), posed. */
+  const stand = (a: Actor, i: number): void => {
     const front = i < 9
     const k = front ? i : i - 9
     a.root.position.set(-6.4 + k * 1.6 + (front ? 0 : 0.8), 0, front ? 3 : 6)
@@ -45,6 +66,12 @@ export async function lineup(s: DuelState, day: number): Promise<Actor[]> {
     row(o, o.look, i)
   }
   row(null, RIFLEMAN_LOOK, 17)
+  // `kit`: the player as he starts, and in a dyed outfitter look (slots 18 and 19, review only)
+  if (hash.has('kit')) {
+    for (const [j, kit] of KITS.entries()) {
+      stand(dressedActor(c.assets.player, c.gun, kit.loadout, { dyes: kit.dyes }), 18 + j)
+    }
+  }
   c.world.focusShadow(V(0, 0, 4))
   s.phase = 'end'
   const fa = actors[Number(hash.get('focus') ?? '-1')]

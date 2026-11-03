@@ -52,9 +52,22 @@
 }
 
 /* ---------------------------------------------------------- the Most Wanted board */
+/* two tabs: they share the width and wrap their labels, never scroll or fade */
 .ow-feat-board-tabs {
   margin-bottom: var(--ow-s3);
   border-bottom-color: var(--ow-rule-ink);
+  overflow-x: visible;
+  mask-image: none;
+}
+.ow-feat-board-tabs .ow-store-tab {
+  flex: 1 1 0;
+  justify-content: center;
+  min-width: 0;
+  padding-block: 6px;
+  white-space: normal;
+  text-align: center;
+  text-wrap: balance;
+  line-height: 1.1;
 }
 /* the board is printed on paper: tabs and notes in ink */
 .ow-board-panel .ow-feat-board-tabs .ow-store-tab {

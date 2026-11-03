@@ -16,7 +16,7 @@ import { haptic } from '../platform/haptics.ts'
 import type { SaveData } from '../save.ts'
 import { DRAW_SOUNDS } from '../scene/loadout.ts'
 import { MatchIntro } from '../ui/match-intro.ts'
-import { type OpponentRef, ResultsPanel } from '../ui/results.ts'
+import { type OpponentRef, ResultsPanel, RoomNews } from '../ui/results.ts'
 import { recordLine } from '../ui/standing.ts'
 import { tickCoward } from './defeat.ts'
 import type { Director, DirectorHooks } from './director.ts'
@@ -84,6 +84,7 @@ export class PvpDuel implements DirectorHooks {
   private lostLine = null as string | null
   /** The next wait's draw number is already known (from `suddenDeath` or `sync`). */
   private drawKnown = false as boolean
+  private readonly news = new RoomNews()
   /** The rematch number of the last hello: a rejoin repeats it, a rematch moves it on. */
   private rematchN = -1
   /** The verdict arrived in a rejoin's sync (no money lines for us in it). */
@@ -292,7 +293,7 @@ export class PvpDuel implements DirectorHooks {
         }
         break
       case 'rematch':
-        this.results?.setVotes(m.votes, this.seat, m.left)
+        this.news.vote(m, this.seat)
         break
       case 'error':
         if (m.fatal) {
@@ -322,6 +323,7 @@ export class PvpDuel implements DirectorHooks {
     }
     this.xpAfter = null
     this.result = null
+    this.news.reset()
     this.synced = false
     this.results?.close()
     this.results = null
@@ -502,6 +504,7 @@ export class PvpDuel implements DirectorHooks {
       },
       this.opponentRef(),
     )
+    this.news.attach(this.results, this.seat)
     fetchDuelStats()
       .then((s) => {
         if (s.ok) {
@@ -543,8 +546,7 @@ export class PvpDuel implements DirectorHooks {
       return
     }
     if (this.result) {
-      this.results?.disableRematch()
-      this.results?.say(reason)
+      this.news.close(reason)
       return
     }
     this.d.c.hud.fake(`[${reason}]`, 3000)
