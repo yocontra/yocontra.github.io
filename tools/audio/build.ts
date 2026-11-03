@@ -24,14 +24,17 @@ interface Point {
   end: number
 }
 
+/** Biome formats long literals with separators (`151.204_71`). */
+const num = (s: string | undefined) => Number((s ?? '').replaceAll('_', ''))
+
 function readPoints(): Record<string, Point> {
   if (!existsSync(POINTS)) {
     return {}
   }
   const out: Record<string, Point> = {}
-  const re = /^ {2}(\w+): \{ start: ([\d.]+), end: ([\d.]+) \},$/gmu
+  const re = /^ {2}(\w+): \{ start: ([\d._]+), end: ([\d._]+) \},$/gmu
   for (const m of readFileSync(POINTS, 'utf8').matchAll(re)) {
-    out[m[1] ?? ''] = { start: Number(m[2]), end: Number(m[3]) }
+    out[m[1] ?? ''] = { start: num(m[2]), end: num(m[3]) }
   }
   return out
 }

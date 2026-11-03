@@ -29,6 +29,11 @@ export interface FileSfx {
   start?: number
   /** Buffer loop points, for decoded loops. */
   loop?: { start: number; end: number }
+  /**
+   * The file is `count` variants `step` s apart, each `len` s long. A play without an `offset`
+   * picks one at random (so a plain `play()` never runs through every variant).
+   */
+  grid?: { count: number; step: number; len: number }
 }
 
 export interface Layer {
@@ -72,13 +77,13 @@ const FILES = {
   hitBody: f('hit_body', 1),
   hitWood: f('hit_wood', 0),
   hitDirt: f('hit_dirt', -1),
-  ricochet: f('ricochet', 1),
+  ricochet: f('ricochet', 1, 'core', { grid: { count: 4, step: 1, len: 0.8 } }),
   flyby: f('flyby', 0),
   bodyfall: f('bodyfall', 0),
   // feet (grids: dirt and wood 6 steps 0.6 s apart, spurs 8 jingles 1 s apart)
-  dirtsteps: f('dirtsteps', 2),
-  woodsteps: f('woodsteps', 2),
-  spursteps: f('spursteps', -5),
+  dirtsteps: f('dirtsteps', 2, 'core', { grid: { count: 6, step: 0.6, len: 0.5 } }),
+  woodsteps: f('woodsteps', 2, 'core', { grid: { count: 6, step: 0.6, len: 0.5 } }),
+  spursteps: f('spursteps', -5, 'core', { grid: { count: 8, step: 1, len: 0.7 } }),
   // people, animals, town
   shout: f('shout', 2),
   gasp: f('gasp', 0),

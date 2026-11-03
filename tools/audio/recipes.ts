@@ -245,7 +245,17 @@ export const RECIPES: Record<string, Recipe> = {
     out: 'sfx/ricochet.m4a',
     lufs: -16,
     credit: GEN,
-    make: () => shot(load(raw('ricochet'), 1), 1.6, 0.6),
+    // Four variants on a 1 s grid (call sites pick `offset: 0..3`, 0.8 s each): the take's own
+    // ricochet and three re-pitched copies, so repeats never sound identical.
+    make: () => {
+      const one = shot(load(raw('ricochet'), 1), 0.8, 0.35)
+      let out = silence(4, 1)
+      ;[1, 1.09, 0.93, 1.17].forEach((r, i) => {
+        const v = r === 1 ? one : filt(one, `asetrate=${Math.round(48_000 * r)},aresample=48000`)
+        out = mixInto(out, fade(slice(v, 0, 0.8), 0.002, 0.3), i)
+      })
+      return out
+    },
   },
   // ---------------------------------------------------------------- footsteps (grids the call sites slice)
   dirtsteps: {

@@ -297,6 +297,10 @@ export class AudioEngine {
     const mode = audioDebugMode()
     this.dbg = mode === null ? null : new AudioDebug(ctx, mode, () => this.stats())
     this.dbg?.log('unlock', ctx.sampleRate)
+    if (this.dbg) {
+      // Debug only: lets a test drive songs and loops directly (`#audiodebug`).
+      Reflect.set(globalThis, '__owAudioEngine', this)
+    }
     this.buildGraph(ctx)
     this.noise = this.makeNoise(ctx, 1)
     this.pool = new DeckPool(ctx)
@@ -630,9 +634,14 @@ export class AudioEngine {
       s.connect(this.slapIn)
     }
     const start = def.start ?? 0
-    const offset =
-      start + this.num('offset', o.offset, 0, 0, Math.max(0, buf.duration - start - 0.02))
-    const len = Math.max(0.02, this.num('duration', o.duration, buf.duration - offset, 0, 600))
+    // A gridded file played without an offset: one random variant, not the whole run.
+    const grid = def.grid && o.offset === undefined ? def.grid : null
+    const pick = grid ? Math.floor(Math.random() * grid.count) * grid.step : o.offset
+    const offset = start + this.num('offset', pick, 0, 0, Math.max(0, buf.duration - start - 0.02))
+    const len = Math.max(
+      0.02,
+      this.num('duration', o.duration ?? grid?.len, buf.duration - offset, 0, 600),
+    )
     const end = when + len / rate
     // Fade the tail too, so sprite slices end cleanly.
     g.gain.setValueAtTime(peak, Math.max(when + FADE, end - 0.02))
