@@ -8,6 +8,7 @@ import {
   type Result,
   saveName,
 } from '../net/leaderboard.ts'
+import { mountMostWanted } from './most-wanted.ts'
 
 export interface Banked {
   total: number
@@ -23,8 +24,13 @@ export interface BoardOpen {
   submitLabel?: string
   /** A short line for view-only boards ("Practice runs aren’t ranked."). */
   note?: string
+  /** View-only boards open on this tab (the gauntlet's by default). */
+  tab?: BoardTab
   onClose?: () => void
 }
+
+/** The gauntlet's all-time run board, or the monthly Most Wanted earnings board. */
+export type BoardTab = 'gauntlet' | 'most-wanted'
 
 function el<K extends keyof HTMLElementTagNameMap>(
   tag: K,
@@ -123,6 +129,16 @@ export class Board {
     const panel = el('div', 'ow-board-panel', r)
     el('h2', 'ow-board-title', panel, 'LEADERBOARD')
     const submit = this.opts.submit
+    if (!submit) {
+      this.tabs(panel)
+    }
+    if (!submit && this.opts.tab === 'most-wanted') {
+      mountMostWanted(el('div', 'ow-feat-mw', panel), this.root)
+      this.status = null
+      this.list = null
+      this.closeButton(panel)
+      return
+    }
     if (submit) {
       const form = el('form', 'ow-board-form', panel)
       el('div', 'ow-board-purse', form, `Your purse: ${money(this.opts.purse ?? 0)}`)
@@ -147,10 +163,40 @@ export class Board {
     this.status = el('div', 'ow-board-status', panel)
     this.status.setAttribute('aria-live', 'polite')
     this.list = el('ol', 'ow-board-list', panel)
+    this.closeButton(panel)
+  }
+
+  private closeButton(panel: HTMLElement): void {
     const close = el('button', 'ow-btn', panel, 'Close')
     close.type = 'button'
     close.addEventListener('click', () => this.close())
     this.closeBtn = close
+  }
+
+  /** Gauntlet runs | Most Wanted, for a view-only board. */
+  private tabs(panel: HTMLElement): void {
+    const bar = el('div', 'ow-store-tabs ow-feat-board-tabs', panel)
+    bar.setAttribute('role', 'tablist')
+    const current = this.opts.tab ?? 'gauntlet'
+    const tabs: readonly [BoardTab, string][] = [
+      ['gauntlet', 'Gauntlet runs'],
+      ['most-wanted', 'Most Wanted'],
+    ]
+    for (const [tab, label] of tabs) {
+      const b = el('button', `ow-store-tab${tab === current ? ' on' : ''}`, bar, label)
+      b.type = 'button'
+      b.setAttribute('role', 'tab')
+      b.setAttribute('aria-selected', String(tab === current))
+      b.addEventListener('click', (e) => {
+        e.stopPropagation()
+        if (tab !== (this.opts.tab ?? 'gauntlet')) {
+          this.opts = { ...this.opts, tab }
+          this.loadSeq++
+          this.render()
+          this.refresh().catch(() => undefined)
+        }
+      })
+    }
   }
 
   private setStatus(text: string, kind: 'info' | 'error' | 'ok' = 'info'): void {
@@ -162,6 +208,9 @@ export class Board {
   }
 
   private async refresh(): Promise<void> {
+    if (!this.list) {
+      return
+    }
     const seq = ++this.loadSeq
     if (this.status?.dataset.kind !== 'ok') {
       this.setStatus('Loading…')

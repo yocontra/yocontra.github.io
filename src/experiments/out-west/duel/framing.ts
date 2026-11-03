@@ -8,7 +8,7 @@ import {
   type Pose,
   twoShot,
 } from '../scene/camera.ts'
-import { STREET } from '../scene/world.ts'
+import { STREET } from '../scene/street.ts'
 import { type DuelState, V } from './state.ts'
 
 /**

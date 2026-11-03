@@ -1,14 +1,27 @@
+import { openReconnecting, type ReconnectingSocket } from '../platform/reconnect.ts'
 import { getAccessToken } from './auth.ts'
 import { LEADERBOARD_URL, type Result } from './leaderboard.ts'
+import {
+  RANKED_RESUME_WINDOW_MS,
+  type RankedResume,
+  type RankedSessionCreated,
+  rankedClosedCopy,
+  resumeUrl,
+} from './wire-ranked.ts'
 
 /**
  * The ranked session: a WebSocket to the server's DuelSession. The server owns
  * the wait, the cues, the call, the outlaw's draw, the verdict and the purse;
  * this module only carries messages. Every failure becomes a polite string.
+ *
+ * A dropped socket (a network switch, the server restarting its object) is not the end of the
+ * run: when the server handed out a resume token, the session reconnects with backoff and the
+ * server answers with a `hello` carrying `resumed` (where the run stands). Without a token, or
+ * once the token is refused, the run drops to practice as before.
  */
 
 export type ServerMessage =
-  | { type: 'hello'; sessionId: string; economyVersion: number }
+  | { type: 'hello'; sessionId: string; economyVersion: number; resumed?: RankedResume }
   | { type: 'ping'; n: number }
   | { type: 'cue'; duel: number; cue: string }
   | { type: 'call'; duel: number }
@@ -27,11 +40,18 @@ export type ServerMessage =
 
 export interface RankedHandlers {
   message: (m: ServerMessage) => void
+  /** The run is over for good (dropped and not resumable, or closed). */
   closed: (reason: string) => void
+  /** The link dropped and a resume is under way. */
+  reconnecting: (reason: string) => void
+  /** Back on the same run; `resumed` is the server's account of where it stands. */
+  resumed: (resumed: RankedResume | null) => void
 }
 
 const CONNECT_TIMEOUT_MS = 8000
 const FINAL_TIMEOUT_MS = 10_000
+/** The server pings every 400 ms: this much silence is a dead link. */
+const STALE_MS = 2500
 
 const isRecord = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null
 const num = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v)
@@ -52,8 +72,11 @@ function validResult(m: Record<string, unknown>): boolean {
   )
 }
 
+const validResume = (v: unknown): boolean =>
+  v === undefined || (isRecord(v) && num(v.level) && num(v.purse) && num(v.nextDuel))
+
 const VALIDATORS: Record<string, (m: Record<string, unknown>) => boolean> = {
-  hello: (m) => typeof m.sessionId === 'string',
+  hello: (m) => typeof m.sessionId === 'string' && validResume(m.resumed),
   ping: (m) => num(m.n),
   cue: (m) => num(m.duel) && typeof m.cue === 'string',
   call: (m) => num(m.duel),
@@ -80,7 +103,7 @@ export function parseServerMessage(raw: unknown): ServerMessage | null {
   return check?.(v) ? (v as ServerMessage) : null
 }
 
-async function createSession(token: string): Promise<Result<string>> {
+async function createSession(token: string): Promise<Result<RankedSessionCreated>> {
   try {
     // Signed in, the run belongs to your account: first clears pay XP and dollars and earn the
     // Bounty Hunt licence. Without the bearer the server can't tell, and the run stays anonymous.
@@ -97,6 +120,10 @@ async function createSession(token: string): Promise<Result<string>> {
     const body: unknown = await res.json().catch(() => null)
     if (!res.ok) {
       const msg = isRecord(body) && typeof body.error === 'string' ? body.error : null
+      const reason = isRecord(body) && typeof body.reason === 'string' ? body.reason : null
+      if (reason === 'over_budget') {
+        return { ok: false, error: msg ?? rankedClosedCopy() }
+      }
       return {
         ok: false,
         error:
@@ -108,23 +135,53 @@ async function createSession(token: string): Promise<Result<string>> {
     if (!isRecord(body) || typeof body.wsUrl !== 'string') {
       return { ok: false, error: 'The ranked server sent something odd back.' }
     }
-    return { ok: true, value: body.wsUrl }
+    return {
+      ok: true,
+      value: {
+        wsUrl: body.wsUrl,
+        resumeToken: typeof body.resumeToken === 'string' ? body.resumeToken : null,
+      },
+    }
   } catch {
     return { ok: false, error: 'Couldn’t reach the ranked server.' }
   }
 }
 
 export class RankedSession {
-  private readonly ws: WebSocket
+  private readonly link: ReconnectingSocket
   private handlers: RankedHandlers | null = null
   private closedReason = null as string | null
   private finalWaiter = null as ((r: Result<{ total: number; rank: number }>) => void) | null
+  /** Waiting for the first `hello` (the session isn't handed out until then). */
+  private onFirstHello = null as ((ok: boolean) => void) | null
+  /** A reconnect is in flight: the next `hello` is the resume. */
+  private resuming = false as boolean
+  private linkUp = false as boolean
 
-  private constructor(ws: WebSocket) {
-    this.ws = ws
-    ws.addEventListener('message', (e) => this.onMessage(e.data))
-    ws.addEventListener('close', () => this.onClose('The ranked connection closed.'))
-    ws.addEventListener('error', () => this.onClose('The ranked connection dropped.'))
+  private constructor(created: RankedSessionCreated, firstHello: (ok: boolean) => void) {
+    this.onFirstHello = firstHello
+    this.link = openReconnecting({
+      // the first attempt opens the run; later ones resume it, or give up without a token
+      url: () => {
+        if (!this.linkUp) {
+          return Promise.resolve(created.wsUrl)
+        }
+        return Promise.resolve(
+          created.resumeToken ? resumeUrl(created.wsUrl, created.resumeToken) : null,
+        )
+      },
+      onOpen: () => {
+        this.linkUp = true
+      },
+      onMessage: (data) => this.onMessage(data),
+      onDrop: (reason) => this.onDrop(reason),
+      onGiveUp: (reason) => this.onClose(this.linkUp ? 'The ranked connection dropped.' : reason),
+      staleMs: STALE_MS,
+      deadlineMs: RANKED_RESUME_WINDOW_MS,
+      binaryType: 'blob',
+      // a run that's over (banked, refused, fatal error) never comes back
+      isFinal: (code) => code === 1000 || code === 1008 || (code >= 4000 && code < 4100),
+    })
   }
 
   /** POST /sessions with a Turnstile token, then open the socket and wait for hello. */
@@ -134,36 +191,23 @@ export class RankedSession {
       return created
     }
     return await new Promise<Result<RankedSession>>((resolve) => {
-      let ws: WebSocket
-      try {
-        ws = new WebSocket(created.value)
-      } catch {
-        resolve({ ok: false, error: 'Couldn’t open the ranked connection.' })
-        return
-      }
       const timer = setTimeout(() => {
-        ws.close()
+        session.close()
         resolve({ ok: false, error: 'The ranked server didn’t answer.' })
       }, CONNECT_TIMEOUT_MS)
-      const onFirst = (e: MessageEvent): void => {
-        const m = parseServerMessage(e.data)
-        if (m?.type !== 'hello') {
-          return
-        }
+      const session: RankedSession = new RankedSession(created.value, (ok) => {
         clearTimeout(timer)
-        ws.removeEventListener('message', onFirst)
-        resolve({ ok: true, value: new RankedSession(ws) })
-      }
-      ws.addEventListener('message', onFirst)
-      ws.addEventListener('error', () => {
-        clearTimeout(timer)
-        resolve({ ok: false, error: 'Couldn’t open the ranked connection.' })
+        resolve(
+          ok
+            ? { ok: true, value: session }
+            : { ok: false, error: 'Couldn’t open the ranked connection.' },
+        )
       })
     })
   }
 
   get open(): boolean {
-    return this.closedReason === null && this.ws.readyState === WebSocket.OPEN
+    return this.closedReason === null && this.link.state === 'open' && !this.resuming
   }
 
   listen(h: RankedHandlers): void {
@@ -172,7 +216,34 @@ export class RankedSession {
 
   private send(m: Record<string, unknown>): void {
     if (this.open) {
-      this.ws.send(JSON.stringify(m))
+      this.link.send(JSON.stringify(m))
+    }
+  }
+
+  private onDrop(reason: string): void {
+    if (this.closedReason !== null) {
+      return
+    }
+    if (this.onFirstHello) {
+      return
+    }
+    this.resuming = true
+    // a run being banked can't be confirmed over a dead link: the form says so and can retry
+    this.finalWaiter?.({ ok: false, error: 'The ranked connection dropped. Try again.' })
+    this.finalWaiter = null
+    this.handlers?.reconnecting(reason)
+  }
+
+  private onHello(m: Extract<ServerMessage, { type: 'hello' }>): void {
+    if (this.onFirstHello) {
+      const first = this.onFirstHello
+      this.onFirstHello = null
+      first(true)
+      return
+    }
+    if (this.resuming) {
+      this.resuming = false
+      this.handlers?.resumed(m.resumed ?? null)
     }
   }
 
@@ -181,18 +252,26 @@ export class RankedSession {
     if (!m) {
       return
     }
-    if (m.type === 'ping') {
-      // answered synchronously: this is the latency probe
-      this.send({ type: 'pong', n: m.n })
-      return
-    }
-    if (m.type === 'final') {
-      this.finalWaiter?.({ ok: true, value: { total: m.total, rank: m.rank } })
-      this.finalWaiter = null
-    }
-    if (m.type === 'error' && this.finalWaiter) {
-      this.finalWaiter({ ok: false, error: m.message })
-      this.finalWaiter = null
+    switch (m.type) {
+      case 'ping':
+        // answered synchronously: this is the latency probe
+        this.link.send(JSON.stringify({ type: 'pong', n: m.n }))
+        return
+      case 'hello':
+        this.onHello(m)
+        return
+      case 'final':
+        this.finalWaiter?.({ ok: true, value: { total: m.total, rank: m.rank } })
+        this.finalWaiter = null
+        break
+      case 'error':
+        if (this.finalWaiter) {
+          this.finalWaiter({ ok: false, error: m.message })
+          this.finalWaiter = null
+        }
+        break
+      default:
+        break
     }
     this.handlers?.message(m)
   }
@@ -202,6 +281,12 @@ export class RankedSession {
       return
     }
     this.closedReason = reason
+    this.resuming = false
+    if (this.onFirstHello) {
+      const first = this.onFirstHello
+      this.onFirstHello = null
+      first(false)
+    }
     this.finalWaiter?.({ ok: false, error: reason })
     this.finalWaiter = null
     this.handlers?.closed(reason)
@@ -235,6 +320,6 @@ export class RankedSession {
 
   close(): void {
     this.onClose('closed')
-    this.ws.close()
+    this.link.close()
   }
 }

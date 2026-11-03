@@ -370,15 +370,13 @@ export function fitHat(body: Body, eye: number, key: HatKey): HatFit | null {
   const c = crown(key)
   let s = (Math.min(hairGirth, girth + HAIR_GIRTH) + EASE) / OPENING_R
   // grow only until the crown clears his skull above the band
-  for (let it = 0; it < 24; it++) {
-    const clear = skull.every((q) => {
+  const clears = (k: number) =>
+    skull.every((q) => {
       const h = q.p.y - seat
-      const y = c.openY + h / s
-      return h <= 0 || (y <= c.topY && girthOf(q) <= c.wall(y) * s)
+      const y = c.openY + h / k
+      return h <= 0 || (y <= c.topY && girthOf(q) <= c.wall(y) * k)
     })
-    if (clear) {
-      break
-    }
+  for (let it = 0; it < 24 && !clears(s); it++) {
     s *= 1.02
   }
   return {

@@ -1,18 +1,14 @@
-// biome-ignore-all lint/style/noExcessiveLinesPerFile: one cohesive module (data table / scene builder); splitting would scatter tightly coupled code. Tracked for a later split.
-// biome-ignore-all lint/style/useThisInClassMethods: interface methods that are deliberate no-ops for this implementation
 // biome-ignore-all lint/suspicious/noUnnecessaryConditions: class fields are flags mutated from outside the method; Biome narrows them to their literal initializer
 import {
   type AnimationAction,
   type AnimationClip,
   AnimationMixer,
   type Bone,
-  CylinderGeometry,
   Group,
   LoopOnce,
   LoopRepeat,
   type Material,
-  Mesh,
-  MeshStandardMaterial,
+  type Mesh,
   type Object3D,
   Quaternion,
   type SkinnedMesh,
@@ -21,25 +17,15 @@ import {
 import type { GLTF } from 'three/examples/jsm/loaders/GLTFLoader.js'
 import { clone as cloneSkinned } from 'three/examples/jsm/utils/SkeletonUtils.js'
 import type { BodyKey, HatKey } from '../data/outlaws.ts'
-import { bake, bodyPieces, mergePieces, meshPieces, onBone, type Piece } from './bake.ts'
+import { bake, bodyPieces, meshPieces, onBone, type Piece } from './bake.ts'
 import { boneKey, bounds, sampleBody } from './fit.ts'
-import { fitHat, type HatFit, makeHat, tuckHair } from './hats.ts'
-import {
-  bandana,
-  bandoliers,
-  beard,
-  coat,
-  type Fit,
-  mask,
-  measure,
-  moustache,
-  outerThigh,
-  poncho,
-  prune,
-  star,
-} from './outfit.ts'
+import { fitHat, type HatFit, tuckHair } from './hats.ts'
+import { type HolsterLook, holsterParts, mergedProp, PLAIN_HOLSTER } from './kit.ts'
+import { type Fit, measure, outerThigh, prune } from './outfit.ts'
+import { watchPose } from './pose-watch.ts'
+import { dressPieces, measureStride, seatHat, slotOn, tintModel } from './rig.ts'
 import { characterMaterial } from './shade.ts'
-import { type Floor, vary } from './style.ts'
+import type { Floor } from './style.ts'
 
 const HEIGHT = 1.78
 
@@ -72,168 +58,9 @@ export interface ActorOpts {
   holster?: HolsterLook | undefined
 }
 
-/**
- * How a holster looks. Pure leatherwork: the gun's slot, and so the draw, never moves.
- * - `trim`: a contrasting band at the mouth and the toe (tooled leather).
- * - `rig`: a buscadero drop loop from the belt down to the holster.
- */
-export interface HolsterLook {
-  color: number
-  roughness?: number
-  trim?: number
-  rig?: boolean
-}
-
-/**
- * The tint of one of the base's materials: the outlaw's own, else the base's default (the
- * build gives the ranger's green a western colour, hair a brown); brows follow his hair and a
- * sculpted beard takes the beard colour.
- */
-function tintFor(
-  src: Material,
-  tint: Readonly<Record<string, number>>,
-  o: ActorOpts,
-): number | undefined {
-  const own = tint[src.name]
-  if (own !== undefined) {
-    return own
-  }
-  if (src.name === 'Beard' && o.beard !== undefined) {
-    return o.beard
-  }
-  if ((src.name === 'Brows' || src.name === 'Beard') && tint.Hair !== undefined) {
-    return tint.Hair
-  }
-  return src.userData.tint as number | undefined
-}
-
-const PLAIN_HOLSTER: HolsterLook = { color: 0x3a_24_14, roughness: 0.55 }
-
-/**
- * The holster's leather in its slot's frame (the barrel lies along +X, 0.045 up +Y). The body
- * cylinder is the same for every holster; tooling adds bands, a buscadero rig adds the drop loop
- * that hangs it from the belt.
- */
-function holsterParts(look: HolsterLook): Mesh[] {
-  const leather = new MeshStandardMaterial({ color: look.color, roughness: look.roughness ?? 0.55 })
-  leather.userData.swatch = 'leather'
-  const body = new Mesh(new CylinderGeometry(0.03, 0.026, 0.2, 7), leather)
-  body.rotation.z = Math.PI / 2
-  body.position.set(0.13, 0.045, 0)
-  const parts = [body]
-  if (look.trim !== undefined) {
-    const band = new MeshStandardMaterial({ color: look.trim, roughness: 0.4, metalness: 0.3 })
-    band.userData.swatch = 'metal'
-    for (const [x, r] of [
-      [0.04, 0.032],
-      [0.215, 0.028],
-    ] as const) {
-      const ring = new Mesh(new CylinderGeometry(r, r, 0.016, 7), band)
-      ring.rotation.z = Math.PI / 2
-      ring.position.set(x, 0.045, 0)
-      parts.push(ring)
-    }
-  }
-  if (look.rig) {
-    // a flat strap on the outer face (-Y, away from the leg), from the belt (-X, up the thigh)
-    // down past the mouth of the holster; local X becomes the thickness once rotated
-    const strap = new Mesh(new CylinderGeometry(0.036, 0.036, 0.16, 6, 1), leather)
-    strap.scale.set(0.22, 1, 1)
-    strap.rotation.z = Math.PI / 2
-    strap.position.set(0.02, 0.008, 0)
-    parts.push(strap)
-  }
-  return parts
-}
-
-/**
- * A gun as ONE mesh (its parts merged, vertex coloured, its own metal look):
- * one draw call in the holster or the hand instead of one per part.
- */
-function mergedProp(src: Object3D): Object3D {
-  const g = src.clone()
-  g.updateMatrixWorld(true)
-  let textured = false
-  g.traverse((o) => {
-    const m = o as Mesh
-    if (m.isMesh && (m.material as MeshStandardMaterial).map) {
-      textured = true
-    }
-  })
-  if (textured) {
-    return g
-  }
-  const pieces = meshPieces(g, g)
-  const metal = new MeshStandardMaterial({ vertexColors: true, roughness: 0.45, metalness: 0.55 })
-  const mesh = new Mesh(mergePieces(pieces), metal)
-  mesh.castShadow = true
-  const out = new Group()
-  out.name = src.name
-  out.add(mesh)
-  return out
-}
-
-const tmpV = new Vector3()
-const V3 = (x: number, y: number, z: number) => new Vector3(x, y, z)
-const tmpQ = new Quaternion()
-
-/** An action that is posing him: scheduled on its mixer and enabled (paused = held, still posing). */
+/** An action posing him: scheduled on its mixer and enabled (a paused, clamped clip still holds). */
 function posing(a: AnimationAction): boolean {
   return a.enabled && a.isScheduled()
-}
-
-/** Is he drawn: in a scene, every ancestor visible, his mesh visible. */
-function shown(a: Actor): boolean {
-  if (!a.meshes.some((m) => m.visible)) {
-    return false
-  }
-  let o: Object3D | null = a.root
-  while (o) {
-    if (!o.visible) {
-      return false
-    }
-    if ((o as Object3D & { isScene?: boolean }).isScene) {
-      return true
-    }
-    o = o.parent
-  }
-  return false
-}
-
-/**
- * Dev only: every frame, warn about any drawn actor with no clip posing him (he'd stand in his
- * bind pose, a T-pose). `globalThis.__owTPose` counts them for Playwright.
- */
-const watched = new Set<WeakRef<Actor>>()
-const warned = new WeakSet<Actor>()
-let watching = false
-
-function checkPoses(): void {
-  for (const ref of watched) {
-    const a = ref.deref()
-    if (!a || a.disposed) {
-      watched.delete(ref)
-      continue
-    }
-    const bad = shown(a) && a.poseWeight() < 1e-3
-    if (bad && !warned.has(a)) {
-      warned.add(a)
-      const n = Number(Reflect.get(globalThis, '__owTPose') ?? 0)
-      Reflect.set(globalThis, '__owTPose', n + 1)
-      console.warn(`[ow] T-pose: ${a.label} is drawn with no clip playing`)
-    } else if (!bad) {
-      warned.delete(a)
-    }
-  }
-  requestAnimationFrame(checkPoses)
-}
-
-function watchPose(a: Actor): void {
-  watched.add(new WeakRef(a))
-  if (!watching && typeof requestAnimationFrame === 'function') {
-    watching = true
-    requestAnimationFrame(checkPoses)
-  }
 }
 
 export type Clip =
@@ -263,8 +90,6 @@ export class Actor {
   readonly armR: Bone | null
   readonly forearmR: Bone | null
   hat: Group | null = null
-  /** Where his hat sits (null when he has none). */
-  hatFit: HatFit | null = null
   gun: Object3D | null = null
   offGun: Object3D | null = null
   rifle: Object3D | null = null
@@ -294,7 +119,9 @@ export class Actor {
   private readonly bones = new Map<string, Bone>()
   /** The base carries a sculpted beard (kept by prune when he wears one). */
   private realBeard = false
-  /** Set by dispose(); the dev pose watchdog forgets him. */
+  /** Where his hat sits (null when he has none); the VAT crowd reads it through `hat`. */
+  hatFit: HatFit | null = null
+  /** Set by dispose() (the dev pose watchdog forgets him). */
   disposed = false
   /** What the dev pose watchdog calls him. */
   readonly label: string
@@ -349,47 +176,18 @@ export class Actor {
     this.mixer.update(0)
     this.root.updateMatrixWorld(true)
 
-    // His own colours (tinted, then a seeded nudge so no two read identical).
-    const tint = opts.tint ?? {}
-    const seed = opts.seed ?? 'player'
-    const matCache = new Map<Material, Material>()
-    this.model.traverse((o) => {
-      const m = o as Mesh
-      if (!m.isMesh) {
-        return
-      }
-      const swap = (src: Material): Material => {
-        const cached = matCache.get(src)
-        if (cached) {
-          return cached
-        }
-        const c = src.clone() as MeshStandardMaterial
-        const hex = tintFor(src, tint, opts)
-        c.color.setHex(hex ?? 0xff_ff_ff)
-        // a tinted garment is recoloured (its main fabric), untinted keeps its texture
-        c.userData.recolor =
-          hex !== undefined && ((src.userData.lum as number | undefined) ?? 0) > 0
-        vary(c, seed)
-        if (hex === undefined) {
-          // untinted: the texture as authored (vary still sets roughness and rim)
-          c.color.setHex(0xff_ff_ff)
-        }
-        matCache.set(src, c)
-        return c
-      }
-      m.material = Array.isArray(m.material) ? m.material.map(swap) : swap(m.material)
-    })
+    tintModel(this.model, opts)
 
     // Dress him in the idle pose, fitted to his own surface, then bake it all
     // into one skinned mesh bound in that pose.
     const body = sampleBody(this.model, this.root)
     const fit = measure(body, this.bones)
-    const clothes = this.dress(fit, opts)
+    const clothes = dressPieces(fit, opts, this.root, this.realBeard)
     const pieces = [...bodyPieces(this.model, this.root, body), ...clothes]
-    // the hat is fitted to his skull now, so the hair it covers can be pressed under it
-    const hatFit = opts.hat ? fitHat(body, fit.head.eye, opts.hat) : null
-    if (hatFit) {
-      tuckHair(pieces, hatFit)
+    // the hat is fitted to his skull now, so the hair it covers is pressed under it before baking
+    this.hatFit = opts.hat ? fitHat(body, fit.head.eye, opts.hat) : null
+    if (this.hatFit) {
+      tuckHair(pieces, this.hatFit)
     }
     if (opts.gun) {
       pieces.push(
@@ -412,8 +210,12 @@ export class Actor {
     }
     this.meshes.push(bake(pieces, body, this.root, characterMaterial(this.floor)))
 
-    if (hatFit) {
-      this.attachHat(hatFit, opts.hatColor ?? 0x3a_2a_1a)
+    if (this.hatFit && this.head) {
+      this.hat = seatHat(
+        this.hatFit,
+        { color: opts.hatColor ?? 0x3a_2a_1a, floor: this.floor },
+        { head: this.head, root: this.root },
+      )
     }
     if (opts.gun) {
       this.gripGuns(opts.offGun ?? false)
@@ -421,75 +223,23 @@ export class Actor {
     if (opts.rifle) {
       this.attachRifle(opts.rifle)
     }
-    if (import.meta.env.DEV) {
-      watchPose(this)
-    }
+    watchPose(this)
   }
 
   private bone(name: string): Bone | null {
     return this.bones.get(boneKey(name)) ?? null
   }
 
-  /** Everything he wears, fitted and skinned (see outfit.ts). */
-  private dress(f: Fit, o: ActorOpts): Piece[] {
-    const out: Piece[] = []
-    if (o.coat !== undefined) {
-      out.push(...coat(f, o.coat))
-    }
-    if (o.poncho !== undefined) {
-      out.push(...poncho(f, o.poncho))
-    }
-    if (o.mask !== undefined) {
-      out.push(...mask(f, o.mask))
-    } else if (o.bandana !== undefined) {
-      out.push(...bandana(f, o.bandana))
-    }
-    if (o.bandoliers) {
-      out.push(...bandoliers(f, this.root))
-    }
-    if (o.star) {
-      out.push(...star(f, this.root))
-    }
-    if (o.beard !== undefined && !this.realBeard) {
-      out.push(...beard(f, o.beard))
-    }
-    if (o.moustache !== undefined) {
-      out.push(...moustache(f, o.moustache, this.root))
-    }
-    return out
-  }
-
-  /** Sample the walk clip to find stride length and heel-strike times (no foot sliding). */
+  /** Stride length and heel strikes from the walk clip, so his feet never slide. */
   private measureWalk(clip: AnimationClip): void {
     const footL = this.bone('FootL')
     const footR = this.bone('FootR')
     if (!(footL && footR)) {
       return
     }
-    const action = this.mixer.clipAction(clip)
-    action.reset().play()
-    action.weight = 1
-    const n = 48
-    const zl: number[] = []
-    const zr: number[] = []
-    const inv = this.root.matrixWorld.clone().invert()
-    for (let i = 0; i < n; i++) {
-      this.mixer.setTime((i / n) * clip.duration)
-      this.root.updateMatrixWorld(true)
-      inv.copy(this.root.matrixWorld).invert()
-      zl.push(footL.getWorldPosition(tmpV).applyMatrix4(inv).z)
-      zr.push(footR.getWorldPosition(tmpV).applyMatrix4(inv).z)
-    }
-    action.stop()
-    const range = (a: number[]) => Math.max(...a) - Math.min(...a)
-    const stride = (range(zl) + range(zr)) / 2
-    if (stride > 0.2 && stride < 1.5) {
-      this.paceLength = stride
-    }
-    const argmax = (a: number[]) => a.indexOf(Math.max(...a))
-    this.heelStrikes = [(argmax(zl) / n) * clip.duration, (argmax(zr) / n) * clip.duration].sort(
-      (a, b) => a - b,
-    )
+    const stride = measureStride({ mixer: this.mixer, root: this.root, feet: [footL, footR] }, clip)
+    this.paceLength = stride.paceLength ?? this.paceLength
+    this.heelStrikes = stride.heelStrikes
   }
 
   action(name: Clip): AnimationAction | null {
@@ -502,8 +252,8 @@ export class Actor {
     if (!a) {
       return null
     }
-    // Already playing it. "Current" alone isn't enough: a stopped action left as current
-    // (mixer.stopAllAction from outside) would keep him in his bind pose, a T-pose.
+    // Already playing it. "Current" alone isn't enough: a clip stopped behind play()'s back
+    // (mixer.stopAllAction) left as current would keep him in his bind pose, a T-pose.
     if (this.current === a && !once && posing(a)) {
       return a
     }
@@ -552,9 +302,9 @@ export class Actor {
   }
 
   /**
-   * Stop every clip and forget the current one, so the next play() starts its clip from
-   * scratch. Never call mixer.stopAllAction() on an actor directly: play() would think the
-   * stopped clip still runs and leave him in his bind pose.
+   * Stop every clip and forget the current one, so the next play() starts its clip from scratch.
+   * Never call mixer.stopAllAction() on an actor from outside: play() would think the stopped
+   * clip still runs and leave him in his bind pose.
    */
   stopAll(): void {
     this.mixer.stopAllAction()
@@ -562,10 +312,7 @@ export class Actor {
     this.walkWeight = 0
   }
 
-  /**
-   * Total weight of the clips posing him (0 = his bind pose, a T-pose). A clamped LoopOnce
-   * (Death) still counts: it holds its last frame.
-   */
+  /** Total weight of the clips posing him (0 = his bind pose). A clamped Death still counts. */
   poseWeight(): number {
     let w = 0
     for (const a of this.actions.values()) {
@@ -586,44 +333,6 @@ export class Actor {
     }
     this.walkWeight = 0
     this.idleAction?.setEffectiveWeight(1)
-  }
-
-  /**
-   * Seat the hat on his head bone where `fitHat` measured it: the band on his skull, the crown
-   * hugging it (see hats.ts).
-   */
-  private attachHat(f: HatFit, color: number): void {
-    const head = this.head
-    if (!head) {
-      return
-    }
-    const hat = makeHat(f.key, color, this.floor)
-    hat.children[0]?.scale.setScalar(f.s)
-    const slot = this.slotOn(
-      head,
-      V3(f.cx, f.y, f.cz),
-      this.root
-        .getWorldQuaternion(new Quaternion())
-        .multiply(tmpQ.setFromAxisAngle(V3(0, 1, 0), f.yaw)),
-    )
-    slot.add(hat)
-    hat.rotation.x = -f.tilt
-    this.hat = hat
-    this.hatFit = f
-  }
-
-  /** Make a bone-local slot that holds world-space-authored children (unit scale, root orientation). */
-  private slotOn(bone: Bone, worldPos: Vector3, worldQuat: Quaternion): Group {
-    const slot = new Group()
-    bone.add(slot)
-    bone.updateMatrixWorld(true)
-    const inv = bone.matrixWorld.clone().invert()
-    slot.position.copy(worldPos.clone().applyMatrix4(inv))
-    bone.getWorldQuaternion(tmpQ)
-    slot.quaternion.copy(tmpQ.clone().invert().multiply(worldQuat))
-    const ws = bone.getWorldScale(new Vector3())
-    slot.scale.setScalar(1 / ws.x)
-    return slot
   }
 
   /**
@@ -659,7 +368,7 @@ export class Actor {
       }
       // slot +Y points toward his body on both sides; the barrel sits 0.045 up +Y
       const x = surface - side * (0.026 + 0.045)
-      const slot = this.slotOn(bone, new Vector3(x, y, bp.z + 0.01), q)
+      const slot = slotOn(bone, new Vector3(x, y, bp.z + 0.01), q)
       for (const part of holsterParts(look)) {
         slot.add(part)
         out.push(...meshPieces(part, this.root, onBone(bone)))
@@ -698,7 +407,7 @@ export class Actor {
       .multiply(new Quaternion().setFromAxisAngle(new Vector3(0, 1, 0), -Math.PI / 2))
     const hp = hand.getWorldPosition(new Vector3())
     const fwd = new Vector3(0, 0, 1).applyQuaternion(rootQ)
-    this.handSlot = this.slotOn(
+    this.handSlot = slotOn(
       hand,
       hp
         .clone()
@@ -708,7 +417,7 @@ export class Actor {
     )
     if (two && this.handL) {
       const lp = this.handL.getWorldPosition(new Vector3())
-      this.offSlot = this.slotOn(this.handL, lp.clone().addScaledVector(fwd, 0.02), gunQ)
+      this.offSlot = slotOn(this.handL, lp.clone().addScaledVector(fwd, 0.02), gunQ)
     }
     if (aim) {
       aim.stop()
@@ -736,7 +445,7 @@ export class Actor {
       .clone()
       .multiply(new Quaternion().setFromAxisAngle(new Vector3(0, 1, 0), Math.PI / 2))
     const hp = hand.getWorldPosition(new Vector3())
-    const slot = this.slotOn(hand, hp, q)
+    const slot = slotOn(hand, hp, q)
     this.rifle = mergedProp(rifle)
     this.rifle.position.set(0, -0.02, 0.1)
     slot.add(this.rifle)

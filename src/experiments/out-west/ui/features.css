@@ -1,0 +1,262 @@
+/*
+ * The late features: public posters with Report and Block, the Most Wanted board, the saloon's
+ * chalkboard, dye jobs, prestige, the name change, blocked players, the saloon's news and the
+ * Frontier gates. Built from the shared sheets, buttons, lists and posters; only the pieces
+ * those don't cover live here, and only on tokens.css variables.
+ */
+
+/* ---------------------------------------------------------------- status lines */
+.ow-feat-status:empty {
+  display: none;
+}
+.ow-feat-status[data-kind="error"] {
+  color: var(--ow-bad);
+}
+.ow-feat-status[data-kind="ok"] {
+  color: var(--ow-good);
+}
+.ow-paper-doc .ow-feat-status[data-kind="error"] {
+  color: var(--ow-bad-ink);
+}
+
+/* ----------------------------------------- two-column lists (label, then value) */
+.ow-feat-news li,
+.ow-feat-record li,
+.ow-feat-chalk li,
+.ow-feat-blocks li {
+  grid-template-columns: 1fr auto;
+}
+
+/* -------------------------------------------------------------- public posters */
+.ow-feat-profile .ow-sheet-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ow-s3);
+}
+.ow-feat-poster {
+  align-self: center;
+  width: min(100%, 300px);
+}
+.ow-feat-title {
+  text-align: center;
+  font-variant-caps: all-small-caps;
+  letter-spacing: var(--ow-track-label);
+}
+.ow-feat-record b {
+  font-family: var(--ow-font-num);
+  font-variant-numeric: lining-nums tabular-nums;
+}
+.ow-feat-actions,
+.ow-feat-opponent {
+  justify-content: flex-end;
+}
+
+/* ---------------------------------------------------------- the Most Wanted board */
+.ow-feat-board-tabs {
+  margin-bottom: var(--ow-s3);
+  border-bottom-color: var(--ow-rule-ink);
+}
+/* the board is printed on paper: tabs and notes in ink */
+.ow-board-panel .ow-feat-board-tabs .ow-store-tab {
+  color: var(--ow-ink-3);
+}
+.ow-board-panel .ow-feat-board-tabs .ow-store-tab.on {
+  color: var(--ow-ink);
+}
+.ow-board-panel .ow-hub-note,
+.ow-board-panel .ow-standing-h {
+  color: var(--ow-ink-2);
+}
+.ow-feat-mw {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ow-s2);
+}
+.ow-feat-mw-nav {
+  justify-content: space-between;
+}
+.ow-feat-mw-head {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ow-s1);
+}
+.ow-feat-mw-month {
+  font-family: var(--ow-font-display);
+  font-size: var(--ow-fs-h3);
+  letter-spacing: var(--ow-track-display);
+  line-height: 1.1;
+}
+.ow-feat-mw-you {
+  font-weight: 600;
+}
+.ow-feat-mw-prev {
+  margin-top: var(--ow-s3);
+}
+.ow-feat-name {
+  min-height: var(--ow-tap);
+  padding: 0;
+  text-align: left;
+  color: inherit;
+  background: none;
+  border: 0;
+  cursor: pointer;
+  text-decoration: underline dotted var(--ow-rule-ink);
+  text-underline-offset: 3px;
+}
+.ow-feat-name:disabled {
+  font-style: italic;
+  text-decoration: none;
+  cursor: default;
+}
+.ow-feat-name:focus-visible {
+  outline: 2px solid var(--ow-brass-hi);
+  outline-offset: 2px;
+}
+
+/* -------------------------------------------------------------- the saloon's news */
+.ow-feat-news li {
+  align-items: start;
+}
+.ow-feat-news li > span {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.ow-feat-news .ow-feat-news-title {
+  font-family: var(--ow-font-text);
+  text-align: left;
+  font-variant-caps: all-small-caps;
+  letter-spacing: var(--ow-track-label);
+}
+.ow-feat-news-line {
+  font-size: var(--ow-fs-body);
+}
+
+/* -------------------------------------------------------------------- the chalkboard */
+.ow-feat-chalk {
+  padding: var(--ow-s3);
+  background: var(--ow-night);
+  border: 3px solid var(--ow-brass-lo);
+  border-radius: var(--ow-radius);
+  box-shadow: var(--ow-shadow-1);
+}
+.ow-feat-chalk li {
+  color: var(--ow-bone);
+}
+.ow-feat-chalk-name {
+  font-family: var(--ow-font-ornate);
+  font-size: var(--ow-fs-lead);
+  letter-spacing: var(--ow-track-display);
+}
+
+/* --------------------------------------------------------------------- dye jobs */
+.ow-feat-dye {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ow-s2);
+  margin-top: var(--ow-s3);
+  padding-top: var(--ow-s3);
+  border-top: 1px solid var(--ow-rule);
+}
+.ow-feat-dye-h {
+  font-variant-caps: all-small-caps;
+  letter-spacing: var(--ow-track-label);
+}
+.ow-feat-swatches {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--ow-s2);
+}
+.ow-feat-swatch {
+  --swatch: var(--ow-paper-2);
+  width: var(--ow-tap);
+  height: var(--ow-tap);
+  padding: 0;
+  border: 2px solid var(--ow-rule);
+  border-radius: 50%;
+  background:
+    linear-gradient(135deg, transparent 46%, var(--ow-red) 47% 53%, transparent 54%), var(--swatch);
+  cursor: pointer;
+  transition:
+    transform var(--ow-t-fast) var(--ow-ease-out),
+    border-color var(--ow-t-fast);
+}
+.ow-feat-swatch[style] {
+  background: var(--swatch);
+}
+.ow-feat-swatch.current {
+  border-color: var(--ow-bone-2);
+}
+.ow-feat-swatch.on {
+  border-color: var(--ow-brass-hi);
+  transform: scale(1.08);
+}
+.ow-feat-swatch:focus-visible {
+  outline: 2px solid var(--ow-brass-hi);
+  outline-offset: 3px;
+}
+
+/* ------------------------------------------------- Frontier: riders, killer poster */
+.fr-root .ow-sheet {
+  pointer-events: auto;
+}
+.fr-players {
+  min-height: 32px;
+  padding: 2px 6px;
+  font: inherit;
+  color: inherit;
+  text-shadow: inherit;
+  background: none;
+  border: 0;
+  text-decoration: underline dotted;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+.fr-poster-link {
+  margin-top: var(--ow-s3);
+  width: 100%;
+}
+/* a phone on its side: the top-right column runs into ROLL and RELOAD, so the kill feed moves
+   under the health bar (left), two lines at most */
+@media (orientation: landscape) and (max-height: 500px) {
+  .fr-root .fr-feed {
+    position: fixed;
+    top: calc(var(--fr-top) + 96px);
+    left: calc(var(--fr-left) + 16px);
+    align-items: flex-start;
+    max-width: 38vw;
+    font-size: 12px;
+  }
+  .fr-root .fr-feed > :nth-child(n + 3) {
+    display: none;
+  }
+}
+
+/* ---------------------------------------------------------- prestige and the gates */
+.ow-feat-prestige {
+  margin-top: var(--ow-s2);
+}
+.ow-feat-gate .ow-hub-row {
+  justify-content: flex-end;
+}
+
+/* -------------------------------------------------------- name change and blocks */
+.ow-feat-rename .ow-acct-form,
+.ow-feat-blocks .ow-ledger-list {
+  margin-top: var(--ow-s2);
+}
+.ow-feat-blocks li {
+  align-items: center;
+}
+.ow-feat-chalk time {
+  color: var(--ow-bone-3);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ow-feat-swatch {
+    transition: none;
+  }
+  .ow-feat-swatch.on {
+    transform: none;
+  }
+}

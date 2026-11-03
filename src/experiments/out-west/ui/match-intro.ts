@@ -3,8 +3,8 @@
  * (10 s, or you dodge). A ghost's poster is sepia and labelled.
  */
 import type { Poster } from '../contract/duel.ts'
-import { posterEl } from './results.ts'
 import { button, el, swallow } from './sheet.ts'
+import { posterEl } from './wanted.ts'
 
 export interface IntroHandlers {
   ready: () => void
