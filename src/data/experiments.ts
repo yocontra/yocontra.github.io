@@ -26,11 +26,11 @@ export const experiments: readonly Experiment[] = [
   {
     slug: 'out-west',
     title: 'out west',
-    year: 2019,
+    year: 2026,
     blurb:
-      'Walk your paces, wait for the call, and outdraw seventeen outlaws before they outdraw you.',
-    tags: ['game', 'canvas', 'audio'],
-    thumb: '/experiments/out-west/thumb.webp',
+      'Walk your paces, wait for the bell, and outdraw seventeen outlaws before they outdraw you. Now in 3D.',
+    tags: ['game', 'three.js', 'webgl', 'audio'],
+    thumb: '/experiments/out-west/thumb3d.webp',
     hue: 25,
   },
   {
