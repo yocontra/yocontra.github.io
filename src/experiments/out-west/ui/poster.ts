@@ -389,7 +389,7 @@ export function drawPoster(canvas: HTMLCanvasElement, o: Outlaw, opts: PosterOpt
     k.fillText('WANTED', W / 2 + 2, 166)
     k.letterSpacing = '0px'
 
-    const sub = opts.index >= 15 ? 'DEAD — ONLY DEAD' : 'DEAD OR ALIVE'
+    const sub = opts.index >= 15 ? 'DEAD ONLY' : 'DEAD OR ALIVE'
     k.font = canvasFont('ornate', 30)
     k.letterSpacing = '4px'
     k.fillText(sub, W / 2 + 2, 210)

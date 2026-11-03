@@ -57,9 +57,9 @@ const LIVE_STALE_MS = 1500
 
 const CLOSED_TEXT: Record<string, string> = {
   'opponent-left': 'He lit out of town.',
-  timeout: 'Nobody cocked in time. No harm done.',
-  done: 'The room closed.',
-  error: 'The room hit a snag.',
+  timeout: 'Nobody cocked in time. No penalty.',
+  done: 'The duel closed.',
+  error: 'The duel server hit an error.',
 }
 
 export class DuelRoomLink {
@@ -142,7 +142,7 @@ export class DuelRoomLink {
     }
     this.h.message(m)
     if (m.type === 'closed') {
-      this.end(CLOSED_TEXT[m.reason] ?? 'The room closed.')
+      this.end(CLOSED_TEXT[m.reason] ?? 'The duel closed.')
     }
   }
 

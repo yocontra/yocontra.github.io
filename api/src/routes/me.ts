@@ -128,7 +128,7 @@ async function awayAck(request: Request, env: Env, player: Player): Promise<Resp
 const NAME_REFUSALS = {
   same: [409, "That's already your name."],
   taken: [409, 'That name is taken. Pick another.'],
-  cooldown: [429, 'You changed your name recently. Give it a while.'],
+  cooldown: [429, 'You can change your name once every 30 days.'],
 } as const
 
 interface NameRow {
@@ -273,7 +273,7 @@ export const meRoutes: RouteHandler = async (request, env, url) => {
   }
   const player = await authenticate(request, env)
   if (!player) {
-    return error(request, env, 401, 'Sign in first, partner.')
+    return error(request, env, 401, 'Sign in first.')
   }
   const route = `${request.method} ${path}`
   switch (route) {

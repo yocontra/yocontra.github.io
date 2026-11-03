@@ -59,7 +59,7 @@ const RARITY_LABEL: Record<CatalogItem['rarity'], string> = {
 /** Where a piece of kit shows (the ones you can't see on the street say so). */
 const SLOT_NOTE: Partial<Record<Slot, string>> = {
   frame: 'Frames your poster in Bounty Hunt.',
-  drawSound: 'Plays on your shot in Bounty Hunt. Never before it.',
+  drawSound: 'Plays when you fire in Bounty Hunt, never before.',
   saddlebag: 'The bag you drop in Frontier.',
   holster: 'Tooling shows up close. Same draw for everyone.',
 }
@@ -319,7 +319,7 @@ export class Outfitter {
       body:
         dye === 'natural'
           ? 'Back to its natural colour. Free.'
-          : `${money(price)} from your purse of ${money(me.purse)}. Looks only, like everything here.`,
+          : `${money(price)} from your purse of ${money(me.purse)}. Cosmetic only.`,
       yes: dye === 'natural' ? 'Wash it out' : `Dye · ${money(price)}`,
     })
     if (!yes) {

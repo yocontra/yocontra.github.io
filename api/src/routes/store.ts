@@ -38,7 +38,7 @@ import { error, json, type RouteHandler, readJson } from '../http.ts'
 const REFUSALS: Record<string, [number, string]> = {
   not_for_sale: [403, "That one isn't for sale."],
   owned: [409, 'You already own that.'],
-  level: [403, "You're not seasoned enough for that yet."],
+  level: [403, 'Your level is too low for that.'],
   funds: [402, "You can't afford that."],
 }
 
@@ -196,7 +196,7 @@ export const storeRoutes: RouteHandler = async (request, env, url) => {
   ) {
     const player = await authenticate(request, env)
     if (!player) {
-      return error(request, env, 401, 'Sign in first, partner.')
+      return error(request, env, 401, 'Sign in first.')
     }
     return url.pathname === '/store/buy' ? buy(request, env, player) : dye(request, env, player)
   }

@@ -157,7 +157,11 @@ export class Matchmaker extends DurableObject<Env> {
     const lastDodge = Math.max(0, ...dodges)
     if (dodges.length >= DODGE_LIMIT && lastDodge + DODGE_COOLDOWN_MS > now) {
       const retryAfterS = Math.ceil((lastDodge + DODGE_COOLDOWN_MS - now) / 1000)
-      return { reason: 'cooldown', message: 'Too many dodges. Cool your heels.', retryAfterS }
+      return {
+        reason: 'cooldown',
+        message: 'Too many dodges. Wait before you queue again.',
+        retryAfterS,
+      }
     }
     const history = await this.history(accountId)
     const priorityUntil = await this.ctx.storage.get<number>(`priority:${accountId}`)

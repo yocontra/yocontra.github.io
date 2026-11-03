@@ -102,11 +102,11 @@ export class PvpDuel implements DirectorHooks {
     d.c.save = scratch
     this.link = new DuelRoomLink(o.wsUrl, {
       message: (m) => this.onMessage(m),
-      dropped: () => d.c.hud.fake('[your line to the room dropped · reconnecting]', 3000),
+      dropped: () => d.c.hud.fake('[connection dropped · reconnecting]', 3000),
       rejoined: () => {
         // the room forgot our hold when the line dropped: say it again on the next frame
         this.hold.sent = false
-        d.c.hud.fake('[back in the room]', 1500)
+        d.c.hud.fake('[reconnected]', 1500)
       },
       gone: (reason) => this.onGone(reason),
     })

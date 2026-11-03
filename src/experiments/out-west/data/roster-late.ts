@@ -59,7 +59,7 @@ export const ROSTER_LATE: readonly Outlaw[] = [
     name: 'Luke Short',
     epithet: 'the Undertaker’s Friend',
     bounty: bountyFor(11),
-    hook: 'Gambler. When the saloon piano stops, it’s not the call.',
+    hook: 'Gambler. Don’t draw when the piano stops.',
     gimmick: 'piano',
     look: {
       base: 'punk',
@@ -109,7 +109,7 @@ export const ROSTER_LATE: readonly Outlaw[] = [
     name: 'Harvey “Kid Curry” Logan',
     epithet: 'the Fake-Out King',
     bounty: bountyFor(13),
-    hook: 'Twitchy hands. Fake-outs everywhere.',
+    hook: 'Twitchy hands. Fakes you out.',
     gimmick: 'fake-king',
     look: {
       base: 'punk',
@@ -133,7 +133,7 @@ export const ROSTER_LATE: readonly Outlaw[] = [
     name: 'James “Wild Bill” Hickok',
     epithet: 'Aces and Eights',
     bounty: bountyFor(14),
-    hook: 'Dead man’s hand. Metronomic.',
+    hook: 'Dead man’s hand. Clockwork.',
     gimmick: 'cards',
     look: {
       base: 'worker',

@@ -36,12 +36,12 @@ export function parseQueueMessage(raw: unknown): QueueServerMessage | null {
 }
 
 const REFUSALS: Record<string, string> = {
-  budget: 'The stage line’s out of money this month. Bounty Hunt reopens on the first.',
+  budget: 'Bounty Hunt is closed for the rest of the month. It reopens on the 1st.',
   unlicensed: 'Beat the first 3 outlaws on a ranked run to earn your licence.',
-  cooldown: 'Dodged too many duels. The sheriff wants you to cool off.',
+  cooldown: 'You dodged too many duels. Sit out a while.',
   busy: 'You’re already in a queue or a duel somewhere else.',
-  unauthorized: 'Your ticket went stale. Try again.',
-  'no-profile': 'Sign in first, partner.',
+  unauthorized: 'Your sign-in expired. Try again.',
+  'no-profile': 'Sign in first.',
 }
 
 export class QueueSearch {
@@ -102,7 +102,7 @@ export class QueueSearch {
         this.h.matched(m)
         break
       case 'refused': {
-        const wait = m.retryAfterS ? ` (${Math.ceil(m.retryAfterS / 60)} min)` : ''
+        const wait = m.retryAfterS ? ` Try again in ${Math.ceil(m.retryAfterS / 60)} min.` : ''
         this.fail(`${REFUSALS[m.reason] ?? m.message}${wait}`)
         break
       }
