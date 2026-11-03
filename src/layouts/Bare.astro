@@ -1,0 +1,32 @@
+---
+/**
+ * Unstyled document shell for experiments: no global CSS, no fonts, no resets.
+ * Experiments must render exactly as their originals did.
+ */
+interface Props {
+  title: string
+  description?: string
+  noindex?: boolean
+  /** Legacy pages that had no viewport meta can opt out to match their original rendering. */
+  viewport?: string | false
+}
+
+const { title, description, noindex = false, viewport = 'width=device-width, initial-scale=1' } =
+  Astro.props
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    {viewport && <meta name="viewport" content={viewport} />}
+    <title>{title}</title>
+    {description && <meta name="description" content={description} />}
+    {noindex && <meta name="robots" content="noindex, nofollow" />}
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <slot name="head" />
+  </head>
+  <body>
+    <slot />
+  </body>
+</html>
