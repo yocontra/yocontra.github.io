@@ -12,14 +12,19 @@
  *   can't cover aborts the whole batch, including the caller's own rows.
  * - **Levels.** XP raises `profiles.level` from `LEVEL_THRESHOLDS` in SQL, and each level gained
  *   pays `$25 × level` as its own `level_reward` row, in the same batch.
+ * - **Most Wanted.** Credits of the EARNING_KINDS (level rewards included) are added to this UTC
+ *   month's `earnings_monthly` row in the same batch, read back by this call's batch nonce, so a
+ *   replay adds nothing and the board can never disagree with the ledger.
  * - **Unknown account.** A missing profile makes `balance_after` NULL, which fails NOT NULL and
  *   aborts the batch, so money can never vanish silently.
  */
 import {
   type LedgerKind as ContractLedgerKind,
+  EARNING_KINDS,
   LEDGER_KINDS,
 } from '../../../src/experiments/out-west/contract/economy.ts'
 import { LEVEL_THRESHOLDS } from '../../../src/experiments/out-west/data/progression.ts'
+import { monthOf } from '../../../src/experiments/out-west/data/sinks.ts'
 import type { Env } from '../env.ts'
 
 export type LedgerKind = ContractLedgerKind
@@ -68,6 +73,20 @@ const UPDATE_PROFILE = `UPDATE profiles SET
   version = version + 1,
   updated_at = ?4
 WHERE account_id = ?1 AND EXISTS (SELECT 1 FROM ledger WHERE idem_key = ?5 AND batch = ?6)`
+
+const EARNING_KINDS_SQL = EARNING_KINDS.map((k) => `'${k}'`).join(', ')
+
+/** Adds this batch's earnings to the month's board rows. Binds month, now, batch. */
+const ROLL_UP_EARNINGS = `INSERT INTO earnings_monthly (month, account_id, earned, updated_at)
+SELECT ?1, account_id, SUM(delta), ?2 FROM ledger
+WHERE batch = ?3 AND delta > 0 AND kind IN (${EARNING_KINDS_SQL})
+GROUP BY account_id
+ON CONFLICT (month, account_id) DO UPDATE SET
+  earned = earned + excluded.earned, updated_at = excluded.updated_at`
+
+const isEarning = (entry: LedgerEntry): boolean =>
+  (entry.amount > 0 && (EARNING_KINDS as readonly string[]).includes(entry.kind)) ||
+  (entry.xp ?? 0) > 0
 
 function validate(entry: LedgerEntry): void {
   if (!(LEDGER_KINDS as readonly string[]).includes(entry.kind)) {
@@ -149,6 +168,9 @@ export function ledgerStatements(
         THRESHOLDS_JSON,
       ),
     )
+  }
+  if (entries.some(isEarning)) {
+    statements.push(env.DB.prepare(ROLL_UP_EARNINGS).bind(monthOf(now), now, batch))
   }
   return statements
 }

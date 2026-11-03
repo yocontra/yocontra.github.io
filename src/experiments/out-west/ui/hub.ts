@@ -54,6 +54,9 @@ const LEDGER_LABEL: Record<LedgerKind, string> = {
   store_purchase: 'Outfitter',
   level_reward: 'Level reward',
   admin_adjust: 'Adjustment',
+  dye_job: 'Dye job',
+  name_change: 'New name',
+  house_round: 'A round for the house',
   // biome-ignore-end lint/style/useNamingConvention: ledger kinds are snake_case on the wire
 }
 

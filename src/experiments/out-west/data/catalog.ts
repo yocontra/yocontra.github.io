@@ -12,7 +12,7 @@
  *
  * Bump CATALOG_VERSION whenever an item is added, removed or repriced.
  */
-export const CATALOG_VERSION = 1
+export const CATALOG_VERSION = 2
 
 export const SLOTS = [
   'gun',
@@ -182,6 +182,12 @@ export const CATALOG = [
   store('frame.gilt-saloon', 'Gilt Saloon', 'frame', ['rare', 8000, 24]),
   store('frame.most-wanted-gilt', 'Most Wanted Gilt', 'frame', ['legendary', 40_000, 50]),
   reward('frame.midnight', 'Midnight', 'frame', 'Clear the full gauntlet without drawing early'),
+  reward(
+    'frame.most-wanted-dated',
+    'Most Wanted (dated)',
+    'frame',
+    'Finish a month in the top 10 of the Most Wanted board',
+  ),
   // Draw sound
   starter('sound.standard', 'Standard Report', 'drawSound', SHOT('gunshot')),
   store('sound.thunder-crack', 'Thunder Crack', 'drawSound', [

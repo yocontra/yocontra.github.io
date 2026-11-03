@@ -2,6 +2,7 @@
  * The Outfitter: catalog and purchases. Owned by stream C.
  *   GET  /store        → StoreResponse (signed out: owned = [], purse/level = null)
  *   POST /store/buy    { itemId } → BuyResponse
+ *   POST /store/dye    { itemId, dye, requestId? } → DyeResponse  (contract/economy.ts)
  *
  * A purchase is one batch: the ledger debit (idem key `buy:<acct>:<item>`) plus the inventory row.
  * An overdraft fails the purse CHECK and a duplicate item fails the inventory primary key, and
@@ -9,6 +10,7 @@
  */
 import type {
   BuyResponse,
+  DyeResponse,
   StoreResponse,
 } from '../../../src/experiments/out-west/contract/economy.ts'
 import {
@@ -19,9 +21,17 @@ import {
   isItemId,
   itemById,
 } from '../../../src/experiments/out-west/data/catalog.ts'
+import {
+  canDye,
+  type DyeId,
+  type DyeVerdict,
+  dyePrice,
+  isDyeId,
+} from '../../../src/experiments/out-west/data/dye.ts'
 import { authenticate, type Player } from '../economy/auth.ts'
 import { isConstraintError, isOverdraft, ledgerStatements } from '../economy/ledger.ts'
 import { getProfileDetail, ownedItems } from '../economy/profile.ts'
+import { dyeStatements, dyesOf, requestIdOf } from '../economy/sinks.ts'
 import type { Env } from '../env.ts'
 import { error, json, type RouteHandler, readJson } from '../http.ts'
 
@@ -92,6 +102,75 @@ async function buy(request: Request, env: Env, player: Player): Promise<Response
   return json(request, env, response)
 }
 
+const DYE_REFUSALS: Record<Exclude<DyeVerdict, 'ok'>, [number, string]> = {
+  not_dyeable: [400, "That one doesn't take dye."],
+  not_owned: [403, "You don't own that."],
+  same: [409, "It's already that colour."],
+  funds: [402, "You can't afford that dye job."],
+}
+
+async function currentDye(env: Env, accountId: string, itemId: ItemId): Promise<DyeId | null> {
+  const row = await env.DB.prepare('SELECT dye FROM inventory WHERE account_id = ? AND item_id = ?')
+    .bind(accountId, itemId)
+    .first<{ dye: string | null }>()
+  return isDyeId(row?.dye) ? row.dye : null
+}
+
+/** `POST /store/dye`: recolour an owned item (§5 dye jobs). One guarded batch. */
+async function dye(request: Request, env: Env, player: Player): Promise<Response> {
+  const body = (await readJson(request, 1024)) as
+    | { itemId?: unknown; dye?: unknown; requestId?: unknown }
+    | undefined
+  const itemId = body?.itemId
+  const wanted = body?.dye
+  if (!(isItemId(itemId) && isDyeId(wanted))) {
+    return error(request, env, 400, 'Unknown item or dye.')
+  }
+  const profile = await getProfileDetail(env, player.accountId)
+  if (!profile) {
+    return error(request, env, 404, 'No profile.')
+  }
+  const owned = new Set<string>(await ownedItems(env, player.accountId))
+  const current = await currentDye(env, player.accountId, itemId)
+  const verdict = canDye({ itemId, dye: wanted, owned, current, purse: profile.purse })
+  if (verdict !== 'ok') {
+    const [status, message] = DYE_REFUSALS[verdict]
+    return error(request, env, status, message)
+  }
+  const price = dyePrice(itemId, wanted) ?? 0
+  const requestId = requestIdOf(body?.requestId)
+  try {
+    await env.DB.batch(
+      dyeStatements(env, {
+        accountId: player.accountId,
+        itemId,
+        dye: wanted,
+        current,
+        price,
+        requestId,
+      }),
+    )
+  } catch (err) {
+    if (isOverdraft(err)) {
+      return error(request, env, 402, DYE_REFUSALS.funds[1])
+    }
+    // The guard failed: the dye changed under us (a retry that already landed, or a race).
+    if (!(isConstraintError(err) && (await currentDye(env, player.accountId, itemId)) === wanted)) {
+      throw err
+    }
+  }
+  const after = await getProfileDetail(env, player.accountId)
+  const response: DyeResponse = {
+    ok: true,
+    itemId,
+    dye: wanted,
+    price,
+    purse: after?.purse ?? 0,
+    dyes: await dyesOf(env, player.accountId),
+  }
+  return json(request, env, response)
+}
+
 async function catalog(request: Request, env: Env): Promise<Response> {
   const player = await authenticate(request, env)
   const profile = player ? await getProfileDetail(env, player.accountId) : null
@@ -111,12 +190,15 @@ export const storeRoutes: RouteHandler = async (request, env, url) => {
   if (url.pathname === '/store' && request.method === 'GET') {
     return catalog(request, env)
   }
-  if (url.pathname === '/store/buy' && request.method === 'POST') {
+  if (
+    (url.pathname === '/store/buy' || url.pathname === '/store/dye') &&
+    request.method === 'POST'
+  ) {
     const player = await authenticate(request, env)
     if (!player) {
       return error(request, env, 401, 'Sign in first, partner.')
     }
-    return buy(request, env, player)
+    return url.pathname === '/store/buy' ? buy(request, env, player) : dye(request, env, player)
   }
   return null
 }

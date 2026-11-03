@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'bun:test'
-import { judgedReaction, looksAutomated, rttStats, tolerance } from './judge.ts'
+import { judgedReaction, looksAutomated, rttStats, timingTells, tolerance } from './judge.ts'
 
 describe('rttStats', () => {
   it('median and median absolute deviation', () => {
@@ -43,5 +43,27 @@ describe('looksAutomated', () => {
   })
   it('needs enough samples to judge', () => {
     expect(looksAutomated([180, 180, 180])).toBe(false)
+  })
+})
+
+describe('timingTells (§8)', () => {
+  const human = (n: number): number[] => Array.from({ length: n }, (_, i) => 190 + ((i * 37) % 90))
+  it('a human-shaped spread trips nothing', () => {
+    expect(timingTells(human(40))).toEqual([])
+  })
+  it('needs a full sample', () => {
+    expect(timingTells(Array.from({ length: 19 }, () => 120))).toEqual([])
+  })
+  it('steady: σ under 12 ms over 20', () => {
+    const steady = Array.from({ length: 20 }, (_, i) => 200 + (i % 3))
+    expect(timingTells(steady)).toEqual(['steady'])
+  })
+  it('fast: a median under 150 ms over 30', () => {
+    const fast = Array.from({ length: 30 }, (_, i) => 135 + ((i * 7) % 30))
+    expect(timingTells(fast)).toContain('fast')
+  })
+  it('clustered: more than 25% between 100 and 130 ms', () => {
+    const mixed = human(30).map((r, i) => (i % 3 === 0 ? 110 + (i % 15) : r))
+    expect(timingTells(mixed)).toEqual(['clustered'])
   })
 })

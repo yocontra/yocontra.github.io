@@ -10,11 +10,15 @@ import {
 import type { Env } from '../env.ts'
 import { creationStatements, deletionStatements } from './hooks.ts'
 
-/** True when an account (or a recently deleted one) holds this name key. For the ranked flow. */
+/**
+ * True when an account holds this name key: its current name, a recently deleted account's, or one
+ * an account gave up in a name change in the last 30 days. For sign-up and the ranked flow.
+ */
 export async function isNameOwned(env: Env, nameKey: string, now = Date.now()): Promise<boolean> {
   const row = await env.DB.prepare(
     `SELECT 1 AS taken FROM accounts WHERE name_key = ?1
      UNION ALL SELECT 1 FROM name_tombstones WHERE name_key = ?1 AND released_at > ?2
+     UNION ALL SELECT 1 FROM name_holds WHERE name_key = ?1 AND released_at > ?2
      LIMIT 1`,
   )
     .bind(nameKey, now)
@@ -179,6 +183,12 @@ export async function deleteAccount(
        SELECT name_key, ? FROM accounts WHERE id = ?
        ON CONFLICT (name_key) DO UPDATE SET released_at = excluded.released_at`,
     ).bind(now + NAME_RELEASE_MS, accountId),
+    // Names it gave up in name changes stay unavailable until their own hold runs out.
+    env.DB.prepare(
+      `INSERT INTO name_tombstones (name_key, released_at)
+       SELECT name_key, released_at FROM name_holds WHERE account_id = ? AND released_at > ?
+       ON CONFLICT (name_key) DO UPDATE SET released_at = MAX(released_at, excluded.released_at)`,
+    ).bind(accountId, now),
     // Our own tables are cleared explicitly too, so deletion never depends on FK enforcement.
     ...['passkeys', 'refresh_tokens', 'ws_tickets', 'app_auth_codes', 'webauthn_challenges'].map(
       (table) => env.DB.prepare(`DELETE FROM ${table} WHERE account_id = ?`).bind(accountId),

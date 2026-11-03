@@ -189,7 +189,7 @@ describe('GET /store', () => {
   it('works signed out', async () => {
     const { body } = await call('GET', '/store')
     const store = body as StoreResponse
-    expect(store.items).toHaveLength(42)
+    expect(store.items).toHaveLength(43)
     expect(store.owned).toEqual([])
     expect(store.purse).toBeNull()
   })
