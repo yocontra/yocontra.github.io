@@ -1,29 +1,32 @@
 /**
- * The out west type system. Four self-hosted faces (fontsource, latin subsets; nothing from a CDN,
- * so the game works offline in a WebView), each with one job:
+ * The out west type system. Four self-hosted faces (built by tools/build-fonts.ts into
+ * /experiments/out-west/fonts/: latin subsets, WOFF2, nothing from a CDN, so the game works offline
+ * in a WebView), each with one job:
  *
  * | Role      | Face                     | Used for                                                     |
  * |-----------|--------------------------|--------------------------------------------------------------|
- * | display   | Ultra (fat-face Clarendon wood type) | WANTED, screen titles, DRAW!, bounties on posters |
- * | ornate    | Rye (Tuscan wood type)   | The wordmark, the saloon sign, "Dead or alive", VS. Sparingly |
- * | text      | EB Garamond (variable 400–800, real small caps, old-style + lining figures) | body copy, labels and buttons in small caps |
- * | numerals  | Oswald (variable 200–700, condensed Alternate Gothic) | HUD money, timers, XP, levels: tabular |
+ * | display   | Ultra (fat-face Clarendon wood type, Apache 2.0) | WANTED, screen titles, DRAW!, bounties, the Frontier purse |
+ * | ornate    | Rye (Tuscan wood type, OFL) | The wordmark, the saloon sign, VS. Nowhere else        |
+ * | text      | EB Garamond (variable 400–700, OFL: real small caps, old-style + lining figures) | body copy, labels and buttons in small caps |
+ * | numerals  | Oswald 500/600 (Alternate Gothic, OFL; digits re-spaced to tabular at build) | HUD money, timers, XP, levels, the Frontier HUD |
  *
  * The scale is a major third (×1.25) on a 16 px base, snapped to whole pixels; every size in the UI
  * comes from `TYPE_SCALE` (mirrored as `--ow-fs-*` in tokens.css). Nothing below 13 px ships, so
- * text stays legible on a 390 × 844 phone. Letter-spacing: display +0.02em, small-caps labels
- * +0.1em, body 0. Money, timers and XP always use tabular lining figures.
+ * text stays legible on a 375 × 812 phone. Letter-spacing: display +0.02em, small-caps labels
+ * +0.07em (real small caps, so less than shrunken capitals needed), kickers +0.16em, body 0.
+ * Leading: display 0.92, tight 1.05, snug 1.2, body 1.45. Money, timers and XP use lining figures
+ * (`--ow-figs-hud`); running text uses old-style figures (`--ow-figs-text`).
  *
- * tokens.css declares the @font-face rules (via @import of the fontsource CSS), the CSS custom
- * properties and the role classes (`.ow-t-*`). The Frontier HUD (and anything else) reuses all of it
- * by importing tokens.css and these stacks.
+ * tokens.css declares the @font-face rules (with metric-matched local fallbacks), the CSS custom
+ * properties and the role classes (`.ow-t-*`). Synthesized bold, italic and small caps are off
+ * (`font-synthesis: none`). The Frontier HUD imports tokens.css and uses the same stacks.
  */
-/** CSS font stacks (the fallbacks are metric-close system faces, only for a failed load). */
+/** CSS font stacks (each falls back to a metric-matched local face, only for a failed load). */
 export const FONT = {
-  display: '"Ultra", "Rockwell Extra Bold", Rockwell, Georgia, serif',
-  ornate: '"Rye", "Ultra", Georgia, serif',
-  text: '"EB Garamond Variable", Garamond, "Iowan Old Style", Georgia, serif',
-  num: '"Oswald Variable", "Arial Narrow", "Helvetica Neue", sans-serif',
+  display: 'Ultra, "Ultra Fallback", Georgia, serif',
+  ornate: 'Rye, "Rye Fallback", Georgia, serif',
+  text: '"EB Garamond Variable", "EB Garamond Fallback", Georgia, serif',
+  num: '"Oswald Variable", "Oswald Fallback", "Arial Narrow", sans-serif',
 } as const
 
 /** Pixel sizes of the scale (1rem = 16 px). */

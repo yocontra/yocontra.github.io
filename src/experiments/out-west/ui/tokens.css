@@ -2,23 +2,109 @@
  * out west design tokens: type, colour, space, surfaces and motion. Documented in ui/type.ts.
  * Every screen (and the Frontier HUD) builds from these; nothing hard-codes a font or a colour.
  *
- * Faces are self-hosted (fontsource, latin subsets): Ultra (display), Rye (ornate),
- * EB Garamond Variable (text, small caps), Oswald Variable (numerals).
+ * Faces are self-hosted from /experiments/out-west/fonts/ (built by tools/build-fonts.ts: latin
+ * subsets, WOFF2, OpenType features kept): Ultra (display), Rye (ornate, the wordmark only),
+ * EB Garamond (text: real small caps, old-style and lining figures), Oswald (numerals: tabular).
+ * Each has a metric-matched local fallback (size-adjust + ascent/descent overrides) so the swap
+ * doesn't reflow a screen.
  * Art lives in /experiments/out-west/ui/ (paper, poster stock, wood, leather, smoke, seal, woodcut,
  * ornaments, torn edge). Light comes from the top left everywhere.
  */
-@import "@fontsource/ultra/latin-400.css";
-@import "@fontsource/rye/latin-400.css";
-@import "@fontsource-variable/eb-garamond/wght.css";
-@import "@fontsource-variable/eb-garamond/wght-italic.css";
-@import "@fontsource-variable/oswald/wght.css";
+@font-face {
+  font-family: Ultra;
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("/experiments/out-west/fonts/ultra.woff2") format("woff2");
+}
+@font-face {
+  font-family: Rye;
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("/experiments/out-west/fonts/rye.woff2") format("woff2");
+}
+@font-face {
+  font-family: "EB Garamond Variable";
+  font-style: normal;
+  font-weight: 400 700;
+  font-display: swap;
+  src: url("/experiments/out-west/fonts/eb-garamond.woff2") format("woff2");
+}
+@font-face {
+  font-family: "EB Garamond Variable";
+  font-style: italic;
+  font-weight: 400 700;
+  font-display: swap;
+  src: url("/experiments/out-west/fonts/eb-garamond-italic.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Oswald Variable";
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url("/experiments/out-west/fonts/oswald-500.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Oswald Variable";
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url("/experiments/out-west/fonts/oswald-600.woff2") format("woff2");
+}
+/* metric-matched fallbacks (average advance of a mixed sample, and vertical metrics) */
+@font-face {
+  font-family: "Ultra Fallback";
+  src: local("Georgia Bold"), local("Georgia-Bold");
+  size-adjust: 117.6%;
+  ascent-override: 85.8%;
+  descent-override: 23.3%;
+  line-gap-override: 0%;
+}
+@font-face {
+  font-family: "Rye Fallback";
+  src: local("Georgia Bold"), local("Georgia-Bold");
+  size-adjust: 101.7%;
+  ascent-override: 97%;
+  descent-override: 26%;
+  line-gap-override: 0%;
+}
+@font-face {
+  font-family: "EB Garamond Fallback";
+  src: local("Georgia"), local("Times New Roman");
+  size-adjust: 89%;
+  ascent-override: 113.1%;
+  descent-override: 33.5%;
+  line-gap-override: 0%;
+}
+@font-face {
+  font-family: "Oswald Fallback";
+  src: local("Arial Narrow Bold"), local("ArialNarrow-Bold"), local("Arial Narrow");
+  size-adjust: 105.8%;
+  ascent-override: 112.8%;
+  descent-override: 27.3%;
+  line-gap-override: 0%;
+}
 
 :root {
   /* ------------------------------------------------------------ type */
-  --ow-font-display: "Ultra", "Rockwell Extra Bold", rockwell, georgia, serif;
-  --ow-font-ornate: "Rye", "Ultra", georgia, serif;
-  --ow-font-text: "EB Garamond Variable", garamond, "Iowan Old Style", georgia, serif;
-  --ow-font-num: "Oswald Variable", "Arial Narrow", "Helvetica Neue", sans-serif;
+  --ow-font-display: Ultra, "Ultra Fallback", georgia, serif;
+  --ow-font-ornate: Rye, "Rye Fallback", georgia, serif;
+  --ow-font-text: "EB Garamond Variable", "EB Garamond Fallback", georgia, serif;
+  --ow-font-num:
+    "Oswald Variable", "Oswald Fallback", "Arial Narrow", sans-serif-condensed, sans-serif;
+  /* leading */
+  --ow-lead-display: 0.92;
+  --ow-lead-tight: 1.05;
+  --ow-lead-snug: 1.2;
+  --ow-lead-body: 1.45;
+  /* tracking: real small caps need less than shrunken capitals did */
+  --ow-track-caps: 0.07em;
+  --ow-track-kicker: 0.16em;
+  /* figures */
+  --ow-figs-hud: lining-nums tabular-nums;
+  --ow-figs-text: oldstyle-nums proportional-nums;
+  --ow-measure: 34em;
   /* major third on 16 px; nothing under 13 px */
   --ow-fs-micro: 0.8125rem;
   --ow-fs-small: 0.875rem;
@@ -31,7 +117,7 @@
   --ow-fs-display: clamp(2.5rem, 9vw, 4rem);
   --ow-fs-hero: clamp(3.5rem, 14vw, 6rem);
   --ow-track-display: 0.02em;
-  --ow-track-label: 0.1em;
+  --ow-track-label: var(--ow-track-caps);
   --ow-track-num: 0.02em;
 
   /* ---------------------------------------------------------- colour */
@@ -61,10 +147,10 @@
   /* rarity, in period inks */
   --ow-r-starter: #b9ab90;
   --ow-r-common: #d9cfb8;
-  --ow-r-uncommon: #8fbf72;
-  --ow-r-rare: #7aa4e0;
-  --ow-r-legendary: #e8b443;
-  --ow-r-reward: #c99ae6;
+  --ow-r-uncommon: #a7b47c; /* verdigris sage */
+  --ow-r-rare: #93abbf; /* cyanotype */
+  --ow-r-legendary: #e2b04a; /* gilt */
+  --ow-r-reward: #cf957d; /* madder */
 
   /* ----------------------------------------------------------- space */
   --ow-s1: 4px;
@@ -108,13 +194,32 @@
   --ow-t-slow: 600ms;
 }
 
+/* --------------------------------------------------------------- rendering */
+/*
+ * Every face ships the styles it's used in: never let the browser fake a bold, an italic or small
+ * caps (Ultra and Rye are single-weight wood types; a faux bold smears their counters).
+ */
+.ow,
+.fr-root,
+.ow-type {
+  font-synthesis: none;
+  font-kerning: normal;
+  font-variant-ligatures: common-ligatures contextual;
+  font-optical-sizing: auto;
+  text-rendering: optimizelegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
 /* --------------------------------------------------------------- role classes */
 .ow-t-display {
   font-family: var(--ow-font-display);
   font-weight: 400;
   letter-spacing: var(--ow-track-display);
   text-transform: uppercase;
-  line-height: 0.95;
+  line-height: var(--ow-lead-display);
   font-kerning: normal;
 }
 .ow-t-ornate {
@@ -134,16 +239,25 @@
   font-family: var(--ow-font-text);
   font-weight: 500;
   font-size: var(--ow-fs-body);
-  line-height: 1.45;
+  line-height: var(--ow-lead-body);
   letter-spacing: 0;
   text-transform: none;
-  font-variant-numeric: oldstyle-nums proportional-nums;
+  font-variant-numeric: var(--ow-figs-text);
 }
 .ow-t-num {
   font-family: var(--ow-font-num);
   font-weight: 500;
   letter-spacing: var(--ow-track-num);
-  font-variant-numeric: lining-nums tabular-nums;
+  font-variant-numeric: var(--ow-figs-hud);
+}
+/* a small-caps kicker over a headline ("A quick-draw western", "Single player") */
+.ow-t-kicker {
+  font-family: var(--ow-font-text);
+  font-weight: 600;
+  font-size: var(--ow-fs-micro);
+  font-variant-caps: all-small-caps;
+  letter-spacing: var(--ow-track-kicker);
+  line-height: 1;
 }
 
 /* --------------------------------------------------------------- surfaces */

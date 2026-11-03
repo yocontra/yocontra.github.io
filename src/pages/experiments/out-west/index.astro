@@ -20,6 +20,27 @@ import '~/experiments/out-west/ui/pvp.css'
 >
   <Fragment slot="head">
     <meta name="theme-color" content="#120c08" />
+    <link
+      rel="preload"
+      href="/experiments/out-west/fonts/rye.woff2"
+      as="font"
+      type="font/woff2"
+      crossorigin
+    />
+    <link
+      rel="preload"
+      href="/experiments/out-west/fonts/ultra.woff2"
+      as="font"
+      type="font/woff2"
+      crossorigin
+    />
+    <link
+      rel="preload"
+      href="/experiments/out-west/fonts/eb-garamond.woff2"
+      as="font"
+      type="font/woff2"
+      crossorigin
+    />
     <link rel="preload" href="/experiments/out-west/ui/paper.webp" as="image" />
   </Fragment>
   <div id="ow" class="ow">
@@ -58,8 +79,9 @@ import '~/experiments/out-west/ui/pvp.css'
         <p>Characters, guns and props: Quaternius (CC0), Kay Lousberg (CC0), via poly.pizza.</p>
         <p>Textures: Poly Haven (CC0). Sound effects: freesound.org contributors (CC0).</p>
         <p>
-          Type: Ultra and Rye (Astigmatic), EB Garamond (Georg Duffner), Oswald (Vernon Adams), all
-          SIL OFL. Paper, woodcut, seal and icon art generated with Gemini.
+          Type: Ultra (Astigmatic, Apache 2.0); Rye (Sorkin Type), EB Garamond (Georg Duffner,
+          Octavio Pardo) and Oswald (Vernon Adams), SIL OFL. Paper, woodcut, seal and icon art
+          generated with Gemini.
         </p>
         <p>Full list: <a href="/experiments/out-west/3d/CREDITS.md">CREDITS.md</a></p>
       </div>
