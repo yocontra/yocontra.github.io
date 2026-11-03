@@ -196,6 +196,42 @@
   outline-offset: 3px;
 }
 
+/* ------------------------------------------------- Frontier: riders, killer poster */
+.fr-root .ow-sheet {
+  pointer-events: auto;
+}
+.fr-players {
+  min-height: 32px;
+  padding: 2px 6px;
+  font: inherit;
+  color: inherit;
+  text-shadow: inherit;
+  background: none;
+  border: 0;
+  text-decoration: underline dotted;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+.fr-poster-link {
+  margin-top: var(--ow-s3);
+  width: 100%;
+}
+/* a phone on its side: the top-right column runs into ROLL and RELOAD, so the kill feed moves
+   under the health bar (left), two lines at most */
+@media (orientation: landscape) and (max-height: 500px) {
+  .fr-root .fr-feed {
+    position: fixed;
+    top: calc(var(--fr-top) + 96px);
+    left: calc(var(--fr-left) + 16px);
+    align-items: flex-start;
+    max-width: 38vw;
+    font-size: 12px;
+  }
+  .fr-root .fr-feed > :nth-child(n + 3) {
+    display: none;
+  }
+}
+
 /* ---------------------------------------------------------- prestige and the gates */
 .ow-feat-prestige {
   margin-top: var(--ow-s2);

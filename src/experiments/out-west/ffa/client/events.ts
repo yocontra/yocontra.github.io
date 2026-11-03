@@ -252,8 +252,9 @@ function killLine(s: Sink, ev: Extract<WireEvent, { type: typeof EV_KILL }>): st
     marks.push("sheriff's pardon")
   }
   const tail = marks.length > 0 ? ` (${marks.join(', ')})` : ''
-  if (ev.killer === NONE) {
-    return `${s.net.name(ev.victim)} bit the dust${tail}`
+  if (ev.killer === NONE || ev.killer === ev.victim) {
+    const how = ev.killer === NONE ? 'bit the dust' : 'blew himself up'
+    return `${s.net.name(ev.victim)} ${how}${tail}`
   }
   return `${s.net.name(ev.killer)} ✕ ${s.net.name(ev.victim)}${tail}`
 }
@@ -293,8 +294,7 @@ function onShowdown(s: Sink, ev: WireEvent): void {
   switch (ev.type) {
     case EV_CALLOUT: {
       if (s.blocked(ev.challenger) || s.blocked(ev.target)) {
-        // a blocked player's call-out is never shown (the server refuses to pair you anyway)
-        break
+        break // a blocked player's call-out is never shown (the server won't pair you anyway)
       }
       s.callouts.push({
         challenger: ev.challenger,
