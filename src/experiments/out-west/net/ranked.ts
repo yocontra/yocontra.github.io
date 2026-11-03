@@ -1,13 +1,13 @@
+import {
+  RANKED_RESUME_WINDOW_MS,
+  type RankedResumed,
+  type RankedSessionResponse,
+  rankedClosedCopy,
+  resumeUrl,
+} from '../contract/ranked.ts'
 import { openReconnecting, type ReconnectingSocket } from '../platform/reconnect.ts'
 import { getAccessToken } from './auth.ts'
 import { LEADERBOARD_URL, type Result } from './leaderboard.ts'
-import {
-  RANKED_RESUME_WINDOW_MS,
-  type RankedResume,
-  type RankedSessionCreated,
-  rankedClosedCopy,
-  resumeUrl,
-} from './wire-ranked.ts'
 
 /**
  * The ranked session: a WebSocket to the server's DuelSession. The server owns
@@ -21,7 +21,7 @@ import {
  */
 
 export type ServerMessage =
-  | { type: 'hello'; sessionId: string; economyVersion: number; resumed?: RankedResume }
+  | { type: 'hello'; sessionId: string; economyVersion: number; resumed?: RankedResumed }
   | { type: 'ping'; n: number }
   | { type: 'cue'; duel: number; cue: string }
   | { type: 'call'; duel: number }
@@ -45,7 +45,7 @@ export interface RankedHandlers {
   /** The link dropped and a resume is under way. */
   reconnecting: (reason: string) => void
   /** Back on the same run; `resumed` is the server's account of where it stands. */
-  resumed: (resumed: RankedResume | null) => void
+  resumed: (resumed: RankedResumed | null) => void
 }
 
 const CONNECT_TIMEOUT_MS = 8000
@@ -103,7 +103,7 @@ export function parseServerMessage(raw: unknown): ServerMessage | null {
   return check?.(v) ? (v as ServerMessage) : null
 }
 
-async function createSession(token: string): Promise<Result<RankedSessionCreated>> {
+async function createSession(token: string): Promise<Result<RankedSessionResponse>> {
   try {
     // Signed in, the run belongs to your account: first clears pay XP and dollars and earn the
     // Bounty Hunt licence. Without the bearer the server can't tell, and the run stays anonymous.
@@ -138,8 +138,10 @@ async function createSession(token: string): Promise<Result<RankedSessionCreated
     return {
       ok: true,
       value: {
+        sessionId: typeof body.sessionId === 'string' ? body.sessionId : '',
         wsUrl: body.wsUrl,
-        resumeToken: typeof body.resumeToken === 'string' ? body.resumeToken : null,
+        // An empty token means this server can't resume: a drop ends the run.
+        resumeToken: typeof body.resumeToken === 'string' ? body.resumeToken : '',
       },
     }
   } catch {
@@ -158,7 +160,7 @@ export class RankedSession {
   private resuming = false as boolean
   private linkUp = false as boolean
 
-  private constructor(created: RankedSessionCreated, firstHello: (ok: boolean) => void) {
+  private constructor(created: RankedSessionResponse, firstHello: (ok: boolean) => void) {
     this.onFirstHello = firstHello
     this.link = openReconnecting({
       // the first attempt opens the run; later ones resume it, or give up without a token

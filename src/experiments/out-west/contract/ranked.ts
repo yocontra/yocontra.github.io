@@ -36,6 +36,7 @@
  *   the window passed). On 410, go back to practice and say so.
  * - A signed-in run whose window passes is recorded on the leaderboard as it stood.
  */
+import { reopensOn } from '../data/sinks.ts'
 
 /** How long after a drop the run can be resumed (§11.1: resume tickets live 30 s). */
 export const RANKED_RESUME_WINDOW_MS = 30_000
@@ -108,3 +109,15 @@ export type RankedClientMessage =
   | { type: 'pong'; n: number }
   /** Ends the run. `name` is used for guests; a signed-in run uses the account name. */
   | { type: 'finish'; name: string }
+
+/** The run's socket URL with the resume token. */
+export function resumeUrl(wsUrl: string, token: string): string {
+  const u = new URL(wsUrl)
+  u.searchParams.set('resume', token)
+  return u.toString()
+}
+
+/** What ranked says when the month's budget is spent (the server's `error` wins when it sends one). */
+export function rankedClosedCopy(now = new Date()): string {
+  return `Ranked runs are closed for the month: the town's spent its keep. They reopen on ${reopensOn(now)} (UTC). Practice is open.`
+}

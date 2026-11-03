@@ -1,5 +1,5 @@
+import type { RankedResumed } from '../contract/ranked.ts'
 import type { RankedSession, ServerMessage } from '../net/ranked.ts'
-import type { RankedResume } from '../net/wire-ranked.ts'
 import type { ClockEvents, DuelClock, StandoffSpec } from './clock.ts'
 
 interface Queued {
@@ -75,7 +75,7 @@ export class RankedDuelClock implements DuelClock {
    * it, so the director can stage it again. If the server expects a different outlaw than the
    * one in flight (a verdict was lost on the way), the run can't be reconciled and drops.
    */
-  private onResumed(r: RankedResume | null): void {
+  private onResumed(r: RankedResumed | null): void {
     if (this.over) {
       return
     }

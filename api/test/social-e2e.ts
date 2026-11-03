@@ -36,6 +36,7 @@ import { BASE, Client, ORIGIN, type Player, waitFor } from './duel-client.ts'
 import { check, failed, openLocalD1, seedPlayer } from './local-d1.ts'
 
 const db = openLocalD1()
+const BOARD_PATH = `/board/most-wanted?${new URLSearchParams({ limit: '50' })}`
 let ipSeq = 0
 const nextIp = (): string => `10.${120 + (++ipSeq % 100)}.${ipSeq}.1`
 
@@ -87,7 +88,7 @@ async function board(): Promise<void> {
        AND kind IN ('duel_win', 'level_reward')`,
     )
     .get(a.id) as { earned: number }
-  const res = await api<MostWantedResponse>('GET', '/board/most-wanted?limit=50', { as: a })
+  const res = await api<MostWantedResponse>('GET', BOARD_PATH, { as: a })
   check('GET /board/most-wanted answers', res.status === 200, res)
   const row = res.body.rows.find((r) => r.name === a.name)
   check(
@@ -98,7 +99,7 @@ async function board(): Promise<void> {
   check('your own rank is included', res.body.you?.earned === credits.earned, res.body.you)
   check('the previous month is reported', typeof res.body.previous.month === 'string')
   flag(a)
-  const after = await api<MostWantedResponse>('GET', '/board/most-wanted?limit=50')
+  const after = await api<MostWantedResponse>('GET', BOARD_PATH)
   check('a Badlands account drops off the board', !after.body.rows.some((r) => r.name === a.name))
 }
 

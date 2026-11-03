@@ -4,16 +4,17 @@
  * Opened from the Most Wanted board, the Bounty Hunt results sheet and Frontier's riders list and
  * death card. Blocking is private; a blocked player is never matched with you and never shown.
  */
-import { money } from '../data/economy.ts'
-import { currentPlayer } from '../net/auth.ts'
-import { block, fetchPoster, report, setBlocked, unblock } from '../net/social.ts'
+
 import {
-  monthName,
   type PlayerPoster,
   REPORT_LABELS,
   REPORT_REASONS,
   type ReportReason,
-} from '../net/wire-social.ts'
+} from '../contract/social.ts'
+import { money } from '../data/economy.ts'
+import { monthName } from '../data/sinks.ts'
+import { currentPlayer } from '../net/auth.ts'
+import { block, fetchPoster, report, setBlocked, unblock } from '../net/social.ts'
 import { button, el, panelSheet, statusLine } from './sheet.ts'
 import { posterEl } from './wanted.ts'
 

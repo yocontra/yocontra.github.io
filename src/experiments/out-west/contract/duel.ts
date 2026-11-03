@@ -297,6 +297,25 @@ export interface Settlement {
   levelReward: number
 }
 
+/** The level-up numbers of a settlement. */
+export type SettlementLevels = Pick<
+  Settlement,
+  'xpBefore' | 'xpAfter' | 'levelBefore' | 'levelAfter' | 'levelReward'
+>
+
+/** A settlement's level-up numbers, or null when there is no settlement. */
+export function settlementLevels(s: Settlement | null | undefined): SettlementLevels | null {
+  return s
+    ? {
+        xpBefore: s.xpBefore,
+        xpAfter: s.xpAfter,
+        levelBefore: s.levelBefore,
+        levelAfter: s.levelAfter,
+        levelReward: s.levelReward,
+      }
+    : null
+}
+
 export interface DuelResult {
   type: 'result'
   serverTime: number

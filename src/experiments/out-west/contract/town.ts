@@ -79,6 +79,8 @@
  * One byte. The next snapshot is a full snapshot; the client must drop its delta baseline. Sent on
  * reconnect before the first snapshot.
  */
+import { reopensOn } from '../data/sinks.ts'
+
 /** 2: `EV_BAG_DROP` carries the dropper's saddlebag `style`. */
 export const CONTRACT_VERSION = 2
 
@@ -375,3 +377,8 @@ export const SD_ABORTED = 5
 
 /** No-one / nothing, for u8 ids. */
 export const NONE = 255
+
+/** Frontier's "closed for the month" line (the join route's `over_budget` refusal says the same). */
+export function townClosedCopy(now = new Date()): string {
+  return `Perdition's closed for the month: the town's spent its keep. It reopens on ${reopensOn(now)} (UTC). Quick Draw is open in the meantime.`
+}

@@ -5,9 +5,9 @@
  * The numbers are always the server's; this module only lays them out.
  */
 import type { DuelResult, Seat, Settlement } from '../contract/duel.ts'
+import { type SettlementLevels, settlementLevels } from '../contract/duel.ts'
 import { money } from '../data/economy.ts'
 import { levelProgress, levelRewards, titleFor } from '../data/progression.ts'
-import { type SettlementLevels, settlementLevels } from '../net/wire-social.ts'
 import { markLevelSeen } from './notices.ts'
 import { openProfile, reportSheet } from './profile.ts'
 import { noteLevel } from './sfx.ts'

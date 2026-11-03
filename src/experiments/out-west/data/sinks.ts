@@ -42,3 +42,19 @@ export function previousMonth(month: string): string {
 const MONTH = /^\d{4}-(?:0[1-9]|1[0-2])$/u
 export const isMonth = (value: unknown): value is string =>
   typeof value === 'string' && MONTH.test(value)
+
+/** "November 2026" for `2026-11`. */
+export function monthName(month: string): string {
+  const [y, m] = month.split('-').map(Number)
+  return new Date(Date.UTC(y ?? 1970, (m ?? 1) - 1, 1)).toLocaleDateString('en-US', {
+    month: 'long',
+    year: 'numeric',
+    timeZone: 'UTC',
+  })
+}
+
+/** The 1st of next month, UTC, as "December 1": when a spent monthly budget reopens. */
+export function reopensOn(now = new Date()): string {
+  const next = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1))
+  return next.toLocaleDateString('en-US', { month: 'long', day: 'numeric', timeZone: 'UTC' })
+}

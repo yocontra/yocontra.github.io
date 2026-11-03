@@ -3,17 +3,12 @@
  * Frontier this UTC month, top 25, your own standing, last month's top 10 (each got a dated frame),
  * and earlier months. Every name opens that player's poster. Blocked players show as such.
  */
+
+import type { MostWantedResponse, MostWantedRow } from '../contract/economy.ts'
 import { money } from '../data/economy.ts'
+import { MOST_WANTED_WINNERS, monthName, monthOf, previousMonth } from '../data/sinks.ts'
 import { currentPlayer } from '../net/auth.ts'
 import { blockedNames, fetchMostWanted } from '../net/social.ts'
-import {
-  MOST_WANTED_WINNERS,
-  type MostWantedResponse,
-  type MostWantedRow,
-  monthName,
-  monthOf,
-  previousMonth,
-} from '../net/wire-social.ts'
 import { openProfile } from './profile.ts'
 import { button, el, statusLine } from './sheet.ts'
 

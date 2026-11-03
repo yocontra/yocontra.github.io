@@ -1,24 +1,22 @@
 /**
  * The social and money-sink calls: the Most Wanted board, public posters, reports and blocks, the
  * name change, the house round, dye jobs, prestige and the "while you were away" notice. Shapes
- * in `wire-social.ts`. Every call resolves to a typed result and never throws.
+ * in `contract/social.ts`, `contract/economy.ts` and `data/dye.ts`. Every call resolves to a typed result and never throws.
  */
-import type { MeResponse } from '../contract/economy.ts'
-import type { ItemId } from '../data/catalog.ts'
-import { apiJson } from './api.ts'
-import type { Result } from './leaderboard.ts'
+import type { DyeResponse, MeResponse, MostWantedResponse } from '../contract/economy.ts'
 import type {
   BlocksResponse,
   ChalkboardResponse,
-  DyeId,
-  DyeResponse,
-  MostWantedResponse,
   NameChangeResponse,
   PlayerPoster,
   ReportReason,
   ReportResponse,
   RoundResponse,
-} from './wire-social.ts'
+} from '../contract/social.ts'
+import type { ItemId } from '../data/catalog.ts'
+import type { DyeId } from '../data/dye.ts'
+import { apiJson } from './api.ts'
+import type { Result } from './leaderboard.ts'
 
 const isRecord = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null
 const okTrue = (v: unknown): v is Record<string, unknown> & { ok: true } =>

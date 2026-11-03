@@ -3,6 +3,7 @@
  * the requests it owns. See api/migrations/README.md for ownership of the schema.
  */
 import { runLedgerAudit } from './economy/audit.ts'
+import { rollover } from './economy/board.ts'
 import type { Env } from './env.ts'
 import { corsHeaders, error, type RouteHandler } from './http.ts'
 import { accountRoutes } from './routes/account.ts'
@@ -11,6 +12,7 @@ import { duelRoutes } from './routes/duel.ts'
 import { leaderboardRoutes } from './routes/leaderboard.ts'
 import { meRoutes } from './routes/me.ts'
 import { rankedRoutes } from './routes/ranked.ts'
+import { socialRoutes } from './routes/social.ts'
 import { storeRoutes } from './routes/store.ts'
 import { townRoutes } from './routes/town.ts'
 
@@ -30,6 +32,7 @@ const ROUTES: readonly RouteHandler[] = [
   storeRoutes,
   duelRoutes,
   townRoutes,
+  socialRoutes,
 ]
 
 export default {
@@ -53,8 +56,10 @@ export default {
       return error(request, env, 500, 'Something went wrong.')
     }
   },
-  /** Daily: recompute every purse from the ledger and flag mismatches. */
+  /** Daily: recompute every purse from the ledger and flag mismatches; roll the board over. */
   scheduled(_controller: ScheduledController, env: Env, ctx: ExecutionContext): void {
     ctx.waitUntil(runLedgerAudit(env).then(() => undefined))
+    // Freeze last month's Most Wanted top 10 once it's over (also done lazily on the board).
+    ctx.waitUntil(rollover(env).catch((err: unknown) => console.error('rollover failed', err)))
   },
 } satisfies ExportedHandler<Env>

@@ -11,7 +11,7 @@
  * - `natural` washes a dye out. It is free.
  * - Re-dyeing an item to the colour it already has is refused.
  */
-import { type CatalogItem, itemById, type Rarity, type Slot } from './catalog.ts'
+import { type CatalogItem, type ItemId, itemById, type Rarity, type Slot } from './catalog.ts'
 
 export const DYES = [
   { id: 'natural', name: 'Natural', hex: null },
@@ -25,6 +25,8 @@ export const DYES = [
 ] as const satisfies readonly { id: string; name: string; hex: string | null }[]
 
 export type DyeId = (typeof DYES)[number]['id']
+/** The dye on each dyed item (absent = natural). */
+export type Dyes = Partial<Record<ItemId, DyeId>>
 
 /** Slots that take dye. */
 export const DYEABLE_SLOTS: readonly Slot[] = ['hat', 'outfit', 'holster', 'saddlebag', 'extra']
@@ -80,4 +82,10 @@ export function canDye(opts: {
     return 'same'
   }
   return opts.purse < price ? 'funds' : 'ok'
+}
+
+/** The dye's colour as a number for three.js, or null for natural. */
+export function dyeHex(dye: DyeId | undefined): number | null {
+  const d = DYES.find((x) => x.id === dye)
+  return d?.hex ? Number.parseInt(d.hex.slice(1), 16) : null
 }

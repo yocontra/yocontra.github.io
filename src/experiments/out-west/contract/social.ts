@@ -108,6 +108,13 @@ export interface RoundResponse {
 export const REPORT_REASONS = ['name', 'cheating', 'abuse'] as const
 export type ReportReason = (typeof REPORT_REASONS)[number]
 
+/** How the poster's Report sheet words each reason. */
+export const REPORT_LABELS: Readonly<Record<ReportReason, string>> = {
+  name: 'An offensive name',
+  cheating: 'Cheating',
+  abuse: 'Abuse or harassment',
+}
+
 /**
  * `POST /reports`. One report per target per day counts (a repeat is accepted and ignored). Only
  * licensed players' reports count toward moderation. 404 unknown player, 400 bad reason or self.

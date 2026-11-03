@@ -15,17 +15,10 @@ import {
   type Slot,
   STARTER_ITEMS,
 } from '../data/catalog.ts'
+import { DYES, type DyeId, type Dyes, dyePrice, isDyeable } from '../data/dye.ts'
 import { money } from '../data/economy.ts'
 import { buyItem, fetchStore, saveLoadout } from '../net/api.ts'
 import { dyeItem } from '../net/social.ts'
-import {
-  DYES,
-  type DyeId,
-  type Dyes,
-  dyePrice,
-  isDyeable,
-  type MeExtras,
-} from '../net/wire-social.ts'
 import { type IconName, icon } from './icons.ts'
 import { uiSound } from './sfx.ts'
 import { button, confirmSheet, el, swallow } from './sheet.ts'
@@ -72,11 +65,11 @@ const SLOT_NOTE: Partial<Record<Slot, string>> = {
 }
 
 export interface StoreDeps {
-  me: () => (MeResponse & MeExtras) | null
+  me: () => MeResponse | null
   /** Dress your character in this loadout (preview or equipped), with these dyes (yours if omitted). */
   preview: (l: Loadout, dyes?: Dyes) => void
   /** The server accepted a purchase, a dye job or a new loadout. */
-  changed: (patch: Partial<MeResponse & MeExtras>) => void
+  changed: (patch: Partial<MeResponse>) => void
   close: () => void
 }
 
