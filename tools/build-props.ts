@@ -34,7 +34,14 @@ import { ALL_EXTENSIONS, EXTMeshoptCompression } from '@gltf-transform/extension
 import { prune, quantize, reorder } from '@gltf-transform/functions'
 import { MeshoptDecoder, MeshoptEncoder, MeshoptSimplifier } from 'meshoptimizer'
 import sharp, { type Sharp } from 'sharp'
-import { Matrix3, Matrix4, Vector3 } from 'three'
+import {
+  type BufferGeometry,
+  CylinderGeometry,
+  Matrix3,
+  Matrix4,
+  TorusGeometry,
+  Vector3,
+} from 'three'
 import {
   KIT_BAND,
   KIT_H,
@@ -441,6 +448,65 @@ function textureRevolver(doc: Document, kit: Material): void {
   })
 }
 
+/** A three.js primitive as atlas geometry: its UVs wrapped onto a band, one flat tint. */
+function primitive(
+  g: BufferGeometry,
+  at: Matrix4,
+  b: { band: KitBand; v0: number; v1: number; u: number },
+  rgb: [number, number, number],
+): Geo {
+  g.applyMatrix4(at)
+  const P = g.getAttribute('position')
+  const N = g.getAttribute('normal')
+  const T = g.getAttribute('uv')
+  const out = empty()
+  for (let k = 0; k < P.count; k++) {
+    out.pos.push(P.getX(k), P.getY(k), P.getZ(k))
+    out.nrm.push(N.getX(k), N.getY(k), N.getZ(k))
+    out.uv.push(T.getX(k) * b.u, bandV(b.band, b.v0 + (b.v1 - b.v0) * T.getY(k)))
+    out.col.push(...rgb)
+  }
+  const I = g.getIndex()
+  for (let t = 0; t < (I ? I.count : P.count); t++) {
+    out.idx.push(I ? I.getX(t) : t)
+  }
+  return out
+}
+
+/**
+ * Three sticks of dynamite in red paper (the cloth sheet's weave), tied with twine (the rope
+ * band of the furniture sheet), and a fuse: a 30 cm bundle, base at y = 0.
+ */
+function dynamite(): Geo {
+  const parts: { g: Geo; m: Matrix4 }[] = []
+  const paper = { band: 'cloth' as const, v0: 0.05, v1: 0.45, u: 1 }
+  for (const [x, z] of [
+    [-0.048, -0.02],
+    [0.048, -0.02],
+    [0, 0.062],
+  ] as const) {
+    const at = new Matrix4().makeTranslation(x, 0.16, z)
+    parts.push({
+      g: primitive(new CylinderGeometry(0.045, 0.045, 0.32, 14), at, paper, [0.72, 0.07, 0.04]),
+      m: new Matrix4(),
+    })
+  }
+  const twine = { band: 'furniture' as const, v0: 0.9, v1: 0.97, u: 4 }
+  for (const y of [0.08, 0.24]) {
+    const at = new Matrix4().makeRotationX(Math.PI / 2).setPosition(0, y, 0.008)
+    parts.push({
+      g: primitive(new TorusGeometry(0.098, 0.009, 6, 24), at, twine, [0.85, 0.75, 0.55]),
+      m: new Matrix4(),
+    })
+  }
+  const fuse = new Matrix4().makeRotationZ(0.35).setPosition(0.01, 0.37, 0.062)
+  parts.push({
+    g: primitive(new CylinderGeometry(0.006, 0.006, 0.12, 5), fuse, twine, [0.3, 0.26, 0.2]),
+    m: new Matrix4(),
+  })
+  return concat(parts)
+}
+
 async function main(): Promise<void> {
   await mkdir(`${OUT}/tex`, { recursive: true })
   await buildAtlas()
@@ -469,8 +535,14 @@ async function main(): Promise<void> {
     )
   }
   textureRevolver(doc, kit)
+  {
+    const sc = doc.createScene('dynamite')
+    const top = doc.createNode('RootNode')
+    sc.addChild(top)
+    top.addChild(addGeo(doc, 'dynamite_kit', dynamite(), kit))
+  }
   await doc.transform(
-    prune(),
+    prune({ keepAttributes: true }),
     reorder({ encoder: MeshoptEncoder }),
     // normals and colours only: positions and UVs stay float so builders can transform and
     // merge props freely (tiled trim UVs run past 0..1)
