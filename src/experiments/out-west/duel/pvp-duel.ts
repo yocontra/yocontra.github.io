@@ -83,6 +83,9 @@ export class PvpDuel implements DirectorHooks {
   private lostLine = null as string | null
   /** The next wait's draw number is already known (from `suddenDeath` or `sync`). */
   private drawKnown = false as boolean
+  /** What the room said after its verdict while the kill cam played: it closed; its votes. */
+  private closedAfter = null as string | null
+  private votes = null as { votes: readonly [boolean, boolean]; left: number } | null
   /** The rematch number of the last hello: a rejoin repeats it, a rematch moves it on. */
   private rematchN = -1
   /** The verdict arrived in a rejoin's sync (no money lines for us in it). */
@@ -287,6 +290,7 @@ export class PvpDuel implements DirectorHooks {
         }
         break
       case 'rematch':
+        this.votes = { votes: m.votes, left: m.left }
         this.results?.setVotes(m.votes, this.seat, m.left)
         break
       case 'error':
@@ -317,6 +321,8 @@ export class PvpDuel implements DirectorHooks {
     }
     this.xpAfter = null
     this.result = null
+    this.closedAfter = null
+    this.votes = null
     this.synced = false
     this.results?.close()
     this.results = null
@@ -497,6 +503,7 @@ export class PvpDuel implements DirectorHooks {
       },
       this.opponentRef(),
     )
+    this.results.catchUp(this.votes, this.seat, this.closedAfter)
     fetchDuelStats()
       .then((s) => {
         if (s.ok) {
@@ -538,8 +545,8 @@ export class PvpDuel implements DirectorHooks {
       return
     }
     if (this.result) {
-      this.results?.disableRematch()
-      this.results?.say(reason)
+      this.closedAfter = reason
+      this.results?.catchUp(null, this.seat, reason)
       return
     }
     this.d.c.hud.fake(`[${reason}]`, 3000)

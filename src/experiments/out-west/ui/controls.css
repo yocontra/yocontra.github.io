@@ -64,6 +64,10 @@
     border-color var(--ow-t-fast),
     transform var(--ow-t-fast) var(--ow-ease-out);
 }
+/* `hidden` must win over the inline-flex above (a rematch that can't happen, a ghost not yet offered) */
+.ow-btn[hidden] {
+  display: none;
+}
 .ow-btn:hover {
   background-color: rgb(239 228 204 / 0.1);
   border-color: var(--ow-bone);

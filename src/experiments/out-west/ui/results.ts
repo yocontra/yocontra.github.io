@@ -84,6 +84,13 @@ export class ResultsPanel {
   private readonly vote: HTMLElement
   private readonly record: HTMLElement
   private readonly rematchBtn: HTMLButtonElement
+  private readonly nextBtn: HTMLButtonElement
+  /**
+   * open: you can ask for a rematch. voted: you asked, waiting on him. closed: no rematch can
+   * happen (a dodge or forfeit, the window or the rematch count ran out, the room closed): the
+   * button goes away and Next bounty takes the lead, rather than a dead pink button.
+   */
+  private rematch: 'open' | 'voted' | 'closed' = 'open'
   /** The settlement's XP and level numbers, when the server sends them. */
   private readonly booked: SettlementLevels | null
 
@@ -123,17 +130,22 @@ export class ResultsPanel {
     this.vote.setAttribute('aria-live', 'polite')
     const row = el('div', 'ow-hub-row', panel)
     button(row, 'Saloon', h.saloon)
-    button(row, 'Next bounty', h.next)
+    this.nextBtn = button(row, 'Next bounty', h.next)
     this.rematchBtn = button(
       row,
       'Rematch',
       () => {
-        this.rematchBtn.disabled = true
-        h.rematch()
+        if (this.rematch === 'open') {
+          this.voted()
+          h.rematch()
+        }
       },
       true,
     )
-    this.rematchBtn.disabled = !v.canRematch
+    this.rematchBtn.classList.add('ow-results-rematch')
+    if (!v.canRematch) {
+      this.closeRematch()
+    }
     if (opponent) {
       const who = el('div', 'ow-hub-row ow-feat-opponent', panel)
       const label = opponent.kind === 'ghost' ? 'His owner’s poster' : 'His poster'
@@ -179,12 +191,16 @@ export class ResultsPanel {
     }
   }
 
-  /** Rematch votes from the server: [seat0, seat1], with the window's deadline. */
+  /** Rematch votes from the server: [seat0, seat1], and how many rematches the room has left. */
   setVotes(votes: readonly [boolean, boolean], me: 0 | 1, left: number): void {
     const mine = votes[me]
     const theirs = votes[me === 0 ? 1 : 0]
     if (left <= 0) {
-      this.rematchBtn.disabled = true
+      this.closeRematch()
+      return
+    }
+    if (mine) {
+      this.voted()
     }
     if (mine && theirs) {
       this.vote.textContent = 'Rematch. Back to the street…'
@@ -192,6 +208,21 @@ export class ResultsPanel {
       this.vote.textContent = 'He wants a rematch.'
     } else if (mine) {
       this.vote.textContent = 'Waiting on him…'
+    }
+  }
+
+  /** What the room said while the kill cam played: its latest votes, and why it closed. */
+  catchUp(
+    votes: { votes: readonly [boolean, boolean]; left: number } | null,
+    me: 0 | 1,
+    closed: string | null,
+  ): void {
+    if (votes) {
+      this.setVotes(votes.votes, me, votes.left)
+    }
+    if (closed !== null) {
+      this.closeRematch()
+      this.say(closed)
     }
   }
 
@@ -204,8 +235,31 @@ export class ResultsPanel {
     this.record.textContent = text
   }
 
-  disableRematch(): void {
+  /** You asked: the button stays, quiet and disabled, while you wait on him. */
+  private voted(): void {
+    if (this.rematch !== 'open') {
+      return
+    }
+    this.rematch = 'voted'
     this.rematchBtn.disabled = true
+    this.rematchBtn.classList.remove('ow-btn-primary')
+    this.rematchBtn.setAttribute('aria-pressed', 'true')
+  }
+
+  /** No rematch is possible any more: hide the button and hand the lead to Next bounty. */
+  closeRematch(): void {
+    if (this.rematch === 'closed') {
+      return
+    }
+    this.rematch = 'closed'
+    this.rematchBtn.disabled = true
+    this.rematchBtn.hidden = true
+    this.nextBtn.classList.add('ow-btn-primary')
+  }
+
+  /** The room closed (or the line died) after the verdict. */
+  disableRematch(): void {
+    this.closeRematch()
   }
 
   close(): void {
