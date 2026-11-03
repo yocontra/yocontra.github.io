@@ -34,6 +34,16 @@ export const experiments: readonly Experiment[] = [
     hue: 25,
   },
   {
+    slug: 'out-west/classic',
+    title: 'out west (2019)',
+    year: 2019,
+    blurb: 'The original 2D version, exactly as it was.',
+    tags: ['game', 'canvas', 'audio'],
+    thumb: '/experiments/out-west/thumb.webp',
+    hue: 25,
+    unlisted: true,
+  },
+  {
     slug: 'hax',
     title: 'You Got Hacked',
     year: 2021,
