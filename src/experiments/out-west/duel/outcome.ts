@@ -3,6 +3,7 @@ import { FEEL } from '../data/feel.ts'
 import { gradeFor } from '../data/outlaws.ts'
 import { save as persist } from '../save.ts'
 import { clamp01 } from '../scene/camera.ts'
+import { say } from './chatter.ts'
 import type { Director } from './director.ts'
 import { killShot } from './framing.ts'
 import { book, type Paid, payLine, showPurse } from './purse.ts'
@@ -231,7 +232,7 @@ function tickBossKill(d: Director, k: number): void {
   if (!d.paidShown && k > d.killDur + 0.6) {
     d.paidShown = true
     showPurse(d, d.winDelta)
-    d.c.hud.line('Bounty', payLine(d, d.lastReaction ?? 0), 2600)
+    say(d, 'Bounty', payLine(d, d.lastReaction ?? 0), { ms: 2600, force: true })
   }
   // let at least six of the twelve tolls ring before the ledger
   if (d.midnightBells >= 6 && k > d.killDur + 1) {
@@ -298,7 +299,7 @@ export function tickBossWound(d: Director): void {
       // lies on its side, its half-thickness (2.2 cm) above the dirt
       c.physics.add(g, V(0.6, 1.0, -0.5), V(4, 2, 6), { side: true, ground: 0.023 })
     }
-    c.hud.line(d.outlaw.name, 'That… that’s just a scratch.', 2200)
+    say(d, d.outlaw.name, 'That… that’s just a scratch.', { ms: 2200, force: true })
     c.audio.play('shout', { gain: 0.7, rate: 0.6, pos: e?.root.position.clone() ?? V() })
   }
   if (t > 1.1) {

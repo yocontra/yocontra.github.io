@@ -18,6 +18,7 @@ import { DRAW_SOUNDS } from '../scene/loadout.ts'
 import { MatchIntro } from '../ui/match-intro.ts'
 import { type OpponentRef, ResultsPanel, RoomNews } from '../ui/results.ts'
 import { recordLine } from '../ui/standing.ts'
+import { say } from './chatter.ts'
 import { tickCoward } from './defeat.ts'
 import type { Director, DirectorHooks } from './director.ts'
 import { tickWin } from './outcome.ts'
@@ -245,10 +246,7 @@ export class PvpDuel implements DirectorHooks {
         remotePace(this.d, m.n, m.auto, this.hold)
         break
       case 'heckle':
-        this.d.c.hud.line(
-          this.d.outlaw.name,
-          HECKLES[Math.floor(Math.random() * HECKLES.length)] ?? '',
-        )
+        say(this.d, this.d.outlaw.name, HECKLES[Math.floor(Math.random() * HECKLES.length)] ?? '')
         break
       case 'cue':
         this.adoptDraw(m.draw)
@@ -289,7 +287,7 @@ export class PvpDuel implements DirectorHooks {
         break
       case 'taunt':
         if (m.seat === this.opp) {
-          d.c.hud.line(d.outlaw.name, TAUNT_TEXT[m.taunt] ?? '', 1800)
+          say(d, d.outlaw.name, TAUNT_TEXT[m.taunt] ?? '', { ms: 1800 })
         }
         break
       case 'rematch':

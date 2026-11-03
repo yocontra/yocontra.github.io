@@ -199,8 +199,8 @@ function strike(d: Director, n: number): void {
   c.audio.play('bell', { gain: 0.8, pos: c.world.bellPos, reverb: 0.5 })
   c.world.toll()
   c.world.setClock(12, 0)
-  c.hud.line(d.outlaw.name, `${NUMBERS[n - 1] ?? ''}…`, 900)
-  c.hud.fake(`[bell strikes ${n}]`)
+  // the bell counts, not the man: the wait stays silent but for the strikes (chatter.ts)
+  c.hud.fake(`[bell strikes ${NUMBERS[n - 1]?.toLowerCase() ?? n}]`, 900)
   // calm inserts on the clock face: the first strike, and the one before the last
   if (n === 6) {
     clockInsert(d, 1.1)

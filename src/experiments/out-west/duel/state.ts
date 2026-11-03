@@ -118,6 +118,10 @@ export class DuelState {
   eDist = 0
   stall = 0
   stallHeckled = false as boolean
+  /** realTime the last spoken line frees the floor (chatter.ts). */
+  lineFreeAt = 0
+  /** Lines this outlaw has said on this walk (the opener and one beat). */
+  walkLines = 0
   lastWalkTime = 0
   lastTick = 0
   turnAnim: Turning[] = []
