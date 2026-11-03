@@ -1,5 +1,3 @@
-import type { RunResult } from '../data/economy'
-
 /**
  * The shared leaderboard (Cloudflare Worker + D1). Every call resolves to a
  * typed result and never throws: offline, rate limits and rejections become a
@@ -15,16 +13,11 @@ export interface BoardEntry {
 
 export type Result<T> = { ok: true; value: T } | { ok: false; error: string }
 
-export interface Submitted {
-  total: number
-  rank: number
-}
-
 const FALLBACK = import.meta.env.DEV ? 'http://localhost:8787' : 'https://leaderboard.contra.io'
-const configured: unknown = import.meta.env['PUBLIC_LEADERBOARD_URL']
+const configured: unknown = import.meta.env.PUBLIC_LEADERBOARD_URL
 export const LEADERBOARD_URL = (
   typeof configured === 'string' && configured ? configured : FALLBACK
-).replace(/\/+$/, '')
+).replace(/\/+$/u, '')
 
 const TIMEOUT_MS = 8000
 const NAME_KEY = 'out-west-3d-name'
@@ -33,7 +26,7 @@ export const NAME_MAX = 16
 
 /** Trim and collapse whitespace; null when it isn't 1–16 characters. */
 export function cleanName(raw: string): string | null {
-  const n = raw.replace(/\s+/g, ' ').trim()
+  const n = raw.replace(/\s+/gu, ' ').trim()
   const len = [...n].length
   return len >= 1 && len <= NAME_MAX ? n : null
 }
@@ -59,17 +52,23 @@ const isRecord = (v: unknown): v is Record<string, unknown> => typeof v === 'obj
 function isEntry(v: unknown): v is BoardEntry {
   return (
     isRecord(v) &&
-    typeof v['rank'] === 'number' &&
-    typeof v['name'] === 'string' &&
-    typeof v['total'] === 'number' &&
-    typeof v['createdAt'] === 'number'
+    typeof v.rank === 'number' &&
+    typeof v.name === 'string' &&
+    typeof v.total === 'number' &&
+    typeof v.createdAt === 'number'
   )
 }
 
 function politeStatus(status: number, server: string | null): string {
-  if (status === 429) return 'Whoa there, partner. Too many tries; give it a minute.'
-  if (status >= 500) return 'The leaderboard is having a bad day. Try again later.'
-  if (server) return server
+  if (status === 429) {
+    return 'Whoa there, partner. Too many tries; give it a minute.'
+  }
+  if (status >= 500) {
+    return 'The leaderboard is having a bad day. Try again later.'
+  }
+  if (server) {
+    return server
+  }
   return 'The leaderboard turned that away.'
 }
 
@@ -88,7 +87,7 @@ async function call(path: string, init: RequestInit = {}): Promise<Result<unknow
       body = null
     }
     if (!res.ok) {
-      const msg = isRecord(body) && typeof body['error'] === 'string' ? body['error'] : null
+      const msg = isRecord(body) && typeof body.error === 'string' ? body.error : null
       return { ok: false, error: politeStatus(res.status, msg) }
     }
     return { ok: true, value: body }
@@ -102,34 +101,12 @@ async function call(path: string, init: RequestInit = {}): Promise<Result<unknow
 /** The top `limit` entries. */
 export async function fetchTop(limit = 25): Promise<Result<BoardEntry[]>> {
   const r = await call(`/leaderboard?limit=${Math.max(1, Math.min(100, Math.floor(limit)))}`)
-  if (!r.ok) return r
+  if (!r.ok) {
+    return r
+  }
   const v = r.value
-  if (!isRecord(v) || !Array.isArray(v['entries'])) {
+  if (!(isRecord(v) && Array.isArray(v.entries))) {
     return { ok: false, error: 'The leaderboard sent something odd back.' }
   }
-  return { ok: true, value: v['entries'].filter(isEntry) }
-}
-
-/** Submit a (possibly partial) run under `name`. The server rescores it. */
-export async function submitRun(name: string, run: RunResult): Promise<Result<Submitted>> {
-  const clean = cleanName(name)
-  if (!clean) return { ok: false, error: `Pick a name of 1–${NAME_MAX} characters.` }
-  const r = await call('/runs', {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ name: clean, run }),
-  })
-  if (!r.ok) return r
-  const v = r.value
-  if (!isRecord(v)) return { ok: false, error: 'The leaderboard sent something odd back.' }
-  if (v['ok'] === false) {
-    return {
-      ok: false,
-      error: typeof v['error'] === 'string' ? v['error'] : 'The leaderboard turned that away.',
-    }
-  }
-  if (typeof v['total'] !== 'number' || typeof v['rank'] !== 'number') {
-    return { ok: false, error: 'The leaderboard sent something odd back.' }
-  }
-  return { ok: true, value: { total: v['total'], rank: v['rank'] } }
+  return { ok: true, value: v.entries.filter(isEntry) }
 }

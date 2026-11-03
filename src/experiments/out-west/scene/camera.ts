@@ -1,3 +1,4 @@
+// biome-ignore-all lint/suspicious/noUnnecessaryConditions: class fields are flags mutated from outside the method; Biome narrows them to their literal initializer
 import { MathUtils, PerspectiveCamera, Quaternion, Vector3 } from 'three'
 
 export interface Pose {
@@ -54,14 +55,18 @@ export class CameraRig {
   }
 
   addTrauma(v: number): void {
-    if (this.reduced) return
+    if (this.reduced) {
+      return
+    }
     this.trauma = Math.min(1, this.trauma + v)
   }
 
   update(dt: number, realDt: number): void {
     this.t += dt
     this.noiseT += realDt
-    if (!this.shot) return
+    if (!this.shot) {
+      return
+    }
     const p = this.shot(this.t, dt)
     if (this.blend > 0 && this.t < this.blend) {
       const k = easeInOutCubic(this.t / this.blend)
@@ -128,14 +133,24 @@ export interface Framing {
  * third (centred on portrait screens) and the shooter in frame on the other
  * side. Tries a few camera placements and keeps the best-composed one.
  */
+export interface TwoShotOpts {
+  /** Victim's height in metres. */
+  height?: number
+  /** Share of the frame height the victim fills. */
+  frac?: number
+  /** 1 = the shooter's right (gun) side, -1 = his left. */
+  side?: 1 | -1
+}
+
 export function twoShot(
   shooter: Vector3,
   victim: Vector3,
   aspect: number,
-  side: 1 | -1,
-  frac = 0.4,
-  victimHeight = 1.78,
+  opts: TwoShotOpts = {},
 ): Framing {
+  const side = opts.side ?? 1
+  const frac = opts.frac ?? 0.4
+  const victimHeight = opts.height ?? 1.78
   const axis = new Vector3(victim.x - shooter.x, 0, victim.z - shooter.z)
   const sep = Math.max(0.4, axis.length())
   axis.divideScalar(sep)
@@ -166,9 +181,15 @@ export function twoShot(
       const sNdc = Math.tan(Math.abs(ang) - ov) / Math.tan(hHalf)
       const offAxis = MathUtils.radToDeg(Math.atan2(so, back))
       let score = Math.abs(back - 3.4) / 8
-      if (sNdc > 0.8) score += (sNdc - 0.8) * 10
-      if (sNdc < 0.4) score += (0.4 - sNdc) * 6
-      if (!portrait) score += Math.abs(offAxis - 32) / 25
+      if (sNdc > 0.8) {
+        score += (sNdc - 0.8) * 10
+      }
+      if (sNdc < 0.4) {
+        score += (0.4 - sNdc) * 6
+      }
+      if (!portrait) {
+        score += Math.abs(offAxis - 32) / 25
+      }
       if (score < bestScore) {
         bestScore = score
         // turn from the victim toward the shooter by `ov`: victim on one third, shooter on the other

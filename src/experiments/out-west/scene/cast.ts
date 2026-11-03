@@ -1,7 +1,7 @@
 import type { Object3D } from 'three'
-import type { HatKey, Look } from '../data/outlaws'
-import type { Assets } from '../engine/assets'
-import { Actor } from './actor'
+import type { HatKey, Look } from '../data/outlaws.ts'
+import type { Assets } from '../engine/assets.ts'
+import { Actor } from './actor.ts'
 
 export interface CastSpec {
   look: Look
@@ -18,7 +18,9 @@ export function castActor(assets: Assets, s: CastSpec): Actor {
   const L = s.look
   const need = (k: Parameters<Assets['bodyNow']>[0]) => {
     const g = assets.bodyNow(k)
-    if (!g) throw new Error(`model ${k} not loaded`)
+    if (!g) {
+      throw new Error(`model ${k} not loaded`)
+    }
     return g
   }
   const base = L.woman ? need('woman') : assets.player
@@ -45,7 +47,7 @@ export function castActor(assets: Assets, s: CastSpec): Actor {
     beard: L.beard,
     bandoliers: L.bandoliers,
     star: L.star,
-    mask: L.mask ? (s.bandana ?? 0x2a1a12) : undefined,
+    mask: L.mask ? (s.bandana ?? 0x2a_1a_12) : undefined,
     seed: `${L.head}/${L.body}/${L.legs}/${L.feet}/${s.hat}/${s.hatColor}`,
   })
 }

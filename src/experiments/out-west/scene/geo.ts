@@ -1,3 +1,4 @@
+// biome-ignore-all lint/complexity/useMaxParams: geometry/audio builders take positional numeric args (x, y, z, size…), mirroring three.js APIs
 import { BufferGeometry, Color, Float32BufferAttribute, Vector3 } from 'three'
 
 /**
@@ -38,7 +39,9 @@ export class GeoBuilder {
       u = p.x
       v = p.y
     }
-    if (rot) [u, v] = [v, u]
+    if (rot) {
+      ;[u, v] = [v, u]
+    }
     return [u / this.tile, v / this.tile]
   }
 
@@ -105,18 +108,24 @@ export class GeoBuilder {
     const s = new Set(opts.skip ?? [])
     const r = opts.rotUV ?? false
     const V = (x: number, y: number, z: number) => new Vector3(x, y, z)
-    if (!s.has('pz'))
+    if (!s.has('pz')) {
       this.quad(V(x0, y0, z1), V(x1, y0, z1), V(x1, y1, z1), V(x0, y1, z1), color, r)
-    if (!s.has('nz'))
+    }
+    if (!s.has('nz')) {
       this.quad(V(x1, y0, z0), V(x0, y0, z0), V(x0, y1, z0), V(x1, y1, z0), color, r)
-    if (!s.has('px'))
+    }
+    if (!s.has('px')) {
       this.quad(V(x1, y0, z1), V(x1, y0, z0), V(x1, y1, z0), V(x1, y1, z1), color, r)
-    if (!s.has('nx'))
+    }
+    if (!s.has('nx')) {
       this.quad(V(x0, y0, z0), V(x0, y0, z1), V(x0, y1, z1), V(x0, y1, z0), color, r)
-    if (!s.has('top'))
+    }
+    if (!s.has('top')) {
       this.quad(V(x0, y1, z1), V(x1, y1, z1), V(x1, y1, z0), V(x0, y1, z0), color, r)
-    if (!s.has('bottom'))
+    }
+    if (!s.has('bottom')) {
       this.quad(V(x0, y0, z0), V(x1, y0, z0), V(x1, y0, z1), V(x0, y0, z1), color, r)
+    }
   }
 
   /** Gable roof along the given axis over a footprint, ridge height h above y. */

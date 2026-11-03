@@ -1,3 +1,6 @@
+// biome-ignore-all lint/complexity/useMaxParams: geometry/audio builders take positional numeric args (x, y, z, size…), mirroring three.js APIs
+// biome-ignore-all lint/style/noExcessiveLinesPerFile: one cohesive module (data table / scene builder); splitting would scatter tightly coupled code. Tracked for a later split.
+// biome-ignore-all lint/suspicious/noUnnecessaryConditions: class fields are flags mutated from outside the method; Biome narrows them to their literal initializer
 import {
   BackSide,
   CanvasTexture,
@@ -19,10 +22,10 @@ import {
   type Texture,
   Vector3,
 } from 'three'
-import { GeoBuilder } from './geo'
-import { type Preset, presetAt } from './presets'
-import { RIM } from './style'
-import { clockCanvas, type SignSpec, signAtlas } from './textures'
+import { GeoBuilder } from './geo.ts'
+import { type Preset, presetAt } from './presets.ts'
+import { RIM } from './style.ts'
+import { clockCanvas, type SignSpec, signAtlas } from './textures.ts'
 
 /** Street layout (metres). The street runs along Z; the duel is centred on the origin. */
 export const STREET = {
@@ -70,21 +73,41 @@ const BUILDINGS: BuildingSpec[] = [
     h: 5.2,
     front: 7.5,
     depth: 12,
-    color: 0x8a6a4a,
+    color: 0x8a_6a_4a,
     sign: 5,
     kind: 'stable',
   },
-  { side: 1, z: -33, w: 9, h: 5.0, front: 7.4, depth: 10, color: 0xb8a690, sign: 10 },
-  { side: 1, z: -22, w: 10, h: 5.5, front: 8.2, depth: 10, color: 0x9a8a72, sign: 4, kind: 'bank' },
-  { side: 1, z: -10.5, w: 11, h: 5.2, front: 7.6, depth: 10, color: 0x7a8a7a, sign: 1 },
-  { side: 1, z: 2, w: 12, h: 6.2, front: 8.4, depth: 12, color: 0x8a4a34, sign: 0, kind: 'saloon' },
-  { side: 1, z: 15, w: 11, h: 7.2, front: 9.0, depth: 11, color: 0x9a8aa0, sign: 6 },
-  { side: 1, z: 27, w: 8, h: 4.6, front: 6.6, depth: 9, color: 0xc0b49a, sign: 7 },
-  { side: 1, z: 37, w: 10, h: 5.0, front: 7.0, depth: 10, color: 0x7a6a5a, sign: 11 },
+  { side: 1, z: -33, w: 9, h: 5.0, front: 7.4, depth: 10, color: 0xb8_a6_90, sign: 10 },
+  {
+    side: 1,
+    z: -22,
+    w: 10,
+    h: 5.5,
+    front: 8.2,
+    depth: 10,
+    color: 0x9a_8a_72,
+    sign: 4,
+    kind: 'bank',
+  },
+  { side: 1, z: -10.5, w: 11, h: 5.2, front: 7.6, depth: 10, color: 0x7a_8a_7a, sign: 1 },
+  {
+    side: 1,
+    z: 2,
+    w: 12,
+    h: 6.2,
+    front: 8.4,
+    depth: 12,
+    color: 0x8a_4a_34,
+    sign: 0,
+    kind: 'saloon',
+  },
+  { side: 1, z: 15, w: 11, h: 7.2, front: 9.0, depth: 11, color: 0x9a_8a_a0, sign: 6 },
+  { side: 1, z: 27, w: 8, h: 4.6, front: 6.6, depth: 9, color: 0xc0_b4_9a, sign: 7 },
+  { side: 1, z: 37, w: 10, h: 5.0, front: 7.0, depth: 10, color: 0x7a_6a_5a, sign: 11 },
   // left side (-x)
-  { side: -1, z: -44, w: 12, h: 5.0, front: 7.2, depth: 10, color: 0x9a7a5a, sign: 8 },
-  { side: -1, z: -31, w: 10, h: 5.4, front: 7.8, depth: 10, color: 0x6a7a8a, sign: 9 },
-  { side: -1, z: -19.5, w: 10, h: 5.2, front: 7.6, depth: 10, color: 0x5a6070, sign: 2 },
+  { side: -1, z: -44, w: 12, h: 5.0, front: 7.2, depth: 10, color: 0x9a_7a_5a, sign: 8 },
+  { side: -1, z: -31, w: 10, h: 5.4, front: 7.8, depth: 10, color: 0x6a_7a_8a, sign: 9 },
+  { side: -1, z: -19.5, w: 10, h: 5.2, front: 7.6, depth: 10, color: 0x5a_60_70, sign: 2 },
   {
     side: -1,
     z: -6.5,
@@ -92,13 +115,13 @@ const BUILDINGS: BuildingSpec[] = [
     h: 5.0,
     front: 7.4,
     depth: 10,
-    color: 0x4a443e,
+    color: 0x4a_44_3e,
     sign: 3,
     kind: 'undertaker',
   },
-  { side: -1, z: 5.5, w: 11, h: 5.6, front: 8.0, depth: 11, color: 0xa08a6a, sign: 1 },
-  { side: -1, z: 18, w: 11, h: 6.6, front: 8.6, depth: 11, color: 0x8a5a44, sign: 6 },
-  { side: -1, z: 30, w: 10, h: 4.8, front: 6.8, depth: 10, color: 0xb0a080, sign: 10 },
+  { side: -1, z: 5.5, w: 11, h: 5.6, front: 8.0, depth: 11, color: 0xa0_8a_6a, sign: 1 },
+  { side: -1, z: 18, w: 11, h: 6.6, front: 8.6, depth: 11, color: 0x8a_5a_44, sign: 6 },
+  { side: -1, z: 30, w: 10, h: 4.8, front: 6.8, depth: 10, color: 0xb0_a0_80, sign: 10 },
 ]
 
 const skyVert = /* glsl */ `
@@ -205,13 +228,13 @@ export class World {
   ) {
     scene.add(this.root)
     this.preset = presetAt(0)
-    this.fog = new Fog(0xe8d3a8, 60, 220)
+    this.fog = new Fog(0xe8_d3_a8, 60, 220)
     scene.fog = this.fog
 
     // --- lights
-    this.hemi = new HemisphereLight(0xcfe0ff, 0xb08a5a, 1)
+    this.hemi = new HemisphereLight(0xcf_e0_ff, 0xb0_8a_5a, 1)
     this.root.add(this.hemi)
-    this.sun = new DirectionalLight(0xfff1d6, 3.2)
+    this.sun = new DirectionalLight(0xff_f1_d6, 3.2)
     this.sun.castShadow = true
     this.sun.shadow.mapSize.set(shadowSize, shadowSize)
     const sc = this.sun.shadow.camera
@@ -236,12 +259,12 @@ export class World {
       [9.4, 3.0, 20],
     ]
     for (const [x, y, z] of lanternSpots) {
-      const l = new PointLight(0xffa850, 0, 16, 1.6)
+      const l = new PointLight(0xff_a8_50, 0, 16, 1.6)
       l.position.set(x, y, z)
       this.root.add(l)
       this.lanterns.push({ light: l, base: 20, phase: Math.random() * 10 })
     }
-    this.flashLight = new PointLight(0xffd090, 0, 14, 1.5)
+    this.flashLight = new PointLight(0xff_d0_90, 0, 14, 1.5)
     this.root.add(this.flashLight)
 
     // --- sky
@@ -276,10 +299,10 @@ export class World {
       color: new Color(1.5, 1.45, 1.4),
     })
     this.windowMat = new MeshStandardMaterial({
-      color: 0x1a1612,
+      color: 0x1a_16_12,
       roughness: 0.25,
       metalness: 0.2,
-      emissive: new Color(0xff9a40),
+      emissive: new Color(0xff_9a_40),
       emissiveIntensity: 0,
     })
     const atlas = signAtlas(SIGNS)
@@ -289,7 +312,7 @@ export class World {
     this.clockMat = new MeshStandardMaterial({
       map: this.clockTex,
       emissiveMap: this.clockTex,
-      emissive: new Color(0xffe0a0),
+      emissive: new Color(0xff_e0_a0),
       emissiveIntensity: 0,
       roughness: 0.6,
     })
@@ -299,7 +322,7 @@ export class World {
       map: tex.ground,
       normalMap: tex.groundN,
       roughness: 1,
-      color: 0xd8c0a0,
+      color: 0xd8_c0_a0,
     })
     groundMat.onBeforeCompile = (shader) => {
       shader.vertexShader = shader.vertexShader
@@ -335,7 +358,9 @@ float gn(vec2 p){ vec2 i=floor(p); vec2 f=fract(p); f=f*f*(3.0-2.0*f);
     const gGeo = new PlaneGeometry(700, 700, 1, 1)
     gGeo.rotateX(-Math.PI / 2)
     const uv = gGeo.getAttribute('uv')
-    for (let i = 0; i < uv.count; i++) uv.setXY(i, uv.getX(i) * 175, uv.getY(i) * 175)
+    for (let i = 0; i < uv.count; i++) {
+      uv.setXY(i, uv.getX(i) * 175, uv.getY(i) * 175)
+    }
     this.ground = new Mesh(gGeo, groundMat)
     this.ground.receiveShadow = true
     this.ground.matrixAutoUpdate = false
@@ -349,13 +374,15 @@ float gn(vec2 p){ vec2 i=floor(p); vec2 f=fract(p); f=f*f*(3.0-2.0*f);
     this.buildMesas()
     this.poster = this.buildPosterPost()
     this.posterMat =
-      (this.poster.userData['mat'] as MeshStandardMaterial) ?? new MeshStandardMaterial()
+      (this.poster.userData.mat as MeshStandardMaterial) ?? new MeshStandardMaterial()
 
     this.apply(0)
   }
 
   private addStatic(geo: GeoBuilder, mat: MeshStandardMaterial, shadow = true): Mesh | null {
-    if (geo.empty) return null
+    if (geo.empty) {
+      return null
+    }
     const m = new Mesh(geo.build(), mat)
     m.castShadow = shadow
     m.receiveShadow = true
@@ -371,30 +398,30 @@ float gn(vec2 p){ vec2 i=floor(p); vec2 f=fract(p); f=f*f*(3.0-2.0*f);
     const glass = new GeoBuilder(1)
     const signs = new GeoBuilder(1)
     const H = STREET.half
-    const BW = STREET.boardwalk
-    const white = new Color(0xffffff)
+    const Bw = STREET.boardwalk
+    const white = new Color(0xff_ff_ff)
     for (const b of BUILDINGS) {
       const s = b.side
       const paint = new Color(b.color).lerp(white, 0.5).getHex()
-      const fx = s * (H + BW) // facade plane
+      const fx = s * (H + Bw) // facade plane
       const z0 = b.z - b.w / 2
       const z1 = b.z + b.w / 2
       const bodyCx = fx + (s * b.depth) / 2
       // main body
       walls.box(bodyCx, b.h / 2, b.z, b.depth, b.h, b.w - 0.05, paint, { skip: ['bottom'] })
       // roof: shallow gable running away from the street, hidden by the false front
-      trim.gable(bodyCx, b.h, b.z, b.depth, b.w - 0.3, 1.2, 'x', 0x4a3a2e, 0.2)
+      trim.gable(bodyCx, b.h, b.z, b.depth, b.w - 0.3, 1.2, 'x', 0x4a_3a_2e, 0.2)
       // false front (taller flat facade)
       const ft = 0.25
       walls.box(fx - (s * ft) / 2, b.front / 2, b.z, ft, b.front, b.w, paint, {
         skip: ['bottom'],
       })
       // cornice
-      trim.box(fx - s * 0.35, b.front + 0.12, b.z, 0.6, 0.24, b.w + 0.3, 0x3a2a1e)
-      trim.box(fx - s * 0.2, b.front - 0.4, b.z, 0.3, 0.12, b.w + 0.1, 0x3a2a1e)
+      trim.box(fx - s * 0.35, b.front + 0.12, b.z, 0.6, 0.24, b.w + 0.3, 0x3a_2a_1e)
+      trim.box(fx - s * 0.2, b.front - 0.4, b.z, 0.3, 0.12, b.w + 0.1, 0x3a_2a_1e)
       // corner pilasters
-      trim.box(fx - s * 0.3, b.front / 2, z0 + 0.15, 0.3, b.front, 0.3, 0x3a2a1e)
-      trim.box(fx - s * 0.3, b.front / 2, z1 - 0.15, 0.3, b.front, 0.3, 0x3a2a1e)
+      trim.box(fx - s * 0.3, b.front / 2, z0 + 0.15, 0.3, b.front, 0.3, 0x3a_2a_1e)
+      trim.box(fx - s * 0.3, b.front / 2, z1 - 0.15, 0.3, b.front, 0.3, 0x3a_2a_1e)
       // sign board on the false front
       const sy = b.h + (b.front - b.h) * 0.45 + 0.3
       const sw = Math.min(b.w - 1.4, 8.5)
@@ -413,7 +440,7 @@ float gn(vec2 p){ vec2 i=floor(p); vec2 f=fract(p); f=f*f*(3.0-2.0*f);
             V(sx, sy + sh / 2, b.z + sw / 2),
           ],
           [0, v0, 1, v0, 1, v1, 0, v1],
-          0xffffff,
+          0xff_ff_ff,
         )
       } else {
         signs.quadUV(
@@ -424,51 +451,51 @@ float gn(vec2 p){ vec2 i=floor(p); vec2 f=fract(p); f=f*f*(3.0-2.0*f);
             V(sx, sy + sh / 2, b.z - sw / 2),
           ],
           [0, v0, 1, v0, 1, v1, 0, v1],
-          0xffffff,
+          0xff_ff_ff,
         )
       }
-      trim.box(fx - s * 0.28, sy, b.z, 0.08, sh + 0.2, sw + 0.2, 0x2a1d14)
+      trim.box(fx - s * 0.28, sy, b.z, 0.08, sh + 0.2, sw + 0.2, 0x2a_1d_14)
       // upper windows on the false front
       const upper = b.h > 5.4 ? 2 : 0
       for (let i = 0; i < upper; i++) {
         const wz = b.z + (i === 0 ? -1 : 1) * (b.w / 4)
-        glass.box(fx - s * 0.28, b.h - 1.2, wz, 0.06, 1.3, 0.9, 0xffffff)
-        trim.box(fx - s * 0.3, b.h - 1.2, wz, 0.08, 1.5, 1.1, 0xd8ccb0)
+        glass.box(fx - s * 0.28, b.h - 1.2, wz, 0.06, 1.3, 0.9, 0xff_ff_ff)
+        trim.box(fx - s * 0.3, b.h - 1.2, wz, 0.08, 1.5, 1.1, 0xd8_cc_b0)
       }
       // ground floor: door + two windows
       const doorW = b.kind === 'stable' ? 3.2 : 1.4
-      glass.box(fx - s * 0.27, 1.25, b.z, 0.06, 2.5, doorW, 0xffffff)
-      trim.box(fx - s * 0.29, 1.3, b.z, 0.08, 2.7, doorW + 0.3, 0x2a1d14)
+      glass.box(fx - s * 0.27, 1.25, b.z, 0.06, 2.5, doorW, 0xff_ff_ff)
+      trim.box(fx - s * 0.29, 1.3, b.z, 0.08, 2.7, doorW + 0.3, 0x2a_1d_14)
       for (const dz of [-1, 1]) {
         const wz = b.z + dz * (b.w / 2 - 1.8)
-        glass.box(fx - s * 0.28, 1.7, wz, 0.06, 1.6, 1.8, 0xffffff)
-        trim.box(fx - s * 0.3, 1.7, wz, 0.08, 1.85, 2.05, 0xd8ccb0)
-        trim.box(fx - s * 0.32, 0.86, wz, 0.25, 0.1, 2.2, 0x3a2a1e)
+        glass.box(fx - s * 0.28, 1.7, wz, 0.06, 1.6, 1.8, 0xff_ff_ff)
+        trim.box(fx - s * 0.3, 1.7, wz, 0.08, 1.85, 2.05, 0xd8_cc_b0)
+        trim.box(fx - s * 0.32, 0.86, wz, 0.25, 0.1, 2.2, 0x3a_2a_1e)
       }
       // boardwalk
-      trim.box(s * (H + BW / 2), 0.17, b.z, BW, 0.34, b.w, 0xc8b090, { rotUV: true })
+      trim.box(s * (H + Bw / 2), 0.17, b.z, Bw, 0.34, b.w, 0xc8_b0_90, { rotUV: true })
       // awning on posts
       const aw = 3.1
-      trim.box(s * (H + BW / 2 + 0.1), aw, b.z, BW + 0.4, 0.12, b.w, 0x5a4634)
+      trim.box(s * (H + Bw / 2 + 0.1), aw, b.z, Bw + 0.4, 0.12, b.w, 0x5a_46_34)
       for (
         let pz = z0 + 0.3;
         pz <= z1 - 0.2;
         pz += (b.w - 0.6) / Math.max(1, Math.round(b.w / 3.2))
       ) {
-        trim.box(s * (H + 0.15), aw / 2 + 0.17, pz, 0.18, aw - 0.3, 0.18, 0x4a3828)
+        trim.box(s * (H + 0.15), aw / 2 + 0.17, pz, 0.18, aw - 0.3, 0.18, 0x4a_38_28)
       }
       // hitching post
       if (b.kind !== 'undertaker') {
         const hz = b.z + (b.side === 1 ? 2 : -2)
-        trim.box(s * (H - 0.6), 0.5, hz - 1.2, 0.14, 1.0, 0.14, 0x5a4430)
-        trim.box(s * (H - 0.6), 0.5, hz + 1.2, 0.14, 1.0, 0.14, 0x5a4430)
-        trim.box(s * (H - 0.6), 0.95, hz, 0.1, 0.1, 2.6, 0x5a4430)
+        trim.box(s * (H - 0.6), 0.5, hz - 1.2, 0.14, 1.0, 0.14, 0x5a_44_30)
+        trim.box(s * (H - 0.6), 0.5, hz + 1.2, 0.14, 1.0, 0.14, 0x5a_44_30)
+        trim.box(s * (H - 0.6), 0.95, hz, 0.1, 0.1, 2.6, 0x5a_44_30)
       }
       // saloon swinging doors
       if (b.kind === 'saloon') {
         for (const dz of [-0.36, 0.36]) {
           const g = new GeoBuilder(1.6)
-          g.box(0, 0, dz * 1, 0.05, 1.1, 0.68, 0x7a4a2a)
+          g.box(0, 0, Number(dz), 0.05, 1.1, 0.68, 0x7a_4a_2a)
           const door = new Mesh(g.build(), this.trimMat)
           door.position.set(fx - s * 0.4, 1.35, b.z + dz)
           door.castShadow = true
@@ -478,13 +505,15 @@ float gn(vec2 p){ vec2 i=floor(p); vec2 f=fract(p); f=f*f*(3.0-2.0*f);
       }
     }
     // a water trough and a few fence runs at the open end
-    trim.box(-8.2, 0.35, 10, 0.9, 0.7, 2.4, 0x5a4430)
-    trim.box(8.3, 0.35, -16, 0.9, 0.7, 2.4, 0x5a4430)
+    trim.box(-8.2, 0.35, 10, 0.9, 0.7, 2.4, 0x5a_44_30)
+    trim.box(8.3, 0.35, -16, 0.9, 0.7, 2.4, 0x5a_44_30)
 
     this.addStatic(walls, this.wallMat)
     this.addStatic(trim, this.trimMat)
     const gm = this.addStatic(glass, this.windowMat, false)
-    if (gm) gm.receiveShadow = false
+    if (gm) {
+      gm.receiveShadow = false
+    }
     this.addStatic(signs, this.signMat, false)
   }
 
@@ -492,14 +521,14 @@ float gn(vec2 p){ vec2 i=floor(p); vec2 f=fract(p); f=f*f*(3.0-2.0*f);
     const w = new GeoBuilder(1.9)
     const t = new GeoBuilder(1.6)
     const cz = STREET.churchZ
-    const white = 0xf4efe6
+    const white = 0xf4_ef_e6
     // nave
     w.box(0, 3.6, cz + 9, 11, 7.2, 18, white, { skip: ['bottom'] })
-    t.gable(0, 7.2, cz + 9, 11, 18, 4.2, 'z', 0x3a3438, 0.5)
+    t.gable(0, 7.2, cz + 9, 11, 18, 4.2, 'z', 0x3a_34_38, 0.5)
     // tower
     w.box(0, 7, cz - 1, 4.4, 14, 4.4, white, { skip: ['bottom'] })
     // belfry
-    t.box(0, 15.1, cz - 1, 4.6, 0.3, 4.6, 0x3a2a20)
+    t.box(0, 15.1, cz - 1, 4.6, 0.3, 4.6, 0x3a_2a_20)
     for (const [dx, dz] of [
       [-2, -2],
       [2, -2],
@@ -508,20 +537,20 @@ float gn(vec2 p){ vec2 i=floor(p); vec2 f=fract(p); f=f*f*(3.0-2.0*f);
     ] as const) {
       t.box(dx, 16.5, cz - 1 + dz, 0.4, 2.6, 0.4, white)
     }
-    t.box(0, 17.95, cz - 1, 4.8, 0.3, 4.8, 0x3a2a20)
-    t.pyramid(0, 18.1, cz - 1, 4.8, 6.5, 0x2e2a2e)
+    t.box(0, 17.95, cz - 1, 4.8, 0.3, 4.8, 0x3a_2a_20)
+    t.pyramid(0, 18.1, cz - 1, 4.8, 6.5, 0x2e_2a_2e)
     // cross
-    t.box(0, 25.4, cz - 1, 0.16, 1.6, 0.16, 0x2a2a2a)
-    t.box(0, 25.7, cz - 1, 0.16, 0.16, 0.9, 0x2a2a2a)
+    t.box(0, 25.4, cz - 1, 0.16, 1.6, 0.16, 0x2a_2a_2a)
+    t.box(0, 25.7, cz - 1, 0.16, 0.16, 0.9, 0x2a_2a_2a)
     // door + steps
-    t.box(0, 1.6, cz - 3.25, 1.8, 3.2, 0.1, 0x2a1a12)
-    t.box(0, 0.15, cz - 4, 4, 0.3, 1.6, 0x8a7a68)
+    t.box(0, 1.6, cz - 3.25, 1.8, 3.2, 0.1, 0x2a_1a_12)
+    t.box(0, 0.15, cz - 4, 4, 0.3, 1.6, 0x8a_7a_68)
     this.addStatic(w, this.wallMat)
     this.addStatic(t, this.trimMat)
     // bell
     const bell = new Mesh(
       new SphereGeometry(0.75, 12, 8, 0, Math.PI * 2, 0, Math.PI * 0.55),
-      new MeshStandardMaterial({ color: 0x8a6a2a, metalness: 0.8, roughness: 0.35 }),
+      new MeshStandardMaterial({ color: 0x8a_6a_2a, metalness: 0.8, roughness: 0.35 }),
     )
     bell.position.set(0, 16.9, cz - 1)
     bell.rotation.x = Math.PI
@@ -553,13 +582,13 @@ float gn(vec2 p){ vec2 i=floor(p); vec2 f=fract(p); f=f*f*(3.0-2.0*f);
       [-2, 2],
       [2, 2],
     ] as const) {
-      t.box(x + dx, 4.5, z + dz, 0.35, 9, 0.35, 0x5a4430)
+      t.box(x + dx, 4.5, z + dz, 0.35, 9, 0.35, 0x5a_44_30)
     }
-    t.box(x, 3, z - 2, 4, 0.2, 0.2, 0x5a4430)
-    t.box(x, 3, z + 2, 4, 0.2, 0.2, 0x5a4430)
-    t.box(x - 2, 3, z, 0.2, 0.2, 4, 0x5a4430)
-    t.box(x + 2, 3, z, 0.2, 0.2, 4, 0x5a4430)
-    t.box(x, 9.1, z, 5, 0.25, 5, 0x4a3828)
+    t.box(x, 3, z - 2, 4, 0.2, 0.2, 0x5a_44_30)
+    t.box(x, 3, z + 2, 4, 0.2, 0.2, 0x5a_44_30)
+    t.box(x - 2, 3, z, 0.2, 0.2, 4, 0x5a_44_30)
+    t.box(x + 2, 3, z, 0.2, 0.2, 4, 0x5a_44_30)
+    t.box(x, 9.1, z, 5, 0.25, 5, 0x4a_38_28)
     this.addStatic(t, this.trimMat)
     // tank: octagonal stave cylinder
     const tank = new GeoBuilder(1.4)
@@ -572,9 +601,9 @@ float gn(vec2 p){ vec2 i=floor(p); vec2 f=fract(p); f=f*f*(3.0-2.0*f);
       const p1 = new Vector3(x + Math.cos(a1) * r, 9.2, z + Math.sin(a1) * r)
       const p2 = p1.clone().setY(12.6)
       const p3 = p0.clone().setY(12.6)
-      tank.quad(p1, p0, p3, p2, 0x7a5e44, true)
+      tank.quad(p1, p0, p3, p2, 0x7a_5e_44, true)
       const top = new Vector3(x, 14, z)
-      tank.tri(p2, p3, top, 0x3a2e26)
+      tank.tri(p2, p3, top, 0x3a_2e_26)
     }
     this.addStatic(tank, this.trimMat)
   }
@@ -616,22 +645,26 @@ float gn(vec2 p){ vec2 i=floor(p); vec2 f=fract(p); f=f*f*(3.0-2.0*f);
       [-150, 120, 50, 36],
       [120, 170, 40, 30],
     ]
-    for (const [x, z, r, h] of spots) mesa(x * 1.25, z * 1.25, r, h * 0.55, 0x9a5a3a)
+    for (const [x, z, r, h] of spots) {
+      mesa(x * 1.25, z * 1.25, r, h * 0.55, 0x9a_5a_3a)
+    }
     const m = new MeshStandardMaterial({ vertexColors: true, roughness: 1, flatShading: true })
     const mesh = this.addStatic(g, m, false)
-    if (mesh) mesh.receiveShadow = false
+    if (mesh) {
+      mesh.receiveShadow = false
+    }
   }
 
   private buildPosterPost(): Group {
     const g = new Group()
     const post = new GeoBuilder(1.2)
-    post.box(0, 1.4, 0, 0.22, 2.8, 0.22, 0x5a4430)
+    post.box(0, 1.4, 0, 0.22, 2.8, 0.22, 0x5a_44_30)
     const pm = new Mesh(post.build(), this.trimMat)
     pm.castShadow = true
     g.add(pm)
     const mat = new MeshStandardMaterial({
       roughness: 0.9,
-      emissive: 0xffffff,
+      emissive: 0xff_ff_ff,
       emissiveIntensity: 0.28,
     })
     const paper = new Mesh(new PlaneGeometry(0.62, 0.86), mat)
@@ -639,8 +672,8 @@ float gn(vec2 p){ vec2 i=floor(p); vec2 f=fract(p); f=f*f*(3.0-2.0*f);
     paper.rotation.y = Math.PI / 2
     paper.castShadow = true
     g.add(paper)
-    g.userData['mat'] = mat
-    g.userData['paper'] = paper
+    g.userData.mat = mat
+    g.userData.paper = paper
     g.position.copy(STREET.posterPos)
     this.root.add(g)
     return g
@@ -655,7 +688,9 @@ float gn(vec2 p){ vec2 i=floor(p); vec2 f=fract(p); f=f*f*(3.0-2.0*f);
     const az = (p.sunAz * Math.PI) / 180
     const dir = new Vector3(Math.sin(az) * Math.cos(el), Math.sin(el), Math.cos(az) * Math.cos(el))
     const lightDir = dir.clone()
-    if (lightDir.y < 0.12) lightDir.y = 0.12
+    if (lightDir.y < 0.12) {
+      lightDir.y = 0.12
+    }
     lightDir.normalize()
     this.sun.position.copy(lightDir).multiplyScalar(60)
     this.sun.target.position.set(0, 0, 0)
@@ -675,7 +710,9 @@ float gn(vec2 p){ vec2 i=floor(p); vec2 f=fract(p); f=f*f*(3.0-2.0*f);
     u.sunGlow.value = p.sunGlow
     u.stars.value = p.stars
     u.moon.value = p.moon
-    if (p.moon > 0.5) u.moonDir.value.copy(dir)
+    if (p.moon > 0.5) {
+      u.moonDir.value.copy(dir)
+    }
     RIM.color.value.copy(p.rimColor)
     RIM.strength.value = p.rim
     this.windowMat.emissiveIntensity = p.windows * 1.6
@@ -705,21 +742,27 @@ float gn(vec2 p){ vec2 i=floor(p); vec2 f=fract(p); f=f*f*(3.0-2.0*f);
     if (this.fires) {
       for (const i of [1, 2]) {
         const l = this.lanterns[i]
-        if (!l) continue
+        if (!l) {
+          continue
+        }
         l.light.intensity = 26 * (0.7 + Math.random() * 0.4)
-        l.light.color.setHex(0xff7a30)
+        l.light.color.setHex(0xff_7a_30)
       }
     }
     const sway = Math.sin(this.time * 1.7) * 0.08
     this.saloonDoors.forEach((d, i) => {
-      d.rotation.y = (i === 0 ? 1 : -1) * sway * (d.userData['kick'] ? 6 : 1)
+      d.rotation.y = (i === 0 ? 1 : -1) * sway * (d.userData.kick ? 6 : 1)
     })
   }
 
   /** Set the fire state (underboss). */
   setFires(on: boolean): void {
     this.fires = on
-    if (!on) for (const l of this.lanterns) l.light.color.setHex(0xffa850)
+    if (!on) {
+      for (const l of this.lanterns) {
+        l.light.color.setHex(0xff_a8_50)
+      }
+    }
   }
 
   /** Shadow frustum tightly around the action. */

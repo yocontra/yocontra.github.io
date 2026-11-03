@@ -1,3 +1,4 @@
+// biome-ignore-all lint/style/useNamingConvention: keys mirror source asset material names (e.g. Brown_02) and Turnstile/three.js option names
 import { Color, type MeshStandardMaterial } from 'three'
 
 /**
@@ -9,7 +10,7 @@ import { Color, type MeshStandardMaterial } from 'three'
 
 /** Shared by every stylized material; World.apply() drives it per time of day. */
 export const RIM = {
-  color: { value: new Color(0xffe2b0) },
+  color: { value: new Color(0xff_e2_b0) },
   strength: { value: 0.25 },
 }
 
@@ -55,12 +56,12 @@ export const FABRIC_BY_MATERIAL: Record<string, Fabric> = {
 
 /** Small deterministic hash of a string to 0..1. */
 export function hash01(s: string): number {
-  let h = 2166136261
+  let h = 2_166_136_261
   for (let i = 0; i < s.length; i++) {
     h ^= s.charCodeAt(i)
-    h = Math.imul(h, 16777619)
+    h = Math.imul(h, 16_777_619)
   }
-  return ((h >>> 0) % 10007) / 10007
+  return ((h >>> 0) % 10_007) / 10_007
 }
 
 /**
@@ -82,19 +83,21 @@ export function vary(mat: MeshStandardMaterial, seed: string): void {
   )
   mat.roughness = f ? f.roughness + (r - 0.5) * 0.08 : Math.max(0.6, mat.roughness)
   mat.metalness = 0
-  mat.userData['rim'] = f ? f.rim : 1
+  mat.userData.rim = f ? f.rim : 1
 }
 
 /** Install the rim + grounding shader on a character material. */
 export function stylize(mat: MeshStandardMaterial, floor: Floor): void {
-  if (mat.userData['stylized']) return
-  mat.userData['stylized'] = true
-  const rimK = (mat.userData['rim'] as number | undefined) ?? 1
+  if (mat.userData.stylized) {
+    return
+  }
+  mat.userData.stylized = true
+  const rimK = (mat.userData.rim as number | undefined) ?? 1
   mat.onBeforeCompile = (shader) => {
-    shader.uniforms['styRim'] = RIM.color
-    shader.uniforms['styRimK'] = RIM.strength
-    shader.uniforms['styRimMat'] = { value: rimK }
-    shader.uniforms['styFloor'] = floor
+    shader.uniforms.styRim = RIM.color
+    shader.uniforms.styRimK = RIM.strength
+    shader.uniforms.styRimMat = { value: rimK }
+    shader.uniforms.styFloor = floor
     shader.vertexShader = shader.vertexShader
       .replace('#include <common>', '#include <common>\nvarying float vStyY;')
       .replace(

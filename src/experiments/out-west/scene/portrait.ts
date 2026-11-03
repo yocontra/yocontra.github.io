@@ -1,3 +1,5 @@
+// biome-ignore-all lint/style/noMultiAssign: canvas/texture dimension setup (w = h = n) is clearer chained
+// biome-ignore-all lint/style/noParameterProperties: legacy constructor shorthand; behaviour-neutral
 import {
   ACESFilmicToneMapping,
   AmbientLight,
@@ -9,9 +11,9 @@ import {
   type WebGLRenderer,
   WebGLRenderTarget,
 } from 'three'
-import type { Outlaw } from '../data/outlaws'
-import type { Assets } from '../engine/assets'
-import { castActor } from './cast'
+import type { Outlaw } from '../data/outlaws.ts'
+import type { Assets } from '../engine/assets.ts'
+import { castActor } from './cast.ts'
 
 const SIZE = 320
 
@@ -30,12 +32,12 @@ export class PortraitStudio {
     private readonly gl: WebGLRenderer,
     private readonly assets: Assets,
   ) {
-    this.scene.background = new Color(0xf2ead8)
-    const key = new DirectionalLight(0xffffff, 3.8)
+    this.scene.background = new Color(0xf2_ea_d8)
+    const key = new DirectionalLight(0xff_ff_ff, 3.8)
     key.position.set(-1.2, 1.6, 1.4)
-    const rim = new DirectionalLight(0xffffff, 1.4)
+    const rim = new DirectionalLight(0xff_ff_ff, 1.4)
     rim.position.set(1.5, 0.8, -1.2)
-    this.scene.add(key, rim, new AmbientLight(0xffffff, 0.9))
+    this.scene.add(key, rim, new AmbientLight(0xff_ff_ff, 0.9))
   }
 
   has(index: number): boolean {
@@ -49,8 +51,12 @@ export class PortraitStudio {
   /** Render (or fetch) the printed portrait. Returns null if his model isn't loaded yet. */
   render(index: number, o: Outlaw): HTMLCanvasElement | null {
     const have = this.cache.get(index)
-    if (have) return have
-    if (!this.assets.lookLoaded(o.look)) return null
+    if (have) {
+      return have
+    }
+    if (!this.assets.lookLoaded(o.look)) {
+      return null
+    }
     const actor = castActor(this.assets, {
       look: o.look,
       hat: o.hat,
@@ -96,7 +102,7 @@ function rand(seed: number): () => number {
     s ^= s << 13
     s ^= s >>> 17
     s ^= s << 5
-    return ((s >>> 0) % 100000) / 100000
+    return ((s >>> 0) % 100_000) / 100_000
   }
 }
 
@@ -118,7 +124,9 @@ function printPortrait(px: Uint8Array, seed: number): HTMLCanvasElement {
   const c = document.createElement('canvas')
   c.width = c.height = N
   const ctx = c.getContext('2d')
-  if (!ctx) return c
+  if (!ctx) {
+    return c
+  }
   const rnd = rand(seed * 977 + 3)
   ctx.fillStyle = '#e4d1a6'
   ctx.fillRect(0, 0, N, N)
@@ -133,10 +141,15 @@ function printPortrait(px: Uint8Array, seed: number): HTMLCanvasElement {
     for (let y = 0; y < N; y += cell) {
       for (let x = 0; x < N; x += cell) {
         let sum = 0
-        for (let j = 0; j < cell; j++)
-          for (let i = 0; i < cell; i++) sum += L[(y + j) * N + x + i] ?? 1
+        for (let j = 0; j < cell; j++) {
+          for (let i = 0; i < cell; i++) {
+            sum += L[(y + j) * N + x + i] ?? 1
+          }
+        }
         const d = 1 - sum / (cell * cell)
-        if (d < 0.06) continue
+        if (d < 0.06) {
+          continue
+        }
         const r = Math.sqrt(d) * cell * 0.72 * gain
         ctx.beginPath()
         ctx.arc(x + cell / 2 + ox, y + cell / 2 + oy, r, 0, Math.PI * 2)

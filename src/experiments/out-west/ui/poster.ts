@@ -1,5 +1,6 @@
-import type { HatKey, Outlaw } from '../data/outlaws'
-import { SLAB } from '../scene/textures'
+// biome-ignore-all lint/complexity/useMaxParams: geometry/audio builders take positional numeric args (x, y, z, size…), mirroring three.js APIs
+import type { HatKey, Outlaw } from '../data/outlaws.ts'
+import { SLAB } from '../scene/textures.ts'
 
 const W = 620
 const H = 860
@@ -10,7 +11,7 @@ function rnd(seed: number): () => number {
     s ^= s << 13
     s ^= s >>> 17
     s ^= s << 5
-    return ((s >>> 0) % 10000) / 10000
+    return ((s >>> 0) % 10_000) / 10_000
   }
 }
 
@@ -58,7 +59,9 @@ export function drawPoster(canvas: HTMLCanvasElement, o: Outlaw, opts: PosterOpt
   canvas.width = W
   canvas.height = H
   const ctx = canvas.getContext('2d')
-  if (!ctx) return
+  if (!ctx) {
+    return
+  }
   const r = rnd(opts.index * 7919 + 13)
   // parchment
   const g = ctx.createRadialGradient(W / 2, H / 2, 100, W / 2, H / 2, 600)
@@ -147,17 +150,21 @@ export function drawPoster(canvas: HTMLCanvasElement, o: Outlaw, opts: PosterOpt
     ctx.font = `${size}px ${SLAB}`
   }
   ctx.fillText(name, W / 2, 590)
-  ctx.font = `italic 28px Georgia, serif`
+  ctx.font = 'italic 28px Georgia, serif'
   ctx.fillText(o.epithet, W / 2, 630)
-  ctx.font = `24px Georgia, serif`
+  ctx.font = '24px Georgia, serif'
   wrap(ctx, o.hook, W / 2, 672, W - 130, 28)
   ctx.font = `64px ${SLAB}`
   ctx.fillText(`$${o.bounty.toLocaleString('en-US')}`, W / 2, 790)
   ctx.font = `22px ${SLAB}`
   ctx.fillText('REWARD', W / 2, 818)
 
-  if (opts.stamp === 'coward') stamp(ctx, ['SHOT IN THE BACK', 'NO BOUNTY'], '#b0100c', -0.28)
-  if (opts.stamp === 'dead') stamp(ctx, ['PAID'], '#b0100c', -0.18)
+  if (opts.stamp === 'coward') {
+    stamp(ctx, ['SHOT IN THE BACK', 'NO BOUNTY'], '#b0100c', -0.28)
+  }
+  if (opts.stamp === 'dead') {
+    stamp(ctx, ['PAID'], '#b0100c', -0.18)
+  }
 }
 
 function wrap(
@@ -177,9 +184,13 @@ function wrap(
       ctx.fillText(line, x, yy)
       line = w
       yy += lh
-    } else line = test
+    } else {
+      line = test
+    }
   }
-  if (line) ctx.fillText(line, x, yy)
+  if (line) {
+    ctx.fillText(line, x, yy)
+  }
 }
 
 function stamp(ctx: CanvasRenderingContext2D, lines: string[], color: string, rot: number): void {

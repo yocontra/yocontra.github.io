@@ -1,21 +1,21 @@
 import { MeshStandardMaterial, Scene } from 'three'
-import type { AudioEngine } from './audio/audio'
-import { OUTLAWS } from './data/outlaws'
-import { Director } from './duel/director'
-import { loadAssets } from './engine/assets'
-import { Input } from './engine/input'
-import { Renderer, type Tier } from './engine/render'
-import type { SaveData } from './save'
-import { CameraRig } from './scene/camera'
-import { dressStreet } from './scene/dressing'
-import { Dust, Flash, Glint, Physics, Puffs, Tumbleweed, tumbleweedGeometry } from './scene/fx'
-import { propDef } from './scene/props'
-import { softDot } from './scene/textures'
-import { World } from './scene/world'
-import { Hud } from './ui/hud'
+import type { AudioEngine } from './audio/audio.ts'
+import { OUTLAWS } from './data/outlaws.ts'
+import { Director } from './duel/director.ts'
+import { loadAssets } from './engine/assets.ts'
+import { Input } from './engine/input.ts'
+import { Renderer, type Tier } from './engine/render.ts'
+import type { SaveData } from './save.ts'
+import { CameraRig } from './scene/camera.ts'
+import { dressStreet } from './scene/dressing.ts'
+import { Dust, Flash, Glint, Physics, Puffs, Tumbleweed, tumbleweedGeometry } from './scene/fx.ts'
+import { propDef } from './scene/props.ts'
+import { softDot } from './scene/textures.ts'
+import { World } from './scene/world.ts'
+import { Hud } from './ui/hud.ts'
 
 export interface Game {
-  begin(skipIntro: boolean): void
+  begin: (skipIntro: boolean) => void
   readonly director: Director
 }
 
@@ -58,7 +58,7 @@ export async function createGame(o: GameOpts): Promise<Game> {
   scene.add(glint.sprite)
   const physics = new Physics()
   const twGeo = tumbleweedGeometry()
-  const twMat = new MeshStandardMaterial({ color: 0x8a6a42, roughness: 1 })
+  const twMat = new MeshStandardMaterial({ color: 0x8a_6a_42, roughness: 1 })
   const tumbleweeds = [0, 1, 2].map(() => {
     const t = new Tumbleweed(twGeo, twMat)
     scene.add(t.mesh)
@@ -109,7 +109,9 @@ export async function createGame(o: GameOpts): Promise<Game> {
 
   window.addEventListener('resize', () => renderer.resize())
   document.addEventListener('visibilitychange', () => {
-    if (document.hidden) director.pauseIfPlaying()
+    if (document.hidden) {
+      director.pauseIfPlaying()
+    }
   })
   hud.pauseBtn.addEventListener('click', (e) => {
     e.stopPropagation()
@@ -156,7 +158,9 @@ export async function createGame(o: GameOpts): Promise<Game> {
     void flashK
     glint.update(realDt)
     physics.update(dt, 1)
-    for (const t of tumbleweeds) t.update(dt, 0.6)
+    for (const t of tumbleweeds) {
+      t.update(dt, 0.6)
+    }
     rig.update(realDt, realDt)
     const cam = rig.cam
     const fwd = cam.getWorldDirection(cam.position.clone())
@@ -171,12 +175,16 @@ export async function createGame(o: GameOpts): Promise<Game> {
     }
     frameCalls = info.render.calls
     frameTris = info.render.triangles
-    if (o.debug) hud.setDebug(director.debugText(fps, frameMs, frameCalls, frameTris))
+    if (o.debug) {
+      hud.setDebug(director.debugText({ fps, ms: frameMs, calls: frameCalls, tris: frameTris }))
+    }
   }
   requestAnimationFrame(loop)
 
   return {
     director,
-    begin: (skipIntro: boolean) => director.begin(skipIntro),
+    // Ranked play is built (duel/ranked-clock.ts, net/ranked.ts) but gated off until wired
+    // to Turnstile on the title screen: practice only for now.
+    begin: (skipIntro: boolean) => director.begin(skipIntro, false),
   }
 }

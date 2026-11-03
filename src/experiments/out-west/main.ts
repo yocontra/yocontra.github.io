@@ -1,9 +1,12 @@
-import { AudioEngine } from './audio/audio'
-import { OUTLAWS } from './data/outlaws'
-import type { Tier } from './engine/render'
-import type { Game } from './game'
-import { load, save } from './save'
-import { Board } from './ui/board'
+// biome-ignore-all lint/style/noNestedTernary: a three-way tier pick reads clearest inline
+// biome-ignore-all lint/style/useGlobalThis: legacy code, behaviour-neutral
+// biome-ignore-all lint/style/useNamingConvention: keys mirror source asset material names (e.g. Brown_02) and Turnstile/three.js option names
+import { AudioEngine } from './audio/audio.ts'
+import { OUTLAWS } from './data/outlaws.ts'
+import type { Tier } from './engine/render.ts'
+import type { Game } from './game.ts'
+import { load, save } from './save.ts'
+import { Board } from './ui/board.ts'
 
 /**
  * Entry point. Kept tiny so the red title is interactive immediately; the
@@ -15,7 +18,7 @@ export function boot(root: HTMLElement): void {
   const data = load()
   const hash = new URLSearchParams(location.hash.slice(1))
   const debug = hash.has('debug')
-  window.addEventListener('hashchange', () => location.reload())
+  globalThis.addEventListener('hashchange', () => location.reload())
   const levelParam = hash.get('level')
   let jump = false
   if (levelParam) {
@@ -27,7 +30,9 @@ export function boot(root: HTMLElement): void {
       save(data)
     }
   }
-  if (hash.has('legend')) data.legend = true
+  if (hash.has('legend')) {
+    data.legend = true
+  }
   const coarse = matchMedia('(pointer: coarse)').matches
   const small = Math.min(screen.width, screen.height) < 700
   const tierParam = hash.get('tier')
@@ -41,7 +46,9 @@ export function boot(root: HTMLElement): void {
   const creditsBtn = root.querySelector<HTMLButtonElement>('.ow-credits-btn')
   const credits = root.querySelector<HTMLElement>('.ow-credits')
   const boardBtn = root.querySelector<HTMLButtonElement>('.ow-board-btn')
-  if (!canvas || !title) return
+  if (!(canvas && title)) {
+    return
+  }
 
   creditsBtn?.addEventListener('click', (e) => {
     e.stopPropagation()
@@ -62,11 +69,15 @@ export function boot(root: HTMLElement): void {
   let started = false
 
   const setProgress = (f: number) => {
-    if (loading) loading.textContent = f >= 1 ? '' : `loading ${Math.round(f * 100)}%`
+    if (loading) {
+      loading.textContent = f >= 1 ? '' : `loading ${Math.round(f * 100)}%`
+    }
   }
 
   const go = () => {
-    if (started || !game) return
+    if (started || !game) {
+      return
+    }
     started = true
     title.classList.add('wipe')
     setTimeout(() => title.remove(), 1100)
@@ -76,9 +87,13 @@ export function boot(root: HTMLElement): void {
   }
 
   const press = (e: Event) => {
-    if (pressed) return
+    if (pressed) {
+      return
+    }
     if (e instanceof KeyboardEvent) {
-      if (!['Space', 'Enter', 'KeyJ', 'KeyW', 'ArrowUp', 'ArrowLeft'].includes(e.code)) return
+      if (!['Space', 'Enter', 'KeyJ', 'KeyW', 'ArrowUp', 'ArrowLeft'].includes(e.code)) {
+        return
+      }
       e.preventDefault()
       e.stopImmediatePropagation()
     }
@@ -86,30 +101,44 @@ export function boot(root: HTMLElement): void {
     audio.unlock()
     audio.playSong(data.level >= 15 ? 'boss' : 'intro')
     title.classList.add('pressed')
-    if (startText) startText.textContent = game ? '' : 'saddling up…'
+    if (startText) {
+      startText.textContent = game ? '' : 'saddling up…'
+    }
     go()
   }
   title.addEventListener('pointerdown', press)
-  window.addEventListener('keydown', press)
+  globalThis.addEventListener('keydown', press)
 
-  import('./game')
+  import('./game.ts')
     .then((m) =>
       m.createGame({ root, canvas, audio, save: data, debug, tier, onProgress: setProgress }),
     )
     .then((g) => {
       game = g
-      if (debug) (window as unknown as { __ow: Game }).__ow = g
+      if (debug) {
+        ;(window as unknown as { __ow: Game }).__ow = g
+      }
       if (hash.has('lineup') || hash.has('posters')) {
         title.remove()
-        if (hash.has('lineup')) void g.director.lineup(Number(hash.get('day') ?? '0.3'))
-        if (hash.has('posters')) void g.director.posters()
+        if (hash.has('lineup')) {
+          void g.director.lineup(Number(hash.get('day') ?? '0.3'))
+        }
+        if (hash.has('posters')) {
+          void g.director.posters()
+        }
         return
       }
       title.classList.add('ready')
-      if (startText && pressed) startText.textContent = ''
-      if (pressed) go()
+      if (startText && pressed) {
+        startText.textContent = ''
+      }
+      if (pressed) {
+        go()
+      }
     })
     .catch(() => {
-      if (loading) loading.textContent = 'This needs WebGL2. Try the 2019 original below.'
+      if (loading) {
+        loading.textContent = 'This needs WebGL2. Try the 2019 original below.'
+      }
     })
 }

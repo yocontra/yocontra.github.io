@@ -1,3 +1,4 @@
+// biome-ignore-all lint/suspicious/noUnnecessaryConditions: class fields are flags mutated from outside the method; Biome narrows them to their literal initializer
 /**
  * Unified keyboard / mouse / touch input. Every press carries the browser's
  * event.timeStamp (performance.now() timebase) so the duel can be judged on
@@ -42,12 +43,12 @@ export class Input {
   constructor(target: HTMLElement, keys: KeyMap) {
     this.target = target
     this.keys = keys
-    window.addEventListener('keydown', this.onKeyDown)
-    window.addEventListener('keyup', this.onKeyUp)
+    globalThis.addEventListener('keydown', this.onKeyDown)
+    globalThis.addEventListener('keyup', this.onKeyUp)
     target.addEventListener('pointerdown', this.onPointerDown)
-    window.addEventListener('pointerup', this.onPointerUp)
-    window.addEventListener('pointercancel', this.onPointerUp)
-    window.addEventListener('blur', this.onBlur)
+    globalThis.addEventListener('pointerup', this.onPointerUp)
+    globalThis.addEventListener('pointercancel', this.onPointerUp)
+    globalThis.addEventListener('blur', this.onBlur)
     target.addEventListener('contextmenu', (e) => e.preventDefault())
   }
 
@@ -57,21 +58,33 @@ export class Input {
   }
 
   private emit(p: Press): void {
-    for (const l of this.listeners) l(p)
+    for (const l of this.listeners) {
+      l(p)
+    }
   }
 
   actionFor(code: string): Action | null {
     for (const a of Object.keys(this.keys) as Action[]) {
-      if (this.keys[a].includes(code)) return a
+      if (this.keys[a].includes(code)) {
+        return a
+      }
     }
     return null
   }
 
   /** Is the player asking to walk right now? */
   get walking(): boolean {
-    if (this.toggleWalk) return this.toggled
-    if (this.pointers.size > 0) return true
-    for (const code of this.keys.walk) if (this.heldKeys.has(code)) return true
+    if (this.toggleWalk) {
+      return this.toggled
+    }
+    if (this.pointers.size > 0) {
+      return true
+    }
+    for (const code of this.keys.walk) {
+      if (this.heldKeys.has(code)) {
+        return true
+      }
+    }
     return false
   }
 
@@ -90,13 +103,21 @@ export class Input {
       return
     }
     const a = this.actionFor(e.code)
-    if (!a) return
+    if (!a) {
+      return
+    }
     // Let Tab work for focus when a menu is open.
-    if (!this.enabled && a !== 'pause') return
+    if (!this.enabled && a !== 'pause') {
+      return
+    }
     e.preventDefault()
-    if (e.repeat) return
+    if (e.repeat) {
+      return
+    }
     this.heldKeys.add(e.code)
-    if (a === 'walk' && this.toggleWalk) this.toggled = !this.toggled
+    if (a === 'walk' && this.toggleWalk) {
+      this.toggled = !this.toggled
+    }
     this.emit({ action: a, t: e.timeStamp, source: 'key', x: -1, y: -1 })
   }
 
@@ -105,8 +126,12 @@ export class Input {
   }
 
   private readonly onPointerDown = (e: PointerEvent): void => {
-    if (!this.enabled) return
-    if (e.button !== 0 && e.pointerType === 'mouse') return
+    if (!this.enabled) {
+      return
+    }
+    if (e.button !== 0 && e.pointerType === 'mouse') {
+      return
+    }
     e.preventDefault()
     this.pointers.add(e.pointerId)
     try {
@@ -114,7 +139,9 @@ export class Input {
     } catch {
       // ignore
     }
-    if (this.toggleWalk) this.toggled = !this.toggled
+    if (this.toggleWalk) {
+      this.toggled = !this.toggled
+    }
     this.emit({ action: 'fire', t: e.timeStamp, source: 'pointer', x: e.clientX, y: e.clientY })
   }
 
@@ -129,8 +156,12 @@ export class Input {
 }
 
 export function keyLabel(code: string): string {
-  if (code.startsWith('Key')) return code.slice(3)
-  if (code.startsWith('Digit')) return code.slice(5)
+  if (code.startsWith('Key')) {
+    return code.slice(3)
+  }
+  if (code.startsWith('Digit')) {
+    return code.slice(5)
+  }
   const map: Record<string, string> = {
     Space: 'Space',
     ArrowLeft: '←',

@@ -1,3 +1,5 @@
+// biome-ignore-all lint/complexity/useMaxParams: geometry/audio builders take positional numeric args (x, y, z, size…), mirroring three.js APIs
+// biome-ignore-all lint/suspicious/noUnnecessaryConditions: class fields are flags mutated from outside the method; Biome narrows them to their literal initializer
 import {
   Box3,
   type BufferGeometry,
@@ -38,7 +40,9 @@ export function propDef(
   axis: 'x' | 'y' | 'z' | 'max' = 'max',
 ): PropDef | null {
   const scene = findScene(gltf, name)
-  if (!scene) return null
+  if (!scene) {
+    return null
+  }
   scene.updateMatrixWorld(true)
   const box = new Box3().setFromObject(scene)
   const dims = box.getSize(new Vector3())
@@ -51,12 +55,16 @@ export function propDef(
   const parts: Part[] = []
   scene.traverse((o) => {
     const m = o as Mesh
-    if (!m.isMesh) return
+    if (!m.isMesh) {
+      return
+    }
     const g = m.geometry.clone()
     g.applyMatrix4(new Matrix4().multiplyMatrices(fix, m.matrixWorld))
     g.computeBoundingSphere()
     const mat = Array.isArray(m.material) ? m.material[0] : m.material
-    if (mat) parts.push({ geometry: g, material: mat })
+    if (mat) {
+      parts.push({ geometry: g, material: mat })
+    }
   })
   return { parts, size: dims.multiplyScalar(k) }
 }

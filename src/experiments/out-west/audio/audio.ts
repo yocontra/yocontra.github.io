@@ -1,3 +1,7 @@
+// biome-ignore-all lint/complexity/useMaxParams: geometry/audio builders take positional numeric args (x, y, z, size…), mirroring three.js APIs
+// biome-ignore-all lint/style/noExcessiveLinesPerFile: one cohesive module (data table / scene builder); splitting would scatter tightly coupled code. Tracked for a later split.
+// biome-ignore-all lint/style/useThisInClassMethods: interface methods that are deliberate no-ops for this implementation
+// biome-ignore-all lint/suspicious/noShadow: local name mirrors the field it configures
 /**
  * Web Audio mix (design doc §4.5). One AudioContext for everything:
  *
@@ -70,13 +74,13 @@ export interface PlayOpts {
 }
 
 export interface Voice {
-  stop(at?: number): void
+  stop: (at?: number) => void
   readonly gain: GainNode
 }
 
 export interface Loop {
-  set(value: number, ramp?: number): void
-  stop(): void
+  set: (value: number, ramp?: number) => void
+  stop: () => void
 }
 
 interface Active {
@@ -98,8 +102,9 @@ const db = (d: number) => 10 ** (d / 20)
 function glide(p: AudioParam, target: number, now: number, seconds: number): void {
   const hold = (p as AudioParam & { cancelAndHoldAtTime?: (t: number) => AudioParam })
     .cancelAndHoldAtTime
-  if (hold) hold.call(p, now)
-  else {
+  if (hold) {
+    hold.call(p, now)
+  } else {
     p.cancelScheduledValues(now)
     p.setValueAtTime(p.value, now)
   }
@@ -124,7 +129,7 @@ export class AudioEngine {
   private readonly voices: Active[] = []
   private song: { name: SongName; src: AudioBufferSourceNode; gain: GainNode } | null = null
   private wantSong: SongName | null = null
-  private songOffset = new Map<SongName, { startedAt: number; offset: number }>()
+  private readonly songOffset = new Map<SongName, { startedAt: number; offset: number }>()
   private heartBpm = 0
   private heartNext = 0
   private noise: AudioBuffer | null = null
@@ -132,13 +137,17 @@ export class AudioEngine {
 
   /** Start fetching every sound (and the intro music) before the first gesture. */
   prefetch(): void {
-    for (const key of Object.keys(SFX) as SfxName[]) this.fetchRaw(SFX[key])
+    for (const key of Object.keys(SFX) as SfxName[]) {
+      this.fetchRaw(SFX[key])
+    }
     this.fetchRaw(SONGS.intro)
   }
 
   private fetchRaw(url: string): Promise<ArrayBuffer | null> {
     const have = this.raw.get(url)
-    if (have) return have
+    if (have) {
+      return have
+    }
     const p = fetch(url)
       .then((r) => (r.ok ? r.arrayBuffer() : null))
       .catch(() => null)
@@ -148,11 +157,17 @@ export class AudioEngine {
 
   private decode(url: string): Promise<AudioBuffer | null> {
     const have = this.decoding.get(url)
-    if (have) return have
+    if (have) {
+      return have
+    }
     const ctx = this.ctx
-    if (!ctx) return Promise.resolve(null)
+    if (!ctx) {
+      return Promise.resolve(null)
+    }
     const p = this.fetchRaw(url).then(async (data) => {
-      if (!data) return null
+      if (!data) {
+        return null
+      }
       try {
         const b = await ctx.decodeAudioData(data.slice(0))
         this.buffers.set(url, b)
@@ -172,11 +187,15 @@ export class AudioEngine {
   /** Must be called from inside a user gesture. */
   unlock(): void {
     if (this.ctx) {
-      if (this.ctx.state !== 'running') void this.ctx.resume()
+      if (this.ctx.state !== 'running') {
+        void this.ctx.resume()
+      }
       return
     }
-    const Ctor = window.AudioContext
-    if (!Ctor) return
+    const Ctor = globalThis.AudioContext
+    if (!Ctor) {
+      return
+    }
     const ctx = new Ctor({ latencyHint: 'interactive' })
     this.ctx = ctx
     void ctx.resume()
@@ -210,7 +229,7 @@ export class AudioEngine {
 
     this.musicFilter = ctx.createBiquadFilter()
     this.musicFilter.type = 'lowpass'
-    this.musicFilter.frequency.value = 18000
+    this.musicFilter.frequency.value = 18_000
     this.musicFilter.Q.value = 0.5
     this.musicGain = ctx.createGain()
     this.musicFilter.connect(this.musicGain).connect(this.buses.music)
@@ -233,7 +252,9 @@ export class AudioEngine {
 
     this.noise = this.makeNoise(ctx, 1)
 
-    for (const key of Object.keys(SFX) as SfxName[]) void this.decode(SFX[key])
+    for (const key of Object.keys(SFX) as SfxName[]) {
+      void this.decode(SFX[key])
+    }
     void this.decode(SONGS.intro)
   }
 
@@ -245,8 +266,11 @@ export class AudioEngine {
 
   /** Decode the boss music ahead of time (called a few outlaws early). */
   preloadSong(name: SongName): void {
-    if (this.ctx) void this.decode(SONGS[name])
-    else this.fetchRaw(SONGS[name])
+    if (this.ctx) {
+      void this.decode(SONGS[name])
+    } else {
+      this.fetchRaw(SONGS[name])
+    }
   }
 
   private makeImpulse(ctx: AudioContext, seconds: number): AudioBuffer {
@@ -268,7 +292,9 @@ export class AudioEngine {
     const len = Math.floor(ctx.sampleRate * seconds)
     const buf = ctx.createBuffer(1, len, ctx.sampleRate)
     const d = buf.getChannelData(0)
-    for (let i = 0; i < len; i++) d[i] = Math.random() * 2 - 1
+    for (let i = 0; i < len; i++) {
+      d[i] = Math.random() * 2 - 1
+    }
     return buf
   }
 
@@ -279,7 +305,9 @@ export class AudioEngine {
   /** Map a performance.now() timestamp to the AudioContext clock (output-latency aware). */
   perfToCtx(perfMs: number): number {
     const ctx = this.ctx
-    if (!ctx) return 0
+    if (!ctx) {
+      return 0
+    }
     const ts = ctx.getOutputTimestamp?.()
     if (ts && ts.contextTime !== undefined && ts.performanceTime && ts.contextTime > 0) {
       return ts.contextTime + (perfMs - ts.performanceTime) / 1000
@@ -291,9 +319,13 @@ export class AudioEngine {
   /** Listener follows the camera (AudioParams only; no deprecated setters). */
   setListener(px: number, py: number, pz: number, fx: number, fy: number, fz: number): void {
     const ctx = this.ctx
-    if (!ctx) return
+    if (!ctx) {
+      return
+    }
     const l = ctx.listener
-    if (!l.positionX) return
+    if (!l.positionX) {
+      return
+    }
     l.positionX.value = px
     l.positionY.value = py
     l.positionZ.value = pz
@@ -317,12 +349,16 @@ export class AudioEngine {
   private reclaim(now: number): void {
     for (let i = this.voices.length - 1; i >= 0; i--) {
       const v = this.voices[i]
-      if (v && (v.done || v.end < now)) this.voices.splice(i, 1)
+      if (v && (v.done || v.end < now)) {
+        this.voices.splice(i, 1)
+      }
     }
     while (this.voices.length >= MAX_VOICES) {
       const idx = this.voices.findIndex((v) => !v.priority)
       const v = this.voices.splice(Math.max(idx, 0), 1)[0]
-      if (v) this.fadeStop(v.gain, v.src, now)
+      if (v) {
+        this.fadeStop(v.gain, v.src, now)
+      }
     }
   }
 
@@ -338,7 +374,9 @@ export class AudioEngine {
   play(name: SfxName, o: PlayOpts = {}): Voice | null {
     const ctx = this.ctx
     const buf = this.buffers.get(SFX[name])
-    if (!ctx || !buf || this.paused) return null
+    if (!(ctx && buf) || this.paused) {
+      return null
+    }
     const now = ctx.currentTime
     this.reclaim(now)
     const when = Math.max(o.when ?? 0, now)
@@ -413,7 +451,9 @@ export class AudioEngine {
   loop(name: SfxName, gain: number, bus: Bus = 'amb'): Loop | null {
     const ctx = this.ctx
     const buf = this.buffers.get(SFX[name])
-    if (!ctx || !buf) return null
+    if (!(ctx && buf)) {
+      return null
+    }
     const src = ctx.createBufferSource()
     src.buffer = buf
     src.loop = true
@@ -428,7 +468,9 @@ export class AudioEngine {
     let target = gain
     return {
       set: (v: number, ramp = 0.3) => {
-        if (Math.abs(v - target) < 0.002) return
+        if (Math.abs(v - target) < 0.002) {
+          return
+        }
         target = v
         glide(g.gain, v, ctx.currentTime, ramp)
       },
@@ -444,7 +486,9 @@ export class AudioEngine {
   /** Synth bullet whizz-by: band-passed noise with a doppler sweep. */
   whizz(pan: number, when?: number): void {
     const ctx = this.ctx
-    if (!ctx || !this.noise || this.paused) return
+    if (!(ctx && this.noise) || this.paused) {
+      return
+    }
     const t = Math.max(when ?? 0, ctx.currentTime)
     const src = ctx.createBufferSource()
     src.buffer = this.noise
@@ -476,17 +520,25 @@ export class AudioEngine {
   playSong(name: SongName): void {
     this.wantSong = name
     const ctx = this.ctx
-    if (!ctx) return
-    if (this.song?.name === name) return
+    if (!ctx) {
+      return
+    }
+    if (this.song?.name === name) {
+      return
+    }
     void this.decode(SONGS[name]).then((buf) => {
-      if (!buf || this.wantSong !== name || this.song?.name === name) return
+      if (!buf || this.wantSong !== name || this.song?.name === name) {
+        return
+      }
       const t = ctx.currentTime
       const old = this.song
       if (old) {
         glide(old.gain.gain, 0, t, 1.2)
         old.src.stop(t + 1.6)
         const st = this.songOffset.get(old.name)
-        if (st) st.offset = (st.offset + (t - st.startedAt)) % (old.src.buffer?.duration ?? 1)
+        if (st) {
+          st.offset = (st.offset + (t - st.startedAt)) % (old.src.buffer?.duration ?? 1)
+        }
       }
       const src = ctx.createBufferSource()
       src.buffer = buf
@@ -505,14 +557,18 @@ export class AudioEngine {
   /** Music level in dB with a ramp in seconds; -Infinity silences. */
   musicLevel(dB: number, ramp = 0.4): void {
     const ctx = this.ctx
-    if (!ctx) return
-    glide(this.musicGain.gain, dB === -Infinity ? 0 : db(dB), ctx.currentTime, ramp)
+    if (!ctx) {
+      return
+    }
+    glide(this.musicGain.gain, dB === Number.NEGATIVE_INFINITY ? 0 : db(dB), ctx.currentTime, ramp)
   }
 
   /** Lowpass sweep on the music; exponential glide, never a jump. */
   musicLowpass(hz: number, ramp = 0.6): void {
     const ctx = this.ctx
-    if (!ctx) return
+    if (!ctx) {
+      return
+    }
     glide(this.musicFilter.frequency, hz, ctx.currentTime, ramp)
   }
 
@@ -520,17 +576,23 @@ export class AudioEngine {
 
   /** Heartbeat at the given bpm; 0 stops it. */
   heartbeat(bpm: number): void {
-    if (bpm > 0 && this.heartBpm === 0) this.heartNext = this.now + 0.05
+    if (bpm > 0 && this.heartBpm === 0) {
+      this.heartNext = this.now + 0.05
+    }
     this.heartBpm = bpm
   }
 
   /** Per-frame: schedules heartbeats a little ahead on the audio clock. */
   update(): void {
     const ctx = this.ctx
-    if (!ctx || this.heartBpm <= 0 || this.paused) return
+    if (!ctx || this.heartBpm <= 0 || this.paused) {
+      return
+    }
     const now = ctx.currentTime
     // After a hitch or a hidden tab never fire a backlog of beats at once.
-    if (this.heartNext < now) this.heartNext = now + 0.02
+    if (this.heartNext < now) {
+      this.heartNext = now + 0.02
+    }
     const ahead = now + 0.12
     if (this.heartNext < ahead) {
       const t = this.heartNext
@@ -542,7 +604,9 @@ export class AudioEngine {
 
   setMono(on: boolean): void {
     const ctx = this.ctx
-    if (!ctx) return
+    if (!ctx) {
+      return
+    }
     try {
       ctx.destination.channelCount = on ? 1 : Math.min(2, ctx.destination.maxChannelCount)
       ctx.destination.channelCountMode = 'explicit'
@@ -555,18 +619,26 @@ export class AudioEngine {
   suspend(): void {
     const ctx = this.ctx
     this.paused = true
-    if (!ctx) return
+    if (!ctx) {
+      return
+    }
     const t = ctx.currentTime
     glide(this.master.gain, 0, t, 0.1)
-    for (const v of this.voices) this.fadeStop(v.gain, v.src, t)
+    for (const v of this.voices) {
+      this.fadeStop(v.gain, v.src, t)
+    }
     this.voices.length = 0
   }
 
   resume(): void {
     const ctx = this.ctx
     this.paused = false
-    if (!ctx) return
-    if (ctx.state !== 'running') void ctx.resume()
+    if (!ctx) {
+      return
+    }
+    if (ctx.state !== 'running') {
+      void ctx.resume()
+    }
     glide(this.master.gain, db(-3), ctx.currentTime, 0.2)
   }
 }

@@ -44,19 +44,24 @@ export function planShots(callT: number, s: PlanSpec, rng: Rng): DrawPlan {
     shots.push({ t: callT + e, hit: false, who: 0, done: false })
     const second = rng() < s.accuracy
     shots.push({ t: callT + e + s.delmerGapMs, hit: second, who: 0, done: false })
-    if (!second)
+    if (!second) {
       shots.push({ t: callT + e + s.delmerGapMs + s.secondShotMs, hit: true, who: 0, done: false })
+    }
   } else {
     const first = rng() < s.accuracy
     shots.push({ t: callT + e, hit: first, who: 0, done: false })
-    if (!first) shots.push({ t: callT + e + s.secondShotMs, hit: true, who: 0, done: false })
+    if (!first) {
+      shots.push({ t: callT + e + s.secondShotMs, hit: true, who: 0, done: false })
+    }
   }
   if (s.rifleman) {
     const r = s.rifleman
     const re = r.draw + jit(r.jitter) + s.assist
     const first = rng() < r.accuracy
     shots.push({ t: callT + re, hit: first, who: 1, done: false })
-    if (!first) shots.push({ t: callT + re + s.secondShotMs, hit: true, who: 1, done: false })
+    if (!first) {
+      shots.push({ t: callT + re + s.secondShotMs, hit: true, who: 1, done: false })
+    }
   }
   shots.sort((a, b) => a.t - b.t)
   return { callT, shots, e }
@@ -78,8 +83,12 @@ export function dueShot(
   alive: (who: number) => boolean,
 ): EnemyShot | null {
   for (const s of plan.shots) {
-    if (s.done || !alive(s.who)) continue
-    if (now >= s.t + tieMs) return s
+    if (s.done || !alive(s.who)) {
+      continue
+    }
+    if (now >= s.t + tieMs) {
+      return s
+    }
     return null
   }
   return null
@@ -108,9 +117,13 @@ export function between(rng: Rng, a: number, b: number): number {
 export function planFakes(w: number, chance: number, max: number, rng: Rng): number[] {
   const out: number[] = []
   for (let i = 0; i < max; i++) {
-    if (rng() >= chance) continue
+    if (rng() >= chance) {
+      continue
+    }
     const t = between(rng, 0.35 * w, 0.8 * w)
-    if (out.every((o) => Math.abs(o - t) > 450)) out.push(t)
+    if (out.every((o) => Math.abs(o - t) > 450)) {
+      out.push(t)
+    }
   }
   return out.sort((a, b) => a - b)
 }

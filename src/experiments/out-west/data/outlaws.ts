@@ -1,10 +1,12 @@
+// biome-ignore-all lint/style/noExcessiveLinesPerFile: one cohesive module (data table / scene builder); splitting would scatter tightly coupled code. Tracked for a later split.
+// biome-ignore-all lint/style/useNamingConvention: keys mirror source asset material names (e.g. Brown_02) and Turnstile/three.js option names
 /**
  * Every outlaw's tuning lives here (design doc §3.4). Times are in ms unless
  * noted. `day` is the time-of-day scalar used by the lighting presets:
  * 0 = high noon, 0.5 = sunset, 1 = midnight.
  */
 
-import { bountyFor } from './economy'
+import { bountyFor } from './economy.ts'
 
 /** Character part sources (all share the player's rig), plus the woman model. */
 export type PartSrc = 'suit' | 'rugged' | 'casual' | 'worker' | 'king' | 'punk'
@@ -88,8 +90,8 @@ export interface Outlaw {
   readonly lines: readonly string[]
 }
 
-const LEATHER = 0x5a3a22
-const BLACK = 0x15120f
+const LEATHER = 0x5a_3a_22
+const BLACK = 0x15_12_0f
 
 export const OUTLAWS: readonly Outlaw[] = [
   {
@@ -103,11 +105,11 @@ export const OUTLAWS: readonly Outlaw[] = [
       body: 'casual',
       legs: 'casual',
       feet: 'worker',
-      tint: { LightBrown: 0xd8ccb0, LightBlue: 0x4a5a6a, Hair: 0xc89a5a },
+      tint: { LightBrown: 0xd8_cc_b0, LightBlue: 0x4a_5a_6a, Hair: 0xc8_9a_5a },
       build: [0.9, 0.97],
     },
     hat: 'cowboy',
-    hatColor: 0xb59a6a,
+    hatColor: 0xb5_9a_6a,
     paces: [5, 7],
     wait: [1.0, 2.0],
     draw: 900,
@@ -129,12 +131,12 @@ export const OUTLAWS: readonly Outlaw[] = [
       body: 'suit',
       legs: 'suit',
       feet: 'suit',
-      tint: { Suit: 0x6a4a30, Tie: 0x8a1a10, Hair: 0x2a1a10 },
+      tint: { Suit: 0x6a_4a_30, Tie: 0x8a_1a_10, Hair: 0x2a_1a_10 },
       build: [1.18, 0.95],
-      moustache: 0x2a1a10,
+      moustache: 0x2a_1a_10,
     },
     hat: 'bowler',
-    hatColor: 0x2a2018,
+    hatColor: 0x2a_20_18,
     paces: [5, 8],
     wait: [1.0, 2.5],
     draw: 820,
@@ -166,16 +168,16 @@ export const OUTLAWS: readonly Outlaw[] = [
       legs: 'worker',
       feet: 'worker',
       tint: {
-        Worker_Vest: 0x5a3a20,
-        LightBrown: 0xa89878,
-        Worker_Yellow: 0x8a6a3a,
-        Brown: 0x6a5a40,
-        Brown2: 0x4a3a28,
+        Worker_Vest: 0x5a_3a_20,
+        LightBrown: 0xa8_98_78,
+        Worker_Yellow: 0x8a_6a_3a,
+        Brown: 0x6a_5a_40,
+        Brown2: 0x4a_3a_28,
       },
       build: [1, 1.05],
     },
     hat: 'cowboy',
-    hatColor: 0x3b2b1c,
+    hatColor: 0x3b_2b_1c,
     paces: [6, 9],
     wait: [1.2, 2.8],
     draw: 750,
@@ -197,12 +199,12 @@ export const OUTLAWS: readonly Outlaw[] = [
       body: 'punk',
       legs: 'suit',
       feet: 'suit',
-      tint: { Black: 0x1a2028, White: 0xe0d8c8, Suit: 0x2a2a30, Hair: 0x101010 },
+      tint: { Black: 0x1a_20_28, White: 0xe0_d8_c8, Suit: 0x2a_2a_30, Hair: 0x10_10_10 },
       build: [0.95, 1.0],
-      moustache: 0x101010,
+      moustache: 0x10_10_10,
     },
     hat: 'flat',
-    hatColor: 0x2b2b2b,
+    hatColor: 0x2b_2b_2b,
     paces: [5, 9],
     wait: [1.2, 3.0],
     draw: 690,
@@ -224,11 +226,16 @@ export const OUTLAWS: readonly Outlaw[] = [
       body: 'casual',
       legs: 'rugged',
       feet: 'worker',
-      tint: { LightBrown: 0x8a7a5a, Brown: 0x5a4a3a, Brown2: 0x3a2e22, Hair_White: 0x9a8a7a },
+      tint: {
+        LightBrown: 0x8a_7a_5a,
+        Brown: 0x5a_4a_3a,
+        Brown2: 0x3a_2e_22,
+        Hair_White: 0x9a_8a_7a,
+      },
       build: [1.2, 0.93],
     },
     hat: 'cowboy',
-    hatColor: 0x5a4a32,
+    hatColor: 0x5a_4a_32,
     paces: [4, 10],
     wait: [1.0, 3.0],
     draw: 640,
@@ -250,13 +257,13 @@ export const OUTLAWS: readonly Outlaw[] = [
       body: 'rugged',
       legs: 'rugged',
       feet: 'rugged',
-      tint: { Green: 0x6a2e1e, LightGreen: 0x8a6a4a, Brown: 0x4a3a2a, Hair: 0x1a1008 },
+      tint: { Green: 0x6a_2e_1e, LightGreen: 0x8a_6a_4a, Brown: 0x4a_3a_2a, Hair: 0x1a_10_08 },
       build: [1.05, 0.98],
-      poncho: 0xa0281a,
+      poncho: 0xa0_28_1a,
     },
     hat: 'sombrero',
-    hatColor: 0x9a7a4a,
-    bandana: 0xa02020,
+    hatColor: 0x9a_7a_4a,
+    bandana: 0xa0_20_20,
     paces: [3, 5],
     wait: [0.8, 1.8],
     draw: 590,
@@ -278,13 +285,13 @@ export const OUTLAWS: readonly Outlaw[] = [
       body: 'rugged',
       legs: 'worker',
       feet: 'rugged',
-      tint: { Green: 0x8a7a5a, LightGreen: 0x6a5a40, Brown: 0x5a4a38, Moustache: 0x3a2412 },
+      tint: { Green: 0x8a_7a_5a, LightGreen: 0x6a_5a_40, Brown: 0x5a_4a_38, Moustache: 0x3a_24_12 },
       build: [0.94, 1.08],
-      coat: 0xb09468,
+      coat: 0xb0_94_68,
     },
     hat: 'cowboy',
-    hatColor: 0x1e1a16,
-    bandana: 0x2a3a6a,
+    hatColor: 0x1e_1a_16,
+    bandana: 0x2a_3a_6a,
     paces: [9, 13],
     wait: [1.5, 3.5],
     draw: 550,
@@ -307,12 +314,12 @@ export const OUTLAWS: readonly Outlaw[] = [
       body: 'casual',
       legs: 'casual',
       feet: 'casual',
-      tint: { LightGreen: 0x2a2a2a, Green: 0x3a2020, White: 0xc8c0b0 },
+      tint: { LightGreen: 0x2a_2a_2a, Green: 0x3a_20_20, White: 0xc8_c0_b0 },
       build: [1, 1],
-      coat: 0x1a1a1a,
+      coat: 0x1a_1a_1a,
     },
     hat: 'flat',
-    hatColor: 0x1a1a1a,
+    hatColor: 0x1a_1a_1a,
     paces: [5, 10],
     wait: [1.5, 3.5],
     draw: 510,
@@ -334,9 +341,9 @@ export const OUTLAWS: readonly Outlaw[] = [
       body: 'suit',
       legs: 'suit',
       feet: 'suit',
-      tint: { Suit: 0x2a1e2a, Tie: 0x101010, White: 0xc8c0b0, Hair: 0x3a2a1a },
+      tint: { Suit: 0x2a_1e_2a, Tie: 0x10_10_10, White: 0xc8_c0_b0, Hair: 0x3a_2a_1a },
       build: [0.88, 1.1],
-      coat: 0x14121a,
+      coat: 0x14_12_1a,
     },
     hat: 'tophat',
     hatColor: BLACK,
@@ -362,17 +369,17 @@ export const OUTLAWS: readonly Outlaw[] = [
       legs: 'worker',
       feet: 'rugged',
       tint: {
-        Worker_Vest: 0x2a2a2a,
-        LightBrown: 0x9a6a4a,
-        Worker_Yellow: 0x2a2a2a,
-        Brown: 0x4a3828,
+        Worker_Vest: 0x2a_2a_2a,
+        LightBrown: 0x9a_6a_4a,
+        Worker_Yellow: 0x2a_2a_2a,
+        Brown: 0x4a_38_28,
       },
       build: [1.12, 1.0],
-      moustache: 0x3a2412,
+      moustache: 0x3a_24_12,
     },
     hat: 'cowboy',
-    hatColor: 0x6a5038,
-    bandana: 0x202020,
+    hatColor: 0x6a_50_38,
+    bandana: 0x20_20_20,
     paces: [5, 10],
     wait: [1.5, 4.0],
     draw: 445,
@@ -395,11 +402,11 @@ export const OUTLAWS: readonly Outlaw[] = [
       body: 'casual',
       legs: 'casual',
       feet: 'casual',
-      tint: { LightGreen: 0x7a2a2a, Green: 0x3a1a1a, White: 0xd8ccb8 },
+      tint: { LightGreen: 0x7a_2a_2a, Green: 0x3a_1a_1a, White: 0xd8_cc_b8 },
       build: [1, 1],
     },
     hat: 'cowboy',
-    hatColor: 0x3a2a1a,
+    hatColor: 0x3a_2a_1a,
     paces: [5, 11],
     wait: [1.5, 4.0],
     draw: 420,
@@ -421,9 +428,9 @@ export const OUTLAWS: readonly Outlaw[] = [
       body: 'punk',
       legs: 'suit',
       feet: 'suit',
-      tint: { Black: 0x3a1a14, White: 0xe8e0d0, Suit: 0x1a1a22, Hair: 0x1a120a },
+      tint: { Black: 0x3a_1a_14, White: 0xe8_e0_d0, Suit: 0x1a_1a_22, Hair: 0x1a_12_0a },
       build: [1.02, 0.88],
-      moustache: 0x1a120a,
+      moustache: 0x1a_12_0a,
     },
     hat: 'bowler',
     hatColor: BLACK,
@@ -448,13 +455,13 @@ export const OUTLAWS: readonly Outlaw[] = [
       body: 'suit',
       legs: 'rugged',
       feet: 'worker',
-      tint: { Suit: 0x2a2620, White: 0xa8a090, Tie: 0x101010, Brown: 0x2a2620 },
+      tint: { Suit: 0x2a_26_20, White: 0xa8_a0_90, Tie: 0x10_10_10, Brown: 0x2a_26_20 },
       build: [1.05, 1.1],
-      coat: 0x2a241c,
+      coat: 0x2a_24_1c,
       star: true,
     },
     hat: 'cowboy',
-    hatColor: 0x2a221a,
+    hatColor: 0x2a_22_1a,
     paces: [6, 12],
     wait: [2.0, 4.5],
     draw: 375,
@@ -476,12 +483,12 @@ export const OUTLAWS: readonly Outlaw[] = [
       body: 'punk',
       legs: 'punk',
       feet: 'worker',
-      tint: { Black: 0x101010, White: 0x7a6a5a, LightBlue: 0x2a3038, Hair: 0x0a0a0a },
+      tint: { Black: 0x10_10_10, White: 0x7a_6a_5a, LightBlue: 0x2a_30_38, Hair: 0x0a_0a_0a },
       build: [0.95, 1.02],
     },
     hat: 'cowboy',
-    hatColor: 0x101010,
-    bandana: 0x8a1010,
+    hatColor: 0x10_10_10,
+    bandana: 0x8a_10_10,
     paces: [4, 12],
     wait: [2.0, 5.0],
     draw: 355,
@@ -503,12 +510,12 @@ export const OUTLAWS: readonly Outlaw[] = [
       body: 'suit',
       legs: 'suit',
       feet: 'worker',
-      tint: { Suit: 0x8a6a44, White: 0xd8ccb0, Tie: 0x101010, Moustache: 0x6a4a2a },
+      tint: { Suit: 0x8a_6a_44, White: 0xd8_cc_b0, Tie: 0x10_10_10, Moustache: 0x6a_4a_2a },
       build: [1.0, 1.08],
-      coat: 0x9a7a50,
+      coat: 0x9a_7a_50,
     },
     hat: 'cowboy',
-    hatColor: 0x2a2018,
+    hatColor: 0x2a_20_18,
     paces: [6, 10],
     wait: [2.0, 5.0],
     draw: 335,
@@ -531,19 +538,19 @@ export const OUTLAWS: readonly Outlaw[] = [
       legs: 'rugged',
       feet: 'worker',
       tint: {
-        Worker_Vest: 0x1a1410,
-        LightBrown: 0x5a4a3a,
-        Worker_Yellow: 0x1a1410,
-        Brown: 0x3a2a1a,
-        Hair: 0x0a0806,
+        Worker_Vest: 0x1a_14_10,
+        LightBrown: 0x5a_4a_3a,
+        Worker_Yellow: 0x1a_14_10,
+        Brown: 0x3a_2a_1a,
+        Hair: 0x0a_08_06,
       },
       build: [1.22, 1.03],
-      poncho: 0x2a2018,
+      poncho: 0x2a_20_18,
       bandoliers: true,
     },
     hat: 'sombrero',
-    hatColor: 0x2a1a10,
-    bandana: 0x101010,
+    hatColor: 0x2a_1a_10,
+    bandana: 0x10_10_10,
     paces: [6, 12],
     wait: [2.0, 5.0],
     draw: 560,
@@ -565,10 +572,10 @@ export const OUTLAWS: readonly Outlaw[] = [
       body: 'suit',
       legs: 'suit',
       feet: 'suit',
-      tint: { Suit: 0x0e0e12, Tie: 0x5a0000, White: 0xcfc6b4, Hair: 0x0a0a0a },
+      tint: { Suit: 0x0e_0e_12, Tie: 0x5a_00_00, White: 0xcf_c6_b4, Hair: 0x0a_0a_0a },
       build: [1.0, 1.12],
-      coat: 0x0c0c10,
-      moustache: 0x0a0a0a,
+      coat: 0x0c_0c_10,
+      moustache: 0x0a_0a_0a,
     },
     hat: 'tall',
     hatColor: BLACK,
@@ -592,7 +599,7 @@ export const RIFLEMAN_LOOK: Look = {
   body: 'casual',
   legs: 'worker',
   feet: 'worker',
-  tint: { LightBrown: 0x3a3226, Brown: 0x2a2018, Moustache: 0x1a1008 },
+  tint: { LightBrown: 0x3a_32_26, Brown: 0x2a_20_18, Moustache: 0x1a_10_08 },
   build: [1, 1],
   mask: true,
 }
@@ -613,10 +620,20 @@ export function legendDraw(index: number): number {
 export const ASSIST_MS = 150
 
 export function gradeFor(ms: number, secondChance: boolean): string {
-  if (secondChance) return 'SECOND CHANCE'
-  if (ms < 180) return 'LIGHTNING'
-  if (ms < 230) return 'DEADEYE'
-  if (ms < 300) return 'QUICK'
-  if (ms < 400) return 'STEADY'
+  if (secondChance) {
+    return 'SECOND CHANCE'
+  }
+  if (ms < 180) {
+    return 'LIGHTNING'
+  }
+  if (ms < 230) {
+    return 'DEADEYE'
+  }
+  if (ms < 300) {
+    return 'QUICK'
+  }
+  if (ms < 400) {
+    return 'STEADY'
+  }
   return 'LUCKY'
 }

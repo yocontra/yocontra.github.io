@@ -1,6 +1,7 @@
+// biome-ignore-all lint/complexity/useMaxParams: geometry/audio builders take positional numeric args (x, y, z, size…), mirroring three.js APIs
 import type { InstancedMesh, Matrix4, Object3D } from 'three'
 import type { GLTF } from 'three/examples/jsm/loaders/GLTFLoader.js'
-import { instance, placeMatrix, propDef } from './props'
+import { instance, placeMatrix, propDef } from './props.ts'
 
 const r = (a: number, b: number) => a + Math.random() * (b - a)
 
@@ -32,8 +33,9 @@ export function dressStreet(props: GLTF, parent: Object3D): { coffins: Instanced
     [10.1, 31.5],
     [-10.2, -36.5],
   ]
-  for (const [x, z] of spots)
+  for (const [x, z] of spots) {
     barrels.push(placeMatrix(x, x > 0 ? 0.34 : 0.34, z, r(0, 6), r(0.95, 1.1)))
+  }
   barrels.push(placeMatrix(-8.3, 0, -15.5, 0.4), placeMatrix(8.4, 0, 25.2, 1.1))
   for (const [x, z] of [
     [10.6, -12.6],
@@ -42,8 +44,9 @@ export function dressStreet(props: GLTF, parent: Object3D): { coffins: Instanced
     [-10.6, 24.5],
     [10.6, -37],
     [-10.5, -23],
-  ] as const)
+  ] as const) {
     crates.push(placeMatrix(x, 0.34, z, r(-0.3, 0.3), r(0.9, 1.1)))
+  }
   crates.push(placeMatrix(8.6, 0, 26.2, 0.3))
   add('barrel', 1.0, barrels, true, 'y')
   add('crate', 0.85, crates, true, 'y')
@@ -63,7 +66,9 @@ export function dressStreet(props: GLTF, parent: Object3D): { coffins: Instanced
     const side = Math.random() < 0.5 ? -1 : 1
     const z = r(-140, 60)
     const x = z < -60 ? r(-60, 60) : side * r(24, 80)
-    if (z < -55 && Math.abs(x) < 10) continue
+    if (z < -55 && Math.abs(x) < 10) {
+      continue
+    }
     cacti.push(placeMatrix(x, 0, z, r(0, 6), r(2.5, 4.6), 0, 0))
   }
   add('cactus', 1, cacti, false, 'y')
@@ -75,8 +80,12 @@ export function dressStreet(props: GLTF, parent: Object3D): { coffins: Instanced
   add('rock', 1, rocks, false, 'y')
   // fence runs out past the stable
   const fence: Matrix4[] = []
-  for (let i = 0; i < 6; i++) fence.push(placeMatrix(22, 0, -52 + i * 5.9, Math.PI / 2))
-  for (let i = 0; i < 5; i++) fence.push(placeMatrix(-22, 0, -48 + i * 5.9, Math.PI / 2))
+  for (let i = 0; i < 6; i++) {
+    fence.push(placeMatrix(22, 0, -52 + i * 5.9, Math.PI / 2))
+  }
+  for (let i = 0; i < 5; i++) {
+    fence.push(placeMatrix(-22, 0, -48 + i * 5.9, Math.PI / 2))
+  }
   add('fence', 5.9, fence, true, 'max')
   // hanging lanterns at the lantern lights
   add(
@@ -100,6 +109,8 @@ export function dressStreet(props: GLTF, parent: Object3D): { coffins: Instanced
     coffinMats.push(placeMatrix(-11.2, 0.35, z, Math.PI / 2, 1, -Math.PI / 2 + 0.22, 0))
   }
   const coffins = add('coffin', 1.9, coffinMats, true, 'max', 18)
-  for (const c of coffins) c.count = 2
+  for (const c of coffins) {
+    c.count = 2
+  }
   return { coffins }
 }

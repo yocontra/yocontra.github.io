@@ -1,21 +1,28 @@
-import { money, type RunResult } from '../data/economy'
+import { money } from '../data/economy.ts'
 import {
   type BoardEntry,
   cleanName,
   fetchTop,
   loadName,
   NAME_MAX,
+  type Result,
   saveName,
-  submitRun,
-} from '../net/leaderboard'
+} from '../net/leaderboard.ts'
+
+export interface Banked {
+  total: number
+  rank: number
+}
 
 export interface BoardOpen {
-  /** A run that may be submitted (omit for a view-only board). */
-  run?: RunResult | null
-  /** Button label, e.g. "Submit to leaderboard" or "Submit run so far". */
+  /** The purse being banked (shown above the name field). */
+  purse?: number
+  /** Bank the run under a name (ranked only); omit for a view-only board. */
+  submit?: (name: string) => Promise<Result<Banked>>
+  /** Button label, e.g. "Submit to leaderboard". */
   submitLabel?: string
-  /** Called after a successful submit. */
-  onSubmitted?: () => void
+  /** A short line for view-only boards ("Practice runs aren’t ranked."). */
+  note?: string
   onClose?: () => void
 }
 
@@ -27,7 +34,9 @@ function el<K extends keyof HTMLElementTagNameMap>(
 ): HTMLElementTagNameMap[K] {
   const e = document.createElement(tag)
   e.className = cls
-  if (text !== undefined) e.textContent = text
+  if (text !== undefined) {
+    e.textContent = text
+  }
   parent.appendChild(e)
   return e
 }
@@ -41,13 +50,12 @@ const dateFmt = new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric
 export class Board {
   readonly root: HTMLElement
   private opts: BoardOpen = {}
-  private myRank: number | null = null
+  private myRank = null as number | null
   private loadSeq = 0
-  /** Run states already submitted this session, so the same run can't post twice. */
-  private readonly sent = new Set<string>()
-  private static key(run: RunResult): string {
-    return `${run.duels.length}:${run.total}`
-  }
+  private banked = false as boolean
+  private closeBtn = null as HTMLButtonElement | null
+  private status = null as HTMLElement | null
+  private list = null as HTMLElement | null
 
   constructor(parent: HTMLElement) {
     this.root = el('div', 'ow-board', parent)
@@ -58,18 +66,18 @@ export class Board {
     }
     // a click on the backdrop closes it
     this.root.addEventListener('click', (e) => {
-      if (e.target === this.root) this.close()
+      if (e.target === this.root) {
+        this.close()
+      }
     })
   }
 
   /** While open, keys belong to the board: Escape closes it, nothing reaches the game. */
   private readonly onWindowKey = (e: KeyboardEvent): void => {
-    if (!this.isOpen) return
-    if (this.root.contains(e.target instanceof Node ? e.target : null)) {
-      if (e.type === 'keydown' && e.key === 'Escape') this.close()
-      return
+    const inside = e.target instanceof Node && this.root.contains(e.target)
+    if (!inside) {
+      e.stopImmediatePropagation()
     }
-    e.stopImmediatePropagation()
     if (e.type === 'keydown' && e.key === 'Escape') {
       e.preventDefault()
       this.close()
@@ -83,39 +91,41 @@ export class Board {
   open(opts: BoardOpen = {}): void {
     this.opts = opts
     this.myRank = null
+    this.banked = false
     this.render()
     this.root.classList.add('on')
-    window.addEventListener('keydown', this.onWindowKey, true)
-    window.addEventListener('keyup', this.onWindowKey, true)
-    const first = this.root.querySelector<HTMLElement>('.ow-board-name') ?? this.closeBtn
-    if (first && !(first instanceof HTMLInputElement && first.value)) first.focus()
-    else this.closeBtn?.focus()
-    void this.refresh()
+    globalThis.addEventListener('keydown', this.onWindowKey, true)
+    globalThis.addEventListener('keyup', this.onWindowKey, true)
+    const name = this.root.querySelector<HTMLInputElement>('.ow-board-name')
+    if (name && !name.value) {
+      name.focus()
+    } else {
+      this.closeBtn?.focus()
+    }
+    this.refresh().catch(() => undefined)
   }
 
   close(): void {
-    if (!this.isOpen) return
+    if (!this.isOpen) {
+      return
+    }
     this.root.classList.remove('on')
-    window.removeEventListener('keydown', this.onWindowKey, true)
-    window.removeEventListener('keyup', this.onWindowKey, true)
+    globalThis.removeEventListener('keydown', this.onWindowKey, true)
+    globalThis.removeEventListener('keyup', this.onWindowKey, true)
     this.root.innerHTML = ''
     this.loadSeq++
     this.opts.onClose?.()
   }
-
-  private closeBtn: HTMLButtonElement | null = null
-  private status: HTMLElement | null = null
-  private list: HTMLElement | null = null
 
   private render(): void {
     const r = this.root
     r.innerHTML = ''
     const panel = el('div', 'ow-board-panel', r)
     el('h2', 'ow-board-title', panel, 'LEADERBOARD')
-    const run = this.opts.run ?? null
-    if (run && run.total > 0) {
+    const submit = this.opts.submit
+    if (submit) {
       const form = el('form', 'ow-board-form', panel)
-      el('div', 'ow-board-purse', form, `Your purse: ${money(run.total)}`)
+      el('div', 'ow-board-purse', form, `Your purse: ${money(this.opts.purse ?? 0)}`)
       const row = el('div', 'ow-board-row', form)
       const label = el('label', 'ow-board-label', row, 'Name')
       const input = el('input', 'ow-board-name', label)
@@ -127,14 +137,12 @@ export class Board {
       input.value = loadName()
       const btn = el('button', 'ow-btn ow-btn-primary', row, this.opts.submitLabel ?? 'Submit')
       btn.type = 'submit'
-      if (this.sent.has(Board.key(run))) {
-        btn.disabled = true
-        btn.textContent = 'Submitted'
-      }
       form.addEventListener('submit', (e) => {
         e.preventDefault()
-        void this.submit(run, input, btn)
+        this.send(submit, { input, btn }).catch(() => undefined)
       })
+    } else if (this.opts.note) {
+      el('div', 'ow-board-note', panel, this.opts.note)
     }
     this.status = el('div', 'ow-board-status', panel)
     this.status.setAttribute('aria-live', 'polite')
@@ -146,35 +154,46 @@ export class Board {
   }
 
   private setStatus(text: string, kind: 'info' | 'error' | 'ok' = 'info'): void {
-    if (!this.status) return
+    if (!this.status) {
+      return
+    }
     this.status.textContent = text
-    this.status.dataset['kind'] = kind
+    this.status.dataset.kind = kind
   }
 
   private async refresh(): Promise<void> {
     const seq = ++this.loadSeq
-    this.setStatus('Loading…')
+    if (this.status?.dataset.kind !== 'ok') {
+      this.setStatus('Loading…')
+    }
     const r = await fetchTop(25)
-    if (seq !== this.loadSeq) return
+    if (seq !== this.loadSeq) {
+      return
+    }
     if (!r.ok) {
       this.setStatus(r.error, 'error')
       return
     }
-    if (this.status?.dataset['kind'] !== 'ok')
-      this.setStatus(r.value.length ? '' : 'No names yet. Be the first.')
+    if (this.status?.dataset.kind !== 'ok') {
+      this.setStatus(r.value.length > 0 ? '' : 'No names yet. Be the first.')
+    }
     this.fill(r.value)
   }
 
   private fill(entries: BoardEntry[]): void {
     const list = this.list
-    if (!list) return
+    if (!list) {
+      return
+    }
     list.innerHTML = ''
     const me = loadName().trim().toLowerCase()
     for (const e of entries) {
       const li = el('li', 'ow-board-entry', list)
       const mine =
-        this.myRank !== null ? e.rank === this.myRank : me !== '' && e.name.toLowerCase() === me
-      if (mine) li.classList.add('mine')
+        this.myRank === null ? me !== '' && e.name.toLowerCase() === me : e.rank === this.myRank
+      if (mine) {
+        li.classList.add('mine')
+      }
       el('span', 'ow-board-rank', li, String(e.rank))
       el('span', 'ow-board-who', li, e.name)
       el('span', 'ow-board-total', li, money(e.total))
@@ -182,12 +201,14 @@ export class Board {
     }
   }
 
-  private async submit(
-    run: RunResult,
-    input: HTMLInputElement,
-    btn: HTMLButtonElement,
+  private async send(
+    submit: (name: string) => Promise<Result<Banked>>,
+    ui: { input: HTMLInputElement; btn: HTMLButtonElement },
   ): Promise<void> {
-    if (this.sent.has(Board.key(run))) return
+    const { input, btn } = ui
+    if (this.banked) {
+      return
+    }
     const name = cleanName(input.value)
     if (!name) {
       this.setStatus(`Pick a name of 1–${NAME_MAX} characters.`, 'error')
@@ -197,19 +218,20 @@ export class Board {
     saveName(name)
     btn.disabled = true
     btn.textContent = 'Sending…'
-    const r = await submitRun(name, run)
-    if (!this.isOpen) return
+    const r = await submit(name)
+    if (!this.isOpen) {
+      return
+    }
     if (!r.ok) {
       btn.disabled = false
       btn.textContent = this.opts.submitLabel ?? 'Submit'
       this.setStatus(r.error, 'error')
       return
     }
-    this.sent.add(Board.key(run))
+    this.banked = true
     this.myRank = r.value.rank
-    btn.textContent = 'Submitted'
+    btn.textContent = 'Banked'
     this.setStatus(`You’re #${r.value.rank} with ${money(r.value.total)}.`, 'ok')
-    this.opts.onSubmitted?.()
     await this.refresh()
   }
 }

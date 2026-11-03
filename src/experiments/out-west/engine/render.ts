@@ -1,3 +1,4 @@
+// biome-ignore-all lint/style/noExcessiveClassesPerFile: small, related effect classes kept together
 import {
   BlendFunction,
   BloomEffect,
@@ -116,7 +117,9 @@ export class GradeEffect extends Effect {
   }
   u(name: string): Uniform {
     const u = this.uniforms.get(name)
-    if (!u) throw new Error(name)
+    if (!u) {
+      throw new Error(name)
+    }
     return u
   }
 }
@@ -135,7 +138,9 @@ export class LensEffect extends Effect {
   }
   u(name: string): Uniform {
     const u = this.uniforms.get(name)
-    if (!u) throw new Error(name)
+    if (!u) {
+      throw new Error(name)
+    }
     return u
   }
 }
@@ -155,11 +160,11 @@ export class Renderer {
   tier: Tier
   spec: TierSpec
   dpr: number
-  private frameTimes: number[] = []
+  private readonly frameTimes: number[] = []
   private tierDropped = false
-  private readonly black = new MeshBasicMaterial({ color: 0x000000 })
-  private scene: Scene
-  private camera: PerspectiveCamera
+  private readonly black = new MeshBasicMaterial({ color: 0x00_00_00 })
+  private readonly scene: Scene
+  private readonly camera: PerspectiveCamera
 
   constructor(canvas: HTMLCanvasElement, scene: Scene, camera: PerspectiveCamera, tier: Tier) {
     this.scene = scene
@@ -221,13 +226,18 @@ export class Renderer {
   adapt(frameMs: number, allowTierDrop: boolean): boolean {
     const ft = this.frameTimes
     ft.push(frameMs)
-    if (ft.length < 120) return false
+    if (ft.length < 120) {
+      return false
+    }
     const avg = ft.reduce((a, b) => a + b, 0) / ft.length
     ft.length = 0
     const max = Math.min(window.devicePixelRatio || 1, this.spec.dprMax)
     let next = this.dpr
-    if (avg > 19) next = Math.max(0.75, this.dpr - 0.15)
-    else if (avg < 14 && this.dpr < max) next = Math.min(max, this.dpr + 0.1)
+    if (avg > 19) {
+      next = Math.max(0.75, this.dpr - 0.15)
+    } else if (avg < 14 && this.dpr < max) {
+      next = Math.min(max, this.dpr + 0.1)
+    }
     if (next !== this.dpr) {
       this.dpr = next
       this.resize()
@@ -264,8 +274,10 @@ export class Renderer {
     const prevFog = scene.fog
     const prevOverride: Material | null = scene.overrideMaterial
     const states = hidden.map((o) => o.visible)
-    for (const o of hidden) o.visible = false
-    scene.background = new Color(0xff0000)
+    for (const o of hidden) {
+      o.visible = false
+    }
+    scene.background = new Color(0xff_00_00)
     scene.fog = null
     scene.overrideMaterial = this.black
     const prevShadow = this.gl.shadowMap.autoUpdate

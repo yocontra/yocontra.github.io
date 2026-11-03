@@ -1,6 +1,6 @@
-import { money } from '../data/economy'
-import { type Action, keyLabel } from '../engine/input'
-import type { Settings } from '../save'
+import { money } from '../data/economy.ts'
+import { type Action, keyLabel } from '../engine/input.ts'
+import type { Settings } from '../save.ts'
 
 function el<K extends keyof HTMLElementTagNameMap>(
   tag: K,
@@ -10,7 +10,9 @@ function el<K extends keyof HTMLElementTagNameMap>(
 ): HTMLElementTagNameMap[K] {
   const e = document.createElement(tag)
   e.className = cls
-  if (text !== undefined) e.textContent = text
+  if (text !== undefined) {
+    e.textContent = text
+  }
   parent.appendChild(e)
   return e
 }
@@ -22,6 +24,30 @@ export interface LedgerRow {
   attempts: number
   /** Bounty + bonus collected for him (null if not yet). */
   paid: number | null
+}
+
+export interface CardSpec {
+  kind: 'win' | 'lose' | 'coward' | 'info'
+  title: string
+  big: string
+  sub: string
+  hint: string
+}
+
+export interface EndSpec {
+  stats: {
+    cowardice: number
+    avg: number | null
+    assist: boolean
+    legend: boolean
+    legendUnlocked: boolean
+    total: number
+    best: number
+    ranked: boolean
+  }
+  onAgain: () => void
+  onLegend: () => void
+  onBoard: () => void
 }
 
 export class Hud {
@@ -54,7 +80,8 @@ export class Hud {
   private fakeTimer = 0
   private lineTimer = 0
   private callTimer = 0
-  captions = true
+  captions = true as boolean
+  private readonly mode: HTMLElement
 
   constructor(root: HTMLElement) {
     this.root = root
@@ -66,6 +93,7 @@ export class Hud {
     this.pauseBtn.type = 'button'
     this.pauseBtn.setAttribute('aria-label', 'Pause')
     this.pauseBtn.innerHTML = '<span></span><span></span>'
+    this.mode = el('div', 'ow-mode', hud)
     this.pips = el('div', 'ow-pips', hud)
     this.letterTop = el('div', 'ow-letter ow-letter-top', root)
     this.letterBot = el('div', 'ow-letter ow-letter-bot', root)
@@ -102,7 +130,9 @@ export class Hud {
       const p = el('span', 'ow-pip', this.pips)
       requestAnimationFrame(() => p.classList.add('in'))
     }
-    while (this.pips.children.length > n) this.pips.lastChild?.remove()
+    while (this.pips.children.length > n) {
+      this.pips.lastChild?.remove()
+    }
   }
 
   call(text: string, ms: number): void {
@@ -121,14 +151,18 @@ export class Hud {
   }
 
   fake(text: string, ms = 1800): void {
-    if (!this.captions) return
+    if (!this.captions) {
+      return
+    }
     this.fakeCap.textContent = text
     this.fakeCap.classList.add('on')
     this.fakeTimer = ms
   }
 
   line(who: string, text: string, ms = 2400): void {
-    if (!this.captions) return
+    if (!this.captions) {
+      return
+    }
     this.lineCap.innerHTML = ''
     el('b', '', this.lineCap, `${who}: `)
     el('span', '', this.lineCap, text)
@@ -143,19 +177,27 @@ export class Hud {
     this.lineTimer = 0
   }
 
-  showCard(
-    kind: 'win' | 'lose' | 'coward' | 'info',
-    title: string,
-    big: string,
-    sub: string,
-    hint: string,
-  ): void {
-    this.card.className = `ow-card ow-card-${kind} on`
-    this.cardTitle.textContent = title
-    this.cardBig.textContent = big
-    this.cardSub.textContent = sub
-    this.cardHint.textContent = hint
+  showCard(card: CardSpec): void {
+    this.card.className = `ow-card ow-card-${card.kind} on`
+    this.cardTitle.textContent = card.title
+    this.cardBig.textContent = card.big
+    this.cardSub.textContent = card.sub
+    this.cardHint.textContent = card.hint
     this.cardPay.textContent = ''
+  }
+
+  /** The stamped wanted poster on the coward card. */
+  cardPoster(src: string): void {
+    this.cardBig.innerHTML = ''
+    const img = el('img', '', this.cardBig)
+    img.alt = 'Wanted poster stamped: shot in the back, no bounty'
+    img.src = src
+  }
+
+  /** "RANKED" or "PRACTICE · not ranked". */
+  setMode(text: string): void {
+    this.mode.textContent = text
+    this.mode.classList.toggle('ranked', text === 'RANKED')
   }
 
   /** The payout line on the result card, e.g. "+$150 · 212 ms draw bonus +$37". */
@@ -166,7 +208,9 @@ export class Hud {
   /** Set the purse; `animate` counts up (or down) gently instead of snapping. */
   setPurse(total: number, animate: boolean): void {
     if (!animate) {
-      this.purseShown = this.purseTo = this.purseFrom = total
+      this.purseShown = total
+      this.purseTo = total
+      this.purseFrom = total
       this.purseT = 1
       this.purse.textContent = money(total)
       return
@@ -205,20 +249,28 @@ export class Hud {
       const k = 1 - (1 - this.purseT) ** 3
       this.purseShown = Math.round(this.purseFrom + (this.purseTo - this.purseFrom) * k)
       this.purse.textContent = money(this.purseShown)
-      if (this.purseT >= 1) this.purse.classList.remove('gain', 'loss')
+      if (this.purseT >= 1) {
+        this.purse.classList.remove('gain', 'loss')
+      }
     }
     if (this.fakeTimer > 0) {
       this.fakeTimer -= dtMs
-      if (this.fakeTimer <= 0) this.fakeCap.classList.remove('on')
+      if (this.fakeTimer <= 0) {
+        this.fakeCap.classList.remove('on')
+      }
     }
     if (this.lineTimer > 0) {
       this.lineTimer -= dtMs
-      if (this.lineTimer <= 0) this.lineCap.classList.remove('on')
+      if (this.lineTimer <= 0) {
+        this.lineCap.classList.remove('on')
+      }
     }
     if (this.callTimer > 0) {
       // DRAW! fades after its hold; the red edge stays until a shot is fired
       this.callTimer -= dtMs
-      if (this.callTimer <= 0) this.callCap.classList.remove('on')
+      if (this.callTimer <= 0) {
+        this.callCap.classList.remove('on')
+      }
     }
   }
 
@@ -301,29 +353,20 @@ export class Hud {
     return this.menu.classList.contains('on')
   }
 
-  showEnd(
-    rows: LedgerRow[],
-    stats: {
-      cowardice: number
-      avg: number | null
-      assist: boolean
-      legend: boolean
-      legendUnlocked: boolean
-      total: number
-      best: number
-    },
-    onAgain: () => void,
-    onLegend: () => void,
-    onBoard: () => void,
-  ): void {
+  showEnd(rows: LedgerRow[], spec: EndSpec): void {
+    const { stats, onAgain, onLegend, onBoard } = spec
     const e = this.end
     e.innerHTML = ''
     e.classList.add('on')
     el('h1', 'ow-end-line', e, 'YOU’RE THE FASTEST HAND IN THE WEST!')
-    if (stats.cowardice >= 10) el('div', 'ow-end-title', e, 'The Yellowest Hand in the West')
+    if (stats.cowardice >= 10) {
+      el('div', 'ow-end-title', e, 'The Yellowest Hand in the West')
+    }
     const table = el('table', 'ow-ledger', e)
     const head = el('tr', '', el('thead', '', table))
-    for (const h of ['#', 'Outlaw', 'Best', 'Grade', 'Tries', 'Bounty']) el('th', '', head, h)
+    for (const h of ['#', 'Outlaw', 'Best', 'Grade', 'Tries', 'Bounty']) {
+      el('th', '', head, h)
+    }
     const body = el('tbody', '', table)
     rows.forEach((r, i) => {
       const tr = el('tr', '', body)
@@ -337,7 +380,9 @@ export class Hud {
     const foot = el('tr', 'ow-ledger-total', el('tfoot', '', table))
     el('td', '', foot, '')
     el('td', '', foot, 'Total earned')
-    for (let i = 0; i < 3; i++) el('td', '', foot, '')
+    for (let i = 0; i < 3; i++) {
+      el('td', '', foot, '')
+    }
     el('td', '', foot, money(stats.total))
     const s = el('div', 'ow-end-stats', e)
     el(
@@ -358,10 +403,19 @@ export class Hud {
       s,
       stats.cowardice === 1 ? '1 man shot in the back' : `${stats.cowardice} men shot in the back`,
     )
-    if (stats.assist) el('div', '', s, 'Assist mode was on (+150 ms).')
-    if (stats.legend) el('div', '', s, 'LEGEND MODE — the 2019 curve. Respect.')
+    if (stats.assist) {
+      el('div', '', s, 'Assist mode was on (+150 ms).')
+    }
+    if (stats.legend) {
+      el('div', '', s, 'LEGEND MODE — the 2019 curve. Respect.')
+    }
     const b = el('div', 'ow-menu-btns', e)
-    const submit = el('button', 'ow-btn ow-btn-primary', b, 'Submit to leaderboard')
+    const submit = el(
+      'button',
+      'ow-btn ow-btn-primary',
+      b,
+      stats.ranked ? 'Submit to leaderboard' : 'Leaderboard',
+    )
     submit.type = 'button'
     submit.addEventListener('click', onBoard)
     const again = el('button', 'ow-btn', b, 'Play again')
@@ -380,6 +434,8 @@ export class Hud {
 
   setDebug(text: string | null): void {
     this.debug.classList.toggle('on', text !== null)
-    if (text !== null) this.debug.textContent = text
+    if (text !== null) {
+      this.debug.textContent = text
+    }
   }
 }

@@ -1,5 +1,5 @@
-import type { RunResult } from './data/economy'
-import { DEFAULT_KEYS, type KeyMap } from './engine/input'
+import type { RunResult } from './data/economy.ts'
+import { DEFAULT_KEYS, type KeyMap } from './engine/input.ts'
 
 export interface Best {
   ms: number
@@ -71,9 +71,13 @@ export function load(): SaveData {
   const d = defaults()
   try {
     const raw = localStorage.getItem(KEY)
-    if (!raw) return d
+    if (!raw) {
+      return d
+    }
     const parsed = JSON.parse(raw) as Partial<SaveData>
-    if (parsed.version !== 1) return d
+    if (parsed.version !== 1) {
+      return d
+    }
     const run = parsed.run
     const okRun =
       run && run.version === 1 && Array.isArray(run.duels) && typeof run.total === 'number'

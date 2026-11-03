@@ -28,7 +28,7 @@ export const ECONOMY_VERSION = 1
 
 /** The bounty on each outlaw's poster, by level. */
 export const BOUNTIES: readonly number[] = [
-  50, 75, 100, 150, 200, 300, 400, 500, 650, 800, 1000, 1250, 1500, 2000, 3000, 5000, 10000,
+  50, 75, 100, 150, 200, 300, 400, 500, 650, 800, 1000, 1250, 1500, 2000, 3000, 5000, 10_000,
 ]
 
 /** Draw-speed bonus tiers, fastest first: a reaction under `ms` earns `pct` of the bounty. */
@@ -46,13 +46,17 @@ export const COWARD_FINE = 0.1
 export const COWARD_FINE_MIN = 5
 
 export function bountyFor(level: number): number {
-  if (!Number.isInteger(level)) return 0
+  if (!Number.isInteger(level)) {
+    return 0
+  }
   return BOUNTIES[level] ?? 0
 }
 
 /** The speed bonus alone for a win at `reactionMs` on `level`. */
 export function drawBonus(level: number, reactionMs: number | null): number {
-  if (reactionMs === null || !Number.isFinite(reactionMs) || reactionMs < MIN_HUMAN_MS) return 0
+  if (reactionMs === null || !Number.isFinite(reactionMs) || reactionMs < MIN_HUMAN_MS) {
+    return 0
+  }
   const tier = DRAW_BONUS.find((t) => reactionMs < t.ms)
   return tier ? Math.round(bountyFor(level) * tier.pct) : 0
 }
@@ -84,7 +88,9 @@ export function scoreRun(duels: readonly DuelRecord[]): number {
   let total = 0
   for (const d of duels) {
     if (d.outcome === 'win') {
-      if (paid.has(d.level)) continue
+      if (paid.has(d.level)) {
+        continue
+      }
       paid.add(d.level)
     }
     total = Math.max(0, total + payout(d))

@@ -1,3 +1,4 @@
+// biome-ignore-all lint/style/noMultiAssign: canvas/texture dimension setup (w = h = n) is clearer chained
 import {
   CanvasTexture,
   LinearMipmapLinearFilter,
@@ -20,7 +21,9 @@ export function loadTex(url: string, srgb: boolean, anisotropy: number): Promise
         t.wrapT = RepeatWrapping
         t.anisotropy = anisotropy
         t.minFilter = LinearMipmapLinearFilter
-        if (srgb) t.colorSpace = SRGBColorSpace
+        if (srgb) {
+          t.colorSpace = SRGBColorSpace
+        }
         resolve(t)
       },
       undefined,
@@ -34,7 +37,9 @@ export function loadTex(url: string, srgb: boolean, anisotropy: number): Promise
           ctx.fillRect(0, 0, 4, 4)
         }
         const t = new CanvasTexture(c)
-        if (srgb) t.colorSpace = SRGBColorSpace
+        if (srgb) {
+          t.colorSpace = SRGBColorSpace
+        }
         resolve(t)
       },
     )
@@ -97,7 +102,9 @@ export function clockCanvas(): { canvas: HTMLCanvasElement; draw: (h: number, m:
   c.width = c.height = 256
   const ctx = c.getContext('2d')
   const draw = (h: number, m: number) => {
-    if (!ctx) return
+    if (!ctx) {
+      return
+    }
     ctx.clearRect(0, 0, 256, 256)
     ctx.fillStyle = '#efe6cf'
     ctx.beginPath()
@@ -107,7 +114,7 @@ export function clockCanvas(): { canvas: HTMLCanvasElement; draw: (h: number, m:
     ctx.strokeStyle = '#2a1d12'
     ctx.stroke()
     ctx.fillStyle = '#2a1d12'
-    ctx.font = `bold 26px Georgia, serif`
+    ctx.font = 'bold 26px Georgia, serif'
     ctx.textAlign = 'center'
     ctx.textBaseline = 'middle'
     const nums = ['XII', 'I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X', 'XI']

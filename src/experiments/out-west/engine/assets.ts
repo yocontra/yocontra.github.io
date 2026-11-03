@@ -1,8 +1,8 @@
 import type { Texture } from 'three'
 import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.js'
 import { type GLTF, GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js'
-import type { BodyKey, Look } from '../data/outlaws'
-import { loadTex } from '../scene/textures'
+import type { BodyKey, Look } from '../data/outlaws.ts'
+import { loadTex } from '../scene/textures.ts'
 
 const ROOT = '/experiments/out-west/3d'
 
@@ -18,12 +18,12 @@ export interface Assets {
     vplanksN: Texture
   }
   /** Character part files, lazily loaded and cached. */
-  body(key: BodyKey): Promise<GLTF>
+  body: (key: BodyKey) => Promise<GLTF>
   /** Already-loaded part (or null). */
-  bodyNow(key: BodyKey): GLTF | null
+  bodyNow: (key: BodyKey) => GLTF | null
   /** Load every file a look needs. */
-  lookReady(look: Look): Promise<void>
-  lookLoaded(look: Look): boolean
+  lookReady: (look: Look) => Promise<void>
+  lookLoaded: (look: Look) => boolean
 }
 
 export function lookKeys(look: Look): BodyKey[] {
@@ -54,7 +54,9 @@ export async function loadAssets(
   const loaded = new Map<BodyKey, GLTF>()
   const body = (key: BodyKey): Promise<GLTF> => {
     const have = cache.get(key)
-    if (have) return have
+    if (have) {
+      return have
+    }
     const p = glb(key).then((g) => {
       loaded.set(key, g)
       return g

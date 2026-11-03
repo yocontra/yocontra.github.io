@@ -1,3 +1,7 @@
+// biome-ignore-all lint/style/noExcessiveClassesPerFile: small, related effect classes kept together
+// biome-ignore-all lint/style/noMultiAssign: canvas/texture dimension setup (w = h = n) is clearer chained
+// biome-ignore-all lint/style/noParameterProperties: legacy constructor shorthand; behaviour-neutral
+// biome-ignore-all lint/suspicious/noUnnecessaryConditions: class fields are flags mutated from outside the method; Biome narrows them to their literal initializer
 import {
   AdditiveBlending,
   BufferAttribute,
@@ -67,7 +71,7 @@ export class Dust {
     size: { value: 0.06 },
     pixelRatio: { value: 1 },
     map: { value: null as Texture | null },
-    color: { value: new Color(0xf0dcc0) },
+    color: { value: new Color(0xf0_dc_c0) },
     opacity: { value: 0.6 },
   }
   private time = 0
@@ -201,15 +205,19 @@ export class Puffs {
       rise?: number
     } = {},
   ): void {
-    const c = new Color(o.color ?? 0xcbb08a)
+    const c = new Color(o.color ?? 0xcb_b0_8a)
     for (let i = 0; i < n; i++) {
-      if (this.parts.length >= this.cap) this.parts.shift()
+      if (this.parts.length >= this.cap) {
+        this.parts.shift()
+      }
       const s = o.spread ?? 0.3
       const v = new Vector3((Math.random() - 0.5) * 2, Math.random(), (Math.random() - 0.5) * 2)
         .normalize()
         .multiplyScalar((o.speed ?? 1) * (0.3 + Math.random()))
       v.y += o.up ?? 0.5
-      if (o.dir) v.addScaledVector(o.dir, 0.5 + Math.random())
+      if (o.dir) {
+        v.addScaledVector(o.dir, 0.5 + Math.random())
+      }
       const life = (o.life ?? 1.2) * (0.6 + Math.random() * 0.8)
       this.parts.push({
         p: at
@@ -235,8 +243,10 @@ export class Puffs {
   }
 
   update(dt: number, pixelRatio: number, wind: number): void {
-    const pr = this.mat.uniforms['pixelRatio']
-    if (pr) pr.value = pixelRatio
+    const pr = this.mat.uniforms.pixelRatio
+    if (pr) {
+      pr.value = pixelRatio
+    }
     let n = 0
     for (let i = this.parts.length - 1; i >= 0; i--) {
       const q = this.parts[i] as Particle
@@ -358,7 +368,9 @@ export function tumbleweedGeometry(): BufferGeometry {
     parts.push(new TubeGeometry(new CatmullRomCurve3(pts), 14, 0.008, 3, false))
   }
   const merged = mergeGeometries(parts)
-  for (const p of parts) p.dispose()
+  for (const p of parts) {
+    p.dispose()
+  }
   return merged ?? new BufferGeometry()
 }
 
@@ -386,7 +398,9 @@ export class Tumbleweed {
     this.phase = Math.random() * 6
   }
   update(dt: number, wind: number): void {
-    if (!this.active) return
+    if (!this.active) {
+      return
+    }
     const s = this.speed * (0.7 + wind * 0.5)
     this.x += this.dir * s * dt
     this.z += Math.sin(this.phase + this.x * 0.2) * dt * 0.4
@@ -435,12 +449,16 @@ export class Physics {
     })
   }
   clear(): void {
-    for (const b of this.bodies) b.obj.removeFromParent()
+    for (const b of this.bodies) {
+      b.obj.removeFromParent()
+    }
     this.bodies.length = 0
   }
   update(dt: number, wind: number): void {
     for (const b of this.bodies) {
-      if (b.sleep) continue
+      if (b.sleep) {
+        continue
+      }
       b.v.y -= 9.8 * dt * (b.flutter > 0 ? 0.25 : 1)
       if (b.flutter > 0) {
         b.v.x += (wind * 2.5 - b.v.x) * dt * 1.5
@@ -457,7 +475,9 @@ export class Physics {
           b.w.multiplyScalar(0)
           // settle flat
           const up = new Vector3(0, 1, 0).applyQuaternion(b.obj.quaternion)
-          if (up.y < 0) b.obj.rotateX(Math.PI)
+          if (up.y < 0) {
+            b.obj.rotateX(Math.PI)
+          }
           b.obj.rotation.x = 0
           b.obj.rotation.z = 0
           b.sleep = true
@@ -466,7 +486,9 @@ export class Physics {
           b.v.x *= 0.6
           b.v.z *= 0.6
           b.w.multiplyScalar(0.5)
-          if (b.flutter > 0 && Math.abs(b.v.y) < 0.3) b.v.y = 0
+          if (b.flutter > 0 && Math.abs(b.v.y) < 0.3) {
+            b.v.y = 0
+          }
         }
       }
     }
@@ -501,7 +523,7 @@ export class Glint {
     this.sprite = new Sprite(
       new SpriteMaterial({
         map: tex,
-        color: 0xfff6d0,
+        color: 0xff_f6_d0,
         blending: AdditiveBlending,
         depthWrite: false,
         fog: false,

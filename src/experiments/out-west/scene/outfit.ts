@@ -1,3 +1,6 @@
+// biome-ignore-all lint/performance/useTopLevelRegex: regexes run once per model load, not per frame
+// biome-ignore-all lint/style/useNamedCaptureGroup: simple suffix match; no captures are read
+// biome-ignore-all lint/suspicious/noUnnecessaryConditions: class fields are flags mutated from outside the method; Biome narrows them to their literal initializer
 import {
   type Bone,
   CanvasTexture,
@@ -16,7 +19,7 @@ import {
   TorusGeometry,
 } from 'three'
 import type { GLTF } from 'three/examples/jsm/loaders/GLTFLoader.js'
-import type { PartSrc } from '../data/outlaws'
+import type { PartSrc } from '../data/outlaws.ts'
 
 export type PartSlot = 'head' | 'body' | 'legs' | 'feet'
 
@@ -37,13 +40,17 @@ const SUFFIX: Record<PartSlot, string[]> = {
 function partRoot(gltf: GLTF, slot: PartSlot): Object3D | null {
   let found: Object3D | null = null
   gltf.scene.traverse((o) => {
-    if (found) return
-    if (SUFFIX[slot].some((s) => o.name.endsWith(s))) found = o
+    if (found) {
+      return
+    }
+    if (SUFFIX[slot].some((s) => o.name.endsWith(s))) {
+      found = o
+    }
   })
   return found
 }
 
-const clean = (n: string) => n.replace(/[.\s]/g, '').replace(/_\d+$/, '')
+const clean = (n: string) => n.replace(/[.\s]/gu, '').replace(/_\d+$/u, '')
 
 /**
  * Replace the rig's own meshes with head/body/legs/feet taken from other
@@ -56,35 +63,47 @@ export function kitbash(
   const bones = new Map<string, Bone>()
   let host: Object3D | null = null
   const drop: Object3D[] = []
-  const partNode = /_(Head|Body|Legs|Pants|Feet)$/
+  const partNode = /_(Head|Body|Legs|Pants|Feet)$/u
   model.traverse((o) => {
     const b = o as Bone
-    if (b.isBone) bones.set(clean(b.name), b)
+    if (b.isBone) {
+      bones.set(clean(b.name), b)
+    }
     const sm = o as SkinnedMesh
     if (sm.isSkinnedMesh) {
       const parent = sm.parent
       const node = parent && partNode.test(parent.name) && !partNode.test(sm.name) ? parent : sm
-      if (!host) host = node.parent
+      if (!host) {
+        host = node.parent
+      }
       drop.push(node)
     }
   })
-  for (const d of drop) d.removeFromParent()
+  for (const d of drop) {
+    d.removeFromParent()
+  }
   const target: Object3D = host ?? model
   for (const slot of ['head', 'body', 'legs', 'feet'] as PartSlot[]) {
     const { gltf, src } = parts[slot]
     const root = partRoot(gltf, slot)
-    if (!root) continue
+    if (!root) {
+      continue
+    }
     const hide = slot === 'head' ? (HEAD_HIDE[src] ?? []) : []
     root.traverse((o) => {
       const sm = o as SkinnedMesh
-      if (!sm.isSkinnedMesh) return
+      if (!sm.isSkinnedMesh) {
+        return
+      }
       const mat = Array.isArray(sm.material) ? sm.material[0] : sm.material
-      if (mat && hide.includes(mat.name)) return
+      if (mat && hide.includes(mat.name)) {
+        return
+      }
       const copy = sm.clone() as SkinnedMesh
       const mapped = sm.skeleton.bones.map((b) => bones.get(clean(b.name)) ?? b)
       const sk = new Skeleton(mapped, sm.skeleton.boneInverses)
       copy.bind(sk, sm.bindMatrix)
-      copy.userData['slot'] = slot
+      copy.userData.slot = slot
       target.add(copy)
     })
   }
@@ -163,8 +182,8 @@ export function makeBeard(color: number): Object3D {
 }
 
 export function makeBandoliers(): Object3D {
-  const mat = new MeshStandardMaterial({ color: 0x3a2412, roughness: 0.7, name: 'Black' })
-  const brass = new MeshStandardMaterial({ color: 0xc8a050, metalness: 0.8, roughness: 0.35 })
+  const mat = new MeshStandardMaterial({ color: 0x3a_24_12, roughness: 0.7, name: 'Black' })
+  const brass = new MeshStandardMaterial({ color: 0xc8_a0_50, metalness: 0.8, roughness: 0.35 })
   const g = new Group()
   for (const s of [-1, 1]) {
     const strap = new Mesh(new TorusGeometry(0.2, 0.018, 4, 20), mat)
@@ -187,16 +206,19 @@ export function makeStar(): Object3D {
   for (let i = 0; i < 12; i++) {
     const r = i % 2 === 0 ? 0.045 : 0.02
     const a = (i / 12) * Math.PI * 2
-    if (i === 0) s.moveTo(Math.sin(a) * r, Math.cos(a) * r)
-    else s.lineTo(Math.sin(a) * r, Math.cos(a) * r)
+    if (i === 0) {
+      s.moveTo(Math.sin(a) * r, Math.cos(a) * r)
+    } else {
+      s.lineTo(Math.sin(a) * r, Math.cos(a) * r)
+    }
   }
   const m = new Mesh(
     new ShapeGeometry(s),
     new MeshStandardMaterial({
-      color: 0xe0c060,
+      color: 0xe0_c0_60,
       metalness: 0.9,
       roughness: 0.3,
-      emissive: 0x3a2a00,
+      emissive: 0x3a_2a_00,
     }),
   )
   return m
