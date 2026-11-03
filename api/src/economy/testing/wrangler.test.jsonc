@@ -1,0 +1,12 @@
+// A D1-only config for stream C's tests: `getPlatformProxy` gives them a real local D1 (workerd).
+{
+  "name": "economy-tests",
+  "compatibility_date": "2026-10-01",
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "economy-tests",
+      "database_id": "00000000-0000-0000-0000-00000000000c"
+    }
+  ]
+}
