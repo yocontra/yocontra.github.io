@@ -35,7 +35,7 @@ export const career: readonly Role[] = [
     title: 'Senior Staff Engineer · SEAR',
     years: '2024 — 2026',
     blurb:
-      'Worked on macOS and iOS security in SEAR, building tools and infrastructure. Not much more I can say about it.',
+      'Worked on macOS and iOS security in SEAR: anti-malware, the next generation of sandboxing, and a platform for running AI agents at scale.',
   },
   {
     company: 'CreateSafe',
