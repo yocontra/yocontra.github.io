@@ -42,7 +42,7 @@ export const career: readonly Role[] = [
     years: '2024 — 2026',
     location: 'Cupertino / SF',
     blurb:
-      'Worked on macOS and iOS security in SEAR: anti-malware, the next generation of sandboxing, and a platform for running AI agents at scale.',
+      'Worked on macOS and iOS security in SEAR: anti-malware, the next generation of sandboxing, and a platform for running AI agents at scale. Built systems handling billions of events a day.',
   },
   {
     company: 'CreateSafe',
@@ -60,7 +60,7 @@ export const career: readonly Role[] = [
     years: '2016 — 2021',
     location: 'New York',
     blurb:
-      'Co-founded a civic data company and built its data, analytics and GIS platform, used by city and county governments in North America.',
+      'Co-founded a civic data company and built its data, analytics and GIS platform: geospatial analytics across billions of civic data points, used by city and county governments across North America and the US Census Bureau.',
   },
   {
     company: 'Charmed',
