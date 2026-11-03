@@ -9,6 +9,9 @@
 import { REVOLVER_ROUNDS } from '../sim/constants.ts'
 
 export interface HudState {
+  /** Gun in hand: label and magazine size; and whether you hold dynamite. */
+  weapon: { label: string; max: number }
+  dynamite: boolean
   hp: number
   ammo: number
   /** 0..1 while reloading, else null. */
@@ -56,6 +59,8 @@ export class Hud {
   private readonly hpText: HTMLElement
   private readonly pips: HTMLElement[] = []
   private readonly reloadEl: HTMLElement
+  private readonly weaponEl: HTMLElement
+  private readonly dynamiteEl: HTMLElement
   private readonly carriedEl: HTMLElement
   private readonly bankedEl: HTMLElement
   private readonly playersEl: HTMLElement
@@ -96,6 +101,8 @@ export class Hud {
       this.pips.push(el('div', 'fr-pip', ammo))
     }
     this.reloadEl = el('div', 'fr-reload', ammo, 'RELOADING')
+    this.weaponEl = el('div', 'fr-weapon', vitals)
+    this.dynamiteEl = el('div', 'fr-dynamite', vitals, '🧨 DYNAMITE: G / THROW')
     this.protectEl = el('div', 'fr-protect', vitals, 'PROTECTED')
 
     const tc = el('div', 'fr-tc', this.root)
@@ -185,10 +192,18 @@ export class Hud {
       this.hpFill.classList.toggle('low', hp <= 34)
       this.hpText.textContent = String(hp)
     }
-    if (this.changed('ammo', s.ammo)) {
+    if (this.changed('ammo', `${s.ammo}/${s.weapon.max}`)) {
       for (const [i, p] of this.pips.entries()) {
         p.classList.toggle('spent', i >= s.ammo)
+        p.hidden = i >= s.weapon.max
       }
+    }
+    if (this.changed('weapon', s.weapon.label)) {
+      this.weaponEl.textContent = s.weapon.label
+      this.weaponEl.classList.toggle('on', s.weapon.label !== '')
+    }
+    if (this.changed('dyn', s.dynamite)) {
+      this.dynamiteEl.classList.toggle('on', s.dynamite)
     }
     const reloading = s.reload !== null
     if (this.changed('reload', reloading)) {

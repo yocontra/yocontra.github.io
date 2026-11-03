@@ -700,6 +700,11 @@ export function buildTown(layout: TownLayout, assets: Assets, sun: Vector3): Tow
   root.add(waterMesh(layout))
   root.add(bluffMesh(layout, assets))
   root.updateMatrixWorld(true)
+  // Static: never recompose these matrices again.
+  root.traverse((o) => {
+    o.matrixAutoUpdate = false
+    o.matrixWorldAutoUpdate = false
+  })
   return {
     root,
     roofs,

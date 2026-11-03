@@ -7,7 +7,7 @@
  * stick), reload, and one contextual 64 px action (bank, open, accept, call out). Every target is
  * at least 56 CSS px.
  */
-import { BTN_AIM, BTN_FIRE, BTN_RELOAD, BTN_ROLL } from '../../contract/town.ts'
+import { BTN_AIM, BTN_FIRE, BTN_RELOAD, BTN_ROLL, BTN_THROW } from '../../contract/town.ts'
 import type { Sampled } from './controls.ts'
 
 const STICK_R = 56
@@ -47,6 +47,7 @@ export class TouchControls {
   private readonly rightBase: HTMLElement
   private readonly rightKnob: HTMLElement
   private readonly action: HTMLElement
+  private readonly throwBtn: HTMLElement
   private actionBit = 0
   private latched = 0
   /** BTN_AIM kept for the release frame so a Dead-Eye release still counts as aimed. */
@@ -80,6 +81,8 @@ export class TouchControls {
     }
     btn('fr-btn-roll', 'ROLL', BTN_ROLL)
     btn('fr-btn-reload', 'RELOAD', BTN_RELOAD)
+    this.throwBtn = btn('fr-btn-throw', 'THROW', BTN_THROW)
+    this.throwBtn.hidden = true
     this.action = btn('fr-btn-act', '', 0)
     this.action.hidden = true
 
@@ -96,6 +99,13 @@ export class TouchControls {
     listen('pointerup', (e) => this.up(e))
     listen('pointercancel', (e) => this.up(e))
     this.place(this.rightBase, null)
+  }
+
+  /** The THROW button shows only while you hold dynamite. */
+  setThrow(on: boolean): void {
+    if (this.throwBtn.hidden === on) {
+      this.throwBtn.hidden = !on
+    }
   }
 
   /** The contextual button: what it does and what it says (null hides it). */

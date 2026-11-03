@@ -16,6 +16,8 @@ const PITCH = MathUtils.degToRad(PITCH_DEG)
 const AIM_Y = 1
 
 const tmp = new Vector3()
+const REDUCED_MOTION =
+  typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches
 
 export class TopDownCamera {
   readonly camera = new PerspectiveCamera(FOV, 1, 1, 160)
@@ -34,6 +36,9 @@ export class TopDownCamera {
   }
 
   kick(amp: number): void {
+    if (REDUCED_MOTION) {
+      return
+    }
     this.shake.amp = Math.max(this.shake.amp, amp)
   }
 

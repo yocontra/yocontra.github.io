@@ -117,6 +117,8 @@
   background: rgb(255 255 255 / 15%);
 }
 
+.fr-weapon,
+.fr-dynamite,
 .fr-reload,
 .fr-protect {
   display: none;
@@ -130,6 +132,24 @@
 .fr-protect.on {
   display: block;
   animation: fr-blink 0.6s steps(2) infinite;
+}
+
+.fr-weapon.on,
+.fr-dynamite.on {
+  display: block;
+  margin-left: 0;
+}
+
+.fr-dynamite {
+  color: #ff9a6a;
+}
+
+.fr-btn-throw {
+  background: rgb(160 40 20 / 75%);
+}
+
+.fr-btn-throw[hidden] {
+  display: none;
 }
 
 .fr-protect {

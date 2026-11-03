@@ -68,7 +68,7 @@ const LOD1_TRIS = 3000
 /** Running speed the Run clip was authored for (m/s). */
 const CLIP_RUN_SPEED = 5.2
 const ROLL_S = 0.35
-const MAX_ACTORS_EXTRA = 6
+const MAX_ACTORS_EXTRA = 3
 /** Characters read 25% bigger than life from the top-down camera (visual only; collision is the sim's). */
 export const READ_SCALE = 1.25
 const ARM_BONES = /^(?<bone>Shoulder|UpperArm|LowerArm|Index|Middle|Ring|Pinky|Thumb)\d?R$/u
@@ -325,7 +325,7 @@ export class Crowd {
   /** Muzzle world position for a player's shot (falls back to chest height). */
   muzzle(id: number, x: number, z: number, aim: number, out: Vector3): Vector3 {
     const m = this.members.get(id)
-    if (m?.actor && m.holder?.visible) {
+    if (m?.actor && m.holder?.parent && m.holder.visible) {
       m.recoil = 1
       m.actor.root.updateWorldMatrix(true, true)
       return m.actor.muzzle(out)
@@ -381,7 +381,8 @@ export class Crowd {
         this.drawNear(m, p, rank, cx, cz, dt, nowS, s)
       } else {
         if (m.holder) {
-          m.holder.visible = false
+          // Off the graph, not just invisible: hidden bones still cost matrix updates.
+          m.holder.removeFromParent()
         }
         m.wasNear = false
         this.drawFar(m, p, nowS)
@@ -390,7 +391,7 @@ export class Crowd {
     }
     for (const m of this.members.values()) {
       if (!seen.has(m.id) && m.holder) {
-        m.holder.visible = false
+        m.holder.removeFromParent()
         m.wasNear = false
       }
     }
@@ -425,6 +426,9 @@ export class Crowd {
       return
     }
     s.near++
+    if (!holder.parent) {
+      this.root.add(holder)
+    }
     holder.visible = !(p.flags & EF_PROTECTED) || Math.floor(nowS * 11) % 3 !== 0
     holder.position.set(p.x, 0, p.z)
     holder.rotation.y = facing(p.aim)

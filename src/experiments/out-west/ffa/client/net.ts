@@ -16,6 +16,10 @@ import {
   SELF_FROZEN,
   SELF_IN_SHOWDOWN,
   type ServerControl,
+  selfWeapon,
+  WEAPON_REVOLVER,
+  WEAPON_RIFLE,
+  WEAPON_SHOTGUN,
 } from '../../contract/town.ts'
 import { Writer } from '../sim/bytes.ts'
 import {
@@ -27,7 +31,13 @@ import {
   type WireFrame,
 } from '../sim/codec.ts'
 import type { WireEvent } from '../sim/codec-events.ts'
-import { INTEREST_NEAR, REVOLVER_FIRE_MS, TICK_MS } from '../sim/constants.ts'
+import {
+  INTEREST_NEAR,
+  REVOLVER_FIRE_MS,
+  RIFLE_FIRE_MS,
+  SHOTGUN_FIRE_MS,
+  TICK_MS,
+} from '../sim/constants.ts'
 import { InputBatcher, quantizeAim } from '../sim/input.ts'
 import { buildGrid, type Grid } from '../sim/layout.ts'
 import { aimRadians, stepMove } from '../sim/move.ts'
@@ -54,7 +64,7 @@ export interface NetHandlers {
   onControl: (msg: ServerControl) => void
   onEvent: (ev: WireEvent, tick: number) => void
   /** A shot this client predicted (muzzle flash, tracer and sound before the server answers). */
-  onPredictedShot: (x: number, z: number, aim: number) => void
+  onPredictedShot: (x: number, z: number, aim: number, weapon: number) => void
 }
 
 interface Pending {
@@ -62,6 +72,12 @@ interface Pending {
   frame: WireFrame
   /** This frame's fire press was predicted as a shot. */
   shot: boolean
+}
+
+const FIRE_MS: Record<number, number> = {
+  [WEAPON_REVOLVER]: REVOLVER_FIRE_MS,
+  [WEAPON_SHOTGUN]: SHOTGUN_FIRE_MS,
+  [WEAPON_RIFLE]: RIFLE_FIRE_MS,
 }
 
 const seqDiff = (a: number, b: number): number => ((a - b + 98_304) % 65_536) - 32_768
@@ -124,9 +140,16 @@ export class NetClient {
     return (f & SELF_ALIVE) !== 0 && (f & SELF_FROZEN) === 0
   }
 
+  /** The gun in hand (revolver, or a map pickup) and whether you hold dynamite. */
+  get weapon(): { weapon: number; rounds: number; dynamite: boolean } {
+    return selfWeapon(this.self?.weapon ?? 0)
+  }
+
   /** Rounds left, counting shots predicted but not yet acknowledged. */
   get ammo(): number {
-    return Math.max(0, (this.self?.ammo ?? 0) - this.predictedShots)
+    const w = this.weapon
+    const have = w.weapon === WEAPON_REVOLVER ? (this.self?.ammo ?? 0) : w.rounds
+    return Math.max(0, have - this.predictedShots)
   }
 
   handle(data: ArrayBuffer | string, nowMs: number): void {
@@ -341,15 +364,16 @@ export class NetClient {
     }
     const blocked =
       this.pred.rollTicks > 0 ||
-      s.reloadTicks > 0 ||
+      (s.reloadTicks > 0 && this.weapon.weapon === WEAPON_REVOLVER) ||
       this.ammo <= 0 ||
       nowMs < this.localCooldownUntil
     if (blocked) {
       return false
     }
-    this.localCooldownUntil = nowMs + REVOLVER_FIRE_MS - TICK_MS / 2
+    const weapon = this.weapon.weapon
+    this.localCooldownUntil = nowMs + (FIRE_MS[weapon] ?? REVOLVER_FIRE_MS) - TICK_MS / 2
     this.predictedShots++
-    this.handlers.onPredictedShot(this.pred.x, this.pred.z, aimRadians(frame.aim))
+    this.handlers.onPredictedShot(this.pred.x, this.pred.z, aimRadians(frame.aim), weapon)
     return true
   }
 

@@ -5,7 +5,7 @@
  *
  * Desktop: WASD/arrows move, the mouse aims, LMB fires, hold RMB for Dead-Eye, Space rolls,
  * R reloads, E banks/opens/accepts, Q calls out. Gamepad: sticks, RT fire, LT Dead-Eye, A roll,
- * X reload, B interact, Y call out.
+ * X reload, B interact, Y call out, RB throw dynamite. G throws dynamite on the keyboard.
  */
 import {
   BTN_AIM,
@@ -14,6 +14,7 @@ import {
   BTN_INTERACT,
   BTN_RELOAD,
   BTN_ROLL,
+  BTN_THROW,
 } from '../../contract/town.ts'
 
 export interface Sampled {
@@ -33,6 +34,7 @@ const KEY_BUTTONS: Record<string, number> = {
   KeyE: BTN_INTERACT,
   KeyF: BTN_INTERACT,
   KeyQ: BTN_CALLOUT,
+  KeyG: BTN_THROW,
 }
 
 const PAD_BUTTONS: readonly (readonly [number, number])[] = [
@@ -42,6 +44,7 @@ const PAD_BUTTONS: readonly (readonly [number, number])[] = [
   [2, BTN_RELOAD],
   [1, BTN_INTERACT],
   [3, BTN_CALLOUT],
+  [5, BTN_THROW],
 ]
 
 const PAD_DEAD = 0.18

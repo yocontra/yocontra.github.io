@@ -186,8 +186,8 @@ export class Effects {
       },
     )
     this.puffs = new Burst(
-      new InstancedMesh(new PlaneGeometry(1, 1), additive(dot), 96),
-      96,
+      new InstancedMesh(new PlaneGeometry(1, 1), additive(dot), 160),
+      160,
       (sl, k, out) => {
         s.setScalar(sl.size * (0.6 + k))
         out.compose(v.set(sl.x, sl.y, sl.z), flat, s)
@@ -358,6 +358,78 @@ export class Effects {
       p.size = 0.7
       p.color.setRGB(0.35, 0.3, 0.22)
     }
+  }
+
+  /** One fizzing spark from a lit fuse. */
+  spark(x: number, y: number, z: number): void {
+    const p = this.puffs.spawn()
+    p.life = 0.18
+    p.x = x
+    p.y = y
+    p.z = z
+    p.vx = (Math.random() - 0.5) * 1.5
+    p.vy = 1 + Math.random()
+    p.vz = (Math.random() - 0.5) * 1.5
+    p.size = 0.16
+    p.color.setRGB(3, 2, 0.6)
+  }
+
+  /** Dynamite: a fireball, a flash and a ring of dust (4 m). */
+  explosion(x: number, z: number): void {
+    const f = this.flashes.spawn()
+    f.life = 0.18
+    f.x = x
+    f.y = 0.6
+    f.z = z
+    f.size = 9
+    f.vx = 0
+    f.vy = 0
+    f.vz = 0
+    f.color.setRGB(4, 2.4, 0.8)
+    for (let i = 0; i < 26; i++) {
+      const a = (i / 26) * Math.PI * 2
+      const sp = 3 + Math.random() * 4
+      const p = this.puffs.spawn()
+      p.life = 0.5 + Math.random() * 0.5
+      p.x = x
+      p.y = 0.4
+      p.z = z
+      p.vx = Math.cos(a) * sp
+      p.vy = 0.5 + Math.random() * 2.5
+      p.vz = Math.sin(a) * sp
+      p.size = 1 + Math.random() * 0.8
+      const hot = i % 3 === 0
+      p.color.setRGB(hot ? 2.6 : 0.5, hot ? 1.2 : 0.42, hot ? 0.3 : 0.32)
+    }
+  }
+
+  /** A shotgun shell: eight short pellet tracers fanned over the cone. */
+  pellets(x: number, y: number, z: number, aim: number, range: number, coneRad: number): void {
+    for (let i = 0; i < 8; i++) {
+      const a = aim + ((i / 7) * 2 - 1) * coneRad * (0.7 + Math.random() * 0.3)
+      const t = this.tracers.spawn()
+      t.life = 0.09
+      t.x = x
+      t.y = y
+      t.z = z
+      t.dx = Math.cos(a)
+      t.dz = Math.sin(a)
+      t.len = range * (0.75 + Math.random() * 0.25)
+      t.vx = 0
+      t.vy = 0
+      t.vz = 0
+      t.color.setRGB(2.2, 1.5, 0.7)
+    }
+    const f = this.flashes.spawn()
+    f.life = 0.09
+    f.x = x + Math.cos(aim) * 0.2
+    f.y = y
+    f.z = z + Math.sin(aim) * 0.2
+    f.size = 1.8
+    f.vx = 0
+    f.vy = 0
+    f.vz = 0
+    f.color.setRGB(3, 2, 0.9)
   }
 
   throwHat(hat: Group, dirX: number, dirZ: number): void {

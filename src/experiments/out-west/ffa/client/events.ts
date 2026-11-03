@@ -14,9 +14,13 @@ import {
   EV_CHANNEL_CANCEL,
   EV_DAMAGE,
   EV_DEPOSIT,
+  EV_DYNAMITE_THROWN,
+  EV_EXPLOSION,
   EV_HAT_OFF,
   EV_KILL,
   EV_LEFT,
+  EV_PICKUP_READY,
+  EV_PICKUP_TAKEN,
   EV_RESPAWN,
   EV_SHOT,
   EV_SHOWDOWN_CALL,
@@ -40,13 +44,17 @@ import {
   SHOT_DEAD_EYE,
   SHOT_HIT,
   SHOT_RANGE_UNIT,
+  SHOT_RIFLE,
+  SHOT_SHOTGUN,
   SHOT_WALL,
 } from '../../contract/town.ts'
 import { haptic } from '../../platform/haptics.ts'
 import type { Crowd } from '../scene/crowd.ts'
 import type { Effects } from '../scene/fx.ts'
+import type { Pickups } from '../scene/pickups.ts'
 import type { WireEvent } from '../sim/codec-events.ts'
-import { CALLOUT_ACCEPT_TICKS, TICK_MS } from '../sim/constants.ts'
+import { CALLOUT_ACCEPT_TICKS, SHOTGUN_CONE_DEG, SHOTGUN_RANGE, TICK_MS } from '../sim/constants.ts'
+import { TOWN } from '../sim/layout.ts'
 import { aimRadians } from '../sim/move.ts'
 import type { Hud } from './hud.ts'
 import type { NetClient } from './net.ts'
@@ -96,6 +104,7 @@ export interface Sink {
   /** Who killed you, for the poster. */
   killer: { id: number; flags: number } | null
   onLeft: () => void
+  pickups: Pickups
 }
 
 const DEAD_EYE_GOLD = new Color(3, 2.4, 0.8)
@@ -129,8 +138,8 @@ function onShot(s: Sink, ev: Extract<WireEvent, { type: typeof EV_SHOT }>): void
   const endZ = p.z + Math.sin(aim) * range
   if (ev.shooter !== you) {
     const m = s.muzzleOf(ev.shooter, p.x, p.z, aim)
-    s.fx.shot(m.x, m.y, m.z, aim, range, ev.flags & SHOT_DEAD_EYE ? DEAD_EYE_GOLD : undefined)
-    play(s, 'fire', p, 0.75, true)
+    shotFx(s, m, aim, range, ev.flags)
+    play(s, ev.flags & (SHOT_SHOTGUN | SHOT_RIFLE) ? 'fireBig' : 'fire', p, 0.75, true)
     if (ev.target === you) {
       s.kick(0.25)
     } else {
@@ -157,6 +166,73 @@ function onShot(s: Sink, ev: Extract<WireEvent, { type: typeof EV_SHOT }>): void
       play(s, 'ricochet', { x: endX, z: endZ }, 0.5)
     }
   }
+}
+
+const RIFLE_WHITE = new Color(3, 2.8, 2.2)
+const SHOTGUN_CONE = (SHOTGUN_CONE_DEG * Math.PI) / 180
+
+/** Tracer and flash for a shot, by weapon (a shotgun shell is one event: draw its fan). */
+export function shotFx(s: Sink, m: Vector3, aim: number, range: number, flags: number): void {
+  if (flags & SHOT_SHOTGUN) {
+    s.fx.pellets(m.x, m.y, m.z, aim, Math.min(range, SHOTGUN_RANGE), SHOTGUN_CONE / 2)
+  } else if (flags & SHOT_RIFLE) {
+    s.fx.shot(m.x, m.y, m.z, aim, range, RIFLE_WHITE)
+  } else {
+    s.fx.shot(m.x, m.y, m.z, aim, range, flags & SHOT_DEAD_EYE ? DEAD_EYE_GOLD : undefined)
+  }
+}
+
+function onPickups(s: Sink, ev: WireEvent, nowS: number): void {
+  const you = s.net.you
+  switch (ev.type) {
+    case EV_PICKUP_TAKEN: {
+      s.pickups.setAvailable(ev.spot, false)
+      const spot = TOWN.pickups[ev.spot]
+      if (spot && ev.player !== NONE) {
+        s.fx.sparkle(spot.x, spot.z, 8)
+        if (ev.player === you) {
+          s.hud.toast(PICKUP_TOAST[spot.kind] ?? spot.kind.toUpperCase(), 'gold', 1600)
+          play(s, 'cocking', null, 0.9)
+        }
+      }
+      break
+    }
+    case EV_PICKUP_READY:
+      s.pickups.setAvailable(ev.spot, true)
+      break
+    case EV_DYNAMITE_THROWN: {
+      const from = s.posOf(ev.player) ?? { x: ev.x / POS_SCALE, z: ev.z / POS_SCALE }
+      s.pickups.throw(
+        from.x,
+        from.z,
+        ev.x / POS_SCALE,
+        ev.z / POS_SCALE,
+        (ev.fuseTicks * TICK_MS) / 1000,
+        nowS,
+      )
+      play(s, 'whip', from, 0.6)
+      break
+    }
+    case EV_EXPLOSION: {
+      const x = ev.x / POS_SCALE
+      const z = ev.z / POS_SCALE
+      s.pickups.explode(x, z)
+      s.fx.explosion(x, z)
+      play(s, 'fireBig', { x, z }, 1.2, true)
+      const me = s.posOf(you)
+      const d = me ? Math.hypot(me.x - x, me.z - z) : 99
+      s.kick(Math.max(0, 0.6 - d * 0.03))
+      break
+    }
+    default:
+      break
+  }
+}
+
+const PICKUP_TOAST: Record<string, string> = {
+  shotgun: 'SHOTGUN: 2 shells, 9 m',
+  rifle: 'RIFLE: 5 rounds, 35 m',
+  dynamite: 'DYNAMITE: G or THROW to lob it (2 s fuse)',
 }
 
 function onDamage(s: Sink, ev: Extract<WireEvent, { type: typeof EV_DAMAGE }>): void {
@@ -389,6 +465,12 @@ export function handleEvent(s: Sink, ev: WireEvent): void {
       }
       break
     }
+    case EV_PICKUP_TAKEN:
+    case EV_PICKUP_READY:
+    case EV_DYNAMITE_THROWN:
+    case EV_EXPLOSION:
+      onPickups(s, ev, performance.now() / 1000)
+      break
     case EV_LEFT:
       if (ev.player === you) {
         s.onLeft()

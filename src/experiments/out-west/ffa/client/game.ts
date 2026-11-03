@@ -1,3 +1,5 @@
+// biome-ignore-all lint/complexity/noExcessiveCognitiveComplexity: the per-frame scene and HUD passes read many independent bits of state
+// biome-ignore-all lint/complexity/useMaxParams: small positional helpers on the hot path
 // biome-ignore-all lint/suspicious/noUnnecessaryConditions: lifecycle flags (running, exited, disposed) are mutated from callbacks and awaits; Biome narrows them to their initialisers
 // biome-ignore-all lint/style/noExcessiveLinesPerFile: the Frontier game loop ties the net, input, scene and HUD together in one place
 /**
@@ -51,6 +53,11 @@ import {
   SELF_MOST_WANTED,
   SELF_RELOADING,
   type ServerControl,
+  SHOT_RIFLE,
+  SHOT_SHOTGUN,
+  WEAPON_REVOLVER,
+  WEAPON_RIFLE,
+  WEAPON_SHOTGUN,
 } from '../../contract/town.ts'
 import { loadAssets } from '../../engine/assets.ts'
 import { Renderer } from '../../engine/render.ts'
@@ -62,6 +69,7 @@ import { Crowd, type CrowdPlayer } from '../scene/crowd.ts'
 import { CUT } from '../scene/cutaway.ts'
 import { Effects } from '../scene/fx.ts'
 import { lookFor } from '../scene/looks.ts'
+import { Pickups } from '../scene/pickups.ts'
 import { buildTown, type Town } from '../scene/town.ts'
 import type { WireEvent } from '../sim/codec-events.ts'
 import {
@@ -70,6 +78,11 @@ import {
   LEAVE_CHANNEL_TICKS,
   MAX_RANGE,
   RELOAD_TICKS,
+  REVOLVER_ROUNDS,
+  RIFLE_RANGE,
+  RIFLE_ROUNDS,
+  SHOTGUN_RANGE,
+  SHOTGUN_SHELLS,
   STAGE_CHANNEL_TICKS,
   STRONGBOX_CHANNEL_TICKS,
   TICK_HZ,
@@ -79,7 +92,14 @@ import { BLOCK_SHOT, rayGrid, TOWN } from '../sim/layout.ts'
 import { radiansToAim } from '../sim/move.ts'
 import { assistAim, currentAction } from './context.ts'
 import { DesktopControls } from './controls.ts'
-import { type Callout, handleControl, handleEvent, type Showdown, type Sink } from './events.ts'
+import {
+  type Callout,
+  handleControl,
+  handleEvent,
+  type Showdown,
+  type Sink,
+  shotFx,
+} from './events.ts'
 import { Hud } from './hud.ts'
 import type { RemoteView } from './interp.ts'
 import { Minimap } from './minimap.ts'
@@ -118,6 +138,7 @@ export class FrontierGame {
   private town: Town | null = null
   private crowd: Crowd | null = null
   private fx: Effects | null = null
+  private pickups: Pickups | null = null
   readonly hud: Hud
   private map: Minimap | null = null
   private readonly desk: DesktopControls
@@ -186,7 +207,7 @@ export class FrontierGame {
       onWelcome: () => this.onWelcome(),
       onControl: (m) => this.onControl(m),
       onEvent: (ev) => this.onEvent(ev),
-      onPredictedShot: (x, z, aim) => this.predictedShot(x, z, aim),
+      onPredictedShot: (x, z, aim, w) => this.predictedShot(x, z, aim, w),
     })
     this.sink = this.makeSink()
     globalThis.addEventListener('resize', this.onResize)
@@ -225,6 +246,9 @@ export class FrontierGame {
         game.killer = k
       },
       onLeft: () => this.exit('left'),
+      get pickups() {
+        return game.pickups as Pickups
+      },
     }
   }
 
@@ -291,6 +315,7 @@ export class FrontierGame {
     this.town = buildTown(TOWN, assets, SUN_DIR)
     this.scene.add(this.town.root)
     this.fx = new Effects(this.scene)
+    this.pickups = new Pickups(this.scene, TOWN.pickups, assets.props)
     const near = this.nearCap()
     this.crowd = new Crowd(this.scene, assets, near)
     this.map = new Minimap(TOWN, this.touch ? 112 : 148)
@@ -370,11 +395,14 @@ export class FrontierGame {
     }
   }
 
-  private predictedShot(x: number, z: number, aim: number): void {
+  private predictedShot(x: number, z: number, aim: number, weapon: number): void {
     const m = this.crowd?.muzzle(this.net.you, x, z, aim, this.tmp) ?? this.tmp.set(x, 1.3, z)
-    const wall = rayToWall(this.net, x, z, aim)
-    this.fx?.shot(m.x, m.y, m.z, aim, wall)
-    this.audio?.play('fire', { gain: 1, priority: true })
+    const range = WEAPON_UI[weapon]?.range ?? MAX_RANGE
+    const wall = rayToWall(this.net, x, z, aim, range)
+    if (this.fx) {
+      shotFx(this.sink, m, aim, wall, WEAPON_UI[weapon]?.shotFlag ?? 0)
+    }
+    this.audio?.play(weapon === WEAPON_REVOLVER ? 'fire' : 'fireBig', { gain: 1, priority: true })
     this.cam.kick(0.12)
     haptic('shot')
   }
@@ -565,9 +593,10 @@ export class FrontierGame {
       this.own.x,
       this.own.z,
       this.aim,
-      this.net.alive && aiming ? MAX_RANGE : null,
+      this.net.alive && aiming ? (WEAPON_UI[this.net.weapon.weapon]?.range ?? MAX_RANGE) : null,
       Boolean(this.touch?.aiming),
     )
+    this.pickups?.update(nowS, (x, y, z) => fx.spark(x, y, z))
     fx.update(dt, nowS)
     this.audio?.setListener(this.own.x, 8, this.own.z + 4, 0, -0.8, -0.6)
     this.wasAlive = this.net.alive
@@ -609,6 +638,11 @@ export class FrontierGame {
     const carrying = s.carried > 0
     for (const z of TOWN.zones) {
       fx.ring(z.x, z.z, z.r, carrying ? gold : new Color(0.5, 0.4, 0.2), carrying ? 3 : 0)
+    }
+    for (const [i, sp] of TOWN.pickups.entries()) {
+      if (this.pickups?.isAvailable(i)) {
+        fx.ring(sp.x, sp.z, 1.2, PICKUP_RING, 4)
+      }
     }
     if (this.net.alive) {
       const mine = s.flags & SELF_MOST_WANTED ? new Color(1.8, 1.4, 0.3) : new Color(1.2, 1, 0.7)
@@ -660,10 +694,15 @@ export class FrontierGame {
       : null
     this.actionBit = action?.bit ?? 0
     this.touch?.setAction(action?.bit ?? 0, action?.label ?? null)
+    const weapon = this.net.weapon
+    this.touch?.setThrow(weapon.dynamite && this.net.alive)
+    const wui = WEAPON_UI[weapon.weapon] ?? WEAPON_UI[WEAPON_REVOLVER]
     const ch = CHANNEL_LABEL[s.channelKind]
     this.hud.update({
       hp: s.hp,
       ammo: this.net.ammo,
+      weapon: { label: wui?.label ?? '', max: wui?.max ?? REVOLVER_ROUNDS },
+      dynamite: weapon.dynamite,
       reload: s.flags & SELF_RELOADING ? 1 - s.reloadTicks / RELOAD_TICKS : null,
       carried: s.carried,
       banked: this.net.banked,
@@ -846,7 +885,6 @@ export class FrontierGame {
   }
 }
 
-// biome-ignore lint/complexity/useMaxParams: a pure mapping of the self state
 function ownAnim(
   flags: number,
   rolling: boolean,
@@ -884,6 +922,20 @@ function ownFlags(selfFlags: number, prot: boolean): number {
   return f
 }
 
-function rayToWall(net: NetClient, x: number, z: number, aim: number): number {
-  return rayGrid(net.grid, x, z, Math.cos(aim), Math.sin(aim), MAX_RANGE, BLOCK_SHOT)
+function rayToWall(net: NetClient, x: number, z: number, aim: number, range: number): number {
+  return rayGrid(net.grid, x, z, Math.cos(aim), Math.sin(aim), range, BLOCK_SHOT)
+}
+
+const PICKUP_RING = new Color(1.4, 0.6, 0.3)
+
+/** HUD label, magazine, reach and tracer style per weapon. */
+const WEAPON_UI: Record<number, { label: string; max: number; range: number; shotFlag: number }> = {
+  [WEAPON_REVOLVER]: { label: '', max: REVOLVER_ROUNDS, range: MAX_RANGE, shotFlag: 0 },
+  [WEAPON_SHOTGUN]: {
+    label: 'SHOTGUN',
+    max: SHOTGUN_SHELLS,
+    range: SHOTGUN_RANGE,
+    shotFlag: SHOT_SHOTGUN,
+  },
+  [WEAPON_RIFLE]: { label: 'RIFLE', max: RIFLE_ROUNDS, range: RIFLE_RANGE, shotFlag: SHOT_RIFLE },
 }
