@@ -109,7 +109,7 @@ export class Hud {
     this.carriedEl = el('div', 'fr-carried', tc, '$0')
     el('div', 'fr-carried-label', tc, 'carried')
     this.bankedEl = el('div', 'fr-banked', tc, 'banked $0')
-    this.mwEl = el('div', 'fr-mw', tc, '★ MOST WANTED')
+    this.mwEl = el('div', 'fr-mw', tc, '★ MOST WANTED · +50% BOUNTY')
 
     const tr = el('div', 'fr-tr', this.root)
     this.mapSlot = el('div', 'fr-map-slot', tr)
@@ -266,10 +266,13 @@ export class Hud {
   }
 
   hurt(amount: number): void {
-    this.hurtEl.style.opacity = String(Math.min(0.9, 0.25 + amount / 70))
-    this.hurtEl.classList.remove('fade')
+    // Flash in instantly, then fade out (inline styles, so the fade always wins over the flash).
+    const st = this.hurtEl.style
+    st.transition = 'none'
+    st.opacity = String(Math.min(0.9, 0.25 + amount / 70))
     this.hurtEl.getBoundingClientRect()
-    this.hurtEl.classList.add('fade')
+    st.transition = 'opacity 0.6s ease-out'
+    st.opacity = '0'
   }
 
   hit(kill: boolean): void {

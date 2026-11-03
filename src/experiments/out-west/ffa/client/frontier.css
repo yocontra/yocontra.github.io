@@ -361,11 +361,6 @@
   background: radial-gradient(ellipse at center, transparent 45%, rgb(200 10 0 / 80%) 100%);
 }
 
-.fr-hurt.fade {
-  transition: opacity 0.6s ease-out;
-  opacity: 0;
-}
-
 .fr-reticle {
   position: absolute;
   left: -20px;
@@ -813,4 +808,34 @@
   from {
     opacity: 0;
   }
+}
+
+/* --- edge threat arrows ---------------------------------------------------------------------- */
+
+.fr-arrows {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.fr-arrow {
+  position: absolute;
+  left: -11px;
+  top: -9px;
+  width: 0;
+  height: 0;
+  border-top: 9px solid transparent;
+  border-bottom: 9px solid transparent;
+  border-left: 22px solid rgb(240 210 160 / 85%);
+  filter: drop-shadow(0 1px 2px rgb(0 0 0 / 70%));
+}
+
+.fr-arrow[data-tone="mw"] {
+  border-left-color: #ffd030;
+  filter: drop-shadow(0 0 6px #ffb000);
+}
+
+.fr-arrow[data-tone="aim"] {
+  border-left-color: #ff4a2a;
+  filter: drop-shadow(0 0 6px #ff2000);
 }

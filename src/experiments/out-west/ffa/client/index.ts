@@ -178,5 +178,22 @@ export function mountFrontier(root: HTMLElement, opts: FrontierOptions = {}): Fr
     debug: () => game.debug(),
   }
   Reflect.set(globalThis, '__frontier', () => game.debug())
+  const ap = game.autopilot
+  if (ap) {
+    // Dev harness: drive this page from Playwright (see client/autopilot.ts).
+    Reflect.set(globalThis, '__frontierPilot', {
+      go: (x: number, z: number) => {
+        const d = game.debug()
+        return ap.go(Number(d.x), Number(d.z), x, z)
+      },
+      stop: () => ap.stop(),
+      aimAt: (id: number) => ap.aimAt(id),
+      aimPoint: (x: number, z: number) => ap.aimPoint(x, z),
+      tap: (bit: number) => ap.tap(bit),
+      hold: (bit: number, on: boolean) => ap.hold(bit, on),
+      release: () => ap.release(),
+      walking: () => ap.walking,
+    })
+  }
   return handle
 }

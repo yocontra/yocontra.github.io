@@ -284,7 +284,12 @@ function onKill(s: Sink, ev: Extract<WireEvent, { type: typeof EV_KILL }>): void
   if (ev.killer === you && ev.victim !== you) {
     s.hud.hit(true)
     const paid = ev.flags & (KILL_PARDON | KILL_FARMED) ? 0 : ev.bounty
-    s.hud.toast(paid > 0 ? `+$${paid} BOUNTY` : 'NO BOUNTY', 'gold', 1400)
+    if (ev.flags & KILL_SHOWDOWN) {
+      // The showdown verdict owns the big toast; the bounty goes in the feed.
+      s.hud.feed(`+$${paid} bounty`, 'gold')
+    } else {
+      s.hud.toast(paid > 0 ? `+$${paid} BOUNTY` : 'NO BOUNTY', 'gold', 1400)
+    }
   }
   if (ev.victim === you) {
     s.killer = { id: ev.killer, flags: ev.flags }

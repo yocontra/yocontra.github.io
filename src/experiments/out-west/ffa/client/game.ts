@@ -90,6 +90,8 @@ import {
 } from '../sim/constants.ts'
 import { BLOCK_SHOT, rayGrid, TOWN } from '../sim/layout.ts'
 import { radiansToAim } from '../sim/move.ts'
+import { ThreatArrows } from './arrows.ts'
+import { Autopilot } from './autopilot.ts'
 import { assistAim, currentAction } from './context.ts'
 import { DesktopControls } from './controls.ts'
 import {
@@ -143,10 +145,15 @@ export class FrontierGame {
   private map: Minimap | null = null
   private readonly desk: DesktopControls
   private readonly touch: TouchControls | null
+  private readonly arrows: ThreatArrows
+  /** Dev-only (`?debug=…`): scripted input for multi-page tests. */
+  readonly autopilot: Autopilot | null
+  private lastMw = NONE
   private readonly audio: AudioEngine | null
   private readonly sun: DirectionalLight
   private readonly opts: GameOptions
   private raf = 0
+  private hiddenTimer: ReturnType<typeof setInterval> | null = null
   private last = 0
   private acc = 0
   private running = false
@@ -203,6 +210,7 @@ export class FrontierGame {
     })
     this.desk = new DesktopControls(root)
     this.touch = coarse ? new TouchControls(root) : null
+    this.arrows = new ThreatArrows(this.hud.root)
     this.net = new NetClient({
       onWelcome: () => this.onWelcome(),
       onControl: (m) => this.onControl(m),
@@ -210,6 +218,9 @@ export class FrontierGame {
       onPredictedShot: (x, z, aim, w) => this.predictedShot(x, z, aim, w),
     })
     this.sink = this.makeSink()
+    this.autopilot = new URLSearchParams(location.search).has('debug')
+      ? new Autopilot(this.net.grid)
+      : null
     globalThis.addEventListener('resize', this.onResize)
     globalThis.addEventListener('keydown', this.onKey)
     document.addEventListener('visibilitychange', this.onVisibility)
@@ -337,6 +348,7 @@ export class FrontierGame {
     this.running = true
     this.last = performance.now()
     this.raf = requestAnimationFrame(this.frame)
+    this.hiddenTimer = setInterval(this.hiddenTick, TICK_MS)
     onProgress(1, '')
   }
 
@@ -450,6 +462,16 @@ export class FrontierGame {
         assist = true
       }
     }
+    const ap = this.autopilot
+    if (ap?.active) {
+      const st = ap.steer(this.own.x, this.own.z, (id) => this.posOf(id))
+      if (ap.walking || st.mx !== 0 || st.mz !== 0) {
+        mx = st.mx
+        mz = st.mz
+      }
+      aim = st.aim ?? aim
+      buttons |= st.buttons
+    }
     if (aim === null) {
       // No pointer yet: face where you run.
       aim = Math.abs(mx) + Math.abs(mz) > 0 ? Math.atan2(mz, mx) : this.aim
@@ -478,15 +500,14 @@ export class FrontierGame {
 
   // --- frame ------------------------------------------------------------------------------------
 
-  private readonly frame = (now: number) => {
-    if (!this.running) {
-      return
-    }
-    this.raf = requestAnimationFrame(this.frame)
+  /**
+   * The 20 Hz input/prediction tick plus own and remote positions. Runs from the render loop, or
+   * from a timer while the tab is hidden (rAF stops; the socket and your input must not).
+   */
+  private simulate(now: number): number {
     const t0 = performance.now()
     const dtMs = Math.min(100, now - this.last)
     this.last = now
-    const dt = dtMs / 1000
     this.renderTick = this.net.renderTick(t0)
     this.acc += dtMs
     let ticks = 0
@@ -502,6 +523,23 @@ export class FrontierGame {
     }
     this.net.ownPosition(this.acc / TICK_MS, dtMs, this.own)
     this.remotes = [...this.net.views(this.renderTick)]
+    return dtMs
+  }
+
+  private readonly hiddenTick = () => {
+    if (this.running && document.hidden) {
+      this.simulate(performance.now())
+    }
+  }
+
+  private readonly frame = (now: number) => {
+    if (!this.running) {
+      return
+    }
+    this.raf = requestAnimationFrame(this.frame)
+    const t0 = performance.now()
+    const dtMs = this.simulate(now)
+    const dt = dtMs / 1000
     const t1 = performance.now()
     this.updateScene(dt, now / 1000)
     this.updateHud(now / 1000)
@@ -728,6 +766,8 @@ export class FrontierGame {
         s.respawnTicks / TICK_HZ,
       )
     }
+    this.announceMostWanted()
+    this.arrows.update(this.cam.camera, this.own.x, this.own.z, this.remotes)
     if (this.map && nowS - this.mapAt > 0.1) {
       this.mapAt = nowS
       this.drawMap(nowS)
@@ -778,6 +818,23 @@ export class FrontierGame {
     this.wasReady = ready
     if (flags & SELF_IN_SHOWDOWN) {
       this.hud.banner(null)
+    }
+  }
+
+  /** The Most Wanted changes hands: say so, with what their head is worth. */
+  private announceMostWanted(): void {
+    const mw = this.net.town?.mostWanted ?? NONE
+    if (mw === this.lastMw) {
+      return
+    }
+    this.lastMw = mw
+    if (mw === NONE) {
+      return
+    }
+    if (mw === this.net.you) {
+      this.hud.toast("YOU'RE MOST WANTED: +50% ON YOUR HEAD", 'gold', 2600)
+    } else {
+      this.hud.feed(`★ ${this.net.name(mw)} is Most Wanted: +50% bounty`, 'gold')
     }
   }
 
@@ -847,6 +904,9 @@ export class FrontierGame {
     this.disposed = true
     this.running = false
     cancelAnimationFrame(this.raf)
+    if (this.hiddenTimer) {
+      clearInterval(this.hiddenTimer)
+    }
     this.transport?.close()
     this.wind?.stop()
     globalThis.removeEventListener('resize', this.onResize)
@@ -881,6 +941,48 @@ export class FrontierGame {
       camDist: Math.round(this.cam.distance),
       x: Math.round(this.own.x * 10) / 10,
       z: Math.round(this.own.z * 10) / 10,
+      you: this.net.you,
+      alive: this.net.alive,
+      hp: this.net.self?.hp ?? 0,
+      carried: this.net.self?.carried ?? 0,
+      banked: this.net.banked,
+      selfFlags: this.net.self?.flags ?? 0,
+      channel: this.net.self?.channelKind ?? 0,
+      weapon: this.net.weapon,
+      ammo: this.net.ammo,
+      mostWanted: this.net.town?.mostWanted ?? NONE,
+      strongbox: this.net.town
+        ? {
+            spot: this.net.town.strongboxSpot,
+            state: this.net.town.strongboxState,
+            value: this.net.town.strongboxValue,
+          }
+        : null,
+      others: this.remotes.map((r) => ({
+        id: r.id,
+        x: Math.round(r.x),
+        z: Math.round(r.z),
+        alive: (r.flags & EF_ALIVE) !== 0,
+        carry: r.carry * 20,
+        flags: r.flags,
+      })),
+      bags: [...(this.fx?.bags.values() ?? [])].map((b) => ({
+        id: b.id,
+        x: b.x,
+        z: b.z,
+        amount: b.amount,
+      })),
+      pickups: TOWN.pickups.map((p, i) => ({
+        kind: p.kind,
+        x: p.x,
+        z: p.z,
+        up: this.pickups?.isAvailable(i) ?? false,
+      })),
+      showdowns: [...this.showdowns.values()].map((d) => ({
+        id: d.id,
+        opponent: d.opponent,
+        called: d.called,
+      })),
     }
   }
 }
