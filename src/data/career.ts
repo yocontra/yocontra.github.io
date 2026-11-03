@@ -10,15 +10,6 @@ export interface Role {
 
 export const career: readonly Role[] = [
   {
-    company: 'Veil Labs',
-    href: 'https://appari.sh',
-    title: 'Co-founder',
-    years: '2026 — now',
-    location: 'Phoenix',
-    blurb:
-      'A game studio building AI-native game experiences. Our first game is Apparish, a location-based ghost hunting game for iOS and Android.',
-  },
-  {
     company: 'Plaza',
     href: 'https://plaza.fyi',
     title: 'Co-founder',
@@ -26,6 +17,15 @@ export const career: readonly Role[] = [
     location: 'Phoenix',
     blurb:
       'A way for AI agents to work with the physical world: geocoding, routing, search and more across the entire OpenStreetMap planet, as an API and MCP server.',
+  },
+  {
+    company: 'Veil Labs',
+    href: 'https://appari.sh',
+    title: 'Co-founder',
+    years: '2026 — now',
+    location: 'Phoenix',
+    blurb:
+      'A game studio building AI-native game experiences. Our first game is Apparish, a location-based ghost hunting game for iOS and Android.',
   },
   {
     company: 'Trigram',
