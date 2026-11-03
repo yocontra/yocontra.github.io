@@ -14,10 +14,21 @@
     }
   ],
   "durable_objects": {
-    "bindings": [{ "name": "DUELS", "class_name": "DuelSession" }]
+    "bindings": [
+      { "name": "DUELS", "class_name": "DuelSession" },
+      { "name": "MATCHMAKER", "class_name": "Matchmaker" },
+      { "name": "DUEL_ROOMS", "class_name": "DuelRoom" },
+      { "name": "LOBBY_DIR", "class_name": "LobbyDirectory" },
+      { "name": "LOBBIES", "class_name": "Lobby" }
+    ]
   },
-  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["DuelSession"] }],
+  "migrations": [
+    { "tag": "v1", "new_sqlite_classes": ["DuelSession"] },
+    { "tag": "v2", "new_sqlite_classes": ["Matchmaker", "DuelRoom", "LobbyDirectory", "Lobby"] }
+  ],
   "vars": {
-    "ALLOWED_ORIGINS": "https://contra.io,http://localhost:4321"
+    "ALLOWED_ORIGINS": "https://contra.io,http://localhost:4321",
+    "RP_ID": "contra.io",
+    "RP_ORIGINS": "https://contra.io"
   }
 }

@@ -1,1 +1,4 @@
 TURNSTILE_SECRET=1x0000000000000000000000000000000AA
+AUTH_SECRET=dev-only-not-secret-change-me
+RP_ID=localhost
+RP_ORIGINS=http://localhost:4321
