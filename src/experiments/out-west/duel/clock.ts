@@ -1,4 +1,3 @@
-// biome-ignore-all lint/style/useThisInClassMethods: interface methods that are deliberate no-ops for this implementation
 import { planFakes } from './judge.ts'
 import { between, rng } from './state.ts'
 
@@ -59,6 +58,8 @@ export interface DuelClock {
   cancel: () => void
   dispose: () => void
 }
+
+const noop = (): void => undefined
 
 interface Timed {
   at: number
@@ -132,9 +133,8 @@ export class LocalDuelClock implements DuelClock {
     }
   }
 
-  shot(): void {
-    // practice is judged locally by the director
-  }
+  /** Practice shots are judged locally by the director. */
+  readonly shot: DuelClock['shot'] = noop
 
   cancel(): void {
     this.live = false
