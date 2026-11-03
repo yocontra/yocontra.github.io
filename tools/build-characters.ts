@@ -457,6 +457,8 @@ const toM4 = (a: ArrayLike<number>) => new Matrix4().fromArray(Array.from(a))
 
 interface Master {
   names: string[]
+  /** Leaf joint → its parent (weights move up). */
+  parent: Map<string, string>
   world: Map<string, Matrix4>
   doc: Document
 }
@@ -469,7 +471,14 @@ async function master(sex: 'M' | 'F'): Promise<Master> {
   }
   const names = skin.listJoints().map((j) => j.getName())
   const world = new Map(skin.listJoints().map((j) => [j.getName(), toM4(j.getWorldMatrix())]))
-  return { names, world, doc: d }
+  const parent = new Map<string, string>()
+  for (const j of skin.listJoints()) {
+    const up = j.getParentNode()
+    if (j.getName().includes('leaf') && up) {
+      parent.set(j.getName(), up.getName())
+    }
+  }
+  return { names, parent, world, doc: d }
 }
 
 function skinOf(d: Document, p: Primitive): { skin: Skin; node: GNode } | null {
@@ -532,7 +541,10 @@ async function extract(part: Part, m: Master): Promise<Geo | null> {
         let headW = 0
         for (let c = 0; c < 4; c++) {
           const w = ww[c] ?? 0
-          const name = jn[jj[c] ?? 0] ?? ''
+          // leaf joints (finger and toe tips) ride their parents: fewer bones to upload
+          const own = jn[jj[c] ?? 0] ?? ''
+          const name = m.parent.get(own) ?? own
+          const at = name === own ? (jj[c] ?? 0) : jn.indexOf(name)
           if (w <= 0) {
             jv.push(0)
             wv.push(0)
@@ -541,7 +553,7 @@ async function extract(part: Part, m: Master): Promise<Geo | null> {
           if (name === 'Head' || name === 'neck_01') {
             headW += w
           }
-          tmp.multiplyMatrices(m.world.get(name) ?? new Matrix4(), ibm[jj[c] ?? 0] ?? new Matrix4())
+          tmp.multiplyMatrices(m.world.get(name) ?? new Matrix4(), ibm[at] ?? new Matrix4())
           for (let q = 0; q < 16; q++) {
             acc.elements[q] = (acc.elements[q] ?? 0) + (tmp.elements[q] ?? 0) * w
           }
