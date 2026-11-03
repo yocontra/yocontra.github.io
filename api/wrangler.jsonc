@@ -4,12 +4,15 @@
   "main": "src/index.ts",
   "compatibility_date": "2026-10-01",
   "observability": { "enabled": true },
+  // The API is served on its own subdomain (same site as contra.io, so refresh cookies stay first-party).
+  // Requires the contra.io zone on Cloudflare (the DNS move at release; see RELEASE.md).
+  "routes": [{ "pattern": "api.contra.io", "custom_domain": true }],
   "triggers": { "crons": ["17 4 * * *"] },
   "d1_databases": [
     {
       "binding": "DB",
       "database_name": "contra-leaderboard",
-      // Placeholder for local dev. Replaced with the real id from `wrangler d1 create` before deploying.
+      // Local dev ignores this id. `bun scripts/release.ts` creates the production database and writes its id here.
       "database_id": "00000000-0000-0000-0000-000000000000",
       "migrations_dir": "migrations"
     }
@@ -28,7 +31,7 @@
     { "tag": "v2", "new_sqlite_classes": ["Matchmaker", "DuelRoom", "LobbyDirectory", "Lobby"] }
   ],
   "vars": {
-    "ALLOWED_ORIGINS": "https://contra.io,http://localhost:4321",
+    "ALLOWED_ORIGINS": "https://contra.io",
     "RP_ID": "contra.io",
     "RP_ORIGINS": "https://contra.io"
   }

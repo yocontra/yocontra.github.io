@@ -3,6 +3,7 @@
  * typed result and never throws: offline, rate limits and rejections become a
  * short, polite message and the game carries on.
  */
+import { API_URL } from './auth.ts'
 
 export interface BoardEntry {
   rank: number
@@ -13,11 +14,8 @@ export interface BoardEntry {
 
 export type Result<T> = { ok: true; value: T } | { ok: false; error: string }
 
-const FALLBACK = import.meta.env.DEV ? 'http://localhost:8787' : 'https://leaderboard.contra.io'
-const configured: unknown = import.meta.env.PUBLIC_LEADERBOARD_URL
-export const LEADERBOARD_URL = (
-  typeof configured === 'string' && configured ? configured : FALLBACK
-).replace(/\/+$/u, '')
+/** The leaderboard lives on the one API host (`api.contra.io` in production). */
+export const LEADERBOARD_URL = API_URL
 
 const TIMEOUT_MS = 8000
 const NAME_KEY = 'out-west-3d-name'

@@ -25,10 +25,17 @@ jobs:
         with:
           bun-version-file: package.json
       - run: bun install --frozen-lockfile
+      - name: Require production config
+        env:
+          PUBLIC_TURNSTILE_SITEKEY: ${{ vars.TURNSTILE_SITEKEY }}
+        run: |
+          test -n "$PUBLIC_TURNSTILE_SITEKEY" || { echo "Set the TURNSTILE_SITEKEY repository variable"; exit 1; }
       - run: bun run check
       - run: bun run build
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PUBLIC_API_URL: https://api.contra.io
+          PUBLIC_TURNSTILE_SITEKEY: ${{ vars.TURNSTILE_SITEKEY }}
       - uses: actions/upload-pages-artifact@v4
         with:
           path: dist
