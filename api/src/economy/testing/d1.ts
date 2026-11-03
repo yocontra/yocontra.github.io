@@ -48,7 +48,7 @@ export async function testDb(): Promise<TestDb> {
     DB: db,
     ALLOWED_ORIGINS: 'http://localhost:4343',
     TURNSTILE_SECRET: '',
-    AUTH_SECRET: 'test',
+    AUTH_SECRET: 'test-secret-for-economy-route-tests-only-0123456789',
     RP_ID: 'localhost',
     RP_ORIGINS: 'http://localhost:4343',
   } as unknown as Env
