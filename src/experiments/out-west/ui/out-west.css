@@ -205,7 +205,8 @@ body {
   position: absolute;
   left: 0;
   right: 0;
-  top: max(9%, calc(var(--ow-sai-t) + 52px));
+  /* clear of the purse line (top + 32 px, 24 px tall) on short phones */
+  top: max(9%, calc(max(var(--ow-s3), var(--ow-sai-t)) + 64px));
   text-align: center;
   font-family: var(--ow-font-display);
   font-size: min(96px, 15vw);
@@ -332,6 +333,9 @@ body {
 .ow-card-title {
   font-family: var(--ow-font-display);
   font-size: var(--ow-fs-h3);
+  /* an outlaw's (or a 16-letter player's) name: wrap rather than run off the torn paper */
+  text-wrap: balance;
+  overflow-wrap: anywhere;
   line-height: 1;
   letter-spacing: var(--ow-track-display);
   text-transform: uppercase;

@@ -226,6 +226,11 @@
   letter-spacing: 0.04em;
 }
 .ow-credits a {
+  /* a 44 px tap target, without changing the line it sits on */
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--ow-tap);
+  margin-block: -12px;
   color: var(--ow-red);
 }
 @media (max-aspect-ratio: 1 / 1) {

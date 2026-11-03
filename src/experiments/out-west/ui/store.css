@@ -31,32 +31,50 @@
 .ow-store.on {
   transform: none;
 }
+/*
+ * Title and Done on the first line, the purse (or the signed-out note) on its own line under the
+ * title: nothing in the head ever has to share a line with text of unknown length.
+ */
 .ow-store-head {
-  display: flex;
+  container-type: inline-size;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-areas:
+    "title done"
+    "purse done";
   align-items: center;
-  gap: var(--ow-s3);
+  gap: 2px var(--ow-s3);
   padding-bottom: 12px;
   border-bottom: 1px solid var(--ow-rule);
 }
 .ow-store-head .ow-hub-h {
-  flex: 1;
-  font-size: var(--ow-fs-h2);
+  grid-area: title;
+  min-width: 0;
+  /* one wood-type word: shrinks with the case rather than running under the purse */
+  font-size: clamp(var(--ow-fs-h4), 9cqi, var(--ow-fs-h2));
+  overflow-wrap: anywhere;
 }
 .ow-store-head .ow-btn {
+  grid-area: done;
   min-height: var(--ow-tap);
   padding: 0 var(--ow-s3);
   font-size: var(--ow-fs-body);
 }
 .ow-store-purse {
-  display: inline-flex;
+  grid-area: purse;
+  display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 6px;
+  min-width: 0;
   font-family: var(--ow-font-num);
   font-weight: 500;
   font-size: var(--ow-fs-lead);
   font-variant-numeric: lining-nums tabular-nums;
   color: var(--ow-brass-hi);
-  white-space: nowrap;
+}
+.ow-store-purse:empty {
+  display: none;
 }
 .ow-store-purse.guest {
   font-family: var(--ow-font-text);
@@ -111,8 +129,8 @@
   border-bottom-color: var(--ow-red-hi);
 }
 .ow-store-list {
-  flex: 1;
-  min-height: 0;
+  flex: 1 1 0;
+  min-height: 7rem;
   overflow-y: auto;
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(9.5rem, 1fr));
@@ -211,14 +229,21 @@
 .ow-item.locked .ow-item-tag {
   color: var(--ow-bone-2);
 }
+/* the picked piece: scrolls on its own when its dye job and buttons don't fit the case */
 .ow-store-detail {
-  flex: none;
+  flex: 0 1 auto;
   display: flex;
   flex-direction: column;
   gap: var(--ow-s2);
   min-height: 6rem;
+  max-height: 55%;
+  overflow-y: auto;
+  overscroll-behavior: contain;
   padding-top: 12px;
   border-top: 1px solid var(--ow-rule);
+}
+.ow-store-detail > * {
+  flex: none;
 }
 .ow-store-name {
   font-family: var(--ow-font-display);
@@ -232,11 +257,27 @@
 }
 
 /* landscape: every slot visible at once, no hidden tabs */
-@media (min-aspect-ratio: 1 / 1) {
+@media (min-aspect-ratio: 1 / 1) and (min-height: 481px) {
   .ow-store-tabs {
     flex-wrap: wrap;
     overflow-x: visible;
     mask-image: none;
+  }
+}
+/* short landscape phones: one scrolling strip of tabs, and a lower floor for the list and detail */
+@media (min-aspect-ratio: 1 / 1) and (max-height: 480px) {
+  .ow-store {
+    gap: var(--ow-s2);
+  }
+  .ow-store-head {
+    padding-bottom: var(--ow-s2);
+  }
+  .ow-store-list {
+    min-height: 5rem;
+  }
+  .ow-store-detail {
+    min-height: 4rem;
+    max-height: 45%;
   }
 }
 
@@ -257,10 +298,6 @@
   }
   .ow-store-head {
     gap: var(--ow-s2);
-  }
-  .ow-store-head .ow-hub-h {
-    min-width: 0;
-    font-size: var(--ow-fs-h4);
   }
   .ow-store-purse {
     font-size: var(--ow-fs-body);

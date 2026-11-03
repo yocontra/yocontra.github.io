@@ -79,6 +79,14 @@ const SINK_LABEL: Readonly<Record<string, string>> = {
   // biome-ignore-end lint/style/useNamingConvention: ledger kinds are snake_case on the wire
 }
 
+/** Your name on the plate, sized by its length so it always fits (see hub.css). */
+function nameplate(strip: HTMLElement, name: string): void {
+  el('div', 'ow-hub-name', strip, name).style.setProperty(
+    '--ow-name-len',
+    String(Math.max(1, [...name].length)),
+  )
+}
+
 export class Hub {
   readonly root: HTMLElement
   private readonly deps: HubDeps
@@ -191,7 +199,7 @@ export class Hub {
     this.strip.replaceChildren()
     const me = this.me
     if (!me) {
-      el('div', 'ow-hub-name', this.strip, signedIn ? (currentPlayer()?.name ?? '') : 'Stranger')
+      nameplate(this.strip, signedIn ? (currentPlayer()?.name ?? '') : 'Stranger')
       el(
         'div',
         'ow-hub-meta',
@@ -204,7 +212,7 @@ export class Hub {
       return
     }
     const prog = levelProgress(me.xp)
-    el('div', 'ow-hub-name', this.strip, me.name)
+    nameplate(this.strip, me.name)
     const stars = me.prestige > 0 ? ` · ${'★'.repeat(me.prestige)}` : ''
     el(
       'div',

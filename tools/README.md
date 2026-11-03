@@ -12,6 +12,7 @@ reuse freely. Every third-party or generated asset gets a line in
 | `build-characters.ts` | The textured character bases + clips + shared character atlas from Quaternius's CC0 Universal Base Characters, Modular Outfits – Fantasy and Universal Animation Library (see the file header)                           | the unzipped packs, `sharp`, gltf-transform, meshoptimizer                     |
 | `build-props.ts`      | `models/props.glb` + the trim atlas `tex/kit_*.webp` from Quaternius's CC0 Medieval Village and Fantasy Props MegaKits (doors, windows, rails, barrels, crates, wagon...), the re-UV'd revolver and the dynamite bundle  | the unzipped kits, `tools/art/props-src.glb`                                   |
 | `make-luts.ts`        | Export the in-game time-of-day grades (`engine/lut.ts`) as 32³ `.cube` files for a colourist                                                                                                                             | none                                                                           |
+| `ui-audit.ts`         | UI layout audit of every game screen at five sizes in real Chrome: text overflow, clipping, ellipses on short text, overlapping text, tap targets, game fonts on controls, dead primary buttons. See below               | a dev server, a local API, Playwright                                          |
 | `float-audit.ts`      | Floating-object audit of both scenes (duel street, Frontier) at both tiers in real Chrome: floaters, kit pieces off their wall, props sunk into a deck, z-fighting faces; `--shots=dir` saves low-angle views. See below | a dev server, Playwright                                                       |
 | `art/`                | Source art for generated textures (e.g. `signboard_src.webp`, Gemini)                                                                                                                                                    |                                                                                |
 | `audio/`              | The soundtrack: `manifest.ts` (every ElevenLabs prompt), `generate.ts`, `recipes.ts` + `build.ts` (master to −16/−18 LUFS, ≤ −1 dBTP, loop points), `loudness.ts` (report), `verify-duel.ts` (in-browser meters)         | `ffmpeg` (with `aac_at`), Apparish generators, Playwright for `verify-duel.ts` |
@@ -82,6 +83,40 @@ wall), a foot buried under a deck, and coplanar same-facing overlaps. Lanterns, 
 bags hang by design and are listed with their mount distance. Every scene and tier passes with zero
 failures (the clock tower replacement fixed the last ones). The duel street's dressing is placed at
 random, so rerun before chasing a one-off barrel/crate z-fight.
+
+## UI audit
+
+```bash
+PUBLIC_API_URL=http://localhost:8811 bun run dev --port 4371      # another shell
+bunx wrangler dev --config api/wrangler.jsonc --local --port 8811 --infer-origin-from-routes=false
+bun tools/ui-audit.ts                          # every screen x every size; exit 1 on any finding
+bun tools/ui-audit.ts --size=375x812 --screen=store --shots=after   # one size, matching screens, PNGs
+bun tools/ui-audit.ts --guest                  # signed-out screens and fixtures only (no account)
+```
+
+Sizes: 375x812 and 812x375 (touch, DPR 3), 390x844, 360x740 (touch), 1440x900 (mouse). Screens are
+reached by playing where that's quick (title, credits, the hub and every hub sheet, the Outfitter's
+tabs and a dye job, both leaderboard tabs, account and delete, profile, report, the queue, the
+licence gate, notices, prestige, the closed town, the Frontier practice HUD and pause). The rest are
+mounted from `ui-audit/fixtures.ts` with worst-case data, through the game's own UI classes: the duel
+HUD, the call, the card, pause, the gauntlet ledger, the match intro, every results state (win,
+loss, froze, draw, coward, forfeit, dodge, ghost, room closed, opponent left, line dead, pending)
+and the Frontier death card, riders list and an everything-on HUD. Names are 16 wide capitals, the
+server's maximum.
+
+Signed-in state is set up directly, not played: a passkey account on a CDP virtual authenticator,
+then SQL on the local D1 (level 12 and unlicensed, then level 50, $1,234,567, licensed, the whole
+catalog), with an away report and a closed town injected into `/me` and `/town/lobbies`. Each run
+registers one account (the API allows 10 an hour per client). `.dev.vars` needs
+`RP_ORIGINS`/`ALLOWED_ORIGINS` set to the dev server's origin.
+
+`ui-audit/probe.ts` runs in the page. Per screen it reports: text outside its own box (measured with a
+Range, so leftward overflow counts too), text clipped by an ancestor or the screen edge, text faded
+by a scroll strip's edge mask, truncated short text (ellipsis or line clamp), overlapping lines of
+text, a heading row whose button wrapped under it, tap targets under 44 px (24 px with a mouse),
+controls whose font-family doesn't start with Ultra, Rye, EB Garamond or Oswald, and a disabled
+primary button on a results receipt. A step it can't reach (a control off screen) is a finding too.
+The Frontier kill feed and the dev toolbar are skipped.
 
 ## Runtime pieces that replace offline bakes (while Blender is unavailable)
 
