@@ -67,6 +67,7 @@ import {
   VatHats,
   vatFrame,
 } from './crowd/vat.ts'
+import { shareDepthByKind } from './depth-kinds.ts'
 import type { PlayerLook } from './looks.ts'
 import { kitMaterial, SHOTGUN_MUZZLE, shotgunMesh } from './shotgun.ts'
 
@@ -77,7 +78,14 @@ const LOD1_TRIS = 3000
 /** Running speed the Run clip was authored for (m/s). */
 const CLIP_RUN_SPEED = 5.2
 const ROLL_S = 0.35
-const MAX_ACTORS_EXTRA = 6
+/**
+ * Built actors kept beyond the skinned cap. A parked actor (off the graph) costs nothing per frame,
+ * only its geometry and bones in memory, while re-casting one is a full dress-and-bake plus a GPU
+ * upload (a frame spike); so riders who drift out and back in keep theirs.
+ */
+const MAX_ACTORS_EXTRA = 12
+/** An actor whose rider has been out of interest this long is freed even under the cap (s). */
+const PARK_S = 20
 /** Players this many ranks beyond the skinned cap get their actor built ahead of time. */
 const PREBUILD_RING = 4
 /** Characters read 25% bigger than life from the top-down camera (visual only; collision is the sim's). */
@@ -130,6 +138,8 @@ interface Member {
   anim: number
   animSince: number
   lastSeen: number
+  /** Distance rank this frame (0 = you); unranked members (out of interest) are Infinity. */
+  rank: number
   caster: boolean
   recoil: number
   /**
@@ -190,7 +200,9 @@ export class Crowd {
   /** Skinned cap (12 floor, 16 medium/high). */
   near: number
   private readonly order: CrowdPlayer[] = []
-  stats = { near: 0, far: 0, actors: 0, casters: 0 }
+  stats = { near: 0, far: 0, actors: 0, casters: 0, builds: 0 }
+  /** Actors cast so far (each is a full dress-and-bake; churn here is the crowd's main CPU cost). */
+  private builds = 0
 
   constructor(scene: Scene, assets: Assets, near: number) {
     this.scene = scene
@@ -220,8 +232,14 @@ export class Crowd {
     this.ring.renderOrder = 2
     this.root.add(this.ring)
     const def = propDef(assets.props, 'revolver', 0.32)
-    this.gun = def ? propObject(def) : null
     this.kit = kitMaterial(assets.props)
+    this.gun = def ? propObject(def) : null
+    // the revolver is a loose mesh too: the kit twin, not the town's instanced kit material
+    this.gun?.traverse((o) => {
+      if (o instanceof Mesh && !Array.isArray(o.material) && o.material.name === 'Kit') {
+        o.material = this.kit
+      }
+    })
     this.rifleDef = propDef(assets.props, 'rifle', RIFLE_LENGTH)
   }
 
@@ -291,6 +309,7 @@ export class Crowd {
       anim: -1,
       animSince: 0,
       lastSeen: 0,
+      rank: Number.POSITIVE_INFINITY,
       caster: false,
       recoil: 0,
       weapon: have?.weapon ?? WEAPON_REVOLVER,
@@ -357,7 +376,7 @@ export class Crowd {
       this.build(m, true)
       return true
     }
-    if (rank < this.near + PREBUILD_RING) {
+    if (rank < this.near + PREBUILD_RING && this.actorCount() < this.near + MAX_ACTORS_EXTRA) {
       this.scheduleBuild(m)
       return true
     }
@@ -390,6 +409,7 @@ export class Crowd {
     if (!this.assets.bodyNow(look.look.base)) {
       return
     }
+    this.builds++
     const actor = castActor(this.assets, {
       look: look.look,
       hat: look.hat,
@@ -406,6 +426,7 @@ export class Crowd {
     actor.root.position.y = -0.9
     pivot.add(actor.root)
     holder.add(pivot)
+    shareDepthByKind(holder)
     this.root.add(holder)
     actor.draw()
     // The revolver's hand slot (it was just drawn into it) carries the map weapons too.
@@ -551,7 +572,11 @@ export class Crowd {
     this.hats.reset()
     this.blobs.count = 0
     VAT_TIME.value = nowS
-    const s = { near: 0, far: 0, actors: 0, casters: 0 }
+    const s = { near: 0, far: 0, actors: 0, casters: 0, builds: this.builds }
+    this.rank(order)
+    // Free slots before building: the furthest actors go first, so a packed crowd keeps its
+    // nearest riders cast instead of dropping and re-baking them every few frames.
+    this.evict(nowS)
     const seen = new Set<number>()
     let built = false
     for (const [rank, p] of order.entries()) {
@@ -587,7 +612,6 @@ export class Crowd {
         m.wasNear = false
       }
     }
-    this.evict(nowS)
     for (const v of this.vats.values()) {
       v.commit()
     }
@@ -765,18 +789,57 @@ export class Crowd {
     this.blobs.setMatrixAt(this.blobs.count++, m4)
   }
 
-  /** Free actors of players far away or gone for a while, keeping at most near + 6. */
+  /** Each member's distance rank this frame (`order` is sorted nearest first). */
+  private rank(order: readonly CrowdPlayer[]): void {
+    for (const m of this.members.values()) {
+      m.rank = Number.POSITIVE_INFINITY
+    }
+    for (const [rank, p] of order.entries()) {
+      const m = this.members.get(p.id)
+      if (m) {
+        m.rank = rank
+      }
+    }
+  }
+
+  private actorCount(): number {
+    let n = 0
+    for (const m of this.members.values()) {
+      n += m.actor ? 1 : 0
+    }
+    return n
+  }
+
+  /**
+   * Keep at most near + 12 actors. Actors gone from interest for 20 s go first, then the furthest
+   * by rank; anyone inside the prebuild ring (rank < near + 4) is never evicted, so a rider is
+   * only re-cast after he really left the ring (each cast is a full dress-and-bake).
+   */
   private evict(nowS: number): void {
-    const withActor = [...this.members.values()].filter((m) => m.actor)
     const cap = this.near + MAX_ACTORS_EXTRA
-    if (withActor.length <= cap) {
+    const keep = this.near + PREBUILD_RING
+    const withActor: Member[] = []
+    for (const m of this.members.values()) {
+      if (m.actor && m.rank !== 0) {
+        if (m.rank === Number.POSITIVE_INFINITY && nowS - m.lastSeen > PARK_S) {
+          this.dropActor(m)
+        } else {
+          withActor.push(m)
+        }
+      }
+    }
+    // one slot spare, so a rider entering the ring can be cast without waiting a frame
+    let over = withActor.length + 1 - cap
+    if (over <= 0) {
       return
     }
-    withActor.sort((a, b) => Number(a.wasNear) - Number(b.wasNear) || a.lastSeen - b.lastSeen)
-    for (const m of withActor.slice(0, withActor.length - cap)) {
-      if (!m.wasNear || nowS - m.lastSeen > 5) {
-        this.dropActor(m)
+    withActor.sort((a, b) => b.rank - a.rank)
+    for (const m of withActor) {
+      if (over <= 0 || m.rank < keep) {
+        break
       }
+      this.dropActor(m)
+      over--
     }
   }
 

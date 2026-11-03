@@ -120,7 +120,7 @@ describe('LobbyCore', () => {
       core.tick(t * 50)
     }
     expect(core.world.players.filter((p) => p?.bot && !p.gone).length).toBeGreaterThan(0)
-    core.ambientBots = false
+    core.ambientPopulation = 0
     for (let t = 20; t < 40; t++) {
       core.tick(t * 50)
     }

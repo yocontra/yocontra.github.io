@@ -14,6 +14,7 @@ import { getProfile } from '../economy/profile.ts'
 import type { Env } from '../env.ts'
 import { FLAG_BADLANDS, flagStatements, isShadowed, standing } from '../moderation/flags.ts'
 import {
+  DEFAULT_TOWN_POPULATION,
   type Departure,
   FLAG_AIMBOT,
   LobbyCore,
@@ -120,10 +121,10 @@ export class Lobby extends DurableObject<Env> {
     const bots = Number(botsHeader)
     if (this.dev() && botsHeader !== '' && Number.isInteger(bots) && bots >= 0) {
       if (bots === 0) {
-        core.ambientBots = false
+        core.ambientPopulation = 0
         core.botTarget = 0
       } else {
-        core.ambientBots = true
+        core.ambientPopulation = DEFAULT_TOWN_POPULATION
         core.botTarget = Math.min(MAX_DEV_BOTS, Math.max(core.botTarget, bots))
       }
     }

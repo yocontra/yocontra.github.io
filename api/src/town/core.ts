@@ -135,18 +135,16 @@ export class LobbyCore {
   world: World
   readonly sessions = new Map<number, Session>()
   private readonly byAccount = new Map<string, Session>()
-  private readonly bots: BotDirector
+  /** The bots' brains (dev harnesses set `rally` on it; see `BotDirector.rally`). */
+  readonly bots: BotDirector
   private readonly judge: ShowdownJudge
   private readonly writer = new Writer(4096)
   /** When each tick's snapshots went out (ms), for RTT from input acks. */
   private readonly sentAt = new Float64Array(64)
   /** Extra bots asked for (dev / load tests), on top of the default town population. */
   botTarget = 0
-  /**
-   * Whether bots fill the town up to `DEFAULT_TOWN_POPULATION`. Dev-only `?bots=0` turns this off
-   * (humans only, for end-to-end tests); production lobbies always keep it on.
-   */
-  ambientBots: boolean = true
+  /** Bodies bots keep the town at while a human is in; only dev `?bots=0` sets it to 0. */
+  ambientPopulation = DEFAULT_TOWN_POPULATION
   readonly metrics: CoreMetrics = { ticks: 0, bytesOut: 0, msgsOut: 0, msgsIn: 0, droppedIn: 0 }
 
   constructor(lobbyId: string, seed: number) {
@@ -409,8 +407,7 @@ export class LobbyCore {
     // Ambient bots stay under the soft cap (room for humans); an explicit dev/load-test target may
     // fill all 32 slots (a joining human still sends one home).
     const cap = (this.botTarget > 0 ? MAX_PLAYERS : SOFT_CAP) - humans
-    const ambient = this.ambientBots ? DEFAULT_TOWN_POPULATION - humans : 0
-    const wanted = Math.max(0, Math.min(cap, Math.max(this.botTarget, ambient)))
+    const wanted = Math.min(cap, Math.max(this.botTarget, this.ambientPopulation - humans, 0))
     let bots = 0
     const names = new Set<string>()
     for (const p of activePlayers(this.world)) {

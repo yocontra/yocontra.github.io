@@ -126,6 +126,9 @@ const additive = (map: MeshBasicMaterial['map'] = null) =>
     blending: AdditiveBlending,
     depthWrite: false,
     side: DoubleSide,
+    // additive and no depth write: back-then-front passes change nothing but cost a program
+    // re-resolve each (three.js flips `side` and bumps the material version per draw)
+    forceSinglePass: true,
     toneMapped: false,
   })
 
@@ -242,6 +245,7 @@ export class Effects {
         blending: AdditiveBlending,
         depthWrite: false,
         side: DoubleSide,
+        forceSinglePass: true,
         toneMapped: false,
       }),
     )

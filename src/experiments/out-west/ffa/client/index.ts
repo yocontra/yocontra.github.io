@@ -35,6 +35,8 @@ export interface FrontierOptions {
   jitterMs?: number
   /** Loopback only: your name. */
   name?: string
+  /** Loopback only (perf harness): the bots crowd around you and leave you be. */
+  cluster?: boolean
   /** Access token source for `/town/join` (defaults to the passkey session). */
   getToken?: () => Promise<string | null>
   /** Share the hub's audio engine (one AudioContext per page). */
@@ -140,6 +142,7 @@ export function mountFrontier(root: HTMLElement, opts: FrontierOptions = {}): Fr
               {
                 bots: opts.bots ?? 15,
                 ...(opts.name ? { name: opts.name } : {}),
+                ...(opts.cluster ? { cluster: true } : {}),
                 lagMs: opts.lagMs ?? 0,
                 jitterMs: opts.jitterMs ?? 0,
               },

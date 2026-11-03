@@ -27,6 +27,10 @@ const BANK_AT = 300
 const REPLAN_TICKS = 40
 const SCAN_TICKS = 4
 const AIM_ERROR_RAD = 0.06
+/** Dev `rally` only: bots further than this from the rally player stop fighting and walk back. */
+const RALLY_LEASH = 9
+/** Dev `rally` only: how far wide the crowd shoots (aim units: 65536 per turn, so ~25°). */
+const RALLY_MISS_AIM = 4600
 const FIRST_NAMES = ['Dusty', 'Lefty', 'Calamity', 'Doc', 'Mad', 'Silent', 'Coyote', 'Belle']
 const LAST_NAMES = ['Malone', 'Hollis', 'Black', 'Starling', 'Pike', 'Varga', 'Crowe', 'Tate']
 /** 64 distinct first × last names, ordered so neighbours share neither half. */
@@ -79,6 +83,11 @@ export class BotDirector {
   private readonly brains = new Map<number, BotBrain>()
   private readonly rng: Rng
   private nav: NavGrid | null = null
+  /**
+   * Dev perf harness only (the loopback's `?cluster`): every bot loiters within a few metres of
+   * this player and never targets them, so 20+ riders fight on screen around a live camera.
+   */
+  rally: number = NONE
 
   constructor(seed: number) {
     this.rng = new Rng(seed ^ 0x5e_ed)
@@ -114,6 +123,10 @@ export class BotDirector {
   }
 
   private pickGoal(w: World, p: Player): { x: number; z: number } {
+    const host = this.rally === NONE ? null : w.players[this.rally]
+    if (host?.alive) {
+      return { x: host.x + this.rng.range(-7, 7), z: host.z + this.rng.range(-5, 5) }
+    }
     if (p.carried >= BANK_AT) {
       const windows = w.layout.zones
       return windows[this.rng.int(0, windows.length - 1)] ?? { x: 72, z: 80 }
@@ -209,24 +222,39 @@ export class BotDirector {
       return f
     }
     if (w.tick >= b.scanAt) {
-      scanForTarget(w, p, b)
+      scanForTarget(w, p, b, this.rally)
     }
     const q = b.target >= 0 ? w.players[b.target] : null
-    if (q?.alive && p.carried < BANK_AT * 2) {
+    const host = this.rally === NONE ? null : w.players[this.rally]
+    const straying = host?.alive === true && dist2(p.x, p.z, host.x, host.z) > RALLY_LEASH ** 2
+    if (q?.alive && p.carried < BANK_AT * 2 && !straying) {
       this.fight({ w, p, b, q, f })
+      if (host) {
+        // A rally is a crowd, not a massacre: they shoot (tracers, muzzle flashes, sound) but
+        // mostly wide, so the crowd stays on its feet around you.
+        f.aim = (f.aim + RALLY_MISS_AIM) & 0xff_ff
+      }
     } else {
+      if (
+        straying &&
+        host &&
+        b.goal &&
+        dist2(b.goal.x, b.goal.z, host.x, host.z) > RALLY_LEASH ** 2
+      ) {
+        b.replanAt = 0
+      }
       this.walk(w, p, b, f)
     }
     return f
   }
 }
 
-function scanForTarget(w: World, p: Player, b: BotBrain): void {
+function scanForTarget(w: World, p: Player, b: BotBrain, spare: number): void {
   b.scanAt = w.tick + SCAN_TICKS
   b.target = -1
   let best = ENGAGE_RANGE ** 2
   for (const q of activePlayers(w)) {
-    if (q.id === p.id || !q.alive || q.showdown >= 0) {
+    if (q.id === p.id || q.id === spare || !q.alive || q.showdown >= 0) {
       continue
     }
     const d2 = dist2(p.x, p.z, q.x, q.z)

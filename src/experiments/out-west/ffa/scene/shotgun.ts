@@ -297,19 +297,36 @@ export function shotgunGeometry(): BufferGeometry {
 }
 
 /** The props' shared atlas material ("Kit", engine/assets.ts), or a plain vertex-coloured one. */
+const loose = new WeakMap<Material, Material>()
+
+/**
+ * The kit material for LOOSE meshes (guns in hands and holsters, pickups): a twin of the town's
+ * kit material (same maps, same shader patch, same program) that is never used by an
+ * InstancedMesh. Sharing one material between instanced and plain meshes makes three.js
+ * re-resolve its program on every switch between them, twice a frame.
+ */
 export function kitMaterial(props: GLTF | null): Material {
-  const found: Material[] = []
+  let found: Material | null = null
   const look = (o: Object3D): void => {
-    if (o instanceof Mesh && !Array.isArray(o.material) && o.material.name === 'Kit') {
-      found.push(o.material)
+    if (!found && o instanceof Mesh && !Array.isArray(o.material) && o.material.name === 'Kit') {
+      found = o.material
     }
   }
   for (const s of props?.scenes ?? []) {
     s.traverse(look)
   }
-  return (
-    found[0] ?? new MeshStandardMaterial({ vertexColors: true, roughness: 0.5, metalness: 0.4 })
-  )
+  const shared = found as Material | null
+  if (!shared) {
+    return new MeshStandardMaterial({ vertexColors: true, roughness: 0.5, metalness: 0.4 })
+  }
+  let twin = loose.get(shared)
+  if (!twin) {
+    twin = shared.clone()
+    twin.onBeforeCompile = shared.onBeforeCompile
+    twin.customProgramCacheKey = shared.customProgramCacheKey
+    loose.set(shared, twin)
+  }
+  return twin
 }
 
 /** One mesh of the coach gun (one draw). */

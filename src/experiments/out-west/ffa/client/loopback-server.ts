@@ -4,7 +4,11 @@
  * confirmed locally and touch no wallet. It exists so the client can be developed, demoed and
  * profiled with 31 bots and no account; the protocol is byte-for-byte the real one.
  */
-import { LobbyCore, type Session } from '../../../../../api/src/town/core.ts'
+import {
+  DEFAULT_TOWN_POPULATION,
+  LobbyCore,
+  type Session,
+} from '../../../../../api/src/town/core.ts'
 import { TICK_MS } from '../sim/constants.ts'
 
 export interface LoopbackOptions {
@@ -12,6 +16,8 @@ export interface LoopbackOptions {
   seed?: number
   name?: string
   banked?: number
+  /** Dev perf harness: the bots crowd around you (and leave you be). */
+  cluster?: boolean
 }
 
 type Send = (data: Uint8Array | string) => void
@@ -31,7 +37,7 @@ export class LoopbackServer {
     this.core = new LobbyCore('loopback', opts.seed ?? Math.floor(Math.random() * 1e9))
     this.core.botTarget = Math.max(0, opts.bots)
     // `?bots=0` means an empty town, the same as on the dev server.
-    this.core.ambientBots = opts.bots > 0
+    this.core.ambientPopulation = opts.bots > 0 ? DEFAULT_TOWN_POPULATION : 0
   }
 
   start(): void {
@@ -50,6 +56,9 @@ export class LoopbackServer {
       { send: (d) => this.send(d), close: () => this.stop() },
       now,
     )
+    if (this.opts.cluster && this.session) {
+      this.core.bots.rally = this.session.playerId
+    }
     this.startedAt = now
     this.timer = setInterval(() => this.pump(), 5)
   }
