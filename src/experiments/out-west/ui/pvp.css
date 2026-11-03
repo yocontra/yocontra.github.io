@@ -1,4 +1,4 @@
-/* out west: Bounty Hunt match intro and results (stream D). Tokens come from hub.css. */
+/* out west: Bounty Hunt match intro (two wanted posters) and the results receipt. Tokens: tokens.css. */
 /* ---------------------------------------------------------- match intro */
 .ow-match {
   position: absolute;
@@ -8,121 +8,187 @@
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 1rem;
-  padding: max(16px, var(--hub-sai-t)) max(16px, var(--hub-sai-r)) max(16px, var(--hub-sai-b))
-    max(16px, var(--hub-sai-l));
-  box-sizing: border-box;
-  background: radial-gradient(circle at 50% 45%, rgb(0 0 0 / 0.35), rgb(0 0 0 / 0.82));
+  gap: var(--ow-s3);
+  padding: max(var(--ow-s3), var(--ow-sai-t)) max(var(--ow-s3), var(--ow-sai-r))
+    max(var(--ow-s3), var(--ow-sai-b)) max(var(--ow-s3), var(--ow-sai-l));
+  background: radial-gradient(circle at 50% 45%, rgb(10 6 4 / 0.78), rgb(10 6 4 / 0.95));
   opacity: 0;
-  transition: opacity 0.3s;
+  transition: opacity var(--ow-t-mid);
 }
 .ow-match.on {
   opacity: 1;
 }
 .ow-match-mode {
-  font-size: 0.9rem;
-  color: var(--hub-gold);
-  background: rgb(0 0 0 / 0.6);
-  padding: 0.3rem 0.8rem;
-  border: 1px solid var(--hub-gold);
+  padding: 4px var(--ow-s3);
+  font-weight: 700;
+  font-size: var(--ow-fs-lead);
+  font-variant-caps: all-small-caps;
+  letter-spacing: 0.16em;
+  color: var(--ow-brass-hi);
+  border-top: 1px solid var(--ow-brass);
+  border-bottom: 1px solid var(--ow-brass);
+  text-shadow: var(--ow-text-shadow);
 }
 .ow-match-mode.ghost {
-  color: #d8c8a0;
-  border-color: #d8c8a0;
+  color: var(--ow-bone-2);
   border-style: dashed;
+  border-color: var(--ow-bone-3);
 }
 .ow-match-posters {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: clamp(0.6rem, 3vw, 2rem);
+  gap: clamp(var(--ow-s2), 3vw, var(--ow-s5));
   width: 100%;
 }
 .ow-match-vs {
-  font-size: clamp(1.4rem, 5vw, 2.6rem);
-  color: var(--hub-red);
-  text-shadow: 0 3px 0 #000;
+  position: relative;
+  z-index: 2;
+  margin-inline: calc(-1 * var(--ow-s4));
+  font-family: var(--ow-font-ornate);
+  font-size: clamp(1.75rem, 6vw, 3rem);
+  color: var(--ow-red-hi);
+  text-transform: uppercase;
+  text-shadow:
+    0 3px 0 #000,
+    0 0 24px rgb(0 0 0 / 0.8);
+  animation: ow-stamp 0.4s 0.5s var(--ow-ease-slam) both;
+  --ow-stamp-rot: 0deg;
 }
 .ow-match-status {
-  font-family: Georgia, serif;
-  text-transform: none;
-  letter-spacing: 0.03em;
-  font-size: 1rem;
-  min-height: 1.4em;
+  min-height: 1.45em;
+  font-size: var(--ow-fs-lead);
+  font-style: italic;
+  font-variant-numeric: lining-nums tabular-nums;
   text-align: center;
+  color: var(--ow-bone);
+  text-shadow: var(--ow-text-shadow);
 }
 .ow-match .ow-hub-row {
-  width: min(24rem, 100%);
-}
-.ow-wanted {
-  --frame: #8a6a42;
-  width: min(15rem, 40vw);
-  box-sizing: border-box;
-  padding: 0.9rem 0.8rem 0.8rem;
-  color: #2a1a10;
-  text-align: center;
-  background:
-    radial-gradient(circle at 30% 20%, rgb(255 255 255 / 0.25), transparent 60%),
-    linear-gradient(180deg, #efe0bc, #d8c08e);
-  border: 8px solid var(--frame);
-  box-shadow:
-    inset 0 0 22px rgb(90 50 20 / 0.45),
-    0 14px 30px rgb(0 0 0 / 0.6);
-  display: flex;
-  flex-direction: column;
-  gap: 0.25rem;
-  animation: ow-slam 0.45s cubic-bezier(0.2, 1.4, 0.4, 1) both;
-}
-.ow-wanted-you {
-  transform: rotate(-2.5deg);
-}
-.ow-wanted-them {
-  transform: rotate(2deg);
-  animation-delay: 0.25s;
-}
-.ow-wanted[data-kind="ghost"],
-.ow-wanted[data-kind="outlaw"] {
-  filter: sepia(0.9) saturate(0.6) brightness(0.92);
-}
-@keyframes ow-slam {
-  from {
-    opacity: 0;
-    scale: 1.6;
-  }
-  to {
-    opacity: 1;
-    scale: 1;
-  }
-}
-.ow-wanted-head {
-  font-size: clamp(1rem, 3.4vw, 1.5rem);
-  color: #6a1f14;
-}
-.ow-wanted-name {
-  font-size: clamp(0.9rem, 3vw, 1.2rem);
-  line-height: 1.1;
-  overflow-wrap: anywhere;
-}
-.ow-wanted-meta,
-.ow-wanted-notes,
-.ow-wanted-kit {
-  font-family: Georgia, serif;
-  text-transform: none;
-  letter-spacing: 0.02em;
-  font-size: 0.75rem;
-}
-.ow-wanted-bounty {
-  font-size: clamp(1.2rem, 4.5vw, 1.9rem);
-  color: #6a1f14;
-}
-.ow-wanted-kit {
-  list-style: none;
-  margin: 0.2rem 0 0;
-  padding: 0.3rem 0 0;
-  border-top: 1px solid rgb(42 26 16 / 0.35);
+  width: min(26rem, 100%);
 }
 
-/* ---------------------------------------------------------- results */
+/* ---------------------------------------------- a wanted poster in the DOM */
+.ow-wanted {
+  --frame: #8a6a42;
+  --ow-stamp-rot: -2.5deg;
+  width: min(16rem, 40vw);
+  padding: 7px;
+  background:
+    linear-gradient(135deg, rgb(255 255 255 / 0.2), transparent 40%, rgb(0 0 0 / 0.3)), var(--frame);
+  box-shadow:
+    inset 0 0 0 1px rgb(0 0 0 / 0.5),
+    0 16px 32px rgb(0 0 0 / 0.65);
+  animation: ow-stamp 0.5s var(--ow-ease-slam) both;
+}
+.ow-wanted-them {
+  --ow-stamp-rot: 2deg;
+  animation-delay: 0.22s;
+}
+.ow-wanted-sheet {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: var(--ow-s3) var(--ow-s2) 14px;
+  color: var(--ow-ink);
+  text-align: center;
+  background:
+    var(--ow-tex-poster) center / cover,
+    var(--ow-paper);
+  -webkit-mask: var(--ow-mask-torn) center / 100% 100% no-repeat;
+  mask: var(--ow-mask-torn) center / 100% 100% no-repeat;
+}
+.ow-wanted[data-kind="ghost"] .ow-wanted-sheet,
+.ow-wanted[data-kind="outlaw"] .ow-wanted-sheet {
+  filter: sepia(0.5) saturate(0.7) brightness(0.9);
+}
+.ow-wanted-head {
+  font-family: var(--ow-font-display);
+  font-size: clamp(1.5rem, 4.4vw, 2.25rem);
+  line-height: 0.95;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+.ow-wanted-sub {
+  font-family: var(--ow-font-ornate);
+  font-size: var(--ow-fs-small);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ow-ink-2);
+}
+.ow-wanted-name {
+  margin-top: var(--ow-s2);
+  padding: 4px 0;
+  width: 100%;
+  font-family: var(--ow-font-display);
+  font-size: clamp(1rem, 3vw, 1.375rem);
+  line-height: 1.05;
+  text-transform: uppercase;
+  overflow-wrap: anywhere;
+  border-top: 2px solid var(--ow-ink);
+  border-bottom: 1px solid var(--ow-ink);
+}
+.ow-wanted-meta,
+.ow-wanted-notes {
+  font-size: var(--ow-fs-small);
+  font-variant-numeric: lining-nums;
+  line-height: 1.3;
+  color: var(--ow-ink-2);
+}
+.ow-wanted-meta {
+  font-weight: 600;
+  font-variant-caps: all-small-caps;
+  letter-spacing: 0.08em;
+  font-size: var(--ow-fs-body);
+}
+.ow-wanted-notes {
+  font-style: italic;
+}
+.ow-wanted-bounty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin: var(--ow-s1) 0;
+}
+.ow-wanted-amount {
+  font-family: var(--ow-font-display);
+  font-size: clamp(1.5rem, 5vw, 2.25rem);
+  line-height: 1;
+  color: var(--ow-red);
+}
+.ow-wanted-reward {
+  font-family: var(--ow-font-display);
+  font-size: var(--ow-fs-micro);
+  letter-spacing: 0.3em;
+  text-transform: uppercase;
+}
+.ow-wanted-kit {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  width: 100%;
+  list-style: none;
+  margin: var(--ow-s1) 0 0;
+  padding: 6px 0 0;
+  border-top: 1px solid var(--ow-rule-ink);
+  font-size: var(--ow-fs-small);
+  font-weight: 600;
+  line-height: 1.25;
+}
+.ow-wanted-kit li {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+.ow-wanted-kit .ow-icon {
+  width: 14px;
+  height: 14px;
+  color: var(--ow-ink-2);
+}
+
+/* ---------------------------------------------------------- results receipt */
 .ow-results {
   position: absolute;
   inset: 0;
@@ -130,85 +196,172 @@
   display: flex;
   align-items: flex-end;
   justify-content: center;
-  padding: max(16px, var(--hub-sai-t)) max(16px, var(--hub-sai-r)) max(16px, var(--hub-sai-b))
-    max(16px, var(--hub-sai-l));
-  box-sizing: border-box;
-  background: linear-gradient(180deg, transparent 30%, rgb(0 0 0 / 0.7));
+  padding: max(var(--ow-s3), var(--ow-sai-t)) max(var(--ow-s3), var(--ow-sai-r))
+    max(var(--ow-s3), var(--ow-sai-b)) max(var(--ow-s3), var(--ow-sai-l));
+  background: linear-gradient(180deg, transparent 25%, rgb(10 6 4 / 0.78));
   opacity: 0;
-  transition: opacity 0.35s;
+  transition: opacity var(--ow-t-mid);
 }
 .ow-results.on {
   opacity: 1;
 }
 .ow-results-panel {
-  width: min(32rem, 100%);
+  position: relative;
+  width: min(34rem, 100%);
   max-height: 100%;
   overflow-y: auto;
+  gap: 12px;
+  padding: var(--ow-s4) var(--ow-s4) var(--ow-s3);
+  animation: ow-paper-in var(--ow-t-slow) var(--ow-ease-out) both;
+  touch-action: pan-y;
 }
-.ow-results-loss .ow-results-panel {
-  border-color: #8a0f08;
-}
-.ow-results-even .ow-results-panel {
-  border-color: #c8a04a;
+.ow-results-kicker {
+  font-weight: 700;
+  font-size: var(--ow-fs-small);
+  font-variant-caps: all-small-caps;
+  letter-spacing: 0.22em;
+  color: var(--ow-ink-3);
+  text-align: center;
 }
 .ow-results-title {
+  --ow-stamp-rot: -2deg;
+  align-self: center;
   margin: 0;
+  padding: 6px var(--ow-s3) 2px;
+  max-width: 100%;
+  font-family: var(--ow-font-display);
   font-weight: 400;
-  font-size: clamp(1.5rem, 5vw, 2.2rem);
-  color: var(--hub-gold);
+  font-size: clamp(1.5rem, 6vw, 2.25rem);
+  line-height: 1;
+  letter-spacing: 0.02em;
+  text-align: center;
+  text-transform: uppercase;
+  color: var(--ow-ink);
+  border: 3px solid currentColor;
+  animation: ow-stamp 0.45s 0.25s var(--ow-ease-slam) both;
+}
+.ow-results-win .ow-results-title {
+  color: var(--ow-red);
 }
 .ow-results-loss .ow-results-title {
-  color: #ff5a40;
+  color: var(--ow-ink);
+}
+.ow-results-even .ow-results-title {
+  color: var(--ow-ink-2);
+  border-style: dashed;
+}
+.ow-results-sub {
+  text-align: center;
+  font-style: italic;
+  font-size: var(--ow-fs-lead);
 }
 .ow-results-draws {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 8px;
+  border-top: 2px solid var(--ow-ink);
+  border-bottom: 1px solid var(--ow-ink);
 }
 .ow-results-draw {
   display: flex;
   flex-direction: column;
   align-items: center;
-  padding: 0.5rem;
-  background: rgb(255 255 255 / 0.06);
+  padding: var(--ow-s2) 0;
+}
+.ow-results-draw + .ow-results-draw {
+  border-left: 1px solid var(--ow-rule-ink);
 }
 .ow-results-draw b {
-  font-weight: 400;
-  font-size: 1.4rem;
+  font-family: var(--ow-font-num);
+  font-weight: 600;
+  font-size: var(--ow-fs-h2);
+  line-height: 1;
+  font-variant-numeric: lining-nums tabular-nums;
 }
 .ow-results-who {
-  font-size: 0.7rem;
-  opacity: 0.7;
+  font-weight: 700;
+  font-size: var(--ow-fs-body);
+  font-variant-caps: all-small-caps;
+  letter-spacing: 0.14em;
+  color: var(--ow-ink-3);
 }
+/* level-up: a wax seal and a slammed stamp */
 .ow-results-level {
   display: none;
-  color: var(--hub-gold);
-  font-size: 0.95rem;
+  align-items: center;
+  justify-content: center;
+  gap: var(--ow-s3);
+  padding: var(--ow-s2) 0;
 }
 .ow-results-level.on {
-  display: block;
-  animation: ow-pulse 1.6s ease-in-out 2;
+  display: flex;
+}
+.ow-results-seal {
+  display: grid;
+  place-items: center;
+  width: 64px;
+  height: 64px;
+  flex: none;
+  padding-bottom: 2px;
+  font-family: var(--ow-font-display);
+  font-size: var(--ow-fs-h4);
+  color: #ffe6d6;
+  text-shadow: 0 1px 0 rgb(80 0 0 / 0.8);
+  background: var(--ow-img-seal) center / contain no-repeat;
+  --ow-stamp-rot: -10deg;
+  animation: ow-stamp 0.5s 0.6s var(--ow-ease-slam) both;
+}
+.ow-results-stamp {
+  --ow-stamp-rot: -4deg;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  color: var(--ow-red);
+  animation: ow-stamp 0.45s 0.75s var(--ow-ease-slam) both;
+}
+.ow-results-stamp b {
+  font-family: var(--ow-font-display);
+  font-weight: 400;
+  font-size: var(--ow-fs-h3);
+  line-height: 1;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.ow-results-stamp span {
+  font-weight: 700;
+  font-size: var(--ow-fs-body);
+  font-variant-caps: all-small-caps;
+  letter-spacing: 0.1em;
+  font-variant-numeric: lining-nums;
 }
 .ow-results-vote {
-  min-height: 1.2em;
-  font-family: Georgia, serif;
-  text-transform: none;
-  font-size: 0.9rem;
-  color: var(--hub-gold);
+  min-height: 1.45em;
+  font-size: var(--ow-fs-body);
+  font-style: italic;
+  text-align: center;
+  color: var(--ow-red);
+}
+.ow-results-vote:empty {
+  display: none;
 }
 
 /* ---------------------------------------------------------- portrait phones */
 @media (max-aspect-ratio: 1 / 1) {
+  .ow-match-vs {
+    margin-inline: -6px;
+    font-size: var(--ow-fs-h3);
+  }
   .ow-wanted {
     width: 42vw;
-    border-width: 6px;
-    padding: 0.6rem 0.5rem;
+    padding: 5px;
+  }
+  .ow-wanted-sheet {
+    padding: 12px 6px 10px;
+  }
+  .ow-wanted-kit {
+    font-size: var(--ow-fs-micro);
   }
   /* keep the kit on phones (it's how you size up his outfit), one piece and one line */
-  .ow-wanted-kit {
-    font-size: 0.65rem;
-    margin-top: 0.1rem;
-    padding-top: 0.2rem;
+  .ow-wanted-kit li {
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -216,21 +369,29 @@
   .ow-wanted-kit li + li {
     display: none;
   }
+  .ow-results-panel {
+    padding: var(--ow-s3);
+  }
 }
 /* short landscape phones */
 @media (max-height: 480px) and (min-aspect-ratio: 1 / 1) {
   .ow-wanted {
     width: min(12rem, 30vw);
-    padding: 0.5rem;
   }
   .ow-wanted-kit,
-  .ow-wanted-notes {
+  .ow-wanted-notes,
+  .ow-wanted-sub {
     display: none;
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .ow-wanted {
+  .ow-wanted,
+  .ow-match-vs,
+  .ow-results-panel,
+  .ow-results-title,
+  .ow-results-seal,
+  .ow-results-stamp {
     animation: none;
   }
 }

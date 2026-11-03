@@ -200,7 +200,7 @@ class Panel implements AccountPanel {
     }
     el('h2', 'ow-acct-title', head, titles[this.view])
     if (this.opts.onClose) {
-      const close = el('button', 'ow-acct-close', head, '✕')
+      const close = el('button', 'ow-acct-close', head, '×')
       close.type = 'button'
       close.setAttribute('aria-label', 'Close')
       close.addEventListener('click', () => this.opts.onClose?.())

@@ -14,9 +14,10 @@ import type { QueueMatch } from '../net/queue.ts'
 // TEMP: stream G's Frontier entry point (ffa/client/), until it exists
 import { mountFrontier } from '../stubs/frontier.ts'
 import { mountAccount } from './account.ts'
+import { icon } from './icons.ts'
 import { type GauntletChoice, gauntletSheet, type Mode, ModeTiles } from './mode-select.ts'
 import { QueueSheet } from './queue.ts'
-import { button, el, signedMoney, swallow } from './sheet.ts'
+import { button, el, setBar, signedMoney, swallow } from './sheet.ts'
 import { mountStanding } from './standing.ts'
 import { Outfitter } from './store.ts'
 
@@ -164,11 +165,15 @@ export class Hub {
     xp.setAttribute('aria-label', 'Experience')
     xp.setAttribute('aria-valuenow', String(prog.into))
     xp.setAttribute('aria-valuemax', String(prog.next))
-    el('div', 'ow-xp-fill', xp).style.width =
-      `${prog.next > 0 ? (prog.into / prog.next) * 100 : 100}%`
+    setBar(el('div', 'ow-xp-fill', xp), prog.next > 0 ? prog.into / prog.next : 1)
     const nums = el('div', 'ow-hub-nums', this.strip)
-    el('span', 'ow-hub-purse', nums, money(me.purse))
-    el('span', 'ow-hub-bounty', nums, `Bounty ${money(me.bounty || bountyForLevel(me.level))}`)
+    const purse = el('span', 'ow-hub-purse', nums)
+    purse.setAttribute('aria-label', `Purse ${money(me.purse)}`)
+    purse.append(icon('money'), money(me.purse))
+    const bounty = el('span', 'ow-hub-bounty', nums)
+    const b = money(me.bounty || bountyForLevel(me.level))
+    bounty.setAttribute('aria-label', `Bounty ${b}`)
+    bounty.append(icon('bounty'), b)
   }
 
   private pick(m: Mode): void {
@@ -259,13 +264,13 @@ export class Hub {
   }
 
   /** A panel over the hub with a close button; returns its body. */
-  private panel(title: string): HTMLElement {
+  private panel(title: string, paper = false): HTMLElement {
     this.closeSheet()
     const back = el('div', 'ow-sheet on', this.parent)
     back.setAttribute('role', 'dialog')
     back.setAttribute('aria-label', title)
     swallow(back)
-    const panel = el('div', 'ow-hub-panel ow-sheet-panel', back)
+    const panel = el('div', `ow-hub-panel ow-sheet-panel${paper ? ' ow-paper-doc' : ''}`, back)
     const head = el('div', 'ow-hub-row ow-sheet-head', panel)
     el('h2', 'ow-hub-h', head, title)
     button(head, 'Close', () => this.closeSheet())
@@ -296,7 +301,7 @@ export class Hub {
   }
 
   private openLedger(): void {
-    const body = this.panel('Ledger')
+    const body = this.panel('Ledger', true)
     if (!currentPlayer()) {
       el('p', 'ow-hub-note', body, 'Sign in to keep a ledger: every dollar and every point of XP.')
       return

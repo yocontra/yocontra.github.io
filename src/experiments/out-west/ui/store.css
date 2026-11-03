@@ -1,21 +1,31 @@
-/* out west: the Outfitter (stream D). Tokens come from hub.css. */
-/* ---------------------------------------------------------- Outfitter */
+/* out west: the Outfitter, a leather sample case beside your gunslinger. Tokens: tokens.css. */
 .ow-store {
   position: absolute;
   z-index: 30;
   top: 0;
   right: 0;
   bottom: 0;
-  width: min(28rem, 46vw);
+  width: min(30rem, 46vw);
   display: flex;
   flex-direction: column;
-  gap: 0.6rem;
-  padding: max(14px, var(--hub-sai-t)) max(16px, var(--hub-sai-r)) max(14px, var(--hub-sai-b)) 16px;
-  box-sizing: border-box;
-  background: linear-gradient(90deg, rgb(20 12 8 / 0.78), rgb(20 12 8 / 0.96) 22%);
-  border-left: 2px solid var(--hub-red);
+  gap: 12px;
+  padding: max(var(--ow-s3), var(--ow-sai-t)) max(var(--ow-s3), var(--ow-sai-r))
+    max(var(--ow-s3), var(--ow-sai-b)) var(--ow-s4);
+  color: var(--ow-bone);
+  background-color: #23150c;
+  background-image:
+    linear-gradient(90deg, rgb(10 6 4 / 0.5), transparent 12%),
+    radial-gradient(120% 80% at 30% 0%, rgb(255 210 160 / 0.1), transparent 55%),
+    var(--ow-tex-leather);
+  background-size:
+    100% 100%,
+    100% 100%,
+    256px 256px;
+  box-shadow:
+    inset 6px 0 0 -3px var(--ow-brass-lo),
+    -16px 0 40px rgb(0 0 0 / 0.5);
   transform: translateX(105%);
-  transition: transform 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
+  transition: transform var(--ow-t-mid) var(--ow-ease-out);
   touch-action: pan-y;
 }
 .ow-store.on {
@@ -24,38 +34,81 @@
 .ow-store-head {
   display: flex;
   align-items: center;
-  gap: 0.8rem;
+  gap: var(--ow-s3);
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--ow-rule);
 }
 .ow-store-head .ow-hub-h {
   flex: 1;
+  font-size: var(--ow-fs-h2);
+}
+.ow-store-head .ow-btn {
+  min-height: var(--ow-tap);
+  padding: 0 var(--ow-s3);
+  font-size: var(--ow-fs-body);
 }
 .ow-store-purse {
-  color: var(--hub-gold);
-  font-size: 0.85rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--ow-font-num);
+  font-weight: 500;
+  font-size: var(--ow-fs-lead);
+  font-variant-numeric: lining-nums tabular-nums;
+  color: var(--ow-brass-hi);
+  white-space: nowrap;
+}
+.ow-store-purse.guest {
+  font-family: var(--ow-font-text);
+  font-style: italic;
+  font-size: var(--ow-fs-small);
+  color: var(--ow-bone-2);
 }
 .ow-store-tabs {
   display: flex;
-  gap: 6px;
+  gap: 2px;
+  flex: none;
   overflow-x: auto;
   scrollbar-width: none;
-  flex: none;
   touch-action: pan-x;
+  border-bottom: 1px solid var(--ow-rule);
+  mask-image: linear-gradient(90deg, #000 88%, transparent);
+}
+.ow-store-tabs::-webkit-scrollbar {
+  display: none;
 }
 .ow-store-tab {
-  font: inherit;
-  font-size: 0.75rem;
-  letter-spacing: 0.1em;
-  color: #fff;
-  background: transparent;
-  border: 1px solid rgb(255 255 255 / 0.3);
-  padding: 0 0.75rem;
-  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: var(--ow-tap);
+  padding: 0 12px;
+  font-family: var(--ow-font-text);
+  font-weight: 600;
+  font-size: var(--ow-fs-lead);
+  font-variant-caps: all-small-caps;
+  letter-spacing: var(--ow-track-label);
   white-space: nowrap;
+  color: var(--ow-bone-2);
+  background: transparent;
+  border: 0;
+  border-bottom: 3px solid transparent;
   cursor: pointer;
+  transition:
+    color var(--ow-t-fast),
+    border-color var(--ow-t-fast);
+}
+.ow-store-tab .ow-icon {
+  width: 18px;
+  height: 18px;
+  opacity: 0.8;
+}
+.ow-store-tab:hover {
+  color: var(--ow-bone);
 }
 .ow-store-tab.on {
-  background: var(--hub-red);
-  border-color: var(--hub-red);
+  color: var(--ow-bone);
+  border-bottom-color: var(--ow-red-hi);
 }
 .ow-store-list {
   flex: 1;
@@ -64,77 +117,126 @@
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(9.5rem, 1fr));
   align-content: start;
-  gap: 8px;
+  gap: var(--ow-s2);
+  padding: 2px;
 }
 .ow-item {
-  --rar: #9a8a70;
-  font: inherit;
-  color: #fff;
-  text-align: left;
+  --rar: var(--ow-r-starter);
+  position: relative;
   display: flex;
   flex-direction: column;
-  gap: 0.25rem;
-  min-height: 5.4rem;
-  padding: 0.6rem 0.7rem;
-  background: rgb(255 255 255 / 0.05);
-  border: 2px solid rgb(255 255 255 / 0.14);
-  border-left: 4px solid var(--rar);
+  gap: 2px;
+  min-height: 6rem;
+  padding: 12px 12px 10px 14px;
+  font: inherit;
+  text-align: left;
+  color: var(--ow-bone);
+  background: linear-gradient(180deg, rgb(239 228 204 / 0.08), rgb(0 0 0 / 0.25));
+  border: 1px solid rgb(239 228 204 / 0.16);
+  border-radius: var(--ow-radius);
+  box-shadow: inset 3px 0 0 var(--rar);
   cursor: pointer;
+  transition:
+    transform var(--ow-t-fast) var(--ow-ease-out),
+    border-color var(--ow-t-fast),
+    background-color var(--ow-t-fast);
+}
+.ow-item:hover {
+  transform: translateY(-2px);
+  border-color: rgb(239 228 204 / 0.4);
 }
 .ow-item.r-common {
-  --rar: #c8c0b0;
+  --rar: var(--ow-r-common);
 }
 .ow-item.r-uncommon {
-  --rar: #6ac06a;
+  --rar: var(--ow-r-uncommon);
 }
 .ow-item.r-rare {
-  --rar: #4a9aff;
+  --rar: var(--ow-r-rare);
 }
 .ow-item.r-legendary {
-  --rar: #ffb020;
+  --rar: var(--ow-r-legendary);
+  background:
+    linear-gradient(135deg, rgb(232 180 67 / 0.14), transparent 50%),
+    linear-gradient(180deg, rgb(239 228 204 / 0.08), rgb(0 0 0 / 0.25));
 }
 .ow-item.r-reward {
-  --rar: #d06aff;
+  --rar: var(--ow-r-reward);
 }
 .ow-item.picked {
-  border-color: #fff;
-  border-left-color: var(--rar);
-  background: rgb(255 255 255 / 0.12);
+  border-color: var(--ow-brass-hi);
+  background-color: rgb(210 173 92 / 0.12);
+  box-shadow:
+    inset 3px 0 0 var(--rar),
+    0 0 0 1px var(--ow-brass-hi);
 }
-.ow-item.locked {
+.ow-item.locked .ow-item-name,
+.ow-item.locked .ow-icon {
   opacity: 0.55;
 }
+.ow-item .ow-icon {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  width: 22px;
+  height: 22px;
+  color: var(--rar);
+  opacity: 0.8;
+}
 .ow-item-rarity {
-  font-size: 0.65rem;
+  padding-right: 26px;
+  font-weight: 700;
+  font-size: var(--ow-fs-body);
+  font-variant-caps: all-small-caps;
+  letter-spacing: 0.1em;
+  line-height: 1.2;
   color: var(--rar);
 }
 .ow-item-name {
-  font-size: 0.85rem;
+  font-weight: 600;
+  font-size: var(--ow-fs-lead);
   line-height: 1.15;
 }
 .ow-item-tag {
   margin-top: auto;
-  font-family: Georgia, serif;
-  text-transform: none;
-  letter-spacing: 0.02em;
-  font-size: 0.8rem;
-  color: var(--hub-gold);
+  padding-top: 6px;
+  font-family: var(--ow-font-num);
+  font-weight: 500;
+  font-size: var(--ow-fs-body);
+  font-variant-numeric: lining-nums tabular-nums;
+  letter-spacing: 0.03em;
+  color: var(--ow-brass-hi);
+}
+.ow-item.locked .ow-item-tag {
+  color: var(--ow-bone-2);
 }
 .ow-store-detail {
   flex: none;
   display: flex;
   flex-direction: column;
-  gap: 0.45rem;
-  padding-top: 0.6rem;
-  border-top: 1px solid rgb(255 255 255 / 0.2);
-  min-height: 5.5rem;
+  gap: var(--ow-s2);
+  min-height: 6rem;
+  padding-top: 12px;
+  border-top: 1px solid var(--ow-rule);
 }
 .ow-store-name {
+  font-family: var(--ow-font-display);
   font-weight: 400;
-  font-size: 1.05rem;
+  font-size: var(--ow-fs-h4);
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
 }
 .ow-store-error {
-  color: #ff8a6a;
+  color: var(--ow-bad);
+}
+
+/* landscape: every slot visible at once, no hidden tabs */
+@media (min-aspect-ratio: 1 / 1) {
+  .ow-store-tabs {
+    flex-wrap: wrap;
+    overflow-x: visible;
+    mask-image: none;
+  }
 }
 
 /* ---------------------------------------------------------- portrait phones */
@@ -143,13 +245,17 @@
     top: auto;
     left: 0;
     width: 100%;
-    height: 56dvh;
-    padding: 12px max(12px, var(--hub-sai-r)) max(12px, var(--hub-sai-b))
-      max(12px, var(--hub-sai-l));
-    border-left: 0;
-    border-top: 2px solid var(--hub-red);
-    background: rgb(20 12 8 / 0.95);
+    height: 58dvh;
+    padding: var(--ow-s3) max(var(--ow-s3), var(--ow-sai-r)) max(var(--ow-s3), var(--ow-sai-b))
+      max(var(--ow-s3), var(--ow-sai-l));
+    border-radius: 10px 10px 0 0;
+    box-shadow:
+      inset 0 3px 0 var(--ow-brass-lo),
+      0 -16px 40px rgb(0 0 0 / 0.5);
     transform: translateY(105%);
+  }
+  .ow-store-head .ow-hub-h {
+    font-size: var(--ow-fs-h3);
   }
   .ow-store-list {
     grid-template-columns: repeat(auto-fill, minmax(8.5rem, 1fr));

@@ -1,9 +1,12 @@
 ---
 import Bare from '~/layouts/Bare.astro'
+import '~/experiments/out-west/ui/tokens.css'
+import '~/experiments/out-west/ui/controls.css'
 import '~/experiments/out-west/ui/out-west.css'
 import '~/experiments/out-west/ui/out-west-menus.css'
 import '~/experiments/out-west/ui/account.css'
 import '~/experiments/out-west/ui/hub.css'
+import '~/experiments/out-west/ui/sheets.css'
 ---
 
 <Bare
@@ -13,17 +16,12 @@ import '~/experiments/out-west/ui/hub.css'
   noindex
 >
   <Fragment slot="head">
-    <meta name="theme-color" content="#140c08" />
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link
-      rel="stylesheet"
-      href="https://fonts.googleapis.com/css2?family=Alfa+Slab+One&display=swap"
-    />
+    <meta name="theme-color" content="#120c08" />
   </Fragment>
   <main id="ow" class="ow ow-page">
+    <p class="ow-page-mark" aria-hidden="true">Out West</p>
     <div class="ow-hub-panel ow-page-panel">
-      <h1 class="ow-hub-h">out west</h1>
+      <h1 class="ow-hub-h">Sign in to the app</h1>
       <p class="ow-hub-note ow-page-status" aria-live="polite">
         Sign in with your passkey, then we’ll send you back to the app.
       </p>
@@ -35,16 +33,52 @@ import '~/experiments/out-west/ui/hub.css'
 <style is:global>
   .ow-page {
     display: flex;
+    flex-direction: column;
     align-items: center;
-    justify-content: center;
-    padding: max(16px, env(safe-area-inset-top)) 16px max(16px, env(safe-area-inset-bottom));
-    box-sizing: border-box;
-    background: radial-gradient(circle at 50% 30%, #3a1a10, #0a0604);
+    justify-content: safe center;
+    gap: var(--ow-s4);
+    padding: max(var(--ow-s4), var(--ow-sai-t)) var(--ow-s3) max(var(--ow-s4), var(--ow-sai-b));
+    background-color: var(--ow-night);
+    background-image:
+      radial-gradient(80% 60% at 50% 30%, rgb(110 64 30 / 0.35), transparent 70%),
+      var(--ow-tex-smoke);
+    background-size:
+      100% 100%,
+      384px 384px;
     overflow-y: auto;
     touch-action: pan-y;
   }
+  .ow-page-mark {
+    margin: 0;
+    font-family: var(--ow-font-ornate);
+    font-weight: 400;
+    font-size: clamp(2.5rem, 12vw, 4rem);
+    line-height: 0.9;
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+    color: var(--ow-red-hi);
+    text-shadow: 0 3px 0 #000;
+  }
   .ow-page-panel {
     width: min(30rem, 100%);
+    animation: ow-paper-in var(--ow-t-slow) var(--ow-ease-out) both;
+  }
+  .ow-page-back {
+    color: var(--ow-bone);
+    font-weight: 600;
+    font-variant-caps: all-small-caps;
+    letter-spacing: var(--ow-track-label);
+    font-size: var(--ow-fs-lead);
+    text-underline-offset: 4px;
+  }
+  .ow-page-back:focus-visible {
+    outline: 2px solid var(--ow-brass-hi);
+    outline-offset: 3px;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .ow-page-panel {
+      animation: none;
+    }
   }
 </style>
 
