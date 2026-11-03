@@ -29,3 +29,10 @@ export function bagColor(loadout: readonly string[]): number {
   const id = loadout.find((i) => i.startsWith('bag.'))
   return (id ? BAG_COLORS[id] : undefined) ?? PLAIN_BAG
 }
+
+/** Saddlebag looks by wire index (contract v2's `BAG_STYLES`, `EV_BAG_DROP.style`). */
+const BAG_STYLE_IDS = ['bag.plain-sack', 'bag.branded-satchel', 'bag.gold-thread'] as const
+
+/** The colour of a bag dropped with wire `style` (an unknown index is the plain sack). */
+export const bagStyleColor = (style: number): number =>
+  BAG_COLORS[BAG_STYLE_IDS[style] ?? 'bag.plain-sack'] ?? PLAIN_BAG

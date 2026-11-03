@@ -173,6 +173,11 @@
   color: var(--ow-brass);
   white-space: nowrap;
 }
+.ow-hub-links .ow-btn {
+  flex: 1 1 0;
+  padding: 0 var(--ow-s2);
+  background-color: rgb(10 6 4 / 0.7);
+}
 .ow-hub-strip > .ow-hub-meta:nth-child(2):last-child,
 .ow-hub-strip > .ow-hub-meta + .ow-btn {
   grid-column: 1 / -1;
@@ -384,11 +389,6 @@
   gap: var(--ow-s2);
   flex-wrap: wrap;
 }
-.ow-hub-links .ow-btn {
-  flex: 1 1 0;
-  padding: 0 var(--ow-s2);
-  background-color: rgb(10 6 4 / 0.7);
-}
 @media (max-width: 480px) {
   .ow-hub-links .ow-btn {
     font-size: var(--ow-fs-body);
@@ -427,6 +427,8 @@
   }
   .ow-tile-kicker {
     padding-right: 30px;
+    font-size: var(--ow-fs-small);
+    white-space: nowrap;
   }
   .ow-tile-title {
     padding-right: 0;
@@ -434,10 +436,6 @@
   }
   .ow-tile-sub {
     font-size: var(--ow-fs-micro);
-  }
-  .ow-tile-kicker {
-    font-size: var(--ow-fs-small);
-    white-space: nowrap;
   }
 }
 /* short landscape phones */

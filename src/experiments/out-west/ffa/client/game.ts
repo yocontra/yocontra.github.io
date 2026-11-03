@@ -67,7 +67,7 @@ import { haptic } from '../../platform/haptics.ts'
 import { presetAt } from '../../scene/presets.ts'
 import { RIM } from '../../scene/style.ts'
 import { installUiSounds } from '../../ui/sfx.ts'
-import { bagColor } from '../scene/bags.ts'
+import { bagColor, bagStyleColor } from '../scene/bags.ts'
 import { TopDownCamera } from '../scene/camera.ts'
 import { Crowd, type CrowdPlayer } from '../scene/crowd.ts'
 import { CUT } from '../scene/cutaway.ts'
@@ -436,13 +436,17 @@ export class FrontierGame {
     if (this.fx && this.crowd) {
       handleEvent(this.sink, ev)
     }
-    // a death drops a bag where the victim fell, in the victim's saddlebag (spec §7)
+    // a bag wears its dropper's saddlebag (spec §7): the server's `style` when it sends one,
+    // else the loadout of the player who just fell where it dropped
     if (ev.type === EV_KILL) {
       this.lastVictim = ev.victim
-    } else if (ev.type === EV_BAG_DROP && this.lastVictim !== NONE) {
+    } else if (ev.type === EV_BAG_DROP) {
       const bag = this.fx?.bags.get(ev.bagId)
+      const style = (ev as { style?: number }).style
       const loadout = this.net.roster.get(this.lastVictim)?.loadout
-      if (bag && loadout) {
+      if (bag && style !== undefined) {
+        bag.color = bagStyleColor(style)
+      } else if (bag && loadout) {
         bag.color = bagColor(loadout)
       }
       this.lastVictim = NONE

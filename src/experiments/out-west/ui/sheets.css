@@ -80,12 +80,6 @@
 .ow-hub-row > .ow-btn {
   flex: 1 1 auto;
 }
-.ow-hub-row.ow-sheet-head > .ow-btn {
-  flex: none;
-  min-height: var(--ow-tap);
-  padding: 0 var(--ow-s3);
-  font-size: var(--ow-fs-body);
-}
 .ow-btn-danger,
 .ow-btn-danger:hover {
   background-color: var(--ow-red-lo);
@@ -259,6 +253,12 @@
   box-shadow:
     inset 0 0 0 3px transparent,
     inset 0 0 0 4px var(--ow-rule-ink);
+}
+.ow-hub-row.ow-sheet-head > .ow-btn {
+  flex: none;
+  min-height: var(--ow-tap);
+  padding: 0 var(--ow-s3);
+  font-size: var(--ow-fs-body);
 }
 .ow-paper-doc .ow-btn:hover {
   background-color: rgb(29 20 12 / 0.08);
