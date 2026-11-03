@@ -8,7 +8,8 @@
  * A local mock of the out west API for stream D's client work, until the real Worker pieces
  * (auth, economy, matchmaker, duel room) are merged: `bun scripts/mock-api.ts [port]`.
  *
- * - `POST /dev/sign-in {name}` stands in for passkeys (the client's temporary auth stub).
+ * - `POST /dev/sign-in {name}` stands in for passkeys: it sets a cookie that `POST /auth/refresh`
+ *   turns into a session for stream A's client (set the `ow-auth-hint` localStorage key too).
  * - `/me`, `/me/ledger`, `/store`, `/store/buy` and `/me/loadout` follow `contract/economy.ts`.
  * - `POST /queue/ticket` and `/queue/ws` follow the queue half of `contract/duel.ts`: two humans
  *   in the queue are paired; alone, you get a labelled ghost at 18 s (or on "Duel a ghost now").
@@ -345,7 +346,8 @@ function cors(req: Request): Record<string, string> {
   return {
     'access-control-allow-origin': req.headers.get('origin') ?? '*',
     'access-control-allow-credentials': 'true',
-    'access-control-allow-headers': 'authorization, content-type, x-ow-client',
+    'access-control-allow-headers':
+      req.headers.get('access-control-request-headers') ?? 'authorization, content-type',
     'access-control-allow-methods': 'GET, POST, PUT, DELETE, OPTIONS',
   }
 }
@@ -382,7 +384,26 @@ async function signIn(req: Request): Promise<Response> {
   // a little starting XP and cash so the Outfitter has something to show
   grant(a, 'admin_adjust', 4000, 1500, 'mock')
   accounts.set(token, a)
-  return json(req, { token, player: { accountId: id, name } })
+  const res = json(req, { token, player: { accountId: id, name } })
+  // stream A's client restores its session from a refresh cookie: the mock's is the dev token
+  res.headers.append('set-cookie', `ow_mock=${encodeURIComponent(token)}; Path=/; SameSite=Lax`)
+  return res
+}
+
+/** Stream A's `POST /auth/refresh`, answered from the mock cookie. */
+function refresh(req: Request): Response {
+  const m = /(?:^|; )ow_mock=(?<tok>[^;]+)/u.exec(req.headers.get('cookie') ?? '')
+  const tok = m?.groups?.tok
+  const token = tok ? decodeURIComponent(tok) : null
+  const a = account(token)
+  if (!(a && token)) {
+    return json(req, { ok: false, error: 'Signed out.' }, 401)
+  }
+  return json(req, {
+    accessToken: token,
+    expiresAt: Date.now() + 15 * 60_000,
+    player: { accountId: a.id, name: a.name },
+  })
 }
 
 async function buy(req: Request, a: Account): Promise<Response> {
@@ -406,6 +427,27 @@ async function route(req: Request, url: URL): Promise<Response> {
   const p = `${req.method} ${url.pathname}`
   if (p === 'POST /dev/sign-in') {
     return signIn(req)
+  }
+  if (p === 'POST /auth/refresh') {
+    return refresh(req)
+  }
+  if (p === 'POST /auth/logout') {
+    return json(req, { ok: true })
+  }
+  if (p === 'GET /duel/stats') {
+    return json(req, {
+      streak: a?.streak ?? 0,
+      bestStreak: a?.streak ?? 0,
+      wins: 0,
+      losses: 0,
+      draws: 0,
+      cowardice: 0,
+    })
+  }
+  if (p === 'GET /duel/settings' || p === 'PUT /duel/settings') {
+    return json(req, {
+      ghostOptOut: p.startsWith('PUT') ? Boolean((await body(req)).ghostOptOut) : false,
+    })
   }
   if (p === 'GET /store') {
     return json(req, {
