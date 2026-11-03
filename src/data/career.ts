@@ -57,6 +57,8 @@ export const career: readonly Role[] = [
     company: 'Charmed',
     href: 'https://becharmed.co/',
     title: 'Co-founder / CTO',
+    years: '2015 — 2016',
+    blurb: 'A video speed dating app for iOS and desktop.',
   },
   {
     company: 'Factory X',
