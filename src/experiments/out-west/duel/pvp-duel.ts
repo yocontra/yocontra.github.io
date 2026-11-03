@@ -13,18 +13,16 @@ import type { Press } from '../engine/input.ts'
 import { fetchDuelStats } from '../net/api.ts'
 import { DuelRoomLink } from '../net/pvp.ts'
 import { haptic } from '../platform/haptics.ts'
-import { save as persist, type SaveData } from '../save.ts'
+import type { SaveData } from '../save.ts'
 import { DRAW_SOUNDS, dressedActor } from '../scene/loadout.ts'
 import { MatchIntro } from '../ui/match-intro.ts'
-import { ResultsPanel, resultView } from '../ui/results.ts'
-import { confirmSheet } from '../ui/sheet.ts'
+import { ResultsPanel } from '../ui/results.ts'
 import { recordLine } from '../ui/standing.ts'
-import { type DuelClock, LocalDuelClock } from './clock.ts'
 import { tickCoward } from './defeat.ts'
 import type { Director, DirectorHooks } from './director.ts'
-import { titleShot } from './framing.ts'
 import { tickWin } from './outcome.ts'
 import { startAmbience } from './present.ts'
+import { clearStreet, confirmFlee, endView, lostResult, quietEndFx } from './pvp-end.ts'
 import { RemoteDuelClock } from './remote.ts'
 import {
   asOutlaw,
@@ -75,6 +73,10 @@ export class PvpDuel implements DirectorHooks {
   private over = false as boolean
   private fleeing = false as boolean
   private xpAfter = null as number | null
+  /** Why the room went away before it sent a result (we can't know the outcome). */
+  private lostLine = null as string | null
+  /** The room just opened a sudden-death wait (its draw number came with `suddenDeath`). */
+  private suddenDeathDraw = false as boolean
 
   constructor(d: Director, o: PvpOpts) {
     this.d = d
@@ -224,10 +226,11 @@ export class PvpDuel implements DirectorHooks {
         )
         break
       case 'cue':
+        this.adoptDraw(m.draw)
         this.d.events.cue(m.draw, m.cue)
         break
       case 'call':
-        this.clock.draw = m.draw
+        this.adoptDraw(m.draw)
         this.d.events.call(m.draw)
         break
       default:
@@ -245,6 +248,7 @@ export class PvpDuel implements DirectorHooks {
         break
       case 'suddenDeath':
         this.deadHeat = false
+        this.suddenDeathDraw = true
         this.clock.draw = m.draw
         reviveForSuddenDeath(d, this.posters?.[this.opp]?.loadout ?? {})
         break
@@ -345,6 +349,12 @@ export class PvpDuel implements DirectorHooks {
         }
         break
       case 'wait':
+        // The room numbers every wait: +1 here, or the number `suddenDeath` just brought. The
+        // standoff (and any early shot) must carry it, or the room ignores the shot as stale.
+        if (!this.suddenDeathDraw) {
+          this.clock.draw += 1
+        }
+        this.suddenDeathDraw = false
         if (d.phase === 'turn' || d.phase === 'walk') {
           d.player.play('Idle', 0.2)
           d.enemy?.play('Idle', 0.2)
@@ -353,6 +363,14 @@ export class PvpDuel implements DirectorHooks {
         break
       default:
         break
+    }
+  }
+
+  /** The room's draw number wins: a cue or the call for this wait must reach the standoff. */
+  private adoptDraw(draw: number): void {
+    this.clock.draw = draw
+    if (this.d.phase === 'wait' && this.d.duelId !== draw) {
+      this.d.duelId = draw
     }
   }
 
@@ -408,17 +426,7 @@ export class PvpDuel implements DirectorHooks {
 
   /** Forfeits, dodges, freezes and double dead heats: no kill cam, straight to the card. */
   private quietEnd(r: DuelResult): void {
-    const d = this.d
-    const mine = r.culprit === this.seat
-    const caption: Record<string, string> = {
-      froze: 'BOTH FROZE',
-      draw: 'DRAW',
-      forfeit: mine ? 'FORFEIT' : 'HE LIT OUT',
-      dodge: mine ? 'DODGED' : 'HE DODGED',
-    }
-    d.c.hud.call(caption[r.outcome] ?? 'OVER', 1600)
-    d.c.audio.heartbeat(0)
-    d.enter('lose')
+    quietEndFx(this.d, r, this.seat, this.lostLine !== null)
     this.resultsAt = performance.now() + 1200
   }
 
@@ -429,9 +437,10 @@ export class PvpDuel implements DirectorHooks {
     this.d.c.hud.hideCard()
     this.results = new ResultsPanel(
       this.d.c.hud.root,
-      resultView(this.result, this.seat, this.d.outlaw.name, {
-        before: this.o.xpBefore,
-        after: this.xpAfter,
+      endView(this.result, this.seat, {
+        name: this.d.outlaw.name,
+        xp: { before: this.o.xpBefore, after: this.xpAfter },
+        lost: this.lostLine,
       }),
       {
         rematch: () => this.link.send({ type: 'rematch' }),
@@ -459,16 +468,7 @@ export class PvpDuel implements DirectorHooks {
       return
     }
     this.fleeing = true
-    const before = this.d.phase === 'cock' || this.d.phase === 'title'
-    const yes = await confirmSheet(this.d.c.hud.root, {
-      title: 'Flee?',
-      body: before
-        ? 'Running before the walk is a dodge: half your penalty and no XP.'
-        : 'Running now is a forfeit: a loss with the full penalty.',
-      yes: 'Flee',
-      no: 'Stand your ground',
-      danger: true,
-    })
+    const yes = await confirmFlee(this.d)
     this.fleeing = false
     if (yes && !this.over) {
       this.link.send({ type: 'flee' })
@@ -485,19 +485,8 @@ export class PvpDuel implements DirectorHooks {
       return
     }
     this.d.c.hud.fake(`[${reason}]`, 3000)
-    this.result = {
-      type: 'result',
-      serverTime: Date.now(),
-      matchId: '',
-      draw: this.clock.draw,
-      outcome: 'forfeit',
-      winner: null,
-      culprit: null,
-      reactions: [null, null],
-      deadHeats: 0,
-      you: null,
-      settled: false,
-    }
+    this.lostLine = reason
+    this.result = lostResult(this.clock.draw)
     this.quietEnd(this.result)
   }
 
@@ -512,24 +501,7 @@ export class PvpDuel implements DirectorHooks {
     this.link.close()
     this.intro?.close()
     this.results?.close()
-    d.hooks = null
-    d.clock = new LocalDuelClock(d.events) satisfies DuelClock
-    d.c.save = this.realSave
-    persist(this.realSave)
-    d.enemy?.dispose()
-    d.enemy = null
-    d.c.physics.clear()
-    d.c.hud.root.classList.remove('ow-pvp')
-    d.c.hud.hideCard()
-    d.c.hud.clearCall()
-    d.c.hud.clearCaptions()
-    d.c.hud.letterbox(false)
-    d.c.hud.show(false)
-    d.c.audio.heartbeat(0)
-    d.timeScale = 1
-    d.player.root.visible = false
-    d.enter('title')
-    titleShot(d)
+    clearStreet(d, this.realSave)
     this.o.onExit(how)
   }
 }

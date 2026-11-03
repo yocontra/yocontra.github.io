@@ -53,12 +53,26 @@ export function parseRoomMessage(raw: unknown): RoomServerMessage | null {
   return null
 }
 
+const LIVE_STALE_MS = 1500
+
+const CLOSED_TEXT: Record<string, string> = {
+  'opponent-left': 'He lit out of town.',
+  timeout: 'Nobody cocked in time. No harm done.',
+  done: 'The room closed.',
+  error: 'The room hit a snag.',
+}
+
 export class DuelRoomLink {
   private readonly sock: ReconnectingSocket
   private readonly h: RoomHandlers
   private closed = false as boolean
   /** perf time the last message arrived (the call's arrival time is what `localMs` counts from). */
   lastAt = 0
+  /**
+   * The room stops pinging in the rematch window so it can hibernate. Silence then is expected,
+   * not a dead link: reconnecting would close both sockets and the room with them.
+   */
+  private quiet = false as boolean
 
   constructor(wsUrl: string, h: RoomHandlers) {
     this.h = h
@@ -72,8 +86,8 @@ export class DuelRoomLink {
       onMessage: (data) => this.onMessage(data),
       onDrop: (reason) => h.dropped(reason),
       onGiveUp: (reason) => this.end(reason),
-      // the server's pings run every 400 ms: 1.5 s of silence is a dead link
-      staleMs: 1500,
+      // the server's pings run every 400 ms: 1.5 s of silence is a dead link (except when quiet)
+      staleMs: () => (this.quiet ? Number.POSITIVE_INFINITY : LIVE_STALE_MS),
       deadlineMs: 12_000,
     })
   }
@@ -89,9 +103,16 @@ export class DuelRoomLink {
       this.send({ type: 'pong', n: m.n })
       return
     }
+    if (m.type === 'beat') {
+      this.quiet = m.beat === 'result' || m.beat === 'rematch' || m.beat === 'closed'
+    } else if (m.type === 'hello') {
+      this.quiet = false
+    } else if (m.type === 'sync') {
+      this.quiet = m.beat === 'result' || m.beat === 'rematch'
+    }
     this.h.message(m)
     if (m.type === 'closed') {
-      this.end(m.reason === 'opponent-left' ? 'He lit out of town.' : 'The room closed.')
+      this.end(CLOSED_TEXT[m.reason] ?? 'The room closed.')
     }
   }
 

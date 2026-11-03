@@ -13,8 +13,11 @@ import { button, el, signedMoney, swallow } from './sheet.ts'
 const KIND_HEAD: Record<Poster['kind'], string> = {
   human: 'Wanted',
   ghost: 'Ghost of',
-  outlaw: 'Town outlaw',
+  // the name already reads "Town Outlaw": a second "Town outlaw" heading just stutters
+  outlaw: 'Wanted',
 }
+
+const OUTLAW_NAME = /outlaw/iu
 
 /** A wanted poster in its frame: name, level, live bounty, streak and kit. */
 export function posterEl(p: Poster, side: 'you' | 'them'): HTMLElement {
@@ -35,6 +38,9 @@ export function posterEl(p: Poster, side: 'you' | 'them'): HTMLElement {
   }
   if (p.kind === 'ghost') {
     notes.push('a recorded gunslinger')
+  }
+  if (p.kind === 'outlaw' && !OUTLAW_NAME.test(p.name)) {
+    notes.push('a town outlaw')
   }
   el('div', 'ow-wanted-notes', card, notes.join(' · ') || 'clean record')
   const kit = el('ul', 'ow-wanted-kit', card)
@@ -62,6 +68,8 @@ export interface ResultView {
   xpBefore: number | null
   xpAfter: number | null
   canRematch: boolean
+  /** Shown instead of the money lines when there's no settlement to show. */
+  pending?: string
 }
 
 export interface ResultHandlers {
@@ -70,10 +78,10 @@ export interface ResultHandlers {
   saloon: () => void
 }
 
-function settlementLines(panel: HTMLElement, s: Settlement | null): void {
+function settlementLines(panel: HTMLElement, s: Settlement | null, pending: string): void {
   const list = el('ul', 'ow-results-lines', panel)
   if (!s) {
-    el('li', '', list, 'Settling up with the bank…')
+    el('li', '', list, pending)
     return
   }
   for (const l of s.lines) {
@@ -127,7 +135,7 @@ export class ResultsPanel {
     }
     cell('You', v.you)
     cell('Him', v.them)
-    settlementLines(panel, v.settlement)
+    settlementLines(panel, v.settlement, v.pending ?? 'Settling up with the bank…')
     this.levelBox = el('div', 'ow-results-level', panel)
     const track = el('div', 'ow-xp', panel)
     this.bar = el('div', 'ow-xp-fill', track)
