@@ -41,85 +41,85 @@ const sorted = [...experiments].sort((a, b) => b.year - a.year)
 </Base>
 
 <style>
-main {
-  padding-block: clamp(6rem, 14vw, 10rem) 6rem;
-}
-h1 {
-  font-size: clamp(3rem, 11vw, 8rem);
-  margin-block: 0.75rem 1.25rem;
-}
-.lede {
-  color: var(--fg-muted);
-  font-size: 1.15rem;
-  max-width: 40ch;
-}
-.grid {
-  list-style: none;
-  padding: 0;
-  margin: 4rem 0 0;
-  display: grid;
-  gap: 1.25rem;
-  grid-template-columns: repeat(auto-fill, minmax(min(100%, 20rem), 1fr));
-}
-.card a {
-  display: grid;
-  gap: 0.75rem;
-  height: 100%;
-  padding: 0.75rem 0.75rem 1.25rem;
-  border-radius: var(--radius);
-  background: var(--bg-raised);
-  border: 1px solid var(--line);
-  text-decoration: none;
-  transition:
-    border-color 0.3s,
-    translate 0.4s var(--ease-out);
-}
-.card a:hover {
-  color: inherit;
-  border-color: oklch(0.8 0.18 var(--hue) / 0.6);
-  translate: 0 -4px;
-}
-.thumb {
-  aspect-ratio: 16 / 10;
-  border-radius: calc(var(--radius) - 0.5rem);
-  background:
-    radial-gradient(circle at 30% 30%, oklch(0.8 0.2 var(--hue)), transparent 60%),
-    radial-gradient(circle at 80% 70%, oklch(0.55 0.22 calc(var(--hue) + 120)), transparent 55%),
-    oklch(0.2 0.04 var(--hue));
-  background-size: cover;
-  background-position: center;
-}
-.meta {
-  display: flex;
-  justify-content: space-between;
-  align-items: baseline;
-  padding-inline: 0.5rem;
-}
-h2 {
-  font-size: 1.35rem;
-}
-.year {
-  font-family: var(--font-mono);
-  color: var(--fg-faint);
-  font-size: 0.85rem;
-}
-.card p {
-  color: var(--fg-muted);
-  padding-inline: 0.5rem;
-}
-.tags {
-  list-style: none;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.4rem;
-  padding: 0 0.5rem;
-  margin: 0;
-}
-.tags li {
-  font: 0.72rem / 1 var(--font-mono);
-  padding: 0.35em 0.6em;
-  border-radius: 999px;
-  border: 1px solid var(--line);
-  color: var(--fg-muted);
-}
+  main {
+    padding-block: clamp(6rem, 14vw, 10rem) 6rem;
+  }
+  h1 {
+    font-size: clamp(3rem, 11vw, 8rem);
+    margin-block: 0.75rem 1.25rem;
+  }
+  .lede {
+    color: var(--fg-muted);
+    font-size: 1.15rem;
+    max-width: 40ch;
+  }
+  .grid {
+    list-style: none;
+    padding: 0;
+    margin: 4rem 0 0;
+    display: grid;
+    gap: 1.25rem;
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, 20rem), 1fr));
+  }
+  .card a {
+    display: grid;
+    gap: 0.75rem;
+    height: 100%;
+    padding: 0.75rem 0.75rem 1.25rem;
+    border-radius: var(--radius);
+    background: var(--bg-raised);
+    border: 1px solid var(--line);
+    text-decoration: none;
+    transition:
+      border-color 0.3s,
+      translate 0.4s var(--ease-out);
+  }
+  .card a:hover {
+    color: inherit;
+    border-color: oklch(0.8 0.18 var(--hue) / 0.6);
+    translate: 0 -4px;
+  }
+  .thumb {
+    aspect-ratio: 16 / 10;
+    border-radius: calc(var(--radius) - 0.5rem);
+    background:
+      radial-gradient(circle at 30% 30%, oklch(0.8 0.2 var(--hue)), transparent 60%),
+      radial-gradient(circle at 80% 70%, oklch(0.55 0.22 calc(var(--hue) + 120)), transparent 55%),
+      oklch(0.2 0.04 var(--hue));
+    background-size: cover;
+    background-position: center;
+  }
+  .meta {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    padding-inline: 0.5rem;
+  }
+  h2 {
+    font-size: 1.35rem;
+  }
+  .year {
+    font-family: var(--font-mono);
+    color: var(--fg-faint);
+    font-size: 0.85rem;
+  }
+  .card p {
+    color: var(--fg-muted);
+    padding-inline: 0.5rem;
+  }
+  .tags {
+    list-style: none;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+    padding: 0 0.5rem;
+    margin: 0;
+  }
+  .tags li {
+    font: 0.72rem / 1 var(--font-mono);
+    padding: 0.35em 0.6em;
+    border-radius: 999px;
+    border: 1px solid var(--line);
+    color: var(--fg-muted);
+  }
 </style>

@@ -1,25 +1,8 @@
 ---
-import { formatCompact } from '~/lib/github'
-
-interface Props {
-  years: number
-  repos: number
-  gulpStars: number
-  gulpWeekly: number
-}
-const { years, repos, gulpStars, gulpWeekly } = Astro.props
-
 const statement =
-  'I take products from zero to one. Scalable backends, delightful frontends, and the architecture and infrastructure underneath. Two venture-backed startups, a consultancy, a record-label-replacing music platform, and most recently keeping a few billion Apple devices unhacked. Now I’m back to building in the open.'
+  'I like building things end to end: backends, frontends, and the infrastructure in between. Most of my career has been at small companies, a few of which I helped start, plus a couple of years at Apple. Now I’m spending my time on open source again, and putting some of what I’m working on here.'
 const words = statement.split(' ')
 const step = 70 / words.length
-
-const stats = [
-  { value: years, display: `${years}+`, label: 'years shipping' },
-  { value: repos, display: `${repos}`, label: 'public repos' },
-  { value: gulpStars, display: formatCompact(gulpStars), label: 'stars on gulp' },
-  { value: gulpWeekly, display: formatCompact(gulpWeekly), label: 'gulp installs / week' },
-]
 ---
 
 <section id="about" class="about wrap" aria-labelledby="about-title">
@@ -33,85 +16,36 @@ const stats = [
       </span>
     ))}
   </p>
-
-  <dl class="stats">
-    {stats.map((stat) => (
-      <div class="stat reveal">
-        <dt>{stat.label}</dt>
-        <dd data-count={stat.value} data-display={stat.display}>
-          {stat.display}
-        </dd>
-      </div>
-    ))}
-  </dl>
 </section>
 
 <style>
-.about {
-  padding-block: clamp(6rem, 18vh, 12rem) clamp(4rem, 10vh, 8rem);
-}
+  .about {
+    padding-block: clamp(6rem, 18vh, 12rem) clamp(4rem, 10vh, 8rem);
+  }
 
-.statement {
-  margin-top: 1.5rem;
-  font-family: var(--font-display);
-  font-weight: 500;
-  font-size: clamp(1.6rem, 3.6vw, 3.4rem);
-  line-height: 1.12;
-  letter-spacing: -0.025em;
-  view-timeline-name: --statement;
-}
+  .statement {
+    margin-top: 1.5rem;
+    font-family: var(--font-display);
+    font-weight: 500;
+    font-size: clamp(1.6rem, 3.6vw, 3.4rem);
+    line-height: 1.12;
+    letter-spacing: -0.025em;
+    view-timeline-name: --statement;
+  }
 
-@supports (animation-timeline: view()) {
-  @media (prefers-reduced-motion: no-preference) {
-    .statement span {
-      color: var(--fg-faint);
-      animation: lit linear both;
-      animation-timeline: --statement;
+  @supports (animation-timeline: view()) {
+    @media (prefers-reduced-motion: no-preference) {
+      .statement span {
+        color: var(--fg-faint);
+        animation: lit linear both;
+        animation-timeline: --statement;
+      }
     }
   }
-}
 
-@keyframes lit {
-  to {
-    color: var(--fg);
+  @keyframes lit {
+    to {
+      color: var(--fg);
+    }
   }
-}
-
-.stats {
-  margin: clamp(4rem, 10vh, 7rem) 0 0;
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 13rem), 1fr));
-  border-top: 1px solid var(--line);
-}
-
-.stat {
-  padding: 1.5rem 1.5rem 1.5rem 0;
-  border-bottom: 1px solid var(--line);
-  display: flex;
-  flex-direction: column-reverse;
-  gap: 0.5rem;
-}
-
-.stat dt {
-  font: 0.8rem / 1.3 var(--font-mono);
-  color: var(--fg-muted);
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-}
-
-.stat dd {
-  margin: 0;
-  font: 700 clamp(2.6rem, 5vw, 4.25rem) / 1 var(--font-display);
-  letter-spacing: -0.04em;
-  font-variant-numeric: tabular-nums;
-  background: linear-gradient(120deg, var(--fg) 30%, var(--accent));
-  background-clip: text;
-  color: transparent;
-}
 </style>
-
-<script>
-import { countUp } from '~/lib/count-up'
-
-countUp(document.querySelectorAll<HTMLElement>('[data-count]'))
-</script>

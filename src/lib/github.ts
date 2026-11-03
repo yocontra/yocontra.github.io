@@ -39,11 +39,6 @@ export function getStars(source: string): Promise<number | null> {
   return promise
 }
 
-export async function getPublicRepoCount(user: string, fallback: number): Promise<number> {
-  const data = await getJson<{ public_repos: number }>(`https://api.github.com/users/${user}`)
-  return data?.public_repos ?? fallback
-}
-
 export async function getWeeklyDownloads(pkg: string, fallback: number): Promise<number> {
   const data = await getJson<{ downloads: number }>(
     `https://api.npmjs.org/downloads/point/last-week/${pkg}`,

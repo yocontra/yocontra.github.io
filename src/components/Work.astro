@@ -5,7 +5,7 @@ import { career } from '~/data/career'
 <section id="work" class="work wrap" aria-labelledby="work-title">
   <header>
     <p class="eyebrow">Work</p>
-    <h2 id="work-title">Sixteen years,<br>mostly from zero.</h2>
+    <h2 id="work-title">Where I’ve worked</h2>
   </header>
 
   <ol class="roles">
@@ -32,88 +32,88 @@ import { career } from '~/data/career'
 </section>
 
 <style>
-.work {
-  padding-block: clamp(4rem, 10vh, 8rem);
-}
-
-h2 {
-  margin-top: 1rem;
-  font-size: clamp(2.4rem, 6vw, 5rem);
-}
-
-.roles {
-  list-style: none;
-  padding: 0;
-  margin: clamp(2.5rem, 6vh, 4rem) 0 0;
-}
-
-.role {
-  display: grid;
-  grid-template-columns: minmax(8rem, 1fr) 3fr;
-  gap: 0.5rem 2rem;
-  padding-block: 2rem;
-  border-top: 1px solid var(--line);
-  position: relative;
-}
-
-.role::before {
-  content: "";
-  position: absolute;
-  inset: -1px 0 auto;
-  height: 1px;
-  background: linear-gradient(90deg, var(--accent), var(--accent-2), transparent);
-  scale: 0 1;
-  transform-origin: left;
-  transition: scale 0.8s var(--ease-out);
-}
-
-.role:hover::before {
-  scale: 1 1;
-}
-
-@media (max-width: 44rem) {
-  .role {
-    grid-template-columns: 1fr;
+  .work {
+    padding-block: clamp(4rem, 10vh, 8rem);
   }
-}
 
-.years {
-  font: 0.9rem / 1.6 var(--font-mono);
-  color: var(--fg-faint);
-  font-variant-numeric: tabular-nums;
-}
+  h2 {
+    margin-top: 1rem;
+    font-size: clamp(2.4rem, 6vw, 5rem);
+  }
 
-h3 {
-  font-size: clamp(1.8rem, 3.6vw, 2.8rem);
-  letter-spacing: -0.035em;
-}
+  .roles {
+    list-style: none;
+    padding: 0;
+    margin: clamp(2.5rem, 6vh, 4rem) 0 0;
+  }
 
-h3 a {
-  text-decoration: none;
-}
+  .role {
+    display: grid;
+    grid-template-columns: minmax(8rem, 1fr) 3fr;
+    gap: 0.5rem 2rem;
+    padding-block: 2rem;
+    border-top: 1px solid var(--line);
+    position: relative;
+  }
 
-h3 a span {
-  font-size: 0.5em;
-  vertical-align: super;
-  color: var(--fg-faint);
-  transition: color 0.2s;
-}
+  .role::before {
+    content: "";
+    position: absolute;
+    inset: -1px 0 auto;
+    height: 1px;
+    background: linear-gradient(90deg, var(--accent), var(--accent-2), transparent);
+    scale: 0 1;
+    transform-origin: left;
+    transition: scale 0.8s var(--ease-out);
+  }
 
-h3 a:hover span {
-  color: var(--accent);
-}
+  .role:hover::before {
+    scale: 1 1;
+  }
 
-.title {
-  margin-top: 0.6rem;
-  font: 500 0.9rem / 1.4 var(--font-mono);
-  color: var(--accent);
-  letter-spacing: 0.02em;
-}
+  @media (max-width: 44rem) {
+    .role {
+      grid-template-columns: 1fr;
+    }
+  }
 
-.blurb {
-  margin-top: 1rem;
-  max-width: 62ch;
-  color: var(--fg-muted);
-  font-size: 1.05rem;
-}
+  .years {
+    font: 0.9rem / 1.6 var(--font-mono);
+    color: var(--fg-faint);
+    font-variant-numeric: tabular-nums;
+  }
+
+  h3 {
+    font-size: clamp(1.8rem, 3.6vw, 2.8rem);
+    letter-spacing: -0.035em;
+  }
+
+  h3 a {
+    text-decoration: none;
+  }
+
+  h3 a span {
+    font-size: 0.5em;
+    vertical-align: super;
+    color: var(--fg-faint);
+    transition: color 0.2s;
+  }
+
+  h3 a:hover span {
+    color: var(--accent);
+  }
+
+  .title {
+    margin-top: 0.6rem;
+    font: 500 0.9rem / 1.4 var(--font-mono);
+    color: var(--accent);
+    letter-spacing: 0.02em;
+  }
+
+  .blurb {
+    margin-top: 1rem;
+    max-width: 62ch;
+    color: var(--fg-muted);
+    font-size: 1.05rem;
+  }
 </style>

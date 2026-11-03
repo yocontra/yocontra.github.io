@@ -15,8 +15,7 @@ export const projects: readonly Project[] = [
   {
     name: 'gulp.js',
     href: 'https://gulpjs.com/',
-    blurb:
-      'The streaming build system. Over a million installs a week, used by thousands of companies to build and ship their code.',
+    blurb: 'A streaming build system for JavaScript. Still maintained by a great group of folks.',
     source: 'gulpjs/gulp',
     stars: 32916,
     npm: 'gulp',
@@ -25,28 +24,28 @@ export const projects: readonly Project[] = [
   {
     name: 'genome.js',
     href: 'http://genomejs.com/',
-    blurb: 'Open-source toolkit for exploring your own DNA with JavaScript.',
+    blurb: 'Tools for exploring your own DNA data with JavaScript.',
     source: 'org:genomejs',
     stars: 600,
   },
   {
     name: 'rtc-everywhere',
     href: 'http://rtc.works/',
-    blurb: 'Cross-everything WebRTC mega-project.',
+    blurb: 'One WebRTC API that works across browsers, Node, and mobile.',
     source: 'yocontra/rtc-everywhere',
     stars: 653,
   },
   {
     name: 'shasta',
     href: 'http://shasta.tools/',
-    blurb: 'Dead simple, opinionated toolkit for building Redux + React applications.',
+    blurb: 'An opinionated toolkit for building React + Redux apps.',
     source: 'shastajs/shasta',
     stars: 506,
   },
   {
     name: 'pg_accel',
     href: 'https://github.com/yocontra/pg_accel',
-    blurb: 'Experiment: Postgres, on the GPU.',
+    blurb: 'An experiment: running parts of Postgres on the GPU.',
     source: 'yocontra/pg_accel',
     tag: 'new',
   },

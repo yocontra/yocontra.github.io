@@ -8,22 +8,14 @@ import OpenSource from '~/components/OpenSource.astro'
 import Stack from '~/components/Stack.astro'
 import Work from '~/components/Work.astro'
 import Base from '~/layouts/Base.astro'
-import { getPublicRepoCount, getStars, getWeeklyDownloads } from '~/lib/github'
-
-const years = new Date().getFullYear() - 2010
-const [repos, gulpStars, gulpWeekly] = await Promise.all([
-  getPublicRepoCount('yocontra', 431),
-  getStars('gulpjs/gulp').then((n) => n ?? 32916),
-  getWeeklyDownloads('gulp', 2_000_000),
-])
 ---
 
 <Base>
   <Nav />
   <main>
-    <Hero years={years} />
+    <Hero />
     <div class="page">
-      <About years={years} repos={repos} gulpStars={gulpStars} gulpWeekly={gulpWeekly} />
+      <About />
       <OpenSource />
       <Stack />
       <Work />
@@ -34,7 +26,7 @@ const [repos, gulpStars, gulpWeekly] = await Promise.all([
 </Base>
 
 <style>
-.page {
-  position: relative;
-}
+  .page {
+    position: relative;
+  }
 </style>

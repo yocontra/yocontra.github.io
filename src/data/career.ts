@@ -10,10 +10,10 @@ export interface Role {
 export const career: readonly Role[] = [
   {
     company: 'Apple',
-    title: 'Staff Full Stack Engineer · SEAR',
+    title: 'Software Engineer · SEAR',
     years: '2024 — 2026',
     blurb:
-      'Technical lead in Security Engineering & Architecture, securing macOS and iOS against nation-state malware. Built customer-facing products and infrastructure serving billions of devices, often solo from zero. Can’t say more. The only KPI was the number of unhacked phones and laptops.',
+      'Worked on macOS and iOS security in SEAR, building tools and infrastructure. Not much more I can say about it.',
   },
   {
     company: 'CreateSafe',
@@ -21,7 +21,7 @@ export const career: readonly Role[] = [
     title: 'Head of Engineering',
     years: '2021 — 2024',
     blurb:
-      'Led engineering and research while building tools to replace the functions of a record label: marketing, fan engagement, distribution, royalties and payments. Shipped generative music AI, audio analysis and voice cloning, training and hosting custom models at scale.',
+      'Led engineering and research for a platform helping independent musicians with distribution, royalties and fan engagement, plus some early generative audio work.',
   },
   {
     company: 'Stae',
@@ -29,7 +29,7 @@ export const career: readonly Role[] = [
     title: 'Co-founder / CTO',
     years: '2016 — 2021',
     blurb:
-      'Raised ~$5M and, as founder and primary engineer, built a complete data warehousing, analytics, GIS, open data and city planning platform. Sold to and deployed in cities and counties across North America.',
+      'Co-founded a civic data company and built its data, analytics and GIS platform, used by city and county governments in North America.',
   },
   {
     company: 'Charmed',
@@ -41,23 +41,21 @@ export const career: readonly Role[] = [
     href: 'http://fact0ryx.com/',
     title: 'Engineering Lead',
     years: '2014 — 2016',
-    blurb:
-      'Taught Fortune 500 companies rapid prototyping by doing it. Six full products in one year inside a venture studio.',
+    blurb: 'Built prototypes and products alongside large companies as part of a venture studio.',
   },
   {
     company: 'Fractal',
     href: 'http://wearefractal.com',
     title: 'Co-founder / CTO',
     years: '2010 — 2014',
-    blurb:
-      'Co-founded and led engineering at a consultancy that shipped 30+ complete products for large companies and freshly funded startups.',
+    blurb: 'Co-founded a small consultancy building products for companies and startups.',
   },
   {
     company: 'Bechtel',
     title: 'API Infrastructure Engineer',
     years: '2012 — 2013',
     blurb:
-      'High-performance API gateways across business units, internal API standards, and a portal for exploring the company’s data assets.',
+      'Worked on API gateways, internal API standards, and a portal for exploring internal data.',
   },
 ]
 

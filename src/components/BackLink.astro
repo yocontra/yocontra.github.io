@@ -12,26 +12,26 @@ const { href = '/experiments/', label = 'experiments' } = Astro.props
 </a>
 
 <style>
-.back {
-  position: fixed;
-  inset-block-start: max(1rem, env(safe-area-inset-top));
-  inset-inline-start: max(1rem, env(safe-area-inset-left));
-  z-index: 1000;
-  display: inline-flex;
-  gap: 0.5em;
-  align-items: center;
-  padding: 0.5em 0.9em;
-  border-radius: 999px;
-  font: 500 0.8rem / 1 var(--font-mono, ui-monospace, monospace);
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  text-decoration: none;
-  color: #fff;
-  background: rgb(0 0 0 / 0.45);
-  backdrop-filter: blur(12px) saturate(1.4);
-  border: 1px solid rgb(255 255 255 / 0.15);
-}
-.back:hover {
-  background: rgb(0 0 0 / 0.7);
-}
+  .back {
+    position: fixed;
+    inset-block-start: max(1rem, env(safe-area-inset-top));
+    inset-inline-start: max(1rem, env(safe-area-inset-left));
+    z-index: 1000;
+    display: inline-flex;
+    gap: 0.5em;
+    align-items: center;
+    padding: 0.5em 0.9em;
+    border-radius: 999px;
+    font: 500 0.8rem / 1 var(--font-mono, ui-monospace, monospace);
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    text-decoration: none;
+    color: #fff;
+    background: rgb(0 0 0 / 0.45);
+    backdrop-filter: blur(12px) saturate(1.4);
+    border: 1px solid rgb(255 255 255 / 0.15);
+  }
+  .back:hover {
+    background: rgb(0 0 0 / 0.7);
+  }
 </style>

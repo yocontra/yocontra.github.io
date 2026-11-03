@@ -1,8 +1,4 @@
 ---
-interface Props {
-  years: number
-}
-const { years } = Astro.props
 ---
 
 <section class="hero" id="top" aria-labelledby="hero-name">
@@ -12,7 +8,7 @@ const { years } = Astro.props
   <div class="inner wrap">
     <p class="status">
       <span class="dot" aria-hidden="true"></span>
-      Ex-Apple · building in the open again
+      Currently working on open source
     </p>
 
     <h1 id="hero-name" class="name">
@@ -21,8 +17,8 @@ const { years } = Astro.props
     </h1>
 
     <p class="tagline">
-      Engineer and founder. Author of <a href="https://gulpjs.com/">gulp.js</a>. Writing code since
-      I was 10, shipping products from zero to one for {years}+ years.
+      Software engineer. I made <a href="https://gulpjs.com/">gulp.js</a>, co-founded a few
+      companies, and most recently worked on security at Apple.
     </p>
   </div>
 
@@ -41,202 +37,202 @@ const { years } = Astro.props
 </section>
 
 <style>
-.hero {
-  position: relative;
-  min-height: 100svh;
-  display: grid;
-  align-items: end;
-  isolation: isolate;
-  padding-block: 7rem clamp(4rem, 10vh, 7rem);
-}
-
-.field,
-.poster {
-  position: fixed;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  z-index: -2;
-}
-
-.poster {
-  z-index: -3;
-  background:
-    radial-gradient(60% 50% at 70% 30%, oklch(0.55 0.16 var(--accent-h) / 0.55), transparent 70%),
-    radial-gradient(
-      50% 40% at 20% 80%,
-      oklch(0.45 0.2 calc(var(--accent-h) + 140) / 0.45),
-      transparent 70%
-    ),
-    var(--bg);
-}
-
-.inner {
-  position: relative;
-}
-
-.status {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.6em;
-  font: 500 0.78rem / 1 var(--font-mono);
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  padding: 0.6em 0.9em;
-  border-radius: 999px;
-  background: oklch(0.13 0.01 var(--accent-h) / 0.45);
-  backdrop-filter: blur(14px) saturate(1.5);
-  border: 1px solid var(--line);
-}
-
-.dot {
-  width: 0.55em;
-  height: 0.55em;
-  border-radius: 50%;
-  background: var(--accent);
-  box-shadow: 0 0 0 0 var(--accent);
-  animation: pulse 2.2s var(--ease-out) infinite;
-}
-
-@keyframes pulse {
-  70% {
-    box-shadow: 0 0 0 0.6em oklch(0.86 0.2 var(--accent-h) / 0);
+  .hero {
+    position: relative;
+    min-height: 100svh;
+    display: grid;
+    align-items: end;
+    isolation: isolate;
+    padding-block: 7rem clamp(4rem, 10vh, 7rem);
   }
-  100% {
-    box-shadow: 0 0 0 0 oklch(0.86 0.2 var(--accent-h) / 0);
+
+  .field,
+  .poster {
+    position: fixed;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    z-index: -2;
   }
-}
 
-.name {
-  margin-block: 1.5rem 1.75rem;
-  font-size: clamp(3.2rem, 13.5vw, 13rem);
-  font-weight: 800;
-  letter-spacing: -0.045em;
-  line-height: 0.86;
-  text-transform: uppercase;
-  color: #fff;
-  mix-blend-mode: difference;
-}
-
-.line {
-  display: block;
-}
-
-@media (prefers-reduced-motion: no-preference) {
-  .line {
-    animation: rise 1.2s var(--ease-out) both;
+  .poster {
+    z-index: -3;
+    background:
+      radial-gradient(60% 50% at 70% 30%, oklch(0.55 0.16 var(--accent-h) / 0.55), transparent 70%),
+      radial-gradient(
+        50% 40% at 20% 80%,
+        oklch(0.45 0.2 calc(var(--accent-h) + 140) / 0.45),
+        transparent 70%
+      ),
+      var(--bg);
   }
-  .line + .line {
-    animation-delay: 0.12s;
+
+  .inner {
+    position: relative;
   }
-  .status,
-  .tagline {
-    animation: fade 1.4s 0.35s var(--ease-out) both;
+
+  .status {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.6em;
+    font: 500 0.78rem / 1 var(--font-mono);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    padding: 0.6em 0.9em;
+    border-radius: 999px;
+    background: oklch(0.13 0.01 var(--accent-h) / 0.45);
+    backdrop-filter: blur(14px) saturate(1.5);
+    border: 1px solid var(--line);
   }
-}
 
-@keyframes rise {
-  from {
-    opacity: 0;
-    translate: 0 0.35em;
-    filter: blur(12px);
+  .dot {
+    width: 0.55em;
+    height: 0.55em;
+    border-radius: 50%;
+    background: var(--accent);
+    box-shadow: 0 0 0 0 var(--accent);
+    animation: pulse 2.2s var(--ease-out) infinite;
   }
-}
 
-@keyframes fade {
-  from {
-    opacity: 0;
-    translate: 0 1rem;
-  }
-}
-
-.tagline {
-  max-width: 38ch;
-  font-size: clamp(1.1rem, 1.6vw, 1.45rem);
-  line-height: 1.45;
-  color: oklch(0.96 0.01 var(--accent-h) / 0.88);
-  text-shadow: 0 1px 24px oklch(0.1 0.02 var(--accent-h) / 0.8);
-}
-
-.tagline a {
-  color: var(--accent);
-}
-
-.cue {
-  position: absolute;
-  inset-inline-end: var(--gutter);
-  inset-block-end: clamp(1.5rem, 4vh, 2.5rem);
-  display: inline-flex;
-  gap: 0.5rem;
-  align-items: center;
-  font: 500 0.75rem / 1 var(--font-mono);
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  text-decoration: none;
-  color: var(--fg-muted);
-}
-
-.handle {
-  position: absolute;
-  inset-block-start: clamp(1.25rem, 3vh, 2rem);
-  inset-inline-start: var(--gutter);
-  font: 700 1rem / 1 var(--font-mono);
-  letter-spacing: 0.04em;
-}
-
-.caret {
-  animation: blink 1s steps(1) infinite;
-  color: var(--accent);
-}
-
-@keyframes blink {
-  50% {
-    opacity: 0;
-  }
-}
-
-@supports (animation-timeline: scroll()) {
-  @media (prefers-reduced-motion: no-preference) {
-    .inner {
-      animation: drift linear both;
-      animation-timeline: scroll(root);
-      animation-range: 0 100svh;
+  @keyframes pulse {
+    70% {
+      box-shadow: 0 0 0 0.6em oklch(0.86 0.2 var(--accent-h) / 0);
+    }
+    100% {
+      box-shadow: 0 0 0 0 oklch(0.86 0.2 var(--accent-h) / 0);
     }
   }
-}
 
-@keyframes drift {
-  to {
-    translate: 0 -18vh;
-    opacity: 0;
-    filter: blur(6px);
+  .name {
+    margin-block: 1.5rem 1.75rem;
+    font-size: clamp(3.2rem, 13.5vw, 13rem);
+    font-weight: 800;
+    letter-spacing: -0.045em;
+    line-height: 0.86;
+    text-transform: uppercase;
+    color: #fff;
+    mix-blend-mode: difference;
   }
-}
+
+  .line {
+    display: block;
+  }
+
+  @media (prefers-reduced-motion: no-preference) {
+    .line {
+      animation: rise 1.2s var(--ease-out) both;
+    }
+    .line + .line {
+      animation-delay: 0.12s;
+    }
+    .status,
+    .tagline {
+      animation: fade 1.4s 0.35s var(--ease-out) both;
+    }
+  }
+
+  @keyframes rise {
+    from {
+      opacity: 0;
+      translate: 0 0.35em;
+      filter: blur(12px);
+    }
+  }
+
+  @keyframes fade {
+    from {
+      opacity: 0;
+      translate: 0 1rem;
+    }
+  }
+
+  .tagline {
+    max-width: 38ch;
+    font-size: clamp(1.1rem, 1.6vw, 1.45rem);
+    line-height: 1.45;
+    color: oklch(0.96 0.01 var(--accent-h) / 0.88);
+    text-shadow: 0 1px 24px oklch(0.1 0.02 var(--accent-h) / 0.8);
+  }
+
+  .tagline a {
+    color: var(--accent);
+  }
+
+  .cue {
+    position: absolute;
+    inset-inline-end: var(--gutter);
+    inset-block-end: clamp(1.5rem, 4vh, 2.5rem);
+    display: inline-flex;
+    gap: 0.5rem;
+    align-items: center;
+    font: 500 0.75rem / 1 var(--font-mono);
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    text-decoration: none;
+    color: var(--fg-muted);
+  }
+
+  .handle {
+    position: absolute;
+    inset-block-start: clamp(1.25rem, 3vh, 2rem);
+    inset-inline-start: var(--gutter);
+    font: 700 1rem / 1 var(--font-mono);
+    letter-spacing: 0.04em;
+  }
+
+  .caret {
+    animation: blink 1s steps(1) infinite;
+    color: var(--accent);
+  }
+
+  @keyframes blink {
+    50% {
+      opacity: 0;
+    }
+  }
+
+  @supports (animation-timeline: scroll()) {
+    @media (prefers-reduced-motion: no-preference) {
+      .inner {
+        animation: drift linear both;
+        animation-timeline: scroll(root);
+        animation-range: 0 100svh;
+      }
+    }
+  }
+
+  @keyframes drift {
+    to {
+      translate: 0 -18vh;
+      opacity: 0;
+      filter: blur(6px);
+    }
+  }
 </style>
 
 <script>
-import { mountHero } from '~/lib/hero'
+  import { mountHero } from '~/lib/hero'
 
-const canvas = document.querySelector<HTMLCanvasElement>('.hero .field')
-const hero = document.querySelector<HTMLElement>('.hero')
+  const canvas = document.querySelector<HTMLCanvasElement>('.hero .field')
+  const hero = document.querySelector<HTMLElement>('.hero')
 
-if (canvas && hero) {
-  const still = matchMedia('(prefers-reduced-motion: reduce)').matches
-  const handle = await mountHero(canvas, { still, scrollTarget: hero })
-  if (handle) {
-    document.documentElement.dataset.renderer = handle.backend
+  if (canvas && hero) {
+    const still = matchMedia('(prefers-reduced-motion: reduce)').matches
+    const handle = await mountHero(canvas, { still, scrollTarget: hero })
+    if (handle) {
+      document.documentElement.dataset.renderer = handle.backend
 
-    // Type "contra" anywhere to drop into VCR mode (a nod to the 2019 site).
-    let typed = ''
-    window.addEventListener('keydown', (event) => {
-      if (event.target instanceof HTMLInputElement) return
-      typed = (typed + event.key.toLowerCase()).slice(-6)
-      if (typed !== 'contra') return
-      const on = handle.params.vcr === 0
-      handle.params.vcr = on ? 1 : 0
-      document.documentElement.toggleAttribute('data-vcr', on)
-      handle.redraw()
-    })
+      // Type "contra" anywhere to drop into VCR mode (a nod to the 2019 site).
+      let typed = ''
+      window.addEventListener('keydown', (event) => {
+        if (event.target instanceof HTMLInputElement) return
+        typed = (typed + event.key.toLowerCase()).slice(-6)
+        if (typed !== 'contra') return
+        const on = handle.params.vcr === 0
+        handle.params.vcr = on ? 1 : 0
+        document.documentElement.toggleAttribute('data-vcr', on)
+        handle.redraw()
+      })
+    }
   }
-}
 </script>

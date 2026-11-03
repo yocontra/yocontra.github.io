@@ -8,44 +8,44 @@ import Bare from '~/layouts/Bare.astro'
 
 <!-- Ported verbatim from the 2021 original. Only change: sizes scale down below ~800px wide. -->
 <style is:global>
-body {
-  cursor: pointer;
-  background: url("/experiments/hax/bg.gif");
-}
-#hacked {
-  position: absolute;
-  left: 50%;
-  top: 50%;
-  transform: translate(-50%, -50%);
-  text-align: center;
-  animation: blink 1s steps(1) infinite;
-  background: red;
-  color: white;
-  font-size: min(120px, 15vw);
-  padding: min(64px, 8vw);
-}
+  body {
+    cursor: pointer;
+    background: url("/experiments/hax/bg.gif");
+  }
+  #hacked {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%);
+    text-align: center;
+    animation: blink 1s steps(1) infinite;
+    background: red;
+    color: white;
+    font-size: min(120px, 15vw);
+    padding: min(64px, 8vw);
+  }
 
-@keyframes blink {
-  0% {
-    opacity: 1;
+  @keyframes blink {
+    0% {
+      opacity: 1;
+    }
+    50% {
+      opacity: 0;
+    }
+    100% {
+      opacity: 1;
+    }
   }
-  50% {
-    opacity: 0;
-  }
-  100% {
-    opacity: 1;
-  }
-}
 </style>
 
 <script>
-// Both files are mp4s; only their AAC audio tracks are used (as in the original).
-const tracks = ['/experiments/hax/jolly.mp4', '/experiments/hax/boom.mp4'].map((src) => {
-  const track = new Audio(src)
-  track.loop = true
-  return track
-})
-document.addEventListener('click', () => {
-  for (const track of tracks) track.play().catch(() => {})
-})
+  // Both files are mp4s; only their AAC audio tracks are used (as in the original).
+  const tracks = ['/experiments/hax/jolly.mp4', '/experiments/hax/boom.mp4'].map((src) => {
+    const track = new Audio(src)
+    track.loop = true
+    return track
+  })
+  document.addEventListener('click', () => {
+    for (const track of tracks) track.play().catch(() => {})
+  })
 </script>

@@ -11,7 +11,7 @@ interface Props {
 
 const {
   title,
-  description = 'Eric Schoffstall — engineer, founder, author of gulp.js. Ex-Apple. Back to building in the open.',
+  description = 'Eric Schoffstall is a software engineer working on open source.',
   image = '/og.png',
   noindex = false,
 } = Astro.props
@@ -24,25 +24,25 @@ const ogImage = new URL(image, Astro.site)
 <!doctype html>
 <html lang="en">
   <head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <title>{fullTitle}</title>
-    <meta name="description" content={description}>
-    <meta name="theme-color" content="#0b120e">
-    <meta name="color-scheme" content="dark">
-    <link rel="canonical" href={canonical}>
+    <meta name="description" content={description} />
+    <meta name="theme-color" content="#0b120e" />
+    <meta name="color-scheme" content="dark" />
+    <link rel="canonical" href={canonical} />
     <Favicon />
-    <link rel="sitemap" href="/sitemap-index.xml">
+    <link rel="sitemap" href="/sitemap-index.xml" />
     {noindex && <meta name="robots" content="noindex, nofollow" />}
 
-    <meta property="og:type" content="website">
-    <meta property="og:title" content={fullTitle}>
-    <meta property="og:description" content={description}>
-    <meta property="og:url" content={canonical}>
-    <meta property="og:image" content={ogImage}>
-    <meta name="twitter:card" content="summary_large_image">
-    <meta name="twitter:image" content={ogImage}>
-    <meta name="author" content="Eric Schoffstall">
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content={fullTitle} />
+    <meta property="og:description" content={description} />
+    <meta property="og:url" content={canonical} />
+    <meta property="og:image" content={ogImage} />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:image" content={ogImage} />
+    <meta name="author" content="Eric Schoffstall" />
     <slot name="head" />
   </head>
   <body>

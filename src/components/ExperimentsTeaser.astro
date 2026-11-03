@@ -28,73 +28,73 @@ const listed = experiments.filter((e) => !e.unlisted).slice(0, 3)
 </section>
 
 <style>
-.lab {
-  padding-block: clamp(4rem, 10vh, 8rem);
-}
+  .lab {
+    padding-block: clamp(4rem, 10vh, 8rem);
+  }
 
-header {
-  display: grid;
-  grid-template-columns: 1fr auto;
-  align-items: end;
-  gap: 1rem;
-}
+  header {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    align-items: end;
+    gap: 1rem;
+  }
 
-.eyebrow {
-  grid-column: 1 / -1;
-}
+  .eyebrow {
+    grid-column: 1 / -1;
+  }
 
-h2 {
-  font-size: clamp(2.4rem, 6vw, 5rem);
-}
+  h2 {
+    font-size: clamp(2.4rem, 6vw, 5rem);
+  }
 
-.all {
-  font: 500 0.85rem / 1 var(--font-mono);
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  text-decoration: none;
-  padding-bottom: 0.6rem;
-}
+  .all {
+    font: 500 0.85rem / 1 var(--font-mono);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    text-decoration: none;
+    padding-bottom: 0.6rem;
+  }
 
-.grid {
-  list-style: none;
-  padding: 0;
-  margin: clamp(2.5rem, 6vh, 4rem) 0 0;
-  display: grid;
-  gap: 1.25rem;
-  grid-template-columns: repeat(auto-fill, minmax(min(100%, 19rem), 1fr));
-}
+  .grid {
+    list-style: none;
+    padding: 0;
+    margin: clamp(2.5rem, 6vh, 4rem) 0 0;
+    display: grid;
+    gap: 1.25rem;
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, 19rem), 1fr));
+  }
 
-.grid a {
-  display: grid;
-  gap: 0.8rem;
-  text-decoration: none;
-}
+  .grid a {
+    display: grid;
+    gap: 0.8rem;
+    text-decoration: none;
+  }
 
-.thumb {
-  aspect-ratio: 16 / 10;
-  border-radius: var(--radius);
-  border: 1px solid var(--line);
-  background:
-    radial-gradient(circle at 30% 30%, oklch(0.8 0.2 var(--hue)), transparent 60%),
-    radial-gradient(circle at 80% 70%, oklch(0.55 0.22 calc(var(--hue) + 120)), transparent 55%),
-    oklch(0.2 0.04 var(--hue));
-  background-size: cover;
-  background-position: center;
-  transition:
-    scale 0.6s var(--ease-out),
-    border-color 0.3s;
-}
+  .thumb {
+    aspect-ratio: 16 / 10;
+    border-radius: var(--radius);
+    border: 1px solid var(--line);
+    background:
+      radial-gradient(circle at 30% 30%, oklch(0.8 0.2 var(--hue)), transparent 60%),
+      radial-gradient(circle at 80% 70%, oklch(0.55 0.22 calc(var(--hue) + 120)), transparent 55%),
+      oklch(0.2 0.04 var(--hue));
+    background-size: cover;
+    background-position: center;
+    transition:
+      scale 0.6s var(--ease-out),
+      border-color 0.3s;
+  }
 
-.grid a:hover .thumb {
-  scale: 1.02;
-  border-color: oklch(0.8 0.18 var(--hue) / 0.6);
-}
+  .grid a:hover .thumb {
+    scale: 1.02;
+    border-color: oklch(0.8 0.18 var(--hue) / 0.6);
+  }
 
-h3 {
-  font-size: 1.4rem;
-}
+  h3 {
+    font-size: 1.4rem;
+  }
 
-p {
-  color: var(--fg-muted);
-}
+  p {
+    color: var(--fg-muted);
+  }
 </style>
