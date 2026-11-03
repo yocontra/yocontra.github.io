@@ -99,12 +99,15 @@ export interface PlayerInit {
   level: number
   prestige: number
   bot: boolean
+  /** Index into `BAG_STYLES` (defaults to the Plain Sack). */
+  saddlebag?: number
 }
 
 export function newPlayer(id: number, init: PlayerInit): Player {
   return {
     id,
     ...init,
+    saddlebag: init.saddlebag ?? 0,
     x: 0,
     z: 0,
     rollTicks: 0,

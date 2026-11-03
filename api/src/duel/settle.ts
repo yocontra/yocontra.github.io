@@ -22,7 +22,7 @@ import {
 } from '../../../src/experiments/out-west/data/progression.ts'
 import type { Env } from '../env.ts'
 import { looksAutomated } from '../judge.ts'
-import { type LedgerEntry, ledgerStatements, type Profile } from './external.ts'
+import { grantItemStatement, type LedgerEntry, ledgerStatements, type Profile } from './external.ts'
 import { drawRating, ghostRecordStatements } from './ghost.ts'
 import type { Pair, Seat } from './judge-pvp.ts'
 import type { WaitStats } from './standoff.ts'
@@ -30,6 +30,9 @@ import { type DuelStats, duelStatsStatement, utcDay } from './stats.ts'
 
 const DODGE_WINDOW_MS = 10 * 60 * 1000
 const DAY_MS = 24 * 60 * 60 * 1000
+
+/** Public cowardice tally that earns the Yellow Hat. */
+export const YELLOW_HAT_COWARDICE = 10
 
 export const FLAG_RTT_CAPPED = 1
 export const FLAG_ROUGH_TRAIL = 2
@@ -378,6 +381,10 @@ export function buildSettlement(env: Env, input: SettleInput): SettleOutput {
     perSeat[seat] = money
     entries.push(...money.entries.filter((e) => e.amount !== 0 || (e.xp ?? 0) !== 0))
     side.push(duelStatsStatement(env, h.accountId, money.stats))
+    if (money.stats.cowardice >= YELLOW_HAT_COWARDICE) {
+      // The Yellow Hat (§7): a reward for drawing early 10 times. Idempotent.
+      side.push(grantItemStatement(env, h.accountId, 'hat.yellow'))
+    }
     side.push(...ghostObservation(env, { input, seat, h }, money.stats))
     settlements[seat] = withLevelUp(
       {

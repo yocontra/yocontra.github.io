@@ -135,6 +135,32 @@ describe('settlement (real D1)', () => {
     expect((await getProfile(t.env, b))?.purse).toBe(250 - duelPenalty(250, bountyForLevel(1)))
   })
 
+  it('the 10th cowardice earns the Yellow Hat, once', async () => {
+    const [a, b] = [await player('Yellow'), await player('Brave')]
+    const owns = async (): Promise<boolean> =>
+      (await t.db
+        .prepare("SELECT 1 AS yes FROM inventory WHERE account_id = ? AND item_id = 'hat.yellow'")
+        .bind(a)
+        .first<{ yes: number }>()) !== null
+    const coward = async (n: number) => {
+      const sa = await seat(a)
+      await settle(
+        base({
+          outcome: 'coward',
+          winner: 1,
+          culprit: 0,
+          humans: [{ ...sa, stats: { ...sa.stats, cowardice: n } }, await seat(b)],
+        }),
+      )
+    }
+    await coward(8)
+    expect(await owns()).toBe(false)
+    await coward(9)
+    expect(await owns()).toBe(true)
+    await coward(10)
+    expect(await owns()).toBe(true)
+  })
+
   it('a replay of the same settlement pays nothing twice', async () => {
     const [a, b] = [await player('Replay'), await player('Victim')]
     const input = base({ humans: [await seat(a), await seat(b)] })

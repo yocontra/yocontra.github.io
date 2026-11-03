@@ -70,6 +70,8 @@ export interface JoinProfile {
   tcpRtt: number | null
   /** False for dev accounts without a profile: nothing is written to D1 for them. */
   ledger?: boolean
+  /** The equipped saddlebag's wire index (`bagStyleIndex`): the look of the bags this player drops. */
+  saddlebag?: number
   /** In the Badlands (§8): deposits bank XP only, the dollars are frozen. */
   frozen?: boolean
   /** Accounts this one blocks or is blocked by: never paired in a call-out. */
@@ -246,6 +248,7 @@ export class LobbyCore {
       level: profile.level,
       prestige: profile.prestige,
       bot: false,
+      saddlebag: profile.saddlebag ?? 0,
     })
     const p = this.world.players[id]
     if (id < 0 || !p) {

@@ -7,6 +7,7 @@
  * storage first so a failed batch retries under the same key). Carried cash lives in memory only.
  */
 import { DurableObject } from 'cloudflare:workers'
+import { bagStyleIndex } from '../../../src/experiments/out-west/contract/town.ts'
 import { TICK_MS } from '../../../src/experiments/out-west/ffa/sim/constants.ts'
 import { recordUsage } from '../budget.ts'
 import { getProfile } from '../economy/profile.ts'
@@ -134,6 +135,7 @@ export class Lobby extends DurableObject<Env> {
         banked: profile?.purse ?? 0,
         tcpRtt: Number.isFinite(tcp) && tcp > 0 ? tcp : null,
         ledger: profile !== null,
+        saddlebag: bagStyleIndex(profile?.loadout.saddlebag),
         frozen: isShadowed(standingNow.flags),
         blocked: standingNow.blocked,
       },
