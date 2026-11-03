@@ -4,7 +4,7 @@
  * for prediction of its own movement (`move.ts`) only.
  */
 
-import { NONE } from '../../contract/town.ts'
+import { NONE, WEAPON_REVOLVER } from '../../contract/town.ts'
 import { canFire, fire, updateWeapon } from './combat.ts'
 import {
   HOLSTER_TICKS,
@@ -29,6 +29,13 @@ import {
   updateStrongbox,
 } from './money.ts'
 import { inIframes, stepMove } from './move.ts'
+import {
+  clearPickups,
+  firePickupWeapon,
+  maybeThrow,
+  updateFuses,
+  updatePickups,
+} from './pickups.ts'
 import { handleCallout, updateShowdowns } from './showdown.ts'
 import {
   activePlayers,
@@ -100,6 +107,7 @@ export function spawnPlayer(w: World, p: Player): void {
   p.lastFireTick = w.tick - HOLSTER_TICKS
   p.deadEyeStart = -1
   p.hatless = false
+  clearPickups(p)
   p.lastDamageTick = -1_000_000
   w.events.push({ type: 'respawn', player: p.id })
 }
@@ -182,8 +190,13 @@ function act(w: World, p: Player, f: InputFrame, aliveAtStart: boolean): void {
   }
   updateWeapon(w, p, f.buttons)
   if (canFire(p, f.buttons, aliveAtStart)) {
-    fire(w, p, f.aim, f.viewTime)
+    if (p.weapon === WEAPON_REVOLVER) {
+      fire(w, p, f.aim, f.viewTime)
+    } else {
+      firePickupWeapon(w, p, f.aim, f.viewTime)
+    }
   }
+  maybeThrow(w, p, f.buttons, f.aim)
   if (!p.alive) {
     return
   }
@@ -225,6 +238,8 @@ export function step(w: World, frames: readonly (InputFrame | null | undefined)[
     progressChannel(w, p)
   }
   updateBags(w)
+  updatePickups(w)
+  updateFuses(w)
   updateStrongbox(w)
   if (w.tick % MOST_WANTED_REFRESH_TICKS === 0) {
     refreshMostWanted(w)

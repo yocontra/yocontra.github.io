@@ -132,6 +132,8 @@ export interface SelfView {
   respawnTicks: number
   holsterTicks: number
   lastButtons: number
+  /** Packed weapon state; unpack with `selfWeapon()` from the contract. */
+  weapon: number
 }
 
 export interface TownView {
@@ -267,7 +269,7 @@ function writeSelf(w: Writer, s: SelfView): void {
     .u8(clampU8(s.respawnTicks))
     .u8(clampU8(s.holsterTicks))
     .u8(s.lastButtons)
-    .u8(0)
+    .u8(s.weapon)
 }
 
 function readSelf(r: Reader): SelfView {
@@ -290,8 +292,8 @@ function readSelf(r: Reader): SelfView {
     respawnTicks: r.u8(),
     holsterTicks: r.u8(),
     lastButtons: r.u8(),
+    weapon: r.u8(),
   }
-  r.u8()
   return s
 }
 

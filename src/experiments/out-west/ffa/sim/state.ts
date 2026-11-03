@@ -1,12 +1,14 @@
 /** The world record every sim module operates on, plus small shared helpers. */
-import { CHANNEL_NONE, NONE } from '../../contract/town.ts'
+import { CHANNEL_NONE, NONE, WEAPON_REVOLVER } from '../../contract/town.ts'
 import { HISTORY_TICKS, MAX_PLAYERS, REVOLVER_ROUNDS } from './constants.ts'
 import { buildGrid, type Grid, TOWN, type TownLayout } from './layout.ts'
 import { Rng } from './rng.ts'
 import {
   type Bag,
   type Deposit,
+  type Fuse,
   newStats,
+  type PickupState,
   type Player,
   type Showdown,
   type SimEvent,
@@ -33,6 +35,8 @@ export interface World {
   nextBagId: number
   strongbox: Strongbox | null
   nextStrongboxTick: number
+  pickups: PickupState[]
+  fuses: Fuse[]
   showdowns: Map<number, Showdown>
   nextShowdownId: number
   mostWanted: number
@@ -67,6 +71,8 @@ export function createWorld(options: WorldOptions = {}): World {
     nextBagId: 1,
     strongbox: null,
     nextStrongboxTick: 0,
+    pickups: layout.pickups.map((_, spot) => ({ spot, availableAt: 0 })),
+    fuses: [],
     showdowns: new Map(),
     nextShowdownId: 1,
     mostWanted: NONE,
@@ -111,6 +117,9 @@ export function newPlayer(id: number, init: PlayerInit): Player {
     lastFireTick: -1_000_000,
     deadEyeStart: -1,
     hatless: false,
+    weapon: WEAPON_REVOLVER,
+    weaponRounds: 0,
+    dynamite: 0,
     carried: 0,
     channel: null,
     lastButtons: 0,

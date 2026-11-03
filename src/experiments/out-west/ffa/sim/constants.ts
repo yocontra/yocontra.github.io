@@ -52,6 +52,28 @@ export const MAX_RANGE = 22
 export const SPREAD_STANDING_DEG = 1.5
 export const SPREAD_MOVING_DEG = 4
 
+// --- Map pickups (§3.2: equal-access, fixed spots, 45 s respawn) ------------------------------------
+
+export const PICKUP_RESPAWN_TICKS = s(45)
+export const PICKUP_RADIUS = 1.2
+export const SHOTGUN_SHELLS = 2
+export const SHOTGUN_PELLETS = 8
+export const SHOTGUN_PELLET_DAMAGE = 12
+export const SHOTGUN_RANGE = 9
+/** Full cone width of the pellet pattern. */
+export const SHOTGUN_CONE_DEG = 12
+export const SHOTGUN_FIRE_MS = 700
+export const RIFLE_ROUNDS = 5
+export const RIFLE_DAMAGE = 60
+export const RIFLE_RANGE = 35
+export const RIFLE_FIRE_MS = 900
+export const RIFLE_SPREAD_STANDING_DEG = 0.4
+export const RIFLE_SPREAD_MOVING_DEG = 3
+export const DYNAMITE_FUSE_TICKS = s(2)
+export const DYNAMITE_RADIUS = 4
+export const DYNAMITE_DAMAGE = 80
+export const DYNAMITE_THROW_RANGE = 10
+
 // --- Dead-Eye -----------------------------------------------------------------------------------
 
 export const HOLSTER_TICKS = s(1.5)

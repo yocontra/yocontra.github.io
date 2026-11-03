@@ -46,7 +46,7 @@
  * | Section | Layout |
  * |---|---|
  * | Header (10 B) | `u8 MSG_SNAPSHOT`, `u32 tick`, `u16 lastInputSeq`, `u8 flags` (`SNAP_*`), `u8 entityCount`, `u8 removedCount` |
- * | Self (26 B) | `u16 x`, `u16 z`, `u8 hp`, `u8 ammo`, `u8 selfFlags` (`SELF_*`), `u8 rollTicks`, `u8 rollCooldown`, `u16 rollDir`, `u8 reloadTicks`, `u8 fireCooldown` (ms ÷ 4), `u8 protectTicks`, `u8 deadEyeTicks`, `u8 channelKind` (`CHANNEL_*`), `u8 channelTicks`, `u32 carried`, `u8 respawnTicks`, `u8 holsterTicks`, `u8 lastButtons`, `u8 _reserved` |
+ * | Self (26 B) | `u16 x`, `u16 z`, `u8 hp`, `u8 ammo`, `u8 selfFlags` (`SELF_*`), `u8 rollTicks`, `u8 rollCooldown`, `u16 rollDir`, `u8 reloadTicks`, `u8 fireCooldown` (ms ÷ 4), `u8 protectTicks`, `u8 deadEyeTicks`, `u8 channelKind` (`CHANNEL_*`), `u8 channelTicks`, `u32 carried`, `u8 respawnTicks`, `u8 holsterTicks`, `u8 lastButtons`, `u8 weapon` (`selfWeapon()`: bits 0–1 `WEAPON_*`, bits 2–4 pickup-weapon rounds, bit 5 holding dynamite; 0 = plain revolver) |
  * | Removed | `removedCount × u8 id` (left interest or left the lobby) |
  * | Entities | `entityCount ×` entity record |
  * | Town (if `SNAP_TOWN`) | `u8 mostWantedId` (255 none), `u8 mwX`, `u8 mwZ` (0.6 m units), `u8 strongboxSpot` (255 none), `u16 strongboxValue`, `u8 strongboxState` (`BOX_*`), `u8 players`, `u32 banked` (this player's wallet, as last confirmed) |
@@ -58,6 +58,21 @@
  * (`ANIM_*`); `ENT_CARRY` → `u8 carryTier`. An entity entering interest sends every field with
  * `ENT_POS_FULL` (9–10 B); a steady one sends 2–6 B. Entities 40–60 m away are refreshed every other
  * tick; beyond 60 m they are removed (the Most Wanted star rides in the town section instead).
+ *
+ * # Map pickups (server-authoritative)
+ *
+ * The spots are `pickups` in `town.layout.json` (event `spot` = index in that array). Every spot
+ * starts available; walking within 1.2 m takes it, and it respawns 45 s later (`EV_PICKUP_TAKEN`,
+ * then `EV_PICKUP_READY`). A full snapshot replays `EV_PICKUP_TAKEN` (player 255) for every spot
+ * that's currently gone, and `EV_DYNAMITE_THROWN` for every lit fuse.
+ * - Shotgun: 2 shells, 8 pellets × 12 damage, 9 m, 700 ms between shells. One `EV_SHOT` per shell
+ *   with `SHOT_SHOTGUN` (target = the player hit hardest).
+ * - Rifle: 5 rounds, 60 damage, 35 m, 900 ms bolt. `EV_SHOT` with `SHOT_RIFLE`.
+ * - Dynamite (×1): `BTN_THROW` lobs it up to 10 m along your aim (stopped by walls); 2 s fuse, then
+ *   80 damage to everyone within 4 m with no wall in between, including the thrower.
+ * A pickup weapon replaces the gun in your hand until its rounds run out (then back to the
+ * revolver, which keeps its own six); Dead-Eye is revolver-only. Dying drops nothing extra: pickup
+ * weapons and dynamite are simply lost.
  *
  * # Server → client: `MSG_FULL_RESET`
  *
@@ -170,6 +185,17 @@ export const BTN_INTERACT = 16
 export const BTN_CALLOUT = 32
 /** Hold-to-leave channel (5 s). */
 export const BTN_LEAVE = 64
+/** Throw dynamite (if you're holding a stick). */
+export const BTN_THROW = 128
+
+export const WEAPON_REVOLVER = 0
+export const WEAPON_SHOTGUN = 1
+export const WEAPON_RIFLE = 2
+
+/** Unpack the self block's `weapon` byte. */
+export function selfWeapon(byte: number): { weapon: number; rounds: number; dynamite: boolean } {
+  return { weapon: byte & 3, rounds: (byte >> 2) & 7, dynamite: (byte & 32) !== 0 }
+}
 
 // --- Snapshot flags -----------------------------------------------------------------------------
 
@@ -258,6 +284,15 @@ export const EV_HAT_OFF = 16
 /** `u8 player` (the leave channel finished; the socket closes next) */
 export const EV_LEFT = 17
 
+/** `u8 spot, u8 player` (255: replayed on a full snapshot, taken earlier) */
+export const EV_PICKUP_TAKEN = 18
+/** `u8 spot` (respawned) */
+export const EV_PICKUP_READY = 19
+/** `u8 player, u16 x, u16 z, u8 fuseTicks` (where it landed, and ticks until it blows) */
+export const EV_DYNAMITE_THROWN = 20
+/** `u8 by, u16 x, u16 z` */
+export const EV_EXPLOSION = 21
+
 export const EVENT_SIZES: Readonly<Record<number, number>> = {
   [EV_SHOT]: 6,
   [EV_DAMAGE]: 4,
@@ -276,6 +311,10 @@ export const EVENT_SIZES: Readonly<Record<number, number>> = {
   [EV_CHANNEL_CANCEL]: 2,
   [EV_HAT_OFF]: 1,
   [EV_LEFT]: 1,
+  [EV_PICKUP_TAKEN]: 2,
+  [EV_PICKUP_READY]: 1,
+  [EV_DYNAMITE_THROWN]: 6,
+  [EV_EXPLOSION]: 5,
 }
 
 /** Shot range units: metres = rangeQ × SHOT_RANGE_UNIT. */
@@ -284,6 +323,8 @@ export const SHOT_RANGE_UNIT = 0.25
 export const SHOT_HIT = 1
 export const SHOT_DEAD_EYE = 2
 export const SHOT_WALL = 4
+export const SHOT_SHOTGUN = 8
+export const SHOT_RIFLE = 16
 
 export const KILL_DEAD_EYE = 1
 export const KILL_PARDON = 2

@@ -148,6 +148,7 @@ export function selfView(w: World, p: Player): SelfView {
     respawnTicks: p.alive ? 0 : Math.max(0, p.respawnTick - w.tick),
     holsterTicks: Math.max(0, HOLSTER_TICKS - (w.tick - p.lastFireTick)),
     lastButtons: p.lastButtons,
+    weapon: (p.weapon & 3) | (Math.min(7, p.weaponRounds) << 2) | (p.dynamite > 0 ? 32 : 0),
   }
 }
 
@@ -213,7 +214,7 @@ export interface SnapshotContext {
   events: readonly SimEvent[]
 }
 
-/** Events that rebuild the world for a fresh baseline: every bag and running showdown. */
+/** Events that rebuild the world for a fresh baseline: bags, showdowns, taken pickups, lit fuses. */
 function catchUpEvents(w: World): WireEvent[] {
   const out: WireEvent[] = []
   for (const bag of w.bags) {
@@ -221,6 +222,15 @@ function catchUpEvents(w: World): WireEvent[] {
   }
   for (const sd of w.showdowns.values()) {
     out.push(toWireEvent({ type: 'showdown_start', showdown: sd }))
+  }
+  for (const pk of w.pickups) {
+    if (pk.availableAt > 0) {
+      out.push(toWireEvent({ type: 'pickup_taken', spot: pk.spot, player: NONE }))
+    }
+  }
+  for (const f of w.fuses) {
+    const fuseTicks = Math.max(0, f.explodeAt - w.tick)
+    out.push(toWireEvent({ type: 'dynamite_thrown', player: f.by, x: f.x, z: f.z, fuseTicks }))
   }
   return out
 }
