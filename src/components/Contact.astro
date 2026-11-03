@@ -1,0 +1,103 @@
+---
+import { socials } from '~/data/career'
+---
+
+<footer id="contact" class="contact">
+  <div class="wrap">
+    <p class="eyebrow">Contact</p>
+    <h2 id="contact-title">
+      <a class="mail" href="mailto:yo@contra.io">yo@contra.io</a>
+    </h2>
+    <p class="note">Open to interesting work, collaborations, and OSS. Say hi.</p>
+
+    <ul class="socials">
+      {socials.map((s) => (
+        <li>
+          <a href={s.href}>{s.label}</a>
+        </li>
+      ))}
+    </ul>
+
+    <div class="colophon">
+      <p>© {new Date().getFullYear()} Eric Schoffstall</p>
+      <p>
+        Hand-written WebGPU, Astro, TypeScript.
+        <a href="https://github.com/yocontra/contra.github.io">Source</a>.
+      </p>
+    </div>
+  </div>
+</footer>
+
+<style>
+.contact {
+  padding-block: clamp(6rem, 16vh, 10rem) 2rem;
+  background: linear-gradient(to bottom, transparent, oklch(0.86 0.2 var(--accent-h) / 0.06));
+  border-top: 1px solid var(--line);
+}
+
+h2 {
+  margin-block: 1.25rem 1.5rem;
+  font-size: clamp(2.4rem, 10vw, 9rem);
+  letter-spacing: -0.05em;
+}
+
+.mail {
+  text-decoration: none;
+  background:
+    linear-gradient(100deg, var(--fg) 20%, var(--accent) 50%, var(--accent-2) 80%) 0 0 / 200% 100%;
+  background-clip: text;
+  color: transparent;
+  transition: background-position 0.8s var(--ease-out);
+  overflow-wrap: anywhere;
+}
+
+.mail:hover {
+  background-position: 100% 0;
+  color: transparent;
+}
+
+.note {
+  color: var(--fg-muted);
+  font-size: 1.15rem;
+}
+
+.socials {
+  list-style: none;
+  padding: 0;
+  margin: 3rem 0 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
+.socials a {
+  display: inline-block;
+  padding: 0.75em 1.2em;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  font: 500 0.85rem / 1 var(--font-mono);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  text-decoration: none;
+  transition:
+    background 0.3s,
+    color 0.3s,
+    border-color 0.3s;
+}
+
+.socials a:hover {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-ink);
+}
+
+.colophon {
+  margin-top: clamp(5rem, 14vh, 8rem);
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 1rem;
+  font: 0.8rem / 1.4 var(--font-mono);
+  color: var(--fg-faint);
+}
+</style>

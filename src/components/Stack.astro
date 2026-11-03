@@ -1,0 +1,55 @@
+---
+import { stack } from '~/data/career'
+
+const row = [...stack, ...stack]
+---
+
+<section class="stack" aria-label="Core stack">
+  <div class="track">
+    <ul>
+      {row.map((item, i) => <li aria-hidden={i >= stack.length ? 'true' : undefined}>{item}</li>)}
+    </ul>
+  </div>
+</section>
+
+<style>
+.stack {
+  padding-block: clamp(3rem, 8vh, 5rem);
+  overflow: hidden;
+  mask-image: linear-gradient(90deg, transparent, #000 12%, #000 88%, transparent);
+}
+
+ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  gap: 3rem;
+  width: max-content;
+  animation: marquee 50s linear infinite;
+}
+
+.stack:hover ul {
+  animation-play-state: paused;
+}
+
+li {
+  font: 600 clamp(1.6rem, 4vw, 3rem) / 1 var(--font-display);
+  letter-spacing: -0.03em;
+  color: transparent;
+  -webkit-text-stroke: 1px var(--fg-faint);
+  white-space: nowrap;
+  transition: color 0.3s;
+}
+
+li:hover {
+  color: var(--accent);
+  -webkit-text-stroke-color: transparent;
+}
+
+@keyframes marquee {
+  to {
+    translate: calc(-50% - 1.5rem) 0;
+  }
+}
+</style>

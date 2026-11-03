@@ -120,9 +120,14 @@ export async function mountHero(
     state.scroll = Math.max(0, Math.min(1, -rect.top / Math.max(1, rect.height)))
   }
 
-  const render = () => {
+  let settled = false
+  const render = (force = false) => {
     resize()
     updateScroll()
+    // Once the field has fully faded out behind the page, stop spending GPU time on it.
+    const faded = state.scroll >= 1
+    if (faded && settled && !force) return
+    settled = faded
     backend.draw(packUniforms(uniforms, state, params))
   }
 
@@ -182,7 +187,7 @@ export async function mountHero(
 
   const onVisibility = () => (document.hidden ? stop() : start())
   const ro = new ResizeObserver(() => {
-    if (!raf) render()
+    if (!raf) render(true)
   })
   ro.observe(canvas)
 
@@ -190,7 +195,7 @@ export async function mountHero(
   window.addEventListener('deviceorientation', onOrientation, { passive: true })
   document.addEventListener('visibilitychange', onVisibility)
 
-  render()
+  render(true)
   start()
 
   return {
@@ -202,7 +207,7 @@ export async function mountHero(
     get frameMs() {
       return frameMs
     },
-    redraw: render,
+    redraw: () => render(true),
     destroy() {
       destroyed = true
       stop()
