@@ -2,7 +2,6 @@
 // biome-ignore-all lint/suspicious/noUnnecessaryConditions: class fields are flags mutated from outside the method; Biome narrows them to their literal initializer
 import {
   BackSide,
-  CanvasTexture,
   Color,
   DirectionalLight,
   Fog,
@@ -17,10 +16,10 @@ import {
   type Scene,
   ShaderMaterial,
   SphereGeometry,
-  SRGBColorSpace,
   type Texture,
   Vector3,
 } from 'three'
+import { ClockTower } from './clocktower.ts'
 import { GeoBuilder } from './geo.ts'
 import { addStatic, buildMesas, buildPosterPost, buildWaterTower } from './landmarks.ts'
 import { type Preset, presetAt } from './presets.ts'
@@ -28,7 +27,7 @@ import { mergePlaced } from './props.ts'
 import { skyFrag, skyVert } from './sky.ts'
 import { BUILDINGS, dressBoardwalks, facade, type Placed, SIGNS, STREET } from './street.ts'
 import { RIM } from './style.ts'
-import { clockCanvas, signAtlas } from './textures.ts'
+import { signAtlas } from './textures.ts'
 import { attachArm, attachBoard, withTownAO } from './town-pbr.ts'
 
 export interface Lantern {
@@ -61,9 +60,8 @@ export class World {
   readonly wallMat: MeshStandardMaterial
   readonly trimMat: MeshStandardMaterial
   readonly signMat: MeshStandardMaterial
-  readonly clockMat: MeshStandardMaterial
-  private readonly clock = clockCanvas()
-  private readonly clockTex: CanvasTexture
+  /** The courthouse clock tower at the end of the street (built with the town). */
+  private tower: ClockTower | null = null
   readonly glintAnchor = new Group()
   readonly poster: Group
   posterMat: MeshStandardMaterial
@@ -174,15 +172,6 @@ export class World {
     const atlas = signAtlas(SIGNS)
     this.signMat = new MeshStandardMaterial({ map: atlas.tex, roughness: 0.85 })
     attachBoard(this.signMat, atlas.rows)
-    this.clockTex = new CanvasTexture(this.clock.canvas)
-    this.clockTex.colorSpace = SRGBColorSpace
-    this.clockMat = new MeshStandardMaterial({
-      map: this.clockTex,
-      emissiveMap: this.clockTex,
-      emissive: new Color(0xff_e0_a0),
-      emissiveIntensity: 0,
-      roughness: 0.6,
-    })
 
     // --- ground
     const groundMat = new MeshStandardMaterial({
@@ -243,7 +232,6 @@ float gn(vec2 p){ vec2 i=floor(p); vec2 f=fract(p); f=f*f*(3.0-2.0*f);
     this.silhouetteHide.push(this.ground)
 
     this.buildTown(atlas.rows)
-    this.buildChurch()
     buildWaterTower(this.root, this.trimMat)
     buildMesas(this.root)
     this.poster = buildPosterPost(this.root, this.trimMat)
@@ -356,6 +344,12 @@ float gn(vec2 p){ vec2 i=floor(p); vec2 f=fract(p); f=f*f*(3.0-2.0*f);
     trim.box(8.3, 0.35, -16, 0.9, 0.7, 2.4, 0x5a_44_30)
 
     dressBoardwalks(kit)
+    this.tower = new ClockTower(this.root, { trim, glass, kit }, STREET.churchZ, () => {
+      // the atlas landed: recapture the town light probe with the real masonry
+      const ud = this.scene.userData
+      ud.owLightVersion = ((ud.owLightVersion as number | undefined) ?? 0) + 1
+    })
+    this.bellPos.copy(this.tower.bellPos)
     mergePlaced(kit, this.root, new Map([['KitGlass', this.windowMat]]))
     addStatic(this.root, walls, this.wallMat)
     addStatic(this.root, trim, this.trimMat)
@@ -366,59 +360,13 @@ float gn(vec2 p){ vec2 i=floor(p); vec2 f=fract(p); f=f*f*(3.0-2.0*f);
     addStatic(this.root, signs, this.signMat, false)
   }
 
-  private buildChurch(): void {
-    const w = new GeoBuilder(1.9)
-    const t = new GeoBuilder(1.6)
-    const cz = STREET.churchZ
-    const white = 0xf4_ef_e6
-    // nave
-    w.box(0, 3.6, cz + 9, 11, 7.2, 18, white, { skip: ['bottom'] })
-    t.gable(0, 7.2, cz + 9, 11, 18, 4.2, 'z', 0x3a_34_38, 0.5)
-    // tower
-    w.box(0, 7, cz - 1, 4.4, 14, 4.4, white, { skip: ['bottom'] })
-    // belfry
-    t.box(0, 15.1, cz - 1, 4.6, 0.3, 4.6, 0x3a_2a_20)
-    for (const [dx, dz] of [
-      [-2, -2],
-      [2, -2],
-      [-2, 2],
-      [2, 2],
-    ] as const) {
-      t.box(dx, 16.5, cz - 1 + dz, 0.4, 2.6, 0.4, white)
-    }
-    t.box(0, 17.95, cz - 1, 4.8, 0.3, 4.8, 0x3a_2a_20)
-    t.pyramid(0, 18.1, cz - 1, 4.8, 6.5, 0x2e_2a_2e)
-    // cross
-    t.box(0, 25.4, cz - 1, 0.16, 1.6, 0.16, 0x2a_2a_2a)
-    t.box(0, 25.7, cz - 1, 0.16, 0.16, 0.9, 0x2a_2a_2a)
-    // door + steps
-    t.box(0, 1.6, cz - 3.25, 1.8, 3.2, 0.1, 0x2a_1a_12)
-    t.box(0, 0.15, cz - 4, 4, 0.3, 1.6, 0x8a_7a_68)
-    addStatic(this.root, w, this.wallMat)
-    addStatic(this.root, t, this.trimMat)
-    // bell
-    const bell = new Mesh(
-      new SphereGeometry(0.75, 12, 8, 0, Math.PI * 2, 0, Math.PI * 0.55),
-      new MeshStandardMaterial({ color: 0x8a_6a_2a, metalness: 0.8, roughness: 0.35 }),
-    )
-    bell.position.set(0, 16.9, cz - 1)
-    bell.rotation.x = Math.PI
-    bell.position.y += 0.6
-    this.root.add(bell)
-    this.bellPos.copy(bell.position)
-    // clock face
-    const face = new Mesh(new PlaneGeometry(2.6, 2.6), this.clockMat)
-    face.position.set(0, 12.2, cz - 3.22)
-    face.rotation.y = Math.PI
-    this.root.add(face)
-    // round rim via alpha: draw with transparent corners
-    this.clockMat.transparent = true
-    this.clockMat.alphaTest = 0.5
+  setClock(h: number, m: number): void {
+    this.tower?.setClock(h, m)
   }
 
-  setClock(h: number, m: number): void {
-    this.clock.draw(h, m)
-    this.clockTex.needsUpdate = true
+  /** A stroke of the tower bell (the swing; the sound is the caller's). */
+  toll(): void {
+    this.tower?.toll()
   }
 
   /** Recompute everything that depends on time of day. */
@@ -458,7 +406,8 @@ float gn(vec2 p){ vec2 i=floor(p); vec2 f=fract(p); f=f*f*(3.0-2.0*f);
     RIM.color.value.copy(p.rimColor)
     RIM.strength.value = p.rim
     this.windowMat.emissiveIntensity = p.windows * 1.6
-    this.clockMat.emissiveIntensity = day > 0.95 ? (day - 0.95) * 20 * 0.9 : 0
+    // the dials are lit from behind once the lamps are (dusk on)
+    this.tower?.night(Math.min(1, Math.max(0, (p.windows - 0.25) / 0.6)))
     // The renderer picks the LUT pair from owDay, and recaptures the town light
     // probe whenever owLightVersion moves (a few frames, spread out).
     const ud = this.scene.userData
@@ -481,6 +430,7 @@ float gn(vec2 p){ vec2 i=floor(p); vec2 f=fract(p); f=f*f*(3.0-2.0*f);
 
   update(dt: number): void {
     this.time += dt
+    this.tower?.update(dt)
     const lv = this.preset.lanterns
     for (const l of this.lanterns) {
       const f =

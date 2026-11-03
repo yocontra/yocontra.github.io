@@ -56,7 +56,7 @@ export class Masonry {
     this.extra.push({ geo: nonIndexed(geo), cell: CIVIC_INDEX[c], color })
   }
 
-  private planar(e: { geo: BufferGeometry; cell: number; color: number }): BufferGeometry {
+  private static planar(e: { geo: BufferGeometry; cell: number; color: number }): BufferGeometry {
     const g = e.geo
     const pos = g.getAttribute('position')
     const n = pos.count
@@ -122,7 +122,7 @@ export class Masonry {
       }
     })
     for (const e of this.extra) {
-      offset(this.planar(e), e.cell)
+      offset(Masonry.planar(e), e.cell)
     }
     const geo = parts.length > 0 ? mergeGeometries(parts, false) : null
     if (geo && shade) {

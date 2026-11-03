@@ -69,7 +69,7 @@ vec3 civicGrime(vec3 p, vec3 n) {
 `
 
 function swap(chunk: string): string {
-  return chunk.replace(/texture2D\( (\w+), /gu, 'civicTex( $1, ')
+  return chunk.replace(/texture2D\( (?<tex>\w+), /gu, 'civicTex( $<tex>, ')
 }
 
 /** The masonry material; its atlas streams in (flat colour until then). */
@@ -282,9 +282,9 @@ function paintDial(c: HTMLCanvasElement): void {
   })
   ring(r * 0.52, s * 0.003)
   ctx.font = `italic 500 ${Math.round(s * 0.034)}px ${FONT.text}`
-  ctx.fillText('Tempus Fugit', 0, r * 0.3)
+  ctx.fillText('Tempus Fugit', 0, r * 0.37)
   ctx.font = `500 ${Math.round(s * 0.026)}px ${FONT.text}`
-  ctx.fillText('A.D. 1879', 0, -r * 0.3)
+  ctx.fillText('A.D. 1879', 0, r * 0.45)
 }
 
 export function dialMaterial(): MeshStandardMaterial {

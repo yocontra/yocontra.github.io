@@ -177,6 +177,7 @@ function strike(d: Director, n: number): void {
   const c = d.c
   d.strikes = n
   c.audio.play('bell', { gain: 0.8, pos: c.world.bellPos, reverb: 0.5 })
+  c.world.toll()
   c.world.setClock(12, 0)
   c.hud.line(d.outlaw.name, `${NUMBERS[n - 1] ?? ''}…`, 900)
   c.hud.fake(`[bell strikes ${n}]`)
@@ -248,6 +249,7 @@ export function onCall(d: Director, duel: number): void {
   d.callT = now
   if (!d.bellScheduled) {
     d.bellVoice = c.audio.call()
+    c.world.toll()
     if (d.callIsScream) {
       c.audio.play('shout', { gain: 1.0, rate: 0.7, pos: d.enemy?.root.position.clone() ?? V() })
     }

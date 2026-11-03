@@ -30,6 +30,7 @@ import { GeoBuilder } from '../../scene/geo.ts'
 import { mergePlaced, type PropDef, placeMatrix, propDef, propsLibrary } from '../../scene/props.ts'
 import { signAtlas } from '../../scene/textures.ts'
 import { type Building, buildingWalls, type Side, type TownLayout } from '../sim/layout.ts'
+import { addClockTower } from './clock-tower.ts'
 import { cutaway } from './cutaway.ts'
 import { dressCover } from './dressing.ts'
 import { bakeGroundMask, groundMesh } from './ground.ts'
@@ -474,6 +475,10 @@ function addBuilding(bs: Builders, b: Building, layout: TownLayout, id: number):
   const h = b.height
   if (b.kind === 'water_tower') {
     addWaterTower(bs, b)
+    return
+  }
+  if (b.kind === 'tower') {
+    addClockTower(bs, b, id)
     return
   }
   for (const w of buildingWalls(b)) {

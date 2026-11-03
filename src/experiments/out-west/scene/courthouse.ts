@@ -10,6 +10,7 @@ import { Matrix4, Vector3 } from 'three'
 import type { GeoBuilder } from './geo.ts'
 import type { Masonry } from './masonry.ts'
 import { type PropDef, placeMatrix, propDef, propsLibrary } from './props.ts'
+import type { Placed } from './street.ts'
 
 export const BRICK = 0xe6_d2_c4
 export const STONE = 0xf4_ea_dc
@@ -17,8 +18,6 @@ export const SHINGLE = 0xc4_ae_96
 export const TIN = 0xb4_b2_ae
 export const PAINT = 0xd8_cc_b0
 export const DARK_WOOD = 0x3a_2a_1e
-
-export type Placed = { def: PropDef; at: Matrix4 }
 
 export interface Parts {
   m: Masonry
@@ -39,7 +38,7 @@ export interface Face {
 
 /**
  * A box against a wall: `a` along the wall, `y` its centre height, `w` x `h` on the face,
- * from 0.1 inside the wall to `proud` in front of it.
+ * from `inner` inside the wall to `proud` in front of it.
  */
 export function boxOn(
   b: GeoBuilder,
@@ -50,12 +49,13 @@ export function boxOn(
   h: number,
   proud: number,
   color: number,
+  inner = 0.1,
 ): void {
-  const depth = proud + 0.1
+  const depth = proud + inner
   if (f.nz === 0) {
-    b.box(f.d + (Math.sign(f.nx) * (proud - 0.1)) / 2, y, a, depth, h, w, color)
+    b.box(f.d + (Math.sign(f.nx) * (proud - inner)) / 2, y, a, depth, h, w, color)
   } else {
-    b.box(a, y, f.d + (Math.sign(f.nz) * (proud - 0.1)) / 2, w, h, depth, color)
+    b.box(a, y, f.d + (Math.sign(f.nz) * (proud - inner)) / 2, w, h, depth, color)
   }
 }
 
