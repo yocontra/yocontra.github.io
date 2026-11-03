@@ -2,13 +2,8 @@
  * Your Bounty Hunt standing on the poster panel: the record (wins, losses, draws, streak,
  * cowardice) and the "Let my ghost ride" switch, on by default.
  */
-
-import {
-  type DuelStatsResponse,
-  fetchDuelSettings,
-  fetchDuelStats,
-  saveDuelSettings,
-} from '../net/api.ts'
+import type { DuelStatsResponse } from '../contract/duel.ts'
+import { fetchDuelSettings, fetchDuelStats, saveDuelSettings } from '../net/api.ts'
 import { currentPlayer } from '../net/auth.ts'
 import { el } from './sheet.ts'
 
