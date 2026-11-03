@@ -180,15 +180,15 @@ function politeError(r: Reply, fallback: string): string {
   if (r.status === 0) {
     return navigator.onLine === false
       ? 'You look to be offline.'
-      : 'Couldn’t reach the saloon. Try again in a bit.'
+      : 'Couldn’t reach the server. Try again in a moment.'
   }
   if (r.status === 429) {
-    return 'Whoa there, partner. Too many tries; give it a minute.'
+    return 'Too many tries. Wait a minute and try again.'
   }
   if (isRecord(r.body) && typeof r.body.error === 'string') {
     return r.body.error
   }
-  return r.status >= 500 ? 'The saloon is having a bad day. Try again later.' : fallback
+  return r.status >= 500 ? 'Server trouble. Try again in a few minutes.' : fallback
 }
 
 const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms))
@@ -430,7 +430,7 @@ export async function getTicket(purpose: TicketPurpose): Promise<AuthResult<stri
   if (r.status === 201 && isRecord(r.body) && typeof r.body.ticket === 'string') {
     return { ok: true, value: r.body.ticket }
   }
-  return { ok: false, error: politeError(r, 'No ticket today.') }
+  return { ok: false, error: politeError(r, 'Couldn’t get a connection ticket.') }
 }
 
 /** The account's details and passkeys. */

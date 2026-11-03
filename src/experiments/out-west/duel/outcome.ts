@@ -292,10 +292,9 @@ export function tickBossWound(d: Director): void {
     d.outcomeT = t
     d.timeScale = 0.3
     e?.play('HitRecieve', 0.05, true)
-    const g = e?.dropOffGun()
+    // it leaves his hand where it is
+    const g = e?.dropOffGun(c.scene)
     if (g && e) {
-      c.scene.add(g)
-      g.position.copy(e.root.position.clone().add(V(0.3, 1.0, 0)))
       // lies on its side, its half-thickness (2.2 cm) above the dirt
       c.physics.add(g, V(0.6, 1.0, -0.5), V(4, 2, 6), { side: true, ground: 0.023 })
     }

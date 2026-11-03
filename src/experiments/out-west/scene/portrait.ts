@@ -1,9 +1,10 @@
-// biome-ignore-all lint/style/noMultiAssign: canvas/texture dimension setup (w = h = n) is clearer chained
 import {
   ACESFilmicToneMapping,
   AmbientLight,
+  Box3,
   Color,
   DirectionalLight,
+  MathUtils,
   PerspectiveCamera,
   Scene,
   Vector3,
@@ -12,19 +13,29 @@ import {
 } from 'three'
 import type { Outlaw } from '../data/outlaws.ts'
 import type { Assets } from '../engine/assets.ts'
+import type { Actor } from './actor.ts'
 import { castActor } from './cast.ts'
 
-const SIZE = 384
+/** The print, in pixels: the poster's mugshot frame (ui/poster.ts MUG, 340 × 286) at ~1.13×. */
+const PW = 384
+const PH = 324
+const ASPECT = PW / PH
+/** How far the camera stands off: long enough to keep the face from bulging. */
+const DIST = 2.4
 
 /**
- * Mugshots for the wanted posters: each outlaw's real model, rendered once
- * offscreen from a fixed three-quarter camera, then printed like an 1880s
- * woodcut/halftone (two ink plates, slight misregistration, paper grain).
+ * Mugshots for the wanted posters: each outlaw's real model, rendered once offscreen from a
+ * three-quarter camera, then printed like an 1880s woodcut/halftone (two ink plates, slight
+ * misregistration, paper grain).
+ *
+ * Every sitter is framed the same way from his own measurements, whatever his height or hat: the
+ * top of his hat (or crown) just inside the top edge, his shoulders and the top of his chest at
+ * the bottom, his face centred. A broad brim widens the frame rather than being cut off.
  */
 export class PortraitStudio {
   private readonly scene = new Scene()
-  private readonly cam = new PerspectiveCamera(24, 1, 0.05, 20)
-  private readonly rt = new WebGLRenderTarget(SIZE, SIZE)
+  private readonly cam = new PerspectiveCamera(20, ASPECT, 0.05, 20)
+  private readonly rt = new WebGLRenderTarget(PW, PH)
   private readonly cache = new Map<number, HTMLCanvasElement>()
   private readonly gl: WebGLRenderer
   private readonly assets: Assets
@@ -65,14 +76,10 @@ export class PortraitStudio {
     })
     this.scene.add(actor.root)
     actor.play('Idle', 0)
-    actor.mixer.update(0.4)
+    actor.update(0.4)
     actor.root.rotation.y = 0.5
     actor.root.updateMatrixWorld(true)
-    const head = actor.headPos(new Vector3())
-    const target = head.clone().add(new Vector3(0, 0.1, 0))
-    this.cam.position.copy(target).add(new Vector3(0.1, 0.06, 1.55))
-    this.cam.lookAt(target.clone().add(new Vector3(0, -0.06, 0)))
-    this.cam.updateMatrixWorld()
+    this.frame(actor)
 
     const gl = this.gl
     const prevTarget = gl.getRenderTarget()
@@ -83,8 +90,8 @@ export class PortraitStudio {
     gl.setRenderTarget(this.rt)
     gl.clear()
     gl.render(this.scene, this.cam)
-    const px = new Uint8Array(SIZE * SIZE * 4)
-    gl.readRenderTargetPixels(this.rt, 0, 0, SIZE, SIZE, px)
+    const px = new Uint8Array(PW * PH * 4)
+    gl.readRenderTargetPixels(this.rt, 0, 0, PW, PH, px)
     gl.setRenderTarget(prevTarget)
     gl.toneMapping = prevTone
     gl.shadowMap.autoUpdate = prevShadow
@@ -93,6 +100,29 @@ export class PortraitStudio {
     const canvas = printPortrait(px, index)
     this.cache.set(index, canvas)
     return canvas
+  }
+
+  /** Aim the camera so he sits head and shoulders in the print, hat and all. */
+  private frame(actor: Actor): void {
+    const head = actor.headPos(new Vector3())
+    const box = new Box3()
+    if (actor.hat) {
+      box.setFromObject(actor.hat)
+    }
+    // the top of his skull is about 0.2 m over the head bone; a hat sits higher
+    const top = Math.max(head.y + 0.22, box.isEmpty() ? 0 : box.max.y) + 0.035
+    // half the hat's breadth (a sombrero brim is wider than his shoulders)
+    const brim = box.isEmpty() ? 0 : (box.max.x - box.min.x) / 2
+    // the bottom edge: the top of his chest, a little under the shoulder line
+    const bottom = head.y - 0.36 * (actor.height / 1.78)
+    const half = Math.max((top - bottom) / 2, (Math.max(brim, 0.25) + 0.03) / ASPECT)
+    const centre = new Vector3(head.x, top - half, head.z)
+    this.cam.fov = MathUtils.radToDeg(2 * Math.atan(half / DIST))
+    this.cam.aspect = ASPECT
+    this.cam.updateProjectionMatrix()
+    this.cam.position.copy(centre).add(new Vector3(0.12, 0.05, DIST))
+    this.cam.lookAt(centre)
+    this.cam.updateMatrixWorld()
   }
 }
 
@@ -106,62 +136,57 @@ function rand(seed: number): () => number {
   }
 }
 
-/** Halftone + engraved-edge print of a linear RGBA buffer (bottom-up rows). */
-function printPortrait(px: Uint8Array, seed: number): HTMLCanvasElement {
-  const N = SIZE
-  // luminance, gamma-encoded, flipped to top-down
-  const L = new Float32Array(N * N)
-  for (let y = 0; y < N; y++) {
-    for (let x = 0; x < N; x++) {
-      const i = ((N - 1 - y) * N + x) * 4
+/** Luminance of a linear RGBA buffer (bottom-up rows), gamma-encoded and flipped to top-down. */
+function luminance(px: Uint8Array): Float32Array {
+  const L = new Float32Array(PW * PH)
+  for (let y = 0; y < PH; y++) {
+    for (let x = 0; x < PW; x++) {
+      const i = ((PH - 1 - y) * PW + x) * 4
       const r = (px[i] ?? 0) / 255
       const g = (px[i + 1] ?? 0) / 255
       const b = (px[i + 2] ?? 0) / 255
       const l = 0.299 * r + 0.587 * g + 0.114 * b
-      L[y * N + x] = Math.min(1, Math.max(0, (l ** (1 / 2.2) - 0.08) * 1.35))
+      L[y * PW + x] = Math.min(1, Math.max(0, (l ** (1 / 2.2) - 0.08) * 1.35))
     }
   }
-  const c = document.createElement('canvas')
-  c.width = c.height = N
-  const ctx = c.getContext('2d')
-  if (!ctx) {
-    return c
-  }
-  const rnd = rand(seed * 977 + 3)
-  // white: the poster multiplies this print onto its own paper stock
-  ctx.fillStyle = '#fff'
-  ctx.fillRect(0, 0, N, N)
+  return L
+}
+
+/** One halftone plate of dots, `cell` px apart, offset (ox, oy). */
+function plate(
+  ctx: CanvasRenderingContext2D,
+  L: Float32Array,
+  ink: { ox: number; oy: number; color: string; gain: number },
+): void {
   const cell = 3
-  const plate = (ox: number, oy: number, color: string, gain: number) => {
-    ctx.fillStyle = color
-    for (let y = 0; y < N; y += cell) {
-      for (let x = 0; x < N; x += cell) {
-        let sum = 0
-        for (let j = 0; j < cell; j++) {
-          for (let i = 0; i < cell; i++) {
-            sum += L[(y + j) * N + x + i] ?? 1
-          }
+  ctx.fillStyle = ink.color
+  for (let y = 0; y + cell <= PH; y += cell) {
+    for (let x = 0; x + cell <= PW; x += cell) {
+      let sum = 0
+      for (let j = 0; j < cell; j++) {
+        for (let i = 0; i < cell; i++) {
+          sum += L[(y + j) * PW + x + i] ?? 1
         }
-        const d = 1 - sum / (cell * cell)
-        if (d < 0.06) {
-          continue
-        }
-        const r = Math.sqrt(d) * cell * 0.72 * gain
-        ctx.beginPath()
-        ctx.arc(x + cell / 2 + ox, y + cell / 2 + oy, r, 0, Math.PI * 2)
-        ctx.fill()
       }
+      const d = 1 - sum / (cell * cell)
+      if (d < 0.06) {
+        continue
+      }
+      const r = Math.sqrt(d) * cell * 0.72 * ink.gain
+      ctx.beginPath()
+      ctx.arc(x + cell / 2 + ink.ox, y + cell / 2 + ink.oy, r, 0, Math.PI * 2)
+      ctx.fill()
     }
   }
-  // brown plate slightly off register, then the black key plate
-  plate(1.4, -1.0, 'rgba(138,58,28,0.35)', 1.05)
-  plate(0, 0, 'rgba(36,22,12,0.92)', 1)
-  // engraved edges (Sobel) for line work
-  const img = ctx.getImageData(0, 0, N, N)
+}
+
+/** Engraved edges (Sobel) darkened into the plates, for line work. */
+function edges(ctx: CanvasRenderingContext2D, L: Float32Array): void {
+  const img = ctx.getImageData(0, 0, PW, PH)
   const d = img.data
-  for (let y = 1; y < N - 1; y++) {
-    for (let x = 1; x < N - 1; x++) {
-      const g = (xx: number, yy: number) => L[yy * N + xx] ?? 1
+  const g = (xx: number, yy: number) => L[yy * PW + xx] ?? 1
+  for (let y = 1; y < PH - 1; y++) {
+    for (let x = 1; x < PW - 1; x++) {
       const gx =
         g(x + 1, y - 1) +
         2 * g(x + 1, y) +
@@ -178,7 +203,7 @@ function printPortrait(px: Uint8Array, seed: number): HTMLCanvasElement {
         g(x + 1, y - 1)
       const e = Math.min(1, Math.hypot(gx, gy) * 1.6)
       if (e > 0.25) {
-        const i = (y * N + x) * 4
+        const i = (y * PW + x) * 4
         const k = 1 - e * 0.85
         d[i] = (d[i] ?? 0) * k
         d[i + 1] = (d[i + 1] ?? 0) * k
@@ -187,20 +212,40 @@ function printPortrait(px: Uint8Array, seed: number): HTMLCanvasElement {
     }
   }
   ctx.putImageData(img, 0, 0)
-  // an engraver's oval vignette: the print fades into the paper instead of ending at a hard edge
-  const v = ctx.createRadialGradient(N / 2, N * 0.44, N * 0.3, N / 2, N * 0.5, N * 0.62)
+}
+
+/** Halftone + engraved-edge print of a linear RGBA buffer (bottom-up rows). */
+function printPortrait(px: Uint8Array, seed: number): HTMLCanvasElement {
+  const L = luminance(px)
+  const c = document.createElement('canvas')
+  c.width = PW
+  c.height = PH
+  const ctx = c.getContext('2d', { willReadFrequently: true })
+  if (!ctx) {
+    return c
+  }
+  const rnd = rand(seed * 977 + 3)
+  // white: the poster multiplies this print onto its own paper stock
+  ctx.fillStyle = '#fff'
+  ctx.fillRect(0, 0, PW, PH)
+  // brown plate slightly off register, then the black key plate
+  plate(ctx, L, { ox: 1.4, oy: -1.0, color: 'rgba(138,58,28,0.35)', gain: 1.05 })
+  plate(ctx, L, { ox: 0, oy: 0, color: 'rgba(36,22,12,0.92)', gain: 1 })
+  edges(ctx, L)
+  // an engraver's oval vignette, wide and low so the shoulders print: only the corners fade
+  const v = ctx.createRadialGradient(PW / 2, PH * 0.5, PH * 0.42, PW / 2, PH * 0.56, PW * 0.68)
   v.addColorStop(0, 'rgba(255,255,255,0)')
-  v.addColorStop(1, 'rgba(255,255,255,0.92)')
+  v.addColorStop(1, 'rgba(255,255,255,0.9)')
   ctx.fillStyle = v
-  ctx.fillRect(0, 0, N, N)
+  ctx.fillRect(0, 0, PW, PH)
   // ink wear: a few pale scratches
   ctx.strokeStyle = 'rgba(255,255,255,0.5)'
   for (let k = 0; k < 6; k++) {
     ctx.lineWidth = 0.5 + rnd()
     ctx.beginPath()
-    const x = rnd() * N
+    const x = rnd() * PW
     ctx.moveTo(x, 0)
-    ctx.lineTo(x + (rnd() - 0.5) * 40, N)
+    ctx.lineTo(x + (rnd() - 0.5) * 40, PH)
     ctx.stroke()
   }
   return c

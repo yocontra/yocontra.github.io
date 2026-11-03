@@ -24,10 +24,10 @@ function errorOf(body: unknown, status: number): string {
     return body.error
   }
   if (status === 401) {
-    return 'Sign in first, partner.'
+    return 'Sign in first.'
   }
   if (status === 429) {
-    return 'Easy, partner. Try again in a bit.'
+    return 'Too many requests. Wait a moment and try again.'
   }
   return 'The server sent something odd back.'
 }
@@ -83,7 +83,7 @@ export async function fetchLedger(limit = 12): Promise<Result<LedgerRow[]>> {
   const entries = r.value.entries
   return Array.isArray(entries)
     ? { ok: true, value: entries as LedgerRow[] }
-    : { ok: false, error: 'The ledger came back smudged.' }
+    : { ok: false, error: 'Couldn’t read the ledger.' }
 }
 
 export const fetchStore = (): Promise<Result<StoreResponse>> => apiJson('/store', {}, isStore)

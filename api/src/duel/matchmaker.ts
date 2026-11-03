@@ -18,8 +18,10 @@ import type {
 } from '../../../src/experiments/out-west/contract/duel.ts'
 import {
   DEFAULT_LOADOUT,
+  type Loadout,
   normalizeLoadout,
 } from '../../../src/experiments/out-west/data/catalog.ts'
+import type { Dyes } from '../../../src/experiments/out-west/data/dye.ts'
 import { licenceStatus } from '../../../src/experiments/out-west/data/licence.ts'
 import {
   baseBounty,
@@ -27,6 +29,7 @@ import {
   effectiveLevel,
 } from '../../../src/experiments/out-west/data/progression.ts'
 import { budgetState } from '../budget.ts'
+import { dyesOf } from '../economy/sinks.ts'
 import type { Env } from '../env.ts'
 import { rttStats } from '../judge.ts'
 import { isShadowed, standing } from '../moderation/flags.ts'
@@ -37,6 +40,12 @@ import { ghostButton, pickGhost, planTick, type QueueEntry, windowFor } from './
 import type { RoomInit } from './room.ts'
 import { duelStats } from './stats.ts'
 import { roomToken } from './token.ts'
+
+/** The dyes on the items he wears (the poster rides a 2 KB socket attachment: nothing else). */
+function wornDyes(loadout: Loadout, dyes: Dyes): Dyes {
+  const worn = new Set<string>(Object.values(loadout))
+  return Object.fromEntries(Object.entries(dyes).filter(([id]) => worn.has(id))) as Dyes
+}
 
 const TICK_MS = 1000
 const GHOST_INDEX_TTL_MS = 5 * 60 * 1000
@@ -138,10 +147,11 @@ export class Matchmaker extends DurableObject<Env> {
     if (queued || (busyUntil !== undefined && busyUntil > Date.now())) {
       return { reason: 'busy', message: "You're already in the queue or a duel." }
     }
-    const [profile, stats, standingNow] = await Promise.all([
+    const [profile, stats, standingNow, dyes] = await Promise.all([
       getProfileDetail(this.env, accountId),
       duelStats(this.env, accountId),
       standing(this.env, accountId),
+      dyesOf(this.env, accountId),
     ])
     if (!profile) {
       return { reason: 'no-profile', message: 'No poster yet. Sign up first.' }
@@ -157,7 +167,11 @@ export class Matchmaker extends DurableObject<Env> {
     const lastDodge = Math.max(0, ...dodges)
     if (dodges.length >= DODGE_LIMIT && lastDodge + DODGE_COOLDOWN_MS > now) {
       const retryAfterS = Math.ceil((lastDodge + DODGE_COOLDOWN_MS - now) / 1000)
-      return { reason: 'cooldown', message: 'Too many dodges. Cool your heels.', retryAfterS }
+      return {
+        reason: 'cooldown',
+        message: 'Too many dodges. Wait before you queue again.',
+        retryAfterS,
+      }
     }
     const history = await this.history(accountId)
     const priorityUntil = await this.ctx.storage.get<number>(`priority:${accountId}`)
@@ -191,6 +205,7 @@ export class Matchmaker extends DurableObject<Env> {
       streak: stats.streak,
       cowardice: stats.cowardice,
       loadout: profile.loadout,
+      dyes: wornDyes(profile.loadout, dyes),
       kind: 'human',
     }
     ws.serializeAttachment({
@@ -413,6 +428,7 @@ export class Matchmaker extends DurableObject<Env> {
           streak: 0,
           cowardice: 0,
           loadout: normalizeLoadout(ghost.loadout),
+          dyes: wornDyes(normalizeLoadout(ghost.loadout), await dyesOf(this.env, ghost.accountId)),
           kind: 'ghost',
         }
       : {

@@ -373,7 +373,7 @@ function verdict(
     return 'Nobody drew. The ring breaks.'
   }
   if (ev.outcome === SD_COWARD) {
-    return ev.winner === you ? 'They flinched. Coward.' : 'You drew early. Coward!'
+    return ev.winner === you ? 'They flinched. Coward.' : 'You drew early. Coward.'
   }
   if (ev.outcome === SD_WIN) {
     return ev.winner === you

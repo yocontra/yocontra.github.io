@@ -143,7 +143,7 @@ function showPoster(d: Director, idx: number): void {
       kind: 'info',
       title: 'LEGEND MODE',
       big: '2019',
-      sub: 'This is how it was in 2019. Good luck.',
+      sub: 'The original 2019 timings.',
       hint: '',
     })
   }

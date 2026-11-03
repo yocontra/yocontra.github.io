@@ -53,7 +53,7 @@ export default {
       return error(request, env, 404, 'Not found.')
     } catch (err) {
       console.error('api error', err)
-      return error(request, env, 500, 'Something went wrong.')
+      return error(request, env, 500, 'Server error.')
     }
   },
   /** Daily: recompute every purse from the ledger and flag mismatches; roll the board over. */

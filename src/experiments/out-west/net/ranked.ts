@@ -128,7 +128,7 @@ async function createSession(token: string): Promise<Result<RankedSessionRespons
         ok: false,
         error:
           res.status === 429
-            ? 'Easy, partner. Try ranked again in a bit.'
+            ? 'Too many ranked starts. Wait a moment and try again.'
             : (msg ?? 'No ranked seat today.'),
       }
     }

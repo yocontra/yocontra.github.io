@@ -20,12 +20,11 @@ import {
   Quaternion,
   Shape,
   ShapeGeometry,
-  SphereGeometry,
   TubeGeometry,
   Vector3,
 } from 'three'
 import { meshPieces, onBone, type Piece } from './bake.ts'
-import { type Body, bounds, nearestWeights, onBones, reach, shell, type WeightFn } from './fit.ts'
+import { type Body, bounds, nearestWeights, onBones, shell, type WeightFn } from './fit.ts'
 import { FABRIC } from './style.ts'
 
 /**
@@ -64,38 +63,6 @@ export interface Fit {
     r: number
   }
   readonly neck: { lo: number; hi: number }
-}
-
-/**
- * X of the outside of his thigh at height `y` (side 1 = his right, -X), over
- * anything he wears there, so a holster sits on the coat rather than in it.
- */
-export function outerThigh(
-  f: Fit,
-  clothes: readonly Piece[],
-  at: { side: 1 | -1; y: number; near: Vector3 },
-): number {
-  const { side, y, near } = at
-  // Work in "outward" units: larger = further out on this side.
-  let out = Number.NEGATIVE_INFINITY
-  const leg = onBones(f.body, [side === 1 ? 'UpperLegR' : 'UpperLegL', 'Hips'])
-  const consider = (x: number, py: number, pz: number, dy: number): void => {
-    if (Math.abs(py - y) < dy && Math.abs(pz - near.z) < 0.08 && side * (x - near.x) < 0) {
-      out = Math.max(out, -side * x)
-    }
-  }
-  for (const s of leg) {
-    consider(s.p.x, s.p.y, s.p.z, 0.05)
-  }
-  const v = new Vector3()
-  for (const c of clothes) {
-    const pos = c.geo.getAttribute('position')
-    for (let k = 0; k < pos.count; k++) {
-      v.fromBufferAttribute(pos, k)
-      consider(v.x, v.y, v.z, 0.06)
-    }
-  }
-  return Number.isFinite(out) ? -side * out : near.x - side * 0.1
 }
 
 const HEAD_BONES = ['Head']
@@ -261,12 +228,15 @@ export function poncho(f: Fit, color: number): Piece[] {
 
 /** Neckerchief: a band snug on the neck and a point hanging over the chest. */
 export function bandana(f: Fit, color: number): Piece[] {
-  // Only the neck itself: the shoulders would turn the band into a shelf.
+  // Only the neck itself: the shoulders would turn the band into a shelf. Tied low on the neck,
+  // close to it, so it reads as cloth knotted on a collar rather than a block under the jaw.
   const cx = f.at('Neck').x
   const cz = f.at('Neck').z
-  const yTop = f.neck.lo + 0.5 * (f.neck.hi - f.neck.lo)
-  const yBot = f.neck.lo + 0.1 * (f.neck.hi - f.neck.lo)
+  const yTop = f.neck.lo + 0.32 * (f.neck.hi - f.neck.lo)
+  const yBot = f.neck.lo + 0.02 * (f.neck.hi - f.neck.lo)
   const neck = onBones(f.body, NECK_BONES).filter((s) => s.p.y > yBot - 0.02 && s.p.y < yTop + 0.02)
+  // a fold: the cloth darkens toward the knot and the point, as a rolled scarf does
+  const fold = (k: number) => (t: number) => lin(color).multiplyScalar(1 - k * t)
   const band = shell({
     samples: neck,
     cx,
@@ -275,25 +245,25 @@ export function bandana(f: Fit, color: number): Piece[] {
     yBot,
     rings: 3,
     segs: 18,
-    margin: 0.012,
-    bulge: (t) => t * 0.008,
-    band: 0.015,
-    color: lin(color),
+    margin: 0.006,
+    bulge: (t) => t * 0.004,
+    band: 0.012,
+    color: fold(0.3),
   })
   const flap = shell({
     samples: onBones(f.body, ['Chest', 'Neck', 'Torso']),
     cx,
     cz,
-    yTop: yBot + 0.005,
-    yBot: yBot - 0.1,
+    yTop: yBot + 0.004,
+    yBot: yBot - 0.075,
     arc: 0,
-    half: 0.75,
+    half: 0.55,
     taper: (t) => Math.max(0.02, 1 - t),
     rings: 4,
     segs: 6,
-    margin: 0.022,
+    margin: 0.012,
     band: 0.02,
-    color: lin(color),
+    color: fold(0.35),
   })
   const w = nearestWeights(f.body, onBones(f.body, ['Neck', 'Chest']))
   return [
@@ -307,8 +277,10 @@ export function mask(f: Fit, color: number): Piece[] {
   const h = f.head
   const yTop = h.eye - 0.48 * (h.eye - h.chin)
   const yBot = f.neck.lo + 0.3 * (f.neck.hi - f.neck.lo)
+  // the face and neck only: long hair hanging past the jaw would balloon it
+  const face = onBones(f.body, ['Head', 'Neck']).filter((s) => s.mat !== 'Hair')
   const geo = shell({
-    samples: onBones(f.body, ['Head', 'Neck']),
+    samples: face,
     cx: h.cx,
     cz: h.cz,
     yTop,
@@ -328,58 +300,6 @@ export function mask(f: Fit, color: number): Piece[] {
       weights: nearestWeights(f.body, onBones(f.body, ['Head', 'Neck'])),
     },
   ]
-}
-
-/** Full beard: a shell over the jaw from the mouth down under the chin. */
-export function beard(f: Fit, color: number): Piece[] {
-  const h = f.head
-  const yTop = h.chin + 0.42 * (h.eye - h.chin)
-  const yBot = h.chin - 0.03
-  const head = onBones(f.body, ['Head'])
-  const geo = shell({
-    samples: head,
-    cx: h.cx,
-    cz: h.cz,
-    yTop,
-    yBot,
-    arc: 0,
-    half: 1.75,
-    taper: (t) => 1 - 0.35 * t,
-    rings: 6,
-    segs: 16,
-    margin: 0.008,
-    bulge: (t) => 0.02 * Math.sin(Math.PI * Math.min(1, t * 1.2)),
-    band: 0.012,
-    color: lin(color),
-  })
-  const b = f.bone('Head')
-  return b ? [{ geo, ...fabric('wool'), weights: onBone(b) }] : []
-}
-
-/** Handlebar moustache on his upper lip. */
-export function moustache(f: Fit, color: number, space: Object3D): Piece[] {
-  const h = f.head
-  const b = f.bone('Head')
-  if (!b) {
-    return []
-  }
-  const y = h.chin + 0.5 * (h.eye - h.chin)
-  const z = reach(onBones(f.body, ['Head']), { cx: h.cx, cz: h.cz, y, a: 0, dy: 0.012, da: 0.25 })
-  const mat = new MeshStandardMaterial({ color, roughness: FABRIC.wool.roughness })
-  mat.userData.swatch = 'felt'
-  const g = new Group()
-  for (const s of [-1, 1]) {
-    const m = new Mesh(new SphereGeometry(0.03, 8, 6), mat)
-    m.scale.set(1.2, 0.4, 0.5)
-    m.position.set(s * 0.026, -0.004, 0)
-    m.rotation.z = s * -0.35
-    g.add(m)
-  }
-  g.position.set(h.cx, y, h.cz + (Number.isFinite(z) ? z : 0.1) + 0.004)
-  space.add(g)
-  const out = meshPieces(g, space, onBone(b))
-  g.removeFromParent()
-  return out
 }
 
 /** Tin star on his left breast, flush with the shirt. */

@@ -21,6 +21,7 @@ import { type ItemId, type Loadout, normalizeLoadout } from '../data/catalog.ts'
 import { type Dyes, dyeHex } from '../data/dye.ts'
 import type { HatKey } from '../data/outlaws.ts'
 import { Actor, type ActorOpts } from './actor.ts'
+import type { Identity } from './identity.ts'
 import type { HolsterLook } from './kit.ts'
 import { type PropDef, propObject } from './props.ts'
 
@@ -184,9 +185,9 @@ export function loadoutOpts(raw: unknown, dyes: Dyes = {}): ActorOpts {
   return o
 }
 
-/** Tint the merged revolver(s) in place: one cloned material per gun. */
-function finishGun(g: Object3D | null, look: GunLook): void {
-  g?.traverse((m) => {
+/** Tint a revolver in place (one cloned material per mesh) and lengthen its barrel. */
+function finishGun(g: Object3D, look: GunLook): void {
+  g.traverse((m) => {
     if (!(m instanceof Mesh)) {
       return
     }
@@ -238,25 +239,34 @@ function fitSpurs(a: Actor, look: { color: number; points: number; metalness: nu
 
 /**
  * A whole gunslinger dressed in `loadout`, on the player's rig. Used for you (single player and
- * Bounty Hunt) and for your opponent, built from their server-validated loadout.
+ * Bounty Hunt) and for your opponent, built from their server-validated loadout and dyes, with
+ * their own face and build (`who`, scene/identity.ts) under the kit.
  */
 export function dressedActor(
   model: GLTF,
   gun: PropDef | null,
   raw: unknown,
-  dyes: Dyes = {},
+  o: { dyes?: Dyes | undefined; who?: Identity } = {},
 ): Actor {
+  const dyes = o.dyes ?? {}
+  const who = o.who ?? {}
   const l: Loadout = normalizeLoadout(raw)
   const gunLook = GUNS[l.gun] ?? GUNS['gun.rusty-six']
+  // finished before he is dressed, so the holster is fitted to the gun he carries (a Buntline's
+  // longer barrel gets a longer holster, and its muzzle is measured where it is)
+  const proto = gun ? propObject(gun) : null
+  if (proto && gunLook) {
+    finishGun(proto, gunLook)
+  }
+  const kit = loadoutOpts(l, dyes)
   const a = new Actor(model, {
-    ...loadoutOpts(l, dyes),
-    gun: gun ? propObject(gun) : null,
+    // who he is under the kit; the kit's own colours and extras win
+    ...who,
+    ...kit,
+    tint: { ...who.tint, ...kit.tint },
+    gun: proto,
     offGun: gunLook?.twin ?? false,
   })
-  if (gunLook) {
-    finishGun(a.gun, gunLook)
-    finishGun(a.offGun, gunLook)
-  }
   const spurs = SPURS[l.spurs]
   if (spurs) {
     fitSpurs(a, spurs)

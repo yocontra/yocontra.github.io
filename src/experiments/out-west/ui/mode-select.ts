@@ -47,7 +47,7 @@ const TILES: readonly TileDef[] = [
     icon: 'dynamite',
     title: 'Frontier',
     kicker: 'Free-for-all',
-    sub: (s) => (s.signedIn ? '32 guns · one bank · no law' : 'Sign in with a passkey'),
+    sub: (s) => (s.signedIn ? '32 guns · bank what you take' : 'Sign in with a passkey'),
     online: true,
   },
   {
@@ -119,7 +119,7 @@ export function gauntletSheet(
     'ow-hub-note',
     panel,
     s.signedIn
-      ? 'Ranked runs earn XP and dollars on your account, and the first 3 outlaws earn your licence.'
+      ? 'Ranked runs pay XP and dollars. Beat the first 3 outlaws to earn your licence.'
       : 'Ranked runs go on the board under a name you type. Sign in to earn XP and dollars.',
   )
   const close = (c: GauntletChoice | null): void => {

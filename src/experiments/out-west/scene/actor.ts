@@ -7,8 +7,6 @@ import {
   Group,
   LoopOnce,
   LoopRepeat,
-  type Material,
-  type Mesh,
   type Object3D,
   Quaternion,
   type SkinnedMesh,
@@ -17,19 +15,24 @@ import {
 import type { GLTF } from 'three/examples/jsm/loaders/GLTFLoader.js'
 import { clone as cloneSkinned } from 'three/examples/jsm/utils/SkeletonUtils.js'
 import type { BodyKey, HatKey } from '../data/outlaws.ts'
-import { bake, bodyPieces, meshPieces, onBone, type Piece } from './bake.ts'
-import { boneKey, bounds, sampleBody } from './fit.ts'
+import { bake, bodyPieces, type Piece } from './bake.ts'
+import { type Body, boneKey, bounds, sampleBody } from './fit.ts'
+import { hangGuns } from './gunbelt.ts'
 import { fitHat, type HatFit, tuckHair } from './hats.ts'
-import { type HolsterLook, holsterParts, mergedProp, PLAIN_HOLSTER } from './kit.ts'
-import { type Fit, measure, outerThigh, prune } from './outfit.ts'
+import { type GunAnatomy, handGrip } from './holster.ts'
+import { type HolsterLook, mergedProp, PLAIN_HOLSTER } from './kit.ts'
+import { fitLong, type LongHold, poseLong, shoulderPocket } from './longgun.ts'
+import { type Fit, measure } from './outfit.ts'
+import { becomeHimself, type PersonOpts, paintSkin, StanceLayer } from './person.ts'
 import { watchPose } from './pose-watch.ts'
 import { dressPieces, measureStride, seatHat, slotOn, tintModel } from './rig.ts'
 import { characterMaterial, type Glow } from './shade.ts'
 import type { Floor } from './style.ts'
 
 const HEIGHT = 1.78
+const ORIGIN = new Vector3()
 
-export interface ActorOpts {
+export interface ActorOpts extends PersonOpts {
   /** Which whole base character this is (prunes its hard hat, crown, mohawk, backpack). */
   base?: BodyKey | null
   /** Animation clips, when the base file carries none (they share the player's rig). */
@@ -97,6 +100,16 @@ export class Actor {
   private handSlot: Group | null = null
   private offSlot: Group | null = null
   private offHolster: Group | null = null
+  /** The long gun in his hands, if any (scene/longgun.ts). */
+  longHeld: LongHold | null = null
+  /** Long gun: 0 = shouldered and aimed, 1 = carried at the low ready. */
+  longCarry = 0
+  /** Long gun recoil, 0..1 (lifts the muzzle). */
+  longKick = 0
+  /** The hollow of his right shoulder in his chest bone's frame (where a butt plate sits). */
+  private readonly pocket: Vector3 | null
+  /** The revolver he carries, measured (muzzle, grip, cylinder); null without one. */
+  anatomy: GunAnatomy | null = null
   /** The baked character: body and every garment in one skinned mesh. */
   readonly meshes: SkinnedMesh[] = []
   /** Distance travelled per pace at full stride (measured from the walk clip). */
@@ -120,28 +133,21 @@ export class Actor {
   readonly glow: Glow = { value: 0 }
   private readonly bones = new Map<string, Bone>()
   /** The base carries a sculpted beard (kept by prune when he wears one). */
-  private realBeard = false
+  private readonly realBeard: boolean
   /** Where his hat sits (null when he has none); the VAT crowd reads it through `hat`. */
   hatFit: HatFit | null = null
   /** Set by dispose() (the dev pose watchdog forgets him). */
   disposed = false
   /** What the dev pose watchdog calls him. */
   readonly label: string
+  /** His standing habit, layered on every clip (null: none). */
+  private readonly stance: StanceLayer | null = null
 
   constructor(gltf: GLTF, opts: ActorOpts = {}) {
     this.label = `${opts.base ?? 'player'} ${opts.seed ?? ''}`.trim()
     this.model = cloneSkinned(gltf.scene)
-    prune(this.model, { beard: opts.beard !== undefined })
-    this.model.traverse((o) => {
-      const b = o as Bone
-      if (b.isBone) {
-        this.bones.set(boneKey(b.name), b)
-      }
-      const m = o as Mesh
-      if (m.isMesh && (m.material as Material).name === 'Beard') {
-        this.realBeard = true
-      }
-    })
+    // his bones, his own cut, face, torso and proportions, before he is normalised or measured
+    this.realBeard = becomeHimself(this.model, this.bones, opts)
     this.root.add(this.model)
     // Normalise to a 1.78 m man, then his build, uniformly: everything he
     // wears and carries rides on bones, and only a uniform scale keeps it true.
@@ -179,13 +185,36 @@ export class Actor {
     this.root.updateMatrixWorld(true)
 
     tintModel(this.model, opts)
+    const body = this.dress(opts)
+    this.pocket = this.measurePocket(body)
 
-    // Dress him in the idle pose, fitted to his own surface, then bake it all
-    // into one skinned mesh bound in that pose.
+    if (this.hatFit && this.head) {
+      this.hat = seatHat(
+        this.hatFit,
+        { color: opts.hatColor ?? 0x3a_2a_1a, floor: this.floor, glow: this.glow },
+        { head: this.head, root: this.root },
+      )
+    }
+    if (opts.gun) {
+      this.gripGuns(opts.offGun ?? false)
+    }
+    if (opts.rifle) {
+      this.attachRifle(opts.rifle)
+    }
+    this.stance = StanceLayer.of(this.bones, opts.stance)
+    watchPose(this)
+  }
+
+  /**
+   * Dress him in the idle pose, fitted to his own surface, then bake it all into one skinned mesh
+   * bound in that pose. Returns the surface he was measured on.
+   */
+  private dress(opts: ActorOpts): Body {
     const body = sampleBody(this.model, this.root)
     const fit = measure(body, this.bones)
     const clothes = dressPieces(fit, opts, this.root, this.realBeard)
     const pieces = [...bodyPieces(this.model, this.root, body), ...clothes]
+    paintSkin(pieces, body, fit.head, opts)
     // the hat is fitted to his skull now, so the hair it covers is pressed under it before baking
     this.hatFit = opts.hat ? fitHat(body, fit.head.eye, opts.hat) : null
     if (this.hatFit) {
@@ -193,11 +222,12 @@ export class Actor {
     }
     if (opts.gun) {
       pieces.push(
-        ...this.placeHolsters(fit, {
+        ...this.armWith(fit, {
           gun: opts.gun,
           two: opts.offGun ?? false,
           clothes,
           look: opts.holster ?? PLAIN_HOLSTER,
+          scale: opts.scale ?? 1,
         }),
       )
     }
@@ -213,21 +243,14 @@ export class Actor {
     this.meshes.push(
       bake(pieces, body, this.root, characterMaterial(this.floor, 'Character', this.glow)),
     )
+    return body
+  }
 
-    if (this.hatFit && this.head) {
-      this.hat = seatHat(
-        this.hatFit,
-        { color: opts.hatColor ?? 0x3a_2a_1a, floor: this.floor, glow: this.glow },
-        { head: this.head, root: this.root },
-      )
-    }
-    if (opts.gun) {
-      this.gripGuns(opts.offGun ?? false)
-    }
-    if (opts.rifle) {
-      this.attachRifle(opts.rifle)
-    }
-    watchPose(this)
+  /** The hollow of his right shoulder, kept in his chest bone's frame (it rides his chest). */
+  private measurePocket(body: Body): Vector3 | null {
+    const pocket = shoulderPocket(body, (n) => this.bone(n))
+    const chest = this.bone('Chest') ?? this.spine
+    return pocket && chest ? chest.worldToLocal(pocket) : null
   }
 
   private bone(name: string): Bone | null {
@@ -339,64 +362,8 @@ export class Actor {
     this.idleAction?.setEffectiveWeight(1)
   }
 
-  /**
-   * Holsters on the outside of his thighs (measured from his own legs, outside
-   * the coat if he wears one), riding the thigh bones. The leather is baked
-   * into the body mesh; the gun hangs in a slot on the same bone.
-   */
-  private placeHolsters(
-    f: Fit,
-    o: { gun: Object3D; two: boolean; clothes: readonly Piece[]; look: HolsterLook },
-  ): Piece[] {
-    const { gun, two, clothes, look } = o
-    const hips = this.hips
-    if (!hips) {
-      return []
-    }
-    const rootQ = this.root.getWorldQuaternion(new Quaternion())
-    const hipP = hips.getWorldPosition(new Vector3())
-    const out: Piece[] = []
-    const mk = (side: 1 | -1): Group => {
-      // side 1 = his right (-X while he faces +Z), -1 = his left.
-      const bone = this.bone(side === 1 ? 'UpperLegR' : 'UpperLegL') ?? hips
-      const bp = bone.getWorldPosition(new Vector3())
-      const y = hipP.y - 0.06
-      const surface = outerThigh(f, clothes, { side, y, near: bp })
-      const q = rootQ
-        .clone()
-        .multiply(
-          new Quaternion().setFromAxisAngle(new Vector3(0, 0, 1), -Math.PI / 2 + 0.12 * side),
-        )
-      if (side === -1) {
-        q.multiply(new Quaternion().setFromAxisAngle(new Vector3(1, 0, 0), Math.PI))
-      }
-      // slot +Y points toward his body on both sides; the barrel sits 0.045 up +Y
-      const x = surface - side * (0.026 + 0.045)
-      const slot = slotOn(bone, new Vector3(x, y, bp.z + 0.01), q)
-      for (const part of holsterParts(look)) {
-        slot.add(part)
-        out.push(...meshPieces(part, this.root, onBone(bone)))
-        part.removeFromParent()
-      }
-      return slot
-    }
-    this.holster = mk(1)
-    this.gun = mergedProp(gun)
-    this.holster.add(this.gun)
-    if (two) {
-      this.offHolster = mk(-1)
-      this.offGun = mergedProp(gun)
-      this.offHolster.add(this.offGun)
-    }
-    return out
-  }
-
-  /** Calibrate the grip in the aiming pose so the barrel points down range. */
-  private gripGuns(two: boolean): void {
-    const hand = this.handR
-    if (!hand) {
-      return
-    }
+  /** Run `fn` with him held in the aiming pose (measuring a grip), then back to idle. */
+  private inAimPose<T>(fn: () => T): T {
     const aim = this.actions.get('Idle_Gun_Pointing')
     if (aim) {
       this.mixer.stopAllAction()
@@ -404,60 +371,97 @@ export class Actor {
       this.mixer.setTime(0.2)
     }
     this.root.updateMatrixWorld(true)
-    const rootQ = this.root.getWorldQuaternion(new Quaternion())
-    // Revolver geometry points +X; rotate so it points +Z (character forward).
-    const gunQ = rootQ
-      .clone()
-      .multiply(new Quaternion().setFromAxisAngle(new Vector3(0, 1, 0), -Math.PI / 2))
-    const hp = hand.getWorldPosition(new Vector3())
-    const fwd = new Vector3(0, 0, 1).applyQuaternion(rootQ)
-    this.handSlot = slotOn(
-      hand,
-      hp
-        .clone()
-        .addScaledVector(fwd, 0.02)
-        .add(new Vector3(0, -0.01, 0)),
-      gunQ,
-    )
-    if (two && this.handL) {
-      const lp = this.handL.getWorldPosition(new Vector3())
-      this.offSlot = slotOn(this.handL, lp.clone().addScaledVector(fwd, 0.02), gunQ)
-    }
-    if (aim) {
-      aim.stop()
-    }
+    const out = fn()
+    aim?.stop()
     this.current = null
     this.play('Idle', 0)
     this.mixer.update(0)
     this.root.updateMatrixWorld(true)
+    return out
   }
 
-  private attachRifle(rifle: Object3D): void {
+  /**
+   * The gunbelt and holster(s), fitted to him (scene/holster.ts): the leather is baked into his
+   * mesh, each gun hangs on the thigh bone its holster rides, and each hand gets its seat,
+   * measured in the aiming pose (the grip in his fist, the barrel down his forearm).
+   */
+  private armWith(
+    f: Fit,
+    o: { gun: Object3D; two: boolean; clothes: readonly Piece[]; look: HolsterLook; scale: number },
+  ): Piece[] {
+    const byName = (n: string) => this.bone(n)
+    const hung = hangGuns(f, { ...o, bone: byName, root: this.root })
+    if (!hung) {
+      return []
+    }
+    this.anatomy = hung.anatomy
+    this.gun = hung.gun
+    this.holster = hung.holster
+    this.offGun = hung.offGun
+    this.offHolster = hung.offHolster
+    return hung.pieces
+  }
+
+  private gripGuns(two: boolean): void {
+    const a = this.anatomy
     const hand = this.handR
-    if (!hand) {
+    if (!(hand && a)) {
       return
     }
-    const aim = this.actions.get('Idle_Gun_Pointing')
-    if (aim) {
-      this.mixer.stopAllAction()
-      aim.reset().play()
-      this.mixer.setTime(0.2)
-    }
-    this.root.updateMatrixWorld(true)
-    const rootQ = this.root.getWorldQuaternion(new Quaternion())
-    const q = rootQ
-      .clone()
-      .multiply(new Quaternion().setFromAxisAngle(new Vector3(0, 1, 0), Math.PI / 2))
-    const hp = hand.getWorldPosition(new Vector3())
-    const slot = slotOn(hand, hp, q)
-    this.rifle = mergedProp(rifle)
-    this.rifle.position.set(0, -0.02, 0.1)
-    slot.add(this.rifle)
-    if (aim) {
-      aim.stop()
-    }
-    this.current = null
+    this.inAimPose(() => {
+      const byName = (n: string) => this.bone(n)
+      const r = handGrip(byName, 'R', a)
+      this.handSlot = r ? slotOn(hand, r.pos, r.quat) : null
+      // the off hand's gun lies beside the strong hand's, down range
+      const l = two && this.handL ? handGrip(byName, 'L', a, r?.quat) : null
+      this.offSlot = l && this.handL ? slotOn(this.handL, l.pos, l.quat) : null
+    })
+  }
+
+  /** The rooftop rifleman's rifle, shouldered and aimed. */
+  private attachRifle(rifle: Object3D): void {
+    // the rifle prop lies along Z, muzzle at +Z: turn it down +X like every gun here
+    const inner = mergedProp(rifle)
+    inner.rotation.y = Math.PI / 2
+    const wrap = new Group()
+    wrap.add(inner)
+    const h = this.addLong(wrap)
+    this.rifle = h?.obj ?? null
+    this.holdLong(h)
     this.play('Idle_Gun_Pointing', 0)
+  }
+
+  /** Fit a long gun (barrel along +X) to him, hidden until `holdLong` (scene/longgun.ts). */
+  addLong(obj: Object3D): LongHold | null {
+    const chest = this.bone('Chest') ?? this.spine
+    const pocket = this.pocket
+    if (!(chest && pocket)) {
+      return null
+    }
+    const h = this.inAimPose(() =>
+      fitLong(obj, {
+        bone: (n) => this.bone(n),
+        chest,
+        pocket: chest.localToWorld(pocket.clone()),
+        rootQ: this.root.getWorldQuaternion(new Quaternion()),
+        slotOn,
+      }),
+    )
+    if (h) {
+      h.obj.visible = false
+    }
+    return h
+  }
+
+  /** Take a long gun in both hands (null: put it away). */
+  holdLong(h: LongHold | null): void {
+    if (this.longHeld && this.longHeld !== h) {
+      this.longHeld.obj.visible = false
+    }
+    this.longHeld = h
+    if (h) {
+      h.obj.visible = true
+    }
   }
 
   /** Move the revolver from holster to hand (the draw). */
@@ -487,13 +491,23 @@ export class Actor {
     }
   }
 
-  /** Drop the off-hand gun (boss phase 1 wound). */
-  dropOffGun(): Object3D | null {
+  /**
+   * Drop the off-hand gun (boss phase 1 wound): it leaves his hand (or holster) where it is,
+   * into `into` (the scene) at unit scale, for the physics to toss.
+   */
+  dropOffGun(into: Object3D): Object3D | null {
     const g = this.offGun
     if (!g) {
       return null
     }
-    g.removeFromParent()
+    g.updateWorldMatrix(true, false)
+    const p = new Vector3()
+    const q = new Quaternion()
+    g.matrixWorld.decompose(p, q, new Vector3())
+    into.add(g)
+    g.position.copy(p)
+    g.quaternion.copy(q)
+    g.scale.setScalar(1)
     this.offGun = null
     return g
   }
@@ -505,9 +519,10 @@ export class Actor {
       return this.root.getWorldPosition(out).setY(1.3)
     }
     g.updateWorldMatrix(true, false)
-    return out
-      .set(this.rifle && !off && !this.gun ? 0.9 : 0.24, 0.045, 0)
-      .applyMatrix4(g.matrixWorld)
+    if (g === this.rifle && this.longHeld) {
+      return out.copy(this.longHeld.a.muzzle).applyMatrix4(g.matrixWorld)
+    }
+    return out.copy(this.anatomy?.muzzle ?? ORIGIN).applyMatrix4(g.matrixWorld)
   }
 
   headPos(out: Vector3): Vector3 {
@@ -540,7 +555,9 @@ export class Actor {
   update(dt: number): void {
     this.floor.value = this.root.position.y
     this.t += dt
+    this.stance?.undo()
     this.mixer.update(dt)
+    this.stance?.apply()
     // Procedural layers on top of the clip.
     if (this.sway > 0 && this.spine) {
       this.spine.rotation.z += Math.sin(this.t * 1.3) * 0.12 * this.sway
@@ -554,6 +571,15 @@ export class Actor {
       this.armR.rotation.z += Math.sin(this.t * 40) * 0.12 * this.twitch
       this.armR.rotation.x += 0.15 * this.twitch
       this.twitch = Math.max(0, this.twitch - dt * 3)
+    }
+    if (this.longHeld?.obj.visible) {
+      this.root.updateMatrixWorld(true)
+      poseLong(this.longHeld, {
+        bone: (n) => this.bone(n),
+        carry: this.longCarry,
+        kick: this.longKick,
+        rootQ: this.root.getWorldQuaternion(new Quaternion()),
+      })
     }
   }
 
