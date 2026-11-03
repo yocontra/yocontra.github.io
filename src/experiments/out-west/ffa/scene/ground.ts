@@ -226,7 +226,16 @@ gM = mix(gM, vec4(1.0, 0.0, 0.0, 1.0), gOut);`,
         `#include <map_fragment>
 {
   float n = gNoise(vGW * 0.35) * 0.6 + gNoise(vGW * 1.7) * 0.4;
-  vec3 dirt = diffuseColor.rgb * mix(vec3(1.02, 0.97, 0.9), vec3(0.93, 0.9, 0.86), n);
+  // broad patches (pale hardpan, darker scrub soil) so open ground isn't one flat colour from above
+  float gPatch = smoothstep(0.35, 0.75, gNoise(vGW * 0.06 + 17.0));
+  float scrub = smoothstep(0.62, 0.8, gNoise(vGW * 0.11 - 5.0));
+  // the dirt texture's grain, contrast-lifted around its (linear) mean so it survives the
+  // top-down distance: the texture's sRGB mean (146, 111, 76) decoded, times the material tint
+  vec3 gMean = vec3(0.288, 0.159, 0.073) * vec3(0.644, 0.617, 0.578);
+  diffuseColor.rgb = max(gMean + (diffuseColor.rgb - gMean) * 1.6, vec3(0.0));
+  vec3 dirt = diffuseColor.rgb * mix(vec3(1.03, 0.98, 0.9), vec3(0.84, 0.8, 0.76), n);
+  dirt *= mix(vec3(1.0), vec3(0.9, 0.88, 0.86), gPatch);
+  dirt = mix(dirt, dirt * vec3(0.78, 0.8, 0.66), scrub * 0.7);
   vec3 street = diffuseColor.rgb * vec3(0.78, 0.7, 0.62) * (0.9 + 0.2 * n);
   diffuseColor.rgb = mix(dirt, street, gM.g * 0.85);
   diffuseColor.rgb *= 1.0 - gM.b * 0.38;
@@ -237,7 +246,7 @@ gM = mix(gM, vec4(1.0, 0.0, 0.0, 1.0), gOut);`,
       )
       .replace(
         '#include <roughnessmap_fragment>',
-        '#include <roughnessmap_fragment>\nroughnessFactor = mix(roughnessFactor, 0.72, gM.b * 0.6);',
+        '#include <roughnessmap_fragment>\nroughnessFactor = mix(roughnessFactor, 0.86, gM.b * 0.5);',
       )
       .replace(
         '#include <lights_fragment_end>',

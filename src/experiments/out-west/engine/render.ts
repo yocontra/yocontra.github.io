@@ -302,7 +302,10 @@ export class Renderer {
     this.perf = perfRequested() ? new PerfOverlay(this) : null
     if (this.perf) {
       Reflect.set(globalThis, '__owPerf', () => this.perf?.snapshot())
-      Reflect.set(globalThis, '__owRenderer', this)
+      if (import.meta.env.DEV) {
+        // the live renderer reaches the whole scene graph: dev builds only
+        Reflect.set(globalThis, '__owRenderer', this)
+      }
     }
     this.resize()
 

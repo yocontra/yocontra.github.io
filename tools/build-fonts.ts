@@ -86,6 +86,7 @@ interface Source {
 }
 
 const SRC = {
+  // biome-ignore lint/security/noSecrets: a public Google Fonts file URL (the %5B…%5D is an encoded [wght]), not a secret
   garamond: { file: 'EBGaramond[wght].ttf', url: `${GF}/ofl/ebgaramond/EBGaramond%5Bwght%5D.ttf` },
   garamondItalic: {
     file: 'EBGaramond-Italic[wght].ttf',

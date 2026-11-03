@@ -43,7 +43,8 @@ export async function tryRanked(d: Director): Promise<void> {
   d.rankedTry++
   const attempt = d.rankedTry
   d.c.hud.setMode('connecting…')
-  const session = await connect().catch(() => null)
+  const r = await connect().catch(() => ({ ok: false, error: '' }) as const)
+  const session = r.ok ? r.value : null
   if (attempt !== d.rankedTry) {
     // a restart (or a drop to practice) superseded this attempt
     session?.close()
@@ -52,6 +53,10 @@ export async function tryRanked(d: Director): Promise<void> {
   if (!(session && canRank(d))) {
     session?.close()
     d.c.hud.setMode(PRACTICE)
+    if (!r.ok && r.error) {
+      // say why it isn't ranked (closed for the month, rate limited, unreachable)
+      d.c.hud.fake(`[${r.error}]`, 6000)
+    }
     return
   }
   d.clock.dispose()

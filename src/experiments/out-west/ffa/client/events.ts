@@ -105,6 +105,8 @@ export interface Sink {
   /** Who killed you, for the poster. */
   killer: { id: number; flags: number } | null
   onLeft: () => void
+  /** True when the player behind this entity is on your block list (never shown to you). */
+  blocked: (id: number) => boolean
   pickups: Pickups
   /** Burning fuses by thrower: the hiss runs from the throw to the blast. */
   fuses: Map<number, Fuse>
@@ -250,8 +252,9 @@ function killLine(s: Sink, ev: Extract<WireEvent, { type: typeof EV_KILL }>): st
     marks.push("sheriff's pardon")
   }
   const tail = marks.length > 0 ? ` (${marks.join(', ')})` : ''
-  if (ev.killer === NONE) {
-    return `${s.net.name(ev.victim)} bit the dust${tail}`
+  if (ev.killer === NONE || ev.killer === ev.victim) {
+    const how = ev.killer === NONE ? 'bit the dust' : 'blew himself up'
+    return `${s.net.name(ev.victim)} ${how}${tail}`
   }
   return `${s.net.name(ev.killer)} ✕ ${s.net.name(ev.victim)}${tail}`
 }
@@ -290,6 +293,9 @@ function onShowdown(s: Sink, ev: WireEvent): void {
   const you = s.net.you
   switch (ev.type) {
     case EV_CALLOUT: {
+      if (s.blocked(ev.challenger) || s.blocked(ev.target)) {
+        break // a blocked player's call-out is never shown (the server won't pair you anyway)
+      }
       s.callouts.push({
         challenger: ev.challenger,
         target: ev.target,

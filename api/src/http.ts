@@ -30,6 +30,7 @@ export function corsHeaders(request: Request, env: Env): Record<string, string> 
   }
 }
 
+// biome-ignore lint/complexity/useMaxParams: every route calls json(request, env, body, status?, headers?); the two optionals keep the common call short
 export function json(
   request: Request,
   env: Env,

@@ -99,17 +99,20 @@ const LIMB: Record<string, string> = {
 }
 
 /** UE-mannequin joint name → the game's rig name (punctuation-free, as boneKey() sees it). */
+/** `<part>_[NN_][leaf_]<l|r>` UE-mannequin joint names. */
+const MANNEQUIN_JOINT = /^(?<part>[a-z]+)_(?:(?<num>\d\d)_)?(?:(?<leaf>leaf)_)?(?<side>[lr])$/u
+
 export function rigName(n: string): string {
   const flat = n.replace(/_/gu, '')
   const direct = DIRECT[n] ?? DIRECT[flat]
   if (direct) {
     return direct
   }
-  const m = /^([a-z]+)_(?:(\d\d)_)?(?:(leaf)_)?([lr])$/u.exec(n)
+  const m = MANNEQUIN_JOINT.exec(n)
   if (!m) {
     return flat
   }
-  const [, part = '', num, leaf, side = 'l'] = m
+  const { part = '', num, leaf, side = 'l' } = m.groups ?? {}
   const s = SIDE[side] ?? 'L'
   if (part === 'ball' && leaf) {
     return `ToeTip${s}`
@@ -166,8 +169,30 @@ const HAIR = 0x4a_34_22
 
 const MO = (n: string) => `outfits/Male_${n}.gltf`
 const FO = (n: string) => `outfits/Female_${n}.gltf`
-const OUTFIT_MAT = /MI_(Ranger|Peasant)/u
+const OUTFIT_MAT = /MI_(?:Ranger|Peasant)/u
 const SKIN_MAT = /MI_Regular/u
+/** Every mesh in the file (the part is picked out by material instead). */
+const ANY_MESH = /./u
+const SUPERHERO_MAT = /MI_Superhero/u
+const EYES_MAT = /MI_Eyes/u
+const HAIR_MAT = /MI_Hair/u
+const BRACER_MESH = /_Arms_Bracer$/u
+const PAULDRON_MESH = /_Acc_Pauldron/u
+const RANGER_LEGS_MESH = /_Ranger_Legs$/u
+const RANGER_FEET_MESH = /_Ranger_Feet/u
+const PEASANT_BODY_MESH = /_Peasant_Body$/u
+const PEASANT_ARMS_MESH = /_Peasant_Arms$/u
+const PEASANT_LEGS_MESH = /_Peasant_Legs$/u
+const PEASANT_FEET_MESH = /_Peasant_Feet$/u
+/** Ranger-set mesh names per sex. */
+const RANGER_MESH = {
+  M: { body: /^Male_Ranger_Body$/u, belt: /^Male_Ranger_Body_Belt/u, arms: /^Male_Ranger_Arms$/u },
+  F: {
+    body: /^Female_Ranger_Body$/u,
+    belt: /^Female_Ranger_Body_Belt/u,
+    arms: /^Female_Ranger_Arms$/u,
+  },
+} as const
 
 function head(sex: 'M' | 'F'): Part[] {
   const f = `base/Superhero_${sex === 'M' ? 'Male' : 'Female'}_FullBody.gltf`
@@ -175,18 +200,18 @@ function head(sex: 'M' | 'F'): Part[] {
     {
       name: 'Skin',
       file: f,
-      mesh: /./u,
-      mat: /MI_Superhero/u,
+      mesh: ANY_MESH,
+      mat: SUPERHERO_MAT,
       tex: sex === 'M' ? 'skinM' : 'skinF',
       tris: 3600,
       head: true,
     },
-    { name: 'Eye', file: f, mesh: /./u, mat: /MI_Eyes/u, tex: 'eyes', tris: 400 },
+    { name: 'Eye', file: f, mesh: ANY_MESH, mat: EYES_MAT, tex: 'eyes', tris: 400 },
     {
       name: 'Brows',
       file: f,
-      mesh: /./u,
-      mat: /MI_Hair/u,
+      mesh: ANY_MESH,
+      mat: HAIR_MAT,
       tex: sex === 'M' ? 'hair1' : 'hair2',
       tris: 500,
       tint: HAIR,
@@ -197,7 +222,7 @@ function head(sex: 'M' | 'F'): Part[] {
 const hair = (style: string, tex: Tex, tris: number): Part => ({
   name: 'Hair',
   file: `hair/Hair_${style}.gltf`,
-  mesh: /./u,
+  mesh: ANY_MESH,
   tex,
   tris,
   tint: HAIR,
@@ -205,7 +230,7 @@ const hair = (style: string, tex: Tex, tris: number): Part => ({
 const beard: Part = {
   name: 'Beard',
   file: 'hair/Hair_Beard.gltf',
-  mesh: /./u,
+  mesh: ANY_MESH,
   tex: 'hair1',
   tris: 700,
   optional: true,
@@ -218,12 +243,12 @@ const RANGER_PANTS = 0x4a_40_34
 
 function ranger(sex: 'M' | 'F', o: { bracer?: boolean; pauldron?: boolean } = {}): Part[] {
   const f = sex === 'M' ? MO('Ranger') : FO('Ranger')
-  const S = sex === 'M' ? 'Male' : 'Female'
+  const S = RANGER_MESH[sex]
   const parts: Part[] = [
     {
       name: 'Shirt',
       file: f,
-      mesh: new RegExp(`^${S}_Ranger_Body$`, 'u'),
+      mesh: S.body,
       tex: 'ranger',
       tris: 2200,
       tint: RANGER_SHIRT,
@@ -231,14 +256,14 @@ function ranger(sex: 'M' | 'F', o: { bracer?: boolean; pauldron?: boolean } = {}
     {
       name: 'Belt',
       file: f,
-      mesh: new RegExp(`^${S}_Ranger_Body_Belt`, 'u'),
+      mesh: S.belt,
       tex: 'ranger',
       tris: 450,
     },
     {
       name: 'Sleeves',
       file: f,
-      mesh: new RegExp(`^${S}_Ranger_Arms$`, 'u'),
+      mesh: S.arms,
       mat: OUTFIT_MAT,
       tex: 'ranger',
       tris: 1900,
@@ -247,7 +272,7 @@ function ranger(sex: 'M' | 'F', o: { bracer?: boolean; pauldron?: boolean } = {}
     {
       name: 'Skin',
       file: f,
-      mesh: new RegExp(`^${S}_Ranger_Arms$`, 'u'),
+      mesh: S.arms,
       mat: SKIN_MAT,
       tex: sex === 'M' ? 'handsM' : 'handsF',
       tris: 1300,
@@ -257,13 +282,13 @@ function ranger(sex: 'M' | 'F', o: { bracer?: boolean; pauldron?: boolean } = {}
     parts.push({
       name: 'Bracer',
       file: f,
-      mesh: /_Arms_Bracer$/u,
+      mesh: BRACER_MESH,
       tex: 'ranger',
       tris: 1200,
     })
   }
   if (o.pauldron) {
-    parts.push({ name: 'Pauldron', file: f, mesh: /_Acc_Pauldron/u, tex: 'ranger', tris: 800 })
+    parts.push({ name: 'Pauldron', file: f, mesh: PAULDRON_MESH, tex: 'ranger', tris: 800 })
   }
   return parts
 }
@@ -271,19 +296,19 @@ function ranger(sex: 'M' | 'F', o: { bracer?: boolean; pauldron?: boolean } = {}
 function rangerLegs(sex: 'M' | 'F'): Part[] {
   const f = sex === 'M' ? MO('Ranger') : FO('Ranger')
   return [
-    { name: 'Pants', file: f, mesh: /_Ranger_Legs$/u, tex: 'ranger', tris: 0, tint: RANGER_PANTS },
-    { name: 'Boots', file: f, mesh: /_Ranger_Feet/u, tex: 'ranger', tris: 2600 },
+    { name: 'Pants', file: f, mesh: RANGER_LEGS_MESH, tex: 'ranger', tris: 0, tint: RANGER_PANTS },
+    { name: 'Boots', file: f, mesh: RANGER_FEET_MESH, tex: 'ranger', tris: 2600 },
   ]
 }
 
 function peasant(sex: 'M' | 'F'): Part[] {
   const f = sex === 'M' ? MO('Peasant') : FO('Peasant')
   const parts: Part[] = [
-    { name: 'Shirt', file: f, mesh: /_Peasant_Body$/u, tex: 'peasant', tris: 2600 },
+    { name: 'Shirt', file: f, mesh: PEASANT_BODY_MESH, tex: 'peasant', tris: 2600 },
     {
       name: 'Sleeves',
       file: f,
-      mesh: /_Peasant_Arms$/u,
+      mesh: PEASANT_ARMS_MESH,
       mat: OUTFIT_MAT,
       tex: 'peasant',
       tris: sex === 'M' ? 0 : 2600,
@@ -293,7 +318,7 @@ function peasant(sex: 'M' | 'F'): Part[] {
     parts.push({
       name: 'Skin',
       file: f,
-      mesh: /_Peasant_Arms$/u,
+      mesh: PEASANT_ARMS_MESH,
       mat: SKIN_MAT,
       tex: 'handsM',
       tris: 1800,
@@ -305,8 +330,8 @@ function peasant(sex: 'M' | 'F'): Part[] {
 function peasantLegs(sex: 'M' | 'F'): Part[] {
   const f = sex === 'M' ? MO('Peasant') : FO('Peasant')
   return [
-    { name: 'Pants', file: f, mesh: /_Peasant_Legs$/u, tex: 'peasant', tris: 0 },
-    { name: 'Boots', file: f, mesh: /_Peasant_Feet$/u, tex: 'peasant', tris: 1800 },
+    { name: 'Pants', file: f, mesh: PEASANT_LEGS_MESH, tex: 'peasant', tris: 0 },
+    { name: 'Boots', file: f, mesh: PEASANT_FEET_MESH, tex: 'peasant', tris: 1800 },
   ]
 }
 
@@ -679,16 +704,16 @@ function rasterise(label: Int16Array, size: { w: number; h: number }, g: Geo, id
       const i = g.idx[t + c] ?? 0
       return [(g.uv[i * 2] ?? 0) * w, (g.uv[i * 2 + 1] ?? 0) * h] as const
     })
-    const [a, b, c] = ps as [
+    const [a, b, cc] = ps as [
       readonly [number, number],
       readonly [number, number],
       readonly [number, number],
     ]
-    const x0 = Math.max(0, Math.floor(Math.min(a[0], b[0], c[0])) - 1)
-    const x1 = Math.min(w - 1, Math.ceil(Math.max(a[0], b[0], c[0])) + 1)
-    const y0 = Math.max(0, Math.floor(Math.min(a[1], b[1], c[1])) - 1)
-    const y1 = Math.min(h - 1, Math.ceil(Math.max(a[1], b[1], c[1])) + 1)
-    const area = (b[0] - a[0]) * (c[1] - a[1]) - (b[1] - a[1]) * (c[0] - a[0])
+    const x0 = Math.max(0, Math.floor(Math.min(a[0], b[0], cc[0])) - 1)
+    const x1 = Math.min(w - 1, Math.ceil(Math.max(a[0], b[0], cc[0])) + 1)
+    const y0 = Math.max(0, Math.floor(Math.min(a[1], b[1], cc[1])) - 1)
+    const y1 = Math.min(h - 1, Math.ceil(Math.max(a[1], b[1], cc[1])) + 1)
+    const area = (b[0] - a[0]) * (cc[1] - a[1]) - (b[1] - a[1]) * (cc[0] - a[0])
     if (Math.abs(area) < 1e-9) {
       continue
     }
@@ -696,8 +721,8 @@ function rasterise(label: Int16Array, size: { w: number; h: number }, g: Geo, id
       for (let x = x0; x <= x1; x++) {
         const px = x + 0.5
         const py = y + 0.5
-        const w0 = ((b[0] - px) * (c[1] - py) - (b[1] - py) * (c[0] - px)) / area
-        const w1 = ((c[0] - px) * (a[1] - py) - (c[1] - py) * (a[0] - px)) / area
+        const w0 = ((b[0] - px) * (cc[1] - py) - (b[1] - py) * (cc[0] - px)) / area
+        const w1 = ((cc[0] - px) * (a[1] - py) - (cc[1] - py) * (a[0] - px)) / area
         const w2 = 1 - w0 - w1
         // a little slack so edge texels count
         if (w0 >= -0.02 && w1 >= -0.02 && w2 >= -0.02) {
@@ -841,7 +866,11 @@ function greenMask(
 }
 
 /** Grow a mask into unlabelled texels so bilinear/mip taps at island edges stay masked. */
-function dilate(mask: Uint8Array, label: Int16Array, w: number, h: number, passes: number): void {
+function dilate(
+  mask: Uint8Array,
+  o: { label: Int16Array; w: number; h: number; passes: number },
+): void {
+  const { label, w, h, passes } = o
   for (let p = 0; p < passes; p++) {
     const src = Uint8Array.from(mask)
     for (let y = 0; y < h; y++) {
@@ -930,6 +959,7 @@ async function buildAtlas(all: Geo[], out: string): Promise<void> {
     const region = REGION[t]
     const f = TEX_FILES[t]
     const size = inner(region, 1)
+    // biome-ignore lint/performance/noAwaitInLoops: one full-resolution source texture decoded at a time bounds peak memory
     const { data: rgb } = await sharp(`${SRC}/${f.diff}`)
       .resize(size.w, size.h, { fit: 'fill' })
       .removeAlpha()
@@ -958,10 +988,10 @@ async function buildAtlas(all: Geo[], out: string): Promise<void> {
         }
       }
       const any = new Int16Array(size.w * size.h).fill(-1)
-      geos.forEach((g) => {
+      for (const g of geos) {
         rasterise(any, size, g, 0)
-      })
-      dilate(mask, any, size.w, size.h, 3)
+      }
+      dilate(mask, { label: any, w: size.w, h: size.h, passes: 3 })
     } else {
       mask.fill(255)
     }
@@ -991,6 +1021,7 @@ async function buildAtlas(all: Geo[], out: string): Promise<void> {
     const r = SWATCH[s]
     const id = SWATCH_SRC[s]
     if (id) {
+      // biome-ignore lint/performance/noAwaitInLoops: swatches are decoded one at a time to bound peak memory; layer order must match SWATCH order
       diff.push(await placed(sharp(`${SRC}/swatch/${id}_diff.webp`), r, 1))
       nor.push(await placed(sharp(`${SRC}/swatch/${id}_nor.webp`), r, 0.5))
       const { data, info } = await sharp(`${SRC}/swatch/${id}_arm.webp`)
@@ -1204,6 +1235,7 @@ async function main(): Promise<void> {
   for (const [key, r] of Object.entries(RECIPES)) {
     const geos: Geo[] = []
     for (const part of r.parts) {
+      // biome-ignore lint/performance/noAwaitInLoops: parts are extracted one at a time so the console tri report and geos order stay deterministic and memory bounded
       const g = await extract(part, masters[r.sex])
       if (g) {
         geos.push(simplify(g))
@@ -1229,6 +1261,7 @@ async function main(): Promise<void> {
     scene.addChild(top)
     scene.addChild(writeMesh(out, geos, m, joints))
     if (key === 'player') {
+      // biome-ignore lint/performance/noAwaitInLoops: only the player model gets clips; models are built and written one at a time to bound memory
       await addClips(out, joints, m)
     }
     await out.transform(

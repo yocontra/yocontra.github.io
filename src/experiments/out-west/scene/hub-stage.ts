@@ -5,6 +5,7 @@
  */
 import { MathUtils, Vector3 } from 'three'
 import type { DuelState } from '../duel/state.ts'
+import type { Dyes } from '../net/wire-social.ts'
 import { clamp01, easeInOutCubic } from './camera.ts'
 import { dressedActor } from './loadout.ts'
 
@@ -18,10 +19,10 @@ const SIDE: Record<HubShot, number> = { hub: 1.1, store: 1.1 }
 const LIFT: Record<HubShot, number> = { hub: -0.75, store: -0.55 }
 
 /** Swap your character for one wearing `loadout`; the duel reads `player` fresh every frame. */
-export function wearLoadout(s: DuelState, loadout: unknown): void {
+export function wearLoadout(s: DuelState, loadout: unknown, dyes: Dyes = {}): void {
   const c = s.c
   const old = s.player
-  const next = dressedActor(c.assets.player, c.gun, loadout)
+  const next = dressedActor(c.assets.player, c.gun, loadout, dyes)
   next.root.position.copy(old.root.position)
   next.root.rotation.copy(old.root.rotation)
   next.root.visible = old.root.visible

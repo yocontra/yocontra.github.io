@@ -7,6 +7,7 @@ import { PvpDuel, type PvpOpts } from './duel/pvp-duel.ts'
 import { loadAssets } from './engine/assets.ts'
 import { Input } from './engine/input.ts'
 import { Renderer, type Tier } from './engine/render.ts'
+import type { Dyes } from './net/wire-social.ts'
 import { save as persist, resetRun, type SaveData } from './save.ts'
 import { CameraRig } from './scene/camera.ts'
 import { dressStreet } from './scene/dressing.ts'
@@ -25,8 +26,8 @@ export interface Game {
   playGauntlet: (c: GauntletChoice) => void
   /** Frame your gunslinger for the hub or the Outfitter. */
   hubShot: (shot: HubShot) => void
-  /** Dress your gunslinger in a loadout (shows in single player too). */
-  dress: (l: Loadout) => void
+  /** Dress your gunslinger in a loadout and its dye jobs (shows in single player too). */
+  dress: (l: Loadout, dyes?: Dyes) => void
   /** A Bounty Hunt match, driven by the duel room. */
   startPvp: (o: PvpOpts) => void
 }
@@ -218,7 +219,7 @@ export async function createGame(o: GameOpts): Promise<Game> {
       director.begin(c.resume || o.save.seenIntro, c.ranked && o.connectRanked !== null)
     },
     hubShot: (shot: HubShot) => hubShot(director, shot),
-    dress: (l: Loadout) => wearLoadout(director, l),
+    dress: (l: Loadout, dyes?: Dyes) => wearLoadout(director, l, dyes),
     startPvp: (opts: PvpOpts) => {
       void new PvpDuel(director, opts)
     },

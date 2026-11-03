@@ -393,9 +393,6 @@ body {
   --ow-stamp-rot: -3deg;
   transform: rotate(-3deg);
 }
-.ow-card-win.on .ow-card-title {
-  animation: ow-stamp 0.42s var(--ow-ease-slam) both;
-}
 .ow-card-lose .ow-card-title {
   font-size: var(--ow-fs-h1);
 }
@@ -422,6 +419,9 @@ body {
 .ow-card-coward .ow-card-hint {
   grid-column: 2;
   justify-self: start;
+}
+.ow-card-win.on .ow-card-title {
+  animation: ow-stamp 0.42s var(--ow-ease-slam) both;
 }
 .ow-card-coward .ow-card-pay {
   color: var(--ow-bad-ink);

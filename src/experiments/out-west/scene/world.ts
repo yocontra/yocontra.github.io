@@ -1,5 +1,4 @@
 // biome-ignore-all lint/complexity/useMaxParams: geometry/audio builders take positional numeric args (x, y, z, size…), mirroring three.js APIs
-// biome-ignore-all lint/style/noExcessiveLinesPerFile: one cohesive module (data table / scene builder); splitting would scatter tightly coupled code. Tracked for a later split.
 // biome-ignore-all lint/suspicious/noUnnecessaryConditions: class fields are flags mutated from outside the method; Biome narrows them to their literal initializer
 import {
   BackSide,
@@ -10,7 +9,6 @@ import {
   Group,
   HemisphereLight,
   type InstancedMesh,
-  Matrix4,
   Mesh,
   MeshStandardMaterial,
   type Object3D,
@@ -24,155 +22,14 @@ import {
   Vector3,
 } from 'three'
 import { GeoBuilder } from './geo.ts'
+import { addStatic, buildMesas, buildPosterPost, buildWaterTower } from './landmarks.ts'
 import { type Preset, presetAt } from './presets.ts'
-import { mergePlaced, type PropDef, placeMatrix, propDef, propsLibrary } from './props.ts'
+import { mergePlaced } from './props.ts'
+import { skyFrag, skyVert } from './sky.ts'
+import { BUILDINGS, dressBoardwalks, facade, type Placed, SIGNS, STREET } from './street.ts'
 import { RIM } from './style.ts'
-import { clockCanvas, type SignSpec, signAtlas } from './textures.ts'
+import { clockCanvas, signAtlas } from './textures.ts'
 import { attachArm, attachBoard, withTownAO } from './town-pbr.ts'
-
-/** Street layout (metres). The street runs along Z; the duel is centred on the origin. */
-type Placed = { def: PropDef; at: Matrix4 }
-
-export const STREET = {
-  half: 9,
-  boardwalk: 2.4,
-  churchZ: 64,
-  posterPos: new Vector3(-8.2, 0, -2.5),
-  /** The rifleman stands on the saloon's porch roof. */
-  saloonRoof: new Vector3(10.4, 3.18, 6.2),
-} as const
-
-interface BuildingSpec {
-  side: -1 | 1
-  z: number
-  w: number
-  h: number
-  front: number
-  depth: number
-  color: number
-  sign: number
-  kind?: 'saloon' | 'undertaker' | 'bank' | 'stable' | 'plain'
-}
-
-const SIGNS: SignSpec[] = [
-  { text: 'SALOON', bg: '#6a1f14', fg: '#f3e2b8' },
-  { text: 'GENERAL STORE', bg: '#2c3a2a', fg: '#efe0b0' },
-  { text: 'SHERIFF', bg: '#1d2430', fg: '#e6c25a' },
-  { text: 'UNDERTAKER', bg: '#141414', fg: '#d9d0bf' },
-  { text: 'BANK', bg: '#3a2e1c', fg: '#e8cf7a' },
-  { text: 'LIVERY STABLE', bg: '#5a3a22', fg: '#f0dcb0' },
-  { text: 'HOTEL', bg: '#2a2236', fg: '#ead9b8' },
-  { text: 'BARBER', bg: '#e9e2d0', fg: '#7a1a12' },
-  { text: 'ASSAY OFFICE', bg: '#2b2b2b', fg: '#d8c9a4' },
-  { text: 'POST OFFICE', bg: '#2e3b48', fg: '#efe6cf' },
-  { text: 'GUNSMITH', bg: '#3b1c14', fg: '#f0d9a0' },
-  { text: 'TELEGRAPH', bg: '#203028', fg: '#e8dcc0' },
-]
-
-const BUILDINGS: BuildingSpec[] = [
-  // right side (+x), heading toward the church
-  {
-    side: 1,
-    z: -46,
-    w: 13,
-    h: 5.2,
-    front: 7.5,
-    depth: 12,
-    color: 0x8a_6a_4a,
-    sign: 5,
-    kind: 'stable',
-  },
-  { side: 1, z: -33, w: 9, h: 5.0, front: 7.4, depth: 10, color: 0xb8_a6_90, sign: 10 },
-  {
-    side: 1,
-    z: -22,
-    w: 10,
-    h: 5.5,
-    front: 8.2,
-    depth: 10,
-    color: 0x9a_8a_72,
-    sign: 4,
-    kind: 'bank',
-  },
-  { side: 1, z: -10.5, w: 11, h: 5.2, front: 7.6, depth: 10, color: 0x7a_8a_7a, sign: 1 },
-  {
-    side: 1,
-    z: 2,
-    w: 12,
-    h: 6.2,
-    front: 8.4,
-    depth: 12,
-    color: 0x8a_4a_34,
-    sign: 0,
-    kind: 'saloon',
-  },
-  { side: 1, z: 15, w: 11, h: 7.2, front: 9.0, depth: 11, color: 0x9a_8a_a0, sign: 6 },
-  { side: 1, z: 27, w: 8, h: 4.6, front: 6.6, depth: 9, color: 0xc0_b4_9a, sign: 7 },
-  { side: 1, z: 37, w: 10, h: 5.0, front: 7.0, depth: 10, color: 0x7a_6a_5a, sign: 11 },
-  // left side (-x)
-  { side: -1, z: -44, w: 12, h: 5.0, front: 7.2, depth: 10, color: 0x9a_7a_5a, sign: 8 },
-  { side: -1, z: -31, w: 10, h: 5.4, front: 7.8, depth: 10, color: 0x6a_7a_8a, sign: 9 },
-  { side: -1, z: -19.5, w: 10, h: 5.2, front: 7.6, depth: 10, color: 0x5a_60_70, sign: 2 },
-  {
-    side: -1,
-    z: -6.5,
-    w: 10,
-    h: 5.0,
-    front: 7.4,
-    depth: 10,
-    color: 0x4a_44_3e,
-    sign: 3,
-    kind: 'undertaker',
-  },
-  { side: -1, z: 5.5, w: 11, h: 5.6, front: 8.0, depth: 11, color: 0xa0_8a_6a, sign: 1 },
-  { side: -1, z: 18, w: 11, h: 6.6, front: 8.6, depth: 11, color: 0x8a_5a_44, sign: 6 },
-  { side: -1, z: 30, w: 10, h: 4.8, front: 6.8, depth: 10, color: 0xb0_a0_80, sign: 10 },
-]
-
-const skyVert = /* glsl */ `
-varying vec3 vDir;
-void main() {
-  vDir = normalize(position);
-  vec4 p = modelViewMatrix * vec4(position, 1.0);
-  gl_Position = projectionMatrix * p;
-  gl_Position.z = gl_Position.w;
-}
-`
-
-const skyFrag = /* glsl */ `
-uniform vec3 zenith;
-uniform vec3 horizon;
-uniform vec3 sunDir;
-uniform vec3 sunColor;
-uniform float sunGlow;
-uniform float stars;
-uniform float moon;
-uniform vec3 moonDir;
-varying vec3 vDir;
-float hash(vec3 p) { p = fract(p * 0.3183099 + 0.1); p *= 17.0; return fract(p.x * p.y * p.z * (p.x + p.y + p.z)); }
-void main() {
-  vec3 d = normalize(vDir);
-  float h = max(d.y, 0.0);
-  vec3 col = mix(horizon, zenith, pow(smoothstep(-0.02, 0.55, h), 0.7));
-  float s = max(dot(d, sunDir), 0.0);
-  col += sunColor * (pow(s, 6.0) * 0.35 + pow(s, 64.0) * 0.6) * sunGlow;
-  col += sunColor * smoothstep(0.9993, 0.9997, s) * 6.0 * step(0.0, sunDir.y) * (1.0 - moon);
-  if (stars > 0.0) {
-    vec3 q = floor(d * 380.0);
-    float r = hash(q);
-    float tw = step(0.9975, r) * smoothstep(0.02, 0.25, d.y);
-    col += vec3(0.9, 0.95, 1.0) * tw * stars * (0.6 + 0.4 * hash(q + 7.0)) * 1.4;
-  }
-  if (moon > 0.0) {
-    float m = max(dot(d, moonDir), 0.0);
-    col += vec3(0.85, 0.9, 1.0) * smoothstep(0.99955, 0.99975, m) * 3.0 * moon;
-    col += vec3(0.4, 0.5, 0.9) * pow(m, 40.0) * 0.25 * moon;
-  }
-  // below horizon fades into fog colour
-  col = mix(col, horizon, smoothstep(0.0, -0.08, d.y));
-  gl_FragColor = vec4(col, 1.0);
-}
-`
 
 export interface Lantern {
   light: PointLight
@@ -387,26 +244,13 @@ float gn(vec2 p){ vec2 i=floor(p); vec2 f=fract(p); f=f*f*(3.0-2.0*f);
 
     this.buildTown(atlas.rows)
     this.buildChurch()
-    this.buildWaterTower()
-    this.buildMesas()
-    this.poster = this.buildPosterPost()
+    buildWaterTower(this.root, this.trimMat)
+    buildMesas(this.root)
+    this.poster = buildPosterPost(this.root, this.trimMat)
     this.posterMat =
       (this.poster.userData.mat as MeshStandardMaterial) ?? new MeshStandardMaterial()
 
     this.apply(0)
-  }
-
-  private addStatic(geo: GeoBuilder, mat: MeshStandardMaterial, shadow = true): Mesh | null {
-    if (geo.empty) {
-      return null
-    }
-    const m = new Mesh(geo.build(), mat)
-    m.castShadow = shadow
-    m.receiveShadow = true
-    m.matrixAutoUpdate = false
-    m.updateMatrix()
-    this.root.add(m)
-    return m
   }
 
   private buildTown(signRows: number): void {
@@ -474,7 +318,7 @@ float gn(vec2 p){ vec2 i=floor(p); vec2 f=fract(p); f=f*f*(3.0-2.0*f);
       }
       trim.box(fx - s * 0.28, sy, b.z, 0.08, sh + 0.2, sw + 0.2, 0x2a_1d_14)
       // windows, doors and shutters: the textured kit when it's loaded, plain boxes otherwise
-      this.facade(b, fx, { glass, trim, kit })
+      facade(b, fx, { glass, trim, kit })
       // boardwalk
       trim.box(s * (H + Bw / 2), 0.17, b.z, Bw, 0.34, b.w, 0xc8_b0_90, { rotUV: true })
       // awning on posts
@@ -511,148 +355,15 @@ float gn(vec2 p){ vec2 i=floor(p); vec2 f=fract(p); f=f*f*(3.0-2.0*f);
     trim.box(-8.2, 0.35, 10, 0.9, 0.7, 2.4, 0x5a_44_30)
     trim.box(8.3, 0.35, -16, 0.9, 0.7, 2.4, 0x5a_44_30)
 
-    this.dressBoardwalks(kit)
+    dressBoardwalks(kit)
     mergePlaced(kit, this.root, new Map([['KitGlass', this.windowMat]]))
-    this.addStatic(walls, this.wallMat)
-    this.addStatic(trim, this.trimMat)
-    const gm = this.addStatic(glass, this.windowMat, false)
+    addStatic(this.root, walls, this.wallMat)
+    addStatic(this.root, trim, this.trimMat)
+    const gm = addStatic(this.root, glass, this.windowMat, false)
     if (gm) {
       gm.receiveShadow = false
     }
-    this.addStatic(signs, this.signMat, false)
-  }
-
-  /**
-   * A building's street face: the kit's panelled door (double doors for the livery), framed
-   * glazed windows either side, and on two-storey fronts upper windows with open shutters and a
-   * balcony rail along the porch roof. Kit pieces face +Z with their base at the wall's foot.
-   */
-  private facade(
-    b: BuildingSpec,
-    fx: number,
-    out: { glass: GeoBuilder; trim: GeoBuilder; kit: Placed[] },
-  ): void {
-    const s = b.side
-    const lib = propsLibrary()
-    const piece = (name: string) => (lib ? propDef(lib, name, 1, 'y', true) : null)
-    const door = piece(b.kind === 'stable' ? 'k_door_braced' : 'k_door')
-    const frame = piece('k_doorframe')
-    const win = piece('k_window_wide')
-    const thin = piece('k_window_thin')
-    const shut = piece('k_shutters_thin')
-    const rail = piece('k_balcony')
-    if (!(door && frame && win && thin && shut && rail)) {
-      this.plainFacade(b, fx, out)
-      return
-    }
-    // kit +Z turned to face the street (-s along X), its back on the false front
-    const ry = -s * (Math.PI / 2)
-    const face = fx - s * 0.25
-    const put = (def: PropDef, z: number, y = 0, depth = 0.03, sx = 1) =>
-      out.kit.push({
-        def,
-        at: placeMatrix(face - s * depth, y, z, ry).scale(new Vector3(sx, 1, 1)),
-      })
-    if (b.kind === 'stable') {
-      put(door, b.z - 0.56, 0, 0.06, 1.0)
-      put(door, b.z + 0.56, 0, 0.06, 1.0)
-      put(frame, b.z, 0, 0.12, 1.5)
-    } else {
-      put(door, b.z, 0, 0.06)
-      put(frame, b.z, 0, 0.12)
-    }
-    for (const dz of [-1, 1]) {
-      put(win, b.z + dz * (b.w / 2 - 1.8), 0, 0.02)
-    }
-    if (b.h > 5.4) {
-      for (const dz of [-1, 1]) {
-        const wz = b.z + dz * (b.w / 4)
-        put(thin, wz, b.h - 2.9, 0)
-        put(shut, wz, b.h - 2.9, -0.12)
-      }
-      // a rail along the porch roof, two-metre sections
-      const aw = 3.1
-      const n = Math.max(1, Math.floor((b.w - 0.4) / 2))
-      for (let i = 0; i < n; i++) {
-        const z = b.z - ((n - 1) * 2) / 2 + i * 2
-        out.kit.push({
-          def: rail,
-          at: placeMatrix(s * (STREET.half + 0.25), aw + 0.06, z, ry + Math.PI).multiply(
-            new Matrix4().makeTranslation(0, 0, -0.95),
-          ),
-        })
-      }
-    }
-  }
-
-  /** The old flat-box facade (props library missing). */
-  private plainFacade(
-    b: BuildingSpec,
-    fx: number,
-    out: { glass: GeoBuilder; trim: GeoBuilder },
-  ): void {
-    const { glass, trim } = out
-    const s = b.side
-    const upper = b.h > 5.4 ? 2 : 0
-    for (let i = 0; i < upper; i++) {
-      const wz = b.z + (i === 0 ? -1 : 1) * (b.w / 4)
-      glass.box(fx - s * 0.28, b.h - 1.2, wz, 0.06, 1.3, 0.9, 0xff_ff_ff)
-      trim.box(fx - s * 0.3, b.h - 1.2, wz, 0.08, 1.5, 1.1, 0xd8_cc_b0)
-    }
-    const doorW = b.kind === 'stable' ? 3.2 : 1.4
-    glass.box(fx - s * 0.27, 1.25, b.z, 0.06, 2.5, doorW, 0xff_ff_ff)
-    trim.box(fx - s * 0.29, 1.3, b.z, 0.08, 2.7, doorW + 0.3, 0x2a_1d_14)
-    for (const dz of [-1, 1]) {
-      const wz = b.z + dz * (b.w / 2 - 1.8)
-      glass.box(fx - s * 0.28, 1.7, wz, 0.06, 1.6, 1.8, 0xff_ff_ff)
-      trim.box(fx - s * 0.3, 1.7, wz, 0.08, 1.85, 2.05, 0xd8_cc_b0)
-      trim.box(fx - s * 0.32, 0.86, wz, 0.25, 0.1, 2.2, 0x3a_2a_1e)
-    }
-  }
-
-  /** Benches, buckets, sacks and a chest or two along the boardwalks, by the doors. */
-  private dressBoardwalks(kit: Placed[]): void {
-    const lib = propsLibrary()
-    if (!lib) {
-      return
-    }
-    const def = (n: string) => propDef(lib, n, 1, 'y', true)
-    const bench = def('k_bench')
-    const bucket = def('k_bucket')
-    const sack = def('k_sack')
-    const chest = def('k_chest')
-    const rack = def('k_barrel_rack')
-    const H = STREET.half
-    const deck = 0.34
-    let i = 0
-    for (const b of BUILDINGS) {
-      const s = b.side
-      const ry = -s * (Math.PI / 2)
-      const fx = s * (H + STREET.boardwalk) - s * 0.6
-      i++
-      if (bench && b.kind !== 'stable' && i % 2 === 0) {
-        kit.push({
-          def: bench,
-          at: placeMatrix(fx, deck, b.z + (b.w / 2 - 1.8) * (i % 4 === 0 ? 1 : -1), ry),
-        })
-      }
-      if (bucket && i % 3 === 0) {
-        kit.push({ def: bucket, at: placeMatrix(fx + s * 0.2, deck, b.z + 1.3, i) })
-      }
-      if (sack && (b.kind === 'stable' || i % 4 === 1)) {
-        kit.push({ def: sack, at: placeMatrix(fx, deck, b.z - b.w / 2 + 0.8, i * 1.7) })
-        kit.push({
-          def: sack,
-          at: placeMatrix(fx - s * 0.1, deck, b.z - b.w / 2 + 1.5, i * 2.3, 0.9),
-        })
-      }
-      if (chest && b.kind === 'bank') {
-        kit.push({ def: chest, at: placeMatrix(fx, deck, b.z + 2.6, ry) })
-      }
-      if (rack && b.kind === 'saloon') {
-        kit.push({ def: rack, at: placeMatrix(fx, deck, b.z - 3.2, ry) })
-      }
-    }
+    addStatic(this.root, signs, this.signMat, false)
   }
 
   private buildChurch(): void {
@@ -683,8 +394,8 @@ float gn(vec2 p){ vec2 i=floor(p); vec2 f=fract(p); f=f*f*(3.0-2.0*f);
     // door + steps
     t.box(0, 1.6, cz - 3.25, 1.8, 3.2, 0.1, 0x2a_1a_12)
     t.box(0, 0.15, cz - 4, 4, 0.3, 1.6, 0x8a_7a_68)
-    this.addStatic(w, this.wallMat)
-    this.addStatic(t, this.trimMat)
+    addStatic(this.root, w, this.wallMat)
+    addStatic(this.root, t, this.trimMat)
     // bell
     const bell = new Mesh(
       new SphereGeometry(0.75, 12, 8, 0, Math.PI * 2, 0, Math.PI * 0.55),
@@ -708,113 +419,6 @@ float gn(vec2 p){ vec2 i=floor(p); vec2 f=fract(p); f=f*f*(3.0-2.0*f);
   setClock(h: number, m: number): void {
     this.clock.draw(h, m)
     this.clockTex.needsUpdate = true
-  }
-
-  private buildWaterTower(): void {
-    const t = new GeoBuilder(1.4)
-    const x = 26
-    const z = 24
-    for (const [dx, dz] of [
-      [-2, -2],
-      [2, -2],
-      [-2, 2],
-      [2, 2],
-    ] as const) {
-      t.box(x + dx, 4.5, z + dz, 0.35, 9, 0.35, 0x5a_44_30)
-    }
-    t.box(x, 3, z - 2, 4, 0.2, 0.2, 0x5a_44_30)
-    t.box(x, 3, z + 2, 4, 0.2, 0.2, 0x5a_44_30)
-    t.box(x - 2, 3, z, 0.2, 0.2, 4, 0x5a_44_30)
-    t.box(x + 2, 3, z, 0.2, 0.2, 4, 0x5a_44_30)
-    t.box(x, 9.1, z, 5, 0.25, 5, 0x4a_38_28)
-    this.addStatic(t, this.trimMat)
-    // tank: octagonal stave cylinder
-    const tank = new GeoBuilder(1.4)
-    const r = 2.6
-    const n = 12
-    for (let i = 0; i < n; i++) {
-      const a0 = (i / n) * Math.PI * 2
-      const a1 = ((i + 1) / n) * Math.PI * 2
-      const p0 = new Vector3(x + Math.cos(a0) * r, 9.2, z + Math.sin(a0) * r)
-      const p1 = new Vector3(x + Math.cos(a1) * r, 9.2, z + Math.sin(a1) * r)
-      const p2 = p1.clone().setY(12.6)
-      const p3 = p0.clone().setY(12.6)
-      tank.quad(p1, p0, p3, p2, 0x7a_5e_44, true)
-      const top = new Vector3(x, 14, z)
-      tank.tri(p2, p3, top, 0x3a_2e_26)
-    }
-    this.addStatic(tank, this.trimMat)
-  }
-
-  private buildMesas(): void {
-    const g = new GeoBuilder(30)
-    const rnd = (a: number, b: number) => a + Math.random() * (b - a)
-    const mesa = (cx: number, cz: number, r: number, h: number, color: number) => {
-      const n = 9
-      const pts: Vector3[] = []
-      const top: Vector3[] = []
-      for (let i = 0; i < n; i++) {
-        const a = (i / n) * Math.PI * 2
-        const rr = r * rnd(0.75, 1.15)
-        pts.push(new Vector3(cx + Math.cos(a) * rr, -2, cz + Math.sin(a) * rr * 0.6))
-        top.push(
-          new Vector3(
-            cx + Math.cos(a) * rr * rnd(0.6, 0.75),
-            h * rnd(0.92, 1.05),
-            cz + Math.sin(a) * rr * 0.45,
-          ),
-        )
-      }
-      const c = new Vector3(cx, h, cz)
-      for (let i = 0; i < n; i++) {
-        const j = (i + 1) % n
-        g.quad(pts[j] as Vector3, pts[i] as Vector3, top[i] as Vector3, top[j] as Vector3, color)
-        g.tri(top[j] as Vector3, top[i] as Vector3, c, color)
-      }
-    }
-    const spots: [number, number, number, number][] = [
-      [-60, -175, 38, 34],
-      [10, -205, 55, 46],
-      [85, -185, 30, 28],
-      [-140, -140, 40, 30],
-      [150, -120, 35, 40],
-      [-175, -20, 30, 26],
-      [180, 40, 40, 32],
-      [-150, 120, 50, 36],
-      [120, 170, 40, 30],
-    ]
-    for (const [x, z, r, h] of spots) {
-      mesa(x * 1.25, z * 1.25, r, h * 0.55, 0x9a_5a_3a)
-    }
-    const m = new MeshStandardMaterial({ vertexColors: true, roughness: 1, flatShading: true })
-    const mesh = this.addStatic(g, m, false)
-    if (mesh) {
-      mesh.receiveShadow = false
-    }
-  }
-
-  private buildPosterPost(): Group {
-    const g = new Group()
-    const post = new GeoBuilder(1.2)
-    post.box(0, 1.4, 0, 0.22, 2.8, 0.22, 0x5a_44_30)
-    const pm = new Mesh(post.build(), this.trimMat)
-    pm.castShadow = true
-    g.add(pm)
-    const mat = new MeshStandardMaterial({
-      roughness: 0.9,
-      emissive: 0xff_ff_ff,
-      emissiveIntensity: 0.28,
-    })
-    const paper = new Mesh(new PlaneGeometry(0.62, 0.86), mat)
-    paper.position.set(0.12, 1.75, 0)
-    paper.rotation.y = Math.PI / 2
-    paper.castShadow = true
-    g.add(paper)
-    g.userData.mat = mat
-    g.userData.paper = paper
-    g.position.copy(STREET.posterPos)
-    this.root.add(g)
-    return g
   }
 
   /** Recompute everything that depends on time of day. */

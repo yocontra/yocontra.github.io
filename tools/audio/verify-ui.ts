@@ -3,12 +3,23 @@
 // biome-ignore-all lint/complexity/noExcessiveLinesPerFunction: one linear test script
 // biome-ignore-all lint/performance/noAwaitInLoops: driving a live page, one step at a time
 // biome-ignore-all lint/suspicious/noPlaywrightWaitForTimeout: real-time menus and duels: waits are beats, not flaky selectors
+import { Database } from 'bun:sqlite'
+import { readdirSync } from 'node:fs'
+import { join } from 'node:path'
+
 /**
- * The saloon's menus and Bounty Hunt, in real Chrome against the local mock API
- * (`bun scripts/mock-api.ts 4354`, with the site's `PUBLIC_API_URL` pointing at it), reading the
- * `#audiodebug` timeline (`__owAudio`):
+ * The saloon's menus and Bounty Hunt, in real Chrome against the real local API (`wrangler dev`,
+ * with the site's `PUBLIC_API_URL` pointing at it and the site's origin in the API's
+ * ALLOWED_ORIGINS and RP_ORIGINS), reading the `#audiodebug` timeline (`__owAudio`):
  *
- *   PLAYWRIGHT=/abs/path/to/node_modules/playwright bun tools/audio/verify-ui.ts [baseUrl] [--api=url]
+ *   bunx wrangler d1 migrations apply contra-leaderboard --config api/wrangler.jsonc --local
+ *   bunx wrangler dev --config api/wrangler.jsonc --local --port 8787
+ *   PUBLIC_API_URL=http://localhost:8787 bun run dev --port 4353
+ *   PLAYWRIGHT=/abs/path/to/node_modules/playwright bun tools/audio/verify-ui.ts [baseUrl] [--d1=dir]
+ *
+ * Each player signs up with a real passkey (a CDP virtual authenticator) and is then given the
+ * Bounty Hunt licence straight in the local D1 (`--d1`, default the API's wrangler state), the
+ * only shortcut: everything else goes through the real Worker.
  *
  * Signs in, opens the Outfitter and buys something, opens the queue and takes a ghost, then plays
  * two duels against ghosts: a win (a quick draw) and a loss (no draw at all). Reports every UI cue,
@@ -29,13 +40,18 @@ interface Ev {
 }
 interface Loc {
   first: () => Loc
+  fill: (v: string) => Promise<void>
   click: (o?: { timeout?: number }) => Promise<void>
   isVisible: () => Promise<boolean>
   isEnabled: () => Promise<boolean>
   count: () => Promise<number>
   waitFor: (o?: { timeout?: number; state?: string }) => Promise<void>
 }
+interface Cdp {
+  send: (method: string, params?: unknown) => Promise<unknown>
+}
 interface PageLike {
+  context: () => { newCDPSession: (p: unknown) => Promise<Cdp> }
   goto: (url: string) => Promise<unknown>
   reload: () => Promise<unknown>
   waitForFunction: (fn: string, arg?: unknown, opts?: { timeout?: number }) => Promise<unknown>
@@ -59,7 +75,10 @@ interface Pw {
 }
 
 const base = process.argv.find((a) => a.startsWith('http')) ?? 'http://localhost:4353'
-const api = process.argv.find((a) => a.startsWith('--api='))?.slice(6) ?? 'http://localhost:4354'
+const d1Dir =
+  process.argv.find((a) => a.startsWith('--d1='))?.slice(5) ??
+  join(import.meta.dir, '../../api/.wrangler/state/v3/d1/miniflare-D1DatabaseObject')
+const RUN = Date.now().toString(36).slice(-4)
 const pwPath = process.env.PLAYWRIGHT ?? 'playwright'
 const { chromium } = (await import(pwPath)) as Pw
 const f1 = (v: number) => v.toFixed(1)
@@ -81,23 +100,48 @@ const browser = await chromium.launch({
   headless: true,
   args: ['--autoplay-policy=no-user-gesture-required'],
 })
-/** A fresh browser context, signed in to the mock as `name`, in the saloon with audio on. */
+/** Give `name` the Bounty Hunt licence (the first three outlaws) in the local D1. */
+function license(name: string): void {
+  const file = readdirSync(d1Dir).find((x) => x.endsWith('.sqlite') && !x.startsWith('metadata'))
+  if (file === undefined) {
+    throw new Error(`No local D1 in ${d1Dir}. Apply the migrations first.`)
+  }
+  const db = new Database(join(d1Dir, file))
+  db.exec('PRAGMA busy_timeout = 5000')
+  db.query(
+    'UPDATE profiles SET gauntlet_clears = gauntlet_clears | 7 WHERE account_id = (SELECT id FROM accounts WHERE name = ?)',
+  ).run(name)
+  db.close()
+}
+
+/** A fresh browser context, signed up with a passkey as `name`, in the saloon with audio on. */
 async function saloon(name: string): Promise<PageLike> {
   const pg = await browser.newPage({ viewport: { width: 1280, height: 720 } })
+  const cdp = await pg.context().newCDPSession(pg)
+  await cdp.send('WebAuthn.enable')
+  await cdp.send('WebAuthn.addVirtualAuthenticator', {
+    options: {
+      protocol: 'ctap2',
+      transport: 'internal',
+      hasResidentKey: true,
+      hasUserVerification: true,
+      isUserVerified: true,
+      automaticPresenceSimulation: true,
+    },
+  })
   await pg.goto(`${base}/experiments/out-west/#audiodebug`)
-  const who = await pg.evaluate<{ player: { accountId: string; name: string } }>(
-    `fetch('${api}/dev/sign-in', { method: 'POST', credentials: 'include', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ name: '${name}' }) }).then((r) => r.json())`,
-  )
-  await pg.evaluate(
-    `localStorage.setItem('ow-auth-hint', ${JSON.stringify(JSON.stringify(who.player))})`,
-  )
-  await pg.reload()
-  await pg.waitForTimeout(1500)
   // the dev toolbar sits over the results sheet's buttons
   await pg.evaluate('document.querySelector("astro-dev-toolbar")?.remove()')
   await pg.mouse.click(640, 360)
   await pg.waitForFunction('globalThis.__owAudio !== undefined', undefined, { timeout: 30_000 })
   await pg.locator('.ow-tile-store').waitFor({ timeout: 60_000 })
+  const handle = `${name} ${RUN}`
+  await pg.locator('.ow-hub-signin').click()
+  await pg.locator('.ow-acct-input').fill(handle)
+  await pg.locator('.ow-acct-form button:has-text("Sign up")').click()
+  await pg.locator('.ow-acct-plate-name').waitFor({ timeout: 20_000 })
+  license(handle)
+  await pg.locator('.ow-sheet-head button:has-text("Close")').first().click()
   await pg.waitForTimeout(1500)
   return pg
 }
@@ -273,5 +317,3 @@ for (const [i, r] of [r1, r2].entries()) {
 }
 const out = frames.filter((f) => f.tap === 'out')
 console.log(`output peak ${f1(Math.max(...out.map((f) => f.peak)))} dBFS`)
-
-export {}

@@ -129,3 +129,13 @@ export const fetchDuelStats = (): Promise<Result<DuelStatsResponse>> =>
     {},
     (v): v is DuelStatsResponse => isRecord(v) && typeof v.wins === 'number',
   )
+
+/** Whether Frontier takes new riders this month (`GET /town/lobbies` → `{ open }`). */
+export async function fetchTownOpen(): Promise<Result<boolean>> {
+  const r = await apiJson(
+    '/town/lobbies',
+    {},
+    (v): v is { open: boolean } => isRecord(v) && typeof v.open === 'boolean',
+  )
+  return r.ok ? { ok: true, value: r.value.open } : r
+}
