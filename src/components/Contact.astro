@@ -6,7 +6,8 @@ import { socials } from '~/data/career'
   <div class="wrap">
     <p class="eyebrow">Contact</p>
     <h2 id="contact-title">
-      <a class="mail" href="mailto:yo@contra.io">yo@contra.io</a>
+      <!-- The address is never in the HTML: it is assembled client-side from a reversed base64 string. -->
+      <a class="mail" href="#contact" data-m="b2kuYXJ0bm9jQG95">yo [at] contra [dot] io</a>
     </h2>
     <p class="note">Always happy to chat about open source, ideas, or anything else.</p>
 
@@ -21,15 +22,23 @@ import { socials } from '~/data/career'
     <div class="colophon">
       <p>© {new Date().getFullYear()} Eric Schoffstall</p>
       <p>
-        Built with Astro and WebGPU ·
+        Built with Astro and WebGPU ·{' '}
         <a href="https://github.com/yocontra/contra.github.io">source</a>
       </p>
     </div>
   </div>
 </footer>
 
+<script>
+  import { revealEmail } from '~/lib/email'
+
+  revealEmail(document.querySelectorAll<HTMLAnchorElement>('a[data-m]'))
+</script>
+
 <style>
   .contact {
+    /* Positioned so it paints above the hero's fixed shader canvas. */
+    position: relative;
     padding-block: clamp(6rem, 16vh, 10rem) 2rem;
     background: linear-gradient(to bottom, transparent, oklch(0.86 0.2 var(--accent-h) / 0.06));
     border-top: 1px solid var(--line);

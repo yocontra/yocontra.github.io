@@ -117,7 +117,6 @@ export const stack: readonly string[] = [
 ]
 
 export const socials = [
-  { label: 'Email', href: 'mailto:yo@contra.io' },
   { label: 'GitHub', href: 'https://github.com/yocontra' },
   { label: 'LinkedIn', href: 'https://www.linkedin.com/in/ericschoffstall' },
   { label: 'Twitter', href: 'https://twitter.com/contrahacks' },

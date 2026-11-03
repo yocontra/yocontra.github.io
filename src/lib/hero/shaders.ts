@@ -67,7 +67,7 @@ vec3 oklch(float L, float C, float h) {
 }
 
 // Returns the linear colour of the ink field at a fragment, plus |r| (used by VCR mode).
-vec4 field(vec2 frag) {
+vec4 field(vec2 frag, float fade) {
   vec2 res = U[0].xy;
   float scroll = U[1].w;
   float hue = U[2].x;
@@ -94,7 +94,7 @@ vec4 field(vec2 frag) {
   col += glow * vein * (0.45 + 0.55 * q.y);
 
   col *= 1.0 - 0.45 * dot(uv, uv);
-  col = mix(col, base * 0.8, smoothstep(0.0, 0.85, scroll) * 0.9);
+  col = mix(col, base * 0.8, smoothstep(0.0, 0.85, scroll) * 0.9 * fade);
   return vec4(col, length(r));
 }
 
@@ -129,21 +129,22 @@ void main() {
   // Around the cursor, the field is re-rendered as ASCII art.
   float speed = min(length(vel), 3.0);
   float radius = U[3].y * (0.22 + 0.06 * speed);
-  float m = (1.0 - smoothstep(radius * 0.45, radius, length(uv - mouse)))
-          * (1.0 - smoothstep(0.5, 1.0, scroll));
+  float m = (1.0 - smoothstep(radius * 0.45, radius, length(uv - mouse)));
 
   vec4 fld = vec4(0.0);
-  if (m < 0.999) fld = field(frag);
+  if (m < 0.999) fld = field(frag, 1.0);
   vec3 col = fld.rgb;
 
   if (m > 0.001) {
-    float cs = max(6.0, floor(res.y / 52.0));
+    float cs = max(4.0, floor(res.y / 104.0));
     vec2 cell = floor(frag / cs);
-    vec4 c = field((cell + 0.5) * cs);
+    vec4 c = field((cell + 0.5) * cs, 0.0);
     float g = smoothstep(0.03, 0.62, pow(clamp(dot(c.rgb, vec3(0.2126, 0.7152, 0.0722)), 0.0, 1.0), 1.0 / 2.2));
     float bit = glyph(g, (frag - cell * cs) / cs * 2.0 - 1.0);
     vec3 ink = c.rgb * 2.2 + oklch(0.5, 0.15, hue);
-    vec3 ascii = mix(oklch(0.07, 0.015, hue), ink, bit);
+    vec3 ascii = mix(c.rgb * 0.12, ink, bit);
+    // Below the hero the lens fades only partway, so it stays readable over the dimmed field.
+    ascii = mix(ascii, oklch(0.12, 0.02, hue) * 0.8, smoothstep(0.0, 0.85, scroll) * 0.55);
     col = mix(col, ascii, m);
     fld.a = mix(fld.a, c.a, m);
   }
@@ -219,7 +220,7 @@ fn oklch(L: f32, C: f32, h: f32) -> vec3f {
 }
 
 // Returns the linear colour of the ink field at a fragment, plus |r| (used by VCR mode).
-fn field(frag: vec2f) -> vec4f {
+fn field(frag: vec2f, fade: f32) -> vec4f {
   let res = U.u0.xy;
   let scroll = U.u1.w;
   let hue = U.u2.x;
@@ -246,7 +247,7 @@ fn field(frag: vec2f) -> vec4f {
   col += glow * vein * (0.45 + 0.55 * q.y);
 
   col *= 1.0 - 0.45 * dot(uv, uv);
-  col = mix(col, base * 0.8, smoothstep(0.0, 0.85, scroll) * 0.9);
+  col = mix(col, base * 0.8, smoothstep(0.0, 0.85, scroll) * 0.9 * fade);
   return vec4f(col, length(r));
 }
 
@@ -283,21 +284,22 @@ fn fs(@builtin(position) pos: vec4f) -> @location(0) vec4f {
   // Around the cursor, the field is re-rendered as ASCII art.
   let speed = min(length(vel), 3.0);
   let radius = U.u3.y * (0.22 + 0.06 * speed);
-  let m = (1.0 - smoothstep(radius * 0.45, radius, length(uv - mouse)))
-        * (1.0 - smoothstep(0.5, 1.0, scroll));
+  let m = (1.0 - smoothstep(radius * 0.45, radius, length(uv - mouse)));
 
   var fld = vec4f(0.0);
-  if (m < 0.999) { fld = field(frag); }
+  if (m < 0.999) { fld = field(frag, 1.0); }
   var col = fld.rgb;
 
   if (m > 0.001) {
-    let cs = max(6.0, floor(res.y / 52.0));
+    let cs = max(4.0, floor(res.y / 104.0));
     let cell = floor(frag / cs);
-    let c = field((cell + 0.5) * cs);
+    let c = field((cell + 0.5) * cs, 0.0);
     let g = smoothstep(0.03, 0.62, pow(clamp(dot(c.rgb, vec3f(0.2126, 0.7152, 0.0722)), 0.0, 1.0), 1.0 / 2.2));
     let bit = glyph(g, (frag - cell * cs) / cs * 2.0 - 1.0);
     let ink = c.rgb * 2.2 + oklch(0.5, 0.15, hue);
-    let ascii = mix(oklch(0.07, 0.015, hue), ink, bit);
+    var ascii = mix(c.rgb * 0.12, ink, bit);
+    // Below the hero the lens fades only partway, so it stays readable over the dimmed field.
+    ascii = mix(ascii, oklch(0.12, 0.02, hue) * 0.8, smoothstep(0.0, 0.85, scroll) * 0.55);
     col = mix(col, ascii, m);
     fld.a = mix(fld.a, c.a, m);
   }
