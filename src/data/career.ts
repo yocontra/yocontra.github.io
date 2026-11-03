@@ -48,6 +48,7 @@ export const career: readonly Role[] = [
     href: 'https://createsafe.io',
     title: 'Head of Engineering',
     years: '2021 — 2024',
+    location: 'Los Angeles',
     blurb:
       'Led engineering and research for a platform helping independent musicians with distribution, royalties and fan engagement, plus some early generative audio work.',
   },
