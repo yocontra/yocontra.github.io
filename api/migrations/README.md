@@ -18,3 +18,9 @@ Never edit a migration after it has been applied anywhere.
 `0011` rebuilds `ledger` (SQLite can't alter a CHECK): every row is copied with its id, amounts,
 balances and keys, and the AUTOINCREMENT high-water mark is carried over. Apply it before deploying
 the Worker that books the new kinds.
+
+`0012` (lead, from the server-gaps pass) rebuilds `ledger` again to add `dye_job`, `name_change`
+and `house_round` (same copy-and-carry-over procedure as `0011`). It also adds `earnings_monthly`
+(backfilled from the ledger), `most_wanted_winners`, `house_rounds`, `name_holds`, `name_changes`,
+`blocks`, `reports`, `moderation_log`, `batch_guard`, and `profiles.away_seen_at`. Apply it before
+deploying the Worker that serves the Most Wanted board, dyes, name changes and moderation.
