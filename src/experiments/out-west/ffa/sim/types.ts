@@ -57,6 +57,11 @@ export interface Player extends MoveState {
   name: string
   level: number
   prestige: number
+  /**
+   * The equipped saddlebag cosmetic, as an index into `BAG_STYLES` (contract/town.ts): the look of
+   * the bag this player drops. Cosmetic only: every style holds, drops and is picked up the same.
+   */
+  saddlebag: number
   bot: boolean
   aim: number
   prevAim: number
@@ -108,6 +113,8 @@ export interface Bag {
   x: number
   z: number
   amount: number
+  /** The dropper's saddlebag style (index into `BAG_STYLES`). Cosmetic only. */
+  style: number
   /** Killer's player id with first claim, and until when. */
   exclusiveFor: number
   exclusiveUntil: number

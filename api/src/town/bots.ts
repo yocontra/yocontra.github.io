@@ -27,20 +27,17 @@ const BANK_AT = 300
 const REPLAN_TICKS = 40
 const SCAN_TICKS = 4
 const AIM_ERROR_RAD = 0.06
-const BOT_NAMES = [
-  'Dusty Pete',
-  'One-Eyed Jack',
-  'Calamity Sue',
-  'Bart Black',
-  'Lefty Malone',
-  'Doc Hollis',
-  'Mad Ike',
-  'Rattlesnake Ray',
-  'Belle Starling',
-  'Coyote Kid',
-  'Ugly Hank',
-  'Silent Sam',
-]
+const FIRST_NAMES = ['Dusty', 'Lefty', 'Calamity', 'Doc', 'Mad', 'Silent', 'Coyote', 'Belle']
+const LAST_NAMES = ['Malone', 'Hollis', 'Black', 'Starling', 'Pike', 'Varga', 'Crowe', 'Tate']
+/** 64 distinct first × last names, ordered so neighbours share neither half. */
+const BOT_NAMES: readonly string[] = Array.from(
+  { length: FIRST_NAMES.length * LAST_NAMES.length },
+  (_, n) => {
+    const first = n % FIRST_NAMES.length
+    const last = (first + Math.floor(n / FIRST_NAMES.length)) % LAST_NAMES.length
+    return `${FIRST_NAMES[first] ?? 'Drifter'} ${LAST_NAMES[last] ?? 'Jones'}`
+  },
+)
 
 /** The town never changes at runtime, so every lobby in an isolate shares one nav grid. */
 let sharedNav: NavGrid | null = null
@@ -55,8 +52,19 @@ interface BotBrain {
   seq: number
 }
 
-export const botName = (n: number): string =>
-  `${BOT_NAMES[n % BOT_NAMES.length] ?? 'Drifter'}${n >= BOT_NAMES.length ? ` ${Math.floor(n / BOT_NAMES.length) + 1}` : ''}`
+/** The `n`th bot name (64 distinct, then they repeat). */
+export const botName = (n: number): string => BOT_NAMES[n % BOT_NAMES.length] ?? 'Drifter'
+
+/** A bot name nobody in `inUse` has, starting from `seed`: unique for up to 64 bots, no suffixes. */
+export function freshBotName(seed: number, inUse: ReadonlySet<string>): string {
+  for (let i = 0; i < BOT_NAMES.length; i++) {
+    const name = botName(seed + i)
+    if (!inUse.has(name)) {
+      return name
+    }
+  }
+  return botName(seed)
+}
 
 /** One bot (`p`, brain `b`) engaging target `q`, writing its intent into `f`. */
 interface Engagement {

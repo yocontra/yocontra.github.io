@@ -7,11 +7,19 @@
  * storage first so a failed batch retries under the same key). Carried cash lives in memory only.
  */
 import { DurableObject } from 'cloudflare:workers'
+import { bagStyleIndex } from '../../../src/experiments/out-west/contract/town.ts'
 import { TICK_MS } from '../../../src/experiments/out-west/ffa/sim/constants.ts'
 import { recordUsage } from '../budget.ts'
 import { getProfile } from '../economy/profile.ts'
 import type { Env } from '../env.ts'
-import { type Departure, LobbyCore, type SettledDeposit, type TickOutput } from './core.ts'
+import { FLAG_BADLANDS, flagStatements, isShadowed, standing } from '../moderation/flags.ts'
+import {
+  type Departure,
+  FLAG_AIMBOT,
+  LobbyCore,
+  type SettledDeposit,
+  type TickOutput,
+} from './core.ts'
 import {
   depositKey,
   depositStatements,
@@ -50,6 +58,8 @@ export class Lobby extends DurableObject<Env> {
   private epoch = 0
   private ticksRun = 0
   private readonly pending = new Map<string, SettledDeposit>()
+  /** Sessions whose aimbot flag has been written to `accounts.flags` already. */
+  private readonly aimbotFlagged = new Set<string>()
   private flushing: boolean
   private lastDepositFlush = 0
   private lastMinute = 0
@@ -95,7 +105,10 @@ export class Lobby extends DurableObject<Env> {
     if (!(accountId && this.lobbyId)) {
       return new Response('Bad join', { status: 400 })
     }
-    const profile = await getProfile(this.env, accountId)
+    const [profile, standingNow] = await Promise.all([
+      getProfile(this.env, accountId),
+      standing(this.env, accountId),
+    ])
     if (!(profile || this.dev())) {
       return new Response('No profile', { status: 403 })
     }
@@ -122,6 +135,9 @@ export class Lobby extends DurableObject<Env> {
         banked: profile?.purse ?? 0,
         tcpRtt: Number.isFinite(tcp) && tcp > 0 ? tcp : null,
         ledger: profile !== null,
+        saddlebag: bagStyleIndex(profile?.loadout.saddlebag),
+        frozen: isShadowed(standingNow.flags),
+        blocked: standingNow.blocked,
       },
       peer,
       Date.now(),
@@ -296,11 +312,27 @@ export class Lobby extends DurableObject<Env> {
       flushIndex: s.xpFlushIndex,
       leftAt,
     })
+    // The aimbot heuristic (§3.7) flags the account (§8): it rides in the Badlands from its next
+    // join. Written once per session, in the same batch as the stats that carry the evidence.
+    const flagNow = (s.flags & FLAG_AIMBOT) !== 0 && !this.aimbotFlagged.has(s.sessionId)
+    if (flagNow) {
+      statements.push(
+        ...flagStatements(this.env, {
+          accountId: s.accountId,
+          bits: FLAG_BADLANDS,
+          source: 'aimbot',
+          detail: `${p.stats.hits}/${p.stats.shots} hits, ${p.stats.snapHits} snaps`,
+        }),
+      )
+    }
     try {
       await this.env.DB.batch(statements)
       s.xpFlushed += xp
       if (xp > 0) {
         s.xpFlushIndex++
+      }
+      if (flagNow) {
+        this.aimbotFlagged.add(s.sessionId)
       }
     } catch (err) {
       console.error('ffa xp flush failed', s.sessionId, err)

@@ -33,8 +33,16 @@ export function cancelChannel(w: World, p: Player): void {
   }
 }
 
-/** Drop a bag of `amount` at (x, z). Returns the bag id, or −1 if nothing dropped. */
-export function dropBag(w: World, { x, z }: Point, amount: number, exclusiveFor: number): number {
+/**
+ * Drop a bag of `amount` at (x, z), in the dropper's saddlebag style (cosmetic only). Returns the
+ * bag id, or −1 if nothing dropped.
+ */
+export function dropBag(
+  w: World,
+  { x, z, saddlebag = 0 }: Point & { saddlebag?: number },
+  amount: number,
+  exclusiveFor: number,
+): number {
   if (amount <= 0) {
     return -1
   }
@@ -43,6 +51,7 @@ export function dropBag(w: World, { x, z }: Point, amount: number, exclusiveFor:
     x,
     z,
     amount,
+    style: saddlebag,
     exclusiveFor,
     exclusiveUntil: exclusiveFor === NONE ? 0 : w.tick + BAG_EXCLUSIVE_TICKS,
     expiresAt: w.tick + BAG_EXPIRE_TICKS,

@@ -4,8 +4,8 @@
  */
 import type { MeResponse } from '../contract/economy.ts'
 import { money } from '../data/economy.ts'
+import { NAME_CHANGE_PRICE } from '../data/sinks.ts'
 import { changeName, fetchBlocks, setBlocked, unblock } from '../net/social.ts'
-import { NAME_CHANGE_PRICE } from '../net/wire-social.ts'
 import { button, confirmSheet, el, statusLine } from './sheet.ts'
 
 /** The sign-up rules (api/src/names.ts); the server stays the judge. */

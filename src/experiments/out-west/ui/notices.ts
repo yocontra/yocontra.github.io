@@ -5,13 +5,13 @@
  * Most Wanted frame). One paper notice, dismissed once; the away report is acknowledged on the
  * server so it isn't told twice, the rest is remembered per account on this device.
  */
-import type { MeResponse } from '../contract/economy.ts'
+import type { AwayReport, MeResponse } from '../contract/economy.ts'
 import { itemById } from '../data/catalog.ts'
 import { money } from '../data/economy.ts'
 import { levelRewards, titleFor } from '../data/progression.ts'
+import { MOST_WANTED_FRAME, monthName } from '../data/sinks.ts'
 import { currentPlayer } from '../net/auth.ts'
 import { ackAway } from '../net/social.ts'
-import { type AwayReport, type MeExtras, MOST_WANTED_FRAME, monthName } from '../net/wire-social.ts'
 import { uiSound } from './sfx.ts'
 import { button, el, signedMoney, swallow } from './sheet.ts'
 
@@ -133,7 +133,7 @@ export function progressNotices(me: MeResponse): Notice[] {
 /** The away report already shown this page (its `asOf`): never shown twice before the ack lands. */
 let shownAsOf = 0
 
-export function showNotices(root: HTMLElement, me: MeResponse & MeExtras): void {
+export function showNotices(root: HTMLElement, me: MeResponse): void {
   if (root.querySelector('.ow-feat-notice')) {
     return
   }

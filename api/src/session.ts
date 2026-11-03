@@ -7,8 +7,17 @@
  * A run may belong to a signed-in account (optional): its wins then pay gauntlet XP and dollars
  * through stream C, its duels against outlaw 6 and up seed the player's ghost, and the leaderboard
  * entry uses the account name.
+ *
+ * **Resume** (`contract/ranked.ts`): the run's progress is stored (`ranked/run-state.ts`) before
+ * any result goes out, so a client that drops, or finds the object restarted, reconnects with its
+ * resume token within 30 s and carries on from the same outlaw with the same purse. A duel in
+ * progress at the drop is voided: never judged, never paid, and faced again under a new number.
  */
 import { DurableObject } from 'cloudflare:workers'
+import {
+  RANKED_RESUME_WINDOW_MS,
+  type RankedServerMessage,
+} from '../../src/experiments/out-west/contract/ranked.ts'
 import {
   type DuelRecord,
   ECONOMY_VERSION,
@@ -16,30 +25,35 @@ import {
   scoreRun,
 } from '../../src/experiments/out-west/data/economy.ts'
 import { recordUsage } from './budget.ts'
-import { type CreditJob, CreditOutbox } from './duel/credit-outbox.ts'
-import { gauntletClearStatements, getProfile, isNameOwned } from './duel/external.ts'
-import {
-  drawRating,
-  GHOST_RING,
-  type GhostSnapshot,
-  ghostRecordStatements,
-  RANKED_GHOST_MIN_LEVEL,
-} from './duel/ghost.ts'
+import { CreditOutbox } from './duel/credit-outbox.ts'
+import { isNameOwned } from './duel/external.ts'
 import { outlawOpponent } from './duel/opponents.ts'
 import { rankedWaitPlan, Standoff, type Verdict, type WaitStats } from './duel/standoff.ts'
 import type { Env } from './env.ts'
-import { looksAutomated, rttStats } from './judge.ts'
+import { rttStats } from './judge.ts'
 import { type NameResult, validateName } from './names.ts'
+import { creditJobFor, RankedCredits } from './ranked/credit.ts'
+import { recordRun } from './ranked/finish.ts'
+import {
+  newRun,
+  type Phase,
+  RUN_KEY,
+  type RunState,
+  resumedInfo,
+  resumeVerdict,
+} from './ranked/run-state.ts'
 import { BOSS_LEVEL, LAST_LEVEL, tuningFor } from './tuning.ts'
 
 /** Kept for older imports; the session sees the whole Worker environment. */
 export type SessionEnv = Env
 
-type Phase = 1 | 2
-
 const PING_INTERVAL_MS = 400
 const RTT_SAMPLES = 12
 const IDLE_TIMEOUT_MS = 15 * 60 * 1000
+/** Close code for a socket replaced by a resume from elsewhere. */
+const REPLACED = 4000
+/** The expiry alarm fires a moment after the window, so the verdict is unambiguous. */
+const RESUME_ALARM_SLACK_MS = RANKED_RESUME_WINDOW_MS + 1000
 
 interface ActiveDuel {
   duel: number
@@ -70,85 +84,188 @@ function parseMessage(raw: string): ClientMessage | null {
 
 export class DuelSession extends DurableObject<Env> {
   private socket: WebSocket | null = null
-  private sessionId = ''
-  private clientHash = ''
-  private accountId: string | null = null
-  private accountName: string | null = null
-  private used = false
-  private finished = false
   private openedAt = 0
-
-  private expectedLevel = 0
-  private expectedPhase: Phase = 1
-  private complete = false
-  private readonly records: DuelRecord[] = []
-  private readonly winReactions: number[] = []
+  /** The run's stored progress. Null until the first socket (or loaded from storage). */
+  private run: RunState | null = null
   private active: ActiveDuel | null = null
 
   private pingSeq = 0
   private readonly pingSentAt = new Map<number, number>()
-  private readonly rttSamples: number[] = []
+  private rttSamples: number[] = []
   private pingTimer: ReturnType<typeof setInterval> | undefined
   private idleTimer: ReturnType<typeof setTimeout> | undefined
 
-  /** The signed-in player's recent reactions and poster, loaded on first need. */
-  private ghost: { snapshot: GhostSnapshot; recent: number[] } | null = null
+  /** Applies credit jobs (gauntlet grants, reward items, ghost seeding). */
+  private readonly credits = new RankedCredits(this.env, (p) => this.ctx.waitUntil(p))
 
   /** Account credits owed by judged duels, durable until their D1 batch commits. */
   private readonly outbox = new CreditOutbox({
     storage: this.ctx.storage,
-    apply: (job) => this.applyCredit(job),
+    apply: (job) => this.credits.apply(job),
   })
 
-  /** Retries credits that failed, including after the object was reset mid-write. */
-  override async alarm(): Promise<void> {
-    await this.outbox.drain()
+  constructor(ctx: DurableObjectState, env: Env) {
+    super(ctx, env)
+    void ctx.blockConcurrencyWhile(async () => {
+      this.run = (await ctx.storage.get<RunState>(RUN_KEY)) ?? null
+    })
   }
 
-  override fetch(request: Request): Response {
+  /** Retries credits that failed (also after a reset), and closes a run whose window passed. */
+  override async alarm(): Promise<void> {
+    await this.outbox.drain()
+    const run = this.run
+    if (!run || this.socket || run.finished) {
+      return
+    }
+    if (resumeVerdict(run, Date.now(), false) === 'expired') {
+      await this.expire(run)
+    } else {
+      // The outbox may have moved the alarm; keep the expiry armed.
+      await this.armExpiry(run)
+    }
+  }
+
+  override async fetch(request: Request): Promise<Response> {
     if (request.headers.get('Upgrade') !== 'websocket') {
       return new Response('Expected WebSocket', { status: 426 })
     }
-    // biome-ignore lint/suspicious/noUnnecessaryConditions: mutated by other handlers; Biome only sees the initial value
-    if (this.used) {
-      return new Response('Session already used', { status: 409 })
+    const resuming = request.headers.get('X-Resume') === '1'
+    const now = Date.now()
+    const admitted = resuming ? await this.resume(now) : this.start(request, now)
+    if (admitted instanceof Response) {
+      return admitted
     }
-    this.used = true
-    this.sessionId = request.headers.get('X-Session-Id') ?? ''
-    this.clientHash = request.headers.get('X-Client-Hash') ?? ''
-    this.accountId = request.headers.get('X-Account-Id') || null
-    this.accountName = request.headers.get('X-Account-Name') || null
-    this.openedAt = Date.now()
+    const { run, voided } = admitted
+    run.droppedAt = null
+    await this.save(run)
 
     const pair = new WebSocketPair()
     const [client, server] = [pair[0], pair[1]]
     server.accept()
     this.socket = server
-    server.addEventListener('message', (event) => this.onMessage(event.data))
-    server.addEventListener('close', () => this.shutdown())
-    server.addEventListener('error', () => this.shutdown())
+    this.openedAt = now
+    this.rttSamples = []
+    server.addEventListener('message', (event) => {
+      if (this.socket === server) {
+        this.onMessage(event.data)
+      }
+    })
+    server.addEventListener('close', () => this.onDrop(server))
+    server.addEventListener('error', () => this.onDrop(server))
 
-    this.send({ type: 'hello', sessionId: this.sessionId, economyVersion: ECONOMY_VERSION })
+    this.send({
+      type: 'hello',
+      sessionId: run.sessionId,
+      economyVersion: ECONOMY_VERSION,
+      ...(resuming ? { resumed: resumedInfo(run, voided) } : {}),
+    })
+    clearInterval(this.pingTimer)
     this.pingTimer = setInterval(() => this.ping(), PING_INTERVAL_MS)
     this.touch()
     return new Response(null, { status: 101, webSocket: client })
   }
 
+  /** A resume: the stored run, if its window is still open. The duel in progress is voided. */
+  private async resume(now: number): Promise<{ run: RunState; voided: number | null } | Response> {
+    const run = this.run
+    if (!run) {
+      return new Response('No run to resume', { status: 410 })
+    }
+    const verdict = resumeVerdict(run, now, this.socket !== null)
+    if (verdict !== 'ok') {
+      if (verdict === 'expired') {
+        await this.expire(run)
+      }
+      return new Response('The run is over', { status: 410 })
+    }
+    const voided = this.voidActive()
+    this.replaceSocket()
+    return { run, voided }
+  }
+
+  /** A first connect: a new run (a session is used once; later sockets must resume). */
+  private start(request: Request, now: number): { run: RunState; voided: null } | Response {
+    if (this.run) {
+      return new Response('Session already used', { status: 409 })
+    }
+    const run = newRun({
+      sessionId: request.headers.get('X-Session-Id') ?? '',
+      clientHash: request.headers.get('X-Client-Hash') ?? '',
+      accountId: request.headers.get('X-Account-Id') || null,
+      accountName: request.headers.get('X-Account-Name') || null,
+      now,
+    })
+    this.run = run
+    return { run, voided: null }
+  }
+
+  // --- persistence -----------------------------------------------------------------------------
+
+  private async save(run: RunState): Promise<void> {
+    run.savedAt = Date.now()
+    await this.ctx.storage.put(RUN_KEY, run)
+  }
+
+  /** Stops the duel in progress, unjudged. Its number stays recorded until a resume reports it. */
+  private abortActive(): void {
+    const active = this.active
+    this.active = null
+    if (active && !active.done) {
+      active.done = true
+      active.standoff.abort()
+    }
+  }
+
+  /** A duel in progress is voided: aborted unjudged, never paid. Returns its number. */
+  private voidActive(): number | null {
+    this.abortActive()
+    // From storage, so a duel cut off by a restart (no `active` in memory any more) is reported too.
+    const run = this.run
+    const voided = run?.inProgress ?? null
+    if (run) {
+      run.inProgress = null
+    }
+    return voided
+  }
+
+  /** The window passed with no resume: a signed-in run is recorded as it stood. */
+  private async expire(run: RunState): Promise<void> {
+    if (run.finished) {
+      return
+    }
+    run.finished = true
+    await this.save(run)
+    if (run.accountId && run.accountName) {
+      const name = validateName(run.accountName)
+      if (name.ok) {
+        await recordRun(this.env, run, name).catch((err: unknown) =>
+          console.error('expired run could not be recorded', err),
+        )
+      }
+    }
+  }
+
   // --- transport -------------------------------------------------------------------------------
 
-  private send(message: Record<string, unknown>): void {
+  private send(message: RankedServerMessage): void {
     try {
       this.socket?.send(JSON.stringify(message))
     } catch {
-      this.shutdown()
+      if (this.socket) {
+        this.onDrop(this.socket)
+      }
     }
   }
 
   private fail(message: string, fatal = false): void {
     this.send({ type: 'error', message, fatal })
     if (fatal) {
-      this.socket?.close(1008, message)
-      this.shutdown()
+      const socket = this.socket
+      socket?.close(1008, message)
+      if (socket) {
+        this.onDrop(socket)
+      }
     }
   }
 
@@ -157,15 +274,52 @@ export class DuelSession extends DurableObject<Env> {
     this.idleTimer = setTimeout(() => this.fail('Session timed out.', true), IDLE_TIMEOUT_MS)
   }
 
-  private shutdown(): void {
+  /** Stops the current socket's timers and bills its time (duel_seconds, §14 budget). */
+  private detach(): void {
     clearInterval(this.pingTimer)
     clearTimeout(this.idleTimer)
-    this.active?.standoff.abort()
     this.socket = null
     if (this.openedAt > 0) {
       const seconds = (Date.now() - this.openedAt) / 1000
       this.openedAt = 0
       this.ctx.waitUntil(recordUsage(this.env, 'duel_seconds', seconds).catch(() => undefined))
+    }
+  }
+
+  /** A resume takes over from a socket that is still open (a second tab, a half-dead link). */
+  private replaceSocket(): void {
+    const old = this.socket
+    if (!old) {
+      return
+    }
+    this.detach()
+    try {
+      old.close(REPLACED, 'replaced')
+    } catch {
+      // Already gone.
+    }
+  }
+
+  /** The socket went away. The run waits for a resume; the duel in progress is voided. */
+  private onDrop(ws: WebSocket): void {
+    if (ws !== this.socket) {
+      return
+    }
+    this.detach()
+    this.abortActive()
+    const run = this.run
+    if (run && !run.finished) {
+      run.droppedAt = Date.now()
+      this.ctx.waitUntil(this.save(run).then(() => this.armExpiry(run)))
+    }
+  }
+
+  /** Wake when the resume window closes (the outbox shares the alarm; both are handled there). */
+  private async armExpiry(run: RunState): Promise<void> {
+    const at = (run.droppedAt ?? Date.now()) + RESUME_ALARM_SLACK_MS
+    const current = await this.ctx.storage.getAlarm()
+    if (current === null || current > at) {
+      await this.ctx.storage.setAlarm(at)
     }
   }
 
@@ -216,8 +370,8 @@ export class DuelSession extends DurableObject<Env> {
   // --- duel flow -------------------------------------------------------------------------------
 
   private onStandoff(duel: number, level: number): void {
-    // biome-ignore lint/suspicious/noUnnecessaryConditions: mutated by other handlers; Biome only sees the initial value
-    if (this.finished || this.complete) {
+    const run = this.run
+    if (!run || run.finished || run.complete) {
       this.fail('The run is over.')
       return
     }
@@ -225,16 +379,23 @@ export class DuelSession extends DurableObject<Env> {
       this.fail('A duel is already in progress.')
       return
     }
-    if (!Number.isInteger(duel) || level !== this.expectedLevel) {
+    if (!Number.isInteger(duel) || duel < run.nextDuel) {
+      this.fail(`Duel numbers only go up: use ${run.nextDuel} or more.`)
+      return
+    }
+    if (level !== run.level) {
       this.fail('Out of order: ranked runs face each outlaw in turn, starting with the first.')
       return
     }
-    const tuning = tuningFor(level, this.expectedPhase)
+    const tuning = tuningFor(level, run.phase)
     if (!tuning) {
       this.fail('Unknown outlaw.')
       return
     }
-    const phase = this.expectedPhase
+    run.nextDuel = duel + 1
+    run.inProgress = duel
+    void this.save(run)
+    const phase = run.phase
     const standoff: Standoff = new Standoff({
       mode: 'ranked',
       seats: [
@@ -262,10 +423,12 @@ export class DuelSession extends DurableObject<Env> {
   }
 
   private resolve(active: ActiveDuel, verdict: Verdict, stats: WaitStats): void {
-    if (active.done || verdict.kind !== 'ranked') {
+    const run = this.run
+    if (!run || active.done || verdict.kind !== 'ranked' || this.active !== active) {
       return
     }
     active.done = true
+    run.inProgress = null
     const { outcome, reactionMs } = verdict
     const record: DuelRecord = { level: active.level, outcome, reactionMs }
 
@@ -273,38 +436,29 @@ export class DuelSession extends DurableObject<Env> {
     let earned = 0
     if (outcome === 'win' && bossPhaseOne) {
       // Phase one only wounds him; the bounty is paid once, on the final kill.
-      this.expectedPhase = 2
+      run.phase = 2
     } else {
-      this.records.push(record)
+      run.records.push(record)
       earned = payout(record)
       if (outcome === 'win') {
-        this.winReactions.push(reactionMs ?? 0)
-        this.expectedLevel++
-        this.expectedPhase = 1
-        this.complete = active.level >= LAST_LEVEL
+        run.winReactions.push(reactionMs ?? 0)
+        run.level++
+        run.phase = 1
+        run.complete = active.level >= LAST_LEVEL
       }
     }
+    run.coward ||= outcome === 'coward'
+    // Progress is stored before the result goes out (the output gate holds the message until the
+    // write is durable), so a resumed run always continues from what the player was told.
+    void this.save(run)
 
-    // The credit job is stored before the result is sent: the output gate holds the socket message
-    // until the write is durable, so a result the player sees always has its credit on disk, and
-    // the outbox retries it (from an alarm, across resets) until the D1 batch commits.
-    const queued = this.accountId
-      ? this.outbox.enqueue(String(active.duel).padStart(4, '0'), {
-          accountId: this.accountId,
-          runId: this.sessionId,
-          level: active.level,
-          paidWin: outcome === 'win' && !bossPhaseOne,
-          ghost:
-            active.level >= RANKED_GHOST_MIN_LEVEL
-              ? {
-                  reactionMs: outcome === 'coward' ? null : reactionMs,
-                  fakesSeen: stats.fakesSeen,
-                  fakeCoward: stats.coward?.onCue ?? false,
-                  waitCoward: stats.coward !== null && !stats.coward.onCue,
-                  waitedMs: stats.waitedMs,
-                }
-              : null,
-        })
+    // The credit job is stored before the result is sent too, and the outbox retries it (from an
+    // alarm, across resets) until the D1 batch commits.
+    const queued = run.accountId
+      ? this.outbox.enqueue(
+          String(active.duel).padStart(4, '0'),
+          creditJobFor(run, { level: active.level, outcome, reactionMs, stats, bossPhaseOne }),
+        )
       : null
 
     this.send({
@@ -314,7 +468,7 @@ export class DuelSession extends DurableObject<Env> {
       reactionMs,
       enemyMs: verdict.enemyMs,
       payout: earned,
-      purse: scoreRun(this.records),
+      purse: scoreRun(run.records),
       targetsHit: verdict.targetsHit,
     })
 
@@ -328,77 +482,12 @@ export class DuelSession extends DurableObject<Env> {
     }
   }
 
-  /**
-   * One credit job: the gauntlet grant through stream C and ghost seeding from outlaw 6 up, in one
-   * batch. Throws on failure so the outbox retries it.
-   */
-  private async applyCredit(job: CreditJob): Promise<void> {
-    const statements: D1PreparedStatement[] = []
-    if (job.paidWin) {
-      statements.push(
-        ...(await gauntletClearStatements(this.env, job.accountId, job.level, job.runId)),
-      )
-    }
-    const ghost = job.ghost ? await this.loadGhost(job.accountId) : null
-    let seeded: { snapshot: GhostSnapshot; recent: number[] } | null = null
-    if (job.ghost && ghost) {
-      const judged = job.ghost.reactionMs
-      const recent = judged === null ? ghost.recent : [...ghost.recent, judged].slice(-GHOST_RING)
-      seeded = { recent, snapshot: { ...ghost.snapshot, drawRating: drawRating(recent) } }
-      statements.push(
-        ...ghostRecordStatements(this.env, {
-          accountId: job.accountId,
-          source: 'ranked',
-          froze: false,
-          ...job.ghost,
-          snapshot: seeded.snapshot,
-        }),
-      )
-    }
-    if (statements.length > 0) {
-      await this.env.DB.batch(statements)
-    }
-    if (seeded) {
-      // only once it committed, so a retried job doesn't count the sample twice in memory
-      this.ghost = seeded
-    }
-  }
-
-  private async loadGhost(
-    accountId: string,
-  ): Promise<{ snapshot: GhostSnapshot; recent: number[] } | null> {
-    if (this.ghost) {
-      return this.ghost
-    }
-    const profile = await getProfile(this.env, accountId)
-    if (!profile) {
-      return null
-    }
-    const { results } = await this.env.DB.prepare(
-      `SELECT ms FROM ghost_samples WHERE account_id = ? ORDER BY id DESC LIMIT ${GHOST_RING}`,
-    )
-      .bind(accountId)
-      .all<{ ms: number }>()
-    const recent = results.map((r) => r.ms).reverse()
-    this.ghost = {
-      recent,
-      snapshot: {
-        name: profile.name,
-        level: profile.level,
-        prestige: profile.prestige,
-        loadout: profile.loadout,
-        drawRating: drawRating(recent),
-      },
-    }
-    return this.ghost
-  }
-
   // --- finish ----------------------------------------------------------------------------------
 
   /** The leaderboard name: the account's own for a signed-in run; a guest may not take an owned one. */
-  private async boardName(rawName: string): Promise<NameResult> {
-    if (this.accountId && this.accountName) {
-      return validateName(this.accountName)
+  private async boardName(run: RunState, rawName: string): Promise<NameResult> {
+    if (run.accountId && run.accountName) {
+      return validateName(run.accountName)
     }
     const name = validateName(rawName)
     if (name.ok && (await isNameOwned(this.env, name.key))) {
@@ -408,53 +497,24 @@ export class DuelSession extends DurableObject<Env> {
   }
 
   private async onFinish(rawName: string): Promise<void> {
-    // biome-ignore lint/suspicious/noUnnecessaryConditions: mutated by other handlers; Biome only sees the initial value
-    if (this.finished) {
+    const run = this.run
+    if (!run || run.finished) {
       return
     }
-    const name = await this.boardName(rawName)
+    const name = await this.boardName(run, rawName)
     if (!name.ok) {
       this.fail(name.error)
       return
     }
-    this.finished = true
-    this.active?.standoff.abort()
-    const total = Math.max(0, Math.round(scoreRun(this.records)))
-    const flagged = looksAutomated(this.winReactions) ? 1 : 0
-    const db = this.env.DB
-
-    if (total > 0) {
-      await db
-        .prepare(
-          `INSERT INTO runs (id, name, name_key, total, duels, wins, economy_version, client_hash,
-                             created_at, flagged, session_id)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        )
-        .bind(
-          crypto.randomUUID(),
-          name.name,
-          name.key,
-          total,
-          this.records.length,
-          this.winReactions.length,
-          ECONOMY_VERSION,
-          this.clientHash,
-          Date.now(),
-          flagged,
-          this.sessionId,
-        )
-        .run()
+    run.finished = true
+    this.voidActive()
+    await this.save(run)
+    const { total, rank } = await recordRun(this.env, run, name)
+    this.send({ type: 'final', total, rank })
+    const socket = this.socket
+    socket?.close(1000, 'Run recorded')
+    if (socket) {
+      this.onDrop(socket)
     }
-    const row = await db
-      .prepare(
-        `SELECT COUNT(*) AS ahead FROM (
-           SELECT name_key, MAX(total) AS best FROM runs WHERE flagged = 0 GROUP BY name_key
-         ) WHERE best > ? AND name_key != ?`,
-      )
-      .bind(total, name.key)
-      .first<{ ahead: number }>()
-    this.send({ type: 'final', total, rank: (row?.ahead ?? 0) + 1 })
-    this.socket?.close(1000, 'Run recorded')
-    this.shutdown()
   }
 }

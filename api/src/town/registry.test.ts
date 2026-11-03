@@ -5,6 +5,7 @@ import {
   emptyRegistry,
   GC_EMPTY_MS,
   HOME_LOBBY,
+  poolOf,
   RESERVE_MS,
   report,
 } from './registry.ts'
@@ -98,5 +99,37 @@ describe('lobby directory', () => {
     fill(reg, HOME_LOBBY, 0, 1000)
     expect(collect(reg, 1000 + GC_EMPTY_MS + 1)).toEqual(['lobby:1'])
     expect(Object.keys(reg.lobbies)).toEqual([HOME_LOBBY])
+  })
+
+  it('the Badlands: flagged accounts get their own lobby, honest ones never do', () => {
+    const reg = emptyRegistry(0)
+    const bad = assign(reg, { ...opts('cheat'), pool: 'badlands' as const })
+    expect(bad).toMatchObject({ ok: true, lobbyId: 'lobby:500' })
+    expect(poolOf('lobby:500')).toBe('badlands')
+    expect(poolOf(HOME_LOBBY)).toBe('main')
+    // A second flagged account joins the same Badlands lobby.
+    expect(assign(reg, { ...opts('cheat2'), pool: 'badlands' as const })).toMatchObject({
+      lobbyId: 'lobby:500',
+    })
+    // Honest players never land there, even when asking for it by id.
+    expect(assign(reg, { ...opts('honest'), preferred: 'lobby:500' })).toMatchObject({
+      lobbyId: HOME_LOBBY,
+    })
+    // The Badlands lobby never drains, and its slot rejoin stays in the pool.
+    fill(reg, 'lobby:500', 1)
+    expect(reg.lobbies).toMatchObject({ 'lobby:500': { state: 'open' } })
+    report(reg, { lobbyId: 'lobby:500', humans: 0, arrived: [], departed: ['cheat'], now: 5 })
+    expect(assign(reg, { ...opts('cheat', 10), pool: 'badlands' as const })).toMatchObject({
+      lobbyId: 'lobby:500',
+    })
+  })
+
+  it('the Badlands counts toward the lobby cap', () => {
+    const reg = emptyRegistry(0)
+    const max = { maxLobbies: 1 }
+    expect(assign(reg, { ...opts('cheat'), ...max, pool: 'badlands' as const })).toEqual({
+      ok: false,
+      reason: 'all_full',
+    })
   })
 })

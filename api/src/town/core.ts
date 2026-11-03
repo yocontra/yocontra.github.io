@@ -23,6 +23,7 @@ import { ClientStream, snapshotFor } from '../../../src/experiments/out-west/ffa
 import {
   activePlayers,
   createWorld,
+  pairKey,
   type World,
 } from '../../../src/experiments/out-west/ffa/sim/state.ts'
 import type {
@@ -37,7 +38,7 @@ import {
   removePlayer,
   step,
 } from '../../../src/experiments/out-west/ffa/sim/world.ts'
-import { BotDirector, botName } from './bots.ts'
+import { BotDirector, freshBotName } from './bots.ts'
 import { ShowdownJudge } from './core-showdown.ts'
 
 /** Lobbies keep at least this many bodies in town (bots fill in) while any human is present. */
@@ -69,6 +70,12 @@ export interface JoinProfile {
   tcpRtt: number | null
   /** False for dev accounts without a profile: nothing is written to D1 for them. */
   ledger?: boolean
+  /** The equipped saddlebag's wire index (`bagStyleIndex`): the look of the bags this player drops. */
+  saddlebag?: number
+  /** In the Badlands (§8): deposits bank XP only, the dollars are frozen. */
+  frozen?: boolean
+  /** Accounts this one blocks or is blocked by: never paired in a call-out. */
+  blocked?: readonly string[]
 }
 
 export interface Session {
@@ -92,6 +99,9 @@ export interface Session {
   xpFlushed: number
   xpFlushIndex: number
   ledger: boolean
+  /** Badlands: payouts frozen. */
+  frozen: boolean
+  blocked: ReadonlySet<string>
   msgsIn: number
 }
 
@@ -103,6 +113,8 @@ export interface Departure {
 
 export interface SettledDeposit extends Deposit {
   sessionId: string
+  /** The depositor is in the Badlands: book the XP, freeze the dollars. */
+  frozen?: boolean
 }
 
 export interface TickOutput {
@@ -236,6 +248,7 @@ export class LobbyCore {
       level: profile.level,
       prestige: profile.prestige,
       bot: false,
+      saddlebag: profile.saddlebag ?? 0,
     })
     const p = this.world.players[id]
     if (id < 0 || !p) {
@@ -262,10 +275,17 @@ export class LobbyCore {
       xpFlushed: 0,
       xpFlushIndex: 0,
       ledger: profile.ledger !== false,
+      frozen: profile.frozen === true,
+      blocked: new Set(profile.blocked ?? []),
       msgsIn: 0,
     }
     this.sessions.set(id, s)
     this.byAccount.set(profile.accountId, s)
+    for (const other of this.sessions.values()) {
+      if (other !== s && (s.blocked.has(other.accountId) || other.blocked.has(s.accountId))) {
+        this.world.noDuel.add(pairKey(s.playerId, other.playerId))
+      }
+    }
     this.welcome(s)
     this.broadcast({ type: 'roster_add', entry: s.roster }, id)
     return s
@@ -386,8 +406,10 @@ export class LobbyCore {
     const cap = (this.botTarget > 0 ? MAX_PLAYERS : SOFT_CAP) - humans
     const wanted = Math.min(cap, Math.max(this.botTarget, DEFAULT_TOWN_POPULATION - humans))
     let bots = 0
+    const names = new Set<string>()
     for (const p of activePlayers(this.world)) {
       bots += p.bot ? 1 : 0
+      names.add(p.name)
     }
     if (bots > wanted) {
       this.evictBot()
@@ -395,7 +417,7 @@ export class LobbyCore {
       const n = this.world.tick + bots
       const id = addPlayer(this.world, {
         accountId: `bot:${this.lobbyId}:${n}`,
-        name: botName(n % 97),
+        name: freshBotName(n, names),
         level: 1 + (n % 25),
         prestige: 0,
         bot: true,
@@ -458,6 +480,11 @@ export class LobbyCore {
         out.push({ session: s, player: p })
       }
       this.bots.forget(p.id)
+      for (const key of this.world.noDuel) {
+        if (key % 256 === p.id || Math.floor(key / 256) === p.id) {
+          this.world.noDuel.delete(key)
+        }
+      }
       removePlayer(this.world, p.id)
       this.broadcast({ type: 'roster_remove', id: p.id })
     }
@@ -496,7 +523,7 @@ export class LobbyCore {
         this.world.burned += d.amount
         continue
       }
-      deposits.push({ ...d, sessionId: s.sessionId })
+      deposits.push({ ...d, sessionId: s.sessionId, ...(s.frozen ? { frozen: true } : {}) })
     }
     this.world.deposits = []
     return { deposits, departures: this.reapGone() }

@@ -13,4 +13,9 @@ export {
   type LedgerEntry,
   ledgerStatements,
 } from '../economy/ledger.ts'
-export { getProfile, getProfileDetail, type Profile } from '../economy/profile.ts'
+export {
+  getProfile,
+  getProfileDetail,
+  grantItemStatement,
+  type Profile,
+} from '../economy/profile.ts'

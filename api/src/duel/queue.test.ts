@@ -125,9 +125,33 @@ describe('pickGhost', () => {
     const netOf = (id: string) => (id === 'neighbour' ? { ip: 'q', prefix: 'pre-me' } : null)
     expect(pickGhost(me, ghosts, netOf)).toBeNull()
   })
+  it('never a ghost of someone you block or who blocks you', () => {
+    const me = entry('me', { blocked: ['rival'] })
+    expect(pickGhost(me, [ghost('rival')], net)).toBeNull()
+  })
   it('prestige counts toward the effective level', () => {
     expect(
       pickGhost(entry('me', { effectiveLevel: 20 }), [ghost('p', { prestige: 1 })], net)?.accountId,
     ).toBe('p')
+  })
+})
+
+describe('blocks and the Badlands', () => {
+  it('players who block each other are never paired', () => {
+    const a = entry('a', { blocked: ['b'] })
+    const b = entry('b')
+    expect(canPair(a, b, NOW)).toBe(false)
+    expect(canPair(b, a, NOW)).toBe(false)
+    expect(planTick([a, b], NOW + 1000)).toEqual([])
+  })
+  it('Badlands players meet only each other', () => {
+    const honest = entry('honest')
+    const cheat = entry('cheat', { badlands: true })
+    const cheat2 = entry('cheat2', { badlands: true })
+    expect(canPair(honest, cheat, NOW)).toBe(false)
+    expect(canPair(cheat, cheat2, NOW)).toBe(true)
+    expect(planTick([honest, cheat, cheat2], NOW + 1000)).toEqual([
+      { kind: 'pair', a: 'cheat', b: 'cheat2' },
+    ])
   })
 })

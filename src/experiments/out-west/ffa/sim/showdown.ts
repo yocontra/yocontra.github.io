@@ -32,7 +32,7 @@ import {
 } from './constants.ts'
 import { cancelChannel, killPlayer } from './death.ts'
 import { aimDir } from './move.ts'
-import { activePlayers, dist2, type World } from './state.ts'
+import { activePlayers, dist2, pairKey, type World } from './state.ts'
 import type { Player, Showdown } from './types.ts'
 
 /** Cues are at least 350 ms (7 ticks) from each other and from the call. */
@@ -57,7 +57,7 @@ export function calloutTarget(w: World, p: Player): Player | null {
   let best: Player | null = null
   let bestD2 = CALLOUT_RANGE ** 2
   for (const q of activePlayers(w)) {
-    if (q.id === p.id || !canDuel(w, q)) {
+    if (q.id === p.id || !canDuel(w, q) || w.noDuel.has(pairKey(p.id, q.id))) {
       continue
     }
     const d2 = dist2(p.x, p.z, q.x, q.z)
@@ -113,7 +113,8 @@ export function handleCallout(w: World, p: Player, buttons: number): boolean {
   if (pressed(buttons, p.lastButtons, BTN_INTERACT) && p.calledBy !== NONE) {
     const challenger = w.players[p.calledBy]
     p.calledBy = NONE
-    if (challenger && w.tick <= p.calledUntil && canDuel(w, challenger) && canDuel(w, p)) {
+    const allowed = challenger && !w.noDuel.has(pairKey(challenger.id, p.id))
+    if (allowed && w.tick <= p.calledUntil && canDuel(w, challenger) && canDuel(w, p)) {
       startShowdown(w, challenger, p)
       return true
     }

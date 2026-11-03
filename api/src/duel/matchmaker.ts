@@ -29,6 +29,7 @@ import {
 import { budgetState } from '../budget.ts'
 import type { Env } from '../env.ts'
 import { rttStats } from '../judge.ts'
+import { isShadowed, standing } from '../moderation/flags.ts'
 import { getProfileDetail } from './external.ts'
 import { eligibleGhosts, type GhostCandidate } from './ghost.ts'
 import { linkOkForPvp } from './judge-pvp.ts'
@@ -62,10 +63,32 @@ interface Attachment {
   wsBase: string
 }
 
+/** Stored block lists for these accounts (storage reads take at most 128 keys at a time). */
+async function blockLists(
+  storage: DurableObjectStorage,
+  ids: readonly string[],
+): Promise<Map<string, string[]>> {
+  const keys = ids.map((id) => `blocked:${id}`)
+  const chunks: string[][] = []
+  for (let i = 0; i < keys.length; i += 128) {
+    chunks.push(keys.slice(i, i + 128))
+  }
+  const maps = await Promise.all(chunks.map((c) => storage.get<string[]>(c)))
+  return new Map(maps.flatMap((m) => [...m]))
+}
+
 export class Matchmaker extends DurableObject<Env> {
   private ghosts: { at: number; list: GhostCandidate[] } | null = null
   /** Networks of recently queued accounts (memory only, never persisted), for ghost selection. */
   private readonly netOf = new Map<string, QueueEntry['net']>()
+  /** Block lists of the accounts waiting, read from storage on every tick. */
+  private blocks = new Map<string, string[]>()
+
+  /** The entry with its stored block list. */
+  private withBlocks(e: QueueEntry): QueueEntry {
+    const list = this.blocks.get(`blocked:${e.accountId}`)
+    return list ? { ...e, blocked: list } : e
+  }
 
   // --- RPC from rooms --------------------------------------------------------------------------
 
@@ -115,9 +138,10 @@ export class Matchmaker extends DurableObject<Env> {
     if (queued || (busyUntil !== undefined && busyUntil > Date.now())) {
       return { reason: 'busy', message: "You're already in the queue or a duel." }
     }
-    const [profile, stats] = await Promise.all([
+    const [profile, stats, standingNow] = await Promise.all([
       getProfileDetail(this.env, accountId),
       duelStats(this.env, accountId),
+      standing(this.env, accountId),
     ])
     if (!profile) {
       return { reason: 'no-profile', message: 'No poster yet. Sign up first.' }
@@ -151,6 +175,13 @@ export class Matchmaker extends DurableObject<Env> {
       wantsGhost: false,
       lastOpponents: history.opponents,
       recentGhosts: history.ghosts,
+      ...(isShadowed(standingNow.flags) ? { badlands: true } : {}),
+    }
+    // Block lists can outgrow a socket attachment (2 KB), so they live in storage by account.
+    if (standingNow.blocked.length > 0) {
+      await this.ctx.storage.put(`blocked:${accountId}`, standingNow.blocked)
+    } else {
+      await this.ctx.storage.delete(`blocked:${accountId}`)
     }
     const poster: Poster = {
       name: profile.name,
@@ -259,8 +290,9 @@ export class Matchmaker extends DurableObject<Env> {
       const ghostsOnly = att.rtt.length >= MIN_PING_SAMPLES && !linkOkForPvp(link)
       att.entry = { ...att.entry, ghostsOnly }
     }
+    this.blocks = await blockLists(this.ctx.storage, [...waiting.keys()])
     const actions = planTick(
-      [...waiting.values()].map((w) => w.att.entry),
+      [...waiting.values()].map((w) => this.withBlocks(w.att.entry)),
       now,
     )
     for (const action of actions) {
@@ -369,7 +401,7 @@ export class Matchmaker extends DurableObject<Env> {
     if (!w) {
       return
     }
-    const entry = w.att.entry
+    const entry = this.withBlocks(w.att.entry)
     const ghost = pickGhost(entry, await this.ghostIndex(), (id) => this.netOf.get(id) ?? null)
     const level = Math.max(1, Math.min(50, entry.effectiveLevel))
     const poster: Poster = ghost

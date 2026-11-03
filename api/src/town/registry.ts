@@ -6,7 +6,11 @@
  * - a lobby with ≤4 players is drained (no new joins) while another lobby has room for them;
  * - players are never moved; a leaver's slot is reserved for 60 s for a rejoin;
  * - an empty extra lobby is forgotten after 2 minutes;
- * - at most `MAX_LOBBIES`, and nothing new while the month's budget is spent.
+ * - at most `MAX_LOBBIES`, and nothing new while the month's budget is spent;
+ * - **the Badlands** (§8): flagged accounts ride only in Badlands lobbies (`lobby:500` and up), and
+ *   honest accounts never do. A Badlands lobby counts toward `MAX_LOBBIES`, never drains, and is
+ *   left out of the public directory view (it's a shadow pool). Its lobby runs server bots so a
+ *   lone flagged player still has a town to shoot at.
  */
 import { MAX_PLAYERS, SOFT_CAP } from '../../../src/experiments/out-west/ffa/sim/constants.ts'
 
@@ -16,6 +20,16 @@ export const GC_EMPTY_MS = 120_000
 export const DRAIN_AT = 4
 /** A join the lobby hasn't confirmed yet holds its slot this long. */
 export const PENDING_MS = 30_000
+/** Badlands lobbies are numbered from here, so they never collide with the honest pool. */
+export const BADLANDS_FIRST = 500
+
+export type Pool = 'main' | 'badlands'
+
+/** Which pool a lobby id belongs to. */
+export function poolOf(lobbyId: string): Pool {
+  const n = Number(lobbyId.slice(lobbyId.indexOf(':') + 1))
+  return Number.isInteger(n) && n >= BADLANDS_FIRST ? 'badlands' : 'main'
+}
 
 export interface LobbyEntry {
   id: string
@@ -31,6 +45,8 @@ export interface LobbyEntry {
 export interface RegistryState {
   lobbies: Record<string, LobbyEntry>
   nextIndex: number
+  /** Next Badlands lobby index (from BADLANDS_FIRST). Absent in registries saved before it. */
+  nextBadlands?: number
 }
 
 export type Assignment =
@@ -67,17 +83,52 @@ export interface AssignOptions {
   preferred?: string | undefined
   budgetOpen: boolean
   maxLobbies: number
+  /** The account's pool: `badlands` for flagged accounts. Defaults to `main`. */
+  pool?: Pool
 }
 
-function heldFor(reg: RegistryState, accountId: string): LobbyEntry | undefined {
-  return Object.values(reg.lobbies).find((e) => accountId in e.reserved)
+const inPool = (pool: Pool) => (e: LobbyEntry) => poolOf(e.id) === pool
+
+function heldFor(reg: RegistryState, accountId: string, pool: Pool): LobbyEntry | undefined {
+  return Object.values(reg.lobbies)
+    .filter(inPool(pool))
+    .find((e) => accountId in e.reserved)
+}
+
+/** The lowest unused lobby id from `first`: ids are reused, so the pools never run into each other. */
+function freeId(reg: RegistryState, first: number): string {
+  let n = first
+  while (`lobby:${n}` in reg.lobbies) {
+    n++
+  }
+  return `lobby:${n}`
+}
+
+function assignBadlands(reg: RegistryState, opts: AssignOptions): Assignment {
+  let target = Object.values(reg.lobbies)
+    .filter(inPool('badlands'))
+    .filter((e) => occupancy(e) < MAX_PLAYERS)
+    .toSorted((a, b) => occupancy(b) - occupancy(a) || a.id.localeCompare(b.id))[0]
+  if (!target) {
+    if (Object.keys(reg.lobbies).length >= opts.maxLobbies) {
+      return { ok: false, reason: 'all_full' }
+    }
+    const id = freeId(reg, BADLANDS_FIRST)
+    reg.nextBadlands = (reg.nextBadlands ?? BADLANDS_FIRST) + 1
+    target = newEntry(id, opts.now)
+    reg.lobbies[id] = target
+  }
+  reserve(target, opts.accountId, opts.now, PENDING_MS)
+  return { ok: true, lobbyId: target.id, players: occupancy(target) }
 }
 
 function pick(reg: RegistryState, opts: AssignOptions): LobbyEntry | undefined {
   const open = Object.values(reg.lobbies)
+    .filter(inPool('main'))
     .filter((e) => e.state === 'open')
     .toSorted((a, b) => occupancy(b) - occupancy(a) || a.id.localeCompare(b.id))
-  const preferred = opts.preferred ? reg.lobbies[opts.preferred] : undefined
+  const asked = opts.preferred ? reg.lobbies[opts.preferred] : undefined
+  const preferred = asked && poolOf(asked.id) === 'main' ? asked : undefined
   if (preferred && preferred.state === 'open' && occupancy(preferred) < SOFT_CAP) {
     return preferred
   }
@@ -86,6 +137,7 @@ function pick(reg: RegistryState, opts: AssignOptions): LobbyEntry | undefined {
 
 function overflow(reg: RegistryState): LobbyEntry | undefined {
   return Object.values(reg.lobbies)
+    .filter(inPool('main'))
     .filter((e) => occupancy(e) < MAX_PLAYERS)
     .toSorted((a, b) => occupancy(b) - occupancy(a) || a.id.localeCompare(b.id))[0]
 }
@@ -95,14 +147,18 @@ export function assign(reg: RegistryState, opts: AssignOptions): Assignment {
   for (const e of Object.values(reg.lobbies)) {
     prune(e, now)
   }
+  const pool = opts.pool ?? 'main'
   // A rejoin goes back to the lobby holding your slot, budget or not: your carry may be there.
-  const held = heldFor(reg, accountId)
+  const held = heldFor(reg, accountId, pool)
   if (held) {
     reserve(held, accountId, now, PENDING_MS)
     return { ok: true, lobbyId: held.id, players: occupancy(held) }
   }
   if (!opts.budgetOpen) {
     return { ok: false, reason: 'over_budget' }
+  }
+  if (pool === 'badlands') {
+    return assignBadlands(reg, opts)
   }
   let target = pick(reg, opts)
   if (!target && Object.keys(reg.lobbies).length >= opts.maxLobbies) {
@@ -112,7 +168,7 @@ export function assign(reg: RegistryState, opts: AssignOptions): Assignment {
     }
   }
   if (!target) {
-    const id = `lobby:${reg.nextIndex}`
+    const id = freeId(reg, 1)
     reg.nextIndex++
     target = newEntry(id, now)
     reg.lobbies[id] = target
@@ -154,12 +210,16 @@ export function report(reg: RegistryState, r: LobbyReport): void {
 function updateDraining(reg: RegistryState): void {
   const all = Object.values(reg.lobbies)
   for (const e of all) {
-    if (e.id === HOME_LOBBY) {
+    if (e.id === HOME_LOBBY || poolOf(e.id) === 'badlands') {
       e.state = 'open'
       continue
     }
     const roomElsewhere = all.some(
-      (o) => o !== e && o.state === 'open' && SOFT_CAP - occupancy(o) >= occupancy(e),
+      (o) =>
+        o !== e &&
+        poolOf(o.id) === 'main' &&
+        o.state === 'open' &&
+        SOFT_CAP - occupancy(o) >= occupancy(e),
     )
     e.state = occupancy(e) <= DRAIN_AT && occupancy(e) > 0 && roomElsewhere ? 'draining' : 'open'
   }

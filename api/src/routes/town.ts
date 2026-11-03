@@ -1,19 +1,24 @@
 /**
  * Frontier: lobby directory joins and lobby WebSockets. Owned by stream F.
- *   POST /town/join          (Bearer) { lobbyId?, bots? } → TownJoinResponse, or 503 with a reason
+ *   POST /town/join          (Bearer) { lobbyId?, bots? } → TownJoinResponse; 403 `unlicensed`
+ *                            (with `licence: { cleared, remaining }`), 503 full/over budget
  *   GET  /town/lobbies       → TownDirectoryView (for the hub tile)
  *   GET  /town/:lobby/ws     ?ticket=&sig= → WebSocket into that Lobby DO
  *   GET  /town/:lobby/stats  dev only: tick timing and traffic counters (load tests)
  */
+
 import type {
   TownJoinRefusal,
   TownJoinRequest,
   TownJoinResponse,
 } from '../../../src/experiments/out-west/contract/town.ts'
+import { licenceStatus } from '../../../src/experiments/out-west/data/licence.ts'
 import { authenticate } from '../auth/session.ts'
 import { AccountGoneError, issueTicket, redeemTicket } from '../auth/ticket.ts'
+import { getProfileDetail } from '../economy/profile.ts'
 import type { Env } from '../env.ts'
 import { allowedOrigin, error, json, type RouteHandler, readJson } from '../http.ts'
+import { accountFlags, isShadowed } from '../moderation/flags.ts'
 
 const LOBBY_PATH = /^\/town\/(?<lobby>lobby:\d{1,3})\/(?<what>ws|stats)$/u
 const DIRECTORY = 'dir:global'
@@ -75,13 +80,34 @@ async function join(request: Request, env: Env): Promise<Response> {
       401,
     )
   }
+  // The Bounty Hunt licence gates Frontier too (§1): the first 3 outlaws cleared on a ranked run.
+  const profile = await getProfileDetail(env, player.accountId)
+  if (!(profile && licenceStatus(profile.gauntletClears).licensed)) {
+    const status = licenceStatus(profile?.gauntletClears ?? 0)
+    return json(
+      request,
+      env,
+      {
+        ok: false,
+        error: refusalMessage('unlicensed'),
+        reason: 'unlicensed',
+        licence: { cleared: status.cleared, remaining: status.remaining },
+      },
+      403,
+    )
+  }
   const body = ((await readJson(request, 1024)) ?? {}) as TownJoinRequest
   const preferred =
     typeof body.lobbyId === 'string' && LOBBY_PATH.test(`/town/${body.lobbyId}/ws`)
       ? body.lobbyId
       : undefined
   const dir = env.LOBBY_DIR.get(env.LOBBY_DIR.idFromName(DIRECTORY))
-  const assigned = await dir.assign(player.accountId, preferred)
+  const flags = await accountFlags(env, player.accountId)
+  const assigned = await dir.assign(
+    player.accountId,
+    preferred,
+    isShadowed(flags) ? 'badlands' : 'main',
+  )
   if (!assigned.ok) {
     return json(
       request,

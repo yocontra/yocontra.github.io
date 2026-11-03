@@ -59,3 +59,36 @@ export function looksAutomated(reactions: readonly number[]): boolean {
   const variance = reactions.reduce((sum, r) => sum + (r - mean) ** 2, 0) / reactions.length
   return Math.sqrt(variance) < 12
 }
+
+/** Which §8 timing statistics an account's judged reactions trip. */
+export type TimingTell = 'steady' | 'fast' | 'clustered'
+
+/**
+ * The §8 bot heuristics over a player's most recent judged reactions (oldest first):
+ * - `steady`: σ < 12 ms over the last 20;
+ * - `fast`: a median under 150 ms over the last 30;
+ * - `clustered`: more than 25% of the last 30 between 100 and 130 ms (needs at least 20).
+ * Each needs its full sample, so a new player can't trip one by luck. Empty means none.
+ */
+export function timingTells(reactions: readonly number[]): TimingTell[] {
+  const tells: TimingTell[] = []
+  const last20 = reactions.slice(-20)
+  if (last20.length === 20 && looksAutomated(last20)) {
+    tells.push('steady')
+  }
+  const last30 = reactions.slice(-30)
+  if (last30.length === 30) {
+    const sorted = last30.toSorted((a, b) => a - b)
+    const median = ((sorted[14] ?? 0) + (sorted[15] ?? 0)) / 2
+    if (median < 150) {
+      tells.push('fast')
+    }
+  }
+  if (last30.length >= 20) {
+    const clustered = last30.filter((r) => r >= 100 && r <= 130).length
+    if (clustered / last30.length > 0.25) {
+      tells.push('clustered')
+    }
+  }
+  return tells
+}

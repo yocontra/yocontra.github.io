@@ -4,8 +4,8 @@
  * Also re-dresses your character when the loadout changes (single player shows it too).
  */
 import { MathUtils, Vector3 } from 'three'
+import type { Dyes } from '../data/dye.ts'
 import type { DuelState } from '../duel/state.ts'
-import type { Dyes } from '../net/wire-social.ts'
 import { clamp01, easeInOutCubic } from './camera.ts'
 import { dressedActor } from './loadout.ts'
 

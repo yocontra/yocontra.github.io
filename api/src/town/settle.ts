@@ -18,6 +18,13 @@ export function depositStatements(
   d: SettledDeposit,
 ): D1PreparedStatement[] {
   const key = depositKey(lobbyId, d)
+  if (d.frozen) {
+    // The Badlands (§8): the deposit happened in the sim, but the dollars are frozen. Only the
+    // banking XP is booked, under the same key, so a retry still books it once.
+    return ledgerStatements(env, key, [
+      { accountId: d.accountId, kind: 'ffa_deposit', amount: 0, xp: d.xp, ref: lobbyId },
+    ])
+  }
   return [
     ...ledgerStatements(env, key, [
       { accountId: d.accountId, kind: 'ffa_deposit', amount: d.amount, xp: d.xp, ref: lobbyId },

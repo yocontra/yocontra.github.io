@@ -5,15 +5,15 @@
  * fully and the online modes ask for a passkey.
  */
 import type { LedgerKind, MeResponse } from '../contract/economy.ts'
+import { townClosedCopy } from '../contract/town.ts'
 import { DEFAULT_LOADOUT, type Loadout, normalizeLoadout } from '../data/catalog.ts'
+import type { Dyes } from '../data/dye.ts'
 import { money } from '../data/economy.ts'
 import { licenceCopy, licenceStatus } from '../data/licence.ts'
 import { bountyForLevel, canPrestige, levelProgress, titleFor } from '../data/progression.ts'
 import { fetchLedger, fetchMe, fetchTownOpen } from '../net/api.ts'
 import { currentPlayer, onAuthChange } from '../net/auth.ts'
 import type { QueueMatch } from '../net/queue.ts'
-import { townClosedCopy } from '../net/wire-ranked.ts'
-import type { Dyes, MeExtras } from '../net/wire-social.ts'
 import { mountAccount } from './account.ts'
 import { icon } from './icons.ts'
 import { mountBlocks, mountNameChange } from './identity.ts'
@@ -45,7 +45,7 @@ export interface HubDeps {
 }
 
 /** Your profile as the hub holds it: `GET /me` plus the fields the server branch adds. */
-type Me = MeResponse & MeExtras
+type Me = MeResponse
 
 const LEDGER_LABEL: Record<LedgerKind, string> = {
   // biome-ignore-start lint/style/useNamingConvention: ledger kinds are snake_case on the wire
@@ -64,6 +64,9 @@ const LEDGER_LABEL: Record<LedgerKind, string> = {
   store_purchase: 'Outfitter',
   level_reward: 'Level reward',
   admin_adjust: 'Adjustment',
+  dye_job: 'Dye job',
+  name_change: 'New name',
+  house_round: 'A round for the house',
   // biome-ignore-end lint/style/useNamingConvention: ledger kinds are snake_case on the wire
 }
 

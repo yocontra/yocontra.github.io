@@ -79,7 +79,28 @@
  * One byte. The next snapshot is a full snapshot; the client must drop its delta baseline. Sent on
  * reconnect before the first snapshot.
  */
-export const CONTRACT_VERSION = 1
+import { reopensOn } from '../data/sinks.ts'
+
+/** 2: `EV_BAG_DROP` carries the dropper's saddlebag `style`. */
+export const CONTRACT_VERSION = 2
+
+// --- saddlebags ----------------------------------------------------------------------------------
+
+/**
+ * The saddlebag cosmetics (§7: "the bag you drop in Frontier FFA"), by wire index. A player's
+ * equipped saddlebag (validated against their inventory at join) sets the look of every bag they
+ * drop: on death, on a lost showdown and on a disconnect. Cosmetic only: every style holds the same
+ * money, sits at the same spot, and has the same pickup radius, exclusivity and expiry. An unknown
+ * index renders as the Plain Sack.
+ */
+export const BAG_STYLES = ['bag.plain-sack', 'bag.branded-satchel', 'bag.gold-thread'] as const
+export type BagStyle = (typeof BAG_STYLES)[number]
+
+/** The wire index of a saddlebag item id (0, the Plain Sack, for anything else). */
+export function bagStyleIndex(itemId: string | null | undefined): number {
+  const i = (BAG_STYLES as readonly string[]).indexOf(itemId ?? '')
+  return Math.max(0, i)
+}
 
 // --- HTTP ---------------------------------------------------------------------------------------
 
@@ -99,8 +120,20 @@ export interface TownJoinResponse {
   players: number
 }
 
-/** Refusals carry `{ ok: false, error, reason }` with HTTP 503 (full or over budget) or 401. */
+/**
+ * Refusals carry `{ ok: false, error, reason }` ({@link TownJoinError}): HTTP 503 (full or over
+ * budget), 401 (signed out) or 403 `unlicensed` (Frontier needs the Bounty Hunt licence: the first
+ * 3 outlaws beaten on a ranked run while signed in). `error` is ready to show as-is.
+ */
 export type TownJoinRefusal = 'over_budget' | 'all_full' | 'unauthorized' | 'unlicensed'
+
+export interface TownJoinError {
+  ok: false
+  error: string
+  reason: TownJoinRefusal
+  /** With `unlicensed`: licence outlaws cleared so far and still to clear (of 3). */
+  licence?: { cleared: number; remaining: number }
+}
 
 /** `GET /town/lobbies`: public directory for the hub tile ("12 in Perdition"). */
 export interface TownDirectoryView {
@@ -255,7 +288,10 @@ export const EV_SHOT = 1
 export const EV_DAMAGE = 2
 /** `u8 victim, u8 killer (255 none), u8 flags (KILL_*), u16 bounty` */
 export const EV_KILL = 3
-/** `u16 bagId, u16 x, u16 z, u16 amount, u8 exclusiveFor (255 none)` */
+/**
+ * `u16 bagId, u16 x, u16 z, u16 amount, u8 exclusiveFor (255 none), u8 style` where `style` is the
+ * dropper's saddlebag cosmetic, an index into {@link BAG_STYLES} (render the bag in that look).
+ */
 export const EV_BAG_DROP = 4
 /** `u16 bagId, u8 by (255 expired/burned)` */
 export const EV_BAG_GONE = 5
@@ -297,7 +333,7 @@ export const EVENT_SIZES: Readonly<Record<number, number>> = {
   [EV_SHOT]: 6,
   [EV_DAMAGE]: 4,
   [EV_KILL]: 5,
-  [EV_BAG_DROP]: 9,
+  [EV_BAG_DROP]: 10,
   [EV_BAG_GONE]: 3,
   [EV_DEPOSIT]: 5,
   [EV_RESPAWN]: 1,
@@ -341,3 +377,8 @@ export const SD_ABORTED = 5
 
 /** No-one / nothing, for u8 ids. */
 export const NONE = 255
+
+/** Frontier's "closed for the month" line (the join route's `over_budget` refusal says the same). */
+export function townClosedCopy(now = new Date()): string {
+  return `Perdition's closed for the month: the town's spent its keep. It reopens on ${reopensOn(now)} (UTC). Quick Draw is open in the meantime.`
+}

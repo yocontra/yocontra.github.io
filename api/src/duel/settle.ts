@@ -16,11 +16,13 @@ import {
   duelXp,
   GHOST_CASH_WINS_PER_DAY,
   ghostRoyalty,
+  levelForXp,
+  levelRewards,
   streakBonus,
 } from '../../../src/experiments/out-west/data/progression.ts'
 import type { Env } from '../env.ts'
 import { looksAutomated } from '../judge.ts'
-import { type LedgerEntry, ledgerStatements, type Profile } from './external.ts'
+import { grantItemStatement, type LedgerEntry, ledgerStatements, type Profile } from './external.ts'
 import { drawRating, ghostRecordStatements } from './ghost.ts'
 import type { Pair, Seat } from './judge-pvp.ts'
 import type { WaitStats } from './standoff.ts'
@@ -28,6 +30,9 @@ import { type DuelStats, duelStatsStatement, utcDay } from './stats.ts'
 
 const DODGE_WINDOW_MS = 10 * 60 * 1000
 const DAY_MS = 24 * 60 * 60 * 1000
+
+/** Public cowardice tally that earns the Yellow Hat. */
+export const YELLOW_HAT_COWARDICE = 10
 
 export const FLAG_RTT_CAPPED = 1
 export const FLAG_ROUGH_TRAIL = 2
@@ -37,6 +42,8 @@ export interface HumanSeat {
   accountId: string
   profile: Profile
   stats: DuelStats
+  /** In the Badlands (§8): winnings are frozen (booked as $0); losses and XP still apply. */
+  frozen?: boolean
 }
 
 export interface GhostSeat {
@@ -272,6 +279,10 @@ function seatMoney(input: SettleInput, seat: Seat, h: HumanSeat): SeatMoney {
     const recent = [...money.stats.recent, reaction].slice(-30)
     money.stats = { ...money.stats, recent, drawRating: drawRating(recent) }
   }
+  if (h.frozen) {
+    money.entries = money.entries.map((e) => (e.amount > 0 ? { ...e, amount: 0 } : e))
+    money.lines = money.lines.map((l) => (l.amount > 0 ? { ...l, amount: 0 } : l))
+  }
   money.delta = money.entries.reduce((sum, e) => sum + e.amount, 0)
   money.xp = money.entries.reduce((sum, e) => sum + (e.xp ?? 0), 0)
   return money
@@ -307,6 +318,55 @@ function ghostObservation(
   })
 }
 
+type BaseSettlement = Omit<
+  Settlement,
+  'xpBefore' | 'xpAfter' | 'levelBefore' | 'levelAfter' | 'levelReward'
+>
+
+/**
+ * Adds the level-up to a seat's settlement: XP and level before and after (from the profile the
+ * settlement was built on), and the `$25 × level` reward the ledger books in the same batch for
+ * every level gained, as its own `Level up · Lv N` line. The reward is counted once per duel, from
+ * this duel's XP only, so rematches can't accumulate it.
+ */
+export function withLevelUp(
+  base: BaseSettlement,
+  before: { xp: number; level: number },
+  booked?: number,
+): Settlement {
+  const xpAfter = before.xp + base.xp
+  const levelAfter = Math.max(before.level, levelForXp(xpAfter))
+  const levelReward = booked ?? levelRewards(before.level, levelAfter)
+  const lines =
+    levelReward > 0
+      ? [...base.lines, { label: `Level up · Lv ${levelAfter}`, amount: levelReward, xp: 0 }]
+      : base.lines
+  return {
+    ...base,
+    delta: base.delta + levelReward,
+    lines,
+    xpBefore: before.xp,
+    xpAfter,
+    levelBefore: before.level,
+    levelAfter,
+    levelReward,
+  }
+}
+
+/** Swaps the predicted level reward for the one the ledger actually booked. */
+export function reconcileLevelReward(s: Settlement, booked: number): Settlement {
+  if (booked === s.levelReward) {
+    return s
+  }
+  const lines = s.lines.filter((l) => !l.label.startsWith('Level up'))
+  const base = { ...s, delta: s.delta - s.levelReward, lines }
+  return withLevelUp(base, { xp: s.xpBefore, level: s.levelBefore }, booked)
+}
+
+/** SQL: the level reward the ledger booked for one account in one match's batch. */
+export const BOOKED_LEVEL_REWARD = `SELECT COALESCE(SUM(delta), 0) AS reward FROM ledger
+  WHERE account_id = ?1 AND kind = 'level_reward' AND substr(idem_key, 1, length(?2)) = ?2`
+
 export function buildSettlement(env: Env, input: SettleInput): SettleOutput {
   const settlements: [Settlement | null, Settlement | null] = [null, null]
   const perSeat: (SeatMoney | null)[] = [null, null]
@@ -321,15 +381,22 @@ export function buildSettlement(env: Env, input: SettleInput): SettleOutput {
     perSeat[seat] = money
     entries.push(...money.entries.filter((e) => e.amount !== 0 || (e.xp ?? 0) !== 0))
     side.push(duelStatsStatement(env, h.accountId, money.stats))
-    side.push(...ghostObservation(env, { input, seat, h }, money.stats))
-    settlements[seat] = {
-      delta: money.delta,
-      xp: money.xp,
-      purse: h.profile.purse + money.delta,
-      streak: money.stats.streak,
-      pairFactor: input.pairFactor,
-      lines: money.lines,
+    if (money.stats.cowardice >= YELLOW_HAT_COWARDICE) {
+      // The Yellow Hat (§7): a reward for drawing early 10 times. Idempotent.
+      side.push(grantItemStatement(env, h.accountId, 'hat.yellow'))
     }
+    side.push(...ghostObservation(env, { input, seat, h }, money.stats))
+    settlements[seat] = withLevelUp(
+      {
+        delta: money.delta,
+        xp: money.xp,
+        purse: h.profile.purse + money.delta,
+        streak: money.stats.streak,
+        pairFactor: input.pairFactor,
+        lines: money.lines,
+      },
+      h.profile,
+    )
   }
   // Royalty: a ghost that wins pays its owner $5 + 10% of the loser's penalty (capped daily).
   const human = perSeat[0]

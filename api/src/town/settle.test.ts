@@ -50,6 +50,8 @@ function session(accountId: string): Session {
     xpFlushed: 0,
     xpFlushIndex: 0,
     ledger: true,
+    frozen: false,
+    blocked: new Set(),
     msgsIn: 0,
   }
 }

@@ -49,6 +49,8 @@ export type WireEvent =
       z: number
       amount: number
       exclusiveFor: number
+      /** The dropper's saddlebag style: index into `BAG_STYLES`. */
+      style: number
     }
   | { type: typeof EV_BAG_GONE; bagId: number; by: number }
   | { type: typeof EV_DEPOSIT; player: number; amount: number; commission: number }
@@ -98,6 +100,7 @@ export const EVENT_LAYOUTS: Readonly<Record<number, Layout>> = {
     ['z', 2],
     ['amount', 2],
     ['exclusiveFor', 1],
+    ['style', 1],
   ],
   [EV_BAG_GONE]: [
     ['bagId', 2],
@@ -217,6 +220,7 @@ export function toWireEvent(ev: SimEvent): WireEvent {
         z: q(ev.bag.z),
         amount: ev.bag.amount,
         exclusiveFor: ev.bag.exclusiveFor,
+        style: ev.bag.style,
       }
     case 'bag_gone':
       return { ...ev, type: EV_BAG_GONE }

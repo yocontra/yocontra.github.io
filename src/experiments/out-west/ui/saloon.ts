@@ -4,6 +4,7 @@
  * Both spend through an in-game confirmation sheet, never `confirm()`.
  */
 import type { MeResponse } from '../contract/economy.ts'
+import type { ChalkboardLine } from '../contract/social.ts'
 import { money } from '../data/economy.ts'
 import {
   baseBounty,
@@ -12,9 +13,9 @@ import {
   MAX_LEVEL,
   MAX_PRESTIGE,
 } from '../data/progression.ts'
+import { HOUSE_ROUND_PRICE } from '../data/sinks.ts'
 import { currentPlayer } from '../net/auth.ts'
 import { blockedNames, buyRound, fetchChalkboard, prestige } from '../net/social.ts'
-import { type ChalkboardLine, HOUSE_ROUND_PRICE } from '../net/wire-social.ts'
 import { uiSound } from './sfx.ts'
 import { button, confirmSheet, el, panelSheet, statusLine } from './sheet.ts'
 

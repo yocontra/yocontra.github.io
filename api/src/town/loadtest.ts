@@ -7,7 +7,8 @@
  *   bun api/src/town/loadtest.ts [api=http://localhost:8794] [clients=3] [bots=29] [seconds=60]
  *
  * Signs real access tokens with the API's AUTH_SECRET (read from `api/.dev.vars`), so accounts
- * lt-1..lt-N must exist (accounts + profiles rows) for tickets and ledger writes.
+ * lt-1..lt-N must exist (accounts + profiles rows) for tickets and ledger writes, and hold the
+ * Frontier licence (`profiles.gauntlet_clears & 7 = 7`): `POST /town/join` refuses unlicensed players.
  */
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
