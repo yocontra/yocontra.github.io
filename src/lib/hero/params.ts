@@ -23,7 +23,7 @@ export const defaultParams: HeroParams = {
   warp: 3.2,
   swirl: 2.4,
   veins: 9,
-  grain: 0.05,
+  grain: 0.025,
   hue: 150,
   vcr: 0,
 }

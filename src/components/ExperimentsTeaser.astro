@@ -33,14 +33,15 @@ const listed = experiments.filter((e) => !e.unlisted).slice(0, 3)
   }
 
   header {
-    display: grid;
-    grid-template-columns: 1fr auto;
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
     align-items: end;
     gap: 1rem;
   }
 
   .eyebrow {
-    grid-column: 1 / -1;
+    flex-basis: 100%;
   }
 
   h2 {

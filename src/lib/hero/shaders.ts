@@ -107,7 +107,7 @@ void main() {
   col += glow * exp(-r2 * 28.0) * 0.12 * (0.3 + speed);
 
   col *= 1.0 - 0.45 * dot(uv, uv);
-  col = mix(col, base * 0.6, clamp(scroll * 0.85, 0.0, 1.0));
+  col = mix(col, base * 0.8, smoothstep(0.0, 0.85, scroll) * 0.99);
 
   if (vcr > 0.5) {
     float lum = dot(col, vec3(0.2126, 0.7152, 0.0722));
@@ -117,8 +117,10 @@ void main() {
     col *= 0.78 + 0.22 * sin(frag.y * 3.14159);
   }
 
-  col += (hash(frag + fract(time)) - 0.5) * U[3].w;
-  outColor = vec4(pow(max(col, vec3(0.0)), vec3(1.0 / 2.2)), 1.0);
+  // Grain is added after gamma encoding so it stays even across dark and bright areas.
+  vec3 srgb = pow(max(col, vec3(0.0)), vec3(1.0 / 2.2));
+  srgb += (hash(frag + fract(time)) - 0.5) * U[3].w;
+  outColor = vec4(srgb, 1.0);
 }
 `
 
@@ -220,7 +222,7 @@ fn fs(@builtin(position) pos: vec4f) -> @location(0) vec4f {
   col += glow * exp(-r2 * 28.0) * 0.12 * (0.3 + speed);
 
   col *= 1.0 - 0.45 * dot(uv, uv);
-  col = mix(col, base * 0.6, clamp(scroll * 0.85, 0.0, 1.0));
+  col = mix(col, base * 0.8, smoothstep(0.0, 0.85, scroll) * 0.99);
 
   if (vcr > 0.5) {
     let lum = dot(col, vec3f(0.2126, 0.7152, 0.0722));
@@ -230,7 +232,9 @@ fn fs(@builtin(position) pos: vec4f) -> @location(0) vec4f {
     col *= 0.78 + 0.22 * sin(frag.y * 3.14159);
   }
 
-  col += (hash(frag + fract(time)) - 0.5) * U.u3.w;
-  return vec4f(pow(max(col, vec3f(0.0)), vec3f(1.0 / 2.2)), 1.0);
+  // Grain is added after gamma encoding so it stays even across dark and bright areas.
+  var srgb = pow(max(col, vec3f(0.0)), vec3f(1.0 / 2.2));
+  srgb += (hash(frag + fract(time)) - 0.5) * U.u3.w;
+  return vec4f(srgb, 1.0);
 }
 `

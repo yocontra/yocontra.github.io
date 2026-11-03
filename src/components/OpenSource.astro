@@ -6,7 +6,7 @@ const items = await Promise.all(
   projects.map(async (project) => {
     const live = project.source ? await getStars(project.source) : null
     const stars = live ?? project.stars
-    const weekly = project.npm ? await getWeeklyDownloads(project.npm, 2_000_000) : undefined
+    const weekly = project.npm ? await getWeeklyDownloads(project.npm) : null
     return { ...project, stars, weekly }
   }),
 )
@@ -20,7 +20,7 @@ const items = await Promise.all(
 
   <ul class="bento">
     {items.map((p) => (
-      <li class:list={['card', 'spot', 'reveal', { featured: p.featured }]}>
+      <li class:list={['card', 'spot', 'reveal', { featured: p.featured, wide: p.wide }]}>
         <a href={p.href}>
           <div class="top">
             <h3>{p.name}</h3>
@@ -34,7 +34,7 @@ const items = await Promise.all(
                 <span class="visually-hidden"> GitHub stars</span>
               </span>
             )}
-            {p.weekly !== undefined && <span>↓ {formatCompact(p.weekly)}/wk on npm</span>}
+            {p.weekly != null && <span>↓ {formatCompact(p.weekly)}/wk on npm</span>}
             <span class="arrow" aria-hidden="true">
               ↗
             </span>
@@ -42,7 +42,7 @@ const items = await Promise.all(
         </a>
       </li>
     ))}
-    <li class="card spot reveal more">
+    <li class="card spot reveal more wide">
       <a href={moreProjectsHref}>
         <h3>200 more…</h3>
         <span class="arrow" aria-hidden="true">↗</span>
@@ -109,8 +109,13 @@ const items = await Promise.all(
     grid-row: span 2;
   }
 
+  .wide {
+    grid-column: span 2;
+  }
+
   @media (max-width: 40rem) {
-    .featured {
+    .featured,
+    .wide {
       grid-column: auto;
       grid-row: auto;
     }
@@ -124,7 +129,7 @@ const items = await Promise.all(
   }
 
   h3 {
-    font-size: 1.6rem;
+    font-size: min(1.6rem, 8.5cqi);
     letter-spacing: -0.03em;
   }
 

@@ -9,6 +9,8 @@ export interface Project {
   npm?: string
   tag?: string
   featured?: boolean
+  /** Span two columns. */
+  wide?: boolean
 }
 
 export const projects: readonly Project[] = [
@@ -22,6 +24,15 @@ export const projects: readonly Project[] = [
     featured: true,
   },
   {
+    name: 'react-responsive',
+    href: 'https://github.com/yocontra/react-responsive',
+    blurb: 'Media queries for React, as components or hooks.',
+    source: 'yocontra/react-responsive',
+    stars: 7182,
+    npm: 'react-responsive',
+    wide: true,
+  },
+  {
     name: 'genome.js',
     href: 'http://genomejs.com/',
     blurb: 'Tools for exploring your own DNA data with JavaScript.',
@@ -29,18 +40,19 @@ export const projects: readonly Project[] = [
     stars: 600,
   },
   {
-    name: 'rtc-everywhere',
-    href: 'http://rtc.works/',
-    blurb: 'One WebRTC API that works across browsers, Node, and mobile.',
-    source: 'yocontra/rtc-everywhere',
-    stars: 653,
+    name: 'gulp-concat',
+    href: 'https://github.com/gulp-community/gulp-concat',
+    blurb: 'Concatenates files. Small, boring, and very widely used.',
+    source: 'gulp-community/gulp-concat',
+    stars: 775,
+    npm: 'gulp-concat',
   },
   {
-    name: 'shasta',
-    href: 'http://shasta.tools/',
-    blurb: 'An opinionated toolkit for building React + Redux apps.',
-    source: 'shastajs/shasta',
-    stars: 506,
+    name: 'windows_98.css',
+    href: 'https://github.com/yocontra/windows_98.css',
+    blurb: 'Some sick styles for your guestbook.',
+    source: 'yocontra/windows_98.css',
+    stars: 789,
   },
   {
     name: 'pg_accel',

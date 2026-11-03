@@ -39,11 +39,11 @@ export function getStars(source: string): Promise<number | null> {
   return promise
 }
 
-export async function getWeeklyDownloads(pkg: string, fallback: number): Promise<number> {
+export async function getWeeklyDownloads(pkg: string): Promise<number | null> {
   const data = await getJson<{ downloads: number }>(
     `https://api.npmjs.org/downloads/point/last-week/${pkg}`,
   )
-  return data?.downloads ?? fallback
+  return data?.downloads ?? null
 }
 
 const compact = new Intl.NumberFormat('en', { notation: 'compact', maximumFractionDigits: 1 })
