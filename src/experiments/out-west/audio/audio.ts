@@ -1,61 +1,47 @@
-// biome-ignore-all lint/complexity/useMaxParams: geometry/audio builders take positional numeric args (x, y, z, size…), mirroring three.js APIs
-// biome-ignore-all lint/style/noExcessiveLinesPerFile: one cohesive module (data table / scene builder); splitting would scatter tightly coupled code. Tracked for a later split.
-// biome-ignore-all lint/style/useThisInClassMethods: interface methods that are deliberate no-ops for this implementation
+// biome-ignore-all lint/complexity/useMaxParams: audio builders take positional numeric args (x, y, z, fallback, range…), mirroring the Web Audio and three.js APIs
+// biome-ignore-all lint/style/useThisInClassMethods: graph-building helpers live on the engine they build for
 // biome-ignore-all lint/suspicious/noShadow: local name mirrors the field it configures
+// biome-ignore-all lint/style/noExcessiveLinesPerFile: the engine is one cohesive mixer (graph, voices, loops, music, the call); data lives in catalog.ts and streaming in stream.ts
 /**
- * Web Audio mix (design doc §4.5). One AudioContext for everything:
+ * Web Audio mix (design doc §4.5, §10.5). One AudioContext for everything:
  *
- *   voices ─┬─ sfx bus ─┐
- *           ├─ reverb + slap-back ─┤
- *   loops ──── amb bus ─┼─ master ─ glue comp ─ limiter ─ soft clip ─ out
- *   music ─ lowpass ─ level ─ music bus ─┘
+ *   one-shots ─┬─ sfx bus ─┐
+ *              ├─ reverb + slap-back ─┤
+ *   beds (streamed) ─ amb bus ─┼─ master ─ glue comp ─ limiter ─ soft clip ─ out
+ *   songs (streamed) ─ lowpass ─ level ─ music bus ─┘
+ *   stings (streamed) ──────────────── music bus
  *
- * Every sound (music included) is fully decoded before use; nothing decodes
- * mid-duel. Voices come from a capped pool, and every start and stop runs a
- * short gain ramp so nothing clicks.
+ * One-shots are decoded up front per pack (`core` at boot, `frontier` on demand) so nothing
+ * decodes mid-duel. Beds and music stream from media elements and are never decoded (`stream.ts`).
+ * Voices come from a capped pool, and every start and stop runs a short gain ramp so nothing
+ * clicks. The call (`call()`) is the one sound the game hinges on: never positional, never
+ * quieter, and everything else steps aside for it.
  */
 
+import {
+  BUFFER_LOOPS,
+  type FileName,
+  type Layer,
+  LOOPS,
+  type LoopName,
+  layersOf,
+  MUSIC_TRIM,
+  type Pack,
+  PRIORITY,
+  SFX_FILES,
+  type SfxName,
+  SONGS,
+  type SongName,
+  STINGS,
+  type StingName,
+  type UiName,
+} from './catalog.ts'
 import { AudioDebug, audioDebugMode } from './debug.ts'
+import { DeckPool } from './deck-pool.ts'
+import { Stream } from './stream.ts'
 
-const OLD = '/experiments/out-west/assets'
-const NEW = '/experiments/out-west/3d/sfx'
-
-export const SFX = {
-  cocking: `${OLD}/cocking.m4a`,
-  fire: `${OLD}/fire.m4a`,
-  fireBig: `${OLD}/fire-big.m4a`,
-  shout: `${OLD}/shout.m4a`,
-  whip: `${OLD}/whip.m4a`,
-  bell: `${NEW}/bell.m4a`,
-  heart: `${NEW}/heart.m4a`,
-  spursteps: `${NEW}/spursteps.m4a`,
-  dirtsteps: `${NEW}/dirtsteps.m4a`,
-  ricochet: `${NEW}/ricochet.m4a`,
-  flyby: `${NEW}/flyby.m4a`,
-  bodyfall: `${NEW}/bodyfall.m4a`,
-  gasp: `${NEW}/gasp.m4a`,
-  crow: `${NEW}/crow.m4a`,
-  door: `${NEW}/door.m4a`,
-  bottle: `${NEW}/bottle.m4a`,
-  horse: `${NEW}/horse.m4a`,
-  coin: `${NEW}/coin.m4a`,
-  piano: `${NEW}/piano.m4a`,
-  dog: `${NEW}/dog.m4a`,
-  hawk: `${NEW}/hawk.m4a`,
-  holster: `${NEW}/holster.m4a`,
-  wind: `${NEW}/wind.m4a`,
-  crickets: `${NEW}/crickets.m4a`,
-  fire_loop: `${NEW}/fire.m4a`,
-} as const
-
-export type SfxName = keyof typeof SFX
+export type { LoopName, Pack, SfxName, SongName, StingName, UiName } from './catalog.ts'
 export type Bus = 'sfx' | 'amb' | 'music'
-
-export const SONGS = {
-  intro: `${OLD}/intro.m4a`,
-  boss: `${OLD}/boss.m4a`,
-} as const
-export type SongName = keyof typeof SONGS
 
 /** Resting bus levels. */
 const BUS_LEVELS: Readonly<Record<Bus, number>> = { sfx: 0.72, amb: 0.5, music: 1.15 }
@@ -66,6 +52,10 @@ const CALL_DUCK: readonly (readonly [Bus, number])[] = [
 ]
 /** Seconds the duck holds before music and ambience swell back. */
 const CALL_DUCK_HOLD = 0.7
+/** No heartbeat may sound this close after the call's strike (it would blur the bell's attack). */
+const CALL_CLEAR = 0.35
+/** Media elements blessed in the unlock gesture (2 per looping stream, 1 per sting). */
+const DECKS = 14
 
 export interface PlayOpts {
   gain?: number
@@ -116,6 +106,10 @@ interface Active {
 }
 
 const db = (d: number) => 10 ** (d / 20)
+const smooth = (x: number) => {
+  const t = Math.min(1, Math.max(0, x))
+  return t * t * (3 - 2 * t)
+}
 
 /**
  * Click-free parameter change: hold whatever value the param has right now
@@ -156,6 +150,10 @@ const RATE_MAX = 4
 const GAIN_MAX = 4
 /** Fade time on every start/stop, seconds. */
 const FADE = 0.006
+/** Grid of the footstep files (see `tools/audio/recipes.ts`). */
+const STEP = { dirt: ['dirtsteps', 6, 0.6, 0.5], wood: ['woodsteps', 6, 0.6, 0.5] } as const
+const SPURS = { count: 8, step: 1, len: 0.7 } as const
+const IMPACT = { body: 'hitBody', wood: 'hitWood', dirt: 'hitDirt', metal: 'ricochet' } as const
 
 export class AudioEngine {
   ctx: AudioContext | null = null
@@ -165,18 +163,27 @@ export class AudioEngine {
   private musicGain!: GainNode
   private reverbIn!: GainNode
   private slapIn!: GainNode
+  private pool: DeckPool | null = null
   private readonly raw = new Map<string, Promise<ArrayBuffer | null>>()
   private readonly buffers = new Map<string, AudioBuffer>()
   private readonly decoding = new Map<string, Promise<AudioBuffer | null>>()
   private readonly voices: Active[] = []
-  private song: { name: SongName; src: AudioBufferSourceNode; gain: GainNode } | null = null
+  private readonly streams = new Set<Stream>()
+  private ticker: ReturnType<typeof setInterval> | null = null
+  private song: { name: SongName; stream: Stream } | null = null
   private wantSong: SongName | null = null
-  private readonly songOffset = new Map<SongName, { startedAt: number; offset: number }>()
+  private readonly songOffset = new Map<SongName, number>()
+  private sting: Stream | null = null
+  private beds: Partial<Record<'wind' | 'windDusk' | 'windNight' | 'crickets', Loop>> = {}
   private heartBpm = 0
   private heartNext = 0
+  private readonly heartVoices: { t: number; v: Voice }[] = []
+  private lastCall = Number.NEGATIVE_INFINITY
   private noise: AudioBuffer | null = null
   private paused = false
   private dbg: AudioDebug | null = null
+  private readonly listener = { x: 0, y: 0, z: 0 }
+  private readonly packs = new Set<Pack>()
   /** Recent scheduled start times and the newest handle, per sample. */
   private readonly starts = new Map<SfxName, Starts>()
 
@@ -199,12 +206,33 @@ export class AudioEngine {
     return v
   }
 
-  /** Start fetching every sound (and the intro music) before the first gesture. */
+  private urls(pack: Pack): string[] {
+    return Object.values(SFX_FILES)
+      .filter((s) => s.pack === pack)
+      .map((s) => s.url)
+  }
+
+  /** Start fetching the core sounds before the first gesture. Music streams; nothing to fetch. */
   prefetch(): void {
-    for (const key of Object.keys(SFX) as SfxName[]) {
-      this.fetchRaw(SFX[key])
+    for (const url of this.urls('core')) {
+      this.fetchRaw(url)
     }
-    this.fetchRaw(SONGS.intro)
+  }
+
+  /**
+   * Fetch and decode a mode's sounds (Frontier's guns, dynamite, bank…). Resolves when decoded.
+   * Safe to call before the unlock gesture (it fetches, and decodes on unlock) and repeatedly.
+   */
+  loadPack(pack: Pack): Promise<void> {
+    this.packs.add(pack)
+    const urls = this.urls(pack)
+    if (!this.ctx) {
+      for (const url of urls) {
+        this.fetchRaw(url)
+      }
+      return Promise.resolve()
+    }
+    return Promise.all(urls.map((u) => this.decode(u))).then(() => undefined)
   }
 
   private fetchRaw(url: string): Promise<ArrayBuffer | null> {
@@ -229,11 +257,13 @@ export class AudioEngine {
       return Promise.resolve(null)
     }
     const p = this.fetchRaw(url).then(async (data) => {
+      // The compressed bytes are only needed until decoded.
+      this.raw.delete(url)
       if (!data) {
         return null
       }
       try {
-        const b = await ctx.decodeAudioData(data.slice(0))
+        const b = await ctx.decodeAudioData(data)
         this.buffers.set(url, b)
         return b
       } catch {
@@ -254,6 +284,7 @@ export class AudioEngine {
       if (this.ctx.state !== 'running') {
         void this.ctx.resume()
       }
+      this.pool?.bless(DECKS)
       return
     }
     const Ctor = globalThis.AudioContext
@@ -264,9 +295,24 @@ export class AudioEngine {
     this.ctx = ctx
     void ctx.resume()
     const mode = audioDebugMode()
-    this.dbg = mode === null ? null : new AudioDebug(ctx, mode)
+    this.dbg = mode === null ? null : new AudioDebug(ctx, mode, () => this.stats())
     this.dbg?.log('unlock', ctx.sampleRate)
+    if (this.dbg) {
+      // Debug only: lets a test drive songs and loops directly (`#audiodebug`).
+      Reflect.set(globalThis, '__owAudioEngine', this)
+    }
+    this.buildGraph(ctx)
+    this.noise = this.makeNoise(ctx, 1)
+    this.pool = new DeckPool(ctx)
+    this.pool.bless(DECKS)
+    this.watchPage()
+    this.packs.add('core')
+    for (const pack of this.packs) {
+      void this.loadPack(pack)
+    }
+  }
 
+  private buildGraph(ctx: AudioContext): void {
     // Headroom: master at -3 dB into a gentle glue compressor, then a brickwall limiter.
     const glue = ctx.createDynamicsCompressor()
     glue.threshold.value = -16
@@ -324,32 +370,51 @@ export class AudioEngine {
 
     if (this.dbg) {
       this.dbg.tap('out', clip)
-      this.dbg.tap('music', this.musicGain)
+      this.dbg.tap('music', this.buses.music)
       this.dbg.tap('sfx', this.buses.sfx)
       this.dbg.tap('amb', this.buses.amb)
     }
-
-    this.noise = this.makeNoise(ctx, 1)
-
-    for (const key of Object.keys(SFX) as SfxName[]) {
-      void this.decode(SFX[key])
-    }
-    void this.decode(SONGS.intro)
   }
 
-  /** Resolves once every sound effect (and the intro) has decoded or failed. */
+  /** Pause streams while hidden; re-bless and retry blocked streams on any later gesture (iOS). */
+  private watchPage(): void {
+    if (typeof document === 'undefined') {
+      return
+    }
+    document.addEventListener('visibilitychange', () => {
+      for (const s of this.streams) {
+        if (document.hidden) {
+          s.pause()
+        } else {
+          s.resume()
+        }
+      }
+    })
+    const retry = () => {
+      if (this.ctx?.state !== 'running') {
+        return
+      }
+      this.pool?.bless(DECKS)
+      for (const s of this.streams) {
+        s.retry()
+      }
+    }
+    for (const ev of ['pointerup', 'touchend', 'click', 'keydown']) {
+      globalThis.addEventListener(ev, retry, { capture: true, passive: true })
+    }
+  }
+
+  /** Resolves once every core sound has decoded or failed. */
   async whenDecoded(timeoutMs = 6000): Promise<void> {
     const all = Promise.all([...this.decoding.values()])
     await Promise.race([all, new Promise((r) => setTimeout(r, timeoutMs))])
   }
 
-  /** Decode the boss music ahead of time (called a few outlaws early). */
+  /** Warm the HTTP cache for a song a little ahead (it streams; nothing is decoded). */
   preloadSong(name: SongName): void {
-    if (this.ctx) {
-      void this.decode(SONGS[name])
-    } else {
-      this.fetchRaw(SONGS[name])
-    }
+    void fetch(SONGS[name].url)
+      .then((r) => r.blob())
+      .catch(() => null)
   }
 
   private makeImpulse(ctx: AudioContext, seconds: number): AudioBuffer {
@@ -410,6 +475,9 @@ export class AudioEngine {
       this.dbg?.warn('listener', [px, py, pz, fx, fy, fz])
       return
     }
+    this.listener.x = px
+    this.listener.y = py
+    this.listener.z = pz
     // Short smoothing so camera cuts don't step the panners (zipper noise).
     const t = ctx.currentTime
     const k = 0.015
@@ -427,11 +495,12 @@ export class AudioEngine {
   }
 
   has(name: SfxName): boolean {
-    return this.buffers.has(SFX[name])
+    return layersOf(name).every((l) => this.buffers.has(SFX_FILES[l.of].url))
   }
 
   duration(name: SfxName): number {
-    return this.buffers.get(SFX[name])?.duration ?? 0
+    const first = layersOf(name)[0]
+    return first ? (this.buffers.get(SFX_FILES[first.of].url)?.duration ?? 0) : 0
   }
 
   /** Free a pool slot: fade out the oldest non-priority voice. */
@@ -469,11 +538,62 @@ export class AudioEngine {
     }
   }
 
+  /**
+   * Play a sound. Layered sounds (`fire`, `rifleFire`…) fire every layer; for a positioned shot
+   * the diffuse town tail plays unpanned and falls off slowly while the direct crack is panned,
+   * distance-attenuated and dulled by air, as a gunshot is outdoors.
+   */
   play(name: SfxName, o: PlayOpts = {}): Voice | null {
-    const ctx = this.ctx
-    const buf = this.buffers.get(SFX[name])
     this.dbg?.log('play', name, o)
+    const layers = layersOf(name)
+    const priority = o.priority ?? PRIORITY.has(name)
+    let first: Voice | null = null
+    for (const l of layers) {
+      const v = this.playLayer(l, o, priority)
+      first ??= v
+    }
+    return first
+  }
+
+  private playLayer(l: Layer, o: PlayOpts, priority: boolean): Voice | null {
+    const trim = db(l.trim ?? 0)
+    const rate = (o.rate ?? 1) * (l.rate ?? 1)
+    const when = l.delay ? (o.when ?? this.now) + l.delay : o.when
+    const { pos, ...rest } = o
+    const diffuse = Boolean(pos && l.diffuse)
+    const lo: PlayOpts = { ...rest, rate, priority, gain: (o.gain ?? 1) * trim }
+    if (when !== undefined) {
+      lo.when = when
+    }
+    if (pos && !diffuse) {
+      lo.pos = pos
+    }
+    const d = pos ? this.distance(pos) : 0
+    if (diffuse) {
+      // The town answers from everywhere: no panning, and a far slower falloff than the crack.
+      lo.gain = (lo.gain ?? 1) * Math.min(1, 14 / (d + 10))
+      lo.lowpass = Math.min(o.lowpass ?? 18_000, 9000 * Math.min(1, 30 / Math.max(30, d)))
+    } else if (pos && d > 25) {
+      // Air absorption: the far crack loses its top end.
+      lo.lowpass = Math.min(o.lowpass ?? 18_000, Math.max(1800, 18_000 * (25 / d) ** 1.4))
+    }
+    return this.playFile(l.of, lo)
+  }
+
+  private distance(p: { x: number; y: number; z: number }): number {
+    const d = Math.hypot(p.x - this.listener.x, p.y - this.listener.y, p.z - this.listener.z)
+    return Number.isFinite(d) ? d : 0
+  }
+
+  private playFile(name: FileName, o: PlayOpts): Voice | null {
+    const ctx = this.ctx
+    const def = SFX_FILES[name]
+    const buf = this.buffers.get(def.url)
     if (!(ctx && buf) || this.paused) {
+      if (ctx && !buf) {
+        // A pack that was never asked for: start loading so the next request plays.
+        void this.loadPack(def.pack)
+      }
       return null
     }
     const now = ctx.currentTime
@@ -484,14 +604,14 @@ export class AudioEngine {
       this.dbg?.log('dedupe', name)
       return dup
     }
-    const priority = o.priority ?? (name === 'bell' || name === 'fire' || name === 'fireBig')
+    const priority = o.priority ?? false
     this.reclaim(now, priority ? null : name)
     const rate = this.num('rate', o.rate, 1, RATE_MIN, RATE_MAX)
     const src = ctx.createBufferSource()
     src.buffer = buf
     src.playbackRate.value = rate
     const g = ctx.createGain()
-    const peak = this.num('gain', o.gain, 1, 0, GAIN_MAX)
+    const peak = this.num('gain', o.gain, 1, 0, GAIN_MAX) * db(def.trim)
     // Short attack ramp from silence: no clicks even when starting mid-file.
     g.gain.setValueAtTime(0, when)
     g.gain.linearRampToValueAtTime(peak, when + FADE)
@@ -504,28 +624,7 @@ export class AudioEngine {
       node = f
     }
     node.connect(g)
-    let out: AudioNode = g
-    const pos = o.pos && [o.pos.x, o.pos.y, o.pos.z].every(Number.isFinite) ? o.pos : undefined
-    if (o.pos && !pos) {
-      this.dbg?.warn('pos', o.pos)
-    }
-    if (pos) {
-      const p = ctx.createPanner()
-      p.panningModel = 'equalpower'
-      p.distanceModel = 'inverse'
-      p.refDistance = 4
-      p.rolloffFactor = 0.7
-      p.positionX.value = pos.x
-      p.positionY.value = pos.y
-      p.positionZ.value = pos.z
-      g.connect(p)
-      out = p
-    } else if (o.pan) {
-      const p = ctx.createStereoPanner()
-      p.pan.value = this.num('pan', o.pan, 0, -1, 1)
-      g.connect(p)
-      out = p
-    }
+    const out = this.route(ctx, g, o)
     out.connect(this.buses[o.bus ?? 'sfx'])
     if (o.reverb) {
       const s = ctx.createGain()
@@ -534,8 +633,15 @@ export class AudioEngine {
       s.connect(this.reverbIn)
       s.connect(this.slapIn)
     }
-    const offset = this.num('offset', o.offset, 0, 0, Math.max(0, buf.duration - 0.02))
-    const len = Math.max(0.02, this.num('duration', o.duration, buf.duration - offset, 0, 600))
+    const start = def.start ?? 0
+    // A gridded file played without an offset: one random variant, not the whole run.
+    const grid = def.grid && o.offset === undefined ? def.grid : null
+    const pick = grid ? Math.floor(Math.random() * grid.count) * grid.step : o.offset
+    const offset = start + this.num('offset', pick, 0, 0, Math.max(0, buf.duration - start - 0.02))
+    const len = Math.max(
+      0.02,
+      this.num('duration', o.duration ?? grid?.len, buf.duration - offset, 0, 600),
+    )
     const end = when + len / rate
     // Fade the tail too, so sprite slices end cleanly.
     g.gain.setValueAtTime(peak, Math.max(when + FADE, end - 0.02))
@@ -567,6 +673,38 @@ export class AudioEngine {
     return voice
   }
 
+  /** Spatial (equal-power panner), stereo pan, or straight through. */
+  private route(ctx: AudioContext, g: GainNode, o: PlayOpts): AudioNode {
+    const pos = o.pos && [o.pos.x, o.pos.y, o.pos.z].every(Number.isFinite) ? o.pos : undefined
+    if (o.pos && !pos) {
+      this.dbg?.warn('pos', o.pos)
+    }
+    if (pos) {
+      const p = this.panner(ctx, pos)
+      g.connect(p)
+      return p
+    }
+    if (o.pan) {
+      const p = ctx.createStereoPanner()
+      p.pan.value = this.num('pan', o.pan, 0, -1, 1)
+      g.connect(p)
+      return p
+    }
+    return g
+  }
+
+  private panner(ctx: AudioContext, pos: { x: number; y: number; z: number }): PannerNode {
+    const p = ctx.createPanner()
+    p.panningModel = 'equalpower'
+    p.distanceModel = 'inverse'
+    p.refDistance = 4
+    p.rolloffFactor = 0.7
+    p.positionX.value = pos.x
+    p.positionY.value = pos.y
+    p.positionZ.value = pos.z
+    return p
+  }
+
   /**
    * Returns the existing handle when this request re-triggers a sample that is
    * already sounding: the same settings again within RETRIGGER of the previous
@@ -586,24 +724,143 @@ export class AudioEngine {
     return rec.times.length >= BURST_COUNT ? rec.voice : null
   }
 
-  loop(name: SfxName, gain: number, bus: Bus = 'amb'): Loop | null {
-    this.dbg?.log('loop', name, gain, bus)
+  // ------------------------------------------------------------- named cues
+
+  /** One footstep on `surface` (a random step from its grid), with an optional spur jingle. */
+  footstep(surface: 'dirt' | 'wood', o: PlayOpts & { spurs?: boolean } = {}): Voice | null {
+    const [name, count, step, len] = STEP[surface]
+    const v = this.play(name, {
+      ...o,
+      offset: Math.floor(Math.random() * count) * step,
+      duration: len,
+      rate: (o.rate ?? 1) * (0.94 + Math.random() * 0.12),
+    })
+    if (o.spurs) {
+      this.play('spursteps', {
+        ...o,
+        gain: (o.gain ?? 1) * 0.8,
+        offset: Math.floor(Math.random() * SPURS.count) * SPURS.step,
+        duration: SPURS.len,
+        rate: 0.95 + Math.random() * 0.1,
+      })
+    }
+    return v
+  }
+
+  /** A bullet hitting something. */
+  impact(surface: keyof typeof IMPACT, o: PlayOpts = {}): Voice | null {
+    return this.play(IMPACT[surface], { ...o, rate: (o.rate ?? 1) * (0.92 + Math.random() * 0.16) })
+  }
+
+  /** UI sounds: dry, centred, a touch of pitch variety so repeats never machine-gun. */
+  ui(name: UiName, gain = 1): Voice | null {
+    return this.play(name, { gain, rate: name === 'uiTick' ? 0.94 + Math.random() * 0.12 : 1 })
+  }
+
+  // ------------------------------------------------------------- streams
+
+  private stream(spec: { url: string; points?: { start: number; end: number } }): Stream | null {
     const ctx = this.ctx
-    const buf = this.buffers.get(SFX[name])
+    if (!(ctx && this.pool)) {
+      return null
+    }
+    const s = new Stream(ctx, this.pool, spec, this.dbg)
+    this.streams.add(s)
+    this.ticker ??= setInterval(() => this.tickStreams(), 30)
+    return s
+  }
+
+  private tickStreams(): void {
+    for (const s of this.streams) {
+      if (s.alive) {
+        s.tick()
+      } else {
+        this.streams.delete(s)
+      }
+    }
+    if (this.streams.size === 0 && this.ticker) {
+      clearInterval(this.ticker)
+      this.ticker = null
+    }
+  }
+
+  /**
+   * A looping bed. Ambience streams from a media element (never decoded); `fuse` loops from its
+   * decoded buffer (short, positional, several at once).
+   */
+  loop(
+    name: LoopName,
+    gain: number,
+    bus: Bus = 'amb',
+    pos?: { x: number; y: number; z: number },
+  ): Loop | null {
+    this.dbg?.log('loop', name, gain, bus)
+    if (name in BUFFER_LOOPS) {
+      return this.bufferLoop(BUFFER_LOOPS[name as keyof typeof BUFFER_LOOPS], gain, bus, pos)
+    }
+    const def = LOOPS[name as keyof typeof LOOPS]
+    const s = this.stream(def)
+    const ctx = this.ctx
+    if (!(s && ctx)) {
+      return null
+    }
+    const out = pos ? this.panner(ctx, pos) : null
+    if (out) {
+      s.out.connect(out).connect(this.buses[bus])
+    } else {
+      s.out.connect(this.buses[bus])
+    }
+    const trim = db(def.trim)
+    const len = def.points.end - def.points.start
+    let target = this.num('loop gain', gain, 0, 0, GAIN_MAX)
+    s.start(target * trim, def.points.start + Math.random() * len * 0.8, 1.2)
+    return {
+      set: (v: number, ramp = 0.3) => {
+        const value = this.num('loop gain', v, target, 0, GAIN_MAX)
+        if (Math.abs(value - target) < 0.002) {
+          return
+        }
+        target = value
+        s.level(value * trim, this.num('loop ramp', ramp, 0.3, 0, 30))
+      },
+      stop: () => s.stop(1),
+    }
+  }
+
+  private bufferLoop(
+    name: FileName,
+    gain: number,
+    bus: Bus,
+    pos?: { x: number; y: number; z: number },
+  ): Loop | null {
+    const ctx = this.ctx
+    const def = SFX_FILES[name]
+    const buf = this.buffers.get(def.url)
     if (!(ctx && buf)) {
+      void this.loadPack(def.pack)
       return null
     }
     const src = ctx.createBufferSource()
     src.buffer = buf
     src.loop = true
-    // Skip AAC priming at both ends so the loop point is seamless.
-    src.loopStart = 0.06
-    src.loopEnd = buf.duration - 0.06
+    src.loopStart = def.loop?.start ?? 0
+    src.loopEnd = def.loop?.end ?? buf.duration
     const g = ctx.createGain()
+    const trim = db(def.trim)
     g.gain.setValueAtTime(0, ctx.currentTime)
-    g.gain.setTargetAtTime(this.num('loop gain', gain, 0, 0, GAIN_MAX), ctx.currentTime, 0.5)
-    src.connect(g).connect(this.buses[bus])
-    src.start(ctx.currentTime, 0.06 + Math.random() * (buf.duration * 0.5))
+    g.gain.setTargetAtTime(
+      this.num('loop gain', gain, 0, 0, GAIN_MAX) * trim,
+      ctx.currentTime,
+      0.05,
+    )
+    src.connect(g)
+    const out = pos ? this.panner(ctx, pos) : null
+    if (out) {
+      g.connect(out).connect(this.buses[bus])
+    } else {
+      g.connect(this.buses[bus])
+    }
+    src.start(ctx.currentTime, src.loopStart + Math.random() * (src.loopEnd - src.loopStart))
     let target = gain
     return {
       set: (v: number, ramp = 0.3) => {
@@ -612,15 +869,57 @@ export class AudioEngine {
           return
         }
         target = value
-        glide(g.gain, value, ctx.currentTime, this.num('loop ramp', ramp, 0.3, 0, 30))
+        glide(g.gain, value * trim, ctx.currentTime, this.num('loop ramp', ramp, 0.3, 0, 30))
       },
       stop: () => {
         const t = ctx.currentTime
-        g.gain.cancelScheduledValues(t)
-        g.gain.setTargetAtTime(0, t, 0.2)
-        src.stop(t + 1.2)
+        glide(g.gain, 0, t, 0.15)
+        src.stop(t + 0.3)
       },
     }
+  }
+
+  /**
+   * Ambience by time of day (0 morning … 0.6 sunset … 1 midnight): crossfades the day, dusk and
+   * night wind beds and brings the crickets in after dark. Beds with nothing to say are stopped,
+   * so at most two winds stream at once. `level` scales the whole bed (0 silences it).
+   */
+  setTimeOfDay(day: number, level = 1): void {
+    const d = this.num('day', day, 0, 0, 1)
+    const k = this.num('amb level', level, 1, 0, GAIN_MAX)
+    const dayW = 1 - smooth((d - 0.42) / 0.22)
+    const nightW = smooth((d - 0.7) / 0.18)
+    const want = {
+      wind: dayW * 0.35,
+      windDusk: Math.max(0, 1 - dayW - nightW) * 0.35,
+      windNight: nightW * 0.4,
+      crickets: smooth((d - 0.68) / 0.2) * 0.35,
+    } as const
+    for (const key of Object.keys(want) as (keyof typeof want)[]) {
+      const v = want[key] * k
+      const have = this.beds[key]
+      if (v > 0.002) {
+        if (have) {
+          have.set(v, 1.5)
+        } else {
+          const l = this.loop(key, v)
+          if (l) {
+            this.beds[key] = l
+          }
+        }
+      } else if (have) {
+        have.stop()
+        delete this.beds[key]
+      }
+    }
+  }
+
+  /** Stop the time-of-day beds. */
+  stopAmbience(): void {
+    for (const l of Object.values(this.beds)) {
+      l?.stop()
+    }
+    this.beds = {}
   }
 
   /** Synth bullet whizz-by: band-passed noise with a doppler sweep. */
@@ -655,47 +954,62 @@ export class AudioEngine {
   // ---------------------------------------------------------------- music
 
   /**
-   * Music is a decoded, looping buffer per song. Switching songs crossfades;
-   * asking for the song already playing does nothing, so the track position
-   * never restarts.
+   * Songs stream and loop seamlessly. Switching songs crossfades; asking for the song already
+   * playing does nothing, so the track position never restarts; a song you come back to resumes
+   * where it left off.
    */
   playSong(name: SongName): void {
     this.dbg?.log('playSong', name, this.song?.name ?? null)
     this.wantSong = name
-    const ctx = this.ctx
-    if (!ctx) {
+    if (!this.ctx || this.song?.name === name) {
       return
     }
-    if (this.song?.name === name) {
+    const def = SONGS[name]
+    const s = this.stream(def)
+    if (!s) {
       return
     }
-    void this.decode(SONGS[name]).then((buf) => {
-      if (!buf || this.wantSong !== name || this.song?.name === name) {
-        return
-      }
-      const t = ctx.currentTime
-      const old = this.song
-      if (old) {
-        glide(old.gain.gain, 0, t, 1.2)
-        old.src.stop(t + 1.6)
-        const st = this.songOffset.get(old.name)
-        if (st) {
-          st.offset = (st.offset + (t - st.startedAt)) % (old.src.buffer?.duration ?? 1)
+    const old = this.song
+    if (old) {
+      this.songOffset.set(old.name, old.stream.position)
+      old.stream.stop(1.2)
+    }
+    s.out.connect(this.musicFilter)
+    const resume = this.songOffset.get(name) ?? 0
+    s.start(db(def.trim), resume < def.points.end ? resume : def.points.start, old ? 1.2 : 0.4)
+    this.song = { name, stream: s }
+    this.dbg?.log('songStart', name, old?.name ?? null)
+  }
+
+  /** The song asked for last (whether or not it is audible yet). */
+  get currentSong(): SongName | null {
+    return this.wantSong
+  }
+
+  /**
+   * A victory or defeat sting. It plays on the music bus past the song's duck and lowpass (so it
+   * is heard even when the score has been cut), and the song dips under it and swells back.
+   */
+  playSting(name: StingName): void {
+    this.dbg?.log('sting', name)
+    const def = STINGS[name]
+    this.sting?.stop(0.3)
+    const s = this.stream(def)
+    if (!s) {
+      return
+    }
+    s.out.connect(this.buses.music)
+    s.start(db(def.trim), 0, 0.01)
+    this.sting = s
+    const song = this.song?.stream
+    if (song) {
+      song.level(db(SONGS[this.song?.name ?? 'intro'].trim - 14), 0.15)
+      setTimeout(() => {
+        if (this.song?.stream === song) {
+          song.level(db(SONGS[this.song.name].trim), 2)
         }
-      }
-      this.dbg?.log('songStart', name, old?.name ?? null)
-      const src = ctx.createBufferSource()
-      src.buffer = buf
-      src.loop = true
-      const g = ctx.createGain()
-      g.gain.setValueAtTime(0, t)
-      g.gain.linearRampToValueAtTime(1, t + (old ? 1.2 : 0.4))
-      src.connect(g).connect(this.musicFilter)
-      const resumeAt = this.songOffset.get(name)?.offset ?? 0
-      src.start(t, resumeAt)
-      this.songOffset.set(name, { startedAt: t, offset: resumeAt })
-      this.song = { name, src, gain: g }
-    })
+      }, 5000)
+    }
   }
 
   /** Music level in dB with a ramp in seconds; -Infinity silences. */
@@ -712,7 +1026,8 @@ export class AudioEngine {
   /**
    * The call: the one sound the whole game hinges on, so it is never subject to distance falloff.
    * The bell rings close and centred at full level (with a little reverb for space) while music and
-   * ambience duck under it, so it is always the loudest, clearest thing you hear.
+   * ambience duck under it and any heartbeat due in its attack is cancelled, so it is always the
+   * loudest, clearest thing you hear.
    */
   call(when?: number): Voice | null {
     const ctx = this.ctx
@@ -729,6 +1044,12 @@ export class AudioEngine {
       g.cancelScheduledValues(at)
       g.setTargetAtTime(base * level, at, 0.012)
       g.setTargetAtTime(base, at + CALL_DUCK_HOLD, 0.25)
+    }
+    this.lastCall = at
+    for (const h of this.heartVoices) {
+      if (h.t > at - 0.03 && h.t < at + CALL_CLEAR) {
+        h.v.stop(Math.max(ctx.currentTime, Math.min(h.t, at) - 0.005))
+      }
     }
     return this.play('bell', { gain: 1.25, when: at, pan: 0, reverb: 0.35, priority: true })
   }
@@ -774,9 +1095,26 @@ export class AudioEngine {
     const ahead = now + 0.12
     if (this.heartNext < ahead) {
       const t = this.heartNext
-      this.play('heart', { gain: 1.1, when: t, lowpass: 900 })
-      this.play('heart', { gain: 0.6, when: t + 0.16, rate: 0.92, lowpass: 700 })
       this.heartNext += 60 / this.heartBpm
+      // Keep the call's attack clear.
+      if (t > this.lastCall - 0.03 && t < this.lastCall + CALL_CLEAR) {
+        return
+      }
+      this.heartVoices.splice(
+        0,
+        this.heartVoices.length,
+        ...this.heartVoices.filter((h) => h.t > now - 1),
+      )
+      const lub = this.play('heart', { gain: 1.1, when: t, lowpass: 900 })
+      const dub = this.play('heart', { gain: 0.6, when: t + 0.16, rate: 0.92, lowpass: 700 })
+      for (const [v, at] of [
+        [lub, t],
+        [dub, t + 0.16],
+      ] as const) {
+        if (v) {
+          this.heartVoices.push({ t: at, v })
+        }
+      }
     }
   }
 
@@ -820,6 +1158,23 @@ export class AudioEngine {
       void ctx.resume()
     }
     glide(this.master.gain, db(-3), ctx.currentTime, 0.2)
+  }
+
+  /** Memory and voice counts, for `#audiodebug`. */
+  stats(): Record<string, number> {
+    let bytes = 0
+    for (const b of this.buffers.values()) {
+      bytes += b.length * b.numberOfChannels * 4
+    }
+    return {
+      decodedMB: Math.round((bytes / 1_048_576) * 100) / 100,
+      buffers: this.buffers.size,
+      voices: this.voices.filter((v) => !v.done).length,
+      streams: this.streams.size,
+      decks: this.pool?.size ?? 0,
+      decksBusy: this.pool?.busy ?? 0,
+      musicTrimDb: MUSIC_TRIM,
+    }
   }
 }
 

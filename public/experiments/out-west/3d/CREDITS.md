@@ -1,8 +1,9 @@
 # out west (3D) — credits
 
 Game, code, wanted posters, town, church, water tower, hats, sky and effects by Eric Schoffstall.
-Music (`intro.m4a`, `boss.m4a`) and the original sounds (`cocking`, `fire`, `fire-big`, `shout`,
-`whip`) are from the 2019 original.
+The title and boss themes (`music/title.m4a`, `music/boss.m4a`) are the 2019 originals (`intro.m4a`,
+`boss.m4a`), remastered and looped; `sfx/shout.m4a` and `sfx/whip.m4a` are remastered 2019 originals
+too.
 
 Every third-party asset below is CC0 (public domain). No attribution is legally required; it is
 given anyway. All models were downloaded as GLB, trimmed and recompressed (meshopt + WebP).
@@ -57,32 +58,49 @@ fetched and converted to WebP with `tools/polyhaven.ts`.
 | `tex/planks_*.webp` | "Weathered Plank Siding" — https://polyhaven.com/a/weathered_plank_siding | CC0 1.0 |
 | `tex/vplanks_*.webp` | "Old Planks 02" — https://polyhaven.com/a/old_planks_02 | CC0 1.0 |
 
-## Sound effects (freesound.org, CC0)
+## Sound effects and music
 
-Trimmed, mono, normalised and re-encoded to AAC.
+Everything here is mastered by `tools/audio/build.ts` (recipes in `tools/audio/recipes.ts`): 48 kHz,
+AAC-LC `.m4a` (Apple encoder), SFX and beds to about −16 LUFS and music to −18 LUFS, true peak
+≤ −1 dBTP. Prompts for every generated take are in `tools/audio/manifest.ts`.
+
+### Generated (ElevenLabs), first-party
+
+| File | What |
+|---|---|
+| `sfx/rev_close.m4a`, `sfx/rev_tail.m4a` | Revolver: close crack (plus a synthesised sub punch) and the stereo town tail (layered at runtime) |
+| `sfx/cock.m4a`, `sfx/hammer.m4a`, `sfx/holster.m4a` | Hammer cock, dry-fire hammer, leather quick-draw |
+| `sfx/rifle.m4a`, `sfx/rifle_lever.m4a` | Lever-action rifle shot and lever |
+| `sfx/shotgun.m4a`, `sfx/shotgun_load.m4a` | Coach gun blast and break-open reload |
+| `sfx/fuse.m4a`, `sfx/explosion.m4a` | Dynamite fuse (seamless loop) and blast (two takes layered) |
+| `sfx/hit_body.m4a`, `sfx/hit_wood.m4a`, `sfx/hit_dirt.m4a`, `sfx/ricochet.m4a` | Bullet impacts |
+| `sfx/dirtsteps.m4a`, `sfx/woodsteps.m4a`, `sfx/spursteps.m4a` | Boots on dirt and boardwalk, spur jingles (sliced onto fixed grids) |
+| `sfx/amb_wind_day.m4a`, `sfx/amb_wind_dusk.m4a`, `sfx/amb_wind_night.m4a` | Wind beds by time of day (seamless, streamed) |
+| `sfx/amb_crickets.m4a`, `sfx/amb_saloon.m4a`, `sfx/amb_piano.m4a` | Night crickets, saloon murmur, honky-tonk piano (seamless, streamed) |
+| `sfx/crow.m4a`, `sfx/dog.m4a`, `sfx/heart.m4a` | Crows, distant dog, heartbeat (plus a synthesised sub) |
+| `sfx/coins.m4a`, `sfx/register.m4a`, `sfx/deposit.m4a` | Coins, cash register (no bell), bank deposit and vault |
+| `sfx/ui_paper.m4a`, `sfx/ui_stamp.m4a`, `sfx/ui_buy.m4a`, `sfx/queue_found.m4a`, `sfx/levelup.m4a` | UI: paper slide, stamp, purchase, queue found, level-up sting |
+| `sfx/ghost.m4a`, `sfx/ghost_vanish.m4a`, `sfx/respawn.m4a` | Ghost duel reveal and vanish, Frontier respawn |
+| `music/tension.m4a`, `music/frontier.m4a` | Standoff tension bed and Frontier town loop (seamless, pitched into A) |
+| `music/victory.m4a`, `music/defeat.m4a` | Victory and defeat stings |
+
+`sfx/ui_tick.m4a` is synthesised (first-party).
+
+### freesound.org, CC0 (trimmed, mono, remastered)
 
 | File | Source | Licence |
 |---|---|---|
-| `sfx/bell.m4a` | "church bells strike 12 midday" by Astounded — https://freesound.org/s/481969/ | CC0 1.0 |
-| `sfx/spursteps.m4a` | "R10-27-Boots with Spurs.wav" by craigsmith — https://freesound.org/s/480613/ | CC0 1.0 |
-| `sfx/dirtsteps.m4a` | "Footsteps_6_Dirt_shoe.wav" by monte32 — https://freesound.org/s/353799/ | CC0 1.0 |
-| `sfx/heart.m4a` | "heartbeat sub kick - softer" by music_is_wiggly_air — https://freesound.org/s/784658/ | CC0 1.0 |
-| `sfx/ricochet.m4a` | "Ricochet 2.wav" by morganpurkis — https://freesound.org/s/392975/ ; "Ricochet 4.wav" by saturdaysoundguy — https://freesound.org/s/394187/ ; "ricochet.mp3" by cedarstudios — https://freesound.org/s/148840/ | CC0 1.0 |
+| `sfx/bell.m4a` | "church bells strike 12 midday" by Astounded — https://freesound.org/s/481969/ (the canonical call; unchanged) | CC0 1.0 |
 | `sfx/flyby.m4a` | "Real Bullet Flyby Sound" by qubodup — https://freesound.org/s/855248/ | CC0 1.0 |
 | `sfx/bodyfall.m4a` | "BODY FALL - V HVY - DIRT" by leonelmail — https://freesound.org/s/504626/ | CC0 1.0 |
 | `sfx/gasp.m4a` | "CRWDReac_Crowd Gasping In Surprise, Voiced 02" by ShangusBurger — https://freesound.org/s/763993/ | CC0 1.0 |
-| `sfx/crow.m4a` | "Crow Caw" by qubodup — https://freesound.org/s/813115/ | CC0 1.0 |
 | `sfx/door.m4a` | "Saloon Door Squeak" by forfie — https://freesound.org/s/364991/ ; "Wood Door Slam.wav" by MootMcnoodles — https://freesound.org/s/444409/ | CC0 1.0 |
 | `sfx/bottle.m4a` | "Small Bottle Smash FF223.aif" by martinimeniscus — https://freesound.org/s/199401/ | CC0 1.0 |
 | `sfx/horse.m4a` | "horse neigh shortened.wav" by shadoWisp — https://freesound.org/s/269571/ | CC0 1.0 |
 | `sfx/coin.m4a` | "Singular Coin Dropping.wav" by Flem0527 — https://freesound.org/s/630018/ | CC0 1.0 |
 | `sfx/piano.m4a` | "Saloon piano, honky tonk, interrupted" by vdublin — https://freesound.org/s/428150/ | CC0 1.0 |
-| `sfx/dog.m4a` | "Distant Dog Bark" by qubodup — https://freesound.org/s/813116/ | CC0 1.0 |
 | `sfx/hawk.m4a` | "Hawk,Cry,Bird,Ext.wav" by Framing_Noise — https://freesound.org/s/319619/ | CC0 1.0 |
-| `sfx/holster.m4a` | "Gun draw holster.wav" by huddwink — https://freesound.org/s/239959/ | CC0 1.0 |
-| `sfx/wind.m4a` | "desert_wind.wav" by DarkShroom — https://freesound.org/s/645305/ | CC0 1.0 |
-| `sfx/crickets.m4a` | "Outdoors_Night_CloseCrickets.wav" by MrFossy — https://freesound.org/s/521844/ | CC0 1.0 |
-| `sfx/fire.m4a` | "Fire Crackle and Flames 002" by TheWoodlandNomad — https://freesound.org/s/363092/ | CC0 1.0 |
+| `sfx/amb_fire.m4a` | "Fire Crackle and Flames 002" by TheWoodlandNomad — https://freesound.org/s/363092/ (looped) | CC0 1.0 |
 
 ## Generated textures
 
