@@ -33,6 +33,8 @@ export interface FrontierOptions {
   jitterMs?: number
   /** Loopback only: your name. */
   name?: string
+  /** Access token source for `/town/join` (defaults to the passkey session). */
+  getToken?: () => Promise<string | null>
   /** Share the hub's audio engine (one AudioContext per page). */
   audio?: AudioEngine
   onExit?: (reason: FrontierExit, detail?: string) => void
@@ -145,6 +147,7 @@ export function mountFrontier(root: HTMLElement, opts: FrontierOptions = {}): Fr
               {
                 ...(opts.apiUrl ? { apiUrl: opts.apiUrl } : {}),
                 ...(opts.lobbyId ? { lobbyId: opts.lobbyId } : {}),
+                ...(opts.getToken ? { getToken: opts.getToken } : {}),
                 ...(opts.bots === undefined ? {} : { bots: opts.bots }),
                 onRefused: (e) => {
                   ui.refuse(e, () => onExit('refused', e.reason))

@@ -72,8 +72,12 @@ const REFUSALS = new Set<string>(['over_budget', 'all_full', 'unauthorized', 'un
 
 export type JoinResult = { ok: true; value: TownJoinResponse } | { ok: false; error: JoinError }
 
-export async function joinTown(req: TownJoinRequest, apiUrl = API_URL): Promise<JoinResult> {
-  const token = await getAccessToken()
+export async function joinTown(
+  req: TownJoinRequest,
+  apiUrl = API_URL,
+  getToken: () => Promise<string | null> = getAccessToken,
+): Promise<JoinResult> {
+  const token = await getToken()
   if (!token) {
     return { ok: false, error: { reason: 'unauthorized', message: JOIN_MESSAGES.unauthorized } }
   }
@@ -114,6 +118,8 @@ export interface RemoteOptions {
   apiUrl?: string
   lobbyId?: string
   bots?: number
+  /** Access token source (defaults to the passkey session). */
+  getToken?: () => Promise<string | null>
   /** A join refusal on the first attempt (full, budget, auth). */
   onRefused: (e: JoinError) => void
 }
@@ -135,7 +141,7 @@ export function openRemote(opts: RemoteOptions, ev: TransportEvents): Transport 
         req.bots = opts.bots
       }
       attempts++
-      const r = await joinTown(req, opts.apiUrl)
+      const r = await joinTown(req, opts.apiUrl, opts.getToken)
       if (!r.ok) {
         if (attempts === 1 || r.error.reason !== 'network') {
           opts.onRefused(r.error)

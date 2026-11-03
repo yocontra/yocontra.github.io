@@ -23,7 +23,7 @@ import Bare from '~/layouts/Bare.astro'
 <script>
   /*
    * Dev and direct access. Query params: server=loopback|remote (default loopback here),
-   * bots=N, lag=ms, jitter=ms, lobby=id, name=… Plus the renderer's #tier= and #perf.
+   * bots=N, lag=ms, jitter=ms, lobby=id, name=…, token=… (dev) Plus the renderer's #tier= and #perf.
    */
   import { mountFrontier } from '~/experiments/out-west/ffa/client/index.ts'
   import { installViewportVars } from '~/experiments/out-west/platform/viewport.ts'
@@ -44,6 +44,8 @@ import Bare from '~/layouts/Bare.astro'
     const bots = num('bots')
     const lobby = q.get('lobby')
     const name = q.get('name')
+    // Dev only: a pre-minted access token (automated runs without a passkey).
+    const token = q.get('token')
     mountFrontier(root, {
       server: q.get('server') === 'remote' ? 'remote' : 'loopback',
       ...(bots === undefined ? {} : { bots }),
@@ -51,6 +53,7 @@ import Bare from '~/layouts/Bare.astro'
       ...(jitter === undefined ? {} : { jitterMs: jitter }),
       ...(lobby ? { lobbyId: lobby } : {}),
       ...(name ? { name } : {}),
+      ...(token ? { getToken: () => Promise.resolve(token) } : {}),
       onExit: () => {
         location.href = '/experiments/out-west/'
       },
