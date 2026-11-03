@@ -1,65 +1,51 @@
 ---
-import Base from '~/layouts/Base.astro'
+import Bare from '~/layouts/Bare.astro'
 ---
 
-<Base title="HACKED" noindex>
+<Bare title="HACKED" noindex>
   <div id="hacked">YOU GOT HACKED</div>
-</Base>
+</Bare>
 
+<!-- Ported verbatim from the 2021 original. Only change: sizes scale down below ~800px wide. -->
 <style is:global>
 body {
-  margin: 0;
-  min-height: 100dvh;
   cursor: pointer;
-  background: #000 url("/experiments/hax/bg.gif");
-  overflow: hidden;
+  background: url("/experiments/hax/bg.gif");
 }
-</style>
-
-<style>
 #hacked {
-  position: fixed;
+  position: absolute;
   left: 50%;
   top: 50%;
   transform: translate(-50%, -50%);
-  width: max-content;
-  max-width: calc(100vw - 32px);
-  box-sizing: border-box;
   text-align: center;
   animation: blink 1s steps(1) infinite;
   background: red;
   color: white;
-  font-family: system-ui, sans-serif;
-  font-size: clamp(40px, 11vw, 120px);
-  line-height: 1.1;
-  padding: clamp(20px, 6vw, 64px);
-  overflow-wrap: break-word;
+  font-size: min(120px, 15vw);
+  padding: min(64px, 8vw);
 }
 
 @keyframes blink {
-  0%,
-  100% {
+  0% {
     opacity: 1;
   }
   50% {
     opacity: 0;
   }
+  100% {
+    opacity: 1;
+  }
 }
 </style>
 
 <script>
-// both files are mp4s, but only their aac audio tracks are used
+// Both files are mp4s; only their AAC audio tracks are used (as in the original).
 const tracks = ['/experiments/hax/jolly.mp4', '/experiments/hax/boom.mp4'].map((src) => {
   const track = new Audio(src)
   track.loop = true
-  track.preload = 'auto'
   return track
 })
-const play = (): void => {
-  for (const track of tracks) {
-    track.play().catch(() => {})
-  }
-}
-document.addEventListener('click', play)
-document.addEventListener('touchend', play)
+document.addEventListener('click', () => {
+  for (const track of tracks) track.play().catch(() => {})
+})
 </script>
