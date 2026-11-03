@@ -68,7 +68,9 @@ const LOD1_TRIS = 3000
 /** Running speed the Run clip was authored for (m/s). */
 const CLIP_RUN_SPEED = 5.2
 const ROLL_S = 0.35
-const MAX_ACTORS_EXTRA = 3
+const MAX_ACTORS_EXTRA = 6
+/** Players this many ranks beyond the skinned cap get their actor built ahead of time. */
+const PREBUILD_RING = 4
 /** Characters read 25% bigger than life from the top-down camera (visual only; collision is the sim's). */
 export const READ_SCALE = 1.25
 const ARM_BONES = /^(?<bone>Shoulder|UpperArm|LowerArm|Index|Middle|Ring|Pinky|Thumb)\d?R$/u
@@ -256,6 +258,41 @@ export class Crowd {
     m.lod1 = null
   }
 
+  private pending: Member | null = null
+
+  /** Your own actor now; anyone else in idle time, a few ranks early, so none is cast mid-frame. */
+  private maybeBuild(m: Member, self: boolean, rank: number): boolean {
+    if (self) {
+      this.build(m, true)
+      return true
+    }
+    if (rank < this.near + PREBUILD_RING) {
+      this.scheduleBuild(m)
+      return true
+    }
+    return false
+  }
+
+  /** One actor build at a time, in idle time (with a deadline so it can't starve). */
+  private scheduleBuild(m: Member): void {
+    if (this.pending) {
+      return
+    }
+    this.pending = m
+    const run = () => {
+      const target = this.pending
+      this.pending = null
+      if (target && !target.actor && this.members.get(target.id) === target) {
+        this.build(target, false)
+      }
+    }
+    if (typeof requestIdleCallback === 'function') {
+      requestIdleCallback(run, { timeout: 250 })
+    } else {
+      setTimeout(run, 0)
+    }
+  }
+
   /** Build one actor (the caller rate-limits to one per frame). */
   private build(m: Member, self: boolean): void {
     const look = m.look
@@ -373,9 +410,8 @@ export class Crowd {
         m.animSince = nowS
       }
       const wantNear = rank < this.near
-      if (wantNear && !m.actor && !built) {
-        this.build(m, p.self)
-        built = true
+      if (!(m.actor || built)) {
+        built = this.maybeBuild(m, p.self, rank)
       }
       if (wantNear && m.actor && m.holder) {
         this.drawNear(m, p, rank, cx, cz, dt, nowS, s)

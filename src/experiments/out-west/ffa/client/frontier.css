@@ -772,7 +772,7 @@
   }
 
   .fr-pad {
-    bottom: calc(var(--fr-bottom) + 176px);
+    bottom: calc(var(--fr-bottom) + 200px);
   }
 }
 
