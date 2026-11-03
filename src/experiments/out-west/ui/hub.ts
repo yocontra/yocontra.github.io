@@ -196,7 +196,7 @@ export class Hub {
         'div',
         'ow-hub-meta',
         this.strip,
-        signedIn ? 'Couldn’t reach the bank. Single player still works.' : 'Playing as a guest',
+        signedIn ? 'Couldn’t reach the server. Quick Draw still works.' : 'Guest',
       )
       if (!signedIn) {
         button(this.strip, 'Sign in', () => this.openAccount(), true).classList.add('ow-hub-signin')

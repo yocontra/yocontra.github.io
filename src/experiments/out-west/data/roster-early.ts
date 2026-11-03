@@ -96,7 +96,7 @@ export const ROSTER_EARLY: readonly Outlaw[] = [
     name: 'Ace Q. McConly',
     epithet: 'the Card Sharp',
     bounty: bountyFor(3),
-    hook: 'Flips a coin. When it lands, that’s not the call.',
+    hook: 'Flips a coin. Don’t draw on the landing.',
     gimmick: 'coin',
     look: {
       base: 'punk',
@@ -206,7 +206,7 @@ export const ROSTER_EARLY: readonly Outlaw[] = [
     name: 'Laura Bullion',
     epithet: 'the Thorny Rose',
     bounty: bountyFor(7),
-    hook: 'Cold and still. Gives nothing away.',
+    hook: 'Cold and still. No tells.',
     gimmick: 'cold',
     look: {
       base: 'woman',

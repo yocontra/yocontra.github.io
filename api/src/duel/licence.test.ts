@@ -24,13 +24,13 @@ describe('Bounty Hunt licence', () => {
     })
     expect(licenceCopy(licenceStatus(0b1))).toEqual({
       kicker: 'Unlicensed gunslinger',
-      progress: 'Beat 2 more outlaws on a ranked run to earn your licence',
+      progress: 'Beat 2 more outlaws on a ranked run to earn your licence.',
     })
     expect(licenceCopy(licenceStatus(0b11)).progress).toBe(
-      'Beat 1 more outlaw on a ranked run to earn your licence',
+      'Beat 1 more outlaw on a ranked run to earn your licence.',
     )
     expect(licenceCopy(licenceStatus(0)).progress).toBe(
-      'Beat 3 more outlaws on a ranked run to earn your licence',
+      'Beat 3 more outlaws on a ranked run to earn your licence.',
     )
   })
 })
