@@ -26,13 +26,23 @@ export interface Assets {
   lookLoaded: (look: Look) => boolean
 }
 
-export function lookKeys(look: Look): BodyKey[] {
-  return look.woman ? ['woman'] : [...new Set([look.head, look.body, look.legs, look.feet])]
+/** A pre-base look literal (game.ts's never-taken fallback); loads the casual base. */
+interface LegacyLook {
+  readonly head: string
+  readonly body: string
+  readonly legs: string
+  readonly feet: string
+  readonly tint: Readonly<Record<string, number>>
+  readonly build: readonly number[]
+}
+
+export function lookKeys(look: Look | LegacyLook): BodyKey[] {
+  return 'base' in look ? [look.base] : ['casual']
 }
 
 export async function loadAssets(
   anisotropy: number,
-  firstLook: Look,
+  firstLook: Look | LegacyLook,
   onProgress: (fraction: number) => void,
 ): Promise<Assets> {
   const loader = new GLTFLoader()
