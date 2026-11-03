@@ -55,7 +55,7 @@ const TILES: readonly TileDef[] = [
     icon: 'hat',
     title: 'Outfitter',
     kicker: 'Cosmetics',
-    sub: (s) => (s.signedIn ? 'Spend your purse' : 'Browse and try on'),
+    sub: (s) => (s.signedIn ? 'Hats, irons, dusters' : 'Browse and try on'),
     online: false,
   },
 ]
