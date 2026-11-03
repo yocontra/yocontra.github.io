@@ -114,9 +114,18 @@ export class Lobby extends DurableObject<Env> {
     }
     this.core ??= new LobbyCore(this.lobbyId, crypto.getRandomValues(new Uint32Array(1))[0] ?? 1)
     const core = this.core
-    const bots = Number(request.headers.get('X-Bots') ?? 0)
-    if (this.dev() && bots > 0) {
-      core.botTarget = Math.min(MAX_DEV_BOTS, Math.max(core.botTarget, bots))
+    // Dev only: `?bots=N` asks for N bots; an explicit `?bots=0` empties the town of bots
+    // (humans only, for end-to-end tests such as test/bank-e2e.ts). No header: ambient bots.
+    const botsHeader = request.headers.get('X-Bots') ?? ''
+    const bots = Number(botsHeader)
+    if (this.dev() && botsHeader !== '' && Number.isInteger(bots) && bots >= 0) {
+      if (bots === 0) {
+        core.ambientBots = false
+        core.botTarget = 0
+      } else {
+        core.ambientBots = true
+        core.botTarget = Math.min(MAX_DEV_BOTS, Math.max(core.botTarget, bots))
+      }
     }
     const pair = new WebSocketPair()
     const [client, server] = [pair[0], pair[1]]

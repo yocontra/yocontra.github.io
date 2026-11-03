@@ -113,6 +113,21 @@ describe('LobbyCore', () => {
     expect(core.world.players.filter(Boolean).length).toBe(MAX_PLAYERS)
   })
 
+  it('with ambient bots off (dev ?bots=0) the town empties of bots', () => {
+    const core = new LobbyCore('lobby:0', 1)
+    core.join(profile('a'), new FakePeer(), 0)
+    for (let t = 0; t < 20; t++) {
+      core.tick(t * 50)
+    }
+    expect(core.world.players.filter((p) => p?.bot && !p.gone).length).toBeGreaterThan(0)
+    core.ambientBots = false
+    for (let t = 20; t < 40; t++) {
+      core.tick(t * 50)
+    }
+    expect(core.world.players.filter((p) => p?.bot && !p.gone).length).toBe(0)
+    expect(core.world.players.filter(Boolean).length).toBe(1)
+  })
+
   it('a human joining a full town sends a bot home', () => {
     const core = new LobbyCore('lobby:0', 1)
     core.join(profile('a'), new FakePeer(), 0)

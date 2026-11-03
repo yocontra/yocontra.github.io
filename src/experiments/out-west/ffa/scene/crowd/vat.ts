@@ -12,7 +12,9 @@
  *
  * Draws: (bases in view) + (hat types in view) + 1 blob-shadow draw.
  *
- * SPIKE (stream H, M1): stream G absorbs or replaces this in ffa/scene/.
+ * This is the far tier of Frontier's crowd: `ffa/scene/crowd.ts` skins the nearest riders and
+ * hands everyone else to the VAT layer here (and `looks.ts` shares its PALETTE for the tints).
+ * The bake itself runs in `vat.worker.ts`; `vat-shared.ts` holds the job and result shapes.
  */
 import {
   type AnimationClip,

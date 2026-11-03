@@ -30,6 +30,8 @@ export class LoopbackServer {
     this.send = send
     this.core = new LobbyCore('loopback', opts.seed ?? Math.floor(Math.random() * 1e9))
     this.core.botTarget = Math.max(0, opts.bots)
+    // `?bots=0` means an empty town, the same as on the dev server.
+    this.core.ambientBots = opts.bots > 0
   }
 
   start(): void {

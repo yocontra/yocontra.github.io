@@ -1,10 +1,45 @@
 // biome-ignore-all lint/complexity/useMaxParams: geometry/audio builders take positional numeric args (x, y, z, size…), mirroring three.js APIs
 import { Box3, type InstancedMesh, Matrix4, type Object3D, Vector3 } from 'three'
 import type { GLTF } from 'three/examples/jsm/loaders/GLTFLoader.js'
+import { Rng } from '../ffa/sim/rng.ts'
 import { instance, type PropDef, placeMatrix, propDef } from './props.ts'
 import { AWNING, deckAt, LANTERNS, STREET } from './street.ts'
 
-const r = (a: number, b: number) => a + Math.random() * (b - a)
+/** The street is dressed the same on every load (the float audit and screenshots depend on it). */
+const DRESSING_SEED = 0x0d_e5_51_e7
+/** Clearance kept between two props' footprints, m. */
+const PROP_GAP = 0.04
+
+/** A placed prop's footprint on the ground plane: a circle that bounds it at any yaw. */
+interface Footprint {
+  x: number
+  z: number
+  r: number
+}
+
+/** Bounding radius of a prop's footprint at scale `s` (half its XZ diagonal). */
+const footprintRadius = (def: PropDef | null, s: number, fallback: number): number =>
+  def ? (Math.hypot(def.size.x, def.size.z) / 2) * s : fallback * s
+
+/**
+ * Nudge (x, z) along the boardwalk (z) until its footprint clears every placed one, trying
+ * alternately further either way. Returns null if nothing within 1.5 m is clear.
+ */
+function clearSpot(
+  placed: readonly Footprint[],
+  x: number,
+  z: number,
+  radius: number,
+): [number, number] | null {
+  for (let step = 0; step <= 30; step++) {
+    const dz = (step % 2 === 0 ? 1 : -1) * Math.ceil(step / 2) * 0.05
+    const zz = z + dz
+    if (placed.every((f) => Math.hypot(f.x - x, f.z - zz) >= f.r + radius + PROP_GAP)) {
+      return [x, zz]
+    }
+  }
+  return null
+}
 
 /**
  * A coffin stood on end in front of the undertaker: the kit coffin lies flat (long along Z, lid up,
@@ -45,9 +80,34 @@ export function dressStreet(props: GLTF, parent: Object3D): { coffins: Instanced
     return def ? instance(def, mats, parent, shadow, cap) : []
   }
 
-  // barrels and crates on and by the boardwalks
+  const rng = new Rng(DRESSING_SEED)
+  const r = (a: number, b: number) => rng.range(a, b)
+  const barrelDef = propDef(props, 'barrel', 1.0, 'y')
+  const crateDef = propDef(props, 'crate', 0.85, 'y')
+
+  // barrels and crates on and by the boardwalks, seeded and never overlapping (a crate that would
+  // sit inside a barrel slides along the boardwalk until both footprints clear)
   const barrels: Matrix4[] = []
   const crates: Matrix4[] = []
+  const placed: Footprint[] = []
+  const put = (
+    into: Matrix4[],
+    def: PropDef | null,
+    x: number,
+    z: number,
+    ry: number,
+    s: number,
+    onDeck: boolean,
+  ) => {
+    const radius = footprintRadius(def, s, 0.5)
+    const spot = clearSpot(placed, x, z, radius)
+    if (!spot) {
+      return
+    }
+    const [px, pz] = spot
+    placed.push({ x: px, z: pz, r: radius })
+    into.push(placeMatrix(px, onDeck ? deckAt(px, pz) : 0, pz, ry, s))
+  }
   // every spot on a boardwalk (none in the gaps between buildings, where they stood on air at deck
   // height), clear of the window sills, and set on the floor under it by deckAt
   const spots: [number, number][] = [
@@ -62,9 +122,10 @@ export function dressStreet(props: GLTF, parent: Object3D): { coffins: Instanced
     [-10.2, -35.4],
   ]
   for (const [x, z] of spots) {
-    barrels.push(placeMatrix(x, deckAt(x, z), z, r(0, 6), r(0.95, 1.1)))
+    put(barrels, barrelDef, x, z, r(0, 6), r(0.95, 1.1), true)
   }
-  barrels.push(placeMatrix(-8.3, 0, -15.5, 0.4), placeMatrix(8.4, 0, 25.2, 1.1))
+  put(barrels, barrelDef, -8.3, -15.5, 0.4, 1, false)
+  put(barrels, barrelDef, 8.4, 25.2, 1.1, 1, false)
   for (const [x, z] of [
     [10.15, -12.6],
     [-10.15, 10.4],
@@ -73,10 +134,10 @@ export function dressStreet(props: GLTF, parent: Object3D): { coffins: Instanced
     [10.15, -31.2],
     [-10.15, -23],
   ] as const) {
-    crates.push(placeMatrix(x, deckAt(x, z), z, r(-0.3, 0.3), r(0.9, 1.1)))
+    put(crates, crateDef, x, z, r(-0.3, 0.3), r(0.9, 1.1), true)
   }
   // on the street, clear of the boardwalk's edge (x 9)
-  crates.push(placeMatrix(8.3, 0, 26.2, 0.3))
+  put(crates, crateDef, 8.3, 26.2, 0.3, 1, false)
   add('barrel', 1.0, barrels, true, 'y')
   add('crate', 0.85, crates, true, 'y')
   // hay at the livery
@@ -92,7 +153,7 @@ export function dressStreet(props: GLTF, parent: Object3D): { coffins: Instanced
   // cacti and rocks out in the desert and at the open end
   const cacti: Matrix4[] = []
   for (let i = 0; i < 26; i++) {
-    const side = Math.random() < 0.5 ? -1 : 1
+    const side = rng.next() < 0.5 ? -1 : 1
     const z = r(-140, 60)
     const x = z < -60 ? r(-60, 60) : side * r(24, 80)
     if (z < -55 && Math.abs(x) < 10) {
@@ -103,7 +164,7 @@ export function dressStreet(props: GLTF, parent: Object3D): { coffins: Instanced
   add('cactus', 1, cacti, false, 'y')
   const rocks: Matrix4[] = []
   for (let i = 0; i < 14; i++) {
-    const side = Math.random() < 0.5 ? -1 : 1
+    const side = rng.next() < 0.5 ? -1 : 1
     rocks.push(placeMatrix(side * r(28, 90), -0.2, r(-150, 80), r(0, 6), r(2, 7)))
   }
   add('rock', 1, rocks, false, 'y')

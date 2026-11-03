@@ -142,6 +142,11 @@ export class LobbyCore {
   private readonly sentAt = new Float64Array(64)
   /** Extra bots asked for (dev / load tests), on top of the default town population. */
   botTarget = 0
+  /**
+   * Whether bots fill the town up to `DEFAULT_TOWN_POPULATION`. Dev-only `?bots=0` turns this off
+   * (humans only, for end-to-end tests); production lobbies always keep it on.
+   */
+  ambientBots: boolean = true
   readonly metrics: CoreMetrics = { ticks: 0, bytesOut: 0, msgsOut: 0, msgsIn: 0, droppedIn: 0 }
 
   constructor(lobbyId: string, seed: number) {
@@ -404,7 +409,8 @@ export class LobbyCore {
     // Ambient bots stay under the soft cap (room for humans); an explicit dev/load-test target may
     // fill all 32 slots (a joining human still sends one home).
     const cap = (this.botTarget > 0 ? MAX_PLAYERS : SOFT_CAP) - humans
-    const wanted = Math.min(cap, Math.max(this.botTarget, DEFAULT_TOWN_POPULATION - humans))
+    const ambient = this.ambientBots ? DEFAULT_TOWN_POPULATION - humans : 0
+    const wanted = Math.max(0, Math.min(cap, Math.max(this.botTarget, ambient)))
     let bots = 0
     const names = new Set<string>()
     for (const p of activePlayers(this.world)) {
