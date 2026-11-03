@@ -1,0 +1,319 @@
+---
+import Bare from '~/layouts/Bare.astro'
+---
+
+<Bare
+  title="out west"
+  description="A western quick-draw duel: walk your paces, wait for the call, and draw first."
+  viewport="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover"
+>
+  <div class="start">
+    <span class="desktop-only">Click to begin</span>
+    <span class="touch-only">Tap to begin</span>
+  </div>
+  <div class="header">out west</div>
+  <div class="instructions">
+    <span class="desktop-only">Left arrow to walk, spacebar to shoot.</span>
+    <span class="touch-only">Hold walk, tap draw to shoot.</span>
+  </div>
+  <canvas class="game"></canvas>
+  <div class="controls" aria-hidden="true">
+    <button type="button" class="control" data-control="walk" tabindex="-1">walk</button>
+    <button type="button" class="control" data-control="fire" tabindex="-1">draw</button>
+  </div>
+</Bare>
+
+<style is:global>
+/* http://meyerweb.com/eric/tools/css/reset/ v2.0 | 20110126 License: none (public domain) */
+html,
+body,
+div,
+span,
+applet,
+object,
+iframe,
+h1,
+h2,
+h3,
+h4,
+h5,
+h6,
+p,
+blockquote,
+pre,
+a,
+abbr,
+acronym,
+address,
+big,
+cite,
+code,
+del,
+dfn,
+em,
+img,
+ins,
+kbd,
+q,
+s,
+samp,
+small,
+strike,
+strong,
+sub,
+sup,
+tt,
+var,
+b,
+u,
+i,
+center,
+dl,
+dt,
+dd,
+ol,
+ul,
+li,
+fieldset,
+form,
+label,
+legend,
+table,
+caption,
+tbody,
+tfoot,
+thead,
+tr,
+th,
+td,
+article,
+aside,
+canvas,
+details,
+embed,
+figure,
+figcaption,
+footer,
+header,
+hgroup,
+menu,
+nav,
+output,
+ruby,
+section,
+summary,
+time,
+mark,
+audio,
+video {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  font: inherit;
+  vertical-align: baseline;
+}
+article,
+aside,
+details,
+figcaption,
+figure,
+footer,
+header,
+hgroup,
+menu,
+nav,
+section {
+  display: block;
+}
+body {
+  line-height: 1;
+}
+ol,
+ul {
+  list-style: none;
+}
+blockquote,
+q {
+  quotes: none;
+}
+blockquote:before,
+blockquote:after,
+q:before,
+q:after {
+  content: none;
+}
+table {
+  border-collapse: collapse;
+  border-spacing: 0;
+}
+
+/* original out-west styles */
+html,
+body {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  -webkit-user-select: none;
+  user-select: none;
+  height: 100%;
+  width: 100%;
+  background: #f00;
+  color: #fff;
+  font-family: Rockwell, "Courier Bold", Courier, Georgia, Times, "Times New Roman", serif;
+  -webkit-font-smoothing: antialiased;
+}
+.start {
+  font-size: 4rem;
+  text-transform: uppercase;
+  letter-spacing: 3px;
+}
+.header {
+  display: none;
+  font-size: 5rem;
+  text-transform: uppercase;
+  letter-spacing: 3px;
+  opacity: 0;
+}
+.instructions {
+  position: absolute;
+  z-index: 100;
+  bottom: 10px;
+  left: 10px;
+  font-size: 1rem;
+  opacity: 0;
+}
+.started .start {
+  display: none;
+}
+.started .header {
+  display: initial;
+  animation: fade-in-out 8s forwards;
+  animation-delay: 5s;
+}
+.started .instructions {
+  animation: fade-in 8s forwards;
+  animation-delay: 13s;
+}
+.started .game-message {
+  position: absolute;
+  left: 50%;
+  top: 25%;
+  transform: translate(-50%, -25%);
+  width: 80%;
+  text-align: center;
+  font-size: 5rem;
+  text-transform: uppercase;
+  letter-spacing: 2px;
+  opacity: 0;
+  animation: fade-in 250ms forwards;
+}
+.started .game-message.hidden {
+  animation: fade-out 250ms forwards;
+}
+.started .game {
+  display: none;
+  opacity: 0;
+  animation: fade-in 8s forwards;
+}
+@keyframes fade-in-out {
+  0% {
+    opacity: 0;
+  }
+  50% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+@keyframes fade-in {
+  0% {
+    opacity: 0;
+  }
+  100% {
+    opacity: 1;
+  }
+}
+@keyframes fade-out {
+  0% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+/* touch additions: invisible on desktop (fine pointer / hover) */
+.touch-only,
+.controls {
+  display: none;
+}
+@media (hover: none) and (pointer: coarse) {
+  html,
+  body {
+    overflow: hidden;
+    overscroll-behavior: none;
+    -webkit-touch-callout: none;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .desktop-only {
+    display: none;
+  }
+  .touch-only {
+    display: inline;
+  }
+  .start {
+    font-size: min(4rem, 11vw);
+  }
+  .header,
+  .started .game-message {
+    font-size: min(5rem, 11vw);
+  }
+  .instructions {
+    bottom: max(10px, env(safe-area-inset-bottom));
+    left: max(10px, env(safe-area-inset-left));
+  }
+  .started .controls {
+    position: fixed;
+    z-index: 101;
+    right: max(16px, env(safe-area-inset-right));
+    bottom: max(40px, calc(env(safe-area-inset-bottom) + 32px));
+    left: max(16px, env(safe-area-inset-left));
+    display: flex;
+    justify-content: space-between;
+    gap: 16px;
+    opacity: 0;
+    animation: fade-in 8s forwards;
+    animation-delay: 13s;
+    pointer-events: none;
+  }
+  .control {
+    width: 96px;
+    height: 96px;
+    border: 3px solid #fff;
+    border-radius: 50%;
+    background: rgb(0 0 0 / 0.15);
+    color: #fff;
+    font: inherit;
+    font-size: 1.1rem;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    touch-action: none;
+    pointer-events: auto;
+    -webkit-user-select: none;
+    user-select: none;
+  }
+  .control.held,
+  .control:active {
+    background: rgb(0 0 0 / 0.35);
+  }
+}
+</style>
+
+<script>
+import { mount } from '~/experiments/out-west/game'
+
+document.body.translate = false
+mount(document.body)
+</script>
