@@ -1,7 +1,4 @@
-// biome-ignore-all lint/complexity/noExcessiveCognitiveComplexity: accessory dressing is a flat list of optional parts
-// biome-ignore-all lint/performance/useTopLevelRegex: regexes run once per model load, not per frame
 // biome-ignore-all lint/style/noExcessiveLinesPerFile: one cohesive module (data table / scene builder); splitting would scatter tightly coupled code. Tracked for a later split.
-// biome-ignore-all lint/style/useNamedCaptureGroup: simple suffix match; no captures are read
 // biome-ignore-all lint/style/useThisInClassMethods: interface methods that are deliberate no-ops for this implementation
 // biome-ignore-all lint/suspicious/noUnnecessaryConditions: class fields are flags mutated from outside the method; Biome narrows them to their literal initializer
 import {
@@ -9,7 +6,6 @@ import {
   type AnimationClip,
   AnimationMixer,
   type Bone,
-  Box3,
   Color,
   CylinderGeometry,
   DoubleSide,
@@ -28,23 +24,33 @@ import {
 } from 'three'
 import type { GLTF } from 'three/examples/jsm/loaders/GLTFLoader.js'
 import { clone as cloneSkinned } from 'three/examples/jsm/utils/SkeletonUtils.js'
-import type { HatKey, PartSrc } from '../data/outlaws.ts'
+import type { BodyKey, HatKey } from '../data/outlaws.ts'
+import { bake, bodyPieces, mergePieces, meshPieces, onBone, type Piece } from './bake.ts'
+import { boneKey, bounds, onBones, sampleBody } from './fit.ts'
 import {
-  kitbash,
-  makeBandoliers,
-  makeBeard,
-  makeCoat,
-  makeMask,
-  makeMoustache,
-  makePoncho,
-  makeStar,
-  type PartSlot,
+  bandana,
+  bandoliers,
+  beard,
+  coat,
+  type Fit,
+  mask,
+  measure,
+  moustache,
+  outerThigh,
+  poncho,
+  prune,
+  star,
 } from './outfit.ts'
-import { type Floor, stylize, vary } from './style.ts'
+import { characterMaterial } from './shade.ts'
+import { type Floor, vary } from './style.ts'
 
 const HEIGHT = 1.78
 
 export interface ActorOpts {
+  /** Which whole base character this is (prunes its hard hat, crown, mohawk, backpack). */
+  base?: BodyKey | null
+  /** Animation clips, when the base file carries none (they share the player's rig). */
+  clips?: readonly AnimationClip[] | null
   tint?: Readonly<Record<string, number>>
   hat?: HatKey | null
   hatColor?: number
@@ -54,10 +60,8 @@ export interface ActorOpts {
   /** Second gun (two-gun Delmer, Hardin). */
   offGun?: boolean
   rifle?: Object3D | null
-  /** Kitbash: head/body/legs/feet from other characters sharing this rig. */
-  parts?: Record<PartSlot, { gltf: GLTF; src: PartSrc }> | null
-  /** [width, height] build multipliers. */
-  build?: readonly [number, number]
+  /** Uniform build: 1 = a 1.78 m man. */
+  scale?: number
   coat?: number | undefined
   poncho?: number | undefined
   moustache?: number | undefined
@@ -126,51 +130,82 @@ const HAT_PROFILES: Record<HatKey, [number, number][]> = {
   ],
 }
 
-export function makeHat(key: HatKey, color: number): Group {
+/** Inner radius of each crown where it meets the head (the profile point above the brim). */
+const CROWN_R: Record<HatKey, number> = {
+  cowboy: 0.1,
+  bowler: 0.1,
+  sombrero: 0.1,
+  tophat: 0.09,
+  tall: 0.095,
+  flat: 0.1,
+}
+
+/**
+ * A hat as ONE mesh (crown and band merged, vertex coloured). The returned
+ * group is what pops off; `fit` scales an inner child so popHat() keeps size.
+ */
+export function makeHat(key: HatKey, color: number, floor: Floor = { value: 0 }): Group {
   const pts = (HAT_PROFILES[key] ?? HAT_PROFILES.cowboy).map(([x, y]) => new Vector2(x, y))
-  // lathe needs the profile ordered bottom→top for outward normals; close the underside
+  // lathe needs the profile ordered bottom→top for outward normals
   const prof = [...pts].reverse()
   const g = new Group()
-  const felt = new MeshStandardMaterial({ color, roughness: 0.85, side: DoubleSide })
+  const felt = new MeshStandardMaterial({ color, roughness: 0.85 })
+  felt.userData.rim = 0.9
   const crown = new Mesh(new LatheGeometry(prof, 18), felt)
-  crown.castShadow = true
   g.add(crown)
   const bandH = key === 'sombrero' ? 0.03 : 0.022
   const r = (HAT_PROFILES[key]?.[2]?.[0] ?? 0.09) + 0.006
-  const band = new Mesh(
-    new CylinderGeometry(r, r + 0.004, bandH, 18, 1, true),
-    new MeshStandardMaterial({
-      color: new Color(color).multiplyScalar(0.35),
-      roughness: 0.6,
-      side: DoubleSide,
-    }),
-  )
+  const bandMat = new MeshStandardMaterial({
+    color: new Color(color).multiplyScalar(0.35),
+    roughness: 0.6,
+  })
+  const band = new Mesh(new CylinderGeometry(r, r + 0.004, bandH, 18, 1, true), bandMat)
   band.position.y = 0.03
   g.add(band)
+  const geo = mergePieces(meshPieces(g, g))
+  const mat = characterMaterial(floor, 'Felt')
+  mat.side = DoubleSide
+  const mesh = new Mesh(geo, mat)
+  mesh.castShadow = true
+  const out = new Group()
+  const inner = new Group()
+  inner.add(mesh)
+  out.add(inner)
   // Crumple the brim a touch so it doesn't read as CG-perfect.
-  g.rotation.z = (Math.random() - 0.5) * 0.06
-  return g
+  out.rotation.z = (Math.random() - 0.5) * 0.06
+  return out
 }
 
-function findBone(root: Object3D, name: string): Bone | null {
-  const clean = name.replace(/[.\s]/gu, '')
-  let found: Bone | null = null
-  root.traverse((o) => {
-    if (found) {
-      return
-    }
-    const b = o as Bone
-    if (b.isBone && b.name.replace(/[.\s]/gu, '').replace(/_\d+$/u, '') === clean) {
-      found = b
+/**
+ * A gun as ONE mesh (its parts merged, vertex coloured, its own metal look):
+ * one draw call in the holster or the hand instead of one per part.
+ */
+function mergedProp(src: Object3D): Object3D {
+  const g = src.clone()
+  g.updateMatrixWorld(true)
+  let textured = false
+  g.traverse((o) => {
+    const m = o as Mesh
+    if (m.isMesh && (m.material as MeshStandardMaterial).map) {
+      textured = true
     }
   })
-  return found
+  if (textured) {
+    return g
+  }
+  const pieces = meshPieces(g, g)
+  const metal = new MeshStandardMaterial({ vertexColors: true, roughness: 0.45, metalness: 0.55 })
+  const mesh = new Mesh(mergePieces(pieces), metal)
+  mesh.castShadow = true
+  const out = new Group()
+  out.name = src.name
+  out.add(mesh)
+  return out
 }
 
 const tmpV = new Vector3()
 const V3 = (x: number, y: number, z: number) => new Vector3(x, y, z)
 const tmpQ = new Quaternion()
-const tmpQ2 = new Quaternion()
 
 export type Clip =
   | 'Idle'
@@ -199,7 +234,6 @@ export class Actor {
   readonly armR: Bone | null
   readonly forearmR: Bone | null
   hat: Group | null = null
-  /** World-space offset from the head bone to the crown, for physics hand-off. */
   gun: Object3D | null = null
   offGun: Object3D | null = null
   rifle: Object3D | null = null
@@ -207,6 +241,7 @@ export class Actor {
   private handSlot: Group | null = null
   private offSlot: Group | null = null
   private offHolster: Group | null = null
+  /** The baked character: body and every garment in one skinned mesh. */
   readonly meshes: SkinnedMesh[] = []
   /** Distance travelled per pace at full stride (measured from the walk clip). */
   paceLength = 0.75
@@ -225,39 +260,63 @@ export class Actor {
   height = HEIGHT
   /** World height of his feet, for the shader's contact darkening. */
   readonly floor: Floor = { value: 0 }
+  private readonly bones = new Map<string, Bone>()
 
   constructor(gltf: GLTF, opts: ActorOpts = {}) {
     this.model = cloneSkinned(gltf.scene)
-    if (opts.parts) {
-      kitbash(this.model, opts.parts)
+    if (opts.base) {
+      prune(this.model, opts.base)
     }
-    // Scale to a consistent height, then apply his build.
-    this.model.updateMatrixWorld(true)
-    const box = new Box3().setFromObject(this.model)
-    const h = box.max.y - box.min.y
-    const [bw, bh] = opts.build ?? [1, 1]
-    const k = HEIGHT / Math.max(0.01, h)
-    this.model.scale.multiplyScalar(k)
-    this.model.scale.x *= bw
-    this.model.scale.z *= bw
-    this.model.scale.y *= bh
-    this.model.position.y = -box.min.y * k * bh
-    this.root.add(this.model)
-    this.height = HEIGHT * bh
-
-    const tint = opts.tint ?? {}
-    const matCache = new Map<Material, Material>()
-    const seed = opts.seed ?? 'player'
     this.model.traverse((o) => {
-      const m = o as SkinnedMesh
+      const b = o as Bone
+      if (b.isBone) {
+        this.bones.set(boneKey(b.name), b)
+      }
+    })
+    this.root.add(this.model)
+    // Normalise to a 1.78 m man, then his build, uniformly: everything he
+    // wears and carries rides on bones, and only a uniform scale keeps it true.
+    this.root.updateMatrixWorld(true)
+    const rest = bounds(sampleBody(this.model, this.root).samples)
+    const s = opts.scale ?? 1
+    const k = (HEIGHT / Math.max(0.01, rest.max.y - rest.min.y)) * s
+    this.model.scale.multiplyScalar(k)
+    this.model.position.y = -rest.min.y * k
+    this.height = HEIGHT * s
+    this.root.updateMatrixWorld(true)
+
+    this.head = this.bone('Head')
+    this.handR = this.bone('WristR') ?? this.bone('FistR')
+    this.handL = this.bone('WristL') ?? this.bone('FistL')
+    this.hips = this.bone('Hips')
+    this.spine = this.bone('Torso') ?? this.bone('Abdomen')
+    this.armR = this.bone('UpperArmR')
+    this.forearmR = this.bone('LowerArmR')
+
+    this.mixer = new AnimationMixer(this.model)
+    const clips = opts.clips && opts.clips.length > 0 ? opts.clips : gltf.animations
+    for (const clip of clips) {
+      const name = clip.name.split('|').pop() ?? clip.name
+      this.actions.set(name, this.mixer.clipAction(clip))
+    }
+    this.walkAction = this.actions.get('Walk') ?? null
+    this.idleAction = this.actions.get('Idle') ?? null
+    if (this.walkAction) {
+      this.walkDuration = this.walkAction.getClip().duration
+      this.measureWalk(this.walkAction.getClip())
+    }
+    this.play('Idle', 0)
+    this.mixer.update(0)
+    this.root.updateMatrixWorld(true)
+
+    // His own colours (tinted, then a seeded nudge so no two read identical).
+    const tint = opts.tint ?? {}
+    const seed = opts.seed ?? 'player'
+    const matCache = new Map<Material, Material>()
+    this.model.traverse((o) => {
+      const m = o as Mesh
       if (!m.isMesh) {
         return
-      }
-      m.castShadow = true
-      m.receiveShadow = true
-      m.frustumCulled = false
-      if ((m as SkinnedMesh).isSkinnedMesh) {
-        this.meshes.push(m)
       }
       const swap = (src: Material): Material => {
         const cached = matCache.get(src)
@@ -276,119 +335,74 @@ export class Actor {
       m.material = Array.isArray(m.material) ? m.material.map(swap) : swap(m.material)
     })
 
-    this.head = findBone(this.model, 'Head')
-    this.handR = findBone(this.model, 'Wrist.R') ?? findBone(this.model, 'Fist.R')
-    this.handL = findBone(this.model, 'Wrist.L') ?? findBone(this.model, 'Fist.L')
-    this.hips = findBone(this.model, 'Hips')
-    this.spine = findBone(this.model, 'Torso') ?? findBone(this.model, 'Abdomen')
-    this.armR = findBone(this.model, 'UpperArm.R')
-    this.forearmR = findBone(this.model, 'LowerArm.R')
-
-    this.mixer = new AnimationMixer(this.model)
-    for (const clip of gltf.animations) {
-      const name = clip.name.split('|').pop() ?? clip.name
-      this.actions.set(name, this.mixer.clipAction(clip))
+    // Dress him in the idle pose, fitted to his own surface, then bake it all
+    // into one skinned mesh bound in that pose.
+    const body = sampleBody(this.model, this.root)
+    const fit = measure(body, this.bones)
+    const clothes = this.dress(fit, opts)
+    const pieces = [...bodyPieces(this.model, this.root, body), ...clothes]
+    if (opts.gun) {
+      pieces.push(...this.placeHolsters(fit, opts.gun, opts.offGun ?? false, clothes))
     }
-    this.walkAction = this.actions.get('Walk') ?? null
-    this.idleAction = this.actions.get('Idle') ?? null
-    if (this.walkAction) {
-      this.walkDuration = this.walkAction.getClip().duration
-      this.measureWalk(this.walkAction.getClip())
-    }
-    this.play('Idle', 0)
-
-    if (opts.hat) {
-      this.attachHat(makeHat(opts.hat, opts.hatColor ?? 0x3a_2a_1a))
-    }
-    if (opts.bandana !== undefined) {
-      this.attachBandana(opts.bandana)
-    }
-    this.dress(opts)
-    // Clean stylized shading on everything he wears (guns keep their own look).
-    this.root.traverse((o) => {
-      const m = o as Mesh
-      if (!m.isMesh) {
-        return
-      }
-      for (const mat of Array.isArray(m.material) ? m.material : [m.material]) {
-        const sm = mat as MeshStandardMaterial
-        if (sm.isMeshStandardMaterial) {
-          stylize(sm, this.floor)
-        }
+    const drop: Object3D[] = []
+    this.model.traverse((o) => {
+      if ((o as SkinnedMesh).isSkinnedMesh) {
+        drop.push(o)
       }
     })
+    for (const d of drop) {
+      d.removeFromParent()
+    }
+    this.meshes.push(bake(pieces, body, this.root, characterMaterial(this.floor)))
+
+    if (opts.hat) {
+      this.attachHat(fit, opts.hat, opts.hatColor ?? 0x3a_2a_1a)
+    }
     if (opts.gun) {
-      this.attachGuns(opts.gun, opts.offGun ?? false)
+      this.gripGuns(opts.offGun ?? false)
     }
     if (opts.rifle) {
       this.attachRifle(opts.rifle)
     }
   }
 
-  /** Accessories that make each outlaw a silhouette of his own. */
-  private dress(o: ActorOpts): void {
-    this.mixer.update(0)
-    this.root.updateMatrixWorld(true)
-    const rootQ = this.root.getWorldQuaternion(new Quaternion())
-    const w = o.build?.[0] ?? 1
-    const hips = this.hips
-    const chest = findBone(this.model, 'Chest') ?? this.spine
-    const neck = findBone(this.model, 'Neck')
-    if (o.coat !== undefined && hips) {
-      const p = hips.getWorldPosition(new Vector3())
-      const coat = makeCoat(o.coat)
-      coat.scale.set(w, 1, w)
-      this.slotOn(hips, p, rootQ).add(coat)
+  private bone(name: string): Bone | null {
+    return this.bones.get(boneKey(name)) ?? null
+  }
+
+  /** Everything he wears, fitted and skinned (see outfit.ts). */
+  private dress(f: Fit, o: ActorOpts): Piece[] {
+    const out: Piece[] = []
+    if (o.coat !== undefined) {
+      out.push(...coat(f, o.coat))
     }
-    if (o.poncho !== undefined && neck) {
-      const p = neck.getWorldPosition(new Vector3()).add(new Vector3(0, 0.02, 0))
-      const poncho = makePoncho(o.poncho)
-      poncho.scale.set(w, 1, w)
-      this.slotOn(chest ?? neck, p, rootQ).add(poncho)
+    if (o.poncho !== undefined) {
+      out.push(...poncho(f, o.poncho))
     }
-    if (chest && (o.bandoliers || o.star)) {
-      const p = chest.getWorldPosition(new Vector3())
-      const slot = this.slotOn(chest, p, rootQ)
-      if (o.bandoliers) {
-        const b = makeBandoliers()
-        b.scale.set(w, 1, w)
-        slot.add(b)
-      }
-      if (o.star) {
-        const st = makeStar()
-        st.position.set(0.1 * w, 0.06, 0.135 * w)
-        slot.add(st)
-      }
+    if (o.mask !== undefined) {
+      out.push(...mask(f, o.mask))
+    } else if (o.bandana !== undefined) {
+      out.push(...bandana(f, o.bandana))
     }
-    // Facial hair and masks: placed from the head mesh's bounds.
-    const head = this.head
-    const headMesh = this.meshes.find((m) => m.userData.slot === 'head') ?? null
-    if (head && (o.moustache !== undefined || o.beard !== undefined || o.mask !== undefined)) {
-      const hb = headMesh ? new Box3().setFromObject(headMesh) : null
-      const hp = head.getWorldPosition(new Vector3())
-      const top = hb ? hb.max.y : hp.y + 0.25
-      const front = hb ? hb.max.z : hp.z + 0.1
-      const hh = hb ? hb.max.y - hb.min.y : 0.3
-      const chin = top - hh * 0.92
-      if (o.moustache !== undefined) {
-        const m = makeMoustache(o.moustache)
-        this.slotOn(head, new Vector3(hp.x, chin + hh * 0.3, front - 0.012), rootQ).add(m)
-      }
-      if (o.beard !== undefined) {
-        const b = makeBeard(o.beard)
-        this.slotOn(head, new Vector3(hp.x, chin + hh * 0.22, front - 0.06), rootQ).add(b)
-      }
-      if (o.mask !== undefined) {
-        const m = makeMask(o.mask)
-        this.slotOn(head, new Vector3(hp.x, chin + hh * 0.26, front - 0.1), rootQ).add(m)
-      }
+    if (o.bandoliers) {
+      out.push(...bandoliers(f, this.root))
     }
+    if (o.star) {
+      out.push(...star(f, this.root))
+    }
+    if (o.beard !== undefined) {
+      out.push(...beard(f, o.beard))
+    }
+    if (o.moustache !== undefined) {
+      out.push(...moustache(f, o.moustache, this.root))
+    }
+    return out
   }
 
   /** Sample the walk clip to find stride length and heel-strike times (no foot sliding). */
   private measureWalk(clip: AnimationClip): void {
-    const footL = findBone(this.model, 'Foot.L')
-    const footR = findBone(this.model, 'Foot.R')
+    const footL = this.bone('FootL')
+    const footR = this.bone('FootR')
     if (!(footL && footR)) {
       return
     }
@@ -487,54 +501,45 @@ export class Actor {
     this.idleAction?.setEffectiveWeight(1)
   }
 
-  private attachHat(hat: Group): void {
+  /**
+   * Seat the hat on his head bone: sized to his skull (hair included) and
+   * lowered until the crown's inner rim meets it, like a real hat.
+   */
+  private attachHat(f: Fit, key: HatKey, color: number): void {
     const head = this.head
     if (!head) {
       return
     }
-    this.root.updateMatrixWorld(true)
-    this.mixer.update(0)
-    this.root.updateMatrixWorld(true)
-    // World top of the head: highest vertex near the head bone ≈ model bbox top.
-    const top = new Box3().setFromObject(this.model).max.y
-    const hp = head.getWorldPosition(new Vector3())
-    const slot = new Group()
-    head.add(slot)
-    const inv = head.matrixWorld.clone().invert()
-    const target = new Vector3(hp.x, top - 0.085, hp.z + 0.01)
-    slot.position.copy(target.applyMatrix4(inv))
-    head.getWorldQuaternion(tmpQ)
-    this.root.getWorldQuaternion(tmpQ2)
-    slot.quaternion.copy(tmpQ.invert().multiply(tmpQ2))
-    const ws = head.getWorldScale(new Vector3())
-    slot.scale.setScalar(1 / ws.x)
+    const hat = makeHat(key, color, this.floor)
+    const h = f.head
+    const crownR = CROWN_R[key] ?? 0.1
+    const s = Math.min(1.3, Math.max(0.9, (h.r * 1.04) / crownR))
+    const want = crownR * s
+    const skull = onBones(f.body, ['Head'])
+    // Highest height at which the head is as wide as the crown's opening.
+    let seat = h.top - 0.06
+    for (let y = h.top; y > h.top - 0.2; y -= 0.004) {
+      let r = 0
+      for (const p of skull) {
+        if (Math.abs(p.p.y - y) < 0.006) {
+          r = Math.max(r, Math.hypot(p.p.x - h.cx, p.p.z - h.cz))
+        }
+      }
+      if (r >= want * 0.96) {
+        seat = y
+        break
+      }
+    }
+    const inner = hat.children[0]
+    inner?.scale.setScalar(s)
+    const slot = this.slotOn(
+      head,
+      V3(h.cx, seat - 0.025 * s, h.cz),
+      this.root.getWorldQuaternion(new Quaternion()),
+    )
     slot.add(hat)
     hat.rotation.x = -0.08
     this.hat = hat
-  }
-
-  private attachBandana(color: number): void {
-    const neck = findBone(this.model, 'Neck')
-    if (!neck) {
-      return
-    }
-    this.mixer.update(0)
-    this.root.updateMatrixWorld(true)
-    const slot = new Group()
-    neck.add(slot)
-    const ws = neck.getWorldScale(new Vector3())
-    slot.scale.setScalar(1 / ws.x)
-    neck.getWorldQuaternion(tmpQ)
-    this.root.getWorldQuaternion(tmpQ2)
-    slot.quaternion.copy(tmpQ.invert().multiply(tmpQ2))
-    const mat = new MeshStandardMaterial({ color, roughness: 0.9, side: DoubleSide })
-    const ring = new Mesh(new CylinderGeometry(0.075, 0.1, 0.07, 12, 1, true), mat)
-    ring.position.set(0, 0.02, 0.01)
-    const tri = new Mesh(new CylinderGeometry(0.0, 0.08, 0.12, 3, 1), mat)
-    tri.rotation.x = Math.PI
-    tri.scale.set(1, 1, 0.35)
-    tri.position.set(0, -0.03, 0.085)
-    slot.add(ring, tri)
   }
 
   /** Make a bone-local slot that holds world-space-authored children (unit scale, root orientation). */
@@ -551,13 +556,64 @@ export class Actor {
     return slot
   }
 
-  private attachGuns(gun: Object3D, two: boolean): void {
-    const hand = this.handR
+  /**
+   * Holsters on the outside of his thighs (measured from his own legs, outside
+   * the coat if he wears one), riding the thigh bones. The leather is baked
+   * into the body mesh; the gun hangs in a slot on the same bone.
+   */
+  private placeHolsters(f: Fit, gun: Object3D, two: boolean, clothes: readonly Piece[]): Piece[] {
     const hips = this.hips
-    if (!(hand && hips)) {
+    if (!hips) {
+      return []
+    }
+    const rootQ = this.root.getWorldQuaternion(new Quaternion())
+    const hipP = hips.getWorldPosition(new Vector3())
+    const out: Piece[] = []
+    const mk = (side: 1 | -1): Group => {
+      // side 1 = his right (-X while he faces +Z), -1 = his left.
+      const bone = this.bone(side === 1 ? 'UpperLegR' : 'UpperLegL') ?? hips
+      const bp = bone.getWorldPosition(new Vector3())
+      const y = hipP.y - 0.06
+      const surface = outerThigh(f, clothes, { side, y, near: bp })
+      const q = rootQ
+        .clone()
+        .multiply(
+          new Quaternion().setFromAxisAngle(new Vector3(0, 0, 1), -Math.PI / 2 + 0.12 * side),
+        )
+      if (side === -1) {
+        q.multiply(new Quaternion().setFromAxisAngle(new Vector3(1, 0, 0), Math.PI))
+      }
+      // slot +Y points toward his body on both sides; the barrel sits 0.045 up +Y
+      const x = surface - side * (0.026 + 0.045)
+      const slot = this.slotOn(bone, new Vector3(x, y, bp.z + 0.01), q)
+      const leather = new Mesh(
+        new CylinderGeometry(0.03, 0.026, 0.2, 7),
+        new MeshStandardMaterial({ color: 0x3a_24_14, roughness: 0.55 }),
+      )
+      leather.rotation.z = Math.PI / 2
+      leather.position.set(0.13, 0.045, 0)
+      slot.add(leather)
+      out.push(...meshPieces(leather, this.root, onBone(bone)))
+      leather.removeFromParent()
+      return slot
+    }
+    this.holster = mk(1)
+    this.gun = mergedProp(gun)
+    this.holster.add(this.gun)
+    if (two) {
+      this.offHolster = mk(-1)
+      this.offGun = mergedProp(gun)
+      this.offHolster.add(this.offGun)
+    }
+    return out
+  }
+
+  /** Calibrate the grip in the aiming pose so the barrel points down range. */
+  private gripGuns(two: boolean): void {
+    const hand = this.handR
+    if (!hand) {
       return
     }
-    // Calibrate the grip in the aiming pose so the barrel points down range.
     const aim = this.actions.get('Idle_Gun_Pointing')
     if (aim) {
       this.mixer.stopAllAction()
@@ -591,52 +647,6 @@ export class Actor {
     this.play('Idle', 0)
     this.mixer.update(0)
     this.root.updateMatrixWorld(true)
-    // Holsters ride on the thighs, flush with the outside of the trousers
-    // (measured from his legs mesh, so wide builds don't leave them floating).
-    const hipP = hips.getWorldPosition(new Vector3())
-    const legs =
-      this.meshes.find((m) => m.userData.slot === 'legs') ??
-      this.meshes.find(
-        (m) => /_(Pants|Legs)$/u.test(m.name) || /_(Pants|Legs)$/u.test(m.parent?.name ?? ''),
-      ) ??
-      null
-    const lb = legs
-      ? new Box3().setFromObject(legs)
-      : new Box3(V3(hipP.x - 0.17, 0, 0), V3(hipP.x + 0.17, 1, 0))
-    const mkHolster = (side: 1 | -1): Group => {
-      // side 1 = his right (-X while he faces +Z), -1 = his left.
-      const bone = findBone(this.model, side === 1 ? 'UpperLeg.R' : 'UpperLeg.L') ?? hips
-      const bp = bone.getWorldPosition(new Vector3())
-      const surface = side === 1 ? lb.min.x : lb.max.x
-      const q = rootQ
-        .clone()
-        .multiply(
-          new Quaternion().setFromAxisAngle(new Vector3(0, 0, 1), -Math.PI / 2 + 0.12 * side),
-        )
-      if (side === -1) {
-        q.multiply(new Quaternion().setFromAxisAngle(new Vector3(1, 0, 0), Math.PI))
-      }
-      // slot +Y points toward his body on both sides; the barrel sits 0.045 up +Y
-      const x = surface - side * (0.028 + 0.045)
-      const slot = this.slotOn(bone, new Vector3(x, hipP.y - 0.06, bp.z + 0.01), q)
-      const leather = new Mesh(
-        new CylinderGeometry(0.03, 0.026, 0.2, 7),
-        new MeshStandardMaterial({ color: 0x3a_24_14, roughness: 0.7 }),
-      )
-      leather.rotation.z = Math.PI / 2
-      leather.position.set(0.13, 0.045, 0)
-      leather.castShadow = true
-      slot.add(leather)
-      return slot
-    }
-    this.holster = mkHolster(1)
-    this.gun = gun.clone()
-    this.holster.add(this.gun)
-    if (two) {
-      this.offHolster = mkHolster(-1)
-      this.offGun = gun.clone()
-      this.offHolster.add(this.offGun)
-    }
   }
 
   private attachRifle(rifle: Object3D): void {
@@ -657,7 +667,7 @@ export class Actor {
       .multiply(new Quaternion().setFromAxisAngle(new Vector3(0, 1, 0), Math.PI / 2))
     const hp = hand.getWorldPosition(new Vector3())
     const slot = this.slotOn(hand, hp, q)
-    this.rifle = rifle.clone()
+    this.rifle = mergedProp(rifle)
     this.rifle.position.set(0, -0.02, 0.1)
     slot.add(this.rifle)
     if (aim) {
