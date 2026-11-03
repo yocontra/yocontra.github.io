@@ -16,7 +16,6 @@ import {
   type Bone,
   type BufferGeometry,
   Euler,
-  type Material,
   type Object3D,
   Quaternion,
   Skeleton,
@@ -35,8 +34,10 @@ import type {
   Stance,
 } from '../data/outlaws.ts'
 import type { Piece } from './bake.ts'
+import { isSkinned, type Land, landmarks, matName, weightsOf } from './bind.ts'
 import { type Body, boneKey } from './fit.ts'
 import { prune } from './outfit.ts'
+import { trimWhiskers, type WhiskerLook, wearsWhiskers } from './whiskers.ts'
 
 /**
  * Mean linear luminance of the atlas's hair, brows and beard (a mid grey). A hair colour is the
@@ -105,10 +106,6 @@ export interface PersonOpts {
   stance?: Stance | undefined
 }
 
-const isSkinned = (o: Object3D): o is SkinnedMesh => (o as SkinnedMesh).isSkinnedMesh
-const matName = (m: SkinnedMesh): string =>
-  ((Array.isArray(m.material) ? m.material[0] : m.material) as Material | undefined)?.name ?? ''
-
 /**
  * Give him another cut: drop his own hair, and (unless he goes bald) bind the donor base's hair
  * mesh to his bones by name, with the donor's bind pose (the skeletons are the same rig).
@@ -168,9 +165,10 @@ export function swapHair(
 export function becomeHimself(
   model: Object3D,
   bones: Map<string, Bone>,
-  o: PersonOpts & { beard?: number | undefined },
+  o: PersonOpts & WhiskerLook,
 ): boolean {
-  prune(model, { beard: o.beard !== undefined && (o.beardStyle ?? 'sculpted') === 'sculpted' })
+  prune(model, { beard: wearsWhiskers(o) })
+  trimWhiskers(model, o)
   let sculpted = false
   model.traverse((obj) => {
     const b = obj as Bone
@@ -204,83 +202,6 @@ export function applyBuild(bones: ReadonlyMap<string, Bone>, b: Build | undefine
       bones.get(n)?.position.multiplyScalar(b.shoulders)
     }
   }
-}
-
-/** Landmarks of the bind mesh (skin space: Y up, facing +Z). */
-interface Land {
-  head: Vector3
-  eye: number
-  chin: number
-  spine: Vector3
-  chest: Vector3
-  hips: number
-}
-
-/** Bind-space bone positions by name, from a skeleton's inverse bind matrices. */
-function bindBones(sm: SkinnedMesh): Map<string, Vector3> {
-  const out = new Map<string, Vector3>()
-  sm.skeleton.bones.forEach((b, i) => {
-    const inv = sm.skeleton.boneInverses[i]
-    if (inv) {
-      out.set(boneKey(b.name), new Vector3().setFromMatrixPosition(inv.clone().invert()))
-    }
-  })
-  return out
-}
-
-/** Weight of each named bone on vertex `k` of `sm`. */
-function weightsOf(sm: SkinnedMesh, k: number, names: readonly string[]): Map<string, number> {
-  const si = sm.geometry.getAttribute('skinIndex')
-  const sw = sm.geometry.getAttribute('skinWeight')
-  const out = new Map<string, number>()
-  for (let c = 0; c < 4; c++) {
-    const w = sw.getComponent(k, c)
-    const n = boneKey(sm.skeleton.bones[si.getComponent(k, c)]?.name ?? '')
-    if (w > 0 && names.includes(n)) {
-      out.set(n, (out.get(n) ?? 0) + w)
-    }
-  }
-  return out
-}
-
-function landmarks(meshes: readonly SkinnedMesh[]): Land | null {
-  const first = meshes[0]
-  if (!first) {
-    return null
-  }
-  const bb = bindBones(first)
-  const head = bb.get('Head')
-  const chest = bb.get('Chest')
-  const spine = bb.get('Abdomen') ?? bb.get('Torso')
-  const hips = bb.get('Hips')
-  if (!(head && chest && spine && hips)) {
-    return null
-  }
-  const v = new Vector3()
-  let eyeSum = 0
-  let eyeN = 0
-  let chin = Number.POSITIVE_INFINITY
-  for (const sm of meshes) {
-    const name = matName(sm)
-    const pos = sm.geometry.getAttribute('position')
-    for (let k = 0; k < pos.count; k++) {
-      v.fromBufferAttribute(pos, k).applyMatrix4(sm.bindMatrix)
-      if (name === 'Eye') {
-        eyeSum += v.y
-        eyeN++
-      } else if (
-        name === 'Skin' &&
-        v.z > head.z &&
-        (weightsOf(sm, k, ['Head']).get('Head') ?? 0) > 0.9
-      ) {
-        chin = Math.min(chin, v.y)
-      }
-    }
-  }
-  if (eyeN === 0 || !Number.isFinite(chin)) {
-    return null
-  }
-  return { head, eye: eyeSum / eyeN, chin, spine, chest, hips: hips.y }
 }
 
 const smooth = (a: number, b: number, x: number): number => {

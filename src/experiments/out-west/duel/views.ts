@@ -21,7 +21,8 @@ export async function lineup(s: DuelState, day: number): Promise<Actor[]> {
       look,
       hat: o?.hat ?? 'cowboy',
       hatColor: o?.hatColor ?? 0x1a_14_10,
-      bandana: o?.bandana ?? 0x3a_2a_1a,
+      // his own neckerchief (or none): only the rifleman's mask needs a cloth colour
+      bandana: o ? o.bandana : 0x3a_2a_1a,
       gun: c.gun ? propObject(c.gun) : null,
       offGun: o?.gimmick === 'two-guns' || o?.gimmick === 'boss',
     })
@@ -55,8 +56,16 @@ export async function lineup(s: DuelState, day: number): Promise<Actor[]> {
     }
     // `dist` widens the close-up (1 = head, ~2.5 = head to belt)
     const k = Number(hash.get('dist') ?? '1')
+    // `yaw` swings the camera round him (radians): ~0.8 three-quarter, ~1.4 profile
+    const yaw = Number(hash.get('yaw') ?? '0')
+    const ox = -0.35 * k
+    const oz = -1.1 * k
     c.rig.cut('lineup', () => ({
-      pos: V(h.x - 0.35 * k, h.y + 0.05, h.z - 1.1 * k),
+      pos: V(
+        h.x + ox * Math.cos(yaw) - oz * Math.sin(yaw),
+        h.y + 0.05,
+        h.z + ox * Math.sin(yaw) + oz * Math.cos(yaw),
+      ),
       look: V(h.x, h.y - 0.1 * k, h.z),
       fov: 35,
     }))

@@ -18,7 +18,7 @@ import {
 } from 'three'
 import type { BeardKey, MoustacheKey } from '../data/outlaws.ts'
 import type { Piece } from './bake.ts'
-import { beard, eyepatch, moustache, scar, sideburns, vest } from './face.ts'
+import { beard, eyepatch, scar, vest } from './face.ts'
 import { type HatFit, makeHat } from './hats.ts'
 import { bandana, bandoliers, coat, type Fit, mask, poncho, star } from './outfit.ts'
 import { HAIR_LUM } from './person.ts'
@@ -65,8 +65,10 @@ function tintFor(
   if (own !== undefined) {
     return own
   }
-  if (src.name === 'Beard' && o.beard !== undefined) {
-    return o.beard
+  // the sculpted beard is also his moustache and side whiskers (scene/whiskers.ts)
+  const whisker = src.name === 'Beard' ? (o.beard ?? o.moustache ?? o.sideburns) : undefined
+  if (whisker !== undefined) {
+    return whisker
   }
   if ((src.name === 'Brows' || src.name === 'Beard') && tint.Hair !== undefined) {
     return tint.Hair
@@ -131,14 +133,9 @@ export function dressPieces(f: Fit, o: DressOpts, root: Object3D, realBeard: boo
   if (o.star) {
     out.push(...star(f, root))
   }
-  if (o.beard !== undefined && !realBeard) {
+  // a fitted shell only for a full beard, or a base without a sculpted one to cut from
+  if (o.beard !== undefined && (o.beardStyle === 'full' || !realBeard)) {
     out.push(...beard(f, o.beard, o.beardStyle))
-  }
-  if (o.moustache !== undefined && o.mask === undefined) {
-    out.push(...moustache(f, { color: o.moustache, style: o.moustacheStyle }, root))
-  }
-  if (o.sideburns !== undefined) {
-    out.push(...sideburns(f, o.sideburns, root))
   }
   if (o.eyepatch) {
     out.push(...eyepatch(f, root))

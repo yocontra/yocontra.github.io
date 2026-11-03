@@ -228,12 +228,15 @@ export function poncho(f: Fit, color: number): Piece[] {
 
 /** Neckerchief: a band snug on the neck and a point hanging over the chest. */
 export function bandana(f: Fit, color: number): Piece[] {
-  // Only the neck itself: the shoulders would turn the band into a shelf.
+  // Only the neck itself: the shoulders would turn the band into a shelf. Tied low on the neck,
+  // close to it, so it reads as cloth knotted on a collar rather than a block under the jaw.
   const cx = f.at('Neck').x
   const cz = f.at('Neck').z
-  const yTop = f.neck.lo + 0.5 * (f.neck.hi - f.neck.lo)
-  const yBot = f.neck.lo + 0.1 * (f.neck.hi - f.neck.lo)
+  const yTop = f.neck.lo + 0.32 * (f.neck.hi - f.neck.lo)
+  const yBot = f.neck.lo + 0.02 * (f.neck.hi - f.neck.lo)
   const neck = onBones(f.body, NECK_BONES).filter((s) => s.p.y > yBot - 0.02 && s.p.y < yTop + 0.02)
+  // a fold: the cloth darkens toward the knot and the point, as a rolled scarf does
+  const fold = (k: number) => (t: number) => lin(color).multiplyScalar(1 - k * t)
   const band = shell({
     samples: neck,
     cx,
@@ -242,25 +245,25 @@ export function bandana(f: Fit, color: number): Piece[] {
     yBot,
     rings: 3,
     segs: 18,
-    margin: 0.012,
-    bulge: (t) => t * 0.008,
-    band: 0.015,
-    color: lin(color),
+    margin: 0.006,
+    bulge: (t) => t * 0.004,
+    band: 0.012,
+    color: fold(0.3),
   })
   const flap = shell({
     samples: onBones(f.body, ['Chest', 'Neck', 'Torso']),
     cx,
     cz,
-    yTop: yBot + 0.005,
-    yBot: yBot - 0.1,
+    yTop: yBot + 0.004,
+    yBot: yBot - 0.075,
     arc: 0,
-    half: 0.75,
+    half: 0.55,
     taper: (t) => Math.max(0.02, 1 - t),
     rings: 4,
     segs: 6,
-    margin: 0.022,
+    margin: 0.012,
     band: 0.02,
-    color: lin(color),
+    color: fold(0.35),
   })
   const w = nearestWeights(f.body, onBones(f.body, ['Neck', 'Chest']))
   return [
