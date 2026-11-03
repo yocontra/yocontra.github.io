@@ -18,6 +18,7 @@ import {
 import { money } from '../data/economy.ts'
 import { buyItem, fetchStore, saveLoadout } from '../net/api.ts'
 import { type IconName, icon } from './icons.ts'
+import { uiSound } from './sfx.ts'
 import { button, confirmSheet, el, swallow } from './sheet.ts'
 
 const SLOT_TABS: readonly { slot: Slot; label: string }[] = [
@@ -285,6 +286,7 @@ export class Outfitter {
       this.flash(r.error)
       return
     }
+    uiSound('uiBuy')
     this.owned = new Set(r.value.owned)
     this.deps.changed({ purse: r.value.purse, owned: r.value.owned })
     await this.equip({ ...this.equipped, [item.slot]: item.id })

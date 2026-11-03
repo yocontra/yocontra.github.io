@@ -9,6 +9,7 @@ import { money } from '../data/economy.ts'
 import { levelProgress, levelRewards, titleFor } from '../data/progression.ts'
 import { FRAME_COLORS } from '../scene/loadout.ts'
 import { type IconName, icon } from './icons.ts'
+import { announceLevel } from './sfx.ts'
 import { button, countUp, el, setBar, signedMoney, swallow } from './sheet.ts'
 
 const KIND_HEAD: Record<Poster['kind'], string> = {
@@ -189,6 +190,7 @@ export class ResultsPanel {
       a.next > 0 ? `Lv ${a.level} · ${a.into} / ${a.next} XP` : `Lv ${a.level} · max level`
     this.levelBox.replaceChildren()
     if (a.level > b.level) {
+      announceLevel(a.level, b.level)
       el('span', 'ow-results-seal', this.levelBox, String(a.level))
       const stamp = el('div', 'ow-results-stamp', this.levelBox)
       el('b', '', stamp, 'Level up')
