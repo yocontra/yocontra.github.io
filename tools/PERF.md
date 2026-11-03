@@ -120,6 +120,44 @@ Notes:
 - VAT bake: 0.4–0.9 s per base the first time (worker), ~16 ms from IndexedDB.
 - The lead set near=12–16 skinned on floor/medium and 8 on legacy (stream G).
 
+### Frontier CPU and heap pass (final audit), Nov 2026
+
+Harness: `bun tools/frontier-perf.ts [--cluster] [--portrait]` (loopback, 31 bots, 812×375 CSS at
+DPR 3, touch, floor tier, 4× CPU, sampled every 2 s for 30 s after a warm-up, dev server).
+`--cluster` is the packed scene: dev `?cluster` makes the bots circle the player and fire outward,
+so 15–21 riders are on screen (counted by projecting them through the live camera).
+
+|                          | Before (audit) | After, spread | After, packed (`--cluster`) |
+| ------------------------ | -------------- | ------------- | --------------------------- |
+| CPU p50 (ms)             | 7.0            | 4.1–6.0       | 4.8–5.1                     |
+| CPU p95 (ms)             | 7.8–8.8        | 5.6–7.5       | 6.5–6.7                     |
+| JS heap, median (MB)     | 93–129         | 94–104        | 91–100                      |
+| Garbage (MB per 10 s)    | 173–210        | 89            |                             |
+| Crowd triangles (packed) | ~178k          |               | ~97k                        |
+| Triangles (max)          | 259k / 450k+   | 303–341k      | 342–363k                    |
+
+Machine load from parallel agents moves p95 by about ±0.8 ms between runs. The heap max still
+peaks at 110–150 MB right after a burst of actor casts, until the next GC. Dev builds also carry
+about 20 MB of module source strings that production doesn't.
+
+What changed:
+- **Crowd churn.** The crowd evicted actors in arbitrary order and re-baked the same riders every
+  few frames (54 casts in 30 s, packed). Each cast is a full dress-and-bake plus a GPU upload.
+  Now:
+  - eviction goes by distance rank and never touches the prebuild ring;
+  - up to near + 20 built actors are parked off the graph for 90 s.
+- **Program re-resolves.** `getProgram`/`getParameters` ran several times a frame. The fixes:
+  - a kit-material twin for loose meshes;
+  - `forceSinglePass` on the additive fx;
+  - one shadow depth material per caster kind (`ffa/scene/depth-kinds.ts`).
+- **Boxed doubles.** `Matrix4.toArray` gets a monomorphic Float32Array fast path
+  (`ffa/scene/hot-paths.ts`). Before it, `Skeleton.update` made 7.7 KB of garbage per skeleton per
+  frame.
+- **Bone compose.** Rig bones compose only when their mixer ticks (30 or 15 Hz).
+- **Body bakes.** `blendBones` reads skin attributes directly.
+- **Hats.** Other riders' hats now use an LOD: 800 triangles near, 300 in the VAT crowd, down from
+  3.5k each.
+
 ## Real-device checklist (iPhone 13 mini, current iOS, WKWebView)
 
 Do this before signing off any art drop. The pass bar (§9.6): **p95 ≤ 16.7 ms over 10 minutes,

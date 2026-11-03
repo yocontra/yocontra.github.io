@@ -86,9 +86,9 @@ const ROLL_S = 0.35
  * only its geometry and bones in memory, while re-casting one is a full dress-and-bake plus a GPU
  * upload (a frame spike); so riders who drift out and back in keep theirs.
  */
-const MAX_ACTORS_EXTRA = 12
+const MAX_ACTORS_EXTRA = 20
 /** An actor whose rider has been out of interest this long is freed even under the cap (s). */
-const PARK_S = 20
+const PARK_S = 90
 /** Players this many ranks beyond the skinned cap get their actor built ahead of time. */
 const PREBUILD_RING = 4
 /** Characters read 25% bigger than life from the top-down camera (visual only; collision is the sim's). */
@@ -848,7 +848,7 @@ export class Crowd {
   }
 
   /**
-   * Keep at most near + 12 actors. Actors gone from interest for 20 s go first, then the furthest
+   * Keep at most near + 20 actors. Actors gone from interest for 90 s go first, then the furthest
    * by rank; anyone inside the prebuild ring (rank < near + 4) is never evicted, so a rider is
    * only re-cast after he really left the ring (each cast is a full dress-and-bake).
    */
