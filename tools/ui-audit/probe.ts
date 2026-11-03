@@ -214,7 +214,8 @@ export function probe(a: ProbeArgs): Finding[] {
         continue
       }
       const str = n.textContent ?? ''
-      for (const m of str.matchAll(/\S+/gu)) {
+      // a hyphen is a fair place to break: "Six-Shooter" is two words here
+      for (const m of str.matchAll(/[^\s\-‐–—]+/gu)) {
         const word = m[0]
         if (word.length < 3 || word.length > 12) {
           continue

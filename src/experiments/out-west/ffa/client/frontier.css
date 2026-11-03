@@ -264,7 +264,8 @@
   font-variant-numeric: var(--ow-figs-hud);
   letter-spacing: 0.01em;
   color: var(--ow-brass-hi);
-  line-height: 1;
+  /* Oswald's figures stand taller than 1em: room for them over the label */
+  line-height: 1.15;
   text-shadow:
     0 2px 0 rgb(0 0 0 / 0.9),
     0 0 18px rgb(0 0 0 / 0.5);
@@ -336,7 +337,11 @@
 }
 
 .fr-players {
-  margin-top: 4px;
+  /* a 44 px tap target (it opens the riders sheet) */
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--ow-tap);
+  padding: 0 2px;
   font-size: var(--ow-fs-body);
   font-variant-numeric: var(--ow-figs-hud);
   line-height: 1;
@@ -436,10 +441,13 @@
     inset 0 0 0 1px var(--fr-hair),
     var(--ow-shadow-1);
   font-size: var(--ow-fs-lead);
-  line-height: 1;
+  line-height: 1.15;
   opacity: 0;
   transition: opacity 0.15s;
-  white-space: nowrap;
+  width: max-content;
+  max-width: calc(100vw - 32px);
+  text-align: center;
+  text-wrap: balance;
 }
 
 .fr-prompt.on {
@@ -462,7 +470,10 @@
   transition:
     opacity 0.2s,
     transform 0.2s;
-  white-space: nowrap;
+  /* one line when it fits, balanced lines when it doesn't: never off the screen's edges */
+  width: max-content;
+  max-width: min(36rem, calc(100vw - 32px));
+  text-wrap: balance;
   text-align: center;
 }
 
@@ -579,7 +590,8 @@
 .fr-banner {
   position: absolute;
   left: 50%;
-  top: calc(var(--fr-top) + 100px);
+  /* under the purse stack (carried, banked, the Most Wanted pill) */
+  top: calc(var(--fr-top) + 140px);
   transform: translateX(-50%);
   display: none;
   padding: 6px 16px 7px;
@@ -589,8 +601,11 @@
     inset 0 0 0 1px rgb(255 200 170 / 0.3),
     var(--ow-shadow-1);
   font-size: var(--ow-fs-lead);
-  line-height: 1;
-  white-space: nowrap;
+  line-height: 1.15;
+  width: max-content;
+  max-width: calc(100vw - 32px);
+  text-align: center;
+  text-wrap: balance;
 }
 
 .fr-banner.on {
@@ -979,16 +994,43 @@
   width: 140px;
 }
 
-.fr-touchui .fr-prompt,
-.fr-touchui .fr-channel {
+.fr-touchui .fr-prompt {
   bottom: calc(var(--fr-bottom) + 40%);
 }
 
+/* the channel bar sits a prompt's height above the prompt, never on it */
+.fr-touchui .fr-channel {
+  bottom: calc(var(--fr-bottom) + 40% + 48px);
+}
+
 @media (orientation: portrait) {
-  .fr-tc {
-    top: calc(var(--fr-top) + 96px);
-    left: calc(var(--fr-left) + 12px);
+  /*
+   * Portrait: the vitals, the purse and the banner stack in flow down the left, so a taller vitals
+   * column (a dynamite line, PROTECTED) pushes the purse down instead of running into it.
+   * Everything else in the HUD stays absolutely placed.
+   */
+  .fr-hud {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    align-content: start;
+    justify-items: start;
+    row-gap: 10px;
+    padding: calc(var(--fr-top) + 12px) calc(var(--fr-right) + 12px) 0 calc(var(--fr-left) + 12px);
+  }
+
+  .fr-tl,
+  .fr-tc,
+  .fr-banner {
+    position: static;
     transform: none;
+  }
+
+  .fr-tc {
+    text-align: left;
+  }
+
+  .fr-banner {
+    max-width: 100%;
     text-align: left;
   }
 
@@ -1000,7 +1042,9 @@
     max-width: 60vw;
   }
 
+  /* under the stacked vitals, purse and banner */
   .fr-toast {
+    top: 44%;
     font-size: 24px;
   }
 
@@ -1016,6 +1060,28 @@
 @media (max-height: 460px) {
   .fr-carried {
     font-size: 24px;
+  }
+
+  /* short landscape: the top band is full (vitals, purse, map), so news goes low and narrow */
+  .fr-banner {
+    top: auto;
+    bottom: calc(var(--fr-bottom) + 12px);
+    max-width: 50vw;
+  }
+
+  /* under the vitals column (it ends about 150 px down), clear of the channel bar */
+  .fr-toast {
+    top: calc(var(--fr-top) + 176px);
+    font-size: 22px;
+    max-width: 50vw;
+  }
+
+  .fr-touchui .fr-prompt {
+    bottom: calc(var(--fr-bottom) + 22%);
+  }
+
+  .fr-touchui .fr-channel {
+    bottom: calc(var(--fr-bottom) + 22% + 48px);
   }
 
   .fr-pad {
