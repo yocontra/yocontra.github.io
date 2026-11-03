@@ -46,6 +46,6 @@ export function castActor(assets: Assets, s: CastSpec): Actor {
     bandoliers: L.bandoliers,
     star: L.star,
     mask: L.mask ? (s.bandana ?? 0x2a1a12) : undefined,
-    cloth: assets.cloth,
+    seed: `${L.head}/${L.body}/${L.legs}/${L.feet}/${s.hat}/${s.hatColor}`,
   })
 }

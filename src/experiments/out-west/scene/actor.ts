@@ -17,16 +17,13 @@ import {
   type Object3D,
   Quaternion,
   type SkinnedMesh,
-  type Texture,
   Vector2,
   Vector3,
 } from 'three'
 import type { GLTF } from 'three/examples/jsm/loaders/GLTFLoader.js'
 import { clone as cloneSkinned } from 'three/examples/jsm/utils/SkeletonUtils.js'
 import type { HatKey, PartSrc } from '../data/outlaws'
-import { applyCloth, type ClothKey } from './cloth'
 import {
-  CLOTH_BY_MATERIAL,
   kitbash,
   makeBandoliers,
   makeBeard,
@@ -37,6 +34,7 @@ import {
   makeStar,
   type PartSlot,
 } from './outfit'
+import { type Floor, stylize, vary } from './style'
 
 const HEIGHT = 1.78
 
@@ -61,8 +59,8 @@ export interface ActorOpts {
   bandoliers?: boolean | undefined
   star?: boolean | undefined
   mask?: number | undefined
-  /** Fabric scans for the triplanar cloth detail. */
-  cloth?: Record<ClothKey, Texture> | null
+  /** Seed for the subtle per-material colour/roughness variation. */
+  seed?: string
 }
 
 /** Hat silhouettes from lathe profiles (x = radius, y = height), metres. */
@@ -214,6 +212,8 @@ export class Actor {
   twitch = 0
   private t = Math.random() * 10
   height = HEIGHT
+  /** World height of his feet, for the shader's contact darkening. */
+  readonly floor: Floor = { value: 0 }
 
   constructor(gltf: GLTF, opts: ActorOpts = {}) {
     this.model = cloneSkinned(gltf.scene)
@@ -234,7 +234,7 @@ export class Actor {
 
     const tint = opts.tint ?? {}
     const matCache = new Map<Material, Material>()
-    const clothQueue: [MeshStandardMaterial, ClothKey, Texture][] = []
+    const seed = opts.seed ?? 'player'
     this.model.traverse((o) => {
       const m = o as SkinnedMesh
       if (!m.isMesh) return
@@ -248,30 +248,12 @@ export class Actor {
         const c = src.clone() as MeshStandardMaterial
         const hex = tint[src.name]
         if (hex !== undefined) c.color.setHex(hex)
-        c.roughness = Math.max(0.6, c.roughness)
-        c.metalness = 0
-        const ck = CLOTH_BY_MATERIAL[src.name]
-        const tex = ck && opts.cloth ? opts.cloth[ck] : null
-        if (ck && tex) clothQueue.push([c, ck, tex])
+        vary(c, seed)
         matCache.set(src, c)
         return c
       }
       m.material = Array.isArray(m.material) ? m.material.map(swap) : swap(m.material)
     })
-
-    // Fabric detail scaled to real-world repeats (object units → metres).
-    this.model.updateMatrixWorld(true)
-    const ws = this.meshes[0]?.getWorldScale(new Vector3()).x ?? 1
-    for (const [m, key, tex] of clothQueue) {
-      const perM = key === 'leather' ? 0.3 : key === 'hessian' ? 0.35 : 0.45
-      applyCloth(m, {
-        tex,
-        scale: perM * ws,
-        amount: key === 'denim' ? 0.35 : 0.25,
-        bump: 0.12,
-        roughness: key === 'leather' ? 0.55 : 0.9,
-      })
-    }
 
     this.head = findBone(this.model, 'Head')
     this.handR = findBone(this.model, 'Wrist.R') ?? findBone(this.model, 'Fist.R')
@@ -297,6 +279,15 @@ export class Actor {
     if (opts.hat) this.attachHat(makeHat(opts.hat, opts.hatColor ?? 0x3a2a1a))
     if (opts.bandana !== undefined) this.attachBandana(opts.bandana)
     this.dress(opts)
+    // Clean stylized shading on everything he wears (guns keep their own look).
+    this.root.traverse((o) => {
+      const m = o as Mesh
+      if (!m.isMesh) return
+      for (const mat of Array.isArray(m.material) ? m.material : [m.material]) {
+        const sm = mat as MeshStandardMaterial
+        if (sm.isMeshStandardMaterial) stylize(sm, this.floor)
+      }
+    })
     if (opts.gun) this.attachGuns(opts.gun, opts.offGun ?? false)
     if (opts.rifle) this.attachRifle(opts.rifle)
   }
@@ -544,39 +535,40 @@ export class Actor {
     this.play('Idle', 0)
     this.mixer.update(0)
     this.root.updateMatrixWorld(true)
-    // Holster on the right hip, barrel down.
+    // Holsters ride on the thighs, flush with the outside of the trousers
+    // (measured from his legs mesh, so wide builds don't leave them floating).
     const hipP = hips.getWorldPosition(new Vector3())
-    const right = new Vector3(-1, 0, 0).applyQuaternion(rootQ)
-    const holsterQ = rootQ
-      .clone()
-      .multiply(new Quaternion().setFromAxisAngle(new Vector3(0, 0, 1), -Math.PI / 2 + 0.15))
-    this.holster = this.slotOn(
-      hips,
-      hipP
+    const legs = this.meshes.find((m) => m.userData['slot'] === 'legs') ?? null
+    const lb = new Box3().setFromObject(legs ?? this.model)
+    const mkHolster = (side: 1 | -1): Group => {
+      // side 1 = his right (-X while he faces +Z), -1 = his left.
+      const bone = findBone(this.model, side === 1 ? 'UpperLeg.R' : 'UpperLeg.L') ?? hips
+      const bp = bone.getWorldPosition(new Vector3())
+      const surface = side === 1 ? lb.min.x : lb.max.x
+      const q = rootQ
         .clone()
-        .addScaledVector(right, 0.2)
-        .add(new Vector3(0, -0.12, 0.02)),
-      holsterQ,
-    )
-    const leather = new Mesh(
-      new CylinderGeometry(0.035, 0.03, 0.2, 6),
-      new MeshStandardMaterial({ color: 0x3a2414, roughness: 0.8 }),
-    )
-    leather.rotation.z = Math.PI / 2
-    leather.position.x = 0.02
-    this.holster.add(leather)
+        .multiply(
+          new Quaternion().setFromAxisAngle(new Vector3(0, 0, 1), -Math.PI / 2 + 0.12 * side),
+        )
+      if (side === -1) q.multiply(new Quaternion().setFromAxisAngle(new Vector3(1, 0, 0), Math.PI))
+      // slot +Y points toward his body on both sides; the barrel sits 0.045 up +Y
+      const x = surface - side * (0.028 + 0.045)
+      const slot = this.slotOn(bone, new Vector3(x, hipP.y - 0.06, bp.z + 0.01), q)
+      const leather = new Mesh(
+        new CylinderGeometry(0.03, 0.026, 0.2, 7),
+        new MeshStandardMaterial({ color: 0x3a2414, roughness: 0.7 }),
+      )
+      leather.rotation.z = Math.PI / 2
+      leather.position.set(0.13, 0.045, 0)
+      leather.castShadow = true
+      slot.add(leather)
+      return slot
+    }
+    this.holster = mkHolster(1)
     this.gun = gun.clone()
     this.holster.add(this.gun)
     if (two) {
-      const left = right.clone().negate()
-      this.offHolster = this.slotOn(
-        hips,
-        hipP
-          .clone()
-          .addScaledVector(left, 0.2)
-          .add(new Vector3(0, -0.12, 0.02)),
-        holsterQ,
-      )
+      this.offHolster = mkHolster(-1)
       this.offGun = gun.clone()
       this.offHolster.add(this.offGun)
     }
@@ -674,6 +666,7 @@ export class Actor {
   }
 
   update(dt: number): void {
+    this.floor.value = this.root.position.y
     this.t += dt
     this.mixer.update(dt)
     // Procedural layers on top of the clip.

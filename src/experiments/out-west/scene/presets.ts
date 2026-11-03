@@ -27,45 +27,54 @@ export interface Preset {
   highTint: [number, number, number]
   exposure: number
   shimmer: number
+  /** Character rim light: strength and colour (warm by day, cool at night). */
+  rim: number
+  rimColor: Color
 }
 
-interface Key extends Omit<Preset, 'sunColor' | 'hemiSky' | 'hemiGround' | 'fog' | 'zenith'> {
+interface Key
+  extends Omit<Preset, 'sunColor' | 'hemiSky' | 'hemiGround' | 'fog' | 'zenith' | 'rimColor'> {
   at: number
   sunColor: number
   hemiSky: number
   hemiGround: number
   fog: number
   zenith: number
+  rimColor: number
 }
 
 const KEYS: Key[] = [
   {
+    // High noon: sun nearly overhead and hard, the street bouncing warm light
+    // up into the facades, thin haze, deep blue overhead, bleached highlights.
     at: 0,
-    sunElev: 72,
+    sunElev: 80,
     sunAz: 25,
-    sunColor: 0xfff1d6,
-    sunIntensity: 3.2,
-    hemiSky: 0xcfe0ff,
-    hemiGround: 0xb08a5a,
-    hemiIntensity: 1.9,
-    fog: 0xe8d3a8,
-    fogNear: 70,
-    fogFar: 260,
-    zenith: 0x6f9fd8,
-    sunGlow: 0.25,
+    sunColor: 0xfff4e0,
+    sunIntensity: 4.8,
+    hemiSky: 0xbfd8ff,
+    hemiGround: 0xc8955a,
+    hemiIntensity: 2.6,
+    fog: 0xeadcbc,
+    fogNear: 117,
+    fogFar: 433,
+    zenith: 0x3f7fd6,
+    sunGlow: 0.2,
     stars: 0,
     moon: 0,
     lanterns: 0,
     windows: 0,
-    bloom: 0.6,
-    grain: 0.05,
-    saturation: 0.86,
-    contrast: 1.04,
-    lift: 0.025,
-    shadowTint: [1.0, 0.97, 0.92],
-    highTint: [1.06, 1.0, 0.9],
-    exposure: 1.0,
+    bloom: 0.55,
+    grain: 0.045,
+    saturation: 0.95,
+    contrast: 1.0,
+    lift: 0.04,
+    shadowTint: [1.02, 1.0, 0.97],
+    highTint: [1.07, 1.03, 0.94],
+    exposure: 1.08,
     shimmer: 1,
+    rim: 0.2,
+    rimColor: 0xffecc8,
   },
   {
     at: 0.25,
@@ -94,6 +103,8 @@ const KEYS: Key[] = [
     highTint: [1.08, 1.0, 0.88],
     exposure: 1.0,
     shimmer: 0.4,
+    rim: 0.25,
+    rimColor: 0xffd8a0,
   },
   {
     at: 0.45,
@@ -122,6 +133,8 @@ const KEYS: Key[] = [
     highTint: [1.1, 0.98, 0.85],
     exposure: 1.0,
     shimmer: 0,
+    rim: 0.32,
+    rimColor: 0xffb070,
   },
   {
     at: 0.6,
@@ -150,6 +163,8 @@ const KEYS: Key[] = [
     highTint: [1.14, 0.96, 0.8],
     exposure: 1.05,
     shimmer: 0,
+    rim: 0.38,
+    rimColor: 0xff8a50,
   },
   {
     at: 0.75,
@@ -178,6 +193,8 @@ const KEYS: Key[] = [
     highTint: [1.1, 0.95, 0.85],
     exposure: 1.1,
     shimmer: 0,
+    rim: 0.3,
+    rimColor: 0xb090ff,
   },
   {
     at: 0.88,
@@ -206,6 +223,8 @@ const KEYS: Key[] = [
     highTint: [1.12, 0.98, 0.85],
     exposure: 1.5,
     shimmer: 0,
+    rim: 0.32,
+    rimColor: 0x8fb0ff,
   },
   {
     at: 1,
@@ -234,6 +253,8 @@ const KEYS: Key[] = [
     highTint: [1.14, 0.98, 0.84],
     exposure: 1.5,
     shimmer: 0,
+    rim: 0.34,
+    rimColor: 0x8fb0ff,
   },
 ]
 
@@ -285,5 +306,7 @@ export function presetAt(day: number): Preset {
     highTint: lerp3(a.highTint, b.highTint, t),
     exposure: lerp(a.exposure, b.exposure, t),
     shimmer: lerp(a.shimmer, b.shimmer, t),
+    rim: lerp(a.rim, b.rim, t),
+    rimColor: mixC(a.rimColor, b.rimColor, t),
   }
 }

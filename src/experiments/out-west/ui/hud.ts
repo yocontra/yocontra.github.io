@@ -108,11 +108,11 @@ export class Hud {
     this.callTimer = 0
   }
 
-  fake(text: string): void {
+  fake(text: string, ms = 1800): void {
     if (!this.captions) return
     this.fakeCap.textContent = text
     this.fakeCap.classList.add('on')
-    this.fakeTimer = 1800
+    this.fakeTimer = ms
   }
 
   line(who: string, text: string, ms = 2400): void {
@@ -174,8 +174,9 @@ export class Hud {
       if (this.lineTimer <= 0) this.lineCap.classList.remove('on')
     }
     if (this.callTimer > 0) {
+      // DRAW! fades after its hold; the red edge stays until a shot is fired
       this.callTimer -= dtMs
-      if (this.callTimer <= 0) this.clearCall()
+      if (this.callTimer <= 0) this.callCap.classList.remove('on')
     }
   }
 

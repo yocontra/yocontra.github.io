@@ -17,7 +17,6 @@ import {
 } from 'three'
 import type { GLTF } from 'three/examples/jsm/loaders/GLTFLoader.js'
 import type { PartSrc } from '../data/outlaws'
-import type { ClothKey } from './cloth'
 
 export type PartSlot = 'head' | 'body' | 'legs' | 'feet'
 
@@ -26,29 +25,6 @@ export const HEAD_HIDE: Partial<Record<PartSrc, string[]>> = {
   worker: ['Worker_Yellow'],
   king: ['Gold'],
   punk: ['Red_Dark', 'Red'],
-}
-
-/** Which Poly Haven scan dresses each source material. */
-export const CLOTH_BY_MATERIAL: Record<string, ClothKey> = {
-  Suit: 'wool',
-  Tie: 'wool',
-  White: 'linen',
-  Black: 'leather',
-  Grey: 'leather',
-  Green: 'wool',
-  LightGreen: 'linen',
-  Brown: 'hessian',
-  Brown2: 'leather',
-  Brown_02: 'leather',
-  LightBrown: 'linen',
-  LightBlue: 'denim',
-  Worker_Vest: 'leather',
-  Red_Dark: 'leather',
-  Beige: 'linen',
-  DarkBrown: 'leather',
-  Coat: 'wool',
-  Poncho: 'hessian',
-  Felt: 'wool',
 }
 
 const SUFFIX: Record<PartSlot, string[]> = {

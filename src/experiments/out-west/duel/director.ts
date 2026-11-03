@@ -30,7 +30,15 @@ import type { Input, Press } from '../engine/input'
 import type { Renderer } from '../engine/render'
 import { save as persist, resetRun, type SaveData } from '../save'
 import { Actor } from '../scene/actor'
-import { type CameraRig, clamp01, easeInOutCubic, easeOutCubic, type Pose } from '../scene/camera'
+import {
+  type CameraRig,
+  clamp01,
+  easeInOutCubic,
+  easeOutCubic,
+  type Framing,
+  type Pose,
+  twoShot,
+} from '../scene/camera'
 import { castActor } from '../scene/cast'
 import {
   type Dust,
@@ -190,6 +198,10 @@ export class Director {
   private ambT = 0
   private killOrbit = 1
   private killDur: number = FEEL.killCamSeconds
+  /** The man going down: his death clip is timed in his own (boosted) clock. */
+  private dying: { actor: Actor; t: number; contact: number; landed: boolean } | null = null
+  private killCamStarted = false
+  private clockInsertUntil = 0
   private posterTex: CanvasTexture | null = null
   private posterCanvas = document.createElement('canvas')
   private cards: Object3D[] = []
@@ -206,7 +218,6 @@ export class Director {
     this.studio = new PortraitStudio(c.renderer.gl, c.assets)
     this.player = new Actor(c.assets.player, {
       gun: c.gun ? propObject(c.gun) : null,
-      cloth: c.assets.cloth,
     })
     c.scene.add(this.player.root)
     this.player.root.visible = false
@@ -224,18 +235,21 @@ export class Director {
   private get portrait(): boolean {
     return this.c.rig.cam.aspect < 1
   }
-  /** Walk/standoff camera offset: tighter to the street axis on portrait phones so both men stay in frame. */
+  /** Walk/standoff camera offset: enough to see past you to him, on any aspect. */
   private get sideOff(): number {
-    return this.portrait ? 0.45 : 1.7
+    return this.portrait ? 0.9 : 1.25
   }
   private get lookOff(): number {
     return this.portrait ? 0 : 0.1
   }
   private get restFov(): number {
-    return this.portrait ? 56 : FEEL.fovRest
+    return this.portrait ? 50 : FEEL.fovRest
   }
   private get wideFov(): number {
-    return this.portrait ? 58 : 42
+    return this.portrait ? 52 : FEEL.fovWalk
+  }
+  private get waitFov(): number {
+    return this.portrait ? 46 : FEEL.fovWait
   }
 
   private get reduced(): boolean {
@@ -330,6 +344,7 @@ export class Director {
     this.timeScale = 1
     this.satTarget = 1
     this.bossPhase = 1
+    this.midnightBells = 0
     this.callIsScream = false
     const boss = this.outlaw.gimmick === 'boss'
     const under = this.outlaw.gimmick === 'underboss'
@@ -473,6 +488,7 @@ export class Director {
     const c = this.c
     const o = this.outlaw
     this.enter('cock')
+    this.dying = null
     c.save.attempts[this.level] = (c.save.attempts[this.level] ?? 0) + 1
     persist(c.save)
     this.resetPositions()
@@ -577,7 +593,7 @@ export class Director {
         if (this.phaseT > FEEL.loseRetryPress) this.retry()
         break
       case 'coward':
-        if (this.phaseT > 1.0) this.retry()
+        if (this.phaseT > FEEL.loseRetryPress) this.retry()
         break
       default:
         break
@@ -696,7 +712,7 @@ export class Director {
         if (this.phaseT > FEEL.loseAutoRetry) this.retry()
         break
       case 'coward':
-        if (this.phaseT > FEEL.cowardAutoRetry) this.retry()
+        this.tickCoward()
         break
       case 'end':
         this.tickEnd(realDt)
@@ -704,9 +720,13 @@ export class Director {
     }
     // hitstop / slow-mo
     const dt = realDt * this.timeScale
-    this.player.update(dt)
-    this.enemy?.update(dt)
+    // The dying man's clip never crawls below victimMinScale, so the fall reads in slow-mo.
+    const dyingDt = this.timeScale > 0 ? realDt * Math.max(this.timeScale, FEEL.victimMinScale) : 0
+    const dying = this.dying?.actor
+    this.player.update(dying === this.player ? dyingDt : dt)
+    this.enemy?.update(dying === this.enemy ? dyingDt : dt)
     this.rifleman?.update(dt)
+    this.tickDying(dyingDt)
     this.tickAmbience(realDt)
     this.tickPresentation(realDt)
     this.tickCards(dt)
@@ -754,9 +774,10 @@ export class Director {
       'walk',
       () => {
         const P = p.root.position
+        const back = this.portrait ? 5.2 : 4.6
         return {
-          pos: V(P.x + this.sideOff, 1.2, P.z - 3.4),
-          look: V(P.x, 1.15, P.z + 1.2),
+          pos: V(P.x + this.sideOff, 1.3, P.z - back),
+          look: V(P.x + this.sideOff * 0.2, 1.15, P.z + 2.5),
           fov: this.wideFov,
           handheld: 0.25,
         }
@@ -894,11 +915,11 @@ export class Director {
     c.hud.setPips(this.paces, false)
     this.player.stopWalk(0.2)
     this.enemy?.stopWalk(0.2)
-    // music ducks and muffles (still present), wind drops
-    c.audio.musicLowpass(900, 0.9)
-    c.audio.musicLevel(-9, 0.9)
+    // music ducks gently (still clearly there), wind drops
+    c.audio.musicLowpass(FEEL.waitLowpass, 0.9)
+    c.audio.musicLevel(FEEL.waitDuckDb, 0.9)
     this.windLoop?.set(0.14, 0.9)
-    this.standoffShot(false, 0.8)
+    this.standoffShot(false, 1.2)
   }
 
   /** True while the duellists stand back to back waiting for the bell. */
@@ -906,21 +927,28 @@ export class Director {
     return this.outlaw.gimmick !== 'boss'
   }
 
-  /** The walk framing, held: in front of you, his back far behind you. */
+  /**
+   * The standoff: a longer lens from in front of you, pulled back so he reads
+   * clearly past your shoulder, his back to you down the street.
+   */
   private standoffShot(dolly: boolean, blend: number): void {
     const p = this.player
+    const e = this.enemy
     this.pushing = dolly
     this.pushStart = this.realTime
     this.c.rig.cut(
       dolly ? 'wait' : 'stop',
       () => {
         const P = p.root.position
+        const E = e ? e.root.position : V(0, 0, P.z + 9)
         const k = this.waitPush()
+        const back = this.portrait ? 6.2 : 5.4
+        const side = this.sideOff
         return {
-          pos: V(P.x + this.sideOff - k * 0.3, 1.2, P.z - 3.4 + k),
-          look: V(P.x, 1.2, P.z + 1.2),
-          fov: this.wideFov,
-          handheld: 0.2,
+          pos: V(P.x + side * (1 - k * 0.15), 1.32, P.z - back + k),
+          look: V(P.x + side * 0.22, 1.2, MathUtils.lerp(P.z, E.z, 0.5)),
+          fov: this.waitFov,
+          handheld: 0.15,
         }
       },
       blend,
@@ -930,10 +958,11 @@ export class Director {
   private pushStart = 0
   private pushing = false
 
-  /** Current slow dolly-in distance during the wait (0.15 m/s, capped). */
+  /** Current slow, eased dolly-in during the wait (settles toward 0.9 m). */
   private waitPush(): number {
     if (!this.pushing || this.reduced) return 0
-    return Math.min(1.2, (this.realTime - this.pushStart) * 0.15)
+    const t = this.realTime - this.pushStart
+    return 0.9 * (1 - Math.exp(-t / 4))
   }
 
   /** Over-the-shoulder standoff framing; `dolly` adds the slow push-in of the wait. */
@@ -942,9 +971,11 @@ export class Director {
     const e = this.enemy
     this.pushing = dolly
     this.pushStart = this.realTime
+    const boss = this.outlaw.gimmick === 'boss'
     this.c.rig.cut(
       dolly ? 'wait' : 'ots',
       () => {
+        if (boss) return this.bossPose(this.waitPush() * 0.5, 0)
         const P = p.root.position
         const E = e ? e.root.position : V(0, 0, 10)
         const dist = Math.abs(E.z - P.z)
@@ -954,6 +985,33 @@ export class Director {
       },
       blend,
     )
+  }
+
+  /**
+   * The boss standoff: low behind your right shoulder, tilted up so the clock
+   * face the whole duel hangs on stays in frame above him.
+   */
+  private bossPose(push: number, fovIn: number): Pose {
+    const P = this.player.root.position
+    const portrait = this.portrait
+    const pos = V(P.x - (portrait ? 0.55 : 0.9), 1.05, P.z - 2.6 + push)
+    const pitch = MathUtils.degToRad(portrait ? 15 : 13)
+    const look = V(pos.x + (portrait ? 0.55 : 1.1), pos.y + Math.tan(pitch) * 10, pos.z + 10)
+    return { pos, look, fov: (portrait ? 60 : 44) - fovIn, handheld: 0.15 }
+  }
+
+  /** A calm insert on the clock face (boss count). */
+  private clockInsert(seconds: number): void {
+    this.clockInsertUntil = this.realTime + seconds
+    const face = V(0, 12.2, STREET.churchZ - 3.22)
+    this.c.rig.cut('clock', (t) => {
+      const k = easeInOutCubic(clamp01(t / Math.max(0.1, seconds)))
+      return {
+        pos: V(0.4, 11.5, face.z - 5.6 + k * 0.35),
+        look: face,
+        fov: this.portrait ? 60 : 26,
+      }
+    })
   }
 
   private tickTurn(): void {
@@ -1003,7 +1061,8 @@ export class Director {
     }
     this.fakes.sort((a, b) => a.at - b.at)
     c.audio.heartbeat(FEEL.heartStartBpm)
-    c.audio.musicLevel(-9, fromPause ? 0.1 : 0.5)
+    c.audio.musicLevel(FEEL.waitDuckDb, fromPause ? 0.1 : 0.5)
+    c.audio.musicLowpass(FEEL.waitLowpass, fromPause ? 0.1 : 0.5)
     this.windLoop?.set(0.12, 0.6)
     if (rng() < 0.3) {
       const tw = c.tumbleweeds.find((t) => !t.active)
@@ -1131,8 +1190,8 @@ export class Director {
     if (!this.bellScheduled) {
       this.bellVoice = c.audio.play('bell', { gain: 1, pos: c.world.bellPos, reverb: 0.5 })
     }
-    c.hud.call(this.callIsScream ? 'DRAW!' : 'DRAW!', 1400)
-    c.hud.fake(this.callIsScream ? '[HE SCREAMS] [BELL TOLLS]' : '[BELL TOLLS]')
+    c.hud.call('DRAW!', FEEL.callHoldMs)
+    c.hud.fake(this.callIsScream ? '[HE SCREAMS] [BELL TOLLS]' : '[BELL TOLLS]', FEEL.callCaptionMs)
     c.hud.letterbox(false)
     c.audio.heartbeat(0)
     if (!this.reduced) c.renderer.grade.u('flash').value = 0.5
@@ -1181,15 +1240,19 @@ export class Director {
     const e = this.enemy
     const start = this.realTime
     const reduced = this.reduced
-    const push0 = this.waitPush()
+    const boss = this.outlaw.gimmick === 'boss'
+    const push0 = boss ? this.waitPush() * 0.5 : 0
     this.c.rig.cut('call', () => {
+      const k = reduced
+        ? 0
+        : easeInOutCubic(clamp01(((this.realTime - start) * 1000) / FEEL.callPushMs))
+      if (boss) return this.bossPose(push0, k * (FEEL.fovRest - FEEL.fovCall))
       const P = p.root.position
       const E = e ? e.root.position : V(0, 0, 10)
       const dist = Math.abs(E.z - P.z)
       const look = V(-dist * this.lookOff, 1.4, E.z)
-      const pos = V(P.x - 0.55, 1.65, P.z - 1.8 + push0)
+      const pos = V(P.x - 0.55, 1.65, P.z - 1.8)
       if (reduced) return { pos, look, fov: this.restFov }
-      const k = easeInOutCubic(clamp01(((this.realTime - start) * 1000) / FEEL.callPushMs))
       return {
         pos,
         look,
@@ -1365,38 +1428,70 @@ export class Director {
     const c = this.c
     const e = this.enemy
     if (!e) return
-    e.play('Death', 0.06, true)
-    const hp = e.headPos(V())
-    c.puffs.emit(hp.clone().setY(1.2), 12, {
-      speed: 1,
-      size: 0.1,
-      life: 0.8,
-      color: 0x7a2a1a,
-      alpha: 0.5,
+    const death = e.play('Death', 0.06, true)
+    const clip = death?.getClip().duration ?? 1.2
+    this.dying = { actor: e, t: 0, contact: clip * 0.55, landed: false }
+    // Impact at the chest: a little blood mist and dust off his clothes, blown away from the shot.
+    const from = this.player.root.position
+    const away = V(e.root.position.x - from.x, 0, e.root.position.z - from.z).normalize()
+    const hit = e.root.position
+      .clone()
+      .add(V(0, e.height * 0.72, 0))
+      .addScaledVector(away, -0.12)
+    c.puffs.emit(hit, 22, {
+      speed: 0.7,
+      size: 0.06,
+      grow: 0.9,
+      life: 0.9,
+      color: 0x6e1810,
+      alpha: 0.38,
+      up: 0.05,
+      spread: 0.12,
+      dir: away.clone().multiplyScalar(0.9),
+      drag: 3,
     })
-    setTimeout(() => {
-      c.audio.play('bodyfall', { gain: 0.9, pos: e.root.position })
-      c.puffs.emit(e.root.position.clone().add(V(0, 0.05, 0.6)), 40, {
-        speed: 1.4,
-        size: 0.18,
-        life: 1.6,
-        alpha: 0.45,
-        up: 0.6,
-      })
-    }, 650)
+    c.puffs.emit(hit, 16, {
+      speed: 0.5,
+      size: 0.09,
+      grow: 1.2,
+      life: 1.3,
+      color: 0xc8b08a,
+      alpha: 0.3,
+      up: 0.15,
+      spread: 0.2,
+      dir: away.clone().multiplyScalar(0.5),
+    })
     const hat = e.popHat()
-    this.flyingHat = hat
     if (hat) {
       const big = this.hatShot
       c.physics.add(
         hat,
-        V(between(-0.4, 0.4), big ? 4.5 : 2.2, big ? 1.6 : 1.0),
+        V(between(-0.4, 0.4), big ? 4.5 : 2.2, 0).addScaledVector(away, big ? 1.6 : 1.0),
         V(between(-6, 6), between(-4, 4), big ? 14 : 6),
       )
     }
   }
 
-  private flyingHat: Object3D | null = null
+  /** Advance the dying man's clock; the body fall lands on ground contact. */
+  private tickDying(dt: number): void {
+    const d = this.dying
+    if (!d || d.landed) return
+    d.t += dt
+    if (d.t < d.contact) return
+    d.landed = true
+    const c = this.c
+    const p = d.actor.root.position
+    c.audio.play('bodyfall', { gain: 0.9, pos: p })
+    const away = V(p.x - this.player.root.position.x, 0, p.z - this.player.root.position.z)
+    away.normalize()
+    c.puffs.emit(p.clone().addScaledVector(away, 0.7).setY(0.05), 40, {
+      speed: 1.2,
+      size: 0.16,
+      life: 1.5,
+      alpha: 0.4,
+      up: 0.5,
+    })
+  }
 
   private killRifleman(): void {
     const c = this.c
@@ -1423,91 +1518,100 @@ export class Director {
     this.fallers = this.fallers.filter((f) => f.obj.position.y > 0)
   }
 
-  private win(r: number): void {
+  private win(press: number): void {
     const c = this.c
     const o = this.outlaw
+    // The ledger records the first press (the one on the card), not the last.
+    const r = this.lastReaction ?? press
     this.enter('win')
     this.outcomeT = 0
     this.resultShown = false
-    this.killEnemyAnim()
+    this.killCamStarted = false
     c.audio.heartbeat(0)
     c.hud.clearCall()
+    c.hud.clearCaptions()
     const grade = gradeFor(r, this.secondChance)
     const best = c.save.best[this.level]
     if (!best || r < best.ms) {
       c.save.best[this.level] = { ms: r, grade, attempts: c.save.attempts[this.level] ?? 1 }
     } else best.attempts = c.save.attempts[this.level] ?? best.attempts
     persist(c.save)
-    // 70 ms hitstop, then the red frame, then 0.15× kill cam.
+    // 70 ms hitstop, the red frame, then the kill cam.
     this.timeScale = 0
     this.killDur = this.reduced ? FEEL.killCamSecondsReduced : FEEL.killCamSeconds
     if (o.gimmick === 'boss' && this.bossPhase === 1) {
       this.enter('bossWound')
       return
     }
-    if (o.gimmick === 'boss') this.killDur = this.reduced ? 1 : 3
-    this.killOrbit = o.gimmick === 'boss' ? Math.PI * 2 : MathUtils.degToRad(25)
+    this.killEnemyAnim()
+    if (o.gimmick === 'boss') this.killDur = this.reduced ? 0.8 : FEEL.bossKillSeconds
+    // only the boss gets a (very slow) orbit; everyone else a gentle push-in
+    this.killOrbit = MathUtils.degToRad(o.gimmick === 'boss' ? 4 : 0)
     c.audio.play('shout', { gain: 0.9, when: c.audio.now + 0.35 })
-    this.killShot()
     this.drawPosterTex('dead')
   }
 
+  /**
+   * The kill cam: a two-shot from behind the shooter on his gun side, the
+   * victim big on a third. Cut on the red frame, then only a slow, eased drift.
+   */
   private killShot(): void {
     const p = this.player
     const e = this.enemy
     const r = this.rifleman
     const start = this.realTime
-    const hatFollow = this.hatShot
-    const dur = this.killDur
     const orbit = this.killOrbit
     const under = this.outlaw.gimmick === 'underboss'
-    const side = rng() < 0.5 ? 1 : -1
+    const aspect = this.c.rig.cam.aspect
+    const E0 = e ? e.root.position.clone() : V(0, 0, 10)
+    const shot = twoShot(p.root.position, E0, aspect, 1, 0.4, e?.height ?? 1.78)
+    // the roof shot lasts this long (real time) before easing down to the street
+    const roofFor = this.killDur * 0.45 + FEEL.killCamLead
     this.c.rig.cut(
       'kill',
       () => {
         const t = this.realTime - start
-        const P = p.root.position
-        const E = e ? e.root.position : V(0, 0, 10)
-        let rp: Pose | null = null
+        const main = this.drift(shot, E0, t, orbit)
         if (under && r) {
           const R = r.root.position
-          rp = { pos: V(R.x - 5, R.y + 0.4, R.z - 5), look: V(R.x, R.y + 1.0, R.z), fov: 40 }
-          if (t < dur * 0.45) return rp
-        }
-        const mid = P.clone().add(E).multiplyScalar(0.5)
-        const sep = Math.abs(E.z - P.z)
-        const dist = Math.min(7, sep * 0.45 + 3)
-        // widen the lens rather than backing into the storefronts
-        const aspect = this.c.rig.cam.aspect
-        const halfW = Math.atan((sep * 0.3 + 1.4) / dist)
-        const kfov = MathUtils.clamp(
-          MathUtils.radToDeg(2 * Math.atan(Math.tan(halfW) / aspect)),
-          32,
-          75,
-        )
-        const focus = mid.clone().lerp(E, 0.55)
-        const a = side * orbit * easeInOutCubic(clamp01(t / Math.max(dur, 0.01)))
-        const pos = V(side * Math.cos(a) * dist, 1.15, focus.z + Math.sin(a) * dist)
-        const hat = this.flyingHat
-        if (hatFollow && hat) {
-          const hp = hat.position
-          return {
-            pos: V(hp.x + 1.8 * side, Math.max(0.4, hp.y + 0.3), hp.z - 1.6),
-            look: hp.clone(),
-            fov: 34,
+          const rp: Pose = {
+            pos: V(R.x - 5, R.y + 0.4, R.z - 5),
+            look: V(R.x, R.y + 1.0, R.z),
+            fov: 40,
           }
-        }
-        const main: Pose = { pos, look: V(0, 1.0, focus.z), fov: kfov, handheld: 0.1 }
-        if (rp && t < dur * 0.45 + 0.5) {
+          if (t < roofFor) return rp
           // ease from the roof down to the street instead of snapping
-          const k = easeInOutCubic(clamp01((t - dur * 0.45) / 0.5))
+          const k = easeInOutCubic(clamp01((t - roofFor) / 0.8))
           main.pos = rp.pos.clone().lerp(main.pos, k)
           main.look = rp.look.clone().lerp(main.look, k)
+          main.fov = MathUtils.lerp(rp.fov, main.fov, k)
         }
         return main
       },
-      0.5,
+      0,
     )
+  }
+
+  /** A framing with a slow eased orbit around the victim and a gentle push-in. */
+  private drift(f: Framing, focus: Vector3, t: number, orbit: number): Pose {
+    const k = easeInOutCubic(clamp01(t / 3.2))
+    const a = orbit * k
+    const rel = f.pos.clone().sub(focus)
+    const cs = Math.cos(a)
+    const sn = Math.sin(a)
+    const pos = V(rel.x * cs + rel.z * sn, rel.y, -rel.x * sn + rel.z * cs).add(focus)
+    const lrel = f.look.clone().sub(focus)
+    const look = V(lrel.x * cs + lrel.z * sn, lrel.y, -lrel.x * sn + lrel.z * cs).add(focus)
+    pos.lerp(look, 0.035 * k)
+    return { pos, look, fov: f.fov, handheld: 0.08 }
+  }
+
+  /** Time scale through an outcome: 1x lead, slow segment, eased ramp back to 1x. */
+  private slowMo(k: number, lead: number, slow: number, scale: number): number {
+    if (k < lead) return 1
+    if (k < lead + slow) return scale
+    const u = clamp01((k - lead - slow) / FEEL.rampBack)
+    return scale + (1 - scale) * u * u * (3 - 2 * u)
   }
 
   private tickWin(realDt: number): void {
@@ -1518,33 +1622,32 @@ export class Director {
       this.timeScale = 0
       return
     }
+    const scale = this.reduced ? FEEL.killCamScaleReduced : FEEL.killCamScale
     if (this.outcomeT === 0) {
       this.outcomeT = t
       if (!this.reduced) this.silhouetteFrames = FEEL.redFrames
       else c.renderer.grade.u('flash').value = 0.25
     }
-    const k = t - hit
-    if (k < this.killDur) this.timeScale = FEEL.killCamScale
-    else
-      this.timeScale = Math.min(
-        1,
-        FEEL.killCamScale + ((k - this.killDur) / FEEL.rampBack) * (1 - FEEL.killCamScale),
-      )
-    if (k > this.killDur && c.rig.name === 'kill' && this.outlaw.gimmick !== 'boss') {
-      // ease back to the OTS while time ramps up
-      this.otsShot(false, 1.0)
+    if (!this.killCamStarted) {
+      // cut to the two-shot on the red frame, and show the shot from there
+      this.killCamStarted = true
+      this.killShot()
+      const m = this.player.muzzle(V())
+      c.flash.fire(m, 0.9)
+      c.world.flashLight.position.copy(m)
+      c.world.flashLight.intensity = 40
     }
+    const k = t - hit
+    this.timeScale = this.slowMo(k, FEEL.killCamLead, this.killDur, scale)
     // music swells back 400 ms after the kill
     if (k > 0.4 && k - realDt <= 0.4) {
       c.audio.musicLowpass(18000, 0.4)
-      c.audio.musicLevel(0, 0.4)
+      c.audio.musicLevel(0, 0.6)
     }
     if (this.outlaw.gimmick === 'boss') {
-      if (k > 0.5 && this.midnightBells < 12 && k > 0.5 + this.midnightBells * 0.9) {
-        c.audio.play('bell', { gain: 0.8, pos: c.world.bellPos, reverb: 0.6 })
-        this.midnightBells++
-      }
-      if (k > this.killDur + 0.5) this.toEnd()
+      if (k > 0.5 && this.midnightBells < 12 && k > 0.5 + this.midnightBells * 0.9) this.toll()
+      // let at least six of the twelve tolls ring before the ledger
+      if (this.midnightBells >= 6 && k > this.killDur + 1) this.toEnd()
       return
     }
     if (!this.resultShown && t >= FEEL.resultAt) {
@@ -1616,6 +1719,7 @@ export class Director {
     this.loseReason = reason
     c.audio.heartbeat(0)
     c.hud.clearCall()
+    c.hud.clearCaptions()
     c.rig.addTrauma(FEEL.shake.hit)
     c.audio.play('bodyfall', { gain: 0.8, when: c.audio.now + 0.5 })
     c.audio.play('bell', {
@@ -1701,43 +1805,54 @@ export class Director {
     this.player.stopWalk(0.08)
     e?.stopWalk(0.08)
     this.turnAnim = []
-    // You turn and shoot him where he stands.
+    c.hud.clearCaptions()
+    // You turn and shoot him in the back where he stands: the kill-cam two-shot, at 0.4x.
     this.player.root.rotation.y = 0
     this.playerFireFx()
     this.enemyAlive = false
     this.killEnemyAnim()
-    // hard cut to silence, then the town gasps
-    c.audio.musicLevel(-Infinity, 0.12)
-    this.windLoop?.set(0.05, 0.05)
-    c.audio.play('gasp', { gain: 1, when: c.audio.now + 0.5, reverb: 0.4 })
+    this.timeScale = this.reduced ? 1 : FEEL.cowardScale
+    this.cowardBeat = false
+    this.cowardCard = false
     c.save.cowardice++
     persist(c.save)
     this.drawPosterTex('coward')
-    const p = this.player
-    this.c.rig.cut(
-      'coward',
-      (t) => {
-        const P = p.root.position
-        const E = e ? e.root.position : V(0, 0, 3)
-        const mid = P.clone().add(E).multiplyScalar(0.5)
-        return { pos: V(6 + t * 0.1, 1.3, mid.z), look: V(0, 1.0, mid.z), fov: 40 }
-      },
-      0.6,
-    )
-    setTimeout(() => {
-      if (this.phase !== 'coward') return
+    const E0 = e ? e.root.position.clone() : V(0, 0, 3)
+    const shot = twoShot(this.player.root.position, E0, c.rig.cam.aspect, 1, 0.4, e?.height ?? 1.78)
+    const start = this.realTime
+    c.rig.cut('coward', () => this.drift(shot, E0, this.realTime - start, 0), 0)
+  }
+
+  private cowardBeat = false
+  private cowardCard = false
+
+  private tickCoward(): void {
+    const c = this.c
+    const t = this.phaseT
+    this.timeScale = this.reduced ? 1 : this.slowMo(t, 0, FEEL.cowardSlow, FEEL.cowardScale)
+    if (!this.cowardBeat && t >= FEEL.cowardSlow) {
+      // then a hard cut to silence, and the town gasps
+      this.cowardBeat = true
+      c.audio.musicLevel(-Infinity, 0.06)
+      this.windLoop?.set(0.05, 0.05)
+      c.audio.play('gasp', { gain: 1, when: c.audio.now + 0.05, reverb: 0.4 })
+    }
+    if (!this.cowardCard && t >= FEEL.cowardCardAt) {
+      this.cowardCard = true
+      const n = c.save.cowardice
       const img = this.posterCanvas.toDataURL('image/jpeg', 0.8)
       c.hud.showCard(
         'coward',
         'COWARD.',
         '',
-        `${c.save.cowardice} shot in the back. No bounty.`,
+        `${n} ${n === 1 ? 'man' : 'men'} shot in the back. No bounty.`,
         'press to try again',
       )
       const card = c.hud.root.querySelector('.ow-card-big')
       if (card)
         card.innerHTML = `<img alt="Wanted poster stamped: shot in the back, no bounty" src="${img}">`
-    }, 700)
+    }
+    if (t > FEEL.cowardAutoRetry) this.retry()
   }
 
   private retry(): void {
@@ -1759,7 +1874,7 @@ export class Director {
       c.save.attempts[this.level] = (c.save.attempts[this.level] ?? 0) + 1
       this.lastReaction = null
       this.secondChance = false
-      this.otsShot(true)
+      this.dying = null
       this.enterWait(false)
       return
     }
@@ -1778,14 +1893,16 @@ export class Director {
     const c = this.c
     this.enter('bossClock')
     this.bossPhase = 1
-    this.strikes = 0
-    this.nextStrike = performance.now() + 1600
+    // The count starts at six: enough to build, short enough not to drag.
+    this.strikes = 5
+    this.clockInsertUntil = 0
+    this.nextStrike = performance.now() + 1000
     this.miscountAt = Math.floor(between(8, 11))
     this.bellPreArmed = false
     this.bellScheduled = false
     c.world.setClock(11, 59)
-    c.audio.musicLevel(-9, 0.6)
-    c.audio.musicLowpass(900, 0.6)
+    c.audio.musicLevel(FEEL.waitDuckDb, 0.6)
+    c.audio.musicLowpass(FEEL.waitLowpass, 0.6)
     c.audio.heartbeat(FEEL.heartStartBpm)
     this.windLoop?.set(0.1, 0.6)
     this.player.root.rotation.y = 0
@@ -1799,6 +1916,8 @@ export class Director {
     c.audio.heartbeat(Math.min(FEEL.heartMaxBpm, FEEL.heartStartBpm + 4 * sec))
     this.vignette = MathUtils.lerp(FEEL.vignetteBase, FEEL.vignetteWait, clamp01(sec / 6))
     const isLast = this.strikes === 11
+    // back from a clock-face insert to the standoff
+    if (this.c.rig.name === 'clock' && this.realTime >= this.clockInsertUntil) this.otsShot(true, 0)
     // schedule each strike on the audio clock slightly ahead
     if (!this.bellPreArmed && now >= this.nextStrike - FEEL.bellLookaheadMs) {
       this.bellPreArmed = true
@@ -1830,7 +1949,9 @@ export class Director {
       }
       c.hud.fake(`[bell strikes ${n}]`)
       this.nextStrike = now + between(BOSS_STRIKE_INTERVAL[0], BOSS_STRIKE_INTERVAL[1]) * 1000
-      if (n === 6 && !this.reduced) c.hud.letterbox(true)
+      // calm inserts on the clock face: the first strike, and the one before the last
+      if (n === 6) this.clockInsert(1.1)
+      else if (n === 11) this.clockInsert(0.8)
     }
   }
 
@@ -1900,6 +2021,17 @@ export class Director {
 
   private tickEnd(dt: number): void {
     this.endT += dt
+    // the victory bells keep tolling to twelve under the ledger
+    if (this.midnightBells > 0 && this.midnightBells < 12 && this.realTime >= this.nextToll)
+      this.toll()
+  }
+
+  private nextToll = 0
+
+  private toll(): void {
+    this.c.audio.play('bell', { gain: 0.8, pos: this.c.world.bellPos, reverb: 0.6 })
+    this.midnightBells++
+    this.nextToll = this.realTime + 0.9
   }
 
   // --------------------------------------------------------- presentation
@@ -1993,8 +2125,8 @@ export class Director {
       (this.phase !== 'walk' && this.phase !== 'wait' && this.phase !== 'call')
     )
       this.wind += (0.35 - this.wind) * Math.min(1, realDt)
-    // muzzle light decay
-    c.world.flashLight.intensity *= Math.exp(-realDt * 30)
+    // muzzle light decays in game time, so it lingers through the slow-mo
+    c.world.flashLight.intensity *= Math.exp(-realDt * Math.max(this.timeScale, 0.05) * 22)
   }
 
   // ------------------------------------------------------------- debug views
@@ -2058,13 +2190,13 @@ export class Director {
   }
 
   /** Debug overlay text. */
-  debugText(fps: number, ms: number): string {
+  debugText(fps: number, ms: number, calls: number, tris: number): string {
     return [
       `fps ${fps.toFixed(0)}  frame ${ms.toFixed(1)} ms  dpr ${this.c.renderer.dpr.toFixed(2)} ${this.c.renderer.tier}`,
       `level ${this.level + 1} ${this.outlaw.name}  phase ${this.phase}${this.paused ? ' (paused)' : ''}`,
       `paces ${this.paces}/${this.target}  W ${(this.waitMs / 1000).toFixed(2)} s  E ${this.plan ? this.plan.e.toFixed(0) : '-'} ms`,
       `last reaction ${this.lastReaction === null ? '-' : `${this.lastReaction.toFixed(1)} ms`}`,
-      `draws ${this.c.renderer.gl.info.render.calls}  tris ${this.c.renderer.gl.info.render.triangles}`,
+      `draws ${calls}  tris ${tris}`,
     ].join('\n')
   }
 }

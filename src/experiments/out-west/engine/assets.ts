@@ -2,7 +2,6 @@ import type { Texture } from 'three'
 import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.js'
 import { type GLTF, GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js'
 import type { BodyKey, Look } from '../data/outlaws'
-import type { ClothKey } from '../scene/cloth'
 import { loadTex } from '../scene/textures'
 
 const ROOT = '/experiments/out-west/3d'
@@ -18,7 +17,6 @@ export interface Assets {
     vplanks: Texture
     vplanksN: Texture
   }
-  cloth: Record<ClothKey, Texture>
   /** Character part files, lazily loaded and cached. */
   body(key: BodyKey): Promise<GLTF>
   /** Already-loaded part (or null). */
@@ -41,7 +39,7 @@ export async function loadAssets(
   loader.setMeshoptDecoder(MeshoptDecoder)
   let done = 0
   const firstKeys = lookKeys(firstLook)
-  const total = 17 + firstKeys.length
+  const total = 8 + firstKeys.length
   const tick = <T>(p: Promise<T>): Promise<T> =>
     p.then((v) => {
       done++
@@ -65,23 +63,8 @@ export async function loadAssets(
     return p
   }
 
-  const cloth = (k: ClothKey) => tex(`cloth/${k}`, false)
   const first = Promise.all(firstKeys.map((k) => tick(body(k))))
-  const [
-    player,
-    props,
-    ground,
-    groundN,
-    planks,
-    planksN,
-    vplanks,
-    vplanksN,
-    denim,
-    leather,
-    wool,
-    linen,
-    hessian,
-  ] = await Promise.all([
+  const [player, props, ground, groundN, planks, planksN, vplanks, vplanksN] = await Promise.all([
     tick(glb('player')),
     tick(glb('props')),
     tex('ground_diff', true),
@@ -90,18 +73,12 @@ export async function loadAssets(
     tex('planks_nor', false),
     tex('vplanks_diff', true),
     tex('vplanks_nor', false),
-    cloth('denim'),
-    cloth('leather'),
-    cloth('wool'),
-    cloth('linen'),
-    cloth('hessian'),
   ])
   await first
   return {
     player,
     props,
     tex: { ground, groundN, planks, planksN, vplanks, vplanksN },
-    cloth: { denim, leather, wool, linen, hessian },
     body,
     bodyNow: (k) => loaded.get(k) ?? null,
     lookReady: async (look) => {

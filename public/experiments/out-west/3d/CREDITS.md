@@ -22,7 +22,8 @@ given anyway. All models were downloaded as GLB, trimmed and recompressed (mesho
 
 The outlaws are kitbashed at runtime: heads, bodies, legs and boots from these characters are
 rebound to one shared rig, then dressed with procedural hats, coats, ponchos, bandoliers, facial
-hair and badges, and given fabric detail from the Poly Haven scans below.
+hair and badges. They are shaded procedurally (rim light and per-material colour and roughness
+variation); no fabric textures are used.
 
 Quaternius: https://quaternius.com
 
@@ -50,16 +51,6 @@ Quaternius: https://quaternius.com
 | `tex/ground_*.webp` | "Gravelly Sand" — https://polyhaven.com/a/gravelly_sand | CC0 1.0 |
 | `tex/planks_*.webp` | "Weathered Plank Siding" — https://polyhaven.com/a/weathered_plank_siding | CC0 1.0 |
 | `tex/vplanks_*.webp` | "Old Planks 02" — https://polyhaven.com/a/old_planks_02 | CC0 1.0 |
-
-### Fabric scans (character cloth detail, `tex/cloth/*.webp`, greyscale 512 px)
-
-| File | Source | Licence |
-|---|---|---|
-| `denim.webp` | "Denim Fabric" — https://polyhaven.com/a/denim_fabric | CC0 1.0 |
-| `leather.webp` | "Brown Leather" — https://polyhaven.com/a/brown_leather | CC0 1.0 |
-| `wool.webp` | "Caban" — https://polyhaven.com/a/caban | CC0 1.0 |
-| `linen.webp` | "Rough Linen" — https://polyhaven.com/a/rough_linen | CC0 1.0 |
-| `hessian.webp` | "Hessian 230" — https://polyhaven.com/a/hessian_230 | CC0 1.0 |
 
 ## Sound effects (freesound.org, CC0)
 

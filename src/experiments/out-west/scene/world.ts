@@ -21,6 +21,7 @@ import {
 } from 'three'
 import { GeoBuilder } from './geo'
 import { type Preset, presetAt } from './presets'
+import { RIM } from './style'
 import { clockCanvas, type SignSpec, signAtlas } from './textures'
 
 /** Street layout (metres). The street runs along Z; the duel is centred on the origin. */
@@ -675,6 +676,8 @@ float gn(vec2 p){ vec2 i=floor(p); vec2 f=fract(p); f=f*f*(3.0-2.0*f);
     u.stars.value = p.stars
     u.moon.value = p.moon
     if (p.moon > 0.5) u.moonDir.value.copy(dir)
+    RIM.color.value.copy(p.rimColor)
+    RIM.strength.value = p.rim
     this.windowMat.emissiveIntensity = p.windows * 1.6
     this.clockMat.emissiveIntensity = day > 0.95 ? (day - 0.95) * 20 * 0.9 : 0
   }

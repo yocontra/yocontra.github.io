@@ -115,3 +115,70 @@ export const clamp01 = (t: number): number => Math.min(1, Math.max(0, t))
 export function dollyDistance(d: number, fovFrom: number, fovTo: number): number {
   return (d * Math.tan(MathUtils.degToRad(fovFrom) / 2)) / Math.tan(MathUtils.degToRad(fovTo) / 2)
 }
+
+export interface Framing {
+  pos: Vector3
+  look: Vector3
+  fov: number
+}
+
+/**
+ * The kill-cam two-shot: from behind the shooter on his gun side, about 30°
+ * off the duel axis, with the victim filling `frac` of the frame height on a
+ * third (centred on portrait screens) and the shooter in frame on the other
+ * side. Tries a few camera placements and keeps the best-composed one.
+ */
+export function twoShot(
+  shooter: Vector3,
+  victim: Vector3,
+  aspect: number,
+  side: 1 | -1,
+  frac = 0.4,
+  victimHeight = 1.78,
+): Framing {
+  const axis = new Vector3(victim.x - shooter.x, 0, victim.z - shooter.z)
+  const sep = Math.max(0.4, axis.length())
+  axis.divideScalar(sep)
+  // the shooter's right-hand side while he faces the victim
+  const right = new Vector3(-axis.z, 0, axis.x).multiplyScalar(side)
+  const portrait = aspect < 1
+  const vC = new Vector3(victim.x, victimHeight * 0.53, victim.z)
+  const sC = new Vector3(shooter.x, 1.3, shooter.z)
+  const backs = [2.4, 3.0, 3.6, 4.4, 5.4]
+  const sides = portrait ? [0.3, 0.45, 0.65, 0.9, 1.2] : [1.1, 1.5, 1.9, 2.4, 2.9]
+  const up = new Vector3(0, 1, 0)
+  const toV = new Vector3()
+  const toS = new Vector3()
+  let best: Framing | null = null
+  let bestScore = Number.POSITIVE_INFINITY
+  for (const back of backs) {
+    for (const so of sides) {
+      const pos = shooter.clone().addScaledVector(axis, -back).addScaledVector(right, so)
+      pos.y = 1.4
+      const dV = pos.distanceTo(vC)
+      const vfov = MathUtils.clamp(2 * Math.atan(victimHeight / (2 * frac * dV)), 0.24, 0.9)
+      const hHalf = Math.atan(Math.tan(vfov / 2) * aspect)
+      toV.set(vC.x - pos.x, 0, vC.z - pos.z).normalize()
+      toS.set(sC.x - pos.x, 0, sC.z - pos.z).normalize()
+      // signed horizontal angle from the victim to the shooter
+      const ang = Math.atan2(toV.z * toS.x - toV.x * toS.z, toV.dot(toS))
+      const ov = Math.atan(Math.tan(hHalf) * (portrait ? 0 : 1 / 3))
+      const sNdc = Math.tan(Math.abs(ang) - ov) / Math.tan(hHalf)
+      const offAxis = MathUtils.radToDeg(Math.atan2(so, back))
+      let score = Math.abs(back - 3.4) / 8
+      if (sNdc > 0.8) score += (sNdc - 0.8) * 10
+      if (sNdc < 0.4) score += (0.4 - sNdc) * 6
+      if (!portrait) score += Math.abs(offAxis - 32) / 25
+      if (score < bestScore) {
+        bestScore = score
+        // turn from the victim toward the shooter by `ov`: victim on one third, shooter on the other
+        const aim = toV.clone().applyAxisAngle(up, Math.sign(ang) * ov)
+        const flat = Math.hypot(vC.x - pos.x, vC.z - pos.z)
+        const look = pos.clone().addScaledVector(aim, flat)
+        look.y = vC.y
+        best = { pos, look, fov: MathUtils.radToDeg(vfov) }
+      }
+    }
+  }
+  return best ?? { pos: shooter.clone().add(new Vector3(0, 1.4, -3)), look: vC, fov: 30 }
+}

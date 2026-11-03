@@ -123,8 +123,14 @@ export async function createGame(o: GameOpts): Promise<Game> {
   let fpsFrames = 0
   let fps = 60
   let frameMs = 16
+  // The post passes would each reset renderer.info; count the whole frame instead.
+  const info = renderer.gl.info
+  info.autoReset = false
+  let frameCalls = 0
+  let frameTris = 0
   const loop = (now: number) => {
     requestAnimationFrame(loop)
+    info.reset()
     const raw = now - last
     last = now
     const realDt = Math.min(0.05, Math.max(0, raw / 1000))
@@ -163,7 +169,9 @@ export async function createGame(o: GameOpts): Promise<Game> {
     } else {
       renderer.render(realDt)
     }
-    if (o.debug) hud.setDebug(director.debugText(fps, frameMs))
+    frameCalls = info.render.calls
+    frameTris = info.render.triangles
+    if (o.debug) hud.setDebug(director.debugText(fps, frameMs, frameCalls, frameTris))
   }
   requestAnimationFrame(loop)
 
