@@ -87,11 +87,11 @@ export class TopDownCamera {
     this.camera.lookAt(tmp.set(this.target.x + ox, AIM_Y, this.target.z + oz))
   }
 
-  /** Snap without easing (spawn, respawn). */
-  snap(px: number, pz: number): void {
-    this.target.set(px, 0, pz)
-    this.lead.set(0, 0, 0)
-    this.update(px, pz, 0, 0, 0)
+  /** Snap without easing (spawn, respawn), already leading toward the aim (unit x, z). */
+  snap(px: number, pz: number, aimX = 0, aimZ = 0): void {
+    this.lead.set(aimX * this.reach.x, 0, aimZ * this.reach.z)
+    this.target.set(px + this.lead.x, 0, pz + this.lead.z)
+    this.update(px, pz, aimX, aimZ, 0)
   }
 }
 

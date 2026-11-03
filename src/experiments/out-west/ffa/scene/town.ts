@@ -1,5 +1,6 @@
 // biome-ignore-all lint/style/noExcessiveLinesPerFile: one town builder; the paint table and the per-feature builders share private helpers
 // biome-ignore-all lint/suspicious/noUnnecessaryConditions: array lookups narrowed by the layout's types
+// biome-ignore-all lint/complexity/noExcessiveCognitiveComplexity: addBuilding assembles walls, windows, roof, front and porch per building kind
 // biome-ignore-all lint/complexity/useMaxParams: geometry builders take positional numeric args (x, y, z, size…), mirroring three.js APIs
 /**
  * Perdition, built from `town.layout.json` (the same file the server builds its collision grid
@@ -34,6 +35,8 @@ import { addClockTower } from './clock-tower.ts'
 import { cutaway } from './cutaway.ts'
 import { dressCover } from './dressing.ts'
 import { bakeGroundMask, groundMesh } from './ground.ts'
+import { OUTSKIRTS_SEED, outskirtsGeometry } from './outskirts.ts'
+import { buildRoof, RK_PLAIN, roofSkin, roofSkins, tinColor } from './roofs.ts'
 
 interface Paint {
   wall: number
@@ -330,6 +333,7 @@ function makeMaterials(assets: Assets): TownMaterials {
   cutaway(kit, false)
   cutaway(wall, false)
   cutaway(stone, false)
+  roofSkins(roof)
   cutaway(roof, true)
   cutaway(wood, false)
   cutaway(windows, false)
@@ -516,20 +520,40 @@ function addBuilding(bs: Builders, b: Building, layout: TownLayout, id: number):
       addWindows(bs, b, side, b.floors)
     }
   }
-  // Roof.
-  const roof = new GeoBuilder(2)
-  const rc = bleach(p.roof)
-  if (b.kind === 'tower') {
-    roof.box(b.x + b.w / 2, h + 0.2, b.z + b.d / 2, b.w + 0.6, 0.4, b.d + 0.6, rc)
-    roof.pyramid(b.x + b.w / 2, h + 0.4, b.z + b.d / 2, b.w + 0.4, 5, rc)
-  } else if (p.gable) {
-    const axis = b.w >= b.d ? 'x' : 'z'
-    roof.gable(b.x + b.w / 2, h, b.z + b.d / 2, b.w, b.d, Math.min(b.w, b.d) * 0.32, axis, rc, 0.5)
-  } else {
-    // its underside 5 mm over the wall top, off the false front's bottom face (they z-fought)
-    roof.box(b.x + b.w / 2, h + 0.1225, b.z + b.d / 2, b.w + 0.5, 0.235, b.d + 0.5, rc)
-  }
-  const rg = roof.build()
+  // Roof: pitched, shingled or tin, with ridge and edge trim (see roofs.ts).
+  const skin = roofSkin(b.kind, id)
+  const span = front === 'n' || front === 's' ? b.w : b.d
+  const bays = p.falseFront && span > 13 ? 2 : 1
+  const built = buildRoof(
+    p.falseFront
+      ? {
+          b,
+          // the western roof: a low gable running back from the street, under the false front
+          axis: front === 'n' || front === 's' ? 'z' : 'x',
+          rise: Math.min(1.45, (span / bays / 2) * 0.55),
+          bays,
+          overhang: 0.35,
+          front,
+          skin,
+          color: skin === 'tin' ? tinColor(b.kind, id) : bleach(p.roof),
+          trim: p.trim,
+          wallColor: p.wall,
+        }
+      : {
+          b,
+          axis: b.w >= b.d ? 'x' : 'z',
+          rise: Math.min(b.w, b.d) * 0.32,
+          bays: 1,
+          overhang: 0.5,
+          front: null,
+          skin,
+          color: skin === 'tin' ? tinColor(b.kind, id) : bleach(p.roof),
+          trim: p.trim,
+          wallColor: p.wall,
+        },
+    g,
+  )
+  const rg = built.geometry
   rg.setAttribute(
     'bid',
     new BufferAttribute(new Float32Array(rg.getAttribute('position').count).fill(id), 1),
@@ -539,7 +563,7 @@ function addBuilding(bs: Builders, b: Building, layout: TownLayout, id: number):
     addDoorFrames(bs, b, PORCHED.has(b.kind) ? front : null)
   }
   if (p.falseFront) {
-    addFalseFront(bs, b, front, p)
+    addFalseFront(bs, b, front, p, built.heightAt)
   }
   if (PORCHED.has(b.kind)) {
     addPorch(bs, b, front)
@@ -558,7 +582,13 @@ function addBuilding(bs: Builders, b: Building, layout: TownLayout, id: number):
   }
 }
 
-function addFalseFront(bs: Builders, b: Building, front: Side, p: Paint): void {
+function addFalseFront(
+  bs: Builders,
+  b: Building,
+  front: Side,
+  p: Paint,
+  roofAt: (x: number, z: number) => number,
+): void {
   const len = sideLength(b, front)
   const top = b.height + 1.8
   const g = p.stone ? bs.stone : bs.wall
@@ -581,14 +611,19 @@ function addFalseFront(bs: Builders, b: Building, front: Side, p: Paint): void {
       quad: faceQuad(b, front, len / 2 - 3, len / 2 + 3, b.height + 0.2, top - 0.2, 0.2),
     })
     if (front !== 's') {
-      const y = top - 0.4
       const z = b.z + b.d / 2
       const x0 = b.x + b.w / 2 - 3
       const x1 = b.x + b.w / 2 + 3
-      // the board leans back on two legs, its foot on the flat roof (it hovered 6 cm over it)
-      const roofTop = b.height + 0.24
+      // the board stands on two legs over the pitched roof, clear of every ridge under it
+      let roofTop = 0
+      for (let x = x0; x <= x1; x += 0.25) {
+        roofTop = Math.max(roofTop, roofAt(x, z - 0.2), roofAt(x, z + 0.9))
+      }
+      roofTop += 0.15
+      const y = Math.max(top - 0.4, roofTop + 1.2)
       for (const lx of [x0 + 0.6, x1 - 0.6]) {
-        bs.wood.box(lx, (roofTop + y) / 2, z - 0.27, 0.12, y - roofTop, 0.12, DARK_WOOD)
+        const foot = roofAt(lx, z - 0.27) - 0.05
+        bs.wood.box(lx, (foot + y) / 2, z - 0.27, 0.12, y - foot, 0.12, DARK_WOOD)
       }
       bs.signs.push({
         text: p.sign,
@@ -772,7 +807,13 @@ export function buildTown(layout: TownLayout, assets: Assets, sun: Vector3): Tow
   addCreek(bs, layout)
   dressCover(layout, assets.props, root, bs.wood)
   const mask = bakeGroundMask(layout, sun)
-  root.add(groundMesh(layout, { map: assets.tex.ground, normal: assets.tex.groundN }, mask))
+  const ground = groundMesh(layout, { map: assets.tex.ground, normal: assets.tex.groundN }, mask)
+  root.add(ground)
+  // the land past the playable edge (cut bank, bench, hills, mesas, scrub) in the ground's material
+  const land = new Mesh(outskirtsGeometry(layout, OUTSKIRTS_SEED, sun), ground.material)
+  land.name = 'outskirts'
+  land.receiveShadow = true
+  root.add(land)
   const add = (geo: BufferGeometry | null, mat: MeshStandardMaterial, name: string) => {
     if (!geo || geo.getAttribute('position').count === 0) {
       return
@@ -788,6 +829,13 @@ export function buildTown(layout: TownLayout, assets: Assets, sun: Vector3): Tow
   const wood = bs.wood.build()
   add(bs.extra.length > 0 ? mergeGeometries([wood, ...bs.extra]) : wood, mats.wood, 'wood')
   add(bs.windows.empty ? null : bs.windows.build(), mats.windows, 'windows')
+  for (const r of bs.roofs) {
+    if (!r.getAttribute('rk')) {
+      // the clock tower's roofs: plain boards
+      const n = r.getAttribute('position').count
+      r.setAttribute('rk', new BufferAttribute(new Float32Array(n).fill(RK_PLAIN), 1))
+    }
+  }
   add(bs.roofs.length > 0 ? mergeGeometries(bs.roofs) : null, mats.roof, 'roofs')
   if (bs.kit.length > 0) {
     for (const m of mergePlaced(
@@ -808,7 +856,6 @@ export function buildTown(layout: TownLayout, assets: Assets, sun: Vector3): Tow
     root.add(signs)
   }
   root.add(waterMesh(layout))
-  root.add(bluffMesh(layout, assets))
   root.updateMatrixWorld(true)
   // Static: never recompose these matrices again.
   root.traverse((o) => {
@@ -861,30 +908,6 @@ function waterMesh(layout: TownLayout): Mesh {
   })
   const m = new Mesh(g.build(), mat)
   m.name = 'creek'
-  m.receiveShadow = true
-  return m
-}
-
-function bluffMesh(layout: TownLayout, assets: Assets): Mesh {
-  const c = layout.creek
-  const g = new GeoBuilder(5)
-  const V = (x: number, y: number, z: number) => new Vector3(x, y, z)
-  const x0 = -200
-  const x1 = layout.size + 200
-  const col = 0xc8_a8_80
-  g.quad(
-    V(x0, 0, c.z + 0.4),
-    V(x1, 0, c.z + 0.4),
-    V(x1, 3.2, c.z - 1.6),
-    V(x0, 3.2, c.z - 1.6),
-    col,
-  )
-  g.quad(V(x0, 3.2, c.z - 1.6), V(x1, 3.2, c.z - 1.6), V(x1, 3.4, -200), V(x0, 3.4, -200), col)
-  const map = assets.tex.ground.clone()
-  map.needsUpdate = true
-  const mat = new MeshStandardMaterial({ map, vertexColors: true, roughness: 0.95 })
-  const m = new Mesh(g.build(), mat)
-  m.name = 'bluff'
   m.receiveShadow = true
   return m
 }

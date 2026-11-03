@@ -71,7 +71,9 @@ import { bagColor, bagStyleColor } from '../scene/bags.ts'
 import { TopDownCamera } from '../scene/camera.ts'
 import { Crowd, type CrowdPlayer } from '../scene/crowd.ts'
 import { CUT } from '../scene/cutaway.ts'
+import { shareDepthByKind } from '../scene/depth-kinds.ts'
 import { Effects } from '../scene/fx.ts'
+import { installHotPaths } from '../scene/hot-paths.ts'
 import { lookFor } from '../scene/looks.ts'
 import { Pickups } from '../scene/pickups.ts'
 import { buildTown, type Town } from '../scene/town.ts'
@@ -92,7 +94,7 @@ import {
   TICK_HZ,
   TICK_MS,
 } from '../sim/constants.ts'
-import { BLOCK_SHOT, rayGrid, TOWN } from '../sim/layout.ts'
+import { BLOCK_SHOT, rayGrid, spawnFacing, TOWN } from '../sim/layout.ts'
 import { radiansToAim } from '../sim/move.ts'
 import { ThreatArrows } from './arrows.ts'
 import { Autopilot } from './autopilot.ts'
@@ -195,6 +197,7 @@ export class FrontierGame {
   readonly perf = { tickMs: 0, frameMs: 0, simMs: 0 }
 
   constructor(root: HTMLElement, opts: GameOptions) {
+    installHotPaths()
     this.root = root
     this.opts = opts
     this.audio = opts.audio === undefined ? new AudioEngine() : opts.audio
@@ -374,6 +377,7 @@ export class FrontierGame {
       return
     }
     onProgress(0.95, 'Riding in')
+    shareDepthByKind(this.scene)
     this.renderer.probe.position.set(72, 1.7, 66)
     try {
       await this.renderer.gl.compileAsync(this.scene, this.cam.camera)
@@ -666,7 +670,9 @@ export class FrontierGame {
       })
     }
     if (this.net.alive && !this.wasAlive) {
-      this.cam.snap(this.own.x, this.own.z)
+      // (re)spawned: face into town until the stick or the mouse says otherwise
+      this.aim = spawnFacing(this.own)
+      this.cam.snap(this.own.x, this.own.z, Math.cos(this.aim), Math.sin(this.aim))
       this.hatlessSeen.clear()
     }
     this.cam.update(this.own.x, this.own.z, Math.cos(this.aim), Math.sin(this.aim), dt)

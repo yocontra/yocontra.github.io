@@ -13,6 +13,7 @@
 import {
   CanvasTexture,
   ClampToEdgeWrapping,
+  Float32BufferAttribute,
   LinearFilter,
   Mesh,
   MeshStandardMaterial,
@@ -167,6 +168,32 @@ export function bakeGroundMask(layout: TownLayout, sun: Vector3): CanvasTexture 
   return t
 }
 
+/** GLSL: the strongest of the trails leaving town where a street runs out near the map's edge. */
+function trailCalls(layout: TownLayout): string {
+  const s = layout.size
+  const f = (v: number) => v.toFixed(2)
+  const calls: string[] = []
+  for (const st of layout.streets) {
+    const ends: [number, number, number, number, number][] = []
+    if (st.x < 8) {
+      ends.push([st.x, st.z + st.d / 2, -1, 0, st.d / 2])
+    }
+    if (st.x + st.w > s - 8) {
+      ends.push([st.x + st.w, st.z + st.d / 2, 1, 0, st.d / 2])
+    }
+    if (st.z + st.d > s - 8) {
+      ends.push([st.x + st.w / 2, st.z + st.d, 0, 1, st.w / 2])
+    }
+    if (st.z <= layout.creek.z + layout.creek.d + 1) {
+      ends.push([st.x + st.w / 2, st.z, 0, -1, st.w / 2])
+    }
+    for (const [x, z, dx, dz, w] of ends) {
+      calls.push(`gTrail(vGW, vec2(${f(x)}, ${f(z)}), vec2(${f(dx)}, ${f(dz)}), ${f(w)})`)
+    }
+  }
+  return calls.reduce((a, c) => `max(${a}, ${c})`, '0.0')
+}
+
 /** The ground plane over the town and far beyond it (the portrait camera sees a long way). */
 export function groundMesh(layout: TownLayout, tex: GroundTex, mask: Texture): Mesh {
   const extent = 520
@@ -178,6 +205,8 @@ export function groundMesh(layout: TownLayout, tex: GroundTex, mask: Texture): M
   for (let i = 0; i < uv.count; i++) {
     uv.setXY(i, pos.getX(i) / tile, -pos.getZ(i) / tile)
   }
+  // white: the outskirts terrain shares this material and tints its cliffs and scrub by vertex
+  geo.setAttribute('color', new Float32BufferAttribute(new Float32Array(pos.count * 3).fill(1), 3))
   const map = tex.map.clone()
   const normal = tex.normal.clone()
   map.needsUpdate = true
@@ -189,16 +218,22 @@ export function groundMesh(layout: TownLayout, tex: GroundTex, mask: Texture): M
     roughness: 0.96,
     metalness: 0,
     color: 0xd2_ce_c8,
+    vertexColors: true,
   })
   const size = layout.size
+  const trails = trailCalls(layout)
   mat.onBeforeCompile = (shader) => {
     shader.uniforms.gMask = { value: mask }
     shader.uniforms.gSize = { value: size }
     shader.vertexShader = shader.vertexShader
-      .replace('#include <common>', '#include <common>\nvarying vec2 vGW;')
+      .replace(
+        '#include <common>',
+        '#include <common>\nvarying vec2 vGW;\nvarying vec3 vGP;\nvarying vec3 vGN;',
+      )
       .replace(
         '#include <worldpos_vertex>',
-        '#include <worldpos_vertex>\nvGW = (modelMatrix * vec4(transformed, 1.0)).xz;',
+        // the outskirts' cliffs slide their pattern by height, so it isn't smeared down a face
+        '#include <worldpos_vertex>\nvec4 gW4 = modelMatrix * vec4(transformed, 1.0);\nvGW = gW4.xz - gW4.y * objectNormal.xz;\nvGP = gW4.xyz;\nvGN = normalize(mat3(modelMatrix) * objectNormal);',
       )
     shader.fragmentShader = shader.fragmentShader
       .replace(
@@ -207,10 +242,20 @@ export function groundMesh(layout: TownLayout, tex: GroundTex, mask: Texture): M
 uniform sampler2D gMask;
 uniform float gSize;
 varying vec2 vGW;
+varying vec3 vGP;
+varying vec3 vGN;
 float gHash(vec2 p) { return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453); }
 float gNoise(vec2 p) {
   vec2 i = floor(p); vec2 f = fract(p); f = f * f * (3.0 - 2.0 * f);
   return mix(mix(gHash(i), gHash(i + vec2(1.0, 0.0)), f.x), mix(gHash(i + vec2(0.0, 1.0)), gHash(i + vec2(1.0, 1.0)), f.x), f.y);
+}
+// a wagon trail running on out of town from a street's end, wandering and narrowing
+float gTrail(vec2 p, vec2 o, vec2 dir, float w0) {
+  vec2 d = p - o;
+  float t = dot(d, dir);
+  float off = dot(d, vec2(-dir.y, dir.x)) - sin(t * 0.085) * 1.8 * smoothstep(0.0, 24.0, t);
+  float w = mix(w0, 2.4, smoothstep(0.0, 28.0, t));
+  return step(-1.0, t) * (1.0 - smoothstep(w * 0.6, w, abs(off))) * (1.0 - smoothstep(45.0, 80.0, t));
 }`,
       )
       .replace(
@@ -219,11 +264,25 @@ float gNoise(vec2 p) {
 vec2 gUv = vGW / gSize;
 vec4 gM = texture2D(gMask, gUv);
 float gOut = (gUv.x < 0.0 || gUv.x > 1.0 || gUv.y < 0.0 || gUv.y > 1.0) ? 1.0 : 0.0;
-gM = mix(gM, vec4(1.0, 0.0, 0.0, 1.0), gOut);`,
+gM = mix(gM, vec4(1.0, 0.0, 0.0, 1.0), gOut);
+gM.g = max(gM.g, ${trails});`,
       )
       .replace(
         '#include <map_fragment>',
         `#include <map_fragment>
+{
+  // the outskirts' cliffs: blend in side projections so the dirt isn't smeared down a face (the
+  // flat ground never takes this branch)
+  vec3 gN = normalize(vGN);
+  if (gN.y < 0.9) {
+    vec3 gWt = pow(abs(gN), vec3(4.0));
+    gWt /= gWt.x + gWt.y + gWt.z;
+    vec4 gSx = texture2D(map, vec2(vGP.z, -vGP.y) * 0.2);
+    vec4 gSz = texture2D(map, vec2(vGP.x, -vGP.y) * 0.2);
+    vec4 gTri = sampledDiffuseColor * gWt.y + gSx * gWt.x + gSz * gWt.z;
+    diffuseColor.rgb = diffuse * gTri.rgb;
+  }
+}
 {
   float n = gNoise(vGW * 0.35) * 0.6 + gNoise(vGW * 1.7) * 0.4;
   // broad patches (pale hardpan, darker scrub soil) so open ground isn't one flat colour from above

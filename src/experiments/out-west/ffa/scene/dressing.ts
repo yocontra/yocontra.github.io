@@ -3,14 +3,15 @@
 /**
  * Cover and set dressing from the layout: every cover rect is filled with props that match its
  * footprint (it is exactly what blocks movement and bullets on the server). Props from the shared
- * GLB are instanced per type; troughs and boxcars are built into the wood geometry. Rocks and
- * cacti scatter outside the playable square.
+ * GLB are instanced per type; troughs and boxcars are built into the wood geometry. Rocks, cacti
+ * and the boundary fence come from `outskirts.ts` (seeded clumps, never rows).
  */
 import type { Matrix4, Object3D } from 'three'
 import type { GLTF } from 'three/examples/jsm/loaders/GLTFLoader.js'
 import type { GeoBuilder } from '../../scene/geo.ts'
 import { instance, placeMatrix, propDef } from '../../scene/props.ts'
 import type { Cover, TownLayout } from '../sim/layout.ts'
+import { OUTSKIRTS_SEED, outskirtsProps } from './outskirts.ts'
 
 /** Deterministic jitter so the town looks the same for everyone. */
 function rand(seed: number): () => number {
@@ -133,35 +134,6 @@ function rails(layout: TownLayout, wood: GeoBuilder): void {
   }
 }
 
-function scatter(layout: TownLayout, p: Placements, r: () => number): void {
-  const s = layout.size
-  for (let i = 0; i < 70; i++) {
-    const side = i % 4
-    const t = r() * (s + 60) - 30
-    const out = 2 + r() * 26
-    const xs = [-out, s + out, t, t]
-    const zs = [t, t, s + out, s + out * 0.5]
-    const x = xs[side] ?? t
-    const z = zs[side] ?? t
-    if (z < layout.creek.z + layout.creek.d && side !== 2) {
-      continue
-    }
-    const list = r() < 0.55 ? p.rock : p.cactus
-    list.push(placeMatrix(x, 0, z, r() * 6, 0.7 + r() * 0.9))
-  }
-  // Rocks along the creek banks.
-  const c = layout.creek
-  for (let x = c.x; x < c.x + c.w; x += 3 + r() * 4) {
-    if (x > c.bridge.x - 1 && x < c.bridge.x + c.bridge.w + 1) {
-      continue
-    }
-    p.rock.push(placeMatrix(x, 0, c.z + c.d + 0.2 + r() * 0.4, r() * 6, 0.4 + r() * 0.4))
-    if (r() < 0.6) {
-      p.rock.push(placeMatrix(x + 1, 0, c.z + 1 + r() * 0.5, r() * 6, 0.3 + r() * 0.4))
-    }
-  }
-}
-
 export function dressCover(
   layout: TownLayout,
   props: GLTF,
@@ -182,7 +154,10 @@ export function dressCover(
     place(c, p, wood, r)
   }
   rails(layout, wood)
-  scatter(layout, p, r)
+  const land = outskirtsProps(layout, OUTSKIRTS_SEED)
+  p.rock.push(...land.rock)
+  p.cactus.push(...land.cactus)
+  p.fence.push(...land.fence)
   const add = (
     name: string,
     size: number,

@@ -359,3 +359,34 @@ export function zoneAt(layout: TownLayout, x: number, z: number): Zone | null {
   }
   return null
 }
+
+/** Spawns this close to the map's edge face straight in from it. */
+const EDGE_SPAWN = 16
+
+/**
+ * Which way a rider faces on spawning there (radians, 0 = +x, toward +z): into town. Perimeter
+ * spawns look in from their edge, leaning toward the crossroads; interior ones look at it.
+ */
+export function spawnFacing(p: Point, layout: TownLayout = TOWN): number {
+  const main = layout.streets[0]
+  const cx = main ? main.x + main.w / 2 : layout.size / 2
+  const cz = main ? main.z + main.d / 2 : layout.size / 2
+  let dx = cx - p.x
+  let dz = cz - p.z
+  const len = Math.hypot(dx, dz) || 1
+  dx /= len
+  dz /= len
+  const s = layout.size
+  const edges: [number, number, number][] = [
+    [p.x, 1, 0],
+    [s - p.x, -1, 0],
+    [p.z - layout.creek.z, 0, 1],
+    [s - p.z, 0, -1],
+  ]
+  const [d, nx, nz] = edges.reduce((a, e) => (e[0] < a[0] ? e : a))
+  if (d < EDGE_SPAWN) {
+    dx += nx * 2
+    dz += nz * 2
+  }
+  return Math.atan2(dz, dx)
+}
