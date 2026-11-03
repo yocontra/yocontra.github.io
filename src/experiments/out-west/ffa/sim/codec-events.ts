@@ -9,9 +9,13 @@ import {
   EV_CHANNEL_CANCEL,
   EV_DAMAGE,
   EV_DEPOSIT,
+  EV_DYNAMITE_THROWN,
+  EV_EXPLOSION,
   EV_HAT_OFF,
   EV_KILL,
   EV_LEFT,
+  EV_PICKUP_READY,
+  EV_PICKUP_TAKEN,
   EV_RESPAWN,
   EV_SHOT,
   EV_SHOWDOWN_CALL,
@@ -58,6 +62,10 @@ export type WireEvent =
   | { type: typeof EV_CHANNEL_CANCEL; player: number; kind: number }
   | { type: typeof EV_HAT_OFF; player: number }
   | { type: typeof EV_LEFT; player: number }
+  | { type: typeof EV_PICKUP_TAKEN; spot: number; player: number }
+  | { type: typeof EV_PICKUP_READY; spot: number }
+  | { type: typeof EV_DYNAMITE_THROWN; player: number; x: number; z: number; fuseTicks: number }
+  | { type: typeof EV_EXPLOSION; by: number; x: number; z: number }
 
 type Width = 1 | 2
 type Layout = readonly (readonly [string, Width])[]
@@ -137,6 +145,22 @@ export const EVENT_LAYOUTS: Readonly<Record<number, Layout>> = {
   ],
   [EV_HAT_OFF]: [['player', 1]],
   [EV_LEFT]: [['player', 1]],
+  [EV_PICKUP_TAKEN]: [
+    ['spot', 1],
+    ['player', 1],
+  ],
+  [EV_PICKUP_READY]: [['spot', 1]],
+  [EV_DYNAMITE_THROWN]: [
+    ['player', 1],
+    ['x', 2],
+    ['z', 2],
+    ['fuseTicks', 1],
+  ],
+  [EV_EXPLOSION]: [
+    ['by', 1],
+    ['x', 2],
+    ['z', 2],
+  ],
 }
 
 const clampWidth = (v: number, width: Width): number =>
@@ -224,6 +248,14 @@ export function toWireEvent(ev: SimEvent): WireEvent {
       return { ...ev, type: EV_CHANNEL_CANCEL }
     case 'hat_off':
       return { ...ev, type: EV_HAT_OFF }
+    case 'pickup_taken':
+      return { ...ev, type: EV_PICKUP_TAKEN }
+    case 'pickup_ready':
+      return { ...ev, type: EV_PICKUP_READY }
+    case 'dynamite_thrown':
+      return { ...ev, type: EV_DYNAMITE_THROWN, x: q(ev.x), z: q(ev.z) }
+    case 'explosion':
+      return { ...ev, type: EV_EXPLOSION, x: q(ev.x), z: q(ev.z) }
     default:
       return { type: EV_LEFT, player: ev.player }
   }

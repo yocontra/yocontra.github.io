@@ -63,6 +63,7 @@ const randomSelf = (): SelfView => ({
   respawnTicks: u8(),
   holsterTicks: u8(),
   lastButtons: u8(),
+  weapon: u8(),
 })
 
 function randomEvent(): WireEvent {

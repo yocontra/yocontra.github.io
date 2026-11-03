@@ -75,7 +75,7 @@ describe('town layout', () => {
     }
   })
 
-  it('every spawn, bank window, Stage Line counter and strongbox spot is reachable from main street', () => {
+  it('every spawn, bank window, Stage Line counter, strongbox and pickup spot is reachable from main street', () => {
     const seen = reachable(30, 64)
     for (const s of TOWN.spawns) {
       expect([s.x, s.z, at(seen, s.x, s.z)]).toEqual([s.x, s.z, true])
@@ -83,7 +83,7 @@ describe('town layout', () => {
     for (const z of TOWN.zones) {
       expect([z.id, at(seen, z.x, z.z)]).toEqual([z.id, true])
     }
-    for (const s of TOWN.strongboxes) {
+    for (const s of [...TOWN.strongboxes, ...TOWN.pickups]) {
       expect([s.id, at(seen, s.x, s.z)]).toEqual([s.id, true])
     }
   })

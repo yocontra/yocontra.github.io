@@ -76,6 +76,11 @@ export interface Player extends MoveState {
   /** Tick the Dead-Eye reticle started closing, or −1. */
   deadEyeStart: number
   hatless: boolean
+  /** `WEAPON_*` in hand; pickup weapons run on `weaponRounds`, the revolver on `ammo`. */
+  weapon: number
+  weaponRounds: number
+  /** Sticks of dynamite held (0 or 1). */
+  dynamite: number
   carried: number
   channel: Channel | null
   lastButtons: number
@@ -107,6 +112,20 @@ export interface Bag {
   exclusiveFor: number
   exclusiveUntil: number
   expiresAt: number
+}
+
+export interface PickupState {
+  /** Index into the layout's `pickups`. */
+  spot: number
+  /** Tick it's available again (0 = available now). */
+  availableAt: number
+}
+
+export interface Fuse {
+  by: number
+  x: number
+  z: number
+  explodeAt: number
 }
 
 export interface Strongbox {
@@ -168,6 +187,10 @@ export type SimEvent =
   | { type: 'channel_cancel'; player: number; kind: number }
   | { type: 'hat_off'; player: number }
   | { type: 'left'; player: number }
+  | { type: 'pickup_taken'; spot: number; player: number }
+  | { type: 'pickup_ready'; spot: number }
+  | { type: 'dynamite_thrown'; player: number; x: number; z: number; fuseTicks: number }
+  | { type: 'explosion'; by: number; x: number; z: number }
 
 export function newStats(): PlayerStats {
   return {

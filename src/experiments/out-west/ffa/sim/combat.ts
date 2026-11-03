@@ -12,6 +12,7 @@ import {
   SHOT_HIT,
   SHOT_RANGE_UNIT,
   SHOT_WALL,
+  WEAPON_REVOLVER,
 } from '../../contract/town.ts'
 import {
   DEAD_EYE_CLOSE_TICKS,
@@ -100,7 +101,7 @@ export function rewindTime(w: World, viewTime: number): number {
 }
 
 /** Ray against every other player's rewound capsule. Returns the nearest hit before `maxT`. */
-function traceTargets(
+export function traceTargets(
   w: World,
   shooter: Player,
   dx: number,
@@ -145,7 +146,33 @@ export const damageAt = (range: number, deadEye: boolean): number =>
   (deadEye ? REVOLVER_DAMAGE * DEAD_EYE_MULTIPLIER : REVOLVER_DAMAGE) *
   (range > FALLOFF_RANGE ? FALLOFF_FACTOR : 1)
 
-/** Fire one round. Assumes `canFire` passed. */
+/**
+ * Land a hit on `targetId` as seen at rewound `time`: spawn-protected targets absorb it, and the
+ * shooter's hit stats (and the aim-snap heuristic) update. Returns true if it killed.
+ */
+export function strike(
+  w: World,
+  p: Player,
+  targetId: number,
+  time: number,
+  damage: number,
+  deadEye: boolean,
+  aim: number,
+): boolean {
+  const target = w.players[targetId]
+  const pose = poseAt(w, targetId, time)
+  if (!(target && pose && (pose.flags & HIST_PROTECTED) === 0 && target.alive)) {
+    return false
+  }
+  p.stats.hits++
+  const aimDelta = Math.abs(((aim - p.prevAim + 98_304) % 65_536) - 32_768)
+  if (aimDelta > AIM_SNAP_UNITS) {
+    p.stats.snapHits++
+  }
+  return applyDamage(w, target, p, damage, deadEye)
+}
+
+/** Fire one revolver round. Assumes `canFire` passed. */
 export function fire(w: World, p: Player, aim: number, viewTime: number): ShotResult {
   const deadEye = deadEyeReady(w, p)
   p.ammo--
@@ -171,17 +198,7 @@ export function fire(w: World, p: Player, aim: number, viewTime: number): ShotRe
   let killed = false
   if (hit) {
     flags |= SHOT_HIT
-    const target = w.players[hit.id]
-    const pose = poseAt(w, hit.id, time)
-    // Spawn-protected targets absorb the shot without damage.
-    if (target && pose && (pose.flags & HIST_PROTECTED) === 0 && target.alive) {
-      p.stats.hits++
-      const aimDelta = Math.abs(((aim - p.prevAim + 98_304) % 65_536) - 32_768)
-      if (aimDelta > AIM_SNAP_UNITS) {
-        p.stats.snapHits++
-      }
-      killed = applyDamage(w, target, p, damageAt(hit.t, deadEye), deadEye)
-    }
+    killed = strike(w, p, hit.id, time, damageAt(hit.t, deadEye), deadEye, aim)
   } else if (wall < MAX_RANGE) {
     flags |= SHOT_WALL
   }
@@ -206,8 +223,7 @@ export function canFire(p: Player, buttons: number, aliveAtTickStart: boolean): 
     p.showdown < 0 &&
     p.lingerUntil < 0 &&
     p.rollTicks === 0 &&
-    p.reloadTicks === 0 &&
-    p.ammo > 0 &&
-    p.fireCooldownMs <= 0
+    p.fireCooldownMs <= 0 &&
+    (p.weapon === WEAPON_REVOLVER ? p.reloadTicks === 0 && p.ammo > 0 : p.weaponRounds > 0)
   )
 }

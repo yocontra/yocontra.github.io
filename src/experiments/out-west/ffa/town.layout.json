@@ -996,10 +996,10 @@
       "z": 122
     },
     {
-      "id": "dynamite_mine",
+      "id": "dynamite_smithy",
       "kind": "dynamite",
-      "x": 92,
-      "z": 104
+      "x": 90,
+      "z": 109
     },
     {
       "id": "dynamite_corral",

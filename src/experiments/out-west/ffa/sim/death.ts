@@ -6,6 +6,7 @@ import {
   KILL_PARDON,
   KILL_SHOWDOWN,
   NONE,
+  WEAPON_REVOLVER,
 } from '../../contract/town.ts'
 import { FFA_XP, ffaDeathDrop, ffaKillMint } from '../../data/progression.ts'
 import {
@@ -140,6 +141,10 @@ export function killPlayer(
   victim.rollTicks = 0
   victim.deadEyeStart = -1
   victim.calledBy = NONE
+  // Pickup weapons and dynamite are lost with the life.
+  victim.weapon = WEAPON_REVOLVER
+  victim.weaponRounds = 0
+  victim.dynamite = 0
   cancelChannel(w, victim)
   let flags = opts.showdown ? KILL_SHOWDOWN : 0
   let bounty = 0

@@ -8,6 +8,7 @@ import {
   BTN_INTERACT,
   BTN_RELOAD,
   BTN_ROLL,
+  BTN_THROW,
   NONE,
 } from '../../../src/experiments/out-west/contract/town.ts'
 import { hasLineOfSight } from '../../../src/experiments/out-west/ffa/sim/layout.ts'
@@ -150,6 +151,9 @@ export class BotDirector {
     f.buttons = fireNow ? BTN_FIRE : 0
     if (p.ammo === 0) {
       f.buttons |= BTN_RELOAD
+    }
+    if (p.dynamite > 0 && d > 5 && d < 10 && this.rng.next() < 0.1) {
+      f.buttons |= BTN_THROW
     }
     if (p.hp < 50 && this.rng.next() < 0.04) {
       f.buttons |= BTN_ROLL
