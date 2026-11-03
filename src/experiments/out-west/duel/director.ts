@@ -221,6 +221,23 @@ export class Director {
     this.titleShot()
   }
 
+  private get portrait(): boolean {
+    return this.c.rig.cam.aspect < 1
+  }
+  /** Walk/standoff camera offset: tighter to the street axis on portrait phones so both men stay in frame. */
+  private get sideOff(): number {
+    return this.portrait ? 0.45 : 1.7
+  }
+  private get lookOff(): number {
+    return this.portrait ? 0 : 0.1
+  }
+  private get restFov(): number {
+    return this.portrait ? 56 : FEEL.fovRest
+  }
+  private get wideFov(): number {
+    return this.portrait ? 58 : 42
+  }
+
   private get reduced(): boolean {
     return this.c.save.settings.reducedMotion
   }
@@ -738,9 +755,9 @@ export class Director {
       () => {
         const P = p.root.position
         return {
-          pos: V(P.x + 1.7, 1.2, P.z - 3.4),
+          pos: V(P.x + this.sideOff, 1.2, P.z - 3.4),
           look: V(P.x, 1.15, P.z + 1.2),
-          fov: 42,
+          fov: this.wideFov,
           handheld: 0.25,
         }
       },
@@ -900,9 +917,9 @@ export class Director {
         const P = p.root.position
         const k = this.waitPush()
         return {
-          pos: V(P.x + 1.7 - k * 0.5, 1.2, P.z - 3.4 + k),
+          pos: V(P.x + this.sideOff - k * 0.3, 1.2, P.z - 3.4 + k),
           look: V(P.x, 1.2, P.z + 1.2),
-          fov: 42,
+          fov: this.wideFov,
           handheld: 0.2,
         }
       },
@@ -931,9 +948,9 @@ export class Director {
         const P = p.root.position
         const E = e ? e.root.position : V(0, 0, 10)
         const dist = Math.abs(E.z - P.z)
-        const look = V(-dist * 0.1, 1.4, E.z)
+        const look = V(-dist * this.lookOff, 1.4, E.z)
         const pos = V(P.x - 0.55, 1.65, P.z - 1.8 + this.waitPush())
-        return { pos, look, fov: FEEL.fovRest, handheld: 0.2 }
+        return { pos, look, fov: this.restFov, handheld: 0.2 }
       },
       blend,
     )
@@ -1169,11 +1186,16 @@ export class Director {
       const P = p.root.position
       const E = e ? e.root.position : V(0, 0, 10)
       const dist = Math.abs(E.z - P.z)
-      const look = V(-dist * 0.1, 1.4, E.z)
+      const look = V(-dist * this.lookOff, 1.4, E.z)
       const pos = V(P.x - 0.55, 1.65, P.z - 1.8 + push0)
-      if (reduced) return { pos, look, fov: FEEL.fovRest }
+      if (reduced) return { pos, look, fov: this.restFov }
       const k = easeInOutCubic(clamp01(((this.realTime - start) * 1000) / FEEL.callPushMs))
-      return { pos, look, fov: MathUtils.lerp(FEEL.fovRest, FEEL.fovCall, k), handheld: 0.1 }
+      return {
+        pos,
+        look,
+        fov: MathUtils.lerp(this.restFov, this.restFov - (FEEL.fovRest - FEEL.fovCall), k),
+        handheld: 0.1,
+      }
     })
   }
 
@@ -1577,6 +1599,8 @@ export class Director {
     if (t > 1.1) this.timeScale = 1
     if (t > 2.4) {
       this.bossPhase = 2
+      this.lastReaction = null
+      this.secondChance = false
       this.enemyAlive = true
       e?.play('Idle', 0.3)
       this.player.holsterGun()

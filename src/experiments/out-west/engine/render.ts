@@ -149,6 +149,7 @@ export class Renderer {
   readonly grade = new GradeEffect()
   readonly lens = new LensEffect()
   private readonly lensPass: EffectPass
+  private readonly mainPass: EffectPass
   private readonly smaaPass: EffectPass | null
   private readonly renderPass: RenderPass
   tier: Tier
@@ -192,11 +193,12 @@ export class Renderer {
     this.noise = new NoiseEffect({ blendFunction: BlendFunction.OVERLAY, premultiply: false })
     this.noise.blendMode.opacity.value = 0.05
     const tone = new ToneMappingEffect({ mode: ToneMappingMode.ACES_FILMIC })
-    this.composer.addPass(
-      new EffectPass(camera, this.bloom, tone, this.grade, this.vignette, this.noise),
-    )
+    // Lens (CA / shimmer / blur) runs first on the HDR frame and can be toggled
+    // off freely: the always-on grade pass (or SMAA) is what reaches the screen.
     this.lensPass = new EffectPass(camera, this.lens)
     this.composer.addPass(this.lensPass)
+    this.mainPass = new EffectPass(camera, this.bloom, tone, this.grade, this.vignette, this.noise)
+    this.composer.addPass(this.mainPass)
     if (this.spec.smaa) {
       this.smaaPass = new EffectPass(camera, new SMAAEffect({ preset: SMAAPreset.MEDIUM }))
       this.composer.addPass(this.smaaPass)
@@ -234,7 +236,10 @@ export class Renderer {
       this.tierDropped = true
       this.tier = 'low'
       this.spec = TIERS.low
-      if (this.smaaPass) this.smaaPass.enabled = false
+      if (this.smaaPass) {
+        this.composer.removePass(this.smaaPass)
+        this.mainPass.renderToScreen = true
+      }
       this.bloom.resolution.scale = 0.5
       return true
     }
