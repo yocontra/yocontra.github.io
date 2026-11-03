@@ -14,9 +14,9 @@ import { rankedRoutes } from './routes/ranked.ts'
 import { storeRoutes } from './routes/store.ts'
 import { townRoutes } from './routes/town.ts'
 
+// biome-ignore lint/performance/noBarrelFile: the Workers runtime needs every Durable Object class exported from the entry module
 export { Matchmaker } from './duel/matchmaker.ts'
 export { DuelRoom } from './duel/room.ts'
-// biome-ignore lint/performance/noBarrelFile: the Workers runtime needs every Durable Object class exported from the entry module
 export { DuelSession } from './session.ts'
 export { LobbyDirectory } from './town/directory.ts'
 export { Lobby } from './town/lobby.ts'

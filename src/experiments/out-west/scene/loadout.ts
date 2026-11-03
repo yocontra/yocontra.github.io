@@ -19,7 +19,9 @@ import {
 import type { GLTF } from 'three/examples/jsm/loaders/GLTFLoader.js'
 import { type ItemId, type Loadout, normalizeLoadout } from '../data/catalog.ts'
 import type { HatKey } from '../data/outlaws.ts'
-import { Actor, type ActorOpts, type HolsterLook } from './actor.ts'
+import { type Dyes, dyeHex } from '../net/wire-social.ts'
+import { Actor, type ActorOpts } from './actor.ts'
+import type { HolsterLook } from './kit.ts'
 import { type PropDef, propObject } from './props.ts'
 
 interface HatLook {
@@ -96,13 +98,17 @@ const HOLSTERS: Partial<Record<ItemId, HolsterLook>> = {
   'holster.buscadero': { color: 0x2a_18_10, roughness: 0.4, trim: 0xc8_c8_d0, rig: true },
 }
 
-/** Frame colours for the duel posters (ui/results, the match intro). */
-export const FRAME_COLORS: Partial<Record<ItemId, string>> = {
+/**
+ * Frame colours for the duel posters (ui/results, the match intro). Keyed by id string: the dated
+ * Most Wanted frame is a server-granted reward the catalog may not list yet.
+ */
+export const FRAME_COLORS: Readonly<Record<string, string>> = {
   'frame.pine-board': '#8a6a42',
   'frame.brass-tacks': '#c8a04a',
   'frame.gilt-saloon': '#e8c060',
   'frame.most-wanted-gilt': '#ffd870',
   'frame.midnight': '#2a2a40',
+  'frame.most-wanted-dated': '#d8b45a',
 }
 
 /** Draw-sound layers on your own shot: [sfx rate, gain]. The standard report adds nothing. */
@@ -119,18 +125,51 @@ const EXTRAS: Partial<Record<ItemId, Partial<ActorOpts>>> = {
   'extra.tin-star': { star: true },
 }
 
-/** Actor options for a loadout (the gun is added by `dressedActor`). */
-export function loadoutOpts(raw: unknown): ActorOpts {
+/** An outfit recoloured by its dye: the coat or poncho takes it, else the shirt and sleeves. */
+function dyedOutfit(outfit: OutfitLook, hex: number | null): OutfitLook {
+  if (hex === null) {
+    return outfit
+  }
+  if (outfit.coat !== undefined) {
+    return { ...outfit, coat: hex }
+  }
+  if (outfit.poncho !== undefined) {
+    return { ...outfit, poncho: hex }
+  }
+  return { ...outfit, tint: { ...outfit.tint, Shirt: hex, Sleeves: hex } }
+}
+
+/** An extra recoloured by its dye (the bandana's cloth, the moustache); the tin star stays tin. */
+function dyedExtra(extra: Partial<ActorOpts>, hex: number | null): Partial<ActorOpts> {
+  if (hex === null) {
+    return extra
+  }
+  if (extra.bandana !== undefined) {
+    return { ...extra, bandana: hex }
+  }
+  if (extra.moustache !== undefined) {
+    return { ...extra, moustache: hex }
+  }
+  return extra
+}
+
+/**
+ * Actor options for a loadout and its dye jobs (the gun is added by `dressedActor`). A dye is a
+ * tint over cloth and leather only: never a mesh, a sound or a silhouette.
+ */
+export function loadoutOpts(raw: unknown, dyes: Dyes = {}): ActorOpts {
   const l = normalizeLoadout(raw)
   const hat = HATS[l.hat] ?? HATS['hat.battered-brim']
-  const outfit = OUTFITS[l.outfit] ?? {}
-  const extra = l.extra ? (EXTRAS[l.extra] ?? {}) : {}
+  const outfit = dyedOutfit(OUTFITS[l.outfit] ?? {}, dyeHex(dyes[l.outfit]))
+  const extra = l.extra ? dyedExtra(EXTRAS[l.extra] ?? {}, dyeHex(dyes[l.extra])) : {}
+  const holster = HOLSTERS[l.holster] ?? HOLSTERS['holster.plain-leather']
+  const holsterDye = dyeHex(dyes[l.holster])
   const o: ActorOpts = {
     hat: hat?.key ?? 'cowboy',
-    hatColor: hat?.color ?? 0x5a_42_2e,
+    hatColor: dyeHex(dyes[l.hat]) ?? hat?.color ?? 0x5a_42_2e,
     tint: outfit.tint ?? {},
     seed: `loadout/${l.hat}/${l.outfit}/${l.extra ?? ''}`,
-    holster: HOLSTERS[l.holster] ?? HOLSTERS['holster.plain-leather'],
+    holster: holster && holsterDye !== null ? { ...holster, color: holsterDye } : holster,
     ...extra,
   }
   if (outfit.coat !== undefined) {
@@ -201,11 +240,16 @@ function fitSpurs(a: Actor, look: { color: number; points: number; metalness: nu
  * A whole gunslinger dressed in `loadout`, on the player's rig. Used for you (single player and
  * Bounty Hunt) and for your opponent, built from their server-validated loadout.
  */
-export function dressedActor(model: GLTF, gun: PropDef | null, raw: unknown): Actor {
+export function dressedActor(
+  model: GLTF,
+  gun: PropDef | null,
+  raw: unknown,
+  dyes: Dyes = {},
+): Actor {
   const l: Loadout = normalizeLoadout(raw)
   const gunLook = GUNS[l.gun] ?? GUNS['gun.rusty-six']
   const a = new Actor(model, {
-    ...loadoutOpts(l),
+    ...loadoutOpts(l, dyes),
     gun: gun ? propObject(gun) : null,
     offGun: gunLook?.twin ?? false,
   })

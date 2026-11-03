@@ -51,19 +51,28 @@ function ensureDatabase(): void {
   console.log(`D1: using ${id} (written to ${CONFIG}; commit this change)`)
 }
 
-function prompt(question: string): string {
-  const answer = globalThis.prompt(question)?.trim()
+/** One line from the terminal (Bun's `console` iterates stdin lines). */
+async function ask(question: string): Promise<string> {
+  process.stdout.write(`${question} `)
+  for await (const line of console) {
+    return line.trim()
+  }
+  return ''
+}
+
+async function required(question: string): Promise<string> {
+  const answer = await ask(question)
   if (!answer) {
     throw new Error(`${question} is required`)
   }
   return answer
 }
 
-function setSecrets(): void {
+async function setSecrets(): Promise<void> {
   const authSecret = Buffer.from(crypto.getRandomValues(new Uint8Array(48))).toString('base64url')
   wrangler(['secret', 'put', 'AUTH_SECRET', '--config', CONFIG], authSecret)
   console.log('Secret: AUTH_SECRET set (generated)')
-  const turnstile = prompt('Turnstile secret key for contra.io:')
+  const turnstile = await required('Turnstile secret key for contra.io:')
   wrangler(['secret', 'put', 'TURNSTILE_SECRET', '--config', CONFIG], turnstile)
   console.log('Secret: TURNSTILE_SECRET set')
 }
@@ -72,8 +81,8 @@ wrangler(['whoami'])
 ensureDatabase()
 wrangler(['d1', 'migrations', 'apply', DB_NAME, '--config', CONFIG, '--remote'])
 console.log('D1: migrations applied')
-if (globalThis.confirm('Set (or rotate) the Worker secrets now?')) {
-  setSecrets()
+if (/^y(?:es)?$/iu.test(await ask('Set (or rotate) the Worker secrets now? [y/N]'))) {
+  await setSecrets()
 }
 wrangler(['deploy', '--config', CONFIG])
 console.log('Deployed. Next: finish the remaining steps in RELEASE.md.')

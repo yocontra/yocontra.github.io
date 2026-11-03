@@ -45,6 +45,8 @@ import {
   EF_HOLSTERED,
   EF_MOST_WANTED,
   EF_PROTECTED,
+  EV_BAG_DROP,
+  EV_KILL,
   NONE,
   SELF_ALIVE,
   SELF_DEAD_EYE_READY,
@@ -65,6 +67,7 @@ import { haptic } from '../../platform/haptics.ts'
 import { presetAt } from '../../scene/presets.ts'
 import { RIM } from '../../scene/style.ts'
 import { installUiSounds } from '../../ui/sfx.ts'
+import { bagColor, bagStyleColor } from '../scene/bags.ts'
 import { TopDownCamera } from '../scene/camera.ts'
 import { Crowd, type CrowdPlayer } from '../scene/crowd.ts'
 import { CUT } from '../scene/cutaway.ts'
@@ -108,6 +111,7 @@ import { Hud } from './hud.ts'
 import type { RemoteView } from './interp.ts'
 import { Minimap } from './minimap.ts'
 import { NetClient } from './net.ts'
+import { Riders } from './riders.ts'
 import { FrontierSound, wearsSpurs } from './sound.ts'
 import { TouchControls } from './touch.ts'
 import type { Transport, TransportEvents } from './transport.ts'
@@ -145,6 +149,11 @@ export class FrontierGame {
   private fx: Effects | null = null
   private pickups: Pickups | null = null
   readonly hud: Hud
+  private readonly riders: Riders
+  /** What you carried a moment ago (the death card says what dropped). */
+  private lastCarry = 0
+  /** The last player killed: the next bag drop is theirs. */
+  private lastVictim = NONE
   private map: Minimap | null = null
   private readonly desk: DesktopControls
   private readonly touch: TouchControls | null
@@ -217,6 +226,8 @@ export class FrontierGame {
       touch: coarse,
       onLeave: () => this.desk.tap(BTN_LEAVE),
       onExit: () => this.exit('quit'),
+      onRiders: () => this.riders.open(),
+      onKiller: () => this.killerPoster(),
     })
     this.desk = new DesktopControls(root)
     this.touch = coarse ? new TouchControls(root) : null
@@ -227,10 +238,18 @@ export class FrontierGame {
       onEvent: (ev) => this.onEvent(ev),
       onPredictedShot: (x, z, aim, w) => this.predictedShot(x, z, aim, w),
     })
+    this.riders = new Riders({
+      root: this.hud.root,
+      roster: () => this.net.roster,
+      you: () => this.net.you,
+      lobbyId: () => this.net.lobbyId,
+    })
     this.sink = this.makeSink()
-    this.autopilot = new URLSearchParams(location.search).has('debug')
-      ? new Autopilot(this.net.grid)
-      : null
+    // The scripted aim/walk/fire harness exists only in dev builds: never an aimbot API in prod.
+    this.autopilot =
+      import.meta.env.DEV && new URLSearchParams(location.search).has('debug')
+        ? new Autopilot(this.net.grid)
+        : null
     globalThis.addEventListener('resize', this.onResize)
     globalThis.addEventListener('keydown', this.onKey)
     document.addEventListener('visibilitychange', this.onVisibility)
@@ -267,6 +286,7 @@ export class FrontierGame {
         game.killer = k
       },
       onLeft: () => this.exit('left'),
+      blocked: (id) => this.riders.isBlocked(id),
       fuses: this.fuses,
       get pickups() {
         return game.pickups as Pickups
@@ -415,6 +435,21 @@ export class FrontierGame {
   private onEvent(ev: WireEvent): void {
     if (this.fx && this.crowd) {
       handleEvent(this.sink, ev)
+    }
+    // a bag wears its dropper's saddlebag (spec §7): the server's `style` when it sends one,
+    // else the loadout of the player who just fell where it dropped
+    if (ev.type === EV_KILL) {
+      this.lastVictim = ev.victim
+    } else if (ev.type === EV_BAG_DROP) {
+      const bag = this.fx?.bags.get(ev.bagId)
+      const style = (ev as { style?: number }).style
+      const loadout = this.net.roster.get(this.lastVictim)?.loadout
+      if (bag && style !== undefined) {
+        bag.color = bagStyleColor(style)
+      } else if (bag && loadout) {
+        bag.color = bagColor(loadout)
+      }
+      this.lastVictim = NONE
     }
   }
 
@@ -734,9 +769,20 @@ export class FrontierGame {
     }
   }
 
+  /** The death card's link: your killer's wanted poster (Report and Block on it). */
+  private killerPoster(): void {
+    const k = this.killer
+    const who = k ? this.riders.person(k.id) : null
+    if (who) {
+      this.riders.poster(who.name)
+    }
+  }
+
   private calledBy(): number {
     const now = performance.now()
-    const c = this.callouts.find((x) => x.target === this.net.you && x.until > now)
+    const c = this.callouts.find(
+      (x) => x.target === this.net.you && x.until > now && !this.riders.isBlocked(x.challenger),
+    )
     return c ? c.challenger : NONE
   }
 
@@ -783,16 +829,18 @@ export class FrontierGame {
     this.reticle(s.flags)
     this.sounds(s.flags)
     if (this.net.alive) {
+      this.lastCarry = s.carried
       this.hud.alive()
     } else {
       const k = this.killer
       const name = k && k.id !== NONE ? this.net.name(k.id) : null
       const lvl = k && k.id !== NONE ? this.net.roster.get(k.id)?.level : undefined
-      this.hud.death(
-        name,
-        lvl ? `Level ${lvl}. You dropped 70% of what you carried.` : 'Your carry is in the dirt.',
-        s.respawnTicks / TICK_HZ,
-      )
+      const carry =
+        this.lastCarry > 0
+          ? `Your $${this.lastCarry.toLocaleString('en-US')} is in the dirt.`
+          : 'You carried nothing.'
+      const person = this.riders.live && k !== null && this.riders.person(k.id) !== null
+      this.hud.death(name, lvl ? `Level ${lvl}. ${carry}` : carry, s.respawnTicks / TICK_HZ, person)
     }
     this.announceMostWanted()
     this.arrows.update(this.cam.camera, this.own.x, this.own.z, this.remotes)

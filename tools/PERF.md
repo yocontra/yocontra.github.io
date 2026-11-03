@@ -96,7 +96,7 @@ Budgets (§9.3): duel ≤120 draws, ≤400k tris, ≤160 MB textures; Frontier �
 character atlas (2048×3072 albedo + two 1024×1536 maps ≈ 50 MB with mips) and the kit atlas
 (1024×3648 + two half-size maps ≈ 30 MB); KTX2 would cut both ~4× (see tools/README.md).
 
-### Frontier crowd spike (`/experiments/out-west/crowd/`, FFA floor tier, DPR 1.3)
+### Frontier crowd (measured on the M1 crowd test page, since folded into Frontier; FFA floor tier, DPR 1.3)
 
 Final architecture:
 - the nearest 16 are skinned (own player at LOD0, the rest at LOD1, ~4k tris);
@@ -137,7 +137,8 @@ no tier drop before 10 minutes, WebContent process < 700 MB, no WebGL context lo
    - [ ] Frame p95 ≤ 16.7 ms and a steady 60 fps.
    - [ ] Scale settles ≥ 0.9.
    - [ ] No thermal drop.
-4. **Frontier crowd**, at `/experiments/out-west/crowd/#perf`, then `?near=12` and `?near=8`:
+4. **Frontier crowd**, at `/experiments/out-west/frontier/?bots=31#perf` against a local API
+   (server bots are dev-only), standing where the bots fight:
    - [ ] p95 ≤ 16.7 ms for 10 minutes.
    - [ ] Note the first VAT bake time and the warm IndexedDB load.
 5. **Safari Web Inspector** (Develop → device):

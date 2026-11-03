@@ -1,5 +1,4 @@
 // biome-ignore-all lint/style/noMultiAssign: canvas/texture dimension setup (w = h = n) is clearer chained
-// biome-ignore-all lint/style/noParameterProperties: legacy constructor shorthand; behaviour-neutral
 import {
   ACESFilmicToneMapping,
   AmbientLight,
@@ -27,11 +26,12 @@ export class PortraitStudio {
   private readonly cam = new PerspectiveCamera(24, 1, 0.05, 20)
   private readonly rt = new WebGLRenderTarget(SIZE, SIZE)
   private readonly cache = new Map<number, HTMLCanvasElement>()
+  private readonly gl: WebGLRenderer
+  private readonly assets: Assets
 
-  constructor(
-    private readonly gl: WebGLRenderer,
-    private readonly assets: Assets,
-  ) {
+  constructor(gl: WebGLRenderer, assets: Assets) {
+    this.gl = gl
+    this.assets = assets
     this.scene.background = new Color(0xf2_ea_d8)
     const key = new DirectionalLight(0xff_ff_ff, 3.8)
     key.position.set(-1.2, 1.6, 1.4)

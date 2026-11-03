@@ -813,20 +813,27 @@ function waterMesh(layout: TownLayout): Mesh {
   const c = layout.creek
   const g = new GeoBuilder(4)
   const V = (x: number, z: number) => new Vector3(x, 0.04, z)
-  // A dry creek: only a thin trickle left down the middle of the bed.
+  // A dry creek: a thin trickle wandering down the bed, narrowing to nothing in places, so it
+  // reads as water over sand from above (not a painted stripe).
   const mid = c.z + c.d / 2 + 0.6
-  g.quad(
-    V(c.x - 30, mid + 0.7),
-    V(c.x + c.w + 30, mid + 0.7),
-    V(c.x + c.w + 30, mid - 0.5),
-    V(c.x - 30, mid - 0.5),
-    0x3a_52_58,
-  )
+  const step = 1.5
+  for (let x = c.x - 30; x < c.x + c.w + 30; x += step) {
+    const at = (t: number) => mid + Math.sin(t * 0.21) * 0.9 + Math.sin(t * 0.057) * 1.4
+    const half = (t: number) =>
+      Math.max(0, 0.18 + 0.32 * Math.sin(t * 0.13) * Math.sin(t * 0.31 + 1))
+    const [z0, z1, h0, h1] = [at(x), at(x + step), half(x), half(x + step)]
+    if (h0 + h1 > 0.02) {
+      g.quad(V(x, z0 + h0), V(x + step, z1 + h1), V(x + step, z1 - h1), V(x, z0 - h0), 0x55_66_62)
+    }
+  }
   const mat = new MeshStandardMaterial({
     vertexColors: true,
-    roughness: 0.08,
-    metalness: 0.1,
-    envMapIntensity: 1.4,
+    roughness: 0.12,
+    metalness: 0.05,
+    envMapIntensity: 1.2,
+    transparent: true,
+    opacity: 0.7,
+    depthWrite: false,
   })
   const m = new Mesh(g.build(), mat)
   m.name = 'creek'

@@ -1,6 +1,5 @@
 // biome-ignore-all lint/style/noExcessiveClassesPerFile: small, related effect classes kept together
 // biome-ignore-all lint/style/noMultiAssign: canvas/texture dimension setup (w = h = n) is clearer chained
-// biome-ignore-all lint/style/noParameterProperties: legacy constructor shorthand; behaviour-neutral
 // biome-ignore-all lint/suspicious/noUnnecessaryConditions: class fields are flags mutated from outside the method; Biome narrows them to their literal initializer
 import {
   AdditiveBlending,
@@ -161,11 +160,9 @@ export class Puffs {
   private readonly col: Float32Array
   private readonly geo: BufferGeometry
   private readonly mat: ShaderMaterial
-  constructor(
-    private readonly cap: number,
-    tex: Texture,
-    additive: boolean,
-  ) {
+  private readonly cap: number
+  constructor(cap: number, tex: Texture, additive: boolean) {
+    this.cap = cap
     this.geo = new BufferGeometry()
     this.pos = new Float32Array(cap * 3)
     this.size = new Float32Array(cap)
