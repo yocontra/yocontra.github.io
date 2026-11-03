@@ -199,6 +199,10 @@
     @media (prefers-reduced-motion: no-preference) {
       .inner {
         animation: drift linear both;
+      }
+      /* Timeline in its own rule (doubled class): minifiers fold it into the `animation` shorthand,
+         which browsers reject, silently disabling the effect. */
+      .inner.inner {
         animation-timeline: scroll(root);
         animation-range: 0 100svh;
       }

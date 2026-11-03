@@ -290,6 +290,26 @@
   translate: -50% 0;
   z-index: 55;
 }
+/* Empty and invisible unless Cloudflare asks for a click; then it gets a card in the game's style. */
+.ow-turnstile:has(iframe[style*="visible"]),
+.ow-turnstile:has(iframe:not([style*="display: none"])) {
+  display: grid;
+  gap: 8px;
+  justify-items: center;
+  padding: 12px 14px 14px;
+  background: rgb(26 18 12 / 0.92);
+  border: 1px solid rgb(201 162 92 / 0.55);
+  border-radius: 4px;
+  box-shadow: 0 10px 30px rgb(0 0 0 / 0.55);
+}
+.ow-turnstile:has(iframe:not([style*="display: none"]))::before {
+  content: "Quick check before you ride";
+  font-family: var(--ow-font-text);
+  font-variant-caps: all-small-caps;
+  letter-spacing: 0.12em;
+  color: var(--ow-bone);
+  font-size: 15px;
+}
 @media (prefers-reduced-motion: reduce) {
   .ow-menu.on,
   .ow-end.on,

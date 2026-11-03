@@ -2,7 +2,8 @@
 const lead =
   'I like building things end to end: backends, frontends, and the infrastructure in between.'
 const words = lead.split(' ')
-const step = 60 / words.length
+// every word is lit by the time the statement reaches mid-screen (cover 50%)
+const step = 30 / words.length
 ---
 
 <section id="about" class="about wrap" aria-labelledby="about-title">
@@ -10,7 +11,7 @@ const step = 60 / words.length
   <p class="statement">
     {words.map((word, i) => (
       <span
-        style={`animation-range: cover ${(12 + i * step).toFixed(2)}% cover ${(20 + i * step).toFixed(2)}%`}
+        style={`animation-range: cover ${(10 + i * step).toFixed(2)}% cover ${(18 + i * step).toFixed(2)}%`}
       >
         {word}{' '}
       </span>
@@ -54,6 +55,10 @@ const step = 60 / words.length
       .statement span {
         color: var(--fg-faint);
         animation: lit linear both;
+      }
+      /* Timeline in its own rule (doubled class): minifiers fold it into the `animation` shorthand,
+         which browsers reject, silently disabling the effect. */
+      .statement.statement span {
         animation-timeline: --statement;
       }
     }

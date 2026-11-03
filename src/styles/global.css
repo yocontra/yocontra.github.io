@@ -150,6 +150,10 @@ svg {
   @media (prefers-reduced-motion: no-preference) {
     .reveal {
       animation: reveal linear both;
+    }
+    /* Timeline in its own rule (doubled class): minifiers fold it into the `animation` shorthand,
+       which browsers reject, silently disabling the effect. */
+    .reveal.reveal {
       animation-timeline: view();
       animation-range: entry 0% cover 28%;
     }
