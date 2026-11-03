@@ -57,9 +57,11 @@ export class AudioDebug {
   private readonly taps: Tap[] = []
   private readonly warned = new Set<string>()
   private readonly ctx: AudioContext
+  private readonly statsOf: () => Record<string, number>
 
-  constructor(ctx: AudioContext, mode: string) {
+  constructor(ctx: AudioContext, mode: string, stats: () => Record<string, number> = () => ({})) {
     this.ctx = ctx
+    this.statsOf = stats
     this.raw = mode === 'raw'
     const tick = () => {
       this.sample()
@@ -137,6 +139,11 @@ export class AudioDebug {
     if (this.frames.length > MAX_FRAMES) {
       this.frames.splice(0, this.frames.length - MAX_FRAMES)
     }
+  }
+
+  /** Engine memory and voice counts (decoded MB, live voices, streams, media decks). */
+  stats(): Record<string, number> {
+    return this.statsOf()
   }
 
   clear(): void {
