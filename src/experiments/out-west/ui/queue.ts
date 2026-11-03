@@ -1,0 +1,109 @@
+/**
+ * The Bounty Hunt queue sheet: searching, the widening level and draw-speed windows, the
+ * "Duel a ghost now" button at 8 s, and the ghost fallback at 18 s, always labelled as a ghost.
+ */
+import { GHOST_FALLBACK_MS } from '../contract/duel.ts'
+import { type QueueMatch, QueueSearch, type QueueStatus } from '../net/queue.ts'
+import { button, el, swallow } from './sheet.ts'
+
+export interface QueueSheetOpts {
+  /** A fresh Turnstile token, or null when the check failed. */
+  token: () => Promise<string | null>
+  matched: (m: QueueMatch) => void
+  closed: () => void
+}
+
+export class QueueSheet {
+  private readonly root: HTMLElement
+  private readonly line: HTMLElement
+  private readonly detail: HTMLElement
+  private readonly ghostBtn: HTMLButtonElement
+  private readonly bar: HTMLElement
+  private readonly search: QueueSearch
+  private readonly o: QueueSheetOpts
+  private done = false as boolean
+
+  constructor(parent: HTMLElement, o: QueueSheetOpts) {
+    this.o = o
+    this.root = el('div', 'ow-sheet on ow-queue', parent)
+    this.root.setAttribute('role', 'dialog')
+    this.root.setAttribute('aria-label', 'Bounty Hunt queue')
+    swallow(this.root)
+    const panel = el('div', 'ow-hub-panel ow-sheet-panel', this.root)
+    el('h2', 'ow-hub-h', panel, 'Bounty Hunt')
+    this.line = el('p', 'ow-queue-line', panel, 'Checking you’re no bot…')
+    this.line.setAttribute('aria-live', 'polite')
+    const track = el('div', 'ow-xp ow-queue-track', panel)
+    this.bar = el('div', 'ow-xp-fill', track)
+    this.detail = el('p', 'ow-hub-note', panel, '')
+    const row = el('div', 'ow-hub-row', panel)
+    button(row, 'Leave queue', () => this.cancel())
+    this.ghostBtn = button(row, 'Duel a ghost now', () => this.search.ghost(), true)
+    this.ghostBtn.hidden = true
+    this.search = new QueueSearch({
+      queued: (m) => {
+        this.line.textContent = m.ghostsOnly
+          ? 'Your connection’s rough today: ghosts only.'
+          : 'Searching the territory for a bounty…'
+      },
+      status: (s) => this.status(s),
+      matched: (m) => this.matched(m),
+      failed: (msg) => this.failed(msg),
+    })
+    this.begin().catch(() => undefined)
+  }
+
+  private async begin(): Promise<void> {
+    const token = await this.o.token()
+    if (this.done) {
+      return
+    }
+    if (!token) {
+      this.failed('The bot check didn’t pass. Try again.')
+      return
+    }
+    this.line.textContent = 'Riding to the matchmaker…'
+    await this.search.start(token)
+  }
+
+  private status(s: QueueStatus): void {
+    const secs = Math.floor(s.waitedMs / 1000)
+    this.line.textContent = s.ghostsOnly
+      ? `Finding you a ghost… ${secs}s`
+      : `Searching for a gunslinger… ${secs}s`
+    const rating = s.ratingWindow === null ? 'any draw speed' : `±${s.ratingWindow} ms draw speed`
+    const others = Math.max(0, s.waiting - 1)
+    this.detail.textContent = `Within ±${s.levelWindow} levels · ${rating} · ${others} other${
+      others === 1 ? '' : 's'
+    } waiting`
+    this.bar.style.width = `${Math.min(100, (s.waitedMs / GHOST_FALLBACK_MS) * 100)}%`
+    this.ghostBtn.hidden = !s.ghostButton
+  }
+
+  private matched(m: QueueMatch): void {
+    this.done = true
+    this.ghostBtn.hidden = true
+    this.line.textContent =
+      m.mode === 'ghost'
+        ? `No live gun rode in. Ghost duel: the ghost of ${m.opponent.name}.`
+        : `${m.opponent.name} answers the call.`
+    setTimeout(() => {
+      this.root.remove()
+      this.o.matched(m)
+    }, 900)
+  }
+
+  private failed(msg: string): void {
+    this.done = true
+    this.line.textContent = msg
+    this.detail.textContent = ''
+    this.ghostBtn.hidden = true
+  }
+
+  cancel(): void {
+    this.done = true
+    this.search.leave()
+    this.root.remove()
+    this.o.closed()
+  }
+}

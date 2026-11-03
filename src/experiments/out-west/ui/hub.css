@@ -1,0 +1,461 @@
+/* out west: the saloon hub, mode tiles, sheets, queue, Outfitter, match intro and results (stream D) */
+.ow {
+  --hub-ink: #140c08;
+  --hub-panel: rgb(20 12 8 / 0.9);
+  --hub-red: #f00;
+  --hub-gold: #f2d27a;
+  --hub-paper: #e9dcc0;
+  --hub-sai-t: env(safe-area-inset-top, 0px);
+  --hub-sai-r: env(safe-area-inset-right, 0px);
+  --hub-sai-b: env(safe-area-inset-bottom, 0px);
+  --hub-sai-l: env(safe-area-inset-left, 0px);
+}
+
+/* Bounty Hunt has no gauntlet counter */
+.ow.ow-pvp .ow-counter {
+  display: none;
+}
+
+/* XP bar (hub strip, results, queue progress) */
+.ow-xp {
+  position: relative;
+  height: 8px;
+  background: rgb(255 255 255 / 0.12);
+  border: 1px solid rgb(255 255 255 / 0.25);
+  overflow: hidden;
+}
+.ow-xp-fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 0;
+  background: linear-gradient(90deg, #c8901e, var(--hub-gold));
+  transition: width 1.2s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+.ow-xp-label {
+  font-family: Georgia, serif;
+  text-transform: none;
+  letter-spacing: 0.03em;
+  font-size: 0.8rem;
+  opacity: 0.8;
+}
+
+/* ---------------------------------------------------------- hub layout */
+.ow-hub {
+  position: absolute;
+  inset: 0;
+  z-index: 20;
+  display: none;
+  grid-template-columns: 1fr min(27rem, 44vw);
+  grid-template-rows: auto 1fr;
+  gap: 12px;
+  padding: max(14px, var(--hub-sai-t)) max(16px, var(--hub-sai-r)) max(14px, var(--hub-sai-b))
+    max(16px, var(--hub-sai-l));
+  box-sizing: border-box;
+  pointer-events: none;
+  background: linear-gradient(90deg, transparent 40%, rgb(0 0 0 / 0.45));
+}
+.ow-hub.on {
+  display: grid;
+  animation: ow-hub-in 0.6s ease-out both;
+}
+.ow-hub.dim,
+.ow-hub.shop {
+  animation: none;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.25s;
+}
+.ow-hub > * {
+  pointer-events: auto;
+}
+@keyframes ow-hub-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.ow-hub-top {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.ow-hub-sign {
+  font-size: clamp(1rem, 2.6vw, 1.6rem);
+  color: var(--hub-paper);
+  background: #6a1f14;
+  border: 2px solid #3a0f08;
+  box-shadow:
+    inset 0 0 0 2px rgb(243 226 184 / 0.25),
+    0 6px 18px rgb(0 0 0 / 0.45);
+  padding: 0.45rem 0.9rem;
+  line-height: 1.1;
+}
+.ow-hub-strip {
+  display: grid;
+  grid-template-columns: auto auto;
+  align-items: center;
+  gap: 0.15rem 1rem;
+  min-width: min(20rem, 100%);
+  background: var(--hub-panel);
+  border-left: 4px solid var(--hub-red);
+  padding: 0.55rem 0.9rem;
+  box-sizing: border-box;
+}
+.ow-hub-name {
+  font-size: 1.15rem;
+}
+.ow-hub-meta {
+  font-family: Georgia, serif;
+  text-transform: none;
+  letter-spacing: 0.03em;
+  font-size: 0.85rem;
+  opacity: 0.8;
+}
+.ow-hub-strip .ow-xp {
+  grid-column: 1 / -1;
+}
+.ow-hub-nums {
+  grid-column: 1 / -1;
+  display: flex;
+  gap: 1rem;
+  font-size: 0.95rem;
+}
+.ow-hub-purse {
+  color: var(--hub-gold);
+}
+.ow-hub-bounty {
+  color: #ff8a6a;
+}
+.ow-hub-signin {
+  grid-column: 1 / -1;
+}
+
+/* ---------------------------------------------------------- tiles */
+.ow-hub-side {
+  grid-column: 2;
+  grid-row: 2;
+  align-self: end;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.ow-tiles {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+.ow-tile {
+  font: inherit;
+  color: #fff;
+  text-align: left;
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  min-height: 7.2rem;
+  padding: 0.8rem 0.85rem;
+  background: var(--hub-panel);
+  border: 2px solid rgb(255 255 255 / 0.18);
+  border-top: 4px solid var(--hub-red);
+  cursor: pointer;
+  transition:
+    transform 0.15s,
+    border-color 0.15s,
+    background 0.15s;
+}
+.ow-tile:hover,
+.ow-tile:focus-visible {
+  transform: translateY(-2px);
+  border-color: rgb(255 255 255 / 0.6);
+  border-top-color: var(--hub-red);
+  background: rgb(40 16 10 / 0.95);
+  outline: none;
+}
+.ow-tile:active {
+  transform: translateY(1px);
+}
+.ow-tile-gauntlet {
+  border-top-color: var(--hub-gold);
+}
+.ow-tile-frontier {
+  border-top-color: #c87a2a;
+}
+.ow-tile-store {
+  border-top-color: #8aa070;
+}
+.ow-tile-kicker {
+  font-family: Georgia, serif;
+  text-transform: none;
+  letter-spacing: 0.04em;
+  font-size: 0.78rem;
+  opacity: 0.75;
+}
+.ow-tile-title {
+  font-size: clamp(1.05rem, 2vw, 1.35rem);
+  line-height: 1.1;
+}
+.ow-tile-sub {
+  margin-top: auto;
+  font-family: Georgia, serif;
+  text-transform: none;
+  letter-spacing: 0.02em;
+  font-size: 0.8rem;
+  line-height: 1.3;
+  color: var(--hub-gold);
+}
+.ow-tile.locked .ow-tile-sub {
+  color: #ff8a6a;
+}
+.ow-tile.waiting {
+  opacity: 0.6;
+  cursor: progress;
+}
+.ow-hub-links {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.ow-hub-links .ow-btn {
+  flex: 1 1 auto;
+  padding: 0.55rem 0.7rem;
+  font-size: 0.8rem;
+  background: rgb(0 0 0 / 0.55);
+  border-width: 1px;
+}
+
+/* ---------------------------------------------------------- sheets and panels */
+.ow-sheet {
+  position: absolute;
+  inset: 0;
+  z-index: 40;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  background: rgb(0 0 0 / 0.6);
+  padding: max(16px, var(--hub-sai-t)) max(16px, var(--hub-sai-r)) max(16px, var(--hub-sai-b))
+    max(16px, var(--hub-sai-l));
+  box-sizing: border-box;
+  touch-action: pan-y;
+}
+.ow-sheet.on {
+  display: flex;
+}
+.ow-hub-panel {
+  background: var(--hub-ink);
+  border: 2px solid var(--hub-red);
+  padding: 1.1rem 1.2rem;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: 0.8rem;
+}
+.ow-sheet-panel {
+  width: min(30rem, 100%);
+  max-height: 100%;
+  overflow-y: auto;
+  animation: ow-sheet-up 0.25s ease-out both;
+}
+@keyframes ow-sheet-up {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.ow-sheet-head {
+  justify-content: space-between;
+  align-items: center;
+}
+.ow-sheet-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.7rem;
+}
+.ow-hub-h {
+  margin: 0;
+  font-weight: 400;
+  font-size: 1.5rem;
+  color: var(--hub-red);
+}
+.ow-hub-note {
+  margin: 0;
+  font-family: Georgia, serif;
+  text-transform: none;
+  letter-spacing: 0.02em;
+  font-size: 0.92rem;
+  line-height: 1.45;
+  opacity: 0.88;
+}
+.ow-hub-row {
+  display: flex;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+  align-items: center;
+}
+.ow-hub-row > .ow-btn {
+  flex: 1 1 auto;
+}
+.ow-hub-row.ow-sheet-head > .ow-btn {
+  flex: none;
+}
+.ow-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+.ow-btn-danger {
+  background: #8a0f08;
+  border-color: #8a0f08;
+}
+.ow-hub-choices {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+.ow-choice {
+  font: inherit;
+  color: #fff;
+  text-align: left;
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  min-height: 56px;
+  padding: 0.7rem 0.9rem;
+  background: rgb(255 255 255 / 0.06);
+  border: 2px solid rgb(255 255 255 / 0.3);
+  cursor: pointer;
+}
+.ow-choice.primary {
+  border-color: var(--hub-red);
+  background: rgb(255 0 0 / 0.16);
+}
+.ow-choice span {
+  font-family: Georgia, serif;
+  text-transform: none;
+  letter-spacing: 0.02em;
+  font-size: 0.82rem;
+  opacity: 0.8;
+}
+.ow-choice:focus-visible,
+.ow-item:focus-visible,
+.ow-store-tab:focus-visible {
+  outline: 3px solid #fff;
+  outline-offset: 2px;
+}
+
+/* ledger and results lines */
+.ow-ledger-list,
+.ow-results-lines {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  font-size: 0.85rem;
+}
+.ow-ledger-list li,
+.ow-results-lines li {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  gap: 0.8rem;
+  align-items: baseline;
+  padding: 0.35rem 0;
+  border-bottom: 1px dashed rgb(255 255 255 / 0.15);
+}
+.ow-ledger-list li {
+  grid-template-columns: 1fr auto auto auto;
+}
+.ow-ledger-list i,
+.ow-results-lines i,
+.ow-ledger-list time {
+  font-family: Georgia, serif;
+  font-style: normal;
+  text-transform: none;
+  letter-spacing: 0.02em;
+  opacity: 0.75;
+}
+.pos {
+  color: var(--hub-gold);
+  font-weight: 400;
+}
+.neg {
+  color: #ff6a50;
+  font-weight: 400;
+}
+.ow-results-total {
+  font-size: 1rem;
+  border-bottom: 0;
+}
+.ow-results-lines .ow-results-pair,
+.ow-results-lines .ow-results-purse {
+  display: block;
+  font-family: Georgia, serif;
+  text-transform: none;
+  font-size: 0.8rem;
+  opacity: 0.75;
+}
+
+/* ---------------------------------------------------------- queue */
+.ow-queue-line {
+  margin: 0;
+  font-size: 1rem;
+  line-height: 1.35;
+}
+.ow-queue-track .ow-xp-fill {
+  background: linear-gradient(90deg, #6a1f14, var(--hub-red));
+  transition: width 1s linear;
+}
+
+/* stub account panel (until stream A's ui/account.ts lands) */
+.ow-hub-account-stub {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+/* ---------------------------------------------------------- portrait phones */
+@media (max-aspect-ratio: 1 / 1) {
+  .ow-hub {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto 1fr auto;
+    background: linear-gradient(180deg, transparent 45%, rgb(0 0 0 / 0.55));
+  }
+  .ow-hub-side {
+    grid-column: 1;
+    grid-row: 3;
+  }
+  .ow-hub-sign {
+    display: none;
+  }
+  .ow-hub-strip {
+    width: 100%;
+  }
+  .ow-tile {
+    min-height: 6rem;
+    padding: 0.65rem 0.7rem;
+  }
+}
+/* short landscape phones */
+@media (max-height: 480px) and (min-aspect-ratio: 1 / 1) {
+  .ow-tile {
+    min-height: 5.2rem;
+    padding: 0.5rem 0.7rem;
+  }
+  .ow-tile-kicker {
+    display: none;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ow-hub.on,
+  .ow-sheet-panel {
+    animation: none;
+  }
+}

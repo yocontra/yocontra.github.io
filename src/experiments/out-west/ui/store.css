@@ -1,0 +1,157 @@
+/* out west: the Outfitter (stream D). Tokens come from hub.css. */
+/* ---------------------------------------------------------- Outfitter */
+.ow-store {
+  position: absolute;
+  z-index: 30;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: min(28rem, 46vw);
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  padding: max(14px, var(--hub-sai-t)) max(16px, var(--hub-sai-r)) max(14px, var(--hub-sai-b)) 16px;
+  box-sizing: border-box;
+  background: linear-gradient(90deg, rgb(20 12 8 / 0.78), rgb(20 12 8 / 0.96) 22%);
+  border-left: 2px solid var(--hub-red);
+  transform: translateX(105%);
+  transition: transform 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
+  touch-action: pan-y;
+}
+.ow-store.on {
+  transform: none;
+}
+.ow-store-head {
+  display: flex;
+  align-items: center;
+  gap: 0.8rem;
+}
+.ow-store-head .ow-hub-h {
+  flex: 1;
+}
+.ow-store-purse {
+  color: var(--hub-gold);
+  font-size: 0.85rem;
+}
+.ow-store-tabs {
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  flex: none;
+  touch-action: pan-x;
+}
+.ow-store-tab {
+  font: inherit;
+  font-size: 0.75rem;
+  letter-spacing: 0.1em;
+  color: #fff;
+  background: transparent;
+  border: 1px solid rgb(255 255 255 / 0.3);
+  padding: 0 0.75rem;
+  min-height: 44px;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.ow-store-tab.on {
+  background: var(--hub-red);
+  border-color: var(--hub-red);
+}
+.ow-store-list {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(9.5rem, 1fr));
+  align-content: start;
+  gap: 8px;
+}
+.ow-item {
+  --rar: #9a8a70;
+  font: inherit;
+  color: #fff;
+  text-align: left;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  min-height: 5.4rem;
+  padding: 0.6rem 0.7rem;
+  background: rgb(255 255 255 / 0.05);
+  border: 2px solid rgb(255 255 255 / 0.14);
+  border-left: 4px solid var(--rar);
+  cursor: pointer;
+}
+.ow-item.r-common {
+  --rar: #c8c0b0;
+}
+.ow-item.r-uncommon {
+  --rar: #6ac06a;
+}
+.ow-item.r-rare {
+  --rar: #4a9aff;
+}
+.ow-item.r-legendary {
+  --rar: #ffb020;
+}
+.ow-item.r-reward {
+  --rar: #d06aff;
+}
+.ow-item.picked {
+  border-color: #fff;
+  border-left-color: var(--rar);
+  background: rgb(255 255 255 / 0.12);
+}
+.ow-item.locked {
+  opacity: 0.55;
+}
+.ow-item-rarity {
+  font-size: 0.65rem;
+  color: var(--rar);
+}
+.ow-item-name {
+  font-size: 0.85rem;
+  line-height: 1.15;
+}
+.ow-item-tag {
+  margin-top: auto;
+  font-family: Georgia, serif;
+  text-transform: none;
+  letter-spacing: 0.02em;
+  font-size: 0.8rem;
+  color: var(--hub-gold);
+}
+.ow-store-detail {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  padding-top: 0.6rem;
+  border-top: 1px solid rgb(255 255 255 / 0.2);
+  min-height: 5.5rem;
+}
+.ow-store-name {
+  font-weight: 400;
+  font-size: 1.05rem;
+}
+.ow-store-error {
+  color: #ff8a6a;
+}
+
+/* ---------------------------------------------------------- portrait phones */
+@media (max-aspect-ratio: 1 / 1) {
+  .ow-store {
+    top: auto;
+    left: 0;
+    width: 100%;
+    height: 56dvh;
+    padding: 12px max(12px, var(--hub-sai-r)) max(12px, var(--hub-sai-b))
+      max(12px, var(--hub-sai-l));
+    border-left: 0;
+    border-top: 2px solid var(--hub-red);
+    background: rgb(20 12 8 / 0.95);
+    transform: translateY(105%);
+  }
+  .ow-store-list {
+    grid-template-columns: repeat(auto-fill, minmax(8.5rem, 1fr));
+  }
+}
