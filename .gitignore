@@ -5,3 +5,5 @@ dist
 .playwright-mcp
 public/__orig
 .claude/worktrees
+.dev.vars
+.wrangler

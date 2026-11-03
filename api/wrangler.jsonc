@@ -13,6 +13,10 @@
       "migrations_dir": "migrations"
     }
   ],
+  "durable_objects": {
+    "bindings": [{ "name": "DUELS", "class_name": "DuelSession" }]
+  },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["DuelSession"] }],
   "vars": {
     "ALLOWED_ORIGINS": "https://contra.io,http://localhost:4321"
   }

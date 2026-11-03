@@ -1,4 +1,4 @@
-import { describe, expect, test as it } from 'bun:test'
+import { describe, expect, it } from 'bun:test'
 import { nameKey, validateName } from './names.ts'
 
 describe('validateName', () => {

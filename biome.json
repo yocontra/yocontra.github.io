@@ -254,6 +254,23 @@
           }
         }
       }
+    },
+    {
+      "includes": [
+        "api/**"
+      ],
+      "javascript": {
+        "globals": [
+          "WebSocketPair"
+        ]
+      },
+      "linter": {
+        "rules": {
+          "correctness": {
+            "noUnresolvedImports": "off"
+          }
+        }
+      }
     }
   ]
 }
