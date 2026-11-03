@@ -90,6 +90,18 @@ Trimmed, mono, normalised and re-encoded to AAC.
 |---|---|---|
 | `tex/signboard_nor.webp`, `tex/signboard_arm.webp` | Weathered painted signboard: generated (Gemini), source `tools/art/signboard_src.webp`; normal and ARM derived with `tools/pbr-from-albedo.ts` | First-party |
 
-## Font
+## UI art (`/experiments/out-west/ui/`)
 
-"Alfa Slab One" by JM Solé, SIL Open Font License 1.1 — https://fonts.google.com/specimen/Alfa+Slab+One
+| File | Source | Licence |
+|---|---|---|
+| `paper.webp`, `poster.webp`, `wood.webp`, `leather.webp`, `smoke.webp` | Aged paper, wanted-poster stock, saloon planks, saddle leather, charred endpaper: generated (Gemini), resized and compressed | First-party |
+| `seal.webp` | Red wax seal: generated (Gemini), chroma-keyed | First-party |
+| `duel-woodcut.webp` | Title woodcut of a street duel: generated (Gemini) | First-party |
+| `corner.svg`, `rule.svg`, `src/experiments/out-west/ui/icons.ts` | Printer's ornaments and the 12-icon set: generated (Gemini) as raster references, traced to vectors with potrace | First-party |
+| `torn.svg` | Torn paper edge mask: generated procedurally | First-party |
+
+## Fonts (self-hosted via fontsource)
+
+- "Ultra" and "Rye" by Astigmatic (AOETI), SIL Open Font License 1.1.
+- "EB Garamond" by Georg Duffner and Octavio Pardo, SIL Open Font License 1.1.
+- "Oswald" by Vernon Adams, Kalapi Gajjar and Cyreal, SIL Open Font License 1.1.
