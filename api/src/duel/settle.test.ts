@@ -118,6 +118,23 @@ describe('settlement (real D1)', () => {
     expect(results[1]?.idem_key.startsWith(`match:${room}:1#`)).toBe(true)
   })
 
+  it('a Badlands winner is paid nothing but keeps the XP; the honest loser still pays', async () => {
+    const [a, b] = [await player('Shadow'), await player('Mark')]
+    const sa = { ...(await seat(a)), frozen: true }
+    const out = await settle(base({ humans: [sa, await seat(b)] }))
+    const win = out.settlements[0]
+    expect(win?.lines.filter((l) => l.amount > 0 && !l.label.startsWith('Level up'))).toEqual([])
+    expect(win?.xp).toBeGreaterThan(0)
+    const { results } = await t.db
+      .prepare(
+        "SELECT COALESCE(SUM(delta), 0) AS cash FROM ledger WHERE account_id = ? AND kind = 'duel_win'",
+      )
+      .bind(a)
+      .all<{ cash: number }>()
+    expect(results[0]?.cash).toBe(0)
+    expect((await getProfile(t.env, b))?.purse).toBe(250 - duelPenalty(250, bountyForLevel(1)))
+  })
+
   it('a replay of the same settlement pays nothing twice', async () => {
     const [a, b] = [await player('Replay'), await player('Victim')]
     const input = base({ humans: [await seat(a), await seat(b)] })

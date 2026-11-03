@@ -39,6 +39,8 @@ export interface HumanSeat {
   accountId: string
   profile: Profile
   stats: DuelStats
+  /** In the Badlands (§8): winnings are frozen (booked as $0); losses and XP still apply. */
+  frozen?: boolean
 }
 
 export interface GhostSeat {
@@ -273,6 +275,10 @@ function seatMoney(input: SettleInput, seat: Seat, h: HumanSeat): SeatMoney {
   if (reaction !== null && input.outcome !== 'coward') {
     const recent = [...money.stats.recent, reaction].slice(-30)
     money.stats = { ...money.stats, recent, drawRating: drawRating(recent) }
+  }
+  if (h.frozen) {
+    money.entries = money.entries.map((e) => (e.amount > 0 ? { ...e, amount: 0 } : e))
+    money.lines = money.lines.map((l) => (l.amount > 0 ? { ...l, amount: 0 } : l))
   }
   money.delta = money.entries.reduce((sum, e) => sum + e.amount, 0)
   money.xp = money.entries.reduce((sum, e) => sum + (e.xp ?? 0), 0)

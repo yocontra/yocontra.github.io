@@ -21,6 +21,8 @@ import { pairFactor } from '../../../src/experiments/out-west/data/progression.t
 import { recordUsage } from '../budget.ts'
 import type { Env } from '../env.ts'
 import { rttStats } from '../judge.ts'
+import { accountFlags, isShadowed } from '../moderation/flags.ts'
+import { reviewTiming } from '../moderation/timing.ts'
 import { getProfile, isConstraintError } from './external.ts'
 import { loadGhostTraits } from './ghost.ts'
 import { type Pair, type PvpLink, rttCapped, type Seat } from './judge-pvp.ts'
@@ -352,11 +354,12 @@ export class DuelRoom extends DurableObject<Env> {
     if (!accountId) {
       return null
     }
-    const [profile, stats] = await Promise.all([
+    const [profile, stats, flags] = await Promise.all([
       getProfile(this.env, accountId),
       duelStats(this.env, accountId),
+      accountFlags(this.env, accountId),
     ])
-    return profile ? { accountId, profile, stats } : null
+    return profile ? { accountId, profile, stats, frozen: isShadowed(flags) } : null
   }
 
   private async settle(stored: Stored, duel: FinishedDuel): Promise<Pair<Settlement | null>> {
@@ -418,6 +421,13 @@ export class DuelRoom extends DurableObject<Env> {
       if (!done) {
         console.error('settlement failed', isConstraintError(err), err)
         throw err
+      }
+    }
+    // The §8 timing statistics, on the reactions this duel just added: a tripped tell sends the
+    // account to the Badlands. Out of band, so it never delays the result.
+    for (const h of [a, b]) {
+      if (h && duel.outcome !== 'dodge') {
+        this.ctx.waitUntil(reviewTiming(this.env, h.accountId).then(() => undefined))
       }
     }
     // Level-up rewards are applied inside the ledger, so read the purses and rewards back.

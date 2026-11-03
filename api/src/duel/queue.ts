@@ -25,7 +25,15 @@ export interface QueueEntry {
   lastOpponents: readonly string[]
   /** Last ten ghosts faced. */
   recentGhosts: readonly string[]
+  /** In the Badlands (§8): paired only with other Badlands players, or with ghosts. */
+  badlands?: boolean
+  /** Accounts this player blocks or is blocked by: never paired, never served as a ghost. */
+  blocked?: readonly string[]
 }
+
+/** Either side blocks the other. */
+export const blocks = (a: QueueEntry, b: QueueEntry): boolean =>
+  (a.blocked ?? []).includes(b.accountId) || (b.blocked ?? []).includes(a.accountId)
 
 export interface Window {
   level: number
@@ -76,7 +84,11 @@ export function canPair(a: QueueEntry, b: QueueEntry, now: number): boolean {
   if (a.accountId === b.accountId || a.ghostsOnly || b.ghostsOnly) {
     return false
   }
-  if (sameNetwork(a.net, b.net) || thirdInARow(a, b)) {
+  if (sameNetwork(a.net, b.net) || thirdInARow(a, b) || blocks(a, b)) {
+    return false
+  }
+  // The Badlands is a shadow pool: its players only ever meet each other.
+  if ((a.badlands ?? false) !== (b.badlands ?? false)) {
     return false
   }
   // Both players' windows must allow it: the newer player's tighter window protects them too.
@@ -122,7 +134,8 @@ export function planTick(entries: readonly QueueEntry[], now: number): TickActio
 
 /**
  * A ghost for `e`: within ±3 effective levels and ±40 ms of rating; not them, not their network,
- * not one of their last ten ghosts. Null means a Town Outlaw.
+ * not one of their last ten ghosts, not anyone they block or who blocks them. Null means a Town
+ * Outlaw. (Flagged accounts' ghosts are never candidates: `eligibleGhosts` leaves them out.)
  */
 export function pickGhost(
   e: QueueEntry,
@@ -135,6 +148,7 @@ export function pickGhost(
     return (
       g.accountId !== e.accountId &&
       !e.recentGhosts.includes(g.accountId) &&
+      !(e.blocked ?? []).includes(g.accountId) &&
       !sameNetwork(e.net, netOf(g.accountId)) &&
       Math.abs(level - e.effectiveLevel) <= GHOST_LEVEL_WINDOW &&
       Math.abs(g.drawRating - e.rating) <= GHOST_RATING_WINDOW
