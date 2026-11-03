@@ -59,6 +59,12 @@ const CALL_DUCK_SONG: Partial<Record<SongName, number>> = { tension: 0.05 }
 const CALL_DUCK_HOLD = 0.7
 /** No heartbeat may sound this close after the call's strike (it would blur the bell's attack). */
 const CALL_CLEAR = 0.35
+/**
+ * How late the master chain delivers anything to the destination, s: each DynamicsCompressorNode
+ * (glue and limiter) looks 6 ms ahead (Blink and WebKit alike), and the 2x-oversampled soft clip
+ * adds a fraction of a ms. Measured at 12.4 ms on the output tap (`.playwright-mcp/bell-av.ts`).
+ */
+const GRAPH_DELAY = 0.0124
 /** Media elements blessed in the unlock gesture (2 per looping stream, 1 per sting). */
 const DECKS = 14
 
@@ -452,7 +458,18 @@ export class AudioEngine {
     return this.ctx?.currentTime ?? 0
   }
 
-  /** Map a performance.now() timestamp to the AudioContext clock (output-latency aware). */
+  /** What the device adds between scheduling and the ear (output + base latency), ms. */
+  get outputLatencyMs(): number {
+    const ctx = this.ctx
+    const s = ctx ? (ctx.outputLatency || 0) + (ctx.baseLatency || 0) : 0
+    return Number.isFinite(s) ? Math.min(1000, Math.max(0, s * 1000)) : 0
+  }
+
+  /**
+   * The AudioContext time to schedule a sound at so it reaches the ear at `perfMs` (a
+   * performance.now() time): mapped through the output timestamp (so the device's output latency is
+   * paid in advance), less the master chain's own look-ahead (`GRAPH_DELAY`).
+   */
   perfToCtx(perfMs: number): number {
     const ctx = this.ctx
     if (!ctx) {
@@ -460,10 +477,10 @@ export class AudioEngine {
     }
     const ts = ctx.getOutputTimestamp?.()
     if (ts && ts.contextTime !== undefined && ts.performanceTime && ts.contextTime > 0) {
-      return ts.contextTime + (perfMs - ts.performanceTime) / 1000
+      return ts.contextTime + (perfMs - ts.performanceTime) / 1000 - GRAPH_DELAY
     }
     const lat = (ctx.outputLatency || 0) + (ctx.baseLatency || 0)
-    return ctx.currentTime + (perfMs - performance.now()) / 1000 - lat
+    return ctx.currentTime + (perfMs - performance.now()) / 1000 - lat - GRAPH_DELAY
   }
 
   /** Listener follows the camera (AudioParams only; no deprecated setters). */

@@ -231,7 +231,7 @@ async function ranked(): Promise<void> {
      s.listen({
        message: (msg) => {
          rk.log.push(msg.type === 'result' ? { type: 'result', duel: msg.duel, outcome: msg.outcome } : { type: msg.type, duel: msg.duel })
-         if (msg.type === 'call') setTimeout(() => s.shot(msg.duel, 0, 140), 140)
+         if (msg.type === 'call') setTimeout(() => s.shot(msg.duel, 0, 140), (msg.inMs ?? 0) + 140)
        },
        closed: (reason) => rk.log.push({ type: 'closed', reason }),
        reconnecting: (reason) => rk.log.push({ type: 'reconnecting', reason }),

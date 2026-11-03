@@ -24,7 +24,7 @@ export type ServerMessage =
   | { type: 'hello'; sessionId: string; economyVersion: number; resumed?: RankedResumed }
   | { type: 'ping'; n: number }
   | { type: 'cue'; duel: number; cue: string }
-  | { type: 'call'; duel: number }
+  | { type: 'call'; duel: number; inMs?: number }
   | {
       type: 'result'
       duel: number
@@ -79,7 +79,7 @@ const VALIDATORS: Record<string, (m: Record<string, unknown>) => boolean> = {
   hello: (m) => typeof m.sessionId === 'string' && validResume(m.resumed),
   ping: (m) => num(m.n),
   cue: (m) => num(m.duel) && typeof m.cue === 'string',
-  call: (m) => num(m.duel),
+  call: (m) => num(m.duel) && (m.inMs === undefined || num(m.inMs)),
   result: validResult,
   final: (m) => num(m.total) && num(m.rank),
   error: (m) => typeof m.message === 'string',

@@ -25,7 +25,14 @@ import {
 import type { Pair, Seat } from './judge-pvp.ts'
 import type { AiOpponent, Rng } from './opponents.ts'
 import type { FinishedDuel, RestState, RoomFlowOptions, RoomIo } from './room-types.ts'
-import { type Clock, pvpWaitPlan, Standoff, type Verdict, type WaitStats } from './standoff.ts'
+import {
+  CALL_LEAD_MS,
+  type Clock,
+  pvpWaitPlan,
+  Standoff,
+  type Verdict,
+  type WaitStats,
+} from './standoff.ts'
 
 /** Pause between a dead heat and the sudden-death wait (both men fall, then get up). */
 export const DEAD_HEAT_PAUSE_MS = 2500
@@ -221,11 +228,12 @@ export class RoomFlow {
       plan,
       clock: this.clock,
       rng: this.rng,
+      leadMs: CALL_LEAD_MS,
       events: {
         cue: (cue) => this.broadcast({ type: 'cue', draw, cue }),
-        call: (seat) => {
+        call: (seat, inMs) => {
           if (this.connected[seat]) {
-            this.io.send(seat, { type: 'call', draw })
+            this.io.send(seat, { type: 'call', draw, inMs })
           }
           this.beat = 'called'
         },

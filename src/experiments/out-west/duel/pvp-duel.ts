@@ -256,7 +256,7 @@ export class PvpDuel implements DirectorHooks {
         break
       case 'call':
         this.adoptDraw(m.draw)
-        this.d.events.call(m.draw)
+        this.clock.call(m.draw, m.inMs, (draw) => this.d.events.call(draw))
         break
       default:
         this.onOther(m)

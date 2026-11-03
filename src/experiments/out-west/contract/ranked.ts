@@ -88,7 +88,11 @@ export type RankedServerMessage =
     }
   | { type: 'ping'; n: number }
   | { type: 'cue'; duel: number; cue: string }
-  | { type: 'call'; duel: number }
+  /**
+   * The call, sent `inMs` ahead of itself: present it (bell, DRAW!) `inMs` after this arrives,
+   * scheduled on the audio clock. Absent or 0 (an older server): present it at once.
+   */
+  | { type: 'call'; duel: number; inMs?: number }
   | {
       type: 'result'
       duel: number
@@ -104,7 +108,10 @@ export type RankedServerMessage =
 
 export type RankedClientMessage =
   | { type: 'standoff'; duel: number; level: number }
-  /** `localMs`: ms from receiving `call` to the press, or null if pressed before it arrived. */
+  /**
+   * `localMs`: ms from presenting the call (its arrival plus `inMs`) to the press, or null if
+   * pressed before it was presented.
+   */
   | { type: 'shot'; duel: number; target: number; localMs: number | null }
   | { type: 'pong'; n: number }
   /** Ends the run. `name` is used for guests; a signed-in run uses the account name. */
