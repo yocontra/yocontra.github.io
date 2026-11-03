@@ -7,13 +7,16 @@
   // The API is served on its own subdomain (same site as contra.io, so refresh cookies stay first-party).
   // Requires the contra.io zone on Cloudflare (the DNS move at release; see RELEASE.md).
   "routes": [{ "pattern": "api.contra.io", "custom_domain": true }],
+  // Only the custom domain: no *.workers.dev URL or preview URLs that would bypass the origin checks.
+  "workers_dev": false,
+  "preview_urls": false,
   "triggers": { "crons": ["17 4 * * *"] },
   "d1_databases": [
     {
       "binding": "DB",
       "database_name": "contra-leaderboard",
       // Local dev ignores this id. `bun scripts/release.ts` creates the production database and writes its id here.
-      "database_id": "00000000-0000-0000-0000-000000000000",
+      "database_id": "a4c8682b-e5f0-435e-b252-d42195509240",
       "migrations_dir": "migrations"
     }
   ],
