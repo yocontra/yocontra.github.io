@@ -252,13 +252,18 @@ export function onAuthChange(cb: (p: Player | null) => void): () => void {
 }
 
 /** Call once at boot: restores the session from the refresh cookie, if there is one. */
-export async function restoreSession(): Promise<Player | null> {
-  if (readHint()) {
-    await refresh()
-  }
-  restored = true
-  return session?.player ?? null
+export function restoreSession(): Promise<Player | null> {
+  restoring ??= (async () => {
+    if (!session && readHint()) {
+      await refresh()
+    }
+    restored = true
+    return session?.player ?? null
+  })()
+  return restoring.then(() => session?.player ?? null)
 }
+
+let restoring: Promise<Player | null> | null = null
 
 /** True when this browser can do passkeys at all. */
 export const passkeysSupported = (): boolean => browserSupportsWebAuthn()

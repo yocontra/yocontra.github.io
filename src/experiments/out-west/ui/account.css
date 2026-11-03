@@ -1,0 +1,243 @@
+/* Account panel (stream A): sign up, sign in, signed-in poster strip, delete. Matches the board. */
+.ow-acct {
+  --acct-red: #f00;
+  --acct-gold: #f2d27a;
+  --acct-ink: #140c08;
+  --acct-err: #ff8a7a;
+  width: min(26rem, 100%);
+  max-height: 100%;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+  background: var(--acct-ink);
+  border: 2px solid var(--acct-red);
+  padding: 1.1rem 1.2rem 1.2rem;
+  box-sizing: border-box;
+  color: #fff;
+  font-family: var(--slab, "Alfa Slab One", Rockwell, Georgia, serif);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  touch-action: pan-y;
+  -webkit-user-select: none;
+  user-select: none;
+}
+.ow-acct-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.6rem;
+}
+.ow-acct-title {
+  margin: 0;
+  font-weight: 400;
+  font-size: 1.6rem;
+  line-height: 1.1;
+  color: var(--acct-red);
+}
+.ow-acct-close {
+  font: inherit;
+  font-size: 1.1rem;
+  color: #fff;
+  background: none;
+  border: 0;
+  min-width: 44px;
+  min-height: 44px;
+  margin: -0.6rem -0.7rem 0 0;
+  cursor: pointer;
+}
+.ow-acct-lede,
+.ow-acct-note,
+.ow-acct-status,
+.ow-acct-warn {
+  margin: 0;
+  font-family: Georgia, serif;
+  text-transform: none;
+  letter-spacing: 0.02em;
+  line-height: 1.45;
+}
+.ow-acct-lede {
+  font-size: 0.95rem;
+  opacity: 0.9;
+}
+.ow-acct-note {
+  font-size: 0.8rem;
+  opacity: 0.7;
+}
+.ow-acct-status {
+  font-size: 0.9rem;
+  min-height: 1.3em;
+  opacity: 0.9;
+}
+.ow-acct-status[data-kind="error"] {
+  color: var(--acct-err);
+}
+.ow-acct-status[data-kind="ok"] {
+  color: var(--acct-gold);
+}
+.ow-acct-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin: 0;
+}
+.ow-acct-label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  font-size: 0.75rem;
+  letter-spacing: 0.1em;
+}
+.ow-acct-input {
+  font:
+    1.05rem Georgia,
+    serif;
+  letter-spacing: 0.02em;
+  color: #fff;
+  background: #000;
+  border: 2px solid rgb(255 255 255 / 0.6);
+  padding: 0.6rem 0.65rem;
+  min-height: 48px;
+  box-sizing: border-box;
+  width: 100%;
+  -webkit-user-select: text;
+  user-select: text;
+}
+.ow-acct-input:focus-visible {
+  outline: 3px solid #fff;
+  outline-offset: 1px;
+}
+.ow-acct-input[aria-invalid="true"] {
+  border-color: var(--acct-err);
+}
+.ow-acct-hint {
+  display: flex;
+  justify-content: space-between;
+  font-family: Georgia, serif;
+  text-transform: none;
+  letter-spacing: 0.02em;
+  font-size: 0.78rem;
+  opacity: 0.7;
+}
+.ow-acct-btns {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+}
+.ow-acct-btn {
+  flex: none;
+  font: inherit;
+  letter-spacing: 0.12em;
+  color: #fff;
+  background: transparent;
+  border: 2px solid #fff;
+  padding: 0.7rem 1rem;
+  min-height: 48px;
+  cursor: pointer;
+}
+.ow-acct-btns > .ow-acct-btn {
+  flex: 1 1 9rem;
+  padding-inline: 0.6rem;
+  letter-spacing: 0.08em;
+}
+.ow-acct-btn.primary {
+  background: var(--acct-red);
+  border-color: var(--acct-red);
+}
+.ow-acct-btn.danger {
+  border-color: var(--acct-err);
+  color: var(--acct-err);
+}
+.ow-acct-btn.danger.primary {
+  background: #b00000;
+  border-color: #b00000;
+  color: #fff;
+}
+.ow-acct-btn.quiet {
+  align-self: center;
+  border-color: transparent;
+  text-decoration: underline;
+  text-underline-offset: 4px;
+  font-size: 0.8rem;
+}
+.ow-acct-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+.ow-acct-btn:focus-visible {
+  outline: 3px solid #fff;
+  outline-offset: 2px;
+}
+.ow-acct[aria-busy="true"] .ow-acct-btn {
+  cursor: progress;
+}
+.ow-acct-or {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  font-size: 0.7rem;
+  opacity: 0.6;
+}
+.ow-acct-or::before,
+.ow-acct-or::after {
+  content: "";
+  flex: 1;
+  border-top: 1px solid rgb(255 255 255 / 0.35);
+}
+/* the signed-in strip: a little wanted-poster plate */
+.ow-acct-plate {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.2rem;
+  padding: 0.9rem 0.8rem;
+  background: #f1e2c0;
+  color: #2a1a10;
+  border: 3px double #2a1a10;
+  text-align: center;
+}
+.ow-acct-plate-kicker {
+  font-size: 0.7rem;
+  letter-spacing: 0.3em;
+}
+.ow-acct-plate-name {
+  font-size: clamp(1.4rem, 7vw, 2rem);
+  line-height: 1.1;
+  word-break: break-word;
+}
+.ow-acct-plate-sub {
+  font-family: Georgia, serif;
+  text-transform: none;
+  letter-spacing: 0.02em;
+  font-size: 0.8rem;
+  opacity: 0.8;
+}
+.ow-acct-keys {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  font-family: Georgia, serif;
+  text-transform: none;
+  letter-spacing: 0.02em;
+  font-size: 0.85rem;
+}
+.ow-acct-keys li {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.3rem 0;
+  border-bottom: 1px solid rgb(255 255 255 / 0.12);
+}
+.ow-acct-warn {
+  font-size: 0.92rem;
+  padding: 0.7rem 0.8rem;
+  border-left: 4px solid var(--acct-err);
+  background: rgb(255 80 60 / 0.1);
+}
+.ow-acct-warn b {
+  color: var(--acct-err);
+  font-weight: 700;
+}
+.ow-acct-hidden {
+  display: none;
+}
