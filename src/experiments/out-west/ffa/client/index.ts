@@ -15,6 +15,7 @@
 import type { AudioEngine } from '../../audio/audio.ts'
 import { FrontierGame } from './game.ts'
 import { type JoinError, openLoopback, openRemote } from './transport.ts'
+import '../../ui/tokens.css'
 import './frontier.css'
 
 export type FrontierExit = 'left' | 'quit' | 'lost' | 'refused'
@@ -45,7 +46,7 @@ export interface FrontierHandle {
   readonly ready: Promise<void>
   leave: () => void
   destroy: () => void
-  /** Perf and net numbers (also on `globalThis.__frontier`). */
+  /** Perf and net numbers (also on `globalThis.__frontier` in dev builds). */
   debug: () => Record<string, unknown>
 }
 
@@ -177,9 +178,12 @@ export function mountFrontier(root: HTMLElement, opts: FrontierOptions = {}): Fr
     },
     debug: () => game.debug(),
   }
-  Reflect.set(globalThis, '__frontier', () => game.debug())
+  if (import.meta.env.DEV) {
+    // Dev harness only: state for Playwright scripts (positions would be a wallhack in prod).
+    Reflect.set(globalThis, '__frontier', () => game.debug())
+  }
   const ap = game.autopilot
-  if (ap) {
+  if (import.meta.env.DEV && ap) {
     // Dev harness: drive this page from Playwright (see client/autopilot.ts).
     Reflect.set(globalThis, '__frontierPilot', {
       go: (x: number, z: number) => {

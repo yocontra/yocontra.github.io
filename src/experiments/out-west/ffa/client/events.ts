@@ -1,4 +1,4 @@
-// biome-ignore-all lint/complexity/useMaxParams: sound helper takes positional options
+// biome-ignore-all lint/complexity/useMaxParams: the tracer helper takes positional options
 // biome-ignore-all lint/complexity/noExcessiveCognitiveComplexity: event dispatch is one flat switch per event type
 /**
  * Server events → what the player sees and hears: tracers and impacts, hit markers and the hurt
@@ -6,7 +6,7 @@
  * strongbox, Most Wanted, Call Out and the showdown (fake-out cues, the bell, the verdict).
  */
 import { Color, type Vector3 } from 'three'
-import type { AudioEngine, SfxName } from '../../audio/audio.ts'
+import type { AudioEngine } from '../../audio/audio.ts'
 import {
   EV_BAG_DROP,
   EV_BAG_GONE,
@@ -47,6 +47,8 @@ import {
   SHOT_RIFLE,
   SHOT_SHOTGUN,
   SHOT_WALL,
+  WEAPON_RIFLE,
+  WEAPON_SHOTGUN,
 } from '../../contract/town.ts'
 import { haptic } from '../../platform/haptics.ts'
 import type { Crowd } from '../scene/crowd.ts'
@@ -56,21 +58,20 @@ import type { WireEvent } from '../sim/codec-events.ts'
 import { CALLOUT_ACCEPT_TICKS, SHOTGUN_CONE_DEG, SHOTGUN_RANGE, TICK_MS } from '../sim/constants.ts'
 import { TOWN } from '../sim/layout.ts'
 import { aimRadians } from '../sim/move.ts'
+import {
+  bagSound,
+  FAKE_CUES,
+  type Fuse,
+  impactSound,
+  PICKUP_SOUND,
+  play,
+  shotSound,
+  startFuse,
+  stopFuse,
+  waitingOnMyCall,
+} from './event-sounds.ts'
 import type { Hud } from './hud.ts'
 import type { NetClient } from './net.ts'
-
-/** Fake-out cues by index (never a bell). */
-const FAKE_CUES: readonly SfxName[] = [
-  'crow',
-  'door',
-  'bottle',
-  'horse',
-  'coin',
-  'dog',
-  'piano',
-  'shout',
-  'whip',
-]
 
 export interface Showdown {
   id: number
@@ -104,27 +105,14 @@ export interface Sink {
   /** Who killed you, for the poster. */
   killer: { id: number; flags: number } | null
   onLeft: () => void
+  /** True when the player behind this entity is on your block list (never shown to you). */
+  blocked: (id: number) => boolean
   pickups: Pickups
+  /** Burning fuses by thrower: the hiss runs from the throw to the blast. */
+  fuses: Map<number, Fuse>
 }
 
 const DEAD_EYE_GOLD = new Color(3, 2.4, 0.8)
-
-function play(
-  s: Sink,
-  name: SfxName,
-  at: { x: number; z: number } | null,
-  gain = 1,
-  priority = false,
-): void {
-  if (!s.audio) {
-    return
-  }
-  s.audio.play(name, {
-    gain,
-    priority,
-    ...(at ? { pos: { x: at.x, y: 1.2, z: at.z } } : {}),
-  })
-}
 
 function onShot(s: Sink, ev: Extract<WireEvent, { type: typeof EV_SHOT }>): void {
   const you = s.net.you
@@ -139,7 +127,7 @@ function onShot(s: Sink, ev: Extract<WireEvent, { type: typeof EV_SHOT }>): void
   if (ev.shooter !== you) {
     const m = s.muzzleOf(ev.shooter, p.x, p.z, aim)
     shotFx(s, m, aim, range, ev.flags)
-    play(s, ev.flags & (SHOT_SHOTGUN | SHOT_RIFLE) ? 'fireBig' : 'fire', p, 0.75, true)
+    play(s, shotSound(ev.flags), p, 0.75)
     if (ev.target === you) {
       s.kick(0.25)
     } else {
@@ -155,6 +143,7 @@ function onShot(s: Sink, ev: Extract<WireEvent, { type: typeof EV_SHOT }>): void
       }
     }
   }
+  impactSound(s.audio, ev.flags, endX, endZ, s.posOf(you))
   if (ev.flags & SHOT_HIT) {
     s.fx.impact(endX, endZ, true)
     if (ev.shooter === you) {
@@ -162,9 +151,6 @@ function onShot(s: Sink, ev: Extract<WireEvent, { type: typeof EV_SHOT }>): void
     }
   } else if (ev.flags & SHOT_WALL) {
     s.fx.impact(endX, endZ, false)
-    if (Math.random() < 0.3) {
-      play(s, 'ricochet', { x: endX, z: endZ }, 0.5)
-    }
   }
 }
 
@@ -190,9 +176,12 @@ function onPickups(s: Sink, ev: WireEvent, nowS: number): void {
       const spot = TOWN.pickups[ev.spot]
       if (spot && ev.player !== NONE) {
         s.fx.sparkle(spot.x, spot.z, 8)
+        if (spot.kind !== 'dynamite') {
+          s.crowd.armed(ev.player, spot.kind === 'shotgun' ? WEAPON_SHOTGUN : WEAPON_RIFLE)
+        }
         if (ev.player === you) {
           s.hud.toast(PICKUP_TOAST[spot.kind] ?? spot.kind.toUpperCase(), 'gold', 1600)
-          play(s, 'cocking', null, 0.9)
+          play(s, PICKUP_SOUND[spot.kind] ?? 'cocking', null, 0.9)
         }
       }
       break
@@ -211,6 +200,7 @@ function onPickups(s: Sink, ev: WireEvent, nowS: number): void {
         nowS,
       )
       play(s, 'whip', from, 0.6)
+      startFuse(s.audio, s.fuses, ev)
       break
     }
     case EV_EXPLOSION: {
@@ -218,7 +208,8 @@ function onPickups(s: Sink, ev: WireEvent, nowS: number): void {
       const z = ev.z / POS_SCALE
       s.pickups.explode(x, z)
       s.fx.explosion(x, z)
-      play(s, 'fireBig', { x, z }, 1.2, true)
+      stopFuse(s.fuses, ev.by)
+      s.audio?.play('explosion', { pos: { x, y: 0.5, z }, priority: true })
       const me = s.posOf(you)
       const d = me ? Math.hypot(me.x - x, me.z - z) : 99
       s.kick(Math.max(0, 0.6 - d * 0.03))
@@ -261,8 +252,9 @@ function killLine(s: Sink, ev: Extract<WireEvent, { type: typeof EV_KILL }>): st
     marks.push("sheriff's pardon")
   }
   const tail = marks.length > 0 ? ` (${marks.join(', ')})` : ''
-  if (ev.killer === NONE) {
-    return `${s.net.name(ev.victim)} bit the dust${tail}`
+  if (ev.killer === NONE || ev.killer === ev.victim) {
+    const how = ev.killer === NONE ? 'bit the dust' : 'blew himself up'
+    return `${s.net.name(ev.victim)} ${how}${tail}`
   }
   return `${s.net.name(ev.killer)} ✕ ${s.net.name(ev.victim)}${tail}`
 }
@@ -301,6 +293,9 @@ function onShowdown(s: Sink, ev: WireEvent): void {
   const you = s.net.you
   switch (ev.type) {
     case EV_CALLOUT: {
+      if (s.blocked(ev.challenger) || s.blocked(ev.target)) {
+        break // a blocked player's call-out is never shown (the server won't pair you anyway)
+      }
       s.callouts.push({
         challenger: ev.challenger,
         target: ev.target,
@@ -340,12 +335,15 @@ function onShowdown(s: Sink, ev: WireEvent): void {
       break
     }
     case EV_SHOWDOWN_CALL:
-      // The JSON showdown_call is the precise one for your own duel; this is for bystanders.
+      // Bystanders: still the call (never a positional bell), but silent while your own showdown
+      // waits, so another duel's bell is never taken for yours (yours is the JSON showdown_call).
       if (!s.showdowns.get(ev.id)?.called && s.showdowns.get(ev.id)?.opponent === NONE) {
         const sd = s.showdowns.get(ev.id)
         if (sd) {
           sd.called = true
-          play(s, 'bell', { x: sd.cx, z: sd.cz }, 0.6)
+          if (!waitingOnMyCall(s.showdowns)) {
+            s.audio?.call()
+          }
         }
       }
       break
@@ -354,6 +352,7 @@ function onShowdown(s: Sink, ev: WireEvent): void {
       s.showdowns.delete(ev.id)
       if (sd && sd.opponent !== NONE) {
         s.hud.toast(verdict(s, ev, you), ev.winner === you ? 'gold' : 'red', 2600)
+        s.audio?.musicLevel(0, 1.5) // the town's tune comes back up
       }
       break
     }
@@ -389,12 +388,15 @@ export function handleEvent(s: Sink, ev: WireEvent): void {
   switch (ev.type) {
     case EV_SHOT:
       onShot(s, ev)
+      // after the muzzle flash: the last shell puts the revolver back in his hand
+      s.crowd.fired(ev.shooter, ev.flags)
       break
     case EV_DAMAGE:
       onDamage(s, ev)
       break
     case EV_KILL:
       onKill(s, ev)
+      s.crowd.disarm(ev.victim)
       break
     case EV_BAG_DROP: {
       const x = ev.x / POS_SCALE
@@ -416,7 +418,7 @@ export function handleEvent(s: Sink, ev: WireEvent): void {
       if (b && ev.by !== NONE) {
         s.fx.sparkle(b.x, b.z, 12)
         if (ev.by === you) {
-          play(s, 'coin', null, 0.9)
+          play(s, bagSound(b.amount), null, 0.9)
           s.hud.toast(`+$${b.amount}`, 'gold', 1000)
         }
       }
@@ -426,7 +428,7 @@ export function handleEvent(s: Sink, ev: WireEvent): void {
       if (ev.player === you) {
         const extra = ev.commission > 0 ? ` (+$${ev.commission} commission)` : ''
         s.hud.toast(`BANKED $${ev.amount}${extra}`, 'gold', 2200)
-        play(s, 'coin', null, 1)
+        play(s, 'deposit', null, 1)
         const p = s.posOf(you)
         if (p) {
           s.fx.sparkle(p.x, p.z, 18)
@@ -434,12 +436,14 @@ export function handleEvent(s: Sink, ev: WireEvent): void {
       }
       break
     case EV_RESPAWN: {
+      s.crowd.disarm(ev.player)
       const p = s.posOf(ev.player)
       if (p) {
         s.fx.dust(p.x, p.z, 10)
       }
       if (ev.player === you) {
         s.killer = null
+        play(s, 'respawn', null, 0.9)
       }
       break
     }
@@ -451,7 +455,7 @@ export function handleEvent(s: Sink, ev: WireEvent): void {
       s.hud.feed(`${s.net.name(ev.by)} cracked the strongbox: $${ev.value}`, 'gold')
       if (ev.by === you) {
         s.hud.toast(`+$${ev.value} STRONGBOX`, 'gold', 2000)
-        play(s, 'coin', null, 1)
+        play(s, 'register', null, 1)
       }
       break
     case EV_CHANNEL_CANCEL:

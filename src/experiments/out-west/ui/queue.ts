@@ -5,6 +5,7 @@
 import { GHOST_FALLBACK_MS } from '../contract/duel.ts'
 import { type QueueMatch, QueueSearch, type QueueStatus } from '../net/queue.ts'
 import { icon } from './icons.ts'
+import { uiSound } from './sfx.ts'
 import { button, el, setBar, swallow } from './sheet.ts'
 
 export interface QueueSheetOpts {
@@ -84,6 +85,8 @@ export class QueueSheet {
   private matched(m: QueueMatch): void {
     this.done = true
     this.ghostBtn.hidden = true
+    // a ghost is revealed with its own cold breath; a live gun with the found sting
+    uiSound(m.mode === 'ghost' ? 'ghost' : 'queueFound')
     this.line.textContent =
       m.mode === 'ghost'
         ? `No live gun rode in. Ghost duel: the ghost of ${m.opponent.name}.`

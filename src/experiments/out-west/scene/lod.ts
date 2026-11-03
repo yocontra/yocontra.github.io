@@ -20,8 +20,10 @@ import { BufferAttribute, BufferGeometry } from 'three'
 export interface SimplifyJob {
   index: Uint32Array
   positions: Float32Array
-  /** RGB per vertex, or empty. */
+  /** Per-vertex attributes that mark seams (RGB tint, then UV), `stride` floats each, or empty. */
   colors: Float32Array
+  /** Floats per vertex in `colors` (3 = RGB only, 5 = RGB + UV). */
+  stride?: number
   targetTris: number
   /** Relative error bound (fraction of the mesh extent). */
   maxError: number
@@ -41,15 +43,21 @@ export interface SimplifyResult {
  * representative: flat-shading splits disappear, colour seams stay seams.
  * Every representative is an original vertex, so skin weights still apply.
  */
-function weld(index: Uint32Array, positions: Float32Array, colors: Float32Array): Uint32Array {
+function weld(
+  index: Uint32Array,
+  positions: Float32Array,
+  colors: Float32Array,
+  stride: number,
+): Uint32Array {
   const n = positions.length / 3
   const rep = new Uint32Array(n)
   const seen = new Map<string, number>()
   const q = (x: number, k: number) => Math.round(x * k)
   for (let i = 0; i < n; i++) {
     let key = `${q(positions[i * 3] ?? 0, 1e4)},${q(positions[i * 3 + 1] ?? 0, 1e4)},${q(positions[i * 3 + 2] ?? 0, 1e4)}`
-    if (colors.length > 0) {
-      key += `|${q(colors[i * 3] ?? 0, 48)},${q(colors[i * 3 + 1] ?? 0, 48)},${q(colors[i * 3 + 2] ?? 0, 48)}`
+    for (let c = 0; c < (colors.length > 0 ? stride : 0); c++) {
+      // colours to 1/48, UVs to about a texel of the atlas
+      key += `|${q(colors[i * stride + c] ?? 0, c < 3 ? 48 : 2048)}`
     }
     const have = seen.get(key)
     if (have === undefined) {
@@ -70,15 +78,16 @@ function weld(index: Uint32Array, positions: Float32Array, colors: Float32Array)
 export async function simplifyIndex(job: SimplifyJob): Promise<SimplifyResult> {
   await MeshoptSimplifier.ready
   const target = Math.min(job.index.length, Math.max(3, Math.floor(job.targetTris) * 3))
-  const welded = weld(job.index, job.positions, job.colors)
+  const stride = job.stride ?? 3
+  const welded = weld(job.index, job.positions, job.colors, stride)
   if (job.colors.length > 0) {
     const [index, error] = MeshoptSimplifier.simplifyWithAttributes(
       welded,
       job.positions,
       3,
       job.colors,
-      3,
-      [0.6, 0.6, 0.6],
+      stride,
+      stride === 5 ? [0.6, 0.6, 0.6, 1.5, 1.5] : [0.6, 0.6, 0.6],
       null,
       target,
       job.maxError,
@@ -134,16 +143,22 @@ export function simplifyAsync(job: SimplifyJob): Promise<SimplifyResult> {
 function jobFor(geo: BufferGeometry, targetTris: number, maxError: number): SimplifyJob {
   const pos = geo.getAttribute('position')
   const col = geo.getAttribute('color')
+  const uv = geo.getAttribute('uv')
+  const stride = uv ? 5 : 3
   const positions = new Float32Array(pos.count * 3)
-  const colors = new Float32Array(col ? pos.count * 3 : 0)
+  const colors = new Float32Array(col ? pos.count * stride : 0)
   for (let i = 0; i < pos.count; i++) {
     positions[i * 3] = pos.getX(i)
     positions[i * 3 + 1] = pos.getY(i)
     positions[i * 3 + 2] = pos.getZ(i)
     if (col) {
-      colors[i * 3] = col.getX(i)
-      colors[i * 3 + 1] = col.getY(i)
-      colors[i * 3 + 2] = col.getZ(i)
+      colors[i * stride] = col.getX(i)
+      colors[i * stride + 1] = col.getY(i)
+      colors[i * stride + 2] = col.getZ(i)
+      if (uv) {
+        colors[i * stride + 3] = uv.getX(i)
+        colors[i * stride + 4] = uv.getY(i)
+      }
     }
   }
   const src = geo.index
@@ -151,7 +166,7 @@ function jobFor(geo: BufferGeometry, targetTris: number, maxError: number): Simp
   for (let i = 0; i < index.length; i++) {
     index[i] = src ? src.getX(i) : i
   }
-  return { index, positions, colors, targetTris, maxError }
+  return { index, positions, colors, stride, targetTris, maxError }
 }
 
 const cache = new Map<string, Promise<BufferGeometry>>()

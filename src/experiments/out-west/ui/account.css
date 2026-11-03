@@ -24,7 +24,7 @@
   font-weight: 700;
   font-size: var(--ow-fs-h4);
   font-variant-caps: all-small-caps;
-  letter-spacing: 0.14em;
+  letter-spacing: 0.09em;
   line-height: 1.1;
   color: var(--ow-brass);
 }
@@ -139,7 +139,7 @@
   font-weight: 600;
   font-size: var(--ow-fs-lead);
   font-variant-caps: all-small-caps;
-  letter-spacing: 0.12em;
+  letter-spacing: 0.08em;
   line-height: 1;
   color: var(--ow-bone);
   background: rgb(14 9 6 / 0.4);
@@ -201,6 +201,9 @@
   background: none;
   border-color: transparent;
   box-shadow: none;
+  letter-spacing: var(--ow-track-caps);
+  line-height: 1.25;
+  text-wrap: balance;
   text-decoration: underline;
   text-underline-offset: 4px;
 }
@@ -229,7 +232,7 @@
   font-weight: 700;
   font-size: var(--ow-fs-body);
   font-variant-caps: all-small-caps;
-  letter-spacing: 0.14em;
+  letter-spacing: 0.09em;
   color: var(--ow-bone-2);
 }
 .ow-acct-or::before,
@@ -257,7 +260,7 @@
 .ow-acct-plate-kicker {
   font-family: var(--ow-font-ornate);
   font-size: var(--ow-fs-small);
-  letter-spacing: 0.2em;
+  letter-spacing: 0.12em;
   text-transform: uppercase;
   color: var(--ow-ink-2);
 }
@@ -328,7 +331,7 @@
   font-weight: 700;
   font-size: var(--ow-fs-h4);
   font-variant-caps: all-small-caps;
-  letter-spacing: 0.14em;
+  letter-spacing: 0.09em;
   color: var(--ow-brass);
 }
 @media (prefers-reduced-motion: reduce) {

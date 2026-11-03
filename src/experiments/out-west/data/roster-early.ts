@@ -1,10 +1,12 @@
-// biome-ignore-all lint/style/useNamingConvention: tint keys mirror source asset material names (e.g. Brown_02)
-/** The first eight outlaws of the ladder, greenhorn upward (design doc §3.4). Tuning notes live on {@link Outlaw}. */
-
+// biome-ignore-all lint/style/useNamingConvention: tint keys mirror the base GLB's material names (Shirt, Sleeves, Pants…)
+/**
+ * Outlaws 1–9 of the gauntlet, in order: the greenhorn to the night shooter. Times are in ms unless
+ * noted; `day` is the lighting scalar (0 noon, 0.5 sunset, 1 midnight).
+ */
 import { bountyFor } from './economy.ts'
-import type { Outlaw } from './outlaws.ts'
+import { BLACK, type Outlaw } from './outlaw-types.ts'
 
-export const EARLY_OUTLAWS: readonly Outlaw[] = [
+export const ROSTER_EARLY: readonly Outlaw[] = [
   {
     name: 'Bret P. Barsh',
     epithet: 'the Greenhorn',
@@ -13,13 +15,7 @@ export const EARLY_OUTLAWS: readonly Outlaw[] = [
     gimmick: 'shaky',
     look: {
       base: 'casual',
-      tint: {
-        LightBrown: 0xd8_cc_b0,
-        LightBlue: 0x4a_5a_6a,
-        Hair: 0xc8_9a_5a,
-        White: 0x6a_50_38,
-        Red_Dark: 0x4a_30_20,
-      },
+      tint: { Shirt: 0xb4_a0_7c, Pants: 0x34_40_5a, Boots: 0x5e_46_30, Hair: 0xc8_9a_5a },
       scale: 0.97,
     },
     hat: 'cowboy',
@@ -42,7 +38,7 @@ export const EARLY_OUTLAWS: readonly Outlaw[] = [
     gimmick: 'talker',
     look: {
       base: 'suit',
-      tint: { Suit: 0x6a_4a_30, Tie: 0x8a_1a_10, Hair: 0x2a_1a_10, White: 0xd8_cc_b0 },
+      tint: { Shirt: 0x6a_4a_30, Sleeves: 0x6a_4a_30, Pants: 0x3a_2a_1e, Hair: 0x2a_1a_10 },
       scale: 0.95,
       moustache: 0x2a_1a_10,
     },
@@ -76,12 +72,11 @@ export const EARLY_OUTLAWS: readonly Outlaw[] = [
     look: {
       base: 'worker',
       tint: {
-        Worker_Vest: 0x5a_3a_20,
-        LightBrown: 0xa8_98_78,
-        Worker_Yellow: 0x8a_6a_3a,
-        Brown: 0x6a_5a_40,
-        Brown2: 0x4a_3a_28,
-        Moustache: 0x8a_5a_2a,
+        Shirt: 0x6a_60_52,
+        Sleeves: 0x9c_8c_6c,
+        Pants: 0x5a_3a_20,
+        Boots: 0x4a_3a_28,
+        Hair: 0x8a_5a_2a,
       },
       scale: 1.05,
     },
@@ -105,7 +100,7 @@ export const EARLY_OUTLAWS: readonly Outlaw[] = [
     gimmick: 'coin',
     look: {
       base: 'punk',
-      tint: { Black: 0x1a_20_28, White: 0xe0_d8_c8, LightBlue: 0x2a_2a_30, Earrings: 0xc8_a0_50 },
+      tint: { Shirt: 0xb0_a0_80, Sleeves: 0xb0_a0_80, Pants: 0x1c_1a_1a, Hair: 0x10_10_10 },
       scale: 1.0,
       moustache: 0x10_10_10,
     },
@@ -130,12 +125,11 @@ export const EARLY_OUTLAWS: readonly Outlaw[] = [
     look: {
       base: 'king',
       tint: {
-        Blue: 0x8a_7a_5a,
-        Beige: 0xa8_98_78,
-        Metal: 0x5a_4a_3a,
-        Metal_Dark: 0x3a_2e_22,
-        DarkBrown: 0x3a_2e_22,
-        Hair_White: 0x9a_8a_7a,
+        Shirt: 0x6a_3a_32,
+        Sleeves: 0x9a_8a_6c,
+        Pants: 0x3a_2e_22,
+        Pauldron: 0x5a_4a_3a,
+        Hair: 0x9a_8a_7a,
       },
       scale: 0.93,
     },
@@ -160,11 +154,11 @@ export const EARLY_OUTLAWS: readonly Outlaw[] = [
     look: {
       base: 'rugged',
       tint: {
-        Green: 0x6a_2e_1e,
-        LightGreen: 0x8a_6a_4a,
-        Brown: 0x4a_3a_2a,
-        Brown2: 0x3a_2a_1a,
+        Shirt: 0x4a_5a_3a,
+        Sleeves: 0x8a_6a_4a,
+        Pants: 0x4a_3a_2a,
         Hair: 0x1a_10_08,
+        Skin: 0xe0_bc_9c,
       },
       scale: 0.98,
       poncho: 0xa0_28_1a,
@@ -191,13 +185,7 @@ export const EARLY_OUTLAWS: readonly Outlaw[] = [
     gimmick: 'windy',
     look: {
       base: 'worker',
-      tint: {
-        Worker_Vest: 0x6a_5a_40,
-        Worker_Yellow: 0x6a_5a_40,
-        LightBrown: 0x8a_7a_5a,
-        Brown: 0x5a_4a_38,
-        Moustache: 0x3a_24_12,
-      },
+      tint: { Shirt: 0x6e_64_50, Sleeves: 0x4e_46_38, Pants: 0x5a_4a_38, Hair: 0x3a_24_12 },
       scale: 1.08,
       coat: 0xb0_94_68,
     },
@@ -213,5 +201,53 @@ export const EARLY_OUTLAWS: readonly Outlaw[] = [
     accuracy: 0.75,
     day: 0.42,
     lines: ['Keep walkin’, friend.'],
+  },
+  {
+    name: 'Laura Bullion',
+    epithet: 'the Thorny Rose',
+    bounty: bountyFor(7),
+    hook: 'Cold. Still. No tells at all.',
+    gimmick: 'cold',
+    look: {
+      base: 'woman',
+      tint: { Shirt: 0xb0_a2_84, Sleeves: 0x2a_2a_2a, Pants: 0x2a_2a_2a, Hair: 0x1a_12_10 },
+      scale: 0.95,
+      coat: 0x1a_1a_1a,
+    },
+    hat: 'flat',
+    hatColor: 0x1a_1a_1a,
+    paces: [5, 10],
+    wait: [1.5, 3.5],
+    draw: 510,
+    jitter: 20,
+    fakeChance: 0.25,
+    fakes: ['crow', 'door'],
+    accuracy: 0.8,
+    day: 0.5,
+    lines: ['…'],
+  },
+  {
+    name: 'Thomas B. Arnold',
+    epithet: 'the Starer',
+    bounty: bountyFor(8),
+    hook: 'Whistles a dirge the whole walk. Never looks back.',
+    gimmick: 'whistler',
+    look: {
+      base: 'suit',
+      tint: { Shirt: 0x26_20_1c, Sleeves: 0x26_20_1c, Pants: 0x1c_1a_18, Hair: 0x3a_2a_1a },
+      scale: 1.1,
+      coat: 0x14_12_1a,
+    },
+    hat: 'tophat',
+    hatColor: BLACK,
+    paces: [6, 10],
+    wait: [1.5, 4.0],
+    draw: 475,
+    jitter: 40,
+    fakeChance: 0.3,
+    fakes: ['horse', 'bottle'],
+    accuracy: 0.8,
+    day: 0.56,
+    lines: ['I can see you sweatin’.'],
   },
 ]

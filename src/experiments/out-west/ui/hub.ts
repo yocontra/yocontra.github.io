@@ -7,15 +7,22 @@
 import type { LedgerKind, MeResponse } from '../contract/economy.ts'
 import { DEFAULT_LOADOUT, type Loadout, normalizeLoadout } from '../data/catalog.ts'
 import { money } from '../data/economy.ts'
-import { bountyForLevel, levelProgress, titleFor } from '../data/progression.ts'
-import { fetchLedger, fetchMe } from '../net/api.ts'
+import { licenceCopy, licenceStatus } from '../data/licence.ts'
+import { bountyForLevel, canPrestige, levelProgress, titleFor } from '../data/progression.ts'
+import { fetchLedger, fetchMe, fetchTownOpen } from '../net/api.ts'
 import { currentPlayer, onAuthChange } from '../net/auth.ts'
 import type { QueueMatch } from '../net/queue.ts'
+import { townClosedCopy } from '../net/wire-ranked.ts'
+import type { Dyes, MeExtras } from '../net/wire-social.ts'
 import { mountAccount } from './account.ts'
 import { icon } from './icons.ts'
+import { mountBlocks, mountNameChange } from './identity.ts'
 import { type GauntletChoice, gauntletSheet, type Mode, ModeTiles } from './mode-select.ts'
+import { showNotices } from './notices.ts'
 import { QueueSheet } from './queue.ts'
-import { button, el, setBar, signedMoney, swallow } from './sheet.ts'
+import { openSaloon, rideAgain } from './saloon.ts'
+import { announceLevel } from './sfx.ts'
+import { button, el, panelSheet, setBar, signedMoney, swallow } from './sheet.ts'
 import { mountStanding } from './standing.ts'
 import { Outfitter } from './store.ts'
 
@@ -28,14 +35,17 @@ export interface HubDeps {
   rankedOk: boolean
   /** Frame your gunslinger for the hub or the Outfitter. */
   stage: (shot: 'hub' | 'store') => void
-  /** Dress your gunslinger (equipped loadout, or a preview). */
-  dress: (l: Loadout) => void
+  /** Dress your gunslinger (equipped loadout, or a preview), with your dye jobs. */
+  dress: (l: Loadout, dyes: Dyes) => void
   playGauntlet: (c: GauntletChoice) => void
   bountyHunt: (m: QueueMatch, xpBefore: number | null) => void
   /** A fresh Turnstile token for the queue. */
   token: () => Promise<string | null>
   openBoard: () => void
 }
+
+/** Your profile as the hub holds it: `GET /me` plus the fields the server branch adds. */
+type Me = MeResponse & MeExtras
 
 const LEDGER_LABEL: Record<LedgerKind, string> = {
   // biome-ignore-start lint/style/useNamingConvention: ledger kinds are snake_case on the wire
@@ -60,13 +70,22 @@ const LEDGER_LABEL: Record<LedgerKind, string> = {
   // biome-ignore-end lint/style/useNamingConvention: ledger kinds are snake_case on the wire
 }
 
+/** Kinds the server books that this contract version doesn't list yet (sinks). */
+const SINK_LABEL: Readonly<Record<string, string>> = {
+  // biome-ignore-start lint/style/useNamingConvention: ledger kinds are snake_case on the wire
+  dye_job: 'Dye job',
+  name_change: 'Name change',
+  house_round: 'A round for the house',
+  // biome-ignore-end lint/style/useNamingConvention: ledger kinds are snake_case on the wire
+}
+
 export class Hub {
   readonly root: HTMLElement
   private readonly deps: HubDeps
   private readonly strip: HTMLElement
   private readonly tiles: ModeTiles
   private readonly parent: HTMLElement
-  private me = null as MeResponse | null
+  private me = null as Me | null
   private sheet = null as { dispose: () => void } | null
   private visible = false as boolean
 
@@ -83,6 +102,12 @@ export class Hub {
     this.tiles = new ModeTiles(side, (m) => this.pick(m))
     const links = el('div', 'ow-hub-links', side)
     button(links, 'Leaderboard', () => deps.openBoard())
+    button(links, 'Chalkboard', () =>
+      openSaloon(this.parent, {
+        me: () => this.me,
+        changed: (patch) => this.patch(patch),
+      }),
+    )
     button(links, 'Ledger', () => this.openLedger())
     button(links, 'Account', () => this.openAccount())
     onAuthChange(() => {
@@ -116,13 +141,26 @@ export class Hub {
     return this.me
   }
 
+  /** Your dye jobs (none when signed out). */
+  get dyes(): Dyes {
+    return this.me?.dyes ?? {}
+  }
+
+  /** The server accepted a purchase, a dye, a name or a round. */
+  private patch(p: Partial<Me>): void {
+    if (this.me) {
+      this.me = { ...this.me, ...p }
+      this.render()
+    }
+  }
+
   get loadout(): Loadout {
     return normalizeLoadout(this.me?.loadout ?? DEFAULT_LOADOUT)
   }
 
   private dressEquipped(): void {
     if (this.deps.ready()) {
-      this.deps.dress(this.loadout)
+      this.deps.dress(this.loadout, this.dyes)
     }
   }
 
@@ -135,7 +173,14 @@ export class Hub {
       return
     }
     const r = await fetchMe()
-    this.me = r.ok ? r.value : null
+    this.me = r.ok ? (r.value as Me) : null
+    if (this.me && this.visible) {
+      // a level gained elsewhere (a ranked gauntlet), once the saloon shows it; Bounty Hunt's
+      // results sheet has already played its own
+      announceLevel(this.me.level)
+      // royalties while you were away, levels and rewards gained since you last looked
+      showNotices(this.parent, this.me)
+    }
     this.render()
     this.dressEquipped()
   }
@@ -160,7 +205,16 @@ export class Hub {
     }
     const prog = levelProgress(me.xp)
     el('div', 'ow-hub-name', this.strip, me.name)
-    el('div', 'ow-hub-meta', this.strip, `Lv ${me.level} · ${me.title || titleFor(me.level)}`)
+    const stars = me.prestige > 0 ? ` · ${'★'.repeat(me.prestige)}` : ''
+    el(
+      'div',
+      'ow-hub-meta',
+      this.strip,
+      `Lv ${me.level} · ${me.title || titleFor(me.level)}${stars}`,
+    ).setAttribute(
+      'aria-label',
+      `Level ${me.level}${me.prestige > 0 ? `, ${me.prestige} prestige stars` : ''}`,
+    )
     const xp = el('div', 'ow-xp', this.strip)
     xp.setAttribute('role', 'progressbar')
     xp.setAttribute('aria-label', 'Experience')
@@ -175,6 +229,19 @@ export class Hub {
     const b = money(me.bounty || bountyForLevel(me.level))
     bounty.setAttribute('aria-label', `Bounty ${b}`)
     bounty.append(icon('bounty'), b)
+    if (canPrestige(me.level, me.prestige)) {
+      button(
+        this.strip,
+        'Ride again',
+        () =>
+          rideAgain(this.parent, me, (next) => {
+            this.me = { ...this.me, ...next }
+            this.render()
+            this.refresh().catch(() => undefined)
+          }),
+        true,
+      ).classList.add('ow-feat-prestige')
+    }
   }
 
   private pick(m: Mode): void {
@@ -207,10 +274,41 @@ export class Hub {
     if (m === 'bounty') {
       this.openQueue()
     } else {
-      // Frontier runs on its own page: one WebGL context and render loop at a time, which matters
-      // on phones. Leaving town returns straight to the saloon (`?saloon`).
-      location.assign('/experiments/out-west/frontier/?server=remote')
+      this.openFrontier().catch(() => undefined)
     }
+  }
+
+  /**
+   * Frontier runs on its own page: one WebGL context and render loop at a time, which matters on
+   * phones. Leaving town returns straight to the saloon (`?saloon`). Before the trip: the licence
+   * (the first three outlaws on a ranked run) and whether the town is open this month.
+   */
+  private async openFrontier(): Promise<void> {
+    const me = this.me
+    if (me && !licenceStatus(me.gauntletClears).licensed) {
+      const s = panelSheet(this.parent, { title: 'Frontier', cls: 'ow-feat-gate' })
+      const copy = licenceCopy(licenceStatus(me.gauntletClears))
+      el('p', 'ow-hub-note', s.body, 'Perdition only lets licensed gunslingers in.')
+      el('p', 'ow-hub-note', s.body, copy.progress ?? copy.kicker)
+      const row = el('div', 'ow-hub-row', s.body)
+      button(
+        row,
+        'Ride the gauntlet',
+        () => {
+          s.close()
+          this.pick('gauntlet')
+        },
+        true,
+      )
+      return
+    }
+    const open = await fetchTownOpen()
+    if (open.ok && !open.value) {
+      const s = panelSheet(this.parent, { title: 'Frontier', cls: 'ow-feat-gate' })
+      el('p', 'ow-hub-note', s.body, townClosedCopy())
+      return
+    }
+    location.assign('/experiments/out-west/frontier/?server=remote')
   }
 
   private openQueue(): void {
@@ -245,13 +343,8 @@ export class Hub {
     this.deps.stage('store')
     const store = new Outfitter(this.parent, {
       me: () => this.me,
-      preview: (l) => this.deps.dress(l),
-      changed: (patch) => {
-        if (this.me) {
-          this.me = { ...this.me, ...patch }
-          this.render()
-        }
-      },
+      preview: (l, dyes) => this.deps.dress(l, dyes ?? this.dyes),
+      changed: (patch) => this.patch(patch),
       close: () => {
         this.root.classList.remove('shop')
         this.deps.stage('hub')
@@ -265,40 +358,44 @@ export class Hub {
     this.sheet = null
   }
 
-  /** A panel over the hub with a close button; returns its body. */
-  private panel(title: string, paper = false): HTMLElement {
+  /**
+   * A panel over the hub with a close button (Escape and a tap outside close it too). `cleanup`
+   * runs however it closes.
+   */
+  private panel(
+    title: string,
+    paper = false,
+    cleanup: { run: () => void } | null = null,
+  ): HTMLElement {
     this.closeSheet()
-    const back = el('div', 'ow-sheet on', this.parent)
-    back.setAttribute('role', 'dialog')
-    back.setAttribute('aria-label', title)
-    swallow(back)
-    const panel = el('div', `ow-hub-panel ow-sheet-panel${paper ? ' ow-paper-doc' : ''}`, back)
-    const head = el('div', 'ow-hub-row ow-sheet-head', panel)
-    el('h2', 'ow-hub-h', head, title)
-    button(head, 'Close', () => this.closeSheet())
-    const body = el('div', 'ow-sheet-body', panel)
-    back.addEventListener('click', (e) => {
-      if (e.target === back) {
-        this.closeSheet()
-      }
+    const s = panelSheet(this.parent, {
+      title,
+      paper,
+      onClose: () => {
+        cleanup?.run()
+        if (this.sheet === handle) {
+          this.sheet = null
+        }
+      },
     })
-    this.sheet = { dispose: () => back.remove() }
-    return body
+    const handle = { dispose: () => s.close() }
+    this.sheet = handle
+    return s.body
   }
 
   private openAccount(): void {
-    const body = this.panel('Your poster')
+    // the account panel holds a pending conditional sign-in: cancelled however the sheet closes
+    const cleanup = { run: (): void => undefined }
+    const body = this.panel('Your poster', false, cleanup)
     const acct = mountAccount(body, {
       onClose: () => this.closeSheet(),
       gauntletClears: this.me?.gauntletClears ?? null,
     })
+    cleanup.run = () => acct.dispose()
     mountStanding(body)
-    const back = this.sheet
-    this.sheet = {
-      dispose: () => {
-        acct.dispose()
-        back?.dispose()
-      },
+    if (this.me) {
+      mountNameChange(body, this.me, (patch) => this.patch(patch))
+      mountBlocks(body)
     }
   }
 
@@ -322,7 +419,7 @@ export class Hub {
         }
         for (const row of r.value) {
           const li = el('li', '', list)
-          el('span', '', li, LEDGER_LABEL[row.kind] ?? row.kind)
+          el('span', '', li, LEDGER_LABEL[row.kind] ?? SINK_LABEL[row.kind] ?? row.kind)
           el('b', row.amount < 0 ? 'neg' : 'pos', li, row.amount ? signedMoney(row.amount) : '')
           el('i', '', li, row.xp ? `+${row.xp} XP` : '')
           el('time', '', li, new Date(row.createdAt).toLocaleDateString())

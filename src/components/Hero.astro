@@ -108,8 +108,10 @@
     margin-block: 1.5rem 1.75rem;
     font-size: 11.1cqi;
     font-weight: 800;
-    letter-spacing: -0.045em;
+    /* -0.045em fused the heavy FF; this keeps the counters open at every width */
+    letter-spacing: -0.035em;
     line-height: 0.86;
+    font-kerning: normal;
     text-transform: uppercase;
     color: #fff;
     mix-blend-mode: difference;
@@ -151,6 +153,7 @@
     max-width: 38ch;
     font-size: clamp(1.1rem, 1.6vw, 1.45rem);
     line-height: 1.45;
+    text-wrap: pretty;
     color: oklch(0.96 0.01 var(--accent-h) / 0.88);
     text-shadow: 0 1px 24px oklch(0.1 0.02 var(--accent-h) / 0.8);
   }

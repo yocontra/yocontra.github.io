@@ -12,6 +12,7 @@ import { load, type SaveData, save } from './save.ts'
 import { Board } from './ui/board.ts'
 import { Hub } from './ui/hub.ts'
 import { loadPosterArt } from './ui/poster.ts'
+import { installUiSounds } from './ui/sfx.ts'
 
 /** Hashes that jump into a debug view or a non-default run: never ranked. */
 const UNRANKED_HASHES = ['level', 'legend', 'lineup', 'posters']
@@ -56,10 +57,9 @@ function rankedConnector(root: HTMLElement, hash: URLSearchParams): RankedConnec
   return async () => {
     const token = await turnstile.take()
     if (!token) {
-      return null
+      return { ok: false, error: '' }
     }
-    const session = await RankedSession.connect(token)
-    return session.ok ? session.value : null
+    return await RankedSession.connect(token)
   }
 }
 
@@ -104,7 +104,7 @@ function makeHub(
     continueAt: () => data.level,
     rankedOk,
     stage: (shot) => game()?.hubShot(shot),
-    dress: (l) => game()?.dress(l),
+    dress: (l, dyes) => game()?.dress(l, dyes),
     playGauntlet: (c) => game()?.playGauntlet(c),
     bountyHunt: (match, xpBefore) =>
       game()?.startPvp({
@@ -121,7 +121,7 @@ function makeHub(
     token: queueTokens(root),
     openBoard: () => {
       board ??= new Board(root)
-      board.open()
+      board.open({ tab: 'most-wanted' })
     },
   })
   return hub
@@ -149,6 +149,7 @@ function debugView(g: Game, hash: URLSearchParams, title: HTMLElement): boolean 
 export function boot(root: HTMLElement): void {
   const audio = new AudioEngine()
   audio.prefetch()
+  installUiSounds(audio)
   const data = load()
   const hash = new URLSearchParams(location.hash.slice(1))
   const debug = hash.has('debug')
@@ -237,6 +238,7 @@ export function boot(root: HTMLElement): void {
       if (audio.ctx) {
         unlockAudio(audio.ctx)
       }
+      audio.playSong('intro')
     }
     globalThis.addEventListener('pointerdown', unlockOnce, { once: true })
   }
@@ -258,7 +260,7 @@ export function boot(root: HTMLElement): void {
     )
     .then((g) => {
       game = g
-      if (debug) {
+      if (import.meta.env.DEV && debug) {
         Reflect.set(globalThis, '__ow', g)
       }
       if (debugView(g, hash, title)) {

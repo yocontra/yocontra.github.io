@@ -2,6 +2,7 @@ import { save as persist, resetRun } from '../save.ts'
 import { LocalDuelClock } from './clock.ts'
 import type { Director } from './director.ts'
 import { titleShot } from './framing.ts'
+import { ambience } from './present.ts'
 import { RankedDuelClock } from './ranked-clock.ts'
 import { standoffSpec } from './standoff.ts'
 
@@ -42,7 +43,8 @@ export async function tryRanked(d: Director): Promise<void> {
   d.rankedTry++
   const attempt = d.rankedTry
   d.c.hud.setMode('connecting…')
-  const session = await connect().catch(() => null)
+  const r = await connect().catch(() => ({ ok: false, error: '' }) as const)
+  const session = r.ok ? r.value : null
   if (attempt !== d.rankedTry) {
     // a restart (or a drop to practice) superseded this attempt
     session?.close()
@@ -51,6 +53,10 @@ export async function tryRanked(d: Director): Promise<void> {
   if (!(session && canRank(d))) {
     session?.close()
     d.c.hud.setMode(PRACTICE)
+    if (!r.ok && r.error) {
+      // say why it isn't ranked (closed for the month, rate limited, unreachable)
+      d.c.hud.fake(`[${r.error}]`, 6000)
+    }
     return
   }
   d.clock.dispose()
@@ -127,6 +133,11 @@ export function emptyStreet(d: Director): void {
   hud.letterbox(false)
   hud.show(false)
   c.audio.heartbeat(0)
+  // back to the saloon's theme, undo any standoff duck, and let the bed rest
+  c.audio.playSong('intro')
+  c.audio.musicLevel(0, 0.6)
+  c.audio.musicLowpass(18_000, 0.6)
+  ambience(d, 1, 1.5)
   d.timeScale = 1
   d.player.root.visible = false
   d.enter('title')

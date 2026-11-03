@@ -8,44 +8,50 @@ too.
 Every third-party asset below is CC0 (public domain). No attribution is legally required; it is
 given anyway. All models were downloaded as GLB, trimmed and recompressed (meshopt + WebP).
 
-## Characters (Quaternius, CC0, via Poly Pizza)
+## Characters (Quaternius, CC0)
 
-| File | Source | Licence |
-|---|---|---|
-| `models/player.glb` | "Farmer" by Quaternius — https://poly.pizza/m/7pn3R6hPvE | CC0 1.0 |
-| `models/suit.glb` | "Business Man" by Quaternius — https://poly.pizza/m/JFrLIKqvCH | CC0 1.0 |
-| `models/rugged.glb` | "Adventurer" by Quaternius — https://poly.pizza/m/5EGWBMpuXq | CC0 1.0 |
-| `models/woman.glb` | "Adventurer" by Quaternius — https://poly.pizza/m/ZwF0K7WBmu | CC0 1.0 |
-| `models/casual.glb` | "Casual Character" by Quaternius — https://poly.pizza/m/kZ3DmIoGip | CC0 1.0 |
-| `models/worker.glb` | "Worker" by Quaternius — https://poly.pizza/m/Yg2bQZO6Hj | CC0 1.0 |
-| `models/king.glb` | "King" by Quaternius — https://poly.pizza/m/I1gTjmuK2m | CC0 1.0 |
-| `models/punk.glb` | "Punk" by Quaternius — https://poly.pizza/m/BTALZymknF | CC0 1.0 |
+Every base body (`models/{player,casual,worker,suit,rugged,king,punk,woman}.glb`) and the shared
+character atlas (`tex/char_{diff,nor,arm}.webp`) are built by `tools/build-characters.ts` from the
+free (standard) editions of three Quaternius packs, all CC0 1.0 (licence files in the downloads):
 
-All of these share one rig (the Woman has her own). Each outlaw is ONE whole character from this
-list, never parts of several: recoloured, uniformly scaled, and dressed at runtime in procedural
-hats, coats, ponchos, bandanas, masks, bandoliers, beards, moustaches and badges that are fitted to
-his own posed surface and skinned to his bones, then baked with him into a single skinned mesh.
-The worker's hard hat, the king's crown, the punk's mohawk and the rugged adventurer's backpack are
-removed. No fabric textures are used.
+| Pack | Source | Used for | Licence |
+|---|---|---|---|
+| Universal Base Characters [Standard] | https://quaternius.com/packs/universalbasecharacters.html (https://quaternius.itch.io/universal-base-characters) | heads, faces, eyes, brows, hairstyles, beards (Superhero male/female bodies; only the head is kept) | CC0 1.0 |
+| Modular Character Outfits – Fantasy [Standard] | https://quaternius.com/packs/modularcharacteroutfitsfantasy.html (https://quaternius.itch.io/modular-character-outfits-fantasy) | the Peasant and Ranger outfits (shirts, sleeves, trousers, boots, belts, bracers, pauldron), mixed and matched per base on their shared skeleton | CC0 1.0 |
+| Universal Animation Library [Standard] | https://quaternius.com/packs/universalanimationlibrary.html (https://quaternius.itch.io/universal-animation-library) | every clip (idle, walk, jog, pistol idle/aim/shoot, hit, death...), renamed to the game's clip names | CC0 1.0 |
+
+The parts are rebound to one skeleton, simplified with meshoptimizer to ~14–18k triangles a
+body, and their textures (4K/2K) are packed into one 2048×3072 atlas (normal and ARM at half
+size; AO baked into the albedo). The ranger set's forest green is recoloured to western colours
+at runtime, and each outlaw's garment colours recolour only the main fabric of each garment
+(mask from the texture). Hats, coats, ponchos, bandanas, masks, bandoliers, moustaches, stars
+and holsters are procedural, fitted to each body and woven from the Poly Haven fabric swatches
+below.
 
 Quaternius: https://quaternius.com
 
-## Props (`models/props.glb`, merged)
+## Props and building kit (`models/props.glb`, `tex/kit_*.webp`)
+
+Built by `tools/build-props.ts`: every kit piece below is re-UV'd into one trim atlas
+(`tex/kit_{diff,nor,arm}.webp`, the kits' trim sheets stacked in bands) and draws with one
+material; the street and the Frontier town merge their doors, windows, shutters, balcony rails and
+dressing into one draw. The source of the untouched scenes is `tools/art/props-src.glb`.
 
 | Prop | Source | Licence |
 |---|---|---|
-| Revolver | Quaternius — https://poly.pizza/m/E7IaG9TptR | CC0 1.0 |
+| Doors, door frames, windows, shutters, boardwalk planks, balcony rails, porch braces, fences, the wagon (`cart`), crates (`crate`), and the trim sheets `T_WoodTrim`, `T_MetalOrnaments` | Quaternius, "Medieval Village MegaKit" [Standard] — https://quaternius.com/packs/medievalvillagemegakit.html (https://quaternius.itch.io/medieval-village-megakit) | CC0 1.0 |
+| Barrels (`barrel`), benches, buckets, chests, sacks, coin purses, coin piles, tables, chairs, stools, barrel racks, rope, wall lanterns, bottles, crates, anvil, workbench, and the trim sheets `T_Trim_Furniture`, `T_Trim_Metal`, `T_Trim_Props`, `T_Trim_Cloth` | Quaternius, "Fantasy Props MegaKit" [Standard] — https://quaternius.com/packs/fantasypropsmegakit.html (https://quaternius.itch.io/fantasy-props-megakit) | CC0 1.0 |
+| Revolver (re-UV'd onto the atlas's steel and walnut) | Quaternius — https://poly.pizza/m/E7IaG9TptR | CC0 1.0 |
 | Rifle | Quaternius — https://poly.pizza/m/KjHL5JJrxU | CC0 1.0 |
 | Cactus | Quaternius — https://poly.pizza/m/HsEJgRLQWX | CC0 1.0 |
-| Crate | Quaternius — https://poly.pizza/m/3OEFd1AWfa | CC0 1.0 |
-| Barrel | Quaternius — https://poly.pizza/m/ONdghDBByN | CC0 1.0 |
-| Broken cart | Quaternius — https://poly.pizza/m/NBDHe8J7f9 | CC0 1.0 |
 | Rock | Quaternius — https://poly.pizza/m/li0YBlBEMz | CC0 1.0 |
 | Hay | Quaternius — https://poly.pizza/m/Yu8TOERkpw | CC0 1.0 |
-| Fence | Quaternius — https://poly.pizza/m/U7g0Wxpt63 | CC0 1.0 |
 | Coffin | Kay Lousberg — https://poly.pizza/m/WqqeFNrp0e | CC0 1.0 |
 | Post lantern | Kay Lousberg — https://poly.pizza/m/ZSQ65S4lEu | CC0 1.0 |
 | Hanging lantern | Kay Lousberg — https://poly.pizza/m/3jzk3YShv1 | CC0 1.0 |
+
+The earlier Quaternius crate, barrel, broken cart and fence (poly.pizza 3OEFd1AWfa, ONdghDBByN,
+NBDHe8J7f9, U7g0Wxpt63; CC0) were replaced by the kit pieces above.
 
 ## Textures (Poly Haven, CC0)
 
@@ -57,6 +63,11 @@ fetched and converted to WebP with `tools/polyhaven.ts`.
 | `tex/ground_*.webp` | "Gravelly Sand" — https://polyhaven.com/a/gravelly_sand | CC0 1.0 |
 | `tex/planks_*.webp` | "Weathered Plank Siding" — https://polyhaven.com/a/weathered_plank_siding | CC0 1.0 |
 | `tex/vplanks_*.webp` | "Old Planks 02" — https://polyhaven.com/a/old_planks_02 | CC0 1.0 |
+| `tex/char_*.webp` swatches: leather | "Brown Leather" — https://polyhaven.com/a/brown_leather | CC0 1.0 |
+| swatch: wool (coats) | "Caban" — https://polyhaven.com/a/caban | CC0 1.0 |
+| swatch: felt (hats, moustaches) | "Scuba Suede" — https://polyhaven.com/a/scuba_suede | CC0 1.0 |
+| swatch: linen (bandanas, masks) | "Rough Linen" — https://polyhaven.com/a/rough_linen | CC0 1.0 |
+| swatch: hessian (ponchos) | "Hessian 230" — https://polyhaven.com/a/hessian_230 | CC0 1.0 |
 
 ## Sound effects and music
 
@@ -112,14 +123,16 @@ AAC-LC `.m4a` (Apple encoder), SFX and beds to about −16 LUFS and music to −
 
 | File | Source | Licence |
 |---|---|---|
-| `paper.webp`, `poster.webp`, `wood.webp`, `leather.webp`, `smoke.webp` | Aged paper, wanted-poster stock, saloon planks, saddle leather, charred endpaper: generated (Gemini), resized and compressed | First-party |
+| `paper.webp` (768², 45 KB), `leather.webp` (768², 83 KB), `smoke.webp` (768², 8 KB) | Cotton rag handbill stock, worn saddle leather, smoke-darkened endpaper: generated (Gemini, 2026-11 art pass), made seamless with `tools/seamless.ts` | First-party |
+| `poster.webp`, `wood.webp` | Wanted-poster stock, saloon planks: generated (Gemini), resized and compressed | First-party |
 | `seal.webp` | Red wax seal: generated (Gemini), chroma-keyed | First-party |
 | `duel-woodcut.webp` | Title woodcut of a street duel: generated (Gemini) | First-party |
 | `corner.svg`, `rule.svg`, `src/experiments/out-west/ui/icons.ts` | Printer's ornaments and the 12-icon set: generated (Gemini) as raster references, traced to vectors with potrace | First-party |
 | `torn.svg` | Torn paper edge mask: generated procedurally | First-party |
 
-## Fonts (self-hosted via fontsource)
+## Fonts (self-hosted, `/experiments/out-west/fonts/`, built by `tools/build-fonts.ts` from github.com/google/fonts; licence texts alongside)
 
-- "Ultra" and "Rye" by Astigmatic (AOETI), SIL Open Font License 1.1.
+- "Ultra" by Astigmatic (AOETI), Apache License 2.0.
+- "Rye" by Nicole Fally (Sorkin Type Co), SIL Open Font License 1.1.
 - "EB Garamond" by Georg Duffner and Octavio Pardo, SIL Open Font License 1.1.
 - "Oswald" by Vernon Adams, Kalapi Gajjar and Cyreal, SIL Open Font License 1.1.

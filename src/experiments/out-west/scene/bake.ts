@@ -19,6 +19,7 @@ import {
   SkinnedMesh,
   Vector3,
 } from 'three'
+import { intoRect, SWATCH, SWATCH_LUM, type Swatch } from './atlas.ts'
 import type { Body, WeightFn } from './fit.ts'
 
 /**
@@ -27,9 +28,18 @@ import type { Body, WeightFn } from './fit.ts'
  * it is skinned.
  */
 export interface Piece {
+  /** Root-space geometry: position, normal, colour (the tint), index, and `uv` when it has one. */
   geo: BufferGeometry
+  /** Roughness multiplier on the atlas (plain swatch: the roughness itself). */
   roughness: number
   rim: number
+  /**
+   * Where its UVs point: `atlas` (a body part, already in atlas space) or a fabric swatch its
+   * 0..1 UVs are mapped onto (procedural garments; plain when it has none).
+   */
+  swatch?: Swatch | 'atlas'
+  /** Mean luminance of the main fabric when recoloured (0 = multiply by the tint). */
+  lum?: number
   /** Per-vertex weights (garments); or `skin`, precomputed indices into `Body.bones` (the body). */
   weights?: WeightFn
   skin?: { index: Uint16Array; weight: Float32Array }
@@ -74,6 +84,7 @@ export function bodyPieces(model: Object3D, space: Object3D, body: Body): Piece[
   const acc = new Matrix4()
   const v = new Vector3()
   const n = new Vector3()
+  // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: one pass per vertex (skin, pose, attributes) kept together to avoid re-walking the buffers
   model.traverse((o) => {
     const sm = o as SkinnedMesh
     if (!sm.isSkinnedMesh) {
@@ -89,6 +100,7 @@ export function bodyPieces(model: Object3D, space: Object3D, body: Body): Piece[
     const outP = new Float32Array(count * 3)
     const outN = new Float32Array(count * 3)
     const outC = new Float32Array(count * 3)
+    const uvA = g.getAttribute('uv')
     const outI = new Uint16Array(count * 4)
     const outW = new Float32Array(count * 4)
     const toSpace = inv.clone().multiply(sm.matrixWorld).multiply(sm.bindMatrixInverse)
@@ -112,15 +124,27 @@ export function bodyPieces(model: Object3D, space: Object3D, body: Body): Piece[
     geo.setAttribute('position', new BufferAttribute(outP, 3))
     geo.setAttribute('normal', new BufferAttribute(outN, 3))
     geo.setAttribute('color', new BufferAttribute(outC, 3))
+    if (uvA) {
+      const uv = new Float32Array(count * 2)
+      for (let k = 0; k < count; k++) {
+        uv[k * 2] = uvA.getX(k)
+        uv[k * 2 + 1] = uvA.getY(k)
+      }
+      geo.setAttribute('uv', new BufferAttribute(uv, 2))
+    }
     geo.setIndex(g.index ? Array.from(g.index.array) : Array.from({ length: count }, (_, i) => i))
     if (!nrm) {
       geo.computeVertexNormals()
     }
+    const recolor = mat.userData.recolor === true
     out.push({
       geo,
-      roughness: mat.roughness,
+      // textured body parts take their roughness from the atlas
+      roughness: uvA ? 1 : mat.roughness,
       rim: (mat.userData.rim as number | undefined) ?? 1,
       skin: { index: outI, weight: outW },
+      swatch: uvA ? 'atlas' : 'plain',
+      lum: recolor ? ((mat.userData.lum as number | undefined) ?? 0) : 0,
     })
   })
   return out
@@ -139,7 +163,7 @@ export function meshPieces(obj: Object3D, space: Object3D, weights?: WeightFn): 
     const mat = firstMaterial(mesh.material)
     const geo = mesh.geometry.clone()
     for (const k of Object.keys(geo.attributes)) {
-      if (k !== 'position' && k !== 'normal') {
+      if (k !== 'position' && k !== 'normal' && k !== 'uv') {
         geo.deleteAttribute(k)
       }
     }
@@ -153,10 +177,12 @@ export function meshPieces(obj: Object3D, space: Object3D, weights?: WeightFn): 
     if (!geo.index) {
       geo.setIndex(Array.from({ length: count }, (_, i) => i))
     }
+    const swatch = (mat.userData.swatch as Swatch | undefined) ?? 'plain'
     const piece: Piece = {
       geo,
-      roughness: mat.roughness,
+      roughness: swatch === 'plain' ? mat.roughness : 1,
       rim: (mat.userData.rim as number | undefined) ?? 1,
+      swatch,
     }
     if (weights) {
       piece.weights = weights
@@ -166,7 +192,23 @@ export function meshPieces(obj: Object3D, space: Object3D, weights?: WeightFn): 
   return out
 }
 
-/** Plain merged geometry (position, normal, color, styMat, index). */
+/** Atlas UV of one vertex of a piece (its own UVs mapped onto its swatch). */
+function atlasUv(p: Piece, u: number, v: number): [number, number] {
+  const sw = p.swatch ?? 'plain'
+  if (sw === 'atlas') {
+    return [u, v]
+  }
+  const c = (x: number) => Math.min(1, Math.max(0, x))
+  return intoRect(SWATCH[sw], c(u), c(v))
+}
+
+/** Luminance the shader normalises a piece's texels by (0 = multiply). */
+function pieceLum(p: Piece): number {
+  const sw = p.swatch ?? 'plain'
+  return sw === 'atlas' ? (p.lum ?? 0) : SWATCH_LUM[sw]
+}
+
+/** Plain merged geometry (position, normal, color, uv, styMat, styLum, index). */
 export function mergePieces(pieces: readonly Piece[]): BufferGeometry {
   let verts = 0
   let tris = 0
@@ -178,6 +220,8 @@ export function mergePieces(pieces: readonly Piece[]): BufferGeometry {
   const outN = new Float32Array(verts * 3)
   const outC = new Float32Array(verts * 3)
   const outS = new Float32Array(verts * 2)
+  const outU = new Float32Array(verts * 2)
+  const outL = new Float32Array(verts)
   const idx = new Uint32Array(tris)
   let vo = 0
   let io = 0
@@ -189,7 +233,11 @@ export function mergePieces(pieces: readonly Piece[]): BufferGeometry {
     const pa = g.getAttribute('position')
     const na = g.getAttribute('normal')
     const ca = g.getAttribute('color')
+    const ua = g.getAttribute('uv')
+    const lum = pieceLum(p)
     for (let k = 0; k < pa.count; k++) {
+      outU.set(atlasUv(p, ua ? ua.getX(k) : 0.5, ua ? ua.getY(k) : 0.5), (vo + k) * 2)
+      outL[vo + k] = lum
       const o = (vo + k) * 3
       outP.set([pa.getX(k), pa.getY(k), pa.getZ(k)], o)
       outN.set([na.getX(k), na.getY(k), na.getZ(k)], o)
@@ -209,7 +257,9 @@ export function mergePieces(pieces: readonly Piece[]): BufferGeometry {
   out.setAttribute('position', new BufferAttribute(outP, 3))
   out.setAttribute('normal', new BufferAttribute(outN, 3))
   out.setAttribute('color', new BufferAttribute(outC, 3))
+  out.setAttribute('uv', new BufferAttribute(outU, 2))
   out.setAttribute('styMat', new BufferAttribute(outS, 2))
+  out.setAttribute('styLum', new BufferAttribute(outL, 1))
   out.setIndex(new BufferAttribute(verts > 65_535 ? idx : Uint16Array.from(idx), 1))
   return out
 }

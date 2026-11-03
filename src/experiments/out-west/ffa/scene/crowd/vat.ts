@@ -34,31 +34,27 @@ import {
 } from 'three'
 import type { BodyKey, HatKey } from '../../../data/outlaws.ts'
 import type { Assets } from '../../../engine/assets.ts'
-import { type Clip, makeHat } from '../../../scene/actor.ts'
+import type { Clip } from '../../../scene/actor.ts'
 import { castActor } from '../../../scene/cast.ts'
+import { makeHat } from '../../../scene/hats.ts'
+import { characterMaps, NORMAL_GUARD_GLSL, RECOLOR_GLSL } from '../../../scene/shade.ts'
 import { RIM } from '../../../scene/style.ts'
 import { VAT_W, type VatClipInfo, type VatJob, type VatResult } from './vat-shared.ts'
 
 export const VAT_FPS = 15
 /** Bump when the bake changes; also part of the IndexedDB key. */
-const VAT_VERSION = 'vat5'
+const VAT_VERSION = 'vat6-atlas'
 const LOD2_TRIS = 1500
 
 /** Clothing materials per base, recoloured per player (slot 1 top, slot 2 bottoms). */
 export const PALETTE: Record<BodyKey, [string[], string[]]> = {
-  casual: [['LightBrown'], ['LightBlue']],
-  suit: [['Suit', 'Tie'], []],
-  worker: [
-    ['Worker_Vest', 'LightBrown'],
-    ['Brown2', 'Brown'],
-  ],
-  punk: [['Black'], ['LightBlue']],
-  king: [['Blue', 'Beige'], ['DarkBrown']],
-  rugged: [
-    ['Green', 'LightGreen'],
-    ['Brown2', 'Brown'],
-  ],
-  woman: [['LightGreen', 'Green'], ['Brown2']],
+  casual: [['Shirt'], ['Pants']],
+  suit: [['Shirt', 'Sleeves'], ['Pants']],
+  worker: [['Shirt', 'Sleeves'], ['Pants']],
+  punk: [['Shirt', 'Sleeves'], ['Pants']],
+  king: [['Shirt', 'Sleeves'], ['Pants']],
+  rugged: [['Shirt', 'Sleeves'], ['Pants']],
+  woman: [['Shirt'], ['Pants']],
 }
 const MARK1 = 0xff_00_ff
 const MARK2 = 0x00_ff_ff
@@ -192,6 +188,13 @@ async function bakeFresh(assets: Assets, base: BodyKey, clips: Clip[]): Promise<
       .toArray()
   }
   hat?.removeFromParent()
+  // geometry and bones only: the worker never needs the atlas (and couldn't decode it)
+  const plain = new MeshStandardMaterial()
+  actor.root.traverse((o) => {
+    if ((o as { isMesh?: boolean }).isMesh) {
+      ;(o as Mesh).material = plain
+    }
+  })
   const json = actor.root.toJSON()
   const clipJson = clips
     .map((n) => actor.action(n)?.getClip())
@@ -232,6 +235,8 @@ function finish(base: BodyKey, s: Stored, ms: number, cached: boolean): VatBake 
   geometry.setAttribute('position', new BufferAttribute(new Float32Array(r.vertexCount * 3), 3))
   geometry.setAttribute('color', new BufferAttribute(r.color, 3))
   geometry.setAttribute('vatSlot', new BufferAttribute(r.slot, 1))
+  geometry.setAttribute('uv', new BufferAttribute(r.uv, 2))
+  geometry.setAttribute('styLum', new BufferAttribute(r.lum, 1))
   geometry.setIndex(new BufferAttribute(r.index, 1))
   const totalFrames = r.clips.reduce((a, c) => a + c.frames, 0)
   return {
@@ -287,6 +292,10 @@ attribute vec4 vatClip;
 attribute vec3 vatTop;
 attribute vec3 vatBottom;
 attribute float vatSlot;
+attribute vec3 color;
+attribute float styLum;
+varying vec3 vStyTint;
+varying float vStyLum;
 vec3 vatP; vec3 vatN;
 void vatSample() {
   float f = mod((vatTime + vatClip.z) * vatClip.w * ${VAT_FPS.toFixed(1)}, vatClip.y);
@@ -299,7 +308,9 @@ void vatSample() {
   int r0 = int(vatClip.x + f0) * ${rows} + y;
   int r1 = int(vatClip.x + f1) * ${rows} + y;
   vatP = mix(texelFetch(vatPos, ivec2(x, r0), 0).xyz, texelFetch(vatPos, ivec2(x, r1), 0).xyz, t);
-  vatN = normalize(mix(texelFetch(vatNrm, ivec2(x, r0), 0).xyz, texelFetch(vatNrm, ivec2(x, r1), 0).xyz, t) * 2.0 - 1.0);
+  vec3 vatNn = mix(texelFetch(vatNrm, ivec2(x, r0), 0).xyz, texelFetch(vatNrm, ivec2(x, r1), 0).xyz, t) * 2.0 - 1.0;
+  // a degenerate (collapsed) triangle bakes a zero normal: never normalize it into a NaN
+  vatN = dot(vatNn, vatNn) > 1e-6 ? normalize(vatNn) : vec3(0.0, 1.0, 0.0);
 }`
 
 export class VatCrowd {
@@ -311,7 +322,15 @@ export class VatCrowd {
 
   constructor(bake: VatBake, capacity: number) {
     this.bake = bake
-    const mat = new MeshStandardMaterial({ vertexColors: true, roughness: 0.8, metalness: 0 })
+    // the same atlas and recolour as the near (skinned) characters
+    const maps = characterMaps()
+    const mat = new MeshStandardMaterial({ roughness: 1, metalness: maps ? 1 : 0 })
+    if (maps) {
+      mat.map = maps.map
+      mat.normalMap = maps.normal
+      mat.roughnessMap = maps.arm
+      mat.metalnessMap = maps.arm
+    }
     mat.onBeforeCompile = (shader) => {
       shader.uniforms.vatPos = { value: bake.posTex }
       shader.uniforms.vatNrm = { value: bake.nrmTex }
@@ -323,15 +342,18 @@ export class VatCrowd {
         .replace('#include <beginnormal_vertex>', 'vatSample();\nvec3 objectNormal = vatN;')
         .replace('#include <begin_vertex>', 'vec3 transformed = vatP;')
         .replace(
-          '#include <color_vertex>',
-          `#include <color_vertex>
-vColor.rgb = vatSlot < 0.5 ? color.rgb : (vatSlot < 1.5 ? vatTop : vatBottom);`,
+          '#include <project_vertex>',
+          `#include <project_vertex>
+vStyTint = vatSlot < 0.5 ? color.rgb : (vatSlot < 1.5 ? vatTop : vatBottom);
+vStyLum = styLum;`,
         )
       shader.fragmentShader = shader.fragmentShader
         .replace(
           '#include <common>',
-          '#include <common>\nuniform vec3 styRim;\nuniform float styRimK;',
+          '#include <common>\nuniform vec3 styRim;\nuniform float styRimK;\nvarying vec3 vStyTint;\nvarying float vStyLum;',
         )
+        .replace('#include <map_fragment>', `#include <map_fragment>\n${RECOLOR_GLSL}`)
+        .replace('#include <normal_fragment_maps>', NORMAL_GUARD_GLSL)
         .replace(
           '#include <emissivemap_fragment>',
           `#include <emissivemap_fragment>
@@ -341,7 +363,7 @@ vColor.rgb = vatSlot < 0.5 ? color.rgb : (vatSlot < 1.5 ? vatTop : vatBottom);`,
 }`,
         )
     }
-    mat.customProgramCacheKey = () => `ow-vat-${bake.rows}`
+    mat.customProgramCacheKey = () => `ow-vat2-${bake.rows}${maps ? '-tex' : ''}`
     const geo = bake.geometry.clone()
     this.mesh = new InstancedMesh(geo, mat, capacity)
     this.clipAttr = new InstancedBufferAttribute(new Float32Array(capacity * 4), 4)

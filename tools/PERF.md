@@ -78,7 +78,25 @@ Downloads added: ARM maps (390 KB) and the signboard normal/ARM (165 KB). LUTs a
 runtime (128 KB of GPU each, 2 resident). The probe is ~0.6 MB of GPU (128² half-float cube plus
 PMREM).
 
-### Frontier crowd spike (`/experiments/out-west/crowd/`, FFA floor tier, DPR 1.3)
+### AAA asset pass (textured characters, kit props and buildings), Nov 2026
+
+Same harness (`#perf&tier=floor`, 812×375 CSS at DPR 3, CPU 4×), Quick Draw level 7 walk/wait and
+the Frontier (`?bots=31`), before (`87d93c9`) vs after:
+
+|                       | Duel before | Duel after  | Frontier before | Frontier after    |
+| --------------------- | ----------- | ----------- | --------------- | ----------------- |
+| Draws (max)           | 70          | 71          | 70–72           | 58–73             |
+| Triangles (max)       | 128k        | 242k        | 259k            | 234–262k          |
+| Texture MB (estimate) | 60.5        | 137         | 54.4            | 131               |
+| Frame p50 / p95 (ms)  | 16.7 / 16.8 | 16.7 / 16.7 | 16.7 / 16.8–33  | 16.7 / 16.8       |
+| CPU p50 / p95 (ms)    | 3.9 / 5.2   | 4.1 / 5.0   | 6.7–7.2 / 9–23  | 5.0–7.2 / 6.5–9.1 |
+
+Budgets (§9.3): duel ≤120 draws, ≤400k tris, ≤160 MB textures; Frontier ≤180 draws, ≤350k tris,
+≤200 MB. Characters are 14–20k tris at LOD0 with 52–53 bones. The texture growth is the shared
+character atlas (2048×3072 albedo + two 1024×1536 maps ≈ 50 MB with mips) and the kit atlas
+(1024×3648 + two half-size maps ≈ 30 MB); KTX2 would cut both ~4× (see tools/README.md).
+
+### Frontier crowd (measured on the M1 crowd test page, since folded into Frontier; FFA floor tier, DPR 1.3)
 
 Final architecture:
 - the nearest 16 are skinned (own player at LOD0, the rest at LOD1, ~4k tris);
@@ -119,7 +137,8 @@ no tier drop before 10 minutes, WebContent process < 700 MB, no WebGL context lo
    - [ ] Frame p95 ≤ 16.7 ms and a steady 60 fps.
    - [ ] Scale settles ≥ 0.9.
    - [ ] No thermal drop.
-4. **Frontier crowd**, at `/experiments/out-west/crowd/#perf`, then `?near=12` and `?near=8`:
+4. **Frontier crowd**, at `/experiments/out-west/frontier/?bots=31#perf` against a local API
+   (server bots are dev-only), standing where the bots fight:
    - [ ] p95 ≤ 16.7 ms for 10 minutes.
    - [ ] Note the first VAT bake time and the warm IndexedDB load.
 5. **Safari Web Inspector** (Develop → device):

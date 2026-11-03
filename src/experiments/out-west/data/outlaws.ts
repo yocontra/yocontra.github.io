@@ -1,108 +1,24 @@
-// biome-ignore-all lint/style/useNamingConvention: keys mirror source asset material names (e.g. Brown_02) and Turnstile/three.js option names
+// biome-ignore-all lint/style/useNamingConvention: tint keys mirror the base GLB's material names (Shirt, Sleeves, Pants…)
 /**
- * Every outlaw's tuning lives here (design doc §3.4). Times are in ms unless
- * noted. `day` is the time-of-day scalar used by the lighting presets:
- * 0 = high noon, 0.5 = sunset, 1 = midnight.
+ * Every outlaw's tuning (design doc §3.4): the 17-strong roster (split across `roster-early.ts` and
+ * `roster-late.ts`), the underboss's rifleman, the boss's second phase, Legend mode and the draw
+ * grades. Times are in ms unless noted. `day` is the time-of-day scalar used by the lighting
+ * presets: 0 = high noon, 0.5 = sunset, 1 = midnight.
  */
+import { LEATHER, type Look, type Outlaw } from './outlaw-types.ts'
+import { ROSTER_EARLY } from './roster-early.ts'
+import { ROSTER_LATE } from './roster-late.ts'
 
-import { LEATHER } from './outlaw-palette.ts'
-import { EARLY_OUTLAWS } from './outlaws-early.ts'
-import { LATE_OUTLAWS } from './outlaws-late.ts'
+export type { BodyKey, FakeKey, Gimmick, HatKey, Look, Outlaw } from './outlaw-types.ts'
 
-/**
- * Whole base characters. All but the woman share the player's rig (identical
- * skeleton, so the player's clips drive them); the woman has her own.
- */
-export type BodyKey = 'suit' | 'rugged' | 'casual' | 'worker' | 'king' | 'punk' | 'woman'
-
-export interface Look {
-  /** Which whole character he is: never mixed with parts of another. */
-  base: BodyKey
-  /** Material name → hex colour. */
-  tint: Readonly<Record<string, number>>
-  /** Uniform build: 1 = a 1.78 m man. */
-  scale: number
-  coat?: number
-  poncho?: number
-  moustache?: number
-  beard?: number
-  bandoliers?: boolean
-  star?: boolean
-  mask?: boolean
-}
-export type HatKey = 'cowboy' | 'bowler' | 'sombrero' | 'tophat' | 'flat' | 'tall'
-export type FakeKey =
-  | 'crow'
-  | 'door'
-  | 'bottle'
-  | 'horse'
-  | 'coin'
-  | 'twitch'
-  | 'heckle'
-  | 'piano'
-  | 'gunshot'
-  | 'dog'
-
-export type Gimmick =
-  | 'shaky'
-  | 'talker'
-  | 'counter'
-  | 'coin'
-  | 'drunk'
-  | 'impatient'
-  | 'windy'
-  | 'cold'
-  | 'whistler'
-  | 'two-guns'
-  | 'drr'
-  | 'piano'
-  | 'night'
-  | 'fake-king'
-  | 'cards'
-  | 'underboss'
-  | 'boss'
-
-export interface Outlaw {
-  readonly name: string
-  readonly epithet: string
-  readonly bounty: number
-  readonly hook: string
-  readonly gimmick: Gimmick
-  /** How he looks: base character, colours, build and fitted accessories. */
-  readonly look: Look
-  readonly hat: HatKey
-  readonly hatColor: number
-  readonly bandana?: number
-  readonly paces: readonly [number, number]
-  /** Wait after the turn, in seconds. */
-  readonly wait: readonly [number, number]
-  /** Enemy draw time from the call, ms. */
-  readonly draw: number
-  readonly jitter: number
-  /** Chance per wait slot that a fake-out fires (0..1). */
-  readonly fakeChance: number
-  readonly fakes: readonly FakeKey[]
-  /** Chance his first shot hits. */
-  readonly accuracy: number
-  readonly day: number
-  /** Lines he heckles with (captioned). */
-  readonly lines: readonly string[]
-}
-
-export const OUTLAWS: readonly Outlaw[] = [...EARLY_OUTLAWS, ...LATE_OUTLAWS]
+export const OUTLAWS: readonly Outlaw[] = [...ROSTER_EARLY, ...ROSTER_LATE]
 
 export const LEATHER_COLOR = LEATHER
 
 /** The rifleman on the saloon's porch roof (underboss). */
 export const RIFLEMAN_LOOK: Look = {
   base: 'casual',
-  tint: {
-    LightBrown: 0x3a_32_26,
-    LightBlue: 0x2a_20_18,
-    Hair: 0x1a_10_08,
-    White: 0x2a_20_18,
-    Red_Dark: 0x1a_14_10,
-  },
+  tint: { Shirt: 0x3a_32_26, Sleeves: 0x2a_20_18, Pants: 0x2a_20_18, Hair: 0x1a_10_08 },
   scale: 1.0,
   mask: true,
 }

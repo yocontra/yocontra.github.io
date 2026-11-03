@@ -24,43 +24,24 @@ import {
   TubeGeometry,
   Vector3,
 } from 'three'
-import type { BodyKey } from '../data/outlaws.ts'
 import { meshPieces, onBone, type Piece } from './bake.ts'
 import { type Body, bounds, nearestWeights, onBones, reach, shell, type WeightFn } from './fit.ts'
 import { FABRIC } from './style.ts'
 
-/** Sub-meshes (by material) dropped from a base's head: our hats replace them. */
-export const HEAD_HIDE: Partial<Record<BodyKey, string[]>> = {
-  worker: ['Worker_Yellow'],
-  king: ['Gold'],
-  punk: ['Red_Dark', 'Red'],
-}
-
-/** Whole nodes dropped from a base (a backpack doesn't fit a duel). */
-export const NODE_HIDE: Partial<Record<BodyKey, string[]>> = {
-  rugged: ['Backpack'],
-}
-
-const HEAD_NODE = /_Head(?:_\d+)?$/u
-
-/** Remove a base's hidden parts before it is measured or drawn. */
-export function prune(model: Object3D, base: BodyKey): void {
-  const hideMat = new Set(HEAD_HIDE[base] ?? [])
-  const hideNode = NODE_HIDE[base] ?? []
+/**
+ * Remove the parts of a base he doesn't wear before he is measured or drawn: the optional
+ * beard (tools/build-characters.ts marks it) unless he has one.
+ */
+export function prune(model: Object3D, o: { beard: boolean }): void {
   const drop: Object3D[] = []
-  model.traverse((o) => {
-    if (hideNode.some((n) => o.name.startsWith(n))) {
-      drop.push(o)
-      return
-    }
-    const mesh = o as Mesh
+  model.traverse((obj) => {
+    const mesh = obj as Mesh
     if (!mesh.isMesh) {
       return
     }
-    const inHead = HEAD_NODE.test(o.name) || HEAD_NODE.test(o.parent?.name ?? '')
     const mat = Array.isArray(mesh.material) ? mesh.material[0] : mesh.material
-    if (inHead && mat && hideMat.has(mat.name)) {
-      drop.push(o)
+    if (mat?.userData.optional && !(o.beard && mat.name === 'Beard')) {
+      drop.push(obj)
     }
   })
   for (const d of drop) {
@@ -158,7 +139,11 @@ export function measure(body: Body, bones: Map<string, Bone>): Fit {
 }
 
 const lin = (hex: number) => new Color(hex)
-const fabric = (k: keyof typeof FABRIC) => ({ roughness: FABRIC[k].roughness, rim: FABRIC[k].rim })
+const fabric = (k: keyof typeof FABRIC) => ({
+  roughness: FABRIC[k].swatch === 'plain' ? FABRIC[k].roughness : 1,
+  rim: FABRIC[k].rim,
+  swatch: FABRIC[k].swatch,
+})
 
 /** Long duster skirt from the belt to mid-shin, open at the front, following hips and thighs. */
 export function coat(f: Fit, color: number): Piece[] {
@@ -381,6 +366,7 @@ export function moustache(f: Fit, color: number, space: Object3D): Piece[] {
   const y = h.chin + 0.5 * (h.eye - h.chin)
   const z = reach(onBones(f.body, ['Head']), { cx: h.cx, cz: h.cz, y, a: 0, dy: 0.012, da: 0.25 })
   const mat = new MeshStandardMaterial({ color, roughness: FABRIC.wool.roughness })
+  mat.userData.swatch = 'felt'
   const g = new Group()
   for (const s of [-1, 1]) {
     const m = new Mesh(new SphereGeometry(0.03, 8, 6), mat)
@@ -427,6 +413,7 @@ export function star(f: Fit, space: Object3D): Piece[] {
   )
   m.position.set(sx, sy, (Number.isFinite(z) ? z : f.at('Chest').z + 0.12) + 0.006)
   m.material.userData.rim = 1.6
+  m.material.userData.swatch = 'metal'
   space.add(m)
   const out = meshPieces(m, space, onBone(b))
   m.removeFromParent()
@@ -450,8 +437,10 @@ export function bandoliers(f: Fit, space: Object3D): Piece[] {
   }
   const leather = new MeshStandardMaterial({ color: 0x3a_24_12, roughness: 0.6 })
   leather.userData.rim = FABRIC.leather.rim
+  leather.userData.swatch = 'leather'
   const brass = new MeshStandardMaterial({ color: 0xc8_a0_50, roughness: 0.35 })
   brass.userData.rim = 1.5
+  brass.userData.swatch = 'metal'
   const g = new Group()
   for (const side of [-1, 1]) {
     const x0 = side * 0.12

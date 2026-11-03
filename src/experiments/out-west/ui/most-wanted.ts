@@ -1,0 +1,126 @@
+/**
+ * The monthly Most Wanted board (spec §4 live ops): gross dollars earned across Bounty Hunt and
+ * Frontier this UTC month, top 25, your own standing, last month's top 10 (each got a dated frame),
+ * and earlier months. Every name opens that player's poster. Blocked players show as such.
+ */
+import { money } from '../data/economy.ts'
+import { currentPlayer } from '../net/auth.ts'
+import { blockedNames, fetchMostWanted } from '../net/social.ts'
+import {
+  MOST_WANTED_WINNERS,
+  type MostWantedResponse,
+  type MostWantedRow,
+  monthName,
+  monthOf,
+  previousMonth,
+} from '../net/wire-social.ts'
+import { openProfile } from './profile.ts'
+import { button, el, statusLine } from './sheet.ts'
+
+const DAY_MS = 24 * 60 * 60 * 1000
+
+function closesIn(at: number): string {
+  const days = Math.ceil((at - Date.now()) / DAY_MS)
+  if (days <= 1) {
+    return 'closes tonight (UTC)'
+  }
+  return `closes in ${days} days`
+}
+
+function rows(
+  list: HTMLElement,
+  data: readonly MostWantedRow[],
+  o: { sheets: HTMLElement; blocked: ReadonlySet<string>; me: string | null; redraw: () => void },
+): void {
+  for (const r of data) {
+    const li = el('li', 'ow-board-entry ow-feat-mw-entry', list)
+    const hidden = o.blocked.has(r.name.toLowerCase())
+    if (o.me !== null && r.name.toLowerCase() === o.me) {
+      li.classList.add('mine')
+    }
+    el('span', 'ow-board-rank', li, String(r.rank))
+    const who = el('button', 'ow-board-who ow-feat-name', li)
+    who.type = 'button'
+    who.textContent = hidden ? 'A blocked gunslinger' : r.name
+    who.disabled = hidden
+    if (!hidden) {
+      who.setAttribute('aria-label', `${r.name}'s poster`)
+      who.addEventListener('click', (e) => {
+        e.stopPropagation()
+        openProfile(o.sheets, r.name, { onBlockChange: o.redraw })
+      })
+    }
+    el('span', 'ow-board-total', li, money(r.earned))
+    el(
+      'span',
+      'ow-board-date',
+      li,
+      `Lv ${r.level}${r.prestige > 0 ? ` ${'★'.repeat(r.prestige)}` : ''}`,
+    )
+  }
+}
+
+/** Render the board for `month` (the current one when omitted) into `host`. */
+export function mountMostWanted(host: HTMLElement, sheets: HTMLElement, month?: string): void {
+  host.replaceChildren()
+  const nav = el('div', 'ow-hub-row ow-feat-mw-nav', host)
+  const head = el('div', 'ow-feat-mw-head', host)
+  const say = statusLine(host)
+  const list = el('ol', 'ow-board-list', host)
+  const prev = el('div', 'ow-feat-mw-prev', host)
+  say('Counting the take…')
+  const draw = (r: MostWantedResponse, blocked: ReadonlySet<string>): void => {
+    const now = monthOf(Date.now())
+    nav.replaceChildren()
+    button(nav, '‹ Earlier', () => mountMostWanted(host, sheets, previousMonth(r.month)))
+    if (r.month < now) {
+      button(nav, r.month === previousMonth(now) ? 'This month ›' : 'Later ›', () => {
+        const next = new Date(`${r.month}-01T00:00:00Z`)
+        next.setUTCMonth(next.getUTCMonth() + 1)
+        mountMostWanted(host, sheets, monthOf(next.getTime()))
+      })
+    }
+    head.replaceChildren()
+    el('b', 'ow-feat-mw-month', head, monthName(r.month))
+    el(
+      'span',
+      'ow-hub-note',
+      head,
+      r.final
+        ? `Final. The top ${MOST_WANTED_WINNERS} each earned a dated Most Wanted frame.`
+        : `Still counting · ${closesIn(r.closesAt)}. Dollars earned in Bounty Hunt and Frontier; the top ${MOST_WANTED_WINNERS} earn a dated frame.`,
+    )
+    if (r.you) {
+      el(
+        'span',
+        'ow-hub-note ow-feat-mw-you',
+        head,
+        r.you.rank === null
+          ? `You: ${money(r.you.earned)} so far, not on the board yet.`
+          : `You: #${r.you.rank} with ${money(r.you.earned)}.`,
+      )
+    }
+    const me = currentPlayer()?.name.toLowerCase() ?? null
+    const redraw = (): void => mountMostWanted(host, sheets, r.month)
+    list.replaceChildren()
+    say(r.rows.length > 0 ? '' : 'Nobody’s earned a dollar this month yet. Be the first.')
+    rows(list, r.rows, { sheets, blocked, me, redraw })
+    prev.replaceChildren()
+    if (r.previous.winners.length > 0) {
+      el('h3', 'ow-standing-h', prev, `Most Wanted, ${monthName(r.previous.month)}`)
+      rows(el('ol', 'ow-board-list', prev), r.previous.winners, { sheets, blocked, me, redraw })
+    }
+  }
+  Promise.all([fetchMostWanted(month), currentPlayer() ? blockedNames() : new Set<string>()])
+    .then(([r, blocked]) => {
+      if (!host.isConnected) {
+        return
+      }
+      if (!r.ok) {
+        say(r.error, 'error')
+        return
+      }
+      draw(r.value, blocked)
+    })
+    .catch(() => undefined)
+}

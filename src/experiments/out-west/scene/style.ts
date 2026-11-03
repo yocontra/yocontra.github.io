@@ -1,5 +1,6 @@
 // biome-ignore-all lint/style/useNamingConvention: keys mirror source asset material names (e.g. Brown_02) and Turnstile/three.js option names
 import { Color, type MeshStandardMaterial } from 'three'
+import type { Swatch } from './atlas.ts'
 
 /**
  * Clean stylized character shading (replaces the old triplanar fabric pass):
@@ -26,14 +27,17 @@ export interface Floor {
 
 export type Fabric = 'leather' | 'wool' | 'linen' | 'denim' | 'hessian' | 'skin'
 
-/** Surface response per kind of material: roughness and how much rim it catches. */
-export const FABRIC: Record<Fabric, { roughness: number; rim: number }> = {
-  leather: { roughness: 0.55, rim: 1.15 },
-  wool: { roughness: 0.92, rim: 0.85 },
-  linen: { roughness: 0.86, rim: 1.0 },
-  denim: { roughness: 0.8, rim: 0.95 },
-  hessian: { roughness: 0.95, rim: 0.8 },
-  skin: { roughness: 0.62, rim: 1.0 },
+/**
+ * Surface response per kind of material: roughness (on untextured surfaces), how much rim it
+ * catches, and the atlas swatch a procedural garment of that kind is woven from.
+ */
+export const FABRIC: Record<Fabric, { roughness: number; rim: number; swatch: Swatch }> = {
+  leather: { roughness: 0.55, rim: 1.15, swatch: 'leather' },
+  wool: { roughness: 0.92, rim: 0.85, swatch: 'wool' },
+  linen: { roughness: 0.86, rim: 1.0, swatch: 'linen' },
+  denim: { roughness: 0.8, rim: 0.95, swatch: 'linen' },
+  hessian: { roughness: 0.95, rim: 0.8, swatch: 'hessian' },
+  skin: { roughness: 0.62, rim: 1.0, swatch: 'plain' },
 }
 
 /** Which kind of surface each source material is. */
@@ -58,6 +62,17 @@ export const FABRIC_BY_MATERIAL: Record<string, Fabric> = {
   Poncho: 'hessian',
   Felt: 'wool',
   Skin: 'skin',
+  // the textured bases (tools/build-characters.ts garment names)
+  Shirt: 'linen',
+  Sleeves: 'linen',
+  Pants: 'denim',
+  Boots: 'leather',
+  Belt: 'leather',
+  Bracer: 'leather',
+  Pauldron: 'leather',
+  Hair: 'wool',
+  Brows: 'wool',
+  Beard: 'wool',
 }
 
 /** Small deterministic hash of a string to 0..1. */

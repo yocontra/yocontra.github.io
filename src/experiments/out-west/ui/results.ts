@@ -1,71 +1,17 @@
 /**
- * Bounty Hunt's results screen, and the wanted posters it shares with the match intro: the
- * results (outcome, both reactions, the money and XP lines, level-ups, the streak, rematch).
+ * Bounty Hunt's results screen: the outcome, both reactions, the money and XP lines, level-ups,
+ * the streak, rematch, and the opponent's poster and Report. (The wanted posters themselves are
+ * `wanted.ts`, shared with the match intro and public profiles.)
  * The numbers are always the server's; this module only lays them out.
  */
-import type { DuelResult, Poster, Seat, Settlement } from '../contract/duel.ts'
-import { itemById, normalizeLoadout } from '../data/catalog.ts'
+import type { DuelResult, Seat, Settlement } from '../contract/duel.ts'
 import { money } from '../data/economy.ts'
 import { levelProgress, levelRewards, titleFor } from '../data/progression.ts'
-import { FRAME_COLORS } from '../scene/loadout.ts'
-import { type IconName, icon } from './icons.ts'
+import { type SettlementLevels, settlementLevels } from '../net/wire-social.ts'
+import { markLevelSeen } from './notices.ts'
+import { openProfile, reportSheet } from './profile.ts'
+import { noteLevel } from './sfx.ts'
 import { button, countUp, el, setBar, signedMoney, swallow } from './sheet.ts'
-
-const KIND_HEAD: Record<Poster['kind'], string> = {
-  human: 'Wanted',
-  ghost: 'Ghost of',
-  // the name already reads "Town Outlaw": a second "Town outlaw" heading just stutters
-  outlaw: 'Wanted',
-}
-
-const OUTLAW_NAME = /outlaw/iu
-
-const KIT_ICON: Record<'hat' | 'gun' | 'outfit' | 'extra', IconName> = {
-  hat: 'hat',
-  gun: 'revolver',
-  outfit: 'coat',
-  extra: 'badge',
-}
-
-/** A wanted poster in its frame: name, level, live bounty, streak and kit, printed on torn stock. */
-export function posterEl(p: Poster, side: 'you' | 'them'): HTMLElement {
-  const l = normalizeLoadout(p.loadout)
-  const card = el('div', `ow-wanted ow-wanted-${side}`)
-  card.dataset.kind = p.kind
-  card.style.setProperty('--frame', FRAME_COLORS[l.frame] ?? '#8a6a42')
-  const sheet = el('div', 'ow-wanted-sheet', card)
-  el('div', 'ow-wanted-head', sheet, KIND_HEAD[p.kind])
-  el('div', 'ow-wanted-sub', sheet, p.kind === 'ghost' ? 'A recorded gun' : 'Dead or alive')
-  el('div', 'ow-wanted-name', sheet, p.name)
-  el('div', 'ow-wanted-meta', sheet, `Level ${p.level} · ${titleFor(p.level)}`)
-  const bounty = el('div', 'ow-wanted-bounty', sheet)
-  el('span', 'ow-wanted-amount', bounty, money(p.bounty))
-  el('span', 'ow-wanted-reward', bounty, 'Reward')
-  const notes: string[] = []
-  if (p.streak > 1) {
-    notes.push(`${p.streak}-win streak`)
-  }
-  if (p.cowardice > 0) {
-    notes.push(`${p.cowardice} cowardice`)
-  }
-  if (p.kind === 'outlaw' && !OUTLAW_NAME.test(p.name)) {
-    notes.push('a town outlaw')
-  }
-  el('div', 'ow-wanted-notes', sheet, notes.join(' · ') || 'Clean record')
-  const kit = el('ul', 'ow-wanted-kit', sheet)
-  for (const slot of ['hat', 'gun', 'outfit', 'extra'] as const) {
-    const id = l[slot]
-    const item = id ? itemById(id) : undefined
-    if (item && item.source !== 'starter') {
-      const li = el('li', '', kit)
-      li.append(icon(KIT_ICON[slot]), item.name)
-    }
-  }
-  if (kit.children.length === 0) {
-    el('li', '', kit, 'Starter kit')
-  }
-  return card
-}
 
 export interface ResultView {
   tone: 'win' | 'loss' | 'even'
@@ -87,6 +33,14 @@ export interface ResultHandlers {
   rematch: () => void
   next: () => void
   saloon: () => void
+}
+
+/** The man across the street, for his poster and Report (a live player or a ghost's owner). */
+export interface OpponentRef {
+  name: string
+  kind: 'human' | 'ghost'
+  /** The match id, attached to a report. */
+  context: string
 }
 
 function settlementLines(panel: HTMLElement, s: Settlement | null, pending: string): void {
@@ -130,8 +84,15 @@ export class ResultsPanel {
   private readonly vote: HTMLElement
   private readonly record: HTMLElement
   private readonly rematchBtn: HTMLButtonElement
+  /** The settlement's XP and level numbers, when the server sends them. */
+  private readonly booked: SettlementLevels | null
 
-  constructor(parent: HTMLElement, v: ResultView, h: ResultHandlers) {
+  constructor(
+    parent: HTMLElement,
+    v: ResultView,
+    h: ResultHandlers,
+    opponent: OpponentRef | null = null,
+  ) {
     this.root = el('div', `ow-results ow-results-${v.tone}`, parent)
     this.root.setAttribute('role', 'dialog')
     this.root.setAttribute('aria-label', v.title)
@@ -154,6 +115,8 @@ export class ResultsPanel {
     const track = el('div', 'ow-xp', panel)
     this.bar = el('div', 'ow-xp-fill', track)
     this.barLabel = el('div', 'ow-xp-label', panel)
+    // the server's own before/after (from the committed ledger) wins over what the client captured
+    this.booked = settlementLevels(v.settlement)
     this.setXp(v.xpBefore, v.xpAfter)
     this.record = el('div', 'ow-xp-label', panel)
     this.vote = el('div', 'ow-results-vote', panel)
@@ -171,11 +134,22 @@ export class ResultsPanel {
       true,
     )
     this.rematchBtn.disabled = !v.canRematch
+    if (opponent) {
+      const who = el('div', 'ow-hub-row ow-feat-opponent', panel)
+      const label = opponent.kind === 'ghost' ? 'His owner’s poster' : 'His poster'
+      button(who, label, () => openProfile(this.root, opponent.name, { context: opponent.context }))
+      button(who, 'Report', () =>
+        reportSheet(this.root, opponent.name, { context: opponent.context }),
+      ).classList.add('ow-btn-danger')
+    }
     requestAnimationFrame(() => this.root.classList.add('on'))
   }
 
   /** The XP bar (and a level-up banner when the level changed). */
-  setXp(before: number | null, after: number | null): void {
+  setXp(xpBefore: number | null, xpAfter: number | null): void {
+    const booked = this.booked
+    const before = booked ? booked.xpBefore : xpBefore
+    const after = booked ? booked.xpAfter : xpAfter
     if (after === null) {
       this.barLabel.textContent = ''
       return
@@ -189,10 +163,18 @@ export class ResultsPanel {
       a.next > 0 ? `Lv ${a.level} · ${a.into} / ${a.next} XP` : `Lv ${a.level} · max level`
     this.levelBox.replaceChildren()
     if (a.level > b.level) {
+      // the seal's slam plays the fanfare (ui/sfx.ts); the saloon mustn't play it (or tell it) again
+      noteLevel(a.level)
+      markLevelSeen(a.level)
       el('span', 'ow-results-seal', this.levelBox, String(a.level))
       const stamp = el('div', 'ow-results-stamp', this.levelBox)
       el('b', '', stamp, 'Level up')
-      el('span', '', stamp, `${titleFor(a.level)} · +${money(levelRewards(b.level, a.level))}`)
+      el(
+        'span',
+        '',
+        stamp,
+        `${titleFor(a.level)} · +${money(booked ? booked.levelReward : levelRewards(b.level, a.level))}`,
+      )
       this.levelBox.classList.add('on')
     }
   }

@@ -9,7 +9,12 @@ const TEST_KEY = '1x00000000000000000000AA'
 const TOKEN_TIMEOUT_MS = 15_000
 
 const configured: unknown = import.meta.env.PUBLIC_TURNSTILE_SITEKEY
-export const SITE_KEY = typeof configured === 'string' && configured ? configured : TEST_KEY
+/**
+ * Production builds must provide `PUBLIC_TURNSTILE_SITEKEY` (CI enforces it). The always-pass test key
+ * is only ever used in dev; a production build without a key gets none, so verification fails closed.
+ */
+const DEV_FALLBACK = import.meta.env.DEV ? TEST_KEY : ''
+export const SITE_KEY = typeof configured === 'string' && configured ? configured : DEV_FALLBACK
 
 interface TurnstileApi {
   render: (el: HTMLElement, opts: Record<string, unknown>) => string

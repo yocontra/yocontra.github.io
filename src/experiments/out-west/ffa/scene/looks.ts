@@ -30,7 +30,7 @@ interface OutfitStyle {
 const OUTFITS: Record<string, OutfitStyle> = {
   'outfit.trail-duds': {
     base: 'casual',
-    tops: [0xd8_cc_b0, 0xb8_8a_5a, 0x9a_6a_4a, 0x8a_9a_a8],
+    tops: [0xd8_cc_b0, 0x8a_3a_2a, 0x4a_5a_6a, 0x8a_9a_a8],
     bottoms: [0x4a_5a_6a, 0x5a_4a_3a],
   },
   'outfit.shirt-vest': {
@@ -40,7 +40,7 @@ const OUTFITS: Record<string, OutfitStyle> = {
   },
   'outfit.wool-duster': {
     base: 'rugged',
-    tops: [0x8a_7a_5a, 0x6a_6a_5a],
+    tops: [0x6a_6a_5a, 0x5a_4a_3a],
     bottoms: [0x4a_3a_2a],
     extra: { coat: 0x7a_5a_3a },
   },

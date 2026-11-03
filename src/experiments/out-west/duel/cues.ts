@@ -1,5 +1,6 @@
 import { CylinderGeometry, Mesh, MeshStandardMaterial } from 'three'
 import { makeCard } from '../scene/fx.ts'
+import { AMB, ambience } from './present.ts'
 import { between, type DuelState, rng, V } from './state.ts'
 
 /**
@@ -143,7 +144,7 @@ const CUES: Record<string, CueFn> = {
   gust: (s) => {
     caption(s, '[a gust of wind]')
     s.wind = Math.min(2.6, s.wind + 0.8)
-    s.windLoop?.set(0.5, 0.2)
+    ambience(s, AMB.gust, 0.2)
     s.c.puffs.emit(V(-4, 0.2, s.player.root.position.z + 3), 30, {
       speed: 2,
       size: 0.2,

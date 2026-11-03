@@ -23,7 +23,7 @@
   font-weight: 700;
   font-size: var(--ow-fs-lead);
   font-variant-caps: all-small-caps;
-  letter-spacing: 0.16em;
+  letter-spacing: 0.1em;
   color: var(--ow-brass-hi);
   border-top: 1px solid var(--ow-brass);
   border-bottom: 1px solid var(--ow-brass);
@@ -219,7 +219,7 @@
   font-weight: 700;
   font-size: var(--ow-fs-small);
   font-variant-caps: all-small-caps;
-  letter-spacing: 0.22em;
+  letter-spacing: 0.12em;
   color: var(--ow-ink-3);
   text-align: center;
 }
@@ -281,7 +281,7 @@
   font-weight: 700;
   font-size: var(--ow-fs-body);
   font-variant-caps: all-small-caps;
-  letter-spacing: 0.14em;
+  letter-spacing: 0.09em;
   color: var(--ow-ink-3);
 }
 /* level-up: a wax seal and a slammed stamp */

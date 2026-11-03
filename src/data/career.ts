@@ -38,6 +38,7 @@ export const career: readonly Role[] = [
   },
   {
     company: 'Apple',
+    href: 'https://sear.apple.com',
     title: 'Senior Staff Engineer · SEAR',
     years: '2024 — 2026',
     location: 'Cupertino / SF',

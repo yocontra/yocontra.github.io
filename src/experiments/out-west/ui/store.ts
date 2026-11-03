@@ -17,7 +17,17 @@ import {
 } from '../data/catalog.ts'
 import { money } from '../data/economy.ts'
 import { buyItem, fetchStore, saveLoadout } from '../net/api.ts'
+import { dyeItem } from '../net/social.ts'
+import {
+  DYES,
+  type DyeId,
+  type Dyes,
+  dyePrice,
+  isDyeable,
+  type MeExtras,
+} from '../net/wire-social.ts'
 import { type IconName, icon } from './icons.ts'
+import { uiSound } from './sfx.ts'
 import { button, confirmSheet, el, swallow } from './sheet.ts'
 
 const SLOT_TABS: readonly { slot: Slot; label: string }[] = [
@@ -62,11 +72,11 @@ const SLOT_NOTE: Partial<Record<Slot, string>> = {
 }
 
 export interface StoreDeps {
-  me: () => MeResponse | null
-  /** Dress your character in this loadout (preview or equipped). */
-  preview: (l: Loadout) => void
-  /** The server accepted a purchase or a new loadout. */
-  changed: (patch: Partial<MeResponse>) => void
+  me: () => (MeResponse & MeExtras) | null
+  /** Dress your character in this loadout (preview or equipped), with these dyes (yours if omitted). */
+  preview: (l: Loadout, dyes?: Dyes) => void
+  /** The server accepted a purchase, a dye job or a new loadout. */
+  changed: (patch: Partial<MeResponse & MeExtras>) => void
   close: () => void
 }
 
@@ -81,6 +91,8 @@ export class Outfitter {
   private owned = new Set<string>(STARTER_ITEMS)
   private slot: Slot = 'hat'
   private picked: CatalogItem | null = null
+  /** A dye being tried on the picked item (not bought yet). */
+  private tryDye: DyeId | null = null
   private busy = false as boolean
 
   constructor(parent: HTMLElement, deps: StoreDeps) {
@@ -202,8 +214,13 @@ export class Outfitter {
     })
   }
 
+  private get dyes(): Dyes {
+    return this.deps.me()?.dyes ?? {}
+  }
+
   private pick(item: CatalogItem): void {
     this.picked = item
+    this.tryDye = null
     this.deps.preview({ ...this.equipped, [item.slot]: item.id })
     this.show(this.slot)
   }
@@ -236,9 +253,97 @@ export class Outfitter {
         true,
       )
       b.disabled = on || !me
+      if (me && isDyeable(item)) {
+        this.dyeSection(item)
+      }
       return
     }
     this.buyButton(item, me)
+  }
+
+  /** Dye jobs: try a colour on, then pay for it (natural washes it out for free). */
+  private dyeSection(item: CatalogItem): void {
+    const box = el('div', 'ow-feat-dye', this.detail)
+    const current: DyeId = this.dyes[item.id as ItemId] ?? 'natural'
+    const want = this.tryDye ?? current
+    el('b', 'ow-feat-dye-h', box, 'Dye job')
+    const swatches = el('div', 'ow-feat-swatches', box)
+    swatches.setAttribute('role', 'radiogroup')
+    swatches.setAttribute('aria-label', `Dye for ${item.name}`)
+    for (const d of DYES) {
+      const b = el('button', 'ow-feat-swatch', swatches)
+      b.type = 'button'
+      b.dataset.dye = d.id
+      b.setAttribute('role', 'radio')
+      b.setAttribute('aria-checked', String(d.id === want))
+      b.setAttribute('aria-label', d.name)
+      b.title = d.name
+      b.classList.toggle('on', d.id === want)
+      b.classList.toggle('current', d.id === current)
+      if (d.hex) {
+        b.style.setProperty('--swatch', d.hex)
+      }
+    }
+    swatches.addEventListener('click', (e) => {
+      e.stopPropagation()
+      const id = DYES.find(
+        (d) =>
+          e.target instanceof HTMLElement &&
+          e.target.closest('[data-dye]')?.getAttribute('data-dye') === d.id,
+      )?.id
+      if (!id) {
+        return
+      }
+      this.tryDye = id
+      this.deps.preview(this.equipped, { ...this.dyes, [item.id]: id })
+      this.renderDetail()
+    })
+    const name = DYES.find((d) => d.id === want)?.name ?? 'Natural'
+    const price = dyePrice(item.id, want) ?? 0
+    const me = this.deps.me()
+    let label = `Dye ${name} · ${money(price)}`
+    if (want === current) {
+      label = current === 'natural' ? 'Pick a colour' : `Dyed ${name}`
+    } else if (want === 'natural') {
+      label = 'Wash it out · free'
+    } else if (me && me.purse < price) {
+      label = `Need ${money(price - me.purse)} more`
+    }
+    const go = button(box, label, () => {
+      this.dye(item, want, price).catch(() => undefined)
+    })
+    go.disabled = want === current || this.busy || (me !== null && me.purse < price)
+  }
+
+  private async dye(item: CatalogItem, dye: DyeId, price: number): Promise<void> {
+    const me = this.deps.me()
+    if (!me || this.busy) {
+      return
+    }
+    const colour = DYES.find((d) => d.id === dye)?.name ?? dye
+    const yes = await confirmSheet(this.root.parentElement ?? this.root, {
+      title: dye === 'natural' ? `Wash out ${item.name}?` : `Dye ${item.name} ${colour}?`,
+      body:
+        dye === 'natural'
+          ? 'Back to its natural colour. Free.'
+          : `${money(price)} from your purse of ${money(me.purse)}. Looks only, like everything here.`,
+      yes: dye === 'natural' ? 'Wash it out' : `Dye · ${money(price)}`,
+    })
+    if (!yes) {
+      return
+    }
+    this.busy = true
+    const r = await dyeItem(item.id as ItemId, dye)
+    this.busy = false
+    if (!r.ok) {
+      this.flash(r.error)
+      return
+    }
+    uiSound('uiBuy')
+    this.tryDye = null
+    this.deps.changed({ purse: r.value.purse, dyes: r.value.dyes })
+    this.deps.preview(this.equipped, r.value.dyes)
+    this.show(this.slot)
   }
 
   private buyButton(item: CatalogItem, me: MeResponse | null): void {
@@ -285,6 +390,7 @@ export class Outfitter {
       this.flash(r.error)
       return
     }
+    uiSound('uiBuy')
     this.owned = new Set(r.value.owned)
     this.deps.changed({ purse: r.value.purse, owned: r.value.owned })
     await this.equip({ ...this.equipped, [item.slot]: item.id })
@@ -310,7 +416,7 @@ export class Outfitter {
   }
 
   close(): void {
-    this.deps.preview(this.equipped)
+    this.deps.preview(this.equipped, this.dyes)
     this.root.classList.remove('on')
     setTimeout(() => this.root.remove(), 250)
     this.deps.close()

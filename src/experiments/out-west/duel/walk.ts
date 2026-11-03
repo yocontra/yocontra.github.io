@@ -4,6 +4,7 @@ import { throwCard } from './cues.ts'
 import { backShotByEnemy } from './defeat.ts'
 import type { Director } from './director.ts'
 import { standoffShot, walkShot } from './framing.ts'
+import { AMB, ambience, duckForStandoff } from './present.ts'
 import { rng, V } from './state.ts'
 
 const STALL_LINES = [
@@ -16,6 +17,8 @@ const STALL_LINES = [
 export function enterWalk(d: Director): void {
   d.enter('walk')
   d.c.hud.setPips(0, true)
+  // the walk and the standoff play over low drones, clear of the bell's register
+  d.c.audio.playSong('tension')
   d.c.audio.musicLevel(0, 0.6)
   walkShot(d)
   if (d.outlaw.gimmick === 'windy') {
@@ -173,9 +176,8 @@ function enterTurn(d: Director): void {
   d.player.stopWalk(0.2)
   d.enemy?.stopWalk(0.2)
   // music ducks gently (still clearly there), wind drops
-  c.audio.musicLowpass(FEEL.waitLowpass, 0.9)
-  c.audio.musicLevel(FEEL.waitDuckDb, 0.9)
-  d.windLoop?.set(0.14, 0.9)
+  duckForStandoff(d, 0.9)
+  ambience(d, AMB.turn, 0.9)
   standoffShot(d, false, 1.2)
 }
 

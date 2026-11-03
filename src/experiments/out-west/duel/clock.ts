@@ -41,6 +41,13 @@ export interface ClockEvents {
   verdict: (v: Verdict) => void
   /** The ranked connection is gone: carry on in practice. */
   dropped: (reason: string) => void
+  /** Ranked only: the link dropped and is being resumed (true), or is back (false). */
+  reconnecting: (on: boolean) => void
+  /**
+   * Ranked only: back on the same run after a drop. Any standoff that was in flight was voided
+   * unjudged, so a live standoff must be run again (`purse` is the server's run total).
+   */
+  resumed: (purse: number) => void
 }
 
 export interface DuelClock {

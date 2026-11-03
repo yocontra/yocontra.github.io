@@ -61,12 +61,17 @@ async function lod2(
   const geo = body.geometry
   const pos = geo.getAttribute('position')
   const col = geo.getAttribute('color')
+  const uv = geo.getAttribute('uv')
+  const stride = uv ? 5 : 3
   const positions = new Float32Array(pos.count * 3)
-  const colors = new Float32Array(col ? pos.count * 3 : 0)
+  const colors = new Float32Array(col ? pos.count * stride : 0)
   for (let i = 0; i < pos.count; i++) {
     positions.set([pos.getX(i), pos.getY(i), pos.getZ(i)], i * 3)
     if (col) {
-      colors.set([col.getX(i), col.getY(i), col.getZ(i)], i * 3)
+      colors.set([col.getX(i), col.getY(i), col.getZ(i)], i * stride)
+      if (uv) {
+        colors.set([uv.getX(i), uv.getY(i)], i * stride + 3)
+      }
     }
   }
   const srcIndex = new Uint32Array(geo.index ? geo.index.count : pos.count)
@@ -77,6 +82,7 @@ async function lod2(
     index: srcIndex,
     positions,
     colors,
+    stride,
     targetTris,
     maxError: 0.25,
     permissive: true,
@@ -115,9 +121,15 @@ async function bake(job: VatJob): Promise<VatResult> {
   const rows = Math.ceil(nv / VAT_W)
   const geo = body.geometry
   const col = geo.getAttribute('color')
+  const uvA = geo.getAttribute('uv')
+  const lumA = geo.getAttribute('styLum')
   const color = new Float32Array(nv * 3)
+  const uv = new Float32Array(nv * 2)
+  const lum = new Float32Array(nv)
   const slot = new Float32Array(nv)
   for (const [i, v] of keep.entries()) {
+    uv.set([uvA ? uvA.getX(v) : 0.5, uvA ? uvA.getY(v) : 0.5], i * 2)
+    lum[i] = lumA ? lumA.getX(v) : 0
     const r = col ? col.getX(v) : 1
     const g = col ? col.getY(v) : 1
     const b = col ? col.getZ(v) : 1
@@ -209,6 +221,8 @@ async function bake(job: VatJob): Promise<VatResult> {
     pos,
     nrm,
     color,
+    uv,
+    lum,
     slot,
     index,
     rows,
@@ -228,6 +242,8 @@ scope.onmessage = async (e: MessageEvent<{ id: number; job: VatJob }>) => {
       r.pos.buffer,
       r.nrm.buffer,
       r.color.buffer,
+      r.uv.buffer,
+      r.lum.buffer,
       r.slot.buffer,
       r.index.buffer,
       r.head.buffer,

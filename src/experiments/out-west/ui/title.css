@@ -178,6 +178,16 @@
   text-decoration-color: var(--ow-rule-ink);
   text-underline-offset: 4px;
 }
+@media (max-width: 420px) {
+  .ow-title-links {
+    gap: 0;
+  }
+  .ow-title-links a,
+  .ow-title-links button {
+    padding: 0 6px;
+    letter-spacing: 0.04em;
+  }
+}
 .ow-title-links a:focus-visible,
 .ow-title-links button:focus-visible {
   outline: 2px solid var(--ow-red);

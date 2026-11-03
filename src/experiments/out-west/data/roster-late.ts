@@ -1,59 +1,12 @@
-// biome-ignore-all lint/style/useNamingConvention: tint keys mirror source asset material names (e.g. Brown_02)
-/** The back half of the ladder, from Laura Bullion to the boss (design doc §3.4). Tuning notes live on {@link Outlaw}. */
-
+// biome-ignore-all lint/style/useNamingConvention: tint keys mirror the base GLB's material names (Shirt, Sleeves, Pants…)
+/**
+ * Outlaws 10–17 of the gauntlet, in order, up to the underboss and John Wesley Hardin. Times are
+ * in ms unless noted; `day` is the lighting scalar (0 noon, 0.5 sunset, 1 midnight).
+ */
 import { bountyFor } from './economy.ts'
-import { BLACK } from './outlaw-palette.ts'
-import type { Outlaw } from './outlaws.ts'
+import { BLACK, type Outlaw } from './outlaw-types.ts'
 
-export const LATE_OUTLAWS: readonly Outlaw[] = [
-  {
-    name: 'Laura Bullion',
-    epithet: 'the Thorny Rose',
-    bounty: bountyFor(7),
-    hook: 'Cold. Still. No tells at all.',
-    gimmick: 'cold',
-    look: {
-      base: 'woman',
-      tint: { LightGreen: 0x2a_2a_2a, Green: 0x3a_20_20, White: 0xc8_c0_b0 },
-      scale: 0.95,
-      coat: 0x1a_1a_1a,
-    },
-    hat: 'flat',
-    hatColor: 0x1a_1a_1a,
-    paces: [5, 10],
-    wait: [1.5, 3.5],
-    draw: 510,
-    jitter: 20,
-    fakeChance: 0.25,
-    fakes: ['crow', 'door'],
-    accuracy: 0.8,
-    day: 0.5,
-    lines: ['…'],
-  },
-  {
-    name: 'Thomas B. Arnold',
-    epithet: 'the Starer',
-    bounty: bountyFor(8),
-    hook: 'Whistles a dirge the whole walk. Never looks back.',
-    gimmick: 'whistler',
-    look: {
-      base: 'suit',
-      tint: { Suit: 0x2a_1e_2a, Tie: 0x10_10_10, White: 0xc8_c0_b0, Hair: 0x3a_2a_1a },
-      scale: 1.1,
-      coat: 0x14_12_1a,
-    },
-    hat: 'tophat',
-    hatColor: BLACK,
-    paces: [6, 10],
-    wait: [1.5, 4.0],
-    draw: 475,
-    jitter: 40,
-    fakeChance: 0.3,
-    fakes: ['horse', 'bottle'],
-    accuracy: 0.8,
-    day: 0.56,
-    lines: ['I can see you sweatin’.'],
-  },
+export const ROSTER_LATE: readonly Outlaw[] = [
   {
     name: 'Delmer F. Gusselman',
     epithet: 'Two-Gun Delmer',
@@ -62,13 +15,7 @@ export const LATE_OUTLAWS: readonly Outlaw[] = [
     gimmick: 'two-guns',
     look: {
       base: 'casual',
-      tint: {
-        LightBrown: 0x9a_6a_4a,
-        LightBlue: 0x3a_30_28,
-        Hair: 0x3a_24_12,
-        White: 0x2a_2a_2a,
-        Red_Dark: 0x2a_2a_2a,
-      },
+      tint: { Shirt: 0x6e_2c_24, Sleeves: 0x2a_2a_2a, Pants: 0x3a_30_28, Hair: 0x3a_24_12 },
       scale: 1.0,
       moustache: 0x3a_24_12,
     },
@@ -93,7 +40,7 @@ export const LATE_OUTLAWS: readonly Outlaw[] = [
     gimmick: 'drr',
     look: {
       base: 'woman',
-      tint: { LightGreen: 0x7a_2a_2a, Green: 0x3a_1a_1a, White: 0xd8_cc_b8 },
+      tint: { Shirt: 0xb4_a2_82, Sleeves: 0x6a_2a_26, Pants: 0x3a_1a_1a, Hair: 0x6a_3a_1a },
       scale: 0.94,
     },
     hat: 'cowboy',
@@ -116,7 +63,7 @@ export const LATE_OUTLAWS: readonly Outlaw[] = [
     gimmick: 'piano',
     look: {
       base: 'punk',
-      tint: { Black: 0x3a_1a_14, White: 0xe8_e0_d0, LightBlue: 0x1a_1a_22 },
+      tint: { Shirt: 0xb8_a8_88, Sleeves: 0x3a_1a_14, Pants: 0x1c_1a_1c, Hair: 0x1a_12_0a },
       scale: 0.9,
       moustache: 0x1a_12_0a,
     },
@@ -140,13 +87,7 @@ export const LATE_OUTLAWS: readonly Outlaw[] = [
     gimmick: 'night',
     look: {
       base: 'rugged',
-      tint: {
-        Green: 0x2a_26_20,
-        LightGreen: 0xa8_a0_90,
-        Brown: 0x2a_26_20,
-        Brown2: 0x1a_16_12,
-        Hair: 0x2a_1a_10,
-      },
+      tint: { Shirt: 0x7a_70_60, Sleeves: 0x2a_26_20, Pants: 0x2a_26_20, Hair: 0x2a_1a_10 },
       scale: 1.1,
       coat: 0x2a_24_1c,
       star: true,
@@ -172,7 +113,7 @@ export const LATE_OUTLAWS: readonly Outlaw[] = [
     gimmick: 'fake-king',
     look: {
       base: 'punk',
-      tint: { Black: 0x10_10_10, White: 0x7a_6a_5a, LightBlue: 0x2a_30_38 },
+      tint: { Shirt: 0x3c_36_30, Sleeves: 0x10_10_10, Pants: 0x2c_34_46, Hair: 0x10_10_10 },
       scale: 1.02,
     },
     hat: 'cowboy',
@@ -196,13 +137,7 @@ export const LATE_OUTLAWS: readonly Outlaw[] = [
     gimmick: 'cards',
     look: {
       base: 'worker',
-      tint: {
-        Worker_Vest: 0x8a_6a_44,
-        Worker_Yellow: 0x8a_6a_44,
-        LightBrown: 0xd8_cc_b0,
-        Brown: 0x4a_3a_2a,
-        Moustache: 0x6a_4a_2a,
-      },
+      tint: { Shirt: 0xb8_9a_6e, Sleeves: 0xb8_9a_6e, Pants: 0x4a_3a_2a, Hair: 0x6a_4a_2a },
       scale: 1.08,
       coat: 0x9a_7a_50,
     },
@@ -226,7 +161,7 @@ export const LATE_OUTLAWS: readonly Outlaw[] = [
     gimmick: 'underboss',
     look: {
       base: 'rugged',
-      tint: { Green: 0x1a_14_10, LightGreen: 0x5a_4a_3a, Brown: 0x3a_2a_1a, Hair: 0x0a_08_06 },
+      tint: { Shirt: 0x5a_4a_3a, Sleeves: 0x1a_14_10, Pants: 0x3a_2a_1a, Hair: 0x0a_08_06 },
       scale: 1.06,
       poncho: 0x2a_20_18,
       bandoliers: true,
@@ -253,7 +188,7 @@ export const LATE_OUTLAWS: readonly Outlaw[] = [
     gimmick: 'boss',
     look: {
       base: 'suit',
-      tint: { Suit: 0x0e_0e_12, Tie: 0x5a_00_00, White: 0xcf_c6_b4, Hair: 0x0a_0a_0a },
+      tint: { Shirt: 0x1c_1a_1a, Sleeves: 0xae_9e_80, Pants: 0x12_11_10, Hair: 0x0a_0a_0a },
       scale: 1.12,
       coat: 0x0c_0c_10,
       moustache: 0x0a_0a_0a,

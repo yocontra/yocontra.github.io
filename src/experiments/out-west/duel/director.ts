@@ -1,6 +1,7 @@
 import { MathUtils, type Object3D, SRGBColorSpace, type Vector3 } from 'three'
 import { FEEL } from '../data/feel.ts'
 import type { Press } from '../engine/input.ts'
+import type { Result } from '../net/leaderboard.ts'
 import type { RankedSession } from '../net/ranked.ts'
 import { save as persist } from '../save.ts'
 import type { Actor } from '../scene/actor.ts'
@@ -27,12 +28,15 @@ import {
   tickWait,
 } from './standoff.ts'
 import { type Ctx, DuelState, type Phase } from './state.ts'
-import { onDropped, onVerdict } from './verdict.ts'
+import { onDropped, onReconnecting, onResumed, onVerdict } from './verdict.ts'
 import { type DebugStats, debugText, lineup, posters } from './views.ts'
 import { enterWalk, tickTurn, tickWalk } from './walk.ts'
 
-/** Opens a ranked session (Turnstile + POST /sessions + socket), or null for practice. */
-export type RankedConnect = () => Promise<RankedSession | null>
+/**
+ * Opens a ranked session (Turnstile + POST /sessions + socket). An error is the reason the run
+ * stays practice (e.g. ranked is closed for the month); an empty error says nothing.
+ */
+export type RankedConnect = () => Promise<Result<RankedSession>>
 
 /**
  * The one seam for a server-driven Bounty Hunt duel (duel/remote.ts): while installed, it may take
@@ -70,6 +74,8 @@ export class Director extends DuelState {
       call: (duel) => onCall(this, duel),
       verdict: (v) => onVerdict(this, v),
       dropped: (reason) => onDropped(this, reason),
+      reconnecting: (on) => onReconnecting(this, on),
+      resumed: (purse) => onResumed(this, purse),
     }
     this.clock = new LocalDuelClock(this.events)
     c.hud.setPurse(c.save.run.total, false)
