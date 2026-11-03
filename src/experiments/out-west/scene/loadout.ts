@@ -19,7 +19,8 @@ import {
 import type { GLTF } from 'three/examples/jsm/loaders/GLTFLoader.js'
 import { type ItemId, type Loadout, normalizeLoadout } from '../data/catalog.ts'
 import type { HatKey } from '../data/outlaws.ts'
-import { Actor, type ActorOpts, type HolsterLook } from './actor.ts'
+import { Actor, type ActorOpts } from './actor.ts'
+import type { HolsterLook } from './kit.ts'
 import { type PropDef, propObject } from './props.ts'
 
 interface HatLook {

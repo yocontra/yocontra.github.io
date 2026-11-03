@@ -1,49 +1,29 @@
-// biome-ignore-all lint/style/noExcessiveLinesPerFile: one cohesive module (data table / scene builder); splitting would scatter tightly coupled code. Tracked for a later split.
-// biome-ignore-all lint/style/useThisInClassMethods: interface methods that are deliberate no-ops for this implementation
 // biome-ignore-all lint/suspicious/noUnnecessaryConditions: class fields are flags mutated from outside the method; Biome narrows them to their literal initializer
 import {
   type AnimationAction,
   type AnimationClip,
   AnimationMixer,
   type Bone,
-  Color,
-  CylinderGeometry,
-  DoubleSide,
   Group,
-  LatheGeometry,
   LoopOnce,
   LoopRepeat,
   type Material,
-  Mesh,
-  MeshStandardMaterial,
+  type Mesh,
   type Object3D,
   Quaternion,
   type SkinnedMesh,
-  SplineCurve,
-  Vector2,
   Vector3,
 } from 'three'
 import type { GLTF } from 'three/examples/jsm/loaders/GLTFLoader.js'
 import { clone as cloneSkinned } from 'three/examples/jsm/utils/SkeletonUtils.js'
 import type { BodyKey, HatKey } from '../data/outlaws.ts'
-import { bake, bodyPieces, mergePieces, meshPieces, onBone, type Piece } from './bake.ts'
-import { boneKey, bounds, onBones, sampleBody } from './fit.ts'
-import {
-  bandana,
-  bandoliers,
-  beard,
-  coat,
-  type Fit,
-  mask,
-  measure,
-  moustache,
-  outerThigh,
-  poncho,
-  prune,
-  star,
-} from './outfit.ts'
+import { bake, bodyPieces, meshPieces, onBone, type Piece } from './bake.ts'
+import { boneKey, bounds, sampleBody } from './fit.ts'
+import { type HolsterLook, holsterParts, mergedProp, PLAIN_HOLSTER } from './kit.ts'
+import { type Fit, measure, outerThigh, prune } from './outfit.ts'
+import { dressPieces, measureStride, seatHat, slotOn, tintModel } from './rig.ts'
 import { characterMaterial } from './shade.ts'
-import { type Floor, vary } from './style.ts'
+import type { Floor } from './style.ts'
 
 const HEIGHT = 1.78
 
@@ -75,250 +55,6 @@ export interface ActorOpts {
   /** The holster cosmetic (leather colour, tooling, a buscadero drop loop). Looks only. */
   holster?: HolsterLook | undefined
 }
-
-/**
- * How a holster looks. Pure leatherwork: the gun's slot, and so the draw, never moves.
- * - `trim`: a contrasting band at the mouth and the toe (tooled leather).
- * - `rig`: a buscadero drop loop from the belt down to the holster.
- */
-export interface HolsterLook {
-  color: number
-  roughness?: number
-  trim?: number
-  rig?: boolean
-}
-
-/**
- * The tint of one of the base's materials: the outlaw's own, else the base's default (the
- * build gives the ranger's green a western colour, hair a brown); brows follow his hair and a
- * sculpted beard takes the beard colour.
- */
-function tintFor(
-  src: Material,
-  tint: Readonly<Record<string, number>>,
-  o: ActorOpts,
-): number | undefined {
-  const own = tint[src.name]
-  if (own !== undefined) {
-    return own
-  }
-  if (src.name === 'Beard' && o.beard !== undefined) {
-    return o.beard
-  }
-  if ((src.name === 'Brows' || src.name === 'Beard') && tint.Hair !== undefined) {
-    return tint.Hair
-  }
-  return src.userData.tint as number | undefined
-}
-
-const PLAIN_HOLSTER: HolsterLook = { color: 0x3a_24_14, roughness: 0.55 }
-
-/** Hat silhouettes from lathe profiles (x = radius, y = height), metres. */
-const HAT_PROFILES: Record<HatKey, [number, number][]> = {
-  cowboy: [
-    [0.0, 0.14],
-    [0.06, 0.145],
-    [0.085, 0.12],
-    [0.1, 0.03],
-    [0.12, 0.012],
-    [0.17, 0.0],
-    [0.205, 0.02],
-    [0.215, 0.045],
-  ],
-  bowler: [
-    [0.0, 0.125],
-    [0.06, 0.118],
-    [0.092, 0.08],
-    [0.1, 0.02],
-    [0.13, 0.008],
-    [0.148, 0.02],
-  ],
-  sombrero: [
-    [0.0, 0.2],
-    [0.05, 0.19],
-    [0.08, 0.1],
-    [0.1, 0.02],
-    [0.25, 0.0],
-    [0.34, 0.02],
-    [0.36, 0.07],
-  ],
-  tophat: [
-    [0.0, 0.2],
-    [0.088, 0.2],
-    [0.082, 0.1],
-    [0.09, 0.012],
-    [0.13, 0.0],
-    [0.145, 0.018],
-  ],
-  tall: [
-    [0.0, 0.2],
-    [0.05, 0.205],
-    [0.08, 0.18],
-    [0.095, 0.03],
-    [0.12, 0.012],
-    [0.17, 0.0],
-    [0.215, 0.012],
-    [0.225, 0.035],
-  ],
-  flat: [
-    [0.0, 0.095],
-    [0.095, 0.095],
-    [0.1, 0.02],
-    [0.13, 0.006],
-    [0.185, 0.0],
-    [0.19, 0.012],
-  ],
-}
-
-/** Inner radius of each crown where it meets the head (the profile point above the brim). */
-const CROWN_R: Record<HatKey, number> = {
-  cowboy: 0.1,
-  bowler: 0.1,
-  sombrero: 0.1,
-  tophat: 0.09,
-  tall: 0.095,
-  flat: 0.1,
-}
-
-/**
- * Give a lathed hat its hand-made shape: a cattleman's brim rolls up at the sides and dips
- * front and back, and its crown takes a centre crease; the flat-brims keep theirs flat.
- */
-function shapeHat(geo: LatheGeometry, key: HatKey): void {
-  const crownR = CROWN_R[key] ?? 0.1
-  const prof = HAT_PROFILES[key] ?? HAT_PROFILES.cowboy
-  const brimR = Math.max(...prof.map(([x]) => x))
-  const top = Math.max(...prof.map(([, y]) => y))
-  const curl = { cowboy: 0.05, tall: 0.045, sombrero: 0.02 }[key as string] ?? 0
-  const crease = { cowboy: 0.022, tall: 0.018 }[key as string] ?? 0
-  const pos = geo.getAttribute('position')
-  for (let i = 0; i < pos.count; i++) {
-    const x = pos.getX(i)
-    const z = pos.getZ(i)
-    let y = pos.getY(i)
-    const rr = Math.hypot(x, z)
-    if (rr > crownR + 0.008 && curl > 0) {
-      const t = (rr - crownR) / Math.max(0.01, brimR - crownR)
-      const side = (x / rr) ** 2
-      y += curl * t * t * side - curl * 0.35 * t * t * (1 - side)
-    }
-    if (crease > 0 && y > top - 0.05) {
-      const k = (y - (top - 0.05)) / 0.05
-      y -= crease * k * Math.max(0, 1 - Math.abs(x) / (crownR * 0.9))
-    }
-    pos.setY(i, y)
-  }
-  geo.computeVertexNormals()
-}
-
-/**
- * A hat as ONE mesh (crown and band merged, vertex coloured). The returned
- * group is what pops off; `fit` scales an inner child so popHat() keeps size.
- */
-export function makeHat(key: HatKey, color: number, floor: Floor = { value: 0 }): Group {
-  const pts = (HAT_PROFILES[key] ?? HAT_PROFILES.cowboy).map(([x, y]) => new Vector2(x, y))
-  // lathe needs the profile ordered bottom→top for outward normals; a spline through the
-  // profile rounds the crown and the brim's roll instead of faceting them
-  const prof = new SplineCurve([...pts].reverse()).getSpacedPoints(36)
-  const g = new Group()
-  const felt = new MeshStandardMaterial({ color, roughness: 0.85 })
-  felt.userData.rim = 0.9
-  felt.userData.swatch = 'felt'
-  const lathe = new LatheGeometry(prof, 48)
-  shapeHat(lathe, key)
-  const crown = new Mesh(lathe, felt)
-  g.add(crown)
-  const bandH = key === 'sombrero' ? 0.03 : 0.022
-  const r = (HAT_PROFILES[key]?.[2]?.[0] ?? 0.09) + 0.006
-  const bandMat = new MeshStandardMaterial({
-    color: new Color(color).multiplyScalar(0.35),
-    roughness: 0.6,
-  })
-  bandMat.userData.swatch = 'leather'
-  const band = new Mesh(new CylinderGeometry(r, r + 0.004, bandH, 48, 1, true), bandMat)
-  band.position.y = 0.03
-  g.add(band)
-  const geo = mergePieces(meshPieces(g, g))
-  const mat = characterMaterial(floor, 'Felt')
-  mat.side = DoubleSide
-  const mesh = new Mesh(geo, mat)
-  mesh.castShadow = true
-  const out = new Group()
-  const inner = new Group()
-  inner.add(mesh)
-  out.add(inner)
-  // Crumple the brim a touch so it doesn't read as CG-perfect.
-  out.rotation.z = (Math.random() - 0.5) * 0.06
-  return out
-}
-
-/**
- * The holster's leather in its slot's frame (the barrel lies along +X, 0.045 up +Y). The body
- * cylinder is the same for every holster; tooling adds bands, a buscadero rig adds the drop loop
- * that hangs it from the belt.
- */
-function holsterParts(look: HolsterLook): Mesh[] {
-  const leather = new MeshStandardMaterial({ color: look.color, roughness: look.roughness ?? 0.55 })
-  leather.userData.swatch = 'leather'
-  const body = new Mesh(new CylinderGeometry(0.03, 0.026, 0.2, 7), leather)
-  body.rotation.z = Math.PI / 2
-  body.position.set(0.13, 0.045, 0)
-  const parts = [body]
-  if (look.trim !== undefined) {
-    const band = new MeshStandardMaterial({ color: look.trim, roughness: 0.4, metalness: 0.3 })
-    band.userData.swatch = 'metal'
-    for (const [x, r] of [
-      [0.04, 0.032],
-      [0.215, 0.028],
-    ] as const) {
-      const ring = new Mesh(new CylinderGeometry(r, r, 0.016, 7), band)
-      ring.rotation.z = Math.PI / 2
-      ring.position.set(x, 0.045, 0)
-      parts.push(ring)
-    }
-  }
-  if (look.rig) {
-    // a flat strap on the outer face (-Y, away from the leg), from the belt (-X, up the thigh)
-    // down past the mouth of the holster; local X becomes the thickness once rotated
-    const strap = new Mesh(new CylinderGeometry(0.036, 0.036, 0.16, 6, 1), leather)
-    strap.scale.set(0.22, 1, 1)
-    strap.rotation.z = Math.PI / 2
-    strap.position.set(0.02, 0.008, 0)
-    parts.push(strap)
-  }
-  return parts
-}
-
-/**
- * A gun as ONE mesh (its parts merged, vertex coloured, its own metal look):
- * one draw call in the holster or the hand instead of one per part.
- */
-function mergedProp(src: Object3D): Object3D {
-  const g = src.clone()
-  g.updateMatrixWorld(true)
-  let textured = false
-  g.traverse((o) => {
-    const m = o as Mesh
-    if (m.isMesh && (m.material as MeshStandardMaterial).map) {
-      textured = true
-    }
-  })
-  if (textured) {
-    return g
-  }
-  const pieces = meshPieces(g, g)
-  const metal = new MeshStandardMaterial({ vertexColors: true, roughness: 0.45, metalness: 0.55 })
-  const mesh = new Mesh(mergePieces(pieces), metal)
-  mesh.castShadow = true
-  const out = new Group()
-  out.name = src.name
-  out.add(mesh)
-  return out
-}
-
-const tmpV = new Vector3()
-const V3 = (x: number, y: number, z: number) => new Vector3(x, y, z)
-const tmpQ = new Quaternion()
 
 export type Clip =
   | 'Idle'
@@ -426,42 +162,13 @@ export class Actor {
     this.mixer.update(0)
     this.root.updateMatrixWorld(true)
 
-    // His own colours (tinted, then a seeded nudge so no two read identical).
-    const tint = opts.tint ?? {}
-    const seed = opts.seed ?? 'player'
-    const matCache = new Map<Material, Material>()
-    this.model.traverse((o) => {
-      const m = o as Mesh
-      if (!m.isMesh) {
-        return
-      }
-      const swap = (src: Material): Material => {
-        const cached = matCache.get(src)
-        if (cached) {
-          return cached
-        }
-        const c = src.clone() as MeshStandardMaterial
-        const hex = tintFor(src, tint, opts)
-        c.color.setHex(hex ?? 0xff_ff_ff)
-        // a tinted garment is recoloured (its main fabric), untinted keeps its texture
-        c.userData.recolor =
-          hex !== undefined && ((src.userData.lum as number | undefined) ?? 0) > 0
-        vary(c, seed)
-        if (hex === undefined) {
-          // untinted: the texture as authored (vary still sets roughness and rim)
-          c.color.setHex(0xff_ff_ff)
-        }
-        matCache.set(src, c)
-        return c
-      }
-      m.material = Array.isArray(m.material) ? m.material.map(swap) : swap(m.material)
-    })
+    tintModel(this.model, opts)
 
     // Dress him in the idle pose, fitted to his own surface, then bake it all
     // into one skinned mesh bound in that pose.
     const body = sampleBody(this.model, this.root)
     const fit = measure(body, this.bones)
-    const clothes = this.dress(fit, opts)
+    const clothes = dressPieces(fit, opts, this.root, this.realBeard)
     const pieces = [...bodyPieces(this.model, this.root, body), ...clothes]
     if (opts.gun) {
       pieces.push(
@@ -484,8 +191,12 @@ export class Actor {
     }
     this.meshes.push(bake(pieces, body, this.root, characterMaterial(this.floor)))
 
-    if (opts.hat) {
-      this.attachHat(fit, opts.hat, opts.hatColor ?? 0x3a_2a_1a)
+    if (opts.hat && this.head) {
+      this.hat = seatHat(
+        fit,
+        { key: opts.hat, color: opts.hatColor ?? 0x3a_2a_1a, floor: this.floor },
+        { head: this.head, root: this.root },
+      )
     }
     if (opts.gun) {
       this.gripGuns(opts.offGun ?? false)
@@ -499,66 +210,16 @@ export class Actor {
     return this.bones.get(boneKey(name)) ?? null
   }
 
-  /** Everything he wears, fitted and skinned (see outfit.ts). */
-  private dress(f: Fit, o: ActorOpts): Piece[] {
-    const out: Piece[] = []
-    if (o.coat !== undefined) {
-      out.push(...coat(f, o.coat))
-    }
-    if (o.poncho !== undefined) {
-      out.push(...poncho(f, o.poncho))
-    }
-    if (o.mask !== undefined) {
-      out.push(...mask(f, o.mask))
-    } else if (o.bandana !== undefined) {
-      out.push(...bandana(f, o.bandana))
-    }
-    if (o.bandoliers) {
-      out.push(...bandoliers(f, this.root))
-    }
-    if (o.star) {
-      out.push(...star(f, this.root))
-    }
-    if (o.beard !== undefined && !this.realBeard) {
-      out.push(...beard(f, o.beard))
-    }
-    if (o.moustache !== undefined) {
-      out.push(...moustache(f, o.moustache, this.root))
-    }
-    return out
-  }
-
-  /** Sample the walk clip to find stride length and heel-strike times (no foot sliding). */
+  /** Stride length and heel strikes from the walk clip, so his feet never slide. */
   private measureWalk(clip: AnimationClip): void {
     const footL = this.bone('FootL')
     const footR = this.bone('FootR')
     if (!(footL && footR)) {
       return
     }
-    const action = this.mixer.clipAction(clip)
-    action.reset().play()
-    action.weight = 1
-    const n = 48
-    const zl: number[] = []
-    const zr: number[] = []
-    const inv = this.root.matrixWorld.clone().invert()
-    for (let i = 0; i < n; i++) {
-      this.mixer.setTime((i / n) * clip.duration)
-      this.root.updateMatrixWorld(true)
-      inv.copy(this.root.matrixWorld).invert()
-      zl.push(footL.getWorldPosition(tmpV).applyMatrix4(inv).z)
-      zr.push(footR.getWorldPosition(tmpV).applyMatrix4(inv).z)
-    }
-    action.stop()
-    const range = (a: number[]) => Math.max(...a) - Math.min(...a)
-    const stride = (range(zl) + range(zr)) / 2
-    if (stride > 0.2 && stride < 1.5) {
-      this.paceLength = stride
-    }
-    const argmax = (a: number[]) => a.indexOf(Math.max(...a))
-    this.heelStrikes = [(argmax(zl) / n) * clip.duration, (argmax(zr) / n) * clip.duration].sort(
-      (a, b) => a - b,
-    )
+    const stride = measureStride({ mixer: this.mixer, root: this.root, feet: [footL, footR] }, clip)
+    this.paceLength = stride.paceLength ?? this.paceLength
+    this.heelStrikes = stride.heelStrikes
   }
 
   action(name: Clip): AnimationAction | null {
@@ -631,61 +292,6 @@ export class Actor {
   }
 
   /**
-   * Seat the hat on his head bone: sized to his skull (hair included) and
-   * lowered until the crown's inner rim meets it, like a real hat.
-   */
-  private attachHat(f: Fit, key: HatKey, color: number): void {
-    const head = this.head
-    if (!head) {
-      return
-    }
-    const hat = makeHat(key, color, this.floor)
-    const h = f.head
-    const crownR = CROWN_R[key] ?? 0.1
-    const s = Math.min(1.3, Math.max(0.9, (h.r * 1.04) / crownR))
-    const want = crownR * s
-    const skull = onBones(f.body, ['Head'])
-    // Highest height at which the head is as wide as the crown's opening.
-    let seat = h.top - 0.06
-    for (let y = h.top; y > h.top - 0.2; y -= 0.004) {
-      let r = 0
-      for (const p of skull) {
-        if (Math.abs(p.p.y - y) < 0.006) {
-          r = Math.max(r, Math.hypot(p.p.x - h.cx, p.p.z - h.cz))
-        }
-      }
-      if (r >= want * 0.96) {
-        seat = y
-        break
-      }
-    }
-    const inner = hat.children[0]
-    inner?.scale.setScalar(s)
-    const slot = this.slotOn(
-      head,
-      V3(h.cx, seat - 0.025 * s, h.cz),
-      this.root.getWorldQuaternion(new Quaternion()),
-    )
-    slot.add(hat)
-    hat.rotation.x = -0.08
-    this.hat = hat
-  }
-
-  /** Make a bone-local slot that holds world-space-authored children (unit scale, root orientation). */
-  private slotOn(bone: Bone, worldPos: Vector3, worldQuat: Quaternion): Group {
-    const slot = new Group()
-    bone.add(slot)
-    bone.updateMatrixWorld(true)
-    const inv = bone.matrixWorld.clone().invert()
-    slot.position.copy(worldPos.clone().applyMatrix4(inv))
-    bone.getWorldQuaternion(tmpQ)
-    slot.quaternion.copy(tmpQ.clone().invert().multiply(worldQuat))
-    const ws = bone.getWorldScale(new Vector3())
-    slot.scale.setScalar(1 / ws.x)
-    return slot
-  }
-
-  /**
    * Holsters on the outside of his thighs (measured from his own legs, outside
    * the coat if he wears one), riding the thigh bones. The leather is baked
    * into the body mesh; the gun hangs in a slot on the same bone.
@@ -718,7 +324,7 @@ export class Actor {
       }
       // slot +Y points toward his body on both sides; the barrel sits 0.045 up +Y
       const x = surface - side * (0.026 + 0.045)
-      const slot = this.slotOn(bone, new Vector3(x, y, bp.z + 0.01), q)
+      const slot = slotOn(bone, new Vector3(x, y, bp.z + 0.01), q)
       for (const part of holsterParts(look)) {
         slot.add(part)
         out.push(...meshPieces(part, this.root, onBone(bone)))
@@ -757,7 +363,7 @@ export class Actor {
       .multiply(new Quaternion().setFromAxisAngle(new Vector3(0, 1, 0), -Math.PI / 2))
     const hp = hand.getWorldPosition(new Vector3())
     const fwd = new Vector3(0, 0, 1).applyQuaternion(rootQ)
-    this.handSlot = this.slotOn(
+    this.handSlot = slotOn(
       hand,
       hp
         .clone()
@@ -767,7 +373,7 @@ export class Actor {
     )
     if (two && this.handL) {
       const lp = this.handL.getWorldPosition(new Vector3())
-      this.offSlot = this.slotOn(this.handL, lp.clone().addScaledVector(fwd, 0.02), gunQ)
+      this.offSlot = slotOn(this.handL, lp.clone().addScaledVector(fwd, 0.02), gunQ)
     }
     if (aim) {
       aim.stop()
@@ -795,7 +401,7 @@ export class Actor {
       .clone()
       .multiply(new Quaternion().setFromAxisAngle(new Vector3(0, 1, 0), Math.PI / 2))
     const hp = hand.getWorldPosition(new Vector3())
-    const slot = this.slotOn(hand, hp, q)
+    const slot = slotOn(hand, hp, q)
     this.rifle = mergedProp(rifle)
     this.rifle.position.set(0, -0.02, 0.1)
     slot.add(this.rifle)
