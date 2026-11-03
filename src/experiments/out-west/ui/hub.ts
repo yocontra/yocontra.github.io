@@ -134,8 +134,9 @@ export class Hub {
     }
     const r = await fetchMe()
     this.me = r.ok ? r.value : null
-    if (this.me) {
-      // a level gained in a ranked gauntlet (Bounty Hunt's results sheet already announced its own)
+    if (this.me && this.visible) {
+      // a level gained elsewhere (a ranked gauntlet), once the saloon shows it; Bounty Hunt's
+      // results sheet has already played its own
       announceLevel(this.me.level)
     }
     this.render()
