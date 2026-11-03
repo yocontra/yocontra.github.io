@@ -354,6 +354,8 @@ export class PvpDuel implements DirectorHooks {
     c.world.setFires(false)
     c.world.apply(d.outlaw.day)
     c.world.setClock(17, 0)
+    // the street's wanted-poster post carries the gauntlet's outlaw: not his, so it comes down
+    c.world.poster.visible = false
     c.audio.playSong('intro')
     d.enterCock()
   }

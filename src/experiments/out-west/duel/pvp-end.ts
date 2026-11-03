@@ -98,5 +98,6 @@ export function clearStreet(d: Director, realSave: SaveData): void {
   d.c.save = realSave
   persist(realSave)
   d.c.hud.root.classList.remove('ow-pvp')
+  d.c.world.poster.visible = true
   emptyStreet(d)
 }

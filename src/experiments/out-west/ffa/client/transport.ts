@@ -143,10 +143,13 @@ export function openRemote(opts: RemoteOptions, ev: TransportEvents): Transport 
       attempts++
       const r = await joinTown(req, opts.apiUrl, opts.getToken)
       if (!r.ok) {
-        if (attempts === 1 || r.error.reason !== 'network') {
-          opts.onRefused(r.error)
-          return null
+        const transient = r.error.reason === 'network' || r.error.reason === 'server'
+        if (attempts > 1 && transient) {
+          // offline mid-switch, or the Worker hiccuped: throwing makes the socket retry with
+          // backoff (returning null would give up on the first failed rejoin)
+          throw new Error(r.error.message)
         }
+        opts.onRefused(r.error)
         return null
       }
       lobbyId = r.value.lobbyId
