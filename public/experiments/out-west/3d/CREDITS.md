@@ -48,6 +48,9 @@ Quaternius: https://quaternius.com
 
 ## Textures (Poly Haven, CC0)
 
+Each set ships diffuse, OpenGL normal and ARM (ambient occlusion, roughness, metalness) maps at 1K,
+fetched and converted to WebP with `tools/polyhaven.ts`.
+
 | File | Source | Licence |
 |---|---|---|
 | `tex/ground_*.webp` | "Gravelly Sand" — https://polyhaven.com/a/gravelly_sand | CC0 1.0 |

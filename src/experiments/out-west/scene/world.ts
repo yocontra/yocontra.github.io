@@ -26,6 +26,7 @@ import { GeoBuilder } from './geo.ts'
 import { type Preset, presetAt } from './presets.ts'
 import { RIM } from './style.ts'
 import { clockCanvas, type SignSpec, signAtlas } from './textures.ts'
+import { attachArm, withTownAO } from './town-pbr.ts'
 
 /** Street layout (metres). The street runs along Z; the duel is centred on the origin. */
 export const STREET = {
@@ -359,6 +360,13 @@ float gn(vec2 p){ vec2 i=floor(p); vec2 f=fract(p); f=f*f*(3.0-2.0*f);
         )
     }
     tex.ground.repeat.set(1, 1)
+    // real PBR (Poly Haven ARM) and the indirect-only town AO on every street surface
+    withTownAO(groundMat, 'ground')
+    withTownAO(this.wallMat, 'wall')
+    withTownAO(this.trimMat, 'trim')
+    attachArm(groundMat, 'ground', 0.8)
+    attachArm(this.wallMat, 'planks', 1)
+    attachArm(this.trimMat, 'vplanks', 1)
     const gGeo = new PlaneGeometry(700, 700, 1, 1)
     gGeo.rotateX(-Math.PI / 2)
     const uv = gGeo.getAttribute('uv')
