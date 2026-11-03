@@ -6,7 +6,14 @@
     "useIgnoreFile": true
   },
   "files": {
-    "includes": ["**", "!dist", "!.astro", "!public", "!node_modules", "!bun.lock"]
+    "includes": [
+      "**",
+      "!dist",
+      "!.astro",
+      "!public",
+      "!node_modules",
+      "!bun.lock"
+    ]
   },
   "formatter": {
     "enabled": true,
@@ -44,19 +51,120 @@
   "linter": {
     "enabled": true,
     "rules": {
-      "preset": "recommended",
-      "suspicious": {
-        "noExplicitAny": "error"
+      "preset": "all",
+      "correctness": {
+        "useQwikValidLexicalScope": "off",
+        "noReactNativeRawText": "off",
+        "noNodejsModules": "off",
+        "useImportExtensions": "error",
+        "noUnusedVariables": "error",
+        "noUnusedImports": "error",
+        "useHookAtTopLevel": "off"
       },
       "style": {
-        "useImportType": "error",
-        "useConst": "error",
-        "noNonNullAssertion": "warn",
-        "useTemplate": "error"
+        "noJsxLiterals": "off",
+        "noMagicNumbers": "off",
+        "noTernary": "off",
+        "noNestedTernary": "error",
+        "noIncrementDecrement": "off",
+        "useExportsLast": "off",
+        "noHexColors": "off",
+        "noContinue": "off",
+        "useDestructuring": "off",
+        "noDefaultExport": "off",
+        "noNonNullAssertion": "error",
+        "noParameterProperties": "error",
+        "useFilenamingConvention": {
+          "level": "error",
+          "options": {
+            "filenameCases": [
+              "kebab-case",
+              "camelCase",
+              "PascalCase"
+            ],
+            "requireAscii": true
+          }
+        },
+        "useNamingConvention": {
+          "level": "error",
+          "options": {
+            "strictCase": false,
+            "requireAscii": true,
+            "conventions": [
+              {
+                "selector": {
+                  "kind": "objectLiteralProperty"
+                },
+                "formats": [
+                  "camelCase",
+                  "CONSTANT_CASE",
+                  "snake_case",
+                  "PascalCase"
+                ]
+              },
+              {
+                "selector": {
+                  "kind": "typeProperty"
+                },
+                "formats": [
+                  "camelCase",
+                  "CONSTANT_CASE",
+                  "snake_case"
+                ]
+              },
+              {
+                "selector": {
+                  "kind": "enumMember"
+                },
+                "formats": [
+                  "PascalCase",
+                  "CONSTANT_CASE"
+                ]
+              }
+            ]
+          }
+        },
+        "noExcessiveLinesPerFile": {
+          "level": "error",
+          "options": {
+            "maxLines": 500,
+            "skipBlankLines": true
+          }
+        }
       },
-      "correctness": {
-        "noUnusedVariables": "error",
-        "noUnusedImports": "error"
+      "suspicious": {
+        "noBitwiseOperators": "off",
+        "useBaseline": "off",
+        "noConsole": {
+          "level": "error",
+          "options": {
+            "allow": [
+              "warn",
+              "error"
+            ]
+          }
+        },
+        "noExplicitAny": "error"
+      },
+      "complexity": {
+        "noVoid": "off",
+        "noExcessiveCognitiveComplexity": {
+          "level": "error",
+          "options": {
+            "maxAllowedComplexity": 25
+          }
+        },
+        "noExcessiveLinesPerFunction": {
+          "level": "error",
+          "options": {
+            "maxLines": 150,
+            "skipBlankLines": true
+          }
+        },
+        "noPlaywrightUselessAwait": "off"
+      },
+      "performance": {
+        "useSolidForComponent": "off"
       }
     }
   },
@@ -70,22 +178,79 @@
   },
   "overrides": [
     {
-      "includes": ["**/*.astro"],
+      "includes": [
+        "src/styles/global.css"
+      ],
       "linter": {
         "rules": {
-          "correctness": {
-            "noUnusedVariables": "off",
-            "noUnusedImports": "off"
+          "complexity": {
+            "noImportantStyles": "off"
           }
         }
       }
     },
     {
-      "includes": ["src/styles/global.css"],
+      "includes": [
+        "**/*.astro"
+      ],
+      "linter": {
+        "rules": {
+          "correctness": {
+            "noUnusedVariables": "off",
+            "noUnusedImports": "off"
+          },
+          "suspicious": {
+            "noUnknownAttribute": "off",
+            "noLeakedRender": "off",
+            "useScopedStyles": "off"
+          },
+          "style": {
+            "noInlineStyles": "off"
+          }
+        }
+      }
+    },
+    {
+      "includes": [
+        "scripts/**",
+        "src/lib/github.ts",
+        "astro.config.ts"
+      ],
+      "linter": {
+        "rules": {
+          "style": {
+            "noProcessEnv": "off"
+          },
+          "correctness": {
+            "noProcessGlobal": "off"
+          },
+          "suspicious": {
+            "noConsole": "off"
+          }
+        }
+      }
+    },
+    {
+      "includes": [
+        "**/*.test.ts"
+      ],
+      "linter": {
+        "rules": {
+          "style": {
+            "noMagicNumbers": "off"
+          }
+        }
+      }
+    },
+    {
+      "includes": [
+        "src/experiments/out-west-classic/**"
+      ],
       "linter": {
         "rules": {
           "complexity": {
-            "noImportantStyles": "off"
+            "noExcessiveLinesPerFunction": "off",
+            "noExcessiveCognitiveComplexity": "off"
           }
         }
       }

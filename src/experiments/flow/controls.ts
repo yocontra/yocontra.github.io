@@ -1,5 +1,6 @@
-import { defaultParams, type HeroHandle, type HeroParams, mountHero, paramRanges } from '~/lib/hero'
-import type { BackendKind } from '~/lib/hero/backends'
+import type { BackendKind } from '~/lib/hero/backends.ts'
+import { type HeroHandle, mountHero } from '~/lib/hero/index.ts'
+import { defaultParams, type HeroParams, paramRanges } from '~/lib/hero/params.ts'
 
 type ParamKey = keyof HeroParams
 
@@ -16,7 +17,9 @@ function must<T extends Element>(
   ctor: abstract new () => T,
 ): T {
   const node = root.querySelector(selector)
-  if (!(node instanceof ctor)) throw new Error(`[flow] missing ${selector}`)
+  if (!(node instanceof ctor)) {
+    throw new Error(`[flow] missing ${selector}`)
+  }
   return node
 }
 
@@ -34,7 +37,9 @@ function quantize(key: ParamKey, value: number): number {
 }
 
 function format(key: ParamKey, value: number): string {
-  if (key === 'vcr') return value > 0.5 ? 'on' : 'off'
+  if (key === 'vcr') {
+    return value > 0.5 ? 'on' : 'off'
+  }
   return value.toFixed(decimals(paramRanges[key].step))
 }
 
@@ -49,9 +54,13 @@ function readHash(): HashState {
   const params: Partial<HeroParams> = {}
   for (const key of PARAM_KEYS) {
     const raw = search.get(key)
-    if (raw === null || raw.trim() === '') continue
+    if (raw === null || raw.trim() === '') {
+      continue
+    }
     const value = Number(raw)
-    if (Number.isFinite(value)) params[key] = quantize(key, value)
+    if (Number.isFinite(value)) {
+      params[key] = quantize(key, value)
+    }
   }
   const backend = search.get('backend')
   return isBackend(backend) ? { params, backend } : { params }
@@ -62,14 +71,18 @@ function writeHash(params: HeroParams, backend: BackendKind | undefined) {
   for (const key of PARAM_KEYS) {
     search.set(key, key === 'vcr' ? String(params.vcr) : format(key, params[key]))
   }
-  if (backend) search.set('backend', backend)
+  if (backend) {
+    search.set('backend', backend)
+  }
   history.replaceState(null, '', `#${search.toString()}`)
 }
 
 function randomParams(current: HeroParams): HeroParams {
   const next: HeroParams = { ...current }
   for (const key of PARAM_KEYS) {
-    if (key === 'vcr') continue
+    if (key === 'vcr') {
+      continue
+    }
     const { min, max } = paramRanges[key]
     // Keep it moving: never randomize into a dead stop.
     const lo = key === 'speed' ? Math.max(min, 0.05) : min
@@ -80,252 +93,337 @@ function randomParams(current: HeroParams): HeroParams {
 }
 
 function isTyping(target: EventTarget | null): boolean {
-  if (!(target instanceof HTMLElement)) return false
-  if (target.isContentEditable) return true
+  if (!(target instanceof HTMLElement)) {
+    return false
+  }
+  if (target.isContentEditable) {
+    return true
+  }
   return target.closest('input, textarea, select, button, summary') !== null
 }
 
-export function initFlow(root: HTMLElement = document.body): void {
-  const stage = must(root, '[data-flow-stage]', HTMLElement)
-  const fallback = must(root, '[data-flow-fallback]', HTMLElement)
-  const panel = must(root, '[data-flow-panel]', HTMLDetailsElement)
-  const form = must(root, '[data-flow-form]', HTMLFormElement)
-  const hudBox = must(root, '[data-flow-hud]', HTMLElement)
-  const hudBackend = must(root, '[data-hud="backend"]', HTMLElement)
-  const hudFps = must(root, '[data-hud="fps"]', HTMLElement)
-  const hudRes = must(root, '[data-hud="res"]', HTMLElement)
-  const hudState = must(root, '[data-hud="state"]', HTMLElement)
-  const status = must(root, '[data-flow-status]', HTMLElement)
+interface FlowElements {
+  stage: HTMLElement
+  fallback: HTMLElement
+  panel: HTMLDetailsElement
+  form: HTMLFormElement
+  hudBox: HTMLElement
+  hudBackend: HTMLElement
+  hudFps: HTMLElement
+  hudRes: HTMLElement
+  hudState: HTMLElement
+  status: HTMLElement
+  inputs: Map<ParamKey, HTMLInputElement>
+  outputs: Map<ParamKey, HTMLOutputElement>
+  backendRadios: HTMLInputElement[]
+}
 
+function queryElements(root: HTMLElement): FlowElements {
+  const form = must(root, '[data-flow-form]', HTMLFormElement)
   const inputs = new Map<ParamKey, HTMLInputElement>()
   const outputs = new Map<ParamKey, HTMLOutputElement>()
   for (const key of PARAM_KEYS) {
     inputs.set(key, must(form, `[name="${key}"]`, HTMLInputElement))
     const out = form.querySelector(`output[for="p-${key}"]`)
-    if (out instanceof HTMLOutputElement) outputs.set(key, out)
+    if (out instanceof HTMLOutputElement) {
+      outputs.set(key, out)
+    }
   }
-  const backendRadios = BACKENDS.map((kind) =>
-    must(form, `input[name="backend"][value="${kind}"]`, HTMLInputElement),
-  )
+  return {
+    stage: must(root, '[data-flow-stage]', HTMLElement),
+    fallback: must(root, '[data-flow-fallback]', HTMLElement),
+    panel: must(root, '[data-flow-panel]', HTMLDetailsElement),
+    form,
+    hudBox: must(root, '[data-flow-hud]', HTMLElement),
+    // biome-ignore lint/security/noSecrets: a CSS selector, not a credential
+    hudBackend: must(root, '[data-hud="backend"]', HTMLElement),
+    hudFps: must(root, '[data-hud="fps"]', HTMLElement),
+    hudRes: must(root, '[data-hud="res"]', HTMLElement),
+    hudState: must(root, '[data-hud="state"]', HTMLElement),
+    status: must(root, '[data-flow-status]', HTMLElement),
+    inputs,
+    outputs,
+    backendRadios: BACKENDS.map((kind) =>
+      must(form, `input[name="backend"][value="${kind}"]`, HTMLInputElement),
+    ),
+  }
+}
 
-  const hasWebGPU = 'gpu' in navigator
-  for (const radio of backendRadios) {
-    if (radio.value === 'webgpu' && !hasWebGPU) {
-      radio.disabled = true
-      radio.closest('label')?.setAttribute('title', 'WebGPU is not available in this browser')
+class FlowPlayground {
+  private readonly el: FlowElements
+  private readonly hasWebGPU = 'gpu' in navigator
+  /** Source of truth; the renderer's params mirror this (except speed while paused). */
+  private model: HeroParams
+  private preferred: BackendKind | undefined
+  private paused = globalThis.matchMedia('(prefers-reduced-motion: reduce)').matches
+  private handle: HeroHandle | null = null
+  private mountToken = 0
+  private hashTimer: ReturnType<typeof setTimeout> | undefined
+  private statusTimer: ReturnType<typeof setTimeout> | undefined
+
+  constructor(root: HTMLElement) {
+    this.el = queryElements(root)
+    const fromHash = readHash()
+    this.model = { ...defaultParams, ...fromHash.params }
+    this.preferred = fromHash.backend
+
+    for (const radio of this.el.backendRadios) {
+      if (radio.value === 'webgpu' && !this.hasWebGPU) {
+        radio.disabled = true
+        radio.closest('label')?.setAttribute('title', 'WebGPU is not available in this browser')
+      }
     }
   }
 
-  const fromHash = readHash()
-  /** Source of truth; the renderer's params mirror this (except speed while paused). */
-  let model: HeroParams = { ...defaultParams, ...fromHash.params }
-  let preferred: BackendKind | undefined = fromHash.backend
-  let paused = window.matchMedia('(prefers-reduced-motion: reduce)').matches
-  let handle: HeroHandle | null = null
-  let mountToken = 0
-  let hashTimer = 0
-  let statusTimer = 0
+  start(): void {
+    this.bindForm()
+    this.bindKeys()
+    this.startHud()
+    // Phones: start with the art, not the panel (`h` / tap the summary to open).
+    if (globalThis.matchMedia('(max-width: 40rem)').matches) {
+      this.el.panel.open = false
+    }
+    this.syncInputs()
+    this.apply()
+    void this.mount(this.preferred)
+  }
 
-  const flash = (message: string) => {
-    status.textContent = message
-    window.clearTimeout(statusTimer)
-    statusTimer = window.setTimeout(() => {
-      status.textContent = ''
+  private flash(message: string): void {
+    this.el.status.textContent = message
+    globalThis.clearTimeout(this.statusTimer)
+    this.statusTimer = globalThis.setTimeout(() => {
+      this.el.status.textContent = ''
     }, 1800)
   }
 
-  const scheduleHash = () => {
-    window.clearTimeout(hashTimer)
-    hashTimer = window.setTimeout(() => writeHash(model, preferred), 150)
+  private scheduleHash(): void {
+    globalThis.clearTimeout(this.hashTimer)
+    this.hashTimer = globalThis.setTimeout(() => writeHash(this.model, this.preferred), 150)
   }
 
-  const apply = () => {
-    if (handle) {
-      Object.assign(handle.params, model)
-      handle.params.speed = paused ? 0 : model.speed
+  private apply(): void {
+    if (this.handle) {
+      Object.assign(this.handle.params, this.model)
+      this.handle.params.speed = this.paused ? 0 : this.model.speed
     }
     const docEl = document.documentElement
-    docEl.style.setProperty('--accent-h', String(model.hue))
-    docEl.toggleAttribute('data-vcr', model.vcr > 0.5)
-    hudState.textContent = paused ? 'paused' : 'live'
-    hudState.toggleAttribute('data-paused', paused)
+    docEl.style.setProperty('--accent-h', String(this.model.hue))
+    docEl.toggleAttribute('data-vcr', this.model.vcr > 0.5)
+    this.el.hudState.textContent = this.paused ? 'paused' : 'live'
+    this.el.hudState.toggleAttribute('data-paused', this.paused)
   }
 
-  const syncInputs = () => {
+  private syncInputs(): void {
     for (const key of PARAM_KEYS) {
-      const input = inputs.get(key)
-      if (!input) continue
-      if (input.type === 'checkbox') input.checked = model[key] > 0.5
-      else input.value = String(model[key])
-      const out = outputs.get(key)
-      if (out) out.value = format(key, model[key])
+      const input = this.el.inputs.get(key)
+      if (!input) {
+        continue
+      }
+      if (input.type === 'checkbox') {
+        input.checked = this.model[key] > 0.5
+      } else {
+        input.value = String(this.model[key])
+      }
+      const out = this.el.outputs.get(key)
+      if (out) {
+        out.value = format(key, this.model[key])
+      }
     }
   }
 
-  const setModel = (next: HeroParams) => {
-    model = next
-    syncInputs()
-    apply()
-    scheduleHash()
+  private setModel(next: HeroParams): void {
+    this.model = next
+    this.syncInputs()
+    this.apply()
+    this.scheduleHash()
   }
 
-  const freshCanvas = (): HTMLCanvasElement => {
+  private freshCanvas(): HTMLCanvasElement {
     // A canvas is locked to its first context type, so every (re)mount gets a new one.
     const canvas = document.createElement('canvas')
     canvas.setAttribute('aria-label', 'Domain-warped noise flow field')
-    stage.querySelector('canvas')?.remove()
-    stage.append(canvas)
+    this.el.stage.querySelector('canvas')?.remove()
+    this.el.stage.append(canvas)
     return canvas
   }
 
-  const mount = async (prefer: BackendKind | undefined) => {
-    const token = ++mountToken
-    handle?.destroy()
-    handle = null
-    hudBackend.textContent = '…'
+  private async mount(prefer: BackendKind | undefined): Promise<void> {
+    const token = ++this.mountToken
+    this.handle?.destroy()
+    this.handle = null
+    this.el.hudBackend.textContent = '…'
 
     const order: (BackendKind | undefined)[] = prefer
       ? [prefer, ...BACKENDS.filter((kind) => kind !== prefer)]
       : [undefined, 'webgl2']
     for (const kind of order) {
-      if (kind === 'webgpu' && !hasWebGPU) continue
+      if (kind === 'webgpu' && !this.hasWebGPU) {
+        continue
+      }
       const opts = kind
-        ? { params: model, scrollTarget: stage, prefer: kind }
-        : { params: model, scrollTarget: stage }
-      const next = await mountHero(freshCanvas(), opts)
-      if (token !== mountToken) {
+        ? { params: this.model, scrollTarget: this.el.stage, prefer: kind }
+        : { params: this.model, scrollTarget: this.el.stage }
+      // Backends are tried one after another on purpose: each attempt needs a fresh canvas.
+      // biome-ignore lint/performance/noAwaitInLoops: sequential fallback, not parallelisable work
+      const next = await mountHero(this.freshCanvas(), opts)
+      if (token !== this.mountToken) {
         next?.destroy()
         return
       }
       if (next) {
-        handle = next
+        this.handle = next
         break
       }
     }
+    this.showMounted(prefer)
+  }
 
+  private showMounted(prefer: BackendKind | undefined): void {
+    const { handle, el } = this
+    el.fallback.hidden = handle !== null
+    el.panel.hidden = handle === null
+    el.hudBox.hidden = handle === null
     if (!handle) {
-      stage.querySelector('canvas')?.remove()
-      fallback.hidden = false
-      panel.hidden = true
-      hudBox.hidden = true
+      el.stage.querySelector('canvas')?.remove()
       return
     }
-    fallback.hidden = true
-    panel.hidden = false
-    hudBox.hidden = false
-    if (prefer && handle.backend !== prefer) flash(`${prefer} unavailable, using ${handle.backend}`)
-    for (const radio of backendRadios) radio.checked = radio.value === handle.backend
-    hudBackend.textContent = handle.backend
-    apply()
+    if (prefer && handle.backend !== prefer) {
+      this.flash(`${prefer} unavailable, using ${handle.backend}`)
+    }
+    for (const radio of el.backendRadios) {
+      radio.checked = radio.value === handle.backend
+    }
+    el.hudBackend.textContent = handle.backend
+    this.apply()
   }
 
-  // --- inputs -------------------------------------------------------------
-
-  form.addEventListener('submit', (event) => event.preventDefault())
-
-  form.addEventListener('input', (event) => {
-    const target = event.target
-    if (!(target instanceof HTMLInputElement)) return
-    if (target.name === 'backend') return
+  private onInput(target: HTMLInputElement): void {
     const key = PARAM_KEYS.find((k) => k === target.name)
-    if (!key) return
-    const value = target.type === 'checkbox' ? (target.checked ? 1 : 0) : Number(target.value)
-    model = { ...model, [key]: quantize(key, value) }
-    const out = outputs.get(key)
-    if (out) out.value = format(key, model[key])
-    apply()
-    scheduleHash()
-  })
+    if (!key) {
+      return
+    }
+    const value = target.type === 'checkbox' ? Number(target.checked) : Number(target.value)
+    this.model = { ...this.model, [key]: quantize(key, value) }
+    const out = this.el.outputs.get(key)
+    if (out) {
+      out.value = format(key, this.model[key])
+    }
+    this.apply()
+    this.scheduleHash()
+  }
 
-  form.addEventListener('change', (event) => {
-    const target = event.target
-    if (!(target instanceof HTMLInputElement) || target.name !== 'backend') return
-    if (!isBackend(target.value)) return
-    preferred = target.value
-    scheduleHash()
-    void mount(preferred)
-  })
+  private randomize(): void {
+    this.setModel(randomParams(this.model))
+    this.flash('randomized')
+  }
 
-  const randomize = () => {
-    setModel(randomParams(model))
-    flash('randomized')
+  private reset(): void {
+    this.setModel({ ...defaultParams })
+    this.flash('reset to defaults')
   }
-  const reset = () => {
-    setModel({ ...defaultParams })
-    flash('reset to defaults')
+
+  private togglePause(): void {
+    this.paused = !this.paused
+    this.apply()
+    this.flash(this.paused ? 'paused' : 'resumed')
   }
-  const togglePause = () => {
-    paused = !paused
-    apply()
-    flash(paused ? 'paused' : 'resumed')
-  }
-  const copy = async () => {
-    const json = JSON.stringify(model, null, 2)
+
+  private async copy(): Promise<void> {
     try {
-      await navigator.clipboard.writeText(json)
-      flash('params copied')
+      await navigator.clipboard.writeText(JSON.stringify(this.model, null, 2))
+      this.flash('params copied')
     } catch {
-      flash('clipboard blocked')
+      this.flash('clipboard blocked')
     }
   }
 
-  const actions: Record<string, () => void> = {
-    randomize,
-    reset,
-    pause: togglePause,
-    copy: () => void copy(),
-  }
-  form.addEventListener('click', (event) => {
-    const target = event.target
-    if (!(target instanceof Element)) return
-    const button = target.closest('button[data-action]')
-    if (!(button instanceof HTMLButtonElement)) return
-    actions[button.getAttribute('data-action') ?? '']?.()
-  })
+  private bindForm(): void {
+    const { form } = this.el
+    form.addEventListener('submit', (event) => event.preventDefault())
 
-  window.addEventListener('keydown', (event) => {
-    if (event.defaultPrevented || event.metaKey || event.ctrlKey || event.altKey) return
-    if (isTyping(event.target)) return
-    if (event.key === 'h' || event.key === 'H') {
-      panel.open = !panel.open
-    } else if (event.key === 'r' || event.key === 'R') {
-      randomize()
-    } else if (event.key === ' ' || event.code === 'Space') {
-      event.preventDefault()
-      togglePause()
-    }
-  })
-
-  window.addEventListener('hashchange', () => {
-    const next = readHash()
-    setModel({ ...defaultParams, ...next.params })
-    if (next.backend && next.backend !== handle?.backend) {
-      preferred = next.backend
-      void mount(preferred)
-    }
-  })
-
-  // --- HUD ----------------------------------------------------------------
-
-  let fps = 60
-  let lastHud = 0
-  const hud = (now: number) => {
-    if (handle) {
-      fps += (1000 / Math.max(1, handle.frameMs) - fps) * 0.1
-      if (now - lastHud > 250) {
-        lastHud = now
-        hudFps.textContent = fps.toFixed(0).padStart(3, ' ')
-        hudRes.textContent = `${Math.round(handle.resolution * 100)}%`
+    form.addEventListener('input', (event) => {
+      const { target } = event
+      if (target instanceof HTMLInputElement && target.name !== 'backend') {
+        this.onInput(target)
       }
+    })
+
+    form.addEventListener('change', (event) => {
+      const { target } = event
+      if (
+        target instanceof HTMLInputElement &&
+        target.name === 'backend' &&
+        isBackend(target.value)
+      ) {
+        this.preferred = target.value
+        this.scheduleHash()
+        void this.mount(this.preferred)
+      }
+    })
+
+    const actions: Record<string, () => void> = {
+      randomize: () => this.randomize(),
+      reset: () => this.reset(),
+      pause: () => this.togglePause(),
+      copy: () => void this.copy(),
+    }
+    form.addEventListener('click', (event) => {
+      const button =
+        event.target instanceof Element ? event.target.closest('button[data-action]') : null
+      if (button instanceof HTMLButtonElement) {
+        actions[button.getAttribute('data-action') ?? '']?.()
+      }
+    })
+  }
+
+  private bindKeys(): void {
+    globalThis.addEventListener('keydown', (event) => {
+      if (event.defaultPrevented || event.metaKey || event.ctrlKey || event.altKey) {
+        return
+      }
+      if (isTyping(event.target)) {
+        return
+      }
+      const key = event.key.toLowerCase()
+      if (key === 'h') {
+        this.el.panel.open = !this.el.panel.open
+      } else if (key === 'r') {
+        this.randomize()
+      } else if (event.code === 'Space') {
+        event.preventDefault()
+        this.togglePause()
+      }
+    })
+
+    globalThis.addEventListener('hashchange', () => {
+      const next = readHash()
+      this.setModel({ ...defaultParams, ...next.params })
+      if (next.backend && next.backend !== this.handle?.backend) {
+        this.preferred = next.backend
+        void this.mount(this.preferred)
+      }
+    })
+  }
+
+  private startHud(): void {
+    let fps = 60
+    let lastHud = 0
+    const hud = (now: number) => {
+      const { handle } = this
+      if (handle) {
+        fps += (1000 / Math.max(1, handle.frameMs) - fps) * 0.1
+        if (now - lastHud > 250) {
+          lastHud = now
+          this.el.hudFps.textContent = fps.toFixed(0).padStart(3, ' ')
+          this.el.hudRes.textContent = `${Math.round(handle.resolution * 100)}%`
+        }
+      }
+      requestAnimationFrame(hud)
     }
     requestAnimationFrame(hud)
   }
-  requestAnimationFrame(hud)
+}
 
-  // Phones: start with the art, not the panel (`h` / tap the summary to open).
-  if (window.matchMedia('(max-width: 40rem)').matches) panel.open = false
-
-  syncInputs()
-  apply()
-  void mount(preferred)
+export function initFlow(root: HTMLElement = document.body): void {
+  new FlowPlayground(root).start()
 }

@@ -19,7 +19,7 @@ export const projects: readonly Project[] = [
     href: 'https://gulpjs.com/',
     blurb: 'A streaming build system for JavaScript. Still maintained by a great group of folks.',
     source: 'gulpjs/gulp',
-    stars: 32916,
+    stars: 32_916,
     npm: 'gulp',
     featured: true,
   },

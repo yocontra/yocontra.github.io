@@ -1,4 +1,4 @@
-import { SONGS, SOUNDS, type SongName, type SoundName } from './constants'
+import { SONGS, SOUNDS, type SongName, type SoundName } from './constants.ts'
 
 /**
  * Sound effects go through Web Audio so they can fire outside of a user
@@ -20,7 +20,9 @@ export class GameAudio {
 
   /** Must be called from inside a user gesture. */
   unlock(): void {
-    if (this.ctx || typeof AudioContext === 'undefined') return
+    if (this.ctx || typeof AudioContext === 'undefined') {
+      return
+    }
     this.ctx = new AudioContext()
     void this.ctx.resume()
     for (const name of Object.keys(SOUNDS) as SoundName[]) {
@@ -49,11 +51,11 @@ export class GameAudio {
     }
     const el = document.createElement('audio')
     el.src = SOUNDS[name]
-    el.play().catch(() => {})
+    el.play().catch(() => undefined)
   }
 
   playSong(name: SongName): void {
     this.music.src = SONGS[name]
-    this.music.play().catch(() => {})
+    this.music.play().catch(() => undefined)
   }
 }

@@ -1,6 +1,6 @@
 ---
 import BackLink from '~/components/BackLink.astro'
-import { experiments } from '~/data/experiments'
+import { experiments } from '~/data/experiments.ts'
 import Base from '~/layouts/Base.astro'
 
 const sorted = [...experiments].sort((a, b) => b.year - a.year)

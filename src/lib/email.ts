@@ -5,7 +5,9 @@
 export function revealEmail(links: NodeListOf<HTMLAnchorElement>): void {
   for (const link of links) {
     const encoded = link.dataset.m
-    if (!encoded) continue
+    if (!encoded) {
+      continue
+    }
     const address = [...atob(encoded)].reverse().join('')
     link.textContent = address
     link.href = `mailto:${address}`

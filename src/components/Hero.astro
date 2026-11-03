@@ -212,7 +212,7 @@
 </style>
 
 <script>
-  import { mountHero } from '~/lib/hero'
+  import { mountHero } from '~/lib/hero/index.ts'
 
   const canvas = document.querySelector<HTMLCanvasElement>('.hero .field')
   const hero = document.querySelector<HTMLElement>('.hero')
@@ -225,10 +225,14 @@
 
       // Type "contra" anywhere to drop into VCR mode (a nod to the 2019 site).
       let typed = ''
-      window.addEventListener('keydown', (event) => {
-        if (event.target instanceof HTMLInputElement) return
+      globalThis.addEventListener('keydown', (event) => {
+        if (event.target instanceof HTMLInputElement) {
+          return
+        }
         typed = (typed + event.key.toLowerCase()).slice(-6)
-        if (typed !== 'contra') return
+        if (typed !== 'contra') {
+          return
+        }
         const on = handle.params.vcr === 0
         handle.params.vcr = on ? 1 : 0
         document.documentElement.toggleAttribute('data-vcr', on)

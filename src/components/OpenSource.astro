@@ -1,6 +1,6 @@
 ---
-import { moreProjectsHref, projects } from '~/data/projects'
-import { formatCompact, getStars, getWeeklyDownloads } from '~/lib/github'
+import { moreProjectsHref, projects } from '~/data/projects.ts'
+import { formatCompact, getStars, getWeeklyDownloads } from '~/lib/github.ts'
 
 const items = await Promise.all(
   projects.map(async (project) => {
@@ -34,7 +34,7 @@ const items = await Promise.all(
                 <span class="visually-hidden"> GitHub stars</span>
               </span>
             )}
-            {p.weekly != null && <span>↓ {formatCompact(p.weekly)}/wk on npm</span>}
+            {p.weekly !== null && <span>↓ {formatCompact(p.weekly)}/wk on npm</span>}
             <span class="arrow" aria-hidden="true">
               ↗
             </span>
@@ -190,7 +190,7 @@ const items = await Promise.all(
 </style>
 
 <script>
-  import { spotlight } from '~/lib/spotlight'
+  import { spotlight } from '~/lib/spotlight.ts'
 
   spotlight(document.querySelectorAll<HTMLElement>('.spot'))
 </script>

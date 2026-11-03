@@ -9,9 +9,13 @@ async function getJson<T>(url: string): Promise<T | null> {
       Accept: 'application/vnd.github+json',
       'User-Agent': 'contra.io-build',
     }
-    if (token && url.startsWith('https://api.github.com')) headers.Authorization = `Bearer ${token}`
+    if (token && url.startsWith('https://api.github.com')) {
+      headers.Authorization = `Bearer ${token}`
+    }
     const res = await fetch(url, { headers, signal: AbortSignal.timeout(8000) })
-    if (!res.ok) return null
+    if (!res.ok) {
+      return null
+    }
     return (await res.json()) as T
   } catch {
     return null
@@ -27,7 +31,9 @@ const memo = new Map<string, Promise<number | null>>()
 /** `owner/repo`, or `org:<name>` to sum stars across an org's public repos. */
 export function getStars(source: string): Promise<number | null> {
   const cached = memo.get(source)
-  if (cached) return cached
+  if (cached) {
+    return cached
+  }
   const promise = source.startsWith('org:')
     ? getJson<RepoResponse[]>(
         `https://api.github.com/orgs/${source.slice(4)}/repos?per_page=100&type=public`,
