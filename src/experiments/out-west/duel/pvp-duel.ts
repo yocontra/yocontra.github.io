@@ -82,6 +82,8 @@ export class PvpDuel implements DirectorHooks {
   private rematchN = -1
   /** The verdict arrived in a rejoin's sync (no money lines for us in it). */
   private synced = false as boolean
+  /** His line dropped and he hasn't come back yet. */
+  private oppDropped = false as boolean
   private readonly unwatch: () => void
 
   constructor(d: Director, o: PvpOpts) {
@@ -267,7 +269,9 @@ export class PvpDuel implements DirectorHooks {
         this.onResult(m)
         break
       case 'presence':
-        if (m.seat === this.opp) {
+        // his first connect is a presence too: only a return after a drop is news
+        if (m.seat === this.opp && (!m.connected || this.oppDropped)) {
+          this.oppDropped = !m.connected
           d.c.hud.fake(m.connected ? '[he’s back]' : '[his line dropped · 5 s grace]', 3000)
         }
         break

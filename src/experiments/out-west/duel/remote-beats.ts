@@ -190,7 +190,8 @@ export function honestWin(d: Director, line: string): void {
   d.enter('call')
   d.callT = performance.now()
   callShot(d)
-  c.hud.line(d.outlaw.name, line, 2400)
+  // the town calls it (not the coward himself)
+  c.hud.line('The town', line, 2400)
   playerFireFx(d)
   d.enemyAlive = false
   win(d, 0, null)
