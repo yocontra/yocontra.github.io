@@ -9,6 +9,28 @@ export interface Role {
 
 export const career: readonly Role[] = [
   {
+    company: 'Veil Labs',
+    href: 'https://appari.sh',
+    title: 'Co-founder',
+    years: '2026 — now',
+    blurb: 'Making Apparish, a location-based ghost hunting game for iOS and Android.',
+  },
+  {
+    company: 'Plaza',
+    href: 'https://plaza.fyi',
+    title: 'Co-founder',
+    years: '2026 — now',
+    blurb:
+      'An API for the whole OpenStreetMap planet: geocoding, routing, elevation, search and more.',
+  },
+  {
+    company: 'Trigram',
+    href: 'https://trigram.co',
+    title: 'Consultant',
+    years: '2026 — now',
+    blurb: 'Consulting work as part of Trigram.',
+  },
+  {
     company: 'Apple',
     title: 'Senior Staff Engineer · SEAR',
     years: '2024 — 2026',
