@@ -57,7 +57,9 @@ export function hubShot(s: DuelState, shot: HubShot): void {
         s.player.root.rotation.y = 0.4 + Math.sin(t * 0.35) * 0.9
       }
       const k = easeInOutCubic(clamp01(t / 2.4))
-      const dist = MathUtils.lerp(store ? 5.6 : 7.5, store ? 4.4 : 5.8, k) * (portrait ? PORTRAIT_PULL[shot] : 1)
+      const dist =
+        MathUtils.lerp(store ? 5.6 : 7.5, store ? 4.4 : 5.8, k) *
+        (portrait ? PORTRAIT_PULL[shot] : 1)
       // the panel sits right (landscape) or below (portrait): push him the other way in frame
       const side = SIDE[shot] * (portrait ? 0 : 1)
       const lift = portrait ? LIFT[shot] : 0
