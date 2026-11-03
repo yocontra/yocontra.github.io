@@ -4,6 +4,7 @@ import { save as persist } from '../save.ts'
 import type { LedgerRow } from '../ui/hud.ts'
 import type { Director } from './director.ts'
 import { endShot } from './framing.ts'
+import { RankedDuelClock } from './ranked-clock.ts'
 
 const LEDGER_DELAY_MS = 1800
 
@@ -15,6 +16,10 @@ function paidFor(run: RunResult, level: number): number | null {
 
 function ledgerRows(d: Director): LedgerRow[] {
   const c = d.c
+  // ranked: what the server paid, never a client-side recomputation
+  const clock = d.clock
+  const paid = (i: number): number | null =>
+    clock instanceof RankedDuelClock ? clock.paidFor(i) : paidFor(c.save.run, i)
   return OUTLAWS.map((o, i) => {
     const b = c.save.best[i]
     return {
@@ -22,7 +27,7 @@ function ledgerRows(d: Director): LedgerRow[] {
       ms: b ? b.ms : null,
       grade: b ? b.grade : '—',
       attempts: c.save.attempts[i] ?? 0,
-      paid: paidFor(c.save.run, i),
+      paid: paid(i),
     }
   })
 }

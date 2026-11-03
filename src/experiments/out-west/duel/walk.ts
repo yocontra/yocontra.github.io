@@ -104,7 +104,7 @@ function paceFx(d: Director): void {
       duration: 0.7,
       gain: 0.45,
       when: a.now + FEEL.enemyStepOffset,
-      pos: e.root.position,
+      pos: e.root.position.clone(),
     })
     c.puffs.emit(V(0, 0.05, e.root.position.z), 6, { speed: 0.6, size: 0.12, life: 1, alpha: 0.35 })
   }

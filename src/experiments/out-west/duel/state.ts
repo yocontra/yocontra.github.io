@@ -148,7 +148,7 @@ export class DuelState {
   // outcomes
   outcomeT = 0
   resultShown = false as boolean
-  loseReason = ''
+  loseReason = '' as string
   bossPhase = 1
   strikes = 0
   midnightBells = 0
@@ -164,7 +164,7 @@ export class DuelState {
   cowardBeat = false as boolean
   cowardCard = false as boolean
   cowardDelta = 0
-  cowardNote = ''
+  cowardNote = '' as string
   endT = 0
   // presentation
   dayFrom = 0

@@ -297,7 +297,7 @@ export function tickBossWound(d: Director): void {
       c.physics.add(g, V(0.6, 1.0, -0.5), V(4, 2, 6))
     }
     c.hud.line(d.outlaw.name, 'That… that’s just a scratch.', 2200)
-    c.audio.play('shout', { gain: 0.7, rate: 0.6, pos: e?.root.position ?? V() })
+    c.audio.play('shout', { gain: 0.7, rate: 0.6, pos: e?.root.position.clone() ?? V() })
   }
   if (t > 1.1) {
     d.timeScale = 1

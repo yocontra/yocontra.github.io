@@ -1,4 +1,3 @@
-// biome-ignore-all lint/complexity/useMaxParams: geometry/audio builders take positional numeric args (x, y, z, size…), mirroring three.js APIs
 import type { HatKey, Outlaw } from '../data/outlaws.ts'
 import { SLAB } from '../scene/textures.ts'
 
@@ -153,7 +152,7 @@ export function drawPoster(canvas: HTMLCanvasElement, o: Outlaw, opts: PosterOpt
   ctx.font = 'italic 28px Georgia, serif'
   ctx.fillText(o.epithet, W / 2, 630)
   ctx.font = '24px Georgia, serif'
-  wrap(ctx, o.hook, W / 2, 672, W - 130, 28)
+  wrap(ctx, o.hook, { x: W / 2, y: 672, max: W - 130, lh: 28 })
   ctx.font = `64px ${SLAB}`
   ctx.fillText(`$${o.bounty.toLocaleString('en-US')}`, W / 2, 790)
   ctx.font = `22px ${SLAB}`
@@ -167,14 +166,16 @@ export function drawPoster(canvas: HTMLCanvasElement, o: Outlaw, opts: PosterOpt
   }
 }
 
-function wrap(
-  ctx: CanvasRenderingContext2D,
-  text: string,
-  x: number,
-  y: number,
-  max: number,
-  lh: number,
-): void {
+/** Where wrapped text goes: centre x, first baseline y, max line width, line height. */
+interface TextBox {
+  x: number
+  y: number
+  max: number
+  lh: number
+}
+
+function wrap(ctx: CanvasRenderingContext2D, text: string, box: TextBox): void {
+  const { x, y, max, lh } = box
   const words = text.split(' ')
   let line = ''
   let yy = y

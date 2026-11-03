@@ -129,7 +129,12 @@ export function tickWait(d: Director, now: number): void {
     const when = c.audio.perfToCtx(callAt)
     d.bellVoice = c.audio.play('bell', { gain: 1.0, when, pos: c.world.bellPos, reverb: 0.5 })
     if (d.callIsScream) {
-      c.audio.play('shout', { gain: 1.0, when, rate: 0.7, pos: d.enemy?.root.position ?? V() })
+      c.audio.play('shout', {
+        gain: 1.0,
+        when,
+        rate: 0.7,
+        pos: d.enemy?.root.position.clone() ?? V(),
+      })
     }
   }
   d.clock.tick(now)
@@ -242,7 +247,7 @@ export function onCall(d: Director, duel: number): void {
   if (!d.bellScheduled) {
     d.bellVoice = c.audio.play('bell', { gain: 1, pos: c.world.bellPos, reverb: 0.5 })
     if (d.callIsScream) {
-      c.audio.play('shout', { gain: 1.0, rate: 0.7, pos: d.enemy?.root.position ?? V() })
+      c.audio.play('shout', { gain: 1.0, rate: 0.7, pos: d.enemy?.root.position.clone() ?? V() })
     }
   }
   c.hud.call('DRAW!', FEEL.callHoldMs)
@@ -285,6 +290,8 @@ export function tickCall(d: Director, now: number): void {
     c.glint.fire(d.rifleman.headPos(V()).add(V(-0.35, -0.02, 0)))
     c.hud.fake('[a glint on the saloon roof]')
   }
+  // ranked: the clock checks the verdict isn't overdue
+  d.clock.tick(now)
   const plan = d.plan
   if (!plan) {
     return

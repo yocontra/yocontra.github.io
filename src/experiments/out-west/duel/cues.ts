@@ -99,7 +99,7 @@ const twitch: CueFn = (s) => {
   if (e) {
     e.twitch = 1
   }
-  s.c.audio.play('holster', { gain: 0.25, pos: e?.root.position ?? V(), rate: 1.3 })
+  s.c.audio.play('holster', { gain: 0.25, pos: e?.root.position.clone() ?? V(), rate: 1.3 })
 }
 
 const CUES: Record<string, CueFn> = {
@@ -124,14 +124,14 @@ const CUES: Record<string, CueFn> = {
     tossCoin(s)
     s.c.audio.play('coin', {
       gain: 0.8,
-      pos: s.enemy?.root.position ?? V(),
+      pos: s.enemy?.root.position.clone() ?? V(),
       reverb: 0.2,
       when: s.c.audio.now + 0.55,
     })
   },
   hiccup: (s) => {
     caption(s, '[hic!]')
-    s.c.audio.play('shout', { gain: 0.3, rate: 1.6, pos: s.enemy?.root.position ?? V() })
+    s.c.audio.play('shout', { gain: 0.3, rate: 1.6, pos: s.enemy?.root.position.clone() ?? V() })
     if (s.enemy) {
       s.enemy.twitch = 0.4
     }
@@ -154,7 +154,7 @@ const CUES: Record<string, CueFn> = {
   },
   whistle: (s) => {
     caption(s, '[his whistle stops dead]')
-    s.c.audio.play('hawk', { gain: 0.25, rate: 1.25, pos: s.enemy?.root.position ?? V() })
+    s.c.audio.play('hawk', { gain: 0.25, rate: 1.25, pos: s.enemy?.root.position.clone() ?? V() })
   },
   'gang-drr': heckle,
   heckle,
