@@ -482,7 +482,7 @@ function addBuilding(bs: Builders, b: Building, layout: TownLayout, id: number):
     return
   }
   if (b.kind === 'tower') {
-    addClockTower(bs, b, id)
+    addClockTower(bs, b, id, layout.buildings)
     return
   }
   for (const w of buildingWalls(b)) {

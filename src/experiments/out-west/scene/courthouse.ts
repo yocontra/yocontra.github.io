@@ -248,10 +248,10 @@ export function buildPortico(p: Parts, front: number): void {
   // entablature: beam, frieze board and cornice
   t.box(0, top + 0.17, z0 + 0.3, 4.4, 0.34, 0.3, PAINT)
   for (const sx of [-1, 1]) {
-    t.box(sx * 2.05, top + 0.17, zc + 0.15, 0.3, 0.34, front - z0 - 0.3, PAINT)
+    t.box(sx * 2.05, top + 0.17, zc + 0.15, 0.3, 0.32, front - z0 - 0.3, PAINT)
   }
   t.box(0, top + 0.4, zc, 4.7, 0.12, front - z0 + 0.3, DARK_WOOD)
-  t.box(0, top + 0.02, zc + 0.15, 3.9, 0.04, front - z0 - 0.3, 0x5a_4a_3a)
+  t.box(0, top + 0.04, zc + 0.15, 3.9, 0.04, front - z0 - 0.3, 0x5a_4a_3a)
   pediment(p, top + 0.46, z0 - 0.15, front)
   // the doors: two kit leaves under a glazed transom, in a painted frame
   const door = kitPiece('k_door')
@@ -266,7 +266,7 @@ export function buildPortico(p: Parts, front: number): void {
   } else {
     t.box(0, PLINTH + 1.05, front - 0.04, 2.1, 2.1, 0.08, DARK_WOOD)
   }
-  p.glass.box(0, PLINTH + 2.55, front - 0.03, 2.1, 0.45, 0.04, 0xff_ff_ff)
+  p.glass.box(0, PLINTH + 2.55, front - 0.04, 2.1, 0.45, 0.02, 0xff_ff_ff)
   t.box(0, PLINTH + 2.32, front - 0.06, 2.3, 0.08, 0.1, PAINT)
   t.box(0, PLINTH + 2.82, front - 0.06, 2.3, 0.1, 0.1, PAINT)
   const lantern = kitPiece('k_lantern')

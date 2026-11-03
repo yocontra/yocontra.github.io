@@ -54,20 +54,41 @@ function faceBox(
   g.box(c.x, c.y, c.z, side ? d1 - d0 : w, h, side ? w : d1 - d0, color)
 }
 
-function quoins(g: GeoBuilder, cx: number, cz: number, half: number, y0: number, y1: number) {
+function quoins(
+  g: GeoBuilder,
+  b: Building,
+  others: readonly Building[],
+  y0: number,
+  y1: number,
+): void {
+  const cx = b.x + b.w / 2
+  const cz = b.z + b.d / 2
+  const half = Math.min(b.w, b.d) / 2
   for (const sx of [-1, 1]) {
     for (const sz of [-1, 1]) {
-      for (let k = 0, y = y0; y < y1 - 0.1; k++, y += 0.42) {
+      // a corner against a neighbour starts above the neighbour's walls
+      const px = cx + sx * (half + 0.3)
+      const pz = cz + sz * (half - 0.3)
+      const qx = cx + sx * (half - 0.3)
+      const qz = cz + sz * (half + 0.3)
+      const hit = others.find(
+        (o) =>
+          o !== b &&
+          ((px > o.x && px < o.x + o.w && pz > o.z && pz < o.z + o.d) ||
+            (qx > o.x && qx < o.x + o.w && qz > o.z && qz < o.z + o.d)),
+      )
+      const start = hit ? Math.max(y0, hit.height + 0.4) : y0
+      for (let k = 0, y = start; y < y1 - 0.1; k++, y += 0.42) {
         const lx = k % 2 === 1 ? 0.75 : 0.45
         const lz = k % 2 === 1 ? 0.45 : 0.75
         const top = Math.min(y + 0.42, y1)
         g.box(
-          cx + sx * (half - lx / 2 + 0.03),
+          cx + sx * (half - lx / 2 + 0.02),
           (y + top) / 2,
-          cz + sz * (half - lz / 2 + 0.03),
-          lx + 0.06,
+          cz + sz * (half - lz / 2 + 0.02),
+          lx + 0.04,
           top - y - 0.03,
-          lz + 0.06,
+          lz + 0.04,
           PALE,
         )
       }
@@ -92,11 +113,18 @@ function dial(t: TowerBatches, cx: number, cz: number, k: number, half: number):
       DIAL,
     )
   }
-  // hands at ten to two, and a dark bezel
+  // hands at ten to two
   faceBox(t.wood, cx, cz, k, -0.2, y + 0.18, 0.5, 0.08, out, out + 0.04, IRON)
   faceBox(t.wood, cx, cz, k, 0.22, y + 0.3, 0.5, 0.07, out, out + 0.05, IRON)
-  faceBox(t.wood, cx, cz, k, 0, y + r + 0.04, 2.0, 0.08, out - 0.05, out + 0.03, IRON)
-  faceBox(t.wood, cx, cz, k, 0, y - r - 0.04, 2.0, 0.08, out - 0.05, out + 0.03, IRON)
+  // hour marks at twelve, three, six and nine
+  for (const [a, dy, w, h] of [
+    [0, r - 0.14, 0.07, 0.22],
+    [0, -r + 0.14, 0.07, 0.22],
+    [r - 0.14, 0, 0.22, 0.07],
+    [-r + 0.14, 0, 0.22, 0.07],
+  ] as const) {
+    faceBox(t.wood, cx, cz, k, a, y + dy, w, h, out, out + 0.03, IRON)
+  }
 }
 
 /** The open belfry: corner piers, stepped arch heads, sills with rails, floor and bell. */
@@ -134,7 +162,7 @@ function belfry(t: TowerBatches, cx: number, cz: number, half: number): void {
     faceBox(t.stone, cx, cz, k, 0, BELFRY0 + 0.25, ow, 0.5, bh - 0.5, bh + 0.08, PALE)
     faceBox(t.wood, cx, cz, k, 0, BELFRY0 + 0.95, ow, 0.1, bh - 0.3, bh - 0.18, 0xe0_d4_bc)
   }
-  t.wood.box(cx, BELFRY0 + 0.05, cz, bh * 2 - 0.6, 0.1, bh * 2 - 0.6, DARK)
+  t.wood.box(cx, BELFRY0 + 0.1, cz, bh * 2 - 0.6, 0.1, bh * 2 - 0.6, DARK)
   t.wood.box(cx, BELFRY0 + 2.5, cz, 2.2, 0.22, 0.26, DARK)
   const bell = new CylinderGeometry(0.32, 0.72, 1.1, 14, 1).translate(cx, BELFRY0 + 1.85, cz)
   t.wood.box(cx, BELFRY0 + 2.48, cz, 0.3, 0.16, 0.3, 0x9a_74_40)
@@ -192,17 +220,28 @@ function spire(t: TowerBatches, cx: number, cz: number, half: number, id: number
   t.roofs.push(rg)
 }
 
+/** Is the middle of face k up against another building (no dial there)? */
+function buried(b: Building, others: readonly Building[], k: number): boolean {
+  const p = onFace(b.x + b.w / 2, b.z + b.d / 2, k, 0, 0, Math.min(b.w, b.d) / 2 + 0.3)
+  return others.some((o) => o !== b && p.x > o.x && p.x < o.x + o.w && p.z > o.z && p.z < o.z + o.d)
+}
+
 /** The whole tower on its layout footprint; `id` is its roof-fade building id. */
-export function addClockTower(t: TowerBatches, b: Building, id: number): void {
+export function addClockTower(
+  t: TowerBatches,
+  b: Building,
+  id: number,
+  others: readonly Building[],
+): void {
   const cx = b.x + b.w / 2
   const cz = b.z + b.d / 2
   const half = Math.min(b.w, b.d) / 2
   t.stone.box(cx, 0.4, cz, half * 2 + 0.2, 0.8, half * 2 + 0.2, PALE, { skip: ['bottom'] })
-  t.stone.box(cx, (0.8 + SHAFT) / 2, cz, half * 2, SHAFT - 0.8, half * 2, BRICK, {
+  t.stone.box(cx, (0.8 + SHAFT) / 2, cz, half * 2 + 0.06, SHAFT - 0.8, half * 2 + 0.06, BRICK, {
     skip: ['bottom'],
   })
   for (const [y, h, p] of [
-    [4.6, 0.22, 0.06],
+    [4.6, 0.22, 0.05],
     [7.6, 0.22, 0.08],
     [SHAFT + 0.12, 0.24, 0.2],
     [SHAFT + 0.32, 0.18, 0.34],
@@ -210,9 +249,11 @@ export function addClockTower(t: TowerBatches, b: Building, id: number): void {
   ] as const) {
     t.stone.box(cx, y, cz, half * 2 + p * 2, h, half * 2 + p * 2, PALE)
   }
-  quoins(t.stone, cx, cz, half, 0.8, SHAFT)
+  quoins(t.stone, b, others, 0.8, SHAFT)
   for (let k = 0; k < 4; k++) {
-    dial(t, cx, cz, k, half)
+    if (!buried(b, others, k)) {
+      dial(t, cx, cz, k, half)
+    }
   }
   belfry(t, cx, cz, half)
   spire(t, cx, cz, half, id)

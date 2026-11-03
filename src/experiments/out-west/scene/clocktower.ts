@@ -116,7 +116,7 @@ function shaft(c: Ctx): void {
     // the clock stage: a dressed panel behind each dial, consoles under the cornice
     boxOn(s, f, along(f, 0, tz), DIAL_Y, 3.3, 3.3, 0.06, STONE)
     for (const a of [-2.0, -1.0, 0, 1.0, 2.0]) {
-      boxOn(c.trim, f, along(f, a, tz), SHAFT_TOP - 0.17, 0.14, 0.34, 0.18, DARK_WOOD)
+      boxOn(c.trim, f, along(f, a, tz), SHAFT_TOP - 0.18, 0.14, 0.3, 0.18, DARK_WOOD)
     }
     clockFace(c, k)
   }
@@ -133,7 +133,7 @@ function clockFace(c: Ctx, k: number): void {
     .applyMatrix4(fr)
   c.m.add('stone', drum, STONE)
   c.dials.push(new CircleGeometry(DIAL_R, 64).applyMatrix4(fr))
-  c.iron.push(ironPart(new TorusGeometry(1.36, 0.075, 8, 64).applyMatrix4(fr), BRONZE))
+  c.iron.push(ironPart(new TorusGeometry(1.36, 0.075, 6, 40).applyMatrix4(fr), BRONZE))
   const boss = new CylinderGeometry(0.06, 0.07, 0.12, 16).rotateX(Math.PI / 2).translate(0, 0, 0.06)
   c.iron.push(ironPart(boss.applyMatrix4(fr), IRON))
   const pip = new Path()
@@ -224,7 +224,7 @@ function belfry(c: Ctx): void {
   t.box(0, BELFRY0 + 0.05, tz, inner, 0.1, inner, 0x2a_20_18)
   t.box(0, BELFRY1 - 0.05, tz, inner, 0.1, inner, 0x1e_18_12)
   for (const sx of [-1, 1]) {
-    t.box(sx * 1.05, BELFRY0 + 1.1, tz, 0.2, 2.2, 0.24, 0x16_10_0c)
+    t.box(sx * 1.05, BELFRY0 + 1.17, tz, 0.2, 2.14, 0.24, 0x16_10_0c)
     t.box(sx * 1.05, BELFRY0 + 0.2, tz, 0.3, 0.2, 1.6, 0x16_10_0c)
   }
   bell(c)
@@ -262,7 +262,7 @@ function bell(c: Ctx): void {
     [0.25, 0.86],
     [0, 0.92],
   ].map(([r = 0, y = 0]) => new Vector2(r, y))
-  const body = new LatheGeometry(prof, 28).translate(0, top - 1.0, c.tz)
+  const body = new LatheGeometry(prof, 20).translate(0, top - 1.0, c.tz)
   c.iron.push(ironPart(body, BRONZE, SPIN.bell, pivot, axis))
   const crown = new CylinderGeometry(0.1, 0.14, 0.14, 12).translate(0, top + 0.05, c.tz)
   c.iron.push(ironPart(crown, BRONZE, SPIN.bell, pivot, axis))
@@ -329,7 +329,7 @@ function lucarne(c: Ctx, k: number, rings: [number, number][]): void {
   boxOn(slate, f, a, y, 0.86, 0.9, 0.0, SHINGLE, 0.9)
   boxOn(c.trim, f, a, y - 0.02, 0.62, 0.72, 0.03, 0x1a_14_10)
   for (let i = 0; i < 5; i++) {
-    boxOn(c.trim, f, a, y - 0.3 + i * 0.14, 0.58, 0.04, 0.09, 0x8a_78_60)
+    boxOn(c.trim, f, a, y - 0.3 + i * 0.14, 0.58, 0.04, 0.09, 0x8a_78_60, -0.025)
   }
   boxOn(c.trim, f, a, y, 0.92, 0.96, 0.02, PAINT, 0)
   const out = onFace(f, a, y + 0.45, -0.35)

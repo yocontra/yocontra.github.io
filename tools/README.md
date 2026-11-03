@@ -79,9 +79,9 @@ It hooks the scene through `__THREE_DEVTOOLS__` (no game code involved) and impo
 kit piece inside a merged mesh via `userData.pieces`, or a connected component of a GeoBuilder mesh)
 is checked for air under its foot (> 3 cm), contact with anything (wall-mounted kit > 2 cm off its
 wall), a foot buried under a deck, and coplanar same-facing overlaps. Lanterns, pickups and money
-bags hang by design and are listed with their mount distance. Known and owned elsewhere: the duel
-church's bell and clock face, and one Frontier church-tower z-fight (the clock tower is being
-replaced).
+bags hang by design and are listed with their mount distance. Every scene and tier passes with zero
+failures (the clock tower replacement fixed the last ones). The duel street's dressing is placed at
+random, so rerun before chasing a one-off barrel/crate z-fight.
 
 ## Runtime pieces that replace offline bakes (while Blender is unavailable)
 
