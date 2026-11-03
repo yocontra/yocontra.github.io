@@ -815,3 +815,31 @@ body {
     animation: none;
   }
 }
+/* mode badge: RANKED / PRACTICE */
+.ow-mode {
+  position: absolute;
+  top: calc(max(14px, env(safe-area-inset-top)) + 3rem);
+  left: max(16px, env(safe-area-inset-left));
+  font-size: 0.65rem;
+  letter-spacing: 0.12em;
+  opacity: 0.7;
+  text-shadow: 0 1px 0 #000;
+}
+.ow-mode.ranked {
+  color: #fff;
+  background: #f00;
+  padding: 0.15rem 0.4rem;
+  opacity: 1;
+}
+.ow-board-note {
+  font-family: Georgia, serif;
+  text-transform: none;
+  opacity: 0.8;
+}
+.ow-turnstile {
+  position: absolute;
+  bottom: max(48px, env(safe-area-inset-bottom) + 40px);
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 55;
+}
