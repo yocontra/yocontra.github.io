@@ -181,7 +181,7 @@
       }
     },
     {
-      "includes": ["scripts/**", "src/lib/github.ts", "astro.config.ts"],
+      "includes": ["scripts/**", "tools/**", "src/lib/github.ts", "astro.config.ts"],
       "linter": {
         "rules": {
           "style": {

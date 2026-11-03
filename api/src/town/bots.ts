@@ -8,6 +8,7 @@ import {
   BTN_INTERACT,
   BTN_RELOAD,
   BTN_ROLL,
+  NONE,
 } from '../../../src/experiments/out-west/contract/town.ts'
 import { hasLineOfSight } from '../../../src/experiments/out-west/ffa/sim/layout.ts'
 import { radiansToAim } from '../../../src/experiments/out-west/ffa/sim/move.ts'
@@ -40,6 +41,9 @@ const BOT_NAMES = [
   'Silent Sam',
 ]
 
+/** The town never changes at runtime, so every lobby in an isolate shares one nav grid. */
+let sharedNav: NavGrid | null = null
+
 interface BotBrain {
   path: { x: number; z: number }[]
   goal: { x: number; z: number } | null
@@ -67,7 +71,9 @@ export class BotDirector {
   }
 
   private navFor(w: World): NavGrid {
-    this.nav ??= buildNav(w.grid)
+    // One per isolate: building it costs a few dozen ms, so new lobbies reuse it.
+    sharedNav ??= buildNav(w.grid)
+    this.nav ??= sharedNav
     return this.nav
   }
 
@@ -186,6 +192,11 @@ export class BotDirector {
     }
     if (!p.alive || p.showdown >= 0) {
       b.path = []
+      return f
+    }
+    if (p.calledBy !== NONE) {
+      // Accept most call-outs: press, release, press.
+      f.buttons = (w.tick + p.id) % 2 === 0 && p.id % 4 !== 0 ? BTN_INTERACT : 0
       return f
     }
     if (p.channel) {

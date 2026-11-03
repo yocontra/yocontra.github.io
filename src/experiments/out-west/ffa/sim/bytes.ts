@@ -69,10 +69,9 @@ export class Reader {
   offset = 0
 
   constructor(data: ArrayBuffer | Uint8Array) {
-    this.view =
-      data instanceof Uint8Array
-        ? new DataView(data.buffer, data.byteOffset, data.byteLength)
-        : new DataView(data)
+    // Views from any realm (workerd hands sockets' binary frames over as foreign buffers).
+    const bytes = ArrayBuffer.isView(data) ? data : new Uint8Array(data)
+    this.view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength)
   }
 
   get remaining(): number {
