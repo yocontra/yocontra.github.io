@@ -44,3 +44,8 @@ export function reopensOn(now = new Date()): string {
 export function rankedClosedCopy(now = new Date()): string {
   return `Ranked runs are closed for the month: the town's spent its keep. They reopen on ${reopensOn(now)} (UTC). Practice is open.`
 }
+
+/** Frontier's "closed for the month" line (the server's refusal card says the same). */
+export function townClosedCopy(now = new Date()): string {
+  return `Perdition's closed for the month: the town's spent its keep. It reopens on ${reopensOn(now)} (UTC). Quick Draw is open in the meantime.`
+}

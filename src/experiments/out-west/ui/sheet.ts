@@ -137,3 +137,75 @@ export function confirmSheet(root: HTMLElement, o: ConfirmOpts): Promise<boolean
     yes.focus()
   })
 }
+
+/** Open panel sheets, oldest first: Escape closes the newest only. */
+const openSheets: HTMLElement[] = []
+
+export interface PanelSheet {
+  /** The sheet's scrolling body. */
+  body: HTMLElement
+  /** The panel itself (for a footer row under the body). */
+  panel: HTMLElement
+  close: () => void
+}
+
+/**
+ * A modal panel with a title and a Close button (the hub's sheet, reusable anywhere): Escape or a
+ * tap outside closes it too. `paper` prints it on the receipt stock.
+ */
+export function panelSheet(
+  root: HTMLElement,
+  o: { title: string; paper?: boolean; cls?: string; onClose?: () => void },
+): PanelSheet {
+  const back = el('div', 'ow-sheet on', root)
+  back.setAttribute('role', 'dialog')
+  back.setAttribute('aria-label', o.title)
+  swallow(back)
+  const panel = el(
+    'div',
+    `ow-hub-panel ow-sheet-panel${o.paper ? ' ow-paper-doc' : ''}${o.cls ? ` ${o.cls}` : ''}`,
+    back,
+  )
+  const head = el('div', 'ow-hub-row ow-sheet-head', panel)
+  el('h2', 'ow-hub-h', head, o.title)
+  let open = true
+  const close = (): void => {
+    if (!open) {
+      return
+    }
+    open = false
+    globalThis.removeEventListener('keydown', onKey, true)
+    openSheets.splice(openSheets.indexOf(back), 1)
+    back.remove()
+    o.onClose?.()
+  }
+  // Escape closes the newest sheet only (a report sheet over a poster, say)
+  const onKey = (e: KeyboardEvent): void => {
+    if (e.key === 'Escape' && back === openSheets.at(-1)) {
+      e.stopImmediatePropagation()
+      close()
+    }
+  }
+  openSheets.push(back)
+  globalThis.addEventListener('keydown', onKey, true)
+  button(head, 'Close', close)
+  const body = el('div', 'ow-sheet-body', panel)
+  back.addEventListener('click', (e) => {
+    if (e.target === back) {
+      close()
+    }
+  })
+  return { body, panel, close }
+}
+
+/** A one-line status under a form (info, error or ok); returns its setter. */
+export function statusLine(
+  parent: HTMLElement,
+): (text: string, kind?: 'info' | 'error' | 'ok') => void {
+  const p = el('p', 'ow-hub-note ow-feat-status', parent)
+  p.setAttribute('aria-live', 'polite')
+  return (text, kind = 'info') => {
+    p.textContent = text
+    p.dataset.kind = kind
+  }
+}

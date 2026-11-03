@@ -104,7 +104,7 @@ function makeHub(
     continueAt: () => data.level,
     rankedOk,
     stage: (shot) => game()?.hubShot(shot),
-    dress: (l) => game()?.dress(l),
+    dress: (l, dyes) => game()?.dress(l, dyes),
     playGauntlet: (c) => game()?.playGauntlet(c),
     bountyHunt: (match, xpBefore) =>
       game()?.startPvp({
@@ -121,7 +121,7 @@ function makeHub(
     token: queueTokens(root),
     openBoard: () => {
       board ??= new Board(root)
-      board.open()
+      board.open({ tab: 'most-wanted' })
     },
   })
   return hub
