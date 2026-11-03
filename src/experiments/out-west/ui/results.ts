@@ -187,7 +187,7 @@ export class ResultsPanel {
       this.rematchBtn.disabled = true
     }
     if (mine && theirs) {
-      this.vote.textContent = 'Rematch! Back to the street…'
+      this.vote.textContent = 'Rematch. Back to the street…'
     } else if (theirs) {
       this.vote.textContent = 'He wants a rematch.'
     } else if (mine) {
@@ -236,11 +236,11 @@ export function resultView(
     coward:
       r.culprit === me
         ? { tone: 'loss', title: 'Coward.', sub: 'You drew before the bell. Full penalty.' }
-        : { tone: 'win', title: 'He drew early', sub: 'Shot at your boots. Bounty’s yours.' },
+        : { tone: 'win', title: 'He drew early', sub: 'He shot at your boots. You collect.' },
     forfeit:
       r.culprit === me
         ? { tone: 'loss', title: 'Forfeit', sub: 'You left the street. Full penalty.' }
-        : { tone: 'win', title: 'He lit out', sub: 'His line went dead. Bounty’s yours.' },
+        : { tone: 'win', title: 'He lit out', sub: 'His connection dropped. You win by forfeit.' },
     dodge:
       r.culprit === me
         ? { tone: 'loss', title: 'Dodged', sub: 'You never cocked. Half penalty, no XP.' }

@@ -200,7 +200,7 @@ async function away(): Promise<void> {
   const text = (await notice.textContent()) ?? ''
   check(
     'the hub shows the royalty notice',
-    text.includes('While you were away') && text.includes('2 greenhorns') && text.includes('41'),
+    text.includes('While you were away') && text.includes('2 duels') && text.includes('41'),
     text,
   )
   await notice.getByRole('button', { name: 'Much obliged' }).click()

@@ -400,11 +400,11 @@ export class FrontierGame {
 
   private onTransport(state: string, detail?: string): void {
     if (state === 'retrying') {
-      this.hud.banner('Riding back in… (connection lost)')
+      this.hud.banner('Connection lost. Reconnecting…')
     } else if (state === 'open') {
       this.hud.banner(null)
     } else if (state === 'closed' && !this.exited && this.running) {
-      this.hud.banner(`Lost the trail${detail ? `: ${detail}` : ''}`)
+      this.hud.banner(`Disconnected${detail ? `: ${detail}` : ''}`)
       setTimeout(() => this.exit('lost'), 2500)
     }
   }

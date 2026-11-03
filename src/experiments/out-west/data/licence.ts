@@ -38,6 +38,6 @@ export function licenceCopy(status: LicenceStatus): { kicker: string; progress: 
   const n = status.remaining
   return {
     kicker: 'Unlicensed gunslinger',
-    progress: `Clear ${n} more outlaw${n === 1 ? '' : 's'} to earn your Bounty Hunt licence`,
+    progress: `Beat ${n} more outlaw${n === 1 ? '' : 's'} on a ranked run to earn your licence`,
   }
 }

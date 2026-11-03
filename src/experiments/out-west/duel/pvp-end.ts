@@ -64,7 +64,7 @@ export function endView(
   const view = resultView(r, seat, o.name, o.xp)
   if (lost === null) {
     return o.synced && r.you === null
-      ? { ...view, pending: 'Settled while you were away: it’s in your ledger.' }
+      ? { ...view, pending: 'Settled while you were away. It’s in your ledger.' }
       : view
   }
   return {
@@ -73,7 +73,7 @@ export function endView(
     title: 'The line went dead',
     sub: lost,
     canRematch: false,
-    pending: 'Whatever the room settled is in your ledger.',
+    pending: 'Whatever was settled is in your ledger.',
   }
 }
 

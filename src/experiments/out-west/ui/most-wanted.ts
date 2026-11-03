@@ -114,8 +114,8 @@ export function mountMostWanted(host: HTMLElement, sheets: HTMLElement, month?: 
       'ow-hub-note',
       head,
       r.final
-        ? `Final. The top ${MOST_WANTED_WINNERS} each earned a dated Most Wanted frame.`
-        : `Still counting · ${closesIn(r.closesAt)}. Dollars earned in Bounty Hunt and Frontier; the top ${MOST_WANTED_WINNERS} earn a dated frame.`,
+        ? `Final. The top ${MOST_WANTED_WINNERS} each got a dated Most Wanted frame.`
+        : `Open · ${closesIn(r.closesAt)}. Ranked by dollars earned in Bounty Hunt and Frontier. The top ${MOST_WANTED_WINNERS} get a dated frame.`,
     )
     if (r.you) {
       el(
@@ -130,7 +130,7 @@ export function mountMostWanted(host: HTMLElement, sheets: HTMLElement, month?: 
     const me = currentPlayer()?.name.toLowerCase() ?? null
     const redraw = (): void => mountMostWanted(host, sheets, r.month)
     list.replaceChildren()
-    say(r.rows.length > 0 ? '' : 'Nobody’s earned a dollar this month yet. Be the first.')
+    say(r.rows.length > 0 ? '' : 'Nobody’s earned a dollar this month yet.')
     rows(list, r.rows, { sheets, blocked, me, redraw })
     prev.replaceChildren()
     if (r.previous.winners.length > 0) {

@@ -314,7 +314,7 @@ export class Hud {
         handlers.change(s)
       })
     }
-    toggle('reducedMotion', 'Reduced motion', 'No shake, zooms or flashes. Short kill cam.')
+    toggle('reducedMotion', 'Reduced motion', 'No shake, zoom or flash. Shorter kill cam.')
     toggle('captions', 'Captions', 'Sound captions and heckles.')
     toggle('toggleWalk', 'Toggle walk', 'Press once to start walking, again to stop.')
     toggle('assist', 'Assist', '+150 ms for every outlaw. Noted on the ledger.')
@@ -375,7 +375,7 @@ export class Hud {
     const e = this.end
     e.innerHTML = ''
     e.classList.add('on')
-    el('h1', 'ow-end-line', e, 'You’re the fastest hand in the West!')
+    el('h1', 'ow-end-line', e, 'Fastest hand in the West.')
     if (stats.cowardice >= 10) {
       el('div', 'ow-end-title', e, 'The Yellowest Hand in the West')
     }
@@ -424,7 +424,7 @@ export class Hud {
       el('div', '', s, 'Assist mode was on (+150 ms).')
     }
     if (stats.legend) {
-      el('div', '', s, 'LEGEND MODE — the 2019 curve. Respect.')
+      el('div', '', s, 'Legend mode: the 2019 curve.')
     }
     const b = el('div', 'ow-menu-btns', e)
     const submit = el(

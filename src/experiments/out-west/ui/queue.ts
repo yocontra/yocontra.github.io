@@ -45,8 +45,8 @@ export class QueueSheet {
     this.search = new QueueSearch({
       queued: (m) => {
         this.line.textContent = m.ghostsOnly
-          ? 'Your connection’s rough today: ghosts only.'
-          : 'Searching the territory for a bounty…'
+          ? 'Your connection is rough today. Ghosts only.'
+          : 'Looking for a gunslinger…'
       },
       status: (s) => this.status(s),
       matched: (m) => this.matched(m),
@@ -64,7 +64,7 @@ export class QueueSheet {
       this.failed('The bot check didn’t pass. Try again.')
       return
     }
-    this.line.textContent = 'Riding to the matchmaker…'
+    this.line.textContent = 'Joining the queue…'
     await this.search.start(token)
   }
 
@@ -72,7 +72,7 @@ export class QueueSheet {
     const secs = Math.floor(s.waitedMs / 1000)
     this.line.textContent = s.ghostsOnly
       ? `Finding you a ghost… ${secs}s`
-      : `Searching for a gunslinger… ${secs}s`
+      : `Looking for a gunslinger… ${secs}s`
     const rating = s.ratingWindow === null ? 'any draw speed' : `±${s.ratingWindow} ms draw speed`
     const others = Math.max(0, s.waiting - 1)
     this.detail.textContent = `Within ±${s.levelWindow} levels · ${rating} · ${others} other${
@@ -89,7 +89,7 @@ export class QueueSheet {
     uiSound(m.mode === 'ghost' ? 'ghost' : 'queueFound')
     this.line.textContent =
       m.mode === 'ghost'
-        ? `No live gun rode in. Ghost duel: the ghost of ${m.opponent.name}.`
+        ? `Nobody rode in. You’ll duel the ghost of ${m.opponent.name}.`
         : `${m.opponent.name} answers the call.`
     setTimeout(() => {
       this.root.remove()

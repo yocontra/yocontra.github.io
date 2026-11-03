@@ -52,9 +52,15 @@ export async function limited(
   if (verdict.ok) {
     return null
   }
-  return json(request, env, { ok: false, error: 'Easy, partner. Try again in a bit.' }, 429, {
-    'Retry-After': String(verdict.retryAfter),
-  })
+  return json(
+    request,
+    env,
+    { ok: false, error: 'Too many requests. Wait a moment and try again.' },
+    429,
+    {
+      'Retry-After': String(verdict.retryAfter),
+    },
+  )
 }
 
 /** Signs an access token for a grant and returns it, with the refresh token in a cookie (web) or the body (app). */

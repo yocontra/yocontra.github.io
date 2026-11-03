@@ -65,7 +65,7 @@ const LEDGER_LABEL: Record<LedgerKind, string> = {
   level_reward: 'Level reward',
   admin_adjust: 'Adjustment',
   dye_job: 'Dye job',
-  name_change: 'New name',
+  name_change: 'Name change',
   house_round: 'A round for the house',
   // biome-ignore-end lint/style/useNamingConvention: ledger kinds are snake_case on the wire
 }
@@ -288,7 +288,7 @@ export class Hub {
     if (me && !licenceStatus(me.gauntletClears).licensed) {
       const s = panelSheet(this.parent, { title: 'Frontier', cls: 'ow-feat-gate' })
       const copy = licenceCopy(licenceStatus(me.gauntletClears))
-      el('p', 'ow-hub-note', s.body, 'Perdition only lets licensed gunslingers in.')
+      el('p', 'ow-hub-note', s.body, 'Perdition is for licensed gunslingers only.')
       el('p', 'ow-hub-note', s.body, copy.progress ?? copy.kicker)
       const row = el('div', 'ow-hub-row', s.body)
       button(
@@ -402,7 +402,7 @@ export class Hub {
   private openLedger(): void {
     const body = this.panel('Ledger', true)
     if (!currentPlayer()) {
-      el('p', 'ow-hub-note', body, 'Sign in to keep a ledger: every dollar and every point of XP.')
+      el('p', 'ow-hub-note', body, 'Sign in to keep a ledger of your money and XP.')
       return
     }
     const note = el('p', 'ow-hub-note', body, 'Opening the books…')

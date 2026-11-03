@@ -119,5 +119,5 @@ export function resumeUrl(wsUrl: string, token: string): string {
 
 /** What ranked says when the month's budget is spent (the server's `error` wins when it sends one). */
 export function rankedClosedCopy(now = new Date()): string {
-  return `Ranked runs are closed for the month: the town's spent its keep. They reopen on ${reopensOn(now)} (UTC). Practice is open.`
+  return `Ranked runs are closed for the rest of the month. They reopen on ${reopensOn(now)} (UTC). Practice is still open.`
 }

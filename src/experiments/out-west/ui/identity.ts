@@ -102,7 +102,7 @@ export function mountBlocks(host: HTMLElement): void {
   const list = el('ul', 'ow-ledger-list', box)
   const draw = (names: readonly string[]): void => {
     list.replaceChildren()
-    say(names.length > 0 ? 'Never matched with you, never shown to you.' : 'Nobody. Peaceful.')
+    say(names.length > 0 ? 'You won’t be matched with them or see them.' : 'Nobody blocked.')
     for (const n of names) {
       const li = el('li', '', list)
       el('span', '', li, n)

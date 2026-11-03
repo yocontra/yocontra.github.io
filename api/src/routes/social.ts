@@ -38,7 +38,7 @@ import { playerPoster } from '../social/players.ts'
 
 const PLAYER_PATH = /^\/players\/(?<name>[^/]{1,96})$/u
 const BLOCK_PATH = /^\/blocks\/(?<name>[^/]{1,96})$/u
-const SIGN_IN = 'Sign in first, partner.'
+const SIGN_IN = 'Sign in first.'
 
 const decode = (raw: string): string => {
   try {

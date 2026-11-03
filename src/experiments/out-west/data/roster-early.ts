@@ -96,7 +96,7 @@ export const ROSTER_EARLY: readonly Outlaw[] = [
     name: 'Ace Q. McConly',
     epithet: 'the Card Sharp',
     bounty: bountyFor(3),
-    hook: 'Flips a coin. The coin landing is not the call.',
+    hook: 'Flips a coin. When it lands, that’s not the call.',
     gimmick: 'coin',
     look: {
       base: 'punk',
@@ -120,7 +120,7 @@ export const ROSTER_EARLY: readonly Outlaw[] = [
     name: 'Burney N. Coover',
     epithet: 'the Drunk',
     bounty: bountyFor(4),
-    hook: 'Sways, swigs, and draws whenever he feels like it.',
+    hook: 'Drinks on the walk. Draws when he feels like it.',
     gimmick: 'drunk',
     look: {
       base: 'king',
@@ -181,7 +181,7 @@ export const ROSTER_EARLY: readonly Outlaw[] = [
     name: 'Felipe K. Wheeler',
     epithet: 'the Long Walker',
     bounty: bountyFor(6),
-    hook: 'Long walks. The wind picks up and the dust hides him.',
+    hook: 'Long walk. The wind kicks up dust and hides him.',
     gimmick: 'windy',
     look: {
       base: 'worker',
@@ -206,7 +206,7 @@ export const ROSTER_EARLY: readonly Outlaw[] = [
     name: 'Laura Bullion',
     epithet: 'the Thorny Rose',
     bounty: bountyFor(7),
-    hook: 'Cold. Still. No tells at all.',
+    hook: 'Cold and still. Gives nothing away.',
     gimmick: 'cold',
     look: {
       base: 'woman',

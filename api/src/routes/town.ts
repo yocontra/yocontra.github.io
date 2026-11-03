@@ -35,9 +35,9 @@ export function reopensOn(now = new Date()): string {
 export function refusalMessage(reason: TownJoinRefusal, now = new Date()): string {
   switch (reason) {
     case 'over_budget':
-      return `Perdition's closed for the month: the town's spent its keep. It reopens on ${reopensOn(now)} (UTC). Quick Draw is open in the meantime.`
+      return `Perdition is closed for the rest of the month. It reopens on ${reopensOn(now)} (UTC). Quick Draw is still open.`
     case 'all_full':
-      return 'Every lobby in Perdition is full right now. Try again in a minute, or take a Quick Draw duel meanwhile.'
+      return 'Every lobby in Perdition is full. Try again in a minute.'
     case 'unlicensed':
       return 'Beat the first 3 outlaws on a ranked run to earn your licence.'
     default:

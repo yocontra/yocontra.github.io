@@ -224,7 +224,7 @@ export class Board {
       return
     }
     if (this.status?.dataset.kind !== 'ok') {
-      this.setStatus(r.value.length > 0 ? '' : 'No names yet. Be the first.')
+      this.setStatus(r.value.length > 0 ? '' : 'No names on the board yet.')
     }
     this.fill(r.value)
   }

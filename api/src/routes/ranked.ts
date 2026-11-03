@@ -70,8 +70,7 @@ export const rankedRoutes: RouteHandler = async (request, env, url) => {
     if (!(await budgetState(env)).duelsOpen) {
       const refusal: RankedRefusal = {
         ok: false,
-        error:
-          "The ranked board's closed for the rest of the month: the town's spent its keep. Practice is open.",
+        error: 'Ranked runs are closed for the rest of the month. Practice is still open.',
         reason: 'over_budget',
       }
       return json(request, env, refusal, 503, { 'Retry-After': '86400' })
@@ -79,9 +78,15 @@ export const rankedRoutes: RouteHandler = async (request, env, url) => {
     const hash = await clientHash(request)
     const now = Date.now()
     if (await rateLimited(request, env, hash, now)) {
-      return json(request, env, { ok: false, error: 'Easy, partner. Try again in a bit.' }, 429, {
-        'Retry-After': '600',
-      })
+      return json(
+        request,
+        env,
+        { ok: false, error: 'Too many requests. Wait a moment and try again.' },
+        429,
+        {
+          'Retry-After': '600',
+        },
+      )
     }
     const player = await authenticate(request, env)
     const id = env.DUELS.newUniqueId().toString()

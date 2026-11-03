@@ -58,7 +58,7 @@ function tidyName(raw: string): string {
 
 function nameProblem(name: string): string | null {
   if (name.length === 0) {
-    return 'Pick a name, partner.'
+    return 'Pick a name.'
   }
   if ([...name].length > NAME_MAX) {
     return `${NAME_MAX} characters or fewer.`
@@ -224,7 +224,7 @@ class Panel implements AccountPanel {
         'p',
         'ow-acct-lede',
         this.root,
-        'This browser can’t use passkeys, so online play is out of reach here. The gauntlet still plays as a guest.',
+        'This browser can’t use passkeys, so online play is off. Quick Draw still works as a guest.',
       )
       return
     }
@@ -232,7 +232,7 @@ class Panel implements AccountPanel {
       'p',
       'ow-acct-lede',
       this.root,
-      'Passkeys only: your face, fingerprint or device PIN. No passwords, no email.',
+      'Sign in with your face, fingerprint or device PIN. No password or email.',
     )
     const signInBtn = button(this.root, 'Sign in with a passkey', 'primary')
     signInBtn.addEventListener('click', () => void this.doSignIn(false))
@@ -426,7 +426,7 @@ class Panel implements AccountPanel {
     const warn = el('p', 'ow-acct-warn', this.root)
     el('b', '', warn, 'This can’t be undone. ')
     warn.append(
-      `Deleting ${name} wipes your purse, outfit, ghost, passkeys and history for good. Past duels stay on record without your name. The name stays reserved for 30 days.`,
+      `Deleting ${name} removes your purse, kit, ghost, passkeys and history for good. Past duels stay on record without your name. The name is held for 30 days.`,
     )
     const form = el('form', 'ow-acct-form', this.root)
     form.noValidate = true
@@ -439,7 +439,7 @@ class Panel implements AccountPanel {
     const go = button(btns, 'Delete forever', 'danger primary')
     go.type = 'submit'
     go.disabled = true
-    const keep = button(btns, 'Keep my hat')
+    const keep = button(btns, 'Keep my account')
     keep.addEventListener('click', () => {
       this.view = 'player'
       this.status = { text: '', kind: 'info' }
@@ -454,12 +454,7 @@ class Panel implements AccountPanel {
         void this.doDelete()
       }
     })
-    el(
-      'p',
-      'ow-acct-note',
-      this.root,
-      'Your passkey will ask once more to make sure it’s really you.',
-    )
+    el('p', 'ow-acct-note', this.root, 'Your passkey will ask once more to confirm it’s you.')
     requestAnimationFrame(() => input.focus())
   }
 
@@ -468,7 +463,7 @@ class Panel implements AccountPanel {
     if (r.ok) {
       this.view = 'guest'
       this.passkeys = null
-      this.status = { text: 'Your hat’s hung up. The account is gone.', kind: 'ok' }
+      this.status = { text: 'Account deleted.', kind: 'ok' }
     }
     this.render()
   }

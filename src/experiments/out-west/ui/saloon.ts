@@ -29,7 +29,7 @@ function chalk(
   list.replaceChildren()
   const shown = rounds.filter((r) => !hide.has(r.name.toLowerCase()))
   if (shown.length === 0) {
-    el('li', '', list, 'Nobody’s stood a round yet. The barkeep is waiting.')
+    el('li', '', list, 'Nobody’s stood a round yet.')
     return
   }
   for (const r of shown) {

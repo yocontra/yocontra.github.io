@@ -77,7 +77,7 @@ export function awayNotices(a: AwayReport | undefined): Notice[] {
     const n = a.royalties.count
     out.push({
       title: 'While you were away',
-      line: `Your ghost gunned down ${n} ${n === 1 ? 'greenhorn' : 'greenhorns'}.`,
+      line: `Your ghost won ${n} ${n === 1 ? 'duel' : 'duels'}.`,
       amount: a.royalties.amount,
     })
   }
