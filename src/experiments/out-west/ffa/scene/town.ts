@@ -15,6 +15,7 @@ import {
   CylinderGeometry,
   Float32BufferAttribute,
   Group,
+  Matrix4,
   Mesh,
   MeshStandardMaterial,
   RepeatWrapping,
@@ -26,6 +27,7 @@ import {
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
 import type { Assets } from '../../engine/assets.ts'
 import { GeoBuilder } from '../../scene/geo.ts'
+import { mergePlaced, type PropDef, placeMatrix, propDef, propsLibrary } from '../../scene/props.ts'
 import { signAtlas } from '../../scene/textures.ts'
 import { type Building, buildingWalls, type Side, type TownLayout } from '../sim/layout.ts'
 import { cutaway } from './cutaway.ts'
@@ -224,6 +226,8 @@ export interface TownMaterials {
   wood: MeshStandardMaterial
   windows: MeshStandardMaterial
   signs: MeshStandardMaterial
+  /** Kit doors, windows and rails (the props' trim atlas, with the cutaway). */
+  kit: MeshStandardMaterial
 }
 
 export interface Town {
@@ -300,13 +304,28 @@ function makeMaterials(assets: Assets): TownMaterials {
     emissiveIntensity: 0.12,
   })
   const signs = new MeshStandardMaterial({ roughness: 0.75 })
+  // the props' trim-atlas material, with the see-through cut like every town surface
+  const kitSrc = propsLibrary()
+    ?.scenes.flatMap((sc) => {
+      const found: MeshStandardMaterial[] = []
+      sc.traverse((o) => {
+        const m = (o as Mesh).material as MeshStandardMaterial | undefined
+        if (m?.name === 'Kit') {
+          found.push(m)
+        }
+      })
+      return found
+    })
+    .at(0)
+  const kit = kitSrc ? kitSrc.clone() : new MeshStandardMaterial({ color: WOOD })
+  cutaway(kit, false)
   cutaway(wall, false)
   cutaway(stone, false)
   cutaway(roof, true)
   cutaway(wood, false)
   cutaway(windows, false)
   cutaway(signs, false)
-  return { wall, stone, roof, wood, windows, signs }
+  return { wall, stone, roof, wood, windows, signs, kit }
 }
 
 /** Which side of a building faces the nearest street (its front). */
@@ -342,6 +361,22 @@ interface Builders {
   roofs: BufferGeometry[]
   signs: { text: string; bg: string; fg: string; quad: Vector3[] }[]
   extra: BufferGeometry[]
+  /** Textured kit pieces (windows, door frames, porch rails), merged at the end. */
+  kit: { def: PropDef; at: Matrix4 }[]
+}
+
+/** Kit +Z turned to face out of a side. */
+const SIDE_RY: Record<Side, number> = { s: 0, n: Math.PI, e: Math.PI / 2, w: -Math.PI / 2 }
+
+const kitDef = (name: string): PropDef | null => {
+  const lib = propsLibrary()
+  return lib ? propDef(lib, name, 1, 'y', true) : null
+}
+
+/** A kit piece on a building's side, `a` metres along it, its origin on the wall face. */
+function onSide(b: Building, side: Side, a: number, y: number, out = 0): Matrix4 {
+  const [p] = faceQuad(b, side, a, a, y, y, out)
+  return placeMatrix(p?.x ?? 0, y, p?.z ?? 0, SIDE_RY[side])
 }
 
 /** The four corners of a vertical quad on side `side` of rect, at heights y0..y1, from a to b along it. */
@@ -389,22 +424,42 @@ function faceQuad(
 
 const sideLength = (b: Building, side: Side) => (side === 'n' || side === 's' ? b.w : b.d)
 
-function addWindows(g: GeoBuilder, b: Building, side: Side, floors: number): void {
+function addWindows(bs: Builders, b: Building, side: Side, floors: number): void {
   const len = sideLength(b, side)
   const doors = b.doors.filter((d) => d.side === side)
   const glass = 0x1a_22_2a
+  const win = kitDef('k_window_thin')
   for (let f = 0; f < floors; f++) {
     const y0 = 1.1 + f * 3.2
     for (let a = 1.6; a + 1.3 < len - 0.8; a += 3.4) {
       if (f === 0 && doors.some((d) => a + 1.3 > d.at - 0.4 && a < d.at + d.width + 0.4)) {
         continue
       }
+      if (win) {
+        // a framed sash window with a sill (the kit's sits 0.97 m above its origin)
+        bs.kit.push({ def: win, at: onSide(b, side, a + 0.65, y0 - 0.97 + 0.05) })
+        continue
+      }
       const q = faceQuad(b, side, a, a + 1.3, y0, y0 + 1.5, 0.04)
       const [p0, p1, p2, p3] = q
       if (p0 && p1 && p2 && p3) {
-        g.quad(p0, p1, p2, p3, glass)
+        bs.windows.quad(p0, p1, p2, p3, glass)
       }
     }
+  }
+}
+
+/** A dark-wood frame round every doorway. */
+function addDoorFrames(bs: Builders, b: Building): void {
+  const frame = kitDef('k_doorframe')
+  if (!frame) {
+    return
+  }
+  for (const d of b.doors) {
+    const at = onSide(b, d.side, d.at + d.width / 2, 0, 0.02)
+    // the kit frame is 1.57 m wide: stretch it to the doorway
+    at.multiply(new Matrix4().makeScale(Math.max(0.8, (d.width + 0.4) / 1.57), 1, 1))
+    bs.kit.push({ def: frame, at })
   }
 }
 
@@ -438,7 +493,7 @@ function addBuilding(bs: Builders, b: Building, layout: TownLayout, id: number):
   })
   for (const side of ['n', 's', 'e', 'w'] as const) {
     if (b.kind !== 'tower') {
-      addWindows(bs.windows, b, side, b.floors)
+      addWindows(bs, b, side, b.floors)
     }
   }
   // Roof.
@@ -459,6 +514,9 @@ function addBuilding(bs: Builders, b: Building, layout: TownLayout, id: number):
     new BufferAttribute(new Float32Array(rg.getAttribute('position').count).fill(id), 1),
   )
   bs.roofs.push(rg)
+  if (b.kind !== 'tower') {
+    addDoorFrames(bs, b)
+  }
   if (p.falseFront) {
     addFalseFront(bs, b, front, p)
   }
@@ -553,6 +611,16 @@ function addPorch(bs: Builders, b: Building, front: Side): void {
     const [p0] = faceQuad(b, front, a, a, 0, 1, depth - 0.15)
     if (p0) {
       bs.wood.box(p0.x, y / 2, p0.z, 0.16, y, 0.16, DARK_WOOD)
+    }
+  }
+  // a balcony rail along the porch roof (two-storey fronts)
+  const rail = kitDef('k_balcony')
+  if (rail && b.floors > 1) {
+    const n = Math.max(1, Math.floor((len - 0.4) / 2))
+    for (let i = 0; i < n; i++) {
+      const a = len / 2 - ((n - 1) * 2) / 2 + i * 2
+      // the kit rail stands 0.9-1.1 m out from its origin
+      bs.kit.push({ def: rail, at: onSide(b, front, a, y + 0.06, depth - 1.1) })
     }
   }
 }
@@ -665,6 +733,7 @@ export function buildTown(layout: TownLayout, assets: Assets, sun: Vector3): Tow
     roofs: [],
     signs: [],
     extra: [],
+    kit: [],
   }
   const roofs: Building[] = []
   for (const b of layout.buildings) {
@@ -692,6 +761,19 @@ export function buildTown(layout: TownLayout, assets: Assets, sun: Vector3): Tow
   add(bs.extra.length > 0 ? mergeGeometries([wood, ...bs.extra]) : wood, mats.wood, 'wood')
   add(bs.windows.empty ? null : bs.windows.build(), mats.windows, 'windows')
   add(bs.roofs.length > 0 ? mergeGeometries(bs.roofs) : null, mats.roof, 'roofs')
+  if (bs.kit.length > 0) {
+    for (const m of mergePlaced(
+      bs.kit,
+      root,
+      new Map([
+        ['Kit', mats.kit],
+        ['KitGlass', mats.windows],
+      ]),
+      false,
+    )) {
+      m.name = 'kit'
+    }
+  }
   const signs = signMesh(bs.signs, mats.signs)
   if (signs) {
     signs.matrixAutoUpdate = false

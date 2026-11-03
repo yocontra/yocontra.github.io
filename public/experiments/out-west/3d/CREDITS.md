@@ -29,22 +29,28 @@ below.
 
 Quaternius: https://quaternius.com
 
-## Props (`models/props.glb`, merged)
+## Props and building kit (`models/props.glb`, `tex/kit_*.webp`)
+
+Built by `tools/build-props.ts`: every kit piece below is re-UV'd into one trim atlas
+(`tex/kit_{diff,nor,arm}.webp`, the kits' trim sheets stacked in bands) and draws with one
+material; the street and the Frontier town merge their doors, windows, shutters, balcony rails and
+dressing into one draw. The source of the untouched scenes is `tools/art/props-src.glb`.
 
 | Prop | Source | Licence |
 |---|---|---|
-| Revolver | Quaternius — https://poly.pizza/m/E7IaG9TptR | CC0 1.0 |
+| Doors, door frames, windows, shutters, boardwalk planks, balcony rails, porch braces, fences, the wagon (`cart`), crates (`crate`), and the trim sheets `T_WoodTrim`, `T_MetalOrnaments` | Quaternius, "Medieval Village MegaKit" [Standard] — https://quaternius.com/packs/medievalvillagemegakit.html (https://quaternius.itch.io/medieval-village-megakit) | CC0 1.0 |
+| Barrels (`barrel`), benches, buckets, chests, sacks, coin purses, coin piles, tables, chairs, stools, barrel racks, rope, wall lanterns, bottles, crates, anvil, workbench, and the trim sheets `T_Trim_Furniture`, `T_Trim_Metal`, `T_Trim_Props`, `T_Trim_Cloth` | Quaternius, "Fantasy Props MegaKit" [Standard] — https://quaternius.com/packs/fantasypropsmegakit.html (https://quaternius.itch.io/fantasy-props-megakit) | CC0 1.0 |
+| Revolver (re-UV'd onto the atlas's steel and walnut) | Quaternius — https://poly.pizza/m/E7IaG9TptR | CC0 1.0 |
 | Rifle | Quaternius — https://poly.pizza/m/KjHL5JJrxU | CC0 1.0 |
 | Cactus | Quaternius — https://poly.pizza/m/HsEJgRLQWX | CC0 1.0 |
-| Crate | Quaternius — https://poly.pizza/m/3OEFd1AWfa | CC0 1.0 |
-| Barrel | Quaternius — https://poly.pizza/m/ONdghDBByN | CC0 1.0 |
-| Broken cart | Quaternius — https://poly.pizza/m/NBDHe8J7f9 | CC0 1.0 |
 | Rock | Quaternius — https://poly.pizza/m/li0YBlBEMz | CC0 1.0 |
 | Hay | Quaternius — https://poly.pizza/m/Yu8TOERkpw | CC0 1.0 |
-| Fence | Quaternius — https://poly.pizza/m/U7g0Wxpt63 | CC0 1.0 |
 | Coffin | Kay Lousberg — https://poly.pizza/m/WqqeFNrp0e | CC0 1.0 |
 | Post lantern | Kay Lousberg — https://poly.pizza/m/ZSQ65S4lEu | CC0 1.0 |
 | Hanging lantern | Kay Lousberg — https://poly.pizza/m/3jzk3YShv1 | CC0 1.0 |
+
+The earlier Quaternius crate, barrel, broken cart and fence (poly.pizza 3OEFd1AWfa, ONdghDBByN,
+NBDHe8J7f9, U7g0Wxpt63; CC0) were replaced by the kit pieces above.
 
 ## Textures (Poly Haven, CC0)
 

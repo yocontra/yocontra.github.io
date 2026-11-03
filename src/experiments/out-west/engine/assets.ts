@@ -1,7 +1,15 @@
-import { ClampToEdgeWrapping, type Texture } from 'three'
+import {
+  ClampToEdgeWrapping,
+  type Material,
+  type Mesh,
+  MeshStandardMaterial,
+  RepeatWrapping,
+  type Texture,
+} from 'three'
 import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.js'
 import { type GLTF, GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js'
 import type { BodyKey, Look } from '../data/outlaws.ts'
+import { setPropsLibrary } from '../scene/props.ts'
 import { setCharacterMaps } from '../scene/shade.ts'
 import { loadTex } from '../scene/textures.ts'
 
@@ -39,6 +47,59 @@ interface LegacyLook {
   readonly build: readonly number[]
 }
 
+/**
+ * Bind the props' shared "Kit" material (tools/build-props.ts) to the trim atlas: repeating
+ * along U like the source trim sheets, clamped along V between the stacked sheets.
+ */
+async function kitMaterial(
+  props: GLTF,
+  tex: (name: string, srgb: boolean) => Promise<Texture>,
+): Promise<void> {
+  const [map, normal, arm] = await Promise.all([
+    tex('kit_diff', true),
+    tex('kit_nor', false),
+    tex('kit_arm', false),
+  ])
+  for (const t of [map, normal, arm]) {
+    t.flipY = false
+    t.wrapS = RepeatWrapping
+    t.wrapT = ClampToEdgeWrapping
+    t.needsUpdate = true
+  }
+  const kit = new MeshStandardMaterial({
+    name: 'Kit',
+    // the kits' paint, weathered toward the street's sun-bleached boards
+    color: 0xc8_bc_ae,
+    map,
+    normalMap: normal,
+    roughnessMap: arm,
+    metalnessMap: arm,
+    roughness: 1,
+    metalness: 1,
+    vertexColors: true,
+  })
+  const glass = new MeshStandardMaterial({
+    name: 'KitGlass',
+    color: 0x1a_1c_1e,
+    roughness: 0.12,
+    metalness: 0.4,
+  })
+  for (const s of props.scenes) {
+    s.traverse((o) => {
+      const m = o as Mesh
+      if (!m.isMesh) {
+        return
+      }
+      const name = (m.material as Material).name
+      if (name === 'Kit') {
+        m.material = kit
+      } else if (name === 'KitGlass') {
+        m.material = glass
+      }
+    })
+  }
+}
+
 export function lookKeys(look: Look | LegacyLook): BodyKey[] {
   return 'base' in look ? [look.base] : ['casual']
 }
@@ -52,7 +113,7 @@ export async function loadAssets(
   loader.setMeshoptDecoder(MeshoptDecoder)
   let done = 0
   const firstKeys = lookKeys(firstLook)
-  const total = 11 + firstKeys.length
+  const total = 14 + firstKeys.length
   const tick = <T>(p: Promise<T>): Promise<T> =>
     p.then((v) => {
       done++
@@ -105,6 +166,8 @@ export async function loadAssets(
     ])
   const char = { map: cMap, normal: cNor, arm: cArm }
   setCharacterMaps(char)
+  await kitMaterial(props, tex)
+  setPropsLibrary(props)
   await first
   return {
     player,

@@ -160,7 +160,7 @@ export const OUTLAWS: readonly Outlaw[] = [
     look: {
       base: 'worker',
       tint: {
-        Shirt: 0xa8_98_78,
+        Shirt: 0x5a_6a_7a,
         Sleeves: 0xa8_98_78,
         Pants: 0x5a_3a_20,
         Boots: 0x4a_3a_28,
@@ -213,7 +213,7 @@ export const OUTLAWS: readonly Outlaw[] = [
     look: {
       base: 'king',
       tint: {
-        Shirt: 0x8a_7a_5a,
+        Shirt: 0x6a_5a_7a,
         Sleeves: 0xa8_98_78,
         Pants: 0x3a_2e_22,
         Pauldron: 0x5a_4a_3a,
@@ -242,7 +242,7 @@ export const OUTLAWS: readonly Outlaw[] = [
     look: {
       base: 'rugged',
       tint: {
-        Shirt: 0x8a_6a_4a,
+        Shirt: 0x4a_5a_3a,
         Sleeves: 0x8a_6a_4a,
         Pants: 0x4a_3a_2a,
         Hair: 0x1a_10_08,
@@ -273,7 +273,7 @@ export const OUTLAWS: readonly Outlaw[] = [
     gimmick: 'windy',
     look: {
       base: 'worker',
-      tint: { Shirt: 0x8a_7a_5a, Sleeves: 0x8a_7a_5a, Pants: 0x5a_4a_38, Hair: 0x3a_24_12 },
+      tint: { Shirt: 0x6a_6a_5a, Sleeves: 0x4a_4a_3e, Pants: 0x5a_4a_38, Hair: 0x3a_24_12 },
       scale: 1.08,
       coat: 0xb0_94_68,
     },
@@ -346,7 +346,7 @@ export const OUTLAWS: readonly Outlaw[] = [
     gimmick: 'two-guns',
     look: {
       base: 'casual',
-      tint: { Shirt: 0x9a_6a_4a, Sleeves: 0x2a_2a_2a, Pants: 0x3a_30_28, Hair: 0x3a_24_12 },
+      tint: { Shirt: 0x7a_2a_22, Sleeves: 0x2a_2a_2a, Pants: 0x3a_30_28, Hair: 0x3a_24_12 },
       scale: 1.0,
       moustache: 0x3a_24_12,
     },
@@ -418,7 +418,7 @@ export const OUTLAWS: readonly Outlaw[] = [
     gimmick: 'night',
     look: {
       base: 'rugged',
-      tint: { Shirt: 0xa8_a0_90, Sleeves: 0x2a_26_20, Pants: 0x2a_26_20, Hair: 0x2a_1a_10 },
+      tint: { Shirt: 0x8a_8a_84, Sleeves: 0x2a_26_20, Pants: 0x2a_26_20, Hair: 0x2a_1a_10 },
       scale: 1.1,
       coat: 0x2a_24_1c,
       star: true,
@@ -444,7 +444,7 @@ export const OUTLAWS: readonly Outlaw[] = [
     gimmick: 'fake-king',
     look: {
       base: 'punk',
-      tint: { Shirt: 0x7a_6a_5a, Sleeves: 0x10_10_10, Pants: 0x2a_30_38, Hair: 0x10_10_10 },
+      tint: { Shirt: 0x3a_3a_42, Sleeves: 0x10_10_10, Pants: 0x2a_30_38, Hair: 0x10_10_10 },
       scale: 1.02,
     },
     hat: 'cowboy',
