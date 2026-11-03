@@ -8,7 +8,7 @@ import {
   type PasskeyInfo,
 } from '../../../src/experiments/out-west/contract/auth.ts'
 import type { Env } from '../env.ts'
-import { deletionStatements } from './hooks.ts'
+import { creationStatements, deletionStatements } from './hooks.ts'
 
 /** True when an account (or a recently deleted one) holds this name key. For the ranked flow. */
 export async function isNameOwned(env: Env, nameKey: string, now = Date.now()): Promise<boolean> {
@@ -87,7 +87,7 @@ export function insertPasskey(
 }
 
 /**
- * Creates the account and its first passkey in one batch, but only while this ceremony still holds
+ * Creates the account, its first passkey and its wallet in one batch, but only while this ceremony still holds
  * the name reservation. Returns false if the name was lost (taken or the reservation expired).
  */
 export async function createAccount(
@@ -106,6 +106,8 @@ export async function createAccount(
       // Fails the FK (and so the whole batch) when the account insert above matched nothing.
       insertPasskey(env, accountId, key, now),
       env.DB.prepare('DELETE FROM name_reservations WHERE name_key = ?').bind(nameKey),
+      // The wallet (stream C); its FK to accounts also fails the batch if the account wasn't made.
+      ...creationStatements(env, accountId),
     ])
     return created?.meta.changes === 1
   } catch (err) {

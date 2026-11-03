@@ -102,6 +102,9 @@ describe('passkey account lifecycle', () => {
     const access = String(up.body.accessToken)
     let cookie = cookieOf(up.res)
     expect(cookie.length).toBeGreaterThan(40)
+    // the wallet (stream C) came with the account, in the same batch
+    expect(env.sqlite.prepare('SELECT purse FROM profiles').get()).toEqual({ purse: 250 })
+    expect(env.sqlite.prepare('SELECT COUNT(*) AS n FROM inventory').get()).toEqual({ n: 8 })
 
     // refresh rotates the cookie
     const r1 = await call(env, '/auth/refresh', { body: {}, cookie })
@@ -164,6 +167,9 @@ describe('passkey account lifecycle', () => {
     expect(del.status).toBe(200)
     expect(env.sqlite.prepare('SELECT COUNT(*) AS n FROM passkeys').get()).toEqual({ n: 0 })
     expect(env.sqlite.prepare('SELECT COUNT(*) AS n FROM refresh_tokens').get()).toEqual({ n: 0 })
+    for (const table of ['profiles', 'inventory', 'ledger']) {
+      expect(env.sqlite.prepare(`SELECT COUNT(*) AS n FROM ${table}`).get()).toEqual({ n: 0 })
+    }
     expect(
       (await call(env, '/tickets', { body: { purpose: 'duel' }, bearer: access })).status,
     ).toBe(401)

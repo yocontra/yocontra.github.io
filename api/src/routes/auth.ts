@@ -11,7 +11,6 @@ import { createAccount, reserveName } from '../auth/accounts.ts'
 import { clearRefreshCookie, readRefreshCookie } from '../auth/cookie.ts'
 import { randomToken } from '../auth/crypto.ts'
 import { authorizeAppCode, exchangeAppCode } from '../auth/handoff.ts'
-import { onAccountCreated } from '../auth/hooks.ts'
 import { LIMITS } from '../auth/rate.ts'
 import { endFamily, endSession, rotateSession, startSession } from '../auth/refresh.ts'
 import {
@@ -101,14 +100,6 @@ const registerVerify: Handler = async (request, env, url) => {
   })
   if (!created) {
     return error(request, env, 409, 'That name was taken in the meantime. Pick another.')
-  }
-  try {
-    await onAccountCreated(env, player.accountId, player.name)
-  } catch (err) {
-    // No wallet means no account: undo, so the player can simply try again.
-    console.error('createProfile failed; rolling back account', err)
-    await env.DB.prepare('DELETE FROM accounts WHERE id = ?').bind(player.accountId).run()
-    return error(request, env, 500, 'Couldn’t open your account. Try again.')
   }
   const grant = await startSession(env, { player, platform: 'web', authTime: Date.now() })
   return await sessionResponse(request, env, url, { grant, status: 201 })

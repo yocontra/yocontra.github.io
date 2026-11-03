@@ -2,18 +2,12 @@
  * Calls into other streams' account lifecycle code, in one place so auth never reaches into their
  * modules directly. Owned by stream A.
  *
- * - Stream C: `createProfile(env, accountId, name)` (api/src/economy/profile.ts), called once
- *   after sign-up. Its profiles, ledger and inventory cascade from `accounts` on delete.
+ * - Stream C: `createProfileStatements(env, accountId)` (api/src/economy/profile.ts), batched with
+ *   the account insert at sign-up. Its profiles, ledger and inventory cascade on delete.
  * - Stream B: `accountDeletionStatements(env, accountId)` anonymises matches; ghost tables cascade.
  */
+import { createProfileStatements } from '../economy/profile.ts'
 import type { Env } from '../env.ts'
-
-// STUB(stream C): replace with `import { createProfile } from '../economy/profile.ts'` once
-// api/src/economy/profile.ts lands. Same signature; its Profile result is unused here.
-// biome-ignore lint/suspicious/useAwait: local stub with the interface's async signature
-async function createProfile(_env: Env, _accountId: string, _name: string): Promise<unknown> {
-  return null
-}
 
 // STUB(stream B): replace with `import { accountDeletionStatements } from '../duel/stats.ts'`
 // once stream B's branch is merged into redesign. Same signature.
@@ -21,9 +15,12 @@ function duelDeletionStatements(_env: Env, _accountId: string): D1PreparedStatem
   return []
 }
 
-/** Creates the wallet for a brand-new account. Idempotent on C's side. */
-export async function onAccountCreated(env: Env, accountId: string, name: string): Promise<void> {
-  await createProfile(env, accountId, name)
+/**
+ * Statements that create the new account's wallet (profile, starter items, $250 start grant). They
+ * run in the same batch as the account insert, so the account and its wallet commit together.
+ */
+export function creationStatements(env: Env, accountId: string): D1PreparedStatement[] {
+  return createProfileStatements(env, accountId)
 }
 
 /** Statements other streams need run in the same batch that deletes the account row. */
