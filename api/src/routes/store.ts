@@ -1,5 +1,122 @@
-/** The Outfitter: catalog and purchases. Owned by stream C. */
-import type { RouteHandler } from '../http.ts'
+/**
+ * The Outfitter: catalog and purchases. Owned by stream C.
+ *   GET  /store        → StoreResponse (signed out: owned = [], purse/level = null)
+ *   POST /store/buy    { itemId } → BuyResponse
+ *
+ * A purchase is one batch: the ledger debit (idem key `buy:<acct>:<item>`) plus the inventory row.
+ * An overdraft fails the purse CHECK and a duplicate item fails the inventory primary key, and
+ * either rolls the whole batch back. A replay of the same purchase is a no-op.
+ */
+import type {
+  BuyResponse,
+  StoreResponse,
+} from '../../../src/experiments/out-west/contract/economy.ts'
+import {
+  CATALOG,
+  CATALOG_VERSION,
+  canBuy,
+  type ItemId,
+  isItemId,
+  itemById,
+} from '../../../src/experiments/out-west/data/catalog.ts'
+import { authenticate, type Player } from '../economy/auth.ts'
+import { isConstraintError, isOverdraft, ledgerStatements } from '../economy/ledger.ts'
+import { getProfileDetail, ownedItems } from '../economy/profile.ts'
+import type { Env } from '../env.ts'
+import { error, json, type RouteHandler, readJson } from '../http.ts'
 
-// biome-ignore lint/suspicious/useAwait: stub until stream C implements it
-export const storeRoutes: RouteHandler = async () => null
+const REFUSALS: Record<string, [number, string]> = {
+  not_for_sale: [403, "That one isn't for sale."],
+  owned: [409, 'You already own that.'],
+  level: [403, "You're not seasoned enough for that yet."],
+  funds: [402, "You can't afford that."],
+}
+
+/** Statements for one purchase. Exported for tests and for future bundles. */
+export function purchaseStatements(
+  env: Env,
+  accountId: string,
+  itemId: ItemId,
+  price: number,
+): D1PreparedStatement[] {
+  const key = `buy:${accountId}:${itemId}`
+  return [
+    ...ledgerStatements(env, key, [
+      { accountId, kind: 'store_purchase', amount: -price, ref: itemId },
+    ]),
+    // Plain INSERT: owning the item by any other route fails the primary key and aborts the batch.
+    // A replay of this exact purchase (same ref) inserts nothing.
+    env.DB.prepare(
+      `INSERT INTO inventory (account_id, item_id, source, ref, acquired_at)
+       SELECT ?1, ?2, 'store', ?3, ?4
+       WHERE NOT EXISTS (SELECT 1 FROM inventory WHERE account_id = ?1 AND item_id = ?2 AND ref = ?3)`,
+    ).bind(accountId, itemId, `${key}#0`, Date.now()),
+  ]
+}
+
+async function buy(request: Request, env: Env, player: Player): Promise<Response> {
+  const body = (await readJson(request, 1024)) as { itemId?: unknown } | undefined
+  const itemId = body?.itemId
+  const item = isItemId(itemId) ? itemById(itemId) : undefined
+  if (!(isItemId(itemId) && item)) {
+    return error(request, env, 400, 'Unknown item.')
+  }
+  const profile = await getProfileDetail(env, player.accountId)
+  if (!profile) {
+    return error(request, env, 404, 'No profile.')
+  }
+  const owned = new Set<string>(await ownedItems(env, player.accountId))
+  const verdict = canBuy(profile, item, owned)
+  const refusal = REFUSALS[verdict]
+  if (refusal) {
+    return error(request, env, refusal[0], refusal[1])
+  }
+  try {
+    await env.DB.batch(purchaseStatements(env, player.accountId, itemId, item.price))
+  } catch (err) {
+    if (isOverdraft(err)) {
+      return error(request, env, 402, "You can't afford that.")
+    }
+    if (isConstraintError(err)) {
+      return error(request, env, 409, 'You already own that.')
+    }
+    throw err
+  }
+  const after = await getProfileDetail(env, player.accountId)
+  const response: BuyResponse = {
+    ok: true,
+    itemId,
+    purse: after?.purse ?? 0,
+    owned: await ownedItems(env, player.accountId),
+  }
+  return json(request, env, response)
+}
+
+async function catalog(request: Request, env: Env): Promise<Response> {
+  const player = await authenticate(request, env)
+  const profile = player ? await getProfileDetail(env, player.accountId) : null
+  const body: StoreResponse = {
+    catalogVersion: CATALOG_VERSION,
+    items: CATALOG,
+    owned: profile ? await ownedItems(env, profile.accountId) : [],
+    purse: profile?.purse ?? null,
+    level: profile?.level ?? null,
+  }
+  return json(request, env, body, 200, {
+    'Cache-Control': player ? 'private, no-store' : 'public, max-age=300',
+  })
+}
+
+export const storeRoutes: RouteHandler = async (request, env, url) => {
+  if (url.pathname === '/store' && request.method === 'GET') {
+    return catalog(request, env)
+  }
+  if (url.pathname === '/store/buy' && request.method === 'POST') {
+    const player = await authenticate(request, env)
+    if (!player) {
+      return error(request, env, 401, 'Sign in first, partner.')
+    }
+    return buy(request, env, player)
+  }
+  return null
+}
