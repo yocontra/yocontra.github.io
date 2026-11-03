@@ -38,6 +38,43 @@ export function button(
   return b
 }
 
+/** Fill a bar (`.ow-xp-fill`) to a fraction, 0..1. Scales on the compositor, never relayouts. */
+export function setBar(fill: HTMLElement, fraction: number): void {
+  const f = Number.isFinite(fraction) ? Math.min(1, Math.max(0, fraction)) : 0
+  fill.style.transform = `scaleX(${f.toFixed(4)})`
+}
+
+const reduced = (): boolean => matchMedia('(prefers-reduced-motion: reduce)').matches
+
+/**
+ * Count a number up (or down) in an element's text, easing out over `ms`. Text only, so it never
+ * relayouts anything but its own line; tabular figures keep the width steady. Reduced motion
+ * snaps straight to the end.
+ */
+export function countUp(
+  target: HTMLElement,
+  range: { from: number; to: number },
+  format: (n: number) => string,
+  ms = 900,
+): void {
+  const { from, to } = range
+  if (reduced() || from === to) {
+    target.textContent = format(to)
+    return
+  }
+  const t0 = performance.now()
+  const step = (now: number): void => {
+    const t = Math.min(1, (now - t0) / ms)
+    const k = 1 - (1 - t) ** 3
+    target.textContent = format(Math.round(from + (to - from) * k))
+    if (t < 1 && target.isConnected) {
+      requestAnimationFrame(step)
+    }
+  }
+  target.textContent = format(from)
+  requestAnimationFrame(step)
+}
+
 /** "+$150", "−$40", "$0". */
 export function signedMoney(n: number): string {
   if (n > 0) {

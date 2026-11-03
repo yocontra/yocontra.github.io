@@ -3,6 +3,7 @@
  * (free-for-all) and the Outfitter. Signed out, single player works fully and the online tiles
  * ask for a sign-in instead. A 2×2 grid in portrait, one row in landscape.
  */
+import { type IconName, icon } from './icons.ts'
 import { el } from './sheet.ts'
 
 export type Mode = 'gauntlet' | 'bounty' | 'frontier' | 'store'
@@ -21,11 +22,13 @@ interface TileDef {
   kicker: string
   sub: (s: TileState) => string
   online: boolean
+  icon: IconName
 }
 
 const TILES: readonly TileDef[] = [
   {
     mode: 'gauntlet',
+    icon: 'revolver',
     title: 'Quick Draw',
     kicker: 'Single player',
     sub: (s) => (s.ready ? '17 outlaws · ranked board' : 'Saddling up…'),
@@ -33,13 +36,15 @@ const TILES: readonly TileDef[] = [
   },
   {
     mode: 'bounty',
+    icon: 'bounty',
     title: 'Bounty Hunt',
-    kicker: 'Duel a gunslinger',
+    kicker: 'Live duels',
     sub: (s) => (s.signedIn ? 'Live PvP · ghosts if the street’s empty' : 'Sign in with a passkey'),
     online: true,
   },
   {
     mode: 'frontier',
+    icon: 'dynamite',
     title: 'Frontier',
     kicker: 'Free-for-all',
     sub: (s) => (s.signedIn ? '32 guns · one bank · no law' : 'Sign in with a passkey'),
@@ -47,6 +52,7 @@ const TILES: readonly TileDef[] = [
   },
   {
     mode: 'store',
+    icon: 'hat',
     title: 'Outfitter',
     kicker: 'Cosmetics',
     sub: (s) => (s.signedIn ? 'Hats, irons, dusters' : 'Browse and try on'),
@@ -65,6 +71,7 @@ export class ModeTiles {
     for (const t of TILES) {
       const b = el('button', `ow-tile ow-tile-${t.mode}`, this.root)
       b.type = 'button'
+      b.append(icon(t.icon))
       el('span', 'ow-tile-kicker', b, t.kicker)
       el('span', 'ow-tile-title', b, t.title)
       this.subs.set(t.mode, el('span', 'ow-tile-sub', b))

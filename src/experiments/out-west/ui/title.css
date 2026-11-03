@@ -1,0 +1,265 @@
+/* out west: the title screen, a printed broadside on aged paper. Tokens: tokens.css. */
+/* ------------------------------------------------- title: a printed broadside */
+.ow-title {
+  position: absolute;
+  inset: 0;
+  z-index: 50;
+  display: grid;
+  place-items: center;
+  padding: max(var(--ow-s4), var(--ow-sai-t)) max(var(--ow-s3), var(--ow-sai-r))
+    max(var(--ow-s6), var(--ow-sai-b)) max(var(--ow-s3), var(--ow-sai-l));
+  color: var(--ow-ink);
+  background-color: var(--ow-paper);
+  background-image:
+    radial-gradient(90% 70% at 50% 40%, rgb(255 248 228 / 0.55), transparent 70%),
+    radial-gradient(150% 120% at 50% 50%, transparent 50%, rgb(110 70 30 / 0.55)),
+    var(--ow-tex-paper);
+  background-size:
+    100% 100%,
+    100% 100%,
+    320px 320px;
+  cursor: pointer;
+  outline: none;
+  transition: transform 0.9s var(--ow-ease-in-out);
+  will-change: transform;
+}
+.ow-title.wipe {
+  transform: translateY(-104%);
+}
+/* printer's corners */
+.ow-title::before,
+.ow-title::after,
+.ow-title-sheet::before,
+.ow-title-sheet::after {
+  content: "";
+  position: absolute;
+  width: clamp(56px, 12vmin, 120px);
+  aspect-ratio: 1;
+  background: var(--ow-ink);
+  -webkit-mask: var(--ow-orn-corner) center / contain no-repeat;
+  mask: var(--ow-orn-corner) center / contain no-repeat;
+  opacity: 0.8;
+  pointer-events: none;
+}
+.ow-title::before {
+  top: max(var(--ow-s3), var(--ow-sai-t));
+  left: max(var(--ow-s3), var(--ow-sai-l));
+}
+.ow-title::after {
+  top: max(var(--ow-s3), var(--ow-sai-t));
+  right: max(var(--ow-s3), var(--ow-sai-r));
+  transform: scaleX(-1);
+}
+.ow-title-sheet {
+  position: static;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--ow-s3);
+  width: min(56rem, 100%);
+  text-align: center;
+}
+.ow-title-sheet::before {
+  bottom: max(var(--ow-s3), var(--ow-sai-b));
+  left: max(var(--ow-s3), var(--ow-sai-l));
+  transform: scaleY(-1);
+}
+.ow-title-sheet::after {
+  bottom: max(var(--ow-s3), var(--ow-sai-b));
+  right: max(var(--ow-s3), var(--ow-sai-r));
+  transform: scale(-1, -1);
+}
+.ow-title-kicker {
+  font-family: var(--ow-font-text);
+  font-weight: 600;
+  font-variant-caps: all-small-caps;
+  letter-spacing: 0.24em;
+  font-size: var(--ow-fs-lead);
+  color: var(--ow-ink-2);
+}
+.ow-logo {
+  margin: 0;
+  font-family: var(--ow-font-ornate);
+  font-weight: 400;
+  font-size: clamp(3.25rem, 13.5vw, 8.5rem);
+  line-height: 0.9;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: var(--ow-red);
+  text-shadow:
+    var(--ow-letterpress),
+    2px 3px 0 rgb(29 20 12 / 0.18);
+  animation: ow-paper-in 0.9s var(--ow-ease-out) both;
+}
+.ow-title .ow-orn-rule {
+  color: var(--ow-ink);
+}
+.ow-title-art {
+  width: min(44rem, 100%);
+  aspect-ratio: 1400 / 608;
+  background: var(--ow-img-woodcut) center / contain no-repeat;
+  mix-blend-mode: multiply;
+  opacity: 0.92;
+  -webkit-mask: radial-gradient(closest-side, #000 82%, transparent);
+  mask: radial-gradient(closest-side, #000 82%, transparent);
+  -webkit-mask-size: 100% 100%;
+  mask-size: 100% 100%;
+  animation: ow-fade-in 1.2s 0.2s var(--ow-ease-out) both;
+}
+.ow-start {
+  min-height: 1.4em;
+  font-family: var(--ow-font-display);
+  font-size: clamp(1.25rem, 4.6vw, 2rem);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ow-ink);
+  animation: ow-breathe 1.8s ease-in-out infinite;
+}
+.ow-title.pressed .ow-start {
+  animation: none;
+}
+.ow-loading {
+  min-height: 1.45em;
+  font-family: var(--ow-font-text);
+  font-weight: 600;
+  font-variant-caps: all-small-caps;
+  font-variant-numeric: lining-nums tabular-nums;
+  letter-spacing: var(--ow-track-label);
+  font-size: var(--ow-fs-body);
+  color: var(--ow-ink-2);
+}
+.ow-howto {
+  max-width: 34rem;
+  font-size: var(--ow-fs-lead);
+  font-style: italic;
+  line-height: 1.45;
+  color: var(--ow-ink-2);
+  text-wrap: balance;
+}
+.ow-howto kbd {
+  font-family: var(--ow-font-text);
+  font-style: normal;
+  font-weight: 600;
+  font-variant-caps: all-small-caps;
+  letter-spacing: 0.06em;
+  border: 1px solid var(--ow-rule-ink);
+  border-radius: var(--ow-radius);
+  padding: 0 0.3em;
+}
+.ow-title-links {
+  position: absolute;
+  bottom: max(var(--ow-s2), var(--ow-sai-b));
+  left: 0;
+  right: 0;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0 var(--ow-s2);
+  font-size: var(--ow-fs-small);
+  color: var(--ow-ink-2);
+}
+.ow-title-links a,
+.ow-title-links button {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--ow-tap);
+  padding: 0 var(--ow-s2);
+  color: var(--ow-ink);
+  font: inherit;
+  font-weight: 600;
+  font-variant-caps: all-small-caps;
+  letter-spacing: var(--ow-track-label);
+  font-size: var(--ow-fs-body);
+  background: none;
+  border: 0;
+  cursor: pointer;
+  text-decoration: underline;
+  text-decoration-color: var(--ow-rule-ink);
+  text-underline-offset: 4px;
+}
+.ow-title-links a:focus-visible,
+.ow-title-links button:focus-visible {
+  outline: 2px solid var(--ow-red);
+  outline-offset: 2px;
+}
+.ow-credits {
+  display: none;
+  position: absolute;
+  bottom: calc(max(var(--ow-s2), var(--ow-sai-b)) + var(--ow-s6));
+  left: 50%;
+  translate: -50% 0;
+  width: min(32rem, calc(100% - 32px));
+  padding: var(--ow-s3) var(--ow-s4);
+  color: var(--ow-ink);
+  background: var(--ow-paper);
+  border: 1px solid var(--ow-rule-ink);
+  outline: 1px solid var(--ow-rule-ink);
+  outline-offset: -5px;
+  box-shadow: var(--ow-shadow-2);
+  font-size: var(--ow-fs-small);
+  line-height: 1.5;
+  text-align: left;
+  cursor: default;
+}
+.ow-credits.on {
+  display: block;
+  animation: ow-paper-in var(--ow-t-mid) var(--ow-ease-out) both;
+}
+.ow-credits p {
+  margin: 0 0 var(--ow-s2);
+}
+.ow-credits b {
+  font-family: var(--ow-font-display);
+  font-weight: 400;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.ow-credits a {
+  color: var(--ow-red);
+}
+@media (max-aspect-ratio: 1 / 1) {
+  .ow-title-art {
+    width: 118%;
+    max-width: none;
+  }
+  .ow-title-sheet::before,
+  .ow-title-sheet::after {
+    bottom: calc(max(var(--ow-s3), var(--ow-sai-b)) + var(--ow-s6));
+  }
+}
+@media (max-width: 520px) {
+  .ow-title-kicker {
+    font-size: var(--ow-fs-body);
+    letter-spacing: 0.16em;
+  }
+  .ow-title-links {
+    gap: 0;
+  }
+  .ow-title-links > span {
+    display: none;
+  }
+  .ow-title-links a,
+  .ow-title-links button {
+    padding: 0 6px;
+    font-size: var(--ow-fs-small);
+    letter-spacing: 0.06em;
+  }
+}
+@media (max-height: 520px) and (min-aspect-ratio: 1 / 1) {
+  .ow-title-art,
+  .ow-title-kicker {
+    display: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ow-title {
+    transition-duration: 0.3s;
+  }
+  .ow-logo,
+  .ow-title-art,
+  .ow-start {
+    animation: none;
+  }
+}

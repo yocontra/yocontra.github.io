@@ -1,4 +1,4 @@
-/* out west: page, title, HUD and result cards. Transitions, menus and overlays: out-west-menus.css */
+/* out west: page, duel HUD, captions and result cards. Title: title.css. Tokens: tokens.css. */
 html,
 body {
   margin: 0;
@@ -6,7 +6,7 @@ body {
   width: 100%;
   height: 100%;
   overflow: hidden;
-  background: #000;
+  background: var(--ow-night);
   overscroll-behavior: none;
   -webkit-user-select: none;
   user-select: none;
@@ -15,13 +15,24 @@ body {
   touch-action: none;
 }
 .ow {
-  --slab: "Alfa Slab One", Rockwell, "Rockwell Extra Bold", Georgia, serif;
+  /* legacy alias: older modules read --slab */
+  --slab: var(--ow-font-display);
   position: fixed;
   inset: 0;
-  color: #fff;
-  font-family: var(--slab);
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
+  color: var(--ow-bone);
+  font-family: var(--ow-font-text);
+  font-weight: 500;
+  font-size: var(--ow-fs-body);
+  line-height: 1.45;
+  font-kerning: normal;
+  font-optical-sizing: auto;
+  text-rendering: optimizelegibility;
+  -webkit-font-smoothing: antialiased;
+}
+.ow *,
+.ow *::before,
+.ow *::after {
+  box-sizing: border-box;
 }
 .ow-canvas {
   position: absolute;
@@ -44,198 +55,115 @@ body {
   }
 }
 
-/* ---------------------------------------------------------- title */
-.ow-title {
-  position: absolute;
-  inset: 0;
-  z-index: 50;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 1.2rem;
-  background: #f00;
-  cursor: pointer;
-  clip-path: inset(0 0 0 0);
-  transition: clip-path 0.9s cubic-bezier(0.7, 0, 0.2, 1);
-  padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom)
-    env(safe-area-inset-left);
-  box-sizing: border-box;
-  outline: none;
-}
-.ow-title.wipe {
-  clip-path: inset(0 0 100% 0);
-}
-.ow-logo {
-  margin: 0;
-  font-size: clamp(3.2rem, 15vw, 9rem);
-  font-weight: 400;
-  line-height: 1;
-  text-shadow: 0 4px 0 rgb(0 0 0 / 0.25);
-}
-.ow-start {
-  font-size: clamp(1.1rem, 4.2vw, 2rem);
-  animation: ow-pulse 1.6s ease-in-out infinite;
-  min-height: 1.4em;
-}
-.ow-title.pressed .ow-start {
-  animation: none;
-}
-.ow-loading {
-  min-height: 1.2em;
-  font-family: Georgia, serif;
-  letter-spacing: 0.08em;
-  font-size: 0.85rem;
-  opacity: 0.85;
-  text-transform: none;
-}
-.ow-howto {
-  max-width: 34rem;
-  padding: 0 1.2rem;
-  text-align: center;
-  font-family: Georgia, serif;
-  text-transform: none;
-  letter-spacing: 0.02em;
-  font-size: 0.95rem;
-  line-height: 1.5;
-  opacity: 0.9;
-}
-.ow-howto kbd {
-  font-family: var(--slab);
-  font-size: 0.8em;
-  border: 1px solid rgb(255 255 255 / 0.6);
-  border-radius: 3px;
-  padding: 0 0.3em;
-}
-.ow-title-links {
-  position: absolute;
-  bottom: max(14px, env(safe-area-inset-bottom));
-  left: 0;
-  right: 0;
-  display: flex;
-  justify-content: center;
-  gap: 0.6rem;
-  font-family: Georgia, serif;
-  font-size: 0.8rem;
-  letter-spacing: 0.04em;
-  text-transform: none;
-  opacity: 0.8;
-}
-.ow-title-links a,
-.ow-title-links button {
-  color: #fff;
-  font: inherit;
-  background: none;
-  border: 0;
-  padding: 0.4rem;
-  cursor: pointer;
-  text-decoration: underline;
-  text-underline-offset: 3px;
-}
-.ow-credits {
-  display: none;
-  position: absolute;
-  bottom: calc(max(14px, env(safe-area-inset-bottom)) + 2.4rem);
-  left: 50%;
-  transform: translateX(-50%);
-  width: min(30rem, calc(100% - 32px));
-  padding: 1rem 1.2rem;
-  background: rgb(0 0 0 / 0.82);
-  font-family: Georgia, serif;
-  font-size: 0.82rem;
-  letter-spacing: 0.02em;
-  line-height: 1.45;
-  text-transform: none;
-  cursor: default;
-  box-sizing: border-box;
-}
-.ow-credits.on {
-  display: block;
-}
-.ow-credits p {
-  margin: 0 0 0.5rem;
-}
-.ow-credits a {
-  color: #fff;
-}
-@keyframes ow-pulse {
-  0%,
-  100% {
-    opacity: 1;
-  }
-  50% {
-    opacity: 0.45;
-  }
-}
-
-/* ------------------------------------------------------------ hud */
+/* -------------------------------------------------------------- duel HUD */
 .ow-hud {
   position: absolute;
   inset: 0;
   pointer-events: none;
   opacity: 0;
-  transition: opacity 0.6s;
+  transition: opacity var(--ow-t-slow);
 }
 .ow-playing .ow-hud {
   opacity: 1;
 }
-.ow-counter {
+/* menus and the gauntlet's ledger own the screen: the HUD steps back */
+.ow:has(.ow-menu.on, .ow-end.on) .ow-hud {
+  opacity: 0;
+}
+.ow-counter,
+.ow-purse,
+.ow-mode {
   position: absolute;
-  top: max(14px, env(safe-area-inset-top));
-  left: max(16px, env(safe-area-inset-left));
-  font-size: 1rem;
-  text-shadow: 0 2px 0 #000;
+  left: max(var(--ow-s3), var(--ow-sai-l));
+  text-shadow: var(--ow-text-shadow);
+}
+.ow-counter {
+  top: max(var(--ow-s3), var(--ow-sai-t));
+  display: flex;
+  align-items: baseline;
+  gap: var(--ow-s2);
+  font-family: var(--ow-font-num);
+  font-weight: 500;
+  font-size: var(--ow-fs-h4);
+  font-variant-numeric: lining-nums tabular-nums;
+  letter-spacing: var(--ow-track-num);
+  color: var(--ow-bone);
+}
+.ow-counter:empty {
+  display: none;
 }
 .ow-purse {
-  position: absolute;
-  top: calc(max(14px, env(safe-area-inset-top)) + 1.5rem);
-  left: max(16px, env(safe-area-inset-left));
-  font-size: 1rem;
-  color: #f2d27a;
-  text-shadow: 0 2px 0 #000;
-  font-variant-numeric: tabular-nums;
-  transition:
-    color 0.3s,
-    transform 0.3s;
+  top: calc(max(var(--ow-s3), var(--ow-sai-t)) + 32px);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--ow-font-num);
+  font-weight: 500;
+  font-size: var(--ow-fs-h3);
+  line-height: 1;
+  font-variant-numeric: lining-nums tabular-nums;
+  letter-spacing: var(--ow-track-num);
+  color: var(--ow-brass);
   transform-origin: left center;
+  transition:
+    color var(--ow-t-mid),
+    transform var(--ow-t-mid) var(--ow-ease-slam);
+}
+.ow-purse .ow-icon {
+  width: 0.85em;
+  height: 0.85em;
+  filter: drop-shadow(0 1px 0 rgb(0 0 0 / 0.9));
 }
 .ow-purse.gain {
-  color: #ffe9a8;
-  transform: scale(1.12);
+  color: var(--ow-brass-hi);
+  transform: scale(1.14);
 }
 .ow-purse.loss {
-  color: #ff6a5a;
+  color: var(--ow-bad);
 }
 .ow-pause {
   position: absolute;
-  top: max(8px, env(safe-area-inset-top));
-  right: max(8px, env(safe-area-inset-right));
-  width: 44px;
-  height: 44px;
+  top: max(var(--ow-s2), var(--ow-sai-t));
+  right: max(var(--ow-s2), var(--ow-sai-r));
+  width: 48px;
+  height: 48px;
   display: flex;
   gap: 6px;
   align-items: center;
   justify-content: center;
-  background: rgb(0 0 0 / 0.25);
-  border: 2px solid rgb(255 255 255 / 0.7);
+  padding: 0;
+  background:
+    radial-gradient(circle at 35% 30%, rgb(255 255 255 / 0.12), transparent 60%), rgb(14 9 6 / 0.55);
+  border: 2px solid var(--ow-brass);
   border-radius: 50%;
+  box-shadow:
+    inset 0 0 0 2px rgb(0 0 0 / 0.5),
+    var(--ow-shadow-1);
   cursor: pointer;
   pointer-events: auto;
+  transition: transform var(--ow-t-fast) var(--ow-ease-out);
+}
+.ow-pause:hover {
+  transform: scale(1.06);
+}
+.ow-pause:active {
+  transform: scale(0.94);
 }
 .ow-pause span {
   width: 4px;
-  height: 14px;
-  background: #fff;
+  height: 16px;
+  border-radius: 1px;
+  background: var(--ow-bone);
 }
 .ow-pips {
   position: absolute;
-  bottom: max(26px, calc(env(safe-area-inset-bottom) + 14px));
+  bottom: max(28px, calc(var(--ow-sai-b) + var(--ow-s3)));
   left: 50%;
-  transform: translateX(-50%);
+  translate: -50% 0;
   display: flex;
-  gap: 10px;
+  gap: 12px;
   opacity: 0;
-  transition: opacity 0.4s;
+  transition: opacity var(--ow-t-mid);
 }
 .ow-pips.on {
   opacity: 1;
@@ -243,10 +171,10 @@ body {
 .ow-pip {
   width: 10px;
   height: 10px;
-  background: #fff;
-  border: 2px solid #000;
+  background: linear-gradient(135deg, var(--ow-brass-hi), var(--ow-brass) 50%, var(--ow-brass-lo));
+  box-shadow: 0 0 0 2px rgb(0 0 0 / 0.75);
   transform: rotate(45deg) scale(0);
-  transition: transform 0.18s cubic-bezier(0.3, 1.6, 0.5, 1);
+  transition: transform 0.18s var(--ow-ease-slam);
 }
 .ow-pip.in {
   transform: rotate(45deg) scale(1);
@@ -258,7 +186,7 @@ body {
   height: 12.5vh;
   background: #000;
   pointer-events: none;
-  transition: transform 0.35s cubic-bezier(0.6, 0, 0.2, 1);
+  transition: transform 0.35s var(--ow-ease-in-out);
   z-index: 5;
 }
 .ow-letter-top {
@@ -277,16 +205,19 @@ body {
   position: absolute;
   left: 0;
   right: 0;
-  top: max(9%, env(safe-area-inset-top) + 52px);
+  top: max(9%, calc(var(--ow-sai-t) + 52px));
   text-align: center;
-  font-size: min(96px, 14vw);
+  font-family: var(--ow-font-display);
+  font-size: min(96px, 15vw);
   line-height: 1;
-  color: #fff;
-  -webkit-text-stroke: 2px #f00;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--ow-bone);
+  -webkit-text-stroke: 3px var(--ow-red);
   paint-order: stroke fill;
   text-shadow:
-    0 0 0 #f00,
-    0 4px 0 #000;
+    0 4px 0 var(--ow-red-lo),
+    0 8px 24px rgb(0 0 0 / 0.7);
   opacity: 0;
   transition: opacity 0.2s ease-out;
   pointer-events: none;
@@ -295,11 +226,11 @@ body {
 .ow-cap-call.on {
   opacity: 1;
   transition: none;
-  animation: ow-call 0.2s cubic-bezier(0.2, 1.6, 0.4, 1);
+  animation: ow-call 0.22s var(--ow-ease-slam);
 }
 @keyframes ow-call {
   from {
-    transform: scale(1.2);
+    transform: scale(1.35);
   }
   to {
     transform: scale(1);
@@ -308,7 +239,9 @@ body {
 .ow-call-indicator {
   position: absolute;
   inset: 0;
-  border: 10px solid #f00;
+  box-shadow:
+    inset 0 0 0 8px var(--ow-red-hi),
+    inset 0 0 140px rgb(168 36 27 / 0.55);
   opacity: 0;
   pointer-events: none;
   z-index: 7;
@@ -320,155 +253,199 @@ body {
 .ow-cap-line {
   position: absolute;
   left: 50%;
-  transform: translateX(-50%);
-  max-width: min(90vw, 40rem);
+  translate: -50% 0;
+  width: max-content;
+  max-width: min(calc(100vw - 32px), 40rem);
   text-align: center;
-  font-family: Georgia, serif;
-  text-transform: none;
-  letter-spacing: 0.02em;
   opacity: 0;
-  transition: opacity 0.25s;
+  transition: opacity var(--ow-t-mid);
   pointer-events: none;
   z-index: 9;
 }
 .ow-cap-fake {
-  bottom: calc(max(64px, env(safe-area-inset-bottom) + 52px) + 12.5vh);
+  bottom: calc(max(64px, calc(var(--ow-sai-b) + 52px)) + 12.5vh);
   font-style: italic;
-  color: #c8c8c8;
-  font-size: 1rem;
-  text-shadow: 0 1px 2px #000;
+  font-size: var(--ow-fs-lead);
+  color: var(--ow-bone-2);
+  text-shadow: var(--ow-text-shadow);
+}
+.ow-cap-fake::before,
+.ow-cap-fake::after {
+  content: "\2014";
+  padding: 0 0.4em;
+  font-style: normal;
 }
 .ow-cap-line {
-  bottom: calc(max(96px, env(safe-area-inset-bottom) + 84px) + 12.5vh);
-  color: #fff;
-  font-size: 1.1rem;
-  background: rgb(0 0 0 / 0.55);
-  padding: 0.35rem 0.8rem;
+  bottom: calc(max(96px, calc(var(--ow-sai-b) + 84px)) + 12.5vh);
+  padding: var(--ow-s2) var(--ow-s3);
+  font-size: var(--ow-fs-lead);
+  line-height: 1.35;
+  color: var(--ow-bone);
+  background: rgb(10 6 4 / 0.72);
+  border-radius: var(--ow-radius);
+  text-wrap: balance;
 }
 .ow-cap-line b {
-  font-family: var(--slab);
-  font-weight: 400;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  font-size: 0.85em;
+  font-weight: 700;
+  font-variant-caps: all-small-caps;
+  letter-spacing: var(--ow-track-label);
+  color: var(--ow-brass);
+}
+.ow-cap-line span {
+  font-style: italic;
 }
 .ow-cap-fake.on,
 .ow-cap-line.on {
   opacity: 1;
 }
-/* Result cards live in the top band (sky), off the body lying in the street. */
+
+/* ------------------------------------------- result cards: a torn paper notice */
 .ow-card {
   position: absolute;
   left: 50%;
-  top: max(7vh, env(safe-area-inset-top) + 52px);
-  transform: translate(-50%, 0) scale(0.96);
-  width: min(60vw, 40rem);
-  max-width: 92vw;
-  padding: 0.9rem 1.6rem 0.8rem;
-  background: rgb(0 0 0 / 0.72);
+  top: max(7vh, calc(var(--ow-sai-t) + 56px));
+  width: min(36rem, calc(100vw - 32px));
+  padding: var(--ow-s4) var(--ow-s5) var(--ow-s3);
+  color: var(--ow-ink);
+  background-color: var(--ow-paper);
+  background-image:
+    radial-gradient(140% 120% at 50% 40%, transparent 55%, rgb(120 84 40 / 0.4)),
+    var(--ow-tex-paper);
+  background-size:
+    100% 100%,
+    256px 256px;
+  -webkit-mask: var(--ow-mask-torn) center / 100% 100% no-repeat;
+  mask: var(--ow-mask-torn) center / 100% 100% no-repeat;
   text-align: center;
   opacity: 0;
   pointer-events: none;
+  transform: translate(-50%, 12px) rotate(-0.8deg);
   transition:
-    opacity 0.25s,
-    transform 0.25s;
+    opacity var(--ow-t-mid),
+    transform var(--ow-t-mid) var(--ow-ease-out);
   z-index: 10;
-  box-sizing: border-box;
 }
 .ow-card.on {
   opacity: 1;
-  transform: translate(-50%, 0) scale(1);
-}
-@media (max-aspect-ratio: 1 / 1) {
-  .ow-card {
-    width: 92vw;
-  }
-}
-.ow-card-win {
-  background: #f00;
-}
-.ow-card-coward {
-  display: grid;
-  grid-template-columns: auto 1fr;
-  column-gap: 1.2rem;
-  align-items: center;
-  text-align: left;
-  background: #111;
-  border: 3px solid #f00;
+  transform: translate(-50%, 0) rotate(-0.8deg);
 }
 .ow-card-title {
-  font-size: clamp(1rem, 4vw, 1.4rem);
+  font-family: var(--ow-font-display);
+  font-size: var(--ow-fs-h3);
+  line-height: 1;
+  letter-spacing: var(--ow-track-display);
+  text-transform: uppercase;
 }
 .ow-card-big {
-  font-size: clamp(2.2rem, 9vw, 3.8rem);
-  line-height: 1.05;
+  margin-top: var(--ow-s2);
+  font-family: var(--ow-font-num);
+  font-weight: 600;
+  font-size: clamp(2.75rem, 11vw, 4rem);
+  line-height: 1;
+  font-variant-numeric: lining-nums tabular-nums;
+  color: var(--ow-ink);
 }
 .ow-card-big:empty {
   display: none;
 }
 .ow-card-big img {
   display: block;
-  width: min(24vw, 7.5rem);
-  margin: 0.2rem auto;
-  transform: rotate(-2deg);
-  box-shadow: 0 6px 20px rgb(0 0 0 / 0.6);
-}
-/* coward: the stamped poster beside the verdict, kept short */
-.ow-card-coward .ow-card-big {
-  grid-column: 1;
-  grid-row: 1 / span 3;
-}
-.ow-card-coward .ow-card-title {
-  font-size: clamp(2.2rem, 9vw, 3.8rem);
-  color: #f00;
-}
-.ow-card-lose .ow-card-title {
-  font-size: clamp(2.2rem, 9vw, 3.8rem);
+  width: min(26vw, 7.5rem);
+  margin: 0 auto;
+  transform: rotate(-3deg);
+  box-shadow: var(--ow-shadow-1);
 }
 .ow-card-sub {
-  font-size: clamp(0.9rem, 3.4vw, 1.2rem);
-  margin-top: 0.3rem;
-}
-.ow-card-hint {
-  margin-top: 0.8rem;
-  font-family: Georgia, serif;
-  text-transform: none;
-  letter-spacing: 0.04em;
-  font-size: 0.8rem;
-  opacity: 0.75;
-}
-.ow-card-coward .ow-card-title,
-.ow-card-coward .ow-card-sub,
-.ow-card-coward .ow-card-hint {
-  grid-column: 2;
+  margin-top: var(--ow-s2);
+  font-size: var(--ow-fs-lead);
+  font-style: italic;
+  color: var(--ow-ink-2);
 }
 .ow-card-pay {
-  margin-top: 0.35rem;
-  font-size: clamp(0.85rem, 3.2vw, 1.1rem);
-  color: #ffe9a8;
-  font-variant-numeric: tabular-nums;
+  display: inline-block;
+  margin-top: var(--ow-s2);
+  padding: 2px var(--ow-s2);
+  font-family: var(--ow-font-num);
+  font-weight: 600;
+  font-size: var(--ow-fs-h4);
+  font-variant-numeric: lining-nums tabular-nums;
+  color: var(--ow-ink);
+  border-top: 1px solid var(--ow-rule-ink);
+  border-bottom: 1px solid var(--ow-rule-ink);
 }
 .ow-card-pay:empty {
   display: none;
 }
-.ow-card-win .ow-card-pay {
-  color: #fff;
+.ow-card-hint {
+  margin-top: var(--ow-s3);
+  font-weight: 600;
+  font-variant-caps: all-small-caps;
+  letter-spacing: var(--ow-track-label);
+  font-size: var(--ow-fs-body);
+  color: var(--ow-ink-3);
+}
+/* win: the title is a red stamp */
+.ow-card-win .ow-card-title {
+  display: inline-block;
+  padding: 4px 12px 2px;
+  color: var(--ow-red);
+  border: 3px solid currentColor;
+  --ow-stamp-rot: -3deg;
+  transform: rotate(-3deg);
+}
+.ow-card-win.on .ow-card-title {
+  animation: ow-stamp 0.42s var(--ow-ease-slam) both;
+}
+.ow-card-lose .ow-card-title {
+  font-size: var(--ow-fs-h1);
+}
+/* coward: the stamped poster beside the verdict */
+.ow-card-coward {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  column-gap: var(--ow-s4);
+  align-items: center;
+  text-align: left;
+}
+.ow-card-coward .ow-card-big {
+  grid-column: 1;
+  grid-row: 1 / span 4;
+  margin: 0;
+}
+.ow-card-coward .ow-card-title {
+  font-size: var(--ow-fs-h1);
+  color: var(--ow-red);
+}
+.ow-card-coward .ow-card-title,
+.ow-card-coward .ow-card-sub,
+.ow-card-coward .ow-card-pay,
+.ow-card-coward .ow-card-hint {
+  grid-column: 2;
+  justify-self: start;
 }
 .ow-card-coward .ow-card-pay {
-  grid-column: 2;
-  color: #ff6a5a;
+  color: var(--ow-bad-ink);
 }
+@media (max-width: 480px) {
+  .ow-card {
+    padding: var(--ow-s3);
+  }
+  .ow-card-coward {
+    column-gap: var(--ow-s3);
+  }
+  .ow-card-coward .ow-card-title,
+  .ow-card-lose .ow-card-title {
+    font-size: var(--ow-fs-h2);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
-  .ow-title {
-    transition-duration: 0.3s;
-  }
-  .ow-cap-call.on {
+  .ow-cap-call.on,
+  .ow-card-win.on .ow-card-title {
     animation: none;
   }
-  .ow-whip.on {
-    animation: none;
-  }
-  .ow-start {
-    animation: none;
+  .ow-card,
+  .ow-card.on {
+    transition: opacity var(--ow-t-mid);
   }
 }

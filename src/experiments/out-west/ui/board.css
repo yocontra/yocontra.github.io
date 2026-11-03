@@ -1,0 +1,188 @@
+/* out west: the leaderboard, the bank's book on paper. Tokens: tokens.css. */
+/* -------------------------------------------- leaderboard: the bank's book */
+.ow-board {
+  position: absolute;
+  inset: 0;
+  z-index: 60;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  background: var(--ow-scrim-soft);
+  padding: max(var(--ow-s3), var(--ow-sai-t)) var(--ow-s3) max(var(--ow-s3), var(--ow-sai-b));
+}
+.ow-board.on {
+  display: flex;
+  animation: ow-fade-in var(--ow-t-mid) both;
+}
+.ow-board-panel {
+  width: min(32rem, 100%);
+  max-height: 100%;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--ow-s3);
+  padding: var(--ow-s4) var(--ow-s4) var(--ow-s3);
+  color: var(--ow-ink);
+  background-color: var(--ow-paper);
+  background-image:
+    radial-gradient(140% 120% at 50% 50%, transparent 55%, rgb(120 84 40 / 0.4)),
+    var(--ow-tex-paper);
+  background-size:
+    100% 100%,
+    256px 256px;
+  outline: 1px solid var(--ow-rule-ink);
+  outline-offset: -8px;
+  box-shadow: var(--ow-shadow-2);
+  animation: ow-paper-in var(--ow-t-mid) var(--ow-ease-out) both;
+  touch-action: pan-y;
+}
+.ow-board-title {
+  margin: 0;
+  font-family: var(--ow-font-display);
+  font-weight: 400;
+  font-size: var(--ow-fs-h2);
+  letter-spacing: 0.04em;
+  line-height: 1;
+  text-align: center;
+  text-transform: uppercase;
+}
+.ow-board-title::after {
+  content: "";
+  display: block;
+  width: 70%;
+  height: 12px;
+  margin: var(--ow-s2) auto 0;
+  background: currentColor;
+  -webkit-mask: var(--ow-orn-rule) center / contain no-repeat;
+  mask: var(--ow-orn-rule) center / contain no-repeat;
+  opacity: 0.7;
+}
+.ow-board-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ow-s2);
+}
+.ow-board-purse {
+  font-family: var(--ow-font-num);
+  font-weight: 500;
+  font-size: var(--ow-fs-h4);
+  font-variant-numeric: lining-nums tabular-nums;
+}
+.ow-board-row {
+  display: flex;
+  gap: var(--ow-s2);
+  flex-wrap: wrap;
+  align-items: flex-end;
+}
+.ow-board-label {
+  flex: 1 1 10rem;
+  display: flex;
+  flex-direction: column;
+  gap: var(--ow-s1);
+  font-weight: 700;
+  font-size: var(--ow-fs-body);
+  font-variant-caps: all-small-caps;
+  letter-spacing: var(--ow-track-label);
+}
+.ow-board-status {
+  min-height: 1.45em;
+  font-size: var(--ow-fs-body);
+  font-style: italic;
+  color: var(--ow-ink-2);
+}
+.ow-board-status[data-kind="error"] {
+  color: var(--ow-bad-ink);
+  font-style: normal;
+}
+.ow-board-status[data-kind="ok"] {
+  color: var(--ow-ink);
+  font-style: normal;
+  font-weight: 600;
+}
+.ow-board-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  border-top: 2px solid var(--ow-ink);
+}
+.ow-board-entry {
+  display: grid;
+  grid-template-columns: 2.25rem 1fr auto 5.5rem;
+  align-items: baseline;
+  gap: var(--ow-s2);
+  min-height: 40px;
+  padding: var(--ow-s2) var(--ow-s1);
+  border-bottom: 1px solid var(--ow-rule-ink);
+}
+.ow-board-entry:nth-child(-n + 3) .ow-board-rank {
+  color: var(--ow-red);
+}
+.ow-board-entry.mine {
+  background: rgb(168 36 27 / 0.14);
+  box-shadow: inset 3px 0 0 var(--ow-red);
+}
+.ow-board-rank {
+  font-family: var(--ow-font-display);
+  font-size: var(--ow-fs-h4);
+  line-height: 1;
+}
+.ow-board-who {
+  font-weight: 600;
+  font-size: var(--ow-fs-lead);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ow-board-total {
+  font-family: var(--ow-font-num);
+  font-weight: 600;
+  font-size: var(--ow-fs-lead);
+  font-variant-numeric: lining-nums tabular-nums;
+  text-align: right;
+}
+.ow-board-date {
+  font-size: var(--ow-fs-small);
+  font-variant-numeric: lining-nums;
+  color: var(--ow-ink-3);
+  text-align: right;
+}
+.ow-board-note {
+  font-size: var(--ow-fs-body);
+  font-style: italic;
+  color: var(--ow-ink-2);
+}
+.ow-board-panel .ow-btn {
+  align-self: center;
+  color: var(--ow-ink);
+  background: transparent;
+  border-color: var(--ow-ink-2);
+  box-shadow:
+    inset 0 0 0 3px transparent,
+    inset 0 0 0 4px var(--ow-rule-ink);
+}
+.ow-board-panel .ow-btn:hover {
+  background: rgb(29 20 12 / 0.08);
+}
+.ow-board-panel .ow-btn-primary {
+  color: #fff6e6;
+  background-color: var(--ow-red);
+  border-color: var(--ow-red-lo);
+}
+.ow-board-panel .ow-btn:focus-visible {
+  outline-color: var(--ow-red);
+}
+@media (max-width: 480px) {
+  .ow-board-entry {
+    grid-template-columns: 2rem 1fr auto;
+  }
+  .ow-board-date {
+    display: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ow-board.on,
+  .ow-board-panel {
+    animation: none;
+  }
+}

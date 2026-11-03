@@ -1,0 +1,260 @@
+/*
+ * out west design tokens: type, colour, space, surfaces and motion. Documented in ui/type.ts.
+ * Every screen (and the Frontier HUD) builds from these; nothing hard-codes a font or a colour.
+ *
+ * Faces are self-hosted (fontsource, latin subsets): Ultra (display), Rye (ornate),
+ * EB Garamond Variable (text, small caps), Oswald Variable (numerals).
+ * Art lives in /experiments/out-west/ui/ (paper, poster stock, wood, leather, smoke, seal, woodcut,
+ * ornaments, torn edge). Light comes from the top left everywhere.
+ */
+@import "@fontsource/ultra/latin-400.css";
+@import "@fontsource/rye/latin-400.css";
+@import "@fontsource-variable/eb-garamond/wght.css";
+@import "@fontsource-variable/eb-garamond/wght-italic.css";
+@import "@fontsource-variable/oswald/wght.css";
+
+:root {
+  /* ------------------------------------------------------------ type */
+  --ow-font-display: "Ultra", "Rockwell Extra Bold", rockwell, georgia, serif;
+  --ow-font-ornate: "Rye", "Ultra", georgia, serif;
+  --ow-font-text: "EB Garamond Variable", garamond, "Iowan Old Style", georgia, serif;
+  --ow-font-num: "Oswald Variable", "Arial Narrow", "Helvetica Neue", sans-serif;
+  /* major third on 16 px; nothing under 13 px */
+  --ow-fs-micro: 0.8125rem;
+  --ow-fs-small: 0.875rem;
+  --ow-fs-body: 1rem;
+  --ow-fs-lead: 1.125rem;
+  --ow-fs-h4: 1.25rem;
+  --ow-fs-h3: 1.5rem;
+  --ow-fs-h2: 2rem;
+  --ow-fs-h1: 2.5rem;
+  --ow-fs-display: clamp(2.5rem, 9vw, 4rem);
+  --ow-fs-hero: clamp(3.5rem, 14vw, 6rem);
+  --ow-track-display: 0.02em;
+  --ow-track-label: 0.1em;
+  --ow-track-num: 0.02em;
+
+  /* ---------------------------------------------------------- colour */
+  --ow-paper: #ecdfc2;
+  --ow-paper-2: #dccaa0;
+  --ow-paper-edge: #a8875a;
+  --ow-ink: #1d140c;
+  --ow-ink-2: #4a3726;
+  --ow-ink-3: #6b5540;
+  --ow-red: #a8241b;
+  --ow-red-hi: #c8382a;
+  --ow-red-lo: #6e140e;
+  --ow-brass: #d2ad5c;
+  --ow-brass-hi: #f0d898;
+  --ow-brass-lo: #7c5a24;
+  --ow-bone: #efe4cc;
+  --ow-bone-2: rgb(239 228 204 / 0.72);
+  --ow-bone-3: rgb(239 228 204 / 0.5);
+  --ow-night: #120c08;
+  --ow-scrim: rgb(14 9 6 / 0.86);
+  --ow-scrim-soft: rgb(14 9 6 / 0.6);
+  --ow-rule: rgb(239 228 204 / 0.22);
+  --ow-rule-ink: rgb(29 20 12 / 0.28);
+  --ow-good: #e4c46e;
+  --ow-bad: #ef7a62;
+  --ow-bad-ink: #9c2016;
+  /* rarity, in period inks */
+  --ow-r-starter: #b9ab90;
+  --ow-r-common: #d9cfb8;
+  --ow-r-uncommon: #8fbf72;
+  --ow-r-rare: #7aa4e0;
+  --ow-r-legendary: #e8b443;
+  --ow-r-reward: #c99ae6;
+
+  /* ----------------------------------------------------------- space */
+  --ow-s1: 4px;
+  --ow-s2: 8px;
+  --ow-s3: 16px;
+  --ow-s4: 24px;
+  --ow-s5: 32px;
+  --ow-s6: 48px;
+  --ow-s7: 64px;
+  --ow-tap: 44px;
+  --ow-radius: 2px;
+  --ow-sai-t: env(safe-area-inset-top, 0px);
+  --ow-sai-r: env(safe-area-inset-right, 0px);
+  --ow-sai-b: env(safe-area-inset-bottom, 0px);
+  --ow-sai-l: env(safe-area-inset-left, 0px);
+
+  /* --------------------------------------------------------- texture */
+  --ow-tex-paper: url("/experiments/out-west/ui/paper.webp");
+  --ow-tex-poster: url("/experiments/out-west/ui/poster.webp");
+  --ow-tex-wood: url("/experiments/out-west/ui/wood.webp");
+  --ow-tex-leather: url("/experiments/out-west/ui/leather.webp");
+  --ow-tex-smoke: url("/experiments/out-west/ui/smoke.webp");
+  --ow-img-seal: url("/experiments/out-west/ui/seal.webp");
+  --ow-img-woodcut: url("/experiments/out-west/ui/duel-woodcut.webp");
+  --ow-orn-corner: url("/experiments/out-west/ui/corner.svg");
+  --ow-orn-rule: url("/experiments/out-west/ui/rule.svg");
+  --ow-mask-torn: url("/experiments/out-west/ui/torn.svg");
+
+  /* ---------------------------------------------------------- shadow */
+  --ow-shadow-1: 0 2px 6px rgb(0 0 0 / 0.35);
+  --ow-shadow-2: 0 12px 32px rgb(0 0 0 / 0.55);
+  --ow-text-shadow: 0 1px 0 rgb(0 0 0 / 0.9), 0 2px 8px rgb(0 0 0 / 0.6);
+  --ow-letterpress: 0 1px 0 rgb(255 248 230 / 0.35);
+
+  /* ---------------------------------------------------------- motion */
+  --ow-ease-out: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --ow-ease-in-out: cubic-bezier(0.7, 0, 0.2, 1);
+  --ow-ease-slam: cubic-bezier(0.2, 1.5, 0.4, 1);
+  --ow-t-fast: 150ms;
+  --ow-t-mid: 280ms;
+  --ow-t-slow: 600ms;
+}
+
+/* --------------------------------------------------------------- role classes */
+.ow-t-display {
+  font-family: var(--ow-font-display);
+  font-weight: 400;
+  letter-spacing: var(--ow-track-display);
+  text-transform: uppercase;
+  line-height: 0.95;
+  font-kerning: normal;
+}
+.ow-t-ornate {
+  font-family: var(--ow-font-ornate);
+  font-weight: 400;
+  letter-spacing: 0.04em;
+  line-height: 1;
+}
+.ow-t-label {
+  font-family: var(--ow-font-text);
+  font-weight: 600;
+  font-variant-caps: all-small-caps;
+  letter-spacing: var(--ow-track-label);
+  text-transform: none;
+}
+.ow-t-body {
+  font-family: var(--ow-font-text);
+  font-weight: 500;
+  font-size: var(--ow-fs-body);
+  line-height: 1.45;
+  letter-spacing: 0;
+  text-transform: none;
+  font-variant-numeric: oldstyle-nums proportional-nums;
+}
+.ow-t-num {
+  font-family: var(--ow-font-num);
+  font-weight: 500;
+  letter-spacing: var(--ow-track-num);
+  font-variant-numeric: lining-nums tabular-nums;
+}
+
+/* --------------------------------------------------------------- surfaces */
+/* A printed paper document: posters, the ledger, receipts, the board. */
+.ow-paper {
+  color: var(--ow-ink);
+  background-color: var(--ow-paper);
+  background-image:
+    radial-gradient(120% 90% at 30% 20%, rgb(255 250 236 / 0.35), transparent 60%),
+    radial-gradient(140% 120% at 50% 50%, transparent 55%, rgb(120 84 40 / 0.35)),
+    var(--ow-tex-paper);
+  background-size:
+    100% 100%,
+    100% 100%,
+    256px 256px;
+}
+/* The dark menu sheet: charred paper, like a book's endpapers. */
+.ow-smoke {
+  color: var(--ow-bone);
+  background-color: var(--ow-night);
+  background-image:
+    radial-gradient(120% 100% at 30% 0%, rgb(90 52 26 / 0.28), transparent 60%), var(--ow-tex-smoke);
+  background-size:
+    100% 100%,
+    384px 384px;
+}
+.ow-wood {
+  color: var(--ow-bone);
+  background-color: #2a1b11;
+  background-image:
+    linear-gradient(180deg, rgb(255 230 190 / 0.08), transparent 30%, rgb(0 0 0 / 0.35)),
+    var(--ow-tex-wood);
+  background-size:
+    100% 100%,
+    320px 320px;
+}
+.ow-leather {
+  color: var(--ow-bone);
+  background-color: #2b1a10;
+  background-image:
+    radial-gradient(120% 120% at 25% 0%, rgb(255 210 160 / 0.1), transparent 55%),
+    var(--ow-tex-leather);
+  background-size:
+    100% 100%,
+    256px 256px;
+}
+/* a rule ornament (centre diamond) in the current colour */
+.ow-orn-rule {
+  display: block;
+  width: min(100%, 22rem);
+  height: 12px;
+  margin-inline: auto;
+  background: currentColor;
+  -webkit-mask: var(--ow-orn-rule) center / contain no-repeat;
+  mask: var(--ow-orn-rule) center / contain no-repeat;
+  opacity: 0.7;
+}
+.ow-icon {
+  display: inline-block;
+  width: 1em;
+  height: 1em;
+  flex: none;
+  vertical-align: -0.14em;
+}
+
+/* --------------------------------------------------------------- motion */
+@keyframes ow-stamp {
+  0% {
+    opacity: 0;
+    transform: scale(2.4) rotate(var(--ow-stamp-rot, -8deg));
+  }
+  60% {
+    opacity: 1;
+    transform: scale(0.94) rotate(var(--ow-stamp-rot, -8deg));
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1) rotate(var(--ow-stamp-rot, -8deg));
+  }
+}
+@keyframes ow-paper-in {
+  from {
+    opacity: 0;
+    transform: translateY(16px) rotate(-0.6deg);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes ow-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@keyframes ow-breathe {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --ow-t-fast: 1ms;
+    --ow-t-mid: 1ms;
+    --ow-t-slow: 1ms;
+  }
+}

@@ -17,6 +17,7 @@ import {
 } from '../data/catalog.ts'
 import { money } from '../data/economy.ts'
 import { buyItem, fetchStore, saveLoadout } from '../net/api.ts'
+import { type IconName, icon } from './icons.ts'
 import { button, confirmSheet, el, swallow } from './sheet.ts'
 
 const SLOT_TABS: readonly { slot: Slot; label: string }[] = [
@@ -30,6 +31,18 @@ const SLOT_TABS: readonly { slot: Slot; label: string }[] = [
   { slot: 'drawSound', label: 'Draw sounds' },
   { slot: 'saddlebag', label: 'Saddlebags' },
 ]
+
+const SLOT_ICON: Record<Slot, IconName> = {
+  hat: 'hat',
+  gun: 'revolver',
+  outfit: 'coat',
+  extra: 'badge',
+  spurs: 'spurs',
+  holster: 'holster',
+  frame: 'bounty',
+  drawSound: 'dynamite',
+  saddlebag: 'money',
+}
 
 const RARITY_LABEL: Record<CatalogItem['rarity'], string> = {
   starter: 'Starter',
@@ -83,8 +96,9 @@ export class Outfitter {
     const tabs = el('div', 'ow-store-tabs', this.root)
     tabs.setAttribute('role', 'tablist')
     for (const t of SLOT_TABS) {
-      const b = el('button', 'ow-store-tab', tabs, t.label)
+      const b = el('button', 'ow-store-tab', tabs)
       b.type = 'button'
+      b.append(icon(SLOT_ICON[t.slot]), t.label)
       b.setAttribute('role', 'tab')
       b.addEventListener('click', (e) => {
         e.stopPropagation()
@@ -128,9 +142,13 @@ export class Outfitter {
       b.setAttribute('aria-selected', String(s === slot))
     }
     const me = this.deps.me()
-    this.purseEl.textContent = me
-      ? `${money(me.purse)} · Lv ${me.level}`
-      : 'Signed out · try on only'
+    this.purseEl.replaceChildren()
+    this.purseEl.classList.toggle('guest', !me)
+    if (me) {
+      this.purseEl.append(icon('money'), `${money(me.purse)} · Lv ${me.level}`)
+    } else {
+      this.purseEl.textContent = 'Signed out · try on only'
+    }
     this.list.replaceChildren()
     const eq = this.equipped
     for (const item of this.items.filter((i) => i.slot === slot)) {
@@ -147,6 +165,7 @@ export class Outfitter {
     const b = el('button', `ow-item r-${item.rarity}`, this.list)
     b.type = 'button'
     b.classList.toggle('picked', this.picked?.id === item.id)
+    b.append(icon(SLOT_ICON[item.slot]))
     el('span', 'ow-item-rarity', b, RARITY_LABEL[item.rarity])
     el('span', 'ow-item-name', b, item.name)
     let tag: string

@@ -8,7 +8,8 @@ import { itemById, normalizeLoadout } from '../data/catalog.ts'
 import { money } from '../data/economy.ts'
 import { levelProgress, levelRewards, titleFor } from '../data/progression.ts'
 import { FRAME_COLORS } from '../scene/loadout.ts'
-import { button, el, signedMoney, swallow } from './sheet.ts'
+import { type IconName, icon } from './icons.ts'
+import { button, countUp, el, setBar, signedMoney, swallow } from './sheet.ts'
 
 const KIND_HEAD: Record<Poster['kind'], string> = {
   human: 'Wanted',
@@ -19,16 +20,27 @@ const KIND_HEAD: Record<Poster['kind'], string> = {
 
 const OUTLAW_NAME = /outlaw/iu
 
-/** A wanted poster in its frame: name, level, live bounty, streak and kit. */
+const KIT_ICON: Record<'hat' | 'gun' | 'outfit' | 'extra', IconName> = {
+  hat: 'hat',
+  gun: 'revolver',
+  outfit: 'coat',
+  extra: 'badge',
+}
+
+/** A wanted poster in its frame: name, level, live bounty, streak and kit, printed on torn stock. */
 export function posterEl(p: Poster, side: 'you' | 'them'): HTMLElement {
   const l = normalizeLoadout(p.loadout)
   const card = el('div', `ow-wanted ow-wanted-${side}`)
   card.dataset.kind = p.kind
   card.style.setProperty('--frame', FRAME_COLORS[l.frame] ?? '#8a6a42')
-  el('div', 'ow-wanted-head', card, KIND_HEAD[p.kind])
-  el('div', 'ow-wanted-name', card, p.name)
-  el('div', 'ow-wanted-meta', card, `Lv ${p.level} · ${titleFor(p.level)}`)
-  el('div', 'ow-wanted-bounty', card, money(p.bounty))
+  const sheet = el('div', 'ow-wanted-sheet', card)
+  el('div', 'ow-wanted-head', sheet, KIND_HEAD[p.kind])
+  el('div', 'ow-wanted-sub', sheet, p.kind === 'ghost' ? 'A recorded gun' : 'Dead or alive')
+  el('div', 'ow-wanted-name', sheet, p.name)
+  el('div', 'ow-wanted-meta', sheet, `Level ${p.level} · ${titleFor(p.level)}`)
+  const bounty = el('div', 'ow-wanted-bounty', sheet)
+  el('span', 'ow-wanted-amount', bounty, money(p.bounty))
+  el('span', 'ow-wanted-reward', bounty, 'Reward')
   const notes: string[] = []
   if (p.streak > 1) {
     notes.push(`${p.streak}-win streak`)
@@ -36,18 +48,17 @@ export function posterEl(p: Poster, side: 'you' | 'them'): HTMLElement {
   if (p.cowardice > 0) {
     notes.push(`${p.cowardice} cowardice`)
   }
-  if (p.kind === 'ghost') {
-    notes.push('a recorded gunslinger')
-  }
   if (p.kind === 'outlaw' && !OUTLAW_NAME.test(p.name)) {
     notes.push('a town outlaw')
   }
-  el('div', 'ow-wanted-notes', card, notes.join(' · ') || 'clean record')
-  const kit = el('ul', 'ow-wanted-kit', card)
-  for (const id of [l.hat, l.gun, l.outfit, l.extra]) {
+  el('div', 'ow-wanted-notes', sheet, notes.join(' · ') || 'Clean record')
+  const kit = el('ul', 'ow-wanted-kit', sheet)
+  for (const slot of ['hat', 'gun', 'outfit', 'extra'] as const) {
+    const id = l[slot]
     const item = id ? itemById(id) : undefined
     if (item && item.source !== 'starter') {
-      el('li', '', kit, item.name)
+      const li = el('li', '', kit)
+      li.append(icon(KIT_ICON[slot]), item.name)
     }
   }
   if (kit.children.length === 0) {
@@ -92,8 +103,8 @@ function settlementLines(panel: HTMLElement, s: Settlement | null, pending: stri
   }
   const total = el('li', 'ow-results-total', list)
   el('span', '', total, s.streak > 1 ? `Total · ${s.streak}-win streak` : 'Total')
-  el('b', s.delta < 0 ? 'neg' : 'pos', total, signedMoney(s.delta))
-  el('i', '', total, `+${s.xp} XP`)
+  countUp(el('b', s.delta < 0 ? 'neg' : 'pos', total), { from: 0, to: s.delta }, signedMoney, 1100)
+  countUp(el('i', '', total), { from: 0, to: s.xp }, (n) => `+${n} XP`, 1100)
   if (s.pairFactor < 1) {
     el(
       'li',
@@ -103,7 +114,8 @@ function settlementLines(panel: HTMLElement, s: Settlement | null, pending: stri
     )
   }
   if (s.purse !== null) {
-    el('li', 'ow-results-purse', list, `Purse ${money(s.purse)}`)
+    const purse = el('li', 'ow-results-purse', list)
+    countUp(purse, { from: s.purse - s.delta, to: s.purse }, (n) => `Purse ${money(n)}`, 1100)
   }
 }
 
@@ -124,9 +136,10 @@ export class ResultsPanel {
     this.root.setAttribute('role', 'dialog')
     this.root.setAttribute('aria-label', v.title)
     swallow(this.root)
-    const panel = el('div', 'ow-hub-panel ow-results-panel', this.root)
+    const panel = el('div', 'ow-hub-panel ow-paper-doc ow-results-panel', this.root)
+    el('div', 'ow-results-kicker', panel, 'Bank of Perdition · Receipt')
     el('h2', 'ow-results-title', panel, v.title)
-    el('p', 'ow-hub-note', panel, v.sub)
+    el('p', 'ow-hub-note ow-results-sub', panel, v.sub)
     const draws = el('div', 'ow-results-draws', panel)
     const cell = (who: string, t: number | null): void => {
       const c = el('div', 'ow-results-draw', draws)
@@ -137,6 +150,7 @@ export class ResultsPanel {
     cell('Him', v.them)
     settlementLines(panel, v.settlement, v.pending ?? 'Settling up with the bank…')
     this.levelBox = el('div', 'ow-results-level', panel)
+    this.levelBox.setAttribute('role', 'status')
     const track = el('div', 'ow-xp', panel)
     this.bar = el('div', 'ow-xp-fill', track)
     this.barLabel = el('div', 'ow-xp-label', panel)
@@ -168,17 +182,17 @@ export class ResultsPanel {
     }
     const a = levelProgress(after)
     const b = before === null ? a : levelProgress(before)
-    const pct = a.next > 0 ? (a.into / a.next) * 100 : 100
-    this.bar.style.width = `${b.level === a.level && before !== null ? (b.into / Math.max(1, b.next)) * 100 : 0}%`
-    requestAnimationFrame(() => {
-      this.bar.style.width = `${pct}%`
-    })
+    const to = a.next > 0 ? a.into / a.next : 1
+    setBar(this.bar, b.level === a.level && before !== null ? b.into / Math.max(1, b.next) : 0)
+    requestAnimationFrame(() => setBar(this.bar, to))
     this.barLabel.textContent =
       a.next > 0 ? `Lv ${a.level} · ${a.into} / ${a.next} XP` : `Lv ${a.level} · max level`
     this.levelBox.replaceChildren()
     if (a.level > b.level) {
-      el('b', '', this.levelBox, `Level up · Lv ${a.level} ${titleFor(a.level)}`)
-      el('span', '', this.levelBox, ` +${money(levelRewards(b.level, a.level))}`)
+      el('span', 'ow-results-seal', this.levelBox, String(a.level))
+      const stamp = el('div', 'ow-results-stamp', this.levelBox)
+      el('b', '', stamp, 'Level up')
+      el('span', '', stamp, `${titleFor(a.level)} · +${money(levelRewards(b.level, a.level))}`)
       this.levelBox.classList.add('on')
     }
   }

@@ -1,6 +1,7 @@
 import { money } from '../data/economy.ts'
 import { type Action, keyLabel } from '../engine/input.ts'
 import type { Settings } from '../save.ts'
+import { icon } from './icons.ts'
 
 function el<K extends keyof HTMLElementTagNameMap>(
   tag: K,
@@ -64,6 +65,7 @@ export class Hud {
   private readonly cardHint: HTMLElement
   private readonly cardPay: HTMLElement
   private readonly purse: HTMLElement
+  private readonly purseText: HTMLElement
   private purseShown = 0
   private purseFrom = 0
   private purseTo = 0
@@ -87,8 +89,10 @@ export class Hud {
     this.root = root
     const hud = el('div', 'ow-hud', root)
     this.counter = el('div', 'ow-counter', hud)
-    this.purse = el('div', 'ow-purse', hud, money(0))
+    this.purse = el('div', 'ow-purse', hud)
     this.purse.setAttribute('aria-label', 'Purse')
+    this.purse.append(icon('money'))
+    this.purseText = el('span', '', this.purse, money(0))
     this.pauseBtn = el('button', 'ow-pause', hud)
     this.pauseBtn.type = 'button'
     this.pauseBtn.setAttribute('aria-label', 'Pause')
@@ -212,7 +216,7 @@ export class Hud {
       this.purseTo = total
       this.purseFrom = total
       this.purseT = 1
-      this.purse.textContent = money(total)
+      this.purseText.textContent = money(total)
       return
     }
     this.purseFrom = this.purseShown
@@ -248,7 +252,7 @@ export class Hud {
       this.purseT = Math.min(1, this.purseT + dtMs / 1100)
       const k = 1 - (1 - this.purseT) ** 3
       this.purseShown = Math.round(this.purseFrom + (this.purseTo - this.purseFrom) * k)
-      this.purse.textContent = money(this.purseShown)
+      this.purseText.textContent = money(this.purseShown)
       if (this.purseT >= 1) {
         this.purse.classList.remove('gain', 'loss')
       }
@@ -291,7 +295,7 @@ export class Hud {
     const m = this.menu
     m.innerHTML = ''
     m.classList.add('on')
-    el('h2', 'ow-menu-title', m, 'PAUSED')
+    el('h2', 'ow-menu-title', m, 'Paused')
     const list = el('div', 'ow-menu-list', m)
     const toggle = (key: keyof Omit<Settings, 'keys'>, label: string, hint: string) => {
       const row = el('label', 'ow-toggle', list)
@@ -311,7 +315,7 @@ export class Hud {
     toggle('assist', 'Assist', '+150 ms for every outlaw. Noted on the ledger.')
     toggle('mono', 'Mono audio', 'Fold the mix to one channel.')
     const keys = el('div', 'ow-keys', m)
-    el('div', 'ow-keys-title', keys, 'KEYS (click to remap)')
+    el('div', 'ow-keys-title', keys, 'Keys · click to remap')
     const actions: [Action, string][] = [
       ['walk', 'Walk'],
       ['fire', 'Draw / fire'],
@@ -366,7 +370,7 @@ export class Hud {
     const e = this.end
     e.innerHTML = ''
     e.classList.add('on')
-    el('h1', 'ow-end-line', e, 'YOU’RE THE FASTEST HAND IN THE WEST!')
+    el('h1', 'ow-end-line', e, 'You’re the fastest hand in the West!')
     if (stats.cowardice >= 10) {
       el('div', 'ow-end-title', e, 'The Yellowest Hand in the West')
     }

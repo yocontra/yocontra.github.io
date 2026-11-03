@@ -15,7 +15,7 @@ import type { Outlaw } from '../data/outlaws.ts'
 import type { Assets } from '../engine/assets.ts'
 import { castActor } from './cast.ts'
 
-const SIZE = 320
+const SIZE = 384
 
 /**
  * Mugshots for the wanted posters: each outlaw's real model, rendered once
@@ -128,14 +128,10 @@ function printPortrait(px: Uint8Array, seed: number): HTMLCanvasElement {
     return c
   }
   const rnd = rand(seed * 977 + 3)
-  ctx.fillStyle = '#e4d1a6'
+  // white: the poster multiplies this print onto its own paper stock
+  ctx.fillStyle = '#fff'
   ctx.fillRect(0, 0, N, N)
-  // paper grain
-  for (let k = 0; k < 2200; k++) {
-    ctx.fillStyle = `rgba(110,80,40,${rnd() * 0.06})`
-    ctx.fillRect(rnd() * N, rnd() * N, 1 + rnd() * 2, 1 + rnd() * 2)
-  }
-  const cell = 4
+  const cell = 3
   const plate = (ox: number, oy: number, color: string, gain: number) => {
     ctx.fillStyle = color
     for (let y = 0; y < N; y += cell) {
@@ -191,8 +187,14 @@ function printPortrait(px: Uint8Array, seed: number): HTMLCanvasElement {
     }
   }
   ctx.putImageData(img, 0, 0)
+  // an engraver's oval vignette: the print fades into the paper instead of ending at a hard edge
+  const v = ctx.createRadialGradient(N / 2, N * 0.44, N * 0.3, N / 2, N * 0.5, N * 0.62)
+  v.addColorStop(0, 'rgba(255,255,255,0)')
+  v.addColorStop(1, 'rgba(255,255,255,0.92)')
+  ctx.fillStyle = v
+  ctx.fillRect(0, 0, N, N)
   // ink wear: a few pale scratches
-  ctx.strokeStyle = 'rgba(228,209,166,0.5)'
+  ctx.strokeStyle = 'rgba(255,255,255,0.5)'
   for (let k = 0; k < 6; k++) {
     ctx.lineWidth = 0.5 + rnd()
     ctx.beginPath()

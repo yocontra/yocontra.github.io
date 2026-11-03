@@ -4,7 +4,8 @@
  */
 import { GHOST_FALLBACK_MS } from '../contract/duel.ts'
 import { type QueueMatch, QueueSearch, type QueueStatus } from '../net/queue.ts'
-import { button, el, swallow } from './sheet.ts'
+import { icon } from './icons.ts'
+import { button, el, setBar, swallow } from './sheet.ts'
 
 export interface QueueSheetOpts {
   /** A fresh Turnstile token, or null when the check failed. */
@@ -30,7 +31,7 @@ export class QueueSheet {
     this.root.setAttribute('aria-label', 'Bounty Hunt queue')
     swallow(this.root)
     const panel = el('div', 'ow-hub-panel ow-sheet-panel', this.root)
-    el('h2', 'ow-hub-h', panel, 'Bounty Hunt')
+    el('h2', 'ow-hub-h', panel).append(icon('bounty'), 'Bounty Hunt')
     this.line = el('p', 'ow-queue-line', panel, 'Checking you’re no bot…')
     this.line.setAttribute('aria-live', 'polite')
     const track = el('div', 'ow-xp ow-queue-track', panel)
@@ -76,7 +77,7 @@ export class QueueSheet {
     this.detail.textContent = `Within ±${s.levelWindow} levels · ${rating} · ${others} other${
       others === 1 ? '' : 's'
     } waiting`
-    this.bar.style.width = `${Math.min(100, (s.waitedMs / GHOST_FALLBACK_MS) * 100)}%`
+    setBar(this.bar, s.waitedMs / GHOST_FALLBACK_MS)
     this.ghostBtn.hidden = !s.ghostButton
   }
 
