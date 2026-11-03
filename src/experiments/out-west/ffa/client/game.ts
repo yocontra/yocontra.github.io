@@ -608,6 +608,7 @@ export class FrontierGame {
         ),
         flags: ownFlags(s.flags, s.protectTicks > 0),
         self: true,
+        weapon: this.net.weapon.weapon,
       })
     }
     for (const r of this.remotes) {

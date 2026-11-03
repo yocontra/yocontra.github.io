@@ -22,9 +22,11 @@ import {
   type Color,
   Group,
   InstancedMesh,
+  type Material,
   Matrix4,
   Mesh,
   MeshBasicMaterial,
+  type Object3D,
   PlaneGeometry,
   Quaternion,
   RingGeometry,
@@ -43,13 +45,19 @@ import {
   EF_HATLESS,
   EF_HOLSTERED,
   EF_PROTECTED,
+  SHOT_RIFLE,
+  SHOT_SHOTGUN,
+  WEAPON_REVOLVER,
+  WEAPON_RIFLE,
+  WEAPON_SHOTGUN,
 } from '../../contract/town.ts'
 import type { BodyKey } from '../../data/outlaws.ts'
 import type { Assets } from '../../engine/assets.ts'
 import type { Actor, Clip } from '../../scene/actor.ts'
 import { castActor } from '../../scene/cast.ts'
 import { lodGeometry } from '../../scene/lod.ts'
-import { propDef, propObject } from '../../scene/props.ts'
+import { type PropDef, propDef, propObject } from '../../scene/props.ts'
+import { RIFLE_ROUNDS, SHOTGUN_SHELLS } from '../sim/constants.ts'
 import {
   baseVat,
   headAt,
@@ -60,6 +68,7 @@ import {
   vatFrame,
 } from './crowd/vat.ts'
 import type { PlayerLook } from './looks.ts'
+import { kitMaterial, SHOTGUN_MUZZLE, shotgunMesh } from './shotgun.ts'
 
 const VAT_CLIPS: Clip[] = ['Idle', 'Run', 'Idle_Gun_Pointing', 'Death']
 const NEAR_FAST_M = 12
@@ -73,6 +82,14 @@ const MAX_ACTORS_EXTRA = 6
 const PREBUILD_RING = 4
 /** Characters read 25% bigger than life from the top-down camera (visual only; collision is the sim's). */
 export const READ_SCALE = 1.25
+/** Map weapons in the hand: where the grip sits in the revolver's slot, and how big they read. */
+const SHOTGUN_GRIP = { x: 0.06, y: -0.02, z: 0 }
+const SHOTGUN_HELD_SCALE = 1.15
+const RIFLE_LENGTH = 1.1
+const RIFLE_GRIP = { x: 0.12, y: -0.16, z: 0 }
+/** The rifle prop's muzzle along its length and height (prop metres, from its centre and foot). */
+const RIFLE_MUZZLE_Z = 0.55
+const RIFLE_MUZZLE_Y = 0.2
 const ARM_BONES = /^(?<bone>Shoulder|UpperArm|LowerArm|Index|Middle|Ring|Pinky|Thumb)\d?R$/u
 
 /** What the crowd needs to know about one player this frame. */
@@ -87,6 +104,15 @@ export interface CrowdPlayer {
   anim: number
   flags: number
   self: boolean
+  /** `WEAPON_*` in hand, when known for sure (your own, from the self block). */
+  weapon?: number
+}
+
+/** A map weapon held in the revolver's hand slot (barrel along the slot's +X, like the revolver). */
+interface LongGun {
+  obj: Object3D
+  /** Muzzle in `obj`'s own space. */
+  muzzle: Vector3
 }
 
 interface Member {
@@ -106,6 +132,17 @@ interface Member {
   lastSeen: number
   caster: boolean
   recoil: number
+  /**
+   * `WEAPON_*` he holds, as the events tell it (only your own is in the snapshot): a map weapon
+   * from his pickup, a shot's flags, its rounds counted down; back to the revolver when they run
+   * out, or he dies.
+   */
+  weapon: number
+  rounds: number
+  shotgun: LongGun | null
+  rifle: LongGun | null
+  /** The map weapon in his hand right now, if any (for the muzzle). */
+  held: LongGun | null
 }
 
 function blobTexture(): CanvasTexture {
@@ -148,6 +185,8 @@ export class Crowd {
   private readonly blobs: InstancedMesh
   readonly ring: Mesh
   private readonly gun: Group | null
+  private readonly kit: Material
+  private readonly rifleDef: PropDef | null
   /** Skinned cap (12 floor, 16 medium/high). */
   near: number
   private readonly order: CrowdPlayer[] = []
@@ -182,6 +221,50 @@ export class Crowd {
     this.root.add(this.ring)
     const def = propDef(assets.props, 'revolver', 0.32)
     this.gun = def ? propObject(def) : null
+    this.kit = kitMaterial(assets.props)
+    this.rifleDef = propDef(assets.props, 'rifle', RIFLE_LENGTH)
+  }
+
+  /** He took a map weapon (`EV_PICKUP_TAKEN` of a shotgun or rifle spot). */
+  armed(id: number, weapon: number): void {
+    const m = this.members.get(id)
+    if (m) {
+      m.weapon = weapon
+      m.rounds = weapon === WEAPON_SHOTGUN ? SHOTGUN_SHELLS : RIFLE_ROUNDS
+    }
+  }
+
+  /** He fired (`EV_SHOT` flags): the gun it came from, a map weapon's round spent. */
+  fired(id: number, flags: number): void {
+    const m = this.members.get(id)
+    if (!m) {
+      return
+    }
+    let w = WEAPON_REVOLVER
+    if (flags & SHOT_SHOTGUN) {
+      w = WEAPON_SHOTGUN
+    } else if (flags & SHOT_RIFLE) {
+      w = WEAPON_RIFLE
+    }
+    if (w !== m.weapon) {
+      // joined late or missed the pickup: assume a fresh one
+      this.armed(id, w)
+    }
+    if (w !== WEAPON_REVOLVER) {
+      m.rounds--
+      if (m.rounds <= 0) {
+        m.weapon = WEAPON_REVOLVER
+      }
+    }
+  }
+
+  /** Back to the revolver (died, respawned): map weapons are lost with the life. */
+  disarm(id: number): void {
+    const m = this.members.get(id)
+    if (m) {
+      m.weapon = WEAPON_REVOLVER
+      m.rounds = 0
+    }
   }
 
   /** Register (or re-skin) a player. */
@@ -210,6 +293,11 @@ export class Crowd {
       lastSeen: 0,
       caster: false,
       recoil: 0,
+      weapon: have?.weapon ?? WEAPON_REVOLVER,
+      rounds: have?.rounds ?? 0,
+      shotgun: null,
+      rifle: null,
+      held: null,
     })
     this.assets.body(look.look.base).catch(() => undefined)
     this.ensureVat(look.look.base)
@@ -256,6 +344,9 @@ export class Crowd {
     m.arm = null
     m.full = null
     m.lod1 = null
+    m.shotgun = null
+    m.rifle = null
+    m.held = null
   }
 
   private pending: Member | null = null
@@ -317,6 +408,12 @@ export class Crowd {
     holder.add(pivot)
     this.root.add(holder)
     actor.draw()
+    // The revolver's hand slot (it was just drawn into it) carries the map weapons too.
+    const hand = actor.gun?.parent
+    if (hand) {
+      m.shotgun = this.longGun(hand, 'shotgun')
+      m.rifle = this.longGun(hand, 'rifle')
+    }
     actor.play('Idle_Gun', 0)
     m.actor = actor
     m.holder = holder
@@ -332,6 +429,61 @@ export class Crowd {
           m.lod1 = g
         })
         .catch(() => undefined)
+    }
+  }
+
+  /**
+   * One map weapon in a hand slot, hidden until he holds it. One mesh sharing the template's
+   * geometry and material (the shotgun is one draw in the kit material; the rifle its prop's).
+   */
+  private longGun(hand: Object3D, kind: 'shotgun' | 'rifle'): LongGun | null {
+    let obj: Object3D
+    let muzzle: Vector3
+    if (kind === 'shotgun') {
+      obj = shotgunMesh(this.kit)
+      // the wrist in the palm, the gun a touch heavier than life so it reads from the sky
+      obj.position.set(SHOTGUN_GRIP.x, SHOTGUN_GRIP.y, SHOTGUN_GRIP.z)
+      obj.scale.set(SHOTGUN_HELD_SCALE, SHOTGUN_HELD_SCALE * 1.2, SHOTGUN_HELD_SCALE * 1.2)
+      muzzle = SHOTGUN_MUZZLE.clone()
+    } else {
+      if (!this.rifleDef) {
+        return null
+      }
+      // the rifle prop lies along Z, muzzle at +Z; turn it down the slot's +X
+      const inner = propObject(this.rifleDef)
+      inner.rotation.y = Math.PI / 2
+      inner.position.set(RIFLE_GRIP.x, RIFLE_GRIP.y, RIFLE_GRIP.z)
+      obj = new Group()
+      obj.add(inner)
+      muzzle = new Vector3(RIFLE_GRIP.x + RIFLE_MUZZLE_Z, RIFLE_GRIP.y + RIFLE_MUZZLE_Y, 0)
+    }
+    obj.visible = false
+    hand.add(obj)
+    return { obj, muzzle }
+  }
+
+  /**
+   * Put the right gun in his hand: the revolver (drawn or holstered), or a map weapon with the
+   * revolver holstered. A long gun has no holster, so it stays in his hand while he's at ease.
+   */
+  private arm(m: Member, actor: Actor, weapon: number, holstered: boolean): void {
+    let long: LongGun | null = null
+    if (weapon === WEAPON_SHOTGUN) {
+      long = m.shotgun
+    } else if (weapon === WEAPON_RIFLE) {
+      long = m.rifle
+    }
+    m.held = long
+    if (holstered || long) {
+      actor.holsterGun()
+    } else {
+      actor.draw()
+    }
+    if (m.shotgun) {
+      m.shotgun.obj.visible = long === m.shotgun
+    }
+    if (m.rifle) {
+      m.rifle.obj.visible = long === m.rifle
     }
   }
 
@@ -365,6 +517,10 @@ export class Crowd {
     if (m?.actor && m.holder?.parent && m.holder.visible) {
       m.recoil = 1
       m.actor.root.updateWorldMatrix(true, true)
+      const long = m.held
+      if (long) {
+        return out.copy(long.muzzle).applyMatrix4(long.obj.matrixWorld)
+      }
       return m.actor.muzzle(out)
     }
     return out.set(x + Math.cos(aim) * 0.7, 1.35, z + Math.sin(aim) * 0.7)
@@ -506,12 +662,9 @@ export class Crowd {
   }
 
   private animate(m: Member, actor: Actor, p: CrowdPlayer, nowS: number): void {
-    const holstered = (p.flags & EF_HOLSTERED) !== 0
-    if (holstered) {
-      actor.holsterGun()
-    } else {
-      actor.draw()
-    }
+    this.arm(m, actor, p.weapon ?? m.weapon, (p.flags & EF_HOLSTERED) !== 0)
+    // a long gun can't be holstered: he carries it at the ready
+    const holstered = (p.flags & EF_HOLSTERED) !== 0 && !m.held
     const speed = Math.hypot(p.vx, p.vz)
     let clip: Clip = holstered ? 'Idle' : 'Idle_Gun'
     let once = false

@@ -47,6 +47,8 @@ import {
   SHOT_RIFLE,
   SHOT_SHOTGUN,
   SHOT_WALL,
+  WEAPON_RIFLE,
+  WEAPON_SHOTGUN,
 } from '../../contract/town.ts'
 import { haptic } from '../../platform/haptics.ts'
 import type { Crowd } from '../scene/crowd.ts'
@@ -172,6 +174,9 @@ function onPickups(s: Sink, ev: WireEvent, nowS: number): void {
       const spot = TOWN.pickups[ev.spot]
       if (spot && ev.player !== NONE) {
         s.fx.sparkle(spot.x, spot.z, 8)
+        if (spot.kind !== 'dynamite') {
+          s.crowd.armed(ev.player, spot.kind === 'shotgun' ? WEAPON_SHOTGUN : WEAPON_RIFLE)
+        }
         if (ev.player === you) {
           s.hud.toast(PICKUP_TOAST[spot.kind] ?? spot.kind.toUpperCase(), 'gold', 1600)
           play(s, PICKUP_SOUND[spot.kind] ?? 'cocking', null, 0.9)
@@ -377,12 +382,15 @@ export function handleEvent(s: Sink, ev: WireEvent): void {
   switch (ev.type) {
     case EV_SHOT:
       onShot(s, ev)
+      // after the muzzle flash: the last shell puts the revolver back in his hand
+      s.crowd.fired(ev.shooter, ev.flags)
       break
     case EV_DAMAGE:
       onDamage(s, ev)
       break
     case EV_KILL:
       onKill(s, ev)
+      s.crowd.disarm(ev.victim)
       break
     case EV_BAG_DROP: {
       const x = ev.x / POS_SCALE
@@ -422,6 +430,7 @@ export function handleEvent(s: Sink, ev: WireEvent): void {
       }
       break
     case EV_RESPAWN: {
+      s.crowd.disarm(ev.player)
       const p = s.posOf(ev.player)
       if (p) {
         s.fx.dust(p.x, p.z, 10)
