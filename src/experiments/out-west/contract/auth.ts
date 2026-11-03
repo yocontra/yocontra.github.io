@@ -15,7 +15,7 @@
  * | `POST /auth/logout`                | refresh token   | `RefreshRequest` → `{ ok: true }` (clears cookie) |
  * | `POST /auth/reauth/options`        | Bearer          | `{}` → `CeremonyOptions` (own passkeys only)      |
  * | `GET /auth/passkeys`               | Bearer          | → `PasskeyList`                                   |
- * | `POST /auth/passkeys/options`      | Bearer, recent  | `{}` → `CeremonyOptions`                          |
+ * | `POST /auth/passkeys/options`      | Bearer, recent  | `{ proof? }` → `CeremonyOptions`                  |
  * | `POST /auth/passkeys`              | Bearer, recent  | `CeremonyVerify` → `PasskeyList`                  |
  * | `DELETE /auth/passkeys/:id`        | Bearer, recent  | → `PasskeyList` (the last passkey can't go)       |
  * | `POST /auth/app/authorize`         | Bearer          | `AppAuthorizeRequest` → `AppAuthorizeResponse`    |

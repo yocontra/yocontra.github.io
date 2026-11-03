@@ -5,7 +5,7 @@
  *   GET    /account                  → AccountInfo
  *   DELETE /account { proof? }       → { ok: true }    needs a recent ceremony or a reauth proof
  *   GET    /auth/passkeys            → PasskeyList
- *   POST   /auth/passkeys/options    → CeremonyOptions (recent ceremony required)
+ *   POST   /auth/passkeys/options { proof? } → CeremonyOptions (recent ceremony or proof)
  *   POST   /auth/passkeys { challengeId, response } → PasskeyList
  *   DELETE /auth/passkeys/:id { proof? } → PasskeyList (never the last one)
  */
@@ -18,7 +18,7 @@ import {
 } from '../auth/accounts.ts'
 import { clearRefreshCookie } from '../auth/cookie.ts'
 import { LIMITS } from '../auth/rate.ts'
-import { isRecent, isRecord, limited, reauthOk, requireAuth } from '../auth/respond.ts'
+import { isRecord, limited, reauthOk, requireAuth } from '../auth/respond.ts'
 import type { AccessClaims } from '../auth/token.ts'
 import { consumeChallenge, registrationOptions, verifyRegistration } from '../auth/webauthn.ts'
 import type { Env } from '../env.ts'
@@ -78,7 +78,7 @@ const passkeyOptions: Handler = async (request, env, _url, claims) => {
   if (blocked) {
     return blocked
   }
-  if (!isRecent(claims)) {
+  if (!(await reauthOk(env, claims, (await body(request)).proof))) {
     return error(request, env, 403, REAUTH_NEEDED)
   }
   const name = await accountName(env, claims.sub)

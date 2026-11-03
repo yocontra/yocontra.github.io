@@ -15,7 +15,8 @@ async function createProfile(_env: Env, _accountId: string, _name: string): Prom
   return null
 }
 
-// STUB(stream B): replace with B's `accountDeletionStatements` import once it lands.
+// STUB(stream B): replace with `import { accountDeletionStatements } from '../duel/stats.ts'`
+// once stream B's branch is merged into redesign. Same signature.
 function duelDeletionStatements(_env: Env, _accountId: string): D1PreparedStatement[] {
   return []
 }
