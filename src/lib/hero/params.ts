@@ -49,6 +49,8 @@ export interface FrameState {
   velX: number
   velY: number
   time: number
+  /** Flow phase: time integrated with `speed`, so speed changes are continuous. */
+  phase: number
   /** 0 at top of page, 1 once the hero has scrolled out. */
   scroll: number
 }
@@ -67,7 +69,7 @@ export function packUniforms(out: Float32Array, s: FrameState, p: HeroParams): F
   out[7] = s.scroll
   out[8] = p.hue
   out[9] = p.vcr
-  out[10] = p.speed
+  out[10] = s.phase
   out[11] = p.scale
   out[12] = p.warp
   out[13] = p.swirl

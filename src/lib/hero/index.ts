@@ -75,6 +75,7 @@ export async function mountHero(
     velX: 0,
     velY: 0,
     time: 18,
+    phase: 18 * params.speed,
     scroll: 0,
   }
 
@@ -162,6 +163,7 @@ export async function mountHero(
     state.mouseX = nx
     state.mouseY = ny
     state.time += dt / 1000
+    state.phase += (dt / 1000) * params.speed
 
     render()
     if (visible && !document.hidden) raf = requestAnimationFrame(tick)

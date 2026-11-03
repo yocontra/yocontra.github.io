@@ -4,7 +4,10 @@
  *
  * Uniform layout (4 × vec4):
  *   U0 = res.xy, mouse.xy        U1 = vel.xy, time, scroll
- *   U2 = hue, vcr, speed, scale  U3 = warp, swirl, veins, grain
+ *   U2 = hue, vcr, phase, scale  U3 = warp, swirl, veins, grain
+ *
+ * `phase` is the flow time (∫ speed dt), integrated on the CPU so speed changes
+ * never jump the field; `time` is wall-clock and only drives the grain.
  */
 
 export const glslVertex = /* glsl */ `#version 300 es
@@ -71,7 +74,7 @@ void main() {
   float scroll = U[1].w;
   float hue = U[2].x;
   float vcr = U[2].y;
-  float t = time * U[2].z;
+  float t = U[2].z;
 
   vec2 frag = gl_FragCoord.xy;
   vec2 uv = (frag - 0.5 * res) / res.y;
@@ -183,7 +186,7 @@ fn fs(@builtin(position) pos: vec4f) -> @location(0) vec4f {
   let scroll = U.u1.w;
   let hue = U.u2.x;
   let vcr = U.u2.y;
-  let t = time * U.u2.z;
+  let t = U.u2.z;
 
   // WebGPU's framebuffer origin is top-left; flip to match GL.
   let frag = vec2f(pos.x, res.y - pos.y);
