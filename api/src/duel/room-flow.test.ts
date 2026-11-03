@@ -4,6 +4,7 @@ import {
   PACE_MS,
   READY_TIMEOUT_MS,
   RECONNECT_GRACE_MS,
+  REMATCH_WINDOW_MS,
   type RoomServerMessage,
   STALL_AUTO_WALK_MS,
   TURN_MS,
@@ -14,7 +15,7 @@ import type { AiOpponent } from './opponents.ts'
 import { DEAD_HEAT_PAUSE_MS, RoomFlow } from './room-flow.ts'
 import type { FinishedDuel } from './room-types.ts'
 
-function room(ai: (() => AiOpponent) | null = null) {
+function room(ai: (() => AiOpponent) | null = null, settleMs = 0) {
   const clock = new FakeClock()
   const inbox: [RoomServerMessage[], RoomServerMessage[]] = [[], []]
   const settled: FinishedDuel[] = []
@@ -30,7 +31,10 @@ function room(ai: (() => AiOpponent) | null = null) {
       link: () => ({ median: 40, jitter: 0, tcp: 40 }),
       settle: (d) => {
         settled.push(d)
-        return Promise.resolve([null, null])
+        // a slow D1 batch: the results go out `settleMs` after the verdict
+        return settleMs > 0
+          ? new Promise((resolve) => clock.after(settleMs, () => resolve([null, null])))
+          : Promise.resolve([null, null])
       },
       idle: (deadline) => {
         idleUntil = deadline
@@ -221,6 +225,27 @@ describe('room flow: two humans', () => {
     r.flow.message(1, { type: 'rematch' })
     expect(r.flow.rematch).toBe(1)
     expect(r.flow.beat).toBe('cock')
+  })
+
+  it('the rematch window is 20 s from when the results go out, not from the verdict', async () => {
+    expect(REMATCH_WINDOW_MS).toBe(20_000)
+    const r = room(null, 1500)
+    r.toWait()
+    r.flow.message(0, { type: 'shot', draw: r.flow.draw, localMs: null })
+    const verdictAt = r.clock.now()
+    r.clock.advance(1500)
+    await r.flush()
+    const sentAt = verdictAt + 1500
+    expect(r.of(0, 'result')).toHaveLength(1)
+    const votes = r.of(1, 'rematch').at(-1)
+    expect(votes?.type === 'rematch' && votes.deadline).toBe(sentAt + REMATCH_WINDOW_MS)
+    // the room hibernates until then: its alarm is the deadline
+    expect(r.idle()).toBe(sentAt + REMATCH_WINDOW_MS)
+    // a vote 15 s after the results (a 4 s kill cam plus a slow click) still lands
+    r.clock.advance(15_000)
+    r.flow.message(0, { type: 'rematch' })
+    r.flow.message(1, { type: 'rematch' })
+    expect(r.flow.rematch).toBe(1)
   })
 
   it('the rematch window expiring closes the room', async () => {

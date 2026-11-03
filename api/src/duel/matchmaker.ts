@@ -38,7 +38,11 @@ import { roomToken } from './token.ts'
 
 const TICK_MS = 1000
 const GHOST_INDEX_TTL_MS = 5 * 60 * 1000
-const IN_ROOM_TTL_MS = 3 * 60 * 1000
+/**
+ * A safety net if a room never releases its players. Six duels with 20 s rematch windows can run
+ * about four minutes, so this sits above that.
+ */
+const IN_ROOM_TTL_MS = 6 * 60 * 1000
 const PRIORITY_TTL_MS = 60 * 1000
 const DODGE_LIMIT = 3
 const DODGE_WINDOW_MS = 10 * 60 * 1000

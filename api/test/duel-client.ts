@@ -31,6 +31,8 @@ export type Behaviour = {
   /** Vote for a rematch after the first result, and use `rematchReactMs` then. */
   rematch?: boolean
   rematchReactMs?: number
+  /** How long after the first result to vote (default 300 ms). */
+  rematchDelayMs?: number
 }
 
 export class Client {
@@ -151,7 +153,7 @@ export class Client {
       case 'result':
         this.results.push(m)
         if (b.rematch && this.results.length === 1) {
-          setTimeout(() => this.send({ type: 'rematch' }), 300)
+          setTimeout(() => this.send({ type: 'rematch' }), b.rematchDelayMs ?? 300)
         }
         return
       default:

@@ -26,7 +26,8 @@
  *       ─▶ walk: hold to walk; a `pace` every 500 ms while BOTH hold (stall: heckle 6 s, auto 10 s)
  *       ─▶ turn (600 ms) ─▶ wait: 0–2 `cue` fake-outs ─▶ `call` ─▶ send `shot` ─▶ `result`
  *       ─▶ (`deadHeat` ─▶ `suddenDeath` wait ─▶ `call` ─▶ …)
- *       ─▶ rematch window (10 s): both send `rematch` ─▶ `hello` again with `rematch > 0`, no intro
+ *       ─▶ rematch window (20 s from the settled `result`): both send `rematch` ─▶ `hello` again
+ *          with `rematch > 0`, no intro
  * ```
  *
  * Every timed message carries `serverTime` (the server's epoch ms) so the client can show
@@ -49,7 +50,12 @@ export const STALL_AUTO_WALK_MS = 10_000
 export const TURN_MS = 600
 export const JUDGE_TIMEOUT_MS = 1500
 export const RESULT_MS = 4500
-export const REMATCH_WINDOW_MS = 10_000
+/**
+ * How long both players have to vote for a rematch, counted from when the settled `result` is sent
+ * (the `rematch` message carries the deadline). The client plays a 2–4 s kill cam before its results
+ * sheet, so this leaves a good 15 s to read the sheet and click.
+ */
+export const REMATCH_WINDOW_MS = 20_000
 export const MAX_REMATCHES = 5
 export const RECONNECT_GRACE_MS = 5000
 /** The "Duel a ghost now" button appears after this long in the queue. */

@@ -14,6 +14,7 @@ import {
   PACE_MS,
   type Poster,
   PVP_CUES,
+  REMATCH_WINDOW_MS,
   type RoomClientMessage,
   type RoomServerMessage,
   type Seat,
@@ -405,14 +406,14 @@ export class MockRoom {
 
   private rematchWindow(): void {
     this.later(1500, () => {
-      this.setBeat('rematch', 10_000)
+      this.setBeat('rematch', REMATCH_WINDOW_MS)
       for (const seat of [0, 1] as const) {
         if (this.seats[seat].ghost) {
           this.votes[seat] = true
         }
       }
       this.sendVotes()
-      this.later(10_000, () => this.close('timeout'))
+      this.later(REMATCH_WINDOW_MS, () => this.close('timeout'))
     })
   }
 

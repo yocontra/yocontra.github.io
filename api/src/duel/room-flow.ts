@@ -289,8 +289,8 @@ export class RoomFlow {
       this.graceUntil[seat] = null
     }
     const now = this.clock.now()
-    const deadline = now + REMATCH_WINDOW_MS
-    this.setBeat('result', deadline)
+    // provisional: the window really starts when the settled results go out (`afterResult`)
+    this.setBeat('result', now + REMATCH_WINDOW_MS)
     const duel: FinishedDuel = {
       rematch: this.rematch,
       outcome,
@@ -347,6 +347,10 @@ export class RoomFlow {
       this.closeRoom('done')
       return
     }
+    // The window opens now, with the results, not at the verdict: settling (a D1 batch) and the
+    // client's kill cam both come out of it otherwise. `idle` hands the deadline to the host, which
+    // keeps it in storage and sets its alarm there, so a hibernated room wakes at the right time.
+    this.deadline = this.clock.now() + REMATCH_WINDOW_MS
     this.broadcastVotes()
     this.io.idle(this.deadline ?? this.clock.now())
   }
