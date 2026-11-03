@@ -33,7 +33,8 @@ export const career: readonly Role[] = [
     title: 'Consultant',
     years: '2026 — now',
     location: 'Phoenix',
-    blurb: 'Consulting work as part of Trigram.',
+    blurb:
+      'A small collective of senior engineers. I help companies with architecture, infrastructure, and getting products from zero to one.',
   },
   {
     company: 'Apple',
