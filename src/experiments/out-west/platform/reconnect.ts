@@ -23,7 +23,11 @@ export interface ReconnectOptions {
   onDrop?: (reason: string) => void
   /** No more retries: `close()` was not called, but the deadline passed or `url()` gave up. */
   onGiveUp?: (reason: string) => void
-  staleMs?: number
+  /**
+   * Silence that counts as a dead link. A function is read on every check, so a caller can relax
+   * it while the server goes quiet on purpose (e.g. a hibernating room); `Infinity` disables it.
+   */
+  staleMs?: number | (() => number)
   backoffMs?: readonly number[]
   deadlineMs?: number
   binaryType?: BinaryType
@@ -63,7 +67,8 @@ function connection(): NetworkInformationLike | null {
 }
 
 export function openReconnecting(opts: ReconnectOptions): ReconnectingSocket {
-  const staleMs = opts.staleMs ?? DEFAULT_STALE_MS
+  const stale = opts.staleMs ?? DEFAULT_STALE_MS
+  const staleMs = (): number => (typeof stale === 'function' ? stale() : stale)
   const steps = opts.backoffMs ?? DEFAULT_BACKOFF_MS
   const deadlineMs = opts.deadlineMs ?? DEFAULT_DEADLINE_MS
   const isFinal = opts.isFinal ?? defaultFinal
@@ -185,7 +190,7 @@ export function openReconnecting(opts: ReconnectOptions): ReconnectingSocket {
       failingSince = 0
       lastMessage = Date.now()
       staleTimer = setInterval(() => {
-        if (Date.now() - lastMessage > staleMs) {
+        if (Date.now() - lastMessage > staleMs()) {
           schedule('no messages')
         }
       }, STALE_CHECK_MS)

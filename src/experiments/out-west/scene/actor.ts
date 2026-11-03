@@ -71,7 +71,23 @@ export interface ActorOpts {
   mask?: number | undefined
   /** Seed for the subtle per-material colour/roughness variation. */
   seed?: string
+  /** The holster cosmetic (leather colour, tooling, a buscadero drop loop). Looks only. */
+  holster?: HolsterLook | undefined
 }
+
+/**
+ * How a holster looks. Pure leatherwork: the gun's slot, and so the draw, never moves.
+ * - `trim`: a contrasting band at the mouth and the toe (tooled leather).
+ * - `rig`: a buscadero drop loop from the belt down to the holster.
+ */
+export interface HolsterLook {
+  color: number
+  roughness?: number
+  trim?: number
+  rig?: boolean
+}
+
+const PLAIN_HOLSTER: HolsterLook = { color: 0x3a_24_14, roughness: 0.55 }
 
 /** Hat silhouettes from lathe profiles (x = radius, y = height), metres. */
 const HAT_PROFILES: Record<HatKey, [number, number][]> = {
@@ -174,6 +190,41 @@ export function makeHat(key: HatKey, color: number, floor: Floor = { value: 0 })
   // Crumple the brim a touch so it doesn't read as CG-perfect.
   out.rotation.z = (Math.random() - 0.5) * 0.06
   return out
+}
+
+/**
+ * The holster's leather in its slot's frame (the barrel lies along +X, 0.045 up +Y). The body
+ * cylinder is the same for every holster; tooling adds bands, a buscadero rig adds the drop loop
+ * that hangs it from the belt.
+ */
+function holsterParts(look: HolsterLook): Mesh[] {
+  const leather = new MeshStandardMaterial({ color: look.color, roughness: look.roughness ?? 0.55 })
+  const body = new Mesh(new CylinderGeometry(0.03, 0.026, 0.2, 7), leather)
+  body.rotation.z = Math.PI / 2
+  body.position.set(0.13, 0.045, 0)
+  const parts = [body]
+  if (look.trim !== undefined) {
+    const band = new MeshStandardMaterial({ color: look.trim, roughness: 0.4, metalness: 0.3 })
+    for (const [x, r] of [
+      [0.04, 0.032],
+      [0.215, 0.028],
+    ] as const) {
+      const ring = new Mesh(new CylinderGeometry(r, r, 0.016, 7), band)
+      ring.rotation.z = Math.PI / 2
+      ring.position.set(x, 0.045, 0)
+      parts.push(ring)
+    }
+  }
+  if (look.rig) {
+    // a flat strap on the outer face (-Y, away from the leg), from the belt (-X, up the thigh)
+    // down past the mouth of the holster; local X becomes the thickness once rotated
+    const strap = new Mesh(new CylinderGeometry(0.036, 0.036, 0.16, 6, 1), leather)
+    strap.scale.set(0.22, 1, 1)
+    strap.rotation.z = Math.PI / 2
+    strap.position.set(0.02, 0.008, 0)
+    parts.push(strap)
+  }
+  return parts
 }
 
 /**
@@ -342,7 +393,14 @@ export class Actor {
     const clothes = this.dress(fit, opts)
     const pieces = [...bodyPieces(this.model, this.root, body), ...clothes]
     if (opts.gun) {
-      pieces.push(...this.placeHolsters(fit, opts.gun, opts.offGun ?? false, clothes))
+      pieces.push(
+        ...this.placeHolsters(fit, {
+          gun: opts.gun,
+          two: opts.offGun ?? false,
+          clothes,
+          look: opts.holster ?? PLAIN_HOLSTER,
+        }),
+      )
     }
     const drop: Object3D[] = []
     this.model.traverse((o) => {
@@ -561,7 +619,11 @@ export class Actor {
    * the coat if he wears one), riding the thigh bones. The leather is baked
    * into the body mesh; the gun hangs in a slot on the same bone.
    */
-  private placeHolsters(f: Fit, gun: Object3D, two: boolean, clothes: readonly Piece[]): Piece[] {
+  private placeHolsters(
+    f: Fit,
+    o: { gun: Object3D; two: boolean; clothes: readonly Piece[]; look: HolsterLook },
+  ): Piece[] {
+    const { gun, two, clothes, look } = o
     const hips = this.hips
     if (!hips) {
       return []
@@ -586,15 +648,11 @@ export class Actor {
       // slot +Y points toward his body on both sides; the barrel sits 0.045 up +Y
       const x = surface - side * (0.026 + 0.045)
       const slot = this.slotOn(bone, new Vector3(x, y, bp.z + 0.01), q)
-      const leather = new Mesh(
-        new CylinderGeometry(0.03, 0.026, 0.2, 7),
-        new MeshStandardMaterial({ color: 0x3a_24_14, roughness: 0.55 }),
-      )
-      leather.rotation.z = Math.PI / 2
-      leather.position.set(0.13, 0.045, 0)
-      slot.add(leather)
-      out.push(...meshPieces(leather, this.root, onBone(bone)))
-      leather.removeFromParent()
+      for (const part of holsterParts(look)) {
+        slot.add(part)
+        out.push(...meshPieces(part, this.root, onBone(bone)))
+        part.removeFromParent()
+      }
       return slot
     }
     this.holster = mk(1)

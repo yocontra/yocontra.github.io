@@ -3,7 +3,7 @@
  * `apiFetch` (Bearer auth, one silent refresh on 401, `PUBLIC_API_URL` base). Every call resolves
  * to a typed result and never throws.
  */
-import type { QueueTicketResponse } from '../contract/duel.ts'
+import type { DuelSettings, DuelStatsResponse, QueueTicketResponse } from '../contract/duel.ts'
 import type {
   BuyResponse,
   LedgerRow,
@@ -108,22 +108,6 @@ export const queueTicket = (turnstileToken: string): Promise<Result<QueueTicketR
     { body: { turnstileToken } },
     (v): v is QueueTicketResponse => isRecord(v) && typeof v.wsUrl === 'string',
   )
-
-/**
- * TEMP: stream B's `DuelSettings` and `DuelStatsResponse`, structurally identical to its branch's
- * `contract/duel.ts`. Import them from there once B's server half merges into redesign.
- */
-export interface DuelSettings {
-  ghostOptOut: boolean
-}
-export interface DuelStatsResponse {
-  streak: number
-  bestStreak: number
-  wins: number
-  losses: number
-  draws: number
-  cowardice: number
-}
 
 export const fetchDuelSettings = (): Promise<Result<DuelSettings>> =>
   apiJson(

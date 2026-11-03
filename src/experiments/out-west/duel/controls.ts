@@ -3,7 +3,7 @@ import type { Press } from '../engine/input.ts'
 import { save as persist } from '../save.ts'
 import { coward } from './defeat.ts'
 import type { Director } from './director.ts'
-import { ensureStandoff, openBoard, restartRun } from './mode.ts'
+import { ensureStandoff, openBoard, restartRun, toSaloon } from './mode.ts'
 import { playerShoots } from './standoff.ts'
 import type { Phase } from './state.ts'
 
@@ -137,6 +137,7 @@ export function togglePause(d: Director): void {
       restartRun(d, c.save.legend)
     },
     leaderboard: () => openBoard(d, false),
+    ...(d.onSaloon ? { saloon: () => toSaloon(d) } : {}),
     remap: (_a, done) => {
       c.input.capture = (code) => {
         c.input.capture = null

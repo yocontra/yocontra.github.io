@@ -41,6 +41,8 @@ export interface GameOpts {
   onProgress: (f: number) => void
   /** Opens a ranked session; null when this page load can't be ranked (debug hashes). */
   connectRanked: RankedConnect | null
+  /** Pause → Saloon goes here (no hub on debug or level-jump loads). */
+  onSaloon: (() => void) | null
 }
 
 export async function createGame(o: GameOpts): Promise<Game> {
@@ -105,6 +107,7 @@ export async function createGame(o: GameOpts): Promise<Game> {
   })
   director.applySettings()
   director.connectRanked = o.connectRanked
+  director.onSaloon = o.onSaloon
   world.silhouetteHide.push(dust.points, puffs.points, sparks.points, flash.sprite, glint.sprite)
 
   // Compile every shader up front behind the title so the first shot never hitches.

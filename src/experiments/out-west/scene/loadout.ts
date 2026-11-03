@@ -1,6 +1,6 @@
 /**
  * Catalog cosmetics on a character. A loadout (eight item ids) becomes the existing actor options
- * (hat, coat, poncho, bandana, moustache, star, bandoliers, tints) so every piece is fitted to the
+ * (hat, coat, poncho, bandana, moustache, star, bandoliers, holster, tints) so every piece is fitted to the
  * body and baked into the one skinned mesh as before. Two finishing touches ride on bones: the gun
  * finish (a tint on the merged revolver) and the spur rowels on the boot heels.
  *
@@ -19,7 +19,7 @@ import {
 import type { GLTF } from 'three/examples/jsm/loaders/GLTFLoader.js'
 import { type ItemId, type Loadout, normalizeLoadout } from '../data/catalog.ts'
 import type { HatKey } from '../data/outlaws.ts'
-import { Actor, type ActorOpts } from './actor.ts'
+import { Actor, type ActorOpts, type HolsterLook } from './actor.ts'
 import { type PropDef, propObject } from './props.ts'
 
 interface HatLook {
@@ -89,6 +89,13 @@ const SPURS: Partial<Record<ItemId, { color: number; points: number; metalness: 
   'spurs.star-rowels': { color: 0xf0_c8_60, points: 5, metalness: 1 },
 }
 
+/** Holster leather, baked on the thigh like the plain one (the gun's slot never moves). */
+const HOLSTERS: Partial<Record<ItemId, HolsterLook>> = {
+  'holster.plain-leather': { color: 0x3a_24_14, roughness: 0.55 },
+  'holster.tooled-floral': { color: 0x8a_5a_30, roughness: 0.45, trim: 0xd8_b0_70 },
+  'holster.buscadero': { color: 0x2a_18_10, roughness: 0.4, trim: 0xc8_c8_d0, rig: true },
+}
+
 /** Frame colours for the duel posters (ui/results, the match intro). */
 export const FRAME_COLORS: Partial<Record<ItemId, string>> = {
   'frame.pine-board': '#8a6a42',
@@ -123,6 +130,7 @@ export function loadoutOpts(raw: unknown): ActorOpts {
     hatColor: hat?.color ?? 0x5a_42_2e,
     tint: outfit.tint ?? {},
     seed: `loadout/${l.hat}/${l.outfit}/${l.extra ?? ''}`,
+    holster: HOLSTERS[l.holster] ?? HOLSTERS['holster.plain-leather'],
     ...extra,
   }
   if (outfit.coat !== undefined) {

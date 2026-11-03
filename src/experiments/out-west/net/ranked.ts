@@ -1,3 +1,4 @@
+import { getAccessToken } from './auth.ts'
 import { LEADERBOARD_URL, type Result } from './leaderboard.ts'
 
 /**
@@ -81,9 +82,16 @@ export function parseServerMessage(raw: unknown): ServerMessage | null {
 
 async function createSession(token: string): Promise<Result<string>> {
   try {
+    // Signed in, the run belongs to your account: first clears pay XP and dollars and earn the
+    // Bounty Hunt licence. Without the bearer the server can't tell, and the run stays anonymous.
+    const headers = new Headers({ 'content-type': 'application/json' })
+    const bearer = await getAccessToken().catch(() => null)
+    if (bearer) {
+      headers.set('Authorization', `Bearer ${bearer}`)
+    }
     const res = await fetch(`${LEADERBOARD_URL}/sessions`, {
       method: 'POST',
-      headers: { 'content-type': 'application/json' },
+      headers,
       body: JSON.stringify({ turnstileToken: token }),
     })
     const body: unknown = await res.json().catch(() => null)

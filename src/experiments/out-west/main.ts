@@ -238,6 +238,7 @@ export function boot(root: HTMLElement): void {
         tier,
         onProgress: setProgress,
         connectRanked,
+        onSaloon: hub ? () => hub.show() : null,
       }),
     )
     .then((g) => {

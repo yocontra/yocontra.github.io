@@ -13,18 +13,17 @@ import type { Press } from '../engine/input.ts'
 import { fetchDuelStats } from '../net/api.ts'
 import { DuelRoomLink } from '../net/pvp.ts'
 import { haptic } from '../platform/haptics.ts'
-import { save as persist, type SaveData } from '../save.ts'
+import type { SaveData } from '../save.ts'
 import { DRAW_SOUNDS, dressedActor } from '../scene/loadout.ts'
 import { MatchIntro } from '../ui/match-intro.ts'
-import { ResultsPanel, resultView } from '../ui/results.ts'
-import { confirmSheet } from '../ui/sheet.ts'
+import { ResultsPanel } from '../ui/results.ts'
 import { recordLine } from '../ui/standing.ts'
-import { type DuelClock, LocalDuelClock } from './clock.ts'
 import { tickCoward } from './defeat.ts'
 import type { Director, DirectorHooks } from './director.ts'
-import { titleShot } from './framing.ts'
 import { tickWin } from './outcome.ts'
 import { startAmbience } from './present.ts'
+import { watchAway } from './pvp-away.ts'
+import { clearStreet, confirmFlee, endView, lostResult, quietEndFx } from './pvp-end.ts'
 import { RemoteDuelClock } from './remote.ts'
 import {
   asOutlaw,
@@ -75,6 +74,17 @@ export class PvpDuel implements DirectorHooks {
   private over = false as boolean
   private fleeing = false as boolean
   private xpAfter = null as number | null
+  /** Why the room went away before it sent a result (we can't know the outcome). */
+  private lostLine = null as string | null
+  /** The next wait's draw number is already known (from `suddenDeath` or `sync`). */
+  private drawKnown = false as boolean
+  /** The rematch number of the last hello: a rejoin repeats it, a rematch moves it on. */
+  private rematchN = -1
+  /** The verdict arrived in a rejoin's sync (no money lines for us in it). */
+  private synced = false as boolean
+  /** His line dropped and he hasn't come back yet. */
+  private oppDropped = false as boolean
+  private readonly unwatch: () => void
 
   constructor(d: Director, o: PvpOpts) {
     this.d = d
@@ -87,7 +97,11 @@ export class PvpDuel implements DirectorHooks {
     this.link = new DuelRoomLink(o.wsUrl, {
       message: (m) => this.onMessage(m),
       dropped: () => d.c.hud.fake('[your line to the room dropped · reconnecting]', 3000),
-      rejoined: () => d.c.hud.fake('[back in the room]', 1500),
+      rejoined: () => {
+        // the room forgot our hold when the line dropped: say it again on the next frame
+        this.hold.sent = false
+        d.c.hud.fake('[back in the room]', 1500)
+      },
       gone: (reason) => this.onGone(reason),
     })
     this.clock = new RemoteDuelClock(this.link)
@@ -101,6 +115,7 @@ export class PvpDuel implements DirectorHooks {
     d.c.hud.setMode(o.opponent.kind === 'human' ? 'BOUNTY HUNT' : 'GHOST DUEL')
     d.c.hud.setPurse(o.purse ?? 0, false)
     startAmbience(d)
+    this.unwatch = watchAway(d, this.link, () => !this.over && this.result === null)
   }
 
   private get opp(): Seat {
@@ -224,10 +239,11 @@ export class PvpDuel implements DirectorHooks {
         )
         break
       case 'cue':
+        this.adoptDraw(m.draw)
         this.d.events.cue(m.draw, m.cue)
         break
       case 'call':
-        this.clock.draw = m.draw
+        this.adoptDraw(m.draw)
         this.d.events.call(m.draw)
         break
       default:
@@ -245,6 +261,7 @@ export class PvpDuel implements DirectorHooks {
         break
       case 'suddenDeath':
         this.deadHeat = false
+        this.drawKnown = true
         this.clock.draw = m.draw
         reviveForSuddenDeath(d, this.posters?.[this.opp]?.loadout ?? {})
         break
@@ -252,7 +269,9 @@ export class PvpDuel implements DirectorHooks {
         this.onResult(m)
         break
       case 'presence':
-        if (m.seat === this.opp) {
+        // his first connect is a presence too: only a return after a drop is news
+        if (m.seat === this.opp && (!m.connected || this.oppDropped)) {
+          this.oppDropped = !m.connected
           d.c.hud.fake(m.connected ? '[he’s back]' : '[his line dropped · 5 s grace]', 3000)
         }
         break
@@ -277,10 +296,17 @@ export class PvpDuel implements DirectorHooks {
   private onHello(you: Seat, posters: readonly [Poster, Poster], rematch: number): void {
     const d = this.d
     this.seat = you
+    const rejoin = this.posters !== null && rematch === this.rematchN
     this.posters = posters
+    this.rematchN = rematch
+    if (rejoin) {
+      // back after a drop: the duel goes on where the room says (its sync follows)
+      return
+    }
     const them = posters[this.opp]
     d.outlaw = asOutlaw(them)
     this.result = null
+    this.synced = false
     this.results?.close()
     this.results = null
     this.stage(them)
@@ -345,6 +371,12 @@ export class PvpDuel implements DirectorHooks {
         }
         break
       case 'wait':
+        // The room numbers every wait: +1 here, or the number `suddenDeath` just brought. The
+        // standoff (and any early shot) must carry it, or the room ignores the shot as stale.
+        if (!this.drawKnown) {
+          this.clock.draw += 1
+        }
+        this.drawKnown = false
         if (d.phase === 'turn' || d.phase === 'walk') {
           d.player.play('Idle', 0.2)
           d.enemy?.play('Idle', 0.2)
@@ -356,11 +388,27 @@ export class PvpDuel implements DirectorHooks {
     }
   }
 
+  /** The room's draw number wins: a cue or the call for this wait must reach the standoff. */
+  private adoptDraw(draw: number): void {
+    this.clock.draw = draw
+    if (this.d.phase === 'wait' && this.d.duelId !== draw) {
+      this.d.duelId = draw
+    }
+  }
+
   private onSync(m: Extract<RoomServerMessage, { type: 'sync' }>): void {
     this.hold.theirs = m.holding[this.opp]
     this.clock.draw = m.draw
     if (m.last && !this.result && (m.beat === 'result' || m.beat === 'rematch')) {
+      this.synced = true
       this.onResult(m.last)
+      return
+    }
+    if (!this.result) {
+      // catch up after a rejoin: the beat may have moved on while we were away
+      this.drawKnown = true
+      this.onBeat(m.beat, m.deadline)
+      this.drawKnown = false
     }
   }
 
@@ -408,17 +456,7 @@ export class PvpDuel implements DirectorHooks {
 
   /** Forfeits, dodges, freezes and double dead heats: no kill cam, straight to the card. */
   private quietEnd(r: DuelResult): void {
-    const d = this.d
-    const mine = r.culprit === this.seat
-    const caption: Record<string, string> = {
-      froze: 'BOTH FROZE',
-      draw: 'DRAW',
-      forfeit: mine ? 'FORFEIT' : 'HE LIT OUT',
-      dodge: mine ? 'DODGED' : 'HE DODGED',
-    }
-    d.c.hud.call(caption[r.outcome] ?? 'OVER', 1600)
-    d.c.audio.heartbeat(0)
-    d.enter('lose')
+    quietEndFx(this.d, r, this.seat, this.lostLine !== null)
     this.resultsAt = performance.now() + 1200
   }
 
@@ -429,9 +467,11 @@ export class PvpDuel implements DirectorHooks {
     this.d.c.hud.hideCard()
     this.results = new ResultsPanel(
       this.d.c.hud.root,
-      resultView(this.result, this.seat, this.d.outlaw.name, {
-        before: this.o.xpBefore,
-        after: this.xpAfter,
+      endView(this.result, this.seat, {
+        name: this.d.outlaw.name,
+        xp: { before: this.o.xpBefore, after: this.xpAfter },
+        lost: this.lostLine,
+        synced: this.synced,
       }),
       {
         rematch: () => this.link.send({ type: 'rematch' }),
@@ -459,16 +499,7 @@ export class PvpDuel implements DirectorHooks {
       return
     }
     this.fleeing = true
-    const before = this.d.phase === 'cock' || this.d.phase === 'title'
-    const yes = await confirmSheet(this.d.c.hud.root, {
-      title: 'Flee?',
-      body: before
-        ? 'Running before the walk is a dodge: half your penalty and no XP.'
-        : 'Running now is a forfeit: a loss with the full penalty.',
-      yes: 'Flee',
-      no: 'Stand your ground',
-      danger: true,
-    })
+    const yes = await confirmFlee(this.d)
     this.fleeing = false
     if (yes && !this.over) {
       this.link.send({ type: 'flee' })
@@ -485,19 +516,8 @@ export class PvpDuel implements DirectorHooks {
       return
     }
     this.d.c.hud.fake(`[${reason}]`, 3000)
-    this.result = {
-      type: 'result',
-      serverTime: Date.now(),
-      matchId: '',
-      draw: this.clock.draw,
-      outcome: 'forfeit',
-      winner: null,
-      culprit: null,
-      reactions: [null, null],
-      deadHeats: 0,
-      you: null,
-      settled: false,
-    }
+    this.lostLine = reason
+    this.result = lostResult(this.clock.draw)
     this.quietEnd(this.result)
   }
 
@@ -507,29 +527,13 @@ export class PvpDuel implements DirectorHooks {
       return
     }
     this.over = true
+    this.unwatch()
     const d = this.d
     this.link.send({ type: 'flee' })
     this.link.close()
     this.intro?.close()
     this.results?.close()
-    d.hooks = null
-    d.clock = new LocalDuelClock(d.events) satisfies DuelClock
-    d.c.save = this.realSave
-    persist(this.realSave)
-    d.enemy?.dispose()
-    d.enemy = null
-    d.c.physics.clear()
-    d.c.hud.root.classList.remove('ow-pvp')
-    d.c.hud.hideCard()
-    d.c.hud.clearCall()
-    d.c.hud.clearCaptions()
-    d.c.hud.letterbox(false)
-    d.c.hud.show(false)
-    d.c.audio.heartbeat(0)
-    d.timeScale = 1
-    d.player.root.visible = false
-    d.enter('title')
-    titleShot(d)
+    clearStreet(d, this.realSave)
     this.o.onExit(how)
   }
 }

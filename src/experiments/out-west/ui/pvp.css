@@ -204,7 +204,16 @@
     border-width: 6px;
     padding: 0.6rem 0.5rem;
   }
+  /* keep the kit on phones (it's how you size up his outfit), one piece and one line */
   .ow-wanted-kit {
+    font-size: 0.65rem;
+    margin-top: 0.1rem;
+    padding-top: 0.2rem;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .ow-wanted-kit li + li {
     display: none;
   }
 }
