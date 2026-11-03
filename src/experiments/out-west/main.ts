@@ -3,10 +3,14 @@ import { OUTLAWS } from './data/outlaws.ts'
 import type { RankedConnect } from './duel/director.ts'
 import type { Tier } from './engine/render.ts'
 import type { Game } from './game.ts'
+import { restoreSession } from './net/auth.ts'
 import { RankedSession } from './net/ranked.ts'
 import { Turnstile } from './net/turnstile.ts'
+import { unlockAudio } from './platform/audio.ts'
+import { installViewportVars } from './platform/viewport.ts'
 import { load, type SaveData, save } from './save.ts'
 import { Board } from './ui/board.ts'
+import { Hub } from './ui/hub.ts'
 
 /** Hashes that jump into a debug view or a non-default run: never ranked. */
 const UNRANKED_HASHES = ['level', 'legend', 'lineup', 'posters']
@@ -76,6 +80,52 @@ function wireTitleLinks(root: HTMLElement, title: HTMLElement): void {
   }
 }
 
+/** The queue spends its own Turnstile tokens (one per search), apart from ranked runs'. */
+function queueTokens(root: HTMLElement): () => Promise<string | null> {
+  let t: Turnstile | null = null
+  return () => {
+    t ??= new Turnstile(root)
+    t.warm()
+    return t.take()
+  }
+}
+
+/** The saloon hub between the title and every mode. */
+function makeHub(
+  root: HTMLElement,
+  data: SaveData,
+  rankedOk: boolean,
+  game: () => Game | null,
+): Hub {
+  let board: Board | null = null
+  const hub: Hub = new Hub(root, {
+    ready: () => game() !== null,
+    continueAt: () => data.level,
+    rankedOk,
+    stage: (shot) => game()?.hubShot(shot),
+    dress: (l) => game()?.dress(l),
+    playGauntlet: (c) => game()?.playGauntlet(c),
+    bountyHunt: (match, xpBefore) =>
+      game()?.startPvp({
+        wsUrl: match.wsUrl,
+        opponent: match.opponent,
+        xpBefore,
+        purse: hub.profile?.purse ?? null,
+        refreshXp: async () => {
+          await hub.refresh()
+          return hub.profile?.xp ?? null
+        },
+        onExit: (how) => (how === 'next' ? hub.requeue() : hub.show()),
+      }),
+    token: queueTokens(root),
+    openBoard: () => {
+      board ??= new Board(root)
+      board.open()
+    },
+  })
+  return hub
+}
+
 /** Debug views that replace the title entirely. Returns true when one ran. */
 function debugView(g: Game, hash: URLSearchParams, title: HTMLElement): boolean {
   if (!(hash.has('lineup') || hash.has('posters'))) {
@@ -121,6 +171,13 @@ export function boot(root: HTMLElement): void {
   let game: Game | null = null
   let pressed = false
   let started = false
+  // a level jump (#level=N) or a debug view skips the hub, as before
+  const hub = jump || debug ? null : makeHub(root, data, connectRanked !== null, () => game)
+  installViewportVars()
+  // a silent refresh from the cookie: the hub shows your poster if you're signed in
+  restoreSession()
+    .then(() => hub?.refresh())
+    .catch(() => undefined)
 
   const setProgress = (f: number) => {
     if (loading) {
@@ -139,7 +196,7 @@ export function boot(root: HTMLElement): void {
     // Everything is decoded before the first duel; nothing decodes mid-duel.
     audio
       .whenDecoded()
-      .then(() => g.begin(jump))
+      .then(() => (hub ? hub.show() : g.begin(jump)))
       .catch(() => undefined)
   }
 
@@ -156,6 +213,10 @@ export function boot(root: HTMLElement): void {
     }
     pressed = true
     audio.unlock()
+    if (audio.ctx) {
+      // iOS: resume after calls and Siri, suspend when hidden, respect the silent switch
+      unlockAudio(audio.ctx)
+    }
     audio.playSong(data.level >= 15 ? 'boss' : 'intro')
     title.classList.add('pressed')
     if (startText) {
@@ -187,6 +248,7 @@ export function boot(root: HTMLElement): void {
       if (debugView(g, hash, title)) {
         return
       }
+      hub?.gameReady()
       title.classList.add('ready')
       if (startText && pressed) {
         startText.textContent = ''

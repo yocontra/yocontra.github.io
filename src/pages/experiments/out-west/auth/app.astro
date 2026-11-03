@@ -1,0 +1,102 @@
+---
+import Bare from '~/layouts/Bare.astro'
+import '~/experiments/out-west/ui/out-west.css'
+import '~/experiments/out-west/ui/out-west-menus.css'
+import '~/experiments/out-west/ui/account.css'
+import '~/experiments/out-west/ui/hub.css'
+---
+
+<Bare
+  title="out west · sign in to the app"
+  description="Sign in with your passkey to continue in the out west app."
+  viewport="width=device-width, initial-scale=1, viewport-fit=cover"
+  noindex
+>
+  <Fragment slot="head">
+    <meta name="theme-color" content="#140c08" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Alfa+Slab+One&display=swap"
+    />
+  </Fragment>
+  <main id="ow" class="ow ow-page">
+    <div class="ow-hub-panel ow-page-panel">
+      <h1 class="ow-hub-h">out west</h1>
+      <p class="ow-hub-note ow-page-status" aria-live="polite">
+        Sign in with your passkey, then we’ll send you back to the app.
+      </p>
+      <div class="ow-page-host"></div>
+    </div>
+  </main>
+</Bare>
+
+<style is:global>
+  .ow-page {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: max(16px, env(safe-area-inset-top)) 16px max(16px, env(safe-area-inset-bottom));
+    box-sizing: border-box;
+    background: radial-gradient(circle at 50% 30%, #3a1a10, #0a0604);
+    overflow-y: auto;
+    touch-action: pan-y;
+  }
+  .ow-page-panel {
+    width: min(30rem, 100%);
+  }
+</style>
+
+<script>
+  import type { AppAuthPurpose } from '~/experiments/out-west/contract/auth.ts'
+  import { currentPlayer, handoffToApp, onAuthChange } from '~/experiments/out-west/net/auth.ts'
+  import { mountAccount } from '~/experiments/out-west/ui/account.ts'
+
+  const host = document.querySelector<HTMLElement>('.ow-page-host')
+  const status = document.querySelector<HTMLElement>('.ow-page-status')
+  const q = new URLSearchParams(location.search)
+  const challenge = q.get('challenge') ?? ''
+  const state = q.get('state') ?? ''
+  const redirectUri = q.get('redirect_uri') ?? ''
+  const purpose = q.get('purpose')
+
+  const say = (text: string): void => {
+    if (status) {
+      status.textContent = text
+    }
+  }
+
+  let handing = false
+  const handoff = async (): Promise<void> => {
+    if (handing || !currentPlayer()) {
+      return
+    }
+    handing = true
+    say('Signed in. Handing you back to the app…')
+    const r = await handoffToApp({
+      challenge,
+      state,
+      redirect_uri: redirectUri,
+      ...(purpose === 'login' || purpose === 'register' || purpose === 'reauth'
+        ? { purpose: purpose as AppAuthPurpose }
+        : {}),
+    })
+    if (r.ok) {
+      location.replace(r.value)
+      return
+    }
+    handing = false
+    say(r.error)
+  }
+
+  if (!(challenge && state && redirectUri)) {
+    say('This link is missing its app details. Open sign-in from the out west app again.')
+  } else if (host) {
+    mountAccount(host)
+    onAuthChange(() => {
+      handoff().catch(() => undefined)
+    })
+    handoff().catch(() => undefined)
+  }
+</script>

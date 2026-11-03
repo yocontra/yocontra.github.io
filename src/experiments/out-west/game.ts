@@ -1,22 +1,34 @@
 import { MeshStandardMaterial, Scene } from 'three'
 import type { AudioEngine } from './audio/audio.ts'
+import type { Loadout } from './data/catalog.ts'
 import { OUTLAWS } from './data/outlaws.ts'
 import { Director, type RankedConnect } from './duel/director.ts'
+import { PvpDuel, type PvpOpts } from './duel/pvp-duel.ts'
 import { loadAssets } from './engine/assets.ts'
 import { Input } from './engine/input.ts'
 import { Renderer, type Tier } from './engine/render.ts'
-import type { SaveData } from './save.ts'
+import { save as persist, resetRun, type SaveData } from './save.ts'
 import { CameraRig } from './scene/camera.ts'
 import { dressStreet } from './scene/dressing.ts'
 import { Dust, Flash, Glint, Physics, Puffs, Tumbleweed, tumbleweedGeometry } from './scene/fx.ts'
+import { type HubShot, hubShot, wearLoadout } from './scene/hub-stage.ts'
 import { propDef } from './scene/props.ts'
 import { softDot } from './scene/textures.ts'
 import { World } from './scene/world.ts'
 import { Hud } from './ui/hud.ts'
+import type { GauntletChoice } from './ui/mode-select.ts'
 
 export interface Game {
   begin: (skipIntro: boolean) => void
   readonly director: Director
+  /** From the hub: a ranked or practice gauntlet, fresh or continued. */
+  playGauntlet: (c: GauntletChoice) => void
+  /** Frame your gunslinger for the hub or the Outfitter. */
+  hubShot: (shot: HubShot) => void
+  /** Dress your gunslinger in a loadout (shows in single player too). */
+  dress: (l: Loadout) => void
+  /** A Bounty Hunt match, driven by the duel room. */
+  startPvp: (o: PvpOpts) => void
 }
 
 export interface GameOpts {
@@ -112,12 +124,18 @@ export async function createGame(o: GameOpts): Promise<Game> {
 
   window.addEventListener('resize', () => renderer.resize())
   document.addEventListener('visibilitychange', () => {
-    if (document.hidden) {
+    // Bounty Hunt has no pause: backgrounding is a drop, and the room's grace rules apply
+    if (document.hidden && !director.hooks) {
       director.pauseIfPlaying()
     }
   })
   hud.pauseBtn.addEventListener('click', (e) => {
     e.stopPropagation()
+    if (director.hooks) {
+      // PvP: the pause button is "Flee"
+      director.onPress({ action: 'pause', t: e.timeStamp, source: 'pointer', x: -1, y: -1 })
+      return
+    }
     director.togglePause()
   })
   hud.pauseBtn.addEventListener('pointerdown', (e) => e.stopPropagation())
@@ -188,5 +206,18 @@ export async function createGame(o: GameOpts): Promise<Game> {
     director,
     // Ranked when this load allows it; begin() still keeps legend and mid-gauntlet saves in practice.
     begin: (skipIntro: boolean) => director.begin(skipIntro, o.connectRanked !== null),
+    playGauntlet: (c: GauntletChoice) => {
+      if (!c.resume) {
+        resetRun(o.save, false)
+        persist(o.save)
+        hud.setPurse(0, false)
+      }
+      director.begin(c.resume || o.save.seenIntro, c.ranked && o.connectRanked !== null)
+    },
+    hubShot: (shot: HubShot) => hubShot(director, shot),
+    dress: (l: Loadout) => wearLoadout(director, l),
+    startPvp: (opts: PvpOpts) => {
+      void new PvpDuel(director, opts)
+    },
   }
 }
