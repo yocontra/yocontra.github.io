@@ -1,3 +1,4 @@
+// biome-ignore-all lint/style/noExcessiveLinesPerFile: one CLI walk through every screen, read top to bottom
 // biome-ignore-all lint/correctness/noUndeclaredVariables: Bun is a global in this Bun script
 // biome-ignore-all lint/complexity/noExcessiveLinesPerFunction: one linear audit script
 // biome-ignore-all lint/performance/noAwaitInLoops: one page, one screen at a time
@@ -67,7 +68,10 @@ const GAME = `${base}/experiments/out-west/`
 const FRONTIER = `${base}/experiments/out-west/frontier/?server=loopback&bots=6`
 const FIXTURES = '/tools/ui-audit/fixtures.ts'
 /** The account the signed-in screens run as (16 wide capitals: the server's longest). */
-const NAME = `WMWMWMWMWMW${Array.from({ length: 5 }, () => 'WM'[Math.round(Math.random())]).join('')}`
+/** Six fixed wide capitals and ten random ones (1,024 names); a taken one is drawn again. */
+const wideName = (): string =>
+  `WMWMWM${Array.from({ length: 10 }, () => 'WM'[Math.round(Math.random())]).join('')}`
+let Name = wideName()
 
 interface Row {
   size: string
@@ -128,6 +132,7 @@ async function fixture(page: Page, call: (m: typeof Fx) => string): Promise<stri
 
 const TOP_SHEET = '.ow-sheet.on'
 const OFF_SCREEN = /outside of the viewport/u
+const TAKEN = /spoken for|taken/iu
 const COVERED = /intercepts pointer events/u
 const AUTH = '/src/experiments/out-west/net/auth.ts'
 const PROFILE = '/src/experiments/out-west/ui/profile.ts'
@@ -320,21 +325,21 @@ function sql(command: string): void {
   }
 }
 
-const accountWhere = `(SELECT id FROM accounts WHERE name = '${NAME}')`
+const accountWhere = (): string => `(SELECT id FROM accounts WHERE name = '${Name}')`
 
 /** Level 12, a modest purse, no licence: the licence gate and a member's first screens. */
 function seedFresh(): void {
   sql(
-    `UPDATE profiles SET level = 12, xp = ${xpForLevel(12) + 40}, purse = 1800, gauntlet_clears = 0 WHERE account_id = ${accountWhere}`,
+    `UPDATE profiles SET level = 12, xp = ${xpForLevel(12) + 40}, purse = 1800, gauntlet_clears = 0 WHERE account_id = ${accountWhere()}`,
   )
 }
 
 /** Level 50, rich, licensed, owns the whole catalog: prestige, dyes, notices. */
 function seedVeteran(): void {
   const now = Date.now()
-  const items = CATALOG.map((i) => `(${accountWhere}, '${i.id}', 'admin', ${now})`).join(', ')
+  const items = CATALOG.map((i) => `(${accountWhere()}, '${i.id}', 'admin', ${now})`).join(', ')
   sql(
-    `UPDATE profiles SET level = 50, xp = ${xpForLevel(50)}, purse = 1234567, gauntlet_clears = 131071 WHERE account_id = ${accountWhere}; INSERT OR IGNORE INTO inventory (account_id, item_id, source, acquired_at) VALUES ${items}`,
+    `UPDATE profiles SET level = 50, xp = ${xpForLevel(50)}, purse = 1234567, gauntlet_clears = 131071 WHERE account_id = ${accountWhere()}; INSERT OR IGNORE INTO inventory (account_id, item_id, source, acquired_at) VALUES ${items}`,
   )
 }
 
@@ -352,15 +357,21 @@ async function signUp(ctx: BrowserContext, page: Page): Promise<void> {
       automaticPresenceSimulation: true,
     },
   })
-  const r = await page.evaluate(
-    async ({ who, url }) => {
-      const m = (await import(/* @vite-ignore */ url)) as typeof Auth
-      return await m.signUp(who)
-    },
-    { who: NAME, url: AUTH },
-  )
-  if (!r.ok) {
-    throw new Error(`sign-up failed: ${r.error}`)
+  for (let attempt = 0; ; attempt++) {
+    const r = await page.evaluate(
+      async ({ who, url }) => {
+        const m = (await import(/* @vite-ignore */ url)) as typeof Auth
+        return await m.signUp(who)
+      },
+      { who: Name, url: AUTH },
+    )
+    if (r.ok) {
+      return
+    }
+    if (!TAKEN.test(r.error) || attempt >= 4) {
+      throw new Error(`sign-up failed: ${r.error}`)
+    }
+    Name = wideName()
   }
 }
 
@@ -438,7 +449,7 @@ async function member(browser: Browser, size: Size, state: State | null): Promis
             m[open](root, who)
           }
         },
-        { who: NAME, open: fn, url: PROFILE },
+        { who: Name, open: fn, url: PROFILE },
       )
       await page.waitForTimeout(1200)
       await audit(page, size, screen, TOP_SHEET, { last: true })
@@ -492,7 +503,7 @@ async function frontier(browser: Browser, size: Size): Promise<void> {
   }
   const ctx = await newContext(browser, size, null)
   const page = await ctx.newPage()
-  await page.goto(`${FRONTIER}&name=${NAME}`)
+  await page.goto(`${FRONTIER}&name=${Name}`)
   await page.locator('.fr-hud').waitFor({ timeout: 120_000 })
   await page.waitForFunction(() => !document.querySelector('.fr-load'), undefined, {
     timeout: 120_000,
