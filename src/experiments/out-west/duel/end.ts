@@ -43,6 +43,8 @@ export function toEnd(d: Director): void {
   persist(c.save)
   c.hud.hideCard()
   c.hud.show(false)
+  // the main theme under the ledger (the boss is dead)
+  c.audio.playSong('intro')
   c.audio.musicLevel(0, 1)
   c.audio.musicLowpass(18_000, 1)
   d.endT = 0

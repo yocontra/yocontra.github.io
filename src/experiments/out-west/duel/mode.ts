@@ -2,6 +2,7 @@ import { save as persist, resetRun } from '../save.ts'
 import { LocalDuelClock } from './clock.ts'
 import type { Director } from './director.ts'
 import { titleShot } from './framing.ts'
+import { ambience } from './present.ts'
 import { RankedDuelClock } from './ranked-clock.ts'
 import { standoffSpec } from './standoff.ts'
 
@@ -127,6 +128,11 @@ export function emptyStreet(d: Director): void {
   hud.letterbox(false)
   hud.show(false)
   c.audio.heartbeat(0)
+  // back to the saloon's theme, undo any standoff duck, and let the bed rest
+  c.audio.playSong('intro')
+  c.audio.musicLevel(0, 0.6)
+  c.audio.musicLowpass(18_000, 0.6)
+  ambience(d, 1, 1.5)
   d.timeScale = 1
   d.player.root.visible = false
   d.enter('title')

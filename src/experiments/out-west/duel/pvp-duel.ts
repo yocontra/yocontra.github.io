@@ -42,6 +42,9 @@ import { enterWalk } from './walk.ts'
 
 export type PvpExit = 'saloon' | 'next'
 
+/** From a win over a ghost to its vanishing, ms. */
+const GHOST_VANISH_MS = 900
+
 export interface PvpOpts {
   wsUrl: string
   opponent: Poster
@@ -429,6 +432,10 @@ export class PvpDuel implements DirectorHooks {
       targetsHit: 0,
     }
     this.resultsAt = performance.now() + 2200
+    if (r.winner === me && this.posters?.[this.opp]?.kind === 'ghost') {
+      // the ghost is beaten: it goes back to the dust as he falls (after the call's hush lifts)
+      setTimeout(() => d.c.audio.ui('ghostVanish'), GHOST_VANISH_MS)
+    }
     if (r.outcome === 'win' && r.winner === me) {
       d.events.verdict({ ...verdict, outcome: 'win', targetsHit: 1 })
     } else if (r.outcome === 'win') {

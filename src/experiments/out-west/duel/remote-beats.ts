@@ -10,6 +10,7 @@ import { dressedActor } from '../scene/loadout.ts'
 import type { Director } from './director.ts'
 import { callShot, standoffShot } from './framing.ts'
 import { killEnemyAnim, playerFireFx, win } from './outcome.ts'
+import { AMB, ambience, duckForStandoff } from './present.ts'
 import { rng, V } from './state.ts'
 
 export interface HoldState {
@@ -107,9 +108,8 @@ export function enterRemoteTurn(d: Director): void {
   c.hud.setPips(d.paces, false)
   d.player.stopWalk(0.2)
   d.enemy?.stopWalk(0.2)
-  c.audio.musicLowpass(FEEL.waitLowpass, 0.9)
-  c.audio.musicLevel(FEEL.waitDuckDb, 0.9)
-  d.windLoop?.set(0.14, 0.9)
+  duckForStandoff(d, 0.9)
+  ambience(d, AMB.turn, 0.9)
   standoffShot(d, false, 1.2)
 }
 

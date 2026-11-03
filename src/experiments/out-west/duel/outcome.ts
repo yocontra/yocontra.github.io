@@ -254,6 +254,7 @@ export function tickWin(d: Director, realDt: number): void {
   if (k > 0.4 && k - realDt <= 0.4) {
     c.audio.musicLowpass(18_000, 0.4)
     c.audio.musicLevel(0, 0.6)
+    c.audio.playSting('victory')
   }
   if (d.boss) {
     tickBossKill(d, k)
