@@ -72,8 +72,43 @@
   flex-direction: column;
   gap: var(--ow-s2);
 }
+/* the month steps: a running head with arrows either side, in the label face */
 .ow-feat-mw-nav {
+  display: flex;
   justify-content: space-between;
+  align-items: center;
+  border-bottom: 1px solid var(--ow-rule-ink);
+}
+.ow-feat-mw-step {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--ow-s1);
+  min-height: var(--ow-tap);
+  padding: 0 var(--ow-s1);
+  font-family: var(--ow-font-text);
+  font-weight: 600;
+  font-size: var(--ow-fs-body);
+  font-variant-caps: all-small-caps;
+  letter-spacing: var(--ow-track-label);
+  color: var(--ow-ink-2);
+  background: none;
+  border: 0;
+  cursor: pointer;
+}
+.ow-feat-mw-step.next {
+  margin-left: auto;
+}
+.ow-feat-mw-step:hover {
+  color: var(--ow-red);
+}
+.ow-feat-mw-step:focus-visible {
+  outline: 2px solid var(--ow-brass-hi);
+  outline-offset: 2px;
+}
+.ow-feat-mw-arrow {
+  font-family: var(--ow-font-display);
+  font-size: var(--ow-fs-h4);
+  line-height: 1;
 }
 .ow-feat-mw-head {
   display: flex;
@@ -93,6 +128,10 @@
   margin-top: var(--ow-s3);
 }
 .ow-feat-name {
+  /* a button: take the row's type (the board row sets its own size and weight) */
+  font-family: inherit;
+  letter-spacing: inherit;
+  line-height: inherit;
   min-height: var(--ow-tap);
   padding: 0;
   text-align: left;
@@ -102,6 +141,10 @@
   cursor: pointer;
   text-decoration: underline dotted var(--ow-rule-ink);
   text-underline-offset: 3px;
+}
+.ow-feat-record .ow-feat-name {
+  font: inherit;
+  font-weight: 600;
 }
 .ow-feat-name:disabled {
   font-style: italic;
@@ -169,6 +212,7 @@
 }
 .ow-feat-swatch {
   --swatch: var(--ow-paper-2);
+  font: inherit;
   width: var(--ow-tap);
   height: var(--ow-tap);
   padding: 0;

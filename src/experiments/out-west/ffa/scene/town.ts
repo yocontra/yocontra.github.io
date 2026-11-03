@@ -820,10 +820,10 @@ function waterMesh(layout: TownLayout): Mesh {
   for (let x = c.x - 30; x < c.x + c.w + 30; x += step) {
     const at = (t: number) => mid + Math.sin(t * 0.21) * 0.9 + Math.sin(t * 0.057) * 1.4
     const half = (t: number) =>
-      Math.max(0, 0.18 + 0.32 * Math.sin(t * 0.13) * Math.sin(t * 0.31 + 1))
+      Math.max(0, 0.05 + 0.2 * Math.sin(t * 0.13) * Math.sin(t * 0.31 + 1))
     const [z0, z1, h0, h1] = [at(x), at(x + step), half(x), half(x + step)]
     if (h0 + h1 > 0.02) {
-      g.quad(V(x, z0 + h0), V(x + step, z1 + h1), V(x + step, z1 - h1), V(x, z0 - h0), 0x55_66_62)
+      g.quad(V(x, z0 + h0), V(x + step, z1 + h1), V(x + step, z1 - h1), V(x, z0 - h0), 0x4a_44_3a)
     }
   }
   const mat = new MeshStandardMaterial({
@@ -832,7 +832,7 @@ function waterMesh(layout: TownLayout): Mesh {
     metalness: 0.05,
     envMapIntensity: 1.2,
     transparent: true,
-    opacity: 0.7,
+    opacity: 0.6,
     depthWrite: false,
   })
   const m = new Mesh(g.build(), mat)
