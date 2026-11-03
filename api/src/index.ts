@@ -2,6 +2,7 @@
  * out-west API (Cloudflare Worker + D1 + Durable Objects). A thin router: each route module claims
  * the requests it owns. See api/migrations/README.md for ownership of the schema.
  */
+import { runLedgerAudit } from './economy/audit.ts'
 import type { Env } from './env.ts'
 import { corsHeaders, error, type RouteHandler } from './http.ts'
 import { accountRoutes } from './routes/account.ts'
@@ -51,5 +52,9 @@ export default {
       console.error('api error', err)
       return error(request, env, 500, 'Something went wrong.')
     }
+  },
+  /** Daily: recompute every purse from the ledger and flag mismatches. */
+  scheduled(_controller: ScheduledController, env: Env, ctx: ExecutionContext): void {
+    ctx.waitUntil(runLedgerAudit(env).then(() => undefined))
   },
 } satisfies ExportedHandler<Env>
