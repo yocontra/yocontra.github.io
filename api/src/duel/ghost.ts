@@ -79,7 +79,9 @@ export function ghostRecordStatements(env: Env, o: GhostObservation): D1Prepared
   if (o.reactionMs !== null) {
     statements.push(
       env.DB.prepare(
-        'INSERT INTO ghost_samples (account_id, ms, source, created_at) VALUES (?, ?, ?, ?)',
+        `INSERT INTO ghost_samples (account_id, ms, source, created_at)
+         SELECT ?1, ?2, ?3, ?4 WHERE NOT EXISTS (
+           SELECT 1 FROM ghost_profiles WHERE account_id = ?1 AND opt_out = 1)`,
       ).bind(o.accountId, Math.round(o.reactionMs), o.source, now),
       env.DB.prepare(
         `DELETE FROM ghost_samples WHERE account_id = ?1 AND id NOT IN (

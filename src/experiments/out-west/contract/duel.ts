@@ -8,6 +8,8 @@
  * 1. `POST /queue/ticket` with `Authorization: Bearer <access token>` and a {@link QueueTicketRequest}
  *    returns a {@link QueueTicketResponse}: a single-use ticket and the queue socket URL.
  *    (A generic `POST /tickets { purpose: 'duel' }` ticket from stream A works too.)
+ *    Other routes: `GET /duel/:matchId` ({@link MatchSummary}), `GET|PUT /duel/settings`
+ *    ({@link DuelSettings}) and `GET /duel/stats` ({@link DuelStatsResponse}), all with Bearer auth.
  * 2. Open `GET /queue/ws?ticket=…`. The queue speaks {@link QueueServerMessage} and
  *    {@link QueueClientMessage}. Answer every `ping` with a `pong` straight away: the matchmaker uses
  *    the round trip to keep bad connections out of human duels.
@@ -33,6 +35,8 @@
  *
  * All money is whole dollars. All times are milliseconds unless the name says otherwise.
  */
+import type { Loadout } from '../data/catalog.ts'
+
 export const CONTRACT_VERSION = 1
 
 // --- constants the client may display ------------------------------------------------------------
@@ -94,10 +98,10 @@ export interface Poster {
   /** Public cowardice tally. */
   cowardice: number
   /**
-   * Server-validated cosmetic loadout: slot → item id (stream C's `Loadout`). An unknown id falls
-   * back to the starter item on the client.
+   * Server-validated cosmetic loadout (stream C's `Loadout`, run through `normalizeLoadout`). An
+   * unknown id falls back to the starter item on the client.
    */
-  loadout: Readonly<Record<string, string | null>>
+  loadout: Loadout
   /** `'human'` for a live player, `'ghost'` for a recorded player, `'outlaw'` for a Town Outlaw. */
   kind: OpponentKind
 }
@@ -132,6 +136,22 @@ export interface MatchSummary {
   mode: DuelMode
   outcome: MatchOutcome | null
   settled: boolean
+}
+
+/** `GET /duel/settings` and `PUT /duel/settings` (Bearer): "Let my ghost ride" (on by default). */
+export interface DuelSettings {
+  /** True when the player has switched their ghost off. Opting out deletes the ghost at once. */
+  ghostOptOut: boolean
+}
+
+/** `GET /duel/stats` (Bearer): the player's public Bounty Hunt standing. */
+export interface DuelStatsResponse {
+  streak: number
+  bestStreak: number
+  wins: number
+  losses: number
+  draws: number
+  cowardice: number
 }
 
 // --- queue socket --------------------------------------------------------------------------------
