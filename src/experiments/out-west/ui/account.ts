@@ -5,6 +5,8 @@
  */
 import './account.css'
 import type { PasskeyInfo, Player } from '../contract/auth.ts'
+import { licenceCopy, licenceStatus } from '../data/licence.ts'
+import { fetchMe } from '../net/api.ts'
 import {
   type AuthResult,
   accountInfo,
@@ -23,6 +25,11 @@ import {
 export interface AccountPanelOptions {
   /** Shows a close button and handles Escape. */
   onClose?: () => void
+  /**
+   * The signed-in player's `gauntletClears`, when the host already has their profile (the hub
+   * does). Without it the panel asks `/me` itself before it says whether they hold a licence.
+   */
+  gauntletClears?: number | null
 }
 
 export interface AccountPanel {
@@ -98,6 +105,9 @@ class Panel implements AccountPanel {
   private draftName = ''
   private readonly off: (() => void)[] = []
   private disposed = false as boolean
+  /** The licence bits of the signed-in account, once known; loaded at most once per account. */
+  private clears: { accountId: string; value: number } | null = null
+  private clearsLoading: string | null = null
 
   constructor(host: HTMLElement, opts: AccountPanelOptions) {
     this.opts = opts
@@ -114,7 +124,11 @@ class Panel implements AccountPanel {
       this.root.addEventListener(ev, stop)
     }
     this.off.push(onAuthChange((p) => this.onPlayer(p)))
-    this.view = currentPlayer() ? 'player' : 'guest'
+    const known = currentPlayer()
+    if (known && typeof opts.gauntletClears === 'number') {
+      this.clears = { accountId: known.accountId, value: opts.gauntletClears }
+    }
+    this.view = known ? 'player' : 'guest'
     this.render()
     void restoreSession().then((p) => this.onPlayer(p))
   }
@@ -304,9 +318,13 @@ class Panel implements AccountPanel {
   private renderPlayer(): void {
     const p = currentPlayer()
     const plate = el('div', 'ow-acct-plate', this.root)
-    el('span', 'ow-acct-plate-kicker', plate, 'Licensed gunslinger')
+    // Never claim a licence we haven't checked: plain "Gunslinger" until the clears are known.
+    const kicker = el('span', 'ow-acct-plate-kicker', plate, 'Gunslinger')
     el('span', 'ow-acct-plate-name', plate, p?.name ?? '…')
     const sub = el('span', 'ow-acct-plate-sub', plate, 'Signed in with a passkey')
+    const progress = el('span', 'ow-acct-plate-licence', plate)
+    progress.hidden = true
+    this.fillLicence(p, kicker, progress)
     const list = el('ul', 'ow-acct-keys', this.root)
     list.setAttribute('aria-label', 'Your passkeys')
     this.fillPasskeys(list, sub)
@@ -318,6 +336,39 @@ class Panel implements AccountPanel {
       this.view = 'confirm-delete'
       this.status = { text: '', kind: 'info' }
       this.render()
+    })
+  }
+
+  /** The licence line: "Licensed gunslinger", or how many outlaws are left to earn it. */
+  private fillLicence(p: Player | null, kicker: HTMLElement, progress: HTMLElement): void {
+    const paint = (clears: number): void => {
+      const copy = licenceCopy(licenceStatus(clears))
+      kicker.textContent = copy.kicker
+      progress.textContent = copy.progress ?? ''
+      progress.hidden = copy.progress === null
+    }
+    if (!p) {
+      return
+    }
+    if (this.clears?.accountId === p.accountId) {
+      paint(this.clears.value)
+      return
+    }
+    if (this.clearsLoading === p.accountId) {
+      return
+    }
+    this.clearsLoading = p.accountId
+    void fetchMe().then((r) => {
+      this.clearsLoading = null
+      if (this.disposed || !r.ok || typeof r.value.gauntletClears !== 'number') {
+        return
+      }
+      this.clears = { accountId: p.accountId, value: r.value.gauntletClears }
+      if (kicker.isConnected) {
+        paint(r.value.gauntletClears)
+      } else if (this.view === 'player') {
+        this.render()
+      }
     })
   }
 

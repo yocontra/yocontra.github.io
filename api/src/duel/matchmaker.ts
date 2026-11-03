@@ -20,6 +20,7 @@ import {
   DEFAULT_LOADOUT,
   normalizeLoadout,
 } from '../../../src/experiments/out-west/data/catalog.ts'
+import { licenceStatus } from '../../../src/experiments/out-west/data/licence.ts'
 import {
   baseBounty,
   bountyForLevel,
@@ -50,8 +51,6 @@ const DODGE_COOLDOWN_MS = 5 * 60 * 1000
 /** Ping samples needed before a link is judged. */
 const MIN_PING_SAMPLES = 3
 const RTT_KEEP = 8
-/** Gauntlet outlaws 1–3 (bits 0–2) cleared while signed in: the Bounty Hunt licence. */
-const LICENCE_MASK = 0b111
 
 interface Attachment {
   entry: QueueEntry
@@ -123,7 +122,7 @@ export class Matchmaker extends DurableObject<Env> {
     if (!profile) {
       return { reason: 'no-profile', message: 'No poster yet. Sign up first.' }
     }
-    if ((profile.gauntletClears & LICENCE_MASK) !== LICENCE_MASK) {
+    if (!licenceStatus(profile.gauntletClears).licensed) {
       return {
         reason: 'unlicensed',
         message: 'Beat the first 3 outlaws on a ranked run to earn your licence.',

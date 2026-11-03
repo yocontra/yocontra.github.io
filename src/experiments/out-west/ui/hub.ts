@@ -281,7 +281,10 @@ export class Hub {
 
   private openAccount(): void {
     const body = this.panel('Your poster')
-    const acct = mountAccount(body, { onClose: () => this.closeSheet() })
+    const acct = mountAccount(body, {
+      onClose: () => this.closeSheet(),
+      gauntletClears: this.me?.gauntletClears ?? null,
+    })
     mountStanding(body)
     const back = this.sheet
     this.sheet = {
