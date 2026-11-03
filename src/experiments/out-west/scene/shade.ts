@@ -78,7 +78,20 @@ if ( !( dot( normal, normal ) > 1e-8 ) ) {
   normal = ( dot( nonPerturbedNormal, nonPerturbedNormal ) > 1e-8 ) ? nonPerturbedNormal : vec3( 0.0, 0.0, 1.0 );
 }`
 
-export function characterMaterial(floor: Floor, name = 'Character'): MeshStandardMaterial {
+/** A glow uniform: 0 = none. One per actor, so his body and hat pulse together. */
+export interface Glow {
+  value: number
+}
+
+/**
+ * The character material. `glow` (0..1) adds a warm emissive fresnel pulse on top of the lit
+ * surface (Frontier spawn protection): opaque, no blending, so nothing turns see-through.
+ */
+export function characterMaterial(
+  floor: Floor,
+  name = 'Character',
+  glow: Glow = { value: 0 },
+): MeshStandardMaterial {
   const mat = new MeshStandardMaterial({ roughness: 1, metalness: 1, name })
   // Opaque, and both faces drawn: the source garments are single sheets (collars, cuffs, hems,
   // hair) and the fitted coats and ponchos are open shells, so with back faces culled you saw
@@ -102,6 +115,7 @@ export function characterMaterial(floor: Floor, name = 'Character'): MeshStandar
     shader.uniforms.styRim = RIM.color
     shader.uniforms.styRimK = RIM.strength
     shader.uniforms.styFloor = floor
+    shader.uniforms.styGlow = glow
     shader.vertexShader = shader.vertexShader
       .replace(
         '#include <common>',
@@ -129,6 +143,7 @@ vStyY = (modelMatrix * vec4(transformed, 1.0)).y;`,
 uniform vec3 styRim;
 uniform float styRimK;
 uniform float styFloor;
+uniform float styGlow;
 varying vec2 vStyMat;
 varying float vStyLum;
 varying vec3 vStyTint;
@@ -159,6 +174,7 @@ diffuseColor.rgb *= mix(0.72, 1.0, smoothstep(0.0, 0.85, vStyY - styFloor));`,
   float ndv = clamp(dot(normalize(normal), normalize(vViewPosition)), 0.0, 1.0);
   float fr = smoothstep(0.35, 1.0, 1.0 - ndv);
   totalEmissiveRadiance += styRim * (styRimK * styRimMat * fr) * (0.55 + 0.45 * diffuseColor.rgb);
+  totalEmissiveRadiance += vec3(1.0, 0.78, 0.42) * styGlow * (0.18 + 1.6 * fr);
 }`,
       )
   }

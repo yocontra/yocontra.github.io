@@ -27,7 +27,7 @@ import {
 import type { HatKey } from '../data/outlaws.ts'
 import { mergePieces, meshPieces, type Piece } from './bake.ts'
 import type { Body } from './fit.ts'
-import { characterMaterial } from './shade.ts'
+import { characterMaterial, type Glow } from './shade.ts'
 import type { Floor } from './style.ts'
 
 /** Hat silhouettes from lathe profiles (x = radius, y = height), metres, crown top first. */
@@ -216,7 +216,12 @@ function shapeHat(geo: BufferGeometry, key: HatKey, lathe: boolean): void {
  * origin's height `openY` (see `fitHat`). The returned group is what pops off; the fit scales
  * an inner child so popHat() keeps its size.
  */
-export function makeHat(key: HatKey, color: number, floor: Floor = { value: 0 }): Group {
+export function makeHat(
+  key: HatKey,
+  color: number,
+  floor: Floor = { value: 0 },
+  glow: Glow = { value: 0 },
+): Group {
   const { pts: raw } = profile(key)
   const pts = raw.map(([x, y]) => new Vector2(x, y))
   // lathe needs the profile ordered bottom→top for outward normals; a spline through the
@@ -245,7 +250,7 @@ export function makeHat(key: HatKey, color: number, floor: Floor = { value: 0 })
   g.add(new Mesh(bandGeo, bandMat))
   const geo = mergePieces(meshPieces(g, g))
   // the brim and the crown are single sheets: both faces show
-  const mat = characterMaterial(floor, 'Felt')
+  const mat = characterMaterial(floor, 'Felt', glow)
   mat.side = DoubleSide
   const mesh = new Mesh(geo, mat)
   mesh.castShadow = true

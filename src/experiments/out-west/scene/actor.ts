@@ -24,7 +24,7 @@ import { type HolsterLook, holsterParts, mergedProp, PLAIN_HOLSTER } from './kit
 import { type Fit, measure, outerThigh, prune } from './outfit.ts'
 import { watchPose } from './pose-watch.ts'
 import { dressPieces, measureStride, seatHat, slotOn, tintModel } from './rig.ts'
-import { characterMaterial } from './shade.ts'
+import { characterMaterial, type Glow } from './shade.ts'
 import type { Floor } from './style.ts'
 
 const HEIGHT = 1.78
@@ -116,6 +116,8 @@ export class Actor {
   height = HEIGHT
   /** World height of his feet, for the shader's contact darkening. */
   readonly floor: Floor = { value: 0 }
+  /** Emissive pulse on his body and hat, 0..1 (Frontier spawn protection). */
+  readonly glow: Glow = { value: 0 }
   private readonly bones = new Map<string, Bone>()
   /** The base carries a sculpted beard (kept by prune when he wears one). */
   private realBeard = false
@@ -208,12 +210,14 @@ export class Actor {
     for (const d of drop) {
       d.removeFromParent()
     }
-    this.meshes.push(bake(pieces, body, this.root, characterMaterial(this.floor)))
+    this.meshes.push(
+      bake(pieces, body, this.root, characterMaterial(this.floor, 'Character', this.glow)),
+    )
 
     if (this.hatFit && this.head) {
       this.hat = seatHat(
         this.hatFit,
-        { color: opts.hatColor ?? 0x3a_2a_1a, floor: this.floor },
+        { color: opts.hatColor ?? 0x3a_2a_1a, floor: this.floor, glow: this.glow },
         { head: this.head, root: this.root },
       )
     }

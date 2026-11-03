@@ -621,7 +621,9 @@ export class Crowd {
     if (!holder.parent) {
       this.root.add(holder)
     }
-    holder.visible = !(p.flags & EF_PROTECTED) || Math.floor(nowS * 11) % 3 !== 0
+    // Spawn protection: a warm pulsing glow on the body (never a blink, never see-through)
+    holder.visible = true
+    actor.glow.value = p.flags & EF_PROTECTED ? 0.45 + 0.35 * Math.sin(nowS * Math.PI * 2 * 2.2) : 0
     holder.position.set(p.x, 0, p.z)
     holder.rotation.y = facing(p.aim)
     const mesh = actor.meshes[0] as SkinnedMesh | undefined

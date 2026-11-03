@@ -29,6 +29,7 @@ import {
   poncho,
   star,
 } from './outfit.ts'
+import type { Glow } from './shade.ts'
 import { type Floor, vary } from './style.ts'
 
 /** What the dressing and tinting read from an actor's options. */
@@ -191,10 +192,10 @@ export function measureStride(
  */
 export function seatHat(
   f: HatFit,
-  hat: { color: number; floor: Floor },
+  hat: { color: number; floor: Floor; glow: Glow },
   on: { head: Bone; root: Object3D },
 ): Group {
-  const g = makeHat(f.key, hat.color, hat.floor)
+  const g = makeHat(f.key, hat.color, hat.floor, hat.glow)
   g.children[0]?.scale.setScalar(f.s)
   const q = on.root
     .getWorldQuaternion(new Quaternion())
