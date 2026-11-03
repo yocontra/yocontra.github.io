@@ -126,9 +126,11 @@ const parseJson = (text: string): unknown => {
 /** Every eligible ghost: ≥15 reactions, active in 30 days, not flagged, not opted out. */
 export async function eligibleGhosts(env: Env, limit = 500): Promise<GhostCandidate[]> {
   const { results } = await env.DB.prepare(
-    `SELECT account_id, name, level, prestige, draw_rating, loadout FROM ghost_profiles
-     WHERE samples >= ? AND opt_out = 0 AND flagged = 0 AND updated_at > ?
-     ORDER BY updated_at DESC LIMIT ?`,
+    `SELECT g.account_id, g.name, g.level, g.prestige, g.draw_rating, g.loadout
+     FROM ghost_profiles g JOIN accounts a ON a.id = g.account_id
+     WHERE g.samples >= ? AND g.opt_out = 0 AND g.flagged = 0 AND g.updated_at > ?
+       AND a.ghost_opt_out = 0 AND (a.flags & 3) = 0
+     ORDER BY g.updated_at DESC LIMIT ?`,
   )
     .bind(GHOST_MIN_SAMPLES, Date.now() - GHOST_ACTIVE_MS, limit)
     .all<GhostRow>()

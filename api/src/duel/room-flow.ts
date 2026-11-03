@@ -36,6 +36,7 @@ const other = (seat: Seat): Seat => (seat === 0 ? 1 : 0)
 
 export class RoomFlow {
   private readonly makeAi: (() => AiOpponent) | null
+  private readonly matchId: string
   private readonly io: RoomIo
   private readonly clock: Clock
   private readonly rng: Rng
@@ -64,6 +65,7 @@ export class RoomFlow {
 
   constructor(options: RoomFlowOptions) {
     this.makeAi = options.ai
+    this.matchId = options.matchId ?? ''
     this.io = options.io
     this.clock = options.clock
     this.rng = options.rng ?? Math.random
@@ -303,7 +305,7 @@ export class RoomFlow {
     const base: DuelResult = {
       type: 'result',
       serverTime: now,
-      matchId: '',
+      matchId: this.matchId,
       draw: this.draw,
       outcome,
       winner,

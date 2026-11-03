@@ -237,6 +237,7 @@ export class DuelRoom extends DurableObject<Env> {
       return this.flow
     }
     this.flow = new RoomFlow({
+      matchId: stored.init.roomId,
       ai: this.ai(stored),
       clock: realClock,
       io: {

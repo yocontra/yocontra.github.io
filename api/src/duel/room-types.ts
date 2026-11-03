@@ -39,6 +39,8 @@ export interface FinishedDuel {
 }
 
 export interface RoomFlowOptions {
+  /** The room id, echoed in results. */
+  matchId?: string
   /** A factory for the AI seat's brain (seat 1 in a ghost duel), or null for two humans. */
   ai: (() => AiOpponent) | null
   io: RoomIo

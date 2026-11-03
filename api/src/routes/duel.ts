@@ -20,7 +20,6 @@ import { verifyRoomToken } from '../duel/token.ts'
 import type { Env } from '../env.ts'
 import {
   allowedOrigin,
-  clientHash,
   error,
   json,
   type RouteHandler,
@@ -39,6 +38,7 @@ const INTERNAL_HEADERS = [
   'X-Ws-Base',
 ]
 const IPV4 = /^\d{1,3}(?:\.\d{1,3}){3}$/u
+const LOOPBACK = new Set(['127.0.0.1', '::1', 'localhost'])
 
 /** Cloudflare's transport RTT at the upgrade (TCP, or QUIC for HTTP/3). */
 function transportRtt(request: Request): number | null {
@@ -48,12 +48,13 @@ function transportRtt(request: Request): number | null {
 }
 
 /**
- * The client's IP. Production always has CF-Connecting-IP. Local dev has none, so a dev-only
- * `X-Dev-Ip` lets the test harness simulate networks; without either, network rules are skipped.
+ * The client's IP. Production always has a real CF-Connecting-IP. Local dev has none or a loopback
+ * one, so a dev-only `X-Dev-Ip` lets the harness simulate networks; without it, the rules are skipped.
  */
 function clientIp(request: Request, env: Env): string | null {
   const ip = request.headers.get('CF-Connecting-IP')
-  if (ip) {
+  const local = ip === null || LOOPBACK.has(ip)
+  if (!local) {
     return ip
   }
   return env.RP_ID === 'localhost' ? request.headers.get('X-Dev-Ip') : null
@@ -74,10 +75,7 @@ async function networkHeaders(request: Request, env: Env, headers: Headers): Pro
   const prefix = IPV4.test(ip)
     ? ip.split('.').slice(0, 3).join('.')
     : ip.toLowerCase().split(':').slice(0, 3).join(':')
-  headers.set(
-    'X-Ip-Hash',
-    request.headers.has('CF-Connecting-IP') ? await clientHash(request) : await hash(ip),
-  )
+  headers.set('X-Ip-Hash', await hash(`ip|${ip}`))
   headers.set('X-Prefix-Hash', await hash(`prefix|${prefix}`))
 }
 
