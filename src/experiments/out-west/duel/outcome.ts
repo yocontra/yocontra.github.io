@@ -295,7 +295,8 @@ export function tickBossWound(d: Director): void {
     if (g && e) {
       c.scene.add(g)
       g.position.copy(e.root.position.clone().add(V(0.3, 1.0, 0)))
-      c.physics.add(g, V(0.6, 1.0, -0.5), V(4, 2, 6))
+      // lies on its side, its half-thickness (2.2 cm) above the dirt
+      c.physics.add(g, V(0.6, 1.0, -0.5), V(4, 2, 6), { side: true, ground: 0.023 })
     }
     c.hud.line(d.outlaw.name, 'That… that’s just a scratch.', 2200)
     c.audio.play('shout', { gain: 0.7, rate: 0.6, pos: e?.root.position.clone() ?? V() })

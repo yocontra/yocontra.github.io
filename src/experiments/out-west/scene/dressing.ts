@@ -1,9 +1,35 @@
 // biome-ignore-all lint/complexity/useMaxParams: geometry/audio builders take positional numeric args (x, y, z, size…), mirroring three.js APIs
-import type { InstancedMesh, Matrix4, Object3D } from 'three'
+import { Box3, type InstancedMesh, Matrix4, type Object3D, Vector3 } from 'three'
 import type { GLTF } from 'three/examples/jsm/loaders/GLTFLoader.js'
-import { instance, placeMatrix, propDef } from './props.ts'
+import { instance, type PropDef, placeMatrix, propDef } from './props.ts'
+import { AWNING, deckAt, LANTERNS, STREET } from './street.ts'
 
 const r = (a: number, b: number) => a + Math.random() * (b - a)
+
+/**
+ * A coffin stood on end in front of the undertaker: the kit coffin lies flat (long along Z, lid up,
+ * 2:3 wide), so narrow it to a coffin's proportions, stand it up with the lid to the street, and
+ * seat its foot on the floor and its back clear of the window sills.
+ */
+function coffinAt(def: PropDef, z: number): Matrix4 {
+  const turn = new Matrix4()
+    .makeRotationY(-Math.PI / 2)
+    .multiply(new Matrix4().makeRotationX(-Math.PI / 2))
+    .multiply(new Matrix4().makeScale(0.5, 1, 1))
+  const box = new Box3()
+  for (const p of def.parts) {
+    p.geometry.computeBoundingBox()
+    if (p.geometry.boundingBox) {
+      box.union(p.geometry.boundingBox)
+    }
+  }
+  box.applyMatrix4(turn)
+  // the undertaker's false front is at -(half + boardwalk - 0.25); its windows stand 0.42 proud
+  const back = -(STREET.half + STREET.boardwalk) + 0.25 + 0.43
+  const x = back - box.min.x
+  const at = new Vector3(x, deckAt(back + 0.4, z) - box.min.y, z)
+  return new Matrix4().makeTranslation(at.x, at.y, at.z).multiply(turn)
+}
 
 /** Instanced props around the street. Returns the coffin instances (count changes with kills). */
 export function dressStreet(props: GLTF, parent: Object3D): { coffins: InstancedMesh[] } {
@@ -22,44 +48,47 @@ export function dressStreet(props: GLTF, parent: Object3D): { coffins: Instanced
   // barrels and crates on and by the boardwalks
   const barrels: Matrix4[] = []
   const crates: Matrix4[] = []
+  // every spot on a boardwalk (none in the gaps between buildings, where they stood on air at deck
+  // height), clear of the window sills, and set on the floor under it by deckAt
   const spots: [number, number][] = [
     [10.2, -14.5],
-    [10.4, -13.6],
+    [10.3, -13.6],
     [-10.3, 9.6],
-    [10.3, 20.6],
-    [-10.4, -24],
-    [9.8, -27.5],
-    [-9.9, 23.4],
-    [10.1, 31.5],
-    [-10.2, -36.5],
+    [10.3, 19.9],
+    [-10.3, -24],
+    [9.8, -26.4],
+    [-9.9, 22.9],
+    [10.1, 30.4],
+    [-10.2, -35.4],
   ]
   for (const [x, z] of spots) {
-    barrels.push(placeMatrix(x, x > 0 ? 0.34 : 0.34, z, r(0, 6), r(0.95, 1.1)))
+    barrels.push(placeMatrix(x, deckAt(x, z), z, r(0, 6), r(0.95, 1.1)))
   }
   barrels.push(placeMatrix(-8.3, 0, -15.5, 0.4), placeMatrix(8.4, 0, 25.2, 1.1))
   for (const [x, z] of [
-    [10.6, -12.6],
-    [-10.6, 10.8],
-    [10.4, 21.8],
-    [-10.6, 24.5],
-    [10.6, -37],
-    [-10.5, -23],
+    [10.15, -12.6],
+    [-10.15, 10.4],
+    [10.2, 23.8],
+    [-10.2, 25.8],
+    [10.15, -31.2],
+    [-10.15, -23],
   ] as const) {
-    crates.push(placeMatrix(x, 0.34, z, r(-0.3, 0.3), r(0.9, 1.1)))
+    crates.push(placeMatrix(x, deckAt(x, z), z, r(-0.3, 0.3), r(0.9, 1.1)))
   }
-  crates.push(placeMatrix(8.6, 0, 26.2, 0.3))
+  // on the street, clear of the boardwalk's edge (x 9)
+  crates.push(placeMatrix(8.3, 0, 26.2, 0.3))
   add('barrel', 1.0, barrels, true, 'y')
   add('crate', 0.85, crates, true, 'y')
   // hay at the livery
   add(
     'hay',
     1.3,
-    [placeMatrix(8.6, 0, -42, 0.2), placeMatrix(8.4, 0, -44, 1.3), placeMatrix(-8.4, 0, 35, 0.6)],
+    [placeMatrix(8.3, 0, -42, 0.2), placeMatrix(8.2, 0, -44, 1.3), placeMatrix(-8.3, 0, 35, 0.6)],
     true,
     'y',
   )
   // broken cart near the end of the street
-  add('cart', 4.2, [placeMatrix(-7.6, 0, -30, 0.5), placeMatrix(7, 0, 42, 2.2)])
+  add('cart', 4.2, [placeMatrix(-7.1, 0, -30, 0.5), placeMatrix(7, 0, 42, 2.2)])
   // cacti and rocks out in the desert and at the open end
   const cacti: Matrix4[] = []
   for (let i = 0; i < 26; i++) {
@@ -91,22 +120,16 @@ export function dressStreet(props: GLTF, parent: Object3D): { coffins: Instanced
   add(
     'lantern',
     0.45,
-    [
-      placeMatrix(-9.4, 2.6, -10, 0),
-      placeMatrix(9.4, 2.6, -4, 0),
-      placeMatrix(-9.4, 2.6, 2, 0),
-      placeMatrix(9.4, 2.6, 9, 0),
-      placeMatrix(-9.4, 2.6, 13, 0),
-      placeMatrix(9.4, 2.6, 20, 0),
-    ],
+    // hung from the awning: the ring touches its underside
+    LANTERNS.map(([x, z]) => placeMatrix(x, AWNING - 0.45, z, 0)),
     false,
     'y',
   )
   // coffins stood against the undertaker's front, one per kill
   const coffinMats: Matrix4[] = []
-  for (let i = 0; i < 18; i++) {
-    const z = -10.6 + i * 0.62
-    coffinMats.push(placeMatrix(-11.2, 0.35, z, Math.PI / 2, 1, -Math.PI / 2 + 0.22, 0))
+  const coffinDef = propDef(props, 'coffin', 1.9, 'max')
+  for (let i = 0; coffinDef && i < 18; i++) {
+    coffinMats.push(coffinAt(coffinDef, -11.1 + i * 0.68))
   }
   const coffins = add('coffin', 1.9, coffinMats, true, 'max', 18)
   for (const c of coffins) {

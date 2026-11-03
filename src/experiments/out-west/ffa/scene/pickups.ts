@@ -20,6 +20,15 @@ import type { PickupSpot } from '../sim/layout.ts'
 import { kitMaterial, shotgunMesh } from './shotgun.ts'
 
 const ARC_S = 0.55
+/** A thrown bundle: its scale, and the fuse tip's height in the bundle's own frame (0.4 tall). */
+const THROWN_SCALE = 1.5
+const FUSE_Y = 0.4
+/**
+ * Landed, it lies over on its side (rolled LIE_ROLL about Z round its foot); lifted so its lowest
+ * stick rests on the dirt (at 0.05 it lay a third buried): the bundle's half-width x sin(roll).
+ */
+const LIE_ROLL = 1.4
+const LIE_Y = 0.1 * THROWN_SCALE * Math.sin(LIE_ROLL)
 
 function dynamiteBundle(): Group {
   const g = new Group()
@@ -95,6 +104,8 @@ export class Pickups {
         obj = new Group()
       }
       obj.position.set(spot.x, 0.9, spot.z)
+      // floats over its ring by design (the float audit allows it by this name)
+      obj.name = 'pickup'
       root.add(obj)
       this.items.push({ spot, obj })
     }
@@ -120,12 +131,12 @@ export class Pickups {
   /** A stick lobbed from (fx, fz) to land at (x, z), exploding `fuseS` seconds from now. */
   throw(fx: number, fz: number, x: number, z: number, fuseS: number, nowS: number): void {
     const obj = this.template.clone()
-    obj.scale.setScalar(1.5)
+    obj.scale.setScalar(THROWN_SCALE)
     this.root.add(obj)
     this.thrown.push({
       obj,
       from: new Vector3(fx, 1.2, fz),
-      to: new Vector3(x, 0.05, z),
+      to: new Vector3(x, LIE_Y, z),
       born: nowS,
       fuseEnd: nowS + fuseS,
     })
@@ -161,8 +172,15 @@ export class Pickups {
       const k = Math.min(1, (nowS - t.born) / ARC_S)
       t.obj.position.lerpVectors(t.from, t.to, k)
       t.obj.position.y += Math.sin(k * Math.PI) * 2.4
-      t.obj.rotation.z = k < 1 ? k * 12 : 1.4
-      spark(t.obj.position.x, t.obj.position.y + 0.45, t.obj.position.z)
+      t.obj.rotation.z = k < 1 ? k * 12 : LIE_ROLL
+      // the spark rides the fuse tip, wherever the tumbling bundle points it
+      const rz = t.obj.rotation.z
+      const fuse = FUSE_Y * THROWN_SCALE
+      spark(
+        t.obj.position.x - Math.sin(rz) * fuse,
+        t.obj.position.y + Math.cos(rz) * fuse,
+        t.obj.position.z,
+      )
       if (nowS > t.fuseEnd + 0.4) {
         t.obj.removeFromParent()
         this.thrown.splice(this.thrown.indexOf(t), 1)

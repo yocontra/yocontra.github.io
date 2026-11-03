@@ -26,7 +26,17 @@ import { addStatic, buildMesas, buildPosterPost, buildWaterTower } from './landm
 import { type Preset, presetAt } from './presets.ts'
 import { mergePlaced } from './props.ts'
 import { skyFrag, skyVert } from './sky.ts'
-import { BUILDINGS, dressBoardwalks, facade, type Placed, SIGNS, STREET } from './street.ts'
+import {
+  AWNING,
+  BUILDINGS,
+  DECK,
+  dressBoardwalks,
+  facade,
+  LANTERNS,
+  type Placed,
+  SIGNS,
+  STREET,
+} from './street.ts'
 import { RIM } from './style.ts'
 import { clockCanvas, signAtlas } from './textures.ts'
 import { attachArm, attachBoard, withTownAO } from './town-pbr.ts'
@@ -116,17 +126,10 @@ export class World {
     this.root.add(this.sun.target)
 
     // Lantern lights on the porches nearest the duel (no shadows: one shadow caster only).
-    const lanternSpots: [number, number, number][] = [
-      [-9.4, 3.0, -10],
-      [9.4, 3.0, -4],
-      [-9.4, 3.0, 2],
-      [9.4, 3.0, 9],
-      [-9.4, 3.0, 13],
-      [9.4, 3.0, 20],
-    ]
-    for (const [x, y, z] of lanternSpots) {
+    // each light at its lantern's flame (dressing.ts hangs the lanterns from the same table)
+    for (const [x, z] of LANTERNS) {
       const l = new PointLight(0xff_a8_50, 0, 16, 1.6)
-      l.position.set(x, y, z)
+      l.position.set(x, AWNING - 0.26, z)
       this.root.add(l)
       this.lanterns.push({ light: l, base: 20, phase: Math.random() * 10 })
     }
@@ -143,6 +146,7 @@ export class World {
       uniforms: this.skyU,
     })
     this.sky = new Mesh(new SphereGeometry(900, 32, 16), this.skyMat)
+    this.sky.name = 'sky'
     this.sky.frustumCulled = false
     this.sky.renderOrder = -1
     this.root.add(this.sky)
@@ -236,6 +240,7 @@ float gn(vec2 p){ vec2 i=floor(p); vec2 f=fract(p); f=f*f*(3.0-2.0*f);
       uv.setXY(i, uv.getX(i) * 175, uv.getY(i) * 175)
     }
     this.ground = new Mesh(gGeo, groundMat)
+    this.ground.name = 'ground'
     this.ground.receiveShadow = true
     this.ground.matrixAutoUpdate = false
     this.ground.updateMatrix()
@@ -282,8 +287,9 @@ float gn(vec2 p){ vec2 i=floor(p); vec2 f=fract(p); f=f*f*(3.0-2.0*f);
       trim.box(fx - s * 0.35, b.front + 0.12, b.z, 0.6, 0.24, b.w + 0.3, 0x3a_2a_1e)
       trim.box(fx - s * 0.2, b.front - 0.4, b.z, 0.3, 0.12, b.w + 0.1, 0x3a_2a_1e)
       // corner pilasters
-      trim.box(fx - s * 0.3, b.front / 2, z0 + 0.15, 0.3, b.front, 0.3, 0x3a_2a_1e)
-      trim.box(fx - s * 0.3, b.front / 2, z1 - 0.15, 0.3, b.front, 0.3, 0x3a_2a_1e)
+      // 1 cm proud of the false front's ends, so their end faces never coincide (z-fighting)
+      trim.box(fx - s * 0.3, b.front / 2, z0 + 0.14, 0.3, b.front, 0.3, 0x3a_2a_1e)
+      trim.box(fx - s * 0.3, b.front / 2, z1 - 0.14, 0.3, b.front, 0.3, 0x3a_2a_1e)
       // sign board on the false front
       const sy = b.h + (b.front - b.h) * 0.45 + 0.3
       const sw = Math.min(b.w - 1.4, 8.5)
@@ -320,7 +326,11 @@ float gn(vec2 p){ vec2 i=floor(p); vec2 f=fract(p); f=f*f*(3.0-2.0*f);
       // windows, doors and shutters: the textured kit when it's loaded, plain boxes otherwise
       facade(b, fx, { glass, trim, kit })
       // boardwalk
-      trim.box(s * (H + Bw / 2), 0.17, b.z, Bw, 0.34, b.w, 0xc8_b0_90, { rotUV: true })
+      // 2 cm past the front and its pilasters at each end, its back end inside the false front
+      // (coincident faces z-fought)
+      trim.box(s * (H + Bw / 2 - 0.01), DECK / 2, b.z, Bw - 0.02, DECK, b.w + 0.04, 0xc8_b0_90, {
+        rotUV: true,
+      })
       // awning on posts
       const aw = 3.1
       trim.box(s * (H + Bw / 2 + 0.1), aw, b.z, Bw + 0.4, 0.12, b.w, 0x5a_46_34)
@@ -329,20 +339,23 @@ float gn(vec2 p){ vec2 i=floor(p); vec2 f=fract(p); f=f*f*(3.0-2.0*f);
         pz <= z1 - 0.2;
         pz += (b.w - 0.6) / Math.max(1, Math.round(b.w / 3.2))
       ) {
-        trim.box(s * (H + 0.15), aw / 2 + 0.17, pz, 0.18, aw - 0.3, 0.18, 0x4a_38_28)
+        // from the deck up to the awning's underside: standing on the one, holding up the other
+        trim.box(s * (H + 0.15), (DECK + AWNING) / 2, pz, 0.18, AWNING - DECK, 0.18, 0x4a_38_28)
       }
       // hitching post
       if (b.kind !== 'undertaker') {
         const hz = b.z + (b.side === 1 ? 2 : -2)
-        trim.box(s * (H - 0.6), 0.5, hz - 1.2, 0.14, 1.0, 0.14, 0x5a_44_30)
-        trim.box(s * (H - 0.6), 0.5, hz + 1.2, 0.14, 1.0, 0.14, 0x5a_44_30)
+        // the posts stand proud of the rail (flush tops z-fought)
+        trim.box(s * (H - 0.6), 0.53, hz - 1.2, 0.14, 1.06, 0.14, 0x5a_44_30)
+        trim.box(s * (H - 0.6), 0.53, hz + 1.2, 0.14, 1.06, 0.14, 0x5a_44_30)
         trim.box(s * (H - 0.6), 0.95, hz, 0.1, 0.1, 2.6, 0x5a_44_30)
       }
       // saloon swinging doors
       if (b.kind === 'saloon') {
-        for (const dz of [-0.36, 0.36]) {
+        // batwings hung inside the kit door frame's opening (the saloon has no door leaf)
+        for (const dz of [-0.29, 0.29]) {
           const g = new GeoBuilder(1.6)
-          g.box(0, 0, Number(dz), 0.05, 1.1, 0.68, 0x7a_4a_2a)
+          g.box(0, 0, Number(dz), 0.05, 1.1, 0.56, 0x7a_4a_2a)
           const door = new Mesh(g.build(), this.trimMat)
           door.position.set(fx - s * 0.4, 1.35, b.z + dz)
           door.castShadow = true
@@ -357,8 +370,14 @@ float gn(vec2 p){ vec2 i=floor(p); vec2 f=fract(p); f=f*f*(3.0-2.0*f);
 
     dressBoardwalks(kit)
     mergePlaced(kit, this.root, new Map([['KitGlass', this.windowMat]]))
-    addStatic(this.root, walls, this.wallMat)
-    addStatic(this.root, trim, this.trimMat)
+    for (const [name, m] of [
+      ['walls', addStatic(this.root, walls, this.wallMat)],
+      ['trim', addStatic(this.root, trim, this.trimMat)],
+    ] as const) {
+      if (m) {
+        m.name = name
+      }
+    }
     const gm = addStatic(this.root, glass, this.windowMat, false)
     if (gm) {
       gm.receiveShadow = false
