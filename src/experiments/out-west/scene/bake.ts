@@ -57,20 +57,34 @@ const firstMaterial = (m: Mesh['material']): MeshStandardMaterial =>
 
 const tmpM = new Matrix4()
 
-/** Linear-blend skinning matrix of vertex `k` (bone world × inverse bind, weighted) into `out`. */
+/** A plain (not interleaved, not normalised) attribute's array: read directly, no accessor. */
+function plainArray(a: SkinnedMesh['geometry']['attributes'][string]): ArrayLike<number> | null {
+  return a instanceof BufferAttribute && !a.normalized ? a.array : null
+}
+
+/**
+ * Linear-blend skinning matrix of vertex `k` (bone world × inverse bind, weighted) into `out`.
+ * Runs once per vertex of every body cast (tens of thousands), so plain attributes are read
+ * straight from their arrays: `getComponent` here boxed every weight it returned.
+ */
 function blendBones(sm: SkinnedMesh, k: number, out: Matrix4): Matrix4 {
   const si = sm.geometry.getAttribute('skinIndex')
   const sw = sm.geometry.getAttribute('skinWeight')
-  out.elements.fill(0)
+  const ia = plainArray(si)
+  const wa = plainArray(sw)
+  const o = out.elements
+  for (let q = 0; q < 16; q++) {
+    o[q] = 0
+  }
   for (let c = 0; c < 4; c++) {
-    const w = sw.getComponent(k, c)
-    const li = si.getComponent(k, c)
+    const w = wa ? (wa[k * sw.itemSize + c] ?? 0) : sw.getComponent(k, c)
+    const li = ia ? (ia[k * si.itemSize + c] ?? 0) : si.getComponent(k, c)
     const bone = sm.skeleton.bones[li]
     const ib = sm.skeleton.boneInverses[li]
     if (w > 0 && bone && ib) {
-      tmpM.multiplyMatrices(bone.matrixWorld, ib)
+      const t = tmpM.multiplyMatrices(bone.matrixWorld, ib).elements
       for (let q = 0; q < 16; q++) {
-        out.elements[q] = (out.elements[q] ?? 0) + (tmpM.elements[q] ?? 0) * w
+        o[q] = (o[q] as number) + (t[q] as number) * w
       }
     }
   }

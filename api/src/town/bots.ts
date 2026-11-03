@@ -28,9 +28,9 @@ const REPLAN_TICKS = 40
 const SCAN_TICKS = 4
 const AIM_ERROR_RAD = 0.06
 /** Dev `rally` only: bots further than this from the rally player stop fighting and walk back. */
-const RALLY_LEASH = 9
-/** Dev `rally` only: how far wide the crowd shoots (aim units: 65536 per turn, so ~25°). */
-const RALLY_MISS_AIM = 4600
+const RALLY_LEASH = 7
+/** Dev `rally` only: the crowd fires outward from the rally point, give or take this (rad). */
+const RALLY_AIM_JITTER = 0.5
 const FIRST_NAMES = ['Dusty', 'Lefty', 'Calamity', 'Doc', 'Mad', 'Silent', 'Coyote', 'Belle']
 const LAST_NAMES = ['Malone', 'Hollis', 'Black', 'Starling', 'Pike', 'Varga', 'Crowe', 'Tate']
 /** 64 distinct first × last names, ordered so neighbours share neither half. */
@@ -125,7 +125,7 @@ export class BotDirector {
   private pickGoal(w: World, p: Player): { x: number; z: number } {
     const host = this.rally === NONE ? null : w.players[this.rally]
     if (host?.alive) {
-      return { x: host.x + this.rng.range(-7, 7), z: host.z + this.rng.range(-5, 5) }
+      return { x: host.x + this.rng.range(-5, 5), z: host.z + this.rng.range(-3.5, 3.5) }
     }
     if (p.carried >= BANK_AT) {
       const windows = w.layout.zones
@@ -198,6 +198,21 @@ export class BotDirector {
     f.aim = radiansToAim(Math.atan2(dz, dx))
   }
 
+  /**
+   * A rally is a crowd, not a massacre: they circle the rally point and shoot (tracers, muzzle
+   * flashes, sound) outward, away from the crowd, so it stays on its feet around you.
+   */
+  private rallyFight(p: Player, b: BotBrain, f: InputFrame, host: Player): void {
+    const hx = host.x - p.x
+    const hz = host.z - p.z
+    const hd = Math.hypot(hx, hz) || 1
+    f.aim = radiansToAim(Math.atan2(-hz, -hx) + this.rng.range(-RALLY_AIM_JITTER, RALLY_AIM_JITTER))
+    f.buttons &= ~BTN_THROW
+    const pull = hd > 5 ? 1 : 0
+    f.moveX = Math.round(((hx / hd) * pull - (hz / hd) * b.strafe * 0.5) * 100)
+    f.moveZ = Math.round(((hz / hd) * pull + (hx / hd) * b.strafe * 0.5) * 100)
+  }
+
   private think(w: World, p: Player): InputFrame {
     const b = this.brain(p.id)
     const f: InputFrame = {
@@ -230,9 +245,7 @@ export class BotDirector {
     if (q?.alive && p.carried < BANK_AT * 2 && !straying) {
       this.fight({ w, p, b, q, f })
       if (host) {
-        // A rally is a crowd, not a massacre: they shoot (tracers, muzzle flashes, sound) but
-        // mostly wide, so the crowd stays on its feet around you.
-        f.aim = (f.aim + RALLY_MISS_AIM) & 0xff_ff
+        this.rallyFight(p, b, f, host)
       }
     } else {
       if (

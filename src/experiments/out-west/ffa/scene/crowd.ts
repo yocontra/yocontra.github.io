@@ -153,6 +153,11 @@ interface Member {
   rifle: LongGun | null
   /** The map weapon in his hand right now, if any (for the muzzle). */
   held: LongGun | null
+  /**
+   * His rig's bones. They only move when his mixer ticks (30 or 15 Hz), so their local matrices
+   * are composed then, not by every frame's scene-graph walk.
+   */
+  bones: Object3D[]
 }
 
 function blobTexture(): CanvasTexture {
@@ -317,6 +322,7 @@ export class Crowd {
       shotgun: null,
       rifle: null,
       held: null,
+      bones: [],
     })
     this.assets.body(look.look.base).catch(() => undefined)
     this.ensureVat(look.look.base)
@@ -358,6 +364,7 @@ export class Crowd {
     m.actor?.dispose()
     m.holder?.removeFromParent()
     m.actor = null
+    m.bones = []
     m.holder = null
     m.pivot = null
     m.arm = null
@@ -437,6 +444,14 @@ export class Crowd {
     }
     actor.play('Idle_Gun', 0)
     m.actor = actor
+    m.bones = []
+    actor.root.traverse((o) => {
+      if ((o as { isBone?: boolean }).isBone === true) {
+        o.matrixAutoUpdate = false
+        o.updateMatrix()
+        m.bones.push(o)
+      }
+    })
     m.holder = holder
     m.pivot = pivot
     m.arm = this.armLayer(actor)
@@ -681,6 +696,9 @@ export class Crowd {
       m.acc = 0
       if (m.recoil > 0 && actor.forearmR) {
         actor.forearmR.rotation.z += m.recoil * 0.5
+      }
+      for (const b of m.bones) {
+        b.updateMatrix()
       }
     }
     m.recoil = Math.max(0, m.recoil - dt * 8)

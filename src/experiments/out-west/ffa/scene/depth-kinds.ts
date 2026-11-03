@@ -21,7 +21,12 @@ export function shareDepthByKind(root: Object3D): void {
       return
     }
     const mat = m.material
-    if (Array.isArray(mat) || mat.alphaTest > 0 || mat.alphaMap || mat.alphaToCoverage) {
+    if (
+      Array.isArray(mat) ||
+      mat.alphaTest > 0 ||
+      (mat as { alphaMap?: unknown }).alphaMap ||
+      mat.alphaToCoverage
+    ) {
       // cut-outs keep three's per-material depth variant
       return
     }

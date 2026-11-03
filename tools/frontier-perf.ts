@@ -61,7 +61,7 @@ await page.waitForFunction(() => typeof Reflect.get(globalThis, '__owPerf') === 
 })
 await sleep(8000)
 await cdp.send('Emulation.setCPUThrottlingRate', { rate })
-await sleep(12_000)
+await sleep(cluster ? 25_000 : 12_000)
 await cdp.send('HeapProfiler.collectGarbage').catch(() => undefined)
 
 const rows: (Snap & { inView: number; near: number; far: number; builds: number })[] = []
@@ -75,8 +75,33 @@ for (let t = 0; t < secs; t += 2) {
     }
     const perf = perfFn()
     const f = fFn()
-    // riders within the guaranteed 18 m view radius (§3.1)
-    const inView = f.others.filter((o) => Math.hypot(o.x - f.x, o.z - f.z) <= 18).length
+    // riders actually on screen: project each through the live camera (dev builds expose the
+    // renderer as __owRenderer); fall back to the guaranteed 18 m view radius (§3.1)
+    const r = Reflect.get(globalThis, '__owRenderer') as Record<string, unknown> | undefined
+    const cam = Object.values(r ?? {}).find(
+      (v) => (v as { isCamera?: boolean } | null)?.isCamera === true,
+    ) as
+      | {
+          matrixWorldInverse: { elements: number[] }
+          projectionMatrix: { elements: number[] }
+        }
+      | undefined
+    const onScreen = (x: number, z: number): boolean => {
+      if (!cam) {
+        return Math.hypot(x - f.x, z - f.z) <= 18
+      }
+      const v = cam.matrixWorldInverse.elements
+      const p = cam.projectionMatrix.elements
+      const y = 1
+      const vx = (v[0] ?? 0) * x + (v[4] ?? 0) * y + (v[8] ?? 0) * z + (v[12] ?? 0)
+      const vy = (v[1] ?? 0) * x + (v[5] ?? 0) * y + (v[9] ?? 0) * z + (v[13] ?? 0)
+      const vz = (v[2] ?? 0) * x + (v[6] ?? 0) * y + (v[10] ?? 0) * z + (v[14] ?? 0)
+      const cx = (p[0] ?? 0) * vx + (p[8] ?? 0) * vz
+      const cy = (p[5] ?? 0) * vy + (p[9] ?? 0) * vz
+      const w = -vz
+      return w > 0 && Math.abs(cx / w) <= 1 && Math.abs(cy / w) <= 1
+    }
+    const inView = f.others.filter((o) => onScreen(o.x, o.z)).length
     return {
       ...perf,
       inView,
@@ -114,3 +139,4 @@ console.log(
 console.log(
   `  draws ≤${max(rows.map((r) => r.draws))}, tris ≤${Math.round(max(rows.map((r) => r.tris)) / 1000)}k, riders in view ${med(rows.map((r) => r.inView))} (max ${max(rows.map((r) => r.inView))})`,
 )
+console.log(`  riders on screen per sample: ${rows.map((r) => r.inView).join(' ')}`)
