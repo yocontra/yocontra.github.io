@@ -17,10 +17,7 @@ export type HubShot = 'hub' | 'store'
 const SIDE: Record<HubShot, number> = { hub: 1.1, store: 1.1 }
 const LIFT: Record<HubShot, number> = { hub: -0.75, store: -0.55 }
 
-/**
- * Swap your character for one wearing `loadout`. `DuelState.player` is built once in the
- * constructor; the duel reads it fresh every frame, so replacing the object is enough.
- */
+/** Swap your character for one wearing `loadout`; the duel reads `player` fresh every frame. */
 export function wearLoadout(s: DuelState, loadout: unknown): void {
   const c = s.c
   const old = s.player
@@ -30,8 +27,7 @@ export function wearLoadout(s: DuelState, loadout: unknown): void {
   next.root.visible = old.root.visible
   old.dispose()
   c.scene.add(next.root)
-  // the one field the duel holds by reference; readonly is a compile-time promise only
-  Reflect.set(s, 'player', next)
+  s.setPlayer(next)
 }
 
 /** Frame your gunslinger for the hub (beside the tiles) or the Outfitter (close, turning). */
@@ -54,7 +50,8 @@ export function hubShot(s: DuelState, shot: HubShot): void {
       const portrait = s.portrait
       if (store) {
         // a slow turntable, so every piece of kit is seen from the front and the back
-        p.root.rotation.y = 0.4 + Math.sin(t * 0.35) * 0.9
+        // (read fresh: trying on a piece swaps the whole actor mid-turn)
+        s.player.root.rotation.y = 0.4 + Math.sin(t * 0.35) * 0.9
       }
       const k = easeInOutCubic(clamp01(t / 2.4))
       const dist = MathUtils.lerp(store ? 5.6 : 7.5, store ? 4.4 : 5.8, k) * (portrait ? 1.35 : 1)

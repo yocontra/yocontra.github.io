@@ -183,12 +183,23 @@ export class DuelState {
   coin = null as Mesh | null
   readonly posterCanvas = document.createElement('canvas')
   readonly posterTex: CanvasTexture
-  readonly player: Actor
+  /** Your gunslinger; replaced (not mutated) when the loadout changes, via `setPlayer`. */
+  private you: Actor
 
   constructor(c: Ctx) {
     this.c = c
     this.posterTex = new CanvasTexture(this.posterCanvas)
-    this.player = new Actor(c.assets.player, { gun: c.gun ? propObject(c.gun) : null })
+    this.you = new Actor(c.assets.player, { gun: c.gun ? propObject(c.gun) : null })
+  }
+
+  /** Your gunslinger. Read it fresh each time: a new loadout swaps the whole actor. */
+  get player(): Actor {
+    return this.you
+  }
+
+  /** Swap in a re-dressed gunslinger (the caller disposes the old one and adds the new to the scene). */
+  setPlayer(a: Actor): void {
+    this.you = a
   }
 
   get portrait(): boolean {
