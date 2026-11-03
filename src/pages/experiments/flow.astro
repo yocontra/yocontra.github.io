@@ -52,8 +52,8 @@ const sliders = (Object.keys(paramRanges) as (keyof HeroParams)[])
     <form data-flow-form>
       <fieldset class="backend">
         <legend class="visually-hidden">Renderer backend</legend>
-        <label><input type="radio" name="backend" value="webgpu"><span>WebGPU</span></label>
-        <label><input type="radio" name="backend" value="webgl2"><span>WebGL2</span></label>
+        <label><input type="radio" name="backend" value="webgpu" /><span>WebGPU</span></label>
+        <label><input type="radio" name="backend" value="webgl2" /><span>WebGL2</span></label>
       </fieldset>
 
       <div class="params">
@@ -75,7 +75,7 @@ const sliders = (Object.keys(paramRanges) as (keyof HeroParams)[])
         <label class="param toggle" for="p-vcr">
           <span class="name">{labels.vcr}</span>
           <output for="p-vcr">off</output>
-          <input id="p-vcr" name="vcr" type="checkbox">
+          <input id="p-vcr" name="vcr" type="checkbox" />
         </label>
       </div>
 
@@ -91,311 +91,311 @@ const sliders = (Object.keys(paramRanges) as (keyof HeroParams)[])
 </Base>
 
 <style>
-:global(html),
-:global(body) {
-  overflow: hidden;
-  overscroll-behavior: none;
-}
-
-.stage {
-  position: fixed;
-  inset: 0;
-  background: var(--bg);
-}
-.stage :global(canvas) {
-  width: 100%;
-  height: 100%;
-  touch-action: none;
-}
-
-.fallback {
-  position: fixed;
-  inset: 0;
-  display: grid;
-  place-content: center;
-  gap: 1rem;
-  padding: var(--gutter);
-  text-align: center;
-  max-width: 40rem;
-  margin-inline: auto;
-}
-.fallback[hidden] {
-  display: none;
-}
-.fallback h1 {
-  font-size: clamp(2rem, 6vw, 3.5rem);
-}
-.fallback p:not(.eyebrow) {
-  color: var(--fg-muted);
-}
-
-.hud,
-.panel {
-  background: oklch(0.13 0.01 var(--accent-h) / 0.55);
-  backdrop-filter: blur(16px) saturate(1.5);
-  -webkit-backdrop-filter: blur(16px) saturate(1.5);
-  border: 1px solid var(--line);
-  color: var(--fg);
-  font-family: var(--font-mono);
-}
-
-.hud {
-  position: fixed;
-  inset-block-start: max(1rem, env(safe-area-inset-top));
-  inset-inline-end: max(1rem, env(safe-area-inset-right));
-  z-index: 10;
-  display: flex;
-  gap: 0.9em;
-  align-items: center;
-  padding: 0.5em 0.9em;
-  border-radius: 999px;
-  font-size: 0.72rem;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: var(--fg-muted);
-  font-variant-numeric: tabular-nums;
-  pointer-events: none;
-}
-.hud b {
-  color: var(--accent);
-  font-weight: 600;
-  white-space: pre;
-}
-.hud .state {
-  color: var(--fg-faint);
-}
-.hud .state[data-paused] {
-  color: var(--accent-2);
-}
-
-.panel {
-  position: fixed;
-  inset-block-end: max(1rem, env(safe-area-inset-bottom));
-  inset-inline-end: max(1rem, env(safe-area-inset-right));
-  z-index: 10;
-  width: min(22rem, calc(100vw - 2rem));
-  max-height: calc(100dvh - 6rem);
-  overflow: auto;
-  border-radius: var(--radius);
-  font-size: 0.78rem;
-  box-shadow: 0 1.5rem 4rem oklch(0 0 0 / 0.4);
-}
-.hud[hidden],
-.panel[hidden] {
-  display: none;
-}
-
-summary {
-  display: flex;
-  gap: 1rem;
-  align-items: baseline;
-  justify-content: space-between;
-  padding: 0.85rem 1.1rem;
-  cursor: pointer;
-  list-style: none;
-  user-select: none;
-}
-summary::-webkit-details-marker {
-  display: none;
-}
-summary .title {
-  font-family: var(--font-display);
-  font-size: 0.95rem;
-  letter-spacing: 0.02em;
-  color: var(--accent);
-}
-summary .title::after {
-  content: " +";
-  color: var(--fg-faint);
-}
-.panel[open] summary .title::after {
-  content: " −";
-}
-.hint {
-  color: var(--fg-faint);
-  font-size: 0.66rem;
-  white-space: nowrap;
-}
-kbd {
-  font: inherit;
-  color: var(--fg-muted);
-  padding: 0.05em 0.35em;
-  border: 1px solid var(--line);
-  border-radius: 0.3em;
-}
-
-form {
-  display: grid;
-  gap: 1rem;
-  padding: 0 1.1rem 1.1rem;
-}
-
-.backend {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 0.25rem;
-  margin: 0;
-  padding: 0.25rem;
-  border: 1px solid var(--line);
-  border-radius: 999px;
-}
-.backend label {
-  position: relative;
-  display: grid;
-  cursor: pointer;
-}
-.backend input {
-  position: absolute;
-  opacity: 0;
-  pointer-events: none;
-}
-.backend span {
-  padding: 0.45em 0;
-  text-align: center;
-  border-radius: 999px;
-  color: var(--fg-muted);
-  transition:
-    background 0.2s,
-    color 0.2s;
-}
-.backend input:checked + span {
-  background: var(--accent);
-  color: var(--accent-ink);
-  font-weight: 600;
-}
-.backend input:focus-visible + span {
-  outline: 2px solid var(--accent);
-  outline-offset: 2px;
-}
-.backend input:disabled + span {
-  opacity: 0.35;
-  text-decoration: line-through;
-  cursor: not-allowed;
-}
-
-.params {
-  display: grid;
-  gap: 0.7rem;
-}
-.param {
-  display: grid;
-  grid-template-columns: 1fr auto;
-  gap: 0.3rem 1rem;
-  align-items: center;
-}
-.param .name {
-  color: var(--fg-muted);
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  font-size: 0.68rem;
-}
-.param output {
-  color: var(--accent);
-  font-variant-numeric: tabular-nums;
-}
-.param input[type="range"] {
-  grid-column: 1 / -1;
-  width: 100%;
-  margin: 0;
-  accent-color: var(--accent);
-  cursor: pointer;
-}
-.toggle {
-  grid-template-columns: 1fr auto auto;
-}
-.toggle input {
-  appearance: none;
-  position: relative;
-  width: 2.2rem;
-  height: 1.2rem;
-  margin: 0;
-  border-radius: 999px;
-  background: var(--line);
-  border: 1px solid var(--line);
-  cursor: pointer;
-  transition: background 0.2s;
-}
-.toggle input::after {
-  content: "";
-  position: absolute;
-  inset-block: 0.12rem;
-  inset-inline-start: 0.12rem;
-  aspect-ratio: 1;
-  border-radius: 50%;
-  background: var(--fg-muted);
-  transition:
-    translate 0.2s var(--ease-out),
-    background 0.2s;
-}
-.toggle input:checked {
-  background: var(--accent);
-}
-.toggle input:checked::after {
-  translate: 1rem 0;
-  background: var(--accent-ink);
-}
-
-.actions {
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 0.4rem;
-}
-button {
-  font: inherit;
-  padding: 0.6em 0.8em;
-  border-radius: 999px;
-  border: 1px solid var(--line);
-  background: oklch(0.96 0.01 var(--accent-h) / 0.06);
-  color: var(--fg);
-  cursor: pointer;
-  text-transform: lowercase;
-  transition:
-    background 0.2s,
-    color 0.2s,
-    border-color 0.2s;
-}
-button:hover {
-  border-color: var(--accent);
-  color: var(--accent);
-}
-button[data-action="randomize"] {
-  background: var(--accent);
-  border-color: var(--accent);
-  color: var(--accent-ink);
-  font-weight: 600;
-}
-button[data-action="randomize"]:hover {
-  background: color-mix(in oklch, var(--accent) 85%, white);
-  color: var(--accent-ink);
-}
-
-.status {
-  min-height: 1.2em;
-  margin: -0.4rem 0 0;
-  color: var(--accent-2);
-  font-size: 0.7rem;
-  text-align: center;
-}
-
-@media (max-width: 40rem) {
-  .panel {
-    inset-inline: max(0.75rem, env(safe-area-inset-left)) max(0.75rem, env(safe-area-inset-right));
-    inset-block-end: max(0.75rem, env(safe-area-inset-bottom));
-    width: auto;
-    max-height: 55dvh;
+  :global(html),
+  :global(body) {
+    overflow: hidden;
+    overscroll-behavior: none;
   }
-  .hud {
-    gap: 0.6em;
-    font-size: 0.64rem;
+
+  .stage {
+    position: fixed;
+    inset: 0;
+    background: var(--bg);
   }
-  .hint {
+  .stage :global(canvas) {
+    width: 100%;
+    height: 100%;
+    touch-action: none;
+  }
+
+  .fallback {
+    position: fixed;
+    inset: 0;
+    display: grid;
+    place-content: center;
+    gap: 1rem;
+    padding: var(--gutter);
+    text-align: center;
+    max-width: 40rem;
+    margin-inline: auto;
+  }
+  .fallback[hidden] {
     display: none;
   }
-}
+  .fallback h1 {
+    font-size: clamp(2rem, 6vw, 3.5rem);
+  }
+  .fallback p:not(.eyebrow) {
+    color: var(--fg-muted);
+  }
+
+  .hud,
+  .panel {
+    background: oklch(0.13 0.01 var(--accent-h) / 0.55);
+    backdrop-filter: blur(16px) saturate(1.5);
+    -webkit-backdrop-filter: blur(16px) saturate(1.5);
+    border: 1px solid var(--line);
+    color: var(--fg);
+    font-family: var(--font-mono);
+  }
+
+  .hud {
+    position: fixed;
+    inset-block-start: max(1rem, env(safe-area-inset-top));
+    inset-inline-end: max(1rem, env(safe-area-inset-right));
+    z-index: 10;
+    display: flex;
+    gap: 0.9em;
+    align-items: center;
+    padding: 0.5em 0.9em;
+    border-radius: 999px;
+    font-size: 0.72rem;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--fg-muted);
+    font-variant-numeric: tabular-nums;
+    pointer-events: none;
+  }
+  .hud b {
+    color: var(--accent);
+    font-weight: 600;
+    white-space: pre;
+  }
+  .hud .state {
+    color: var(--fg-faint);
+  }
+  .hud .state[data-paused] {
+    color: var(--accent-2);
+  }
+
+  .panel {
+    position: fixed;
+    inset-block-end: max(1rem, env(safe-area-inset-bottom));
+    inset-inline-end: max(1rem, env(safe-area-inset-right));
+    z-index: 10;
+    width: min(22rem, calc(100vw - 2rem));
+    max-height: calc(100dvh - 6rem);
+    overflow: auto;
+    border-radius: var(--radius);
+    font-size: 0.78rem;
+    box-shadow: 0 1.5rem 4rem oklch(0 0 0 / 0.4);
+  }
+  .hud[hidden],
+  .panel[hidden] {
+    display: none;
+  }
+
+  summary {
+    display: flex;
+    gap: 1rem;
+    align-items: baseline;
+    justify-content: space-between;
+    padding: 0.85rem 1.1rem;
+    cursor: pointer;
+    list-style: none;
+    user-select: none;
+  }
+  summary::-webkit-details-marker {
+    display: none;
+  }
+  summary .title {
+    font-family: var(--font-display);
+    font-size: 0.95rem;
+    letter-spacing: 0.02em;
+    color: var(--accent);
+  }
+  summary .title::after {
+    content: " +";
+    color: var(--fg-faint);
+  }
+  .panel[open] summary .title::after {
+    content: " −";
+  }
+  .hint {
+    color: var(--fg-faint);
+    font-size: 0.66rem;
+    white-space: nowrap;
+  }
+  kbd {
+    font: inherit;
+    color: var(--fg-muted);
+    padding: 0.05em 0.35em;
+    border: 1px solid var(--line);
+    border-radius: 0.3em;
+  }
+
+  form {
+    display: grid;
+    gap: 1rem;
+    padding: 0 1.1rem 1.1rem;
+  }
+
+  .backend {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.25rem;
+    margin: 0;
+    padding: 0.25rem;
+    border: 1px solid var(--line);
+    border-radius: 999px;
+  }
+  .backend label {
+    position: relative;
+    display: grid;
+    cursor: pointer;
+  }
+  .backend input {
+    position: absolute;
+    opacity: 0;
+    pointer-events: none;
+  }
+  .backend span {
+    padding: 0.45em 0;
+    text-align: center;
+    border-radius: 999px;
+    color: var(--fg-muted);
+    transition:
+      background 0.2s,
+      color 0.2s;
+  }
+  .backend input:checked + span {
+    background: var(--accent);
+    color: var(--accent-ink);
+    font-weight: 600;
+  }
+  .backend input:focus-visible + span {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
+  .backend input:disabled + span {
+    opacity: 0.35;
+    text-decoration: line-through;
+    cursor: not-allowed;
+  }
+
+  .params {
+    display: grid;
+    gap: 0.7rem;
+  }
+  .param {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 0.3rem 1rem;
+    align-items: center;
+  }
+  .param .name {
+    color: var(--fg-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    font-size: 0.68rem;
+  }
+  .param output {
+    color: var(--accent);
+    font-variant-numeric: tabular-nums;
+  }
+  .param input[type="range"] {
+    grid-column: 1 / -1;
+    width: 100%;
+    margin: 0;
+    accent-color: var(--accent);
+    cursor: pointer;
+  }
+  .toggle {
+    grid-template-columns: 1fr auto auto;
+  }
+  .toggle input {
+    appearance: none;
+    position: relative;
+    width: 2.2rem;
+    height: 1.2rem;
+    margin: 0;
+    border-radius: 999px;
+    background: var(--line);
+    border: 1px solid var(--line);
+    cursor: pointer;
+    transition: background 0.2s;
+  }
+  .toggle input::after {
+    content: "";
+    position: absolute;
+    inset-block: 0.12rem;
+    inset-inline-start: 0.12rem;
+    aspect-ratio: 1;
+    border-radius: 50%;
+    background: var(--fg-muted);
+    transition:
+      translate 0.2s var(--ease-out),
+      background 0.2s;
+  }
+  .toggle input:checked {
+    background: var(--accent);
+  }
+  .toggle input:checked::after {
+    translate: 1rem 0;
+    background: var(--accent-ink);
+  }
+
+  .actions {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 0.4rem;
+  }
+  button {
+    font: inherit;
+    padding: 0.6em 0.8em;
+    border-radius: 999px;
+    border: 1px solid var(--line);
+    background: oklch(0.96 0.01 var(--accent-h) / 0.06);
+    color: var(--fg);
+    cursor: pointer;
+    text-transform: lowercase;
+    transition:
+      background 0.2s,
+      color 0.2s,
+      border-color 0.2s;
+  }
+  button:hover {
+    border-color: var(--accent);
+    color: var(--accent);
+  }
+  button[data-action="randomize"] {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: var(--accent-ink);
+    font-weight: 600;
+  }
+  button[data-action="randomize"]:hover {
+    background: color-mix(in oklch, var(--accent) 85%, white);
+    color: var(--accent-ink);
+  }
+
+  .status {
+    min-height: 1.2em;
+    margin: -0.4rem 0 0;
+    color: var(--accent-2);
+    font-size: 0.7rem;
+    text-align: center;
+  }
+
+  @media (max-width: 40rem) {
+    .panel {
+      inset-inline: max(0.75rem, env(safe-area-inset-left)) max(0.75rem, env(safe-area-inset-right));
+      inset-block-end: max(0.75rem, env(safe-area-inset-bottom));
+      width: auto;
+      max-height: 55dvh;
+    }
+    .hud {
+      gap: 0.6em;
+      font-size: 0.64rem;
+    }
+    .hint {
+      display: none;
+    }
+  }
 </style>
 
 <script>
-import { initFlow } from '~/experiments/flow/controls'
+  import { initFlow } from '~/experiments/flow/controls'
 
-initFlow()
+  initFlow()
 </script>

@@ -14,6 +14,16 @@ export interface Experiment {
 
 export const experiments: readonly Experiment[] = [
   {
+    slug: 'flow',
+    title: 'Flow',
+    year: 2026,
+    blurb:
+      'A playground for the shader behind this site’s homepage. Tweak it, randomize it, share the URL.',
+    tags: ['webgpu', 'webgl2', 'shader'],
+    thumb: '/experiments/flow/thumb.webp',
+    hue: 150,
+  },
+  {
     slug: 'out-west',
     title: 'out west',
     year: 2019,
