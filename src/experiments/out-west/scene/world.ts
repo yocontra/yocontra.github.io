@@ -212,6 +212,9 @@ export class World {
   readonly instanced: InstancedMesh[] = []
   readonly saloonDoors: Mesh[] = []
   private time = 0
+  private readonly scene: Scene
+  /** Day at the last light-probe capture request. */
+  private probeDay = -1
   readonly bellPos = new Vector3(0, 13, STREET.churchZ - 6)
 
   constructor(
@@ -226,6 +229,7 @@ export class World {
     },
     shadowSize: number,
   ) {
+    this.scene = scene
     scene.add(this.root)
     this.preset = presetAt(0)
     this.fog = new Fog(0xe8_d3_a8, 60, 220)
@@ -717,6 +721,14 @@ float gn(vec2 p){ vec2 i=floor(p); vec2 f=fract(p); f=f*f*(3.0-2.0*f);
     RIM.strength.value = p.rim
     this.windowMat.emissiveIntensity = p.windows * 1.6
     this.clockMat.emissiveIntensity = day > 0.95 ? (day - 0.95) * 20 * 0.9 : 0
+    // The renderer picks the LUT pair from owDay, and recaptures the town light
+    // probe whenever owLightVersion moves (a few frames, spread out).
+    const ud = this.scene.userData
+    ud.owDay = day
+    if (Math.abs(day - this.probeDay) > 0.035) {
+      this.probeDay = day
+      ud.owLightVersion = ((ud.owLightVersion as number | undefined) ?? 0) + 1
+    }
   }
 
   /** Fog thickening for the windy outlaw (0..1). */
