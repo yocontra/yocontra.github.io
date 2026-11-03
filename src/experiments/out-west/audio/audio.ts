@@ -50,6 +50,11 @@ const CALL_DUCK: readonly (readonly [Bus, number])[] = [
   ['music', 0.18],
   ['amb', 0.25],
 ]
+/**
+ * Songs that duck deeper under the call. The tension bed is low drones that a lowpass can't thin,
+ * so at the bell it drops away (on the bell's own clock: never a beat early, which would be a tell).
+ */
+const CALL_DUCK_SONG: Partial<Record<SongName, number>> = { tension: 0.05 }
 /** Seconds the duck holds before music and ambience swell back. */
 const CALL_DUCK_HOLD = 0.7
 /** No heartbeat may sound this close after the call's strike (it would blur the bell's attack). */
@@ -179,6 +184,7 @@ export class AudioEngine {
   private heartNext = 0
   private readonly heartVoices: { t: number; v: Voice }[] = []
   private lastCall = Number.NEGATIVE_INFINITY
+  private uiHushed = false as boolean
   private noise: AudioBuffer | null = null
   private paused = false
   private dbg: AudioDebug | null = null
@@ -752,9 +758,24 @@ export class AudioEngine {
     return this.play(IMPACT[surface], { ...o, rate: (o.rate ?? 1) * (0.92 + Math.random() * 0.16) })
   }
 
-  /** UI sounds: dry, centred, a touch of pitch variety so repeats never machine-gun. */
+  /**
+   * UI sounds: dry, centred, a touch of pitch variety so repeats never machine-gun. Silent through
+   * a standoff (`hushUi`) and while the call rings, so nothing on screen can be mistaken for it.
+   */
   ui(name: UiName, gain = 1): Voice | null {
+    if (this.uiHushed || this.now < this.lastCall + CALL_DUCK_HOLD) {
+      this.dbg?.log('uiHushed', name)
+      return null
+    }
     return this.play(name, { gain, rate: name === 'uiTick' ? 0.94 + Math.random() * 0.12 : 1 })
+  }
+
+  /** Hush every UI sound while a standoff waits for the call (and lift it after). */
+  hushUi(on: boolean): void {
+    if (this.uiHushed !== on) {
+      this.dbg?.log('hushUi', on)
+    }
+    this.uiHushed = on
   }
 
   // ------------------------------------------------------------- streams
@@ -823,7 +844,10 @@ export class AudioEngine {
         target = value
         s.level(value * trim, this.num('loop ramp', ramp, 0.3, 0, 30))
       },
-      stop: () => s.stop(1),
+      stop: () => {
+        this.dbg?.log('loopStop', name)
+        s.stop(1)
+      },
     }
   }
 
@@ -872,6 +896,7 @@ export class AudioEngine {
         glide(g.gain, value * trim, ctx.currentTime, this.num('loop ramp', ramp, 0.3, 0, 30))
       },
       stop: () => {
+        this.dbg?.log('loopStop', name)
         const t = ctx.currentTime
         glide(g.gain, 0, t, 0.15)
         src.stop(t + 0.3)
@@ -882,11 +907,13 @@ export class AudioEngine {
   /**
    * Ambience by time of day (0 morning … 0.6 sunset … 1 midnight): crossfades the day, dusk and
    * night wind beds and brings the crickets in after dark. Beds with nothing to say are stopped,
-   * so at most two winds stream at once. `level` scales the whole bed (0 silences it).
+   * so at most two winds stream at once. `level` scales the whole bed (0 silences it); `ramp` is
+   * how long a change takes, in seconds. Safe to call every frame: unchanged levels cost nothing.
    */
-  setTimeOfDay(day: number, level = 1): void {
+  setTimeOfDay(day: number, level = 1, ramp = 1.5): void {
     const d = this.num('day', day, 0, 0, 1)
     const k = this.num('amb level', level, 1, 0, GAIN_MAX)
+    const r = this.num('amb ramp', ramp, 1.5, 0, 30)
     const dayW = 1 - smooth((d - 0.42) / 0.22)
     const nightW = smooth((d - 0.7) / 0.18)
     const want = {
@@ -900,7 +927,7 @@ export class AudioEngine {
       const have = this.beds[key]
       if (v > 0.002) {
         if (have) {
-          have.set(v, 1.5)
+          have.set(v, r)
         } else {
           const l = this.loop(key, v)
           if (l) {
@@ -1038,7 +1065,9 @@ export class AudioEngine {
       this.num('when', when, ctx.currentTime, 0, ctx.currentTime + 30),
       ctx.currentTime,
     )
-    for (const [bus, level] of CALL_DUCK) {
+    for (const [bus, duck] of CALL_DUCK) {
+      const song = bus === 'music' && this.song ? CALL_DUCK_SONG[this.song.name] : undefined
+      const level = song ?? duck
       const g = this.buses[bus].gain
       const base = BUS_LEVELS[bus]
       g.cancelScheduledValues(at)
