@@ -15,7 +15,8 @@ export const career: readonly Role[] = [
     title: 'Co-founder',
     years: '2026 — now',
     location: 'Phoenix',
-    blurb: 'Making Apparish, a location-based ghost hunting game for iOS and Android.',
+    blurb:
+      'A game studio building AI-native game experiences. Our first game is Apparish, a location-based ghost hunting game for iOS and Android.',
   },
   {
     company: 'Plaza',
