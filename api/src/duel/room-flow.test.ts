@@ -58,14 +58,14 @@ function room(ai: (() => AiOpponent) | null = null, settleMs = 0) {
       flow.message(s, { type: 'hold', down: true })
     }
     clock.advance(PACE_MS * 10 + TURN_MS)
-    expect(flow.beat).toBe('wait')
+    return flow.beat
   }
   /** Run the wait until the call reaches both humans. */
   const toCall = () => {
     for (let i = 0; i < 600 && of(0, 'call').length < flow.draw; i++) {
       clock.advance(10)
     }
-    expect(flow.beat).toBe('called')
+    return flow.beat
   }
   const flush = () => new Promise((r) => setTimeout(r, 0))
   return {
@@ -86,11 +86,11 @@ function room(ai: (() => AiOpponent) | null = null, settleMs = 0) {
 describe('room flow: two humans', () => {
   it('walks the full beat sheet to a clean win', async () => {
     const r = room()
-    r.toWait()
+    expect(r.toWait()).toBe('wait')
     const paces = r.of(0, 'pace')
     expect(paces.length).toBeGreaterThanOrEqual(5)
     expect(paces.length).toBeLessThanOrEqual(9)
-    r.toCall()
+    expect(r.toCall()).toBe('called')
     r.clock.advance(250)
     r.flow.message(0, { type: 'shot', draw: r.flow.draw, localMs: 210 })
     r.clock.advance(10)
@@ -120,7 +120,7 @@ describe('room flow: two humans', () => {
 
   it('a press before the call is cowardice', async () => {
     const r = room()
-    r.toWait()
+    expect(r.toWait()).toBe('wait')
     r.flow.message(1, { type: 'shot', draw: r.flow.draw, localMs: null })
     await r.flush()
     expect(r.settled[0]).toMatchObject({ outcome: 'coward', culprit: 1, winner: 0 })
@@ -128,26 +128,27 @@ describe('room flow: two humans', () => {
 
   it('a dead heat goes to sudden death; two in a row is a draw', async () => {
     const r = room()
-    r.toWait()
-    for (let heat = 0; heat < 2; heat++) {
-      r.toCall()
+    expect(r.toWait()).toBe('wait')
+    const tie = () => {
       r.clock.advance(250)
       r.flow.message(0, { type: 'shot', draw: r.flow.draw, localMs: 210 })
       r.flow.message(1, { type: 'shot', draw: r.flow.draw, localMs: 212 })
-      if (heat === 0) {
-        expect(r.of(0, 'deadHeat')).toHaveLength(1)
-        r.clock.advance(DEAD_HEAT_PAUSE_MS)
-        expect(r.of(0, 'suddenDeath')).toHaveLength(1)
-      }
     }
+    expect(r.toCall()).toBe('called')
+    tie()
+    expect(r.of(0, 'deadHeat')).toHaveLength(1)
+    r.clock.advance(DEAD_HEAT_PAUSE_MS)
+    expect(r.of(0, 'suddenDeath')).toHaveLength(1)
+    expect(r.toCall()).toBe('called')
+    tie()
     await r.flush()
     expect(r.settled[0]).toMatchObject({ outcome: 'draw', deadHeats: 2, winner: null })
   })
 
   it('neither firing is a freeze', async () => {
     const r = room()
-    r.toWait()
-    r.toCall()
+    expect(r.toWait()).toBe('wait')
+    expect(r.toCall()).toBe('called')
     r.clock.advance(2000)
     await r.flush()
     expect(r.settled[0]).toMatchObject({ outcome: 'froze' })
@@ -155,7 +156,7 @@ describe('room flow: two humans', () => {
 
   it('a drop before the call gets 5 s, then forfeits', async () => {
     const r = room()
-    r.toWait()
+    expect(r.toWait()).toBe('wait')
     r.flow.disconnect(1)
     expect(r.of(0, 'presence').at(-1)).toMatchObject({ seat: 1, connected: false })
     r.clock.advance(RECONNECT_GRACE_MS + 1)
@@ -165,7 +166,7 @@ describe('room flow: two humans', () => {
 
   it('a reconnect within the grace re-rolls the wait', () => {
     const r = room()
-    r.toWait()
+    expect(r.toWait()).toBe('wait')
     const draw = r.flow.draw
     r.flow.disconnect(1)
     r.clock.advance(2000)
@@ -178,8 +179,8 @@ describe('room flow: two humans', () => {
 
   it('a drop after the call has no grace: the shot that came in wins', async () => {
     const r = room()
-    r.toWait()
-    r.toCall()
+    expect(r.toWait()).toBe('wait')
+    expect(r.toCall()).toBe('called')
     r.flow.disconnect(1)
     r.clock.advance(250)
     r.flow.message(0, { type: 'shot', draw: r.flow.draw, localMs: 220 })
@@ -217,7 +218,7 @@ describe('room flow: two humans', () => {
 
   it('a rematch needs both votes, skips the intro, and stops after 5', async () => {
     const r = room()
-    r.toWait()
+    expect(r.toWait()).toBe('wait')
     r.flow.message(0, { type: 'shot', draw: r.flow.draw, localMs: null })
     await r.flush()
     r.flow.message(0, { type: 'rematch' })
@@ -230,7 +231,7 @@ describe('room flow: two humans', () => {
   it('the rematch window is 20 s from when the results go out, not from the verdict', async () => {
     expect(REMATCH_WINDOW_MS).toBe(20_000)
     const r = room(null, 1500)
-    r.toWait()
+    expect(r.toWait()).toBe('wait')
     r.flow.message(0, { type: 'shot', draw: r.flow.draw, localMs: null })
     const verdictAt = r.clock.now()
     r.clock.advance(1500)
@@ -250,7 +251,7 @@ describe('room flow: two humans', () => {
 
   it('the rematch window expiring closes the room', async () => {
     const r = room()
-    r.toWait()
+    expect(r.toWait()).toBe('wait')
     r.flow.message(0, { type: 'shot', draw: r.flow.draw, localMs: null })
     await r.flush()
     r.flow.rematchExpired()
@@ -267,16 +268,16 @@ describe('room flow: against a ghost', () => {
   })
   it('walks alone (the ghost always holds) and the ghost shoots at its time', async () => {
     const r = room(ghost)
-    r.toWait()
-    r.toCall()
+    expect(r.toWait()).toBe('wait')
+    expect(r.toCall()).toBe('called')
     r.clock.advance(500)
     await r.flush()
     expect(r.settled[0]).toMatchObject({ outcome: 'win', winner: 1, reactions: [null, 300] })
   })
   it('a faster human wins', async () => {
     const r = room(ghost)
-    r.toWait()
-    r.toCall()
+    expect(r.toWait()).toBe('wait')
+    expect(r.toCall()).toBe('called')
     r.clock.advance(240)
     r.flow.message(0, { type: 'shot', draw: r.flow.draw, localMs: 200 })
     await r.flush()
@@ -284,7 +285,7 @@ describe('room flow: against a ghost', () => {
   })
   it('a rematch with a ghost needs only the human', async () => {
     const r = room(ghost)
-    r.toWait()
+    expect(r.toWait()).toBe('wait')
     r.flow.message(0, { type: 'shot', draw: r.flow.draw, localMs: null })
     await r.flush()
     r.flow.message(0, { type: 'rematch' })

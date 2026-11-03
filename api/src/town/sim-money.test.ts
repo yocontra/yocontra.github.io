@@ -67,12 +67,12 @@ describe('kill bounty and death drop', () => {
 
   it('unclaimed bags burn after 45 s', () => {
     const { w } = killB(1000)
-    w.players.forEach((p) => {
+    for (const p of w.players) {
       if (p) {
         p.x = 130
         p.z = 130
       }
-    })
+    }
     run(w, BAG_EXPIRE_TICKS + 1)
     expect(w.bags.length).toBe(0)
     expect(w.burned).toBe(1000)

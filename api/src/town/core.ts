@@ -54,8 +54,8 @@ export const FLAG_FLOOD = 2
 
 /** Anything that can carry bytes or text to one client. */
 export interface Peer {
-  send(data: Uint8Array | string): void
-  close(code: number, reason: string): void
+  send: (data: Uint8Array | string) => void
+  close: (code: number, reason: string) => void
 }
 
 export interface JoinProfile {
@@ -167,14 +167,10 @@ export class LobbyCore {
     }
   }
 
-  private rosterOf(p: Player, loadout: readonly string[]): RosterEntry {
-    return { id: p.id, name: p.name, level: p.level, prestige: p.prestige, bot: p.bot, loadout }
-  }
-
   private roster(): RosterEntry[] {
     const out: RosterEntry[] = []
     for (const p of activePlayers(this.world)) {
-      out.push(this.sessions.get(p.id)?.roster ?? this.rosterOf(p, []))
+      out.push(this.sessions.get(p.id)?.roster ?? rosterOf(p, []))
     }
     return out
   }
@@ -255,7 +251,7 @@ export class LobbyCore {
       queue: new InputQueue(),
       stream: new ClientStream(),
       banked: profile.banked,
-      roster: this.rosterOf(p, profile.loadout),
+      roster: rosterOf(p, profile.loadout),
       rtt: [],
       tcpRtt: profile.tcpRtt,
       windowStart: now,
@@ -406,7 +402,7 @@ export class LobbyCore {
       })
       const p = this.world.players[id]
       if (p) {
-        this.broadcast({ type: 'roster_add', entry: this.rosterOf(p, []) })
+        this.broadcast({ type: 'roster_add', entry: rosterOf(p, []) })
       }
     }
   }
@@ -535,4 +531,8 @@ export class LobbyCore {
   notice(text: string): void {
     this.broadcast({ type: 'notice', text })
   }
+}
+
+function rosterOf(p: Player, loadout: readonly string[]): RosterEntry {
+  return { id: p.id, name: p.name, level: p.level, prestige: p.prestige, bot: p.bot, loadout }
 }

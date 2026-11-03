@@ -58,6 +58,15 @@ interface BotBrain {
 export const botName = (n: number): string =>
   `${BOT_NAMES[n % BOT_NAMES.length] ?? 'Drifter'}${n >= BOT_NAMES.length ? ` ${Math.floor(n / BOT_NAMES.length) + 1}` : ''}`
 
+/** One bot (`p`, brain `b`) engaging target `q`, writing its intent into `f`. */
+interface Engagement {
+  w: World
+  p: Player
+  b: BotBrain
+  q: Player
+  f: InputFrame
+}
+
 export class BotDirector {
   private readonly brains = new Map<number, BotBrain>()
   private readonly rng: Rng
@@ -114,23 +123,7 @@ export class BotDirector {
     return spawns[this.rng.int(0, spawns.length - 1)] ?? { x: 72, z: 64 }
   }
 
-  private scan(w: World, p: Player, b: BotBrain): void {
-    b.scanAt = w.tick + SCAN_TICKS
-    b.target = -1
-    let best = ENGAGE_RANGE ** 2
-    for (const q of activePlayers(w)) {
-      if (q.id === p.id || !q.alive || q.showdown >= 0) {
-        continue
-      }
-      const d2 = dist2(p.x, p.z, q.x, q.z)
-      if (d2 < best && hasLineOfSight(w.grid, p.x, p.z, q.x, q.z)) {
-        best = d2
-        b.target = q.id
-      }
-    }
-  }
-
-  private fight(w: World, p: Player, b: BotBrain, q: Player, f: InputFrame): void {
+  private fight({ w, p, b, q, f }: Engagement): void {
     const dx = q.x - p.x
     const dz = q.z - p.z
     const d = Math.sqrt(dx * dx + dz * dz) || 1
@@ -208,14 +201,30 @@ export class BotDirector {
       return f
     }
     if (w.tick >= b.scanAt) {
-      this.scan(w, p, b)
+      scanForTarget(w, p, b)
     }
     const q = b.target >= 0 ? w.players[b.target] : null
     if (q?.alive && p.carried < BANK_AT * 2) {
-      this.fight(w, p, b, q, f)
+      this.fight({ w, p, b, q, f })
     } else {
       this.walk(w, p, b, f)
     }
     return f
+  }
+}
+
+function scanForTarget(w: World, p: Player, b: BotBrain): void {
+  b.scanAt = w.tick + SCAN_TICKS
+  b.target = -1
+  let best = ENGAGE_RANGE ** 2
+  for (const q of activePlayers(w)) {
+    if (q.id === p.id || !q.alive || q.showdown >= 0) {
+      continue
+    }
+    const d2 = dist2(p.x, p.z, q.x, q.z)
+    if (d2 < best && hasLineOfSight(w.grid, p.x, p.z, q.x, q.z)) {
+      best = d2
+      b.target = q.id
+    }
   }
 }

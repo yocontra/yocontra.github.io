@@ -21,7 +21,7 @@ export interface Player {
 
 // --- the simulated client ------------------------------------------------------------------------
 
-export type Behaviour = {
+export interface Behaviour {
   /** Fire this long after the call (ms), reporting it as localMs. Null never fires. */
   reactMs: number | null
   /** Fire during the wait (cowardice). */
@@ -172,18 +172,23 @@ export class Client {
     return sync?.type === 'sync' ? sync.draw + 1 : 1
   }
 
-  async waitFor(pred: () => boolean, timeoutMs = 40_000): Promise<boolean> {
-    const end = Date.now() + timeoutMs
-    while (Date.now() < end) {
-      if (pred()) {
-        return true
-      }
-      await sleep(100)
-    }
-    return pred()
-  }
-
   close(): void {
     this.room?.close()
   }
+}
+
+/** Poll `pred` every 100 ms until it holds or `timeoutMs` passes; resolves to its final value. */
+export async function waitFor(pred: () => boolean, timeoutMs = 40_000): Promise<boolean> {
+  const end = Date.now() + timeoutMs
+  const poll = async (): Promise<boolean> => {
+    if (pred()) {
+      return true
+    }
+    if (Date.now() >= end) {
+      return pred()
+    }
+    await sleep(100)
+    return poll()
+  }
+  return await poll()
 }

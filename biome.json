@@ -56,6 +56,10 @@
       },
       "style": {
         "noJsxLiterals": "off",
+        "useThisInClassMethods": {
+          "level": "warn",
+          "options": { "ignoreOverrideMethods": true }
+        },
         "noMagicNumbers": "off",
         "noTernary": "off",
         "noNestedTernary": "error",

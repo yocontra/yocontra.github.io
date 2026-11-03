@@ -15,7 +15,13 @@ import {
 } from '../../../src/experiments/out-west/ffa/sim/codec.ts'
 import { MAX_PLAYERS, SOFT_CAP } from '../../../src/experiments/out-west/ffa/sim/constants.ts'
 import { InputBatcher } from '../../../src/experiments/out-west/ffa/sim/input.ts'
-import { DEFAULT_TOWN_POPULATION, type JoinProfile, LobbyCore, type Peer } from './core.ts'
+import {
+  DEFAULT_TOWN_POPULATION,
+  type JoinProfile,
+  LobbyCore,
+  type Peer,
+  type SettledDeposit,
+} from './core.ts'
 
 class FakePeer implements Peer {
   readonly binary: Uint8Array[] = []
@@ -46,7 +52,14 @@ const profile = (accountId: string, extra: Partial<JoinProfile> = {}): JoinProfi
 
 const still: WireFrame = { moveX: 0, moveZ: 0, aim: 0, buttons: 0, viewTick: 0, viewFrac: 0 }
 
-function send(core: LobbyCore, id: number, b: InputBatcher, f: WireFrame, now: number): void {
+/** One player's input `f`, pushed through their batcher `b`. */
+interface Press {
+  id: number
+  b: InputBatcher
+  f: WireFrame
+}
+
+function send(core: LobbyCore, { id, b, f }: Press, now: number): void {
   const msg = b.push({ ...f, viewTick: (core.world.tick - 2) & 0xff_ff })
   if (msg) {
     core.onBinary(
@@ -120,7 +133,7 @@ describe('LobbyCore', () => {
     const x0 = p?.x ?? 0
     const b = new InputBatcher()
     for (let t = 0; t < 40; t++) {
-      send(core, id, b, { ...still, moveX: t < 20 ? 127 : 0 }, t * 50)
+      send(core, { id, b, f: { ...still, moveX: t < 20 ? 127 : 0 } }, t * 50)
       core.tick(t * 50)
     }
     expect(Math.abs((p?.x ?? 0) - x0)).toBeGreaterThan(3)
@@ -200,9 +213,9 @@ describe('LobbyCore sessions and money', () => {
     p.carried = 600
     p.protectUntil = 0
     const b = new InputBatcher()
-    const deposits = []
+    const deposits: SettledDeposit[] = []
     for (let t = 0; t < 60; t++) {
-      send(core, s.playerId, b, { ...still, buttons: BTN_INTERACT }, t * 50)
+      send(core, { id: s.playerId, b, f: { ...still, buttons: BTN_INTERACT } }, t * 50)
       deposits.push(...core.tick(t * 50).deposits)
     }
     expect(deposits).toHaveLength(1)
@@ -246,9 +259,7 @@ describe('LobbyCore sessions and money', () => {
       bot.z = me.showdown < 0 ? 64 : bot.z
       send(
         core,
-        s.playerId,
-        b,
-        { ...still, aim: 0, buttons: t % 4 === 1 ? BTN_CALLOUT : 0 },
+        { id: s.playerId, b, f: { ...still, aim: 0, buttons: t % 4 === 1 ? BTN_CALLOUT : 0 } },
         t * 50,
       )
       core.tick(t * 50)

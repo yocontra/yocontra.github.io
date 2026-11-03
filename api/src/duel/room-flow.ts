@@ -55,8 +55,8 @@ export class RoomFlow {
   private deadHeats = 0
   private startedAt = 0
   private lastProgress = 0
-  private heckled = false
-  private autoWalk = false
+  private heckled: boolean
+  private autoWalk: boolean
   private standoff: Standoff | null = null
   private last: DuelResult | null = null
   private readonly lastTaunt: [number, number] = [0, 0]
@@ -64,6 +64,8 @@ export class RoomFlow {
   private readonly graceTimers: [(() => void) | null, (() => void) | null] = [null, null]
 
   constructor(options: RoomFlowOptions) {
+    this.heckled = false
+    this.autoWalk = false
     this.makeAi = options.ai
     this.matchId = options.matchId ?? ''
     this.io = options.io

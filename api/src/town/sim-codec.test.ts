@@ -148,10 +148,8 @@ describe('input codec', () => {
     expect(decodeInput(five)).toBeNull()
     for (let i = 0; i < 2000; i++) {
       const junk = new Uint8Array(rng.int(0, 40)).map(() => u8())
-      const out = decodeInput(junk)
-      if (out) {
-        expect(out.frames.length).toBeGreaterThan(0)
-      }
+      // Junk either fails to decode or decodes to at least one frame.
+      expect(decodeInput(junk)?.frames.length ?? 1).toBeGreaterThan(0)
     }
   })
 

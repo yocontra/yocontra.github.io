@@ -19,7 +19,7 @@ import process from 'node:process'
 import { DEFAULT_LOADOUT } from '../../src/experiments/out-west/data/catalog.ts'
 import { signAccessToken } from '../src/auth/token.ts'
 import { nameKey } from '../src/names.ts'
-import { BASE, Client, ORIGIN, type Player, sleep } from './duel-client.ts'
+import { BASE, Client, ORIGIN, type Player, sleep, waitFor } from './duel-client.ts'
 
 const D1_DIR = join(import.meta.dir, '../.wrangler/state/v3/d1/miniflare-D1DatabaseObject')
 const RUN = Date.now().toString(36)
@@ -42,7 +42,7 @@ function openD1(): Database {
 const db = openD1()
 
 let seq = 0
-async function seedPlayer(name: string, ip: string, purse = 1000): Promise<Player> {
+async function seedPlayer(name: string, ip: string, startPurse = 1000): Promise<Player> {
   const id = `h${RUN}${++seq}`
   const display = `${name} ${RUN.slice(-4)}${seq}`
   const now = Date.now()
@@ -55,11 +55,11 @@ async function seedPlayer(name: string, ip: string, purse = 1000): Promise<Playe
   db.query(
     `INSERT INTO profiles (account_id, level, xp, prestige, purse, loadout, gauntlet_clears, created_at, updated_at)
      VALUES (?, 1, 0, 0, ?, ?, 7, ?, ?)`,
-  ).run(id, purse, JSON.stringify(DEFAULT_LOADOUT), now, now)
+  ).run(id, startPurse, JSON.stringify(DEFAULT_LOADOUT), now, now)
   db.query(
     `INSERT INTO ledger (account_id, delta, xp, balance_after, kind, ref, idem_key, batch, created_at)
      VALUES (?, ?, 0, ?, 'start_grant', 'harness', ?, 'harness', ?)`,
-  ).run(id, purse, purse, `harness:${id}`, now)
+  ).run(id, startPurse, startPurse, `harness:${id}`, now)
   const { token } = await signAccessToken(SECRET, {
     accountId: id,
     name: display,
@@ -138,7 +138,7 @@ async function humanVsHumanWithRematchAndDeadHeat(): Promise<void> {
     a.matchId,
     b.matchId,
   ])
-  await a.waitFor(() => a.results.length >= 1)
+  await waitFor(() => a.results.length > 0)
   const first = a.results[0]
   check('the faster draw wins', first?.outcome === 'win' && first.winner === a.seat, first)
   check(
@@ -170,7 +170,7 @@ async function humanVsHumanWithRematchAndDeadHeat(): Promise<void> {
   ])
 
   // Rematch: both fire at the same instant, so the first draw is a dead heat.
-  await a.waitFor(() => a.results.length >= 2, 60_000)
+  await waitFor(() => a.results.length >= 2, 60_000)
   const hello = a.messages.filter((m) => m.type === 'hello')
   check(
     'rematch started with hello rematch=1 (no intro)',
@@ -179,7 +179,7 @@ async function humanVsHumanWithRematchAndDeadHeat(): Promise<void> {
   const heats = a.messages.filter((m) => m.type === 'deadHeat')
   check(
     'a dead heat was called and sudden death followed',
-    heats.length >= 1 && a.messages.some((m) => m.type === 'suddenDeath'),
+    heats.length > 0 && a.messages.some((m) => m.type === 'suddenDeath'),
     heats,
   )
   const second = a.results[1]
@@ -202,7 +202,7 @@ async function coward(): Promise<void> {
   const a = new Client(await seedPlayer('Honest', '10.3.0.1'), { reactMs: 250 })
   const b = new Client(await seedPlayer('Yellow', '10.4.0.1'), { reactMs: null, coward: true })
   const room = await duel(a, b)
-  await a.waitFor(() => a.results.length >= 1)
+  await waitFor(() => a.results.length > 0)
   const r = a.results[0]
   check(
     'outcome coward: the coward is the culprit, the honest seat wins',
@@ -227,11 +227,11 @@ async function forfeit(): Promise<void> {
   const a = new Client(await seedPlayer('Stayer', '10.5.0.1'), { reactMs: 250 })
   const b = new Client(await seedPlayer('Quitter', '10.6.0.1'), { reactMs: 250, dropOnWalk: true })
   const room = await duel(a, b)
-  const presence = await a.waitFor(() =>
+  const presence = await waitFor(() =>
     a.messages.some((m) => m.type === 'presence' && !m.connected),
   )
   check('the opponent saw the drop with a grace deadline', presence)
-  await a.waitFor(() => a.results.length >= 1)
+  await waitFor(() => a.results.length > 0)
   const r = a.results[0]
   check(
     'forfeit after the 5 s grace',
@@ -267,7 +267,7 @@ async function ghostDuel(): Promise<void> {
     return
   }
   h.join(url)
-  await h.waitFor(() => h.results.length >= 1)
+  await waitFor(() => h.results.length > 0)
   const hello = h.messages.find((m) => m.type === 'hello')
   check(
     'the ghost poster is labelled',
@@ -280,7 +280,7 @@ async function ghostDuel(): Promise<void> {
     'ghost_win ledger entry',
     ledger(h.player).some((l) => l.kind === 'ghost_win' && l.delta > 0),
   )
-  await h.waitFor(() => h.results.length >= 2, 60_000)
+  await waitFor(() => h.results.length >= 2, 60_000)
   const r2 = h.results[1]
   check('in the rematch the ghost won', r2?.winner === 1, r2)
   const ghostOf = matchRow(h.matchId, 1)?.ghost_of

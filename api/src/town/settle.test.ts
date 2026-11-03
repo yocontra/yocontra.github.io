@@ -123,11 +123,16 @@ describe('Frontier settlement (D1)', () => {
     p.stats.xp = 70
     p.stats.kills = 2
     const before = await purse(acct)
-    const first = xpFlushStatements(t.env, s, p, 0, null)
+    const first = xpFlushStatements(t.env, { session: s, player: p, flushIndex: 0, leftAt: null })
     await t.db.batch(first.statements)
     s.xpFlushed += first.xp
     p.stats.xp = 100
-    const second = xpFlushStatements(t.env, s, p, 1, Date.now())
+    const second = xpFlushStatements(t.env, {
+      session: s,
+      player: p,
+      flushIndex: 1,
+      leftAt: Date.now(),
+    })
     await t.db.batch(second.statements)
     const after = await purse(acct)
     expect(second.xp).toBe(30)

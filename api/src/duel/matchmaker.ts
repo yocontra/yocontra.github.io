@@ -92,7 +92,7 @@ export class Matchmaker extends DurableObject<Env> {
     this.ctx.acceptWebSocket(server, [request.headers.get('X-Account-Id') ?? 'anonymous'])
     const refusal = await this.admit(request, server)
     if (refusal) {
-      this.send(server, { type: 'refused', ...refusal })
+      sendQueueMessage(server, { type: 'refused', ...refusal })
       server.close(1000, refusal.reason)
     }
     return new Response(null, { status: 101, webSocket: client })
@@ -137,7 +137,7 @@ export class Matchmaker extends DurableObject<Env> {
     }
     const history = await this.history(accountId)
     const priorityUntil = await this.ctx.storage.get<number>(`priority:${accountId}`)
-    const net = this.network(request)
+    const net = networkOf(request)
     this.netOf.set(accountId, net)
     const tcp = Number(request.headers.get('X-Tcp-Rtt'))
     const entry: QueueEntry = {
@@ -171,7 +171,7 @@ export class Matchmaker extends DurableObject<Env> {
       pingAt: 0,
       wsBase: request.headers.get('X-Ws-Base') ?? '',
     } satisfies Attachment)
-    this.send(ws, {
+    sendQueueMessage(ws, {
       type: 'queued',
       serverTime: now,
       effectiveLevel: entry.effectiveLevel,
@@ -179,12 +179,6 @@ export class Matchmaker extends DurableObject<Env> {
     })
     await this.ensureAlarm()
     return null
-  }
-
-  private network(request: Request): QueueEntry['net'] {
-    const ip = request.headers.get('X-Ip-Hash')
-    const prefix = request.headers.get('X-Prefix-Hash')
-    return ip && prefix ? { ip, prefix } : null
   }
 
   private async history(accountId: string): Promise<{ opponents: string[]; ghosts: string[] }> {
@@ -286,7 +280,7 @@ export class Matchmaker extends DurableObject<Env> {
     for (const { ws, att } of waiting.values()) {
       const waited = now - att.entry.joinedAt
       const window = windowFor(waited)
-      this.send(ws, {
+      sendQueueMessage(ws, {
         type: 'status',
         serverTime: now,
         waitedMs: waited,
@@ -299,7 +293,7 @@ export class Matchmaker extends DurableObject<Env> {
       att.pingN++
       att.pingAt = Date.now()
       ws.serializeAttachment(att)
-      this.send(ws, { type: 'ping', n: att.pingN })
+      sendQueueMessage(ws, { type: 'ping', n: att.pingN })
     }
     if (waiting.size > 0) {
       await this.ctx.storage.setAlarm(Date.now() + TICK_MS)
@@ -328,7 +322,7 @@ export class Matchmaker extends DurableObject<Env> {
   ): Promise<void> {
     const token = await roomToken(this.env, init.roomId, w.att.entry.accountId, seat)
     const opponent = init.posters[seat === 0 ? 1 : 0]
-    this.send(w.ws, {
+    sendQueueMessage(w.ws, {
       type: 'matched',
       matchId: init.roomId,
       mode: init.mode,
@@ -417,11 +411,18 @@ export class Matchmaker extends DurableObject<Env> {
     await this.matched(w, init, 0)
   }
 
-  private send(ws: WebSocket, message: QueueServerMessage): void {
-    try {
-      ws.send(JSON.stringify(message))
-    } catch {
-      // Closed sockets are dropped on the next tick.
-    }
+}
+
+function networkOf(request: Request): QueueEntry['net'] {
+  const ip = request.headers.get('X-Ip-Hash')
+  const prefix = request.headers.get('X-Prefix-Hash')
+  return ip && prefix ? { ip, prefix } : null
+}
+
+function sendQueueMessage(ws: WebSocket, message: QueueServerMessage): void {
+  try {
+    ws.send(JSON.stringify(message))
+  } catch {
+    // Closed sockets are dropped on the next tick.
   }
 }

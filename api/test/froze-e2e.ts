@@ -11,7 +11,7 @@
  * Not part of `bun test`. Seeds its own accounts straight into the local D1.
  */
 import process from 'node:process'
-import { BASE, Client, ORIGIN } from './duel-client.ts'
+import { BASE, Client, ORIGIN, waitFor } from './duel-client.ts'
 import { check, failed, openLocalD1, seedPlayer } from './local-d1.ts'
 
 const flag = process.argv.indexOf('--expect')
@@ -26,7 +26,7 @@ if (!(ua && ub)) {
 }
 a.join(ua)
 b.join(ub)
-await a.waitFor(() => a.results.length > 0, 60_000)
+await waitFor(() => a.results.length > 0, 60_000)
 const result = a.results[0]
 check('both froze', result?.outcome === 'froze', result)
 check('XP only on the results sheet', result?.you?.delta === 0 && result.you.xp > 0, result?.you)
