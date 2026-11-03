@@ -3,19 +3,26 @@
 /**
  * Frontier crowd spike (design doc §13.1, the M1 "A15 crowd baseline").
  *
- * 32 outlaws with the current art, top-down: the nearest 16 GPU-skinned
- * Actors (animated at 30 Hz within 12 m, 15 Hz beyond), everyone else drawn
- * as vertex-animation-texture instances, one instanced draw per look plus one
- * draw of blob shadows. The town is the Quick Draw street as a stand-in.
+ * 32 outlaws with the current art, top-down:
+ * - the nearest `near` (16) are GPU-skinned Actors. The own player is LOD0;
+ *   the others swap to a ~3k-tri LOD1 (scene/lod.ts, meshopt in a worker).
+ *   They animate at 30 Hz within 12 m and 15 Hz beyond, and only the nearest
+ *   `shadows` (6) cast real shadows; everyone else gets a blob.
+ * - everyone else is a VAT instance of their BASE BODY (≤7 VATs, LOD2 ~1.5k
+ *   tris, baked on demand in a worker) with per-instance palette tints, plus
+ *   one instanced hat mesh per hat type riding the baked head track.
  *
- * Query params: `n` (agents, 32), `near` (skinned cap, 16), `looks` (1–7, 4),
- * `pack` (1 = everyone within view), `dist` (camera distance, 26), and the
- * usual `#tier=` / `#perf`. `globalThis.__crowd()` returns the numbers.
+ * Query params: `n` (32), `near` (16), `shadows` (6), `looks` (outlaws used,
+ * 17), `pack` (1 = everyone in view), `dist` (camera distance, 26), `lod1`
+ * (0 disables LOD1), and `#tier=` / `#perf`. `globalThis.__crowd()` returns
+ * the numbers.
  *
  * SPIKE (stream H): stream G absorbs or deletes this when it owns ffa/scene/.
  */
 import {
+  type BufferGeometry,
   CanvasTexture,
+  Color,
   InstancedMesh,
   MathUtils,
   Matrix4,
@@ -24,17 +31,19 @@ import {
   PlaneGeometry,
   Quaternion,
   Scene,
+  type SkinnedMesh,
   Vector3,
 } from 'three'
-import { OUTLAWS } from '../../../data/outlaws.ts'
+import { type BodyKey, type HatKey, OUTLAWS, type Outlaw } from '../../../data/outlaws.ts'
 import { loadAssets } from '../../../engine/assets.ts'
 import { Renderer } from '../../../engine/render.ts'
 import type { Actor, Clip } from '../../../scene/actor.ts'
 import { castActor } from '../../../scene/cast.ts'
 import { dressStreet } from '../../../scene/dressing.ts'
+import { lodGeometry } from '../../../scene/lod.ts'
 import { World } from '../../../scene/world.ts'
 import { Window } from '../../../ui/perf.ts'
-import { bakeVat, VAT_TIME, type VatClip, VatCrowd } from './vat.ts'
+import { baseVat, headAt, VAT_TIME, type VatBake, VatCrowd, VatHats, vatFrame } from './vat.ts'
 
 const params = new URLSearchParams(location.search)
 const num = (k: string, d: number) => {
@@ -43,23 +52,39 @@ const num = (k: string, d: number) => {
 }
 const N = num('n', 32)
 const NEAR = num('near', 16)
-const LOOKS = MathUtils.clamp(num('looks', 4), 1, 7)
+const SHADOWS = num('shadows', 6)
+const LOOKS = MathUtils.clamp(num('looks', OUTLAWS.length), 1, OUTLAWS.length)
 const PACK = params.get('pack') === '1'
 const DIST = num('dist', 26)
+const USE_LOD1 = params.get('lod1') !== '0'
 const PITCH = MathUtils.degToRad(58)
 const NEAR_FAST_M = 12
+const CLIPS: Clip[] = ['Run', 'Gun_Shoot']
 
-/** Distinct bases first, so each look is a different silhouette. */
-const LOOK_IDS = [0, 1, 2, 3, 4, 5, 7]
+const PALETTES: [number, number][] = [
+  [0x8a_3a_22, 0x3a_3a_48],
+  [0x2e_4a_3a, 0x5a_44_30],
+  [0xd8_c8_a0, 0x2a_2a_30],
+  [0x4a_5a_7a, 0x6a_5a_44],
+  [0x6a_1f_14, 0x24_20_1c],
+  [0xb8_8a_44, 0x3a_30_28],
+]
 
 interface Agent {
-  look: number
+  outlaw: Outlaw
+  base: BodyKey
+  hat: HatKey
+  hatColor: Color
+  top: Color
+  bottom: Color
   pos: Vector3
   goal: Vector3
   heading: number
   speed: number
   shootT: number
   actor: Actor
+  full: BufferGeometry | null
+  lod1: BufferGeometry | null
   acc: number
   near: boolean
   phase: number
@@ -86,32 +111,31 @@ function randomGoal(out: Vector3): Vector3 {
   return out.set(MathUtils.randFloat(-7.5, 7.5), 0, MathUtils.randFloat(-zr, zr))
 }
 
+function setShadow(a: Actor, on: boolean): void {
+  a.root.traverse((o) => {
+    o.castShadow = on
+  })
+}
+
 export async function bootCrowd(canvas: HTMLCanvasElement, status: HTMLElement): Promise<void> {
   const scene = new Scene()
   const cam = new PerspectiveCamera(30, innerWidth / innerHeight, 1, 400)
-  const renderer = new Renderer(
-    canvas,
-    scene,
-    cam,
-    matchMedia('(pointer: coarse)').matches ? 'low' : 'high',
-    'ffa',
-  )
-  const looks = LOOK_IDS.slice(0, LOOKS)
-    .map((i) => (OUTLAWS[i] ?? OUTLAWS[0])?.look)
-    .filter((l) => l !== undefined)
-  const first = looks[0]
+  const hint = matchMedia('(pointer: coarse)').matches ? 'low' : 'high'
+  const renderer = new Renderer(canvas, scene, cam, hint, 'ffa')
+  const outlaws = OUTLAWS.slice(0, LOOKS)
+  const first = outlaws[0]
   if (!first) {
     return
   }
   status.textContent = 'loading…'
   const assets = await loadAssets(
     Math.min(8, renderer.gl.capabilities.getMaxAnisotropy()),
-    first,
+    first.look,
     (f) => {
       status.textContent = `loading ${Math.round(f * 100)}%`
     },
   )
-  await Promise.all(looks.map((l) => assets.lookReady(l)))
+  await Promise.all(outlaws.map((o) => assets.lookReady(o.look)))
   const world = new World(scene, assets.tex, renderer.spec.shadowSize)
   dressStreet(assets.props, world.root)
   world.apply(0.3)
@@ -123,19 +147,64 @@ export async function bootCrowd(canvas: HTMLCanvasElement, status: HTMLElement):
   sc.bottom = -14
   sc.updateProjectionMatrix()
 
-  status.textContent = 'baking VAT…'
-  const clips: Clip[] = ['Run', 'Idle', 'Gun_Shoot']
-  const t0 = performance.now()
-  const crowds: VatCrowd[] = []
-  for (const look of looks) {
-    const tmpl = castActor(assets, { look, hat: 'cowboy', hatColor: 0x2a_1d_14 })
-    crowds.push(new VatCrowd(bakeVat(tmpl, clips), N))
-    tmpl.dispose()
+  // --- agents and their near (skinned) actors
+  status.textContent = 'casting…'
+  const agents: Agent[] = []
+  for (let i = 0; i < N; i++) {
+    const o = outlaws[i % outlaws.length] ?? first
+    const pal = PALETTES[i % PALETTES.length] ?? [0x80_80_80, 0x40_40_40]
+    const actor = castActor(assets, {
+      look: o.look,
+      hat: o.hat,
+      hatColor: o.hatColor,
+      bandana: o.bandana,
+    })
+    scene.add(actor.root)
+    actor.play('Run', 0)
+    agents.push({
+      outlaw: o,
+      base: o.look.base,
+      hat: o.hat,
+      hatColor: new Color(o.hatColor),
+      top: new Color(pal[0]),
+      bottom: new Color(pal[1]),
+      pos: randomGoal(new Vector3()),
+      goal: randomGoal(new Vector3()),
+      heading: 0,
+      speed: MathUtils.randFloat(3.5, 5.5),
+      shootT: 0,
+      actor,
+      full: actor.meshes[0]?.geometry ?? null,
+      lod1: null,
+      acc: Math.random() / 30,
+      near: false,
+      phase: Math.random() * 3,
+    })
   }
-  const bakeMs = performance.now() - t0
-  for (const c of crowds) {
+
+  // --- LOD1 per look (worker), VAT per base (worker), in parallel
+  status.textContent = 'baking LOD1 + VAT…'
+  const t0 = performance.now()
+  const lodJobs = USE_LOD1
+    ? agents.map(async (a, i) => {
+        const g = a.full
+        if (!g || i === 0) {
+          return
+        }
+        a.lod1 = await lodGeometry(g, `${a.outlaw.name}:lod1`, 3000)
+      })
+    : []
+  const bases = [...new Set(agents.map((a) => a.base))]
+  const bakes = await Promise.all(bases.map((b) => baseVat(assets, b, CLIPS)))
+  await Promise.all(lodJobs)
+  const prepMs = performance.now() - t0
+  const crowds = new Map<BodyKey, VatCrowd>()
+  for (const b of bakes) {
+    const c = new VatCrowd(b, N)
+    crowds.set(b.base, c)
     scene.add(c.mesh)
   }
+  const hats = new VatHats(scene, N)
   const blobs = new InstancedMesh(
     new PlaneGeometry(1.3, 1.3).rotateX(-Math.PI / 2),
     new MeshBasicMaterial({ map: blobTexture(), transparent: true, depthWrite: false }),
@@ -144,31 +213,6 @@ export async function bootCrowd(canvas: HTMLCanvasElement, status: HTMLElement):
   blobs.frustumCulled = false
   blobs.renderOrder = 1
   scene.add(blobs)
-
-  const agents: Agent[] = []
-  for (let i = 0; i < N; i++) {
-    const look = i % looks.length
-    const l = looks[look] ?? first
-    const actor = castActor(assets, { look: l, hat: 'cowboy', hatColor: 0x2a_1d_14 })
-    actor.root.traverse((o) => {
-      o.castShadow = true
-    })
-    scene.add(actor.root)
-    actor.play('Run', 0)
-    const pos = randomGoal(new Vector3())
-    agents.push({
-      look,
-      pos,
-      goal: randomGoal(new Vector3()),
-      heading: 0,
-      speed: MathUtils.randFloat(3.5, 5.5),
-      shootT: 0,
-      actor,
-      acc: Math.random() / 30,
-      near: false,
-      phase: Math.random() * 3,
-    })
-  }
   status.textContent = ''
 
   try {
@@ -181,27 +225,39 @@ export async function bootCrowd(canvas: HTMLCanvasElement, status: HTMLElement):
   const animMs = new Window(240)
   const simMs = new Window(240)
   const m4 = new Matrix4()
-  const q = new Quaternion()
-  const up = new Vector3(0, 1, 0)
+  const hatM = new Matrix4()
+  const headM = new Matrix4()
   const one = new Vector3(1, 1, 1)
+  const q = new Quaternion()
+  const hq = new Quaternion()
+  const hp = new Vector3()
+  const up = new Vector3(0, 1, 0)
   const target = new Vector3()
   const order: Agent[] = []
+  const hatLocal = new Map<BodyKey, Matrix4>(
+    bakes.map((b: VatBake) => [b.base, new Matrix4().fromArray(b.hatLocal)]),
+  )
   let last = performance.now()
   let nearCount = 0
-
-  const clipOf = (a: Agent, c: VatCrowd): VatClip | null =>
-    c.clip(a.shootT > 0 ? 'Gun_Shoot' : 'Run')
+  let lod1Tris = 0
 
   Reflect.set(globalThis, '__crowd', () => ({
     n: N,
     near: nearCount,
     far: N - nearCount,
-    looks: looks.length,
-    vatVertices: crowds.map((c) => c.bake.vertexCount),
-    vatMb: crowds.reduce((s, c) => s + c.bake.bytes, 0) / 1_048_576,
-    vatFrames: crowds[0]?.bake.clips.map((c) => `${c.name}:${c.frames}`),
-    tris: crowds.map((c) => (c.bake.geometry.index?.count ?? 0) / 3),
-    bakeMs,
+    bases: bakes.map((b) => ({
+      base: b.base,
+      sourceTris: b.sourceTris,
+      lod2Tris: b.index.length / 3,
+      verts: b.vertexCount,
+      kb: Math.round(b.bytes / 1024),
+      ms: Math.round(b.ms),
+      cached: b.cached,
+    })),
+    vatMb: bakes.reduce((s, b) => s + b.bytes, 0) / 1_048_576,
+    hatTypes: hats.meshes.size,
+    lod1Tris,
+    prepMs,
     animP50: animMs.pct(0.5),
     animP95: animMs.pct(0.95),
     simP50: simMs.pct(0.5),
@@ -239,16 +295,21 @@ export async function bootCrowd(canvas: HTMLCanvasElement, status: HTMLElement):
     }
     order.length = 0
     order.push(...agents)
-    order.sort((x, y) => x.pos.distanceToSquared(target) - y.pos.distanceToSquared(target))
+    // the own player (agent 0) is always the nearest
+    const dist2 = (a: Agent) => (a === lead ? -1 : a.pos.distanceToSquared(target))
+    order.sort((x, y) => dist2(x) - dist2(y))
     simMs.push(performance.now() - s0)
 
-    // --- near: skinned actors at 30/15 Hz; far: VAT instances
+    // --- near: skinned; far: VAT + hats + blobs
     const a0 = performance.now()
-    for (const c of crowds) {
+    for (const c of crowds.values()) {
       c.mesh.count = 0
     }
+    hats.reset()
     blobs.count = 0
     nearCount = 0
+    lod1Tris = 0
+    VAT_TIME.value = now / 1000
     for (const [rank, a] of order.entries()) {
       const near = rank < NEAR
       a.actor.root.visible = near
@@ -256,8 +317,22 @@ export async function bootCrowd(canvas: HTMLCanvasElement, status: HTMLElement):
         nearCount++
         a.actor.root.position.copy(a.pos)
         a.actor.root.rotation.y = a.heading
-        const clip: Clip = a.shootT > 0 ? 'Gun_Shoot' : 'Run'
-        a.actor.play(clip, a.near ? 0.15 : 0)
+        a.actor.play(a.shootT > 0 ? 'Gun_Shoot' : 'Run', a.near ? 0.15 : 0)
+        const mesh = a.actor.meshes[0] as SkinnedMesh | undefined
+        const geo = rank === 0 || !a.lod1 ? a.full : a.lod1
+        if (mesh && geo && mesh.geometry !== geo) {
+          mesh.geometry = geo
+        }
+        lod1Tris += mesh ? (mesh.geometry.index?.count ?? 0) / 3 : 0
+        const caster = rank < SHADOWS
+        if (caster !== a.actor.root.userData.caster) {
+          a.actor.root.userData.caster = caster
+          setShadow(a.actor, caster)
+        }
+        if (!caster) {
+          m4.makeTranslation(a.pos.x, 0.03, a.pos.z)
+          blobs.setMatrixAt(blobs.count++, m4)
+        }
         const hz = a.pos.distanceTo(target) < NEAR_FAST_M ? 30 : 15
         a.acc += dt
         if (a.acc >= 1 / hz || !a.near) {
@@ -268,26 +343,30 @@ export async function bootCrowd(canvas: HTMLCanvasElement, status: HTMLElement):
         continue
       }
       a.near = false
-      const c = crowds[a.look]
-      if (!c) {
+      const c = crowds.get(a.base)
+      const clip = c?.clip(a.shootT > 0 ? 'Gun_Shoot' : 'Run')
+      if (!(c && clip)) {
         continue
       }
-      const clip = clipOf(a, c)
+      const speed = a.shootT > 0 ? 1 : a.speed / 4.5
       const i = c.mesh.count++
-      if (clip) {
-        c.setClip(i, clip, a.phase, a.shootT > 0 ? 1 : a.speed / 4.5)
-      }
+      c.set(i, clip, a.phase, speed, a.top, a.bottom)
       q.setFromAxisAngle(up, a.heading)
       m4.compose(a.pos, q, one)
       c.mesh.setMatrixAt(i, m4)
+      // hat: instance × head(frame) × fitted hat offset
+      headAt(c.bake, clip, vatFrame(clip, a.phase, speed), hp, hq)
+      headM.compose(hp, hq, one)
+      hatM.multiplyMatrices(m4, headM).multiply(hatLocal.get(a.base) ?? headM.identity())
+      hats.push(a.hat, hatM, a.hatColor)
       m4.makeTranslation(a.pos.x, 0.03, a.pos.z)
       blobs.setMatrixAt(blobs.count++, m4)
     }
-    for (const c of crowds) {
-      c.mesh.instanceMatrix.needsUpdate = true
+    for (const c of crowds.values()) {
+      c.commit()
     }
+    hats.commit()
     blobs.instanceMatrix.needsUpdate = true
-    VAT_TIME.value = now / 1000
     animMs.push(performance.now() - a0)
 
     // --- camera: 30° FOV, pitched 58° down, DIST m from the target

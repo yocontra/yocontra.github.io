@@ -1,261 +1,292 @@
+// biome-ignore-all lint/style/noExcessiveClassesPerFile: the VAT crowd and its hat layer are one feature
 /**
- * Vertex-animation textures (design doc §9.5 item 8): bake a dressed Actor's
- * clips into position and normal textures, then draw any number of him as ONE
- * instanced mesh whose vertex shader plays the clip. Per instance: clip, phase,
- * speed and a cosmetic tint.
+ * Vertex-animation-texture crowd (design doc §9.5 item 8), keyed by BASE BODY
+ * (at most 7), not by loadout:
+ *
+ * - One VAT per base, baked on demand in a worker from an LOD2 of ~1.5k tris
+ *   (meshopt), cached in memory and (best effort) in IndexedDB.
+ * - Far players are instances of their base with per-instance palette tints
+ *   (the loadout's primary and secondary colours) and clip/phase/speed.
+ * - Hats are a separate instanced mesh per hat type, placed every frame on
+ *   the VAT's baked head track.
+ *
+ * Draws: (bases in view) + (hat types in view) + 1 blob-shadow draw.
  *
  * SPIKE (stream H, M1): stream G absorbs or replaces this in ffa/scene/.
  */
 import {
+  type AnimationClip,
   BufferAttribute,
   BufferGeometry,
   Color,
   DataTexture,
-  DataUtils,
   HalfFloatType,
   InstancedBufferAttribute,
   InstancedMesh,
-  type Material,
+  Matrix4,
   type Mesh,
   MeshStandardMaterial,
   NearestFilter,
+  Quaternion,
   RGBAFormat,
-  type SkinnedMesh,
   UnsignedByteType,
   Vector3,
 } from 'three'
-import type { Actor, Clip } from '../../../scene/actor.ts'
+import type { BodyKey, HatKey } from '../../../data/outlaws.ts'
+import type { Assets } from '../../../engine/assets.ts'
+import { type Clip, makeHat } from '../../../scene/actor.ts'
+import { castActor } from '../../../scene/cast.ts'
 import { RIM } from '../../../scene/style.ts'
+import { VAT_W, type VatClipInfo, type VatJob, type VatResult } from './vat-shared.ts'
 
-/** Texture row width; vertex v of frame f lives at (v % W, f * rows + v / W). */
-const W = 1024
 export const VAT_FPS = 15
+/** Bump when the bake changes; also part of the IndexedDB key. */
+const VAT_VERSION = 'vat5'
+const LOD2_TRIS = 1500
 
-export interface VatClip {
-  name: Clip
-  start: number
-  frames: number
+/** Clothing materials per base, recoloured per player (slot 1 top, slot 2 bottoms). */
+const PALETTE: Record<BodyKey, [string[], string[]]> = {
+  casual: [['LightBrown'], ['LightBlue']],
+  suit: [['Suit', 'Tie'], []],
+  worker: [
+    ['Worker_Vest', 'LightBrown'],
+    ['Brown2', 'Brown'],
+  ],
+  punk: [['Black'], ['LightBlue']],
+  king: [['Blue', 'Beige'], ['DarkBrown']],
+  rugged: [
+    ['Green', 'LightGreen'],
+    ['Brown2', 'Brown'],
+  ],
+  woman: [['LightGreen', 'Green'], ['Brown2']],
 }
+const MARK1 = 0xff_00_ff
+const MARK2 = 0x00_ff_ff
 
-export interface VatBake {
-  /** GPU bytes of both textures. */
-  bytes: number
+export interface VatBake extends VatResult {
+  base: BodyKey
+  posTex: DataTexture
+  nrmTex: DataTexture
   geometry: BufferGeometry
-  pos: DataTexture
-  nrm: DataTexture
-  clips: VatClip[]
-  rows: number
-  vertexCount: number
+  /** Hat transform relative to the head bone (from the fitted base actor). */
+  hatLocal: number[]
+  bytes: number
+  ms: number
+  cached: boolean
 }
 
-interface Part {
-  mesh: Mesh
-  skinned: boolean
-  color: Color
-}
+// ---------------------------------------------------------------- IndexedDB (best effort)
 
-function parts(actor: Actor): Part[] {
-  const out: Part[] = []
-  actor.root.updateMatrixWorld(true)
-  actor.root.traverse((o) => {
-    const m = o as Mesh
-    if (!((o as { isMesh?: boolean }).isMesh && m.visible)) {
-      return
+function idb(): Promise<IDBDatabase | null> {
+  return new Promise((resolve) => {
+    try {
+      const req = indexedDB.open('ow-vat', 1)
+      req.onupgradeneeded = () => req.result.createObjectStore('vat')
+      req.onsuccess = () => resolve(req.result)
+      req.onerror = () => resolve(null)
+    } catch {
+      resolve(null)
     }
-    const mat = (Array.isArray(m.material) ? m.material[0] : m.material) as Material & {
-      color?: Color
-    }
-    out.push({
-      mesh: m,
-      skinned: Boolean((m as SkinnedMesh).isSkinnedMesh),
-      color: mat.color ? mat.color.clone() : new Color(1, 1, 1),
-    })
   })
-  return out
 }
 
-/** One static geometry (rest pose) with vertex colours, indexed, in root space. */
-function mergeStatic(ps: Part[]): { geo: BufferGeometry; counts: number[] } {
-  let nv = 0
-  let ni = 0
-  const counts: number[] = []
-  for (const p of ps) {
-    const g = p.mesh.geometry
-    const c = g.getAttribute('position').count
-    counts.push(c)
-    nv += c
-    ni += g.index ? g.index.count : c
-  }
-  const color = new Float32Array(nv * 3)
-  const index = new Uint32Array(ni)
-  let vo = 0
-  let io = 0
-  for (const p of ps) {
-    const g = p.mesh.geometry
-    const c = g.getAttribute('position').count
-    const col = g.getAttribute('color')
-    for (let i = 0; i < c; i++) {
-      const r = col ? col.getX(i) : 1
-      const gg = col ? col.getY(i) : 1
-      const b = col ? col.getZ(i) : 1
-      color.set([r * p.color.r, gg * p.color.g, b * p.color.b], (vo + i) * 3)
-    }
-    if (g.index) {
-      for (let k = 0; k < g.index.count; k++) {
-        index[io++] = g.index.getX(k) + vo
-      }
-    } else {
-      for (let k = 0; k < c; k++) {
-        index[io++] = vo + k
-      }
-    }
-    vo += c
-  }
-  const geo = new BufferGeometry()
-  // positions come from the texture; this attribute only sizes the draw and bounds
-  geo.setAttribute('position', new BufferAttribute(new Float32Array(nv * 3), 3))
-  geo.setAttribute('color', new BufferAttribute(color, 3))
-  geo.setIndex(new BufferAttribute(index, 1))
-  return { geo, counts }
+interface Stored {
+  r: VatResult
+  hatLocal: number[]
 }
 
-const tmp = new Vector3()
+async function idbGet(key: string): Promise<Stored | null> {
+  const db = await idb()
+  if (!db) {
+    return null
+  }
+  return new Promise((resolve) => {
+    try {
+      const req = db.transaction('vat').objectStore('vat').get(key)
+      req.onsuccess = () => resolve((req.result as Stored | undefined) ?? null)
+      req.onerror = () => resolve(null)
+    } catch {
+      resolve(null)
+    }
+  })
+}
 
-/** Sample every vertex of every part at the actor's current pose (root space). */
-function samplePose(ps: Part[], out: Float32Array): void {
-  let o = 0
-  for (const p of ps) {
-    const pos = p.mesh.geometry.getAttribute('position')
-    for (let i = 0; i < pos.count; i++) {
-      tmp.fromBufferAttribute(pos, i)
-      if (p.skinned) {
-        ;(p.mesh as SkinnedMesh).applyBoneTransform(i, tmp)
-        tmp.applyMatrix4(p.mesh.matrixWorld)
+async function idbPut(key: string, v: Stored): Promise<void> {
+  const db = await idb()
+  try {
+    db?.transaction('vat', 'readwrite').objectStore('vat').put(v, key)
+  } catch {
+    // quota or private mode: memory cache only
+  }
+}
+
+// ---------------------------------------------------------------- worker
+
+let worker: Worker | null = null
+let seq = 0
+const waiting = new Map<number, { ok: (r: VatResult) => void; fail: (e: Error) => void }>()
+
+function runJob(job: VatJob): Promise<VatResult> {
+  if (!worker) {
+    worker = new Worker(new URL('./vat.worker.ts', import.meta.url), { type: 'module' })
+    worker.onmessage = (e: MessageEvent<{ id: number; result?: VatResult; error?: string }>) => {
+      const w = waiting.get(e.data.id)
+      waiting.delete(e.data.id)
+      if (e.data.result) {
+        w?.ok(e.data.result)
       } else {
-        tmp.applyMatrix4(p.mesh.matrixWorld)
+        w?.fail(new Error(e.data.error ?? 'vat bake failed'))
       }
-      out[o++] = tmp.x
-      out[o++] = tmp.y
-      out[o++] = tmp.z
     }
+  }
+  const id = ++seq
+  const wk = worker
+  return new Promise((ok, fail) => {
+    waiting.set(id, { ok, fail })
+    wk.postMessage({ id, job })
+  })
+}
+
+function linear(hex: number): [number, number, number] {
+  const c = new Color(hex)
+  return [c.r, c.g, c.b]
+}
+
+/** Dress the base with marker colours, serialise it, and hand it to the worker. */
+async function bakeFresh(assets: Assets, base: BodyKey, clips: Clip[]): Promise<Stored> {
+  const [top, bottom] = PALETTE[base]
+  const tint: Record<string, number> = {}
+  for (const n of top) {
+    tint[n] = MARK1
+  }
+  for (const n of bottom) {
+    tint[n] = MARK2
+  }
+  await assets.lookReady({ base, tint, scale: 1 })
+  const actor = castActor(assets, {
+    look: { base, tint, scale: 1 },
+    hat: 'cowboy',
+    hatColor: 0xff_ff_ff,
+  })
+  actor.root.updateMatrixWorld(true)
+  const head = actor.head
+  const hat = actor.hat
+  // the hat's one mesh, under its fitted (scaled) inner group
+  let hatMesh: Mesh | null = null
+  hat?.traverse((o) => {
+    if ((o as { isMesh?: boolean }).isMesh) {
+      hatMesh = o as Mesh
+    }
+  })
+  const hm = hatMesh as Mesh | null
+  // relative to the head's unit-scale pose (the baked head track drops bone scale)
+  let hatLocal: number[] = new Matrix4().toArray()
+  if (head && hm) {
+    const hp = new Vector3()
+    const hq = new Quaternion()
+    head.matrixWorld.decompose(hp, hq, new Vector3())
+    hatLocal = new Matrix4()
+      .compose(hp, hq, new Vector3(1, 1, 1))
+      .invert()
+      .multiply(hm.matrixWorld)
+      .toArray()
+  }
+  hat?.removeFromParent()
+  const json = actor.root.toJSON()
+  const clipJson = clips
+    .map((n) => actor.action(n)?.getClip())
+    .filter((c): c is AnimationClip => c !== undefined)
+    .map((c) => c.toJSON())
+  actor.dispose()
+  const r = await runJob({
+    json,
+    clips: clipJson,
+    fps: VAT_FPS,
+    targetTris: LOD2_TRIS,
+    headUuid: head?.uuid ?? '',
+    markers: [linear(MARK1), linear(MARK2)],
+  })
+  return { r, hatLocal }
+}
+
+const memory = new Map<BodyKey, Promise<VatBake>>()
+
+function texture(d: Uint16Array | Uint8Array, rows: number): DataTexture {
+  const t = new DataTexture(
+    d,
+    VAT_W,
+    rows,
+    RGBAFormat,
+    d instanceof Uint16Array ? HalfFloatType : UnsignedByteType,
+  )
+  t.minFilter = NearestFilter
+  t.magFilter = NearestFilter
+  t.generateMipmaps = false
+  t.needsUpdate = true
+  return t
+}
+
+function finish(base: BodyKey, s: Stored, ms: number, cached: boolean): VatBake {
+  const r = s.r
+  const geometry = new BufferGeometry()
+  geometry.setAttribute('position', new BufferAttribute(new Float32Array(r.vertexCount * 3), 3))
+  geometry.setAttribute('color', new BufferAttribute(r.color, 3))
+  geometry.setAttribute('vatSlot', new BufferAttribute(r.slot, 1))
+  geometry.setIndex(new BufferAttribute(r.index, 1))
+  const totalFrames = r.clips.reduce((a, c) => a + c.frames, 0)
+  return {
+    ...r,
+    base,
+    posTex: texture(r.pos, r.rows * totalFrames),
+    nrmTex: texture(r.nrm, r.rows * totalFrames),
+    geometry,
+    hatLocal: s.hatLocal,
+    bytes: r.pos.byteLength + r.nrm.byteLength,
+    ms,
+    cached,
   }
 }
 
-/** Bake the named clips at VAT_FPS. The actor must stand at the origin, unrotated. */
-export function bakeVat(actor: Actor, names: Clip[]): VatBake {
-  const ps = parts(actor)
-  const { geo } = mergeStatic(ps)
-  const nv = geo.getAttribute('position').count
-  const rows = Math.ceil(nv / W)
-  const clips: VatClip[] = []
-  let total = 0
-  for (const n of names) {
-    const a = actor.action(n)
-    if (!a) {
-      continue
+/** The VAT for one base body: memory cache, then IndexedDB, then a worker bake. */
+export function baseVat(assets: Assets, base: BodyKey, clips: Clip[]): Promise<VatBake> {
+  const have = memory.get(base)
+  if (have) {
+    return have
+  }
+  const key = `${VAT_VERSION}:${LOD2_TRIS}:${base}:${clips.join(',')}`
+  const p = (async () => {
+    const t0 = performance.now()
+    const stored = await idbGet(key)
+    if (stored) {
+      return finish(base, stored, performance.now() - t0, true)
     }
-    const frames = Math.max(2, Math.round(a.getClip().duration * VAT_FPS))
-    clips.push({ name: n, start: total, frames })
-    total += frames
-  }
-  // positions as half floats (8 B/vertex/frame), normals as RGBA8 (4 B)
-  const posData = new Uint16Array(W * rows * total * 4)
-  const nrmData = new Uint8Array(W * rows * total * 4)
-  const h = DataUtils.toHalfFloat
-  const n8 = (x: number) => Math.round((x * 0.5 + 0.5) * 255)
-  const frame = new Float32Array(nv * 3)
-  const ng = new BufferGeometry()
-  const nAttr = new BufferAttribute(frame, 3)
-  ng.setAttribute('position', nAttr)
-  ng.setIndex(geo.index)
-  const mixer = actor.mixer
-  for (const c of clips) {
-    mixer.stopAllAction()
-    const a = actor.action(c.name)
-    if (!a) {
-      continue
-    }
-    a.reset().play()
-    a.setEffectiveWeight(1)
-    for (let f = 0; f < c.frames; f++) {
-      a.time = (f / c.frames) * a.getClip().duration
-      mixer.update(0)
-      actor.root.updateMatrixWorld(true)
-      samplePose(ps, frame)
-      nAttr.needsUpdate = true
-      ng.computeVertexNormals()
-      const normals = ng.getAttribute('normal')
-      const base = (c.start + f) * rows * W
-      for (let v = 0; v < nv; v++) {
-        const t = (base + v) * 4
-        posData[t] = h(frame[v * 3] ?? 0)
-        posData[t + 1] = h(frame[v * 3 + 1] ?? 0)
-        posData[t + 2] = h(frame[v * 3 + 2] ?? 0)
-        posData[t + 3] = h(1)
-        nrmData[t] = n8(normals.getX(v))
-        nrmData[t + 1] = n8(normals.getY(v))
-        nrmData[t + 2] = n8(normals.getZ(v))
-        nrmData[t + 3] = 255
-      }
-    }
-    a.stop()
-  }
-  const tex = (d: Uint16Array | Uint8Array) => {
-    const t = new DataTexture(
-      d,
-      W,
-      rows * total,
-      RGBAFormat,
-      d instanceof Uint16Array ? HalfFloatType : UnsignedByteType,
-    )
-    t.minFilter = NearestFilter
-    t.magFilter = NearestFilter
-    t.generateMipmaps = false
-    t.needsUpdate = true
-    return t
-  }
-  // bounds: a generous cylinder around a running man
-  geo.boundingSphere = null
-  geo.computeBoundingBox()
-  geo.boundingBox?.set(new Vector3(-1, 0, -1), new Vector3(1, 2.2, 1))
-  geo.computeBoundingSphere()
-  return {
-    bytes: posData.byteLength + nrmData.byteLength,
-    geometry: geo,
-    pos: tex(posData),
-    nrm: tex(nrmData),
-    clips,
-    rows,
-    vertexCount: nv,
-  }
+    const fresh = await bakeFresh(assets, base, clips)
+    idbPut(key, fresh).catch(() => undefined)
+    return finish(base, fresh, performance.now() - t0, false)
+  })()
+  memory.set(base, p)
+  return p
 }
+
+// ---------------------------------------------------------------- drawing
 
 /** Shared clock for every VAT crowd. */
 export const VAT_TIME = { value: 0 }
 
-export class VatCrowd {
-  readonly mesh: InstancedMesh
-  readonly bake: VatBake
-  /** Per instance: start frame, frame count, phase (s), speed. */
-  private readonly clipAttr: InstancedBufferAttribute
+/** The frame position (fractional) the shader plays for an instance. */
+export function vatFrame(clip: VatClipInfo, phase: number, speed: number): number {
+  const f = (VAT_TIME.value + phase) * speed * VAT_FPS
+  return ((f % clip.frames) + clip.frames) % clip.frames
+}
 
-  constructor(bake: VatBake, capacity: number) {
-    this.bake = bake
-    const mat = new MeshStandardMaterial({ vertexColors: true, roughness: 0.8, metalness: 0 })
-    mat.onBeforeCompile = (shader) => {
-      shader.uniforms.vatPos = { value: bake.pos }
-      shader.uniforms.vatNrm = { value: bake.nrm }
-      shader.uniforms.vatTime = VAT_TIME
-      shader.uniforms.styRim = RIM.color
-      shader.uniforms.styRimK = RIM.strength
-      shader.vertexShader = shader.vertexShader
-        .replace(
-          '#include <common>',
-          `#include <common>
+const vatVertex = (rows: number) => /* glsl */ `#include <common>
 uniform highp sampler2D vatPos;
 uniform highp sampler2D vatNrm;
 uniform float vatTime;
 attribute vec4 vatClip;
+attribute vec3 vatTop;
+attribute vec3 vatBottom;
+attribute float vatSlot;
 vec3 vatP; vec3 vatN;
 void vatSample() {
   float f = mod((vatTime + vatClip.z) * vatClip.w * ${VAT_FPS.toFixed(1)}, vatClip.y);
@@ -263,16 +294,39 @@ void vatSample() {
   float f1 = mod(f0 + 1.0, vatClip.y);
   float t = f - f0;
   int v = gl_VertexID;
-  int x = v % ${W};
-  int y = v / ${W};
-  int r0 = int(vatClip.x + f0) * ${bake.rows} + y;
-  int r1 = int(vatClip.x + f1) * ${bake.rows} + y;
+  int x = v % ${VAT_W};
+  int y = v / ${VAT_W};
+  int r0 = int(vatClip.x + f0) * ${rows} + y;
+  int r1 = int(vatClip.x + f1) * ${rows} + y;
   vatP = mix(texelFetch(vatPos, ivec2(x, r0), 0).xyz, texelFetch(vatPos, ivec2(x, r1), 0).xyz, t);
   vatN = normalize(mix(texelFetch(vatNrm, ivec2(x, r0), 0).xyz, texelFetch(vatNrm, ivec2(x, r1), 0).xyz, t) * 2.0 - 1.0);
-}`,
-        )
+}`
+
+export class VatCrowd {
+  readonly mesh: InstancedMesh
+  readonly bake: VatBake
+  private readonly clipAttr: InstancedBufferAttribute
+  private readonly topAttr: InstancedBufferAttribute
+  private readonly bottomAttr: InstancedBufferAttribute
+
+  constructor(bake: VatBake, capacity: number) {
+    this.bake = bake
+    const mat = new MeshStandardMaterial({ vertexColors: true, roughness: 0.8, metalness: 0 })
+    mat.onBeforeCompile = (shader) => {
+      shader.uniforms.vatPos = { value: bake.posTex }
+      shader.uniforms.vatNrm = { value: bake.nrmTex }
+      shader.uniforms.vatTime = VAT_TIME
+      shader.uniforms.styRim = RIM.color
+      shader.uniforms.styRimK = RIM.strength
+      shader.vertexShader = shader.vertexShader
+        .replace('#include <common>', vatVertex(bake.rows))
         .replace('#include <beginnormal_vertex>', 'vatSample();\nvec3 objectNormal = vatN;')
         .replace('#include <begin_vertex>', 'vec3 transformed = vatP;')
+        .replace(
+          '#include <color_vertex>',
+          `#include <color_vertex>
+vColor.rgb = vatSlot < 0.5 ? color.rgb : (vatSlot < 1.5 ? vatTop : vatBottom);`,
+        )
       shader.fragmentShader = shader.fragmentShader
         .replace(
           '#include <common>',
@@ -288,21 +342,124 @@ void vatSample() {
         )
     }
     mat.customProgramCacheKey = () => `ow-vat-${bake.rows}`
-    this.mesh = new InstancedMesh(bake.geometry, mat, capacity)
+    const geo = bake.geometry.clone()
+    this.mesh = new InstancedMesh(geo, mat, capacity)
     this.clipAttr = new InstancedBufferAttribute(new Float32Array(capacity * 4), 4)
-    bake.geometry.setAttribute('vatClip', this.clipAttr)
+    this.topAttr = new InstancedBufferAttribute(new Float32Array(capacity * 3), 3)
+    this.bottomAttr = new InstancedBufferAttribute(new Float32Array(capacity * 3), 3)
+    geo.setAttribute('vatClip', this.clipAttr)
+    geo.setAttribute('vatTop', this.topAttr)
+    geo.setAttribute('vatBottom', this.bottomAttr)
     this.mesh.count = 0
     this.mesh.frustumCulled = false
     this.mesh.castShadow = false
     this.mesh.receiveShadow = true
   }
 
-  clip(name: Clip): VatClip | null {
+  clip(name: Clip): VatClipInfo | null {
     return this.bake.clips.find((c) => c.name === name) ?? null
   }
 
-  setClip(i: number, clip: VatClip, phase: number, speed: number): void {
+  // biome-ignore lint/complexity/useMaxParams: one instance's full state, written per frame without allocating
+  set(i: number, clip: VatClipInfo, phase: number, speed: number, top: Color, bottom: Color): void {
     this.clipAttr.setXYZW(i, clip.start, clip.frames, phase, speed)
+    this.topAttr.setXYZ(i, top.r, top.g, top.b)
+    this.bottomAttr.setXYZ(i, bottom.r, bottom.g, bottom.b)
+  }
+
+  commit(): void {
     this.clipAttr.needsUpdate = true
+    this.topAttr.needsUpdate = true
+    this.bottomAttr.needsUpdate = true
+    this.mesh.instanceMatrix.needsUpdate = true
+  }
+}
+
+const hp0 = new Vector3()
+const hp1 = new Vector3()
+const hq0 = new Quaternion()
+const hq1 = new Quaternion()
+
+/** Head pose (root space) at a fractional frame of a clip. */
+// biome-ignore lint/complexity/useMaxParams: out-parameters keep the per-frame hat update allocation-free
+export function headAt(
+  bake: VatBake,
+  clip: VatClipInfo,
+  frame: number,
+  outP: Vector3,
+  outQ: Quaternion,
+): void {
+  const f0 = Math.floor(frame)
+  const f1 = (f0 + 1) % clip.frames
+  const t = frame - f0
+  const h = bake.head
+  const o0 = (clip.start + f0) * 7
+  const o1 = (clip.start + f1) * 7
+  hp0.fromArray(h, o0)
+  hp1.fromArray(h, o1)
+  hq0.fromArray(h, o0 + 3)
+  hq1.fromArray(h, o1 + 3)
+  outP.lerpVectors(hp0, hp1, t)
+  outQ.slerpQuaternions(hq0, hq1, t)
+}
+
+/** One instanced mesh per hat type, tinted per instance. */
+export class VatHats {
+  readonly meshes = new Map<HatKey, InstancedMesh>()
+  private readonly capacity: number
+  private readonly root: { add: (o: InstancedMesh) => void }
+
+  constructor(root: { add: (o: InstancedMesh) => void }, capacity: number) {
+    this.root = root
+    this.capacity = capacity
+  }
+
+  mesh(key: HatKey): InstancedMesh {
+    const have = this.meshes.get(key)
+    if (have) {
+      return have
+    }
+    const g = makeHat(key, 0xff_ff_ff)
+    const meshes: Mesh[] = []
+    g.traverse((o) => {
+      if ((o as { isMesh?: boolean }).isMesh) {
+        meshes.push(o as Mesh)
+      }
+    })
+    const m = meshes[0]
+    // mesh-local: VatBake.hatLocal already carries the fitted scale
+    const geo = m ? m.geometry.clone() : new BufferGeometry()
+    const mat = new MeshStandardMaterial({
+      vertexColors: geo.hasAttribute('color'),
+      roughness: 0.85,
+    })
+    const im = new InstancedMesh(geo, mat, this.capacity)
+    im.count = 0
+    im.frustumCulled = false
+    this.meshes.set(key, im)
+    this.root.add(im)
+    return im
+  }
+
+  reset(): void {
+    for (const m of this.meshes.values()) {
+      m.count = 0
+    }
+  }
+
+  push(key: HatKey, matrix: Matrix4, color: Color): void {
+    const m = this.mesh(key)
+    const i = m.count++
+    m.setMatrixAt(i, matrix)
+    m.setColorAt(i, color)
+  }
+
+  commit(): void {
+    for (const m of this.meshes.values()) {
+      m.instanceMatrix.needsUpdate = true
+      if (m.instanceColor) {
+        m.instanceColor.needsUpdate = true
+      }
+    }
   }
 }
