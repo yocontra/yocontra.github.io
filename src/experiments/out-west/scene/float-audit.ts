@@ -66,17 +66,17 @@ const FAR = 1e9
 
 /** Props that must stand on something (never just lean on a wall). */
 const GROUNDED =
-  /^(barrel|crate|hay|cart|cactus|rock|fence|coffin|k_bench|k_bucket|k_sack|k_chest|k_barrel_rack|k_table|k_chair|k_stool|k_crate_big|k_workbench|k_anvil|k_door|k_door_braced|k_door_plank|k_doorframe)$/
+  /^(?:barrel|crate|hay|cart|cactus|rock|fence|coffin|k_bench|k_bucket|k_sack|k_chest|k_barrel_rack|k_table|k_chair|k_stool|k_crate_big|k_workbench|k_anvil|k_door|k_door_braced|k_door_plank|k_doorframe)$/u
 /** Doorways and props that stand on a deck when there is one. */
 const ON_DECK =
-  /^(barrel|crate|hay|cart|coffin|fence|k_bench|k_bucket|k_sack|k_chest|k_barrel_rack|k_door|k_door_braced|k_door_plank|k_doorframe)$/
+  /^(?:barrel|crate|hay|cart|coffin|fence|k_bench|k_bucket|k_sack|k_chest|k_barrel_rack|k_door|k_door_braced|k_door_plank|k_doorframe)$/u
 /** Kit pieces whose back belongs on a wall. */
-const WALL_MOUNTED = /^k_(window|shutters|door|balcony|support|lantern)/
+const WALL_MOUNTED = /^k_(?:window|shutters|door|balcony|support|lantern)/u
 /** Hang or fly by design (matched against the piece's own and every ancestor's name). */
-const HANGS = /(^|\/)(lantern|postlantern|pickup|bags|bird|cloud)(\/|$)/
+const HANGS = /(?:^|\/)(?:lantern|postlantern|pickup|bags|bird|cloud)(?:\/|$)/u
 /** Effects, decals and the sky: never pieces (decals still support). */
-const SKIP = /^(tracer|flash|puff|ring|aim|beacon|dust|spark|sky|blob)$/
-const DECAL = /^(creek)$/
+const SKIP = /^(?:tracer|flash|puff|ring|aim|beacon|dust|spark|sky|blob)$/u
+const DECAL = /^creek$/u
 
 interface Piece {
   name: string
@@ -89,6 +89,8 @@ interface Piece {
   max: Vector3
   hangs: boolean
   decal: boolean
+  /** Vertex colour of its first vertex (GeoBuilder boxes are one colour), or -1. */
+  color: number
 }
 
 interface Collected {
@@ -192,6 +194,7 @@ function addPiece(
   chain: string,
   verts: number[],
   tris: number[],
+  color = -1,
 ): void {
   const id = out.pieces.length
   const min = new Vector3(FAR, FAR, FAR)
@@ -219,6 +222,7 @@ function addPiece(
     max,
     hangs: HANGS.test(`${name}/${chain}`),
     decal: DECAL.test(name),
+    color,
   })
 }
 
@@ -226,6 +230,7 @@ interface Part {
   name: string
   verts: number[]
   tris: number[]
+  color: number
 }
 
 /** One mesh (or one instance of it) in world space, split into named parts. */
@@ -261,7 +266,7 @@ function meshParts(out: Collected, m: Mesh, world: Matrix4, label: string): Part
   let names: string[] = []
   const ranges = m.userData.pieces as { name: string; start: number; count: number }[] | undefined
   if (ranges) {
-    names = ranges.map((r) => r.name)
+    names = ranges.map((range) => range.name)
     pieceOf = new Int32Array(nt)
     let r = 0
     for (let t = 0; t < nt; t++) {
@@ -287,6 +292,7 @@ function meshParts(out: Collected, m: Mesh, world: Matrix4, label: string): Part
     }
   }
   const parts: Part[] = []
+  const col = g.getAttribute('color')
   for (const [p, list] of byPiece) {
     const verts: number[] = []
     const tris: number[] = []
@@ -304,7 +310,13 @@ function meshParts(out: Collected, m: Mesh, world: Matrix4, label: string): Part
         }
       }
     }
-    parts.push({ name: names[p] ?? label, verts, tris })
+    const first = idx[(list[0] ?? 0) * 3] as number
+    const color = col
+      ? Math.round(col.getX(first) * 255) * 65_536 +
+        Math.round(col.getY(first) * 255) * 256 +
+        Math.round(col.getZ(first) * 255)
+      : -1
+    parts.push({ name: names[p] ?? label, verts, tris, color })
   }
   return parts
 }
@@ -342,11 +354,13 @@ function collect(scene: Object3D): Collected {
         o.getMatrixAt(i, im)
         const w = new Matrix4().multiplyMatrices(o.matrixWorld, im)
         const key = `${o.parent?.uuid}|${o.name || o.uuid}|${i}`
-        const acc = instanced.get(key) ?? {
+        const acc: { name: string; mesh: string; chain: string; part: Part } = instanced.get(
+          key,
+        ) ?? {
           name: label,
           mesh: firstName(o),
           chain,
-          part: { name: label, verts: [], tris: [] },
+          part: { name: label, verts: [], tris: [], color: -1 },
         }
         for (const part of meshParts(out, o, w, label)) {
           acc.part.verts.push(...part.verts)
@@ -357,7 +371,7 @@ function collect(scene: Object3D): Collected {
       return
     }
     for (const part of meshParts(out, o, o.matrixWorld, label)) {
-      addPiece(out, part.name, firstName(o), chain, part.verts, part.tris)
+      addPiece(out, part.name, firstName(o), chain, part.verts, part.tris, part.color)
     }
   })
   for (const acc of instanced.values()) {
@@ -878,6 +892,14 @@ function zFights(
           continue
         }
         if (Math.abs(dot(ua.n, sub(b[0], a[0]))) > 0.002) {
+          continue
+        }
+        // invisible: identical surfaces (one mesh, one colour, world-space UVs), or both facing
+        // down into the ground
+        if (pa.mesh === pb.mesh && pa.color >= 0 && pa.color === pb.color) {
+          continue
+        }
+        if (ua.n[1] < -0.9 && a[0][1] < 0.002) {
           continue
         }
         if (!(inside(mid(b), a, ua.n) || inside(mid(a), b, ua.n))) {

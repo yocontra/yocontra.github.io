@@ -17,7 +17,6 @@
  */
 import { mkdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { chromium, type Page } from 'playwright'
 import type { AuditIssue, AuditReport } from '../src/experiments/out-west/scene/float-audit.ts'
 
 const base = process.argv.find((a) => a.startsWith('http')) ?? 'http://localhost:4365'
@@ -29,6 +28,26 @@ const shots = arg('shots')
 const json = process.argv.includes('--json')
 
 const MODULE = '/src/experiments/out-west/scene/float-audit.ts'
+
+/** The slice of Playwright used here (resolved from PLAYWRIGHT, else the repo's devDependency). */
+interface Page {
+  goto: (url: string) => Promise<unknown>
+  on: (event: 'pageerror', cb: (e: Error) => void) => void
+  addInitScript: (fn: () => void) => Promise<void>
+  waitForFunction: (fn: () => boolean, arg: undefined, o: { timeout: number }) => Promise<unknown>
+  waitForTimeout: (ms: number) => Promise<void>
+  evaluate: <R, A>(fn: (arg: A) => R | Promise<R>, arg: A) => Promise<R>
+  close: () => Promise<void>
+}
+interface Pw {
+  chromium: {
+    launch: (o: { channel: string; args: string[] }) => Promise<{
+      newPage: (o: { viewport: { width: number; height: number } }) => Promise<Page>
+      close: () => Promise<void>
+    }>
+  }
+}
+const { chromium } = (await import(process.env.PLAYWRIGHT ?? 'playwright')) as Pw
 
 type View = [string, [number, number, number], [number, number, number]]
 
@@ -74,7 +93,8 @@ async function open(page: Page, scene: string, tier: string): Promise<void> {
   // the town is built once the biggest captured scene stops growing
   await page.waitForFunction(
     () => {
-      const list = (globalThis as unknown as { __owScenes?: { children: unknown[] }[] }).__owScenes
+      const list = (globalThis as unknown as { owAuditScenes?: { children: unknown[] }[] })
+        .owAuditScenes
       return (list ?? []).some((s) => s.children.length > 4)
     },
     undefined,
@@ -105,8 +125,8 @@ for (const scene of scenes) {
       const hook = new EventTarget()
       const found: unknown[] = []
       const renderers: unknown[] = []
-      g.__owScenes = found
-      g.__owRenderers = renderers
+      g.owAuditScenes = found
+      g.owAuditRenderers = renderers
       hook.addEventListener('observe', (e) => {
         const d = (e as CustomEvent<{ isScene?: boolean; isWebGLRenderer?: boolean }>).detail
         if (d.isScene) {
@@ -115,15 +135,18 @@ for (const scene of scenes) {
           renderers.push(d)
         }
       })
-      g.__THREE_DEVTOOLS__ = hook
+      // three.js announces every Scene and renderer to this hook when it exists
+      Reflect.set(g, '__THREE_DEVTOOLS__', hook)
     })
     await open(page, scene, tier)
     const report = await page.evaluate(async (mod) => {
-      const m = (await import(/* @vite-ignore */ mod)) as typeof import('../src/experiments/out-west/scene/float-audit.ts')
-      const g = globalThis as unknown as { __owScenes: import('three').Object3D[] }
-      let best = g.__owScenes[0]
+      const m = (await import(
+        /* @vite-ignore */ mod
+      )) as typeof import('../src/experiments/out-west/scene/float-audit.ts')
+      const g = globalThis as unknown as { owAuditScenes: import('three').Object3D[] }
+      let best = g.owAuditScenes[0]
       let most = -1
-      for (const s of g.__owScenes) {
+      for (const s of g.owAuditScenes) {
         let n = 0
         s.traverse(() => {
           n++
@@ -174,14 +197,20 @@ for (const scene of scenes) {
       for (const [name, from, to] of views) {
         const url = await page.evaluate(
           async ([mod, f, t]) => {
-            const m = (await import(/* @vite-ignore */ mod as string)) as typeof import('../src/experiments/out-west/scene/float-audit.ts')
+            const m = (await import(
+              /* @vite-ignore */ mod as string
+            )) as typeof import('../src/experiments/out-west/scene/float-audit.ts')
             const g = globalThis as unknown as {
-              __owScenes: import('three').Object3D[]
-              __owRenderers: import('three').WebGLRenderer[]
+              owAuditScenes: import('three').Object3D[]
+              owAuditRenderers: import('three').WebGLRenderer[]
             }
-            const r = g.__owRenderers.at(-1)
-            const s = g.__owScenes.reduce((a, b) => (b.children.length > a.children.length ? b : a))
-            return r ? m.snapshot(r, s, f as [number, number, number], t as [number, number, number]) : ''
+            const r = g.owAuditRenderers.at(-1)
+            const s = g.owAuditScenes.reduce((a, b) =>
+              b.children.length > a.children.length ? b : a,
+            )
+            return r
+              ? m.snapshot(r, s, f as [number, number, number], t as [number, number, number])
+              : ''
           },
           [MODULE, from, to] as const,
         )
