@@ -158,6 +158,7 @@ function findBone(root: Object3D, name: string): Bone | null {
 }
 
 const tmpV = new Vector3()
+const V3 = (x: number, y: number, z: number) => new Vector3(x, y, z)
 const tmpQ = new Quaternion()
 const tmpQ2 = new Quaternion()
 
@@ -538,8 +539,15 @@ export class Actor {
     // Holsters ride on the thighs, flush with the outside of the trousers
     // (measured from his legs mesh, so wide builds don't leave them floating).
     const hipP = hips.getWorldPosition(new Vector3())
-    const legs = this.meshes.find((m) => m.userData['slot'] === 'legs') ?? null
-    const lb = new Box3().setFromObject(legs ?? this.model)
+    const legs =
+      this.meshes.find((m) => m.userData['slot'] === 'legs') ??
+      this.meshes.find(
+        (m) => /_(Pants|Legs)$/.test(m.name) || /_(Pants|Legs)$/.test(m.parent?.name ?? ''),
+      ) ??
+      null
+    const lb = legs
+      ? new Box3().setFromObject(legs)
+      : new Box3(V3(hipP.x - 0.17, 0, 0), V3(hipP.x + 0.17, 1, 0))
     const mkHolster = (side: 1 | -1): Group => {
       // side 1 = his right (-X while he faces +Z), -1 = his left.
       const bone = findBone(this.model, side === 1 ? 'UpperLeg.R' : 'UpperLeg.L') ?? hips
