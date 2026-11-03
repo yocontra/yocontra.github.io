@@ -318,6 +318,10 @@ function makeMaterials(assets: Assets): TownMaterials {
     })
     .at(0)
   const kit = kitSrc ? kitSrc.clone() : new MeshStandardMaterial({ color: WOOD })
+  if (kitSrc) {
+    // clone() doesn't carry the shader patch (the NaN-normal guard); cutaway chains onto it
+    kit.onBeforeCompile = kitSrc.onBeforeCompile
+  }
   cutaway(kit, false)
   cutaway(wall, false)
   cutaway(stone, false)

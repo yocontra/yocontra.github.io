@@ -36,7 +36,7 @@ import type { BodyKey, HatKey } from '../../../data/outlaws.ts'
 import type { Assets } from '../../../engine/assets.ts'
 import { type Clip, makeHat } from '../../../scene/actor.ts'
 import { castActor } from '../../../scene/cast.ts'
-import { characterMaps, RECOLOR_GLSL } from '../../../scene/shade.ts'
+import { characterMaps, NORMAL_GUARD_GLSL, RECOLOR_GLSL } from '../../../scene/shade.ts'
 import { RIM } from '../../../scene/style.ts'
 import { VAT_W, type VatClipInfo, type VatJob, type VatResult } from './vat-shared.ts'
 
@@ -307,7 +307,9 @@ void vatSample() {
   int r0 = int(vatClip.x + f0) * ${rows} + y;
   int r1 = int(vatClip.x + f1) * ${rows} + y;
   vatP = mix(texelFetch(vatPos, ivec2(x, r0), 0).xyz, texelFetch(vatPos, ivec2(x, r1), 0).xyz, t);
-  vatN = normalize(mix(texelFetch(vatNrm, ivec2(x, r0), 0).xyz, texelFetch(vatNrm, ivec2(x, r1), 0).xyz, t) * 2.0 - 1.0);
+  vec3 vatNn = mix(texelFetch(vatNrm, ivec2(x, r0), 0).xyz, texelFetch(vatNrm, ivec2(x, r1), 0).xyz, t) * 2.0 - 1.0;
+  // a degenerate (collapsed) triangle bakes a zero normal: never normalize it into a NaN
+  vatN = dot(vatNn, vatNn) > 1e-6 ? normalize(vatNn) : vec3(0.0, 1.0, 0.0);
 }`
 
 export class VatCrowd {
@@ -350,6 +352,7 @@ vStyLum = styLum;`,
           '#include <common>\nuniform vec3 styRim;\nuniform float styRimK;\nvarying vec3 vStyTint;\nvarying float vStyLum;',
         )
         .replace('#include <map_fragment>', `#include <map_fragment>\n${RECOLOR_GLSL}`)
+        .replace('#include <normal_fragment_maps>', NORMAL_GUARD_GLSL)
         .replace(
           '#include <emissivemap_fragment>',
           `#include <emissivemap_fragment>

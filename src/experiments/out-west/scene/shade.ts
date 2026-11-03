@@ -68,6 +68,16 @@ export const RECOLOR_GLSL = `{
 #endif
 }`
 
+/**
+ * After `normal_fragment_maps`: a derivative tangent frame on a tiny, far triangle can blow up
+ * (Inf × 0) into a NaN normal, and one NaN pixel turns into a black block in the bloom chain.
+ * Fall back to the unperturbed normal (NaN fails every comparison, so it's caught too).
+ */
+export const NORMAL_GUARD_GLSL = `#include <normal_fragment_maps>
+if ( !( dot( normal, normal ) > 1e-8 ) ) {
+  normal = ( dot( nonPerturbedNormal, nonPerturbedNormal ) > 1e-8 ) ? nonPerturbedNormal : vec3( 0.0, 0.0, 1.0 );
+}`
+
 export function characterMaterial(floor: Floor, name = 'Character'): MeshStandardMaterial {
   const mat = new MeshStandardMaterial({ roughness: 1, metalness: 1, name })
   if (maps) {
@@ -117,6 +127,7 @@ float styWrap = 0.2;
 vec3 styWrapTint = vec3(1.0);`,
       )
       .replace('#include <lights_physical_pars_fragment>', LIGHTS_WITH_WRAP)
+      .replace('#include <normal_fragment_maps>', NORMAL_GUARD_GLSL)
       .replace(
         '#include <roughnessmap_fragment>',
         '#include <roughnessmap_fragment>\nroughnessFactor = clamp(roughnessFactor * vStyMat.x, 0.04, 1.0);',

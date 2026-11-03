@@ -10,7 +10,7 @@ import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.j
 import { type GLTF, GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js'
 import type { BodyKey, Look } from '../data/outlaws.ts'
 import { setPropsLibrary } from '../scene/props.ts'
-import { setCharacterMaps } from '../scene/shade.ts'
+import { NORMAL_GUARD_GLSL, setCharacterMaps } from '../scene/shade.ts'
 import { loadTex } from '../scene/textures.ts'
 
 const ROOT = '/experiments/out-west/3d'
@@ -78,6 +78,13 @@ async function kitMaterial(
     metalness: 1,
     vertexColors: true,
   })
+  kit.onBeforeCompile = (shader) => {
+    shader.fragmentShader = shader.fragmentShader.replace(
+      '#include <normal_fragment_maps>',
+      NORMAL_GUARD_GLSL,
+    )
+  }
+  kit.customProgramCacheKey = () => 'ow-kit'
   const glass = new MeshStandardMaterial({
     name: 'KitGlass',
     color: 0x1a_1c_1e,
