@@ -26,7 +26,7 @@ import { GeoBuilder } from './geo.ts'
 import { type Preset, presetAt } from './presets.ts'
 import { RIM } from './style.ts'
 import { clockCanvas, type SignSpec, signAtlas } from './textures.ts'
-import { attachArm, withTownAO } from './town-pbr.ts'
+import { attachArm, attachBoard, withTownAO } from './town-pbr.ts'
 
 /** Street layout (metres). The street runs along Z; the duel is centred on the origin. */
 export const STREET = {
@@ -312,6 +312,7 @@ export class World {
     })
     const atlas = signAtlas(SIGNS)
     this.signMat = new MeshStandardMaterial({ map: atlas.tex, roughness: 0.85 })
+    attachBoard(this.signMat, atlas.rows)
     this.clockTex = new CanvasTexture(this.clock.canvas)
     this.clockTex.colorSpace = SRGBColorSpace
     this.clockMat = new MeshStandardMaterial({

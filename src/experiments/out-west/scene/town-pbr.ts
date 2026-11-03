@@ -84,3 +84,27 @@ export function attachArm(mat: MeshStandardMaterial, name: string, aoIntensity: 
     })
     .catch(() => undefined)
 }
+
+/**
+ * The painted signboards: relief and roughness from the Gemini signboard
+ * texture (tools/art/signboard_src.webp through tools/pbr-from-albedo.ts),
+ * under the canvas-drawn lettering. One board per atlas row.
+ */
+export function attachBoard(mat: MeshStandardMaterial, rows: number): void {
+  Promise.all([
+    loadTex(`${ROOT}/signboard_nor.webp`, false, 4),
+    loadTex(`${ROOT}/signboard_arm.webp`, false, 4),
+  ])
+    .then(([nor, arm]) => {
+      for (const t of [nor, arm]) {
+        t.repeat.set(2, rows)
+      }
+      mat.normalMap = nor
+      mat.normalScale.set(0.8, 0.8)
+      mat.aoMap = arm
+      mat.roughnessMap = arm
+      mat.roughness = 1
+      mat.needsUpdate = true
+    })
+    .catch(() => undefined)
+}

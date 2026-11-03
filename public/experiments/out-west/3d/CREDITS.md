@@ -84,6 +84,12 @@ Trimmed, mono, normalised and re-encoded to AAC.
 | `sfx/crickets.m4a` | "Outdoors_Night_CloseCrickets.wav" by MrFossy — https://freesound.org/s/521844/ | CC0 1.0 |
 | `sfx/fire.m4a` | "Fire Crackle and Flames 002" by TheWoodlandNomad — https://freesound.org/s/363092/ | CC0 1.0 |
 
+## Generated textures
+
+| File | Source | Licence |
+|---|---|---|
+| `tex/signboard_nor.webp`, `tex/signboard_arm.webp` | Weathered painted signboard: generated (Gemini), source `tools/art/signboard_src.webp`; normal and ARM derived with `tools/pbr-from-albedo.ts` | First-party |
+
 ## Font
 
 "Alfa Slab One" by JM Solé, SIL Open Font License 1.1 — https://fonts.google.com/specimen/Alfa+Slab+One
