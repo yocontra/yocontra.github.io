@@ -216,6 +216,7 @@ export class Effects {
       64,
     )
     this.bagMesh.count = 0
+    this.bagMesh.name = 'bags'
     this.bagMesh.frustumCulled = false
     this.bagMesh.castShadow = false
     root.add(this.bagMesh)
@@ -473,7 +474,8 @@ export class Effects {
       const k = Math.min(1, (bobT - b.born) * 4)
       const scale = (0.75 + Math.min(1.2, Math.sqrt(b.amount / 100)) * 0.5) * k
       q.setFromAxisAngle(up, bobT * 1.4 + b.id)
-      m4.compose(v.set(b.x, 0.05 + Math.sin(bobT * 3 + b.id) * 0.06, b.z), q, s.setScalar(scale))
+      // a gentle hover over the dirt that never dips into it (it bobbed 1 cm under the ground)
+      m4.compose(v.set(b.x, 0.07 + Math.sin(bobT * 3 + b.id) * 0.06, b.z), q, s.setScalar(scale))
       this.bagMesh.setColorAt(i, bagTint.setHex(b.color ?? PLAIN_BAG))
       this.bagMesh.setMatrixAt(i++, m4)
     }

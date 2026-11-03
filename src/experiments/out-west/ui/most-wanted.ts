@@ -15,9 +15,36 @@ import {
   previousMonth,
 } from '../net/wire-social.ts'
 import { openProfile } from './profile.ts'
-import { button, el, statusLine } from './sheet.ts'
+import { el, statusLine } from './sheet.ts'
 
 const DAY_MS = 24 * 60 * 60 * 1000
+
+/** "Oct 2026" for `2026-10`. */
+const shortMonth = (month: string): string =>
+  new Date(`${month}-01T00:00:00Z`).toLocaleDateString('en-US', {
+    month: 'short',
+    year: 'numeric',
+    timeZone: 'UTC',
+  })
+
+/** A month step in the board's running head: a small-caps arrow link, not a button plate. */
+function step(
+  nav: HTMLElement,
+  o: { label: string; dir: 'prev' | 'next' },
+  go: () => void,
+): HTMLButtonElement {
+  const b = el('button', `ow-feat-mw-step ${o.dir}`, nav)
+  b.type = 'button'
+  b.setAttribute('aria-label', o.dir === 'prev' ? `Earlier: ${o.label}` : `Later: ${o.label}`)
+  el('span', 'ow-feat-mw-arrow', b, o.dir === 'prev' ? '‹' : '›')
+  el('span', '', b, o.label)
+  b.addEventListener('click', (e) => {
+    e.stopPropagation()
+    go()
+  })
+  b.addEventListener('pointerdown', (e) => e.stopPropagation())
+  return b
+}
 
 function closesIn(at: number): string {
   const days = Math.ceil((at - Date.now()) / DAY_MS)
@@ -63,7 +90,8 @@ function rows(
 /** Render the board for `month` (the current one when omitted) into `host`. */
 export function mountMostWanted(host: HTMLElement, sheets: HTMLElement, month?: string): void {
   host.replaceChildren()
-  const nav = el('div', 'ow-hub-row ow-feat-mw-nav', host)
+  const nav = el('nav', 'ow-feat-mw-nav', host)
+  nav.setAttribute('aria-label', 'Months')
   const head = el('div', 'ow-feat-mw-head', host)
   const say = statusLine(host)
   const list = el('ol', 'ow-board-list', host)
@@ -72,13 +100,17 @@ export function mountMostWanted(host: HTMLElement, sheets: HTMLElement, month?: 
   const draw = (r: MostWantedResponse, blocked: ReadonlySet<string>): void => {
     const now = monthOf(Date.now())
     nav.replaceChildren()
-    button(nav, '‹ Earlier', () => mountMostWanted(host, sheets, previousMonth(r.month)))
+    const earlier = previousMonth(r.month)
+    step(nav, { label: shortMonth(earlier), dir: 'prev' }, () =>
+      mountMostWanted(host, sheets, earlier),
+    )
     if (r.month < now) {
-      button(nav, r.month === previousMonth(now) ? 'This month ›' : 'Later ›', () => {
-        const next = new Date(`${r.month}-01T00:00:00Z`)
-        next.setUTCMonth(next.getUTCMonth() + 1)
-        mountMostWanted(host, sheets, monthOf(next.getTime()))
-      })
+      const d = new Date(`${r.month}-01T00:00:00Z`)
+      d.setUTCMonth(d.getUTCMonth() + 1)
+      const later = monthOf(d.getTime())
+      step(nav, { label: later === now ? 'This month' : shortMonth(later), dir: 'next' }, () =>
+        mountMostWanted(host, sheets, later),
+      )
     }
     head.replaceChildren()
     el('b', 'ow-feat-mw-month', head, monthName(r.month))

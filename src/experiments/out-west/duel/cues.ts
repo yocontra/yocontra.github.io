@@ -43,7 +43,8 @@ export function tossCoin(s: DuelState): void {
   const p = e.root.position
   coin.position.set(p.x - 0.25, 1.2, p.z - 0.2)
   s.c.scene.add(coin)
-  s.c.physics.add(coin, V(0, 3.1, -0.1), V(30, 0, 0), { rest: 0.1 })
+  // lands flat: its centre half its 4 mm thickness up (at 2 cm it hovered)
+  s.c.physics.add(coin, V(0, 3.1, -0.1), V(30, 0, 0), { rest: 0.1, ground: 0.002 })
   s.coin = coin
 }
 

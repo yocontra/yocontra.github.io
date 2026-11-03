@@ -231,6 +231,12 @@ export class FrontierGame {
     })
     this.desk = new DesktopControls(root)
     this.touch = coarse ? new TouchControls(root) : null
+    if (this.touch) {
+      // the sticks' full-screen layer goes under the HUD: the HUD is see-through to touches
+      // except its own buttons (the menu, the head count, the death card's link), which a
+      // stick layer on top used to swallow
+      root.insertBefore(this.touch.layer, this.hud.root)
+    }
     this.arrows = new ThreatArrows(this.hud.root)
     this.net = new NetClient({
       onWelcome: () => this.onWelcome(),

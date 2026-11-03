@@ -4,17 +4,18 @@ Bun + TypeScript, typechecked by `tsc -p tools` (part of `bun run check`). Owned
 reuse freely. Every third-party or generated asset gets a line in
 `public/experiments/out-west/3d/CREDITS.md`.
 
-| Tool                  | What it does                                                                                                                                                                                                            | Needs                                                                          |
-| --------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------ |
-| `polyhaven.ts`        | Fetch a Poly Haven CC0 PBR set (diffuse, GL normal, ARM, …) and write WebP maps                                                                                                                                         | `cwebp`                                                                        |
-| `pbr-from-albedo.ts`  | Derive normal + ARM (AO, roughness) from a flat albedo (design doc §10.2): Gemini signage, posters, leather                                                                                                             | `ffmpeg`, `cwebp`                                                              |
-| `optimize-gltf.ts`    | dedup → prune → weld → resize → KTX2 (or WebP) → quantize → meshopt, plus an optional simplified LOD file                                                                                                               | `bunx` (fetches `@gltf-transform/cli`), optional `toktx`                       |
-| `build-characters.ts` | The textured character bases + clips + shared character atlas from Quaternius's CC0 Universal Base Characters, Modular Outfits – Fantasy and Universal Animation Library (see the file header)                          | the unzipped packs, `sharp`, gltf-transform, meshoptimizer                     |
-| `build-props.ts`      | `models/props.glb` + the trim atlas `tex/kit_*.webp` from Quaternius's CC0 Medieval Village and Fantasy Props MegaKits (doors, windows, rails, barrels, crates, wagon...), the re-UV'd revolver and the dynamite bundle | the unzipped kits, `tools/art/props-src.glb`                                   |
-| `make-luts.ts`        | Export the in-game time-of-day grades (`engine/lut.ts`) as 32³ `.cube` files for a colourist                                                                                                                            | none                                                                           |
-| `art/`                | Source art for generated textures (e.g. `signboard_src.webp`, Gemini)                                                                                                                                                   |                                                                                |
-| `audio/`              | The soundtrack: `manifest.ts` (every ElevenLabs prompt), `generate.ts`, `recipes.ts` + `build.ts` (master to −16/−18 LUFS, ≤ −1 dBTP, loop points), `loudness.ts` (report), `verify-duel.ts` (in-browser meters)        | `ffmpeg` (with `aac_at`), Apparish generators, Playwright for `verify-duel.ts` |
-| `PERF.md`             | How to measure, the numbers so far, and the real-device checklist                                                                                                                                                       |                                                                                |
+| Tool                  | What it does                                                                                                                                                                                                             | Needs                                                                          |
+| --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------ |
+| `polyhaven.ts`        | Fetch a Poly Haven CC0 PBR set (diffuse, GL normal, ARM, …) and write WebP maps                                                                                                                                          | `cwebp`                                                                        |
+| `pbr-from-albedo.ts`  | Derive normal + ARM (AO, roughness) from a flat albedo (design doc §10.2): Gemini signage, posters, leather                                                                                                              | `ffmpeg`, `cwebp`                                                              |
+| `optimize-gltf.ts`    | dedup → prune → weld → resize → KTX2 (or WebP) → quantize → meshopt, plus an optional simplified LOD file                                                                                                                | `bunx` (fetches `@gltf-transform/cli`), optional `toktx`                       |
+| `build-characters.ts` | The textured character bases + clips + shared character atlas from Quaternius's CC0 Universal Base Characters, Modular Outfits – Fantasy and Universal Animation Library (see the file header)                           | the unzipped packs, `sharp`, gltf-transform, meshoptimizer                     |
+| `build-props.ts`      | `models/props.glb` + the trim atlas `tex/kit_*.webp` from Quaternius's CC0 Medieval Village and Fantasy Props MegaKits (doors, windows, rails, barrels, crates, wagon...), the re-UV'd revolver and the dynamite bundle  | the unzipped kits, `tools/art/props-src.glb`                                   |
+| `make-luts.ts`        | Export the in-game time-of-day grades (`engine/lut.ts`) as 32³ `.cube` files for a colourist                                                                                                                             | none                                                                           |
+| `float-audit.ts`      | Floating-object audit of both scenes (duel street, Frontier) at both tiers in real Chrome: floaters, kit pieces off their wall, props sunk into a deck, z-fighting faces; `--shots=dir` saves low-angle views. See below | a dev server, Playwright                                                       |
+| `art/`                | Source art for generated textures (e.g. `signboard_src.webp`, Gemini)                                                                                                                                                    |                                                                                |
+| `audio/`              | The soundtrack: `manifest.ts` (every ElevenLabs prompt), `generate.ts`, `recipes.ts` + `build.ts` (master to −16/−18 LUFS, ≤ −1 dBTP, loop points), `loudness.ts` (report), `verify-duel.ts` (in-browser meters)         | `ffmpeg` (with `aac_at`), Apparish generators, Playwright for `verify-duel.ts` |
+| `PERF.md`             | How to measure, the numbers so far, and the real-device checklist                                                                                                                                                        |                                                                                |
 
 ## Recipes
 
@@ -64,6 +65,23 @@ KTX2: Homebrew has no `ktx` formula. The KTX-Software 4.4.2 macOS pkg can be unp
 installing (`pkgutil --expand-full`, then run `ktx` with `DYLD_LIBRARY_PATH` at its `lib/`), but
 shipping KTX2 also needs the Basis transcoder (`basis_transcoder.js`) served to the page, which
 the repo's zero-JS rule rules out as a committed file. The atlases ship as WebP.
+
+## Float audit
+
+```bash
+bun run dev --port 4365                        # another shell
+bun tools/float-audit.ts                       # both scenes x both tiers; exit 1 on any floater
+bun tools/float-audit.ts --scene=frontier --tier=low --shots=.playwright-mcp/float
+```
+
+It hooks the scene through `__THREE_DEVTOOLS__` (no game code involved) and imports
+`src/experiments/out-west/scene/float-audit.ts` into the page. Every static piece (an instance, a
+kit piece inside a merged mesh via `userData.pieces`, or a connected component of a GeoBuilder mesh)
+is checked for air under its foot (> 3 cm), contact with anything (wall-mounted kit > 2 cm off its
+wall), a foot buried under a deck, and coplanar same-facing overlaps. Lanterns, pickups and money
+bags hang by design and are listed with their mount distance. Known and owned elsewhere: the duel
+church's bell and clock face, and one Frontier church-tower z-fight (the clock tower is being
+replaced).
 
 ## Runtime pieces that replace offline bakes (while Blender is unavailable)
 
