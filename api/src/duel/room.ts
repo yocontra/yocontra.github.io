@@ -81,13 +81,19 @@ function parse(data: string | ArrayBuffer): RoomClientMessage | null {
 export class DuelRoom extends DurableObject<Env> {
   private stored: Stored | null = null
   private flow: RoomFlow | null = null
-  private closed = false
+  private closed: boolean
   private readonly tcp: [number | null, number | null] = [null, null]
   private readonly rtt: [number[], number[]] = [[], []]
   private readonly pingSentAt = new Map<number, number>()
   private pingSeq = 0
   private pingTimer: ReturnType<typeof setInterval> | undefined
-  private startedOnce = false
+  private startedOnce: boolean
+
+  constructor(ctx: DurableObjectState, env: Env) {
+    super(ctx, env)
+    this.closed = false
+    this.startedOnce = false
+  }
 
   // --- RPC from the matchmaker -----------------------------------------------------------------
 
@@ -126,7 +132,7 @@ export class DuelRoom extends DurableObject<Env> {
 
     const flow = this.ensureFlow(stored)
     if (this.startedOnce) {
-      this.sendTo(server, this.hello(stored, seat, flow.rematch))
+      sendRoomMessage(server, helloMessage(stored, seat, flow.rematch))
       flow.connect(seat)
     } else {
       // The first arrival starts the intro; `started` sends the hello.
@@ -209,41 +215,18 @@ export class DuelRoom extends DurableObject<Env> {
     return this.stored
   }
 
-  private hello(stored: Stored, seat: Seat, rematch: number): RoomServerMessage {
-    return {
-      type: 'hello',
-      serverTime: Date.now(),
-      matchId: stored.init.roomId,
-      mode: stored.init.mode,
-      you: seat,
-      posters: stored.init.posters,
-      rematch,
-    }
-  }
-
-  private ai(stored: Stored): (() => AiOpponent) | null {
-    const ghost = stored.init.ghost
-    if (stored.init.mode !== 'ghost' || !ghost) {
-      return null
-    }
-    const traits = stored.traits
-    return traits && traits.reactions.length > 0
-      ? () => ghostOpponent(traits)
-      : () => townOutlaw(ghost.rating)
-  }
-
   private ensureFlow(stored: Stored): RoomFlow {
     if (this.flow) {
       return this.flow
     }
     this.flow = new RoomFlow({
       matchId: stored.init.roomId,
-      ai: this.ai(stored),
+      ai: aiFor(stored),
       clock: realClock,
       io: {
         send: (seat, message) => {
           for (const ws of this.ctx.getWebSockets(`seat:${seat}`)) {
-            this.sendTo(ws, message)
+            sendRoomMessage(ws, message)
           }
         },
         link: (seat) => this.link(seat),
@@ -254,7 +237,7 @@ export class DuelRoom extends DurableObject<Env> {
         started: (rematch) => {
           for (const seat of [0, 1] as const) {
             for (const ws of this.ctx.getWebSockets(`seat:${seat}`)) {
-              this.sendTo(ws, this.hello(stored, seat, rematch))
+              sendRoomMessage(ws, helloMessage(stored, seat, rematch))
             }
           }
           this.ctx.waitUntil(this.ctx.storage.delete('rest'))
@@ -263,14 +246,6 @@ export class DuelRoom extends DurableObject<Env> {
       },
     })
     return this.flow
-  }
-
-  private sendTo(ws: WebSocket, message: RoomServerMessage): void {
-    try {
-      ws.send(JSON.stringify(message))
-    } catch {
-      // The close handler deals with dead sockets.
-    }
   }
 
   // --- pings -----------------------------------------------------------------------------------
@@ -462,5 +437,36 @@ export class DuelRoom extends DurableObject<Env> {
       .bind(ownerId)
       .first<{ royalties_today: number; royalties_day: string | null }>()
     return row?.royalties_day === new Date().toISOString().slice(0, 10) ? row.royalties_today : 0
+  }
+}
+
+function helloMessage(stored: Stored, seat: Seat, rematch: number): RoomServerMessage {
+  return {
+    type: 'hello',
+    serverTime: Date.now(),
+    matchId: stored.init.roomId,
+    mode: stored.init.mode,
+    you: seat,
+    posters: stored.init.posters,
+    rematch,
+  }
+}
+
+function aiFor(stored: Stored): (() => AiOpponent) | null {
+  const ghost = stored.init.ghost
+  if (stored.init.mode !== 'ghost' || !ghost) {
+    return null
+  }
+  const traits = stored.traits
+  return traits && traits.reactions.length > 0
+    ? () => ghostOpponent(traits)
+    : () => townOutlaw(ghost.rating)
+}
+
+function sendRoomMessage(ws: WebSocket, message: RoomServerMessage): void {
+  try {
+    ws.send(JSON.stringify(message))
+  } catch {
+    // The close handler deals with dead sockets.
   }
 }

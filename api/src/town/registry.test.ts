@@ -82,8 +82,10 @@ describe('lobby directory', () => {
     }
     fill(reg, 'lobby:1', 3)
     fill(reg, HOME_LOBBY, 2)
-    expect(reg.lobbies['lobby:1']?.state).toBe('draining')
-    expect(reg.lobbies[HOME_LOBBY]?.state).toBe('open')
+    expect(reg.lobbies).toMatchObject({
+      'lobby:1': { state: 'draining' },
+      [HOME_LOBBY]: { state: 'open' },
+    })
     expect(assign(reg, opts('n'))).toMatchObject({ lobbyId: HOME_LOBBY })
   })
 

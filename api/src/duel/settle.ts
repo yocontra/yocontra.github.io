@@ -185,13 +185,14 @@ function winnerMoney(input: SettleInput, seat: Seat, h: HumanSeat, money: SeatMo
   }
 }
 
-function loserMoney(
-  input: SettleInput,
-  seat: Seat,
-  h: HumanSeat,
-  result: DuelXpResult,
-  money: SeatMoney,
-): void {
+/** One human seat's view of a settlement. */
+interface SeatTurn {
+  input: SettleInput
+  seat: Seat
+  h: HumanSeat
+}
+
+function loserMoney({ input, seat, h }: SeatTurn, result: DuelXpResult, money: SeatMoney): void {
   const ghostDuel = input.mode === 'ghost'
   const penalty = duelPenalty(h.profile.purse, liveBountyOf(h), {
     pairFactor: input.pairFactor,
@@ -264,7 +265,7 @@ function seatMoney(input: SettleInput, seat: Seat, h: HumanSeat): SeatMoney {
   } else if (result === 'dodge' && input.culprit !== seat) {
     // The dodged player: nothing moves. They are requeued at the front.
   } else {
-    loserMoney(input, seat, h, result, money)
+    loserMoney({ input, seat, h }, result, money)
   }
   const reaction = input.reactions[seat]
   if (reaction !== null && input.outcome !== 'coward') {
@@ -278,9 +279,7 @@ function seatMoney(input: SettleInput, seat: Seat, h: HumanSeat): SeatMoney {
 
 function ghostObservation(
   env: Env,
-  input: SettleInput,
-  seat: Seat,
-  h: HumanSeat,
+  { input, seat, h }: SeatTurn,
   stats: DuelStats,
 ): D1PreparedStatement[] {
   // Only judged evidence: a dodge or a forfeit says nothing about how a player draws.
@@ -322,7 +321,7 @@ export function buildSettlement(env: Env, input: SettleInput): SettleOutput {
     perSeat[seat] = money
     entries.push(...money.entries.filter((e) => e.amount !== 0 || (e.xp ?? 0) !== 0))
     side.push(duelStatsStatement(env, h.accountId, money.stats))
-    side.push(...ghostObservation(env, input, seat, h, money.stats))
+    side.push(...ghostObservation(env, { input, seat, h }, money.stats))
     settlements[seat] = {
       delta: money.delta,
       xp: money.xp,

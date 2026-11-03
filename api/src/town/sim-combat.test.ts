@@ -83,7 +83,7 @@ describe('revolver', () => {
     const a = place(w, 20, 64)
     run(w, 1, { [a.id]: () => ({ buttons: BTN_FIRE }) })
     run(w, 1, { [a.id]: () => ({ buttons: BTN_RELOAD }) })
-    expect(a.reloadTicks).toBe(RELOAD_TICKS - 0)
+    expect(a.reloadTicks).toBe(RELOAD_TICKS)
     run(w, RELOAD_TICKS)
     expect(a.ammo).toBe(6)
   })

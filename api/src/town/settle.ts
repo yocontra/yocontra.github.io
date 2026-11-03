@@ -48,12 +48,17 @@ export function sessionStartStatement(env: Env, lobbyId: string, s: Session): D1
  * Flush unflushed XP (kills, assists, showdowns, strongboxes) as an XP-only ledger entry, plus the
  * session's stats. `flushIndex` keys the XP entry; the caller advances it only on success.
  */
+/** What one XP flush covers: the session, its player, the entry index and the leave time. */
+export interface XpFlush {
+  session: Session
+  player: Player
+  flushIndex: number
+  leftAt: number | null
+}
+
 export function xpFlushStatements(
   env: Env,
-  s: Session,
-  p: Player,
-  flushIndex: number,
-  leftAt: number | null,
+  { session: s, player: p, flushIndex, leftAt }: XpFlush,
 ): { statements: D1PreparedStatement[]; xp: number } {
   const xp = Math.max(0, p.stats.xp - s.xpFlushed)
   const st = p.stats

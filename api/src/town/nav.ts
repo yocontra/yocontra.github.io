@@ -30,7 +30,9 @@ export function buildNav(grid: Grid): NavGrid {
     for (let col = 0; col < n; col++) {
       const x = (col + 0.5) * NAV_CELL
       const z = (row + 0.5) * NAV_CELL
-      free[row * n + col] = circleBlocked(grid, x, z, PLAYER_RADIUS + 0.05, BLOCK_MOVE) ? 0 : 1
+      free[row * n + col] = circleBlocked(grid, { x, z, r: PLAYER_RADIUS + 0.05 }, BLOCK_MOVE)
+        ? 0
+        : 1
     }
   }
   return { n, free }

@@ -68,7 +68,7 @@ export function slide(grid: Grid, m: MoveState, dx: number, dz: number): void {
   let x = m.x
   let z = m.z
   for (let i = 0; i < steps; i++) {
-    const p = pushOut(grid, x + dx / steps, z + dz / steps, PLAYER_RADIUS, BLOCK_MOVE)
+    const p = pushOut(grid, { x: x + dx / steps, z: z + dz / steps, r: PLAYER_RADIUS }, BLOCK_MOVE)
     x = p.x
     z = p.z
   }

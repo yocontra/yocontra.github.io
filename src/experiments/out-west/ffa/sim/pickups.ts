@@ -63,7 +63,11 @@ function take(p: Player, kind: string): boolean {
 }
 
 /** The first eligible player standing on a spot takes it. */
-function claim(w: World, index: number, x: number, z: number, kind: string): number {
+function claim(
+  w: World,
+  index: number,
+  { x, z, kind }: { x: number; z: number; kind: string },
+): number {
   for (const p of activePlayers(w)) {
     const free = p.alive && p.lingerUntil < 0 && p.showdown < 0
     if (free && dist2(p.x, p.z, x, z) <= PICKUP_RADIUS ** 2 && take(p, kind)) {
@@ -82,7 +86,7 @@ export function updatePickups(w: World): void {
       continue
     }
     if (pk.availableAt === 0) {
-      if (claim(w, pk.spot, spot.x, spot.z, spot.kind) >= 0) {
+      if (claim(w, pk.spot, spot) >= 0) {
         pk.availableAt = w.tick + PICKUP_RESPAWN_TICKS
       }
     } else if (w.tick >= pk.availableAt) {
@@ -110,14 +114,15 @@ function spend(w: World, p: Player, intervalMs: number): void {
   }
 }
 
-function shotEvent(
-  w: World,
-  p: Player,
-  angle: number,
-  range: number,
-  target: number,
-  flags: number,
-): void {
+/** A shot as the wire sees it: direction, how far it went, who it hit (or NONE), and flags. */
+interface ShotTrace {
+  angle: number
+  range: number
+  target: number
+  flags: number
+}
+
+function shotEvent(w: World, p: Player, { angle, range, target, flags }: ShotTrace): void {
   w.events.push({
     type: 'shot',
     shooter: p.id,
@@ -136,17 +141,17 @@ function fireRifle(w: World, p: Player, aim: number, viewTime: number): void {
   const angle = aimRadians(aim) + hashSigned(w.seed, p.id, w.tick, p.stats.shots) * spread * DEG
   const dx = Math.cos(angle)
   const dz = Math.sin(angle)
-  const wall = rayGrid(w.grid, p.x, p.z, dx, dz, RIFLE_RANGE, BLOCK_SHOT)
+  const wall = rayGrid(w.grid, { ox: p.x, oz: p.z, dx, dz, maxDist: RIFLE_RANGE }, BLOCK_SHOT)
   const time = rewindTime(w, viewTime)
-  const hit = traceTargets(w, p, dx, dz, wall, time)
+  const hit = traceTargets(w, p, { dx, dz, maxT: wall }, time)
   let flags = SHOT_RIFLE
   if (hit) {
     flags |= SHOT_HIT
-    strike(w, p, hit.id, time, RIFLE_DAMAGE, false, aim)
+    strike(w, p, { targetId: hit.id, time, damage: RIFLE_DAMAGE, deadEye: false, aim })
   } else if (wall < RIFLE_RANGE) {
     flags |= SHOT_WALL
   }
-  shotEvent(w, p, angle, hit ? hit.t : wall, hit ? hit.id : NONE, flags)
+  shotEvent(w, p, { angle, range: hit ? hit.t : wall, target: hit ? hit.id : NONE, flags })
 }
 
 function fireShotgun(w: World, p: Player, aim: number, viewTime: number): void {
@@ -161,8 +166,8 @@ function fireShotgun(w: World, p: Player, aim: number, viewTime: number): void {
     const angle = base + (lane + jitter) * DEG
     const dx = Math.cos(angle)
     const dz = Math.sin(angle)
-    const wall = rayGrid(w.grid, p.x, p.z, dx, dz, SHOTGUN_RANGE, BLOCK_SHOT)
-    const hit = traceTargets(w, p, dx, dz, wall, time)
+    const wall = rayGrid(w.grid, { ox: p.x, oz: p.z, dx, dz, maxDist: SHOTGUN_RANGE }, BLOCK_SHOT)
+    const hit = traceTargets(w, p, { dx, dz, maxT: wall }, time)
     if (hit) {
       damage.set(hit.id, (damage.get(hit.id) ?? 0) + SHOTGUN_PELLET_DAMAGE)
     }
@@ -171,7 +176,7 @@ function fireShotgun(w: World, p: Player, aim: number, viewTime: number): void {
   let most = 0
   for (const [id, dmg] of damage) {
     // One hit per target per shell, so stats count shells, not pellets.
-    strike(w, p, id, time, dmg, false, aim)
+    strike(w, p, { targetId: id, time, damage: dmg, deadEye: false, aim })
     if (dmg > most) {
       most = dmg
       target = id
@@ -181,7 +186,12 @@ function fireShotgun(w: World, p: Player, aim: number, viewTime: number): void {
     target === NONE
       ? SHOTGUN_RANGE
       : Math.sqrt(dist2(p.x, p.z, w.players[target]?.x ?? p.x, w.players[target]?.z ?? p.z))
-  shotEvent(w, p, base, range, target, SHOT_SHOTGUN | (target === NONE ? 0 : SHOT_HIT))
+  shotEvent(w, p, {
+    angle: base,
+    range,
+    target,
+    flags: SHOT_SHOTGUN | (target === NONE ? 0 : SHOT_HIT),
+  })
 }
 
 /** Fire the pickup weapon in hand. Assumes `canFire` passed and `p.weapon` isn't the revolver. */
@@ -204,7 +214,7 @@ export function maybeThrow(w: World, p: Player, buttons: number, aim: number): v
   const dz = Math.sin(a)
   const reach = Math.max(
     0,
-    rayGrid(w.grid, p.x, p.z, dx, dz, DYNAMITE_THROW_RANGE, BLOCK_SIGHT) - 0.5,
+    rayGrid(w.grid, { ox: p.x, oz: p.z, dx, dz, maxDist: DYNAMITE_THROW_RANGE }, BLOCK_SIGHT) - 0.5,
   )
   const x = quantize(p.x + dx * reach)
   const z = quantize(p.z + dz * reach)
@@ -227,12 +237,15 @@ export function updateFuses(w: World): void {
       const inRange = dist2(f.x, f.z, target.x, target.z) <= DYNAMITE_RADIUS ** 2
       const immune =
         !target.alive || isProtected(w, target) || target.showdown >= 0 || inIframes(target)
-      if (!inRange || immune || !hasLineOfSight(w.grid, f.x, f.z, target.x, target.z)) {
+      if (!inRange || immune || !hasLineOfSight(w.grid, f, target)) {
         continue
       }
       // The thrower may have left; then the blast is nobody's kill.
       const thrower = w.players[f.by]
-      applyDamage(w, target, thrower && !thrower.gone ? thrower : target, DYNAMITE_DAMAGE, false)
+      applyDamage(w, target, thrower && !thrower.gone ? thrower : target, {
+        amount: DYNAMITE_DAMAGE,
+        deadEye: false,
+      })
     }
   }
 }

@@ -151,9 +151,7 @@ export type ShowdownVerdict =
 function endShowdown(
   w: World,
   sd: Showdown,
-  winner: number,
-  outcome: number,
-  winnerMs: number,
+  { winner, outcome, winnerMs }: { winner: number; outcome: number; winnerMs: number },
 ): void {
   sd.phase = 'done'
   w.showdowns.delete(sd.id)
@@ -184,13 +182,11 @@ export function resolveShowdown(w: World, id: number, verdict: ShowdownVerdict):
     const winnerId = verdict.kind === 'win' ? verdict.winner : other(verdict.who)
     const loser = w.players[other(winnerId)]
     const winner = w.players[winnerId]
-    endShowdown(
-      w,
-      sd,
-      winnerId,
-      verdict.kind === 'win' ? SD_WIN : SD_COWARD,
-      verdict.kind === 'win' ? verdict.winnerMs : 0,
-    )
+    endShowdown(w, sd, {
+      winner: winnerId,
+      outcome: verdict.kind === 'win' ? SD_WIN : SD_COWARD,
+      winnerMs: verdict.kind === 'win' ? verdict.winnerMs : 0,
+    })
     if (loser?.alive) {
       killPlayer(w, loser, winnerId, { showdown: true, showdownDrop: true })
     }
@@ -201,7 +197,7 @@ export function resolveShowdown(w: World, id: number, verdict: ShowdownVerdict):
     return
   }
   if (verdict.kind === 'dead_heat') {
-    endShowdown(w, sd, NONE, SD_DEAD_HEAT, 0)
+    endShowdown(w, sd, { winner: NONE, outcome: SD_DEAD_HEAT, winnerMs: 0 })
     for (const p of [a, b]) {
       if (p?.alive) {
         killPlayer(w, p, NONE, { showdown: true })
@@ -209,7 +205,11 @@ export function resolveShowdown(w: World, id: number, verdict: ShowdownVerdict):
     }
     return
   }
-  endShowdown(w, sd, NONE, verdict.kind === 'froze' ? SD_FROZE : SD_ABORTED, 0)
+  endShowdown(w, sd, {
+    winner: NONE,
+    outcome: verdict.kind === 'froze' ? SD_FROZE : SD_ABORTED,
+    winnerMs: 0,
+  })
 }
 
 /** Beats, fake-outs, the bell, cowardice by early press, and the 6 s safety cap. */

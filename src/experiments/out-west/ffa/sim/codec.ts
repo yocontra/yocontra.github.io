@@ -20,8 +20,9 @@ import {
   SNAPSHOT_HEADER_BYTES,
   SNAPSHOT_SELF_BYTES,
 } from '../../contract/town.ts'
-import { clampI8, clampU8, Reader, type Writer } from './bytes.ts'
+import { clampI8, clampU8, type Writer } from './bytes.ts'
 import { readEvent, type WireEvent, writeEvent } from './codec-events.ts'
+import { Reader } from './reader.ts'
 
 // --- Input --------------------------------------------------------------------------------------
 

@@ -11,13 +11,7 @@ import { TICK_MS } from '../../../src/experiments/out-west/ffa/sim/constants.ts'
 import { recordUsage } from '../budget.ts'
 import { getProfile } from '../economy/profile.ts'
 import type { Env } from '../env.ts'
-import {
-  type Departure,
-  LobbyCore,
-  type Peer,
-  type SettledDeposit,
-  type TickOutput,
-} from './core.ts'
+import { type Departure, LobbyCore, type SettledDeposit, type TickOutput } from './core.ts'
 import {
   depositKey,
   depositStatements,
@@ -25,6 +19,7 @@ import {
   sessionStartStatement,
   xpFlushStatements,
 } from './settle.ts'
+import { SocketPeer } from './socket-peer.ts'
 
 const DEPOSIT_FLUSH_MS = 2000
 const MINUTE_MS = 60_000
@@ -32,27 +27,6 @@ const DIRECTORY_DEBOUNCE_MS = 5000
 const MAX_CATCH_UP_TICKS = 4
 const MAX_DEV_BOTS = 31
 const DIRECTORY = 'dir:global'
-
-class SocketPeer implements Peer {
-  private readonly ws: WebSocket
-  constructor(ws: WebSocket) {
-    this.ws = ws
-  }
-  send(data: Uint8Array | string): void {
-    try {
-      this.ws.send(data)
-    } catch {
-      // Closed under us; the close handler cleans up.
-    }
-  }
-  close(code: number, reason: string): void {
-    try {
-      this.ws.close(code, reason)
-    } catch {
-      // Already closed.
-    }
-  }
-}
 
 export interface LobbyStats {
   lobbyId: string
@@ -76,7 +50,7 @@ export class Lobby extends DurableObject<Env> {
   private epoch = 0
   private ticksRun = 0
   private readonly pending = new Map<string, SettledDeposit>()
-  private flushing = false
+  private flushing: boolean
   private lastDepositFlush = 0
   private lastMinute = 0
   private occupiedSince = 0
@@ -93,6 +67,7 @@ export class Lobby extends DurableObject<Env> {
 
   constructor(ctx: DurableObjectState, env: Env) {
     super(ctx, env)
+    this.flushing = false
     void ctx.blockConcurrencyWhile(async () => {
       const saved = await ctx.storage.list<SettledDeposit & { lobbyId: string }>({ prefix: 'dep:' })
       for (const [key, d] of saved) {
@@ -315,7 +290,12 @@ export class Lobby extends DurableObject<Env> {
     if (!s.ledger) {
       return
     }
-    const { statements, xp } = xpFlushStatements(this.env, s, p, s.xpFlushIndex, leftAt)
+    const { statements, xp } = xpFlushStatements(this.env, {
+      session: s,
+      player: p,
+      flushIndex: s.xpFlushIndex,
+      leftAt,
+    })
     try {
       await this.env.DB.batch(statements)
       s.xpFlushed += xp

@@ -70,7 +70,7 @@ function scoreSpawn(w: World, sp: SpawnPoint, index: number, self: Player): Spaw
     }
     const d = Math.sqrt(dist2(sp.x, sp.z, q.x, q.z))
     nearest = Math.min(nearest, d)
-    if (!seen && d <= SPAWN_LOS_DIST && hasLineOfSight(w.grid, sp.x, sp.z, q.x, q.z)) {
+    if (!seen && d <= SPAWN_LOS_DIST && hasLineOfSight(w.grid, sp, q)) {
       seen = true
     }
   }
@@ -114,7 +114,7 @@ export function spawnPlayer(w: World, p: Player): void {
 
 /** Add a player in the first free slot and spawn them. Returns the id, or −1 if full. */
 export function addPlayer(w: World, init: PlayerInit): number {
-  const id = w.players.findIndex((p) => p === null)
+  const id = w.players.indexOf(null)
   if (id < 0 || id >= MAX_PLAYERS) {
     return -1
   }

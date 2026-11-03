@@ -11,7 +11,7 @@
  */
 import process from 'node:process'
 import { REMATCH_WINDOW_MS } from '../../src/experiments/out-west/contract/duel.ts'
-import { Client } from './duel-client.ts'
+import { Client, waitFor } from './duel-client.ts'
 import { check, failed, openLocalD1, seedPlayer } from './local-d1.ts'
 
 const VOTE_AFTER_MS = 15_000
@@ -29,9 +29,9 @@ if (!(ua && ub)) {
 }
 a.join(ua)
 b.join(ub)
-await a.waitFor(() => a.results.length > 0, 60_000)
+await waitFor(() => a.results.length > 0, 60_000)
 const resultAt = Date.now()
-await a.waitFor(() => a.messages.some((m) => m.type === 'rematch'), 5000)
+await waitFor(() => a.messages.some((m) => m.type === 'rematch'), 5000)
 const votes = a.messages.find((m) => m.type === 'rematch')
 const window = votes?.type === 'rematch' ? votes.deadline - resultAt : null
 check(
@@ -39,7 +39,7 @@ check(
   window !== null && Math.abs(window - REMATCH_WINDOW_MS) < 1000,
   window,
 )
-const started = await a.waitFor(
+const started = await waitFor(
   () => a.messages.some((m) => m.type === 'hello' && m.rematch === 1),
   VOTE_AFTER_MS + 5000,
 )

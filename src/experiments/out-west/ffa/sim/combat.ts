@@ -100,13 +100,20 @@ export function rewindTime(w: World, viewTime: number): number {
   return Math.max(latest - REWIND_TICKS, Math.min(latest, viewTime))
 }
 
+/** One landed shot: who, at which rewound `time`, for how much, and the shooter's `aim`. */
+export interface Strike {
+  targetId: number
+  time: number
+  damage: number
+  deadEye: boolean
+  aim: number
+}
+
 /** Ray against every other player's rewound capsule. Returns the nearest hit before `maxT`. */
 export function traceTargets(
   w: World,
   shooter: Player,
-  dx: number,
-  dz: number,
-  maxT: number,
+  { dx, dz, maxT }: { dx: number; dz: number; maxT: number },
   time: number,
 ): { id: number; t: number } | null {
   let best: { id: number; t: number } | null = null
@@ -153,11 +160,7 @@ export const damageAt = (range: number, deadEye: boolean): number =>
 export function strike(
   w: World,
   p: Player,
-  targetId: number,
-  time: number,
-  damage: number,
-  deadEye: boolean,
-  aim: number,
+  { targetId, time, damage, deadEye, aim }: Strike,
 ): boolean {
   const target = w.players[targetId]
   const pose = poseAt(w, targetId, time)
@@ -169,7 +172,7 @@ export function strike(
   if (aimDelta > AIM_SNAP_UNITS) {
     p.stats.snapHits++
   }
-  return applyDamage(w, target, p, damage, deadEye)
+  return applyDamage(w, target, p, { amount: damage, deadEye })
 }
 
 /** Fire one revolver round. Assumes `canFire` passed. */
@@ -190,15 +193,21 @@ export function fire(w: World, p: Player, aim: number, viewTime: number): ShotRe
   const angle = aimRadians(aim) + hashSigned(w.seed, p.id, w.tick, p.stats.shots) * spreadDeg * DEG
   const dx = Math.cos(angle)
   const dz = Math.sin(angle)
-  const wall = rayGrid(w.grid, p.x, p.z, dx, dz, MAX_RANGE, BLOCK_SHOT)
+  const wall = rayGrid(w.grid, { ox: p.x, oz: p.z, dx, dz, maxDist: MAX_RANGE }, BLOCK_SHOT)
   const time = rewindTime(w, viewTime)
-  const hit = traceTargets(w, p, dx, dz, wall, time)
+  const hit = traceTargets(w, p, { dx, dz, maxT: wall }, time)
   const range = hit ? hit.t : wall
   let flags = deadEye ? SHOT_DEAD_EYE : 0
   let killed = false
   if (hit) {
     flags |= SHOT_HIT
-    killed = strike(w, p, hit.id, time, damageAt(hit.t, deadEye), deadEye, aim)
+    killed = strike(w, p, {
+      targetId: hit.id,
+      time,
+      damage: damageAt(hit.t, deadEye),
+      deadEye,
+      aim,
+    })
   } else if (wall < MAX_RANGE) {
     flags |= SHOT_WALL
   }

@@ -46,12 +46,11 @@ export class ShowdownJudge {
     }
   }
 
-  private link(core: LobbyCore, playerId: number): PvpLink {
-    const s = core.sessionOf(playerId)
-    return { ...rttStats(s?.rtt ?? []), tcp: s?.tcpRtt ?? null }
-  }
-
-  private open(core: LobbyCore, id: number, a: number, b: number, now: number): void {
+  private open(
+    core: LobbyCore,
+    { id, a, b }: { id: number; a: number; b: number },
+    now: number,
+  ): void {
     const w = core.world
     const fixedFor = (pid: number): FixedDraw | undefined =>
       w.players[pid]?.bot ? { ms: this.rng.int(BOT_DRAW_MIN_MS, BOT_DRAW_MAX_MS) } : undefined
@@ -68,21 +67,6 @@ export class ShowdownJudge {
     core.sessionOf(b)?.peer?.send(call)
   }
 
-  private toVerdict(p: Pending, v: PvpVerdict): ShowdownVerdict | null {
-    switch (v.kind) {
-      case 'pending':
-        return null
-      case 'win':
-        return { kind: 'win', winner: p.seats[v.winner], winnerMs: v.ms[v.winner] ?? 0 }
-      case 'coward':
-        return { kind: 'coward', who: p.seats[v.who] }
-      case 'dead_heat':
-        return { kind: 'dead_heat' }
-      default:
-        return { kind: 'froze' }
-    }
-  }
-
   /** After each sim step: open records for new bells, close finished ones, judge the rest. */
   update(core: LobbyCore, now: number): void {
     const w = core.world
@@ -90,7 +74,7 @@ export class ShowdownJudge {
       if (ev.type === 'showdown_call') {
         const sd = w.showdowns.get(ev.id)
         if (sd) {
-          this.open(core, sd.id, sd.a, sd.b, now)
+          this.open(core, sd, now)
         }
       } else if (ev.type === 'showdown_end') {
         this.pending.delete(ev.id)
@@ -101,13 +85,13 @@ export class ShowdownJudge {
         this.pending.delete(p.id)
         continue
       }
-      const verdict = this.toVerdict(
+      const verdict = toVerdict(
         p,
         judgePvp({
           callSentAt: p.callSentAt,
           shotSeenAt: p.shotSeenAt,
           localMs: p.localMs,
-          rtt: [this.link(core, p.seats[0]), this.link(core, p.seats[1])],
+          rtt: [linkOf(core, p.seats[0]), linkOf(core, p.seats[1])],
           now,
           fixed: p.fixed,
         }),
@@ -117,5 +101,25 @@ export class ShowdownJudge {
         resolveShowdown(w, p.id, verdict)
       }
     }
+  }
+}
+
+function linkOf(core: LobbyCore, playerId: number): PvpLink {
+  const s = core.sessionOf(playerId)
+  return { ...rttStats(s?.rtt ?? []), tcp: s?.tcpRtt ?? null }
+}
+
+function toVerdict(p: Pending, v: PvpVerdict): ShowdownVerdict | null {
+  switch (v.kind) {
+    case 'pending':
+      return null
+    case 'win':
+      return { kind: 'win', winner: p.seats[v.winner], winnerMs: v.ms[v.winner] ?? 0 }
+    case 'coward':
+      return { kind: 'coward', who: p.seats[v.who] }
+    case 'dead_heat':
+      return { kind: 'dead_heat' }
+    default:
+      return { kind: 'froze' }
   }
 }

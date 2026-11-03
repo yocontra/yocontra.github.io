@@ -157,7 +157,12 @@ describe('map pickups', () => {
     run(w, 1, { [a.id]: () => ({ aim: 0, buttons: BTN_THROW }) })
     expect(taker.weapon).toBe(WEAPON_SHOTGUN)
     const snap = decodeSnapshot(
-      snapshotFor(w, a, new ClientStream(), { banked: 0, events: [] }, new Writer()),
+      snapshotFor(
+        w,
+        { viewer: a, stream: new ClientStream() },
+        { banked: 0, events: [] },
+        new Writer(),
+      ),
       new Map<number, EntityView>(),
     )
     const types = snap?.events.map((e) => e.type) ?? []
