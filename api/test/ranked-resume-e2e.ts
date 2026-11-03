@@ -11,7 +11,8 @@
  * 5. The run is cleared to the end without drawing early: every first clear is paid exactly once
  *    (never for a voided duel), and the account gets Hardin's Pair and the Midnight frame.
  *
- *   bunx wrangler dev --config api/wrangler.jsonc --local --port 8799 --inspector-port 9239
+ *   bunx wrangler dev --config api/wrangler.jsonc --local --port 8799 --inspector-port 9239 \
+ *     --infer-origin-from-routes=false
  *   bun api/test/ranked-resume-e2e.ts [http://localhost:8799]
  *
  * Not part of `bun test`. Seeds its own account straight into the local D1.

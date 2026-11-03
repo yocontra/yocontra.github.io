@@ -10,7 +10,8 @@
  * 5. Frontier: unlicensed → 403 `unlicensed`; licensed → a lobby; flagged → a Badlands lobby that
  *    the public directory never lists.
  *
- *   bunx wrangler dev --config api/wrangler.jsonc --local --port 8799 --inspector-port 9239
+ *   bunx wrangler dev --config api/wrangler.jsonc --local --port 8799 --inspector-port 9239 \
+ *     --infer-origin-from-routes=false
  *   bun api/test/social-e2e.ts http://localhost:8799
  *
  * Not part of `bun test`. Seeds its own accounts straight into the local D1.
