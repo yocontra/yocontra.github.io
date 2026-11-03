@@ -66,6 +66,10 @@ body {
 .ow-playing .ow-hud {
   opacity: 1;
 }
+/* menus and the gauntlet's ledger own the screen: the HUD steps back */
+.ow:has(.ow-menu.on, .ow-end.on) .ow-hud {
+  opacity: 0;
+}
 .ow-counter,
 .ow-purse,
 .ow-mode {

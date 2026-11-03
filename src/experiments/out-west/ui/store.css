@@ -254,8 +254,15 @@
       0 -16px 40px rgb(0 0 0 / 0.5);
     transform: translateY(105%);
   }
+  .ow-store-head {
+    gap: var(--ow-s2);
+  }
   .ow-store-head .ow-hub-h {
-    font-size: var(--ow-fs-h3);
+    min-width: 0;
+    font-size: var(--ow-fs-h4);
+  }
+  .ow-store-purse {
+    font-size: var(--ow-fs-body);
   }
   .ow-store-list {
     grid-template-columns: repeat(auto-fill, minmax(8.5rem, 1fr));

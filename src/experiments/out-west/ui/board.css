@@ -84,35 +84,6 @@
   font-variant-caps: all-small-caps;
   letter-spacing: var(--ow-track-label);
 }
-/* a ruled line to sign on */
-.ow-board-name,
-.ow-acct-input {
-  width: 100%;
-  min-height: 48px;
-  padding: var(--ow-s2) var(--ow-s1) 6px;
-  font-family: var(--ow-font-text);
-  font-weight: 500;
-  font-size: var(--ow-fs-h4);
-  font-style: italic;
-  letter-spacing: 0.01em;
-  color: var(--ow-ink);
-  background: rgb(255 250 236 / 0.4);
-  border: 0;
-  border-bottom: 2px solid var(--ow-ink);
-  border-radius: 0;
-  -webkit-user-select: text;
-  user-select: text;
-}
-.ow-board-name::placeholder,
-.ow-acct-input::placeholder {
-  color: var(--ow-ink-3);
-}
-.ow-board-name:focus-visible,
-.ow-acct-input:focus-visible {
-  outline: 2px solid var(--ow-red);
-  outline-offset: 2px;
-  background: rgb(255 250 236 / 0.7);
-}
 .ow-board-status {
   min-height: 1.45em;
   font-size: var(--ow-fs-body);

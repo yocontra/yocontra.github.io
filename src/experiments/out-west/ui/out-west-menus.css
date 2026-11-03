@@ -78,7 +78,7 @@
 }
 .ow-key {
   min-width: 7rem;
-  min-height: 40px;
+  min-height: var(--ow-tap);
   padding: 0 var(--ow-s3);
   font-family: var(--ow-font-num);
   font-weight: 500;
