@@ -30,6 +30,8 @@ import type { Body, WeightFn } from './fit.ts'
 export interface Piece {
   /** Root-space geometry: position, normal, colour (the tint), index, and `uv` when it has one. */
   geo: BufferGeometry
+  /** The source material's name, for body parts (Hair, Skin, Shirt...). */
+  name?: string
   /** Roughness multiplier on the atlas (plain swatch: the roughness itself). */
   roughness: number
   rim: number
@@ -139,6 +141,7 @@ export function bodyPieces(model: Object3D, space: Object3D, body: Body): Piece[
     const recolor = mat.userData.recolor === true
     out.push({
       geo,
+      name: mat.name,
       // textured body parts take their roughness from the atlas
       roughness: uvA ? 1 : mat.roughness,
       rim: (mat.userData.rim as number | undefined) ?? 1,

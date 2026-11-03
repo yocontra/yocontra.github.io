@@ -119,7 +119,7 @@ function spawnActors(d: Director): void {
   spawnRifleman(d)
   const p = d.player
   p.root.visible = true
-  p.mixer.stopAllAction()
+  p.stopAll()
   p.holsterGun()
   p.play('Idle', 0)
   resetPositions(d)

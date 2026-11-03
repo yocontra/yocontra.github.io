@@ -40,7 +40,7 @@ export function hubShot(s: DuelState, shot: HubShot): void {
   p.root.visible = true
   p.root.position.copy(SPOT)
   p.root.rotation.set(0, shot === 'store' ? 0.4 : -0.35, 0)
-  p.mixer.stopAllAction()
+  p.stopAll()
   p.holsterGun()
   p.play('Idle', 0)
   const store = shot === 'store'

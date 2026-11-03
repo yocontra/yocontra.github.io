@@ -16,7 +16,11 @@ export interface PlayerLook {
   hatColor: number
   top: Color
   bottom: Color
-  /** Hats read bigger in the Frontier (spec §3.8). */
+  /**
+   * Extra hat scale in the Frontier. 1: every hat is fitted snug to its head (scene/hats.ts); a
+   * bigger one sits loose and floats above the skull (spec §3.8 asked for 1.15, which read as
+   * hats far too large).
+   */
   hatScale: number
 }
 
@@ -99,6 +103,6 @@ export function lookFor(loadout: readonly string[], id: number): PlayerLook {
     hatColor,
     top: new Color(top),
     bottom: new Color(bottom),
-    hatScale: 1.15,
+    hatScale: 1,
   }
 }

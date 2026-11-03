@@ -1,4 +1,4 @@
-import { MeshStandardMaterial, ShaderChunk, type Texture } from 'three'
+import { BackSide, DoubleSide, MeshStandardMaterial, ShaderChunk, type Texture } from 'three'
 import { type Floor, RIM, SKIN_FLAG } from './style.ts'
 
 /**
@@ -80,6 +80,16 @@ if ( !( dot( normal, normal ) > 1e-8 ) ) {
 
 export function characterMaterial(floor: Floor, name = 'Character'): MeshStandardMaterial {
   const mat = new MeshStandardMaterial({ roughness: 1, metalness: 1, name })
+  // Opaque, and both faces drawn: the source garments are single sheets (collars, cuffs, hems,
+  // hair) and the fitted coats and ponchos are open shells, so with back faces culled you saw
+  // through the inside of a coat, a sleeve or a collar to the street behind. A back face is lit
+  // with its normal flipped (three's DOUBLE_SIDED path). On the tile-based iPhone GPU the hidden
+  // back faces of a closed body cost no shading. Shadows keep casting from the back faces, as
+  // before, so no new self-shadow acne.
+  mat.side = DoubleSide
+  mat.shadowSide = BackSide
+  mat.transparent = false
+  mat.alphaTest = 0
   if (maps) {
     mat.map = maps.map
     mat.normalMap = maps.normal

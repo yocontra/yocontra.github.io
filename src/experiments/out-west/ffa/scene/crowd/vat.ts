@@ -16,10 +16,12 @@
  */
 import {
   type AnimationClip,
+  BackSide,
   BufferAttribute,
   BufferGeometry,
   Color,
   DataTexture,
+  DoubleSide,
   HalfFloatType,
   InstancedBufferAttribute,
   InstancedMesh,
@@ -34,15 +36,16 @@ import {
 } from 'three'
 import type { BodyKey, HatKey } from '../../../data/outlaws.ts'
 import type { Assets } from '../../../engine/assets.ts'
-import { type Clip, makeHat } from '../../../scene/actor.ts'
+import type { Clip } from '../../../scene/actor.ts'
 import { castActor } from '../../../scene/cast.ts'
+import { makeHat } from '../../../scene/hats.ts'
 import { characterMaps, NORMAL_GUARD_GLSL, RECOLOR_GLSL } from '../../../scene/shade.ts'
 import { RIM } from '../../../scene/style.ts'
 import { VAT_W, type VatClipInfo, type VatJob, type VatResult } from './vat-shared.ts'
 
 export const VAT_FPS = 15
 /** Bump when the bake changes; also part of the IndexedDB key. */
-const VAT_VERSION = 'vat6-atlas'
+const VAT_VERSION = 'vat7-hatfit'
 const LOD2_TRIS = 1500
 
 /** Clothing materials per base, recoloured per player (slot 1 top, slot 2 bottoms). */
@@ -324,6 +327,9 @@ export class VatCrowd {
     // the same atlas and recolour as the near (skinned) characters
     const maps = characterMaps()
     const mat = new MeshStandardMaterial({ roughness: 1, metalness: maps ? 1 : 0 })
+    // like the near characters (shade.ts): open garments show their insides, not the street
+    mat.side = DoubleSide
+    mat.shadowSide = BackSide
     if (maps) {
       mat.map = maps.map
       mat.normalMap = maps.normal

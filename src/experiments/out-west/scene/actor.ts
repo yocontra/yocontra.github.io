@@ -6,11 +6,8 @@ import {
   type AnimationClip,
   AnimationMixer,
   type Bone,
-  Color,
   CylinderGeometry,
-  DoubleSide,
   Group,
-  LatheGeometry,
   LoopOnce,
   LoopRepeat,
   type Material,
@@ -19,15 +16,14 @@ import {
   type Object3D,
   Quaternion,
   type SkinnedMesh,
-  SplineCurve,
-  Vector2,
   Vector3,
 } from 'three'
 import type { GLTF } from 'three/examples/jsm/loaders/GLTFLoader.js'
 import { clone as cloneSkinned } from 'three/examples/jsm/utils/SkeletonUtils.js'
 import type { BodyKey, HatKey } from '../data/outlaws.ts'
 import { bake, bodyPieces, mergePieces, meshPieces, onBone, type Piece } from './bake.ts'
-import { boneKey, bounds, onBones, sampleBody } from './fit.ts'
+import { boneKey, bounds, sampleBody } from './fit.ts'
+import { fitHat, type HatFit, makeHat, tuckHair } from './hats.ts'
 import {
   bandana,
   bandoliers,
@@ -113,145 +109,6 @@ function tintFor(
 
 const PLAIN_HOLSTER: HolsterLook = { color: 0x3a_24_14, roughness: 0.55 }
 
-/** Hat silhouettes from lathe profiles (x = radius, y = height), metres. */
-const HAT_PROFILES: Record<HatKey, [number, number][]> = {
-  cowboy: [
-    [0.0, 0.14],
-    [0.06, 0.145],
-    [0.085, 0.12],
-    [0.1, 0.03],
-    [0.12, 0.012],
-    [0.17, 0.0],
-    [0.205, 0.02],
-    [0.215, 0.045],
-  ],
-  bowler: [
-    [0.0, 0.125],
-    [0.06, 0.118],
-    [0.092, 0.08],
-    [0.1, 0.02],
-    [0.13, 0.008],
-    [0.148, 0.02],
-  ],
-  sombrero: [
-    [0.0, 0.2],
-    [0.05, 0.19],
-    [0.08, 0.1],
-    [0.1, 0.02],
-    [0.25, 0.0],
-    [0.34, 0.02],
-    [0.36, 0.07],
-  ],
-  tophat: [
-    [0.0, 0.2],
-    [0.088, 0.2],
-    [0.082, 0.1],
-    [0.09, 0.012],
-    [0.13, 0.0],
-    [0.145, 0.018],
-  ],
-  tall: [
-    [0.0, 0.2],
-    [0.05, 0.205],
-    [0.08, 0.18],
-    [0.095, 0.03],
-    [0.12, 0.012],
-    [0.17, 0.0],
-    [0.215, 0.012],
-    [0.225, 0.035],
-  ],
-  flat: [
-    [0.0, 0.095],
-    [0.095, 0.095],
-    [0.1, 0.02],
-    [0.13, 0.006],
-    [0.185, 0.0],
-    [0.19, 0.012],
-  ],
-}
-
-/** Inner radius of each crown where it meets the head (the profile point above the brim). */
-const CROWN_R: Record<HatKey, number> = {
-  cowboy: 0.1,
-  bowler: 0.1,
-  sombrero: 0.1,
-  tophat: 0.09,
-  tall: 0.095,
-  flat: 0.1,
-}
-
-/**
- * Give a lathed hat its hand-made shape: a cattleman's brim rolls up at the sides and dips
- * front and back, and its crown takes a centre crease; the flat-brims keep theirs flat.
- */
-function shapeHat(geo: LatheGeometry, key: HatKey): void {
-  const crownR = CROWN_R[key] ?? 0.1
-  const prof = HAT_PROFILES[key] ?? HAT_PROFILES.cowboy
-  const brimR = Math.max(...prof.map(([x]) => x))
-  const top = Math.max(...prof.map(([, y]) => y))
-  const curl = { cowboy: 0.05, tall: 0.045, sombrero: 0.02 }[key as string] ?? 0
-  const crease = { cowboy: 0.022, tall: 0.018 }[key as string] ?? 0
-  const pos = geo.getAttribute('position')
-  for (let i = 0; i < pos.count; i++) {
-    const x = pos.getX(i)
-    const z = pos.getZ(i)
-    let y = pos.getY(i)
-    const rr = Math.hypot(x, z)
-    if (rr > crownR + 0.008 && curl > 0) {
-      const t = (rr - crownR) / Math.max(0.01, brimR - crownR)
-      const side = (x / rr) ** 2
-      y += curl * t * t * side - curl * 0.35 * t * t * (1 - side)
-    }
-    if (crease > 0 && y > top - 0.05) {
-      const k = (y - (top - 0.05)) / 0.05
-      y -= crease * k * Math.max(0, 1 - Math.abs(x) / (crownR * 0.9))
-    }
-    pos.setY(i, y)
-  }
-  geo.computeVertexNormals()
-}
-
-/**
- * A hat as ONE mesh (crown and band merged, vertex coloured). The returned
- * group is what pops off; `fit` scales an inner child so popHat() keeps size.
- */
-export function makeHat(key: HatKey, color: number, floor: Floor = { value: 0 }): Group {
-  const pts = (HAT_PROFILES[key] ?? HAT_PROFILES.cowboy).map(([x, y]) => new Vector2(x, y))
-  // lathe needs the profile ordered bottom→top for outward normals; a spline through the
-  // profile rounds the crown and the brim's roll instead of faceting them
-  const prof = new SplineCurve([...pts].reverse()).getSpacedPoints(36)
-  const g = new Group()
-  const felt = new MeshStandardMaterial({ color, roughness: 0.85 })
-  felt.userData.rim = 0.9
-  felt.userData.swatch = 'felt'
-  const lathe = new LatheGeometry(prof, 48)
-  shapeHat(lathe, key)
-  const crown = new Mesh(lathe, felt)
-  g.add(crown)
-  const bandH = key === 'sombrero' ? 0.03 : 0.022
-  const r = (HAT_PROFILES[key]?.[2]?.[0] ?? 0.09) + 0.006
-  const bandMat = new MeshStandardMaterial({
-    color: new Color(color).multiplyScalar(0.35),
-    roughness: 0.6,
-  })
-  bandMat.userData.swatch = 'leather'
-  const band = new Mesh(new CylinderGeometry(r, r + 0.004, bandH, 48, 1, true), bandMat)
-  band.position.y = 0.03
-  g.add(band)
-  const geo = mergePieces(meshPieces(g, g))
-  const mat = characterMaterial(floor, 'Felt')
-  mat.side = DoubleSide
-  const mesh = new Mesh(geo, mat)
-  mesh.castShadow = true
-  const out = new Group()
-  const inner = new Group()
-  inner.add(mesh)
-  out.add(inner)
-  // Crumple the brim a touch so it doesn't read as CG-perfect.
-  out.rotation.z = (Math.random() - 0.5) * 0.06
-  return out
-}
-
 /**
  * The holster's leather in its slot's frame (the barrel lies along +X, 0.045 up +Y). The body
  * cylinder is the same for every holster; tooling adds bands, a buscadero rig adds the drop loop
@@ -320,6 +177,65 @@ const tmpV = new Vector3()
 const V3 = (x: number, y: number, z: number) => new Vector3(x, y, z)
 const tmpQ = new Quaternion()
 
+/** An action that is posing him: scheduled on its mixer and enabled (paused = held, still posing). */
+function posing(a: AnimationAction): boolean {
+  return a.enabled && a.isScheduled()
+}
+
+/** Is he drawn: in a scene, every ancestor visible, his mesh visible. */
+function shown(a: Actor): boolean {
+  if (!a.meshes.some((m) => m.visible)) {
+    return false
+  }
+  let o: Object3D | null = a.root
+  while (o) {
+    if (!o.visible) {
+      return false
+    }
+    if ((o as Object3D & { isScene?: boolean }).isScene) {
+      return true
+    }
+    o = o.parent
+  }
+  return false
+}
+
+/**
+ * Dev only: every frame, warn about any drawn actor with no clip posing him (he'd stand in his
+ * bind pose, a T-pose). `globalThis.__owTPose` counts them for Playwright.
+ */
+const watched = new Set<WeakRef<Actor>>()
+const warned = new WeakSet<Actor>()
+let watching = false
+
+function checkPoses(): void {
+  for (const ref of watched) {
+    const a = ref.deref()
+    if (!a || a.disposed) {
+      watched.delete(ref)
+      continue
+    }
+    const bad = shown(a) && a.poseWeight() < 1e-3
+    if (bad && !warned.has(a)) {
+      warned.add(a)
+      const n = Number(Reflect.get(globalThis, '__owTPose') ?? 0)
+      Reflect.set(globalThis, '__owTPose', n + 1)
+      console.warn(`[ow] T-pose: ${a.label} is drawn with no clip playing`)
+    } else if (!bad) {
+      warned.delete(a)
+    }
+  }
+  requestAnimationFrame(checkPoses)
+}
+
+function watchPose(a: Actor): void {
+  watched.add(new WeakRef(a))
+  if (!watching && typeof requestAnimationFrame === 'function') {
+    watching = true
+    requestAnimationFrame(checkPoses)
+  }
+}
+
 export type Clip =
   | 'Idle'
   | 'Idle_Neutral'
@@ -347,6 +263,8 @@ export class Actor {
   readonly armR: Bone | null
   readonly forearmR: Bone | null
   hat: Group | null = null
+  /** Where his hat sits (null when he has none). */
+  hatFit: HatFit | null = null
   gun: Object3D | null = null
   offGun: Object3D | null = null
   rifle: Object3D | null = null
@@ -376,8 +294,13 @@ export class Actor {
   private readonly bones = new Map<string, Bone>()
   /** The base carries a sculpted beard (kept by prune when he wears one). */
   private realBeard = false
+  /** Set by dispose(); the dev pose watchdog forgets him. */
+  disposed = false
+  /** What the dev pose watchdog calls him. */
+  readonly label: string
 
   constructor(gltf: GLTF, opts: ActorOpts = {}) {
+    this.label = `${opts.base ?? 'player'} ${opts.seed ?? ''}`.trim()
     this.model = cloneSkinned(gltf.scene)
     prune(this.model, { beard: opts.beard !== undefined })
     this.model.traverse((o) => {
@@ -463,6 +386,11 @@ export class Actor {
     const fit = measure(body, this.bones)
     const clothes = this.dress(fit, opts)
     const pieces = [...bodyPieces(this.model, this.root, body), ...clothes]
+    // the hat is fitted to his skull now, so the hair it covers can be pressed under it
+    const hatFit = opts.hat ? fitHat(body, fit.head.eye, opts.hat) : null
+    if (hatFit) {
+      tuckHair(pieces, hatFit)
+    }
     if (opts.gun) {
       pieces.push(
         ...this.placeHolsters(fit, {
@@ -484,14 +412,17 @@ export class Actor {
     }
     this.meshes.push(bake(pieces, body, this.root, characterMaterial(this.floor)))
 
-    if (opts.hat) {
-      this.attachHat(fit, opts.hat, opts.hatColor ?? 0x3a_2a_1a)
+    if (hatFit) {
+      this.attachHat(hatFit, opts.hatColor ?? 0x3a_2a_1a)
     }
     if (opts.gun) {
       this.gripGuns(opts.offGun ?? false)
     }
     if (opts.rifle) {
       this.attachRifle(opts.rifle)
+    }
+    if (import.meta.env.DEV) {
+      watchPose(this)
     }
   }
 
@@ -571,7 +502,9 @@ export class Actor {
     if (!a) {
       return null
     }
-    if (this.current === a && !once) {
+    // Already playing it. "Current" alone isn't enough: a stopped action left as current
+    // (mixer.stopAllAction from outside) would keep him in his bind pose, a T-pose.
+    if (this.current === a && !once && posing(a)) {
       return a
     }
     a.enabled = true
@@ -603,7 +536,7 @@ export class Actor {
     if (!(w && idle)) {
       return
     }
-    if (this.current !== idle) {
+    if (this.current !== idle || !posing(idle)) {
       this.play('Idle', 0.15)
     }
     if (!w.isRunning()) {
@@ -616,6 +549,31 @@ export class Actor {
     w.setEffectiveWeight(weight)
     idle.setEffectiveWeight(1 - weight)
     w.timeScale = cadence * s
+  }
+
+  /**
+   * Stop every clip and forget the current one, so the next play() starts its clip from
+   * scratch. Never call mixer.stopAllAction() on an actor directly: play() would think the
+   * stopped clip still runs and leave him in his bind pose.
+   */
+  stopAll(): void {
+    this.mixer.stopAllAction()
+    this.current = null
+    this.walkWeight = 0
+  }
+
+  /**
+   * Total weight of the clips posing him (0 = his bind pose, a T-pose). A clamped LoopOnce
+   * (Death) still counts: it holds its last frame.
+   */
+  poseWeight(): number {
+    let w = 0
+    for (const a of this.actions.values()) {
+      if (posing(a)) {
+        w += a.getEffectiveWeight()
+      }
+    }
+    return w
   }
 
   get walkTime(): number {
@@ -631,44 +589,27 @@ export class Actor {
   }
 
   /**
-   * Seat the hat on his head bone: sized to his skull (hair included) and
-   * lowered until the crown's inner rim meets it, like a real hat.
+   * Seat the hat on his head bone where `fitHat` measured it: the band on his skull, the crown
+   * hugging it (see hats.ts).
    */
-  private attachHat(f: Fit, key: HatKey, color: number): void {
+  private attachHat(f: HatFit, color: number): void {
     const head = this.head
     if (!head) {
       return
     }
-    const hat = makeHat(key, color, this.floor)
-    const h = f.head
-    const crownR = CROWN_R[key] ?? 0.1
-    const s = Math.min(1.3, Math.max(0.9, (h.r * 1.04) / crownR))
-    const want = crownR * s
-    const skull = onBones(f.body, ['Head'])
-    // Highest height at which the head is as wide as the crown's opening.
-    let seat = h.top - 0.06
-    for (let y = h.top; y > h.top - 0.2; y -= 0.004) {
-      let r = 0
-      for (const p of skull) {
-        if (Math.abs(p.p.y - y) < 0.006) {
-          r = Math.max(r, Math.hypot(p.p.x - h.cx, p.p.z - h.cz))
-        }
-      }
-      if (r >= want * 0.96) {
-        seat = y
-        break
-      }
-    }
-    const inner = hat.children[0]
-    inner?.scale.setScalar(s)
+    const hat = makeHat(f.key, color, this.floor)
+    hat.children[0]?.scale.setScalar(f.s)
     const slot = this.slotOn(
       head,
-      V3(h.cx, seat - 0.025 * s, h.cz),
-      this.root.getWorldQuaternion(new Quaternion()),
+      V3(f.cx, f.y, f.cz),
+      this.root
+        .getWorldQuaternion(new Quaternion())
+        .multiply(tmpQ.setFromAxisAngle(V3(0, 1, 0), f.yaw)),
     )
     slot.add(hat)
-    hat.rotation.x = -0.08
+    hat.rotation.x = -f.tilt
     this.hat = hat
+    this.hatFit = f
   }
 
   /** Make a bone-local slot that holds world-space-authored children (unit scale, root orientation). */
@@ -904,6 +845,7 @@ export class Actor {
   }
 
   dispose(): void {
+    this.disposed = true
     this.mixer.stopAllAction()
     this.root.removeFromParent()
   }
