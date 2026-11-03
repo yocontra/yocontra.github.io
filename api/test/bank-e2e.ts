@@ -111,9 +111,9 @@ class Rider {
     x: number,
     z: number,
     near = 0.6,
-    timeoutMs = 40_000,
-    arrived: (s: State) => boolean = () => false,
+    opts: { timeoutMs?: number; arrived?: (s: State) => boolean } = {},
   ): Promise<boolean> {
+    const { timeoutMs = 40_000, arrived = () => false } = opts
     const until = Date.now() + timeoutMs
     let lastPlan = 0
     let last = { x: Number.NaN, z: Number.NaN, at: Date.now() }
@@ -282,9 +282,9 @@ try {
 
   // 3. A picks up the bag.
   // the bag may lie against cover where its exact spot isn't walkable: arriving is picking it up
-  const onBag = await a.walkTo(bag.x, bag.z, BAG_PICKUP_RADIUS - 0.3, 40_000, (st) =>
-    st.bags.every((g) => g.id !== bag.id),
-  )
+  const onBag = await a.walkTo(bag.x, bag.z, BAG_PICKUP_RADIUS - 0.3, {
+    arrived: (st) => st.bags.every((g) => g.id !== bag.id),
+  })
   check('A walks onto the bag', onBag)
   const picked = await a.waitFor('A picked the bag up', (s) => s.carried >= aCarry0 + bag.amount)
   check(
@@ -300,7 +300,10 @@ try {
       ? w
       : best,
   )
-  check(`A reaches the bank window (${win.id})`, await a.walkTo(win.x, win.z, win.r - 0.3, 60_000))
+  check(
+    `A reaches the bank window (${win.id})`,
+    await a.walkTo(win.x, win.z, win.r - 0.3, { timeoutMs: 60_000 }),
+  )
   const carry = (await a.state()).carried
   await a.pilot('stop')
   await sleep(300)
