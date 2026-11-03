@@ -1,5 +1,6 @@
 import { MeshStandardMaterial, Scene } from 'three'
 import type { AudioEngine } from './audio/audio'
+import { OUTLAWS } from './data/outlaws'
 import { Director } from './duel/director'
 import { loadAssets } from './engine/assets'
 import { Input } from './engine/input'
@@ -33,7 +34,14 @@ export async function createGame(o: GameOpts): Promise<Game> {
   const rig = new CameraRig(window.innerWidth / window.innerHeight)
   const renderer = new Renderer(o.canvas, scene, rig.cam, o.tier)
   const aniso = Math.min(8, renderer.gl.capabilities.getMaxAnisotropy())
-  const assets = await loadAssets(aniso, (f) => o.onProgress(f * 0.85))
+  const first = OUTLAWS[o.save.level] ?? OUTLAWS[0]
+  const assets = await loadAssets(
+    aniso,
+    first
+      ? first.look
+      : { head: 'casual', body: 'casual', legs: 'casual', feet: 'casual', tint: {}, build: [1, 1] },
+    (f) => o.onProgress(f * 0.85),
+  )
   const world = new World(scene, assets.tex, renderer.spec.shadowSize)
   const { coffins } = dressStreet(assets.props, world.root)
 

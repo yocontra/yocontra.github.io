@@ -17,12 +17,26 @@ import {
   type Object3D,
   Quaternion,
   type SkinnedMesh,
+  type Texture,
   Vector2,
   Vector3,
 } from 'three'
 import type { GLTF } from 'three/examples/jsm/loaders/GLTFLoader.js'
 import { clone as cloneSkinned } from 'three/examples/jsm/utils/SkeletonUtils.js'
-import type { HatKey } from '../data/outlaws'
+import type { HatKey, PartSrc } from '../data/outlaws'
+import { applyCloth, type ClothKey } from './cloth'
+import {
+  CLOTH_BY_MATERIAL,
+  kitbash,
+  makeBandoliers,
+  makeBeard,
+  makeCoat,
+  makeMask,
+  makeMoustache,
+  makePoncho,
+  makeStar,
+  type PartSlot,
+} from './outfit'
 
 const HEIGHT = 1.78
 
@@ -36,6 +50,19 @@ export interface ActorOpts {
   /** Second gun (two-gun Delmer, Hardin). */
   offGun?: boolean
   rifle?: Object3D | null
+  /** Kitbash: head/body/legs/feet from other characters sharing this rig. */
+  parts?: Record<PartSlot, { gltf: GLTF; src: PartSrc }> | null
+  /** [width, height] build multipliers. */
+  build?: readonly [number, number]
+  coat?: number | undefined
+  poncho?: number | undefined
+  moustache?: number | undefined
+  beard?: number | undefined
+  bandoliers?: boolean | undefined
+  star?: boolean | undefined
+  mask?: number | undefined
+  /** Fabric scans for the triplanar cloth detail. */
+  cloth?: Record<ClothKey, Texture> | null
 }
 
 /** Hat silhouettes from lathe profiles (x = radius, y = height), metres. */
@@ -74,6 +101,16 @@ const HAT_PROFILES: Record<HatKey, [number, number][]> = {
     [0.09, 0.012],
     [0.13, 0.0],
     [0.145, 0.018],
+  ],
+  tall: [
+    [0.0, 0.2],
+    [0.05, 0.205],
+    [0.08, 0.18],
+    [0.095, 0.03],
+    [0.12, 0.012],
+    [0.17, 0.0],
+    [0.215, 0.012],
+    [0.225, 0.035],
   ],
   flat: [
     [0.0, 0.095],
@@ -176,21 +213,28 @@ export class Actor {
   shake = 0
   twitch = 0
   private t = Math.random() * 10
-  readonly height = HEIGHT
+  height = HEIGHT
 
   constructor(gltf: GLTF, opts: ActorOpts = {}) {
     this.model = cloneSkinned(gltf.scene)
-    // Scale to a consistent height.
+    if (opts.parts) kitbash(this.model, opts.parts)
+    // Scale to a consistent height, then apply his build.
     this.model.updateMatrixWorld(true)
     const box = new Box3().setFromObject(this.model)
     const h = box.max.y - box.min.y
+    const [bw, bh] = opts.build ?? [1, 1]
     const k = HEIGHT / Math.max(0.01, h)
     this.model.scale.multiplyScalar(k)
-    this.model.position.y = -box.min.y * k
+    this.model.scale.x *= bw
+    this.model.scale.z *= bw
+    this.model.scale.y *= bh
+    this.model.position.y = -box.min.y * k * bh
     this.root.add(this.model)
+    this.height = HEIGHT * bh
 
     const tint = opts.tint ?? {}
     const matCache = new Map<Material, Material>()
+    const clothQueue: [MeshStandardMaterial, ClothKey, Texture][] = []
     this.model.traverse((o) => {
       const m = o as SkinnedMesh
       if (!m.isMesh) return
@@ -206,11 +250,28 @@ export class Actor {
         if (hex !== undefined) c.color.setHex(hex)
         c.roughness = Math.max(0.6, c.roughness)
         c.metalness = 0
+        const ck = CLOTH_BY_MATERIAL[src.name]
+        const tex = ck && opts.cloth ? opts.cloth[ck] : null
+        if (ck && tex) clothQueue.push([c, ck, tex])
         matCache.set(src, c)
         return c
       }
       m.material = Array.isArray(m.material) ? m.material.map(swap) : swap(m.material)
     })
+
+    // Fabric detail scaled to real-world repeats (object units → metres).
+    this.model.updateMatrixWorld(true)
+    const ws = this.meshes[0]?.getWorldScale(new Vector3()).x ?? 1
+    for (const [m, key, tex] of clothQueue) {
+      const perM = key === 'leather' ? 0.3 : key === 'hessian' ? 0.35 : 0.45
+      applyCloth(m, {
+        tex,
+        scale: perM * ws,
+        amount: key === 'denim' ? 0.35 : 0.25,
+        bump: 0.12,
+        roughness: key === 'leather' ? 0.55 : 0.9,
+      })
+    }
 
     this.head = findBone(this.model, 'Head')
     this.handR = findBone(this.model, 'Wrist.R') ?? findBone(this.model, 'Fist.R')
@@ -235,8 +296,69 @@ export class Actor {
 
     if (opts.hat) this.attachHat(makeHat(opts.hat, opts.hatColor ?? 0x3a2a1a))
     if (opts.bandana !== undefined) this.attachBandana(opts.bandana)
+    this.dress(opts)
     if (opts.gun) this.attachGuns(opts.gun, opts.offGun ?? false)
     if (opts.rifle) this.attachRifle(opts.rifle)
+  }
+
+  /** Accessories that make each outlaw a silhouette of his own. */
+  private dress(o: ActorOpts): void {
+    this.mixer.update(0)
+    this.root.updateMatrixWorld(true)
+    const rootQ = this.root.getWorldQuaternion(new Quaternion())
+    const w = o.build?.[0] ?? 1
+    const hips = this.hips
+    const chest = findBone(this.model, 'Chest') ?? this.spine
+    const neck = findBone(this.model, 'Neck')
+    if (o.coat !== undefined && hips) {
+      const p = hips.getWorldPosition(new Vector3())
+      const coat = makeCoat(o.coat)
+      coat.scale.set(w, 1, w)
+      this.slotOn(hips, p, rootQ).add(coat)
+    }
+    if (o.poncho !== undefined && neck) {
+      const p = neck.getWorldPosition(new Vector3()).add(new Vector3(0, 0.02, 0))
+      const poncho = makePoncho(o.poncho)
+      poncho.scale.set(w, 1, w)
+      this.slotOn(chest ?? neck, p, rootQ).add(poncho)
+    }
+    if (chest && (o.bandoliers || o.star)) {
+      const p = chest.getWorldPosition(new Vector3())
+      const slot = this.slotOn(chest, p, rootQ)
+      if (o.bandoliers) {
+        const b = makeBandoliers()
+        b.scale.set(w, 1, w)
+        slot.add(b)
+      }
+      if (o.star) {
+        const st = makeStar()
+        st.position.set(0.1 * w, 0.06, 0.135 * w)
+        slot.add(st)
+      }
+    }
+    // Facial hair and masks: placed from the head mesh's bounds.
+    const head = this.head
+    const headMesh = this.meshes.find((m) => m.userData['slot'] === 'head') ?? null
+    if (head && (o.moustache !== undefined || o.beard !== undefined || o.mask !== undefined)) {
+      const hb = headMesh ? new Box3().setFromObject(headMesh) : null
+      const hp = head.getWorldPosition(new Vector3())
+      const top = hb ? hb.max.y : hp.y + 0.25
+      const front = hb ? hb.max.z : hp.z + 0.1
+      const hh = hb ? hb.max.y - hb.min.y : 0.3
+      const chin = top - hh * 0.92
+      if (o.moustache !== undefined) {
+        const m = makeMoustache(o.moustache)
+        this.slotOn(head, new Vector3(hp.x, chin + hh * 0.3, front - 0.012), rootQ).add(m)
+      }
+      if (o.beard !== undefined) {
+        const b = makeBeard(o.beard)
+        this.slotOn(head, new Vector3(hp.x, chin + hh * 0.22, front - 0.06), rootQ).add(b)
+      }
+      if (o.mask !== undefined) {
+        const m = makeMask(o.mask)
+        this.slotOn(head, new Vector3(hp.x, chin + hh * 0.26, front - 0.1), rootQ).add(m)
+      }
+    }
   }
 
   /** Sample the walk clip to find stride length and heel-strike times (no foot sliding). */

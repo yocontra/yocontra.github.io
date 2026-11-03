@@ -18,10 +18,12 @@ import {
   BOSS_STRIKE_INTERVAL,
   type FakeKey,
   gradeFor,
+  type Look,
   legendDraw,
   OUTLAWS,
   type Outlaw,
   RIFLEMAN,
+  RIFLEMAN_LOOK,
 } from '../data/outlaws'
 import type { Assets } from '../engine/assets'
 import type { Input, Press } from '../engine/input'
@@ -29,6 +31,7 @@ import type { Renderer } from '../engine/render'
 import { save as persist, resetRun, type SaveData } from '../save'
 import { Actor } from '../scene/actor'
 import { type CameraRig, clamp01, easeInOutCubic, easeOutCubic, type Pose } from '../scene/camera'
+import { castActor } from '../scene/cast'
 import {
   type Dust,
   type Flash,
@@ -38,6 +41,7 @@ import {
   type Puffs,
   type Tumbleweed,
 } from '../scene/fx'
+import { PortraitStudio } from '../scene/portrait'
 import { type PropDef, propObject } from '../scene/props'
 import { STREET, type World } from '../scene/world'
 import type { Hud } from '../ui/hud'
@@ -196,8 +200,14 @@ export class Director {
   private skipIntroAllowed = false
   private realTime = 0
 
+  readonly studio: PortraitStudio
+
   constructor(private readonly c: Ctx) {
-    this.player = new Actor(c.assets.player, { gun: c.gun ? propObject(c.gun) : null })
+    this.studio = new PortraitStudio(c.renderer.gl, c.assets)
+    this.player = new Actor(c.assets.player, {
+      gun: c.gun ? propObject(c.gun) : null,
+      cloth: c.assets.cloth,
+    })
     c.scene.add(this.player.root)
     this.player.root.visible = false
     drawPoster(this.posterCanvas, this.outlaw, { index: 0, stamp: null })
@@ -265,10 +275,31 @@ export class Director {
     })
   }
 
+  /** Every model file this outlaw (and his rifleman) needs. */
+  private looksFor(o: Outlaw): Look[] {
+    return o.gimmick === 'underboss' ? [o.look, RIFLEMAN_LOOK] : [o.look]
+  }
+
   startLevel(i: number, retry: boolean): void {
     const c = this.c
-    this.level = Math.min(Math.max(0, i), this.total - 1)
-    this.outlaw = OUTLAWS[this.level] as Outlaw
+    const idx = Math.min(Math.max(0, i), this.total - 1)
+    const next = OUTLAWS[idx] as Outlaw
+    const looks = this.looksFor(next)
+    if (!looks.every((l) => c.assets.lookLoaded(l))) {
+      // Lazy-loaded per outlaw; normally prefetched a duel ahead so this is rare.
+      c.hud.fake('[saddling up…]')
+      void Promise.all(looks.map((l) => c.assets.lookReady(l))).then(() =>
+        this.startLevel(idx, retry),
+      )
+      return
+    }
+    // prefetch the next two outlaws while this duel plays
+    for (const k of [idx + 1, idx + 2]) {
+      const n = OUTLAWS[k]
+      if (n) for (const l of this.looksFor(n)) void c.assets.lookReady(l)
+    }
+    this.level = idx
+    this.outlaw = next
     c.save.level = this.level
     persist(c.save)
     c.hud.setCounter(this.level, this.total, c.save.legend)
@@ -327,7 +358,8 @@ export class Director {
   }
 
   private drawPosterTex(stamp: 'coward' | 'dead' | null): void {
-    drawPoster(this.posterCanvas, this.outlaw, { index: this.level, stamp })
+    const portrait = this.studio.render(this.level, this.outlaw)
+    drawPoster(this.posterCanvas, this.outlaw, { index: this.level, stamp, portrait })
     if (this.posterTex) this.posterTex.needsUpdate = true
   }
 
@@ -357,8 +389,8 @@ export class Director {
     this.rifleman = null
     const o = this.outlaw
     const gun = c.gun ? propObject(c.gun) : null
-    this.enemy = new Actor(c.assets.bodies[o.body], {
-      tint: o.tint,
+    this.enemy = castActor(c.assets, {
+      look: o.look,
       hat: o.hat,
       hatColor: o.hatColor,
       bandana: o.bandana,
@@ -369,10 +401,11 @@ export class Director {
     this.enemyAlive = true
     this.riflemanAlive = false
     if (o.gimmick === 'underboss' && c.rifle) {
-      const r = new Actor(c.assets.bodies.casual, {
-        tint: { White: 0x3a3226, LightBlue: 0x2a2a2a, Red_Dark: 0x2a1a10 },
+      const r = castActor(c.assets, {
+        look: RIFLEMAN_LOOK,
         hat: 'cowboy',
         hatColor: 0x1a1410,
+        bandana: 0x3a2a1a,
         rifle: propObject(c.rifle),
       })
       r.root.position.copy(STREET.saloonRoof)
@@ -1938,6 +1971,66 @@ export class Director {
       this.wind += (0.35 - this.wind) * Math.min(1, realDt)
     // muzzle light decay
     c.world.flashLight.intensity *= Math.exp(-realDt * 30)
+  }
+
+  // ------------------------------------------------------------- debug views
+
+  /** #lineup: every outlaw side by side in the street (for review screenshots). */
+  async lineup(day = 0.3): Promise<void> {
+    const c = this.c
+    const all = [...OUTLAWS.map((o) => o.look), RIFLEMAN_LOOK]
+    await Promise.all(all.map((l) => c.assets.lookReady(l)))
+    c.world.apply(day)
+    this.player.root.visible = false
+    const row = (o: Outlaw | null, look: Look, i: number) => {
+      const a = castActor(c.assets, {
+        look,
+        hat: o?.hat ?? 'cowboy',
+        hatColor: o?.hatColor ?? 0x1a1410,
+        bandana: o?.bandana ?? 0x3a2a1a,
+        gun: c.gun ? propObject(c.gun) : null,
+        offGun: o?.gimmick === 'two-guns' || o?.gimmick === 'boss',
+      })
+      const front = i < 9
+      const k = front ? i : i - 9
+      a.root.position.set(-6.4 + k * 1.6 + (front ? 0 : 0.8), 0, front ? 3 : 6)
+      a.root.rotation.y = Math.PI
+      a.play('Idle', 0)
+      a.mixer.update(Math.random())
+      c.scene.add(a.root)
+      this.lineupActors.push(a)
+    }
+    OUTLAWS.forEach((o, i) => {
+      row(o, o.look, i)
+    })
+    row(null, RIFLEMAN_LOOK, 17)
+    c.world.focusShadow(V(0, 0, 4))
+    this.phase = 'end'
+    const focus = Number(new URLSearchParams(location.hash.slice(1)).get('focus') ?? '-1')
+    const fa = this.lineupActors[focus]
+    if (fa) {
+      const h = fa.headPos(V())
+      c.rig.cut('lineup', () => ({
+        pos: V(h.x - 0.35, h.y + 0.05, h.z - 1.1),
+        look: V(h.x, h.y - 0.1, h.z),
+        fov: 35,
+      }))
+    } else c.rig.cut('lineup', () => ({ pos: V(0, 1.55, -4.6), look: V(0, 1.05, 4.5), fov: 52 }))
+  }
+  private readonly lineupActors: Actor[] = []
+
+  /** #posters: all wanted posters in a grid. */
+  async posters(): Promise<void> {
+    const c = this.c
+    await Promise.all(OUTLAWS.map((o) => c.assets.lookReady(o.look)))
+    const grid = document.createElement('div')
+    grid.className = 'ow-poster-grid'
+    OUTLAWS.forEach((o, i) => {
+      const cv = document.createElement('canvas')
+      drawPoster(cv, o, { index: i, stamp: null, portrait: this.studio.render(i, o) })
+      grid.appendChild(cv)
+    })
+    c.hud.root.appendChild(grid)
   }
 
   /** Debug overlay text. */

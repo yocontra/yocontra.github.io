@@ -91,6 +91,12 @@ export function boot(root: HTMLElement): void {
     .then((g) => {
       game = g
       if (debug) (window as unknown as { __ow: Game }).__ow = g
+      if (hash.has('lineup') || hash.has('posters')) {
+        title.remove()
+        if (hash.has('lineup')) void g.director.lineup(Number(hash.get('day') ?? '0.3'))
+        if (hash.has('posters')) void g.director.posters()
+        return
+      }
       title.classList.add('ready')
       if (startText && pressed) startText.textContent = ''
       if (pressed) go()

@@ -630,6 +630,21 @@ import Bare from '~/layouts/Bare.astro'
     text-align: center;
     line-height: 1.6;
   }
+  .ow-poster-grid {
+    position: absolute;
+    inset: 0;
+    z-index: 45;
+    display: grid;
+    grid-template-columns: repeat(6, 1fr);
+    gap: 8px;
+    padding: 8px;
+    background: #2a1a10;
+    overflow: auto;
+  }
+  .ow-poster-grid canvas {
+    width: 100%;
+    height: auto;
+  }
   .ow-debug {
     position: absolute;
     left: 8px;

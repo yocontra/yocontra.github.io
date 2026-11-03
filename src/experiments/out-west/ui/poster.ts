@@ -49,6 +49,8 @@ function hatPath(ctx: CanvasRenderingContext2D, hat: HatKey, cx: number, top: nu
 export interface PosterOpts {
   index: number
   stamp?: 'coward' | 'dead' | null
+  /** Printed mugshot of his actual model (see PortraitStudio). */
+  portrait?: HTMLCanvasElement | null
 }
 
 /** Draw a wanted poster onto a canvas (runtime-generated, no image assets). */
@@ -96,35 +98,42 @@ export function drawPoster(canvas: HTMLCanvasElement, o: Outlaw, opts: PosterOpt
   const py = 220
   const pw = W - 260
   const ph = 300
-  ctx.fillStyle = '#c9ad7a'
+  ctx.fillStyle = opts.portrait ? '#efe2c0' : '#c9ad7a'
   ctx.fillRect(px, py, pw, ph)
   ctx.strokeStyle = '#2a1a0e'
   ctx.lineWidth = 3
   ctx.strokeRect(px, py, pw, ph)
-  // silhouette
-  ctx.save()
-  ctx.beginPath()
-  ctx.rect(px, py, pw, ph)
-  ctx.clip()
-  ctx.fillStyle = '#24170c'
-  const cx = W / 2
-  ctx.beginPath()
-  ctx.ellipse(cx, py + 165, 48, 60, 0, 0, Math.PI * 2)
-  ctx.fill()
-  ctx.beginPath()
-  ctx.moveTo(cx - 140, py + ph)
-  ctx.bezierCurveTo(cx - 130, py + 235, cx - 60, py + 225, cx - 30, py + 215)
-  ctx.lineTo(cx + 30, py + 215)
-  ctx.bezierCurveTo(cx + 60, py + 225, cx + 130, py + 235, cx + 140, py + ph)
-  ctx.fill()
-  hatPath(ctx, o.hat, cx, py + 40)
-  if (o.bandana !== undefined) {
-    ctx.fillStyle = `#${o.bandana.toString(16).padStart(6, '0')}`
+  if (opts.portrait) {
+    const pr = opts.portrait
+    const k = Math.max(pw / pr.width, ph / pr.height)
+    const dw = pr.width * k
+    const dh = pr.height * k
+    ctx.save()
     ctx.beginPath()
-    ctx.moveTo(cx - 40, py + 205)
-    ctx.lineTo(cx + 40, py + 205)
-    ctx.lineTo(cx, py + 250)
+    ctx.rect(px, py, pw, ph)
+    ctx.clip()
+    ctx.globalCompositeOperation = 'multiply'
+    ctx.drawImage(pr, px + (pw - dw) / 2, py + (ph - dh) / 2, dw, dh)
+    ctx.restore()
+    ctx.save()
+  } else {
+    // silhouette fallback while his model streams in
+    ctx.save()
+    ctx.beginPath()
+    ctx.rect(px, py, pw, ph)
+    ctx.clip()
+    ctx.fillStyle = '#24170c'
+    const cx = W / 2
+    ctx.beginPath()
+    ctx.ellipse(cx, py + 165, 48, 60, 0, 0, Math.PI * 2)
     ctx.fill()
+    ctx.beginPath()
+    ctx.moveTo(cx - 140, py + ph)
+    ctx.bezierCurveTo(cx - 130, py + 235, cx - 60, py + 225, cx - 30, py + 215)
+    ctx.lineTo(cx + 30, py + 215)
+    ctx.bezierCurveTo(cx + 60, py + 225, cx + 130, py + 235, cx + 140, py + ph)
+    ctx.fill()
+    hatPath(ctx, o.hat, cx, py + 40)
   }
   ctx.restore()
 

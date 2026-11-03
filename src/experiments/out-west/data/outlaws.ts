@@ -4,8 +4,30 @@
  * 0 = high noon, 0.5 = sunset, 1 = midnight.
  */
 
-export type BodyKey = 'suit' | 'rugged' | 'woman' | 'casual'
-export type HatKey = 'cowboy' | 'bowler' | 'sombrero' | 'tophat' | 'flat'
+/** Character part sources (all share the player's rig), plus the woman model. */
+export type PartSrc = 'suit' | 'rugged' | 'casual' | 'worker' | 'king' | 'punk'
+export type BodyKey = PartSrc | 'woman'
+
+export interface Look {
+  /** Use the whole woman model instead of kitbashed parts. */
+  woman?: boolean
+  head: PartSrc
+  body: PartSrc
+  legs: PartSrc
+  feet: PartSrc
+  /** Material name → hex colour. */
+  tint: Readonly<Record<string, number>>
+  /** [width, height] build multipliers. */
+  build: readonly [number, number]
+  coat?: number
+  poncho?: number
+  moustache?: number
+  beard?: number
+  bandoliers?: boolean
+  star?: boolean
+  mask?: boolean
+}
+export type HatKey = 'cowboy' | 'bowler' | 'sombrero' | 'tophat' | 'flat' | 'tall'
 export type FakeKey =
   | 'crow'
   | 'door'
@@ -43,9 +65,8 @@ export interface Outlaw {
   readonly bounty: number
   readonly hook: string
   readonly gimmick: Gimmick
-  readonly body: BodyKey
-  /** Material name → hex colour overrides for the outfit. */
-  readonly tint: Readonly<Record<string, number>>
+  /** How he looks: kitbashed body parts, outfit, accessories (see LOOKS). */
+  readonly look: Look
   readonly hat: HatKey
   readonly hatColor: number
   readonly bandana?: number
@@ -75,8 +96,14 @@ export const OUTLAWS: readonly Outlaw[] = [
     bounty: 50,
     hook: 'Hands shake. Drops his hat on the turn.',
     gimmick: 'shaky',
-    body: 'casual',
-    tint: { White: 0xc9b48a, LightBlue: 0x3b4a5a },
+    look: {
+      head: 'casual',
+      body: 'casual',
+      legs: 'casual',
+      feet: 'worker',
+      tint: { LightBrown: 0xd8ccb0, LightBlue: 0x4a5a6a, Hair: 0xc89a5a },
+      build: [0.9, 0.97],
+    },
     hat: 'cowboy',
     hatColor: 0xb59a6a,
     paces: [5, 7],
@@ -95,8 +122,15 @@ export const OUTLAWS: readonly Outlaw[] = [
     bounty: 75,
     hook: 'Heckles every pace.',
     gimmick: 'talker',
-    body: 'suit',
-    tint: { Suit: 0x4a3b2c, Tie: 0x7a1010 },
+    look: {
+      head: 'suit',
+      body: 'suit',
+      legs: 'suit',
+      feet: 'suit',
+      tint: { Suit: 0x6a4a30, Tie: 0x8a1a10, Hair: 0x2a1a10 },
+      build: [1.18, 0.95],
+      moustache: 0x2a1a10,
+    },
     hat: 'bowler',
     hatColor: 0x2a2018,
     paces: [5, 8],
@@ -124,8 +158,20 @@ export const OUTLAWS: readonly Outlaw[] = [
     bounty: 100,
     hook: 'Counts paces aloud, wrongly. Watch for the crow.',
     gimmick: 'counter',
-    body: 'rugged',
-    tint: { Green: 0x5b4a33, LightGreen: 0x6f5a3d },
+    look: {
+      head: 'punk',
+      body: 'worker',
+      legs: 'worker',
+      feet: 'worker',
+      tint: {
+        Worker_Vest: 0x5a3a20,
+        LightBrown: 0xa89878,
+        Worker_Yellow: 0x8a6a3a,
+        Brown: 0x6a5a40,
+        Brown2: 0x4a3a28,
+      },
+      build: [1, 1.05],
+    },
     hat: 'cowboy',
     hatColor: 0x3b2b1c,
     paces: [6, 9],
@@ -144,8 +190,15 @@ export const OUTLAWS: readonly Outlaw[] = [
     bounty: 150,
     hook: 'Flips a coin. The coin landing is not the call.',
     gimmick: 'coin',
-    body: 'suit',
-    tint: { Suit: 0x23303a, Tie: 0x8a6a1a, White: 0xd8d0c0 },
+    look: {
+      head: 'suit',
+      body: 'punk',
+      legs: 'suit',
+      feet: 'suit',
+      tint: { Black: 0x1a2028, White: 0xe0d8c8, Suit: 0x2a2a30, Hair: 0x101010 },
+      build: [0.95, 1.0],
+      moustache: 0x101010,
+    },
     hat: 'flat',
     hatColor: 0x2b2b2b,
     paces: [5, 9],
@@ -164,8 +217,14 @@ export const OUTLAWS: readonly Outlaw[] = [
     bounty: 200,
     hook: 'Sways, swigs, and draws whenever he feels like it.',
     gimmick: 'drunk',
-    body: 'casual',
-    tint: { White: 0x9a8a6a, LightBlue: 0x4a3a2a, Red_Dark: 0x6a2a1a },
+    look: {
+      head: 'king',
+      body: 'casual',
+      legs: 'rugged',
+      feet: 'worker',
+      tint: { LightBrown: 0x8a7a5a, Brown: 0x5a4a3a, Brown2: 0x3a2e22, Hair_White: 0x9a8a7a },
+      build: [1.2, 0.93],
+    },
     hat: 'cowboy',
     hatColor: 0x5a4a32,
     paces: [4, 10],
@@ -184,8 +243,15 @@ export const OUTLAWS: readonly Outlaw[] = [
     bounty: 300,
     hook: 'Short walks. The call comes early.',
     gimmick: 'impatient',
-    body: 'rugged',
-    tint: { Green: 0x6a2e1e, LightGreen: 0x8a5a2a },
+    look: {
+      head: 'rugged',
+      body: 'rugged',
+      legs: 'rugged',
+      feet: 'rugged',
+      tint: { Green: 0x6a2e1e, LightGreen: 0x8a6a4a, Brown: 0x4a3a2a, Hair: 0x1a1008 },
+      build: [1.05, 0.98],
+      poncho: 0xa0281a,
+    },
     hat: 'sombrero',
     hatColor: 0x9a7a4a,
     bandana: 0xa02020,
@@ -205,8 +271,15 @@ export const OUTLAWS: readonly Outlaw[] = [
     bounty: 400,
     hook: 'Long walks. The wind picks up and the dust hides him.',
     gimmick: 'windy',
-    body: 'rugged',
-    tint: { Green: 0x3a3a3a, LightGreen: 0x5a4a3a },
+    look: {
+      head: 'worker',
+      body: 'rugged',
+      legs: 'worker',
+      feet: 'rugged',
+      tint: { Green: 0x8a7a5a, LightGreen: 0x6a5a40, Brown: 0x5a4a38, Moustache: 0x3a2412 },
+      build: [0.94, 1.08],
+      coat: 0xb09468,
+    },
     hat: 'cowboy',
     hatColor: 0x1e1a16,
     bandana: 0x2a3a6a,
@@ -226,8 +299,16 @@ export const OUTLAWS: readonly Outlaw[] = [
     bounty: 500,
     hook: 'Cold. Still. No tells at all.',
     gimmick: 'cold',
-    body: 'woman',
-    tint: { LightGreen: 0x2a2a2a, Green: 0x3a2020, White: 0xc8c0b0 },
+    look: {
+      woman: true,
+      head: 'casual',
+      body: 'casual',
+      legs: 'casual',
+      feet: 'casual',
+      tint: { LightGreen: 0x2a2a2a, Green: 0x3a2020, White: 0xc8c0b0 },
+      build: [1, 1],
+      coat: 0x1a1a1a,
+    },
     hat: 'flat',
     hatColor: 0x1a1a1a,
     paces: [5, 10],
@@ -246,8 +327,15 @@ export const OUTLAWS: readonly Outlaw[] = [
     bounty: 650,
     hook: 'Whistles a dirge the whole walk. Never looks back.',
     gimmick: 'whistler',
-    body: 'suit',
-    tint: { Suit: 0x3a2a3a, Tie: 0x1a1a1a },
+    look: {
+      head: 'casual',
+      body: 'suit',
+      legs: 'suit',
+      feet: 'suit',
+      tint: { Suit: 0x2a1e2a, Tie: 0x101010, White: 0xc8c0b0, Hair: 0x3a2a1a },
+      build: [0.88, 1.1],
+      coat: 0x14121a,
+    },
     hat: 'tophat',
     hatColor: BLACK,
     paces: [6, 10],
@@ -266,8 +354,20 @@ export const OUTLAWS: readonly Outlaw[] = [
     bounty: 800,
     hook: 'Two guns. Fires twice. The first always misses.',
     gimmick: 'two-guns',
-    body: 'rugged',
-    tint: { Green: 0x4a3020, LightGreen: 0x6a4a2a },
+    look: {
+      head: 'punk',
+      body: 'worker',
+      legs: 'worker',
+      feet: 'rugged',
+      tint: {
+        Worker_Vest: 0x2a2a2a,
+        LightBrown: 0x9a6a4a,
+        Worker_Yellow: 0x2a2a2a,
+        Brown: 0x4a3828,
+      },
+      build: [1.12, 1.0],
+      moustache: 0x3a2412,
+    },
     hat: 'cowboy',
     hatColor: 0x6a5038,
     bandana: 0x202020,
@@ -287,8 +387,15 @@ export const OUTLAWS: readonly Outlaw[] = [
     bounty: 1000,
     hook: 'Her gang heckles. “DRR…” is not the call.',
     gimmick: 'drr',
-    body: 'woman',
-    tint: { LightGreen: 0x6a2a2a, Green: 0x3a1a1a },
+    look: {
+      woman: true,
+      head: 'casual',
+      body: 'casual',
+      legs: 'casual',
+      feet: 'casual',
+      tint: { LightGreen: 0x7a2a2a, Green: 0x3a1a1a, White: 0xd8ccb8 },
+      build: [1, 1],
+    },
     hat: 'cowboy',
     hatColor: 0x3a2a1a,
     paces: [5, 11],
@@ -307,8 +414,15 @@ export const OUTLAWS: readonly Outlaw[] = [
     bounty: 1250,
     hook: 'Gambler. When the saloon piano stops, it’s not the call.',
     gimmick: 'piano',
-    body: 'suit',
-    tint: { Suit: 0x1a1a22, Tie: 0x6a0a0a, White: 0xe0d8c8 },
+    look: {
+      head: 'suit',
+      body: 'punk',
+      legs: 'suit',
+      feet: 'suit',
+      tint: { Black: 0x3a1a14, White: 0xe8e0d0, Suit: 0x1a1a22, Hair: 0x1a120a },
+      build: [1.02, 0.88],
+      moustache: 0x1a120a,
+    },
     hat: 'bowler',
     hatColor: BLACK,
     paces: [5, 11],
@@ -327,8 +441,16 @@ export const OUTLAWS: readonly Outlaw[] = [
     bounty: 1500,
     hook: 'Night. You can’t read his hand. Trust your ears.',
     gimmick: 'night',
-    body: 'rugged',
-    tint: { Green: 0x2a2a30, LightGreen: 0x3a3a40 },
+    look: {
+      head: 'rugged',
+      body: 'suit',
+      legs: 'rugged',
+      feet: 'worker',
+      tint: { Suit: 0x2a2620, White: 0xa8a090, Tie: 0x101010, Brown: 0x2a2620 },
+      build: [1.05, 1.1],
+      coat: 0x2a241c,
+      star: true,
+    },
     hat: 'cowboy',
     hatColor: 0x2a221a,
     paces: [6, 12],
@@ -347,8 +469,14 @@ export const OUTLAWS: readonly Outlaw[] = [
     bounty: 2000,
     hook: 'Twitchy hands. Fake-outs everywhere.',
     gimmick: 'fake-king',
-    body: 'casual',
-    tint: { White: 0x5a4a3a, LightBlue: 0x202020, Red_Dark: 0x3a1a1a },
+    look: {
+      head: 'casual',
+      body: 'punk',
+      legs: 'punk',
+      feet: 'worker',
+      tint: { Black: 0x101010, White: 0x7a6a5a, LightBlue: 0x2a3038, Hair: 0x0a0a0a },
+      build: [0.95, 1.02],
+    },
     hat: 'cowboy',
     hatColor: 0x101010,
     bandana: 0x8a1010,
@@ -368,8 +496,15 @@ export const OUTLAWS: readonly Outlaw[] = [
     bounty: 3000,
     hook: 'Dead man’s hand. Metronomic.',
     gimmick: 'cards',
-    body: 'suit',
-    tint: { Suit: 0x3a2a1a, Tie: 0x101010, White: 0xd0c0a0 },
+    look: {
+      head: 'worker',
+      body: 'suit',
+      legs: 'suit',
+      feet: 'worker',
+      tint: { Suit: 0x8a6a44, White: 0xd8ccb0, Tie: 0x101010, Moustache: 0x6a4a2a },
+      build: [1.0, 1.08],
+      coat: 0x9a7a50,
+    },
     hat: 'cowboy',
     hatColor: 0x2a2018,
     paces: [6, 10],
@@ -388,8 +523,22 @@ export const OUTLAWS: readonly Outlaw[] = [
     bounty: 5000,
     hook: 'Rifleman on the saloon roof. Watch for the glint. Two shots.',
     gimmick: 'underboss',
-    body: 'rugged',
-    tint: { Green: 0x2a1a12, LightGreen: 0x4a2a1a },
+    look: {
+      head: 'rugged',
+      body: 'worker',
+      legs: 'rugged',
+      feet: 'worker',
+      tint: {
+        Worker_Vest: 0x1a1410,
+        LightBrown: 0x5a4a3a,
+        Worker_Yellow: 0x1a1410,
+        Brown: 0x3a2a1a,
+        Hair: 0x0a0806,
+      },
+      build: [1.22, 1.03],
+      poncho: 0x2a2018,
+      bandoliers: true,
+    },
     hat: 'sombrero',
     hatColor: 0x2a1a10,
     bandana: 0x101010,
@@ -409,9 +558,17 @@ export const OUTLAWS: readonly Outlaw[] = [
     bounty: 10000,
     hook: 'Midnight. The twelfth strike is the call.',
     gimmick: 'boss',
-    body: 'suit',
-    tint: { Suit: 0x0e0e12, Tie: 0x5a0000, White: 0xcfc6b4 },
-    hat: 'cowboy',
+    look: {
+      head: 'suit',
+      body: 'suit',
+      legs: 'suit',
+      feet: 'suit',
+      tint: { Suit: 0x0e0e12, Tie: 0x5a0000, White: 0xcfc6b4, Hair: 0x0a0a0a },
+      build: [1.0, 1.12],
+      coat: 0x0c0c10,
+      moustache: 0x0a0a0a,
+    },
+    hat: 'tall',
     hatColor: BLACK,
     paces: [0, 0],
     wait: [1.5, 4.0],
@@ -426,6 +583,17 @@ export const OUTLAWS: readonly Outlaw[] = [
 ]
 
 export const LEATHER_COLOR = LEATHER
+
+/** The rifleman on the saloon's porch roof (underboss). */
+export const RIFLEMAN_LOOK: Look = {
+  head: 'worker',
+  body: 'casual',
+  legs: 'worker',
+  feet: 'worker',
+  tint: { LightBrown: 0x3a3226, Brown: 0x2a2018, Moustache: 0x1a1008 },
+  build: [1, 1],
+  mask: true,
+}
 
 /** Underboss: the rifleman on the roof. */
 export const RIFLEMAN = { draw: 330, jitter: 20, glintAt: 150, accuracy: 0.95 } as const

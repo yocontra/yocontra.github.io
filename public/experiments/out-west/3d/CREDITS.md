@@ -16,6 +16,13 @@ given anyway. All models were downloaded as GLB, trimmed and recompressed (mesho
 | `models/rugged.glb` | "Adventurer" by Quaternius — https://poly.pizza/m/5EGWBMpuXq | CC0 1.0 |
 | `models/woman.glb` | "Adventurer" by Quaternius — https://poly.pizza/m/ZwF0K7WBmu | CC0 1.0 |
 | `models/casual.glb` | "Casual Character" by Quaternius — https://poly.pizza/m/kZ3DmIoGip | CC0 1.0 |
+| `models/worker.glb` | "Worker" by Quaternius — https://poly.pizza/m/Yg2bQZO6Hj | CC0 1.0 |
+| `models/king.glb` | "King" by Quaternius — https://poly.pizza/m/I1gTjmuK2m | CC0 1.0 |
+| `models/punk.glb` | "Punk" by Quaternius — https://poly.pizza/m/BTALZymknF | CC0 1.0 |
+
+The outlaws are kitbashed at runtime: heads, bodies, legs and boots from these characters are
+rebound to one shared rig, then dressed with procedural hats, coats, ponchos, bandoliers, facial
+hair and badges, and given fabric detail from the Poly Haven scans below.
 
 Quaternius: https://quaternius.com
 
@@ -43,6 +50,16 @@ Quaternius: https://quaternius.com
 | `tex/ground_*.webp` | "Gravelly Sand" — https://polyhaven.com/a/gravelly_sand | CC0 1.0 |
 | `tex/planks_*.webp` | "Weathered Plank Siding" — https://polyhaven.com/a/weathered_plank_siding | CC0 1.0 |
 | `tex/vplanks_*.webp` | "Old Planks 02" — https://polyhaven.com/a/old_planks_02 | CC0 1.0 |
+
+### Fabric scans (character cloth detail, `tex/cloth/*.webp`, greyscale 512 px)
+
+| File | Source | Licence |
+|---|---|---|
+| `denim.webp` | "Denim Fabric" — https://polyhaven.com/a/denim_fabric | CC0 1.0 |
+| `leather.webp` | "Brown Leather" — https://polyhaven.com/a/brown_leather | CC0 1.0 |
+| `wool.webp` | "Caban" — https://polyhaven.com/a/caban | CC0 1.0 |
+| `linen.webp` | "Rough Linen" — https://polyhaven.com/a/rough_linen | CC0 1.0 |
+| `hessian.webp` | "Hessian 230" — https://polyhaven.com/a/hessian_230 | CC0 1.0 |
 
 ## Sound effects (freesound.org, CC0)
 
