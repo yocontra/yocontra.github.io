@@ -1,0 +1,1011 @@
+{
+  "$comment": "Perdition, the Frontier town. Single source of truth for server collision, the Blender build and the client scene. Units are metres; x runs east, z runs south, origin at the north-west corner. Rects are {x, z} min corner plus {w, d} size.",
+  "version": 1,
+  "name": "Perdition",
+  "size": 144,
+  "cell": 0.5,
+  "streets": [
+    {
+      "id": "main_street",
+      "x": 4,
+      "z": 56,
+      "w": 136,
+      "d": 16
+    },
+    {
+      "id": "north_road",
+      "x": 68,
+      "z": 12,
+      "w": 8,
+      "d": 44
+    },
+    {
+      "id": "cross_street",
+      "x": 66,
+      "z": 92,
+      "w": 12,
+      "d": 48
+    }
+  ],
+  "creek": {
+    "x": 4,
+    "z": 3,
+    "w": 136,
+    "d": 9,
+    "banks": [
+      {
+        "x": 9,
+        "z": 12,
+        "w": 59,
+        "d": 0.5
+      },
+      {
+        "x": 76,
+        "z": 12,
+        "w": 59,
+        "d": 0.5
+      }
+    ],
+    "bridge": {
+      "x": 68,
+      "z": 3,
+      "w": 8,
+      "d": 9.5
+    }
+  },
+  "buildings": [
+    {
+      "id": "stable",
+      "kind": "stable",
+      "x": 28,
+      "z": 36,
+      "w": 16,
+      "d": 18,
+      "height": 4.5,
+      "floors": 1,
+      "hollow": true,
+      "doors": [
+        {
+          "side": "s",
+          "at": 5,
+          "width": 6
+        }
+      ]
+    },
+    {
+      "id": "saloon",
+      "kind": "saloon",
+      "x": 47,
+      "z": 34,
+      "w": 19,
+      "d": 20,
+      "height": 7.5,
+      "floors": 2,
+      "hollow": true,
+      "doors": [
+        {
+          "side": "s",
+          "at": 7,
+          "width": 4
+        },
+        {
+          "side": "e",
+          "at": 4,
+          "width": 2
+        }
+      ],
+      "walls": [
+        {
+          "x": 47,
+          "z": 42,
+          "w": 12,
+          "d": 0.5
+        },
+        {
+          "x": 61,
+          "z": 42,
+          "w": 5,
+          "d": 0.5
+        }
+      ]
+    },
+    {
+      "id": "hotel",
+      "kind": "hotel",
+      "x": 78,
+      "z": 38,
+      "w": 16,
+      "d": 16,
+      "height": 7.5,
+      "floors": 2,
+      "hollow": true,
+      "doors": [
+        {
+          "side": "s",
+          "at": 6,
+          "width": 3
+        }
+      ]
+    },
+    {
+      "id": "assay",
+      "kind": "assay",
+      "x": 97,
+      "z": 42,
+      "w": 10,
+      "d": 12,
+      "height": 4.5,
+      "floors": 1,
+      "hollow": false,
+      "doors": []
+    },
+    {
+      "id": "church",
+      "kind": "church",
+      "x": 110,
+      "z": 30,
+      "w": 14,
+      "d": 22,
+      "height": 8,
+      "floors": 1,
+      "hollow": true,
+      "doors": [
+        {
+          "side": "s",
+          "at": 5,
+          "width": 4
+        }
+      ]
+    },
+    {
+      "id": "church_tower",
+      "kind": "tower",
+      "x": 124,
+      "z": 30,
+      "w": 6,
+      "d": 6,
+      "height": 14,
+      "floors": 3,
+      "hollow": false,
+      "doors": []
+    },
+    {
+      "id": "stage_line",
+      "kind": "stage_line",
+      "x": 6,
+      "z": 74,
+      "w": 14,
+      "d": 14,
+      "height": 4.5,
+      "floors": 1,
+      "hollow": true,
+      "doors": [
+        {
+          "side": "n",
+          "at": 5,
+          "width": 3
+        }
+      ]
+    },
+    {
+      "id": "general_store",
+      "kind": "general_store",
+      "x": 40,
+      "z": 74,
+      "w": 20,
+      "d": 16,
+      "height": 4.5,
+      "floors": 1,
+      "hollow": true,
+      "doors": [
+        {
+          "side": "n",
+          "at": 8,
+          "width": 4
+        }
+      ]
+    },
+    {
+      "id": "bank",
+      "kind": "bank",
+      "x": 62,
+      "z": 74,
+      "w": 20,
+      "d": 18,
+      "height": 7.5,
+      "floors": 2,
+      "hollow": true,
+      "doors": [
+        {
+          "side": "n",
+          "at": 8,
+          "width": 4
+        },
+        {
+          "side": "e",
+          "at": 4,
+          "width": 2
+        },
+        {
+          "side": "s",
+          "at": 8,
+          "width": 4
+        }
+      ],
+      "walls": [
+        {
+          "x": 62,
+          "z": 83,
+          "w": 9,
+          "d": 0.5
+        },
+        {
+          "x": 73,
+          "z": 83,
+          "w": 9,
+          "d": 0.5
+        }
+      ]
+    },
+    {
+      "id": "undertaker",
+      "kind": "undertaker",
+      "x": 85,
+      "z": 74,
+      "w": 15,
+      "d": 14,
+      "height": 4.5,
+      "floors": 1,
+      "hollow": false,
+      "doors": []
+    },
+    {
+      "id": "jail",
+      "kind": "jail",
+      "x": 104,
+      "z": 74,
+      "w": 16,
+      "d": 14,
+      "height": 4.5,
+      "floors": 1,
+      "hollow": true,
+      "doors": [
+        {
+          "side": "n",
+          "at": 6,
+          "width": 3
+        },
+        {
+          "side": "s",
+          "at": 6,
+          "width": 3
+        }
+      ]
+    },
+    {
+      "id": "water_tower",
+      "kind": "water_tower",
+      "x": 125,
+      "z": 109,
+      "w": 4,
+      "d": 4,
+      "height": 12,
+      "floors": 1,
+      "hollow": false,
+      "doors": []
+    },
+    {
+      "id": "depot",
+      "kind": "depot",
+      "x": 20,
+      "z": 128,
+      "w": 20,
+      "d": 10,
+      "height": 4.5,
+      "floors": 1,
+      "hollow": true,
+      "doors": [
+        {
+          "side": "n",
+          "at": 8,
+          "width": 4
+        }
+      ]
+    },
+    {
+      "id": "shed_a",
+      "kind": "shed",
+      "x": 90,
+      "z": 120,
+      "w": 8,
+      "d": 8,
+      "height": 4.5,
+      "floors": 1,
+      "hollow": false,
+      "doors": []
+    },
+    {
+      "id": "shed_b",
+      "kind": "shed",
+      "x": 108,
+      "z": 128,
+      "w": 12,
+      "d": 10,
+      "height": 4.5,
+      "floors": 1,
+      "hollow": true,
+      "doors": [
+        {
+          "side": "n",
+          "at": 4,
+          "width": 3
+        }
+      ]
+    },
+    {
+      "id": "shed_c",
+      "kind": "shed",
+      "x": 128,
+      "z": 124,
+      "w": 8,
+      "d": 8,
+      "height": 4.5,
+      "floors": 1,
+      "hollow": false,
+      "doors": []
+    },
+    {
+      "id": "outhouse",
+      "kind": "outhouse",
+      "x": 56,
+      "z": 104,
+      "w": 3,
+      "d": 3,
+      "height": 4.5,
+      "floors": 1,
+      "hollow": false,
+      "doors": []
+    },
+    {
+      "id": "smithy",
+      "kind": "smithy",
+      "x": 86,
+      "z": 96,
+      "w": 10,
+      "d": 10,
+      "height": 4.5,
+      "floors": 1,
+      "hollow": false,
+      "doors": []
+    }
+  ],
+  "cover": [
+    {
+      "kind": "trough",
+      "x": 8,
+      "z": 57.5,
+      "w": 2.5,
+      "d": 1,
+      "low": true
+    },
+    {
+      "kind": "barrels",
+      "x": 17.5,
+      "z": 68,
+      "w": 1.5,
+      "d": 1.5,
+      "low": true
+    },
+    {
+      "kind": "crates",
+      "x": 27,
+      "z": 57.5,
+      "w": 1.5,
+      "d": 1.5,
+      "low": true
+    },
+    {
+      "kind": "wagon",
+      "x": 36.5,
+      "z": 67.5,
+      "w": 4,
+      "d": 2,
+      "low": true
+    },
+    {
+      "kind": "trough",
+      "x": 46,
+      "z": 57.5,
+      "w": 2.5,
+      "d": 1,
+      "low": true
+    },
+    {
+      "kind": "barrels",
+      "x": 55.5,
+      "z": 68,
+      "w": 1.5,
+      "d": 1.5,
+      "low": true
+    },
+    {
+      "kind": "trough",
+      "x": 84,
+      "z": 57.5,
+      "w": 2.5,
+      "d": 1,
+      "low": true
+    },
+    {
+      "kind": "barrels",
+      "x": 93.5,
+      "z": 68,
+      "w": 1.5,
+      "d": 1.5,
+      "low": true
+    },
+    {
+      "kind": "crates",
+      "x": 103,
+      "z": 57.5,
+      "w": 1.5,
+      "d": 1.5,
+      "low": true
+    },
+    {
+      "kind": "wagon",
+      "x": 112.5,
+      "z": 67.5,
+      "w": 4,
+      "d": 2,
+      "low": true
+    },
+    {
+      "kind": "trough",
+      "x": 122,
+      "z": 57.5,
+      "w": 2.5,
+      "d": 1,
+      "low": true
+    },
+    {
+      "kind": "barrels",
+      "x": 131.5,
+      "z": 68,
+      "w": 1.5,
+      "d": 1.5,
+      "low": true
+    },
+    {
+      "kind": "trough",
+      "x": 64,
+      "z": 70,
+      "w": 2.5,
+      "d": 1,
+      "low": true
+    },
+    {
+      "kind": "trough",
+      "x": 77.5,
+      "z": 70,
+      "w": 2.5,
+      "d": 1,
+      "low": true
+    },
+    {
+      "kind": "barrels",
+      "x": 71,
+      "z": 63.5,
+      "w": 2,
+      "d": 2,
+      "low": true
+    },
+    {
+      "kind": "crates",
+      "x": 70,
+      "z": 24,
+      "w": 1.5,
+      "d": 1.5,
+      "low": true
+    },
+    {
+      "kind": "barrels",
+      "x": 74.5,
+      "z": 40,
+      "w": 1.5,
+      "d": 1.5,
+      "low": true
+    },
+    {
+      "kind": "wagon",
+      "x": 67,
+      "z": 104,
+      "w": 2,
+      "d": 4,
+      "low": true
+    },
+    {
+      "kind": "crates",
+      "x": 75.5,
+      "z": 116,
+      "w": 1.5,
+      "d": 1.5,
+      "low": true
+    },
+    {
+      "kind": "barrels",
+      "x": 67.5,
+      "z": 130,
+      "w": 1.5,
+      "d": 1.5,
+      "low": true
+    },
+    {
+      "kind": "fence",
+      "x": 6,
+      "z": 20,
+      "w": 20,
+      "d": 0.3,
+      "low": true
+    },
+    {
+      "kind": "fence",
+      "x": 6,
+      "z": 48,
+      "w": 8,
+      "d": 0.3,
+      "low": true
+    },
+    {
+      "kind": "fence",
+      "x": 18,
+      "z": 48,
+      "w": 8,
+      "d": 0.3,
+      "low": true
+    },
+    {
+      "kind": "fence",
+      "x": 6,
+      "z": 20.3,
+      "w": 0.3,
+      "d": 27.7,
+      "low": true
+    },
+    {
+      "kind": "fence",
+      "x": 25.7,
+      "z": 20.3,
+      "w": 0.3,
+      "d": 12,
+      "low": true
+    },
+    {
+      "kind": "hay",
+      "x": 12,
+      "z": 30,
+      "w": 2,
+      "d": 2,
+      "low": true
+    },
+    {
+      "kind": "hay",
+      "x": 19,
+      "z": 38,
+      "w": 2,
+      "d": 2,
+      "low": true
+    },
+    {
+      "kind": "hay",
+      "x": 33,
+      "z": 44,
+      "w": 2,
+      "d": 1.5,
+      "low": true
+    },
+    {
+      "kind": "hay",
+      "x": 10,
+      "z": 100,
+      "w": 2,
+      "d": 2,
+      "low": true
+    },
+    {
+      "kind": "hay",
+      "x": 16,
+      "z": 108,
+      "w": 2,
+      "d": 2,
+      "low": true
+    },
+    {
+      "kind": "wagon",
+      "x": 26,
+      "z": 98,
+      "w": 4,
+      "d": 2,
+      "low": true
+    },
+    {
+      "kind": "wagon",
+      "x": 32,
+      "z": 112,
+      "w": 2,
+      "d": 4,
+      "low": true
+    },
+    {
+      "kind": "hay",
+      "x": 40,
+      "z": 104,
+      "w": 2,
+      "d": 2,
+      "low": true
+    },
+    {
+      "kind": "fence",
+      "x": 104,
+      "z": 104,
+      "w": 10,
+      "d": 0.3,
+      "low": true
+    },
+    {
+      "kind": "fence",
+      "x": 118,
+      "z": 104,
+      "w": 12,
+      "d": 0.3,
+      "low": true
+    },
+    {
+      "kind": "fence",
+      "x": 129.7,
+      "z": 88,
+      "w": 0.3,
+      "d": 16,
+      "low": true
+    },
+    {
+      "kind": "crates",
+      "x": 112,
+      "z": 95,
+      "w": 1.5,
+      "d": 1.5,
+      "low": true
+    },
+    {
+      "kind": "boxcar",
+      "x": 44,
+      "z": 121,
+      "w": 12,
+      "d": 3,
+      "low": false
+    },
+    {
+      "kind": "boxcar",
+      "x": 82,
+      "z": 131,
+      "w": 12,
+      "d": 3,
+      "low": false
+    },
+    {
+      "kind": "boxcar",
+      "x": 100,
+      "z": 115,
+      "w": 3,
+      "d": 9,
+      "low": false
+    },
+    {
+      "kind": "crates",
+      "x": 62,
+      "z": 126,
+      "w": 1.5,
+      "d": 1.5,
+      "low": true
+    },
+    {
+      "kind": "barrels",
+      "x": 118,
+      "z": 118,
+      "w": 1.5,
+      "d": 1.5,
+      "low": true
+    },
+    {
+      "kind": "crates",
+      "x": 134,
+      "z": 100,
+      "w": 1.5,
+      "d": 1.5,
+      "low": true
+    },
+    {
+      "kind": "wagon",
+      "x": 96,
+      "z": 108,
+      "w": 4,
+      "d": 2,
+      "low": true
+    },
+    {
+      "kind": "crates",
+      "x": 102,
+      "z": 30,
+      "w": 1.5,
+      "d": 1.5,
+      "low": true
+    },
+    {
+      "kind": "barrels",
+      "x": 134,
+      "z": 40,
+      "w": 1.5,
+      "d": 1.5,
+      "low": true
+    }
+  ],
+  "zones": [
+    {
+      "id": "bank_w1",
+      "kind": "bank",
+      "x": 64.5,
+      "z": 81.5,
+      "r": 1.3
+    },
+    {
+      "id": "bank_w2",
+      "kind": "bank",
+      "x": 68.5,
+      "z": 81.5,
+      "r": 1.3
+    },
+    {
+      "id": "bank_w3",
+      "kind": "bank",
+      "x": 75.5,
+      "z": 81.5,
+      "r": 1.3
+    },
+    {
+      "id": "bank_w4",
+      "kind": "bank",
+      "x": 79.5,
+      "z": 81.5,
+      "r": 1.3
+    },
+    {
+      "id": "stage_counter",
+      "kind": "stage",
+      "x": 13,
+      "z": 84,
+      "r": 1.8
+    }
+  ],
+  "spawns": [
+    {
+      "x": 20,
+      "z": 8,
+      "interior": false
+    },
+    {
+      "x": 50,
+      "z": 8,
+      "interior": false
+    },
+    {
+      "x": 100,
+      "z": 8,
+      "interior": false
+    },
+    {
+      "x": 128,
+      "z": 8,
+      "interior": false
+    },
+    {
+      "x": 10,
+      "z": 26,
+      "interior": false
+    },
+    {
+      "x": 20,
+      "z": 42,
+      "interior": false
+    },
+    {
+      "x": 138,
+      "z": 24,
+      "interior": false
+    },
+    {
+      "x": 138,
+      "z": 60,
+      "interior": false
+    },
+    {
+      "x": 138,
+      "z": 92,
+      "interior": false
+    },
+    {
+      "x": 6,
+      "z": 62,
+      "interior": false
+    },
+    {
+      "x": 6,
+      "z": 96,
+      "interior": false
+    },
+    {
+      "x": 8,
+      "z": 116,
+      "interior": false
+    },
+    {
+      "x": 10,
+      "z": 138,
+      "interior": false
+    },
+    {
+      "x": 48,
+      "z": 136,
+      "interior": false
+    },
+    {
+      "x": 62,
+      "z": 138,
+      "interior": false
+    },
+    {
+      "x": 96,
+      "z": 138,
+      "interior": false
+    },
+    {
+      "x": 122,
+      "z": 138,
+      "interior": false
+    },
+    {
+      "x": 138,
+      "z": 132,
+      "interior": false
+    },
+    {
+      "x": 120,
+      "z": 112,
+      "interior": false
+    },
+    {
+      "x": 101,
+      "z": 130,
+      "interior": false
+    },
+    {
+      "x": 36,
+      "z": 40,
+      "interior": true
+    },
+    {
+      "x": 52,
+      "z": 37,
+      "interior": true
+    },
+    {
+      "x": 86,
+      "z": 42,
+      "interior": true
+    },
+    {
+      "x": 117,
+      "z": 34,
+      "interior": true
+    },
+    {
+      "x": 10,
+      "z": 78,
+      "interior": true
+    },
+    {
+      "x": 112,
+      "z": 79,
+      "interior": true
+    },
+    {
+      "x": 30,
+      "z": 132,
+      "interior": true
+    },
+    {
+      "x": 114,
+      "z": 133,
+      "interior": true
+    }
+  ],
+  "strongboxes": [
+    {
+      "id": "saloon_porch",
+      "x": 56,
+      "z": 58
+    },
+    {
+      "id": "church_yard",
+      "x": 117,
+      "z": 56
+    },
+    {
+      "id": "jail_yard",
+      "x": 117,
+      "z": 96
+    },
+    {
+      "id": "stable_yard",
+      "x": 16,
+      "z": 34
+    },
+    {
+      "id": "rail_depot",
+      "x": 30,
+      "z": 122
+    },
+    {
+      "id": "water_tower",
+      "x": 120,
+      "z": 106
+    },
+    {
+      "id": "creek_bed",
+      "x": 72,
+      "z": 7
+    },
+    {
+      "id": "hay_yard",
+      "x": 22,
+      "z": 104
+    }
+  ],
+  "pickups": [
+    {
+      "id": "rifle_tower",
+      "kind": "rifle",
+      "x": 126,
+      "z": 38
+    },
+    {
+      "id": "rifle_balcony",
+      "kind": "rifle",
+      "x": 56,
+      "z": 55
+    },
+    {
+      "id": "shotgun_store",
+      "kind": "shotgun",
+      "x": 50,
+      "z": 86
+    },
+    {
+      "id": "shotgun_depot",
+      "kind": "shotgun",
+      "x": 70,
+      "z": 122
+    },
+    {
+      "id": "dynamite_mine",
+      "kind": "dynamite",
+      "x": 92,
+      "z": 104
+    },
+    {
+      "id": "dynamite_corral",
+      "kind": "dynamite",
+      "x": 22,
+      "z": 26
+    }
+  ]
+}
