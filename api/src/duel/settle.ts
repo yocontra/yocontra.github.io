@@ -16,6 +16,8 @@ import {
   duelXp,
   GHOST_CASH_WINS_PER_DAY,
   ghostRoyalty,
+  levelForXp,
+  levelRewards,
   streakBonus,
 } from '../../../src/experiments/out-west/data/progression.ts'
 import type { Env } from '../env.ts'
@@ -307,6 +309,55 @@ function ghostObservation(
   })
 }
 
+type BaseSettlement = Omit<
+  Settlement,
+  'xpBefore' | 'xpAfter' | 'levelBefore' | 'levelAfter' | 'levelReward'
+>
+
+/**
+ * Adds the level-up to a seat's settlement: XP and level before and after (from the profile the
+ * settlement was built on), and the `$25 × level` reward the ledger books in the same batch for
+ * every level gained, as its own `Level up · Lv N` line. The reward is counted once per duel, from
+ * this duel's XP only, so rematches can't accumulate it.
+ */
+export function withLevelUp(
+  base: BaseSettlement,
+  before: { xp: number; level: number },
+  booked?: number,
+): Settlement {
+  const xpAfter = before.xp + base.xp
+  const levelAfter = Math.max(before.level, levelForXp(xpAfter))
+  const levelReward = booked ?? levelRewards(before.level, levelAfter)
+  const lines =
+    levelReward > 0
+      ? [...base.lines, { label: `Level up · Lv ${levelAfter}`, amount: levelReward, xp: 0 }]
+      : base.lines
+  return {
+    ...base,
+    delta: base.delta + levelReward,
+    lines,
+    xpBefore: before.xp,
+    xpAfter,
+    levelBefore: before.level,
+    levelAfter,
+    levelReward,
+  }
+}
+
+/** Swaps the predicted level reward for the one the ledger actually booked. */
+export function reconcileLevelReward(s: Settlement, booked: number): Settlement {
+  if (booked === s.levelReward) {
+    return s
+  }
+  const lines = s.lines.filter((l) => !l.label.startsWith('Level up'))
+  const base = { ...s, delta: s.delta - s.levelReward, lines }
+  return withLevelUp(base, { xp: s.xpBefore, level: s.levelBefore }, booked)
+}
+
+/** SQL: the level reward the ledger booked for one account in one match's batch. */
+export const BOOKED_LEVEL_REWARD = `SELECT COALESCE(SUM(delta), 0) AS reward FROM ledger
+  WHERE account_id = ?1 AND kind = 'level_reward' AND substr(idem_key, 1, length(?2)) = ?2`
+
 export function buildSettlement(env: Env, input: SettleInput): SettleOutput {
   const settlements: [Settlement | null, Settlement | null] = [null, null]
   const perSeat: (SeatMoney | null)[] = [null, null]
@@ -322,14 +373,17 @@ export function buildSettlement(env: Env, input: SettleInput): SettleOutput {
     entries.push(...money.entries.filter((e) => e.amount !== 0 || (e.xp ?? 0) !== 0))
     side.push(duelStatsStatement(env, h.accountId, money.stats))
     side.push(...ghostObservation(env, { input, seat, h }, money.stats))
-    settlements[seat] = {
-      delta: money.delta,
-      xp: money.xp,
-      purse: h.profile.purse + money.delta,
-      streak: money.stats.streak,
-      pairFactor: input.pairFactor,
-      lines: money.lines,
-    }
+    settlements[seat] = withLevelUp(
+      {
+        delta: money.delta,
+        xp: money.xp,
+        purse: h.profile.purse + money.delta,
+        streak: money.stats.streak,
+        pairFactor: input.pairFactor,
+        lines: money.lines,
+      },
+      h.profile,
+    )
   }
   // Royalty: a ghost that wins pays its owner $5 + 10% of the loser's penalty (capped daily).
   const human = perSeat[0]

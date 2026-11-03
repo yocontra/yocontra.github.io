@@ -28,11 +28,13 @@ import { type AiOpponent, type GhostTraits, ghostOpponent, townOutlaw } from './
 import { RoomFlow } from './room-flow.ts'
 import type { FinishedDuel, RestState } from './room-types.ts'
 import {
+  BOOKED_LEVEL_REWARD,
   buildSettlement,
   FLAG_ROUGH_TRAIL,
   FLAG_RTT_CAPPED,
   type HumanSeat,
   pairHistory,
+  reconcileLevelReward,
 } from './settle.ts'
 import { realClock } from './standoff.ts'
 import { duelStats } from './stats.ts'
@@ -418,16 +420,30 @@ export class DuelRoom extends DurableObject<Env> {
         throw err
       }
     }
-    // Level-up rewards are applied inside the ledger, so read the purses back.
-    const purses = await Promise.all(
-      [a.accountId, b?.accountId ?? null].map(async (id) =>
-        id ? ((await getProfile(this.env, id))?.purse ?? null) : null,
-      ),
-    )
+    // Level-up rewards are applied inside the ledger, so read the purses and rewards back.
     return [
-      settlements[0] && { ...settlements[0], purse: purses[0] ?? settlements[0].purse },
-      settlements[1] && { ...settlements[1], purse: purses[1] ?? settlements[1].purse },
+      await this.committed(settlements[0], a.accountId, matchId),
+      await this.committed(settlements[1], b?.accountId ?? null, matchId),
     ]
+  }
+
+  /** A seat's settlement as committed: its purse now and the level reward actually booked. */
+  private async committed(
+    s: Settlement | null,
+    accountId: string | null,
+    matchId: string,
+  ): Promise<Settlement | null> {
+    if (!(s && accountId)) {
+      return s
+    }
+    const [profile, booked] = await Promise.all([
+      getProfile(this.env, accountId),
+      this.env.DB.prepare(BOOKED_LEVEL_REWARD)
+        .bind(accountId, `match:${matchId}#`)
+        .first<{ reward: number }>(),
+    ])
+    const settled = reconcileLevelReward(s, booked?.reward ?? 0)
+    return { ...settled, purse: profile?.purse ?? settled.purse }
   }
 
   private async royaltiesToday(ownerId: string): Promise<number> {

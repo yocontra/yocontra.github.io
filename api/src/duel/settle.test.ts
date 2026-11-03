@@ -75,10 +75,10 @@ describe('settlement (real D1)', () => {
     const payout = duelPayout({ loserBounty: bountyForLevel(1), reactionMs: 210 })
     const daily = dailyWinBonus(baseBounty(1))
     const penalty = duelPenalty(250, bountyForLevel(1))
-    expect(out.settlements[0]?.delta).toBe(payout + daily)
-    expect(out.settlements[1]?.delta).toBe(-penalty)
-    // The XP crosses level 2, and the ledger pays the level reward on its own.
+    // The XP crosses level 2, and the ledger pays the level reward in the same batch.
     const reward = levelRewards(1, levelForXp(120 + DAILY_FIRST_WIN_XP))
+    expect(out.settlements[0]?.delta).toBe(payout + daily + reward)
+    expect(out.settlements[1]?.delta).toBe(-penalty)
     expect((await getProfile(t.env, a))?.purse).toBe(250 + payout + daily + reward)
     expect((await getProfile(t.env, b))?.purse).toBe(250 - penalty)
     const statsA = await duelStats(t.env, a)
@@ -90,6 +90,32 @@ describe('settlement (real D1)', () => {
     expect(traits?.reactions).toEqual([210])
     expect(traits?.fakesSeen).toBe(1)
     expect(out.settlements[0]?.xp).toBe(120 + DAILY_FIRST_WIN_XP)
+  })
+
+  it('rematches show only their own level reward, matching the ledger ($75, not $125)', async () => {
+    const [a, b] = [await player('Climber'), await player('Sparring')]
+    const room = freshId('room')
+    const first = await settle(
+      base({ matchId: `${room}:0`, humans: [await seat(a), await seat(b)] }),
+    )
+    const one = first.settlements[0]
+    expect(one).toMatchObject({ levelBefore: 1, levelAfter: 2, levelReward: 50 })
+    expect(one?.lines.at(-1)).toEqual({ label: 'Level up · Lv 2', amount: 50, xp: 0 })
+    // The rematch is built on the profile as it is now, not on the XP from when they queued.
+    const second = await settle(
+      base({ matchId: `${room}:1`, rematch: 1, humans: [await seat(a), await seat(b)] }),
+    )
+    const two = second.settlements[0]
+    expect(two?.xpBefore).toBe(one?.xpAfter)
+    expect(two).toMatchObject({ levelBefore: 2, levelAfter: 3, levelReward: 75 })
+    const { results } = await t.db
+      .prepare(
+        "SELECT idem_key, delta FROM ledger WHERE account_id = ? AND kind = 'level_reward' ORDER BY id",
+      )
+      .bind(a)
+      .all<{ idem_key: string; delta: number }>()
+    expect(results.map((r) => r.delta)).toEqual([50, 75])
+    expect(results[1]?.idem_key.startsWith(`match:${room}:1#`)).toBe(true)
   })
 
   it('a replay of the same settlement pays nothing twice', async () => {

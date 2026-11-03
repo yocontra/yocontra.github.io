@@ -279,8 +279,22 @@ export interface Settlement {
   streak: number
   /** Pair diminishing-returns multiplier that applied, 0..1. */
   pairFactor: number
-  /** Itemised lines for the results screen. */
+  /**
+   * Itemised lines for the results screen. When the duel levelled you up, the last line is
+   * `Level up · Lv N` with the level reward exactly as the ledger booked it.
+   */
   lines: readonly { label: string; amount: number; xp: number }[]
+  /**
+   * Your XP and level just before and just after this duel, from the server's committed profile.
+   * Use these (not an XP figure captured when you queued: across rematches that goes stale and
+   * double-counts level rewards).
+   */
+  xpBefore: number
+  xpAfter: number
+  levelBefore: number
+  levelAfter: number
+  /** Dollars the level-ups in this duel paid ($25 × each new level), as booked. 0 if none. */
+  levelReward: number
 }
 
 export interface DuelResult {
