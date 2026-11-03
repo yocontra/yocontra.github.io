@@ -188,11 +188,38 @@ export function cellAt(grid: Grid, x: number, z: number): number {
   return grid.cells[row * grid.n + col] ?? WALL
 }
 
+/** A point on the ground plane. */
+export interface Point {
+  x: number
+  z: number
+}
+
+/** A circle on the ground plane (a player's capsule seen from above). */
+export interface Circle extends Point {
+  r: number
+}
+
+/** A ray from (`ox`, `oz`) along the unit direction (`dx`, `dz`), walked up to `maxDist`. */
+export interface Ray {
+  ox: number
+  oz: number
+  dx: number
+  dz: number
+  maxDist: number
+}
+
+/** One square cell box: its min corner (`x0`, `z0`) and side length. */
+interface CellBox {
+  x0: number
+  z0: number
+  size: number
+}
+
 export const inRect = (r: Rect, x: number, z: number): boolean =>
   x >= r.x && x <= r.x + r.w && z >= r.z && z <= r.z + r.d
 
 /** True if a circle at (x, z) overlaps any cell with `mask`. */
-export function circleBlocked(grid: Grid, x: number, z: number, r: number, mask: number): boolean {
+export function circleBlocked(grid: Grid, { x, z, r }: Circle, mask: number): boolean {
   const c = grid.cell
   const c0 = Math.floor((x - r) / c)
   const c1 = Math.floor((x + r) / c)
@@ -214,13 +241,7 @@ export function circleBlocked(grid: Grid, x: number, z: number, r: number, mask:
 }
 
 /** Push point `p` (a circle of radius `r`) out of one cell box. Returns true if it moved. */
-function resolveCell(
-  p: { x: number; z: number },
-  bx0: number,
-  bz0: number,
-  c: number,
-  r: number,
-): boolean {
+function resolveCell(p: Point, { x0: bx0, z0: bz0, size: c }: CellBox, r: number): boolean {
   const nx = Math.max(bx0, Math.min(p.x, bx0 + c))
   const nz = Math.max(bz0, Math.min(p.z, bz0 + c))
   const dx = p.x - nx
@@ -257,13 +278,7 @@ function resolveCell(
  * Push a circle out of every blocked cell it overlaps. Deterministic (fixed cell order, up to three
  * passes). Returns the resolved position.
  */
-export function pushOut(
-  grid: Grid,
-  px: number,
-  pz: number,
-  r: number,
-  mask: number,
-): { x: number; z: number } {
+export function pushOut(grid: Grid, { x: px, z: pz, r }: Circle, mask: number): Point {
   const p = { x: px, z: pz }
   const c = grid.cell
   for (let pass = 0; pass < 3; pass++) {
@@ -275,7 +290,7 @@ export function pushOut(
     for (let row = r0; row <= r1; row++) {
       for (let col = c0; col <= c1; col++) {
         const blocked = (cellAt(grid, (col + 0.5) * c, (row + 0.5) * c) & mask) !== 0
-        if (blocked && resolveCell(p, col * c, row * c, c, r)) {
+        if (blocked && resolveCell(p, { x0: col * c, z0: row * c, size: c }, r)) {
           moved = true
         }
       }
@@ -291,15 +306,7 @@ export function pushOut(
  * Walk a ray through the grid (Amanatides–Woo DDA). Returns the distance to the first cell with
  * `mask`, or `maxDist` if none.
  */
-export function rayGrid(
-  grid: Grid,
-  ox: number,
-  oz: number,
-  dx: number,
-  dz: number,
-  maxDist: number,
-  mask: number,
-): number {
+export function rayGrid(grid: Grid, { ox, oz, dx, dz, maxDist }: Ray, mask: number): number {
   const c = grid.cell
   let col = Math.floor(ox / c)
   let row = Math.floor(oz / c)
@@ -332,10 +339,8 @@ export function rayGrid(
 /** Line of sight between two points (only sight-blocking cells count). */
 export function hasLineOfSight(
   grid: Grid,
-  ax: number,
-  az: number,
-  bx: number,
-  bz: number,
+  { x: ax, z: az }: Point,
+  { x: bx, z: bz }: Point,
 ): boolean {
   const dx = bx - ax
   const dz = bz - az
@@ -343,7 +348,7 @@ export function hasLineOfSight(
   if (d < EPS) {
     return true
   }
-  return rayGrid(grid, ax, az, dx / d, dz / d, d, BLOCK_SIGHT) >= d
+  return rayGrid(grid, { ox: ax, oz: az, dx: dx / d, dz: dz / d, maxDist: d }, BLOCK_SIGHT) >= d
 }
 
 export function zoneAt(layout: TownLayout, x: number, z: number): Zone | null {

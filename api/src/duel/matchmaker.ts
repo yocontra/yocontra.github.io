@@ -410,7 +410,6 @@ export class Matchmaker extends DurableObject<Env> {
     await this.openRoom(init)
     await this.matched(w, init, 0)
   }
-
 }
 
 function networkOf(request: Request): QueueEntry['net'] {

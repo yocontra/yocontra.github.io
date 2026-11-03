@@ -222,7 +222,7 @@ function scanForTarget(w: World, p: Player, b: BotBrain): void {
       continue
     }
     const d2 = dist2(p.x, p.z, q.x, q.z)
-    if (d2 < best && hasLineOfSight(w.grid, p.x, p.z, q.x, q.z)) {
+    if (d2 < best && hasLineOfSight(w.grid, p, q)) {
       best = d2
       b.target = q.id
     }

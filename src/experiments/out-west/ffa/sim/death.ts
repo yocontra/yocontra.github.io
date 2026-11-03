@@ -19,6 +19,7 @@ import {
   FARM_WINDOW_TICKS,
   PARDON_TICKS,
 } from './constants.ts'
+import type { Point } from './layout.ts'
 import type { World } from './state.ts'
 import type { Player } from './types.ts'
 
@@ -33,13 +34,7 @@ export function cancelChannel(w: World, p: Player): void {
 }
 
 /** Drop a bag of `amount` at (x, z). Returns the bag id, or −1 if nothing dropped. */
-export function dropBag(
-  w: World,
-  x: number,
-  z: number,
-  amount: number,
-  exclusiveFor: number,
-): number {
+export function dropBag(w: World, { x, z }: Point, amount: number, exclusiveFor: number): number {
   if (amount <= 0) {
     return -1
   }
@@ -63,7 +58,7 @@ export function spillCarry(w: World, p: Player, exclusiveFor: number, showdown: 
   const { drop, burn } = ffaDeathDrop(p.carried, showdown)
   p.carried = 0
   w.burned += burn
-  dropBag(w, p.x, p.z, drop, exclusiveFor)
+  dropBag(w, p, drop, exclusiveFor)
 }
 
 /** Count this kill against the farm cap. True if it is the 4th+ kill of `victim` in 10 minutes. */
@@ -177,8 +172,7 @@ export function applyDamage(
   w: World,
   target: Player,
   attacker: Player,
-  amount: number,
-  deadEye: boolean,
+  { amount, deadEye }: { amount: number; deadEye: boolean },
 ): boolean {
   const dealt = Math.min(target.hp, amount)
   target.hp -= amount

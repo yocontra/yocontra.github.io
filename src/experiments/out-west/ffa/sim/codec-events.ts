@@ -26,7 +26,8 @@ import {
   EV_STRONGBOX_SPAWN,
   POS_SCALE,
 } from '../../contract/town.ts'
-import type { Reader, Writer } from './bytes.ts'
+import type { Writer } from './bytes.ts'
+import type { Reader } from './reader.ts'
 import type { SimEvent } from './types.ts'
 
 /** Events on the wire. Field names match `SimEvent` where they overlap. */

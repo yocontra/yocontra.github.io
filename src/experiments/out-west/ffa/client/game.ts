@@ -1025,7 +1025,11 @@ function ownFlags(selfFlags: number, prot: boolean): number {
 }
 
 function rayToWall(net: NetClient, x: number, z: number, aim: number, range: number): number {
-  return rayGrid(net.grid, x, z, Math.cos(aim), Math.sin(aim), range, BLOCK_SHOT)
+  return rayGrid(
+    net.grid,
+    { ox: x, oz: z, dx: Math.cos(aim), dz: Math.sin(aim), maxDist: range },
+    BLOCK_SHOT,
+  )
 }
 
 const PICKUP_RING = new Color(1.4, 0.6, 0.3)

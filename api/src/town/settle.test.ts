@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, test as it } from 'bun:test'
-import { InputQueue } from '../../../src/experiments/out-west/ffa/sim/input.ts'
+import { InputQueue } from '../../../src/experiments/out-west/ffa/sim/input-queue.ts'
 import { ClientStream } from '../../../src/experiments/out-west/ffa/sim/snapshot.ts'
 import { newPlayer } from '../../../src/experiments/out-west/ffa/sim/state.ts'
 import { createProfileStatements } from '../economy/profile.ts'

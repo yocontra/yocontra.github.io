@@ -18,7 +18,7 @@ import {
   SOFT_CAP,
   TICK_HZ,
 } from '../../../src/experiments/out-west/ffa/sim/constants.ts'
-import { InputQueue } from '../../../src/experiments/out-west/ffa/sim/input.ts'
+import { InputQueue } from '../../../src/experiments/out-west/ffa/sim/input-queue.ts'
 import { ClientStream, snapshotFor } from '../../../src/experiments/out-west/ffa/sim/snapshot.ts'
 import {
   activePlayers,
@@ -436,8 +436,7 @@ export class LobbyCore {
       }
       const bytes = snapshotFor(
         this.world,
-        p,
-        s.stream,
+        { viewer: p, stream: s.stream },
         { banked: s.banked, events: this.world.events },
         this.writer,
       )

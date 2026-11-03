@@ -84,7 +84,12 @@ export function bench(players: number, seconds: number, seed = 42): BenchResult 
       const p = w.players[id]
       const stream = streams[id]
       if (p && stream) {
-        const bytes = snapshotFor(w, p, stream, { banked: 1000, events: w.events }, writer)
+        const bytes = snapshotFor(
+          w,
+          { viewer: p, stream },
+          { banked: 1000, events: w.events },
+          writer,
+        )
         sent[id] = (sent[id] ?? 0) + bytes.length + 2
         sizes.push(bytes.length)
       }

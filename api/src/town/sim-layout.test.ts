@@ -23,9 +23,7 @@ function reachable(sx: number, sz: number): Uint8Array {
   const free = (col: number, row: number): boolean =>
     !circleBlocked(
       grid,
-      (col + 0.5) * grid.cell,
-      (row + 0.5) * grid.cell,
-      PLAYER_RADIUS * 0.9,
+      { x: (col + 0.5) * grid.cell, z: (row + 0.5) * grid.cell, r: PLAYER_RADIUS * 0.9 },
       BLOCK_MOVE,
     )
   const start = Math.floor(sz / grid.cell) * grid.n + Math.floor(sx / grid.cell)
@@ -71,7 +69,7 @@ describe('town layout', () => {
     const bz = (bank?.z ?? 0) + (bank?.d ?? 0) / 2
     for (const s of TOWN.spawns) {
       expect(Math.hypot(s.x - bx, s.z - bz)).toBeGreaterThanOrEqual(SPAWN_BANK_CLEARANCE)
-      expect(circleBlocked(grid, s.x, s.z, PLAYER_RADIUS, BLOCK_MOVE)).toBe(false)
+      expect(circleBlocked(grid, { x: s.x, z: s.z, r: PLAYER_RADIUS }, BLOCK_MOVE)).toBe(false)
     }
   })
 
@@ -99,15 +97,20 @@ describe('town layout', () => {
   it('walls block bullets and sight; low cover blocks bullets but not sight', () => {
     // The saloon's west wall at x = 47.
     expect(cellAt(grid, 47.2, 40) & BLOCK_SHOT).toBeTruthy()
-    expect(rayGrid(grid, 45.5, 40, 1, 0, 20, BLOCK_SHOT)).toBeCloseTo(1.5, 5)
-    expect(hasLineOfSight(grid, 45.5, 40, 60, 40)).toBe(false)
+    expect(rayGrid(grid, { ox: 45.5, oz: 40, dx: 1, dz: 0, maxDist: 20 }, BLOCK_SHOT)).toBeCloseTo(
+      1.5,
+      5,
+    )
+    expect(hasLineOfSight(grid, { x: 45.5, z: 40 }, { x: 60, z: 40 })).toBe(false)
     // A trough on main street: blocks the shot, not the view.
     const trough = TOWN.cover.find((c) => c.kind === 'trough' && c.low)
     expect(trough).toBeDefined()
     const tx = (trough?.x ?? 0) + (trough?.w ?? 0) / 2
     const tz = (trough?.z ?? 0) + (trough?.d ?? 0) / 2
-    expect(rayGrid(grid, tx - 5, tz, 1, 0, 10, BLOCK_SHOT)).toBeLessThan(5)
-    expect(hasLineOfSight(grid, tx - 5, tz, tx + 5, tz)).toBe(true)
+    expect(
+      rayGrid(grid, { ox: tx - 5, oz: tz, dx: 1, dz: 0, maxDist: 10 }, BLOCK_SHOT),
+    ).toBeLessThan(5)
+    expect(hasLineOfSight(grid, { x: tx - 5, z: tz }, { x: tx + 5, z: tz })).toBe(true)
   })
 
   it('outside the map is solid', () => {

@@ -22,11 +22,8 @@ import {
   EVENT_LAYOUTS,
   type WireEvent,
 } from '../../../src/experiments/out-west/ffa/sim/codec-events.ts'
-import {
-  InputBatcher,
-  InputQueue,
-  quantizeAim,
-} from '../../../src/experiments/out-west/ffa/sim/input.ts'
+import { InputBatcher, quantizeAim } from '../../../src/experiments/out-west/ffa/sim/input.ts'
+import { InputQueue } from '../../../src/experiments/out-west/ffa/sim/input-queue.ts'
 import { Rng } from '../../../src/experiments/out-west/ffa/sim/rng.ts'
 import { ClientStream, snapshotFor } from '../../../src/experiments/out-west/ffa/sim/snapshot.ts'
 import { place, run, testWorld } from './test-helpers.ts'
@@ -230,7 +227,7 @@ describe('snapshot codec', () => {
     const stream = new ClientStream()
     const recv = new Map<number, EntityView>()
     const out = new Writer()
-    const first = snapshotFor(w, viewer, stream, { banked: 500, events: w.events }, out)
+    const first = snapshotFor(w, { viewer, stream }, { banked: 500, events: w.events }, out)
     const snap = decodeSnapshot(first, recv)
     expect((snap?.flags ?? 0) & SNAP_FULL).toBeTruthy()
     expect(snap?.town?.banked).toBe(500)
@@ -239,7 +236,7 @@ describe('snapshot codec', () => {
     const sizes: number[] = []
     for (let t = 0; t < 40; t++) {
       run(w, 1, Object.fromEntries([...recv.keys()].map((id) => [id, () => ({ moveX: 127 })])))
-      const bytes = snapshotFor(w, viewer, stream, { banked: 500, events: w.events }, out)
+      const bytes = snapshotFor(w, { viewer, stream }, { banked: 500, events: w.events }, out)
       sizes.push(bytes.length)
       decodeSnapshot(bytes, recv)
     }

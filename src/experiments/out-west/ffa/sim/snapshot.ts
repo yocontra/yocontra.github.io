@@ -198,13 +198,23 @@ export function eventRelevant(w: World, ev: SimEvent, viewer: Player): boolean {
 /** Per-socket encoder state: the delta baseline and whether the next snapshot must be full. */
 export class ClientStream {
   readonly baseline = new Map<number, EntityView>()
-  full = true
+  full: boolean
+
+  constructor() {
+    this.full = true
+  }
 
   /** Force a full snapshot next (reconnects). */
   reset(): void {
     this.baseline.clear()
     this.full = true
   }
+}
+
+/** Who a snapshot is for: the viewing player and their socket's encoder state. */
+export interface SnapshotViewer {
+  viewer: Player
+  stream: ClientStream
 }
 
 export interface SnapshotContext {
@@ -238,8 +248,7 @@ function catchUpEvents(w: World): WireEvent[] {
 /** Build and encode this tick's snapshot for one viewer. */
 export function snapshotFor(
   w: World,
-  viewer: Player,
-  stream: ClientStream,
+  { viewer, stream }: SnapshotViewer,
   ctx: SnapshotContext,
   out: Writer,
 ): Uint8Array {
