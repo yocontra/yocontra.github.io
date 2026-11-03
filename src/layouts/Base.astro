@@ -1,4 +1,5 @@
 ---
+import Favicon from '~/components/Favicon.astro'
 import '~/styles/global.css'
 
 interface Props {
@@ -30,7 +31,7 @@ const ogImage = new URL(image, Astro.site)
     <meta name="theme-color" content="#0b120e">
     <meta name="color-scheme" content="dark">
     <link rel="canonical" href={canonical}>
-    <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+    <Favicon />
     <link rel="sitemap" href="/sitemap-index.xml">
     {noindex && <meta name="robots" content="noindex, nofollow" />}
 

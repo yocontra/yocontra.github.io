@@ -3,12 +3,28 @@
   "compilerOptions": {
     "allowJs": false,
     "checkJs": false,
-    "types": ["bun"],
-    "lib": ["ESNext", "DOM", "DOM.Iterable"],
+    "types": [
+      "bun",
+      "@webgpu/types"
+    ],
+    "lib": [
+      "ESNext",
+      "DOM",
+      "DOM.Iterable"
+    ],
     "paths": {
-      "~/*": ["./src/*"]
+      "~/*": [
+        "./src/*"
+      ]
     }
   },
-  "include": [".astro/types.d.ts", "**/*"],
-  "exclude": ["dist", "node_modules", "public"]
+  "include": [
+    ".astro/types.d.ts",
+    "**/*"
+  ],
+  "exclude": [
+    "dist",
+    "node_modules",
+    "public"
+  ]
 }
