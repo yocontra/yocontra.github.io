@@ -1,0 +1,59 @@
+---
+import Bare from '~/layouts/Bare.astro'
+---
+
+<Bare
+  title="out west: Frontier"
+  description="Frontier: a 32-player free-for-all in the western town of Perdition."
+  viewport="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover"
+  noindex
+>
+  <Fragment slot="head">
+    <meta name="theme-color" content="#2a1d12" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Alfa+Slab+One&display=swap"
+    />
+  </Fragment>
+  <div id="frontier"></div>
+</Bare>
+
+<script>
+  /*
+   * Dev and direct access. Query params: server=loopback|remote (default loopback here),
+   * bots=N, lag=ms, jitter=ms, lobby=id, name=… Plus the renderer's #tier= and #perf.
+   */
+  import { mountFrontier } from '~/experiments/out-west/ffa/client/index.ts'
+  import { installViewportVars } from '~/experiments/out-west/platform/viewport.ts'
+
+  const root = document.querySelector<HTMLElement>('#frontier')
+  const q = new URLSearchParams(location.search)
+  const num = (k: string): number | undefined => {
+    const v = Number(q.get(k))
+    return q.has(k) && Number.isFinite(v) ? v : undefined
+  }
+  if (root) {
+    installViewportVars()
+    for (const t of ['gesturestart', 'dblclick']) {
+      document.addEventListener(t, (e) => e.preventDefault(), { passive: false })
+    }
+    const lag = num('lag')
+    const jitter = num('jitter')
+    const bots = num('bots')
+    const lobby = q.get('lobby')
+    const name = q.get('name')
+    mountFrontier(root, {
+      server: q.get('server') === 'remote' ? 'remote' : 'loopback',
+      ...(bots === undefined ? {} : { bots }),
+      ...(lag === undefined ? {} : { lagMs: lag }),
+      ...(jitter === undefined ? {} : { jitterMs: jitter }),
+      ...(lobby ? { lobbyId: lobby } : {}),
+      ...(name ? { name } : {}),
+      onExit: () => {
+        location.href = '/experiments/out-west/'
+      },
+    })
+  }
+</script>
