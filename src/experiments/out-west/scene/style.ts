@@ -14,6 +14,12 @@ export const RIM = {
   strength: { value: 0.25 },
 }
 
+/**
+ * Skin is flagged by adding this to its per-vertex rim strength (styMat.y);
+ * shade.ts decodes it for the warm subsurface wrap. Rim strengths stay < 5.
+ */
+export const SKIN_FLAG = 10
+
 export interface Floor {
   value: number
 }
@@ -83,7 +89,7 @@ export function vary(mat: MeshStandardMaterial, seed: string): void {
   )
   mat.roughness = f ? f.roughness + (r - 0.5) * 0.08 : Math.max(0.6, mat.roughness)
   mat.metalness = 0
-  mat.userData.rim = f ? f.rim : 1
+  mat.userData.rim = (f ? f.rim : 1) + (kind === 'skin' ? SKIN_FLAG : 0)
 }
 
 /** Install the rim + grounding shader on a character material. */
