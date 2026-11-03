@@ -292,6 +292,24 @@ describe('passkey account lifecycle', () => {
   })
 })
 
+describe('a refresh whose response was lost', () => {
+  it('hands the old cookie the same successor, then rotates on from it', async () => {
+    const env = fakeEnv()
+    const up = await signUp(env, 'Doc Holliday', new SoftAuthenticator(ORIGIN))
+    const cookie = cookieOf(up.res)
+    const r1 = await call(env, '/auth/refresh', { body: {}, cookie })
+    const rotated = cookieOf(r1)
+    // the page reloads before it stores `rotated`, and presents the old cookie again
+    const lost = await call(env, '/auth/refresh', { body: {}, cookie })
+    expect(lost.status).toBe(200)
+    expect(cookieOf(lost)).toBe(rotated)
+    const next = await call(env, '/auth/refresh', { body: {}, cookie: rotated })
+    expect(next.status).toBe(200)
+    // now the old cookie is genuinely stale: a race inside the grace, not another replay
+    expect((await call(env, '/auth/refresh', { body: {}, cookie })).status).toBe(409)
+  })
+})
+
 describe('production cookie', () => {
   it('uses __Host- with Secure on https', async () => {
     const env = fakeEnv({

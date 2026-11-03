@@ -111,7 +111,7 @@ function setSession(next: Session | null, broadcast = true): void {
     return
   }
   if (broadcast) {
-    channel?.postMessage({ type: next ? 'signin' : 'signout' })
+    channel?.postMessage(next ? { type: 'signin', accountId: after } : { type: 'signout' })
   }
   for (const cb of listeners) {
     try {
@@ -124,13 +124,23 @@ function setSession(next: Session | null, broadcast = true): void {
 
 // Another tab signed in or out: follow it. Its access token stays there; ours refreshes from the
 // shared cookie on demand.
+//
+// A tab that follows a sign-in never re-announces it. It used to: tab B heard A's `signin`, dropped
+// its session, refreshed and broadcast `signin` again (its session had gone from null to a player),
+// which made A do the same, forever. Every open tab (say the game plus an `/auth/app` handoff tab)
+// rotated the refresh token in a loop, burned the refresh rate limit, and left a refresh in flight
+// almost all the time, so any reload was likely to drop a rotated cookie. Now the same account is
+// ignored outright, and a different one is followed without a broadcast.
 channel?.addEventListener('message', (e: MessageEvent<unknown>) => {
-  const type = isRecord(e.data) ? e.data.type : null
-  if (type === 'signout') {
+  const data = isRecord(e.data) ? e.data : null
+  if (data?.type === 'signout') {
     setSession(null, false)
-  } else if (type === 'signin') {
+  } else if (data?.type === 'signin') {
+    if (session && session.player.accountId === data.accountId) {
+      return
+    }
     session = null
-    void refresh()
+    void refresh(false)
   }
 })
 
@@ -205,8 +215,11 @@ async function refreshOnce(): Promise<Session | null> {
   return null
 }
 
-/** Silent refresh, single-flight within the tab and serialised across tabs with a Web Lock. */
-function refresh(): Promise<Session | null> {
+/**
+ * Silent refresh, single-flight within the tab and serialised across tabs with a Web Lock.
+ * `announce` is false when following another tab, which has already told everyone.
+ */
+function refresh(announce = true): Promise<Session | null> {
   refreshing ??= (async () => {
     try {
       const locks = typeof navigator === 'undefined' ? undefined : navigator.locks
@@ -214,7 +227,7 @@ function refresh(): Promise<Session | null> {
         ? await locks.request(LOCK, async () => await refreshOnce())
         : await refreshOnce()
       if (fresh) {
-        setSession(fresh)
+        setSession(fresh, announce)
       }
       return fresh
     } finally {

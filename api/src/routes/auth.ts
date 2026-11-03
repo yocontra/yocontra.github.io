@@ -9,7 +9,7 @@ import {
 } from '../../../src/experiments/out-west/contract/auth.ts'
 import { createAccount, reserveName } from '../auth/accounts.ts'
 import { clearRefreshCookie, readRefreshCookie } from '../auth/cookie.ts'
-import { randomToken } from '../auth/crypto.ts'
+import { randomToken, sha256Hex } from '../auth/crypto.ts'
 import { authorizeAppCode, exchangeAppCode } from '../auth/handoff.ts'
 import { LIMITS } from '../auth/rate.ts'
 import { endFamily, endSession, rotateSession, startSession } from '../auth/refresh.ts'
@@ -153,6 +153,15 @@ function presentedToken(
   return typeof b.refreshToken === 'string' ? b.refreshToken : null
 }
 
+/**
+ * Who is refreshing, so a rotation whose response was lost can be replayed to the same client only
+ * (`rotateSession`). IP plus User-Agent, hashed; never stored.
+ */
+async function clientBinding(request: Request): Promise<string> {
+  const ip = request.headers.get('CF-Connecting-IP') ?? 'unknown'
+  return await sha256Hex(`${ip}|${request.headers.get('User-Agent') ?? ''}`)
+}
+
 const REFRESH_FAILURES: Record<string, string> = {
   raced: 'Refreshed in another tab. Try again.',
   reused: 'That session was used elsewhere, so it was closed. Sign in again.',
@@ -172,7 +181,9 @@ const refresh: Handler = async (request, env, url) => {
   if (!presented) {
     return error(request, env, 401, 'Not signed in.')
   }
-  const result = await rotateSession(env, presented, platform)
+  const result = await rotateSession(env, presented, platform, {
+    client: await clientBinding(request),
+  })
   if (result.ok) {
     return await sessionResponse(request, env, url, { grant: result.grant })
   }
