@@ -12,4 +12,25 @@ export interface Experiment {
   unlisted?: boolean
 }
 
-export const experiments: readonly Experiment[] = []
+export const experiments: readonly Experiment[] = [
+  {
+    slug: 'out-west',
+    title: 'out west',
+    year: 2019,
+    blurb:
+      'Walk your paces, wait for the call, and outdraw seventeen outlaws before they outdraw you.',
+    tags: ['game', 'canvas', 'audio'],
+    thumb: '/experiments/out-west/thumb.webp',
+    hue: 25,
+  },
+  {
+    slug: 'hax',
+    title: 'You Got Hacked',
+    year: 2021,
+    blurb: 'A prank page. Blinking red, looping audio, zero chill.',
+    tags: ['prank', 'css', 'audio'],
+    hue: 0,
+    thumb: '/experiments/hax/thumb.webp',
+    unlisted: true,
+  },
+]

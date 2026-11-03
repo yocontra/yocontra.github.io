@@ -4,7 +4,7 @@ on:
   push:
     branches: [master]
   schedule:
-    - cron: '17 6 * * 1' # weekly rebuild to refresh GitHub stats
+    - cron: "17 6 * * 1" # weekly rebuild to refresh GitHub stats
   workflow_dispatch:
 
 permissions:
