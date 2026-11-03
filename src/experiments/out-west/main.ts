@@ -3,6 +3,7 @@ import { OUTLAWS } from './data/outlaws'
 import type { Tier } from './engine/render'
 import type { Game } from './game'
 import { load, save } from './save'
+import { Board } from './ui/board'
 
 /**
  * Entry point. Kept tiny so the red title is interactive immediately; the
@@ -39,11 +40,18 @@ export function boot(root: HTMLElement): void {
   const startText = root.querySelector<HTMLElement>('.ow-start')
   const creditsBtn = root.querySelector<HTMLButtonElement>('.ow-credits-btn')
   const credits = root.querySelector<HTMLElement>('.ow-credits')
+  const boardBtn = root.querySelector<HTMLButtonElement>('.ow-board-btn')
   if (!canvas || !title) return
 
   creditsBtn?.addEventListener('click', (e) => {
     e.stopPropagation()
     credits?.classList.toggle('on')
+  })
+  let board: Board | null = null
+  boardBtn?.addEventListener('click', (e) => {
+    e.stopPropagation()
+    board ??= new Board(root)
+    board.open()
   })
   for (const a of title.querySelectorAll('a, button, .ow-credits')) {
     a.addEventListener('pointerdown', (e) => e.stopPropagation())

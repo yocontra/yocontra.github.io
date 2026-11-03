@@ -11,6 +11,7 @@ import {
   Vector3,
 } from 'three'
 import type { AudioEngine, Loop } from '../audio/audio'
+import { bountyFor, type DuelOutcome, drawBonus, money, scoreRun } from '../data/economy'
 import { FEEL } from '../data/feel'
 import {
   ASSIST_MS,
@@ -52,6 +53,7 @@ import {
 import { PortraitStudio } from '../scene/portrait'
 import { type PropDef, propObject } from '../scene/props'
 import { STREET, type World } from '../scene/world'
+import { Board } from '../ui/board'
 import type { Hud } from '../ui/hud'
 import { drawPoster } from '../ui/poster'
 import { type DrawPlan, dueShot, type EnemyShot, planFakes, planShots, shotsBefore } from './judge'
@@ -213,9 +215,12 @@ export class Director {
   private realTime = 0
 
   readonly studio: PortraitStudio
+  readonly board: Board
 
   constructor(private readonly c: Ctx) {
     this.studio = new PortraitStudio(c.renderer.gl, c.assets)
+    this.board = new Board(c.hud.root)
+    c.hud.setPurse(c.save.run.total, false)
     this.player = new Actor(c.assets.player, {
       gun: c.gun ? propObject(c.gun) : null,
     })
@@ -636,7 +641,15 @@ export class Director {
         this.togglePause()
         resetRun(c.save, c.save.legend)
         persist(c.save)
+        c.hud.setPurse(0, false)
         this.startLevel(0, false)
+      },
+      leaderboard: () => {
+        const run = c.save.run
+        this.board.open({
+          run: run.total > 0 ? run : null,
+          submitLabel: 'Submit run so far',
+        })
       },
       remap: (_a, done) => {
         c.input.capture = (code) => {
@@ -1518,6 +1531,37 @@ export class Director {
     this.fallers = this.fallers.filter((f) => f.obj.position.y > 0)
   }
 
+  // ------------------------------------------------------------- economy
+
+  /** Log this duel in the run and rescore the purse. Returns the change in the purse. */
+  private record(outcome: DuelOutcome, reactionMs: number | null): number {
+    const c = this.c
+    const run = c.save.run
+    const before = run.total
+    run.duels.push({
+      level: this.level,
+      outcome,
+      reactionMs: reactionMs === null ? null : Math.round(reactionMs * 10) / 10,
+    })
+    run.total = scoreRun(run.duels)
+    persist(c.save)
+    return run.total - before
+  }
+
+  /** Tick the purse to its new total, with a little cash-register jingle on a gain. */
+  private showPurse(delta: number): void {
+    const c = this.c
+    c.hud.setPurse(c.save.run.total, true)
+    if (delta > 0) {
+      c.audio.play('coin', { gain: 0.8 })
+      c.audio.play('coin', { gain: 0.6, rate: 1.26, when: c.audio.now + 0.09 })
+      c.audio.play('coin', { gain: 0.5, rate: 1.5, when: c.audio.now + 0.19 })
+    }
+  }
+
+  private paidShown = false
+  private winDelta = 0
+
   private win(press: number): void {
     const c = this.c
     const o = this.outlaw
@@ -1544,6 +1588,8 @@ export class Director {
       return
     }
     this.killEnemyAnim()
+    this.winDelta = this.record('win', r)
+    this.paidShown = false
     if (o.gimmick === 'boss') this.killDur = this.reduced ? 0.8 : FEEL.bossKillSeconds
     // only the boss gets a (very slow) orbit; everyone else a gentle push-in
     this.killOrbit = MathUtils.degToRad(o.gimmick === 'boss' ? 4 : 0)
@@ -1646,6 +1692,11 @@ export class Director {
     }
     if (this.outlaw.gimmick === 'boss') {
       if (k > 0.5 && this.midnightBells < 12 && k > 0.5 + this.midnightBells * 0.9) this.toll()
+      if (!this.paidShown && k > this.killDur + 0.6) {
+        this.paidShown = true
+        this.showPurse(this.winDelta)
+        c.hud.line('Bounty', this.payLine(this.lastReaction ?? 0), 2600)
+      }
       // let at least six of the twelve tolls ring before the ledger
       if (this.midnightBells >= 6 && k > this.killDur + 1) this.toEnd()
       return
@@ -1660,8 +1711,18 @@ export class Director {
         gradeFor(r, this.secondChance),
         'press to continue',
       )
+      c.hud.cardPayout(this.payLine(r))
+      this.showPurse(this.winDelta)
     }
     if (t >= FEEL.resultAt + FEEL.resultFor) this.nextLevel()
+  }
+
+  /** "+$150 · 212 ms draw bonus +$37" */
+  private payLine(r: number): string {
+    if (this.winDelta <= 0) return 'Already paid for this one.'
+    const bonus = drawBonus(this.level, r)
+    const base = `+${money(bountyFor(this.level))}`
+    return bonus > 0 ? `${base} · ${Math.round(r)} ms draw bonus +${money(bonus)}` : base
   }
 
   private nextLevel(): void {
@@ -1717,6 +1778,7 @@ export class Director {
     const c = this.c
     this.enter('lose')
     this.loseReason = reason
+    this.record('loss', this.lastReaction)
     c.audio.heartbeat(0)
     c.hud.clearCall()
     c.hud.clearCaptions()
@@ -1796,7 +1858,10 @@ export class Director {
   private coward(): void {
     const c = this.c
     const e = this.enemy
+    // how early: negative ms before the call (or -1 when no call was set yet)
+    const early = this.phase === 'wait' ? Math.min(-1, performance.now() - this.tCall) : -1
     this.enter('coward')
+    this.cowardDelta = this.record('coward', early)
     this.bellVoice?.stop()
     this.bellVoice = null
     c.audio.heartbeat(0)
@@ -1825,6 +1890,7 @@ export class Director {
 
   private cowardBeat = false
   private cowardCard = false
+  private cowardDelta = 0
 
   private tickCoward(): void {
     const c = this.c
@@ -1848,6 +1914,10 @@ export class Director {
         `${n} ${n === 1 ? 'man' : 'men'} shot in the back. No bounty.`,
         'press to try again',
       )
+      if (this.cowardDelta < 0) {
+        c.hud.cardPayout(`Fined ${money(-this.cowardDelta)}`)
+        this.showPurse(this.cowardDelta)
+      }
       const card = c.hud.root.querySelector('.ow-card-big')
       if (card)
         card.innerHTML = `<img alt="Wanted poster stamped: shot in the back, no bounty" src="${img}">`
@@ -1968,6 +2038,15 @@ export class Director {
     c.audio.musicLevel(0, 1)
     c.audio.musicLowpass(18000, 1)
     this.endT = 0
+    const run = c.save.run
+    c.save.bestTotal = Math.max(c.save.bestTotal, run.total)
+    persist(c.save)
+    const paid = (i: number): number | null => {
+      const won = run.duels.some((d) => d.level === i && d.outcome === 'win')
+      if (!won) return null
+      const first = run.duels.find((d) => d.level === i && d.outcome === 'win')
+      return bountyFor(i) + drawBonus(i, first?.reactionMs ?? null)
+    }
     const rows = OUTLAWS.map((o, i) => {
       const b = c.save.best[i]
       return {
@@ -1975,6 +2054,7 @@ export class Director {
         ms: b ? b.ms : null,
         grade: b ? b.grade : '—',
         attempts: c.save.attempts[i] ?? 0,
+        paid: paid(i),
       }
     })
     const ms = rows.map((r) => r.ms).filter((m): m is number => m !== null)
@@ -1988,21 +2068,28 @@ export class Director {
           assist: c.save.assistUsed,
           legend: c.save.legend,
           legendUnlocked: c.save.legendUnlocked,
+          total: run.total,
+          best: c.save.bestTotal,
         },
         () => {
           c.hud.hideEnd()
           c.hud.show(true)
+          this.board.close()
           resetRun(c.save, false)
           persist(c.save)
+          c.hud.setPurse(0, false)
           this.startLevel(0, false)
         },
         () => {
           c.hud.hideEnd()
           c.hud.show(true)
+          this.board.close()
           resetRun(c.save, true)
           persist(c.save)
+          c.hud.setPurse(0, false)
           this.startLevel(0, false)
         },
+        () => this.board.open({ run, submitLabel: 'Submit to leaderboard' }),
       )
     }, 1800)
     this.c.rig.cut(

@@ -4,6 +4,8 @@
  * 0 = high noon, 0.5 = sunset, 1 = midnight.
  */
 
+import { bountyFor } from './economy'
+
 /** Character part sources (all share the player's rig), plus the woman model. */
 export type PartSrc = 'suit' | 'rugged' | 'casual' | 'worker' | 'king' | 'punk'
 export type BodyKey = PartSrc | 'woman'
@@ -93,7 +95,7 @@ export const OUTLAWS: readonly Outlaw[] = [
   {
     name: 'Bret P. Barsh',
     epithet: 'the Greenhorn',
-    bounty: 50,
+    bounty: bountyFor(0),
     hook: 'Hands shake. Drops his hat on the turn.',
     gimmick: 'shaky',
     look: {
@@ -119,7 +121,7 @@ export const OUTLAWS: readonly Outlaw[] = [
   {
     name: 'Prescott J. House',
     epithet: 'the Talker',
-    bounty: 75,
+    bounty: bountyFor(1),
     hook: 'Heckles every pace.',
     gimmick: 'talker',
     look: {
@@ -155,7 +157,7 @@ export const OUTLAWS: readonly Outlaw[] = [
   {
     name: 'Calhoun C. Trine',
     epithet: 'Can’t Count',
-    bounty: 100,
+    bounty: bountyFor(2),
     hook: 'Counts paces aloud, wrongly. Watch for the crow.',
     gimmick: 'counter',
     look: {
@@ -187,7 +189,7 @@ export const OUTLAWS: readonly Outlaw[] = [
   {
     name: 'Ace Q. McConly',
     epithet: 'the Card Sharp',
-    bounty: 150,
+    bounty: bountyFor(3),
     hook: 'Flips a coin. The coin landing is not the call.',
     gimmick: 'coin',
     look: {
@@ -214,7 +216,7 @@ export const OUTLAWS: readonly Outlaw[] = [
   {
     name: 'Burney N. Coover',
     epithet: 'the Drunk',
-    bounty: 200,
+    bounty: bountyFor(4),
     hook: 'Sways, swigs, and draws whenever he feels like it.',
     gimmick: 'drunk',
     look: {
@@ -240,7 +242,7 @@ export const OUTLAWS: readonly Outlaw[] = [
   {
     name: 'Salvador R. Gruell',
     epithet: 'the Impatient',
-    bounty: 300,
+    bounty: bountyFor(5),
     hook: 'Short walks. The call comes early.',
     gimmick: 'impatient',
     look: {
@@ -268,7 +270,7 @@ export const OUTLAWS: readonly Outlaw[] = [
   {
     name: 'Felipe K. Wheeler',
     epithet: 'the Long Walker',
-    bounty: 400,
+    bounty: bountyFor(6),
     hook: 'Long walks. The wind picks up and the dust hides him.',
     gimmick: 'windy',
     look: {
@@ -296,7 +298,7 @@ export const OUTLAWS: readonly Outlaw[] = [
   {
     name: 'Laura Bullion',
     epithet: 'the Thorny Rose',
-    bounty: 500,
+    bounty: bountyFor(7),
     hook: 'Cold. Still. No tells at all.',
     gimmick: 'cold',
     look: {
@@ -324,7 +326,7 @@ export const OUTLAWS: readonly Outlaw[] = [
   {
     name: 'Thomas B. Arnold',
     epithet: 'the Starer',
-    bounty: 650,
+    bounty: bountyFor(8),
     hook: 'Whistles a dirge the whole walk. Never looks back.',
     gimmick: 'whistler',
     look: {
@@ -351,7 +353,7 @@ export const OUTLAWS: readonly Outlaw[] = [
   {
     name: 'Delmer F. Gusselman',
     epithet: 'Two-Gun Delmer',
-    bounty: 800,
+    bounty: bountyFor(9),
     hook: 'Two guns. Fires twice. The first always misses.',
     gimmick: 'two-guns',
     look: {
@@ -384,7 +386,7 @@ export const OUTLAWS: readonly Outlaw[] = [
   {
     name: 'Pearl Hart',
     epithet: 'the Stage Robber',
-    bounty: 1000,
+    bounty: bountyFor(10),
     hook: 'Her gang heckles. “DRR…” is not the call.',
     gimmick: 'drr',
     look: {
@@ -411,7 +413,7 @@ export const OUTLAWS: readonly Outlaw[] = [
   {
     name: 'Luke Short',
     epithet: 'the Undertaker’s Friend',
-    bounty: 1250,
+    bounty: bountyFor(11),
     hook: 'Gambler. When the saloon piano stops, it’s not the call.',
     gimmick: 'piano',
     look: {
@@ -438,7 +440,7 @@ export const OUTLAWS: readonly Outlaw[] = [
   {
     name: 'Dallas Stoudenmire',
     epithet: 'the Marshal of El Paso',
-    bounty: 1500,
+    bounty: bountyFor(12),
     hook: 'Night. You can’t read his hand. Trust your ears.',
     gimmick: 'night',
     look: {
@@ -466,7 +468,7 @@ export const OUTLAWS: readonly Outlaw[] = [
   {
     name: 'Harvey “Kid Curry” Logan',
     epithet: 'the Fake-Out King',
-    bounty: 2000,
+    bounty: bountyFor(13),
     hook: 'Twitchy hands. Fake-outs everywhere.',
     gimmick: 'fake-king',
     look: {
@@ -493,7 +495,7 @@ export const OUTLAWS: readonly Outlaw[] = [
   {
     name: 'James “Wild Bill” Hickok',
     epithet: 'Aces and Eights',
-    bounty: 3000,
+    bounty: bountyFor(14),
     hook: 'Dead man’s hand. Metronomic.',
     gimmick: 'cards',
     look: {
@@ -520,7 +522,7 @@ export const OUTLAWS: readonly Outlaw[] = [
   {
     name: 'William “Curly Bill” Brocius',
     epithet: 'the Underboss',
-    bounty: 5000,
+    bounty: bountyFor(15),
     hook: 'Rifleman on the saloon roof. Watch for the glint. Two shots.',
     gimmick: 'underboss',
     look: {
@@ -555,7 +557,7 @@ export const OUTLAWS: readonly Outlaw[] = [
   {
     name: 'John Wesley Hardin',
     epithet: 'the Boss',
-    bounty: 10000,
+    bounty: bountyFor(16),
     hook: 'Midnight. The twelfth strike is the call.',
     gimmick: 'boss',
     look: {

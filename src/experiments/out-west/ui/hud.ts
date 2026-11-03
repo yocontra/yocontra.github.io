@@ -1,3 +1,4 @@
+import { money } from '../data/economy'
 import { type Action, keyLabel } from '../engine/input'
 import type { Settings } from '../save'
 
@@ -19,6 +20,8 @@ export interface LedgerRow {
   ms: number | null
   grade: string
   attempts: number
+  /** Bounty + bonus collected for him (null if not yet). */
+  paid: number | null
 }
 
 export class Hud {
@@ -33,6 +36,12 @@ export class Hud {
   private readonly cardSub: HTMLElement
   private readonly cardBig: HTMLElement
   private readonly cardHint: HTMLElement
+  private readonly cardPay: HTMLElement
+  private readonly purse: HTMLElement
+  private purseShown = 0
+  private purseFrom = 0
+  private purseTo = 0
+  private purseT = 1
   private readonly letterTop: HTMLElement
   private readonly letterBot: HTMLElement
   private readonly whip: HTMLElement
@@ -51,6 +60,8 @@ export class Hud {
     this.root = root
     const hud = el('div', 'ow-hud', root)
     this.counter = el('div', 'ow-counter', hud)
+    this.purse = el('div', 'ow-purse', hud, money(0))
+    this.purse.setAttribute('aria-label', 'Purse')
     this.pauseBtn = el('button', 'ow-pause', hud)
     this.pauseBtn.type = 'button'
     this.pauseBtn.setAttribute('aria-label', 'Pause')
@@ -67,6 +78,7 @@ export class Hud {
     this.cardTitle = el('div', 'ow-card-title', this.card)
     this.cardBig = el('div', 'ow-card-big', this.card)
     this.cardSub = el('div', 'ow-card-sub', this.card)
+    this.cardPay = el('div', 'ow-card-pay', this.card)
     this.cardHint = el('div', 'ow-card-hint', this.card)
     this.whip = el('div', 'ow-whip', root)
     this.iris = el('div', 'ow-iris', root)
@@ -143,6 +155,29 @@ export class Hud {
     this.cardBig.textContent = big
     this.cardSub.textContent = sub
     this.cardHint.textContent = hint
+    this.cardPay.textContent = ''
+  }
+
+  /** The payout line on the result card, e.g. "+$150 · 212 ms draw bonus +$37". */
+  cardPayout(text: string): void {
+    this.cardPay.textContent = text
+  }
+
+  /** Set the purse; `animate` counts up (or down) gently instead of snapping. */
+  setPurse(total: number, animate: boolean): void {
+    if (!animate) {
+      this.purseShown = this.purseTo = this.purseFrom = total
+      this.purseT = 1
+      this.purse.textContent = money(total)
+      return
+    }
+    this.purseFrom = this.purseShown
+    this.purseTo = total
+    this.purseT = 0
+    const cls = total >= this.purseFrom ? 'gain' : 'loss'
+    this.purse.classList.remove('gain', 'loss')
+    void this.purse.offsetWidth
+    this.purse.classList.add(cls)
   }
 
   hideCard(): void {
@@ -165,6 +200,13 @@ export class Hud {
   }
 
   update(dtMs: number): void {
+    if (this.purseT < 1) {
+      this.purseT = Math.min(1, this.purseT + dtMs / 1100)
+      const k = 1 - (1 - this.purseT) ** 3
+      this.purseShown = Math.round(this.purseFrom + (this.purseTo - this.purseFrom) * k)
+      this.purse.textContent = money(this.purseShown)
+      if (this.purseT >= 1) this.purse.classList.remove('gain', 'loss')
+    }
     if (this.fakeTimer > 0) {
       this.fakeTimer -= dtMs
       if (this.fakeTimer <= 0) this.fakeCap.classList.remove('on')
@@ -188,6 +230,7 @@ export class Hud {
       resume: () => void
       change: (s: Settings) => void
       restart: () => void
+      leaderboard: () => void
       remap: (a: Action, done: (code: string) => void) => void
     },
   ): void {
@@ -240,6 +283,9 @@ export class Hud {
     const resume = el('button', 'ow-btn ow-btn-primary', btns, 'Resume')
     resume.type = 'button'
     resume.addEventListener('click', handlers.resume)
+    const board = el('button', 'ow-btn', btns, 'Leaderboard')
+    board.type = 'button'
+    board.addEventListener('click', handlers.leaderboard)
     const restart = el('button', 'ow-btn', btns, 'Restart gauntlet')
     restart.type = 'button'
     restart.addEventListener('click', handlers.restart)
@@ -263,9 +309,12 @@ export class Hud {
       assist: boolean
       legend: boolean
       legendUnlocked: boolean
+      total: number
+      best: number
     },
     onAgain: () => void,
     onLegend: () => void,
+    onBoard: () => void,
   ): void {
     const e = this.end
     e.innerHTML = ''
@@ -274,7 +323,7 @@ export class Hud {
     if (stats.cowardice >= 10) el('div', 'ow-end-title', e, 'The Yellowest Hand in the West')
     const table = el('table', 'ow-ledger', e)
     const head = el('tr', '', el('thead', '', table))
-    for (const h of ['#', 'Outlaw', 'Best', 'Grade', 'Tries']) el('th', '', head, h)
+    for (const h of ['#', 'Outlaw', 'Best', 'Grade', 'Tries', 'Bounty']) el('th', '', head, h)
     const body = el('tbody', '', table)
     rows.forEach((r, i) => {
       const tr = el('tr', '', body)
@@ -283,8 +332,20 @@ export class Hud {
       el('td', '', tr, r.ms === null ? '—' : `${Math.round(r.ms)} ms`)
       el('td', '', tr, r.grade)
       el('td', '', tr, String(r.attempts))
+      el('td', '', tr, r.paid === null ? '—' : money(r.paid))
     })
+    const foot = el('tr', 'ow-ledger-total', el('tfoot', '', table))
+    el('td', '', foot, '')
+    el('td', '', foot, 'Total earned')
+    for (let i = 0; i < 3; i++) el('td', '', foot, '')
+    el('td', '', foot, money(stats.total))
     const s = el('div', 'ow-end-stats', e)
+    el(
+      'div',
+      'ow-end-purse',
+      s,
+      `Purse: ${money(stats.total)}${stats.total >= stats.best && stats.total > 0 ? ' · a new best' : ` · best ${money(stats.best)}`}`,
+    )
     el(
       'div',
       '',
@@ -300,7 +361,10 @@ export class Hud {
     if (stats.assist) el('div', '', s, 'Assist mode was on (+150 ms).')
     if (stats.legend) el('div', '', s, 'LEGEND MODE — the 2019 curve. Respect.')
     const b = el('div', 'ow-menu-btns', e)
-    const again = el('button', 'ow-btn ow-btn-primary', b, 'Play again')
+    const submit = el('button', 'ow-btn ow-btn-primary', b, 'Submit to leaderboard')
+    submit.type = 'button'
+    submit.addEventListener('click', onBoard)
+    const again = el('button', 'ow-btn', b, 'Play again')
     again.type = 'button'
     again.addEventListener('click', onAgain)
     if (stats.legendUnlocked) {

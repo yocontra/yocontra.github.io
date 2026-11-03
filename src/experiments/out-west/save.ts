@@ -1,3 +1,4 @@
+import type { RunResult } from './data/economy'
 import { DEFAULT_KEYS, type KeyMap } from './engine/input'
 
 export interface Best {
@@ -27,6 +28,14 @@ export interface SaveData {
   cowardice: number
   assistUsed: boolean
   settings: Settings
+  /** The gauntlet in progress: every duel and the purse (leaderboard-ready). */
+  run: RunResult
+  /** Best finished purse on this device. */
+  bestTotal: number
+}
+
+export function emptyRun(): RunResult {
+  return { version: 1, duels: [], total: 0 }
 }
 
 const KEY = 'out-west-3d'
@@ -53,6 +62,8 @@ function defaults(): SaveData {
       mono: false,
       keys: structuredClone(DEFAULT_KEYS),
     },
+    run: emptyRun(),
+    bestTotal: 0,
   }
 }
 
@@ -63,9 +74,14 @@ export function load(): SaveData {
     if (!raw) return d
     const parsed = JSON.parse(raw) as Partial<SaveData>
     if (parsed.version !== 1) return d
+    const run = parsed.run
+    const okRun =
+      run && run.version === 1 && Array.isArray(run.duels) && typeof run.total === 'number'
     return {
       ...d,
       ...parsed,
+      run: okRun ? run : emptyRun(),
+      bestTotal: typeof parsed.bestTotal === 'number' ? parsed.bestTotal : 0,
       settings: {
         ...d.settings,
         ...(parsed.settings ?? {}),
@@ -92,4 +108,5 @@ export function resetRun(data: SaveData, legend: boolean): void {
   data.attempts = {}
   data.cowardice = 0
   data.assistUsed = data.settings.assist
+  data.run = emptyRun()
 }
