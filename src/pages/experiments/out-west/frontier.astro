@@ -45,7 +45,8 @@ import Bare from '~/layouts/Bare.astro'
     const lobby = q.get('lobby')
     const name = q.get('name')
     // Dev only: a pre-minted access token (automated runs without a passkey).
-    const token = q.get('token')
+    // Never honoured in production builds: tokens must not travel in URLs.
+    const token = import.meta.env.DEV ? q.get('token') : null
     mountFrontier(root, {
       server: q.get('server') === 'remote' ? 'remote' : 'loopback',
       ...(bots === undefined ? {} : { bots }),
@@ -55,7 +56,7 @@ import Bare from '~/layouts/Bare.astro'
       ...(name ? { name } : {}),
       ...(token ? { getToken: () => Promise.resolve(token) } : {}),
       onExit: () => {
-        location.href = '/experiments/out-west/'
+        location.href = '/experiments/out-west/?saloon'
       },
     })
   }

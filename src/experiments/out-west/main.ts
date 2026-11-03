@@ -227,6 +227,19 @@ export function boot(root: HTMLElement): void {
   title.addEventListener('pointerdown', press)
   globalThis.addEventListener('keydown', press)
 
+  // Back from Frontier: straight to the saloon, no title screen. Audio unlocks on the first tap.
+  if (hub && new URLSearchParams(location.search).has('saloon')) {
+    pressed = true
+    history.replaceState(null, '', location.pathname + location.hash)
+    const unlockOnce = () => {
+      audio.unlock()
+      if (audio.ctx) {
+        unlockAudio(audio.ctx)
+      }
+    }
+    globalThis.addEventListener('pointerdown', unlockOnce, { once: true })
+  }
+
   import('./game.ts')
     .then((m) =>
       m.createGame({

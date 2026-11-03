@@ -11,8 +11,6 @@ import { bountyForLevel, levelProgress, titleFor } from '../data/progression.ts'
 import { fetchLedger, fetchMe } from '../net/api.ts'
 import { currentPlayer, onAuthChange } from '../net/auth.ts'
 import type { QueueMatch } from '../net/queue.ts'
-// TEMP: stream G's Frontier entry point (ffa/client/), until it exists
-import { mountFrontier } from '../stubs/frontier.ts'
 import { mountAccount } from './account.ts'
 import { type GauntletChoice, gauntletSheet, type Mode, ModeTiles } from './mode-select.ts'
 import { QueueSheet } from './queue.ts'
@@ -201,8 +199,9 @@ export class Hub {
     if (m === 'bounty') {
       this.openQueue()
     } else {
-      this.hide()
-      mountFrontier(this.parent, { onExit: () => this.show() })
+      // Frontier runs on its own page: one WebGL context and render loop at a time, which matters
+      // on phones. Leaving town returns straight to the saloon (`?saloon`).
+      location.assign('/experiments/out-west/frontier/?server=remote')
     }
   }
 
