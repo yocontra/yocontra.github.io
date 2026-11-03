@@ -4,7 +4,7 @@
  *
  * Uniform layout (4 × vec4):
  *   U0 = res.xy, mouse.xy        U1 = vel.xy, time, scroll
- *   U2 = hue, vcr, phase, scale  U3 = warp, swirl, veins, grain
+ *   U2 = hue, vcr, phase, scale  U3 = warp, ascii, veins, grain
  *
  * `phase` is the flow time (∫ speed dt), integrated on the CPU so speed changes
  * never jump the field; `time` is wall-clock and only drives the grain.
@@ -66,27 +66,15 @@ vec3 oklch(float L, float C, float h) {
     -0.0041960863 * l - 0.7034186147 * m + 1.7076147010 * s), 0.0);
 }
 
-void main() {
+// Returns the linear colour of the ink field at a fragment, plus |r| (used by VCR mode).
+vec4 field(vec2 frag) {
   vec2 res = U[0].xy;
-  vec2 mouse = U[0].zw;
-  vec2 vel = U[1].xy;
-  float time = U[1].z;
   float scroll = U[1].w;
   float hue = U[2].x;
-  float vcr = U[2].y;
   float t = U[2].z;
 
-  vec2 frag = gl_FragCoord.xy;
   vec2 uv = (frag - 0.5 * res) / res.y;
-  vec2 p = uv;
-
-  vec2 d = p - mouse;
-  float r2 = dot(d, d);
-  float speed = min(length(vel), 3.0);
-  float sw = U[3].y * exp(-r2 * 7.0) * (0.35 + speed);
-  p = mouse + rot(sw) * d;
-
-  p *= U[2].w * (1.0 + scroll * 0.5);
+  vec2 p = uv * U[2].w * (1.0 + scroll * 0.5);
   p.y -= scroll * 1.2;
 
   vec2 q = vec2(fbm(p + vec2(0.0, t)), fbm(p + vec2(5.2, 1.3) - t * 0.7));
@@ -104,15 +92,66 @@ void main() {
   vec3 col = mix(base, ink, smoothstep(0.35, 0.85, f));
   col = mix(col, acc, smoothstep(0.75, 1.15, length(r)) * 0.6);
   col += glow * vein * (0.45 + 0.55 * q.y);
-  col += glow * exp(-r2 * 28.0) * 0.12 * (0.3 + speed);
 
   col *= 1.0 - 0.45 * dot(uv, uv);
-  col = mix(col, base * 0.8, smoothstep(0.0, 0.85, scroll) * 0.99);
+  col = mix(col, base * 0.8, smoothstep(0.0, 0.85, scroll) * 0.9);
+  return vec4(col, length(r));
+}
+
+// 5x5 bitmap glyphs, darkest to brightest: . : * o & 8 @ #
+float glyph(float g, vec2 p) {
+  int n = 4096;
+  if (g > 0.08) n = 65600;
+  if (g > 0.16) n = 332772;
+  if (g > 0.26) n = 15255086;
+  if (g > 0.36) n = 23385164;
+  if (g > 0.48) n = 15252014;
+  if (g > 0.6) n = 13199452;
+  if (g > 0.72) n = 11512810;
+  p = floor(p * vec2(4.0, -4.0) + 2.5);
+  if (clamp(p.x, 0.0, 4.0) != p.x || clamp(p.y, 0.0, 4.0) != p.y) return 0.0;
+  int a = int(p.x + 5.0 * p.y);
+  return float((n >> a) & 1);
+}
+
+void main() {
+  vec2 res = U[0].xy;
+  vec2 mouse = U[0].zw;
+  vec2 vel = U[1].xy;
+  float time = U[1].z;
+  float scroll = U[1].w;
+  float hue = U[2].x;
+  float vcr = U[2].y;
+
+  vec2 frag = gl_FragCoord.xy;
+  vec2 uv = (frag - 0.5 * res) / res.y;
+
+  // Around the cursor, the field is re-rendered as ASCII art.
+  float speed = min(length(vel), 3.0);
+  float radius = U[3].y * (0.22 + 0.06 * speed);
+  float m = (1.0 - smoothstep(radius * 0.45, radius, length(uv - mouse)))
+          * (1.0 - smoothstep(0.5, 1.0, scroll));
+
+  vec4 fld = vec4(0.0);
+  if (m < 0.999) fld = field(frag);
+  vec3 col = fld.rgb;
+
+  if (m > 0.001) {
+    float cs = max(6.0, floor(res.y / 52.0));
+    vec2 cell = floor(frag / cs);
+    vec4 c = field((cell + 0.5) * cs);
+    float g = smoothstep(0.03, 0.62, pow(clamp(dot(c.rgb, vec3(0.2126, 0.7152, 0.0722)), 0.0, 1.0), 1.0 / 2.2));
+    float bit = glyph(g, (frag - cell * cs) / cs * 2.0 - 1.0);
+    vec3 ink = c.rgb * 2.2 + oklch(0.5, 0.15, hue);
+    vec3 ascii = mix(oklch(0.07, 0.015, hue), ink, bit);
+    col = mix(col, ascii, m);
+    fld.a = mix(fld.a, c.a, m);
+  }
 
   if (vcr > 0.5) {
     float lum = dot(col, vec3(0.2126, 0.7152, 0.0722));
     col = mix(vec3(0.0, 0.08, 0.02), vec3(0.0, 1.0, 0.44), smoothstep(0.0, 0.6, lum));
-    col = mix(col, vec3(1.0, 0.25, 0.21), smoothstep(0.6, 0.9, length(r)) * 0.8);
+    col = mix(col, vec3(1.0, 0.25, 0.21), smoothstep(0.6, 0.9, fld.a) * 0.8);
     col = floor(col * 5.0) / 5.0;
     col *= 0.78 + 0.22 * sin(frag.y * 3.14159);
   }
@@ -179,29 +218,15 @@ fn oklch(L: f32, C: f32, h: f32) -> vec3f {
     -0.0041960863 * l - 0.7034186147 * m + 1.7076147010 * s), vec3f(0.0));
 }
 
-@fragment
-fn fs(@builtin(position) pos: vec4f) -> @location(0) vec4f {
+// Returns the linear colour of the ink field at a fragment, plus |r| (used by VCR mode).
+fn field(frag: vec2f) -> vec4f {
   let res = U.u0.xy;
-  let mouse = U.u0.zw;
-  let vel = U.u1.xy;
-  let time = U.u1.z;
   let scroll = U.u1.w;
   let hue = U.u2.x;
-  let vcr = U.u2.y;
   let t = U.u2.z;
 
-  // WebGPU's framebuffer origin is top-left; flip to match GL.
-  let frag = vec2f(pos.x, res.y - pos.y);
   let uv = (frag - 0.5 * res) / res.y;
-  var p = uv;
-
-  let d = p - mouse;
-  let r2 = dot(d, d);
-  let speed = min(length(vel), 3.0);
-  let sw = U.u3.y * exp(-r2 * 7.0) * (0.35 + speed);
-  p = mouse + rot(sw) * d;
-
-  p *= U.u2.w * (1.0 + scroll * 0.5);
+  var p = uv * U.u2.w * (1.0 + scroll * 0.5);
   p.y -= scroll * 1.2;
 
   let q = vec2f(fbm(p + vec2f(0.0, t)), fbm(p + vec2f(5.2, 1.3) - t * 0.7));
@@ -219,15 +244,68 @@ fn fs(@builtin(position) pos: vec4f) -> @location(0) vec4f {
   var col = mix(base, ink, smoothstep(0.35, 0.85, f));
   col = mix(col, acc, smoothstep(0.75, 1.15, length(r)) * 0.6);
   col += glow * vein * (0.45 + 0.55 * q.y);
-  col += glow * exp(-r2 * 28.0) * 0.12 * (0.3 + speed);
 
   col *= 1.0 - 0.45 * dot(uv, uv);
-  col = mix(col, base * 0.8, smoothstep(0.0, 0.85, scroll) * 0.99);
+  col = mix(col, base * 0.8, smoothstep(0.0, 0.85, scroll) * 0.9);
+  return vec4f(col, length(r));
+}
+
+// 5x5 bitmap glyphs, darkest to brightest: . : * o & 8 @ #
+fn glyph(g: f32, pIn: vec2f) -> f32 {
+  var n = 4096u;
+  if (g > 0.08) { n = 65600u; }
+  if (g > 0.16) { n = 332772u; }
+  if (g > 0.26) { n = 15255086u; }
+  if (g > 0.36) { n = 23385164u; }
+  if (g > 0.48) { n = 15252014u; }
+  if (g > 0.6) { n = 13199452u; }
+  if (g > 0.72) { n = 11512810u; }
+  let p = floor(pIn * vec2f(4.0, -4.0) + 2.5);
+  if (p.x < 0.0 || p.x > 4.0 || p.y < 0.0 || p.y > 4.0) { return 0.0; }
+  let a = u32(p.x + 5.0 * p.y);
+  return f32((n >> a) & 1u);
+}
+
+@fragment
+fn fs(@builtin(position) pos: vec4f) -> @location(0) vec4f {
+  let res = U.u0.xy;
+  let mouse = U.u0.zw;
+  let vel = U.u1.xy;
+  let time = U.u1.z;
+  let scroll = U.u1.w;
+  let hue = U.u2.x;
+  let vcr = U.u2.y;
+
+  // WebGPU's framebuffer origin is top-left; flip to match GL.
+  let frag = vec2f(pos.x, res.y - pos.y);
+  let uv = (frag - 0.5 * res) / res.y;
+
+  // Around the cursor, the field is re-rendered as ASCII art.
+  let speed = min(length(vel), 3.0);
+  let radius = U.u3.y * (0.22 + 0.06 * speed);
+  let m = (1.0 - smoothstep(radius * 0.45, radius, length(uv - mouse)))
+        * (1.0 - smoothstep(0.5, 1.0, scroll));
+
+  var fld = vec4f(0.0);
+  if (m < 0.999) { fld = field(frag); }
+  var col = fld.rgb;
+
+  if (m > 0.001) {
+    let cs = max(6.0, floor(res.y / 52.0));
+    let cell = floor(frag / cs);
+    let c = field((cell + 0.5) * cs);
+    let g = smoothstep(0.03, 0.62, pow(clamp(dot(c.rgb, vec3f(0.2126, 0.7152, 0.0722)), 0.0, 1.0), 1.0 / 2.2));
+    let bit = glyph(g, (frag - cell * cs) / cs * 2.0 - 1.0);
+    let ink = c.rgb * 2.2 + oklch(0.5, 0.15, hue);
+    let ascii = mix(oklch(0.07, 0.015, hue), ink, bit);
+    col = mix(col, ascii, m);
+    fld.a = mix(fld.a, c.a, m);
+  }
 
   if (vcr > 0.5) {
     let lum = dot(col, vec3f(0.2126, 0.7152, 0.0722));
     col = mix(vec3f(0.0, 0.08, 0.02), vec3f(0.0, 1.0, 0.44), smoothstep(0.0, 0.6, lum));
-    col = mix(col, vec3f(1.0, 0.25, 0.21), smoothstep(0.6, 0.9, length(r)) * 0.8);
+    col = mix(col, vec3f(1.0, 0.25, 0.21), smoothstep(0.6, 0.9, fld.a) * 0.8);
     col = floor(col * 5.0) / 5.0;
     col *= 0.78 + 0.22 * sin(frag.y * 3.14159);
   }

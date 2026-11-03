@@ -55,6 +55,9 @@ async function createBackend(
   }
 }
 
+/** Lens position used when no pointer is present (far outside the frame). */
+const OFFSCREEN = 50
+
 export async function mountHero(
   canvas: HTMLCanvasElement,
   options: HeroOptions = {},
@@ -70,8 +73,8 @@ export async function mountHero(
   const state: FrameState = {
     width: 1,
     height: 1,
-    mouseX: 0.25,
-    mouseY: 0.1,
+    mouseX: OFFSCREEN,
+    mouseY: OFFSCREEN,
     velX: 0,
     velY: 0,
     time: 18,
@@ -104,16 +107,37 @@ export async function mountHero(
     state.height = h
   }
 
-  const onPointer = (event: PointerEvent) => {
-    const rect = canvas.getBoundingClientRect()
-    targetX = (event.clientX - rect.left - rect.width / 2) / rect.height
-    targetY = (rect.height / 2 - (event.clientY - rect.top)) / rect.height
+  // The ASCII lens follows the pointer. It snaps in on first contact and hides when the
+  // pointer leaves, rather than sliding across the screen from wherever it was.
+  const place = (x: number, y: number, snap: boolean) => {
+    targetX = x
+    targetY = y
+    if (snap) {
+      state.mouseX = x
+      state.mouseY = y
+      state.velX = 0
+      state.velY = 0
+    }
   }
 
-  const onOrientation = (event: DeviceOrientationEvent) => {
-    if (event.gamma === null || event.beta === null) return
-    targetX = Math.max(-0.8, Math.min(0.8, event.gamma / 45))
-    targetY = Math.max(-0.5, Math.min(0.5, (45 - event.beta) / 60))
+  let present = false
+  const onPointer = (event: PointerEvent) => {
+    const rect = canvas.getBoundingClientRect()
+    const x = (event.clientX - rect.left - rect.width / 2) / rect.height
+    const y = (rect.height / 2 - (event.clientY - rect.top)) / rect.height
+    place(x, y, !present)
+    present = true
+  }
+
+  const onLeave = (event: PointerEvent) => {
+    if (event.pointerType === 'mouse' && event.relatedTarget !== null) return
+    present = false
+    place(OFFSCREEN, OFFSCREEN, true)
+  }
+
+  // Touch has no hover: show the lens while a finger is down, then hide it.
+  const onTouchEnd = (event: PointerEvent) => {
+    if (event.pointerType !== 'mouse') onLeave(event)
   }
 
   const updateScroll = () => {
@@ -121,14 +145,9 @@ export async function mountHero(
     state.scroll = Math.max(0, Math.min(1, -rect.top / Math.max(1, rect.height)))
   }
 
-  let settled = false
-  const render = (force = false) => {
+  const render = () => {
     resize()
     updateScroll()
-    // Once the field has fully faded out behind the page, stop spending GPU time on it.
-    const faded = state.scroll >= 1
-    if (faded && settled && !force) return
-    settled = faded
     backend.draw(packUniforms(uniforms, state, params))
   }
 
@@ -154,7 +173,7 @@ export async function mountHero(
     last = now
     adapt(dt)
 
-    const k = 1 - Math.exp(-dt / 90)
+    const k = 1 - Math.exp(-dt / 55)
     const nx = state.mouseX + (targetX - state.mouseX) * k
     const ny = state.mouseY + (targetY - state.mouseY) * k
     const inst = 1000 / Math.max(dt, 1)
@@ -163,7 +182,8 @@ export async function mountHero(
     state.mouseX = nx
     state.mouseY = ny
     state.time += dt / 1000
-    state.phase += (dt / 1000) * params.speed
+    // Scrolling past the hero slows the flow down rather than stopping it.
+    state.phase += (dt / 1000) * params.speed * (1 - 0.7 * state.scroll)
 
     render()
     if (visible && !document.hidden) raf = requestAnimationFrame(tick)
@@ -189,15 +209,18 @@ export async function mountHero(
 
   const onVisibility = () => (document.hidden ? stop() : start())
   const ro = new ResizeObserver(() => {
-    if (!raf) render(true)
+    if (!raf) render()
   })
   ro.observe(canvas)
 
   window.addEventListener('pointermove', onPointer, { passive: true })
-  window.addEventListener('deviceorientation', onOrientation, { passive: true })
+  window.addEventListener('pointerdown', onPointer, { passive: true })
+  window.addEventListener('pointercancel', onTouchEnd)
+  document.documentElement.addEventListener('pointerleave', onLeave)
+  window.addEventListener('pointerup', onTouchEnd)
   document.addEventListener('visibilitychange', onVisibility)
 
-  render(true)
+  render()
   start()
 
   return {
@@ -209,14 +232,17 @@ export async function mountHero(
     get frameMs() {
       return frameMs
     },
-    redraw: () => render(true),
+    redraw: () => render(),
     destroy() {
       destroyed = true
       stop()
       io.disconnect()
       ro.disconnect()
       window.removeEventListener('pointermove', onPointer)
-      window.removeEventListener('deviceorientation', onOrientation)
+      window.removeEventListener('pointerdown', onPointer)
+      window.removeEventListener('pointercancel', onTouchEnd)
+      document.documentElement.removeEventListener('pointerleave', onLeave)
+      window.removeEventListener('pointerup', onTouchEnd)
       document.removeEventListener('visibilitychange', onVisibility)
       backend.destroy()
     },

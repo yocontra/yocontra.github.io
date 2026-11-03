@@ -5,8 +5,8 @@ export interface HeroParams {
   scale: number
   /** Domain-warp strength. */
   warp: number
-  /** Cursor swirl strength. */
-  swirl: number
+  /** Radius of the ASCII-art lens around the cursor (0 = off). */
+  ascii: number
   /** Vein sharpness exponent. */
   veins: number
   /** Film grain amount. */
@@ -21,7 +21,7 @@ export const defaultParams: HeroParams = {
   speed: 0.32,
   scale: 1.6,
   warp: 3.2,
-  swirl: 2.4,
+  ascii: 1,
   veins: 9,
   grain: 0.025,
   hue: 150,
@@ -33,7 +33,7 @@ export const paramRanges: Record<keyof HeroParams, { min: number; max: number; s
   speed: { min: 0, max: 2, step: 0.01 },
   scale: { min: 0.3, max: 5, step: 0.01 },
   warp: { min: 0, max: 8, step: 0.01 },
-  swirl: { min: 0, max: 8, step: 0.01 },
+  ascii: { min: 0, max: 3, step: 0.01 },
   veins: { min: 1, max: 40, step: 0.1 },
   grain: { min: 0, max: 0.3, step: 0.001 },
   hue: { min: 0, max: 360, step: 1 },
@@ -72,7 +72,7 @@ export function packUniforms(out: Float32Array, s: FrameState, p: HeroParams): F
   out[10] = s.phase
   out[11] = p.scale
   out[12] = p.warp
-  out[13] = p.swirl
+  out[13] = p.ascii
   out[14] = p.veins
   out[15] = p.grain
   return out

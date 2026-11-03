@@ -21,7 +21,7 @@ export const career: readonly Role[] = [
     title: 'Co-founder',
     years: '2026 — now',
     blurb:
-      'An API for the whole OpenStreetMap planet: geocoding, routing, elevation, search and more.',
+      'A way for AI agents to work with the physical world: geocoding, routing, search and more across the entire OpenStreetMap planet, as an API and MCP server.',
   },
   {
     company: 'Trigram',
