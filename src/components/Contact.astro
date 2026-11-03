@@ -1,5 +1,5 @@
 ---
-import { socials } from '~/data/career'
+import { socials } from '~/data/career.ts'
 ---
 
 <footer id="contact" class="contact">
@@ -30,7 +30,7 @@ import { socials } from '~/data/career'
 </footer>
 
 <script>
-  import { revealEmail } from '~/lib/email'
+  import { revealEmail } from '~/lib/email.ts'
 
   revealEmail(document.querySelectorAll<HTMLAnchorElement>('a[data-m]'))
 </script>

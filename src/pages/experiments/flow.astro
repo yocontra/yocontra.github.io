@@ -1,7 +1,7 @@
 ---
 import BackLink from '~/components/BackLink.astro'
 import Base from '~/layouts/Base.astro'
-import { defaultParams, type HeroParams, paramRanges } from '~/lib/hero'
+import { defaultParams, type HeroParams, paramRanges } from '~/lib/hero/params.ts'
 
 const labels: Record<keyof HeroParams, string> = {
   speed: 'speed',
@@ -395,7 +395,7 @@ const sliders = (Object.keys(paramRanges) as (keyof HeroParams)[])
 </style>
 
 <script>
-  import { initFlow } from '~/experiments/flow/controls'
+  import { initFlow } from '~/experiments/flow/controls.ts'
 
   initFlow()
 </script>

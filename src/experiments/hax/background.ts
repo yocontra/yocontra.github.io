@@ -1,4 +1,4 @@
-import { fragmentSource, vertexSource } from './shader'
+import { fragmentSource, vertexSource } from './shader.ts'
 
 const FALLBACK_BG = 'url("/experiments/hax/bg.gif")'
 const MAX_DPR = 1.5
@@ -32,7 +32,7 @@ interface Glitch {
 
 /** Deterministic 0..1 hash, so glitch timing is stable per beat. */
 function hash(n: number): number {
-  const x = Math.sin(n * 127.1 + 311.7) * 43758.5453
+  const x = Math.sin(n * 127.1 + 311.7) * 43_758.5453
   return x - Math.floor(x)
 }
 
@@ -48,18 +48,24 @@ function glitchAt(blinkSeconds: number): Glitch {
   const beatFlash = Math.max(0, 1 - phase / 0.2)
 
   let intensity = 0
-  if (hash(beat) < 0.3 && phase < 0.22) intensity = 1 - phase / 0.22
-  else if (hash(beat + 0.5) < 0.2 && phase >= 0.5 && phase < 0.62) intensity = 0.8
-  else if (hash(step + 0.37) < 0.025) intensity = 0.35
+  if (hash(beat) < 0.3 && phase < 0.22) {
+    intensity = 1 - phase / 0.22
+  } else if (hash(beat + 0.5) < 0.2 && phase >= 0.5 && phase < 0.62) {
+    intensity = 0.8
+  } else if (hash(step + 0.37) < 0.025) {
+    intensity = 0.35
+  }
   return { intensity, seed, beat: beatFlash }
 }
 
 function compile(gl: WebGL2RenderingContext, type: GLenum, source: string): WebGLShader {
   const shader = gl.createShader(type)
-  if (!shader) throw new Error('hax: createShader failed')
+  if (!shader) {
+    throw new Error('hax: createShader failed')
+  }
   gl.shaderSource(shader, source)
   gl.compileShader(shader)
-  if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS) && !gl.isContextLost()) {
+  if (!(gl.getShaderParameter(shader, gl.COMPILE_STATUS) || gl.isContextLost())) {
     const log = gl.getShaderInfoLog(shader)
     gl.deleteShader(shader)
     throw new Error(`hax: shader compile failed\n${log ?? ''}`)
@@ -76,7 +82,7 @@ function setup(gl: WebGL2RenderingContext): GlState {
   gl.linkProgram(program)
   gl.deleteShader(vs)
   gl.deleteShader(fs)
-  if (!gl.getProgramParameter(program, gl.LINK_STATUS) && !gl.isContextLost()) {
+  if (!(gl.getProgramParameter(program, gl.LINK_STATUS) || gl.isContextLost())) {
     const log = gl.getProgramInfoLog(program)
     gl.deleteProgram(program)
     throw new Error(`hax: program link failed\n${log ?? ''}`)
@@ -120,7 +126,7 @@ export function mountBackground(canvas: HTMLCanvasElement, box: Element | null):
 
   if (!gl) {
     fallback()
-    return () => {}
+    return () => undefined
   }
 
   let state: GlState
@@ -129,10 +135,10 @@ export function mountBackground(canvas: HTMLCanvasElement, box: Element | null):
   } catch (err) {
     console.warn(err)
     fallback()
-    return () => {}
+    return () => undefined
   }
 
-  const motionQuery = window.matchMedia('(prefers-reduced-motion: reduce)')
+  const motionQuery = globalThis.matchMedia('(prefers-reduced-motion: reduce)')
   const clock = blinkClock(box)
   const start = performance.now()
   let raf = 0
@@ -147,15 +153,19 @@ export function mountBackground(canvas: HTMLCanvasElement, box: Element | null):
     const rect = canvas.getBoundingClientRect()
     const w = Math.max(1, rect.width)
     const h = Math.max(1, rect.height)
-    scale = Math.min(window.devicePixelRatio || 1, MAX_DPR)
+    scale = Math.min(globalThis.devicePixelRatio || 1, MAX_DPR)
     const budget = Math.sqrt(MAX_PIXELS / (w * h * scale * scale))
-    if (budget < 1) scale *= budget
+    if (budget < 1) {
+      scale *= budget
+    }
     canvas.width = Math.max(1, Math.round(w * scale))
     canvas.height = Math.max(1, Math.round(h * scale))
   }
 
   const draw = (time: number, glitch: Glitch): void => {
-    if (lost) return
+    if (lost) {
+      return
+    }
     const { program, vao, uniforms: u } = state
     gl.viewport(0, 0, canvas.width, canvas.height)
     gl.useProgram(program)
@@ -189,12 +199,14 @@ export function mountBackground(canvas: HTMLCanvasElement, box: Element | null):
     draw((now - start) / 1000, glitch)
   }
 
-  const animated = (): boolean => !motionQuery.matches && !document.hidden && !lost && !disposed
+  const animated = (): boolean => !(motionQuery.matches || document.hidden || lost || disposed)
 
   const sync = (): void => {
     cancelAnimationFrame(raf)
     raf = 0
-    if (disposed || lost) return
+    if (disposed || lost) {
+      return
+    }
     if (animated()) {
       lastFrame = performance.now()
       raf = requestAnimationFrame(frame)
@@ -206,13 +218,15 @@ export function mountBackground(canvas: HTMLCanvasElement, box: Element | null):
   const observer = new ResizeObserver(() => {
     resize()
     // Resizing clears the buffer; repaint immediately so there is no flash.
-    if (motionQuery.matches) drawStill()
+    if (motionQuery.matches) {
+      drawStill()
+    }
   })
   observer.observe(canvas)
 
   const onPointerMove = (e: PointerEvent): void => {
-    pointer.tx = e.clientX / window.innerWidth
-    pointer.ty = 1 - e.clientY / window.innerHeight
+    pointer.tx = e.clientX / globalThis.innerWidth
+    pointer.ty = 1 - e.clientY / globalThis.innerHeight
     pointer.target = 1
   }
   const onPointerLeave = (): void => {
@@ -234,7 +248,7 @@ export function mountBackground(canvas: HTMLCanvasElement, box: Element | null):
     }
   }
 
-  window.addEventListener('pointermove', onPointerMove, { passive: true })
+  globalThis.addEventListener('pointermove', onPointerMove, { passive: true })
   document.documentElement.addEventListener('pointerleave', onPointerLeave)
   document.addEventListener('visibilitychange', sync)
   motionQuery.addEventListener('change', sync)
@@ -245,11 +259,13 @@ export function mountBackground(canvas: HTMLCanvasElement, box: Element | null):
   sync()
 
   return () => {
-    if (disposed) return
+    if (disposed) {
+      return
+    }
     disposed = true
     cancelAnimationFrame(raf)
     observer.disconnect()
-    window.removeEventListener('pointermove', onPointerMove)
+    globalThis.removeEventListener('pointermove', onPointerMove)
     document.documentElement.removeEventListener('pointerleave', onPointerLeave)
     document.removeEventListener('visibilitychange', sync)
     motionQuery.removeEventListener('change', sync)

@@ -7,21 +7,28 @@ const FPS = 20
 const PERIOD_MS = 2400
 
 export function spinFavicon(src = '/face.png'): void {
-  if (navigator.userAgent.includes('Firefox')) return
-  if (matchMedia('(prefers-reduced-motion: reduce)').matches) return
+  if (navigator.userAgent.includes('Firefox')) {
+    return
+  }
+  if (matchMedia('(prefers-reduced-motion: reduce)').matches) {
+    return
+  }
 
+  // biome-ignore lint/security/noSecrets: a CSS selector, not a credential
   const link = document.querySelector<HTMLLinkElement>('link[rel="icon"]')
   const canvas = document.createElement('canvas')
   canvas.width = SIZE
   canvas.height = SIZE
   const ctx = canvas.getContext('2d')
-  if (!link || !ctx) return
+  if (!(link && ctx)) {
+    return
+  }
 
   const img = new Image()
   img.src = src
   img.addEventListener('load', () => {
     link.type = 'image/png'
-    let timer = 0
+    let timer: ReturnType<typeof setInterval> | undefined
 
     const frame = () => {
       const angle = ((performance.now() % PERIOD_MS) / PERIOD_MS) * Math.PI * 2
@@ -37,13 +44,17 @@ export function spinFavicon(src = '/face.png'): void {
     }
 
     const start = () => {
-      if (!timer) timer = window.setInterval(frame, 1000 / FPS)
+      if (timer === undefined) {
+        timer = globalThis.setInterval(frame, 1000 / FPS)
+      }
     }
     const stop = () => {
-      window.clearInterval(timer)
-      timer = 0
+      globalThis.clearInterval(timer)
+      timer = undefined
     }
     document.addEventListener('visibilitychange', () => (document.hidden ? stop() : start()))
-    if (!document.hidden) start()
+    if (!document.hidden) {
+      start()
+    }
   })
 }

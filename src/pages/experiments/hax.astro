@@ -59,13 +59,15 @@ import Bare from '~/layouts/Bare.astro'
 </style>
 
 <script>
-  import { mountBackground } from '~/experiments/hax/background'
+  import { mountBackground } from '~/experiments/hax/background.ts'
 
-  const canvas = document.getElementById('hax-bg')
+  const canvas = document.querySelector('#hax-bg')
   if (canvas instanceof HTMLCanvasElement) {
-    const dispose = mountBackground(canvas, document.getElementById('hacked'))
+    const dispose = mountBackground(canvas, document.querySelector('#hacked'))
     window.addEventListener('pagehide', (e) => {
-      if (!e.persisted) dispose()
+      if (!e.persisted) {
+        dispose()
+      }
     })
   }
 
@@ -76,6 +78,8 @@ import Bare from '~/layouts/Bare.astro'
     return track
   })
   document.addEventListener('click', () => {
-    for (const track of tracks) track.play().catch(() => {})
+    for (const track of tracks) {
+      track.play().catch(() => undefined)
+    }
   })
 </script>

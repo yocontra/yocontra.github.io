@@ -1,4 +1,4 @@
-import { GameAudio } from './audio'
+import { GameAudio } from './audio.ts'
 import {
   COCK_DELAY,
   COWARD_DURATION,
@@ -18,8 +18,8 @@ import {
   SPRITE_HEIGHT,
   SPRITE_WIDTH,
   TICK_MS,
-} from './constants'
-import { isReady, loadSprites } from './sprites'
+} from './constants.ts'
+import { isReady, loadSprites } from './sprites.ts'
 
 type Shooter = 'player' | 'enemy'
 
@@ -32,7 +32,9 @@ interface Actor {
 
 const query = <T extends Element>(root: ParentNode, selector: string, type: new () => T): T => {
   const el = root.querySelector(selector)
-  if (!(el instanceof type)) throw new Error(`out-west: missing ${selector}`)
+  if (!(el instanceof type)) {
+    throw new Error(`out-west: missing ${selector}`)
+  }
   return el
 }
 
@@ -42,7 +44,9 @@ export const mount = (root: HTMLElement): void => {
   const walkButton = query(root, '[data-control="walk"]', HTMLButtonElement)
   const fireButton = query(root, '[data-control="fire"]', HTMLButtonElement)
   const ctx = canvas.getContext('2d')
-  if (!ctx) throw new Error('out-west: 2d canvas unsupported')
+  if (!ctx) {
+    throw new Error('out-west: 2d canvas unsupported')
+  }
 
   const msgEl = document.createElement('div')
   msgEl.setAttribute('role', 'status')
@@ -61,7 +65,7 @@ export const mount = (root: HTMLElement): void => {
   let showdown = false
   let playing = false
   let movement = 0
-  let msgTimeout: number | undefined
+  let msgTimeout: ReturnType<typeof setTimeout> | undefined
   let keyWalk = false
   let pointerWalk = false
 
@@ -85,14 +89,18 @@ export const mount = (root: HTMLElement): void => {
   }
 
   const drawActor = (actor: Actor, img: HTMLImageElement): void => {
-    if (!isReady(img)) return
+    if (!isReady(img)) {
+      return
+    }
     ctx.drawImage(img, actor.x, world.height / 2, actor.width, actor.height)
   }
 
   // render loop
   const update = (): void => {
     // check key state
-    if (playing && (keyWalk || pointerWalk) && player.speedX > -MAX_SPEED) player.speedX--
+    if (playing && (keyWalk || pointerWalk) && player.speedX > -MAX_SPEED) {
+      player.speedX--
+    }
 
     // apply some friction
     player.speedX *= FRICTION
@@ -100,7 +108,9 @@ export const mount = (root: HTMLElement): void => {
     enemy.x -= player.speedX
     movement += player.speedX
 
-    if (-movement >= paces) ensureShowdown()
+    if (-movement >= paces) {
+      ensureShowdown()
+    }
 
     // constrain to bounds
     player.x = Math.max(0, Math.min(world.width - player.width, player.x))
@@ -131,23 +141,31 @@ export const mount = (root: HTMLElement): void => {
     msgEl.textContent = msg
     msgEl.className = 'game-message'
 
-    window.clearTimeout(msgTimeout)
+    globalThis.clearTimeout(msgTimeout)
     if (time) {
-      msgTimeout = window.setTimeout(() => msgEl.classList.add('hidden'), time)
+      msgTimeout = globalThis.setTimeout(() => msgEl.classList.add('hidden'), time)
     }
   }
   const ensureShowdown = (): void => {
-    if (showdown || !playing) return
+    if (showdown || !playing) {
+      return
+    }
     const delay = Math.max(MIN_DRAW_TIME, drawTime)
     audio.play('whip')
     showdown = true
     showMessage('draw', delay)
-    window.setTimeout(() => shoot('enemy'), delay)
+    globalThis.setTimeout(() => shoot('enemy'), delay)
   }
   const shoot = (shooter: Shooter): void => {
-    if (!playing) return
-    if (shooter === 'player') player.firing = true
-    if (shooter === 'enemy') enemy.firing = true
+    if (!playing) {
+      return
+    }
+    if (shooter === 'player') {
+      player.firing = true
+    }
+    if (shooter === 'enemy') {
+      enemy.firing = true
+    }
     audio.play(shooter === 'player' ? 'fire' : 'fireBig')
     endLevel(showdown ? shooter : 'enemy')
   }
@@ -155,7 +173,9 @@ export const mount = (root: HTMLElement): void => {
     if (!retry) {
       ++level
       drawTime *= DIFFICULTY
-      if (level === NAMES.length - 2) audio.playSong('boss') // final bosses song
+      if (level === NAMES.length - 2) {
+        audio.playSong('boss') // final bosses song
+      }
     }
     const name = NAMES[level]
     if (!name) {
@@ -168,7 +188,7 @@ export const mount = (root: HTMLElement): void => {
     movement = 0
     showdown = false
     audio.play('cocking')
-    window.setTimeout(() => {
+    globalThis.setTimeout(() => {
       audio.play('cocking')
       playing = true
     }, COCK_DELAY)
@@ -187,17 +207,17 @@ export const mount = (root: HTMLElement): void => {
     } else {
       showMessage('coward, you lose', COWARD_DURATION)
     }
-    window.setTimeout(() => startLevel(winner === 'enemy'), NEXT_LEVEL_DELAY)
+    globalThis.setTimeout(() => startLevel(winner === 'enemy'), NEXT_LEVEL_DELAY)
   }
   const win = (): void => {
     showMessage('you’re the fastest hand in the west!')
   }
 
   const setGameSize = (): void => {
-    const cssWidth = window.innerWidth
-    const cssHeight = window.innerHeight
+    const cssWidth = globalThis.innerWidth
+    const cssHeight = globalThis.innerHeight
     const scale = Math.min(1, cssWidth / MIN_WORLD_WIDTH)
-    const dpr = window.devicePixelRatio || 1
+    const dpr = globalThis.devicePixelRatio || 1
     world.width = cssWidth / scale
     world.height = cssHeight / scale
     canvas.width = Math.round(cssWidth * dpr)
@@ -217,18 +237,22 @@ export const mount = (root: HTMLElement): void => {
   }
 
   // event logic
-  window.addEventListener('resize', setGameSize)
-  window.addEventListener('keydown', (e) => {
+  globalThis.addEventListener('resize', setGameSize)
+  globalThis.addEventListener('keydown', (e) => {
     if (e.code === 'Space') {
       e.preventDefault()
       shoot('player')
     }
-    if (e.code === 'ArrowLeft') keyWalk = true
+    if (e.code === 'ArrowLeft') {
+      keyWalk = true
+    }
   })
-  window.addEventListener('keyup', (e) => {
-    if (e.code === 'ArrowLeft') keyWalk = false
+  globalThis.addEventListener('keyup', (e) => {
+    if (e.code === 'ArrowLeft') {
+      keyWalk = false
+    }
   })
-  window.addEventListener('blur', () => {
+  globalThis.addEventListener('blur', () => {
     keyWalk = false
     pointerWalk = false
   })
@@ -259,12 +283,14 @@ export const mount = (root: HTMLElement): void => {
 
   // init
   const begin = (e: MouseEvent): void => {
-    if (e.target instanceof Element && e.target.closest('a')) return
+    if (e.target instanceof Element && e.target.closest('a')) {
+      return
+    }
     document.removeEventListener('click', begin)
     audio.unlock()
     root.classList.add('started')
     audio.playSong('intro')
-    window.setTimeout(start, INTRO_DURATION)
+    globalThis.setTimeout(start, INTRO_DURATION)
   }
   document.addEventListener('click', begin)
 }

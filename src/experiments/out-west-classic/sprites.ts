@@ -1,4 +1,4 @@
-import { SPRITES, type SpriteName } from './constants'
+import { SPRITES, type SpriteName } from './constants.ts'
 
 export type Sprites = Record<SpriteName, HTMLImageElement>
 

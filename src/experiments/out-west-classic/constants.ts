@@ -12,7 +12,7 @@ export const SPRITE_WIDTH = 160
 export const SPRITE_HEIGHT = 230
 
 /** Intro music plays alone for this long before the duel begins. */
-export const INTRO_DURATION = 13000
+export const INTRO_DURATION = 13_000
 export const NAME_DURATION = 2000
 export const COCK_DELAY = 2000
 export const RESULT_DURATION = 3000

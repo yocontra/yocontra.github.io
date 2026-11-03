@@ -1,18 +1,22 @@
-import { glslFragment, glslVertex, wgsl } from './shaders'
+import { glslFragment, glslVertex, wgsl } from './shaders.ts'
 
 export type BackendKind = 'webgpu' | 'webgl2'
 
 export interface Backend {
   kind: BackendKind
   /** Draw one frame with the packed uniforms. Canvas size is managed by the caller. */
-  draw(uniforms: Float32Array): void
-  destroy(): void
+  draw: (uniforms: Float32Array) => void
+  destroy: () => void
 }
 
 export async function createWebGPU(canvas: HTMLCanvasElement): Promise<Backend | null> {
-  if (!('gpu' in navigator)) return null
+  if (!('gpu' in navigator)) {
+    return null
+  }
   const adapter = await navigator.gpu.requestAdapter({ powerPreference: 'low-power' })
-  if (!adapter) return null
+  if (!adapter) {
+    return null
+  }
   const device = await adapter.requestDevice()
   const context = canvas.getContext('webgpu')
   if (!context) {
@@ -71,7 +75,9 @@ export async function createWebGPU(canvas: HTMLCanvasElement): Promise<Backend |
 
 function compile(gl: WebGL2RenderingContext, type: GLenum, source: string): WebGLShader {
   const shader = gl.createShader(type)
-  if (!shader) throw new Error('createShader failed')
+  if (!shader) {
+    throw new Error('createShader failed')
+  }
   gl.shaderSource(shader, source)
   gl.compileShader(shader)
   if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
@@ -88,7 +94,9 @@ export function createWebGL2(canvas: HTMLCanvasElement): Backend | null {
     alpha: false,
     powerPreference: 'low-power',
   })
-  if (!gl) return null
+  if (!gl) {
+    return null
+  }
 
   const program = gl.createProgram()
   gl.attachShader(program, compile(gl, gl.VERTEX_SHADER, glslVertex))

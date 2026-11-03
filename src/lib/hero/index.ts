@@ -1,13 +1,11 @@
-import { type Backend, type BackendKind, createWebGL2, createWebGPU } from './backends'
+import { type Backend, type BackendKind, createWebGL2, createWebGPU } from './backends.ts'
 import {
   defaultParams,
   type FrameState,
   type HeroParams,
   packUniforms,
   UNIFORM_FLOATS,
-} from './params'
-
-export { defaultParams, type HeroParams, paramRanges } from './params'
+} from './params.ts'
 
 export interface HeroOptions {
   params?: Partial<HeroParams>
@@ -30,8 +28,8 @@ export interface HeroHandle {
   /** Smoothed frame time in ms. */
   readonly frameMs: number
   /** Re-render once (useful when paused / still). */
-  redraw(): void
-  destroy(): void
+  redraw: () => void
+  destroy: () => void
 }
 
 async function createBackend(
@@ -41,11 +39,15 @@ async function createBackend(
   if (prefer !== 'webgl2') {
     try {
       const gpu = await createWebGPU(canvas)
-      if (gpu) return gpu
+      if (gpu) {
+        return gpu
+      }
     } catch (error) {
       console.warn('[hero] WebGPU unavailable, falling back to WebGL2', error)
     }
-    if (prefer === 'webgpu') return null
+    if (prefer === 'webgpu') {
+      return null
+    }
   }
   try {
     return createWebGL2(canvas)
@@ -63,7 +65,9 @@ export async function mountHero(
   options: HeroOptions = {},
 ): Promise<HeroHandle | null> {
   const backend = await createBackend(canvas, options.prefer)
-  if (!backend) return null
+  if (!backend) {
+    return null
+  }
 
   const params: HeroParams = { ...defaultParams, ...options.params }
   const uniforms = new Float32Array(UNIFORM_FLOATS)
@@ -96,7 +100,7 @@ export async function mountHero(
 
   const resize = () => {
     const rect = canvas.getBoundingClientRect()
-    const dpr = Math.min(window.devicePixelRatio || 1, maxDpr) * resolution
+    const dpr = Math.min(globalThis.devicePixelRatio || 1, maxDpr) * resolution
     const w = Math.max(1, Math.round(rect.width * dpr))
     const h = Math.max(1, Math.round(rect.height * dpr))
     if (canvas.width !== w || canvas.height !== h) {
@@ -130,14 +134,18 @@ export async function mountHero(
   }
 
   const onLeave = (event: PointerEvent) => {
-    if (event.pointerType === 'mouse' && event.relatedTarget !== null) return
+    if (event.pointerType === 'mouse' && event.relatedTarget !== null) {
+      return
+    }
     present = false
     place(OFFSCREEN, OFFSCREEN, true)
   }
 
   // Touch has no hover: show the lens while a finger is down, then hide it.
   const onTouchEnd = (event: PointerEvent) => {
-    if (event.pointerType !== 'mouse') onLeave(event)
+    if (event.pointerType !== 'mouse') {
+      onLeave(event)
+    }
   }
 
   const updateScroll = () => {
@@ -153,10 +161,16 @@ export async function mountHero(
 
   const adapt = (dt: number) => {
     frameMs += (dt - frameMs) * 0.05
-    if (frameMs > 24) slowFrames++
-    else slowFrames = 0
-    if (frameMs < 17.5) fastFrames++
-    else fastFrames = 0
+    if (frameMs > 24) {
+      slowFrames++
+    } else {
+      slowFrames = 0
+    }
+    if (frameMs < 17.5) {
+      fastFrames++
+    } else {
+      fastFrames = 0
+    }
     if (slowFrames > 30 && resolution > 0.35) {
       resolution = Math.max(0.35, resolution * 0.85)
       slowFrames = 0
@@ -168,7 +182,9 @@ export async function mountHero(
 
   const tick = (now: number) => {
     raf = 0
-    if (destroyed) return
+    if (destroyed) {
+      return
+    }
     const dt = Math.min(100, now - last)
     last = now
     adapt(dt)
@@ -186,38 +202,49 @@ export async function mountHero(
     state.phase += (dt / 1000) * params.speed * (1 - 0.7 * state.scroll)
 
     render()
-    if (visible && !document.hidden) raf = requestAnimationFrame(tick)
+    if (visible && !document.hidden) {
+      raf = requestAnimationFrame(tick)
+    }
   }
 
   const start = () => {
-    if (options.still || raf || destroyed) return
+    if (options.still || raf || destroyed) {
+      return
+    }
     last = performance.now()
     raf = requestAnimationFrame(tick)
   }
 
   const stop = () => {
-    if (raf) cancelAnimationFrame(raf)
+    if (raf) {
+      cancelAnimationFrame(raf)
+    }
     raf = 0
   }
 
   const io = new IntersectionObserver(([entry]) => {
     visible = entry?.isIntersecting ?? true
-    if (visible) start()
-    else stop()
+    if (visible) {
+      start()
+    } else {
+      stop()
+    }
   })
   io.observe(canvas)
 
   const onVisibility = () => (document.hidden ? stop() : start())
   const ro = new ResizeObserver(() => {
-    if (!raf) render()
+    if (!raf) {
+      render()
+    }
   })
   ro.observe(canvas)
 
-  window.addEventListener('pointermove', onPointer, { passive: true })
-  window.addEventListener('pointerdown', onPointer, { passive: true })
-  window.addEventListener('pointercancel', onTouchEnd)
+  globalThis.addEventListener('pointermove', onPointer, { passive: true })
+  globalThis.addEventListener('pointerdown', onPointer, { passive: true })
+  globalThis.addEventListener('pointercancel', onTouchEnd)
   document.documentElement.addEventListener('pointerleave', onLeave)
-  window.addEventListener('pointerup', onTouchEnd)
+  globalThis.addEventListener('pointerup', onTouchEnd)
   document.addEventListener('visibilitychange', onVisibility)
 
   render()
@@ -238,11 +265,11 @@ export async function mountHero(
       stop()
       io.disconnect()
       ro.disconnect()
-      window.removeEventListener('pointermove', onPointer)
-      window.removeEventListener('pointerdown', onPointer)
-      window.removeEventListener('pointercancel', onTouchEnd)
+      globalThis.removeEventListener('pointermove', onPointer)
+      globalThis.removeEventListener('pointerdown', onPointer)
+      globalThis.removeEventListener('pointercancel', onTouchEnd)
       document.documentElement.removeEventListener('pointerleave', onLeave)
-      window.removeEventListener('pointerup', onTouchEnd)
+      globalThis.removeEventListener('pointerup', onTouchEnd)
       document.removeEventListener('visibilitychange', onVisibility)
       backend.destroy()
     },
