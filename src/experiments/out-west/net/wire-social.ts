@@ -113,6 +113,30 @@ export interface DyeResponse {
   dyes: Dyes
 }
 
+// --- Bounty Hunt settlement extras (contract/duel.ts on the server branch) --------------------
+
+/** What the server's settlement adds: your XP and level either side, from the committed ledger. */
+export interface SettlementLevels {
+  xpBefore: number
+  xpAfter: number
+  levelBefore: number
+  levelAfter: number
+  /** Dollars the level-ups paid (0 when none). */
+  levelReward: number
+}
+
+/** The settlement's own XP and level numbers, when this server sends them. */
+export function settlementLevels(s: unknown): SettlementLevels | null {
+  if (typeof s !== 'object' || s === null) {
+    return null
+  }
+  const v = s as Record<string, unknown>
+  const n = (k: string): boolean => typeof v[k] === 'number'
+  return n('xpBefore') && n('xpAfter') && n('levelBefore') && n('levelAfter') && n('levelReward')
+    ? (v as unknown as SettlementLevels)
+    : null
+}
+
 // --- the profile's extras (contract/economy.ts) ----------------------------------------------
 
 /** "While you were away": passive money since the hub notice was last dismissed. */

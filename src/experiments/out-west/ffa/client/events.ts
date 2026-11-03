@@ -103,6 +103,8 @@ export interface Sink {
   /** Who killed you, for the poster. */
   killer: { id: number; flags: number } | null
   onLeft: () => void
+  /** True when the player behind this entity is on your block list (never shown to you). */
+  blocked: (id: number) => boolean
   pickups: Pickups
   /** Burning fuses by thrower: the hiss runs from the throw to the blast. */
   fuses: Map<number, Fuse>
@@ -285,6 +287,10 @@ function onShowdown(s: Sink, ev: WireEvent): void {
   const you = s.net.you
   switch (ev.type) {
     case EV_CALLOUT: {
+      if (s.blocked(ev.challenger) || s.blocked(ev.target)) {
+        // a blocked player's call-out is never shown (the server refuses to pair you anyway)
+        break
+      }
       s.callouts.push({
         challenger: ev.challenger,
         target: ev.target,

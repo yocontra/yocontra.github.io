@@ -5,9 +5,15 @@
  *   POST /sessions  { turnstileToken } → 201 RankedSessionCreated
  *                   503 { ok: false, error, reason: 'over_budget' } when the budget meter is spent
  *   GET  /sessions/:id/ws                 the run's socket
- *   GET  /sessions/:id/ws?resume=<token>  the same run after a drop; the server's `hello` then
- *                                         carries `resumed: RankedResume`
+ *   GET  /sessions/:id/ws?resume=<token>  the same run after a drop (within 30 s); the server's
+ *                                         `hello` then carries `resumed: RankedResume`. Refused on the
+ *                                         upgrade with 403 (bad token) or 410 (expired or finished);
+ *                                         a newer socket replaces an older one (close 4000).
+ * The server branch will carry these as contract/ranked.ts.
  */
+
+/** How long after a drop a run can be resumed. */
+export const RANKED_RESUME_WINDOW_MS = 30_000
 
 export interface RankedSessionCreated {
   wsUrl: string
@@ -20,11 +26,15 @@ export interface RankedResume {
   /** The outlaw index the server expects the next standoff for. */
   level: number
   /** 1, or 2 for the boss's second draw. */
-  phase?: number
+  phase: 1 | 2
   /** The run's purse so far. */
   purse: number
-  /** The last duel id the server saw. */
-  duel?: number
+  /** The lowest duel number the next standoff may use (duel numbers strictly increase). */
+  nextDuel: number
+  /** The duel the server voided on the drop, if any. */
+  voided: number | null
+  /** The run is over (all outlaws beaten): nothing to stage, only banking. */
+  complete: boolean
 }
 
 /** The run's socket URL with the resume token. */

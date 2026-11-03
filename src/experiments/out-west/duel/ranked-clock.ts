@@ -81,7 +81,7 @@ export class RankedDuelClock implements DuelClock {
     }
     this.reconnecting = false
     const inFlight = this.unresolved === null ? null : (this.levels.get(this.unresolved) ?? null)
-    if (r === null || (inFlight !== null && r.level !== inFlight)) {
+    if (r === null || (inFlight !== null && !r.complete && r.level !== inFlight)) {
       this.drop('The ranked server lost track of this run.')
       return
     }
@@ -91,7 +91,8 @@ export class RankedDuelClock implements DuelClock {
     this.unresolved = null
     this.deadline = 0
     this.queue = []
-    this.duel = Math.max(this.duel, r.duel ?? -1)
+    // duel numbers strictly increase: the next standoff takes at least `nextDuel`
+    this.duel = Math.max(this.duel, r.nextDuel - 1)
     this.events.reconnecting(false)
     this.events.resumed(r.purse)
   }

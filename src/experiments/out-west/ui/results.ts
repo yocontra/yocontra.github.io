@@ -7,6 +7,7 @@
 import type { DuelResult, Seat, Settlement } from '../contract/duel.ts'
 import { money } from '../data/economy.ts'
 import { levelProgress, levelRewards, titleFor } from '../data/progression.ts'
+import { type SettlementLevels, settlementLevels } from '../net/wire-social.ts'
 import { markLevelSeen } from './notices.ts'
 import { openProfile, reportSheet } from './profile.ts'
 import { noteLevel } from './sfx.ts'
@@ -83,6 +84,8 @@ export class ResultsPanel {
   private readonly vote: HTMLElement
   private readonly record: HTMLElement
   private readonly rematchBtn: HTMLButtonElement
+  /** The settlement's XP and level numbers, when the server sends them. */
+  private readonly booked: SettlementLevels | null
 
   constructor(
     parent: HTMLElement,
@@ -112,6 +115,8 @@ export class ResultsPanel {
     const track = el('div', 'ow-xp', panel)
     this.bar = el('div', 'ow-xp-fill', track)
     this.barLabel = el('div', 'ow-xp-label', panel)
+    // the server's own before/after (from the committed ledger) wins over what the client captured
+    this.booked = settlementLevels(v.settlement)
     this.setXp(v.xpBefore, v.xpAfter)
     this.record = el('div', 'ow-xp-label', panel)
     this.vote = el('div', 'ow-results-vote', panel)
@@ -141,7 +146,10 @@ export class ResultsPanel {
   }
 
   /** The XP bar (and a level-up banner when the level changed). */
-  setXp(before: number | null, after: number | null): void {
+  setXp(xpBefore: number | null, xpAfter: number | null): void {
+    const booked = this.booked
+    const before = booked ? booked.xpBefore : xpBefore
+    const after = booked ? booked.xpAfter : xpAfter
     if (after === null) {
       this.barLabel.textContent = ''
       return
@@ -161,7 +169,12 @@ export class ResultsPanel {
       el('span', 'ow-results-seal', this.levelBox, String(a.level))
       const stamp = el('div', 'ow-results-stamp', this.levelBox)
       el('b', '', stamp, 'Level up')
-      el('span', '', stamp, `${titleFor(a.level)} · +${money(levelRewards(b.level, a.level))}`)
+      el(
+        'span',
+        '',
+        stamp,
+        `${titleFor(a.level)} · +${money(booked ? booked.levelReward : levelRewards(b.level, a.level))}`,
+      )
       this.levelBox.classList.add('on')
     }
   }

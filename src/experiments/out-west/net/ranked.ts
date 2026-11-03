@@ -2,6 +2,7 @@ import { openReconnecting, type ReconnectingSocket } from '../platform/reconnect
 import { getAccessToken } from './auth.ts'
 import { LEADERBOARD_URL, type Result } from './leaderboard.ts'
 import {
+  RANKED_RESUME_WINDOW_MS,
   type RankedResume,
   type RankedSessionCreated,
   rankedClosedCopy,
@@ -51,8 +52,6 @@ const CONNECT_TIMEOUT_MS = 8000
 const FINAL_TIMEOUT_MS = 10_000
 /** The server pings every 400 ms: this much silence is a dead link. */
 const STALE_MS = 2500
-/** Give up resuming after this long without a link. */
-const RESUME_DEADLINE_MS = 20_000
 
 const isRecord = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null
 const num = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v)
@@ -74,7 +73,7 @@ function validResult(m: Record<string, unknown>): boolean {
 }
 
 const validResume = (v: unknown): boolean =>
-  v === undefined || (isRecord(v) && num(v.level) && num(v.purse))
+  v === undefined || (isRecord(v) && num(v.level) && num(v.purse) && num(v.nextDuel))
 
 const VALIDATORS: Record<string, (m: Record<string, unknown>) => boolean> = {
   hello: (m) => typeof m.sessionId === 'string' && validResume(m.resumed),
@@ -178,7 +177,7 @@ export class RankedSession {
       onDrop: (reason) => this.onDrop(reason),
       onGiveUp: (reason) => this.onClose(this.linkUp ? 'The ranked connection dropped.' : reason),
       staleMs: STALE_MS,
-      deadlineMs: RESUME_DEADLINE_MS,
+      deadlineMs: RANKED_RESUME_WINDOW_MS,
       binaryType: 'blob',
       // a run that's over (banked, refused, fatal error) never comes back
       isFinal: (code) => code === 1000 || code === 1008 || (code >= 4000 && code < 4100),
