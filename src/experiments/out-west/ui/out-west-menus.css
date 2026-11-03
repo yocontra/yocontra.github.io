@@ -63,7 +63,7 @@
   margin-bottom: var(--ow-s1);
   font-weight: 600;
   font-variant-caps: all-small-caps;
-  letter-spacing: 0.16em;
+  letter-spacing: 0.1em;
   font-size: var(--ow-fs-body);
   color: var(--ow-brass);
 }
