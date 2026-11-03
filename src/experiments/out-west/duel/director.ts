@@ -35,6 +35,15 @@ import { enterWalk, tickTurn, tickWalk } from './walk.ts'
 export type RankedConnect = () => Promise<RankedSession | null>
 
 /**
+ * The one seam for a server-driven Bounty Hunt duel (duel/remote.ts): while installed, it may take
+ * over a phase's tick or a press. Each returns true when it handled it.
+ */
+export interface DirectorHooks {
+  tick: (phase: Phase, now: number, dt: number) => boolean
+  press: (p: Press) => boolean
+}
+
+/**
  * The duel's conductor: phases, mode (ranked or practice) and the frame loop.
  * The moments themselves live in stage, walk, standoff, outcome, defeat,
  * framing and cues; input in controls; ranked/practice in mode.
@@ -48,6 +57,7 @@ export class Director extends DuelState {
   rankedTry = 0
   lineupActors: Actor[] = []
   readonly events: ClockEvents
+  hooks = null as DirectorHooks | null
 
   constructor(c: Ctx) {
     super(c)
@@ -185,7 +195,9 @@ export class Director extends DuelState {
   // ---------------------------------------------------------------- input
 
   onPress(p: Press): void {
-    onPress(this, p)
+    if (!this.hooks?.press(p)) {
+      onPress(this, p)
+    }
   }
 
   togglePause(): void {
@@ -238,7 +250,9 @@ export class Director extends DuelState {
       return 0
     }
     this.phaseT += realDt
-    this.ticks[this.phase]?.(now, realDt)
+    if (!this.hooks?.tick(this.phase, now, realDt)) {
+      this.ticks[this.phase]?.(now, realDt)
+    }
     // hitstop / slow-mo; the dying man's clip never crawls below victimMinScale
     const dt = realDt * this.timeScale
     const dyingDt = this.timeScale > 0 ? realDt * Math.max(this.timeScale, FEEL.victimMinScale) : 0

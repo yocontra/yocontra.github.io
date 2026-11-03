@@ -1,0 +1,227 @@
+/* out west: Bounty Hunt match intro and results (stream D). Tokens come from hub.css. */
+/* ---------------------------------------------------------- match intro */
+.ow-match {
+  position: absolute;
+  inset: 0;
+  z-index: 35;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1rem;
+  padding: max(16px, var(--hub-sai-t)) max(16px, var(--hub-sai-r)) max(16px, var(--hub-sai-b))
+    max(16px, var(--hub-sai-l));
+  box-sizing: border-box;
+  background: radial-gradient(circle at 50% 45%, rgb(0 0 0 / 0.35), rgb(0 0 0 / 0.82));
+  opacity: 0;
+  transition: opacity 0.3s;
+}
+.ow-match.on {
+  opacity: 1;
+}
+.ow-match-mode {
+  font-size: 0.9rem;
+  color: var(--hub-gold);
+  background: rgb(0 0 0 / 0.6);
+  padding: 0.3rem 0.8rem;
+  border: 1px solid var(--hub-gold);
+}
+.ow-match-mode.ghost {
+  color: #d8c8a0;
+  border-color: #d8c8a0;
+  border-style: dashed;
+}
+.ow-match-posters {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: clamp(0.6rem, 3vw, 2rem);
+  width: 100%;
+}
+.ow-match-vs {
+  font-size: clamp(1.4rem, 5vw, 2.6rem);
+  color: var(--hub-red);
+  text-shadow: 0 3px 0 #000;
+}
+.ow-match-status {
+  font-family: Georgia, serif;
+  text-transform: none;
+  letter-spacing: 0.03em;
+  font-size: 1rem;
+  min-height: 1.4em;
+  text-align: center;
+}
+.ow-match .ow-hub-row {
+  width: min(24rem, 100%);
+}
+.ow-wanted {
+  --frame: #8a6a42;
+  width: min(15rem, 40vw);
+  box-sizing: border-box;
+  padding: 0.9rem 0.8rem 0.8rem;
+  color: #2a1a10;
+  text-align: center;
+  background:
+    radial-gradient(circle at 30% 20%, rgb(255 255 255 / 0.25), transparent 60%),
+    linear-gradient(180deg, #efe0bc, #d8c08e);
+  border: 8px solid var(--frame);
+  box-shadow:
+    inset 0 0 22px rgb(90 50 20 / 0.45),
+    0 14px 30px rgb(0 0 0 / 0.6);
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  animation: ow-slam 0.45s cubic-bezier(0.2, 1.4, 0.4, 1) both;
+}
+.ow-wanted-you {
+  transform: rotate(-2.5deg);
+}
+.ow-wanted-them {
+  transform: rotate(2deg);
+  animation-delay: 0.25s;
+}
+.ow-wanted[data-kind="ghost"],
+.ow-wanted[data-kind="outlaw"] {
+  filter: sepia(0.9) saturate(0.6) brightness(0.92);
+}
+@keyframes ow-slam {
+  from {
+    opacity: 0;
+    scale: 1.6;
+  }
+  to {
+    opacity: 1;
+    scale: 1;
+  }
+}
+.ow-wanted-head {
+  font-size: clamp(1rem, 3.4vw, 1.5rem);
+  color: #6a1f14;
+}
+.ow-wanted-name {
+  font-size: clamp(0.9rem, 3vw, 1.2rem);
+  line-height: 1.1;
+  overflow-wrap: anywhere;
+}
+.ow-wanted-meta,
+.ow-wanted-notes,
+.ow-wanted-kit {
+  font-family: Georgia, serif;
+  text-transform: none;
+  letter-spacing: 0.02em;
+  font-size: 0.75rem;
+}
+.ow-wanted-bounty {
+  font-size: clamp(1.2rem, 4.5vw, 1.9rem);
+  color: #6a1f14;
+}
+.ow-wanted-kit {
+  list-style: none;
+  margin: 0.2rem 0 0;
+  padding: 0.3rem 0 0;
+  border-top: 1px solid rgb(42 26 16 / 0.35);
+}
+
+/* ---------------------------------------------------------- results */
+.ow-results {
+  position: absolute;
+  inset: 0;
+  z-index: 35;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding: max(16px, var(--hub-sai-t)) max(16px, var(--hub-sai-r)) max(16px, var(--hub-sai-b))
+    max(16px, var(--hub-sai-l));
+  box-sizing: border-box;
+  background: linear-gradient(180deg, transparent 30%, rgb(0 0 0 / 0.7));
+  opacity: 0;
+  transition: opacity 0.35s;
+}
+.ow-results.on {
+  opacity: 1;
+}
+.ow-results-panel {
+  width: min(32rem, 100%);
+  max-height: 100%;
+  overflow-y: auto;
+}
+.ow-results-loss .ow-results-panel {
+  border-color: #8a0f08;
+}
+.ow-results-even .ow-results-panel {
+  border-color: #c8a04a;
+}
+.ow-results-title {
+  margin: 0;
+  font-weight: 400;
+  font-size: clamp(1.5rem, 5vw, 2.2rem);
+  color: var(--hub-gold);
+}
+.ow-results-loss .ow-results-title {
+  color: #ff5a40;
+}
+.ow-results-draws {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+.ow-results-draw {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 0.5rem;
+  background: rgb(255 255 255 / 0.06);
+}
+.ow-results-draw b {
+  font-weight: 400;
+  font-size: 1.4rem;
+}
+.ow-results-who {
+  font-size: 0.7rem;
+  opacity: 0.7;
+}
+.ow-results-level {
+  display: none;
+  color: var(--hub-gold);
+  font-size: 0.95rem;
+}
+.ow-results-level.on {
+  display: block;
+  animation: ow-pulse 1.6s ease-in-out 2;
+}
+.ow-results-vote {
+  min-height: 1.2em;
+  font-family: Georgia, serif;
+  text-transform: none;
+  font-size: 0.9rem;
+  color: var(--hub-gold);
+}
+
+/* ---------------------------------------------------------- portrait phones */
+@media (max-aspect-ratio: 1 / 1) {
+  .ow-wanted {
+    width: 42vw;
+    border-width: 6px;
+    padding: 0.6rem 0.5rem;
+  }
+  .ow-wanted-kit {
+    display: none;
+  }
+}
+/* short landscape phones */
+@media (max-height: 480px) and (min-aspect-ratio: 1 / 1) {
+  .ow-wanted {
+    width: min(12rem, 30vw);
+    padding: 0.5rem;
+  }
+  .ow-wanted-kit,
+  .ow-wanted-notes {
+    display: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ow-wanted {
+    animation: none;
+  }
+}

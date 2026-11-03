@@ -6,6 +6,7 @@ import type {
   StoreResponse,
 } from '../../../src/experiments/out-west/contract/economy.ts'
 import { DEFAULT_LOADOUT } from '../../../src/experiments/out-west/data/catalog.ts'
+import { signAccessToken } from '../auth/token.ts'
 import { meRoutes } from '../routes/me.ts'
 import { purchaseStatements, storeRoutes } from '../routes/store.ts'
 import { auditLedger } from './audit.ts'
@@ -31,7 +32,14 @@ async function call(
   const url = new URL(path, 'http://localhost:8793')
   const headers: Record<string, string> = { 'Content-Type': 'application/json' }
   if (opts.as) {
-    headers.Authorization = `Bearer dev:${opts.as}:Tester`
+    const { token } = await signAccessToken(t.env.AUTH_SECRET, {
+      accountId: opts.as,
+      name: 'Tester',
+      sid: 'test-session',
+      platform: 'web',
+      authTime: Date.now(),
+    })
+    headers.Authorization = `Bearer ${token}`
   }
   const init: RequestInit = { method, headers }
   if (opts.body !== undefined) {
@@ -87,7 +95,7 @@ describe('GET /me', () => {
     expect(((await call('GET', '/me', { as: id })).body as MeResponse).purse).toBe(250)
   })
 
-  it('ignores a dev token sent to a non-local host', async () => {
+  it('rejects a forged token', async () => {
     const url = new URL('https://api.contra.io/me')
     const req = new Request(url, { headers: { Authorization: 'Bearer dev:x:y' } })
     expect((await meRoutes(req, t.env, url, ctx))?.status).toBe(401)

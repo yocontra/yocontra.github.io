@@ -1,0 +1,535 @@
+/**
+ * Bounty Hunt: a duel against another gunslinger (or a labelled ghost), driven entirely by the
+ * DuelRoom. The room owns every beat: the walk only advances while both men hold, the server sends
+ * the fake-out cues and the call, and judges both shots. This module turns room messages into the
+ * director's existing moments (walk, standoff, call, kill cam, death, back-shot) through one seam,
+ * `Director.hooks`, and puts the match intro and results screens around them.
+ *
+ * The gauntlet's save is never touched: the duel runs on a scratch copy, restored on the way out.
+ */
+import type { Beat, DuelResult, Poster, RoomServerMessage, Seat } from '../contract/duel.ts'
+import { FEEL } from '../data/feel.ts'
+import type { Press } from '../engine/input.ts'
+import { fetchDuelStats } from '../net/api.ts'
+import { DuelRoomLink } from '../net/pvp.ts'
+import { haptic } from '../platform/haptics.ts'
+import { save as persist, type SaveData } from '../save.ts'
+import { DRAW_SOUNDS, dressedActor } from '../scene/loadout.ts'
+import { MatchIntro } from '../ui/match-intro.ts'
+import { ResultsPanel, resultView } from '../ui/results.ts'
+import { confirmSheet } from '../ui/sheet.ts'
+import { recordLine } from '../ui/standing.ts'
+import { type DuelClock, LocalDuelClock } from './clock.ts'
+import { tickCoward } from './defeat.ts'
+import type { Director, DirectorHooks } from './director.ts'
+import { titleShot } from './framing.ts'
+import { tickWin } from './outcome.ts'
+import { startAmbience } from './present.ts'
+import { RemoteDuelClock } from './remote.ts'
+import {
+  asOutlaw,
+  deadHeatFx,
+  enterRemoteTurn,
+  HECKLES,
+  type HoldState,
+  honestWin,
+  remotePace,
+  reviveForSuddenDeath,
+  TAUNT_TEXT,
+  tickRemoteWalk,
+} from './remote-beats.ts'
+import type { Phase } from './state.ts'
+import { enterWalk } from './walk.ts'
+
+export type PvpExit = 'saloon' | 'next'
+
+export interface PvpOpts {
+  wsUrl: string
+  opponent: Poster
+  /** Your XP before the match (the results bar), when signed-in data is at hand. */
+  xpBefore: number | null
+  /** Your purse going in (the HUD), when known. */
+  purse: number | null
+  /** Refetch your profile after settlement (for the XP bar and level-ups). */
+  refreshXp: () => Promise<number | null>
+  onExit: (how: PvpExit) => void
+}
+
+/** One Bounty Hunt match: hello → duel(s) → results → rematch or leave. */
+export class PvpDuel implements DirectorHooks {
+  private readonly d: Director
+  private readonly o: PvpOpts
+  private readonly link: DuelRoomLink
+  private readonly clock: RemoteDuelClock
+  private readonly realSave: SaveData
+  private seat: Seat = 0
+  private posters: readonly [Poster, Poster] | null = null
+  private serverOffset = 0
+  private intro: MatchIntro | null = null
+  private results: ResultsPanel | null = null
+  private result: DuelResult | null = null
+  /** perf time when the results sheet may open (after the kill cam or the fall). */
+  private resultsAt = 0
+  private deadHeat = false as boolean
+  private readonly hold: HoldState = { mine: false, theirs: false, sent: false, autoUntil: 0 }
+  private over = false as boolean
+  private fleeing = false as boolean
+  private xpAfter = null as number | null
+
+  constructor(d: Director, o: PvpOpts) {
+    this.d = d
+    this.o = o
+    this.realSave = d.c.save
+    const scratch = structuredClone(d.c.save)
+    scratch.settings = d.c.save.settings
+    scratch.legend = false
+    d.c.save = scratch
+    this.link = new DuelRoomLink(o.wsUrl, {
+      message: (m) => this.onMessage(m),
+      dropped: () => d.c.hud.fake('[your line to the room dropped · reconnecting]', 3000),
+      rejoined: () => d.c.hud.fake('[back in the room]', 1500),
+      gone: (reason) => this.onGone(reason),
+    })
+    this.clock = new RemoteDuelClock(this.link)
+    d.clock.dispose()
+    d.clock = this.clock
+    d.hooks = this
+    d.outlaw = asOutlaw(o.opponent)
+    d.level = 0
+    d.c.hud.root.classList.add('ow-pvp')
+    d.c.hud.show(true)
+    d.c.hud.setMode(o.opponent.kind === 'human' ? 'BOUNTY HUNT' : 'GHOST DUEL')
+    d.c.hud.setPurse(o.purse ?? 0, false)
+    startAmbience(d)
+  }
+
+  private get opp(): Seat {
+    return this.seat === 0 ? 1 : 0
+  }
+
+  // ------------------------------------------------------------------ hooks
+
+  tick(phase: Phase, _now: number, dt: number): boolean {
+    const d = this.d
+    switch (phase) {
+      case 'cock':
+        return true
+      case 'walk':
+        tickRemoteWalk(d, dt, this.hold, (down) => this.link.send({ type: 'hold', down }))
+        return true
+      case 'turn':
+        if (d.phaseT >= FEEL.turnDuration && d.phaseT - dt < FEEL.turnDuration) {
+          d.player.play('Idle', 0.25)
+          d.enemy?.play('Idle', 0.25)
+        }
+        return true
+      case 'win':
+        // the kill cam, without the gauntlet's card or its move to the next outlaw
+        d.resultShown = true
+        if (d.phaseT < FEEL.resultAt + FEEL.resultFor - 0.1) {
+          tickWin(d, dt)
+        }
+        this.maybeResults()
+        return true
+      case 'coward':
+        // the slow-mo and the gasp, without the gauntlet's card (the results sheet says it)
+        d.cowardCard = true
+        if (d.phaseT < FEEL.cowardAutoRetry - 0.1) {
+          tickCoward(d)
+        }
+        this.maybeResults()
+        return true
+      case 'lose':
+        // the fall, without the gauntlet's "press to try again" card
+        d.c.hud.hideCard()
+        this.maybeResults()
+        return true
+      case 'bossWound':
+      case 'end':
+      case 'poster':
+      case 'intro':
+        this.maybeResults()
+        return true
+      default:
+        return false
+    }
+  }
+
+  press(p: Press): boolean {
+    const d = this.d
+    if (p.action === 'pause') {
+      this.flee().catch(() => undefined)
+      return true
+    }
+    if (
+      d.phase === 'call' &&
+      d.shotsSent === 0 &&
+      (p.action === 'fire' || p.source === 'pointer')
+    ) {
+      haptic('shot')
+      this.drawSound()
+    }
+    // walking, a back-shot and the draw behave as ever; everything else waits on the room
+    return !['walk', 'turn', 'wait', 'call'].includes(d.phase)
+  }
+
+  /** Your draw sound, layered on the report (on the shot, never before). */
+  private drawSound(): void {
+    const mine = this.posters?.[this.seat]
+    const s = mine ? DRAW_SOUNDS[String(mine.loadout.drawSound) as keyof typeof DRAW_SOUNDS] : null
+    if (!s) {
+      return
+    }
+    const a = this.d.c.audio
+    a.play('fireBig', { gain: s.gain, rate: s.rate, reverb: 0.8 })
+    if (s.hawk) {
+      a.play('hawk', { gain: 0.5, when: a.now + 0.35 })
+    }
+  }
+
+  // --------------------------------------------------------------- messages
+
+  private onMessage(m: RoomServerMessage): void {
+    if (this.over) {
+      return
+    }
+    if ('serverTime' in m) {
+      this.serverOffset = m.serverTime - Date.now()
+    }
+    switch (m.type) {
+      case 'hello':
+        this.onHello(m.you, m.posters, m.rematch)
+        break
+      case 'sync':
+        this.onSync(m)
+        break
+      case 'beat':
+        this.onBeat(m.beat, m.deadline)
+        break
+      case 'ready':
+        if (m.seat === this.opp) {
+          this.intro?.say('He’s cocked and waiting.')
+        }
+        break
+      case 'holding':
+        this.hold.theirs = m.holding[this.opp]
+        break
+      case 'pace':
+        remotePace(this.d, m.n, m.auto, this.hold)
+        break
+      case 'heckle':
+        this.d.c.hud.line(
+          this.d.outlaw.name,
+          HECKLES[Math.floor(Math.random() * HECKLES.length)] ?? '',
+        )
+        break
+      case 'cue':
+        this.d.events.cue(m.draw, m.cue)
+        break
+      case 'call':
+        this.clock.draw = m.draw
+        this.d.events.call(m.draw)
+        break
+      default:
+        this.onOther(m)
+        break
+    }
+  }
+
+  private onOther(m: RoomServerMessage): void {
+    const d = this.d
+    switch (m.type) {
+      case 'deadHeat':
+        this.deadHeat = true
+        deadHeatFx(d)
+        break
+      case 'suddenDeath':
+        this.deadHeat = false
+        this.clock.draw = m.draw
+        reviveForSuddenDeath(d, this.posters?.[this.opp]?.loadout ?? {})
+        break
+      case 'result':
+        this.onResult(m)
+        break
+      case 'presence':
+        if (m.seat === this.opp) {
+          d.c.hud.fake(m.connected ? '[he’s back]' : '[his line dropped · 5 s grace]', 3000)
+        }
+        break
+      case 'taunt':
+        if (m.seat === this.opp) {
+          d.c.hud.line(d.outlaw.name, TAUNT_TEXT[m.taunt] ?? '', 1800)
+        }
+        break
+      case 'rematch':
+        this.results?.setVotes(m.votes, this.seat, m.left)
+        break
+      case 'error':
+        if (m.fatal) {
+          this.onGone(m.message)
+        }
+        break
+      default:
+        break
+    }
+  }
+
+  private onHello(you: Seat, posters: readonly [Poster, Poster], rematch: number): void {
+    const d = this.d
+    this.seat = you
+    this.posters = posters
+    const them = posters[this.opp]
+    d.outlaw = asOutlaw(them)
+    this.result = null
+    this.results?.close()
+    this.results = null
+    this.stage(them)
+    if (rematch === 0) {
+      this.intro?.close()
+      this.intro = new MatchIntro(d.c.hud.root, posters[you], them, {
+        ready: () => this.link.send({ type: 'ready' }),
+        flee: () => {
+          this.flee().catch(() => undefined)
+        },
+      })
+    } else {
+      // a rematch: no intro, straight back to the street (ready on your behalf)
+      this.link.send({ type: 'ready' })
+    }
+  }
+
+  /** Both men on the street, dressed in their own kit. */
+  private stage(them: Poster): void {
+    const d = this.d
+    const c = d.c
+    d.enemy?.dispose()
+    d.enemy = dressedActor(c.assets.player, c.gun, them.loadout)
+    c.scene.add(d.enemy.root)
+    d.enemyAlive = true
+    d.dying = null
+    d.fallers = []
+    d.timeScale = 1
+    c.physics.clear()
+    c.hud.hideCard()
+    c.hud.clearCaptions()
+    c.hud.clearCall()
+    c.hud.letterbox(false)
+    c.world.setFires(false)
+    c.world.apply(d.outlaw.day)
+    c.world.setClock(17, 0)
+    c.audio.playSong('intro')
+    d.enterCock()
+  }
+
+  private onBeat(beat: Beat, deadline: number | null): void {
+    const d = this.d
+    switch (beat) {
+      case 'cock':
+        if (this.intro && !this.intro.readySent) {
+          this.intro.cock(deadline, this.serverOffset)
+        }
+        break
+      case 'walk':
+        this.intro?.close()
+        this.intro = null
+        if (d.phase === 'cock') {
+          this.hold.sent = false
+          this.hold.mine = false
+          d.c.hud.show(true)
+          enterWalk(d)
+        }
+        break
+      case 'turn':
+        if (d.phase === 'walk') {
+          enterRemoteTurn(d)
+        }
+        break
+      case 'wait':
+        if (d.phase === 'turn' || d.phase === 'walk') {
+          d.player.play('Idle', 0.2)
+          d.enemy?.play('Idle', 0.2)
+          d.enterWait(false)
+        }
+        break
+      default:
+        break
+    }
+  }
+
+  private onSync(m: Extract<RoomServerMessage, { type: 'sync' }>): void {
+    this.hold.theirs = m.holding[this.opp]
+    this.clock.draw = m.draw
+    if (m.last && !this.result && (m.beat === 'result' || m.beat === 'rematch')) {
+      this.onResult(m.last)
+    }
+  }
+
+  // ---------------------------------------------------------------- results
+
+  private onResult(r: DuelResult): void {
+    const d = this.d
+    this.result = r
+    this.deadHeat = false
+    const me = this.seat
+    const paid = { payout: r.you?.delta ?? 0, purse: r.you?.purse ?? 0 }
+    const verdict = {
+      duel: r.draw,
+      reactionMs: r.reactions[me],
+      enemyMs: r.reactions[this.opp],
+      payout: paid.payout,
+      purse: paid.purse,
+      targetsHit: 0,
+    }
+    this.resultsAt = performance.now() + 2200
+    if (r.outcome === 'win' && r.winner === me) {
+      d.events.verdict({ ...verdict, outcome: 'win', targetsHit: 1 })
+    } else if (r.outcome === 'win') {
+      haptic('hit')
+      d.events.verdict({ ...verdict, outcome: 'loss' })
+    } else if (r.outcome === 'coward' && r.culprit === me) {
+      d.events.verdict({ ...verdict, outcome: 'coward' })
+    } else if (r.outcome === 'coward') {
+      honestWin(d, 'HE DREW EARLY. BOUNTY’S YOURS.')
+    } else {
+      this.quietEnd(r)
+    }
+    // after the verdict: the director's own purse display reads the scratch run
+    if (r.you?.purse !== null && r.you?.purse !== undefined) {
+      d.c.hud.setPurse(r.you.purse, true)
+    }
+    this.o
+      .refreshXp()
+      .then((xp) => {
+        this.xpAfter = xp
+        this.results?.setXp(this.o.xpBefore, xp)
+      })
+      .catch(() => undefined)
+  }
+
+  /** Forfeits, dodges, freezes and double dead heats: no kill cam, straight to the card. */
+  private quietEnd(r: DuelResult): void {
+    const d = this.d
+    const mine = r.culprit === this.seat
+    const caption: Record<string, string> = {
+      froze: 'BOTH FROZE',
+      draw: 'DRAW',
+      forfeit: mine ? 'FORFEIT' : 'HE LIT OUT',
+      dodge: mine ? 'DODGED' : 'HE DODGED',
+    }
+    d.c.hud.call(caption[r.outcome] ?? 'OVER', 1600)
+    d.c.audio.heartbeat(0)
+    d.enter('lose')
+    this.resultsAt = performance.now() + 1200
+  }
+
+  private maybeResults(): void {
+    if (!this.result || this.results || performance.now() < this.resultsAt || this.deadHeat) {
+      return
+    }
+    this.d.c.hud.hideCard()
+    this.results = new ResultsPanel(
+      this.d.c.hud.root,
+      resultView(this.result, this.seat, this.d.outlaw.name, {
+        before: this.o.xpBefore,
+        after: this.xpAfter,
+      }),
+      {
+        rematch: () => this.link.send({ type: 'rematch' }),
+        next: () => this.leave('next'),
+        saloon: () => this.leave('saloon'),
+      },
+    )
+    fetchDuelStats()
+      .then((s) => {
+        if (s.ok) {
+          this.results?.setRecord(`Record ${recordLine(s.value)}`)
+        }
+      })
+      .catch(() => undefined)
+  }
+
+  // --------------------------------------------------------------- leaving
+
+  private async flee(): Promise<void> {
+    if (this.fleeing || this.over) {
+      return
+    }
+    if (this.result) {
+      this.leave('saloon')
+      return
+    }
+    this.fleeing = true
+    const before = this.d.phase === 'cock' || this.d.phase === 'title'
+    const yes = await confirmSheet(this.d.c.hud.root, {
+      title: 'Flee?',
+      body: before
+        ? 'Running before the walk is a dodge: half your penalty and no XP.'
+        : 'Running now is a forfeit: a loss with the full penalty.',
+      yes: 'Flee',
+      no: 'Stand your ground',
+      danger: true,
+    })
+    this.fleeing = false
+    if (yes && !this.over) {
+      this.link.send({ type: 'flee' })
+    }
+  }
+
+  private onGone(reason: string): void {
+    if (this.over) {
+      return
+    }
+    if (this.result) {
+      this.results?.disableRematch()
+      this.results?.say(reason)
+      return
+    }
+    this.d.c.hud.fake(`[${reason}]`, 3000)
+    this.result = {
+      type: 'result',
+      serverTime: Date.now(),
+      matchId: '',
+      draw: this.clock.draw,
+      outcome: 'forfeit',
+      winner: null,
+      culprit: null,
+      reactions: [null, null],
+      deadHeats: 0,
+      you: null,
+      settled: false,
+    }
+    this.quietEnd(this.result)
+  }
+
+  /** Back to the saloon (or straight back into the queue). */
+  leave(how: PvpExit): void {
+    if (this.over) {
+      return
+    }
+    this.over = true
+    const d = this.d
+    this.link.send({ type: 'flee' })
+    this.link.close()
+    this.intro?.close()
+    this.results?.close()
+    d.hooks = null
+    d.clock = new LocalDuelClock(d.events) satisfies DuelClock
+    d.c.save = this.realSave
+    persist(this.realSave)
+    d.enemy?.dispose()
+    d.enemy = null
+    d.c.physics.clear()
+    d.c.hud.root.classList.remove('ow-pvp')
+    d.c.hud.hideCard()
+    d.c.hud.clearCall()
+    d.c.hud.clearCaptions()
+    d.c.hud.letterbox(false)
+    d.c.hud.show(false)
+    d.c.audio.heartbeat(0)
+    d.timeScale = 1
+    d.player.root.visible = false
+    d.enter('title')
+    titleShot(d)
+    this.o.onExit(how)
+  }
+}

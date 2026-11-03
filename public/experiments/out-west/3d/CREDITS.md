@@ -48,6 +48,9 @@ Quaternius: https://quaternius.com
 
 ## Textures (Poly Haven, CC0)
 
+Each set ships diffuse, OpenGL normal and ARM (ambient occlusion, roughness, metalness) maps at 1K,
+fetched and converted to WebP with `tools/polyhaven.ts`.
+
 | File | Source | Licence |
 |---|---|---|
 | `tex/ground_*.webp` | "Gravelly Sand" — https://polyhaven.com/a/gravelly_sand | CC0 1.0 |
@@ -80,6 +83,12 @@ Trimmed, mono, normalised and re-encoded to AAC.
 | `sfx/wind.m4a` | "desert_wind.wav" by DarkShroom — https://freesound.org/s/645305/ | CC0 1.0 |
 | `sfx/crickets.m4a` | "Outdoors_Night_CloseCrickets.wav" by MrFossy — https://freesound.org/s/521844/ | CC0 1.0 |
 | `sfx/fire.m4a` | "Fire Crackle and Flames 002" by TheWoodlandNomad — https://freesound.org/s/363092/ | CC0 1.0 |
+
+## Generated textures
+
+| File | Source | Licence |
+|---|---|---|
+| `tex/signboard_nor.webp`, `tex/signboard_arm.webp` | Weathered painted signboard: generated (Gemini), source `tools/art/signboard_src.webp`; normal and ARM derived with `tools/pbr-from-albedo.ts` | First-party |
 
 ## Font
 

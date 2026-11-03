@@ -12,5 +12,13 @@ export default defineConfig({
     prefetchAll: true,
     defaultStrategy: 'viewport',
   },
-  integrations: [sitemap()],
+  integrations: [
+    sitemap({
+      // Dev tools, prank pages and app-only flows stay out of search.
+      filter: (page) =>
+        !['/out-west/crowd/', '/out-west/auth/', '/out-west/delete/', '/experiments/hax/'].some(
+          (path) => page.includes(path),
+        ),
+    }),
+  ],
 })

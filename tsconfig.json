@@ -10,5 +10,5 @@
     }
   },
   "include": [".astro/types.d.ts", "**/*"],
-  "exclude": ["api", "dist", "node_modules", "public", "scripts"]
+  "exclude": ["api", "dist", "node_modules", "public", "scripts", "tools"]
 }
