@@ -10,9 +10,11 @@
  * - Visible ground: 18 m each way along the screen's LONG axis, at least 12 m along the SHORT axis
  *   (portrait: 18 m north/south, ≥12 m east/west; landscape the other way round).
  * - Readability clamp: the camera never pulls back so far that a character (2.25 m on screen) is
- *   under 6% of the short axis, and that wins over the radii. Measured: landscape (any 16:10 to
- *   19.5:9) fits at 35.5 m but clamps to 27.5 m (about ±16 m wide, ±9.5 m deep); 390×844 portrait
- *   fits at 72 m but clamps to 59 m (±18 m tall, about ±10 m wide).
+ *   under 6% of the short axis in landscape, 9% in portrait, and that wins over the radii.
+ *   Landscape (16:10 to 19.5:9) fits at 35.5 m but clamps to 27.5 m (about ±16 m wide, ±9.5 m
+ *   deep). Portrait fits at 72 m but clamps to about 40 m (±12 m tall, about ±7 m wide): at 59 m
+ *   a phone held upright was mostly sand around a speck of a gunslinger. The look-ahead runs
+ *   further along the long axis, so you see where you aim.
  * - Enemies within 18 m but off screen get edge arrows (`client/arrows.ts`).
  */
 import { MathUtils, PerspectiveCamera, Vector3 } from 'three'
@@ -23,8 +25,9 @@ const FOV = 40
 const BASE_DIST = 22
 /** Ground metres guaranteed each way along the screen's short axis. */
 export const SHORT_RADIUS = 12
-/** A character must stand at least this fraction of the short axis tall. */
+/** A character must stand at least this fraction of the short axis tall (landscape, portrait). */
 const MIN_CHAR_FRACTION = 0.06
+const MIN_CHAR_FRACTION_PORTRAIT = 0.09
 /** On-screen character height (1.8 m × the crowd's read scale). */
 const CHAR_H = 2.25
 const PITCH = MathUtils.degToRad(PITCH_DEG)
@@ -42,9 +45,13 @@ export class TopDownCamera {
   private readonly shake = { t: 0, amp: 0 }
   /** Look-ahead toward the aim (m), eased. */
   private readonly lead = new Vector3()
+  /** Look-ahead reach along screen x and z (m): longer along the long axis. */
+  private readonly reach = { x: 2.2, z: 2.2 }
 
   resize(aspect: number): void {
     this.camera.aspect = aspect
+    this.reach.x = aspect >= 1 ? 3.2 : 1.6
+    this.reach.z = aspect >= 1 ? 1.6 : 3.4
     this.distance = Math.max(BASE_DIST, Math.min(fitDistance(aspect), readableDistance(aspect)))
     this.camera.near = Math.max(1, this.distance - 30)
     this.camera.far = this.distance + 90
@@ -61,8 +68,8 @@ export class TopDownCamera {
   /** Follow the player with a little look-ahead toward where they aim. */
   update(px: number, pz: number, aimX: number, aimZ: number, dt: number): void {
     const k = 1 - Math.exp(-dt * 3)
-    this.lead.x += (aimX * 2.2 - this.lead.x) * k
-    this.lead.z += (aimZ * 2.2 - this.lead.z) * k
+    this.lead.x += (aimX * this.reach.x - this.lead.x) * k
+    this.lead.z += (aimZ * this.reach.z - this.lead.z) * k
     const f = 1 - Math.exp(-dt * 12)
     this.target.x += (px + this.lead.x - this.target.x) * f
     this.target.z += (pz + this.lead.z - this.target.z) * f
@@ -139,7 +146,8 @@ export function fitDistance(aspect: number): number {
 /** Largest distance at which a character is still `MIN_CHAR_FRACTION` of the short axis tall. */
 export function readableDistance(aspect: number): number {
   // In NDC the screen is 2 tall; the short axis is the height in landscape, the width in portrait.
-  const need = 2 * MIN_CHAR_FRACTION * Math.min(1, aspect)
+  const fraction = aspect >= 1 ? MIN_CHAR_FRACTION : MIN_CHAR_FRACTION_PORTRAIT
+  const need = 2 * fraction * Math.min(1, aspect)
   return bisect((d) => {
     const cam = place(d, aspect)
     const foot = tmp.set(0, 0, 0).project(cam).y

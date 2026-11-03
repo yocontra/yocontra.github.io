@@ -48,7 +48,7 @@ const smooth = (t: number): number => {
 
 const a = parse(process.argv.slice(2))
 let img = sharp(a.input).removeAlpha()
-if (a.size) {
+if (a.size !== null && a.size > 0) {
   img = img.resize(a.size, a.size, { fit: 'cover', kernel: 'lanczos3' })
 }
 const { data, info } = await img.raw().toBuffer({ resolveWithObject: true })

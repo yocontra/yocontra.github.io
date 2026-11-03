@@ -83,6 +83,38 @@ export function onVerdict(d: Director, v: Verdict): void {
   }
 }
 
+/** The ranked link dropped and is resuming (or came back): say so where the mode is shown. */
+export function onReconnecting(d: Director, on: boolean): void {
+  if (!d.ranked) {
+    return
+  }
+  d.c.hud.setMode(on ? 'RECONNECTING…' : 'RANKED')
+  if (on) {
+    d.c.hud.fake('[The line to the ranked server dropped. Hold on…]', 3000)
+  }
+}
+
+/**
+ * Back on the same ranked run after a drop. The server voided the standoff that was in flight, so
+ * a live one is staged again from the wait (no walk), still ranked; the purse is the server's.
+ */
+export function onResumed(d: Director, purse: number): void {
+  if (!d.ranked) {
+    return
+  }
+  d.c.save.run.total = purse
+  d.c.hud.setPurse(purse, false)
+  if (!LIVE.has(d.phase)) {
+    return
+  }
+  d.c.hud.fake('[Back on the line. The standoff starts over.]', 3000)
+  if (d.boss && d.bossPhase === 1) {
+    d.enterBossClock()
+  } else {
+    d.enterWait(true)
+  }
+}
+
 /** The ranked connection is gone (or the server disagreed): carry on in practice from here. */
 export function onDropped(d: Director, reason: string): void {
   if (!d.ranked) {

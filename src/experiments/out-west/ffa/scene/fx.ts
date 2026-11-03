@@ -27,6 +27,7 @@ import {
   Vector3,
 } from 'three'
 import { softDot } from '../../scene/textures.ts'
+import { type Bag, PLAIN_BAG } from './bags.ts'
 
 const m4 = new Matrix4()
 const q = new Quaternion()
@@ -133,15 +134,9 @@ function seedColors(mesh: InstancedMesh): void {
   mesh.setColorAt(0, c)
 }
 
-export interface Bag {
-  id: number
-  x: number
-  z: number
-  amount: number
-  born: number
-  /** Exclusive to you (the killer) for its first seconds. */
-  mine: boolean
-}
+const bagTint = new Color() // each bag's instance colour: the dropper's saddlebag
+
+export type { Bag } from './bags.ts'
 
 export class Effects {
   readonly root: Object3D
@@ -213,7 +208,7 @@ export class Effects {
     this.bagMesh = new InstancedMesh(
       sack,
       new MeshStandardMaterial({
-        color: 0xb8_9a_60,
+        color: 0xff_ff_ff,
         roughness: 0.7,
         emissive: 0x6a_48_10,
         emissiveIntensity: 0.6,
@@ -479,7 +474,11 @@ export class Effects {
       const scale = (0.75 + Math.min(1.2, Math.sqrt(b.amount / 100)) * 0.5) * k
       q.setFromAxisAngle(up, bobT * 1.4 + b.id)
       m4.compose(v.set(b.x, 0.05 + Math.sin(bobT * 3 + b.id) * 0.06, b.z), q, s.setScalar(scale))
+      this.bagMesh.setColorAt(i, bagTint.setHex(b.color ?? PLAIN_BAG))
       this.bagMesh.setMatrixAt(i++, m4)
+    }
+    if (this.bagMesh.instanceColor) {
+      this.bagMesh.instanceColor.needsUpdate = true
     }
     this.bagMesh.count = i
     this.bagMesh.instanceMatrix.needsUpdate = true

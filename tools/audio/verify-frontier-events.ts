@@ -90,6 +90,7 @@ const sink = {
   callouts: [],
   killer: null,
   onLeft: () => undefined,
+  blocked: () => false,
   pickups: inert,
   fuses,
 } as unknown as Sink

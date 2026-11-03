@@ -52,6 +52,10 @@ export interface HudOptions {
   touch: boolean
   onLeave: () => void
   onExit: () => void
+  /** The head count was tapped: who's in town. */
+  onRiders: () => void
+  /** The death card's "Wanted poster": your killer's. */
+  onKiller: () => void
 }
 
 export class Hud {
@@ -79,6 +83,7 @@ export class Hud {
   private readonly deathName: HTMLElement
   private readonly deathSub: HTMLElement
   private readonly deathCount: HTMLElement
+  private readonly deathPoster: HTMLButtonElement
   private readonly bannerEl: HTMLElement
   private readonly menuEl: HTMLElement
   private readonly protectEl: HTMLElement
@@ -115,7 +120,14 @@ export class Hud {
 
     const tr = el('div', 'fr-tr', this.root)
     this.mapSlot = el('div', 'fr-map-slot', tr)
-    this.playersEl = el('div', 'fr-players', tr, '')
+    const players = el('button', 'fr-players fr-hit', tr, '')
+    players.type = 'button'
+    players.setAttribute('aria-label', 'Riders in town')
+    players.addEventListener('click', (e) => {
+      e.stopPropagation()
+      opts.onRiders()
+    })
+    this.playersEl = players
     this.feedEl = el('div', 'fr-feed', tr)
 
     this.channelEl = el('div', 'fr-channel', this.root)
@@ -137,6 +149,18 @@ export class Hud {
     this.deathName = el('div', 'fr-poster-name', poster)
     this.deathSub = el('div', 'fr-poster-sub', poster)
     this.deathCount = el('div', 'fr-poster-count', poster)
+    this.deathPoster = el(
+      'button',
+      'fr-menu-item fr-hit fr-poster-link',
+      poster,
+      'His wanted poster',
+    )
+    this.deathPoster.type = 'button'
+    this.deathPoster.hidden = true
+    this.deathPoster.addEventListener('click', (e) => {
+      e.stopPropagation()
+      opts.onKiller()
+    })
 
     this.menuEl = el('div', 'fr-menu fr-hit', this.root)
     const card = el('div', 'fr-menu-card', this.menuEl)
@@ -308,11 +332,13 @@ export class Hud {
     }
   }
 
-  death(killer: string | null, sub: string, seconds: number): void {
+  /** The death card; `person` shows the link to the killer's poster (a player, not a bot). */
+  death(killer: string | null, sub: string, seconds: number, person = false): void {
     if (this.changed('death', killer ?? '\u0000')) {
       this.deathEl.classList.add('on')
       this.deathName.textContent = killer ?? 'The frontier'
       this.deathSub.textContent = sub
+      this.deathPoster.hidden = !person
     }
     const s = Math.ceil(seconds)
     if (this.changed('deathS', s)) {

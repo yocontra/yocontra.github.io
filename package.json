@@ -10,7 +10,7 @@
     "format": "biome format --write .",
     "fix": "biome check --write .",
     "typecheck": "astro check && tsc --noEmit && tsc -p api && tsc -p scripts && tsc -p tools",
-    "check": "biome ci . && bun run typecheck && bun run api:test && bun scripts/no-js.ts",
+    "check": "biome ci --error-on-warnings . && bun run typecheck && bun run api:test && bun scripts/no-js.ts",
     "api:dev": "wrangler dev --config api/wrangler.jsonc --local --port 8787",
     "api:migrate:local": "wrangler d1 migrations apply contra-leaderboard --config api/wrangler.jsonc --local",
     "api:test": "bun test api"

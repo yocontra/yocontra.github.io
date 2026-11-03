@@ -94,6 +94,7 @@ async function kitMaterial(
   for (const s of props.scenes) {
     s.traverse((o) => {
       const m = o as Mesh
+      // biome-ignore lint/suspicious/noUnnecessaryConditions: three types isMesh as `true` on the cast; this is the runtime type check
       if (!m.isMesh) {
         return
       }

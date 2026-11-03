@@ -16,7 +16,7 @@ import { haptic } from '../platform/haptics.ts'
 import type { SaveData } from '../save.ts'
 import { DRAW_SOUNDS, dressedActor } from '../scene/loadout.ts'
 import { MatchIntro } from '../ui/match-intro.ts'
-import { ResultsPanel } from '../ui/results.ts'
+import { type OpponentRef, ResultsPanel } from '../ui/results.ts'
 import { recordLine } from '../ui/standing.ts'
 import { tickCoward } from './defeat.ts'
 import type { Director, DirectorHooks } from './director.ts'
@@ -77,6 +77,8 @@ export class PvpDuel implements DirectorHooks {
   private over = false as boolean
   private fleeing = false as boolean
   private xpAfter = null as number | null
+  /** XP going into the current duel: the match's start, then each rematch's (not summed). */
+  private xpBefore = null as number | null
   /** Why the room went away before it sent a result (we can't know the outcome). */
   private lostLine = null as string | null
   /** The next wait's draw number is already known (from `suddenDeath` or `sync`). */
@@ -93,6 +95,7 @@ export class PvpDuel implements DirectorHooks {
     this.d = d
     this.o = o
     this.realSave = d.c.save
+    this.xpBefore = o.xpBefore
     const scratch = structuredClone(d.c.save)
     scratch.settings = d.c.save.settings
     scratch.legend = false
@@ -308,6 +311,11 @@ export class PvpDuel implements DirectorHooks {
     }
     const them = posters[this.opp]
     d.outlaw = asOutlaw(them)
+    if (rematch > 0 && this.xpAfter !== null) {
+      // a rematch starts from the last settlement's XP, so its level-up isn't counted twice
+      this.xpBefore = this.xpAfter
+    }
+    this.xpAfter = null
     this.result = null
     this.synced = false
     this.results?.close()
@@ -346,6 +354,8 @@ export class PvpDuel implements DirectorHooks {
     c.world.setFires(false)
     c.world.apply(d.outlaw.day)
     c.world.setClock(17, 0)
+    // the street's wanted-poster post carries the gauntlet's outlaw: not his, so it comes down
+    c.world.poster.visible = false
     c.audio.playSong('intro')
     d.enterCock()
   }
@@ -456,7 +466,7 @@ export class PvpDuel implements DirectorHooks {
       .refreshXp()
       .then((xp) => {
         this.xpAfter = xp
-        this.results?.setXp(this.o.xpBefore, xp)
+        this.results?.setXp(this.xpBefore, xp)
       })
       .catch(() => undefined)
   }
@@ -476,7 +486,7 @@ export class PvpDuel implements DirectorHooks {
       this.d.c.hud.root,
       endView(this.result, this.seat, {
         name: this.d.outlaw.name,
-        xp: { before: this.o.xpBefore, after: this.xpAfter },
+        xp: { before: this.xpBefore, after: this.xpAfter },
         lost: this.lostLine,
         synced: this.synced,
       }),
@@ -485,6 +495,7 @@ export class PvpDuel implements DirectorHooks {
         next: () => this.leave('next'),
         saloon: () => this.leave('saloon'),
       },
+      this.opponentRef(),
     )
     fetchDuelStats()
       .then((s) => {
@@ -493,6 +504,15 @@ export class PvpDuel implements DirectorHooks {
         }
       })
       .catch(() => undefined)
+  }
+
+  /** Who to show a poster for, or report, from the results sheet (never a Town Outlaw). */
+  private opponentRef(): OpponentRef | null {
+    const them = this.posters?.[this.opp]
+    if (!them || them.kind === 'outlaw') {
+      return null
+    }
+    return { name: them.name, kind: them.kind, context: this.result?.matchId ?? '' }
   }
 
   // --------------------------------------------------------------- leaving

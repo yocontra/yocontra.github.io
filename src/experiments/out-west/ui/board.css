@@ -114,9 +114,6 @@
   padding: var(--ow-s2) var(--ow-s1);
   border-bottom: 1px solid var(--ow-rule-ink);
 }
-.ow-board-entry:nth-child(-n + 3) .ow-board-rank {
-  color: var(--ow-red);
-}
 .ow-board-entry.mine {
   background: rgb(168 36 27 / 0.14);
   box-shadow: inset 3px 0 0 var(--ow-red);
@@ -125,6 +122,9 @@
   font-family: var(--ow-font-display);
   font-size: var(--ow-fs-h4);
   line-height: 1;
+}
+.ow-board-entry:nth-child(-n + 3) .ow-board-rank {
+  color: var(--ow-red);
 }
 .ow-board-who {
   font-weight: 600;

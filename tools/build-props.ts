@@ -204,8 +204,16 @@ interface Geo {
 
 const empty = (): Geo => ({ pos: [], nrm: [], uv: [], col: [], idx: [] })
 
+/** A texture URI's extension, and its directory part. */
+const FILE_EXT = /\.[a-z]+$/u
+const DIR_PREFIX = /^.*\//u
+const GLASS_MAT = /Glass/u
+const WOOD_MAT = /Wood/u
+/** Attributes to quantize: normals and vertex colours only. */
+const NORMAL_OR_COLOR = /^(?:NORMAL|COLOR)/u
+
 const texName = (m: Material | null): string =>
-  (m?.getBaseColorTexture()?.getURI() ?? '').replace(/\.[a-z]+$/u, '').replace(/^.*\//u, '')
+  (m?.getBaseColorTexture()?.getURI() ?? '').replace(FILE_EXT, '').replace(DIR_PREFIX, '')
 
 /** All of one kit file, in its scene's space, split into the atlas geometry and the glass. */
 async function readPiece(file: string): Promise<{ kit: Geo; glass: Geo }> {
@@ -222,7 +230,7 @@ async function readPiece(file: string): Promise<{ kit: Geo; glass: Geo }> {
     n3.getNormalMatrix(m)
     for (const p of mesh.listPrimitives()) {
       const mat = p.getMaterial()
-      const glass = /Glass/u.test(mat?.getName() ?? '')
+      const glass = GLASS_MAT.test(mat?.getName() ?? '')
       const tn = texName(mat)
       const b: KitBand = BAND_OF[tn] ?? 'plain'
       const g = glass ? out.glass : out.kit
@@ -404,7 +412,7 @@ function textureRevolver(doc: Document, kit: Material): void {
   scene.traverse((node) => {
     for (const p of node.getMesh()?.listPrimitives() ?? []) {
       const name = p.getMaterial()?.getName() ?? ''
-      const wood = /Wood/u.test(name)
+      const wood = WOOD_MAT.test(name)
       const P = p.getAttribute('POSITION')
       const N = p.getAttribute('NORMAL')
       if (!(P && N)) {
@@ -451,11 +459,11 @@ function textureRevolver(doc: Document, kit: Material): void {
 /** A three.js primitive as atlas geometry: its UVs wrapped onto a band, one flat tint. */
 function primitive(
   g: BufferGeometry,
-  at: Matrix4,
+  xf: Matrix4,
   b: { band: KitBand; v0: number; v1: number; u: number },
   rgb: [number, number, number],
 ): Geo {
-  g.applyMatrix4(at)
+  g.applyMatrix4(xf)
   const P = g.getAttribute('position')
   const N = g.getAttribute('normal')
   const T = g.getAttribute('uv')
@@ -485,17 +493,17 @@ function dynamite(): Geo {
     [0.048, -0.02],
     [0, 0.062],
   ] as const) {
-    const at = new Matrix4().makeTranslation(x, 0.16, z)
+    const xf = new Matrix4().makeTranslation(x, 0.16, z)
     parts.push({
-      g: primitive(new CylinderGeometry(0.045, 0.045, 0.32, 14), at, paper, [0.72, 0.07, 0.04]),
+      g: primitive(new CylinderGeometry(0.045, 0.045, 0.32, 14), xf, paper, [0.72, 0.07, 0.04]),
       m: new Matrix4(),
     })
   }
   const twine = { band: 'furniture' as const, v0: 0.9, v1: 0.97, u: 4 }
   for (const y of [0.08, 0.24]) {
-    const at = new Matrix4().makeRotationX(Math.PI / 2).setPosition(0, y, 0.008)
+    const xf = new Matrix4().makeRotationX(Math.PI / 2).setPosition(0, y, 0.008)
     parts.push({
-      g: primitive(new TorusGeometry(0.098, 0.009, 6, 24), at, twine, [0.85, 0.75, 0.55]),
+      g: primitive(new TorusGeometry(0.098, 0.009, 6, 24), xf, twine, [0.85, 0.75, 0.55]),
       m: new Matrix4(),
     })
   }
@@ -531,7 +539,7 @@ async function main(): Promise<void> {
       top.addChild(addGeo(doc, `${spec.scene}_glass`, gl, glass))
     }
     console.log(
-      `${spec.scene}: ${k.idx.length / 3} tris${gl.idx.length ? ` + ${gl.idx.length / 3} glass` : ''}`,
+      `${spec.scene}: ${k.idx.length / 3} tris${gl.idx.length > 0 ? ` + ${gl.idx.length / 3} glass` : ''}`,
     )
   }
   textureRevolver(doc, kit)
@@ -546,7 +554,7 @@ async function main(): Promise<void> {
     reorder({ encoder: MeshoptEncoder }),
     // normals and colours only: positions and UVs stay float so builders can transform and
     // merge props freely (tiled trim UVs run past 0..1)
-    quantize({ pattern: /^(NORMAL|COLOR)/u, quantizeNormal: 10, quantizeColor: 8 }),
+    quantize({ pattern: NORMAL_OR_COLOR, quantizeNormal: 10, quantizeColor: 8 }),
   )
   doc
     .createExtension(EXTMeshoptCompression)

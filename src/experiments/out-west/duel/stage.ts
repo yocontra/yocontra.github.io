@@ -3,7 +3,7 @@ import { type Look, OUTLAWS, type Outlaw, RIFLEMAN_LOOK } from '../data/outlaws.
 import { save as persist } from '../save.ts'
 import { castActor } from '../scene/cast.ts'
 import { propObject } from '../scene/props.ts'
-import { STREET } from '../scene/world.ts'
+import { STREET } from '../scene/street.ts'
 import { clearCards } from './cues.ts'
 import type { Director } from './director.ts'
 import { backToBackShot, otsShot, posterShot } from './framing.ts'
