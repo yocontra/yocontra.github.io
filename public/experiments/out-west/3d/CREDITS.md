@@ -68,6 +68,13 @@ fetched and converted to WebP with `tools/polyhaven.ts`.
 | swatch: felt (hats, moustaches) | "Scuba Suede" — https://polyhaven.com/a/scuba_suede | CC0 1.0 |
 | swatch: linen (bandanas, masks) | "Rough Linen" — https://polyhaven.com/a/rough_linen | CC0 1.0 |
 | swatch: hessian (ponchos) | "Hessian 230" — https://polyhaven.com/a/hessian_230 | CC0 1.0 |
+| `tex/civic_*.webp` (clock tower atlas): brick | "Red Brick" — https://polyhaven.com/a/red_brick | CC0 1.0 |
+| civic atlas: dressed stone | "Sandstone Blocks 08" — https://polyhaven.com/a/sandstone_blocks_08 | CC0 1.0 |
+| civic atlas: cedar shingles | "Roof Slates 02" — https://polyhaven.com/a/roof_slates_02 | CC0 1.0 |
+| civic atlas: sheet tin | "Rusty Metal Sheet" — https://polyhaven.com/a/rusty_metal_sheet | CC0 1.0 |
+
+The civic atlas packs those four sets 2x2 with wrapped gutters (`tools/build-civic-atlas.ts`):
+diffuse 1024², normal and ARM 512². The clock dial is painted at runtime on a canvas.
 
 ## Sound effects and music
 

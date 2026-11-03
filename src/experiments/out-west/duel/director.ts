@@ -175,6 +175,7 @@ export class Director extends DuelState {
 
   toll(): void {
     this.c.audio.play('bell', { gain: 0.8, pos: this.c.world.bellPos, reverb: 0.6 })
+    this.c.world.toll()
     this.midnightBells++
     this.nextToll = this.realTime + 0.9
   }

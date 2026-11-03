@@ -98,47 +98,6 @@ export function signAtlas(signs: SignSpec[]): { tex: CanvasTexture; rows: number
   return { tex, rows }
 }
 
-/** Clock face: roman numerals, hands at the given hour/minute. */
-export function clockCanvas(): { canvas: HTMLCanvasElement; draw: (h: number, m: number) => void } {
-  const c = document.createElement('canvas')
-  c.width = c.height = 256
-  const ctx = c.getContext('2d')
-  const draw = (h: number, m: number) => {
-    if (!ctx) {
-      return
-    }
-    ctx.clearRect(0, 0, 256, 256)
-    ctx.fillStyle = '#efe6cf'
-    ctx.beginPath()
-    ctx.arc(128, 128, 124, 0, Math.PI * 2)
-    ctx.fill()
-    ctx.lineWidth = 8
-    ctx.strokeStyle = '#2a1d12'
-    ctx.stroke()
-    ctx.fillStyle = '#2a1d12'
-    ctx.font = `700 26px ${FONT.text}`
-    ctx.textAlign = 'center'
-    ctx.textBaseline = 'middle'
-    const nums = ['XII', 'I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X', 'XI']
-    nums.forEach((n, i) => {
-      const a = (i / 12) * Math.PI * 2
-      ctx.fillText(n, 128 + Math.sin(a) * 96, 128 - Math.cos(a) * 96)
-    })
-    const hand = (a: number, len: number, wdt: number) => {
-      ctx.lineWidth = wdt
-      ctx.lineCap = 'round'
-      ctx.beginPath()
-      ctx.moveTo(128, 128)
-      ctx.lineTo(128 + Math.sin(a) * len, 128 - Math.cos(a) * len)
-      ctx.stroke()
-    }
-    hand(((h % 12) / 12 + m / 720) * Math.PI * 2, 56, 9)
-    hand((m / 60) * Math.PI * 2, 84, 5)
-  }
-  draw(12, 0)
-  return { canvas: c, draw }
-}
-
 /** Soft round sprite for particles. */
 export function softDot(): CanvasTexture {
   const c = document.createElement('canvas')

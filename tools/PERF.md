@@ -175,3 +175,11 @@ await p.goto('http://localhost:4347/experiments/out-west/#level=6&perf&tier=floo
 // tap to start, wait, then:
 await p.evaluate(() => globalThis.__owPerf())
 ```
+
+## Clock tower (courthouse) budget
+
+The tower draws 3 meshes of its own (masonry atlas, iron + bronze with in-shader hands and bell,
+enamel dials); its timber, glass and kit pieces join the street batches. The old church drew 4.
+Textures: `civic_*` atlas, 1024² diffuse plus 512² normal and ARM (about 8.4 MB of GPU), and a
+512² dial canvas (1.4 MB). The duel scene estimate went from 137.0 MB to 146.0 MB. Geometry is
+about 20k triangles before the shadow pass. Frontier's tower uses no new textures.
