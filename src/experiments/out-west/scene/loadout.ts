@@ -31,7 +31,7 @@ interface OutfitLook {
   coat?: number
   poncho?: number
   bandoliers?: boolean
-  /** Material name (player model) → colour. */
+  /** Garment of the player base (Shirt, Sleeves, Pants, Boots...) → colour. */
   tint?: Readonly<Record<string, number>>
 }
 
@@ -56,14 +56,14 @@ const HATS: Partial<Record<ItemId, HatLook>> = {
 
 const OUTFITS: Partial<Record<ItemId, OutfitLook>> = {
   'outfit.trail-duds': {},
-  'outfit.shirt-vest': { tint: { LightBlue: 0xd8_cc_b0, Brown2: 0x3a_2a_1e } },
+  'outfit.shirt-vest': { tint: { Shirt: 0xd8_cc_b0, Sleeves: 0x3a_2a_1e } },
   'outfit.wool-duster': { coat: 0x6a_50_38 },
   'outfit.striped-poncho': { poncho: 0x9a_3a_28 },
-  'outfit.gamblers-frock': { coat: 0x2a_1c_2e, tint: { LightBlue: 0xe8_e0_d0 } },
-  'outfit.bandolier-rig': { bandoliers: true, tint: { LightBlue: 0x8a_6a_4a } },
+  'outfit.gamblers-frock': { coat: 0x2a_1c_2e, tint: { Shirt: 0xe8_e0_d0, Pants: 0x2a_22_2a } },
+  'outfit.bandolier-rig': { bandoliers: true, tint: { Shirt: 0x8a_6a_4a, Sleeves: 0x6a_50_38 } },
   'outfit.undertakers-black': {
     coat: 0x12_10_10,
-    tint: { LightBlue: 0x1e_1a_1a, Brown: 0x1a_16_14, Brown2: 0x14_12_10 },
+    tint: { Shirt: 0x1e_1a_1a, Sleeves: 0x1a_16_14, Pants: 0x14_12_10, Boots: 0x14_12_10 },
   },
 }
 

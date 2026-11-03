@@ -51,7 +51,9 @@ export class Pickups {
 
   constructor(root: Object3D, spots: readonly PickupSpot[], props: GLTF) {
     this.root = root
-    this.template = dynamiteBundle()
+    // the textured bundle from the props kit (tools/build-props.ts), else the plain one
+    const tnt = propDef(props, 'dynamite', 0.4, 'y')
+    this.template = tnt ? propObject(tnt) : dynamiteBundle()
     this.available = spots.map(() => true)
     const rifle = propDef(props, 'rifle', 1.1)
     for (const spot of spots) {

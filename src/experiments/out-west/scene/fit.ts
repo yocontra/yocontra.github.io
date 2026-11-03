@@ -280,6 +280,7 @@ export function shell(s: ShellSpec): BufferGeometry {
   }
   const pos: number[] = []
   const col: number[] = []
+  const uv: number[] = []
   r.forEach((row, i) => {
     const { t, y, a0, step } = L.ring(i)
     const c = typeof s.color === 'function' ? s.color(t, i) : s.color
@@ -288,11 +289,14 @@ export function shell(s: ShellSpec): BufferGeometry {
       const a = a0 + step * j
       pos.push(s.cx + Math.sin(a) * (rad + extra), y, s.cz + Math.cos(a) * (rad + extra))
       col.push(c.r, c.g, c.b)
+      // A full ring mirrors its swatch (0 → 1 → 0) so there is no seam at the back.
+      uv.push(L.full ? 1 - Math.abs((2 * j) / L.cols - 1) : j / Math.max(1, L.cols - 1), t)
     })
   })
   const g = new BufferGeometry()
   g.setAttribute('position', new BufferAttribute(new Float32Array(pos), 3))
   g.setAttribute('color', new BufferAttribute(new Float32Array(col), 3))
+  g.setAttribute('uv', new BufferAttribute(new Float32Array(uv), 2))
   g.setIndex(quads(L))
   g.computeVertexNormals()
   return g

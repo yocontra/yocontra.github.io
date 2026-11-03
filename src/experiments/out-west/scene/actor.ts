@@ -19,6 +19,7 @@ import {
   type Object3D,
   Quaternion,
   type SkinnedMesh,
+  SplineCurve,
   Vector2,
   Vector3,
 } from 'three'
@@ -85,6 +86,29 @@ export interface HolsterLook {
   roughness?: number
   trim?: number
   rig?: boolean
+}
+
+/**
+ * The tint of one of the base's materials: the outlaw's own, else the base's default (the
+ * build gives the ranger's green a western colour, hair a brown); brows follow his hair and a
+ * sculpted beard takes the beard colour.
+ */
+function tintFor(
+  src: Material,
+  tint: Readonly<Record<string, number>>,
+  o: ActorOpts,
+): number | undefined {
+  const own = tint[src.name]
+  if (own !== undefined) {
+    return own
+  }
+  if (src.name === 'Beard' && o.beard !== undefined) {
+    return o.beard
+  }
+  if ((src.name === 'Brows' || src.name === 'Beard') && tint.Hair !== undefined) {
+    return tint.Hair
+  }
+  return src.userData.tint as number | undefined
 }
 
 const PLAIN_HOLSTER: HolsterLook = { color: 0x3a_24_14, roughness: 0.55 }
@@ -157,17 +181,52 @@ const CROWN_R: Record<HatKey, number> = {
 }
 
 /**
+ * Give a lathed hat its hand-made shape: a cattleman's brim rolls up at the sides and dips
+ * front and back, and its crown takes a centre crease; the flat-brims keep theirs flat.
+ */
+function shapeHat(geo: LatheGeometry, key: HatKey): void {
+  const crownR = CROWN_R[key] ?? 0.1
+  const prof = HAT_PROFILES[key] ?? HAT_PROFILES.cowboy
+  const brimR = Math.max(...prof.map(([x]) => x))
+  const top = Math.max(...prof.map(([, y]) => y))
+  const curl = { cowboy: 0.05, tall: 0.045, sombrero: 0.02 }[key as string] ?? 0
+  const crease = { cowboy: 0.022, tall: 0.018 }[key as string] ?? 0
+  const pos = geo.getAttribute('position')
+  for (let i = 0; i < pos.count; i++) {
+    const x = pos.getX(i)
+    const z = pos.getZ(i)
+    let y = pos.getY(i)
+    const rr = Math.hypot(x, z)
+    if (rr > crownR + 0.008 && curl > 0) {
+      const t = (rr - crownR) / Math.max(0.01, brimR - crownR)
+      const side = (x / rr) ** 2
+      y += curl * t * t * side - curl * 0.35 * t * t * (1 - side)
+    }
+    if (crease > 0 && y > top - 0.05) {
+      const k = (y - (top - 0.05)) / 0.05
+      y -= crease * k * Math.max(0, 1 - Math.abs(x) / (crownR * 0.9))
+    }
+    pos.setY(i, y)
+  }
+  geo.computeVertexNormals()
+}
+
+/**
  * A hat as ONE mesh (crown and band merged, vertex coloured). The returned
  * group is what pops off; `fit` scales an inner child so popHat() keeps size.
  */
 export function makeHat(key: HatKey, color: number, floor: Floor = { value: 0 }): Group {
   const pts = (HAT_PROFILES[key] ?? HAT_PROFILES.cowboy).map(([x, y]) => new Vector2(x, y))
-  // lathe needs the profile ordered bottom→top for outward normals
-  const prof = [...pts].reverse()
+  // lathe needs the profile ordered bottom→top for outward normals; a spline through the
+  // profile rounds the crown and the brim's roll instead of faceting them
+  const prof = new SplineCurve([...pts].reverse()).getSpacedPoints(36)
   const g = new Group()
   const felt = new MeshStandardMaterial({ color, roughness: 0.85 })
   felt.userData.rim = 0.9
-  const crown = new Mesh(new LatheGeometry(prof, 18), felt)
+  felt.userData.swatch = 'felt'
+  const lathe = new LatheGeometry(prof, 48)
+  shapeHat(lathe, key)
+  const crown = new Mesh(lathe, felt)
   g.add(crown)
   const bandH = key === 'sombrero' ? 0.03 : 0.022
   const r = (HAT_PROFILES[key]?.[2]?.[0] ?? 0.09) + 0.006
@@ -175,7 +234,8 @@ export function makeHat(key: HatKey, color: number, floor: Floor = { value: 0 })
     color: new Color(color).multiplyScalar(0.35),
     roughness: 0.6,
   })
-  const band = new Mesh(new CylinderGeometry(r, r + 0.004, bandH, 18, 1, true), bandMat)
+  bandMat.userData.swatch = 'leather'
+  const band = new Mesh(new CylinderGeometry(r, r + 0.004, bandH, 48, 1, true), bandMat)
   band.position.y = 0.03
   g.add(band)
   const geo = mergePieces(meshPieces(g, g))
@@ -199,12 +259,14 @@ export function makeHat(key: HatKey, color: number, floor: Floor = { value: 0 })
  */
 function holsterParts(look: HolsterLook): Mesh[] {
   const leather = new MeshStandardMaterial({ color: look.color, roughness: look.roughness ?? 0.55 })
+  leather.userData.swatch = 'leather'
   const body = new Mesh(new CylinderGeometry(0.03, 0.026, 0.2, 7), leather)
   body.rotation.z = Math.PI / 2
   body.position.set(0.13, 0.045, 0)
   const parts = [body]
   if (look.trim !== undefined) {
     const band = new MeshStandardMaterial({ color: look.trim, roughness: 0.4, metalness: 0.3 })
+    band.userData.swatch = 'metal'
     for (const [x, r] of [
       [0.04, 0.032],
       [0.215, 0.028],
@@ -312,16 +374,20 @@ export class Actor {
   /** World height of his feet, for the shader's contact darkening. */
   readonly floor: Floor = { value: 0 }
   private readonly bones = new Map<string, Bone>()
+  /** The base carries a sculpted beard (kept by prune when he wears one). */
+  private realBeard = false
 
   constructor(gltf: GLTF, opts: ActorOpts = {}) {
     this.model = cloneSkinned(gltf.scene)
-    if (opts.base) {
-      prune(this.model, opts.base)
-    }
+    prune(this.model, { beard: opts.beard !== undefined })
     this.model.traverse((o) => {
       const b = o as Bone
       if (b.isBone) {
         this.bones.set(boneKey(b.name), b)
+      }
+      const m = o as Mesh
+      if (m.isMesh && (m.material as Material).name === 'Beard') {
+        this.realBeard = true
       }
     })
     this.root.add(this.model)
@@ -375,11 +441,16 @@ export class Actor {
           return cached
         }
         const c = src.clone() as MeshStandardMaterial
-        const hex = tint[src.name]
-        if (hex !== undefined) {
-          c.color.setHex(hex)
-        }
+        const hex = tintFor(src, tint, opts)
+        c.color.setHex(hex ?? 0xff_ff_ff)
+        // a tinted garment is recoloured (its main fabric), untinted keeps its texture
+        c.userData.recolor =
+          hex !== undefined && ((src.userData.lum as number | undefined) ?? 0) > 0
         vary(c, seed)
+        if (hex === undefined) {
+          // untinted: the texture as authored (vary still sets roughness and rim)
+          c.color.setHex(0xff_ff_ff)
+        }
         matCache.set(src, c)
         return c
       }
@@ -448,7 +519,7 @@ export class Actor {
     if (o.star) {
       out.push(...star(f, this.root))
     }
-    if (o.beard !== undefined) {
+    if (o.beard !== undefined && !this.realBeard) {
       out.push(...beard(f, o.beard))
     }
     if (o.moustache !== undefined) {

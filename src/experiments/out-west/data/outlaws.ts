@@ -17,7 +17,10 @@ export type BodyKey = 'suit' | 'rugged' | 'casual' | 'worker' | 'king' | 'punk' 
 export interface Look {
   /** Which whole character he is: never mixed with parts of another. */
   base: BodyKey
-  /** Material name → hex colour. */
+  /**
+   * Garment → hex colour (the base GLB's material names: Shirt, Sleeves, Pants, Boots, Belt,
+   * Bracer, Pauldron, Hair, Skin). A garment recolours its main fabric and keeps its detail.
+   */
   tint: Readonly<Record<string, number>>
   /** Uniform build: 1 = a 1.78 m man. */
   scale: number
@@ -100,13 +103,7 @@ export const OUTLAWS: readonly Outlaw[] = [
     gimmick: 'shaky',
     look: {
       base: 'casual',
-      tint: {
-        LightBrown: 0xd8_cc_b0,
-        LightBlue: 0x4a_5a_6a,
-        Hair: 0xc8_9a_5a,
-        White: 0x6a_50_38,
-        Red_Dark: 0x4a_30_20,
-      },
+      tint: { Shirt: 0xd8_cc_b0, Pants: 0x4a_5a_6a, Boots: 0x6a_50_38, Hair: 0xc8_9a_5a },
       scale: 0.97,
     },
     hat: 'cowboy',
@@ -129,7 +126,7 @@ export const OUTLAWS: readonly Outlaw[] = [
     gimmick: 'talker',
     look: {
       base: 'suit',
-      tint: { Suit: 0x6a_4a_30, Tie: 0x8a_1a_10, Hair: 0x2a_1a_10, White: 0xd8_cc_b0 },
+      tint: { Shirt: 0x6a_4a_30, Sleeves: 0x6a_4a_30, Pants: 0x3a_2a_1e, Hair: 0x2a_1a_10 },
       scale: 0.95,
       moustache: 0x2a_1a_10,
     },
@@ -163,12 +160,11 @@ export const OUTLAWS: readonly Outlaw[] = [
     look: {
       base: 'worker',
       tint: {
-        Worker_Vest: 0x5a_3a_20,
-        LightBrown: 0xa8_98_78,
-        Worker_Yellow: 0x8a_6a_3a,
-        Brown: 0x6a_5a_40,
-        Brown2: 0x4a_3a_28,
-        Moustache: 0x8a_5a_2a,
+        Shirt: 0x5a_6a_7a,
+        Sleeves: 0xa8_98_78,
+        Pants: 0x5a_3a_20,
+        Boots: 0x4a_3a_28,
+        Hair: 0x8a_5a_2a,
       },
       scale: 1.05,
     },
@@ -192,7 +188,7 @@ export const OUTLAWS: readonly Outlaw[] = [
     gimmick: 'coin',
     look: {
       base: 'punk',
-      tint: { Black: 0x1a_20_28, White: 0xe0_d8_c8, LightBlue: 0x2a_2a_30, Earrings: 0xc8_a0_50 },
+      tint: { Shirt: 0xe0_d8_c8, Sleeves: 0xe0_d8_c8, Pants: 0x1a_20_28, Hair: 0x10_10_10 },
       scale: 1.0,
       moustache: 0x10_10_10,
     },
@@ -217,12 +213,11 @@ export const OUTLAWS: readonly Outlaw[] = [
     look: {
       base: 'king',
       tint: {
-        Blue: 0x8a_7a_5a,
-        Beige: 0xa8_98_78,
-        Metal: 0x5a_4a_3a,
-        Metal_Dark: 0x3a_2e_22,
-        DarkBrown: 0x3a_2e_22,
-        Hair_White: 0x9a_8a_7a,
+        Shirt: 0x6a_5a_7a,
+        Sleeves: 0xa8_98_78,
+        Pants: 0x3a_2e_22,
+        Pauldron: 0x5a_4a_3a,
+        Hair: 0x9a_8a_7a,
       },
       scale: 0.93,
     },
@@ -247,11 +242,11 @@ export const OUTLAWS: readonly Outlaw[] = [
     look: {
       base: 'rugged',
       tint: {
-        Green: 0x6a_2e_1e,
-        LightGreen: 0x8a_6a_4a,
-        Brown: 0x4a_3a_2a,
-        Brown2: 0x3a_2a_1a,
+        Shirt: 0x4a_5a_3a,
+        Sleeves: 0x8a_6a_4a,
+        Pants: 0x4a_3a_2a,
         Hair: 0x1a_10_08,
+        Skin: 0xe0_bc_9c,
       },
       scale: 0.98,
       poncho: 0xa0_28_1a,
@@ -278,13 +273,7 @@ export const OUTLAWS: readonly Outlaw[] = [
     gimmick: 'windy',
     look: {
       base: 'worker',
-      tint: {
-        Worker_Vest: 0x6a_5a_40,
-        Worker_Yellow: 0x6a_5a_40,
-        LightBrown: 0x8a_7a_5a,
-        Brown: 0x5a_4a_38,
-        Moustache: 0x3a_24_12,
-      },
+      tint: { Shirt: 0x6a_6a_5a, Sleeves: 0x4a_4a_3e, Pants: 0x5a_4a_38, Hair: 0x3a_24_12 },
       scale: 1.08,
       coat: 0xb0_94_68,
     },
@@ -309,7 +298,7 @@ export const OUTLAWS: readonly Outlaw[] = [
     gimmick: 'cold',
     look: {
       base: 'woman',
-      tint: { LightGreen: 0x2a_2a_2a, Green: 0x3a_20_20, White: 0xc8_c0_b0 },
+      tint: { Shirt: 0xc8_c0_b0, Sleeves: 0x2a_2a_2a, Pants: 0x2a_2a_2a, Hair: 0x1a_12_10 },
       scale: 0.95,
       coat: 0x1a_1a_1a,
     },
@@ -333,7 +322,7 @@ export const OUTLAWS: readonly Outlaw[] = [
     gimmick: 'whistler',
     look: {
       base: 'suit',
-      tint: { Suit: 0x2a_1e_2a, Tie: 0x10_10_10, White: 0xc8_c0_b0, Hair: 0x3a_2a_1a },
+      tint: { Shirt: 0x2a_1e_2a, Sleeves: 0x2a_1e_2a, Pants: 0x1a_1a_1e, Hair: 0x3a_2a_1a },
       scale: 1.1,
       coat: 0x14_12_1a,
     },
@@ -357,13 +346,7 @@ export const OUTLAWS: readonly Outlaw[] = [
     gimmick: 'two-guns',
     look: {
       base: 'casual',
-      tint: {
-        LightBrown: 0x9a_6a_4a,
-        LightBlue: 0x3a_30_28,
-        Hair: 0x3a_24_12,
-        White: 0x2a_2a_2a,
-        Red_Dark: 0x2a_2a_2a,
-      },
+      tint: { Shirt: 0x7a_2a_22, Sleeves: 0x2a_2a_2a, Pants: 0x3a_30_28, Hair: 0x3a_24_12 },
       scale: 1.0,
       moustache: 0x3a_24_12,
     },
@@ -388,7 +371,7 @@ export const OUTLAWS: readonly Outlaw[] = [
     gimmick: 'drr',
     look: {
       base: 'woman',
-      tint: { LightGreen: 0x7a_2a_2a, Green: 0x3a_1a_1a, White: 0xd8_cc_b8 },
+      tint: { Shirt: 0xd8_cc_b8, Sleeves: 0x7a_2a_2a, Pants: 0x3a_1a_1a, Hair: 0x6a_3a_1a },
       scale: 0.94,
     },
     hat: 'cowboy',
@@ -411,7 +394,7 @@ export const OUTLAWS: readonly Outlaw[] = [
     gimmick: 'piano',
     look: {
       base: 'punk',
-      tint: { Black: 0x3a_1a_14, White: 0xe8_e0_d0, LightBlue: 0x1a_1a_22 },
+      tint: { Shirt: 0xe8_e0_d0, Sleeves: 0x3a_1a_14, Pants: 0x1a_1a_22, Hair: 0x1a_12_0a },
       scale: 0.9,
       moustache: 0x1a_12_0a,
     },
@@ -435,13 +418,7 @@ export const OUTLAWS: readonly Outlaw[] = [
     gimmick: 'night',
     look: {
       base: 'rugged',
-      tint: {
-        Green: 0x2a_26_20,
-        LightGreen: 0xa8_a0_90,
-        Brown: 0x2a_26_20,
-        Brown2: 0x1a_16_12,
-        Hair: 0x2a_1a_10,
-      },
+      tint: { Shirt: 0x8a_8a_84, Sleeves: 0x2a_26_20, Pants: 0x2a_26_20, Hair: 0x2a_1a_10 },
       scale: 1.1,
       coat: 0x2a_24_1c,
       star: true,
@@ -467,7 +444,7 @@ export const OUTLAWS: readonly Outlaw[] = [
     gimmick: 'fake-king',
     look: {
       base: 'punk',
-      tint: { Black: 0x10_10_10, White: 0x7a_6a_5a, LightBlue: 0x2a_30_38 },
+      tint: { Shirt: 0x3a_3a_42, Sleeves: 0x10_10_10, Pants: 0x2a_30_38, Hair: 0x10_10_10 },
       scale: 1.02,
     },
     hat: 'cowboy',
@@ -491,13 +468,7 @@ export const OUTLAWS: readonly Outlaw[] = [
     gimmick: 'cards',
     look: {
       base: 'worker',
-      tint: {
-        Worker_Vest: 0x8a_6a_44,
-        Worker_Yellow: 0x8a_6a_44,
-        LightBrown: 0xd8_cc_b0,
-        Brown: 0x4a_3a_2a,
-        Moustache: 0x6a_4a_2a,
-      },
+      tint: { Shirt: 0xd8_cc_b0, Sleeves: 0xd8_cc_b0, Pants: 0x4a_3a_2a, Hair: 0x6a_4a_2a },
       scale: 1.08,
       coat: 0x9a_7a_50,
     },
@@ -521,7 +492,7 @@ export const OUTLAWS: readonly Outlaw[] = [
     gimmick: 'underboss',
     look: {
       base: 'rugged',
-      tint: { Green: 0x1a_14_10, LightGreen: 0x5a_4a_3a, Brown: 0x3a_2a_1a, Hair: 0x0a_08_06 },
+      tint: { Shirt: 0x5a_4a_3a, Sleeves: 0x1a_14_10, Pants: 0x3a_2a_1a, Hair: 0x0a_08_06 },
       scale: 1.06,
       poncho: 0x2a_20_18,
       bandoliers: true,
@@ -548,7 +519,7 @@ export const OUTLAWS: readonly Outlaw[] = [
     gimmick: 'boss',
     look: {
       base: 'suit',
-      tint: { Suit: 0x0e_0e_12, Tie: 0x5a_00_00, White: 0xcf_c6_b4, Hair: 0x0a_0a_0a },
+      tint: { Shirt: 0x1a_1a_20, Sleeves: 0xcf_c6_b4, Pants: 0x0e_0e_12, Hair: 0x0a_0a_0a },
       scale: 1.12,
       coat: 0x0c_0c_10,
       moustache: 0x0a_0a_0a,
@@ -572,13 +543,7 @@ export const LEATHER_COLOR = LEATHER
 /** The rifleman on the saloon's porch roof (underboss). */
 export const RIFLEMAN_LOOK: Look = {
   base: 'casual',
-  tint: {
-    LightBrown: 0x3a_32_26,
-    LightBlue: 0x2a_20_18,
-    Hair: 0x1a_10_08,
-    White: 0x2a_20_18,
-    Red_Dark: 0x1a_14_10,
-  },
+  tint: { Shirt: 0x3a_32_26, Sleeves: 0x2a_20_18, Pants: 0x2a_20_18, Hair: 0x1a_10_08 },
   scale: 1.0,
   mask: true,
 }

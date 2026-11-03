@@ -4,15 +4,17 @@ Bun + TypeScript, typechecked by `tsc -p tools` (part of `bun run check`). Owned
 reuse freely. Every third-party or generated asset gets a line in
 `public/experiments/out-west/3d/CREDITS.md`.
 
-| Tool                 | What it does                                                                                                                                                                                                     | Needs                                                                          |
-| -------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------ |
-| `polyhaven.ts`       | Fetch a Poly Haven CC0 PBR set (diffuse, GL normal, ARM, …) and write WebP maps                                                                                                                                  | `cwebp`                                                                        |
-| `pbr-from-albedo.ts` | Derive normal + ARM (AO, roughness) from a flat albedo (design doc §10.2): Gemini signage, posters, leather                                                                                                      | `ffmpeg`, `cwebp`                                                              |
-| `optimize-gltf.ts`   | dedup → prune → weld → resize → KTX2 (or WebP) → quantize → meshopt, plus an optional simplified LOD file                                                                                                        | `bunx` (fetches `@gltf-transform/cli`), optional `toktx`                       |
-| `make-luts.ts`       | Export the in-game time-of-day grades (`engine/lut.ts`) as 32³ `.cube` files for a colourist                                                                                                                     | none                                                                           |
-| `art/`               | Source art for generated textures (e.g. `signboard_src.webp`, Gemini)                                                                                                                                            |                                                                                |
-| `audio/`             | The soundtrack: `manifest.ts` (every ElevenLabs prompt), `generate.ts`, `recipes.ts` + `build.ts` (master to −16/−18 LUFS, ≤ −1 dBTP, loop points), `loudness.ts` (report), `verify-duel.ts` (in-browser meters) | `ffmpeg` (with `aac_at`), Apparish generators, Playwright for `verify-duel.ts` |
-| `PERF.md`            | How to measure, the numbers so far, and the real-device checklist                                                                                                                                                |                                                                                |
+| Tool                  | What it does                                                                                                                                                                                                            | Needs                                                      |
+| --------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------- |
+| `polyhaven.ts`        | Fetch a Poly Haven CC0 PBR set (diffuse, GL normal, ARM, …) and write WebP maps                                                                                                                                         | `cwebp`                                                    |
+| `pbr-from-albedo.ts`  | Derive normal + ARM (AO, roughness) from a flat albedo (design doc §10.2): Gemini signage, posters, leather                                                                                                             | `ffmpeg`, `cwebp`                                          |
+| `optimize-gltf.ts`    | dedup → prune → weld → resize → KTX2 (or WebP) → quantize → meshopt, plus an optional simplified LOD file                                                                                                               | `bunx` (fetches `@gltf-transform/cli`), optional `toktx`   |
+| `build-characters.ts` | The textured character bases + clips + shared character atlas from Quaternius's CC0 Universal Base Characters, Modular Outfits – Fantasy and Universal Animation Library (see the file header)                          | the unzipped packs, `sharp`, gltf-transform, meshoptimizer |
+| `build-props.ts`      | `models/props.glb` + the trim atlas `tex/kit_*.webp` from Quaternius's CC0 Medieval Village and Fantasy Props MegaKits (doors, windows, rails, barrels, crates, wagon...), the re-UV'd revolver and the dynamite bundle | the unzipped kits, `tools/art/props-src.glb`               |
+| `make-luts.ts`        | Export the in-game time-of-day grades (`engine/lut.ts`) as 32³ `.cube` files for a colourist                                                                                                                            | none                                                       |
+| `art/`                | Source art for generated textures (e.g. `signboard_src.webp`, Gemini)                                                                                                                                                   |                                                            |
+| `audio/` | The soundtrack: `manifest.ts` (every ElevenLabs prompt), `generate.ts`, `recipes.ts` + `build.ts` (master to −16/−18 LUFS, ≤ −1 dBTP, loop points), `loudness.ts` (report), `verify-duel.ts` (in-browser meters) | `ffmpeg` (with `aac_at`), Apparish generators, Playwright for `verify-duel.ts` |
+| `PERF.md`             | How to measure, the numbers so far, and the real-device checklist                                                                                                                                                       |                                                            |
 
 ## Recipes
 
@@ -39,6 +41,30 @@ KTX2: `optimize-gltf.ts` writes KTX2/Basis only when KTX-Software's `toktx` is o
 GLTFLoader in `engine/assets.ts`. Until then, WebP inside GLB (what the current models use) is the
 format.
 
+## Characters and props (no Blender)
+
+```bash
+# Packs: download the free [Standard] zips from quaternius.com (itch.io), unzip, and flatten into
+#   <src>/base  <src>/outfits  <src>/hair  <src>/ual  <src>/swatch (Poly Haven sets, see below)
+for id in brown_leather caban scuba_suede rough_linen hessian_230; do
+  bun tools/polyhaven.ts $id <src>/swatch --name $id
+done
+bun tools/build-characters.ts <src>          # models/{player,casual,...}.glb + tex/char_*.webp
+bun tools/build-props.ts <kit_dir>           # models/props.glb + tex/kit_*.webp
+```
+
+- Every base shares one skeleton (renamed to the game's rig names) and one 2048x3072 atlas; the
+  player GLB carries the clips. Garment material names (Shirt, Sleeves, Pants, Boots, Belt,
+  Bracer, Pauldron, Hair, Skin) are the outlaw tint keys; a tint recolours only the garment's main
+  fabric (mask in `char_arm.r`).
+- Kit pieces keep their trim-sheet UVs (U tiles), stacked into one atlas band per sheet; they all
+  draw with the one "Kit" material bound in `engine/assets.ts`.
+
+KTX2: Homebrew has no `ktx` formula. The KTX-Software 4.4.2 macOS pkg can be unpacked without
+installing (`pkgutil --expand-full`, then run `ktx` with `DYLD_LIBRARY_PATH` at its `lib/`), but
+shipping KTX2 also needs the Basis transcoder (`basis_transcoder.js`) served to the page, which
+the repo's zero-JS rule rules out as a committed file. The atlases ship as WebP.
+
 ## Runtime pieces that replace offline bakes (while Blender is unavailable)
 
 - **Light probe / IBL:** `engine/probe.ts` captures a 128² cube of the lit street from the duel spot
@@ -58,9 +84,7 @@ format.
   shadows.
 - `tools/bake-probes/`: L2 SH probe grid from the lightmapped town, for characters (cheaper than
   PMREM sampling).
-- Characters: UV-unwrap the CC0 bases and bake 1K PBR (albedo, normal, ORM) from a sculpted or
-  generated high-poly, or source or generate higher-fidelity rigged characters (Sketchfab
-  CC0/CC-BY, Hyper3D Rodin, Hunyuan3D) and retarget them onto the shared Quaternius skeleton, so
-  `actor.ts` and `fit.ts` keep working. The current bases are low-poly, flat-shaded and have no
-  UVs, which caps character quality at "clean stylized".
+- Characters: bespoke sculpted faces/hands, a proper western outfit set (the free packs have a
+  peasant and a ranger outfit, recoloured per outlaw), cloth-fitted coats and ponchos (ours are
+  procedural shells fitted at runtime), and hand-made LOD0-2 instead of meshopt simplification.
 - Proper LOD0–2 via Decimate with hand fixes, and VAT bakes from the clean LOD2.

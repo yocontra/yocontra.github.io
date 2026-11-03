@@ -10,6 +10,7 @@ import {
   Group,
   HemisphereLight,
   type InstancedMesh,
+  Matrix4,
   Mesh,
   MeshStandardMaterial,
   type Object3D,
@@ -24,11 +25,14 @@ import {
 } from 'three'
 import { GeoBuilder } from './geo.ts'
 import { type Preset, presetAt } from './presets.ts'
+import { mergePlaced, type PropDef, placeMatrix, propDef, propsLibrary } from './props.ts'
 import { RIM } from './style.ts'
 import { clockCanvas, type SignSpec, signAtlas } from './textures.ts'
 import { attachArm, attachBoard, withTownAO } from './town-pbr.ts'
 
 /** Street layout (metres). The street runs along Z; the duel is centred on the origin. */
+type Placed = { def: PropDef; at: Matrix4 }
+
 export const STREET = {
   half: 9,
   boardwalk: 2.4,
@@ -410,6 +414,7 @@ float gn(vec2 p){ vec2 i=floor(p); vec2 f=fract(p); f=f*f*(3.0-2.0*f);
     const trim = new GeoBuilder(1.6)
     const glass = new GeoBuilder(1)
     const signs = new GeoBuilder(1)
+    const kit: Placed[] = []
     const H = STREET.half
     const Bw = STREET.boardwalk
     const white = new Color(0xff_ff_ff)
@@ -468,23 +473,8 @@ float gn(vec2 p){ vec2 i=floor(p); vec2 f=fract(p); f=f*f*(3.0-2.0*f);
         )
       }
       trim.box(fx - s * 0.28, sy, b.z, 0.08, sh + 0.2, sw + 0.2, 0x2a_1d_14)
-      // upper windows on the false front
-      const upper = b.h > 5.4 ? 2 : 0
-      for (let i = 0; i < upper; i++) {
-        const wz = b.z + (i === 0 ? -1 : 1) * (b.w / 4)
-        glass.box(fx - s * 0.28, b.h - 1.2, wz, 0.06, 1.3, 0.9, 0xff_ff_ff)
-        trim.box(fx - s * 0.3, b.h - 1.2, wz, 0.08, 1.5, 1.1, 0xd8_cc_b0)
-      }
-      // ground floor: door + two windows
-      const doorW = b.kind === 'stable' ? 3.2 : 1.4
-      glass.box(fx - s * 0.27, 1.25, b.z, 0.06, 2.5, doorW, 0xff_ff_ff)
-      trim.box(fx - s * 0.29, 1.3, b.z, 0.08, 2.7, doorW + 0.3, 0x2a_1d_14)
-      for (const dz of [-1, 1]) {
-        const wz = b.z + dz * (b.w / 2 - 1.8)
-        glass.box(fx - s * 0.28, 1.7, wz, 0.06, 1.6, 1.8, 0xff_ff_ff)
-        trim.box(fx - s * 0.3, 1.7, wz, 0.08, 1.85, 2.05, 0xd8_cc_b0)
-        trim.box(fx - s * 0.32, 0.86, wz, 0.25, 0.1, 2.2, 0x3a_2a_1e)
-      }
+      // windows, doors and shutters: the textured kit when it's loaded, plain boxes otherwise
+      this.facade(b, fx, { glass, trim, kit })
       // boardwalk
       trim.box(s * (H + Bw / 2), 0.17, b.z, Bw, 0.34, b.w, 0xc8_b0_90, { rotUV: true })
       // awning on posts
@@ -521,6 +511,8 @@ float gn(vec2 p){ vec2 i=floor(p); vec2 f=fract(p); f=f*f*(3.0-2.0*f);
     trim.box(-8.2, 0.35, 10, 0.9, 0.7, 2.4, 0x5a_44_30)
     trim.box(8.3, 0.35, -16, 0.9, 0.7, 2.4, 0x5a_44_30)
 
+    this.dressBoardwalks(kit)
+    mergePlaced(kit, this.root, new Map([['KitGlass', this.windowMat]]))
     this.addStatic(walls, this.wallMat)
     this.addStatic(trim, this.trimMat)
     const gm = this.addStatic(glass, this.windowMat, false)
@@ -528,6 +520,139 @@ float gn(vec2 p){ vec2 i=floor(p); vec2 f=fract(p); f=f*f*(3.0-2.0*f);
       gm.receiveShadow = false
     }
     this.addStatic(signs, this.signMat, false)
+  }
+
+  /**
+   * A building's street face: the kit's panelled door (double doors for the livery), framed
+   * glazed windows either side, and on two-storey fronts upper windows with open shutters and a
+   * balcony rail along the porch roof. Kit pieces face +Z with their base at the wall's foot.
+   */
+  private facade(
+    b: BuildingSpec,
+    fx: number,
+    out: { glass: GeoBuilder; trim: GeoBuilder; kit: Placed[] },
+  ): void {
+    const s = b.side
+    const lib = propsLibrary()
+    const piece = (name: string) => (lib ? propDef(lib, name, 1, 'y', true) : null)
+    const door = piece(b.kind === 'stable' ? 'k_door_braced' : 'k_door')
+    const frame = piece('k_doorframe')
+    const win = piece('k_window_wide')
+    const thin = piece('k_window_thin')
+    const shut = piece('k_shutters_thin')
+    const rail = piece('k_balcony')
+    if (!(door && frame && win && thin && shut && rail)) {
+      this.plainFacade(b, fx, out)
+      return
+    }
+    // kit +Z turned to face the street (-s along X), its back on the false front
+    const ry = -s * (Math.PI / 2)
+    const face = fx - s * 0.25
+    const put = (def: PropDef, z: number, y = 0, depth = 0.03, sx = 1) =>
+      out.kit.push({
+        def,
+        at: placeMatrix(face - s * depth, y, z, ry).scale(new Vector3(sx, 1, 1)),
+      })
+    if (b.kind === 'stable') {
+      put(door, b.z - 0.56, 0, 0.06, 1.0)
+      put(door, b.z + 0.56, 0, 0.06, 1.0)
+      put(frame, b.z, 0, 0.12, 1.5)
+    } else {
+      put(door, b.z, 0, 0.06)
+      put(frame, b.z, 0, 0.12)
+    }
+    for (const dz of [-1, 1]) {
+      put(win, b.z + dz * (b.w / 2 - 1.8), 0, 0.02)
+    }
+    if (b.h > 5.4) {
+      for (const dz of [-1, 1]) {
+        const wz = b.z + dz * (b.w / 4)
+        put(thin, wz, b.h - 2.9, 0)
+        put(shut, wz, b.h - 2.9, -0.12)
+      }
+      // a rail along the porch roof, two-metre sections
+      const aw = 3.1
+      const n = Math.max(1, Math.floor((b.w - 0.4) / 2))
+      for (let i = 0; i < n; i++) {
+        const z = b.z - ((n - 1) * 2) / 2 + i * 2
+        out.kit.push({
+          def: rail,
+          at: placeMatrix(s * (STREET.half + 0.25), aw + 0.06, z, ry + Math.PI).multiply(
+            new Matrix4().makeTranslation(0, 0, -0.95),
+          ),
+        })
+      }
+    }
+  }
+
+  /** The old flat-box facade (props library missing). */
+  private plainFacade(
+    b: BuildingSpec,
+    fx: number,
+    out: { glass: GeoBuilder; trim: GeoBuilder },
+  ): void {
+    const { glass, trim } = out
+    const s = b.side
+    const upper = b.h > 5.4 ? 2 : 0
+    for (let i = 0; i < upper; i++) {
+      const wz = b.z + (i === 0 ? -1 : 1) * (b.w / 4)
+      glass.box(fx - s * 0.28, b.h - 1.2, wz, 0.06, 1.3, 0.9, 0xff_ff_ff)
+      trim.box(fx - s * 0.3, b.h - 1.2, wz, 0.08, 1.5, 1.1, 0xd8_cc_b0)
+    }
+    const doorW = b.kind === 'stable' ? 3.2 : 1.4
+    glass.box(fx - s * 0.27, 1.25, b.z, 0.06, 2.5, doorW, 0xff_ff_ff)
+    trim.box(fx - s * 0.29, 1.3, b.z, 0.08, 2.7, doorW + 0.3, 0x2a_1d_14)
+    for (const dz of [-1, 1]) {
+      const wz = b.z + dz * (b.w / 2 - 1.8)
+      glass.box(fx - s * 0.28, 1.7, wz, 0.06, 1.6, 1.8, 0xff_ff_ff)
+      trim.box(fx - s * 0.3, 1.7, wz, 0.08, 1.85, 2.05, 0xd8_cc_b0)
+      trim.box(fx - s * 0.32, 0.86, wz, 0.25, 0.1, 2.2, 0x3a_2a_1e)
+    }
+  }
+
+  /** Benches, buckets, sacks and a chest or two along the boardwalks, by the doors. */
+  private dressBoardwalks(kit: Placed[]): void {
+    const lib = propsLibrary()
+    if (!lib) {
+      return
+    }
+    const def = (n: string) => propDef(lib, n, 1, 'y', true)
+    const bench = def('k_bench')
+    const bucket = def('k_bucket')
+    const sack = def('k_sack')
+    const chest = def('k_chest')
+    const rack = def('k_barrel_rack')
+    const H = STREET.half
+    const deck = 0.34
+    let i = 0
+    for (const b of BUILDINGS) {
+      const s = b.side
+      const ry = -s * (Math.PI / 2)
+      const fx = s * (H + STREET.boardwalk) - s * 0.6
+      i++
+      if (bench && b.kind !== 'stable' && i % 2 === 0) {
+        kit.push({
+          def: bench,
+          at: placeMatrix(fx, deck, b.z + (b.w / 2 - 1.8) * (i % 4 === 0 ? 1 : -1), ry),
+        })
+      }
+      if (bucket && i % 3 === 0) {
+        kit.push({ def: bucket, at: placeMatrix(fx + s * 0.2, deck, b.z + 1.3, i) })
+      }
+      if (sack && (b.kind === 'stable' || i % 4 === 1)) {
+        kit.push({ def: sack, at: placeMatrix(fx, deck, b.z - b.w / 2 + 0.8, i * 1.7) })
+        kit.push({
+          def: sack,
+          at: placeMatrix(fx - s * 0.1, deck, b.z - b.w / 2 + 1.5, i * 2.3, 0.9),
+        })
+      }
+      if (chest && b.kind === 'bank') {
+        kit.push({ def: chest, at: placeMatrix(fx, deck, b.z + 2.6, ry) })
+      }
+      if (rack && b.kind === 'saloon') {
+        kit.push({ def: rack, at: placeMatrix(fx, deck, b.z - 3.2, ry) })
+      }
+    }
   }
 
   private buildChurch(): void {
