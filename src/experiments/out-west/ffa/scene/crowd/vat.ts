@@ -45,7 +45,7 @@ const VAT_VERSION = 'vat5'
 const LOD2_TRIS = 1500
 
 /** Clothing materials per base, recoloured per player (slot 1 top, slot 2 bottoms). */
-const PALETTE: Record<BodyKey, [string[], string[]]> = {
+export const PALETTE: Record<BodyKey, [string[], string[]]> = {
   casual: [['LightBrown'], ['LightBlue']],
   suit: [['Suit', 'Tie'], []],
   worker: [
