@@ -1,4 +1,5 @@
 import type { RankedSession, ServerMessage } from '../net/ranked.ts'
+import type { RankedResume } from '../net/wire-ranked.ts'
 import type { ClockEvents, DuelClock, StandoffSpec } from './clock.ts'
 
 interface Queued {
@@ -24,9 +25,12 @@ const noop = (): void => undefined
  * events the practice clock raises. A new standoff waits until the server has
  * judged the previous duel (a stall loss resolves on the server's own timer).
  *
- * Anything unexpected (the socket closing, any server error, the server going
- * quiet mid-standoff) is reported once as `dropped`, and the director carries
- * on in practice: the player is never left waiting on a call that won't come.
+ * A dropped link is resumed when the server allows it: sends wait, the watchdog
+ * rests, and on the way back any standoff in flight (voided by the server) is
+ * forgotten so the director can run it again. Anything else unexpected (the
+ * link not coming back, any server error, the server going quiet mid-standoff)
+ * is reported once as `dropped`, and the director carries on in practice: the
+ * player is never left waiting on a call that won't come.
  */
 export class RankedDuelClock implements DuelClock {
   readonly ranked = true as boolean
@@ -43,6 +47,8 @@ export class RankedDuelClock implements DuelClock {
   private over = false as boolean
   private readonly levels = new Map<number, number>()
   private readonly paid = new Map<number, number>()
+  /** The link is down and being resumed: nothing is sent, nothing times out. */
+  private reconnecting = false as boolean
 
   constructor(session: RankedSession, events: ClockEvents) {
     this.session = session
@@ -50,7 +56,44 @@ export class RankedDuelClock implements DuelClock {
     session.listen({
       message: (m) => this.onMessage(m),
       closed: (reason) => this.drop(reason),
+      reconnecting: () => this.onReconnecting(),
+      resumed: (r) => this.onResumed(r),
     })
+  }
+
+  private onReconnecting(): void {
+    if (this.over) {
+      return
+    }
+    this.reconnecting = true
+    this.deadline = 0
+    this.events.reconnecting(true)
+  }
+
+  /**
+   * Back on the run. The server voided any standoff in flight: forget it and anything queued for
+   * it, so the director can stage it again. If the server expects a different outlaw than the
+   * one in flight (a verdict was lost on the way), the run can't be reconciled and drops.
+   */
+  private onResumed(r: RankedResume | null): void {
+    if (this.over) {
+      return
+    }
+    this.reconnecting = false
+    const inFlight = this.unresolved === null ? null : (this.levels.get(this.unresolved) ?? null)
+    if (r === null || (inFlight !== null && r.level !== inFlight)) {
+      this.drop('The ranked server lost track of this run.')
+      return
+    }
+    if (this.unresolved !== null) {
+      this.levels.delete(this.unresolved)
+    }
+    this.unresolved = null
+    this.deadline = 0
+    this.queue = []
+    this.duel = Math.max(this.duel, r.duel ?? -1)
+    this.events.reconnecting(false)
+    this.events.resumed(r.purse)
   }
 
   /** The server's payout for each outlaw beaten this run (for the ledger). */
@@ -122,7 +165,7 @@ export class RankedDuelClock implements DuelClock {
   }
 
   private flush(): void {
-    while (!this.over && this.queue.length > 0) {
+    while (!(this.over || this.reconnecting) && this.queue.length > 0) {
       const q = this.queue[0]
       if (!q || (q.standoff && this.unresolved !== null)) {
         return
@@ -154,7 +197,7 @@ export class RankedDuelClock implements DuelClock {
 
   /** Server messages drive the duel; the frame only checks that the server is still talking. */
   tick(now: number): void {
-    if (this.deadline > 0 && now > this.deadline) {
+    if (!this.reconnecting && this.deadline > 0 && now > this.deadline) {
       this.drop('The ranked server went quiet.')
     }
   }

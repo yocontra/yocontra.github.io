@@ -57,10 +57,9 @@ function rankedConnector(root: HTMLElement, hash: URLSearchParams): RankedConnec
   return async () => {
     const token = await turnstile.take()
     if (!token) {
-      return null
+      return { ok: false, error: '' }
     }
-    const session = await RankedSession.connect(token)
-    return session.ok ? session.value : null
+    return await RankedSession.connect(token)
   }
 }
 
