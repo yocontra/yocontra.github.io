@@ -1,0 +1,65 @@
+---
+import Base from '~/layouts/Base.astro'
+---
+
+<Base title="HACKED" noindex>
+  <div id="hacked">YOU GOT HACKED</div>
+</Base>
+
+<style is:global>
+body {
+  margin: 0;
+  min-height: 100dvh;
+  cursor: pointer;
+  background: #000 url("/experiments/hax/bg.gif");
+  overflow: hidden;
+}
+</style>
+
+<style>
+#hacked {
+  position: fixed;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: max-content;
+  max-width: calc(100vw - 32px);
+  box-sizing: border-box;
+  text-align: center;
+  animation: blink 1s steps(1) infinite;
+  background: red;
+  color: white;
+  font-family: system-ui, sans-serif;
+  font-size: clamp(40px, 11vw, 120px);
+  line-height: 1.1;
+  padding: clamp(20px, 6vw, 64px);
+  overflow-wrap: break-word;
+}
+
+@keyframes blink {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0;
+  }
+}
+</style>
+
+<script>
+// both files are mp4s, but only their aac audio tracks are used
+const tracks = ['/experiments/hax/jolly.mp4', '/experiments/hax/boom.mp4'].map((src) => {
+  const track = new Audio(src)
+  track.loop = true
+  track.preload = 'auto'
+  return track
+})
+const play = (): void => {
+  for (const track of tracks) {
+    track.play().catch(() => {})
+  }
+}
+document.addEventListener('click', play)
+document.addEventListener('touchend', play)
+</script>
