@@ -9,7 +9,21 @@ import { LEATHER, type Look, type Outlaw } from './outlaw-types.ts'
 import { ROSTER_EARLY } from './roster-early.ts'
 import { ROSTER_LATE } from './roster-late.ts'
 
-export type { BodyKey, FakeKey, Gimmick, HatKey, Look, Outlaw } from './outlaw-types.ts'
+export type {
+  BeardKey,
+  BodyKey,
+  Build,
+  FaceShape,
+  FakeKey,
+  Gimmick,
+  HairKey,
+  HatKey,
+  Look,
+  MoustacheKey,
+  Outlaw,
+  SkinKey,
+  Stance,
+} from './outlaw-types.ts'
 
 export const OUTLAWS: readonly Outlaw[] = [...ROSTER_EARLY, ...ROSTER_LATE]
 

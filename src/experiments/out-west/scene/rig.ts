@@ -16,19 +16,12 @@ import {
   Quaternion,
   Vector3,
 } from 'three'
+import type { BeardKey, MoustacheKey } from '../data/outlaws.ts'
 import type { Piece } from './bake.ts'
+import { beard, eyepatch, moustache, scar, sideburns, vest } from './face.ts'
 import { type HatFit, makeHat } from './hats.ts'
-import {
-  bandana,
-  bandoliers,
-  beard,
-  coat,
-  type Fit,
-  mask,
-  moustache,
-  poncho,
-  star,
-} from './outfit.ts'
+import { bandana, bandoliers, coat, type Fit, mask, poncho, star } from './outfit.ts'
+import { HAIR_LUM } from './person.ts'
 import type { Glow } from './shade.ts'
 import { type Floor, vary } from './style.ts'
 
@@ -38,8 +31,14 @@ export interface DressOpts {
   bandana?: number | undefined
   coat?: number | undefined
   poncho?: number | undefined
+  vest?: number | undefined
   moustache?: number | undefined
+  moustacheStyle?: MoustacheKey | undefined
   beard?: number | undefined
+  beardStyle?: BeardKey | undefined
+  sideburns?: number | undefined
+  eyepatch?: boolean | undefined
+  scar?: boolean | undefined
   bandoliers?: boolean | undefined
   star?: boolean | undefined
   mask?: number | undefined
@@ -48,6 +47,9 @@ export interface DressOpts {
 
 const tmpV = new Vector3()
 const tmpQ = new Quaternion()
+
+/** Hair-like materials: their atlas texels are a mid grey, so an explicit colour is normalised. */
+const HAIRY = new Set(['Hair', 'Brows', 'Beard'])
 
 /**
  * The tint of one of the base's materials: the outlaw's own, else the base's default (the
@@ -91,6 +93,9 @@ export function tintModel(model: Object3D, o: DressOpts): void {
     if (hex === undefined) {
       // untinted: the texture as authored (vary still sets roughness and rim)
       c.color.setHex(0xff_ff_ff)
+    } else if (HAIRY.has(src.name) && hex !== src.userData.tint) {
+      // his own hair colour reads as itself over the grey hair texels (the base default doesn't)
+      c.color.multiplyScalar(1 / HAIR_LUM)
     }
     cache.set(src, c)
     return c
@@ -112,6 +117,9 @@ export function dressPieces(f: Fit, o: DressOpts, root: Object3D, realBeard: boo
   if (o.poncho !== undefined) {
     out.push(...poncho(f, o.poncho))
   }
+  if (o.vest !== undefined && o.poncho === undefined) {
+    out.push(...vest(f, o.vest))
+  }
   if (o.mask !== undefined) {
     out.push(...mask(f, o.mask))
   } else if (o.bandana !== undefined) {
@@ -124,10 +132,19 @@ export function dressPieces(f: Fit, o: DressOpts, root: Object3D, realBeard: boo
     out.push(...star(f, root))
   }
   if (o.beard !== undefined && !realBeard) {
-    out.push(...beard(f, o.beard))
+    out.push(...beard(f, o.beard, o.beardStyle))
   }
-  if (o.moustache !== undefined) {
-    out.push(...moustache(f, o.moustache, root))
+  if (o.moustache !== undefined && o.mask === undefined) {
+    out.push(...moustache(f, { color: o.moustache, style: o.moustacheStyle }, root))
+  }
+  if (o.sideburns !== undefined) {
+    out.push(...sideburns(f, o.sideburns, root))
+  }
+  if (o.eyepatch) {
+    out.push(...eyepatch(f, root))
+  }
+  if (o.scar && o.mask === undefined) {
+    out.push(...scar(f, root))
   }
   return out
 }

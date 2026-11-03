@@ -9,6 +9,7 @@ import {
 import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.js'
 import { type GLTF, GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js'
 import type { BodyKey, Look } from '../data/outlaws.ts'
+import { hairDonor } from '../scene/person.ts'
 import { setPropsLibrary } from '../scene/props.ts'
 import { NORMAL_GUARD_GLSL, setCharacterMaps } from '../scene/shade.ts'
 import { loadTex } from '../scene/textures.ts'
@@ -108,8 +109,13 @@ async function kitMaterial(
   }
 }
 
+/** The files a look needs: its base, and the base its hair cut is borrowed from. */
 export function lookKeys(look: Look | LegacyLook): BodyKey[] {
-  return 'base' in look ? [look.base] : ['casual']
+  if (!('base' in look)) {
+    return ['casual']
+  }
+  const donor = hairDonor(look.base, look.hair)
+  return donor ? [look.base, donor] : [look.base]
 }
 
 export async function loadAssets(

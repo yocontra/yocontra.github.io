@@ -38,13 +38,15 @@ export async function lineup(s: DuelState, day: number): Promise<Actor[]> {
   row(null, RIFLEMAN_LOOK, 17)
   c.world.focusShadow(V(0, 0, 4))
   s.phase = 'end'
-  const focus = Number(new URLSearchParams(location.hash.slice(1)).get('focus') ?? '-1')
-  const fa = actors[focus]
+  const hash = new URLSearchParams(location.hash.slice(1))
+  const fa = actors[Number(hash.get('focus') ?? '-1')]
   if (fa) {
     const h = fa.headPos(V())
+    // `dist` widens the close-up (1 = head, ~2.5 = head to belt)
+    const k = Number(hash.get('dist') ?? '1')
     c.rig.cut('lineup', () => ({
-      pos: V(h.x - 0.35, h.y + 0.05, h.z - 1.1),
-      look: V(h.x, h.y - 0.1, h.z),
+      pos: V(h.x - 0.35 * k, h.y + 0.05, h.z - 1.1 * k),
+      look: V(h.x, h.y - 0.1 * k, h.z),
       fov: 35,
     }))
   } else {

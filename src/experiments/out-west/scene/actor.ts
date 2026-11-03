@@ -16,12 +16,23 @@ import {
 } from 'three'
 import type { GLTF } from 'three/examples/jsm/loaders/GLTFLoader.js'
 import { clone as cloneSkinned } from 'three/examples/jsm/utils/SkeletonUtils.js'
-import type { BodyKey, HatKey } from '../data/outlaws.ts'
+import type {
+  BeardKey,
+  BodyKey,
+  Build,
+  FaceShape,
+  HairKey,
+  HatKey,
+  MoustacheKey,
+  SkinKey,
+  Stance,
+} from '../data/outlaws.ts'
 import { bake, bodyPieces, meshPieces, onBone, type Piece } from './bake.ts'
 import { boneKey, bounds, sampleBody } from './fit.ts'
 import { fitHat, type HatFit, tuckHair } from './hats.ts'
 import { type HolsterLook, holsterParts, mergedProp, PLAIN_HOLSTER } from './kit.ts'
 import { type Fit, measure, outerThigh, prune } from './outfit.ts'
+import { applyBuild, paintSkin, reshape, StanceLayer, swapHair } from './person.ts'
 import { watchPose } from './pose-watch.ts'
 import { dressPieces, measureStride, seatHat, slotOn, tintModel } from './rig.ts'
 import { characterMaterial, type Glow } from './shade.ts'
@@ -47,11 +58,27 @@ export interface ActorOpts {
   scale?: number
   coat?: number | undefined
   poncho?: number | undefined
+  vest?: number | undefined
   moustache?: number | undefined
+  moustacheStyle?: MoustacheKey | undefined
   beard?: number | undefined
+  beardStyle?: BeardKey | undefined
+  sideburns?: number | undefined
+  stubble?: number | undefined
   bandoliers?: boolean | undefined
   star?: boolean | undefined
   mask?: number | undefined
+  eyepatch?: boolean | undefined
+  scar?: boolean | undefined
+  gloves?: number | undefined
+  /** Who he is under the clothes (scene/person.ts). */
+  skin?: SkinKey | undefined
+  hair?: HairKey | undefined
+  /** The base whose hair mesh his cut borrows (null: his own). */
+  hairFrom?: GLTF | null
+  build?: Build | undefined
+  face?: FaceShape | undefined
+  stance?: Stance | undefined
   /** Seed for the subtle per-material colour/roughness variation. */
   seed?: string
   /** The holster cosmetic (leather colour, tooling, a buscadero drop loop). Looks only. */
@@ -127,11 +154,15 @@ export class Actor {
   disposed = false
   /** What the dev pose watchdog calls him. */
   readonly label: string
+  /** His standing habit, layered on every clip (null: none). */
+  private readonly stance: StanceLayer | null = null
 
   constructor(gltf: GLTF, opts: ActorOpts = {}) {
     this.label = `${opts.base ?? 'player'} ${opts.seed ?? ''}`.trim()
     this.model = cloneSkinned(gltf.scene)
-    prune(this.model, { beard: opts.beard !== undefined })
+    prune(this.model, {
+      beard: opts.beard !== undefined && (opts.beardStyle ?? 'sculpted') === 'sculpted',
+    })
     this.model.traverse((o) => {
       const b = o as Bone
       if (b.isBone) {
@@ -142,6 +173,9 @@ export class Actor {
         this.realBeard = true
       }
     })
+    // his own cut and his own face and torso, before anything is measured
+    swapHair(this.model, this.bones, opts.hair, opts.hairFrom ?? null)
+    reshape(this.model, opts.build, opts.face)
     this.root.add(this.model)
     // Normalise to a 1.78 m man, then his build, uniformly: everything he
     // wears and carries rides on bones, and only a uniform scale keeps it true.
@@ -152,6 +186,8 @@ export class Actor {
     this.model.scale.multiplyScalar(k)
     this.model.position.y = -rest.min.y * k
     this.height = HEIGHT * s
+    // his proportions ride on bones: the clips key no scale, and position only on the hips
+    applyBuild(this.bones, opts.build)
     this.root.updateMatrixWorld(true)
 
     this.head = this.bone('Head')
@@ -186,6 +222,7 @@ export class Actor {
     const fit = measure(body, this.bones)
     const clothes = dressPieces(fit, opts, this.root, this.realBeard)
     const pieces = [...bodyPieces(this.model, this.root, body), ...clothes]
+    paintSkin(pieces, body, fit.head, opts)
     // the hat is fitted to his skull now, so the hair it covers is pressed under it before baking
     this.hatFit = opts.hat ? fitHat(body, fit.head.eye, opts.hat) : null
     if (this.hatFit) {
@@ -226,6 +263,10 @@ export class Actor {
     }
     if (opts.rifle) {
       this.attachRifle(opts.rifle)
+    }
+    if (opts.stance) {
+      const layer = new StanceLayer(this.bones, opts.stance)
+      this.stance = layer.empty ? null : layer
     }
     watchPose(this)
   }
@@ -540,7 +581,9 @@ export class Actor {
   update(dt: number): void {
     this.floor.value = this.root.position.y
     this.t += dt
+    this.stance?.undo()
     this.mixer.update(dt)
+    this.stance?.apply()
     // Procedural layers on top of the clip.
     if (this.sway > 0 && this.spine) {
       this.spine.rotation.z += Math.sin(this.t * 1.3) * 0.12 * this.sway

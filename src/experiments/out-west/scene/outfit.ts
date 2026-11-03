@@ -20,12 +20,11 @@ import {
   Quaternion,
   Shape,
   ShapeGeometry,
-  SphereGeometry,
   TubeGeometry,
   Vector3,
 } from 'three'
 import { meshPieces, onBone, type Piece } from './bake.ts'
-import { type Body, bounds, nearestWeights, onBones, reach, shell, type WeightFn } from './fit.ts'
+import { type Body, bounds, nearestWeights, onBones, shell, type WeightFn } from './fit.ts'
 import { FABRIC } from './style.ts'
 
 /**
@@ -307,8 +306,10 @@ export function mask(f: Fit, color: number): Piece[] {
   const h = f.head
   const yTop = h.eye - 0.48 * (h.eye - h.chin)
   const yBot = f.neck.lo + 0.3 * (f.neck.hi - f.neck.lo)
+  // the face and neck only: long hair hanging past the jaw would balloon it
+  const face = onBones(f.body, ['Head', 'Neck']).filter((s) => s.mat !== 'Hair')
   const geo = shell({
-    samples: onBones(f.body, ['Head', 'Neck']),
+    samples: face,
     cx: h.cx,
     cz: h.cz,
     yTop,
@@ -328,58 +329,6 @@ export function mask(f: Fit, color: number): Piece[] {
       weights: nearestWeights(f.body, onBones(f.body, ['Head', 'Neck'])),
     },
   ]
-}
-
-/** Full beard: a shell over the jaw from the mouth down under the chin. */
-export function beard(f: Fit, color: number): Piece[] {
-  const h = f.head
-  const yTop = h.chin + 0.42 * (h.eye - h.chin)
-  const yBot = h.chin - 0.03
-  const head = onBones(f.body, ['Head'])
-  const geo = shell({
-    samples: head,
-    cx: h.cx,
-    cz: h.cz,
-    yTop,
-    yBot,
-    arc: 0,
-    half: 1.75,
-    taper: (t) => 1 - 0.35 * t,
-    rings: 6,
-    segs: 16,
-    margin: 0.008,
-    bulge: (t) => 0.02 * Math.sin(Math.PI * Math.min(1, t * 1.2)),
-    band: 0.012,
-    color: lin(color),
-  })
-  const b = f.bone('Head')
-  return b ? [{ geo, ...fabric('wool'), weights: onBone(b) }] : []
-}
-
-/** Handlebar moustache on his upper lip. */
-export function moustache(f: Fit, color: number, space: Object3D): Piece[] {
-  const h = f.head
-  const b = f.bone('Head')
-  if (!b) {
-    return []
-  }
-  const y = h.chin + 0.5 * (h.eye - h.chin)
-  const z = reach(onBones(f.body, ['Head']), { cx: h.cx, cz: h.cz, y, a: 0, dy: 0.012, da: 0.25 })
-  const mat = new MeshStandardMaterial({ color, roughness: FABRIC.wool.roughness })
-  mat.userData.swatch = 'felt'
-  const g = new Group()
-  for (const s of [-1, 1]) {
-    const m = new Mesh(new SphereGeometry(0.03, 8, 6), mat)
-    m.scale.set(1.2, 0.4, 0.5)
-    m.position.set(s * 0.026, -0.004, 0)
-    m.rotation.z = s * -0.35
-    g.add(m)
-  }
-  g.position.set(h.cx, y, h.cz + (Number.isFinite(z) ? z : 0.1) + 0.004)
-  space.add(g)
-  const out = meshPieces(g, space, onBone(b))
-  g.removeFromParent()
-  return out
 }
 
 /** Tin star on his left breast, flush with the shirt. */
