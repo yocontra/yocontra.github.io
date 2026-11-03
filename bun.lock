@@ -6,13 +6,9 @@
       "name": "contra.io",
       "dependencies": {
         "@astrojs/sitemap": "^3.7.4",
-        "@fontsource-variable/eb-garamond": "^5.3.0",
         "@fontsource-variable/inter-tight": "^5.3.0",
         "@fontsource-variable/jetbrains-mono": "^5.3.0",
-        "@fontsource-variable/oswald": "^5.3.0",
         "@fontsource-variable/unbounded": "^5.3.0",
-        "@fontsource/rye": "^5.3.0",
-        "@fontsource/ultra": "^5.3.0",
         "@simplewebauthn/browser": "^14.0.0",
         "@simplewebauthn/server": "^14.0.3",
         "astro": "^7.4.5",
@@ -226,19 +222,11 @@
 
     "@esbuild/win32-x64": ["@esbuild/win32-x64@0.28.2", "", { "os": "win32", "cpu": "x64" }, "sha512-5ebpxr3nWMzrL/rnUI755Jkuee0bHL/Gq0WTF9lvcpv73wAp5eu8MfBUgWK9bhWvZjj7yX8etf/8tI8Ney695g=="],
 
-    "@fontsource-variable/eb-garamond": ["@fontsource-variable/eb-garamond@5.3.0", "", {}, "sha512-656OJsA9Vv24yhqRZFEzXnzS2AYgKdEILLgHJYLzzXndgcWFKfSXFqzbRI5/6Yk1Yt7UfWrUeppE5nRQPQMwlQ=="],
-
     "@fontsource-variable/inter-tight": ["@fontsource-variable/inter-tight@5.3.0", "", {}, "sha512-ZhZZ29sNZ15P1K+cUt13GeBRYON0akgmNiftshUeDLos7X7zGcRgPzt434879Xhq1QbwlW3M/apBMk7jWabwvA=="],
 
     "@fontsource-variable/jetbrains-mono": ["@fontsource-variable/jetbrains-mono@5.3.0", "", {}, "sha512-F32xpS2NsGYoQi2ADSkKTgpJj7ozajsGgDJ8woTnqjmIB+dxDIqImjl4pXZVEExu8UFZ2ndhmX18EBS/hdz3Lw=="],
 
-    "@fontsource-variable/oswald": ["@fontsource-variable/oswald@5.3.0", "", {}, "sha512-sSZzcTeaQGNyZbTVlS4tNNHElK38UktFLqKd6NQDLFCBV27320rQC3kXSZVytYm1PPjKmPxqVaGwqj7LEKUWQw=="],
-
     "@fontsource-variable/unbounded": ["@fontsource-variable/unbounded@5.3.0", "", {}, "sha512-ea565Ncn4r7gPdBEHcmaF31V11hDfkL7b/JCklLobQbMfbu2ZZQrVWNgdeEFWFLqNh36yhieZWOgxdAnMTzrLg=="],
-
-    "@fontsource/rye": ["@fontsource/rye@5.3.0", "", {}, "sha512-nKMwMa2/y8LMfhxs7Wm6FnbwXLKsBrJKs6dygYOPrmbpRIvBlf7Kt1mDNm0lzDIuuU+ghluQsisqpQ7peDm7gA=="],
-
-    "@fontsource/ultra": ["@fontsource/ultra@5.3.0", "", {}, "sha512-mV1do792j1WQTTNVpRiv0zaLhd4U6hLSKnYFKZJyoMVwGXy5QrU7EtjikO57Gm4guRB3UNi9wbJhKLuveUlomw=="],
 
     "@gltf-transform/core": ["@gltf-transform/core@4.5.1", "", { "dependencies": { "property-graph": "^4.1.0" } }, "sha512-OWgBYssKHKoXMIrMb2N20jXqWRnMP9HdtcTFQBEAJtz4P+OOxx5fozl5eAeK7nktIs5uDE/lu4NbkE5VCZaR9g=="],
 

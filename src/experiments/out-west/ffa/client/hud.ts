@@ -6,6 +6,7 @@
  * reticle, the hit marker, the hurt flash, the death poster with the respawn countdown, and the
  * menu (leave town). Every write is skipped when the value hasn't changed.
  */
+import { icon } from '../../ui/icons.ts'
 import { REVOLVER_ROUNDS } from '../sim/constants.ts'
 
 export interface HudState {
@@ -107,7 +108,8 @@ export class Hud {
     }
     this.reloadEl = el('div', 'fr-reload', ammo, 'RELOADING')
     this.weaponEl = el('div', 'fr-weapon', vitals)
-    this.dynamiteEl = el('div', 'fr-dynamite', vitals, '🧨 DYNAMITE: G / THROW')
+    this.dynamiteEl = el('div', 'fr-dynamite', vitals, 'Dynamite: G / throw')
+    this.dynamiteEl.prepend(icon('dynamite'))
     this.protectEl = el('div', 'fr-protect', vitals, 'PROTECTED')
 
     const tc = el('div', 'fr-tc', this.root)

@@ -52,6 +52,7 @@ const sorted = [...experiments].sort((a, b) => b.year - a.year)
     color: var(--fg-muted);
     font-size: 1.15rem;
     max-width: 40ch;
+    text-wrap: balance;
   }
   .grid {
     list-style: none;
@@ -100,8 +101,9 @@ const sorted = [...experiments].sort((a, b) => b.year - a.year)
   }
   .year {
     font-family: var(--font-mono);
-    color: var(--fg-faint);
+    color: var(--fg-muted);
     font-size: 0.85rem;
+    font-variant-numeric: tabular-nums;
   }
   .card p {
     color: var(--fg-muted);
@@ -116,8 +118,9 @@ const sorted = [...experiments].sort((a, b) => b.year - a.year)
     margin: 0;
   }
   .tags li {
-    font: 0.72rem / 1 var(--font-mono);
-    padding: 0.35em 0.6em;
+    font: 0.78rem / 1 var(--font-mono);
+    letter-spacing: 0.02em;
+    padding: 0.4em 0.7em;
     border-radius: 999px;
     border: 1px solid var(--line);
     color: var(--fg-muted);

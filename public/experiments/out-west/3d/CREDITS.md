@@ -123,14 +123,16 @@ AAC-LC `.m4a` (Apple encoder), SFX and beds to about −16 LUFS and music to −
 
 | File | Source | Licence |
 |---|---|---|
-| `paper.webp`, `poster.webp`, `wood.webp`, `leather.webp`, `smoke.webp` | Aged paper, wanted-poster stock, saloon planks, saddle leather, charred endpaper: generated (Gemini), resized and compressed | First-party |
+| `paper.webp` (768², 45 KB), `leather.webp` (768², 83 KB), `smoke.webp` (768², 8 KB) | Cotton rag handbill stock, worn saddle leather, smoke-darkened endpaper: generated (Gemini, 2026-11 art pass), made seamless with `tools/seamless.ts` | First-party |
+| `poster.webp`, `wood.webp` | Wanted-poster stock, saloon planks: generated (Gemini), resized and compressed | First-party |
 | `seal.webp` | Red wax seal: generated (Gemini), chroma-keyed | First-party |
 | `duel-woodcut.webp` | Title woodcut of a street duel: generated (Gemini) | First-party |
 | `corner.svg`, `rule.svg`, `src/experiments/out-west/ui/icons.ts` | Printer's ornaments and the 12-icon set: generated (Gemini) as raster references, traced to vectors with potrace | First-party |
 | `torn.svg` | Torn paper edge mask: generated procedurally | First-party |
 
-## Fonts (self-hosted via fontsource)
+## Fonts (self-hosted, `/experiments/out-west/fonts/`, built by `tools/build-fonts.ts` from github.com/google/fonts; licence texts alongside)
 
-- "Ultra" and "Rye" by Astigmatic (AOETI), SIL Open Font License 1.1.
+- "Ultra" by Astigmatic (AOETI), Apache License 2.0.
+- "Rye" by Nicole Fally (Sorkin Type Co), SIL Open Font License 1.1.
 - "EB Garamond" by Georg Duffner and Octavio Pardo, SIL Open Font License 1.1.
 - "Oswald" by Vernon Adams, Kalapi Gajjar and Cyreal, SIL Open Font License 1.1.

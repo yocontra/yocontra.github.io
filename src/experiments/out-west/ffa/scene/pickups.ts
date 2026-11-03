@@ -5,10 +5,19 @@
  * their arc then fizzing on the ground until the fuse runs out. The server owns every rule; this
  * only shows the state the events describe.
  */
-import { CylinderGeometry, Group, Mesh, MeshStandardMaterial, type Object3D, Vector3 } from 'three'
+import {
+  CylinderGeometry,
+  Group,
+  type Material,
+  Mesh,
+  MeshStandardMaterial,
+  type Object3D,
+  Vector3,
+} from 'three'
 import type { GLTF } from 'three/examples/jsm/loaders/GLTFLoader.js'
 import { propDef, propObject } from '../../scene/props.ts'
 import type { PickupSpot } from '../sim/layout.ts'
+import { kitMaterial, shotgunMesh } from './shotgun.ts'
 
 const ARC_S = 0.55
 
@@ -34,6 +43,21 @@ function dynamiteBundle(): Group {
   return g
 }
 
+/** The coach gun turning about its middle, fattened like the rifle so it reads from the sky. */
+function shotgunPickup(kit: Material): Group {
+  const gun = shotgunMesh(kit)
+  // its own origin is the wrist; centre it (the gun runs x -0.39..0.59, y -0.11..0.08), and
+  // roll it half over so the sky camera sees both barrels and the stock's profile
+  gun.position.set(-0.1, 0, 0)
+  const roll = new Group()
+  roll.rotation.x = 0.8
+  roll.add(gun)
+  const g = new Group()
+  g.add(roll)
+  g.scale.set(1.3, 1.7, 1.7)
+  return g
+}
+
 interface Thrown {
   obj: Object3D
   from: Vector3
@@ -56,15 +80,17 @@ export class Pickups {
     this.template = tnt ? propObject(tnt) : dynamiteBundle()
     this.available = spots.map(() => true)
     const rifle = propDef(props, 'rifle', 1.1)
+    const kit = kitMaterial(props)
     for (const spot of spots) {
       let obj: Object3D
       if (spot.kind === 'dynamite') {
         obj = this.template.clone()
         obj.scale.setScalar(1.6)
+      } else if (spot.kind === 'shotgun') {
+        obj = shotgunPickup(kit)
       } else if (rifle) {
         obj = propObject(rifle)
-        // The shotgun is the rifle sawn short.
-        obj.scale.set(spot.kind === 'shotgun' ? 0.7 : 1, 1.4, 1.4)
+        obj.scale.set(1, 1.4, 1.4)
       } else {
         obj = new Group()
       }

@@ -322,10 +322,10 @@
   --tile-accent: var(--ow-brass);
 }
 .ow-tile-frontier {
-  --tile-accent: #c8762a;
+  --tile-accent: #b8692a;
 }
 .ow-tile-store {
-  --tile-accent: #7f9a62;
+  --tile-accent: #7d8c5a;
 }
 .ow-tile .ow-icon {
   position: absolute;
@@ -333,9 +333,11 @@
   right: 14px;
   width: 36px;
   height: 36px;
-  color: var(--tile-accent);
-  opacity: 0.9;
-  filter: drop-shadow(0 2px 0 rgb(0 0 0 / 0.8));
+  /* one ink for every icon: brass, struck like a die (light top-left, shadow bottom-right) */
+  color: var(--ow-brass);
+  opacity: 0.92;
+  filter: drop-shadow(-0.5px -0.5px 0 rgb(255 236 190 / 0.35))
+    drop-shadow(1px 1.5px 0 rgb(0 0 0 / 0.85));
 }
 .ow-tile-kicker {
   padding-right: 40px;
@@ -349,18 +351,20 @@
   padding-right: 32px;
   font-family: var(--ow-font-display);
   font-size: clamp(1.25rem, 2vw, 1.5rem);
-  line-height: 1;
+  line-height: var(--ow-lead-display);
   letter-spacing: 0.03em;
   text-transform: uppercase;
   text-shadow: 0 2px 0 rgb(0 0 0 / 0.85);
+  text-wrap: balance;
 }
 .ow-tile-sub {
   margin-top: auto;
   padding-top: var(--ow-s2);
   font-size: var(--ow-fs-small);
   font-style: italic;
-  line-height: 1.3;
+  line-height: 1.25;
   color: var(--ow-brass-hi);
+  text-wrap: balance;
 }
 .ow-tile.locked .ow-tile-sub {
   color: var(--ow-bad);
@@ -427,6 +431,13 @@
   .ow-tile-title {
     padding-right: 0;
     font-size: var(--ow-fs-h4);
+  }
+  .ow-tile-sub {
+    font-size: var(--ow-fs-micro);
+  }
+  .ow-tile-kicker {
+    font-size: var(--ow-fs-small);
+    white-space: nowrap;
   }
 }
 /* short landscape phones */

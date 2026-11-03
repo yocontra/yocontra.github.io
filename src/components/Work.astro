@@ -83,13 +83,14 @@ import { career } from '~/data/career.ts'
   .location {
     display: block;
     color: var(--fg-faint);
-    opacity: 0.75;
   }
 
+  /* dates and places sit on the live shader: muted, not faint, with a soft halo for contrast */
   .years {
     font: 0.9rem / 1.6 var(--font-mono);
-    color: var(--fg-faint);
+    color: var(--fg-muted);
     font-variant-numeric: tabular-nums;
+    text-shadow: 0 1px 14px oklch(0.1 0.02 var(--accent-h) / 0.9);
   }
 
   h3 {
@@ -102,6 +103,7 @@ import { career } from '~/data/career.ts'
   }
 
   h3 a span {
+    margin-inline-start: 0.12em;
     font-size: 0.5em;
     vertical-align: super;
     color: var(--fg-faint);

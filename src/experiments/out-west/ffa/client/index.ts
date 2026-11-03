@@ -15,6 +15,7 @@
 import type { AudioEngine } from '../../audio/audio.ts'
 import { FrontierGame } from './game.ts'
 import { type JoinError, openLoopback, openRemote } from './transport.ts'
+import '../../ui/tokens.css'
 import './frontier.css'
 
 export type FrontierExit = 'left' | 'quit' | 'lost' | 'refused'

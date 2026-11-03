@@ -15,7 +15,7 @@ export const ROSTER_LATE: readonly Outlaw[] = [
     gimmick: 'two-guns',
     look: {
       base: 'casual',
-      tint: { Shirt: 0x7a_2a_22, Sleeves: 0x2a_2a_2a, Pants: 0x3a_30_28, Hair: 0x3a_24_12 },
+      tint: { Shirt: 0x6e_2c_24, Sleeves: 0x2a_2a_2a, Pants: 0x3a_30_28, Hair: 0x3a_24_12 },
       scale: 1.0,
       moustache: 0x3a_24_12,
     },
@@ -40,7 +40,7 @@ export const ROSTER_LATE: readonly Outlaw[] = [
     gimmick: 'drr',
     look: {
       base: 'woman',
-      tint: { Shirt: 0xd8_cc_b8, Sleeves: 0x7a_2a_2a, Pants: 0x3a_1a_1a, Hair: 0x6a_3a_1a },
+      tint: { Shirt: 0xb4_a2_82, Sleeves: 0x6a_2a_26, Pants: 0x3a_1a_1a, Hair: 0x6a_3a_1a },
       scale: 0.94,
     },
     hat: 'cowboy',
@@ -63,7 +63,7 @@ export const ROSTER_LATE: readonly Outlaw[] = [
     gimmick: 'piano',
     look: {
       base: 'punk',
-      tint: { Shirt: 0xe8_e0_d0, Sleeves: 0x3a_1a_14, Pants: 0x1a_1a_22, Hair: 0x1a_12_0a },
+      tint: { Shirt: 0xb8_a8_88, Sleeves: 0x3a_1a_14, Pants: 0x1c_1a_1c, Hair: 0x1a_12_0a },
       scale: 0.9,
       moustache: 0x1a_12_0a,
     },
@@ -87,7 +87,7 @@ export const ROSTER_LATE: readonly Outlaw[] = [
     gimmick: 'night',
     look: {
       base: 'rugged',
-      tint: { Shirt: 0x8a_8a_84, Sleeves: 0x2a_26_20, Pants: 0x2a_26_20, Hair: 0x2a_1a_10 },
+      tint: { Shirt: 0x7a_70_60, Sleeves: 0x2a_26_20, Pants: 0x2a_26_20, Hair: 0x2a_1a_10 },
       scale: 1.1,
       coat: 0x2a_24_1c,
       star: true,
@@ -113,7 +113,7 @@ export const ROSTER_LATE: readonly Outlaw[] = [
     gimmick: 'fake-king',
     look: {
       base: 'punk',
-      tint: { Shirt: 0x3a_3a_42, Sleeves: 0x10_10_10, Pants: 0x2a_30_38, Hair: 0x10_10_10 },
+      tint: { Shirt: 0x3c_36_30, Sleeves: 0x10_10_10, Pants: 0x2c_34_46, Hair: 0x10_10_10 },
       scale: 1.02,
     },
     hat: 'cowboy',
@@ -137,7 +137,7 @@ export const ROSTER_LATE: readonly Outlaw[] = [
     gimmick: 'cards',
     look: {
       base: 'worker',
-      tint: { Shirt: 0xd8_cc_b0, Sleeves: 0xd8_cc_b0, Pants: 0x4a_3a_2a, Hair: 0x6a_4a_2a },
+      tint: { Shirt: 0xb8_9a_6e, Sleeves: 0xb8_9a_6e, Pants: 0x4a_3a_2a, Hair: 0x6a_4a_2a },
       scale: 1.08,
       coat: 0x9a_7a_50,
     },
@@ -188,7 +188,7 @@ export const ROSTER_LATE: readonly Outlaw[] = [
     gimmick: 'boss',
     look: {
       base: 'suit',
-      tint: { Shirt: 0x1a_1a_20, Sleeves: 0xcf_c6_b4, Pants: 0x0e_0e_12, Hair: 0x0a_0a_0a },
+      tint: { Shirt: 0x1c_1a_1a, Sleeves: 0xae_9e_80, Pants: 0x12_11_10, Hair: 0x0a_0a_0a },
       scale: 1.12,
       coat: 0x0c_0c_10,
       moustache: 0x0a_0a_0a,
