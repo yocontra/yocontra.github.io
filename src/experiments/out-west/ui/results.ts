@@ -1,3 +1,4 @@
+// biome-ignore-all lint/style/noExcessiveClassesPerFile: the receipt and the room news it opens with belong together
 /**
  * Bounty Hunt's results screen: the outcome, both reactions, the money and XP lines, level-ups,
  * the streak, rematch, and the opponent's poster and Report. (The wanted posters themselves are
@@ -211,21 +212,6 @@ export class ResultsPanel {
     }
   }
 
-  /** What the room said while the kill cam played: its latest votes, and why it closed. */
-  catchUp(
-    votes: { votes: readonly [boolean, boolean]; left: number } | null,
-    me: 0 | 1,
-    closed: string | null,
-  ): void {
-    if (votes) {
-      this.setVotes(votes.votes, me, votes.left)
-    }
-    if (closed !== null) {
-      this.closeRematch()
-      this.say(closed)
-    }
-  }
-
   say(text: string): void {
     this.vote.textContent = text
   }
@@ -264,6 +250,52 @@ export class ResultsPanel {
 
   close(): void {
     this.root.remove()
+  }
+}
+
+interface Votes {
+  votes: readonly [boolean, boolean]
+  left: number
+}
+
+/**
+ * What the room says after its verdict, for the receipt. The kill cam is often still playing when
+ * the rematch votes arrive or the room closes; the receipt opens with them instead of dropping
+ * them (and offering a Rematch that can't happen).
+ */
+export class RoomNews {
+  private votes: Votes | null = null
+  private closed: string | null = null
+  private panel: ResultsPanel | null = null
+
+  /** A new duel: a rematch, or the first hello. */
+  reset(): void {
+    this.votes = null
+    this.closed = null
+    this.panel = null
+  }
+
+  /** The receipt is up: tell it everything so far. */
+  attach(panel: ResultsPanel, seat: 0 | 1): void {
+    this.panel = panel
+    if (this.votes) {
+      panel.setVotes(this.votes.votes, seat, this.votes.left)
+    }
+    if (this.closed !== null) {
+      this.close(this.closed)
+    }
+  }
+
+  vote(v: Votes, seat: 0 | 1): void {
+    this.votes = { votes: v.votes, left: v.left }
+    this.panel?.setVotes(v.votes, seat, v.left)
+  }
+
+  /** The room closed (or the line died) after the verdict. */
+  close(reason: string): void {
+    this.closed = reason
+    this.panel?.disableRematch()
+    this.panel?.say(reason)
   }
 }
 

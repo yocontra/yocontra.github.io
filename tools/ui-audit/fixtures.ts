@@ -17,7 +17,7 @@ import { Riders } from '../../src/experiments/out-west/ffa/client/riders.ts'
 import { load } from '../../src/experiments/out-west/save.ts'
 import { Hud } from '../../src/experiments/out-west/ui/hud.ts'
 import { MatchIntro } from '../../src/experiments/out-west/ui/match-intro.ts'
-import { ResultsPanel } from '../../src/experiments/out-west/ui/results.ts'
+import { ResultsPanel, RoomNews } from '../../src/experiments/out-west/ui/results.ts'
 
 /** The longest name the server allows (16), in wide capitals. */
 export const LONG = 'WMWMWMWMWMWMWMWM'
@@ -93,7 +93,15 @@ const result = (o: Partial<DuelResult>): DuelResult => ({
 /** Every results state, by name. `closed` is what the room said after the verdict, if anything. */
 const RESULTS: Record<
   string,
-  { r: DuelResult; ghost?: boolean; lost?: string; closed?: string; votes?: [boolean, boolean] }
+  {
+    r: DuelResult
+    ghost?: boolean
+    lost?: string
+    closed?: string
+    votes?: [boolean, boolean]
+    /** The room closed while the kill cam played, before the receipt was up. */
+    early?: boolean
+  }
 > = {
   win: { r: result({}) },
   'win-levelup': { r: result({ you: settlement(4800, true) }) },
@@ -126,6 +134,13 @@ const RESULTS: Record<
     closed: 'The room closed.',
   },
   'room-closed': { r: result({}), closed: 'The room closed.' },
+  'room-closed-early': {
+    r: result({ winner: 1, you: settlement(-2400) }),
+    ghost: true,
+    closed: 'The room closed.',
+    votes: [false, true],
+    early: true,
+  },
   'opponent-left': { r: result({}), closed: 'He lit out of town.' },
   'rematch-he-wants': { r: result({}), votes: [false, true] },
   'line-dead': {
@@ -158,13 +173,23 @@ export function results(name: string): string {
   )
   panel.root.classList.add('on')
   panel.setRecord('Record 120–48 · best streak 14')
-  if (s.votes) {
-    panel.setVotes(s.votes, 0, 3)
+  // what pvp-duel does: the room's news after its verdict goes through RoomNews, which hands it
+  // to the receipt now or (early) when the receipt opens
+  const news = new RoomNews()
+  if (s.early) {
+    if (s.votes) {
+      news.vote({ votes: s.votes, left: 3 }, 0)
+    }
+    if (s.closed) {
+      news.close(s.closed)
+    }
   }
-  if (s.closed) {
-    // what pvp-duel does when the room closes after its verdict
-    panel.disableRematch()
-    panel.say(s.closed)
+  news.attach(panel, 0)
+  if (!s.early && s.votes) {
+    news.vote({ votes: s.votes, left: 3 }, 0)
+  }
+  if (!s.early && s.closed) {
+    news.close(s.closed)
   }
   return '.ow-audit-fx .ow-results'
 }
