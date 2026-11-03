@@ -40,14 +40,6 @@ export const projects: readonly Project[] = [
     stars: 600,
   },
   {
-    name: 'gulp-concat',
-    href: 'https://github.com/gulp-community/gulp-concat',
-    blurb: 'Concatenates files. Small, boring, and very widely used.',
-    source: 'gulp-community/gulp-concat',
-    stars: 775,
-    npm: 'gulp-concat',
-  },
-  {
     name: 'windows_98.css',
     href: 'https://github.com/yocontra/windows_98.css',
     blurb: 'Some sick styles for your guestbook.',
@@ -60,6 +52,7 @@ export const projects: readonly Project[] = [
     blurb: 'An experiment: running parts of Postgres on the GPU.',
     source: 'yocontra/pg_accel',
     tag: 'new',
+    wide: true,
   },
 ]
 
