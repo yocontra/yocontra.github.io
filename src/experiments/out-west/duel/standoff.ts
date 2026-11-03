@@ -16,6 +16,7 @@ import type { Director } from './director.ts'
 import { callShot, clockInsert, otsShot, standoffShot } from './framing.ts'
 import { dueShot, planShots, shotsBefore } from './judge.ts'
 import { killEnemyAnim, killRifleman, playerFireFx, win } from './outcome.ts'
+import { AMB, ambience, bedLevel, duckForStandoff } from './present.ts'
 import { rng, V } from './state.ts'
 
 const NUMBERS = [
@@ -93,9 +94,8 @@ export function enterWait(d: Director, fromPause: boolean): void {
     d.pianoVoice = c.audio.play('piano', { gain: 0.55, pos: V(11.5, 1.6, 2), reverb: 0.3 })
   }
   c.audio.heartbeat(FEEL.heartStartBpm)
-  c.audio.musicLevel(FEEL.waitDuckDb, fromPause ? 0.1 : 0.5)
-  c.audio.musicLowpass(FEEL.waitLowpass, fromPause ? 0.1 : 0.5)
-  d.windLoop?.set(0.12, 0.6)
+  duckForStandoff(d, fromPause ? 0.1 : 0.5)
+  ambience(d, AMB.wait, 0.6)
   if (d.enemy) {
     d.enemy.shake = o.gimmick === 'shaky' ? 1 : 0
     if (o.gimmick === 'drunk') {
@@ -151,10 +151,9 @@ export function enterBossClock(d: Director): void {
   d.strikes = 5
   d.clockInsertUntil = 0
   c.world.setClock(11, 59)
-  c.audio.musicLevel(FEEL.waitDuckDb, 0.6)
-  c.audio.musicLowpass(FEEL.waitLowpass, 0.6)
+  duckForStandoff(d, 0.6)
   c.audio.heartbeat(FEEL.heartStartBpm)
-  d.windLoop?.set(0.1, 0.6)
+  ambience(d, AMB.bossClock, 0.6)
   d.player.root.rotation.y = 0
   d.enemy?.root.rotation.set(0, Math.PI, 0)
   d.duelId = d.clock.standoff(standoffSpec(d))
@@ -243,6 +242,8 @@ export function onCall(d: Director, duel: number): void {
   if (d.boss && d.bossPhase === 1) {
     c.world.setClock(12, 0)
   }
+  // the bed holds where the standoff left it (the call ducks it; it must not swell under the bell)
+  ambience(d, bedLevel(d), 0.05)
   d.enter('call')
   d.callT = now
   if (!d.bellScheduled) {

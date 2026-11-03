@@ -15,6 +15,7 @@ import { mountAccount } from './account.ts'
 import { icon } from './icons.ts'
 import { type GauntletChoice, gauntletSheet, type Mode, ModeTiles } from './mode-select.ts'
 import { QueueSheet } from './queue.ts'
+import { announceLevel } from './sfx.ts'
 import { button, el, setBar, signedMoney, swallow } from './sheet.ts'
 import { mountStanding } from './standing.ts'
 import { Outfitter } from './store.ts'
@@ -133,6 +134,11 @@ export class Hub {
     }
     const r = await fetchMe()
     this.me = r.ok ? r.value : null
+    if (this.me && this.visible) {
+      // a level gained elsewhere (a ranked gauntlet), once the saloon shows it; Bounty Hunt's
+      // results sheet has already played its own
+      announceLevel(this.me.level)
+    }
     this.render()
     this.dressEquipped()
   }

@@ -45,6 +45,9 @@ export interface Ctx {
   debug: boolean
 }
 
+/** Phases in which the call can ring (or just rang): every UI sound is hushed. */
+const STANDOFF_PHASES: ReadonlySet<Phase> = new Set<Phase>(['wait', 'bossClock', 'call'])
+
 export type Phase =
   | 'title'
   | 'intro'
@@ -174,8 +177,9 @@ export class DuelState {
   sat = 1
   ca = 0
   wind = 0.35
-  windLoop = null as Loop | null
-  cricketLoop = null as Loop | null
+  /** The time-of-day bed's level (1 = resting) and how fast it moves there, s (`present.ts`). */
+  ambLevel = 1
+  ambRamp = 1.5
   fireLoop = null as Loop | null
   ambT = 0
   cards: Object3D[] = []
@@ -226,5 +230,7 @@ export class DuelState {
   enter(p: Phase): void {
     this.phase = p
     this.phaseT = 0
+    // no menu sound may play while the street waits for the call
+    this.c.audio.hushUi(STANDOFF_PHASES.has(p))
   }
 }

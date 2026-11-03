@@ -7,6 +7,7 @@ import { STREET } from '../scene/world.ts'
 import { clearCards } from './cues.ts'
 import type { Director } from './director.ts'
 import { backToBackShot, otsShot, posterShot } from './framing.ts'
+import { ambience } from './present.ts'
 import { between, V } from './state.ts'
 
 /**
@@ -229,7 +230,7 @@ export function enterCock(d: Director): void {
   c.audio.play('cocking', { gain: 0.9 })
   c.audio.musicLevel(0, 0.3)
   c.audio.musicLowpass(18_000, 0.3)
-  d.windLoop?.set(0.35, 0.6)
+  ambience(d, 1, 0.6)
   const [lo, hi] = o.paces
   d.target = Math.max(lo, Math.min(hi, Math.round(between(lo, hi + 0.999) - 0.5)))
   clearCards(d)

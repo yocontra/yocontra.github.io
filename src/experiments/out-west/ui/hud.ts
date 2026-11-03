@@ -2,6 +2,7 @@ import { money } from '../data/economy.ts'
 import { type Action, keyLabel } from '../engine/input.ts'
 import type { Settings } from '../save.ts'
 import { icon } from './icons.ts'
+import { uiSound } from './sfx.ts'
 
 function el<K extends keyof HTMLElementTagNameMap>(
   tag: K,
@@ -182,6 +183,9 @@ export class Hud {
   }
 
   showCard(card: CardSpec): void {
+    if (!this.card.classList.contains('on')) {
+      uiSound('uiPaper')
+    }
     this.card.className = `ow-card ow-card-${card.kind} on`
     this.cardTitle.textContent = card.title
     this.cardBig.textContent = card.big
@@ -192,6 +196,7 @@ export class Hud {
 
   /** The stamped wanted poster on the coward card. */
   cardPoster(src: string): void {
+    uiSound('uiStamp')
     this.cardBig.innerHTML = ''
     const img = el('img', '', this.cardBig)
     img.alt = 'Wanted poster stamped: shot in the back, no bounty'

@@ -22,6 +22,12 @@ export function quietEndFx(d: Director, r: DuelResult, seat: Seat, lost: boolean
   }
   d.c.hud.call(lost ? 'OVER' : (caption[r.outcome] ?? 'OVER'), 1600)
   d.c.audio.heartbeat(0)
+  // he lit out or dodged: still a win; you did: a loss. Freezes and draws get no sting.
+  if (!lost && r.winner === seat) {
+    d.c.audio.playSting('victory')
+  } else if (!lost && r.culprit === seat) {
+    d.c.audio.playSting('defeat')
+  }
   d.enter('lose')
 }
 

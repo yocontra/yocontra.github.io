@@ -21,7 +21,7 @@ import {
   Vector2,
   Vector3,
 } from 'three'
-import { AudioEngine } from '../../audio/audio.ts'
+import { AudioEngine, type SfxName } from '../../audio/audio.ts'
 import {
   ANIM_CHANNEL,
   ANIM_DEAD,
@@ -64,6 +64,7 @@ import { Renderer } from '../../engine/render.ts'
 import { haptic } from '../../platform/haptics.ts'
 import { presetAt } from '../../scene/presets.ts'
 import { RIM } from '../../scene/style.ts'
+import { installUiSounds } from '../../ui/sfx.ts'
 import { TopDownCamera } from '../scene/camera.ts'
 import { Crowd, type CrowdPlayer } from '../scene/crowd.ts'
 import { CUT } from '../scene/cutaway.ts'
@@ -94,6 +95,7 @@ import { ThreatArrows } from './arrows.ts'
 import { Autopilot } from './autopilot.ts'
 import { assistAim, currentAction } from './context.ts'
 import { DesktopControls } from './controls.ts'
+import { type Fuse, shotSound, stopFuse } from './event-sounds.ts'
 import {
   type Callout,
   handleControl,
@@ -106,6 +108,7 @@ import { Hud } from './hud.ts'
 import type { RemoteView } from './interp.ts'
 import { Minimap } from './minimap.ts'
 import { NetClient } from './net.ts'
+import { FrontierSound, wearsSpurs } from './sound.ts'
 import { TouchControls } from './touch.ts'
 import type { Transport, TransportEvents } from './transport.ts'
 
@@ -177,7 +180,8 @@ export class FrontierGame {
   private wasAlive = false
   private wasReloading = false
   private wasReady = false
-  private wind: { stop: () => void } | null = null
+  private readonly sound: FrontierSound | null
+  private readonly fuses = new Map<number, Fuse>()
   private readonly sink: Sink
   readonly perf = { tickMs: 0, frameMs: 0, simMs: 0 }
 
@@ -186,6 +190,12 @@ export class FrontierGame {
     this.opts = opts
     this.audio = opts.audio === undefined ? new AudioEngine() : opts.audio
     this.audio?.prefetch()
+    // the guns, dynamite, bank and respawn: fetched now, decoded on the first gesture
+    this.audio?.loadPack('frontier').catch(() => undefined)
+    this.sound = this.audio ? new FrontierSound(this.audio) : null
+    if (this.audio) {
+      installUiSounds(this.audio)
+    }
     root.classList.add('fr-root')
     this.canvas = document.createElement('canvas')
     this.canvas.className = 'fr-canvas'
@@ -257,6 +267,7 @@ export class FrontierGame {
         game.killer = k
       },
       onLeft: () => this.exit('left'),
+      fuses: this.fuses,
       get pickups() {
         return game.pickups as Pickups
       },
@@ -414,7 +425,12 @@ export class FrontierGame {
     if (this.fx) {
       shotFx(this.sink, m, aim, wall, WEAPON_UI[weapon]?.shotFlag ?? 0)
     }
-    this.audio?.play(weapon === WEAPON_REVOLVER ? 'fire' : 'fireBig', { gain: 1, priority: true })
+    const a = this.audio
+    a?.play(shotSound(WEAPON_UI[weapon]?.shotFlag ?? 0), { gain: 1, priority: true })
+    if (a && weapon === WEAPON_RIFLE && this.net.weapon.rounds > 1) {
+      // the lever chambers the next round as the barrel settles
+      a.play('rifleLever', { gain: 0.6, when: a.now + RIFLE_LEVER_DELAY })
+    }
     this.cam.kick(0.12)
     haptic('shot')
   }
@@ -613,6 +629,17 @@ export class FrontierGame {
     }
     this.cam.update(this.own.x, this.own.z, Math.cos(this.aim), Math.sin(this.aim), dt)
     crowd.update(list, this.cam.target.x, this.cam.target.z, dt, nowS)
+    this.sound?.steps(
+      {
+        id: this.net.you,
+        x: this.own.x,
+        z: this.own.z,
+        moving: ownMoving(list[0], this.net.pred.rollTicks > 0),
+      },
+      this.remotes,
+      (id) => wearsSpurs(this.net.roster.get(id)?.loadout),
+      nowS,
+    )
     this.sun.position.copy(this.cam.target).addScaledVector(SUN_DIR, 60)
     this.sun.target.position.copy(this.cam.target)
     this.updateCut()
@@ -807,7 +834,7 @@ export class FrontierGame {
   private sounds(flags: number): void {
     const reloading = (flags & SELF_RELOADING) !== 0
     if (reloading && !this.wasReloading) {
-      this.audio?.play('cocking', { gain: 0.7 })
+      this.audio?.play(RELOAD_SOUND[this.net.weapon.weapon] ?? 'cocking', { gain: 0.7 })
     }
     this.wasReloading = reloading
     const ready = (flags & SELF_DEAD_EYE_READY) !== 0
@@ -816,9 +843,12 @@ export class FrontierGame {
       this.audio?.play('holster', { gain: 0.9, rate: 1.6, priority: true })
     }
     this.wasReady = ready
-    if (flags & SELF_IN_SHOWDOWN) {
+    const showdown = (flags & SELF_IN_SHOWDOWN) !== 0
+    if (showdown) {
       this.hud.banner(null)
     }
+    // no menu sound while your showdown waits for its call
+    this.audio?.hushUi(showdown)
   }
 
   /** The Most Wanted changes hands: say so, with what their head is worth. */
@@ -880,12 +910,10 @@ export class FrontierGame {
     }
   }
 
-  /** Start ambience on the first gesture (iOS needs the AudioContext created inside one). */
+  /** Start the music and ambience on the first gesture (iOS needs the AudioContext created inside one). */
   unlockAudio(): void {
     this.audio?.unlock()
-    if (!this.wind && this.audio) {
-      this.wind = this.audio.loop('wind', 0.25)
-    }
+    this.sound?.start(DAY)
   }
 
   leave(): void {
@@ -908,7 +936,11 @@ export class FrontierGame {
       clearInterval(this.hiddenTimer)
     }
     this.transport?.close()
-    this.wind?.stop()
+    for (const id of [...this.fuses.keys()]) {
+      stopFuse(this.fuses, id)
+    }
+    this.sound?.dispose()
+    this.audio?.hushUi(false)
     globalThis.removeEventListener('resize', this.onResize)
     globalThis.removeEventListener('keydown', this.onKey)
     document.removeEventListener('visibilitychange', this.onVisibility)
@@ -1034,6 +1066,16 @@ function rayToWall(net: NetClient, x: number, z: number, aim: number, range: num
 
 const PICKUP_RING = new Color(1.4, 0.6, 0.3)
 
+/** From a rifle shot to the lever working the next round in, s (the rifle fires every 0.9 s). */
+const RIFLE_LEVER_DELAY = 0.32
+
+/** The reload, by weapon: the rifle's lever, shells into the shotgun, the revolver's hammer. */
+const RELOAD_SOUND: Record<number, SfxName> = {
+  [WEAPON_REVOLVER]: 'cocking',
+  [WEAPON_RIFLE]: 'rifleLever',
+  [WEAPON_SHOTGUN]: 'shotgunLoad',
+}
+
 /** HUD label, magazine, reach and tracer style per weapon. */
 const WEAPON_UI: Record<number, { label: string; max: number; range: number; shotFlag: number }> = {
   [WEAPON_REVOLVER]: { label: '', max: REVOLVER_ROUNDS, range: MAX_RANGE, shotFlag: 0 },
@@ -1044,4 +1086,15 @@ const WEAPON_UI: Record<number, { label: string; max: number; range: number; sho
     shotFlag: SHOT_SHOTGUN,
   },
   [WEAPON_RIFLE]: { label: 'RIFLE', max: RIFLE_ROUNDS, range: RIFLE_RANGE, shotFlag: SHOT_RIFLE },
+}
+
+/** Your feet are on the move: alive, running (or reloading on the run), and not mid-roll. */
+function ownMoving(me: CrowdPlayer | undefined, rolling: boolean): boolean {
+  return (
+    me?.self === true &&
+    !rolling &&
+    (me.flags & EF_ALIVE) !== 0 &&
+    me.anim !== ANIM_DUEL &&
+    Math.hypot(me.vx, me.vz) > 0.3
+  )
 }

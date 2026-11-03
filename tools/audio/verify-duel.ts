@@ -6,15 +6,17 @@
 /**
  * Plays a practice duel in real Chrome and reads the `#audiodebug` meters (`__owAudio`).
  *
- *   PLAYWRIGHT=/abs/path/to/node_modules/playwright bun tools/audio/verify-duel.ts [baseUrl] [--loops]
+ *   PLAYWRIGHT=/abs/path/to/node_modules/playwright bun tools/audio/verify-duel.ts [baseUrl] [--loops] [--react=ms] [--lose]
  *
  * Playwright is not a repo dependency: install it anywhere (`bun add playwright`) and point
  * PLAYWRIGHT at it. Uses `channel: 'chrome'`.
  *
  * Reports, for the call: when the bell's strike reaches the output relative to the call, and how far
  * the SFX bus (the bell) stands above music and ambience in the 700 ms after it; for the round: the
- * output peak, any NaN frames, and decoded memory. `--loops` also plays the tension bed through a
- * loop seam and reports the seam's alignment and any level dip.
+ * output peak, any NaN frames, and decoded memory; the music (songs and stings) through the round;
+ * and any UI cue that played between the standoff's hush and its lift. `--lose` never draws (he
+ * shoots you). `--loops` also plays the tension bed through a loop seam and reports the seam's
+ * alignment and any level dip.
  */
 
 interface Frame {
@@ -52,7 +54,9 @@ interface Pw {
 
 const base = process.argv.find((a) => a.startsWith('http')) ?? 'http://localhost:4350'
 const SHOT = /^(fire|fireBig)/u
+const UI_CUE = /^(uiPaper|uiStamp|uiTick|uiBuy|queueFound|levelUp|ghost|ghostVanish),/u
 const loops = process.argv.includes('--loops')
+const lose = process.argv.includes('--lose')
 const hashExtra = process.argv.find((a) => a.startsWith('#'))?.slice(1) ?? ''
 const react = Number(process.argv.find((a) => a.startsWith('--react='))?.slice(8) ?? '260')
 const pwPath = process.env.PLAYWRIGHT ?? 'playwright'
@@ -88,13 +92,13 @@ const waitEvent = async (pred: (e: Ev) => boolean, ms: number, from = 0): Promis
   }
   return null
 }
-// The round starts (the stage cocks a gun); hold to walk until the wait phase ducks the music.
+// The round starts (the stage cocks a gun); hold to walk until the standoff ducks the music.
 const stage = await waitEvent((e) => e.name === 'play' && e.args.startsWith('cocking'), 60_000)
 await page.waitForTimeout(1200)
 const mark = await since()
 await page.mouse.down()
 const wait = await waitEvent(
-  (e) => e.name === 'musicLevel' && e.args.startsWith('-7'),
+  (e) => e.name === 'musicLevel' && Number(e.args.split(',')[0]) <= -7,
   60_000,
   mark,
 )
@@ -113,11 +117,13 @@ if (!(stage && wait && bell)) {
   await browser.close()
   process.exit(1)
 }
-// React like a quick human, then fire.
-await page.waitForTimeout(react)
-await page.mouse.down()
-await page.mouse.up()
-await page.waitForTimeout(4500)
+// React like a quick human, then fire (or never draw, and lose).
+if (!lose) {
+  await page.waitForTimeout(react)
+  await page.mouse.down()
+  await page.mouse.up()
+}
+await page.waitForTimeout(lose ? 6000 : 4500)
 const frames = await page.evaluate<Frame[]>('globalThis.__owAudio.frames')
 const stats = await page.evaluate<Record<string, number>>('globalThis.__owAudio.stats?.() ?? {}')
 const all = await events()
@@ -149,6 +155,9 @@ console.log(
   `  sfx (bell) ${f1(during('sfx'))}  music ${f1(during('music'))}  amb ${f1(during('amb'))} → bell clears music by ${f1(during('sfx') - during('music'))} dB, ambience by ${f1(during('sfx') - during('amb'))} dB`,
 )
 console.log(
+  `  in the 650 ms before the call: music ${f1(before('music'))}  amb ${f1(before('amb'))}  sfx ${f1(before('sfx'))}`,
+)
+console.log(
   `output peak: bell ${f1(bellPeak)} dBFS, your shot ${f1(shotPeak)} dBFS, whole round ${f1(outPeak)} dBFS`,
 )
 console.log(
@@ -159,6 +168,25 @@ console.log(
 )
 console.log(`bad (NaN) frames: ${frames.filter((f) => f.bad).length} of ${frames.length}`)
 console.log('stats', JSON.stringify(stats))
+console.log(
+  'music:',
+  all
+    .filter((e) => e.name === 'playSong' || e.name === 'sting')
+    .map((e) => `${(e.t - tb).toFixed(2)}s ${e.name} ${e.args}`)
+    .join(' | '),
+)
+let hushed = false
+let leaks = 0
+for (const e of all) {
+  if (e.name === 'hushUi') {
+    hushed = e.args === 'true'
+  } else if (hushed && e.name === 'play' && UI_CUE.test(e.args)) {
+    leaks++
+  }
+}
+console.log(
+  `UI cues while hushed: ${leaks}; hushed requests dropped: ${all.filter((e) => e.name === 'uiHushed').length}`,
+)
 
 if (loops) {
   // Tension bed: start near the loop end and watch the seam.

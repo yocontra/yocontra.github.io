@@ -4,6 +4,7 @@ import type { Director } from './director.ts'
 import { cowardShot, deathShot } from './framing.ts'
 import type { EnemyShot } from './judge.ts'
 import { killEnemyAnim, playerFireFx, slowMo } from './outcome.ts'
+import { AMB, ambience } from './present.ts'
 import { book, type Paid, showPurse } from './purse.ts'
 import { between, rng, V } from './state.ts'
 
@@ -116,6 +117,7 @@ export function playerHit(d: Director, reason: string, paid: Paid | null): void 
     if (d.phase !== 'lose') {
       return
     }
+    c.audio.playSting('defeat')
     c.hud.showCard({
       kind: 'lose',
       title: 'YOU LOSE',
@@ -204,8 +206,10 @@ export function tickCoward(d: Director): void {
   if (!d.cowardBeat && t >= FEEL.cowardSlow) {
     d.cowardBeat = true
     c.audio.musicLevel(Number.NEGATIVE_INFINITY, 0.06)
-    d.windLoop?.set(0.05, 0.05)
+    ambience(d, AMB.hush, 0.05)
     c.audio.play('gasp', { gain: 1, when: c.audio.now + 0.05, reverb: 0.4 })
+    // the score is cut; the sting plays past the cut
+    c.audio.playSting('defeat')
   }
   if (!d.cowardCard && t >= FEEL.cowardCardAt) {
     d.cowardCard = true

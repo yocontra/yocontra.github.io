@@ -12,6 +12,7 @@ import { load, type SaveData, save } from './save.ts'
 import { Board } from './ui/board.ts'
 import { Hub } from './ui/hub.ts'
 import { loadPosterArt } from './ui/poster.ts'
+import { installUiSounds } from './ui/sfx.ts'
 
 /** Hashes that jump into a debug view or a non-default run: never ranked. */
 const UNRANKED_HASHES = ['level', 'legend', 'lineup', 'posters']
@@ -149,6 +150,7 @@ function debugView(g: Game, hash: URLSearchParams, title: HTMLElement): boolean 
 export function boot(root: HTMLElement): void {
   const audio = new AudioEngine()
   audio.prefetch()
+  installUiSounds(audio)
   const data = load()
   const hash = new URLSearchParams(location.hash.slice(1))
   const debug = hash.has('debug')
@@ -237,6 +239,7 @@ export function boot(root: HTMLElement): void {
       if (audio.ctx) {
         unlockAudio(audio.ctx)
       }
+      audio.playSong('intro')
     }
     globalThis.addEventListener('pointerdown', unlockOnce, { once: true })
   }
