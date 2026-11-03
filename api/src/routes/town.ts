@@ -1,6 +1,7 @@
 /**
  * Frontier: lobby directory joins and lobby WebSockets. Owned by stream F.
- *   POST /town/join          (Bearer) { lobbyId?, bots? } → TownJoinResponse; 403 `unlicensed`
+ *   POST /town/join          (Bearer) { turnstileToken, lobbyId?, bots? } → TownJoinResponse;
+ *                            403 `turnstile`, 403 `unlicensed`
  *                            (with `licence: { cleared, remaining }`), 503 full/over budget
  *   GET  /town/lobbies       → TownDirectoryView (for the hub tile)
  *   GET  /town/:lobby/ws     ?ticket=&sig= → WebSocket into that Lobby DO
@@ -17,7 +18,14 @@ import { authenticate } from '../auth/session.ts'
 import { AccountGoneError, issueTicket, redeemTicket } from '../auth/ticket.ts'
 import { getProfileDetail } from '../economy/profile.ts'
 import type { Env } from '../env.ts'
-import { allowedOrigin, error, json, type RouteHandler, readJson } from '../http.ts'
+import {
+  allowedOrigin,
+  error,
+  json,
+  type RouteHandler,
+  readJson,
+  verifyTurnstile,
+} from '../http.ts'
 import { accountFlags, isShadowed } from '../moderation/flags.ts'
 
 const LOBBY_PATH = /^\/town\/(?<lobby>lobby:\d{1,3})\/(?<what>ws|stats)$/u
@@ -40,6 +48,8 @@ export function refusalMessage(reason: TownJoinRefusal, now = new Date()): strin
       return 'Every lobby in Perdition is full right now. Try again in a minute, or take a Quick Draw duel meanwhile.'
     case 'unlicensed':
       return 'Beat the first 3 outlaws on a ranked run to earn your licence.'
+    case 'turnstile':
+      return 'Could not verify you are human. Try again.'
     default:
       return 'Sign in with a passkey to ride into town.'
   }
@@ -96,7 +106,18 @@ async function join(request: Request, env: Env): Promise<Response> {
       403,
     )
   }
-  const body = ((await readJson(request, 1024)) ?? {}) as TownJoinRequest
+  // Turnstile tokens run to ~2 KB.
+  const body = ((await readJson(request, 8 * 1024)) ?? {}) as TownJoinRequest
+  // §8: Turnstile at every lobby join, rejoins included (each token is single use).
+  const token = body.turnstileToken
+  if (!(typeof token === 'string' && token && (await verifyTurnstile(token, request, env)))) {
+    return json(
+      request,
+      env,
+      { ok: false, error: refusalMessage('turnstile'), reason: 'turnstile' },
+      403,
+    )
+  }
   const preferred =
     typeof body.lobbyId === 'string' && LOBBY_PATH.test(`/town/${body.lobbyId}/ws`)
       ? body.lobbyId
@@ -141,8 +162,8 @@ async function join(request: Request, env: Env): Promise<Response> {
   ws.searchParams.set('ticket', ticket)
   ws.searchParams.set('exp', String(exp))
   ws.searchParams.set('sig', await lobbySig(env, assigned.lobbyId, player.accountId, exp))
-  const bots = Number(body.bots ?? 0)
-  if (isDev(env) && Number.isInteger(bots) && bots > 0) {
+  const bots = Number(body.bots ?? Number.NaN)
+  if (isDev(env) && Number.isInteger(bots) && bots >= 0) {
     ws.searchParams.set('bots', String(Math.min(31, bots)))
   }
   const out: TownJoinResponse = {
@@ -174,7 +195,13 @@ async function connect(request: Request, env: Env, url: URL, lobbyId: string): P
   headers.set('X-Name', player.name)
   const tcp = (request.cf as { clientTcpRtt?: number } | undefined)?.clientTcpRtt
   headers.set('X-Tcp-Rtt', String(tcp ?? ''))
-  headers.set('X-Bots', isDev(env) ? (url.searchParams.get('bots') ?? '0') : '0')
+  // Dev only; production lobbies never see the header (ambient bots, no load-test targets).
+  const bots = url.searchParams.get('bots')
+  if (isDev(env) && bots !== null) {
+    headers.set('X-Bots', bots)
+  } else {
+    headers.delete('X-Bots')
+  }
   const lobby = env.LOBBIES.get(env.LOBBIES.idFromName(lobbyId))
   return lobby.fetch(new Request(request, { headers }))
 }

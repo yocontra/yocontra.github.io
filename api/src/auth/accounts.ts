@@ -8,6 +8,7 @@ import {
   type PasskeyInfo,
 } from '../../../src/experiments/out-west/contract/auth.ts'
 import type { Env } from '../env.ts'
+import { utcDay } from './daily-turnstile.ts'
 import { creationStatements, deletionStatements } from './hooks.ts'
 
 /**
@@ -103,10 +104,11 @@ export async function createAccount(
   try {
     const [created] = await env.DB.batch([
       env.DB.prepare(
-        `INSERT INTO accounts (id, name, name_key, created_at)
-         SELECT ?1, ?2, ?3, ?4 FROM name_reservations
+        // Sign-up passed Turnstile minutes ago, which counts as today's daily check.
+        `INSERT INTO accounts (id, name, name_key, created_at, turnstile_day)
+         SELECT ?1, ?2, ?3, ?4, ?6 FROM name_reservations
          WHERE name_key = ?3 AND challenge_id = ?5 AND expires_at > ?4`,
-      ).bind(accountId, name, nameKey, now, challengeId),
+      ).bind(accountId, name, nameKey, now, challengeId, utcDay(now)),
       // Fails the FK (and so the whole batch) when the account insert above matched nothing.
       insertPasskey(env, accountId, key, now),
       env.DB.prepare('DELETE FROM name_reservations WHERE name_key = ?').bind(nameKey),

@@ -10,6 +10,7 @@ import {
 import { createAccount, reserveName } from '../auth/accounts.ts'
 import { clearRefreshCookie, readRefreshCookie } from '../auth/cookie.ts'
 import { randomToken, sha256Hex } from '../auth/crypto.ts'
+import { dailyCheckFor, stampTurnstileDay, TURNSTILE_REQUIRED } from '../auth/daily-turnstile.ts'
 import { authorizeAppCode, exchangeAppCode } from '../auth/handoff.ts'
 import { LIMITS } from '../auth/rate.ts'
 import { endFamily, endSession, rotateSession, startSession } from '../auth/refresh.ts'
@@ -167,6 +168,34 @@ const REFRESH_FAILURES: Record<string, string> = {
   reused: 'That session was used elsewhere, so it was closed. Sign in again.',
 }
 
+/**
+ * The first web refresh of each UTC day must carry a Turnstile token (`daily-turnstile.ts`). A
+ * refusal is a 403 with `turnstile: 'required'` and doesn't rotate or clear anything, so the client
+ * fetches a token and retries with the same cookie. Null means go ahead.
+ */
+async function dailyTurnstile(
+  request: Request,
+  env: Env,
+  presented: string,
+  token: unknown,
+): Promise<Response | null> {
+  const check = await dailyCheckFor(env, presented)
+  if (!check?.due) {
+    return null
+  }
+  if (typeof token === 'string' && token && (await verifyTurnstile(token, request, env))) {
+    // Stamped before rotating: a raced or replayed rotation retries without a second token.
+    await stampTurnstileDay(env, check.accountId)
+    return null
+  }
+  return json(
+    request,
+    env,
+    { ok: false, error: 'Could not verify you are human.', turnstile: TURNSTILE_REQUIRED },
+    403,
+  )
+}
+
 const refresh: Handler = async (request, env, url) => {
   const b = await body(request)
   const platform = isPlatform(b.platform) ? b.platform : 'web'
@@ -180,6 +209,12 @@ const refresh: Handler = async (request, env, url) => {
   const presented = presentedToken(request, env, url, b)
   if (!presented) {
     return error(request, env, 401, 'Not signed in.')
+  }
+  if (isWeb) {
+    const refused = await dailyTurnstile(request, env, presented, b.turnstileToken)
+    if (refused) {
+      return refused
+    }
   }
   const result = await rotateSession(env, presented, platform, {
     client: await clientBinding(request),

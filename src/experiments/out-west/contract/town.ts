@@ -108,6 +108,8 @@ export function bagStyleIndex(itemId: string | null | undefined): number {
 export interface TownJoinRequest {
   /** Ask for a specific lobby (e.g. "Ride to a busier town" or a rejoin). The directory may refuse. */
   lobbyId?: string
+  /** Cloudflare Turnstile token, single use: required on every join, rejoins included (§8). */
+  turnstileToken?: string
   /** Dev only (`RP_ID=localhost`): server bots to add, for load tests and `perf=ffa`. */
   bots?: number
 }
@@ -125,7 +127,13 @@ export interface TownJoinResponse {
  * budget), 401 (signed out) or 403 `unlicensed` (Frontier needs the Bounty Hunt licence: the first
  * 3 outlaws beaten on a ranked run while signed in). `error` is ready to show as-is.
  */
-export type TownJoinRefusal = 'over_budget' | 'all_full' | 'unauthorized' | 'unlicensed'
+/** `turnstile`: the join's Turnstile token was missing or failed (403); a fresh one may pass. */
+export type TownJoinRefusal =
+  | 'over_budget'
+  | 'all_full'
+  | 'unauthorized'
+  | 'unlicensed'
+  | 'turnstile'
 
 export interface TownJoinError {
   ok: false

@@ -24,10 +24,11 @@ import {
   CLIENT_HEADER,
   type PasskeyInfo,
   type Player,
+  type RefreshRequest,
   type TicketPurpose,
 } from '../contract/auth.ts'
 import { platform, provideWebTokens } from '../platform/bridge.ts'
-import { Turnstile } from './turnstile.ts'
+import { pageTurnstile } from './turnstile.ts'
 
 export type { Player } from '../contract/auth.ts'
 
@@ -192,10 +193,14 @@ function politeError(r: Reply, fallback: string): string {
 
 const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms))
 
-async function refreshOnce(): Promise<Session | null> {
+/** The server's 403 for "today's Turnstile check is still owed" (the cookie is left alone). */
+const wantsTurnstile = (r: Reply): boolean =>
+  r.status === 403 && isRecord(r.body) && r.body.turnstile === 'required'
+
+async function refreshWith(body: RefreshRequest): Promise<Session | null | 'turnstile'> {
   for (let i = 0; i <= RACE_RETRIES; i++) {
     // biome-ignore lint/performance/noAwaitInLoops: retries are sequential by nature
-    const r = await api('/auth/refresh', { body: '{}' })
+    const r = await api('/auth/refresh', { body: JSON.stringify(body) })
     if (r.status === 200 && isSession(r.body)) {
       const { accessToken, expiresAt, player } = r.body
       return { accessToken, expiresAt, player }
@@ -205,6 +210,9 @@ async function refreshOnce(): Promise<Session | null> {
       await sleep(RACE_DELAY_MS * (i + 1))
       continue
     }
+    if (wantsTurnstile(r)) {
+      return 'turnstile'
+    }
     if (r.status === 401) {
       setSession(null)
       return null
@@ -213,6 +221,21 @@ async function refreshOnce(): Promise<Session | null> {
     return null
   }
   return null
+}
+
+async function refreshOnce(): Promise<Session | null> {
+  const first = await refreshWith({})
+  if (first !== 'turnstile') {
+    return first
+  }
+  // The first refresh of the UTC day (§8): one token from the invisible widget, then one retry.
+  // No token (script blocked, timed out) keeps whoever is signed in, just without an access token.
+  const token = await pageTurnstile().take()
+  if (!token) {
+    return null
+  }
+  const second = await refreshWith({ turnstileToken: token })
+  return second === 'turnstile' ? null : second
 }
 
 /**
@@ -310,12 +333,7 @@ async function finish(path: string, challengeId: string, response: unknown): Pro
   return { ok: true, value: player }
 }
 
-let turnstile: Turnstile | null = null
-
-async function turnstileToken(): Promise<string | null> {
-  turnstile ??= new Turnstile(document.body)
-  return await turnstile.take()
-}
+const turnstileToken = (): Promise<string | null> => pageTurnstile().take()
 
 /** Creates an account named `name` with a new passkey. */
 export async function signUp(name: string): Promise<AuthResult> {

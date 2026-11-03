@@ -197,7 +197,8 @@ async function joinTown(api: string, i: number, bots: number): Promise<TownJoinR
       Origin: ORIGIN,
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify(i === 1 ? { bots } : {}),
+    // Dev's always-pass Turnstile secret accepts any token.
+    body: JSON.stringify({ turnstileToken: 'XXXX.DUMMY.TOKEN.XXXX', ...(i === 1 ? { bots } : {}) }),
   })
   if (!res.ok) {
     throw new Error(`join ${i}: ${res.status} ${await res.text()}`)

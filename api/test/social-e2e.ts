@@ -37,6 +37,8 @@ import { BASE, Client, ORIGIN, type Player, waitFor } from './duel-client.ts'
 import { check, failed, openLocalD1, seedPlayer } from './local-d1.ts'
 
 const db = openLocalD1()
+/** Every lobby join carries a Turnstile token (dev's always-pass secret accepts any). */
+const JOIN = { turnstileToken: 'XXXX.DUMMY.TOKEN.XXXX' }
 const BOARD_PATH = `/board/most-wanted?${new URLSearchParams({ limit: '50' })}`
 let ipSeq = 0
 const nextIp = (): string => `10.${120 + (++ipSeq % 100)}.${ipSeq}.1`
@@ -165,7 +167,7 @@ async function badlands(): Promise<void> {
 async function frontier(): Promise<void> {
   console.log('\n5. Frontier: the licence gate and the Badlands lobby')
   const rookie = await seedPlayer(db, { name: 'Rookie', ip: nextIp(), clears: 0b011 })
-  const refused = await api<TownJoinError>('POST', '/town/join', { as: rookie, body: {} })
+  const refused = await api<TownJoinError>('POST', '/town/join', { as: rookie, body: JOIN })
   check(
     'unlicensed: 403 with reason and progress',
     refused.status === 403 &&
@@ -175,12 +177,18 @@ async function frontier(): Promise<void> {
     refused,
   )
   const rider = await seedPlayer(db, { name: 'Rider', ip: nextIp() })
-  const ok = await api<TownJoinResponse>('POST', '/town/join', { as: rider, body: {} })
+  const bare = await api<TownJoinError>('POST', '/town/join', { as: rider, body: {} })
+  check(
+    'no Turnstile token: 403 turnstile',
+    bare.status === 403 && bare.body.reason === 'turnstile',
+    bare,
+  )
+  const ok = await api<TownJoinResponse>('POST', '/town/join', { as: rider, body: JOIN })
   const n = Number(ok.body.lobbyId.split(':')[1])
   check('licensed: a public lobby', ok.status === 201 && n < 500, ok)
   const outlaw = await seedPlayer(db, { name: 'Outlaw', ip: nextIp() })
   flag(outlaw)
-  const shadow = await api<TownJoinResponse>('POST', '/town/join', { as: outlaw, body: {} })
+  const shadow = await api<TownJoinResponse>('POST', '/town/join', { as: outlaw, body: JOIN })
   check(
     'flagged: a Badlands lobby',
     shadow.status === 201 && shadow.body.lobbyId === 'lobby:500',

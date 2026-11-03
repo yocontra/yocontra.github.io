@@ -24,3 +24,7 @@ and `house_round` (same copy-and-carry-over procedure as `0011`). It also adds `
 (backfilled from the ledger), `most_wanted_winners`, `house_rounds`, `name_holds`, `name_changes`,
 `blocks`, `reports`, `moderation_log`, `batch_guard`, and `profiles.away_seen_at`. Apply it before
 deploying the Worker that serves the Most Wanted board, dyes, name changes and moderation.
+
+`0013_turnstile_day.sql` (server pass) adds `accounts.turnstile_day`, the last UTC day the account
+passed Turnstile. The web refresh route asks for a Turnstile token on the first refresh of each UTC
+day. Apply it before deploying the Worker that reads the column.

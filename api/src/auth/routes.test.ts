@@ -310,6 +310,56 @@ describe('a refresh whose response was lost', () => {
   })
 })
 
+describe('Turnstile on the first web refresh of the day', () => {
+  it('asks for a token without rotating, then accepts one and stamps the day', async () => {
+    const env = fakeEnv()
+    const up = await signUp(env, 'Calamity Jane', new SoftAuthenticator(ORIGIN))
+    const cookie = cookieOf(up.res)
+    const day = () =>
+      env.sqlite.prepare('SELECT turnstile_day AS d FROM accounts').get() as { d: string | null }
+    // sign-up passed Turnstile, so today is already done
+    expect(day().d).toBe(new Date().toISOString().slice(0, 10))
+    // a new UTC day: the first refresh owes a check
+    env.sqlite.prepare("UPDATE accounts SET turnstile_day = '2020-01-01'").run()
+    const asked = await call(env, '/auth/refresh', { body: {}, cookie })
+    expect(asked.status).toBe(403)
+    expect((await json(asked)).turnstile).toBe('required')
+    expect(asked.headers.get('Set-Cookie')).toBeNull()
+    // a failing token is refused the same way
+    const bad = await call(env, '/auth/refresh', { body: { turnstileToken: 'fail' }, cookie })
+    expect(bad.status).toBe(403)
+    // the cookie wasn't rotated or revoked: it still works with a token
+    const ok = await call(env, '/auth/refresh', { body: { turnstileToken: 'ok' }, cookie })
+    expect(ok.status).toBe(200)
+    expect(day().d).toBe(new Date().toISOString().slice(0, 10))
+    // later refreshes today need nothing
+    const later = await call(env, '/auth/refresh', { body: {}, cookie: cookieOf(ok) })
+    expect(later.status).toBe(200)
+  })
+
+  it('leaves app platforms (native refresh) alone', async () => {
+    const env = fakeEnv()
+    const up = await signUp(env, 'Annie Oakley', new SoftAuthenticator(ORIGIN))
+    const { startSession } = await import('./refresh.ts')
+    const accountId = String(
+      (env.sqlite.prepare('SELECT id FROM accounts').get() as { id: string }).id,
+    )
+    expect(up.res.status).toBe(201)
+    env.sqlite.prepare('UPDATE accounts SET turnstile_day = NULL').run()
+    const grant = await startSession(env, {
+      player: { accountId, name: 'Annie Oakley' },
+      platform: 'ios-app',
+      authTime: Date.now(),
+    })
+    const rr = await call(env, '/auth/refresh', {
+      origin: null,
+      client: false,
+      body: { refreshToken: grant.refreshToken, platform: 'ios-app' },
+    })
+    expect(rr.status).toBe(200)
+  })
+})
+
 describe('production cookie', () => {
   it('uses __Host- with Secure on https', async () => {
     const env = fakeEnv({

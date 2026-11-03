@@ -5,6 +5,7 @@
  */
 import type { TownJoinRefusal, TownJoinRequest, TownJoinResponse } from '../../contract/town.ts'
 import { API_URL, getAccessToken } from '../../net/auth.ts'
+import { pageTurnstile } from '../../net/turnstile.ts'
 import { openReconnecting, type ReconnectingSocket } from '../../platform/reconnect.ts'
 import type { LoopbackOptions } from './loopback-server.ts'
 
@@ -66,9 +67,19 @@ export const JOIN_MESSAGES: Record<JoinError['reason'], string> = {
   unlicensed: 'Beat the first 3 outlaws on a ranked run to earn your licence.',
   network: "Can't reach the frontier. Check your connection.",
   server: 'The frontier is having trouble. Try again shortly.',
+  turnstile: 'Could not verify you are human. Try again.',
 }
 
-const REFUSALS = new Set<string>(['over_budget', 'all_full', 'unauthorized', 'unlicensed'])
+const REFUSALS = new Set<string>([
+  'over_budget',
+  'all_full',
+  'unauthorized',
+  'unlicensed',
+  'turnstile',
+])
+
+/** A fresh token from the page's invisible Turnstile widget (one per join: they're single use). */
+const turnstileToken = (): Promise<string | null> => pageTurnstile().take()
 
 export type JoinResult = { ok: true; value: TownJoinResponse } | { ok: false; error: JoinError }
 
@@ -76,17 +87,24 @@ export async function joinTown(
   req: TownJoinRequest,
   apiUrl = API_URL,
   getToken: () => Promise<string | null> = getAccessToken,
+  getTurnstile: () => Promise<string | null> = turnstileToken,
 ): Promise<JoinResult> {
+  // The access token first: its refresh may spend a Turnstile token of its own (first of the day).
   const token = await getToken()
   if (!token) {
     return { ok: false, error: { reason: 'unauthorized', message: JOIN_MESSAGES.unauthorized } }
   }
+  const turnstile = await getTurnstile()
+  if (!turnstile) {
+    return { ok: false, error: { reason: 'turnstile', message: JOIN_MESSAGES.turnstile } }
+  }
+  const payload: TownJoinRequest = { ...req, turnstileToken: turnstile }
   let res: Response
   try {
     res = await fetch(`${apiUrl}/town/join`, {
       method: 'POST',
       headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' },
-      body: JSON.stringify(req),
+      body: JSON.stringify(payload),
     })
   } catch {
     return { ok: false, error: { reason: 'network', message: JOIN_MESSAGES.network } }
@@ -120,12 +138,18 @@ export interface RemoteOptions {
   bots?: number
   /** Access token source (defaults to the passkey session). */
   getToken?: () => Promise<string | null>
+  /** Turnstile token source (defaults to the page's invisible widget). */
+  getTurnstile?: () => Promise<string | null>
   /** A join refusal on the first attempt (full, budget, auth). */
   onRefused: (e: JoinError) => void
 }
 
 /** The real lobby: join, then a WebSocket that rejoins (fresh ticket) after network switches. */
 export function openRemote(opts: RemoteOptions, ev: TransportEvents): Transport {
+  if (!opts.getTurnstile) {
+    // Solve the first join's challenge while the town loads.
+    pageTurnstile().warm()
+  }
   let lobbyId = opts.lobbyId
   let attempts = 0
   const socket: ReconnectingSocket = openReconnecting({
@@ -141,9 +165,13 @@ export function openRemote(opts: RemoteOptions, ev: TransportEvents): Transport 
         req.bots = opts.bots
       }
       attempts++
-      const r = await joinTown(req, opts.apiUrl, opts.getToken)
+      const r = await joinTown(req, opts.apiUrl, opts.getToken, opts.getTurnstile)
       if (!r.ok) {
-        const transient = r.error.reason === 'network' || r.error.reason === 'server'
+        // A failed Turnstile check on a rejoin is worth another try with a fresh token.
+        const transient =
+          r.error.reason === 'network' ||
+          r.error.reason === 'server' ||
+          r.error.reason === 'turnstile'
         if (attempts > 1 && transient) {
           // offline mid-switch, or the Worker hiccuped: throwing makes the socket retry with
           // backoff (returning null would give up on the first failed rejoin)

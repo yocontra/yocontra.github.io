@@ -104,6 +104,19 @@ export interface RefreshRequest {
   /** App platforms only; the web sends the cookie instead. */
   refreshToken?: string
   platform?: ClientPlatform
+  /**
+   * Web only. The first web refresh of each UTC day must carry a Turnstile token. Without one the
+   * server answers 403 `RefreshTurnstileRequired`, leaves the cookie alone, and the client retries
+   * with a token.
+   */
+  turnstileToken?: string
+}
+
+/** The 403 from `POST /auth/refresh` when today's Turnstile check is still owed. */
+export interface RefreshTurnstileRequired {
+  ok: false
+  error: string
+  turnstile: 'required'
 }
 
 export interface PasskeyInfo {

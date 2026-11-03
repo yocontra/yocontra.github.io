@@ -1,7 +1,10 @@
 /**
- * Cloudflare Turnstile, rendered on the title screen. It stays invisible unless
- * Cloudflare needs the player to interact. Never throws: no token means the
- * game simply plays in practice mode.
+ * Cloudflare Turnstile. Every widget is `interaction-only`: invisible unless Cloudflare needs the
+ * player to click. Never throws: no token means the caller's request is refused politely (ranked
+ * plays in practice mode, a Frontier join shows the refusal card).
+ *
+ * Who spends tokens (§8): sign-up, the first web refresh of each UTC day (`net/auth.ts`), the
+ * Bounty Hunt queue, ranked runs, and every Frontier lobby join. Tokens are single use.
  */
 
 const SCRIPT = 'https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit'
@@ -48,16 +51,31 @@ function load(): Promise<TurnstileApi | null> {
   return loading
 }
 
-/** One widget, re-armed for each new ranked session (tokens are single-use). */
+/**
+ * One widget, re-armed for each token (tokens are single use). Requests are served one at a time,
+ * so two callers sharing a widget (a refresh and a lobby join) never steal each other's token.
+ */
 export class Turnstile {
   private readonly host: HTMLElement
   private widget = null as string | null
   private waiter = null as ((t: string | null) => void) | null
   private pending = null as Promise<string | null> | null
+  private queue: Promise<unknown> = Promise.resolve()
 
   constructor(parent: HTMLElement) {
     this.host = document.createElement('div')
     this.host.className = 'ow-turnstile'
+    if (parent === document.body) {
+      // Page-level widget (any page, styled or not): pinned above the game in case Cloudflare
+      // asks for a click; empty and invisible otherwise.
+      Object.assign(this.host.style, {
+        position: 'fixed',
+        left: '50%',
+        bottom: 'max(48px, calc(env(safe-area-inset-bottom) + 40px))',
+        translate: '-50% 0',
+        zIndex: '1000',
+      })
+    }
     parent.appendChild(this.host)
   }
 
@@ -73,7 +91,13 @@ export class Turnstile {
     return await p
   }
 
-  private async get(): Promise<string | null> {
+  private get(): Promise<string | null> {
+    const next = this.queue.then(() => this.issue())
+    this.queue = next.catch(() => null)
+    return next
+  }
+
+  private async issue(): Promise<string | null> {
     const t = await load()
     if (!t) {
       return null
@@ -107,4 +131,12 @@ export class Turnstile {
       }
     })
   }
+}
+
+let shared: Turnstile | null = null
+
+/** The page's shared widget (on `document.body`), made on first use. */
+export function pageTurnstile(): Turnstile {
+  shared ??= new Turnstile(document.body)
+  return shared
 }
