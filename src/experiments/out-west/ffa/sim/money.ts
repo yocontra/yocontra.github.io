@@ -11,6 +11,7 @@ import {
   CHANNEL_STRONGBOX,
   NONE,
 } from '../../contract/town.ts'
+import { FFA_XP, ffaBankXp, ffaDepositCommission, ffaStrongbox } from '../../data/progression.ts'
 import { pressed } from './combat.ts'
 import {
   BAG_PICKUP_RADIUS,
@@ -25,7 +26,6 @@ import {
 } from './constants.ts'
 import { cancelChannel, spillCarry } from './death.ts'
 import { inRect, zoneAt } from './layout.ts'
-import { FFA_XP, ffaBankXp, ffaDepositCommission, ffaStrongbox } from './progression-stub.ts'
 import { activePlayers, dist2, humanCount, isProtected, type World } from './state.ts'
 import type { Player } from './types.ts'
 

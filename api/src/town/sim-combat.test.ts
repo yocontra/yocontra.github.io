@@ -1,4 +1,4 @@
-import { describe, expect, test } from 'bun:test'
+import { describe, expect, test as it } from 'bun:test'
 import {
   BTN_AIM,
   BTN_FIRE,
@@ -36,7 +36,7 @@ function duel() {
 }
 
 describe('revolver', () => {
-  test('34 damage per hit, three hits to kill', () => {
+  it('34 damage per hit, three hits to kill', () => {
     const { w, a, b, aim } = duel()
     const shots = runCollect(w, 40, { [a.id]: spam(aim) }, 'shot') as Shot[]
     expect(shots.length).toBeGreaterThanOrEqual(3)
@@ -46,7 +46,7 @@ describe('revolver', () => {
     expect(a.stats.kills).toBe(1)
   })
 
-  test('six rounds, then a 1.6 s reload; fire rate averages 280 ms', () => {
+  it('six rounds, then a 1.6 s reload; fire rate averages 280 ms', () => {
     const w = testWorld()
     const a = place(w, 20, 64)
     const shots = runCollect(w, 100, { [a.id]: spam(0) }, 'shot') as Shot[]
@@ -71,14 +71,14 @@ describe('revolver', () => {
     expect(p.ammo).toBe(6)
   })
 
-  test('holding fire is one shot (semi-automatic)', () => {
+  it('holding fire is one shot (semi-automatic)', () => {
     const w = testWorld()
     const a = place(w, 20, 64)
     run(w, 30, { [a.id]: () => ({ buttons: BTN_FIRE }) })
     expect(a.stats.shots).toBe(1)
   })
 
-  test('manual reload', () => {
+  it('manual reload', () => {
     const w = testWorld()
     const a = place(w, 20, 64)
     run(w, 1, { [a.id]: () => ({ buttons: BTN_FIRE }) })
@@ -88,7 +88,7 @@ describe('revolver', () => {
     expect(a.ammo).toBe(6)
   })
 
-  test('damage falls to 60% beyond 14 m, nothing past 22 m', () => {
+  it('damage falls to 60% beyond 14 m, nothing past 22 m', () => {
     expect(damageAt(10, false)).toBe(34)
     expect(damageAt(15, false)).toBeCloseTo(20.4)
     const w = testWorld()
@@ -98,7 +98,7 @@ describe('revolver', () => {
     expect(b.hp).toBe(MAX_HP)
   })
 
-  test('walls stop bullets', () => {
+  it('walls stop bullets', () => {
     const w = testWorld()
     // Saloon west wall at x = 47; stand either side of it.
     const a = place(w, 45.5, 40)
@@ -107,7 +107,7 @@ describe('revolver', () => {
     expect(b.hp).toBe(MAX_HP)
   })
 
-  test('regenerates 12 HP/s after 5 s without damage', () => {
+  it('regenerates 12 HP/s after 5 s without damage', () => {
     const { w, a, b, aim } = duel()
     run(w, 1, { [a.id]: () => ({ aim, buttons: BTN_FIRE }) })
     expect(b.hp).toBe(66)
@@ -117,7 +117,7 @@ describe('revolver', () => {
 })
 
 describe('Dead-Eye', () => {
-  test('aim from the holster, fire inside the 150 ms window: 68 damage and the hat comes off', () => {
+  it('aim from the holster, fire inside the 150 ms window: 68 damage and the hat comes off', () => {
     const { w, a, b, aim } = duel()
     a.lastFireTick = w.tick - HOLSTER_TICKS
     const start = w.tick
@@ -137,7 +137,7 @@ describe('Dead-Eye', () => {
     expect(b.hatless).toBe(true)
   })
 
-  test('firing early is a normal shot', () => {
+  it('firing early is a normal shot', () => {
     const { w, a, b, aim } = duel()
     a.lastFireTick = w.tick - HOLSTER_TICKS
     run(w, 3, { [a.id]: () => ({ aim, buttons: BTN_AIM }) })
@@ -145,7 +145,7 @@ describe('Dead-Eye', () => {
     expect(b.hp).toBe(MAX_HP - 34)
   })
 
-  test('waiting too long is a normal shot', () => {
+  it('waiting too long is a normal shot', () => {
     const { w, a, b, aim } = duel()
     a.lastFireTick = w.tick - HOLSTER_TICKS
     run(w, 14, { [a.id]: () => ({ aim, buttons: BTN_AIM }) })
@@ -153,7 +153,7 @@ describe('Dead-Eye', () => {
     expect(b.hp).toBe(MAX_HP - 34)
   })
 
-  test('no Dead-Eye with the gun out', () => {
+  it('no Dead-Eye with the gun out', () => {
     const { w, a, b, aim } = duel()
     a.lastFireTick = w.tick
     run(w, DEAD_EYE_CLOSE_TICKS, { [a.id]: () => ({ aim, buttons: BTN_AIM }) })
@@ -163,15 +163,18 @@ describe('Dead-Eye', () => {
 })
 
 describe('roll i-frames, spawn protection and the pardon', () => {
-  test('a rolling target takes no damage during the i-frames', () => {
+  it('a rolling target takes no damage during the i-frames', () => {
     const { w, a, b, aim } = duel()
     run(w, 1, { [b.id]: () => ({ moveZ: 127, buttons: BTN_ROLL }) })
-    run(w, 1, { [a.id]: () => ({ aim: aimAt(a, b), buttons: BTN_FIRE }), [b.id]: () => ({ buttons: BTN_ROLL }) })
+    run(w, 1, {
+      [a.id]: () => ({ aim: aimAt(a, b), buttons: BTN_FIRE }),
+      [b.id]: () => ({ buttons: BTN_ROLL }),
+    })
     expect(b.hp).toBe(MAX_HP)
     expect(aim).toBeGreaterThanOrEqual(0)
   })
 
-  test('spawn protection blocks damage; firing ends it early', () => {
+  it('spawn protection blocks damage; firing ends it early', () => {
     const { w, a, b, aim } = duel()
     b.protectUntil = w.tick + SPAWN_PROTECT_TICKS
     run(w, 1, { [a.id]: spam(aim) })
@@ -182,25 +185,25 @@ describe('roll i-frames, spawn protection and the pardon', () => {
     expect(b.hp).toBeLessThan(MAX_HP)
   })
 
-  test('the protected player cannot damage anyone (their first shot ends protection, then hits)', () => {
+  it('the protected player cannot damage anyone (their first shot ends protection, then hits)', () => {
     const { w, a, b } = duel()
     a.protectUntil = w.tick + SPAWN_PROTECT_TICKS
     run(w, 1, { [a.id]: () => ({ aim: aimAt(a, b), buttons: BTN_FIRE }) })
     expect(a.protectUntil).toBeLessThanOrEqual(w.tick)
   })
 
-  test("killed within 8 s of spawning: the Sheriff's pardon (no bounty, no drop)", () => {
+  it("killed within 8 s of spawning: the Sheriff's pardon (no bounty, no drop)", () => {
     const { w, a, b, aim } = duel()
     b.spawnTick = w.tick
     b.carried = 120
     const kills = runCollect(w, 40, { [a.id]: spam(aim) }, 'kill') as Kill[]
-    expect(kills[0]?.flags & KILL_PARDON).toBeTruthy()
+    expect((kills[0]?.flags ?? 0) & KILL_PARDON).toBeTruthy()
     expect(a.carried).toBe(0)
     expect(a.stats.xp).toBe(0)
     expect(w.bags.length).toBe(0)
   })
 
-  test('respawn after the 3 s death cam with 3 s of protection', () => {
+  it('respawn after the 3 s death cam with 3 s of protection', () => {
     const { w, a, b, aim } = duel()
     run(w, 40, { [a.id]: spam(aim) })
     expect(b.alive).toBe(false)
@@ -212,7 +215,7 @@ describe('roll i-frames, spawn protection and the pardon', () => {
 })
 
 describe('lag compensation', () => {
-  test('a shot rewinds the target to where the shooter saw it, up to 200 ms', () => {
+  it('a shot rewinds the target to where the shooter saw it, up to 200 ms', () => {
     const w = testWorld()
     const a = place(w, 20, 64)
     const b = place(w, 30, 64)
@@ -224,7 +227,7 @@ describe('lag compensation', () => {
     expect(b.hp).toBe(MAX_HP - 34)
   })
 
-  test('claims older than 200 ms are clamped (and miss)', () => {
+  it('claims older than 200 ms are clamped (and miss)', () => {
     const w = testWorld()
     const a = place(w, 20, 64)
     const b = place(w, 30, 64)

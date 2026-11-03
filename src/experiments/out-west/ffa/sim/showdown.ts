@@ -15,6 +15,7 @@ import {
   SD_FROZE,
   SD_WIN,
 } from '../../contract/town.ts'
+import { FFA_XP } from '../../data/progression.ts'
 import { pressed } from './combat.ts'
 import {
   CALLOUT_ACCEPT_TICKS,
@@ -31,7 +32,6 @@ import {
 } from './constants.ts'
 import { cancelChannel, killPlayer } from './death.ts'
 import { aimDir } from './move.ts'
-import { FFA_XP } from './progression-stub.ts'
 import { activePlayers, dist2, type World } from './state.ts'
 import type { Player, Showdown } from './types.ts'
 

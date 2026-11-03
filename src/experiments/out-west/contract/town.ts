@@ -18,7 +18,14 @@
  * (u16 covers the 144 m town at 2.2 mm). Angles are u16 turns (`ANGLE_SCALE` units per 2π), or u8
  * turns on remote entities. Ticks are 20 Hz; `tick16` means the low 16 bits of the server tick.
  *
- * # Client → server: `MSG_INPUT` (10 Hz, two 20 Hz frames per message)
+ * # Client → server: `MSG_INPUT` (send-on-change, at most 10 Hz, two 20 Hz frames per message)
+ *
+ * The client numbers one frame per 20 Hz tick. At each 10 Hz slot it sends that slot's two frames
+ * **only if either differs** from the last frame sent (stick, aim quantised to 1/1024 turn, or
+ * buttons), and otherwise stays silent, apart from a one-frame keepalive every 500 ms.
+ * **Silence means "unchanged"**: the server re-applies the last frame for every frame number it
+ * wasn't sent, exactly as the client predicted. Use `InputBatcher` / `InputQueue` in
+ * `ffa/sim/input.ts`; they implement both ends of this rule.
  *
  * | Offset | Type | Field |
  * |---|---|---|

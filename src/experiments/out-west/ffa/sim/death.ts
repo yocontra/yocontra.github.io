@@ -7,6 +7,7 @@ import {
   KILL_SHOWDOWN,
   NONE,
 } from '../../contract/town.ts'
+import { FFA_XP, ffaDeathDrop, ffaKillMint } from '../../data/progression.ts'
 import {
   ASSIST_DAMAGE,
   ASSIST_WINDOW_TICKS,
@@ -17,7 +18,6 @@ import {
   FARM_WINDOW_TICKS,
   PARDON_TICKS,
 } from './constants.ts'
-import { FFA_XP, ffaDeathDrop, ffaKillMint } from './progression-stub.ts'
 import type { World } from './state.ts'
 import type { Player } from './types.ts'
 
