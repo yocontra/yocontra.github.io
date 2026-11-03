@@ -10,10 +10,10 @@ import type {
   TownJoinRequest,
   TownJoinResponse,
 } from '../../../src/experiments/out-west/contract/town.ts'
-import { authenticate } from '../economy/auth.ts'
+import { authenticate } from '../auth/session.ts'
+import { AccountGoneError, issueTicket, redeemTicket } from '../auth/ticket.ts'
 import type { Env } from '../env.ts'
 import { allowedOrigin, error, json, type RouteHandler, readJson } from '../http.ts'
-import { issueTicket, redeemTicket } from '../town/ticket-stub.ts'
 
 const LOBBY_PATH = /^\/town\/(?<lobby>lobby:\d{1,3})\/(?<what>ws|stats)$/u
 const DIRECTORY = 'dir:global'
@@ -93,7 +93,20 @@ async function join(request: Request, env: Env): Promise<Response> {
       },
     )
   }
-  const ticket = await issueTicket(env, player, 'town')
+  let ticket: string
+  try {
+    ticket = await issueTicket(env, player, 'town')
+  } catch (err) {
+    if (err instanceof AccountGoneError) {
+      return json(
+        request,
+        env,
+        { ok: false, error: refusalMessage('unauthorized'), reason: 'unauthorized' },
+        401,
+      )
+    }
+    throw err
+  }
   const exp = Date.now() + SIG_TTL_MS
   const ws = new URL(request.url)
   ws.protocol = ws.protocol === 'https:' ? 'wss:' : 'ws:'

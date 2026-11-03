@@ -9,9 +9,9 @@ import {
   resolveShowdown,
   type ShowdownVerdict,
 } from '../../../src/experiments/out-west/ffa/sim/showdown.ts'
+import { type FixedDraw, judgePvp, type PvpLink, type PvpVerdict } from '../duel/judge-pvp.ts'
 import { rttStats } from '../judge.ts'
 import type { LobbyCore } from './core.ts'
-import { type FixedDraw, judgePvp, type PvpLink, type PvpVerdict } from './judge-stub.ts'
 
 const BOT_DRAW_MIN_MS = 190
 const BOT_DRAW_MAX_MS = 340

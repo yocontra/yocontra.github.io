@@ -6,8 +6,11 @@
  *
  *   bun api/src/town/loadtest.ts [api=http://localhost:8794] [clients=3] [bots=29] [seconds=60]
  *
- * Dev auth only (`Bearer dev:<id>:<name>`, localhost). Seed accounts lt-1..lt-N for ledger writes.
+ * Signs real access tokens with the API's AUTH_SECRET (read from `api/.dev.vars`), so accounts
+ * lt-1..lt-N must exist (accounts + profiles rows) for tickets and ledger writes.
  */
+import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
 import { argv, stdout } from 'node:process'
 import {
   BTN_FIRE,
@@ -25,6 +28,7 @@ import {
 import { TICK_MS } from '../../../src/experiments/out-west/ffa/sim/constants.ts'
 import { InputBatcher } from '../../../src/experiments/out-west/ffa/sim/input.ts'
 import { Rng } from '../../../src/experiments/out-west/ffa/sim/rng.ts'
+import { signAccessToken } from '../auth/token.ts'
 import type { LobbyStats } from './lobby.ts'
 
 const ORIGIN = 'http://localhost:4344'
@@ -173,11 +177,22 @@ class FakeHuman {
   }
 }
 
+const AUTH_SECRET =
+  /^AUTH_SECRET=(?<s>.+)$/mu.exec(readFileSync(join(import.meta.dir, '../../.dev.vars'), 'utf8'))
+    ?.groups?.s ?? ''
+
 async function joinTown(api: string, i: number, bots: number): Promise<TownJoinResponse> {
+  const { token } = await signAccessToken(AUTH_SECRET, {
+    accountId: `lt-${i}`,
+    name: `Loadtest${i}`,
+    sid: `loadtest-${i}`,
+    platform: 'web',
+    authTime: Date.now(),
+  })
   const res = await fetch(`${api}/town/join`, {
     method: 'POST',
     headers: {
-      Authorization: `Bearer dev:lt-${i}:Loadtest ${i}`,
+      Authorization: `Bearer ${token}`,
       Origin: ORIGIN,
       'Content-Type': 'application/json',
     },

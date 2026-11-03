@@ -41,6 +41,9 @@ const BOT_NAMES = [
   'Silent Sam',
 ]
 
+/** The town never changes at runtime, so every lobby in an isolate shares one nav grid. */
+let sharedNav: NavGrid | null = null
+
 interface BotBrain {
   path: { x: number; z: number }[]
   goal: { x: number; z: number } | null
@@ -68,7 +71,9 @@ export class BotDirector {
   }
 
   private navFor(w: World): NavGrid {
-    this.nav ??= buildNav(w.grid)
+    // One per isolate: building it costs a few dozen ms, so new lobbies reuse it.
+    sharedNav ??= buildNav(w.grid)
+    this.nav ??= sharedNav
     return this.nav
   }
 
