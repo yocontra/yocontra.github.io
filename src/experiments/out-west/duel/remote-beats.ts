@@ -6,6 +6,8 @@
 import type { Poster, Taunt } from '../contract/duel.ts'
 import { FEEL } from '../data/feel.ts'
 import type { Outlaw } from '../data/outlaws.ts'
+import type { Actor } from '../scene/actor.ts'
+import { identityFor } from '../scene/identity.ts'
 import { dressedActor } from '../scene/loadout.ts'
 import type { Director } from './director.ts'
 import { callShot, standoffShot } from './framing.ts'
@@ -146,10 +148,10 @@ export function deadHeatFx(d: Director): void {
 }
 
 /** Sudden death: both back on their feet, backs turned, a fresh wait (no walk). */
-export function reviveForSuddenDeath(d: Director, loadout: unknown): void {
+export function reviveForSuddenDeath(d: Director, p: Poster | undefined): void {
   const c = d.c
   const old = d.enemy
-  const fresh = dressedActor(c.assets.player, c.gun, loadout)
+  const fresh = opponentActor(d, p)
   if (old) {
     fresh.root.position.copy(old.root.position)
     old.dispose()
@@ -207,6 +209,19 @@ export const TAUNT_TEXT: Record<Taunt, string> = {
 }
 
 export const HECKLES = ['You plannin’ on walkin’ today?', 'I ain’t got all day, friend.', 'Scared?']
+
+/**
+ * The opponent dressed in his own loadout and dyes, with his own face (scene/identity.ts): a Town
+ * Outlaw is told apart by his level, since they share a name.
+ */
+export function opponentActor(d: Director, p: Poster | undefined): Actor {
+  const c = d.c
+  const key = p?.kind === 'outlaw' ? `${p.name}#${p.level}` : (p?.name ?? 'stranger')
+  return dressedActor(c.assets.player, c.gun, p?.loadout ?? {}, {
+    dyes: p?.dyes,
+    who: identityFor(key, c.assets),
+  })
+}
 
 /** An outlaw record for the opponent, so the director's captions and framing have a name. */
 export function asOutlaw(p: Poster): Outlaw {

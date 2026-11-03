@@ -14,7 +14,7 @@ import { fetchDuelStats } from '../net/api.ts'
 import { DuelRoomLink } from '../net/pvp.ts'
 import { haptic } from '../platform/haptics.ts'
 import type { SaveData } from '../save.ts'
-import { DRAW_SOUNDS, dressedActor } from '../scene/loadout.ts'
+import { DRAW_SOUNDS } from '../scene/loadout.ts'
 import { MatchIntro } from '../ui/match-intro.ts'
 import { type OpponentRef, ResultsPanel } from '../ui/results.ts'
 import { recordLine } from '../ui/standing.ts'
@@ -32,6 +32,7 @@ import {
   HECKLES,
   type HoldState,
   honestWin,
+  opponentActor,
   remotePace,
   reviveForSuddenDeath,
   TAUNT_TEXT,
@@ -118,6 +119,10 @@ export class PvpDuel implements DirectorHooks {
     d.clock = this.clock
     d.hooks = this
     d.outlaw = asOutlaw(o.opponent)
+    // the hair cuts an opponent's face may borrow, fetched while the match is found
+    for (const donor of ['worker', 'king'] as const) {
+      d.c.assets.body(donor).catch(() => undefined)
+    }
     d.level = 0
     d.c.hud.root.classList.add('ow-pvp')
     d.c.hud.show(true)
@@ -272,7 +277,7 @@ export class PvpDuel implements DirectorHooks {
         this.deadHeat = false
         this.drawKnown = true
         this.clock.draw = m.draw
-        reviveForSuddenDeath(d, this.posters?.[this.opp]?.loadout ?? {})
+        reviveForSuddenDeath(d, this.posters?.[this.opp])
         break
       case 'result':
         this.onResult(m)
@@ -346,7 +351,7 @@ export class PvpDuel implements DirectorHooks {
     const d = this.d
     const c = d.c
     d.enemy?.dispose()
-    d.enemy = dressedActor(c.assets.player, c.gun, them.loadout)
+    d.enemy = opponentActor(d, them)
     c.scene.add(d.enemy.root)
     d.enemyAlive = true
     d.dying = null

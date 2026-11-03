@@ -2,6 +2,7 @@ import type { Object3D } from 'three'
 import type { HatKey, Look } from '../data/outlaws.ts'
 import type { Assets } from '../engine/assets.ts'
 import { Actor } from './actor.ts'
+import { hairDonor } from './person.ts'
 
 export interface CastSpec {
   look: Look
@@ -24,6 +25,7 @@ export function castActor(assets: Assets, s: CastSpec): Actor {
   if (!base) {
     throw new Error(`model ${L.base} not loaded`)
   }
+  const donor = hairDonor(L.base, L.hair)
   return new Actor(base, {
     base: L.base,
     // Bases without clips of their own play the player's (same skeleton).
@@ -38,11 +40,25 @@ export function castActor(assets: Assets, s: CastSpec): Actor {
     scale: L.scale,
     coat: L.coat,
     poncho: L.poncho,
+    vest: L.vest,
     moustache: L.moustache,
+    moustacheStyle: L.moustacheStyle,
     beard: L.beard,
+    beardStyle: L.beardStyle,
+    sideburns: L.sideburns,
+    stubble: L.stubble,
     bandoliers: L.bandoliers,
     star: L.star,
     mask: L.mask ? (s.bandana ?? 0x2a_1a_12) : undefined,
+    eyepatch: L.eyepatch,
+    scar: L.scar,
+    gloves: L.gloves,
+    skin: L.skin,
+    hair: L.hair,
+    hairFrom: donor ? assets.bodyNow(donor) : null,
+    build: L.build,
+    face: L.face,
+    stance: L.stance,
     seed: `${L.base}/${s.hat}/${s.hatColor}/${Object.values(L.tint).join(',')}`,
   })
 }

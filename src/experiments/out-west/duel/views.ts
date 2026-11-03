@@ -14,12 +14,15 @@ export async function lineup(s: DuelState, day: number): Promise<Actor[]> {
   c.world.apply(day)
   s.player.root.visible = false
   const actors: Actor[] = []
+  const hash = new URLSearchParams(location.hash.slice(1))
+  const aim = hash.has('aim')
   const row = (o: Outlaw | null, look: Look, i: number): void => {
     const a = castActor(c.assets, {
       look,
       hat: o?.hat ?? 'cowboy',
       hatColor: o?.hatColor ?? 0x1a_14_10,
-      bandana: o?.bandana ?? 0x3a_2a_1a,
+      // his own neckerchief (or none): only the rifleman's mask needs a cloth colour
+      bandana: o ? o.bandana : 0x3a_2a_1a,
       gun: c.gun ? propObject(c.gun) : null,
       offGun: o?.gimmick === 'two-guns' || o?.gimmick === 'boss',
     })
@@ -27,8 +30,14 @@ export async function lineup(s: DuelState, day: number): Promise<Actor[]> {
     const k = front ? i : i - 9
     a.root.position.set(-6.4 + k * 1.6 + (front ? 0 : 0.8), 0, front ? 3 : 6)
     a.root.rotation.y = Math.PI
-    a.play('Idle', 0)
-    a.mixer.update(Math.random())
+    // `aim`: everyone drawn and pointing (checks the grip on every build)
+    if (aim) {
+      a.draw()
+      a.play('Idle_Gun_Pointing', 0)
+    } else {
+      a.play('Idle', 0)
+    }
+    a.mixer.update(aim ? 0.2 : Math.random())
     c.scene.add(a.root)
     actors.push(a)
   }
@@ -38,13 +47,26 @@ export async function lineup(s: DuelState, day: number): Promise<Actor[]> {
   row(null, RIFLEMAN_LOOK, 17)
   c.world.focusShadow(V(0, 0, 4))
   s.phase = 'end'
-  const focus = Number(new URLSearchParams(location.hash.slice(1)).get('focus') ?? '-1')
-  const fa = actors[focus]
+  const fa = actors[Number(hash.get('focus') ?? '-1')]
   if (fa) {
+    // `at=hips`: the belt and holster instead of the face
     const h = fa.headPos(V())
+    if (hash.get('at') === 'hips') {
+      fa.hips?.getWorldPosition(h)
+    }
+    // `dist` widens the close-up (1 = head, ~2.5 = head to belt)
+    const k = Number(hash.get('dist') ?? '1')
+    // `yaw` swings the camera round him (radians): ~0.8 three-quarter, ~1.4 profile
+    const yaw = Number(hash.get('yaw') ?? '0')
+    const ox = -0.35 * k
+    const oz = -1.1 * k
     c.rig.cut('lineup', () => ({
-      pos: V(h.x - 0.35, h.y + 0.05, h.z - 1.1),
-      look: V(h.x, h.y - 0.1, h.z),
+      pos: V(
+        h.x + ox * Math.cos(yaw) - oz * Math.sin(yaw),
+        h.y + 0.05,
+        h.z + ox * Math.sin(yaw) + oz * Math.cos(yaw),
+      ),
+      look: V(h.x, h.y - 0.1 * k, h.z),
       fov: 35,
     }))
   } else {

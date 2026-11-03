@@ -26,7 +26,6 @@ import {
   Matrix4,
   Mesh,
   MeshBasicMaterial,
-  type Object3D,
   PlaneGeometry,
   Quaternion,
   RingGeometry,
@@ -56,6 +55,7 @@ import type { Assets } from '../../engine/assets.ts'
 import type { Actor, Clip } from '../../scene/actor.ts'
 import { castActor } from '../../scene/cast.ts'
 import { lodGeometry } from '../../scene/lod.ts'
+import type { LongHold } from '../../scene/longgun.ts'
 import { type PropDef, propDef, propObject } from '../../scene/props.ts'
 import { RIFLE_ROUNDS, SHOTGUN_SHELLS } from '../sim/constants.ts'
 import {
@@ -68,7 +68,7 @@ import {
   vatFrame,
 } from './crowd/vat.ts'
 import type { PlayerLook } from './looks.ts'
-import { kitMaterial, SHOTGUN_MUZZLE, shotgunMesh } from './shotgun.ts'
+import { kitMaterial, shotgunMesh } from './shotgun.ts'
 
 const VAT_CLIPS: Clip[] = ['Idle', 'Run', 'Idle_Gun_Pointing', 'Death']
 const NEAR_FAST_M = 12
@@ -82,14 +82,9 @@ const MAX_ACTORS_EXTRA = 6
 const PREBUILD_RING = 4
 /** Characters read 25% bigger than life from the top-down camera (visual only; collision is the sim's). */
 export const READ_SCALE = 1.25
-/** Map weapons in the hand: where the grip sits in the revolver's slot, and how big they read. */
-const SHOTGUN_GRIP = { x: 0.06, y: -0.02, z: 0 }
+/** Map weapons: how big they read (the coach gun a touch heavier than life, to read from the sky). */
 const SHOTGUN_HELD_SCALE = 1.15
 const RIFLE_LENGTH = 1.1
-const RIFLE_GRIP = { x: 0.12, y: -0.16, z: 0 }
-/** The rifle prop's muzzle along its length and height (prop metres, from its centre and foot). */
-const RIFLE_MUZZLE_Z = 0.55
-const RIFLE_MUZZLE_Y = 0.2
 const ARM_BONES = /^(?<bone>Shoulder|UpperArm|LowerArm|Index|Middle|Ring|Pinky|Thumb)\d?R$/u
 
 /** What the crowd needs to know about one player this frame. */
@@ -108,12 +103,8 @@ export interface CrowdPlayer {
   weapon?: number
 }
 
-/** A map weapon held in the revolver's hand slot (barrel along the slot's +X, like the revolver). */
-interface LongGun {
-  obj: Object3D
-  /** Muzzle in `obj`'s own space. */
-  muzzle: Vector3
-}
+/** A map weapon shouldered in both hands (scene/longgun.ts; barrel along its +X). */
+type LongGun = LongHold
 
 interface Member {
   id: number
@@ -408,12 +399,8 @@ export class Crowd {
     holder.add(pivot)
     this.root.add(holder)
     actor.draw()
-    // The revolver's hand slot (it was just drawn into it) carries the map weapons too.
-    const hand = actor.gun?.parent
-    if (hand) {
-      m.shotgun = this.longGun(hand, 'shotgun')
-      m.rifle = this.longGun(hand, 'rifle')
-    }
+    m.shotgun = this.longGun(actor, 'shotgun')
+    m.rifle = this.longGun(actor, 'rifle')
     actor.play('Idle_Gun', 0)
     m.actor = actor
     m.holder = holder
@@ -433,33 +420,26 @@ export class Crowd {
   }
 
   /**
-   * One map weapon in a hand slot, hidden until he holds it. One mesh sharing the template's
-   * geometry and material (the shotgun is one draw in the kit material; the rifle its prop's).
+   * One map weapon fitted to him (butt in his shoulder, both hands on it), hidden until he holds
+   * it. One mesh sharing the template's geometry and material (the shotgun is one draw in the kit
+   * material; the rifle its prop's).
    */
-  private longGun(hand: Object3D, kind: 'shotgun' | 'rifle'): LongGun | null {
-    let obj: Object3D
-    let muzzle: Vector3
+  private longGun(actor: Actor, kind: 'shotgun' | 'rifle'): LongGun | null {
+    const obj = new Group()
     if (kind === 'shotgun') {
-      obj = shotgunMesh(this.kit)
-      // the wrist in the palm, the gun a touch heavier than life so it reads from the sky
-      obj.position.set(SHOTGUN_GRIP.x, SHOTGUN_GRIP.y, SHOTGUN_GRIP.z)
-      obj.scale.set(SHOTGUN_HELD_SCALE, SHOTGUN_HELD_SCALE * 1.2, SHOTGUN_HELD_SCALE * 1.2)
-      muzzle = SHOTGUN_MUZZLE.clone()
+      const gun = shotgunMesh(this.kit)
+      gun.scale.set(SHOTGUN_HELD_SCALE, SHOTGUN_HELD_SCALE * 1.2, SHOTGUN_HELD_SCALE * 1.2)
+      obj.add(gun)
     } else {
       if (!this.rifleDef) {
         return null
       }
-      // the rifle prop lies along Z, muzzle at +Z; turn it down the slot's +X
+      // the rifle prop lies along Z, muzzle at +Z; turn it down +X
       const inner = propObject(this.rifleDef)
       inner.rotation.y = Math.PI / 2
-      inner.position.set(RIFLE_GRIP.x, RIFLE_GRIP.y, RIFLE_GRIP.z)
-      obj = new Group()
       obj.add(inner)
-      muzzle = new Vector3(RIFLE_GRIP.x + RIFLE_MUZZLE_Z, RIFLE_GRIP.y + RIFLE_MUZZLE_Y, 0)
     }
-    obj.visible = false
-    hand.add(obj)
-    return { obj, muzzle }
+    return actor.addLong(obj)
   }
 
   /**
@@ -479,12 +459,7 @@ export class Crowd {
     } else {
       actor.draw()
     }
-    if (m.shotgun) {
-      m.shotgun.obj.visible = long === m.shotgun
-    }
-    if (m.rifle) {
-      m.rifle.obj.visible = long === m.rifle
-    }
+    actor.holdLong(long)
   }
 
   /** The gun arm of Idle_Gun_Pointing as its own action, layered over Run while armed. */
@@ -519,7 +494,7 @@ export class Crowd {
       m.actor.root.updateWorldMatrix(true, true)
       const long = m.held
       if (long) {
-        return out.copy(long.muzzle).applyMatrix4(long.obj.matrixWorld)
+        return out.copy(long.a.muzzle).applyMatrix4(long.obj.matrixWorld)
       }
       return m.actor.muzzle(out)
     }
@@ -653,11 +628,10 @@ export class Crowd {
     const hz = p.self || dist < NEAR_FAST_M ? 30 : 15
     m.acc += dt
     if (m.acc >= 1 / hz || !m.wasNear) {
+      actor.longKick = m.recoil
       actor.update(m.acc)
       m.acc = 0
-      if (m.recoil > 0 && actor.forearmR) {
-        actor.forearmR.rotation.z += m.recoil * 0.5
-      }
+      this.kick(m, actor)
     }
     m.recoil = Math.max(0, m.recoil - dt * 8)
     m.wasNear = true
@@ -711,6 +685,20 @@ export class Crowd {
     if (m.arm) {
       m.arm.setEffectiveWeight(clip === 'Run' ? armW : 0)
     }
+    this.braceLong(m, actor, clip === 'Run')
+  }
+
+  /** The revolver kicks his forearm (a long gun kicks at the shoulder: `longKick`). */
+  private kick(m: Member, actor: Actor): void {
+    if (m.recoil > 0 && actor.forearmR && !m.held) {
+      actor.forearmR.rotation.z += m.recoil * 0.5
+    }
+  }
+
+  /** A long gun: at the low ready on the run, shouldered when he stops, aims or fires. */
+  private braceLong(m: Member, actor: Actor, running: boolean): void {
+    const carry = running && m.recoil <= 0 ? 1 : 0
+    actor.longCarry += (carry - actor.longCarry) * 0.2
   }
 
   private drawFar(m: Member, p: CrowdPlayer, nowS: number): void {
@@ -738,7 +726,7 @@ export class Crowd {
       phase = f / 15 - nowS
     }
     const i = v.mesh.count++
-    v.set(i, clip, phase, rate, m.look.top, m.look.bottom)
+    v.set(i, clip, { phase, speed: rate }, m.look)
     q.setFromAxisAngle(up, facing(p.aim))
     pos.set(p.x, 0, p.z)
     m4.compose(pos, q, one.setScalar(READ_SCALE))

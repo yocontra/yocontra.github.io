@@ -22,7 +22,7 @@ const LIFT: Record<HubShot, number> = { hub: -0.75, store: -0.55 }
 export function wearLoadout(s: DuelState, loadout: unknown, dyes: Dyes = {}): void {
   const c = s.c
   const old = s.player
-  const next = dressedActor(c.assets.player, c.gun, loadout, dyes)
+  const next = dressedActor(c.assets.player, c.gun, loadout, { dyes })
   next.root.position.copy(old.root.position)
   next.root.rotation.copy(old.root.rotation)
   next.root.visible = old.root.visible
