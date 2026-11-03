@@ -4,14 +4,15 @@ Bun + TypeScript, typechecked by `tsc -p tools` (part of `bun run check`). Owned
 reuse freely. Every third-party or generated asset gets a line in
 `public/experiments/out-west/3d/CREDITS.md`.
 
-| Tool                 | What it does                                                                                                | Needs                                                    |
-| -------------------- | ----------------------------------------------------------------------------------------------------------- | -------------------------------------------------------- |
-| `polyhaven.ts`       | Fetch a Poly Haven CC0 PBR set (diffuse, GL normal, ARM, …) and write WebP maps                             | `cwebp`                                                  |
-| `pbr-from-albedo.ts` | Derive normal + ARM (AO, roughness) from a flat albedo (design doc §10.2): Gemini signage, posters, leather | `ffmpeg`, `cwebp`                                        |
-| `optimize-gltf.ts`   | dedup → prune → weld → resize → KTX2 (or WebP) → quantize → meshopt, plus an optional simplified LOD file   | `bunx` (fetches `@gltf-transform/cli`), optional `toktx` |
-| `make-luts.ts`       | Export the in-game time-of-day grades (`engine/lut.ts`) as 32³ `.cube` files for a colourist                | none                                                     |
-| `art/`               | Source art for generated textures (e.g. `signboard_src.webp`, Gemini)                                       |                                                          |
-| `PERF.md`            | How to measure, the numbers so far, and the real-device checklist                                           |                                                          |
+| Tool                 | What it does                                                                                                                                                                                                     | Needs                                                                          |
+| -------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------ |
+| `polyhaven.ts`       | Fetch a Poly Haven CC0 PBR set (diffuse, GL normal, ARM, …) and write WebP maps                                                                                                                                  | `cwebp`                                                                        |
+| `pbr-from-albedo.ts` | Derive normal + ARM (AO, roughness) from a flat albedo (design doc §10.2): Gemini signage, posters, leather                                                                                                      | `ffmpeg`, `cwebp`                                                              |
+| `optimize-gltf.ts`   | dedup → prune → weld → resize → KTX2 (or WebP) → quantize → meshopt, plus an optional simplified LOD file                                                                                                        | `bunx` (fetches `@gltf-transform/cli`), optional `toktx`                       |
+| `make-luts.ts`       | Export the in-game time-of-day grades (`engine/lut.ts`) as 32³ `.cube` files for a colourist                                                                                                                     | none                                                                           |
+| `art/`               | Source art for generated textures (e.g. `signboard_src.webp`, Gemini)                                                                                                                                            |                                                                                |
+| `audio/`             | The soundtrack: `manifest.ts` (every ElevenLabs prompt), `generate.ts`, `recipes.ts` + `build.ts` (master to −16/−18 LUFS, ≤ −1 dBTP, loop points), `loudness.ts` (report), `verify-duel.ts` (in-browser meters) | `ffmpeg` (with `aac_at`), Apparish generators, Playwright for `verify-duel.ts` |
+| `PERF.md`            | How to measure, the numbers so far, and the real-device checklist                                                                                                                                                |                                                                                |
 
 ## Recipes
 

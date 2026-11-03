@@ -54,6 +54,7 @@ const base = process.argv.find((a) => a.startsWith('http')) ?? 'http://localhost
 const SHOT = /^(fire|fireBig)/u
 const loops = process.argv.includes('--loops')
 const hashExtra = process.argv.find((a) => a.startsWith('#'))?.slice(1) ?? ''
+const react = Number(process.argv.find((a) => a.startsWith('--react='))?.slice(8) ?? '260')
 const pwPath = process.env.PLAYWRIGHT ?? 'playwright'
 const { chromium } = (await import(pwPath)) as Pw
 
@@ -113,7 +114,7 @@ if (!(stage && wait && bell)) {
   process.exit(1)
 }
 // React like a quick human, then fire.
-await page.waitForTimeout(260)
+await page.waitForTimeout(react)
 await page.mouse.down()
 await page.mouse.up()
 await page.waitForTimeout(4500)
@@ -149,6 +150,12 @@ console.log(
 )
 console.log(
   `output peak: bell ${f1(bellPeak)} dBFS, your shot ${f1(shotPeak)} dBFS, whole round ${f1(outPeak)} dBFS`,
+)
+console.log(
+  'sfx frames from the call (ms:rms/peak):',
+  win('sfx', tb - 0.05, tb + 0.45)
+    .map((f) => `${Math.round((f.t - tb) * 1000)}:${f.rms.toFixed(0)}/${f.peak.toFixed(0)}`)
+    .join(' '),
 )
 console.log(`bad (NaN) frames: ${frames.filter((f) => f.bad).length} of ${frames.length}`)
 console.log('stats', JSON.stringify(stats))
