@@ -263,13 +263,16 @@
 /* --------------------------------------------- mode badge: RANKED / PRACTICE */
 .ow-mode {
   top: calc(max(var(--ow-s3), var(--ow-sai-t)) + 64px);
-  padding: 2px var(--ow-s2);
-  font-weight: 700;
-  font-size: var(--ow-fs-small);
+  padding: 3px var(--ow-s2) 4px;
+  font-weight: 600;
+  font-size: var(--ow-fs-body);
   font-variant-caps: all-small-caps;
-  letter-spacing: 0.14em;
-  line-height: 1.3;
-  color: var(--ow-bone-2);
+  letter-spacing: var(--ow-track-caps);
+  line-height: 1.2;
+  color: var(--ow-bone);
+  background: var(--ow-scrim-soft);
+  box-shadow: inset 0 0 0 1px var(--ow-rule);
+  text-shadow: none;
 }
 .ow-mode:empty {
   display: none;
