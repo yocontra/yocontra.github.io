@@ -11,7 +11,10 @@ import { career } from '~/data/career'
   <ol class="roles">
     {career.map((role) => (
       <li class="role reveal">
-        <p class="years">{role.years ?? '—'}</p>
+        <p class="years">
+          {role.years ?? '—'}
+          {role.location && <span class="location">{role.location}</span>}
+        </p>
         <div class="body">
           <h3>
             {role.href ? (
@@ -75,6 +78,12 @@ import { career } from '~/data/career'
     .role {
       grid-template-columns: 1fr;
     }
+  }
+
+  .location {
+    display: block;
+    color: var(--fg-faint);
+    opacity: 0.75;
   }
 
   .years {

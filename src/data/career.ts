@@ -4,6 +4,7 @@ export interface Role {
   title: string
   /** Display years, e.g. "2021 — 2024". Omitted when unknown. */
   years?: string
+  location?: string
   blurb?: string
 }
 
@@ -13,6 +14,7 @@ export const career: readonly Role[] = [
     href: 'https://appari.sh',
     title: 'Co-founder',
     years: '2026 — now',
+    location: 'Phoenix',
     blurb: 'Making Apparish, a location-based ghost hunting game for iOS and Android.',
   },
   {
@@ -20,6 +22,7 @@ export const career: readonly Role[] = [
     href: 'https://plaza.fyi',
     title: 'Co-founder',
     years: '2026 — now',
+    location: 'Phoenix',
     blurb:
       'A way for AI agents to work with the physical world: geocoding, routing, search and more across the entire OpenStreetMap planet, as an API and MCP server.',
   },
@@ -28,12 +31,14 @@ export const career: readonly Role[] = [
     href: 'https://trigram.co',
     title: 'Consultant',
     years: '2026 — now',
+    location: 'Phoenix',
     blurb: 'Consulting work as part of Trigram.',
   },
   {
     company: 'Apple',
     title: 'Senior Staff Engineer · SEAR',
     years: '2024 — 2026',
+    location: 'Cupertino / SF',
     blurb:
       'Worked on macOS and iOS security in SEAR: anti-malware, the next generation of sandboxing, and a platform for running AI agents at scale.',
   },
@@ -50,6 +55,7 @@ export const career: readonly Role[] = [
     href: 'https://stae.co/',
     title: 'Co-founder / CTO',
     years: '2016 — 2021',
+    location: 'New York',
     blurb:
       'Co-founded a civic data company and built its data, analytics and GIS platform, used by city and county governments in North America.',
   },
@@ -58,6 +64,7 @@ export const career: readonly Role[] = [
     href: 'https://becharmed.co/',
     title: 'Co-founder / CTO',
     years: '2015 — 2016',
+    location: 'San Francisco',
     blurb: 'A video speed dating app for iOS and desktop.',
   },
   {
@@ -65,6 +72,7 @@ export const career: readonly Role[] = [
     href: 'http://fact0ryx.com/',
     title: 'Engineering Lead',
     years: '2014 — 2016',
+    location: 'San Francisco',
     blurb: 'Built prototypes and products alongside large companies as part of a venture studio.',
   },
   {
@@ -72,6 +80,7 @@ export const career: readonly Role[] = [
     href: 'http://wearefractal.com',
     title: 'Co-founder / CTO',
     years: '2010 — 2014',
+    location: 'Phoenix',
     blurb: 'Co-founded a small consultancy building products for companies and startups.',
   },
   {
@@ -79,6 +88,7 @@ export const career: readonly Role[] = [
     href: 'https://www.bechtel.com',
     title: 'API Infrastructure Engineer',
     years: '2012 — 2013',
+    location: 'Phoenix',
     blurb:
       'Worked on API gateways, internal API standards, and a portal for exploring internal data.',
   },
