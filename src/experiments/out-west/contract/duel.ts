@@ -37,6 +37,7 @@
  * All money is whole dollars. All times are milliseconds unless the name says otherwise.
  */
 import type { Loadout } from '../data/catalog.ts'
+import type { Dyes } from '../data/dye.ts'
 
 export const CONTRACT_VERSION = 1
 
@@ -108,6 +109,8 @@ export interface Poster {
    * unknown id falls back to the starter item on the client.
    */
   loadout: Loadout
+  /** The dye on each dyed item in the loadout (absent: natural, or a server that predates dyes). */
+  dyes?: Dyes
   /** `'human'` for a live player, `'ghost'` for a recorded player, `'outlaw'` for a Town Outlaw. */
   kind: OpponentKind
 }

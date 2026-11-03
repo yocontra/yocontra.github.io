@@ -39,13 +39,14 @@ import type { Assets } from '../../../engine/assets.ts'
 import type { Clip } from '../../../scene/actor.ts'
 import { castActor } from '../../../scene/cast.ts'
 import { makeHat } from '../../../scene/hats.ts'
+import { HAIR_LUM } from '../../../scene/person.ts'
 import { characterMaps, NORMAL_GUARD_GLSL, RECOLOR_GLSL } from '../../../scene/shade.ts'
 import { RIM } from '../../../scene/style.ts'
 import { VAT_W, type VatClipInfo, type VatJob, type VatResult } from './vat-shared.ts'
 
 export const VAT_FPS = 15
 /** Bump when the bake changes; also part of the IndexedDB key. */
-const VAT_VERSION = 'vat7-hatfit'
+const VAT_VERSION = 'vat8-skinhair'
 const LOD2_TRIS = 1500
 
 /** Clothing materials per base, recoloured per player (slot 1 top, slot 2 bottoms). */
@@ -60,6 +61,9 @@ export const PALETTE: Record<BodyKey, [string[], string[]]> = {
 }
 const MARK1 = 0xff_00_ff
 const MARK2 = 0x00_ff_ff
+/** Hair and brows (slot 3), and skin (slot 4): recoloured per rider like the clothes. */
+const MARK3 = 0xff_ff_00
+const MARK4 = 0x00_00_ff
 
 export interface VatBake extends VatResult {
   base: BodyKey
@@ -150,6 +154,19 @@ function linear(hex: number): [number, number, number] {
   return [c.r, c.g, c.b]
 }
 
+function hairLinear(hex: number): [number, number, number] {
+  const [r, g, b] = linear(hex)
+  return [r / HAIR_LUM, g / HAIR_LUM, b / HAIR_LUM]
+}
+
+/** One far rider's colours: clothes, and the hair and skin tint his near actor wears. */
+export interface VatColors {
+  top: Color
+  bottom: Color
+  hair: Color
+  skin: Color
+}
+
 /** Dress the base with marker colours, serialise it, and hand it to the worker. */
 async function bakeFresh(assets: Assets, base: BodyKey, clips: Clip[]): Promise<Stored> {
   const [top, bottom] = PALETTE[base]
@@ -160,6 +177,8 @@ async function bakeFresh(assets: Assets, base: BodyKey, clips: Clip[]): Promise<
   for (const n of bottom) {
     tint[n] = MARK2
   }
+  tint.Hair = MARK3
+  tint.Skin = MARK4
   await assets.lookReady({ base, tint, scale: 1 })
   const actor = castActor(assets, {
     look: { base, tint, scale: 1 },
@@ -209,7 +228,8 @@ async function bakeFresh(assets: Assets, base: BodyKey, clips: Clip[]): Promise<
     fps: VAT_FPS,
     targetTris: LOD2_TRIS,
     headUuid: head?.uuid ?? '',
-    markers: [linear(MARK1), linear(MARK2)],
+    // the hair tint reads as itself over the grey hair texels (scene/rig.ts), so its marker too
+    markers: [linear(MARK1), linear(MARK2), hairLinear(MARK3), linear(MARK4)],
   })
   return { r, hatLocal }
 }
@@ -293,6 +313,8 @@ uniform float vatTime;
 attribute vec4 vatClip;
 attribute vec3 vatTop;
 attribute vec3 vatBottom;
+attribute vec3 vatHair;
+attribute vec3 vatSkin;
 attribute float vatSlot;
 attribute vec3 color;
 attribute float styLum;
@@ -321,6 +343,8 @@ export class VatCrowd {
   private readonly clipAttr: InstancedBufferAttribute
   private readonly topAttr: InstancedBufferAttribute
   private readonly bottomAttr: InstancedBufferAttribute
+  private readonly hairAttr: InstancedBufferAttribute
+  private readonly skinAttr: InstancedBufferAttribute
 
   constructor(bake: VatBake, capacity: number) {
     this.bake = bake
@@ -349,7 +373,8 @@ export class VatCrowd {
         .replace(
           '#include <project_vertex>',
           `#include <project_vertex>
-vStyTint = vatSlot < 0.5 ? color.rgb : (vatSlot < 1.5 ? vatTop : vatBottom);
+vec3 vatPaint = vatSlot < 2.5 ? vatBottom : (vatSlot < 3.5 ? vatHair : vatSkin);
+vStyTint = vatSlot < 0.5 ? color.rgb : (vatSlot < 1.5 ? vatTop : vatPaint);
 vStyLum = styLum;`,
         )
       shader.fragmentShader = shader.fragmentShader
@@ -368,15 +393,19 @@ vStyLum = styLum;`,
 }`,
         )
     }
-    mat.customProgramCacheKey = () => `ow-vat2-${bake.rows}${maps ? '-tex' : ''}`
+    mat.customProgramCacheKey = () => `ow-vat3-${bake.rows}${maps ? '-tex' : ''}`
     const geo = bake.geometry.clone()
     this.mesh = new InstancedMesh(geo, mat, capacity)
     this.clipAttr = new InstancedBufferAttribute(new Float32Array(capacity * 4), 4)
     this.topAttr = new InstancedBufferAttribute(new Float32Array(capacity * 3), 3)
     this.bottomAttr = new InstancedBufferAttribute(new Float32Array(capacity * 3), 3)
+    this.hairAttr = new InstancedBufferAttribute(new Float32Array(capacity * 3), 3)
+    this.skinAttr = new InstancedBufferAttribute(new Float32Array(capacity * 3), 3)
     geo.setAttribute('vatClip', this.clipAttr)
     geo.setAttribute('vatTop', this.topAttr)
     geo.setAttribute('vatBottom', this.bottomAttr)
+    geo.setAttribute('vatHair', this.hairAttr)
+    geo.setAttribute('vatSkin', this.skinAttr)
     this.mesh.count = 0
     this.mesh.frustumCulled = false
     this.mesh.castShadow = false
@@ -387,17 +416,21 @@ vStyLum = styLum;`,
     return this.bake.clips.find((c) => c.name === name) ?? null
   }
 
-  // biome-ignore lint/complexity/useMaxParams: one instance's full state, written per frame without allocating
-  set(i: number, clip: VatClipInfo, phase: number, speed: number, top: Color, bottom: Color): void {
-    this.clipAttr.setXYZW(i, clip.start, clip.frames, phase, speed)
-    this.topAttr.setXYZ(i, top.r, top.g, top.b)
-    this.bottomAttr.setXYZ(i, bottom.r, bottom.g, bottom.b)
+  /** One instance's full state, written per frame without allocating. */
+  set(i: number, clip: VatClipInfo, play: { phase: number; speed: number }, c: VatColors): void {
+    this.clipAttr.setXYZW(i, clip.start, clip.frames, play.phase, play.speed)
+    this.topAttr.setXYZ(i, c.top.r, c.top.g, c.top.b)
+    this.bottomAttr.setXYZ(i, c.bottom.r, c.bottom.g, c.bottom.b)
+    this.hairAttr.setXYZ(i, c.hair.r, c.hair.g, c.hair.b)
+    this.skinAttr.setXYZ(i, c.skin.r, c.skin.g, c.skin.b)
   }
 
   commit(): void {
     this.clipAttr.needsUpdate = true
     this.topAttr.needsUpdate = true
     this.bottomAttr.needsUpdate = true
+    this.hairAttr.needsUpdate = true
+    this.skinAttr.needsUpdate = true
     this.mesh.instanceMatrix.needsUpdate = true
   }
 }

@@ -726,7 +726,7 @@ export class Crowd {
       phase = f / 15 - nowS
     }
     const i = v.mesh.count++
-    v.set(i, clip, phase, rate, m.look.top, m.look.bottom)
+    v.set(i, clip, { phase, speed: rate }, m.look)
     q.setFromAxisAngle(up, facing(p.aim))
     pos.set(p.x, 0, p.z)
     m4.compose(pos, q, one.setScalar(READ_SCALE))

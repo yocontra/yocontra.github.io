@@ -285,7 +285,7 @@ export const ROSTER_LATE: readonly Outlaw[] = [
     look: {
       base: 'suit',
       tint: {
-        Shirt: 0x2c_20_18,
+        Shirt: 0x3a_1c_18,
         Sleeves: 0xae_9e_80,
         Belt: 0x16_12_10,
         Pants: 0x12_11_10,

@@ -7,8 +7,6 @@ import {
   Group,
   LoopOnce,
   LoopRepeat,
-  type Material,
-  type Mesh,
   type Object3D,
   Quaternion,
   type SkinnedMesh,
@@ -16,17 +14,7 @@ import {
 } from 'three'
 import type { GLTF } from 'three/examples/jsm/loaders/GLTFLoader.js'
 import { clone as cloneSkinned } from 'three/examples/jsm/utils/SkeletonUtils.js'
-import type {
-  BeardKey,
-  BodyKey,
-  Build,
-  FaceShape,
-  HairKey,
-  HatKey,
-  MoustacheKey,
-  SkinKey,
-  Stance,
-} from '../data/outlaws.ts'
+import type { BodyKey, HatKey } from '../data/outlaws.ts'
 import { bake, bodyPieces, type Piece } from './bake.ts'
 import { type Body, boneKey, bounds, sampleBody } from './fit.ts'
 import { hangGuns } from './gunbelt.ts'
@@ -34,8 +22,8 @@ import { fitHat, type HatFit, tuckHair } from './hats.ts'
 import { type GunAnatomy, handGrip } from './holster.ts'
 import { type HolsterLook, mergedProp, PLAIN_HOLSTER } from './kit.ts'
 import { fitLong, type LongHold, poseLong, shoulderPocket } from './longgun.ts'
-import { type Fit, measure, prune } from './outfit.ts'
-import { applyBuild, paintSkin, reshape, StanceLayer, swapHair } from './person.ts'
+import { type Fit, measure } from './outfit.ts'
+import { becomeHimself, type PersonOpts, paintSkin, StanceLayer } from './person.ts'
 import { watchPose } from './pose-watch.ts'
 import { dressPieces, measureStride, seatHat, slotOn, tintModel } from './rig.ts'
 import { characterMaterial, type Glow } from './shade.ts'
@@ -44,7 +32,7 @@ import type { Floor } from './style.ts'
 const HEIGHT = 1.78
 const ORIGIN = new Vector3()
 
-export interface ActorOpts {
+export interface ActorOpts extends PersonOpts {
   /** Which whole base character this is (prunes its hard hat, crown, mohawk, backpack). */
   base?: BodyKey | null
   /** Animation clips, when the base file carries none (they share the player's rig). */
@@ -62,27 +50,11 @@ export interface ActorOpts {
   scale?: number
   coat?: number | undefined
   poncho?: number | undefined
-  vest?: number | undefined
   moustache?: number | undefined
-  moustacheStyle?: MoustacheKey | undefined
   beard?: number | undefined
-  beardStyle?: BeardKey | undefined
-  sideburns?: number | undefined
-  stubble?: number | undefined
   bandoliers?: boolean | undefined
   star?: boolean | undefined
   mask?: number | undefined
-  eyepatch?: boolean | undefined
-  scar?: boolean | undefined
-  gloves?: number | undefined
-  /** Who he is under the clothes (scene/person.ts). */
-  skin?: SkinKey | undefined
-  hair?: HairKey | undefined
-  /** The base whose hair mesh his cut borrows (null: his own). */
-  hairFrom?: GLTF | null
-  build?: Build | undefined
-  face?: FaceShape | undefined
-  stance?: Stance | undefined
   /** Seed for the subtle per-material colour/roughness variation. */
   seed?: string
   /** The holster cosmetic (leather colour, tooling, a buscadero drop loop). Looks only. */
@@ -161,7 +133,7 @@ export class Actor {
   readonly glow: Glow = { value: 0 }
   private readonly bones = new Map<string, Bone>()
   /** The base carries a sculpted beard (kept by prune when he wears one). */
-  private realBeard = false
+  private readonly realBeard: boolean
   /** Where his hat sits (null when he has none); the VAT crowd reads it through `hat`. */
   hatFit: HatFit | null = null
   /** Set by dispose() (the dev pose watchdog forgets him). */
@@ -174,22 +146,8 @@ export class Actor {
   constructor(gltf: GLTF, opts: ActorOpts = {}) {
     this.label = `${opts.base ?? 'player'} ${opts.seed ?? ''}`.trim()
     this.model = cloneSkinned(gltf.scene)
-    prune(this.model, {
-      beard: opts.beard !== undefined && (opts.beardStyle ?? 'sculpted') === 'sculpted',
-    })
-    this.model.traverse((o) => {
-      const b = o as Bone
-      if (b.isBone) {
-        this.bones.set(boneKey(b.name), b)
-      }
-      const m = o as Mesh
-      if (m.isMesh && (m.material as Material).name === 'Beard') {
-        this.realBeard = true
-      }
-    })
-    // his own cut and his own face and torso, before anything is measured
-    swapHair(this.model, this.bones, opts.hair, opts.hairFrom ?? null)
-    reshape(this.model, opts.build, opts.face)
+    // his bones, his own cut, face, torso and proportions, before he is normalised or measured
+    this.realBeard = becomeHimself(this.model, this.bones, opts)
     this.root.add(this.model)
     // Normalise to a 1.78 m man, then his build, uniformly: everything he
     // wears and carries rides on bones, and only a uniform scale keeps it true.
@@ -200,8 +158,6 @@ export class Actor {
     this.model.scale.multiplyScalar(k)
     this.model.position.y = -rest.min.y * k
     this.height = HEIGHT * s
-    // his proportions ride on bones: the clips key no scale, and position only on the hips
-    applyBuild(this.bones, opts.build)
     this.root.updateMatrixWorld(true)
 
     this.head = this.bone('Head')
@@ -245,10 +201,7 @@ export class Actor {
     if (opts.rifle) {
       this.attachRifle(opts.rifle)
     }
-    if (opts.stance) {
-      const layer = new StanceLayer(this.bones, opts.stance)
-      this.stance = layer.empty ? null : layer
-    }
+    this.stance = StanceLayer.of(this.bones, opts.stance)
     watchPose(this)
   }
 

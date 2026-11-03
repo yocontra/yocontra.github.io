@@ -323,8 +323,8 @@ export const ROSTER_EARLY: readonly Outlaw[] = [
     look: {
       base: 'suit',
       tint: {
-        Shirt: 0x30_24_1a,
-        Sleeves: 0x30_24_1a,
+        Shirt: 0x3a_2a_1c,
+        Sleeves: 0x3a_2a_1c,
         Belt: 0x16_12_10,
         Pants: 0x1c_1a_18,
         Boots: 0x24_1c_16,

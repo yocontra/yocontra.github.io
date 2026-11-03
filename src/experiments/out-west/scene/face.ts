@@ -54,7 +54,7 @@ const CUTS: Record<
   Exclude<MoustacheKey, 'horseshoe'>,
   { s: [number, number, number]; droop: number; lift: number; gap: number }
 > = {
-  handlebar: { s: [1.2, 0.36, 0.42], droop: -0.1, lift: 0, gap: 0.026 },
+  handlebar: { s: [1.32, 0.34, 0.4], droop: -0.32, lift: 0.002, gap: 0.027 },
   walrus: { s: [1.32, 0.56, 0.46], droop: 0.4, lift: -0.006, gap: 0.024 },
   pencil: { s: [1.0, 0.15, 0.32], droop: 0.06, lift: 0.004, gap: 0.024 },
   chevron: { s: [1.2, 0.5, 0.44], droop: 0.24, lift: -0.002, gap: 0.024 },
@@ -79,18 +79,11 @@ export function moustache(
     m.position.set(s * cut.gap, -0.004 + cut.lift, 0)
     m.rotation.z = s * cut.droop
     g.add(m)
-    if (style === 'handlebar') {
-      // waxed tips curled up past the cheeks
-      const tip = new Mesh(new SphereGeometry(0.011, 6, 4), mat)
-      tip.scale.set(1.3, 0.8, 0.8)
-      tip.position.set(s * 0.052, 0.008, -0.008)
-      g.add(tip)
-    }
     if (style === 'horseshoe') {
       // the bars down past the mouth to the jaw
       const bar = new Mesh(new SphereGeometry(0.03, 6, 6), mat)
-      bar.scale.set(0.26, 0.9, 0.34)
-      bar.position.set(s * 0.046, -0.026, -0.016)
+      bar.scale.set(0.24, 0.62, 0.3)
+      bar.position.set(s * 0.04, -0.02, -0.02)
       g.add(bar)
     }
   }
@@ -135,9 +128,10 @@ export function sideburns(f: Fit, color: number, space: Object3D): Piece[] {
     const r = surface(f, y, a, 0.08)
     const m = new Mesh(new SphereGeometry(0.03, 6, 8), mat)
     // broad along the cheek (local X), thin off it (local Z), down to the jaw
-    m.scale.set(0.62, 0.36 * (span / 0.03), 0.22)
+    m.scale.set(0.75, 0.36 * (span / 0.03), 0.2)
     m.rotation.y = a
-    m.position.set(h.cx + Math.sin(a) * r, y, h.cz + Math.cos(a) * r)
+    // sunk into the cheek, so only a thin pelt stands proud of it
+    m.position.set(h.cx + Math.sin(a) * (r - 0.004), y, h.cz + Math.cos(a) * (r - 0.004))
     g.add(m)
   }
   return onHead(f, g, space)

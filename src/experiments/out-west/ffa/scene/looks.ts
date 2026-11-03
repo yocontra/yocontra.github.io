@@ -3,10 +3,13 @@
  * bodies they are, their top and bottom palette colours, and their hat. The same look drives the
  * near (skinned) actor and the far (VAT) instance, so a player never changes clothes when they
  * cross the LOD line. Unknown ids fall back to the starter look; a small per-player variation
- * keeps a lobby of identical starters readable.
+ * keeps a lobby of identical starters readable: the palette colours, and the rider's own skin tone
+ * and hair colour (the same for near and far: the VAT recolours skin and hair per instance too).
  */
 import { Color } from 'three'
 import type { BodyKey, HatKey, Look } from '../../data/outlaws.ts'
+import { HAIR_COLORS, SKINS, seeded } from '../../scene/identity.ts'
+import { HAIR_LUM, SKIN_TONES } from '../../scene/person.ts'
 import { PALETTE } from './crowd/vat.ts'
 
 export interface PlayerLook {
@@ -16,6 +19,10 @@ export interface PlayerLook {
   hatColor: number
   top: Color
   bottom: Color
+  /** Hair tint as the shader takes it (the colour over the grey hair texels). */
+  hair: Color
+  /** Skin tone multiplier on the atlas skin. */
+  skin: Color
   /**
    * Extra hat scale in the Frontier. 1: every hat is fitted snug to its head (scene/hats.ts); a
    * bigger one sits loose and floats above the skull (spec §3.8 asked for 1.15, which read as
@@ -95,14 +102,21 @@ export function lookFor(loadout: readonly string[], id: number): PlayerLook {
   for (const m of bottomMats) {
     tint[m] = bottom
   }
-  const look: Look = { base: o.base, tint, scale: 1, ...o.extra }
+  const r = seeded(`ow-rider/${id}`)
+  const skin = SKINS[Math.floor(r() * SKINS.length)] ?? 'tan'
+  const hairHex = HAIR_COLORS[Math.floor(r() * HAIR_COLORS.length)] ?? 0x2e_1e_12
+  tint.Hair = hairHex
+  const tone = SKIN_TONES[skin] ?? SKIN_TONES.tan
+  const look: Look = { base: o.base, tint, scale: 1, skin, ...o.extra }
   return {
-    key: `${outfitId}/${hatId}/${top}/${bottom}/${hatColor}`,
+    key: `${outfitId}/${hatId}/${top}/${bottom}/${hatColor}/${skin}/${hairHex}`,
     look,
     hat: h.hat,
     hatColor,
     top: new Color(top),
     bottom: new Color(bottom),
+    hair: new Color(hairHex).multiplyScalar(1 / HAIR_LUM),
+    skin: new Color(tone[0], tone[1], tone[2]),
     hatScale: 1,
   }
 }

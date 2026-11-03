@@ -24,9 +24,19 @@ import {
   Vector3,
 } from 'three'
 import type { GLTF } from 'three/examples/jsm/loaders/GLTFLoader.js'
-import type { BodyKey, Build, FaceShape, HairKey, SkinKey, Stance } from '../data/outlaws.ts'
+import type {
+  BeardKey,
+  BodyKey,
+  Build,
+  FaceShape,
+  HairKey,
+  MoustacheKey,
+  SkinKey,
+  Stance,
+} from '../data/outlaws.ts'
 import type { Piece } from './bake.ts'
 import { type Body, boneKey } from './fit.ts'
+import { prune } from './outfit.ts'
 
 /**
  * Mean linear luminance of the atlas's hair, brows and beard (a mid grey). A hair colour is the
@@ -74,6 +84,25 @@ export function hairDonor(base: BodyKey, hair: HairKey | undefined): BodyKey | n
     return null
   }
   return HAIR_DONOR[hair] ?? null
+}
+
+/** Who he is under the clothes: the actor options this module (and scene/face.ts) reads. */
+export interface PersonOpts {
+  vest?: number | undefined
+  moustacheStyle?: MoustacheKey | undefined
+  beardStyle?: BeardKey | undefined
+  sideburns?: number | undefined
+  stubble?: number | undefined
+  eyepatch?: boolean | undefined
+  scar?: boolean | undefined
+  gloves?: number | undefined
+  skin?: SkinKey | undefined
+  hair?: HairKey | undefined
+  /** The base whose hair mesh his cut borrows (null: his own). */
+  hairFrom?: GLTF | null
+  build?: Build | undefined
+  face?: FaceShape | undefined
+  stance?: Stance | undefined
 }
 
 const isSkinned = (o: Object3D): o is SkinnedMesh => (o as SkinnedMesh).isSkinnedMesh
@@ -128,6 +157,34 @@ export function swapHair(
       o.bindMatrix.clone(),
     )
   })
+}
+
+/**
+ * Make the cloned base into him, before he is normalised, measured or dressed: drop the parts he
+ * doesn't wear (the sculpted beard unless it is his), collect his bones into `bones`, give him
+ * his cut, reshape his face and torso, and set his proportions on the bones. His overall height
+ * (`scale`) is then normalised over all of it. Returns whether he keeps the sculpted beard.
+ */
+export function becomeHimself(
+  model: Object3D,
+  bones: Map<string, Bone>,
+  o: PersonOpts & { beard?: number | undefined },
+): boolean {
+  prune(model, { beard: o.beard !== undefined && (o.beardStyle ?? 'sculpted') === 'sculpted' })
+  let sculpted = false
+  model.traverse((obj) => {
+    const b = obj as Bone
+    if (b.isBone) {
+      bones.set(boneKey(b.name), b)
+    }
+    if (isSkinned(obj) && matName(obj) === 'Beard') {
+      sculpted = true
+    }
+  })
+  swapHair(model, bones, o.hair, o.hairFrom ?? null)
+  reshape(model, o.build, o.face)
+  applyBuild(bones, o.build)
+  return sculpted
 }
 
 /** Bone proportions (head size, neck length, shoulder width). Call before he is measured. */
@@ -316,26 +373,51 @@ export interface SkinLook {
   gloves?: number | undefined
 }
 
-const HANDS = /^(Wrist|Fist|Index|Middle|Pinky|Ring|Thumb)/u
+const HANDS = /^(?:Wrist|Fist|Index|Middle|Pinky|Ring|Thumb)/u
+
+/** The bone carrying most of vertex `k`'s weight (punctuation-free name). */
+function dominant(skin: NonNullable<Piece['skin']>, body: Body, k: number): string {
+  let best = 0
+  let bone = ''
+  for (let c = 0; c < 4; c++) {
+    const w = skin.weight[k * 4 + c] ?? 0
+    if (w > best) {
+      best = w
+      bone = boneKey(body.bones[skin.index[k * 4 + c] ?? 0]?.name ?? '')
+    }
+  }
+  return bone
+}
+
+interface Head {
+  cx: number
+  cz: number
+  chin: number
+  eye: number
+}
+
+/** How unshaven the skin at (y, z) of his face is, 0..1: jaw and upper lip, front half. */
+function stubbleAt(head: Head, stubble: number, y: number, z: number): number {
+  if (z - head.cz <= -0.035) {
+    return 0
+  }
+  const lip = head.chin + 0.56 * (head.eye - head.chin)
+  return (
+    stubble * smooth(lip + 0.006, lip - 0.014, y) * smooth(head.chin - 0.06, head.chin - 0.02, y)
+  )
+}
 
 /**
  * Skin tone, stubble and gloves, painted on the baked skin's per-vertex tint (the skin is drawn
  * texel × tint). `head` is his measured head (root space).
  */
-export function paintSkin(
-  pieces: readonly Piece[],
-  body: Body,
-  head: { cx: number; cz: number; chin: number; eye: number },
-  o: SkinLook,
-): void {
+export function paintSkin(pieces: readonly Piece[], body: Body, head: Head, o: SkinLook): void {
   const tone = SKIN_TONES[o.skin ?? 'tan'] ?? SKIN_TONES.tan
   const glove = o.gloves === undefined ? null : linearOver(o.gloves, SKIN_TEXEL)
   const stubble = Math.min(1, Math.max(0, o.stubble ?? 0))
   if (tone === SKIN_TONES.tan && !glove && stubble === 0) {
     return
   }
-  const span = head.eye - head.chin
-  const lip = head.chin + 0.56 * span
   for (const p of pieces) {
     const skin = p.skin
     if (p.name !== 'Skin' || !skin) {
@@ -344,36 +426,27 @@ export function paintSkin(
     const col = p.geo.getAttribute('color')
     const pos = p.geo.getAttribute('position')
     for (let k = 0; k < col.count; k++) {
-      let best = 0
-      let bone = ''
-      for (let c = 0; c < 4; c++) {
-        const w = skin.weight[k * 4 + c] ?? 0
-        if (w > best) {
-          best = w
-          bone = boneKey(body.bones[skin.index[k * 4 + c] ?? 0]?.name ?? '')
-        }
-      }
-      let r = col.getX(k) * tone[0]
-      let g = col.getY(k) * tone[1]
-      let b = col.getZ(k) * tone[2]
+      const bone = dominant(skin, body, k)
       if (glove && HANDS.test(bone)) {
-        ;[r, g, b] = glove
-      } else if (stubble > 0 && bone === 'Head') {
-        const y = pos.getY(k)
-        const front = pos.getZ(k) - head.cz > -0.035
-        const a = front
-          ? stubble *
-            smooth(lip + 0.006, lip - 0.014, y) *
-            smooth(head.chin - 0.06, head.chin - 0.02, y)
-          : 0
-        r *= 1 - 0.74 * a
-        g *= 1 - 0.7 * a
-        b *= 1 - 0.6 * a
+        col.setXYZ(k, glove[0], glove[1], glove[2])
+        continue
       }
-      col.setXYZ(k, r, g, b)
+      const a = bone === 'Head' ? stubbleAt(head, stubble, pos.getY(k), pos.getZ(k)) : 0
+      col.setXYZ(
+        k,
+        col.getX(k) * tone[0] * (1 - 0.74 * a),
+        col.getY(k) * tone[1] * (1 - 0.7 * a),
+        col.getZ(k) * tone[2] * (1 - 0.6 * a),
+      )
     }
     col.needsUpdate = true
   }
+}
+
+/** sRGB byte → linear. */
+const toLinear = (byte: number): number => {
+  const v = byte / 255
+  return v <= 0.040_45 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4
 }
 
 /** The tint that makes `over` (a texel of this mean colour) read as `hex`. */
@@ -381,11 +454,7 @@ function linearOver(
   hex: number,
   over: readonly [number, number, number],
 ): [number, number, number] {
-  const lin = (c: number) => {
-    const s = c / 255
-    return s <= 0.040_45 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4
-  }
-  const c = [(hex >> 16) & 0xff, (hex >> 8) & 0xff, hex & 0xff].map(lin)
+  const c = [(hex >> 16) & 0xff, (hex >> 8) & 0xff, hex & 0xff].map(toLinear)
   return [0, 1, 2].map((i) => Math.min(8, (c[i] ?? 0) / (over[i] ?? 1))) as [number, number, number]
 }
 
@@ -412,8 +481,10 @@ export class StanceLayer {
     add('Chest', 0, -0.55 * hip)
   }
 
-  get empty(): boolean {
-    return this.parts.length === 0
+  /** His layer, or null when he stands as the clip has him. */
+  static of(bones: ReadonlyMap<string, Bone>, s: Stance | undefined): StanceLayer | null {
+    const layer = s ? new StanceLayer(bones, s) : null
+    return layer && layer.parts.length > 0 ? layer : null
   }
 
   apply(): void {

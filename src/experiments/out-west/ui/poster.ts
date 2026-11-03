@@ -254,8 +254,9 @@ function engrave(ctx: CanvasRenderingContext2D, src: HTMLCanvasElement): void {
     for (let i = 0; i < w; i++) {
       const p = j * w + i
       const u = (i / w - 0.5) * 2
-      const v = (j / h - 0.42) * 2
-      const oval = 1 - smoothstep(0.62, 1.02, Math.hypot(u * 0.92, v * 0.78))
+      const v = (j / h - 0.46) * 2
+      // wide and low: the hat and the shoulders print, only the corners fade into the paper
+      const oval = 1 - smoothstep(0.8, 1.22, Math.hypot(u * 0.8, v * 0.74))
       const dark = smoothstep(0.2, 1, 1 - (lum[p] ?? 1)) ** 1.4 * oval
       const n = grain(i, j)
       const cover = smoothstep(n - 0.28, n + 0.28, dark)
