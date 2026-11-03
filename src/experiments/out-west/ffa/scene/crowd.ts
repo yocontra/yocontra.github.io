@@ -76,6 +76,8 @@ const VAT_CLIPS: Clip[] = ['Idle', 'Run', 'Idle_Gun_Pointing', 'Death']
 const NEAR_FAST_M = 12
 const SHADOW_CASTERS = 6
 const LOD1_TRIS = 3000
+/** Triangles in a skinned (near) rider's hat, other than yours. */
+const NEAR_HAT_TRIS = 800
 /** Running speed the Run clip was authored for (m/s). */
 const CLIP_RUN_SPEED = 5.2
 const ROLL_S = 0.35
@@ -445,6 +447,9 @@ export class Crowd {
     m.arm = this.armLayer(actor)
     const mesh = actor.meshes[0]
     m.full = mesh?.geometry ?? null
+    if (!self) {
+      this.lodHat(m, actor)
+    }
     m.caster = true
     this.setCaster(m, false)
     if (!self && mesh) {
@@ -454,6 +459,27 @@ export class Crowd {
         })
         .catch(() => undefined)
     }
+  }
+
+  /**
+   * Everyone else's hat at an LOD (your own keeps the full lathe): from the top-down camera a
+   * ~3.5k-triangle hat is a few dozen pixels, and twelve of them cost more than their bodies.
+   */
+  private lodHat(m: Member, actor: Actor): void {
+    let n = 0
+    actor.hat?.traverse((o) => {
+      if (!(o instanceof Mesh)) {
+        return
+      }
+      const key = `${m.look.key}:hat${n++}`
+      lodGeometry(o.geometry as BufferGeometry, key, NEAR_HAT_TRIS)
+        .then((g) => {
+          if (m.actor === actor) {
+            o.geometry = g
+          }
+        })
+        .catch(() => undefined)
+    })
   }
 
   /**

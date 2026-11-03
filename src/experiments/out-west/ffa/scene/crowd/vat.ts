@@ -41,6 +41,7 @@ import type { Assets } from '../../../engine/assets.ts'
 import type { Clip } from '../../../scene/actor.ts'
 import { castActor } from '../../../scene/cast.ts'
 import { makeHat } from '../../../scene/hats.ts'
+import { lodGeometry } from '../../../scene/lod.ts'
 import { HAIR_LUM } from '../../../scene/person.ts'
 import { characterMaps, NORMAL_GUARD_GLSL, RECOLOR_GLSL } from '../../../scene/shade.ts'
 import { RIM } from '../../../scene/style.ts'
@@ -50,6 +51,8 @@ export const VAT_FPS = 15
 /** Bump when the bake changes; also part of the IndexedDB key. */
 const VAT_VERSION = 'vat8-skinhair'
 const LOD2_TRIS = 1500
+/** Triangles in a far (VAT) rider's hat. */
+const FAR_HAT_TRIS = 300
 
 /** Clothing materials per base, recoloured per player (slot 1 top, slot 2 bottoms). */
 export const PALETTE: Record<BodyKey, [string[], string[]]> = {
@@ -498,6 +501,12 @@ export class VatHats {
     const im = new InstancedMesh(geo, mat, this.capacity)
     im.count = 0
     im.frustumCulled = false
+    // a far rider's hat is a few pixels across: the lathe's ~3.5k triangles drop to a few hundred
+    lodGeometry(geo, `hat:${key}:far`, FAR_HAT_TRIS)
+      .then((lod) => {
+        im.geometry = lod
+      })
+      .catch(() => undefined)
     this.meshes.set(key, im)
     this.root.add(im)
     return im
