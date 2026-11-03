@@ -1,7 +1,7 @@
 import { MeshStandardMaterial, Scene } from 'three'
 import type { AudioEngine } from './audio/audio.ts'
 import { OUTLAWS } from './data/outlaws.ts'
-import { Director } from './duel/director.ts'
+import { Director, type RankedConnect } from './duel/director.ts'
 import { loadAssets } from './engine/assets.ts'
 import { Input } from './engine/input.ts'
 import { Renderer, type Tier } from './engine/render.ts'
@@ -27,6 +27,8 @@ export interface GameOpts {
   debug: boolean
   tier: Tier
   onProgress: (f: number) => void
+  /** Opens a ranked session; null when this page load can't be ranked (debug hashes). */
+  connectRanked: RankedConnect | null
 }
 
 export async function createGame(o: GameOpts): Promise<Game> {
@@ -90,6 +92,7 @@ export async function createGame(o: GameOpts): Promise<Game> {
     debug: o.debug,
   })
   director.applySettings()
+  director.connectRanked = o.connectRanked
   world.silhouetteHide.push(dust.points, puffs.points, sparks.points, flash.sprite, glint.sprite)
 
   // Compile every shader up front behind the title so the first shot never hitches.
@@ -183,8 +186,7 @@ export async function createGame(o: GameOpts): Promise<Game> {
 
   return {
     director,
-    // Ranked play is built (duel/ranked-clock.ts, net/ranked.ts) but gated off until wired
-    // to Turnstile on the title screen: practice only for now.
-    begin: (skipIntro: boolean) => director.begin(skipIntro, false),
+    // Ranked when this load allows it; begin() still keeps legend and mid-gauntlet saves in practice.
+    begin: (skipIntro: boolean) => director.begin(skipIntro, o.connectRanked !== null),
   }
 }

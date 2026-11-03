@@ -1,4 +1,3 @@
-// biome-ignore-all lint/suspicious/noUnnecessaryConditions: class fields are flags mutated from outside the method; Biome narrows them to their literal initializer
 import { money } from '../data/economy.ts'
 import { FEEL } from '../data/feel.ts'
 import type { Director } from './director.ts'
@@ -41,7 +40,7 @@ function shooterFx(d: Director, who: number): void {
     alpha: 0.35,
     up: 0.2,
   })
-  c.audio.play('fireBig', { gain: 1.1, pos: shooter.root.position, reverb: 0.7 })
+  c.audio.play('fireBig', { gain: 1.1, pos: shooter.root.position.clone(), reverb: 0.7 })
   if (!d.reduced) {
     d.ca = 0.012
   }
@@ -142,7 +141,7 @@ export function backShotByEnemy(d: Director): void {
       e.draw()
       e.play('Gun_Shoot', 0.05, true, 1.6)
       c.flash.fire(e.muzzle(V()))
-      c.audio.play('fireBig', { gain: 1.1, pos: e.root.position, reverb: 0.7 })
+      c.audio.play('fireBig', { gain: 1.1, pos: e.root.position.clone(), reverb: 0.7 })
     }, BACKSHOT_TURN_MS)
   }
   d.enter('lose')

@@ -1,4 +1,3 @@
-// biome-ignore-all lint/style/useThisInClassMethods: interface methods that are deliberate no-ops for this implementation
 import type { RankedSession, ServerMessage } from '../net/ranked.ts'
 import type { ClockEvents, DuelClock, StandoffSpec } from './clock.ts'
 
@@ -9,10 +8,25 @@ interface Queued {
 }
 
 /**
+ * How long the server may take to send the call once it has a standoff. The
+ * longest wait is the boss's clock: seven strikes at up to 1.6 s each.
+ */
+const CALL_DEADLINE_MS = 16_000
+/** How long a verdict may take after the call (the outlaw's draw plus a round trip). */
+const VERDICT_DEADLINE_MS = 4000
+
+const unknownCall = (): null => null
+const noop = (): void => undefined
+
+/**
  * Ranked: the server owns the wait, the cues, the call and the verdict. This
  * clock sends `standoff` and `shot`, and turns server messages into the same
  * events the practice clock raises. A new standoff waits until the server has
  * judged the previous duel (a stall loss resolves on the server's own timer).
+ *
+ * Anything unexpected (the socket closing, any server error, the server going
+ * quiet mid-standoff) is reported once as `dropped`, and the director carries
+ * on in practice: the player is never left waiting on a call that won't come.
  */
 export class RankedDuelClock implements DuelClock {
   readonly ranked = true as boolean
@@ -21,24 +35,50 @@ export class RankedDuelClock implements DuelClock {
   private duel = -1
   private unresolved = null as number | null
   private queue: Queued[] = []
-  private finished = false as boolean
+  /** perf time by which the server must next answer; 0 when nothing is pending. */
+  private deadline = 0
+  /** Banking the run: errors belong to the leaderboard form, not to the duel. */
+  private banking = false as boolean
+  /** Banked, dropped or disposed: the socket closing now is expected. */
+  private over = false as boolean
+  private readonly levels = new Map<number, number>()
+  private readonly paid = new Map<number, number>()
 
   constructor(session: RankedSession, events: ClockEvents) {
     this.session = session
     this.events = events
     session.listen({
       message: (m) => this.onMessage(m),
-      closed: (reason) => {
-        if (!this.finished) {
-          events.dropped(reason)
-        }
-      },
+      closed: (reason) => this.drop(reason),
     })
   }
 
-  /** The run was banked: the socket closing now is expected. */
-  markFinished(): void {
-    this.finished = true
+  /** The server's payout for each outlaw beaten this run (for the ledger). */
+  paidFor(level: number): number | null {
+    return this.paid.get(level) ?? null
+  }
+
+  /** Bank the run under `name`. On success the session is over (the server closes it). */
+  async bank(name: string): ReturnType<RankedSession['finish']> {
+    this.banking = true
+    const r = await this.session.finish(name)
+    this.banking = false
+    if (r.ok) {
+      this.over = true
+    } else if (!this.session.open) {
+      this.drop(r.error)
+    }
+    return r
+  }
+
+  private drop(reason: string): void {
+    if (this.over) {
+      return
+    }
+    this.over = true
+    this.queue = []
+    this.deadline = 0
+    this.events.dropped(reason)
   }
 
   private onMessage(m: ServerMessage): void {
@@ -47,18 +87,19 @@ export class RankedDuelClock implements DuelClock {
         this.events.cue(m.duel, m.cue)
         break
       case 'call':
+        if (m.duel === this.unresolved) {
+          this.deadline = performance.now() + VERDICT_DEADLINE_MS
+        }
         this.events.call(m.duel)
         break
       case 'result':
-        if (this.unresolved === m.duel) {
-          this.unresolved = null
-        }
-        this.events.verdict(m)
-        this.flush()
+        this.onResult(m)
         break
       case 'error':
-        if (m.fatal) {
-          this.events.dropped(m.message)
+        // a bad name while banking is the form's to show; anything else means the server
+        // and this client disagree about the run (e.g. "Out of order"), so it can't stay ranked
+        if (!this.banking) {
+          this.drop(m.message)
         }
         break
       default:
@@ -66,8 +107,22 @@ export class RankedDuelClock implements DuelClock {
     }
   }
 
+  private onResult(m: Extract<ServerMessage, { type: 'result' }>): void {
+    if (this.unresolved === m.duel) {
+      this.unresolved = null
+      this.deadline = 0
+    }
+    const level = this.levels.get(m.duel)
+    this.levels.delete(m.duel)
+    if (m.outcome === 'win' && level !== undefined) {
+      this.paid.set(level, (this.paid.get(level) ?? 0) + m.payout)
+    }
+    this.events.verdict(m)
+    this.flush()
+  }
+
   private flush(): void {
-    while (this.queue.length > 0) {
+    while (!this.over && this.queue.length > 0) {
       const q = this.queue[0]
       if (!q || (q.standoff && this.unresolved !== null)) {
         return
@@ -75,6 +130,7 @@ export class RankedDuelClock implements DuelClock {
       this.queue.shift()
       if (q.standoff) {
         this.unresolved = q.duel
+        this.deadline = performance.now() + CALL_DEADLINE_MS
       }
       q.send()
     }
@@ -83,6 +139,7 @@ export class RankedDuelClock implements DuelClock {
   standoff(spec: StandoffSpec): number {
     this.duel++
     const duel = this.duel
+    this.levels.set(duel, spec.level)
     this.queue.push({
       duel,
       standoff: true,
@@ -92,12 +149,14 @@ export class RankedDuelClock implements DuelClock {
     return duel
   }
 
-  callAt(): number | null {
-    return null
-  }
+  /** The server never says when the call is coming. */
+  readonly callAt: DuelClock['callAt'] = unknownCall
 
-  tick(): void {
-    // driven by server messages
+  /** Server messages drive the duel; the frame only checks that the server is still talking. */
+  tick(now: number): void {
+    if (this.deadline > 0 && now > this.deadline) {
+      this.drop('The ranked server went quiet.')
+    }
   }
 
   shot(target: number, localMs: number | null): void {
@@ -110,12 +169,13 @@ export class RankedDuelClock implements DuelClock {
     this.flush()
   }
 
-  cancel(): void {
-    // the server's clock can't be paused
-  }
+  /** The server's clock can't be paused or voided: its verdict stands. */
+  readonly cancel: DuelClock['cancel'] = noop
 
   dispose(): void {
-    this.finished = true
+    this.over = true
     this.queue = []
+    this.deadline = 0
+    this.session.close()
   }
 }

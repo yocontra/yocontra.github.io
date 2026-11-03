@@ -20,10 +20,12 @@ given anyway. All models were downloaded as GLB, trimmed and recompressed (mesho
 | `models/king.glb` | "King" by Quaternius — https://poly.pizza/m/I1gTjmuK2m | CC0 1.0 |
 | `models/punk.glb` | "Punk" by Quaternius — https://poly.pizza/m/BTALZymknF | CC0 1.0 |
 
-The outlaws are kitbashed at runtime: heads, bodies, legs and boots from these characters are
-rebound to one shared rig, then dressed with procedural hats, coats, ponchos, bandoliers, facial
-hair and badges. They are shaded procedurally (rim light and per-material colour and roughness
-variation); no fabric textures are used.
+All of these share one rig (the Woman has her own). Each outlaw is ONE whole character from this
+list, never parts of several: recoloured, uniformly scaled, and dressed at runtime in procedural
+hats, coats, ponchos, bandanas, masks, bandoliers, beards, moustaches and badges that are fitted to
+his own posed surface and skinned to his bones, then baked with him into a single skinned mesh.
+The worker's hard hat, the king's crown, the punk's mohawk and the rugged adventurer's backpack are
+removed. No fabric textures are used.
 
 Quaternius: https://quaternius.com
 

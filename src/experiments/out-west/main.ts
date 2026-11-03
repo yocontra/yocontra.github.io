@@ -1,12 +1,95 @@
-// biome-ignore-all lint/style/noNestedTernary: a three-way tier pick reads clearest inline
-// biome-ignore-all lint/style/useGlobalThis: legacy code, behaviour-neutral
-// biome-ignore-all lint/style/useNamingConvention: keys mirror source asset material names (e.g. Brown_02) and Turnstile/three.js option names
 import { AudioEngine } from './audio/audio.ts'
 import { OUTLAWS } from './data/outlaws.ts'
+import type { RankedConnect } from './duel/director.ts'
 import type { Tier } from './engine/render.ts'
 import type { Game } from './game.ts'
-import { load, save } from './save.ts'
+import { RankedSession } from './net/ranked.ts'
+import { Turnstile } from './net/turnstile.ts'
+import { load, type SaveData, save } from './save.ts'
 import { Board } from './ui/board.ts'
+
+/** Hashes that jump into a debug view or a non-default run: never ranked. */
+const UNRANKED_HASHES = ['level', 'legend', 'lineup', 'posters']
+const START_KEYS = ['Space', 'Enter', 'KeyJ', 'KeyW', 'ArrowUp', 'ArrowLeft']
+
+function pickTier(param: string | null): Tier {
+  if (param === 'low' || param === 'high') {
+    return param
+  }
+  const coarse = matchMedia('(pointer: coarse)').matches
+  const small = Math.min(screen.width, screen.height) < 700
+  return coarse || small ? 'low' : 'high'
+}
+
+/** `#level=N` jumps straight to outlaw N; returns true when it did. */
+function applyLevelJump(data: SaveData, param: string | null): boolean {
+  if (!param) {
+    return false
+  }
+  const n = Number.parseInt(param, 10)
+  if (!Number.isFinite(n)) {
+    return false
+  }
+  data.level = Math.min(OUTLAWS.length, Math.max(1, n)) - 1
+  data.seenIntro = true
+  save(data)
+  return true
+}
+
+/**
+ * Ranked play: a Turnstile widget armed on the title screen, and a connector
+ * that spends one fresh token per ranked session (a restart asks again).
+ * Null when this page load can't be ranked.
+ */
+function rankedConnector(root: HTMLElement, hash: URLSearchParams): RankedConnect | null {
+  if (UNRANKED_HASHES.some((h) => hash.has(h))) {
+    return null
+  }
+  // on the root, not the title: the title is wiped, and later runs re-arm this widget
+  const turnstile = new Turnstile(root)
+  turnstile.warm()
+  return async () => {
+    const token = await turnstile.take()
+    if (!token) {
+      return null
+    }
+    const session = await RankedSession.connect(token)
+    return session.ok ? session.value : null
+  }
+}
+
+/** Credits and leaderboard buttons on the title; their clicks never start the game. */
+function wireTitleLinks(root: HTMLElement, title: HTMLElement): void {
+  const credits = root.querySelector<HTMLElement>('.ow-credits')
+  root.querySelector('.ow-credits-btn')?.addEventListener('click', (e) => {
+    e.stopPropagation()
+    credits?.classList.toggle('on')
+  })
+  let board: Board | null = null
+  root.querySelector('.ow-board-btn')?.addEventListener('click', (e) => {
+    e.stopPropagation()
+    board ??= new Board(root)
+    board.open()
+  })
+  for (const a of title.querySelectorAll('a, button, .ow-credits')) {
+    a.addEventListener('pointerdown', (e) => e.stopPropagation())
+  }
+}
+
+/** Debug views that replace the title entirely. Returns true when one ran. */
+function debugView(g: Game, hash: URLSearchParams, title: HTMLElement): boolean {
+  if (!(hash.has('lineup') || hash.has('posters'))) {
+    return false
+  }
+  title.remove()
+  if (hash.has('lineup')) {
+    g.director.lineup(Number(hash.get('day') ?? '0.3')).catch(() => undefined)
+  }
+  if (hash.has('posters')) {
+    g.director.posters().catch(() => undefined)
+  }
+  return true
+}
 
 /**
  * Entry point. Kept tiny so the red title is interactive immediately; the
@@ -19,50 +102,21 @@ export function boot(root: HTMLElement): void {
   const hash = new URLSearchParams(location.hash.slice(1))
   const debug = hash.has('debug')
   globalThis.addEventListener('hashchange', () => location.reload())
-  const levelParam = hash.get('level')
-  let jump = false
-  if (levelParam) {
-    const n = Number.parseInt(levelParam, 10)
-    if (Number.isFinite(n)) {
-      data.level = Math.min(OUTLAWS.length, Math.max(1, n)) - 1
-      data.seenIntro = true
-      jump = true
-      save(data)
-    }
-  }
+  const jump = applyLevelJump(data, hash.get('level'))
   if (hash.has('legend')) {
     data.legend = true
   }
-  const coarse = matchMedia('(pointer: coarse)').matches
-  const small = Math.min(screen.width, screen.height) < 700
-  const tierParam = hash.get('tier')
-  const tier: Tier =
-    tierParam === 'low' || tierParam === 'high' ? tierParam : coarse || small ? 'low' : 'high'
+  const tier = pickTier(hash.get('tier'))
 
   const canvas = root.querySelector<HTMLCanvasElement>('canvas.ow-canvas')
   const title = root.querySelector<HTMLElement>('.ow-title')
   const loading = root.querySelector<HTMLElement>('.ow-loading')
   const startText = root.querySelector<HTMLElement>('.ow-start')
-  const creditsBtn = root.querySelector<HTMLButtonElement>('.ow-credits-btn')
-  const credits = root.querySelector<HTMLElement>('.ow-credits')
-  const boardBtn = root.querySelector<HTMLButtonElement>('.ow-board-btn')
   if (!(canvas && title)) {
     return
   }
-
-  creditsBtn?.addEventListener('click', (e) => {
-    e.stopPropagation()
-    credits?.classList.toggle('on')
-  })
-  let board: Board | null = null
-  boardBtn?.addEventListener('click', (e) => {
-    e.stopPropagation()
-    board ??= new Board(root)
-    board.open()
-  })
-  for (const a of title.querySelectorAll('a, button, .ow-credits')) {
-    a.addEventListener('pointerdown', (e) => e.stopPropagation())
-  }
+  wireTitleLinks(root, title)
+  const connectRanked = rankedConnector(root, hash)
 
   let game: Game | null = null
   let pressed = false
@@ -83,7 +137,10 @@ export function boot(root: HTMLElement): void {
     setTimeout(() => title.remove(), 1100)
     const g = game
     // Everything is decoded before the first duel; nothing decodes mid-duel.
-    void audio.whenDecoded().then(() => g.begin(jump))
+    audio
+      .whenDecoded()
+      .then(() => g.begin(jump))
+      .catch(() => undefined)
   }
 
   const press = (e: Event) => {
@@ -91,7 +148,7 @@ export function boot(root: HTMLElement): void {
       return
     }
     if (e instanceof KeyboardEvent) {
-      if (!['Space', 'Enter', 'KeyJ', 'KeyW', 'ArrowUp', 'ArrowLeft'].includes(e.code)) {
+      if (!START_KEYS.includes(e.code)) {
         return
       }
       e.preventDefault()
@@ -111,21 +168,23 @@ export function boot(root: HTMLElement): void {
 
   import('./game.ts')
     .then((m) =>
-      m.createGame({ root, canvas, audio, save: data, debug, tier, onProgress: setProgress }),
+      m.createGame({
+        root,
+        canvas,
+        audio,
+        save: data,
+        debug,
+        tier,
+        onProgress: setProgress,
+        connectRanked,
+      }),
     )
     .then((g) => {
       game = g
       if (debug) {
-        ;(window as unknown as { __ow: Game }).__ow = g
+        Reflect.set(globalThis, '__ow', g)
       }
-      if (hash.has('lineup') || hash.has('posters')) {
-        title.remove()
-        if (hash.has('lineup')) {
-          void g.director.lineup(Number(hash.get('day') ?? '0.3'))
-        }
-        if (hash.has('posters')) {
-          void g.director.posters()
-        }
+      if (debugView(g, hash, title)) {
         return
       }
       title.classList.add('ready')
