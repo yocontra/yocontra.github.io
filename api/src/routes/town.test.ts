@@ -1,5 +1,6 @@
 /** `POST /town/join`: Turnstile at every lobby join (§8), checked before the directory is asked. */
 import { afterAll, beforeAll, describe, expect, it } from 'bun:test'
+import { TOWN_WIRE_VERSION as W } from '../../../src/experiments/out-west/contract/town.ts'
 import { fakeEnv, seedAccount, TEST_SECRET } from '../auth/d1-fake.ts'
 import { signAccessToken } from '../auth/token.ts'
 import { createProfileStatements } from '../economy/profile.ts'
@@ -67,7 +68,11 @@ async function join(env: Env, bearer: string, body: unknown): Promise<Response> 
 describe('POST /town/join and Turnstile', () => {
   it('refuses a join without a token, or with a failing one, before assigning a lobby', async () => {
     const { env, bearer, asked } = await setup()
-    for (const body of [{}, { turnstileToken: '' }, { turnstileToken: 'fail' }]) {
+    for (const body of [
+      { wire: W },
+      { wire: W, turnstileToken: '' },
+      { wire: W, turnstileToken: 'fail' },
+    ]) {
       // biome-ignore lint/performance/noAwaitInLoops: one request at a time keeps the counter honest
       const res = await join(env, bearer, body)
       expect(res.status).toBe(403)
@@ -78,9 +83,20 @@ describe('POST /town/join and Turnstile', () => {
 
   it('passes a join with a valid token on to the directory', async () => {
     const { env, bearer, asked } = await setup()
-    const res = await join(env, bearer, { turnstileToken: 'ok' })
+    const res = await join(env, bearer, { wire: W, turnstileToken: 'ok' })
     expect(res.status).toBe(503)
     expect(await res.json()).toMatchObject({ reason: 'all_full' })
     expect(asked()).toBe(1)
+  })
+
+  it('sends a client on an older wire format to refresh, before Turnstile or the directory', async () => {
+    const { env, bearer, asked } = await setup()
+    for (const body of [{ turnstileToken: 'ok' }, { wire: W - 1, turnstileToken: 'ok' }]) {
+      // biome-ignore lint/performance/noAwaitInLoops: one request at a time keeps the counter honest
+      const res = await join(env, bearer, body)
+      expect(res.status).toBe(409)
+      expect(await res.json()).toMatchObject({ ok: false, reason: 'outdated' })
+    }
+    expect(asked()).toBe(0)
   })
 })

@@ -3,7 +3,12 @@
  * WebSocket (`POST /town/join` → `wsUrl` with a single-use ticket), or the loopback lobby in a
  * worker. Both carry the same frames: binary inputs and snapshots, JSON control text.
  */
-import type { TownJoinRefusal, TownJoinRequest, TownJoinResponse } from '../../contract/town.ts'
+import {
+  TOWN_WIRE_VERSION,
+  type TownJoinRefusal,
+  type TownJoinRequest,
+  type TownJoinResponse,
+} from '../../contract/town.ts'
 import { API_URL, getAccessToken } from '../../net/auth.ts'
 import { pageTurnstile } from '../../net/turnstile.ts'
 import { openReconnecting, type ReconnectingSocket } from '../../platform/reconnect.ts'
@@ -68,6 +73,7 @@ export const JOIN_MESSAGES: Record<JoinError['reason'], string> = {
   network: "Can't reach the frontier. Check your connection.",
   server: 'Server trouble in Perdition. Try again in a few minutes.',
   turnstile: 'Could not verify you are human. Try again.',
+  outdated: 'Perdition has been updated. Refresh the page to ride in.',
 }
 
 const REFUSALS = new Set<string>([
@@ -76,6 +82,7 @@ const REFUSALS = new Set<string>([
   'unauthorized',
   'unlicensed',
   'turnstile',
+  'outdated',
 ])
 
 /** A fresh token from the page's invisible Turnstile widget (one per join: they're single use). */
@@ -98,7 +105,7 @@ export async function joinTown(
   if (!turnstile) {
     return { ok: false, error: { reason: 'turnstile', message: JOIN_MESSAGES.turnstile } }
   }
-  const payload: TownJoinRequest = { ...req, turnstileToken: turnstile }
+  const payload: TownJoinRequest = { ...req, turnstileToken: turnstile, wire: TOWN_WIRE_VERSION }
   let res: Response
   try {
     res = await fetch(`${apiUrl}/town/join`, {

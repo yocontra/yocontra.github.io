@@ -17,6 +17,7 @@ import {
   BTN_FIRE,
   BTN_INTERACT,
   MSG_SNAPSHOT,
+  TOWN_WIRE_VERSION,
   type TownJoinResponse,
 } from '../../../src/experiments/out-west/contract/town.ts'
 import { Writer } from '../../../src/experiments/out-west/ffa/sim/bytes.ts'
@@ -198,7 +199,11 @@ async function joinTown(api: string, i: number, bots: number): Promise<TownJoinR
       'Content-Type': 'application/json',
     },
     // Dev's always-pass Turnstile secret accepts any token.
-    body: JSON.stringify({ turnstileToken: 'XXXX.DUMMY.TOKEN.XXXX', ...(i === 1 ? { bots } : {}) }),
+    body: JSON.stringify({
+      turnstileToken: 'XXXX.DUMMY.TOKEN.XXXX',
+      wire: TOWN_WIRE_VERSION,
+      ...(i === 1 ? { bots } : {}),
+    }),
   })
   if (!res.ok) {
     throw new Error(`join ${i}: ${res.status} ${await res.text()}`)

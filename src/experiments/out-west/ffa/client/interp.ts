@@ -1,13 +1,19 @@
 // biome-ignore-all lint/style/noExcessiveClassesPerFile: the remote track and the server clock are the two halves of interpolation
 // biome-ignore-all lint/suspicious/noUnnecessaryConditions: `init` flips on the first observation; Biome narrows it to its initialiser
 /**
- * Other players: rendered 100 ms (two ticks) in the past between buffered snapshots, with up to
- * 150 ms of extrapolation when a snapshot is late. Positions are metres, aim is radians.
+ * Other players: rendered in the past between buffered snapshots, at a delay of two ticks (100 ms)
+ * plus the recent worst snapshot lateness (`ServerClock.delay`), with up to 150 ms of
+ * extrapolation when a snapshot is later still. Positions are metres, aim is radians.
  */
 import { ANGLE_SCALE, EF_ALIVE, POS_SCALE } from '../../contract/town.ts'
 import type { EntityView } from '../sim/codec.ts'
 
+/** The interpolation delay with no jitter (ticks): far riders refresh every other tick. */
 export const INTERP_TICKS = 2
+/** The adaptive delay's ceiling (ticks): 300 ms. */
+const MAX_INTERP_TICKS = 6
+/** Per-snapshot decay of the remembered worst lateness: it halves in ~7 s of calm. */
+const LATE_DECAY = 0.995
 const MAX_EXTRAP_TICKS = 3
 const HISTORY = 16
 /** A jump this large between samples is a respawn or a teleport: no lerp. */
@@ -177,6 +183,10 @@ export class ServerClock {
   private init = false
   /** Recent arrival lateness, in ticks (jitter). */
   jitter = 0
+  /** The worst recent lateness (ticks): jumps up at once, eases down over seconds. */
+  private late = 0
+  /** Interpolation delay for remote riders (ticks): `INTERP_TICKS` plus the worst lateness. */
+  delay = INTERP_TICKS
 
   observe(tick: number, nowMs: number): void {
     const sample = tick - nowMs / 50
@@ -187,6 +197,10 @@ export class ServerClock {
     }
     const d = sample - this.offset
     this.jitter += (Math.abs(d) - this.jitter) * 0.05
+    if (Math.abs(d) <= 20) {
+      this.late = Math.max(-d, this.late * LATE_DECAY)
+      this.delay = Math.min(MAX_INTERP_TICKS, INTERP_TICKS + this.late * 1.25)
+    }
     if (Math.abs(d) > 20) {
       // Way off (a stall or a reconnect): resync.
       this.offset = sample

@@ -4,6 +4,7 @@ import {
   EVENT_SIZES,
   INPUT_FRAME_BYTES,
   INPUT_HEADER_BYTES,
+  INPUT_LEAD_NONE,
   POS_SCALE,
   SNAP_FULL,
 } from '../../../src/experiments/out-west/contract/town.ts'
@@ -36,7 +37,7 @@ const randomFrame = (): WireFrame => ({
   moveX: rng.int(-127, 127),
   moveZ: rng.int(-127, 127),
   aim: u16(),
-  buttons: u8(),
+  buttons: u16(),
   viewTick: u16(),
   viewFrac: u8(),
 })
@@ -59,7 +60,7 @@ const randomSelf = (): SelfView => ({
   carried: rng.int(0, 4_000_000),
   respawnTicks: u8(),
   holsterTicks: u8(),
-  lastButtons: u8(),
+  lastButtons: u16(),
   weapon: u8(),
 })
 
@@ -120,14 +121,14 @@ describe('input codec', () => {
     }
   })
 
-  it('a normal two-frame message is 23 bytes', () => {
+  it('a normal two-frame message is 25 bytes', () => {
     const bytes = encodeInput(new Writer(), {
       seq: 1,
       ackTick: 0,
       ackAgeMs: 0,
       frames: [randomFrame(), randomFrame()],
     })
-    expect(bytes.length).toBe(23)
+    expect(bytes.length).toBe(25)
   })
 
   it('rejects garbage, truncation, wrong types and too many frames', () => {
@@ -181,11 +182,13 @@ describe('snapshot codec', () => {
               banked: rng.int(0, 1e9),
             }
           : null
+      const lead = rng.next() < 0.1 ? INPUT_LEAD_NONE : rng.int(-127, 127)
       const bytes = encodeSnapshot(
         w,
         {
           tick,
           lastInputSeq: tick & 0xff_ff,
+          inputLead: lead,
           flags: 0,
           self,
           entities: [...truth.values()],
@@ -197,6 +200,7 @@ describe('snapshot codec', () => {
       )
       const snap = decodeSnapshot(bytes, recvBase)
       expect(snap?.tick).toBe(tick)
+      expect(snap?.inputLead).toBe(lead)
       expect(snap?.self).toEqual(self)
       expect(snap?.events).toEqual(events)
       expect(snap?.town).toEqual(town)

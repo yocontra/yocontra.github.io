@@ -23,6 +23,9 @@ export class Autopilot {
   private aimPt: { x: number; z: number } | null = null
   private taps = 0
   private held = 0
+  /** A constant stick (unit vector) while no path is set: straight-line walks for the motion trace. */
+  private stickX = 0
+  private stickZ = 0
   active = false
 
   constructor(grid: Grid) {
@@ -67,7 +70,15 @@ export class Autopilot {
     this.active = true
   }
 
+  stick(mx: number, mz: number): void {
+    this.stickX = mx
+    this.stickZ = mz
+    this.active = true
+  }
+
   release(): void {
+    this.stickX = 0
+    this.stickZ = 0
     this.active = false
     this.path = []
     this.aimId = -1
@@ -81,8 +92,8 @@ export class Autopilot {
       this.path.shift()
       next = this.path[0]
     }
-    let mx = 0
-    let mz = 0
+    let mx = this.stickX
+    let mz = this.stickZ
     if (next) {
       const dx = next.x - x
       const dz = next.z - z
