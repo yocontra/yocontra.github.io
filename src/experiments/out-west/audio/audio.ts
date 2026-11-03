@@ -57,6 +57,16 @@ export const SONGS = {
 } as const
 export type SongName = keyof typeof SONGS
 
+/** Resting bus levels. */
+const BUS_LEVELS: Readonly<Record<Bus, number>> = { sfx: 0.72, amb: 0.5, music: 1.15 }
+/** How far each bus ducks under the call (linear gain multiplier). */
+const CALL_DUCK: readonly (readonly [Bus, number])[] = [
+  ['music', 0.18],
+  ['amb', 0.25],
+]
+/** Seconds the duck holds before music and ambience swell back. */
+const CALL_DUCK_HOLD = 0.7
+
 export interface PlayOpts {
   gain?: number
   rate?: number
@@ -287,7 +297,7 @@ export class AudioEngine {
       g.connect(this.master)
       return g
     }
-    this.buses = { sfx: mk(0.72), amb: mk(0.5), music: mk(1.15) }
+    this.buses = { sfx: mk(BUS_LEVELS.sfx), amb: mk(BUS_LEVELS.amb), music: mk(BUS_LEVELS.music) }
 
     this.musicFilter = ctx.createBiquadFilter()
     this.musicFilter.type = 'lowpass'
@@ -697,6 +707,30 @@ export class AudioEngine {
     }
     const gain = dB === Number.NEGATIVE_INFINITY ? 0 : db(this.num('musicLevel', dB, 0, -120, 12))
     glide(this.musicGain.gain, gain, ctx.currentTime, this.num('musicLevel ramp', ramp, 0.4, 0, 30))
+  }
+
+  /**
+   * The call: the one sound the whole game hinges on, so it is never subject to distance falloff.
+   * The bell rings close and centred at full level (with a little reverb for space) while music and
+   * ambience duck under it, so it is always the loudest, clearest thing you hear.
+   */
+  call(when?: number): Voice | null {
+    const ctx = this.ctx
+    if (!ctx) {
+      return null
+    }
+    const at = Math.max(
+      this.num('when', when, ctx.currentTime, 0, ctx.currentTime + 30),
+      ctx.currentTime,
+    )
+    for (const [bus, level] of CALL_DUCK) {
+      const g = this.buses[bus].gain
+      const base = BUS_LEVELS[bus]
+      g.cancelScheduledValues(at)
+      g.setTargetAtTime(base * level, at, 0.012)
+      g.setTargetAtTime(base, at + CALL_DUCK_HOLD, 0.25)
+    }
+    return this.play('bell', { gain: 1.25, when: at, pan: 0, reverb: 0.35, priority: true })
   }
 
   /** Lowpass sweep on the music; exponential glide, never a jump. */

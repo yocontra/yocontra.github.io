@@ -127,7 +127,8 @@ export function tickWait(d: Director, now: number): void {
   if (callAt !== null && !d.bellScheduled && now >= callAt - FEEL.bellLookaheadMs) {
     d.bellScheduled = true
     const when = c.audio.perfToCtx(callAt)
-    d.bellVoice = c.audio.play('bell', { gain: 1.0, when, pos: c.world.bellPos, reverb: 0.5 })
+    // The call is never distance-attenuated: it rings close and centred and ducks the mix.
+    d.bellVoice = c.audio.call(when)
     if (d.callIsScream) {
       c.audio.play('shout', { gain: 1.0, when, rate: 0.7, pos: d.enemy?.root.position ?? V() })
     }
@@ -240,7 +241,7 @@ export function onCall(d: Director, duel: number): void {
   d.enter('call')
   d.callT = now
   if (!d.bellScheduled) {
-    d.bellVoice = c.audio.play('bell', { gain: 1, pos: c.world.bellPos, reverb: 0.5 })
+    d.bellVoice = c.audio.call()
     if (d.callIsScream) {
       c.audio.play('shout', { gain: 1.0, rate: 0.7, pos: d.enemy?.root.position ?? V() })
     }
