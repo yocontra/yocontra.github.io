@@ -6,14 +6,7 @@
     "useIgnoreFile": true
   },
   "files": {
-    "includes": [
-      "**",
-      "!dist",
-      "!.astro",
-      "!public",
-      "!node_modules",
-      "!bun.lock"
-    ]
+    "includes": ["**", "!dist", "!.astro", "!public", "!node_modules", "!bun.lock"]
   },
   "formatter": {
     "enabled": true,
@@ -77,11 +70,7 @@
         "useFilenamingConvention": {
           "level": "error",
           "options": {
-            "filenameCases": [
-              "kebab-case",
-              "camelCase",
-              "PascalCase"
-            ],
+            "filenameCases": ["kebab-case", "camelCase", "PascalCase"],
             "requireAscii": true
           }
         },
@@ -95,31 +84,19 @@
                 "selector": {
                   "kind": "objectLiteralProperty"
                 },
-                "formats": [
-                  "camelCase",
-                  "CONSTANT_CASE",
-                  "snake_case",
-                  "PascalCase"
-                ]
+                "formats": ["camelCase", "CONSTANT_CASE", "snake_case", "PascalCase"]
               },
               {
                 "selector": {
                   "kind": "typeProperty"
                 },
-                "formats": [
-                  "camelCase",
-                  "CONSTANT_CASE",
-                  "snake_case"
-                ]
+                "formats": ["camelCase", "CONSTANT_CASE", "snake_case"]
               },
               {
                 "selector": {
                   "kind": "enumMember"
                 },
-                "formats": [
-                  "PascalCase",
-                  "CONSTANT_CASE"
-                ]
+                "formats": ["PascalCase", "CONSTANT_CASE"]
               }
             ]
           }
@@ -138,10 +115,7 @@
         "noConsole": {
           "level": "error",
           "options": {
-            "allow": [
-              "warn",
-              "error"
-            ]
+            "allow": ["warn", "error"]
           }
         },
         "noExplicitAny": "error"
@@ -178,9 +152,7 @@
   },
   "overrides": [
     {
-      "includes": [
-        "src/styles/global.css"
-      ],
+      "includes": ["src/styles/global.css"],
       "linter": {
         "rules": {
           "complexity": {
@@ -190,9 +162,7 @@
       }
     },
     {
-      "includes": [
-        "**/*.astro"
-      ],
+      "includes": ["**/*.astro"],
       "linter": {
         "rules": {
           "correctness": {
@@ -211,11 +181,7 @@
       }
     },
     {
-      "includes": [
-        "scripts/**",
-        "src/lib/github.ts",
-        "astro.config.ts"
-      ],
+      "includes": ["scripts/**", "src/lib/github.ts", "astro.config.ts"],
       "linter": {
         "rules": {
           "style": {
@@ -231,9 +197,7 @@
       }
     },
     {
-      "includes": [
-        "**/*.test.ts"
-      ],
+      "includes": ["**/*.test.ts"],
       "linter": {
         "rules": {
           "style": {
@@ -243,9 +207,7 @@
       }
     },
     {
-      "includes": [
-        "src/experiments/out-west-classic/**"
-      ],
+      "includes": ["src/experiments/out-west-classic/**"],
       "linter": {
         "rules": {
           "complexity": {
@@ -256,13 +218,9 @@
       }
     },
     {
-      "includes": [
-        "api/**"
-      ],
+      "includes": ["api/**"],
       "javascript": {
-        "globals": [
-          "WebSocketPair"
-        ]
+        "globals": ["WebSocketPair"]
       },
       "linter": {
         "rules": {
