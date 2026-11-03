@@ -23,7 +23,8 @@ const dayStart = (now: number): number => now - (now % 86_400_000)
  *   idempotency key `gauntlet:first:<accountId>:<level>`. Sets the bit in `gauntlet_clears`, and the
  *   17th bit grants Hardin's Pair.
  * - **Repeat win:** 10 XP, at most 200 XP per UTC day, key `gauntlet:repeat:<runId>:<level>`.
- * Returns [] when there's no profile, the level is out of range, or the daily cap is reached.
+ * Returns [] when there's no profile, the level is out of range, the daily cap is reached, or this
+ * run already first-cleared this level (so a retried write is a no-op, not a repeat-XP grant).
  * Callers put the statements in their own batch.
  */
 export async function gauntletClearStatements(
@@ -36,16 +37,23 @@ export async function gauntletClearStatements(
     return []
   }
   const now = Date.now()
+  const firstRef = `first:${runId}:${level}`
   const row = await env.DB.prepare(
     `SELECT p.gauntlet_clears AS clears,
        (SELECT COALESCE(SUM(l.xp), 0) FROM ledger l
          WHERE l.account_id = p.account_id AND l.kind = 'gauntlet_clear'
-           AND l.ref LIKE 'repeat:%' AND l.created_at >= ?2) AS repeat_xp
+           AND l.ref LIKE 'repeat:%' AND l.created_at >= ?2) AS repeat_xp,
+       EXISTS (SELECT 1 FROM ledger l
+         WHERE l.account_id = p.account_id AND l.kind = 'gauntlet_clear' AND l.ref = ?3) AS first_here
      FROM profiles p WHERE p.account_id = ?1`,
   )
-    .bind(accountId, dayStart(now))
-    .first<{ clears: number; repeat_xp: number }>()
+    .bind(accountId, dayStart(now), firstRef)
+    .first<{ clears: number; repeat_xp: number; first_here: number }>()
   if (!row) {
+    return []
+  }
+  if (row.first_here) {
+    // A retry of this very win (its first write committed but the caller never heard): already paid.
     return []
   }
   const bit = 1 << level
@@ -57,7 +65,7 @@ export async function gauntletClearStatements(
           kind: 'gauntlet_clear',
           amount: gauntletFirstClearCash(level),
           xp: gauntletFirstClearXp(level),
-          ref: `first:${runId}:${level}`,
+          ref: firstRef,
         },
       ]),
       env.DB.prepare(

@@ -16,6 +16,7 @@ import {
   scoreRun,
 } from '../../src/experiments/out-west/data/economy.ts'
 import { recordUsage } from './budget.ts'
+import { type CreditJob, CreditOutbox } from './duel/credit-outbox.ts'
 import { gauntletClearStatements, getProfile, isNameOwned } from './duel/external.ts'
 import {
   drawRating,
@@ -92,6 +93,17 @@ export class DuelSession extends DurableObject<Env> {
 
   /** The signed-in player's recent reactions and poster, loaded on first need. */
   private ghost: { snapshot: GhostSnapshot; recent: number[] } | null = null
+
+  /** Account credits owed by judged duels, durable until their D1 batch commits. */
+  private readonly outbox = new CreditOutbox({
+    storage: this.ctx.storage,
+    apply: (job) => this.applyCredit(job),
+  })
+
+  /** Retries credits that failed, including after the object was reset mid-write. */
+  override async alarm(): Promise<void> {
+    await this.outbox.drain()
+  }
 
   override fetch(request: Request): Response {
     if (request.headers.get('Upgrade') !== 'websocket') {
@@ -273,6 +285,28 @@ export class DuelSession extends DurableObject<Env> {
       }
     }
 
+    // The credit job is stored before the result is sent: the output gate holds the socket message
+    // until the write is durable, so a result the player sees always has its credit on disk, and
+    // the outbox retries it (from an alarm, across resets) until the D1 batch commits.
+    const queued = this.accountId
+      ? this.outbox.enqueue(String(active.duel).padStart(4, '0'), {
+          accountId: this.accountId,
+          runId: this.sessionId,
+          level: active.level,
+          paidWin: outcome === 'win' && !bossPhaseOne,
+          ghost:
+            active.level >= RANKED_GHOST_MIN_LEVEL
+              ? {
+                  reactionMs: outcome === 'coward' ? null : reactionMs,
+                  fakesSeen: stats.fakesSeen,
+                  fakeCoward: stats.coward?.onCue ?? false,
+                  waitCoward: stats.coward !== null && !stats.coward.onCue,
+                  waitedMs: stats.waitedMs,
+                }
+              : null,
+        })
+      : null
+
     this.send({
       type: 'result',
       duel: active.duel,
@@ -284,59 +318,49 @@ export class DuelSession extends DurableObject<Env> {
       targetsHit: verdict.targetsHit,
     })
 
-    if (this.accountId) {
-      const paidWin = outcome === 'win' && !bossPhaseOne
+    if (queued) {
       this.ctx.waitUntil(
-        this.creditAccount(this.accountId, { level: active.level, paidWin, verdict, stats }).catch(
-          (err) => console.error('ranked credit failed', err),
+        queued.then(
+          () => this.outbox.drain(),
+          (err: unknown) => console.error('ranked credit could not be queued', err),
         ),
       )
     }
   }
 
-  /** Signed-in runs: gauntlet clears through stream C, and ghost seeding from outlaw 6 up. */
-  private async creditAccount(
-    accountId: string,
-    duel: {
-      level: number
-      paidWin: boolean
-      verdict: Verdict & { kind: 'ranked' }
-      stats: WaitStats
-    },
-  ): Promise<void> {
-    const { level, paidWin, verdict, stats } = duel
+  /**
+   * One credit job: the gauntlet grant through stream C and ghost seeding from outlaw 6 up, in one
+   * batch. Throws on failure so the outbox retries it.
+   */
+  private async applyCredit(job: CreditJob): Promise<void> {
     const statements: D1PreparedStatement[] = []
-    if (paidWin) {
+    if (job.paidWin) {
       statements.push(
-        ...(await gauntletClearStatements(this.env, accountId, level, this.sessionId)),
+        ...(await gauntletClearStatements(this.env, job.accountId, job.level, job.runId)),
       )
     }
-    if (level >= RANKED_GHOST_MIN_LEVEL) {
-      const ghost = await this.loadGhost(accountId)
-      const judged = verdict.outcome === 'coward' ? null : verdict.reactionMs
-      if (ghost && judged !== null) {
-        ghost.recent.push(judged)
-        ghost.recent.splice(0, Math.max(0, ghost.recent.length - GHOST_RING))
-        ghost.snapshot.drawRating = drawRating(ghost.recent)
-      }
-      if (ghost) {
-        statements.push(
-          ...ghostRecordStatements(this.env, {
-            accountId,
-            source: 'ranked',
-            reactionMs: judged,
-            froze: false,
-            fakesSeen: stats.fakesSeen,
-            fakeCoward: stats.coward?.onCue ?? false,
-            waitCoward: stats.coward !== null && !stats.coward.onCue,
-            waitedMs: stats.waitedMs,
-            snapshot: ghost.snapshot,
-          }),
-        )
-      }
+    const ghost = job.ghost ? await this.loadGhost(job.accountId) : null
+    let seeded: { snapshot: GhostSnapshot; recent: number[] } | null = null
+    if (job.ghost && ghost) {
+      const judged = job.ghost.reactionMs
+      const recent = judged === null ? ghost.recent : [...ghost.recent, judged].slice(-GHOST_RING)
+      seeded = { recent, snapshot: { ...ghost.snapshot, drawRating: drawRating(recent) } }
+      statements.push(
+        ...ghostRecordStatements(this.env, {
+          accountId: job.accountId,
+          source: 'ranked',
+          froze: false,
+          ...job.ghost,
+          snapshot: seeded.snapshot,
+        }),
+      )
     }
     if (statements.length > 0) {
       await this.env.DB.batch(statements)
+    }
+    if (seeded) {
+      // only once it committed, so a retried job doesn't count the sample twice in memory
+      this.ghost = seeded
     }
   }
 
