@@ -1,0 +1,166 @@
+import { MeshStandardMaterial, Scene } from 'three'
+import type { AudioEngine } from './audio/audio'
+import { Director } from './duel/director'
+import { loadAssets } from './engine/assets'
+import { Input } from './engine/input'
+import { Renderer, type Tier } from './engine/render'
+import type { SaveData } from './save'
+import { CameraRig } from './scene/camera'
+import { dressStreet } from './scene/dressing'
+import { Dust, Flash, Glint, Physics, Puffs, Tumbleweed, tumbleweedGeometry } from './scene/fx'
+import { propDef } from './scene/props'
+import { softDot } from './scene/textures'
+import { World } from './scene/world'
+import { Hud } from './ui/hud'
+
+export interface Game {
+  begin(skipIntro: boolean): void
+  readonly director: Director
+}
+
+export interface GameOpts {
+  root: HTMLElement
+  canvas: HTMLCanvasElement
+  audio: AudioEngine
+  save: SaveData
+  debug: boolean
+  tier: Tier
+  onProgress: (f: number) => void
+}
+
+export async function createGame(o: GameOpts): Promise<Game> {
+  const scene = new Scene()
+  const rig = new CameraRig(window.innerWidth / window.innerHeight)
+  const renderer = new Renderer(o.canvas, scene, rig.cam, o.tier)
+  const aniso = Math.min(8, renderer.gl.capabilities.getMaxAnisotropy())
+  const assets = await loadAssets(aniso, (f) => o.onProgress(f * 0.85))
+  const world = new World(scene, assets.tex, renderer.spec.shadowSize)
+  const { coffins } = dressStreet(assets.props, world.root)
+
+  const dot = softDot()
+  const dust = new Dust(renderer.spec.dust, dot)
+  scene.add(dust.points)
+  const puffs = new Puffs(500, dot, false)
+  scene.add(puffs.points)
+  const sparks = new Puffs(200, dot, true)
+  scene.add(sparks.points)
+  const flash = new Flash()
+  scene.add(flash.sprite)
+  const glint = new Glint(dot)
+  scene.add(glint.sprite)
+  const physics = new Physics()
+  const twGeo = tumbleweedGeometry()
+  const twMat = new MeshStandardMaterial({ color: 0x8a6a42, roughness: 1 })
+  const tumbleweeds = [0, 1, 2].map(() => {
+    const t = new Tumbleweed(twGeo, twMat)
+    scene.add(t.mesh)
+    return t
+  })
+
+  const hud = new Hud(o.root)
+  const input = new Input(o.canvas, o.save.settings.keys)
+  const director = new Director({
+    scene,
+    world,
+    rig,
+    renderer,
+    audio: o.audio,
+    hud,
+    input,
+    assets,
+    save: o.save,
+    gun: propDef(assets.props, 'revolver', 0.3, 'max'),
+    rifle: propDef(assets.props, 'rifle', 1.1, 'max'),
+    coffins,
+    dust,
+    puffs,
+    sparks,
+    flash,
+    glint,
+    physics,
+    tumbleweeds,
+    debug: o.debug,
+  })
+  director.applySettings()
+  world.silhouetteHide.push(dust.points, puffs.points, sparks.points, flash.sprite, glint.sprite)
+
+  // Compile every shader up front behind the title so the first shot never hitches.
+  flash.sprite.visible = true
+  glint.sprite.visible = true
+  try {
+    await renderer.gl.compileAsync(scene, rig.cam)
+  } catch {
+    // compileAsync unsupported: the warm-up render below still helps
+  }
+  rig.update(0.016, 0.016)
+  renderer.render(0.016)
+  renderer.renderSilhouette(world.silhouetteHide)
+  flash.sprite.visible = false
+  glint.sprite.visible = false
+  o.onProgress(1)
+
+  window.addEventListener('resize', () => renderer.resize())
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) director.pauseIfPlaying()
+  })
+  hud.pauseBtn.addEventListener('click', (e) => {
+    e.stopPropagation()
+    director.togglePause()
+  })
+  hud.pauseBtn.addEventListener('pointerdown', (e) => e.stopPropagation())
+
+  // ---------------------------------------------------------------- loop
+  let last = performance.now()
+  let fpsAcc = 0
+  let fpsFrames = 0
+  let fps = 60
+  let frameMs = 16
+  const loop = (now: number) => {
+    requestAnimationFrame(loop)
+    const raw = now - last
+    last = now
+    const realDt = Math.min(0.05, Math.max(0, raw / 1000))
+    fpsAcc += raw
+    fpsFrames++
+    if (fpsAcc > 500) {
+      fps = (fpsFrames * 1000) / fpsAcc
+      frameMs = fpsAcc / fpsFrames
+      fpsAcc = 0
+      fpsFrames = 0
+    }
+    const dt = director.frame(now, realDt)
+    const phase = director.phase
+    const tense = phase === 'wait' || phase === 'call' || phase === 'win' || phase === 'bossClock'
+    if (!tense && renderer.adapt(raw, true)) {
+      dust.points.visible = true
+    }
+    world.update(realDt)
+    dust.update(realDt, renderer.dpr)
+    puffs.update(dt, renderer.dpr, 0.6)
+    sparks.update(dt, renderer.dpr, 0)
+    const flashK = flash.update(dt)
+    void flashK
+    glint.update(realDt)
+    physics.update(dt, 1)
+    for (const t of tumbleweeds) t.update(dt, 0.6)
+    rig.update(realDt, realDt)
+    const cam = rig.cam
+    const fwd = cam.getWorldDirection(cam.position.clone())
+    o.audio.setListener(cam.position.x, cam.position.y, cam.position.z, fwd.x, fwd.y, fwd.z)
+    o.audio.update()
+    hud.update(raw)
+    if (director.silhouetteFrames > 0) {
+      director.silhouetteFrames--
+      renderer.renderSilhouette(world.silhouetteHide)
+    } else {
+      renderer.render(realDt)
+    }
+    if (o.debug) hud.setDebug(director.debugText(fps, frameMs))
+  }
+  requestAnimationFrame(loop)
+
+  return {
+    director,
+    begin: (skipIntro: boolean) => director.begin(skipIntro),
+  }
+}

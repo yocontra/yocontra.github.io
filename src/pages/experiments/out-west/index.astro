@@ -1,5 +1,675 @@
 ---
-// Placeholder until the 3D remake lands; the 2019 original lives at /classic/.
-return Astro.redirect('/experiments/out-west/classic/')
+import Bare from '~/layouts/Bare.astro'
 ---
 
+<Bare
+  title="out west"
+  description="A western quick-draw duel in 3D: walk your paces, wait for the bell, and draw first."
+  viewport="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover"
+>
+  <Fragment slot="head">
+    <meta name="theme-color" content="#ff0000" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Alfa+Slab+One&display=swap"
+    />
+  </Fragment>
+  <div id="ow" class="ow">
+    <canvas class="ow-canvas" aria-label="Out West, a 3D quick-draw duel"></canvas>
+    <div class="ow-title">
+      <h1 class="ow-logo">out west</h1>
+      <div class="ow-start">
+        <span class="desktop-only">click to draw</span><span class="touch-only">tap to draw</span>
+      </div>
+      <div class="ow-loading" aria-live="polite"></div>
+      <div class="ow-howto">
+        <span class="desktop-only"
+          >Hold W, ↑ or ← (or the mouse) to walk. Wait for the bell. Space or click to draw.</span
+        >
+        <span class="touch-only">Hold anywhere to walk. Wait for the bell. Tap to draw.</span>
+      </div>
+      <div class="ow-title-links">
+        <a href="/experiments/out-west/classic/">play the 2019 original</a>
+        <span aria-hidden="true">·</span>
+        <button type="button" class="ow-credits-btn">credits</button>
+      </div>
+      <div class="ow-credits" role="dialog" aria-label="Credits">
+        <p>
+          <b>out west</b>
+          by Eric Schoffstall. Music and the original sounds from the 2019 game.
+        </p>
+        <p>Characters, guns and props: Quaternius (CC0), Kay Lousberg (CC0), via poly.pizza.</p>
+        <p>Textures: Poly Haven (CC0). Sound effects: freesound.org contributors (CC0).</p>
+        <p>Full list: <a href="/experiments/out-west/3d/CREDITS.md">CREDITS.md</a></p>
+      </div>
+    </div>
+  </div>
+</Bare>
+
+<style is:global>
+  html,
+  body {
+    margin: 0;
+    padding: 0;
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    background: #000;
+    overscroll-behavior: none;
+    -webkit-user-select: none;
+    user-select: none;
+    -webkit-touch-callout: none;
+    -webkit-tap-highlight-color: transparent;
+    touch-action: none;
+  }
+  .ow {
+    --slab: "Alfa Slab One", Rockwell, "Rockwell Extra Bold", Georgia, serif;
+    position: fixed;
+    inset: 0;
+    color: #fff;
+    font-family: var(--slab);
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+  }
+  .ow-canvas {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    display: block;
+    touch-action: none;
+    outline: none;
+  }
+  .touch-only {
+    display: none;
+  }
+  @media (hover: none) and (pointer: coarse) {
+    .desktop-only {
+      display: none;
+    }
+    .touch-only {
+      display: inline;
+    }
+  }
+
+  /* ---------------------------------------------------------- title */
+  .ow-title {
+    position: absolute;
+    inset: 0;
+    z-index: 50;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 1.2rem;
+    background: #f00;
+    cursor: pointer;
+    clip-path: inset(0 0 0 0);
+    transition: clip-path 0.9s cubic-bezier(0.7, 0, 0.2, 1);
+    padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom)
+      env(safe-area-inset-left);
+    box-sizing: border-box;
+    outline: none;
+  }
+  .ow-title.wipe {
+    clip-path: inset(0 0 100% 0);
+  }
+  .ow-logo {
+    margin: 0;
+    font-size: clamp(3.2rem, 15vw, 9rem);
+    font-weight: 400;
+    line-height: 1;
+    text-shadow: 0 4px 0 rgb(0 0 0 / 0.25);
+  }
+  .ow-start {
+    font-size: clamp(1.1rem, 4.2vw, 2rem);
+    animation: ow-pulse 1.6s ease-in-out infinite;
+    min-height: 1.4em;
+  }
+  .ow-title.pressed .ow-start {
+    animation: none;
+  }
+  .ow-loading {
+    min-height: 1.2em;
+    font-family: Georgia, serif;
+    letter-spacing: 0.08em;
+    font-size: 0.85rem;
+    opacity: 0.85;
+    text-transform: none;
+  }
+  .ow-howto {
+    max-width: 34rem;
+    padding: 0 1.2rem;
+    text-align: center;
+    font-family: Georgia, serif;
+    text-transform: none;
+    letter-spacing: 0.02em;
+    font-size: 0.95rem;
+    line-height: 1.5;
+    opacity: 0.9;
+  }
+  .ow-howto kbd {
+    font-family: var(--slab);
+    font-size: 0.8em;
+    border: 1px solid rgb(255 255 255 / 0.6);
+    border-radius: 3px;
+    padding: 0 0.3em;
+  }
+  .ow-title-links {
+    position: absolute;
+    bottom: max(14px, env(safe-area-inset-bottom));
+    left: 0;
+    right: 0;
+    display: flex;
+    justify-content: center;
+    gap: 0.6rem;
+    font-family: Georgia, serif;
+    font-size: 0.8rem;
+    letter-spacing: 0.04em;
+    text-transform: none;
+    opacity: 0.8;
+  }
+  .ow-title-links a,
+  .ow-title-links button {
+    color: #fff;
+    font: inherit;
+    background: none;
+    border: 0;
+    padding: 0.4rem;
+    cursor: pointer;
+    text-decoration: underline;
+    text-underline-offset: 3px;
+  }
+  .ow-credits {
+    display: none;
+    position: absolute;
+    bottom: calc(max(14px, env(safe-area-inset-bottom)) + 2.4rem);
+    left: 50%;
+    transform: translateX(-50%);
+    width: min(30rem, calc(100% - 32px));
+    padding: 1rem 1.2rem;
+    background: rgb(0 0 0 / 0.82);
+    font-family: Georgia, serif;
+    font-size: 0.82rem;
+    letter-spacing: 0.02em;
+    line-height: 1.45;
+    text-transform: none;
+    cursor: default;
+    box-sizing: border-box;
+  }
+  .ow-credits.on {
+    display: block;
+  }
+  .ow-credits p {
+    margin: 0 0 0.5rem;
+  }
+  .ow-credits a {
+    color: #fff;
+  }
+  @keyframes ow-pulse {
+    0%,
+    100% {
+      opacity: 1;
+    }
+    50% {
+      opacity: 0.45;
+    }
+  }
+
+  /* ------------------------------------------------------------ hud */
+  .ow-hud {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.6s;
+  }
+  .ow-playing .ow-hud {
+    opacity: 1;
+  }
+  .ow-counter {
+    position: absolute;
+    top: max(14px, env(safe-area-inset-top));
+    left: max(16px, env(safe-area-inset-left));
+    font-size: 1rem;
+    text-shadow: 0 2px 0 #000;
+  }
+  .ow-pause {
+    position: absolute;
+    top: max(8px, env(safe-area-inset-top));
+    right: max(8px, env(safe-area-inset-right));
+    width: 44px;
+    height: 44px;
+    display: flex;
+    gap: 6px;
+    align-items: center;
+    justify-content: center;
+    background: rgb(0 0 0 / 0.25);
+    border: 2px solid rgb(255 255 255 / 0.7);
+    border-radius: 50%;
+    cursor: pointer;
+    pointer-events: auto;
+  }
+  .ow-pause span {
+    width: 4px;
+    height: 14px;
+    background: #fff;
+  }
+  .ow-pips {
+    position: absolute;
+    bottom: max(26px, calc(env(safe-area-inset-bottom) + 14px));
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    gap: 10px;
+    opacity: 0;
+    transition: opacity 0.4s;
+  }
+  .ow-pips.on {
+    opacity: 1;
+  }
+  .ow-pip {
+    width: 10px;
+    height: 10px;
+    background: #fff;
+    border: 2px solid #000;
+    transform: rotate(45deg) scale(0);
+    transition: transform 0.18s cubic-bezier(0.3, 1.6, 0.5, 1);
+  }
+  .ow-pip.in {
+    transform: rotate(45deg) scale(1);
+  }
+  .ow-letter {
+    position: absolute;
+    left: 0;
+    right: 0;
+    height: 12.5vh;
+    background: #000;
+    pointer-events: none;
+    transition: transform 0.35s cubic-bezier(0.6, 0, 0.2, 1);
+    z-index: 5;
+  }
+  .ow-letter-top {
+    top: 0;
+    transform: translateY(-100%);
+  }
+  .ow-letter-bot {
+    bottom: 0;
+    transform: translateY(100%);
+  }
+  .ow-letter.on {
+    transform: translateY(0);
+  }
+  .ow-cap-call {
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 36%;
+    text-align: center;
+    font-size: clamp(4rem, 18vw, 11rem);
+    line-height: 1;
+    color: #fff;
+    -webkit-text-stroke: 3px #f00;
+    paint-order: stroke fill;
+    text-shadow:
+      0 0 0 #f00,
+      0 6px 0 #000;
+    opacity: 0;
+    pointer-events: none;
+    z-index: 8;
+  }
+  .ow-cap-call.on {
+    opacity: 1;
+    animation: ow-call 0.25s cubic-bezier(0.2, 2, 0.4, 1);
+  }
+  @keyframes ow-call {
+    from {
+      transform: scale(1.5);
+    }
+    to {
+      transform: scale(1);
+    }
+  }
+  .ow-call-indicator {
+    position: absolute;
+    inset: 0;
+    border: 10px solid #f00;
+    opacity: 0;
+    pointer-events: none;
+    z-index: 7;
+  }
+  .ow-call-indicator.on {
+    opacity: 1;
+  }
+  .ow-cap-fake,
+  .ow-cap-line {
+    position: absolute;
+    left: 50%;
+    transform: translateX(-50%);
+    max-width: min(90vw, 40rem);
+    text-align: center;
+    font-family: Georgia, serif;
+    text-transform: none;
+    letter-spacing: 0.02em;
+    opacity: 0;
+    transition: opacity 0.25s;
+    pointer-events: none;
+    z-index: 9;
+  }
+  .ow-cap-fake {
+    bottom: calc(max(64px, env(safe-area-inset-bottom) + 52px) + 12.5vh);
+    font-style: italic;
+    color: #c8c8c8;
+    font-size: 1rem;
+    text-shadow: 0 1px 2px #000;
+  }
+  .ow-cap-line {
+    bottom: calc(max(96px, env(safe-area-inset-bottom) + 84px) + 12.5vh);
+    color: #fff;
+    font-size: 1.1rem;
+    background: rgb(0 0 0 / 0.55);
+    padding: 0.35rem 0.8rem;
+  }
+  .ow-cap-line b {
+    font-family: var(--slab);
+    font-weight: 400;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    font-size: 0.85em;
+  }
+  .ow-cap-fake.on,
+  .ow-cap-line.on {
+    opacity: 1;
+  }
+  .ow-card {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%) scale(0.92);
+    min-width: min(80vw, 22rem);
+    max-width: 92vw;
+    padding: 1.4rem 2rem 1.2rem;
+    background: rgb(0 0 0 / 0.72);
+    text-align: center;
+    opacity: 0;
+    pointer-events: none;
+    transition:
+      opacity 0.25s,
+      transform 0.25s;
+    z-index: 10;
+    box-sizing: border-box;
+  }
+  .ow-card.on {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
+  }
+  .ow-card-win {
+    background: #f00;
+  }
+  .ow-card-coward {
+    background: #111;
+    border: 3px solid #f00;
+  }
+  .ow-card-title {
+    font-size: clamp(1rem, 4vw, 1.4rem);
+  }
+  .ow-card-big {
+    font-size: clamp(2.6rem, 12vw, 5rem);
+    line-height: 1.1;
+  }
+  .ow-card-big:empty {
+    display: none;
+  }
+  .ow-card-big img {
+    display: block;
+    width: min(46vw, 13rem);
+    margin: 0.6rem auto;
+    transform: rotate(-2deg);
+    box-shadow: 0 6px 20px rgb(0 0 0 / 0.6);
+  }
+  .ow-card-coward .ow-card-title {
+    font-size: clamp(2.6rem, 12vw, 5rem);
+    color: #f00;
+  }
+  .ow-card-lose .ow-card-title {
+    font-size: clamp(2.6rem, 12vw, 5rem);
+  }
+  .ow-card-sub {
+    font-size: clamp(0.9rem, 3.4vw, 1.2rem);
+    margin-top: 0.3rem;
+  }
+  .ow-card-hint {
+    margin-top: 0.8rem;
+    font-family: Georgia, serif;
+    text-transform: none;
+    letter-spacing: 0.04em;
+    font-size: 0.8rem;
+    opacity: 0.75;
+  }
+  .ow-whip {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background: linear-gradient(90deg, transparent, rgb(255 255 255 / 0.35), transparent);
+    opacity: 0;
+    transform: translateX(-100%);
+    z-index: 6;
+  }
+  .ow-whip.on {
+    animation: ow-whip 0.28s ease-out;
+  }
+  @keyframes ow-whip {
+    0% {
+      opacity: 1;
+      transform: translateX(-100%);
+      backdrop-filter: blur(0);
+    }
+    50% {
+      backdrop-filter: blur(6px);
+    }
+    100% {
+      opacity: 0;
+      transform: translateX(100%);
+      backdrop-filter: blur(0);
+    }
+  }
+  .ow-iris {
+    position: absolute;
+    inset: 0;
+    background: #f00;
+    clip-path: circle(150% at 50% 50%);
+    opacity: 0;
+    pointer-events: none;
+    z-index: 4;
+  }
+  .ow-iris.on {
+    opacity: 1;
+  }
+
+  /* ---------------------------------------------------------- menus */
+  .ow-menu,
+  .ow-end {
+    position: absolute;
+    inset: 0;
+    z-index: 30;
+    display: none;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 1rem;
+    background: rgb(0 0 0 / 0.82);
+    padding: max(20px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right))
+      max(20px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left));
+    box-sizing: border-box;
+    overflow-y: auto;
+    touch-action: pan-y;
+  }
+  .ow-menu.on,
+  .ow-end.on {
+    display: flex;
+  }
+  .ow-menu-title {
+    margin: 0;
+    font-weight: 400;
+    font-size: 2rem;
+  }
+  .ow-menu-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.6rem;
+    width: min(28rem, 100%);
+  }
+  .ow-toggle {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 0 0.7rem;
+    align-items: center;
+    cursor: pointer;
+    font-size: 0.95rem;
+  }
+  .ow-toggle input {
+    width: 22px;
+    height: 22px;
+    accent-color: #f00;
+    grid-row: span 2;
+  }
+  .ow-toggle-hint {
+    font-family: Georgia, serif;
+    text-transform: none;
+    letter-spacing: 0.02em;
+    font-size: 0.8rem;
+    opacity: 0.7;
+  }
+  .ow-keys {
+    width: min(28rem, 100%);
+    font-size: 0.85rem;
+  }
+  .ow-keys-title {
+    opacity: 0.7;
+    margin-bottom: 0.3rem;
+  }
+  .ow-key-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.15rem 0;
+  }
+  .ow-key {
+    font: inherit;
+    color: #fff;
+    background: rgb(255 255 255 / 0.1);
+    border: 1px solid rgb(255 255 255 / 0.4);
+    padding: 0.25rem 0.6rem;
+    cursor: pointer;
+    min-width: 6rem;
+  }
+  .ow-menu-btns {
+    display: flex;
+    gap: 0.8rem;
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+  .ow-btn {
+    font: inherit;
+    letter-spacing: 0.12em;
+    color: #fff;
+    background: transparent;
+    border: 2px solid #fff;
+    padding: 0.7rem 1.3rem;
+    min-height: 44px;
+    cursor: pointer;
+  }
+  .ow-btn-primary {
+    background: #f00;
+    border-color: #f00;
+  }
+  .ow-btn:focus-visible,
+  .ow-key:focus-visible,
+  .ow-pause:focus-visible {
+    outline: 3px solid #fff;
+    outline-offset: 2px;
+  }
+  .ow-end {
+    background: rgb(0 0 0 / 0.55);
+    justify-content: flex-start;
+  }
+  .ow-end-line {
+    margin: 1rem 0 0;
+    font-weight: 400;
+    text-align: center;
+    font-size: clamp(1.5rem, 5.5vw, 3rem);
+    line-height: 1.15;
+    text-shadow: 0 3px 0 #f00;
+  }
+  .ow-end-title {
+    color: #ffd200;
+    font-size: 1.1rem;
+  }
+  .ow-ledger {
+    border-collapse: collapse;
+    font-size: clamp(0.62rem, 2.3vw, 0.85rem);
+    width: min(40rem, 100%);
+  }
+  .ow-ledger th,
+  .ow-ledger td {
+    padding: 0.28rem 0.5rem;
+    border-bottom: 1px solid rgb(255 255 255 / 0.15);
+    text-align: left;
+  }
+  .ow-ledger td:nth-child(2) {
+    font-family: Georgia, serif;
+    text-transform: none;
+    letter-spacing: 0.02em;
+  }
+  .ow-end-stats {
+    font-family: Georgia, serif;
+    text-transform: none;
+    letter-spacing: 0.02em;
+    text-align: center;
+    line-height: 1.6;
+  }
+  .ow-debug {
+    position: absolute;
+    left: 8px;
+    bottom: 8px;
+    margin: 0;
+    padding: 6px 8px;
+    background: rgb(0 0 0 / 0.6);
+    color: #9f9;
+    font:
+      11px / 1.35 ui-monospace,
+      Menlo,
+      monospace;
+    letter-spacing: 0;
+    text-transform: none;
+    display: none;
+    z-index: 40;
+    pointer-events: none;
+  }
+  .ow-debug.on {
+    display: block;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .ow-title {
+      transition-duration: 0.3s;
+    }
+    .ow-cap-call.on {
+      animation: none;
+    }
+    .ow-whip.on {
+      animation: none;
+    }
+    .ow-start {
+      animation: none;
+    }
+  }
+</style>
+
+<script>
+  import { boot } from '~/experiments/out-west/main'
+
+  const root = document.getElementById('ow')
+  if (root) boot(root)
+</script>
