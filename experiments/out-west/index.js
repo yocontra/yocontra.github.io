@@ -25,7 +25,7 @@ const names = [
   'Harvey “Kid Curry” Logan',
   'James “Wild Bill” Hickok',
   'Underboss: William “Curly Bill” Brocius',
-  'Boss: John Wesley Hardin'
+  'Boss: John Wesley Hardin',
 ]
 
 const music = document.createElement('audio')
@@ -43,7 +43,7 @@ const enemyWalk = document.createElement('img')
 enemyWalk.src = './assets/enemy-walk.png'
 
 // state
-let showdownTimer = null
+const showdownTimer = null
 let paces = null
 let drawTime = 1000
 let level = -1
@@ -64,15 +64,15 @@ const enemy = {
     enemy.firing = false
     enemy.x = game.width / 2 + enemy.width
   },
-  draw: ctx => {
+  draw: (ctx) => {
     ctx.drawImage(
       enemy.firing ? enemyFire : enemyWalk,
       enemy.x,
       game.height / 2,
       player.width,
-      player.height
+      player.height,
     )
-  }
+  },
 }
 const player = {
   speedX: 0,
@@ -100,15 +100,15 @@ const player = {
     player.x = Math.max(0, Math.min(game.width - player.width, player.x))
     player.y = Math.max(0, Math.min(game.height - player.height, player.y))
   },
-  draw: ctx => {
+  draw: (ctx) => {
     ctx.drawImage(
       player.firing ? playerFire : playerWalk,
       player.x,
       game.height / 2,
       player.width,
-      player.height
+      player.height,
     )
-  }
+  },
 }
 
 // render loop
@@ -137,7 +137,7 @@ const showMessage = (msg, time) => {
     msgTimeout = setTimeout(() => (msgEl.className += ' hidden'), time)
   }
 }
-const playSound = fname => {
+const playSound = (fname) => {
   const a = document.createElement('audio')
   a.src = fname
   a.play()
@@ -150,16 +150,14 @@ const ensureShowdown = () => {
   showMessage('draw', delay)
   setTimeout(() => shoot('enemy'), delay)
 }
-const shoot = shooter => {
+const shoot = (shooter) => {
   if (!playing) return
   if (shooter === 'player') player.firing = true
   if (shooter === 'enemy') enemy.firing = true
-  playSound(
-    shooter === 'player' ? './assets/fire.wav' : './assets/fire-big.wav'
-  )
+  playSound(shooter === 'player' ? './assets/fire.wav' : './assets/fire-big.wav')
   endLevel(showdown ? shooter : 'enemy')
 }
-const startLevel = retry => {
+const startLevel = (retry) => {
   if (!retry) {
     ++level
     drawTime *= difficulty
@@ -183,7 +181,7 @@ const startLevel = retry => {
   player.init()
   enemy.init()
 }
-const endLevel = winner => {
+const endLevel = (winner) => {
   playing = false
   if (showdown) {
     if (winner === 'player') {
@@ -215,23 +213,23 @@ const setGameSize = () => {
   game.width = window.innerWidth
 }
 
-const playSong = src => {
+const playSong = (src) => {
   music.src = src
   music.play()
 }
 
 // event logic
 window.addEventListener('resize', setGameSize)
-document.body.addEventListener('keydown', e => {
+document.body.addEventListener('keydown', (e) => {
   if (e.keyCode === 32) shoot('player')
   keys[e.keyCode] = true
 })
-document.body.addEventListener('keyup', e => {
+document.body.addEventListener('keyup', (e) => {
   keys[e.keyCode] = false
 })
 
 // init
-const begin = e => {
+const begin = (e) => {
   document.body.removeEventListener('click', begin)
   document.body.className += 'started'
   playSong('./assets/intro.mp3')

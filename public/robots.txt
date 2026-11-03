@@ -1,0 +1,5 @@
+User-agent: *
+Allow: /
+Disallow: /experiments/hax/
+
+Sitemap: https://contra.io/sitemap-index.xml

@@ -1,0 +1,50 @@
+---
+import '~/styles/global.css'
+
+interface Props {
+  title?: string
+  description?: string
+  image?: string
+  noindex?: boolean
+}
+
+const {
+  title,
+  description = 'Eric Schoffstall — engineer, founder, author of gulp.js. Ex-Apple. Back to building in the open.',
+  image = '/og.png',
+  noindex = false,
+} = Astro.props
+
+const fullTitle = title ? `${title} — contra` : 'Eric Schoffstall — contra'
+const canonical = new URL(Astro.url.pathname, Astro.site)
+const ogImage = new URL(image, Astro.site)
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    <title>{fullTitle}</title>
+    <meta name="description" content={description}>
+    <meta name="theme-color" content="#0b120e">
+    <meta name="color-scheme" content="dark">
+    <link rel="canonical" href={canonical}>
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+    <link rel="sitemap" href="/sitemap-index.xml">
+    {noindex && <meta name="robots" content="noindex, nofollow" />}
+
+    <meta property="og:type" content="website">
+    <meta property="og:title" content={fullTitle}>
+    <meta property="og:description" content={description}>
+    <meta property="og:url" content={canonical}>
+    <meta property="og:image" content={ogImage}>
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:image" content={ogImage}>
+    <meta name="author" content="Eric Schoffstall">
+    <slot name="head" />
+  </head>
+  <body>
+    <slot />
+  </body>
+</html>
