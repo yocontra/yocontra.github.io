@@ -45,6 +45,8 @@ import {
   EF_HOLSTERED,
   EF_MOST_WANTED,
   EF_PROTECTED,
+  EV_BAG_DROP,
+  EV_KILL,
   NONE,
   SELF_ALIVE,
   SELF_DEAD_EYE_READY,
@@ -65,6 +67,7 @@ import { haptic } from '../../platform/haptics.ts'
 import { presetAt } from '../../scene/presets.ts'
 import { RIM } from '../../scene/style.ts'
 import { installUiSounds } from '../../ui/sfx.ts'
+import { bagColor } from '../scene/bags.ts'
 import { TopDownCamera } from '../scene/camera.ts'
 import { Crowd, type CrowdPlayer } from '../scene/crowd.ts'
 import { CUT } from '../scene/cutaway.ts'
@@ -149,6 +152,8 @@ export class FrontierGame {
   private readonly riders: Riders
   /** What you carried a moment ago (the death card says what dropped). */
   private lastCarry = 0
+  /** The last player killed: the next bag drop is theirs. */
+  private lastVictim = NONE
   private map: Minimap | null = null
   private readonly desk: DesktopControls
   private readonly touch: TouchControls | null
@@ -430,6 +435,17 @@ export class FrontierGame {
   private onEvent(ev: WireEvent): void {
     if (this.fx && this.crowd) {
       handleEvent(this.sink, ev)
+    }
+    // a death drops a bag where the victim fell, in the victim's saddlebag (spec §7)
+    if (ev.type === EV_KILL) {
+      this.lastVictim = ev.victim
+    } else if (ev.type === EV_BAG_DROP && this.lastVictim !== NONE) {
+      const bag = this.fx?.bags.get(ev.bagId)
+      const loadout = this.net.roster.get(this.lastVictim)?.loadout
+      if (bag && loadout) {
+        bag.color = bagColor(loadout)
+      }
+      this.lastVictim = NONE
     }
   }
 
