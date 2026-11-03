@@ -14,6 +14,8 @@ import {
   emptyRegistry,
   type LobbyReport,
   occupancy,
+  type Pool,
+  poolOf,
   type RegistryState,
   report,
 } from './registry.ts'
@@ -32,8 +34,8 @@ export class LobbyDirectory extends DurableObject<Env> {
     await this.ctx.storage.put(KEY, reg)
   }
 
-  /** Pick a lobby for an account (RPC from the join route). */
-  async assign(accountId: string, preferred?: string): Promise<Assignment> {
+  /** Pick a lobby for an account (RPC from the join route). Flagged accounts ride in the Badlands. */
+  async assign(accountId: string, preferred?: string, pool: Pool = 'main'): Promise<Assignment> {
     const reg = await this.load()
     const now = Date.now()
     collect(reg, now)
@@ -44,6 +46,7 @@ export class LobbyDirectory extends DurableObject<Env> {
       preferred,
       budgetOpen: budget.frontierOpen,
       maxLobbies: MAX_LOBBIES,
+      pool,
     })
     await this.save(reg)
     return result
@@ -62,11 +65,14 @@ export class LobbyDirectory extends DurableObject<Env> {
     const reg = await this.load()
     const budget = await budgetState(this.env)
     return {
-      lobbies: Object.values(reg.lobbies).map((e) => ({
-        lobbyId: e.id,
-        players: occupancy(e),
-        state: e.state,
-      })),
+      // The Badlands is a shadow pool: never listed.
+      lobbies: Object.values(reg.lobbies)
+        .filter((e) => poolOf(e.id) === 'main')
+        .map((e) => ({
+          lobbyId: e.id,
+          players: occupancy(e),
+          state: e.state,
+        })),
       open: budget.frontierOpen,
     }
   }

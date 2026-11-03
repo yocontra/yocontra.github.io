@@ -15,6 +15,8 @@ import {
 } from '../../../src/experiments/out-west/ffa/sim/codec.ts'
 import { MAX_PLAYERS, SOFT_CAP } from '../../../src/experiments/out-west/ffa/sim/constants.ts'
 import { InputBatcher } from '../../../src/experiments/out-west/ffa/sim/input.ts'
+import { calloutTarget } from '../../../src/experiments/out-west/ffa/sim/showdown.ts'
+import { pairKey } from '../../../src/experiments/out-west/ffa/sim/state.ts'
 import {
   DEFAULT_TOWN_POPULATION,
   type JoinProfile,
@@ -231,6 +233,59 @@ describe('LobbyCore sessions and money', () => {
     }
     expect(s.banked).toBe(1660)
     expect(peer.text.at(-1)).toMatchObject({ type: 'deposit', ok: true, banked: 1660 })
+  })
+
+  it('the Badlands: a frozen account banks XP, never dollars', () => {
+    const core = new LobbyCore('lobby:500', 1)
+    const s = core.join(profile('cheat', { frozen: true }), new FakePeer(), 0)
+    const p = core.world.players[s?.playerId ?? 0]
+    if (!(p && s)) {
+      throw new Error('no player')
+    }
+    p.x = 64.5
+    p.z = 81.5
+    p.carried = 600
+    p.protectUntil = 0
+    const b = new InputBatcher()
+    const deposits: SettledDeposit[] = []
+    for (let t = 0; t < 60; t++) {
+      send(core, { id: s.playerId, b, f: { ...still, buttons: BTN_INTERACT } }, t * 50)
+      deposits.push(...core.tick(t * 50).deposits)
+    }
+    expect(deposits).toHaveLength(1)
+    expect(deposits[0]).toMatchObject({ accountId: 'cheat', frozen: true })
+  })
+
+  it('players who block each other are never paired in a call-out', () => {
+    const core = new LobbyCore('lobby:0', 1)
+    const a = core.join(profile('a', { blocked: ['b'] }), new FakePeer(), 0)
+    const b = core.join(profile('b'), new FakePeer(), 0)
+    const c = core.join(profile('c'), new FakePeer(), 0)
+    const [pa, pb, pc] = [a, b, c].map((s) => core.world.players[s?.playerId ?? -1])
+    if (!(pa && pb && pc)) {
+      throw new Error('no players')
+    }
+    expect(core.world.noDuel.has(pairKey(pa.id, pb.id))).toBe(true)
+    expect(core.world.noDuel.has(pairKey(pa.id, pc.id))).toBe(false)
+    core.world.tick = 1000
+    for (const p of [pa, pb, pc]) {
+      p.carried = 100
+      p.lastDamageTick = 0
+      p.protectUntil = 0
+    }
+    // a aims straight at b, 5 m away: no target. c in the same spot is a fair target.
+    pa.x = 60
+    pa.z = 60
+    pa.aim = 0
+    pb.x = 65
+    pb.z = 60
+    pc.x = 200
+    pc.z = 200
+    expect(calloutTarget(core.world, pa)).toBeNull()
+    pc.x = 65
+    pc.z = 60
+    pb.x = 200
+    expect(calloutTarget(core.world, pa)?.id).toBe(pc.id)
   })
 
   it('a showdown against a bot runs end to end: bell, human draw, verdict', () => {

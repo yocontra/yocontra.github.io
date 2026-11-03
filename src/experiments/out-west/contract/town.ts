@@ -99,8 +99,20 @@ export interface TownJoinResponse {
   players: number
 }
 
-/** Refusals carry `{ ok: false, error, reason }` with HTTP 503 (full or over budget) or 401. */
+/**
+ * Refusals carry `{ ok: false, error, reason }` ({@link TownJoinError}): HTTP 503 (full or over
+ * budget), 401 (signed out) or 403 `unlicensed` (Frontier needs the Bounty Hunt licence: the first
+ * 3 outlaws beaten on a ranked run while signed in). `error` is ready to show as-is.
+ */
 export type TownJoinRefusal = 'over_budget' | 'all_full' | 'unauthorized' | 'unlicensed'
+
+export interface TownJoinError {
+  ok: false
+  error: string
+  reason: TownJoinRefusal
+  /** With `unlicensed`: licence outlaws cleared so far and still to clear (of 3). */
+  licence?: { cleared: number; remaining: number }
+}
 
 /** `GET /town/lobbies`: public directory for the hub tile ("12 in Perdition"). */
 export interface TownDirectoryView {

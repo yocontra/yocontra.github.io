@@ -39,6 +39,11 @@ export interface World {
   fuses: Fuse[]
   showdowns: Map<number, Showdown>
   nextShowdownId: number
+  /**
+   * Player pairs that may never face each other in a call-out (one of them blocks the other),
+   * as {@link pairKey}s. The lobby keeps it current as players join and leave.
+   */
+  noDuel: Set<number>
   mostWanted: number
   /** Events produced by the current tick (cleared at the start of each step). */
   events: SimEvent[]
@@ -50,6 +55,9 @@ export interface World {
   minted: number
   burned: number
 }
+
+/** An order-independent key for a pair of player slots. */
+export const pairKey = (a: number, b: number): number => Math.min(a, b) * 256 + Math.max(a, b)
 
 export interface WorldOptions {
   seed?: number
@@ -75,6 +83,7 @@ export function createWorld(options: WorldOptions = {}): World {
     fuses: [],
     showdowns: new Map(),
     nextShowdownId: 1,
+    noDuel: new Set(),
     mostWanted: NONE,
     events: [],
     deposits: [],
