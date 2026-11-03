@@ -37,7 +37,7 @@ import {
   removePlayer,
   step,
 } from '../../../src/experiments/out-west/ffa/sim/world.ts'
-import { BotDirector, botName } from './bots.ts'
+import { BotDirector, freshBotName } from './bots.ts'
 import { ShowdownJudge } from './core-showdown.ts'
 
 /** Lobbies keep at least this many bodies in town (bots fill in) while any human is present. */
@@ -386,8 +386,10 @@ export class LobbyCore {
     const cap = (this.botTarget > 0 ? MAX_PLAYERS : SOFT_CAP) - humans
     const wanted = Math.min(cap, Math.max(this.botTarget, DEFAULT_TOWN_POPULATION - humans))
     let bots = 0
+    const names = new Set<string>()
     for (const p of activePlayers(this.world)) {
       bots += p.bot ? 1 : 0
+      names.add(p.name)
     }
     if (bots > wanted) {
       this.evictBot()
@@ -395,7 +397,7 @@ export class LobbyCore {
       const n = this.world.tick + bots
       const id = addPlayer(this.world, {
         accountId: `bot:${this.lobbyId}:${n}`,
-        name: botName(n % 97),
+        name: freshBotName(n, names),
         level: 1 + (n % 25),
         prestige: 0,
         bot: true,
