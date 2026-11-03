@@ -1,9 +1,17 @@
 /**
  * Ranked single-player gauntlet sessions. Owned by stream B.
- *   POST /sessions             { turnstileToken } → { sessionId, wsUrl }
+ *   POST /sessions             { turnstileToken } → RankedSessionResponse (201)
  *                              Optional `Authorization: Bearer`: the run belongs to that account.
+ *                              503 { reason: 'over_budget' } once the month's spend cap is reached.
  *   GET  /sessions/:id/ws      WebSocket upgrade into that run's DuelSession
+ *                              `?resume=<resumeToken>` resumes the run after a drop (30 s window).
+ * Protocol and resume rules: `contract/ranked.ts`.
  */
+import type {
+  RankedRefusal,
+  RankedSessionResponse,
+} from '../../../src/experiments/out-west/contract/ranked.ts'
+import { budgetState } from '../budget.ts'
 import { authenticate, getProfile } from '../duel/external.ts'
 import type { Env } from '../env.ts'
 import {
@@ -15,6 +23,7 @@ import {
   readJson,
   verifyTurnstile,
 } from '../http.ts'
+import { resumeToken, verifyResumeToken } from '../ranked/resume-token.ts'
 
 const SESSIONS_PER_HOUR = 30
 const HOUR_MS = 60 * 60 * 1000
@@ -57,6 +66,16 @@ export const rankedRoutes: RouteHandler = async (request, env, url) => {
     if (typeof token !== 'string' || !(await verifyTurnstile(token, request, env))) {
       return error(request, env, 403, 'Could not verify you are human.')
     }
+    // The $5/month cap (§14): ranked runs are Durable Object time like duels, so they close with them.
+    if (!(await budgetState(env)).duelsOpen) {
+      const refusal: RankedRefusal = {
+        ok: false,
+        error:
+          "The ranked board's closed for the rest of the month: the town's spent its keep. Practice is open.",
+        reason: 'over_budget',
+      }
+      return json(request, env, refusal, 503, { 'Retry-After': '86400' })
+    }
     const hash = await clientHash(request)
     const now = Date.now()
     if (await rateLimited(request, env, hash, now)) {
@@ -75,7 +94,12 @@ export const rankedRoutes: RouteHandler = async (request, env, url) => {
     ws.protocol = ws.protocol === 'https:' ? 'wss:' : 'ws:'
     ws.pathname = `/sessions/${id}/ws`
     ws.search = ''
-    return json(request, env, { sessionId: id, wsUrl: ws.toString() }, 201)
+    const out: RankedSessionResponse = {
+      sessionId: id,
+      wsUrl: ws.toString(),
+      resumeToken: await resumeToken(env, id),
+    }
+    return json(request, env, out, 201)
   }
 
   const match = WS_PATH.exec(url.pathname)
@@ -95,8 +119,13 @@ export const rankedRoutes: RouteHandler = async (request, env, url) => {
   if (!session) {
     return new Response('Unknown session', { status: 404 })
   }
+  const resume = url.searchParams.get('resume')
+  if (resume !== null && !(await verifyResumeToken(env, id, resume))) {
+    return new Response('Bad resume token', { status: 403 })
+  }
   const stub = env.DUELS.get(env.DUELS.idFromString(id))
   const headers = new Headers(request.headers)
+  headers.set('X-Resume', resume === null ? '0' : '1')
   headers.set('X-Session-Id', id)
   headers.set('X-Client-Hash', session.client_hash)
   headers.delete('X-Account-Id')
