@@ -30,10 +30,14 @@ function whisker(color: number): MeshStandardMaterial {
   return m
 }
 
-/** The head's surface distance from its axis toward angle `a` at height `y` (or `fallback`). */
+/**
+ * His skin's distance from the head's axis toward angle `a` at height `y` (or `fallback`): hair,
+ * brows and a sculpted beard stand off the face and would float whatever sits on it.
+ */
 function surface(f: Fit, y: number, a: number, fallback: number): number {
   const h = f.head
-  const z = reach(onBones(f.body, HEAD), { cx: h.cx, cz: h.cz, y, a, dy: 0.012, da: 0.25 })
+  const skin = onBones(f.body, HEAD).filter((s) => s.mat === 'Skin')
+  const z = reach(skin, { cx: h.cx, cz: h.cz, y, a, dy: 0.012, da: 0.25 })
   return Number.isFinite(z) ? z : fallback
 }
 
