@@ -421,6 +421,8 @@ interface Body {
   rest: number
   ground: number
   flutter: number
+  /** Settle lying on its side (local Z up), not standing on its foot: a dropped gun. */
+  side: boolean
   sleep: boolean
 }
 
@@ -433,7 +435,7 @@ export class Physics {
     obj: Object3D,
     v: Vector3,
     w: Vector3,
-    o: { rest?: number; ground?: number; flutter?: number } = {},
+    o: { rest?: number; ground?: number; flutter?: number; side?: boolean } = {},
   ): void {
     this.bodies.push({
       obj,
@@ -442,6 +444,7 @@ export class Physics {
       rest: o.rest ?? 0.25,
       ground: o.ground ?? 0.02,
       flutter: o.flutter ?? 0,
+      side: o.side ?? false,
       sleep: false,
     })
   }
@@ -468,16 +471,7 @@ export class Physics {
       if (b.obj.position.y < b.ground) {
         b.obj.position.y = b.ground
         if (Math.abs(b.v.y) < 0.6 && b.flutter === 0) {
-          b.v.set(0, 0, 0)
-          b.w.multiplyScalar(0)
-          // settle flat
-          const up = new Vector3(0, 1, 0).applyQuaternion(b.obj.quaternion)
-          if (up.y < 0) {
-            b.obj.rotateX(Math.PI)
-          }
-          b.obj.rotation.x = 0
-          b.obj.rotation.z = 0
-          b.sleep = true
+          settle(b)
         } else {
           b.v.y = -b.v.y * b.rest
           b.v.x *= 0.6
@@ -490,6 +484,24 @@ export class Physics {
       }
     }
   }
+}
+
+/** A body comes to rest: upright on its foot, or (`side`) flat on its side. */
+function settle(b: Body): void {
+  b.v.set(0, 0, 0)
+  b.w.multiplyScalar(0)
+  const up = new Vector3(0, 1, 0).applyQuaternion(b.obj.quaternion)
+  if (up.y < 0) {
+    b.obj.rotateX(Math.PI)
+  }
+  if (b.side) {
+    // flat on its side, keeping its heading (a revolver stood on its grip edge before)
+    b.obj.rotation.set(Math.PI / 2, b.obj.rotation.y, 0, 'YXZ')
+  } else {
+    b.obj.rotation.x = 0
+    b.obj.rotation.z = 0
+  }
+  b.sleep = true
 }
 
 export function makeCard(): Mesh {

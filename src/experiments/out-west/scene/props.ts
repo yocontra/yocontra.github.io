@@ -4,6 +4,7 @@ import {
   Box3,
   type BufferGeometry,
   Euler,
+  Float32BufferAttribute,
   Group,
   InstancedMesh,
   type Material,
@@ -22,8 +23,17 @@ export interface Part {
 }
 
 export interface PropDef {
+  /** The kit scene it came from (the float audit names pieces by it). */
+  name: string
   parts: Part[]
   size: Vector3
+}
+
+/** One placed piece inside a merged mesh: its vertex range (the float audit reads these). */
+export interface PieceRange {
+  name: string
+  start: number
+  count: number
 }
 
 function findScene(gltf: GLTF, name: string): Object3D | null {
@@ -54,6 +64,38 @@ export function propDef(
 
 const defs = new WeakMap<GLTF, Map<string, PropDef | null>>()
 
+/**
+ * Native kit pieces whose origin isn't where the builders assume. The Medieval Village door leaves
+ * hinge at their origin (x -0.05..1.07) while the frame is centred, so every door hung half outside
+ * its frame; shift them so x is centred like the frame. (tools/build-props.ts keeps the kit's own
+ * origins; this is the one place that corrects them.)
+ */
+const KIT_PIVOT: Record<string, readonly [number, number, number]> = {
+  k_door: [-0.513, 0, 0],
+  k_door_plank: [-0.513, 0, 0],
+  k_door_braced: [-0.513, 0, 0],
+}
+
+/**
+ * The GLB's quantized meshes (KHR_mesh_quantization: rock, hay, cactus, cart...) keep positions as
+ * normalized Int16 in -1..1 with the scale on the node. Baking a transform into that array wraps
+ * every vertex past 1 m round to the other side (a 1.3 m hay bale came out folded through the
+ * ground), so positions go to Float32 before anything is baked in.
+ */
+function dequantized(g: BufferGeometry): BufferGeometry {
+  const pos = g.getAttribute('position')
+  if (pos && (pos.normalized || !(pos.array instanceof Float32Array))) {
+    const out = new Float32Array(pos.count * 3)
+    for (let i = 0; i < pos.count; i++) {
+      out[i * 3] = pos.getX(i)
+      out[i * 3 + 1] = pos.getY(i)
+      out[i * 3 + 2] = pos.getZ(i)
+    }
+    g.setAttribute('position', new Float32BufferAttribute(out, 3))
+  }
+  return g
+}
+
 function makeDef(
   gltf: GLTF,
   name: string,
@@ -72,8 +114,9 @@ function makeDef(
   const k = size / Math.max(1e-6, ref)
   const center = box.getCenter(new Vector3())
   // native: the kit's own metres and origin (a door's foot, a window's wall plane)
+  const pivot = KIT_PIVOT[name]
   const fix = native
-    ? new Matrix4()
+    ? new Matrix4().makeTranslation(pivot?.[0] ?? 0, pivot?.[1] ?? 0, pivot?.[2] ?? 0)
     : new Matrix4()
         .makeScale(k, k, k)
         .multiply(new Matrix4().makeTranslation(-center.x, -box.min.y, -center.z))
@@ -83,7 +126,7 @@ function makeDef(
     if (!m.isMesh) {
       return
     }
-    const g = m.geometry.clone()
+    const g = dequantized(m.geometry.clone())
     g.applyMatrix4(new Matrix4().multiplyMatrices(fix, m.matrixWorld))
     g.computeBoundingSphere()
     const mat = Array.isArray(m.material) ? m.material[0] : m.material
@@ -91,7 +134,7 @@ function makeDef(
       parts.push({ geometry: g, material: mat })
     }
   })
-  return { parts, size: native ? dims : dims.multiplyScalar(k) }
+  return { name, parts, size: native ? dims : dims.multiplyScalar(k) }
 }
 
 export function placeMatrix(
@@ -133,6 +176,7 @@ export function instance(
     im.computeBoundingSphere()
     // Instances are scattered widely; skip per-mesh culling.
     im.frustumCulled = false
+    im.name = def.name
     parent.add(im)
     out.push(im)
   }
@@ -172,23 +216,28 @@ export function mergePlaced(
   swap: ReadonlyMap<string, Material> = new Map(),
   shadow = true,
 ): Mesh[] {
-  const groups = new Map<Material, BufferGeometry[]>()
+  const groups = new Map<Material, { geos: BufferGeometry[]; pieces: PieceRange[] }>()
   for (const { def, at } of placed) {
     for (const p of def.parts) {
       const mat = swap.get(p.material.name) ?? p.material
       const g = p.geometry.clone().applyMatrix4(at)
-      const list = groups.get(mat) ?? []
-      list.push(g)
+      const list = groups.get(mat) ?? { geos: [], pieces: [] }
+      const last = list.pieces.at(-1)
+      const start = last ? last.start + last.count : 0
+      list.geos.push(g)
+      list.pieces.push({ name: def.name, start, count: g.getAttribute('position').count })
       groups.set(mat, list)
     }
   }
   const out: Mesh[] = []
   for (const [mat, list] of groups) {
-    const geo = mergeGeometries(list, false)
+    const geo = mergeGeometries(list.geos, false)
     if (!geo) {
       continue
     }
     const m = new Mesh(geo, mat)
+    m.name = 'kit'
+    m.userData.pieces = list.pieces
     m.castShadow = shadow
     m.receiveShadow = true
     m.matrixAutoUpdate = false

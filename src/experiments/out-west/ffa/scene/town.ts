@@ -212,6 +212,10 @@ const DEFAULT_PAINT: Paint = PAINT.shed ?? (Object.values(PAINT)[0] as Paint)
 const WOOD = 0xb0_8a_60
 const DARK_WOOD = 0x6a_4c_34
 const WALL_T = 0.5
+/** Top of a porch's floor boards. */
+const PORCH_DECK = 0.06
+/** Buildings with a porch along their front. */
+const PORCHED = new Set(['saloon', 'hotel', 'general_store', 'stage_line'])
 
 /** Roofs are most of what the top-down camera sees: sun-bleached, never near-black. */
 function bleach(hex: number): number {
@@ -453,14 +457,14 @@ function addWindows(bs: Builders, b: Building, side: Side, floors: number): void
   }
 }
 
-/** A dark-wood frame round every doorway. */
-function addDoorFrames(bs: Builders, b: Building): void {
+/** A dark-wood frame round every doorway, standing on the porch deck where there is one. */
+function addDoorFrames(bs: Builders, b: Building, porch: Side | null): void {
   const frame = kitDef('k_doorframe')
   if (!frame) {
     return
   }
   for (const d of b.doors) {
-    const at = onSide(b, d.side, d.at + d.width / 2, 0, 0.02)
+    const at = onSide(b, d.side, d.at + d.width / 2, d.side === porch ? PORCH_DECK : 0, 0.02)
     // the kit frame is 1.57 m wide: stretch it to the doorway
     at.multiply(new Matrix4().makeScale(Math.max(0.8, (d.width + 0.4) / 1.57), 1, 1))
     bs.kit.push({ def: frame, at })
@@ -491,10 +495,17 @@ function addBuilding(bs: Builders, b: Building, layout: TownLayout, id: number):
       { skip: ['bottom'] },
     )
   }
-  // Trim: a band at the top of the walls and corner posts.
-  bs.wood.box(b.x + b.w / 2, h - 0.15, b.z + b.d / 2, b.w + 0.12, 0.3, b.d + 0.12, p.trim, {
-    skip: ['bottom', 'top'],
-  })
+  // Trim: a band round the top of the walls, flush on their faces (an open-bottomed shell 6 cm
+  // out left a slot of air between the band and the wall)
+  const t = 0.06
+  for (const [x, z, w, d] of [
+    [b.x + b.w / 2, b.z - t / 2, b.w + 2 * t, t],
+    [b.x + b.w / 2, b.z + b.d + t / 2, b.w + 2 * t, t],
+    [b.x - t / 2, b.z + b.d / 2, t, b.d],
+    [b.x + b.w + t / 2, b.z + b.d / 2, t, b.d],
+  ] as const) {
+    bs.wood.box(x, h - 0.15, z, w, 0.3, d, p.trim, { skip: ['top'] })
+  }
   for (const side of ['n', 's', 'e', 'w'] as const) {
     if (b.kind !== 'tower') {
       addWindows(bs, b, side, b.floors)
@@ -510,7 +521,8 @@ function addBuilding(bs: Builders, b: Building, layout: TownLayout, id: number):
     const axis = b.w >= b.d ? 'x' : 'z'
     roof.gable(b.x + b.w / 2, h, b.z + b.d / 2, b.w, b.d, Math.min(b.w, b.d) * 0.32, axis, rc, 0.5)
   } else {
-    roof.box(b.x + b.w / 2, h + 0.12, b.z + b.d / 2, b.w + 0.5, 0.24, b.d + 0.5, rc)
+    // its underside 5 mm over the wall top, off the false front's bottom face (they z-fought)
+    roof.box(b.x + b.w / 2, h + 0.1225, b.z + b.d / 2, b.w + 0.5, 0.235, b.d + 0.5, rc)
   }
   const rg = roof.build()
   rg.setAttribute(
@@ -519,17 +531,12 @@ function addBuilding(bs: Builders, b: Building, layout: TownLayout, id: number):
   )
   bs.roofs.push(rg)
   if (b.kind !== 'tower') {
-    addDoorFrames(bs, b)
+    addDoorFrames(bs, b, PORCHED.has(b.kind) ? front : null)
   }
   if (p.falseFront) {
     addFalseFront(bs, b, front, p)
   }
-  if (
-    b.kind === 'saloon' ||
-    b.kind === 'hotel' ||
-    b.kind === 'general_store' ||
-    b.kind === 'stage_line'
-  ) {
+  if (PORCHED.has(b.kind)) {
     addPorch(bs, b, front)
   }
   if (p.sign && !p.falseFront) {
@@ -573,13 +580,18 @@ function addFalseFront(bs: Builders, b: Building, front: Side, p: Paint): void {
       const z = b.z + b.d / 2
       const x0 = b.x + b.w / 2 - 3
       const x1 = b.x + b.w / 2 + 3
+      // the board leans back on two legs, its foot on the flat roof (it hovered 6 cm over it)
+      const roofTop = b.height + 0.24
+      for (const lx of [x0 + 0.6, x1 - 0.6]) {
+        bs.wood.box(lx, (roofTop + y) / 2, z - 0.27, 0.12, y - roofTop, 0.12, DARK_WOOD)
+      }
       bs.signs.push({
         text: p.sign,
         bg: p.signBg,
         fg,
         quad: [
-          new Vector3(x0, b.height + 0.3, z + 0.9),
-          new Vector3(x1, b.height + 0.3, z + 0.9),
+          new Vector3(x0, roofTop, z + 0.9),
+          new Vector3(x1, roofTop, z + 0.9),
           new Vector3(x1, y, z - 0.2),
           new Vector3(x0, y, z - 0.2),
         ],
@@ -599,7 +611,7 @@ function addPorch(bs: Builders, b: Building, front: Side): void {
   const along = front === 'n' || front === 's'
   const cx = (q0.x + q1.x) / 2
   const cz = (q0.z + q1.z) / 2
-  bs.wood.box(cx, 0.03, cz, along ? len : depth, 0.06, along ? depth : len, WOOD, {
+  bs.wood.box(cx, PORCH_DECK / 2, cz, along ? len : depth, PORCH_DECK, along ? depth : len, WOOD, {
     skip: ['bottom'],
   })
   bs.wood.box(
@@ -638,7 +650,8 @@ function addWaterTower(bs: Builders, b: Building): void {
     [1, 1],
     [-1, 1],
   ] as const) {
-    bs.wood.box(cx + dx * 1.6, 4, cz + dz * 1.6, 0.25, 8, 0.25, DARK_WOOD)
+    // up to the platform's underside, not flush with its top (z-fighting)
+    bs.wood.box(cx + dx * 1.6, 3.9, cz + dz * 1.6, 0.25, 7.8, 0.25, DARK_WOOD)
   }
   bs.wood.box(cx, 7.9, cz, 4.4, 0.2, 4.4, DARK_WOOD)
   const tank = new CylinderGeometry(2.1, 2.1, 3.6, 16, 1, false).toNonIndexed()
@@ -679,9 +692,15 @@ function addBank(bs: Builders, layout: TownLayout): void {
 function addCreek(bs: Builders, layout: TownLayout): void {
   const c = layout.creek
   const br = c.bridge
-  bs.wood.box(br.x + br.w / 2, 0.35, br.z + br.d / 2, br.w, 0.25, br.d + 1, WOOD)
+  const deck = 0.475
+  bs.wood.box(br.x + br.w / 2, deck - 0.125, br.z + br.d / 2, br.w, 0.25, br.d + 1, WOOD)
+  // sills on the creek bed hold the deck up (it hung 22 cm over the sand on nothing)
+  for (const z of [4, br.z + br.d / 2, br.z + br.d + 0.35]) {
+    bs.wood.box(br.x + br.w / 2, (deck - 0.25) / 2, z, br.w + 0.3, deck - 0.25, 0.3, DARK_WOOD)
+  }
+  // the rails stand on the deck (they floated 7.5 cm above it)
   for (const x of [br.x + 0.2, br.x + br.w - 0.2]) {
-    bs.wood.box(x, 1, br.z + br.d / 2, 0.15, 0.9, br.d + 1, DARK_WOOD)
+    bs.wood.box(x, deck + 0.45, br.z + br.d / 2, 0.15, 0.9, br.d + 1, DARK_WOOD)
   }
 }
 

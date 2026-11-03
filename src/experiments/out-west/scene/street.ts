@@ -23,6 +23,24 @@ export const STREET = {
   saloonRoof: new Vector3(10.4, 3.18, 6.2),
 } as const
 
+/** Top of the boardwalks: everything on a porch stands at this height, not on the dirt. */
+export const DECK = 0.34
+/** Underside of the porch roofs (awnings), 3.1 m up, 0.12 thick. */
+export const AWNING = 3.04
+
+/**
+ * Hanging lanterns (and their lights) under the porch roofs nearest the duel: x, z. Each sits
+ * under a building's awning, never in the gaps between buildings.
+ */
+export const LANTERNS: readonly (readonly [number, number])[] = [
+  [-9.4, -10],
+  [9.4, -4],
+  [-9.4, 2],
+  [9.4, 10.5],
+  [-9.4, 13],
+  [9.4, 20],
+]
+
 export interface BuildingSpec {
   side: -1 | 1
   z: number
@@ -111,6 +129,21 @@ export const BUILDINGS: BuildingSpec[] = [
 ]
 
 /**
+ * The floor height at (x, z): the boardwalk's top in front of a building, else the street (0).
+ * Props are placed with this so nothing stands on air in the gaps between buildings or sinks
+ * into a deck.
+ */
+export function deckAt(x: number, z: number): number {
+  const ax = Math.abs(x)
+  if (ax < STREET.half || ax > STREET.half + STREET.boardwalk) {
+    return 0
+  }
+  const side = x > 0 ? 1 : -1
+  const on = BUILDINGS.some((b) => b.side === side && Math.abs(z - b.z) <= b.w / 2)
+  return on ? DECK : 0
+}
+
+/**
  * A building's street face: the kit's panelled door (double doors for the livery), framed
  * glazed windows either side, and on two-storey fronts upper windows with open shutters and a
  * balcony rail along the porch roof. Kit pieces face +Z with their base at the wall's foot.
@@ -141,16 +174,21 @@ export function facade(
       def,
       at: placeMatrix(face - s * depth, y, z, ry).scale(new Vector3(sx, 1, 1)),
     })
+  // the doorway and the ground-floor windows stand on the boardwalk, not on the dirt under it
   if (b.kind === 'stable') {
-    put(door, b.z - 0.56, 0, 0.06, 1.0)
-    put(door, b.z + 0.56, 0, 0.06, 1.0)
-    put(frame, b.z, 0, 0.12, 1.5)
+    // two leaves narrowed to fill the widened frame's opening, not overlap its jambs
+    put(door, b.z - 0.44, DECK, 0.06, 0.78)
+    put(door, b.z + 0.44, DECK, 0.06, 0.78)
+    put(frame, b.z, DECK, 0.12, 1.5)
   } else {
-    put(door, b.z, 0, 0.06)
-    put(frame, b.z, 0, 0.12)
+    // the saloon's doorway holds its batwings (world.ts), not a closed door behind them
+    if (b.kind !== 'saloon') {
+      put(door, b.z, DECK, 0.06)
+    }
+    put(frame, b.z, DECK, 0.12)
   }
   for (const dz of [-1, 1]) {
-    put(win, b.z + dz * (b.w / 2 - 1.8), 0, 0.02)
+    put(win, b.z + dz * (b.w / 2 - 1.8), DECK, 0.02)
   }
   if (b.h > 5.4) {
     for (const dz of [-1, 1]) {
@@ -211,7 +249,7 @@ export function dressBoardwalks(kit: Placed[]): void {
   const chest = def('k_chest')
   const rack = def('k_barrel_rack')
   const H = STREET.half
-  const deck = 0.34
+  const deck = DECK
   let i = 0
   for (const b of BUILDINGS) {
     const s = b.side
