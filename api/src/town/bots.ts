@@ -8,6 +8,7 @@ import {
   BTN_INTERACT,
   BTN_RELOAD,
   BTN_ROLL,
+  NONE,
 } from '../../../src/experiments/out-west/contract/town.ts'
 import { hasLineOfSight } from '../../../src/experiments/out-west/ffa/sim/layout.ts'
 import { radiansToAim } from '../../../src/experiments/out-west/ffa/sim/move.ts'
@@ -186,6 +187,11 @@ export class BotDirector {
     }
     if (!p.alive || p.showdown >= 0) {
       b.path = []
+      return f
+    }
+    if (p.calledBy !== NONE) {
+      // Accept most call-outs: press, release, press.
+      f.buttons = (w.tick + p.id) % 2 === 0 && p.id % 4 !== 0 ? BTN_INTERACT : 0
       return f
     }
     if (p.channel) {

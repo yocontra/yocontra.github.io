@@ -43,8 +43,10 @@ export interface PlayerStats {
   hits: number
   banked: number
   showdownWins: number
-  /** XP earned and not yet flushed to the ledger. */
+  /** XP earned and not yet flushed to the ledger (excludes bank XP, which rides on deposits). */
   xp: number
+  /** XP from banking this session (settled with each deposit). */
+  bankXp: number
   /** Aim snaps over 90° in one tick right before a hit (aimbot heuristic). */
   snapHits: number
 }
@@ -177,6 +179,7 @@ export function newStats(): PlayerStats {
     banked: 0,
     showdownWins: 0,
     xp: 0,
+    bankXp: 0,
     snapHits: 0,
   }
 }

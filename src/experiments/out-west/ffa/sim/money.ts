@@ -40,7 +40,8 @@ export function deposit(w: World, p: Player): void {
   p.carried = 0
   p.depositSeq++
   p.stats.banked += amount + commission
-  p.stats.xp += xp
+  // Bank XP rides on the deposit entry itself, not the periodic XP flush.
+  p.stats.bankXp += xp
   w.minted += commission
   w.deposits.push({
     playerId: p.id,
