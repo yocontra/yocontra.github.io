@@ -184,9 +184,9 @@ export function loadoutOpts(raw: unknown, dyes: Dyes = {}): ActorOpts {
   return o
 }
 
-/** Tint the merged revolver(s) in place: one cloned material per gun. */
-function finishGun(g: Object3D | null, look: GunLook): void {
-  g?.traverse((m) => {
+/** Tint a revolver in place (one cloned material per mesh) and lengthen its barrel. */
+function finishGun(g: Object3D, look: GunLook): void {
+  g.traverse((m) => {
     if (!(m instanceof Mesh)) {
       return
     }
@@ -248,15 +248,17 @@ export function dressedActor(
 ): Actor {
   const l: Loadout = normalizeLoadout(raw)
   const gunLook = GUNS[l.gun] ?? GUNS['gun.rusty-six']
+  // finished before he is dressed, so the holster is fitted to the gun he carries (a Buntline's
+  // longer barrel gets a longer holster, and its muzzle is measured where it is)
+  const proto = gun ? propObject(gun) : null
+  if (proto && gunLook) {
+    finishGun(proto, gunLook)
+  }
   const a = new Actor(model, {
     ...loadoutOpts(l, dyes),
-    gun: gun ? propObject(gun) : null,
+    gun: proto,
     offGun: gunLook?.twin ?? false,
   })
-  if (gunLook) {
-    finishGun(a.gun, gunLook)
-    finishGun(a.offGun, gunLook)
-  }
   const spurs = SPURS[l.spurs]
   if (spurs) {
     fitSpurs(a, spurs)
