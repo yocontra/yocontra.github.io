@@ -6,14 +6,9 @@
  *   the account insert at sign-up. Its profiles, ledger and inventory cascade on delete.
  * - Stream B: `accountDeletionStatements(env, accountId)` anonymises matches; ghost tables cascade.
  */
+import { accountDeletionStatements as duelDeletionStatements } from '../duel/stats.ts'
 import { createProfileStatements } from '../economy/profile.ts'
 import type { Env } from '../env.ts'
-
-// STUB(stream B): replace with `import { accountDeletionStatements } from '../duel/stats.ts'`
-// once stream B's branch is merged into redesign. Same signature.
-function duelDeletionStatements(_env: Env, _accountId: string): D1PreparedStatement[] {
-  return []
-}
 
 /**
  * Statements that create the new account's wallet (profile, starter items, $250 start grant). They
