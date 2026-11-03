@@ -261,7 +261,7 @@ export function boot(root: HTMLElement): void {
     )
     .then((g) => {
       game = g
-      if (debug) {
+      if (import.meta.env.DEV && debug) {
         Reflect.set(globalThis, '__ow', g)
       }
       if (debugView(g, hash, title)) {

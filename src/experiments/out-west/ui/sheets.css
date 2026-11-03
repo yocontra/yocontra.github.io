@@ -324,13 +324,6 @@
   }
 }
 
-/* stub account panel (until stream A's ui/account.ts lands) */
-.ow-hub-account-stub {
-  display: flex;
-  flex-direction: column;
-  gap: var(--ow-s2);
-}
-
 @media (prefers-reduced-motion: reduce) {
   .ow-sheet.on,
   .ow-sheet-panel,

@@ -228,9 +228,11 @@ export class FrontierGame {
       onPredictedShot: (x, z, aim, w) => this.predictedShot(x, z, aim, w),
     })
     this.sink = this.makeSink()
-    this.autopilot = new URLSearchParams(location.search).has('debug')
-      ? new Autopilot(this.net.grid)
-      : null
+    // The scripted aim/walk/fire harness exists only in dev builds: never an aimbot API in prod.
+    this.autopilot =
+      import.meta.env.DEV && new URLSearchParams(location.search).has('debug')
+        ? new Autopilot(this.net.grid)
+        : null
     globalThis.addEventListener('resize', this.onResize)
     globalThis.addEventListener('keydown', this.onKey)
     document.addEventListener('visibilitychange', this.onVisibility)
