@@ -11,6 +11,7 @@ import { installViewportVars } from './platform/viewport.ts'
 import { load, type SaveData, save } from './save.ts'
 import { Board } from './ui/board.ts'
 import { Hub } from './ui/hub.ts'
+import { loadPosterArt } from './ui/poster.ts'
 
 /** Hashes that jump into a debug view or a non-default run: never ranked. */
 const UNRANKED_HASHES = ['level', 'legend', 'lineup', 'posters']
@@ -142,7 +143,7 @@ function debugView(g: Game, hash: URLSearchParams, title: HTMLElement): boolean 
 }
 
 /**
- * Entry point. Kept tiny so the red title is interactive immediately; the
+ * Entry point. Kept tiny so the title broadside is interactive immediately; the
  * three.js game streams in behind it via a dynamic import.
  */
 export function boot(root: HTMLElement): void {
@@ -227,8 +228,9 @@ export function boot(root: HTMLElement): void {
   title.addEventListener('pointerdown', press)
   globalThis.addEventListener('keydown', press)
 
-  import('./game.ts')
-    .then((m) =>
+  // the wanted posters are painted on canvas, which never swaps in a late font: fonts and stock first
+  Promise.all([import('./game.ts'), loadPosterArt()])
+    .then(([m]) =>
       m.createGame({
         root,
         canvas,

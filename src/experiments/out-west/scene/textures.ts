@@ -7,8 +7,10 @@ import {
   type Texture,
   TextureLoader,
 } from 'three'
+import { FONT } from '../ui/type.ts'
 
-export const SLAB = '"Alfa Slab One", Rockwell, "Rockwell Extra Bold", Georgia, serif'
+/** Painted signs use the display wood type (see ui/type.ts). */
+export const SLAB = FONT.display
 
 const loader = new TextureLoader()
 
@@ -114,7 +116,7 @@ export function clockCanvas(): { canvas: HTMLCanvasElement; draw: (h: number, m:
     ctx.strokeStyle = '#2a1d12'
     ctx.stroke()
     ctx.fillStyle = '#2a1d12'
-    ctx.font = 'bold 26px Georgia, serif'
+    ctx.font = `700 26px ${FONT.text}`
     ctx.textAlign = 'center'
     ctx.textBaseline = 'middle'
     const nums = ['XII', 'I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X', 'XI']
