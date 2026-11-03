@@ -1,8 +1,8 @@
 ---
-const statement =
-  'I like building things end to end: backends, frontends, and the infrastructure in between. Most of my career has been at small companies, a few of which I helped start, plus a couple of years at Apple. These days I’m co-founding Veil Labs and Plaza, consulting with Trigram, and doing open source.'
-const words = statement.split(' ')
-const step = 70 / words.length
+const lead =
+  'I like building things end to end: backends, frontends, and the infrastructure in between.'
+const words = lead.split(' ')
+const step = 60 / words.length
 ---
 
 <section id="about" class="about wrap" aria-labelledby="about-title">
@@ -10,12 +10,23 @@ const step = 70 / words.length
   <p class="statement">
     {words.map((word, i) => (
       <span
-        style={`animation-range: cover ${(10 + i * step).toFixed(2)}% cover ${(16 + i * step).toFixed(2)}%`}
+        style={`animation-range: cover ${(12 + i * step).toFixed(2)}% cover ${(20 + i * step).toFixed(2)}%`}
       >
         {word}{' '}
       </span>
     ))}
   </p>
+
+  <div class="detail">
+    <p class="reveal">
+      Most of my career has been at small companies, a few of which I helped start, plus a couple of
+      years at Apple.
+    </p>
+    <p class="reveal">
+      These days I’m co-founding Veil Labs and Plaza, consulting with Trigram, and doing open
+      source.
+    </p>
+  </div>
 </section>
 
 <style>
@@ -25,11 +36,12 @@ const step = 70 / words.length
 
   .statement {
     margin-top: 1.5rem;
+    max-width: 22ch;
     font-family: var(--font-display);
     font-weight: 500;
-    font-size: clamp(1.6rem, 3.6vw, 3.4rem);
-    line-height: 1.12;
-    letter-spacing: -0.025em;
+    font-size: clamp(2rem, 4.6vw, 4.4rem);
+    line-height: 1.08;
+    letter-spacing: -0.03em;
     view-timeline-name: --statement;
   }
 
@@ -47,5 +59,22 @@ const step = 70 / words.length
     to {
       color: var(--fg);
     }
+  }
+
+  .detail {
+    margin-top: clamp(2.5rem, 6vh, 4rem);
+    margin-left: auto;
+    max-width: 44rem;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 18rem), 1fr));
+    gap: 1.5rem 2.5rem;
+  }
+
+  .detail p {
+    font-size: clamp(1.1rem, 1.4vw, 1.3rem);
+    line-height: 1.5;
+    color: var(--fg-muted);
+    padding-top: 1rem;
+    border-top: 1px solid var(--line);
   }
 </style>
