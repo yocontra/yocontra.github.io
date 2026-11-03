@@ -63,7 +63,10 @@ const CLOSED_TEXT: Record<string, string> = {
 }
 
 export class DuelRoomLink {
-  private readonly sock: ReconnectingSocket
+  private sock: ReconnectingSocket
+  private readonly wsUrl: string
+  /** Closed on purpose while the page is in the background; `resume()` reopens it. */
+  private suspended = false as boolean
   private readonly h: RoomHandlers
   private closed = false as boolean
   /** perf time the last message arrived (the call's arrival time is what `localMs` counts from). */
@@ -76,10 +79,16 @@ export class DuelRoomLink {
 
   constructor(wsUrl: string, h: RoomHandlers) {
     this.h = h
-    this.sock = openReconnecting({
-      url: () => Promise.resolve(this.closed ? null : wsUrl),
+    this.wsUrl = wsUrl
+    this.sock = this.connect(false)
+  }
+
+  private connect(rejoin: boolean): ReconnectingSocket {
+    const h = this.h
+    return openReconnecting({
+      url: () => Promise.resolve(this.closed ? null : this.wsUrl),
       onOpen: (attempt) => {
-        if (attempt > 0) {
+        if (attempt > 0 || rejoin) {
           h.rejoined()
         }
       },
@@ -90,6 +99,27 @@ export class DuelRoomLink {
       staleMs: () => (this.quiet ? Number.POSITIVE_INFINITY : LIVE_STALE_MS),
       deadlineMs: 12_000,
     })
+  }
+
+  /**
+   * The page went to the background: close the socket cleanly now, so the room's rules apply at
+   * once (5 s of grace before the call, none after) instead of whenever the OS kills the socket.
+   */
+  suspend(): void {
+    if (this.closed || this.suspended) {
+      return
+    }
+    this.suspended = true
+    this.sock.close(1000, 'backgrounded')
+  }
+
+  /** Back in the foreground: reopen the same room URL; the room answers with hello and sync. */
+  resume(): void {
+    if (this.closed || !this.suspended) {
+      return
+    }
+    this.suspended = false
+    this.sock = this.connect(true)
   }
 
   private onMessage(data: string | ArrayBuffer): void {

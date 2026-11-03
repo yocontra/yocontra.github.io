@@ -9,7 +9,7 @@ import { type ResultView, resultView } from '../ui/results.ts'
 import { confirmSheet } from '../ui/sheet.ts'
 import { type DuelClock, LocalDuelClock } from './clock.ts'
 import type { Director } from './director.ts'
-import { titleShot } from './framing.ts'
+import { emptyStreet } from './mode.ts'
 
 /** Forfeits, dodges, freezes and double dead heats: no kill cam, a caption and the fall. */
 export function quietEndFx(d: Director, r: DuelResult, seat: Seat, lost: boolean): void {
@@ -46,12 +46,20 @@ export function lostResult(draw: number): DuelResult {
 export function endView(
   r: DuelResult,
   seat: Seat,
-  o: { name: string; xp: { before: number | null; after: number | null }; lost: string | null },
+  o: {
+    name: string
+    xp: { before: number | null; after: number | null }
+    lost: string | null
+    /** The verdict came in a rejoin's sync, which carries no per-seat money lines. */
+    synced: boolean
+  },
 ): ResultView {
   const { lost } = o
   const view = resultView(r, seat, o.name, o.xp)
   if (lost === null) {
-    return view
+    return o.synced && r.you === null
+      ? { ...view, pending: 'Settled while you were away: it’s in your ledger.' }
+      : view
   }
   return {
     ...view,
@@ -83,19 +91,6 @@ export function clearStreet(d: Director, realSave: SaveData): void {
   d.clock = new LocalDuelClock(d.events) satisfies DuelClock
   d.c.save = realSave
   persist(realSave)
-  d.enemy?.dispose()
-  d.enemy = null
-  d.c.physics.clear()
-  const hud = d.c.hud
-  hud.root.classList.remove('ow-pvp')
-  hud.hideCard()
-  hud.clearCall()
-  hud.clearCaptions()
-  hud.letterbox(false)
-  hud.show(false)
-  d.c.audio.heartbeat(0)
-  d.timeScale = 1
-  d.player.root.visible = false
-  d.enter('title')
-  titleShot(d)
+  d.c.hud.root.classList.remove('ow-pvp')
+  emptyStreet(d)
 }

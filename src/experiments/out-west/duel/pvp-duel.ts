@@ -22,6 +22,7 @@ import { tickCoward } from './defeat.ts'
 import type { Director, DirectorHooks } from './director.ts'
 import { tickWin } from './outcome.ts'
 import { startAmbience } from './present.ts'
+import { watchAway } from './pvp-away.ts'
 import { clearStreet, confirmFlee, endView, lostResult, quietEndFx } from './pvp-end.ts'
 import { RemoteDuelClock } from './remote.ts'
 import {
@@ -75,8 +76,13 @@ export class PvpDuel implements DirectorHooks {
   private xpAfter = null as number | null
   /** Why the room went away before it sent a result (we can't know the outcome). */
   private lostLine = null as string | null
-  /** The room just opened a sudden-death wait (its draw number came with `suddenDeath`). */
-  private suddenDeathDraw = false as boolean
+  /** The next wait's draw number is already known (from `suddenDeath` or `sync`). */
+  private drawKnown = false as boolean
+  /** The rematch number of the last hello: a rejoin repeats it, a rematch moves it on. */
+  private rematchN = -1
+  /** The verdict arrived in a rejoin's sync (no money lines for us in it). */
+  private synced = false as boolean
+  private readonly unwatch: () => void
 
   constructor(d: Director, o: PvpOpts) {
     this.d = d
@@ -89,7 +95,11 @@ export class PvpDuel implements DirectorHooks {
     this.link = new DuelRoomLink(o.wsUrl, {
       message: (m) => this.onMessage(m),
       dropped: () => d.c.hud.fake('[your line to the room dropped · reconnecting]', 3000),
-      rejoined: () => d.c.hud.fake('[back in the room]', 1500),
+      rejoined: () => {
+        // the room forgot our hold when the line dropped: say it again on the next frame
+        this.hold.sent = false
+        d.c.hud.fake('[back in the room]', 1500)
+      },
       gone: (reason) => this.onGone(reason),
     })
     this.clock = new RemoteDuelClock(this.link)
@@ -103,6 +113,7 @@ export class PvpDuel implements DirectorHooks {
     d.c.hud.setMode(o.opponent.kind === 'human' ? 'BOUNTY HUNT' : 'GHOST DUEL')
     d.c.hud.setPurse(o.purse ?? 0, false)
     startAmbience(d)
+    this.unwatch = watchAway(d, this.link, () => !this.over && this.result === null)
   }
 
   private get opp(): Seat {
@@ -248,7 +259,7 @@ export class PvpDuel implements DirectorHooks {
         break
       case 'suddenDeath':
         this.deadHeat = false
-        this.suddenDeathDraw = true
+        this.drawKnown = true
         this.clock.draw = m.draw
         reviveForSuddenDeath(d, this.posters?.[this.opp]?.loadout ?? {})
         break
@@ -281,10 +292,17 @@ export class PvpDuel implements DirectorHooks {
   private onHello(you: Seat, posters: readonly [Poster, Poster], rematch: number): void {
     const d = this.d
     this.seat = you
+    const rejoin = this.posters !== null && rematch === this.rematchN
     this.posters = posters
+    this.rematchN = rematch
+    if (rejoin) {
+      // back after a drop: the duel goes on where the room says (its sync follows)
+      return
+    }
     const them = posters[this.opp]
     d.outlaw = asOutlaw(them)
     this.result = null
+    this.synced = false
     this.results?.close()
     this.results = null
     this.stage(them)
@@ -351,10 +369,10 @@ export class PvpDuel implements DirectorHooks {
       case 'wait':
         // The room numbers every wait: +1 here, or the number `suddenDeath` just brought. The
         // standoff (and any early shot) must carry it, or the room ignores the shot as stale.
-        if (!this.suddenDeathDraw) {
+        if (!this.drawKnown) {
           this.clock.draw += 1
         }
-        this.suddenDeathDraw = false
+        this.drawKnown = false
         if (d.phase === 'turn' || d.phase === 'walk') {
           d.player.play('Idle', 0.2)
           d.enemy?.play('Idle', 0.2)
@@ -378,7 +396,15 @@ export class PvpDuel implements DirectorHooks {
     this.hold.theirs = m.holding[this.opp]
     this.clock.draw = m.draw
     if (m.last && !this.result && (m.beat === 'result' || m.beat === 'rematch')) {
+      this.synced = true
       this.onResult(m.last)
+      return
+    }
+    if (!this.result) {
+      // catch up after a rejoin: the beat may have moved on while we were away
+      this.drawKnown = true
+      this.onBeat(m.beat, m.deadline)
+      this.drawKnown = false
     }
   }
 
@@ -441,6 +467,7 @@ export class PvpDuel implements DirectorHooks {
         name: this.d.outlaw.name,
         xp: { before: this.o.xpBefore, after: this.xpAfter },
         lost: this.lostLine,
+        synced: this.synced,
       }),
       {
         rematch: () => this.link.send({ type: 'rematch' }),
@@ -496,6 +523,7 @@ export class PvpDuel implements DirectorHooks {
       return
     }
     this.over = true
+    this.unwatch()
     const d = this.d
     this.link.send({ type: 'flee' })
     this.link.close()
