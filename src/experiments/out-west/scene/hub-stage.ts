@@ -61,9 +61,11 @@ export function hubShot(s: DuelState, shot: HubShot): void {
       // the panel sits right (landscape) or below (portrait): push him the other way in frame
       const side = SIDE[shot] * (portrait ? 0 : 1)
       const lift = portrait ? LIFT[shot] : 0
+      // portrait centres him above the panel; landscape keeps him left of the tiles
+      const cx = SPOT.x + (portrait ? 0 : 0.6)
       return {
-        pos: new Vector3(SPOT.x + 0.6, 1.35, SPOT.z + dist),
-        look: new Vector3(SPOT.x + 0.6 + side, 1.05 + lift, SPOT.z),
+        pos: new Vector3(cx, 1.35, SPOT.z + dist),
+        look: new Vector3(cx + side, 1.05 + lift, SPOT.z),
         fov: 38,
         handheld: 0.12,
       }
