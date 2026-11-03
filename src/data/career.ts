@@ -76,6 +76,7 @@ export const career: readonly Role[] = [
   },
   {
     company: 'Bechtel',
+    href: 'https://www.bechtel.com',
     title: 'API Infrastructure Engineer',
     years: '2012 — 2013',
     blurb:
