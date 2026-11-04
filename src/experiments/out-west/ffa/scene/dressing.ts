@@ -6,7 +6,8 @@
 /**
  * Cover and set dressing from the layout. Every cover rect is exactly what blocks movement and
  * bullets on the server, so every kind here fills its rect and nothing more: barrels, crates and
- * hay are instanced kit props fitted to their cells; fences are kit sections stretched to the run;
+ * hay are kit props fitted to their cells (merged by detail tile in town.ts, with an inset
+ * stand-in always drawn); fences are kit sections stretched to the run;
  * troughs, hitching rails, wagons, coaches, boxcars, lumber, wells and the rest are built into the
  * town's merged geometry (planks, painted boards, brick, canvas). Rocks, cacti and the boundary
  * fence come from `outskirts.ts` and stay outside the playable square.
@@ -16,13 +17,12 @@ import {
   CylinderGeometry,
   Float32BufferAttribute,
   Matrix4,
-  type Object3D,
   Quaternion,
   Vector3,
 } from 'three'
 import type { GLTF } from 'three/examples/jsm/loaders/GLTFLoader.js'
 import type { GeoBuilder } from '../../scene/geo.ts'
-import { instance, type PropDef, propDef } from '../../scene/props.ts'
+import { type PropDef, propDef } from '../../scene/props.ts'
 import type { Cover, Rect, TownLayout } from '../sim/layout.ts'
 import { OUTSKIRTS_SEED, outskirtsProps } from './outskirts.ts'
 
@@ -52,16 +52,41 @@ function rand(seed: number): () => number {
   }
 }
 
-type Placed = Map<string, Matrix4[]>
+/**
+ * Where a piece goes, for the town's visibility layers:
+ * - `structure`: always drawn (buildings, vehicles, fences, rails: what reads at any distance);
+ * - `near`: small kit props, drawn by 36 m tile only when the camera is close (each one has a
+ *   cheap inset stand-in in `structure`, so cover never vanishes, it only loses detail);
+ * - `in:<building id>`: a room's furniture, drawn only when the camera is in or by the building.
+ */
+export type KitLayer = 'structure' | 'near' | `in:${string}`
 
-function put(p: Placed, name: string, m: Matrix4): void {
-  const list = p.get(name)
-  if (list) {
-    list.push(m)
-  } else {
-    p.set(name, [m])
-  }
+/** Collects kit placements for the cover being dressed (its layer is fixed per cover). */
+interface Sink {
+  put: (name: string, m: Matrix4) => void
 }
+
+function put(p: Sink, name: string, m: Matrix4): void {
+  p.put(name, m)
+}
+
+/** What dressCover needs from the town builder. */
+export interface DressContext {
+  layout: TownLayout
+  props: GLTF
+  /** Geometry that is always drawn. */
+  structure: DressBuilders
+  /** Geometry for one building's interior. */
+  interior: (id: string) => DressBuilders
+  floorAt: (x: number, z: number) => number
+  porchRoof: number
+  kit: (layer: KitLayer, def: PropDef, at: Matrix4) => void
+  /** Rocks and the boundary fence past the playable square. */
+  outskirts: (def: PropDef, at: Matrix4) => void
+}
+
+/** Cover kinds whose kit props are fine detail (stand-ins carry them at distance). */
+const NEAR_KINDS = new Set(['barrels', 'crates', 'crate_stack', 'hay', 'bench', 'coffins'])
 
 /** Kit props normalised to 1 m along x, so their proportions are known for fitting. */
 const UNIT: Record<string, 'x' | 'y' | 'max'> = {
@@ -831,53 +856,116 @@ function backOf(layout: TownLayout, c: Rect): number {
   return nearLow ? -1 : 1
 }
 
-export function dressCover(
-  layout: TownLayout,
-  props: GLTF,
-  parent: Object3D,
-  b: DressBuilders,
-  floorAt: (x: number, z: number) => number,
-  porchRoof: number,
-): void {
+/** The building whose room a rect stands in, if any. */
+function roomOf(layout: TownLayout, c: Rect): string | null {
+  const cx = c.x + c.w / 2
+  const cz = c.z + c.d / 2
+  const b = layout.buildings.find(
+    (o) => o.hollow && cx > o.x && cx < o.x + o.w && cz > o.z && cz < o.z + o.d,
+  )
+  return b ? b.id : null
+}
+
+/**
+ * A cheap stand-in a few centimetres inside each small kit prop, always drawn: from far off it
+ * is the barrel, crate or bale (the kit prop over it only adds detail up close), so cover
+ * never pops out of existence when the detail tiles drop.
+ */
+function standIn(b: DressBuilders, c: Cover, y: number): void {
+  const inset = 0.05
+  switch (c.kind) {
+    case 'barrels':
+      cells(c, 0.75, (x, z, w, d) => {
+        const rr = Math.min(w, d) / 2 - 0.03 - inset
+        cyl(b.extra, rr * 0.92, 0.95 - 2 * inset, 8, x, y + 0.475, z, 'y', 0x6a_44_2a)
+      })
+      break
+    case 'crates':
+      cells(c, 0.75, (x, z, w, d) => {
+        b.wood.box(
+          x,
+          y + 0.36,
+          z,
+          w - 0.04 - 2 * inset,
+          0.72 - 2 * inset,
+          d - 0.04 - 2 * inset,
+          0x9a_70_44,
+        )
+      })
+      break
+    case 'crate_stack':
+      cells(c, 0.75, (x, z, w, d) => {
+        b.wood.box(
+          x,
+          y + 0.72,
+          z,
+          w - 0.06 - 2 * inset,
+          1.44 - 2 * inset,
+          d - 0.06 - 2 * inset,
+          0x9a_70_44,
+        )
+      })
+      b.wood.box(
+        c.x + c.w / 2,
+        y + 1.8,
+        c.z + c.d / 2,
+        0.72 - 3 * inset,
+        0.72 - 2 * inset,
+        0.72 - 3 * inset,
+        0x9a_70_44,
+      )
+      break
+    case 'hay':
+      cells(c, 1, (x, z, w, d) => {
+        b.wood.box(x, y + 0.42, z, w * 0.55, 0.84 - 2 * inset, d * 0.55, 0xc8_a8_58)
+      })
+      break
+    default:
+      break
+  }
+}
+
+export function dressCover(ctx: DressContext): void {
+  const { layout, props } = ctx
   const r = rand(0x70_57)
-  const p: Placed = new Map()
   const unit = (name: string) => propDef(props, name, 1, UNIT[name] ?? 'max')
   for (const c of layout.cover) {
-    place(c, p, b, r, unit, floorAt(c.x + c.w / 2, c.z + c.d / 2), porchRoof, backOf(layout, c))
+    const room = roomOf(layout, c)
+    const near = !room && NEAR_KINDS.has(c.kind)
+    const open: KitLayer = near ? 'near' : 'structure'
+    const layer: KitLayer = room ? `in:${room}` : open
+    const b = room ? ctx.interior(room) : ctx.structure
+    const sink: Sink = {
+      put: (name, m) => {
+        const def = unit(name)
+        if (def) {
+          ctx.kit(layer, def, m)
+        }
+      },
+    }
+    const y = ctx.floorAt(c.x + c.w / 2, c.z + c.d / 2)
+    if (near) {
+      standIn(ctx.structure, c, y)
+    }
+    place(c, sink, b, r, unit, y, ctx.porchRoof, backOf(layout, c))
   }
-  track(layout, b.wood)
+  track(layout, ctx.structure.wood)
   const land = outskirtsProps(layout, OUTSKIRTS_SEED)
-  const sized = (name: string, size: number, axis: 'max' | 'y' | 'x', mats: Matrix4[]) => {
-    if (mats.length === 0) {
-      return
-    }
-    const def = propDef(props, name, size, axis)
-    if (def) {
-      instance(def, mats, parent, false)
-    }
-  }
-  sized('rock', 1.2, 'max', land.rock)
   // the cactus spots grow procedural saguaros and Joshua trees instead (wilds.ts)
-  // the boundary fence is the kit fence at its own 2 m section size
-  for (const m of land.fence) {
-    put(p, 'fence@edge', m)
+  const rock = propDef(props, 'rock', 1.2, 'max')
+  for (const m of rock ? land.rock : []) {
+    ctx.outskirts(rock as PropDef, m)
   }
-  for (const [key, mats] of p) {
-    const [name = '', variant] = key.split('@')
-    const def = variant === 'edge' ? propDef(props, name, 2, 'x') : unit(name)
-    if (def && mats.length > 0) {
-      // static and low: their shadows are in the baked ground mask, not the real-time map
-      for (const m of instance(def, mats, parent, false)) {
-        // the boundary fence is its own batch (the audits key instances by name)
-        m.name = variant ? `${name}_${variant}` : name
-      }
-    }
+  // the boundary fence is the kit fence at its own 2 m section size
+  const edge = propDef(props, 'fence', 2, 'x')
+  for (const m of edge ? land.fence : []) {
+    ctx.outskirts(edge as PropDef, m)
   }
 }
 
 function place(
   c: Cover,
-  p: Placed,
+  p: Sink,
   b: DressBuilders,
   r: () => number,
   unit: (name: string) => PropDef | null,

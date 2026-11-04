@@ -196,6 +196,47 @@ the same view differ by up to 1.5 ms under the current machine load. What keeps 
 The rebuilt town alone puts top-down over the old budget: CPU p95 over 7 ms and triangles over
 350k. That needs a pass on the town's geometry, not on the camera.
 
+### Perdition geometry pass (town LOD), Nov 2026
+
+Harness: `bun tools/frontier-perf.ts --view=third [--cluster]` (floor proxy as above). Before and
+after were run back to back on the same dev server and the same machine load (load average about
+5, other agents running). Before is `redesign` d26e0ac.
+
+|                 | Before, spread | After, spread | Before, packed | After, packed |
+| --------------- | -------------- | ------------- | -------------- | ------------- |
+| CPU p95 (ms)    | 8.4            | 8.0           | 10.7           | 8.2           |
+| CPU p50 (ms)    | 6.0            | 6.1           | 7.9            | 5.9           |
+| Draws (max)     | 111            | 115           | 152            | 137           |
+| Triangles (max) | 490k           | 271k          | 539k           | 306k          |
+| JS heap (MB)    | 104            | 134           | 117            | 141           |
+
+Of the ~270k that remain, the town is about 120–170k in a view; desert flora is up to ~42k and the
+riders, pickups and effects are the rest. The heap grows by about 30 MB: merged per-tile kit and
+the far batch replace instancing, which shared one geometry per prop.
+
+What `ffa/scene/town.ts` does now:
+- **Detail tiles.** Every kit piece (windows, frames, doors, fences, barrels, crates, hay, lanterns,
+  outskirts rocks and the boundary fence) merges into a 36 m tile. A tile draws only when the
+  camera is within 46 m of it (30 m on floor and legacy).
+- **One far batch per material.** Beyond that radius, stand-ins draw instead:
+  - fences, closed doors and rocks are vertex-clustered (`ffa/scene/lod.ts`; a 432-triangle rock
+    comes out at a few dozen);
+  - windows become two flat quads.
+  Every vertex carries its tile id. A uniform array in the vertex shader folds away the tiles that
+  show full detail, so the whole far layer costs one draw per material.
+- **Small props never vanish.** Barrels, crates, crate stacks and hay get an inset box or cylinder
+  stand-in in the always-drawn wood batch. From afar that is the prop; up close the kit prop
+  covers it.
+- **Rooms.** Each walk-in building's furniture, ceiling and inside windows are their own group.
+  They draw only within 18 m of the building (12 m on floor and legacy), or with the camera inside.
+- **Balcony rails** are built geometry (about 200 triangles per 2 m against the kit balcony's
+  1,120). The outskirts terrain is split into four sides of town, so the side behind the camera is
+  culled.
+- **Floor and legacy** also drop facade trim and ceiling joists.
+- **Visibility** updates from the ground mesh's `onBeforeRender`, for perspective cameras only (so
+  not the sun's shadow camera); `Town.update(camera)` is also public. When the dev audits'
+  `owAuditScenes` hook is present, everything shows at full detail.
+
 ## Real-device checklist (iPhone 13 mini, current iOS, WKWebView)
 
 Do this before signing off any art drop. The pass bar (§9.6): **p95 ≤ 16.7 ms over 10 minutes,

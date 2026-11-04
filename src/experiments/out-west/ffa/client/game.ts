@@ -552,7 +552,7 @@ export class FrontierGame {
       return
     }
     onProgress(0.65, 'Raising the town')
-    this.town = buildTown(TOWN, assets, SUN_DIR)
+    this.town = buildTown(TOWN, assets, SUN_DIR, this.renderer.tier)
     this.scene.add(this.town.root)
     shadeTown(this.town.root)
     this.scene.add(buildWilds(TOWN, this.renderer.tier))
