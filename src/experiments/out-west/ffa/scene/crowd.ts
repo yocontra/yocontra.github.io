@@ -788,6 +788,7 @@ export class Crowd {
       holstered,
       long: m.held !== null,
       shooting: nowS - m.shotAt < 1.2,
+      detail: p.self || m.rank < 6,
     })
   }
 

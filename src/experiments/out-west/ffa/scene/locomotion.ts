@@ -100,6 +100,8 @@ export interface LocoInput {
   long: boolean
   /** Fired in the last moment: the gun arm stays up. */
   shooting: boolean
+  /** Close enough for the fine work (the support hand's IK and fingers): yours, or within 12 m. */
+  detail: boolean
 }
 
 const up = new Vector3(0, 1, 0)
@@ -175,6 +177,7 @@ export class Locomotion {
     holstered: true,
     long: false,
     shooting: false,
+    detail: false,
   }
 
   constructor(actor: Actor, clips: readonly AnimationClip[], bodyKey: string) {
@@ -544,7 +547,7 @@ export class Locomotion {
         arm.updateMatrixWorld(true)
         turnWorld(fore, r, this.kick * this.kick * 0.35)
       }
-      if (this.adsW > 0.05) {
+      if (this.adsW > 0.05 && this.input.detail) {
         this.twoHands()
       }
     }
