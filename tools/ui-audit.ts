@@ -593,7 +593,7 @@ async function frontier(browser: Browser, size: Size): Promise<void> {
       await tap(page, '.fr-menu-btn')
     }
     await audit(page, size, 'frontier-pause', '.fr-menu')
-    await tap(page, '.fr-menu .fr-menu-quiet >> nth=-1')
+    await tap(page, '.fr-menu .fr-menu-resume')
   })
   for (const [screen, call] of [
     ['frontier-busy', (m: typeof Fx) => m.frontierBusy()],

@@ -811,3 +811,12 @@ html[data-ow-scale="xl"]
 .fr-touch.pad {
   display: none;
 }
+
+/* a phone on its side: the kill feed sits under the health bar on the left (ui/features.css), so
+   the left FIRE drops below it, clear of the move stick's home */
+@media (orientation: landscape) and (max-height: 500px) {
+  .fr-btn-fire.fr-btn-fire-l {
+    bottom: calc(var(--fr-bottom) + 158px);
+    left: calc(var(--fr-left) + 24px);
+  }
+}
