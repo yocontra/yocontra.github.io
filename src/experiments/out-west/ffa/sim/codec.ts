@@ -136,6 +136,11 @@ export interface SelfView {
   lastButtons: number
   /** Packed weapon state; unpack with `selfWeapon()` from the contract. */
   weapon: number
+  jumpTicks: number
+  jumpCooldown: number
+  /** Vault travel per tick, centimetres (0: a hop or nothing). */
+  vaultStep: number
+  vaultAim: number
 }
 
 export interface TownView {
@@ -274,6 +279,10 @@ function writeSelf(w: Writer, s: SelfView): void {
     .u8(clampU8(s.holsterTicks))
     .u16(s.lastButtons)
     .u8(s.weapon)
+    .u8(clampU8(s.jumpTicks))
+    .u8(clampU8(s.jumpCooldown))
+    .u8(clampU8(s.vaultStep))
+    .u16(s.vaultAim)
 }
 
 function readSelf(r: Reader): SelfView {
@@ -297,6 +306,10 @@ function readSelf(r: Reader): SelfView {
     holsterTicks: r.u8(),
     lastButtons: r.u16(),
     weapon: r.u8(),
+    jumpTicks: r.u8(),
+    jumpCooldown: r.u8(),
+    vaultStep: r.u8(),
+    vaultAim: r.u16(),
   }
   return s
 }

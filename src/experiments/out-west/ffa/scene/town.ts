@@ -40,7 +40,13 @@ import {
 } from '../../scene/props.ts'
 import { glassLook } from '../../scene/surface.ts'
 import { signAtlas } from '../../scene/textures.ts'
-import { type Building, buildingWalls, type Side, type TownLayout } from '../sim/layout.ts'
+import {
+  type Building,
+  buildingWalls,
+  type Cover,
+  type Side,
+  type TownLayout,
+} from '../sim/layout.ts'
 import { addClockTower } from './clock-tower.ts'
 import {
   decks,
@@ -251,6 +257,8 @@ const WALL_T = 0.5
 const WIDE_DOOR = 3.2
 /** Top of a doorway (the kit frame's lintel), m: the wall closes over it. */
 const DOOR_TOP = 2.45
+/** Furniture that stands against a wall and hides the inside of a window there. */
+const AGAINST_WALL = new Set(['shelves', 'stairs', 'piano', 'safe'])
 
 /** Roofs are most of what the top-down camera sees: sun-bleached, never near-black. */
 function bleach(hex: number): number {
@@ -504,7 +512,14 @@ const SHOPFRONT = new Set([
   'jail',
 ])
 
-function addWindows(bs: Builders, b: Building, side: Side, floors: number, front: Side): void {
+function addWindows(
+  bs: Builders,
+  b: Building,
+  side: Side,
+  floors: number,
+  front: Side,
+  against: readonly Cover[],
+): void {
   const len = sideLength(b, side)
   const doors = b.doors.filter((d) => d.side === side)
   const glass = 0x1a_22_2a
@@ -527,6 +542,23 @@ function addWindows(bs: Builders, b: Building, side: Side, floors: number, front
         const at = onSide(b, side, a + span / 2, sill - 0.97 * s + 0.05)
         at.multiply(new Matrix4().makeScale(s, s, 1))
         bs.kit.push({ def: win, at })
+        if (b.hollow && sill < ceilingHeight(b)) {
+          // the same window seen from inside the room (the wall itself is solid)
+          const [q] = faceQuad(b, side, a + span / 2, 0, 0, 1, -WALL_T)
+          const hidden = against.some(
+            (c) =>
+              q &&
+              q.x > c.x - span / 2 - 0.3 &&
+              q.x < c.x + c.w + span / 2 + 0.3 &&
+              q.z > c.z - span / 2 - 0.3 &&
+              q.z < c.z + c.d + span / 2 + 0.3,
+          )
+          if (q && !hidden) {
+            const inner = placeMatrix(q.x, sill - 0.97 * s + 0.05, q.z, SIDE_RY[side] + Math.PI)
+            inner.multiply(new Matrix4().makeScale(s, s, 1))
+            bs.kit.push({ def: win, at: inner })
+          }
+        }
         continue
       }
       const q = faceQuad(b, side, a, a + span, sill, sill + 1.5, 0.04)
@@ -585,6 +617,36 @@ function addDoorFrames(bs: Builders, b: Building, porch: Side | null): void {
     // the kit frame is 1.57 m wide: stretch it to the doorway
     at.multiply(new Matrix4().makeScale(Math.max(0.8, (d.width + 0.4) / 1.57), 1, 1))
     bs.kit.push({ def: frame, at })
+  }
+}
+
+/** Where a hollow building's ceiling sits: the first storey's on two-storey fronts. */
+export function ceilingHeight(b: Building): number {
+  return b.floors > 1 ? 3.3 : b.height - 0.05
+}
+
+/**
+ * A plank ceiling inside every walk-in building, so a third-person camera inside sees a room,
+ * not sky. Only its underside is built: from above (the top-down camera, and with the roof faded
+ * over you) back-face culling hides it, so the top-down view is unchanged. Joists run across.
+ */
+function addCeiling(bs: Builders, b: Building): void {
+  const y = ceilingHeight(b)
+  const cx = b.x + b.w / 2
+  const cz = b.z + b.d / 2
+  const iw = b.w - WALL_T * 2
+  const id = b.d - WALL_T * 2
+  const only = { skip: ['top', 'px', 'nx', 'pz', 'nz'] }
+  bs.wood.box(cx, y, cz, iw, 0.02, id, 0x8a_6a_4a, only)
+  const alongX = iw <= id
+  const span = alongX ? id : iw
+  for (let a = 1.2; a < span - 0.6; a += 1.8) {
+    // joists: their undersides and sides only (no top face to show from above)
+    const jx = alongX ? cx : b.x + WALL_T + a
+    const jz = alongX ? b.z + WALL_T + a : cz
+    bs.wood.box(jx, y - 0.1, jz, alongX ? iw : 0.14, 0.18, alongX ? 0.14 : id, DARK_WOOD, {
+      skip: ['top'],
+    })
   }
 }
 
@@ -717,6 +779,7 @@ function addBuilding(bs: Builders, b: Building, layout: TownLayout, id: number):
       0x9a_7a_58,
       { skip: ['bottom'] },
     )
+    addCeiling(bs, b)
   }
   // Trim: a band round the top of the walls, flush on their faces (an open-bottomed shell 6 cm
   // out left a slot of air between the band and the wall)
@@ -731,7 +794,14 @@ function addBuilding(bs: Builders, b: Building, layout: TownLayout, id: number):
   }
   for (const side of ['n', 's', 'e', 'w'] as const) {
     if (b.kind !== 'tower') {
-      addWindows(bs, b, side, b.floors, front)
+      addWindows(
+        bs,
+        b,
+        side,
+        b.floors,
+        front,
+        layout.cover.filter((c) => AGAINST_WALL.has(c.kind)),
+      )
     }
   }
   // Roof: pitched, shingled or tin, with ridge and edge trim (see roofs.ts).

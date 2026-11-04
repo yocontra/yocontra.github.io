@@ -46,7 +46,7 @@
  * | Section | Layout |
  * |---|---|
  * | Header (11 B) | `u8 MSG_SNAPSHOT`, `u32 tick`, `u16 lastInputSeq`, `i8 inputLead`, `u8 flags` (`SNAP_*`), `u8 entityCount`, `u8 removedCount` |
- * | Self (27 B) | `u16 x`, `u16 z`, `u8 hp`, `u8 ammo`, `u8 selfFlags` (`SELF_*`), `u8 rollTicks`, `u8 rollCooldown`, `u16 rollDir`, `u8 reloadTicks`, `u8 fireCooldown` (ms ÷ 4), `u8 protectTicks`, `u8 deadEyeTicks`, `u8 channelKind` (`CHANNEL_*`), `u8 channelTicks`, `u32 carried`, `u8 respawnTicks`, `u8 holsterTicks`, `u16 lastButtons`, `u8 weapon` (`selfWeapon()`: bits 0–1 `WEAPON_*`, bits 2–4 pickup-weapon rounds, bit 5 holding dynamite; 0 = plain revolver) |
+ * | Self (32 B) | `u16 x`, `u16 z`, `u8 hp`, `u8 ammo`, `u8 selfFlags` (`SELF_*`), `u8 rollTicks`, `u8 rollCooldown`, `u16 rollDir`, `u8 reloadTicks`, `u8 fireCooldown` (ms ÷ 4), `u8 protectTicks`, `u8 deadEyeTicks`, `u8 channelKind` (`CHANNEL_*`), `u8 channelTicks`, `u32 carried`, `u8 respawnTicks`, `u8 holsterTicks`, `u16 lastButtons`, `u8 weapon` (`selfWeapon()`: bits 0–1 `WEAPON_*`, bits 2–4 pickup-weapon rounds, bit 5 holding dynamite; 0 = plain revolver), `u8 jumpTicks`, `u8 jumpCooldown`, `u8 vaultStep` (cm per tick; 0 = a hop), `u16 vaultAim` |
  * | Removed | `removedCount × u8 id` (left interest or left the lobby) |
  * | Entities | `entityCount ×` entity record |
  * | Town (if `SNAP_TOWN`) | `u8 mostWantedId` (255 none), `u8 mwX`, `u8 mwZ` (0.6 m units), `u8 strongboxSpot` (255 none), `u16 strongboxValue`, `u8 strongboxState` (`BOX_*`), `u8 players`, `u32 banked` (this player's wallet, as last confirmed) |
@@ -92,10 +92,11 @@ import { reopensOn } from '../data/sinks.ts'
  * 3: input frames carry `buttons u16`; snapshots carry `inputLead i8` in the header and
  *    `lastButtons u16` in the self block. Clients send `wire` in `POST /town/join`; an older client
  *    (no `wire`, or a smaller one) is refused with `outdated`.
+ * 4: `BTN_JUMP` (vault / hop); the self block carries the jump state; `ANIM_VAULT`, `ANIM_HOP`.
  */
-export const CONTRACT_VERSION = 3
+export const CONTRACT_VERSION = 4
 /** The binary Frontier wire format this build speaks (`TownJoinRequest.wire`). */
-export const TOWN_WIRE_VERSION = 3
+export const TOWN_WIRE_VERSION = 4
 
 // --- saddlebags ----------------------------------------------------------------------------------
 
@@ -227,7 +228,7 @@ export const INPUT_HEADER_BYTES = 7
 export const INPUT_FRAME_BYTES = 9
 export const MAX_FRAMES_PER_INPUT = 4
 export const SNAPSHOT_HEADER_BYTES = 11
-export const SNAPSHOT_SELF_BYTES = 27
+export const SNAPSHOT_SELF_BYTES = 32
 /** `inputLead` when no input message arrived since the previous snapshot. */
 export const INPUT_LEAD_NONE = -128
 
@@ -246,6 +247,8 @@ export const BTN_CALLOUT = 32
 export const BTN_LEAVE = 64
 /** Throw dynamite (if you're holding a stick). */
 export const BTN_THROW = 128
+/** Jump: vault low cover you face (fences, rails, troughs, crates), or hop. See `VAULT_TICKS`. */
+export const BTN_JUMP = 256
 
 export const WEAPON_REVOLVER = 0
 export const WEAPON_SHOTGUN = 1
@@ -295,6 +298,10 @@ export const ANIM_DEAD = 4
 export const ANIM_AIM = 5
 export const ANIM_CHANNEL = 6
 export const ANIM_DUEL = 7
+/** Mid-vault (0.5 s arc over low cover). */
+export const ANIM_VAULT = 8
+/** A hop in place (0.4 s, for show). */
+export const ANIM_HOP = 9
 
 export const CHANNEL_NONE = 0
 export const CHANNEL_BANK = 1

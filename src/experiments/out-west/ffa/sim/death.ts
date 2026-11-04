@@ -143,6 +143,8 @@ export function killPlayer(
   victim.respawnTick = w.tick + DEATH_CAM_TICKS
   victim.stats.deaths++
   victim.rollTicks = 0
+  victim.jumpTicks = 0
+  victim.vaultStep = 0
   victim.deadEyeStart = -1
   victim.calledBy = NONE
   // Pickup weapons and dynamite are lost with the life.

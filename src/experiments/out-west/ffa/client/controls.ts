@@ -3,8 +3,8 @@
  * Desktop and gamepad input → one held-button word, a move vector and an aim. Presses shorter
  * than a 50 ms tick are latched so the server always sees their edge.
  *
- * Desktop: WASD/arrows move, the mouse aims, LMB fires, hold RMB for Dead-Eye, Space rolls,
- * R reloads, E banks/opens/accepts, Q calls out. Gamepad: sticks, RT fire, LT Dead-Eye, A roll,
+ * Desktop: WASD/arrows move, the mouse aims, LMB fires, hold RMB for Dead-Eye, Space jumps or vaults, Shift or C rolls,
+ * R reloads, E banks/opens/accepts, Q calls out. Gamepad: sticks, RT fire, LT Dead-Eye, A jump, LB roll,
  * X reload, B interact, Y call out, RB throw dynamite. G throws dynamite on the keyboard.
  */
 import {
@@ -12,6 +12,7 @@ import {
   BTN_CALLOUT,
   BTN_FIRE,
   BTN_INTERACT,
+  BTN_JUMP,
   BTN_RELOAD,
   BTN_ROLL,
   BTN_THROW,
@@ -29,7 +30,10 @@ export interface Sampled {
 }
 
 const KEY_BUTTONS: Record<string, number> = {
-  Space: BTN_ROLL,
+  Space: BTN_JUMP,
+  ShiftLeft: BTN_ROLL,
+  ShiftRight: BTN_ROLL,
+  KeyC: BTN_ROLL,
   KeyR: BTN_RELOAD,
   KeyE: BTN_INTERACT,
   KeyF: BTN_INTERACT,
@@ -40,7 +44,8 @@ const KEY_BUTTONS: Record<string, number> = {
 const PAD_BUTTONS: readonly (readonly [number, number])[] = [
   [7, BTN_FIRE],
   [6, BTN_AIM],
-  [0, BTN_ROLL],
+  [0, BTN_JUMP],
+  [4, BTN_ROLL],
   [2, BTN_RELOAD],
   [1, BTN_INTERACT],
   [3, BTN_CALLOUT],

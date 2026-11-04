@@ -49,6 +49,15 @@ export const COVER_VISUALS: Record<string, CoverVisual> = {
   anvil: { what: 'anvil on a stump', height: 0.8, vault: true, surface: 'metal' },
   bench: { what: 'bench', height: 0.5, vault: true, surface: 'wood' },
   coffins: { what: 'coffins', height: 0.9, vault: true, surface: 'wood' },
+  piano: { what: 'upright piano', height: 1.35, vault: false, surface: 'wood' },
+  shelves: { what: 'wall shelving with goods', height: 2.3, vault: false, surface: 'wood' },
+  stairs: { what: 'staircase to the upper floor', height: 3.3, vault: false, surface: 'wood' },
+  safe: { what: 'iron safe', height: 1.5, vault: false, surface: 'metal' },
+  stove: { what: 'pot-bellied stove', height: 1.1, vault: false, surface: 'metal' },
+  workbench: { what: 'workbench', height: 0.95, vault: true, surface: 'wood' },
+  barrel_rack: { what: 'barrel rack', height: 1.3, vault: false, surface: 'wood' },
+  bed: { what: 'cot', height: 0.6, vault: true, surface: 'wood' },
+  bars: { what: 'cell bars', height: 2.6, vault: false, surface: 'metal' },
   bridge_rail: { what: 'bridge rail', height: 1.0, vault: true, surface: 'wood' },
 }
 

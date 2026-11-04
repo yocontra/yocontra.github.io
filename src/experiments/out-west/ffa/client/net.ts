@@ -43,7 +43,7 @@ import {
 } from '../sim/constants.ts'
 import { InputBatcher, quantizeAim } from '../sim/input.ts'
 import { buildGrid, type Grid } from '../sim/layout.ts'
-import { aimRadians, stepMove } from '../sim/move.ts'
+import { aimRadians, stepMove, vaulting } from '../sim/move.ts'
 import type { MoveState } from '../sim/types.ts'
 import { RemoteTrack, type RemoteView, ServerClock } from './interp.ts'
 import { TickClock } from './tick-clock.ts'
@@ -126,7 +126,18 @@ export class NetClient {
   bytesIn = 0
   bytesOut = 0
   /** Predicted own move state after the newest local tick, and the one before (render lerp). */
-  readonly pred: MoveState = { x: 0, z: 0, rollTicks: 0, rollCooldown: 0, rollDirX: 1, rollDirZ: 0 }
+  readonly pred: MoveState = {
+    x: 0,
+    z: 0,
+    rollTicks: 0,
+    rollCooldown: 0,
+    rollDirX: 1,
+    rollDirZ: 0,
+    jumpTicks: 0,
+    jumpCooldown: 0,
+    vaultStep: 0,
+    vaultAim: 0,
+  }
   readonly prev: MoveState = { ...this.pred }
   /** The visual correction offset (m) and its velocity (m/s): what the spring still has to remove. */
   private offX = 0
@@ -335,6 +346,10 @@ export class NetClient {
       rollCooldown: s.rollCooldown,
       rollDirX: Math.cos(rollRad),
       rollDirZ: Math.sin(rollRad),
+      jumpTicks: s.jumpTicks,
+      jumpCooldown: s.jumpCooldown,
+      vaultStep: s.vaultStep / 100,
+      vaultAim: s.vaultAim,
     }
     const canMove =
       (s.flags & SELF_ALIVE) !== 0 && (s.flags & (SELF_FROZEN | SELF_IN_SHOWDOWN)) === 0
@@ -434,6 +449,7 @@ export class NetClient {
     }
     const blocked =
       this.pred.rollTicks > 0 ||
+      vaulting(this.pred) ||
       (s.reloadTicks > 0 && this.weapon.weapon === WEAPON_REVOLVER) ||
       this.ammo <= 0 ||
       nowMs < this.localCooldownUntil

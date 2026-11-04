@@ -68,4 +68,11 @@ export const FRONTIER_VIEWS: TownView[] = [
   eye('saloon-bar', 64, 52, 50, 40),
   eye('store-inside', 56, 76, 42, 86),
   eye('smithy-inside', 34, 75, 25, 84),
+  eye('saloon-room', 61, 52, 49, 44),
+  eye('hotel-lobby', 86, 53, 82, 44),
+  eye('church-nave', 117, 51, 117, 31),
+  eye('jail-inside', 111, 76, 106, 86),
+  eye('bank-vault', 72, 84, 64, 90),
+  eye('depot-inside', 28, 118, 18, 111),
+  eye('livery-stalls', 30, 52, 38, 38),
 ]
