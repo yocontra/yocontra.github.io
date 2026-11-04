@@ -3,7 +3,8 @@
  * The street's layout and its fronts: the street dimensions, every building and sign, and the kit
  * pieces that dress a false front (door, windows, shutters, balcony rail) and the boardwalks.
  */
-import { Matrix4, Vector3 } from 'three'
+import { Matrix4, Vector3, Vector4 } from 'three'
+import { padPools } from './arenas/pools.ts'
 import type { GeoBuilder } from './geo.ts'
 import { type PropDef, placeMatrix, propDef, propsLibrary } from './props.ts'
 import type { SignSpec } from './textures.ts'
@@ -279,4 +280,22 @@ export function dressBoardwalks(kit: Placed[]): void {
       kit.push({ def: rack, at: placeMatrix(fx, deck, b.z - 3.2, ry) })
     }
   }
+}
+
+/**
+ * The street's light pools: one under each hanging lantern (flickering, +), and one spilling from
+ * each lit storefront and the courthouse doors (steady, -), nearest the duel first.
+ */
+export function streetPools(): Vector4[] {
+  const out: Vector4[] = LANTERNS.map(([x, z]) => new Vector4(x * 0.92, z, 4.2, 1))
+  const H = STREET.half
+  const fronts = [...BUILDINGS].sort((a, b) => Math.abs(a.z) - Math.abs(b.z))
+  for (const b of fronts) {
+    out.push(new Vector4(b.side * (H + 0.8), b.z, 3.2, -0.55))
+  }
+  // the courthouse: its doors and the windows either side
+  out.push(new Vector4(0, STREET.churchZ - 9, 4.5, -0.9))
+  out.push(new Vector4(-5, STREET.churchZ - 8, 3, -0.5))
+  out.push(new Vector4(5, STREET.churchZ - 8, 3, -0.5))
+  return padPools(out)
 }

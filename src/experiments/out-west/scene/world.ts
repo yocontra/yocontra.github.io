@@ -14,8 +14,11 @@ import {
   type Scene,
   type Texture,
   Vector3,
-  Vector4,
+  type Vector4,
 } from 'three'
+import { ArenaHost } from './arenas/host.ts'
+import { POOLS } from './arenas/pools.ts'
+import type { ArenaId } from './arenas/types.ts'
 import { ATMOS, bindAtmos, tickAtmos, withCloudShadow } from './atmos.ts'
 import { ClockTower } from './clocktower.ts'
 import { buildDesert, desertGeometry } from './desert.ts'
@@ -35,11 +38,13 @@ import {
   type Placed,
   SIGNS,
   STREET,
+  streetPools,
 } from './street.ts'
 import { RIM } from './style.ts'
 import { glassLook } from './surface.ts'
 import { signAtlas } from './textures.ts'
 import { attachArm, attachBoard, withTownAO } from './town-pbr.ts'
+import type { LifeLayout } from './townlife.ts'
 
 export interface Lantern {
   light: PointLight
@@ -49,6 +54,8 @@ export interface Lantern {
 
 export class World {
   readonly root = new Group()
+  /** Everything that belongs to the main street (hidden while another arena is up). */
+  readonly town = new Group()
   readonly sun: DirectionalLight
   readonly hemi: HemisphereLight
   readonly fog: Fog
@@ -59,6 +66,7 @@ export class World {
     owPools: { value: [] as Vector4[] },
     owLantern: { value: 0 },
     owWindow: { value: 0 },
+    owRuts: { value: 1 },
   }
   readonly ground: Mesh
   readonly lanterns: Lantern[] = []
@@ -83,6 +91,10 @@ export class World {
   /** Day at the last light-probe capture request. */
   private probeDay = -1
   readonly bellPos = new Vector3(0, 13, STREET.churchZ - 6)
+  /** The street tower's bell (bellPos goes back to it with the street). */
+  private readonly streetBell = new Vector3()
+  /** The duel arena on show (scene/arenas): the street, or one act's. */
+  private readonly arenas: ArenaHost
 
   constructor(
     scene: Scene,
@@ -99,6 +111,8 @@ export class World {
   ) {
     this.scene = scene
     scene.add(this.root)
+    this.town.name = 'street'
+    this.root.add(this.town)
     this.preset = presetAt(0)
     this.fog = new Fog(0xe8_d3_a8, 60, 220)
     scene.fog = this.fog
@@ -195,6 +209,7 @@ varying float vSlope;
 uniform vec4 owPools[${POOLS}];
 uniform float owLantern;
 uniform float owWindow;
+uniform float owRuts;
 float gh(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
 float gn(vec2 p){ vec2 i=floor(p); vec2 f=fract(p); f=f*f*(3.0-2.0*f);
   return mix(mix(gh(i),gh(i+vec2(1,0)),f.x), mix(gh(i+vec2(0,1)),gh(i+vec2(1,1)),f.x), f.y); }
@@ -221,8 +236,8 @@ float hoof(vec2 p) {
   float road = step(p.y, -58.0);
   rx = mix(rx, abs(p.x + sin(p.y * 0.02) * 4.0), road);
   float rut = exp(-pow((rx - 1.25) * 5.0, 2.0)) * (0.6 + 0.4 * gn(p * vec2(2.0, 0.3)));
-  diffuseColor.rgb *= 1.0 - rut * 0.24 * step(p.y, 58.0) * (1.0 - smoothstep(-200.0, -120.0, -p.y) * road);
-  diffuseColor.rgb *= 1.0 - hoof(p) * 0.28 * (1.0 - smoothstep(2.5, 4.5, rx)) * step(p.y, 58.0);
+  diffuseColor.rgb *= 1.0 - rut * 0.24 * owRuts * step(p.y, 58.0) * (1.0 - smoothstep(-200.0, -120.0, -p.y) * road);
+  diffuseColor.rgb *= 1.0 - hoof(p) * 0.28 * owRuts * (1.0 - smoothstep(2.5, 4.5, rx)) * step(p.y, 58.0);
   float street = 1.0 - smoothstep(8.5, 11.0, ax);
   diffuseColor.rgb *= mix(1.04, 0.96, street * inStreet);
   // pale wind-blown sand drifting against the boardwalks and out on the flats
@@ -277,13 +292,35 @@ float hoof(vec2 p) {
     this.silhouetteHide.push(this.ground)
 
     this.buildTown(atlas.rows)
-    buildWaterTower(this.root, this.trimMat)
+    buildWaterTower(this.town, this.trimMat)
     buildMesas(this.root, tex.ground)
-    this.root.add(buildDesert(tier))
+    this.town.add(buildDesert(tier, 'street'))
+    this.root.add(buildDesert(tier, 'land'))
     this.poster = buildPosterPost(this.root, this.trimMat)
     this.posterMat =
       (this.poster.userData.mat as MeshStandardMaterial) ?? new MeshStandardMaterial()
 
+    this.arenas = new ArenaHost({
+      scene,
+      root: this.root,
+      town: this.town,
+      lanterns: this.lanterns,
+      streetLamps: LANTERNS.map(([x, z]) => [x, AWNING - 0.26, z] as const),
+      streetPools,
+      pools: this.poolU,
+      bellPos: this.bellPos,
+      streetBell: this.streetBell,
+      ctx: () => ({
+        wallMat: this.wallMat,
+        trimMat: this.trimMat,
+        windowMat: this.windowMat,
+        signMat: this.signMat,
+        civic: this.tower?.civic ?? this.wallMat,
+        ground: { map: tex.ground, normal: tex.groundN },
+        tier,
+      }),
+      nightK: () => this.nightK(),
+    })
     this.apply(0)
   }
 
@@ -388,7 +425,7 @@ float hoof(vec2 p) {
           const door = new Mesh(g.build(), this.trimMat)
           door.position.set(fx - s * 0.4, 1.35, b.z + dz)
           door.castShadow = true
-          this.root.add(door)
+          this.town.add(door)
           this.saloonDoors.push(door)
         }
       }
@@ -398,27 +435,53 @@ float hoof(vec2 p) {
     trim.box(8.3, 0.35, -16, 0.9, 0.7, 2.4, 0x5a_44_30)
 
     dressBoardwalks(kit)
-    this.tower = new ClockTower(this.root, { trim, glass, kit }, STREET.churchZ, () => {
+    this.tower = new ClockTower(this.town, { trim, glass, kit }, STREET.churchZ, () => {
       // the atlas landed: recapture the town light probe with the real masonry
       const ud = this.scene.userData
       ud.owLightVersion = ((ud.owLightVersion as number | undefined) ?? 0) + 1
     })
     this.bellPos.copy(this.tower.bellPos)
-    mergePlaced(kit, this.root, new Map([['KitGlass', this.windowMat]]))
+    this.streetBell.copy(this.tower.bellPos)
+    mergePlaced(kit, this.town, new Map([['KitGlass', this.windowMat]]))
     for (const [name, m] of [
-      ['walls', addStatic(this.root, walls, this.wallMat)],
-      ['trim', addStatic(this.root, trim, this.trimMat)],
+      ['walls', addStatic(this.town, walls, this.wallMat)],
+      ['trim', addStatic(this.town, trim, this.trimMat)],
     ] as const) {
       if (m) {
         m.name = name
       }
     }
-    const gm = addStatic(this.root, glass, this.windowMat, false)
+    const gm = addStatic(this.town, glass, this.windowMat, false)
     if (gm) {
       gm.name = 'windows'
       gm.receiveShadow = false
     }
-    addStatic(this.root, signs, this.signMat, false)
+    addStatic(this.town, signs, this.signMat, false)
+  }
+
+  /** The arena on show ('street' when none other is). */
+  get arenaId(): ArenaId {
+    return this.arenas.id
+  }
+
+  /** Stage outlaw `slot`'s act: its arena (built if it isn't up yet), the next act's fetched. */
+  stageSlot(slot: number): void {
+    this.arenas.stageSlot(slot)
+  }
+
+  /** Show arena `id`: the street, or one built lazily (the last disposed first). */
+  setArena(id: ArenaId): void {
+    this.arenas.set(id)
+  }
+
+  /** Where the town's life stands in the arena on show (null: the street's places). */
+  get lifeLayout(): LifeLayout | null {
+    return this.arenas.life
+  }
+
+  /** How lit the lamps and windows are (0 by day, 1 at night). */
+  private nightK(): number {
+    return Math.min(1, Math.max(0, (this.preset.windows - 0.25) / 0.6))
   }
 
   setClock(h: number, m: number): void {
@@ -471,7 +534,8 @@ float hoof(vec2 p) {
     RIM.strength.value = p.rim
     this.windowMat.emissiveIntensity = p.windows * 1.6
     // the dials are lit from behind once the lamps are (dusk on)
-    this.tower?.night(Math.min(1, Math.max(0, (p.windows - 0.25) / 0.6)))
+    this.tower?.night(this.nightK())
+    this.arenas?.night(this.nightK())
     // The renderer picks the LUT pair from owDay, and recaptures the town light
     // probe whenever owLightVersion moves (a few frames, spread out).
     const ud = this.scene.userData
@@ -539,28 +603,4 @@ float hoof(vec2 p) {
     this.sun.target.position.copy(center)
     this.sun.position.copy(center).addScaledVector(dir, 60)
   }
-}
-
-/** How many light pools the street's ground shader carries. */
-const POOLS = 24
-
-/**
- * The street's light pools: one under each hanging lantern (flickering, +), and one spilling from
- * each lit storefront and the courthouse doors (steady, -), nearest the duel first.
- */
-function streetPools(): Vector4[] {
-  const out: Vector4[] = LANTERNS.map(([x, z]) => new Vector4(x * 0.92, z, 4.2, 1))
-  const H = STREET.half
-  const fronts = [...BUILDINGS].sort((a, b) => Math.abs(a.z) - Math.abs(b.z))
-  for (const b of fronts) {
-    out.push(new Vector4(b.side * (H + 0.8), b.z, 3.2, -0.55))
-  }
-  // the courthouse: its doors and the windows either side
-  out.push(new Vector4(0, STREET.churchZ - 9, 4.5, -0.9))
-  out.push(new Vector4(-5, STREET.churchZ - 8, 3, -0.5))
-  out.push(new Vector4(5, STREET.churchZ - 8, 3, -0.5))
-  while (out.length < POOLS) {
-    out.push(new Vector4(0, -9999, 1, 0))
-  }
-  return out.slice(0, POOLS)
 }

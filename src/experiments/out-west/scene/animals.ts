@@ -101,6 +101,18 @@ class Hens {
     }
   }
 
+  /** Move the flock to another arena's yard (null: the street's), or hide it there. */
+  yard(p: { x: number; z: number } | null, shown = true): void {
+    const x = p?.x ?? -7.5
+    const z = p?.z ?? 23.4
+    this.hens.forEach((h, i) => {
+      this.home[i]?.set(x - 0.4 + Math.random() * 0.8, 0, z + i * 0.7 + Math.random() * 0.4)
+      h.at.copy(this.home[i] ?? h.at)
+      h.scatter = 0
+    })
+    this.herd.mesh.visible = shown
+  }
+
   reset(): void {
     this.hens.forEach((h, i) => {
       h.at.copy(this.home[i] ?? h.at)
