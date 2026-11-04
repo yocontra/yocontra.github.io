@@ -1118,8 +1118,12 @@
    and a banner yields to it while it runs */
 @media (orientation: portrait) and (max-height: 700px) {
   .fr-touchui .fr-channel {
-    top: 33%;
+    top: 38%;
     bottom: auto;
+  }
+
+  .fr-touchui .fr-toast {
+    top: 50%;
   }
 
   .fr-hud:has(.fr-channel.on) .fr-banner {
