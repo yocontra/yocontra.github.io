@@ -34,6 +34,8 @@ export interface VmPose {
   ads: number
   /** The support hand's extra reach while loading (m, toward the gun's gate), 0 at rest. */
   load: number
+  /** A long gun's action between rounds, 0..1: the rifle's lever thrown, the coach gun broken. */
+  cycle: number
   /** The view's own kick (rad): the world camera pitches up by this and settles. */
   viewKick: number
 }
@@ -90,6 +92,7 @@ export class VmMotion {
     roll: 0,
     ads: 0,
     load: 0,
+    cycle: 0,
     viewKick: 0,
   }
   private adsT = 0
@@ -213,6 +216,12 @@ export class VmMotion {
       lever = bump(this.sinceShot, 0.18, 0.62)
     }
     const rock = this.shotWeapon === WEAPON_SHOTGUN ? bump(this.sinceShot, 0, 0.45) : 0
+    // the moving part: the lever thrown with the lever beat, the barrels broken after the kick
+    let cycle = lever
+    if (this.shotWeapon === WEAPON_SHOTGUN) {
+      cycle = bump(this.sinceShot, 0.2, 0.68)
+    }
+    p.cycle = this.shotWeapon === i.weapon ? cycle : 0
     // the draw: up from below, turning in
     const d = 1 - ease(this.draw / DRAW_S)
     const sp = this.sprint * (1 - this.slide)

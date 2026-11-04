@@ -111,6 +111,9 @@ interface Fit {
   left: Matrix4 | null
   /** The revolver: the grip's middle (gun frame); the left hand mirrors the right around it. */
   grip?: Vector3
+  /** The moving part (the rifle's lever, the coach gun's barrels) and how far it throws (rad). */
+  part?: Object3D | null
+  partThrow?: number
   /**
    * A long gun: the stock's wrist (where the right fist closes) and the fore-end; the left hand is
    * the right one mirrored, slid up to the fore-end and turned under it.
@@ -374,6 +377,8 @@ export class ViewModel {
     rear.y += 0.006
     return {
       obj,
+      part: obj.getObjectByName(kind === 'shotgun' ? 'barrels' : 'lever') ?? null,
+      partThrow: kind === 'shotgun' ? -0.5 : 0.55,
       rear: h.a.rear?.clone() ?? rear,
       front: h.a.front?.clone() ?? new Vector3(h.a.muzzle.x, frontY + 0.006, 0),
       muzzle: h.a.muzzle.clone(),
@@ -447,6 +452,10 @@ export class ViewModel {
 
   /** Where the gun goes this frame: the hold (hip → sights) plus the motion, in camera space. */
   private placeGun(fit: Fit, pose: VmPose): void {
+    if (fit.part) {
+      // the lever down and forward between rounds; the barrels broken open for the next shell
+      fit.part.rotation.z = (fit.partThrow ?? 0) * pose.cycle
+    }
     const h = fit.hold
     const ads = pose.ads
     const at = tmpV.copy(h.hip).lerp(h.ads, ads)
