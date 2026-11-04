@@ -231,6 +231,11 @@ export class DesktopControls {
       this.keys.delete(e.code)
     }
     if (e.code === KEY_SCOREBOARD) {
+      if (!this.enabled) {
+        // paused: Tab walks the menu's buttons as usual
+        this.hooks?.onScoreboard(false)
+        return
+      }
       e.preventDefault()
       if (!e.repeat) {
         this.hooks?.onScoreboard(down)

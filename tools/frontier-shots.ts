@@ -9,7 +9,7 @@
  * lock) and the rider through the dev autopilot (`?debug`).
  *
  *   bun --bun astro dev --port 4375
- *   bun tools/frontier-shots.ts [baseUrl] [--size=1440x900,812x375,375x812] [--only=tps,fps,howto,bank]
+ *   bun tools/frontier-shots.ts [baseUrl] [--size=1440x900,812x375,375x812] [--only=howto,tps,fps,bank,death]
  *
  * Writes `.playwright-mcp/tps-<size>-<shot>.png`. Exit code 1 if a step never got there.
  */
@@ -24,7 +24,7 @@ const base = process.argv.find((a) => a.startsWith('http')) ?? 'http://localhost
 const opt = (k: string): string | null =>
   process.argv.find((a) => a.startsWith(`--${k}=`))?.slice(k.length + 3) ?? null
 const sizes = (opt('size') ?? '1440x900,812x375,375x812').split(',')
-const only = new Set((opt('only') ?? 'howto,tps,fps,bank').split(','))
+const only = new Set((opt('only') ?? 'howto,tps,fps,bank,death').split(','))
 const OUT = '.playwright-mcp'
 const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms))
 let failures = 0
@@ -157,7 +157,7 @@ async function hitShot(page: Page, size: string, name: string): Promise<boolean>
 
 /**
  * Get some money in your carry. Bots pay no kill bounty, so it's the strongbox (the first one
- * spawns a minute in) or a bag someone dropped; in between, keep the bots honest.
+ * spawns a minute in) or a bag someone dropped.
  */
 async function earn(page: Page): Promise<boolean> {
   const t0 = Date.now()
@@ -187,21 +187,9 @@ async function earn(page: Page): Promise<boolean> {
       await sleep(400)
       continue
     }
-    const o = nearest(s)
-    if (!(o && s.alive)) {
-      await sleep(400)
-      continue
-    }
-    await pilot(page, 'aimAt', o.id)
-    const d = Math.hypot(o.x - s.x, o.z - s.z)
-    if (d > 8) {
-      await pilot(page, 'go', o.x, o.z)
-      await sleep(350)
-      continue
-    }
+    // nothing to take yet: wait where you are
     await pilot(page, 'stop')
-    await pilot(page, 'tap', BTN_FIRE)
-    await sleep(320)
+    await sleep(500)
   }
   return false
 }
@@ -291,7 +279,7 @@ async function bank(page: Page, size: string): Promise<void> {
   // walk to the window: the prompt
   await pilot(page, 'go', w.x, w.z)
   await pilot(page, 'aimPoint', w.x, w.z - 6)
-  await until(page, 'at the window', (x) => Math.hypot(x.x - w.x, x.z - w.z) < 1.1, 60_000)
+  await until(page, 'at the window', (x) => Math.hypot(x.x - w.x, x.z - w.z) < w.r - 0.1, 60_000)
   await pilot(page, 'stop')
   await sleep(600)
   await shot(page, size, 'bank-prompt')
@@ -355,6 +343,8 @@ for (const size of sizes) {
     await view(calm, 'closeHowTo')
     await bank(calm, size)
     await calm.context().close()
+  }
+  if (only.has('death')) {
     await deathWithMoney(page, size)
   }
   const s = await state(page)

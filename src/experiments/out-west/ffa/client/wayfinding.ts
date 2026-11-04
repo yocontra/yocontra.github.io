@@ -46,9 +46,9 @@ const NEIGHBOURS: readonly (readonly [number, number, number])[] = [
 
 /** Walking distance (m) from every cell to the nearest window, Infinity where unreachable. */
 // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: one Dijkstra flood with its bounds and corner checks inline
-export function flood(grid: Grid, targets: readonly BankWindow[]): Float32Array {
+export function flood(grid: Grid, targets: readonly BankWindow[]): Float64Array {
   const n = grid.n
-  const dist = new Float32Array(n * n).fill(Number.POSITIVE_INFINITY)
+  const dist = new Float64Array(n * n).fill(Number.POSITIVE_INFINITY)
   const heap = new MinHeap()
   for (const t of targets) {
     const c = Math.floor(t.x / grid.cell)
@@ -96,7 +96,7 @@ export function flood(grid: Grid, targets: readonly BankWindow[]): Float32Array 
 export class BankGuide {
   private readonly grid: Grid
   private readonly windows: BankWindow[]
-  private field: Float32Array | null = null
+  private field: Float64Array | null = null
   private readonly marker: HTMLElement
   private readonly label: HTMLElement
   private readonly dist: HTMLElement
