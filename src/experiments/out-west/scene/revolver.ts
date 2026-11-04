@@ -139,7 +139,7 @@ function screw(x: number, y: number, z: number, f: Finish, r = 0.0021): BufferGe
  */
 function cylinder(d: RevolverDetail, look: RevolverLook): BufferGeometry {
   const steel = look.steel
-  const around = d === 'hi' ? 96 : d === 'mid' ? 36 : 12
+  const around = d === 'hi' ? 96 : d === 'mid' ? 24 : 12
   const xa = CYL_X0 + 0.0152
   const xb = CYL_X1 - 0.0035
   const end = 0.003
@@ -160,7 +160,7 @@ function cylinder(d: RevolverDetail, look: RevolverLook): BufferGeometry {
           CYL_X1,
         ]
       : d === 'mid'
-        ? [CYL_X0, CYL_X0 + 0.0012, xa, xa + end, xb - end, xb, CYL_X1 - 0.0012, CYL_X1]
+        ? [CYL_X0, xa, xa + end, xb - end, xb, CYL_X1]
         : [CYL_X0, xa, xb, CYL_X1]
   const hw = 0.33
   const depth = 0.0034
@@ -255,6 +255,9 @@ function cylinder(d: RevolverDetail, look: RevolverLook): BufferGeometry {
       wall.deleteAttribute('normal')
       wall.computeVertexNormals()
       geos.push(part(wall, alongX(CYL_X1 - 0.003, cy, cz), tint(BORE, 1.6)))
+      if (d !== 'hi') {
+        continue
+      }
       const nose = new SphereGeometry(
         CH_R * 0.92,
         d === 'hi' ? 12 : 6,
@@ -342,8 +345,8 @@ function hammer(d: RevolverDetail, look: RevolverLook): BufferGeometry {
 function body(d: RevolverDetail, look: RevolverLook): BufferGeometry[] {
   const hi = d === 'hi'
   const lo = d === 'lo'
-  const round = hi ? 24 : d === 'mid' ? 12 : 7
-  const sides = hi ? 20 : d === 'mid' ? 12 : 6
+  const round = hi ? 24 : d === 'mid' ? 10 : 7
+  const sides = hi ? 20 : d === 'mid' ? 10 : 6
   const mx = muzzleX(look.barrel)
   const { steel, frame, guard, grip } = look
   const p: BufferGeometry[] = []
@@ -551,7 +554,7 @@ function body(d: RevolverDetail, look: RevolverLook): BufferGeometry[] {
     [-0.1112, -0.1072, 0.0338, 0.0312],
     [-0.1168, -0.1122, 0.031, 0.0286],
   ]
-  p.push(loftPath(spine, grip, { sides: hi ? 22 : d === 'mid' ? 12 : 6, square: 0.62 }))
+  p.push(loftPath(spine, grip, { sides: hi ? 22 : d === 'mid' ? 10 : 6, square: 0.62 }))
   if (!lo) {
     // the straps, narrower than the wood and riding its edges, front and back
     const strap = (s: PathSection): PathSection => [s[0], s[1], 0.0072, s[3] * 0.62]
@@ -722,7 +725,7 @@ export function revolverDef(
 }
 
 /** Past this distance (m) a rider's revolver draws its low level of detail. */
-export const REVOLVER_LOD_FAR = 8
+export const REVOLVER_LOD_FAR = 5
 
 /**
  * The revolver as a drawable: one mesh (a hand, a holster), or with `lod` a three.js LOD that swaps
