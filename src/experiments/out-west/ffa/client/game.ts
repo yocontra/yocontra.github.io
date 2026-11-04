@@ -74,6 +74,7 @@ import {
 } from '../../contract/town.ts'
 import { loadAssets } from '../../engine/assets.ts'
 import { Renderer } from '../../engine/render.ts'
+import { tierHint } from '../../engine/tiers.ts'
 import { haptic } from '../../platform/haptics.ts'
 import { presetAt } from '../../scene/presets.ts'
 import { RIM } from '../../scene/style.ts'
@@ -301,13 +302,7 @@ export class FrontierGame {
     const coarse = matchMedia('(pointer: coarse)').matches || navigator.maxTouchPoints > 0
     this.touchUi = coarse
     this.settings = loadSettings()
-    this.renderer = new Renderer(
-      this.canvas,
-      this.scene,
-      this.cam.camera,
-      coarse ? 'low' : 'high',
-      'ffa',
-    )
+    this.renderer = new Renderer(this.canvas, this.scene, this.cam.camera, tierHint(), 'ffa')
     this.scene.userData.owDay = DAY
     this.shooter = new ShooterCamera(this.cam.camera)
     // the first-person view model rides on the camera, so the camera joins the scene graph
@@ -1038,32 +1033,12 @@ export class FrontierGame {
     this.perf.frameMs = performance.now() - t0
     this.audio?.update()
     this.renderer.label = 'frontier'
-    this.shadowRate()
     this.renderer.adapt(dtMs, true)
     this.renderer.render(dt)
     if (this.trace.on) {
       this.pushTrace(now, dtMs, performance.now() - t0)
     }
   }
-
-  /**
-   * Floor and legacy redraw the sun's shadow map every other frame (30 Hz). Only riders, pickups
-   * and props near you cast into it; the map and its matrix stay a matched pair, so a skipped
-   * frame shows the last frame's rider shadows, never a misplaced one. Its scene walk and draws
-   * were a tenth of the frame's CPU on the floor proxy.
-   */
-  private shadowRate(): void {
-    const sm = this.renderer.gl.shadowMap
-    const t = this.renderer.tier
-    const half = t === 'floor' || t === 'legacy'
-    this.shadowFrame++
-    sm.autoUpdate = !half
-    if (half) {
-      sm.needsUpdate = (this.shadowFrame & 1) === 0
-    }
-  }
-
-  private shadowFrame = 0
 
   private pushTrace(now: number, dtMs: number, cpuMs: number): void {
     const r = this.traceRow

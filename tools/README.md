@@ -12,7 +12,7 @@ reuse freely. Every third-party or generated asset gets a line in
 | `build-characters.ts` | The textured character bases + clips + shared character atlas from Quaternius's CC0 Universal Base Characters, Modular Outfits – Fantasy and Universal Animation Library (see the file header)                           | the unzipped packs, `sharp`, gltf-transform, meshoptimizer                     |
 | `build-props.ts`      | `models/props.glb` + the trim atlas `tex/kit_*.webp` from Quaternius's CC0 Medieval Village and Fantasy Props MegaKits (doors, windows, rails, barrels, crates, wagon...), the re-UV'd revolver and the dynamite bundle  | the unzipped kits, `tools/art/props-src.glb`                                   |
 | `make-luts.ts`        | Export the in-game time-of-day grades (`engine/lut.ts`) as 32³ `.cube` files for a colourist                                                                                                                             | none                                                                           |
-| `ui-audit.ts`         | UI layout audit of every game screen at five sizes in real Chrome: text overflow, clipping, ellipses on short text, overlapping text, tap targets, game fonts on controls, dead primary buttons. See below               | a dev server, a local API, Playwright                                          |
+| `ui-audit.ts`         | UI layout audit of every game screen at twelve sizes in real Chrome: text overflow, clipping, ellipses on short text, overlapping text, tap targets, game fonts on controls, dead primary buttons. See below             | a dev server, a local API, Playwright                                          |
 | `float-audit.ts`      | Floating-object audit of both scenes (duel street, Frontier) at both tiers in real Chrome: floaters, kit pieces off their wall, props sunk into a deck, z-fighting faces; `--shots=dir` saves low-angle views. See below | a dev server, Playwright                                                       |
 | `art/`                | Source art for generated textures (e.g. `signboard_src.webp`, Gemini)                                                                                                                                                    |                                                                                |
 | `audio/`              | The soundtrack: `manifest.ts` (every ElevenLabs prompt), `generate.ts`, `recipes.ts` + `build.ts` (master to −16/−18 LUFS, ≤ −1 dBTP, loop points), `loudness.ts` (report), `verify-duel.ts` (in-browser meters)         | `ffmpeg` (with `aac_at`), Apparish generators, Playwright for `verify-duel.ts` |
@@ -94,7 +94,10 @@ bun tools/ui-audit.ts --size=375x812 --screen=store --shots=after   # one size, 
 bun tools/ui-audit.ts --guest                  # signed-out screens and fixtures only (no account)
 ```
 
-Sizes: 375x812 and 812x375 (touch, DPR 3), 390x844, 360x740 (touch), 1440x900 (mouse). Screens are
+Sizes: 375x812 and 812x375 (touch, DPR 3), 390x844, 360x740 (touch), 1440x900 (mouse), the
+iPhone Duo foldable (outer 466x678, outer in Safari 382x580, inner 951x669 and 669x951, iPhone UA)
+and iPad (mini 744x1133, 13-inch 1376x1032, one-third Split View 320x1032, iPad UA), so
+`platform/device.ts` scales them as on the device. Screens are
 reached by playing where that's quick (title, credits, the hub and every hub sheet, the Outfitter's
 tabs and a dye job, both leaderboard tabs, account and delete, profile, report, the queue, the
 licence gate, notices, prestige, the closed town, the Frontier practice HUD and pause). The rest are

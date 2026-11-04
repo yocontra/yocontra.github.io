@@ -6,7 +6,7 @@
  * `--stress`), in real Chrome. One table, so regressions show.
  *
  *   bun tools/perf-suite.ts [--rate=4] [--stress] [--secs=20] [--screen=substr] [--portrait]
- *     [--no-build] [--port=4387] [--sustained=600] [--profile=screen]
+ *     [--no-build] [--port=4387] [--sustained=600] [--profile=screen] [--devices]
  *
  * Screens: the title, the saloon hub, the Outfitter, a Quick Draw duel (level 7, played: it holds to
  * walk, waits, fires on the call, then sits through the kill cam; one row per phase), and Frontier
@@ -14,8 +14,8 @@
  * packed. Bounty Hunt is the duel's scene and director against a remote opponent; it needs the API
  * and a second client, so the Quick Draw rows stand in for it.
  *
- * Each row: draws and triangles (max), textures (count, estimated MB), JS heap (after a forced GC
- * before sampling, then the median), CPU p50 / p95 / p99 per frame (every rAF callback timed by an
+ * Each row: draws and triangles (max), textures (count, estimated MB), JS heap (the median while
+ * sampling, garbage included, and `retained`: after forced GCs at the end), CPU p50 / p95 / p99 per frame (every rAF callback timed by an
  * init script, so it's the whole frame's JavaScript and GL submission), long frames (a frame
  * interval over 16.7 ms by more than a fifth: a missed vsync) and frames whose CPU alone is over
  * 16.7 ms.
@@ -28,6 +28,7 @@
 import process from 'node:process'
 // biome-ignore lint/correctness/noUnresolvedImports: playwright's CommonJS re-exports are invisible to Biome
 import { type BrowserContext, type CDPSession, chromium, type Page } from 'playwright'
+import { deviceTiers } from './perf-devices.ts'
 import { profileMain, serveProd, startProfile, stopProfile } from './perf-lib.ts'
 
 const opt = (k: string, d: string): string =>
@@ -69,6 +70,7 @@ const SAMPLER = `(() => {
 
 type Frame = [number, number, string]
 interface Snap {
+  dpr: number
   draws: number
   tris: number
   textures: number
@@ -81,6 +83,8 @@ interface Snap {
 interface Row {
   screen: string
   rate: number
+  /** JS heap right after a forced GC at the end of the run (what's retained, not garbage). */
+  retainedMb?: number
   frames: Frame[]
   snaps: Snap[]
 }
@@ -137,6 +141,16 @@ async function gc(cdp: CDPSession): Promise<void> {
   await cdp.send('HeapProfiler.collectGarbage').catch(() => undefined)
 }
 
+/** MB of JS heap still reachable: two forced GCs, then the used size. */
+async function retained(page: Page, cdp: CDPSession): Promise<number> {
+  await gc(cdp)
+  await gc(cdp)
+  return page.evaluate(() => {
+    const m = (performance as Performance & { memory?: { usedJSHeapSize: number } }).memory
+    return m ? m.usedJSHeapSize / 1_048_576 : 0
+  })
+}
+
 /** Title, hub and Outfitter: one page walked through. */
 async function menus(ctx: BrowserContext, rate: number): Promise<void> {
   if (!['title', 'hub', 'outfitter'].some(want)) {
@@ -150,10 +164,18 @@ async function menus(ctx: BrowserContext, rate: number): Promise<void> {
     await gc(cdp)
     await cdp.send('Emulation.setCPUThrottlingRate', { rate })
     await sleep(3000)
+    // a menu is profiled while it's used (the browsing is where its hitches are)
+    const profiling = profileScreen !== '' && screen.includes(profileScreen)
+    if (profiling) {
+      await startProfile(cdp)
+    }
     const r = await sample(page, secs * 1000, each)
-    await maybeProfile(screen, cdp)
+    if (profiling) {
+      console.log(`profile: ${screen} (while browsing)`)
+      await stopProfile(cdp, true)
+    }
     await cdp.send('Emulation.setCPUThrottlingRate', { rate: 1 })
-    rows.push({ screen, rate, ...r })
+    rows.push({ screen, rate, ...r, retainedMb: await retained(page, cdp) })
   }
   if (want('title')) {
     await run('title')
@@ -230,6 +252,35 @@ async function drive(page: Page, cdp: CDPSession, st: DuelState): Promise<boolea
   return st.doneAt > 0 && Date.now() - st.doneAt > 7000
 }
 
+/** Through the intro and the poster to the walk (unthrottled), tapping past them. */
+async function toWalk(page: Page, x: number, y: number): Promise<void> {
+  for (let i = 0; i < 120 && (await label(page)) !== 'walk'; i++) {
+    if (i % 4 === 0) {
+      await page.touchscreen.tap(x, y).catch(() => undefined)
+    }
+    await sleep(500)
+  }
+}
+
+/** `--profile=call`: profile from the wait to 1.5 s after the duel is decided. */
+async function callWindow(
+  page: Page,
+  cdp: CDPSession,
+  st: DuelState,
+  state: 'off' | 'on' | 'done',
+): Promise<'off' | 'on' | 'done'> {
+  if (state === 'off' && (await label(page)) === 'wait') {
+    await startProfile(cdp)
+    return 'on'
+  }
+  if (state === 'on' && st.doneAt && Date.now() - st.doneAt > 1500) {
+    console.log('profile: duel wait, call and shot')
+    await stopProfile(cdp, true, 12)
+    return 'done'
+  }
+  return state
+}
+
 /** A Quick Draw duel, played through: hold to walk, fire on the call, the kill cam. */
 async function duel(ctx: BrowserContext, rate: number): Promise<void> {
   if (!want('duel')) {
@@ -243,26 +294,26 @@ async function duel(ctx: BrowserContext, rate: number): Promise<void> {
   const vp = page.viewportSize() ?? { width: 812, height: 375 }
   const cx = vp.width / 2
   const cy = vp.height / 2
-  // through the intro and poster to the walk, unthrottled
-  for (let i = 0; i < 120 && (await label(page)) !== 'walk'; i++) {
-    if (i % 4 === 0) {
-      await page.touchscreen.tap(cx, cy).catch(() => undefined)
-    }
-    await sleep(500)
-  }
+  await toWalk(page, cx, cy)
   await gc(cdp)
   await cdp.send('Emulation.setCPUThrottlingRate', { rate })
   await drain(page)
   const snaps: Snap[] = []
   const frames: Frame[] = []
-  // `--profile=duel`: the whole played duel, walk to kill cam
+  // `--profile=duel`: the whole played duel, walk to kill cam; `--profile=call`: from the wait
+  // to 1.5 s after the shot (the bell, the draw and the hit)
   const profiling = profileScreen !== '' && 'duel'.includes(profileScreen)
+  const callOnly = profileScreen === 'call'
+  let callProfile: 'off' | 'on' | 'done' = 'off'
   if (profiling) {
     await startProfile(cdp)
   }
   const st: DuelState = { holding: false, fired: false, doneAt: 0, x: cx, y: cy }
   const t0 = Date.now()
   while (Date.now() - t0 < 150_000 && !(await drive(page, cdp, st))) {
+    if (callOnly) {
+      callProfile = await callWindow(page, cdp, st, callProfile)
+    }
     frames.push(...(await drain(page)))
     if (frames.length % 6 === 0) {
       const s = await snap(page)
@@ -277,11 +328,29 @@ async function duel(ctx: BrowserContext, rate: number): Promise<void> {
     console.log('profile: duel (walk to kill cam)')
     await stopProfile(cdp, true)
   }
+  if (callOnly) {
+    const call = frames.filter((r) => r[2] === 'call' || r[2] === 'win')
+    console.log(
+      `  call/win frames over 12 ms: ${
+        call
+          .filter((r) => r[1] > 12)
+          .map((r) => `${r[2]} ${r[1].toFixed(1)}`)
+          .join(', ') || 'none'
+      }`,
+    )
+  }
+  const kept = await retained(page, cdp)
   // one row per phase
   for (const ph of ['walk', 'turn', 'wait', 'call', 'win', 'lose', 'coward']) {
     const f = frames.filter((r) => r[2] === ph)
     if (f.length > 10) {
-      rows.push({ screen: `duel ${ph === 'win' ? 'win+killcam' : ph}`, rate, frames: f, snaps })
+      rows.push({
+        screen: `duel ${ph === 'win' ? 'win+killcam' : ph}`,
+        rate,
+        frames: f,
+        snaps,
+        retainedMb: kept,
+      })
     }
   }
   await page.close()
@@ -338,6 +407,7 @@ async function frontier(
     }
   } else {
     const r = await sample(page, ms, pan)
+    row.retainedMb = await retained(page, cdp)
     row.frames = r.frames
     row.snaps = r.snaps
     await maybeProfile(screen, cdp)
@@ -391,6 +461,10 @@ const browser = await chromium.launch({
   args: ['--use-angle=metal', '--ignore-gpu-blocklist', '--enable-precise-memory-info'],
 })
 try {
+  if (process.argv.includes('--devices')) {
+    await deviceTiers(browser, GAME)
+    rates.length = 0
+  }
   for (const rate of rates) {
     const ctx = await browser.newContext({ hasTouch: true })
     await menus(ctx, rate)
@@ -427,6 +501,7 @@ const head = [
   'tex',
   'tex MB',
   'heap MB',
+  'retained',
   'CPU p50',
   'p95',
   'p99',
@@ -444,6 +519,7 @@ const table = rows.map((r) => {
     String(max(r.snaps.map((x) => x.textures))),
     max(r.snaps.map((x) => x.textureMb)).toFixed(0),
     med(r.snaps.map((x) => x.heapMb ?? 0)).toFixed(1),
+    r.retainedMb === undefined ? '-' : r.retainedMb.toFixed(1),
     s.p50.toFixed(1),
     s.p95.toFixed(1),
     s.p99.toFixed(1),
@@ -455,13 +531,15 @@ const table = rows.map((r) => {
 const widths = head.map((h, i) => Math.max(h.length, ...table.map((r) => (r[i] ?? '').length)))
 const line = (cells: string[]): string =>
   `| ${cells.map((c, i) => (i === 0 ? c.padEnd(widths[i] ?? 0) : c.padStart(widths[i] ?? 0))).join(' | ')} |`
-console.log(line(head))
-console.log(
-  `|${widths.map((w, i) => (i === 0 ? `:${'-'.repeat(w + 1)}` : `${'-'.repeat(w + 1)}:`)).join('|')}|`,
-)
-for (const r of table) {
-  console.log(line(r))
+if (table.length > 0) {
+  console.log(line(head))
+  console.log(
+    `|${widths.map((w, i) => (i === 0 ? `:${'-'.repeat(w + 1)}` : `${'-'.repeat(w + 1)}:`)).join('|')}|`,
+  )
+  for (const r of table) {
+    console.log(line(r))
+  }
+  console.log(
+    'Bounty Hunt shares the duel rows (same scene and director; it needs the API and a second client).',
+  )
 }
-console.log(
-  'Bounty Hunt shares the duel rows (same scene and director; it needs the API and a second client).',
-)

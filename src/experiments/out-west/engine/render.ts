@@ -14,7 +14,6 @@ import {
   VignetteEffect,
 } from 'postprocessing'
 import {
-  type Camera,
   Color,
   DirectionalLight,
   HalfFloatType,
@@ -33,6 +32,7 @@ import {
 import { ATMOS, HAZE_GLSL } from '../scene/atmos.ts'
 import { GpuTimer, PerfOverlay, perfRequested, Window } from '../ui/perf.ts'
 import { LUT_SIZE, lutsAt } from './lut.ts'
+import { applyOverlay, type OverlaySpec } from './overlay.ts'
 import { TownProbe } from './probe.ts'
 import {
   cachedQuality,
@@ -44,6 +44,7 @@ import {
   specFor,
   type TierSpec,
 } from './tiers.ts'
+import { compileOverride } from './warm.ts'
 
 /**
  * The coarse hint main.ts passes ('high' on desktop, 'low' on touch). The
@@ -287,6 +288,8 @@ const DYN = {
   thermalMs: 180_000,
   /** After a step down, wait this long before trying to climb. */
   holdMs: 4000,
+  /** Low Power Mode's 30 Hz cap held this long: step down one tier (once a session). */
+  lowPowerMs: 3000,
 } as const
 
 const NEXT_DOWN: Record<Quality, Quality | null> = {
@@ -340,6 +343,8 @@ export class Renderer {
   private floorSince = 0
   private lastDay = -1
   private readonly mode: RenderMode
+  /** The size and ratio last applied by `resize()`. */
+  private readonly applied = { w: 0, h: 0, dpr: 0 }
 
   get quality(): string {
     return this.tier
@@ -493,9 +498,23 @@ export class Renderer {
     this.resize()
   }
 
+  /**
+   * Fits the backing store to the viewport. Skips the work when nothing changed: iOS fires
+   * `resize` for toolbar and keyboard moves, and Stage Manager fires dozens while a window is
+   * dragged, and every real resize reallocates the composer's targets (a visible hitch). The
+   * pixel ratio is re-read each time, since an iPad window can move to an external display.
+   */
   resize(): void {
     const w = window.innerWidth
     const h = window.innerHeight
+    this.dpr = this.baseDpr() * this.scale
+    const a = this.applied
+    if (w === a.w && h === a.h && this.dpr === a.dpr) {
+      return
+    }
+    a.w = w
+    a.h = h
+    a.dpr = this.dpr
     this.gl.setPixelRatio(this.dpr)
     this.composer.setSize(w, h)
     this.camera.aspect = w / h
@@ -524,8 +543,9 @@ export class Renderer {
     const capped = med > 30 && med < 37 && refresh > 28 && this.cpu.pct(0.9) < 10
     this.lowPower = capped
     if (capped) {
-      return false
+      return this.lowPowerStep(now, allowTierDrop)
     }
+    this.lowPowerSince = 0
     const s = this.spec
     let next = this.scale
     if (p90 > Math.max(refresh * 1.15, 17.5)) {
@@ -555,31 +575,51 @@ export class Renderer {
   }
 
   /**
-   * Draw `scene` through `camera` over the main scene, into the same buffer and before the post
-   * chain, so it is graded like the rest of the frame: no clear, no background, no shadow-map
-   * update. Its depth has to win on its own (Frontier's view model squeezes its depth range into
-   * the nearest 1%). `enabled` false skips it at no cost; null removes it.
+   * Low Power Mode (iOS caps rAF at 30 Hz to save battery): the frame has twice the time, but the
+   * player asked for less power, so after 3 s of it step down one tier, once a session, and keep
+   * the resolution where it is (a drop in resolution wouldn't lift the cap).
    */
-  setOverlay(o: { scene: Scene; camera: Camera; enabled: boolean } | null): void {
-    if (!o) {
-      if (this.overlayPass) {
-        this.composer.removePass(this.overlayPass)
-        this.overlayPass.dispose()
-        this.overlayPass = null
-      }
-      return
+  private lowPowerStep(now: number, allowTierDrop: boolean): boolean {
+    this.lowPowerSince ||= now
+    const down = NEXT_DOWN[this.tier]
+    if (
+      !allowTierDrop ||
+      this.lowPowerDropped ||
+      !down ||
+      now - this.lowPowerSince < DYN.lowPowerMs
+    ) {
+      return false
     }
-    if (!this.overlayPass) {
-      const pass = new RenderPass(o.scene, o.camera)
-      pass.clear = false
-      pass.ignoreBackground = true
-      pass.skipShadowMapUpdate = true
-      this.composer.addPass(pass, 1)
-      this.overlayPass = pass
+    this.lowPowerDropped = true
+    this.setTier(down)
+    return true
+  }
+
+  private lowPowerSince = 0
+  private shadowFrame = 0
+  private lensWarm = 0
+
+  /**
+   * Floor and legacy redraw the sun's shadow map every other frame (30 Hz). The map and its
+   * matrix stay a matched pair, so a skipped frame shows the last frame's moving shadows (a rider,
+   * a duelist's arm), never a misplaced one. The shadow pass walks the whole scene and redraws
+   * every caster (the duel street's kit batch is 55k triangles): about a tenth of the frame's
+   * CPU on the floor proxy, in both modes.
+   */
+  private shadowRate(): void {
+    const sm = this.gl.shadowMap
+    const half = this.tier === 'floor' || this.tier === 'legacy'
+    this.shadowFrame++
+    sm.autoUpdate = !half
+    if (half) {
+      sm.needsUpdate = (this.shadowFrame & 1) === 0
     }
-    this.overlayPass.mainScene = o.scene
-    this.overlayPass.mainCamera = o.camera
-    this.overlayPass.enabled = o.enabled
+  }
+  private lowPowerDropped = false
+
+  /** The Frontier view model's overlay pass (`engine/overlay.ts`); null removes it. */
+  setOverlay(o: OverlaySpec | null): void {
+    this.overlayPass = applyOverlay(this.composer, this.overlayPass, o)
   }
 
   /**
@@ -617,14 +657,36 @@ export class Renderer {
     const rays = this.tier === 'high' ? ((ud.owRays as number | undefined) ?? 0) : 0
     this.atmos.track(this.camera, rays)
     this.gpu?.begin()
+    this.shadowRate()
     this.probe.tick()
+    // the lens pass's program compiles on its first use: draw the first frames with it on (at
+    // zero strength it changes nothing), so that's at load, not on the frame of the first kill
+    const lensOn = this.lensPass.enabled
+    const warm = this.lensWarm < 2
+    if (warm) {
+      this.lensPass.enabled = true
+    }
     this.composer.render(dt)
+    if (warm) {
+      this.lensWarm++
+      this.lensPass.enabled = lensOn
+    }
     this.gpu?.end()
     const info = this.gl.info.render
     this.frame.calls = info.calls
     this.frame.triangles = info.triangles
     this.cpu.push(performance.now() - frameStart)
     this.perf?.update(frameStart)
+  }
+
+  /**
+   * Compile the red flash frame's programs now (call it at a level's setup), not on the frame of
+   * the winning shot: the black override needs its own variant per kind of object (skinned,
+   * instanced, morphed), and a new outlaw can bring a new one. Same state as the flash frame
+   * (no fog, drawn to the screen), every drawable in the scene, not only what's in view.
+   */
+  warmSilhouette(hidden: readonly { visible: boolean }[]): void {
+    compileOverride({ gl: this.gl, scene: this.scene, camera: this.camera }, this.black, hidden)
   }
 
   /** The red flash frame: black silhouettes on pure #F00, bypassing all grading. */

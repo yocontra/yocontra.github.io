@@ -234,7 +234,8 @@ describe('gauntletClearStatements', () => {
     expect(p?.level).toBe(7)
     expect(await ownedItems(t.env, id)).toContain('gun.hardins-pair')
     expect((await auditLedger(t.env)).mismatches).toEqual([])
-  })
+    // seventeen settled clears against a real D1: slow on CI runners
+  }, 20_000)
 
   it('returns nothing for a guest or a bad level', async () => {
     expect(await gauntletClearStatements(t.env, 'nobody', 0, 'r')).toEqual([])

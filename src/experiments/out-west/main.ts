@@ -8,6 +8,8 @@ import { restoreSession } from './net/auth.ts'
 import { RankedSession } from './net/ranked.ts'
 import { Turnstile } from './net/turnstile.ts'
 import { unlockAudio } from './platform/audio.ts'
+import { installDevice, readDevice } from './platform/device.ts'
+import { installGamepad } from './platform/gamepad.ts'
 import { setHapticsEnabled } from './platform/haptics.ts'
 import { installViewportVars } from './platform/viewport.ts'
 import { load, type SaveData, save } from './save.ts'
@@ -32,9 +34,9 @@ function pickTier(param: string | null): Tier {
   if (chosen !== 'auto') {
     return chosen
   }
-  const coarse = matchMedia('(pointer: coarse)').matches
-  const small = Math.min(screen.width, screen.height) < 700
-  return coarse || small ? 'low' : 'high'
+  // phones start at the floor; iPads, foldables and desktops take the device prior (tiers.ts's
+  // devicePrior; Frontier asks tierHint, the same rule)
+  return readDevice().form === 'phone' ? 'low' : 'high'
 }
 
 /** `#level=N` jumps straight to outlaw N; returns true when it did. */
@@ -277,6 +279,9 @@ export function boot(root: HTMLElement): void {
       : makeHub(root, { data, rankedOk: connectRanked !== null, game: () => game, meta })
   wireSettings(root, audio, data, () => game)
   installViewportVars()
+  // form factor, fold/unfold, late WebKit resizes, the pinch guard; then pads and menu arrows
+  installDevice()
+  installGamepad()
   // a silent refresh from the cookie: the hub shows your poster if you're signed in
   restoreSession()
     .then(() => Promise.all([hub?.refresh(), meta.sync()]))
