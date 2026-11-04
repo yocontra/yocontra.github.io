@@ -7,10 +7,11 @@
  *   setSetting(key, value)   change one, persist, tell the listeners
  *   onSettings(cb)           listen (called with the new values); returns the unsubscribe
  *   reducedMotion()          the resolved flag: the player's choice, else the system's
+ *   runFlag(k), setRunFlag   reduced motion, captions, mono audio and toggle walk
  *
- * Reduced motion has one source of truth, the run's save (`save.ts` `settings.reducedMotion`,
- * which the pause menu toggles too): `main.ts` binds it here with `bindReducedMotion`. Until
- * then it follows `prefers-reduced-motion`.
+ * Those four switches have one source of truth, the run's save (`save.ts` `settings`, which the
+ * duel reads): `main.ts` binds them here with `bindRunFlags`. Until then reduced motion follows
+ * `prefers-reduced-motion` and the rest read as their defaults (captions on).
  */
 
 export type Graphics = 'auto' | 'low' | 'high'
@@ -88,26 +89,43 @@ export function onSettings(cb: (s: Readonly<Settings>) => void): () => void {
   return () => listeners.delete(cb)
 }
 
-// ------------------------------------------------------------------------------ reduced motion
+// --------------------------------------------------------------- the run save's switches
+
+/** Switches kept in the run's save (`save.ts` `settings`) that the Settings sheet edits too. */
+export type RunFlag = 'reducedMotion' | 'captions' | 'mono' | 'toggleWalk'
 
 const systemReduced = (): boolean =>
   typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches
 
-let motion: { get: () => boolean; set: (on: boolean) => void } | null = null
+let run: { get: (k: RunFlag) => boolean; set: (k: RunFlag, on: boolean) => void } | null = null
 
-/** Hand reduced motion to the run's save (the one the pause menu edits). */
-export function bindReducedMotion(get: () => boolean, set: (on: boolean) => void): void {
-  motion = { get, set }
+/** Hand the switches to the run's save (the one the duel reads). */
+export function bindRunFlags(
+  get: (k: RunFlag) => boolean,
+  set: (k: RunFlag, on: boolean) => void,
+): void {
+  run = { get, set }
+}
+
+/** One switch; unbound, reduced motion follows the system and captions are on. */
+export function runFlag(k: RunFlag): boolean {
+  if (run) {
+    return run.get(k)
+  }
+  if (k === 'reducedMotion') {
+    return systemReduced()
+  }
+  return k === 'captions'
+}
+
+export function setRunFlag(k: RunFlag, on: boolean): void {
+  run?.set(k, on)
+  for (const cb of listeners) {
+    cb(getSettings())
+  }
 }
 
 /** Reduced motion, resolved: the player's setting, else the system preference. */
 export function reducedMotion(): boolean {
-  return motion ? motion.get() : systemReduced()
-}
-
-export function setReducedMotion(on: boolean): void {
-  motion?.set(on)
-  for (const cb of listeners) {
-    cb(getSettings())
-  }
+  return runFlag('reducedMotion')
 }

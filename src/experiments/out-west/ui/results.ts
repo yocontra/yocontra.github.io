@@ -317,7 +317,8 @@ export function resultView(
   }
   const byOutcome: Record<string, Pick<ResultView, 'tone' | 'title' | 'sub'>> = {
     win: won
-      ? { tone: 'win', title: `${name} is dead`, sub: 'The bounty’s yours.' }
+      ? // the title and the receipt below already say it: no line between them
+        { tone: 'win', title: `${name} is dead`, sub: '' }
       : { tone: 'loss', title: 'You lose', sub: `${name} was quicker.` },
     coward:
       r.culprit === me

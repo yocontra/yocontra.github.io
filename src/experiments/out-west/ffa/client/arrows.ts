@@ -81,9 +81,10 @@ export class ThreatArrows {
       if (!node) {
         break
       }
-      node.hidden = false
-      node.dataset.tone = tone
-      node.style.transform = `translate(${sp.x}px, ${sp.y}px) rotate(${sp.angle}rad) scale(${1.25 - (d / RANGE) * 0.45})`
+      if (node.dataset.tone !== tone) {
+        node.dataset.tone = tone
+      }
+      place(node, sp, 1.25 - (d / RANGE) * 0.45)
     }
     hideFrom(this.nodes, n)
     let b = 0
@@ -103,11 +104,36 @@ export class ThreatArrows {
       if (!node) {
         break
       }
-      node.hidden = false
-      node.style.transform = `translate(${sp.x}px, ${sp.y}px) rotate(${sp.angle}rad) scale(${1.1 - (d / BAG_RANGE) * 0.35})`
+      place(node, sp, 1.1 - (d / BAG_RANGE) * 0.35)
     }
     hideFrom(this.bagNodes, b)
   }
+}
+
+/** Last transform written per node, quantised: the DOM (and style recalc) only sees real moves. */
+const placed = new WeakMap<HTMLElement, { x: number; y: number; a: number; s: number }>()
+
+function place(node: HTMLElement, p: ScreenPoint, scale: number): void {
+  if (node.hidden) {
+    node.hidden = false
+  }
+  const x = Math.round(p.x * 2) / 2
+  const y = Math.round(p.y * 2) / 2
+  const a = Math.round(p.angle * 100) / 100
+  const s = Math.round(scale * 50) / 50
+  let last = placed.get(node)
+  if (!last) {
+    last = { x: Number.NaN, y: 0, a: 0, s: 0 }
+    placed.set(node, last)
+  }
+  if (last.x === x && last.y === y && last.a === a && last.s === s) {
+    return
+  }
+  last.x = x
+  last.y = y
+  last.a = a
+  last.s = s
+  node.style.transform = `translate(${x}px, ${y}px) rotate(${a}rad) scale(${s})`
 }
 
 function hideFrom(nodes: readonly HTMLElement[], from: number): void {

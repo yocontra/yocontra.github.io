@@ -201,7 +201,7 @@ describe('ledgerStatements', () => {
 })
 
 describe('gauntletClearStatements', () => {
-  it('pays a first clear once per account, then repeat XP capped at 200 a day', async () => {
+  it('pays a first clear once per account, then repeat XP (10 + 2·level) capped at 600 a day', async () => {
     const id = await newPlayer()
     await t.db.batch(await gauntletClearStatements(t.env, id, 2, 'run1'))
     let p = await getProfile(t.env, id)
@@ -210,16 +210,17 @@ describe('gauntletClearStatements', () => {
     // Same outlaw on another run: repeat XP only.
     await t.db.batch(await gauntletClearStatements(t.env, id, 2, 'run2'))
     p = await getProfile(t.env, id)
-    expect(p?.xp).toBe(80)
+    expect(p?.xp).toBe(84)
     expect(p?.purse).toBe(260)
-    for (let i = 3; i < 40; i++) {
+    for (let i = 3; i < 60; i++) {
       // biome-ignore lint/performance/noAwaitInLoops: sequential runs
       const s = await gauntletClearStatements(t.env, id, 2, `run${i}`)
       if (s.length > 0) {
         await t.db.batch(s)
       }
     }
-    expect((await getProfile(t.env, id))?.xp).toBe(70 + 200)
+    // 14 XP a repeat on outlaw 3: 42 of them fit under 600
+    expect((await getProfile(t.env, id))?.xp).toBe(70 + 42 * 14)
   })
 
   it('the full gauntlet grants every first clear and Hardin’s Pair', async () => {

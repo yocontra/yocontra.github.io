@@ -31,17 +31,20 @@ export const FEEL = {
   callHoldMs: 500,
   /** The [BELL TOLLS] caption clears this long after the call. */
   callCaptionMs: 1200,
-  /** The act theme keeps playing on the walk, a step back so the paces and lines come through. */
-  walkDuckDb: -8,
-  walkLowpass: 7000,
-  /** Music during the turn and wait: quieter again, still playing, under the bell's register. */
+  /**
+   * On the walk the act theme thins to its sparse duel cue (`AudioEngine.musicSection`) and steps
+   * back, so the paces and lines come through (`tools/audio/MIX.md`).
+   */
+  walkDuckDb: -6,
+  walkLowpass: 9000,
+  /** Music during the turn and wait: the cue again, quieter and darker, under the bell's register. */
   waitDuckDb: -13,
   /**
    * The tension bed's standoff duck. Its drones sit below the lowpass, so it ducks deeper to land
    * where the score has always sat under the bell (about -35 dB on the music bus).
    */
   tensionWaitDuckDb: -18,
-  waitLowpass: 2800,
+  waitLowpass: 3000,
   tieMs: 8,
   secondShotMs: 300,
   delmerGapMs: 120,

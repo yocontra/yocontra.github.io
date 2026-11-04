@@ -99,7 +99,7 @@
 /* landscape phones: DRAW! stays in the top fifth, clear of the outlaw in the centre band */
 @media (max-height: 450px) {
   .ow-cap-call {
-    top: max(2vh, var(--ow-sai-t));
+    top: max(14px, var(--ow-sai-t));
     font-size: min(18vh, 64px);
     -webkit-text-stroke-width: 2px;
   }

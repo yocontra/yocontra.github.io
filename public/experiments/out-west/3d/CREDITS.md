@@ -165,7 +165,7 @@ Prompts are in `tools/audio/manifest.ts` (music) and `tools/audio/voices.ts` (vo
 | `paper.webp` (768², 45 KB), `leather.webp` (768², 83 KB), `smoke.webp` (768², 8 KB) | Cotton rag handbill stock, worn saddle leather, smoke-darkened endpaper: generated (Gemini, 2026-11 art pass), made seamless with `tools/seamless.ts` | First-party |
 | `poster.webp`, `wood.webp` | Wanted-poster stock, saloon planks: generated (Gemini), resized and compressed | First-party |
 | `seal.webp` | Red wax seal: generated (Gemini), chroma-keyed | First-party |
-| `duel-woodcut.webp` | Title woodcut of a street duel: generated (Gemini) | First-party |
+| `title-duel.svg` (100 KB, 34 KB gzipped) | Title key art: the duel street at noon (the courthouse clock tower, false fronts, mesas, two gunmen) as a two-ink relief print. Drawn by hand as geometry in `tools/build-title-art.ts` (true one-point perspective, no image generator, no lettering); ink spread, wear and misregistration are SVG filters | First-party |
 | `corner.svg`, `rule.svg`, `src/experiments/out-west/ui/icons.ts` | Printer's ornaments and the 12-icon set: generated (Gemini) as raster references, traced to vectors with potrace | First-party |
 | `torn.svg` | Torn paper edge mask: generated procedurally | First-party |
 

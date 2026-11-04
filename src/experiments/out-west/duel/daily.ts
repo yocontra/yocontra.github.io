@@ -1,0 +1,188 @@
+/**
+ * The Daily Outlaw on the street (meta-game stream): one server-judged duel against the day's
+ * outlaw, with its modifiers (fog, two fake-outs, no bell), then back to the saloon.
+ *
+ * It rides the ranked machinery: the DailySession speaks the ranked protocol, so the duel runs on
+ * a `RankedDuelClock` and the director plays it like any ranked standoff. Through
+ * `Director.hooks` it stops the gauntlet from moving on: no next outlaw, no retry (a retry is a
+ * new ticket). Your gauntlet save is set aside for the duel and put back after, untouched.
+ */
+import type { DailySpec } from '../data/daily.ts'
+import { FEEL } from '../data/feel.ts'
+import type { Press } from '../engine/input.ts'
+import { reportDuel } from '../meta/events.ts'
+import type { RankedSession } from '../net/ranked.ts'
+import { emptyRun, save as persist, type SaveData } from '../save.ts'
+import { LocalDuelClock, type Verdict } from './clock.ts'
+import type { Director, DirectorHooks } from './director.ts'
+import { emptyStreet } from './mode.ts'
+import { startAmbience } from './present.ts'
+import { RankedDuelClock } from './ranked-clock.ts'
+import type { Phase } from './state.ts'
+
+export interface DailyOpts {
+  spec: DailySpec
+  session: RankedSession
+  /** Back at the saloon: the server's verdict, or null if the duel never finished. */
+  onExit: (v: Verdict | null) => void
+}
+
+/** Fog thickening on a fog day (0..1, `World.windyFog`). */
+const FOG = 0.85
+/** Presses this soon after a result is shown are the draw's follow-through, not "leave". */
+const PRESS_GRACE_S = 0.8
+
+export class DailyDuel implements DirectorHooks {
+  private readonly d: Director
+  private readonly o: DailyOpts
+  private readonly realSave: SaveData
+  private verdict = null as Verdict | null
+  private over = false as boolean
+
+  constructor(d: Director, o: DailyOpts) {
+    this.d = d
+    this.o = o
+    this.realSave = d.c.save
+    const scratch = structuredClone(d.c.save)
+    scratch.settings = d.c.save.settings
+    scratch.legend = false
+    scratch.run = emptyRun()
+    scratch.attempts = {}
+    scratch.best = {}
+    d.c.save = scratch
+    d.clock.dispose()
+    d.clock = new RankedDuelClock(o.session, {
+      ...d.events,
+      verdict: (v) => this.onVerdict(v),
+      dropped: (reason) => this.onDropped(reason),
+    })
+    d.hooks = this
+    d.duelId = -1
+    d.standoffSent = false
+    d.c.hud.show(true)
+    d.c.hud.setMode('DAILY OUTLAW')
+    d.c.hud.setPurse(0, false)
+    startAmbience(d)
+    d.startLevel(o.spec.outlaw, false)
+    this.dress()
+  }
+
+  private get spec(): DailySpec {
+    return this.o.spec
+  }
+
+  /** The day's modifiers, set after `startLevel` (it resets them) and before the standoff. */
+  private dress(): void {
+    const d = this.d
+    d.daily = true
+    const noBell = this.spec.modifiers.includes('no-bell')
+    d.callPresentation = { bell: !noBell, text: !noBell }
+  }
+
+  private onVerdict(v: Verdict): void {
+    const d = this.d
+    if (!this.verdict) {
+      this.verdict = v
+      // the duel report skips hooked duels, so the daily reports its own
+      reportDuel({
+        level: d.level,
+        legend: false,
+        ranked: true,
+        outcome: v.outcome,
+        reactionMs: v.outcome === 'coward' ? null : v.reactionMs,
+        secondChance: d.secondChance,
+        hatShot: d.hatShot,
+        fakesSeen: d.fakesSeen,
+        firstTry: true,
+        daily: true,
+      })
+    }
+    d.events.verdict(v)
+  }
+
+  private onDropped(reason: string): void {
+    if (this.verdict || this.over) {
+      // the server closes the line once the duel is recorded
+      return
+    }
+    this.d.c.hud.fake(`[${reason} That try is void.]`, 3000)
+    this.leave()
+  }
+
+  tick(phase: Phase, _now: number, _dt: number): boolean {
+    const d = this.d
+    if (this.over) {
+      return false
+    }
+    if (this.spec.modifiers.includes('fog') && phase !== 'poster' && phase !== 'intro') {
+      d.c.world.windyFog(FOG)
+    }
+    if (phase === 'cock' && d.phaseT < 0.05) {
+      // a retry path would reset these: keep the day's modifiers on
+      this.dress()
+    }
+    const t = d.phaseT
+    switch (phase) {
+      case 'win':
+        if (t >= FEEL.resultAt + FEEL.resultFor - 0.05) {
+          this.leave()
+          return true
+        }
+        return false
+      case 'lose':
+        if (t >= FEEL.loseAutoRetry - 0.05) {
+          this.leave()
+          return true
+        }
+        return false
+      case 'coward':
+        if (t >= FEEL.cowardAutoRetry - 0.05) {
+          this.leave()
+          return true
+        }
+        return false
+      default:
+        return false
+    }
+  }
+
+  press(p: Press): boolean {
+    const d = this.d
+    if (this.over) {
+      return false
+    }
+    if (p.action === 'pause') {
+      this.leave()
+      return true
+    }
+    const after = d.phase === 'win' ? d.resultShown : d.phase === 'lose' || d.phase === 'coward'
+    if (after && d.phaseT > PRESS_GRACE_S) {
+      this.leave()
+      return true
+    }
+    return false
+  }
+
+  /** Back to the saloon: the ranked clock closed, the gauntlet save restored. */
+  leave(): void {
+    if (this.over) {
+      return
+    }
+    this.over = true
+    const d = this.d
+    d.hooks = null
+    d.daily = false
+    d.callPresentation = { bell: true, text: true }
+    d.clock.dispose()
+    d.clock = new LocalDuelClock(d.events)
+    this.o.session.close()
+    d.c.save = this.realSave
+    persist(this.realSave)
+    d.c.hud.setPurse(this.realSave.run.total, false)
+    d.c.hud.setMode('PRACTICE · not ranked')
+    d.duelId = -1
+    d.standoffSent = false
+    emptyStreet(d)
+    this.o.onExit(this.verdict)
+  }
+}

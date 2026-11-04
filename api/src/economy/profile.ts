@@ -10,7 +10,7 @@ import {
   normalizeLoadout,
   STARTER_ITEMS,
 } from '../../../src/experiments/out-west/data/catalog.ts'
-import { START_PURSE } from '../../../src/experiments/out-west/data/progression.ts'
+import { START_PURSE, storeLevel } from '../../../src/experiments/out-west/data/progression.ts'
 import type { Env } from '../env.ts'
 import { ledgerStatements } from './ledger.ts'
 
@@ -25,6 +25,7 @@ interface ProfileRow {
   prestige: number
   loadout: string
   gauntlet_clears: number
+  solo_xp: number
 }
 
 function parseLoadout(raw: string): Profile['loadout'] {
@@ -36,12 +37,16 @@ function parseLoadout(raw: string): Profile['loadout'] {
 }
 
 const SELECT_PROFILE = `SELECT p.account_id, a.name, p.purse, p.xp, p.level, p.prestige, p.loadout,
-  p.gauntlet_clears
+  p.gauntlet_clears, p.solo_xp
 FROM profiles p LEFT JOIN accounts a ON a.id = p.account_id WHERE p.account_id = ?`
 
 /** A profile plus the extra columns the routes need. */
 export interface ProfileDetail extends Profile {
   gauntletClears: number
+  /** XP earned in single player since the last prestige. */
+  soloXp: number
+  /** The level the Outfitter's gates check (solo levels count ~3×). */
+  storeLevel: number
 }
 
 export async function getProfileDetail(env: Env, accountId: string): Promise<ProfileDetail | null> {
@@ -58,6 +63,8 @@ export async function getProfileDetail(env: Env, accountId: string): Promise<Pro
     prestige: row.prestige,
     loadout: parseLoadout(row.loadout),
     gauntletClears: row.gauntlet_clears,
+    soloXp: row.solo_xp,
+    storeLevel: storeLevel({ level: row.level, xp: row.xp, soloXp: row.solo_xp }),
   }
 }
 
@@ -66,7 +73,7 @@ export async function getProfile(env: Env, accountId: string): Promise<Profile |
   if (!detail) {
     return null
   }
-  const { gauntletClears: _, ...profile } = detail
+  const { gauntletClears: _, soloXp: _s, storeLevel: _l, ...profile } = detail
   return profile
 }
 

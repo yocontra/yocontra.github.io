@@ -77,6 +77,10 @@ body {
   left: max(var(--ow-s3), var(--ow-sai-l));
   text-shadow: var(--ow-text-shadow);
 }
+.ow-counter,
+.ow-mode {
+  transition: opacity var(--ow-t-slow);
+}
 .ow-counter {
   top: max(var(--ow-s3), var(--ow-sai-t));
   display: flex;
@@ -106,6 +110,7 @@ body {
   color: var(--ow-brass);
   transform-origin: left center;
   transition:
+    opacity var(--ow-t-slow),
     color var(--ow-t-mid),
     transform var(--ow-t-mid) var(--ow-ease-slam);
 }
@@ -141,7 +146,9 @@ body {
     var(--ow-shadow-1);
   cursor: pointer;
   pointer-events: auto;
-  transition: transform var(--ow-t-fast) var(--ow-ease-out);
+  transition:
+    opacity var(--ow-t-mid),
+    transform var(--ow-t-fast) var(--ow-ease-out);
 }
 .ow-pause:hover {
   transform: scale(1.06);
@@ -154,6 +161,17 @@ body {
   height: 16px;
   border-radius: 1px;
   background: var(--ow-bone);
+}
+/* The street is the screen. The counter, purse and badge show on the poster and with a result
+   card; from the cocking through the kill cam they step back (a line still connecting stays). */
+.ow[data-duel]:not([data-duel="intro"], [data-duel="poster"]):not(:has(.ow-card.on))
+  :is(.ow-counter, .ow-purse, .ow-mode:not(.alert)),
+.ow-purse.zero {
+  opacity: 0;
+}
+/* the pause button stays tappable but quiet while the street waits for the bell */
+.ow:is([data-duel="wait"], [data-duel="call"], [data-duel="bossClock"]) .ow-pause {
+  opacity: 0.45;
 }
 .ow-pips {
   position: absolute;
@@ -263,28 +281,30 @@ body {
   pointer-events: none;
   z-index: 9;
 }
+/* Captions are subtitles: low on the screen, small, no box, clear of the duellists' faces. They
+   rise above the letterbox only when it is down (the boss's clock). */
 .ow-cap-fake {
-  bottom: calc(max(64px, calc(var(--ow-sai-b) + 52px)) + 12.5vh);
+  bottom: max(64px, calc(var(--ow-sai-b) + 52px));
   font-style: italic;
-  font-size: var(--ow-fs-lead);
+  font-size: var(--ow-fs-body);
   color: var(--ow-bone-2);
-  text-shadow: var(--ow-text-shadow);
-}
-.ow-cap-fake::before,
-.ow-cap-fake::after {
-  content: "\2014";
-  padding: 0 0.4em;
-  font-style: normal;
+  text-shadow:
+    var(--ow-text-shadow),
+    0 0 14px rgb(0 0 0 / 0.5);
 }
 .ow-cap-line {
-  bottom: calc(max(96px, calc(var(--ow-sai-b) + 84px)) + 12.5vh);
-  padding: var(--ow-s2) var(--ow-s3);
-  font-size: var(--ow-fs-lead);
+  bottom: max(92px, calc(var(--ow-sai-b) + 80px));
+  font-size: var(--ow-fs-body);
   line-height: 1.35;
   color: var(--ow-bone);
-  background: rgb(10 6 4 / 0.72);
-  border-radius: var(--ow-radius);
+  text-shadow:
+    var(--ow-text-shadow),
+    0 0 14px rgb(0 0 0 / 0.5);
   text-wrap: balance;
+}
+.ow:has(.ow-letter.on) .ow-cap-fake,
+.ow:has(.ow-letter.on) .ow-cap-line {
+  translate: -50% -12.5vh;
 }
 .ow-cap-line b {
   font-weight: 700;

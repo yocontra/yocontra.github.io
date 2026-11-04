@@ -15,7 +15,9 @@ import {
   type Ch,
   concat,
   fade,
+  filt,
   gain,
+  limit,
   linToDb,
   load,
   loudness,
@@ -25,6 +27,7 @@ import {
   silence,
   slice,
 } from './dsp.ts'
+import { LEGACY } from './legacy.ts'
 import { takePath } from './speak.ts'
 import { VOICE_PICKS } from './voice-picks.ts'
 import { CAST, type Cast, effortLines, type Line, linesOf, PLAYER } from './voices.ts'
@@ -32,7 +35,7 @@ import { CAST, type Cast, effortLines, type Line, linesOf, PLAYER } from './voic
 const ROOT = resolve(import.meta.dir, '../..')
 const PUB = resolve(ROOT, 'public/experiments/out-west/3d/voice')
 const OUT_TS = resolve(ROOT, 'src/experiments/out-west/audio/voices.ts')
-const KBPS = 40
+const KBPS = 48
 /** Silence between lines in a file, s (the engine plays exact slices; this only keeps tails apart). */
 const GAP = 0.12
 
@@ -72,28 +75,93 @@ function bounds(x: Float32Array, rel: number): [number, number] {
   return [a, b]
 }
 
+/**
+ * The voice chain, one for every fresh take so the cast sounds recorded on one mic: rumble off, a
+ * little mud out (250 Hz), presence up (3.5 kHz) so a line cuts through the score on a phone
+ * speaker, sibilance tamed, then an even, gentle squeeze. The street's room is added in the engine.
+ */
+const CHAIN =
+  'highpass=f=85,equalizer=f=250:t=q:w=1.1:g=-2.5,equalizer=f=3500:t=q:w=1.2:g=2.5,deesser=i=0.35:m=0.5:f=0.5,acompressor=threshold=-24dB:ratio=3:attack=5:release=120:makeup=1'
+
+/** A line taken from the speaker's earlier shipped file (`legacy.ts`): levelled, not reprocessed. */
+function legacy(c: Cast, l: Line): Ch | null {
+  const at = LEGACY[c.id]?.[l.key]
+  const f = resolve(import.meta.dir, `legacy/${c.id}.m4a`)
+  if (!(at && existsSync(f))) {
+    return null
+  }
+  return slice(load(f, 1), at[0], at[0] + at[1])
+}
+
+/**
+ * Longest a line may run, s. A caption shows for 2.4 s and the next line may start 2.7 s after one
+ * begins, so the per-pace hecklers (the talker, the counter) must be done by then; anyone else has
+ * a beat more. A death is a breath, not a scene.
+ */
+const MAX_LEN = { pace: 2.6, line: 3.6, death: 3.4 } as const
+const PACERS = new Set(['talker', 'counter'])
+/** Fastest a take may be sped up to fit (beyond this it stops sounding like the same man). */
+const MAX_TEMPO = 1.3
+
+/**
+ * Bring a fresh take inside its time: long pauses inside a spoken line close up to 0.3 s, then the
+ * line is sped up (pitch kept) as far as {@link MAX_TEMPO}; a death that still runs long fades out.
+ */
+function fitTime(c: Cast, l: Line, x: Ch): Ch {
+  const death = l.kind === 'death' || l.text === ''
+  let max: number = PACERS.has(c.id) ? MAX_LEN.pace : MAX_LEN.line
+  if (death) {
+    max = MAX_LEN.death
+  }
+  let y = x
+  if (!death && secs(y) > max) {
+    y = filt(
+      y,
+      'silenceremove=start_periods=0:stop_periods=-1:stop_duration=0.3:stop_threshold=-40dB:detection=rms',
+    )
+  }
+  if (secs(y) > max) {
+    const tempo = Math.min(MAX_TEMPO, secs(y) / max)
+    if (tempo > 1.02 && !death) {
+      y = filt(y, `atempo=${tempo.toFixed(4)}`)
+    }
+  }
+  if (secs(y) > max + 0.05) {
+    console.log(
+      `  ${c.id}/${l.key}: ${secs(y).toFixed(2)} s, over ${max} s${death ? ' (faded)' : ''}`,
+    )
+    if (death) {
+      y = fade(slice(y, 0, max), 0, 0.6)
+    }
+  }
+  return y
+}
+
 function clean(c: Cast, l: Line): Ch | null {
   const take = VOICE_PICKS[`${c.id}/${l.key}`] ?? 1
   const f = takePath(c, l.key, take)
-  if (!existsSync(f)) {
-    console.log(`missing ${c.id}/${l.key} (take ${take})`)
-    return null
+  let cut: Ch
+  if (existsSync(f)) {
+    const r = 2 ** ((c.semis ?? 0) / 12)
+    const shift = c.semis
+      ? `asetrate=${Math.round(SR * r)},aresample=${SR},atempo=${(1 / r).toFixed(6)},`
+      : ''
+    const x = load(f, 1, `${shift}${CHAIN}`)
+    const ch = x[0] ?? new Float32Array(0)
+    const [a, b] = bounds(ch, -38)
+    cut = fitTime(c, l, slice(x, Math.max(0, a / SR - 0.03), Math.min(secs(x), b / SR + 0.08)))
+  } else {
+    const old = legacy(c, l)
+    if (!old) {
+      console.log(`missing ${c.id}/${l.key} (take ${take})`)
+      return null
+    }
+    cut = old
   }
-  const r = 2 ** ((c.semis ?? 0) / 12)
-  const shift = c.semis
-    ? `,asetrate=${Math.round(SR * r)},aresample=${SR},atempo=${(1 / r).toFixed(6)}`
-    : ''
-  // rumble and mic thump off, a touch of presence, then an even, gentle squeeze
-  const x = load(
-    f,
-    1,
-    `highpass=f=90${shift},equalizer=f=3200:t=q:w=1.2:g=2,acompressor=threshold=-24dB:ratio=3:attack=5:release=120:makeup=1`,
-  )
-  const ch = x[0] ?? new Float32Array(0)
-  const [a, b] = bounds(ch, -38)
-  const cut = slice(x, Math.max(0, a / SR - 0.03), Math.min(secs(x), b / SR + 0.08))
   const m = loudness(cut)
-  return fade(gain(cut, TARGET[l.kind] - m.lufs), 0.008, 0.05)
+  // a shouted grunt can peak far over its loudness: hold each line under the file's ceiling, so
+  // one line never pulls the whole file down at the master
+  return fade(limit(gain(cut, TARGET[l.kind] - m.lufs), -1.5), 0.008, 0.05)
 }
 
 function build(c: Cast): {
@@ -206,6 +274,11 @@ export const PLAYER_VOICE: {
 }
 `,
   )
+  // the generated file is checked like any other: leave it as Biome would write it
+  Bun.spawnSync(['bunx', 'biome', 'format', '--write', OUT_TS], {
+    stdout: 'ignore',
+    stderr: 'ignore',
+  })
   console.log(`voices: ${(total / 1024).toFixed(0)} KB in ${built.size} files`)
 }
 

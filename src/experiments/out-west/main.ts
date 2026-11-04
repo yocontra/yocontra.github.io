@@ -3,6 +3,7 @@ import { OUTLAWS } from './data/outlaws.ts'
 import type { RankedConnect } from './duel/director.ts'
 import type { Tier } from './engine/render.ts'
 import type { Game } from './game.ts'
+import { Meta } from './meta/progress.ts'
 import { restoreSession } from './net/auth.ts'
 import { RankedSession } from './net/ranked.ts'
 import { Turnstile } from './net/turnstile.ts'
@@ -10,11 +11,14 @@ import { unlockAudio } from './platform/audio.ts'
 import { setHapticsEnabled } from './platform/haptics.ts'
 import { installViewportVars } from './platform/viewport.ts'
 import { load, type SaveData, save } from './save.ts'
-import { bindReducedMotion, getSettings, onSettings, type Settings } from './settings.ts'
+import { bindRunFlags, getSettings, onSettings, type Settings } from './settings.ts'
 import { Board } from './ui/board.ts'
+import { installGazette } from './ui/gazette.ts'
 import { Hub } from './ui/hub.ts'
+import { hubMeta } from './ui/meta-hub.ts'
 import { loadPosterArt } from './ui/poster.ts'
 import { installUiSounds } from './ui/sfx.ts'
+import { Toaster } from './ui/toast.ts'
 
 /** Hashes that jump into a debug view or a non-default run: never ranked. */
 const UNRANKED_HASHES = ['level', 'legend', 'lineup', 'posters']
@@ -106,15 +110,50 @@ function queueTokens(root: HTMLElement): () => Promise<string | null> {
   }
 }
 
+/** The phases where nothing may pop up: the walk, the wait for the bell, the draw. */
+const QUIET_PHASES = new Set(['walk', 'turn', 'wait', 'call', 'bossClock'])
+
+/** The meta-game: medals, the guest purse, achievements' toasts, the Gazette between duels. */
+function makeMeta(root: HTMLElement, data: SaveData, game: () => Game | null): Meta {
+  const toaster = new Toaster(root, () => QUIET_PHASES.has(game()?.director.phase ?? ''))
+  const meta = new Meta({
+    save: () => game()?.director.c.save ?? data,
+    runId: () => game()?.rankedRunId() ?? null,
+    toast: (t) => toaster.push(t),
+  })
+  installGazette(root, meta)
+  return meta
+}
+
 /** The saloon hub between the title and every mode. */
 function makeHub(
   root: HTMLElement,
-  data: SaveData,
-  rankedOk: boolean,
-  game: () => Game | null,
+  o: { data: SaveData; rankedOk: boolean; game: () => Game | null; meta: Meta },
 ): Hub {
+  const { data, rankedOk, game, meta } = o
   let board: Board | null = null
+  const dailyTokens = queueTokens(root)
   const hub: Hub = new Hub(root, {
+    meta: hubMeta(root, meta, {
+      ready: () => game() !== null,
+      token: dailyTokens,
+      start: (spec, session, back) => {
+        const g = game()
+        if (!g) {
+          session.close()
+          return
+        }
+        hub.hide()
+        g.playDaily({
+          spec,
+          session,
+          onExit: (v) => {
+            hub.show()
+            back(v)
+          },
+        })
+      },
+    }),
     ready: () => game() !== null,
     continueAt: () => data.level,
     rankedOk,
@@ -152,8 +191,8 @@ interface Volumes {
 
 /**
  * The Settings sheet's choices, applied: volumes to the audio engine, vibration to the haptics
- * gate, and reduced motion bound to the run's save (the pause menu edits the same flag) and to a
- * root class the CSS honours like the system preference.
+ * gate, and reduced motion, captions, mono audio and toggle walk bound to the run's save (the duel
+ * reads them there); reduced motion is also a root class the CSS honours like the system's.
  */
 function wireSettings(
   root: HTMLElement,
@@ -169,10 +208,10 @@ function wireSettings(
     setHapticsEnabled(s.vibration)
     root.classList.toggle('ow-reduced', data.settings.reducedMotion)
   }
-  bindReducedMotion(
-    () => data.settings.reducedMotion,
-    (on) => {
-      data.settings.reducedMotion = on
+  bindRunFlags(
+    (k) => data.settings[k],
+    (k, on) => {
+      data.settings[k] = on
       save(data)
       const g = game()
       if (g) {
@@ -231,12 +270,16 @@ export function boot(root: HTMLElement): void {
   let pressed = false
   let started = false
   // a level jump (#level=N) or a debug view skips the hub, as before
-  const hub = jump || debug ? null : makeHub(root, data, connectRanked !== null, () => game)
+  const meta = makeMeta(root, data, () => game)
+  const hub =
+    jump || debug
+      ? null
+      : makeHub(root, { data, rankedOk: connectRanked !== null, game: () => game, meta })
   wireSettings(root, audio, data, () => game)
   installViewportVars()
   // a silent refresh from the cookie: the hub shows your poster if you're signed in
   restoreSession()
-    .then(() => hub?.refresh())
+    .then(() => Promise.all([hub?.refresh(), meta.sync()]))
     .catch(() => undefined)
 
   const setProgress = (f: number) => {

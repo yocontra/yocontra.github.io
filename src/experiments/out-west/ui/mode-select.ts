@@ -25,13 +25,24 @@ interface TileDef {
   icon: IconName
 }
 
+/**
+ * A tile's line under its title is only for what the kicker and title can't say: still loading,
+ * a run to continue, or a sign-in standing in the way. Otherwise it is empty and hidden.
+ */
+const signInFirst = (s: TileState): string => (s.signedIn ? '' : 'Sign in to play')
+
 const TILES: readonly TileDef[] = [
   {
     mode: 'gauntlet',
     icon: 'revolver',
     title: 'Quick Draw',
     kicker: 'Single player',
-    sub: (s) => (s.ready ? '17 outlaws · ranked board' : 'Saddling up…'),
+    sub: (s) => {
+      if (!s.ready) {
+        return 'Saddling up…'
+      }
+      return s.continueAt > 0 ? `Outlaw ${s.continueAt + 1} of 17` : ''
+    },
     online: false,
   },
   {
@@ -39,7 +50,7 @@ const TILES: readonly TileDef[] = [
     icon: 'bounty',
     title: 'Bounty Hunt',
     kicker: 'Live duels',
-    sub: (s) => (s.signedIn ? 'Live PvP · ghosts if the street’s empty' : 'Sign in with a passkey'),
+    sub: signInFirst,
     online: true,
   },
   {
@@ -47,7 +58,7 @@ const TILES: readonly TileDef[] = [
     icon: 'dynamite',
     title: 'Frontier',
     kicker: 'Free-for-all',
-    sub: (s) => (s.signedIn ? '32 guns · bank what you take' : 'Sign in with a passkey'),
+    sub: signInFirst,
     online: true,
   },
   {
@@ -55,7 +66,7 @@ const TILES: readonly TileDef[] = [
     icon: 'hat',
     title: 'Outfitter',
     kicker: 'Cosmetics',
-    sub: (s) => (s.signedIn ? 'Hats, irons, dusters' : 'Browse and try on'),
+    sub: () => '',
     online: false,
   },
 ]
@@ -102,13 +113,17 @@ export interface GauntletChoice {
   resume: boolean
 }
 
-/** Ranked from outlaw 1, or practice (continuing a saved run when there is one). */
+/**
+ * Ranked from outlaw 1, or practice (continuing a saved run when there is one), and the way to
+ * the Gauntlet map when the meta-game is there.
+ */
 export function gauntletSheet(
   root: HTMLElement,
   s: TileState,
-  rankedOk: boolean,
+  o: { rankedOk: boolean; map?: () => void },
   done: (c: GauntletChoice | null) => void,
 ): void {
+  const { rankedOk } = o
   const back = el('div', 'ow-sheet on', root)
   back.setAttribute('role', 'dialog')
   back.setAttribute('aria-label', 'Quick Draw')
@@ -154,12 +169,23 @@ export function gauntletSheet(
     )
   }
   choice('Practice', 'From outlaw 1 · not ranked', { ranked: false, resume: false }, false)
-  const cancel = el('button', 'ow-btn', panel, 'Back')
+  const row = el('div', 'ow-hub-row', panel)
+  const cancel = el('button', 'ow-btn', row, 'Back')
   cancel.type = 'button'
   cancel.addEventListener('click', (e) => {
     e.stopPropagation()
     close(null)
   })
+  const { map } = o
+  if (map) {
+    const m = el('button', 'ow-btn', row, 'Gauntlet map')
+    m.type = 'button'
+    m.addEventListener('click', (e) => {
+      e.stopPropagation()
+      close(null)
+      map()
+    })
+  }
   back.addEventListener('click', (e) => {
     if (e.target === back) {
       close(null)

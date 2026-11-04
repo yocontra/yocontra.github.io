@@ -181,7 +181,6 @@ function pauseMenu(d: Director): void {
         togglePause(d)
         restartRun(d, c.save.legend)
       }),
-    leaderboard: () => openBoard(d, false),
     ...(d.onSaloon
       ? { saloon: () => leaveRanked(d, 'you go back to the saloon', () => toSaloon(d)) }
       : {}),
