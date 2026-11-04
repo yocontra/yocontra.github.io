@@ -316,7 +316,8 @@ export class Outfitter {
       (!me || me.purse < item.price)
     if (unaffordable) {
       b.classList.add('unaffordable')
-      b.setAttribute('aria-disabled', 'true')
+      // dimmed, not disabled: the card is still the way to try the piece on and see its price
+      b.title = me ? `Need ${money(item.price - me.purse)} more to buy` : 'Sign in to buy'
     }
     const badges = el('span', 'ow-item-badges', b)
     if (this.shelf?.isNew(item.id)) {
