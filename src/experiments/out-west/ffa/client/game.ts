@@ -52,6 +52,7 @@ import {
   EV_DEPOSIT,
   EV_KILL,
   NONE,
+  type RosterEntry,
   SELF_ALIVE,
   SELF_DEAD_EYE_READY,
   SELF_HOLSTERED,
@@ -135,6 +136,7 @@ import { MotionTrace, TRACE_FIELDS } from './trace.ts'
 import type { Transport, TransportEvents } from './transport.ts'
 import { fireIntervalMs, policyFor, spreadDeg, spreadPx } from './view.ts'
 import { ViewModel } from './viewmodel.ts'
+import { viewport } from './viewport.ts'
 import { BankGuide } from './wayfinding.ts'
 
 /** Late-afternoon light: the sun low in the south-west, shadows reaching north-east. */
@@ -252,6 +254,7 @@ export class FrontierGame {
   private lastShotAt = -1e9
   /** Dev harness ADS (desktop has no touch AIM toggle). */
   private devAdsOn = false
+  private devWeapon: number | null = null
   /** Dev-only per-frame motion trace (`__frontierTrace`). */
   readonly trace = new MotionTrace()
   private ticksThisFrame = 0
@@ -630,13 +633,22 @@ export class FrontierGame {
       return
     }
     for (const r of this.net.roster.values()) {
-      crowd.setLook(r.id, lookFor(r.loadout, r.id))
+      this.dress(r)
+    }
+  }
+
+  /** One rider's look, on the crowd (and on your first-person arms when it's you). */
+  private dress(r: RosterEntry): void {
+    const look = lookFor(r.loadout, r.id, r.bot)
+    this.crowd?.setLook(r.id, look)
+    if (r.id === this.net.you) {
+      this.viewModel?.setLook(look)
     }
   }
 
   private onControl(m: ServerControl): void {
     if (m.type === 'roster_add') {
-      this.crowd?.setLook(m.entry.id, lookFor(m.entry.loadout, m.entry.id))
+      this.dress(m.entry)
     } else if (m.type === 'roster_remove') {
       this.crowd?.remove(m.id)
       this.score.forget(m.id)
@@ -714,7 +726,7 @@ export class FrontierGame {
     if (!p.has) {
       return null
     }
-    this.ndc.set((p.x / window.innerWidth) * 2 - 1, -(p.y / window.innerHeight) * 2 + 1)
+    this.ndc.set((p.x / viewport.w) * 2 - 1, -(p.y / viewport.h) * 2 + 1)
     this.ray.setFromCamera(this.ndc, this.cam.camera)
     const hit = this.ray.ray.intersectPlane(this.aimPlane, this.tmp)
     if (!hit) {
@@ -1215,7 +1227,7 @@ export class FrontierGame {
     )
     vm.update(
       dt,
-      this.net.weapon.weapon,
+      this.devWeapon ?? this.net.weapon.weapon,
       this.turned.yaw,
       this.turned.pitch,
       speed,
@@ -1422,7 +1434,7 @@ export class FrontierGame {
       zoneAt(TOWN, this.own.x, this.own.z)?.kind === 'bank',
       this.dtS,
     )
-    const portrait = window.innerHeight > window.innerWidth
+    const portrait = viewport.h > viewport.w
     this.hud.rotateHint(this.touchUi && portrait && this.shooterView && this.net.alive)
     if (this.map && nowS - this.mapAt > 0.1) {
       this.mapAt = nowS
@@ -1440,7 +1452,7 @@ export class FrontierGame {
     const deadEyeReady = (flags & SELF_DEAD_EYE_READY) !== 0
     this.bloom *= Math.exp(-this.dtS * 5)
     const deg = spreadDeg(w, moving, deadEyeReady) + this.bloom
-    const gap = Math.max(3, spreadPx(deg, this.cam.camera.fov, window.innerHeight))
+    const gap = Math.max(3, spreadPx(deg, this.cam.camera.fov, viewport.h))
     const range = WEAPON_UI[w]?.range ?? MAX_RANGE
     const onTarget = this.aimRes.target >= 0 && this.aimRes.range <= range
     const show =
@@ -1448,7 +1460,7 @@ export class FrontierGame {
     const closing =
       s && s.deadEyeTicks > 0 ? Math.min(1, s.deadEyeTicks / DEAD_EYE_CLOSE_TICKS) : null
     this.hud.setCrosshair(true, gap, onTarget)
-    this.hud.setReticle(window.innerWidth / 2, window.innerHeight / 2, show, closing, deadEyeReady)
+    this.hud.setReticle(viewport.w / 2, viewport.h / 2, show, closing, deadEyeReady)
   }
 
   /** The once-per-device coach lines, triggered by what just happened. */
@@ -1491,8 +1503,8 @@ export class FrontierGame {
       const v = this.tmp
         .set(this.own.x + Math.cos(this.aim) * d, 1.2, this.own.z + Math.sin(this.aim) * d)
         .project(this.cam.camera)
-      x = (v.x * 0.5 + 0.5) * window.innerWidth
-      y = (-v.y * 0.5 + 0.5) * window.innerHeight
+      x = (v.x * 0.5 + 0.5) * viewport.w
+      y = (-v.y * 0.5 + 0.5) * viewport.h
     }
     const s = this.net.self
     const closing =
@@ -1643,6 +1655,11 @@ export class FrontierGame {
   /** Dev harness only: look as if the mouse moved (pointer lock doesn't run headless). */
   devLook(dx: number, dy: number): void {
     this.desk.injectLook(dx, dy)
+  }
+
+  /** Dev harness only: show a weapon in the first-person hands (null: the one you hold). */
+  devShowWeapon(w: number | null): void {
+    this.devWeapon = w
   }
 
   /** Dev harness only: hold or release aim-down-sights. */

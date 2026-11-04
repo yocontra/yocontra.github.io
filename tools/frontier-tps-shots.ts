@@ -17,7 +17,13 @@ import { mkdirSync } from 'node:fs'
 import process from 'node:process'
 // biome-ignore lint/correctness/noUnresolvedImports: playwright's CommonJS re-exports are invisible to Biome
 import { type Browser, chromium, type Page } from 'playwright'
-import { BOX_WAITING, BTN_FIRE, BTN_INTERACT } from '../src/experiments/out-west/contract/town.ts'
+import {
+  BOX_WAITING,
+  BTN_FIRE,
+  BTN_INTERACT,
+  WEAPON_RIFLE,
+  WEAPON_SHOTGUN,
+} from '../src/experiments/out-west/contract/town.ts'
 import { TOWN } from '../src/experiments/out-west/ffa/sim/layout.ts'
 
 const base = process.argv.find((a) => a.startsWith('http')) ?? 'http://localhost:4375'
@@ -248,6 +254,22 @@ async function views(page: Page, size: string, v: 'third' | 'first'): Promise<vo
   await view(page, 'ads', false)
   await hitShot(page, size, `${tag}-hit`)
   await pilot(page, 'release')
+  if (v === 'first') {
+    // the long guns in the hands (dev hook: the view model only, not the sim)
+    for (const [w, name] of [
+      [WEAPON_RIFLE, 'rifle'],
+      [WEAPON_SHOTGUN, 'shotgun'],
+    ] as const) {
+      await view(page, 'weapon', w)
+      await sleep(500)
+      await shot(page, size, `fps-${name}`)
+      await view(page, 'ads', true)
+      await sleep(500)
+      await shot(page, size, `fps-${name}-ads`)
+      await view(page, 'ads', false)
+    }
+    await view(page, 'weapon', null)
+  }
 }
 
 async function bank(page: Page, size: string): Promise<void> {

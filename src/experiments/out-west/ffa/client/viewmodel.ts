@@ -1,59 +1,69 @@
 // biome-ignore-all lint/complexity/useMaxParams: the per-frame update takes positional numbers
 /**
- * The first-person view model: the gun in your hand (revolver, rifle or coach gun, the same props
- * the riders carry), a gloved hand and a sleeve in your shirt colour, parented to the camera. It
- * sways against the look, bobs with your stride, kicks on every shot, dips while you reload,
- * comes up to the sights when you aim, and pulls back off a wall instead of poking through it.
- * Never casts shadows; three to six draws.
+ * The first-person view model: your own rider, the same skinned character the others see over
+ * your shoulder (his shirt, his skin, the atlas and its lighting), parented to the camera with his
+ * eye on the lens and his head folded away. He holds the gun the way he holds it in third person
+ * (`Idle_Gun_Pointing` for the revolver, the two-handed long-gun hold for the rifle and the coach
+ * gun), so the arm, the cuff and the hand on the grip are his own.
+ *
+ * On top: sway against the look, a bob with the stride, a kick on every shot (the forearm for the
+ * revolver, the shoulder for a long gun), a dip while reloading, the sights brought up to the
+ * crosshair when you aim, and a pull back off a wall instead of poking through it. Never casts
+ * shadows. Built once per look, and only once first person is on.
  */
 import {
-  Box3,
-  type BufferGeometry,
   type Camera,
-  type Color,
-  CylinderGeometry,
   Group,
   type Material,
   MathUtils,
   Mesh,
-  MeshStandardMaterial,
-  type Object3D,
-  SphereGeometry,
+  type PerspectiveCamera,
   Vector3,
 } from 'three'
-import { WEAPON_REVOLVER, WEAPON_RIFLE, WEAPON_SHOTGUN } from '../../contract/town.ts'
+import { WEAPON_RIFLE, WEAPON_SHOTGUN } from '../../contract/town.ts'
 import type { Assets } from '../../engine/assets.ts'
+import type { Actor } from '../../scene/actor.ts'
+import { castActor } from '../../scene/cast.ts'
+import type { LongHold } from '../../scene/longgun.ts'
 import { propDef, propObject } from '../../scene/props.ts'
+import type { PlayerLook } from '../scene/looks.ts'
 import { kitMaterial, shotgunMesh } from '../scene/shotgun.ts'
 
-/** Hip and sight positions in camera space (camera looks down −Z). */
-const HIP = new Vector3(0.16, -0.16, -0.38)
-/** Aiming down the sights: centred, with the sight line a hair under the crosshair. */
-const SIGHTS = new Vector3(0, 0, -0.34)
+/** The eye sits this far above and in front of the head bone (m). */
+const EYE_UP = 0.09
+const EYE_FWD = 0.11
+/**
+ * Where the muzzle rests in camera space at the hip (right of centre, below the crosshair, so the
+ * forearm and the hand on the grip are in view), and how far the whole hold moves in depth at
+ * the hip and on the sights.
+ */
+const HIP = new Vector3(0.15, -0.11, 0)
+const HIP_Z = 0.02
+/** A shouldered long gun on the sights: the stock comes in and up toward the eye (m). */
+const LONG_ADS = { x: 0.07, y: 0.05 }
+const ADS_Z = -0.06
+/** Height of the sight line above the muzzle's centre, so the crosshair rests on the sights. */
+const SIGHT = 0.028
 const REDUCED_MOTION =
   typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches
 
-interface Gun {
-  root: Group
-  /** Muzzle in the gun root's space. */
-  muzzle: Vector3
-  /** Where the grip hand and the support hand sit, in the gun root's space. */
-  grip: Vector3
-  fore: Vector3 | null
-  /** Height of the sight line above the grip origin (m). */
-  top: number
-}
-
 const tmp = new Vector3()
-const tmp2 = new Vector3()
+const muz = new Vector3()
 
 export class ViewModel {
   readonly root = new Group()
-  private readonly guns = new Map<number, Gun>()
-  private readonly sleeve: Material
-  private readonly gloveR: Group
-  private readonly gloveL: Group
-  private weapon = -1
+  /** The actor's frame: the eye at its origin, moved by the sway, the bob and the sights. */
+  private readonly holder = new Group()
+  private readonly camera: PerspectiveCamera
+  private readonly assets: Assets
+  private readonly kit: Material
+  private actor: Actor | null = null
+  private long: { shotgun: LongHold | null; rifle: LongHold | null } = {
+    shotgun: null,
+    rifle: null,
+  }
+  private lookKey = ''
+  private pending: PlayerLook | null = null
   private kick = 0
   private swayX = 0
   private swayY = 0
@@ -61,56 +71,17 @@ export class ViewModel {
   private bobAmp = 0
   private reload = 0
   private push = 0
+  /** Where the muzzle sits (camera space) without the aim offset, smoothed. */
+  private readonly sight = new Vector3(0.1, -0.12, -0.4)
 
   constructor(camera: Camera, assets: Assets) {
+    this.camera = camera as PerspectiveCamera
+    this.assets = assets
+    this.kit = kitMaterial(assets.props)
     this.root.name = 'viewmodel'
     this.root.visible = false
+    this.root.add(this.holder)
     camera.add(this.root)
-    const kit = kitMaterial(assets.props)
-    const revolver = propDef(assets.props, 'revolver', 0.3)
-    if (revolver) {
-      const g = propObject(revolver)
-      g.traverse((o) => {
-        if (o instanceof Mesh && !Array.isArray(o.material) && o.material.name === 'Kit') {
-          o.material = kit
-        }
-      })
-      this.guns.set(WEAPON_REVOLVER, fitGun(g, false))
-    }
-    const rifle = propDef(assets.props, 'rifle', 1.0)
-    if (rifle) {
-      const inner = propObject(rifle)
-      // the rifle prop lies along Z, muzzle at +Z; turn it down +X like the others
-      inner.rotation.y = Math.PI / 2
-      const g = new Group()
-      g.add(inner)
-      this.guns.set(WEAPON_RIFLE, fitGun(g, true))
-    }
-    const sg = new Group()
-    sg.add(shotgunMesh(kit))
-    sg.scale.setScalar(0.95)
-    this.guns.set(WEAPON_SHOTGUN, fitGun(sg, true))
-    for (const gun of this.guns.values()) {
-      gun.root.visible = false
-      this.root.add(gun.root)
-    }
-    this.sleeve = new MeshStandardMaterial({ color: 0x6a_4a_32, roughness: 0.9 })
-    const glove = new MeshStandardMaterial({ color: 0x4a_30_1c, roughness: 0.75 })
-    this.gloveR = hand(glove, this.sleeve)
-    this.gloveL = hand(glove, this.sleeve)
-    this.root.add(this.gloveR, this.gloveL)
-    this.root.traverse((o) => {
-      o.castShadow = false
-      o.receiveShadow = false
-      o.frustumCulled = false
-      // drawn after the world, over anything it might graze
-      o.renderOrder = 10
-    })
-  }
-
-  /** Your shirt colour on the sleeves. */
-  setSleeve(c: Color): void {
-    ;(this.sleeve as MeshStandardMaterial).color.copy(c)
   }
 
   get visible(): boolean {
@@ -119,26 +90,101 @@ export class ViewModel {
 
   set visible(v: boolean) {
     this.root.visible = v
+    if (v && this.pending) {
+      this.build(this.pending)
+    }
   }
 
-  /** A shot: the gun kicks up and back. */
+  /** Dress the view model as your rider (built lazily, once first person is on). */
+  setLook(look: PlayerLook): void {
+    if (look.key === this.lookKey) {
+      return
+    }
+    this.pending = look
+    if (this.root.visible) {
+      this.build(look)
+    }
+  }
+
+  private build(look: PlayerLook): void {
+    if (!this.assets.bodyNow(look.look.base)) {
+      this.assets.body(look.look.base).catch(() => undefined)
+      return
+    }
+    this.pending = null
+    this.lookKey = look.key
+    this.actor?.dispose()
+    const def = propDef(this.assets.props, 'revolver', 0.32)
+    const gun = def ? propObject(def) : null
+    gun?.traverse((o) => {
+      if (o instanceof Mesh && !Array.isArray(o.material) && o.material.name === 'Kit') {
+        o.material = this.kit
+      }
+    })
+    const actor = castActor(this.assets, {
+      look: look.look,
+      hat: look.hat,
+      hatColor: look.hatColor,
+      gun,
+    })
+    if (actor.hat) {
+      actor.hat.visible = false
+    }
+    this.long = { shotgun: this.longGun(actor, 'shotgun'), rifle: this.longGun(actor, 'rifle') }
+    actor.draw()
+    actor.play('Idle_Gun_Pointing', 0)
+    actor.update(0)
+    // he faces +Z; the lens looks down −Z
+    actor.root.rotation.y = Math.PI
+    actor.root.position.set(0, 0, 0)
+    this.holder.position.set(0, 0, 0)
+    this.holder.add(actor.root)
+    actor.root.traverse((o) => {
+      o.castShadow = false
+      o.frustumCulled = false
+    })
+    // his eye on the lens: the head bone, a little up and forward, in the holder's frame
+    this.holder.updateMatrixWorld(true)
+    const eye = this.holder.worldToLocal(actor.headPos(tmp))
+    actor.root.position.set(-eye.x, -eye.y - EYE_UP, -eye.z + EYE_FWD)
+    this.actor = actor
+  }
+
+  private longGun(actor: Actor, kind: 'shotgun' | 'rifle'): LongHold | null {
+    const obj = new Group()
+    if (kind === 'shotgun') {
+      obj.add(shotgunMesh(this.kit))
+    } else {
+      const def = propDef(this.assets.props, 'rifle', 1.1)
+      if (!def) {
+        return null
+      }
+      const inner = propObject(def)
+      // the rifle prop lies along Z, muzzle at +Z; turn it down +X like every gun here
+      inner.rotation.y = Math.PI / 2
+      obj.add(inner)
+    }
+    return actor.addLong(obj)
+  }
+
+  /** A shot: the gun kicks. */
   fired(): void {
     this.kick = 1
   }
 
   /** The muzzle in world space (for the tracer and the flash). */
   muzzle(out: Vector3): Vector3 {
-    const g = this.guns.get(this.weapon)
-    if (!g) {
+    if (!this.actor) {
       return out.set(0, 0, -0.5).applyMatrix4(this.root.matrixWorld)
     }
-    g.root.updateWorldMatrix(true, false)
-    return out.copy(g.muzzle).applyMatrix4(g.root.matrixWorld)
+    this.actor.root.updateWorldMatrix(true, true)
+    return muzzleOf(this.actor, out)
   }
 
   /**
-   * Per frame: `look` is this frame's look movement (rad), `speed` your planar speed, `ads` the
-   * sights blend 0..1, `reloading` while the reload runs, `wall` the distance to a wall ahead (m).
+   * Per frame: `lookYaw`/`lookPitch` this frame's look turn (rad), `speed` your planar speed,
+   * `ads` the sights blend 0..1, `reloading` while the reload runs, `wall` the distance to a wall
+   * ahead (m).
    */
   update(
     dt: number,
@@ -150,148 +196,80 @@ export class ViewModel {
     reloading: boolean,
     wall: number,
   ): void {
-    if (!this.root.visible) {
+    const actor = this.actor
+    if (!(this.root.visible && actor)) {
       return
     }
-    if (weapon !== this.weapon) {
-      this.weapon = weapon
-      for (const [w, g] of this.guns) {
-        g.root.visible = w === weapon
-      }
+    let held: LongHold | null = null
+    if (weapon === WEAPON_SHOTGUN) {
+      held = this.long.shotgun
+    } else if (weapon === WEAPON_RIFLE) {
+      held = this.long.rifle
     }
-    const g = this.guns.get(weapon)
+    if (held) {
+      actor.holsterGun()
+    } else {
+      actor.draw()
+    }
+    actor.holdLong(held)
+    actor.longCarry = 0
+    actor.play(held ? 'Idle_Gun' : 'Idle_Gun_Pointing', 0.15)
     const e = (rate: number) => 1 - Math.exp(-dt * rate)
     const calm = REDUCED_MOTION ? 0.3 : 1
-    // sway: the gun trails the look a little, less on the sights
-    const swayK = (1 - ads * 0.75) * calm
-    this.swayX += (MathUtils.clamp(-lookYaw * 1.6, -0.06, 0.06) * swayK - this.swayX) * e(10)
-    this.swayY += (MathUtils.clamp(lookPitch * 1.6, -0.05, 0.05) * swayK - this.swayY) * e(10)
-    this.bobAmp += (Math.min(1, speed / 5.5) * (1 - ads * 0.8) - this.bobAmp) * e(8)
+    this.kick = Math.max(0, this.kick - dt * 6)
+    actor.longKick = this.kick
+    actor.update(dt)
+    if (!held && actor.forearmR) {
+      actor.forearmR.rotation.z += this.kick * this.kick * 0.45
+    }
+    // his head folds away: the lens is where his eyes were
+    actor.head?.scale.setScalar(0.001)
+    const swayK = (1 - ads * 0.8) * calm
+    this.swayX += (MathUtils.clamp(-lookYaw * 1.4, -0.05, 0.05) * swayK - this.swayX) * e(10)
+    this.swayY += (MathUtils.clamp(lookPitch * 1.4, -0.04, 0.04) * swayK - this.swayY) * e(10)
+    this.bobAmp += (Math.min(1, speed / 5.5) * (1 - ads * 0.85) - this.bobAmp) * e(8)
     this.bob += dt * (6 + speed * 1.4)
-    this.kick = Math.max(0, this.kick - dt * 7)
     this.reload += ((reloading ? 1 : 0) - this.reload) * e(9)
-    this.push += (MathUtils.clamp(0.75 - wall, 0, 0.35) - this.push) * e(14)
+    this.push += (MathUtils.clamp(0.8 - wall, 0, 0.35) - this.push) * e(14)
+    const bx = Math.cos(this.bob) * 0.01 * this.bobAmp * calm
+    const by = Math.abs(Math.sin(this.bob)) * 0.014 * this.bobAmp * calm
+    // where the muzzle is without our own offset: aiming brings it to the crosshair
+    this.holder.position.set(0, 0, 0)
+    this.holder.rotation.set(0, 0, 0)
+    this.root.updateMatrixWorld(true)
+    this.camera.worldToLocal(muzzleOf(actor, muz))
+    this.sight.lerp(muz, e(20))
     const k = this.kick * this.kick
-    const long = weapon === WEAPON_RIFLE || weapon === WEAPON_SHOTGUN
-    const bx = Math.cos(this.bob) * 0.012 * this.bobAmp * calm
-    const by = Math.abs(Math.sin(this.bob)) * 0.016 * this.bobAmp * calm
-    const sights = tmp2.copy(SIGHTS)
-    sights.y = -((g?.top ?? 0.1) + 0.012)
-    const pos = tmp.copy(HIP).lerp(sights, ads)
-    if (long) {
-      pos.y -= 0.02 * (1 - ads)
-    }
-    this.root.position.set(
-      pos.x + this.swayX + bx,
-      pos.y + this.swayY - by - this.reload * 0.12 - this.push * 0.2,
-      pos.z + k * (long ? 0.09 : 0.06) + this.push,
+    // the muzzle goes to HIP at the hip and onto the crosshair on the sights
+    // the revolver's muzzle rests at HIP and comes onto the crosshair on the sights; a long gun
+    // stays shouldered as he holds it (stock at his shoulder, under the eye) and the sights come
+    // in toward the line of sight
+    const tx = held ? this.sight.x - LONG_ADS.x * ads : MathUtils.lerp(HIP.x, 0, ads)
+    const ty = held ? this.sight.y + LONG_ADS.y * ads : MathUtils.lerp(HIP.y, -SIGHT, ads)
+    const depth = MathUtils.lerp(HIP_Z, ADS_Z, ads)
+    this.holder.position.set(
+      tx - this.sight.x + this.swayX + bx,
+      ty - this.sight.y + this.swayY - by - this.reload * 0.14 - this.push * 0.15,
+      depth + k * (held ? 0.05 : 0.03) + this.push,
     )
-    this.root.rotation.set(
-      k * (long ? 0.18 : 0.42) - this.reload * 0.7 + this.swayY * 2,
-      this.swayX * 2 + (1 - ads) * 0.04,
-      this.reload * 0.5 - this.swayX * 1.5,
+    this.holder.rotation.set(
+      k * (held ? 0.06 : 0.1) - this.reload * 0.6 + this.swayY * 1.5,
+      this.swayX * 1.5,
+      this.reload * 0.35 - this.swayX * 1.2,
     )
-    if (g) {
-      place(this.gloveR, g.grip, g.root)
-      this.gloveL.visible = g.fore !== null
-      if (g.fore) {
-        place(this.gloveL, g.fore, g.root)
-      }
-    }
+  }
+
+  dispose(): void {
+    this.actor?.dispose()
+    this.root.removeFromParent()
   }
 }
 
-/**
- * Point the gun down −Z and centre it on its grip; measure the muzzle and the sight line. The props
- * don't agree on which way their barrels run, so it's measured: the barrel is the longest level
- * axis, and the grip hangs below its rear half, so the muzzle is the far end from the grip.
- */
-function fitGun(g: Group, long: boolean): Gun {
-  const root = new Group()
-  const turn = new Group()
-  turn.add(g)
-  root.add(turn)
-  root.updateMatrixWorld(true)
-  const box0 = new Box3().setFromObject(turn)
-  const size0 = box0.getSize(new Vector3())
-  const alongX = size0.x >= size0.z
-  const low = lowCentroid(turn, box0)
-  const mid = alongX ? (box0.min.x + box0.max.x) / 2 : (box0.min.z + box0.max.z) / 2
-  const gripSide = (alongX ? low.x : low.z) - mid
-  // the muzzle points away from the grip: turn it to −Z
-  if (alongX) {
-    turn.rotation.y = gripSide < 0 ? Math.PI / 2 : -Math.PI / 2
-  } else {
-    turn.rotation.y = gripSide < 0 ? Math.PI : 0
+/** The gun in his hands: a long gun's own muzzle, else the revolver's. */
+function muzzleOf(actor: Actor, out: Vector3): Vector3 {
+  const long = actor.longHeld
+  if (long?.obj.visible) {
+    return out.copy(long.a.muzzle).applyMatrix4(long.obj.matrixWorld)
   }
-  root.updateMatrixWorld(true)
-  const box = new Box3().setFromObject(turn)
-  const size = box.getSize(new Vector3())
-  // the hand closes on the grip: a quarter of the way up, near the back (further forward on a
-  // long gun, where the wrist of the stock is)
-  const grip = new Vector3(
-    (box.min.x + box.max.x) / 2,
-    box.min.y + size.y * 0.25,
-    box.max.z - size.z * (long ? 0.32 : 0.2),
-  )
-  turn.position.sub(grip)
-  const muzzle = new Vector3((box.min.x + box.max.x) / 2, box.max.y - size.y * 0.3, box.min.z).sub(
-    grip,
-  )
-  const fore = long ? new Vector3(0, -size.y * 0.1, -size.z * 0.36) : null
-  return {
-    root,
-    muzzle,
-    grip: new Vector3(0, -size.y * 0.08, 0.01),
-    fore,
-    top: box.max.y - grip.y,
-  }
-}
-
-/** Centroid of the vertices in the bottom 40% of a group (where a grip or a stock hangs). */
-function lowCentroid(obj: Object3D, box: Box3): Vector3 {
-  const cut = box.min.y + (box.max.y - box.min.y) * 0.4
-  const sum = new Vector3()
-  const v = new Vector3()
-  let n = 0
-  obj.updateMatrixWorld(true)
-  obj.traverse((o) => {
-    if (!(o instanceof Mesh)) {
-      return
-    }
-    const pos = (o.geometry as BufferGeometry).getAttribute('position')
-    if (!pos) {
-      return
-    }
-    const step = Math.max(1, Math.floor(pos.count / 400))
-    for (let i = 0; i < pos.count; i += step) {
-      v.fromBufferAttribute(pos, i).applyMatrix4(o.matrixWorld)
-      if (v.y <= cut) {
-        sum.add(v)
-        n++
-      }
-    }
-  })
-  return n > 0 ? sum.divideScalar(n) : box.getCenter(sum)
-}
-
-/** A gloved fist with a sleeve running back toward the camera's corner. */
-function hand(glove: Material, sleeve: Material): Group {
-  const g = new Group()
-  const fist = new Mesh(new SphereGeometry(0.032, 10, 8), glove)
-  fist.scale.set(1, 0.9, 1.25)
-  const cuff = new Mesh(new CylinderGeometry(0.036, 0.04, 0.05, 10), glove)
-  cuff.rotation.x = Math.PI / 2
-  cuff.position.z = 0.05
-  const arm = new Mesh(new CylinderGeometry(0.036, 0.042, 0.22, 10), sleeve)
-  arm.rotation.x = Math.PI / 2
-  arm.position.z = 0.15
-  g.add(fist, cuff, arm)
-  // the forearm runs back, down and out toward the body, never across the view
-  g.rotation.set(0.75, 0.4, 0)
-  return g
-}
-
-function place(glove: Object3D, at: Vector3, gun: Group): void {
-  glove.position.copy(at).applyMatrix4(gun.matrix)
+  return actor.muzzle(out)
 }

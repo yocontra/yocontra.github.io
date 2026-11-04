@@ -6,6 +6,7 @@
  * screen. Off-screen points are clamped to an inset rectangle with the angle for a chevron.
  */
 import { type PerspectiveCamera, Vector3 } from 'three'
+import { viewport } from './viewport.ts'
 
 export interface ScreenPoint {
   /** Client pixels (clamped to the inset edge when off screen). */
@@ -27,8 +28,8 @@ export function toScreen(
   inset: number,
   out: ScreenPoint,
 ): ScreenPoint {
-  const w = window.innerWidth
-  const h = window.innerHeight
+  const w = viewport.w
+  const h = viewport.h
   v.set(wx, wy, wz).applyMatrix4(cam.matrixWorldInverse)
   const behind = v.z > -cam.near
   v.applyMatrix4(cam.projectionMatrix)
