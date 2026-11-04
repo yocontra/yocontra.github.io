@@ -27,6 +27,19 @@ export interface MoveState {
   /** Vault travel per tick (m, whole centimetres) and direction (u16 turns, as on the wire). */
   vaultStep: number
   vaultAim: number
+  /** Sprinting on the last tick (wire v5). */
+  sprinting: boolean
+  /** Ticks the sprint stays off after a trigger pull (renewed while the trigger is held). */
+  sprintLock: number
+  /** Ticks until the gun is up after a sprint (the sprint-to-fire delay). */
+  sprintOut: number
+  /** Ticks left of a slide, its cooldown, and its heading (u16 turns, as on the wire). */
+  slideTicks: number
+  slideCooldown: number
+  slideAim: number
+  /** Velocity in the air (m per tick, whole centimetres): kept from take-off, steered a little. */
+  airX: number
+  airZ: number
 }
 
 export interface Channel {
@@ -72,6 +85,13 @@ export interface Player extends MoveState {
   aim: number
   prevAim: number
   moving: boolean
+  /** Held this tick: crouched, on the sights (the stance bits remote riders see). */
+  crouched: boolean
+  ads: boolean
+  /** Spread added by recent shots (degrees), settling every tick. */
+  bloom: number
+  /** A trigger pull waiting for the gun to come up out of a sprint. */
+  fireQueued: boolean
   alive: boolean
   hp: number
   lastDamageTick: number

@@ -66,6 +66,14 @@ const move = (x: number, z: number): MoveState => ({
   jumpCooldown: 0,
   vaultStep: 0,
   vaultAim: 0,
+  sprinting: false,
+  sprintLock: 0,
+  sprintOut: 0,
+  slideTicks: 0,
+  slideCooldown: 0,
+  slideAim: 0,
+  airX: 0,
+  airZ: 0,
 })
 const free = (x: number, z: number): boolean =>
   !circleBlocked(grid, { x, z, r: PLAYER_RADIUS }, BLOCK_MOVE)
@@ -106,6 +114,52 @@ function fenceRun(): Run {
   return run
 }
 
+/**
+ * A building wall to run at: 2.5 m out from the middle of a side, nothing in the way but the
+ * wall itself (the first blocked step lands on the building's face). `plane` is the face's
+ * coordinate along the run.
+ */
+function wallRuns(): (Run & { plane: number })[] {
+  const runs: (Run & { plane: number })[] = []
+  for (const b of TOWN.buildings) {
+    const cx = b.x + b.w / 2
+    const cz = b.z + b.d / 2
+    const sides = [
+      { x: b.x - 2.5 - PLAYER_RADIUS, z: cz, dx: 1, dz: 0, plane: b.x },
+      { x: b.x + b.w + 2.5 + PLAYER_RADIUS, z: cz, dx: -1, dz: 0, plane: -(b.x + b.w) },
+      { x: cx, z: b.z - 2.5 - PLAYER_RADIUS, dx: 0, dz: 1, plane: b.z },
+      { x: cx, z: b.z + b.d + 2.5 + PLAYER_RADIUS, dx: 0, dz: -1, plane: -(b.z + b.d) },
+    ]
+    for (const r of sides) {
+      const roomy = [0, Math.PI / 2, Math.PI, -Math.PI / 2].every((a) =>
+        free(r.x + Math.cos(a) * 0.8, r.z + Math.sin(a) * 0.8),
+      )
+      if (!(free(r.x, r.z) && roomy)) {
+        continue
+      }
+      let hit = -1
+      let vaultable = false
+      for (let t = 0.05; t <= 3.5; t += 0.05) {
+        const at = move(r.x + r.dx * t, r.z + r.dz * t)
+        vaultable ||= vaultDistance(grid, at, r.dx, r.dz) > 0
+        if (!free(at.x, at.z)) {
+          hit = t
+          break
+        }
+      }
+      const face = (r.x + r.dx * hit) * r.dx + (r.z + r.dz * hit) * r.dz
+      if (!vaultable && hit > 2 && Math.abs(face + PLAYER_RADIUS - r.plane) < 0.3) {
+        runs.push({ ...r, cover: { x: b.x, z: b.z, w: b.w, d: b.d } })
+      }
+    }
+  }
+  runs.sort((a, b) => Math.hypot(a.x - 72, a.z - 64) - Math.hypot(b.x - 72, b.z - 64))
+  if (runs.length === 0) {
+    throw new Error('no building wall to run at in this layout')
+  }
+  return runs
+}
+
 async function rider(chrome: Browser, label: string, touch: boolean): Promise<Page> {
   const player = await seedPlayer(db, { name: `Vault ${label}`, purse: 500, clears: 7 })
   const ctx = await chrome.newContext(
@@ -118,7 +172,7 @@ async function rider(chrome: Browser, label: string, touch: boolean): Promise<Pa
   const q = new URLSearchParams({ server: 'remote', bots: '0', debug: '1', token: player.token })
   await page.goto(`${SITE}/experiments/out-west/frontier/?${q.toString()}#tier=floor`)
   await page.waitForFunction(
-    () => (Reflect.get(globalThis, '__frontier') as () => State)().alive === true,
+    () => (Reflect.get(globalThis, '__frontier') as (() => State) | undefined)?.().alive === true,
     null,
     { timeout: 90_000 },
   )
@@ -140,10 +194,10 @@ const pilot = (page: Page, method: keyof Pilot, ...args: number[]): Promise<unkn
     [method, args] as const,
   )
 
-async function walkTo(page: Page, x: number, z: number): Promise<boolean> {
-  for (let attempt = 0; attempt < 3; attempt++) {
+async function walkTo(page: Page, x: number, z: number, attempts = 3): Promise<boolean> {
+  for (let attempt = 0; attempt < attempts; attempt++) {
     await pilot(page, 'go', x, z)
-    for (let i = 0; i < 160; i++) {
+    for (let i = 0; i < 100; i++) {
       await sleep(400)
       if (!(await pilot(page, 'walking'))) {
         break
@@ -193,16 +247,18 @@ let code = 0
 try {
   console.log('Frontier vault, end to end')
   const run = fenceRun()
+  const walls = wallRuns()
   console.log(
     `  fence at (${run.cover.x}, ${run.cover.z}) ${run.cover.w}×${run.cover.d}; run-up from (${run.x}, ${run.z})`,
   )
   for (const touch of [false, true]) {
     const label = touch ? 'touch' : 'desktop'
     const page = await rider(browser, label, touch)
+    check(`${label}: reaches the fence`, await walkTo(page, run.x, run.z))
+    // only the vault itself counts (the walk there may correct as it settles in)
     const corr0 = await page.evaluate(() =>
       (Reflect.get(globalThis, '__frontierTrace') as { corr: () => Corr }).corr(),
     )
-    check(`${label}: reaches the fence`, await walkTo(page, run.x, run.z))
     const v = await runAndJump(page, run.dx, run.dz, `.playwright-mcp/vault-${label}`)
     const mid = { x: run.cover.x + run.cover.w / 2, z: run.cover.z + run.cover.d / 2 }
     const side = (p: State): number => (p.x - mid.x) * run.dx + (p.z - mid.z) * run.dz
@@ -215,11 +271,26 @@ try {
       (Reflect.get(globalThis, '__frontierTrace') as { corr: () => Corr }).corr(),
     )
     check(`${label}: no reconciliation snap across the vault`, corr1.snap === corr0.snap, corr1)
-    // The saloon's west wall (x = 47 at z = 40): a hop, and the wall still stops you.
-    check(`${label}: reaches the saloon wall`, await walkTo(page, 44.5, 40))
-    const wall = await runAndJump(page, 1, 0, `.playwright-mcp/vault-${label}-wall`)
+    // A building's wall: a jump there is a hop, and the wall still stops you.
+    // the nearest wall run the autopilot can route to
+    let wr = walls[0] as (typeof walls)[number]
+    let reached = false
+    const here = await state(page)
+    const near = [...walls].sort(
+      (a, b) => Math.hypot(a.x - here.x, a.z - here.z) - Math.hypot(b.x - here.x, b.z - here.z),
+    )
+    for (const w of near.slice(0, 4)) {
+      wr = w
+      reached = await walkTo(page, w.x, w.z, 1)
+      if (reached) {
+        break
+      }
+    }
+    check(`${label}: reaches a building wall`, reached, wr)
+    const wall = await runAndJump(page, wr.dx, wr.dz, `.playwright-mcp/vault-${label}-wall`)
+    const along = wall.after.x * wr.dx + wall.after.z * wr.dz
     check(`${label}: no vault offered at a wall`, !wall.pressed)
-    check(`${label}: the wall stops you (no vaulting buildings)`, wall.after.x < 47, wall.after)
+    check(`${label}: the wall stops you (no vaulting buildings)`, along < wr.plane, wall.after)
     await page.context().close()
   }
 } catch (e) {

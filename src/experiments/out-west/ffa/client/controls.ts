@@ -6,8 +6,9 @@
  *
  * Shooter views: the first click on the game takes the pointer lock (and doesn't fire); then the
  * mouse looks, LMB fires and RMB aims down the sights. Losing the lock (Esc, alt-tab) tells the
- * game, which opens the pause menu. Gamepad: left stick moves, right stick looks, RT fire, LT aim,
- * A jump, B roll, X reload, Y interact, RB throw, LB call out.
+ * game, which opens the pause menu. Gamepad, the CoD layout: left stick moves (click it to sprint
+ * until the stick returns), right stick looks, RT fire, LT aim, A jump, B crouch (slide
+ * mid-sprint), X reload, Y interact, RB throw, LB call out.
  *
  * Top-down: WASD/arrows move, the mouse aims at the ground, LMB fires, hold RMB for Dead-Eye.
  */
@@ -18,9 +19,11 @@ import {
   BTN_INTERACT,
   BTN_RELOAD,
   BTN_ROLL,
+  BTN_SPRINT,
   BTN_THROW,
 } from '../../contract/town.ts'
 import {
+  CROUCH_TAP,
   JUMP_BIT,
   KEY_SCOREBOARD,
   KEY_SHOULDER,
@@ -66,7 +69,7 @@ const PAD_SHOOTER: readonly (readonly [number, number])[] = [
   [7, BTN_FIRE],
   [6, BTN_AIM],
   [0, JUMP_BIT],
-  [1, BTN_ROLL],
+  [1, CROUCH_TAP],
   [2, BTN_RELOAD],
   [3, BTN_INTERACT],
   [4, BTN_CALLOUT],
@@ -94,6 +97,12 @@ export class DesktopControls {
   private lookY = 0
   /** The game wants input (not paused, not dead in a menu): a click may take the lock. */
   enabled = true
+  /** RMB toggles the sights instead of holding them (a setting). */
+  adsToggle = false
+  /** The sights, when RMB is a toggle. */
+  private adsOn = false
+  /** Gamepad: L3 clicked, sprinting until the left stick comes back to centre. */
+  private padSprint = false
   private readonly root: HTMLElement
   private readonly hooks: DesktopHooks | null
   private readonly off: (() => void)[] = []
@@ -122,7 +131,7 @@ export class DesktopControls {
     on(
       'pointerup',
       (e) => {
-        if (e.pointerType === 'mouse') {
+        if (e.pointerType === 'mouse' && !(e.button === 2 && this.adsToggle)) {
           this.release(e.button === 2 ? BTN_AIM : BTN_FIRE)
         }
       },
@@ -135,6 +144,7 @@ export class DesktopControls {
         if (!this.locked) {
           // the lock went away (Esc, alt-tab): let go of everything held under it
           this.held = 0
+          this.adsOn = false
           if (this.shooter && this.enabled) {
             this.hooks?.onLockLost()
           }
@@ -209,7 +219,17 @@ export class DesktopControls {
       }
       return
     }
+    if (e.button === 2 && this.adsToggle) {
+      this.adsOn = !this.adsOn
+      return
+    }
     this.press(e.button === 2 ? BTN_AIM : BTN_FIRE)
+  }
+
+  /** Drop the sights (death, a menu, a view switch). */
+  dropAds(): void {
+    this.adsOn = false
+    this.held &= ~BTN_AIM
   }
 
   private press(bit: number): void {
@@ -266,7 +286,7 @@ export class DesktopControls {
 
   /** RMB / LT held (aiming down the sights; the Dead-Eye reticle from the holster). */
   get aimHeld(): boolean {
-    return (this.held & BTN_AIM) !== 0 || (this.padHeld & BTN_AIM) !== 0
+    return this.adsOn || (this.held & BTN_AIM) !== 0 || (this.padHeld & BTN_AIM) !== 0
   }
 
   /** Inject a one-tick press (HUD buttons, menu actions). */
@@ -304,7 +324,7 @@ export class DesktopControls {
       (k.has('KeyD') || k.has('ArrowRight') ? 1 : 0) - (k.has('KeyA') || k.has('ArrowLeft') ? 1 : 0)
     let mz =
       (k.has('KeyS') || k.has('ArrowDown') ? 1 : 0) - (k.has('KeyW') || k.has('ArrowUp') ? 1 : 0)
-    let buttons = this.held | this.latched
+    let buttons = this.held | this.latched | (this.adsOn ? BTN_AIM : 0)
     this.latched = 0
     const pad = this.pad()
     if (pad) {
@@ -324,6 +344,7 @@ export class DesktopControls {
   }
 
   private padHeld = 0
+  private padL3 = false
   private readonly padLook = { x: 0, y: 0 }
 
   private pad(): { mx: number; mz: number; buttons: number } | null {
@@ -362,6 +383,18 @@ export class DesktopControls {
     const lz = ax(1)
     if (held || lx || lz) {
       this.usingPad = true
+    }
+    // L3 (button 10): sprint until the stick comes back to centre
+    const l3 = p.buttons[10]?.pressed === true
+    if (l3 && !this.padL3) {
+      this.padSprint = true
+    }
+    this.padL3 = l3
+    if (Math.hypot(lx, lz) < 0.3) {
+      this.padSprint = false
+    }
+    if (this.shooter && this.padSprint) {
+      held |= BTN_SPRINT
     }
     const rising = held & ~this.padHeld
     this.padHeld = held

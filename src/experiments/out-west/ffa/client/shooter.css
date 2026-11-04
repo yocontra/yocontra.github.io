@@ -580,9 +580,48 @@
   bottom: calc(var(--fr-bottom) + 124px);
 }
 
-.fr-touch.shooter .fr-pad .fr-btn-roll {
+.fr-touch.shooter .fr-top-only {
+  display: none;
+}
+
+.fr-touch.shooter .fr-pad .fr-btn-crouch {
   right: calc(var(--fr-right) + 112px);
   bottom: calc(var(--fr-bottom) + 106px);
+}
+
+.fr-btn-crouch.on {
+  background: radial-gradient(circle at 35% 25%, rgb(176 133 58 / 0.9), rgb(90 62 26 / 0.85));
+  color: var(--fr-ink);
+  text-shadow: none;
+}
+
+/* the left thumb's FIRE: above the stick's home, small */
+.fr-btn-fire.fr-btn-fire-l {
+  right: auto;
+  left: calc(var(--fr-left) + 30px);
+  bottom: calc(var(--fr-bottom) + 190px);
+  width: 60px;
+  height: 60px;
+  font-size: var(--ow-fs-micro);
+}
+
+/* sprinting: the stick's ring glows and a chevron points the way */
+.fr-stick.sprint {
+  border-color: rgb(255 214 120 / 0.9);
+  box-shadow: 0 0 16px rgb(255 190 90 / 0.55);
+}
+
+.fr-stick.sprint::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: -22px;
+  width: 14px;
+  height: 14px;
+  margin-left: -7px;
+  border-left: 3px solid rgb(255 220 140 / 0.95);
+  border-top: 3px solid rgb(255 220 140 / 0.95);
+  transform: rotate(45deg);
 }
 
 .fr-touch.shooter .fr-pad .fr-btn-reload {
@@ -631,8 +670,12 @@
     bottom: calc(var(--fr-bottom) + 150px);
   }
 
-  .fr-touch.shooter .fr-pad .fr-btn-roll {
+  .fr-touch.shooter .fr-pad .fr-btn-crouch {
     bottom: calc(var(--fr-bottom) + 132px);
+  }
+
+  .fr-btn-fire.fr-btn-fire-l {
+    bottom: calc(var(--fr-bottom) + 230px);
   }
 
   .fr-touch.shooter .fr-pad .fr-btn-reload {

@@ -9,16 +9,8 @@
  */
 import { WEAPON_RIFLE, WEAPON_SHOTGUN } from '../../contract/town.ts'
 import type { Quality } from '../../engine/tiers.ts'
-import {
-  REVOLVER_FIRE_MS,
-  RIFLE_FIRE_MS,
-  RIFLE_SPREAD_MOVING_DEG,
-  RIFLE_SPREAD_STANDING_DEG,
-  SHOTGUN_CONE_DEG,
-  SHOTGUN_FIRE_MS,
-  SPREAD_MOVING_DEG,
-  SPREAD_STANDING_DEG,
-} from '../sim/constants.ts'
+import { REVOLVER_FIRE_MS, RIFLE_FIRE_MS, SHOTGUN_FIRE_MS } from '../sim/constants.ts'
+import { type SpreadInput, spreadDeg as simSpread } from '../sim/spread.ts'
 import type { ViewMode } from './settings.ts'
 
 export interface ViewPolicy {
@@ -45,18 +37,13 @@ export function policyFor(mode: ViewMode, tier: Quality): ViewPolicy {
   return mode === 'top' ? TOP : SHOOTER[tier]
 }
 
-/** The sim's spread for this weapon and gait (degrees, full cone half-angle). */
-export function spreadDeg(weapon: number, moving: boolean, deadEye: boolean): number {
+/** The sim's spread right now (degrees, half-angle: the shotgun's cone is halved). */
+export function spreadDeg(s: SpreadInput, deadEye: boolean): number {
   if (deadEye) {
     return 0
   }
-  if (weapon === WEAPON_SHOTGUN) {
-    return SHOTGUN_CONE_DEG / 2
-  }
-  if (weapon === WEAPON_RIFLE) {
-    return moving ? RIFLE_SPREAD_MOVING_DEG : RIFLE_SPREAD_STANDING_DEG
-  }
-  return moving ? SPREAD_MOVING_DEG : SPREAD_STANDING_DEG
+  const d = simSpread(s)
+  return s.weapon === WEAPON_SHOTGUN ? d / 2 : d
 }
 
 /** Hold-to-fire repeat interval (ms): the gun's own rate plus a tick of margin. */

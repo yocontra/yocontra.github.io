@@ -13,6 +13,7 @@ import {
   ANIM_RELOAD,
   ANIM_ROLL,
   ANIM_RUN,
+  ANIM_SLIDE,
   ANIM_VAULT,
   BOX_NONE,
   BOX_OPENING,
@@ -26,6 +27,7 @@ import {
   EF_PROTECTED,
   EF_SHOWDOWN,
   INPUT_LEAD_NONE,
+  MOVE_SPRINTING,
   NONE,
   POS_SCALE,
   SELF_ALIVE,
@@ -37,6 +39,9 @@ import {
   SELF_PROTECTED,
   SELF_RELOADING,
   SNAP_FULL,
+  STANCE_ADS,
+  STANCE_CROUCH,
+  STANCE_SPRINT,
 } from '../../contract/town.ts'
 import type { Writer } from './bytes.ts'
 import { type EntityView, encodeSnapshot, type SelfView, type TownView } from './codec.ts'
@@ -56,7 +61,26 @@ const q = (m: number): number => Math.max(0, Math.min(65_535, Math.round(m * POS
 /** Minimap units for the Most Wanted star (0.6 m). */
 const MAP_UNIT = 0.6
 
+/** The entity's `anim` byte: what he's doing, and his stance bits above it. */
 function animOf(p: Player): number {
+  const a = baseAnim(p)
+  if (a === ANIM_DEAD || a === ANIM_DUEL) {
+    return a
+  }
+  let stance = 0
+  if (p.crouched) {
+    stance |= STANCE_CROUCH
+  }
+  if (p.ads) {
+    stance |= STANCE_ADS
+  }
+  if (p.sprinting) {
+    stance |= STANCE_SPRINT
+  }
+  return a | stance
+}
+
+function baseAnim(p: Player): number {
   if (!p.alive) {
     return ANIM_DEAD
   }
@@ -65,6 +89,9 @@ function animOf(p: Player): number {
   }
   if (p.rollTicks > 0) {
     return ANIM_ROLL
+  }
+  if (p.slideTicks > 0) {
+    return ANIM_SLIDE
   }
   if (p.jumpTicks > 0) {
     return p.vaultStep > 0 ? ANIM_VAULT : ANIM_HOP
@@ -159,6 +186,14 @@ export function selfView(w: World, p: Player): SelfView {
     jumpCooldown: p.jumpCooldown,
     vaultStep: Math.round(p.vaultStep * 100),
     vaultAim: p.vaultAim,
+    moveFlags: p.sprinting ? MOVE_SPRINTING : 0,
+    sprintLock: p.sprintLock,
+    sprintOut: p.sprintOut,
+    slideTicks: p.slideTicks,
+    slideCooldown: p.slideCooldown,
+    slideAim: p.slideAim,
+    airX: Math.round(p.airX * 100),
+    airZ: Math.round(p.airZ * 100),
   }
 }
 

@@ -16,6 +16,7 @@ import {
   Fog,
   HemisphereLight,
   Plane,
+  Quaternion,
   Raycaster,
   Scene,
   Vector2,
@@ -32,9 +33,11 @@ import {
   ANIM_RELOAD,
   ANIM_ROLL,
   ANIM_RUN,
+  ANIM_SLIDE,
   ANIM_VAULT,
   BOX_NONE,
   BOX_OPENING,
+  BTN_AIM,
   BTN_CALLOUT,
   BTN_FIRE,
   BTN_INTERACT,
@@ -62,6 +65,9 @@ import {
   type ServerControl,
   SHOT_RIFLE,
   SHOT_SHOTGUN,
+  STANCE_ADS,
+  STANCE_CROUCH,
+  STANCE_SPRINT,
   WEAPON_REVOLVER,
   WEAPON_RIFLE,
   WEAPON_SHOTGUN,
@@ -82,12 +88,14 @@ import { Effects } from '../scene/fx.ts'
 import { installHotPaths } from '../scene/hot-paths.ts'
 import { buildInterior } from '../scene/interior.ts'
 import { lookFor } from '../scene/looks.ts'
+import { loadMoves } from '../scene/moves.ts'
 import { Pickups } from '../scene/pickups.ts'
 import { buildTown, type Town } from '../scene/town.ts'
 import { buildWilds, shadeTown, Wilds } from '../scene/wilds.ts'
 import type { WireEvent } from '../sim/codec-events.ts'
 import {
   BANK_CHANNEL_TICKS,
+  BLOOM_DECAY_DEG,
   DEAD_EYE_CLOSE_TICKS,
   HOP_TICKS,
   LEAVE_CHANNEL_TICKS,
@@ -105,10 +113,13 @@ import {
   VAULT_TICKS,
 } from '../sim/constants.ts'
 import { BLOCK_SHOT, BLOCK_SIGHT, rayGrid, spawnFacing, TOWN, zoneAt } from '../sim/layout.ts'
-import { radiansToAim } from '../sim/move.ts'
+import { airborne, radiansToAim, sliding } from '../sim/move.ts'
+import { bloomAfterShot } from '../sim/spread.ts'
+import type { MoveState } from '../sim/types.ts'
 import { type AimResult, assistFriction, assistPull, resolveAim } from './aim.ts'
 import { ThreatArrows } from './arrows.ts'
 import { Autopilot } from './autopilot.ts'
+import { LOCAL_BITS } from './bindings.ts'
 import { assistAim, currentAction } from './context.ts'
 import { DesktopControls } from './controls.ts'
 import { type Fuse, shotSound, stopFuse } from './event-sounds.ts'
@@ -131,6 +142,7 @@ import { type FrontierSettings, loadSettings, saveSettings, type ViewMode } from
 import { SettingsPanel } from './settings-panel.ts'
 import { ShooterCamera } from './shooter-camera.ts'
 import { FrontierSound, wearsSpurs } from './sound.ts'
+import { Stance } from './stance.ts'
 import { onBoardwalk } from './surface.ts'
 import { TouchControls } from './touch.ts'
 import { MotionTrace, TRACE_FIELDS } from './trace.ts'
@@ -235,8 +247,12 @@ export class FrontierGame {
   /** Drives the same camera as `cam` in the shooter views. */
   readonly shooter: ShooterCamera
   private viewModel: ViewModel | null = null
+  private readonly vmSun = new Vector3()
+  private readonly vmQ = new Quaternion()
   private guide: BankGuide | null = null
   private readonly coach: Onboarding
+  /** Crouch toggle and slide (local crouch taps → `BTN_CROUCH`). */
+  private readonly stance = new Stance()
   private readonly score: Scoreboard
   private readonly panel: SettingsPanel
   private readonly touchUi: boolean
@@ -403,6 +419,7 @@ export class FrontierGame {
     const was = this.root.dataset.view
     this.root.dataset.view = this.settings.view
     this.desk.setShooter(shooter)
+    this.desk.adsToggle = this.settings.adsToggle
     this.touch?.setShooter(shooter)
     if (this.crowd) {
       this.crowd.readScale = shooter ? 1 : READ_SCALE
@@ -552,6 +569,8 @@ export class FrontierGame {
       first.look,
       (f) => onProgress(f * 0.6, 'Saddling up'),
     )
+    // sprint, crouch, jump and reload clips: Frontier's own file, on top of the player's
+    await loadMoves(assets).catch((e: unknown) => console.warn('moves.glb failed', e))
     if (this.disposed) {
       return
     }
@@ -575,7 +594,16 @@ export class FrontierGame {
     this.crowd.casters = near < 16 ? 4 : 6
     this.map = new Minimap(TOWN, this.touch ? 112 : 148)
     this.hud.mapSlot.append(this.map.el)
-    this.viewModel = new ViewModel(this.cam.camera, assets)
+    this.viewModel = new ViewModel(assets)
+    if (import.meta.env.DEV) {
+      Reflect.set(globalThis, '__vm', this.viewModel)
+    }
+    // its own scene and lens, drawn over the world before the post chain
+    this.renderer.setOverlay({
+      scene: this.viewModel.scene,
+      camera: this.viewModel.camera,
+      enabled: false,
+    })
     this.guide = new BankGuide(this.hud.root, this.net.grid)
     this.guide.prepare()
     onProgress(0.75, 'Fitting the posse')
@@ -687,7 +715,7 @@ export class FrontierGame {
   private predictedShot(x: number, z: number, aim: number, weapon: number): void {
     const fp = this.settings.view === 'first' && this.viewModel !== null
     const m = fp
-      ? (this.viewModel?.muzzle(this.tmp) ?? this.tmp.set(x, 1.3, z))
+      ? (this.viewModel?.muzzle(this.cam.camera, this.tmp) ?? this.tmp.set(x, 1.3, z))
       : (this.crowd?.muzzle(this.net.you, x, z, aim, this.tmp) ?? this.tmp.set(x, 1.3, z))
     const range = WEAPON_UI[weapon]?.range ?? MAX_RANGE
     const wall = rayToWall(this.net, x, z, aim, range)
@@ -705,8 +733,8 @@ export class FrontierGame {
       // the view kicks up and settles; the crosshair blooms
       const long = weapon === WEAPON_RIFLE || weapon === WEAPON_SHOTGUN
       this.shooter.kickRecoil(long ? 0.05 : 0.03)
-      this.viewModel?.fired()
-      this.bloom = Math.min(6, this.bloom + (long ? 3 : 1.6))
+      this.viewModel?.fired(weapon)
+      this.bloom = bloomAfterShot(weapon, this.bloom)
     } else {
       this.cam.kick(0.12)
     }
@@ -785,7 +813,7 @@ export class FrontierGame {
       moveX: Math.round(mx * 127),
       moveZ: Math.round(mz * 127),
       aim: radiansToAim(aim),
-      buttons,
+      buttons: buttons & ~LOCAL_BITS,
     }
   }
 
@@ -818,6 +846,9 @@ export class FrontierGame {
         buttons &= ~BTN_FIRE
       }
     }
+    if (this.devAdsOn) {
+      buttons |= BTN_AIM
+    }
     if (!this.desk.enabled) {
       // paused: stand still, hands off
       mx = 0
@@ -846,6 +877,8 @@ export class FrontierGame {
     if (buttons & BTN_INTERACT && this.actionBit === BTN_CALLOUT) {
       buttons = (buttons & ~BTN_INTERACT) | BTN_CALLOUT
     }
+    // crouch toggle and slide (local bits in, BTN_CROUCH out)
+    buttons = this.stance.apply(buttons, this.net.pred.sprinting, this.net.alive)
     this.aim = aim
     return {
       moveX: Math.round(wx * 127),
@@ -1056,7 +1089,7 @@ export class FrontierGame {
         anim: this.shooterAnim(
           ownAnim(
             s.flags,
-            this.net.pred.rollTicks > 0,
+            dodgeAnim(this.net.pred),
             speed > 0.3,
             s.reloadTicks > 0,
             s.channelKind,
@@ -1065,6 +1098,7 @@ export class FrontierGame {
           speed > 0.3,
         ),
         flags: ownFlags(s.flags, s.protectTicks > 0),
+        stance: this.ownStance(),
         self: true,
         weapon: this.net.weapon.weapon,
       })
@@ -1072,7 +1106,7 @@ export class FrontierGame {
     for (const [i, r] of this.remotes.entries()) {
       let row = this.crowdRows[i]
       if (!row) {
-        row = { id: 0, x: 0, z: 0, aim: 0, vx: 0, vz: 0, anim: 0, flags: 0, self: false }
+        row = { id: 0, x: 0, z: 0, aim: 0, vx: 0, vz: 0, anim: 0, stance: 0, flags: 0, self: false }
         this.crowdRows.push(row)
       }
       row.id = r.id
@@ -1082,8 +1116,15 @@ export class FrontierGame {
       row.vx = r.vx
       row.vz = r.vz
       row.anim = r.anim
+      row.stance = r.stance
       row.flags = r.flags
       list.push(row)
+    }
+    if (!this.net.alive && this.wasAlive) {
+      // down: on your feet, sights dropped, for the next life
+      this.stance.reset()
+      this.desk.dropAds()
+      this.touch?.setAds(false)
     }
     if (this.net.alive && !this.wasAlive) {
       // (re)spawned: face into town until the stick or the mouse says otherwise
@@ -1211,6 +1252,22 @@ export class FrontierGame {
     return (vault ? VAULT_PEAK_M : HOP_PEAK_M) * 4 * t * (1 - t)
   }
 
+  /** Your stance bits, as remote riders see them (crouched, on the sights, sprinting). */
+  private ownStance(): number {
+    const pred = this.net.pred
+    let st = 0
+    if (this.stance.crouched) {
+      st |= STANCE_CROUCH
+    }
+    if (this.adsHeld() && !pred.sprinting) {
+      st |= STANCE_ADS
+    }
+    if (pred.sprinting) {
+      st |= STANCE_SPRINT
+    }
+    return st
+  }
+
   /** RMB, LT or the touch AIM toggle. */
   private adsHeld(): boolean {
     return this.desk.aimHeld || (this.touch?.ads ?? false) || this.devAdsOn
@@ -1223,6 +1280,7 @@ export class FrontierGame {
     }
     const on = this.settings.view === 'first' && this.net.alive
     vm.visible = on
+    this.renderer.setOverlay({ scene: vm.scene, camera: vm.camera, enabled: on })
     if (!on) {
       return
     }
@@ -1234,15 +1292,28 @@ export class FrontierGame {
       { ox: this.own.x, oz: this.own.z, dx: Math.cos(yaw), dz: Math.sin(yaw), maxDist: 1.2 },
       BLOCK_SIGHT,
     )
+    const cam = this.cam.camera
+    vm.setLens(cam.aspect, cam.fov)
+    // the sun, turned into the lens's frame (the view model lives in camera space)
+    this.vmSun.copy(SUN_DIR).applyQuaternion(this.vmQ.copy(cam.quaternion).invert())
+    const pred = this.net.pred
+    const reloading = ((s?.flags ?? 0) & SELF_RELOADING) !== 0
     vm.update(
-      dt,
-      this.devWeapon ?? this.net.weapon.weapon,
-      this.turned.yaw,
-      this.turned.pitch,
-      speed,
-      this.shooter.ads,
-      ((s?.flags ?? 0) & SELF_RELOADING) !== 0,
-      wall,
+      {
+        dt,
+        lookYaw: this.turned.yaw,
+        lookPitch: this.turned.pitch,
+        speed,
+        sprinting: pred.sprinting,
+        ads: this.adsHeld(),
+        crouched: this.stance.crouched,
+        sliding: sliding(pred),
+        lift: this.jumpLift(),
+        reload: reloading && s ? 1 - s.reloadTicks / RELOAD_TICKS : null,
+        weapon: this.devWeapon ?? this.net.weapon.weapon,
+        wall,
+      },
+      this.vmSun,
     )
   }
 
@@ -1386,6 +1457,7 @@ export class FrontierGame {
       : null
     this.actionBit = action?.bit ?? 0
     this.touch?.setAction(action?.bit ?? 0, action?.label ?? null)
+    this.touch?.setCrouched(this.stance.crouched)
     const weapon = this.net.weapon
     this.touch?.setThrow(weapon.dynamite && this.net.alive)
     const wui = WEAPON_UI[weapon.weapon] ?? WEAPON_UI[WEAPON_REVOLVER]
@@ -1461,13 +1533,34 @@ export class FrontierGame {
       this.net.alive &&
       Math.hypot(this.net.pred.x - this.net.prev.x, this.net.pred.z - this.net.prev.z) > 0.01
     const deadEyeReady = (flags & SELF_DEAD_EYE_READY) !== 0
-    this.bloom *= Math.exp(-this.dtS * 5)
-    const deg = spreadDeg(w, moving, deadEyeReady) + this.bloom
-    const gap = Math.max(3, spreadPx(deg, this.cam.camera.fov, viewport.h))
+    // the sim's bloom, mirrored: it settles 0.3° a tick
+    this.bloom = Math.max(0, this.bloom - this.dtS * BLOOM_DECAY_DEG * TICK_HZ)
+    const pred = this.net.pred
+    const ads = this.adsHeld()
+    const deg = spreadDeg(
+      {
+        weapon: w,
+        ads,
+        crouched: this.stance.crouched,
+        moving,
+        sliding: sliding(pred),
+        airborne: airborne(pred),
+        bloom: this.bloom,
+      },
+      deadEyeReady,
+    )
+    const gap = Math.max(2, spreadPx(deg, this.cam.camera.fov, viewport.h))
     const range = WEAPON_UI[w]?.range ?? MAX_RANGE
     const onTarget = this.aimRes.target >= 0 && this.aimRes.range <= range
+    // first person on the sights: the gun's own sights are the crosshair; sprinting: no crosshair
+    const sighted = this.settings.view === 'first' && (this.viewModel?.motion.pose.ads ?? 0) > 0.6
     const show =
-      this.net.alive && !this.hud.menuOpen && !this.coach.open && this.settings.view !== 'top'
+      this.net.alive &&
+      !this.hud.menuOpen &&
+      !this.coach.open &&
+      this.settings.view !== 'top' &&
+      !(sighted && !(s && s.deadEyeTicks > 0)) &&
+      !pred.sprinting
     const closing =
       s && s.deadEyeTicks > 0 ? Math.min(1, s.deadEyeTicks / DEAD_EYE_CLOSE_TICKS) : null
     this.hud.setCrosshair(true, gap, onTarget)
@@ -1763,9 +1856,17 @@ function jumpAnim(jumpTicks: number, vaultStep: number): number {
   return vaultStep > 0 ? ANIM_VAULT : ANIM_HOP
 }
 
+/** `ANIM_ROLL` or `ANIM_SLIDE` while one is under way, else 0. */
+function dodgeAnim(m: MoveState): number {
+  if (m.rollTicks > 0) {
+    return ANIM_ROLL
+  }
+  return m.slideTicks > 0 ? ANIM_SLIDE : 0
+}
+
 function ownAnim(
   flags: number,
-  rolling: boolean,
+  dodge: number,
   moving: boolean,
   reloading: boolean,
   channel: number,
@@ -1777,8 +1878,8 @@ function ownAnim(
   if (flags & SELF_IN_SHOWDOWN) {
     return ANIM_DUEL
   }
-  if (rolling) {
-    return ANIM_ROLL
+  if (dodge !== 0) {
+    return dodge
   }
   if (jump !== 0) {
     return jump

@@ -14,6 +14,7 @@ import {
   VignetteEffect,
 } from 'postprocessing'
 import {
+  type Camera,
   Color,
   DirectionalLight,
   HalfFloatType,
@@ -312,6 +313,8 @@ export class Renderer {
   private readonly mainPass: EffectPass
   private fxaaPass: EffectPass | null = null
   private readonly renderPass: RenderPass
+  /** A scene drawn over the main one, before the post chain (Frontier's first-person gun). */
+  private overlayPass: RenderPass | null = null
   /** The active quality tier. */
   tier: Quality
   spec: TierSpec
@@ -613,6 +616,34 @@ export class Renderer {
     }
   }
   private lowPowerDropped = false
+
+  /**
+   * Draw `scene` through `camera` over the main scene, into the same buffer and before the post
+   * chain, so it is graded like the rest of the frame: no clear, no background, no shadow-map
+   * update. Its depth has to win on its own (Frontier's view model squeezes its depth range into
+   * the nearest 1%). `enabled` false skips it at no cost; null removes it.
+   */
+  setOverlay(o: { scene: Scene; camera: Camera; enabled: boolean } | null): void {
+    if (!o) {
+      if (this.overlayPass) {
+        this.composer.removePass(this.overlayPass)
+        this.overlayPass.dispose()
+        this.overlayPass = null
+      }
+      return
+    }
+    if (!this.overlayPass) {
+      const pass = new RenderPass(o.scene, o.camera)
+      pass.clear = false
+      pass.ignoreBackground = true
+      pass.skipShadowMapUpdate = true
+      this.composer.addPass(pass, 1)
+      this.overlayPass = pass
+    }
+    this.overlayPass.mainScene = o.scene
+    this.overlayPass.mainCamera = o.camera
+    this.overlayPass.enabled = o.enabled
+  }
 
   /**
    * The lens pass. `night` (0 noon … 1 midnight) fades the chromatic aberration out after dusk:
