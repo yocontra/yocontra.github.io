@@ -15,7 +15,7 @@ import {
   WEAPON_RIFLE,
   WEAPON_SHOTGUN,
 } from '../../contract/town.ts'
-import { pressed, rewindTime, strike, traceTargets } from './combat.ts'
+import { pressed, rewindTime, spreadFor, strike, traceTargets } from './combat.ts'
 import {
   DYNAMITE_DAMAGE,
   DYNAMITE_FUSE_TICKS,
@@ -27,9 +27,6 @@ import {
   RIFLE_FIRE_MS,
   RIFLE_RANGE,
   RIFLE_ROUNDS,
-  RIFLE_SPREAD_MOVING_DEG,
-  RIFLE_SPREAD_STANDING_DEG,
-  SHOTGUN_CONE_DEG,
   SHOTGUN_FIRE_MS,
   SHOTGUN_PELLET_DAMAGE,
   SHOTGUN_PELLETS,
@@ -41,6 +38,7 @@ import { applyDamage } from './death.ts'
 import { BLOCK_SHOT, BLOCK_SIGHT, hasLineOfSight, rayGrid } from './layout.ts'
 import { aimRadians, inIframes, quantize, radiansToAim, vaulting } from './move.ts'
 import { hashSigned } from './rng.ts'
+import { bloomAfterShot } from './spread.ts'
 import { activePlayers, dist2, isProtected, type World } from './state.ts'
 import type { Player } from './types.ts'
 
@@ -137,7 +135,8 @@ function shotEvent(w: World, p: Player, { angle, range, target, flags }: ShotTra
 
 function fireRifle(w: World, p: Player, aim: number, viewTime: number): void {
   spend(w, p, RIFLE_FIRE_MS)
-  const spread = p.moving ? RIFLE_SPREAD_MOVING_DEG : RIFLE_SPREAD_STANDING_DEG
+  const spread = spreadFor(p)
+  p.bloom = bloomAfterShot(p.weapon, p.bloom)
   const angle = aimRadians(aim) + hashSigned(w.seed, p.id, w.tick, p.stats.shots) * spread * DEG
   const dx = Math.cos(angle)
   const dz = Math.sin(angle)
@@ -159,10 +158,12 @@ function fireShotgun(w: World, p: Player, aim: number, viewTime: number): void {
   const base = aimRadians(aim)
   const time = rewindTime(w, viewTime)
   const damage = new Map<number, number>()
+  // the cone: tighter on the sights (spread.ts)
+  const cone = spreadFor(p)
   for (let i = 0; i < SHOTGUN_PELLETS; i++) {
     // An even fan with a little jitter, so the pattern is fair but not a fixed comb.
-    const lane = (i / (SHOTGUN_PELLETS - 1) - 0.5) * SHOTGUN_CONE_DEG
-    const jitter = hashSigned(w.seed, p.id, w.tick, i) * (SHOTGUN_CONE_DEG / SHOTGUN_PELLETS / 2)
+    const lane = (i / (SHOTGUN_PELLETS - 1) - 0.5) * cone
+    const jitter = hashSigned(w.seed, p.id, w.tick, i) * (cone / SHOTGUN_PELLETS / 2)
     const angle = base + (lane + jitter) * DEG
     const dx = Math.cos(angle)
     const dz = Math.sin(angle)

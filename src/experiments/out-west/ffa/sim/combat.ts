@@ -27,14 +27,13 @@ import {
   REVOLVER_DAMAGE,
   REVOLVER_FIRE_MS,
   REVOLVER_ROUNDS,
-  SPREAD_MOVING_DEG,
-  SPREAD_STANDING_DEG,
   TICK_MS,
 } from './constants.ts'
 import { applyDamage } from './death.ts'
 import { BLOCK_SHOT, rayGrid } from './layout.ts'
-import { aimRadians, radiansToAim, vaulting } from './move.ts'
+import { aimRadians, airborne, radiansToAim, sliding, vaulting } from './move.ts'
 import { hashSigned } from './rng.ts'
+import { bloomAfterShot, settleBloom, spreadDeg } from './spread.ts'
 import {
   HIST_ALIVE,
   HIST_IFRAMES,
@@ -67,6 +66,7 @@ export function deadEyeReady(w: World, p: Player): boolean {
 /** Reload and reticle bookkeeping that runs every tick before firing. */
 export function updateWeapon(w: World, p: Player, buttons: number): void {
   p.fireCooldownMs -= TICK_MS
+  p.bloom = settleBloom(p.bloom)
   if (p.reloadTicks > 0) {
     p.reloadTicks--
     if (p.reloadTicks === 0) {
@@ -186,11 +186,9 @@ export function fire(w: World, p: Player, aim: number, viewTime: number): ShotRe
   // Firing ends spawn protection.
   p.protectUntil = Math.min(p.protectUntil, w.tick)
   p.stats.shots++
-  let spreadDeg = p.moving ? SPREAD_MOVING_DEG : SPREAD_STANDING_DEG
-  if (deadEye) {
-    spreadDeg = 0
-  }
-  const angle = aimRadians(aim) + hashSigned(w.seed, p.id, w.tick, p.stats.shots) * spreadDeg * DEG
+  const spread = deadEye ? 0 : spreadFor(p)
+  p.bloom = bloomAfterShot(p.weapon, p.bloom)
+  const angle = aimRadians(aim) + hashSigned(w.seed, p.id, w.tick, p.stats.shots) * spread * DEG
   const dx = Math.cos(angle)
   const dz = Math.sin(angle)
   const wall = rayGrid(w.grid, { ox: p.x, oz: p.z, dx, dz, maxDist: MAX_RANGE }, BLOCK_SHOT)
@@ -224,11 +222,36 @@ export function fire(w: World, p: Player, aim: number, viewTime: number): ShotRe
   return { target: hit ? hit.id : NONE, range, deadEye, killed }
 }
 
+/** This player's spread right now (degrees; the shotgun's is its cone). */
+export function spreadFor(p: Player): number {
+  return spreadDeg({
+    weapon: p.weapon,
+    ads: p.ads,
+    crouched: p.crouched,
+    moving: p.moving,
+    sliding: sliding(p),
+    airborne: airborne(p),
+    bloom: p.bloom,
+  })
+}
+
+/**
+ * This tick's trigger: a fresh `BTN_FIRE` press, or one held back while the gun came up out of a
+ * sprint. A pull during the sprint-to-fire delay is queued (`fireQueued`) and fires when it ends.
+ */
+export function trigger(p: Player, buttons: number, aliveAtTickStart: boolean): boolean {
+  const pull = pressed(buttons, p.lastButtons, BTN_FIRE) || p.fireQueued
+  p.fireQueued = pull && aliveAtTickStart && p.sprintOut > 0
+  return pull && !p.fireQueued
+}
+
 /** Fire-rate, ammo and state checks: the server-side limits a client can't bypass. */
-export function canFire(p: Player, buttons: number, aliveAtTickStart: boolean): boolean {
+export function canFire(p: Player, pulled: boolean, aliveAtTickStart: boolean): boolean {
   return (
-    pressed(buttons, p.lastButtons, BTN_FIRE) &&
+    pulled &&
     aliveAtTickStart &&
+    !p.sprinting &&
+    p.sprintOut === 0 &&
     p.showdown < 0 &&
     p.lingerUntil < 0 &&
     p.rollTicks === 0 &&

@@ -66,6 +66,14 @@ const move = (x: number, z: number): MoveState => ({
   jumpCooldown: 0,
   vaultStep: 0,
   vaultAim: 0,
+  sprinting: false,
+  sprintLock: 0,
+  sprintOut: 0,
+  slideTicks: 0,
+  slideCooldown: 0,
+  slideAim: 0,
+  airX: 0,
+  airZ: 0,
 })
 const free = (x: number, z: number): boolean =>
   !circleBlocked(grid, { x, z, r: PLAYER_RADIUS }, BLOCK_MOVE)

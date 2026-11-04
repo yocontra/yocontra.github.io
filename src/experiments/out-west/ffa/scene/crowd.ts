@@ -133,6 +133,8 @@ export interface CrowdPlayer {
   vx: number
   vz: number
   anim: number
+  /** `STANCE_*` bits: crouched, on the sights, sprinting. */
+  stance: number
   flags: number
   self: boolean
   /** `WEAPON_*` in hand, when known for sure (your own, from the self block). */

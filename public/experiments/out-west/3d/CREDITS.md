@@ -28,6 +28,11 @@ at runtime, and each outlaw's garment colours recolour only the main fabric of e
 and holsters are procedural, fitted to each body and woven from the Poly Haven fabric swatches
 below.
 
+Frontier's move clips (`models/moves.glb`: sprint, crouch idle and walk, jump start / loop / land,
+pistol reload, pistol aim up and down) are built by `tools/build-moves.ts` from the same Universal
+Animation Library [Standard] (CC0 1.0), retargeted the same way. That copy of `UAL1_Standard.glb`
+came from a mirror of the unmodified pack: https://raw.githubusercontent.com/DyingStar-game/DyingStar/HEAD/assets/Universal%20Animation%20Library/Unreal-Godot/UAL1_Standard.glb
+
 Quaternius: https://quaternius.com
 
 ## Props and building kit (`models/props.glb`, `tex/kit_*.webp`)

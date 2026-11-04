@@ -66,6 +66,14 @@ const randomSelf = (): SelfView => ({
   jumpCooldown: u8(),
   vaultStep: u8(),
   vaultAim: u16(),
+  moveFlags: u8(),
+  sprintLock: u8(),
+  sprintOut: u8(),
+  slideTicks: u8(),
+  slideCooldown: u8(),
+  slideAim: u16(),
+  airX: rng.int(-127, 127),
+  airZ: rng.int(-127, 127),
 })
 
 function randomEvent(): WireEvent {

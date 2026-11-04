@@ -5,13 +5,16 @@
  * §3.8). Two layouts:
  *
  * Shooter (over the shoulder / first person, the default):
- * - a floating move stick that spawns under the left thumb anywhere in the left 45%;
+ * - a floating move stick that spawns under the left thumb anywhere in the left 45%; push it past
+ *   its ring toward the top of the screen to sprint (it glows while you do);
  * - drag anywhere else on the right to look (the game applies the sensitivity and, on touch only,
  *   a little aim friction and magnetism);
  * - FIRE: tap to shoot, hold to keep firing at the gun's own rate; dragging from FIRE also looks,
  *   so you can track while you shoot;
- * - AIM toggles the sights (from the holster it closes the Dead-Eye reticle), JUMP, ROLL, RELOAD,
- *   THROW while you hold dynamite, and the contextual button (BANK, SHIP, OPEN, ACCEPT, CALL OUT).
+ * - a smaller FIRE on the left, for a thumb that's on the stick;
+ * - AIM toggles the sights (from the holster it closes the Dead-Eye reticle), CROUCH (a toggle; a
+ *   slide mid-sprint), JUMP, RELOAD, THROW while you hold dynamite, and the contextual button
+ *   (BANK, SHIP, OPEN, ACCEPT, CALL OUT).
  *
  * Top-down (kept as an option): the original twin-stick. The right stick aims while dragged and
  * fires on release (flick-to-fire); holding it 400 ms from the holster closes the Dead-Eye
@@ -19,11 +22,22 @@
  *
  * Every target is at least 48 CSS px (the audit's floor is 44).
  */
-import { BTN_AIM, BTN_FIRE, BTN_RELOAD, BTN_ROLL, BTN_THROW } from '../../contract/town.ts'
-import { JUMP_BIT } from './bindings.ts'
+import {
+  BTN_AIM,
+  BTN_FIRE,
+  BTN_RELOAD,
+  BTN_ROLL,
+  BTN_SPRINT,
+  BTN_THROW,
+} from '../../contract/town.ts'
+import { CROUCH_TAP, JUMP_BIT } from './bindings.ts'
 import type { Sampled } from './controls.ts'
 
 const STICK_R = 56
+/** Sprint: the thumb past this far (× the ring), within `SPRINT_CONE` of straight up; off under `SPRINT_OFF`. */
+const SPRINT_ON = 1.15
+const SPRINT_OFF = 0.8
+const SPRINT_CONE = Math.cos((40 * Math.PI) / 180)
 const DEAD_PX = 10
 const TAP_MS = 220
 /** World z is foreshortened on screen by sin(pitch) at the 58° camera. */
@@ -63,6 +77,10 @@ export class TouchControls {
   private readonly throwBtn: HTMLElement
   private readonly adsBtn: HTMLElement
   private readonly fireBtn: HTMLElement
+  private readonly fireLeft: HTMLElement
+  private readonly crouchBtn: HTMLElement
+  /** The left stick is past the ring, forward: sprinting. */
+  private sprint = false
   private actionBit = 0
   private latched = 0
   /** BTN_AIM kept for the release frame so a Dead-Eye release still counts as aimed. */
@@ -104,7 +122,9 @@ export class TouchControls {
       b.addEventListener('pointercancel', up)
       return b
     }
-    btn('fr-btn-roll', 'ROLL', BTN_ROLL)
+    btn('fr-btn-roll fr-top-only', 'ROLL', BTN_ROLL)
+    this.crouchBtn = btn('fr-btn-crouch fr-shooter-only', 'CROUCH', CROUCH_TAP)
+    this.crouchBtn.setAttribute('aria-pressed', 'false')
     btn('fr-btn-reload', 'RELOAD', BTN_RELOAD)
     btn('fr-btn-jump', 'JUMP', JUMP_BIT)
     this.throwBtn = btn('fr-btn-throw', 'THROW', BTN_THROW)
@@ -116,11 +136,15 @@ export class TouchControls {
     this.fireBtn = el('fr-btn fr-hit fr-btn-fire', fire, 'FIRE')
     this.fireBtn.setAttribute('role', 'button')
     this.fireBtn.setAttribute('aria-label', 'Fire')
+    this.fireLeft = el('fr-btn fr-hit fr-btn-fire fr-btn-fire-l', fire, 'FIRE')
+    this.fireLeft.setAttribute('role', 'button')
+    this.fireLeft.setAttribute('aria-label', 'Fire (left thumb)')
     this.adsBtn = el('fr-btn fr-hit fr-btn-ads', fire, 'AIM')
     this.adsBtn.setAttribute('role', 'button')
     this.adsBtn.setAttribute('aria-label', 'Aim down the sights')
     this.adsBtn.setAttribute('aria-pressed', 'false')
-    this.wireFire()
+    this.wireFire(this.fireBtn, true)
+    this.wireFire(this.fireLeft, false)
     this.adsBtn.addEventListener('pointerdown', (e) => {
       e.preventDefault()
       e.stopPropagation()
@@ -142,8 +166,8 @@ export class TouchControls {
     this.place(this.rightBase, null)
   }
 
-  private wireFire(): void {
-    const b = this.fireBtn
+  /** A FIRE button: tap to shoot, hold to keep firing; `look`: a drag from it also looks. */
+  private wireFire(b: HTMLElement, look: boolean): void {
     b.addEventListener('pointerdown', (e) => {
       e.preventDefault()
       e.stopPropagation()
@@ -153,7 +177,7 @@ export class TouchControls {
       b.classList.add('down')
       b.setPointerCapture(e.pointerId)
       // a drag from FIRE tracks the target while it fires
-      if (!this.look) {
+      if (look && !this.look) {
         this.look = { id: e.pointerId, x: e.clientX, y: e.clientY }
       }
     })
@@ -197,6 +221,14 @@ export class TouchControls {
     this.ads = on
     this.adsBtn.classList.toggle('down', on)
     this.adsBtn.setAttribute('aria-pressed', String(on))
+  }
+
+  /** The crouch toggle shows pressed while you're crouched. */
+  setCrouched(on: boolean): void {
+    if (this.crouchBtn.classList.contains('on') !== on) {
+      this.crouchBtn.classList.toggle('on', on)
+      this.crouchBtn.setAttribute('aria-pressed', String(on))
+    }
   }
 
   /** FIRE is held right now (the game repeats the shot at the gun's rate). */
@@ -300,6 +332,7 @@ export class TouchControls {
     if (this.left?.id === e.pointerId) {
       this.left = null
       this.place(this.leftBase, null)
+      this.setSprint(false)
       return
     }
     const r = this.right
@@ -380,14 +413,27 @@ export class TouchControls {
         mx = dx * k
         mz = dy * k
       }
+      // sprint: past the ring, toward the top of the screen (hysteresis on the way back)
+      const up = d > 0 ? -dy / d : 0
+      const reach = d / STICK_R
+      this.setSprint(
+        this.shooter && up >= SPRINT_CONE && reach >= (this.sprint ? SPRINT_OFF : SPRINT_ON),
+      )
     }
-    let buttons = this.latched | this.aimHold
+    let buttons = this.latched | this.aimHold | (this.sprint ? BTN_SPRINT : 0)
     if (this.aiming || (this.shooter && this.ads)) {
       buttons |= BTN_AIM
     }
     this.latched = 0
     this.aimHold = 0
     return { mx, mz, buttons, aim: this.shooter ? null : this.aim, assist: true }
+  }
+
+  private setSprint(on: boolean): void {
+    if (on !== this.sprint) {
+      this.sprint = on
+      this.leftBase.classList.toggle('sprint', on)
+    }
   }
 
   dispose(): void {

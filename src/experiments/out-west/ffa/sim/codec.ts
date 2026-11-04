@@ -141,6 +141,16 @@ export interface SelfView {
   /** Vault travel per tick, centimetres (0: a hop or nothing). */
   vaultStep: number
   vaultAim: number
+  /** `MOVE_*` bits (wire v5). */
+  moveFlags: number
+  sprintLock: number
+  sprintOut: number
+  slideTicks: number
+  slideCooldown: number
+  slideAim: number
+  /** Velocity in the air, centimetres per tick. */
+  airX: number
+  airZ: number
 }
 
 export interface TownView {
@@ -283,6 +293,14 @@ function writeSelf(w: Writer, s: SelfView): void {
     .u8(clampU8(s.jumpCooldown))
     .u8(clampU8(s.vaultStep))
     .u16(s.vaultAim)
+    .u8(s.moveFlags)
+    .u8(clampU8(s.sprintLock))
+    .u8(clampU8(s.sprintOut))
+    .u8(clampU8(s.slideTicks))
+    .u8(clampU8(s.slideCooldown))
+    .u16(s.slideAim)
+    .i8(s.airX)
+    .i8(s.airZ)
 }
 
 function readSelf(r: Reader): SelfView {
@@ -310,6 +328,14 @@ function readSelf(r: Reader): SelfView {
     jumpCooldown: r.u8(),
     vaultStep: r.u8(),
     vaultAim: r.u16(),
+    moveFlags: r.u8(),
+    sprintLock: r.u8(),
+    sprintOut: r.u8(),
+    slideTicks: r.u8(),
+    slideCooldown: r.u8(),
+    slideAim: r.u16(),
+    airX: r.i8(),
+    airZ: r.i8(),
   }
   return s
 }

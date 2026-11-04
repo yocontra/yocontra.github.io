@@ -16,6 +16,7 @@ import type { GLTF } from 'three/examples/jsm/loaders/GLTFLoader.js'
 import { clone as cloneSkinned } from 'three/examples/jsm/utils/SkeletonUtils.js'
 import type { BodyKey, HatKey } from '../data/outlaws.ts'
 import { bake, bodyPieces, type Piece } from './bake.ts'
+import type { Clip } from './clips.ts'
 import { DrawLayer } from './draw.ts'
 import { type Body, boneKey, bounds, sampleBody } from './fit.ts'
 import { hangGuns } from './gunbelt.ts'
@@ -67,19 +68,7 @@ function posing(a: AnimationAction): boolean {
   return a.enabled && a.isScheduled()
 }
 
-export type Clip =
-  | 'Idle'
-  | 'Idle_Neutral'
-  | 'Idle_Gun'
-  | 'Idle_Gun_Pointing'
-  | 'Idle_Gun_Shoot'
-  | 'Gun_Shoot'
-  | 'Walk'
-  | 'Run'
-  | 'Death'
-  | 'HitRecieve'
-  | 'HitRecieve_2'
-  | 'Wave'
+export type { Clip } from './clips.ts'
 
 export class Actor {
   readonly root = new Group()
