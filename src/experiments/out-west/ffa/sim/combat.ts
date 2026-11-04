@@ -33,7 +33,7 @@ import {
 } from './constants.ts'
 import { applyDamage } from './death.ts'
 import { BLOCK_SHOT, rayGrid } from './layout.ts'
-import { aimRadians, radiansToAim } from './move.ts'
+import { aimRadians, radiansToAim, vaulting } from './move.ts'
 import { hashSigned } from './rng.ts'
 import {
   HIST_ALIVE,
@@ -232,6 +232,7 @@ export function canFire(p: Player, buttons: number, aliveAtTickStart: boolean): 
     p.showdown < 0 &&
     p.lingerUntil < 0 &&
     p.rollTicks === 0 &&
+    !vaulting(p) &&
     p.fireCooldownMs <= 0 &&
     (p.weapon === WEAPON_REVOLVER ? p.reloadTicks === 0 && p.ammo > 0 : p.weaponRounds > 0)
   )
