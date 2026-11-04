@@ -49,7 +49,7 @@ import { VAT_W, type VatClipInfo, type VatJob, type VatResult } from './vat-shar
 
 export const VAT_FPS = 15
 /** Bump when the bake changes; also part of the IndexedDB key. */
-const VAT_VERSION = 'vat9-collar'
+const VAT_VERSION = 'vat10-walk'
 const LOD2_TRIS = 1500
 /** Triangles in a far (VAT) rider's hat. */
 const FAR_HAT_TRIS = 300
