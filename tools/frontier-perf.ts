@@ -6,7 +6,7 @@
  *
  *   bun run dev --port 4369          # in another shell
  *   bun tools/frontier-perf.ts [baseUrl] [--cluster] [--rate=4] [--secs=30] [--portrait]
- *     [--view=third|first|top]
+ *     [--view=third|first|top] [--profile]
  *
  * `--cluster` makes every bot crowd around (and spare) the player, so 20+ riders are on screen at
  * once. Prints CPU p50/p95 (rAF start to end of submit), frame p95, JS heap, draws, triangles and
@@ -136,6 +136,40 @@ for (let t = 0; t < secs; t += 2) {
   })
   if (s) {
     rows.push(s)
+  }
+}
+if (process.argv.includes('--profile')) {
+  // where the main thread's time goes: 6 s of the sampling profiler, self time by function
+  await cdp.send('Profiler.enable')
+  await cdp.send('Profiler.setSamplingInterval', { interval: 200 })
+  await cdp.send('Profiler.start')
+  await sleep(6000)
+  const { profile } = (await cdp.send('Profiler.stop')) as {
+    profile: {
+      nodes: { id: number; callFrame: { functionName: string; url: string; lineNumber: number } }[]
+      samples: number[]
+      timeDeltas: number[]
+    }
+  }
+  const byId = new Map(profile.nodes.map((n) => [n.id, n]))
+  const self = new Map<string, number>()
+  let total = 0
+  for (const [i, id] of profile.samples.entries()) {
+    const n = byId.get(id)
+    const dt = profile.timeDeltas[i] ?? 0
+    total += dt
+    if (!n) {
+      continue
+    }
+    const f = n.callFrame
+    const file = f.url.split('/').pop()?.split('?')[0] ?? ''
+    const key = `${f.functionName || '(anon)'} ${file}:${f.lineNumber + 1}`
+    self.set(key, (self.get(key) ?? 0) + dt)
+  }
+  const top = [...self].sort((a, b) => b[1] - a[1]).slice(0, 30)
+  console.log(`  profile (self time, ${Math.round(total / 1000)} ms sampled):`)
+  for (const [k, us] of top) {
+    console.log(`    ${((us / total) * 100).toFixed(1).padStart(5)}%  ${k}`)
   }
 }
 await browser.close()
