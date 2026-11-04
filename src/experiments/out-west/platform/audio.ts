@@ -6,8 +6,8 @@
  * - Handles `state === 'interrupted'` (a call, Siri) by resuming on the next gesture.
  * - Suspends while the page is hidden, and resumes when it comes back (or on the next gesture if
  *   the browser refuses).
- * - Sets `navigator.audioSession.type` to `'ambient'` (respects the silent switch) or, with the
- *   "Play sound on silent" setting, `'playback'`.
+ * - Sets `navigator.audioSession.type` to `'playback'` (a game is audible with the Ring/Silent
+ *   switch on; iOS 17.4+) or `'ambient'` (respects the switch) from the player's setting.
  *
  * The DRAW! caption is always shown, so silence never decides a duel. Owned by stream A.
  */
@@ -21,12 +21,19 @@ interface AudioSessionLike {
 
 const GESTURES = ['pointerup', 'touchend', 'keydown', 'click'] as const
 
-/** Applies the iOS audio session type where supported (Safari 17+). No-op elsewhere. */
+/** The last type written, so the same value is never written twice (a write can interrupt iOS). */
+let sessionMode: AudioSessionMode | null = null
+
+/** Applies the iOS audio session type where supported (Safari 17.4+). No-op elsewhere. */
 export function setAudioSessionMode(mode: AudioSessionMode): void {
+  if (sessionMode === mode) {
+    return
+  }
   const session: unknown = Reflect.get(navigator, 'audioSession')
   if (typeof session === 'object' && session !== null && 'type' in session) {
     try {
       ;(session as AudioSessionLike).type = mode
+      sessionMode = mode
     } catch {
       // read-only in some builds
     }
@@ -58,7 +65,7 @@ export function unlockAudio(
   ctx: AudioContext,
   opts: { mode?: AudioSessionMode; onUnlock?: () => void } = {},
 ): AudioUnlock {
-  setAudioSessionMode(opts.mode ?? 'ambient')
+  setAudioSessionMode(opts.mode ?? 'playback')
   let unlocked = false
   let hidden = document.visibilityState === 'hidden'
   let armed = false

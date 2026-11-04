@@ -4,6 +4,7 @@
  * (`settings.ts`).
  */
 import { hapticsSupported } from '../platform/haptics.ts'
+import { IOS_UA } from '../platform/native.ts'
 import {
   type Graphics,
   getSettings,
@@ -116,6 +117,25 @@ export function openSettings(root: HTMLElement, onClose?: () => void): void {
   slider(sound, 'Effects', 'sfx')
   slider(sound, 'Voices', 'voice')
   flag(sound, 'mono', { label: 'Mono audio', hint: 'All sound in both ears.' })
+  if (IOS_UA.test(navigator.userAgent)) {
+    const hasSession = typeof Reflect.get(navigator, 'audioSession') === 'object'
+    toggle(sound, {
+      label: 'Play on silent',
+      hint: hasSession
+        ? 'Keep sound when the Ring/Silent switch is on.'
+        : 'This iOS version mutes web audio on silent; update iOS to use it.',
+      value: getSettings().silentAudio,
+      change: (on) => setSetting('silentAudio', on),
+    })
+    if (!hasSession) {
+      el(
+        'p',
+        'ow-hub-note',
+        sound,
+        'The Ring/Silent switch mutes web audio on this iOS version. Turn it off or update iOS.',
+      )
+    }
+  }
   const feel = el('section', 'ow-set-group', s.body)
   el('h3', 'ow-set-h', feel, 'Controls')
   flag(feel, 'captions', { label: 'Captions', hint: 'Show sounds and speech as text.' })

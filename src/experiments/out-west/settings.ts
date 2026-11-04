@@ -25,6 +25,11 @@ export interface Settings {
   voice: number
   /** Buzz on your own shot and on a hit (never on the call). */
   vibration: boolean
+  /**
+   * iOS: play through the Ring/Silent switch. `true` sets the audio session to `playback`, so the
+   * game is audible with the phone on silent (what every game expects); `false` keeps `ambient`.
+   */
+  silentAudio: boolean
   /** Renderer tier: auto picks by device; low and high force it. Applies on the next load. */
   graphics: Graphics
 }
@@ -34,6 +39,7 @@ export const DEFAULT_SETTINGS: Readonly<Settings> = {
   sfx: 1,
   voice: 1,
   vibration: true,
+  silentAudio: true,
   graphics: 'auto',
 }
 
@@ -57,6 +63,7 @@ function read(): Settings {
     sfx: unit(v.sfx, DEFAULT_SETTINGS.sfx),
     voice: unit(v.voice, DEFAULT_SETTINGS.voice),
     vibration: typeof v.vibration === 'boolean' ? v.vibration : DEFAULT_SETTINGS.vibration,
+    silentAudio: typeof v.silentAudio === 'boolean' ? v.silentAudio : DEFAULT_SETTINGS.silentAudio,
     graphics: GRAPHICS.includes(v.graphics as Graphics)
       ? (v.graphics as Graphics)
       : DEFAULT_SETTINGS.graphics,

@@ -80,6 +80,7 @@ import { tierHint } from '../../engine/tiers.ts'
 import { haptic } from '../../platform/haptics.ts'
 import { presetAt } from '../../scene/presets.ts'
 import { RIM } from '../../scene/style.ts'
+import { setLowRes } from '../../scene/textures.ts'
 import { installUiSounds } from '../../ui/sfx.ts'
 import { bagColor, bagStyleColor } from '../scene/bags.ts'
 import { TopDownCamera } from '../scene/camera.ts'
@@ -325,6 +326,8 @@ export class FrontierGame {
     this.touchUi = coarse
     this.settings = loadSettings()
     this.renderer = new Renderer(this.canvas, this.scene, this.cam.camera, tierHint(), 'ffa')
+    // Phones read the half-size texture set (scene/textures.ts): ~550 KB instead of ~2.7 MB.
+    setLowRes(this.renderer.tier === 'floor' || this.renderer.tier === 'legacy')
     this.scene.userData.owDay = DAY
     this.shooter = new ShooterCamera(this.cam.camera)
     // the first-person view model rides on the camera, so the camera joins the scene graph
@@ -677,15 +680,16 @@ export class FrontierGame {
     if (this.disposed) {
       return
     }
-    onProgress(0.95, 'Joining')
+    onProgress(0.8, 'Warming')
     shareDepthByKind(this.scene)
     this.renderer.probe.position.set(72, 1.7, 66)
-    try {
-      await this.renderer.gl.compileAsync(this.scene, this.cam.camera)
-    } catch {
-      // Older browsers compile on first use.
-    }
+    // Environment first, then compile: three bakes USE_ENVMAP into the program, so a probe
+    // captured after the warm would make every material compile a second variant.
     this.renderer.probe.captureNow()
+    // The loading screen is up: one synchronous draw warms every program and is faster than
+    // spreading the same reflection across frames (the duel's title uses the chunked warm).
+    this.renderer.warmSync(this.scene, this.cam.camera)
+    onProgress(0.95, 'Joining')
     this.syncRoster()
     // the riders' bodies, cast now (behind the loading screen) instead of mid-fight
     await this.precastRiders(onProgress)
@@ -1959,6 +1963,8 @@ export class FrontierGame {
   /** Start the music and ambience on the first gesture (iOS needs the AudioContext created inside one). */
   unlockAudio(): void {
     this.audio?.unlock()
+    // The bell is already in flight; the rest (Frontier's guns, the footsteps) decode now.
+    void this.audio?.loadPacks()
     this.sound?.start(DAY)
   }
 

@@ -7,10 +7,11 @@ import { Meta } from './meta/progress.ts'
 import { restoreSession } from './net/auth.ts'
 import { RankedSession } from './net/ranked.ts'
 import { Turnstile } from './net/turnstile.ts'
-import { unlockAudio } from './platform/audio.ts'
+import { setAudioSessionMode, unlockAudio } from './platform/audio.ts'
 import { installDevice, readDevice } from './platform/device.ts'
 import { installGamepad } from './platform/gamepad.ts'
 import { setHapticsEnabled } from './platform/haptics.ts'
+import { registerServiceWorker } from './platform/sw.ts'
 import { installViewportVars } from './platform/viewport.ts'
 import { load, type SaveData, save } from './save.ts'
 import { bindRunFlags, getSettings, onSettings, type Settings } from './settings.ts'
@@ -228,6 +229,8 @@ function wireSettings(
     v.setSfxVolume?.(s.sfx)
     v.setVoiceVolume?.(s.voice)
     setHapticsEnabled(s.vibration)
+    // iOS: `playback` keeps the game audible with the Ring/Silent switch on; `ambient` respects it.
+    setAudioSessionMode(s.silentAudio ? 'playback' : 'ambient')
     root.classList.toggle('ow-reduced', data.settings.reducedMotion)
   }
   bindRunFlags(
@@ -265,6 +268,7 @@ function debugView(g: Game, hash: URLSearchParams, title: HTMLElement): boolean 
  * three.js game streams in behind it via a dynamic import.
  */
 export function boot(root: HTMLElement): void {
+  registerServiceWorker()
   const audio = new AudioEngine()
   audio.prefetch()
   installUiSounds(audio)
@@ -318,14 +322,25 @@ export function boot(root: HTMLElement): void {
       return
     }
     started = true
-    title.classList.add('wipe')
-    setTimeout(() => title.remove(), 1100)
     const g = game
-    // Everything is decoded before the first duel; nothing decodes mid-duel.
-    audio
-      .whenDecoded()
-      .then(() => (hub ? hub.show() : g.begin(jump)))
-      .catch(() => undefined)
+    // The scene warms one program per frame behind the title (game.ts / render.ts). Show the hub
+    // when it is ready; do not freeze the page waiting for every shader at once.
+    void (async () => {
+      try {
+        await g.whenWarm()
+      } catch {
+        // a driver failure must not strand the title: the first frame will report it
+      }
+      // The scene is warm; decode the rest of the sounds while the player is in the hub.
+      void audio.loadPacks()
+      title.classList.add('wipe')
+      setTimeout(() => title.remove(), 1100)
+      if (hub) {
+        hub.show()
+      } else {
+        g.begin(jump)
+      }
+    })()
   }
 
   const press = (e: Event) => {
@@ -340,33 +355,48 @@ export function boot(root: HTMLElement): void {
       e.stopImmediatePropagation()
     }
     pressed = true
+    // Set the iOS session before the context is created: switching it afterwards can interrupt
+    // the first sound. `playback` (the default) is audible with the Ring/Silent switch on.
+    const mode = getSettings().silentAudio ? 'playback' : 'ambient'
+    setAudioSessionMode(mode)
     audio.unlock()
     if (audio.ctx) {
-      // iOS: resume after calls and Siri, suspend when hidden, respect the silent switch
-      unlockAudio(audio.ctx)
+      // iOS: resume after calls and Siri, suspend when hidden
+      unlockAudio(audio.ctx, { mode })
     }
     audio.playSong(data.level >= 15 ? 'boss' : 'intro')
     title.classList.add('pressed')
     if (startText) {
-      startText.textContent = game ? '' : 'loading…'
+      startText.textContent = 'loading…'
     }
     go()
   }
   title.addEventListener('pointerdown', press)
+  title.addEventListener('touchend', press, { passive: false })
   globalThis.addEventListener('keydown', press)
 
   // Back from Frontier: straight to the saloon, no title screen. Audio unlocks on the first tap.
   if (hub && new URLSearchParams(location.search).has('saloon')) {
     pressed = true
     history.replaceState(null, '', location.pathname + location.hash)
+    let unlocked = false
     const unlockOnce = () => {
+      if (unlocked) {
+        return
+      }
+      unlocked = true
+      const mode = getSettings().silentAudio ? 'playback' : 'ambient'
+      setAudioSessionMode(mode)
       audio.unlock()
       if (audio.ctx) {
-        unlockAudio(audio.ctx)
+        unlockAudio(audio.ctx, { mode })
       }
       audio.playSong('saloon')
+      globalThis.removeEventListener('pointerdown', unlockOnce)
+      globalThis.removeEventListener('touchend', unlockOnce)
     }
     globalThis.addEventListener('pointerdown', unlockOnce, { once: true })
+    globalThis.addEventListener('touchend', unlockOnce, { once: true })
   }
 
   // the wanted posters are painted on canvas, which never swaps in a late font: fonts and stock first
@@ -389,14 +419,20 @@ export function boot(root: HTMLElement): void {
       if (import.meta.env.DEV && debug) {
         Reflect.set(globalThis, '__ow', g)
       }
-      if (debugView(g, hash, title)) {
+      if (hash.has('lineup') || hash.has('posters')) {
+        // debug views draw the scene: run them once it is warm, not on a cold first frame
+        void (async () => {
+          try {
+            await g.whenWarm()
+          } catch {
+            // draw anyway
+          }
+          debugView(g, hash, title)
+        })()
         return
       }
       hub?.gameReady()
       title.classList.add('ready')
-      if (startText && pressed) {
-        startText.textContent = ''
-      }
       if (pressed) {
         go()
       }

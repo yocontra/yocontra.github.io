@@ -11,6 +11,7 @@ reuse freely. Every third-party or generated asset gets a line in
 | `optimize-gltf.ts`    | dedup → prune → weld → resize → KTX2 (or WebP) → quantize → meshopt, plus an optional simplified LOD file                                                                                                                | `bunx` (fetches `@gltf-transform/cli`), optional `toktx`                       |
 | `build-characters.ts` | The textured character bases + clips + shared character atlas from Quaternius's CC0 Universal Base Characters, Modular Outfits – Fantasy and Universal Animation Library (see the file header)                           | the unzipped packs, `sharp`, gltf-transform, meshoptimizer                     |
 | `build-props.ts`      | `models/props.glb` + the trim atlas `tex/kit_*.webp` from Quaternius's CC0 Medieval Village and Fantasy Props MegaKits (doors, windows, rails, barrels, crates, wagon...), the re-UV'd revolver and the dynamite bundle  | the unzipped kits, `tools/art/props-src.glb`                                   |
+| `half-textures.ts`    | The phone texture set: a half-size WebP beside every map in `3d/tex` (`scene/textures.ts` reads them on floor/legacy; ~2.7 MB → ~550 KB)                                                                                 | `sharp`                                                                        |
 | `make-luts.ts`        | Export the in-game time-of-day grades (`engine/lut.ts`) as 32³ `.cube` files for a colourist                                                                                                                             | none                                                                           |
 | `ui-audit.ts`         | UI layout audit of every game screen at twelve sizes in real Chrome: text overflow, clipping, ellipses on short text, overlapping text, tap targets, game fonts on controls, dead primary buttons. See below             | a dev server, a local API, Playwright                                          |
 | `float-audit.ts`      | Floating-object audit of both scenes (duel street, Frontier) at both tiers in real Chrome: floaters, kit pieces off their wall, props sunk into a deck, z-fighting faces; `--shots=dir` saves low-angle views. See below | a dev server, Playwright                                                       |
@@ -31,6 +32,9 @@ bun tools/pbr-from-albedo.ts tools/art/signboard_src.webp public/experiments/out
 
 # A GLB for the web (hero: --tex 2048 --ktx uastc; props: --ktx etc1s; FFA: --tex 512) + a 25% LOD
 bun tools/optimize-gltf.ts in.glb public/experiments/out-west/3d/models/out.glb --tex 1024 --lod 0.25
+
+# The phone texture set (floor and legacy read these): rerun after changing any map in 3d/tex
+bun tools/half-textures.ts
 
 # LUTs for grading in Resolve: load the .cube, grade over an in-game capture, export a 32³ .cube,
 # then load it at runtime with lutFromCube() (engine/lut.ts)

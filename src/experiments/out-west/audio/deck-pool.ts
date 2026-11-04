@@ -60,6 +60,12 @@ export class DeckPool {
     const el = new Audio()
     el.preload = 'auto'
     el.crossOrigin = 'anonymous'
+    // iOS is happier with a media element that is in the document (a detached element can be
+    // refused after its src changes), and it costs nothing: it never paints.
+    el.setAttribute('playsinline', '')
+    el.setAttribute('aria-hidden', 'true')
+    el.style.display = 'none'
+    document.body.append(el)
     // Rate nudges happen while silent; never pitch-correct them (cheaper, and no artefacts).
     el.preservesPitch = false
     const src = this.ctx.createMediaElementSource(el)

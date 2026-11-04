@@ -13,6 +13,8 @@ interface Props {
   viewport?: string | false
   /** Benchmarks: skip the spinning favicon so it never shows up in a profile. */
   staticFavicon?: boolean
+  /** Override the site-wide home-screen icon (the game pages use their own). */
+  appleIcon?: string
 }
 
 const {
@@ -21,6 +23,7 @@ const {
   noindex = false,
   viewport = 'width=device-width, initial-scale=1',
   staticFavicon = false,
+  appleIcon,
 } = Astro.props
 ---
 
@@ -32,7 +35,7 @@ const {
     <title>{title}</title>
     {description && <meta name="description" content={description} />}
     {noindex && <meta name="robots" content="noindex, nofollow" />}
-    <Favicon />
+    <Favicon {...appleIcon ? { appleIcon } : {}} />
     <slot name="head" />
   </head>
   <body>

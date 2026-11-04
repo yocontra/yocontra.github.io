@@ -117,7 +117,28 @@ const CALL_CLEAR = 0.35
  */
 const GRAPH_DELAY = 0.0124
 /** Media elements blessed in the unlock gesture (2 per looping stream, 1 per sting). */
-const DECKS = 14
+const DECKS = 10
+/**
+ * Decode order for the core pack: the bell a duel cannot wait for, then the draw, the feet and the
+ * menu ticks. Everything else follows in file order.
+ */
+const CORE_ORDER: readonly string[] = [
+  'bell',
+  'cocking',
+  'hammer',
+  'holster',
+  'revClose',
+  'revTail',
+  'dirtsteps',
+  'woodsteps',
+  'spursteps',
+  'uiTick',
+  'uiPaper',
+  'uiStamp',
+  'uiBuy',
+  'heart',
+]
+const BELL_URL = /(?:^|\/)bell\.[a-z0-9]+$/iu
 
 export interface PlayOpts {
   gain?: number
@@ -282,33 +303,53 @@ export class AudioEngine {
     return v
   }
 
-  private urls(pack: Pack): string[] {
-    return Object.values(SFX_FILES)
-      .filter((s) => s.pack === pack)
-      .map((s) => s.url)
-  }
-
-  /** Start fetching the core sounds before the first gesture. Music streams; nothing to fetch. */
+  /** Start fetching the bell before the first gesture; the rest wait for it (see loadPack). */
   prefetch(): void {
-    for (const url of this.urls('core')) {
-      this.fetchRaw(url)
+    const bell = Object.values(SFX_FILES).find((s) => s.pack === 'core' && BELL_URL.test(s.url))
+    if (bell) {
+      this.fetchRaw(bell.url)
     }
   }
 
   /**
    * Fetch and decode a mode's sounds (Frontier's guns, dynamite, bank…). Resolves when decoded.
    * Safe to call before the unlock gesture (it fetches, and decodes on unlock) and repeatedly.
+   *
+   * The bell and the sounds a tap can reach first decode together right away; the rest wait a
+   * moment, so the first gesture is not competing with thirty decoders on a phone.
    */
   loadPack(pack: Pack): Promise<void> {
     this.packs.add(pack)
-    const urls = this.urls(pack)
+    const files = Object.entries(SFX_FILES).filter(([, s]) => s.pack === pack)
     if (!this.ctx) {
-      for (const url of urls) {
-        this.fetchRaw(url)
+      for (const [, s] of files) {
+        this.fetchRaw(s.url)
       }
       return Promise.resolve()
     }
-    return Promise.all(urls.map((u) => this.decode(u))).then(() => undefined)
+    const rank = (name: string): number => {
+      const i = CORE_ORDER.indexOf(name)
+      return i < 0 ? CORE_ORDER.length : i
+    }
+    files.sort(([a], [b]) => rank(a) - rank(b))
+    const ordered = files.map(([, s]) => s.url)
+    const head = pack === 'core' ? ordered.slice(0, CORE_ORDER.length) : ordered
+    const tail = pack === 'core' ? ordered.slice(CORE_ORDER.length) : []
+    // The sounds a tap can reach first decode together, right away. The rest wait a moment so the
+    // first gesture (the title song, the hub) is not competing with thirty decoders on a phone.
+    const headDone = Promise.all(head.map((url) => this.decode(url))).then(() => undefined)
+    const tailDone =
+      tail.length === 0
+        ? Promise.resolve()
+        : new Promise<void>((resolve) => {
+            setTimeout(() => {
+              Promise.all(tail.map((url) => this.decode(url))).then(
+                () => resolve(),
+                () => resolve(),
+              )
+            }, 1200)
+          })
+    return Promise.all([headDone, tailDone]).then(() => undefined)
   }
 
   private fetchRaw(url: string): Promise<ArrayBuffer | null> {
@@ -363,13 +404,16 @@ export class AudioEngine {
       this.pool?.bless(DECKS)
       return
     }
-    const Ctor = globalThis.AudioContext
+    const Ctor =
+      globalThis.AudioContext ??
+      (globalThis as typeof globalThis & { webkitAudioContext?: typeof AudioContext })
+        .webkitAudioContext
     if (!Ctor) {
       return
     }
     const ctx = new Ctor({ latencyHint: 'interactive' })
     this.ctx = ctx
-    void ctx.resume()
+    void ctx.resume().catch(() => undefined)
     const mode = audioDebugMode()
     this.dbg = mode === null ? null : new AudioDebug(ctx, mode, () => this.stats())
     this.dbg?.log('unlock', ctx.sampleRate)
@@ -383,9 +427,17 @@ export class AudioEngine {
     this.pool.bless(DECKS)
     this.watchPage()
     this.packs.add('core')
-    for (const pack of this.packs) {
-      void this.loadPack(pack)
+    // Only the bell now: it is the one sound a duel cannot wait for. `loadPacks` (called once the
+    // title has handed over to the hub) decodes the rest in the background.
+    const bell = Object.values(SFX_FILES).find((s) => s.pack === 'core' && BELL_URL.test(s.url))
+    if (bell) {
+      void this.decode(bell.url)
     }
+  }
+
+  /** Decode every pack asked for so far (the bell is already in flight). */
+  loadPacks(): Promise<void> {
+    return Promise.all([...this.packs].map((pack) => this.loadPack(pack))).then(() => undefined)
   }
 
   private buildGraph(ctx: AudioContext): void {
