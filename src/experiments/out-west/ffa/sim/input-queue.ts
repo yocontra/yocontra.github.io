@@ -3,6 +3,7 @@
  * protocol): it consumes frame `expect` each tick, replays the last frame through silence, keeps
  * late button presses and fast-forwards a client that runs too far ahead.
  */
+import { INPUT_LEAD_NONE } from '../../contract/town.ts'
 import type { WireFrame } from './codec.ts'
 import { EDGE_BUTTONS, INPUT_BUFFER_FRAMES, MAX_AHEAD_FRAMES, seqDiff } from './input.ts'
 
@@ -19,6 +20,8 @@ export class InputQueue {
   }
   /** Frames dropped as too far ahead or merged as late (abuse/latency telemetry). */
   dropped = 0
+  /** Smallest arrival margin since the last `takeLead()` (frames), or none. */
+  private minLead = INPUT_LEAD_NONE
 
   /** Seq of the frame consumed most recently (echoed as `lastInputSeq`). */
   get lastSeq(): number {
@@ -34,6 +37,10 @@ export class InputQueue {
     const newest = (seq + frames.length - 1) & 0xff_ff
     if (this.expect < 0) {
       this.expect = (newest - INPUT_BUFFER_FRAMES + 1) & 0xff_ff
+    } else {
+      // How many ticks before its first frame is due this message arrived (negative: late).
+      const lead = Math.max(-127, Math.min(127, seqDiff(seq, this.expect)))
+      this.minLead = this.minLead === INPUT_LEAD_NONE ? lead : Math.min(this.minLead, lead)
     }
     for (const [i, f] of frames.entries()) {
       this.add((seq + i) & 0xff_ff, f)
@@ -65,6 +72,13 @@ export class InputQueue {
       }
     }
     this.expect = to
+  }
+
+  /** The arrival margin to echo in the next snapshot (`inputLead`), and start a new window. */
+  takeLead(): number {
+    const lead = this.minLead
+    this.minLead = INPUT_LEAD_NONE
+    return lead
   }
 
   /** The frame for this tick: the next numbered frame, a late one, or the last one again. */

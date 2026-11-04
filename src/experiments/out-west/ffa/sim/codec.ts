@@ -13,6 +13,7 @@ import {
   EVENT_SIZES,
   INPUT_FRAME_BYTES,
   INPUT_HEADER_BYTES,
+  INPUT_LEAD_NONE,
   MAX_FRAMES_PER_INPUT,
   MSG_INPUT,
   MSG_SNAPSHOT,
@@ -53,7 +54,7 @@ export function encodeInput(w: Writer, msg: InputMessage): Uint8Array {
     w.i8(clampI8(f.moveX))
       .i8(clampI8(f.moveZ))
       .u16(f.aim)
-      .u8(f.buttons)
+      .u16(f.buttons)
       .u16(f.viewTick)
       .u8(clampU8(f.viewFrac))
   }
@@ -79,7 +80,7 @@ export function decodeInput(data: ArrayBuffer | Uint8Array): InputMessage | null
       moveX: r.i8(),
       moveZ: r.i8(),
       aim: r.u16(),
-      buttons: r.u8(),
+      buttons: r.u16(),
       viewTick: r.u16(),
       viewFrac: r.u8(),
     })
@@ -151,6 +152,8 @@ export interface TownView {
 export interface Snapshot {
   tick: number
   lastInputSeq: number
+  /** Frames of margin on this player's newest input (`INPUT_LEAD_NONE`: none since last). */
+  inputLead: number
   flags: number
   self: SelfView
   /** Entities that changed or entered this tick, fully resolved against the baseline. */
@@ -269,7 +272,7 @@ function writeSelf(w: Writer, s: SelfView): void {
     .u32(s.carried)
     .u8(clampU8(s.respawnTicks))
     .u8(clampU8(s.holsterTicks))
-    .u8(s.lastButtons)
+    .u16(s.lastButtons)
     .u8(s.weapon)
 }
 
@@ -292,7 +295,7 @@ function readSelf(r: Reader): SelfView {
     carried: r.u32(),
     respawnTicks: r.u8(),
     holsterTicks: r.u8(),
-    lastButtons: r.u8(),
+    lastButtons: r.u16(),
     weapon: r.u8(),
   }
   return s
@@ -325,6 +328,7 @@ function readTown(r: Reader): TownView {
 export interface SnapshotInput {
   tick: number
   lastInputSeq: number
+  inputLead: number
   flags: number
   self: SelfView
   entities: readonly EntityView[]
@@ -343,7 +347,8 @@ export function encodeSnapshot(
   baseline: Map<number, EntityView>,
 ): Uint8Array {
   const flags = s.town ? s.flags | SNAP_TOWN : s.flags & ~SNAP_TOWN
-  w.reset().u8(MSG_SNAPSHOT).u32(s.tick).u16(s.lastInputSeq).u8(flags)
+  const lead = s.inputLead === INPUT_LEAD_NONE ? INPUT_LEAD_NONE : clampI8(s.inputLead)
+  w.reset().u8(MSG_SNAPSHOT).u32(s.tick).u16(s.lastInputSeq).i8(lead).u8(flags)
   const countAt = w.offset
   w.u8(0).u8(s.removed.length)
   writeSelf(w, s.self)
@@ -384,6 +389,7 @@ export function decodeSnapshot(
   }
   const tick = r.u32()
   const lastInputSeq = r.u16()
+  const inputLead = r.i8()
   const flags = r.u8()
   const entityCount = r.u8()
   const removedCount = r.u8()
@@ -407,7 +413,7 @@ export function decodeSnapshot(
       events.push(ev)
     }
   }
-  return { tick, lastInputSeq, flags, self, entities, removed, town, events }
+  return { tick, lastInputSeq, inputLead, flags, self, entities, removed, town, events }
 }
 
 /** Bytes an event of `type` occupies after its type byte. */

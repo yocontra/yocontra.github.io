@@ -23,6 +23,7 @@ import {
   EF_MOST_WANTED,
   EF_PROTECTED,
   EF_SHOWDOWN,
+  INPUT_LEAD_NONE,
   NONE,
   POS_SCALE,
   SELF_ALIVE,
@@ -222,6 +223,8 @@ export interface SnapshotContext {
   banked: number
   /** Sim events of this tick (already filtered for the viewer if desired). */
   events: readonly SimEvent[]
+  /** The viewer's input margin since the last snapshot (`InputQueue.takeLead()`); none if absent. */
+  inputLead?: number
 }
 
 /** Events that rebuild the world for a fresh baseline: bags, showdowns, taken pickups, lit fuses. */
@@ -286,6 +289,7 @@ export function snapshotFor(
       // The state after tick T is stamped T (the history index the client's view time refers to).
       tick: w.tick - 1,
       lastInputSeq: viewer.lastSeq,
+      inputLead: ctx.inputLead ?? INPUT_LEAD_NONE,
       flags: full ? SNAP_FULL : 0,
       self: selfView(w, viewer),
       entities,

@@ -30,7 +30,7 @@ export const KEEPALIVE_TICKS = TICK_HZ / 2
 /** The server's jitter buffer, in frames behind the newest frame seen. */
 export const INPUT_BUFFER_FRAMES = 2
 /** A client this far ahead of the server is fast-forwarded. */
-export const MAX_AHEAD_FRAMES = 8
+export const MAX_AHEAD_FRAMES = 10
 /** Presses that must not be lost when frames are merged or dropped. */
 export const EDGE_BUTTONS =
   BTN_FIRE | BTN_ROLL | BTN_RELOAD | BTN_INTERACT | BTN_CALLOUT | BTN_LEAVE
@@ -54,6 +54,20 @@ export class InputBatcher {
   /** The seq the next `push` will be numbered with. */
   get nextSeq(): number {
     return this.seq
+  }
+
+  /**
+   * Jump the frame numbers `n` ahead (the server already repeated those frames: see
+   * `client/tick-clock.ts`). A half-filled slot goes out now, alone, so no frame is lost, and the
+   * next slot is sent whatever it holds, to re-anchor the server's queue.
+   */
+  skip(n: number): { seq: number; frames: WireFrame[] } | null {
+    const held = this.slot
+    this.slot = []
+    this.lastSent = null
+    const out = held.length > 0 ? { seq: (this.seq - held.length) & 0xff_ff, frames: held } : null
+    this.seq = (this.seq + n) & 0xff_ff
+    return out
   }
 
   /**
