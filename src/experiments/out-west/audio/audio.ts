@@ -96,10 +96,16 @@ const VOICE_PAN = 0.12
 const CALL_DUCK_SONG: Partial<Record<SongName, number>> = {
   tension: 0.05,
   // the duel cues sit in the bell's own midrange (guitar, cello), so they clear further for it
-  duelDay: 0.1,
-  duelDusk: 0.1,
-  duelNight: 0.1,
+  duelDay: 0.06,
+  duelDusk: 0.06,
+  duelNight: 0.06,
 }
+/**
+ * Where a song starts the first time it plays, s (else 0, its lead-in). The 2019 boss theme opens
+ * with 48 s of slow build at about −34 LUFS, 16 dB under every other screen: under the boss duel's
+ * walk duck it was inaudible, so the last stand starts where the theme does.
+ */
+const SONG_ENTRY: Partial<Record<SongName, number>> = { boss: SONGS.boss.points.start }
 /** Seconds the duck holds before music and ambience swell back. */
 const CALL_DUCK_HOLD = 0.7
 /** No heartbeat may sound this close after the call's strike (it would blur the bell's attack). */
@@ -1143,7 +1149,7 @@ export class AudioEngine {
       old.stream.stop(1.2)
     }
     s.out.connect(this.musicFilter)
-    const resume = this.songOffset.get(name) ?? 0
+    const resume = this.songOffset.get(name) ?? SONG_ENTRY[name] ?? 0
     s.start(db(def.trim), resume < def.points.end ? resume : def.points.start, old ? 1.2 : 0.4)
     this.song = { name, stream: s }
     this.dbg?.log('songStart', name, old?.name ?? null)
