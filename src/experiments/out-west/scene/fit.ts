@@ -203,6 +203,13 @@ export interface ShellSpec {
   span?: (t: number) => readonly [number, number]
   /** Largest radius allowed at direction `a`, ring `t` (cloth that hangs, not flares). */
   limit?: (a: number, t: number) => number
+  /**
+   * How far down the column at direction `a` reaches, as a fraction of yTop → yBot (a poncho
+   * longer in front and back than at the sides). Default 1.
+   */
+  drop?: (a: number) => number
+  /** Most the radius may grow per metre down (cloth sloping off the shoulders, not a shelf). */
+  grow?: number
 }
 
 /** Resolved ring layout shared by the shell's passes. */
@@ -242,12 +249,17 @@ function layout(s: ShellSpec): Layout {
   }
 }
 
+/** Height of ring `t` in the column at direction `a`. */
+const colY = (s: ShellSpec, t: number, a: number): number =>
+  s.yTop + (s.yBot - s.yTop) * t * (s.drop ? s.drop(a) : 1)
+
 /** Surface radius per column of one ring, holes filled, smoothed without dipping inside. */
 function ringRadii(s: ShellSpec, L: Layout, i: number): number[] {
-  const { y, a0, step } = L.ring(i)
+  const { t, a0, step } = L.ring(i)
   const row: number[] = []
   for (let j = 0; j < L.cols; j++) {
-    const q = { cx: s.cx, cz: s.cz, y, a: a0 + step * j, dy: L.band, da: Math.max(0.25, step) }
+    const a = a0 + step * j
+    const q = { cx: s.cx, cz: s.cz, y: colY(s, t, a), a, dy: L.band, da: Math.max(0.25, step) }
     row.push(reach(s.samples, q))
   }
   const known = row.filter((x) => Number.isFinite(x))
@@ -289,6 +301,19 @@ export function shell(s: ShellSpec): BufferGeometry {
       r[i] = (r[i] ?? []).map((x, j) => Math.max(x, above[j] ?? 0))
     }
   }
+  const grow = s.grow
+  if (grow !== undefined) {
+    for (let i = 1; i < r.length; i++) {
+      const above = r[i - 1] ?? []
+      const { t } = L.ring(i)
+      const t0 = L.ring(i - 1).t
+      r[i] = (r[i] ?? []).map((x, j) => {
+        const a = L.ring(i).a0 + L.ring(i).step * j
+        const dy = Math.abs(colY(s, t, a) - colY(s, t0, a))
+        return Math.min(x, (above[j] ?? x) + grow * dy)
+      })
+    }
+  }
   const limit = s.limit
   if (limit) {
     r.forEach((row, i) => {
@@ -300,12 +325,16 @@ export function shell(s: ShellSpec): BufferGeometry {
   const col: number[] = []
   const uv: number[] = []
   r.forEach((row, i) => {
-    const { t, y, a0, step } = L.ring(i)
+    const { t, a0, step } = L.ring(i)
     const c = typeof s.color === 'function' ? s.color(t, i) : s.color
     const extra = s.margin + (s.bulge ? s.bulge(t) : 0)
     row.forEach((rad, j) => {
       const a = a0 + step * j
-      pos.push(s.cx + Math.sin(a) * (rad + extra), y, s.cz + Math.cos(a) * (rad + extra))
+      pos.push(
+        s.cx + Math.sin(a) * (rad + extra),
+        colY(s, t, a),
+        s.cz + Math.cos(a) * (rad + extra),
+      )
       col.push(c.r, c.g, c.b)
       // A full ring mirrors its swatch (0 → 1 → 0) so there is no seam at the back.
       uv.push(L.full ? 1 - Math.abs((2 * j) / L.cols - 1) : j / Math.max(1, L.cols - 1), t)

@@ -21,8 +21,9 @@ import type { Piece } from './bake.ts'
 import { coat, type GunSides } from './coat.ts'
 import { beard, eyepatch, scar, vest } from './face.ts'
 import { type HatFit, makeHat } from './hats.ts'
-import { bandana, bandoliers, type Fit, mask, poncho, star } from './outfit.ts'
+import { bandana, bandoliers, type Fit, mask, star } from './outfit.ts'
 import { HAIR_LUM } from './person.ts'
+import { poncho } from './poncho.ts'
 import type { Glow } from './shade.ts'
 import { type Floor, vary } from './style.ts'
 
@@ -118,12 +119,13 @@ export function tintModel(model: Object3D, o: DressOpts): void {
 /** Everything he wears, fitted and skinned (see outfit.ts). */
 export function dressPieces(f: Fit, o: DressOpts, root: Object3D, realBeard: boolean): Piece[] {
   const out: Piece[] = []
+  const holstered: GunSides = o.offGun ? [1, -1] : [1]
+  const sides: GunSides = o.gun ? holstered : []
   if (o.coat !== undefined) {
-    const sides: GunSides = o.offGun ? [1, -1] : [1]
-    out.push(...coat(f, o.coat, o.coatCut ?? 'duster', o.gun ? sides : []))
+    out.push(...coat(f, o.coat, o.coatCut ?? 'duster', sides))
   }
   if (o.poncho !== undefined) {
-    out.push(...poncho(f, o.poncho))
+    out.push(...poncho(f, o.poncho, sides))
   }
   if (o.vest !== undefined && o.poncho === undefined) {
     out.push(...vest(f, o.vest))
