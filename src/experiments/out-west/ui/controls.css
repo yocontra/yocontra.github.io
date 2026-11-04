@@ -35,13 +35,22 @@
 }
 
 /* -------------------------------------------------------- buttons */
+/*
+ * One button system, used by every screen:
+ *   .ow-btn            the plate: bone rule on a dark ground (on paper: ink rule, no ground)
+ *   .ow-btn-primary    red ink pressed into paper: the one thing to do next
+ *   .ow-btn-danger     oxblood: a choice that can't be undone
+ *   .ow-btn-ghost      a bare underlined word: the quiet way out (with -danger: in the bad ink)
+ *   .ow-btn-sm         a sheet's Close or Done: one tap target tall, the body size
+ * Labels are Garamond small caps, lifted onto the box's optical centre (`--ow-lift-sc`).
+ */
 .ow-btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: var(--ow-s2);
   min-height: 48px;
-  padding: 0 var(--ow-s4);
+  padding: 0 var(--ow-s4) var(--ow-lift-sc);
   font-family: var(--ow-font-text);
   font-weight: 600;
   font-size: var(--ow-fs-lead);
@@ -49,6 +58,7 @@
   letter-spacing: 0.08em;
   line-height: 1;
   text-transform: none;
+  text-wrap: balance;
   color: var(--ow-bone);
   background: rgb(14 9 6 / 0.4);
   border: 1px solid rgb(239 228 204 / 0.55);
@@ -59,6 +69,7 @@
   cursor: pointer;
   -webkit-user-select: none;
   user-select: none;
+  -webkit-tap-highlight-color: transparent;
   transition:
     background-color var(--ow-t-fast),
     border-color var(--ow-t-fast),
@@ -68,12 +79,19 @@
 .ow-btn[hidden] {
   display: none;
 }
+/* an icon beside a small-caps label drops to the letters' middle, half a lift under the line's */
+.ow-btn > .ow-icon,
+.ow-store-tab > .ow-icon,
+.ow-feat-mw-step > .ow-icon {
+  translate: 0 calc(var(--ow-lift-sc) / 2);
+}
 .ow-btn:hover {
   background-color: rgb(239 228 204 / 0.1);
   border-color: var(--ow-bone);
 }
 .ow-btn:active {
   transform: translateY(1px);
+  background-color: rgb(239 228 204 / 0.16);
 }
 /* red ink pressed into paper */
 .ow-btn-primary {
@@ -96,6 +114,41 @@
 .ow-btn-primary:hover {
   background-color: var(--ow-red-hi);
   border-color: var(--ow-red-lo);
+}
+.ow-btn-primary:active {
+  background-color: var(--ow-red-lo);
+  box-shadow:
+    inset 0 0 0 3px transparent,
+    inset 0 0 0 4px rgb(255 226 196 / 0.2),
+    inset 0 2px 4px rgb(0 0 0 / 0.35);
+}
+.ow-btn-danger,
+.ow-btn-danger:hover {
+  color: #fff6e6;
+  background-color: var(--ow-red-lo);
+  border-color: #3a0805;
+}
+.ow-btn-ghost,
+.ow-btn-ghost:hover,
+.ow-btn-ghost:active {
+  min-height: var(--ow-tap);
+  padding-inline: var(--ow-s2);
+  font-size: var(--ow-fs-body);
+  letter-spacing: var(--ow-track-caps);
+  line-height: 1.25;
+  color: var(--ow-bone-2);
+  background: none;
+  border-color: transparent;
+  box-shadow: none;
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 4px;
+}
+.ow-btn-ghost:hover {
+  color: var(--ow-bone);
+}
+.ow-btn-ghost.ow-btn-danger {
+  color: var(--ow-bad);
 }
 .ow-btn:focus-visible,
 .ow-key:focus-visible,
@@ -120,6 +173,15 @@
   .ow-btn {
     min-height: 52px;
   }
+}
+/* a sheet's Close (or the Outfitter's Done): a tap target tall, the body size */
+.ow-btn.ow-btn-sm,
+.ow-sheet-head > .ow-btn,
+.ow-store-head .ow-btn {
+  flex: none;
+  min-height: var(--ow-tap);
+  padding-inline: var(--ow-s3);
+  font-size: var(--ow-fs-body);
 }
 
 /* ------------------------------------------- toggles (no native checkboxes) */

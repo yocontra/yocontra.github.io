@@ -89,8 +89,14 @@ function el<K extends keyof HTMLElementTagNameMap>(
   return e
 }
 
-function button(parent: HTMLElement, label: string, cls = ''): HTMLButtonElement {
-  const b = el('button', `ow-acct-btn ${cls}`.trim(), parent, label)
+/** One of the shared plates (controls.css): '' or any of 'primary', 'danger', 'ghost'. */
+function button(parent: HTMLElement, label: string, kind = ''): HTMLButtonElement {
+  const cls = kind
+    .split(' ')
+    .filter((k) => k !== '')
+    .map((k) => ` ow-btn-${k}`)
+    .join('')
+  const b = el('button', `ow-btn${cls}`, parent, label)
   b.type = 'button'
   return b
 }
@@ -331,7 +337,7 @@ class Panel implements AccountPanel {
     const btns = el('div', 'ow-acct-btns', this.root)
     button(btns, 'Add a passkey').addEventListener('click', () => void this.doAddPasskey())
     button(btns, 'Sign out').addEventListener('click', () => void this.doSignOut())
-    const del = button(this.root, 'Hang up your hat (delete account)', 'danger quiet')
+    const del = button(this.root, 'Hang up your hat (delete account)', 'danger ghost')
     del.addEventListener('click', () => {
       this.view = 'confirm-delete'
       this.status = { text: '', kind: 'info' }
@@ -436,7 +442,7 @@ class Panel implements AccountPanel {
     input.spellcheck = false
     input.setAttribute('autocapitalize', 'off')
     const btns = el('div', 'ow-acct-btns', form)
-    const go = button(btns, 'Delete forever', 'danger primary')
+    const go = button(btns, 'Delete forever', 'danger')
     go.type = 'submit'
     go.disabled = true
     const keep = button(btns, 'Keep my account')
