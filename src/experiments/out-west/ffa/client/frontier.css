@@ -1114,6 +1114,19 @@
   }
 }
 
+/* short portrait (the folded Duo in Safari, 382×580): the channel bar goes above the toast,
+   and a banner yields to it while it runs */
+@media (orientation: portrait) and (max-height: 700px) {
+  .fr-touchui .fr-channel {
+    top: 33%;
+    bottom: auto;
+  }
+
+  .fr-hud:has(.fr-channel.on) .fr-banner {
+    display: none;
+  }
+}
+
 @media (max-height: 460px) {
   .fr-carried {
     font-size: 24px;

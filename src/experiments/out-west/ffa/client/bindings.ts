@@ -92,3 +92,17 @@ export const TOUCH_HELP: readonly (readonly [string, string])[] = [
   ['RELOAD', 'Reload'],
   ['BANK', 'Shows at a bank window'],
 ]
+
+/** The How to play rows with a gamepad connected (the CoD layout, Xbox-style glyphs). */
+export const PAD_HELP: readonly (readonly [string, string])[] = [
+  ['Left stick', 'Move (click: sprint)'],
+  ['Right stick', 'Look'],
+  ['RT', 'Shoot'],
+  ['LT', 'Aim down the sights'],
+  ['A', 'Jump / vault'],
+  ['B', 'Crouch; slide while sprinting'],
+  ['X', 'Reload'],
+  ['Y', 'Bank, open, accept'],
+  ['RB', 'Throw dynamite'],
+  ['LB', 'Call out a rider'],
+]

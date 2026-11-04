@@ -36,13 +36,17 @@ import {
 import {
   ANIM_AIM,
   ANIM_DEAD,
+  ANIM_HOP,
   ANIM_ROLL,
+  ANIM_SLIDE,
+  ANIM_VAULT,
   EF_HATLESS,
   EF_HOLSTERED,
   EF_PROTECTED,
   SHOT_RIFLE,
   SHOT_SHOTGUN,
   STANCE_ADS,
+  STANCE_CROUCH,
   WEAPON_REVOLVER,
   WEAPON_RIFLE,
   WEAPON_SHOTGUN,
@@ -294,6 +298,7 @@ export class Crowd {
       return
     }
     m.shotAt = performance.now() / 1000
+    m.loco?.fired()
     let w = WEAPON_REVOLVER
     if (flags & SHOT_SHOTGUN) {
       w = WEAPON_SHOTGUN
@@ -597,6 +602,7 @@ export class Crowd {
     const m = this.members.get(id)
     if (m?.actor && m.holder?.parent && m.holder.visible) {
       m.recoil = 1
+      m.loco?.fired()
       m.actor.root.updateWorldMatrix(true, true)
       const long = m.held
       if (long) {
@@ -824,8 +830,10 @@ export class Crowd {
     const i = v.mesh.count++
     v.set(i, clip, { phase, speed: rate }, m.look)
     q.setFromAxisAngle(up, facing(p.aim))
-    pos.set(p.x, 0, p.z)
-    m4.compose(pos, q, one.setScalar(this.readScale))
+    pos.set(p.x, farLift(p.anim, nowS - m.animSince), p.z)
+    // far riders have no rig to bend: a crouch or a slide reads as a lower, leaning figure
+    const low = p.anim === ANIM_SLIDE || (p.stance & STANCE_CROUCH) !== 0
+    m4.compose(pos, q, one.set(this.readScale, this.readScale * (low ? 0.74 : 1), this.readScale))
     one.set(1, 1, 1)
     v.mesh.setMatrixAt(i, m4)
     if (!(p.flags & EF_HATLESS)) {
@@ -957,6 +965,16 @@ function gaitRate(clip: Clip, speed: number, walk: number): number {
   return clip === 'Walk'
     ? Math.max(0.6, Math.min(1.6, speed / walk))
     : Math.max(0.6, Math.min(1.3, speed / CLIP_RUN_SPEED))
+}
+
+/** A far rider's jump or vault arc (m), from his anim and how long he's been at it. */
+function farLift(anim: number, since: number): number {
+  if (anim !== ANIM_HOP && anim !== ANIM_VAULT) {
+    return 0
+  }
+  const vault = anim === ANIM_VAULT
+  const t = Math.min(1, since / (vault ? 0.5 : 0.55))
+  return (vault ? 0.85 : 0.45) * 4 * t * (1 - t)
 }
 
 const hatColors = new WeakMap<PlayerLook, Color>()

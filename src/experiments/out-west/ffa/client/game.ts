@@ -248,6 +248,7 @@ export class FrontierGame {
   readonly shooter: ShooterCamera
   private viewModel: ViewModel | null = null
   private readonly vmSun = new Vector3()
+  private dustAt = 0
   private readonly vmQ = new Quaternion()
   private guide: BankGuide | null = null
   private readonly coach: Onboarding
@@ -1147,6 +1148,7 @@ export class FrontierGame {
       this.coach.maybeShow()
     }
     this.landings(list)
+    this.slideDust(list, nowS)
     const shooter = this.shooterView
     const first = this.settings.view === 'first'
     const speed0 = list[0]?.self ? Math.hypot(list[0].vx, list[0].vz) : 0
@@ -1336,6 +1338,19 @@ export class FrontierGame {
       },
       this.vmSun,
     )
+  }
+
+  /** A slide kicks up a trail of dust. */
+  private slideDust(list: readonly CrowdPlayer[], nowS: number): void {
+    if (nowS - this.dustAt < 0.06 || !this.fx) {
+      return
+    }
+    this.dustAt = nowS
+    for (const p of list) {
+      if (p.anim === ANIM_SLIDE) {
+        this.fx.dust(p.x, p.z, 3)
+      }
+    }
   }
 
   /** A thud of boots for every rider (you included) coming down from a vault or a hop. */
@@ -1538,8 +1553,10 @@ export class FrontierGame {
       zoneAt(TOWN, this.own.x, this.own.z)?.kind === 'bank',
       this.dtS,
     )
-    const portrait = viewport.h > viewport.w
-    this.hud.rotateHint(this.touchUi && portrait && this.shooterView && this.net.alive)
+    // only a narrow portrait screen gets the hint (not the open Duo, nor anything squarer)
+    const narrow =
+      viewport.w / viewport.h < 0.65 && document.documentElement.dataset.owForm !== 'fold-inner'
+    this.hud.rotateHint(this.touchUi && narrow && this.shooterView && this.net.alive)
     if (this.map && nowS - this.mapAt > 0.1) {
       this.mapAt = nowS
       this.drawMap(nowS)

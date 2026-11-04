@@ -1,3 +1,4 @@
+// biome-ignore-all lint/suspicious/noUnnecessaryConditions: `bent` flips in layer(), which Actor.update calls back; Biome narrows it to its initialiser
 // biome-ignore-all lint/style/noExcessiveLinesPerFile: one rider's animation state machine (clip weights, the phase-locked gait, the bone layers, the body arcs)
 /**
  * A skinned rider's animation, CoD style, from what the wire says he's doing: his `ANIM_*`, his
@@ -44,7 +45,9 @@ import {
 } from '../../contract/town.ts'
 import type { Actor } from '../../scene/actor.ts'
 import type { Clip } from '../../scene/clips.ts'
+import { solveArm } from '../../scene/longgun.ts'
 import { measureStride } from '../../scene/rig.ts'
+import { SupportHand } from './mirror-hand.ts'
 
 /** Base (full-body) clips, in blend order. */
 const BASE = [
@@ -131,6 +134,22 @@ export class Locomotion {
   private readonly arm: AnimationAction | null
   private readonly reload: AnimationAction | null
   private readonly hits: AnimationAction[] = []
+  /** The pistol shot, over the gun arm and chest, once per shot. */
+  private readonly shoot: AnimationAction | null
+  private shootW = 0
+  /** A shot's kick (1 at the shot, settling): the chest and the gun arm rock back and up. */
+  private kick = 0
+  /** On the sights, eased 0..1: the gun at eye line, the left hand wrapping the right. */
+  private adsW = 0
+  private readonly support: SupportHand | null
+  /**
+   * Every bone's rotation as the clips left it, saved before the procedural layer bends it and put
+   * back before the next mixer update: the mixer skips writing a value that hasn't changed since
+   * its last write, so a bend left in place would pile up tick after tick on a still clip.
+   */
+  private readonly clean: Quaternion[] = []
+  private readonly bones: Bone[] = []
+  private bent = false
   private readonly bone = new Map<string, Bone>()
   private phase = Math.random()
   private legYaw = 0
@@ -167,21 +186,7 @@ export class Locomotion {
     })
     const find = (n: string) => clips.find((c) => (c.name.split('|').pop() ?? c.name) === n)
     // strides first (measuring poses the mixer), then the actions
-    const feet = [this.bone.get('FootL'), this.bone.get('FootR')] as const
-    for (const c of CYCLES) {
-      const key = `${bodyKey}:${c}`
-      let len = strides.get(key)
-      const clip = find(c)
-      if (len === undefined && clip && feet[0] && feet[1]) {
-        const m = measureStride(
-          { mixer: actor.mixer, root: actor.root, feet: [feet[0], feet[1]] },
-          clip,
-        )
-        len = m.paceLength ? 2 * m.paceLength : AUTHORED[c] * clip.duration
-        strides.set(key, len)
-      }
-      this.stride.set(c, len ?? AUTHORED[c] * (clip?.duration ?? 1))
-    }
+    this.measureStrides(find, bodyKey)
     actor.mixer.stopAllAction()
     for (const n of BASE) {
       const a = actor.action(n)
@@ -215,6 +220,8 @@ export class Locomotion {
       return a
     }
     this.arm = layer('Idle_Gun_Pointing', 'LocoArm', ARM_R, true)
+    this.shoot = layer('Idle_Gun_Shoot', 'LocoShoot', ARM_R, false)
+    this.shoot?.stop()
     this.reload = layer('Reload', 'LocoReload', UPPER, true)
     for (const n of ['HitRecieve', 'HitRecieve_2']) {
       const a = layer(n, `Loco${n}`, UPPER, false)
@@ -223,12 +230,63 @@ export class Locomotion {
         this.hits.push(a)
       }
     }
+    // the support hand's mirror pairs, measured in the bind pose (symmetric, unlike any clip's)
+    const skel = actor.meshes[0]?.skeleton
+    if (skel) {
+      // (put every bone back after: pose() also moves bones no clip animates)
+      const saved = skel.bones.map(
+        (b) => [b.position.clone(), b.quaternion.clone(), b.scale.clone()] as const,
+      )
+      skel.pose()
+      actor.root.updateMatrixWorld(true)
+      const side = new Vector3(1, 0, 0).applyQuaternion(actor.root.getWorldQuaternion(tmpQ))
+      this.support = new SupportHand(this.bone, side)
+      for (const [k, b] of skel.bones.entries()) {
+        const s0 = saved[k]
+        if (s0) {
+          b.position.copy(s0[0])
+          b.quaternion.copy(s0[1])
+          b.scale.copy(s0[2])
+          b.updateMatrix()
+        }
+      }
+      actor.root.updateMatrixWorld(true)
+    } else {
+      this.support = null
+    }
     // the procedural layer runs inside Actor.update, after the clips and before the long-gun IK
     actor.layer = () => this.layer()
   }
 
+  /** Each cycle's stride (m per cycle), measured once per base body. */
+  private measureStrides(find: (n: string) => AnimationClip | undefined, bodyKey: string): void {
+    const feet = [this.bone.get('FootL'), this.bone.get('FootR')] as const
+    for (const c of CYCLES) {
+      const key = `${bodyKey}:${c}`
+      let len = strides.get(key)
+      const clip = find(c)
+      if (len === undefined && clip && feet[0] && feet[1]) {
+        const m = measureStride(
+          { mixer: this.actor.mixer, root: this.actor.root, feet: [feet[0], feet[1]] },
+          clip,
+        )
+        len = m.paceLength ? 2 * m.paceLength : AUTHORED[c] * clip.duration
+        strides.set(key, len)
+      }
+      this.stride.set(c, len ?? AUTHORED[c] * (clip?.duration ?? 1))
+    }
+  }
+
   set(i: LocoInput): void {
     this.input = i
+  }
+
+  /** He fired: the shot clip over the gun arm, and a kick through the chest and arm. */
+  fired(): void {
+    this.shoot?.reset().play()
+    this.shootW = 1
+    this.kick = 1
+    this.armW = 7
   }
 
   /** A hit from direction (dx, dz) (world, toward him): flinch away and play a hit clip. */
@@ -255,6 +313,7 @@ export class Locomotion {
    * `dt` is the time since his last update (his mixer may tick at 15 or 30 Hz).
    */
   pre(dt: number): void {
+    this.unbend()
     const i = this.input
     if (i.anim !== this.was) {
       if (i.anim === ANIM_DEAD) {
@@ -278,7 +337,12 @@ export class Locomotion {
       a.setEffectiveWeight(w)
     }
     this.pace(dt, speed, i)
-    // the upper body
+    this.upper(dt, speed)
+  }
+
+  /** The upper body's layers: the gun arm, the reload, hits, the shot, the sights. */
+  private upper(dt: number, speed: number): void {
+    const i = this.input
     const crouched = (i.stance & STANCE_CROUCH) !== 0
     const armUp =
       !(i.holstered || i.long) &&
@@ -300,10 +364,29 @@ export class Locomotion {
       a.setEffectiveWeight(this.hitW * 3)
     }
     this.flinch = Math.max(0, this.flinch - dt * 4)
+    this.kick = Math.max(0, this.kick - dt * 7)
+    this.shootW = Math.max(0, this.shootW - dt * 2.5)
+    this.shoot?.setEffectiveWeight(this.shootW * 9)
+    const sighted = (i.stance & STANCE_ADS) !== 0 && !i.holstered && !i.long
+    this.adsW += ((sighted ? 1 : 0) - this.adsW) * (1 - Math.exp(-dt * 12))
     // the landing dip: a spring
     this.dipV += (-90 * this.dip - 14 * this.dipV) * dt
     this.dip += this.dipV * dt
     this.actor.longCarry += ((sprinting ? 1 : 0) - this.actor.longCarry) * (1 - Math.exp(-dt * 8))
+  }
+
+  /** Put back the rotations the clips left, before the mixer runs again. */
+  private unbend(): void {
+    if (!this.bent) {
+      return
+    }
+    this.bent = false
+    for (const [k, b] of this.bones.entries()) {
+      const q = this.clean[k]
+      if (q) {
+        b.quaternion.copy(q)
+      }
+    }
   }
 
   /** The base clips' target weights for this state. */
@@ -416,6 +499,16 @@ export class Locomotion {
     if (!hips || this.input.anim === ANIM_DEAD) {
       return
     }
+    if (this.bones.length === 0) {
+      this.bones.push(...this.bone.values())
+      for (const b of this.bones) {
+        this.clean.push(b.quaternion.clone())
+      }
+    }
+    for (const [k, b] of this.bones.entries()) {
+      this.clean[k]?.copy(b.quaternion)
+    }
+    this.bent = true
     this.actor.root.updateMatrixWorld(true)
     const yaw = this.legYaw
     // the hips turn the legs (and everything above); the spine turns the rest back
@@ -427,8 +520,8 @@ export class Locomotion {
       }
     }
     const pitch = Math.max(-0.7, Math.min(0.7, this.input.pitch))
-    const fl = this.flinch * this.flinch * 0.35 * this.flinchDir
-    if (pitch !== 0 || fl !== 0 || this.lean !== 0) {
+    const fl = this.flinch * this.flinch * 0.35 * this.flinchDir - this.kick * this.kick * 0.22
+    if (pitch !== 0 || fl !== 0 || this.lean !== 0 || this.adsW > 0.01) {
       hips.updateMatrixWorld(true)
       const right = tmpV.set(0, 0, 0)
       const q = this.actor.root.getWorldQuaternion(tmpQ)
@@ -442,6 +535,51 @@ export class Locomotion {
           turnWorld(b, fwd, -this.lean * 0.12 * share)
         }
       }
+      // the gun arm: up to the eye line on the sights, and kicked up by a shot
+      const arm = this.bone.get('UpperArmR')
+      const fore = this.bone.get('LowerArmR')
+      if (arm && fore) {
+        arm.parent?.updateMatrixWorld(true)
+        turnWorld(arm, r, this.adsW * 0.22 + this.kick * this.kick * 0.3)
+        arm.updateMatrixWorld(true)
+        turnWorld(fore, r, this.kick * this.kick * 0.35)
+      }
+      if (this.adsW > 0.05) {
+        this.twoHands()
+      }
+    }
+  }
+
+  /** On the sights with the revolver: the left hand comes across and wraps the right. */
+  private twoHands(): void {
+    const sh = this.support
+    const gun = this.actor.gun
+    const a = this.actor.anatomy
+    const upper = this.bone.get('UpperArmL')
+    const lower = this.bone.get('LowerArmL')
+    const end = this.bone.get('WristL')
+    if (!(sh && gun && a && upper && lower && end && gun.parent)) {
+      return
+    }
+    this.actor.root.updateMatrixWorld(true)
+    const on = tmpV.copy(a.grip).applyMatrix4(gun.matrixWorld)
+    const n = new Vector3().setFromMatrixColumn(gun.matrixWorld, 2).setY(0).normalize()
+    const up2 = new Vector3().setFromMatrixColumn(gun.matrixWorld, 1).normalize()
+    const tp = new Vector3()
+    const tq = new Quaternion()
+    if (!sh.target(on, n, tp, tq)) {
+      return
+    }
+    tp.addScaledVector(up2, -0.02)
+    // eased in from wherever the clip holds it
+    const w = this.adsW
+    const cur = end.getWorldPosition(new Vector3())
+    tp.lerp(cur, 1 - w)
+    tq.slerp(end.getWorldQuaternion(new Quaternion()), 1 - w)
+    const pole = upper.getWorldPosition(new Vector3()).addScaledVector(up, -0.6)
+    solveArm({ upper, lower, end }, tp, tq, pole)
+    if (w > 0.5) {
+      sh.fingersLike(n)
     }
   }
 
@@ -463,9 +601,10 @@ export class Locomotion {
       y += (vault ? VAULT_PEAK_M : HOP_PEAK_M) * 4 * u * (1 - u)
       rx = vault ? 0.45 * Math.sin(Math.PI * u) : 0.12 * Math.sin(Math.PI * u)
     } else if (a === ANIM_SLIDE) {
-      const u = Math.min(1, t / 0.12)
-      rx = -0.55 * u
-      y -= 0.12 * u
+      // low and leaning back, feet first
+      const u = Math.min(1, t / 0.1)
+      rx = -0.85 * u
+      y -= 0.3 * u
     } else if (a === ANIM_DEAD) {
       ry = this.deathYaw
       if (this.deathKind === 1) {
