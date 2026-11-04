@@ -15,7 +15,12 @@
 import type { AudioEngine } from '../../audio/audio.ts'
 import { FrontierGame } from './game.ts'
 import type { FeedKind } from './hud.ts'
-import { type JoinError, openLoopback, openRemote } from './transport.ts'
+import {
+  type JoinError,
+  type LoopbackTransportOptions,
+  openLoopback,
+  openRemote,
+} from './transport.ts'
 import '../../ui/tokens.css'
 import './frontier.css'
 import './shooter.css'
@@ -38,6 +43,10 @@ export interface FrontierOptions {
   name?: string
   /** Loopback only (perf harness): the bots crowd around you and leave you be. */
   cluster?: boolean
+  /** Loopback only (perf harness): the lobby's RNG seed, for repeatable runs. */
+  seed?: number
+  /** Loopback only (perf harness): where you first appear, layout metres. */
+  spawn?: { x: number; z: number }
   /** Access token source for `/town/join` (defaults to the passkey session). */
   getToken?: () => Promise<string | null>
   /** Share the hub's audio engine (one AudioContext per page). */
@@ -122,6 +131,19 @@ function overlay(root: HTMLElement): {
   }
 }
 
+/** The practice town's lobby options from the mount options. */
+function loopbackOptions(opts: FrontierOptions): LoopbackTransportOptions {
+  return {
+    bots: opts.bots ?? 15,
+    ...(opts.name ? { name: opts.name } : {}),
+    ...(opts.cluster ? { cluster: true } : {}),
+    ...(opts.seed === undefined ? {} : { seed: opts.seed }),
+    ...(opts.spawn ? { spawn: opts.spawn } : {}),
+    lagMs: opts.lagMs ?? 0,
+    jitterMs: opts.jitterMs ?? 0,
+  }
+}
+
 export function mountFrontier(root: HTMLElement, opts: FrontierOptions = {}): FrontierHandle {
   let destroyed = false
   const onExit = (reason: FrontierExit, detail?: string) => {
@@ -139,16 +161,7 @@ export function mountFrontier(root: HTMLElement, opts: FrontierOptions = {}): Fr
     .start(
       (ev) =>
         opts.server === 'loopback'
-          ? openLoopback(
-              {
-                bots: opts.bots ?? 15,
-                ...(opts.name ? { name: opts.name } : {}),
-                ...(opts.cluster ? { cluster: true } : {}),
-                lagMs: opts.lagMs ?? 0,
-                jitterMs: opts.jitterMs ?? 0,
-              },
-              ev,
-            )
+          ? openLoopback(loopbackOptions(opts), ev)
           : openRemote(
               {
                 ...(opts.apiUrl ? { apiUrl: opts.apiUrl } : {}),
