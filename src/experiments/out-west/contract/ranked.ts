@@ -107,7 +107,7 @@ export type RankedServerMessage =
   | { type: 'error'; message: string; fatal: boolean }
 
 export type RankedClientMessage =
-  /** `touch`: playing on a touch screen, so the outlaws get the touch allowance. */
+  /** `touch`: playing on a touch screen. Only an unposted Daily honours it; ranked ignores it. */
   | { type: 'standoff'; duel: number; level: number; touch?: boolean }
   /**
    * `localMs`: ms from presenting the call (its arrival plus `inMs`) to the press, or null if

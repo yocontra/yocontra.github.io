@@ -96,6 +96,11 @@ body {
 .ow-counter:empty {
   display: none;
 }
+/* the Daily Outlaw: no gauntlet counter, no run purse */
+.ow-counter[hidden],
+.ow-purse[hidden] {
+  display: none;
+}
 .ow-purse {
   top: calc(max(var(--ow-s3), var(--ow-sai-t)) + 32px);
   display: flex;

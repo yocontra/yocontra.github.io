@@ -1,6 +1,7 @@
 import { MathUtils, Quaternion } from 'three'
 import { FEEL } from '../data/feel.ts'
-import { gradeFor } from '../data/outlaws.ts'
+import { MEDAL_MS, tierFor, tierName } from '../data/medals.ts'
+import { gradeFor, TOUCH_ALLOWANCE_MS } from '../data/outlaws.ts'
 import { save as persist } from '../save.ts'
 import { clamp01 } from '../scene/camera.ts'
 import { say } from './chatter.ts'
@@ -180,6 +181,11 @@ export function win(d: Director, reactionMs: number, paid: Paid | null): void {
   const o = d.outlaw
   const r = d.lastReaction ?? reactionMs
   d.lastReaction = r
+  // practice: when his first hitting shot would have gone off (ranked sets the server's time)
+  const due = d.plan?.shots.find((s) => s.hit)
+  if (d.hisMs === null && due && d.callT > 0) {
+    d.hisMs = due.t - d.callT
+  }
   d.enter('win')
   d.outcomeT = 0
   d.resultShown = false
@@ -245,12 +251,38 @@ function tickBossKill(d: Director, k: number): void {
   if (!d.paidShown && k > d.killDur + 0.6) {
     d.paidShown = true
     showPurse(d, d.winDelta)
-    say(d, 'Bounty', payLine(d, d.lastReaction ?? 0), { ms: 2600, force: true })
+    say(d, 'Bounty', payLine(d), { ms: 2600, force: true })
   }
   // let at least six of the twelve tolls ring before the ledger
   if (d.midnightBells >= 6 && k > d.killDur + 1) {
     d.toEnd()
   }
+}
+
+/**
+ * The win card's medal line: the tier this shot earned on this outlaw and the time for the next
+ * one ("Silver medal. Gold under 285 ms."). Times are as measured, so on a touch screen the
+ * allowance is added back. Empty where medals don't count (Legend, the Daily, Bounty Hunt).
+ */
+function medalNote(d: Director, r: number): string {
+  const t = MEDAL_MS[d.level]
+  if (!t || d.c.save.legend || d.daily || d.hooks) {
+    return ''
+  }
+  // ranked runs never take the touch allowance (the server judges them as keys)
+  const touch = d.c.input.touch && !d.ranked
+  const tier = tierFor(d.level, r, touch)
+  const name = tierName(tier)
+  const extra = touch ? TOUCH_ALLOWANCE_MS : 0
+  const next = (tier === 1 ? t[1] : t[2]) + extra
+  if (!name) {
+    return ''
+  }
+  const label = `${name[0]?.toUpperCase() ?? ''}${name.slice(1)} medal.`
+  if (tier === 3) {
+    return label
+  }
+  return `${label} ${tier === 1 ? 'Silver' : 'Gold'} under ${next} ms.`
 }
 
 export function tickWin(d: Director, realDt: number): void {
@@ -292,7 +324,8 @@ export function tickWin(d: Director, realDt: number): void {
       sub: gradeFor(r, d.secondChance),
       hint: 'press to continue',
     })
-    c.hud.cardPayout(payLine(d, r))
+    c.hud.cardTimes({ you: r, him: d.hisMs, note: medalNote(d, r) })
+    c.hud.cardPayout(payLine(d))
     c.hud.cardStamp(trickStamp(d))
     showPurse(d, d.winDelta)
   }

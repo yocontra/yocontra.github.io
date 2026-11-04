@@ -119,7 +119,9 @@ export class DailySession extends DurableObject<Env> {
       return
     }
     if (m.type === 'standoff') {
-      this.onStandoff(m.duel, m.touch === true)
+      // the touch allowance is for unposted play only: a client can claim it, so a board run on
+      // an account never gets it
+      this.onStandoff(m.duel, m.touch === true && this.accountId === null)
     } else if (m.type === 'shot' && m.duel === this.duel) {
       this.standoff?.shot(0, typeof m.localMs === 'number' ? m.localMs : null, 0)
     }

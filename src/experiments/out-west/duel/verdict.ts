@@ -50,6 +50,7 @@ function onWin(d: Director, v: Verdict, paid: Paid): void {
   killRifleman(d)
   d.enemyAlive = false
   d.lastReaction = v.reactionMs ?? d.lastReaction
+  d.hisMs = v.enemyMs
   // boss phase one pays nothing (payout 0) and goes to the wound; phase two pays it all
   win(d, v.reactionMs ?? 0, paid)
 }

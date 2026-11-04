@@ -90,8 +90,9 @@ export const ASSIST_MS = 150
 /**
  * Extra ms on his draw when you're playing by touch. A tap reaches the page 35–60 ms after the
  * finger lands (touch sampling and the compositor), a key about 10 ms, so a phone player would
- * otherwise lose the same race a keyboard player wins. The ranked server adds the same amount
- * (`api/src/tuning.ts`). Your reaction is still timed honestly; only his shot waits.
+ * otherwise lose the same race a keyboard player wins. Unranked play only: practice, the story and
+ * a Daily that isn't posted (the server's `withTouch`). Ranked runs and posted Daily runs are one
+ * ladder for every device, since a client could claim touch. Your reaction is still timed honestly.
  */
 export const TOUCH_ALLOWANCE_MS = 40
 

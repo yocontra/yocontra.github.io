@@ -355,13 +355,7 @@ describe('the ranked credit job', () => {
       stats: { fakesSeen: 0, coward: null, waitedMs: 1500 },
       bossPhaseOne: false,
     })
-    expect(job.solo).toEqual({
-      reactionMs: 210,
-      touch: false,
-      fakesSeen: 0,
-      firstTry: false,
-      clean: false,
-    })
+    expect(job.solo).toEqual({ reactionMs: 210, fakesSeen: 0, firstTry: false, clean: false })
     const credits = new RankedCredits(t.env, () => undefined)
     await credits.apply(job)
     await credits.apply(job)

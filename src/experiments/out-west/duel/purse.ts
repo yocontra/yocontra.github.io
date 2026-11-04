@@ -67,8 +67,8 @@ export function showPurse(s: DuelState, delta: number): void {
   }
 }
 
-/** "+$150 · 212 ms draw bonus +$37" */
-export function payLine(s: DuelState, reactionMs: number): string {
+/** "+$150 · speed bonus +$37" (the card already shows the time). */
+export function payLine(s: DuelState): string {
   const paid = s.winDelta
   if (paid <= 0) {
     return 'No bounty for this one.'
@@ -76,5 +76,5 @@ export function payLine(s: DuelState, reactionMs: number): string {
   const bounty = Math.min(paid, bountyFor(s.level))
   const bonus = paid - bounty
   const base = `+${money(bounty)}`
-  return bonus > 0 ? `${base} · ${Math.round(reactionMs)} ms draw bonus +${money(bonus)}` : base
+  return bonus > 0 ? `${base} · speed bonus +${money(bonus)}` : base
 }

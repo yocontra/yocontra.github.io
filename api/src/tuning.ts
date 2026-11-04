@@ -118,7 +118,8 @@ const BOSS_PHASE_TWO: DuelTuning = {
 /**
  * Extra ms on every outlaw's draw for a player on a touch screen (mirrors `TOUCH_ALLOWANCE_MS` in
  * the client's `data/outlaws.ts`). A tap reaches the page 35–60 ms after the finger lands, a key
- * about 10 ms. The reaction is still judged as measured, so medals and boards stay honest.
+ * about 10 ms. Unposted play only (a guest's Daily): the client can claim `touch`, so ranked runs
+ * and posted Daily runs never get it, and the boards stay one ladder.
  */
 export const TOUCH_ALLOWANCE_MS = 40
 
@@ -133,7 +134,6 @@ export function withTouch(tune: DuelTuning): DuelTuning {
   }
 }
 
-export function tuningFor(level: number, phase: 1 | 2 = 1, touch = false): DuelTuning | undefined {
-  const tune = level === BOSS_LEVEL && phase === 2 ? BOSS_PHASE_TWO : TABLE[level]
-  return tune && touch ? withTouch(tune) : tune
+export function tuningFor(level: number, phase: 1 | 2 = 1): DuelTuning | undefined {
+  return level === BOSS_LEVEL && phase === 2 ? BOSS_PHASE_TWO : TABLE[level]
 }

@@ -30,8 +30,6 @@ export interface CreditJob {
    */
   solo?: {
     reactionMs: number | null
-    /** Played by touch (absent on older jobs: judged as keys). */
-    touch?: boolean
     fakesSeen: number
     firstTry: boolean
     clean: boolean
