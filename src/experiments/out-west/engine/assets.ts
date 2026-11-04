@@ -106,9 +106,33 @@ async function kitMaterial(
         m.material = kit
       } else if (name === 'KitGlass') {
         m.material = glass
+      } else {
+        dielectric(m.material as MeshStandardMaterial)
       }
     })
   }
+}
+
+/**
+ * The palette props (wood, hay, pumpkins, cactus) were exported with metallic 0.4, which takes
+ * 40 % off their diffuse and paints them with a grey mirror of the sky: set each to a plain
+ * dielectric with a roughness for what it is.
+ */
+const PROP_ROUGHNESS: Record<string, number> = {
+  Atlas: 0.85,
+  'Atlas.016': 0.85,
+  HalloweenBits: 0.8,
+  Hay: 0.92,
+  Green: 0.62,
+}
+
+function dielectric(mat: MeshStandardMaterial): void {
+  const r = PROP_ROUGHNESS[mat.name]
+  if (r === undefined || mat.metalnessMap) {
+    return
+  }
+  mat.metalness = 0
+  mat.roughness = r
 }
 
 /** The files a look needs: its base, and the base its hair cut is borrowed from. */

@@ -21,6 +21,7 @@ import {
 } from 'three'
 import { intoRect, SWATCH, SWATCH_LUM, type Swatch } from './atlas.ts'
 import { type Body, boneKey, type WeightFn } from './fit.ts'
+import { atlasRoughness } from './style.ts'
 
 /**
  * One piece of the final character: root-space geometry (position, normal,
@@ -163,8 +164,8 @@ export function bodyPieces(model: Object3D, space: Object3D, body: Body): Piece[
     out.push({
       geo,
       name: mat.name,
-      // textured body parts take their roughness from the atlas
-      roughness: uvA ? 1 : mat.roughness,
+      // textured body parts take their roughness from the atlas (skin and leather a touch glossier)
+      roughness: uvA ? atlasRoughness(mat.name) : mat.roughness,
       rim: (mat.userData.rim as number | undefined) ?? 1,
       skin: { index: outI, weight: outW },
       swatch: uvA ? 'atlas' : 'plain',

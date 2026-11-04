@@ -254,6 +254,8 @@ export function makeHat(
   mat.side = DoubleSide
   const mesh = new Mesh(geo, mat)
   mesh.castShadow = true
+  // the crown shades the brim and the brim its own underside, like the face under it
+  mesh.receiveShadow = true
   const out = new Group()
   const inner = new Group()
   inner.add(mesh)
