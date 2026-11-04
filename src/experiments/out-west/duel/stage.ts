@@ -8,6 +8,7 @@ import { clearCards } from './cues.ts'
 import type { Director } from './director.ts'
 import { backToBackShot, otsShot, posterShot } from './framing.ts'
 import { ambience } from './present.ts'
+import { STEADY_MS } from './standoff.ts'
 import { between, V } from './state.ts'
 
 /**
@@ -177,6 +178,7 @@ export function startLevel(d: Director, i: number, isRetry: boolean): void {
   d.bossPhase = 1
   d.midnightBells = 0
   d.callIsScream = false
+  d.callPresentation = { bell: true, text: true }
   setStage(d)
   spawnActors(d)
   if (isRetry) {
@@ -193,6 +195,7 @@ function resetAttempt(d: Director): void {
   d.stallHeckled = false
   d.lastWalkTime = 0
   d.hatShot = false
+  d.handShot = false
   d.lastReaction = null
   d.secondChance = false
   d.targetsDown = 0
@@ -263,6 +266,8 @@ function retryPhaseTwo(d: Director): void {
   c.save.attempts[d.level] = (c.save.attempts[d.level] ?? 0) + 1
   d.lastReaction = null
   d.secondChance = false
+  d.hatShot = false
+  d.handShot = false
   d.dying = null
   if (d.phase === 'coward') {
     // take the COWARD stamp off his poster
@@ -274,6 +279,8 @@ function retryPhaseTwo(d: Director): void {
 /** Try this outlaw again after a loss or a back-shot. */
 export function retry(d: Director): void {
   const c = d.c
+  // the press that retried (and a second tap right behind it) can't be a back-shot
+  d.steadyUntil = performance.now() + STEADY_MS
   c.hud.hideCard()
   c.physics.clear()
   d.satTarget = 1

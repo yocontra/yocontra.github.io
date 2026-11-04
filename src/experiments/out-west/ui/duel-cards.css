@@ -1,0 +1,124 @@
+/* out west duel: the lose card receipt, trick-shot stamps, the scope-glint marker, DRAW! on short
+   screens and the pause menu's confirm sheet. The cards themselves: out-west.css. Tokens: tokens.css. */
+
+/* the lose card's receipt: YOU 412 ms · HIM 318 ms, then the verdict */
+.ow-card-times:empty,
+.ow-card-stamp:empty {
+  display: none;
+}
+.ow-card-times {
+  margin-top: var(--ow-s2);
+}
+.ow-card-coward .ow-card-times {
+  grid-column: 2;
+  justify-self: start;
+}
+.ow-card-times-row {
+  display: flex;
+  justify-content: center;
+  gap: var(--ow-s4);
+  padding: 4px 0;
+  border-top: 1px solid var(--ow-rule-ink);
+  border-bottom: 1px solid var(--ow-rule-ink);
+}
+.ow-card-time {
+  display: flex;
+  align-items: baseline;
+  gap: var(--ow-s2);
+}
+.ow-card-time-who {
+  font-weight: 700;
+  font-variant-caps: all-small-caps;
+  letter-spacing: var(--ow-track-label);
+  color: var(--ow-ink-3);
+}
+.ow-card-time-ms {
+  font-family: var(--ow-font-num);
+  font-weight: 600;
+  font-size: var(--ow-fs-h4);
+  font-variant-numeric: lining-nums tabular-nums;
+  color: var(--ow-ink);
+}
+.ow-card-time-him .ow-card-time-ms {
+  color: var(--ow-red);
+}
+.ow-card-times-note {
+  margin-top: 4px;
+  font-weight: 600;
+  font-size: var(--ow-fs-body);
+  font-variant-numeric: lining-nums tabular-nums;
+  color: var(--ow-ink-2);
+}
+
+/* a trick shot's stamp on the win card */
+.ow-card-stamp {
+  display: inline-block;
+  margin-top: var(--ow-s2);
+  margin-left: var(--ow-s2);
+  padding: 2px 10px 0;
+  font-family: var(--ow-font-display);
+  font-size: var(--ow-fs-h4);
+  letter-spacing: var(--ow-track-display);
+  text-transform: uppercase;
+  color: var(--ow-red);
+  border: 2px solid currentColor;
+  --ow-stamp-rot: 4deg;
+  transform: rotate(4deg);
+  animation: ow-stamp 0.42s 0.25s var(--ow-ease-slam) both;
+}
+
+/* the rifleman's scope glint: a ring that pulses for 300 ms after it flashes (touch: where he is) */
+.ow-glint-mark {
+  position: absolute;
+  left: -28px;
+  top: -28px;
+  width: 56px;
+  height: 56px;
+  border: 3px solid var(--ow-bone);
+  border-radius: 50%;
+  box-shadow:
+    0 0 0 2px rgb(0 0 0 / 0.6),
+    0 0 18px var(--ow-red-hi);
+  opacity: 0;
+  pointer-events: none;
+  z-index: 8;
+}
+.ow-glint-mark.on {
+  opacity: 1;
+  animation: ow-glint-pulse 0.15s ease-in-out infinite alternate;
+}
+@keyframes ow-glint-pulse {
+  from {
+    scale: 0.8;
+  }
+  to {
+    scale: 1.15;
+  }
+}
+
+/* landscape phones: DRAW! stays in the top fifth, clear of the outlaw in the centre band */
+@media (max-height: 450px) {
+  .ow-cap-call {
+    top: max(2vh, var(--ow-sai-t));
+    font-size: min(18vh, 64px);
+    -webkit-text-stroke-width: 2px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ow-glint-mark.on,
+  .ow-card-stamp {
+    animation: none;
+  }
+}
+
+/* a confirm sheet in place of the pause menu (abandoning a ranked run) */
+.ow-menu-body {
+  max-width: 30rem;
+  margin: 0 auto var(--ow-s3);
+  font-size: var(--ow-fs-lead);
+  line-height: 1.4;
+  text-align: center;
+  color: var(--ow-bone-2);
+  text-wrap: pretty;
+}

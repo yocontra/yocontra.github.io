@@ -1,7 +1,7 @@
 import { FEEL } from '../data/feel.ts'
 import type { Press } from '../engine/input.ts'
 import { save as persist } from '../save.ts'
-import { coward } from './defeat.ts'
+import { coward, lateDraw } from './defeat.ts'
 import type { Director } from './director.ts'
 import { ensureStandoff, openBoard, restartRun, toSaloon } from './mode.ts'
 import { playerShoots } from './standoff.ts'
@@ -15,14 +15,34 @@ function skipIntro(d: Director): void {
   }
 }
 
-function retryAfterPress(d: Director): void {
+function retryAfterPress(d: Director, p: Press): void {
   if (d.phaseT > FEEL.loseRetryPress) {
     d.retry()
+    return
+  }
+  // practice: the press that came just too late goes on the lose card
+  if (d.phase === 'lose' && !d.ranked) {
+    lateDraw(d, p)
   }
 }
 
+/**
+ * A press that can't be a back-shot yet: just after a retry, and as the wait opens. It is held,
+ * and "steady…" says so, rather than fined.
+ */
+function steadying(d: Director, p: Press): boolean {
+  if (p.t >= d.steadyUntil) {
+    return false
+  }
+  d.c.hud.fake('steady…', Math.max(300, d.steadyUntil - p.t))
+  return true
+}
+
 /** Drew before the call. Ranked: the server judges it too (and fines it). */
-function cowardNow(d: Director): void {
+function cowardNow(d: Director, p: Press): void {
+  if (steadying(d, p)) {
+    return
+  }
   if (d.ranked) {
     ensureStandoff(d)
     d.clock.shot(0, null)
@@ -40,7 +60,7 @@ const ON_FIRE: Partial<Record<Phase, (d: Director, p: Press) => void>> = {
   // pointer presses during the walk are walking; a fire key is a back-shot
   walk: (d, p) => {
     if (p.source === 'key') {
-      cowardNow(d)
+      cowardNow(d, p)
     }
   },
   turn: cowardNow,
@@ -125,6 +145,30 @@ export function togglePause(d: Director): void {
   c.audio.heartbeat(0)
   c.input.enabled = false
   c.audio.suspend()
+  pauseMenu(d)
+}
+
+/**
+ * Leaving a ranked run (to the saloon, or a restart) ends it for good: say so first, and offer to
+ * bank what it has earned. Practice leaves at once.
+ */
+function leaveRanked(d: Director, verb: string, go: () => void): void {
+  if (!d.ranked) {
+    go()
+    return
+  }
+  const banked = d.c.save.run.total > 0
+  d.c.hud.menuConfirm({
+    title: 'Abandon this ranked run?',
+    body: `A ranked run can’t be picked up again: ${verb}, and the rest of this gauntlet is practice.${banked ? ' Bank it first to put its purse on the board.' : ''}`,
+    no: { label: 'Keep riding', run: () => pauseMenu(d) },
+    ...(banked ? { extra: { label: 'Bank this run', run: () => openBoard(d, false) } } : {}),
+    yes: { label: 'Abandon run', run: go },
+  })
+}
+
+function pauseMenu(d: Director): void {
+  const c = d.c
   c.hud.openMenu(c.save.settings, {
     resume: () => togglePause(d),
     change: (s) => {
@@ -132,12 +176,15 @@ export function togglePause(d: Director): void {
       persist(c.save)
       applySettings(d)
     },
-    restart: () => {
-      togglePause(d)
-      restartRun(d, c.save.legend)
-    },
+    restart: () =>
+      leaveRanked(d, 'a fresh gauntlet starts', () => {
+        togglePause(d)
+        restartRun(d, c.save.legend)
+      }),
     leaderboard: () => openBoard(d, false),
-    ...(d.onSaloon ? { saloon: () => toSaloon(d) } : {}),
+    ...(d.onSaloon
+      ? { saloon: () => leaveRanked(d, 'you go back to the saloon', () => toSaloon(d)) }
+      : {}),
     remap: (_a, done) => {
       c.input.capture = (code) => {
         c.input.capture = null

@@ -175,6 +175,42 @@ export function clockInsert(s: DuelState, seconds: number): void {
   })
 }
 
+/** Vertical fov (degrees) that keeps every point inside the frame, with a margin, from pos→look. */
+function fitFov(pos: Vector3, look: Vector3, points: Vector3[], aspect: number): number {
+  const fwd = look.clone().sub(pos).normalize()
+  const right = V()
+    .crossVectors(fwd, V(0, 1, 0))
+    .normalize()
+  const up = V().crossVectors(right, fwd)
+  let tanV = 0
+  for (const p of points) {
+    const d = p.clone().sub(pos)
+    const z = Math.max(0.1, d.dot(fwd))
+    tanV = Math.max(tanV, Math.abs(d.dot(up)) / z, Math.abs(d.dot(right)) / z / aspect)
+  }
+  return MathUtils.radToDeg(2 * Math.atan(tanV * 1.3))
+}
+
+/**
+ * The underboss's call: both guns in frame, Curly down the street and the rifleman on the
+ * saloon roof, from a step behind you; the lens opens just enough to hold the pair.
+ */
+function underbossCallPose(s: DuelState, k: number): Pose | null {
+  const r = s.rifleman
+  const e = s.enemy
+  if (!(r && s.riflemanAlive && e)) {
+    return null
+  }
+  const P = s.player.root.position
+  const pos = V(P.x - 1.0, 1.75, P.z - 3.2)
+  const eHead = e.headPos(V())
+  const rHead = r.headPos(V())
+  const look = eHead.clone().lerp(rHead, 0.5)
+  const fit = fitFov(pos, look, [eHead, rHead, V(eHead.x, 0.2, eHead.z)], s.c.rig.cam.aspect)
+  const fov = MathUtils.clamp(fit, restFov(s), 80)
+  return { pos, look, fov: fov - (s.reduced ? 0 : k * 2), handheld: 0.1 }
+}
+
 /** The call: a gentle, eased push-in on the standoff framing (no dolly-zoom whip). */
 export function callShot(s: DuelState): void {
   const p = s.player
@@ -187,6 +223,10 @@ export function callShot(s: DuelState): void {
     const k = reduced ? 0 : easeInOutCubic(clamp01(((s.realTime - start) * 1000) / FEEL.callPushMs))
     if (boss) {
       return bossPose(s, push0, k * (FEEL.fovRest - FEEL.fovCall))
+    }
+    const under = s.underboss ? underbossCallPose(s, k) : null
+    if (under) {
+      return under
     }
     const P = p.root.position
     const E = e ? e.root.position : V(0, 0, 10)
@@ -329,6 +369,31 @@ export function cowardShot(s: DuelState): void {
   )
 }
 
+/** The eye-line never closer than this to a standing man's spine, m (no camera inside a poncho). */
+const DEATH_CLEARANCE = 1.15
+
+/**
+ * Pull a camera position out of any visible actor near it: back along the line from him to the
+ * camera (straight back from `away` when it sits on his spine), to `clearance` metres.
+ */
+function clearOfActors(s: DuelState, pos: Vector3, away: Vector3, clearance: number): Vector3 {
+  for (const a of [s.player, s.enemy]) {
+    if (!a?.root.visible) {
+      continue
+    }
+    const A = a.root.position
+    const off = V(pos.x - A.x, 0, pos.z - A.z)
+    const d = off.length()
+    if (d >= clearance || pos.y > A.y + a.height + 0.2) {
+      continue
+    }
+    const dir = d > 1e-3 ? off.divideScalar(d) : away.clone().setY(0).normalize()
+    pos.x = A.x + dir.x * clearance
+    pos.z = A.z + dir.z * clearance
+  }
+  return pos
+}
+
 /** Your death: the eye-line sinks and rolls toward the dirt. */
 export function deathShot(s: DuelState): void {
   const p = s.player
@@ -341,8 +406,10 @@ export function deathShot(s: DuelState): void {
       const E = e ? e.root.position : V(0, 0, 10)
       const facing = Math.sign(E.z - P.z) || 1
       const k = reduced ? 0 : easeInOutCubic(clamp01(t / FEEL.loseFall))
+      const pos = V(P.x, MathUtils.lerp(1.62, 0.55, k), P.z + facing * 0.1)
+      clearOfActors(s, pos, V(0, 0, -facing), DEATH_CLEARANCE)
       return {
-        pos: V(P.x, MathUtils.lerp(1.62, 0.55, k), P.z + facing * 0.1),
+        pos,
         look: V(E.x, MathUtils.lerp(1.5, 1.0, k), E.z),
         fov: 42,
         roll: MathUtils.degToRad(22) * k,
