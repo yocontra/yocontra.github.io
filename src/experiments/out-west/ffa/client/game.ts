@@ -86,6 +86,7 @@ import type { WireEvent } from '../sim/codec-events.ts'
 import {
   BANK_CHANNEL_TICKS,
   DEAD_EYE_CLOSE_TICKS,
+  HOP_TICKS,
   LEAVE_CHANNEL_TICKS,
   MAX_RANGE,
   RELOAD_TICKS,
@@ -98,6 +99,7 @@ import {
   STRONGBOX_CHANNEL_TICKS,
   TICK_HZ,
   TICK_MS,
+  VAULT_TICKS,
 } from '../sim/constants.ts'
 import { BLOCK_SHOT, BLOCK_SIGHT, rayGrid, spawnFacing, TOWN, zoneAt } from '../sim/layout.ts'
 import { radiansToAim } from '../sim/move.ts'
@@ -1071,6 +1073,7 @@ export class FrontierGame {
         x: this.own.x,
         z: this.own.z,
         speed: speed0,
+        lift: this.jumpLift(),
         first,
         ads: this.net.alive && this.adsHeld(),
         fov: first ? this.settings.fovFirst : this.settings.fovThird,
@@ -1159,6 +1162,21 @@ export class FrontierGame {
       return anim
     }
     return this.adsHeld() || performance.now() - this.lastShotAt < 1200 ? ANIM_AIM : anim
+  }
+
+  /**
+   * How high your vault or hop carries the camera right now: `peak·4t(1−t)` over the move, with
+   * t interpolated between ticks so the arc is smooth at any frame rate.
+   */
+  private jumpLift(): number {
+    const pred = this.net.pred
+    if (pred.jumpTicks <= 0) {
+      return 0
+    }
+    const vault = pred.vaultStep > 0
+    const total = vault ? VAULT_TICKS : HOP_TICKS
+    const t = Math.min(1, Math.max(0, (total - pred.jumpTicks + this.acc / TICK_MS) / total))
+    return (vault ? VAULT_PEAK_M : HOP_PEAK_M) * 4 * t * (1 - t)
   }
 
   /** RMB, LT or the touch AIM toggle. */
@@ -1759,6 +1777,10 @@ function rayToWall(net: NetClient, x: number, z: number, aim: number, range: num
 }
 
 const PICKUP_RING = new Color(1.4, 0.6, 0.3)
+
+/** How high the camera rides a vault and a hop (m): the body's arc. */
+const VAULT_PEAK_M = 0.55
+const HOP_PEAK_M = 0.3
 
 /** From a rifle shot to the lever working the next round in, s (the rifle fires every 0.9 s). */
 const RIFLE_LEVER_DELAY = 0.32

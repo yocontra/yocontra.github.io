@@ -6,8 +6,9 @@
  *
  * - Yaw and pitch come straight from the mouse / touch look (no lag on aim). Yaw uses the sim's
  *   aim convention: 0 = +x, increasing toward +z; forward is (cos yaw, sin yaw).
- * - The pivot follows the smoothed render pose with a short exponential ease (the pose is already
- *   smoothed; this only takes the edge off a reconciliation snap).
+ * - The pivot sits on the render pose (`NetClient.localRenderPose`), which is already smoothed:
+ *   no second filter on top, so the camera never trails your rider. A vault or a hop lifts it
+ *   along the same arc the body takes.
  * - Over the shoulder: 2.7 m back, 0.6 m to the side, 0.3 m up from a 1.5 m pivot; aiming down the
  *   sights pulls in to 1.5 m and 0.45 m and narrows the field of view. The shoulder swap eases over.
  * - Walls: a ray on the town's sight grid from the pivot to the wanted spot; the camera snaps in in
@@ -52,6 +53,8 @@ export interface ShooterFrame {
   z: number
   /** Planar speed (m/s), for the first-person bob. */
   speed: number
+  /** Height of a vault or hop arc right now (m), 0 on the ground. */
+  lift: number
   first: boolean
   ads: boolean
   /** Base vertical FOV for this mode, degrees. */
@@ -132,13 +135,8 @@ export class ShooterCamera {
     const cam = this.camera
     const ease = (rate: number) => 1 - Math.exp(-dt * rate)
     this.ads += ((f.ads ? 1 : 0) - this.ads) * ease(14)
-    // the pivot: a short ease after the already-smoothed pose
-    const pk = ease(f.first ? 40 : 22)
-    this.pivot.x += (f.x - this.pivot.x) * pk
-    this.pivot.z += (f.z - this.pivot.z) * pk
-    if (Math.hypot(f.x - this.pivot.x, f.z - this.pivot.z) > 3) {
-      this.pivot.set(f.x, PIVOT_Y, f.z)
-    }
+    // the pivot rides the (already smoothed) render pose, lifted through a vault or a hop
+    this.pivot.set(f.x, PIVOT_Y + f.lift, f.z)
     this.recoil *= Math.exp(-dt * 9)
     this.shake.t += dt
     this.shake.amp *= Math.exp(-dt * 10)
@@ -185,7 +183,7 @@ export class ShooterCamera {
     const bx = Math.cos(this.bobPhase) * 0.025 * bob
     this.camera.position.set(
       this.pivot.x + Math.cos(this.yaw) * 0.12 + right.x * bx,
-      EYE_Y + by - 0.02 * bob,
+      this.pivot.y - PIVOT_Y + EYE_Y + by - 0.02 * bob,
       this.pivot.z + Math.sin(this.yaw) * 0.12 + right.z * bx,
     )
     this.closeness = 1
@@ -203,7 +201,7 @@ export class ShooterCamera {
     // the shoulder point, then back along the view from there
     const px = this.pivot.x + right.x * this.side
     const pz = this.pivot.z + right.z * this.side
-    const py = PIVOT_Y + this.up
+    const py = this.pivot.y + this.up
     want.set(px - fwd.x * this.back, py - fwd.y * this.back, pz - fwd.z * this.back)
     // walls: from the body's centre to the shoulder, then on to the lens
     const shoulderFree = clearance(f.grid, this.pivot.x, this.pivot.z, px, pz)
