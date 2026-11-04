@@ -334,7 +334,9 @@ async function signedInRanked(): Promise<void> {
       } else if (m.type === 'hello') {
         setTimeout(() => ws.send(JSON.stringify({ type: 'standoff', duel: 0, level: 0 })), 1200)
       } else if (m.type === 'call') {
-        callAt = performance.now()
+        // the call comes `inMs` ahead of itself: react from when it's presented
+        const lead = typeof m.inMs === 'number' ? m.inMs : 0
+        callAt = performance.now() + lead
         setTimeout(
           () =>
             ws.send(
@@ -345,7 +347,7 @@ async function signedInRanked(): Promise<void> {
                 localMs: performance.now() - callAt,
               }),
             ),
-          230,
+          lead + 230,
         )
       } else if (m.type === 'result') {
         resolve(m)

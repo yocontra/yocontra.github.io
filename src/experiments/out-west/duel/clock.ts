@@ -1,4 +1,5 @@
 import { planFakes } from './judge.ts'
+import { CALL_FRAME_SLACK_MS } from './pending-call.ts'
 import { between, rng } from './state.ts'
 
 /**
@@ -134,7 +135,7 @@ export class LocalDuelClock implements DuelClock {
       }
     }
     // the call: the first frame at/after tCall (within half a frame)
-    if (now >= this.tCall - 8) {
+    if (now >= this.tCall - CALL_FRAME_SLACK_MS) {
       this.live = false
       this.events.call(this.duel)
     }

@@ -60,11 +60,13 @@ function room(ai: (() => AiOpponent) | null = null, settleMs = 0) {
     clock.advance(PACE_MS * 10 + TURN_MS)
     return flow.beat
   }
-  /** Run the wait until the call reaches both humans. */
+  /** Run the wait until the call reaches both humans, then on to its `inMs` (when it's presented). */
   const toCall = () => {
     for (let i = 0; i < 600 && of(0, 'call').length < flow.draw; i++) {
       clock.advance(10)
     }
+    const call = of(0, 'call').at(-1)
+    clock.advance(call?.type === 'call' ? (call.inMs ?? 0) : 0)
     return flow.beat
   }
   const flush = () => new Promise((r) => setTimeout(r, 0))

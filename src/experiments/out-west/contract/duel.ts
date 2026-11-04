@@ -31,8 +31,9 @@
  * ```
  *
  * Every timed message carries `serverTime` (the server's epoch ms) so the client can show
- * countdowns; never use it to time the call. The client judges its own press on `pointerdown`
- * `event.timeStamp` relative to the moment it received `call`, and reports that as `localMs`.
+ * countdowns; never use it to time the call. `call` comes `inMs` ahead of itself: the client
+ * presents it (bell, DRAW!) `inMs` after it arrives, scheduled on the audio clock, judges its own
+ * press on `pointerdown` `event.timeStamp` relative to that moment, and reports it as `localMs`.
  *
  * All money is whole dollars. All times are milliseconds unless the name says otherwise.
  */
@@ -233,8 +234,9 @@ export type RoomClientMessage =
   /** Walk control: `true` while the walk button or key is held, `false` on release. */
   | { type: 'hold'; down: boolean }
   /**
-   * You fired. `localMs` is ms from receiving `call` to the press, measured on the client
-   * (`pointerdown` `event.timeStamp`). Send `null` if you pressed before the call reached you:
+   * You fired. `localMs` is ms from presenting `call` (its arrival plus `inMs`) to the press,
+   * measured on the client (`pointerdown` `event.timeStamp`). Send `null` if you pressed before
+   * the call was presented:
    * that is cowardice. Only the first shot of each draw counts; later ones are ignored.
    */
   | { type: 'shot'; draw: number; localMs: number | null }
@@ -378,8 +380,11 @@ export type RoomServerMessage =
   | { type: 'heckle' }
   /** A fake-out. Never the call. */
   | { type: 'cue'; draw: number; cue: PvpCue | string }
-  /** DRAW! Both sockets get this on the same server tick. */
-  | { type: 'call'; draw: number }
+  /**
+   * DRAW!, sent `inMs` ahead: present it `inMs` after it arrives (absent or 0: at once). Both
+   * sockets get this on the same server tick.
+   */
+  | { type: 'call'; draw: number; inMs?: number }
   /** Both shots landed within 5 ms. Both men fall; sudden death follows (no walk). */
   | {
       type: 'deadHeat'

@@ -5,6 +5,7 @@ import {
   easeInOutCubic,
   easeOutCubic,
   type Framing,
+  orbitPose,
   type Pose,
   twoShot,
 } from '../scene/camera.ts'
@@ -219,8 +220,49 @@ export function drift(f: Framing, focus: Vector3, t: number, orbit: number): Pos
 }
 
 /**
- * The kill cam: a two-shot from behind the shooter on his gun side, the
- * victim big on a third. A cut on the red frame, then only a slow, eased drift.
+ * Onto the kill cam without a cut: hold the call framing on the impact, then swing around the
+ * shooter's gun (`pivot`, the muzzle) onto the two-shot, eased in and out, in real time. `settled`
+ * is the pose the swing lands on (the drift's first frame); the drift takes over from there, so the
+ * hand-off is seamless. Reduced motion keeps the cut.
+ */
+interface Swing {
+  /** Where the call left the camera. */
+  from: Pose
+  /** The shooter's muzzle. */
+  pivot: Vector3
+  /** Bows the swing out to the gun side (and a touch up), so it visibly arcs around the gun hand. */
+  bend: Vector3
+}
+
+function swingFor(s: DuelState, victim: Vector3): Swing {
+  const P = s.player.root.position
+  const fwd = V(victim.x - P.x, 0, victim.z - P.z).normalize()
+  // the shooter's right (his gun side) while he faces the victim
+  const right = V(-fwd.z, 0, fwd.x)
+  return {
+    from: s.c.rig.pose(),
+    pivot: s.player.muzzle(V()),
+    bend: right.multiplyScalar(s.portrait ? 0.3 : 0.45).setY(0.12),
+  }
+}
+
+function swingTo(s: DuelState, sw: Swing, t: number, settled: Pose): Pose | null {
+  const hold = FEEL.shotSwingHold
+  if (s.reduced || t >= hold + FEEL.shotSwingSeconds) {
+    return null
+  }
+  const k = easeInOutCubic(clamp01((t - hold) / FEEL.shotSwingSeconds))
+  return orbitPose(sw.from, settled, { pivot: sw.pivot, k, bend: sw.bend })
+}
+
+/** Seconds from the start of the kill cam until its drift begins (after the swing). */
+const swingSeconds = (s: DuelState): number =>
+  s.reduced ? 0 : FEEL.shotSwingHold + FEEL.shotSwingSeconds
+
+/**
+ * The kill cam: a two-shot from behind the shooter on his gun side, the victim big on a third.
+ * The camera swings onto it around your gun from wherever the call left it, then only a slow,
+ * eased drift.
  */
 export function killShot(s: DuelState): void {
   const p = s.player
@@ -231,14 +273,16 @@ export function killShot(s: DuelState): void {
   const under = s.underboss
   const E0 = e ? e.root.position.clone() : V(0, 0, 10)
   const shot = twoShot(p.root.position, E0, s.c.rig.cam.aspect, { height: e?.height ?? 1.78 })
+  const sw = swingFor(s, E0)
+  const lead = swingSeconds(s)
   // the roof shot lasts this long (real time) before easing down to the street
   const roofFor = s.killDur * 0.45 + FEEL.killCamLead
   s.c.rig.cut(
     'kill',
     () => {
       const t = s.realTime - start
-      const main = drift(shot, E0, t, orbit)
       if (under && r) {
+        const main = drift(shot, E0, t, orbit)
         const R = r.root.position
         const rp: Pose = {
           pos: V(R.x - 5, R.y + 0.4, R.z - 5),
@@ -253,14 +297,16 @@ export function killShot(s: DuelState): void {
         main.pos = rp.pos.clone().lerp(main.pos, k)
         main.look = rp.look.clone().lerp(main.look, k)
         main.fov = MathUtils.lerp(rp.fov, main.fov, k)
+        return main
       }
-      return main
+      const main = drift(shot, E0, Math.max(0, t - lead), orbit)
+      return swingTo(s, sw, t, main) ?? main
     },
     0,
   )
 }
 
-/** The coward back-shot: the kill-cam two-shot, held calm. */
+/** The coward back-shot: the same swing onto the kill-cam two-shot, then held calm. */
 export function cowardShot(s: DuelState): void {
   const e = s.enemy
   const E0 = e ? e.root.position.clone() : V(0, 0, 3)
@@ -268,7 +314,17 @@ export function cowardShot(s: DuelState): void {
     height: e?.height ?? 1.78,
   })
   const start = s.realTime
-  s.c.rig.cut('coward', () => drift(shot, E0, s.realTime - start, 0), 0)
+  const sw = swingFor(s, E0)
+  const lead = swingSeconds(s)
+  s.c.rig.cut(
+    'coward',
+    () => {
+      const t = s.realTime - start
+      const main = drift(shot, E0, Math.max(0, t - lead), 0)
+      return swingTo(s, sw, t, main) ?? main
+    },
+    0,
+  )
 }
 
 /** Your death: the eye-line sinks and rolls toward the dirt. */
@@ -291,7 +347,7 @@ export function deathShot(s: DuelState): void {
         handheld: 0.15,
       }
     },
-    0.35,
+    reduced ? 0.35 : FEEL.loseBlend,
   )
 }
 

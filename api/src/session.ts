@@ -28,7 +28,13 @@ import { recordUsage } from './budget.ts'
 import { CreditOutbox } from './duel/credit-outbox.ts'
 import { isNameOwned } from './duel/external.ts'
 import { outlawOpponent } from './duel/opponents.ts'
-import { rankedWaitPlan, Standoff, type Verdict, type WaitStats } from './duel/standoff.ts'
+import {
+  CALL_LEAD_MS,
+  rankedWaitPlan,
+  Standoff,
+  type Verdict,
+  type WaitStats,
+} from './duel/standoff.ts'
 import type { Env } from './env.ts'
 import { rttStats } from './judge.ts'
 import { type NameResult, validateName } from './names.ts'
@@ -403,9 +409,10 @@ export class DuelSession extends DurableObject<Env> {
         outlawOpponent(tuning),
       ],
       plan: rankedWaitPlan(tuning),
+      leadMs: CALL_LEAD_MS,
       events: {
         cue: (cue) => this.send({ type: 'cue', duel, cue }),
-        call: () => this.send({ type: 'call', duel }),
+        call: (_seat, inMs) => this.send({ type: 'call', duel, inMs }),
         end: (verdict, stats) => this.resolve(active, verdict, stats),
       },
     })
