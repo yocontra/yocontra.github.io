@@ -6,7 +6,7 @@
  * It knows nothing of the duel's rules; the duel side (`duel/cues.ts`) tells it what happened
  * (the call, the shot, a fake-out, a new duel) and where to look.
  *
- * Budget (floor): townsfolk ~2.2k triangles and 2 draws each (body, hat), no shadows; horses,
+ * Budget (floor: 4 folk): townsfolk ~4k triangles and 2 draws each (body, hat), no shadows; horses,
  * dog, hens, crows and signs are one draw per species; the dust devil one point draw.
  */
 import { type Color, Group, type Object3D, type Texture, type Vector3 } from 'three'
@@ -28,8 +28,8 @@ interface TierCounts {
 const COUNTS: Record<string, TierCounts> = {
   high: { folk: 9, crows: 7, hens: 3, devil: true },
   medium: { folk: 7, crows: 6, hens: 2, devil: true },
-  floor: { folk: 5, crows: 5, hens: 0, devil: false },
-  legacy: { folk: 4, crows: 4, hens: 0, devil: false },
+  floor: { folk: 4, crows: 5, hens: 0, devil: false },
+  legacy: { folk: 3, crows: 4, hens: 0, devil: false },
 }
 
 export class TownLife {
