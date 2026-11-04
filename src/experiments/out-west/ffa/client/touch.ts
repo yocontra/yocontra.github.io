@@ -7,7 +7,14 @@
  * stick), reload, and one contextual 64 px action (bank, open, accept, call out). Every target is
  * at least 56 CSS px.
  */
-import { BTN_AIM, BTN_FIRE, BTN_RELOAD, BTN_ROLL, BTN_THROW } from '../../contract/town.ts'
+import {
+  BTN_AIM,
+  BTN_FIRE,
+  BTN_JUMP,
+  BTN_RELOAD,
+  BTN_ROLL,
+  BTN_THROW,
+} from '../../contract/town.ts'
 import type { Sampled } from './controls.ts'
 
 const STICK_R = 56
@@ -79,6 +86,7 @@ export class TouchControls {
       b.addEventListener('pointercancel', up)
       return b
     }
+    btn('fr-btn-jump', 'JUMP', BTN_JUMP)
     btn('fr-btn-roll', 'ROLL', BTN_ROLL)
     btn('fr-btn-reload', 'RELOAD', BTN_RELOAD)
     this.throwBtn = btn('fr-btn-throw', 'THROW', BTN_THROW)
