@@ -1,35 +1,65 @@
-import { CylinderGeometry, Mesh, MeshStandardMaterial } from 'three'
-import { makeCard } from '../scene/fx.ts'
+import {
+  CanvasTexture,
+  CylinderGeometry,
+  DoubleSide,
+  Mesh,
+  MeshBasicMaterial,
+  MeshStandardMaterial,
+  PlaneGeometry,
+} from 'three'
+import { DOG_POS } from '../scene/beasts.ts'
+import { LIFE } from '../scene/townlife.ts'
 import { say } from './chatter.ts'
+import { bangDoors, watchCoin } from './cues-life.ts'
 import { AMB, ambience } from './present.ts'
 import { between, type DuelState, rng, V } from './state.ts'
 
 /**
  * Fake-outs and atmosphere during the wait. The same cue names come from the
  * ranked server and from the local practice clock, so both play identically.
- * Anything unknown plays as a generic creak.
+ * Anything unknown plays as a generic creak. The fakes are things you see as
+ * well as hear: the crows burst off their rail, the saloon doors bang, the dog
+ * lunges, the coin glints, the horse throws its head, and the townsfolk look.
  */
 
-type CueFn = (s: DuelState) => void
+// biome-ignore lint/performance/noBarrelFile: the outcome hooks are reached through cues.ts, as agreed with duel-core
+export { deathStyle, hitFx, tickLife } from './cues-life.ts'
 
-const KICK_MS = 900
+type CueFn = (s: DuelState) => void
 
 function caption(s: DuelState, text: string): void {
   s.c.hud.fake(text)
 }
 
+/** Where the saloon's batwings hang. */
+const SALOON_DOOR = V(11, 1.4, 2)
+
+/** A door bangs: the barber's screen door up the street (in frame), and the saloon's batwings. */
 function creak(s: DuelState): void {
   const c = s.c
   caption(s, '[a saloon door creaks]')
-  c.audio.play('door', { gain: 1, pos: V(11, 1.5, 2), reverb: 0.4 })
-  for (const d of c.world.saloonDoors) {
-    d.userData.kick = true
+  const town = LIFE.town
+  const at = town ? town.door.at.clone().setY(1.4) : SALOON_DOOR
+  c.audio.play('door', { gain: 1, pos: at, reverb: 0.4 })
+  bangDoors()
+  if (town) {
+    town.door.bang()
+    town.glance(at)
+    c.puffs.emit(
+      at
+        .clone()
+        .setX(at.x - 0.5)
+        .setY(0.45),
+      10,
+      {
+        speed: 0.6,
+        size: 0.12,
+        life: 1.2,
+        alpha: 0.25,
+        up: 0.3,
+      },
+    )
   }
-  setTimeout(() => {
-    for (const d of c.world.saloonDoors) {
-      d.userData.kick = false
-    }
-  }, KICK_MS)
 }
 
 export function tossCoin(s: DuelState): void {
@@ -47,6 +77,28 @@ export function tossCoin(s: DuelState): void {
   // lands flat: its centre half its 4 mm thickness up (at 2 cm it hovered)
   s.c.physics.add(coin, V(0, 3.1, -0.1), V(30, 0, 0), { rest: 0.1, ground: 0.002 })
   s.coin = coin
+}
+
+/** A playing card, an ace or an eight of spades or clubs. */
+function makeCard(): Mesh {
+  const c = document.createElement('canvas')
+  c.width = 64
+  c.height = 90
+  const ctx = c.getContext('2d')
+  if (ctx) {
+    ctx.fillStyle = '#f4efe2'
+    ctx.fillRect(0, 0, 64, 90)
+    ctx.fillStyle = Math.random() < 0.5 ? '#111' : '#a01010'
+    ctx.font = 'bold 30px Georgia'
+    ctx.fillText(Math.random() < 0.5 ? 'A' : '8', 8, 36)
+    ctx.font = 'bold 40px Georgia'
+    ctx.fillText(Math.random() < 0.5 ? '♠' : '♣', 18, 80)
+  }
+  const tex = new CanvasTexture(c)
+  return new Mesh(
+    new PlaneGeometry(0.063, 0.088),
+    new MeshBasicMaterial({ map: tex, side: DoubleSide }),
+  )
 }
 
 /** Throw one playing card into the wind (the card sharp). */
@@ -112,17 +164,26 @@ const CUES: Record<string, CueFn> = {
   },
   crow: (s) => {
     caption(s, '[a crow caws]')
-    s.c.audio.play('crow', { gain: 0.9, pos: V(-12, 8, between(-10, 15)), reverb: 0.3 })
+    const town = LIFE.town
+    const at = town ? town.crows.where.clone() : V(-12, 8, between(-10, 15))
+    s.c.audio.play('crow', { gain: 0.9, pos: at, reverb: 0.3 })
+    if (town) {
+      town.crows.takeOff()
+      town.glance(at.setY(4))
+    }
   },
   creak,
   door: creak,
   dog: (s) => {
     caption(s, '[a dog barks]')
-    s.c.audio.play('dog', { gain: 0.8, pos: V(-30, 1, 30), reverb: 0.5 })
+    s.c.audio.play('dog', { gain: 0.8, pos: DOG_POS.clone(), reverb: 0.5 })
+    LIFE.town?.animals.dog.bark()
+    LIFE.town?.glance(DOG_POS)
   },
   coin: (s) => {
     caption(s, '[a coin spins in the air]')
     tossCoin(s)
+    watchCoin()
     s.c.audio.play('coin', {
       gain: 0.8,
       pos: s.enemy?.root.position.clone() ?? V(),
@@ -188,7 +249,16 @@ const CUES: Record<string, CueFn> = {
   gunshot: distantShot,
   horse: (s) => {
     caption(s, '[a horse whinnies]')
-    s.c.audio.play('horse', { gain: 0.8, pos: V(14, 1.5, -46), reverb: 0.3 })
+    const town = LIFE.town
+    s.c.audio.play('horse', {
+      gain: 0.8,
+      pos: town ? V(-7.2, 1.8, 16.2) : V(14, 1.5, -46),
+      reverb: 0.3,
+    })
+    if (town) {
+      town.animals.horses.toss()
+      town.glance(V(-7.2, 1.8, 16.2))
+    }
   },
 }
 

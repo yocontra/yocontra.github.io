@@ -18,6 +18,12 @@ export interface LoopbackOptions {
   banked?: number
   /** Dev perf harness: the bots crowd around you (and leave you be). */
   cluster?: boolean
+  /**
+   * Dev perf harness: where you first appear (layout metres), instead of the safest spawn. With a
+   * fixed `seed` (bots, their spawns and the strongbox all follow the lobby's RNG) every run
+   * starts from the same scene, so packed-scene numbers compare.
+   */
+  spawn?: { x: number; z: number }
 }
 
 type Send = (data: Uint8Array | string) => void
@@ -58,6 +64,11 @@ export class LoopbackServer {
     )
     if (this.opts.cluster && this.session) {
       this.core.bots.rally = this.session.playerId
+    }
+    const you = this.session ? this.core.world.players[this.session.playerId] : null
+    if (this.opts.spawn && you) {
+      you.x = this.opts.spawn.x
+      you.z = this.opts.spawn.z
     }
     this.startedAt = now
     this.timer = setInterval(() => this.pump(), 5)

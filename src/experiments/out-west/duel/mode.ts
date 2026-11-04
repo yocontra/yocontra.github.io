@@ -133,8 +133,8 @@ export function emptyStreet(d: Director): void {
   hud.letterbox(false)
   hud.show(false)
   c.audio.heartbeat(0)
-  // back to the saloon's theme, undo any standoff duck, and let the bed rest
-  c.audio.playSong('intro')
+  // back to the saloon's piano, undo any standoff duck, and let the bed rest
+  c.audio.playSong('saloon')
   c.audio.musicLevel(0, 0.6)
   c.audio.musicLowpass(18_000, 0.6)
   ambience(d, 1, 1.5)

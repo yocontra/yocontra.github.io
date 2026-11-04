@@ -35,21 +35,56 @@ import {
   STINGS,
   type StingName,
   type UiName,
+  victorySting,
 } from './catalog.ts'
 import { AudioDebug, audioDebugMode } from './debug.ts'
 import { DeckPool } from './deck-pool.ts'
 import { Stream } from './stream.ts'
+import {
+  type EffortKind,
+  PLAYER_VOICE,
+  VOICE_CAST,
+  type VoiceKind,
+  type VoiceLine,
+} from './voices.ts'
 
 export type { LoopName, Pack, SfxName, SongName, StingName, UiName } from './catalog.ts'
-export type Bus = 'sfx' | 'amb' | 'music'
+export type { EffortKind, VoiceKind } from './voices.ts'
+/** `call` carries only the call's bell: past the SFX slider, so no setting can silence the cue. */
+export type Bus = 'sfx' | 'amb' | 'music' | 'voice' | 'call'
+/** What the player's volume sliders scale (ambience follows SFX). */
+export type VolumeKind = 'music' | 'sfx' | 'voice'
 
 /** Resting bus levels. */
-const BUS_LEVELS: Readonly<Record<Bus, number>> = { sfx: 0.72, amb: 0.5, music: 1.15 }
+const BUS_LEVELS: Readonly<Record<Bus, number>> = {
+  sfx: 0.72,
+  amb: 0.5,
+  music: 1.15,
+  voice: 1.2,
+  call: 0.72,
+}
+/** Which slider each bus answers to (the call answers to none). */
+const BUS_VOLUME: Readonly<Record<Bus, VolumeKind | null>> = {
+  sfx: 'sfx',
+  amb: 'sfx',
+  music: 'music',
+  voice: 'voice',
+  call: null,
+}
 /** How far each bus ducks under the call (linear gain multiplier). */
 const CALL_DUCK: readonly (readonly [Bus, number])[] = [
   ['music', 0.18],
   ['amb', 0.25],
+  ['voice', 0.25],
 ]
+/** A slider position (0..1) to gain: squared, so the travel feels even (0.5 ≈ −12 dB). */
+const taper = (x: number) => x * x
+/** Breathing room baked between voice lines in a sprite is trimmed off at play: fade out over this. */
+const VOICE_FADE = 0.03
+/** How far the score dips under an outlaw's line (linear: about −5 dB). */
+const VOICE_DUCK = 0.56
+/** Each speaker's lines play this far off centre (the outlaw stands across the street). */
+const VOICE_PAN = 0.12
 /**
  * Songs that duck deeper under the call. The tension bed is low drones that a lowpass can't thin,
  * so at the bell it drops away (on the bell's own clock: never a beat early, which would be a tell).
@@ -170,8 +205,15 @@ export class AudioEngine {
   ctx: AudioContext | null = null
   private master!: GainNode
   private buses!: Record<Bus, GainNode>
+  /** The player's sliders, one gain per kind between the buses and the master. */
+  private sliders!: Record<VolumeKind, GainNode>
+  private readonly volumes: Record<VolumeKind, number> = { music: 1, sfx: 1, voice: 1 }
+  /** The line each speaker is saying now: a new line from the same mouth cuts the old one. */
+  private readonly speaking = new Map<string, { src: AudioBufferSourceNode; gain: GainNode }>()
   private musicFilter!: BiquadFilterNode
   private musicGain!: GainNode
+  /** Dips the score under an outlaw's line, so the words sit on top of it. */
+  private voiceDuck!: GainNode
   private reverbIn!: GainNode
   private slapIn!: GainNode
   private pool: DeckPool | null = null
@@ -349,20 +391,36 @@ export class AudioEngine {
     clip.oversample = '2x'
     this.master.connect(glue).connect(trim).connect(limiter).connect(clip).connect(ctx.destination)
 
-    const mk = (v: number) => {
+    const gainTo = (v: number, to: AudioNode) => {
       const g = ctx.createGain()
       g.gain.value = v
-      g.connect(this.master)
+      g.connect(to)
       return g
     }
-    this.buses = { sfx: mk(BUS_LEVELS.sfx), amb: mk(BUS_LEVELS.amb), music: mk(BUS_LEVELS.music) }
+    this.sliders = {
+      music: gainTo(taper(this.volumes.music), this.master),
+      sfx: gainTo(taper(this.volumes.sfx), this.master),
+      voice: gainTo(taper(this.volumes.voice), this.master),
+    }
+    const bus = (b: Bus) => {
+      const kind = BUS_VOLUME[b]
+      return gainTo(BUS_LEVELS[b], kind ? this.sliders[kind] : this.master)
+    }
+    this.buses = {
+      sfx: bus('sfx'),
+      amb: bus('amb'),
+      music: bus('music'),
+      voice: bus('voice'),
+      call: bus('call'),
+    }
 
     this.musicFilter = ctx.createBiquadFilter()
     this.musicFilter.type = 'lowpass'
     this.musicFilter.frequency.value = 18_000
     this.musicFilter.Q.value = 0.5
     this.musicGain = ctx.createGain()
-    this.musicFilter.connect(this.musicGain).connect(this.buses.music)
+    this.voiceDuck = ctx.createGain()
+    this.musicFilter.connect(this.musicGain).connect(this.voiceDuck).connect(this.buses.music)
 
     const reverb = ctx.createConvolver()
     reverb.buffer = this.makeImpulse(ctx, 1.4)
@@ -383,8 +441,13 @@ export class AudioEngine {
     if (this.dbg) {
       this.dbg.tap('out', clip)
       this.dbg.tap('music', this.buses.music)
-      this.dbg.tap('sfx', this.buses.sfx)
+      // the meters read the bell as SFX, as they always have: sum the call's own bus in
+      const sfx = ctx.createGain()
+      this.buses.sfx.connect(sfx)
+      this.buses.call.connect(sfx)
+      this.dbg.tap('sfx', sfx)
       this.dbg.tap('amb', this.buses.amb)
+      this.dbg.tap('voice', this.buses.voice)
     }
   }
 
@@ -1056,6 +1119,146 @@ export class AudioEngine {
     }
   }
 
+  /**
+   * The victory sting for a draw grade (`gradeFor`): the big fanfare for LIGHTNING and DEADEYE, the
+   * trumpet for QUICK and STEADY, a wry twang for LUCKY and a second chance. Your own breath of
+   * relief follows it.
+   */
+  playVictory(grade: string): void {
+    this.playSting(victorySting(grade))
+    this.effort('win', 0.5)
+  }
+
+  // ---------------------------------------------------------------- volume
+
+  /** The player's music slider, 0..1 (squared taper: 0.5 ≈ −12 dB; 0 mutes). */
+  setMusicVolume(x: number): void {
+    this.setVolume('music', x)
+  }
+
+  /** The player's SFX slider, 0..1: effects and ambience. The call's bell is exempt (it is the cue). */
+  setSfxVolume(x: number): void {
+    this.setVolume('sfx', x)
+  }
+
+  /** The player's voice slider, 0..1: outlaws' barks and your own breaths. */
+  setVoiceVolume(x: number): void {
+    this.setVolume('voice', x)
+  }
+
+  /** Slider positions as last set (1 until a setting arrives). */
+  get volume(): Readonly<Record<VolumeKind, number>> {
+    return this.volumes
+  }
+
+  private setVolume(kind: VolumeKind, x: number): void {
+    const v = this.num(`${kind} volume`, x, this.volumes[kind], 0, 1)
+    this.volumes[kind] = v
+    const ctx = this.ctx
+    if (ctx) {
+      glide(this.sliders[kind].gain, taper(v), ctx.currentTime, 0.08)
+    }
+  }
+
+  // ---------------------------------------------------------------- voices
+
+  /**
+   * Fetch and decode an outlaw's voice (by name, as in the roster) and the player's efforts, ahead
+   * of his duel. Each outlaw is one small file, so the first load carries no voices at all.
+   */
+  loadVoice(who: string): void {
+    const cast = VOICE_CAST[who]
+    for (const url of cast ? [cast.url, PLAYER_VOICE.url] : [PLAYER_VOICE.url]) {
+      if (this.ctx) {
+        void this.decode(url)
+      } else {
+        void this.fetchRaw(url)
+      }
+    }
+  }
+
+  /**
+   * Say a captioned line in its speaker's voice (`duel/chatter.ts` calls this for every line it
+   * lets through). False when the speaker has no voice, the line isn't one of his, or his file
+   * hasn't loaded: the caption stands alone, as before.
+   */
+  voiceLine(who: string, text: string): boolean {
+    const cast = VOICE_CAST[who]
+    const key = lineKey(text)
+    const line = cast?.lines.find((l) => lineKey(l.text) === key)
+    return cast && line ? this.speak(who, cast.url, line, 0) : false
+  }
+
+  /**
+   * One of a speaker's barks by kind: his `open`er, a `taunt`, or his `death` (a grunt or a last
+   * breath, never words, so it needs no caption). `delay` is seconds from now.
+   */
+  voice(who: string, kind: VoiceKind, delay = 0): boolean {
+    const cast = VOICE_CAST[who]
+    const pool = cast?.lines.filter((l) => l.kind === kind) ?? []
+    const line = pool[Math.floor(Math.random() * pool.length)]
+    return cast && line ? this.speak(who, cast.url, line, delay) : false
+  }
+
+  /** The player's own breath and grunts: the draw, a flinch at a near miss, the win, the death. */
+  effort(kind: EffortKind, delay = 0): boolean {
+    const pool = PLAYER_VOICE.efforts[kind]
+    const line = pool[Math.floor(Math.random() * pool.length)]
+    return line ? this.speak('', PLAYER_VOICE.url, line, delay, 0) : false
+  }
+
+  private speak(
+    who: string,
+    url: string,
+    line: VoiceLine,
+    delay: number,
+    pan = VOICE_PAN,
+  ): boolean {
+    const ctx = this.ctx
+    const buf = this.buffers.get(url)
+    if (!(ctx && buf) || this.paused) {
+      if (ctx && !buf) {
+        void this.decode(url)
+      }
+      return false
+    }
+    const when = ctx.currentTime + this.num('voice delay', delay, 0, 0, 10)
+    const prev = this.speaking.get(who)
+    if (prev) {
+      glide(prev.gain.gain, 0, when, 0.04)
+      prev.src.stop(when + 0.08)
+    }
+    const src = ctx.createBufferSource()
+    src.buffer = buf
+    const g = ctx.createGain()
+    const end = when + line.len
+    g.gain.setValueAtTime(0, when)
+    g.gain.linearRampToValueAtTime(1, when + FADE)
+    g.gain.setValueAtTime(1, Math.max(when + FADE, end - VOICE_FADE))
+    g.gain.linearRampToValueAtTime(0, end)
+    const p = ctx.createStereoPanner()
+    p.pan.value = pan
+    src.connect(g).connect(p).connect(this.buses.voice)
+    src.start(when, line.at, line.len + 0.01)
+    const mine = { src, gain: g }
+    this.speaking.set(who, mine)
+    if (who) {
+      // the score steps back under his words and comes up after
+      const d = this.voiceDuck.gain
+      d.cancelScheduledValues(when)
+      d.setTargetAtTime(VOICE_DUCK, when, 0.05)
+      d.setTargetAtTime(1, end, 0.25)
+    }
+    src.onended = () => {
+      src.disconnect()
+      if (this.speaking.get(who) === mine) {
+        this.speaking.delete(who)
+      }
+    }
+    this.dbg?.log('voice', who || 'player', line.text || line.kind)
+    return true
+  }
+
   /** Music level in dB with a ramp in seconds; -Infinity silences. */
   musicLevel(dB: number, ramp = 0.4): void {
     this.dbg?.log('musicLevel', dB, ramp)
@@ -1097,7 +1300,14 @@ export class AudioEngine {
         h.v.stop(Math.max(ctx.currentTime, Math.min(h.t, at) - 0.005))
       }
     }
-    return this.play('bell', { gain: 1.25, when: at, pan: 0, reverb: 0.35, priority: true })
+    return this.play('bell', {
+      gain: 1.25,
+      when: at,
+      pan: 0,
+      reverb: 0.35,
+      priority: true,
+      bus: 'call',
+    })
   }
 
   /** Lowpass sweep on the music; exponential glide, never a jump. */
@@ -1191,6 +1401,11 @@ export class AudioEngine {
       this.fadeStop(v.gain, v.src, t)
     }
     this.voices.length = 0
+    for (const s of this.speaking.values()) {
+      glide(s.gain.gain, 0, t, 0.04)
+      s.src.stop(t + 0.08)
+    }
+    this.speaking.clear()
   }
 
   resume(): void {
@@ -1222,6 +1437,13 @@ export class AudioEngine {
       musicTrimDb: MUSIC_TRIM,
     }
   }
+}
+
+const NOT_WORD = /[^\p{L}\p{N}]+/gu
+
+/** A caption reduced to its words, so a stray quote mark or ellipsis never loses its voice. */
+function lineKey(text: string): string {
+  return text.normalize('NFKD').toLowerCase().replaceAll(NOT_WORD, ' ').trim()
 }
 
 /**

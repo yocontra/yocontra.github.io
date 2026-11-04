@@ -9,14 +9,11 @@ import {
   CanvasTexture,
   CatmullRomCurve3,
   Color,
-  DoubleSide,
   Euler,
   Mesh,
-  MeshBasicMaterial,
   type MeshStandardMaterial,
   NormalBlending,
   type Object3D,
-  PlaneGeometry,
   Points,
   Quaternion,
   ShaderMaterial,
@@ -149,6 +146,8 @@ interface Particle {
   color: Color
   drag: number
   rise: number
+  /** How fast it fades in (1/life fractions; 8 a soft bloom, 60 a hard impact). */
+  pop: number
 }
 
 /** CPU particle pool for puffs, muzzle smoke, sparks and flames. */
@@ -201,6 +200,7 @@ export class Puffs {
       dir?: Vector3
       drag?: number
       rise?: number
+      pop?: number
     } = {},
   ): void {
     const c = new Color(o.color ?? 0xcb_b0_8a)
@@ -236,6 +236,7 @@ export class Puffs {
         color: c,
         drag: o.drag ?? 2,
         rise: o.rise ?? 0,
+        pop: o.pop ?? 8,
       })
     }
   }
@@ -268,7 +269,7 @@ export class Puffs {
       this.pos[n * 3 + 1] = q.p.y
       this.pos[n * 3 + 2] = q.p.z
       this.size[n] = q.size * (1 + t * q.grow * 4)
-      this.alpha[n] = q.alpha * Math.min(1, t * 8) * (1 - t) ** 1.5
+      this.alpha[n] = q.alpha * Math.min(1, t * q.pop + (q.pop > 8 ? 0.6 : 0)) * (1 - t) ** 1.5
       this.col[n * 3] = q.color.r
       this.col[n * 3 + 1] = q.color.g
       this.col[n * 3 + 2] = q.color.b
@@ -313,6 +314,8 @@ function flashTexture(): CanvasTexture {
 
 export class Flash {
   readonly sprite: Sprite
+  fires = 0 // every shot so far, and where the last was (read by the town's smoke and light)
+  readonly at = new Vector3()
   private t = 0
   constructor() {
     this.sprite = new Sprite(
@@ -327,6 +330,8 @@ export class Flash {
     this.sprite.visible = false
   }
   fire(at: Vector3, scale = 0.7): void {
+    this.fires++
+    this.at.copy(at)
     this.sprite.position.copy(at)
     this.sprite.scale.setScalar(scale)
     this.sprite.material.rotation = Math.random() * Math.PI
@@ -454,6 +459,15 @@ export class Physics {
       sleep: false,
     })
   }
+  /** Throw a body already in flight harder (a hat flipped high); false if it isn't one. */
+  kick(obj: Object3D, v: Vector3, w: Vector3): boolean {
+    const b = this.bodies.find((x) => x.obj === obj)
+    if (b) {
+      Object.assign(b, { v: v.clone(), w: w.clone(), sleep: false })
+    }
+    return b !== undefined
+  }
+
   clear(): void {
     for (const b of this.bodies) {
       b.obj.removeFromParent()
@@ -516,27 +530,6 @@ function settle(b: Body): void {
     }
   }
   b.sleep = true
-}
-
-export function makeCard(): Mesh {
-  const c = document.createElement('canvas')
-  c.width = 64
-  c.height = 90
-  const ctx = c.getContext('2d')
-  if (ctx) {
-    ctx.fillStyle = '#f4efe2'
-    ctx.fillRect(0, 0, 64, 90)
-    ctx.fillStyle = Math.random() < 0.5 ? '#111' : '#a01010'
-    ctx.font = 'bold 30px Georgia'
-    ctx.fillText(Math.random() < 0.5 ? 'A' : '8', 8, 36)
-    ctx.font = 'bold 40px Georgia'
-    ctx.fillText(Math.random() < 0.5 ? '♠' : '♣', 18, 80)
-  }
-  const tex = new CanvasTexture(c)
-  return new Mesh(
-    new PlaneGeometry(0.063, 0.088),
-    new MeshBasicMaterial({ map: tex, side: DoubleSide }),
-  )
 }
 
 export class Glint {

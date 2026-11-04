@@ -196,6 +196,106 @@ the same view differ by up to 1.5 ms under the current machine load. What keeps 
 The rebuilt town alone puts top-down over the old budget: CPU p95 over 7 ms and triangles over
 350k. That needs a pass on the town's geometry, not on the camera.
 
+### Perdition geometry pass (town LOD), Nov 2026
+
+Harness: `bun tools/frontier-perf.ts --view=third [--cluster]` (floor proxy as above). Before and
+after were run back to back on the same dev server and the same machine load (load average about
+5, other agents running). Before is `redesign` d26e0ac.
+
+|                 | Before, spread | After, spread | Before, packed | After, packed |
+| --------------- | -------------- | ------------- | -------------- | ------------- |
+| CPU p95 (ms)    | 8.4            | 8.0           | 10.7           | 8.2           |
+| CPU p50 (ms)    | 6.0            | 6.1           | 7.9            | 5.9           |
+| Draws (max)     | 111            | 115           | 152            | 137           |
+| Triangles (max) | 490k           | 271k          | 539k           | 306k          |
+| JS heap (MB)    | 104            | 134           | 117            | 141           |
+
+Of the ~270k that remain, the town is about 120–170k in a view; desert flora is up to ~42k and the
+riders, pickups and effects are the rest. The heap grows by about 30 MB: merged per-tile kit and
+the far batch replace instancing, which shared one geometry per prop.
+
+What `ffa/scene/town.ts` does now:
+- **Detail tiles.** Every kit piece (windows, frames, doors, fences, barrels, crates, hay, lanterns,
+  outskirts rocks and the boundary fence) merges into a 36 m tile. A tile draws only when the
+  camera is within 46 m of it (30 m on floor and legacy).
+- **One far batch per material.** Beyond that radius, stand-ins draw instead:
+  - fences, closed doors and rocks are vertex-clustered (`ffa/scene/lod.ts`; a 432-triangle rock
+    comes out at a few dozen);
+  - windows become two flat quads.
+    Every vertex carries its tile id. A uniform array in the vertex shader folds away the tiles that
+    show full detail, so the whole far layer costs one draw per material.
+- **Small props never vanish.** Barrels, crates, crate stacks and hay get an inset box or cylinder
+  stand-in in the always-drawn wood batch. From afar that is the prop; up close the kit prop
+  covers it.
+- **Rooms.** Each walk-in building's furniture, ceiling and inside windows are their own group.
+  They draw only within 18 m of the building (12 m on floor and legacy), or with the camera inside.
+- **Balcony rails** are built geometry (about 200 triangles per 2 m against the kit balcony's
+  1,120). The outskirts terrain is split into four sides of town, so the side behind the camera is
+  culled.
+- **Floor and legacy** also drop facade trim and ceiling joists.
+- **Visibility** updates from the ground mesh's `onBeforeRender`, for perspective cameras only (so
+  not the sun's shadow camera); `Town.update(camera)` is also public. When the dev audits'
+  `owAuditScenes` hook is present, everything shows at full detail.
+
+#### Heap follow-up
+
+The +30 MB above was mostly a leak, not merging. `buildTown`'s update and dispose closures were
+created in its scope, so they kept every builder's plain-number vertex arrays alive (the
+structure batch alone is about 1M numbers). Fixed:
+- the culler and the disposer are now built by module-level factories, so their closures capture
+  only what they use;
+- every town-owned vertex and index array drops its CPU copy on GPU upload
+  (`BufferAttribute.onUpload`), with bounding spheres computed first. The exceptions are instanced
+  meshes (their geometry is shared) and runs where the dev audits are watching. Groups that have
+  never been drawn, such as rooms you haven't been near, keep their arrays until they first draw.
+- coarser far stand-ins: rocks are clustered at 30% of their size, fences at 10% and doors at 12%.
+- floor and legacy draw detail tiles within 27 m (was 30) and rooms within 10 m (was 12).
+
+| Floor proxy, post-GC JS heap                | `d26e0ac` | Now                          |
+| ------------------------------------------- | --------- | ---------------------------- |
+| bots=0, after load                          | 98.3 MB   | 93.2 MB                      |
+| Town vertex/index arrays held in JS         | 13.5 MB   | 4–7 MB (falls as rooms draw) |
+| 31 bots packed (crowd arrays vary 11–17 MB) | 118.6 MB  | 124.7–127.9 MB               |
+
+Instancing the repeated props was tried as one instanced batch per prop across tiles, refilled
+when the near tiles or the view changed. It cost 2–3 ms of CPU p95 at 4× (the per-frame refill and
+upload), and freeing the merged copies saves the JS heap anyway. Merged per-tile kit stays.
+
+Packed third person, three runs on the floor proxy (the spawn is random, so the view differs run
+to run): triangles 288k, 304k and 288k against 539k before; CPU p95 8.9–10.0 ms at load average
+5–7.
+
+### Frontier baseline, seeded harness (Nov 2026)
+
+`tools/frontier-perf.ts` now starts every run from the same scene. It uses the loopback lobby's
+seed 7 (which fixes the bots, their spawns and the strongbox) and puts you on the bank's front steps
+(72, 69), via the dev-only page params `?seed=7&spawn=72,69`. Other start points: `--spawn=` a name
+(`crossroads`, `saloon-porch`, `west-end`, `east-end`, `depot`, `corral`) or `x,z`.
+`--seed=random --spawn=random` gives the old behaviour.
+
+Repeatability: two back-to-back packed third-person runs gave 298k and 298k triangles, 139 and 139
+draws, 122.3 and 122.2 MB heap, and 9.6 and 9.5 ms CPU p95. Triangle, draw and heap figures are
+now exact comparisons. CPU still moves with machine load, so read it within one sitting.
+
+Floor proxy (812×375 at DPR 3, touch, floor tier, 4× CPU, 31 bots, 15 samples, the camera
+panning a full circle), on `redesign` 1518366 with the town LOD and heap passes, at load average
+4–6:
+
+|                 | Third, spread | Third, packed | First, spread | First, packed | Top, spread | Top, packed |
+| --------------- | ------------- | ------------- | ------------- | ------------- | ----------- | ----------- |
+| CPU p50 (ms)    | 6.1           | 6.8           | 5.3           | 8.3           | 7.0         | 7.2         |
+| CPU p95 (ms)    | 8.3           | 9.1           | 7.4           | 10.5          | 8.5         | 9.2         |
+| Frame p95 (ms)  | 16.7          | 16.8          | 16.7          | 16.8          | 16.8        | 16.8        |
+| Heap, median    | 122.7 MB      | 122.5 MB      | 122.2 MB      | 123.6 MB      | 128.3 MB    | 121.8 MB    |
+| Draws (max)     | 107           | 139           | 105           | 128           | 81          | 150         |
+| Triangles (max) | 229k          | 298k          | 227k          | 274k          | 209k        | 294k        |
+| Riders in view  | 2 (max 7)     | 11 (max 16)   | 2 (max 7)     | 9 (max 15)    | 2 (max 2)   | 19 (max 22) |
+
+Against the budget (≤300k triangles, CPU p95 ≤ 7 ms on a quiet machine, heap ≤ 110 MB):
+- triangles are inside in every view;
+- CPU and heap are over. What's left is the crowd (skinned and VAT riders, 11–17 MB of their own
+  arrays), the desert flora, and the dev build's module source, which production doesn't carry.
+
 ## Real-device checklist (iPhone 13 mini, current iOS, WKWebView)
 
 Do this before signing off any art drop. The pass bar (§9.6): **p95 ≤ 16.7 ms over 10 minutes,

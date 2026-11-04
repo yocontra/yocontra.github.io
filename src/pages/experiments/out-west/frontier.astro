@@ -39,7 +39,8 @@ import Bare from '~/layouts/Bare.astro'
   /*
    * Dev and direct access. Query params: server=loopback|remote (default loopback here),
    * bots=N, lag=ms, jitter=ms, lobby=id, name=…, token=… (dev), cluster (loopback: the bots crowd
-   * around you, for packed-scene perf runs). Plus the renderer's #tier= and #perf.
+   * around you, for packed-scene perf runs), seed=N and spawn=x,z (dev: a repeatable start for the
+   * perf harness). Plus the renderer's #tier= and #perf.
    */
   import { mountFrontier } from '~/experiments/out-west/ffa/client/index.ts'
   import { installViewportVars } from '~/experiments/out-west/platform/viewport.ts'
@@ -63,6 +64,13 @@ import Bare from '~/layouts/Bare.astro'
     // Dev only: a pre-minted access token (automated runs without a passkey).
     // Never honoured in production builds: tokens must not travel in URLs.
     const token = import.meta.env.DEV ? q.get('token') : null
+    // Dev only (perf harness): a fixed lobby seed and first spawn, `seed=7&spawn=72,66`.
+    const seed = import.meta.env.DEV ? num('seed') : undefined
+    const [sx, sz] = (import.meta.env.DEV ? (q.get('spawn') ?? '') : '').split(',').map(Number)
+    const spawn =
+      sx !== undefined && sz !== undefined && Number.isFinite(sx) && Number.isFinite(sz)
+        ? { x: sx, z: sz }
+        : undefined
     mountFrontier(root, {
       server: q.get('server') === 'remote' ? 'remote' : 'loopback',
       ...(bots === undefined ? {} : { bots }),
@@ -71,6 +79,8 @@ import Bare from '~/layouts/Bare.astro'
       ...(lobby ? { lobbyId: lobby } : {}),
       ...(name ? { name } : {}),
       ...(q.has('cluster') ? { cluster: true } : {}),
+      ...(seed === undefined ? {} : { seed }),
+      ...(spawn ? { spawn } : {}),
       ...(token ? { getToken: () => Promise.resolve(token) } : {}),
       onExit: () => {
         location.href = '/experiments/out-west/?saloon'

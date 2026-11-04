@@ -20,7 +20,12 @@
 .ow-match.on {
   opacity: 1;
 }
+/* above the posters: the "them" poster's stamp slam scales over it otherwise (its animation makes
+   a stacking context later in the DOM) */
 .ow-match-mode {
+  position: relative;
+  z-index: 3;
+  margin-bottom: var(--ow-s2);
   padding: 4px var(--ow-s3);
   font-weight: 700;
   font-size: var(--ow-fs-lead);

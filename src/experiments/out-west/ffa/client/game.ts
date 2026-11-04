@@ -556,7 +556,7 @@ export class FrontierGame {
       return
     }
     onProgress(0.65, 'Raising the town')
-    this.town = buildTown(TOWN, assets, SUN_DIR)
+    this.town = buildTown(TOWN, assets, SUN_DIR, this.renderer.tier)
     this.scene.add(this.town.root)
     const inside = buildInterior(TOWN, presetAt(DAY).windows)
     shadeTown(this.town.root, inside)

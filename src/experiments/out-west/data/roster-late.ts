@@ -241,7 +241,7 @@ export const ROSTER_LATE: readonly Outlaw[] = [
     name: 'William “Curly Bill” Brocius',
     epithet: 'the Underboss',
     bounty: bountyFor(15),
-    hook: 'Rifleman on the saloon roof. Watch for the glint. Two shots.',
+    hook: 'A rifleman covers him from the roof. Shoot him first.',
     gimmick: 'underboss',
     look: {
       base: 'rugged',

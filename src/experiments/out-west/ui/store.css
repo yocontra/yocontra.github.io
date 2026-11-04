@@ -134,6 +134,9 @@
   overflow-y: auto;
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(9.5rem, 1fr));
+  /* rows as tall as their cards: a flex button's content isn't counted otherwise, and the
+     thumbnail band pushed the name, rarity and price under the next row */
+  grid-auto-rows: max-content;
   align-content: start;
   gap: var(--ow-s2);
   padding: 2px;
@@ -199,7 +202,7 @@
   filter: drop-shadow(1px 1px 0 rgb(0 0 0 / 0.8));
 }
 .ow-item-rarity {
-  padding-right: 26px;
+  padding-right: 0;
   font-weight: 700;
   font-size: var(--ow-fs-body);
   font-variant-caps: all-small-caps;
@@ -304,5 +307,172 @@
   }
   .ow-store-list {
     grid-template-columns: repeat(auto-fill, minmax(8.5rem, 1fr));
+  }
+}
+
+/* ------------------------------------------- the piece itself, badges and sets */
+.ow-item-art {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 120px;
+  margin: -12px -12px 8px -14px;
+  overflow: hidden;
+  /* the thumbnails' own backdrop, so a contained square runs edge to edge */
+  background: #3e3329;
+  border-bottom: 1px solid rgb(239 228 204 / 0.12);
+}
+.ow-item-art img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+.ow-item .ow-item-art .ow-icon {
+  position: static;
+  width: 34px;
+  height: 34px;
+  opacity: 0.55;
+}
+.ow-item.locked .ow-item-art {
+  filter: grayscale(0.7) brightness(0.7);
+}
+.ow-item-badges {
+  position: absolute;
+  top: 6px;
+  left: 8px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  pointer-events: none;
+}
+.ow-item-badges:empty {
+  display: none;
+}
+.ow-item-badge {
+  padding: 1px 6px 2px;
+  font-family: var(--ow-font-text);
+  font-weight: 700;
+  font-size: var(--ow-fs-small);
+  font-variant-caps: all-small-caps;
+  letter-spacing: 0.08em;
+  line-height: 1.2;
+  border-radius: var(--ow-radius);
+  box-shadow: 0 1px 2px rgb(0 0 0 / 0.6);
+}
+.ow-item-badge.new {
+  color: var(--ow-bone);
+  background: var(--ow-red);
+}
+.ow-item-badge.afford {
+  color: var(--ow-ink);
+  background: var(--ow-brass-hi);
+}
+.ow-store-tab.fresh::after {
+  content: "";
+  width: 7px;
+  height: 7px;
+  margin-left: 2px;
+  border-radius: 50%;
+  background: var(--ow-red-hi);
+  align-self: flex-start;
+  margin-top: 10px;
+}
+.ow-store-set {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0 4px;
+}
+.ow-store-link {
+  min-height: 44px;
+  padding: 0 4px;
+  font: inherit;
+  color: var(--ow-brass-hi);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  background: none;
+  border: 0;
+  cursor: pointer;
+}
+.ow-set-card {
+  grid-column: 1 / -1;
+  display: grid;
+  gap: var(--ow-s2);
+  padding: 12px 14px;
+  background: linear-gradient(180deg, rgb(239 228 204 / 0.08), rgb(0 0 0 / 0.25));
+  border: 1px solid rgb(239 228 204 / 0.16);
+  border-radius: var(--ow-radius);
+}
+.ow-set-card .ow-hub-note {
+  margin: 0;
+}
+.ow-set-pieces {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(6.5rem, 1fr));
+  gap: var(--ow-s2);
+}
+.ow-set-piece {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-height: 44px;
+  padding: 0 0 6px;
+  font: inherit;
+  font-size: var(--ow-fs-small);
+  font-weight: 600;
+  line-height: 1.2;
+  text-align: center;
+  color: var(--ow-bone-2);
+  background: rgb(0 0 0 / 0.25);
+  border: 1px solid rgb(239 228 204 / 0.16);
+  border-radius: var(--ow-radius);
+  cursor: pointer;
+}
+.ow-set-pieces .ow-set-piece .ow-item-art {
+  height: 64px;
+  margin: 0;
+}
+.ow-set-pieces .ow-set-piece .ow-item-art .ow-icon {
+  width: 26px;
+  height: 26px;
+  color: var(--ow-brass);
+  opacity: 0.55;
+}
+.ow-set-piece.owned {
+  color: var(--ow-bone);
+  border-color: var(--ow-brass);
+}
+
+/* portrait and short landscape phones: the picture beside the words, so a short shelf still shows
+   every card's name, rarity and price */
+@media (max-aspect-ratio: 1 / 1), (max-height: 480px) {
+  .ow-store-list {
+    grid-template-columns: repeat(auto-fill, minmax(13rem, 1fr));
+  }
+  .ow-item {
+    display: grid;
+    grid-template-columns: 76px 1fr;
+    grid-template-rows: auto auto 1fr;
+    column-gap: 12px;
+    min-height: 84px;
+    padding: 8px 12px 8px 0;
+  }
+  .ow-item .ow-item-art {
+    grid-row: 1 / 4;
+    height: auto;
+    min-height: 76px;
+    margin: -8px 0 -8px 3px;
+    border-bottom: 0;
+    border-right: 1px solid rgb(239 228 204 / 0.12);
+  }
+  .ow-item-tag {
+    padding-top: 2px;
+  }
+  .ow-item-badges {
+    top: auto;
+    bottom: 6px;
+    left: auto;
+    right: 8px;
   }
 }

@@ -51,8 +51,8 @@ await page.addInitScript(() => {
   const hook = new EventTarget()
   const found: unknown[] = []
   const renderers: unknown[] = []
-  g.owAuditScenes = found
-  g.owAuditRenderers = renderers
+  g.owShotScenes = found
+  g.owShotRenderers = renderers
   hook.addEventListener('observe', (e) => {
     const d = (e as CustomEvent<{ isScene?: boolean; isWebGLRenderer?: boolean }>).detail
     if (d.isScene) {
@@ -67,7 +67,7 @@ await page.goto(`${base}/experiments/out-west/frontier/?bots=0#tier=${tier}`)
 await page.waitForFunction(
   () =>
     (
-      (globalThis as unknown as { owAuditScenes?: { children: unknown[] }[] }).owAuditScenes ?? []
+      (globalThis as unknown as { owShotScenes?: { children: unknown[] }[] }).owShotScenes ?? []
     ).some((s) => s.children.length > 4),
   undefined,
   { timeout: 120_000 },
@@ -84,20 +84,19 @@ for (const v of FRONTIER_VIEWS) {
         /* @vite-ignore */ mod as string
       )) as typeof import('../src/experiments/out-west/scene/float-audit.ts')
       const g = globalThis as unknown as {
-        owAuditScenes: import('three').Object3D[]
-        owAuditRenderers: import('three').WebGLRenderer[]
+        owShotScenes: import('three').Object3D[]
+        owShotRenderers: import('three').WebGLRenderer[]
       }
-      const r = g.owAuditRenderers.at(-1)
-      const s = g.owAuditScenes.reduce((a, b) => (b.children.length > a.children.length ? b : a))
-      return r
-        ? m.snapshot(
-            r,
-            s,
-            f as [number, number, number],
-            t as [number, number, number],
-            fov as number,
-          )
-        : ''
+      const r = g.owShotRenderers.at(-1)
+      const s = g.owShotScenes.reduce((a, b) => (b.children.length > a.children.length ? b : a))
+      if (!r) {
+        return ''
+      }
+      const from = f as [number, number, number]
+      const to = t as [number, number, number]
+      // the first render lets the town pick its detail for this camera; the second is the shot
+      m.snapshot(r, s, from, to, fov as number)
+      return m.snapshot(r, s, from, to, fov as number)
     },
     [MODULE, v.from, v.to, v.fov ?? 62] as const,
   )

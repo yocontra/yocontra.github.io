@@ -1,11 +1,12 @@
 import { MeshStandardMaterial, Scene } from 'three'
 import type { AudioEngine } from './audio/audio.ts'
-import type { Loadout } from './data/catalog.ts'
+import type { ItemId, Loadout } from './data/catalog.ts'
 import type { Dyes } from './data/dye.ts'
 import { OUTLAWS } from './data/outlaws.ts'
+import { tickLife } from './duel/cues.ts'
 import { Director, type RankedConnect } from './duel/director.ts'
 import { PvpDuel, type PvpOpts } from './duel/pvp-duel.ts'
-import { loadAssets } from './engine/assets.ts'
+import { type Assets, loadAssets } from './engine/assets.ts'
 import { Input } from './engine/input.ts'
 import { Renderer, type Tier } from './engine/render.ts'
 import { save as persist, resetRun, type SaveData } from './save.ts'
@@ -13,8 +14,10 @@ import { CameraRig } from './scene/camera.ts'
 import { dressStreet } from './scene/dressing.ts'
 import { Dust, Flash, Glint, Physics, Puffs, Tumbleweed, tumbleweedGeometry } from './scene/fx.ts'
 import { type HubShot, hubShot, wearLoadout } from './scene/hub-stage.ts'
+import { ItemStudio } from './scene/item-studio.ts'
 import { propDef } from './scene/props.ts'
 import { softDot } from './scene/textures.ts'
+import { LIFE, TownLife } from './scene/townlife.ts'
 import { World } from './scene/world.ts'
 import { Hud } from './ui/hud.ts'
 import type { GauntletChoice } from './ui/mode-select.ts'
@@ -30,6 +33,8 @@ export interface Game {
   dress: (l: Loadout, dyes?: Dyes) => void
   /** A Bounty Hunt match, driven by the duel room. */
   startPvp: (o: PvpOpts) => void
+  /** The Outfitter's picture of one piece of kit (rendered once, cached). */
+  itemThumb: (id: ItemId) => HTMLCanvasElement | null
 }
 
 export interface GameOpts {
@@ -44,6 +49,19 @@ export interface GameOpts {
   connectRanked: RankedConnect | null
   /** Pause → Saloon goes here (no hub on debug or level-jump loads). */
   onSaloon: (() => void) | null
+}
+
+/** Outfitter thumbnails, on the game's renderer; the studio is built on the first ask. */
+function itemThumbs(renderer: Renderer, assets: Assets): (id: ItemId) => HTMLCanvasElement | null {
+  let studio: ItemStudio | null = null
+  return (id) => {
+    studio ??= new ItemStudio(
+      renderer.gl,
+      assets.player,
+      propDef(assets.props, 'revolver', 0.3, 'max'),
+    )
+    return studio.render(id)
+  }
 }
 
 export async function createGame(o: GameOpts): Promise<Game> {
@@ -110,6 +128,10 @@ export async function createGame(o: GameOpts): Promise<Game> {
   director.connectRanked = o.connectRanked
   director.onSaloon = o.onSaloon
   world.silhouetteHide.push(dust.points, puffs.points, sparks.points, flash.sprite, glint.sprite)
+  // town life: townsfolk, animals, crows, signs (kept off the red silhouette frame)
+  const town = new TownLife(world.root, assets, renderer.tier, dot)
+  LIFE.town = town
+  world.silhouetteHide.push(town.root)
 
   // Compile every shader up front behind the title so the first shot never hitches.
   flash.sprite.visible = true
@@ -176,6 +198,7 @@ export async function createGame(o: GameOpts): Promise<Game> {
       dust.points.visible = true
     }
     world.update(realDt)
+    tickLife(director, dt, realDt)
     dust.update(realDt, renderer.dpr)
     puffs.update(dt, renderer.dpr, 0.6)
     sparks.update(dt, renderer.dpr, 0)
@@ -220,6 +243,7 @@ export async function createGame(o: GameOpts): Promise<Game> {
     },
     hubShot: (shot: HubShot) => hubShot(director, shot),
     dress: (l: Loadout, dyes?: Dyes) => wearLoadout(director, l, dyes),
+    itemThumb: itemThumbs(renderer, assets),
     startPvp: (opts: PvpOpts) => {
       void new PvpDuel(director, opts)
     },

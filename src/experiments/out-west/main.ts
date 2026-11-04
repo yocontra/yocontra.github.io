@@ -7,8 +7,10 @@ import { restoreSession } from './net/auth.ts'
 import { RankedSession } from './net/ranked.ts'
 import { Turnstile } from './net/turnstile.ts'
 import { unlockAudio } from './platform/audio.ts'
+import { setHapticsEnabled } from './platform/haptics.ts'
 import { installViewportVars } from './platform/viewport.ts'
 import { load, type SaveData, save } from './save.ts'
+import { bindReducedMotion, getSettings, onSettings, type Settings } from './settings.ts'
 import { Board } from './ui/board.ts'
 import { Hub } from './ui/hub.ts'
 import { loadPosterArt } from './ui/poster.ts'
@@ -21,6 +23,10 @@ const START_KEYS = ['Space', 'Enter', 'KeyJ', 'KeyW', 'ArrowUp', 'ArrowLeft']
 function pickTier(param: string | null): Tier {
   if (param === 'low' || param === 'high') {
     return param
+  }
+  const chosen = getSettings().graphics
+  if (chosen !== 'auto') {
+    return chosen
   }
   const coarse = matchMedia('(pointer: coarse)').matches
   const small = Math.min(screen.width, screen.height) < 700
@@ -53,7 +59,16 @@ function rankedConnector(root: HTMLElement, hash: URLSearchParams): RankedConnec
   }
   // on the root, not the title: the title is wiped, and later runs re-arm this widget
   const turnstile = new Turnstile(root)
-  turnstile.warm()
+  // Warm on the first gesture (the title press), not at load: a cold look at the page (a crawler,
+  // a visitor who never presses) loads no Turnstile iframe and none of its console noise, and the
+  // title, hub and Quick Draw sheet still give the token seconds to arrive before a ranked run.
+  const warm = (): void => {
+    globalThis.removeEventListener('pointerdown', warm, true)
+    globalThis.removeEventListener('keydown', warm, true)
+    turnstile.warm()
+  }
+  globalThis.addEventListener('pointerdown', warm, true)
+  globalThis.addEventListener('keydown', warm, true)
   return async () => {
     const token = await turnstile.take()
     if (!token) {
@@ -105,6 +120,7 @@ function makeHub(
     rankedOk,
     stage: (shot) => game()?.hubShot(shot),
     dress: (l, dyes) => game()?.dress(l, dyes),
+    thumb: (id) => game()?.itemThumb(id) ?? null,
     playGauntlet: (c) => game()?.playGauntlet(c),
     bountyHunt: (match, xpBefore) =>
       game()?.startPvp({
@@ -125,6 +141,47 @@ function makeHub(
     },
   })
   return hub
+}
+
+/** The volume API the audio engine grows (audio-content); a no-op until it lands. */
+interface Volumes {
+  setMusicVolume?: (v: number) => void
+  setSfxVolume?: (v: number) => void
+  setVoiceVolume?: (v: number) => void
+}
+
+/**
+ * The Settings sheet's choices, applied: volumes to the audio engine, vibration to the haptics
+ * gate, and reduced motion bound to the run's save (the pause menu edits the same flag) and to a
+ * root class the CSS honours like the system preference.
+ */
+function wireSettings(
+  root: HTMLElement,
+  audio: AudioEngine,
+  data: SaveData,
+  game: () => Game | null,
+): void {
+  const apply = (s: Readonly<Settings>): void => {
+    const v = audio as AudioEngine & Volumes
+    v.setMusicVolume?.(s.music)
+    v.setSfxVolume?.(s.sfx)
+    v.setVoiceVolume?.(s.voice)
+    setHapticsEnabled(s.vibration)
+    root.classList.toggle('ow-reduced', data.settings.reducedMotion)
+  }
+  bindReducedMotion(
+    () => data.settings.reducedMotion,
+    (on) => {
+      data.settings.reducedMotion = on
+      save(data)
+      const g = game()
+      if (g) {
+        import('./duel/controls.ts').then((m) => m.applySettings(g.director)).catch(() => undefined)
+      }
+    },
+  )
+  apply(getSettings())
+  onSettings(apply)
 }
 
 /** Debug views that replace the title entirely. Returns true when one ran. */
@@ -175,6 +232,7 @@ export function boot(root: HTMLElement): void {
   let started = false
   // a level jump (#level=N) or a debug view skips the hub, as before
   const hub = jump || debug ? null : makeHub(root, data, connectRanked !== null, () => game)
+  wireSettings(root, audio, data, () => game)
   installViewportVars()
   // a silent refresh from the cookie: the hub shows your poster if you're signed in
   restoreSession()
@@ -238,7 +296,7 @@ export function boot(root: HTMLElement): void {
       if (audio.ctx) {
         unlockAudio(audio.ctx)
       }
-      audio.playSong('intro')
+      audio.playSong('saloon')
     }
     globalThis.addEventListener('pointerdown', unlockOnce, { once: true })
   }

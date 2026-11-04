@@ -1,3 +1,4 @@
+// biome-ignore-all lint/complexity/noExcessiveLinesPerFunction: buildTown wires the layers (structure, detail tiles, far batch, rooms) and their culling in one pass
 // biome-ignore-all lint/style/noExcessiveLinesPerFile: one town builder; the paint table and the per-feature builders share private helpers
 // biome-ignore-all lint/suspicious/noUnnecessaryConditions: array lookups narrowed by the layout's types
 // biome-ignore-all lint/complexity/noExcessiveCognitiveComplexity: addBuilding assembles walls, windows, roof, front and porch per building kind
@@ -6,21 +7,36 @@
  * Perdition, built from `town.layout.json` (the same file the server builds its collision grid
  * from, so what you see is what blocks you). Everything static merges into a handful of draws:
  * painted plank walls, stone walls (bank, jail), roofs (with a building id for the roof fade),
- * wood (boardwalks, porches, floors, the bridge, boxcars), windows and signs; props from the shared
- * props GLB are instanced per type.
+ * wood (boardwalks, porches, floors, the bridge, boxcars), windows and signs.
+ *
+ * Third person sees the whole town, so the detail is layered and culled by the camera:
+ * - kit pieces (windows, frames, fences, barrels, crates, hay, rocks) merge by 36 m tile, drawn
+ *   only within ~30–46 m of the camera;
+ * - beyond that, one far batch per material stands in (clustered fences, doors and rocks, flat
+ *   painted windows), each vertex tagged with its tile so the shader folds away tiles showing
+ *   full detail; small props have inset stand-ins in the always-drawn wood batch instead;
+ * - each walk-in building's furniture, ceiling and inside windows draw only when the camera is in
+ *   it or within ~12–18 m;
+ * - the floor and legacy tiers also drop facade trim and ceiling joists.
  */
 import {
+  Box3,
   BufferAttribute,
   BufferGeometry,
+  type Camera,
   CanvasTexture,
   Color,
   CylinderGeometry,
   DoubleSide,
   Float32BufferAttribute,
   Group,
+  type InstancedMesh,
+  type Material,
   Matrix4,
   Mesh,
   MeshStandardMaterial,
+  type Object3D,
+  type PerspectiveCamera,
   RepeatWrapping,
   SRGBColorSpace,
   type Texture,
@@ -29,21 +45,16 @@ import {
 } from 'three'
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
 import type { Assets } from '../../engine/assets.ts'
+import type { Quality } from '../../engine/tiers.ts'
 import { GeoBuilder } from '../../scene/geo.ts'
-import {
-  instance,
-  mergePlaced,
-  type PropDef,
-  placeMatrix,
-  propDef,
-  propsLibrary,
-} from '../../scene/props.ts'
+import { mergePlaced, type PropDef, placeMatrix, propDef, propsLibrary } from '../../scene/props.ts'
 import { glassLook } from '../../scene/surface.ts'
 import { signAtlas } from '../../scene/textures.ts'
 import {
   type Building,
   buildingWalls,
   type Cover,
+  type Rect,
   type Side,
   type TownLayout,
 } from '../sim/layout.ts'
@@ -62,6 +73,7 @@ import {
 import { cutaway } from './cutaway.ts'
 import { dressCover } from './dressing.ts'
 import { bakeGroundMask, groundMesh } from './ground.ts'
+import { farDef } from './lod.ts'
 import { OUTSKIRTS_SEED, outskirtsGeometry } from './outskirts.ts'
 import { buildRoof, RK_PLAIN, roofSkin, roofSkins, tinColor } from './roofs.ts'
 
@@ -284,6 +296,12 @@ export interface Town {
   /** Building rects by roof id, for the roof fade. */
   roofs: Building[]
   sun: Vector3
+  /**
+   * Show the detail the camera can use and hide the rest: small-prop tiles near the camera, the
+   * interiors of the buildings it is in or beside. The town also calls it itself from the
+   * ground's onBeforeRender (main camera only), so callers needn't; one frame of lag is fine.
+   */
+  update: (camera: Camera) => void
   dispose: () => void
 }
 
@@ -445,6 +463,10 @@ interface Builders {
   extra: BufferGeometry[]
   /** Textured kit pieces (windows, door frames, porch rails), merged at the end. */
   kit: { def: PropDef; at: Matrix4 }[]
+  /** A building's interior set: drawn only when the camera is in or beside it. */
+  room: (id: string) => Builders
+  /** Floor and legacy tiers: no facade trim or joists. */
+  lean: boolean
 }
 
 /** Kit +Z turned to face out of a side. */
@@ -562,7 +584,7 @@ function addWindows(
           if (q && !hidden) {
             const inner = placeMatrix(q.x, sill - 0.97 * s + 0.05, q.z, SIDE_RY[side] + Math.PI)
             inner.multiply(new Matrix4().makeScale(s, s, 1))
-            bs.kit.push({ def: win, at: inner })
+            bs.room(b.id).kit.push({ def: win, at: inner })
           }
         }
         continue
@@ -643,14 +665,18 @@ function addCeiling(bs: Builders, b: Building): void {
   const iw = b.w - WALL_T * 2
   const id = b.d - WALL_T * 2
   const only = { skip: ['top', 'px', 'nx', 'pz', 'nz'] }
-  bs.wood.box(cx, y, cz, iw, 0.02, id, 0x8a_6a_4a, only)
+  const room = bs.room(b.id)
+  room.wood.box(cx, y, cz, iw, 0.02, id, 0x8a_6a_4a, only)
+  if (bs.lean) {
+    return
+  }
   const alongX = iw <= id
   const span = alongX ? id : iw
   for (let a = 1.2; a < span - 0.6; a += 1.8) {
     // joists: their undersides and sides only (no top face to show from above)
     const jx = alongX ? cx : b.x + WALL_T + a
     const jz = alongX ? b.z + WALL_T + a : cz
-    bs.wood.box(jx, y - 0.1, jz, alongX ? iw : 0.14, 0.18, alongX ? 0.14 : id, DARK_WOOD, {
+    room.wood.box(jx, y - 0.1, jz, alongX ? iw : 0.14, 0.18, alongX ? 0.14 : id, DARK_WOOD, {
       skip: ['top'],
     })
   }
@@ -683,6 +709,10 @@ function solidRuns(b: Building, side: Side): [number, number][] {
  * floors meet. Brick buildings get a stone plinth instead of the skirting.
  */
 function addFacadeTrim(bs: Builders, b: Building, p: Paint, front: Side): void {
+  if (bs.lean) {
+    // floor tier: the planks and the paint carry the facade
+    return
+  }
   const decked = PORCHED.has(b.kind) || b.kind === 'depot'
   const h = b.height
   const out = 0.04
@@ -958,13 +988,59 @@ function addPorch(bs: Builders, b: Building, front: Side): void {
     DARK_WOOD,
   )
   // a balcony rail along the porch roof (two-storey fronts)
-  const rail = kitDef('k_balcony')
-  if (rail && b.floors > 1) {
-    const n = Math.max(1, Math.floor((len - 0.4) / 2))
-    for (let i = 0; i < n; i++) {
-      const a = len / 2 - ((n - 1) * 2) / 2 + i * 2
-      // the kit rail stands 0.9-1.1 m out from its origin
-      bs.kit.push({ def: rail, at: onSide(b, front, a, y + 0.06, depth - 1.1) })
+  if (b.floors > 1) {
+    addBalconyRail(bs, b, front, y + 0.06, depth)
+  }
+}
+
+/**
+ * A balcony rail round the porch roof of a two-storey front: handrail, bottom rail, square
+ * balusters and posts, returning to the wall at both ends. Built into the wood batch (about a
+ * tenth of the kit balcony's triangles, which the whole street saw from 100 m off).
+ */
+function addBalconyRail(bs: Builders, b: Building, front: Side, y: number, depth: number): void {
+  const len = sideLength(b, front)
+  const out = depth - 0.12
+  const runs: [number, number, number, number][] = [
+    [0.1, len - 0.1, out, out],
+    [0.1, 0.1, 0.1, out],
+    [len - 0.1, len - 0.1, 0.1, out],
+  ]
+  for (const [a0, a1, o0, o1] of runs) {
+    const [p0] = faceQuad(b, front, a0, a0, 0, 1, o0)
+    const [p1] = faceQuad(b, front, a1, a1, 0, 1, o1)
+    if (!(p0 && p1)) {
+      continue
+    }
+    const dx = p1.x - p0.x
+    const dz = p1.z - p0.z
+    const L = Math.hypot(dx, dz)
+    const cx = (p0.x + p1.x) / 2
+    const cz = (p0.z + p1.z) / 2
+    const alongX = Math.abs(dx) >= Math.abs(dz)
+    for (const [yy, hh] of [
+      [y + 0.95, 0.08],
+      [y + 0.12, 0.06],
+    ] as const) {
+      bs.wood.box(cx, yy, cz, alongX ? L + 0.08 : 0.08, hh, alongX ? 0.08 : L + 0.08, DARK_WOOD)
+    }
+    const n = Math.max(1, Math.round(L / 0.22))
+    for (let k = 0; k <= n; k++) {
+      const t = k / n
+      const post = k % 9 === 0 || k === n
+      const s = post ? 0.1 : 0.045
+      bs.wood.box(
+        p0.x + dx * t,
+        y + (post ? 0.5 : 0.53),
+        p0.z + dz * t,
+        s,
+        post ? 1.0 : 0.76,
+        s,
+        DARK_WOOD,
+        {
+          skip: post ? [] : ['top', 'bottom'],
+        },
+      )
     }
   }
 }
@@ -1214,11 +1290,8 @@ function signMesh(signs: Builders['signs'], mat: MeshStandardMaterial): Mesh | n
   return new Mesh(geo, mat)
 }
 
-export function buildTown(layout: TownLayout, assets: Assets, sun: Vector3): Town {
-  const root = new Group()
-  root.name = 'town'
-  const mats = makeMaterials(assets)
-  const bs: Builders = {
+function newBuilders(room: (id: string) => Builders, lean: boolean): Builders {
+  return {
     wall: new GeoBuilder(2.4),
     stone: new GeoBuilder(2),
     wood: new GeoBuilder(2),
@@ -1228,7 +1301,261 @@ export function buildTown(layout: TownLayout, assets: Assets, sun: Vector3): Tow
     signs: [],
     extra: [],
     kit: [],
+    room,
+    lean,
   }
+}
+
+/** Detail tiles, metres. */
+const TILE = 36
+/** How close the camera must come to a detail tile, or to a building, to draw its detail. */
+const NEAR_DETAIL = { lean: 27, full: 46 }
+const NEAR_ROOM = { lean: 10, full: 18 }
+
+const tileKey = (x: number, z: number): string => `${Math.floor(x / TILE)},${Math.floor(z / TILE)}`
+
+interface Placement {
+  def: PropDef
+  at: Matrix4
+}
+
+/** Tiles the far batch can fold away: x and z tile indices −2..5 (the town and its outskirts). */
+const FAR_SPAN = 8
+const farIndex = (ix: number, iz: number): number =>
+  Math.min(FAR_SPAN - 1, Math.max(0, ix + 2)) +
+  Math.min(FAR_SPAN - 1, Math.max(0, iz + 2)) * FAR_SPAN
+/** 1 where a tile's full detail shows (its stand-ins fold away), shared by every far material. */
+const FAR_HIDE = { value: new Array<number>(FAR_SPAN * FAR_SPAN).fill(0) }
+
+function tagTile(g: BufferGeometry, id: number): BufferGeometry {
+  const n = g.getAttribute('position').count
+  g.setAttribute('tile', new BufferAttribute(new Float32Array(n).fill(id), 1))
+  return g
+}
+
+/** Keep only the named attributes (and fill a missing colour with white), so batches merge. */
+const stripTo =
+  (names: readonly string[]) =>
+  (g: BufferGeometry): BufferGeometry => {
+    const src = g.index ? g.toNonIndexed() : g
+    const out = new BufferGeometry()
+    const n = src.getAttribute('position').count
+    for (const name of names) {
+      const a = src.getAttribute(name)
+      if (a) {
+        out.setAttribute(name, a)
+      } else if (name === 'color') {
+        out.setAttribute('color', new BufferAttribute(new Float32Array(n * 3).fill(1), 3))
+      } else if (name === 'uv') {
+        out.setAttribute('uv', new BufferAttribute(new Float32Array(n * 2), 2))
+      } else if (name === 'normal') {
+        src.computeVertexNormals()
+        out.setAttribute('normal', src.getAttribute('normal'))
+      }
+    }
+    return out
+  }
+
+const farMats = new Map<Material, Material>()
+
+/** A material's far twin: the same look, with tiles showing full detail folded out of view. */
+function farMaterial(base: Material): Material {
+  const hit = farMats.get(base)
+  if (hit) {
+    return hit
+  }
+  const m = base.clone()
+  const prev = base.onBeforeCompile
+  m.onBeforeCompile = (shader, renderer) => {
+    prev.call(m, shader, renderer)
+    shader.uniforms.farHide = FAR_HIDE
+    shader.vertexShader = shader.vertexShader
+      .replace(
+        '#include <common>',
+        `#include <common>
+attribute float tile;
+uniform float farHide[${FAR_SPAN * FAR_SPAN}];`,
+      )
+      .replace(
+        '#include <project_vertex>',
+        `#include <project_vertex>
+if (farHide[int(tile + 0.5)] > 0.5) gl_Position = vec4(2.0, 2.0, 2.0, 1.0);`,
+      )
+  }
+  const key = base.customProgramCacheKey()
+  m.customProgramCacheKey = () => `${key}-far`
+  farMats.set(base, m)
+  return m
+}
+
+/** One detail tile: full kit up close; clustered and flat stand-ins from further off. */
+interface Tile {
+  near: Placement[]
+  far: Placement[]
+  /** Flat window stand-ins (the windows material). */
+  flat: GeoBuilder
+}
+
+/**
+ * Far stand-ins by kit piece: a vertex-cluster cell as a fraction of the piece's size, or a flat
+ * painted window. Anything not here has no far version: small props have their always-drawn
+ * inset stand-ins (dressing.ts), and door frames, lanterns and wagon loads aren't missed at 40 m.
+ */
+const FAR: Record<string, number | 'flat'> = {
+  rock: 0.3,
+  fence: 0.1,
+  k_door_plank: 0.12,
+  k_window_thin: 'flat',
+  k_window_wide: 'flat',
+}
+
+/**
+ * Drop the CPU copy of every town-owned vertex and index array once it is on the GPU (iOS
+ * WebViews are killed under memory pressure). Bounding spheres are computed first, which is all
+ * culling needs. Instanced meshes (shared prop geometry, used elsewhere too) are left alone, as
+ * is everything when the dev audits, which read vertices, are watching.
+ */
+function freeAfterUpload(root: Object3D): void {
+  const free = function (this: { array: unknown }) {
+    this.array = null
+  }
+  root.traverse((o) => {
+    const m = o as Mesh
+    if (!m.isMesh || (m as InstancedMesh).isInstancedMesh) {
+      return
+    }
+    const g = m.geometry
+    g.computeBoundingSphere()
+    g.computeBoundingBox()
+    for (const a of Object.values(g.attributes)) {
+      ;(a as BufferAttribute).onUpload(free)
+    }
+    g.index?.onUpload(free)
+  })
+}
+
+const FRAME = 0x5a_3e_28
+const GLASS = 0x1a_22_2a
+const box3 = new Box3()
+
+/**
+ * A window as two quads on the wall face (frame, then glass inset), sized from the kit window's
+ * own bounds under its placement: 4 triangles for 112–160, at a distance nobody counts muntins.
+ */
+function flatWindow(g: GeoBuilder, def: PropDef, at: Matrix4): void {
+  box3.makeEmpty()
+  for (const p of def.parts) {
+    if (!p.geometry.boundingBox) {
+      p.geometry.computeBoundingBox()
+    }
+    const b = p.geometry.boundingBox
+    if (b) {
+      box3.union(b.clone().applyMatrix4(at))
+    }
+  }
+  if (box3.isEmpty()) {
+    return
+  }
+  // the window's outward axis is its placement's +z
+  const e = at.elements
+  const nx = e[8] ?? 0
+  const nz = e[10] ?? 0
+  const alongX = Math.abs(nz) >= Math.abs(nx)
+  const sgn = alongX ? Math.sign(nz) || 1 : Math.sign(nx) || 1
+  // just inside the front of the bounds (the kit sash stands proud of the wall; its back sinks in)
+  const face = alongX
+    ? (sgn > 0 ? box3.max.z : box3.min.z) - sgn * 0.03
+    : (sgn > 0 ? box3.max.x : box3.min.x) - sgn * 0.03
+  const a0 = alongX ? box3.min.x : box3.min.z
+  const a1 = alongX ? box3.max.x : box3.max.z
+  const y0 = box3.min.y + 0.12
+  const y1 = box3.max.y
+  const quad = (u0: number, u1: number, v0: number, v1: number, off: number, color: number) => {
+    const P = (u: number, v: number) =>
+      alongX ? new Vector3(u, v, face + sgn * off) : new Vector3(face + sgn * off, v, u)
+    // wound to face outward
+    if (sgn > 0 === alongX) {
+      g.quad(P(u0, v0), P(u1, v0), P(u1, v1), P(u0, v1), color)
+    } else {
+      g.quad(P(u1, v0), P(u0, v0), P(u0, v1), P(u1, v1), color)
+    }
+  }
+  const iu = (a1 - a0) * 0.14
+  const iv = (y1 - y0) * 0.1
+  quad(a0, a1, y0, y1, 0, FRAME)
+  quad(a0 + iu, a1 - iu, y0 + iv, y1 - iv, 0.01, GLASS)
+}
+
+/** Which side of town a point past the edge is on (the outskirts' four batches). */
+function sectorOf(layout: TownLayout, x: number, z: number): string {
+  const a = Math.atan2(z - layout.size / 2, x - layout.size / 2)
+  return ['w', 'n', 'e', 's'][Math.floor(((a + Math.PI + Math.PI / 4) / (Math.PI / 2)) % 4)] ?? 'n'
+}
+
+/** Split a geometry's triangles into buckets by where their centroid falls. */
+function splitTriangles(
+  geo: BufferGeometry,
+  keyOf: (x: number, z: number) => string,
+): Map<string, BufferGeometry> {
+  const g = geo.index ? geo.toNonIndexed() : geo
+  const pos = g.getAttribute('position')
+  const names = Object.keys(g.attributes)
+  const buckets = new Map<string, number[]>()
+  for (let t = 0; t < pos.count / 3; t++) {
+    const x = (pos.getX(t * 3) + pos.getX(t * 3 + 1) + pos.getX(t * 3 + 2)) / 3
+    const z = (pos.getZ(t * 3) + pos.getZ(t * 3 + 1) + pos.getZ(t * 3 + 2)) / 3
+    const k = keyOf(x, z)
+    const list = buckets.get(k) ?? []
+    list.push(t)
+    buckets.set(k, list)
+  }
+  const out = new Map<string, BufferGeometry>()
+  for (const [k, tris] of buckets) {
+    const part = new BufferGeometry()
+    for (const name of names) {
+      const src = g.getAttribute(name)
+      const size = src.itemSize
+      const arr = new Float32Array(tris.length * 3 * size)
+      let o = 0
+      for (const t of tris) {
+        for (let v = 0; v < 3; v++) {
+          for (let c = 0; c < size; c++) {
+            arr[o++] = src.getComponent(t * 3 + v, c)
+          }
+        }
+      }
+      part.setAttribute(name, new BufferAttribute(arr, size))
+    }
+    part.computeBoundingSphere()
+    out.set(k, part)
+  }
+  return out
+}
+
+/** Distance on the ground from (x, z) to a rect (0 inside). */
+const toRect = (r: Rect, x: number, z: number): number =>
+  Math.hypot(Math.max(r.x - x, 0, x - r.x - r.w), Math.max(r.z - z, 0, z - r.z - r.d))
+
+export function buildTown(
+  layout: TownLayout,
+  assets: Assets,
+  sun: Vector3,
+  tier: Quality = 'high',
+): Town {
+  const root = new Group()
+  root.name = 'town'
+  const mats = makeMaterials(assets)
+  const lean = tier === 'floor' || tier === 'legacy'
+  const rooms = new Map<string, Builders>()
+  const room = (id: string): Builders => {
+    let r = rooms.get(id)
+    if (!r) {
+      r = newBuilders(room, lean)
+      rooms.set(id, r)
+    }
+    return r
+  }
+  const bs = newBuilders(room, lean)
   const roofs: Building[] = []
   for (const b of layout.buildings) {
     addBuilding(bs, b, layout, roofs.length)
@@ -1238,43 +1565,96 @@ export function buildTown(layout: TownLayout, assets: Assets, sun: Vector3): Tow
   addCreek(bs, layout)
   const lanterns: Matrix4[] = []
   addDecor(bs, layout, lanterns)
+  const tiles = new Map<string, Tile>()
+  /** A kit piece into its tile: full detail up close, its far stand-in (if any) beyond. */
+  const toTile = (def: PropDef, at: Matrix4) => {
+    const k = tileKey(at.elements[12] ?? 0, at.elements[14] ?? 0)
+    let t = tiles.get(k)
+    if (!t) {
+      t = { near: [], far: [], flat: new GeoBuilder(1) }
+      tiles.set(k, t)
+    }
+    t.near.push({ def, at })
+    const rule = FAR[def.name]
+    if (rule === 'flat') {
+      flatWindow(t.flat, def, at)
+    } else if (rule !== undefined) {
+      t.far.push({ def: farDef(def, rule * Math.max(def.size.x, def.size.y, def.size.z)), at })
+    }
+  }
   const lantern = propDef(assets.props, 'lantern', 0.4, 'y')
-  if (lantern && lanterns.length > 0) {
-    instance(lantern, lanterns, root, false)
+  for (const at of lantern ? lanterns : []) {
+    toTile(lantern as PropDef, at)
   }
   const deckRects = decks(layout)
-  dressCover(
+  dressCover({
     layout,
-    assets.props,
-    root,
-    bs,
-    (x, z) => floorHeight(layout, deckRects, x, z),
-    PORCH_ROOF - 0.06,
-  )
+    props: assets.props,
+    structure: bs,
+    interior: room,
+    floorAt: (x, z) => floorHeight(layout, deckRects, x, z),
+    porchRoof: PORCH_ROOF - 0.06,
+    kit: (layer, def, at) => {
+      if (layer === 'structure') {
+        bs.kit.push({ def, at })
+      } else if (layer === 'near') {
+        toTile(def, at)
+      } else {
+        room(layer.slice(3)).kit.push({ def, at })
+      }
+    },
+    outskirts: toTile,
+  })
+  // the facades' kit (windows, frames, doors) and the cover's (fences, wagon loads) go by tile
+  // too: full kit near the camera, clustered or flat stand-ins beyond
+  for (const { def, at } of bs.kit.splice(0)) {
+    toTile(def, at)
+  }
   const mask = bakeGroundMask(layout, sun)
   const ground = groundMesh(layout, { map: assets.tex.ground, normal: assets.tex.groundN }, mask)
   root.add(ground)
-  // the land past the playable edge (cut bank, bench, hills, mesas, scrub) in the ground's material
-  const land = new Mesh(outskirtsGeometry(layout, OUTSKIRTS_SEED, sun), ground.material)
-  land.name = 'outskirts'
-  land.receiveShadow = true
-  root.add(land)
-  const add = (geo: BufferGeometry | null, mat: MeshStandardMaterial, name: string) => {
-    if (!geo || geo.getAttribute('position').count === 0) {
-      return
-    }
-    const m = new Mesh(geo, mat)
-    m.name = name
-    m.receiveShadow = true
-    m.matrixAutoUpdate = false
-    root.add(m)
+  // the land past the playable edge (cut bank, bench, hills, mesas, scrub), one batch per side of
+  // town so the side behind the camera isn't drawn
+  const landGeo = outskirtsGeometry(layout, OUTSKIRTS_SEED, sun)
+  for (const [k, part] of splitTriangles(landGeo, (x, z) => sectorOf(layout, x, z))) {
+    const land = new Mesh(part, ground.material)
+    land.name = 'outskirts'
+    land.userData.sector = k
+    land.receiveShadow = true
+    root.add(land)
   }
-  add(bs.wall.empty ? null : bs.wall.build(), mats.wall, 'walls')
-  add(bs.stone.empty ? null : bs.stone.build(), mats.stone, 'stone')
-  const wood = bs.wood.build()
-  add(bs.extra.length > 0 ? mergeGeometries([wood, ...bs.extra]) : wood, mats.wood, 'wood')
-  add(bs.windows.empty ? null : bs.windows.build(), mats.windows, 'windows')
-  add(bs.cloth.empty ? null : bs.cloth.build(), mats.cloth, 'canvas')
+  landGeo.dispose()
+  const swap = new Map([
+    ['Kit', mats.kit],
+    ['KitGlass', mats.windows],
+  ])
+  /** Every batch of one builder set, under `parent`. */
+  const emit = (set: Builders, parent: Group) => {
+    const add = (geo: BufferGeometry | null, mat: MeshStandardMaterial, name: string) => {
+      if (!geo || geo.getAttribute('position').count === 0) {
+        return
+      }
+      const m = new Mesh(geo, mat)
+      m.name = name
+      m.receiveShadow = true
+      m.matrixAutoUpdate = false
+      parent.add(m)
+    }
+    add(set.wall.empty ? null : set.wall.build(), mats.wall, 'walls')
+    add(set.stone.empty ? null : set.stone.build(), mats.stone, 'stone')
+    if (!set.wood.empty || set.extra.length > 0) {
+      const wood = set.wood.build()
+      add(set.extra.length > 0 ? mergeGeometries([wood, ...set.extra]) : wood, mats.wood, 'wood')
+    }
+    add(set.windows.empty ? null : set.windows.build(), mats.windows, 'windows')
+    add(set.cloth.empty ? null : set.cloth.build(), mats.cloth, 'canvas')
+    if (set.kit.length > 0) {
+      for (const m of mergePlaced(set.kit, parent, swap, false)) {
+        m.name = 'kit'
+      }
+    }
+  }
+  emit(bs, root)
   for (const r of bs.roofs) {
     if (!r.getAttribute('rk')) {
       // the clock tower's roofs: plain boards
@@ -1282,19 +1662,11 @@ export function buildTown(layout: TownLayout, assets: Assets, sun: Vector3): Tow
       r.setAttribute('rk', new BufferAttribute(new Float32Array(n).fill(RK_PLAIN), 1))
     }
   }
-  add(bs.roofs.length > 0 ? mergeGeometries(bs.roofs) : null, mats.roof, 'roofs')
-  if (bs.kit.length > 0) {
-    for (const m of mergePlaced(
-      bs.kit,
-      root,
-      new Map([
-        ['Kit', mats.kit],
-        ['KitGlass', mats.windows],
-      ]),
-      false,
-    )) {
-      m.name = 'kit'
-    }
+  if (bs.roofs.length > 0) {
+    const m = new Mesh(mergeGeometries(bs.roofs), mats.roof)
+    m.name = 'roofs'
+    m.receiveShadow = true
+    root.add(m)
   }
   const signs = signMesh(bs.signs, mats.signs)
   if (signs) {
@@ -1302,27 +1674,128 @@ export function buildTown(layout: TownLayout, assets: Assets, sun: Vector3): Tow
     root.add(signs)
   }
   root.add(waterMesh(layout))
+  // the culled layers: detail tiles (near and far versions), and rooms
+  const culled: { group: Group; rect: Rect; within: number }[] = []
+  const farGeos = new Map<Material, BufferGeometry[]>()
+  const farRects: { rect: Rect; id: number }[] = []
+  const farMeshes: Mesh[] = []
+  const nearM = lean ? NEAR_DETAIL.lean : NEAR_DETAIL.full
+  for (const [k, t] of tiles) {
+    const [ix = 0, iz = 0] = k.split(',').map(Number)
+    const rect = { x: ix * TILE, z: iz * TILE, w: TILE, d: TILE }
+    const near = new Group()
+    near.name = `detail ${k}`
+    for (const m of mergePlaced(t.near, near, swap, false)) {
+      m.name = 'kit'
+    }
+    root.add(near)
+    culled.push({ group: near, rect, within: nearM })
+    // far stand-ins all go into one batch per material (tagged with their tile), drawn always;
+    // the vertex shader folds away the tiles whose full detail is showing
+    const id = farIndex(ix, iz)
+    for (const { def, at } of t.far) {
+      for (const p of def.parts) {
+        const mat = swap.get(p.material.name) ?? p.material
+        const list = farGeos.get(mat) ?? []
+        list.push(tagTile(p.geometry.clone().applyMatrix4(at), id))
+        farGeos.set(mat, list)
+      }
+    }
+    if (!t.flat.empty) {
+      const list = farGeos.get(mats.windows) ?? []
+      list.push(tagTile(t.flat.build(), id))
+      farGeos.set(mats.windows, list)
+    }
+    farRects.push({ rect, id })
+  }
+  for (const [mat, geos] of farGeos) {
+    const geo = mergeGeometries(geos.map(stripTo(['position', 'normal', 'uv', 'color', 'tile'])))
+    if (geo) {
+      const m = new Mesh(geo, farMaterial(mat))
+      farMeshes.push(m)
+      m.name = 'far'
+      m.receiveShadow = true
+      root.add(m)
+    }
+  }
+  const roomM = lean ? NEAR_ROOM.lean : NEAR_ROOM.full
+  for (const [id, set] of rooms) {
+    const b = layout.buildings.find((o) => o.id === id)
+    if (!b) {
+      continue
+    }
+    const g = new Group()
+    g.name = `room ${id}`
+    emit(set, g)
+    root.add(g)
+    culled.push({ group: g, rect: b, within: roomM })
+  }
   root.updateMatrixWorld(true)
   // Static: never recompose these matrices again.
   root.traverse((o) => {
     o.matrixAutoUpdate = false
     o.matrixWorldAutoUpdate = false
   })
-  return {
-    root,
-    roofs,
-    sun,
-    dispose: () => {
-      root.traverse((o) => {
-        if (o instanceof Mesh) {
-          o.geometry.dispose()
-        }
-      })
-      for (const m of Object.values(mats)) {
-        m.dispose()
+  const audit0 = Reflect.has(globalThis, 'owAuditScenes')
+  if (!audit0) {
+    freeAfterUpload(root)
+  }
+  // the culler and the disposer are built outside this scope: a closure made here would keep
+  // every builder's vertex arrays alive with it
+  const update = culler({ culled, farRects, farMeshes, nearM })
+  ground.onBeforeRender = onCamera(update)
+  return { root, roofs, sun, update, dispose: disposer(root, Object.values(mats), mask) }
+}
+
+interface CullState {
+  culled: { group: Group; rect: Rect; within: number }[]
+  farRects: { rect: Rect; id: number }[]
+  farMeshes: Mesh[]
+  nearM: number
+}
+
+/**
+ * Per-frame detail selection for `camera`: detail tiles and rooms by distance, and the far
+ * batch's fold mask. A few dozen rect distances, no allocation.
+ */
+function culler(s: CullState): (camera: Camera) => void {
+  return (camera) => {
+    const cam = camera.position
+    // the dev audits (float, collider) need every piece in the scene they capture
+    const audit = Reflect.has(globalThis, 'owAuditScenes')
+    for (const c of s.culled) {
+      c.group.visible = audit || toRect(c.rect, cam.x, cam.z) <= c.within
+    }
+    for (const m of s.farMeshes) {
+      m.visible = !audit
+    }
+    for (const { rect, id } of s.farRects) {
+      // the audits see the full kit only
+      FAR_HIDE.value[id] = audit || toRect(rect, cam.x, cam.z) <= s.nearM ? 1 : 0
+    }
+  }
+}
+
+/** The ground's onBeforeRender: the main (perspective) camera drives the culler, not the sun's. */
+function onCamera(update: (camera: Camera) => void): Mesh['onBeforeRender'] {
+  return (_r, _s, camera) => {
+    if ((camera as PerspectiveCamera).isPerspectiveCamera) {
+      update(camera)
+    }
+  }
+}
+
+function disposer(root: Group, mats: { dispose: () => void }[], mask: Texture): () => void {
+  return () => {
+    root.traverse((o) => {
+      if (o instanceof Mesh) {
+        o.geometry.dispose()
       }
-      mask.dispose()
-    },
+    })
+    for (const m of mats) {
+      m.dispose()
+    }
+    mask.dispose()
   }
 }
 

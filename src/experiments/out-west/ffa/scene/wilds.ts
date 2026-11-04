@@ -47,6 +47,8 @@ import {
 } from './outskirts.ts'
 
 const SEED = 0x0f_10_7a_01
+/** Metres past the walkable square beyond which plants are impostors. */
+const IMPOSTOR_AT = 22
 
 const OUT_KINDS: readonly (readonly [PlantKind, number])[] = [
   ['saguaro', 3],
@@ -89,15 +91,18 @@ export function wildsPlants(
   const s = layout.size
   const north = layout.creek.z
   const plants: Plant[] = []
+  // how far outside the walkable square: every camera is inside it
+  const edge = (x: number, z: number) => Math.max(-x, x - s, z - s, north - 0.4 - z)
   const add = (x: number, z: number, kind: PlantKind, lod: number, scale = 1) => {
-    plants.push({
-      kind,
-      x,
-      z,
-      s: scale * (0.8 + rng.next() * 0.45),
-      seed: (rng.next() * 4_294_967_296) >>> 0,
-      lod,
-    })
+    // past ~22 m from where any camera can stand, a plant is an impostor card pair; small
+    // ground cover that far out is invisible, so it isn't drawn at all
+    const imp = edge(x, z) > IMPOSTOR_AT
+    const sz = scale * (0.8 + rng.next() * 0.45)
+    const seed = (rng.next() * 4_294_967_296) >>> 0
+    if (imp && (kind === 'grass' || kind === 'barrel' || kind === 'pear' || kind === 'cholla')) {
+      return
+    }
+    plants.push({ kind, x, z, s: sz, seed, lod, imp })
   }
   // the terrain mesh reaches REACH past the square; beyond it is the flat ground plane
   const inMesh = (x: number, z: number) =>
@@ -198,10 +203,11 @@ export function buildWilds(layout: TownLayout, tier: string): Group {
   const near = (x: number, z: number) => x > -45 && x < s + 45 && z > -45 && z < s + 45
   return buildFlora(plants, {
     heightAt,
-    chunk: 36,
+    chunk: 48,
+    centre: { x: s / 2, z: s / 2 },
     chunkKey: (x, z) => {
       if (near(x, z)) {
-        return `g${Math.floor(x / 36)},${Math.floor(z / 36)}`
+        return `g${Math.floor(x / 48)},${Math.floor(z / 48)}`
       }
       const a = Math.atan2(z - s / 2, x - s / 2)
       return `w${Math.floor(((a + Math.PI) / (Math.PI * 2)) * 8)}`

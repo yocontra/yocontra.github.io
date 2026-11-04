@@ -157,6 +157,7 @@ export class Input {
 
 const CONTROL =
   'button, a[href], input, select, textarea, [contenteditable], [role="radio"], [role="tab"]'
+// biome-ignore lint/security/noSecrets: a CSS selector list, not a credential
 const MENU = '[role="dialog"], [role="alertdialog"], .ow-hub, .ow-sheet'
 
 /**

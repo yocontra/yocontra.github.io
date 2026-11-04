@@ -53,6 +53,20 @@ dressing into one draw. The source of the untouched scenes is `tools/art/props-s
 The earlier Quaternius crate, barrel, broken cart and fence (poly.pizza 3OEFd1AWfa, ONdghDBByN,
 NBDHe8J7f9, U7g0Wxpt63; CC0) were replaced by the kit pieces above.
 
+## Town animals (`models/horse.glb`, `models/dog.glb`)
+
+The horses at the hitching rails and the dog on the barber's porch. Downloaded from Poly Pizza as
+GLB, trimmed to the idle clips the street uses (horse: Idle, Idle_2, Idle_Headlow, Eating,
+Idle_HitReact_Left; dog: Idle, Idle_2_HeadLow, Eating, Attack), quantised and meshopt-compressed
+with gltf-transform. At runtime each animal's flat-colour parts are merged into one skinned mesh
+(one draw), the second horse is recoloured grey, and the horses get a procedural saddle and
+blanket (`scene/beasts.ts`). The crows, chickens, screen door and hanging signs are procedural.
+
+| Model | Source | Licence |
+|---|---|---|
+| Horse (animated) | Quaternius, from the Ultimate Animated Animals pack — https://poly.pizza/m/qvTrSG9pZF | CC0 1.0 |
+| Shiba Inu (animated) | Quaternius, from the Ultimate Animated Animals pack — https://poly.pizza/m/y4wdQpg767 | CC0 1.0 |
+
 ## Textures (Poly Haven, CC0)
 
 Each set ships diffuse, OpenGL normal and ARM (ambient occlusion, roughness, metalness) maps at 1K,
@@ -101,8 +115,21 @@ AAC-LC `.m4a` (Apple encoder), SFX and beds to about −16 LUFS and music to −
 | `sfx/ghost.m4a`, `sfx/ghost_vanish.m4a`, `sfx/respawn.m4a` | Ghost duel reveal and vanish, Frontier respawn |
 | `music/tension.m4a`, `music/frontier.m4a` | Standoff tension bed and Frontier town loop (seamless, pitched into A) |
 | `music/victory.m4a`, `music/defeat.m4a` | Victory and defeat stings |
+| `music/victory_big.m4a`, `music/victory_lucky.m4a` | Graded victory stings: the LIGHTNING/DEADEYE fanfare, the LUCKY harmonica |
+| `voice/*.m4a` (15 of the outlaws) | Outlaw barks: the captioned lines and death grunts, ElevenLabs `eleven_v3` with premade voices (cast in `tools/audio/voices.ts`) |
 
 `sfx/ui_tick.m4a` is synthesised (first-party).
+
+### Generated (Google: Lyria 2 and Gemini TTS, Vertex AI), first-party
+
+Prompts are in `tools/audio/manifest.ts` (music) and `tools/audio/voices.ts` (voices).
+
+| File | What |
+|---|---|
+| `music/saloon.m4a` | Saloon hub bed, honky-tonk piano (Lyria 2, looped on whole bars) |
+| `music/act_day.m4a`, `music/act_dusk.m4a`, `music/act_night.m4a` | The three act themes (Lyria 2, looped on whole bars) |
+| `music/act_*_hot.m4a` | The act themes with the win-streak layer: a synthesised galloping percussion track laid on their beat grid (`tools/audio/beats.ts`) |
+| `voice/impatient.m4a`, `voice/player.m4a` | Salvador's voice and the player's breaths and grunts (Gemini TTS) |
 
 ### freesound.org, CC0 (trimmed, mono, remastered)
 
