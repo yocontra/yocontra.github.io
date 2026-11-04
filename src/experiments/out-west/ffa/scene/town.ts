@@ -1788,23 +1788,38 @@ export function buildTown(
   if (!audit0) {
     freeAfterUpload(root)
   }
+  // the culler and the disposer are built outside this scope: a closure made here would keep
+  // every builder's vertex arrays alive with it
+  const update = culler({ culled, herds: [...herds.values()], farRects, farMeshes, nearM })
+  ground.onBeforeRender = onCamera(update)
+  return { root, roofs, sun, update, dispose: disposer(root, Object.values(mats), mask) }
+}
+
+interface CullState {
+  culled: { group: Group; rect: Rect; within: number; tile?: string }[]
+  herds: Herd[]
+  farRects: { rect: Rect; id: number }[]
+  farMeshes: Mesh[]
+  nearM: number
+}
+
+/** Per-frame detail selection for the camera at `cam` (no allocation unless the near set changes). */
+function culler(s: CullState): (cam: Vector3) => void {
   let nearSet = ''
-  const update = (cam: Vector3) => {
+  return (cam) => {
     // the dev audits (float, collider) need every piece in the scene they capture
     const audit = Reflect.has(globalThis, 'owAuditScenes')
-    const nearTiles: string[] = []
-    for (const c of culled) {
-      const near = toRect(c.rect, cam.x, cam.z) <= c.within
-      c.group.visible = audit || near
+    let key = ''
+    for (const c of s.culled) {
+      c.group.visible = audit || toRect(c.rect, cam.x, cam.z) <= c.within
       if (c.tile && c.group.visible) {
-        nearTiles.push(c.tile)
+        key += `${c.tile}|`
       }
     }
-    const key = nearTiles.join('|')
     if (key !== nearSet) {
       nearSet = key
-      const show = new Set(nearTiles)
-      for (const herd of herds.values()) {
+      const show = new Set(key.split('|'))
+      for (const herd of s.herds) {
         let n = 0
         for (const it of herd.items) {
           if (show.has(it.tile)) {
@@ -1820,35 +1835,36 @@ export function buildTown(
         }
       }
     }
-    for (const m of farMeshes) {
+    for (const m of s.farMeshes) {
       m.visible = !audit
     }
-    for (const { rect, id } of farRects) {
+    for (const { rect, id } of s.farRects) {
       // the audits see the full kit only
-      FAR_HIDE.value[id] = audit || toRect(rect, cam.x, cam.z) <= nearM ? 1 : 0
+      FAR_HIDE.value[id] = audit || toRect(rect, cam.x, cam.z) <= s.nearM ? 1 : 0
     }
   }
-  ground.onBeforeRender = (_r, _s, camera) => {
+}
+
+/** The ground's onBeforeRender: the main (perspective) camera drives the culler, not the sun's. */
+function onCamera(update: (cam: Vector3) => void): Mesh['onBeforeRender'] {
+  return (_r, _s, camera) => {
     if ((camera as PerspectiveCamera).isPerspectiveCamera) {
       update(camera.position)
     }
   }
-  return {
-    root,
-    roofs,
-    sun,
-    update,
-    dispose: () => {
-      root.traverse((o) => {
-        if (o instanceof Mesh) {
-          o.geometry.dispose()
-        }
-      })
-      for (const m of Object.values(mats)) {
-        m.dispose()
+}
+
+function disposer(root: Group, mats: { dispose: () => void }[], mask: Texture): () => void {
+  return () => {
+    root.traverse((o) => {
+      if (o instanceof Mesh) {
+        o.geometry.dispose()
       }
-      mask.dispose()
-    },
+    })
+    for (const m of mats) {
+      m.dispose()
+    }
+    mask.dispose()
   }
 }
 
