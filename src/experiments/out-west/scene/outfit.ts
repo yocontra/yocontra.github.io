@@ -24,7 +24,7 @@ import {
   Vector3,
 } from 'three'
 import { meshPieces, onBone, type Piece } from './bake.ts'
-import { type Body, bounds, nearestWeights, onBones, shell, type WeightFn } from './fit.ts'
+import { type Body, bounds, nearestWeights, onBones, shell } from './fit.ts'
 import { FABRIC } from './style.ts'
 
 /**
@@ -68,7 +68,6 @@ export interface Fit {
 const HEAD_BONES = ['Head']
 const NECK_BONES = ['Neck']
 const TORSO_BONES = ['Chest', 'Torso', 'Abdomen', 'Hips', 'Neck', 'ShoulderL', 'ShoulderR']
-const LEG_BONES = ['Hips', 'Abdomen', 'UpperLegL', 'UpperLegR', 'LowerLegL', 'LowerLegR']
 const ARM_BONES = ['UpperArmL', 'UpperArmR', 'LowerArmL', 'LowerArmR']
 
 export function measure(body: Body, bones: Map<string, Bone>): Fit {
@@ -111,51 +110,6 @@ const fabric = (k: keyof typeof FABRIC) => ({
   rim: FABRIC[k].rim,
   swatch: FABRIC[k].swatch,
 })
-
-/** Long duster skirt from the belt to mid-shin, open at the front, following hips and thighs. */
-export function coat(f: Fit, color: number): Piece[] {
-  const hips = f.at('Hips')
-  const knee = f.at('LowerLegL').add(f.at('LowerLegR')).multiplyScalar(0.5)
-  const foot = f.at('FootL').add(f.at('FootR')).multiplyScalar(0.5)
-  const yTop = hips.y + 0.06
-  const yBot = knee.y - 0.55 * (knee.y - foot.y)
-  const legs = onBones(f.body, LEG_BONES)
-  const gap = 0.8
-  const geo = shell({
-    samples: legs,
-    cx: hips.x,
-    cz: hips.z - 0.01,
-    yTop,
-    yBot,
-    arc: Math.PI,
-    half: Math.PI - gap / 2,
-    rings: 8,
-    segs: 22,
-    margin: 0.022,
-    bulge: (t) => t * t * 0.07,
-    hang: true,
-    color: lin(color),
-  })
-  const hipsB = f.bone('Hips')
-  const ulR = f.bone('UpperLegR')
-  const ulL = f.bone('UpperLegL')
-  const weights: WeightFn = (p) => {
-    if (!(hipsB && ulR && ulL)) {
-      return hipsB ? [[hipsB, 1]] : []
-    }
-    const t = Math.min(1, Math.max(0, (yTop - p.y) / (yTop - yBot)))
-    const wh = 1 - Math.min(0.88, t * 1.6)
-    // his right is -X
-    const u = Math.min(1, Math.max(0, (-(p.x - hips.x) + 0.08) / 0.16))
-    const sR = u * u * (3 - 2 * u)
-    return [
-      [hipsB, wh],
-      [ulR, (1 - wh) * sR],
-      [ulL, (1 - wh) * (1 - sR)],
-    ]
-  }
-  return [{ geo, ...fabric('wool'), weights }]
-}
 
 const STRIPES: readonly [number, number, number][] = [
   // [top px, height px, colour] on the 64 px tall weave of the original poncho

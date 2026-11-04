@@ -16,11 +16,12 @@ import {
   Quaternion,
   Vector3,
 } from 'three'
-import type { BeardKey, MoustacheKey } from '../data/outlaws.ts'
+import type { BeardKey, CoatCut, MoustacheKey } from '../data/outlaws.ts'
 import type { Piece } from './bake.ts'
+import { coat, type GunSides } from './coat.ts'
 import { beard, eyepatch, scar, vest } from './face.ts'
 import { type HatFit, makeHat } from './hats.ts'
-import { bandana, bandoliers, coat, type Fit, mask, poncho, star } from './outfit.ts'
+import { bandana, bandoliers, type Fit, mask, poncho, star } from './outfit.ts'
 import { HAIR_LUM } from './person.ts'
 import type { Glow } from './shade.ts'
 import { type Floor, vary } from './style.ts'
@@ -30,6 +31,7 @@ export interface DressOpts {
   tint?: Readonly<Record<string, number>>
   bandana?: number | undefined
   coat?: number | undefined
+  coatCut?: CoatCut | undefined
   poncho?: number | undefined
   vest?: number | undefined
   moustache?: number | undefined
@@ -43,6 +45,9 @@ export interface DressOpts {
   star?: boolean | undefined
   mask?: number | undefined
   seed?: string
+  /** His revolver(s): the coat is cut back behind each holster. */
+  gun?: object | null | undefined
+  offGun?: boolean | undefined
 }
 
 const tmpV = new Vector3()
@@ -114,7 +119,8 @@ export function tintModel(model: Object3D, o: DressOpts): void {
 export function dressPieces(f: Fit, o: DressOpts, root: Object3D, realBeard: boolean): Piece[] {
   const out: Piece[] = []
   if (o.coat !== undefined) {
-    out.push(...coat(f, o.coat))
+    const sides: GunSides = o.offGun ? [1, -1] : [1]
+    out.push(...coat(f, o.coat, o.coatCut ?? 'duster', o.gun ? sides : []))
   }
   if (o.poncho !== undefined) {
     out.push(...poncho(f, o.poncho))

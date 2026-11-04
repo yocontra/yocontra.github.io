@@ -13,6 +13,7 @@ export type {
   BeardKey,
   BodyKey,
   Build,
+  CoatCut,
   FaceShape,
   FakeKey,
   Gimmick,
