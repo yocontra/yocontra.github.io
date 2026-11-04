@@ -42,6 +42,7 @@ import {
   type Texture,
   Vector2,
   Vector3,
+  Vector4,
 } from 'three'
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
 import type { Assets } from '../../engine/assets.ts'
@@ -50,6 +51,7 @@ import { GeoBuilder } from '../../scene/geo.ts'
 import { mergePlaced, type PropDef, placeMatrix, propDef, propsLibrary } from '../../scene/props.ts'
 import { glassLook } from '../../scene/surface.ts'
 import { signAtlas } from '../../scene/textures.ts'
+import { attachArm } from '../../scene/town-pbr.ts'
 import {
   type Building,
   buildingWalls,
@@ -305,30 +307,107 @@ export interface Town {
   dispose: () => void
 }
 
-function brickTexture(): CanvasTexture {
-  const c = document.createElement('canvas')
-  c.width = 256
-  c.height = 256
-  const ctx = c.getContext('2d')
+/** A tiny seeded hash (the masonry must look the same for everyone). */
+function hashAt(i: number, j: number): number {
+  const s = Math.sin(i * 127.1 + j * 311.7) * 43_758.5453
+  return s - Math.floor(s)
+}
+
+/**
+ * Dressed sandstone for the bank and the jail: coursed ashlar (long and short blocks, two
+ * course heights), each block its own warm tint with a chisel-dragged face and darker,
+ * weathered edges, in recessed mortar. Drawn once on a canvas (512², one 2 m tile) with a
+ * matching normal map from the same height field, so the joints catch the low sun.
+ */
+function masonryTextures(): { map: CanvasTexture; normal: CanvasTexture } {
+  const N = 512
+  const color = document.createElement('canvas')
+  color.width = N
+  color.height = N
+  const height = new Float32Array(N * N)
+  const ctx = color.getContext('2d')
   if (ctx) {
-    ctx.fillStyle = '#8c8478'
-    ctx.fillRect(0, 0, 256, 256)
-    const rows = 8
-    const h = 256 / rows
-    for (let r = 0; r < rows; r++) {
-      const off = r % 2 ? 32 : 0
-      for (let x = -64; x < 256; x += 64) {
-        const l = 200 + Math.floor(Math.random() * 40)
-        ctx.fillStyle = `rgb(${l},${l - 8},${l - 22})`
-        ctx.fillRect(x + off + 2, r * h + 2, 60, h - 4)
+    ctx.fillStyle = '#8a7e6c'
+    ctx.fillRect(0, 0, N, N)
+    const courses = [70, 58, 70, 58, 70, 58, 70, 58]
+    let y = 0
+    for (const [row, ch] of courses.entries()) {
+      let x = -Math.floor(hashAt(row, 0) * 120)
+      let k = 0
+      while (x < N) {
+        const w = 90 + Math.floor(hashAt(row, ++k) * 110)
+        const tint = 0.86 + hashAt(row, k + 50) * 0.22
+        const r = Math.round(214 * tint)
+        const g = Math.round(188 * tint)
+        const b = Math.round(150 * tint)
+        // the block, inset for the mortar; edges weathered darker
+        const x0 = x + 4
+        const y0 = y + 4
+        const bw = w - 8
+        const bh = ch - 8
+        const grad = ctx.createLinearGradient(0, y0, 0, y0 + bh)
+        grad.addColorStop(0, `rgb(${r - 10},${g - 10},${b - 10})`)
+        grad.addColorStop(0.5, `rgb(${r},${g},${b})`)
+        grad.addColorStop(1, `rgb(${r - 26},${g - 24},${b - 22})`)
+        ctx.fillStyle = grad
+        for (const dx of [0, N]) {
+          ctx.fillRect(x0 - dx, y0, bw, bh)
+          ctx.fillRect(x0 + dx, y0, bw, bh)
+        }
+        // chisel drag: faint diagonal strokes across the face
+        ctx.strokeStyle = 'rgba(80,60,40,0.07)'
+        ctx.lineWidth = 1
+        for (let s = 0; s < bw; s += 5) {
+          for (const dx of [0, N, -N]) {
+            ctx.beginPath()
+            ctx.moveTo(x0 + s + dx, y0)
+            ctx.lineTo(x0 + s + dx + bh * 0.4, y0 + bh)
+            ctx.stroke()
+          }
+        }
+        for (let py = Math.max(0, y0); py < Math.min(N, y0 + bh); py++) {
+          for (let px = x0; px < x0 + bw; px++) {
+            const wx = ((px % N) + N) % N
+            const edge = Math.min(px - x0, x0 + bw - px, py - y0, y0 + bh - py)
+            height[py * N + wx] = Math.min(1, edge / 6) * (0.92 + hashAt(px, py) * 0.08)
+          }
+        }
+        x += w
       }
+      y += ch
     }
   }
-  const t = new CanvasTexture(c)
-  t.wrapS = RepeatWrapping
-  t.wrapT = RepeatWrapping
-  t.colorSpace = SRGBColorSpace
-  return t
+  const normal = document.createElement('canvas')
+  normal.width = N
+  normal.height = N
+  const nctx = normal.getContext('2d')
+  if (nctx) {
+    const img = nctx.createImageData(N, N)
+    const h = (x: number, yy: number) => height[((yy + N) % N) * N + ((x + N) % N)] ?? 0
+    for (let yy = 0; yy < N; yy++) {
+      for (let x = 0; x < N; x++) {
+        const dx = (h(x + 1, yy) - h(x - 1, yy)) * 2.5
+        const dy = (h(x, yy + 1) - h(x, yy - 1)) * 2.5
+        const len = Math.hypot(dx, dy, 1)
+        const o = (yy * N + x) * 4
+        img.data[o] = Math.round((-dx / len) * 127 + 128)
+        img.data[o + 1] = Math.round((dy / len) * 127 + 128)
+        img.data[o + 2] = Math.round((1 / len) * 127 + 128)
+        img.data[o + 3] = 255
+      }
+    }
+    nctx.putImageData(img, 0, 0)
+  }
+  const wrap = (c: HTMLCanvasElement, srgb: boolean) => {
+    const t = new CanvasTexture(c)
+    t.wrapS = RepeatWrapping
+    t.wrapT = RepeatWrapping
+    if (srgb) {
+      t.colorSpace = SRGBColorSpace
+    }
+    return t
+  }
+  return { map: wrap(color, true), normal: wrap(normal, false) }
 }
 
 function makeMaterials(assets: Assets): TownMaterials {
@@ -349,10 +428,14 @@ function makeMaterials(assets: Assets): TownMaterials {
     // (not near-black) at eye level
     color: new Color(1.55, 1.48, 1.4),
   })
+  const masonry = masonryTextures()
   const stone = new MeshStandardMaterial({
-    map: brickTexture(),
+    map: masonry.map,
+    normalMap: masonry.normal,
+    normalScale: new Vector2(0.9, 0.9),
     vertexColors: true,
-    roughness: 0.92,
+    roughness: 0.9,
+    color: new Color(1.25, 1.2, 1.15),
   })
   const roof = new MeshStandardMaterial({
     map: tiled(assets.tex.planks),
@@ -395,6 +478,15 @@ function makeMaterials(assets: Assets): TownMaterials {
     // clone() doesn't carry the shader patch (the NaN-normal guard); cutaway chains onto it
     kit.onBeforeCompile = kitSrc.onBeforeCompile
   }
+  // the duel street's surface treatment: Poly Haven ARM maps (plank grooves in the AO, real
+  // roughness) and the contact shade at wall feet and under the porch roofs
+  attachArm(wall, 'vplanks', 1)
+  attachArm(wood, 'planks', 1)
+  attachArm(roof, 'planks', 0.8)
+  withContactShade(wall, 'wall')
+  withContactShade(stone, 'stone')
+  withContactShade(wood, 'wood')
+  withContactShade(kit, 'kit')
   cutaway(kit, false)
   cutaway(wall, false)
   cutaway(stone, false)
@@ -417,6 +509,71 @@ function makeMaterials(assets: Assets): TownMaterials {
   wood.name = 'town-wood'
   windows.name = 'town-windows'
   return { wall, stone, roof, wood, windows, signs, kit, cloth }
+}
+
+/** How many porch and platform rects the contact-shade patch carries. */
+const SHADE_RECTS = 16
+/** Porch and platform rects (x, z, w, d) for the contact shade, set once by buildTown. */
+const SHADE = {
+  rects: { value: Array.from({ length: SHADE_RECTS }, () => new Vector4(0, 0, 0, 0)) },
+}
+
+/**
+ * The duel street's "town AO" for Perdition: indirect light only (the sky probe and the fill),
+ * as a baked sky-visibility map would. Darkens the foot of every vertical face (contact
+ * shadow), and everything under a porch roof (the facade, the deck, the posts), so fronts read
+ * as built into the ground and shaded by their awnings. Direct sun and real shadows untouched.
+ */
+function withContactShade(mat: MeshStandardMaterial, key: string): void {
+  const prev = mat.onBeforeCompile
+  mat.onBeforeCompile = (shader, renderer) => {
+    prev.call(mat, shader, renderer)
+    shader.uniforms.shadeRects = SHADE.rects
+    shader.vertexShader = shader.vertexShader
+      .replace(
+        '#include <common>',
+        '#include <common>\nvarying vec3 vShadeP;\nvarying vec3 vShadeN;',
+      )
+      .replace(
+        '#include <worldpos_vertex>',
+        `#include <worldpos_vertex>
+vShadeP = (modelMatrix * vec4(transformed, 1.0)).xyz;
+vShadeN = normalize(mat3(modelMatrix) * objectNormal);`,
+      )
+    shader.fragmentShader = shader.fragmentShader
+      .replace(
+        '#include <common>',
+        `#include <common>
+varying vec3 vShadeP;
+varying vec3 vShadeN;
+uniform vec4 shadeRects[${SHADE_RECTS}];
+float contactShade(vec3 p, vec3 n) {
+  float vertical = 1.0 - abs(n.y);
+  float foot = vertical * (1.0 - smoothstep(0.0, 1.3, p.y));
+  float porch = 0.0;
+  for (int i = 0; i < ${SHADE_RECTS}; i++) {
+    vec4 r = shadeRects[i];
+    // the deck, plus half a metre into the wall behind it, below the porch roof
+    vec2 lo = r.xy - 0.55;
+    vec2 hi = r.xy + r.zw + 0.55;
+    float inside = step(lo.x, p.x) * step(p.x, hi.x) * step(lo.y, p.z) * step(p.z, hi.y);
+    porch = max(porch, inside * (1.0 - smoothstep(2.9, 3.2, p.y)));
+  }
+  return clamp(1.0 - foot * 0.35 - porch * 0.45, 0.35, 1.0);
+}`,
+      )
+      .replace(
+        '#include <aomap_fragment>',
+        `#include <aomap_fragment>
+{
+  float cs = contactShade(vShadeP, normalize(vShadeN));
+  reflectedLight.indirectDiffuse *= cs;
+  reflectedLight.indirectSpecular *= cs * cs;
+}`,
+      )
+  }
+  const k = mat.customProgramCacheKey()
+  mat.customProgramCacheKey = () => `${k}-shade-${key}`
 }
 
 /** Woven canvas: a fine warp-and-weft grain with a few darker stains (wagon bonnets, laundry). */
@@ -552,6 +709,7 @@ function addWindows(
   const doors = b.doors.filter((d) => d.side === side)
   const glass = 0x1a_22_2a
   const thin = kitDef('k_window_thin')
+  const shutter = kitDef('k_shutters_thin')
   const wide = kitDef('k_window_wide')
   for (let f = 0; f < floors; f++) {
     // sills at a rider's waist on the ground floor (windows sized to a 3.2 m storey, not a doll's)
@@ -570,6 +728,13 @@ function addWindows(
         const at = onSide(b, side, a + span / 2, sill - 0.97 * s + 0.05)
         at.multiply(new Matrix4().makeScale(s, s, 1))
         bs.kit.push({ def: win, at })
+        // shutters, as on the duel street's upper windows: on every upper floor, and round the
+        // houses' and barns' windows (never a shopfront's display glass)
+        if (shutter && !shop && (f > 0 || !SHOPFRONT.has(b.kind)) && !bs.lean) {
+          const st = onSide(b, side, a + span / 2, sill - 0.97 * s + 0.05, -0.12)
+          st.multiply(new Matrix4().makeScale(s, s, 1))
+          bs.kit.push({ def: shutter, at: st })
+        }
         if (b.hollow && sill < ceilingHeight(b)) {
           // the same window seen from inside the room (the wall itself is solid)
           const [q] = faceQuad(b, side, a + span / 2, 0, 0, 1, -WALL_T)
@@ -930,14 +1095,66 @@ function addFalseFront(
   const along = front === 'n' || front === 's'
   g.box(cx, (b.height + top) / 2, cz, along ? len : 0.3, top - b.height, along ? 0.3 : len, p.wall)
   bs.wood.box(cx, top + 0.1, cz, along ? len + 0.3 : 0.5, 0.2, along ? 0.5 : len + 0.3, p.trim)
+  // the duel street's false-front joinery: a cornice band under the cap on a row of brackets,
+  // and pilasters at both ends
+  const at = (a: number, out: number) => faceQuad(b, front, a, a, 0, 1, out)[0] ?? new Vector3()
+  const mid = at(len / 2, 0.25)
+  bs.wood.box(
+    mid.x,
+    top - 0.28,
+    mid.z,
+    along ? len + 0.2 : 0.2,
+    0.16,
+    along ? 0.2 : len + 0.2,
+    p.trim,
+  )
+  if (!bs.lean) {
+    const n = Math.max(2, Math.round(len / 1.1))
+    for (let k = 0; k <= n; k++) {
+      const q = at(0.2 + ((len - 0.4) * k) / n, 0.22)
+      bs.wood.box(q.x, top - 0.47, q.z, along ? 0.12 : 0.14, 0.22, along ? 0.14 : 0.12, p.trim)
+    }
+  }
+  for (const a of [0.14, len - 0.14]) {
+    const q = at(a, 0.2)
+    bs.wood.box(
+      q.x,
+      (b.height - 0.2 + top - 0.36) / 2,
+      q.z,
+      along ? 0.28 : 0.1,
+      top - b.height - 0.16,
+      along ? 0.1 : 0.28,
+      p.trim,
+    )
+  }
   if (p.sign) {
     const fg = p.signBg === '#e8c870' || p.signBg.startsWith('#e') ? '#2a1a10' : '#f0e2c0'
+    // a dark frame stands the painted board off the front
+    const fr = at(len / 2, 0.17)
+    const fh = top - b.height - 0.85
+    bs.wood.box(
+      fr.x,
+      b.height + 0.1 + fh / 2,
+      fr.z,
+      along ? 6.3 : 0.04,
+      fh + 0.16,
+      along ? 0.04 : 6.3,
+      0x2a_1d_14,
+    )
     // On the street face; and for fronts facing away from the camera, a board on the roof too.
     bs.signs.push({
       text: p.sign,
       bg: p.signBg,
       fg,
-      quad: faceQuad(b, front, len / 2 - 3, len / 2 + 3, b.height + 0.2, top - 0.2, 0.16),
+      quad: faceQuad(
+        b,
+        front,
+        len / 2 - 3,
+        len / 2 + 3,
+        b.height + 0.18,
+        b.height + 0.02 + fh,
+        0.2,
+      ),
     })
     if (front !== 's') {
       const z = b.z + b.d / 2
@@ -1145,6 +1362,9 @@ function addCreek(bs: Builders, layout: TownLayout): void {
 }
 
 /** The depot's platform: a plank deck out to the track, with a timber edge. */
+/** Handbills by the doors. */
+const BILLS = ['WANTED', 'REWARD', 'DEAD OR ALIVE', 'LAND FOR SALE']
+
 /** Painted advertisements high on the side walls that face the alleys and the street's ends. */
 const WALL_ADS: Record<string, { side: Side; text: string; bg: string; fg: string }> = {
   livery: { side: 'e', text: 'FEED & SEED', bg: '#3a2a1e', fg: '#e8dcc0' },
@@ -1233,6 +1453,14 @@ function addDecor(bs: Builders, layout: TownLayout, lanterns: Matrix4[]): void {
         bs.wood.box(q.x, PORCH_ROOF - 0.06 - 0.15, q.z, 0.02, 0.3, 0.02, 0x2a_2a_2a)
         lanterns.push(placeMatrix(q.x, PORCH_ROOF - 0.06 - 0.3 - 0.4, q.z, 0, 1))
       }
+      // handbills pasted up beside the door, at eye level
+      const bill = BILLS[Math.floor(b.x * 7 + b.z * 3) % BILLS.length] ?? 'WANTED'
+      bs.signs.push({
+        text: bill,
+        bg: '#e4d6b4',
+        fg: '#3a2414',
+        quad: faceQuad(b, front, d.at - 0.85, d.at - 0.3, 1.45, 2.15, 0.012),
+      })
       // a shingle sign hung from the porch beam, edge-on to the street, readable walking past
       const paint = PAINT[b.kind]
       const [s0] = faceQuad(b, front, d.at - 0.9, 0, 0, 1, PORCH_DEPTH - 0.45)
@@ -1645,6 +1873,9 @@ export function buildTown(
     toTile(lantern as PropDef, at)
   }
   const deckRects = decks(layout)
+  for (const [i, r] of deckRects.slice(0, SHADE_RECTS).entries()) {
+    SHADE.rects.value[i]?.set(r.x, r.z, r.w, r.d)
+  }
   dressCover({
     layout,
     props: assets.props,
