@@ -9,7 +9,7 @@ import type { Bone, Vector3 } from 'three'
 export type GestureKind = 'throw' | 'pickup' | 'callout' | 'draw' | 'bank'
 
 const LENGTH: Record<GestureKind, number> = {
-  throw: 0.55,
+  throw: 0.8,
   pickup: 0.6,
   callout: 1.1,
   draw: 0.35,
