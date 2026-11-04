@@ -25,6 +25,7 @@ interface Sample {
   t: number
   x: number
   z: number
+  y: number
   aim: number
   hp: number
   flags: number
@@ -38,6 +39,7 @@ export interface RemoteView {
   id: number
   x: number
   z: number
+  y: number
   aim: number
   hp: number
   flags: number
@@ -74,6 +76,7 @@ export class RemoteTrack {
       id,
       x: 0,
       z: 0,
+      y: 0,
       aim: 0,
       hp: 100,
       flags: 0,
@@ -100,6 +103,7 @@ export class RemoteTrack {
       t,
       x: e.x / POS_SCALE,
       z: e.z / POS_SCALE,
+      y: e.y / 10,
       aim: turn(e.aim),
       hp: e.hp,
       flags: e.flags,
@@ -182,6 +186,7 @@ export class RemoteTrack {
     const v = this.view
     v.x = a.x + (b.x - a.x) * k
     v.z = a.z + (b.z - a.z) * k
+    v.y = a.y + (b.y - a.y) * k
     v.aim = lerpAngle(a.aim, b.aim, k)
     v.pitch = a.pitch + (b.pitch - a.pitch) * k
     // Discrete state switches at the midpoint.
@@ -195,7 +200,7 @@ export class RemoteTrack {
 }
 
 function dist(a: Sample, b: Sample): number {
-  return Math.hypot(b.x - a.x, b.z - a.z)
+  return Math.hypot(b.x - a.x, b.z - a.z, b.y - a.y)
 }
 
 /**

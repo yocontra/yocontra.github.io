@@ -93,6 +93,12 @@ function baseAnim(p: Player): number {
   if (p.slideTicks > 0) {
     return ANIM_SLIDE
   }
+  if (p.climbTicks > 0) {
+    return ANIM_VAULT
+  }
+  if (p.fallTicks > 0) {
+    return ANIM_HOP
+  }
   if (p.jumpTicks > 0) {
     return p.vaultStep > 0 ? ANIM_VAULT : ANIM_HOP
   }
@@ -133,6 +139,7 @@ export function entityView(w: World, p: Player): EntityView {
     id: p.id,
     x: q(p.x),
     z: q(p.z),
+    y: Math.max(0, Math.min(255, Math.round(p.y * 10))),
     aim: p.aim >> 8,
     hp: Math.ceil(Math.max(0, p.hp)),
     flags: entityFlags(w, p),
@@ -166,6 +173,18 @@ export function selfView(w: World, p: Player): SelfView {
   return {
     x: q(p.x),
     z: q(p.z),
+    y: p.y,
+    roof: p.roof,
+    climbTicks: p.climbTicks,
+    climbDeck: p.climbDeck,
+    climbDir: p.climbDir,
+    fallTicks: p.fallTicks,
+    fallTotal: p.fallTotal,
+    fallFromX: p.fallFromX,
+    fallFromZ: p.fallFromZ,
+    fallFromY: p.fallFromY,
+    fallToX: p.fallToX,
+    fallToZ: p.fallToZ,
     hp: Math.ceil(Math.max(0, p.hp)),
     ammo: p.ammo,
     flags: selfFlags(w, p),

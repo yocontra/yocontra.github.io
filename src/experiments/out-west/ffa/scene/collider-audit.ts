@@ -19,6 +19,7 @@
 import type { Object3D } from 'three'
 import { collect } from '../../scene/float-audit.ts'
 import { BLOCK_MOVE, buildGrid, TOWN } from '../sim/layout.ts'
+import { ROOF_WALKS } from '../sim/roofwalks.ts'
 
 export interface ColliderBlob {
   kind: 'invisible' | 'walkthrough'
@@ -88,6 +89,12 @@ export function colliderAudit(scene: Object3D): ColliderReport {
       const r1 = Math.min(n - 1, Math.floor((z1 - Math.min(0.06, (z1 - z0) / 2)) / cell))
       for (let row = r0; row <= r1; row++) {
         for (let col = c0; col <= c1; col++) {
+          // A ladder is deliberately walk-through: the sim's ladder point is the collider.
+          const lx = (col + 0.5) * cell
+          const lz = (row + 0.5) * cell
+          if (ROOF_WALKS.some((w) => Math.hypot(lx - w.ladderX, lz - w.ladderZ) < 0.75)) {
+            continue
+          }
           visual[row * n + col] = 1
           if (!who.has(row * n + col)) {
             who.set(row * n + col, p.name)

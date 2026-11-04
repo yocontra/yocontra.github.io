@@ -20,6 +20,7 @@ import {
   STRONGBOX_RADIUS,
 } from '../sim/constants.ts'
 import { type TownLayout, zoneAt } from '../sim/layout.ts'
+import { ladderAt } from '../sim/roofwalks.ts'
 import type { RemoteView } from './interp.ts'
 import type { NetClient } from './net.ts'
 
@@ -101,6 +102,17 @@ export function currentAction(c: ContextInput): Action | null {
     return {
       bit: 0,
       prompt: `Stand still to open the strongbox (${money(town?.strongboxValue ?? 0)}, 3 s)`,
+      label: '',
+      target: NONE,
+    }
+  }
+  const roof = c.net.pred.roof
+  const ladder = ladderAt(c.x, c.z, roof)
+  if (ladder) {
+    return {
+      bit: 0,
+      prompt: roof > 0 ? 'JUMP: climb down the ladder' : 'JUMP: climb to the roof',
+      touchPrompt: roof > 0 ? 'JUMP: climb down the ladder' : 'JUMP: climb to the roof',
       label: '',
       target: NONE,
     }

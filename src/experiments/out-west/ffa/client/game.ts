@@ -117,6 +117,7 @@ import {
 } from '../sim/constants.ts'
 import { BLOCK_SHOT, BLOCK_SIGHT, rayGrid, spawnFacing, TOWN, zoneAt } from '../sim/layout.ts'
 import { airborne, radiansToAim, sliding } from '../sim/move.ts'
+import { ROOF_WALKS } from '../sim/roofwalks.ts'
 import { bloomAfterShot } from '../sim/spread.ts'
 import type { MoveState } from '../sim/types.ts'
 import { type AimResult, assistFriction, assistPull, resolveAim } from './aim.ts'
@@ -224,7 +225,7 @@ export class FrontierGame {
   /** The connection's banner ("Reconnecting…", "Disconnected"), or null while connected. */
   private connBanner: string | null = null
   /** Your rendered pose (`NetClient.localRenderPose`): what the camera and the crowd follow. */
-  private readonly own = { x: 72, z: 64, yaw: 0 }
+  private readonly own = { x: 72, z: 64, y: 0, yaw: 0 }
   private aim = 0
   private renderTick = 0
   private readonly showdowns = new Map<number, Showdown>()
@@ -864,12 +865,12 @@ export class FrontierGame {
     this.hud.damageArc(Math.atan2(Math.sin(bearing - ahead), Math.cos(bearing - ahead)))
   }
 
-  posOf(id: number): { x: number; z: number } | null {
+  posOf(id: number): { x: number; z: number; y: number } | null {
     if (id === this.net.you) {
       return this.own
     }
     const r = this.remotes.find((v) => v.id === id)
-    return r ? { x: r.x, z: r.z } : null
+    return r ? { x: r.x, y: r.y, z: r.z } : null
   }
 
   // --- input ------------------------------------------------------------------------------------
@@ -1272,6 +1273,7 @@ export class FrontierGame {
         id: this.net.you,
         x: this.own.x,
         z: this.own.z,
+        y: this.own.y,
         aim: this.aim,
         vx: (dirX / len) * speed,
         vz: (dirZ / len) * speed,
@@ -1282,7 +1284,8 @@ export class FrontierGame {
             speed > 0.3,
             s.reloadTicks > 0,
             s.channelKind,
-            jumpAnim(this.net.pred.jumpTicks, this.net.pred.vaultStep),
+            jumpAnim(this.net.pred.jumpTicks, this.net.pred.vaultStep) ||
+              verticalAnim(this.net.pred),
           ),
           speed > 0.3,
         ),
@@ -1300,12 +1303,25 @@ export class FrontierGame {
     for (const [i, r] of this.remotes.entries()) {
       let row = this.crowdRows[i]
       if (!row) {
-        row = { id: 0, x: 0, z: 0, aim: 0, vx: 0, vz: 0, anim: 0, stance: 0, flags: 0, self: false }
+        row = {
+          id: 0,
+          x: 0,
+          z: 0,
+          y: 0,
+          aim: 0,
+          vx: 0,
+          vz: 0,
+          anim: 0,
+          stance: 0,
+          flags: 0,
+          self: false,
+        }
         this.crowdRows.push(row)
       }
       row.id = r.id
       row.x = r.x
       row.z = r.z
+      row.y = r.y
       row.aim = r.aim
       row.vx = r.vx
       row.vz = r.vz
@@ -1443,12 +1459,12 @@ export class FrontierGame {
   private jumpLift(): number {
     const pred = this.net.pred
     if (pred.jumpTicks <= 0) {
-      return 0
+      return this.own.y
     }
     const vault = pred.vaultStep > 0
     const total = vault ? VAULT_TICKS : HOP_TICKS
     const t = Math.min(1, Math.max(0, (total - pred.jumpTicks + this.acc / TICK_MS) / total))
-    return (vault ? VAULT_PEAK_M : HOP_PEAK_M) * 4 * t * (1 - t)
+    return this.own.y + (vault ? VAULT_PEAK_M : HOP_PEAK_M) * 4 * t * (1 - t)
   }
 
   /** Your stance bits, as remote riders see them (crouched, on the sights, sprinting). */
@@ -1635,6 +1651,10 @@ export class FrontierGame {
       if (this.pickups?.isAvailable(i)) {
         fx.ring(sp.x, sp.z, 1.2, PICKUP_RING, 4)
       }
+    }
+    // the ladder feet: four deliberate marks, so a rider can find a way onto the porch roofs
+    for (const w of ROOF_WALKS) {
+      fx.ring(w.ladderX, w.ladderZ, 0.72, RING_LADDER, 2)
     }
     // your own ground ring is a top-down readability aid: over the shoulder it's just in the way
     if (this.net.alive && !this.shooterView) {
@@ -2113,6 +2133,12 @@ export class FrontierGame {
       geometries: this.renderer.gl.info.memory.geometries,
       x: Math.round(this.own.x * 10) / 10,
       z: Math.round(this.own.z * 10) / 10,
+      y: Math.round(this.own.y * 100) / 100,
+      roof: this.net.pred.roof,
+      selfRoof: this.net.self?.roof ?? 0,
+      selfY: this.net.self?.y ?? 0,
+      climbing: this.net.pred.climbTicks > 0,
+      falling: this.net.pred.fallTicks > 0,
       you: this.net.you,
       alive: this.net.alive,
       hp: this.net.self?.hp ?? 0,
@@ -2199,6 +2225,14 @@ function jumpAnim(jumpTicks: number, vaultStep: number): number {
   return vaultStep > 0 ? ANIM_VAULT : ANIM_HOP
 }
 
+/** A ladder or a step-off, in the crowd's animation vocabulary. */
+function verticalAnim(m: MoveState): number {
+  if (m.climbTicks > 0) {
+    return ANIM_VAULT
+  }
+  return m.fallTicks > 0 ? ANIM_HOP : 0
+}
+
 /** `ANIM_ROLL` or `ANIM_SLIDE` while one is under way, else 0. */
 function dodgeAnim(m: MoveState): number {
   if (m.rollTicks > 0) {
@@ -2267,6 +2301,7 @@ const RING_SHOWDOWN = new Color(0.9, 0.7, 0.45)
 const RING_MW = new Color(2, 1.5, 0.3)
 const RING_FUSE = new Color(1.1, 0.18, 0.1)
 const RING_FUSE_HOT = new Color(2.2, 0.8, 0.2)
+const RING_LADDER = new Color(1.3, 0.95, 0.45)
 
 /** The sideways share of each shot, repeating: up-left, up-right, and so on. */
 const RECOIL_SIDE = [0.18, -0.32, 0.42, -0.12, 0.3, -0.4]

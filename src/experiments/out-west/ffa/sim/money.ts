@@ -78,6 +78,10 @@ export function startChannel(w: World, p: Player, buttons: number): void {
     p.channel = { kind: CHANNEL_LEAVE, ticks: 0, total: LEAVE_CHANNEL_TICKS }
     return
   }
+  // A catwalk is not a counter: ground zones and the strongbox are out of reach from above.
+  if (p.roof > 0) {
+    return
+  }
   // No interact key: standing still in a bank/stage zone or at the strongbox starts the hold.
   if (p.moving) {
     return
@@ -159,7 +163,8 @@ export function updateBags(w: World): void {
     }
     for (const p of activePlayers(w)) {
       const exclusive = w.tick < bag.exclusiveUntil && bag.exclusiveFor !== p.id
-      const eligible = p.alive && p.lingerUntil < 0 && !isProtected(w, p) && p.showdown < 0
+      const eligible =
+        p.alive && p.lingerUntil < 0 && !isProtected(w, p) && p.showdown < 0 && p.roof === 0
       if (eligible && !exclusive && dist2(p.x, p.z, bag.x, bag.z) <= r2) {
         p.carried += bag.amount
         w.events.push({ type: 'bag_gone', bagId: bag.id, by: p.id })

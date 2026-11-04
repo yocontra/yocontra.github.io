@@ -136,6 +136,8 @@ export interface CrowdPlayer {
   id: number
   x: number
   z: number
+  /** Feet height, m (0 on the street, a porch roof's top on a catwalk). */
+  y: number
   /** Radians, 0 = +x, increasing toward +z. */
   aim: number
   vx: number
@@ -817,7 +819,7 @@ export class Crowd {
       holder.scale.setScalar(this.readScale)
     }
     actor.glow.value = p.flags & EF_PROTECTED ? 0.6 + 0.4 * Math.sin(nowS * Math.PI * 2 * 2.2) : 0
-    holder.position.set(p.x, 0, p.z)
+    holder.position.set(p.x, p.y, p.z)
     holder.rotation.y = facing(p.aim)
     const mesh = actor.meshes[0] as SkinnedMesh | undefined
     const geo = p.self || !m.lod1 ? m.full : m.lod1
@@ -829,7 +831,7 @@ export class Crowd {
     if (caster) {
       s.casters++
     } else {
-      this.blob(p.x, p.z)
+      this.blob(p.x, p.y, p.z)
     }
     this.rigidParts(actor, holder, p)
     this.animate(m, actor, p, nowS)
@@ -968,7 +970,7 @@ export class Crowd {
     const i = v.mesh.count++
     v.set(i, clip, { phase, speed: rate }, m.look)
     q.setFromAxisAngle(up, facing(p.aim))
-    pos.set(p.x, farLift(p.anim, nowS - m.animSince), p.z)
+    pos.set(p.x, p.y + farLift(p.anim, nowS - m.animSince), p.z)
     if (p.anim === ANIM_SLIDE) {
       // the crouch, leaning back feet first
       q.multiply(hq.setFromAxisAngle(side, -0.7))
@@ -987,14 +989,14 @@ export class Crowd {
       one.set(1, 1, 1)
       this.hats.push(m.look.hat, hatM, hatColor(m.look))
     }
-    this.blob(p.x, p.z)
+    this.blob(p.x, p.y, p.z)
   }
 
-  private blob(x: number, z: number): void {
+  private blob(x: number, y: number, z: number): void {
     if (this.blobs.count >= 40) {
       return
     }
-    m4.makeTranslation(x, 0.035, z)
+    m4.makeTranslation(x, y + 0.035, z)
     this.blobs.setMatrixAt(this.blobs.count++, m4)
   }
 

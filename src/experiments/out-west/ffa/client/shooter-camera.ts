@@ -79,9 +79,9 @@ export interface ShooterFrame {
   /** Sprinting: the lens widens a touch (CoD's sprint FOV). */
   sprinting?: boolean
   /** Where your body lies while you're dead (the death camera), or null. */
-  dead: { x: number; z: number } | null
+  dead: { x: number; z: number; y?: number } | null
   /** Who killed you, where he stands (the kill cam's first 2.5 s look from behind him). */
-  killer?: { x: number; z: number } | null
+  killer?: { x: number; z: number; y?: number } | null
 }
 
 export class ShooterCamera {
@@ -238,6 +238,7 @@ export class ShooterCamera {
     if (!body) {
       return
     }
+    const bodyY = body.y ?? 0
     this.deadT += dt
     const cam = this.camera
     const k = f.killer
@@ -248,7 +249,7 @@ export class ShooterCamera {
       const d = Math.hypot(dx, dz) || 1
       want.set(
         k.x + (dx / d) * 1.6 + (-dz / d) * 0.6,
-        EYE_Y + 0.5,
+        EYE_Y + 0.5 + (k.y ?? 0),
         k.z + (dz / d) * 1.6 + (dx / d) * 0.6,
       )
       const freeK = clearance(f.grid, k.x, k.z, want.x, want.z)
@@ -256,7 +257,7 @@ export class ShooterCamera {
       want.z = k.z + (want.z - k.z) * freeK
       cam.position.lerp(want, this.deadT < 0.05 ? 1 : 1 - Math.exp(-dt * 6))
       cam.up.set(0, 1, 0)
-      cam.lookAt(body.x, 0.6, body.z)
+      cam.lookAt(body.x, bodyY + 0.6, body.z)
       this.closeness = 0
       return
     }

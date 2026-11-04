@@ -26,6 +26,8 @@ import { clampI8, clampU8, type Writer } from './bytes.ts'
 import { readEvent, type WireEvent, writeEvent } from './codec-events.ts'
 import { Reader } from './reader.ts'
 
+const clampU16 = (v: number): number => Math.max(0, Math.min(65_535, Math.round(v)))
+
 // --- Input --------------------------------------------------------------------------------------
 
 export interface WireFrame {
@@ -113,6 +115,8 @@ export interface EntityView {
   /** Quantised position (`POS_SCALE` units per metre). */
   x: number
   z: number
+  /** Feet height, decimetres (0 on the street, ~32 on a porch catwalk). */
+  y: number
   aim: number
   hp: number
   flags: number
@@ -125,6 +129,19 @@ export interface EntityView {
 export interface SelfView {
   x: number
   z: number
+  /** Feet height, centimetres. */
+  y: number
+  roof: number
+  climbTicks: number
+  climbDeck: number
+  climbDir: number
+  fallTicks: number
+  fallTotal: number
+  fallFromX: number
+  fallFromZ: number
+  fallFromY: number
+  fallToX: number
+  fallToZ: number
   hp: number
   ammo: number
   flags: number
@@ -191,7 +208,7 @@ export function entityMask(e: EntityView, base: EntityView | undefined): number 
     return ENT_POS | ENT_POS_FULL | ENT_AIM | ENT_HP | ENT_FLAGS | ENT_ANIM | ENT_CARRY | ENT_PITCH
   }
   let mask = 0
-  if (e.x !== base.x || e.z !== base.z) {
+  if (e.x !== base.x || e.z !== base.z || e.y !== base.y) {
     mask |= ENT_POS
     if (Math.abs(e.x - base.x) > 127 || Math.abs(e.z - base.z) > 127) {
       mask |= ENT_POS_FULL
@@ -226,6 +243,7 @@ function writeEntity(w: Writer, e: EntityView, base: EntityView | undefined, mas
     } else {
       w.i8(e.x - base.x).i8(e.z - base.z)
     }
+    w.u8(clampU8(e.y))
   }
   if (mask & ENT_AIM) {
     w.u8(e.aim)
@@ -253,7 +271,7 @@ function readEntity(r: Reader, baseline: Map<number, EntityView>): EntityView {
   const base = baseline.get(id)
   const e: EntityView = base
     ? { ...base }
-    : { id, x: 0, z: 0, aim: 0, hp: 0, flags: 0, anim: 0, carry: 0 }
+    : { id, x: 0, z: 0, y: 0, aim: 0, hp: 0, flags: 0, anim: 0, carry: 0 }
   if (mask & ENT_POS) {
     if (mask & ENT_POS_FULL) {
       e.x = r.u16()
@@ -262,6 +280,7 @@ function readEntity(r: Reader, baseline: Map<number, EntityView>): EntityView {
       e.x += r.i8()
       e.z += r.i8()
     }
+    e.y = r.u8()
   }
   if (mask & ENT_AIM) {
     e.aim = r.u8()
@@ -288,6 +307,18 @@ function readEntity(r: Reader, baseline: Map<number, EntityView>): EntityView {
 function writeSelf(w: Writer, s: SelfView): void {
   w.u16(s.x)
     .u16(s.z)
+    .u16(clampU16(s.y * 100))
+    .u8(clampU8(s.roof))
+    .u8(clampU8(s.climbTicks))
+    .u8(clampU8(s.climbDeck))
+    .i8(clampI8(s.climbDir))
+    .u8(clampU8(s.fallTicks))
+    .u8(clampU8(s.fallTotal))
+    .u16(clampU16(s.fallFromX * 100))
+    .u16(clampU16(s.fallFromZ * 100))
+    .u8(clampU8(s.fallFromY * 10))
+    .u16(clampU16(s.fallToX * 100))
+    .u16(clampU16(s.fallToZ * 100))
     .u8(clampU8(s.hp))
     .u8(s.ammo)
     .u8(s.flags)
@@ -323,6 +354,18 @@ function readSelf(r: Reader): SelfView {
   const s: SelfView = {
     x: r.u16(),
     z: r.u16(),
+    y: r.u16() / 100,
+    roof: r.u8(),
+    climbTicks: r.u8(),
+    climbDeck: r.u8(),
+    climbDir: r.i8(),
+    fallTicks: r.u8(),
+    fallTotal: r.u8(),
+    fallFromX: r.u16() / 100,
+    fallFromZ: r.u16() / 100,
+    fallFromY: r.u8() / 10,
+    fallToX: r.u16() / 100,
+    fallToZ: r.u16() / 100,
     hp: r.u8(),
     ammo: r.u8(),
     flags: r.u8(),

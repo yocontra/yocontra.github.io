@@ -21,7 +21,7 @@ import {
   PRACTICE_BOT_KILL_XP,
 } from './constants.ts'
 import type { Point } from './layout.ts'
-import { stopMoves } from './move.ts'
+import { resetVertical, stopMoves } from './move.ts'
 import type { World } from './state.ts'
 import type { Player } from './types.ts'
 
@@ -148,6 +148,7 @@ export function killPlayer(
   victim.respawnTick = w.tick + DEATH_CAM_TICKS
   victim.stats.deaths++
   stopMoves(victim)
+  resetVertical(victim)
   victim.deadEyeStart = -1
   victim.calledBy = NONE
   // Pickup weapons and dynamite are lost with the life.

@@ -711,6 +711,7 @@ export class Locomotion {
    * the death's turn. `holder` stands on the ground at his feet; `pivot` turns about his hips.
    */
   body(holder: Object3D, pivot: Object3D): void {
+    const baseY = holder.position.y
     const a = this.input.anim
     const t = this.since
     let y = Math.min(0, this.dip) * 0.12
@@ -734,7 +735,7 @@ export class Locomotion {
         ry += Math.min(1, t / 0.8) * 0.9
       }
     }
-    holder.position.y = y
+    holder.position.y = baseY + y
     pivot.rotation.x = rx
     pivot.rotation.y = ry
     pivot.scale.x = a === ANIM_DEAD && this.deathKind === 2 ? -1 : 1

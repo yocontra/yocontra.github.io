@@ -60,6 +60,7 @@ import {
   type Side,
   type TownLayout,
 } from '../sim/layout.ts'
+import { ROOF_WALKS } from '../sim/roofwalks.ts'
 import { addClockTower } from './clock-tower.ts'
 import {
   decks,
@@ -1259,6 +1260,80 @@ function addFalseFront(
   }
 }
 
+/**
+ * Catwalks on the porch roofs the sim lets a rider walk (ffa/sim/roofwalks.ts): a plank layer on
+ * the existing roof, a ladder at the eave, and a low handrail on one-storey fronts (two-storey
+ * fronts already have their balcony rail).
+ */
+function addRoofWalks(bs: Builders): void {
+  for (const w of ROOF_WALKS) {
+    const cx = w.x + w.w / 2
+    const cz = w.z + w.d / 2
+    bs.wood.box(cx, w.height - 0.02, cz, w.w, 0.04, w.d, 0x9a_7a_58, { skip: ['bottom'] })
+    // the ladder: rails and rungs on the eave's face, from the street to the boards
+    const rungs = Math.max(4, Math.round(w.height / 0.38))
+    const along = w.side === 'n' || w.side === 's'
+    const railH = w.height - 0.06
+    for (const d of [-0.24, 0.24] as const) {
+      bs.wood.box(
+        w.ladderX + (along ? d : 0),
+        railH / 2,
+        w.ladderZ + (along ? 0 : d),
+        0.05,
+        railH,
+        0.05,
+        0x8a_6a_48,
+      )
+    }
+    for (let i = 1; i < rungs; i++) {
+      const y = (i / rungs) * railH
+      bs.wood.box(
+        w.ladderX,
+        y,
+        w.ladderZ,
+        along ? 0.48 : 0.05,
+        0.04,
+        along ? 0.05 : 0.48,
+        0x8a_6a_48,
+      )
+    }
+    if (w.floors > 1) {
+      continue
+    }
+    // a low rail on the open side, split round the ladder's top
+    const railY = w.height + 0.55
+    const post = 0.07
+    const runs: [number, number][] =
+      w.side === 'n' || w.side === 's'
+        ? [
+            [w.x, w.ladderX - 0.5],
+            [w.ladderX + 0.5, w.x + w.w],
+          ]
+        : [
+            [w.z, w.ladderZ - 0.5],
+            [w.ladderZ + 0.5, w.z + w.d],
+          ]
+    for (const [a0, a1] of runs) {
+      if (a1 - a0 < 0.3) {
+        continue
+      }
+      const mid = (a0 + a1) / 2
+      const len = a1 - a0
+      if (w.side === 'n' || w.side === 's') {
+        const z = w.side === 'n' ? w.z : w.z + w.d
+        bs.wood.box(mid, railY, z, len, post, post, 0x8a_6a_48)
+        bs.wood.box(a0, w.height + 0.27, z, post, 0.54, post, 0x8a_6a_48)
+        bs.wood.box(a1, w.height + 0.27, z, post, 0.54, post, 0x8a_6a_48)
+      } else {
+        const x = w.side === 'e' ? w.x + w.w : w.x
+        bs.wood.box(x, railY, mid, post, post, len, 0x8a_6a_48)
+        bs.wood.box(x, w.height + 0.27, a0, post, 0.54, post, 0x8a_6a_48)
+        bs.wood.box(x, w.height + 0.27, a1, post, 0.54, post, 0x8a_6a_48)
+      }
+    }
+  }
+}
+
 function addPorch(bs: Builders, b: Building, front: Side): void {
   const len = sideLength(b, front)
   const depth = PORCH_DEPTH
@@ -1922,6 +1997,7 @@ export function buildTown(
     addBuilding(bs, b, layout, roofs.length)
     roofs.push(b)
   }
+  addRoofWalks(bs)
   addBank(bs, layout)
   addCreek(bs, layout)
   addWallAds(bs, layout)

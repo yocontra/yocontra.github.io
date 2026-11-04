@@ -28,7 +28,7 @@ import {
   updateBags,
   updateStrongbox,
 } from './money.ts'
-import { inIframes, stepMove, stopMoves } from './move.ts'
+import { inIframes, resetVertical, stepMove, stopMoves } from './move.ts'
 import {
   clearPickups,
   firePickupWeapon,
@@ -109,6 +109,7 @@ export function spawnPlayer(w: World, p: Player): void {
   p.ammo = REVOLVER_ROUNDS
   p.reloadTicks = 0
   stopMoves(p)
+  resetVertical(p)
   p.jumpCooldown = 0
   p.slideCooldown = 0
   p.sprintLock = 0

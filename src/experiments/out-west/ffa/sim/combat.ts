@@ -31,7 +31,7 @@ import {
 } from './constants.ts'
 import { applyDamage } from './death.ts'
 import { BLOCK_SHOT, rayGrid } from './layout.ts'
-import { aimRadians, airborne, radiansToAim, sliding, vaulting } from './move.ts'
+import { aimRadians, airborne, climbing, falling, radiansToAim, sliding, vaulting } from './move.ts'
 import { hashSigned } from './rng.ts'
 import { bloomAfterShot, settleBloom, spreadDeg } from './spread.ts'
 import {
@@ -256,6 +256,8 @@ export function canFire(p: Player, pulled: boolean, aliveAtTickStart: boolean): 
     p.lingerUntil < 0 &&
     p.rollTicks === 0 &&
     !vaulting(p) &&
+    !climbing(p) &&
+    !falling(p) &&
     p.fireCooldownMs <= 0 &&
     (p.weapon === WEAPON_REVOLVER ? p.reloadTicks === 0 && p.ammo > 0 : p.weaponRounds > 0)
   )

@@ -46,6 +46,18 @@ const randomFrame = (): WireFrame => ({
 const randomSelf = (): SelfView => ({
   x: u16(),
   z: u16(),
+  y: u16() / 100,
+  roof: rng.int(0, 4),
+  climbTicks: u8(),
+  climbDeck: u8(),
+  climbDir: rng.int(-1, 1),
+  fallTicks: u8(),
+  fallTotal: u8(),
+  fallFromX: u16() / 100,
+  fallFromZ: u16() / 100,
+  fallFromY: u8() / 10,
+  fallToX: u16() / 100,
+  fallToZ: u16() / 100,
   hp: rng.int(0, 100),
   ammo: rng.int(0, 6),
   flags: u8(),
@@ -96,6 +108,7 @@ function mutate(truth: Map<number, EntityView>): void {
         id,
         x: u16(),
         z: u16(),
+        y: rng.int(0, 40),
         aim: u8(),
         hp: rng.int(0, 100),
         flags: u8(),
@@ -109,6 +122,9 @@ function mutate(truth: Map<number, EntityView>): void {
       const jump = rng.next() < 0.05 ? 500 : 120
       e.x = Math.max(0, Math.min(65_535, e.x + rng.int(-jump, jump)))
       e.z = Math.max(0, Math.min(65_535, e.z + rng.int(-jump, jump)))
+      if (rng.next() < 0.1) {
+        e.y = rng.int(0, 40)
+      }
       if (rng.next() < 0.3) {
         e.aim = u8()
       }

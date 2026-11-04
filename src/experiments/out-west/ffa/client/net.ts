@@ -132,6 +132,18 @@ export class NetClient {
   readonly pred: MoveState = {
     x: 0,
     z: 0,
+    y: 0,
+    roof: 0,
+    climbTicks: 0,
+    climbDeck: 0,
+    climbDir: 0,
+    fallTicks: 0,
+    fallTotal: 0,
+    fallFromX: 0,
+    fallFromZ: 0,
+    fallFromY: 0,
+    fallToX: 0,
+    fallToZ: 0,
     rollTicks: 0,
     rollCooldown: 0,
     rollDirX: 1,
@@ -355,6 +367,18 @@ export class NetClient {
     const m: MoveState = {
       x: s.x / POS_SCALE,
       z: s.z / POS_SCALE,
+      y: s.y,
+      roof: s.roof,
+      climbTicks: s.climbTicks,
+      climbDeck: s.climbDeck,
+      climbDir: s.climbDir,
+      fallTicks: s.fallTicks,
+      fallTotal: s.fallTotal,
+      fallFromX: s.fallFromX,
+      fallFromZ: s.fallFromZ,
+      fallFromY: s.fallFromY,
+      fallToX: s.fallToX,
+      fallToZ: s.fallToZ,
       rollTicks: s.rollTicks,
       rollCooldown: s.rollCooldown,
       rollDirX: Math.cos(rollRad),
@@ -495,7 +519,11 @@ export class NetClient {
    * offset as the spring removes it. `yaw` is the aim of the newest predicted frame (radians).
    * Call once per rendered frame with that frame's `dtMs`.
    */
-  localRenderPose(alpha: number, dtMs: number, out: { x: number; z: number; yaw: number }): void {
+  localRenderPose(
+    alpha: number,
+    dtMs: number,
+    out: { x: number; z: number; y: number; yaw: number },
+  ): void {
     const dt = Math.max(0, dtMs) / 1000
     const e = Math.exp(-SMOOTH_OMEGA * dt)
     const tx = (this.offVX + SMOOTH_OMEGA * this.offX) * dt
@@ -506,6 +534,7 @@ export class NetClient {
     this.offVZ = (this.offVZ - SMOOTH_OMEGA * tz) * e
     out.x = this.prev.x + (this.pred.x - this.prev.x) * alpha + this.offX
     out.z = this.prev.z + (this.pred.z - this.prev.z) * alpha + this.offZ
+    out.y = this.prev.y + (this.pred.y - this.prev.y) * alpha
     out.yaw = this.predAim
   }
 

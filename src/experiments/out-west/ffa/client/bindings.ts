@@ -4,9 +4,9 @@
  * Over the shoulder and first person (the default), CoD style: WASD moves relative to where you
  * look, the mouse looks (pointer lock), LMB fires, RMB aims down the sights (hold, or a toggle in
  * the settings; from the holster it also closes the Dead-Eye reticle), Shift sprints, C crouches
- * (mid-sprint: a slide), Ctrl crouches while held, Space jumps or vaults, R reloads, E banks /
- * opens / accepts, Q calls out, G throws dynamite, V swaps first and third person, X swaps the
- * shoulder, Tab holds the scoreboard, Esc pauses.
+ * (mid-sprint: a slide), Ctrl crouches while held, Space jumps, vaults or climbs, R reloads,
+ * standing still banks or opens, Q accepts a call-out or calls one out, G throws dynamite, V
+ * swaps first and third person, X swaps the shoulder, Tab holds the scoreboard, Esc pauses.
  *
  * Top-down (kept as an option): the same keys, but the mouse aims at the ground.
  */
@@ -65,7 +65,7 @@ export const DESKTOP_HELP: readonly (readonly [string, string])[] = [
   ['Right click', 'Aim down the sights'],
   ['Shift', 'Sprint (no shooting)'],
   ['C / Ctrl', 'Crouch (slide while sprinting)'],
-  ['Space', 'Jump / vault'],
+  ['Space', 'Jump / vault / climb'],
   ['R', 'Reload'],
   ['Q', 'Challenge a player'],
   ['V', 'First / third person'],
@@ -80,7 +80,7 @@ export const TOUCH_HELP: readonly (readonly [string, string])[] = [
   ['Right side', 'Drag to look'],
   ['FIRE', 'Tap to shoot, hold to keep firing'],
   ['AIM', 'Hold to aim down the sights'],
-  ['JUMP', 'Jump / vault'],
+  ['JUMP', 'Jump / vault / climb'],
   ['CROUCH', 'Crouch (tap while sprinting to slide)'],
   ['RELOAD', 'Reload'],
   ['Bank window', 'Stand still to bank your carry'],
@@ -92,7 +92,7 @@ export const PAD_HELP: readonly (readonly [string, string])[] = [
   ['Right stick', 'Look'],
   ['RT', 'Shoot'],
   ['LT', 'Aim down the sights'],
-  ['A', 'Jump / vault'],
+  ['A', 'Jump / vault / climb'],
   ['B', 'Crouch (slide while sprinting)'],
   ['X', 'Reload'],
   ['Y', 'Call out / accept'],

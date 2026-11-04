@@ -1,3 +1,4 @@
+// biome-ignore-all lint/style/noExcessiveLinesPerFile: movement, collision, vaults, ladders and falls are one deterministic step
 /**
  * Movement, the roll, and collision. This is the exact step the client replays for prediction, so
  * it depends only on the move state, the input frame and the grid.
@@ -40,6 +41,15 @@ import {
   VAULT_TICKS,
 } from './constants.ts'
 import { BLOCK_MOVE, BLOCK_VAULT, circleBlocked, type Grid, pushOut } from './layout.ts'
+import {
+  CLIMB_TICKS,
+  FALL_DISTANCE,
+  FALL_TICKS,
+  ladderAt,
+  onRoofWalk,
+  type RoofWalk,
+  roofWalkAt,
+} from './roofwalks.ts'
 import type { MoveState } from './types.ts'
 
 const STICK_MAX = 127
@@ -79,7 +89,14 @@ export const rolling = (m: MoveState): boolean => m.rollTicks > 0
 export const vaulting = (m: MoveState): boolean => m.jumpTicks > 0 && m.vaultStep > 0
 
 /** A jump in the air (not a vault). */
-export const airborne = (m: MoveState): boolean => m.jumpTicks > 0 && m.vaultStep === 0
+export const airborne = (m: MoveState): boolean =>
+  (m.jumpTicks > 0 && m.vaultStep === 0) || m.fallTicks > 0
+
+/** On a ladder, committed up or down. */
+export const climbing = (m: MoveState): boolean => m.climbTicks > 0
+
+/** Stepping off a roof: a committed fall to the ground. */
+export const falling = (m: MoveState): boolean => m.fallTicks > 0
 
 export const sliding = (m: MoveState): boolean => m.slideTicks > 0
 
@@ -88,7 +105,7 @@ export const inIframes = (m: MoveState): boolean =>
   (m.rollTicks > 0 && m.rollTicks >= ROLL_TICKS - ROLL_IFRAME_TICKS) ||
   (m.slideTicks > 0 && m.slideTicks >= SLIDE_TICKS - SLIDE_IFRAME_TICKS)
 
-/** Stop every move in progress (death, a showdown, a respawn). */
+/** Stop every move in progress, settling a climb or fall onto the nearest safe level. */
 export function stopMoves(m: MoveState): void {
   m.rollTicks = 0
   m.jumpTicks = 0
@@ -98,6 +115,45 @@ export function stopMoves(m: MoveState): void {
   m.airZ = 0
   m.sprinting = false
   m.sprintOut = 0
+  if (m.climbTicks > 0) {
+    const w = roofWalkAt(m.climbDeck)
+    if (w) {
+      m.x = w.ladderX
+      m.z = w.ladderZ
+      m.y = m.climbDir > 0 ? 0 : w.height
+      m.roof = m.climbDir > 0 ? 0 : w.index
+    }
+    m.climbTicks = 0
+    m.climbDeck = 0
+    m.climbDir = 0
+  }
+  if (m.fallTicks > 0) {
+    m.x = m.fallToX
+    m.z = m.fallToZ
+    m.fallTicks = 0
+    m.fallTotal = 0
+  }
+  const walk = roofWalkAt(m.roof)
+  m.y = walk ? walk.height : 0
+  if (!walk) {
+    m.roof = 0
+  }
+}
+
+/** Death and respawn go back to the street; a showdown keeps its level. */
+export function resetVertical(m: MoveState): void {
+  m.y = 0
+  m.roof = 0
+  m.climbTicks = 0
+  m.climbDeck = 0
+  m.climbDir = 0
+  m.fallTicks = 0
+  m.fallTotal = 0
+  m.fallFromX = 0
+  m.fallFromZ = 0
+  m.fallFromY = 0
+  m.fallToX = 0
+  m.fallToZ = 0
 }
 
 const SPRINT_COS = Math.cos((SPRINT_CONE_DEG * Math.PI) / 180)
@@ -206,6 +262,15 @@ function startJump(
   stick: Stick,
   sprint: boolean,
 ): void {
+  const ladder = ladderAt(m.x, m.z, m.roof)
+  if (ladder) {
+    startClimb(m, ladder.walk, ladder.dir)
+    return
+  }
+  if (m.roof > 0) {
+    startFall(grid, m)
+    return
+  }
   const dirAim = heading(stick, input.aim)
   // The direction goes through the wire's u16 angle, so a replay from a snapshot is exact.
   const dir = aimDir(dirAim)
@@ -228,6 +293,164 @@ function startJump(
   }
   m.slideTicks = 0
   m.sprinting = false
+}
+
+/** Start a committed climb from one end of a ladder. */
+function startClimb(m: MoveState, w: RoofWalk, dir: 1 | -1): void {
+  m.jumpCooldown = JUMP_COOLDOWN_TICKS
+  m.x = w.ladderX
+  m.z = w.ladderZ
+  m.climbTicks = CLIMB_TICKS
+  m.climbDeck = w.index
+  m.climbDir = dir
+  m.roof = dir > 0 ? 0 : w.index
+  m.y = dir > 0 ? 0 : w.height
+  m.rollTicks = 0
+  m.jumpTicks = 0
+  m.slideTicks = 0
+  m.airX = 0
+  m.airZ = 0
+  m.sprinting = false
+  m.sprintOut = 0
+}
+
+/** One tick of the ladder: straight up or down, fixed duration, no steering. */
+function stepClimb(m: MoveState): void {
+  const w = roofWalkAt(m.climbDeck)
+  if (!w) {
+    m.climbTicks = 0
+    m.climbDeck = 0
+    m.climbDir = 0
+    m.y = 0
+    m.roof = 0
+    return
+  }
+  m.x = w.ladderX
+  m.z = w.ladderZ
+  m.climbTicks--
+  const t = 1 - m.climbTicks / CLIMB_TICKS
+  m.y = quantize(m.climbDir > 0 ? w.height * t : w.height * (1 - t))
+  if (m.climbTicks <= 0) {
+    m.climbTicks = 0
+    m.y = m.climbDir > 0 ? w.height : 0
+    m.roof = m.climbDir > 0 ? w.index : 0
+    m.climbDeck = 0
+    m.climbDir = 0
+  }
+}
+
+/** The way off a catwalk: away from its building, over the eave. */
+function outward(w: RoofWalk): { x: number; z: number } {
+  switch (w.side) {
+    case 'n':
+      return { x: 0, z: -1 }
+    case 's':
+      return { x: 0, z: 1 }
+    case 'e':
+      return { x: 1, z: 0 }
+    default:
+      return { x: -1, z: 0 }
+  }
+}
+
+/**
+ * Step off the roof: travel `FALL_DISTANCE` outward, stop at the first wall or cover, then drop
+ * straight to that point. Always outward, so a rider never falls through the roof they stood on.
+ */
+function startFall(grid: Grid, m: MoveState): void {
+  const w = roofWalkAt(m.roof)
+  if (!w) {
+    m.roof = 0
+    m.y = 0
+    return
+  }
+  const dir = outward(w)
+  // Find the first clear spot past the eave: the rider is above the street/porch below, so the
+  // landing only has to be walkable, but it must be off the deck or the fall would pass through it.
+  let x = m.x
+  let z = m.z
+  let found = false
+  for (let d = 0.1; d <= FALL_DISTANCE + 1e-6; d += 0.1) {
+    const nx = m.x + dir.x * d
+    const nz = m.z + dir.z * d
+    if (onRoofWalk(w, nx, nz)) {
+      continue
+    }
+    if (!circleBlocked(grid, { x: nx, z: nz, r: PLAYER_RADIUS }, BLOCK_MOVE)) {
+      x = nx
+      z = nz
+      found = true
+      break
+    }
+  }
+  if (!found) {
+    const p = pushOut(
+      grid,
+      { x: m.x + dir.x * FALL_DISTANCE, z: m.z + dir.z * FALL_DISTANCE, r: PLAYER_RADIUS },
+      BLOCK_MOVE,
+      0,
+    )
+    x = p.x
+    z = p.z
+  }
+  m.jumpCooldown = JUMP_COOLDOWN_TICKS
+  m.fallFromX = m.x
+  m.fallFromZ = m.z
+  m.fallFromY = w.height
+  m.fallToX = quantize(x)
+  m.fallToZ = quantize(z)
+  m.fallTicks = FALL_TICKS
+  m.fallTotal = FALL_TICKS
+  m.roof = 0
+  m.y = w.height
+  m.rollTicks = 0
+  m.jumpTicks = 0
+  m.slideTicks = 0
+  m.airX = 0
+  m.airZ = 0
+  m.sprinting = false
+  m.sprintOut = 0
+}
+
+/** One tick of a step-off: horizontal travel plus a gravity-shaped drop. */
+function stepFall(m: MoveState): void {
+  m.fallTicks--
+  const t = 1 - m.fallTicks / Math.max(1, m.fallTotal)
+  m.x = quantize(m.fallFromX + (m.fallToX - m.fallFromX) * t)
+  m.z = quantize(m.fallFromZ + (m.fallToZ - m.fallFromZ) * t)
+  m.y = quantize(m.fallFromY * (1 - t * t))
+  if (m.fallTicks <= 0) {
+    m.fallTicks = 0
+    m.fallTotal = 0
+    m.x = m.fallToX
+    m.z = m.fallToZ
+    m.y = 0
+    m.roof = 0
+  }
+}
+
+/** Walk along a catwalk: the same speeds, clamped to the deck's inset rectangle. */
+function stepRoof(m: MoveState, stick: Stick, input: MoveInput, sprint: boolean): boolean {
+  const w = roofWalkAt(m.roof)
+  if (!w) {
+    m.roof = 0
+    m.y = 0
+    return false
+  }
+  m.y = w.height
+  if (stick.mag === 0) {
+    m.sprinting = false
+    return false
+  }
+  m.sprinting = sprint
+  const step = groundSpeed(input.buttons, sprint) * stick.mag * DT
+  const minX = w.x + PLAYER_RADIUS
+  const maxX = w.x + w.w - PLAYER_RADIUS
+  const minZ = w.z + PLAYER_RADIUS
+  const maxZ = w.z + w.d - PLAYER_RADIUS
+  m.x = quantize(Math.min(maxX, Math.max(minX, m.x + stick.x * step)))
+  m.z = quantize(Math.min(maxZ, Math.max(minZ, m.z + stick.z * step)))
+  return true
 }
 
 /** Ground speed (m/s) for this tick's stance: sprint, crouch, the sights. */
@@ -343,6 +566,14 @@ export function stepMove(grid: Grid, m: MoveState, input: MoveInput): boolean {
     stopMoves(m)
     return false
   }
+  if (m.climbTicks > 0) {
+    stepClimb(m)
+    return false
+  }
+  if (m.fallTicks > 0) {
+    stepFall(m)
+    return true
+  }
   const stick = stickVector(input.moveX, input.moveZ)
   const edge = (bit: number) => (input.buttons & bit) !== 0 && (input.prevButtons & bit) === 0
   if (input.buttons & BTN_FIRE) {
@@ -355,6 +586,15 @@ export function stepMove(grid: Grid, m: MoveState, input: MoveInput): boolean {
   const sprint = canSprint(m, input, stick)
   if (edge(BTN_JUMP) && m.rollTicks === 0 && m.jumpTicks === 0 && m.jumpCooldown === 0) {
     startJump(grid, m, input, stick, sprint)
+    if (m.climbTicks > 0) {
+      return false
+    }
+    if (m.fallTicks > 0) {
+      return true
+    }
+  }
+  if (m.roof > 0) {
+    return stepRoof(m, stick, input, sprint)
   }
   if (vaulting(m)) {
     stepVault(grid, m)

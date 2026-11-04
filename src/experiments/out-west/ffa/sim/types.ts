@@ -19,6 +19,22 @@ export interface InputFrame {
 export interface MoveState {
   x: number
   z: number
+  /** Feet height above the street, metres (0 at street level, a porch roof's top on a deck). */
+  y: number
+  /** Walking level: 0 is the street, `n` is `ROOF_WALKS[n - 1]`. */
+  roof: number
+  /** Ticks left on a committed ladder climb, the walk being climbed and the direction (+1/-1). */
+  climbTicks: number
+  climbDeck: number
+  climbDir: number
+  /** Ticks left on a committed step-off, the fall's duration, and its start/end points. */
+  fallTicks: number
+  fallTotal: number
+  fallFromX: number
+  fallFromZ: number
+  fallFromY: number
+  fallToX: number
+  fallToZ: number
   rollTicks: number
   rollCooldown: number
   rollDirX: number

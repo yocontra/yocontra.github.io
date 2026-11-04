@@ -98,7 +98,7 @@ export interface Sink {
   audio: AudioEngine | null
   kick: (amp: number) => void
   /** World position of a player right now (render position), or null if unknown. */
-  posOf: (id: number) => { x: number; z: number } | null
+  posOf: (id: number) => { x: number; z: number; y?: number } | null
   /** Where a player's shot leaves the gun. */
   muzzleOf: (id: number, x: number, z: number, aim: number) => Vector3
   showdowns: Map<number, Showdown>
@@ -110,7 +110,7 @@ export interface Sink {
   blocked: (id: number) => boolean
   pickups: Pickups
   /** You took a hit from (`x`, `z`): the HUD's damage arc points there. */
-  damageFrom: (from: { x: number; z: number }) => void
+  damageFrom: (from: { x: number; z: number; y?: number }) => void
   /** You took `amount` from `attacker` (the death card's tally). */
   tookHit: (attacker: number, amount: number) => void
   /** Burning fuses by thrower: the hiss runs from the throw to the blast. */
@@ -150,7 +150,7 @@ function onShot(s: Sink, ev: Extract<WireEvent, { type: typeof EV_SHOT }>): void
   }
   impactSound(s.audio, ev.flags, endX, endZ, s.posOf(you))
   if (ev.flags & SHOT_HIT) {
-    s.fx.impact(endX, endZ, true)
+    s.fx.impact(endX, endZ, true, s.posOf(ev.target)?.y ?? 0)
     if (ev.shooter === you) {
       // a Dead-Eye hit is the critical one: gold, and a sharper tick
       const crit = (ev.flags & SHOT_DEAD_EYE) !== 0
@@ -158,7 +158,7 @@ function onShot(s: Sink, ev: Extract<WireEvent, { type: typeof EV_SHOT }>): void
       s.audio?.play('hitBody', { gain: crit ? 0.55 : 0.4, rate: crit ? 1.9 : 1.6, priority: true })
     }
   } else if (ev.flags & SHOT_WALL) {
-    s.fx.impact(endX, endZ, false)
+    s.fx.impact(endX, endZ, false, p.y ?? 0)
   }
 }
 

@@ -316,8 +316,8 @@ export class Effects {
     f.color.setRGB(3, 2.2, 1)
   }
 
-  /** Dust off a wall, or blood on a hit. */
-  impact(x: number, z: number, hit: boolean): void {
+  /** Dust off a wall, or blood on a hit; `y` lifts it to the shooter/target's feet. */
+  impact(x: number, z: number, hit: boolean, y = 0): void {
     const eye = this.eye
     if (eye && Math.hypot(x - eye.x, z - eye.z) < 0.9) {
       return
@@ -326,7 +326,7 @@ export class Effects {
       const p = this.puffs.spawn()
       p.life = hit ? 0.35 : 0.5
       p.x = x
-      p.y = hit ? 1.1 : 0.9
+      p.y = y + (hit ? 1.1 : 0.9)
       p.z = z
       p.vx = (Math.random() - 0.5) * 2
       p.vy = Math.random() * 1.2
