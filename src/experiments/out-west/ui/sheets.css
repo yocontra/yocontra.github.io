@@ -91,11 +91,6 @@
 .ow-hub-row > .ow-btn {
   flex: 1 1 auto;
 }
-.ow-btn-danger,
-.ow-btn-danger:hover {
-  background-color: var(--ow-red-lo);
-  border-color: #3a0805;
-}
 .ow-hub-choices {
   display: flex;
   flex-direction: column;
@@ -265,12 +260,6 @@
     inset 0 0 0 3px transparent,
     inset 0 0 0 4px var(--ow-rule-ink);
 }
-.ow-hub-row.ow-sheet-head > .ow-btn {
-  flex: none;
-  min-height: var(--ow-tap);
-  padding: 0 var(--ow-s3);
-  font-size: var(--ow-fs-body);
-}
 .ow-paper-doc .ow-btn:hover {
   background-color: rgb(29 20 12 / 0.08);
 }
@@ -281,6 +270,19 @@
 }
 .ow-paper-doc .ow-btn-primary:hover {
   background-color: var(--ow-red-hi);
+}
+.ow-paper-doc .ow-btn-danger,
+.ow-paper-doc .ow-btn-danger:hover {
+  color: #fff6e6;
+  background-color: var(--ow-red-lo);
+  border-color: #3a0805;
+}
+.ow-paper-doc .ow-btn-ghost,
+.ow-paper-doc .ow-btn-ghost:hover {
+  color: var(--ow-ink-2);
+  background: none;
+  border-color: transparent;
+  box-shadow: none;
 }
 .ow-paper-doc .ow-btn:disabled,
 .ow-paper-doc .ow-btn:disabled:hover {
@@ -408,7 +410,7 @@
 .ow-set-seg-btn {
   flex: 1 1 0;
   min-height: 44px;
-  padding: 0 var(--ow-s3);
+  padding: 0 var(--ow-s3) var(--ow-lift-sc);
   border: 0;
   background: rgb(0 0 0 / 0.3);
   color: var(--ow-bone-2);

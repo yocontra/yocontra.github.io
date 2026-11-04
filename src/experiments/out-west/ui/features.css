@@ -63,7 +63,7 @@
   flex: 1 1 0;
   justify-content: center;
   min-width: 0;
-  padding-block: 6px;
+  padding-block: 6px calc(6px + var(--ow-lift-sc));
   white-space: normal;
   text-align: center;
   text-wrap: balance;
@@ -97,7 +97,7 @@
   align-items: center;
   gap: var(--ow-s1);
   min-height: var(--ow-tap);
-  padding: 0 var(--ow-s1);
+  padding: 0 var(--ow-s1) var(--ow-lift-sc);
   font-family: var(--ow-font-text);
   font-weight: 600;
   font-size: var(--ow-fs-body);
