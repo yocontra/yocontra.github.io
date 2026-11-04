@@ -60,7 +60,7 @@ const BUS_LEVELS: Readonly<Record<Bus, number>> = {
   sfx: 0.72,
   amb: 0.5,
   music: 1.15,
-  voice: 0.8,
+  voice: 1.2,
   call: 0.72,
 }
 /** Which slider each bus answers to (the call answers to none). */
@@ -81,6 +81,8 @@ const CALL_DUCK: readonly (readonly [Bus, number])[] = [
 const taper = (x: number) => x * x
 /** Breathing room baked between voice lines in a sprite is trimmed off at play: fade out over this. */
 const VOICE_FADE = 0.03
+/** How far the score dips under an outlaw's line (linear: about −5 dB). */
+const VOICE_DUCK = 0.56
 /** Each speaker's lines play this far off centre (the outlaw stands across the street). */
 const VOICE_PAN = 0.12
 /**
@@ -210,6 +212,8 @@ export class AudioEngine {
   private readonly speaking = new Map<string, { src: AudioBufferSourceNode; gain: GainNode }>()
   private musicFilter!: BiquadFilterNode
   private musicGain!: GainNode
+  /** Dips the score under an outlaw's line, so the words sit on top of it. */
+  private voiceDuck!: GainNode
   private reverbIn!: GainNode
   private slapIn!: GainNode
   private pool: DeckPool | null = null
@@ -415,7 +419,8 @@ export class AudioEngine {
     this.musicFilter.frequency.value = 18_000
     this.musicFilter.Q.value = 0.5
     this.musicGain = ctx.createGain()
-    this.musicFilter.connect(this.musicGain).connect(this.buses.music)
+    this.voiceDuck = ctx.createGain()
+    this.musicFilter.connect(this.musicGain).connect(this.voiceDuck).connect(this.buses.music)
 
     const reverb = ctx.createConvolver()
     reverb.buffer = this.makeImpulse(ctx, 1.4)
@@ -1237,6 +1242,13 @@ export class AudioEngine {
     src.start(when, line.at, line.len + 0.01)
     const mine = { src, gain: g }
     this.speaking.set(who, mine)
+    if (who) {
+      // the score steps back under his words and comes up after
+      const d = this.voiceDuck.gain
+      d.cancelScheduledValues(when)
+      d.setTargetAtTime(VOICE_DUCK, when, 0.05)
+      d.setTargetAtTime(1, end, 0.25)
+    }
     src.onended = () => {
       src.disconnect()
       if (this.speaking.get(who) === mine) {
