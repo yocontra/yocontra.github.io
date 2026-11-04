@@ -1179,6 +1179,11 @@ function spaced(plants: readonly Plant[]): Plant[] {
   return out
 }
 
+/** Drop an attribute's CPU array once it is uploaded (three's documented pattern). */
+function release(this: { array: unknown }): void {
+  this.array = null
+}
+
 /** Bake the plants into merged, chunked, static meshes under one group. */
 export function buildFlora(plants: readonly Plant[], opts: FloraOpts): Group {
   const root = new Group()
@@ -1209,6 +1214,15 @@ export function buildFlora(plants: readonly Plant[], opts: FloraOpts): Group {
     const geo = g.build()
     if (!geo) {
       continue
+    }
+    if (!import.meta.env.DEV) {
+      // once on the GPU the CPU copies are dead weight (dev keeps them for the float audit)
+      for (const attr of Object.values(geo.attributes)) {
+        if (attr instanceof BufferAttribute) {
+          attr.onUpload(release)
+        }
+      }
+      geo.index?.onUpload(release)
     }
     const m = new Mesh(geo, mat)
     m.name = 'flora'

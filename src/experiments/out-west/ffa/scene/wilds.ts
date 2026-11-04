@@ -206,7 +206,7 @@ export function buildWilds(layout: TownLayout, tier: string): Group {
       const a = Math.atan2(z - s / 2, x - s / 2)
       return `w${Math.floor(((a + Math.PI) / (Math.PI * 2)) * 8)}`
     },
-    shadowNear: { x: s / 2, z: s / 2, r: s },
+    // no real-time shadows: the plants all stand outside the square, past the shadow map's reach
   })
 }
 
@@ -294,7 +294,6 @@ export class Wilds {
     for (const [i, lane] of lanes.entries()) {
       const m = new Mesh(geo, mat)
       m.name = 'tumbleweed'
-      m.castShadow = true
       this.scene.add(m)
       this.weeds.push(new Roller(m, lane, layout, i * 23))
     }
