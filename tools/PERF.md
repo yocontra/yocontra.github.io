@@ -158,6 +158,44 @@ What changed:
 - **Hats.** Other riders' hats now use an LOD: 800 triangles near, 300 in the VAT crowd, down from
   3.5k each.
 
+### Frontier shooter views (over the shoulder, first person), Nov 2026
+
+Harness: `bun tools/frontier-perf.ts --view=top|third|first [--cluster]`. It uses the same floor
+proxy as above: loopback, 31 bots, 812×375 CSS at DPR 3, touch, floor tier, 4× CPU, and 15 samples.
+In the shooter views the camera pans 30° per sample, so every run looks all the way round the
+horizon. These numbers are on the rebuilt Perdition (`redesign` after the map rebuild and the
+stutter fix), with other agents loading the machine. Read the views against each other within one
+run; don't compare them with the older tables.
+
+|                 | Top-down, spread | Third, spread | First, spread | Top-down, packed | Third, packed | First, packed |
+| --------------- | ---------------- | ------------- | ------------- | ---------------- | ------------- | ------------- |
+| CPU p50 (ms)    | 7.5              | 6.8           | 5.9           | 7.5              | 8.6           | 9.1           |
+| CPU p95 (ms)    | 9.6              | 8.8           | 7.3           | 9.4              | 10.2          | 11.0          |
+| Draws (max)     | 65               | 99            | 89            | 132              | 128           | 124           |
+| Triangles (max) | 387k             | 417k          | 379k          | 451k             | 447k          | 413k          |
+| Textures        | ≤81              | ≤80           | ≤72           | ≤81              | ≤80           | ≤79           |
+
+The shooter views cost about the same as top-down: within ±1 ms p95 in the same run. Two runs of
+the same view differ by up to 1.5 ms under the current machine load. What keeps the horizon cheap:
+- **Draw distance and fog by tier** (`ffa/client/view.ts`):
+  - floor: 120 m far plane, fog 38 to 118 m;
+  - legacy: 90 m, fog 28 to 88 m;
+  - medium: 190 m;
+  - high: 230 m.
+    The far end melts into the haze colour instead of popping.
+- **Shadows follow the view.** The sun's box centres ahead of you (7 m on floor) and stays small:
+  a 12 m half-size on floor and legacy's 10 m, against 24 m on high.
+- **The crowd is ranked from your position**, not the old look-ahead point. The nearest 12 or 16
+  riders stay skinned and the rest are VAT instances, which read correctly from street level, hats
+  included. Characters render at life size in the shooter views (`Crowd.readScale` 1; top-down
+  keeps 1.25).
+- **First person** hides your own body and draws a 3–6 draw view model instead.
+- **The bank guide's path walk** runs at 10 Hz. Its walking-distance field is flooded once at
+  load, about 5 ms.
+
+The rebuilt town alone puts top-down over the old budget: CPU p95 over 7 ms and triangles over
+350k. That needs a pass on the town's geometry, not on the camera.
+
 ## Real-device checklist (iPhone 13 mini, current iOS, WKWebView)
 
 Do this before signing off any art drop. The pass bar (§9.6): **p95 ≤ 16.7 ms over 10 minutes,
