@@ -134,6 +134,9 @@
   overflow-y: auto;
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(9.5rem, 1fr));
+  /* rows as tall as their cards: a flex button's content isn't counted otherwise, and the
+     thumbnail band pushed the name, rarity and price under the next row */
+  grid-auto-rows: max-content;
   align-content: start;
   gap: var(--ow-s2);
   padding: 2px;
@@ -313,16 +316,17 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  height: 88px;
+  height: 120px;
   margin: -12px -12px 8px -14px;
   overflow: hidden;
-  background: radial-gradient(90% 90% at 50% 40%, #3a2f25, #1f1914);
+  /* the thumbnails' own backdrop, so a contained square runs edge to edge */
+  background: #3e3329;
   border-bottom: 1px solid rgb(239 228 204 / 0.12);
 }
 .ow-item-art img {
   width: 100%;
   height: 100%;
-  object-fit: cover;
+  object-fit: contain;
 }
 .ow-item .ow-item-art .ow-icon {
   position: static;
@@ -414,7 +418,6 @@
   gap: 4px;
   min-height: 44px;
   padding: 0 0 6px;
-  overflow: hidden;
   font: inherit;
   font-size: var(--ow-fs-small);
   font-weight: 600;
@@ -439,4 +442,37 @@
 .ow-set-piece.owned {
   color: var(--ow-bone);
   border-color: var(--ow-brass);
+}
+
+/* portrait and short landscape phones: the picture beside the words, so a short shelf still shows
+   every card's name, rarity and price */
+@media (max-aspect-ratio: 1 / 1), (max-height: 480px) {
+  .ow-store-list {
+    grid-template-columns: repeat(auto-fill, minmax(13rem, 1fr));
+  }
+  .ow-item {
+    display: grid;
+    grid-template-columns: 76px 1fr;
+    grid-template-rows: auto auto 1fr;
+    column-gap: 12px;
+    min-height: 84px;
+    padding: 8px 12px 8px 0;
+  }
+  .ow-item .ow-item-art {
+    grid-row: 1 / 4;
+    height: auto;
+    min-height: 76px;
+    margin: -8px 0 -8px 3px;
+    border-bottom: 0;
+    border-right: 1px solid rgb(239 228 204 / 0.12);
+  }
+  .ow-item-tag {
+    padding-top: 2px;
+  }
+  .ow-item-badges {
+    top: auto;
+    bottom: 6px;
+    left: auto;
+    right: 8px;
+  }
 }

@@ -18,8 +18,10 @@ export type Graphics = 'auto' | 'low' | 'high'
 export interface Settings {
   /** Music bus, 0..1. */
   music: number
-  /** Effects bus (shots, the bell, the street), 0..1. */
+  /** Effects bus (shots and the street; the bell ignores every slider), 0..1. */
   sfx: number
+  /** Voices (barks, taunts, grunts), 0..1. */
+  voice: number
   /** Buzz on your own shot and on a hit (never on the call). */
   vibration: boolean
   /** Renderer tier: auto picks by device; low and high force it. Applies on the next load. */
@@ -29,6 +31,7 @@ export interface Settings {
 export const DEFAULT_SETTINGS: Readonly<Settings> = {
   music: 0.8,
   sfx: 1,
+  voice: 1,
   vibration: true,
   graphics: 'auto',
 }
@@ -51,6 +54,7 @@ function read(): Settings {
   return {
     music: unit(v.music, DEFAULT_SETTINGS.music),
     sfx: unit(v.sfx, DEFAULT_SETTINGS.sfx),
+    voice: unit(v.voice, DEFAULT_SETTINGS.voice),
     vibration: typeof v.vibration === 'boolean' ? v.vibration : DEFAULT_SETTINGS.vibration,
     graphics: GRAPHICS.includes(v.graphics as Graphics)
       ? (v.graphics as Graphics)
