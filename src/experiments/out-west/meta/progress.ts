@@ -8,8 +8,8 @@ import type { ProgressResponse } from '../contract/meta.ts'
 import { type Achievement, type AchievementState, newlyEarned } from '../data/achievements.ts'
 import { dayKey } from '../data/daily.ts'
 import {
-  type Challenge,
   CHALLENGE_PAY,
+  type Challenge,
   CLAIM_PAY,
   challengeFor,
   emptyMark,
@@ -17,8 +17,8 @@ import {
   guestCredit,
   isClaim,
   MEDAL_PAY,
-  mergeMark,
   meets,
+  mergeMark,
   OUTLAW_COUNT,
   type OutlawMark,
   type TierRank,
@@ -179,15 +179,7 @@ export class Meta {
       return
     }
     this.data.clears |= 1 << level
-    if (r.hatShot) {
-      this.data.stats.hats++
-    }
-    if ((save.attempts[level] ?? 1) >= 6) {
-      this.moment('stubborn')
-    }
-    if (level === BOSS && save.cowardice === 0) {
-      this.moment('clean-clear')
-    }
+    this.gauntletMoments(r, save)
     const clean = !this.drewEarly.has(level)
     this.drewEarly.delete(level)
     const prev = this.data.marks[level] ?? emptyMark()
@@ -209,7 +201,15 @@ export class Meta {
         counted === null ? prev.bestMs : Math.min(prev.bestMs ?? Number.POSITIVE_INFINITY, counted),
       challenge: prev.challenge || met,
     }
-    const account = this.account?.marks[level]
+    this.announce(r, { prev, tier, met, challenge: c })
+  }
+
+  /** The toasts for a gauntlet win, and the hat claim on a ranked run. */
+  private announce(
+    r: DuelReport,
+    w: { prev: OutlawMark; tier: TierRank; met: boolean; challenge: Challenge | undefined },
+  ): void {
+    const account = this.account?.marks[r.level]
     const signedIn = currentPlayer() !== null
     const paysAccount = r.ranked && signedIn
     let where: Where = 'guest'
@@ -218,14 +218,30 @@ export class Meta {
     } else if (signedIn) {
       where = 'practice'
     }
-    if (tier > Math.max(prev.tier, paysAccount ? (account?.tier ?? 0) : 0)) {
-      this.medalToast(level, tier, r.reactionMs ?? 0, where)
+    if (w.tier > Math.max(w.prev.tier, paysAccount ? (account?.tier ?? 0) : 0)) {
+      this.medalToast(r.level, w.tier, r.reactionMs ?? 0, where)
     }
-    if (met && c && !prev.challenge) {
+    const c = w.challenge
+    if (!(w.met && c)) {
+      return
+    }
+    if (!w.prev.challenge) {
       this.challengeToast(c, where)
     }
-    if (met && c && isClaim(c) && paysAccount && !account?.challenge) {
+    if (isClaim(c) && paysAccount && !account?.challenge) {
       this.claimHat(c, this.deps.runId())
+    }
+  }
+
+  private gauntletMoments(r: DuelReport, save: SaveData): void {
+    if (r.hatShot) {
+      this.data.stats.hats++
+    }
+    if ((save.attempts[r.level] ?? 1) >= 6) {
+      this.moment('stubborn')
+    }
+    if (r.level === BOSS && save.cowardice === 0) {
+      this.moment('clean-clear')
     }
   }
 
@@ -256,20 +272,25 @@ export class Meta {
     if (!runId) {
       return
     }
-    const attempt = (n: number): void => {
-      claimChallenge(c.id, runId)
-        .then((r) => {
-          if (r.ok || r.status === 409) {
-            this.sync().catch(() => undefined)
-            return
-          }
-          if (r.status === 403 && n + 1 < CLAIM_TRIES) {
-            setTimeout(() => attempt(n + 1), CLAIM_DELAY_MS * (n + 1))
-          }
-        })
-        .catch(() => undefined)
+    const attempt = async (n: number): Promise<void> => {
+      const r = await claimChallenge(c.id, runId)
+      if (r.ok || r.status === 409) {
+        await this.sync()
+        return
+      }
+      if (r.status === 403 && n + 1 < CLAIM_TRIES) {
+        // the credit job may not have booked the win yet
+        setTimeout(
+          () => {
+            attempt(n + 1).catch(() => undefined)
+          },
+          CLAIM_DELAY_MS * (n + 1),
+        )
+      }
     }
-    setTimeout(() => attempt(0), CLAIM_DELAY_MS)
+    setTimeout(() => {
+      attempt(0).catch(() => undefined)
+    }, CLAIM_DELAY_MS)
   }
 
   private claimLegend(): void {

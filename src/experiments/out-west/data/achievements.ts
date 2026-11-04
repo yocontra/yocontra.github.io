@@ -45,22 +45,52 @@ export const ACHIEVEMENTS: readonly Achievement[] = [
   a('first-blood', ['First Blood', 'Win your first duel.'], (s) => s.wins >= 1),
   a('first-medal', ['Pinned', 'Win a medal.'], (s) => tally(s.marks).bronze >= 1),
   a('first-gold', ['Struck Gold', 'Win a gold medal.'], (s) => tally(s.marks).gold >= 1),
-  a('bronze-set', ['Bronze Age', 'Bronze on all 17 outlaws.'], (s) => tally(s.marks).bronze >= OUTLAW_COUNT),
-  a('silver-set', ['Silver Tongue', 'Silver on all 17 outlaws.'], (s) => tally(s.marks).silver >= OUTLAW_COUNT),
-  a('gold-set', ['Gold Rush', 'Gold on all 17 outlaws.'], (s) => tally(s.marks).gold >= OUTLAW_COUNT),
-  a('first-challenge', ['Called Out', 'Finish a challenge.'], (s) => tally(s.marks).challenges >= 1),
-  a('tall-tales', ['Tall Tales', 'Finish all 17 challenges.'], (s) => tally(s.marks).challenges >= OUTLAW_COUNT),
+  a(
+    'bronze-set',
+    ['Bronze Age', 'Bronze on all 17 outlaws.'],
+    (s) => tally(s.marks).bronze >= OUTLAW_COUNT,
+  ),
+  a(
+    'silver-set',
+    ['Silver Tongue', 'Silver on all 17 outlaws.'],
+    (s) => tally(s.marks).silver >= OUTLAW_COUNT,
+  ),
+  a(
+    'gold-set',
+    ['Gold Rush', 'Gold on all 17 outlaws.'],
+    (s) => tally(s.marks).gold >= OUTLAW_COUNT,
+  ),
+  a(
+    'first-challenge',
+    ['Called Out', 'Finish a challenge.'],
+    (s) => tally(s.marks).challenges >= 1,
+  ),
+  a(
+    'tall-tales',
+    ['Tall Tales', 'Finish all 17 challenges.'],
+    (s) => tally(s.marks).challenges >= OUTLAW_COUNT,
+  ),
   a('hat-trick', ['Hat Trick', 'Shoot the hat off three outlaws.'], (s) => s.hats >= 3),
-  a('gauntlet', ['Last Man Standing', 'Kill John Wesley Hardin.'], (s) => (s.clears & BOSS_BIT) !== 0),
+  a(
+    'gauntlet',
+    ['Last Man Standing', 'Kill John Wesley Hardin.'],
+    (s) => (s.clears & BOSS_BIT) !== 0,
+  ),
   a('clean-hands', ['Clean Hands', 'Clear the gauntlet without drawing early.'], (s) =>
     s.moments.has('clean-clear'),
   ),
   a('nerves', ['Nerves of Iron', 'Win through a fake-out ten times.'], (s) => s.fakesBeaten >= 10),
-  a('lightning', ['Greased Lightning', 'Win a duel under 180 ms.'], (s) => s.moments.has('lightning')),
+  a('lightning', ['Greased Lightning', 'Win a duel under 180 ms.'], (s) =>
+    s.moments.has('lightning'),
+  ),
   a('stubborn', ['Mule-Headed', 'Beat an outlaw who killed you five times.'], (s) =>
     s.moments.has('stubborn'),
   ),
-  a('legend-3', ['Tall in the Saddle', 'Beat three outlaws in one Legend run.'], (s) => s.legendBest >= 3),
+  a(
+    'legend-3',
+    ['Tall in the Saddle', 'Beat three outlaws in one Legend run.'],
+    (s) => s.legendBest >= 3,
+  ),
   a('legend-6', ['Legend', 'Beat six outlaws in one Legend run.'], (s) => s.legendBest >= 6),
   a('daily-first', ['Daily Bread', 'Win the Daily Outlaw.'], (s) => s.dailyDays >= 1),
   a('daily-week', ['Regular', 'Win the Daily Outlaw on seven days.'], (s) => s.dailyDays >= 7),
@@ -69,6 +99,9 @@ export const ACHIEVEMENTS: readonly Achievement[] = [
 ]
 
 /** Achievements `s` meets that aren't in `have` yet. */
-export function newlyEarned(s: AchievementState, have: Readonly<Record<string, number>>): Achievement[] {
+export function newlyEarned(
+  s: AchievementState,
+  have: Readonly<Record<string, number>>,
+): Achievement[] {
   return ACHIEVEMENTS.filter((x) => have[x.id] === undefined && x.test(s))
 }

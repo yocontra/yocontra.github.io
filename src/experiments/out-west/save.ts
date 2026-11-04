@@ -172,7 +172,7 @@ export function loadMeta(): MetaSave {
   try {
     const raw = localStorage.getItem(META_KEY)
     const p = raw ? (JSON.parse(raw) as Partial<MetaSave>) : null
-    if (!p || p.version !== 1) {
+    if (p?.version !== 1) {
       return d
     }
     const marks = d.marks.map((m, i) => {
@@ -195,7 +195,9 @@ export function loadMeta(): MetaSave {
         wins: num(s.wins),
         hats: num(s.hats),
         fakesBeaten: num(s.fakesBeaten),
-        dailyDays: Array.isArray(s.dailyDays) ? s.dailyDays.filter((x) => typeof x === 'string') : [],
+        dailyDays: Array.isArray(s.dailyDays)
+          ? s.dailyDays.filter((x) => typeof x === 'string')
+          : [],
         gazette: Array.isArray(s.gazette) ? s.gazette.filter((x) => typeof x === 'number') : [],
         epilogue: s.epilogue === true,
         signedIn: s.signedIn === true,

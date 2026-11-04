@@ -66,9 +66,15 @@ export const fetchDaily = (): Promise<Reply<DailyResponse>> =>
   call('/daily', {}, (v) => isRecord(v) && isRecord(v.spec))
 
 export const fetchDailyBoard = (day?: string): Promise<Reply<DailyBoardResponse>> =>
-  call(day ? `/daily/board?day=${encodeURIComponent(day)}` : '/daily/board', {}, (v) =>
-    isRecord(v) && Array.isArray(v.rows),
+  call(
+    day ? `/daily/board?day=${encodeURIComponent(day)}` : '/daily/board',
+    {},
+    (v) => isRecord(v) && Array.isArray(v.rows),
   )
 
 export const issueDaily = (turnstileToken: string): Promise<Reply<RankedSessionResponse>> =>
-  call('/daily/sessions', { body: { turnstileToken } }, (v) => isRecord(v) && typeof v.wsUrl === 'string')
+  call(
+    '/daily/sessions',
+    { body: { turnstileToken } },
+    (v) => isRecord(v) && typeof v.wsUrl === 'string',
+  )

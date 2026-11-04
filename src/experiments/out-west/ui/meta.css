@@ -1,0 +1,421 @@
+/*
+ * The solo meta-game (meta-game stream): the Daily Outlaw tile, the gauntlet map, achievements,
+ * toasts and the Perdition Gazette. Built only from ui/tokens.css.
+ */
+
+/* ---------------------------------------------------------- medal inks */
+.ow {
+  --ow-medal-bronze: #b9773f;
+  --ow-medal-silver: #c9ccd2;
+  --ow-medal-gold: var(--ow-brass-hi);
+}
+
+/* ---------------------------------------------------------- the daily tile */
+.ow-tile.ow-tile-daily {
+  --tile-accent: var(--ow-red-hi);
+  min-height: 5.5rem;
+  animation-delay: 0ms;
+}
+.ow-tile-daily .ow-tile-title {
+  font-size: min(clamp(1.125rem, 1.8vw, 1.375rem), 9cqi);
+}
+@media (max-aspect-ratio: 1 / 1) {
+  .ow-tile.ow-tile-daily {
+    min-height: 4.75rem;
+  }
+}
+@media (max-aspect-ratio: 1 / 1) and (max-height: 760px) {
+  .ow-tile.ow-tile-daily {
+    min-height: 4.25rem;
+  }
+  .ow-tile-daily .ow-tile-kicker {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+}
+
+/* ---------------------------------------------------------- toasts */
+.ow-toasts {
+  position: fixed;
+  top: calc(var(--ow-s3) + var(--ow-sai-t));
+  left: 50%;
+  z-index: 60;
+  width: min(26rem, calc(100% - 2 * var(--ow-s3)));
+  transform: translateX(-50%);
+  pointer-events: none;
+}
+.ow-toast {
+  display: flex;
+  gap: var(--ow-s3);
+  align-items: center;
+  padding: 12px var(--ow-s3);
+  color: var(--ow-ink);
+  background-color: var(--ow-paper);
+  background-image:
+    radial-gradient(120% 90% at 30% 15%, rgb(255 250 236 / 0.4), transparent 60%),
+    var(--ow-tex-paper);
+  background-size:
+    100% 100%,
+    256px 256px;
+  border: 1px solid var(--ow-brass-lo);
+  border-radius: var(--ow-radius);
+  box-shadow:
+    inset 0 0 0 3px var(--ow-paper),
+    inset 0 0 0 4px var(--ow-rule-ink),
+    var(--ow-shadow-2);
+  opacity: 0;
+  transform: translateY(-16px) rotate(-0.6deg);
+  transition:
+    opacity var(--ow-t-mid) var(--ow-ease-out),
+    transform var(--ow-t-mid) var(--ow-ease-slam);
+}
+.ow-toast.on {
+  opacity: 1;
+  transform: none;
+}
+.ow-toast.off {
+  opacity: 0;
+  transform: translateY(-8px);
+}
+.ow-toast-seal {
+  flex: none;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background:
+    radial-gradient(circle at 35% 30%, rgb(255 255 255 / 0.55), transparent 45%), var(--ow-red);
+  box-shadow:
+    inset 0 0 0 3px rgb(0 0 0 / 0.18),
+    0 1px 2px rgb(0 0 0 / 0.4);
+}
+.ow-toast-achievement .ow-toast-seal {
+  background-color: var(--ow-brass);
+}
+.ow-toast-purse .ow-toast-seal,
+.ow-toast-daily .ow-toast-seal {
+  background-color: #7d8c5a;
+}
+.ow-toast[data-tier="1"] .ow-toast-seal {
+  background-color: var(--ow-medal-bronze);
+}
+.ow-toast[data-tier="2"] .ow-toast-seal {
+  background-color: var(--ow-medal-silver);
+}
+.ow-toast[data-tier="3"] .ow-toast-seal {
+  background-color: var(--ow-medal-gold);
+}
+.ow-toast-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.ow-toast-kicker {
+  font-weight: 700;
+  font-size: var(--ow-fs-micro);
+  font-variant-caps: all-small-caps;
+  letter-spacing: var(--ow-track-kicker);
+  color: var(--ow-ink-3);
+}
+.ow-toast-title {
+  font-family: var(--ow-font-display);
+  font-weight: 400;
+  font-size: var(--ow-fs-h4);
+  line-height: var(--ow-lead-tight);
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+.ow-toast-line {
+  font-size: var(--ow-fs-small);
+  line-height: var(--ow-lead-snug);
+  color: var(--ow-ink-2);
+}
+@media (prefers-reduced-motion: reduce) {
+  .ow-toast {
+    transform: none;
+    transition: opacity var(--ow-t-fast);
+  }
+}
+
+/* ---------------------------------------------------------- the gauntlet map */
+.ow-sheet-panel.ow-map,
+.ow-sheet-panel.ow-ach,
+.ow-sheet-panel.ow-daily {
+  width: min(46rem, 100%);
+}
+.ow-map-sets {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: var(--ow-s2);
+  margin: var(--ow-s3) 0 var(--ow-s2);
+}
+.ow-map-set {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: var(--ow-s2);
+  border: 1px solid var(--ow-rule-ink);
+  border-top: 4px solid currentcolor;
+}
+.ow-map-set b {
+  font-size: var(--ow-fs-h3);
+  line-height: 1;
+  color: var(--ow-ink);
+}
+.ow-map-set span {
+  font-weight: 600;
+  font-size: var(--ow-fs-small);
+  font-variant-caps: all-small-caps;
+  letter-spacing: var(--ow-track-label);
+  color: var(--ow-ink-3);
+}
+.ow-map-set.ow-map-pip-bronze {
+  color: var(--ow-medal-bronze);
+}
+.ow-map-set.ow-map-pip-silver {
+  color: #9097a1;
+}
+.ow-map-set.ow-map-pip-gold {
+  color: var(--ow-brass);
+}
+.ow-map-set.ow-map-set-ch {
+  color: var(--ow-red);
+}
+.ow-map-list {
+  margin: var(--ow-s3) 0;
+  padding: 0;
+  list-style: none;
+}
+.ow-map-row {
+  display: grid;
+  grid-template-columns: 2.25rem minmax(0, 1.2fr) minmax(0, 1fr) minmax(0, 1.4fr);
+  gap: var(--ow-s2) var(--ow-s3);
+  align-items: center;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--ow-rule-ink);
+}
+.ow-map-row:not(.beaten) {
+  opacity: 0.62;
+}
+.ow-map-no {
+  font-size: var(--ow-fs-h4);
+  color: var(--ow-ink-3);
+}
+.ow-map-who,
+.ow-map-ch {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.ow-map-name {
+  font-family: var(--ow-font-display);
+  font-weight: 400;
+  font-size: var(--ow-fs-body);
+  line-height: var(--ow-lead-tight);
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+.ow-map-epithet,
+.ow-map-ch-task {
+  font-size: var(--ow-fs-small);
+  font-style: italic;
+  line-height: var(--ow-lead-snug);
+  color: var(--ow-ink-2);
+}
+.ow-map-medal {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 2px var(--ow-s2);
+  align-items: center;
+}
+.ow-map-pips {
+  display: inline-flex;
+  grid-row: span 2;
+  gap: 4px;
+}
+.ow-map-pip {
+  width: 16px;
+  height: 16px;
+  border: 1.5px solid var(--ow-ink-3);
+  border-radius: 50%;
+  background: transparent;
+}
+.ow-map-pip.on {
+  border-color: rgb(0 0 0 / 0.35);
+  box-shadow: inset 0 0 0 2px rgb(255 255 255 / 0.25);
+}
+.ow-map-pip-bronze.on {
+  background: var(--ow-medal-bronze);
+}
+.ow-map-pip-silver.on {
+  background: var(--ow-medal-silver);
+}
+.ow-map-pip-gold.on {
+  background: var(--ow-medal-gold);
+}
+.ow-map-best {
+  font-size: var(--ow-fs-body);
+  color: var(--ow-ink);
+}
+.ow-map-need {
+  font-size: var(--ow-fs-micro);
+  color: var(--ow-ink-3);
+}
+.ow-map-ch-title {
+  font-weight: 700;
+  font-size: var(--ow-fs-small);
+  font-variant-caps: all-small-caps;
+  letter-spacing: var(--ow-track-label);
+  color: var(--ow-ink);
+}
+.ow-map-ch.done .ow-map-ch-title {
+  color: var(--ow-red);
+}
+.ow-map-h {
+  margin: var(--ow-s4) 0 var(--ow-s2);
+  font-family: var(--ow-font-display);
+  font-weight: 400;
+  font-size: var(--ow-fs-h4);
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: var(--ow-ink);
+}
+.ow-map-rewards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(13rem, 1fr));
+  gap: var(--ow-s2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.ow-map-rewards li {
+  display: flex;
+  flex-direction: column;
+  padding: var(--ow-s2) 12px;
+  border: 1px dashed var(--ow-rule-ink);
+  color: var(--ow-ink-3);
+}
+.ow-map-rewards li b {
+  color: var(--ow-ink-2);
+}
+.ow-map-rewards li span,
+.ow-map-rewards li i {
+  font-size: var(--ow-fs-small);
+}
+.ow-map-rewards li.met {
+  border-style: solid;
+  border-color: var(--ow-brass-lo);
+}
+.ow-map-rewards li.owned {
+  color: var(--ow-ink-2);
+  border: 1px solid var(--ow-red);
+  box-shadow: inset 0 3px 0 var(--ow-red);
+}
+.ow-map-rewards li.owned b {
+  color: var(--ow-ink);
+}
+@container (max-width: 34rem) {
+  .ow-map-row {
+    grid-template-columns: 2rem minmax(0, 1fr) auto;
+  }
+  .ow-map-ch {
+    grid-column: 2 / -1;
+  }
+  .ow-map-sets {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+/* ---------------------------------------------------------- achievements */
+.ow-ach-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(17rem, 1fr));
+  gap: var(--ow-s2);
+  margin: var(--ow-s3) 0 0;
+  padding: 0;
+  list-style: none;
+}
+.ow-ach-list li {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: 12px;
+  align-items: center;
+  padding: 10px 12px;
+  border: 1px solid var(--ow-rule-ink);
+}
+.ow-ach-seal {
+  width: 32px;
+  height: 32px;
+  border: 1.5px dashed var(--ow-ink-3);
+  border-radius: 50%;
+}
+.ow-ach-list li.earned .ow-ach-seal {
+  border: 0;
+  background:
+    radial-gradient(circle at 35% 30%, rgb(255 255 255 / 0.5), transparent 45%), var(--ow-red);
+  box-shadow: inset 0 0 0 3px rgb(0 0 0 / 0.18);
+}
+.ow-ach-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.ow-ach-title {
+  font-family: var(--ow-font-display);
+  font-weight: 400;
+  font-size: var(--ow-fs-body);
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+.ow-ach-line {
+  font-size: var(--ow-fs-small);
+  font-style: italic;
+  color: var(--ow-ink-2);
+}
+.ow-ach-list li.locked {
+  opacity: 0.55;
+}
+.ow-ach-list time {
+  font-size: var(--ow-fs-micro);
+  color: var(--ow-ink-3);
+}
+
+/* ---------------------------------------------------------- the daily sheet */
+.ow-daily-mods {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--ow-s2);
+  justify-content: center;
+  margin: var(--ow-s2) 0;
+}
+.ow-daily-mod {
+  padding: 4px 12px;
+  font-weight: 700;
+  font-size: var(--ow-fs-small);
+  font-variant-caps: all-small-caps;
+  letter-spacing: var(--ow-track-label);
+  color: #fff6e6;
+  background: var(--ow-red);
+  border-radius: var(--ow-radius);
+  transform: rotate(-1deg);
+}
+.ow-daily-mod-fog {
+  background: #5d6670;
+}
+.ow-daily-mod-double-fakes {
+  background: var(--ow-brass-lo);
+}
+.ow-daily-board li {
+  display: grid;
+  grid-template-columns: 3rem 1fr auto;
+}
+.ow-daily-big {
+  margin: var(--ow-s3) 0;
+  font-family: var(--ow-font-display);
+  font-weight: 400;
+  font-size: var(--ow-fs-h3);
+  line-height: var(--ow-lead-tight);
+  text-align: center;
+  text-transform: uppercase;
+  color: var(--ow-ink);
+}

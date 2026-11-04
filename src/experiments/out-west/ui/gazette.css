@@ -1,0 +1,172 @@
+/*
+ * The Perdition Gazette (meta-game stream): the front page between outlaws, the epilogue and the
+ * credits, and the back issues. Built only from ui/tokens.css.
+ */
+/* ---------------------------------------------------------- the Perdition Gazette */
+.ow-gz {
+  position: fixed;
+  inset: 0;
+  z-index: 55;
+  display: grid;
+  place-items: center;
+  padding: calc(var(--ow-s3) + var(--ow-sai-t)) calc(var(--ow-s3) + var(--ow-sai-r))
+    calc(var(--ow-s3) + var(--ow-sai-b)) calc(var(--ow-s3) + var(--ow-sai-l));
+  background: var(--ow-scrim);
+  opacity: 0;
+  transition: opacity var(--ow-t-mid) var(--ow-ease-out);
+  cursor: pointer;
+}
+.ow-gz.on {
+  opacity: 1;
+}
+.ow-gz.off {
+  opacity: 0;
+}
+.ow-gz-paper {
+  width: min(40rem, 100%);
+  max-height: 100%;
+  overflow-y: auto;
+  padding: var(--ow-s4) var(--ow-s5) var(--ow-s5);
+  color: var(--ow-ink);
+  background-color: var(--ow-paper);
+  background-image:
+    radial-gradient(120% 90% at 30% 15%, rgb(255 250 236 / 0.4), transparent 60%),
+    radial-gradient(140% 120% at 50% 50%, transparent 55%, rgb(120 84 40 / 0.45)),
+    var(--ow-tex-paper);
+  background-size:
+    100% 100%,
+    100% 100%,
+    256px 256px;
+  box-shadow: var(--ow-shadow-2);
+  transform: rotate(-0.8deg) translateY(12px);
+  transition: transform var(--ow-t-slow) var(--ow-ease-slam);
+}
+.ow-gz.on .ow-gz-paper {
+  transform: rotate(-0.8deg);
+}
+.ow-gz-mast {
+  font-size: clamp(1.75rem, 6vw, 3rem);
+  text-align: center;
+  color: var(--ow-ink);
+}
+.ow-gz-date {
+  margin-top: var(--ow-s2);
+  padding: 4px 0;
+  font-weight: 600;
+  font-size: var(--ow-fs-micro);
+  font-variant-caps: all-small-caps;
+  letter-spacing: var(--ow-track-kicker);
+  text-align: center;
+  color: var(--ow-ink-2);
+  border-top: 3px double var(--ow-ink);
+  border-bottom: 1px solid var(--ow-ink);
+}
+.ow-gz-kicker {
+  margin-top: var(--ow-s3);
+  font-weight: 700;
+  font-size: var(--ow-fs-small);
+  font-variant-caps: all-small-caps;
+  letter-spacing: var(--ow-track-kicker);
+  text-align: center;
+  color: var(--ow-red);
+}
+.ow-gz-head {
+  margin: var(--ow-s3) 0;
+  font-family: var(--ow-font-display);
+  font-weight: 400;
+  font-size: clamp(1.5rem, 5vw, 2.5rem);
+  line-height: var(--ow-lead-display);
+  letter-spacing: var(--ow-track-display);
+  text-align: center;
+  text-transform: uppercase;
+  text-wrap: balance;
+}
+.ow-gz-cols {
+  columns: 2 14rem;
+  column-gap: var(--ow-s4);
+  column-rule: 1px solid var(--ow-rule-ink);
+}
+.ow-gz-p {
+  margin: 0 0 var(--ow-s2);
+  font-size: var(--ow-fs-lead);
+  line-height: var(--ow-lead-body);
+  font-variant-numeric: var(--ow-figs-text);
+  text-align: justify;
+  hyphens: auto;
+  break-inside: avoid;
+}
+.ow-gz-p:first-child::first-letter {
+  float: left;
+  margin: 4px 6px 0 0;
+  font-family: var(--ow-font-display);
+  font-size: 2.6em;
+  line-height: 0.8;
+}
+.ow-gz-wanted {
+  margin-top: var(--ow-s3);
+  padding-top: var(--ow-s2);
+  font-size: var(--ow-fs-small);
+  font-style: italic;
+  text-align: center;
+  color: var(--ow-ink-2);
+  border-top: 1px solid var(--ow-ink);
+}
+.ow-gz-hint {
+  position: absolute;
+  bottom: calc(var(--ow-s4) + var(--ow-sai-b));
+  left: 0;
+  right: 0;
+  font-weight: 600;
+  font-variant-caps: all-small-caps;
+  letter-spacing: var(--ow-track-kicker);
+  text-align: center;
+  color: var(--ow-bone-2);
+  opacity: 0;
+  transition: opacity var(--ow-t-mid);
+}
+.ow-gz-hint.on {
+  opacity: 1;
+  animation: ow-breathe 1.6s ease-in-out infinite;
+}
+.ow-gz-credits-list {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 2px;
+  margin: var(--ow-s4) 0 0;
+  text-align: center;
+}
+.ow-gz-credits-list dt {
+  margin-top: var(--ow-s3);
+  font-weight: 600;
+  font-size: var(--ow-fs-small);
+  font-variant-caps: all-small-caps;
+  letter-spacing: var(--ow-track-kicker);
+  color: var(--ow-ink-3);
+}
+.ow-gz-credits-list dd {
+  margin: 0;
+  font-family: var(--ow-font-display);
+  font-size: var(--ow-fs-h4);
+  text-transform: uppercase;
+}
+.ow-gz-list li {
+  display: grid;
+  grid-template-columns: 3.5rem 1fr;
+  align-items: center;
+}
+.ow-gz-list .ow-btn {
+  justify-content: flex-start;
+  text-align: left;
+}
+@media (max-width: 480px) {
+  .ow-gz-paper {
+    padding: var(--ow-s3);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ow-gz-paper,
+  .ow-gz.on .ow-gz-paper {
+    transform: none;
+    transition: none;
+  }
+}

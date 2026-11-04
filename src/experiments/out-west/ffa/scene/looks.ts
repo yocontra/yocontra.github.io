@@ -69,6 +69,7 @@ const OUTFITS: Record<string, OutfitStyle> = {
     extra: { bandoliers: true },
   },
   'outfit.undertakers-black': { base: 'suit', tops: [0x18_16_16], bottoms: [0x18_16_16] },
+  'outfit.midnight-coat': { base: 'suit', tops: [0x1a_1a_2e], bottoms: [0x1a_1a_24] },
 }
 const STARTER = OUTFITS['outfit.trail-duds'] as OutfitStyle
 
@@ -80,6 +81,8 @@ const HATS: Record<string, { hat: HatKey; colors: number[] }> = {
   'hat.rattler-band': { hat: 'tall', colors: [0x3a_2e_22] },
   'hat.ghost-white': { hat: 'cowboy', colors: [0xee_ea_e0] },
   'hat.yellow': { hat: 'cowboy', colors: [0xe8_c0_30] },
+  'hat.bronze-band': { hat: 'cowboy', colors: [0x8a_5a_30] },
+  'hat.holed-stetson': { hat: 'cowboy', colors: [0x6a_58_44] },
 }
 const STARTER_HAT = HATS['hat.battered-brim'] as { hat: HatKey; colors: number[] }
 
