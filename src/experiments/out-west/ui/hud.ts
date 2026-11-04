@@ -55,6 +55,8 @@ export interface EndSpec {
   onAgain: () => void
   onLegend: () => void
   onBoard: () => void
+  /** Back to the hub (absent where there's no hub: debug and level-jump loads). */
+  onSaloon?: () => void
 }
 
 export class Hud {
@@ -508,15 +510,16 @@ export class Hud {
       el('div', '', s, 'Legend mode: the 2019 curve.')
     }
     const b = el('div', 'ow-menu-btns', e)
+    // ranked: banking the purse comes first; practice: another run
     const submit = el(
       'button',
-      'ow-btn ow-btn-primary',
+      stats.ranked ? 'ow-btn ow-btn-primary' : 'ow-btn',
       b,
       stats.ranked ? 'Submit to leaderboard' : 'Leaderboard',
     )
     submit.type = 'button'
     submit.addEventListener('click', onBoard)
-    const again = el('button', 'ow-btn', b, 'Play again')
+    const again = el('button', stats.ranked ? 'ow-btn' : 'ow-btn ow-btn-primary', b, 'Play again')
     again.type = 'button'
     again.addEventListener('click', onAgain)
     if (stats.legendUnlocked) {
@@ -524,6 +527,12 @@ export class Hud {
       leg.type = 'button'
       leg.addEventListener('click', onLegend)
     }
+    if (spec.onSaloon) {
+      const saloon = el('button', 'ow-btn', b, 'Saloon')
+      saloon.type = 'button'
+      saloon.addEventListener('click', spec.onSaloon)
+    }
+    ;(stats.ranked ? submit : again).focus()
   }
 
   hideEnd(): void {

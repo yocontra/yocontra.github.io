@@ -24,8 +24,9 @@ export class QueueSheet {
   private readonly ghostBtn: HTMLButtonElement
   private readonly rankedBtn: HTMLButtonElement
   private readonly leaveBtn: HTMLButtonElement
+  private readonly retryBtn: HTMLButtonElement
   private readonly bar: HTMLElement
-  private readonly search: QueueSearch
+  private search: QueueSearch
   private readonly o: QueueSheetOpts
   private done = false as boolean
 
@@ -56,7 +57,15 @@ export class QueueSheet {
       true,
     )
     this.rankedBtn.hidden = true
-    this.search = new QueueSearch({
+    // a dropped line or a failed bot check: search again in place, never back to the saloon first
+    this.retryBtn = button(row, 'Try again', () => this.retry(), true)
+    this.retryBtn.hidden = true
+    this.search = this.newSearch()
+    this.begin().catch(() => undefined)
+  }
+
+  private newSearch(): QueueSearch {
+    return new QueueSearch({
       queued: (m) => {
         this.line.textContent = m.ghostsOnly
           ? 'Your connection is rough today. Ghosts only.'
@@ -66,6 +75,17 @@ export class QueueSheet {
       matched: (m) => this.matched(m),
       failed: (msg, reason) => this.failed(msg, reason),
     })
+  }
+
+  private retry(): void {
+    this.search.leave()
+    this.done = false
+    this.retryBtn.hidden = true
+    this.rankedBtn.hidden = true
+    this.leaveBtn.textContent = 'Leave queue'
+    this.line.textContent = 'Checking you’re no bot…'
+    setBar(this.bar, 0)
+    this.search = this.newSearch()
     this.begin().catch(() => undefined)
   }
 
@@ -120,8 +140,15 @@ export class QueueSheet {
     this.leaveBtn.textContent = 'Back to the saloon'
     // not a dead end: the licence is three outlaws away
     this.rankedBtn.hidden = reason !== 'unlicensed'
+    this.retryBtn.hidden =
+      reason === 'unlicensed' ||
+      reason === 'budget' ||
+      reason === 'cooldown' ||
+      reason === 'no-profile'
     if (reason === 'unlicensed') {
       this.rankedBtn.focus()
+    } else if (!this.retryBtn.hidden) {
+      this.retryBtn.focus()
     }
   }
 

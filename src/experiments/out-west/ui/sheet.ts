@@ -98,6 +98,8 @@ export interface ConfirmOpts {
   yes: string
   no?: string
   danger?: boolean
+  /** Focus the safe choice (a sheet that can open under a player's key presses). */
+  focusNo?: boolean
 }
 
 /** A modal sheet with two buttons. Resolves true for yes, false for no, Escape or a tap outside. */
@@ -134,7 +136,7 @@ export function confirmSheet(root: HTMLElement, o: ConfirmOpts): Promise<boolean
       }
     }
     globalThis.addEventListener('keydown', onKey, true)
-    button(row, o.no ?? 'Not now', () => done(false))
+    const no = button(row, o.no ?? 'Not now', () => done(false))
     const yes = button(row, o.yes, () => done(true), true)
     if (o.danger) {
       yes.classList.add('ow-btn-danger')
@@ -144,7 +146,7 @@ export function confirmSheet(root: HTMLElement, o: ConfirmOpts): Promise<boolean
         done(false)
       }
     })
-    yes.focus()
+    ;(o.focusNo ? no : yes).focus()
   })
 }
 
