@@ -20,6 +20,7 @@
 import {
   AdditiveBlending,
   type Bone,
+  BoxGeometry,
   CanvasTexture,
   Color,
   DirectionalLight,
@@ -42,13 +43,14 @@ import { WEAPON_RIFLE, WEAPON_SHOTGUN } from '../../contract/town.ts'
 import type { Assets } from '../../engine/assets.ts'
 import type { Actor } from '../../scene/actor.ts'
 import { castActor } from '../../scene/cast.ts'
-import { gunAnatomy, gunPointsOf } from '../../scene/holster.ts'
+import { type GunAnatomy, gunAnatomy, gunPointsOf } from '../../scene/holster.ts'
 import { type LongHold, solveArm } from '../../scene/longgun.ts'
 import { propDef, propObject } from '../../scene/props.ts'
 import { rifleObject } from '../../scene/rifle.ts'
 import type { PlayerLook } from '../scene/looks.ts'
 import { SupportHand } from '../scene/mirror-hand.ts'
 import { kitMaterial, shotgunMesh } from '../scene/shotgun.ts'
+import { dressForLens } from './vm-gloves.ts'
 import { type VmInput, VmMotion, type VmPose } from './vm-motion.ts'
 import { VmSky } from './vm-sky.ts'
 
@@ -265,6 +267,11 @@ export class ViewModel {
     if (actor.hat) {
       actor.hat.visible = false
     }
+    // dressed for the lens: gloves and cuffs, smooth shading (vm-gloves.ts)
+    const body = actor.meshes[0]
+    if (body) {
+      body.geometry = dressForLens(body.geometry, body.skeleton)
+    }
     if (actor.gun) {
       this.townSky.adopt(actor.gun)
     }
@@ -329,11 +336,11 @@ export class ViewModel {
     gun.updateWorldMatrix(true, false)
     const gunW = gun.matrixWorld.clone()
     const right = gunW.clone().invert().multiply(wristR.matrixWorld)
-    const top = a.barrel.cy + a.barrel.hy
+    const sights = addSights(gun, a)
     return {
       obj: gun,
-      rear: new Vector3(a.rearX + 0.03, a.cylinder.cy + a.cylinder.hy + 0.004, 0),
-      front: new Vector3(a.muzzle.x - 0.008, top + 0.006, 0),
+      rear: sights.rear,
+      front: sights.front,
       muzzle: a.muzzle.clone(),
       right,
       left: null,
@@ -615,6 +622,39 @@ export class ViewModel {
     this.actor?.dispose()
     this.flash.material.map?.dispose()
     this.flash.material.dispose()
+  }
+}
+
+/**
+ * Iron sights on the revolver, so the sights show a real picture: a front blade at the muzzle and
+ * a rear notch (two posts) on the frame, in the gun's own steel. Returns the sight line's two
+ * points (the notch's top and the blade's top, level with each other on the sights).
+ */
+function addSights(gun: Object3D, a: GunAnatomy): { rear: Vector3; front: Vector3 } {
+  let steel: Material | null = null
+  gun.traverse((o) => {
+    if (!steel && o instanceof Mesh && !Array.isArray(o.material)) {
+      steel = o.material
+    }
+  })
+  const top = a.barrel.cy + a.barrel.hy
+  const frame = a.cylinder.cy + a.cylinder.hy
+  const blade = new Vector3(a.muzzle.x - 0.012, top + 0.0045, 0)
+  // the notch at the back of the top strap, just behind the cylinder
+  const notchX = a.mouthX - 0.03
+  if (steel) {
+    const front = new Mesh(new BoxGeometry(0.012, 0.009, 0.0026), steel)
+    front.position.copy(blade)
+    gun.add(front)
+    for (const z of [-0.0042, 0.0042]) {
+      const post = new Mesh(new BoxGeometry(0.008, 0.008, 0.0028), steel)
+      post.position.set(notchX, frame + 0.004, z)
+      gun.add(post)
+    }
+  }
+  return {
+    rear: new Vector3(notchX, frame + 0.008, 0),
+    front: new Vector3(blade.x, top + 0.009, 0),
   }
 }
 

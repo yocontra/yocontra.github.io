@@ -251,6 +251,8 @@ export class FrontierGame {
   private viewModel: ViewModel | null = null
   private readonly vmSun = new Vector3()
   private dustAt = 0
+  /** This life's hits taken, by attacker (the death card). */
+  private readonly tally = new Map<number, { hits: number; dmg: number }>()
   /** When you last went down (s). */
   private diedAt = 0
   private readonly vmQ = new Quaternion()
@@ -496,6 +498,12 @@ export class FrontierGame {
       audio: this.audio,
       kick: (a) => (this.shooterView ? this.shooter.kick(a) : this.cam.kick(a)),
       damageFrom: (from) => this.damageFrom(from),
+      tookHit: (attacker, amount) => {
+        const t = this.tally.get(attacker) ?? { hits: 0, dmg: 0 }
+        t.hits++
+        t.dmg += amount
+        this.tally.set(attacker, t)
+      },
       posOf: (id) => this.posOf(id),
       muzzleOf: (id, x, z, aim) =>
         this.crowd?.muzzle(id, x, z, aim, new Vector3()) ?? new Vector3(x, 1.3, z),
@@ -1194,22 +1202,7 @@ export class FrontierGame {
       row.flags = r.flags
       list.push(row)
     }
-    if (!this.net.alive && this.wasAlive) {
-      this.diedAt = nowS
-      // down: on your feet, sights dropped, for the next life
-      this.stance.reset()
-      this.desk.dropAds()
-      this.touch?.setAds(false)
-    }
-    if (this.net.alive && !this.wasAlive) {
-      // (re)spawned: face into town until the stick or the mouse says otherwise
-      this.aim = spawnFacing(this.own)
-      this.cam.snap(this.own.x, this.own.z, Math.cos(this.aim), Math.sin(this.aim))
-      this.shooter.snap(this.own.x, this.own.z, this.aim)
-      this.hatlessSeen.clear()
-      // the first ride into town on this device: how to play
-      this.coach.maybeShow()
-    }
+    this.lifeEdges(nowS)
     this.landings(list)
     this.slideDust(list, nowS)
     const shooter = this.shooterView
@@ -1231,6 +1224,7 @@ export class FrontierGame {
         dt,
         duck: this.duckHeight(),
         dead: this.net.alive ? null : this.own,
+        killer: this.net.alive || !this.killer ? null : this.posOf(this.killer.id),
       })
       // dead in first person: the death camera starts inside your head, so your body shows only
       // once it has pulled out (0.3 s)
@@ -1240,6 +1234,7 @@ export class FrontierGame {
       this.cam.update(this.own.x, this.own.z, Math.cos(this.aim), Math.sin(this.aim), dt)
       crowd.hideSelf = false
     }
+    crowd.selfFade = shooter && !first && this.net.alive ? this.shooter.bodyFade : 1
     const cx = shooter ? this.own.x : this.cam.target.x
     const cz = shooter ? this.own.z : this.cam.target.z
     crowd.update(list, cx, cz, dt, nowS)
@@ -1407,6 +1402,27 @@ export class FrontierGame {
     )
     // the gun's kick rides into the lens (CoD's view punch)
     this.shooter.vmKick = vm.motion.pose.viewKick
+  }
+
+  /** Going down and riding back in: the stance, the sights, the tally, the spawn's facing. */
+  private lifeEdges(nowS: number): void {
+    if (!this.net.alive && this.wasAlive) {
+      this.diedAt = nowS
+      // down: on your feet, sights dropped, for the next life
+      this.stance.reset()
+      this.desk.dropAds()
+      this.touch?.setAds(false)
+    }
+    if (this.net.alive && !this.wasAlive) {
+      this.tally.clear()
+      // (re)spawned: face into town until the stick or the mouse says otherwise
+      this.aim = spawnFacing(this.own)
+      this.cam.snap(this.own.x, this.own.z, Math.cos(this.aim), Math.sin(this.aim))
+      this.shooter.snap(this.own.x, this.own.z, this.aim)
+      this.hatlessSeen.clear()
+      // the first ride into town on this device: how to play
+      this.coach.maybeShow()
+    }
   }
 
   /** A slide kicks up a trail of dust. */
@@ -1603,7 +1619,11 @@ export class FrontierGame {
           ? `You dropped $${this.lastCarry.toLocaleString('en-US')}.`
           : 'You weren’t carrying money.'
       const person = this.riders.live && k !== null && this.riders.person(k.id) !== null
-      this.hud.death(name, lvl ? `Level ${lvl}. ${carry}` : carry, s.respawnTicks / TICK_HZ, person)
+      // what he did to you: "He hit you 3× · 100 damage."
+      const t = k ? this.tally.get(k.id) : undefined
+      const hits = t ? `He hit you ${t.hits}× · ${Math.round(t.dmg)} damage. ` : ''
+      const sub = `${lvl ? `Level ${lvl}. ` : ''}${hits}${carry}`
+      this.hud.death(name, sub, s.respawnTicks / TICK_HZ, person)
     }
     this.announceMostWanted()
     this.arrows.update(

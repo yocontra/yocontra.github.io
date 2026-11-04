@@ -675,9 +675,11 @@
   position: absolute;
   inset: 0;
   display: none;
-  align-items: center;
+  /* low on the screen, so the kill cam above it shows who got you */
+  align-items: flex-end;
   justify-content: center;
-  background: radial-gradient(ellipse at center, rgb(40 10 5 / 0.35), rgb(14 4 0 / 0.82));
+  padding-bottom: calc(var(--fr-bottom) + 6vh);
+  background: radial-gradient(ellipse at 50% 35%, transparent 30%, rgb(14 4 0 / 0.7));
 }
 
 .fr-death.on {
@@ -852,6 +854,71 @@
     inset 0 0 0 3px transparent,
     inset 0 0 0 4px rgb(239 228 204 / 0.14);
   text-shadow: none;
+}
+
+/* the pause card: a head with a close ✕, Resume first and sticky, then two columns on a short
+   screen (settings left, the way out right) */
+.fr-menu-head {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+}
+
+.fr-menu-x {
+  position: absolute;
+  right: -8px;
+  top: 50%;
+  width: 44px;
+  height: 44px;
+  margin-top: -22px;
+  border: 0;
+  border-radius: var(--ow-radius);
+  background: none;
+  color: var(--ow-bone);
+  font-family: var(--ow-font-text);
+  font-size: 22px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.fr-menu-resume {
+  position: sticky;
+  top: -24px;
+  z-index: 1;
+}
+
+.fr-menu-cols,
+.fr-menu-col {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+@media (max-height: 500px) {
+  .fr-menu-card {
+    width: min(720px, 94vw);
+    padding: 14px 18px 16px;
+    gap: 10px;
+  }
+
+  .fr-menu-title {
+    font-size: 26px;
+  }
+
+  .fr-menu-cols {
+    flex-direction: row;
+    align-items: flex-start;
+  }
+
+  .fr-menu-col {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .fr-menu-item {
+    min-height: 46px;
+  }
 }
 
 /* --- loading -------------------------------------------------------------------------------- */
