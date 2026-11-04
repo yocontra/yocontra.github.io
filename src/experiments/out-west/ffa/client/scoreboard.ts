@@ -33,10 +33,10 @@ export class Scoreboard {
     card.className = 'fr-score-card'
     const h = document.createElement('h2')
     h.className = 'fr-score-title'
-    h.textContent = 'Perdition'
+    h.textContent = 'Scoreboard'
     const sub = document.createElement('div')
     sub.className = 'fr-score-sub'
-    sub.textContent = 'Kills and deaths since you rode in'
+    sub.textContent = 'Kills and deaths this match'
     this.body = document.createElement('div')
     this.body.className = 'fr-score-rows'
     card.append(h, sub, this.body)
@@ -94,7 +94,7 @@ export class Scoreboard {
       t: this.tally.get(r.id) ?? { kills: 0, deaths: 0 },
     }))
     rows.sort((a, b) => b.t.kills - a.t.kills || a.t.deaths - b.t.deaths || a.r.id - b.r.id)
-    const head = row('fr-score-row fr-score-head', ['', 'Rider', 'Lvl', 'K', 'D'])
+    const head = row('fr-score-row fr-score-head', ['', 'Player', 'Lvl', 'K', 'D'])
     const lines = rows.map(({ r, t }, i) => {
       const name = `${r.id === mw ? '★ ' : ''}${r.name}${r.bot ? ' (bot)' : ''}`
       const line = row(`fr-score-row${r.id === you ? ' you' : ''}`, [

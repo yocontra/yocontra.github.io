@@ -37,14 +37,16 @@ async function call<T>(
     const body: unknown = await res.json().catch(() => null)
     if (!res.ok) {
       const error =
-        isRecord(body) && typeof body.error === 'string' ? body.error : 'The server said no.'
+        isRecord(body) && typeof body.error === 'string'
+          ? body.error
+          : 'Something went wrong. Try again.'
       return { ok: false, status: res.status, error }
     }
     return check(body)
       ? { ok: true, value: body as T }
-      : { ok: false, status: 0, error: 'The server sent something odd back.' }
+      : { ok: false, status: 0, error: 'Something went wrong. Try again.' }
   } catch {
-    return { ok: false, status: 0, error: 'Couldn’t reach the server.' }
+    return { ok: false, status: 0, error: 'Couldn’t connect. Check your connection and try again.' }
   } finally {
     clearTimeout(timer)
   }

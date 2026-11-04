@@ -390,7 +390,7 @@ export class DuelSession extends DurableObject<Env> {
       return
     }
     if (level !== run.level) {
-      this.fail('Out of order: ranked runs face each outlaw in turn, starting with the first.')
+      this.fail('Ranked runs go in order, starting with outlaw 1.')
       return
     }
     const tuning = tuningFor(level, run.phase)
@@ -498,7 +498,7 @@ export class DuelSession extends DurableObject<Env> {
     }
     const name = validateName(rawName)
     if (name.ok && (await isNameOwned(this.env, name.key))) {
-      return { ok: false, error: 'That name belongs to a registered gunslinger. Pick another.' }
+      return { ok: false, error: 'That name is taken. Pick another.' }
     }
     return name
   }

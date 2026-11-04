@@ -89,8 +89,8 @@ function overlay(root: HTMLElement): {
   if (tip) {
     const touch = matchMedia('(pointer: coarse)').matches
     tip.textContent = touch
-      ? 'Left thumb moves, right thumb looks. Space jumps fences. Kill riders, grab their money, bank it before you die.'
-      : 'WASD moves, the mouse looks, click fires, right-click aims. Space jumps fences. Kill riders, grab their money, bank it before you die.'
+      ? 'Left thumb moves. Right thumb looks. Kill players, take their money and bank it.'
+      : 'WASD moves. Click shoots. Right-click aims. Kill players, take their money and bank it.'
   }
   return {
     el,
@@ -110,16 +110,16 @@ function overlay(root: HTMLElement): {
       const h = document.createElement('div')
       h.className = 'fr-load-title'
       const titles: Partial<Record<JoinError['reason'], string>> = {
-        all_full: "TOWN'S FULL",
-        over_budget: 'CLOSED FOR NOW',
+        all_full: 'SERVERS FULL',
+        over_budget: 'CLOSED',
       }
-      h.textContent = titles[e.reason] ?? 'HOLD UP'
+      h.textContent = titles[e.reason] ?? 'CAN’T JOIN'
       const p = document.createElement('p')
       p.textContent = e.message
       const b = document.createElement('button')
       b.type = 'button'
       b.className = 'fr-menu-item fr-hit'
-      b.textContent = 'Back to the saloon'
+      b.textContent = 'Back to menu'
       b.addEventListener('click', onBack)
       card.append(h, p, b)
       el.append(card)

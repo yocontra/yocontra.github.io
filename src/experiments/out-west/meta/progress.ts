@@ -58,9 +58,9 @@ const BOSS = OUTLAW_COUNT - 1
 type Where = 'ledger' | 'practice' | 'guest'
 
 const WHERE: Readonly<Record<Where, string>> = {
-  ledger: 'Booked to your ledger.',
-  practice: 'Practice only: win it on a ranked run to bank it.',
-  guest: 'In your guest purse.',
+  ledger: 'Added to your account.',
+  practice: 'Practice only. Win it on a ranked run to get paid.',
+  guest: 'Saved to your guest purse.',
 }
 
 const shortName = (level: number): string => OUTLAWS[level]?.name ?? `Outlaw ${level + 1}`
@@ -282,7 +282,7 @@ export class Meta {
       tier,
       kicker: `${name} medal`,
       title: shortName(level),
-      line: `${Math.round(ms)} ms. +${pay.xp} XP, +$${pay.cash}. ${WHERE[where]}`,
+      line: `${Math.round(ms)} ms · ${pay.xp} XP + $${pay.cash}. ${WHERE[where]}`,
     })
   }
 
@@ -290,9 +290,9 @@ export class Meta {
     const pay = isClaim(c) ? CLAIM_PAY : CHALLENGE_PAY
     this.deps.toast({
       kind: 'challenge',
-      kicker: 'Challenge done',
+      kicker: 'Challenge complete',
       title: c.title,
-      line: `+${pay.xp} XP${pay.cash ? `, +$${pay.cash}` : ''}. ${WHERE[where]}`,
+      line: `${pay.xp} XP${pay.cash ? ` + $${pay.cash}` : ''}. ${WHERE[where]}`,
     })
   }
 
@@ -404,12 +404,12 @@ export class Meta {
       this.deps.toast({
         kind: 'purse',
         kicker: 'Guest purse',
-        title: 'It rode in with you',
-        line: `+$${r.value.cash} and +${r.value.xp} XP booked to your ledger${
+        title: 'Guest earnings saved',
+        line: `$${r.value.cash} + ${r.value.xp} XP added to your account.${
           r.value.claimed.xp > GUEST_CAP.xp || r.value.claimed.cash > GUEST_CAP.cash
-            ? ` (the most a guest purse brings is $${GUEST_CAP.cash} and ${GUEST_CAP.xp} XP)`
+            ? ` Guests can keep up to $${GUEST_CAP.cash} + ${GUEST_CAP.xp} XP.`
             : ''
-        }.`,
+        }`,
       })
     } else if (r.status === 409) {
       this.data.migrated.push(accountId)

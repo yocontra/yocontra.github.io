@@ -30,7 +30,7 @@ import { BAKED_THUMBS } from './thumbs.ts'
 
 const SLOT_TABS: readonly { slot: Slot; label: string }[] = [
   { slot: 'hat', label: 'Hats' },
-  { slot: 'gun', label: 'Irons' },
+  { slot: 'gun', label: 'Guns' },
   { slot: 'outfit', label: 'Outfits' },
   { slot: 'extra', label: 'Extras' },
   { slot: 'spurs', label: 'Spurs' },

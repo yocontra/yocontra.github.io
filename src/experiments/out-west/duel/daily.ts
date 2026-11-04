@@ -105,7 +105,7 @@ export class DailyDuel implements DirectorHooks {
       // the server closes the line once the duel is recorded
       return
     }
-    this.d.c.hud.fake(`[${reason} That try is void.]`, 3000)
+    this.d.c.hud.fake(`[${reason} That try didn’t count.]`, 3000)
     this.leave()
   }
 

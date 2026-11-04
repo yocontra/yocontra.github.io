@@ -31,7 +31,6 @@ import {
   EV_STRONGBOX_SPAWN,
   KILL_DEAD_EYE,
   KILL_FARMED,
-  KILL_MOST_WANTED,
   KILL_PARDON,
   KILL_SHOWDOWN,
   NONE,
@@ -71,6 +70,7 @@ import {
   waitingOnMyCall,
 } from './event-sounds.ts'
 import type { Hud } from './hud.ts'
+import { killLine } from './kill-line.ts'
 import type { NetClient } from './net.ts'
 
 export interface Showdown {
@@ -108,6 +108,8 @@ export interface Sink {
   /** True when the player behind this entity is on your block list (never shown to you). */
   blocked: (id: number) => boolean
   pickups: Pickups
+  /** You took a hit from (`x`, `z`): the HUD's damage arc points there. */
+  damageFrom: (from: { x: number; z: number }) => void
   /** Burning fuses by thrower: the hiss runs from the throw to the blast. */
   fuses: Map<number, Fuse>
 }
@@ -147,7 +149,10 @@ function onShot(s: Sink, ev: Extract<WireEvent, { type: typeof EV_SHOT }>): void
   if (ev.flags & SHOT_HIT) {
     s.fx.impact(endX, endZ, true)
     if (ev.shooter === you) {
-      s.hud.hit(false)
+      // a Dead-Eye hit is the critical one: gold, and a sharper tick
+      const crit = (ev.flags & SHOT_DEAD_EYE) !== 0
+      s.hud.hit(false, crit)
+      s.audio?.play('hitBody', { gain: crit ? 0.55 : 0.4, rate: crit ? 1.9 : 1.6, priority: true })
     }
   } else if (ev.flags & SHOT_WALL) {
     s.fx.impact(endX, endZ, false)
@@ -223,40 +228,26 @@ function onPickups(s: Sink, ev: WireEvent, nowS: number): void {
 const PICKUP_TOAST: Record<string, string> = {
   shotgun: 'SHOTGUN: 2 shells, 9 m',
   rifle: 'RIFLE: 5 rounds, 35 m',
-  dynamite: 'DYNAMITE: G or THROW to lob it (2 s fuse)',
+  dynamite: 'DYNAMITE: G or THROW to throw (2 s fuse)',
 }
 
 function onDamage(s: Sink, ev: Extract<WireEvent, { type: typeof EV_DAMAGE }>): void {
+  const at = s.posOf(ev.victim)
+  const from = ev.attacker === ev.victim ? null : s.posOf(ev.attacker)
+  if (at) {
+    s.crowd.hurt(ev.victim, at, from)
+  }
   if (ev.victim === s.net.you) {
     s.hud.hurt(ev.amount)
+    if (from) {
+      s.damageFrom(from)
+    }
     s.kick(0.18 + ev.amount / 200)
     haptic('hit')
     if (ev.hp > 0 && Math.random() < 0.5) {
       play(s, 'gasp', null, 0.5)
     }
   }
-}
-
-function killLine(s: Sink, ev: Extract<WireEvent, { type: typeof EV_KILL }>): string {
-  const marks: string[] = []
-  if (ev.flags & KILL_DEAD_EYE) {
-    marks.push('Dead-Eye')
-  }
-  if (ev.flags & KILL_SHOWDOWN) {
-    marks.push('showdown')
-  }
-  if (ev.flags & KILL_MOST_WANTED) {
-    marks.push('Most Wanted')
-  }
-  if (ev.flags & KILL_PARDON) {
-    marks.push('pardoned')
-  }
-  const tail = marks.length > 0 ? ` (${marks.join(', ')})` : ''
-  if (ev.killer === NONE || ev.killer === ev.victim) {
-    const how = ev.killer === NONE ? 'bit the dust' : 'blew himself up'
-    return `${s.net.name(ev.victim)} ${how}${tail}`
-  }
-  return `${s.net.name(ev.killer)} ✕ ${s.net.name(ev.victim)}${tail}`
 }
 
 function onKill(s: Sink, ev: Extract<WireEvent, { type: typeof EV_KILL }>): void {
@@ -267,14 +258,19 @@ function onKill(s: Sink, ev: Extract<WireEvent, { type: typeof EV_KILL }>): void
   } else if (ev.killer === you) {
     kind = 'you'
   }
-  s.hud.feed(killLine(s, ev), kind)
+  s.hud.feed(
+    killLine((id) => s.net.name(id), ev),
+    kind,
+  )
   const p = s.posOf(ev.victim)
   if (p) {
+    s.crowd.killed(ev.victim, p, ev.killer === ev.victim ? null : s.posOf(ev.killer))
     s.fx.dust(p.x, p.z, 8)
     play(s, 'bodyfall', p, 0.8)
   }
   if (ev.killer === you && ev.victim !== you) {
-    s.hud.hit(true)
+    s.hud.hit(true, (ev.flags & KILL_DEAD_EYE) !== 0)
+    s.audio?.play('uiStamp', { gain: 0.6, priority: true })
     const paid = ev.flags & (KILL_PARDON | KILL_FARMED) ? 0 : ev.bounty
     if (ev.flags & KILL_SHOWDOWN) {
       // The showdown verdict owns the big toast; the bounty goes in the feed.
@@ -322,7 +318,7 @@ function onShowdown(s: Sink, ev: WireEvent): void {
         shot: false,
       })
       if (mine) {
-        s.hud.toast('SHOWDOWN: hands off… wait for the bell', 'red', 2400)
+        s.hud.toast('SHOWDOWN: wait for the bell', 'red', 2400)
         s.audio?.musicLevel(-30)
       }
       break
@@ -367,20 +363,20 @@ function verdict(
   you: number,
 ): string {
   if (ev.outcome === SD_DEAD_HEAT) {
-    return 'DEAD HEAT: nobody walks away'
+    return 'TIE: both died'
   }
   if (ev.outcome === SD_FROZE) {
-    return 'Nobody drew. The ring breaks.'
+    return 'No one drew. Showdown over.'
   }
   if (ev.outcome === SD_COWARD) {
-    return ev.winner === you ? 'They flinched. Coward.' : 'You drew early. Coward.'
+    return ev.winner === you ? 'They drew early. You win.' : 'You drew early. You lose.'
   }
   if (ev.outcome === SD_WIN) {
     return ev.winner === you
       ? `YOU WIN (${ev.winnerMs} ms)`
       : `${s.net.name(ev.winner)} was faster (${ev.winnerMs} ms)`
   }
-  return 'The showdown was called off'
+  return 'Showdown cancelled'
 }
 
 export function handleEvent(s: Sink, ev: WireEvent): void {
@@ -448,11 +444,11 @@ export function handleEvent(s: Sink, ev: WireEvent): void {
       break
     }
     case EV_STRONGBOX_SPAWN:
-      s.hud.feed(`A strongbox worth $${ev.value} turned up. Find the beacon.`, 'gold')
+      s.hud.feed(`A strongbox worth $${ev.value} appeared. Follow the beacon.`, 'gold')
       play(s, 'hawk', null, 0.6)
       break
     case EV_STRONGBOX_OPEN:
-      s.hud.feed(`${s.net.name(ev.by)} cracked the strongbox: $${ev.value}`, 'gold')
+      s.hud.feed(`${s.net.name(ev.by)} opened the strongbox: $${ev.value}`, 'gold')
       if (ev.by === you) {
         s.hud.toast(`+$${ev.value} STRONGBOX`, 'gold', 2000)
         play(s, 'register', null, 1)
@@ -514,7 +510,7 @@ export function handleControl(s: Sink, msg: ServerControl): void {
     }
     case 'deposit':
       if (!msg.ok) {
-        s.hud.feed('The bank is slow to confirm. Your deposit will retry.', 'info')
+        s.hud.feed('The bank is slow. Your deposit will retry.', 'info')
       }
       break
     case 'notice':

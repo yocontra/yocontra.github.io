@@ -76,14 +76,14 @@ async function migrate(request: Request, env: Env, player: Player): Promise<Resp
   const body = (await readJson(request, 8 * 1024)) as { claim?: unknown } | undefined
   const claim = sanitizeClaim(body?.claim)
   if (!claim) {
-    return error(request, env, 400, 'That guest purse doesn’t read right.')
+    return error(request, env, 400, 'Couldn’t read your guest earnings.')
   }
   const id = player.accountId
   const done = await env.DB.prepare('SELECT 1 AS yes FROM guest_migrations WHERE account_id = ?')
     .bind(id)
     .first<{ yes: number }>()
   if (done) {
-    return error(request, env, 409, 'Your guest purse already rode in with you.')
+    return error(request, env, 409, 'Your guest earnings were already saved.')
   }
   const credit = guestCredit(claim)
   const now = Date.now()
@@ -115,7 +115,7 @@ async function migrate(request: Request, env: Env, player: Player): Promise<Resp
     ])
   } catch (err) {
     if (isConstraintError(err)) {
-      return error(request, env, 409, 'Your guest purse already rode in with you.')
+      return error(request, env, 409, 'Your guest earnings were already saved.')
     }
     throw err
   }
@@ -167,7 +167,7 @@ async function legend(request: Request, env: Env, player: Player): Promise<Respo
     return error(request, env, 404, 'No profile.')
   }
   if ((detail.gauntletClears & FULL_CLEAR_MASK) !== FULL_CLEAR_MASK) {
-    return error(request, env, 403, 'Clear the whole gauntlet on a ranked run first.')
+    return error(request, env, 403, 'Beat all 17 outlaws on a ranked run first.')
   }
   const now = Date.now()
   const items = SOLO_REWARDS.filter((r) => r.rule.kind === 'legend' && beaten >= r.rule.beaten)

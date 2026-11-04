@@ -66,14 +66,14 @@ export interface JoinError {
 }
 
 export const JOIN_MESSAGES: Record<JoinError['reason'], string> = {
-  over_budget: 'Perdition is closed until next month. Quick Draw is still open.',
-  all_full: 'Every town is full. Try again in a minute.',
-  unauthorized: 'Sign in with your passkey to ride into Perdition.',
-  unlicensed: 'Beat the first 3 outlaws on a ranked run to earn your licence.',
-  network: "Can't reach the frontier. Check your connection.",
-  server: 'Server trouble in Perdition. Try again in a few minutes.',
-  turnstile: 'Could not verify you are human. Try again.',
-  outdated: 'Perdition has been updated. Refresh the page to ride in.',
+  over_budget: 'Frontier is closed until next month. Quick Draw is still open.',
+  all_full: 'All servers are full. Try again in a minute.',
+  unauthorized: 'Sign in to play Frontier.',
+  unlicensed: 'You need a licence. Beat 3 outlaws on a ranked run.',
+  network: 'Couldn’t connect. Check your connection and try again.',
+  server: 'Server error. Try again in a few minutes.',
+  turnstile: 'Couldn’t check you’re human. Try again.',
+  outdated: 'The game was updated. Reload the page to play.',
 }
 
 const REFUSALS = new Set<string>([

@@ -328,7 +328,7 @@ export function boot(root: HTMLElement): void {
     audio.playSong(data.level >= 15 ? 'boss' : 'intro')
     title.classList.add('pressed')
     if (startText) {
-      startText.textContent = game ? '' : 'saddling up…'
+      startText.textContent = game ? '' : 'loading…'
     }
     go()
   }

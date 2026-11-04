@@ -36,10 +36,10 @@ export function parseQueueMessage(raw: unknown): QueueServerMessage | null {
 }
 
 const REFUSALS: Record<string, string> = {
-  budget: 'Bounty Hunt is closed for the rest of the month. It reopens on the 1st.',
-  unlicensed: 'Beat the first 3 outlaws on a ranked run to earn your licence.',
-  cooldown: 'You dodged too many duels. Sit out a while.',
-  busy: 'You’re already in a queue or a duel somewhere else.',
+  budget: 'Bounty Hunt is closed until the 1st of next month.',
+  unlicensed: 'You need a licence. Beat 3 outlaws on a ranked run.',
+  cooldown: 'You dodged too many duels. Wait a while, then try again.',
+  busy: 'You’re already in a queue or duel in another tab.',
   unauthorized: 'Your sign-in expired. Try again.',
   'no-profile': 'Sign in first.',
 }
@@ -67,12 +67,12 @@ export class QueueSearch {
     try {
       ws = new WebSocket(t.value.wsUrl)
     } catch {
-      this.fail('Couldn’t reach the matchmaker.')
+      this.fail('Couldn’t connect. Check your connection and try again.')
       return
     }
     this.ws = ws
     ws.addEventListener('message', (e) => this.onMessage(e.data))
-    ws.addEventListener('close', () => this.fail('The matchmaker hung up.'))
+    ws.addEventListener('close', () => this.fail('Connection lost. Try again.'))
   }
 
   private send(m: QueueClientMessage): void {

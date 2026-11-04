@@ -97,12 +97,12 @@ async function queueTicket(request: Request, env: Env, url: URL): Promise<Respon
   }
   const player = await authenticate(request, env)
   if (!player) {
-    return error(request, env, 401, 'Sign in to ride for bounties.')
+    return error(request, env, 401, 'Sign in to play Bounty Hunt.')
   }
   const body = (await readJson(request, 8 * 1024)) as { turnstileToken?: unknown } | undefined
   const token = body?.turnstileToken
   if (typeof token !== 'string' || !(await verifyTurnstile(token, request, env))) {
-    return error(request, env, 403, 'Could not verify you are human.')
+    return error(request, env, 403, 'Couldn’t check you’re human. Try again.')
   }
   const ticket = await issueTicket(env, player, 'duel')
   const body2: QueueTicketResponse = {

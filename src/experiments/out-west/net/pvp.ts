@@ -56,10 +56,10 @@ export function parseRoomMessage(raw: unknown): RoomServerMessage | null {
 const LIVE_STALE_MS = 1500
 
 const CLOSED_TEXT: Record<string, string> = {
-  'opponent-left': 'He lit out of town.',
-  timeout: 'Nobody cocked in time. No penalty.',
-  done: 'No more rematches at this table.',
-  error: 'The duel server hit an error.',
+  'opponent-left': 'He left the duel.',
+  timeout: 'No one pressed Ready in time. No penalty.',
+  done: 'No more rematches with this player.',
+  error: 'Server error. Try again.',
 }
 
 export class DuelRoomLink {

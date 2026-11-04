@@ -63,7 +63,7 @@ function rows(
     el('span', 'ow-board-rank', li, String(r.rank))
     const who = el('button', 'ow-board-who ow-feat-name', li)
     who.type = 'button'
-    who.textContent = hidden ? 'A blocked gunslinger' : r.name
+    who.textContent = hidden ? 'A blocked player' : r.name
     who.disabled = hidden
     if (!hidden) {
       who.setAttribute('aria-label', `${r.name}'s poster`)

@@ -280,7 +280,7 @@ export function tickCoward(d: Director): void {
       kind: 'coward',
       title: 'COWARD.',
       big: '',
-      sub: d.cowardNote || `${n} ${n === 1 ? 'man' : 'men'} shot in the back. No bounty.`,
+      sub: d.cowardNote || `You drew before the bell. No bounty. (Early draws: ${n})`,
       hint: 'press to try again',
     })
     c.hud.cardPoster(d.posterCanvas.toDataURL('image/jpeg', 0.8))
