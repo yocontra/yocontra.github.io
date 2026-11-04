@@ -83,7 +83,7 @@ export function awayNotices(a: AwayReport | undefined): Notice[] {
   for (const w of a.mostWanted) {
     out.push({
       title: `Most Wanted, ${monthName(w.month)}`,
-      line: `You finished #${w.rank}. A dated Most Wanted frame is in your Outfitter.`,
+      line: `You finished #${w.rank}. Your dated frame is in the Outfitter.`,
     })
   }
   return out
@@ -109,7 +109,7 @@ export function progressNotices(me: MeResponse): Notice[] {
   if (seen.prestige === me.prestige && me.level > seen.level) {
     out.push({
       title: `Level ${me.level}`,
-      line: `${titleFor(me.level)}. A level-up pays $25 × the new level.`,
+      line: `New title: ${titleFor(me.level)}.`,
       amount: levelRewards(seen.level, me.level),
     })
   }
@@ -168,7 +168,7 @@ function pump(root: HTMLElement): void {
   }
 }
 
-/** One notice on Gazette stock, dismissed with "Much obliged". */
+/** One notice on Gazette stock, dismissed with "OK". */
 function paper(root: HTMLElement, n: Queued, done: () => void): void {
   const back = el('div', 'ow-sheet on ow-feat-notice', root)
   back.setAttribute('role', 'alertdialog')
@@ -179,7 +179,7 @@ function paper(root: HTMLElement, n: Queued, done: () => void): void {
   el('h2', 'ow-hub-h', panel, n.title)
   el('p', 'ow-feat-news-line', panel, n.line)
   if (n.amount) {
-    el('p', 'ow-hub-note', panel, `Already in your purse: ${signedMoney(n.amount)}.`)
+    el('p', 'ow-hub-note', panel, `Added to your purse: ${signedMoney(n.amount)}`)
   }
   if (queue.length > 0) {
     el('p', 'ow-hub-note ow-feat-news-more', panel, `${queue.length} more after this.`)
@@ -188,7 +188,7 @@ function paper(root: HTMLElement, n: Queued, done: () => void): void {
   const row = el('div', 'ow-hub-row', panel)
   const ok = button(
     row,
-    'Much obliged',
+    'OK',
     () => {
       back.remove()
       const a = n.ack

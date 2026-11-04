@@ -11,6 +11,7 @@ import type { Dyes } from '../data/dye.ts'
 import { money } from '../data/economy.ts'
 import { licenceCopy, licenceStatus } from '../data/licence.ts'
 import { bountyForLevel, canPrestige, levelProgress, titleFor } from '../data/progression.ts'
+import { type LicensedMode, licenceWish, setLicenceWish } from '../meta/licence-wish.ts'
 import { fetchLedger, fetchMe, fetchTownOpen } from '../net/api.ts'
 import { currentPlayer, onAuthChange } from '../net/auth.ts'
 import type { QueueMatch } from '../net/queue.ts'
@@ -56,24 +57,24 @@ type Me = MeResponse
 
 const LEDGER_LABEL: Record<LedgerKind, string> = {
   // biome-ignore-start lint/style/useNamingConvention: ledger kinds are snake_case on the wire
-  start_grant: 'Grubstake',
+  start_grant: 'Starting money',
   gauntlet_clear: 'Gauntlet bounty',
   duel_win: 'Bounty Hunt win',
   duel_loss: 'Bounty Hunt loss',
-  duel_draw: 'Standoff: dead heat',
-  duel_froze: 'Standoff: both froze',
+  duel_draw: 'Standoff: tie',
+  duel_froze: 'Standoff: no one drew',
   ghost_win: 'Ghost duel',
-  ghost_royalty: 'Your ghost’s cut',
+  ghost_royalty: 'Ghost winnings',
   ffa_kill_mint: 'Frontier kill',
   ffa_deposit: 'Banked in Frontier',
   ffa_strongbox: 'Strongbox',
-  ffa_commission: 'Banker’s commission',
+  ffa_commission: 'Bank fee',
   store_purchase: 'Outfitter',
   level_reward: 'Level reward',
   admin_adjust: 'Adjustment',
   dye_job: 'Dye job',
   name_change: 'Name change',
-  house_round: 'A round for the house',
+  house_round: 'Bought a round',
   medal: 'Medal',
   challenge: 'Challenge',
   daily_outlaw: 'Daily Outlaw',
@@ -86,7 +87,7 @@ const SINK_LABEL: Readonly<Record<string, string>> = {
   // biome-ignore-start lint/style/useNamingConvention: ledger kinds are snake_case on the wire
   dye_job: 'Dye job',
   name_change: 'Name change',
-  house_round: 'A round for the house',
+  house_round: 'Bought a round',
   // biome-ignore-end lint/style/useNamingConvention: ledger kinds are snake_case on the wire
 }
 
@@ -161,8 +162,33 @@ export class Hub {
     this.root.classList.add('on')
     this.deps.stage('hub')
     this.render()
-    this.refresh().catch(() => undefined)
+    this.refresh()
+      .then(() => this.licensedCarryOn(0))
+      .catch(() => undefined)
     this.metaUi?.refresh()
+  }
+
+  /**
+   * The licence road's end: back in the saloon with the licence a gate sent you to earn, carry on
+   * into that mode. The server books clears a moment after the duel, so look again a few times.
+   */
+  private licensedCarryOn(tries: number): void {
+    const wish = licenceWish()
+    if (!(wish && this.visible && this.me)) {
+      return
+    }
+    if (!licenceStatus(this.me.gauntletClears).licensed) {
+      if (tries < 3) {
+        setTimeout(() => {
+          this.refresh()
+            .then(() => this.licensedCarryOn(tries + 1))
+            .catch(() => undefined)
+        }, 1500)
+      }
+      return
+    }
+    setLicenceWish(null)
+    this.pick(wish)
   }
 
   hide(): void {
@@ -233,7 +259,7 @@ export class Hub {
     this.strip.replaceChildren()
     const me = this.me
     if (!me) {
-      nameplate(this.strip, signedIn ? (currentPlayer()?.name ?? '') : 'Stranger')
+      nameplate(this.strip, signedIn ? (currentPlayer()?.name ?? '') : 'Guest')
       // a guest's line only when it carries something (the guest purse); "Stranger" and the Sign
       // in button already say you're a guest
       const line = signedIn
@@ -273,12 +299,12 @@ export class Hub {
     const bounty = el('span', 'ow-hub-bounty', nums)
     const b = money(me.bounty || bountyForLevel(me.level))
     bounty.setAttribute('aria-label', `Bounty ${b}`)
-    bounty.title = 'Bounty: the price on your poster. It grows with your level and your win streak.'
+    bounty.title = 'Bounty: the reward for beating you. It grows with your level and win streak.'
     bounty.append(icon('bounty'), el('small', '', null, 'Bounty'), b)
     if (canPrestige(me.level, me.prestige)) {
       button(
         this.strip,
-        'Ride again',
+        'Prestige',
         () =>
           rideAgain(this.parent, me, (next) => {
             this.me = { ...this.me, ...next }
@@ -312,7 +338,7 @@ export class Hub {
   }
 
   /** Bounty Hunt and Frontier want the licence: say so, with the way to earn it, not a dead end. */
-  private licenceGate(title: string, line: string): boolean {
+  private licenceGate(mode: LicensedMode, title: string, line: string): boolean {
     const me = this.me
     if (!me || licenceStatus(me.gauntletClears).licensed) {
       return false
@@ -325,9 +351,11 @@ export class Hub {
     button(row, 'Not now', () => s.close())
     button(
       row,
-      'Ride the ranked gauntlet',
+      'Play ranked',
       () => {
         s.close()
+        // once licensed, the duel and the saloon carry on into the mode you wanted
+        setLicenceWish(mode)
         this.rideRanked()
       },
       true,
@@ -377,7 +405,7 @@ export class Hub {
    * (the first three outlaws on a ranked run) and whether the town is open this month.
    */
   private async openFrontier(): Promise<void> {
-    if (this.licenceGate('Frontier', 'Perdition is for licensed gunslingers only.')) {
+    if (this.licenceGate('frontier', 'Frontier', 'Frontier needs a licence.')) {
       return
     }
     const open = await fetchTownOpen()
@@ -393,20 +421,24 @@ export class Hub {
     if (!this.deps.ready()) {
       return
     }
-    if (this.licenceGate('Bounty Hunt', 'Bounty Hunt is for licensed gunslingers only.')) {
+    if (this.licenceGate('bounty', 'Bounty Hunt', 'Bounty Hunt needs a licence.')) {
       return
     }
-    const xpBefore = this.me?.xp ?? null
     this.root.classList.add('dim')
     const q = new QueueSheet(this.parent, {
       token: () => this.deps.token(),
       matched: (match) => {
         this.root.classList.remove('dim')
         this.hide()
-        this.deps.bountyHunt(match, xpBefore)
+        // read at the match, not the search: "Next duel" requeues while the last duel's XP is
+        // still being fetched, and the receipt's bar should start from after that duel
+        this.deps.bountyHunt(match, this.me?.xp ?? null)
       },
       closed: () => this.root.classList.remove('dim'),
-      rideRanked: () => this.rideRanked(),
+      rideRanked: () => {
+        setLicenceWish('bounty')
+        this.rideRanked()
+      },
     })
     void q
   }
@@ -491,10 +523,10 @@ export class Hub {
   private openLedger(): void {
     const body = this.panel('Ledger', true)
     if (!currentPlayer()) {
-      el('p', 'ow-hub-note', body, 'Sign in to keep a ledger of your money and XP.')
+      el('p', 'ow-hub-note', body, 'Sign in to see your money and XP history.')
       return
     }
-    const note = el('p', 'ow-hub-note', body, 'Opening the books…')
+    const note = el('p', 'ow-hub-note', body, 'Loading…')
     fetchLedger(15)
       .then((r) => {
         if (!r.ok) {
@@ -504,7 +536,7 @@ export class Hub {
         note.remove()
         const list = el('ul', 'ow-ledger-list', body)
         if (r.value.length === 0) {
-          el('li', '', list, 'Nothing in the books yet.')
+          el('li', '', list, 'No entries yet.')
         }
         for (const row of r.value) {
           const li = el('li', '', list)

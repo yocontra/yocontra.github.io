@@ -144,7 +144,7 @@
   letter-spacing: 0.06em;
   border: 1px solid var(--ow-rule-ink);
   border-radius: var(--ow-radius);
-  padding: 0 0.3em;
+  padding: 0 0.3em var(--ow-lift-sc);
 }
 .ow-title-links {
   position: absolute;
@@ -164,7 +164,7 @@
   display: inline-flex;
   align-items: center;
   min-height: var(--ow-tap);
-  padding: 0 var(--ow-s2);
+  padding: 0 var(--ow-s2) var(--ow-lift-sc);
   color: var(--ow-ink);
   font: inherit;
   font-weight: 600;
@@ -184,7 +184,7 @@
   }
   .ow-title-links a,
   .ow-title-links button {
-    padding: 0 6px;
+    padding-inline: 6px;
     letter-spacing: 0.04em;
   }
 }
@@ -256,7 +256,7 @@
   }
   .ow-title-links a,
   .ow-title-links button {
-    padding: 0 6px;
+    padding-inline: 6px;
     font-size: var(--ow-fs-small);
     letter-spacing: 0.06em;
   }

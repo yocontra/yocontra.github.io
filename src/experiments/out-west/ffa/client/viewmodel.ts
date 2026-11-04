@@ -45,10 +45,12 @@ import { castActor } from '../../scene/cast.ts'
 import { gunAnatomy, gunPointsOf } from '../../scene/holster.ts'
 import { type LongHold, solveArm } from '../../scene/longgun.ts'
 import { propDef, propObject } from '../../scene/props.ts'
+import { rifleObject } from '../../scene/rifle.ts'
 import type { PlayerLook } from '../scene/looks.ts'
 import { SupportHand } from '../scene/mirror-hand.ts'
 import { kitMaterial, shotgunMesh } from '../scene/shotgun.ts'
 import { type VmInput, VmMotion, type VmPose } from './vm-motion.ts'
+import { VmSky } from './vm-sky.ts'
 
 /** The view model's own vertical field of view (degrees), and on the sights. */
 export const VM_FOV = 54
@@ -169,6 +171,8 @@ export class ViewModel {
   private lookKey = ''
   private pending: PlayerLook | null = null
   readonly motion = new VmMotion()
+  /** The town's sky on the guns (their metal reads black without it). */
+  readonly townSky = new VmSky()
   private on = false
   private aspect = 1
   private worldFov = 80
@@ -257,6 +261,9 @@ export class ViewModel {
     if (actor.hat) {
       actor.hat.visible = false
     }
+    if (actor.gun) {
+      this.townSky.adopt(actor.gun)
+    }
     this.bones.clear()
     actor.root.traverse((o) => {
       o.castShadow = false
@@ -334,17 +341,8 @@ export class ViewModel {
   /** A long gun: its wrists from the shouldered fit (scene/longgun.ts), re-homed to our frame. */
   private fitLong(actor: Actor, kind: 'shotgun' | 'rifle'): Fit | null {
     const obj = new Group()
-    if (kind === 'shotgun') {
-      obj.add(shotgunMesh(this.kit))
-    } else {
-      const def = propDef(this.assets.props, 'rifle', 1.1)
-      if (!def) {
-        return null
-      }
-      const inner = propObject(def)
-      inner.rotation.y = Math.PI / 2
-      obj.add(inner)
-    }
+    obj.add(kind === 'shotgun' ? shotgunMesh() : rifleObject())
+    this.townSky.adopt(obj)
     const h: LongHold | null = actor.addLong(obj)
     if (!h) {
       return null
@@ -358,12 +356,13 @@ export class ViewModel {
       o.castShadow = false
       o.frustumCulled = false
     })
-    // the sight line over its two high points: the tallest part ahead of the stock's wrist (the
-    // hammers, the receiver) and the muzzle's top, so on the sights both sit on the crosshair and
-    // the rest of the gun drops away below it
+    // the sight line: the gun's own sights when its builder carries them (the Winchester's notch
+    // and blade, the coach gun's rib and bead); else over its two high points, the tallest part
+    // ahead of the stock's wrist and the muzzle's top, so on the sights both sit on the crosshair
+    // and the rest of the gun drops away below it
     const rear = new Vector3(h.a.wrist.x, -1, 0)
     let frontY = h.a.muzzle.y
-    for (const p of gunPointsOf(obj)) {
+    for (const p of h.a.rear ? [] : gunPointsOf(obj)) {
       if (p.x > h.a.wrist.x + 0.02 && p.y > rear.y) {
         rear.set(p.x, p.y, 0)
       }
@@ -374,8 +373,8 @@ export class ViewModel {
     rear.y += 0.006
     return {
       obj,
-      rear,
-      front: new Vector3(h.a.muzzle.x, frontY + 0.006, 0),
+      rear: h.a.rear?.clone() ?? rear,
+      front: h.a.front?.clone() ?? new Vector3(h.a.muzzle.x, frontY + 0.006, 0),
       muzzle: h.a.muzzle.clone(),
       right: h.right,
       left: null,

@@ -111,6 +111,11 @@ export class DrawLayer {
     return this.mode !== 'off'
   }
 
+  /** What the layer is doing (the dev probe reads it). */
+  get state(): Mode {
+    return this.mode
+  }
+
   /** Has the gun(s) out of the leather. */
   get drawn(): boolean {
     return this.mode === 'draw' && this.u >= U_GRIP

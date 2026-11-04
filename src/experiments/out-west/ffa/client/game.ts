@@ -171,9 +171,9 @@ export type Connect = (ev: TransportEvents) => Transport
 
 const CHANNEL_LABEL: Record<number, [string, number]> = {
   [CHANNEL_BANK]: ['Banking…', BANK_CHANNEL_TICKS],
-  [CHANNEL_STAGE]: ['Shipping by stage…', STAGE_CHANNEL_TICKS],
-  [CHANNEL_STRONGBOX]: ['Cracking the strongbox…', STRONGBOX_CHANNEL_TICKS],
-  [CHANNEL_LEAVE]: ['Leaving town…', LEAVE_CHANNEL_TICKS],
+  [CHANNEL_STAGE]: ['Shipping…', STAGE_CHANNEL_TICKS],
+  [CHANNEL_STRONGBOX]: ['Opening the strongbox…', STRONGBOX_CHANNEL_TICKS],
+  [CHANNEL_LEAVE]: ['Leaving…', LEAVE_CHANNEL_TICKS],
 }
 
 export class FrontierGame {
@@ -570,14 +570,14 @@ export class FrontierGame {
     const assets = await loadAssets(
       Math.min(8, this.renderer.gl.capabilities.getMaxAnisotropy()),
       first.look,
-      (f) => onProgress(f * 0.6, 'Saddling up'),
+      (f) => onProgress(f * 0.6, 'Loading'),
     )
     // sprint, crouch, jump and reload clips: Frontier's own file, on top of the player's
     await loadMoves(assets).catch((e: unknown) => console.warn('moves.glb failed', e))
     if (this.disposed) {
       return
     }
-    onProgress(0.65, 'Raising the town')
+    onProgress(0.65, 'Building the town')
     this.town = buildTown(TOWN, assets, SUN_DIR, this.renderer.tier)
     this.scene.add(this.town.root)
     const inside = buildInterior(TOWN, presetAt(DAY).windows)
@@ -610,12 +610,12 @@ export class FrontierGame {
     })
     this.guide = new BankGuide(this.hud.root, this.net.grid)
     this.guide.prepare()
-    onProgress(0.75, 'Fitting the posse')
+    onProgress(0.75, 'Loading players')
     await this.crowd.prepare(['casual', 'worker', 'rugged', 'suit'])
     if (this.disposed) {
       return
     }
-    onProgress(0.95, 'Riding in')
+    onProgress(0.95, 'Joining')
     shareDepthByKind(this.scene)
     this.renderer.probe.position.set(72, 1.7, 66)
     try {
@@ -1152,7 +1152,7 @@ export class FrontierGame {
         stance: this.ownStance(),
         pitch: this.shooterView ? this.shooter.pitch : 0,
         self: true,
-        weapon: this.net.weapon.weapon,
+        weapon: this.devWeapon ?? this.net.weapon.weapon,
       })
     }
     for (const [i, r] of this.remotes.entries()) {
@@ -1357,6 +1357,7 @@ export class FrontierGame {
     )
     const cam = this.cam.camera
     vm.setLens(cam.aspect, cam.fov)
+    vm.townSky.update(this.scene.environment, this.scene.environmentIntensity, cam.quaternion)
     // the sun, turned into the lens's frame (the view model lives in camera space)
     this.vmSun.copy(SUN_DIR).applyQuaternion(this.vmQ.copy(cam.quaternion).invert())
     const pred = this.net.pred
@@ -1515,7 +1516,7 @@ export class FrontierGame {
     // The banner is only ever the connection's state: "Riding in…" until the first snapshot
     // (cleared the moment you're in town), "Reconnecting…" while the socket retries.
     const duel = ((s?.flags ?? 0) & SELF_IN_SHOWDOWN) !== 0
-    this.hud.banner(duel ? null : (this.connBanner ?? (s ? null : 'Riding into Perdition…')))
+    this.hud.banner(duel ? null : (this.connBanner ?? (s ? null : 'Joining…')))
     if (!s) {
       return
     }
@@ -1571,8 +1572,8 @@ export class FrontierGame {
       const lvl = k && k.id !== NONE ? this.net.roster.get(k.id)?.level : undefined
       const carry =
         this.lastCarry > 0
-          ? `Your $${this.lastCarry.toLocaleString('en-US')} is in the dirt.`
-          : 'You carried nothing.'
+          ? `You dropped $${this.lastCarry.toLocaleString('en-US')}.`
+          : 'You weren’t carrying money.'
       const person = this.riders.live && k !== null && this.riders.person(k.id) !== null
       this.hud.death(name, lvl ? `Level ${lvl}. ${carry}` : carry, s.respawnTicks / TICK_HZ, person)
     }
@@ -1730,7 +1731,7 @@ export class FrontierGame {
       return
     }
     if (mw === this.net.you) {
-      this.hud.toast("YOU'RE MOST WANTED: +50% ON YOUR HEAD", 'gold', 2600)
+      this.hud.toast('YOU’RE MOST WANTED: +50% BOUNTY ON YOU', 'gold', 2600)
     } else {
       this.hud.feed(`★ ${this.net.name(mw)} is Most Wanted: +50% bounty`, 'gold')
     }
@@ -1836,7 +1837,7 @@ export class FrontierGame {
     this.desk.injectLook(dx, dy)
   }
 
-  /** Dev harness only: show a weapon in the first-person hands (null: the one you hold). */
+  /** Dev harness only: show a weapon in your hands, first and third person (null: the one you hold). */
   devShowWeapon(w: number | null): void {
     this.devWeapon = w
   }

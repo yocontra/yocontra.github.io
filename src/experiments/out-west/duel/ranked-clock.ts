@@ -85,7 +85,7 @@ export class RankedDuelClock implements DuelClock {
     this.reconnecting = false
     const inFlight = this.unresolved === null ? null : (this.levels.get(this.unresolved) ?? null)
     if (r === null || (inFlight !== null && !r.complete && r.level !== inFlight)) {
-      this.drop('The ranked server lost track of this run.')
+      this.drop('The server lost this run.')
       return
     }
     if (this.unresolved !== null) {
@@ -211,7 +211,7 @@ export class RankedDuelClock implements DuelClock {
       this.events.call(due)
     }
     if (!this.reconnecting && this.deadline > 0 && now > this.deadline) {
-      this.drop('The ranked server went quiet.')
+      this.drop('The server stopped responding.')
     }
   }
 

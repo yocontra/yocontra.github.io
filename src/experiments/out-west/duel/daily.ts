@@ -13,6 +13,7 @@ import type { Press } from '../engine/input.ts'
 import { reportDuel } from '../meta/events.ts'
 import type { RankedSession } from '../net/ranked.ts'
 import { emptyRun, save as persist, type SaveData } from '../save.ts'
+import { confirmSheet } from '../ui/sheet.ts'
 import { LocalDuelClock, type Verdict } from './clock.ts'
 import type { Director, DirectorHooks } from './director.ts'
 import { emptyStreet } from './mode.ts'
@@ -31,6 +32,8 @@ export interface DailyOpts {
 const FOG = 0.85
 /** Presses this soon after a result is shown are the draw's follow-through, not "leave". */
 const PRESS_GRACE_S = 0.8
+/** The server's verdict can trail the client's own card (a back-shot is judged at its call). */
+const VERDICT_WAIT_S = 8
 
 export class DailyDuel implements DirectorHooks {
   private readonly d: Director
@@ -38,6 +41,7 @@ export class DailyDuel implements DirectorHooks {
   private readonly realSave: SaveData
   private verdict = null as Verdict | null
   private over = false as boolean
+  private asking = false as boolean
 
   constructor(d: Director, o: DailyOpts) {
     this.d = d
@@ -105,7 +109,7 @@ export class DailyDuel implements DirectorHooks {
       // the server closes the line once the duel is recorded
       return
     }
-    this.d.c.hud.fake(`[${reason} That try is void.]`, 3000)
+    this.d.c.hud.fake(`[${reason} That try didn’t count.]`, 3000)
     this.leave()
   }
 
@@ -122,6 +126,12 @@ export class DailyDuel implements DirectorHooks {
       this.dress()
     }
     const t = d.phaseT
+    // leaving closes the socket, and a socket closed before the verdict voids the try
+    if (!this.verdict && t < VERDICT_WAIT_S) {
+      return phase === 'win' || phase === 'lose' || phase === 'coward'
+        ? this.holdForVerdict(phase)
+        : false
+    }
     switch (phase) {
       case 'win':
         if (t >= FEEL.resultAt + FEEL.resultFor - 0.05) {
@@ -146,21 +156,65 @@ export class DailyDuel implements DirectorHooks {
     }
   }
 
+  /**
+   * The client has shown its result but the server hasn't ruled: let the phase play out (its own
+   * tick runs) except for the gauntlet's auto-retry and next outlaw, which the daily never takes.
+   */
+  private holdForVerdict(phase: Phase): boolean {
+    const t = this.d.phaseT
+    if (phase === 'win') {
+      return t >= FEEL.resultAt + FEEL.resultFor - 0.05
+    }
+    return t >= (phase === 'lose' ? FEEL.loseAutoRetry : FEEL.cowardAutoRetry) - 0.05
+  }
+
   press(p: Press): boolean {
     const d = this.d
     if (this.over) {
       return false
     }
     if (p.action === 'pause') {
-      this.leave()
+      this.quit()
       return true
     }
     const after = d.phase === 'win' ? d.resultShown : d.phase === 'lose' || d.phase === 'coward'
     if (after && d.phaseT > PRESS_GRACE_S) {
-      this.leave()
+      // not before the server's verdict (leaving would void the try); swallowed meanwhile
+      if (this.verdict || d.phaseT >= VERDICT_WAIT_S) {
+        this.leave()
+      }
       return true
     }
     return false
+  }
+
+  /**
+   * Pause in the daily: its clock is the server's, so pausing is leaving. Before the verdict that
+   * spends the try, so ask first (a stray Escape shouldn't cost one of three).
+   */
+  private quit(): void {
+    if (this.verdict || this.asking) {
+      if (this.verdict) {
+        this.leave()
+      }
+      return
+    }
+    this.asking = true
+    confirmSheet(this.d.c.hud.root, {
+      title: 'Leave this duel?',
+      body: 'Leaving now uses up this try.',
+      yes: 'Leave',
+      no: 'Keep going',
+      danger: true,
+      focusNo: true,
+    })
+      .then((yes) => {
+        this.asking = false
+        if (yes) {
+          this.leave()
+        }
+      })
+      .catch(() => undefined)
   }
 
   /** Back to the saloon: the ranked clock closed, the gauntlet save restored. */

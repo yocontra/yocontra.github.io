@@ -9,6 +9,7 @@ import {
   saveName,
 } from '../net/leaderboard.ts'
 import { mountMostWanted } from './most-wanted.ts'
+import { recallOne, remember } from './store-memory.ts'
 
 export interface Banked {
   total: number
@@ -31,6 +32,13 @@ export interface BoardOpen {
 
 /** The gauntlet's all-time run board, or the monthly Most Wanted earnings board. */
 export type BoardTab = 'gauntlet' | 'most-wanted'
+
+const BOARD_TAB_KEY = 'out-west-board-tab'
+
+/** The board tab you last looked at on this device, else `fallback`. */
+export function lastBoardTab(fallback: BoardTab): BoardTab {
+  return recallOne<BoardTab>(BOARD_TAB_KEY, ['gauntlet', 'most-wanted'], fallback)
+}
 
 function el<K extends keyof HTMLElementTagNameMap>(
   tag: K,
@@ -127,7 +135,10 @@ export class Board {
     const r = this.root
     r.innerHTML = ''
     const panel = el('div', 'ow-board-panel', r)
-    el('h2', 'ow-board-title', panel, 'LEADERBOARD')
+    // the sheets' head: the title and its Close on one line (sheets.css)
+    const head = el('div', 'ow-hub-row ow-sheet-head', panel)
+    el('h2', 'ow-hub-h ow-board-title', head, 'LEADERBOARD')
+    this.closeButton(head)
     const submit = this.opts.submit
     if (!submit) {
       this.tabs(panel)
@@ -136,7 +147,6 @@ export class Board {
       mountMostWanted(el('div', 'ow-feat-mw', panel), this.root)
       this.status = null
       this.list = null
-      this.closeButton(panel)
       return
     }
     if (submit) {
@@ -149,7 +159,7 @@ export class Board {
       input.maxLength = NAME_MAX
       input.setAttribute('autocomplete', 'nickname')
       input.spellcheck = false
-      input.placeholder = 'Your handle'
+      input.placeholder = 'Your name'
       input.value = loadName()
       const btn = el('button', 'ow-btn ow-btn-primary', row, this.opts.submitLabel ?? 'Submit')
       btn.type = 'submit'
@@ -163,7 +173,6 @@ export class Board {
     this.status = el('div', 'ow-board-status', panel)
     this.status.setAttribute('aria-live', 'polite')
     this.list = el('ol', 'ow-board-list', panel)
-    this.closeButton(panel)
   }
 
   private closeButton(panel: HTMLElement): void {
@@ -190,6 +199,7 @@ export class Board {
       b.addEventListener('click', (e) => {
         e.stopPropagation()
         if (tab !== (this.opts.tab ?? 'gauntlet')) {
+          remember(BOARD_TAB_KEY, tab)
           this.opts = { ...this.opts, tab }
           this.loadSeq++
           this.render()
@@ -279,7 +289,7 @@ export class Board {
     }
     this.banked = true
     this.myRank = r.value.rank
-    btn.textContent = 'Banked'
+    btn.textContent = 'Submitted'
     this.setStatus(`You’re #${r.value.rank} with ${money(r.value.total)}.`, 'ok')
     await this.refresh()
   }

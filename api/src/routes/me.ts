@@ -255,7 +255,7 @@ async function putLoadout(request: Request, env: Env, player: Player): Promise<R
 async function prestige(request: Request, env: Env, player: Player): Promise<Response> {
   const detail = await profileFor(env, player)
   if (!(detail && canPrestige(detail.level, detail.prestige))) {
-    return error(request, env, 409, 'Reach level 50 to ride again.')
+    return error(request, env, 409, 'Reach level 50 to prestige.')
   }
   await env.DB.prepare(
     `UPDATE profiles SET level = 1, xp = 0, solo_xp = 0, prestige = prestige + 1, version = version + 1,

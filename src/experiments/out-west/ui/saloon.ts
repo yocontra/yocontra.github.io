@@ -29,7 +29,7 @@ function chalk(
   list.replaceChildren()
   const shown = rounds.filter((r) => !hide.has(r.name.toLowerCase()))
   if (shown.length === 0) {
-    el('li', '', list, 'Nobody’s stood a round yet.')
+    el('li', '', list, 'No one has bought a round yet.')
     return
   }
   for (const r of shown) {
@@ -46,16 +46,16 @@ export interface SaloonDeps {
 
 /** The chalkboard sheet, with the round to buy when signed in. */
 export function openSaloon(root: HTMLElement, deps: SaloonDeps): void {
-  const sheet = panelSheet(root, { title: 'The chalkboard', cls: 'ow-feat-saloon' })
+  const sheet = panelSheet(root, { title: 'Chalkboard', cls: 'ow-feat-saloon' })
   el(
     'p',
     'ow-hub-note',
     sheet.body,
-    `Stand the whole saloon a round for ${money(HOUSE_ROUND_PRICE)} and your name goes up in chalk.`,
+    `Buy everyone a round for ${money(HOUSE_ROUND_PRICE)}. Your name goes on the board.`,
   )
   const board = el('ol', 'ow-ledger-list ow-feat-chalk', sheet.body)
   const say = statusLine(sheet.body)
-  say('Reading the chalk…')
+  say('Loading…')
   let hide: ReadonlySet<string> = new Set()
   Promise.all([fetchChalkboard(), currentPlayer() ? blockedNames() : new Set<string>()])
     .then(([r, blocked]) => {
@@ -70,29 +70,29 @@ export function openSaloon(root: HTMLElement, deps: SaloonDeps): void {
     .catch(() => undefined)
   const me = deps.me()
   if (!me) {
-    el('p', 'ow-hub-note', sheet.body, 'Sign in with a passkey to buy a round.')
+    el('p', 'ow-hub-note', sheet.body, 'Sign in to buy a round.')
     return
   }
   const row = el('div', 'ow-hub-row', sheet.body)
   const buy = button(
     row,
-    `Buy the house a round · ${money(HOUSE_ROUND_PRICE)}`,
+    `Buy a round · ${money(HOUSE_ROUND_PRICE)}`,
     () => {
       const now = deps.me()
       if (!now) {
         return
       }
       confirmSheet(root, {
-        title: 'Buy the house a round?',
-        body: `${money(HOUSE_ROUND_PRICE)} from your purse of ${money(now.purse)}. Your name goes on the chalkboard. Nothing else changes.`,
-        yes: `Pour · ${money(HOUSE_ROUND_PRICE)}`,
+        title: 'Buy a round?',
+        body: `Costs ${money(HOUSE_ROUND_PRICE)}. You have ${money(now.purse)}. It only adds your name to the board.`,
+        yes: `Buy · ${money(HOUSE_ROUND_PRICE)}`,
       })
         .then(async (yes) => {
           if (!yes) {
             return
           }
           buy.disabled = true
-          say('Pouring…')
+          say('Buying…')
           const r = await buyRound()
           if (!r.ok) {
             buy.disabled = false
@@ -102,7 +102,7 @@ export function openSaloon(root: HTMLElement, deps: SaloonDeps): void {
           uiSound('uiBuy')
           deps.changed({ purse: r.value.purse })
           chalk(board, r.value.rounds, hide)
-          say('The house drinks to you.', 'ok')
+          say('Done. Your name is on the board.', 'ok')
           buy.disabled = r.value.purse < HOUSE_ROUND_PRICE
         })
         .catch(() => undefined)
@@ -111,7 +111,7 @@ export function openSaloon(root: HTMLElement, deps: SaloonDeps): void {
   )
   buy.disabled = me.purse < HOUSE_ROUND_PRICE
   if (buy.disabled) {
-    say(`You need ${money(HOUSE_ROUND_PRICE - me.purse)} more for a round.`)
+    say(`You need ${money(HOUSE_ROUND_PRICE - me.purse)} more.`)
   }
 }
 
@@ -130,9 +130,9 @@ export function rideAgain(
   }
   const next = me.prestige + 1
   confirmSheet(root, {
-    title: 'Ride again?',
-    body: `You go back to level 1 with star ${next} of ${MAX_PRESTIGE}. You keep your purse (${money(me.purse)}), every piece of kit and your titles. Your bounty grows: ${money(baseBounty(1, next))} at level 1, ${money(baseBounty(MAX_LEVEL, next))} at ${MAX_LEVEL}. Bounty Hunt matches you as level ${effectiveLevel(1, next)}.`,
-    yes: `Ride again · ★${next}`,
+    title: 'Prestige?',
+    body: `Go back to level 1 and earn star ${next} of ${MAX_PRESTIGE}. You keep your purse (${money(me.purse)}), kit and titles. Your bounty goes up: ${money(baseBounty(1, next))} at level 1, ${money(baseBounty(MAX_LEVEL, next))} at level ${MAX_LEVEL}. Bounty Hunt matches you as level ${effectiveLevel(1, next)}.`,
+    yes: `Prestige · ★${next}`,
   })
     .then(async (yes) => {
       if (!yes) {
@@ -140,7 +140,7 @@ export function rideAgain(
       }
       const r = await prestige()
       if (!r.ok) {
-        const s = panelSheet(root, { title: 'Ride again' })
+        const s = panelSheet(root, { title: 'Prestige' })
         el('p', 'ow-hub-note', s.body, r.error)
         return
       }

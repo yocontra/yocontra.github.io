@@ -162,8 +162,8 @@ export class Hud {
     }
     this.bannerEl = el('div', 'fr-banner', this.root)
     this.lowPowerEl = el('div', 'fr-lowpower', this.root, 'Low Power Mode: 30 fps')
-    this.rotateEl = el('div', 'fr-rotate', this.root, 'Turn your phone sideways for the best view')
-    this.clickEl = el('div', 'fr-rotate fr-click', this.root, 'Click to take aim')
+    this.rotateEl = el('div', 'fr-rotate', this.root, 'Turn your phone sideways')
+    this.clickEl = el('div', 'fr-rotate fr-click', this.root, 'Click to play')
 
     this.deathEl = el('div', 'fr-death', this.root)
     const poster = el('div', 'fr-poster', this.deathEl)
@@ -186,25 +186,25 @@ export class Hud {
 
     this.menuEl = el('div', 'fr-menu fr-hit', this.root)
     const card = el('div', 'fr-menu-card', this.menuEl)
-    el('h2', 'fr-menu-title', card, 'Perdition')
+    el('h2', 'fr-menu-title', card, 'Paused')
     el(
       'p',
       'fr-menu-note',
       card,
-      'Carried cash drops when you leave, unless you leave from inside the bank. Banked money is safe.',
+      'Leaving drops your carried money, unless you’re in the bank. Banked money is safe.',
     )
     const howto = el('button', 'fr-menu-item fr-menu-quiet fr-hit', card, 'How to play')
     // who's in town (report and block live there)
-    this.playersEl = el('button', 'fr-menu-item fr-menu-quiet fr-hit', card, 'Riders in town')
+    this.playersEl = el('button', 'fr-menu-item fr-menu-quiet fr-hit', card, 'Players')
     this.menuSettings = el('div', 'fr-menu-settings', card)
-    const leave = el('button', 'fr-menu-item fr-hit', card, 'Leave town (5 s)')
+    const leave = el('button', 'fr-menu-item fr-hit', card, 'Leave (5 s)')
     const exit = el(
       'button',
       'fr-menu-item fr-menu-quiet fr-hit',
       card,
-      'Quit now (drop your carry)',
+      'Quit now (lose carried money)',
     )
-    const back = el('button', 'fr-menu-item fr-menu-quiet fr-hit', card, 'Back to the fight')
+    const back = el('button', 'fr-menu-item fr-menu-quiet fr-hit', card, 'Resume')
     const players = this.playersEl
     players.addEventListener('click', (e) => {
       e.stopPropagation()
@@ -319,7 +319,7 @@ export class Hud {
       this.bankedEl.hidden = s.banked <= 0
     }
     if (this.changed('players', s.players)) {
-      this.playersEl.textContent = `Riders in town (${s.players})`
+      this.playersEl.textContent = `Players (${s.players})`
     }
     if (this.changed('mw', s.mostWanted)) {
       this.mwEl.classList.toggle('on', s.mostWanted)
@@ -467,7 +467,7 @@ export class Hud {
     }
     const s = Math.ceil(seconds)
     if (this.changed('deathS', s)) {
-      this.deathCount.textContent = s > 0 ? `Back in the saddle in ${s}…` : ''
+      this.deathCount.textContent = s > 0 ? `Respawn in ${s}…` : ''
     }
   }
 

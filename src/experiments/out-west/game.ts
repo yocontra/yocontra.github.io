@@ -1,4 +1,4 @@
-import { MeshStandardMaterial, Scene } from 'three'
+import { MeshStandardMaterial, type Object3D, Scene } from 'three'
 import type { AudioEngine } from './audio/audio.ts'
 import type { ItemId, Loadout } from './data/catalog.ts'
 import type { Dyes } from './data/dye.ts'
@@ -19,6 +19,7 @@ import { Dust, Flash, Glint, Physics, Puffs, Tumbleweed, tumbleweedGeometry } fr
 import { type HubShot, hubShot, wearLoadout } from './scene/hub-stage.ts'
 import { ItemStudio } from './scene/item-studio.ts'
 import { propDef } from './scene/props.ts'
+import { rifleObject } from './scene/rifle.ts'
 import { softDot } from './scene/textures.ts'
 import { LIFE, TownLife } from './scene/townlife.ts'
 import { World } from './scene/world.ts'
@@ -99,6 +100,26 @@ function serverDuels(director: Director): Pick<Game, 'startPvp' | 'playDaily' | 
   }
 }
 
+/**
+ * Show what the warm-up must compile that isn't drawn yet: the muzzle flash and the glint, and
+ * the rooftop rifleman's Winchester (its own material; he only walks on later) out of sight under
+ * the street. Returns the undo.
+ */
+function warmExtras(scene: Scene, sprites: readonly Object3D[]): () => void {
+  const rifle = rifleObject()
+  rifle.position.set(0, -4, 0)
+  scene.add(rifle)
+  for (const s of sprites) {
+    s.visible = true
+  }
+  return () => {
+    rifle.removeFromParent()
+    for (const s of sprites) {
+      s.visible = false
+    }
+  }
+}
+
 export async function createGame(o: GameOpts): Promise<Game> {
   const scene = new Scene()
   const rig = new CameraRig(window.innerWidth / window.innerHeight)
@@ -148,7 +169,7 @@ export async function createGame(o: GameOpts): Promise<Game> {
     assets,
     save: o.save,
     gun: propDef(assets.props, 'revolver', 0.3, 'max'),
-    rifle: propDef(assets.props, 'rifle', 1.1, 'max'),
+    rifle: () => rifleObject({ lod: true }),
     coffins,
     dust,
     puffs,
@@ -169,8 +190,7 @@ export async function createGame(o: GameOpts): Promise<Game> {
   world.silhouetteHide.push(town.root)
 
   // Compile every shader up front behind the title so the first shot never hitches.
-  flash.sprite.visible = true
-  glint.sprite.visible = true
+  const unwarm = warmExtras(scene, [flash.sprite, glint.sprite])
   try {
     await renderer.gl.compileAsync(scene, rig.cam)
   } catch {
@@ -179,8 +199,7 @@ export async function createGame(o: GameOpts): Promise<Game> {
   rig.update(0.016, 0.016)
   renderer.render(0.016)
   renderer.renderSilhouette(world.silhouetteHide)
-  flash.sprite.visible = false
-  glint.sprite.visible = false
+  unwarm()
   o.onProgress(1)
 
   wireViewport(renderer, director)

@@ -61,12 +61,7 @@ function settlementLines(panel: HTMLElement, s: Settlement | null, pending: stri
   countUp(el('b', s.delta < 0 ? 'neg' : 'pos', total), { from: 0, to: s.delta }, signedMoney, 1100)
   countUp(el('i', '', total), { from: 0, to: s.xp }, (n) => `+${n} XP`, 1100)
   if (s.pairFactor < 1) {
-    el(
-      'li',
-      'ow-results-pair',
-      list,
-      `Same opponent again: paid at ${Math.round(s.pairFactor * 100)}%`,
-    )
+    el('li', 'ow-results-pair', list, `Same opponent again: ${Math.round(s.pairFactor * 100)}% pay`)
   }
   if (s.purse !== null) {
     const purse = el('li', 'ow-results-purse', list)
@@ -106,7 +101,7 @@ export class ResultsPanel {
     this.root.setAttribute('aria-label', v.title)
     swallow(this.root)
     const panel = el('div', 'ow-hub-panel ow-paper-doc ow-results-panel', this.root)
-    el('div', 'ow-results-kicker', panel, 'Bank of Perdition · Receipt')
+    el('div', 'ow-results-kicker', panel, 'Results')
     el('h2', 'ow-results-title', panel, v.title)
     el('p', 'ow-hub-note ow-results-sub', panel, v.sub)
     const draws = el('div', 'ow-results-draws', panel)
@@ -117,7 +112,7 @@ export class ResultsPanel {
     }
     cell('You', v.you)
     cell('Him', v.them)
-    settlementLines(panel, v.settlement, v.pending ?? 'Settling up with the bank…')
+    settlementLines(panel, v.settlement, v.pending ?? 'Adding up…')
     this.levelBox = el('div', 'ow-results-level', panel)
     this.levelBox.setAttribute('role', 'status')
     const track = el('div', 'ow-xp', panel)
@@ -130,8 +125,8 @@ export class ResultsPanel {
     this.vote = el('div', 'ow-results-vote', panel)
     this.vote.setAttribute('aria-live', 'polite')
     const row = el('div', 'ow-hub-row', panel)
-    button(row, 'Saloon', h.saloon)
-    this.nextBtn = button(row, 'Next bounty', h.next)
+    button(row, 'Menu', h.saloon)
+    this.nextBtn = button(row, 'Next duel', h.next)
     this.rematchBtn = button(
       row,
       'Rematch',
@@ -204,11 +199,11 @@ export class ResultsPanel {
       this.voted()
     }
     if (mine && theirs) {
-      this.vote.textContent = 'Rematch. Back to the street…'
+      this.vote.textContent = 'Rematch accepted. Starting…'
     } else if (theirs) {
       this.vote.textContent = 'He wants a rematch.'
     } else if (mine) {
-      this.vote.textContent = 'Waiting on him…'
+      this.vote.textContent = 'Waiting for him…'
     }
   }
 
@@ -322,22 +317,22 @@ export function resultView(
       : { tone: 'loss', title: 'You lose', sub: `${name} was quicker.` },
     coward:
       r.culprit === me
-        ? { tone: 'loss', title: 'Coward.', sub: 'You drew before the bell. Full penalty.' }
-        : { tone: 'win', title: 'He drew early', sub: 'He shot at your boots. You collect.' },
+        ? { tone: 'loss', title: 'Too early', sub: 'You drew before the bell. Full penalty.' }
+        : { tone: 'win', title: 'He drew early', sub: 'He drew before the bell. You win.' },
     forfeit:
       r.culprit === me
-        ? { tone: 'loss', title: 'Forfeit', sub: 'You left the street. Full penalty.' }
-        : { tone: 'win', title: 'He lit out', sub: 'His connection dropped. You win by forfeit.' },
+        ? { tone: 'loss', title: 'Forfeit', sub: 'You left the duel. Full penalty.' }
+        : { tone: 'win', title: 'He left', sub: 'His connection dropped. You win.' },
     dodge:
       r.culprit === me
-        ? { tone: 'loss', title: 'Dodged', sub: 'You never cocked. Half penalty, no XP.' }
+        ? { tone: 'loss', title: 'Dodged', sub: 'You didn’t press Ready. Half penalty, no XP.' }
         : {
             tone: 'even',
             title: 'He dodged',
-            sub: 'He never cocked. Back to the front of the queue.',
+            sub: 'He didn’t press Ready. You’re first in the queue.',
           },
-    froze: { tone: 'even', title: 'Both froze', sub: 'Nobody drew. A little XP, no money.' },
-    draw: { tone: 'even', title: 'A draw', sub: 'Two dead heats. Nobody pays.' },
+    froze: { tone: 'even', title: 'No one drew', sub: 'A little XP, no money.' },
+    draw: { tone: 'even', title: 'Tie', sub: 'Two ties in a row. No one pays.' },
   }
   return { ...base, ...(byOutcome[r.outcome] ?? byOutcome.froze) } as ResultView
 }

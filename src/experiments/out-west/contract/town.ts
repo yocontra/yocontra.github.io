@@ -436,5 +436,5 @@ export const NONE = 255
 
 /** Frontier's "closed for the month" line (the join route's `over_budget` refusal says the same). */
 export function townClosedCopy(now = new Date()): string {
-  return `Perdition is closed for the rest of the month. It reopens on ${reopensOn(now)} (UTC). Quick Draw is still open.`
+  return `Frontier is closed until ${reopensOn(now)} (UTC). Quick Draw is still open.`
 }

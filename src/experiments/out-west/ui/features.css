@@ -63,11 +63,20 @@
   flex: 1 1 0;
   justify-content: center;
   min-width: 0;
-  padding-block: 6px;
+  padding-block: 6px calc(6px + var(--ow-lift-sc));
+  /* the body size: "Gauntlet runs" holds one line on a 375 px phone */
+  font-size: var(--ow-fs-body);
   white-space: normal;
   text-align: center;
   text-wrap: balance;
   line-height: 1.1;
+}
+/* a phone's board: the tabs step down a size so "Gauntlet runs" holds one line */
+@container (max-width: 22rem) {
+  .ow-feat-board-tabs .ow-store-tab {
+    padding-inline: var(--ow-s1);
+    font-size: var(--ow-fs-small);
+  }
 }
 /* the board is printed on paper: tabs and notes in ink */
 .ow-board-panel .ow-feat-board-tabs .ow-store-tab {
@@ -97,7 +106,7 @@
   align-items: center;
   gap: var(--ow-s1);
   min-height: var(--ow-tap);
-  padding: 0 var(--ow-s1);
+  padding: 0 var(--ow-s1) var(--ow-lift-sc);
   font-family: var(--ow-font-text);
   font-weight: 600;
   font-size: var(--ow-fs-body);

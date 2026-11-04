@@ -26,11 +26,12 @@ import { uiSound } from './sfx.ts'
 import { button, confirmSheet, el, swallow } from './sheet.ts'
 import { dyePanel } from './store-dye.ts'
 import { inReach, SETS, Shelf, setOf, wearSet } from './store-kit.ts'
+import { buyLabel, keptLoadout, recallOne, remember, TAB_KEY } from './store-memory.ts'
 import { BAKED_THUMBS } from './thumbs.ts'
 
 const SLOT_TABS: readonly { slot: Slot; label: string }[] = [
   { slot: 'hat', label: 'Hats' },
-  { slot: 'gun', label: 'Irons' },
+  { slot: 'gun', label: 'Guns' },
   { slot: 'outfit', label: 'Outfits' },
   { slot: 'extra', label: 'Extras' },
   { slot: 'spurs', label: 'Spurs' },
@@ -66,9 +67,9 @@ const RARITY_LABEL: Record<CatalogItem['rarity'], string> = {
 /** Where a piece of kit shows (the ones you can't see on the street say so). */
 const SLOT_NOTE: Partial<Record<Slot, string>> = {
   frame: 'Frames your poster in Bounty Hunt.',
-  drawSound: 'Plays when you fire in Bounty Hunt, never before.',
+  drawSound: 'Plays when you fire in Bounty Hunt.',
   saddlebag: 'The bag you drop in Frontier.',
-  holster: 'Tooling shows up close. Same draw for everyone.',
+  holster: 'Looks only. Every gun draws the same.',
 }
 
 /** Thumbnails as image URLs, kept for the page: a canvas can only hang in one place. */
@@ -104,7 +105,9 @@ export class Outfitter {
   private readonly deps: StoreDeps
   private items: readonly CatalogItem[] = CATALOG
   private owned = new Set<string>(STARTER_ITEMS)
-  private tab: Tab = 'hat'
+  private tab = recallOne(TAB_KEY, ['sets', ...SLOT_TABS.map((t) => t.slot)], 'hat' as Tab)
+  /** What's being tried on (a piece or a set), or null when you're in what you have equipped. */
+  private wearing = null as Loadout | null
   private picked: CatalogItem | null = null
   /** A dye being tried on the picked item (not bought yet). */
   private tryDye: DyeId | null = null
@@ -174,8 +177,14 @@ export class Outfitter {
     return normalizeLoadout(this.deps.me()?.loadout ?? DEFAULT_LOADOUT)
   }
 
+  private tryOn(l: Loadout, dyes?: Dyes): void {
+    this.wearing = l
+    this.deps.preview(l, dyes)
+  }
+
   private show(tab: Tab): void {
     this.tab = tab
+    remember(TAB_KEY, tab)
     const me = this.deps.me()
     for (const [t, b] of this.tabs) {
       b.classList.toggle('on', t === tab)
@@ -334,7 +343,7 @@ export class Outfitter {
       const have = pieces.filter((i) => this.owned.has(i.id)).length
       const box = el('div', 'ow-set-card', this.list)
       el('b', 'ow-store-name', box, set.name)
-      el('p', 'ow-hub-note', box, `${set.blurb} ${have}/${pieces.length} owned.`)
+      el('p', 'ow-hub-note', box, `${set.blurb} Owned: ${have}/${pieces.length}`)
       const row = el('div', 'ow-set-pieces', box)
       for (const p of pieces) {
         const chip = el('button', `ow-set-piece${this.owned.has(p.id) ? ' owned' : ''}`, row)
@@ -347,9 +356,9 @@ export class Outfitter {
           this.pick(p)
         })
       }
-      button(box, 'Try the set on', () => {
+      button(box, 'Try on', () => {
         this.picked = null
-        this.deps.preview(wearSet(this.equipped, set, this.items))
+        this.tryOn(wearSet(this.equipped, set, this.items))
       })
     }
     this.drawThumbs()
@@ -362,7 +371,7 @@ export class Outfitter {
   private pick(item: CatalogItem): void {
     this.picked = item
     this.tryDye = null
-    this.deps.preview({ ...this.equipped, [item.slot]: item.id })
+    this.tryOn({ ...this.equipped, [item.slot]: item.id })
     this.show(item.slot)
   }
 
@@ -391,7 +400,7 @@ export class Outfitter {
     if (set) {
       const have = set.items.filter((id) => this.owned.has(id)).length
       const line = el('p', 'ow-hub-note ow-store-set', this.detail)
-      line.append(`Part of the ${set.name} set · ${have}/${set.items.length} owned · `)
+      line.append(`${set.name} set · Owned: ${have}/${set.items.length} · `)
       const see = el('button', 'ow-store-link', line, 'See the set')
       see.type = 'button'
       see.addEventListener('click', (e) => {
@@ -427,10 +436,7 @@ export class Outfitter {
         busy: this.busy,
         onTry: (id) => {
           this.tryDye = id
-          this.deps.preview(
-            { ...this.equipped, [item.slot]: item.id },
-            { ...this.dyes, [item.id]: id },
-          )
+          this.tryOn({ ...this.equipped, [item.slot]: item.id }, { ...this.dyes, [item.id]: id })
           this.renderDetail()
         },
         onDye: (want, price) => {
@@ -447,12 +453,12 @@ export class Outfitter {
     }
     const colour = DYES.find((d) => d.id === dye)?.name ?? dye
     const yes = await confirmSheet(this.root.parentElement ?? this.root, {
-      title: dye === 'natural' ? `Wash out ${item.name}?` : `Dye ${item.name} ${colour}?`,
+      title: dye === 'natural' ? `Remove dye from ${item.name}?` : `Dye ${item.name} ${colour}?`,
       body:
         dye === 'natural'
           ? 'Back to its natural colour. Free.'
-          : `${money(price)} from your purse of ${money(me.purse)}. Cosmetic only.`,
-      yes: dye === 'natural' ? 'Wash it out' : `Dye · ${money(price)}`,
+          : `Costs ${money(price)}. You have ${money(me.purse)}.`,
+      yes: dye === 'natural' ? 'Remove dye' : `Dye · ${money(price)}`,
     })
     if (!yes) {
       return
@@ -473,20 +479,13 @@ export class Outfitter {
 
   private buyButton(item: CatalogItem, me: MeResponse | null): void {
     if (!me) {
-      el('p', 'ow-hub-note', this.detail, 'Sign in with a passkey to buy and equip.')
+      el('p', 'ow-hub-note', this.detail, 'Sign in to buy and equip.')
       return
     }
     const verdict = canBuy({ level: me.level, purse: me.purse }, item, this.owned)
-    const label: Record<string, string> = {
-      ok: `Buy · ${money(item.price)}`,
-      funds: `Need ${money(item.price - me.purse)} more`,
-      level: `Unlocks at Lv ${item.level}`,
-      not_for_sale: item.unlock ?? 'Not for sale',
-      owned: 'Owned',
-    }
     const b = button(
       this.detail,
-      label[verdict] ?? 'Buy',
+      buyLabel(verdict, item, me.purse),
       () => {
         this.buy(item).catch(() => undefined)
       },
@@ -502,7 +501,7 @@ export class Outfitter {
     }
     const yes = await confirmSheet(this.root.parentElement ?? this.root, {
       title: `Buy ${item.name}?`,
-      body: `${money(item.price)} from your purse of ${money(me.purse)}. Cosmetic only, no refunds.`,
+      body: `Costs ${money(item.price)}. You have ${money(me.purse)}. No refunds.`,
       yes: `Buy · ${money(item.price)}`,
     })
     if (!yes) {
@@ -540,8 +539,13 @@ export class Outfitter {
     el('p', 'ow-hub-note ow-store-error', this.detail, msg)
   }
 
+  /** Done: owned pieces you're trying on stay on (`keptLoadout`); the rest come off. */
   close(): void {
-    this.deps.preview(this.equipped, this.dyes)
+    const kept = keptLoadout(this.wearing, this.equipped, this.owned)
+    if (kept) {
+      this.equip(kept).catch(() => undefined)
+    }
+    this.deps.preview(kept ?? this.equipped, this.dyes)
     this.root.classList.remove('on')
     setTimeout(() => this.root.remove(), 250)
     this.deps.close()

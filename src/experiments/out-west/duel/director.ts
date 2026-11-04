@@ -12,6 +12,7 @@ import type { Result } from '../net/leaderboard.ts'
 import type { RankedSession } from '../net/ranked.ts'
 import { save as persist } from '../save.ts'
 import type { Actor } from '../scene/actor.ts'
+import { PROBE } from '../scene/anim-probe.ts'
 import { clamp01, easeInOutCubic } from '../scene/camera.ts'
 import { PortraitStudio } from '../scene/portrait.ts'
 import { Board } from '../ui/board.ts'
@@ -320,6 +321,7 @@ export class Director extends DuelState {
     const e = this.enemy
     if (t >= FEEL.enemyCockDelay && this.lastTick < FEEL.enemyCockDelay && e) {
       this.c.audio.play('cocking', { gain: 0.8, pos: e.root.position.clone(), rate: 0.95 })
+      e.gestures.play('thumb', 1)
     }
     if (t >= FEEL.inputEnableDelay) {
       if (this.boss) {
@@ -335,6 +337,11 @@ export class Director extends DuelState {
 
   async lineup(day = 0.3): Promise<void> {
     this.lineupActors = await lineup(this, day)
+    if (PROBE) {
+      // the animation audit drives the lineup (tools/anim-audit.ts); tree-shaken from the deploy
+      const { installStage } = await import('./anim-stage.ts')
+      installStage(this, this.lineupActors)
+    }
   }
 
   posters(): Promise<void> {

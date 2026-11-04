@@ -58,8 +58,8 @@ function purse(parent: HTMLElement, meta: Meta): void {
       'ow-hub-note ow-map-purse',
       parent,
       meta.account
-        ? 'Medals and challenges won on ranked runs are booked to your ledger once each. Practice wins show here but don’t pay.'
-        : 'Signed in. Medals won on ranked runs are booked to your ledger once each.',
+        ? 'Medals and challenges pay once, on ranked runs. Practice wins show here but don’t pay.'
+        : 'Medals pay once each, on ranked runs.',
     )
     return
   }
@@ -67,10 +67,13 @@ function purse(parent: HTMLElement, meta: Meta): void {
     'p',
     'ow-hub-note ow-map-purse',
     parent,
-    `Guest purse: ${money(p.cash)} and ${p.xp.toLocaleString('en-US')} XP from your clears, medals and challenges. ` +
-      `Sign in and up to ${money(GUEST_CAP.cash)} and ${GUEST_CAP.xp.toLocaleString('en-US')} XP ride into your account.`,
+    `Guest earnings: ${money(p.cash)} and ${p.xp.toLocaleString('en-US')} XP. ` +
+      `Sign in to keep up to ${money(GUEST_CAP.cash)} and ${GUEST_CAP.xp.toLocaleString('en-US')} XP.`,
   )
 }
+
+/** A challenge's task loses its full stop when the pay follows it on the same line. */
+const END_STOP = /\.$/u
 
 function outlawRow(list: HTMLElement, meta: Meta, i: number): void {
   const o = OUTLAWS[i]
@@ -94,7 +97,7 @@ function outlawRow(list: HTMLElement, meta: Meta, i: number): void {
   }
   el('span', 'ow-map-best ow-t-num', medal, best)
   el('span', 'ow-map-need ow-t-num', medal, `${ms[0]} · ${ms[1]} · ${ms[2]}`).title =
-    'Bronze, silver and gold: beat these (ms)'
+    'Medal times in ms: bronze, silver, gold'
   const ch = el('div', `ow-map-ch${m?.challenge ? ' done' : ''}`, li)
   el('b', 'ow-map-ch-title', ch, `${m?.challenge ? '✓ ' : ''}${c.title}`)
   const pay = challengePay(c)
@@ -102,12 +105,12 @@ function outlawRow(list: HTMLElement, meta: Meta, i: number): void {
     'span',
     'ow-map-ch-task',
     ch,
-    `${c.task} +${pay.xp} XP${pay.cash ? `, +${money(pay.cash)}` : ''}${isClaim(c) ? ' · tap or click his hat' : ''}`,
+    `${c.task.replace(END_STOP, '')} · ${pay.xp} XP${pay.cash ? ` + ${money(pay.cash)}` : ''}${isClaim(c) ? ' · Tap his hat' : ''}`,
   )
 }
 
 function rewards(parent: HTMLElement, meta: Meta): void {
-  el('h3', 'ow-map-h', parent, 'Earned on the street')
+  el('h3', 'ow-map-h', parent, 'Rewards')
   const owned = new Set(meta.account?.rewards ?? [])
   const state = {
     marks: meta.marks(),
@@ -130,7 +133,7 @@ function rewards(parent: HTMLElement, meta: Meta): void {
     if (has) {
       status = 'In your Outfitter'
     } else if (met) {
-      status = currentPlayer() ? 'Earned here: win it on a ranked run' : 'Sign in to claim it'
+      status = currentPlayer() ? 'Win it on a ranked run' : 'Sign in to claim it'
     }
     el('i', '', li, status)
   }
@@ -147,9 +150,10 @@ export function openGauntletMap(root: HTMLElement, meta: Meta, links: MapLinks):
   })
   const paint = (): void => {
     s.body.replaceChildren()
-    el('div', 'ow-results-kicker', s.body, 'Seventeen posters · one street')
+    el('div', 'ow-results-kicker', s.body, '17 outlaws')
     sets(s.body, meta)
     purse(s.body, meta)
+    el('p', 'ow-hub-note ow-map-legend', s.body, 'Medal times in ms: bronze · silver · gold')
     const list = el('ol', 'ow-map-list', s.body)
     for (let i = 0; i < OUTLAW_COUNT; i++) {
       outlawRow(list, meta, i)

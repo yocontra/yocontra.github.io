@@ -2,7 +2,7 @@ import { money } from '../data/economy.ts'
 import { FEEL } from '../data/feel.ts'
 import { haptic } from '../platform/haptics.ts'
 import type { Director } from './director.ts'
-import { drawAt, fireGun } from './draws.ts'
+import { drawAt, fireGun, nearMiss } from './draws.ts'
 import { cowardShot, deathShot } from './framing.ts'
 import type { EnemyShot } from './judge.ts'
 import { killEnemyAnim, playerFireFx, slowMo } from './outcome.ts'
@@ -29,6 +29,9 @@ function shooterFx(d: Director, who: number): void {
     shooter.play('Gun_Shoot', 0.05, true, 1.6)
     // out and on you this frame, wherever his draw had got to; two guns take turns
     off = fireGun(shooter)
+  } else {
+    // the rooftop rifle kicks
+    shooter.kickLong()
   }
   const m = shooter.muzzle(V(), off)
   c.flash.fire(m, 0.8)
@@ -84,6 +87,7 @@ export function enemyFires(d: Director, s: EnemyShot): void {
     playerHit(d, s.who === 1 ? 'The rifleman got you.' : '', null)
   } else {
     missFx(d)
+    nearMiss(d.player)
     d.secondChance = true
   }
 }
@@ -280,7 +284,7 @@ export function tickCoward(d: Director): void {
       kind: 'coward',
       title: 'COWARD.',
       big: '',
-      sub: d.cowardNote || `${n} ${n === 1 ? 'man' : 'men'} shot in the back. No bounty.`,
+      sub: d.cowardNote || `You drew before the bell. No bounty. (Early draws: ${n})`,
       hint: 'press to try again',
     })
     c.hud.cardPoster(d.posterCanvas.toDataURL('image/jpeg', 0.8))

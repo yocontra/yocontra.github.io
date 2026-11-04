@@ -71,7 +71,7 @@ export class Riders {
 
   /** The riders in town: every person's name, level and a way to their poster. */
   open(): void {
-    const sheet = panelSheet(this.deps.root, { title: 'Riders in Perdition' })
+    const sheet = panelSheet(this.deps.root, { title: 'Players' })
     const people = [...this.deps.roster().values()]
       .filter((r) => !r.bot && r.id !== this.deps.you())
       .sort((a, b) => b.level - a.level || a.name.localeCompare(b.name))
@@ -81,8 +81,8 @@ export class Riders {
       'ow-hub-note',
       sheet.body,
       people.length > 0
-        ? 'Tap a name for their poster, to report or block them.'
-        : 'Nobody else in town but the hired guns.',
+        ? 'Tap a name to see their poster, report or block.'
+        : 'No other players. Only bots.',
     )
     const list = el('ul', 'ow-ledger-list ow-feat-record', sheet.body)
     for (const r of people) {
@@ -102,9 +102,9 @@ export class Riders {
       }
     }
     if (bots > 0) {
-      el('p', 'ow-hub-note', sheet.body, `${bots} hired gun${bots === 1 ? '' : 's'} besides.`)
+      el('p', 'ow-hub-note', sheet.body, `Plus ${bots} bot${bots === 1 ? '' : 's'}.`)
     }
     const row = el('div', 'ow-hub-row', sheet.body)
-    button(row, 'Back to the fight', () => sheet.close(), true)
+    button(row, 'Close', () => sheet.close(), true)
   }
 }

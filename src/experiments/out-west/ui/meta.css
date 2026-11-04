@@ -82,6 +82,10 @@
   opacity: 0;
   transform: translateY(-8px);
 }
+/* a slip already up steps aside while the pause menu is open (new ones wait: main.ts) */
+.ow:has(.ow-menu.on) .ow-toasts {
+  visibility: hidden;
+}
 .ow-toast-seal {
   flex: none;
   width: 40px;
@@ -198,8 +202,9 @@
   padding: 10px 0;
   border-bottom: 1px solid var(--ow-rule-ink);
 }
+/* outlaws still ahead print lighter, but their italics stay readable on the paper (AA) */
 .ow-map-row:not(.beaten) {
-  opacity: 0.62;
+  opacity: 0.8;
 }
 .ow-map-no {
   font-size: var(--ow-fs-h4);
@@ -387,8 +392,10 @@
   font-style: italic;
   color: var(--ow-ink-2);
 }
-.ow-ach-list li.locked {
-  opacity: 0.55;
+/* a locked one is told by its empty seal and a lighter ink, never a fade under AA contrast */
+.ow-ach-list li.locked .ow-ach-title,
+.ow-ach-list li.locked .ow-ach-line {
+  color: var(--ow-ink-3);
 }
 .ow-ach-list time {
   font-size: var(--ow-fs-micro);

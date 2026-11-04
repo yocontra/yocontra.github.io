@@ -9,6 +9,7 @@ import { STREET } from '../scene/street.ts'
 import { clearCards } from './cues.ts'
 import type { Director } from './director.ts'
 import { backToBackShot, otsShot, posterShot } from './framing.ts'
+import { offerLicensedMode } from './licence-road.ts'
 import { ambience } from './present.ts'
 import { STEADY_MS } from './standoff.ts'
 import { BACK_TO_BACK_Z, between, V } from './state.ts'
@@ -29,7 +30,7 @@ function prepare(d: Director, idx: number): boolean {
   const next = OUTLAWS[idx] as Outlaw
   if (!looksFor(d, next).every((l) => c.assets.lookLoaded(l))) {
     // Lazy-loaded per outlaw; normally prefetched a duel ahead so this is rare.
-    c.hud.fake('[saddling up…]')
+    c.hud.fake('[loading…]')
     return false
   }
   for (const k of [idx + 1, idx + 2]) {
@@ -96,7 +97,7 @@ function spawnRifleman(d: Director): void {
     hat: 'cowboy',
     hatColor: 0x1a_14_10,
     bandana: 0x3a_2a_1a,
-    rifle: propObject(c.rifle),
+    rifle: c.rifle(),
   })
   r.root.position.copy(STREET.saloonRoof)
   r.root.rotation.y = Math.atan2(-STREET.saloonRoof.x, -5 - STREET.saloonRoof.z)
@@ -128,6 +129,7 @@ function spawnActors(d: Director): void {
   p.stopAll()
   p.holsterGun()
   p.play('Idle', 0)
+  p.gestures.clear()
   resetPositions(d)
 }
 
@@ -225,8 +227,10 @@ export function enterCock(d: Director): void {
   d.player.root.visible = true
   d.player.holsterGun()
   d.player.play('Idle', 0.1)
+  d.player.gestures.clear()
   d.enemy?.holsterGun()
   d.enemy?.play('Idle', 0.1)
+  d.enemy?.gestures.clear()
   if (d.enemy) {
     d.enemy.sway = o.gimmick === 'drunk' ? 1 : 0
     d.enemy.shake = o.gimmick === 'shaky' ? 0.6 : 0
@@ -265,6 +269,7 @@ function retryPhaseTwo(d: Director): void {
   d.player.root.visible = true
   d.player.holsterGun()
   d.player.play('Idle', 0.1)
+  d.player.gestures.clear()
   d.enemyAlive = true
   d.enemy?.play('Idle', 0.1)
   d.enemy?.holsterGun()
@@ -335,5 +340,19 @@ export function nextLevel(d: Director): void {
   const next = d.level + 1
   d.c.save.level = next
   persist(d.c.save)
-  holdFor(d, interlude({ kind: 'next', level: next }), () => startLevel(d, next, false))
+  // the licence road: a player who rode here from a licence gate is offered that mode first
+  const offer = offerLicensedMode(d, next)
+  const page = offer
+    ? offer.then((left) => {
+        if (left) {
+          return
+        }
+        return interlude({ kind: 'next', level: next }) ?? undefined
+      })
+    : interlude({ kind: 'next', level: next })
+  holdFor(d, page, () => {
+    if (d.phase === 'win') {
+      startLevel(d, next, false)
+    }
+  })
 }

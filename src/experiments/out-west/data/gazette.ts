@@ -69,7 +69,7 @@ export const FRONT_PAGES: readonly (FrontPage | null)[] = [
     9,
     'Thorny Rose In Town, No Tells',
     'Felipe Wheeler is buried out past the wash. The wind has dropped.',
-    'Laura Bullion stands still and gives nothing away. Outlaws farther north are dead for less.',
+    'Laura Bullion stands still and gives nothing away. Watch closely.',
   ),
   p(
     10,
@@ -81,7 +81,7 @@ export const FRONT_PAGES: readonly (FrontPage | null)[] = [
     11,
     'Stage Robber and Gang Ride In',
     'Thomas Arnold stopped whistling at the bell. The street is grateful.',
-    'Pearl Hart brings her gang. They will heckle. A gang member saying “DRR” is not the bell.',
+    'Pearl Hart brings her gang. They heckle. A shout of “DRR” is not the bell.',
   ),
   p(
     12,
@@ -93,7 +93,7 @@ export const FRONT_PAGES: readonly (FrontPage | null)[] = [
     13,
     'Marshal of El Paso Duels After Dark',
     'Luke Short folded. The piano player has asked for a raise.',
-    'Dallas Stoudenmire meets you at night. You will not read his hand. Trust your ears.',
+    'Dallas Stoudenmire meets you at night. You can’t see his hand. Listen for the bell.',
   ),
   p(
     14,
@@ -105,7 +105,7 @@ export const FRONT_PAGES: readonly (FrontPage | null)[] = [
     15,
     'Wild Bill Holds Aces and Eights',
     'Kid Curry twitched once too often. The coroner noted it was a real draw this time.',
-    'Wild Bill Hickok shoots like a clock. Dead man’s hand. Nobody has beaten him in years.',
+    'Wild Bill Hickok draws fast and steady. Nobody has beaten him in years.',
   ),
   p(
     16,
@@ -129,9 +129,9 @@ export const EPILOGUE = {
   issue: 18,
   headline: 'Hardin Dead. Perdition Sleeps.',
   lines: [
-    'John Wesley Hardin fell on the twelfth strike. The clock in the tower has been stopped at midnight, by order of the council, and will stay that way.',
-    'The posters have come down off every wall in town. The undertaker has closed early for the first time this year and gone fishing.',
-    'Of the stranger who did it, nobody knows much. Paid in full at the bank, drank one whiskey, and rode out the south road before sunup.',
+    'John Wesley Hardin fell on the twelfth strike. The tower clock is stopped at midnight for good.',
+    'The posters have come down off every wall in town. The undertaker has closed early and gone fishing.',
+    'Nobody knows much about the stranger who did it. They drank one whiskey and left before sunup.',
   ],
   kicker: 'Special Edition',
 } as const

@@ -26,8 +26,34 @@ export function drawSecs(shotInMs: number): number {
   return Math.min(DRAW_MAX_S, Math.max(DRAW_MIN_S, (shotInMs * 0.85) / 1000))
 }
 
+/**
+ * The standoff's nerves (scene/gesture.ts): the gun hand hovers over the leather and he fidgets on
+ * his own random clock (never the call's: nothing here can hint at it).
+ */
+export function standoffNerves(...men: (Actor | null)[]): void {
+  for (const a of men) {
+    if (a) {
+      a.gestures.hover = 1
+      a.gestures.fidget = 'standoff'
+    }
+  }
+}
+
+/** A shot that just missed him: the head snaps aside (body only: it plays under the draw). */
+export function nearMiss(a: Actor): void {
+  a.gestures.play('flinch')
+}
+
+/** After the twirl: a hat tip to the town, then he stands easy (the hub's variety idles). */
+export function victoryTaunt(a: Actor): void {
+  a.gestures.play('tipHat', 1)
+  a.gestures.fidget = 'hub'
+}
+
 /** The quick-draw (and turn, if `spec.turn`): presentation only, never waits on anything. */
 export function quickDraw(a: Actor, spec: DrawSpec): void {
+  a.gestures.hover = 0
+  a.gestures.fidget = null
   if (!a.drawing) {
     if (spec.turn) {
       a.root.rotation.y = spec.turn.to
