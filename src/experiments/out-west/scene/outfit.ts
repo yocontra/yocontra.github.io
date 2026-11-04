@@ -68,7 +68,6 @@ export interface Fit {
 const HEAD_BONES = ['Head']
 const NECK_BONES = ['Neck']
 const TORSO_BONES = ['Chest', 'Torso', 'Abdomen', 'Hips', 'Neck', 'ShoulderL', 'ShoulderR']
-const ARM_BONES = ['UpperArmL', 'UpperArmR', 'LowerArmL', 'LowerArmR']
 
 export function measure(body: Body, bones: Map<string, Bone>): Fit {
   const bone = (n: string) => bones.get(n) ?? null
@@ -110,75 +109,6 @@ const fabric = (k: keyof typeof FABRIC) => ({
   rim: FABRIC[k].rim,
   swatch: FABRIC[k].swatch,
 })
-
-const STRIPES: readonly [number, number, number][] = [
-  // [top px, height px, colour] on the 64 px tall weave of the original poncho
-  [8, 2, 0xe8_d8_b0],
-  [12, 2, 0x1a_1a_1a],
-  [16, 2, 0xc0_8a_2a],
-  [20, 2, 0xe8_d8_b0],
-  [40, 3, 0xe8_d8_b0],
-  [45, 3, 0x1a_1a_1a],
-  [50, 3, 0xc0_8a_2a],
-  [55, 3, 0xe8_d8_b0],
-]
-
-/** Striped poncho from the neck to the belt, draped over his shoulders and arms. */
-export function poncho(f: Fit, color: number): Piece[] {
-  const hips = f.at('Hips')
-  const yTop = f.neck.lo + 0.4 * (f.neck.hi - f.neck.lo)
-  const yBot = hips.y + 0.1
-  const wrap = onBones(f.body, [...TORSO_BONES, ...ARM_BONES, 'Neck'])
-  // Ring list: an even grid for the fit, plus doubled rings at stripe edges for crisp bands.
-  const marks: { t: number; c: number }[] = []
-  const base = color
-  const stripeAt = (t: number): number => {
-    const px = t * 64
-    for (const [y, h, c] of STRIPES) {
-      if (px >= y && px < y + h) {
-        return c
-      }
-    }
-    return base
-  }
-  const edges = new Set<number>([0, 1])
-  for (let i = 1; i < 10; i++) {
-    edges.add(i / 10)
-  }
-  for (const [y, h] of STRIPES) {
-    edges.add(y / 64)
-    edges.add((y + h) / 64)
-  }
-  for (const t of [...edges].sort((a, b) => a - b)) {
-    marks.push({ t, c: stripeAt(t - 1e-4) })
-    marks.push({ t, c: stripeAt(t + 1e-4) })
-  }
-  const geo = shell({
-    samples: wrap,
-    cx: f.at('Chest').x,
-    cz: f.at('Chest').z,
-    yTop,
-    yBot,
-    ts: marks.map((m) => m.t),
-    segs: 24,
-    margin: 0.018,
-    bulge: (t) => t * 0.03,
-    hang: true,
-    band: 0.03,
-    color: (_t, i) => lin(marks[i]?.c ?? base),
-  })
-  const from = onBones(f.body, [
-    'Neck',
-    'Chest',
-    'Torso',
-    'Abdomen',
-    'ShoulderL',
-    'ShoulderR',
-    'UpperArmL',
-    'UpperArmR',
-  ])
-  return [{ geo, ...fabric('hessian'), weights: nearestWeights(f.body, from) }]
-}
 
 /** Neckerchief: a band snug on the neck and a point hanging over the chest. */
 export function bandana(f: Fit, color: number): Piece[] {

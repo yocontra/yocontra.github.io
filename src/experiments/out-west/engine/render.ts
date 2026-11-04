@@ -339,6 +339,8 @@ export class Renderer {
   private floorSince = 0
   private lastDay = -1
   private readonly mode: RenderMode
+  /** The size and ratio last applied by `resize()`. */
+  private readonly applied = { w: 0, h: 0, dpr: 0 }
 
   get quality(): string {
     return this.tier
@@ -492,9 +494,23 @@ export class Renderer {
     this.resize()
   }
 
+  /**
+   * Fits the backing store to the viewport. Skips the work when nothing changed: iOS fires
+   * `resize` for toolbar and keyboard moves, and Stage Manager fires dozens while a window is
+   * dragged, and every real resize reallocates the composer's targets (a visible hitch). The
+   * pixel ratio is re-read each time, since an iPad window can move to an external display.
+   */
   resize(): void {
     const w = window.innerWidth
     const h = window.innerHeight
+    this.dpr = this.baseDpr() * this.scale
+    const a = this.applied
+    if (w === a.w && h === a.h && this.dpr === a.dpr) {
+      return
+    }
+    a.w = w
+    a.h = h
+    a.dpr = this.dpr
     this.gl.setPixelRatio(this.dpr)
     this.composer.setSize(w, h)
     this.camera.aspect = w / h

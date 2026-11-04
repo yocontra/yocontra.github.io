@@ -19,8 +19,12 @@ export const LOOP_POINTS = {
   m_act_night: { start: 2.534_48, end: 25.805_38 },
   m_act_night_hot: { start: 2.534_48, end: 25.805_38 },
   m_boss: { start: 48.4, end: 168.9499 },
+  m_duel_day: { start: 2.005_71, end: 28.203_77 },
+  m_duel_dusk: { start: 2.496_98, end: 26.496_92 },
+  m_duel_night: { start: 1.3655, end: 23.366_71 },
   m_frontier: { start: 2, end: 23.760_77 },
-  m_saloon: { start: 1.069_23, end: 27.254_25 },
+  m_saloon: { start: 0.299_12, end: 26.088_23 },
+  m_saloon_b: { start: 0.724_94, end: 23.568_17 },
   m_tension: { start: 2, end: 28.218 },
   m_title: { start: 22.7, end: 151.204_71 },
 } as const satisfies Record<string, { start: number; end: number }>

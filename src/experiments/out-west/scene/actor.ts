@@ -228,7 +228,7 @@ export class Actor {
         ...this.armWith(fit, {
           gun: opts.gun,
           two: opts.offGun ?? false,
-          clothes: clothes.filter((c) => !c.overArm),
+          clothes: clothes.filter((c) => !c.unbelted),
           look: opts.holster ?? PLAIN_HOLSTER,
           scale: opts.scale ?? 1,
         }),

@@ -10,35 +10,41 @@ import { openAchievements } from './achievements.ts'
 import { type DailyDeps, DailyTile } from './daily.ts'
 import { openGauntletMap } from './gauntlet-map.ts'
 import { openBackIssues } from './gazette.ts'
-import { button } from './sheet.ts'
+
+/** What the hub gets back from `mount`: the tile's refresher and the ways into the meta sheets. */
+export interface HubMetaUi {
+  refresh: () => void
+  /** The Gauntlet map (from the Quick Draw sheet and the saloon's More sheet). */
+  map: () => void
+  achievements: () => void
+}
 
 export interface HubMeta {
-  /** Adds the tile and links to the hub's side column; returns its refresher. */
-  mount: (side: HTMLElement, links: HTMLElement) => { refresh: () => void }
+  /** Puts the Daily Outlaw banner over the hub's mode tiles; the hub places the links itself. */
+  mount: (side: HTMLElement) => HubMetaUi
   /** The strip's line for a guest ("Guest · purse $120 · 340 XP"), or null to keep the default. */
   guestLine: () => string | null
 }
 
 export function hubMeta(root: HTMLElement, meta: Meta, daily: DailyDeps): HubMeta {
   return {
-    mount: (side, links) => {
+    mount: (side) => {
       const tile = new DailyTile(root, side, daily)
-      // the day's tile sits over the four mode tiles
+      // the day's banner sits over the four mode tiles
       side.prepend(tile.button)
-      const openAch = (): void => openAchievements(root, meta)
-      const map = button(links, 'Gauntlet map', () =>
+      const achievements = (): void => openAchievements(root, meta)
+      const map = (): void =>
         openGauntletMap(root, meta, {
           gazette: () => openBackIssues(root, meta),
-          achievements: openAch,
-        }),
-      )
-      links.prepend(map)
-      button(links, 'Achievements', openAch)
+          achievements,
+        })
       tile.refresh().catch(() => undefined)
       return {
         refresh: () => {
           tile.refresh().catch(() => undefined)
         },
+        map,
+        achievements,
       }
     },
     guestLine: () => {

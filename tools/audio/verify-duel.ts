@@ -171,7 +171,7 @@ console.log('stats', JSON.stringify(stats))
 console.log(
   'music:',
   all
-    .filter((e) => e.name === 'playSong' || e.name === 'sting')
+    .filter((e) => e.name === 'playSong' || e.name === 'songStart' || e.name === 'sting')
     .map((e) => `${(e.t - tb).toFixed(2)}s ${e.name} ${e.args}`)
     .join(' | '),
 )

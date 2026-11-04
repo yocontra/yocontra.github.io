@@ -8,6 +8,8 @@ import { restoreSession } from './net/auth.ts'
 import { RankedSession } from './net/ranked.ts'
 import { Turnstile } from './net/turnstile.ts'
 import { unlockAudio } from './platform/audio.ts'
+import { installDevice } from './platform/device.ts'
+import { installGamepad } from './platform/gamepad.ts'
 import { setHapticsEnabled } from './platform/haptics.ts'
 import { installViewportVars } from './platform/viewport.ts'
 import { load, type SaveData, save } from './save.ts'
@@ -277,6 +279,9 @@ export function boot(root: HTMLElement): void {
       : makeHub(root, { data, rankedOk: connectRanked !== null, game: () => game, meta })
   wireSettings(root, audio, data, () => game)
   installViewportVars()
+  // form factor, fold/unfold, late WebKit resizes, the pinch guard; then pads and menu arrows
+  installDevice()
+  installGamepad()
   // a silent refresh from the cookie: the hub shows your poster if you're signed in
   restoreSession()
     .then(() => Promise.all([hub?.refresh(), meta.sync()]))
