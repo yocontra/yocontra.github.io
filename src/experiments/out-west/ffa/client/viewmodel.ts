@@ -327,7 +327,8 @@ export class ViewModel {
   /** A long gun: its wrists from the shouldered fit (scene/longgun.ts), re-homed to our frame. */
   private fitLong(actor: Actor, kind: 'shotgun' | 'rifle'): Fit | null {
     const obj = new Group()
-    obj.add(kind === 'shotgun' ? shotgunMesh() : rifleObject())
+    // articulated: the lever and the barrels are child meshes (`lever`, `barrels`) for the reload
+    obj.add(kind === 'shotgun' ? shotgunMesh(undefined, true) : rifleObject({ lever: true }))
     this.townSky.adopt(obj)
     const h: LongHold | null = actor.addLong(obj)
     if (!h) {
