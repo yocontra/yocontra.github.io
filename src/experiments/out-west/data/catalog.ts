@@ -12,7 +12,7 @@
  *
  * Bump CATALOG_VERSION whenever an item is added, removed or repriced.
  */
-export const CATALOG_VERSION = 2
+export const CATALOG_VERSION = 3
 
 export const SLOTS = [
   'gun',
@@ -131,6 +131,7 @@ export const CATALOG = [
   store('gun.buntline', 'Buntline Long Nine', 'gun', ['rare', 12_000, 20]),
   store('gun.gilded-sovereign', 'Gilded Sovereign', 'gun', ['legendary', 35_000, 35]),
   reward('gun.hardins-pair', "Hardin's Pair", 'gun', 'Clear the full gauntlet'),
+  reward('gun.gold-medal', 'Gold Medal Six', 'gun', 'Gold on all 17 outlaws'),
   // Hat
   starter('hat.battered-brim', 'Battered Brim', 'hat'),
   store('hat.plainsman', 'Plainsman', 'hat', ['common', 250, 1]),
@@ -139,6 +140,8 @@ export const CATALOG = [
   store('hat.rattler-band', 'Rattler Band', 'hat', ['rare', 7500, 18]),
   store('hat.ghost-white', 'Ghost-White Cattleman', 'hat', ['legendary', 30_000, 40]),
   reward('hat.yellow', 'Yellow Hat', 'hat', 'Draw early 10 times'),
+  reward('hat.bronze-band', 'Bronze Band', 'hat', 'Bronze on all 17 outlaws'),
+  reward('hat.holed-stetson', 'Holed Stetson', 'hat', 'Shoot the hat off all three hat outlaws'),
   // Outfit
   starter('outfit.trail-duds', 'Trail Duds', 'outfit', WALK('cloth')),
   store('outfit.shirt-vest', 'Shirt & Vest', 'outfit', ['common', 350, 2]),
@@ -154,6 +157,12 @@ export const CATALOG = [
   store('outfit.gamblers-frock', "Gambler's Frock", 'outfit', ['rare', 9000, 16]),
   store('outfit.bandolier-rig', 'Bandolier Rig', 'outfit', ['rare', 11_000, 22]),
   store('outfit.undertakers-black', "Undertaker's Black", 'outfit', ['legendary', 45_000, 45]),
+  reward(
+    'outfit.midnight-coat',
+    'Midnight Coat',
+    'outfit',
+    'Kill Hardin without drawing early on him',
+  ),
   // Spurs
   starter('spurs.plain-rowels', 'Plain Rowels', 'spurs', WALK('spur-rattle')),
   store('spurs.silver-jinglebobs', 'Silver Jinglebobs', 'spurs', [
@@ -172,10 +181,12 @@ export const CATALOG = [
       sound: WALK('spur-rattle'),
     },
   ]),
+  reward('spurs.legend-rowels', 'Legend Rowels', 'spurs', 'Beat 6 outlaws in one Legend run'),
   // Holster
   starter('holster.plain-leather', 'Plain Leather', 'holster'),
   store('holster.tooled-floral', 'Tooled Floral', 'holster', ['uncommon', 2200, 7]),
   store('holster.buscadero', 'Buscadero Rig', 'holster', ['rare', 10_000, 20]),
+  reward('holster.silver-conchos', 'Silver Conchos', 'holster', 'Silver on all 17 outlaws'),
   // Poster frame
   starter('frame.pine-board', 'Pine Board', 'frame'),
   store('frame.brass-tacks', 'Brass Tacks', 'frame', ['uncommon', 2000, 9]),
@@ -188,6 +199,8 @@ export const CATALOG = [
     'frame',
     'Finish a month in the top 10 of the Most Wanted board',
   ),
+  reward('frame.tall-tales', 'Tall Tales', 'frame', 'Finish all 17 challenges'),
+  reward('frame.legend', 'Legend’s Laurel', 'frame', 'Beat 9 outlaws in one Legend run'),
   // Draw sound
   starter('sound.standard', 'Standard Report', 'drawSound', SHOT('gunshot')),
   store('sound.thunder-crack', 'Thunder Crack', 'drawSound', [
@@ -218,10 +231,12 @@ export const CATALOG = [
   starter('bag.plain-sack', 'Plain Sack', 'saddlebag'),
   store('bag.branded-satchel', 'Branded Satchel', 'saddlebag', ['uncommon', 2500, 8]),
   store('bag.gold-thread', 'Gold-Thread Purse', 'saddlebag', ['rare', 12_000, 26]),
+  reward('bag.medal-satchel', 'Medal Satchel', 'saddlebag', 'Win 25 medals'),
   // Extra
   store('extra.handlebar', 'Handlebar Moustache', 'extra', ['common', 250, 1]),
   store('extra.red-bandana', 'Red Bandana', 'extra', ['common', 500, 4]),
   store('extra.tin-star', 'Tin Star', 'extra', ['uncommon', 4000, 14]),
+  reward('extra.black-bandana', 'Black Bandana', 'extra', 'Win the Daily Outlaw on 7 days'),
 ] as const satisfies readonly CatalogItem[]
 
 export type ItemId = (typeof CATALOG)[number]['id']
@@ -271,10 +286,11 @@ export type BuyVerdict = 'ok' | 'not_for_sale' | 'owned' | 'level' | 'funds'
 
 /**
  * Whether `profile` may buy `item` now. Server-authoritative in `POST /store/buy`; the client uses
- * it only to grey out buttons.
+ * it only to grey out buttons. `storeLevel` (from `GET /me`) is the level gates are checked against;
+ * an old profile without it is checked against its level.
  */
 export function canBuy(
-  profile: { readonly level: number; readonly purse: number },
+  profile: { readonly level: number; readonly purse: number; readonly storeLevel?: number },
   item: CatalogItem,
   owned: ReadonlySet<string> = new Set(),
 ): BuyVerdict {
@@ -284,7 +300,8 @@ export function canBuy(
   if (owned.has(item.id)) {
     return 'owned'
   }
-  if (profile.level < item.level) {
+  // the store level (solo levels count ~3×, data/progression.ts storeLevel); never below the level
+  if (Math.max(profile.level, profile.storeLevel ?? 0) < item.level) {
     return 'level'
   }
   if (profile.purse < item.price) {

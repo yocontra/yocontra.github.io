@@ -87,11 +87,10 @@ export class QueueSheet {
     this.line.textContent = s.ghostsOnly
       ? `Finding you a ghost… ${secs}s`
       : `Looking for a gunslinger… ${secs}s`
-    const rating = s.ratingWindow === null ? 'any draw speed' : `±${s.ratingWindow} ms draw speed`
+    // the matchmaker's windows are its business; only company in the queue is worth a line
     const others = Math.max(0, s.waiting - 1)
-    this.detail.textContent = `Within ±${s.levelWindow} levels · ${rating} · ${others} other${
-      others === 1 ? '' : 's'
-    } waiting`
+    this.detail.textContent =
+      others === 0 ? '' : `${others} other${others === 1 ? '' : 's'} waiting`
     setBar(this.bar, s.waitedMs / GHOST_FALLBACK_MS)
     this.ghostBtn.hidden = !s.ghostButton
   }

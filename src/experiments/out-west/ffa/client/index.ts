@@ -196,7 +196,9 @@ export function mountFrontier(root: HTMLElement, opts: FrontierOptions = {}): Fr
     },
     debug: () => game.debug(),
   }
-  if (import.meta.env.DEV) {
+  // Dev builds, or a perf-harness build (`PUBLIC_OW_PERF_HARNESS=1`, tools/frontier-perf.ts
+  // --prod; never set for the real deploy), so both fold away in production.
+  if (import.meta.env.DEV || import.meta.env.PUBLIC_OW_PERF_HARNESS === '1') {
     // Dev harness only: state for Playwright scripts (positions would be a wallhack in prod).
     Reflect.set(globalThis, '__frontier', () => game.debug())
     Reflect.set(globalThis, '__frontierTrace', {

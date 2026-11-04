@@ -265,6 +265,7 @@ export class DuelState {
   enter(p: Phase): void {
     this.phase = p
     this.phaseT = 0
+    this.c.hud.phase(p)
     // no menu sound may play while the street waits for the call
     this.c.audio.hushUi(STANDOFF_PHASES.has(p))
   }

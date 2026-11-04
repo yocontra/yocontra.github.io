@@ -157,7 +157,10 @@ export class Effects {
   private readonly box: Mesh
   private readonly beacon: Mesh
   private readonly rings: InstancedMesh
-  private readonly ringList: { x: number; z: number; r: number; color: Color; pulse: number }[] = []
+  /** This frame's rings: a fixed pool, `ringCount` of them live (nothing allocated per frame). */
+  private readonly ringList: { x: number; z: number; r: number; color: Color; pulse: number }[] =
+    Array.from({ length: 24 }, () => ({ x: 0, z: 0, r: 0, color: new Color(), pulse: 0 }))
+  private ringCount = 0
   readonly aimLine: Mesh
   private readonly hats: {
     g: Group
@@ -463,12 +466,18 @@ export class Effects {
 
   /** Rings for this frame: call `ring` any number of times between `beginRings` and `update`. */
   beginRings(): void {
-    this.ringList.length = 0
+    this.ringCount = 0
   }
 
   ring(x: number, z: number, r: number, color: Color, pulse = 0): void {
-    if (this.ringList.length < 24) {
-      this.ringList.push({ x, z, r, color, pulse })
+    const e = this.ringList[this.ringCount]
+    if (e) {
+      this.ringCount++
+      e.x = x
+      e.z = z
+      e.r = r
+      e.color = color
+      e.pulse = pulse
     }
   }
 
@@ -497,6 +506,9 @@ export class Effects {
     this.bagMesh.instanceMatrix.needsUpdate = true
     let n = 0
     for (const r of this.ringList) {
+      if (n >= this.ringCount) {
+        break
+      }
       const pulse = r.pulse > 0 ? 1 + Math.sin(this.time * r.pulse) * 0.08 : 1
       m4.compose(
         v.set(r.x, 0.045 + n * 0.001, r.z),

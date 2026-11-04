@@ -1,5 +1,6 @@
 /** Every binding the Worker and its Durable Objects can see. Owned by the lead; ask before adding. */
 
+import type { DailySession } from './daily/session.ts'
 import type { Matchmaker } from './duel/matchmaker.ts'
 import type { DuelRoom } from './duel/room.ts'
 import type { DuelSession } from './session.ts'
@@ -10,6 +11,8 @@ export interface Env {
   DB: D1Database
   /** Ranked single-player gauntlet runs (one object per run). */
   DUELS: DurableObjectNamespace<DuelSession>
+  /** One object per Daily Outlaw attempt (meta-game stream). */
+  DAILY_SESSIONS: DurableObjectNamespace<DailySession>
   /** Bounty Hunt matchmaking (sharded by bracket; see stream B). */
   MATCHMAKER: DurableObjectNamespace<Matchmaker>
   /** One object per Bounty Hunt PvP or ghost duel. */

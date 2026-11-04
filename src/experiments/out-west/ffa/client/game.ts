@@ -199,6 +199,8 @@ export class FrontierGame {
   private running = false
   private disposed = false
   private exited = false
+  /** The connection's banner ("Reconnecting…", "Disconnected"), or null while connected. */
+  private connBanner: string | null = null
   /** Your rendered pose (`NetClient.localRenderPose`): what the camera and the crowd follow. */
   private readonly own = { x: 72, z: 64, yaw: 0 }
   private aim = 0
@@ -211,8 +213,11 @@ export class FrontierGame {
   private readonly aimPlane = new Plane(new Vector3(0, 1, 0), -1.2)
   private readonly tmp = new Vector3()
   private readonly ndc = new Vector2()
-  private remotes: RemoteView[] = []
+  /** Every remote rider at render time, refilled in place each frame. */
+  private readonly remotes: RemoteView[] = []
   private readonly crowdList: CrowdPlayer[] = []
+  /** Reused rows for `crowdList` (one per remote rider; nothing allocated per frame). */
+  private readonly crowdRows: CrowdPlayer[] = []
   private mapAt = 0
   private readonly hatlessSeen = new Set<number>()
   private wasAlive = false
@@ -571,6 +576,8 @@ export class FrontierGame {
     this.pickups = new Pickups(this.scene, TOWN.pickups, assets.props)
     const near = this.nearCap()
     this.crowd = new Crowd(this.scene, assets, near)
+    // real shadows for the nearest few: 4 on floor and legacy (each is a shadow-pass draw set)
+    this.crowd.casters = near < 16 ? 4 : 6
     this.map = new Minimap(TOWN, this.touch ? 112 : 148)
     this.hud.mapSlot.append(this.map.el)
     this.viewModel = new ViewModel(this.cam.camera, assets)
@@ -599,32 +606,32 @@ export class FrontierGame {
     onProgress(1, '')
   }
 
-  /** Skinned cap: 12 on the floor tier, 8 on legacy, 16 above (stream H's measurements). */
+  /**
+   * Skinned cap: 8 on the floor tier, 6 on legacy, 16 above. Past the cap riders are VAT instances,
+   * which read correctly from street level (hats included); each skinned rider costs its mixer, a
+   * bone texture upload and 3–5 draws.
+   */
   private nearCap(): number {
     const t = this.renderer.tier
     if (t === 'legacy') {
-      return 8
+      return 6
     }
-    return t === 'floor' ? 12 : 16
+    return t === 'floor' ? 8 : 16
   }
 
   private onTransport(state: string, detail?: string): void {
     if (state === 'retrying') {
-      this.hud.banner('Connection lost. Reconnecting…')
+      this.connBanner = 'Connection lost. Reconnecting…'
     } else if (state === 'open') {
-      this.hud.banner(null)
+      this.connBanner = null
     } else if (state === 'closed' && !this.exited && this.running) {
-      this.hud.banner(`Disconnected${detail ? `: ${detail}` : ''}`)
+      this.connBanner = `Disconnected${detail ? `: ${detail}` : ''}`
       setTimeout(() => this.exit('lost'), 2500)
     }
   }
 
   private onWelcome(): void {
     this.syncRoster()
-    this.hud.feed(
-      `Welcome to Perdition${this.net.lobbyId === 'loopback' ? ' (practice town)' : ''}.`,
-      'info',
-    )
   }
 
   private syncRoster(): void {
@@ -961,7 +968,10 @@ export class FrontierGame {
     }
     this.ticksThisFrame = ticks
     this.net.localRenderPose(Math.min(1, this.acc / period), dtMs, this.own)
-    this.remotes = [...this.net.views(this.renderTick)]
+    this.remotes.length = 0
+    for (const v of this.net.views(this.renderTick)) {
+      this.remotes.push(v)
+    }
     return dtMs
   }
 
@@ -985,12 +995,33 @@ export class FrontierGame {
     this.perf.simMs = t1 - t0
     this.perf.frameMs = performance.now() - t0
     this.audio?.update()
+    this.renderer.label = 'frontier'
+    this.shadowRate()
     this.renderer.adapt(dtMs, true)
     this.renderer.render(dt)
     if (this.trace.on) {
       this.pushTrace(now, dtMs, performance.now() - t0)
     }
   }
+
+  /**
+   * Floor and legacy redraw the sun's shadow map every other frame (30 Hz). Only riders, pickups
+   * and props near you cast into it; the map and its matrix stay a matched pair, so a skipped
+   * frame shows the last frame's rider shadows, never a misplaced one. Its scene walk and draws
+   * were a tenth of the frame's CPU on the floor proxy.
+   */
+  private shadowRate(): void {
+    const sm = this.renderer.gl.shadowMap
+    const t = this.renderer.tier
+    const half = t === 'floor' || t === 'legacy'
+    this.shadowFrame++
+    sm.autoUpdate = !half
+    if (half) {
+      sm.needsUpdate = (this.shadowFrame & 1) === 0
+    }
+  }
+
+  private shadowFrame = 0
 
   private pushTrace(now: number, dtMs: number, cpuMs: number): void {
     const r = this.traceRow
@@ -1063,18 +1094,21 @@ export class FrontierGame {
         weapon: this.net.weapon.weapon,
       })
     }
-    for (const r of this.remotes) {
-      list.push({
-        id: r.id,
-        x: r.x,
-        z: r.z,
-        aim: r.aim,
-        vx: r.vx,
-        vz: r.vz,
-        anim: r.anim,
-        flags: r.flags,
-        self: false,
-      })
+    for (const [i, r] of this.remotes.entries()) {
+      let row = this.crowdRows[i]
+      if (!row) {
+        row = { id: 0, x: 0, z: 0, aim: 0, vx: 0, vz: 0, anim: 0, flags: 0, self: false }
+        this.crowdRows.push(row)
+      }
+      row.id = r.id
+      row.x = r.x
+      row.z = r.z
+      row.aim = r.aim
+      row.vx = r.vx
+      row.vz = r.vz
+      row.anim = r.anim
+      row.flags = r.flags
+      list.push(row)
     }
     if (this.net.alive && !this.wasAlive) {
       // (re)spawned: face into town until the stick or the mouse says otherwise
@@ -1303,10 +1337,9 @@ export class FrontierGame {
       return
     }
     fx.beginRings()
-    const gold = new Color(1.6, 1.2, 0.4)
     const carrying = s.carried > 0
     for (const z of TOWN.zones) {
-      fx.ring(z.x, z.z, z.r, carrying ? gold : new Color(0.5, 0.4, 0.2), carrying ? 3 : 0)
+      fx.ring(z.x, z.z, z.r, carrying ? RING_GOLD : RING_ZONE, carrying ? 3 : 0)
     }
     for (const [i, sp] of TOWN.pickups.entries()) {
       if (this.pickups?.isAvailable(i)) {
@@ -1315,7 +1348,7 @@ export class FrontierGame {
     }
     // your own ground ring is a top-down readability aid: over the shoulder it's just in the way
     if (this.net.alive && !this.shooterView) {
-      const mine = s.flags & SELF_MOST_WANTED ? new Color(1.8, 1.4, 0.3) : new Color(1.2, 1, 0.7)
+      const mine = s.flags & SELF_MOST_WANTED ? RING_MINE_MW : RING_MINE
       fx.ring(this.own.x, this.own.z, 0.7, mine, 0)
     }
     const now = performance.now()
@@ -1324,16 +1357,16 @@ export class FrontierGame {
       for (const id of [c.challenger, c.target]) {
         const p = this.posOf(id)
         if (p) {
-          fx.ring(p.x, p.z, 1.1, new Color(2, 0.4, 0.2), 10)
+          fx.ring(p.x, p.z, 1.1, RING_CALLOUT, 10)
         }
       }
     }
     for (const sd of this.showdowns.values()) {
-      fx.ring(sd.cx, sd.cz, 5.5, new Color(0.9, 0.7, 0.45), sd.called ? 0 : 2)
+      fx.ring(sd.cx, sd.cz, 5.5, RING_SHOWDOWN, sd.called ? 0 : 2)
     }
     for (const r of this.remotes) {
       if (r.flags & EF_MOST_WANTED && r.flags & EF_ALIVE) {
-        fx.ring(r.x, r.z, 0.85 + Math.sin(nowS * 6) * 0.05, new Color(2, 1.5, 0.3), 0)
+        fx.ring(r.x, r.z, 0.85 + Math.sin(nowS * 6) * 0.05, RING_MW, 0)
       }
     }
   }
@@ -1357,8 +1390,11 @@ export class FrontierGame {
 
   private updateHud(nowS: number): void {
     const s = this.net.self
+    // The banner is only ever the connection's state: "Riding in…" until the first snapshot
+    // (cleared the moment you're in town), "Reconnecting…" while the socket retries.
+    const duel = ((s?.flags ?? 0) & SELF_IN_SHOWDOWN) !== 0
+    this.hud.banner(duel ? null : (this.connBanner ?? (s ? null : 'Riding into Perdition…')))
     if (!s) {
-      this.hud.banner('Riding into Perdition…')
       return
     }
     const action = this.net.alive
@@ -1533,9 +1569,6 @@ export class FrontierGame {
     }
     this.wasReady = ready
     const showdown = (flags & SELF_IN_SHOWDOWN) !== 0
-    if (showdown) {
-      this.hud.banner(null)
-    }
     // no menu sound while your showdown waits for its call
     this.audio?.hushUi(showdown)
   }
@@ -1805,6 +1838,14 @@ function rayToWall(net: NetClient, x: number, z: number, aim: number, range: num
 }
 
 const PICKUP_RING = new Color(1.4, 0.6, 0.3)
+/** Ground ring colours (shared, never mutated: the fx reads them the same frame). */
+const RING_GOLD = new Color(1.6, 1.2, 0.4)
+const RING_ZONE = new Color(0.5, 0.4, 0.2)
+const RING_MINE = new Color(1.2, 1, 0.7)
+const RING_MINE_MW = new Color(1.8, 1.4, 0.3)
+const RING_CALLOUT = new Color(2, 0.4, 0.2)
+const RING_SHOWDOWN = new Color(0.9, 0.7, 0.45)
+const RING_MW = new Color(2, 1.5, 0.3)
 
 /** Muzzle-flash size by view (the top-down flash would fill a shoulder or an eye). */
 const FLASH_SCALE: Record<ViewMode, number> = { top: 1, third: 0.45, first: 0.18 }

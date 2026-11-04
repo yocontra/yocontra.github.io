@@ -15,6 +15,8 @@
  * - **Most Wanted.** Credits of the EARNING_KINDS (level rewards included) are added to this UTC
  *   month's `earnings_monthly` row in the same batch, read back by this call's batch nonce, so a
  *   replay adds nothing and the board can never disagree with the ledger.
+ * - **Solo XP.** XP of the SOLO_KINDS also adds to `profiles.solo_xp` (it lowers the Outfitter's
+ *   gates), behind the same batch gate, so a replay adds nothing.
  * - **Unknown account.** A missing profile makes `balance_after` NULL, which fails NOT NULL and
  *   aborts the batch, so money can never vanish silently.
  */
@@ -22,6 +24,7 @@ import {
   type LedgerKind as ContractLedgerKind,
   EARNING_KINDS,
   LEDGER_KINDS,
+  SOLO_KINDS,
 } from '../../../src/experiments/out-west/contract/economy.ts'
 import { LEVEL_THRESHOLDS } from '../../../src/experiments/out-west/data/progression.ts'
 import { monthOf } from '../../../src/experiments/out-west/data/sinks.ts'
@@ -69,6 +72,7 @@ const NL = newLevelSql('xp + ?3', 7)
 const UPDATE_PROFILE = `UPDATE profiles SET
   purse = purse + ?2 + ${rewardSql(NL, 'level')},
   xp = xp + ?3,
+  solo_xp = solo_xp + ?8,
   level = MAX(level, ${NL}),
   version = version + 1,
   updated_at = ?4
@@ -166,6 +170,7 @@ export function ledgerStatements(
         key,
         batch,
         THRESHOLDS_JSON,
+        (SOLO_KINDS as readonly string[]).includes(entry.kind) ? xp : 0,
       ),
     )
   }

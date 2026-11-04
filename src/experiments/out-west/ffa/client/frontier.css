@@ -70,7 +70,6 @@
 .fr-reload,
 .fr-protect,
 .fr-carried-label,
-.fr-players,
 .fr-channel-label,
 .fr-prompt,
 .fr-banner,
@@ -257,10 +256,21 @@
   text-align: center;
 }
 
+.fr-carry {
+  display: none;
+  align-items: baseline;
+  justify-content: center;
+  gap: 8px;
+}
+
+.fr-tc.carry .fr-carry {
+  display: flex;
+}
+
 .fr-carried {
   font-family: var(--ow-font-num);
   font-weight: 600;
-  font-size: 40px;
+  font-size: 34px;
   font-variant-numeric: var(--ow-figs-hud);
   letter-spacing: 0.01em;
   color: var(--ow-brass-hi);
@@ -279,7 +289,8 @@
   font-size: var(--ow-fs-small);
   letter-spacing: var(--ow-track-kicker);
   line-height: 1.2;
-  color: var(--ow-bone-2);
+  text-transform: uppercase;
+  color: #f0a08a;
 }
 
 .fr-banked {
@@ -334,18 +345,6 @@
     0 0 0 3px rgb(176 133 58 / 0.85),
     0 0 0 4px rgb(0 0 0 / 0.6),
     0 6px 18px rgb(0 0 0 / 0.5);
-}
-
-.fr-players {
-  /* a 44 px tap target (it opens the riders sheet) */
-  display: inline-flex;
-  align-items: center;
-  min-height: var(--ow-tap);
-  padding: 0 2px;
-  font-size: var(--ow-fs-body);
-  font-variant-numeric: var(--ow-figs-hud);
-  line-height: 1;
-  color: var(--ow-bone-2);
 }
 
 .fr-feed {

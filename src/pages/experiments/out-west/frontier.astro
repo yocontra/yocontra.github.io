@@ -67,9 +67,11 @@ import Bare from '~/layouts/Bare.astro'
     // Dev only: a pre-minted access token (automated runs without a passkey).
     // Never honoured in production builds: tokens must not travel in URLs.
     const token = import.meta.env.DEV ? q.get('token') : null
-    // Dev only (perf harness): a fixed lobby seed and first spawn, `seed=7&spawn=72,66`.
-    const seed = import.meta.env.DEV ? num('seed') : undefined
-    const [sx, sz] = (import.meta.env.DEV ? (q.get('spawn') ?? '') : '').split(',').map(Number)
+    // Dev and perf-harness builds only (`PUBLIC_OW_PERF_HARNESS=1`, never set for the deploy):
+    // a fixed lobby seed and first spawn, `seed=7&spawn=72,66`.
+    const harness = import.meta.env.DEV || import.meta.env.PUBLIC_OW_PERF_HARNESS === '1'
+    const seed = harness ? num('seed') : undefined
+    const [sx, sz] = (harness ? (q.get('spawn') ?? '') : '').split(',').map(Number)
     const spawn =
       sx !== undefined && sz !== undefined && Number.isFinite(sx) && Number.isFinite(sz)
         ? { x: sx, z: sz }

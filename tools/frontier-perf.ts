@@ -7,6 +7,18 @@
  *   bun run dev --port 4369          # in another shell
  *   bun tools/frontier-perf.ts [baseUrl] [--cluster] [--rate=4] [--secs=30] [--portrait]
  *     [--view=third|first|top] [--profile] [--seed=7|random] [--spawn=bank-front|x,z|random]
+ *     [--prod[=port]] [--no-build] [--alloc]
+ *
+ * `--profile` prints the main thread's top functions (self and inclusive ms per frame); `--alloc`
+ * the garbage made per frame by allocating function (the sampling heap profiler).
+ *
+ * `--prod` measures the production build, which is the number that matters (dev carries HMR,
+ * unminified modules and the float audit's CPU geometry copies). It builds the site into
+ * `$TMPDIR/frontier-perf-dist` (outside the tree, so a running dev server doesn't reload) with
+ * `PUBLIC_OW_PERF_HARNESS=1` and hidden source maps (which keeps the dev-only `?seed=` /
+ * `?spawn=` params and the `__frontier*` / `__owRenderer` hooks; the real deploy never sets it, so
+ * they fold away there) and serves it statically on the port (default 4387). `--no-build` reuses
+ * the last perf build.
  *
  * Runs are repeatable by default: the loopback lobby's seed is 7 and you start on the bank's
  * front steps (dev-only `?seed=` / `?spawn=` page params), so numbers compare run to run.
@@ -20,10 +32,19 @@
 import process from 'node:process'
 // biome-ignore lint/correctness/noUnresolvedImports: playwright's CommonJS re-exports are invisible to Biome
 import { chromium } from 'playwright'
+import { allocProfile, profileMain, serveProd } from './perf-lib.ts'
 
-const base = process.argv.find((a) => a.startsWith('http')) ?? 'http://localhost:4369'
 const opt = (k: string, d: string): string =>
   process.argv.find((a) => a.startsWith(`--${k}=`))?.slice(k.length + 3) ?? d
+const prodArg = process.argv.find((a) => a === '--prod' || a.startsWith('--prod='))
+const prodPort = Number(prodArg?.split('=')[1] ?? '4387')
+let stopServer: (() => void) | null = null
+if (prodArg) {
+  stopServer = serveProd(prodPort, !process.argv.includes('--no-build'))
+}
+const base =
+  process.argv.find((a) => a.startsWith('http')) ??
+  (prodArg ? `http://localhost:${prodPort}` : 'http://localhost:4369')
 const rate = Number(opt('rate', '4'))
 const secs = Number(opt('secs', '30'))
 const cluster = process.argv.includes('--cluster')
@@ -167,40 +188,13 @@ for (let t = 0; t < secs; t += 2) {
   }
 }
 if (process.argv.includes('--profile')) {
-  // where the main thread's time goes: 6 s of the sampling profiler, self time by function
-  await cdp.send('Profiler.enable')
-  await cdp.send('Profiler.setSamplingInterval', { interval: 200 })
-  await cdp.send('Profiler.start')
-  await sleep(6000)
-  const { profile } = (await cdp.send('Profiler.stop')) as {
-    profile: {
-      nodes: { id: number; callFrame: { functionName: string; url: string; lineNumber: number } }[]
-      samples: number[]
-      timeDeltas: number[]
-    }
-  }
-  const byId = new Map(profile.nodes.map((n) => [n.id, n]))
-  const self = new Map<string, number>()
-  let total = 0
-  for (const [i, id] of profile.samples.entries()) {
-    const n = byId.get(id)
-    const dt = profile.timeDeltas[i] ?? 0
-    total += dt
-    if (!n) {
-      continue
-    }
-    const f = n.callFrame
-    const file = f.url.split('/').pop()?.split('?')[0] ?? ''
-    const key = `${f.functionName || '(anon)'} ${file}:${f.lineNumber + 1}`
-    self.set(key, (self.get(key) ?? 0) + dt)
-  }
-  const top = [...self].sort((a, b) => b[1] - a[1]).slice(0, 30)
-  console.log(`  profile (self time, ${Math.round(total / 1000)} ms sampled):`)
-  for (const [k, us] of top) {
-    console.log(`    ${((us / total) * 100).toFixed(1).padStart(5)}%  ${k}`)
-  }
+  await profileMain(cdp, 8000, prodArg !== undefined)
+}
+if (process.argv.includes('--alloc')) {
+  await allocProfile(cdp, 8000, prodArg !== undefined)
 }
 await browser.close()
+stopServer?.()
 
 const med = (xs: number[]): number => {
   const a = [...xs].sort((x, y) => x - y)

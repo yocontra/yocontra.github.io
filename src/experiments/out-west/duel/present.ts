@@ -31,6 +31,7 @@ const isWindy = (s: DuelState): boolean =>
 /** Duck the score for the standoff: gently, and deeper for the tension drones (`FEEL`). */
 export function duckForStandoff(s: DuelState, ramp: number): void {
   const a = s.c.audio
+  a.musicSection('duel')
   a.musicLowpass(FEEL.waitLowpass, ramp)
   a.musicLevel(a.currentSong === 'tension' ? FEEL.tensionWaitDuckDb : FEEL.waitDuckDb, ramp)
 }

@@ -46,8 +46,8 @@ html:is([data-ow-scale="l"], [data-ow-scale="xl"]) .ow-cap-fake {
   font-size: var(--ow-fs-h4);
 }
 
-/* The saloon's per-device layout (iPad side column, foldable) belongs to the hub's owner: the
-   proposals went to the lead. Only the type scale above and the narrow-window fix below touch it. */
+/* The saloon's per-device layout (iPad side column, foldable, narrow tiles) lives in
+   hub-more.css; only the type scale above reaches it from here. */
 
 /* ------------------------------------------- the title, landscape-ish */
 /*
@@ -66,26 +66,7 @@ html:is([data-ow-scale="l"], [data-ow-scale="xl"]) .ow-cap-fake {
 }
 
 /* ------------------------------------------ narrow windows (Split View) */
-/*
- * A one-third Split View window (320 px) or a narrow Stage Manager window: two tiles share 288 px,
- * and a tile's kicker ran under its icon. Tiles size their own type from their width
- * (container queries), so this holds in any narrow window, not just one breakpoint.
- */
-@container (max-width: 150px) {
-  .ow-tile .ow-icon {
-    display: none;
-  }
-  .ow-tile-kicker {
-    padding-right: 0;
-    font-size: var(--ow-fs-micro);
-    letter-spacing: 0.04em;
-    white-space: normal;
-  }
-  .ow-tile-title {
-    font-size: min(var(--ow-fs-h4), 10cqi);
-  }
-}
-
+/* tiles under 150 px wide: hub-more.css (the hub's owner) */
 /* in a window under 360 px the title's footer links wrap to two rows: the credits card has to sit
    above both, or it covers the "credits" button that closes it */
 @media (max-width: 359px) {

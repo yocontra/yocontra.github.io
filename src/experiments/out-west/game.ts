@@ -4,8 +4,10 @@ import type { ItemId, Loadout } from './data/catalog.ts'
 import type { Dyes } from './data/dye.ts'
 import { OUTLAWS } from './data/outlaws.ts'
 import { tickLife } from './duel/cues.ts'
+import { DailyDuel, type DailyOpts } from './duel/daily.ts'
 import { Director, type RankedConnect } from './duel/director.ts'
 import { PvpDuel, type PvpOpts } from './duel/pvp-duel.ts'
+import { RankedDuelClock } from './duel/ranked-clock.ts'
 import { type Assets, loadAssets } from './engine/assets.ts'
 import { Input } from './engine/input.ts'
 import { Renderer, type Tier } from './engine/render.ts'
@@ -34,6 +36,10 @@ export interface Game {
   dress: (l: Loadout, dyes?: Dyes) => void
   /** A Bounty Hunt match, driven by the duel room. */
   startPvp: (o: PvpOpts) => void
+  /** The Daily Outlaw: one server-judged duel, then back to the saloon. */
+  playDaily: (o: DailyOpts) => void
+  /** The ranked run's id while one is on (a hat-shot claim names it), else null. */
+  rankedRunId: () => string | null
   /** The Outfitter's picture of one piece of kit (rendered once, cached). */
   itemThumb: (id: ItemId) => HTMLCanvasElement | null
 }
@@ -65,6 +71,7 @@ function itemThumbs(renderer: Renderer, assets: Assets): (id: ItemId) => HTMLCan
   }
 }
 
+<<<<<<< HEAD
 /**
  * The renderer follows the viewport; folding or unfolding a foldable swaps panels mid-duel, so a
  * single-player duel pauses rather than let the bell ring while the player's hands move (Bounty
@@ -77,6 +84,20 @@ function wireViewport(renderer: Renderer, director: Director): void {
       director.pauseIfPlaying()
     }
   })
+=======
+/** The server-driven duels: Bounty Hunt, the Daily Outlaw, and the ranked run's id. */
+function serverDuels(director: Director): Pick<Game, 'startPvp' | 'playDaily' | 'rankedRunId'> {
+  return {
+    startPvp: (opts: PvpOpts) => {
+      void new PvpDuel(director, opts)
+    },
+    playDaily: (opts: DailyOpts) => {
+      void new DailyDuel(director, opts)
+    },
+    rankedRunId: () =>
+      director.clock instanceof RankedDuelClock ? director.clock.session.sessionId : null,
+  }
+>>>>>>> redesign
 }
 
 export async function createGame(o: GameOpts): Promise<Game> {
@@ -208,6 +229,7 @@ export async function createGame(o: GameOpts): Promise<Game> {
     }
     const dt = director.frame(now, realDt)
     const phase = director.phase
+    renderer.label = phase
     const tense = phase === 'wait' || phase === 'call' || phase === 'win' || phase === 'bossClock'
     if (!tense && renderer.adapt(raw, true)) {
       dust.points.visible = true
@@ -217,8 +239,7 @@ export async function createGame(o: GameOpts): Promise<Game> {
     dust.update(realDt, renderer.dpr)
     puffs.update(dt, renderer.dpr, 0.6)
     sparks.update(dt, renderer.dpr, 0)
-    const flashK = flash.update(dt)
-    void flashK
+    flash.update(dt)
     glint.update(realDt)
     physics.update(dt, 1)
     for (const t of tumbleweeds) {
@@ -259,8 +280,6 @@ export async function createGame(o: GameOpts): Promise<Game> {
     hubShot: (shot: HubShot) => hubShot(director, shot),
     dress: (l: Loadout, dyes?: Dyes) => wearLoadout(director, l, dyes),
     itemThumb: itemThumbs(renderer, assets),
-    startPvp: (opts: PvpOpts) => {
-      void new PvpDuel(director, opts)
-    },
+    ...serverDuels(director),
   }
 }
