@@ -252,8 +252,14 @@ export function ghostRoyalty(loserPenalty: number, royaltiesToday: number): numb
 
 // ─── Gauntlet (signed-in ranked runs) ──────────────────────────────────────────────────────────
 
+/** Repeat-win XP on the first outlaw; later outlaws pay more ({@link gauntletRepeatXp}). */
 export const GAUNTLET_REPEAT_XP = 10
-export const GAUNTLET_REPEAT_XP_PER_DAY = 200
+/** Daily cap on repeat-win XP (raised from 200 so solo play keeps paying). */
+export const GAUNTLET_REPEAT_XP_PER_DAY = 600
+
+/** Repeat win over outlaw `i` (0-based): 10 + 2·i XP, so a full repeat run pays 442 XP. */
+export const gauntletRepeatXp = (i: number): number =>
+  GAUNTLET_REPEAT_XP + 2 * Math.min(16, Math.max(0, Math.floor(Number.isFinite(i) ? i : 0)))
 
 /** First clear of outlaw `i` (0-based): 40 + 15·i XP. 2,720 XP over all 17. */
 export const gauntletFirstClearXp = (i: number): number => 40 + 15 * i
@@ -305,3 +311,24 @@ export const MOST_WANTED_MIN_CARRY = 300
 
 /** Hard upper bound on any single Bounty Hunt payout: liveBounty(L50, streak 5) × 1.15. */
 export const MAX_DUEL_PAYOUT = Math.round(bountyForLevel(MAX_LEVEL, 5) * 1.15)
+
+// ─── Solo levels and the Outfitter's gates ─────────────────────────────────────────────────────
+
+/**
+ * Levels earned in single player count more toward the Outfitter's level gates: gates are about
+ * 0.3× for them. Solo XP is the gauntlet's own (first clears, repeats, medals, challenges, the Daily
+ * Outlaw, a guest's migrated purse), kept in `profiles.solo_xp`.
+ */
+export const SOLO_GATE_FACTOR = 0.3
+
+/**
+ * The level the Outfitter checks gates against: your level, plus the levels solo XP earned you
+ * scaled by 1/0.3 − 1. A player at L11 entirely from the gauntlet shops as L34. Capped at 50.
+ */
+export function storeLevel(p: { level: number; xp: number; soloXp: number }): number {
+  const level = clampLevel(p.level)
+  const solo = Math.min(Math.max(0, Math.floor(p.soloXp || 0)), Math.max(0, p.xp))
+  const without = Math.min(level, levelForXp(Math.max(0, p.xp - solo)))
+  const gained = level - without
+  return Math.min(MAX_LEVEL, level + Math.ceil(gained * (1 / SOLO_GATE_FACTOR - 1) - 1e-9))
+}
