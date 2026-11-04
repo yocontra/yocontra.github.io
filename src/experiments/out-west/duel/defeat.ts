@@ -1,6 +1,7 @@
 import { money } from '../data/economy.ts'
 import { FEEL } from '../data/feel.ts'
 import type { Director } from './director.ts'
+import { drawAt, fireGun } from './draws.ts'
 import { cowardShot, deathShot } from './framing.ts'
 import type { EnemyShot } from './judge.ts'
 import { killEnemyAnim, playerFireFx, slowMo } from './outcome.ts'
@@ -11,6 +12,8 @@ import { between, rng, V } from './state.ts'
 const CARD_DELAY_MS = 450
 const BACKSHOT_TURN_MS = 320
 const BACKSHOT_HIT_MS = 340
+/** The coward's spin and draw (it plays out in the slow-mo). */
+const COWARD_DRAW_S = 0.26
 
 /** An outlaw (0 = him, 1 = the rifleman) fires: flash, smoke, report. */
 function shooterFx(d: Director, who: number): void {
@@ -19,16 +22,13 @@ function shooterFx(d: Director, who: number): void {
   if (!shooter) {
     return
   }
-  const t = d.turnAnim.find((x) => x.a === shooter)
-  if (t) {
-    shooter.root.rotation.y = t.to
-  }
-  d.turnAnim = d.turnAnim.filter((x) => x.a !== shooter)
-  shooter.draw()
+  let off = false
   if (who === 0) {
     shooter.play('Gun_Shoot', 0.05, true, 1.6)
+    // out and on you this frame, wherever his draw had got to; two guns take turns
+    off = fireGun(shooter)
   }
-  const m = shooter.muzzle(V())
+  const m = shooter.muzzle(V(), off)
   c.flash.fire(m, 0.8)
   c.world.flashLight.position.copy(m)
   c.world.flashLight.intensity = 30
@@ -138,10 +138,10 @@ export function backShotByEnemy(d: Director): void {
   d.ensureStandoff()
   if (e) {
     e.stopWalk(0.1)
-    d.turnActor(e, e.root.rotation.y, Math.PI)
+    drawAt(e, d.player, Math.PI, BACKSHOT_TURN_MS / 1000)
     setTimeout(() => {
-      e.draw()
       e.play('Gun_Shoot', 0.05, true, 1.6)
+      fireGun(e)
       c.flash.fire(e.muzzle(V()))
       c.audio.play('fireBig', { gain: 1.1, pos: e.root.position.clone(), reverb: 0.7 })
     }, BACKSHOT_TURN_MS)
@@ -172,8 +172,12 @@ export function coward(d: Director, note: string): void {
   c.hud.clearCaptions()
   d.player.stopWalk(0.08)
   d.enemy?.stopWalk(0.08)
-  d.turnAnim = []
-  d.player.root.rotation.y = 0
+  // he spins and fires from the hip into a turned back
+  if (d.enemy) {
+    drawAt(d.player, d.enemy, 0, COWARD_DRAW_S)
+  } else {
+    d.player.root.rotation.y = 0
+  }
   playerFireFx(d)
   d.enemyAlive = false
   killEnemyAnim(d)
