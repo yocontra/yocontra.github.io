@@ -82,11 +82,11 @@ export function openBoard(d: Director, fromEnd: boolean): void {
   if (clock instanceof RankedDuelClock && total > 0) {
     d.board.open({
       purse: total,
-      submitLabel: fromEnd ? 'Submit to leaderboard' : 'Bank this run and end it',
+      submitLabel: fromEnd ? 'Submit to leaderboard' : 'Submit and end run',
       submit: async (name) => {
         const r = await clock.bank(name)
         if (r.ok && !fromEnd) {
-          setPractice(d, '[Run banked. Practice from here.]')
+          setPractice(d, '[Run submitted. Practice from here.]')
         }
         return r
       },
@@ -94,7 +94,7 @@ export function openBoard(d: Director, fromEnd: boolean): void {
     return
   }
   d.board.open({
-    note: d.ranked ? 'Earn a bounty to get on the board.' : 'Practice runs aren’t ranked.',
+    note: d.ranked ? 'Win a duel to get on the board.' : 'Practice runs aren’t ranked.',
   })
 }
 

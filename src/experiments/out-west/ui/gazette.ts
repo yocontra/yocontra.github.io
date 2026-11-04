@@ -131,7 +131,7 @@ export function openBackIssues(root: HTMLElement, meta: Meta): void {
     slots.unshift(EPILOGUE_SLOT)
   }
   if (slots.length === 0) {
-    el('p', 'ow-hub-note', s.body, 'No papers yet. Beat Bret Barsh and the Gazette will print.')
+    el('p', 'ow-hub-note', s.body, 'No issues yet. Beat Bret Barsh to get the first one.')
     return
   }
   const list = el('ul', 'ow-ledger-list ow-gz-list', s.body)
