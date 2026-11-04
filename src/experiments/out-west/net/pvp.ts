@@ -94,7 +94,8 @@ export class DuelRoomLink {
       },
       onMessage: (data) => this.onMessage(data),
       onDrop: (reason) => h.dropped(reason),
-      onGiveUp: (reason) => this.end(reason),
+      // the socket's own reason is technical ("couldn’t reconnect: closed (1006)"): say it plainly
+      onGiveUp: () => this.end('Connection lost. Couldn’t reconnect.'),
       // the server's pings run every 400 ms: 1.5 s of silence is a dead link (except when quiet)
       staleMs: () => (this.quiet ? Number.POSITIVE_INFINITY : LIVE_STALE_MS),
       deadlineMs: 12_000,
@@ -142,7 +143,7 @@ export class DuelRoomLink {
     }
     this.h.message(m)
     if (m.type === 'closed') {
-      this.end(CLOSED_TEXT[m.reason] ?? 'No more rematches at this table.')
+      this.end(CLOSED_TEXT[m.reason] ?? 'No more rematches with this player.')
     }
   }
 

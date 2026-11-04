@@ -123,7 +123,9 @@ export class DailyTile {
     if (title) {
       title.textContent = spec.title
     }
-    this.kicker.textContent = `Daily Outlaw · ${spec.modifiers.map((m) => MOD_LABEL[m]).join(' · ')}`
+    // the tile is narrow on a phone: the modifiers live on the sheet (and in the tooltip)
+    this.kicker.textContent = 'Daily Outlaw'
+    this.button.title = `Daily Outlaw: ${spec.modifiers.map((m) => MOD_LABEL[m]).join(', ')}`
     this.sub.textContent = dailyStatus(this.today)
   }
 

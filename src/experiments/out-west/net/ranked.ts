@@ -180,7 +180,12 @@ export class RankedSession {
       },
       onMessage: (data) => this.onMessage(data),
       onDrop: (reason) => this.onDrop(reason),
-      onGiveUp: (reason) => this.onClose(this.linkUp ? 'Connection lost.' : reason),
+      onGiveUp: () =>
+        this.onClose(
+          this.linkUp
+            ? 'Connection lost.'
+            : 'Couldn’t connect. Check your connection and try again.',
+        ),
       staleMs: STALE_MS,
       deadlineMs: RANKED_RESUME_WINDOW_MS,
       binaryType: 'blob',
