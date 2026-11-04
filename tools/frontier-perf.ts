@@ -6,10 +6,13 @@
  *
  *   bun run dev --port 4369          # in another shell
  *   bun tools/frontier-perf.ts [baseUrl] [--cluster] [--rate=4] [--secs=30] [--portrait]
+ *     [--view=third|first|top]
  *
  * `--cluster` makes every bot crowd around (and spare) the player, so 20+ riders are on screen at
  * once. Prints CPU p50/p95 (rAF start to end of submit), frame p95, JS heap, draws, triangles and
- * how many riders were in view, sampled every 2 s after a 20 s warm-up.
+ * how many riders were in view, sampled every 2 s after a 20 s warm-up. `--view` picks the camera
+ * (over the shoulder by default, as players get it; `top` is the old map view), and the camera
+ * turns slowly through a full circle while sampling so the horizon is measured in every direction.
  */
 import process from 'node:process'
 // biome-ignore lint/correctness/noUnresolvedImports: playwright's CommonJS re-exports are invisible to Biome
@@ -22,6 +25,7 @@ const rate = Number(opt('rate', '4'))
 const secs = Number(opt('secs', '30'))
 const cluster = process.argv.includes('--cluster')
 const portrait = process.argv.includes('--portrait')
+const viewMode = opt('view', 'third')
 const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms))
 
 interface Snap {
@@ -31,6 +35,10 @@ interface Snap {
   heapMb: number | null
   draws: number
   tris: number
+}
+interface Extra {
+  textures: number
+  geometries: number
 }
 interface Frontier {
   x: number
@@ -54,18 +62,32 @@ await cdp.send('Emulation.setDeviceMetricsOverride', {
   mobile: true,
 })
 await cdp.send('Emulation.setTouchEmulationEnabled', { enabled: true, maxTouchPoints: 5 })
-const q = `?bots=31${cluster ? '&cluster' : ''}`
+const q = `?bots=31${cluster ? '&cluster' : ''}&view=${viewMode}`
 await page.goto(`${base}/experiments/out-west/frontier/${q}#perf&tier=floor`)
 await page.waitForFunction(() => typeof Reflect.get(globalThis, '__owPerf') === 'function', null, {
   timeout: 60_000,
 })
 await sleep(8000)
+// the first-spawn How to play card would sit over the first samples
+await page.evaluate(() => {
+  const v = Reflect.get(globalThis, '__frontierView') as { closeHowTo?: () => void } | undefined
+  v?.closeHowTo?.()
+})
 await cdp.send('Emulation.setCPUThrottlingRate', { rate })
 await sleep(cluster ? 25_000 : 12_000)
 await cdp.send('HeapProfiler.collectGarbage').catch(() => undefined)
 
-const rows: (Snap & { inView: number; near: number; far: number; builds: number })[] = []
+const rows: (Snap & Extra & { inView: number; near: number; far: number; builds: number })[] = []
 for (let t = 0; t < secs; t += 2) {
+  if (viewMode !== 'top') {
+    // a slow pan: about 30° per sample, so a 30 s run looks all the way round
+    await page.evaluate(() => {
+      const v = Reflect.get(globalThis, '__frontierView') as
+        | { look?: (dx: number, dy: number) => void }
+        | undefined
+      v?.look?.(240, 0)
+    })
+  }
   await sleep(2000)
   const s = await page.evaluate(() => {
     const perfFn = Reflect.get(globalThis, '__owPerf') as (() => Snap) | undefined
@@ -74,7 +96,7 @@ for (let t = 0; t < secs; t += 2) {
       return null // reloading (a dev-server hot update): skip this sample
     }
     const perf = perfFn()
-    const f = fFn()
+    const f = fFn() as Frontier & Extra
     // riders actually on screen: project each through the live camera (dev builds expose the
     // renderer as __owRenderer); fall back to the guaranteed 18 m view radius (§3.1)
     const r = Reflect.get(globalThis, '__owRenderer') as Record<string, unknown> | undefined
@@ -108,6 +130,8 @@ for (let t = 0; t < secs; t += 2) {
       near: f.crowd?.near ?? 0,
       far: f.crowd?.far ?? 0,
       builds: f.crowd?.builds ?? 0,
+      textures: f.textures,
+      geometries: f.geometries,
     }
   })
   if (s) {
@@ -123,7 +147,7 @@ const med = (xs: number[]): number => {
 const max = (xs: number[]): number => Math.max(...xs)
 const f1 = (n: number): string => n.toFixed(1)
 console.log(
-  `Frontier ${cluster ? 'clustered' : 'spread'}, ${portrait ? 'portrait' : 'landscape'}, ${rate}× CPU, floor tier, ${rows.length} samples`,
+  `Frontier ${viewMode} view, ${cluster ? 'clustered' : 'spread'}, ${portrait ? 'portrait' : 'landscape'}, ${rate}× CPU, floor tier, ${rows.length} samples`,
 )
 console.log(
   `  CPU p50 ${f1(med(rows.map((r) => r.cpuP50)))} ms, p95 ${f1(med(rows.map((r) => r.cpuP95)))} ms (worst window ${f1(max(rows.map((r) => r.cpuP95)))})`,
@@ -138,5 +162,8 @@ console.log(
 )
 console.log(
   `  draws ≤${max(rows.map((r) => r.draws))}, tris ≤${Math.round(max(rows.map((r) => r.tris)) / 1000)}k, riders in view ${med(rows.map((r) => r.inView))} (max ${max(rows.map((r) => r.inView))})`,
+)
+console.log(
+  `  textures ≤${max(rows.map((r) => r.textures))}, geometries ≤${max(rows.map((r) => r.geometries))}`,
 )
 console.log(`  riders on screen per sample: ${rows.map((r) => r.inView).join(' ')}`)

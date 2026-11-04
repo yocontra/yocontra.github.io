@@ -13,6 +13,7 @@ import type { StandoffSpec } from './clock.ts'
 import { playCue } from './cues.ts'
 import { enemyFires } from './defeat.ts'
 import type { Director } from './director.ts'
+import { drawOnCall, drawSecs, REMOTE_DRAW_S } from './draws.ts'
 import { callShot, clockInsert, otsShot, standoffShot } from './framing.ts'
 import { dueShot, planShots, shotsBefore } from './judge.ts'
 import { killEnemyAnim, killRifleman, playerFireFx, win } from './outcome.ts'
@@ -70,7 +71,6 @@ export function standoffSpec(d: Director): StandoffSpec {
 }
 
 function resetWaitState(d: Director): void {
-  d.turnAnim = []
   d.waitStart = performance.now()
   d.tCall = 0
   d.bellScheduled = false
@@ -253,6 +253,15 @@ function planLocal(d: Director, now: number): void {
   }
 }
 
+/** How long his draw takes: to just before his first planned shot, or his draw stat. */
+function enemyDrawSecs(d: Director, now: number): number {
+  const first = d.plan?.shots.find((s) => s.who === 0)
+  if (first) {
+    return drawSecs(first.t - now)
+  }
+  return d.hooks ? REMOTE_DRAW_S : drawSecs(d.outlaw.draw)
+}
+
 /** The bell. Both men turn on it, in the same frame; nobody turns early. */
 export function onCall(d: Director, duel: number): void {
   if (duel !== d.duelId || (d.phase !== 'wait' && d.phase !== 'bossClock')) {
@@ -287,16 +296,12 @@ export function onCall(d: Director, duel: number): void {
     planLocal(d, now)
   }
   d.glintFired = false
-  if (d.backsTurned) {
-    d.turnActor(d.player, Math.PI, Math.PI * 2)
-    if (d.enemy && d.enemyAlive) {
-      d.turnActor(d.enemy, 0, Math.PI)
-    }
-    if (d.outlaw.gimmick === 'shaky' && d.enemy) {
-      const hat = d.enemy.popHat()
-      if (hat) {
-        c.physics.add(hat, V(0.3, 1.4, -0.4), V(2, 1, 3), { floor: 0.002 })
-      }
+  // both turn and draw on the bell (presentation: the judge never waits on it)
+  drawOnCall(d, enemyDrawSecs(d, now))
+  if (d.backsTurned && d.outlaw.gimmick === 'shaky' && d.enemy) {
+    const hat = d.enemy.popHat()
+    if (hat) {
+      c.physics.add(hat, V(0.3, 1.4, -0.4), V(2, 1, 3), { floor: 0.002 })
     }
   }
   callShot(d)

@@ -75,14 +75,6 @@ export interface Dying {
   landed: boolean
 }
 
-export interface Turning {
-  a: Actor
-  from: number
-  to: number
-  t0: number
-  dur: number
-}
-
 export interface Faller {
   obj: Object3D
   v: Vector3
@@ -124,7 +116,6 @@ export class DuelState {
   walkLines = 0
   lastWalkTime = 0
   lastTick = 0
-  turnAnim: Turning[] = []
   // standoff
   /** The attempt id shared with the clock (and the ranked server). */
   duelId = -1

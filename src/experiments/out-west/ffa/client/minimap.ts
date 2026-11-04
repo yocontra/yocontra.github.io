@@ -19,7 +19,17 @@ export interface MapFrame {
   strongbox: MapDot | null
   mostWanted: (MapDot & { you: boolean }) | null
   callout: MapDot | null
+  /**
+   * Shooter views: the view yaw. The map turns so your heading is up and zooms in around you
+   * (a 64 m window). Null: the whole town, north up (top-down).
+   */
+  heading?: number | null
+  /** The way to the bank while you carry (the guide's next point), or null. */
+  bank?: MapDot | null
 }
+
+/** Metres across the rotated (shooter) map. */
+const ZOOM_SPAN = 64
 
 const PAD = 4
 const BUILDING_FILL: Record<string, string> = { bank: '#e8c060', stage_line: '#9ac0a0' }
@@ -132,7 +142,74 @@ export class Minimap {
     }
     const r = this.px / this.size
     ctx.clearRect(0, 0, this.px, this.px)
+    const heading = f.heading ?? null
+    const turned = heading !== null && f.self !== null
+    if (turned && f.self) {
+      // heading up: rotate the town about you, zoomed in
+      const [sx, sy] = this.at(f.self)
+      const zoom = (this.px - PAD * 2) / (ZOOM_SPAN * this.scale)
+      ctx.save()
+      ctx.beginPath()
+      ctx.roundRect(0, 0, this.px, this.px, this.px * 0.08)
+      ctx.fillStyle = 'rgba(52, 38, 26, 0.82)'
+      ctx.fill()
+      ctx.clip()
+      ctx.translate(this.px / 2, this.px / 2)
+      ctx.rotate(-Math.PI / 2 - heading)
+      ctx.scale(zoom, zoom)
+      ctx.translate(-sx, -sy)
+      ctx.drawImage(this.base, 0, 0)
+      this.dots(f, nowS, r / zoom)
+      ctx.restore()
+      this.north(heading, r)
+      // you: an arrow at the centre, always pointing up
+      ctx.save()
+      ctx.translate(this.px / 2, this.px / 2)
+      ctx.rotate(-Math.PI / 2)
+      arrow(ctx, r)
+      ctx.restore()
+      return
+    }
     ctx.drawImage(this.base, 0, 0)
+    this.dots(f, nowS, r)
+    if (f.self) {
+      const [x, y] = this.at(f.self)
+      ctx.save()
+      ctx.translate(x, y)
+      ctx.rotate(f.self.aim)
+      arrow(ctx, r)
+      ctx.restore()
+    }
+  }
+
+  /** The N on the rim of the turned map. */
+  private north(heading: number, r: number): void {
+    const ctx = this.ctx
+    if (!ctx) {
+      return
+    }
+    // north (−z) relative to a heading-up map
+    const a = -Math.PI / 2 - heading - Math.PI / 2
+    const rad = this.px / 2 - 9 * r
+    const x = this.px / 2 + Math.cos(a) * rad
+    const y = this.px / 2 + Math.sin(a) * rad
+    ctx.save()
+    ctx.fillStyle = '#f0d898'
+    ctx.strokeStyle = '#1a120a'
+    ctx.lineWidth = 2 * r
+    ctx.font = `bold ${10 * r}px Georgia, serif`
+    ctx.textAlign = 'center'
+    ctx.textBaseline = 'middle'
+    ctx.strokeText('N', x, y)
+    ctx.fillText('N', x, y)
+    ctx.restore()
+  }
+
+  private dots(f: MapFrame, nowS: number, r: number): void {
+    const ctx = this.ctx
+    if (!ctx) {
+      return
+    }
     ctx.fillStyle = '#ffd860'
     for (const b of f.bags) {
       const [x, y] = this.at(b)
@@ -166,25 +243,39 @@ export class Minimap {
       const [x, y] = this.at(f.mostWanted)
       star(ctx, x, y, (f.mostWanted.you ? 6 : 5.5) * r, nowS)
     }
-    if (f.self) {
-      const [x, y] = this.at(f.self)
+    if (f.bank && f.self) {
+      // a gold line from you toward the bank, with a pulsing $ ring at its end
+      const [sx, sy] = this.at(f.self)
+      const [bx, by] = this.at(f.bank)
       ctx.save()
-      ctx.translate(x, y)
-      ctx.rotate(f.self.aim)
-      ctx.fillStyle = '#ffffff'
-      ctx.strokeStyle = '#1a120a'
-      ctx.lineWidth = r
+      ctx.strokeStyle = 'rgba(255, 216, 96, 0.85)'
+      ctx.lineWidth = 1.5 * r
+      ctx.setLineDash([3 * r, 3 * r])
       ctx.beginPath()
-      ctx.moveTo(5 * r, 0)
-      ctx.lineTo(-3.5 * r, 3.2 * r)
-      ctx.lineTo(-2 * r, 0)
-      ctx.lineTo(-3.5 * r, -3.2 * r)
-      ctx.closePath()
-      ctx.fill()
+      ctx.moveTo(sx, sy)
+      ctx.lineTo(bx, by)
+      ctx.stroke()
+      ctx.setLineDash([])
+      ctx.beginPath()
+      ctx.arc(bx, by, (4 + Math.sin(nowS * 6)) * r, 0, Math.PI * 2)
       ctx.stroke()
       ctx.restore()
     }
   }
+}
+
+function arrow(ctx: CanvasRenderingContext2D, r: number): void {
+  ctx.fillStyle = '#ffffff'
+  ctx.strokeStyle = '#1a120a'
+  ctx.lineWidth = r
+  ctx.beginPath()
+  ctx.moveTo(5 * r, 0)
+  ctx.lineTo(-3.5 * r, 3.2 * r)
+  ctx.lineTo(-2 * r, 0)
+  ctx.lineTo(-3.5 * r, -3.2 * r)
+  ctx.closePath()
+  ctx.fill()
+  ctx.stroke()
 }
 
 function star(ctx: CanvasRenderingContext2D, x: number, y: number, rad: number, t: number): void {

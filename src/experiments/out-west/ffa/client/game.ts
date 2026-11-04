@@ -23,6 +23,7 @@ import {
 } from 'three'
 import { AudioEngine, type SfxName } from '../../audio/audio.ts'
 import {
+  ANIM_AIM,
   ANIM_CHANNEL,
   ANIM_DEAD,
   ANIM_DUEL,
@@ -48,6 +49,7 @@ import {
   EF_MOST_WANTED,
   EF_PROTECTED,
   EV_BAG_DROP,
+  EV_DEPOSIT,
   EV_KILL,
   NONE,
   SELF_ALIVE,
@@ -71,7 +73,7 @@ import { RIM } from '../../scene/style.ts'
 import { installUiSounds } from '../../ui/sfx.ts'
 import { bagColor, bagStyleColor } from '../scene/bags.ts'
 import { TopDownCamera } from '../scene/camera.ts'
-import { Crowd, type CrowdPlayer } from '../scene/crowd.ts'
+import { Crowd, type CrowdPlayer, READ_SCALE } from '../scene/crowd.ts'
 import { CUT } from '../scene/cutaway.ts'
 import { shareDepthByKind } from '../scene/depth-kinds.ts'
 import { Effects } from '../scene/fx.ts'
@@ -85,6 +87,7 @@ import type { WireEvent } from '../sim/codec-events.ts'
 import {
   BANK_CHANNEL_TICKS,
   DEAD_EYE_CLOSE_TICKS,
+  HOP_TICKS,
   LEAVE_CHANNEL_TICKS,
   MAX_RANGE,
   RELOAD_TICKS,
@@ -97,9 +100,11 @@ import {
   STRONGBOX_CHANNEL_TICKS,
   TICK_HZ,
   TICK_MS,
+  VAULT_TICKS,
 } from '../sim/constants.ts'
-import { BLOCK_SHOT, rayGrid, spawnFacing, TOWN } from '../sim/layout.ts'
+import { BLOCK_SHOT, BLOCK_SIGHT, rayGrid, spawnFacing, TOWN, zoneAt } from '../sim/layout.ts'
 import { radiansToAim } from '../sim/move.ts'
+import { type AimResult, assistFriction, assistPull, resolveAim } from './aim.ts'
 import { ThreatArrows } from './arrows.ts'
 import { Autopilot } from './autopilot.ts'
 import { assistAim, currentAction } from './context.ts'
@@ -117,12 +122,20 @@ import { Hud } from './hud.ts'
 import type { RemoteView } from './interp.ts'
 import { Minimap } from './minimap.ts'
 import { NetClient } from './net.ts'
+import { Onboarding } from './onboarding.ts'
 import { Riders } from './riders.ts'
+import { Scoreboard } from './scoreboard.ts'
+import { type FrontierSettings, loadSettings, saveSettings, type ViewMode } from './settings.ts'
+import { SettingsPanel } from './settings-panel.ts'
+import { ShooterCamera } from './shooter-camera.ts'
 import { FrontierSound, wearsSpurs } from './sound.ts'
 import { onBoardwalk } from './surface.ts'
 import { TouchControls } from './touch.ts'
 import { MotionTrace, TRACE_FIELDS } from './trace.ts'
 import type { Transport, TransportEvents } from './transport.ts'
+import { fireIntervalMs, policyFor, spreadDeg, spreadPx } from './view.ts'
+import { ViewModel } from './viewmodel.ts'
+import { BankGuide } from './wayfinding.ts'
 
 /** Late-afternoon light: the sun low in the south-west, shadows reaching north-east. */
 const DAY = 0.3
@@ -209,6 +222,36 @@ export class FrontierGame {
   private readonly fuses = new Map<number, Fuse>()
   private readonly sink: Sink
   readonly perf = { tickMs: 0, frameMs: 0, simMs: 0 }
+  // --- shooter views (over the shoulder, first person) ---
+  private settings: FrontierSettings
+  /** Drives the same camera as `cam` in the shooter views. */
+  readonly shooter: ShooterCamera
+  private viewModel: ViewModel | null = null
+  private guide: BankGuide | null = null
+  private readonly coach: Onboarding
+  private readonly score: Scoreboard
+  private readonly panel: SettingsPanel
+  private readonly touchUi: boolean
+  private readonly aimRes: AimResult = { yaw: 0, point: new Vector3(), target: -1, range: 0 }
+  private readonly look = { x: 0, y: 0 }
+  /** This frame's look turn (rad), for the view model's sway. */
+  private readonly turned = { yaw: 0, pitch: 0 }
+  /** Crosshair bloom after a shot (degrees, decays). */
+  private bloom = 0
+  /** Next auto-repeat shot while FIRE is held on touch (performance.now ms). */
+  private nextAuto = 0
+  private wasCarry = 0
+  private wasInZone = false
+  /** The last frame's dt (s), for the HUD's easing. */
+  private dtS = 0
+  private readonly cutSize = new Vector2()
+  private readonly cutView = new Vector3()
+  /** When the pointer lock was last lost (performance.now ms). */
+  private lockLostAt = -1e9
+  /** When you last fired (performance.now ms), for the raised-gun pose. */
+  private lastShotAt = -1e9
+  /** Dev harness ADS (desktop has no touch AIM toggle). */
+  private devAdsOn = false
   /** Dev-only per-frame motion trace (`__frontierTrace`). */
   readonly trace = new MotionTrace()
   private ticksThisFrame = 0
@@ -232,6 +275,8 @@ export class FrontierGame {
     this.canvas.setAttribute('aria-label', 'Frontier: the town of Perdition')
     root.append(this.canvas)
     const coarse = matchMedia('(pointer: coarse)').matches || navigator.maxTouchPoints > 0
+    this.touchUi = coarse
+    this.settings = loadSettings()
     this.renderer = new Renderer(
       this.canvas,
       this.scene,
@@ -240,6 +285,9 @@ export class FrontierGame {
       'ffa',
     )
     this.scene.userData.owDay = DAY
+    this.shooter = new ShooterCamera(this.cam.camera)
+    // the first-person view model rides on the camera, so the camera joins the scene graph
+    this.scene.add(this.cam.camera)
     this.applyGrade()
     this.sun = new DirectionalLight(0xff_e8_c8, 3.4)
     this.setupLights()
@@ -251,8 +299,23 @@ export class FrontierGame {
       onExit: () => this.exit('quit'),
       onRiders: () => this.riders.open(),
       onKiller: () => this.killerPoster(),
+      onMenu: (open) => this.onMenu(open),
+      onHowTo: () => this.coach.show(),
     })
-    this.desk = new DesktopControls(root)
+    this.desk = new DesktopControls(root, {
+      onViewToggle: () => this.setView(this.settings.view === 'first' ? 'third' : 'first'),
+      onShoulder: () => {
+        this.settings.shoulder = this.settings.shoulder === 1 ? -1 : 1
+        this.saveSettings()
+      },
+      onScoreboard: (open) => this.score.show(open && this.running),
+      onLockLost: () => {
+        this.lockLostAt = performance.now()
+        if (!(this.coach.open || this.hud.menuOpen || this.exited)) {
+          this.hud.setMenu(true)
+        }
+      },
+    })
     this.touch = coarse ? new TouchControls(root) : null
     if (this.touch) {
       // the sticks' full-screen layer goes under the HUD: the HUD is see-through to touches
@@ -261,6 +324,21 @@ export class FrontierGame {
       root.insertBefore(this.touch.layer, this.hud.root)
     }
     this.arrows = new ThreatArrows(this.hud.root)
+    this.coach = new Onboarding(root, this.hud.root, coarse, {
+      onOpen: (open) => this.onCoachCard(open),
+    })
+    this.panel = new SettingsPanel(
+      {
+        settings: () => this.settings,
+        onChange: (st) => {
+          this.settings = st
+          this.saveSettings()
+          this.applyView()
+        },
+      },
+      coarse,
+    )
+    this.hud.menuSettings.append(this.panel.el)
     this.net = new NetClient({
       onWelcome: () => this.onWelcome(),
       onControl: (m) => this.onControl(m),
@@ -273,6 +351,11 @@ export class FrontierGame {
       you: () => this.net.you,
       lobbyId: () => this.net.lobbyId,
     })
+    this.score = new Scoreboard(this.hud.root, {
+      roster: () => this.net.roster,
+      you: () => this.net.you,
+      mostWanted: () => this.net.town?.mostWanted ?? NONE,
+    })
     this.sink = this.makeSink()
     // The scripted aim/walk/fire harness exists only in dev builds: never an aimbot API in prod.
     this.autopilot =
@@ -283,6 +366,93 @@ export class FrontierGame {
     globalThis.addEventListener('keydown', this.onKey)
     document.addEventListener('visibilitychange', this.onVisibility)
     this.onResize()
+    this.applyView()
+  }
+
+  // --- view modes ---------------------------------------------------------------------------------
+
+  /** Over the shoulder or first person (not the top-down map). */
+  get shooterView(): boolean {
+    return this.settings.view !== 'top'
+  }
+
+  get viewMode(): ViewMode {
+    return this.settings.view
+  }
+
+  setView(v: ViewMode): void {
+    if (v === this.settings.view) {
+      return
+    }
+    this.settings.view = v
+    this.saveSettings()
+    this.applyView()
+  }
+
+  private saveSettings(): void {
+    saveSettings(this.settings)
+    this.panel.sync()
+  }
+
+  /** Put the camera, controls, crowd scale, fog and HUD into the current view mode. */
+  private applyView(): void {
+    const shooter = this.shooterView
+    const was = this.root.dataset.view
+    this.root.dataset.view = this.settings.view
+    this.desk.setShooter(shooter)
+    this.touch?.setShooter(shooter)
+    if (this.crowd) {
+      this.crowd.readScale = shooter ? 1 : READ_SCALE
+    }
+    if (this.fx) {
+      this.fx.flashScale = FLASH_SCALE[this.settings.view]
+    }
+    const pol = policyFor(this.settings.view, this.renderer.tier)
+    const fog = this.scene.fog
+    if (fog instanceof Fog) {
+      fog.near = pol.fogNear
+      fog.far = pol.fogFar
+    }
+    const sc = this.sun.shadow.camera
+    sc.left = -pol.shadowHalf
+    sc.right = pol.shadowHalf
+    sc.top = pol.shadowHalf
+    sc.bottom = -pol.shadowHalf
+    sc.updateProjectionMatrix()
+    if (!shooter) {
+      // back to the map: the top-down camera owns the projection again
+      this.cam.resize(window.innerWidth / window.innerHeight)
+      this.cam.snap(this.own.x, this.own.z, Math.cos(this.aim), Math.sin(this.aim))
+      CUT.radius.value = 0
+    } else if (was === 'top' || was === undefined) {
+      this.shooter.snap(this.own.x, this.own.z, this.aim)
+    }
+    if (this.viewModel) {
+      this.viewModel.visible = this.settings.view === 'first'
+    }
+    this.panel.sync()
+  }
+
+  private onMenu(open: boolean): void {
+    this.desk.enabled = !(open || this.coach.open)
+    if (open) {
+      this.desk.unlock()
+      this.score.show(false)
+    } else if (!(this.coach.open || this.touchUi)) {
+      // "Back to the fight" is a click: a fine moment to take the mouse again
+      this.desk.lock()
+    }
+  }
+
+  private onCoachCard(open: boolean): void {
+    this.desk.enabled = !(open || this.hud.menuOpen)
+    if (open) {
+      this.desk.unlock()
+      this.hud.setMenu(false)
+    } else if (!this.touchUi) {
+      // "Ride" is a click: take the mouse straight into the fight
+      this.desk.lock()
+    }
   }
 
   private makeSink(): Sink {
@@ -297,7 +467,7 @@ export class FrontierGame {
       },
       hud: this.hud,
       audio: this.audio,
-      kick: (a) => this.cam.kick(a),
+      kick: (a) => (this.shooterView ? this.shooter.kick(a) : this.cam.kick(a)),
       posOf: (id) => this.posOf(id),
       muzzleOf: (id, x, z, aim) =>
         this.crowd?.muzzle(id, x, z, aim, new Vector3()) ?? new Vector3(x, 1.3, z),
@@ -400,6 +570,9 @@ export class FrontierGame {
     this.crowd = new Crowd(this.scene, assets, near)
     this.map = new Minimap(TOWN, this.touch ? 112 : 148)
     this.hud.mapSlot.append(this.map.el)
+    this.viewModel = new ViewModel(this.cam.camera, assets)
+    this.guide = new BankGuide(this.hud.root, this.net.grid)
+    this.guide.prepare()
     onProgress(0.75, 'Fitting the posse')
     await this.crowd.prepare(['casual', 'worker', 'rugged', 'suit'])
     if (this.disposed) {
@@ -415,6 +588,7 @@ export class FrontierGame {
     }
     this.renderer.probe.captureNow()
     this.syncRoster()
+    this.applyView()
     this.running = true
     this.last = performance.now()
     this.raf = requestAnimationFrame(this.frame)
@@ -465,6 +639,7 @@ export class FrontierGame {
       this.crowd?.setLook(m.entry.id, lookFor(m.entry.loadout, m.entry.id))
     } else if (m.type === 'roster_remove') {
       this.crowd?.remove(m.id)
+      this.score.forget(m.id)
     }
     if (this.fx) {
       handleControl(this.sink, m)
@@ -479,6 +654,9 @@ export class FrontierGame {
     // else the loadout of the player who just fell where it dropped
     if (ev.type === EV_KILL) {
       this.lastVictim = ev.victim
+      this.score.kill(ev.killer, ev.victim)
+    } else if (ev.type === EV_DEPOSIT && ev.player === this.net.you) {
+      this.coach.banked(ev.amount)
     } else if (ev.type === EV_BAG_DROP) {
       const bag = this.fx?.bags.get(ev.bagId)
       const style = (ev as { style?: number }).style
@@ -493,7 +671,10 @@ export class FrontierGame {
   }
 
   private predictedShot(x: number, z: number, aim: number, weapon: number): void {
-    const m = this.crowd?.muzzle(this.net.you, x, z, aim, this.tmp) ?? this.tmp.set(x, 1.3, z)
+    const fp = this.settings.view === 'first' && this.viewModel !== null
+    const m = fp
+      ? (this.viewModel?.muzzle(this.tmp) ?? this.tmp.set(x, 1.3, z))
+      : (this.crowd?.muzzle(this.net.you, x, z, aim, this.tmp) ?? this.tmp.set(x, 1.3, z))
     const range = WEAPON_UI[weapon]?.range ?? MAX_RANGE
     const wall = rayToWall(this.net, x, z, aim, range)
     if (this.fx) {
@@ -505,7 +686,16 @@ export class FrontierGame {
       // the lever chambers the next round as the barrel settles
       a.play('rifleLever', { gain: 0.6, when: a.now + RIFLE_LEVER_DELAY })
     }
-    this.cam.kick(0.12)
+    this.lastShotAt = performance.now()
+    if (this.shooterView) {
+      // the view kicks up and settles; the crosshair blooms
+      const long = weapon === WEAPON_RIFLE || weapon === WEAPON_SHOTGUN
+      this.shooter.kickRecoil(long ? 0.05 : 0.03)
+      this.viewModel?.fired()
+      this.bloom = Math.min(6, this.bloom + (long ? 3 : 1.6))
+    } else {
+      this.cam.kick(0.12)
+    }
     haptic('shot')
   }
 
@@ -534,6 +724,9 @@ export class FrontierGame {
   }
 
   private sampleInput(): { moveX: number; moveZ: number; aim: number; buttons: number } {
+    if (this.shooterView) {
+      return this.sampleShooter()
+    }
     const d = this.desk.sample()
     const t = this.touch?.sample()
     let mx = d.mx
@@ -582,8 +775,145 @@ export class FrontierGame {
     }
   }
 
+  /**
+   * Shooter views: WASD / the left stick move relative to where the camera looks; the shot goes
+   * along the yaw from you to whatever the crosshair rests on (`aim.ts`); touch FIRE repeats at
+   * the gun's rate while held, with a light magnetism on each shot.
+   */
+  private sampleShooter(): { moveX: number; moveZ: number; aim: number; buttons: number } {
+    const d = this.desk.sample()
+    const t = this.touch?.sample()
+    let mx = d.mx
+    let mz = d.mz
+    let buttons = d.buttons
+    if (t) {
+      if (Math.abs(t.mx) + Math.abs(t.mz) > 0) {
+        mx = t.mx
+        mz = t.mz
+      }
+      buttons |= t.buttons
+      const now = performance.now()
+      const held = this.touch?.fireHeld ?? false
+      const interval = fireIntervalMs(this.net.weapon.weapon)
+      if (t.buttons & BTN_FIRE || (held && now >= this.nextAuto)) {
+        buttons |= BTN_FIRE
+        this.nextAuto = now + interval
+        this.magnet()
+      } else if (held) {
+        // a tick with the trigger up between repeats: the server fires on the press
+        buttons &= ~BTN_FIRE
+      }
+    }
+    if (!this.desk.enabled) {
+      // paused: stand still, hands off
+      mx = 0
+      mz = 0
+      buttons = 0
+    }
+    const yaw = this.shooter.yaw
+    const fwd = -mz
+    const side = mx
+    let wx = fwd * Math.cos(yaw) - side * Math.sin(yaw)
+    let wz = fwd * Math.sin(yaw) + side * Math.cos(yaw)
+    const ap = this.autopilot
+    let aim = this.resolveShooterAim()
+    if (ap?.active) {
+      const st = ap.steer(this.own.x, this.own.z, (id) => this.posOf(id))
+      if (ap.walking || st.mx !== 0 || st.mz !== 0) {
+        wx = st.mx
+        wz = st.mz
+      }
+      if (st.aim !== null) {
+        aim = st.aim
+        this.shooter.yaw = st.aim
+      }
+      buttons |= st.buttons
+    }
+    if (buttons & BTN_INTERACT && this.actionBit === BTN_CALLOUT) {
+      buttons = (buttons & ~BTN_INTERACT) | BTN_CALLOUT
+    }
+    this.aim = aim
+    return {
+      moveX: Math.round(wx * 127),
+      moveZ: Math.round(wz * 127),
+      aim: radiansToAim(aim),
+      buttons,
+    }
+  }
+
+  /** The yaw the sim should fire along: from you to what the crosshair is on. */
+  private resolveShooterAim(): number {
+    const cam = this.cam.camera
+    const origin = this.tmp.copy(cam.position)
+    return resolveAim(
+      origin,
+      this.shooter.yaw,
+      this.shooter.pitch,
+      this.own.x,
+      this.own.z,
+      this.net.grid,
+      this.remotes,
+      this.aimRes,
+    ).yaw
+  }
+
+  /** Touch only: on the shot, nudge the view onto the nearest rider within 2.5°. */
+  private magnet(): void {
+    const pull = assistPull(
+      this.cam.camera.position,
+      this.shooter.yaw,
+      this.shooter.pitch,
+      this.remotes,
+    )
+    if (pull) {
+      this.shooter.turn(pull.dYaw, pull.dPitch, this.settings.view === 'first')
+    }
+  }
+
+  /** Mouse, right stick and thumb look → the camera, once per rendered frame. */
+  private applyLook(): void {
+    this.turned.yaw = 0
+    this.turned.pitch = 0
+    if (!(this.shooterView && this.desk.enabled && this.net.alive)) {
+      this.desk.takeLook(this.look)
+      this.touch?.takeLook(this.look)
+      return
+    }
+    const first = this.settings.view === 'first'
+    const inv = this.settings.invertY ? -1 : 1
+    // aiming down the sights slows the look with the zoom
+    const zoom = 1 - this.shooter.ads * (first ? 0.32 : 0.28)
+    const m = this.desk.takeLook(this.look)
+    let dYaw = m.x * 0.0022 * this.settings.mouseSens * zoom
+    let dPitch = -m.y * 0.0022 * this.settings.mouseSens * zoom * inv
+    if (this.touch) {
+      const tl = this.touch.takeLook(this.look)
+      const friction = this.touch.looking
+        ? assistFriction(
+            this.cam.camera.position,
+            this.shooter.yaw,
+            this.shooter.pitch,
+            this.remotes,
+          )
+        : 1
+      const k = 0.0055 * this.settings.touchSens * zoom * friction
+      dYaw += tl.x * k
+      dPitch += -tl.y * k * inv
+    }
+    if (dYaw !== 0 || dPitch !== 0) {
+      this.shooter.turn(dYaw, dPitch, first)
+      this.turned.yaw = dYaw
+      this.turned.pitch = dPitch
+    }
+  }
+
   private readonly onKey = (e: KeyboardEvent) => {
-    if (e.code === 'Escape') {
+    if (this.coach.key(e.code)) {
+      e.preventDefault()
+      return
+    }
+    if (e.code === 'Escape' && performance.now() - this.lockLostAt > 300) {
+      // (the Esc that let go of the pointer lock already opened the menu)
       this.hud.toggleMenu()
     }
   }
@@ -683,6 +1013,7 @@ export class FrontierGame {
   }
 
   private updateScene(dt: number, nowS: number): void {
+    this.dtS = dt
     const crowd = this.crowd
     const fx = this.fx
     if (!(crowd && fx)) {
@@ -704,13 +1035,16 @@ export class FrontierGame {
         aim: this.aim,
         vx: (dirX / len) * speed,
         vz: (dirZ / len) * speed,
-        anim: ownAnim(
-          s.flags,
-          this.net.pred.rollTicks > 0,
+        anim: this.shooterAnim(
+          ownAnim(
+            s.flags,
+            this.net.pred.rollTicks > 0,
+            speed > 0.3,
+            s.reloadTicks > 0,
+            s.channelKind,
+            jumpAnim(this.net.pred.jumpTicks, this.net.pred.vaultStep),
+          ),
           speed > 0.3,
-          s.reloadTicks > 0,
-          s.channelKind,
-          jumpAnim(this.net.pred.jumpTicks, this.net.pred.vaultStep),
         ),
         flags: ownFlags(s.flags, s.protectTicks > 0),
         self: true,
@@ -734,12 +1068,41 @@ export class FrontierGame {
       // (re)spawned: face into town until the stick or the mouse says otherwise
       this.aim = spawnFacing(this.own)
       this.cam.snap(this.own.x, this.own.z, Math.cos(this.aim), Math.sin(this.aim))
+      this.shooter.snap(this.own.x, this.own.z, this.aim)
       this.hatlessSeen.clear()
+      // the first ride into town on this device: how to play
+      this.coach.maybeShow()
     }
     this.landings(list)
-    this.cam.update(this.own.x, this.own.z, Math.cos(this.aim), Math.sin(this.aim), dt)
+    const shooter = this.shooterView
+    const first = this.settings.view === 'first'
+    const speed0 = list[0]?.self ? Math.hypot(list[0].vx, list[0].vz) : 0
+    if (shooter) {
+      this.applyLook()
+      this.shooter.update({
+        x: this.own.x,
+        z: this.own.z,
+        speed: speed0,
+        lift: this.jumpLift(),
+        first,
+        ads: this.net.alive && this.adsHeld(),
+        fov: first ? this.settings.fovFirst : this.settings.fovThird,
+        shoulder: this.settings.shoulder,
+        far: policyFor(this.settings.view, this.renderer.tier).far,
+        grid: this.net.grid,
+        dt,
+      })
+      crowd.hideSelf = this.net.alive && (first || this.shooter.closeness > 0.85)
+    } else {
+      this.cam.update(this.own.x, this.own.z, Math.cos(this.aim), Math.sin(this.aim), dt)
+      crowd.hideSelf = false
+    }
+    const cx = shooter ? this.own.x : this.cam.target.x
+    const cz = shooter ? this.own.z : this.cam.target.z
+    crowd.update(list, cx, cz, dt, nowS)
+    this.updateViewModel(dt, speed0)
+    fx.eye = first ? this.own : null
     this.wilds.tick(dt)
-    crowd.update(list, this.cam.target.x, this.cam.target.z, dt, nowS)
     this.sound?.steps(
       {
         id: this.net.you,
@@ -751,8 +1114,17 @@ export class FrontierGame {
       (id) => wearsSpurs(this.net.roster.get(id)?.loadout),
       nowS,
     )
-    this.sun.position.copy(this.cam.target).addScaledVector(SUN_DIR, 60)
-    this.sun.target.position.copy(this.cam.target)
+    // the sun's shadow box: around the map's centre top-down, ahead of you where you look otherwise
+    const ahead = policyFor(this.settings.view, this.renderer.tier).shadowAhead
+    const focus = shooter
+      ? this.tmp.set(
+          this.own.x + Math.cos(this.shooter.yaw) * ahead,
+          0,
+          this.own.z + Math.sin(this.shooter.yaw) * ahead,
+        )
+      : this.tmp.copy(this.cam.target)
+    this.sun.target.position.copy(focus)
+    this.sun.position.copy(focus).addScaledVector(SUN_DIR, 60)
     this.updateCut()
     this.updateRings(nowS)
     const town = this.net.town
@@ -769,13 +1141,88 @@ export class FrontierGame {
       this.own.x,
       this.own.z,
       this.aim,
-      this.net.alive && aiming ? (WEAPON_UI[this.net.weapon.weapon]?.range ?? MAX_RANGE) : null,
+      this.net.alive && aiming && !shooter
+        ? (WEAPON_UI[this.net.weapon.weapon]?.range ?? MAX_RANGE)
+        : null,
       Boolean(this.touch?.aiming),
     )
     this.pickups?.update(nowS, (x, y, z) => fx.spark(x, y, z))
     fx.update(dt, nowS)
-    this.audio?.setListener(this.own.x, 8, this.own.z + 4, 0, -0.8, -0.6)
+    if (shooter) {
+      // your ears are where your head is, facing the way you look
+      this.audio?.setListener(
+        this.own.x,
+        1.6,
+        this.own.z,
+        Math.cos(this.shooter.yaw),
+        0,
+        Math.sin(this.shooter.yaw),
+      )
+    } else {
+      this.audio?.setListener(this.own.x, 8, this.own.z + 4, 0, -0.8, -0.6)
+    }
     this.wasAlive = this.net.alive
+  }
+
+  /**
+   * Over the shoulder your rider raises the gun while you aim down the sights, and for a moment
+   * after a shot, instead of letting it hang at his side.
+   */
+  private shooterAnim(anim: number, moving: boolean): number {
+    if (!this.shooterView || anim !== ANIM_IDLE || moving) {
+      return anim
+    }
+    return this.adsHeld() || performance.now() - this.lastShotAt < 1200 ? ANIM_AIM : anim
+  }
+
+  /**
+   * How high your vault or hop carries the camera right now: `peak·4t(1−t)` over the move, with
+   * t interpolated between ticks so the arc is smooth at any frame rate.
+   */
+  private jumpLift(): number {
+    const pred = this.net.pred
+    if (pred.jumpTicks <= 0) {
+      return 0
+    }
+    const vault = pred.vaultStep > 0
+    const total = vault ? VAULT_TICKS : HOP_TICKS
+    const t = Math.min(1, Math.max(0, (total - pred.jumpTicks + this.acc / TICK_MS) / total))
+    return (vault ? VAULT_PEAK_M : HOP_PEAK_M) * 4 * t * (1 - t)
+  }
+
+  /** RMB, LT or the touch AIM toggle. */
+  private adsHeld(): boolean {
+    return this.desk.aimHeld || (this.touch?.ads ?? false) || this.devAdsOn
+  }
+
+  private updateViewModel(dt: number, speed: number): void {
+    const vm = this.viewModel
+    if (!vm) {
+      return
+    }
+    const on = this.settings.view === 'first' && this.net.alive
+    vm.visible = on
+    if (!on) {
+      return
+    }
+    const s = this.net.self
+    const yaw = this.shooter.yaw
+    // a wall close ahead pushes the gun back rather than through it
+    const wall = rayGrid(
+      this.net.grid,
+      { ox: this.own.x, oz: this.own.z, dx: Math.cos(yaw), dz: Math.sin(yaw), maxDist: 1.2 },
+      BLOCK_SIGHT,
+    )
+    vm.update(
+      dt,
+      this.net.weapon.weapon,
+      this.turned.yaw,
+      this.turned.pitch,
+      speed,
+      this.shooter.ads,
+      ((s?.flags ?? 0) & SELF_RELOADING) !== 0,
+      wall,
+    )
   }
 
   /** A thud of boots for every rider (you included) coming down from a vault or a hop. */
@@ -797,17 +1244,32 @@ export class FrontierGame {
     }
   }
 
-  /** Player position on screen → the cutaway circle (render-target pixels). */
+  /**
+   * Top-down: a 4.5 m circle around you, and the roof of the building you stand in fades. Over the
+   * shoulder: roofs stay solid; only what stands between the lens and your rider (a porch roof, a
+   * wall edge) dithers away inside a 1.2 m circle. First person: nothing fades.
+   */
   private updateCut(): void {
+    const view = this.settings.view
+    if (view === 'first') {
+      CUT.radius.value = 0
+      CUT.bid.value = -1
+      return
+    }
+    const cam = this.cam.camera
     const p = this.tmp.set(this.own.x, 1, this.own.z)
-    const view = p.clone().applyMatrix4(this.cam.camera.matrixWorldInverse)
-    p.project(this.cam.camera)
-    const size = this.renderer.gl.getDrawingBufferSize(new Vector2())
-    CUT.screen.value.set((p.x * 0.5 + 0.5) * size.x, (p.y * 0.5 + 0.5) * size.y, -view.z)
-    // About 4.5 m around the player, in pixels at this zoom.
-    const pxPerM =
-      size.y / (2 * Math.tan((this.cam.camera.fov * Math.PI) / 360) * this.cam.distance)
-    CUT.radius.value = 4.5 * pxPerM
+    const depth = -this.cutView.copy(p).applyMatrix4(cam.matrixWorldInverse).z
+    p.project(cam)
+    const size = this.renderer.gl.getDrawingBufferSize(this.cutSize)
+    CUT.screen.value.set((p.x * 0.5 + 0.5) * size.x, (p.y * 0.5 + 0.5) * size.y, depth)
+    const shooter = view === 'third'
+    const dist = shooter ? Math.max(0.5, depth) : this.cam.distance
+    const pxPerM = size.y / (2 * Math.tan((cam.fov * Math.PI) / 360) * dist)
+    CUT.radius.value = (shooter ? 1.2 : 4.5) * pxPerM
+    if (shooter) {
+      CUT.bid.value = -1
+      return
+    }
     let bid = -1
     for (const [i, b] of (this.town?.roofs ?? []).entries()) {
       if (
@@ -839,7 +1301,8 @@ export class FrontierGame {
         fx.ring(sp.x, sp.z, 1.2, PICKUP_RING, 4)
       }
     }
-    if (this.net.alive) {
+    // your own ground ring is a top-down readability aid: over the shoulder it's just in the way
+    if (this.net.alive && !this.shooterView) {
       const mine = s.flags & SELF_MOST_WANTED ? new Color(1.8, 1.4, 0.3) : new Color(1.2, 1, 0.7)
       fx.ring(this.own.x, this.own.z, 0.7, mine, 0)
     }
@@ -916,12 +1379,18 @@ export class FrontierGame {
       mostWanted: (s.flags & SELF_MOST_WANTED) !== 0,
       channel:
         ch && s.channelKind !== CHANNEL_NONE ? { label: ch[0], t: s.channelTicks / ch[1] } : null,
-      prompt: this.touch ? null : (action?.prompt ?? null),
+      prompt: this.touch ? (action?.touchPrompt ?? null) : (action?.prompt ?? null),
       protectedFor: s.protectTicks,
       lowPower: this.renderer.lowPower,
     })
-    this.reticle(s.flags)
+    if (this.shooterView) {
+      this.crosshair(s.flags)
+    } else {
+      this.hud.setCrosshair(false, 0, false)
+      this.reticle(s.flags)
+    }
     this.sounds(s.flags)
+    this.coaching(s.carried)
     if (this.net.alive) {
       this.lastCarry = s.carried
       this.hud.alive()
@@ -937,11 +1406,76 @@ export class FrontierGame {
       this.hud.death(name, lvl ? `Level ${lvl}. ${carry}` : carry, s.respawnTicks / TICK_HZ, person)
     }
     this.announceMostWanted()
-    this.arrows.update(this.cam.camera, this.own.x, this.own.z, this.remotes)
+    this.arrows.update(
+      this.cam.camera,
+      this.own.x,
+      this.own.z,
+      this.remotes,
+      this.fx?.bags.values() ?? [],
+    )
+    this.guide?.update(
+      this.cam.camera,
+      this.own.x,
+      this.own.z,
+      s.carried,
+      this.net.alive,
+      zoneAt(TOWN, this.own.x, this.own.z)?.kind === 'bank',
+      this.dtS,
+    )
+    const portrait = window.innerHeight > window.innerWidth
+    this.hud.rotateHint(this.touchUi && portrait && this.shooterView && this.net.alive)
     if (this.map && nowS - this.mapAt > 0.1) {
       this.mapAt = nowS
       this.drawMap(nowS)
     }
+  }
+
+  /** The shooter crosshair: centred, ticks opening with the gun's spread and the shot bloom. */
+  private crosshair(flags: number): void {
+    const s = this.net.self
+    const w = this.net.weapon.weapon
+    const moving =
+      this.net.alive &&
+      Math.hypot(this.net.pred.x - this.net.prev.x, this.net.pred.z - this.net.prev.z) > 0.01
+    const deadEyeReady = (flags & SELF_DEAD_EYE_READY) !== 0
+    this.bloom *= Math.exp(-this.dtS * 5)
+    const deg = spreadDeg(w, moving, deadEyeReady) + this.bloom
+    const gap = Math.max(3, spreadPx(deg, this.cam.camera.fov, window.innerHeight))
+    const range = WEAPON_UI[w]?.range ?? MAX_RANGE
+    const onTarget = this.aimRes.target >= 0 && this.aimRes.range <= range
+    const show =
+      this.net.alive && !this.hud.menuOpen && !this.coach.open && this.settings.view !== 'top'
+    const closing =
+      s && s.deadEyeTicks > 0 ? Math.min(1, s.deadEyeTicks / DEAD_EYE_CLOSE_TICKS) : null
+    this.hud.setCrosshair(true, gap, onTarget)
+    this.hud.setReticle(window.innerWidth / 2, window.innerHeight / 2, show, closing, deadEyeReady)
+  }
+
+  /** The once-per-device coach lines, triggered by what just happened. */
+  private coaching(carried: number): void {
+    const alive = this.net.alive
+    if (alive && carried > 0 && this.wasCarry === 0) {
+      this.coach.firstCarry(carried)
+    }
+    const inZone = alive && carried > 0 && zoneAt(TOWN, this.own.x, this.own.z)?.kind === 'bank'
+    if (inZone && !this.wasInZone) {
+      this.coach.atWindow()
+    }
+    this.wasInZone = inZone
+    if (!alive && this.wasCarry > 0 && this.lastCarry > 0) {
+      this.coach.diedCarrying(this.lastCarry)
+    }
+    this.wasCarry = alive ? carried : 0
+    // desktop, shooter view, no mouse yet: say how to take it
+    const needClick =
+      !this.touchUi &&
+      this.shooterView &&
+      alive &&
+      this.desk.enabled &&
+      !this.desk.locked &&
+      !this.desk.usingPad &&
+      this.autopilot === null
+    this.hud.clickHint(needClick)
   }
 
   private reticle(flags: number): void {
@@ -1031,6 +1565,11 @@ export class FrontierGame {
         strongbox: spot ?? null,
         mostWanted: mw,
         callout: caller === NONE ? null : this.posOf(caller),
+        heading: this.shooterView ? this.shooter.yaw : null,
+        bank:
+          this.guide && this.net.alive && (this.net.self?.carried ?? 0) > 0
+            ? this.guide.nearest(this.own.x, this.own.z)
+            : null,
       },
       nowS,
     )
@@ -1089,6 +1628,8 @@ export class FrontierGame {
     document.removeEventListener('visibilitychange', this.onVisibility)
     this.desk.dispose()
     this.touch?.dispose()
+    this.score.dispose()
+    this.coach.dispose()
     this.hud.dispose()
     this.crowd?.dispose()
     this.town?.dispose()
@@ -1097,6 +1638,22 @@ export class FrontierGame {
     this.renderer.gl.dispose()
     this.canvas.remove()
     this.root.classList.remove('fr-root')
+  }
+
+  /** Dev harness only: look as if the mouse moved (pointer lock doesn't run headless). */
+  devLook(dx: number, dy: number): void {
+    this.desk.injectLook(dx, dy)
+  }
+
+  /** Dev harness only: hold or release aim-down-sights. */
+  devAds(on: boolean): void {
+    this.touch?.setAds(on)
+    this.devAdsOn = on
+  }
+
+  /** Dev harness only: close the How to play card without a click. */
+  devCloseHowTo(): void {
+    this.coach.close()
   }
 
   /** Numbers for the perf overlay and the Playwright harness. */
@@ -1114,6 +1671,17 @@ export class FrontierGame {
       kbIn: Math.round(this.net.bytesIn / 1024),
       kbOut: Math.round(this.net.bytesOut / 1024),
       camDist: Math.round(this.cam.distance),
+      view: this.settings.view,
+      yaw: Math.round(this.shooter.yaw * 1000) / 1000,
+      pitch: Math.round(this.shooter.pitch * 1000) / 1000,
+      aimTarget: this.aimRes.target,
+      locked: this.desk.locked,
+      howto: this.coach.open,
+      menu: this.hud.menuOpen,
+      guide: this.guide?.state ?? null,
+      fov: Math.round(this.cam.camera.fov * 10) / 10,
+      textures: this.renderer.gl.info.memory.textures,
+      geometries: this.renderer.gl.info.memory.geometries,
       x: Math.round(this.own.x * 10) / 10,
       z: Math.round(this.own.z * 10) / 10,
       you: this.net.you,
@@ -1220,6 +1788,13 @@ function rayToWall(net: NetClient, x: number, z: number, aim: number, range: num
 }
 
 const PICKUP_RING = new Color(1.4, 0.6, 0.3)
+
+/** Muzzle-flash size by view (the top-down flash would fill a shoulder or an eye). */
+const FLASH_SCALE: Record<ViewMode, number> = { top: 1, third: 0.45, first: 0.18 }
+
+/** How high the camera rides a vault and a hop (m): the body's arc. */
+const VAULT_PEAK_M = 0.55
+const HOP_PEAK_M = 0.3
 
 /** From a rifle shot to the lever working the next round in, s (the rifle fires every 0.9 s). */
 const RIFLE_LEVER_DELAY = 0.32

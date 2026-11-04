@@ -56,6 +56,10 @@ export interface HudOptions {
   onRiders: () => void
   /** The death card's "Wanted poster": your killer's. */
   onKiller: () => void
+  /** The pause menu opened or closed (the game frees or retakes the mouse). */
+  onMenu?: (open: boolean) => void
+  /** The pause menu's "How to play". */
+  onHowTo?: () => void
 }
 
 export class Hud {
@@ -86,6 +90,12 @@ export class Hud {
   private readonly deathPoster: HTMLButtonElement
   private readonly bannerEl: HTMLElement
   private readonly menuEl: HTMLElement
+  /** The pause card (the settings panel mounts in `menuSettings`). */
+  readonly menuSettings: HTMLElement
+  private readonly opts: HudOptions
+  private readonly ticks: HTMLElement
+  private readonly rotateEl: HTMLElement
+  private readonly clickEl: HTMLElement
   private readonly protectEl: HTMLElement
   private readonly lowPowerEl: HTMLElement
   readonly mapSlot: HTMLElement
@@ -93,6 +103,7 @@ export class Hud {
   private toastTimer: ReturnType<typeof setTimeout> | null = null
 
   constructor(parent: HTMLElement, opts: HudOptions) {
+    this.opts = opts
     this.root = el('div', `fr-hud fr-ui${opts.touch ? ' fr-touchui' : ''}`, parent)
     const tl = el('div', 'fr-tl', this.root)
     const menuBtn = el('button', 'fr-menu-btn fr-hit', tl, '≡')
@@ -114,8 +125,8 @@ export class Hud {
 
     const tc = el('div', 'fr-tc', this.root)
     this.carriedEl = el('div', 'fr-carried', tc, '$0')
-    el('div', 'fr-carried-label', tc, 'carried')
-    this.bankedEl = el('div', 'fr-banked', tc, 'banked $0')
+    el('div', 'fr-carried-label', tc, 'carried · at risk')
+    this.bankedEl = el('div', 'fr-banked', tc, 'purse $0 · safe')
     this.mwEl = el('div', 'fr-mw', tc, '★ MOST WANTED · +50% BOUNTY')
 
     const tr = el('div', 'fr-tr', this.root)
@@ -139,9 +150,17 @@ export class Hud {
     this.hurtEl = el('div', 'fr-hurt', this.root)
     this.reticle = el('div', 'fr-reticle', this.root)
     el('div', 'fr-reticle-ring', this.reticle)
+    // the shooter crosshair: four ticks that open with the spread, and a centre dot
+    this.ticks = el('div', 'fr-ticks', this.reticle)
+    for (const side of ['t', 'r', 'b', 'l']) {
+      el('div', `fr-tick fr-tick-${side}`, this.ticks)
+    }
+    el('div', 'fr-dot', this.ticks)
     this.hitEl = el('div', 'fr-hitmark', this.reticle)
     this.bannerEl = el('div', 'fr-banner', this.root)
     this.lowPowerEl = el('div', 'fr-lowpower', this.root, 'Low Power Mode: 30 fps')
+    this.rotateEl = el('div', 'fr-rotate', this.root, 'Turn your phone sideways for the best view')
+    this.clickEl = el('div', 'fr-rotate fr-click', this.root, 'Click to take aim')
 
     this.deathEl = el('div', 'fr-death', this.root)
     const poster = el('div', 'fr-poster', this.deathEl)
@@ -171,6 +190,8 @@ export class Hud {
       card,
       'Carried cash drops when you leave, unless you leave from inside the bank. Banked money is safe.',
     )
+    const howto = el('button', 'fr-menu-item fr-menu-quiet fr-hit', card, 'How to play')
+    this.menuSettings = el('div', 'fr-menu-settings', card)
     const leave = el('button', 'fr-menu-item fr-hit', card, 'Leave town (5 s)')
     const exit = el(
       'button',
@@ -179,12 +200,23 @@ export class Hud {
       'Quit now (drop your carry)',
     )
     const back = el('button', 'fr-menu-item fr-menu-quiet fr-hit', card, 'Back to the fight')
-    for (const b of [leave, exit, back]) {
+    for (const b of [howto, leave, exit, back]) {
       b.type = 'button'
     }
-    const close = () => this.menuEl.classList.remove('on')
-    menuBtn.addEventListener('click', () => this.menuEl.classList.toggle('on'))
-    back.addEventListener('click', close)
+    const close = () => this.setMenu(false)
+    menuBtn.addEventListener('click', (e) => {
+      e.stopPropagation()
+      this.toggleMenu()
+    })
+    back.addEventListener('click', (e) => {
+      e.stopPropagation()
+      close()
+    })
+    howto.addEventListener('click', (e) => {
+      e.stopPropagation()
+      close()
+      opts.onHowTo?.()
+    })
     leave.addEventListener('click', () => {
       close()
       opts.onLeave()
@@ -200,7 +232,29 @@ export class Hud {
   }
 
   toggleMenu(): void {
-    this.menuEl.classList.toggle('on')
+    this.setMenu(!this.menuOpen)
+  }
+
+  setMenu(open: boolean): void {
+    if (open === this.menuOpen) {
+      return
+    }
+    this.menuEl.classList.toggle('on', open)
+    this.opts.onMenu?.(open)
+  }
+
+  /** Desktop shooter view without the pointer lock: "Click to take aim". */
+  clickHint(on: boolean): void {
+    if (this.changed('click', on)) {
+      this.clickEl.classList.toggle('on', on)
+    }
+  }
+
+  /** Portrait phone in a shooter view: a polite hint to turn sideways (play still works). */
+  rotateHint(on: boolean): void {
+    if (this.changed('rot', on)) {
+      this.rotateEl.classList.toggle('on', on)
+    }
   }
 
   private changed(key: string, v: string | number | boolean): boolean {
@@ -242,7 +296,7 @@ export class Hud {
       this.carriedEl.classList.add('bump')
     }
     if (this.changed('banked', s.banked)) {
-      this.bankedEl.textContent = `banked ${money(s.banked)}`
+      this.bankedEl.textContent = `purse ${money(s.banked)} · safe`
     }
     if (this.changed('players', s.players)) {
       this.playersEl.textContent = `${s.players} in Perdition`
@@ -336,6 +390,26 @@ export class Hud {
     }
     if (close !== null) {
       this.reticle.style.setProperty('--close', String(close))
+    }
+  }
+
+  /**
+   * Shooter views: the crosshair sits at the screen centre; `spread` is the gap of its ticks (px),
+   * `onTarget` turns it red over a rider in range.
+   */
+  setCrosshair(shooter: boolean, spread: number, onTarget: boolean): void {
+    if (this.changed('xshoot', shooter)) {
+      this.reticle.classList.toggle('shooter', shooter)
+    }
+    if (!shooter) {
+      return
+    }
+    const gap = Math.round(spread * 2) / 2
+    if (this.changed('xgap', gap)) {
+      this.ticks.style.setProperty('--gap', `${gap}px`)
+    }
+    if (this.changed('xtgt', onTarget)) {
+      this.reticle.classList.toggle('target', onTarget)
     }
   }
 

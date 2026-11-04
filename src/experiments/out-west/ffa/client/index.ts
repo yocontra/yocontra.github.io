@@ -18,6 +18,7 @@ import type { FeedKind } from './hud.ts'
 import { type JoinError, openLoopback, openRemote } from './transport.ts'
 import '../../ui/tokens.css'
 import './frontier.css'
+import './shooter.css'
 
 export type FrontierExit = 'left' | 'quit' | 'lost' | 'refused'
 
@@ -79,8 +80,8 @@ function overlay(root: HTMLElement): {
   if (tip) {
     const touch = matchMedia('(pointer: coarse)').matches
     tip.textContent = touch
-      ? 'Left thumb moves. Right thumb aims; let go to fire. Hold it from the holster for a Dead-Eye.'
-      : 'WASD to move, mouse to aim, click to fire. Hold right-click from the holster for a Dead-Eye. Space jumps fences, Shift rolls, E banks.'
+      ? 'Left thumb moves, right thumb looks. Space jumps fences. Kill riders, grab their money, bank it before you die.'
+      : 'WASD moves, the mouse looks, click fires, right-click aims. Space jumps fences. Kill riders, grab their money, bank it before you die.'
   }
   return {
     el,
@@ -196,6 +197,13 @@ export function mountFrontier(root: HTMLElement, opts: FrontierOptions = {}): Fr
     Reflect.set(globalThis, '__frontierFeed', (text: string, kind: FeedKind) =>
       game.hud.feed(text, kind),
     )
+    // Dev harness: drive the shooter camera without pointer lock (headless can't lock).
+    Reflect.set(globalThis, '__frontierView', {
+      look: (dx: number, dy: number) => game.devLook(dx, dy),
+      ads: (on: boolean) => game.devAds(on),
+      set: (v: 'third' | 'first' | 'top') => game.setView(v),
+      closeHowTo: () => game.devCloseHowTo(),
+    })
   }
   const ap = game.autopilot
   if (import.meta.env.DEV && ap) {
