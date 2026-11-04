@@ -286,6 +286,8 @@ const DYN = {
   thermalMs: 180_000,
   /** After a step down, wait this long before trying to climb. */
   holdMs: 4000,
+  /** Low Power Mode's 30 Hz cap held this long: step down one tier (once a session). */
+  lowPowerMs: 3000,
 } as const
 
 const NEXT_DOWN: Record<Quality, Quality | null> = {
@@ -521,8 +523,9 @@ export class Renderer {
     const capped = med > 30 && med < 37 && refresh > 28 && this.cpu.pct(0.9) < 10
     this.lowPower = capped
     if (capped) {
-      return false
+      return this.lowPowerStep(now, allowTierDrop)
     }
+    this.lowPowerSince = 0
     const s = this.spec
     let next = this.scale
     if (p90 > Math.max(refresh * 1.15, 17.5)) {
@@ -550,6 +553,30 @@ export class Renderer {
     }
     return false
   }
+
+  /**
+   * Low Power Mode (iOS caps rAF at 30 Hz to save battery): the frame has twice the time, but the
+   * player asked for less power, so after 3 s of it step down one tier, once a session, and keep
+   * the resolution where it is (a drop in resolution wouldn't lift the cap).
+   */
+  private lowPowerStep(now: number, allowTierDrop: boolean): boolean {
+    this.lowPowerSince ||= now
+    const down = NEXT_DOWN[this.tier]
+    if (
+      !allowTierDrop ||
+      this.lowPowerDropped ||
+      !down ||
+      now - this.lowPowerSince < DYN.lowPowerMs
+    ) {
+      return false
+    }
+    this.lowPowerDropped = true
+    this.setTier(down)
+    return true
+  }
+
+  private lowPowerSince = 0
+  private lowPowerDropped = false
 
   /**
    * The lens pass. `night` (0 noon … 1 midnight) fades the chromatic aberration out after dusk:
