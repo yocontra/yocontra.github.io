@@ -340,7 +340,14 @@ export function onCall(d: Director, duel: number): void {
   if (d.backsTurned && d.outlaw.gimmick === 'shaky' && d.enemy) {
     const hat = d.enemy.popHat()
     if (hat) {
-      c.physics.add(hat, V(0.3, 1.4, -0.4), V(2, 1, 3), { floor: 0.002 })
+      // tossed up, off to his side and back away from you, spinning, so it reads as a hat
+      // (falling straight past his belt, the edge-on brim read as a ring at the call)
+      const p = d.player.root.position
+      const e = d.enemy.root.position
+      const away = V(e.x - p.x, 0, e.z - p.z).normalize()
+      const side = V(-away.z, 0, away.x)
+      const vel = V(0, 2.4, 0).addScaledVector(side, 1.3).addScaledVector(away, 1.1)
+      c.physics.add(hat, vel, V(7, 2, 9), { floor: 0.002 })
     }
   }
   callShot(d)
