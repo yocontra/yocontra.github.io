@@ -9,6 +9,7 @@ import {
 import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.js'
 import { type GLTF, GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js'
 import type { BodyKey, Look } from '../data/outlaws.ts'
+import { creaseNormals } from '../scene/normals.ts'
 import { hairDonor } from '../scene/person.ts'
 import { setPropsLibrary } from '../scene/props.ts'
 import { NORMAL_GUARD_GLSL, setCharacterMaps } from '../scene/shade.ts'
@@ -116,6 +117,9 @@ async function kitMaterial(
 
 const GRIP_MESH = /_2$/u
 
+/** Crease angle for the revolver's normals (its cylinder has 8 to 12 sides). */
+const GUN_CREASE = 48
+
 /**
  * The revolver's own materials. On the Kit atlas its steel was a mid grey at metalness 1, a
  * mirror of the sky that read flat dark blue, and its grip a rough brown. A period revolver is
@@ -126,8 +130,11 @@ const GRIP_MESH = /_2$/u
 function gunMaterials(props: GLTF, map: Texture, normal: Texture): void {
   const steel = new MeshStandardMaterial({
     name: 'GunSteel',
-    // warm and dark: blued steel is near black, and the warmth offsets the sky it mirrors
-    color: 0x8a_80_78,
+    // the Kit's steel texel (grain and wear, about 0.24 linear) under a warm tint: dark like
+    // blued steel, and the warmth offsets the sky it mirrors
+    color: 0xf0_e4_d8,
+    map,
+    normalMap: normal,
     roughness: 0.44,
     metalness: 1,
     vertexColors: true,
@@ -160,6 +167,8 @@ radiance = mix( vec3( dot( radiance, vec3( 0.2126, 0.7152, 0.0722 ) ) ), radianc
         // biome-ignore lint/suspicious/noUnnecessaryConditions: three types isMesh as `true` on the cast; this is the runtime type check
         if (m.isMesh) {
           m.material = GRIP_MESH.test(m.name) ? grip : steel
+          // exported flat-shaded: round the barrel, cylinder and grip, keep the frame's edges
+          creaseNormals(m.geometry, GUN_CREASE)
         }
       })
     })

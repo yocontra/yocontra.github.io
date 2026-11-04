@@ -22,6 +22,7 @@ import {
   type SkinnedMesh,
   Vector3,
 } from 'three'
+import { creaseNormals } from './normals.ts'
 
 export interface Sample {
   readonly p: Vector3
@@ -350,7 +351,7 @@ export function shell(s: ShellSpec): BufferGeometry {
   g.setAttribute('color', new BufferAttribute(new Float32Array(col), 3))
   g.setAttribute('uv', new BufferAttribute(new Float32Array(uv), 2))
   g.setIndex(quads(L))
-  g.computeVertexNormals()
+  creaseNormals(g)
   return g
 }
 
