@@ -296,6 +296,115 @@ Against the budget (≤300k triangles, CPU p95 ≤ 7 ms on a quiet machine, heap
 - CPU and heap are over. What's left is the crowd (skinned and VAT riders, 11–17 MB of their own
   arrays), the desert flora, and the dev build's module source, which production doesn't carry.
 
+### Mobile 60 fps pass: production build, whole game (Nov 2026)
+
+**Measure the production build.** Dev carries HMR, unminified modules and (for the float audit) every
+static geometry's CPU copy, so its heap and CPU read high: the Frontier's heap is ~122 MB in dev and
+~90 MB in production.
+
+- `bun tools/frontier-perf.ts --prod [--profile] [--alloc]` builds the site with
+  `PUBLIC_OW_PERF_HARNESS=1` into `$TMPDIR/frontier-perf-dist` and serves it on 4387. That flag keeps
+  the dev-only `?seed=` and `?spawn=` params, the `__frontier*` and `__owRenderer` hooks, and hidden
+  source maps, so `--profile` names real functions (self and inclusive ms per frame). The deploy
+  never sets it, so they fold away there (checked: no `__frontierView` in a plain `astro build`).
+  `--alloc` prints garbage per frame by allocating function.
+- `bun tools/perf-suite.ts [--stress] [--sustained=600] [--profile=screen|call] [--devices]` runs every screen in the
+  production build and prints one table:
+  - **Screens:** the title, the hub, the Outfitter (browsed while sampling), a played Quick Draw
+    duel with one row per phase, and the Frontier in 3 views, spread and packed.
+  - **Columns:** draws, tris, textures, heap (live and retained after GC), CPU p50/p95/p99 per
+    frame (every rAF callback timed), long frames and frames with more than 16.7 ms of CPU.
+  - `--devices` checks the tier prior per emulated Apple device.
+  - Bounty Hunt is the duel's scene and director. It needs the API and a second client, so the
+    duel rows stand in for it.
+
+Floor proxy (812×375 at DPR 3, touch, floor tier), production build, load average 5–6:
+
+| Screen                 | Draws | Tris | Retained heap | CPU p50 / p95 / p99, 4× | Frames > 16.7 ms, 4× | CPU p95 / p99, 6× |
+| ---------------------- | ----: | ---: | ------------: | ----------------------: | -------------------: | ----------------: |
+| Title                  |    73 | 211k |       37.1 MB |         3.2 / 4.0 / 4.4 |                    0 |         5.2 / 6.2 |
+| Hub                    |    79 | 235k |       38.4 MB |         3.5 / 4.5 / 4.9 |                    0 |         5.7 / 6.5 |
+| Outfitter (browsing)   |    80 | 238k |       43.7 MB |         3.9 / 4.8 / 5.4 |                    0 |         5.9 / 7.3 |
+| Duel walk              |    97 | 319k |       41.8 MB |         4.9 / 6.4 / 7.4 |                    0 |         7.4 / 8.6 |
+| Duel wait              |    97 | 319k |       41.8 MB |         4.7 / 6.5 / 7.2 |                    0 |         6.7 / 8.5 |
+| Duel call              |    97 | 319k |       41.8 MB |        6.5 / 7.3 / 10.2 |                    0 |        8.6 / 13.5 |
+| Duel win + kill cam    |    97 | 319k |       41.8 MB |         4.4 / 6.5 / 8.7 |                    1 |         8.0 / 9.9 |
+| Frontier third, spread |    77 | 207k |       91.2 MB |         4.2 / 5.4 / 5.8 |                    1 |         6.7 / 8.0 |
+| Frontier third, packed |   113 | 282k |       94.2 MB |         5.9 / 8.2 / 9.0 |                    3 |        9.5 / 12.6 |
+| Frontier first, spread |    71 | 181k |       92.3 MB |         5.2 / 6.6 / 7.5 |                    3 |        8.9 / 10.4 |
+| Frontier first, packed |   101 | 256k |       95.4 MB |         5.6 / 7.3 / 8.0 |                    3 |        8.2 / 10.8 |
+| Frontier top, spread   |    80 | 201k |       90.0 MB |         3.6 / 5.5 / 6.5 |                    3 |         7.5 / 8.5 |
+| Frontier top, packed   |   114 | 265k |       92.7 MB |         4.3 / 5.9 / 6.6 |                    0 |        9.0 / 10.3 |
+
+The texture estimate is 145 MB in the duel scenes and 128 MB in the Frontier. Before this pass, the
+same suite showed:
+- Outfitter p99 at 144 ms (20 frames over 16.7 ms);
+- the duel call at p95 8.1 and p99 17.3;
+- Frontier packed third person at p95 9.6–11.8, with 141 draws and 303k triangles.
+
+In dev (`frontier-perf`, renderer CPU only, same proxy), the seeded baseline's CPU p95 was 8.3, 9.1
+and 10.5 ms for third spread, third packed and first packed. Now:
+
+|       | Third, spread | Third, packed | First, spread | First, packed | Top, spread | Top, packed |
+| ----- | ------------- | ------------- | ------------- | ------------- | ----------- | ----------- |
+| p95   | 7.5 ms        | 7.6 ms        | 5.7 ms        | 7.5 ms        | 6.1 ms      | 6.1 ms      |
+| Heap  | 136 MB        | 132 MB        | 132 MB        | 134 MB        | 126 MB      | 122 MB      |
+| Draws | 94            | 118           | 99            | 101           | 80          | 119         |
+
+The dev heap keeps every geometry's CPU copy for the float audit; production retains 90–95 MB.
+
+`frontier-perf --prod` measures only the renderer's own frame (rAF start to submit). On it, packed
+third person reads CPU p50 4.4 ms and p95 6.1 ms.
+
+What changed:
+- **Frontier crowd on floor:**
+  - 8 skinned riders (was 12; legacy 6) and 4 real shadow casters (was 6).
+  - A rider's bone texture is rebuilt only when his mixer ticks (`ffa/scene/crowd/skin-hold.ts`).
+    Between ticks, `bindMatrixInverse` holds the mesh's world matrix from that tick, so the model
+    matrix moves him exactly. The shader's bone transform matches the live one to 5e-6 m.
+- **Shadows:** floor and legacy redraw the sun's shadow map at 30 Hz in every mode. The map and
+  its matrix stay a matched pair, so a skipped frame never misplaces a shadow.
+- **Per-frame garbage:** the crowd rows, remotes, rings and sort closures are pooled. The edge
+  arrows only write the DOM when they actually move. The minimap's N is drawn once.
+- **Duel call and shot:** the winning shot's frame no longer does any of these:
+  - paint and upload the DEAD poster (a twin is drawn with the level);
+  - compile the lens pass (warmed on the first frames);
+  - compile the red flash frame's override variants (`engine/warm.ts`, at level setup);
+  - run the procedural draw for the first time (`DrawLayer.warm`, at level setup);
+  - book the meta report (idle time);
+  - force a layout for the call caption.
+- **Outfitter:** item thumbnails are baked to `public/experiments/out-west/thumbs` by
+  `tools/item-thumbs.ts`. Re-run it when kit art changes. At runtime they were a dress-and-bake
+  plus a pixel read per card. `fit.ts` `reach` and `nearestWeights` give identical results without
+  atan2 or per-sample sorting, which also speeds up every try-on.
+- **Tiers:** the device prior comes from `platform/device.ts`:
+  - foldables are medium on both panels;
+  - an iPhone is floor whatever core count Safari reports;
+  - an iPad is high with a short side of 1000 px or more, otherwise medium;
+  - only phones get the 'low' hint.
+
+  Low Power Mode's 30 Hz cap steps down one tier after 3 s, once a session.
+- **iOS:** a lost WebGL context stops drawing, and the page reloads on restore. Static geometry
+  frees its CPU copies after upload, so it can't be refilled in place.
+
+A 10-minute sustained run (`--sustained=600`, third person packed, 4×) showed no leak and no
+adaptation drift:
+- CPU p95 by minute: 8.8, 8.6, 7.9, 8.1, 7.7, 7.8, 7.7, 7.8, 7.5 and 6.9 ms;
+- live heap 100–109 MB, rising and falling with each GC;
+- floor tier the whole run, scale 1.00, no thermal drops;
+- long frames 0.3% (4 of 36,074 frames over 16.7 ms of CPU).
+
+Still over the 7 ms p95 at 4×: Frontier third person packed (8.2 ms) and first person packed
+(7.3 ms). What remains there is three.js submission:
+- about 1.8 ms of `renderObject`, uniforms and VAO binds for about 110 draws;
+- 0.7 ms of `projectObject` over about 1,000 objects (the crowd's bones are about half of the
+  graph);
+- 0.6 ms of matrix updates;
+- 2.3 ms of native GL work.
+
+The next levers are fewer crowd draws (body, hat and gun in one mesh for a skinned rider) and taking
+the skeletons out of the render traversal.
+
 ## Real-device checklist (iPhone 13 mini, current iOS, WKWebView)
 
 Do this before signing off any art drop. The pass bar (§9.6): **p95 ≤ 16.7 ms over 10 minutes,
@@ -326,11 +435,15 @@ no tier drop before 10 minutes, WebContent process < 700 MB, no WebGL context lo
      blit).
    - [ ] Allocations / VM Tracker on WebContent: < 700 MB.
 7. **Edge cases:**
-   - [ ] Low Power Mode: the overlay shows "LOW POWER 30 Hz" and the resolution doesn't collapse.
+   - [ ] Low Power Mode: the overlay shows "LOW POWER 30 Hz", the tier steps down one (once), and
+     the resolution doesn't collapse.
    - [ ] Background the app for 5 minutes, then return: no context loss and the probe still lit.
    - [ ] Rotate portrait ↔ landscape mid-duel: no hitch beyond one frame.
 8. **Thermal:**
    - [ ] Play 15 minutes back to back in a warm room. Record when (if) a tier drop happens.
+   - [ ] First, on desktop: `bun tools/perf-suite.ts --screen=frontier --sustained=600` (10 minutes
+     packed, a line a minute: CPU p95, long frames, heap, tier, scale, thermal drops). Emulation
+     can't heat a phone, but it catches leaks and runaway adaptation.
 9. **Record** each run's numbers in this file, with device, iOS version, build hash and date.
 
 ### Reproducing the desktop emulation
