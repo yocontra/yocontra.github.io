@@ -23,16 +23,19 @@ import {
   Box3,
   BufferAttribute,
   BufferGeometry,
+  type Camera,
   CanvasTexture,
   Color,
   CylinderGeometry,
   DoubleSide,
   Float32BufferAttribute,
   Group,
+  type InstancedMesh,
   type Material,
   Matrix4,
   Mesh,
   MeshStandardMaterial,
+  type Object3D,
   type PerspectiveCamera,
   RepeatWrapping,
   SRGBColorSpace,
@@ -298,7 +301,7 @@ export interface Town {
    * interiors of the buildings it is in or beside. The town also calls it itself from the
    * ground's onBeforeRender (main camera only), so callers needn't; one frame of lag is fine.
    */
-  update: (camera: Vector3) => void
+  update: (camera: Camera) => void
   dispose: () => void
 }
 
@@ -1306,8 +1309,8 @@ function newBuilders(room: (id: string) => Builders, lean: boolean): Builders {
 /** Detail tiles, metres. */
 const TILE = 36
 /** How close the camera must come to a detail tile, or to a building, to draw its detail. */
-const NEAR_DETAIL = { lean: 30, full: 46 }
-const NEAR_ROOM = { lean: 12, full: 18 }
+const NEAR_DETAIL = { lean: 27, full: 46 }
+const NEAR_ROOM = { lean: 10, full: 18 }
 
 const tileKey = (x: number, z: number): string => `${Math.floor(x / TILE)},${Math.floor(z / TILE)}`
 
@@ -1399,11 +1402,36 @@ interface Tile {
  * inset stand-ins (dressing.ts), and door frames, lanterns and wagon loads aren't missed at 40 m.
  */
 const FAR: Record<string, number | 'flat'> = {
-  rock: 0.2,
-  fence: 0.06,
-  k_door_plank: 0.08,
+  rock: 0.3,
+  fence: 0.1,
+  k_door_plank: 0.12,
   k_window_thin: 'flat',
   k_window_wide: 'flat',
+}
+
+/**
+ * Drop the CPU copy of every town-owned vertex and index array once it is on the GPU (iOS
+ * WebViews are killed under memory pressure). Bounding spheres are computed first, which is all
+ * culling needs. Instanced meshes (shared prop geometry, used elsewhere too) are left alone, as
+ * is everything when the dev audits, which read vertices, are watching.
+ */
+function freeAfterUpload(root: Object3D): void {
+  const free = function (this: { array: unknown }) {
+    this.array = null
+  }
+  root.traverse((o) => {
+    const m = o as Mesh
+    if (!m.isMesh || (m as InstancedMesh).isInstancedMesh) {
+      return
+    }
+    const g = m.geometry
+    g.computeBoundingSphere()
+    g.computeBoundingBox()
+    for (const a of Object.values(g.attributes)) {
+      ;(a as BufferAttribute).onUpload(free)
+    }
+    g.index?.onUpload(free)
+  })
 }
 
 const FRAME = 0x5a_3e_28
@@ -1708,42 +1736,66 @@ export function buildTown(
     o.matrixAutoUpdate = false
     o.matrixWorldAutoUpdate = false
   })
-  const update = (cam: Vector3) => {
+  const audit0 = Reflect.has(globalThis, 'owAuditScenes')
+  if (!audit0) {
+    freeAfterUpload(root)
+  }
+  // the culler and the disposer are built outside this scope: a closure made here would keep
+  // every builder's vertex arrays alive with it
+  const update = culler({ culled, farRects, farMeshes, nearM })
+  ground.onBeforeRender = onCamera(update)
+  return { root, roofs, sun, update, dispose: disposer(root, Object.values(mats), mask) }
+}
+
+interface CullState {
+  culled: { group: Group; rect: Rect; within: number }[]
+  farRects: { rect: Rect; id: number }[]
+  farMeshes: Mesh[]
+  nearM: number
+}
+
+/**
+ * Per-frame detail selection for `camera`: detail tiles and rooms by distance, and the far
+ * batch's fold mask. A few dozen rect distances, no allocation.
+ */
+function culler(s: CullState): (camera: Camera) => void {
+  return (camera) => {
+    const cam = camera.position
     // the dev audits (float, collider) need every piece in the scene they capture
     const audit = Reflect.has(globalThis, 'owAuditScenes')
-    for (const c of culled) {
-      const near = toRect(c.rect, cam.x, cam.z) <= c.within
-      c.group.visible = audit || near
+    for (const c of s.culled) {
+      c.group.visible = audit || toRect(c.rect, cam.x, cam.z) <= c.within
     }
-    for (const m of farMeshes) {
+    for (const m of s.farMeshes) {
       m.visible = !audit
     }
-    for (const { rect, id } of farRects) {
+    for (const { rect, id } of s.farRects) {
       // the audits see the full kit only
-      FAR_HIDE.value[id] = audit || toRect(rect, cam.x, cam.z) <= nearM ? 1 : 0
+      FAR_HIDE.value[id] = audit || toRect(rect, cam.x, cam.z) <= s.nearM ? 1 : 0
     }
   }
-  ground.onBeforeRender = (_r, _s, camera) => {
+}
+
+/** The ground's onBeforeRender: the main (perspective) camera drives the culler, not the sun's. */
+function onCamera(update: (camera: Camera) => void): Mesh['onBeforeRender'] {
+  return (_r, _s, camera) => {
     if ((camera as PerspectiveCamera).isPerspectiveCamera) {
-      update(camera.position)
+      update(camera)
     }
   }
-  return {
-    root,
-    roofs,
-    sun,
-    update,
-    dispose: () => {
-      root.traverse((o) => {
-        if (o instanceof Mesh) {
-          o.geometry.dispose()
-        }
-      })
-      for (const m of Object.values(mats)) {
-        m.dispose()
+}
+
+function disposer(root: Group, mats: { dispose: () => void }[], mask: Texture): () => void {
+  return () => {
+    root.traverse((o) => {
+      if (o instanceof Mesh) {
+        o.geometry.dispose()
       }
-      mask.dispose()
-    },
+    })
+    for (const m of mats) {
+      m.dispose()
+    }
+    mask.dispose()
   }
 }
 
