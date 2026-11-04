@@ -170,6 +170,7 @@ export class ViewModel {
     shotgun: null,
   }
   private held: Fit | null = null
+  private mixAcc = 1
   private support: SupportHand | null = null
   private lookKey = ''
   private pending: PlayerLook | null = null
@@ -439,7 +440,12 @@ export class ViewModel {
     }
     actor.play(fit === this.fits.revolver ? 'Idle_Gun_Pointing' : 'Idle_Gun', 0.15)
     actor.longKick = 0
-    actor.update(input.dt)
+    // the clip only holds the body and the fingers (both arms are solved every frame): 20 Hz will do
+    this.mixAcc += input.dt
+    if (this.mixAcc >= 0.05) {
+      actor.update(this.mixAcc)
+      this.mixAcc = 0
+    }
     actor.head?.scale.setScalar(0.001)
     if (!fit) {
       return

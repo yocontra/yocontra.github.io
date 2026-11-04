@@ -13,7 +13,7 @@ const LENGTH: Record<GestureKind, number> = {
   pickup: 0.6,
   callout: 1.1,
   draw: 0.35,
-  bank: 0.5,
+  bank: 0.7,
 }
 
 /** A 0→1→0 bump over [a, b] of u. */
@@ -65,13 +65,16 @@ export class Gestures {
     const { turn, armR, foreR, chest, torso, right, up } = g
     if (k === 'throw' && armR && foreR) {
       // wind up, then over the top
-      turn(armR, right, -1.5 * bump(u, 0, 0.45) + 1.1 * bump(u, 0.35, 1))
-      turn(foreR, right, -0.9 * bump(u, 0, 0.5))
+      // big enough to read from behind: the arm right back past the shoulder, the chest wound
+      // round, then the arm over the top and the chest unwinding through the throw
+      turn(armR, right, -2.3 * bump(u, 0, 0.45) + 1.7 * bump(u, 0.35, 1))
+      turn(foreR, right, -1.3 * bump(u, 0, 0.5))
       if (chest) {
-        turn(chest, up, 0.45 * bump(u, 0, 0.5) - 0.3 * bump(u, 0.4, 1))
+        turn(chest, up, 0.8 * bump(u, 0, 0.5) - 0.55 * bump(u, 0.4, 1))
+        turn(chest, right, 0.25 * bump(u, 0, 0.45) - 0.35 * bump(u, 0.4, 1))
       }
     } else if ((k === 'pickup' || k === 'bank') && torso && chest) {
-      const deep = k === 'pickup' ? 0.75 : 0.3
+      const deep = k === 'pickup' ? 0.9 : 0.7
       turn(torso, right, -deep * 0.5 * bump(u, 0, 1))
       turn(chest, right, -deep * 0.5 * bump(u, 0, 1))
     } else if (k === 'callout' && armR) {

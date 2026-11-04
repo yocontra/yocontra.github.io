@@ -599,7 +599,8 @@ export class FrontierGame {
     const near = this.nearCap()
     this.crowd = new Crowd(this.scene, assets, near)
     // real shadows for the nearest few: 4 on floor and legacy (each is a shadow-pass draw set)
-    this.crowd.casters = near < 16 ? 4 : 6
+    // the floor tier: only the nearest two riders cast real shadows (the rest get blobs)
+    this.crowd.casters = near < 16 ? 2 : 6
     this.map = new Minimap(TOWN, this.touch ? 112 : 148)
     this.hud.mapSlot.append(this.map.el)
     this.viewModel = new ViewModel(assets)
@@ -677,16 +678,17 @@ export class FrontierGame {
   }
 
   /**
-   * Skinned cap: 8 on the floor tier, 6 on legacy, 16 above. Past the cap riders are VAT instances,
+   * Skinned cap: 6 on the floor tier, 5 on legacy, 16 above. Past the cap riders are VAT instances,
    * which read correctly from street level (hats included); each skinned rider costs its mixer, a
    * bone texture upload and 3–5 draws.
    */
   private nearCap(): number {
     const t = this.renderer.tier
     if (t === 'legacy') {
-      return 6
+      return 5
     }
-    return t === 'floor' ? 8 : 16
+    // the floor tier: six skinned riders (the far crowd now crouches, sprints and slides too)
+    return t === 'floor' ? 6 : 16
   }
 
   private onTransport(state: string): void {

@@ -6,7 +6,7 @@
  *
  * - The nearest `near` players (8 on the floor tier, 16 above; your own player always) are
  *   GPU-skinned Actors. Yours stays at LOD0; the rest swap to a meshopt LOD1 (`scene/lod.ts`).
- *   Animation runs at 30 Hz within 12 m and 15 Hz beyond. Only the nearest `casters` (4 on floor,
+ *   Animation runs at 30 Hz for you, 20 Hz within 12 m and 12 Hz beyond. Only the nearest `casters` (4 on floor,
  *   6 above) cast real shadows.
  * - Everyone else is a VAT instance of their base body (≤7 bases, one draw each), tinted per
  *   instance with their palette, with hats as one instanced draw per hat type on the baked head
@@ -793,16 +793,23 @@ export class Crowd {
     this.animate(m, actor, p, nowS)
     m.loco?.body(holder, pivot)
     const dist = Math.hypot(p.x - cx, p.z - cz)
-    const hz = p.self || dist < NEAR_FAST_M ? 30 : 15
+    // your own rider at 30 Hz; others at 20 Hz within 12 m and 12 Hz beyond (each tick is a full
+    // clip evaluation per playing action: the crowd's biggest CPU and garbage source)
+    let hz = dist < NEAR_FAST_M ? 20 : 12
+    if (p.self) {
+      hz = 30
+    }
     m.acc += dt
-    if (m.acc >= 1 / hz || !m.wasNear) {
+    const first = !m.wasNear
+    if (m.acc >= 1 / hz || first) {
       // the bones compose themselves while the clip, stance and long-gun IK pose them (the IK
       // reads world matrices mid-solve), then freeze until the next tick
       setAuto(m.bones, true)
       actor.longKick = m.recoil
       m.loco?.pre(m.acc)
       actor.update(m.acc)
-      m.acc = 0
+      // stagger the riders' mixer ticks across frames (by id), so they don't all land on one
+      m.acc = first ? -(m.id % 4) / 60 : 0
       this.kick(m, actor)
       for (const b of m.bones) {
         b.updateMatrix()
