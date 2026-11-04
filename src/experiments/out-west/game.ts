@@ -71,7 +71,6 @@ function itemThumbs(renderer: Renderer, assets: Assets): (id: ItemId) => HTMLCan
   }
 }
 
-<<<<<<< HEAD
 /**
  * The renderer follows the viewport; folding or unfolding a foldable swaps panels mid-duel, so a
  * single-player duel pauses rather than let the bell ring while the player's hands move (Bounty
@@ -84,7 +83,8 @@ function wireViewport(renderer: Renderer, director: Director): void {
       director.pauseIfPlaying()
     }
   })
-=======
+}
+
 /** The server-driven duels: Bounty Hunt, the Daily Outlaw, and the ranked run's id. */
 function serverDuels(director: Director): Pick<Game, 'startPvp' | 'playDaily' | 'rankedRunId'> {
   return {
@@ -97,7 +97,6 @@ function serverDuels(director: Director): Pick<Game, 'startPvp' | 'playDaily' | 
     rankedRunId: () =>
       director.clock instanceof RankedDuelClock ? director.clock.session.sessionId : null,
   }
->>>>>>> redesign
 }
 
 export async function createGame(o: GameOpts): Promise<Game> {
