@@ -35,6 +35,9 @@ export interface GunAnatomy {
   cylinder: Section
   /** The barrel's section (sights and ejector housing included): the holster's toe. */
   barrel: Section
+  /** The sight line, when the gun carries its sights: the rear notch's floor and the blade's top. */
+  rear?: Vector3
+  front?: Vector3
 }
 
 /** Every vertex of a gun in its own frame (its own transform excluded). */
@@ -86,6 +89,21 @@ const median = (xs: number[]): number => {
  * where it is thickest.
  */
 export function gunAnatomy(gun: Object3D): GunAnatomy {
+  // a gun built in code carries its own landmarks (scene/revolver.ts); a clone's userData has
+  // been through JSON, so its points are plain {x, y, z}
+  const own = gun.userData.gunAnatomy as GunAnatomy | undefined
+  if (own) {
+    const v = (p: { x: number; y: number; z: number }) => new Vector3(p.x, p.y, p.z)
+    return {
+      ...own,
+      muzzle: v(own.muzzle),
+      grip: v(own.grip),
+      cylinder: { ...own.cylinder },
+      barrel: { ...own.barrel },
+      ...(own.rear ? { rear: v(own.rear) } : {}),
+      ...(own.front ? { front: v(own.front) } : {}),
+    }
+  }
   const pts = gunPointsOf(gun)
   const b = new Vector3(1e9, 1e9, 1e9)
   const t = new Vector3(-1e9, -1e9, -1e9)

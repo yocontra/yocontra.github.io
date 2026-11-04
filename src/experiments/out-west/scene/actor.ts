@@ -30,6 +30,7 @@ import { nudge } from './nudge.ts'
 import { type Fit, measure } from './outfit.ts'
 import { becomeHimself, type PersonOpts, paintSkin, StanceLayer } from './person.ts'
 import { watchPose } from './pose-watch.ts'
+import { tickGuns } from './revolver.ts'
 import { type DressOpts, dressPieces, measureStride, seatHat, slotOn, tintModel } from './rig.ts'
 import { characterMaterial, type Glow } from './shade.ts'
 import type { Floor } from './style.ts'
@@ -583,6 +584,7 @@ export class Actor {
     // the drunk's sway, the shaky hand, a twitch (scene/nudge.ts)
     this.kickDecays = nudge(this, this.t, dt, this.kickDecays)
     this.drawing?.update(dt)
+    tickGuns(this, dt)
     if (this.longHeld?.obj.visible) {
       this.root.updateMatrixWorld(true)
       poseLong(this.longHeld, {

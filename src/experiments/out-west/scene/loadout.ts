@@ -2,7 +2,8 @@
  * Catalog cosmetics on a character. A loadout (eight item ids) becomes the existing actor options
  * (hat, coat, poncho, bandana, moustache, star, bandoliers, holster, tints) so every piece is fitted to the
  * body and baked into the one skinned mesh as before. Two finishing touches ride on bones: the gun
- * finish (a tint on the merged revolver) and the spur rowels on the boot heels.
+ * finish (the Peacemaker built in that finish, scene/revolver.ts) and the spur rowels on the boot
+ * heels.
  *
  * Pure presentation: nothing here changes a timing, a clip length, the muzzle or the hit capsule.
  * An unknown id falls back to the starter for its slot (`normalizeLoadout`).
@@ -21,9 +22,11 @@ import { type ItemId, type Loadout, normalizeLoadout } from '../data/catalog.ts'
 import { type Dyes, dyeHex } from '../data/dye.ts'
 import type { CoatCut, HatKey } from '../data/outlaws.ts'
 import { Actor, type ActorOpts } from './actor.ts'
+import { BLUED, BRASS, CASE, type Finish, NICKEL, WALNUT } from './gunsmith.ts'
 import type { Identity } from './identity.ts'
 import type { HolsterLook } from './kit.ts'
-import { type PropDef, propObject } from './props.ts'
+import type { PropDef } from './props.ts'
+import { PEACEMAKER, type RevolverLook, revolverObject } from './revolver.ts'
 
 interface HatLook {
   key: HatKey
@@ -40,11 +43,8 @@ interface OutfitLook {
 }
 
 interface GunLook {
-  color: number
-  metalness: number
-  roughness: number
-  /** Barrel length factor (looks only; the muzzle point scales with it). */
-  length: number
+  /** The Peacemaker's finish and barrel (looks only: the muzzle is measured where it is). */
+  finish: RevolverLook
   twin?: boolean
 }
 
@@ -79,19 +79,46 @@ const OUTFITS: Partial<Record<ItemId, OutfitLook>> = {
   },
 }
 
+const finish = (f: Finish, rgb: Finish['rgb'], metal: number, rough: number): Finish => ({
+  band: f.band,
+  rgb,
+  metal,
+  rough,
+})
+/** Gilt: brass's band, brightened toward gold leaf. */
+const GILT = finish(BRASS, [1.12, 1.0, 0.78], 1, 0.2)
+/** Ivory grips: the white band, warm, a soft sheen. */
+const IVORY = finish(NICKEL, [0.98, 0.92, 0.8], 0, 0.36)
+/** Silver plate: cooler and brighter than nickel. */
+const SILVER = finish(NICKEL, [0.9, 0.92, 0.96], 1, 0.18)
+
 const GUNS: Partial<Record<ItemId, GunLook>> = {
-  'gun.gold-medal': { color: 0xe8_b8_4a, metalness: 1, roughness: 0.2, length: 1 },
-  'gun.rusty-six': { color: 0x9a_7a_66, metalness: 0.3, roughness: 0.7, length: 1 },
-  'gun.blued-six': { color: 0x6a_80_a8, metalness: 0.7, roughness: 0.35, length: 1 },
-  'gun.nickel-six': { color: 0xe0_e4_ea, metalness: 0.9, roughness: 0.22, length: 1 },
-  'gun.engraved-ivory': { color: 0xf4_ea_d4, metalness: 0.6, roughness: 0.3, length: 1 },
-  'gun.buntline': { color: 0xb8_bc_c4, metalness: 0.8, roughness: 0.3, length: 1.3 },
-  'gun.gilded-sovereign': { color: 0xff_c8_50, metalness: 1, roughness: 0.18, length: 1 },
+  // the starter: a working gun gone brown, its case colours faded, its walnut dry
+  'gun.rusty-six': {
+    finish: {
+      barrel: 5.5,
+      steel: finish(BLUED, [1.45, 1.1, 0.86], 0.55, 0.6),
+      frame: finish(CASE, [1.02, 0.9, 0.78], 0.5, 0.62),
+      guard: finish(BRASS, [0.72, 0.62, 0.48], 0.85, 0.55),
+      grip: finish(WALNUT, [0.88, 0.84, 0.8], 0, 0.7),
+    },
+  },
+  'gun.blued-six': { finish: PEACEMAKER },
+  'gun.nickel-six': {
+    finish: { barrel: 5.5, steel: NICKEL, frame: NICKEL, guard: NICKEL, grip: WALNUT },
+  },
+  'gun.engraved-ivory': {
+    finish: { barrel: 5.5, steel: NICKEL, frame: NICKEL, guard: GILT, grip: IVORY },
+  },
+  'gun.buntline': { finish: { ...PEACEMAKER, barrel: 12 } },
+  'gun.gilded-sovereign': {
+    finish: { barrel: 5.5, steel: GILT, frame: GILT, guard: GILT, grip: IVORY },
+  },
+  'gun.gold-medal': {
+    finish: { barrel: 5.5, steel: BLUED, frame: GILT, guard: GILT, grip: WALNUT },
+  },
   'gun.hardins-pair': {
-    color: 0xd0_d0_d8,
-    metalness: 0.85,
-    roughness: 0.25,
-    length: 1,
+    finish: { barrel: 5.5, steel: SILVER, frame: SILVER, guard: SILVER, grip: IVORY },
     twin: true,
   },
 }
@@ -201,37 +228,25 @@ export function loadoutOpts(raw: unknown, dyes: Dyes = {}): ActorOpts {
   return o
 }
 
-/** Tint a revolver in place (one cloned material per mesh) and lengthen its barrel. */
-function finishGun(g: Object3D, look: GunLook): void {
-  g.traverse((m) => {
-    if (!(m instanceof Mesh)) {
-      return
-    }
-    const src = m.material as MeshStandardMaterial
-    // the finish is the steel's: the walnut grip stays walnut
-    if (src.name === 'GunGrip') {
-      m.scale.x *= look.length
-      return
-    }
-    const mat = src.clone()
-    mat.color.setHex(look.color)
-    mat.metalness = look.metalness
-    mat.roughness = look.roughness
-    m.material = mat
-    // revolver geometry points +X: a longer barrel is a stretch along it
-    m.scale.x *= look.length
+/**
+ * The Peacemaker in a finish, at the size `gun` was made at (its own geometry in the guns' one
+ * material: a finish never costs a program), with its hammer and cylinder on their pivots when
+ * `gun` has them.
+ */
+function finishedRevolver(gun: PropDef, look: GunLook, still = false): Object3D {
+  const made = gun.userData?.revolver as { size: number; articulated?: boolean } | undefined
+  const g = revolverObject({
+    size: made?.size ?? gun.size.x,
+    look: look.finish,
+    articulated: !still && made?.articulated === true,
   })
+  return g
 }
 
 /** A revolver finished as `id` (an Outfitter thumbnail); null when the id isn't a gun. */
 export function finishedGun(gun: PropDef, id: ItemId): Object3D | null {
   const look = GUNS[id]
-  if (!look) {
-    return null
-  }
-  const g = propObject(gun)
-  finishGun(g, look)
-  return g
+  return look ? finishedRevolver(gun, look, true) : null
 }
 
 const norm = (name: string): string => name.replace(/[^a-z]/giu, '').toLowerCase()
@@ -286,10 +301,7 @@ export function dressedActor(
   const gunLook = GUNS[l.gun] ?? GUNS['gun.rusty-six']
   // finished before he is dressed, so the holster is fitted to the gun he carries (a Buntline's
   // longer barrel gets a longer holster, and its muzzle is measured where it is)
-  const proto = gun ? propObject(gun) : null
-  if (proto && gunLook) {
-    finishGun(proto, gunLook)
-  }
+  const proto = gun && gunLook ? finishedRevolver(gun, gunLook) : null
   const kit = loadoutOpts(l, dyes)
   const a = new Actor(model, {
     // who he is under the kit; the kit's own colours and extras win

@@ -2,12 +2,14 @@
 // biome-ignore-all lint/complexity/useMaxParams: geometry builders take positional numbers, like three.js
 // biome-ignore-all lint/style/noMagicNumbers: a gunsmith's measurements and a texture's colours
 /**
- * The long guns' workshop: one small procedural texture, one material and the geometry helpers
- * the Winchester (`scene/rifle.ts`) and the coach gun (`ffa/scene/shotgun.ts`) are built with.
+ * The gunsmith's workshop: one small procedural texture, one material and the geometry helpers
+ * the Winchester (`scene/rifle.ts`), the coach gun (`ffa/scene/shotgun.ts`) and the Colt
+ * Peacemaker (`scene/revolver.ts`) are built with.
  *
- * - The texture (`gunTexture`) is four bands, generated once in code (no file): oiled walnut with
+ * - The texture (`gunTexture`) is five bands, generated once in code (no file): oiled walnut with
  *   its grain running along the gun, blued steel with fine polishing lines, case-hardened colour
- *   (the straw, blue and plum mottle of a Winchester's or a coach gun's receiver), and brass.
+ *   (the straw, blue and plum mottle of a Winchester's or a coach gun's receiver), brass, and a
+ *   bright white steel (nickel plate, silver, ivory and lead take their colour from a tint on it).
  * - The material (`gunMaterial`) is ONE MeshStandardMaterial for every long gun (one program,
  *   one draw per gun): its metalness and roughness come per vertex (the `pbr` attribute), so
  *   blued steel, brass and walnut each get their own finish inside one mesh; a metal mirrors the
@@ -35,14 +37,14 @@ import { creaseNormals } from './normals.ts'
 
 const TEX_W = 512
 const BAND_H = 128
-const BANDS = 4
+const BANDS = 5
 const TEX_H = BAND_H * BANDS
 
 type Rgb = readonly [number, number, number]
 
 /** A surface: its texture band, a tint over it, and its metalness and roughness. */
 export interface Finish {
-  band: 0 | 1 | 2 | 3
+  band: 0 | 1 | 2 | 3 | 4
   rgb: Rgb
   metal: number
   rough: number
@@ -58,6 +60,10 @@ export const CASE: Finish = { band: 2, rgb: [1, 1, 1], metal: 0.75, rough: 0.42 
 export const BRASS: Finish = { band: 3, rgb: [1, 1, 1], metal: 1, rough: 0.32 }
 /** The dark of a bore or a slot. */
 export const BORE: Finish = { band: 1, rgb: [0.08, 0.08, 0.08], metal: 0, rough: 0.9 }
+/** Nickel plate: bright, white and a little warm. */
+export const NICKEL: Finish = { band: 4, rgb: [0.92, 0.91, 0.88], metal: 1, rough: 0.24 }
+/** A lead bullet's nose, dull grey. */
+export const LEAD: Finish = { band: 4, rgb: [0.17, 0.17, 0.18], metal: 0.15, rough: 0.7 }
 
 /** V inside a band, a tenth in from each edge (the mips never bleed a neighbour in). */
 function bandV(band: number, t: number): number {
@@ -166,11 +172,20 @@ function brass(x: number, y: number): [number, number, number] {
   return [c[0] + lines, c[1] + lines, c[2] + lines * 0.6]
 }
 
-const PAINT = [walnut, blued, caseHardened, brass] as const
+function bright(x: number, y: number): [number, number, number] {
+  // white steel: near white (a tint gives it nickel, silver or ivory), polishing lines and a
+  // soft cloud of wear, so a tinted plate still has a surface
+  const lines = (noise(x, y, 8, 96, 51) - 0.5) * 12
+  const cloud = (fbm(x, y, 5, 3, 53) - 0.5) * 22
+  const v = 228 + lines + cloud
+  return [v, v, v - 4]
+}
+
+const PAINT = [walnut, blued, caseHardened, brass, bright] as const
 
 let texture: DataTexture | null = null
 
-/** The long guns' texture: walnut, blued steel, case colour, brass (built once). */
+/** The guns' texture: walnut, blued steel, case colour, brass, white steel (built once). */
 export function gunTexture(): DataTexture {
   if (texture) {
     return texture
@@ -368,6 +383,92 @@ export function loft(
       cap.computeVertexNormals()
       geos.push(dress(cap, f, 'y'))
     }
+  }
+  return mergeGeometries(geos, false) ?? geos[0] ?? body
+}
+
+/**
+ * One section of a loft along a path in the gun's side plane (a revolver's grip): the centre (x, y),
+ * the section's depth across the path (in the plane) and its width (along Z).
+ */
+export type PathSection = readonly [x: number, y: number, d: number, w: number]
+
+/**
+ * A tube through rounded-rectangle sections standing square to a path in the XY plane (a grip
+ * curving down and back), capped at both ends. `square` as for `loft`; `shift` slides every
+ * section across the path (toward its front edge, +, or its back, −) by a fraction of its depth.
+ */
+export function loftPath(
+  sections: readonly PathSection[],
+  f: Finish,
+  o: { sides?: number; square?: number; shift?: number } = {},
+): BufferGeometry {
+  const sides = o.sides ?? 14
+  const sq = o.square ?? 0.6
+  const ring = sides + 1
+  const pos: number[] = []
+  const uv: number[] = []
+  const idx: number[] = []
+  const shape = (v: number) => Math.sign(v) * Math.abs(v) ** sq
+  const n = sections.length
+  const centres: [number, number, number, number][] = []
+  for (let i = 0; i < n; i++) {
+    const s = sections[i]
+    const a = sections[Math.max(0, i - 1)]
+    const b = sections[Math.min(n - 1, i + 1)]
+    if (!(s && a && b)) {
+      continue
+    }
+    // the path's tangent, and its normal in the plane (the section's depth axis)
+    const tx = b[0] - a[0]
+    const ty = b[1] - a[1]
+    const tl = Math.hypot(tx, ty) || 1
+    const nx = ty / tl
+    const ny = -tx / tl
+    const cx = s[0] + nx * s[2] * (o.shift ?? 0)
+    const cy = s[1] + ny * s[2] * (o.shift ?? 0)
+    centres.push([cx, cy, nx, ny])
+    for (let k = 0; k <= sides; k++) {
+      const t = (k / sides) * Math.PI * 2 + Math.PI / sides
+      const d = (s[2] / 2) * shape(Math.sin(t))
+      pos.push(cx + nx * d, cy + ny * d, (s[3] / 2) * shape(Math.cos(t)))
+      uv.push(0, k / sides)
+    }
+  }
+  for (let i = 0; i < n - 1; i++) {
+    for (let k = 0; k < sides; k++) {
+      const a = i * ring + k
+      const b = a + ring
+      idx.push(a, a + 1, b, b, a + 1, b + 1)
+    }
+  }
+  const body = new BufferGeometry()
+  body.setAttribute('position', new BufferAttribute(new Float32Array(pos), 3))
+  body.setAttribute('uv', new BufferAttribute(new Float32Array(uv), 2))
+  body.setIndex(idx)
+  creaseNormals(body, 50)
+  const geos = [dress(body, f, 'v')]
+  for (const end of [0, n - 1]) {
+    const c = centres[end]
+    if (!c) {
+      continue
+    }
+    const cp: number[] = [c[0], c[1], 0]
+    const ci: number[] = []
+    for (let k = 0; k < sides; k++) {
+      const p = (end * ring + k) * 3
+      cp.push(pos[p] ?? 0, pos[p + 1] ?? 0, pos[p + 2] ?? 0)
+    }
+    for (let k = 0; k < sides; k++) {
+      const a = 1 + k
+      const b = 1 + ((k + 1) % sides)
+      ci.push(...(end === 0 ? [0, b, a] : [0, a, b]))
+    }
+    const cap = new BufferGeometry()
+    cap.setAttribute('position', new BufferAttribute(new Float32Array(cp), 3))
+    cap.setIndex(ci)
+    cap.computeVertexNormals()
+    geos.push(dress(cap, f, 'y'))
   }
   return mergeGeometries(geos, false) ?? geos[0] ?? body
 }
