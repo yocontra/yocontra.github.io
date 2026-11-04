@@ -237,6 +237,34 @@ What `ffa/scene/town.ts` does now:
   not the sun's shadow camera); `Town.update(camera)` is also public. When the dev audits'
   `owAuditScenes` hook is present, everything shows at full detail.
 
+#### Heap follow-up
+
+The +30 MB above was mostly a leak, not merging. `buildTown`'s update and dispose closures were
+created in its scope, so they kept every builder's plain-number vertex arrays alive (the
+structure batch alone is about 1M numbers). Fixed:
+- the culler and the disposer are now built by module-level factories, so their closures capture
+  only what they use;
+- every town-owned vertex and index array drops its CPU copy on GPU upload
+  (`BufferAttribute.onUpload`), with bounding spheres computed first. The exceptions are instanced
+  meshes (their geometry is shared) and runs where the dev audits are watching. Groups that have
+  never been drawn, such as rooms you haven't been near, keep their arrays until they first draw.
+- coarser far stand-ins: rocks are clustered at 30% of their size, fences at 10% and doors at 12%.
+- floor and legacy draw detail tiles within 27 m (was 30) and rooms within 10 m (was 12).
+
+| Floor proxy, post-GC JS heap                | `d26e0ac` | Now                          |
+| ------------------------------------------- | --------- | ---------------------------- |
+| bots=0, after load                          | 98.3 MB   | 93.2 MB                      |
+| Town vertex/index arrays held in JS         | 13.5 MB   | 4–7 MB (falls as rooms draw) |
+| 31 bots packed (crowd arrays vary 11–17 MB) | 118.6 MB  | 124.7–127.9 MB               |
+
+Instancing the repeated props was tried as one instanced batch per prop across tiles, refilled
+when the near tiles or the view changed. It cost 2–3 ms of CPU p95 at 4× (the per-frame refill and
+upload), and freeing the merged copies saves the JS heap anyway. Merged per-tile kit stays.
+
+Packed third person, three runs on the floor proxy (the spawn is random, so the view differs run
+to run): triangles 288k, 304k and 288k against 539k before; CPU p95 8.9–10.0 ms at load average
+5–7.
+
 ## Real-device checklist (iPhone 13 mini, current iOS, WKWebView)
 
 Do this before signing off any art drop. The pass bar (§9.6): **p95 ≤ 16.7 ms over 10 minutes,
