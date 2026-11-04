@@ -387,6 +387,13 @@ What changed:
 - **iOS:** a lost WebGL context stops drawing, and the page reloads on restore. Static geometry
   frees its CPU copies after upload, so it can't be refilled in place.
 
+A 10-minute sustained run (`--sustained=600`, third person packed, 4×) showed no leak and no
+adaptation drift:
+- CPU p95 by minute: 8.8, 8.6, 7.9, 8.1, 7.7, 7.8, 7.7, 7.8, 7.5 and 6.9 ms;
+- live heap 100–109 MB, rising and falling with each GC;
+- floor tier the whole run, scale 1.00, no thermal drops;
+- long frames 0.3% (4 of 36,074 frames over 16.7 ms of CPU).
+
 Still over the 7 ms p95 at 4×: Frontier third person packed (8.2 ms) and first person packed
 (7.3 ms). What remains there is three.js submission:
 - about 1.8 ms of `renderObject`, uniforms and VAO binds for about 110 draws;
