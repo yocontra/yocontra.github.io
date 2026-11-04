@@ -29,9 +29,8 @@ import {
   CylinderGeometry,
   DoubleSide,
   Float32BufferAttribute,
-  Frustum,
   Group,
-  InstancedMesh,
+  type InstancedMesh,
   type Material,
   Matrix4,
   Mesh,
@@ -39,7 +38,6 @@ import {
   type Object3D,
   type PerspectiveCamera,
   RepeatWrapping,
-  Sphere,
   SRGBColorSpace,
   type Texture,
   Vector2,
@@ -1311,8 +1309,8 @@ function newBuilders(room: (id: string) => Builders, lean: boolean): Builders {
 /** Detail tiles, metres. */
 const TILE = 36
 /** How close the camera must come to a detail tile, or to a building, to draw its detail. */
-const NEAR_DETAIL = { lean: 30, full: 46 }
-const NEAR_ROOM = { lean: 12, full: 18 }
+const NEAR_DETAIL = { lean: 27, full: 46 }
+const NEAR_ROOM = { lean: 10, full: 18 }
 
 const tileKey = (x: number, z: number): string => `${Math.floor(x / TILE)},${Math.floor(z / TILE)}`
 
@@ -1412,23 +1410,10 @@ const FAR: Record<string, number | 'flat'> = {
 }
 
 /**
- * Repeated kit props drawn as instances of their one shared geometry (merged copies cost a
- * vertex buffer per copy): refilled with the near tiles' instances when that set changes.
- */
-const INSTANCED = new Set(['barrel', 'crate', 'hay', 'fence', 'rock'])
-
-interface Herd {
-  def: PropDef
-  meshes: InstancedMesh[]
-  /** Each instance: its matrix, tile, and a bounding sphere for the view test. */
-  items: { at: Matrix4; tile: string; x: number; y: number; z: number; r: number }[]
-}
-
-/**
  * Drop the CPU copy of every town-owned vertex and index array once it is on the GPU (iOS
  * WebViews are killed under memory pressure). Bounding spheres are computed first, which is all
- * culling needs. Shared prop geometry (instanced, used elsewhere too) is left alone, as is
- * everything when the dev audits, which read vertices, are watching.
+ * culling needs. Instanced meshes (shared prop geometry, used elsewhere too) are left alone, as
+ * is everything when the dev audits, which read vertices, are watching.
  */
 function freeAfterUpload(root: Object3D): void {
   const free = function (this: { array: unknown }) {
@@ -1690,8 +1675,7 @@ export function buildTown(
   }
   root.add(waterMesh(layout))
   // the culled layers: detail tiles (near and far versions), and rooms
-  const culled: { group: Group; rect: Rect; within: number; tile?: string }[] = []
-  const herds = new Map<PropDef, Herd>()
+  const culled: { group: Group; rect: Rect; within: number }[] = []
   const farGeos = new Map<Material, BufferGeometry[]>()
   const farRects: { rect: Rect; id: number }[] = []
   const farMeshes: Mesh[] = []
@@ -1701,23 +1685,11 @@ export function buildTown(
     const rect = { x: ix * TILE, z: iz * TILE, w: TILE, d: TILE }
     const near = new Group()
     near.name = `detail ${k}`
-    const merged: Placement[] = []
-    for (const p of t.near) {
-      if (INSTANCED.has(p.def.name)) {
-        const herd = herds.get(p.def) ?? { def: p.def, meshes: [], items: [] }
-        const el = p.at.elements
-        const r = Math.max(p.def.size.x, p.def.size.y, p.def.size.z) * p.at.getMaxScaleOnAxis()
-        herd.items.push({ at: p.at, tile: k, x: el[12] ?? 0, y: el[13] ?? 0, z: el[14] ?? 0, r })
-        herds.set(p.def, herd)
-      } else {
-        merged.push(p)
-      }
-    }
-    for (const m of mergePlaced(merged, near, swap, false)) {
+    for (const m of mergePlaced(t.near, near, swap, false)) {
       m.name = 'kit'
     }
     root.add(near)
-    culled.push({ group: near, rect, within: nearM, tile: k })
+    culled.push({ group: near, rect, within: nearM })
     // far stand-ins all go into one batch per material (tagged with their tile), drawn always;
     // the vertex shader folds away the tiles whose full detail is showing
     const id = farIndex(ix, iz)
@@ -1758,22 +1730,6 @@ export function buildTown(
     root.add(g)
     culled.push({ group: g, rect: b, within: roomM })
   }
-  // repeated props: one shared geometry each, instanced over whichever tiles are near
-  for (const herd of herds.values()) {
-    for (const p of herd.def.parts) {
-      const im = new InstancedMesh(
-        p.geometry,
-        swap.get(p.material.name) ?? p.material,
-        herd.items.length,
-      )
-      im.name = herd.def.name
-      im.count = 0
-      im.frustumCulled = false
-      im.receiveShadow = true
-      root.add(im)
-      herd.meshes.push(im)
-    }
-  }
   root.updateMatrixWorld(true)
   // Static: never recompose these matrices again.
   root.traverse((o) => {
@@ -1786,66 +1742,29 @@ export function buildTown(
   }
   // the culler and the disposer are built outside this scope: a closure made here would keep
   // every builder's vertex arrays alive with it
-  const update = culler({ culled, herds: [...herds.values()], farRects, farMeshes, nearM })
+  const update = culler({ culled, farRects, farMeshes, nearM })
   ground.onBeforeRender = onCamera(update)
   return { root, roofs, sun, update, dispose: disposer(root, Object.values(mats), mask) }
 }
 
 interface CullState {
-  culled: { group: Group; rect: Rect; within: number; tile?: string }[]
-  herds: Herd[]
+  culled: { group: Group; rect: Rect; within: number }[]
   farRects: { rect: Rect; id: number }[]
   farMeshes: Mesh[]
   nearM: number
 }
 
-const FRUSTUM = new Frustum()
-const VIEW_PROJ = new Matrix4()
-const SPHERE = new Sphere()
-
 /**
- * Per-frame detail selection for `camera`: tile and room groups by distance, the far batch's
- * fold mask, and the instanced props refilled with the near tiles' instances inside the view
- * (a ~600-instance sphere test, then one small matrix upload; nothing behind you is drawn).
+ * Per-frame detail selection for `camera`: detail tiles and rooms by distance, and the far
+ * batch's fold mask. A few dozen rect distances, no allocation.
  */
 function culler(s: CullState): (camera: Camera) => void {
-  let last = ''
   return (camera) => {
     const cam = camera.position
     // the dev audits (float, collider) need every piece in the scene they capture
     const audit = Reflect.has(globalThis, 'owAuditScenes')
-    const show = new Set<string>()
     for (const c of s.culled) {
       c.group.visible = audit || toRect(c.rect, cam.x, cam.z) <= c.within
-      if (c.tile && c.group.visible) {
-        show.add(c.tile)
-      }
-    }
-    VIEW_PROJ.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse)
-    const e = VIEW_PROJ.elements
-    const key = `${[...show].join('|')}#${e.map((v) => v.toFixed(2)).join(',')}`
-    if (key !== last) {
-      last = key
-      FRUSTUM.setFromProjectionMatrix(VIEW_PROJ)
-      for (const herd of s.herds) {
-        let n = 0
-        for (const it of herd.items) {
-          SPHERE.center.set(it.x, it.y, it.z)
-          SPHERE.radius = it.r
-          if (show.has(it.tile) && (audit || FRUSTUM.intersectsSphere(SPHERE))) {
-            for (const im of herd.meshes) {
-              im.setMatrixAt(n, it.at)
-            }
-            n++
-          }
-        }
-        for (const im of herd.meshes) {
-          im.count = n
-          // an empty batch is still a draw call
-          im.visible = n > 0
-          im.instanceMatrix.needsUpdate = true
-        }
-      }
     }
     for (const m of s.farMeshes) {
       m.visible = !audit
