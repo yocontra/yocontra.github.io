@@ -130,8 +130,11 @@ const GUN_CREASE = 48
 function gunMaterials(props: GLTF, map: Texture, normal: Texture): void {
   const steel = new MeshStandardMaterial({
     name: 'GunSteel',
-    // warm and dark: blued steel is near black, and the warmth offsets the sky it mirrors
-    color: 0x8a_80_78,
+    // the Kit's steel texel (grain and wear, about 0.24 linear) under a warm tint: dark like
+    // blued steel, and the warmth offsets the sky it mirrors
+    color: 0xf0_e4_d8,
+    map,
+    normalMap: normal,
     roughness: 0.44,
     metalness: 1,
     vertexColors: true,
