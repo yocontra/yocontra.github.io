@@ -3,7 +3,8 @@
 /**
  * The long guns on a bench: the Winchester carbine and the coach gun rendered on their own under
  * a studio light (three's RoomEnvironment and a key), from the left, the right, three-quarter
- * and close on the action, so their shapes and finishes can be judged without a level around
+ * and close on the action, the far level of detail, and the first-person pair articulated (the
+ * lever thrown, the barrels broken open), so their shapes and finishes can be judged without a level around
  * them. The modules are imported into a page from the dev server (no game code runs).
  *
  *   bun --bun astro dev --port 4401 --ignore-lock
@@ -70,7 +71,18 @@ const tris = await page.evaluate(async (urls) => {
   const r = rifle.rifleObject()
   const lo = new T.Mesh(rifle.rifleGeometry('lo'), (r as import('three').Mesh).material)
   const s = shotgun.shotgunMesh()
-  const guns = [r, lo, s]
+  // the first-person guns: the lever thrown, the barrels broken open
+  const ra = rifle.rifleObject({ lever: true })
+  const lever = ra.getObjectByName('lever')
+  if (lever) {
+    lever.rotation.z = 0.55
+  }
+  const sa = shotgun.shotgunMesh(undefined, true)
+  const barrels = sa.getObjectByName('barrels')
+  if (barrels) {
+    barrels.rotation.z = -0.5
+  }
+  const guns = [r, lo, s, ra, sa]
   for (const g of guns) {
     g.visible = false
     scene.add(g)
@@ -101,12 +113,14 @@ const tris = await page.evaluate(async (urls) => {
   view(r, [800, 0, 800, 300], [0.18, -0.03, 1.25, 24], [0.18, -0.03, 0])
   view(r, [0, 300, 800, 300], [0.75, 0.42, 0.85, 30], [0.17, -0.03, 0])
   view(r, [800, 300, 400, 300], [0.02, 0.0, 0.42, 30], [0.02, -0.03, 0])
-  view(lo, [1200, 300, 400, 300], [0.18, -0.03, 2.4, 24], [0.18, -0.03, 0])
+  view(lo, [1200, 300, 400, 150], [0.18, -0.03, 2.4, 24], [0.18, -0.03, 0])
+  view(ra, [1200, 450, 400, 150], [0.1, -0.05, -0.9, 30], [0.08, -0.06, 0])
   // coach gun: left, right, three-quarter, the locks close
   view(s, [0, 600, 800, 300], [0.1, -0.01, -1.25, 24], [0.1, -0.01, 0])
   view(s, [800, 600, 800, 300], [0.1, -0.01, 1.25, 24], [0.1, -0.01, 0])
   view(s, [0, 900, 800, 300], [0.75, 0.45, 0.8, 30], [0.1, 0, 0])
-  view(s, [800, 900, 800, 300], [0.0, 0.08, 0.4, 34], [0.0, 0.02, 0])
+  view(s, [800, 900, 400, 300], [0.0, 0.08, 0.4, 34], [0.0, 0.02, 0])
+  view(sa, [1200, 900, 400, 300], [0.1, 0.1, 1.1, 30], [0.08, -0.02, 0])
   const count = (g: import('three').BufferGeometry) =>
     (g.index ? g.index.count : g.getAttribute('position').count) / 3
   return {
