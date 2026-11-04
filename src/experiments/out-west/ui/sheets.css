@@ -366,8 +366,9 @@
 }
 
 /* ------------------------------------------------------------------- settings */
+/* a group's heading sits nearer its own rows than the rows above it (the body gap adds 16 px) */
 .ow-set-group + .ow-set-group {
-  margin-top: var(--ow-s4);
+  margin-top: var(--ow-s2);
 }
 .ow-set-h {
   margin: 0 0 var(--ow-s2);

@@ -71,6 +71,13 @@
   text-wrap: balance;
   line-height: 1.1;
 }
+/* a phone's board: the tabs step down a size so "Gauntlet runs" holds one line */
+@container (max-width: 22rem) {
+  .ow-feat-board-tabs .ow-store-tab {
+    padding-inline: var(--ow-s1);
+    font-size: var(--ow-fs-small);
+  }
+}
 /* the board is printed on paper: tabs and notes in ink */
 .ow-board-panel .ow-feat-board-tabs .ow-store-tab {
   color: var(--ow-ink-3);

@@ -152,7 +152,8 @@
 }
 .ow-btn:focus-visible,
 .ow-key:focus-visible,
-.ow-pause:focus-visible {
+.ow-pause:focus-visible,
+.ow-hub-tool:focus-visible {
   outline: 2px solid var(--ow-brass-hi);
   outline-offset: 3px;
 }
