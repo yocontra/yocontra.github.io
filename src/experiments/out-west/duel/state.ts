@@ -176,6 +176,8 @@ export class DuelState {
   cowardEarlyMs = null as number | null
   /** This duel is the Daily Outlaw (set by `daily.ts`; the duel report carries it). */
   daily = false as boolean
+  /** A meta-game page (the Gazette) is up between duels: input is held. */
+  interluding = false as boolean
   /**
    * How the call is presented. The Daily Outlaw's no-bell duel turns both off: the call is then
    * only his hand twitching. Judging never changes. Reset to both on for every outlaw.

@@ -3,6 +3,7 @@ import { type Action, keyLabel } from '../engine/input.ts'
 import type { Settings } from '../save.ts'
 import { type CardTimes, type ConfirmSpec, renderConfirm, renderTimes } from './hud-parts.ts'
 import { icon } from './icons.ts'
+import { openSettings } from './settings-sheet.ts'
 import { uiSound } from './sfx.ts'
 
 function el<K extends keyof HTMLElementTagNameMap>(
@@ -375,7 +376,6 @@ export class Hud {
         handlers.change(s)
       })
     }
-    toggle('reducedMotion', 'Reduced motion', 'No shake, zoom or flash. Shorter kill cam.')
     toggle('captions', 'Captions', 'Sound captions and heckles.')
     toggle('toggleWalk', 'Toggle walk', 'Press once to start walking, again to stop.')
     toggle('assist', 'Assist', '+150 ms for every outlaw. Noted on the ledger.')
@@ -407,6 +407,10 @@ export class Hud {
     const resume = el('button', 'ow-btn ow-btn-primary', btns, 'Resume')
     resume.type = 'button'
     resume.addEventListener('click', handlers.resume)
+    // sound, vibration, reduced motion and graphics: one sheet over the pause menu
+    const settings = el('button', 'ow-btn', btns, 'Settings')
+    settings.type = 'button'
+    settings.addEventListener('click', () => openSettings(this.root, () => handlers.change(s)))
     const board = el('button', 'ow-btn', btns, 'Leaderboard')
     board.type = 'button'
     board.addEventListener('click', handlers.leaderboard)

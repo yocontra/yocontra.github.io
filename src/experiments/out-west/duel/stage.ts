@@ -1,5 +1,6 @@
 import { FEEL } from '../data/feel.ts'
 import { type Look, OUTLAWS, type Outlaw, RIFLEMAN_LOOK } from '../data/outlaws.ts'
+import { interlude } from '../meta/events.ts'
 import { save as persist } from '../save.ts'
 import { castActor } from '../scene/cast.ts'
 import { propObject } from '../scene/props.ts'
@@ -297,14 +298,40 @@ export function retry(d: Director): void {
   enterCock(d)
 }
 
+/**
+ * A page from the meta-game (the Gazette) before something new; input is held until it's done.
+ * Null when there is none, so the duel carries straight on.
+ */
+export function holdFor(d: Director, page: Promise<void> | null, then: () => void): void {
+  if (!page) {
+    then()
+    return
+  }
+  d.interluding = true
+  d.c.input.enabled = false
+  page.then(
+    () => {
+      d.interluding = false
+      d.c.input.enabled = true
+      then()
+    },
+    () => undefined,
+  )
+}
+
 export function nextLevel(d: Director): void {
+  // the win's timer and a press both ask for the next outlaw; the Gazette may already be up
+  if (d.interluding) {
+    return
+  }
   d.c.hud.hideCard()
   d.timeScale = 1
   if (d.level + 1 >= OUTLAWS.length) {
     d.toEnd()
     return
   }
-  d.c.save.level = d.level + 1
+  const next = d.level + 1
+  d.c.save.level = next
   persist(d.c.save)
-  startLevel(d, d.level + 1, false)
+  holdFor(d, interlude({ kind: 'next', level: next }), () => startLevel(d, next, false))
 }
