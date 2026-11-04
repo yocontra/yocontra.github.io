@@ -192,6 +192,9 @@
   text-align: right;
 }
 .ow-ledger tfoot td {
+  position: sticky;
+  bottom: 0;
+  background: var(--ow-paper);
   padding-block: var(--ow-s2) var(--ow-s3);
   border-top: 2px solid var(--ow-ink);
   border-bottom: 0;
