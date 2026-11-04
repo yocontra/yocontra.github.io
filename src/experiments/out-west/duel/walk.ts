@@ -74,6 +74,8 @@ export function tickWalk(d: Director, dt: number): void {
   const e = d.enemy
   if (e) {
     e.locomote(d.speed, e.walkDuration / 2 / FEEL.paceSeconds)
+    // the talker talks with his hands, over his shoulder, as he walks
+    e.gestures.talk = o.gimmick === 'talker' ? d.speed : 0
     d.eDist += (d.speed * e.paceLength * dt) / FEEL.paceSeconds
     e.root.position.z = BACK_TO_BACK_Z + d.eDist
   }
@@ -200,6 +202,9 @@ function enterTurn(d: Director): void {
   c.hud.setPips(d.paces, false)
   d.player.stopWalk(0.2)
   d.enemy?.stopWalk(0.2)
+  if (d.enemy) {
+    d.enemy.gestures.talk = 0
+  }
   // music ducks gently (still clearly there), wind drops
   duckForStandoff(d, 0.9)
   ambience(d, AMB.turn, 0.9)

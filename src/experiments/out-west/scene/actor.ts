@@ -15,15 +15,18 @@ import {
 import type { GLTF } from 'three/examples/jsm/loaders/GLTFLoader.js'
 import { clone as cloneSkinned } from 'three/examples/jsm/utils/SkeletonUtils.js'
 import type { BodyKey, HatKey } from '../data/outlaws.ts'
+import { PROBE, probeIdle, probeRest } from './anim-probe.ts'
 import { bake, bodyPieces, type Piece } from './bake.ts'
 import type { Clip } from './clips.ts'
 import { DrawLayer } from './draw.ts'
 import { type Body, boneKey, bounds, sampleBody } from './fit.ts'
+import { GestureLayer } from './gesture.ts'
 import { hangGuns } from './gunbelt.ts'
 import { fitHat, type HatFit, tuckHair } from './hats.ts'
 import { type GunAnatomy, handGrip } from './holster.ts'
 import { type HolsterLook, mergedProp, PLAIN_HOLSTER } from './kit.ts'
 import { fitLong, type LongHold, poseLong, shoulderPocket } from './longgun.ts'
+import { nudge } from './nudge.ts'
 import { type Fit, measure } from './outfit.ts'
 import { becomeHimself, type PersonOpts, paintSkin, StanceLayer } from './person.ts'
 import { watchPose } from './pose-watch.ts'
@@ -112,6 +115,8 @@ export class Actor {
   private readonly walkAction: AnimationAction | null = null
   private readonly idleAction: AnimationAction | null = null
   private current: AnimationAction | null = null
+  /** The current clip's name (gestures stand down under anything but his idle). */
+  private currentName = 'Idle'
   walkWeight = 0
   /** Procedural layers. */
   sway = 0
@@ -135,6 +140,10 @@ export class Actor {
   /** His standing habit, layered on every clip (null: none). */
   private readonly stance: StanceLayer | null = null
   readonly drawing: DrawLayer | null = null
+  /** His small habits on the idle and walk: fidgets, the hat tip, the talker's hand (scene/gesture.ts). */
+  readonly gestures: GestureLayer
+  /** The rooftop rifleman's rifle kick decays on its own (Frontier drives `longKick` itself). */
+  private kickDecays = false
 
   constructor(gltf: GLTF, opts: ActorOpts = {}) {
     this.label = `${opts.base ?? 'player'} ${opts.seed ?? ''}`.trim()
@@ -162,6 +171,9 @@ export class Actor {
     this.forearmR = this.bone('LowerArmR')
 
     this.mixer = new AnimationMixer(this.model)
+    if (PROBE) {
+      probeRest(this, this.bones, this.mixer)
+    }
     const clips = opts.clips && opts.clips.length > 0 ? opts.clips : gltf.animations
     for (const clip of clips) {
       const name = clip.name.split('|').pop() ?? clip.name
@@ -176,6 +188,9 @@ export class Actor {
     this.play('Idle', 0)
     this.mixer.update(0)
     this.root.updateMatrixWorld(true)
+    if (PROBE) {
+      probeIdle(this)
+    }
 
     tintModel(this.model, opts)
     const body = this.dress(opts)
@@ -196,6 +211,7 @@ export class Actor {
       this.attachRifle(opts.rifle)
     }
     this.stance = StanceLayer.of(this.bones, opts.stance)
+    this.gestures = new GestureLayer((n) => this.bone(n), this.root)
     watchPose(this)
   }
 
@@ -263,6 +279,12 @@ export class Actor {
     this.heelStrikes = stride.heelStrikes
   }
 
+  /** The rifle kicks (the rooftop rifleman's shot); it settles on its own. */
+  kickLong(): void {
+    this.longKick = 1
+    this.kickDecays = true
+  }
+
   action(name: Clip): AnimationAction | null {
     return this.actions.get(name) ?? null
   }
@@ -298,6 +320,7 @@ export class Actor {
       this.walkWeight = 0
     }
     this.current = a
+    this.currentName = name
     return a
   }
 
@@ -552,24 +575,16 @@ export class Actor {
     this.floor.value = this.root.position.y
     this.t += dt
     this.drawing?.undo()
+    this.gestures.undo()
     this.stance?.undo()
     this.mixer.update(dt)
     this.stance?.apply()
     this.layer?.()
-    // Procedural layers on top of the clip.
-    if (this.sway > 0 && this.spine) {
-      this.spine.rotation.z += Math.sin(this.t * 1.3) * 0.12 * this.sway
-      this.spine.rotation.x += Math.sin(this.t * 0.9 + 1) * 0.06 * this.sway
-    }
-    if (this.shake > 0 && this.forearmR) {
-      this.forearmR.rotation.x += (Math.random() - 0.5) * 0.08 * this.shake
-      this.forearmR.rotation.z += (Math.random() - 0.5) * 0.08 * this.shake
-    }
-    if (this.twitch > 0.001 && this.armR) {
-      this.armR.rotation.z += Math.sin(this.t * 40) * 0.12 * this.twitch
-      this.armR.rotation.x += 0.15 * this.twitch
-      this.twitch = Math.max(0, this.twitch - dt * 3)
-    }
+    // the draw, or a clip that isn't his idle (a shot, a hit, a death), owns him
+    const idle = this.currentName === 'Idle' || this.currentName === 'Idle_Neutral'
+    this.gestures.apply(dt, Boolean(this.drawing?.active) || !idle)
+    // the drunk's sway, the shaky hand, a twitch (scene/nudge.ts)
+    this.kickDecays = nudge(this, this.t, dt, this.kickDecays)
     this.drawing?.update(dt)
     if (this.longHeld?.obj.visible) {
       this.root.updateMatrixWorld(true)

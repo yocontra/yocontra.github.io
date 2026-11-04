@@ -96,14 +96,14 @@ export function hitFx(
   c.rig.addTrauma(lethal ? 0.22 : 0.16)
 }
 
-interface Style {
+export interface Style {
   lead: 'HitRecieve' | 'HitRecieve_2' | null
   leadS: number
   rate: number
   hatFlip: boolean
 }
 
-const STYLES: Record<string, Style> = {
+export const DEATH_STYLES: Record<string, Style> = {
   LIGHTNING: { lead: null, leadS: 0, rate: 0.62, hatFlip: true },
   DEADEYE: { lead: null, leadS: 0, rate: 1.15, hatFlip: false },
   QUICK: { lead: 'HitRecieve', leadS: 0.22, rate: 1.0, hatFlip: false },
@@ -123,7 +123,8 @@ let enemyHat: Object3D | null = null
  */
 export function deathStyle(s: DuelState, grade: string): { contact: number; slow: number } {
   const e = s.enemy
-  const st = STYLES[grade] ?? STYLES.LUCKY ?? { lead: null, leadS: 0, rate: 1, hatFlip: false }
+  const st = DEATH_STYLES[grade] ??
+    DEATH_STYLES.LUCKY ?? { lead: null, leadS: 0, rate: 1, hatFlip: false }
   if (!e) {
     return { contact: 1, slow: 1 }
   }

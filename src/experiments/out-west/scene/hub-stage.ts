@@ -14,6 +14,9 @@ const HUB_DAY = 0.46
 
 export type HubShot = 'hub' | 'store'
 
+/** The shot the hub last framed (a loadout change in the Outfitter gets a look at the new kit). */
+let framed: HubShot | null = null
+
 /** How far the look point slides right of him (landscape), and drops (portrait). */
 const SIDE: Record<HubShot, number> = { hub: 1.1, store: 1.1 }
 const LIFT: Record<HubShot, number> = { hub: -0.38, store: -0.55 }
@@ -28,6 +31,11 @@ export function wearLoadout(s: DuelState, loadout: unknown, dyes: Dyes = {}): vo
   next.root.position.copy(old.root.position)
   next.root.rotation.copy(old.root.rotation)
   next.root.visible = old.root.visible
+  next.gestures.fidget = old.gestures.fidget
+  if (framed === 'store' && next.root.visible) {
+    // trying it on: a look down at the new kit, a turn one way and the other
+    next.gestures.play('admire', 1)
+  }
   old.dispose()
   c.scene.add(next.root)
   s.setPlayer(next)
@@ -46,6 +54,10 @@ export function hubShot(s: DuelState, shot: HubShot): void {
   p.stopAll()
   p.holsterGun()
   p.play('Idle', 0)
+  // the variety idles: a glance down the street, his weight shifted, a shoulder roll, a hat tip
+  p.gestures.clear()
+  p.gestures.fidget = 'hub'
+  framed = shot
   const store = shot === 'store'
   c.rig.cut(
     store ? 'store' : 'hub',
