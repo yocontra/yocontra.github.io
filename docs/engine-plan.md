@@ -55,18 +55,21 @@ One free lever: **Mixamo** has a large professional animation library, free with
 ## Options
 
 ### A. Stay on three.js, adopt proven libraries (recommended now)
+
 - Libraries: Rapier (physics/character controller), three-mesh-bvh (collision and raycasts), a small animation state-graph layer over AnimationMixer, and Mixamo animations (free) retargeted to our rig.
 - Keeps everything that works and keeps shipping continuously.
 - Gets most of the remaining animation quality, the main visible gap.
 - Cost: low and incremental.
 
 ### B. Port the client to Babylon.js
+
 - Same web + Expo WebView story as today. Native Babylon in Expo isn't available, so this doesn't buy native performance.
 - Gains: engine-grade animation blending and masks, Havok, built-in baked-vertex-animation crowds, an inspector, WebGPU.
 - Cost: rewrite about 38k lines. Realistically several weeks of multi-agent work with a period of two renderers, plus regressions to re-fix (everything we've tuned: lighting, shading, garments, LOD, perf).
 - Do it if we hit a wall three.js can't pass (e.g. we need Havok-grade physics, or WebGPU-only features).
 
 ### C. Rebuild in Unity (native-first)
+
 - The CoD Mobile route: best native performance on iPhone and Android, a mature animation system, Unity UI.
 - Web version: a Unity Web build (heavy, slow first load on mobile Safari) or keep the three.js game on contra.io as a separate client.
 - Costs:
@@ -93,6 +96,7 @@ One free lever: **Mixamo** has a large professional animation library, free with
 4. Decide with real numbers. If B clearly wins, migrate Frontier first (it benefits most), then the duel, behind a flag, with the shared sim, net, UI and audio unchanged.
 
 ## If B is chosen: migration outline
+
 1. **Render boundary.** Define a `RenderBackend` interface that the game state calls: scene graph, actors, cameras, fx. Keep sim, net, UI and audio untouched.
 2. **Assets.** glTF stays (both engines load it). Port the procedural builders (`BufferGeometry` → `VertexData`) or bake them to GLB with tool scripts (the better long-term choice, and engine-agnostic).
 3. **Characters and animation.**
@@ -106,6 +110,7 @@ One free lever: **Mixamo** has a large professional animation library, free with
 6. **Tools.** Port float-audit, material-audit, anim-audit and perf-suite hooks. ui-audit is unchanged (DOM).
 
 ## Sources
+
 - Unity web browser compatibility (6000.6 manual): https://docs.unity3d.com/Manual/webgl-browsercompatibility.html
 - Unity web runtime updates (blog): https://unity.com/blog/engine-platform/web-runtime-updates-enhance-browser-experience
 - Web engine comparison 2026 (third-party): https://app.cinevva.com/guides/web-game-engines-comparison
