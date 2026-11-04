@@ -54,6 +54,11 @@ export interface World {
   /** Economy audit, in dollars since the world started. */
   minted: number
   burned: number
+  /**
+   * The practice town (the client's loopback lobby, never the Lobby DO): bag magnet, bots carry a
+   * few dollars, bot kills pay practice XP, a first-bank bonus. Its money reaches no wallet.
+   */
+  practice: boolean
 }
 
 /** An order-independent key for a pair of player slots. */
@@ -63,6 +68,7 @@ export interface WorldOptions {
   seed?: number
   layout?: TownLayout
   grid?: Grid
+  practice?: boolean
 }
 
 export function createWorld(options: WorldOptions = {}): World {
@@ -90,6 +96,7 @@ export function createWorld(options: WorldOptions = {}): World {
     history: new Float64Array(HISTORY_TICKS * MAX_PLAYERS * HIST_STRIDE),
     minted: 0,
     burned: 0,
+    practice: options.practice === true,
   }
 }
 

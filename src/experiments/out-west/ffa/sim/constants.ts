@@ -143,6 +143,17 @@ export const DEAD_EYE_MULTIPLIER = 2
 // --- Money --------------------------------------------------------------------------------------
 
 export const BAG_PICKUP_RADIUS = 1.2
+/**
+ * The practice town only (see `World.practice`): a bag magnet, so a new player who runs past a bag
+ * still gets it; bots there spawn carrying a few dollars so every kill drops a bag; a bot kill pays
+ * a little XP; the first deposit of a session pays a bonus. None of it reaches a wallet: the
+ * practice town is the client's loopback lobby.
+ */
+export const PRACTICE_BAG_RADIUS = 2.5
+export const PRACTICE_BOT_CARRY_MIN = 5
+export const PRACTICE_BOT_CARRY_MAX = 25
+export const PRACTICE_BOT_KILL_XP = 20
+export const PRACTICE_FIRST_BANK_BONUS = 50
 export const BAG_EXCLUSIVE_TICKS = s(2)
 export const BAG_EXPIRE_TICKS = s(45)
 export const BANK_CHANNEL_TICKS = s(2)

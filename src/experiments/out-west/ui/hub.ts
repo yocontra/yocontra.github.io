@@ -16,6 +16,7 @@ import { fetchLedger, fetchMe, fetchTownOpen } from '../net/api.ts'
 import { currentPlayer, onAuthChange } from '../net/auth.ts'
 import type { QueueMatch } from '../net/queue.ts'
 import { mountAccount } from './account.ts'
+import { frontierSheet } from './frontier-sheet.ts'
 import { hubTools, openMore } from './hub-more.ts'
 import { icon } from './icons.ts'
 import { mountBlocks, mountNameChange } from './identity.ts'
@@ -324,6 +325,10 @@ export class Hub {
     }
     this.afterSignIn = null
     this.closeSheet()
+    if (m === 'frontier') {
+      this.openFrontier().catch(() => undefined)
+      return
+    }
     this.pick(m)
   }
 
@@ -384,6 +389,18 @@ export class Hub {
     }
     if (m === 'store') {
       this.openStore()
+      return
+    }
+    if (m === 'frontier') {
+      frontierSheet(this.parent, signedIn, () => {
+        if (signedIn) {
+          this.openFrontier().catch(() => undefined)
+        } else {
+          this.openAccount()
+          // set after opening: opening closes any older sheet, whose cleanup clears it
+          this.afterSignIn = 'frontier'
+        }
+      })
       return
     }
     if (!signedIn) {

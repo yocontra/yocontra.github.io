@@ -38,8 +38,10 @@ import {
   removePlayer,
   step,
 } from '../../../src/experiments/out-west/ffa/sim/world.ts'
+import { looksLikeAimbot } from './aimbot.ts'
 import { BotDirector, freshBotName } from './bots.ts'
 import { ShowdownJudge } from './core-showdown.ts'
+import { applyPractice, botLevel, type PracticeOptions, stakeRespawns } from './practice.ts'
 
 /** Lobbies keep at least this many bodies in town (bots fill in) while any human is present. */
 export const DEFAULT_TOWN_POPULATION = 6
@@ -47,9 +49,6 @@ const MAX_MALFORMED = 20
 const MAX_FLOOD_STRIKES = 60
 const RTT_SAMPLES = 12
 /** Aimbot heuristics (§3.7): flag, never auto-ban. */
-const AIMBOT_MIN_SHOTS = 50
-const AIMBOT_HIT_RATE = 0.85
-const AIMBOT_SNAPS = 5
 export const FLAG_AIMBOT = 1
 export const FLAG_FLOOD = 2
 
@@ -145,6 +144,7 @@ export class LobbyCore {
   botTarget = 0
   /** Bodies bots keep the town at while a human is in; only dev `?bots=0` sets it to 0. */
   ambientPopulation = DEFAULT_TOWN_POPULATION
+  practice: PracticeOptions | null = null
   readonly metrics: CoreMetrics = { ticks: 0, bytesOut: 0, msgsOut: 0, msgsIn: 0, droppedIn: 0 }
 
   constructor(lobbyId: string, seed: number) {
@@ -152,6 +152,12 @@ export class LobbyCore {
     this.world = createWorld({ seed })
     this.bots = new BotDirector(seed)
     this.judge = new ShowdownJudge(seed)
+  }
+
+  /** The practice town (the loopback host only, never the Lobby DO): see `practice.ts`. */
+  usePractice(rules: PracticeOptions | null): void {
+    this.practice = rules
+    applyPractice(this.world, this.bots, rules)
   }
 
   /** Connected or lingering humans: the lobby ticks while this is above zero. */
@@ -421,7 +427,7 @@ export class LobbyCore {
       const id = addPlayer(this.world, {
         accountId: `bot:${this.lobbyId}:${n}`,
         name: freshBotName(n, names),
-        level: 1 + (n % 25),
+        level: botLevel(this.world, n, this.practice),
         prestige: 0,
         bot: true,
       })
@@ -498,11 +504,7 @@ export class LobbyCore {
   private flagCheats(): void {
     for (const s of this.sessions.values()) {
       const st = this.world.players[s.playerId]?.stats
-      if (
-        st &&
-        st.shots >= AIMBOT_MIN_SHOTS &&
-        (st.hits / st.shots > AIMBOT_HIT_RATE || st.snapHits >= AIMBOT_SNAPS)
-      ) {
+      if (st && looksLikeAimbot(st)) {
         s.flags |= FLAG_AIMBOT
       }
     }
@@ -513,6 +515,7 @@ export class LobbyCore {
     this.balanceBots()
     const frames = this.framesForTick()
     step(this.world, frames)
+    stakeRespawns(this.world, this.practice)
     this.judge.update(this, now)
     this.sendSnapshots(now)
     this.metrics.ticks++

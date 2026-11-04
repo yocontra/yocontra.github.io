@@ -9,6 +9,7 @@ import {
   LobbyCore,
   type Session,
 } from '../../../../../api/src/town/core.ts'
+import type { PracticeOptions } from '../../../../../api/src/town/practice.ts'
 import { TICK_MS } from '../sim/constants.ts'
 
 export interface LoopbackOptions {
@@ -24,6 +25,31 @@ export interface LoopbackOptions {
    * starts from the same scene, so packed-scene numbers compare.
    */
   spawn?: { x: number; z: number }
+  /**
+   * The practice town's rules from your record on this device (bots that teach, bots carrying a
+   * few dollars, the bag magnet). Off for the dev perf harness, so packed scenes compare.
+   */
+  practice?: PracticeOptions
+}
+
+/**
+ * Loopback-only control text (never sent to a real lobby): the round summary freezes the practice
+ * town while it's up, and a finished round updates the record the bots read.
+ */
+export type LoopbackControl =
+  | { type: 'practice_pause'; on: boolean }
+  | { type: 'practice_record'; rounds: number; kd: number }
+
+function loopbackControl(text: string): LoopbackControl | null {
+  if (!text.startsWith('{"type":"practice_')) {
+    return null
+  }
+  try {
+    const m = JSON.parse(text) as LoopbackControl
+    return m.type === 'practice_pause' || m.type === 'practice_record' ? m : null
+  } catch {
+    return null
+  }
 }
 
 type Send = (data: Uint8Array | string) => void
@@ -36,6 +62,7 @@ export class LoopbackServer {
   private timer: ReturnType<typeof setInterval> | null = null
   private startedAt = 0
   private ticks = 0
+  private paused = false as boolean
 
   constructor(opts: LoopbackOptions, send: Send) {
     this.opts = opts
@@ -44,6 +71,9 @@ export class LoopbackServer {
     this.core.botTarget = Math.max(0, opts.bots)
     // `?bots=0` means an empty town, the same as on the dev server.
     this.core.ambientPopulation = opts.bots > 0 ? DEFAULT_TOWN_POPULATION : 0
+    if (opts.practice && !opts.cluster) {
+      this.core.usePractice(opts.practice)
+    }
   }
 
   start(): void {
@@ -86,15 +116,33 @@ export class LoopbackServer {
     if (!s) {
       return
     }
-    if (typeof data === 'string') {
+    const control = typeof data === 'string' ? loopbackControl(data) : null
+    if (control) {
+      this.onControl(control)
+    } else if (typeof data === 'string') {
       this.core.onText(s.playerId, data, performance.now())
     } else {
       this.core.onBinary(s.playerId, data, performance.now())
     }
   }
 
+  private onControl(m: LoopbackControl): void {
+    if (m.type === 'practice_pause') {
+      if (this.paused && !m.on) {
+        // pick up where the town froze: no catch-up burst for the time it stood still
+        this.startedAt = performance.now() - this.ticks * TICK_MS
+      }
+      this.paused = m.on
+    } else if (this.core.practice) {
+      this.core.usePractice({ rounds: m.rounds, kd: m.kd })
+    }
+  }
+
   /** Catch up on every 50 ms tick that has elapsed (setInterval drifts; the sim must not). */
   private pump(): void {
+    if (this.paused) {
+      return
+    }
     const now = performance.now()
     const due = Math.floor((now - this.startedAt) / TICK_MS)
     let n = 0

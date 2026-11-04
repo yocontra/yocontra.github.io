@@ -71,7 +71,7 @@ import {
 } from './event-sounds.ts'
 import { gestureFor } from './gesture-events.ts'
 import type { Hud } from './hud.ts'
-import { killLine } from './kill-line.ts'
+import { killLine, killToast } from './kill-line.ts'
 import type { NetClient } from './net.ts'
 
 export interface Showdown {
@@ -277,7 +277,7 @@ function onKill(s: Sink, ev: Extract<WireEvent, { type: typeof EV_KILL }>): void
       // The showdown verdict owns the big toast; the bounty goes in the feed.
       s.hud.feed(`+$${paid} bounty`, 'gold')
     } else {
-      s.hud.toast(paid > 0 ? `+$${paid} BOUNTY` : 'NO BOUNTY', 'gold', 1400)
+      s.hud.toast(killToast(ev.flags, paid, s.fx.bags.values()), 'gold', 1400)
     }
   }
   if (ev.victim === you) {
@@ -424,8 +424,7 @@ export function handleEvent(s: Sink, ev: WireEvent): void {
     }
     case EV_DEPOSIT:
       if (ev.player === you) {
-        const extra = ev.commission > 0 ? ` (+$${ev.commission} commission)` : ''
-        s.hud.toast(`BANKED $${ev.amount}${extra}`, 'gold', 2200)
+        // the bank moment (round.ts) stamps the amount in the middle of the screen
         play(s, 'deposit', null, 1)
         const p = s.posOf(you)
         if (p) {

@@ -18,6 +18,8 @@ import {
   BANK_CHANNEL_TICKS,
   LEAVE_CHANNEL_TICKS,
   MOST_WANTED_MIN,
+  PRACTICE_BAG_RADIUS,
+  PRACTICE_FIRST_BANK_BONUS,
   STAGE_CHANNEL_TICKS,
   STRONGBOX_CHANNEL_TICKS,
   STRONGBOX_FIRST_TICKS,
@@ -35,7 +37,9 @@ export function deposit(w: World, p: Player): void {
   if (amount <= 0) {
     return
   }
-  const commission = ffaDepositCommission(amount)
+  // The practice town's first-bank bonus rides as commission (it reaches no wallet there).
+  const bonus = w.practice && !p.bot && p.depositSeq === 0 ? PRACTICE_FIRST_BANK_BONUS : 0
+  const commission = ffaDepositCommission(amount) + bonus
   const xp = ffaBankXp(amount) * FFA_XP.bankPer10
   p.carried = 0
   p.depositSeq++
@@ -144,9 +148,9 @@ export function progressChannel(w: World, p: Player): void {
   }
 }
 
-/** Automatic pickup within 1.2 m; the killer's 2 s exclusivity; burn after 45 s. */
+/** Automatic pickup within 1.2 m (2.5 m in practice); the killer's 2 s exclusivity; burn after 45 s. */
 export function updateBags(w: World): void {
-  const r2 = BAG_PICKUP_RADIUS ** 2
+  const r2 = (w.practice ? PRACTICE_BAG_RADIUS : BAG_PICKUP_RADIUS) ** 2
   w.bags = w.bags.filter((bag) => {
     if (w.tick >= bag.expiresAt) {
       w.burned += bag.amount

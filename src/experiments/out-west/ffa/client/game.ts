@@ -139,6 +139,7 @@ import { Minimap } from './minimap.ts'
 import { NetClient } from './net.ts'
 import { Onboarding } from './onboarding.ts'
 import { Riders } from './riders.ts'
+import { Rounds } from './round.ts'
 import { Scoreboard } from './scoreboard.ts'
 import { type FrontierSettings, loadSettings, saveSettings, type ViewMode } from './settings.ts'
 import { SettingsPanel } from './settings-panel.ts'
@@ -166,6 +167,8 @@ export interface GameOptions {
   audio?: AudioEngine | null
   /** Called once when the player leaves town (or the connection is lost for good). */
   onExit: (reason: 'left' | 'quit' | 'lost') => void
+  /** The practice town (loopback): practice rules, practice purse, the town freezes for a summary. */
+  practice?: boolean
 }
 
 export type Connect = (ev: TransportEvents) => Transport
@@ -256,6 +259,8 @@ export class FrontierGame {
   private readonly vmQ = new Quaternion()
   private guide: BankGuide | null = null
   private readonly coach: Onboarding
+  /** Rounds, the round summary, the first-bank objective chain and the bank moment. */
+  readonly rounds: Rounds
   /** Crouch toggle and slide (local crouch taps → `BTN_CROUCH`). */
   private readonly stance = new Stance()
   private readonly score: Scoreboard
@@ -352,6 +357,21 @@ export class FrontierGame {
     this.arrows = new ThreatArrows(this.hud.root)
     this.coach = new Onboarding(root, this.hud.root, coarse, {
       onOpen: (open) => this.onCoachCard(open),
+    })
+    this.rounds = new Rounds(root, this.hud.root, {
+      practice: opts.practice === true,
+      touch: coarse,
+      audio: this.audio,
+      you: () => this.net.you,
+      alive: () => this.net.alive,
+      carried: () => this.net.self?.carried ?? 0,
+      banked: () => this.net.banked,
+      isBot: (id) => this.net.roster.get(id)?.bot === true,
+      send: (text) => this.transport?.send(text),
+      feed: (text) => this.hud.feed(text, 'info'),
+      onOpen: (open) => this.onCoachCard(open),
+      leave: () => this.exit('quit'),
+      blocked: () => this.coach.open,
     })
     this.panel = new SettingsPanel(
       {
@@ -736,12 +756,14 @@ export class FrontierGame {
     if (this.fx) {
       handleControl(this.sink, m)
     }
+    this.rounds.control(m)
   }
 
   private onEvent(ev: WireEvent): void {
     if (this.fx && this.crowd) {
       handleEvent(this.sink, ev)
     }
+    this.rounds.event(ev)
     // a bag wears its dropper's saddlebag (spec §7): the server's `style` when it sends one,
     // else the loadout of the player who just fell where it dropped
     if (ev.type === EV_KILL) {
@@ -1026,7 +1048,7 @@ export class FrontierGame {
   }
 
   private readonly onKey = (e: KeyboardEvent) => {
-    if (this.coach.key(e.code)) {
+    if (this.coach.key(e.code) || this.rounds.key(e.code)) {
       e.preventDefault()
       return
     }
@@ -1850,6 +1872,7 @@ export class FrontierGame {
     this.touch?.dispose()
     this.score.dispose()
     this.coach.dispose()
+    this.rounds.dispose()
     this.hud.dispose()
     this.crowd?.dispose()
     this.town?.dispose()
@@ -1941,6 +1964,7 @@ export class FrontierGame {
       aimTarget: this.aimRes.target,
       locked: this.desk.locked,
       howto: this.coach.open,
+      round: this.rounds.state,
       menu: this.hud.menuOpen,
       guide: this.guide?.state ?? null,
       fov: Math.round(this.cam.camera.fov * 10) / 10,

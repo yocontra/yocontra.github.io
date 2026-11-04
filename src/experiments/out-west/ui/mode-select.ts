@@ -58,8 +58,9 @@ const TILES: readonly TileDef[] = [
     icon: 'dynamite',
     title: 'Frontier',
     kicker: 'Free-for-all',
-    sub: signInFirst,
-    online: true,
+    // the practice town is open to everyone; the live town asks for a sign-in on the sheet
+    sub: (s) => (s.signedIn ? '' : 'Practice town open'),
+    online: false,
   },
   {
     mode: 'store',

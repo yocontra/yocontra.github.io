@@ -18,13 +18,17 @@ import {
   FARM_FREE_KILLS,
   FARM_WINDOW_TICKS,
   PARDON_TICKS,
+  PRACTICE_BOT_KILL_XP,
 } from './constants.ts'
 import type { Point } from './layout.ts'
 import { stopMoves } from './move.ts'
 import type { World } from './state.ts'
 import type { Player } from './types.ts'
 
-/** XP for killing a server bot. Bots never mint money, and they pay no XP so they can't be farmed. */
+/**
+ * XP for killing a server bot in a live lobby. Bots never mint money there, and they pay no XP so
+ * they can't be farmed. The practice town pays `PRACTICE_BOT_KILL_XP` (it reaches no account).
+ */
 export const BOT_KILL_XP = 0
 
 export function cancelChannel(w: World, p: Player): void {
@@ -119,7 +123,7 @@ function creditKiller(w: World, killer: Player, victim: Player, opts: KillOption
     flags |= KILL_MOST_WANTED
   }
   if (victim.bot) {
-    killer.stats.xp += BOT_KILL_XP
+    killer.stats.xp += w.practice ? PRACTICE_BOT_KILL_XP : BOT_KILL_XP
     return flags
   }
   const bounty = ffaKillMint(victim.level, victim.prestige, mostWanted)

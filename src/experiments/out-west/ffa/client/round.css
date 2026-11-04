@@ -1,0 +1,397 @@
+/* Rounds, the first-bank objective chain and the bank moment (round.ts, objectives.ts). */
+
+/* the round clock and the objective sit in one column under the money readout */
+.fr-round,
+.fr-obj {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  pointer-events: none;
+  text-align: center;
+  text-shadow: none;
+}
+
+.fr-round {
+  top: calc(var(--fr-top) + 84px);
+  padding: 2px 10px 3px;
+  border-radius: var(--ow-radius);
+  background: var(--fr-scrim);
+  box-shadow: inset 0 0 0 1px var(--fr-hair);
+  font-family: var(--ow-font-num);
+  font-variant-numeric: var(--ow-figs-hud);
+  font-size: var(--ow-fs-small);
+  letter-spacing: 0.04em;
+  color: var(--ow-bone-2);
+  white-space: nowrap;
+  opacity: 0;
+  transition: opacity 0.3s;
+}
+
+.fr-round.on {
+  opacity: 1;
+}
+
+.fr-round.late {
+  color: var(--ow-brass-hi);
+  animation: fr-round-late 1s ease-in-out infinite;
+}
+
+@keyframes fr-round-late {
+  50% {
+    box-shadow:
+      inset 0 0 0 1px var(--ow-brass-hi),
+      0 0 14px rgb(240 200 120 / 0.55);
+  }
+}
+
+.fr-obj {
+  top: calc(var(--fr-top) + 112px);
+  width: min(380px, calc(100% - 32px));
+  padding: 6px 12px 7px;
+  border-radius: var(--ow-radius);
+  background: var(--fr-scrim);
+  box-shadow:
+    inset 0 0 0 1px var(--ow-brass-hi),
+    var(--ow-shadow-1);
+  opacity: 0;
+  transition: opacity 0.3s;
+}
+
+.fr-obj.on {
+  opacity: 1;
+}
+
+.fr-obj.on.tick {
+  animation: fr-obj-in 0.5s ease-out;
+}
+
+@keyframes fr-obj-in {
+  0% {
+    transform: translateX(-50%) scale(1.12);
+    box-shadow:
+      inset 0 0 0 1px var(--ow-brass-hi),
+      0 0 24px rgb(240 200 120 / 0.8);
+  }
+}
+
+.fr-obj-kicker {
+  font-variant-caps: all-small-caps;
+  letter-spacing: var(--ow-track-kicker);
+  font-size: var(--ow-fs-small);
+  line-height: 1.1;
+  color: var(--ow-brass-hi);
+}
+
+.fr-obj-text {
+  font-size: var(--ow-fs-body, 15px);
+  line-height: 1.25;
+  color: var(--ow-bone);
+  text-wrap: balance;
+}
+
+/* the bank moment: a stamp in the middle, counting up, with a shower of coins */
+.fr-bankstamp {
+  position: absolute;
+  left: 50%;
+  top: 38%;
+  transform: translate(-50%, -50%) scale(0.6);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 10px 22px 12px;
+  border-radius: var(--ow-radius);
+  background: rgb(14 9 6 / 0.82);
+  box-shadow:
+    inset 0 0 0 2px var(--ow-brass-hi),
+    0 0 40px rgb(240 200 120 / 0.45);
+  pointer-events: none;
+  opacity: 0;
+  text-shadow: none;
+}
+
+.fr-bankstamp.on {
+  animation: fr-stamp 2.2s cubic-bezier(0.2, 1.4, 0.4, 1) forwards;
+}
+
+@keyframes fr-stamp {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(1.8) rotate(-6deg);
+  }
+  12% {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1) rotate(-2deg);
+  }
+  80% {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1) rotate(-2deg);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(-50%, -60%) scale(0.95) rotate(-2deg);
+  }
+}
+
+.fr-bankstamp-kicker {
+  font-family: var(--ow-font-display);
+  font-size: 18px;
+  letter-spacing: var(--ow-track-display);
+  text-transform: uppercase;
+  color: var(--ow-bone);
+}
+
+.fr-bankstamp-fig {
+  font-family: var(--ow-font-num);
+  font-weight: 600;
+  font-size: 48px;
+  line-height: 1.1;
+  font-variant-numeric: var(--ow-figs-hud);
+  color: var(--ow-brass-hi);
+}
+
+.fr-bankstamp-extra {
+  font-size: var(--ow-fs-small);
+  color: var(--ow-brass-hi);
+}
+
+.fr-bankstamp-purse {
+  font-size: var(--ow-fs-small);
+  letter-spacing: 0.04em;
+  color: var(--ow-bone-2);
+}
+
+.fr-coin {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 12px;
+  height: 12px;
+  margin: -6px 0 0 -6px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 35%, #fff2c0, var(--ow-brass-hi) 55%, #8a5a18);
+  opacity: 0;
+}
+
+.fr-bankstamp.on .fr-coin {
+  animation: fr-coin 0.9s ease-out var(--d, 0ms) forwards;
+}
+
+@keyframes fr-coin {
+  0% {
+    opacity: 1;
+    transform: translate(0, 0) scale(0.6);
+  }
+  60% {
+    opacity: 1;
+    transform: translate(var(--dx), var(--dy)) scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(var(--dx), calc(var(--dy) + 90px)) scale(0.8);
+  }
+}
+
+/* the round summary: a card over the (frozen, in practice) town */
+.fr-summary {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: calc(var(--fr-top) + 10px) calc(var(--fr-right) + 12px) calc(var(--fr-bottom) + 10px)
+    calc(var(--fr-left) + 12px);
+  background: rgb(10 6 2 / 0.6);
+  z-index: 6;
+}
+
+.fr-summary[hidden] {
+  display: none;
+}
+
+.fr-summary-card {
+  width: min(460px, 100%);
+  max-height: 100%;
+  overflow: auto;
+  padding: 16px 20px;
+  border-radius: var(--ow-radius);
+  color: var(--ow-bone);
+  background-color: var(--ow-night);
+  background-image:
+    radial-gradient(120% 100% at 30% 0%, rgb(90 52 26 / 0.32), transparent 60%), var(--ow-tex-smoke);
+  background-size:
+    100% 100%,
+    384px 384px;
+  border: 1px solid #000;
+  box-shadow:
+    inset 0 0 0 1px rgb(210 173 92 / 0.35),
+    var(--ow-shadow-2);
+  display: grid;
+  gap: 8px;
+  text-align: center;
+  text-shadow: none;
+  animation: fr-fade 0.3s;
+}
+
+.fr-summary-kicker {
+  font-variant-caps: all-small-caps;
+  letter-spacing: var(--ow-track-kicker);
+  font-size: var(--ow-fs-small);
+  color: var(--ow-bone-2);
+}
+
+.fr-summary-title {
+  margin: 0;
+  font-family: var(--ow-font-display);
+  font-weight: 400;
+  font-size: 28px;
+  line-height: 1;
+  letter-spacing: var(--ow-track-display);
+  text-transform: uppercase;
+  color: var(--ow-brass-hi);
+}
+
+.fr-summary-hero {
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: 8px;
+}
+
+.fr-summary-fig {
+  font-family: var(--ow-font-num);
+  font-weight: 600;
+  font-size: 44px;
+  line-height: 1.1;
+  font-variant-numeric: var(--ow-figs-hud);
+  color: var(--ow-brass-hi);
+}
+
+.fr-summary-label {
+  font-size: var(--ow-fs-small);
+  letter-spacing: var(--ow-track-kicker);
+  text-transform: uppercase;
+  color: var(--ow-bone-2);
+}
+
+.fr-summary-grid {
+  margin: 0;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.fr-summary-cell {
+  display: flex;
+  flex-direction: column-reverse;
+  padding: 6px 2px;
+  border-radius: var(--ow-radius);
+  box-shadow: inset 0 0 0 1px var(--fr-hair);
+}
+
+.fr-summary-cell dd {
+  margin: 0;
+  font-family: var(--ow-font-num);
+  font-size: 24px;
+  font-variant-numeric: var(--ow-figs-hud);
+  color: var(--ow-bone);
+}
+
+.fr-summary-cell dt {
+  font-size: var(--ow-fs-small);
+  color: var(--ow-bone-2);
+}
+
+.fr-summary-note {
+  margin: 0;
+  font-size: var(--ow-fs-small);
+  line-height: 1.35;
+  text-wrap: pretty;
+}
+
+.fr-summary-note.quiet {
+  color: var(--ow-bone-2);
+}
+
+.fr-summary-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+/* short landscape phones: tighter, so both buttons stay on screen */
+@media (max-height: 430px) {
+  .fr-round {
+    top: calc(var(--fr-top) + 72px);
+  }
+
+  .fr-obj {
+    top: calc(var(--fr-top) + 96px);
+    width: min(340px, calc(100% - 340px));
+    padding: 4px 10px 5px;
+  }
+
+  .fr-obj-text {
+    font-size: var(--ow-fs-small);
+  }
+
+  .fr-summary-card {
+    padding: 10px 16px;
+    gap: 5px;
+  }
+
+  .fr-summary-title {
+    font-size: 22px;
+  }
+
+  .fr-summary-fig {
+    font-size: 32px;
+  }
+
+  .fr-summary-cell {
+    padding: 3px 2px;
+  }
+
+  .fr-summary-cell dd {
+    font-size: 19px;
+  }
+
+  .fr-summary-row .fr-menu-item {
+    min-height: 44px;
+  }
+
+  .fr-bankstamp {
+    top: 34%;
+  }
+
+  .fr-bankstamp-fig {
+    font-size: 36px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .fr-bankstamp.on .fr-coin,
+  .fr-obj.on.tick,
+  .fr-round.late {
+    animation: none;
+  }
+
+  .fr-bankstamp {
+    transform: translate(-50%, -50%);
+  }
+
+  .fr-bankstamp.on {
+    animation: fr-stamp-still 2.2s linear forwards;
+  }
+
+  @keyframes fr-stamp-still {
+    0%,
+    100% {
+      opacity: 0;
+    }
+    10%,
+    85% {
+      opacity: 1;
+    }
+  }
+}

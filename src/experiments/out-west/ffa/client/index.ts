@@ -15,6 +15,7 @@
 import type { AudioEngine } from '../../audio/audio.ts'
 import { FrontierGame } from './game.ts'
 import type { FeedKind } from './hud.ts'
+import { loadRecord, practiceOptions } from './practice.ts'
 import {
   type JoinError,
   type LoopbackTransportOptions,
@@ -141,10 +142,19 @@ function overlay(root: HTMLElement): {
   }
 }
 
-/** The practice town's lobby options from the mount options. */
+/** The perf harness's loopback (a fixed seed, or the rally crowd): plain bots, no practice rules. */
+const harnessTown = (opts: FrontierOptions): boolean =>
+  opts.cluster === true || opts.seed !== undefined
+
+/**
+ * The practice town's lobby options from the mount options. Its rules come from your record on
+ * this device (bots that teach), and your practice purse rides in as the banked figure.
+ */
 function loopbackOptions(opts: FrontierOptions): LoopbackTransportOptions {
+  const record = loadRecord()
   return {
     bots: opts.bots ?? 15,
+    ...(harnessTown(opts) ? {} : { practice: practiceOptions(record), banked: record.purse }),
     ...(opts.name ? { name: opts.name } : {}),
     ...(opts.cluster ? { cluster: true } : {}),
     ...(opts.seed === undefined ? {} : { seed: opts.seed }),
@@ -182,6 +192,7 @@ export function mountFrontier(root: HTMLElement, opts: FrontierOptions = {}): Fr
   }
   const game = new FrontierGame(root, {
     ...(opts.audio ? { audio: opts.audio } : {}),
+    practice: opts.server === 'loopback' && !harnessTown(opts),
     onExit: (reason) => {
       if (reason === 'lost') {
         // the reconnect gave up: say so plainly, and offer another go

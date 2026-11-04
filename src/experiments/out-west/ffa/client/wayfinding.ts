@@ -27,6 +27,16 @@ export function bankWindows(windows: readonly Zone[] = BANK_WINDOWS): BankWindow
   return windows.map((z) => ({ id: z.id, x: z.x, z: z.z }))
 }
 
+/**
+ * The first-bank objective is on (see `objectives.ts`): the marker pulses for any carry, not just
+ * the Most Wanted line, so the way to your first deposit can't be missed.
+ */
+let urgent = false
+
+export function setGuideUrgent(on: boolean): void {
+  urgent = on
+}
+
 /** Inside the threat arrows' ring (26 px), so the bank chevron never hides among them. */
 const INSET = 52
 /** How far down the path (cells) to look for a straight-line waypoint. */
@@ -281,7 +291,7 @@ export class BankGuide {
       this.lastText = text
       this.dist.textContent = text
     }
-    const big = carried >= MOST_WANTED_MIN
+    const big = carried >= MOST_WANTED_MIN || urgent
     this.marker.classList.toggle('big', big)
     this.chevron.classList.toggle('big', big)
     if (sp.on) {
