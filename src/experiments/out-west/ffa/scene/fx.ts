@@ -1,3 +1,4 @@
+// biome-ignore-all lint/style/noExcessiveLinesPerFile: every Frontier effect pool lives in one module (one draw each)
 // biome-ignore-all lint/style/noExcessiveClassesPerFile: the Frontier effects are small pooled classes, kept together
 // biome-ignore-all lint/complexity/useMaxParams: effect spawners take positional numeric args
 /**
@@ -149,6 +150,10 @@ export class Effects {
   private readonly puffs: Burst
   private readonly bagMesh: InstancedMesh
   readonly bags = new Map<number, Bag>()
+  /** Muzzle-flash size (1 top-down; the shooter views shrink it). */
+  flashScale = 1
+  /** First person: your eye, so no puff bursts inside it; else null. */
+  eye: { x: number; z: number } | null = null
   private readonly box: Mesh
   private readonly beacon: Mesh
   private readonly rings: InstancedMesh
@@ -299,7 +304,7 @@ export class Effects {
     f.x = x + Math.cos(aim) * 0.15
     f.y = y
     f.z = z + Math.sin(aim) * 0.15
-    f.size = 1.1
+    f.size = 1.1 * this.flashScale
     f.vx = 0
     f.vy = 0
     f.vz = 0
@@ -308,6 +313,10 @@ export class Effects {
 
   /** Dust off a wall, or blood on a hit. */
   impact(x: number, z: number, hit: boolean): void {
+    const eye = this.eye
+    if (eye && Math.hypot(x - eye.x, z - eye.z) < 0.9) {
+      return
+    }
     for (let i = 0; i < (hit ? 5 : 4); i++) {
       const p = this.puffs.spawn()
       p.life = hit ? 0.35 : 0.5
@@ -423,7 +432,7 @@ export class Effects {
     f.x = x + Math.cos(aim) * 0.2
     f.y = y
     f.z = z + Math.sin(aim) * 0.2
-    f.size = 1.8
+    f.size = 1.8 * this.flashScale
     f.vx = 0
     f.vy = 0
     f.vz = 0

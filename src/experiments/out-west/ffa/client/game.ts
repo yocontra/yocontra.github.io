@@ -403,6 +403,9 @@ export class FrontierGame {
     if (this.crowd) {
       this.crowd.readScale = shooter ? 1 : READ_SCALE
     }
+    if (this.fx) {
+      this.fx.flashScale = FLASH_SCALE[this.settings.view]
+    }
     const pol = policyFor(this.settings.view, this.renderer.tier)
     const fog = this.scene.fog
     if (fog instanceof Fog) {
@@ -1091,6 +1094,7 @@ export class FrontierGame {
     const cz = shooter ? this.own.z : this.cam.target.z
     crowd.update(list, cx, cz, dt, nowS)
     this.updateViewModel(dt, speed0)
+    fx.eye = first ? this.own : null
     this.wilds.tick(dt)
     this.sound?.steps(
       {
@@ -1777,6 +1781,9 @@ function rayToWall(net: NetClient, x: number, z: number, aim: number, range: num
 }
 
 const PICKUP_RING = new Color(1.4, 0.6, 0.3)
+
+/** Muzzle-flash size by view (the top-down flash would fill a shoulder or an eye). */
+const FLASH_SCALE: Record<ViewMode, number> = { top: 1, third: 0.45, first: 0.18 }
 
 /** How high the camera rides a vault and a hop (m): the body's arc. */
 const VAULT_PEAK_M = 0.55
