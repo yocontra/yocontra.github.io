@@ -260,6 +260,7 @@ check('the daily paid once: $50 and 75 XP', paid.length === 1 && paid[0]?.delta 
 const board = await inPage<{ ok: boolean; value?: { rows: { name: string }[] } }>(
   page,
   'net/meta.ts',
+  // biome-ignore lint/security/noSecrets: a snippet of the harness, not a secret
   'return await m.fetchDailyBoard()',
 )
 check(
