@@ -106,7 +106,7 @@ export class TouchControls {
     }
     btn('fr-btn-roll', 'ROLL', BTN_ROLL)
     btn('fr-btn-reload', 'RELOAD', BTN_RELOAD)
-    btn('fr-btn-jump fr-shooter-only', 'JUMP', JUMP_BIT)
+    btn('fr-btn-jump', 'JUMP', JUMP_BIT)
     this.throwBtn = btn('fr-btn-throw', 'THROW', BTN_THROW)
     this.throwBtn.hidden = true
     this.action = btn('fr-btn-act', '', 0)

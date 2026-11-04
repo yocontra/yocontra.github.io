@@ -21,6 +21,12 @@ export interface MoveState {
   rollCooldown: number
   rollDirX: number
   rollDirZ: number
+  /** Ticks left of a vault (`vaultStep` > 0) or a hop (`vaultStep` 0). */
+  jumpTicks: number
+  jumpCooldown: number
+  /** Vault travel per tick (m, whole centimetres) and direction (u16 turns, as on the wire). */
+  vaultStep: number
+  vaultAim: number
 }
 
 export interface Channel {

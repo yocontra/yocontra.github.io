@@ -7,16 +7,19 @@
  * accepts, Q calls out, G throws dynamite, V swaps first and third person, X swaps the shoulder,
  * Tab holds the scoreboard, Esc pauses.
  *
- * Top-down (kept as an option): as before, Space rolls and the mouse aims at the ground.
+ * Top-down (kept as an option): the same keys, but the mouse aims at the ground.
  */
-import { BTN_CALLOUT, BTN_INTERACT, BTN_RELOAD, BTN_ROLL, BTN_THROW } from '../../contract/town.ts'
+import {
+  BTN_CALLOUT,
+  BTN_INTERACT,
+  BTN_JUMP,
+  BTN_RELOAD,
+  BTN_ROLL,
+  BTN_THROW,
+} from '../../contract/town.ts'
 
-/**
- * Jump / vault. The sim's `BTN_JUMP` (buttons widened to u16, value 256) lands with
- * frontier-smooth's movement work; until then Space and the touch JUMP button roll instead, so
- * the key never does nothing. Swap this for `BTN_JUMP` when it exists.
- */
-export const JUMP_BIT: number = BTN_ROLL
+/** Jump / vault (the sim's `BTN_JUMP`): Space, gamepad A, the touch JUMP button. */
+export const JUMP_BIT = BTN_JUMP
 
 /** Shooter views: held keys → input buttons. */
 export const SHOOTER_KEYS: Readonly<Record<string, number>> = {
@@ -33,8 +36,10 @@ export const SHOOTER_KEYS: Readonly<Record<string, number>> = {
 
 /** Top-down view: the original map. */
 export const TOP_KEYS: Readonly<Record<string, number>> = {
-  Space: BTN_ROLL,
+  Space: BTN_JUMP,
   ShiftLeft: BTN_ROLL,
+  ShiftRight: BTN_ROLL,
+  KeyC: BTN_ROLL,
   KeyR: BTN_RELOAD,
   KeyE: BTN_INTERACT,
   KeyF: BTN_INTERACT,

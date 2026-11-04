@@ -109,6 +109,9 @@ export function spawnPlayer(w: World, p: Player): void {
   p.ammo = REVOLVER_ROUNDS
   p.reloadTicks = 0
   p.rollTicks = 0
+  p.jumpTicks = 0
+  p.jumpCooldown = 0
+  p.vaultStep = 0
   p.fireCooldownMs = 0
   p.lastFireTick = w.tick - HOLSTER_TICKS
   p.deadEyeStart = -1

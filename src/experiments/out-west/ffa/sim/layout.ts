@@ -87,6 +87,11 @@ export const BANK_WINDOWS: readonly Zone[] = TOWN.zones.filter((z) => z.kind ===
 export const BLOCK_MOVE = 1
 export const BLOCK_SHOT = 2
 export const BLOCK_SIGHT = 4
+/**
+ * Low cover a rider can vault (`Cover.vaultHeight`): blocks movement like any cover, except to a
+ * vault. Never set on a cell that anything solid also fills.
+ */
+export const BLOCK_VAULT = 8
 const WALL = BLOCK_MOVE | BLOCK_SHOT | BLOCK_SIGHT
 const WALL_THICKNESS = 0.5
 const EPS = 1e-6
@@ -187,7 +192,21 @@ export function buildGrid(layout: TownLayout = TOWN): Grid {
     }
   }
   for (const c of layout.cover) {
-    fill(grid, c, c.low ? BLOCK_MOVE | BLOCK_SHOT : WALL)
+    if (c.vaultHeight === undefined) {
+      fill(grid, c, c.low ? BLOCK_MOVE | BLOCK_SHOT : WALL)
+    }
+  }
+  // Vaultable cover last, so a cell it shares with anything solid stays solid.
+  const solid = grid.cells.slice()
+  for (const c of layout.cover) {
+    if (c.vaultHeight !== undefined) {
+      fill(grid, c, BLOCK_MOVE | BLOCK_SHOT | BLOCK_VAULT)
+    }
+  }
+  for (const [i, before] of solid.entries()) {
+    if (before & BLOCK_MOVE) {
+      grid.cells[i] = (grid.cells[i] ?? 0) & ~BLOCK_VAULT
+    }
   }
   return grid
 }
@@ -232,7 +251,8 @@ export const inRect = (r: Rect, x: number, z: number): boolean =>
   x >= r.x && x <= r.x + r.w && z >= r.z && z <= r.z + r.d
 
 /** True if a circle at (x, z) overlaps any cell with `mask`. */
-export function circleBlocked(grid: Grid, { x, z, r }: Circle, mask: number): boolean {
+/** Whether a circle overlaps a cell with any `mask` bit (cells with any `except` bit don't count). */
+export function circleBlocked(grid: Grid, { x, z, r }: Circle, mask: number, except = 0): boolean {
   const c = grid.cell
   const c0 = Math.floor((x - r) / c)
   const c1 = Math.floor((x + r) / c)
@@ -240,7 +260,8 @@ export function circleBlocked(grid: Grid, { x, z, r }: Circle, mask: number): bo
   const r1 = Math.floor((z + r) / c)
   for (let row = r0; row <= r1; row++) {
     for (let col = c0; col <= c1; col++) {
-      if ((cellAt(grid, (col + 0.5) * c, (row + 0.5) * c) & mask) === 0) {
+      const cell = cellAt(grid, (col + 0.5) * c, (row + 0.5) * c)
+      if ((cell & mask) === 0 || (cell & except) !== 0) {
         continue
       }
       const nx = Math.max(col * c, Math.min(x, (col + 1) * c))
@@ -291,7 +312,7 @@ function resolveCell(p: Point, { x0: bx0, z0: bz0, size: c }: CellBox, r: number
  * Push a circle out of every blocked cell it overlaps. Deterministic (fixed cell order, up to three
  * passes). Returns the resolved position.
  */
-export function pushOut(grid: Grid, { x: px, z: pz, r }: Circle, mask: number): Point {
+export function pushOut(grid: Grid, { x: px, z: pz, r }: Circle, mask: number, except = 0): Point {
   const p = { x: px, z: pz }
   const c = grid.cell
   for (let pass = 0; pass < 3; pass++) {
@@ -302,7 +323,8 @@ export function pushOut(grid: Grid, { x: px, z: pz, r }: Circle, mask: number): 
     const r1 = Math.floor((p.z + r) / c)
     for (let row = r0; row <= r1; row++) {
       for (let col = c0; col <= c1; col++) {
-        const blocked = (cellAt(grid, (col + 0.5) * c, (row + 0.5) * c) & mask) !== 0
+        const cell = cellAt(grid, (col + 0.5) * c, (row + 0.5) * c)
+        const blocked = (cell & mask) !== 0 && (cell & except) === 0
         if (blocked && resolveCell(p, { x0: col * c, z0: row * c, size: c }, r)) {
           moved = true
         }

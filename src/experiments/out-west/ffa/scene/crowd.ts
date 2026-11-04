@@ -39,9 +39,11 @@ import {
   ANIM_CHANNEL,
   ANIM_DEAD,
   ANIM_DUEL,
+  ANIM_HOP,
   ANIM_RELOAD,
   ANIM_ROLL,
   ANIM_RUN,
+  ANIM_VAULT,
   EF_HATLESS,
   EF_HOLSTERED,
   EF_PROTECTED,
@@ -81,6 +83,13 @@ const NEAR_HAT_TRIS = 800
 /** Running speed the Run clip was authored for (m/s). */
 const CLIP_RUN_SPEED = 5.2
 const ROLL_S = 0.35
+/** Vault and hop arcs (the sim's `VAULT_TICKS` and `HOP_TICKS`), s, and their peak heights, m. */
+const VAULT_S = 0.5
+const VAULT_PEAK_M = 0.85
+const HOP_S = 0.4
+const HOP_PEAK_M = 0.3
+/** Forward lean at the top of a vault (rad): knees tucked over the rail. */
+const VAULT_TUCK = 0.45
 /**
  * Built actors kept beyond the skinned cap. A parked actor (off the graph) costs nothing per frame,
  * only its geometry and bones in memory, while re-casting one is a full dress-and-bake plus a GPU
@@ -693,13 +702,7 @@ export class Crowd {
       actor.hat.visible = (p.flags & EF_HATLESS) === 0
     }
     this.animate(m, actor, p, nowS)
-    // Roll: a quick tumble around the hips.
-    if (p.anim === ANIM_ROLL) {
-      const t = Math.min(1, (nowS - m.animSince) / ROLL_S)
-      pivot.rotation.x = t * Math.PI * 2
-    } else {
-      pivot.rotation.x *= 0.5
-    }
+    bodyPose({ holder, pivot }, p.anim, nowS - m.animSince)
     const dist = Math.hypot(p.x - cx, p.z - cz)
     const hz = p.self || dist < NEAR_FAST_M ? 30 : 15
     m.acc += dt
@@ -735,6 +738,8 @@ export class Crowd {
         break
       case ANIM_RUN:
       case ANIM_ROLL:
+      case ANIM_VAULT:
+      case ANIM_HOP:
         clip = speed > 0.3 || p.anim === ANIM_ROLL ? 'Run' : clip
         armW = holstered ? 0 : 6
         break
@@ -913,4 +918,25 @@ function hatColor(look: PlayerLook): Color {
     hatColors.set(look, c)
   }
   return c
+}
+
+/**
+ * Whole-body moves the rig has no clip for, `since` s into them: the roll (a quick tumble around the
+ * hips) and the vault and hop (an arc up and over, leaning into a vault).
+ */
+function bodyPose(
+  { holder, pivot }: { holder: Object3D; pivot: Object3D },
+  anim: number,
+  since: number,
+): void {
+  if (anim === ANIM_ROLL) {
+    pivot.rotation.x = Math.min(1, since / ROLL_S) * Math.PI * 2
+  } else if (anim === ANIM_VAULT || anim === ANIM_HOP) {
+    const vault = anim === ANIM_VAULT
+    const t = Math.min(1, since / (vault ? VAULT_S : HOP_S))
+    holder.position.y = (vault ? VAULT_PEAK_M : HOP_PEAK_M) * 4 * t * (1 - t)
+    pivot.rotation.x = vault ? VAULT_TUCK * Math.sin(Math.PI * t) : 0
+  } else {
+    pivot.rotation.x *= 0.5
+  }
 }

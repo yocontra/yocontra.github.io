@@ -54,7 +54,8 @@ export interface DesktopHooks {
 const PAD_TOP: readonly (readonly [number, number])[] = [
   [7, BTN_FIRE],
   [6, BTN_AIM],
-  [0, BTN_ROLL],
+  [0, JUMP_BIT],
+  [4, BTN_ROLL],
   [2, BTN_RELOAD],
   [1, BTN_INTERACT],
   [3, BTN_CALLOUT],

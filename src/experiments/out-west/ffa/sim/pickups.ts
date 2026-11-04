@@ -39,7 +39,7 @@ import {
 } from './constants.ts'
 import { applyDamage } from './death.ts'
 import { BLOCK_SHOT, BLOCK_SIGHT, hasLineOfSight, rayGrid } from './layout.ts'
-import { aimRadians, inIframes, quantize, radiansToAim } from './move.ts'
+import { aimRadians, inIframes, quantize, radiansToAim, vaulting } from './move.ts'
 import { hashSigned } from './rng.ts'
 import { activePlayers, dist2, isProtected, type World } from './state.ts'
 import type { Player } from './types.ts'
@@ -205,7 +205,13 @@ export function firePickupWeapon(w: World, p: Player, aim: number, viewTime: num
 
 /** `BTN_THROW`: lob the stick along your aim, stopping short of walls. */
 export function maybeThrow(w: World, p: Player, buttons: number, aim: number): void {
-  const free = p.alive && p.dynamite > 0 && p.showdown < 0 && p.lingerUntil < 0 && p.rollTicks === 0
+  const free =
+    p.alive &&
+    p.dynamite > 0 &&
+    p.showdown < 0 &&
+    p.lingerUntil < 0 &&
+    p.rollTicks === 0 &&
+    !vaulting(p)
   if (!(free && pressed(buttons, p.lastButtons, BTN_THROW))) {
     return
   }

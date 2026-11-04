@@ -8,10 +8,12 @@ import {
   ANIM_CHANNEL,
   ANIM_DEAD,
   ANIM_DUEL,
+  ANIM_HOP,
   ANIM_IDLE,
   ANIM_RELOAD,
   ANIM_ROLL,
   ANIM_RUN,
+  ANIM_VAULT,
   BOX_NONE,
   BOX_OPENING,
   BOX_WAITING,
@@ -63,6 +65,9 @@ function animOf(p: Player): number {
   }
   if (p.rollTicks > 0) {
     return ANIM_ROLL
+  }
+  if (p.jumpTicks > 0) {
+    return p.vaultStep > 0 ? ANIM_VAULT : ANIM_HOP
   }
   if (p.reloadTicks > 0) {
     return ANIM_RELOAD
@@ -150,6 +155,10 @@ export function selfView(w: World, p: Player): SelfView {
     holsterTicks: Math.max(0, HOLSTER_TICKS - (w.tick - p.lastFireTick)),
     lastButtons: p.lastButtons,
     weapon: (p.weapon & 3) | (Math.min(7, p.weaponRounds) << 2) | (p.dynamite > 0 ? 32 : 0),
+    jumpTicks: p.jumpTicks,
+    jumpCooldown: p.jumpCooldown,
+    vaultStep: Math.round(p.vaultStep * 100),
+    vaultAim: p.vaultAim,
   }
 }
 

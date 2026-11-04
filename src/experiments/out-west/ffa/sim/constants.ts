@@ -25,6 +25,17 @@ export const ROLL_DISTANCE = 4
 export const ROLL_SPEED = ROLL_DISTANCE / (ROLL_TICKS * DT)
 export const ROLL_IFRAME_TICKS = s(0.25)
 export const ROLL_COOLDOWN_TICKS = s(2.5)
+/**
+ * Jump (`BTN_JUMP`): facing low cover with a `vaultHeight` within `VAULT_REACH` of you, a committed
+ * 0.5 s vault over it to the first clear spot beyond (at most `VAULT_MAX_M` of travel, never through
+ * anything solid); anywhere else a small hop in place that changes nothing. No shooting mid-vault, no
+ * i-frames (the roll is the dodge). Either one starts `JUMP_COOLDOWN_TICKS`.
+ */
+export const VAULT_TICKS = s(0.5)
+export const VAULT_REACH = 1
+export const VAULT_MAX_M = 4
+export const HOP_TICKS = s(0.4)
+export const JUMP_COOLDOWN_TICKS = s(0.8)
 
 // --- Health -------------------------------------------------------------------------------------
 
