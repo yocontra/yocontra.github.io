@@ -81,6 +81,10 @@ html:is([data-ow-scale="l"], [data-ow-scale="xl"]) .ow-cap-fake {
   .ow-results-sub {
     font-size: var(--ow-fs-micro);
   }
+  /* a 16-letter name in the delete warning wraps rather than running out of the panel */
+  .ow-acct-warn {
+    overflow-wrap: anywhere;
+  }
 }
 
 /* ------------------------------------------------------------- the pad */
