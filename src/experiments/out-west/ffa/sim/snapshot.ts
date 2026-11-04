@@ -138,6 +138,7 @@ export function entityView(w: World, p: Player): EntityView {
     flags: entityFlags(w, p),
     anim: animOf(p),
     carry: Math.min(255, Math.ceil(p.carried / 20)),
+    pitch: p.alive ? p.pitch : 0,
   }
 }
 

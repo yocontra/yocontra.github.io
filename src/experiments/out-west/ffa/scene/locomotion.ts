@@ -78,7 +78,7 @@ const BLEND = 14
 const MAX_LEG_YAW = 1.3
 const ROLL_S = 0.35
 const VAULT_S = 0.5
-const VAULT_PEAK_M = 0.85
+const VAULT_PEAK_M = 0.75
 const HOP_S = 0.55
 const HOP_PEAK_M = 0.45
 /** How the spine (abdomen, torso, chest) shares the twist back to the aim, and the aim's pitch. */
@@ -375,7 +375,14 @@ export class Locomotion {
     // the landing dip: a spring
     this.dipV += (-90 * this.dip - 14 * this.dipV) * dt
     this.dip += this.dipV * dt
-    this.actor.longCarry += ((sprinting ? 1 : 0) - this.actor.longCarry) * (1 - Math.exp(-dt * 8))
+    // a long gun: shouldered on the sights or firing, at the low ready at the hip, slung on the run
+    let carry = 0.45
+    if (sprinting) {
+      carry = 1
+    } else if ((i.stance & STANCE_ADS) !== 0 || i.shooting || i.anim === ANIM_AIM) {
+      carry = 0
+    }
+    this.actor.longCarry += (carry - this.actor.longCarry) * (1 - Math.exp(-dt * 10))
   }
 
   /** Put back the rotations the clips left, before the mixer runs again. */
@@ -523,7 +530,9 @@ export class Locomotion {
       }
     }
     const pitch = Math.max(-0.7, Math.min(0.7, this.input.pitch))
-    const fl = this.flinch * this.flinch * 0.35 * this.flinchDir - this.kick * this.kick * 0.22
+    const fl =
+      this.flinch * this.flinch * 0.35 * this.flinchDir -
+      this.kick * this.kick * 0.22 * (1 - 0.5 * this.adsW)
     if (pitch !== 0 || fl !== 0 || this.lean !== 0 || this.adsW > 0.01) {
       hips.updateMatrixWorld(true)
       const right = tmpV.set(0, 0, 0)

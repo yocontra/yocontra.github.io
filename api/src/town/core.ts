@@ -445,6 +445,7 @@ export class LobbyCore {
           aim: f.aim,
           buttons: f.buttons,
           viewTime: unwrapTick16(f.viewTick, this.world.tick) + f.viewFrac / 255,
+          pitch: f.pitch ?? 0,
         }
       }
     }

@@ -231,6 +231,7 @@ export function step(w: World, frames: readonly (InputFrame | null | undefined)[
     if (p.lingerUntil < 0) {
       p.aim = f.aim
     }
+    p.pitch = f.pitch ?? 0
     p.crouched = p.alive && (f.buttons & BTN_CROUCH) !== 0
     p.ads = p.alive && (f.buttons & BTN_AIM) !== 0
     p.moving = stepMove(w.grid, p, {

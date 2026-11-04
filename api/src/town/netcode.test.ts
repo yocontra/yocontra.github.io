@@ -156,7 +156,15 @@ describe('input pacing (TickClock + InputQueue.inputLead)', () => {
 
   it('a skip sends the half-filled slot and moves the numbering on', () => {
     const b = new InputBatcher()
-    const f: WireFrame = { moveX: 5, moveZ: 0, aim: 0, buttons: 0, viewTick: 0, viewFrac: 0 }
+    const f: WireFrame = {
+      moveX: 5,
+      moveZ: 0,
+      aim: 0,
+      buttons: 0,
+      viewTick: 0,
+      viewFrac: 0,
+      pitch: 0,
+    }
     b.push(f)
     b.push(f)
     b.push(f)

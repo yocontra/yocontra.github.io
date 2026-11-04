@@ -278,6 +278,8 @@ export class FrontierGame {
   private lastShotAt = -1e9
   /** Dev harness ADS (desktop has no touch AIM toggle). */
   private devAdsOn = false
+  /** Dev / audit: your rider held in a named state. */
+  private devAnim: DevAnim | null = null
   private devWeapon: number | null = null
   /** Dev-only per-frame motion trace (`__frontierTrace`). */
   readonly trace = new MotionTrace()
@@ -816,7 +818,13 @@ export class FrontierGame {
     return Math.atan2(hit.z - this.own.z, hit.x - this.own.x)
   }
 
-  private sampleInput(): { moveX: number; moveZ: number; aim: number; buttons: number } {
+  private sampleInput(): {
+    moveX: number
+    moveZ: number
+    aim: number
+    buttons: number
+    pitch?: number
+  } {
     if (this.shooterView) {
       return this.sampleShooter()
     }
@@ -873,7 +881,13 @@ export class FrontierGame {
    * along the yaw from you to whatever the crosshair rests on (`aim.ts`); touch FIRE repeats at
    * the gun's rate while held, with a light magnetism on each shot.
    */
-  private sampleShooter(): { moveX: number; moveZ: number; aim: number; buttons: number } {
+  private sampleShooter(): {
+    moveX: number
+    moveZ: number
+    aim: number
+    buttons: number
+    pitch: number
+  } {
     const d = this.desk.sample()
     const t = this.touch?.sample()
     let mx = d.mx
@@ -936,6 +950,7 @@ export class FrontierGame {
       moveZ: Math.round(wz * 127),
       aim: radiansToAim(aim),
       buttons,
+      pitch: Math.round((this.shooter.pitch / (Math.PI / 2)) * 127),
     }
   }
 
@@ -1154,6 +1169,7 @@ export class FrontierGame {
         self: true,
         weapon: this.devWeapon ?? this.net.weapon.weapon,
       })
+      this.forceAnim(list.at(-1))
     }
     for (const [i, r] of this.remotes.entries()) {
       let row = this.crowdRows[i]
@@ -1169,6 +1185,7 @@ export class FrontierGame {
       row.vz = r.vz
       row.anim = r.anim
       row.stance = r.stance
+      row.pitch = r.pitch
       row.flags = r.flags
       list.push(row)
     }
@@ -1379,6 +1396,8 @@ export class FrontierGame {
       },
       this.vmSun,
     )
+    // the gun's kick rides into the lens (CoD's view punch)
+    this.shooter.vmKick = vm.motion.pose.viewKick
   }
 
   /** A slide kicks up a trail of dust. */
@@ -1843,6 +1862,41 @@ export class FrontierGame {
   }
 
   /** Dev harness only: hold or release aim-down-sights. */
+  /** The animation audit's hook: your rider in a named state. */
+  private forceAnim(own: CrowdPlayer | undefined): void {
+    const f = this.devAnim
+    if (!(f && own)) {
+      return
+    }
+    own.anim = f.anim
+    own.stance = f.stance
+    const dir = this.aim + (f.turn ?? 0)
+    own.vx = Math.cos(dir) * f.speed
+    own.vz = Math.sin(dir) * f.speed
+  }
+
+  /** Dev / audit: hold your rider in a state (null: back to play). See `ANIM_STATES`. */
+  devAnimSet(state: string | null): boolean {
+    if (state === null) {
+      this.devAnim = null
+      return true
+    }
+    if (state === 'fire') {
+      this.crowd?.fired(this.net.you, 0)
+      return true
+    }
+    if (state === 'hit') {
+      this.crowd?.hurt(this.net.you, this.own, {
+        x: this.own.x + Math.cos(this.aim) * 5,
+        z: this.own.z + Math.sin(this.aim) * 5,
+      })
+      return true
+    }
+    const s = ANIM_STATES[state]
+    this.devAnim = s ?? null
+    return s !== undefined
+  }
+
   devAds(on: boolean): void {
     this.touch?.setAds(on)
     this.devAdsOn = on
@@ -1927,6 +1981,35 @@ export class FrontierGame {
   }
 }
 
+/** A held state: anim, stance bits, ground speed, and the move's turn off the aim (rad). */
+interface DevAnim {
+  anim: number
+  stance: number
+  speed: number
+  turn?: number
+}
+
+/** The animation audit's named states (dev hook `__frontierAnim.set`). */
+const ANIM_STATES: Record<string, DevAnim> = {
+  idle: { anim: ANIM_IDLE, stance: 0, speed: 0 },
+  walk: { anim: ANIM_RUN, stance: 0, speed: 1.6 },
+  run: { anim: ANIM_RUN, stance: 0, speed: 5.5 },
+  sprint: { anim: ANIM_RUN, stance: STANCE_SPRINT, speed: 7.6 },
+  strafe: { anim: ANIM_RUN, stance: 0, speed: 5.5, turn: Math.PI / 2 },
+  back: { anim: ANIM_RUN, stance: 0, speed: 5.5, turn: Math.PI },
+  ads: { anim: ANIM_IDLE, stance: STANCE_ADS, speed: 0 },
+  'ads-walk': { anim: ANIM_RUN, stance: STANCE_ADS, speed: 3 },
+  crouch: { anim: ANIM_IDLE, stance: STANCE_CROUCH, speed: 0 },
+  'crouch-walk': { anim: ANIM_RUN, stance: STANCE_CROUCH, speed: 2.9 },
+  slide: { anim: ANIM_SLIDE, stance: 0, speed: 7 },
+  jump: { anim: ANIM_HOP, stance: 0, speed: 5.5 },
+  vault: { anim: ANIM_VAULT, stance: 0, speed: 4 },
+  roll: { anim: ANIM_ROLL, stance: 0, speed: 8 },
+  reload: { anim: ANIM_RELOAD, stance: 0, speed: 0 },
+  channel: { anim: ANIM_CHANNEL, stance: 0, speed: 0 },
+  dead: { anim: ANIM_DEAD, stance: 0, speed: 0 },
+}
+
 /** `ANIM_VAULT` or `ANIM_HOP` while one is under way, else 0. */
 function jumpAnim(jumpTicks: number, vaultStep: number): number {
   if (jumpTicks <= 0) {
@@ -2006,8 +2089,9 @@ const RING_MW = new Color(2, 1.5, 0.3)
 const FLASH_SCALE: Record<ViewMode, number> = { top: 1, third: 0.45, first: 0.18 }
 
 /** How high the camera rides a vault and a hop (m): the body's arc. */
-const VAULT_PEAK_M = 0.55
-const HOP_PEAK_M = 0.3
+/** The lens's vault and jump arcs: the body's (scene/locomotion.ts), so the view rides with it. */
+const VAULT_PEAK_M = 0.75
+const HOP_PEAK_M = 0.45
 
 /** From a rifle shot to the lever working the next round in, s (the rifle fires every 0.9 s). */
 const RIFLE_LEVER_DELAY = 0.32

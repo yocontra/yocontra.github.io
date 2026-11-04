@@ -47,6 +47,7 @@ import {
   SHOT_SHOTGUN,
   STANCE_ADS,
   STANCE_CROUCH,
+  STANCE_SPRINT,
   WEAPON_REVOLVER,
   WEAPON_RIFLE,
   WEAPON_SHOTGUN,
@@ -75,7 +76,16 @@ import { Locomotion } from './locomotion.ts'
 import type { PlayerLook } from './looks.ts'
 import { kitMaterial, shotgunMesh } from './shotgun.ts'
 
-const VAT_CLIPS: Clip[] = ['Idle', 'Walk', 'Run', 'Idle_Gun_Pointing', 'Death']
+const VAT_CLIPS: Clip[] = [
+  'Idle',
+  'Walk',
+  'Run',
+  'Idle_Gun_Pointing',
+  'Death',
+  'Sprint',
+  'Crouch_Idle',
+  'Crouch_Walk',
+]
 const NEAR_FAST_M = 12
 const SHADOW_CASTERS = 6
 const LOD1_TRIS = 3000
@@ -212,6 +222,7 @@ const hp = new Vector3()
 const pos = new Vector3()
 const one = new Vector3(1, 1, 1)
 const up = new Vector3(0, 1, 0)
+const side = new Vector3(1, 0, 0)
 
 export class Crowd {
   readonly root = new Group()
@@ -843,17 +854,16 @@ export class Crowd {
     } else if (m.gait === GAIT_WALK) {
       name = v.clip('Walk') ? 'Walk' : 'Run'
     }
-    if (p.anim === ANIM_DEAD) {
-      name = 'Death'
-    } else if (p.anim === ANIM_AIM || (name === 'Idle' && !(p.flags & EF_HOLSTERED))) {
-      name = 'Idle_Gun_Pointing'
-    }
+    name = farStance(p, name, (c) => v.clip(c) !== null)
     const clip = v.clip(name) ?? v.clip('Idle')
     if (!clip) {
       return
     }
     let phase = m.phase
     let rate = name === 'Run' || name === 'Walk' ? gaitRate(name, speed, CLIP_WALK_SPEED) : 1
+    if (name === 'Sprint' || name === 'Crouch_Walk') {
+      rate = Math.max(0.6, Math.min(1.6, speed / (name === 'Sprint' ? 7.2 : 1.6)))
+    }
     if (name === 'Death') {
       // Play once and hold the last frame: drive the frame from the death time.
       const f = Math.min(clip.frames - 1, (nowS - m.animSince) * 15)
@@ -864,9 +874,12 @@ export class Crowd {
     v.set(i, clip, { phase, speed: rate }, m.look)
     q.setFromAxisAngle(up, facing(p.aim))
     pos.set(p.x, farLift(p.anim, nowS - m.animSince), p.z)
-    // far riders have no rig to bend: a crouch or a slide reads as a lower, leaning figure
-    const low = p.anim === ANIM_SLIDE || (p.stance & STANCE_CROUCH) !== 0
-    m4.compose(pos, q, one.set(this.readScale, this.readScale * (low ? 0.74 : 1), this.readScale))
+    if (p.anim === ANIM_SLIDE) {
+      // the crouch, leaning back feet first
+      q.multiply(hq.setFromAxisAngle(side, -0.7))
+      pos.y -= 0.2
+    }
+    m4.compose(pos, q, one.setScalar(this.readScale))
     one.set(1, 1, 1)
     v.mesh.setMatrixAt(i, m4)
     if (!(p.flags & EF_HATLESS)) {
@@ -1000,6 +1013,27 @@ function gaitRate(clip: Clip, speed: number, walk: number): number {
     : Math.max(0.6, Math.min(1.3, speed / CLIP_RUN_SPEED))
 }
 
+/** A far rider's clip for his stance: the crouch, the sprint, the slide, the sights, his death. */
+function farStance(p: CrowdPlayer, gait: Clip, has: (c: Clip) => boolean): Clip {
+  if (p.anim === ANIM_DEAD) {
+    return 'Death'
+  }
+  if (p.anim === ANIM_SLIDE && has('Crouch_Idle')) {
+    return 'Crouch_Idle'
+  }
+  if ((p.stance & STANCE_CROUCH) !== 0 && has('Crouch_Idle')) {
+    return gait === 'Idle' ? 'Crouch_Idle' : 'Crouch_Walk'
+  }
+  if ((p.stance & STANCE_SPRINT) !== 0 && has('Sprint')) {
+    return 'Sprint'
+  }
+  const drawn = !(p.flags & EF_HOLSTERED) || (p.stance & STANCE_ADS) !== 0
+  if (p.anim === ANIM_AIM || (p.stance & STANCE_ADS) !== 0 || (gait === 'Idle' && drawn)) {
+    return gait === 'Idle' || (p.stance & STANCE_ADS) !== 0 ? 'Idle_Gun_Pointing' : gait
+  }
+  return gait
+}
+
 /** A far rider's jump or vault arc (m), from his anim and how long he's been at it. */
 function farLift(anim: number, since: number): number {
   if (anim !== ANIM_HOP && anim !== ANIM_VAULT) {
@@ -1007,7 +1041,7 @@ function farLift(anim: number, since: number): number {
   }
   const vault = anim === ANIM_VAULT
   const t = Math.min(1, since / (vault ? 0.5 : 0.55))
-  return (vault ? 0.85 : 0.45) * 4 * t * (1 - t)
+  return (vault ? 0.75 : 0.45) * 4 * t * (1 - t)
 }
 
 const hatColors = new WeakMap<PlayerLook, Color>()

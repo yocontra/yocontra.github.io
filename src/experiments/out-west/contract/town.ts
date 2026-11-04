@@ -36,10 +36,11 @@
  * | 6 | u8 | `ackAgeMs`: ms between receiving that snapshot and sending this message (cap 255) |
  * | 7 | n × 9 B | frames |
  *
- * Frame (9 B): `moveX i8`, `moveZ i8` (−127..127, normalised on the server), `aim u16` (turns,
+ * Frame (10 B): `moveX i8`, `moveZ i8` (−127..127, normalised on the server), `aim u16` (turns,
  * 0 = +x, increasing toward +z), `buttons u16` (`BTN_*`, held state; the server edge-detects),
  * `viewTick u16` (tick16 of the remote-entity time the client was rendering), `viewFrac u8`
- * (fraction of a tick ×255). The view time is used only to rewind hits, clamped to `MAX_REWIND_MS`.
+ * (fraction of a tick ×255), `pitch i8` (±127 = ±90°, wire v6; cosmetic). The view time is used only
+ * to rewind hits, clamped to `MAX_REWIND_MS`.
  *
  * # Server → client: `MSG_SNAPSHOT` (20 Hz)
  *
@@ -98,10 +99,12 @@ import { reopensOn } from '../data/sinks.ts'
  *    `u8 sprintLock`, `u8 sprintOut`, `u8 slideTicks`, `u8 slideCooldown`, `u16 slideAim`,
  *    `i8 airX`, `i8 airZ` (cm per tick)); an entity's `anim` byte carries `ANIM_*` in its low
  *    nibble and the stance bits (`STANCE_*`) above it; `ANIM_SLIDE`.
+ * 6: aim pitch, for the riders' upper bodies (cosmetic: hits stay yaw-only): input frames end with
+ *    `i8 pitch` (10 B a frame) and entities carry it under `ENT_PITCH` (`i8`, ±127 = ±90°).
  */
-export const CONTRACT_VERSION = 5
+export const CONTRACT_VERSION = 6
 /** The binary Frontier wire format this build speaks (`TownJoinRequest.wire`). */
-export const TOWN_WIRE_VERSION = 5
+export const TOWN_WIRE_VERSION = 6
 
 // --- saddlebags ----------------------------------------------------------------------------------
 
@@ -230,7 +233,7 @@ export const ANGLE_SCALE = 65_536
 export const MAX_REWIND_MS = 200
 
 export const INPUT_HEADER_BYTES = 7
-export const INPUT_FRAME_BYTES = 9
+export const INPUT_FRAME_BYTES = 10
 export const MAX_FRAMES_PER_INPUT = 4
 export const SNAPSHOT_HEADER_BYTES = 11
 export const SNAPSHOT_SELF_BYTES = 41
@@ -295,6 +298,8 @@ export const ENT_HP = 8
 export const ENT_FLAGS = 16
 export const ENT_ANIM = 32
 export const ENT_CARRY = 64
+/** Aim pitch, `i8` (±127 = ±90°, up positive): wire v6. */
+export const ENT_PITCH = 128
 
 export const EF_ALIVE = 1
 export const EF_PROTECTED = 2

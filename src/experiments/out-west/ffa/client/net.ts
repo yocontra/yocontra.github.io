@@ -76,6 +76,8 @@ export interface Intent {
   /** u16 turns. */
   aim: number
   buttons: number
+  /** Aim pitch, ±127 = ±90° (cosmetic). */
+  pitch?: number
 }
 
 export interface NetHandlers {
@@ -434,6 +436,7 @@ export class NetClient {
       buttons: intent.buttons,
       viewTick: viewTick & 0xff_ff,
       viewFrac: Math.round((renderTick - viewTick) * 255),
+      pitch: intent.pitch ?? 0,
     }
     const seq = this.batcher.nextSeq
     this.send(this.batcher.push(frame), nowMs)

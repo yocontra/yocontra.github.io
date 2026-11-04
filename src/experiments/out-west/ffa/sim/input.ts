@@ -40,7 +40,15 @@ export const quantizeAim = (aim: number): number =>
 
 /** Stick, quantised aim and buttons: the parts that count as a change (view time doesn't). */
 export const sameInput = (a: WireFrame, b: WireFrame): boolean =>
-  a.moveX === b.moveX && a.moveZ === b.moveZ && a.aim === b.aim && a.buttons === b.buttons
+  a.moveX === b.moveX &&
+  a.moveZ === b.moveZ &&
+  a.aim === b.aim &&
+  a.buttons === b.buttons &&
+  (a.pitch ?? 0) === (b.pitch ?? 0)
+
+/** Pitch goes in steps of 4 (about 3°): enough for a body to look up, few extra sends. */
+export const quantizePitch = (p: number): number =>
+  Math.max(-124, Math.min(124, Math.round(p / 4) * 4))
 
 export const seqDiff = (a: number, b: number): number => ((a - b + 98_304) % 65_536) - 32_768
 
@@ -75,7 +83,7 @@ export class InputBatcher {
    * first, or null for silence. Call every tick, even when nothing is pressed.
    */
   push(frame: WireFrame): { seq: number; frames: WireFrame[] } | null {
-    const f = { ...frame, aim: quantizeAim(frame.aim) }
+    const f = { ...frame, aim: quantizeAim(frame.aim), pitch: quantizePitch(frame.pitch ?? 0) }
     const seq = this.seq
     this.seq = (this.seq + 1) & 0xff_ff
     this.slot.push(f)

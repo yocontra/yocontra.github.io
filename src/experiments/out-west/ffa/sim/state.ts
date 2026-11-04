@@ -129,6 +129,7 @@ export function newPlayer(id: number, init: PlayerInit): Player {
     aim: 0,
     prevAim: 0,
     moving: false,
+    pitch: 0,
     crouched: false,
     ads: false,
     bloom: 0,

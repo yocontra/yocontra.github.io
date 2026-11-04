@@ -89,6 +89,8 @@ export class ShooterCamera {
   private fov = 72
   /** Recoil: extra pitch (rad) that settles back. */
   private recoil = 0
+  /** First person: the view model's own kick (rad), added to the lens's pitch. */
+  vmKick = 0
   private readonly shake = { t: 0, amp: 0 }
   private bobPhase = 0
   private bobAmp = 0
@@ -156,7 +158,7 @@ export class ShooterCamera {
     this.recoil *= Math.exp(-dt * 9)
     this.shake.t += dt
     this.shake.amp *= Math.exp(-dt * 10)
-    const pitch = this.pitch + this.recoil
+    const pitch = this.pitch + this.recoil + (f.first ? this.vmKick : 0)
     const sx = Math.sin(this.shake.t * 63) * this.shake.amp * 0.04
     const sy = Math.cos(this.shake.t * 51) * this.shake.amp * 0.04
     const cy = Math.cos(this.yaw)

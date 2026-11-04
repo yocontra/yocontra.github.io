@@ -266,6 +266,12 @@ export function mountFrontier(root: HTMLElement, opts: FrontierOptions = {}): Fr
       closeHowTo: () => game.devCloseHowTo(),
       weapon: (w: number | null) => game.devShowWeapon(w),
     })
+    // The animation audit: hold your rider in a named state (idle, walk, run, sprint, strafe,
+    // ads, ads-walk, crouch, crouch-walk, slide, jump, vault, roll, reload, channel, dead), or
+    // trigger one (fire, hit); null hands him back.
+    Reflect.set(globalThis, '__frontierAnim', {
+      set: (state: string | null) => game.devAnimSet(state),
+    })
   }
   const ap = game.autopilot
   if (import.meta.env.DEV && ap) {

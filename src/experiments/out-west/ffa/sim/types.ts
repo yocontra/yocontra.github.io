@@ -11,6 +11,8 @@ export interface InputFrame {
   buttons: number
   /** Full server tick (+ fraction) of the remote-entity time the client rendered. */
   viewTime: number
+  /** Aim pitch, ±127 = ±90° (wire v6; cosmetic, for the riders' upper bodies). */
+  pitch?: number
 }
 
 /** The movement subset of a player: what client prediction replays. */
@@ -85,6 +87,8 @@ export interface Player extends MoveState {
   aim: number
   prevAim: number
   moving: boolean
+  /** Aim pitch as the client last sent it (±127 = ±90°; cosmetic). */
+  pitch: number
   /** Held this tick: crouched, on the sights (the stance bits remote riders see). */
   crouched: boolean
   ads: boolean

@@ -30,6 +30,7 @@ interface Sample {
   flags: number
   anim: number
   carry: number
+  pitch: number
 }
 
 /** What the scene draws for one remote player this frame. */
@@ -45,6 +46,8 @@ export interface RemoteView {
   /** `STANCE_*` bits (crouched, on the sights, sprinting). */
   stance: number
   carry: number
+  /** Aim pitch (rad, up positive). */
+  pitch: number
   /** Ground velocity (m/s), from the samples around the render time. */
   vx: number
   vz: number
@@ -77,6 +80,7 @@ export class RemoteTrack {
       anim: 0,
       stance: 0,
       carry: 0,
+      pitch: 0,
       vx: 0,
       vz: 0,
       ready: false,
@@ -101,6 +105,7 @@ export class RemoteTrack {
       flags: e.flags,
       anim: e.anim,
       carry: e.carry,
+      pitch: ((e.pitch ?? 0) / 127) * (Math.PI / 2),
     })
     if (this.samples.length > HISTORY) {
       this.samples.shift()
@@ -178,6 +183,7 @@ export class RemoteTrack {
     v.x = a.x + (b.x - a.x) * k
     v.z = a.z + (b.z - a.z) * k
     v.aim = lerpAngle(a.aim, b.aim, k)
+    v.pitch = a.pitch + (b.pitch - a.pitch) * k
     // Discrete state switches at the midpoint.
     const d = k < 0.5 ? a : b
     v.hp = d.hp

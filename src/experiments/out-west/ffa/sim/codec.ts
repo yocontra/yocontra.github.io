@@ -8,6 +8,7 @@ import {
   ENT_CARRY,
   ENT_FLAGS,
   ENT_HP,
+  ENT_PITCH,
   ENT_POS,
   ENT_POS_FULL,
   EVENT_SIZES,
@@ -34,6 +35,8 @@ export interface WireFrame {
   buttons: number
   viewTick: number
   viewFrac: number
+  /** Aim pitch, ±127 = ±90° up/down (wire v6; cosmetic). */
+  pitch?: number
 }
 
 export interface InputMessage {
@@ -57,6 +60,7 @@ export function encodeInput(w: Writer, msg: InputMessage): Uint8Array {
       .u16(f.buttons)
       .u16(f.viewTick)
       .u8(clampU8(f.viewFrac))
+      .i8(clampI8(f.pitch ?? 0))
   }
   return w.bytes()
 }
@@ -83,6 +87,7 @@ export function decodeInput(data: ArrayBuffer | Uint8Array): InputMessage | null
       buttons: r.u16(),
       viewTick: r.u16(),
       viewFrac: r.u8(),
+      pitch: r.i8(),
     })
   }
   return { seq, ackTick, ackAgeMs, frames }
@@ -113,6 +118,8 @@ export interface EntityView {
   flags: number
   anim: number
   carry: number
+  /** Aim pitch, ±127 = ±90° (wire v6). */
+  pitch?: number
 }
 
 export interface SelfView {
@@ -181,7 +188,7 @@ export interface Snapshot {
 /** Field bits for an entity against its baseline (or every field when entering). */
 export function entityMask(e: EntityView, base: EntityView | undefined): number {
   if (!base) {
-    return ENT_POS | ENT_POS_FULL | ENT_AIM | ENT_HP | ENT_FLAGS | ENT_ANIM | ENT_CARRY
+    return ENT_POS | ENT_POS_FULL | ENT_AIM | ENT_HP | ENT_FLAGS | ENT_ANIM | ENT_CARRY | ENT_PITCH
   }
   let mask = 0
   if (e.x !== base.x || e.z !== base.z) {
@@ -204,6 +211,9 @@ export function entityMask(e: EntityView, base: EntityView | undefined): number 
   }
   if (e.carry !== base.carry) {
     mask |= ENT_CARRY
+  }
+  if ((e.pitch ?? 0) !== (base.pitch ?? 0)) {
+    mask |= ENT_PITCH
   }
   return mask
 }
@@ -231,6 +241,9 @@ function writeEntity(w: Writer, e: EntityView, base: EntityView | undefined, mas
   }
   if (mask & ENT_CARRY) {
     w.u8(e.carry)
+  }
+  if (mask & ENT_PITCH) {
+    w.i8(clampI8(e.pitch ?? 0))
   }
 }
 
@@ -264,6 +277,9 @@ function readEntity(r: Reader, baseline: Map<number, EntityView>): EntityView {
   }
   if (mask & ENT_CARRY) {
     e.carry = r.u8()
+  }
+  if (mask & ENT_PITCH) {
+    e.pitch = r.i8()
   }
   baseline.set(id, e)
   return e
