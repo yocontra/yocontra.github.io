@@ -223,7 +223,7 @@ function onPickups(s: Sink, ev: WireEvent, nowS: number): void {
 const PICKUP_TOAST: Record<string, string> = {
   shotgun: 'SHOTGUN: 2 shells, 9 m',
   rifle: 'RIFLE: 5 rounds, 35 m',
-  dynamite: 'DYNAMITE: G or THROW to lob it (2 s fuse)',
+  dynamite: 'DYNAMITE: G or THROW to throw (2 s fuse)',
 }
 
 function onDamage(s: Sink, ev: Extract<WireEvent, { type: typeof EV_DAMAGE }>): void {
@@ -322,7 +322,7 @@ function onShowdown(s: Sink, ev: WireEvent): void {
         shot: false,
       })
       if (mine) {
-        s.hud.toast('SHOWDOWN: hands off… wait for the bell', 'red', 2400)
+        s.hud.toast('SHOWDOWN: wait for the bell', 'red', 2400)
         s.audio?.musicLevel(-30)
       }
       break
@@ -367,20 +367,20 @@ function verdict(
   you: number,
 ): string {
   if (ev.outcome === SD_DEAD_HEAT) {
-    return 'DEAD HEAT: nobody walks away'
+    return 'TIE: both died'
   }
   if (ev.outcome === SD_FROZE) {
-    return 'Nobody drew. The ring breaks.'
+    return 'No one drew. Showdown over.'
   }
   if (ev.outcome === SD_COWARD) {
-    return ev.winner === you ? 'They flinched. Coward.' : 'You drew early. Coward.'
+    return ev.winner === you ? 'They drew early. You win.' : 'You drew early. You lose.'
   }
   if (ev.outcome === SD_WIN) {
     return ev.winner === you
       ? `YOU WIN (${ev.winnerMs} ms)`
       : `${s.net.name(ev.winner)} was faster (${ev.winnerMs} ms)`
   }
-  return 'The showdown was called off'
+  return 'Showdown cancelled'
 }
 
 export function handleEvent(s: Sink, ev: WireEvent): void {
@@ -448,11 +448,11 @@ export function handleEvent(s: Sink, ev: WireEvent): void {
       break
     }
     case EV_STRONGBOX_SPAWN:
-      s.hud.feed(`A strongbox worth $${ev.value} turned up. Find the beacon.`, 'gold')
+      s.hud.feed(`A strongbox worth $${ev.value} appeared. Follow the beacon.`, 'gold')
       play(s, 'hawk', null, 0.6)
       break
     case EV_STRONGBOX_OPEN:
-      s.hud.feed(`${s.net.name(ev.by)} cracked the strongbox: $${ev.value}`, 'gold')
+      s.hud.feed(`${s.net.name(ev.by)} opened the strongbox: $${ev.value}`, 'gold')
       if (ev.by === you) {
         s.hud.toast(`+$${ev.value} STRONGBOX`, 'gold', 2000)
         play(s, 'register', null, 1)
@@ -514,7 +514,7 @@ export function handleControl(s: Sink, msg: ServerControl): void {
     }
     case 'deposit':
       if (!msg.ok) {
-        s.hud.feed('The bank is slow to confirm. Your deposit will retry.', 'info')
+        s.hud.feed('The bank is slow. Your deposit will retry.', 'info')
       }
       break
     case 'notice':

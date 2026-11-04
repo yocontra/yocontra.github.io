@@ -237,7 +237,7 @@ export class PvpDuel implements DirectorHooks {
         break
       case 'ready':
         if (m.seat === this.opp) {
-          this.intro?.say('He’s cocked and waiting.')
+          this.intro?.say('He’s ready.')
         }
         break
       case 'holding':
@@ -283,7 +283,7 @@ export class PvpDuel implements DirectorHooks {
         // his first connect is a presence too: only a return after a drop is news
         if (m.seat === this.opp && (!m.connected || this.oppDropped)) {
           this.oppDropped = !m.connected
-          d.c.hud.fake(m.connected ? '[he’s back]' : '[his line dropped · 5 s grace]', 3000)
+          d.c.hud.fake(m.connected ? '[he reconnected]' : '[he disconnected · waiting 5 s]', 3000)
         }
         break
       case 'taunt':
@@ -460,7 +460,7 @@ export class PvpDuel implements DirectorHooks {
     } else if (r.outcome === 'coward' && r.culprit === me) {
       d.events.verdict({ ...verdict, outcome: 'coward' })
     } else if (r.outcome === 'coward') {
-      honestWin(d, 'HE DREW EARLY. BOUNTY’S YOURS.')
+      honestWin(d, 'HE DREW EARLY. YOU WIN.')
     } else {
       this.quietEnd(r)
     }

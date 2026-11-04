@@ -91,7 +91,7 @@ async function issue(request: Request, env: Env, verify: Verify): Promise<Respon
   const body = (await readJson(request, 8 * 1024)) as { turnstileToken?: unknown } | undefined
   const token = body?.turnstileToken
   if (typeof token !== 'string' || !(await verify(token, request, env))) {
-    return error(request, env, 403, 'Could not verify you are human.')
+    return error(request, env, 403, 'Couldn’t check you’re human. Try again.')
   }
   if (!(await budgetState(env)).duelsOpen) {
     return json(
@@ -99,7 +99,7 @@ async function issue(request: Request, env: Env, verify: Verify): Promise<Respon
       env,
       {
         ok: false,
-        error: 'The Daily Outlaw is closed for the rest of the month.',
+        error: 'The Daily Outlaw is closed until next month.',
         reason: 'over_budget',
       },
       503,
@@ -115,7 +115,7 @@ async function issue(request: Request, env: Env, verify: Verify): Promise<Respon
     return json(
       request,
       env,
-      { ok: false, error: `That’s your ${DAILY_ATTEMPTS} tries for today. He’s back tomorrow.` },
+      { ok: false, error: `That’s your ${DAILY_ATTEMPTS} tries for today. Come back tomorrow.` },
       429,
       { 'Retry-After': String(Math.ceil((dayEnds(day) - Date.now()) / 1000)) },
     )
@@ -133,7 +133,7 @@ async function issue(request: Request, env: Env, verify: Verify): Promise<Respon
     .bind(id, day, account, player?.name ?? null, hash, now, DAILY_ATTEMPTS)
     .run()
   if ((inserted.meta.changes ?? 0) === 0) {
-    return error(request, env, 429, 'That’s your tries for today.')
+    return error(request, env, 429, 'No tries left today. Come back tomorrow.')
   }
   const ws = new URL(request.url)
   ws.protocol = ws.protocol === 'https:' ? 'wss:' : 'ws:'

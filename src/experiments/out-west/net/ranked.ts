@@ -129,11 +129,11 @@ async function createSession(token: string): Promise<Result<RankedSessionRespons
         error:
           res.status === 429
             ? 'Too many ranked starts. Wait a moment and try again.'
-            : (msg ?? 'No ranked seat today.'),
+            : (msg ?? 'Ranked isn’t available right now. Try again later.'),
       }
     }
     if (!isRecord(body) || typeof body.wsUrl !== 'string') {
-      return { ok: false, error: 'The ranked server sent something odd back.' }
+      return { ok: false, error: 'Something went wrong. Try again.' }
     }
     return {
       ok: true,
@@ -145,7 +145,7 @@ async function createSession(token: string): Promise<Result<RankedSessionRespons
       },
     }
   } catch {
-    return { ok: false, error: 'Couldn’t reach the ranked server.' }
+    return { ok: false, error: 'Couldn’t connect. Check your connection and try again.' }
   }
 }
 
@@ -180,7 +180,7 @@ export class RankedSession {
       },
       onMessage: (data) => this.onMessage(data),
       onDrop: (reason) => this.onDrop(reason),
-      onGiveUp: (reason) => this.onClose(this.linkUp ? 'The ranked connection dropped.' : reason),
+      onGiveUp: (reason) => this.onClose(this.linkUp ? 'Connection lost.' : reason),
       staleMs: STALE_MS,
       deadlineMs: RANKED_RESUME_WINDOW_MS,
       binaryType: 'blob',
@@ -206,14 +206,14 @@ export class RankedSession {
     return await new Promise<Result<RankedSession>>((resolve) => {
       const timer = setTimeout(() => {
         session.close()
-        resolve({ ok: false, error: 'The ranked server didn’t answer.' })
+        resolve({ ok: false, error: 'The server didn’t respond. Try again.' })
       }, CONNECT_TIMEOUT_MS)
       const session: RankedSession = new RankedSession(created, (ok) => {
         clearTimeout(timer)
         resolve(
           ok
             ? { ok: true, value: session }
-            : { ok: false, error: 'Couldn’t open the ranked connection.' },
+            : { ok: false, error: 'Couldn’t connect. Check your connection and try again.' },
         )
       })
     })
@@ -242,7 +242,7 @@ export class RankedSession {
     }
     this.resuming = true
     // a run being banked can't be confirmed over a dead link: the form says so and can retry
-    this.finalWaiter?.({ ok: false, error: 'The ranked connection dropped. Try again.' })
+    this.finalWaiter?.({ ok: false, error: 'Connection lost. Try again.' })
     this.finalWaiter = null
     this.handlers?.reconnecting(reason)
   }
@@ -316,12 +316,12 @@ export class RankedSession {
   /** Bank the run under `name`; resolves with the server's total and rank. */
   async finish(name: string): Promise<Result<{ total: number; rank: number }>> {
     if (!this.open) {
-      return { ok: false, error: 'The ranked connection is closed.' }
+      return { ok: false, error: 'Connection closed.' }
     }
     return await new Promise((resolve) => {
       const timer = setTimeout(() => {
         this.finalWaiter = null
-        resolve({ ok: false, error: 'The ranked server didn’t confirm the run.' })
+        resolve({ ok: false, error: 'The server didn’t save the run. Try again.' })
       }, FINAL_TIMEOUT_MS)
       this.finalWaiter = (r) => {
         clearTimeout(timer)

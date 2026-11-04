@@ -55,7 +55,7 @@ const registerOptions: Handler = async (request, env) => {
   }
   const token = b.turnstileToken
   if (typeof token !== 'string' || !(await verifyTurnstile(token, request, env))) {
-    return error(request, env, 403, 'Could not verify you are human.')
+    return error(request, env, 403, 'Couldn’t check you’re human. Try again.')
   }
   const challengeId = randomToken()
   if (
@@ -65,7 +65,7 @@ const registerOptions: Handler = async (request, env) => {
       clientHash: await clientHash(request),
     }))
   ) {
-    return error(request, env, 409, 'That name’s already spoken for. Pick another.')
+    return error(request, env, 409, 'That name is taken. Pick another.')
   }
   const options = await registrationOptions(env, {
     kind: 'register',
@@ -89,7 +89,7 @@ const registerVerify: Handler = async (request, env, url) => {
   }
   const key = await verifyRegistration(env, row, b.response)
   if (!key) {
-    return error(request, env, 400, 'The passkey didn’t check out.')
+    return error(request, env, 400, 'That passkey didn’t work. Try again.')
   }
   const player = { accountId: row.account_id, name: row.name }
   const created = await createAccount(env, {
@@ -100,7 +100,7 @@ const registerVerify: Handler = async (request, env, url) => {
     key,
   })
   if (!created) {
-    return error(request, env, 409, 'That name was taken in the meantime. Pick another.')
+    return error(request, env, 409, 'Someone just took that name. Pick another.')
   }
   const grant = await startSession(env, { player, platform: 'web', authTime: Date.now() })
   return await sessionResponse(request, env, url, { grant, status: 201 })
@@ -131,7 +131,7 @@ const loginVerify: Handler = async (request, env, url) => {
         .first<{ name: string }>()
     : null
   if (!(accountId && name)) {
-    return error(request, env, 401, 'We don’t know that passkey.')
+    return error(request, env, 401, 'That passkey isn’t linked to an account.')
   }
   const grant = await startSession(env, {
     player: { accountId, name: name.name },
@@ -191,7 +191,7 @@ async function dailyTurnstile(
   return json(
     request,
     env,
-    { ok: false, error: 'Could not verify you are human.', turnstile: TURNSTILE_REQUIRED },
+    { ok: false, error: 'Couldn’t check you’re human. Try again.', turnstile: TURNSTILE_REQUIRED },
     403,
   )
 }

@@ -41,7 +41,7 @@ const getAccount: Handler = async (request, env, _url, claims) => {
     .bind(claims.sub)
     .first<{ name: string; created_at: number }>()
   if (!row) {
-    return error(request, env, 401, 'That account is gone. Sign in again.')
+    return error(request, env, 401, 'That account no longer exists. Sign in again.')
   }
   return json(
     request,
@@ -83,7 +83,7 @@ const passkeyOptions: Handler = async (request, env, _url, claims) => {
   }
   const name = await accountName(env, claims.sub)
   if (!name) {
-    return error(request, env, 401, 'That account is gone. Sign in again.')
+    return error(request, env, 401, 'That account no longer exists. Sign in again.')
   }
   const options = await registrationOptions(env, {
     kind: 'add_passkey',
@@ -101,7 +101,7 @@ const addPasskey: Handler = async (request, env, _url, claims) => {
   }
   const key = await verifyRegistration(env, row, b.response)
   if (!key) {
-    return error(request, env, 400, 'The passkey didn’t check out.')
+    return error(request, env, 400, 'That passkey didn’t work. Try again.')
   }
   try {
     await insertPasskey(env, claims.sub, key, Date.now()).run()

@@ -15,9 +15,9 @@ import { emptyStreet } from './mode.ts'
 export function quietEndFx(d: Director, r: DuelResult, seat: Seat, lost: boolean): void {
   const mine = r.culprit === seat
   const caption: Record<string, string> = {
-    froze: 'BOTH FROZE',
-    draw: 'DRAW',
-    forfeit: mine ? 'FORFEIT' : 'HE LIT OUT',
+    froze: 'NO ONE DREW',
+    draw: 'TIE',
+    forfeit: mine ? 'FORFEIT' : 'HE LEFT',
     dodge: mine ? 'DODGED' : 'HE DODGED',
   }
   d.c.hud.call(lost ? 'OVER' : (caption[r.outcome] ?? 'OVER'), 1600)

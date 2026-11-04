@@ -70,7 +70,7 @@ export const ACHIEVEMENTS: readonly Achievement[] = [
     ['Tall Tales', 'Finish all 17 challenges.'],
     (s) => tally(s.marks).challenges >= OUTLAW_COUNT,
   ),
-  a('hat-trick', ['Hat Trick', 'Shoot the hat off three outlaws.'], (s) => s.hats >= 3),
+  a('hat-trick', ['Hat Trick', 'Shoot the hat off 3 outlaws.'], (s) => s.hats >= 3),
   a(
     'gauntlet',
     ['Last Man Standing', 'Kill John Wesley Hardin.'],
@@ -79,23 +79,23 @@ export const ACHIEVEMENTS: readonly Achievement[] = [
   a('clean-hands', ['Clean Hands', 'Clear the gauntlet without drawing early.'], (s) =>
     s.moments.has('clean-clear'),
   ),
-  a('nerves', ['Nerves of Iron', 'Win through a fake-out ten times.'], (s) => s.fakesBeaten >= 10),
+  a('nerves', ['Nerves of Iron', 'Win after a fake-out 10 times.'], (s) => s.fakesBeaten >= 10),
   a('lightning', ['Greased Lightning', 'Win a duel under 180 ms.'], (s) =>
     s.moments.has('lightning'),
   ),
-  a('stubborn', ['Mule-Headed', 'Beat an outlaw who killed you five times.'], (s) =>
+  a('stubborn', ['Mule-Headed', 'Beat an outlaw after he beat you 5 times.'], (s) =>
     s.moments.has('stubborn'),
   ),
   a(
     'legend-3',
-    ['Tall in the Saddle', 'Beat three outlaws in one Legend run.'],
+    ['Tall in the Saddle', 'Beat 3 outlaws in one Legend run.'],
     (s) => s.legendBest >= 3,
   ),
-  a('legend-6', ['Legend', 'Beat six outlaws in one Legend run.'], (s) => s.legendBest >= 6),
+  a('legend-6', ['Legend', 'Beat 6 outlaws in one Legend run.'], (s) => s.legendBest >= 6),
   a('daily-first', ['Daily Bread', 'Win the Daily Outlaw.'], (s) => s.dailyDays >= 1),
-  a('daily-week', ['Regular', 'Win the Daily Outlaw on seven days.'], (s) => s.dailyDays >= 7),
-  a('signed', ['On the Books', 'Put your name in the ledger.'], (s) => s.signedIn),
-  a('extra', ['Extra! Extra!', 'Read the Gazette’s last front page.'], (s) => s.epilogue),
+  a('daily-week', ['Regular', 'Win the Daily Outlaw on 7 days.'], (s) => s.dailyDays >= 7),
+  a('signed', ['On the Books', 'Sign in with a passkey.'], (s) => s.signedIn),
+  a('extra', ['Extra! Extra!', 'Read the last Gazette.'], (s) => s.epilogue),
 ]
 
 /** Achievements `s` meets that aren't in `have` yet. */

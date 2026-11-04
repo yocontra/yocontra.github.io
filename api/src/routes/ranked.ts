@@ -64,13 +64,13 @@ export const rankedRoutes: RouteHandler = async (request, env, url) => {
     const body = (await readJson(request, 8 * 1024)) as { turnstileToken?: unknown } | undefined
     const token = body?.turnstileToken
     if (typeof token !== 'string' || !(await verifyTurnstile(token, request, env))) {
-      return error(request, env, 403, 'Could not verify you are human.')
+      return error(request, env, 403, 'Couldn’t check you’re human. Try again.')
     }
     // The $5/month cap (§14): ranked runs are Durable Object time like duels, so they close with them.
     if (!(await budgetState(env)).duelsOpen) {
       const refusal: RankedRefusal = {
         ok: false,
-        error: 'Ranked runs are closed for the rest of the month. Practice is still open.',
+        error: 'Ranked is closed until next month. Practice is still open.',
         reason: 'over_budget',
       }
       return json(request, env, refusal, 503, { 'Retry-After': '86400' })

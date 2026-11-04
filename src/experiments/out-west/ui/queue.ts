@@ -60,7 +60,7 @@ export class QueueSheet {
       queued: (m) => {
         this.line.textContent = m.ghostsOnly
           ? 'Your connection is weak. Ghost duels only.'
-          : 'Looking for a gunslinger…'
+          : 'Finding an opponent…'
       },
       status: (s) => this.status(s),
       matched: (m) => this.matched(m),
@@ -85,8 +85,8 @@ export class QueueSheet {
   private status(s: QueueStatus): void {
     const secs = Math.floor(s.waitedMs / 1000)
     this.line.textContent = s.ghostsOnly
-      ? `Finding you a ghost… ${secs}s`
-      : `Looking for a gunslinger… ${secs}s`
+      ? `Finding a ghost… ${secs}s`
+      : `Finding an opponent… ${secs}s`
     // the matchmaker's windows are its business; only company in the queue is worth a line
     const others = Math.max(0, s.waiting - 1)
     this.detail.textContent =
@@ -101,10 +101,10 @@ export class QueueSheet {
     // a ghost is revealed with its own cold breath; a live gun with the found sting
     uiSound(m.mode === 'ghost' ? 'ghost' : 'queueFound')
     const ghostOf =
-      m.opponent.kind === 'outlaw' ? 'a Town Outlaw' : `the ghost of ${m.opponent.name}`
+      m.opponent.kind === 'outlaw' ? 'a computer opponent' : `the ghost of ${m.opponent.name}`
     this.line.textContent =
       m.mode === 'ghost'
-        ? `Nobody rode in. You’ll duel ${ghostOf}.`
+        ? `No one found. You’ll duel ${ghostOf}.`
         : `${m.opponent.name} answers the call.`
     setTimeout(() => {
       this.root.remove()

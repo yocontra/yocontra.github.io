@@ -71,7 +71,7 @@ export function remotePace(d: Director, n: number, auto: boolean, h: HoldState):
   d.c.hud.setPips(n, true)
   if (auto) {
     h.autoUntil = performance.now() + 650
-    d.c.hud.fake('[the town walks you on]', 1200)
+    d.c.hud.fake('[walking you out]', 1200)
   }
   d.pDist = Math.max(d.pDist, (n - 0.35) * d.player.paceLength)
   if (d.enemy) {
@@ -147,8 +147,8 @@ export function deadHeatFx(d: Director): void {
   d.enter('lose')
   c.audio.heartbeat(0)
   c.hud.clearCaptions()
-  c.hud.call('DEAD HEAT', 1800)
-  c.hud.fake('[both men fall · sudden death]', 2400)
+  c.hud.call('TIE', 1800)
+  c.hud.fake('[tie · sudden death]', 2400)
   c.rig.addTrauma(FEEL.shake.hit)
 }
 

@@ -136,11 +136,11 @@ export class Matchmaker extends DurableObject<Env> {
   ): Promise<{ reason: QueueRefusal; message: string; retryAfterS?: number } | null> {
     const accountId = request.headers.get('X-Account-Id') ?? ''
     if (!accountId) {
-      return { reason: 'unauthorized', message: 'Sign in to ride for bounties.' }
+      return { reason: 'unauthorized', message: 'Sign in to play Bounty Hunt.' }
     }
     const budget = await budgetState(this.env)
     if (!budget.duelsOpen) {
-      return { reason: 'budget', message: "The town's full this month. Come back soon, partner." }
+      return { reason: 'budget', message: 'Bounty Hunt is closed until next month.' }
     }
     const busyUntil = await this.ctx.storage.get<number>(`room:${accountId}`)
     const queued = this.ctx.getWebSockets(accountId).length > 1
@@ -154,12 +154,12 @@ export class Matchmaker extends DurableObject<Env> {
       dyesOf(this.env, accountId),
     ])
     if (!profile) {
-      return { reason: 'no-profile', message: 'No poster yet. Sign up first.' }
+      return { reason: 'no-profile', message: 'Sign up first.' }
     }
     if (!licenceStatus(profile.gauntletClears).licensed) {
       return {
         reason: 'unlicensed',
-        message: 'Beat the first 3 outlaws on a ranked run to earn your licence.',
+        message: 'You need a licence. Beat 3 outlaws on a ranked run.',
       }
     }
     const now = Date.now()
@@ -169,7 +169,7 @@ export class Matchmaker extends DurableObject<Env> {
       const retryAfterS = Math.ceil((lastDodge + DODGE_COOLDOWN_MS - now) / 1000)
       return {
         reason: 'cooldown',
-        message: 'Too many dodges. Wait before you queue again.',
+        message: 'You dodged too many duels. Wait a while, then try again.',
         retryAfterS,
       }
     }

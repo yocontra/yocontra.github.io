@@ -33,11 +33,11 @@ export function licenceStatus(gauntletClears: number): LicenceStatus {
 /** The account plate's two lines: a kicker above the name, and the progress (null once licensed). */
 export function licenceCopy(status: LicenceStatus): { kicker: string; progress: string | null } {
   if (status.licensed) {
-    return { kicker: 'Licensed gunslinger', progress: null }
+    return { kicker: 'Licensed', progress: null }
   }
   const n = status.remaining
   return {
-    kicker: 'Unlicensed gunslinger',
-    progress: `Beat ${n} more outlaw${n === 1 ? '' : 's'} on a ranked run to earn your licence.`,
+    kicker: 'No licence yet',
+    progress: `Beat ${n} more outlaw${n === 1 ? '' : 's'} on a ranked run to get your licence.`,
   }
 }
