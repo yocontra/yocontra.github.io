@@ -25,6 +25,12 @@ import { buildNav, findPath, type NavGrid } from './nav.ts'
 const ENGAGE_RANGE = 20
 const BANK_AT = 300
 const REPLAN_TICKS = 40
+/** At the goal with nothing to channel: the next goal this soon (ticks). */
+const ARRIVED_REPLAN_TICKS = 3
+/** Closer than this (m), two fighters back off from each other instead of trading point-blank. */
+const POINT_BLANK_M = 1.5
+/** Walking without moving for this long (ticks): pick another goal. */
+const STUCK_TICKS = 15
 const SCAN_TICKS = 4
 const AIM_ERROR_RAD = 0.06
 /** Dev `rally` only: bots further than this from the rally player stop fighting and walk back. */
@@ -54,6 +60,10 @@ interface BotBrain {
   scanAt: number
   strafe: number
   seq: number
+  /** Where the bot stood last tick and how many ticks it has walked without getting anywhere. */
+  lastX: number
+  lastZ: number
+  stuck: number
 }
 
 /** The `n`th bot name (64 distinct, then they repeat). */
@@ -107,7 +117,18 @@ export class BotDirector {
   private brain(id: number): BotBrain {
     let b = this.brains.get(id)
     if (!b) {
-      b = { path: [], goal: null, replanAt: 0, target: -1, scanAt: 0, strafe: 1, seq: 0 }
+      b = {
+        path: [],
+        goal: null,
+        replanAt: 0,
+        target: -1,
+        scanAt: 0,
+        strafe: 1,
+        seq: 0,
+        lastX: 0,
+        lastZ: 0,
+        stuck: 0,
+      }
       this.brains.set(id, b)
     }
     return b
@@ -145,8 +166,15 @@ export class BotDirector {
   }
 
   private fight({ w, p, b, q, f }: Engagement): void {
-    const dx = q.x - p.x
-    const dz = q.z - p.z
+    let dx = q.x - p.x
+    let dz = q.z - p.z
+    if (dx * dx + dz * dz < POINT_BLANK_M ** 2) {
+      // On top of each other (a shared goal, a shared doorway): with no direction between them
+      // they'd stand and trade shots forever. Each backs off its own way (by id) and circles.
+      const a = (p.id * 2.399_963) % (Math.PI * 2)
+      dx = Math.cos(a) * POINT_BLANK_M
+      dz = Math.sin(a) * POINT_BLANK_M
+    }
     const d = Math.sqrt(dx * dx + dz * dz) || 1
     f.aim = radiansToAim(Math.atan2(dz, dx) + this.rng.range(-AIM_ERROR_RAD, AIM_ERROR_RAD))
     // Strafe around the target, closing to ~10 m.
@@ -156,6 +184,8 @@ export class BotDirector {
     let approach = 0
     if (d > 12) {
       approach = 1
+    } else if (d <= POINT_BLANK_M) {
+      approach = -1
     } else if (d < 7) {
       approach = -0.6
     }
@@ -175,6 +205,14 @@ export class BotDirector {
   }
 
   private walk(w: World, p: Player, b: BotBrain, f: InputFrame): void {
+    // Pushing into a corner the nav grid thinks is open (or another rider): give up on this goal.
+    b.stuck = dist2(p.x, p.z, b.lastX, b.lastZ) < 0.05 ** 2 && b.path.length > 0 ? b.stuck + 1 : 0
+    b.lastX = p.x
+    b.lastZ = p.z
+    if (b.stuck >= STUCK_TICKS) {
+      b.stuck = 0
+      b.replanAt = 0
+    }
     if (w.tick >= b.replanAt || b.path.length === 0) {
       b.goal = this.pickGoal(w, p)
       b.path = findPath(this.navFor(w), p, b.goal) ?? []
@@ -186,8 +224,10 @@ export class BotDirector {
       next = b.path[0]
     }
     if (!next) {
-      // At the goal: bank, open the box, or idle.
-      f.buttons = (w.tick + p.id) % 4 === 0 ? BTN_INTERACT : 0
+      // At the goal: press E (bank, open the box). If no channel starts within a few ticks there
+      // was nothing to do here: pick the next goal at once rather than idling until the replan.
+      f.buttons = p.lastButtons & BTN_INTERACT ? 0 : BTN_INTERACT
+      b.replanAt = Math.min(b.replanAt, w.tick + ARRIVED_REPLAN_TICKS)
       return
     }
     const dx = next.x - p.x
