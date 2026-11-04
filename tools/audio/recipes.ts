@@ -587,8 +587,9 @@ export const RECIPES: Record<string, Recipe> = {
     out: 'music/victory.m4a',
     lufs: -18,
     kbps: 128,
-    credit: GEN,
-    make: () => fade(load(raw('s_victory'), 2), 0.005, 1),
+    credit: LYRIA,
+    // audio director pass: the old synth sting (rated 4/10) redone as a Lyria trumpet flourish
+    make: () => shot(load(lyriaTake('l_victory', 2), 2), 6, 1.5, -40),
   },
   m_defeat: {
     out: 'music/defeat.m4a',
@@ -603,7 +604,38 @@ export const RECIPES: Record<string, Recipe> = {
     lufs: -18,
     kbps: 96,
     credit: LYRIA,
-    make: () => act(lyriaTake('l_saloon_b', 2), false),
+    // audio director pass: a live fiddle band instead of the lone piano that read as MIDI
+    make: () => act(lyriaTake('l_saloon_c', 2), false),
+  },
+  /** The hub's second tune: the two take turns visit by visit (`AudioEngine.playSong`). */
+  m_saloon_b: {
+    out: 'music/saloon_b.m4a',
+    lufs: -18,
+    kbps: 96,
+    credit: LYRIA,
+    make: () => act(lyriaTake('l_saloon_d', 3), false),
+  },
+  /** The duel cues: the act theme thins to these for the walk and the standoff. */
+  m_duel_day: {
+    out: 'music/duel_day.m4a',
+    lufs: -18,
+    kbps: 96,
+    credit: LYRIA,
+    make: () => act(lyriaTake('l_duel_day', 1), false),
+  },
+  m_duel_dusk: {
+    out: 'music/duel_dusk.m4a',
+    lufs: -18,
+    kbps: 96,
+    credit: LYRIA,
+    make: () => act(lyriaTake('l_duel_dusk', 2), false),
+  },
+  m_duel_night: {
+    out: 'music/duel_night.m4a',
+    lufs: -18,
+    kbps: 96,
+    credit: LYRIA,
+    make: () => act(lyriaTake('l_duel_night', 3), false),
   },
   m_act_day: {
     out: 'music/act_day.m4a',
@@ -658,7 +690,7 @@ export const RECIPES: Record<string, Recipe> = {
     out: 'music/victory_lucky.m4a',
     lufs: -18,
     kbps: 128,
-    credit: GEN,
-    make: () => shot(load(`${RAW}/s_victory_lucky.t2.mp3`, 2), 5, 1.2, -40),
+    credit: LYRIA,
+    make: () => shot(load(lyriaTake('l_lucky_b', 3), 2), 5, 1.2, -40),
   },
 }
