@@ -13,10 +13,31 @@ import { type Color, Group, type Object3D, type Texture, type Vector3 } from 'th
 import type { Assets } from '../engine/assets.ts'
 import { PROBE } from './anim-probe.ts'
 import { Animals } from './animals.ts'
+import type { Stand } from './beasts.ts'
 import { RIG_TIME } from './critter-rig.ts'
 import { Crows } from './crows.ts'
+import type { FolkPlace } from './folk-spots.ts'
 import { DustDevil, ScreenDoor, Shingles } from './town-motion.ts'
 import { Townsfolk } from './townsfolk.ts'
+
+/**
+ * Where the town's life stands in another duel arena (scene/arenas): the same people, birds and
+ * animals, moved onto that arena's porches, rails and roofs. The street's own places are the
+ * default (`arrange(null)`).
+ */
+export interface LifeLayout {
+  /** In the townsfolk's tier order (the floor tier takes the first four). */
+  folk: readonly FolkPlace[]
+  /** The crows' perch: centre, the run of it, and the way they face. */
+  crows: { x: number; y: number; z: number; along: 'x' | 'z'; face: number }
+  /** One per horse (two); a missing one hides. */
+  horses: readonly Stand[]
+  dog: Stand
+  /** The fake-out door's hinge foot and turn (0: on a +x front, opening toward the lane). */
+  door: Stand
+  /** The hens' yard, or null to keep them in the coop. */
+  hens: { x: number; z: number } | null
+}
 
 interface TierCounts {
   folk: number
@@ -56,6 +77,18 @@ export class TownLife {
       // for Playwright (perf A/B, cues, the animation audit): dev and perf-harness builds only
       Reflect.set(globalThis, '__owLife', this)
     }
+  }
+
+  /** Move everyone into another arena's places (null: the street's). */
+  arrange(layout: LifeLayout | null): void {
+    this.folk.arrange(layout?.folk ?? null)
+    this.crows.perchAt(layout?.crows ?? null)
+    this.animals.horses.tether(layout?.horses ?? null)
+    this.animals.dog.place(layout?.dog ?? null)
+    this.animals.hens?.yard(layout?.hens ?? null, layout === null || layout.hens !== null)
+    this.door.hang(layout?.door ?? null)
+    // the street's hanging shingles (SALOON, ROOMS) belong to its porches
+    this.signs.mesh.visible = layout === null
   }
 
   /** A new duel: everyone back where they were, the crows on their rail. */

@@ -6,6 +6,7 @@ import {
   BOSS_STRIKE_INTERVAL,
   legendDraw,
   RIFLEMAN,
+  TOUCH_ALLOWANCE_MS,
 } from '../data/outlaws.ts'
 import type { Press } from '../engine/input.ts'
 import { haptic } from '../platform/haptics.ts'
@@ -74,6 +75,7 @@ export function standoffSpec(d: Director): StandoffSpec {
           intervalMs: [BOSS_STRIKE_INTERVAL[0] * 1000, BOSS_STRIKE_INTERVAL[1] * 1000],
         }
       : null,
+    touch: d.c.input.touch,
   }
 }
 
@@ -274,7 +276,7 @@ function planLocal(d: Director, now: number): void {
       draw,
       jitter,
       accuracy: o.accuracy,
-      assist: c.save.settings.assist ? ASSIST_MS : 0,
+      assist: (c.save.settings.assist ? ASSIST_MS : 0) + (c.input.touch ? TOUCH_ALLOWANCE_MS : 0),
       twoGuns: o.gimmick === 'two-guns',
       rifleman: d.underboss && d.riflemanAlive ? RIFLEMAN : null,
       secondShotMs: FEEL.secondShotMs,
@@ -471,6 +473,8 @@ export function playerShoots(d: Director, p: Press): void {
   for (const s of shotsBefore(plan, p.t, FEEL.tieMs, (w) => alive(d, w))) {
     enemyFires(d, s)
     if (d.phase !== 'call') {
+      // he got there first in this same frame: your press still goes on the lose card
+      d.lateMs ??= p.t - d.callT
       return
     }
   }

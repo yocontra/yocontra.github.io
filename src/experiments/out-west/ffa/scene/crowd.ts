@@ -21,7 +21,6 @@ import {
   type Color,
   Group,
   InstancedMesh,
-  type Material,
   Matrix4,
   Mesh,
   MeshBasicMaterial,
@@ -58,7 +57,8 @@ import type { Actor, Clip } from '../../scene/actor.ts'
 import { castActor } from '../../scene/cast.ts'
 import { lodGeometry } from '../../scene/lod.ts'
 import type { LongHold } from '../../scene/longgun.ts'
-import { propDef, propObject } from '../../scene/props.ts'
+import { propObject } from '../../scene/props.ts'
+import { REVOLVER_LOD_FAR, revolverDef, revolverGeometry } from '../../scene/revolver.ts'
 import { rifleObject } from '../../scene/rifle.ts'
 import { RIFLE_ROUNDS, SHOTGUN_SHELLS } from '../sim/constants.ts'
 import { GunBatch } from './crowd/gun-batch.ts'
@@ -76,7 +76,7 @@ import { shareDepthByKind } from './depth-kinds.ts'
 import type { GestureKind } from './gestures.ts'
 import { Locomotion } from './locomotion.ts'
 import type { PlayerLook } from './looks.ts'
-import { kitMaterial, shotgunMesh } from './shotgun.ts'
+import { shotgunMesh } from './shotgun.ts'
 
 const VAT_CLIPS: Clip[] = [
   'Idle',
@@ -125,6 +125,8 @@ const CAST_GAP_MS = 1500
 const PREBUILD_RING = 4
 /** Characters read 25% bigger than life from the top-down camera (visual only; collision is the sim's). */
 export const READ_SCALE = 1.25
+/** The riders' revolver, its length (m) before `READ_SCALE`. */
+const GUN_SIZE = 0.32
 /** Map weapons: how big they read (the coach gun a touch heavier than life, to read from the sky). */
 const SHOTGUN_HELD_SCALE = 1.15
 
@@ -238,7 +240,6 @@ export class Crowd {
   private readonly blobs: InstancedMesh
   readonly ring: Mesh
   private readonly gun: Group | null
-  private readonly kit: Material
   /** Every skinned rider's revolver as one instanced draw per part. */
   private readonly gunBatch: GunBatch
   /** Skinned cap (8 floor, 6 legacy, 16 medium/high). */
@@ -252,6 +253,9 @@ export class Crowd {
   readScale = READ_SCALE
   /** First person (or a lens pulled into your head): your own body isn't drawn. */
   hideSelf = false
+  /** Your body's opacity (dithered): the shooter camera thins it out when the lens is close. */
+  selfFade = 1
+  private selfFaded = 1
   private readonly order: CrowdPlayer[] = []
   /** Ids drawn this frame (reused). */
   private readonly seen = new Set<number>()
@@ -286,21 +290,17 @@ export class Crowd {
     )
     this.ring.renderOrder = 2
     this.root.add(this.ring)
-    const def = propDef(assets.props, 'revolver', 0.32)
-    this.kit = kitMaterial(assets.props)
-    this.gun = def ? propObject(def) : null
-    // the revolver is a loose mesh too: the kit twin, not the town's instanced kit material
-    this.gun?.traverse((o) => {
-      if (o instanceof Mesh && !Array.isArray(o.material) && o.material.name === 'Kit') {
-        o.material = this.kit
-      }
+    // the Peacemaker (scene/revolver.ts) at its riders' detail, the low level past a few metres
+    this.gun = propObject(revolverDef(GUN_SIZE, 'mid'))
+    this.gunBatch = new GunBatch(this.root, 40, {
+      geometry: revolverGeometry(GUN_SIZE, 'lo'),
+      distance: REVOLVER_LOD_FAR,
     })
-    this.gunBatch = new GunBatch(this.root, 40)
     // the riders' revolvers are copied into their instances once the frame's matrices are current
     const before = scene.onBeforeRender
     scene.onBeforeRender = (...args) => {
       before.apply(scene, args)
-      this.gunBatch.sync()
+      this.gunBatch.sync(args[2])
     }
   }
 
@@ -670,9 +670,18 @@ export class Crowd {
       m.actor.root.updateWorldMatrix(true, true)
       const long = m.held
       if (long) {
-        return out.copy(long.a.muzzle).applyMatrix4(long.obj.matrixWorld)
+        out.copy(long.a.muzzle).applyMatrix4(long.obj.matrixWorld)
+      } else {
+        m.actor.muzzle(out)
       }
-      return m.actor.muzzle(out)
+      // the gun comes up with the shot (the arm layer, the shouldered long gun) a tick after this:
+      // a muzzle still at the hip or the holster gets the raised one's spot instead
+      const ahead = (out.x - x) * Math.cos(aim) + (out.z - z) * Math.sin(aim)
+      if (out.y > 1.15 * this.readScale && ahead > 0.25) {
+        return out
+      }
+      const reach = long ? 1.05 : 0.75
+      return out.set(x + Math.cos(aim) * reach, 1.42 * this.readScale, z + Math.sin(aim) * reach)
     }
     return out.set(x + Math.cos(aim) * 0.7, 1.35, z + Math.sin(aim) * 0.7)
   }
@@ -688,6 +697,21 @@ export class Crowd {
       this.scene.attach(h)
     }
     return h
+  }
+
+  /**
+   * The shooter views: the skinned slots go to riders inside the view cone first (yaw: forward is
+   * (cos, sin); half: the lens's horizontal half-angle). Null (top-down) ranks by distance alone.
+   */
+  setView(yaw: number | null, half = 0): void {
+    if (yaw === null) {
+      viewCos = 2
+      return
+    }
+    viewX = Math.cos(yaw)
+    viewZ = Math.sin(yaw)
+    // a margin past the frame's edge, so the swap to skinned happens off screen
+    viewCos = Math.cos(Math.min(Math.PI, half + VIEW_MARGIN))
   }
 
   update(players: readonly CrowdPlayer[], cx: number, cz: number, dt: number, nowS: number): void {
@@ -783,6 +807,9 @@ export class Crowd {
     }
     // Spawn protection: a warm pulsing glow on the body (never a blink, never see-through)
     holder.visible = !(p.self && this.hideSelf)
+    if (p.self) {
+      this.fadeSelf(actor)
+    }
     if (holder.scale.x !== this.readScale) {
       holder.scale.setScalar(this.readScale)
     }
@@ -839,6 +866,28 @@ export class Crowd {
     }
     m.recoil = Math.max(0, m.recoil - dt * 8)
     m.wasNear = true
+  }
+
+  /**
+   * Your body thinned out (hashed alpha: no sorting, no blending) while the lens is close, so it
+   * never fills the frame or hides the crosshair.
+   */
+  private fadeSelf(actor: Actor): void {
+    const f = Math.round(this.selfFade * 20) / 20
+    if (f === this.selfFaded) {
+      return
+    }
+    this.selfFaded = f
+    actor.root.traverse((o) => {
+      const mat = (o as Partial<Mesh>).material
+      if (mat && !Array.isArray(mat) && (o as Partial<Mesh>).isMesh) {
+        if (!mat.alphaHash) {
+          mat.alphaHash = true
+          mat.needsUpdate = true
+        }
+        mat.opacity = f
+      }
+    })
   }
 
   /** His hat (unless it was shot off) and his revolver (into the crowd's gun batch). */
@@ -1020,10 +1069,31 @@ export class Crowd {
   }
 }
 
+/** How far past the frame's edge (rad) a rider still counts as in view. */
+const VIEW_MARGIN = 0.4
 /** The ranking centre for `byDistance` (module state: the sort runs with no closure per frame). */
 let rankX = 0
 let rankZ = 0
-const d2 = (p: CrowdPlayer): number => (p.self ? -1 : (p.x - rankX) ** 2 + (p.z - rankZ) ** 2)
+/** The look direction and the cone (cos of half its angle) the skinned slots favour; off = 2. */
+let viewX = 1
+let viewZ = 0
+let viewCos = 2
+/** Past this (m², 4 m) a rider out of view ranks as if this much further (m²): 30 m. */
+const BEHIND_FROM2 = 16
+const BEHIND_ADD2 = 900
+const d2 = (p: CrowdPlayer): number => {
+  if (p.self) {
+    return -1
+  }
+  const dx = p.x - rankX
+  const dz = p.z - rankZ
+  const r2 = dx * dx + dz * dz
+  // riders out of view (behind you, off to the side) give their skinned slot to riders in view
+  if (r2 > BEHIND_FROM2 && (dx * viewX + dz * viewZ) / Math.sqrt(r2) < viewCos) {
+    return r2 + BEHIND_ADD2
+  }
+  return r2
+}
 const byDistance = (a: CrowdPlayer, b: CrowdPlayer): number => d2(a) - d2(b)
 
 function setAuto(bones: readonly Object3D[], on: boolean): void {

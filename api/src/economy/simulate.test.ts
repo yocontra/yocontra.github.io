@@ -52,7 +52,7 @@ describe('Bounty Hunt: 3,000 duels at a 50% win rate', () => {
   })
 
   it('a median player can afford the whole catalog after roughly 1,200–2,200 duels', () => {
-    expect(CATALOG_TOTAL).toBe(306_950)
+    expect(CATALOG_TOTAL).toBe(292_550)
     for (const run of runs) {
       const at = run.steps.find((s) => s.purse >= CATALOG_TOTAL)?.duel ?? Number.POSITIVE_INFINITY
       expect(at).toBeGreaterThan(1200)

@@ -15,9 +15,10 @@
  * Bump MEDALS_VERSION whenever a threshold or a payout changes.
  */
 import { BOUNTIES } from './economy.ts'
+import { TOUCH_ALLOWANCE_MS } from './outlaws.ts'
 import { gauntletFirstClearCash, gauntletFirstClearXp } from './progression.ts'
 
-export const MEDALS_VERSION = 1
+export const MEDALS_VERSION = 2
 
 export const TIERS = ['bronze', 'silver', 'gold'] as const
 export type Tier = (typeof TIERS)[number]
@@ -27,28 +28,40 @@ export type TierRank = 0 | 1 | 2 | 3
 
 /**
  * Bronze, silver and gold thresholds per outlaw, ms (a win's first shot must be faster).
- * Bronze always sits under the outlaw's draw time, so a medal is never just "you won".
- * Tuned to duel-core's curve (by gauntlet slot): 900/750 for the tutorial pair, then 520 → 300 ms.
+ * - Bronze is any win: it sits at his slowest possible draw (draw + jitter + the tie window).
+ * - Silver beats a median hand (about 300 ms) on the late outlaws.
+ * - Gold is hard but in reach on a phone: about one win in six for a 260 ms hand.
+ * In practice on a touch screen the touch allowance comes off the reaction first (`medalMs`), the
+ * same allowance the outlaw's draw gets. Ranked medals (booked by the server) never take it.
+ * Tuned to duel-core's curve (by gauntlet slot): 900/750 for the tutorial pair, then 405 → 295 ms.
  */
 export const MEDAL_MS: readonly (readonly [number, number, number])[] = [
-  [420, 320, 240], // 1 Bret P. Barsh (draws 900)
-  [400, 310, 235], // 2 Prescott J. House (750)
-  [390, 300, 230], // 3 Calhoun C. Trine (520)
-  [380, 295, 228], // 4 Burney N. Coover (502 ± 140)
-  [370, 290, 225], // 5 Ace Q. McConly (483)
-  [360, 285, 222], // 6 Delmer F. Gusselman (345, first shot always misses: 465)
-  [350, 280, 220], // 7 Salvador R. Gruell (447)
-  [340, 275, 218], // 8 Felipe K. Wheeler (428)
-  [330, 270, 215], // 9 Laura Bullion (410)
-  [320, 265, 212], // 10 Thomas B. Arnold (392)
-  [310, 260, 210], // 11 Pearl Hart (373)
-  [305, 255, 208], // 12 Luke Short (355)
-  [300, 250, 205], // 13 Dallas Stoudenmire (337)
-  [295, 245, 202], // 14 Kid Curry (318)
-  [285, 240, 200], // 15 Wild Bill Hickok (300)
-  [320, 260, 210], // 16 Curly Bill and the rifleman (rifleman 330)
-  [270, 235, 200], // 17 John Wesley Hardin, the phase-two kill (280)
+  [958, 320, 265], // 1 Bret P. Barsh (draws 900 ± 50)
+  [808, 315, 262], // 2 Prescott J. House (750 ± 50)
+  [463, 310, 260], // 3 Calhoun C. Trine (405 ± 50)
+  [558, 305, 258], // 4 Burney N. Coover (410 ± 140)
+  [428, 300, 256], // 5 Ace Q. McConly (380 ± 40)
+  [408, 296, 254], // 6 Delmer F. Gusselman (250, first shot always misses: 370 ± 30)
+  [408, 292, 252], // 7 Salvador R. Gruell (360 ± 40)
+  [388, 288, 250], // 8 Felipe K. Wheeler (350 ± 30)
+  [361, 284, 248], // 9 Laura Bullion (338 ± 15)
+  [367, 280, 247], // 10 Thomas B. Arnold (329 ± 30)
+  [359, 277, 246], // 11 Pearl Hart (321 ± 30)
+  [357, 274, 245], // 12 Luke Short (314 ± 35)
+  [350, 271, 244], // 13 Dallas Stoudenmire (307 ± 35)
+  [349, 268, 242], // 14 Kid Curry (301 ± 40)
+  [333, 265, 240], // 15 Wild Bill Hickok (295 ± 30)
+  [328, 270, 245], // 16 Curly Bill and the rifleman (rifleman 300 ± 20)
+  [335, 262, 238], // 17 John Wesley Hardin, the phase-two kill (292 ± 35)
 ]
+
+/**
+ * The reaction a medal or a timed challenge is judged on: as measured, less the touch allowance
+ * when the shot was a tap.
+ */
+export function medalMs(reactionMs: number, touch: boolean): number {
+  return touch ? reactionMs - TOUCH_ALLOWANCE_MS : reactionMs
+}
 
 export const OUTLAW_COUNT = MEDAL_MS.length
 
@@ -67,18 +80,19 @@ export const CLAIM_PAY = { xp: 50, cash: 0 } as const
 export const CLAIM_WINDOW_MS = 15 * 60 * 1000
 
 /** The medal tier a winning first shot earns on outlaw `level` (0 when none). */
-export function tierFor(level: number, reactionMs: number | null): TierRank {
+export function tierFor(level: number, reactionMs: number | null, touch = false): TierRank {
   const t = MEDAL_MS[level]
   if (!t || reactionMs === null || !Number.isFinite(reactionMs) || reactionMs <= 0) {
     return 0
   }
-  if (reactionMs < t[2]) {
+  const ms = medalMs(reactionMs, touch)
+  if (ms < t[2]) {
     return 3
   }
-  if (reactionMs < t[1]) {
+  if (ms < t[1]) {
     return 2
   }
-  return reactionMs < t[0] ? 1 : 0
+  return ms < t[0] ? 1 : 0
 }
 
 export const tierName = (rank: TierRank): Tier | null =>
@@ -101,6 +115,8 @@ export function medalPay(from: TierRank, to: TierRank): { xp: number; cash: numb
 /** What a judged win shows about itself. The ranked server can vouch for all of it but `hatShot`. */
 export interface ChallengeEvidence {
   reactionMs: number | null
+  /** The shot was a tap: timed challenges take the touch allowance off first. */
+  touch?: boolean
   fakesSeen: number
   /** No earlier attempt on this outlaw in this run. */
   firstTry: boolean
@@ -174,7 +190,7 @@ export const CHALLENGES: readonly Challenge[] = [
     kind: 'fakesFirstTry',
     min: 1,
   }),
-  ch(14, 'hand', ['Dead Man’s Hand', 'Win under 230 ms.'], { kind: 'under', ms: 230 }),
+  ch(14, 'hand', ['Dead Man’s Hand', 'Win under 240 ms.'], { kind: 'under', ms: 240 }),
   ch(15, 'gunshot', ['Gunshot, No Flinch', 'Win after a fake-out without drawing early.'], {
     kind: 'fakes',
     min: 1,
@@ -206,7 +222,9 @@ export function meets(c: Challenge, e: ChallengeEvidence): boolean {
     case 'fakesFirstTry':
       return e.fakesSeen >= r.min && e.firstTry
     case 'under':
-      return e.reactionMs !== null && e.reactionMs > 0 && e.reactionMs < r.ms
+      return (
+        e.reactionMs !== null && e.reactionMs > 0 && medalMs(e.reactionMs, e.touch === true) < r.ms
+      )
     case 'hat':
       return e.hatShot
     case 'clean':

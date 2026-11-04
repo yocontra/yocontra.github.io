@@ -1,13 +1,26 @@
 /**
  * The Daily Outlaw (meta-game stream). Contract: `contract/meta.ts`.
  *   GET  /daily                   (Bearer optional) → DailyResponse
- *   POST /daily/sessions          { turnstileToken } (Bearer optional) → RankedSessionResponse 201
- *                                 429 out of tries, 503 over budget, 403 Turnstile/origin.
+ *   POST /daily/sessions          { turnstileToken?, unposted? } (Bearer optional)
+ *                                 → RankedSessionResponse 201; 429 out of tries, 503 over budget,
+ *                                 403 origin, or 403 `turnstile` (signed in, no valid token, not
+ *                                 `unposted`).
  *   GET  /daily/sessions/:id/ws   WebSocket into that attempt's DailySession (one socket, ever)
  *   GET  /daily/board?day=        (Bearer optional) → DailyBoardResponse
  *
  * Tries are counted per account when signed in, per network (the daily client hash) as a guest.
  * Guests can duel the Daily Outlaw but never post on the board or get paid.
+ *
+ * Turnstile gates only what a try can post or pay. A guest's try never needs a token: it posts
+ * nothing, and its tries are still counted per network. Signed in, a valid token makes the try the
+ * account's (the board, the pay). Without one the server refuses with `reason: 'turnstile'`, and
+ * the client offers a retry or `unposted`: the try runs as a guest's (no board, no pay). This keeps
+ * the Daily playable where the Turnstile widget can't run (headless or embedded browsers, error
+ * 600010; see RELEASE.md).
+ *
+ * An untokened try is rate limited per IP (`DAILY_GUEST_LIMIT`, 4 a minute) before it touches D1
+ * or a Durable Object, so a script can't spend the month's budget on guest tries. The 3 tries a
+ * day per network are then counted in D1 as before.
  */
 import type { DailyResponse } from '../../../src/experiments/out-west/contract/meta.ts'
 import type { RankedSessionResponse } from '../../../src/experiments/out-west/contract/ranked.ts'
@@ -69,6 +82,16 @@ async function triesToday(
   return { tries: row?.n ?? 0, best: row?.best ?? null, paid }
 }
 
+/** The per-IP guest limit (no binding configured: allowed; the D1 daily cap still holds). */
+async function guestAllowed(request: Request, env: Env): Promise<boolean> {
+  if (!env.DAILY_GUEST_LIMIT) {
+    return true
+  }
+  const ip = request.headers.get('CF-Connecting-IP') ?? 'unknown'
+  const { success } = await env.DAILY_GUEST_LIMIT.limit({ key: `daily-guest:${ip}` })
+  return success
+}
+
 async function today(request: Request, env: Env): Promise<Response> {
   const day = dayKey()
   const player = await authenticate(request, env)
@@ -88,10 +111,41 @@ async function issue(request: Request, env: Env, verify: Verify): Promise<Respon
   if (!allowedOrigin(request, env)) {
     return error(request, env, 403, 'Origin not allowed.')
   }
-  const body = (await readJson(request, 8 * 1024)) as { turnstileToken?: unknown } | undefined
+  const body = (await readJson(request, 8 * 1024)) as
+    | { turnstileToken?: unknown; unposted?: unknown }
+    | undefined
+  const player = await authenticate(request, env)
   const token = body?.turnstileToken
-  if (typeof token !== 'string' || !(await verify(token, request, env))) {
-    return error(request, env, 403, 'Couldn’t check you’re human. Try again.')
+  // a guest's try posts nothing, so it never spends a siteverify call
+  const verified =
+    player !== null &&
+    typeof token === 'string' &&
+    token !== '' &&
+    (await verify(token, request, env))
+  if (player && !verified && body?.unposted !== true) {
+    return json(
+      request,
+      env,
+      {
+        ok: false,
+        error: 'Couldn’t verify this device. Your time can’t be posted.',
+        reason: 'turnstile',
+      },
+      403,
+    )
+  }
+  if (!(verified || (await guestAllowed(request, env)))) {
+    return json(
+      request,
+      env,
+      {
+        ok: false,
+        error: 'Too many tries from this network. Wait a minute.',
+        reason: 'rate_limited',
+      },
+      429,
+      { 'Retry-After': '60' },
+    )
   }
   if (!(await budgetState(env)).duelsOpen) {
     return json(
@@ -106,8 +160,8 @@ async function issue(request: Request, env: Env, verify: Verify): Promise<Respon
       { 'Retry-After': '86400' },
     )
   }
-  const player = await authenticate(request, env)
-  const account = player?.accountId ?? null
+  // an unverified try is a guest's: counted per network, never posted or paid
+  const account = verified ? (player?.accountId ?? null) : null
   const hash = await clientHash(request)
   const day = dayKey()
   const t = await triesToday(env, day, account, hash)
@@ -130,7 +184,7 @@ async function issue(request: Request, env: Env, verify: Verify): Promise<Respon
             WHERE day = ?2 AND ((?3 IS NOT NULL AND account_id = ?3)
                OR (?3 IS NULL AND account_id IS NULL AND client_hash = ?5))) < ?7`,
   )
-    .bind(id, day, account, player?.name ?? null, hash, now, DAILY_ATTEMPTS)
+    .bind(id, day, account, account ? (player?.name ?? null) : null, hash, now, DAILY_ATTEMPTS)
     .run()
   if ((inserted.meta.changes ?? 0) === 0) {
     return error(request, env, 429, 'No tries left today. Come back tomorrow.')

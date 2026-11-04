@@ -39,6 +39,9 @@ function page(
   }
 }
 
+/** Keys that put the paper down and open the pause menu (the duel's default pause keys). */
+const PAUSE_KEYS: ReadonlySet<string> = new Set(['Escape', 'KeyP'])
+
 /** A full-screen sheet that resolves when the reader turns the page. */
 function overlay(
   root: HTMLElement,
@@ -56,8 +59,8 @@ function overlay(
     const opened = performance.now()
     uiSound('uiStamp')
     let done = false
-    const close = (): void => {
-      if (done || performance.now() - opened < READ_GRACE_MS) {
+    const close = (now = false): void => {
+      if (done || (!now && performance.now() - opened < READ_GRACE_MS)) {
         return
       }
       done = true
@@ -70,6 +73,15 @@ function overlay(
       // the page owns the keys while it's up: Space must not reach the duel
       e.preventDefault()
       e.stopImmediatePropagation()
+      if (PAUSE_KEYS.has(e.code)) {
+        // pause: put the paper down at once, then let the key through to the game's pause menu
+        close(true)
+        const code = e.code
+        setTimeout(() => {
+          globalThis.dispatchEvent(new KeyboardEvent('keydown', { code, key: e.key }))
+        }, 0)
+        return
+      }
       close()
     }
     globalThis.addEventListener('keydown', onKey, true)

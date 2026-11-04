@@ -27,6 +27,10 @@ export interface PropDef {
   name: string
   parts: Part[]
   size: Vector3
+  /** Carried onto every `propObject` of it (a built gun's landmarks, scene/revolver.ts). */
+  userData?: Record<string, unknown>
+  /** Builds the object instead of its parts (a gun with moving parts, scene/revolver.ts). */
+  make?: () => Object3D
 }
 
 /** One placed piece inside a merged mesh: its vertex range (the float audit reads these). */
@@ -186,12 +190,19 @@ export function instance(
 /** A plain (non-instanced) object from a prop def, e.g. a gun to attach to a hand. */
 export function propObject(def: PropDef): Group {
   const g = new Group()
-  for (const p of def.parts) {
+  const made = def.make?.()
+  for (const p of made ? [] : def.parts) {
     const m = new Mesh(p.geometry, p.material)
     m.castShadow = true
     // a gun in a hand or a holster sits in its owner's shadow, like the hand does
     m.receiveShadow = true
     g.add(m)
+  }
+  if (made) {
+    g.add(made)
+  }
+  if (def.userData) {
+    Object.assign(g.userData, def.userData)
   }
   return g
 }

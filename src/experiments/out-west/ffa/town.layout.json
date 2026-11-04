@@ -2634,6 +2634,115 @@
       "low": false
     },
     {
+      "kind": "pole",
+      "x": 132,
+      "z": 128,
+      "w": 0.5,
+      "d": 0.5,
+      "low": true
+    },
+    {
+      "kind": "pole",
+      "x": 108,
+      "z": 128,
+      "w": 0.5,
+      "d": 0.5,
+      "low": true
+    },
+    {
+      "kind": "pole",
+      "x": 84,
+      "z": 128,
+      "w": 0.5,
+      "d": 0.5,
+      "low": true
+    },
+    {
+      "kind": "pole",
+      "x": 60,
+      "z": 128,
+      "w": 0.5,
+      "d": 0.5,
+      "low": true
+    },
+    {
+      "kind": "pole",
+      "x": 36,
+      "z": 128,
+      "w": 0.5,
+      "d": 0.5,
+      "low": true
+    },
+    {
+      "kind": "pole",
+      "x": 12,
+      "z": 128,
+      "w": 0.5,
+      "d": 0.5,
+      "low": true
+    },
+    {
+      "kind": "pole",
+      "x": 79,
+      "z": 112,
+      "w": 0.5,
+      "d": 0.5,
+      "low": true
+    },
+    {
+      "kind": "pole",
+      "x": 79,
+      "z": 96,
+      "w": 0.5,
+      "d": 0.5,
+      "low": true
+    },
+    {
+      "kind": "bench",
+      "x": 49.5,
+      "z": 54,
+      "w": 2,
+      "d": 0.5,
+      "low": true,
+      "vaultHeight": 0.5
+    },
+    {
+      "kind": "bench",
+      "x": 78.5,
+      "z": 54,
+      "w": 2,
+      "d": 0.5,
+      "low": true,
+      "vaultHeight": 0.5
+    },
+    {
+      "kind": "bench",
+      "x": 97.5,
+      "z": 54,
+      "w": 1.5,
+      "d": 0.5,
+      "low": true,
+      "vaultHeight": 0.5
+    },
+    {
+      "kind": "bench",
+      "x": 41,
+      "z": 73.5,
+      "w": 2,
+      "d": 0.5,
+      "low": true,
+      "vaultHeight": 0.5
+    },
+    {
+      "kind": "bench",
+      "x": 87,
+      "z": 73.5,
+      "w": 2,
+      "d": 0.5,
+      "low": true,
+      "vaultHeight": 0.5
+    },
+    {
       "kind": "crates",
       "x": 18,
       "z": 120.5,

@@ -51,6 +51,8 @@ function setStage(d: Director): void {
   }
   c.audio.playSong(actSong(d.level, d.outlaw.day, winStreak(d.level, c.save.attempts, c.save.best)))
   c.audio.loadVoice(d.outlaw.name)
+  // the campaign travels: this outlaw's act's arena (scene/arenas/acts.ts)
+  c.world.stageSlot(d.level)
   c.world.setFires(under)
   if (under) {
     d.fireLoop ??= c.audio.loop('fire_loop', 0.5)
@@ -215,6 +217,8 @@ export function enterCock(d: Director): void {
   const c = d.c
   const o = d.outlaw
   d.enter('cock')
+  // Bounty Hunt comes straight here (its level is 0: the street)
+  c.world.stageSlot(d.level)
   d.dying = null
   // one-shot cues in tickCock fire when phaseT crosses their delay, so start below all of them
   d.lastTick = 0

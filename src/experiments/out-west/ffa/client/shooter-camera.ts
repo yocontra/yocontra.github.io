@@ -25,13 +25,19 @@ import { BLOCK_SIGHT, type Grid, rayGrid } from '../sim/layout.ts'
 export const PIVOT_Y = 1.5
 export const EYE_Y = 1.62
 const BACK = 2.7
-const BACK_ADS = 1.5
+const BACK_ADS = 1.35
 const SIDE = 0.8
-const SIDE_ADS = 0.55
+const SIDE_ADS = 0.72
 const UP = 0.3
-const UP_ADS = 0.18
+const UP_ADS = 0.24
+/** Sprinting widens the field of view by this fraction. */
+const SPRINT_FOV = 0.08
+/** The kill cam: this long from behind your killer before the lens drifts round your body (s). */
+const KILL_CAM_S = 2.5
 /** Keep the lens this far off a wall it was pulled in front of (m). */
-const WALL_PAD = 0.3
+const WALL_PAD = 0.4
+/** The lens is a ball this wide (m): its edges are tested too, so a wall can't fill the frame. */
+const LENS_R = 0.25
 /** Never below this height (the camera tucks under when you look straight up). */
 const MIN_Y = 0.35
 const PITCH_MIN = MathUtils.degToRad(-70)
@@ -40,7 +46,7 @@ const PITCH_MIN_FIRST = MathUtils.degToRad(-85)
 const PITCH_MAX_FIRST = MathUtils.degToRad(85)
 /** ADS field of view as a fraction of the base. */
 const ADS_ZOOM_THIRD = 0.72
-const ADS_ZOOM_FIRST = 0.68
+const ADS_ZOOM_FIRST = 0.78
 
 const REDUCED_MOTION =
   typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches
@@ -70,8 +76,12 @@ export interface ShooterFrame {
   dt: number
   /** How far the stance lowers the eye (m): 0 standing, 0.45 crouched, 0.6 sliding. */
   duck: number
+  /** Sprinting: the lens widens a touch (CoD's sprint FOV). */
+  sprinting?: boolean
   /** Where your body lies while you're dead (the death camera), or null. */
   dead: { x: number; z: number } | null
+  /** Who killed you, where he stands (the kill cam's first 2.5 s look from behind him). */
+  killer?: { x: number; z: number } | null
 }
 
 export class ShooterCamera {
@@ -96,7 +106,16 @@ export class ShooterCamera {
   private bobAmp = 0
   /** How close the lens is to the pivot (0 far … 1 inside the head): hide the body when high. */
   closeness = 0
+  /** Your body's fade (1 solid … 0 gone) as the lens comes within 0.7 m of it. */
+  bodyFade = 1
+  /** The shoulder actually in use (−1 / 1): swaps itself when the chosen side is walled in. */
+  private side0 = 1
   private duck = 0
+  /** The sprint's FOV widening (0..1, eased) and the landing's dip (a spring, m). */
+  private sprintK = 0
+  private dip = 0
+  private dipV = 0
+  private lastLift = 0
   /** Seconds into the death camera (0 alive). */
   private deadT = 0
 
@@ -148,13 +167,23 @@ export class ShooterCamera {
     const ease = (rate: number) => 1 - Math.exp(-dt * rate)
     this.ads += ((f.ads ? 1 : 0) - this.ads) * ease(14)
     this.duck += (f.duck - this.duck) * ease(12)
+    this.sprintK += ((f.sprinting ? 1 : 0) - this.sprintK) * ease(f.sprinting ? 6 : 10)
+    // the landing: the view dips and springs back
+    if (this.lastLift > 0.05 && f.lift <= 0.02 && !REDUCED_MOTION) {
+      this.dipV -= 1.6
+    }
+    this.lastLift = f.lift
+    // a stiff spring: stepped at most 1/30 s at a time so a hitch can't throw it
+    const sd = Math.min(dt, 1 / 30)
+    this.dipV += (-140 * this.dip - 18 * this.dipV) * sd
+    this.dip += this.dipV * sd
     if (f.dead) {
       this.deathCam(f, dt)
       return
     }
     this.deadT = 0
     // the pivot rides the (already smoothed) render pose, lifted through a vault or a hop
-    this.pivot.set(f.x, PIVOT_Y + f.lift - this.duck, f.z)
+    this.pivot.set(f.x, PIVOT_Y + f.lift - this.duck + this.dip, f.z)
     this.recoil *= Math.exp(-dt * 9)
     this.shake.t += dt
     this.shake.amp *= Math.exp(-dt * 10)
@@ -178,7 +207,8 @@ export class ShooterCamera {
     cam.lookAt(look)
     // FOV and planes: only touch the projection when something changed
     const zoom = f.first ? ADS_ZOOM_FIRST : ADS_ZOOM_THIRD
-    const fov = portraitFov(f.fov, cam.aspect) * (1 - (1 - zoom) * this.ads)
+    const fov =
+      portraitFov(f.fov, cam.aspect) * (1 - (1 - zoom) * this.ads) * (1 + SPRINT_FOV * this.sprintK)
     const near = f.first ? 0.05 : 0.1
     if (Math.abs(fov - this.fov) > 0.01 || cam.near !== near || cam.far !== f.far) {
       this.fov = fov
@@ -199,11 +229,31 @@ export class ShooterCamera {
       return
     }
     this.deadT += dt
-    const t = Math.min(1, this.deadT / 1.2)
+    const cam = this.camera
+    const k = f.killer
+    if (k && this.deadT < KILL_CAM_S) {
+      // the kill cam: over his shoulder, looking at you where you fell
+      const dx = k.x - body.x
+      const dz = k.z - body.z
+      const d = Math.hypot(dx, dz) || 1
+      want.set(
+        k.x + (dx / d) * 1.6 + (-dz / d) * 0.6,
+        EYE_Y + 0.5,
+        k.z + (dz / d) * 1.6 + (dx / d) * 0.6,
+      )
+      const freeK = clearance(f.grid, k.x, k.z, want.x, want.z)
+      want.x = k.x + (want.x - k.x) * freeK
+      want.z = k.z + (want.z - k.z) * freeK
+      cam.position.lerp(want, this.deadT < 0.05 ? 1 : 1 - Math.exp(-dt * 6))
+      cam.up.set(0, 1, 0)
+      cam.lookAt(body.x, 0.6, body.z)
+      this.closeness = 0
+      return
+    }
+    const t = Math.min(1, Math.max(0, this.deadT - (k ? KILL_CAM_S : 0)) / 1.2)
     const e = t * t * (3 - 2 * t)
     const orbit = this.yaw + Math.PI + this.deadT * 0.25
     const dist = 1.5 + 2.5 * e
-    const cam = this.camera
     want.set(body.x + Math.cos(orbit) * dist, EYE_Y + 2.2 * e, body.z + Math.sin(orbit) * dist)
     // keep out of walls: pull in toward the body
     const free = clearance(f.grid, body.x, body.z, want.x, want.z)
@@ -235,7 +285,22 @@ export class ShooterCamera {
     // a phone held upright is narrow: the shoulder comes in and the lens backs off a little
     const aspect = this.camera.aspect
     const narrow = MathUtils.clamp(aspect / 1.3, 0.45, 1)
-    const sideTo = f.shoulder * MathUtils.lerp(SIDE, SIDE_ADS, a) * narrow
+    // a wall hard on the chosen shoulder: swing to the other one while it lasts
+    const chosen = f.shoulder
+    const reachSide = (s: number) =>
+      clearance(
+        f.grid,
+        this.pivot.x,
+        this.pivot.z,
+        this.pivot.x + right.x * s,
+        this.pivot.z + right.z * s,
+      )
+    if (reachSide(chosen * SIDE) < 0.6 && reachSide(-chosen * SIDE) > 0.95) {
+      this.side0 = -chosen
+    } else if (reachSide(chosen * SIDE) > 0.9) {
+      this.side0 = chosen
+    }
+    const sideTo = this.side0 * MathUtils.lerp(SIDE, SIDE_ADS, a) * narrow
     this.side += (sideTo - this.side) * ease(10)
     this.back = MathUtils.lerp(BACK, BACK_ADS, a) * (aspect < 1 ? 1.15 : 1)
     this.up = MathUtils.lerp(UP, UP_ADS, a)
@@ -249,7 +314,17 @@ export class ShooterCamera {
     const sideK = Math.min(shoulderFree, 1)
     const sx = this.pivot.x + (px - this.pivot.x) * sideK
     const sz = this.pivot.z + (pz - this.pivot.z) * sideK
-    const free = clearance(f.grid, sx, sz, want.x, want.z)
+    // the lens is a ball: its centre and both edges must be clear
+    const ex = -fwd.z
+    const ez = fwd.x
+    const flat = Math.hypot(ex, ez) || 1
+    const lx = (ex / flat) * LENS_R
+    const lz = (ez / flat) * LENS_R
+    const free = Math.min(
+      clearance(f.grid, sx, sz, want.x, want.z),
+      clearance(f.grid, sx + lx, sz + lz, want.x + lx, want.z + lz),
+      clearance(f.grid, sx - lx, sz - lz, want.x - lx, want.z - lz),
+    )
     const target = this.back * free
     // in at once, out gently
     this.reach = target < this.reach ? target : this.reach + (target - this.reach) * ease(5)
@@ -261,6 +336,12 @@ export class ShooterCamera {
     )
     // the closer the lens, the more the body would fill it
     this.closeness = MathUtils.clamp(1 - (this.reach - 0.35) / 0.5, 0, 1)
+    // within 0.7 m your body thins out (dithered), so it never fills the frame or hides the aim
+    const near = Math.hypot(
+      this.camera.position.x - this.pivot.x,
+      this.camera.position.z - this.pivot.z,
+    )
+    this.bodyFade = MathUtils.clamp((near - 0.35) / 0.35, 0.15, 1)
   }
 }
 

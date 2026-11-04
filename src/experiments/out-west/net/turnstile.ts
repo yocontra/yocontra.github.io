@@ -4,7 +4,14 @@
  * plays in practice mode, a Frontier join shows the refusal card).
  *
  * Who spends tokens (§8): sign-up, the first web refresh of each UTC day (`net/auth.ts`), the
- * Bounty Hunt queue, ranked runs, and every Frontier lobby join. Tokens are single use.
+ * Bounty Hunt queue, ranked runs, a signed-in Daily Outlaw try, and every Frontier lobby join.
+ * Tokens are single use.
+ *
+ * Nothing a guest plays alone waits on a token: practice, the gauntlet and a guest's Daily Outlaw
+ * try never ask for one, so a browser where the widget can't run (headless Chrome, some embedded
+ * WebViews: error 600010) still plays. Where a token is needed and missing, the caller says
+ * "Couldn't verify this device" and offers a retry (ranked falls back to practice, the Daily offers
+ * "Play without posting"). See RELEASE.md, "Turnstile in an app WebView".
  */
 
 const SCRIPT = 'https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit'

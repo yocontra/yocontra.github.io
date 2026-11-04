@@ -38,7 +38,7 @@ export class QueueSheet {
     swallow(this.root)
     const panel = el('div', 'ow-hub-panel ow-sheet-panel', this.root)
     el('h2', 'ow-hub-h', panel).append(icon('bounty'), 'Bounty Hunt')
-    this.line = el('p', 'ow-queue-line', panel, 'Checking you’re human…')
+    this.line = el('p', 'ow-queue-line', panel, 'Checking this device…')
     this.line.setAttribute('aria-live', 'polite')
     const track = el('div', 'ow-xp ow-queue-track', panel)
     this.bar = el('div', 'ow-xp-fill', track)
@@ -83,7 +83,7 @@ export class QueueSheet {
     this.retryBtn.hidden = true
     this.rankedBtn.hidden = true
     this.leaveBtn.textContent = 'Leave queue'
-    this.line.textContent = 'Checking you’re human…'
+    this.line.textContent = 'Checking this device…'
     setBar(this.bar, 0)
     this.search = this.newSearch()
     this.begin().catch(() => undefined)
@@ -95,7 +95,7 @@ export class QueueSheet {
       return
     }
     if (!token) {
-      this.failed('Couldn’t check you’re human. Try again.')
+      this.failed('Couldn’t verify this device. Try again.')
       return
     }
     this.line.textContent = 'Joining the queue…'

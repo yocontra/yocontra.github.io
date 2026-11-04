@@ -17,7 +17,9 @@ import {
   CylinderGeometry,
   Float32BufferAttribute,
   Matrix4,
+  PlaneGeometry,
   Quaternion,
+  RingGeometry,
   Vector3,
 } from 'three'
 import type { GLTF } from 'three/examples/jsm/loaders/GLTFLoader.js'
@@ -195,9 +197,35 @@ function wheel(
   z: number,
   r: number,
   axleAlongX: boolean,
+  color = DARK_WOOD,
 ): void {
-  cyl(b.extra, r, 0.08, 14, x, y, z, axleAlongX ? 'x' : 'z', DARK_WOOD)
-  cyl(b.extra, r * 0.22, 0.16, 8, x, y, z, axleAlongX ? 'x' : 'z', IRON)
+  // the felloe and its iron tyre: a flat ring on each face, three spokes through the hub, the hub
+  for (const side of [-1, 1]) {
+    const ring = new RingGeometry(r * 0.86, r, 10, 1).toNonIndexed()
+    if (side < 0) {
+      ring.rotateY(Math.PI)
+    }
+    ring.translate(0, 0, side * 0.035)
+    if (axleAlongX) {
+      ring.rotateY(Math.PI / 2)
+    }
+    ring.translate(x, y, z)
+    b.extra.push(colorize(ring, color))
+  }
+  // spokes as flat slats in the wheel's plane, one face each way (4 triangles, not a box's 12)
+  for (let k = 0; k < 3; k++) {
+    for (const face of [0, Math.PI]) {
+      const spoke = new PlaneGeometry(0.05, r * 1.76).toNonIndexed()
+      spoke.rotateY(face)
+      spoke.rotateZ((k * Math.PI) / 3)
+      if (axleAlongX) {
+        spoke.rotateY(Math.PI / 2)
+      }
+      spoke.translate(x, y, z)
+      b.extra.push(colorize(spoke, color))
+    }
+  }
+  cyl(b.extra, r * 0.18, 0.18, 6, x, y, z, axleAlongX ? 'x' : 'z', IRON)
 }
 
 /** Box helper in rect-local terms: `a` along the long axis, `c` across it. */
@@ -337,27 +365,61 @@ function stagecoach(b: DressBuilders, c: Rect, y: number, r: () => number): void
   const W = Math.min(c.w, c.d)
   const cx = c.x + c.w / 2
   const cz = c.z + c.d / 2
-  const body = r() < 0.5 ? 0x6a_22_1a : 0x2a_44_32
+  // a Concord coach: red or green body, straw-yellow running gear, gold lining
+  const body = r() < 0.5 ? 0x9a_2e_20 : 0x3a_6a_48
+  const gear = 0xc8_9a_3a
+  const gold = 0xd8_b0_50
   const wr = 0.62
   // running gear
   for (const a of [-L / 2 + 0.95, L / 2 - 0.75]) {
     const rr = a < 0 ? wr * 0.85 : wr
-    along(b.wood, alongX, cx, cz, a, 0, y + rr - 0.05, 0.1, W - 0.1, 0.1, IRON)
+    along(b.wood, alongX, cx, cz, a, 0, y + rr - 0.05, 0.1, W - 0.1, 0.1, gear)
     for (const s of [-1, 1]) {
       const off = s * (W / 2 - 0.08)
-      wheel(b, alongX ? cx + a : cx + off, y + rr, alongX ? cz + off : cz + a, rr, !alongX)
+      wheel(b, alongX ? cx + a : cx + off, y + rr, alongX ? cz + off : cz + a, rr, !alongX, gear)
     }
   }
-  // the body: a boxy coach on its thoroughbraces, painted, with darker panels and windows
+  // the perch beam between the axles, and the leather thoroughbraces the body hangs from
+  along(b.wood, alongX, cx, cz, -0.1, 0, y + 0.55, L - 1.4, 0.16, 0.12, gear)
+  for (const a of [-1.05, 1.25]) {
+    for (const s of [-1, 1]) {
+      along(b.wood, alongX, cx, cz, a, s * 0.45, y + 0.62, 0.08, 0.1, 0.3, 0x3a_26_18)
+    }
+  }
+  // the body: rounded at the foot (a narrower lower panel), lined in gold, windows and a door
   const bw = W - 0.45
-  along(b.wall, alongX, cx, cz, 0.1, 0, y + 0.85, 2.5, bw, 1.5, body)
+  along(b.wall, alongX, cx, cz, 0.1, 0, y + 0.92, 2.2, bw - 0.16, 0.3, body)
+  along(b.wall, alongX, cx, cz, 0.1, 0, y + 1.2, 2.5, bw, 1.15, body)
   along(b.wood, alongX, cx, cz, 0.1, 0, y + 2.35, 2.7, bw + 0.15, 0.1, DARK_WOOD)
-  // roof rail and luggage
-  along(b.wood, alongX, cx, cz, 0.1, 0, y + 2.45, 2.2, bw, 0.12, DARK_WOOD)
-  along(b.wood, alongX, cx, cz, -0.2, 0, y + 2.57, 1.1, bw - 0.4, 0.38, 0x5a_3a_22)
-  // windows, one each side
   for (const s of [-1, 1]) {
-    along(b.wood, alongX, cx, cz, 0.1, s * (bw / 2 + 0.01), y + 1.55, 0.8, 0.02, 0.55, 0x1a_14_10)
+    const side = s * (bw / 2 + 0.012)
+    along(b.wood, alongX, cx, cz, 0.1, side, y + 1.26, 2.4, 0.02, 0.04, gold)
+    along(b.wood, alongX, cx, cz, 0.1, side, y + 2.27, 2.4, 0.02, 0.04, gold)
+    // door with its window, and a window either side of it
+    along(b.wood, alongX, cx, cz, 0.1, side, y + 1.3, 0.04, 0.02, 0.95, gold)
+    along(b.wood, alongX, cx, cz, 0.85, side, y + 1.3, 0.04, 0.02, 0.95, gold)
+    for (const a of [-0.65, 0.47, 1.2]) {
+      along(
+        b.wood,
+        alongX,
+        cx,
+        cz,
+        a,
+        s * (bw / 2 + 0.016),
+        y + 1.68,
+        a > 0.4 && a < 0.6 ? 0.5 : 0.42,
+        0.02,
+        0.45,
+        0x1a_14_10,
+      )
+    }
+  }
+  // roof rail and luggage under a lashed tarpaulin
+  along(b.wood, alongX, cx, cz, 0.1, 0, y + 2.45, 2.2, bw, 0.12, DARK_WOOD)
+  along(b.cloth, alongX, cx, cz, -0.2, 0, y + 2.57, 1.1, bw - 0.4, 0.38, 0x8a_7a_5a)
+  // carriage lamps either side of the driver
+  for (const s of [-1, 1]) {
+    along(b.wood, alongX, cx, cz, -1.15, s * (bw / 2 + 0.06), y + 1.9, 0.12, 0.12, 0.22, gold)
   }
   // driver's box up front, and the boot at the back
   along(b.wood, alongX, cx, cz, -1.4, 0, y + 0.85, 0.6, bw, 1.2, DARK_WOOD)
@@ -374,16 +436,28 @@ function wreck(b: DressBuilders, c: Rect, y: number): void {
   const W = Math.min(c.w, c.d)
   const cx = c.x + c.w / 2
   const cz = c.z + c.d / 2
-  // the body on its flank: 1.5 high becomes the width, 1.9 wide becomes the height
-  along(b.wall, alongX, cx, cz, 0, -0.2, y, 2.6, 1.5, 1.85, 0x5a_22_1a)
-  along(b.wood, alongX, cx, cz, 0, -0.2, y + 1.85, 2.8, 1.6, 0.1, 0x3a_2a_1e)
-  // the undercarriage up the side, wheels sticking out flat
-  along(b.wood, alongX, cx, cz, 0, 0.62, y + 0.35, 3.6, 0.12, 0.12, IRON)
+  // the body on its flank: 1.5 high becomes the width, 1.9 wide becomes the height; its side, with
+  // the door and windows, now faces the sky; the roof rail scraped along the dirt
+  const gold = 0xd8_b0_50
+  along(b.wall, alongX, cx, cz, 0, -0.2, y, 2.6, 1.5, 1.85, 0x8a_2a_1e)
+  for (const [a, la] of [
+    [-0.85, 0.42],
+    [0.05, 0.5],
+    [0.85, 0.42],
+  ] as const) {
+    along(b.wood, alongX, cx, cz, a, -0.15, y + 1.86, la, 0.45, 0.02, 0x14_10_0c)
+  }
+  for (const c0 of [-0.66, 0.26]) {
+    along(b.wood, alongX, cx, cz, 0, c0, y + 1.86, 2.4, 0.04, 0.025, gold)
+  }
+  along(b.wood, alongX, cx, cz, 0, -0.98, y + 0.4, 2.8, 0.1, 1.1, DARK_WOOD)
+  // the undercarriage up the side, its yellow wheels in the air
+  along(b.wood, alongX, cx, cz, 0, 0.62, y + 0.35, 3.6, 0.12, 0.12, 0xc8_9a_3a)
   for (const a of [-1.35, 1.35]) {
     const off = 0.7
     const wx = alongX ? cx + a : cx + off
     const wz = alongX ? cz + off : cz + a
-    cyl(b.extra, 0.6, 0.08, 14, wx, y + 0.95, wz, alongX ? 'z' : 'x', DARK_WOOD)
+    wheel(b, wx, y + 0.95, wz, 0.6, !alongX, 0xc8_9a_3a)
   }
   // a spilled trunk at each end
   along(b.wood, alongX, cx, cz, L / 2 - 0.45, 0, y, 0.7, W - 0.5, 0.5, 0x5a_3a_22)
@@ -545,7 +619,7 @@ function woodpile(b: DressBuilders, c: Rect, y: number, r: () => number): void {
       const len = W - r() * 0.15
       const x = alongX ? cx + a : cx
       const z = alongX ? cz : cz + a
-      cyl(b.extra, lr * (1 + r() * 0.06), len, 7, x, yy, z, alongX ? 'z' : 'x', 0x8a_64_44)
+      cyl(b.extra, lr * (1 + r() * 0.06), len, 6, x, yy, z, alongX ? 'z' : 'x', 0x8a_64_44)
     }
   }
 }
@@ -801,6 +875,71 @@ function bars(b: DressBuilders, c: Rect, y: number): void {
   }
 }
 
+const POLE_TOP = 7
+const ARM = 0.55
+
+/** A telegraph pole: a tarred trunk, a crossarm, glass insulators at each end. */
+function telegraphPole(b: DressBuilders, x: number, z: number, y: number): void {
+  cyl(b.extra, 0.12, POLE_TOP, 7, x, y + POLE_TOP / 2, z, 'y', 0x4a_3a_2c)
+  b.wood.box(x, y + POLE_TOP - 0.35, z, ARM * 2 + 0.3, 0.1, 0.1, 0x5a_44_30)
+  for (const s of [-1, 1]) {
+    b.wood.box(x + s * ARM, y + POLE_TOP - 0.24, z, 0.06, 0.12, 0.06, 0x6a_9a_8a)
+  }
+}
+
+/**
+ * The wires between consecutive telegraph poles (in layout order, while they're within 40 m of
+ * each other): two lines, each sagging in five straight runs, as thin vertical ribbons seen from
+ * both sides. Overhead, so nothing collides with them.
+ */
+function telegraphWires(
+  b: DressBuilders,
+  layout: TownLayout,
+  floorAt: (x: number, z: number) => number,
+): void {
+  const poles = layout.cover.filter((c) => c.kind === 'pole')
+  for (let i = 1; i < poles.length; i++) {
+    const p = poles[i - 1] as Cover
+    const q = poles[i] as Cover
+    const ax = p.x + p.w / 2
+    const az = p.z + p.d / 2
+    const bx = q.x + q.w / 2
+    const bz = q.z + q.d / 2
+    const span = Math.hypot(bx - ax, bz - az)
+    if (span > 40) {
+      continue
+    }
+    // the crossarms run along x; the wires leave from their ends
+    const ya = floorAt(ax, az) + POLE_TOP - 0.2
+    const yb = floorAt(bx, bz) + POLE_TOP - 0.2
+    const sag = 0.02 * span
+    for (const s of [-1, 1]) {
+      const pts: Vector3[] = []
+      for (let k = 0; k <= 5; k++) {
+        const t = k / 5
+        pts.push(
+          new Vector3(
+            ax + s * ARM + (bx - ax) * t,
+            ya + (yb - ya) * t - sag * 4 * t * (1 - t),
+            az + (bz - az) * t,
+          ),
+        )
+      }
+      for (let k = 0; k < 5; k++) {
+        const u = pts[k] as Vector3
+        const v = pts[k + 1] as Vector3
+        const h = 0.02
+        const a = new Vector3(u.x, u.y - h, u.z)
+        const bb = new Vector3(v.x, v.y - h, v.z)
+        const c = new Vector3(v.x, v.y + h, v.z)
+        const d = new Vector3(u.x, u.y + h, u.z)
+        b.wood.quad(a, bb, c, d, 0x1a_1a_1a)
+        b.wood.quad(bb, a, d, c, 0x1a_1a_1a)
+      }
+    }
+  }
+}
+
 function bridgeRail(b: DressBuilders, c: Rect, y: number): void {
   const alongX = c.w >= c.d
   const L = Math.max(c.w, c.d)
@@ -950,6 +1089,7 @@ export function dressCover(ctx: DressContext): void {
     place(c, sink, b, r, unit, y, ctx.porchRoof, backOf(layout, c))
   }
   track(layout, ctx.structure.wood)
+  telegraphWires(ctx.structure, layout, ctx.floorAt)
   const land = outskirtsProps(layout, OUTSKIRTS_SEED)
   // the cactus spots grow procedural saguaros and Joshua trees instead (wilds.ts)
   const rock = propDef(props, 'rock', 1.2, 'max')
@@ -1169,6 +1309,9 @@ function place(
       break
     case 'bridge_rail':
       bridgeRail(b, c, y)
+      break
+    case 'pole':
+      telegraphPole(b, cx, cz, y)
       break
     case 'post':
       post(b, c, y, porchRoof)

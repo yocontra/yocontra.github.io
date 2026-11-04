@@ -24,8 +24,12 @@ import type { Phase } from './state.ts'
 export interface DailyOpts {
   spec: DailySpec
   session: RankedSession
-  /** Back at the saloon: the server's verdict, or null if the duel never finished. */
-  onExit: (v: Verdict | null) => void
+  /**
+   * Back at the saloon: the server's verdict, or null if the duel never finished. `drewMs` is
+   * your press as this device timed it, when the server's verdict came before your shot reached it
+   * (a late press: the sheet says "too slow", not "you didn't draw").
+   */
+  onExit: (v: Verdict | null, drewMs: number | null) => void
 }
 
 /** Fog thickening on a fog day (0..1, `World.windyFog`). */
@@ -68,6 +72,7 @@ export class DailyDuel implements DirectorHooks {
     d.c.hud.setPurse(0, false)
     startAmbience(d)
     d.startLevel(o.spec.outlaw, false)
+    d.c.hud.setDaily(true)
     this.dress()
   }
 
@@ -94,6 +99,7 @@ export class DailyDuel implements DirectorHooks {
         ranked: true,
         outcome: v.outcome,
         reactionMs: v.outcome === 'coward' ? null : v.reactionMs,
+        touch: d.c.input.touch,
         secondChance: d.secondChance,
         hatShot: d.hatShot,
         fakesSeen: d.fakesSeen,
@@ -224,6 +230,7 @@ export class DailyDuel implements DirectorHooks {
     }
     this.over = true
     const d = this.d
+    const drewMs = d.lastReaction ?? d.lateMs
     d.hooks = null
     d.daily = false
     d.callPresentation = { bell: true, text: true }
@@ -232,11 +239,12 @@ export class DailyDuel implements DirectorHooks {
     this.o.session.close()
     d.c.save = this.realSave
     persist(this.realSave)
+    d.c.hud.setDaily(false)
     d.c.hud.setPurse(this.realSave.run.total, false)
     d.c.hud.setMode('PRACTICE · not ranked')
     d.duelId = -1
     d.standoffSent = false
     emptyStreet(d)
-    this.o.onExit(this.verdict)
+    this.o.onExit(this.verdict, drewMs)
   }
 }

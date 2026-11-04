@@ -20,8 +20,8 @@ function retryAfterPress(d: Director, p: Press): void {
     d.retry()
     return
   }
-  // practice: the press that came just too late goes on the lose card
-  if (d.phase === 'lose' && !d.ranked) {
+  // the press that came just too late goes on the lose card (ranked: as this device timed it)
+  if (d.phase === 'lose') {
     lateDraw(d, p)
   }
 }

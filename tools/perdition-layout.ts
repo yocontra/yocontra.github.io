@@ -469,6 +469,19 @@ c('buffer', 8, 124, 1, 2)
 c('buffer', 135, 124, 1, 2)
 c('boxcar', 46, 123.5, 12, 3)
 c('boxcar', 100, 123.5, 12, 3)
+// the telegraph: poles along the track, then up the cross street to the bank (wires join each
+// pole to the next one listed, so keep them in line order)
+for (const x of [12, 36, 60, 84, 108, 132].toReversed()) {
+  c('pole', x, 128, 0.5, 0.5)
+}
+c('pole', 79, 112, 0.5, 0.5)
+c('pole', 79, 96, 0.5, 0.5)
+// porch benches against the walls, either side of the doors
+c('bench', 49.5, 54, 2, 0.5)
+c('bench', 78.5, 54, 2, 0.5)
+c('bench', 97.5, 54, 1.5, 0.5)
+c('bench', 41, 73.5, 2, 0.5)
+c('bench', 87, 73.5, 2, 0.5)
 // depot platform clutter (platform z 119-123.5, x 14-42)
 c('crates', 18, 120.5, 1.5, 1.5)
 c('barrels', 37, 120.5, 1.5, 1.5)

@@ -186,32 +186,40 @@ export class Hud {
 
     this.menuEl = el('div', 'fr-menu fr-hit', this.root)
     const card = el('div', 'fr-menu-card', this.menuEl)
-    el('h2', 'fr-menu-title', card, 'Paused')
+    // the title and a close ✕, then Resume first (sticky: it never scrolls off a short screen),
+    // then the settings and the way out side by side when the screen is short
+    const head = el('div', 'fr-menu-head', card)
+    el('h2', 'fr-menu-title', head, 'Paused')
+    const shut = el('button', 'fr-menu-x fr-hit', head, '✕')
+    shut.setAttribute('aria-label', 'Resume')
+    const back = el('button', 'fr-menu-item fr-menu-resume fr-hit', card, 'Resume')
+    const cols = el('div', 'fr-menu-cols', card)
+    const left = el('div', 'fr-menu-col', cols)
+    const right = el('div', 'fr-menu-col', cols)
+    this.menuSettings = el('div', 'fr-menu-settings', left)
     el(
       'p',
       'fr-menu-note',
-      card,
+      right,
       'Leaving drops your carried money, unless you’re in the bank. Banked money is safe.',
     )
-    const howto = el('button', 'fr-menu-item fr-menu-quiet fr-hit', card, 'How to play')
+    const howto = el('button', 'fr-menu-item fr-menu-quiet fr-hit', right, 'How to play')
     // who's in town (report and block live there)
-    this.playersEl = el('button', 'fr-menu-item fr-menu-quiet fr-hit', card, 'Players')
-    this.menuSettings = el('div', 'fr-menu-settings', card)
-    const leave = el('button', 'fr-menu-item fr-hit', card, 'Leave (5 s)')
+    this.playersEl = el('button', 'fr-menu-item fr-menu-quiet fr-hit', right, 'Players')
+    const leave = el('button', 'fr-menu-item fr-hit', right, 'Leave (5 s)')
     const exit = el(
       'button',
       'fr-menu-item fr-menu-quiet fr-hit',
-      card,
+      right,
       'Quit now (lose carried money)',
     )
-    const back = el('button', 'fr-menu-item fr-menu-quiet fr-hit', card, 'Resume')
     const players = this.playersEl
     players.addEventListener('click', (e) => {
       e.stopPropagation()
       close()
       opts.onRiders()
     })
-    for (const b of [howto, players, leave, exit, back]) {
+    for (const b of [howto, players, leave, exit, back, shut]) {
       b.type = 'button'
     }
     const close = () => this.setMenu(false)
@@ -219,10 +227,12 @@ export class Hud {
       e.stopPropagation()
       this.toggleMenu()
     })
-    back.addEventListener('click', (e) => {
-      e.stopPropagation()
-      close()
-    })
+    for (const b of [back, shut]) {
+      b.addEventListener('click', (e) => {
+        e.stopPropagation()
+        close()
+      })
+    }
     howto.addEventListener('click', (e) => {
       e.stopPropagation()
       close()
@@ -388,8 +398,11 @@ export class Hud {
 
   /** The hit marker: white for a hit, red for a kill, gold for a Dead-Eye (critical) hit. */
   hit(kill: boolean, crit = false): void {
+    // the pop restarts on every hit (a held class would play it once)
+    this.hitEl.style.animation = 'none'
     this.hitEl.className = `fr-hitmark on${kill ? ' kill' : ''}${crit ? ' crit' : ''}`
     this.hitEl.getBoundingClientRect()
+    this.hitEl.style.animation = ''
     this.hitEl.classList.add('fade')
   }
 

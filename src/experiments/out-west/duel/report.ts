@@ -19,6 +19,8 @@ export function report(
     ranked: d.ranked,
     outcome,
     reactionMs,
+    // ranked medals are the server's, judged without the allowance; the device's marks match
+    touch: d.c.input.touch && !d.ranked,
     secondChance: d.secondChance,
     hatShot: d.hatShot,
     fakesSeen: d.fakesSeen,

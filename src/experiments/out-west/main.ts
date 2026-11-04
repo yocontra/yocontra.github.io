@@ -78,7 +78,11 @@ function rankedConnector(root: HTMLElement, hash: URLSearchParams): RankedConnec
   return async () => {
     const token = await turnstile.take()
     if (!token) {
-      return { ok: false, error: '' }
+      // never a dead end: the run plays on in practice, and a restart asks again
+      return {
+        ok: false,
+        error: 'Couldn’t verify this device, so this run is practice. Restart to try ranked again.',
+      }
     }
     return await RankedSession.connect(token)
   }

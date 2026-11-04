@@ -26,11 +26,11 @@ export function killLine(name: (id: number) => string, ev: KillLine): string {
     marks.push('Most Wanted')
   }
   if (ev.flags & KILL_PARDON) {
-    marks.push('pardoned')
+    marks.push('just spawned, no bounty')
   }
   const tail = marks.length > 0 ? ` · ${marks.join(' · ')}` : ''
   if (ev.killer === NONE || ev.killer === ev.victim) {
-    const how = ev.killer === NONE ? 'bit the dust' : 'blew himself up'
+    const how = ev.killer === NONE ? 'died' : 'blew himself up'
     return `${name(ev.victim)} ${how}${tail}`
   }
   return `${name(ev.killer)} ✕ ${name(ev.victim)}${tail}`

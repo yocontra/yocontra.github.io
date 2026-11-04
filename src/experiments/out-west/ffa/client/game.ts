@@ -133,6 +133,7 @@ import {
   type Sink,
   shotFx,
 } from './events.ts'
+import { cullFlora, FIRST_FLORA_M, type FloraChunk, floraChunks } from './flora-cull.ts'
 import { Hud } from './hud.ts'
 import type { RemoteView } from './interp.ts'
 import { Minimap } from './minimap.ts'
@@ -209,6 +210,8 @@ export class FrontierGame {
   private readonly sun: DirectionalLight
   /** Sky, haze, cloud shadows and wind. */
   private readonly wilds: Wilds
+  /** The plant chunks (centre, radius) first person drops past its haze on the small tiers. */
+  private floraChunks: FloraChunk[] = []
   private readonly opts: GameOptions
   private raf = 0
   private hiddenTimer: ReturnType<typeof setInterval> | null = null
@@ -254,6 +257,10 @@ export class FrontierGame {
   private viewModel: ViewModel | null = null
   private readonly vmSun = new Vector3()
   private dustAt = 0
+  /** This life's hits taken, by attacker (the death card). */
+  private readonly tally = new Map<number, { hits: number; dmg: number }>()
+  /** The touch aim pull still to apply (rad). */
+  private readonly pull = { yaw: 0, pitch: 0 }
   /** When you last went down (s). */
   private diedAt = 0
   private readonly vmQ = new Quaternion()
@@ -516,6 +523,12 @@ export class FrontierGame {
       audio: this.audio,
       kick: (a) => (this.shooterView ? this.shooter.kick(a) : this.cam.kick(a)),
       damageFrom: (from) => this.damageFrom(from),
+      tookHit: (attacker, amount) => {
+        const t = this.tally.get(attacker) ?? { hits: 0, dmg: 0 }
+        t.hits++
+        t.dmg += amount
+        this.tally.set(attacker, t)
+      },
       posOf: (id) => this.posOf(id),
       muzzleOf: (id, x, z, aim) =>
         this.crowd?.muzzle(id, x, z, aim, new Vector3()) ?? new Vector3(x, 1.3, z),
@@ -612,7 +625,9 @@ export class FrontierGame {
       inside.lamps.updateMatrix()
       inside.lamps.updateMatrixWorld(true)
     }
-    this.scene.add(buildWilds(TOWN, this.renderer.tier))
+    const flora = buildWilds(TOWN, this.renderer.tier)
+    this.scene.add(flora)
+    this.floraChunks = floraChunks(flora)
     this.wilds.roll(TOWN)
     this.fx = new Effects(this.scene)
     this.pickups = new Pickups(this.scene, TOWN.pickups, assets.props)
@@ -1006,8 +1021,34 @@ export class FrontierGame {
       this.remotes,
     )
     if (pull) {
-      this.shooter.turn(pull.dYaw, pull.dPitch, this.settings.view === 'first')
+      // eased in over the next few frames (a snap reads as the game aiming for you)
+      this.pull.yaw += pull.dYaw
+      this.pull.pitch += pull.dPitch
     }
+  }
+
+  /** The crowd's skinned slots favour riders in the lens (the shooter views). */
+  private viewCone(crowd: Crowd, shooter: boolean): void {
+    if (!shooter) {
+      crowd.setView(null)
+      return
+    }
+    const c = this.cam.camera
+    crowd.setView(this.shooter.yaw, Math.atan(Math.tan((c.fov * Math.PI) / 360) * c.aspect))
+  }
+
+  /** The touch shot's aim pull, a share of what's left each frame (~90 ms to settle). */
+  private easePull(dt: number): void {
+    const p = this.pull
+    if (p.yaw === 0 && p.pitch === 0) {
+      return
+    }
+    const k = 1 - Math.exp(-dt * 30)
+    const dy = Math.abs(p.yaw) < 1e-4 ? p.yaw : p.yaw * k
+    const dp = Math.abs(p.pitch) < 1e-4 ? p.pitch : p.pitch * k
+    p.yaw -= dy
+    p.pitch -= dp
+    this.shooter.turn(dy, dp, this.settings.view === 'first')
   }
 
   /** Mouse, right stick and thumb look → the camera, once per rendered frame. */
@@ -1216,22 +1257,7 @@ export class FrontierGame {
       row.flags = r.flags
       list.push(row)
     }
-    if (!this.net.alive && this.wasAlive) {
-      this.diedAt = nowS
-      // down: on your feet, sights dropped, for the next life
-      this.stance.reset()
-      this.desk.dropAds()
-      this.touch?.setAds(false)
-    }
-    if (this.net.alive && !this.wasAlive) {
-      // (re)spawned: face into town until the stick or the mouse says otherwise
-      this.aim = spawnFacing(this.own)
-      this.cam.snap(this.own.x, this.own.z, Math.cos(this.aim), Math.sin(this.aim))
-      this.shooter.snap(this.own.x, this.own.z, this.aim)
-      this.hatlessSeen.clear()
-      // the first ride into town on this device: how to play
-      this.coach.maybeShow()
-    }
+    this.lifeEdges(nowS)
     this.landings(list)
     this.slideDust(list, nowS)
     const shooter = this.shooterView
@@ -1239,6 +1265,7 @@ export class FrontierGame {
     const speed0 = list[0]?.self ? Math.hypot(list[0].vx, list[0].vz) : 0
     if (shooter) {
       this.applyLook()
+      this.easePull(dt)
       this.shooter.update({
         x: this.own.x,
         z: this.own.z,
@@ -1252,7 +1279,9 @@ export class FrontierGame {
         grid: this.net.grid,
         dt,
         duck: this.duckHeight(),
+        sprinting: this.net.pred.sprinting,
         dead: this.net.alive ? null : this.own,
+        killer: this.net.alive || !this.killer ? null : this.posOf(this.killer.id),
       })
       // dead in first person: the death camera starts inside your head, so your body shows only
       // once it has pulled out (0.3 s)
@@ -1262,12 +1291,20 @@ export class FrontierGame {
       this.cam.update(this.own.x, this.own.z, Math.cos(this.aim), Math.sin(this.aim), dt)
       crowd.hideSelf = false
     }
+    crowd.selfFade = shooter && !first && this.net.alive ? this.shooter.bodyFade : 1
     const cx = shooter ? this.own.x : this.cam.target.x
     const cz = shooter ? this.own.z : this.cam.target.z
+    this.viewCone(crowd, shooter)
     crowd.update(list, cx, cz, dt, nowS)
     this.updateViewModel(dt, speed0)
     fx.eye = first ? this.own : null
     this.wilds.tick(dt)
+    cullFlora(
+      this.floraChunks,
+      this.own.x,
+      this.own.z,
+      first ? FIRST_FLORA_M[this.renderer.tier] : 0,
+    )
     this.sound?.steps(
       {
         id: this.net.you,
@@ -1429,6 +1466,27 @@ export class FrontierGame {
     )
     // the gun's kick rides into the lens (CoD's view punch)
     this.shooter.vmKick = vm.motion.pose.viewKick
+  }
+
+  /** Going down and riding back in: the stance, the sights, the tally, the spawn's facing. */
+  private lifeEdges(nowS: number): void {
+    if (!this.net.alive && this.wasAlive) {
+      this.diedAt = nowS
+      // down: on your feet, sights dropped, for the next life
+      this.stance.reset()
+      this.desk.dropAds()
+      this.touch?.setAds(false)
+    }
+    if (this.net.alive && !this.wasAlive) {
+      this.tally.clear()
+      // (re)spawned: face into town until the stick or the mouse says otherwise
+      this.aim = spawnFacing(this.own)
+      this.cam.snap(this.own.x, this.own.z, Math.cos(this.aim), Math.sin(this.aim))
+      this.shooter.snap(this.own.x, this.own.z, this.aim)
+      this.hatlessSeen.clear()
+      // the first ride into town on this device: how to play
+      this.coach.maybeShow()
+    }
   }
 
   /** A slide kicks up a trail of dust. */
@@ -1625,7 +1683,11 @@ export class FrontierGame {
           ? `You dropped $${this.lastCarry.toLocaleString('en-US')}.`
           : 'You weren’t carrying money.'
       const person = this.riders.live && k !== null && this.riders.person(k.id) !== null
-      this.hud.death(name, lvl ? `Level ${lvl}. ${carry}` : carry, s.respawnTicks / TICK_HZ, person)
+      // what he did to you: "He hit you 3× · 100 damage."
+      const t = k ? this.tally.get(k.id) : undefined
+      const hits = t ? `He hit you ${t.hits}× · ${Math.round(t.dmg)} damage. ` : ''
+      const sub = `${lvl ? `Level ${lvl}. ` : ''}${hits}${carry}`
+      this.hud.death(name, sub, s.respawnTicks / TICK_HZ, person)
     }
     this.announceMostWanted()
     this.arrows.update(

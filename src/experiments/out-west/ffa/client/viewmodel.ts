@@ -20,6 +20,7 @@
 import {
   AdditiveBlending,
   type Bone,
+  BoxGeometry,
   CanvasTexture,
   Color,
   DirectionalLight,
@@ -42,18 +43,37 @@ import { WEAPON_RIFLE, WEAPON_SHOTGUN } from '../../contract/town.ts'
 import type { Assets } from '../../engine/assets.ts'
 import type { Actor } from '../../scene/actor.ts'
 import { castActor } from '../../scene/cast.ts'
-import { gunAnatomy, gunPointsOf } from '../../scene/holster.ts'
+import { type GunAnatomy, gunAnatomy, gunPointsOf } from '../../scene/holster.ts'
 import { type LongHold, solveArm } from '../../scene/longgun.ts'
-import { propDef, propObject } from '../../scene/props.ts'
+import { actionOf, type RevolverAction, revolverObject } from '../../scene/revolver.ts'
 import { rifleObject } from '../../scene/rifle.ts'
 import type { PlayerLook } from '../scene/looks.ts'
 import { SupportHand } from '../scene/mirror-hand.ts'
-import { kitMaterial, shotgunMesh } from '../scene/shotgun.ts'
+import { shotgunMesh } from '../scene/shotgun.ts'
+import { dressForLens } from './vm-gloves.ts'
 import { type VmInput, VmMotion, type VmPose } from './vm-motion.ts'
 import { VmSky } from './vm-sky.ts'
 
 /** The view model's own vertical field of view (degrees), and on the sights. */
 export const VM_FOV = 54
+/** The view model's lens never sees narrower than this across (tan of the half-angle). */
+const MIN_TAN_ACROSS = 0.44
+/** How far the hip hold comes in toward the middle on an upright phone (share of its offset). */
+const PORTRAIT_IN = 0.45
+/** The share of the draw after which the hammer comes back. */
+const COCK_ON_DRAW = 0.45
+
+/** 0 in landscape and square … 1 at a phone held upright (aspect 0.46 and narrower). */
+function portraitK(aspect: number): number {
+  return Math.min(1, Math.max(0, (1 - aspect) / 0.54))
+}
+
+/** The vertical FOV the view model draws with: widened when the frame is narrow. */
+function vmFov(fov: number, aspect: number): number {
+  const tanV = Math.tan((fov * Math.PI) / 360)
+  const need = MIN_TAN_ACROSS / Math.max(0.1, aspect)
+  return tanV >= need ? fov : (Math.atan(need) * 360) / Math.PI
+}
 const VM_FOV_ADS = 46
 /** The eye sits this far above and in front of the head bone (m). */
 const EYE_UP = 0.09
@@ -155,7 +175,6 @@ export class ViewModel {
   readonly scene = new Scene()
   readonly camera = new PerspectiveCamera(VM_FOV, 1, 0.01, 4)
   private readonly assets: Assets
-  private readonly kit: Material
   private readonly rig = new Group()
   private readonly key = new DirectionalLight(0xff_f2_e0, 2.2)
   private readonly fill = new DirectionalLight(0xff_ee_dd, 0.55)
@@ -181,10 +200,11 @@ export class ViewModel {
   private aspect = 1
   private worldFov = 80
   private readonly gunM = new Matrix4()
+  /** The revolver's hammer and cylinder (cocked in hand, ticked here every frame). */
+  private action: RevolverAction | null = null
 
   constructor(assets: Assets) {
     this.assets = assets
-    this.kit = kitMaterial(assets.props)
     this.scene.name = 'viewmodel'
     this.scene.add(this.rig, this.key, this.key.target, this.fill, this.fill.target, this.sky)
     this.fill.position.set(0.3, 0.4, 1)
@@ -249,13 +269,8 @@ export class ViewModel {
     this.pending = null
     this.lookKey = look.key
     this.actor?.dispose()
-    const def = propDef(this.assets.props, 'revolver', 0.32)
-    const gun = def ? propObject(def) : null
-    gun?.traverse((o) => {
-      if (o instanceof Mesh && !Array.isArray(o.material) && o.material.name === 'Kit') {
-        o.material = this.kit
-      }
-    })
+    // the Peacemaker with its hammer and cylinder on their pivots, to cock and to turn
+    const gun = revolverObject({ size: 0.32, articulated: true })
     const actor = castActor(this.assets, {
       look: look.look,
       hat: look.hat,
@@ -265,8 +280,18 @@ export class ViewModel {
     if (actor.hat) {
       actor.hat.visible = false
     }
+    // dressed for the lens: gloves and cuffs, smooth shading (vm-gloves.ts)
+    const body = actor.meshes[0]
+    if (body) {
+      dressForLens(body)
+    }
     if (actor.gun) {
       this.townSky.adopt(actor.gun)
+      this.action = actionOf(actor.gun)
+      if (this.action) {
+        this.action.arm(true)
+        this.action.manual = true
+      }
     }
     this.bones.clear()
     actor.root.traverse((o) => {
@@ -329,11 +354,12 @@ export class ViewModel {
     gun.updateWorldMatrix(true, false)
     const gunW = gun.matrixWorld.clone()
     const right = gunW.clone().invert().multiply(wristR.matrixWorld)
-    const top = a.barrel.cy + a.barrel.hy
+    // its own sights when it carries them (scene/revolver.ts: the notch's floor, the blade's top)
+    const sights = a.rear && a.front ? { rear: a.rear, front: a.front } : addSights(gun, a)
     return {
       obj: gun,
-      rear: new Vector3(a.rearX + 0.03, a.cylinder.cy + a.cylinder.hy + 0.004, 0),
-      front: new Vector3(a.muzzle.x - 0.008, top + 0.006, 0),
+      rear: sights.rear,
+      front: sights.front,
       muzzle: a.muzzle.clone(),
       right,
       left: null,
@@ -394,6 +420,9 @@ export class ViewModel {
   /** A shot: the gun kicks and the muzzle flashes. */
   fired(weapon: number): void {
     this.motion.fired(weapon)
+    if (weapon !== WEAPON_RIFLE && weapon !== WEAPON_SHOTGUN) {
+      this.action?.fired()
+    }
     this.flashT = 0
   }
 
@@ -451,6 +480,11 @@ export class ViewModel {
       return
     }
     this.placeGun(fit, pose)
+    if (fit === this.fits.revolver) {
+      // the thumb cocks it as it comes up, and again once the gate shuts after a reload
+      this.action?.arm(input.reload === null && this.motion.drawn > COCK_ON_DRAW)
+      this.action?.update(input.dt, input.reload)
+    }
     this.rig.updateMatrixWorld(true)
     this.solve(fit, pose)
     this.lens(pose, sunCam, input.dt)
@@ -465,6 +499,8 @@ export class ViewModel {
     const h = fit.hold
     const ads = pose.ads
     const at = tmpV.copy(h.hip).lerp(h.ads, ads)
+    // upright phone: the hip hold comes in toward the middle, so the gun stays in the narrow frame
+    at.x -= h.hip.x * (1 - ads) * PORTRAIT_IN * portraitK(this.aspect)
     at.x += pose.x
     at.y += pose.y
     at.z += pose.z
@@ -590,7 +626,7 @@ export class ViewModel {
   /** The lens (its FOV eases in on the sights, its depth squeezed), the lights and the flash. */
   private lens(pose: VmPose, sunCam: Vector3, dt: number): void {
     const cam = this.camera
-    const fov = VM_FOV + (VM_FOV_ADS - VM_FOV) * pose.ads
+    const fov = vmFov(VM_FOV + (VM_FOV_ADS - VM_FOV) * pose.ads, this.aspect)
     if (cam.fov !== fov || cam.aspect !== this.aspect) {
       cam.fov = fov
       cam.aspect = this.aspect
@@ -615,6 +651,39 @@ export class ViewModel {
     this.actor?.dispose()
     this.flash.material.map?.dispose()
     this.flash.material.dispose()
+  }
+}
+
+/**
+ * Iron sights on the revolver, so the sights show a real picture: a front blade at the muzzle and
+ * a rear notch (two posts) on the frame, in the gun's own steel. Returns the sight line's two
+ * points (the notch's top and the blade's top, level with each other on the sights).
+ */
+function addSights(gun: Object3D, a: GunAnatomy): { rear: Vector3; front: Vector3 } {
+  let steel: Material | null = null
+  gun.traverse((o) => {
+    if (!steel && o instanceof Mesh && !Array.isArray(o.material)) {
+      steel = o.material
+    }
+  })
+  const top = a.barrel.cy + a.barrel.hy
+  const frame = a.cylinder.cy + a.cylinder.hy
+  const blade = new Vector3(a.muzzle.x - 0.012, top + 0.0045, 0)
+  // the notch at the back of the top strap, just behind the cylinder
+  const notchX = a.mouthX - 0.03
+  if (steel) {
+    const front = new Mesh(new BoxGeometry(0.012, 0.009, 0.0026), steel)
+    front.position.copy(blade)
+    gun.add(front)
+    for (const z of [-0.0042, 0.0042]) {
+      const post = new Mesh(new BoxGeometry(0.008, 0.008, 0.0028), steel)
+      post.position.set(notchX, frame + 0.004, z)
+      gun.add(post)
+    }
+  }
+  return {
+    rear: new Vector3(notchX, frame + 0.008, 0),
+    front: new Vector3(blade.x, top + 0.009, 0),
   }
 }
 

@@ -209,7 +209,8 @@ interface Placement {
 
 /** How badly a two-shot placement composes (lower is better). */
 function placementScore(p: Placement): number {
-  let score = Math.abs(p.back - 3.4) / 8
+  // portrait sits further back: a narrow frame close behind him was all torso
+  let score = Math.abs(p.back - (p.portrait ? 4.6 : 3.4)) / 8
   // a narrow frame may cut the shooter at its edge (his gun arm stays in), never hide the victim
   const edge = p.portrait ? 1 : 0.8
   if (p.sNdc > edge) {
@@ -233,14 +234,15 @@ export function twoShot(
   opts: TwoShotOpts = {},
 ): Framing {
   const side = opts.side ?? 1
-  const frac = opts.frac ?? 0.4
+  const portrait = aspect < 1
+  // portrait: a smaller victim, so a wider lens (a long lens made the shooter a wall of torso)
+  const frac = opts.frac ?? (portrait ? 0.26 : 0.4)
   const victimHeight = opts.height ?? 1.78
   const axis = new Vector3(victim.x - shooter.x, 0, victim.z - shooter.z)
   const sep = Math.max(0.4, axis.length())
   axis.divideScalar(sep)
   // the shooter's right-hand side while he faces the victim
   const right = new Vector3(-axis.z, 0, axis.x).multiplyScalar(side)
-  const portrait = aspect < 1
   const vC = new Vector3(victim.x, victimHeight * 0.53, victim.z)
   const sC = new Vector3(shooter.x, 1.3, shooter.z)
   const backs = [2.4, 3.0, 3.6, 4.4, 5.4]

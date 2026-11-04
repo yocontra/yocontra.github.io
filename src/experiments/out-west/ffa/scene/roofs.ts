@@ -169,6 +169,43 @@ export function buildRoof(spec: RoofSpec, walls: GeoBuilder): RoofParts {
         },
       )
     }
+    // soffits: the underside of every overhang (the skin faces up only, so from the street the
+    // eaves were see-through); a shade darker than the trim, a few centimetres under the skin
+    const soffit = lighten(spec.trim, 0.55)
+    const under = 0.04
+    for (const [e, ye, cb, outer] of [
+      [e0, ye0, cb0, k === 0],
+      [e1, ye1, cb1, k === spec.bays - 1],
+    ] as const) {
+      if (!outer) {
+        continue
+      }
+      const q = facing(
+        [T(a0, ye - under, e), T(a1, ye - under, e), T(a1, y0 - under, cb), T(a0, y0 - under, cb)],
+        (n) => n.y < 0,
+      )
+      trim.quad(q[0], q[1], q[2], q[3], soffit)
+    }
+    for (const end of [-1, 1] as const) {
+      if (end === f.frontEnd) {
+        continue
+      }
+      const a = end === -1 ? a0 : a1
+      const aw = end === -1 ? f.a0 : f.a1
+      // from the wall line up to the ridge (the eave soffit already covers the corner)
+      for (const cb of [cb0, cb1]) {
+        const q = facing(
+          [
+            T(a, y0 - under, cb),
+            T(aw, y0 - under, cb),
+            T(aw, yr - under, cm),
+            T(a, yr - under, cm),
+          ],
+          (n) => n.y < 0,
+        )
+        trim.quad(q[0], q[1], q[2], q[3], soffit)
+      }
+    }
     // barge boards up the rakes, and the gable-end walls
     for (const end of [-1, 1] as const) {
       if (end === f.frontEnd) {

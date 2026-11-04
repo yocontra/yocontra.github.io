@@ -4,6 +4,7 @@
  */
 import { afterAll, beforeAll, describe, expect, it } from 'bun:test'
 import { CATALOG, itemById } from '../../../src/experiments/out-west/data/catalog.ts'
+import { FEEL } from '../../../src/experiments/out-west/data/feel.ts'
 import {
   CHALLENGES,
   GUEST_CAP,
@@ -16,7 +17,7 @@ import {
   SOLO_REWARDS,
   tierFor,
 } from '../../../src/experiments/out-west/data/medals.ts'
-import { OUTLAWS, RIFLEMAN } from '../../../src/experiments/out-west/data/outlaws.ts'
+import { OUTLAWS, TOUCH_ALLOWANCE_MS } from '../../../src/experiments/out-west/data/outlaws.ts'
 import { storeLevel } from '../../../src/experiments/out-west/data/progression.ts'
 import { creditJobFor, RankedCredits } from '../ranked/credit.ts'
 import { newRun } from '../ranked/run-state.ts'
@@ -65,31 +66,29 @@ async function ledgerOf(id: string, kind: string) {
 }
 
 describe('medal thresholds', () => {
-  /** The draw a win has to beat, per slot (Delmer's first shot always misses; see the lead's table). */
-  const toBeat = (i: number): number => {
-    const o = OUTLAWS[i]
-    if (!o) {
-      return 0
-    }
-    if (o.gimmick === 'two-guns') {
-      return 465
-    }
-    if (o.gimmick === 'underboss') {
-      return RIFLEMAN.draw
-    }
-    if (i === BOSS_LEVEL) {
-      return tuningFor(BOSS_LEVEL, 2)?.targets[0]?.drawMs ?? 0
-    }
-    return tuningFor(i)?.targets[0]?.drawMs ?? o.draw
+  /** His slowest landing per slot: draw + jitter (Delmer's first shot always misses). */
+  const slowest = (i: number): number => {
+    const tune = i === BOSS_LEVEL ? tuningFor(BOSS_LEVEL, 2) : tuningFor(i)
+    const first = tune?.targets[0]
+    return first ? first.drawMs + first.jitterMs : 0
   }
 
-  it('one row per outlaw, gold < silver < bronze, bronze under his draw', () => {
+  it('one row per outlaw, gold < silver < his draw, bronze is any win', () => {
     expect(MEDAL_MS).toHaveLength(OUTLAWS.length)
     for (const [i, [b, s, g]] of MEDAL_MS.entries()) {
+      const tune = i === BOSS_LEVEL ? tuningFor(BOSS_LEVEL, 2) : tuningFor(i)
+      const draw = Math.min(...(tune?.targets ?? []).map((x) => x.drawMs))
       expect(g).toBeLessThan(s)
-      expect(s).toBeLessThan(b)
-      expect(b).toBeLessThan(toBeat(i))
+      expect(s).toBeLessThan(draw)
+      expect(b).toBeGreaterThanOrEqual(slowest(i) + FEEL.tieMs)
     }
+  })
+
+  it('a tap takes the touch allowance off before the tiers', () => {
+    const [, s, g] = MEDAL_MS[14] as readonly [number, number, number]
+    expect(tierFor(14, g + TOUCH_ALLOWANCE_MS - 1, true)).toBe(3)
+    expect(tierFor(14, s + TOUCH_ALLOWANCE_MS - 1, true)).toBe(2)
+    expect(tierFor(14, s + TOUCH_ALLOWANCE_MS - 1, false)).toBe(1)
   })
 
   it('tiers are strict and nonsense reactions earn nothing', () => {
@@ -234,8 +233,8 @@ describe('medalStatements', () => {
     const marks = await marksOf(t.env, id)
     expect(marks[0]?.challenge).toBe(true)
     expect(marks[1]?.challenge).toBe(false)
-    // no medal under 500 ms on outlaw 1, but the win is recorded (for a claim)
-    expect(marks[1]?.tier).toBe(0)
+    // any win is a bronze, and the win is recorded (for a claim)
+    expect(marks[1]?.tier).toBe(1)
   })
 
   it('a fake-out challenge needs the fake-out', async () => {

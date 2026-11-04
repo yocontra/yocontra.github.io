@@ -8,6 +8,8 @@ export interface CardTimes {
   you: number | null
   him: number | null
   note: string
+  /** The win card: your time is already the big number, so the row shows only his. */
+  himOnly?: boolean
 }
 
 /** "YOU 412 ms · HIM 318 ms" and the verdict ("94 ms too slow", "You never drew."); null empties. */
@@ -19,10 +21,11 @@ export function renderTimes(box: HTMLElement, t: CardTimes | null): void {
   const ms = (v: number) => `${Math.round(v)} ms`
   if (t.you !== null || t.him !== null) {
     const row = el('div', 'ow-card-times-row', box)
-    for (const [who, v] of [
+    const cells = [
       ['You', t.you],
       ['Him', t.him],
-    ] as const) {
+    ] as const
+    for (const [who, v] of t.himOnly ? cells.slice(1) : cells) {
       const cell = el('div', `ow-card-time ow-card-time-${who.toLowerCase()}`, row)
       el('span', 'ow-card-time-who', cell, who)
       el('span', 'ow-card-time-ms', cell, v === null ? '—' : ms(v))

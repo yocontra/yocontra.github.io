@@ -73,9 +73,9 @@ export const RIFLEMAN_LOOK: Look = {
 }
 
 /** Underboss: the rifleman on the roof. */
-export const RIFLEMAN = { draw: 330, jitter: 20, glintAt: 150, accuracy: 0.95 } as const
+export const RIFLEMAN = { draw: 300, jitter: 20, glintAt: 150, accuracy: 1 } as const
 /** Boss phase 2. */
-export const BOSS_PHASE2 = { draw: 280, jitter: 15 } as const
+export const BOSS_PHASE2 = { draw: 292, jitter: 35 } as const
 /** Boss phase 1 clock strike interval, seconds. */
 export const BOSS_STRIKE_INTERVAL: readonly [number, number] = [1.1, 1.6]
 
@@ -86,6 +86,15 @@ export function legendDraw(index: number): number {
 
 /** Extra ms granted by assist mode. */
 export const ASSIST_MS = 150
+
+/**
+ * Extra ms on his draw when you're playing by touch. A tap reaches the page 35–60 ms after the
+ * finger lands (touch sampling and the compositor), a key about 10 ms, so a phone player would
+ * otherwise lose the same race a keyboard player wins. Unranked play only: practice, the story and
+ * a Daily that isn't posted (the server's `withTouch`). Ranked runs and posted Daily runs are one
+ * ladder for every device, since a client could claim touch. Your reaction is still timed honestly.
+ */
+export const TOUCH_ALLOWANCE_MS = 40
 
 export function gradeFor(ms: number, secondChance: boolean): string {
   if (secondChance) {

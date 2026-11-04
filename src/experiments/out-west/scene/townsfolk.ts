@@ -10,138 +10,21 @@
  * sightline or read as the opponent: muted clothes, in porch shade, at the edges of the frame.
  */
 import { type Group, MathUtils, type Object3D, type SkinnedMesh, Vector3 } from 'three'
-import type { BodyKey, HatKey, Look } from '../data/outlaws.ts'
+import type { HatKey, Look } from '../data/outlaws.ts'
 import type { Assets } from '../engine/assets.ts'
 import type { Actor } from './actor.ts'
 import { castActor } from './cast.ts'
 import { FolkPose, type PoseMix, restMix } from './folk-pose.ts'
+import { type FolkPlace, type Habit, SPOTS, type Spot } from './folk-spots.ts'
 import { identityFor } from './identity.ts'
 import { lodGeometry } from './lod.ts'
 import { SkinThrottle } from './skin-throttle.ts'
 import { DECK, STREET } from './street.ts'
 
-type Habit = 'whittle' | 'sit' | 'lean' | 'rail' | 'door' | 'stand'
 type Reaction = 'flinch' | 'cower' | 'duck'
 type Mode = 'idle' | 'react' | 'flee' | 'gone'
 
-interface Spot {
-  name: string
-  base: BodyKey
-  /** Where he stands or sits (feet, or the bench seat under him), and the way he faces. */
-  x: number
-  y: number
-  z: number
-  yaw: number
-  habit: Habit
-  /** Where he goes indoors (a door on his porch), or null: he stays and ducks. */
-  door: readonly [number, number] | null
-}
-
-/** Faces the street from the right (+x) or left (-x) boardwalk. */
-const FACE_R = -Math.PI / 2
-const FACE_L = Math.PI / 2
-/** A bench seat's height above the deck (the kit bench). */
-const SEAT = 0.42
-/** The porch roof's top, where the balcony folk stand. */
-const ROOF = 3.16
 const H = STREET.half
-
-/**
- * In tier order (the floor tier takes the first four, medium seven, high all nine): those in the
- * standoff's frame first, up the street beyond the outlaw.
- */
-const SPOTS: readonly Spot[] = [
-  {
-    name: 'Clara Bell',
-    base: 'woman',
-    x: 9.75,
-    y: ROOF,
-    z: 14,
-    yaw: FACE_R,
-    habit: 'rail',
-    door: null,
-  },
-  {
-    name: 'Walt Greer',
-    base: 'worker',
-    x: 9.43,
-    y: DECK,
-    z: 19.85,
-    yaw: FACE_R - 0.35,
-    habit: 'lean',
-    door: [H + 2.05, 15],
-  },
-  {
-    name: 'Ned Calloway',
-    base: 'rugged',
-    x: -10.4,
-    y: DECK,
-    z: 27.5,
-    yaw: FACE_L - 0.3,
-    habit: 'stand',
-    door: [-(H + 2.05), 30],
-  },
-  {
-    name: 'Ezra Dunn',
-    base: 'rugged',
-    x: -9.75,
-    y: ROOF,
-    z: 19.6,
-    yaw: FACE_L,
-    habit: 'rail',
-    door: null,
-  },
-  {
-    name: 'Amos Whitlock',
-    base: 'worker',
-    x: 10.72,
-    y: DECK + SEAT,
-    z: 11.3,
-    yaw: FACE_R,
-    habit: 'whittle',
-    door: [H + 2.05, 15],
-  },
-  {
-    name: 'Silas Moon',
-    base: 'suit',
-    x: 10.85,
-    y: DECK,
-    z: 3.05,
-    yaw: FACE_R - 0.4,
-    habit: 'door',
-    door: [H + 2.1, 2],
-  },
-  {
-    name: 'Hattie Crane',
-    base: 'woman',
-    x: -10.72,
-    y: DECK + SEAT,
-    z: 14.3,
-    yaw: FACE_L,
-    habit: 'sit',
-    door: [-(H + 2.05), 18],
-  },
-  {
-    name: 'Jed Pruitt',
-    base: 'casual',
-    x: -9.43,
-    y: DECK,
-    z: 7.55,
-    yaw: FACE_L + 0.35,
-    habit: 'lean',
-    door: [-(H + 2.05), 5.5],
-  },
-  {
-    name: 'Old Tom Bixby',
-    base: 'casual',
-    x: -10.72,
-    y: DECK + SEAT,
-    z: -2.8,
-    yaw: FACE_L,
-    habit: 'sit',
-    door: null,
-  },
-]
 
 /** Muted period cloth: dun, faded blue, grey, rust, sage, oatmeal. */
 const SHIRTS = [0x8a_7e_6a, 0x5e_66_6e, 0x7a_72_68, 0x7e_5a_46, 0x6a_70_5a, 0xa8_9c_86, 0x6e_5e_52]
@@ -217,7 +100,7 @@ function habitMix(h: Habit): PoseMix {
 /** One person on a porch. */
 class Folk {
   readonly actor: Actor
-  readonly spot: Spot
+  spot: Spot
   private readonly pose: FolkPose
   private readonly mix = restMix()
   private readonly want = restMix()
@@ -276,6 +159,14 @@ class Folk {
       this.actor.play('Idle_Neutral', 0.2)
     }
     this.skin.touch()
+  }
+
+  /** Moved to another arena's spot (the same man, the same habit's look): back home there. */
+  move(spot: Spot): void {
+    this.spot = spot
+    if (this.mode !== 'gone') {
+      this.home()
+    }
   }
 
   /** Out of sight (indoors) until the next `home`. */
@@ -413,11 +304,12 @@ class Folk {
       return
     }
     const p = this.actor.root.position
-    const lane = Math.sign(door[0]) * (H + 1.2)
+    const lane = this.spot.lane ?? Math.sign(door[0]) * (H + 1.2)
+    const floor = this.spot.floor ?? DECK
     this.path = [
-      new Vector3(lane, DECK, p.z),
-      new Vector3(lane, DECK, door[1]),
-      new Vector3(door[0], DECK, door[1]),
+      new Vector3(lane, floor, p.z),
+      new Vector3(lane, floor, door[1]),
+      new Vector3(door[0], floor, door[1]),
     ]
     this.mode = 'flee'
     Object.assign(this.mix, restMix())
@@ -443,7 +335,7 @@ class Folk {
     dy = Math.atan2(Math.sin(dy), Math.cos(dy))
     this.yaw += dy * Math.min(1, dt * 10)
     p.addScaledVector(d.normalize(), Math.min(len, RUN_SPEED * dt))
-    p.y = DECK
+    p.y = this.spot.floor ?? DECK
   }
 }
 
@@ -454,6 +346,8 @@ export class Townsfolk {
   private readonly assets: Assets
   private readonly queue: Spot[]
   private building: boolean = false as boolean
+  /** Another arena's spots, in {@link SPOTS} order (null: the street's own). */
+  private places: readonly FolkPlace[] | null = null
 
   constructor(root: Group, assets: Assets, count: number) {
     this.root = root
@@ -482,7 +376,8 @@ export class Townsfolk {
         }
         cheapen(actor.root, `folk:${spot.name}`)
         this.root.add(actor.root)
-        const f = new Folk(actor, spot)
+        // where he stands in the arena that's up when he arrives
+        const f = new Folk(actor, this.placed(spot))
         // nobody pops into view mid-duel: he takes his place at the next fresh duel
         if (!this.reveal) {
           f.away()
@@ -493,6 +388,26 @@ export class Townsfolk {
       .finally(() => {
         this.building = false
       })
+  }
+
+  /** His spot in the current arena. */
+  private placed(spot: Spot): Spot {
+    const p = this.places?.[SPOTS.indexOf(spot)]
+    return p ? { ...p, name: spot.name, base: spot.base } : spot
+  }
+
+  /**
+   * Stand everyone in another arena's spots (in {@link SPOTS} order; null: the street's). The same
+   * people, so the crowd's casting and LODs are kept; each goes straight home there.
+   */
+  arrange(places: readonly FolkPlace[] | null): void {
+    this.places = places
+    for (const f of this.folk) {
+      const origin = SPOTS.find((s) => s.name === f.spot.name)
+      if (origin) {
+        f.move(this.placed(origin))
+      }
+    }
   }
 
   /** Everyone back in place (a new duel). */

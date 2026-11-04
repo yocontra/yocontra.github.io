@@ -6,7 +6,7 @@
  * `--stress`), in real Chrome. One table, so regressions show.
  *
  *   bun tools/perf-suite.ts [--rate=4] [--stress] [--secs=20] [--screen=substr] [--portrait]
- *     [--no-build] [--port=4387] [--sustained=600] [--profile=screen] [--devices]
+ *     [--no-build] [--port=4387] [--level=7] [--sustained=600] [--profile=screen] [--devices]
  *
  * Screens: the title, the saloon hub, the Outfitter, a Quick Draw duel (level 7, played: it holds to
  * walk, waits, fires on the call, then sits through the kill cam; one row per phase), and Frontier
@@ -43,6 +43,8 @@ const sustained = Number(opt('sustained', '0'))
 const profileScreen = opt('profile', '')
 const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms))
 const GAME = `${base}/experiments/out-west/`
+/** `--level=N`: which outlaw's duel (his act's arena, scene/arenas/acts.ts); 7 is the rail depot. */
+const duelLevel = Number(opt('level', '7'))
 const FRONTIER = `${base}/experiments/out-west/frontier/?bots=31&seed=7&spawn=72,69`
 const HASH = '#perf&tier=floor'
 
@@ -287,7 +289,7 @@ async function duel(ctx: BrowserContext, rate: number): Promise<void> {
     return
   }
   const { page, cdp } = await phone(ctx)
-  await page.goto(`${GAME}#level=7&perf&tier=floor`)
+  await page.goto(`${GAME}#level=${duelLevel}&perf&tier=floor`)
   await page.locator('.ow-title.ready').waitFor({ timeout: 180_000 })
   await sleep(2000)
   await page.locator('.ow-start').tap()

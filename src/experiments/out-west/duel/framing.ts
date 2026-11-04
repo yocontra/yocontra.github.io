@@ -57,12 +57,14 @@ export function posterShot(s: DuelState): void {
 }
 
 export function backToBackShot(s: DuelState): void {
+  // portrait: twice as far back, so a narrow frame still holds both men whole
+  const far = s.portrait ? 6.4 : 3.4
   s.c.rig.cut(
     'b2b',
     (t) => ({
-      pos: V(3.4 - Math.min(t, 3) * 0.12, 1.15, 0.4),
-      look: V(0, 1.15, 0),
-      fov: 38,
+      pos: V(far - Math.min(t, 3) * 0.12, 1.15, 0.4),
+      look: V(0, 1.1, 0),
+      fov: s.portrait ? 40 : 38,
       handheld: 0.3,
     }),
     0,
@@ -211,6 +213,23 @@ function underbossCallPose(s: DuelState, k: number): Pose | null {
   return { pos, look, fov: fov - (s.reduced ? 0 : k * 2), handheld: 0.1 }
 }
 
+/**
+ * The portrait call: a narrow frame can't hold a camera out at your side (you were an arm at the
+ * edge and half the frame was dirt). From high and close behind your shoulder instead, on a longer
+ * lens: your head, shoulder and gun arm in the bottom-left third, him a quarter of the frame tall
+ * down the middle of the street.
+ */
+function portraitCallPose(P: Vector3, E: Vector3, k: number, reduced: boolean): Pose {
+  const pos = V(P.x - 0.34, 1.86, P.z - 3.1)
+  const look = V(E.x + 0.12, 1.2, E.z)
+  const fov = reduced
+    ? PORTRAIT_CALL_FOV
+    : MathUtils.lerp(PORTRAIT_CALL_FOV, PORTRAIT_CALL_FOV - 4, k)
+  return { pos, look, fov, handheld: reduced ? 0 : 0.1 }
+}
+
+const PORTRAIT_CALL_FOV = 38
+
 /** The call: a gentle, eased push-in on the standoff framing (no dolly-zoom whip). */
 export function callShot(s: DuelState): void {
   const p = s.player
@@ -230,6 +249,9 @@ export function callShot(s: DuelState): void {
     }
     const P = p.root.position
     const E = e ? e.root.position : V(0, 0, 10)
+    if (s.portrait) {
+      return portraitCallPose(P, E, k, reduced)
+    }
     const dist = Math.abs(E.z - P.z)
     const look = V(-dist * lookOff(s), 1.4, E.z)
     // a step further back and out on your gun side than the standoff's: the turn and the draw

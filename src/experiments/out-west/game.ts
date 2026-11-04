@@ -18,7 +18,7 @@ import { dressStreet } from './scene/dressing.ts'
 import { Dust, Flash, Glint, Physics, Puffs, Tumbleweed, tumbleweedGeometry } from './scene/fx.ts'
 import { type HubShot, hubShot, wearLoadout } from './scene/hub-stage.ts'
 import { ItemStudio } from './scene/item-studio.ts'
-import { propDef } from './scene/props.ts'
+import { revolverDef } from './scene/revolver.ts'
 import { rifleObject } from './scene/rifle.ts'
 import { softDot } from './scene/textures.ts'
 import { LIFE, TownLife } from './scene/townlife.ts'
@@ -63,11 +63,7 @@ export interface GameOpts {
 function itemThumbs(renderer: Renderer, assets: Assets): (id: ItemId) => HTMLCanvasElement | null {
   let studio: ItemStudio | null = null
   return (id) => {
-    studio ??= new ItemStudio(
-      renderer.gl,
-      assets.player,
-      propDef(assets.props, 'revolver', 0.3, 'max'),
-    )
+    studio ??= new ItemStudio(renderer.gl, assets.player, revolverDef(0.3))
     return studio.render(id)
   }
 }
@@ -120,6 +116,17 @@ function warmExtras(scene: Scene, sprites: readonly Object3D[]): () => void {
   }
 }
 
+/**
+ * A new act's arena: its materials compiled and the red DRAW! frame's silhouette variants warmed as
+ * it goes up (behind the poster), not on the first call there.
+ */
+function warmArenas(world: World, renderer: Renderer, rig: CameraRig, scene: Scene): void {
+  world.onArena = () => {
+    renderer.warmSilhouette(world.silhouetteHide)
+    renderer.gl.compileAsync(world.root, rig.cam, scene).catch(() => undefined)
+  }
+}
+
 export async function createGame(o: GameOpts): Promise<Game> {
   const scene = new Scene()
   const rig = new CameraRig(window.innerWidth / window.innerHeight)
@@ -134,7 +141,8 @@ export async function createGame(o: GameOpts): Promise<Game> {
     (f) => o.onProgress(f * 0.85),
   )
   const world = new World(scene, assets.tex, renderer.spec.shadowSize, renderer.tier)
-  const { coffins } = dressStreet(assets.props, world.root)
+  const { coffins } = dressStreet(assets.props, world.town)
+  warmArenas(world, renderer, rig, scene)
 
   const dot = softDot()
   const dust = new Dust(renderer.spec.dust, dot)
@@ -168,7 +176,7 @@ export async function createGame(o: GameOpts): Promise<Game> {
     input,
     assets,
     save: o.save,
-    gun: propDef(assets.props, 'revolver', 0.3, 'max'),
+    gun: revolverDef(0.3, 'hi', { articulated: true }),
     rifle: () => rifleObject({ lod: true }),
     coffins,
     dust,
@@ -187,6 +195,7 @@ export async function createGame(o: GameOpts): Promise<Game> {
   // town life: townsfolk, animals, crows, signs (kept off the red silhouette frame)
   const town = new TownLife(world.root, assets, renderer.tier, dot)
   LIFE.town = town
+  town.arrange(world.lifeLayout)
   world.silhouetteHide.push(town.root)
 
   // Compile every shader up front behind the title so the first shot never hitches.

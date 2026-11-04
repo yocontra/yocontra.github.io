@@ -60,8 +60,7 @@ type Where = 'ledger' | 'practice' | 'guest'
 const WHERE: Readonly<Record<Where, string>> = {
   ledger: 'Added to your account.',
   practice: 'Practice only. Win it on a ranked run to get paid.',
-  // a guest's pay needs no footnote: the purse is just where it goes
-  guest: '',
+  guest: 'Added to your guest purse.',
 }
 
 const shortName = (level: number): string => OUTLAWS[level]?.name ?? `Outlaw ${level + 1}`
@@ -213,12 +212,13 @@ export class Meta {
     const clean = !this.drewEarly.has(level)
     this.drewEarly.delete(level)
     const prev = this.data.marks[level] ?? emptyMark()
-    const tier = tierFor(level, r.reactionMs)
+    const tier = tierFor(level, r.reactionMs, r.touch)
     const c = challengeFor(level)
     const met =
       c !== undefined &&
       meets(c, {
         reactionMs: r.reactionMs,
+        touch: r.touch,
         fakesSeen: r.fakesSeen,
         firstTry: r.firstTry,
         clean,

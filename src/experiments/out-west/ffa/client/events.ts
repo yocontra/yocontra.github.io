@@ -111,6 +111,8 @@ export interface Sink {
   pickups: Pickups
   /** You took a hit from (`x`, `z`): the HUD's damage arc points there. */
   damageFrom: (from: { x: number; z: number }) => void
+  /** You took `amount` from `attacker` (the death card's tally). */
+  tookHit: (attacker: number, amount: number) => void
   /** Burning fuses by thrower: the hiss runs from the throw to the blast. */
   fuses: Map<number, Fuse>
 }
@@ -239,6 +241,7 @@ function onDamage(s: Sink, ev: Extract<WireEvent, { type: typeof EV_DAMAGE }>): 
     s.crowd.hurt(ev.victim, at, from)
   }
   if (ev.victim === s.net.you) {
+    s.tookHit(ev.attacker, ev.amount)
     s.hud.hurt(ev.amount)
     if (from) {
       s.damageFrom(from)

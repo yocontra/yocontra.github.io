@@ -344,7 +344,11 @@ export function collect(scene: Object3D): Collected {
     if (mat && !mat.depthWrite) {
       return
     }
-    // anything riding a skeleton (a gun in a hand, a hat) is a character's: not audited here
+    // anything riding a skeleton (a gun in a hand, a hat) is a character's: not audited here,
+    // nor the crowd's batched revolvers (each instance rides a rider: ffa/scene/crowd/gun-batch.ts)
+    if (o.userData.character === true) {
+      return
+    }
     for (let p = o.parent; p; p = p.parent) {
       if (p.type === 'Bone' || p instanceof SkinnedMesh) {
         return

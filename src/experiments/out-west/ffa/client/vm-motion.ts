@@ -139,6 +139,11 @@ export class VmMotion {
   }
 
   /** Bring the gun up from below the frame (spawn, a pickup, back to the revolver). */
+  /** How far through the draw (0 … 1 up). */
+  get drawn(): number {
+    return this.draw / DRAW_S
+  }
+
   redraw(): void {
     this.draw = 0
   }

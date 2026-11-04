@@ -545,7 +545,9 @@ export class PvpDuel implements DirectorHooks {
       return
     }
     if (this.result) {
-      this.news.close(reason)
+      // a ghost (or a Town Outlaw) never offers a rematch, so "no more rematches" means nothing
+      const human = this.posters?.[this.opp]?.kind === 'human'
+      this.news.close(human ? reason : '')
       return
     }
     this.d.c.hud.fake(`[${reason}]`, 3000)
