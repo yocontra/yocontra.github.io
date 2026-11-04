@@ -14,7 +14,6 @@ import {
   VignetteEffect,
 } from 'postprocessing'
 import {
-  type Camera,
   Color,
   DirectionalLight,
   HalfFloatType,
@@ -33,6 +32,7 @@ import {
 import { ATMOS, HAZE_GLSL } from '../scene/atmos.ts'
 import { GpuTimer, PerfOverlay, perfRequested, Window } from '../ui/perf.ts'
 import { LUT_SIZE, lutsAt } from './lut.ts'
+import { applyOverlay, type OverlaySpec } from './overlay.ts'
 import { TownProbe } from './probe.ts'
 import {
   cachedQuality,
@@ -617,32 +617,9 @@ export class Renderer {
   }
   private lowPowerDropped = false
 
-  /**
-   * Draw `scene` through `camera` over the main scene, into the same buffer and before the post
-   * chain, so it is graded like the rest of the frame: no clear, no background, no shadow-map
-   * update. Its depth has to win on its own (Frontier's view model squeezes its depth range into
-   * the nearest 1%). `enabled` false skips it at no cost; null removes it.
-   */
-  setOverlay(o: { scene: Scene; camera: Camera; enabled: boolean } | null): void {
-    if (!o) {
-      if (this.overlayPass) {
-        this.composer.removePass(this.overlayPass)
-        this.overlayPass.dispose()
-        this.overlayPass = null
-      }
-      return
-    }
-    if (!this.overlayPass) {
-      const pass = new RenderPass(o.scene, o.camera)
-      pass.clear = false
-      pass.ignoreBackground = true
-      pass.skipShadowMapUpdate = true
-      this.composer.addPass(pass, 1)
-      this.overlayPass = pass
-    }
-    this.overlayPass.mainScene = o.scene
-    this.overlayPass.mainCamera = o.camera
-    this.overlayPass.enabled = o.enabled
+  /** The Frontier view model's overlay pass (`engine/overlay.ts`); null removes it. */
+  setOverlay(o: OverlaySpec | null): void {
+    this.overlayPass = applyOverlay(this.composer, this.overlayPass, o)
   }
 
   /**
