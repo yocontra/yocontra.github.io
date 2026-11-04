@@ -17,6 +17,10 @@
  * the client offers a retry or `unposted`: the try runs as a guest's (no board, no pay). This keeps
  * the Daily playable where the Turnstile widget can't run (headless or embedded browsers, error
  * 600010; see RELEASE.md).
+ *
+ * An untokened try is rate limited per IP (`DAILY_GUEST_LIMIT`, 4 a minute) before it touches D1
+ * or a Durable Object, so a script can't spend the month's budget on guest tries. The 3 tries a
+ * day per network are then counted in D1 as before.
  */
 import type { DailyResponse } from '../../../src/experiments/out-west/contract/meta.ts'
 import type { RankedSessionResponse } from '../../../src/experiments/out-west/contract/ranked.ts'
@@ -78,6 +82,16 @@ async function triesToday(
   return { tries: row?.n ?? 0, best: row?.best ?? null, paid }
 }
 
+/** The per-IP guest limit (no binding configured: allowed; the D1 daily cap still holds). */
+async function guestAllowed(request: Request, env: Env): Promise<boolean> {
+  if (!env.DAILY_GUEST_LIMIT) {
+    return true
+  }
+  const ip = request.headers.get('CF-Connecting-IP') ?? 'unknown'
+  const { success } = await env.DAILY_GUEST_LIMIT.limit({ key: `daily-guest:${ip}` })
+  return success
+}
+
 async function today(request: Request, env: Env): Promise<Response> {
   const day = dayKey()
   const player = await authenticate(request, env)
@@ -118,6 +132,19 @@ async function issue(request: Request, env: Env, verify: Verify): Promise<Respon
         reason: 'turnstile',
       },
       403,
+    )
+  }
+  if (!(verified || (await guestAllowed(request, env)))) {
+    return json(
+      request,
+      env,
+      {
+        ok: false,
+        error: 'Too many tries from this network. Wait a minute.',
+        reason: 'rate_limited',
+      },
+      429,
+      { 'Retry-After': '60' },
     )
   }
   if (!(await budgetState(env)).duelsOpen) {

@@ -21,6 +21,11 @@ export interface Env {
   LOBBY_DIR: DurableObjectNamespace<LobbyDirectory>
   /** One object per Frontier lobby. */
   LOBBIES: DurableObjectNamespace<Lobby>
+  /**
+   * Per-IP limit on guest (untokened) Daily tries, checked before any D1 or Durable Object work
+   * (`routes/daily.ts`). Optional: absent in unit tests that don't exercise it.
+   */
+  DAILY_GUEST_LIMIT?: RateLimit
   /** Comma-separated list of origins allowed to call the API from a browser. */
   ALLOWED_ORIGINS: string
   /** Cloudflare Turnstile secret. Local dev uses Cloudflare's always-pass test secret. */

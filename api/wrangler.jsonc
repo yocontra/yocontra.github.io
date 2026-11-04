@@ -35,6 +35,11 @@
     { "tag": "v2", "new_sqlite_classes": ["Matchmaker", "DuelRoom", "LobbyDirectory", "Lobby"] },
     { "tag": "v3", "new_sqlite_classes": ["DailySession"] }
   ],
+  // Cloudflare's rate-limiting binding (no charge on any Workers plan, counted in memory per
+  // location, no D1 or Durable Object work): guest Daily tries, before they reach D1.
+  "ratelimits": [
+    { "name": "DAILY_GUEST_LIMIT", "namespace_id": "1001", "simple": { "limit": 4, "period": 60 } }
+  ],
   "vars": {
     "ALLOWED_ORIGINS": "https://contra.io",
     "RP_ID": "contra.io",
