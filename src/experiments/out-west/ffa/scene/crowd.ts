@@ -241,6 +241,8 @@ export class Crowd {
   /** First person (or a lens pulled into your head): your own body isn't drawn. */
   hideSelf = false
   private readonly order: CrowdPlayer[] = []
+  /** Ids drawn this frame (reused). */
+  private readonly seen = new Set<number>()
   stats = { near: 0, far: 0, actors: 0, casters: 0, builds: 0 }
   /** Actors cast so far (each is a full dress-and-bake; churn here is the crowd's main CPU cost). */
   private builds = 0
@@ -627,9 +629,12 @@ export class Crowd {
   update(players: readonly CrowdPlayer[], cx: number, cz: number, dt: number, nowS: number): void {
     const order = this.order
     order.length = 0
-    order.push(...players)
-    const d2 = (p: CrowdPlayer) => (p.self ? -1 : (p.x - cx) ** 2 + (p.z - cz) ** 2)
-    order.sort((a, b) => d2(a) - d2(b))
+    for (const p of players) {
+      order.push(p)
+    }
+    rankX = cx
+    rankZ = cz
+    order.sort(byDistance)
     for (const v of this.vats.values()) {
       v.mesh.count = 0
     }
@@ -641,7 +646,8 @@ export class Crowd {
     // Free slots before building: the furthest actors go first, so a packed crowd keeps its
     // nearest riders cast instead of dropping and re-baking them every few frames.
     this.evict(nowS)
-    const seen = new Set<number>()
+    const seen = this.seen
+    seen.clear()
     let built = false
     for (const [rank, p] of order.entries()) {
       const m = this.members.get(p.id)
@@ -929,6 +935,12 @@ export class Crowd {
     this.root.removeFromParent()
   }
 }
+
+/** The ranking centre for `byDistance` (module state: the sort runs with no closure per frame). */
+let rankX = 0
+let rankZ = 0
+const d2 = (p: CrowdPlayer): number => (p.self ? -1 : (p.x - rankX) ** 2 + (p.z - rankZ) ** 2)
+const byDistance = (a: CrowdPlayer, b: CrowdPlayer): number => d2(a) - d2(b)
 
 function setAuto(bones: readonly Object3D[], on: boolean): void {
   for (const b of bones) {

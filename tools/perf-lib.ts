@@ -32,12 +32,23 @@ const NL = String.fromCharCode(10)
 
 /** Main-thread CPU profile for `ms`: the top self-time and inclusive-time functions, printed. */
 export async function profileMain(cdp: CDPSession, ms: number, sourceMaps: boolean): Promise<void> {
-  // where the main thread's time goes: the sampling profiler, self time by function
-  // (production frames resolve through the perf build's hidden source maps)
+  await startProfile(cdp)
+  await new Promise((r) => setTimeout(r, ms))
+  await stopProfile(cdp, sourceMaps)
+}
+
+/** Start the main thread's sampling profiler (`stopProfile` prints it). */
+export async function startProfile(cdp: CDPSession): Promise<void> {
   await cdp.send('Profiler.enable')
   await cdp.send('Profiler.setSamplingInterval', { interval: 200 })
   await cdp.send('Profiler.start')
-  await new Promise((r) => setTimeout(r, ms))
+}
+
+/**
+ * Stop the profiler and print where the main thread's time went: self and inclusive time by
+ * function (production frames resolve through the perf build's hidden source maps).
+ */
+export async function stopProfile(cdp: CDPSession, sourceMaps: boolean): Promise<void> {
   const { profile } = (await cdp.send('Profiler.stop')) as {
     profile: {
       nodes: {
