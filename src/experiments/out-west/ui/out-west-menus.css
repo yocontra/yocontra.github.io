@@ -130,9 +130,19 @@
   font-size: var(--ow-fs-h4);
   color: var(--ow-brass);
 }
-.ow-ledger {
+.ow-ledger-wrap {
+  flex: 0 1 auto;
+  min-height: 12rem;
   width: min(40rem, 100%);
-  border-collapse: collapse;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  box-shadow: var(--ow-shadow-2);
+  animation: ow-paper-in var(--ow-t-slow) 0.12s var(--ow-ease-out) both;
+}
+.ow-ledger {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
   color: var(--ow-ink);
   background-color: var(--ow-paper);
   background-image:
@@ -141,9 +151,7 @@
   background-size:
     100% 100%,
     256px 256px;
-  box-shadow: var(--ow-shadow-2);
   font-size: var(--ow-fs-body);
-  animation: ow-paper-in var(--ow-t-slow) 0.12s var(--ow-ease-out) both;
 }
 .ow-ledger th,
 .ow-ledger td {
@@ -153,6 +161,10 @@
   white-space: nowrap;
 }
 .ow-ledger th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--ow-paper);
   padding-top: var(--ow-s3);
   font-weight: 700;
   font-variant-caps: all-small-caps;
@@ -205,6 +217,20 @@
   font-size: var(--ow-fs-h3);
   font-variant-numeric: lining-nums tabular-nums;
   color: var(--ow-brass);
+}
+/* short screens: tighter rows and no Grade column, so title, ledger, stats and buttons fit */
+@media (max-height: 950px) {
+  .ow-end-line {
+    font-size: clamp(1.5rem, 4.5vh, 2.5rem);
+  }
+  .ow-ledger th,
+  .ow-ledger td {
+    padding-block: 3px;
+  }
+  .ow-ledger th:nth-child(4),
+  .ow-ledger td:nth-child(4) {
+    display: none;
+  }
 }
 @media (max-width: 480px) {
   .ow-ledger {
@@ -295,7 +321,7 @@
   .ow-menu.on,
   .ow-end.on,
   .ow-end-line,
-  .ow-ledger {
+  .ow-ledger-wrap {
     animation: none;
   }
 }

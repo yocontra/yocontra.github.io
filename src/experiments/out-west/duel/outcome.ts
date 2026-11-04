@@ -181,8 +181,9 @@ export function win(d: Director, reactionMs: number, paid: Paid | null): void {
   const o = d.outlaw
   const r = d.lastReaction ?? reactionMs
   d.lastReaction = r
-  // practice: when his first hitting shot would have gone off (ranked sets the server's time)
-  const due = d.plan?.shots.find((s) => s.hit)
+  // practice: when he'd have drawn (his first shot; the two-gun man's sure miss doesn't count).
+  // Ranked sets the server's time.
+  const due = d.plan?.shots.find((s) => s.who === 0 && (s.hit || o.gimmick !== 'two-guns'))
   if (d.hisMs === null && due && d.callT > 0) {
     d.hisMs = due.t - d.callT
   }
@@ -324,7 +325,7 @@ export function tickWin(d: Director, realDt: number): void {
       sub: gradeFor(r, d.secondChance),
       hint: 'press to continue',
     })
-    c.hud.cardTimes({ you: r, him: d.hisMs, note: medalNote(d, r) })
+    c.hud.cardTimes({ you: r, him: d.hisMs, note: medalNote(d, r), himOnly: true })
     c.hud.cardPayout(payLine(d))
     c.hud.cardStamp(trickStamp(d))
     showPurse(d, d.winDelta)

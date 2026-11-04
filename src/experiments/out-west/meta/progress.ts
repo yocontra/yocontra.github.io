@@ -60,8 +60,7 @@ type Where = 'ledger' | 'practice' | 'guest'
 const WHERE: Readonly<Record<Where, string>> = {
   ledger: 'Added to your account.',
   practice: 'Practice only. Win it on a ranked run to get paid.',
-  // a guest's pay needs no footnote: the purse is just where it goes
-  guest: '',
+  guest: 'Added to your guest purse.',
 }
 
 const shortName = (level: number): string => OUTLAWS[level]?.name ?? `Outlaw ${level + 1}`

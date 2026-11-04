@@ -468,7 +468,8 @@ export class Hud {
     if (stats.cowardice >= 10) {
       el('div', 'ow-end-title', e, 'The Yellowest Hand in the West')
     }
-    const table = el('table', 'ow-ledger', e)
+    // the ledger scrolls inside its paper under a sticky header, so the page never cuts it off
+    const table = el('table', 'ow-ledger', el('div', 'ow-ledger-wrap', e))
     const head = el('tr', '', el('thead', '', table))
     for (const h of ['#', 'Outlaw', 'Best', 'Grade', 'Tries', 'Bounty']) {
       el('th', '', head, h)

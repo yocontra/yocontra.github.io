@@ -146,12 +146,12 @@ export class DailyTile {
     if (title) {
       title.textContent = spec.title
     }
-    // whole pieces that wrap between them, never inside one: "Daily Outlaw" / "· Two fake-outs"
+    // the day's modifiers on a line of their own under "Daily Outlaw" (a "· 2 fake-outs" that
+    // wrapped alone read as an orphan)
     this.kicker.replaceChildren()
     el('span', 'ow-kick-part', this.kicker, 'Daily Outlaw')
-    for (const m of spec.modifiers) {
-      this.kicker.append(' ')
-      el('span', 'ow-kick-part', this.kicker, `· ${MOD_LABEL[m]}`)
+    if (spec.modifiers.length > 0) {
+      el('span', 'ow-kick-mods', this.kicker, spec.modifiers.map((m) => MOD_LABEL[m]).join(', '))
     }
     this.sub.textContent = dailyStatus(this.today)
   }
@@ -399,10 +399,8 @@ function verdictLine(v: Verdict | null, you: number | null): { line: string; not
   if (v?.outcome === 'loss') {
     const him = v.enemyMs
     if (you && him && you > him) {
-      return {
-        line: 'Too slow',
-        note: `You ${Math.round(you)} ms, him ${Math.round(him)} ms: ${Math.round(you - him)} ms late.`,
-      }
+      // both times are in the rows below; the note says by how much
+      return { line: 'Too slow', note: `${Math.round(you - him)} ms behind him.` }
     }
     return { line: 'You lost', note: you ? '' : 'You didn’t draw.' }
   }
