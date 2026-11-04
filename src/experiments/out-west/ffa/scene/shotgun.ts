@@ -57,12 +57,16 @@ const RIB_Y = BARREL_Y + BARREL_R0 * 0.78
 /** Where the shot leaves (between the two muzzles), in the gun's own metres. */
 export const SHOTGUN_MUZZLE = new Vector3(MUZZLE_X + 0.001, BARREL_Y, 0)
 
+/** The hinge pin the barrels break open on: at the front of the action bar, under the barrels. */
+const HINGE = new Vector3(BREECH_X + 0.02, 0.012, 0)
+
 /** The coach gun's landmarks in its own frame. */
 export const SHOTGUN_ANATOMY: LongAnatomy = {
   muzzle: SHOTGUN_MUZZLE.clone(),
   butt: new Vector3(-0.386, -0.054, 0),
   wrist: new Vector3(-0.085, 0.002, 0),
   fore: new Vector3(0.13, BARREL_Y - 0.05, 0),
+  hinge: HINGE.clone(),
 }
 
 const M = (): Matrix4 => new Matrix4()
@@ -71,12 +75,14 @@ const tint = (f: Finish, k: number): Finish => ({
   rgb: [f.rgb[0] * k, f.rgb[1] * k, f.rgb[2] * k],
 })
 
-function build(): BufferGeometry {
+/** The coach gun's parts: the action and stock, and the barrels with their fore-end (they break). */
+function build(): { body: BufferGeometry[]; barrels: BufferGeometry[] } {
   const p: BufferGeometry[] = []
+  const b: BufferGeometry[] = []
   const len = MUZZLE_X - BREECH_X
   // ---- the barrels, the bores, the ribs and the bead
   for (const z of [-BARREL_Z, BARREL_Z]) {
-    p.push(
+    b.push(
       part(
         new CylinderGeometry(BARREL_R1, BARREL_R0, len, 18, 1),
         alongX(BREECH_X + len / 2, BARREL_Y, z),
@@ -89,7 +95,7 @@ function build(): BufferGeometry {
       ),
     )
   }
-  p.push(
+  b.push(
     // the matted top rib, tapering toward the muzzle, and the bottom rib
     loft(
       [
@@ -248,6 +254,9 @@ function build(): BufferGeometry {
       BLUED,
       { sides: 16, square: 0.55 },
     ),
+  )
+  // the fore-end rides on the barrels
+  b.push(
     loft(
       [
         [BREECH_X + 0.03, BARREL_Y - 0.021, 0.022, 0.044],
@@ -267,15 +276,34 @@ function build(): BufferGeometry {
       { sides: 14, square: 0.6 },
     ),
   )
-  return forge(p)
+  return { body: p, barrels: b }
 }
 
 let cached: BufferGeometry | null = null
 
-/** The coach gun's geometry (shared: never mutate it). */
+/** The coach gun's geometry, all of it (shared: never mutate it). */
 export function shotgunGeometry(): BufferGeometry {
-  cached ??= build()
+  if (!cached) {
+    const { body, barrels } = build()
+    cached = forge([...body, ...barrels])
+  }
   return cached
+}
+
+let split: { body: BufferGeometry; barrels: BufferGeometry } | null = null
+
+/**
+ * The coach gun split to break open (shared: never mutate them): the action and stock, and the
+ * barrels with their fore-end, origin on the hinge pin (`SHOTGUN_ANATOMY.hinge`), so turning them
+ * about −Z drops the muzzles.
+ */
+export function shotgunParts(): { body: BufferGeometry; barrels: BufferGeometry } {
+  if (!split) {
+    const { body, barrels } = build()
+    const h = HINGE
+    split = { body: forge(body), barrels: forge(barrels).translate(-h.x, -h.y, -h.z) }
+  }
+  return split
 }
 
 /** The props' shared atlas material ("Kit", engine/assets.ts), or a plain vertex-coloured one. */
@@ -311,9 +339,21 @@ export function kitMaterial(props: GLTF | null): Material {
   return twin
 }
 
-/** One mesh of the coach gun (one draw, the long guns' material); its landmarks ride on it. */
-export function shotgunMesh(material: Material = gunMaterial()): Object3D {
-  const m = new Mesh(shotgunGeometry(), material)
+/**
+ * One mesh of the coach gun (one draw, the long guns' material); its landmarks ride on it. With
+ * `hinged` the barrels are a child mesh named `barrels` on the hinge pin, for the first-person
+ * reload (that gun alone costs a second draw).
+ */
+export function shotgunMesh(material: Material = gunMaterial(), hinged = false): Object3D {
+  const m = new Mesh(hinged ? shotgunParts().body : shotgunGeometry(), material)
+  if (hinged) {
+    const barrels = new Mesh(shotgunParts().barrels, material)
+    barrels.name = 'barrels'
+    barrels.position.copy(HINGE)
+    barrels.castShadow = true
+    barrels.receiveShadow = true
+    m.add(barrels)
+  }
   m.name = 'shotgun'
   m.castShadow = true
   m.receiveShadow = true

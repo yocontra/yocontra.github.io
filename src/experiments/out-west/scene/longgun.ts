@@ -32,6 +32,8 @@ export interface LongAnatomy {
   /** A lever gun: the middle of the lever's hand loop, and its pivot (for a lever throw). */
   lever?: Vector3
   leverPivot?: Vector3
+  /** A break-open gun: the hinge pin its barrels drop on. */
+  hinge?: Vector3
 }
 
 /** The landmarks a gun's builder carried on it, in the gun's frame (null: measure them). */
@@ -56,7 +58,7 @@ function carried(gun: Object3D): LongAnatomy | null {
     wrist: a.wrist.clone().applyMatrix4(to),
     fore: a.fore.clone().applyMatrix4(to),
   }
-  for (const k of ['rear', 'front', 'lever', 'leverPivot'] as const) {
+  for (const k of ['rear', 'front', 'lever', 'leverPivot', 'hinge'] as const) {
     const v = map(a[k])
     if (v) {
       out[k] = v

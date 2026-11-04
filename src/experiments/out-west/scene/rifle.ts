@@ -87,7 +87,8 @@ const tint = (f: Finish, k: number): Finish => ({
   rgb: [f.rgb[0] * k, f.rgb[1] * k, f.rgb[2] * k],
 })
 
-function build(d: Detail): BufferGeometry {
+/** The carbine's parts: everything that stays put, and the lever (it swings on its pivot). */
+function build(d: Detail): { body: BufferGeometry[]; lever: BufferGeometry } {
   const hi = d === 'hi'
   const round = hi ? 18 : 8
   const p: BufferGeometry[] = []
@@ -228,31 +229,29 @@ function build(d: Detail): BufferGeometry {
   )
   // ---- the lever: from its pivot under the receiver's front, round the trigger, then the
   // hand's loop under the wrist, its tip latched up against the stock
-  p.push(
-    sweep(
-      [
-        [0.13, -0.0455, 0],
-        [0.09, -0.0462, 0],
-        [0.05, -0.0468, 0],
-        [0.036, -0.053, 0],
-        [0.033, -0.067, 0],
-        [0.021, -0.0775, 0],
-        [0.004, -0.0775, 0],
-        [-0.008, -0.068, 0],
-        [-0.013, -0.0505, 0],
-        [-0.022, -0.06, 0],
-        [-0.033, -0.085, 0],
-        [-0.054, -0.0995, 0],
-        [-0.079, -0.0995, 0],
-        [-0.099, -0.09, 0],
-        [-0.106, -0.074, 0],
-        [-0.099, -0.061, 0],
-        [-0.083, -0.0545, 0],
-      ],
-      0.0034,
-      CASE,
-      { segments: hi ? 64 : 24, radial: hi ? 8 : 4, flat: 1.45 },
-    ),
+  const lever = sweep(
+    [
+      [0.13, -0.0455, 0],
+      [0.09, -0.0462, 0],
+      [0.05, -0.0468, 0],
+      [0.036, -0.053, 0],
+      [0.033, -0.067, 0],
+      [0.021, -0.0775, 0],
+      [0.004, -0.0775, 0],
+      [-0.008, -0.068, 0],
+      [-0.013, -0.0505, 0],
+      [-0.022, -0.06, 0],
+      [-0.033, -0.085, 0],
+      [-0.054, -0.0995, 0],
+      [-0.079, -0.0995, 0],
+      [-0.099, -0.09, 0],
+      [-0.106, -0.074, 0],
+      [-0.099, -0.061, 0],
+      [-0.083, -0.0545, 0],
+    ],
+    0.0034,
+    CASE,
+    { segments: hi ? 64 : 24, radial: hi ? 8 : 4, flat: 1.45 },
   )
   // ---- the walnut: the fore-end with its steel cap, the buttstock and its crescent plate
   p.push(
@@ -337,30 +336,55 @@ function build(d: Detail): BufferGeometry {
   } else {
     p.push(part(new BoxGeometry(0.01, 0.009, 0.003), at(FRONT_X, BARREL_R1 + 0.004, 0), BRASS, 'y'))
   }
-  return forge(p)
+  return { body: p, lever }
 }
 
-const cache = new Map<Detail, BufferGeometry>()
-
-/** The carbine's geometry at a level of detail (shared: never mutate it). */
-export function rifleGeometry(d: Detail = 'hi'): BufferGeometry {
-  let g = cache.get(d)
+const cache = new Map<string, BufferGeometry>()
+const cached = (key: string, make: () => BufferGeometry): BufferGeometry => {
+  let g = cache.get(key)
   if (!g) {
-    g = build(d)
-    cache.set(d, g)
+    g = make()
+    cache.set(key, g)
   }
   return g
+}
+
+/** The carbine's geometry at a level of detail, lever and all (shared: never mutate it). */
+export function rifleGeometry(d: Detail = 'hi'): BufferGeometry {
+  return cached(d, () => {
+    const { body, lever } = build(d)
+    return forge([...body, lever])
+  })
+}
+
+/**
+ * The carbine split for a lever throw (shared: never mutate them): the body, and the lever with
+ * its origin on its pivot (`RIFLE_ANATOMY.leverPivot`), so turning it about Z swings it down.
+ */
+export function rifleParts(): { body: BufferGeometry; lever: BufferGeometry } {
+  const p = RIFLE_ANATOMY.leverPivot ?? new Vector3()
+  return {
+    body: cached('body', () => forge(build('hi').body)),
+    lever: cached('lever', () => forge([build('hi').lever]).translate(-p.x, -p.y, -p.z)),
+  }
 }
 
 /** Past this distance (m) a rider's rifle draws its low level of detail. */
 const LOD_FAR = 9
 
 /**
- * The carbine as one drawable: one mesh (first person, pickups), or with `lod` a three.js LOD
- * that swaps to the low level past a few metres (still one draw). Its landmarks ride on it.
+ * The carbine as one drawable: one mesh (pickups, riders), or with `lod` a three.js LOD that swaps
+ * to the low level past a few metres (still one draw). With `lever` it is the body and a child
+ * mesh named `lever` on its pivot, for the first-person reload (that gun alone costs a second
+ * draw). Its landmarks ride on it.
  */
-export function rifleObject(o: { lod?: boolean; material?: Material } = {}): Object3D {
+export function rifleObject(
+  o: { lod?: boolean; material?: Material; lever?: boolean } = {},
+): Object3D {
   const mat = o.material ?? gunMaterial()
+  if (o.lever) {
+    return articulated(mat)
+  }
   const mesh = (d: Detail): Mesh => {
     const m = new Mesh(rifleGeometry(d), mat)
     m.name = d === 'hi' ? 'rifle' : 'rifle-lod'
@@ -383,4 +407,21 @@ export function rifleObject(o: { lod?: boolean; material?: Material } = {}): Obj
   obj.name = 'rifle'
   obj.userData.longAnatomy = RIFLE_ANATOMY
   return obj
+}
+
+/** The body with the lever as a child mesh on its pivot (rotate `lever` about Z to throw it). */
+function articulated(mat: Material): Object3D {
+  const parts = rifleParts()
+  const body = new Mesh(parts.body, mat)
+  const lever = new Mesh(parts.lever, mat)
+  lever.name = 'lever'
+  lever.position.copy(RIFLE_ANATOMY.leverPivot ?? new Vector3())
+  for (const m of [body, lever]) {
+    m.castShadow = true
+    m.receiveShadow = true
+  }
+  body.add(lever)
+  body.name = 'rifle'
+  body.userData.longAnatomy = RIFLE_ANATOMY
+  return body
 }

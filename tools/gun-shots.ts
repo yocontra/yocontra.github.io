@@ -48,6 +48,14 @@ const hook = (page: Page, root: string, fn: string, ...args: unknown[]): Promise
     },
     [root, fn, args] as const,
   )
+/** T-pose frames the pose watch counted on this page (scene/pose-watch.ts): must stay 0. */
+async function tPose(page: Page): Promise<number> {
+  const n = await page.evaluate(() => Number(Reflect.get(globalThis, '__owTPose') ?? 0))
+  if (n > 0) {
+    failures++
+  }
+  return n
+}
 const pilot = (page: Page, fn: string, ...args: unknown[]) =>
   hook(page, '__frontierPilot', fn, ...args)
 const view = (page: Page, fn: string, ...args: unknown[]) =>
@@ -189,6 +197,7 @@ async function rifleman(chrome: Browser): Promise<void> {
       }
       await sleep(5000)
       await shot(page, `held-${gun}-${side}`)
+      console.log(`  T-pose ${await tPose(page)}`)
       await ctx.close()
     }
   }
@@ -211,7 +220,7 @@ if (only.has('fps') || only.has('tps') || only.has('pickups')) {
     await pickups(page)
   }
   const s = await state(page)
-  console.log(`  draws ${s.draws}, tris ${Math.round(s.tris / 1000)}k`)
+  console.log(`  draws ${s.draws}, tris ${Math.round(s.tris / 1000)}k, T-pose ${await tPose(page)}`)
   await page.context().close()
 }
 if (only.has('rifleman')) {
