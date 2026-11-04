@@ -624,13 +624,13 @@ export class FrontierGame {
       return
     }
     for (const r of this.net.roster.values()) {
-      crowd.setLook(r.id, lookFor(r.loadout, r.id))
+      crowd.setLook(r.id, lookFor(r.loadout, r.id, r.bot))
     }
   }
 
   private onControl(m: ServerControl): void {
     if (m.type === 'roster_add') {
-      this.crowd?.setLook(m.entry.id, lookFor(m.entry.loadout, m.entry.id))
+      this.crowd?.setLook(m.entry.id, lookFor(m.entry.loadout, m.entry.id, m.entry.bot))
     } else if (m.type === 'roster_remove') {
       this.crowd?.remove(m.id)
       this.score.forget(m.id)
