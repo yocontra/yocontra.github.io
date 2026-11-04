@@ -7,7 +7,6 @@
 import {
   BTN_CALLOUT,
   BTN_FIRE,
-  BTN_INTERACT,
   NONE,
   SD_ABORTED,
   SD_COWARD,
@@ -110,7 +109,7 @@ function startShowdown(w: World, a: Player, b: Player): void {
  * start a bank channel).
  */
 export function handleCallout(w: World, p: Player, buttons: number): boolean {
-  if (pressed(buttons, p.lastButtons, BTN_INTERACT) && p.calledBy !== NONE) {
+  if (pressed(buttons, p.lastButtons, BTN_CALLOUT) && p.calledBy !== NONE) {
     const challenger = w.players[p.calledBy]
     p.calledBy = NONE
     const allowed = challenger && !w.noDuel.has(pairKey(challenger.id, p.id))

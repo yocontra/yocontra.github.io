@@ -18,14 +18,14 @@ const money = (n: number): string => `$${Math.max(0, Math.round(n)).toLocaleStri
 
 const STEPS: readonly Step[] = ['shoot', 'grab', 'bank']
 
-function stepText(step: Step, touch: boolean, practice: boolean): string {
+function stepText(step: Step, practice: boolean): string {
   if (step === 'shoot') {
     return 'Shoot a rider. Everyone drops their money when they fall.'
   }
   if (step === 'grab') {
     return 'Grab the bag. Run over it.'
   }
-  const how = touch ? 'tap BANK' : 'press E'
+  const how = 'stand still at the window'
   const bonus = practice ? ` First bank pays +${money(PRACTICE_FIRST_BANK_BONUS)}.` : ''
   return `Bank it. Follow the $ marker to a window and ${how}.${bonus}`
 }
@@ -37,7 +37,6 @@ export class Objectives {
   private readonly kicker: HTMLElement
   private readonly text: HTMLElement
   private readonly stamp: HTMLElement
-  private readonly touch: boolean
   private readonly practice: boolean
   private readonly audio: AudioEngine | null
   private step: Step | null
@@ -46,9 +45,8 @@ export class Objectives {
 
   constructor(
     hud: HTMLElement,
-    opts: { touch: boolean; practice: boolean; audio: AudioEngine | null; done: boolean },
+    opts: { practice: boolean; audio: AudioEngine | null; done: boolean },
   ) {
-    this.touch = opts.touch
     this.practice = opts.practice
     this.audio = opts.audio
     this.el = document.createElement('div')
@@ -94,7 +92,7 @@ export class Objectives {
     }
     const n = STEPS.indexOf(s)
     this.kicker.textContent = `First bank · ${n + 1} of ${STEPS.length}`
-    this.text.textContent = stepText(s, this.touch, this.practice)
+    this.text.textContent = stepText(s, this.practice)
     this.el.classList.remove('tick')
     // restart the arrival bump
     void this.el.offsetWidth

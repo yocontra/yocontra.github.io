@@ -13,14 +13,7 @@
  * applied on the next tick (and its button presses are kept); a client far ahead is fast-forwarded.
  * Either case shows up client-side as an ordinary reconciliation correction.
  */
-import {
-  BTN_CALLOUT,
-  BTN_FIRE,
-  BTN_INTERACT,
-  BTN_LEAVE,
-  BTN_RELOAD,
-  BTN_ROLL,
-} from '../../contract/town.ts'
+import { BTN_CALLOUT, BTN_FIRE, BTN_LEAVE, BTN_RELOAD, BTN_ROLL } from '../../contract/town.ts'
 import type { WireFrame } from './codec.ts'
 import { TICK_HZ } from './constants.ts'
 
@@ -32,8 +25,7 @@ export const INPUT_BUFFER_FRAMES = 2
 /** A client this far ahead of the server is fast-forwarded. */
 export const MAX_AHEAD_FRAMES = 10
 /** Presses that must not be lost when frames are merged or dropped. */
-export const EDGE_BUTTONS =
-  BTN_FIRE | BTN_ROLL | BTN_RELOAD | BTN_INTERACT | BTN_CALLOUT | BTN_LEAVE
+export const EDGE_BUTTONS = BTN_FIRE | BTN_ROLL | BTN_RELOAD | BTN_CALLOUT | BTN_LEAVE
 
 export const quantizeAim = (aim: number): number =>
   (Math.round(aim / AIM_STEP) * AIM_STEP) & 0xff_ff

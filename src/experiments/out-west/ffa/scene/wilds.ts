@@ -35,6 +35,7 @@ import {
 import { tumbleweedGeometry } from '../../scene/fx.ts'
 import type { Preset } from '../../scene/presets.ts'
 import { Sky } from '../../scene/sky.ts'
+import { twigLook } from '../../scene/surface.ts'
 import type { TownLayout } from '../sim/layout.ts'
 import { Rng } from '../sim/rng.ts'
 import { type Interior, withInterior } from './interior.ts'
@@ -290,6 +291,7 @@ export class Wilds {
     const geo = tumbleweedGeometry()
     const mat = new MeshStandardMaterial({ color: 0x8a_6a_42, roughness: 1 })
     mat.userData.procedural = true
+    twigLook(mat)
     const s = layout.size
     // lanes: on the bench north of the creek, and out past the west and south edges
     const lanes: Lane[] = [
@@ -300,6 +302,7 @@ export class Wilds {
     for (const [i, lane] of lanes.entries()) {
       const m = new Mesh(geo, mat)
       m.name = 'tumbleweed'
+      m.receiveShadow = true
       this.scene.add(m)
       this.weeds.push(new Roller(m, lane, layout, i * 23))
     }

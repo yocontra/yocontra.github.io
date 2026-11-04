@@ -2,7 +2,6 @@ import { describe, expect, test as it } from 'bun:test'
 import {
   BAG_STYLES,
   BTN_FIRE,
-  BTN_INTERACT,
   BTN_LEAVE,
   bagStyleIndex,
   EV_BAG_DROP,
@@ -146,7 +145,7 @@ describe('banking', () => {
   it('a 2 s channel at a bank window deposits the whole carry, with commission over $500', () => {
     const w = testWorld()
     const p = place(w, 64.5, 81.5, { carried: 1000 })
-    run(w, BANK_CHANNEL_TICKS + 1, { [p.id]: hold(BTN_INTERACT) })
+    run(w, BANK_CHANNEL_TICKS + 1)
     expect(p.carried).toBe(0)
     expect(w.deposits).toEqual([
       {
@@ -164,20 +163,21 @@ describe('banking', () => {
   it('moving or taking damage cancels the channel', () => {
     const w = testWorld()
     const p = place(w, 64.5, 81.5, { carried: 200 })
-    run(w, 10, { [p.id]: hold(BTN_INTERACT) })
-    run(w, 1, { [p.id]: () => ({ buttons: BTN_INTERACT, moveX: 127 }) })
+    run(w, 10)
+    run(w, 1, { [p.id]: () => ({ moveX: 127 }) })
     expect(p.channel).toBeNull()
+    p.x = 30
+    p.z = 64
     run(w, BANK_CHANNEL_TICKS + 2)
     expect(p.carried).toBe(200)
     const shooter = place(w, 64.5, 76)
     p.x = 64.5
     p.z = 81.5
     run(w, 1, { [p.id]: () => ({ buttons: 0 }) })
-    run(w, 5, { [p.id]: hold(BTN_INTERACT) })
+    run(w, 5)
     expect(p.channel).not.toBeNull()
     run(w, 1, {
       [shooter.id]: () => ({ aim: aimAt(shooter, p), buttons: BTN_FIRE }),
-      [p.id]: hold(BTN_INTERACT),
     })
     expect(p.channel).toBeNull()
   })
@@ -185,9 +185,9 @@ describe('banking', () => {
   it('the Stage Line office takes 4 s', () => {
     const w = testWorld()
     const p = place(w, 13, 84, { carried: 100 })
-    run(w, BANK_CHANNEL_TICKS + 1, { [p.id]: hold(BTN_INTERACT) })
+    run(w, BANK_CHANNEL_TICKS + 1)
     expect(p.carried).toBe(100)
-    run(w, STAGE_CHANNEL_TICKS - BANK_CHANNEL_TICKS, { [p.id]: hold(BTN_INTERACT) })
+    run(w, STAGE_CHANNEL_TICKS - BANK_CHANNEL_TICKS)
     expect(p.carried).toBe(0)
     expect(w.deposits[0]?.amount).toBe(100)
   })
@@ -195,7 +195,7 @@ describe('banking', () => {
   it('nothing to bank outside a zone', () => {
     const w = testWorld()
     const p = place(w, 30, 64, { carried: 100 })
-    run(w, BANK_CHANNEL_TICKS + 1, { [p.id]: hold(BTN_INTERACT) })
+    run(w, BANK_CHANNEL_TICKS + 1)
     expect(p.carried).toBe(100)
   })
 })
@@ -256,7 +256,7 @@ describe('leaving, lingering, Most Wanted and strongboxes', () => {
     p.z = spot?.z ?? 0
     const value = w.strongbox?.value ?? 0
     expect(value).toBe(420)
-    run(w, STRONGBOX_CHANNEL_TICKS + 1, { [p.id]: hold(BTN_INTERACT) })
+    run(w, STRONGBOX_CHANNEL_TICKS + 1)
     expect(w.strongbox).toBeNull()
     expect(p.carried).toBe(value)
     expect(p.stats.xp).toBe(50)

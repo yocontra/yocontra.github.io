@@ -16,7 +16,6 @@ import {
   BTN_AIM,
   BTN_CALLOUT,
   BTN_FIRE,
-  BTN_INTERACT,
   BTN_RELOAD,
   BTN_ROLL,
   BTN_SPRINT,
@@ -60,7 +59,7 @@ const PAD_TOP: readonly (readonly [number, number])[] = [
   [0, JUMP_BIT],
   [4, BTN_ROLL],
   [2, BTN_RELOAD],
-  [1, BTN_INTERACT],
+  [1, BTN_CALLOUT],
   [3, BTN_CALLOUT],
   [5, BTN_THROW],
 ]
@@ -71,7 +70,7 @@ const PAD_SHOOTER: readonly (readonly [number, number])[] = [
   [0, JUMP_BIT],
   [1, CROUCH_TAP],
   [2, BTN_RELOAD],
-  [3, BTN_INTERACT],
+  [3, BTN_CALLOUT],
   [4, BTN_CALLOUT],
   [5, BTN_THROW],
 ]

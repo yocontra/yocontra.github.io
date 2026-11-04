@@ -243,7 +243,7 @@ export class Onboarding {
     this.once(
       'bankPrompt',
       this.touch
-        ? 'Tap BANK and hold still for 2 seconds.'
+        ? 'Stand still at the window for 2 seconds.'
         : 'Press E and hold still for 2 seconds.',
       5000,
     )

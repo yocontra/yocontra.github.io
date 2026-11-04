@@ -14,9 +14,9 @@
  */
 import {
   BTN_AIM,
+  BTN_CALLOUT,
   BTN_CROUCH,
   BTN_FIRE,
-  BTN_INTERACT,
   BTN_JUMP,
   BTN_RELOAD,
   BTN_ROLL,
@@ -478,7 +478,7 @@ export class BotDirector {
     if (!next) {
       // At the goal: press E (bank, open the box). If no channel starts within a few ticks there
       // was nothing to do here: pick the next goal at once rather than idling until the replan.
-      f.buttons = p.lastButtons & BTN_INTERACT ? 0 : BTN_INTERACT
+      f.buttons = 0
       b.replanAt = Math.min(b.replanAt, w.tick + ARRIVED_REPLAN_TICKS)
       return
     }
@@ -535,7 +535,7 @@ export class BotDirector {
     }
     if (p.calledBy !== NONE) {
       // Accept most call-outs: press, release, press.
-      f.buttons = (w.tick + p.id) % 2 === 0 && p.id % 4 !== 0 ? BTN_INTERACT : 0
+      f.buttons = (w.tick + p.id) % 2 === 0 && p.id % 4 !== 0 ? BTN_CALLOUT : 0
       return f
     }
     if (p.channel) {

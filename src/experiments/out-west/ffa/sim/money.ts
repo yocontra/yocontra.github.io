@@ -3,7 +3,6 @@
  * and the Most Wanted marker. All money lives here, on the server.
  */
 import {
-  BTN_INTERACT,
   BTN_LEAVE,
   CHANNEL_BANK,
   CHANNEL_LEAVE,
@@ -79,7 +78,8 @@ export function startChannel(w: World, p: Player, buttons: number): void {
     p.channel = { kind: CHANNEL_LEAVE, ticks: 0, total: LEAVE_CHANNEL_TICKS }
     return
   }
-  if (!pressed(buttons, p.lastButtons, BTN_INTERACT)) {
+  // No interact key: standing still in a bank/stage zone or at the strongbox starts the hold.
+  if (p.moving) {
     return
   }
   const zone = zoneAt(w.layout, p.x, p.z)

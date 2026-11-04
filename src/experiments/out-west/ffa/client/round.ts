@@ -47,7 +47,6 @@ const POLL_MS = 250
 
 export interface RoundHost {
   practice: boolean
-  touch: boolean
   audio: AudioEngine | null
   /** Your player id, whether you're alive, what you carry, your purse; whether an id is a bot. */
   you: () => number
@@ -127,7 +126,6 @@ export class Rounds {
     this.card.setAttribute('aria-label', 'Round summary')
     this.card.hidden = true
     this.objectives = new Objectives(hud, {
-      touch: host.touch,
       practice: host.practice,
       audio: host.audio,
       done: record.firstBank,

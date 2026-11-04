@@ -1,7 +1,6 @@
 import { describe, expect, test as it } from 'bun:test'
 import {
   BTN_CALLOUT,
-  BTN_INTERACT,
   MSG_FULL_RESET,
   MSG_SNAPSHOT,
   type ServerControl,
@@ -232,7 +231,7 @@ describe('LobbyCore sessions and money', () => {
     const b = new InputBatcher()
     const deposits: SettledDeposit[] = []
     for (let t = 0; t < 60; t++) {
-      send(core, { id: s.playerId, b, f: { ...still, buttons: BTN_INTERACT } }, t * 50)
+      send(core, { id: s.playerId, b, f: { ...still } }, t * 50)
       deposits.push(...core.tick(t * 50).deposits)
     }
     expect(deposits).toHaveLength(1)
@@ -264,7 +263,7 @@ describe('LobbyCore sessions and money', () => {
     const b = new InputBatcher()
     const deposits: SettledDeposit[] = []
     for (let t = 0; t < 60; t++) {
-      send(core, { id: s.playerId, b, f: { ...still, buttons: BTN_INTERACT } }, t * 50)
+      send(core, { id: s.playerId, b, f: { ...still } }, t * 50)
       deposits.push(...core.tick(t * 50).deposits)
     }
     expect(deposits).toHaveLength(1)

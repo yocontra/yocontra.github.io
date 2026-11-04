@@ -6,7 +6,6 @@
 import {
   BOX_WAITING,
   BTN_CALLOUT,
-  BTN_INTERACT,
   CHANNEL_NONE,
   EF_ALIVE,
   EF_PROTECTED,
@@ -66,8 +65,8 @@ export function currentAction(c: ContextInput): Action | null {
   if (c.calledBy !== NONE) {
     const name = c.net.name(c.calledBy)
     return {
-      bit: BTN_INTERACT,
-      prompt: `E: accept ${name}'s call-out`,
+      bit: BTN_CALLOUT,
+      prompt: `Q: accept ${name}'s call-out`,
       label: 'ACCEPT',
       target: c.calledBy,
     }
@@ -79,17 +78,17 @@ export function currentAction(c: ContextInput): Action | null {
   if (zone && s.carried > 0) {
     return zone.kind === 'bank'
       ? {
-          bit: BTN_INTERACT,
-          prompt: `Press E to bank ${money(s.carried)}, then hold still 2 s`,
-          touchPrompt: 'Tap BANK, then hold still 2 s',
-          label: 'BANK',
+          bit: 0,
+          prompt: `Stand still to bank ${money(s.carried)} (2 s)`,
+          touchPrompt: `Stand still to bank ${money(s.carried)} (2 s)`,
+          label: '',
           target: NONE,
         }
       : {
-          bit: BTN_INTERACT,
-          prompt: `Press E to ship ${money(s.carried)} by stage, then hold still 4 s`,
-          touchPrompt: 'Tap SHIP, then hold still 4 s',
-          label: 'SHIP',
+          bit: 0,
+          prompt: `Stand still to ship ${money(s.carried)} by stage (4 s)`,
+          touchPrompt: `Stand still to ship ${money(s.carried)} (4 s)`,
+          label: '',
           target: NONE,
         }
   }
@@ -100,9 +99,9 @@ export function currentAction(c: ContextInput): Action | null {
       : undefined
   if (spot && Math.hypot(spot.x - c.x, spot.z - c.z) <= STRONGBOX_RADIUS) {
     return {
-      bit: BTN_INTERACT,
-      prompt: `E: open the strongbox (${money(town?.strongboxValue ?? 0)}, 3 s)`,
-      label: 'OPEN',
+      bit: 0,
+      prompt: `Stand still to open the strongbox (${money(town?.strongboxValue ?? 0)}, 3 s)`,
+      label: '',
       target: NONE,
     }
   }

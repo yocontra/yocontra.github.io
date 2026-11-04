@@ -39,9 +39,7 @@ import {
   BOX_NONE,
   BOX_OPENING,
   BTN_AIM,
-  BTN_CALLOUT,
   BTN_FIRE,
-  BTN_INTERACT,
   BTN_LEAVE,
   BTN_RELOAD,
   CHANNEL_BANK,
@@ -232,7 +230,6 @@ export class FrontierGame {
   private readonly showdowns = new Map<number, Showdown>()
   private callouts: Callout[] = []
   private killer: { id: number; flags: number } | null = null
-  private actionBit = 0
   private readonly ray = new Raycaster()
   private readonly aimPlane = new Plane(new Vector3(0, 1, 0), -1.2)
   private readonly tmp = new Vector3()
@@ -375,7 +372,6 @@ export class FrontierGame {
     })
     this.rounds = new Rounds(root, this.hud.root, {
       practice: opts.practice === true,
-      touch: coarse,
       audio: this.audio,
       you: () => this.net.you,
       alive: () => this.net.alive,
@@ -938,9 +934,6 @@ export class FrontierGame {
       aim = assistAim(this.own.x, this.own.z, aim, this.remotes)
     }
     // The contextual key/button sends whatever the context says (bank, open, accept, call out).
-    if (buttons & BTN_INTERACT && this.actionBit === BTN_CALLOUT) {
-      buttons = (buttons & ~BTN_INTERACT) | BTN_CALLOUT
-    }
     this.aim = aim
     return {
       moveX: Math.round(mx * 127),
@@ -1042,9 +1035,6 @@ export class FrontierGame {
     ) {
       buttons |= BTN_RELOAD
       this.nextReloadAsk = now + 700
-    }
-    if (buttons & BTN_INTERACT && this.actionBit === BTN_CALLOUT) {
-      buttons = (buttons & ~BTN_INTERACT) | BTN_CALLOUT
     }
     // crouch toggle and slide (local bits in, BTN_CROUCH out)
     buttons = this.stance.apply(buttons, this.net.pred.sprinting, this.net.alive)
@@ -1716,8 +1706,8 @@ export class FrontierGame {
           nowS,
         })
       : null
-    this.actionBit = action?.bit ?? 0
-    this.touch?.setAction(action?.bit ?? 0, action?.label ?? null)
+    const auto = action !== null && action.bit === 0
+    this.touch?.setAction(auto ? 0 : (action?.bit ?? 0), auto ? null : (action?.label ?? null))
     this.touch?.setCrouched(this.stance.crouched)
     const weapon = this.net.weapon
     this.touch?.setThrow(weapon.dynamite && this.net.alive)

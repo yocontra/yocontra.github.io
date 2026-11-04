@@ -2,7 +2,6 @@ import { describe, expect, test as it } from 'bun:test'
 import {
   BTN_CALLOUT,
   BTN_FIRE,
-  BTN_INTERACT,
   SD_COWARD,
   SD_FROZE,
   SD_WIN,
@@ -51,7 +50,7 @@ describe('Call Out', () => {
 
   it('accepting forms a ring: both frozen and invulnerable to third parties', () => {
     const { w, a, b } = calledOut()
-    run(w, 1, { [b.id]: () => ({ buttons: BTN_INTERACT }) })
+    run(w, 1, { [b.id]: () => ({ buttons: BTN_CALLOUT }) })
     expect(a.showdown).toBeGreaterThan(0)
     expect(b.showdown).toBe(a.showdown)
     const x = a.x
@@ -65,13 +64,13 @@ describe('Call Out', () => {
   it('an unanswered call-out lapses after 3 s', () => {
     const { w, b } = calledOut()
     run(w, CALLOUT_ACCEPT_TICKS + 1)
-    run(w, 1, { [b.id]: () => ({ buttons: BTN_INTERACT }) })
+    run(w, 1, { [b.id]: () => ({ buttons: BTN_CALLOUT }) })
     expect(b.showdown).toBe(-1)
   })
 
   it('firing before the bell is cowardice: the coward dies and drops everything', () => {
     const { w, a, b } = calledOut()
-    run(w, 1, { [b.id]: () => ({ buttons: BTN_INTERACT }) })
+    run(w, 1, { [b.id]: () => ({ buttons: BTN_CALLOUT }) })
     const ends = runCollect(
       w,
       2,
@@ -87,7 +86,7 @@ describe('Call Out', () => {
 
   it('the bell rings, the judge picks a winner: the loser dies with a 100% drop, the winner gets 60 XP', () => {
     const { w, a, b } = calledOut()
-    run(w, 1, { [b.id]: () => ({ buttons: BTN_INTERACT }) })
+    run(w, 1, { [b.id]: () => ({ buttons: BTN_CALLOUT }) })
     const id = a.showdown
     const calls = runCollect(w, 80, {}, 'showdown_call')
     expect(calls.length).toBe(1)
@@ -102,7 +101,7 @@ describe('Call Out', () => {
 
   it('no verdict: the ring breaks after 6 s with both alive', () => {
     const { w, a, b } = calledOut()
-    run(w, 1, { [b.id]: () => ({ buttons: BTN_INTERACT }) })
+    run(w, 1, { [b.id]: () => ({ buttons: BTN_CALLOUT }) })
     const ends = runCollect(w, SHOWDOWN_MAX_TICKS + 1, {}, 'showdown_end') as End[]
     expect(ends[0]?.outcome).toBe(SD_FROZE)
     expect(a.alive && b.alive).toBe(true)

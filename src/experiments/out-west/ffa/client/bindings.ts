@@ -13,7 +13,6 @@
 import {
   BTN_CALLOUT,
   BTN_CROUCH,
-  BTN_INTERACT,
   BTN_JUMP,
   BTN_RELOAD,
   BTN_ROLL,
@@ -38,8 +37,6 @@ export const SHOOTER_KEYS: Readonly<Record<string, number>> = {
   KeyC: CROUCH_TAP,
   ControlLeft: BTN_CROUCH,
   KeyR: BTN_RELOAD,
-  KeyE: BTN_INTERACT,
-  KeyF: BTN_INTERACT,
   KeyQ: BTN_CALLOUT,
   KeyG: BTN_THROW,
 }
@@ -51,8 +48,6 @@ export const TOP_KEYS: Readonly<Record<string, number>> = {
   ShiftRight: BTN_ROLL,
   KeyC: BTN_ROLL,
   KeyR: BTN_RELOAD,
-  KeyE: BTN_INTERACT,
-  KeyF: BTN_INTERACT,
   KeyQ: BTN_CALLOUT,
   KeyG: BTN_THROW,
 }
@@ -72,7 +67,6 @@ export const DESKTOP_HELP: readonly (readonly [string, string])[] = [
   ['C / Ctrl', 'Crouch (slide while sprinting)'],
   ['Space', 'Jump / vault'],
   ['R', 'Reload'],
-  ['E', 'Bank, open, accept'],
   ['Q', 'Challenge a player'],
   ['V', 'First / third person'],
   ['X', 'Swap shoulder'],
@@ -89,7 +83,7 @@ export const TOUCH_HELP: readonly (readonly [string, string])[] = [
   ['JUMP', 'Jump / vault'],
   ['CROUCH', 'Crouch (tap while sprinting to slide)'],
   ['RELOAD', 'Reload'],
-  ['BANK', 'Shows at a bank window'],
+  ['Bank window', 'Stand still to bank your carry'],
 ]
 
 /** The How to play rows with a gamepad connected (the CoD layout, Xbox-style glyphs). */
@@ -101,7 +95,7 @@ export const PAD_HELP: readonly (readonly [string, string])[] = [
   ['A', 'Jump / vault'],
   ['B', 'Crouch (slide while sprinting)'],
   ['X', 'Reload'],
-  ['Y', 'Bank, open, accept'],
+  ['Y', 'Call out / accept'],
   ['RB', 'Throw dynamite'],
   ['LB', 'Challenge a player'],
 ]

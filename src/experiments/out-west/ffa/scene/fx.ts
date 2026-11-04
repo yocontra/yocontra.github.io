@@ -229,6 +229,7 @@ export class Effects {
     this.bagMesh.name = 'bags'
     this.bagMesh.frustumCulled = false
     this.bagMesh.castShadow = false
+    this.bagMesh.receiveShadow = true
     root.add(this.bagMesh)
     // Strongbox and beacon.
     const boxMat = new MeshStandardMaterial({

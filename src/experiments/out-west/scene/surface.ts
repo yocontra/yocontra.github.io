@@ -201,3 +201,19 @@ const STRONGBOX_GLSL = /* glsl */ `
 export function strongboxLook(mat: MeshStandardMaterial): void {
   patch(mat, 'strongbox', STRONGBOX_GLSL, {})
 }
+
+const TWIG_GLSL = /* glsl */ `
+{
+  // dry, bleached twigs: a cracked grain, lit on the top of each strand
+  vec3 n = normalize(vSurfN);
+  float grain = atmNoise(vAtmW.xz * 75.0 + vAtmW.y * 48.0) * 0.55
+    + atmNoise(vAtmW.zy * 29.0 - vAtmW.y * 18.0) * 0.45;
+  diffuseColor.rgb *= 0.62 + 0.62 * grain;
+  diffuseColor.rgb *= mix(vec3(1.0), vec3(0.9, 0.82, 0.64), smoothstep(-0.4, 0.85, n.y));
+}
+`
+
+/** Tumbleweed twigs: the last flat prop in Frontier gets a dry, bleached grain. */
+export function twigLook(mat: MeshStandardMaterial): void {
+  patch(mat, 'twig', TWIG_GLSL, { surfTex: { value: null } })
+}
