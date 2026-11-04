@@ -35,6 +35,7 @@ export function playerFireFx(s: DuelState): void {
     up: 0.25,
   })
   c.audio.play('fire', { gain: 1.2, reverb: 0.6 })
+  c.audio.effort('draw')
   c.rig.addTrauma(FEEL.shake.own)
   if (!s.reduced) {
     s.ca = 0.012
@@ -229,7 +230,9 @@ export function win(d: Director, reactionMs: number, paid: Paid | null): void {
   }
   // only the boss gets a (very slow) orbit; everyone else a gentle push-in
   d.killOrbit = MathUtils.degToRad(o.gimmick === 'boss' ? 4 : 0)
-  c.audio.play('shout', { gain: 0.9, when: c.audio.now + 0.35 })
+  if (!c.audio.voice(o.name, 'death', 0.35)) {
+    c.audio.play('shout', { gain: 0.9, when: c.audio.now + 0.35 })
+  }
   d.drawPosterTex('dead')
 }
 
@@ -285,7 +288,7 @@ export function tickWin(d: Director, realDt: number): void {
   if (k > 0.4 && k - realDt <= 0.4) {
     c.audio.musicLowpass(18_000, 0.4)
     c.audio.musicLevel(0, 0.6)
-    c.audio.playSting('victory')
+    c.audio.playVictory(gradeFor(d.lastReaction ?? 0, d.secondChance))
   }
   // the kill cam has eased back to 1x: a twirl on the trigger finger, and into the leather
   if (t >= SPIN_AT && t - realDt < SPIN_AT) {

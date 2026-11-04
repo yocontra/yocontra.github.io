@@ -1,3 +1,4 @@
+import { actSong, winStreak } from '../audio/catalog.ts'
 import { FEEL } from '../data/feel.ts'
 import { type Look, OUTLAWS, type Outlaw, RIFLEMAN_LOOK } from '../data/outlaws.ts'
 import { save as persist } from '../save.ts'
@@ -46,7 +47,8 @@ function setStage(d: Director): void {
   if (d.level >= 11) {
     c.audio.preloadSong('boss')
   }
-  c.audio.playSong(d.level >= 15 ? 'boss' : 'intro')
+  c.audio.playSong(actSong(d.level, d.outlaw.day, winStreak(d.level, c.save.attempts, c.save.best)))
+  c.audio.loadVoice(d.outlaw.name)
   c.world.setFires(under)
   if (under) {
     d.fireLoop ??= c.audio.loop('fire_loop', 0.5)

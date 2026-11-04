@@ -53,6 +53,7 @@ function shooterFx(d: Director, who: number): void {
 function missFx(d: Director): void {
   const c = d.c
   c.audio.whizz(rng() < 0.5 ? -0.7 : 0.7)
+  c.audio.effort('flinch', 0.12)
   c.audio.play('ricochet', {
     offset: Math.floor(rng() * 4),
     duration: 0.8,
@@ -148,6 +149,7 @@ export function playerHit(d: Director, reason: string, paid: Paid | null): void 
   c.hud.clearCaptions()
   c.rig.addTrauma(FEEL.shake.hit)
   c.audio.play('bodyfall', { gain: 0.8, when: c.audio.now + 0.5 })
+  c.audio.effort('death', 0.05)
   c.audio.play('bell', {
     gain: 0.7,
     rate: 0.6,
