@@ -23,11 +23,13 @@ import {
   Box3,
   BufferAttribute,
   BufferGeometry,
+  type Camera,
   CanvasTexture,
   Color,
   CylinderGeometry,
   DoubleSide,
   Float32BufferAttribute,
+  Frustum,
   Group,
   InstancedMesh,
   type Material,
@@ -37,6 +39,7 @@ import {
   type Object3D,
   type PerspectiveCamera,
   RepeatWrapping,
+  Sphere,
   SRGBColorSpace,
   type Texture,
   Vector2,
@@ -300,7 +303,7 @@ export interface Town {
    * interiors of the buildings it is in or beside. The town also calls it itself from the
    * ground's onBeforeRender (main camera only), so callers needn't; one frame of lag is fine.
    */
-  update: (camera: Vector3) => void
+  update: (camera: Camera) => void
   dispose: () => void
 }
 
@@ -1412,22 +1415,13 @@ const FAR: Record<string, number | 'flat'> = {
  * Repeated kit props drawn as instances of their one shared geometry (merged copies cost a
  * vertex buffer per copy): refilled with the near tiles' instances when that set changes.
  */
-const INSTANCED = new Set([
-  'barrel',
-  'crate',
-  'hay',
-  'fence',
-  'rock',
-  'k_chair',
-  'k_bench',
-  'k_table',
-  'lantern',
-])
+const INSTANCED = new Set(['barrel', 'crate', 'hay', 'fence', 'rock'])
 
 interface Herd {
   def: PropDef
   meshes: InstancedMesh[]
-  items: { at: Matrix4; tile: string }[]
+  /** Each instance: its matrix, tile, and a bounding sphere for the view test. */
+  items: { at: Matrix4; tile: string; x: number; y: number; z: number; r: number }[]
 }
 
 /**
@@ -1711,7 +1705,9 @@ export function buildTown(
     for (const p of t.near) {
       if (INSTANCED.has(p.def.name)) {
         const herd = herds.get(p.def) ?? { def: p.def, meshes: [], items: [] }
-        herd.items.push({ at: p.at, tile: k })
+        const el = p.at.elements
+        const r = Math.max(p.def.size.x, p.def.size.y, p.def.size.z) * p.at.getMaxScaleOnAxis()
+        herd.items.push({ at: p.at, tile: k, x: el[12] ?? 0, y: el[13] ?? 0, z: el[14] ?? 0, r })
         herds.set(p.def, herd)
       } else {
         merged.push(p)
@@ -1803,26 +1799,40 @@ interface CullState {
   nearM: number
 }
 
-/** Per-frame detail selection for the camera at `cam` (no allocation unless the near set changes). */
-function culler(s: CullState): (cam: Vector3) => void {
-  let nearSet = ''
-  return (cam) => {
+const FRUSTUM = new Frustum()
+const VIEW_PROJ = new Matrix4()
+const SPHERE = new Sphere()
+
+/**
+ * Per-frame detail selection for `camera`: tile and room groups by distance, the far batch's
+ * fold mask, and the instanced props refilled with the near tiles' instances inside the view
+ * (a ~600-instance sphere test, then one small matrix upload; nothing behind you is drawn).
+ */
+function culler(s: CullState): (camera: Camera) => void {
+  let last = ''
+  return (camera) => {
+    const cam = camera.position
     // the dev audits (float, collider) need every piece in the scene they capture
     const audit = Reflect.has(globalThis, 'owAuditScenes')
-    let key = ''
+    const show = new Set<string>()
     for (const c of s.culled) {
       c.group.visible = audit || toRect(c.rect, cam.x, cam.z) <= c.within
       if (c.tile && c.group.visible) {
-        key += `${c.tile}|`
+        show.add(c.tile)
       }
     }
-    if (key !== nearSet) {
-      nearSet = key
-      const show = new Set(key.split('|'))
+    VIEW_PROJ.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse)
+    const e = VIEW_PROJ.elements
+    const key = `${[...show].join('|')}#${e.map((v) => v.toFixed(2)).join(',')}`
+    if (key !== last) {
+      last = key
+      FRUSTUM.setFromProjectionMatrix(VIEW_PROJ)
       for (const herd of s.herds) {
         let n = 0
         for (const it of herd.items) {
-          if (show.has(it.tile)) {
+          SPHERE.center.set(it.x, it.y, it.z)
+          SPHERE.radius = it.r
+          if (show.has(it.tile) && (audit || FRUSTUM.intersectsSphere(SPHERE))) {
             for (const im of herd.meshes) {
               im.setMatrixAt(n, it.at)
             }
@@ -1831,6 +1841,8 @@ function culler(s: CullState): (cam: Vector3) => void {
         }
         for (const im of herd.meshes) {
           im.count = n
+          // an empty batch is still a draw call
+          im.visible = n > 0
           im.instanceMatrix.needsUpdate = true
         }
       }
@@ -1846,10 +1858,10 @@ function culler(s: CullState): (cam: Vector3) => void {
 }
 
 /** The ground's onBeforeRender: the main (perspective) camera drives the culler, not the sun's. */
-function onCamera(update: (cam: Vector3) => void): Mesh['onBeforeRender'] {
+function onCamera(update: (camera: Camera) => void): Mesh['onBeforeRender'] {
   return (_r, _s, camera) => {
     if ((camera as PerspectiveCamera).isPerspectiveCamera) {
-      update(camera.position)
+      update(camera)
     }
   }
 }
