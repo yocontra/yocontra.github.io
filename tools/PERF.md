@@ -153,7 +153,7 @@ What changed:
 - **Boxed doubles.** `Matrix4.toArray` gets a monomorphic Float32Array fast path
   (`ffa/scene/hot-paths.ts`). Before it, `Skeleton.update` made 7.7 KB of garbage per skeleton per
   frame.
-- **Bone compose.** Rig bones compose only when their mixer ticks (30 or 15 Hz).
+- **Bone compose.** Rig bones compose only when their mixer ticks (self 60 Hz, other skinned riders 30 Hz near / 20 Hz far).
 - **Body bakes.** `blendBones` reads skin attributes directly.
 - **Hats.** Other riders' hats now use an LOD: 800 triangles near, 300 in the VAT crowd, down from
   3.5k each.
@@ -449,8 +449,11 @@ and triangles exactly, CPU within the sitting only):
 
 The sample above was taken with the 4× MSAA build; the Frontier floor now runs 2×. The dynamic
 resolution scaler was observed at 0.76 in the same 31-bot scene, which is the fix working: the old
-estimator held it at 1.0 while frames missed. Real-device validation is still the gate (checklist
-below); these numbers only say the pass did not regress the floor proxy.
+estimator held it at 1.0 while frames missed. A later animation/recoil pass (self 60 Hz, nearest
+riders 30 Hz, far 20 Hz; the VAT crowd still per frame) measured again on the same proxy at load
+average 8: **draws ≤69, triangles ≤254k, CPU p50/p95 5.8/7.7 ms, frame p95 16.7 ms, heap 113 MB**.
+Real-device validation is still the gate (checklist below); these numbers only say the pass did not
+regress the floor proxy.
 
 ## Real-device checklist (iPhone 13 mini, current iOS, WKWebView)
 
