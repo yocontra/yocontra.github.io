@@ -16,6 +16,7 @@
  */
 import { MeshoptSimplifier } from 'meshoptimizer'
 import { BufferAttribute, BufferGeometry } from 'three'
+import { creaseNormals } from './normals.ts'
 
 export interface SimplifyJob {
   index: Uint32Array
@@ -169,6 +170,9 @@ function jobFor(geo: BufferGeometry, targetTris: number, maxError: number): Simp
   return { index, positions, colors, stride, targetTris, maxError }
 }
 
+/** Crease angle for LOD normals: smooth across the simplifier's big facets, sharp at real edges. */
+const LOD_CREASE = 60
+
 const cache = new Map<string, Promise<BufferGeometry>>()
 
 /**
@@ -191,6 +195,10 @@ export function lodGeometry(
       out.setAttribute(name, attr)
     }
     out.setIndex(new BufferAttribute(index, 1))
+    // The LOD's own smooth normals: its triangles are far bigger than the source's, and a welded
+    // vertex kept whichever source normal it happened to have, so the far cast shaded faceted.
+    // Only this geometry's `normal` changes; the source mesh keeps its own.
+    creaseNormals(out, LOD_CREASE, index)
     out.boundingBox = geo.boundingBox
     out.boundingSphere = geo.boundingSphere
     out.userData.lodOf = key

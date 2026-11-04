@@ -15,6 +15,7 @@ import { type Bone, Color, type Vector3 } from 'three'
 import type { Piece } from './bake.ts'
 import type { GunSides } from './coat.ts'
 import { nearestWeights, onBones, shell } from './fit.ts'
+import { creaseNormals } from './normals.ts'
 import type { Fit } from './outfit.ts'
 import { FABRIC } from './style.ts'
 
@@ -91,7 +92,7 @@ function fold(geo: ReturnType<typeof shell>, ts: readonly number[], cx: number, 
     }
   }
   pos.needsUpdate = true
-  geo.computeVertexNormals()
+  creaseNormals(geo)
 }
 
 /** His shoulders' half-width about `cx`: the outside of the upper arms at the shoulder joints. */
