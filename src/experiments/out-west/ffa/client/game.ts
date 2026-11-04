@@ -42,6 +42,7 @@ import {
   BTN_FIRE,
   BTN_INTERACT,
   BTN_LEAVE,
+  BTN_RELOAD,
   CHANNEL_BANK,
   CHANNEL_LEAVE,
   CHANNEL_NONE,
@@ -281,6 +282,8 @@ export class FrontierGame {
   private bloom = 0
   /** Next auto-repeat shot while FIRE is held on touch (performance.now ms). */
   private nextAuto = 0
+  /** Next time an empty gun asks for a reload on its own (performance.now ms). */
+  private nextReloadAsk = 0
   private wasCarry = 0
   private wasInZone = false
   /** The last frame's dt (s), for the HUD's easing. */
@@ -356,6 +359,7 @@ export class FrontierGame {
     })
     this.touch = coarse ? new TouchControls(root) : null
     if (this.touch) {
+      this.touch.configure(this.settings)
       // the sticks' full-screen layer goes under the HUD: the HUD is see-through to touches
       // except its own buttons (the menu, the head count, the death card's link), which a
       // stick layer on top used to swallow
@@ -454,6 +458,7 @@ export class FrontierGame {
     this.root.dataset.view = this.settings.view
     this.desk.setShooter(shooter)
     this.desk.adsToggle = this.settings.adsToggle
+    this.touch?.configure(this.settings)
     this.touch?.setShooter(shooter)
     if (this.crowd) {
       this.crowd.readScale = shooter ? 1 : READ_SCALE
@@ -496,6 +501,7 @@ export class FrontierGame {
       // "Back to the fight" is a click: a fine moment to take the mouse again
       this.desk.lock()
     }
+    this.practiceFreeze()
   }
 
   private onCoachCard(open: boolean): void {
@@ -507,6 +513,16 @@ export class FrontierGame {
       // "Ride" is a click: take the mouse straight into the fight
       this.desk.lock()
     }
+    this.practiceFreeze()
+  }
+
+  /** The practice town freezes behind any full-screen card, so nobody shoots you while you read. */
+  private practiceFreeze(): void {
+    if (!this.opts.practice) {
+      return
+    }
+    const on = this.hud.menuOpen || this.coach.open || this.rounds.summaryOpen
+    this.transport?.send(JSON.stringify({ type: 'practice_pause', on }))
   }
 
   private makeSink(): Sink {
@@ -633,9 +649,14 @@ export class FrontierGame {
     this.pickups = new Pickups(this.scene, TOWN.pickups, assets.props)
     const near = this.nearCap()
     this.crowd = new Crowd(this.scene, assets, near)
-    // real shadows for the nearest few: 4 on floor and legacy (each is a shadow-pass draw set)
-    // the floor tier: only the nearest two riders cast real shadows (the rest get blobs)
-    this.crowd.casters = near < 16 ? 2 : 6
+    // real shadows for the nearest few: 2 on the floor tier, 1 on legacy (each is a shadow-pass
+    // draw set), 6 above. Everyone else gets a blob.
+    const small = this.renderer.tier === 'floor' || this.renderer.tier === 'legacy'
+    let casters = 6
+    if (small) {
+      casters = this.renderer.tier === 'legacy' ? 1 : 2
+    }
+    this.crowd.casters = casters
     this.map = new Minimap(TOWN, this.touch ? 112 : 148)
     this.hud.mapSlot.append(this.map.el)
     this.viewModel = new ViewModel(assets)
@@ -981,6 +1002,36 @@ export class FrontierGame {
       }
       buttons |= st.buttons
     }
+    // CoD Mobile's auto fire: the crosshair on a rider in range is the trigger. It runs at the
+    // gun's own rate, exactly like a held FIRE button.
+    const now = performance.now()
+    const reloading = ((this.net.self?.flags ?? 0) & SELF_RELOADING) !== 0
+    if (
+      this.settings.autoFire &&
+      this.net.alive &&
+      this.desk.enabled &&
+      this.net.ammo > 0 &&
+      !reloading &&
+      this.aimRes.target >= 0 &&
+      this.aimRes.range <= (WEAPON_UI[this.net.weapon.weapon]?.range ?? MAX_RANGE) &&
+      now >= this.nextAuto
+    ) {
+      buttons |= BTN_FIRE
+      this.nextAuto = now + fireIntervalMs(this.net.weapon.weapon)
+      this.magnet()
+    }
+    // an empty gun loads itself unless the player turned that off
+    if (
+      this.settings.autoReload &&
+      this.net.alive &&
+      this.desk.enabled &&
+      this.net.ammo <= 0 &&
+      !reloading &&
+      now >= this.nextReloadAsk
+    ) {
+      buttons |= BTN_RELOAD
+      this.nextReloadAsk = now + 700
+    }
     if (buttons & BTN_INTERACT && this.actionBit === BTN_CALLOUT) {
       buttons = (buttons & ~BTN_INTERACT) | BTN_CALLOUT
     }
@@ -1063,13 +1114,15 @@ export class FrontierGame {
     const first = this.settings.view === 'first'
     const inv = this.settings.invertY ? -1 : 1
     // aiming down the sights slows the look with the zoom
-    const zoom = 1 - this.shooter.ads * (first ? 0.32 : 0.28)
+    const mzoom = 1 - this.shooter.ads * (first ? 0.32 : 0.28)
+    const tzoom = 1 - this.shooter.ads * (1 - this.settings.touchAdsSens)
     const m = this.desk.takeLook(this.look)
-    let dYaw = m.x * 0.0022 * this.settings.mouseSens * zoom
-    let dPitch = -m.y * 0.0022 * this.settings.mouseSens * zoom * inv
+    let dYaw = m.x * 0.0022 * this.settings.mouseSens * mzoom
+    let dPitch = -m.y * 0.0022 * this.settings.mouseSens * mzoom * inv
     if (this.touch) {
       const tl = this.touch.takeLook(this.look)
-      const friction = this.touch.looking
+      const steering = this.touch.looking && (tl.x !== 0 || tl.y !== 0)
+      const friction = steering
         ? assistFriction(
             this.cam.camera.position,
             this.shooter.yaw,
@@ -1077,7 +1130,7 @@ export class FrontierGame {
             this.remotes,
           )
         : 1
-      const k = 0.0055 * this.settings.touchSens * zoom * friction
+      const k = 0.0055 * this.settings.touchSens * tzoom * friction
       dYaw += tl.x * k
       dPitch += -tl.y * k * inv
     }
@@ -1625,6 +1678,13 @@ export class FrontierGame {
     // (cleared the moment you're in town), "Reconnecting…" while the socket retries.
     const duel = ((s?.flags ?? 0) & SELF_IN_SHOWDOWN) !== 0
     this.hud.banner(duel ? null : (this.connBanner ?? (s ? null : 'Joining…')))
+    this.touch?.setEnabled(
+      Boolean(s) &&
+        this.net.alive &&
+        !this.hud.menuOpen &&
+        !this.coach.open &&
+        !this.rounds.summaryOpen,
+    )
     if (!s) {
       return
     }

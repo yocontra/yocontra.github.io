@@ -20,15 +20,34 @@ export interface FrontierSettings {
   mouseSens: number
   /** Touch-look multiplier (1 = 0.0055 rad per pixel). */
   touchSens: number
+  /** Touch: look speed while the sights are up, as a share of `touchSens`. */
+  touchAdsSens: number
   invertY: boolean
   /** 1 = right shoulder, −1 = left. */
   shoulder: 1 | -1
   /** Desktop: right click toggles the sights instead of holding them. */
   adsToggle: boolean
+  /** Touch: the AIM button holds or toggles the sights. */
+  adsMode: 'hold' | 'toggle'
+  /** Touch: pushing the stick forward sprints without a separate button. */
+  autoSprint: boolean
+  /** Touch: fire whenever an enemy is under the crosshair (CoD Mobile's auto fire). */
+  autoFire: boolean
+  /** Empty the magazine, load it: no dead trigger. */
+  autoReload: boolean
+  /** Touch: mirror the thumb clusters (stick on the right). */
+  leftHanded: boolean
+  /** Touch: button size multiplier. */
+  controlScale: number
+  /** Touch: joystick size multiplier. */
+  joyScale: number
 }
 
 export const FOV_RANGE = { min: 60, max: 95 } as const
 export const SENS_RANGE = { min: 0.3, max: 3 } as const
+export const ADS_SENS_RANGE = { min: 0.35, max: 1.25 } as const
+export const CONTROL_RANGE = { min: 0.8, max: 1.35 } as const
+export const JOY_RANGE = { min: 0.8, max: 1.4 } as const
 
 export const DEFAULTS: FrontierSettings = {
   view: 'third',
@@ -36,9 +55,17 @@ export const DEFAULTS: FrontierSettings = {
   fovFirst: 80,
   mouseSens: 1,
   touchSens: 1,
+  touchAdsSens: 0.8,
   invertY: false,
   shoulder: 1,
   adsToggle: false,
+  adsMode: 'hold',
+  autoSprint: true,
+  autoFire: false,
+  autoReload: true,
+  leftHanded: false,
+  controlScale: 1,
+  joyScale: 1,
 }
 
 const KEY = 'ow.frontier.settings.v1'
@@ -78,9 +105,27 @@ export function loadSettings(search = globalThis.location?.search ?? ''): Fronti
     fovFirst: clamp(r.fovFirst, FOV_RANGE.min, FOV_RANGE.max, DEFAULTS.fovFirst),
     mouseSens: clamp(r.mouseSens, SENS_RANGE.min, SENS_RANGE.max, DEFAULTS.mouseSens),
     touchSens: clamp(r.touchSens, SENS_RANGE.min, SENS_RANGE.max, DEFAULTS.touchSens),
+    touchAdsSens: clamp(
+      r.touchAdsSens,
+      ADS_SENS_RANGE.min,
+      ADS_SENS_RANGE.max,
+      DEFAULTS.touchAdsSens,
+    ),
     invertY: r.invertY === true,
     shoulder: r.shoulder === -1 ? -1 : 1,
     adsToggle: r.adsToggle === true,
+    adsMode: r.adsMode === 'toggle' ? 'toggle' : 'hold',
+    autoSprint: r.autoSprint !== false,
+    autoFire: r.autoFire === true,
+    autoReload: r.autoReload !== false,
+    leftHanded: r.leftHanded === true,
+    controlScale: clamp(
+      r.controlScale,
+      CONTROL_RANGE.min,
+      CONTROL_RANGE.max,
+      DEFAULTS.controlScale,
+    ),
+    joyScale: clamp(r.joyScale, JOY_RANGE.min, JOY_RANGE.max, DEFAULTS.joyScale),
   }
   const q = new URLSearchParams(search).get('view')
   if (isView(q)) {

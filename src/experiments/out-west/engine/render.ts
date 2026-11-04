@@ -1,4 +1,5 @@
 // biome-ignore-all lint/style/noExcessiveClassesPerFile: small, related effect classes kept together
+// biome-ignore-all lint/style/noExcessiveLinesPerFile: the renderer and its pass/effect helpers live together
 import {
   BlendFunction,
   BloomEffect,
@@ -282,8 +283,10 @@ export class LensEffect extends Effect {
 
 /** Dynamic resolution (§9.4): step size, cadence, and the thermal rule. */
 const DYN = {
-  step: 0.05,
-  everyMs: 500,
+  step: 0.06,
+  /** A badly missed frame budget drops this much at once. */
+  bigStep: 0.12,
+  everyMs: 300,
   /** Scale pinned at its floor this long means thermal throttling: drop a tier. */
   thermalMs: 180_000,
   /** After a step down, wait this long before trying to climb. */
@@ -310,7 +313,8 @@ export class Renderer {
   readonly atmos = new AtmosEffect()
   readonly probe: TownProbe
   private readonly lensPass: EffectPass
-  private readonly mainPass: EffectPass
+  private mainPass: EffectPass
+  private readonly tone = new ToneMappingEffect({ mode: ToneMappingMode.AGX })
   private fxaaPass: EffectPass | null = null
   private readonly renderPass: RenderPass
   /** A scene drawn over the main one, before the post chain (Frontier's first-person gun). */
@@ -408,22 +412,14 @@ export class Renderer {
     this.vignette = new VignetteEffect({ darkness: 0.35, offset: 0.3 })
     this.noise = new NoiseEffect({ blendFunction: BlendFunction.OVERLAY, premultiply: false })
     this.noise.blendMode.opacity.value = 0.05
-    const tone = new ToneMappingEffect({ mode: ToneMappingMode.AGX })
     // Lens (CA / shimmer / blur) runs first on the HDR frame and is off unless
     // a moment asks for it. Everything else is ONE merged pass (§9.3): the
-    // half-res bloom composite, AgX, grade + LUT, vignette and grain.
+    // half-res bloom composite, AgX, grade + LUT, vignette and grain. The phone
+    // tiers also leave the height fog and the LUT out of that pass entirely.
     this.lensPass = new EffectPass(camera, this.lens)
     this.lensPass.enabled = false
     this.composer.addPass(this.lensPass)
-    this.mainPass = new EffectPass(
-      camera,
-      this.atmos,
-      this.bloom,
-      tone,
-      this.grade,
-      this.vignette,
-      this.noise,
-    )
+    this.mainPass = this.makeMainPass()
     this.composer.addPass(this.mainPass)
     this.applyPostForTier()
 
@@ -459,13 +455,52 @@ export class Renderer {
     return Math.min(window.devicePixelRatio || 1, this.spec.dprMax)
   }
 
+  /**
+   * One merged pass for the whole grade. The phone tiers leave the height-fog pass, the LUT and
+   * the full-screen grain out of the shader instead of running them at zero strength: a merged
+   * effect still costs its ALU and texture reads on a phone.
+   */
+  private makeMainPass(): EffectPass {
+    const s = this.spec
+    const effects: Effect[] = [this.tone, this.grade]
+    if (s.bloom) {
+      effects.unshift(this.bloom)
+    }
+    if (s.atmos) {
+      effects.unshift(this.atmos)
+    }
+    if (s.fullPost) {
+      effects.push(this.vignette, this.noise)
+    }
+    return new EffectPass(this.camera, ...effects)
+  }
+
+  /** Rebuild the merged pass to match the tier (called at boot and on a tier change). */
+  private rebuildMainPass(): void {
+    const next = this.makeMainPass()
+    const at = this.composer.passes.indexOf(this.mainPass)
+    if (at >= 0) {
+      this.composer.removePass(this.mainPass)
+      this.mainPass.dispose()
+      this.composer.addPass(next, at)
+    } else {
+      // after the lens pass, before the FXAA pass when there is one
+      this.composer.addPass(next, 2)
+    }
+    this.mainPass = next
+  }
+
   /** Legacy: no MSAA, an FXAA pass instead, and only tonemap + LUT. */
   private applyPostForTier(): void {
     const s = this.spec
     this.composer.multisampling = this.maxSamples(s.msaa)
     this.bloom.resolution.scale = s.bloomRes
+    // postprocessing exposes `levels` at runtime; its typings only carry the getter on the pass
+    ;(this.bloom as BloomEffect & { levels: number }).levels = s.bloomLevels
+    this.grade.u('lutAmount').value = s.lut ? 1 : 0
     this.vignette.blendMode.opacity.value = s.fullPost ? 1 : 0
     this.noise.blendMode.opacity.value = s.fullPost ? this.noise.blendMode.opacity.value : 0
+    this.rebuildMainPass()
     if (s.msaa === 0 && !this.fxaaPass) {
       this.fxaaPass = new EffectPass(this.camera, new FXAAEffect())
       this.composer.addPass(this.fxaaPass)
@@ -536,11 +571,15 @@ export class Renderer {
       return false
     }
     this.lastAdapt = now
-    const refresh = this.intervals.pct(0.1)
+    const rawRefresh = this.intervals.pct(0.1)
+    // A game that is stuck at 30 fps reports ~33 ms for its fastest frames too. Without the cap
+    // the estimator would mistake that for a 30 Hz display and never lower the resolution. 60 Hz
+    // is the lowest target the game aims for, so never infer a slower display than that.
+    const refresh = Math.min(rawRefresh, 1000 / 60)
     const p90 = this.intervals.pct(0.9)
     const med = this.intervals.pct(0.5)
     // iOS Low Power Mode caps rAF at 30 Hz: steady ~33 ms frames with idle CPU.
-    const capped = med > 30 && med < 37 && refresh > 28 && this.cpu.pct(0.9) < 10
+    const capped = med > 30 && med < 37 && rawRefresh > 28 && this.cpu.pct(0.9) < 10
     this.lowPower = capped
     if (capped) {
       return this.lowPowerStep(now, allowTierDrop)
@@ -548,10 +587,13 @@ export class Renderer {
     this.lowPowerSince = 0
     const s = this.spec
     let next = this.scale
-    if (p90 > Math.max(refresh * 1.15, 17.5)) {
-      next = Math.max(s.scaleMin, this.scale - DYN.step)
+    const late = p90 > Math.max(refresh * 1.15, 17.5)
+    if (late) {
+      // a frame that misses by a lot gets a bigger step: recover 60 fps in a few hundred ms
+      const step = p90 > Math.max(refresh * 1.5, 24) ? DYN.bigStep : DYN.step
+      next = Math.max(s.scaleMin, this.scale - step)
       this.holdUntil = now + DYN.holdMs
-    } else if (p90 < refresh * 1.06 && now > this.holdUntil && this.cpu.pct(0.9) < refresh * 0.6) {
+    } else if (p90 < refresh * 1.06 && now > this.holdUntil && this.cpu.pct(0.9) < refresh * 0.55) {
       next = Math.min(s.scaleMax, this.scale + DYN.step)
     }
     if (next !== this.scale) {
@@ -600,19 +642,19 @@ export class Renderer {
   private lensWarm = 0
 
   /**
-   * Floor and legacy redraw the sun's shadow map every other frame (30 Hz). The map and its
-   * matrix stay a matched pair, so a skipped frame shows the last frame's moving shadows (a rider,
-   * a duelist's arm), never a misplaced one. The shadow pass walks the whole scene and redraws
-   * every caster (the duel street's kit batch is 55k triangles): about a tenth of the frame's
-   * CPU on the floor proxy, in both modes.
+   * The sun's shadow map is redrawn every `spec.shadowHz` frames (1 = every frame, 2 = 30 Hz,
+   * 3 = 20 Hz, 4 = 15 Hz). The map and its matrix stay a matched pair, so a skipped frame shows
+   * the last frame's moving shadows (a rider, a duelist's arm), never a misplaced one. The shadow
+   * pass walks the whole scene and redraws every caster, so on phones it is one of the first
+   * things to slow down.
    */
   private shadowRate(): void {
     const sm = this.gl.shadowMap
-    const half = this.tier === 'floor' || this.tier === 'legacy'
+    const hz = Math.max(1, this.spec.shadowHz)
     this.shadowFrame++
-    sm.autoUpdate = !half
-    if (half) {
-      sm.needsUpdate = (this.shadowFrame & 1) === 0
+    sm.autoUpdate = hz === 1
+    if (hz > 1) {
+      sm.needsUpdate = this.shadowFrame % hz === 0
     }
   }
   private lowPowerDropped = false

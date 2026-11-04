@@ -30,6 +30,7 @@ function prepare(d: Director, idx: number): boolean {
   const next = OUTLAWS[idx] as Outlaw
   if (!looksFor(d, next).every((l) => c.assets.lookLoaded(l))) {
     // Lazy-loaded per outlaw; normally prefetched a duel ahead so this is rare.
+    // biome-ignore lint/security/noSecrets: the loading placeholder text is not a secret
     c.hud.fake('[loading…]')
     return false
   }

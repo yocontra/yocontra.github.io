@@ -1,10 +1,19 @@
 /**
  * The pause menu's settings: view (over the shoulder, first person, top-down), field of view for
  * the current view, look sensitivity (mouse on desktop, thumbs on touch), invert-Y, hold or toggle
- * aim (desktop) and the shoulder.
+ * aim, the shoulder, and on touch the CoD Mobile block: layout side, button and stick size, auto
+ * sprint, auto fire, auto reload and the ADS look speed.
  * Every change applies at once and is saved per device.
  */
-import { FOV_RANGE, type FrontierSettings, SENS_RANGE, type ViewMode } from './settings.ts'
+import {
+  ADS_SENS_RANGE,
+  CONTROL_RANGE,
+  FOV_RANGE,
+  type FrontierSettings,
+  JOY_RANGE,
+  SENS_RANGE,
+  type ViewMode,
+} from './settings.ts'
 
 export interface PanelHooks {
   settings: () => FrontierSettings
@@ -35,6 +44,17 @@ export class SettingsPanel {
   private readonly shoulderRow: HTMLElement
   private readonly shoulderBtn: HTMLButtonElement
   private readonly lookRows: HTMLElement[] = []
+  private adsModeBtn: HTMLButtonElement | null = null
+  private autoSprint: HTMLInputElement | null = null
+  private autoFire: HTMLInputElement | null = null
+  private autoReload: HTMLInputElement | null = null
+  private leftHanded: HTMLInputElement | null = null
+  private ctl: HTMLInputElement | null = null
+  private ctlOut: HTMLOutputElement | null = null
+  private joy: HTMLInputElement | null = null
+  private joyOut: HTMLOutputElement | null = null
+  private adsSens: HTMLInputElement | null = null
+  private adsSensOut: HTMLOutputElement | null = null
 
   constructor(hooks: PanelHooks, touch: boolean) {
     this.hooks = hooks
@@ -134,7 +154,93 @@ export class SettingsPanel {
     })
     this.shoulderRow.append(sl, this.shoulderBtn)
     this.el.append(this.shoulderRow)
+    if (touch) {
+      this.addTouchControls()
+    }
     this.sync()
+  }
+
+  /** The touch-only block: layout, sizes and the CoD Mobile play aids. */
+  private addTouchControls(): void {
+    const head = document.createElement('div')
+    head.className = 'fr-set-head'
+    head.textContent = 'Touch controls'
+    this.el.append(head)
+
+    const adsRow = document.createElement('div')
+    adsRow.className = 'fr-set-row'
+    const adsLabel = document.createElement('span')
+    adsLabel.className = 'fr-set-label'
+    adsLabel.textContent = 'AIM button'
+    const adsBtn = document.createElement('button')
+    adsBtn.type = 'button'
+    adsBtn.className = 'fr-seg-btn fr-hit fr-set-toggle'
+    adsBtn.addEventListener('click', (e) => {
+      e.stopPropagation()
+      this.change((s) => {
+        s.adsMode = s.adsMode === 'hold' ? 'toggle' : 'hold'
+      })
+    })
+    adsRow.append(adsLabel, adsBtn)
+    this.el.append(adsRow)
+    this.adsModeBtn = adsBtn
+
+    this.autoSprint = this.check('Auto sprint (push the stick)', (v) => {
+      this.change((s) => {
+        s.autoSprint = v
+      })
+    })
+    this.autoFire = this.check('Auto fire (crosshair on a rider)', (v) => {
+      this.change((s) => {
+        s.autoFire = v
+      })
+    })
+    this.autoReload = this.check('Auto reload an empty gun', (v) => {
+      this.change((s) => {
+        s.autoReload = v
+      })
+    })
+    this.leftHanded = this.check('Left-handed layout', (v) => {
+      this.change((s) => {
+        s.leftHanded = v
+      })
+    })
+
+    const [, ctl, ctlOut] = this.slider('Button size', CONTROL_RANGE, 0.05, (n) => {
+      this.change((s) => {
+        s.controlScale = n
+      })
+    })
+    this.ctl = ctl
+    this.ctlOut = ctlOut
+    const [, joy, joyOut] = this.slider('Stick size', JOY_RANGE, 0.05, (n) => {
+      this.change((s) => {
+        s.joyScale = n
+      })
+    })
+    this.joy = joy
+    this.joyOut = joyOut
+    const [, adsSens, adsSensOut] = this.slider('Aim look speed', ADS_SENS_RANGE, 0.05, (n) => {
+      this.change((s) => {
+        s.touchAdsSens = n
+      })
+    })
+    this.adsSens = adsSens
+    this.adsSensOut = adsSensOut
+  }
+
+  /** A labelled checkbox row. */
+  private check(labelText: string, set: (v: boolean) => void): HTMLInputElement {
+    const row = document.createElement('label')
+    row.className = 'fr-set-row fr-set-check fr-hit'
+    const input = document.createElement('input')
+    input.type = 'checkbox'
+    input.addEventListener('change', () => set(input.checked))
+    const text = document.createElement('span')
+    text.textContent = labelText
+    row.append(input, text)
+    this.el.append(row)
+    return input
   }
 
   private slider(
@@ -195,5 +301,32 @@ export class SettingsPanel {
     this.invert.checked = s.invertY
     this.adsToggle.checked = s.adsToggle
     this.shoulderBtn.textContent = s.shoulder === 1 ? 'Right' : 'Left'
+    if (this.adsModeBtn) {
+      this.adsModeBtn.textContent = s.adsMode === 'hold' ? 'Hold' : 'Toggle'
+    }
+    if (this.autoSprint) {
+      this.autoSprint.checked = s.autoSprint
+    }
+    if (this.autoFire) {
+      this.autoFire.checked = s.autoFire
+    }
+    if (this.autoReload) {
+      this.autoReload.checked = s.autoReload
+    }
+    if (this.leftHanded) {
+      this.leftHanded.checked = s.leftHanded
+    }
+    if (this.ctl && this.ctlOut) {
+      this.ctl.value = String(s.controlScale)
+      this.ctlOut.textContent = `${Math.round(s.controlScale * 100)}%`
+    }
+    if (this.joy && this.joyOut) {
+      this.joy.value = String(s.joyScale)
+      this.joyOut.textContent = `${Math.round(s.joyScale * 100)}%`
+    }
+    if (this.adsSens && this.adsSensOut) {
+      this.adsSens.value = String(s.touchAdsSens)
+      this.adsSensOut.textContent = `${Math.round(s.touchAdsSens * 100)}%`
+    }
   }
 }

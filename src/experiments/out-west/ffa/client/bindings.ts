@@ -82,13 +82,12 @@ export const DESKTOP_HELP: readonly (readonly [string, string])[] = [
 
 /** The How to play rows, touch. */
 export const TOUCH_HELP: readonly (readonly [string, string])[] = [
-  ['Left thumb', 'Move'],
-  ['Right thumb', 'Drag to look'],
+  ['Left stick', 'Move (push forward to sprint)'],
+  ['Right side', 'Drag to look'],
   ['FIRE', 'Tap to shoot, hold to keep firing'],
-  ['AIM', 'Aim down the sights'],
-  ['Stick past the ring', 'Sprint'],
-  ['CROUCH', 'Crouch (slide while sprinting)'],
+  ['AIM', 'Hold to aim down the sights'],
   ['JUMP', 'Jump / vault'],
+  ['CROUCH', 'Crouch (tap while sprinting to slide)'],
   ['RELOAD', 'Reload'],
   ['BANK', 'Shows at a bank window'],
 ]

@@ -90,7 +90,7 @@ function overlay(root: HTMLElement): {
   if (tip) {
     const touch = matchMedia('(pointer: coarse)').matches
     tip.textContent = touch
-      ? 'Left thumb moves. Right thumb looks. Kill players, take their money and bank it.'
+      ? 'Left thumb moves (push forward to sprint). Right thumb looks. FIRE shoots, AIM holds the sights. Kill players, take their money and bank it.'
       : 'WASD moves. Click shoots. Right-click aims. Kill players, take their money and bank it.'
   }
   return {

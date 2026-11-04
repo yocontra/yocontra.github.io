@@ -1,20 +1,18 @@
 // biome-ignore-all lint/style/useThisInClassMethods: private helpers kept on the class next to the state they describe
 // biome-ignore-all lint/suspicious/noUnnecessaryConditions: stick and button state is mutated from pointer callbacks; Biome narrows them to their initialisers
+// biome-ignore-all lint/style/noExcessiveLinesPerFile: the whole thumb layer is one state machine
 /**
  * Touch controls, as DOM in their own layer above the canvas so input never waits on WebGL (spec
- * §3.8). Two layouts:
+ * §3.8). The shooter layout copies Call of Duty Mobile:
  *
- * Shooter (over the shoulder / first person, the default):
- * - a floating move stick that spawns under the left thumb anywhere in the left 45%; push it past
- *   its ring toward the top of the screen to sprint (it glows while you do);
- * - drag anywhere else on the right to look (the game applies the sensitivity and, on touch only,
- *   a little aim friction and magnetism);
- * - FIRE: tap to shoot, hold to keep firing at the gun's own rate; dragging from FIRE also looks,
- *   so you can track while you shoot;
- * - a smaller FIRE on the left, for a thumb that's on the stick;
- * - AIM toggles the sights (from the holster it closes the Dead-Eye reticle), CROUCH (a toggle; a
- *   slide mid-sprint), JUMP, RELOAD, THROW while you hold dynamite, and the contextual button
- *   (BANK, SHIP, OPEN, ACCEPT, CALL OUT).
+ * - a fixed move stick at the bottom-left (the CODM thumbstick) with a dead zone and an optional
+ *   auto-sprint: push it forward and out and the rider sprints until the stick comes back;
+ * - the right half of the screen is the look pad: drag anywhere on it to turn, and a drag that
+ *   starts on FIRE keeps looking while it fires;
+ * - FIRE is the big button at the right thumb; AIM sits beside it and holds the sights (or toggles,
+ *   a setting); JUMP and CROUCH/SLIDE sit above them, RELOAD and THROW to their left, and the
+ *   contextual button (BANK, SHIP, OPEN, ACCEPT, CALL OUT) above the cluster;
+ * - a left-handed layout mirrors the whole thing, and the button and stick sizes are settings.
  *
  * Top-down (kept as an option): the original twin-stick. The right stick aims while dragged and
  * fires on release (flick-to-fire); holding it 400 ms from the holster closes the Dead-Eye
@@ -32,13 +30,16 @@ import {
 } from '../../contract/town.ts'
 import { CROUCH_TAP, JUMP_BIT } from './bindings.ts'
 import type { Sampled } from './controls.ts'
+import type { FrontierSettings } from './settings.ts'
 
+/** The stick's base radius in CSS px at scale 1. */
 const STICK_R = 56
-/** Sprint: the thumb past this far (× the ring), within `SPRINT_CONE` of straight up; off under `SPRINT_OFF`. */
-const SPRINT_ON = 1.15
-const SPRINT_OFF = 0.8
+/** Fraction of the stick that does nothing, so a resting thumb never drifts. */
+const DEAD_FRAC = 0.13
+/** Sprint: the thumb past this share of the ring, within `SPRINT_CONE` of straight up. */
+const SPRINT_ON = 0.9
+const SPRINT_OFF = 0.68
 const SPRINT_CONE = Math.cos((40 * Math.PI) / 180)
-const DEAD_PX = 10
 const TAP_MS = 220
 /** World z is foreshortened on screen by sin(pitch) at the 58° camera. */
 const PITCH_SIN = Math.sin((58 * Math.PI) / 180)
@@ -77,26 +78,36 @@ export class TouchControls {
   private readonly throwBtn: HTMLElement
   private readonly adsBtn: HTMLElement
   private readonly fireBtn: HTMLElement
-  private readonly fireLeft: HTMLElement
   private readonly crouchBtn: HTMLElement
-  /** The left stick is past the ring, forward: sprinting. */
+  private readonly sprintBtn: HTMLElement
+  /** Auto-sprint: the left stick has been pushed forward far enough. */
   private sprint = false
+  /** The SPRINT button is held (a setting hides it when auto-sprint is on). */
+  private sprintHeld = false
   private actionBit = 0
   private latched = 0
   /** BTN_AIM kept for the release frame so a Dead-Eye release still counts as aimed. */
   private aimHold = 0
   private aim: number | null = null
   active = false
+  /** The thumbs take input (false while dead or a full-screen card is up). */
+  private enabled = true
   /** Shooter layout (look by drag, FIRE / AIM buttons) or the top-down twin-stick. */
   private shooter = false
   /** The look finger (right side, or a drag that started on FIRE). */
   private look: { id: number; x: number; y: number } | null = null
   private lookX = 0
   private lookY = 0
+  /** The stick ring radius in CSS px, measured from the live base (size settings included). */
+  private stickR = STICK_R
   /** FIRE is held by this pointer (auto-repeat runs in the game at the gun's rate). */
   private fireId = -1
-  /** The sights are up (AIM is a toggle on touch). */
+  /** The sights are up (hold by default, or a toggle in the settings). */
   ads = false
+  private adsDown = false
+  private adsMode: 'hold' | 'toggle' = 'hold'
+  private autoSprint = true
+  private leftHanded = false
   private readonly off: (() => void)[] = []
 
   constructor(parent: HTMLElement) {
@@ -107,19 +118,22 @@ export class TouchControls {
     this.rightKnob = el('fr-knob', this.rightBase)
     const pad = el('fr-pad', this.layer)
     const btn = (cls: string, label: string, bit: number, parentEl: HTMLElement = pad) => {
+      const contextual = cls.includes('fr-btn-act')
       const b = el(`fr-btn fr-hit ${cls}`, parentEl, label)
       b.setAttribute('role', 'button')
       b.setAttribute('aria-label', label)
       const down = (e: PointerEvent) => {
         e.preventDefault()
         e.stopPropagation()
-        this.latched |= bit || this.actionBit
+        this.active = true
+        this.latched |= bit | (contextual ? this.actionBit : 0)
         b.classList.add('down')
       }
       const up = () => b.classList.remove('down')
       b.addEventListener('pointerdown', down)
       b.addEventListener('pointerup', up)
       b.addEventListener('pointercancel', up)
+      b.addEventListener('pointerleave', up)
       return b
     }
     btn('fr-btn-roll fr-top-only', 'ROLL', BTN_ROLL)
@@ -131,25 +145,28 @@ export class TouchControls {
     this.throwBtn.hidden = true
     this.action = btn('fr-btn-act', '', 0)
     this.action.hidden = true
-    // the shooter's big two: FIRE (hold to keep firing, drag to track) and AIM (a toggle)
+    // a sprint button for players who don't want auto-sprint
+    this.sprintBtn = btn('fr-btn-sprint fr-shooter-only', 'SPRINT', 0)
+    this.sprintBtn.setAttribute('aria-label', 'Sprint')
+    this.sprintBtn.addEventListener('pointerdown', () => {
+      this.sprintHeld = true
+    })
+    for (const type of ['pointerup', 'pointercancel', 'pointerleave'] as const) {
+      this.sprintBtn.addEventListener(type, () => {
+        this.sprintHeld = false
+      })
+    }
+    // the shooter's big two: FIRE (hold to keep firing, drag to track) and AIM
     const fire = el('fr-fire-pad fr-shooter-only', this.layer)
     this.fireBtn = el('fr-btn fr-hit fr-btn-fire', fire, 'FIRE')
     this.fireBtn.setAttribute('role', 'button')
     this.fireBtn.setAttribute('aria-label', 'Fire')
-    this.fireLeft = el('fr-btn fr-hit fr-btn-fire fr-btn-fire-l', fire, 'FIRE')
-    this.fireLeft.setAttribute('role', 'button')
-    this.fireLeft.setAttribute('aria-label', 'Fire (left thumb)')
     this.adsBtn = el('fr-btn fr-hit fr-btn-ads', fire, 'AIM')
     this.adsBtn.setAttribute('role', 'button')
     this.adsBtn.setAttribute('aria-label', 'Aim down the sights')
     this.adsBtn.setAttribute('aria-pressed', 'false')
-    this.wireFire(this.fireBtn, true)
-    this.wireFire(this.fireLeft, false)
-    this.adsBtn.addEventListener('pointerdown', (e) => {
-      e.preventDefault()
-      e.stopPropagation()
-      this.setAds(!this.ads)
-    })
+    this.wireFire(this.fireBtn)
+    this.wireAds()
 
     const opts = { passive: false } as const
     const listen = <K extends keyof HTMLElementEventMap>(
@@ -161,7 +178,10 @@ export class TouchControls {
     }
     listen('pointerdown', (e) => this.down(e))
     // a rotation, a fold or a resize: no stick keeps an origin from the old layout
-    const relayout = () => this.release()
+    const relayout = () => {
+      this.release()
+      this.measureStick()
+    }
     globalThis.addEventListener('resize', relayout)
     this.off.push(() => globalThis.removeEventListener('resize', relayout))
     // a gamepad takes over: the thumbs layer steps aside until it's gone
@@ -182,8 +202,34 @@ export class TouchControls {
     this.place(this.rightBase, null)
   }
 
-  /** A FIRE button: tap to shoot, hold to keep firing; `look`: a drag from it also looks. */
-  private wireFire(b: HTMLElement, look: boolean): void {
+  /**
+   * Apply the player's control settings: layout side, sizes, aim mode, auto-sprint. Cheap enough
+   * to call on every settings change and on a view switch.
+   */
+  configure(s: FrontierSettings): void {
+    if (s.leftHanded !== this.leftHanded) {
+      this.leftHanded = s.leftHanded
+      this.release()
+    }
+    this.adsMode = s.adsMode
+    this.autoSprint = s.autoSprint
+    const st = this.layer.style
+    st.setProperty('--fr-user-ctl', String(s.controlScale))
+    st.setProperty('--fr-user-joy', String(s.joyScale))
+    this.layer.classList.toggle('lefty', s.leftHanded)
+    // no separate sprint button when the stick does it
+    this.layer.classList.toggle('show-sprint', !s.autoSprint)
+    if (s.autoSprint) {
+      this.sprintHeld = false
+    }
+    if (this.adsMode === 'toggle' && this.adsDown) {
+      this.adsDown = false
+    }
+    this.measureStick()
+  }
+
+  /** A FIRE button: tap to shoot, hold to keep firing; a drag from it also looks. */
+  private wireFire(b: HTMLElement): void {
     b.addEventListener('pointerdown', (e) => {
       e.preventDefault()
       e.stopPropagation()
@@ -193,7 +239,7 @@ export class TouchControls {
       b.classList.add('down')
       b.setPointerCapture(e.pointerId)
       // a drag from FIRE tracks the target while it fires
-      if (look && !this.look) {
+      if (!this.look) {
         this.look = { id: e.pointerId, x: e.clientX, y: e.clientY }
       }
     })
@@ -219,18 +265,48 @@ export class TouchControls {
     b.addEventListener('pointercancel', up)
   }
 
+  /** AIM: hold (CODM's default) or toggle, per the settings. */
+  private wireAds(): void {
+    const b = this.adsBtn
+    b.addEventListener('pointerdown', (e) => {
+      e.preventDefault()
+      e.stopPropagation()
+      b.setPointerCapture(e.pointerId)
+      if (this.adsMode === 'toggle') {
+        this.setAds(!this.ads)
+        this.adsDown = false
+      } else {
+        this.adsDown = true
+        this.setAds(true)
+      }
+    })
+    const up = (e: PointerEvent) => {
+      e.stopPropagation()
+      if (this.adsMode === 'hold' && this.adsDown) {
+        this.adsDown = false
+        this.setAds(false)
+      }
+    }
+    b.addEventListener('pointerup', up)
+    b.addEventListener('pointercancel', up)
+  }
+
   /** Shooter layout on or off (the view mode decides). */
   setShooter(on: boolean): void {
     this.shooter = on
     this.layer.classList.toggle('shooter', on)
+    this.layer.classList.toggle('lefty', this.leftHanded)
     if (!on) {
       this.setAds(false)
     }
     this.left = null
     this.right = null
     this.look = null
+    this.sprintHeld = false
+    this.setSprint(false)
     this.place(this.leftBase, null)
     this.place(this.rightBase, null)
+    this.measureStick()
   }
 
   setAds(on: boolean): void {
@@ -244,6 +320,18 @@ export class TouchControls {
     if (this.crouchBtn.classList.contains('on') !== on) {
       this.crouchBtn.classList.toggle('on', on)
       this.crouchBtn.setAttribute('aria-pressed', String(on))
+    }
+  }
+
+  /** Dead or in a card: dim the thumbs and stop them taking input. */
+  setEnabled(on: boolean): void {
+    if (this.enabled === on) {
+      return
+    }
+    this.enabled = on
+    this.layer.classList.toggle('off', !on)
+    if (!on) {
+      this.release()
     }
   }
 
@@ -272,6 +360,31 @@ export class TouchControls {
     }
   }
 
+  /** The movement zone: the left 45% (mirrored for a left-handed layout). */
+  private inMoveZone(e: PointerEvent): boolean {
+    const w = window.innerWidth
+    const h = window.innerHeight
+    const x = this.leftHanded ? w - e.clientX : e.clientX
+    const tablet = document.documentElement.dataset.owForm === 'tablet'
+    if (tablet) {
+      return x < w * 0.4 && e.clientY > h * 0.25
+    }
+    // the thumb's half, below the HUD: a tap on the purse or the map never starts a ride
+    return x < w * 0.45 && e.clientY > h * 0.22
+  }
+
+  /** The stick's home, in client px: the visible base at the bottom corner. */
+  private home(base: HTMLElement): { x: number; y: number; r: number } {
+    const r = base.getBoundingClientRect()
+    return { x: r.left + r.width / 2, y: r.top + r.height / 2, r: r.width / 2 }
+  }
+
+  /** Re-read the ring size after a settings or layout change. */
+  private measureStick(): void {
+    const w = this.leftBase.getBoundingClientRect().width
+    this.stickR = w > 0 ? w / 2 : STICK_R
+  }
+
   private down(e: PointerEvent): void {
     if (e.pointerType === 'mouse') {
       return
@@ -280,33 +393,39 @@ export class TouchControls {
     this.active = true
     this.layer.classList.add('on')
     this.layer.setPointerCapture(e.pointerId)
-    const w = window.innerWidth
-    const s: Omit<Stick, 'base' | 'knob'> = {
-      id: e.pointerId,
-      ox: e.clientX,
-      oy: e.clientY,
-      x: e.clientX,
-      y: e.clientY,
-      t0: performance.now(),
-      moved: false,
-    }
-    // the move stick's zone: the left 45% (an iPad: the left 40%, lower three quarters, where the
-    // thumb rests)
-    const tablet = document.documentElement.dataset.owForm === 'tablet'
-    const inZone = tablet
-      ? e.clientX < w * 0.4 && e.clientY > window.innerHeight * 0.25
-      : e.clientX < w * 0.45
-    if (inZone) {
-      if (!this.left) {
-        this.left = { ...s, base: this.leftBase, knob: this.leftKnob }
-        this.place(this.leftBase, this.left)
+    if (this.inMoveZone(e) && !this.left) {
+      const h = this.home(this.leftBase)
+      this.stickR = h.r
+      this.left = {
+        id: e.pointerId,
+        ox: h.x,
+        oy: h.y,
+        x: e.clientX,
+        y: e.clientY,
+        t0: performance.now(),
+        moved: false,
+        base: this.leftBase,
+        knob: this.leftKnob,
       }
-    } else if (this.shooter) {
+      this.place(this.leftBase, this.left)
+    } else if (!this.inMoveZone(e) && this.shooter) {
       if (!this.look) {
         this.look = { id: e.pointerId, x: e.clientX, y: e.clientY }
       }
-    } else if (!this.right) {
-      this.right = { ...s, base: this.rightBase, knob: this.rightKnob }
+    } else if (!(this.right || this.shooter)) {
+      const h = this.home(this.rightBase)
+      this.stickR = h.r
+      this.right = {
+        id: e.pointerId,
+        ox: e.clientX,
+        oy: e.clientY,
+        x: e.clientX,
+        y: e.clientY,
+        t0: performance.now(),
+        moved: false,
+        base: this.rightBase,
+        knob: this.rightKnob,
+      }
       this.place(this.rightBase, this.right)
     }
   }
@@ -314,6 +433,18 @@ export class TouchControls {
   private lookMove(e: PointerEvent): void {
     const l = this.look
     if (!l) {
+      return
+    }
+    // Coalesced events: at 120 Hz touch sampling, the intermediate points make a fast flick
+    // follow the thumb instead of jumping to where it landed on the next frame.
+    const events = e.getCoalescedEvents?.() ?? []
+    if (events.length > 0) {
+      for (const c of events) {
+        this.lookX += c.clientX - l.x
+        this.lookY += c.clientY - l.y
+        l.x = c.clientX
+        l.y = c.clientY
+      }
       return
     }
     this.lookX += e.clientX - l.x
@@ -337,7 +468,8 @@ export class TouchControls {
     st.y = e.clientY
     const dx = st.x - st.ox
     const dy = st.y - st.oy
-    if (Math.hypot(dx, dy) > DEAD_PX) {
+    const r = this.radius()
+    if (Math.hypot(dx, dy) > r * DEAD_FRAC) {
       st.moved = true
     }
     if (st === this.right && st.moved) {
@@ -371,15 +503,24 @@ export class TouchControls {
     this.place(this.rightBase, null)
   }
 
+  /** The stick ring in CSS px at the current size setting. */
+  private radius(): number {
+    return this.stickR
+  }
+
   private place(base: HTMLElement, st: Stick | null): void {
     if (st) {
-      base.style.transform = `translate(${st.ox - STICK_R}px, ${st.oy - STICK_R}px)`
+      if (base === this.rightBase) {
+        base.style.transform = `translate(${st.ox - this.radius()}px, ${st.oy - this.radius()}px)`
+      }
       base.classList.add('live')
       this.knobAt(st)
       return
     }
     base.classList.remove('live')
-    base.style.transform = ''
+    if (base === this.rightBase) {
+      base.style.transform = ''
+    }
     const knob = base.firstElementChild as HTMLElement | null
     if (knob) {
       knob.style.transform = ''
@@ -389,10 +530,11 @@ export class TouchControls {
   private knobAt(st: Stick): void {
     let dx = st.x - st.ox
     let dy = st.y - st.oy
+    const r = this.radius()
     const d = Math.hypot(dx, dy)
-    if (d > STICK_R) {
-      dx = (dx / d) * STICK_R
-      dy = (dy / d) * STICK_R
+    if (d > r) {
+      dx = (dx / d) * r
+      dy = (dy / d) * r
     }
     st.knob.style.transform = `translate(${dx}px, ${dy}px)`
   }
@@ -429,20 +571,28 @@ export class TouchControls {
     if (l) {
       const dx = l.x - l.ox
       const dy = l.y - l.oy
+      const r = this.radius()
       const d = Math.hypot(dx, dy)
-      if (d > DEAD_PX) {
-        const k = Math.min(1, d / STICK_R) / d
-        mx = dx * k
-        mz = dy * k
+      const dead = r * DEAD_FRAC
+      if (d > dead) {
+        // rescale past the dead zone so the full ring is full speed, and ease the first few px
+        const raw = Math.min(1, (d - dead) / (r - dead))
+        const k = raw * raw * (3 - 2 * raw)
+        mx = (dx / d) * k
+        mz = (dy / d) * k
       }
-      // sprint: past the ring, toward the top of the screen (hysteresis on the way back)
+      // auto-sprint: the thumb past the ring, toward the top of the screen (hysteresis back)
       const up = d > 0 ? -dy / d : 0
-      const reach = d / STICK_R
-      this.setSprint(
-        this.shooter && up >= SPRINT_CONE && reach >= (this.sprint ? SPRINT_OFF : SPRINT_ON),
-      )
+      const reach = d / r
+      if (this.autoSprint) {
+        this.setSprint(up >= SPRINT_CONE && reach >= (this.sprint ? SPRINT_OFF : SPRINT_ON))
+      } else {
+        this.setSprint(false)
+      }
+    } else if (this.autoSprint) {
+      this.setSprint(false)
     }
-    let buttons = this.latched | this.aimHold | (this.sprint ? BTN_SPRINT : 0)
+    let buttons = this.latched | this.aimHold | (this.sprint || this.sprintHeld ? BTN_SPRINT : 0)
     if (this.aiming || (this.shooter && this.ads)) {
       buttons |= BTN_AIM
     }
@@ -457,6 +607,9 @@ export class TouchControls {
     this.right = null
     this.look = null
     this.fireId = -1
+    this.sprintHeld = false
+    this.adsDown = false
+    this.setAds(false)
     this.place(this.leftBase, null)
     this.place(this.rightBase, null)
     this.setSprint(false)

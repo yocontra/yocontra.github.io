@@ -261,6 +261,7 @@ export class Hud {
       return
     }
     this.menuEl.classList.toggle('on', open)
+    this.root.classList.toggle('paused', open)
     this.opts.onMenu?.(open)
   }
 

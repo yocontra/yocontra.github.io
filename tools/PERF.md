@@ -405,6 +405,53 @@ Still over the 7 ms p95 at 4×: Frontier third person packed (8.2 ms) and first 
 The next levers are fewer crowd draws (body, hat and gun in one mesh for a skinned rider) and taking
 the skeletons out of the render traversal.
 
+### Frontier mobile pass: phone post, adaptive refresh and CoD Mobile thumbs (Nov 2026)
+
+The on-device complaint was Frontier's frame rate. The desktop proxy could not see the phone's
+problem directly, so this pass attacked the three things a phone pays for most: full-screen post,
+the shadow pass, and a resolution scaler that could get stuck.
+
+**Adaptive resolution could never recover from a sustained low frame rate.** `Renderer.adapt`
+estimated the display refresh from the 10th-percentile frame interval. A game stuck at 30 fps has
+no 16.7 ms frames, so its p10 is ~33 ms: the renderer read that as a 30 Hz display, set its miss
+threshold to ~38 ms, and never lowered the resolution. The estimate is now capped at 60 Hz (the
+lowest target the game aims for), while Low Power Mode still uses the raw p10 to recognise a 30 Hz
+cap. A large miss drops 0.12 in one step; the check runs every 300 ms. The Frontier floor can now
+scale to 0.6 of its 1.3 DPR instead of 0.7.
+
+**The phone pass leaves effects out of the shader instead of running them at zero.** The merged
+grade pass is rebuilt per tier (`Renderer.makeMainPass`):
+
+- **floor / legacy Frontier:** no bloom, no height-fog (`AtmosEffect`), no 3D LUT, no vignette, no
+  grain. The scene's linear fog carries the aerial perspective; the grade keeps its contrast and
+  tint. The duel floor keeps its 4-level bloom, so Quick Draw's look is unchanged.
+- **MSAA:** 2× on the Frontier floor (was 4×); the duel floor keeps 4×. Legacy keeps its FXAA
+  pass and no MSAA.
+- **shadows:** the sun's map redraws every 3 frames on floor (20 Hz) and every 4 on legacy
+  (15 Hz), down from every 2 frames (30 Hz). Real-shadow riders stayed at 2 on floor and 1 on legacy.
+- **draw distance:** Frontier shooter far plane 105 m (was 120), fog 34–100; first person 95 m
+  (was 100). The town's detail radius and the crowd stay as they were.
+- **touch:** the thumb layer is now the CoD Mobile layout: a fixed bottom-left stick with a dead
+  zone and auto-sprint, a right look pad, FIRE with drag-to-track, hold-or-toggle AIM, JUMP /
+  CROUCH / RELOAD / THROW / contextual BANK around the right thumb, left-handed mirroring, button
+  and stick size settings, auto fire and auto reload. `ffa/client/touch.ts` and `shooter.css`.
+- **input feel:** coalesced pointer events for look, a smoothstep response past the dead zone, and
+  an ADS look-speed multiplier. Practice freezes behind the How to play and pause cards.
+
+Floor proxy (`frontier-perf.ts --prod`, 812×375 at DPR 3, touch, floor tier, 4× CPU, 31 bots,
+clustered, seed 7, bank-front), load average 8 (other agents and Time Machine running; read draws
+and triangles exactly, CPU within the sitting only):
+
+| View  | Draws | Triangles | CPU p50 / p95 |   Heap | Riders in view |
+| ----- | ----: | --------: | ------------: | -----: | -------------: |
+| Third |    73 |      275k |     4.6 / 6.4 | 111 MB |    12 (max 14) |
+| First |    65 |      244k |     4.8 / 6.7 | 115 MB |     9 (max 11) |
+
+The sample above was taken with the 4× MSAA build; the Frontier floor now runs 2×. The dynamic
+resolution scaler was observed at 0.76 in the same 31-bot scene, which is the fix working: the old
+estimator held it at 1.0 while frames missed. Real-device validation is still the gate (checklist
+below); these numbers only say the pass did not regress the floor proxy.
+
 ## Real-device checklist (iPhone 13 mini, current iOS, WKWebView)
 
 Do this before signing off any art drop. The pass bar (§9.6): **p95 ≤ 16.7 ms over 10 minutes,

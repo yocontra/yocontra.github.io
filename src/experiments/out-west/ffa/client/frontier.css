@@ -776,6 +776,30 @@
   align-items: center;
   justify-content: center;
   background: rgb(10 6 2 / 0.6);
+  overflow: hidden;
+  z-index: 30;
+}
+
+/* paused: the fight's HUD steps aside, so nothing paints over the card */
+.fr-hud.paused
+  :is(
+    .fr-tl,
+    .fr-tc,
+    .fr-tr,
+    .fr-obj,
+    .fr-round,
+    .fr-feed,
+    .fr-banner,
+    .fr-toast,
+    .fr-channel,
+    .fr-prompt,
+    .fr-reticle,
+    .fr-arrows,
+    .fr-death,
+    .fr-rotate,
+    .fr-lowpower
+  ) {
+  display: none;
 }
 
 .fr-menu.on {
@@ -785,6 +809,12 @@
 .fr-menu-card,
 .fr-refuse {
   width: min(360px, 88vw);
+  max-height: calc(100dvh - 24px);
+  box-sizing: border-box;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-y;
   padding: 24px 22px 22px;
   border-radius: var(--ow-radius);
   color: var(--ow-bone);
@@ -1013,17 +1043,51 @@
 /* --- touch twin-stick ------------------------------------------------------------------------ */
 
 .fr-touch {
+  --fr-user-ctl: 1;
+  --fr-user-joy: 1;
+  --fr-device-ctl: 1;
+  --fr-device-joy: 1;
+  --fr-ctl: calc(var(--fr-user-ctl) * var(--fr-device-ctl));
+  --fr-joy: calc(var(--fr-user-joy) * var(--fr-device-joy));
+  --fr-safe-e: var(--fr-right);
+  --fr-safe-s: var(--fr-left);
+  --fr-btn: calc(56px * var(--fr-ctl));
+  --fr-fire: calc(92px * var(--fr-ctl));
+  --fr-ads: calc(64px * var(--fr-ctl));
+  --fr-act-w: calc(132px * var(--fr-ctl));
+  --fr-act-h: calc(54px * var(--fr-ctl));
+  --fr-joy-size: calc(112px * var(--fr-joy));
+  --fr-knob-size: calc(48px * var(--fr-joy));
   position: absolute;
   inset: 0;
   touch-action: none;
+  transition: opacity 0.2s;
+}
+
+/* dead or reading a card: the thumbs stay visible but stop taking input */
+.fr-touch.off,
+.fr-touch.off .fr-hit {
+  pointer-events: none;
+}
+
+.fr-touch.off {
+  opacity: 0.32;
+}
+
+/* left-handed: the clusters swap sides; the whole layer's inline axis runs right to left */
+.fr-touch.lefty {
+  --fr-safe-e: var(--fr-left);
+  --fr-safe-s: var(--fr-right);
+  direction: rtl;
 }
 
 .fr-stick {
   position: absolute;
-  left: 0;
-  top: 0;
-  width: 112px;
-  height: 112px;
+  left: auto;
+  right: auto;
+  top: auto;
+  width: var(--fr-joy-size);
+  height: var(--fr-joy-size);
   border-radius: 50%;
   border: 1px solid rgb(210 173 92 / 0.45);
   background: radial-gradient(circle, rgb(20 12 8 / 0.1), rgb(20 12 8 / 0.32));
@@ -1037,26 +1101,23 @@
 }
 
 .fr-stick-r:not(.live) {
-  left: auto;
-  top: auto;
-  right: calc(var(--fr-right) + 40px);
+  inset-inline-end: calc(var(--fr-safe-e) + 40px);
   bottom: calc(var(--fr-bottom) + 40px);
   opacity: 0.55;
 }
 
 .fr-stick-l:not(.live) {
-  left: calc(var(--fr-left) + 40px);
-  top: auto;
-  bottom: calc(var(--fr-bottom) + 40px);
-  opacity: 0.35;
+  inset-inline-start: calc(var(--fr-safe-s) + 22px);
+  bottom: calc(var(--fr-bottom) + 22px);
+  opacity: 0.5;
 }
 
 .fr-knob {
   position: absolute;
-  left: 32px;
-  top: 32px;
-  width: 48px;
-  height: 48px;
+  left: calc((var(--fr-joy-size) - var(--fr-knob-size)) / 2);
+  top: calc((var(--fr-joy-size) - var(--fr-knob-size)) / 2);
+  width: var(--fr-knob-size);
+  height: var(--fr-knob-size);
   border-radius: 50%;
   background: radial-gradient(circle at 35% 30%, rgb(255 240 210 / 0.8), rgb(176 133 58 / 0.65));
   box-shadow: 0 2px 8px rgb(0 0 0 / 40%);

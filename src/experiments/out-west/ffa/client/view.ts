@@ -29,7 +29,7 @@ const TOP: ViewPolicy = { far: 160, fogNear: 120, fogFar: 260, shadowHalf: 12, s
 const SHOOTER: Record<Quality, ViewPolicy> = {
   high: { far: 230, fogNear: 70, fogFar: 225, shadowHalf: 24, shadowAhead: 14 },
   medium: { far: 190, fogNear: 60, fogFar: 185, shadowHalf: 20, shadowAhead: 12 },
-  floor: { far: 120, fogNear: 38, fogFar: 118, shadowHalf: 12, shadowAhead: 7 },
+  floor: { far: 105, fogNear: 34, fogFar: 100, shadowHalf: 12, shadowAhead: 7 },
   legacy: { far: 90, fogNear: 28, fogFar: 88, shadowHalf: 10, shadowAhead: 6 },
 }
 
@@ -38,7 +38,7 @@ const SHOOTER: Record<Quality, ViewPolicy> = {
  * of your own body fills the frame), so the far end comes in a little to hold the draw count.
  */
 const FIRST: Partial<Record<Quality, ViewPolicy>> = {
-  floor: { far: 100, fogNear: 34, fogFar: 98, shadowHalf: 12, shadowAhead: 7 },
+  floor: { far: 95, fogNear: 30, fogFar: 92, shadowHalf: 12, shadowAhead: 7 },
   legacy: { far: 80, fogNear: 26, fogFar: 78, shadowHalf: 10, shadowAhead: 6 },
 }
 

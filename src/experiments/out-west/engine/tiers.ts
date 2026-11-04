@@ -39,8 +39,16 @@ export interface TierSpec {
   /** Bloom resolution scale and mip levels. */
   bloomRes: number
   bloomLevels: number
-  /** LUT grade, vignette and grain (legacy keeps tonemap + LUT only). */
+  /** The bloom mip chain and composite. Off on the phone Frontier pass. */
+  bloom: boolean
+  /** Vignette and grain (only the top tiers). */
   fullPost: boolean
+  /** The depth-reading height-fog pass. Off on phones, where the scene's linear fog carries it. */
+  atmos: boolean
+  /** The time-of-day LUT pair inside the grade pass (two 3D texture reads per pixel). */
+  lut: boolean
+  /** Redraw the sun's shadow map every N frames (1 = every frame). */
+  shadowHz: number
 }
 
 /** Quick Draw budgets per tier; §9.3 sets the floor row. */
@@ -55,7 +63,11 @@ export const TIER_SPECS: Record<Quality, TierSpec> = {
     shimmer: true,
     bloomRes: 0.5,
     bloomLevels: 5,
+    bloom: true,
     fullPost: true,
+    atmos: true,
+    lut: true,
+    shadowHz: 1,
   },
   medium: {
     dprMax: 1.75,
@@ -67,11 +79,15 @@ export const TIER_SPECS: Record<Quality, TierSpec> = {
     shimmer: true,
     bloomRes: 0.5,
     bloomLevels: 5,
+    bloom: true,
     fullPost: true,
+    atmos: true,
+    lut: true,
+    shadowHz: 1,
   },
   floor: {
     dprMax: 1.6,
-    scaleMin: 0.8,
+    scaleMin: 0.72,
     scaleMax: 1,
     msaa: 4,
     shadowSize: 1024,
@@ -79,11 +95,15 @@ export const TIER_SPECS: Record<Quality, TierSpec> = {
     shimmer: false,
     bloomRes: 0.5,
     bloomLevels: 4,
+    bloom: true,
     fullPost: true,
+    atmos: true,
+    lut: true,
+    shadowHz: 2,
   },
   legacy: {
     dprMax: 1,
-    scaleMin: 0.75,
+    scaleMin: 0.7,
     scaleMax: 1,
     msaa: 0,
     shadowSize: 1024,
@@ -91,18 +111,53 @@ export const TIER_SPECS: Record<Quality, TierSpec> = {
     shimmer: false,
     bloomRes: 0.5,
     bloomLevels: 3,
+    bloom: true,
     fullPost: false,
+    atmos: true,
+    lut: true,
+    shadowHz: 2,
   },
 }
 
 export type RenderMode = 'duel' | 'ffa'
 
-/** Frontier FFA budgets (§9.3): lower internal resolution, wider dynamic range. */
+/**
+ * Frontier FFA budgets (§9.3): lower internal resolution, wider dynamic range, and a phone pass
+ * that keeps the frame cheap in the places a phone actually pays: the depth-reading height fog,
+ * the LUT, the bloom mip chain and the shadow redraws. The scene's linear fog and the grade's
+ * plain contrast carry the look instead.
+ */
 const FFA_DPR: Record<Quality, Partial<TierSpec>> = {
   high: { dprMax: 1.75, scaleMin: 0.7 },
-  medium: { dprMax: 1.5, scaleMin: 0.7 },
-  floor: { dprMax: 1.3, scaleMin: 0.7 },
-  legacy: { dprMax: 1, scaleMin: 0.7 },
+  medium: { dprMax: 1.5, scaleMin: 0.7, bloomLevels: 4, shadowHz: 2 },
+  floor: {
+    dprMax: 1.3,
+    scaleMin: 0.6,
+    msaa: 2,
+    shadowSize: 1024,
+    dust: 450,
+    bloomRes: 0.35,
+    bloomLevels: 2,
+    bloom: false,
+    fullPost: false,
+    atmos: false,
+    lut: false,
+    shadowHz: 3,
+  },
+  legacy: {
+    dprMax: 1,
+    scaleMin: 0.6,
+    msaa: 0,
+    shadowSize: 1024,
+    dust: 240,
+    bloomRes: 0.35,
+    bloomLevels: 2,
+    bloom: false,
+    fullPost: false,
+    atmos: false,
+    lut: false,
+    shadowHz: 4,
+  },
 }
 
 export function specFor(q: Quality, mode: RenderMode): TierSpec {

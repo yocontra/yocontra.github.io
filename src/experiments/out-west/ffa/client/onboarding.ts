@@ -28,7 +28,7 @@ function steps(touch: boolean): Step[] {
     {
       title: 'Move',
       body: touch
-        ? 'Left thumb moves. Drag on the right to look. Hide behind low cover.'
+        ? 'Left thumb moves, and pushing it forward sprints. Drag on the right to look. FIRE shoots; AIM holds the sights.'
         : 'Click to use the mouse. Hide behind low cover.',
       keys: true,
     },
