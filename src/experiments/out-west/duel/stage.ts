@@ -96,7 +96,7 @@ function spawnRifleman(d: Director): void {
     hat: 'cowboy',
     hatColor: 0x1a_14_10,
     bandana: 0x3a_2a_1a,
-    rifle: propObject(c.rifle),
+    rifle: c.rifle(),
   })
   r.root.position.copy(STREET.saloonRoof)
   r.root.rotation.y = Math.atan2(-STREET.saloonRoof.x, -5 - STREET.saloonRoof.z)

@@ -52,7 +52,8 @@ import type { Actor, Clip } from '../../scene/actor.ts'
 import { castActor } from '../../scene/cast.ts'
 import { lodGeometry } from '../../scene/lod.ts'
 import type { LongHold } from '../../scene/longgun.ts'
-import { type PropDef, propDef, propObject } from '../../scene/props.ts'
+import { propDef, propObject } from '../../scene/props.ts'
+import { rifleObject } from '../../scene/rifle.ts'
 import { RIFLE_ROUNDS, SHOTGUN_SHELLS } from '../sim/constants.ts'
 import { holdSkin } from './crowd/skin-hold.ts'
 import {
@@ -107,7 +108,6 @@ const PREBUILD_RING = 4
 export const READ_SCALE = 1.25
 /** Map weapons: how big they read (the coach gun a touch heavier than life, to read from the sky). */
 const SHOTGUN_HELD_SCALE = 1.15
-const RIFLE_LENGTH = 1.1
 
 /** What the crowd needs to know about one player this frame. */
 export interface CrowdPlayer {
@@ -219,7 +219,6 @@ export class Crowd {
   readonly ring: Mesh
   private readonly gun: Group | null
   private readonly kit: Material
-  private readonly rifleDef: PropDef | null
   /** Skinned cap (8 floor, 6 legacy, 16 medium/high). */
   near: number
   /** Skinned riders casting real shadows, nearest first (the rest get a blob). */
@@ -274,7 +273,6 @@ export class Crowd {
         o.material = this.kit
       }
     })
-    this.rifleDef = propDef(assets.props, 'rifle', RIFLE_LENGTH)
   }
 
   /** He took a map weapon (`EV_PICKUP_TAKEN` of a shotgun or rifle spot). */
@@ -540,23 +538,18 @@ export class Crowd {
 
   /**
    * One map weapon fitted to him (butt in his shoulder, both hands on it), hidden until he holds
-   * it. One mesh sharing the template's geometry and material (the shotgun is one draw in the kit
-   * material; the rifle its prop's).
+   * it. One mesh sharing the template's geometry and the long guns' one material
+   * (scene/gunsmith.ts): one draw each.
    */
   private longGun(actor: Actor, kind: 'shotgun' | 'rifle'): LongGun | null {
     const obj = new Group()
     if (kind === 'shotgun') {
-      const gun = shotgunMesh(this.kit)
+      const gun = shotgunMesh()
       gun.scale.set(SHOTGUN_HELD_SCALE, SHOTGUN_HELD_SCALE * 1.2, SHOTGUN_HELD_SCALE * 1.2)
       obj.add(gun)
     } else {
-      if (!this.rifleDef) {
-        return null
-      }
-      // the rifle prop lies along Z, muzzle at +Z; turn it down +X
-      const inner = propObject(this.rifleDef)
-      inner.rotation.y = Math.PI / 2
-      obj.add(inner)
+      // the Winchester, its far level of detail past a few metres
+      obj.add(rifleObject({ lod: true }))
     }
     return actor.addLong(obj)
   }

@@ -1100,7 +1100,7 @@ export class FrontierGame {
         flags: ownFlags(s.flags, s.protectTicks > 0),
         stance: this.ownStance(),
         self: true,
-        weapon: this.net.weapon.weapon,
+        weapon: this.devWeapon ?? this.net.weapon.weapon,
       })
     }
     for (const [i, r] of this.remotes.entries()) {
@@ -1294,6 +1294,7 @@ export class FrontierGame {
     )
     const cam = this.cam.camera
     vm.setLens(cam.aspect, cam.fov)
+    vm.townSky.update(this.scene.environment, this.scene.environmentIntensity, cam.quaternion)
     // the sun, turned into the lens's frame (the view model lives in camera space)
     this.vmSun.copy(SUN_DIR).applyQuaternion(this.vmQ.copy(cam.quaternion).invert())
     const pred = this.net.pred
@@ -1758,7 +1759,7 @@ export class FrontierGame {
     this.desk.injectLook(dx, dy)
   }
 
-  /** Dev harness only: show a weapon in the first-person hands (null: the one you hold). */
+  /** Dev harness only: show a weapon in your hands, first and third person (null: the one you hold). */
   devShowWeapon(w: number | null): void {
     this.devWeapon = w
   }
