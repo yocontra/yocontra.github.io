@@ -4,6 +4,7 @@ import { gradeFor } from '../data/outlaws.ts'
 import { save as persist } from '../save.ts'
 import { clamp01 } from '../scene/camera.ts'
 import { say } from './chatter.ts'
+import { deathStyle, hitFx } from './cues-life.ts'
 import type { Director } from './director.ts'
 import { fireGun, spinHolster } from './draws.ts'
 import { killShot } from './framing.ts'
@@ -49,38 +50,16 @@ export function killEnemyAnim(s: DuelState): void {
   if (!e) {
     return
   }
-  const death = e.play('Death', 0.06, true)
-  const clip = death?.getClip().duration ?? 1.2
-  s.dying = { actor: e, t: 0, contact: clip * 0.55, landed: false }
   const from = s.player.root.position
   const away = V(e.root.position.x - from.x, 0, e.root.position.z - from.z).normalize()
   const hit = e.root.position
     .clone()
     .add(V(0, e.height * 0.72, 0))
     .addScaledVector(away, -0.12)
-  c.puffs.emit(hit, 22, {
-    speed: 0.7,
-    size: 0.06,
-    grow: 0.9,
-    life: 0.9,
-    color: 0x6e_18_10,
-    alpha: 0.38,
-    up: 0.05,
-    spread: 0.12,
-    dir: away.clone().multiplyScalar(0.9),
-    drag: 3,
-  })
-  c.puffs.emit(hit, 16, {
-    speed: 0.5,
-    size: 0.09,
-    grow: 1.2,
-    life: 1.3,
-    color: 0xc8_b0_8a,
-    alpha: 0.3,
-    up: 0.15,
-    spread: 0.2,
-    dir: away.clone().multiplyScalar(0.5),
-  })
+  // the death clip varies by hit grade (town-life owns the styles); dust and cloth, never blood
+  s.dying = { actor: e, t: 0, contact: 0.66, landed: false }
+  s.dying.contact = deathStyle(s, gradeFor(s.lastReaction ?? 999, s.secondChance)).contact
+  hitFx(s, e, hit, away, true)
   if (s.handShot) {
     shootGunFromHand(s)
   }
