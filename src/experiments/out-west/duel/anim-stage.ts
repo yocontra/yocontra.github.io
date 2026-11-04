@@ -12,7 +12,6 @@ import type { Actor } from '../scene/actor.ts'
 import { probeIndex } from '../scene/anim-probe.ts'
 import { castActor } from '../scene/cast.ts'
 import type { Beat } from '../scene/gesture.ts'
-import { propObject } from '../scene/props.ts'
 import { DEATH_STYLES } from './cues-life.ts'
 import { fireGun, nearMiss, offHandOf, quickDraw, spinHolster, victoryTaunt } from './draws.ts'
 import { type DuelState, V } from './state.ts'
@@ -356,7 +355,7 @@ export function installStage(s: DuelState, men: Actor[]): void {
           hat: 'cowboy',
           hatColor: 0x1a_14_10,
           bandana: 0x3a_2a_1a,
-          rifle: propObject(s.c.rifle),
+          rifle: s.c.rifle(),
         })
         s.c.scene.add(rifleman.root)
       }
