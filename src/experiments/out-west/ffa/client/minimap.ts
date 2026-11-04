@@ -83,9 +83,30 @@ export class Minimap {
       ctx.fillStyle = BUILDING_FILL[b.kind] ?? '#5a4434'
       ctx.fillRect(b.x, b.z, b.w, b.d)
     }
-    ctx.fillStyle = '#7a6046'
+    // the railroad between its buffer stops
+    const buffers = layout.cover.filter((c2) => c2.kind === 'buffer')
+    if (buffers.length >= 2) {
+      const xs = buffers.map((c2) => c2.x + c2.w / 2)
+      const tz = (buffers[0]?.z ?? 0) + (buffers[0]?.d ?? 0) / 2
+      ctx.fillStyle = '#5a4a3a'
+      ctx.fillRect(Math.min(...xs), tz - 1.1, Math.max(...xs) - Math.min(...xs), 2.2)
+    }
+    // tall cover (coaches, wagons, boxcars) dark; low cover lighter; porch posts left out
     for (const c2 of layout.cover) {
-      ctx.fillRect(c2.x, c2.z, Math.max(1, c2.w), Math.max(1, c2.d))
+      if (c2.kind === 'post') {
+        continue
+      }
+      ctx.fillStyle = c2.low ? '#8a6e50' : '#4a3424'
+      ctx.fillRect(c2.x, c2.z, Math.max(0.8, c2.w), Math.max(0.8, c2.d))
+    }
+    // the bank's deposit windows
+    ctx.fillStyle = '#ffd860'
+    for (const z of layout.zones) {
+      if (z.kind === 'bank') {
+        ctx.beginPath()
+        ctx.arc(z.x, z.z, 1.1, 0, Math.PI * 2)
+        ctx.fill()
+      }
     }
     // Bank: a $ on the roof.
     const bank = layout.buildings.find((b) => b.kind === 'bank')

@@ -60,8 +60,8 @@ describe('town layout', () => {
     expect(grid.cells.length).toBe(288 * 288)
   })
 
-  it('28 spawns: 20 perimeter, 8 interior, none within 30 m of the bank, all clear', () => {
-    expect(TOWN.spawns.length).toBe(28)
+  it('32 spawns: 24 perimeter, 8 interior, none within 30 m of the bank, all clear', () => {
+    expect(TOWN.spawns.length).toBe(32)
     expect(TOWN.spawns.filter((s) => s.interior).length).toBe(8)
     const bank = TOWN.buildings.find((b) => b.kind === 'bank')
     expect(bank).toBeDefined()
@@ -86,9 +86,11 @@ describe('town layout', () => {
     }
   })
 
-  it('the bank has 4 deposit windows and 3 entrances', () => {
+  it('the bank has 4 deposit windows and an entrance on every side', () => {
     expect(TOWN.zones.filter((z) => z.kind === 'bank').length).toBe(4)
-    expect(TOWN.buildings.find((b) => b.kind === 'bank')?.doors.length).toBe(3)
+    expect(
+      new Set(TOWN.buildings.find((b) => b.kind === 'bank')?.doors.map((d) => d.side)).size,
+    ).toBe(4)
     expect(zoneAt(TOWN, 64.5, 81.5)?.kind).toBe('bank')
     expect(zoneAt(TOWN, 13, 84)?.kind).toBe('stage')
     expect(zoneAt(TOWN, 30, 64)).toBeNull()
@@ -111,6 +113,15 @@ describe('town layout', () => {
       rayGrid(grid, { ox: tx - 5, oz: tz, dx: 1, dz: 0, maxDist: 10 }, BLOCK_SHOT),
     ).toBeLessThan(5)
     expect(hasLineOfSight(grid, { x: tx - 5, z: tz }, { x: tx + 5, z: tz })).toBe(true)
+  })
+
+  it('vault heights: low cover only, 0.5 to 1.1 m; tall cover never', () => {
+    const vaultable = TOWN.cover.filter((c) => c.vaultHeight !== undefined)
+    expect(vaultable.length).toBeGreaterThan(100)
+    expect(vaultable.filter((c) => !c.low).map((c) => c.kind)).toEqual([])
+    const heights = vaultable.map((c) => c.vaultHeight ?? 0)
+    expect(Math.min(...heights)).toBeGreaterThanOrEqual(0.5)
+    expect(Math.max(...heights)).toBeLessThanOrEqual(1.1)
   })
 
   it('outside the map is solid', () => {

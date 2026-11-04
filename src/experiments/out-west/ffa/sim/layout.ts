@@ -28,11 +28,18 @@ export interface Building extends Rect {
   doors: Door[]
   /** Interior partitions (hollow buildings only). */
   walls?: Rect[]
+  /** The side its facade faces, where the nearest street doesn't say (depot on the track, sheds). */
+  front?: Side
 }
 export interface Cover extends Rect {
   kind: string
   /** Low cover blocks movement and bullets but not sight. Tall cover (boxcars) blocks all three. */
   low: boolean
+  /**
+   * Low cover a rider can vault: the height of its top, metres (fences 1.1, hitching rails 1.05,
+   * troughs 0.7...). Absent on tall cover and on low pieces that can't be vaulted (posts, wells).
+   */
+  vaultHeight?: number
 }
 export interface Zone {
   id: string
@@ -70,6 +77,12 @@ export interface TownLayout {
 }
 
 export const TOWN: TownLayout = townJson as TownLayout
+
+/**
+ * The bank's deposit windows (inside the lobby, at the teller grilles): stand in one with money
+ * and interact to bank it. For HUD arrows and onboarding.
+ */
+export const BANK_WINDOWS: readonly Zone[] = TOWN.zones.filter((z) => z.kind === 'bank')
 
 export const BLOCK_MOVE = 1
 export const BLOCK_SHOT = 2
