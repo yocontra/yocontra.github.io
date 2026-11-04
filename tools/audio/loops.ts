@@ -11,7 +11,7 @@ const HOP = 0.1
 const N = 4096
 const BANDS = 36
 
-function fft(re: Float64Array, im: Float64Array): void {
+export function fft(re: Float64Array, im: Float64Array): void {
   const n = re.length
   for (let i = 1, j = 0; i < n; i++) {
     let bit = n >> 1
@@ -82,6 +82,43 @@ export interface LoopPoints {
   start: number
   end: number
   score: number
+}
+
+/**
+ * The best of the given (start, end) candidates (seconds), for rhythmic music whose loop must be a
+ * whole number of bars: scored like `findLoop` (at the nearest analysis hop), then `end` is
+ * aligned to the waveform by at most ±60 ms.
+ */
+export function findLoopAmong(
+  ch: Ch,
+  pairs: readonly (readonly [number, number])[],
+  win = 4,
+): LoopPoints {
+  const x = mono(ch)[0] ?? new Float32Array(0)
+  const fr = features(x)
+  const w = Math.round(win / HOP)
+  let best: LoopPoints = { start: 0, end: 0, score: -2 }
+  for (const [start, end] of pairs) {
+    const a = Math.round(start / HOP)
+    const b = Math.round(end / HOP)
+    let s = 0
+    let ok = true
+    for (let k = 0; k < w && ok; k++) {
+      const fa = fr[a + k]
+      const fb = fr[b + k]
+      if (fa && fb) {
+        for (let i = 0; i < BANDS; i++) {
+          s += (fa[i] ?? 0) * (fb[i] ?? 0)
+        }
+      } else {
+        ok = false
+      }
+    }
+    if (ok && s / w > best.score) {
+      best = { start, end, score: s / w }
+    }
+  }
+  return { ...best, end: align(x, best.start, best.end) }
 }
 
 /** Search starts in [sMin, sMax] and ends in [start + minLen, eMax] (seconds). */

@@ -208,8 +208,23 @@ const song = (file: string, points: { start: number; end: number }, trim = 0): L
 })
 
 export const SONGS = {
-  /** Title / hub theme (the 2019 main theme, remastered, plays its intro once then loops). */
+  /**
+   * Title theme (the 2019 main theme, remastered, plays its intro once then loops): the title and
+   * the end screen only.
+   */
   intro: song('title', LOOP_POINTS.m_title),
+  /** The saloon hub: a honky-tonk upright. */
+  saloon: song('saloon', LOOP_POINTS.m_saloon),
+  /** Act one (outlaws by daylight). */
+  actDay: song('act_day', LOOP_POINTS.m_act_day),
+  /** Act two (sunset). */
+  actDusk: song('act_dusk', LOOP_POINTS.m_act_dusk),
+  /** Act three (after dark). */
+  actNight: song('act_night', LOOP_POINTS.m_act_night),
+  /** The act themes again with a galloping percussion layer: you're on a streak. */
+  actDayHot: song('act_day_hot', LOOP_POINTS.m_act_day_hot),
+  actDuskHot: song('act_dusk_hot', LOOP_POINTS.m_act_dusk_hot),
+  actNightHot: song('act_night_hot', LOOP_POINTS.m_act_night_hot),
   /** Midnight boss theme. */
   boss: song('boss', LOOP_POINTS.m_boss),
   /** Walk and standoff bed: low drones only, under the heartbeat and clear of the bell. */
@@ -220,12 +235,71 @@ export const SONGS = {
 
 export type SongName = keyof typeof SONGS
 
+/** First-try wins in a row that light the streak layer. */
+export const STREAK_HOT = 3
+
+/**
+ * The act theme for an outlaw: by the light he's fought in (`day`: 0 noon … 1 midnight), the boss
+ * theme for the last two, and the streak layer once you've beaten {@link STREAK_HOT} in a row
+ * first time.
+ */
+export function actSong(level: number, day: number, streak = 0): SongName {
+  if (level >= 15) {
+    return 'boss'
+  }
+  const hot = streak >= STREAK_HOT
+  if (day < 0.4) {
+    return hot ? 'actDayHot' : 'actDay'
+  }
+  if (day < 0.8) {
+    return hot ? 'actDuskHot' : 'actDusk'
+  }
+  return hot ? 'actNightHot' : 'actNight'
+}
+
+/**
+ * First-try wins in a row going into `level` (0 on a retry): each earlier outlaw beaten on the
+ * one attempt made against him.
+ */
+export function winStreak(
+  level: number,
+  attempts: Readonly<Record<number, number>>,
+  best: Readonly<Record<number, unknown>>,
+): number {
+  if ((attempts[level] ?? 0) > 0) {
+    return 0
+  }
+  let n = 0
+  for (let k = level - 1; k >= 0 && attempts[k] === 1 && best[k]; k--) {
+    n++
+  }
+  return n
+}
+
+const sting = (file: string): StreamDef => ({ url: `${MUSIC_DIR}/${file}.m4a`, trim: MUSIC_TRIM })
+
 export const STINGS = {
-  victory: { url: `${MUSIC_DIR}/victory.m4a`, trim: MUSIC_TRIM },
-  defeat: { url: `${MUSIC_DIR}/defeat.m4a`, trim: MUSIC_TRIM },
+  /** LIGHTNING and DEADEYE: the big fanfare. */
+  victoryBig: sting('victory_big'),
+  /** QUICK and STEADY. */
+  victory: sting('victory'),
+  /** LUCKY and a second chance: a wry, relieved twang. */
+  victoryLucky: sting('victory_lucky'),
+  defeat: sting('defeat'),
 } as const satisfies Record<string, StreamDef>
 
 export type StingName = keyof typeof STINGS
+
+/** The victory sting for a draw grade (`gradeFor` in `data/outlaws.ts`). */
+export function victorySting(grade: string): StingName {
+  if (grade === 'LIGHTNING' || grade === 'DEADEYE') {
+    return 'victoryBig'
+  }
+  if (grade === 'QUICK' || grade === 'STEADY') {
+    return 'victory'
+  }
+  return 'victoryLucky'
+}
 
 export type UiName =
   | 'uiPaper'
