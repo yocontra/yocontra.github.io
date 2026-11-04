@@ -48,6 +48,7 @@ import {
 } from './draw-pose.ts'
 import type { GunAnatomy } from './holster.ts'
 import { solveArm } from './longgun.ts'
+import { actionOf } from './revolver.ts'
 
 export type OffHand = 'steady' | 'fan'
 
@@ -178,6 +179,8 @@ export class DrawLayer {
     const s = this.states[which]
     if (s) {
       s.kick = 1
+      // the hammer falls; the thumb (or the fanning hand) brings it back
+      actionOf(s.h.gun)?.fired()
     }
     this.slap = this.fan > 0 ? 1 : 0
     return which === 1

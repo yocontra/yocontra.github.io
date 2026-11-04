@@ -18,7 +18,7 @@ import { dressStreet } from './scene/dressing.ts'
 import { Dust, Flash, Glint, Physics, Puffs, Tumbleweed, tumbleweedGeometry } from './scene/fx.ts'
 import { type HubShot, hubShot, wearLoadout } from './scene/hub-stage.ts'
 import { ItemStudio } from './scene/item-studio.ts'
-import { propDef } from './scene/props.ts'
+import { revolverDef } from './scene/revolver.ts'
 import { rifleObject } from './scene/rifle.ts'
 import { softDot } from './scene/textures.ts'
 import { LIFE, TownLife } from './scene/townlife.ts'
@@ -63,11 +63,7 @@ export interface GameOpts {
 function itemThumbs(renderer: Renderer, assets: Assets): (id: ItemId) => HTMLCanvasElement | null {
   let studio: ItemStudio | null = null
   return (id) => {
-    studio ??= new ItemStudio(
-      renderer.gl,
-      assets.player,
-      propDef(assets.props, 'revolver', 0.3, 'max'),
-    )
+    studio ??= new ItemStudio(renderer.gl, assets.player, revolverDef(0.3))
     return studio.render(id)
   }
 }
@@ -180,7 +176,7 @@ export async function createGame(o: GameOpts): Promise<Game> {
     input,
     assets,
     save: o.save,
-    gun: propDef(assets.props, 'revolver', 0.3, 'max'),
+    gun: revolverDef(0.3, 'hi', { articulated: true }),
     rifle: () => rifleObject({ lod: true }),
     coffins,
     dust,

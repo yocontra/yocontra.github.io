@@ -45,11 +45,11 @@ import type { Actor } from '../../scene/actor.ts'
 import { castActor } from '../../scene/cast.ts'
 import { type GunAnatomy, gunAnatomy, gunPointsOf } from '../../scene/holster.ts'
 import { type LongHold, solveArm } from '../../scene/longgun.ts'
-import { propDef, propObject } from '../../scene/props.ts'
+import { actionOf, type RevolverAction, revolverObject } from '../../scene/revolver.ts'
 import { rifleObject } from '../../scene/rifle.ts'
 import type { PlayerLook } from '../scene/looks.ts'
 import { SupportHand } from '../scene/mirror-hand.ts'
-import { kitMaterial, shotgunMesh } from '../scene/shotgun.ts'
+import { shotgunMesh } from '../scene/shotgun.ts'
 import { dressForLens } from './vm-gloves.ts'
 import { type VmInput, VmMotion, type VmPose } from './vm-motion.ts'
 import { VmSky } from './vm-sky.ts'
@@ -157,7 +157,6 @@ export class ViewModel {
   readonly scene = new Scene()
   readonly camera = new PerspectiveCamera(VM_FOV, 1, 0.01, 4)
   private readonly assets: Assets
-  private readonly kit: Material
   private readonly rig = new Group()
   private readonly key = new DirectionalLight(0xff_f2_e0, 2.2)
   private readonly fill = new DirectionalLight(0xff_ee_dd, 0.55)
@@ -183,10 +182,11 @@ export class ViewModel {
   private aspect = 1
   private worldFov = 80
   private readonly gunM = new Matrix4()
+  /** The revolver's hammer and cylinder (cocked in hand, ticked here every frame). */
+  private action: RevolverAction | null = null
 
   constructor(assets: Assets) {
     this.assets = assets
-    this.kit = kitMaterial(assets.props)
     this.scene.name = 'viewmodel'
     this.scene.add(this.rig, this.key, this.key.target, this.fill, this.fill.target, this.sky)
     this.fill.position.set(0.3, 0.4, 1)
@@ -251,13 +251,8 @@ export class ViewModel {
     this.pending = null
     this.lookKey = look.key
     this.actor?.dispose()
-    const def = propDef(this.assets.props, 'revolver', 0.32)
-    const gun = def ? propObject(def) : null
-    gun?.traverse((o) => {
-      if (o instanceof Mesh && !Array.isArray(o.material) && o.material.name === 'Kit') {
-        o.material = this.kit
-      }
-    })
+    // the Peacemaker with its hammer and cylinder on their pivots, to cock and to turn
+    const gun = revolverObject({ size: 0.32, articulated: true })
     const actor = castActor(this.assets, {
       look: look.look,
       hat: look.hat,
@@ -270,10 +265,15 @@ export class ViewModel {
     // dressed for the lens: gloves and cuffs, smooth shading (vm-gloves.ts)
     const body = actor.meshes[0]
     if (body) {
-      body.geometry = dressForLens(body.geometry, body.skeleton)
+      dressForLens(body)
     }
     if (actor.gun) {
       this.townSky.adopt(actor.gun)
+      this.action = actionOf(actor.gun)
+      if (this.action) {
+        this.action.arm(true)
+        this.action.manual = true
+      }
     }
     this.bones.clear()
     actor.root.traverse((o) => {
@@ -336,7 +336,8 @@ export class ViewModel {
     gun.updateWorldMatrix(true, false)
     const gunW = gun.matrixWorld.clone()
     const right = gunW.clone().invert().multiply(wristR.matrixWorld)
-    const sights = addSights(gun, a)
+    // its own sights when it carries them (scene/revolver.ts: the notch's floor, the blade's top)
+    const sights = a.rear && a.front ? { rear: a.rear, front: a.front } : addSights(gun, a)
     return {
       obj: gun,
       rear: sights.rear,
@@ -401,6 +402,9 @@ export class ViewModel {
   /** A shot: the gun kicks and the muzzle flashes. */
   fired(weapon: number): void {
     this.motion.fired(weapon)
+    if (weapon !== WEAPON_RIFLE && weapon !== WEAPON_SHOTGUN) {
+      this.action?.fired()
+    }
     this.flashT = 0
   }
 
@@ -458,6 +462,9 @@ export class ViewModel {
       return
     }
     this.placeGun(fit, pose)
+    if (fit === this.fits.revolver) {
+      this.action?.update(input.dt, input.reload)
+    }
     this.rig.updateMatrixWorld(true)
     this.solve(fit, pose)
     this.lens(pose, sunCam, input.dt)

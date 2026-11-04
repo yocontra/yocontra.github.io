@@ -21,7 +21,6 @@ import {
   type Color,
   Group,
   InstancedMesh,
-  type Material,
   Matrix4,
   Mesh,
   MeshBasicMaterial,
@@ -58,7 +57,8 @@ import type { Actor, Clip } from '../../scene/actor.ts'
 import { castActor } from '../../scene/cast.ts'
 import { lodGeometry } from '../../scene/lod.ts'
 import type { LongHold } from '../../scene/longgun.ts'
-import { propDef, propObject } from '../../scene/props.ts'
+import { propObject } from '../../scene/props.ts'
+import { REVOLVER_LOD_FAR, revolverDef, revolverGeometry } from '../../scene/revolver.ts'
 import { rifleObject } from '../../scene/rifle.ts'
 import { RIFLE_ROUNDS, SHOTGUN_SHELLS } from '../sim/constants.ts'
 import { GunBatch } from './crowd/gun-batch.ts'
@@ -76,7 +76,7 @@ import { shareDepthByKind } from './depth-kinds.ts'
 import type { GestureKind } from './gestures.ts'
 import { Locomotion } from './locomotion.ts'
 import type { PlayerLook } from './looks.ts'
-import { kitMaterial, shotgunMesh } from './shotgun.ts'
+import { shotgunMesh } from './shotgun.ts'
 
 const VAT_CLIPS: Clip[] = [
   'Idle',
@@ -125,6 +125,8 @@ const CAST_GAP_MS = 1500
 const PREBUILD_RING = 4
 /** Characters read 25% bigger than life from the top-down camera (visual only; collision is the sim's). */
 export const READ_SCALE = 1.25
+/** The riders' revolver, its length (m) before `READ_SCALE`. */
+const GUN_SIZE = 0.32
 /** Map weapons: how big they read (the coach gun a touch heavier than life, to read from the sky). */
 const SHOTGUN_HELD_SCALE = 1.15
 
@@ -238,7 +240,6 @@ export class Crowd {
   private readonly blobs: InstancedMesh
   readonly ring: Mesh
   private readonly gun: Group | null
-  private readonly kit: Material
   /** Every skinned rider's revolver as one instanced draw per part. */
   private readonly gunBatch: GunBatch
   /** Skinned cap (8 floor, 6 legacy, 16 medium/high). */
@@ -289,21 +290,17 @@ export class Crowd {
     )
     this.ring.renderOrder = 2
     this.root.add(this.ring)
-    const def = propDef(assets.props, 'revolver', 0.32)
-    this.kit = kitMaterial(assets.props)
-    this.gun = def ? propObject(def) : null
-    // the revolver is a loose mesh too: the kit twin, not the town's instanced kit material
-    this.gun?.traverse((o) => {
-      if (o instanceof Mesh && !Array.isArray(o.material) && o.material.name === 'Kit') {
-        o.material = this.kit
-      }
+    // the Peacemaker (scene/revolver.ts) at its riders' detail, the low level past a few metres
+    this.gun = propObject(revolverDef(GUN_SIZE, 'mid'))
+    this.gunBatch = new GunBatch(this.root, 40, {
+      geometry: revolverGeometry(GUN_SIZE, 'lo'),
+      distance: REVOLVER_LOD_FAR,
     })
-    this.gunBatch = new GunBatch(this.root, 40)
     // the riders' revolvers are copied into their instances once the frame's matrices are current
     const before = scene.onBeforeRender
     scene.onBeforeRender = (...args) => {
       before.apply(scene, args)
-      this.gunBatch.sync()
+      this.gunBatch.sync(args[2])
     }
   }
 

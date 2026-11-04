@@ -9,7 +9,6 @@ import {
 import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.js'
 import { type GLTF, GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js'
 import type { BodyKey, Look } from '../data/outlaws.ts'
-import { creaseNormals } from '../scene/normals.ts'
 import { hairDonor } from '../scene/person.ts'
 import { setPropsLibrary } from '../scene/props.ts'
 import { NORMAL_GUARD_GLSL, setCharacterMaps } from '../scene/shade.ts'
@@ -110,67 +109,6 @@ async function kitMaterial(
       } else {
         dielectric(m.material as MeshStandardMaterial)
       }
-    })
-  }
-  gunMaterials(props, map, normal)
-}
-
-const GRIP_MESH = /_2$/u
-
-/** Crease angle for the revolver's normals (its cylinder has 8 to 12 sides). */
-const GUN_CREASE = 48
-
-/**
- * The revolver's own materials. On the Kit atlas its steel was a mid grey at metalness 1, a
- * mirror of the sky that read flat dark blue, and its grip a rough brown. A period revolver is
- * blued and case-hardened steel with an oiled walnut grip: a dark, satin steel (its frame and
- * cylinder keep their two tones through the vertex colours) and the walnut texel with a sheen.
- * The source splits it in three meshes: frame, grip (`_2`), cylinder and barrel.
- */
-function gunMaterials(props: GLTF, map: Texture, normal: Texture): void {
-  const steel = new MeshStandardMaterial({
-    name: 'GunSteel',
-    // the Kit's steel texel (grain and wear, about 0.24 linear) under a warm tint: dark like
-    // blued steel, and the warmth offsets the sky it mirrors
-    color: 0xf0_e4_d8,
-    map,
-    normalMap: normal,
-    roughness: 0.44,
-    metalness: 1,
-    vertexColors: true,
-  })
-  // Oiled steel doesn't mirror the sky's full saturation: the reflected environment is mostly
-  // its brightness (a flat top facing a deep blue sky otherwise turns the gun cobalt).
-  steel.onBeforeCompile = (shader) => {
-    shader.fragmentShader = shader.fragmentShader.replace(
-      '#include <lights_fragment_maps>',
-      `#include <lights_fragment_maps>
-radiance = mix( vec3( dot( radiance, vec3( 0.2126, 0.7152, 0.0722 ) ) ), radiance, 0.3 );`,
-    )
-  }
-  steel.customProgramCacheKey = () => 'ow-gun-steel'
-  const grip = new MeshStandardMaterial({
-    name: 'GunGrip',
-    color: 0xff_e4_cc,
-    map,
-    normalMap: normal,
-    roughness: 0.48,
-    metalness: 0,
-  })
-  for (const s of props.scenes) {
-    s.traverse((o) => {
-      if (o.name !== 'revolver') {
-        return
-      }
-      o.traverse((p) => {
-        const m = p as Mesh
-        // biome-ignore lint/suspicious/noUnnecessaryConditions: three types isMesh as `true` on the cast; this is the runtime type check
-        if (m.isMesh) {
-          m.material = GRIP_MESH.test(m.name) ? grip : steel
-          // exported flat-shaded: round the barrel, cylinder and grip, keep the frame's edges
-          creaseNormals(m.geometry, GUN_CREASE)
-        }
-      })
     })
   }
 }
