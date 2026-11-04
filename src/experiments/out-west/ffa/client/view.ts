@@ -33,8 +33,20 @@ const SHOOTER: Record<Quality, ViewPolicy> = {
   legacy: { far: 90, fogNear: 28, fogFar: 88, shadowHalf: 10, shadowAhead: 6 },
 }
 
+/**
+ * First person on the small tiers: the eye sees more of the town than the shoulder view (nothing
+ * of your own body fills the frame), so the far end comes in a little to hold the draw count.
+ */
+const FIRST: Partial<Record<Quality, ViewPolicy>> = {
+  floor: { far: 100, fogNear: 34, fogFar: 98, shadowHalf: 12, shadowAhead: 7 },
+  legacy: { far: 80, fogNear: 26, fogFar: 78, shadowHalf: 10, shadowAhead: 6 },
+}
+
 export function policyFor(mode: ViewMode, tier: Quality): ViewPolicy {
-  return mode === 'top' ? TOP : SHOOTER[tier]
+  if (mode === 'top') {
+    return TOP
+  }
+  return (mode === 'first' ? FIRST[tier] : undefined) ?? SHOOTER[tier]
 }
 
 /** The sim's spread right now (degrees, half-angle: the shotgun's cone is halved). */

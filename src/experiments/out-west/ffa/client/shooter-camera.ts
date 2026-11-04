@@ -30,6 +30,8 @@ const SIDE = 0.8
 const SIDE_ADS = 0.72
 const UP = 0.3
 const UP_ADS = 0.24
+/** Sprinting widens the field of view by this fraction. */
+const SPRINT_FOV = 0.08
 /** The kill cam: this long from behind your killer before the lens drifts round your body (s). */
 const KILL_CAM_S = 2.5
 /** Keep the lens this far off a wall it was pulled in front of (m). */
@@ -74,6 +76,8 @@ export interface ShooterFrame {
   dt: number
   /** How far the stance lowers the eye (m): 0 standing, 0.45 crouched, 0.6 sliding. */
   duck: number
+  /** Sprinting: the lens widens a touch (CoD's sprint FOV). */
+  sprinting?: boolean
   /** Where your body lies while you're dead (the death camera), or null. */
   dead: { x: number; z: number } | null
   /** Who killed you, where he stands (the kill cam's first 2.5 s look from behind him). */
@@ -107,6 +111,11 @@ export class ShooterCamera {
   /** The shoulder actually in use (−1 / 1): swaps itself when the chosen side is walled in. */
   private side0 = 1
   private duck = 0
+  /** The sprint's FOV widening (0..1, eased) and the landing's dip (a spring, m). */
+  private sprintK = 0
+  private dip = 0
+  private dipV = 0
+  private lastLift = 0
   /** Seconds into the death camera (0 alive). */
   private deadT = 0
 
@@ -158,13 +167,23 @@ export class ShooterCamera {
     const ease = (rate: number) => 1 - Math.exp(-dt * rate)
     this.ads += ((f.ads ? 1 : 0) - this.ads) * ease(14)
     this.duck += (f.duck - this.duck) * ease(12)
+    this.sprintK += ((f.sprinting ? 1 : 0) - this.sprintK) * ease(f.sprinting ? 6 : 10)
+    // the landing: the view dips and springs back
+    if (this.lastLift > 0.05 && f.lift <= 0.02 && !REDUCED_MOTION) {
+      this.dipV -= 1.6
+    }
+    this.lastLift = f.lift
+    // a stiff spring: stepped at most 1/30 s at a time so a hitch can't throw it
+    const sd = Math.min(dt, 1 / 30)
+    this.dipV += (-140 * this.dip - 18 * this.dipV) * sd
+    this.dip += this.dipV * sd
     if (f.dead) {
       this.deathCam(f, dt)
       return
     }
     this.deadT = 0
     // the pivot rides the (already smoothed) render pose, lifted through a vault or a hop
-    this.pivot.set(f.x, PIVOT_Y + f.lift - this.duck, f.z)
+    this.pivot.set(f.x, PIVOT_Y + f.lift - this.duck + this.dip, f.z)
     this.recoil *= Math.exp(-dt * 9)
     this.shake.t += dt
     this.shake.amp *= Math.exp(-dt * 10)
@@ -188,7 +207,8 @@ export class ShooterCamera {
     cam.lookAt(look)
     // FOV and planes: only touch the projection when something changed
     const zoom = f.first ? ADS_ZOOM_FIRST : ADS_ZOOM_THIRD
-    const fov = portraitFov(f.fov, cam.aspect) * (1 - (1 - zoom) * this.ads)
+    const fov =
+      portraitFov(f.fov, cam.aspect) * (1 - (1 - zoom) * this.ads) * (1 + SPRINT_FOV * this.sprintK)
     const near = f.first ? 0.05 : 0.1
     if (Math.abs(fov - this.fov) > 0.01 || cam.near !== near || cam.far !== f.far) {
       this.fov = fov

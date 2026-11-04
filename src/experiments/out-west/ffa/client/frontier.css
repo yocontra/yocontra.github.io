@@ -575,6 +575,20 @@
 
 .fr-hitmark.on {
   opacity: 1;
+  animation: fr-hit-pop 0.12s ease-out;
+}
+
+.fr-hitmark.on.kill {
+  animation: fr-hit-pop 0.2s ease-out;
+}
+
+@keyframes fr-hit-pop {
+  0% {
+    transform: scale(1.7);
+  }
+  100% {
+    transform: scale(1);
+  }
 }
 
 .fr-hitmark.kill {
@@ -583,7 +597,7 @@
 
 .fr-hitmark.crit {
   filter: drop-shadow(0 0 3px #ffcf4a) sepia(1) saturate(5) hue-rotate(5deg);
-  transform: scale(1.25);
+  inset: -2px;
 }
 
 /* where the hit came from: red arcs on a ring around the crosshair */
