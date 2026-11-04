@@ -90,7 +90,12 @@ export class RankedCredits {
       )
       if (job.solo) {
         statements.push(
-          ...(await medalStatements(this.env, job.accountId, job.level, job.runId, job.solo)),
+          ...(await medalStatements(this.env, {
+            accountId: job.accountId,
+            level: job.level,
+            runId: job.runId,
+            ev: job.solo,
+          })),
         )
       }
     }

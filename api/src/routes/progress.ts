@@ -65,7 +65,9 @@ async function progress(env: Env, accountId: string): Promise<ProgressResponse |
     marks,
     dailyWins,
     rewards: owned.filter((i) => REWARD_ITEMS.has(i)),
-    migration: migration ? { xp: migration.xp, cash: migration.cash, at: migration.created_at } : null,
+    migration: migration
+      ? { xp: migration.xp, cash: migration.cash, at: migration.created_at }
+      : null,
     storeLevel: detail.storeLevel,
   }
 }
@@ -102,7 +104,13 @@ async function migrate(request: Request, env: Env, player: Player): Promise<Resp
         now,
       ),
       ...ledgerStatements(env, `guest:${id}`, [
-        { accountId: id, kind: 'guest_migration', amount: credit.cash, xp: credit.xp, ref: 'guest' },
+        {
+          accountId: id,
+          kind: 'guest_migration',
+          amount: credit.cash,
+          xp: credit.xp,
+          ref: 'guest',
+        },
       ]),
     ])
   } catch (err) {
@@ -125,20 +133,18 @@ async function migrate(request: Request, env: Env, player: Player): Promise<Resp
 
 const CLAIM_REFUSALS = {
   unknown: [400, 'No such challenge.'],
-  // biome-ignore lint/style/useNamingConvention: refusal codes from economy/medals.ts
   not_claim: [400, 'That challenge is judged by the server, not claimed.'],
-  // biome-ignore lint/style/useNamingConvention: refusal codes from economy/medals.ts
   no_win: [403, 'Beat him on a ranked run first, then claim it.'],
   done: [409, 'You already have that one.'],
 } as const
 
-async function claim(request: Request, env: Env, player: Player): Promise<Response> {
+async function claimRoute(request: Request, env: Env, player: Player): Promise<Response> {
   const body = (await readJson(request, 1024)) as
     | { challengeId?: unknown; runId?: unknown }
     | undefined
   const challengeId = typeof body?.challengeId === 'string' ? body.challengeId : ''
   const runId = typeof body?.runId === 'string' ? body.runId : ''
-  const r = await claimStatements(env, player.accountId, challengeId, runId)
+  const r = await claimStatements(env, { accountId: player.accountId, challengeId, runId })
   if (typeof r === 'string') {
     const [status, message] = CLAIM_REFUSALS[r]
     return error(request, env, status, message)
@@ -151,7 +157,8 @@ async function claim(request: Request, env: Env, player: Player): Promise<Respon
 /** Legend items: claimed from the device, only by an account that cleared the gauntlet ranked. */
 async function legend(request: Request, env: Env, player: Player): Promise<Response> {
   const body = (await readJson(request, 1024)) as { beaten?: unknown } | undefined
-  const beaten = typeof body?.beaten === 'number' && Number.isInteger(body.beaten) ? body.beaten : -1
+  const beaten =
+    typeof body?.beaten === 'number' && Number.isInteger(body.beaten) ? body.beaten : -1
   if (beaten < 0 || beaten > OUTLAW_COUNT) {
     return error(request, env, 400, 'beaten must be 0–17.')
   }
@@ -195,7 +202,7 @@ export const progressRoutes: RouteHandler = async (request, env, url) => {
     case 'POST /progress/migrate':
       return await migrate(request, env, player)
     case 'POST /progress/claim':
-      return await claim(request, env, player)
+      return await claimRoute(request, env, player)
     case 'POST /progress/legend':
       return await legend(request, env, player)
     default:

@@ -97,7 +97,11 @@ async function issue(request: Request, env: Env, verify: Verify): Promise<Respon
     return json(
       request,
       env,
-      { ok: false, error: 'The Daily Outlaw is closed for the rest of the month.', reason: 'over_budget' },
+      {
+        ok: false,
+        error: 'The Daily Outlaw is closed for the rest of the month.',
+        reason: 'over_budget',
+      },
       503,
       { 'Retry-After': '86400' },
     )

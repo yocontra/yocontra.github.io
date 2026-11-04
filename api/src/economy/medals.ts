@@ -10,15 +10,15 @@
 import {
   CHALLENGE_PAY,
   CHALLENGES,
+  type Challenge,
   CLAIM_PAY,
   CLAIM_WINDOW_MS,
-  type Challenge,
   challengeFor,
   earnedRewards,
   emptyMark,
   isClaim,
-  meets,
   medalPay,
+  meets,
   OUTLAW_COUNT,
   type OutlawMark,
   type TierRank,
@@ -127,11 +127,9 @@ function challengeEntry(accountId: string, c: Challenge, runId: string) {
  */
 export async function medalStatements(
   env: Env,
-  accountId: string,
-  level: number,
-  runId: string,
-  ev: SoloEvidence,
+  win: { accountId: string; level: number; runId: string; ev: SoloEvidence },
 ): Promise<D1PreparedStatement[]> {
+  const { accountId, level, runId, ev } = win
   if (!Number.isInteger(level) || level < 0 || level >= OUTLAW_COUNT || accountId === '') {
     return []
   }
@@ -192,11 +190,9 @@ export type ClaimRefusal = 'unknown' | 'not_claim' | 'no_win' | 'done'
  */
 export async function claimStatements(
   env: Env,
-  accountId: string,
-  challengeId: string,
-  runId: string,
-  now = Date.now(),
+  claim: { accountId: string; challengeId: string; runId: string; now?: number },
 ): Promise<{ statements: D1PreparedStatement[]; xp: number; granted: string[] } | ClaimRefusal> {
+  const { accountId, challengeId, runId, now = Date.now() } = claim
   const c = CHALLENGES.find((x) => x.id === challengeId)
   if (!c) {
     return 'unknown'

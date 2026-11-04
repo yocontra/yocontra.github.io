@@ -323,7 +323,7 @@ export const SOLO_GATE_FACTOR = 0.3
 
 /**
  * The level the Outfitter checks gates against: your level, plus the levels solo XP earned you
- * scaled by 1/0.3 − 1. A player at L11 entirely from the gauntlet shops as L34. Capped at 50.
+ * scaled by 1/0.3 − 1. A player at L11 entirely from the gauntlet shops as L35. Capped at 50.
  */
 export function storeLevel(p: { level: number; xp: number; soloXp: number }): number {
   const level = clampLevel(p.level)

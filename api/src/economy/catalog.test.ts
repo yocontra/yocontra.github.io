@@ -72,17 +72,27 @@ function keysDeep(value: unknown, out: string[] = []): string[] {
 }
 
 describe('catalog shape', () => {
-  it('has the 40 spec items plus the non-store rewards', () => {
+  it('has the 40 spec items plus the non-store rewards (4 originals, 10 gauntlet-earned)', () => {
     const bySource = (s: string) => ITEMS.filter((i) => i.source === s)
     expect(bySource('starter')).toHaveLength(8)
     expect(bySource('store')).toHaveLength(31)
     expect(bySource('reward').map((i) => i.id)).toEqual([
       'gun.hardins-pair',
+      'gun.gold-medal',
       'hat.yellow',
+      'hat.bronze-band',
+      'hat.holed-stetson',
+      'outfit.midnight-coat',
+      'spurs.legend-rowels',
+      'holster.silver-conchos',
       'frame.midnight',
       'frame.most-wanted-dated',
+      'frame.tall-tales',
+      'frame.legend',
+      'bag.medal-satchel',
+      'extra.black-bandana',
     ])
-    expect(ITEMS).toHaveLength(43)
+    expect(ITEMS).toHaveLength(53)
     expect(bySource('store').reduce((sum, i) => sum + i.price, 0)).toBe(306_950)
   })
 

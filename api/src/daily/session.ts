@@ -13,17 +13,15 @@
 import { DurableObject } from 'cloudflare:workers'
 import type { DailyResultExtra } from '../../../src/experiments/out-west/contract/meta.ts'
 import type { RankedServerMessage } from '../../../src/experiments/out-west/contract/ranked.ts'
-import { DAILY_PAY, type DailySpec, dailySpec } from '../../../src/experiments/out-west/data/daily.ts'
+import { dailySpec } from '../../../src/experiments/out-west/data/daily.ts'
 import { ECONOMY_VERSION } from '../../../src/experiments/out-west/data/economy.ts'
 import { recordUsage } from '../budget.ts'
 import { outlawOpponent } from '../duel/opponents.ts'
 import { CALL_LEAD_MS, pvpWaitPlan, Standoff, type Verdict } from '../duel/standoff.ts'
-import { ledgerStatements } from '../economy/ledger.ts'
-import { dailyRewardStatements } from '../economy/medals.ts'
 import type { Env } from '../env.ts'
 import { rttStats } from '../judge.ts'
-import type { DuelTuning } from '../tuning.ts'
-import { dailyRank } from './board.ts'
+import { settleDaily } from './settle.ts'
+import { dailyTuning } from './tuning.ts'
 
 const PING_INTERVAL_MS = 400
 const RTT_SAMPLES = 12
@@ -36,16 +34,6 @@ type ClientMessage =
   | { type: 'pong'; n: number }
   | { type: 'finish'; name: string }
 
-/** The server tuning for a day: one target, the spec's draw and the spec's fake-out count. */
-export function dailyTuning(spec: DailySpec): DuelTuning {
-  return {
-    waitMs: spec.waitMs,
-    fakeChance: spec.fakes > 0 ? 1 : 0,
-    cues: spec.cues,
-    targets: [{ drawMs: spec.drawMs, jitterMs: spec.jitterMs, accuracy: spec.accuracy }],
-  }
-}
-
 export class DailySession extends DurableObject<Env> {
   private socket: WebSocket | null = null
   private openedAt = 0
@@ -54,10 +42,10 @@ export class DailySession extends DurableObject<Env> {
   private accountId: string | null = null
   private standoff: Standoff | null = null
   private duel = -1
-  private decided = false
+  private decided = false as boolean
   private pingSeq = 0
   private readonly pingSentAt = new Map<number, number>()
-  private rttSamples: number[] = []
+  private readonly rttSamples: number[] = []
   private pingTimer: ReturnType<typeof setInterval> | undefined
   private lifeTimer: ReturnType<typeof setTimeout> | undefined
 
@@ -174,52 +162,22 @@ export class DailySession extends DurableObject<Env> {
       return
     }
     this.decided = true
-    const { outcome, reactionMs } = verdict
-    const ms = outcome === 'win' && reactionMs !== null ? Math.max(1, Math.round(reactionMs)) : null
-    const now = Date.now()
-    const statements: D1PreparedStatement[] = [
-      this.env.DB.prepare(
-        `UPDATE daily_runs SET outcome = ?2, reaction_ms = ?3, settled_at = ?4
-         WHERE id = ?1 AND outcome IS NULL`,
-      ).bind(this.id, outcome, ms, now),
-    ]
-    let paid = false
-    const account = this.accountId
-    if (account && outcome === 'win') {
-      const before = await this.env.DB.prepare('SELECT 1 AS yes FROM ledger WHERE idem_key = ?')
-        .bind(`daily:${account}:${this.day}#0`)
-        .first<{ yes: number }>()
-      paid = !before
-      statements.push(
-        ...ledgerStatements(this.env, `daily:${account}:${this.day}`, [
-          {
-            accountId: account,
-            kind: 'daily_outlaw',
-            amount: DAILY_PAY.cash,
-            xp: DAILY_PAY.xp,
-            ref: this.day,
-          },
-        ]),
-      )
-    }
-    await this.env.DB.batch(statements)
-    if (account && outcome === 'win') {
-      // the Black Bandana counts days with a win, including the one just written
-      const rewards = await dailyRewardStatements(this.env, account)
-      if (rewards.length > 0) {
-        await this.env.DB.batch(rewards)
-      }
-    }
-    const rank = ms !== null && account ? await dailyRank(this.env, this.day, account) : null
-    const extra: DailyResultExtra = { rank, xp: paid ? DAILY_PAY.xp : 0 }
+    const settled = await settleDaily(this.env, {
+      id: this.id,
+      day: this.day,
+      accountId: this.accountId,
+      outcome: verdict.outcome,
+      reactionMs: verdict.reactionMs,
+    })
+    const extra: DailyResultExtra = { rank: settled.rank, xp: settled.xp }
     this.send({
       type: 'result',
       duel: this.duel,
-      outcome,
-      reactionMs,
+      outcome: verdict.outcome,
+      reactionMs: verdict.reactionMs,
       enemyMs: verdict.enemyMs,
-      payout: paid ? DAILY_PAY.cash : 0,
-      purse: paid ? DAILY_PAY.cash : 0,
+      payout: settled.cash,
+      purse: settled.cash,
       targetsHit: verdict.targetsHit,
       ...extra,
     })
