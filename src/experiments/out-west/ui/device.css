@@ -86,6 +86,22 @@ html:is([data-ow-scale="l"], [data-ow-scale="xl"]) .ow-cap-fake {
   }
 }
 
+/* in a window under 360 px the title's footer links wrap to two rows: the credits card has to sit
+   above both, or it covers the "credits" button that closes it */
+@media (max-width: 359px) {
+  .ow-credits {
+    bottom: calc(max(var(--ow-s2), var(--ow-sai-b)) + 2 * var(--ow-tap) + var(--ow-s2));
+  }
+  /* sheet headings and the receipt's "<16-letter name> was quicker." fit a 256 px panel */
+  .ow-hub-h,
+  .ow-sheet-head > .ow-hub-h {
+    font-size: var(--ow-fs-body);
+  }
+  .ow-results-sub {
+    font-size: var(--ow-fs-micro);
+  }
+}
+
 /* ------------------------------------------------------------- the pad */
 /* a controller or the arrow keys drive the focus: show where it is, everywhere, at couch distance */
 html.ow-pad :is(button, a[href], [tabindex], [role="tab"], [role="radio"], input):focus {
