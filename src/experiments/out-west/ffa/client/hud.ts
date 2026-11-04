@@ -379,7 +379,10 @@ export class Hud {
     if (!visible) {
       return
     }
-    this.reticle.style.transform = `translate(${x}px, ${y}px)`
+    const at = `translate(${Math.round(x * 2) / 2}px, ${Math.round(y * 2) / 2}px)`
+    if (this.changed('retxy', at)) {
+      this.reticle.style.transform = at
+    }
     let k = 'n'
     if (close !== null) {
       k = ready ? 'r' : 'c'
