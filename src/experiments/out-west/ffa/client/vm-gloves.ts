@@ -1,3 +1,4 @@
+// biome-ignore-all lint/style/noExcessiveLinesPerFile: one glove builder (its tubes, the rig it is measured on, the palm, the fingers) and the body it is fitted to
 // biome-ignore-all lint/style/noMagicNumbers: a glover's proportions, fractions of the hand they are cut to
 // biome-ignore-all lint/complexity/noExcessiveCognitiveComplexity: flat passes over rings, sides and vertices
 /**
@@ -18,6 +19,7 @@
 import {
   type BufferAttribute,
   BufferGeometry,
+  DoubleSide,
   Float32BufferAttribute,
   Matrix4,
   MeshStandardMaterial,
@@ -36,7 +38,7 @@ const LEATHER = [0.46, 0.3, 0.19] as const
 const GLOVE_MAT = [0.75, 0.55] as const
 const CREASE = (70 * Math.PI) / 180
 /** The glove's leather: the cuffs' brown, as their tint lands on the skin's atlas. */
-const GLOVE_COLOR = 0x6a_40_24
+const GLOVE_COLOR = 0x3b_23_15
 const FINGERS = ['Index', 'Middle', 'Ring', 'Pinky'] as const
 /** Around each tube, and around the palm. */
 const SIDES = 12
@@ -125,10 +127,14 @@ function tube(rings: readonly Ring[], sides: number, tip: number): BufferGeometr
     for (let k = 0; k < sides; k++) {
       idx.push(base + k, tipAt, base + ((k + 1) % sides))
     }
-    const startAt = pos.length / 3
-    push(first.c, first.skin)
-    for (let k = 0; k < sides; k++) {
-      idx.push(startAt, k, (k + 1) % sides)
+    // a digit's root is buried in the palm (a cap there pokes out of a curled knuckle); the
+    // palm's root, inside the cuff, is closed
+    if (tip === 0) {
+      const startAt = pos.length / 3
+      push(first.c, first.skin)
+      for (let k = 0; k < sides; k++) {
+        idx.push(startAt, k, (k + 1) % sides)
+      }
     }
   }
   const g = new BufferGeometry()
@@ -247,7 +253,7 @@ function digit(
   const j0 = J[0] as Vector3
   const j1 = J[1] as Vector3
   // from a little inside the palm, through each joint, to the tip
-  const path: { p: Vector3; u: number }[] = [{ p: j0.clone().lerp(j1, -0.3), u: -0.3 }]
+  const path: { p: Vector3; u: number }[] = [{ p: j0.clone().lerp(j1, -0.15), u: -0.15 }]
   for (let s = 0; s < J.length - 1; s++) {
     const a = J[s] as Vector3
     const b = J[s + 1] as Vector3
@@ -274,7 +280,7 @@ function digit(
     // the skin: the wrist into the first bone round the base knuckle, each joint blended
     let skin: Skin
     if (u < 0.25) {
-      skin = { a: o.wrist, b: bone(0), t: smooth(-0.35, 0.25, u) }
+      skin = { a: o.wrist, b: bone(0), t: smooth(-0.15, 0.3, u) }
     } else {
       const j = Math.round(u)
       const near = Math.abs(u - j) < 0.3 && j >= 1 && j < segs
@@ -285,6 +291,14 @@ function digit(
     return { c: p, u: f.u, v: f.v, ru: r * o.flat, rv: r, skin }
   })
   return tube(rings, SIDES, 3)
+}
+
+/** How much of a palm ring rides the forearm: all of the cuff, half the wrist, none of the hand. */
+function cuffWeight(f: number): number {
+  if (f < -0.15) {
+    return 1
+  }
+  return f < 0 ? 0.5 : 0
 }
 
 /** The palm: lofted from just inside the cuff to round over the knuckles. */
@@ -324,9 +338,26 @@ function palm(
     id: rig.index(`${f}1${side}`),
     x: (rig.at(`${f}1${side}`) ?? h.knuckles).clone().sub(h.knuckles).dot(h.across),
   }))
-  // (fraction along, width, thickness)
+  // the forearm just behind the wrist (its source vertices' reach off the hand's axis), for the
+  // gauntlet's cuff
+  const reach: number[] = []
+  for (const p of rig.of(`LowerArm${side}`)) {
+    const d = p.clone().sub(h.wrist)
+    const back = -d.dot(along)
+    if (back > 0 && back < len * 0.45) {
+      reach.push(d.addScaledVector(along, back).length())
+    }
+  }
+  reach.sort((a, b) => a - b)
+  const rF = Math.max(wK * 0.32, reach[Math.floor(reach.length * 0.9)] ?? wK * 0.4)
+  // (fraction along, width, thickness): the gauntlet's flared cuff over the sleeve's end, the
+  // wrist, the palm, rounding over the knuckles
   const sections: [number, number, number][] = [
-    [-0.06, 0.6, 0.8],
+    [-0.64, (rF * 2.08) / wK, (rF * 2.08) / tK],
+    [-0.56, (rF * 2.36) / wK, (rF * 2.36) / tK],
+    [-0.4, (rF * 2.3) / wK, (rF * 2.3) / tK],
+    [-0.2, (rF * 2.12) / wK, (rF * 2.0) / tK],
+    [-0.06, 0.62, 0.86],
     [0.06, 0.72, 0.94],
     [0.35, 0.9, 1.04],
     [0.68, 0.98, 1.0],
@@ -340,8 +371,8 @@ function palm(
     v: h.across.clone(),
     ru: (tK * t) / 2,
     rv: (wK * w) / 2,
-    // the wrist end turns half with the forearm, so it stays inside the cuff as the wrist bends
-    skin: { a: h.wristBone, b: h.foreBone, t: f < 0 ? 0.5 : 0 },
+    // the cuff rides the forearm; the wrist turns half with it, so the seam bends smoothly
+    skin: { a: h.wristBone, b: h.foreBone, t: cuffWeight(f) },
   }))
   const g = tube(rings, PALM_SIDES, 0)
   // a squarer section than an ellipse (a hand is flat across the back), and the knuckle end
@@ -356,7 +387,7 @@ function palm(
     const x = q.dot(h.across)
     const y = q.dot(h.up)
     const ring = rings[Math.min(rings.length - 1, Math.floor(v / PALM_SIDES))]
-    if (ring && v < rings.length * PALM_SIDES) {
+    if (ring && v < rings.length * PALM_SIDES && f > -0.1) {
       // superellipse toward a rounded box
       const nx = x / ring.rv
       const ny = y / ring.ru
@@ -509,7 +540,7 @@ function cuffsAndHands(g: BufferGeometry, skeleton: Skeleton, gloved: ReadonlySe
       const b = ix.getX(t + 1)
       const c = ix.getX(t + 2)
       // (any triangle mostly on the hand: the wrist's seam is under the glove's cuff)
-      if ((under[a] ?? 0) + (under[b] ?? 0) + (under[c] ?? 0) < 120) {
+      if ((under[a] ?? 0) + (under[b] ?? 0) + (under[c] ?? 0) < 60) {
         keep.push(a, b, c)
       }
     }
@@ -522,7 +553,9 @@ function gloveMaterial(): MeshStandardMaterial {
   return new MeshStandardMaterial({
     name: 'VmGlove',
     color: GLOVE_COLOR,
-    roughness: 0.58,
+    roughness: 0.5,
+    // the cuff's mouth and the tubes' ends are seen from inside too
+    side: DoubleSide,
     metalness: 0,
   })
 }
