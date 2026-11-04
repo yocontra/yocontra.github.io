@@ -62,6 +62,10 @@ const randomSelf = (): SelfView => ({
   holsterTicks: u8(),
   lastButtons: u16(),
   weapon: u8(),
+  jumpTicks: u8(),
+  jumpCooldown: u8(),
+  vaultStep: u8(),
+  vaultAim: u16(),
 })
 
 function randomEvent(): WireEvent {

@@ -26,10 +26,12 @@ import {
   ANIM_CHANNEL,
   ANIM_DEAD,
   ANIM_DUEL,
+  ANIM_HOP,
   ANIM_IDLE,
   ANIM_RELOAD,
   ANIM_ROLL,
   ANIM_RUN,
+  ANIM_VAULT,
   BOX_NONE,
   BOX_OPENING,
   BTN_CALLOUT,
@@ -115,6 +117,7 @@ import { Minimap } from './minimap.ts'
 import { NetClient } from './net.ts'
 import { Riders } from './riders.ts'
 import { FrontierSound, wearsSpurs } from './sound.ts'
+import { onBoardwalk } from './surface.ts'
 import { TouchControls } from './touch.ts'
 import { MotionTrace, TRACE_FIELDS } from './trace.ts'
 import type { Transport, TransportEvents } from './transport.ts'
@@ -194,6 +197,8 @@ export class FrontierGame {
   private mapAt = 0
   private readonly hatlessSeen = new Set<number>()
   private wasAlive = false
+  /** Each rider's vault or hop (anim) as of last frame, for the landing thud. */
+  private readonly airborne = new Map<number, number>()
   private wasReloading = false
   private wasReady = false
   private readonly sound: FrontierSound | null
@@ -690,6 +695,7 @@ export class FrontierGame {
           speed > 0.3,
           s.reloadTicks > 0,
           s.channelKind,
+          jumpAnim(this.net.pred.jumpTicks, this.net.pred.vaultStep),
         ),
         flags: ownFlags(s.flags, s.protectTicks > 0),
         self: true,
@@ -715,6 +721,7 @@ export class FrontierGame {
       this.cam.snap(this.own.x, this.own.z, Math.cos(this.aim), Math.sin(this.aim))
       this.hatlessSeen.clear()
     }
+    this.landings(list)
     this.cam.update(this.own.x, this.own.z, Math.cos(this.aim), Math.sin(this.aim), dt)
     crowd.update(list, this.cam.target.x, this.cam.target.z, dt, nowS)
     this.sound?.steps(
@@ -753,6 +760,25 @@ export class FrontierGame {
     fx.update(dt, nowS)
     this.audio?.setListener(this.own.x, 8, this.own.z + 4, 0, -0.8, -0.6)
     this.wasAlive = this.net.alive
+  }
+
+  /** A thud of boots for every rider (you included) coming down from a vault or a hop. */
+  private landings(list: readonly CrowdPlayer[]): void {
+    for (const p of list) {
+      const was = this.airborne.get(p.id) ?? 0
+      const now = p.anim === ANIM_VAULT || p.anim === ANIM_HOP ? p.anim : 0
+      if (was !== now) {
+        this.airborne.set(p.id, now)
+      }
+      if (was !== 0 && now === 0 && p.anim !== ANIM_DEAD) {
+        const vault = was === ANIM_VAULT
+        this.audio?.footstep(onBoardwalk(p.x, p.z) ? 'wood' : 'dirt', {
+          gain: (vault ? 1.3 : 0.8) * (p.self ? 1 : 0.8),
+          rate: vault ? 0.82 : 0.95,
+          pos: { x: p.x, y: 0, z: p.z },
+        })
+      }
+    }
   }
 
   /** Player position on screen → the cutaway circle (render-target pixels). */
@@ -1120,12 +1146,21 @@ export class FrontierGame {
   }
 }
 
+/** `ANIM_VAULT` or `ANIM_HOP` while one is under way, else 0. */
+function jumpAnim(jumpTicks: number, vaultStep: number): number {
+  if (jumpTicks <= 0) {
+    return 0
+  }
+  return vaultStep > 0 ? ANIM_VAULT : ANIM_HOP
+}
+
 function ownAnim(
   flags: number,
   rolling: boolean,
   moving: boolean,
   reloading: boolean,
   channel: number,
+  jump: number,
 ): number {
   if (!(flags & SELF_ALIVE)) {
     return ANIM_DEAD
@@ -1135,6 +1170,9 @@ function ownAnim(
   }
   if (rolling) {
     return ANIM_ROLL
+  }
+  if (jump !== 0) {
+    return jump
   }
   if (reloading) {
     return ANIM_RELOAD

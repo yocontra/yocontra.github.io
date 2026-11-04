@@ -100,6 +100,8 @@ function startShowdown(w: World, a: Player, b: Player): void {
     p.showdown = sd.id
     p.calledBy = NONE
     p.rollTicks = 0
+    p.jumpTicks = 0
+    p.vaultStep = 0
     p.deadEyeStart = -1
   }
   w.events.push({ type: 'showdown_start', showdown: sd })
