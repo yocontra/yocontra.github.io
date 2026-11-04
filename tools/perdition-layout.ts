@@ -21,6 +21,8 @@ import type { Building, Cover, Door, Side } from '../src/experiments/out-west/ff
 
 /** Tall cover: blocks sight as well as movement and bullets. */
 const TALL = new Set([
+  'shelves',
+  'stairs',
   'crate_stack',
   'freight_wagon',
   'covered_wagon',
@@ -330,26 +332,99 @@ fence('x', 12, 76, 135, [
 ])
 
 // ---------------------------------------------------------------- interiors
-c('counter', 49, 36, 0.5, 5) // saloon bar
-c('table', 53, 46, 1.5, 1.5)
-c('table', 58, 49, 1.5, 1.5)
+// Every walk-in building furnished as the room it is, against its walls, doorways and spawn
+// points kept clear. All of it is cover like anything else (what blocks you is what you see).
+// saloon: back bar and bar along the west wall, tables, a piano; the storeroom behind
+c('shelves', 47.5, 44, 0.5, 7)
+c('counter', 49, 44, 0.5, 6.5)
+c('table', 51.5, 47, 1.5, 1.5)
+c('table', 55.5, 45.5, 1.5, 1.5)
+c('table', 59.5, 48.5, 1.5, 1.5)
 c('table', 52, 51, 1.5, 1.5)
-c('counter', 43, 79, 6, 0.5) // store counter
-c('crates', 54, 76, 1.5, 1.5)
-c('counter', 84, 46, 0.5, 4) // hotel desk
-c('counter', 99, 45, 3, 0.5) // assay counter
-c('counter', 11.5, 82, 3, 0.5) // stage-line ticket counter (behind the deposit spot)
-c('forge', 24.5, 83, 2.5, 2.5) // smithy
+c('piano', 64.5, 47, 1, 1.5)
+c('stove', 63, 44.5, 1, 1)
+c('barrels', 47.5, 34.5, 1.5, 1.5)
+c('barrel_rack', 50.5, 34.5, 2, 1)
+c('crates', 53.5, 34.5, 1.5, 1.5)
+c('crate_stack', 64, 34.5, 1.5, 1.5)
+// hotel lobby: desk and key rack, stairs up, a bench and a table by the stove
+c('shelves', 78.5, 45, 0.5, 4)
+c('counter', 80, 47, 4, 0.5)
+c('stairs', 92, 38.5, 1.5, 6)
+c('bench', 93, 48, 0.5, 2)
+c('table', 88.5, 49.5, 1.5, 1.5)
+c('stove', 85, 51.5, 1, 1)
+// assay office: counter, safe, shelves of samples, stove
+c('counter', 99, 45, 3, 0.5)
+c('safe', 104, 42.5, 1.5, 1)
+c('shelves', 97.5, 47, 0.5, 4)
+c('stove', 105.5, 49, 1, 1)
+// church: pews either side of the aisle, the altar and the pulpit
+for (const z of [35.5, 38.5, 41.5, 46.5, 49.5]) {
+  c('bench', 110.5, z, 4, 0.5)
+  c('bench', 119.5, z, 4, 0.5)
+}
+c('counter', 111.5, 31.5, 3, 1)
+c('counter', 120, 31.5, 1, 1)
+// stage line: ticket counter (the deposit spot is in front of it), mail shelves, luggage, bench
+c('counter', 11.5, 82, 3, 0.5)
+c('shelves', 6.5, 78, 0.5, 3)
+c('crates', 6.5, 86, 1.5, 1.5)
+c('bench', 15.5, 74.5, 2.5, 0.5)
+c('stove', 17.5, 80, 1, 1)
+// smithy: forge, anvil, workbench, the quenching barrel
+c('forge', 24.5, 83, 2.5, 2.5)
 c('anvil', 29.5, 80, 1, 0.5)
-c('coffins', 95, 76, 2.5, 1) // undertaker
+c('workbench', 33, 84.5, 2.5, 1)
+c('barrels', 30.5, 84.5, 1, 1)
+// general store: counter, shelves down both walls, barrels and crates of stock, stove
+c('counter', 43, 79, 6, 0.5)
+c('shelves', 40.5, 80, 0.5, 8)
+c('shelves', 57, 78, 0.5, 6)
+c('crates', 54, 74.5, 1.5, 1.5)
+c('barrels', 43.5, 86, 1.5, 1.5)
+c('barrel_rack', 54, 87.5, 2, 1)
+c('stove', 46.5, 83.5, 1, 1)
+// bank: benches in the lobby; safes and a clerk's desk in the vault room behind the partition
+c('bench', 63.5, 74.5, 3, 0.5)
+c('bench', 77.5, 74.5, 3, 0.5)
+c('safe', 62.5, 90, 1.5, 1.5)
+c('safe', 80, 90, 1.5, 1.5)
+c('counter', 65.5, 86, 2, 1)
+c('crates', 77, 85, 1.5, 1.5)
+// undertaker: coffins, workbench, lumber for the next ones
+c('coffins', 95, 76, 2.5, 1)
 c('coffins', 87, 85, 1, 2.5)
-c('bench', 113, 32, 0.5, 2) // church pews
-c('bench', 113, 37, 0.5, 2)
-c('bench', 120, 32, 0.5, 2)
-c('bench', 120, 37, 0.5, 2)
-c('hay', 26, 36, 2, 1) // livery
-c('hay', 36, 50, 2, 1)
-c('bench', 20, 113, 4, 0.5) // depot waiting room
+c('workbench', 91.5, 86.5, 3, 1)
+c('lumber', 97, 80, 1.5, 3)
+// sheriff and jail: desk, gun rack, stove; a cell with its door open and a cot inside
+c('counter', 106, 77, 2, 1)
+c('shelves', 104.5, 80, 0.5, 3)
+c('stove', 117.5, 75.5, 1, 1)
+c('bench', 115, 82.5, 3, 0.5)
+c('bars', 104.5, 85, 2.5, 0.5)
+c('bars', 108.5, 85, 1.5, 0.5)
+c('bed', 104.5, 86.5, 2, 1)
+// livery: stalls down the east wall, hay, a trough
+for (const z of [38, 42, 46, 50]) {
+  c('fence', 35.5, z, 4, 0.5)
+}
+c('hay', 26, 36, 2, 1)
+c('trough', 24.5, 49, 2.5, 1)
+// depot: waiting bench, ticket counter, baggage shelves, trunks, stove
+c('bench', 20, 113, 4, 0.5)
+c('counter', 31, 111, 4, 0.5)
+c('shelves', 39, 109.5, 0.5, 3)
+c('crates', 16.5, 109.5, 1.5, 1.5)
+c('stove', 36, 117.5, 1, 1)
+// hay barn: bales stacked along the west wall
+c('hay', 8.5, 98.5, 2, 1)
+c('hay', 8.5, 99.5, 2, 1)
+c('hay', 8.5, 104, 2, 1)
+c('hay', 8.5, 105, 2, 1)
+// carriage shed: a coach in for repair, a workbench
+c('stagecoach', 129, 98.5, 5, 2)
+c('workbench', 132, 103.5, 2.5, 1)
 
 // ---------------------------------------------------------------- south back lots (z 92-122)
 c('hay', 24, 100, 2, 1)

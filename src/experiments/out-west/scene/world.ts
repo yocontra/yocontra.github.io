@@ -1,7 +1,6 @@
 // biome-ignore-all lint/complexity/useMaxParams: geometry/audio builders take positional numeric args (x, y, z, size…), mirroring three.js APIs
 // biome-ignore-all lint/suspicious/noUnnecessaryConditions: class fields are flags mutated from outside the method; Biome narrows them to their literal initializer
 import {
-  BackSide,
   Color,
   DirectionalLight,
   Fog,
@@ -11,20 +10,20 @@ import {
   Mesh,
   MeshStandardMaterial,
   type Object3D,
-  PlaneGeometry,
   PointLight,
   type Scene,
-  ShaderMaterial,
-  SphereGeometry,
   type Texture,
   Vector3,
+  Vector4,
 } from 'three'
+import { ATMOS, bindAtmos, tickAtmos, withCloudShadow } from './atmos.ts'
 import { ClockTower } from './clocktower.ts'
+import { buildDesert, desertGeometry } from './desert.ts'
 import { GeoBuilder } from './geo.ts'
 import { addStatic, buildMesas, buildPosterPost, buildWaterTower } from './landmarks.ts'
 import { type Preset, presetAt } from './presets.ts'
 import { mergePlaced } from './props.ts'
-import { skyFrag, skyVert } from './sky.ts'
+import { Sky } from './sky.ts'
 import {
   AWNING,
   BUILDINGS,
@@ -37,6 +36,7 @@ import {
   STREET,
 } from './street.ts'
 import { RIM } from './style.ts'
+import { glassLook } from './surface.ts'
 import { signAtlas } from './textures.ts'
 import { attachArm, attachBoard, withTownAO } from './town-pbr.ts'
 
@@ -52,16 +52,12 @@ export class World {
   readonly hemi: HemisphereLight
   readonly fog: Fog
   readonly sky: Mesh
-  private readonly skyMat: ShaderMaterial
-  private readonly skyU = {
-    zenith: { value: new Color() },
-    horizon: { value: new Color() },
-    sunDir: { value: new Vector3(0, 1, 0) },
-    sunColor: { value: new Color() },
-    sunGlow: { value: 0 },
-    stars: { value: 0 },
-    moon: { value: 0 },
-    moonDir: { value: new Vector3(-0.4, 0.6, 0.7).normalize() },
+  private readonly skyDome: Sky
+  /** Warm pools of lamp and window light on the street (x, z, radius, ±strength). */
+  private readonly poolU = {
+    owPools: { value: [] as Vector4[] },
+    owLantern: { value: 0 },
+    owWindow: { value: 0 },
   }
   readonly ground: Mesh
   readonly lanterns: Lantern[] = []
@@ -98,6 +94,7 @@ export class World {
       vplanksN: Texture
     },
     shadowSize: number,
+    tier = 'high',
   ) {
     this.scene = scene
     scene.add(this.root)
@@ -135,20 +132,10 @@ export class World {
     this.root.add(this.flashLight)
 
     // --- sky
-    this.skyMat = new ShaderMaterial({
-      vertexShader: skyVert,
-      fragmentShader: skyFrag,
-      side: BackSide,
-      depthWrite: false,
-      fog: false,
-      uniforms: this.skyU,
-    })
-    this.sky = new Mesh(new SphereGeometry(900, 32, 16), this.skyMat)
-    this.sky.name = 'sky'
-    this.sky.frustumCulled = false
-    this.sky.renderOrder = -1
-    this.root.add(this.sky)
+    this.skyDome = new Sky(this.root, tier === 'high' || tier === 'medium' ? 1 : 0)
+    this.sky = this.skyDome.mesh
     this.silhouetteHide.push(this.sky)
+    this.poolU.owPools.value = streetPools()
 
     // --- materials
     this.wallMat = new MeshStandardMaterial({
@@ -173,6 +160,7 @@ export class World {
       emissive: new Color(0xff_9a_40),
       emissiveIntensity: 0,
     })
+    glassLook(this.windowMat)
     const atlas = signAtlas(SIGNS)
     this.signMat = new MeshStandardMaterial({ map: atlas.tex, roughness: 0.85 })
     attachBoard(this.signMat, atlas.rows)
@@ -184,33 +172,85 @@ export class World {
       roughness: 1,
       color: 0xd8_c0_a0,
     })
+    const pools = this.poolU
     groundMat.onBeforeCompile = (shader) => {
+      bindAtmos(shader)
+      Object.assign(shader.uniforms, pools)
       shader.vertexShader = shader.vertexShader
-        .replace('#include <common>', '#include <common>\nvarying vec3 vWorldP;')
+        .replace(
+          '#include <common>',
+          '#include <common>\nvarying vec3 vWorldP;\nvarying float vSlope;',
+        )
         .replace(
           '#include <worldpos_vertex>',
-          '#include <worldpos_vertex>\nvWorldP = (modelMatrix * vec4(transformed, 1.0)).xyz;',
+          '#include <worldpos_vertex>\nvWorldP = (modelMatrix * vec4(transformed, 1.0)).xyz;\nvSlope = 1.0 - objectNormal.y;',
         )
       shader.fragmentShader = shader.fragmentShader
         .replace(
           '#include <common>',
           `#include <common>
 varying vec3 vWorldP;
+varying float vSlope;
+uniform vec4 owPools[${POOLS}];
+uniform float owLantern;
+uniform float owWindow;
 float gh(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
 float gn(vec2 p){ vec2 i=floor(p); vec2 f=fract(p); f=f*f*(3.0-2.0*f);
-  return mix(mix(gh(i),gh(i+vec2(1,0)),f.x), mix(gh(i+vec2(0,1)),gh(i+vec2(1,1)),f.x), f.y); }`,
+  return mix(mix(gh(i),gh(i+vec2(1,0)),f.x), mix(gh(i+vec2(0,1)),gh(i+vec2(1,1)),f.x), f.y); }
+// a hoofprint field: small dark crescents scattered along the middle of the street
+float hoof(vec2 p) {
+  vec2 c = floor(p * vec2(2.2, 1.4));
+  vec2 f = fract(p * vec2(2.2, 1.4)) - 0.5 + (vec2(gh(c), gh(c + 9.1)) - 0.5) * 0.5;
+  float on = step(0.72, gh(c + 3.3));
+  float r = length(f * vec2(1.0, 1.25));
+  return on * (1.0 - smoothstep(0.12, 0.17, r)) * smoothstep(0.03, 0.1, r);
+}`,
         )
         .replace(
           '#include <map_fragment>',
           `#include <map_fragment>
 {
-  float macro = gn(vWorldP.xz * 0.04) * 0.6 + gn(vWorldP.xz * 0.13) * 0.4;
-  diffuseColor.rgb *= mix(0.78, 1.12, macro);
-  float ax = abs(vWorldP.x);
-  float rut = exp(-pow((ax - 1.25) * 5.0, 2.0)) * (0.6 + 0.4 * gn(vWorldP.xz * vec2(2.0, 0.3)));
-  diffuseColor.rgb *= 1.0 - rut * 0.22 * step(vWorldP.z, 58.0);
+  vec2 p = vWorldP.xz;
+  float ax = abs(p.x);
+  float macro = gn(p * 0.04) * 0.6 + gn(p * 0.13) * 0.4;
+  diffuseColor.rgb *= mix(0.8, 1.1, macro);
+  float inStreet = step(p.y, 58.0) * step(-70.0, p.y);
+  // twin wagon ruts down the street and on along the road out of the open end
+  float rx = ax;
+  float road = step(p.y, -58.0);
+  rx = mix(rx, abs(p.x + sin(p.y * 0.02) * 4.0), road);
+  float rut = exp(-pow((rx - 1.25) * 5.0, 2.0)) * (0.6 + 0.4 * gn(p * vec2(2.0, 0.3)));
+  diffuseColor.rgb *= 1.0 - rut * 0.24 * step(p.y, 58.0) * (1.0 - smoothstep(-200.0, -120.0, -p.y) * road);
+  diffuseColor.rgb *= 1.0 - hoof(p) * 0.28 * (1.0 - smoothstep(2.5, 4.5, rx)) * step(p.y, 58.0);
   float street = 1.0 - smoothstep(8.5, 11.0, ax);
-  diffuseColor.rgb *= mix(1.04, 0.96, street);
+  diffuseColor.rgb *= mix(1.04, 0.96, street * inStreet);
+  // pale wind-blown sand drifting against the boardwalks and out on the flats
+  float drift = smoothstep(0.55, 0.85, gn(vec2(p.x * 0.09 + p.y * 0.05, p.y * 0.02 - p.x * 0.03)));
+  drift = max(drift * (1.0 - street * 0.7), smoothstep(7.6, 8.9, ax) * street * inStreet * 0.6);
+  diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.62, 0.48, 0.33), drift * 0.35);
+  // patchy dry grass and scrub soil off the street
+  float off = smoothstep(11.0, 26.0, ax) + (1.0 - inStreet);
+  float grass = smoothstep(0.5, 0.75, gn(p * 0.21 + 4.0)) * smoothstep(0.35, 0.7, gn(p * 1.3)) * clamp(off, 0.0, 1.0);
+  diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.42, 0.36, 0.17), grass * 0.5);
+  // the hills: weathered, redder slopes
+  diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * vec3(1.08, 0.86, 0.74), smoothstep(0.08, 0.35, vSlope));
+}`,
+        )
+        .replace(
+          '#include <lights_fragment_end>',
+          `#include <lights_fragment_end>
+{
+  // warm, flickering pools under the lanterns and below lit windows
+  vec3 pool = vec3(0.0);
+  for (int i = 0; i < ${POOLS}; i++) {
+    vec4 q = owPools[i];
+    vec2 d = vWorldP.xz - q.xy;
+    float f = exp(-dot(d, d) / (q.z * q.z));
+    float fl = 0.86 + 0.09 * sin(atmTime * 9.0 + float(i) * 1.7) + 0.05 * sin(atmTime * 23.0 + float(i) * 3.1);
+    float k = q.w > 0.0 ? q.w * owLantern * fl : -q.w * owWindow;
+    pool += f * k * (q.w > 0.0 ? vec3(1.0, 0.55, 0.22) : vec3(1.0, 0.62, 0.3));
+  }
+  reflectedLight.directDiffuse += diffuseColor.rgb * pool;
 }`,
         )
     }
@@ -222,13 +262,10 @@ float gn(vec2 p){ vec2 i=floor(p); vec2 f=fract(p); f=f*f*(3.0-2.0*f);
     attachArm(groundMat, 'ground', 0.8)
     attachArm(this.wallMat, 'planks', 1)
     attachArm(this.trimMat, 'vplanks', 1)
-    const gGeo = new PlaneGeometry(700, 700, 1, 1)
-    gGeo.rotateX(-Math.PI / 2)
-    const uv = gGeo.getAttribute('uv')
-    for (let i = 0; i < uv.count; i++) {
-      uv.setXY(i, uv.getX(i) * 175, uv.getY(i) * 175)
-    }
-    this.ground = new Mesh(gGeo, groundMat)
+    withCloudShadow(groundMat)
+    withCloudShadow(this.wallMat)
+    withCloudShadow(this.trimMat)
+    this.ground = new Mesh(desertGeometry(), groundMat)
     this.ground.name = 'ground'
     this.ground.receiveShadow = true
     this.ground.matrixAutoUpdate = false
@@ -238,7 +275,8 @@ float gn(vec2 p){ vec2 i=floor(p); vec2 f=fract(p); f=f*f*(3.0-2.0*f);
 
     this.buildTown(atlas.rows)
     buildWaterTower(this.root, this.trimMat)
-    buildMesas(this.root)
+    buildMesas(this.root, tex.ground)
+    this.root.add(buildDesert(tier))
     this.poster = buildPosterPost(this.root, this.trimMat)
     this.posterMat =
       (this.poster.userData.mat as MeshStandardMaterial) ?? new MeshStandardMaterial()
@@ -374,6 +412,7 @@ float gn(vec2 p){ vec2 i=floor(p); vec2 f=fract(p); f=f*f*(3.0-2.0*f);
     }
     const gm = addStatic(this.root, glass, this.windowMat, false)
     if (gm) {
+      gm.name = 'windows'
       gm.receiveShadow = false
     }
     addStatic(this.root, signs, this.signMat, false)
@@ -411,17 +450,20 @@ float gn(vec2 p){ vec2 i=floor(p); vec2 f=fract(p); f=f*f*(3.0-2.0*f);
     this.fog.color.copy(p.fog)
     this.fog.near = p.fogNear
     this.fog.far = p.fogFar
-    const u = this.skyU
-    u.zenith.value.copy(p.zenith)
-    u.horizon.value.copy(p.fog)
-    u.sunDir.value.copy(dir)
-    u.sunColor.value.copy(p.sunColor)
-    u.sunGlow.value = p.sunGlow
-    u.stars.value = p.stars
-    u.moon.value = p.moon
-    if (p.moon > 0.5) {
-      u.moonDir.value.copy(dir)
-    }
+    this.skyDome.set({
+      zenith: p.zenith,
+      horizon: p.fog,
+      sunDir: dir,
+      sunColor: p.sunColor,
+      sunGlow: p.sunGlow,
+      stars: p.stars,
+      moon: p.moon,
+    })
+    ATMOS.atmCover.value = p.clouds
+    ATMOS.atmShadowK.value = p.cloudShadow
+    ATMOS.atmGust.value = 0.7
+    this.poolU.owLantern.value = p.lanterns * 1.4
+    this.poolU.owWindow.value = p.windows * 0.9
     RIM.color.value.copy(p.rimColor)
     RIM.strength.value = p.rim
     this.windowMat.emissiveIntensity = p.windows * 1.6
@@ -431,6 +473,9 @@ float gn(vec2 p){ vec2 i=floor(p); vec2 f=fract(p); f=f*f*(3.0-2.0*f);
     // probe whenever owLightVersion moves (a few frames, spread out).
     const ud = this.scene.userData
     ud.owDay = day
+    // the renderer's aerial perspective and sun shafts
+    ud.owHaze = p.haze
+    ud.owRays = p.rays
     if (Math.abs(day - this.probeDay) > 0.035) {
       this.probeDay = day
       ud.owLightVersion = ((ud.owLightVersion as number | undefined) ?? 0) + 1
@@ -449,6 +494,7 @@ float gn(vec2 p){ vec2 i=floor(p); vec2 f=fract(p); f=f*f*(3.0-2.0*f);
 
   update(dt: number): void {
     this.time += dt
+    tickAtmos(dt)
     this.tower?.update(dt)
     const lv = this.preset.lanterns
     for (const l of this.lanterns) {
@@ -490,4 +536,28 @@ float gn(vec2 p){ vec2 i=floor(p); vec2 f=fract(p); f=f*f*(3.0-2.0*f);
     this.sun.target.position.copy(center)
     this.sun.position.copy(center).addScaledVector(dir, 60)
   }
+}
+
+/** How many light pools the street's ground shader carries. */
+const POOLS = 24
+
+/**
+ * The street's light pools: one under each hanging lantern (flickering, +), and one spilling from
+ * each lit storefront and the courthouse doors (steady, -), nearest the duel first.
+ */
+function streetPools(): Vector4[] {
+  const out: Vector4[] = LANTERNS.map(([x, z]) => new Vector4(x * 0.92, z, 4.2, 1))
+  const H = STREET.half
+  const fronts = [...BUILDINGS].sort((a, b) => Math.abs(a.z) - Math.abs(b.z))
+  for (const b of fronts) {
+    out.push(new Vector4(b.side * (H + 0.8), b.z, 3.2, -0.55))
+  }
+  // the courthouse: its doors and the windows either side
+  out.push(new Vector4(0, STREET.churchZ - 9, 4.5, -0.9))
+  out.push(new Vector4(-5, STREET.churchZ - 8, 3, -0.5))
+  out.push(new Vector4(5, STREET.churchZ - 8, 3, -0.5))
+  while (out.length < POOLS) {
+    out.push(new Vector4(0, -9999, 1, 0))
+  }
+  return out.slice(0, POOLS)
 }

@@ -27,7 +27,7 @@ export const OUTSKIRTS_SEED = 0x0f_ee_15
 /** How far below the ground plane flat terrain sits. */
 const SINK = 0.15
 /** How far past the playable square the terrain and the scatter reach (the camera sees ~30 m). */
-const REACH = 34
+export const REACH = 34
 /** Ground texture metres per repeat (the ground plane's tiling). */
 const TILE = 5
 
@@ -153,6 +153,81 @@ function rows(layout: TownLayout): number[] {
     out.push(z)
   }
   return out
+}
+
+/** Height of a grid's triangulated surface at (x, z): cells split along the (i+1, j)-(i, j+1) diagonal. */
+export function gridHeight(
+  xs: readonly number[],
+  zs: readonly number[],
+  at: (i: number, j: number) => number,
+  x: number,
+  z: number,
+): number {
+  const find = (a: readonly number[], key: number) => {
+    let lo = 0
+    let hi = a.length - 2
+    while (lo < hi) {
+      const mid = (lo + hi + 1) >> 1
+      if ((a[mid] ?? 0) <= key) {
+        lo = mid
+      } else {
+        hi = mid - 1
+      }
+    }
+    return Math.max(0, lo)
+  }
+  const i = find(xs, x)
+  const j = find(zs, z)
+  const x0 = xs[i] ?? 0
+  const z0 = zs[j] ?? 0
+  const u = Math.min(1, Math.max(0, (x - x0) / ((xs[i + 1] ?? x0 + 1) - x0)))
+  const v = Math.min(1, Math.max(0, (z - z0) / ((zs[j + 1] ?? z0 + 1) - z0)))
+  const ha = at(i, j)
+  const hb = at(i + 1, j)
+  const hc = at(i, j + 1)
+  const hd = at(i + 1, j + 1)
+  return u + v <= 1
+    ? ha + u * (hb - ha) + v * (hc - ha)
+    : hd + (1 - u) * (hc - hd) + (1 - v) * (hb - hd)
+}
+
+let meshCache: { layout: TownLayout; xs: number[]; zs: number[]; h: Float32Array } | null = null
+
+/**
+ * The outskirts terrain mesh's actual surface height at (x, z) (the triangles, not the smooth
+ * field), so anything set on it sits exactly on what is drawn. 0 off the mesh.
+ */
+export function terrainMeshHeight(layout: TownLayout, x: number, z: number): number {
+  if (meshCache?.layout !== layout) {
+    const s = layout.size
+    const xs: number[] = []
+    for (let gx = -REACH; gx <= s + REACH; gx += 2.5) {
+      xs.push(gx)
+    }
+    const zs = rows(layout)
+    const h = new Float32Array(xs.length * zs.length)
+    for (const [j, gz] of zs.entries()) {
+      for (const [i, gx] of xs.entries()) {
+        h[j * xs.length + i] = terrainHeight(layout, gx, gz) - SINK
+      }
+    }
+    meshCache = { layout, xs, zs, h }
+  }
+  const c = meshCache
+  const nx = c.xs.length
+  // off the grid's last row or column: the flat ground plane
+  if (
+    x < (c.xs[0] ?? 0) ||
+    x > (c.xs.at(-1) ?? 0) ||
+    z < (c.zs[0] ?? 0) ||
+    z > (c.zs.at(-1) ?? 0)
+  ) {
+    return 0
+  }
+  return Math.max(
+    0,
+    gridHeight(c.xs, c.zs, (i, j) => c.h[j * nx + i] ?? 0, x, z),
+  )
 }
 
 /** Sandstone strata on steep faces, paler on mesa tops; flat ground keeps the dirt's own colour. */
@@ -377,13 +452,16 @@ export function outskirtsProps(layout: TownLayout, seed: number): OutskirtsProps
   const c = layout.creek
   const out: OutskirtsProps = { rock: [], cactus: [], fence: [] }
   const anywhere = () => nearEdge(rng, layout, REACH - 10)
-  // the drawn surface: the terrain mesh sits SINK under the analytic height, the ground plane at 0
-  const y = (x: number, z: number) => Math.max(0, terrainHeight(layout, x, z) - SINK) - 0.05
+  // the drawn surface (its triangles), so a rock sits on exactly what is rendered
+  const y = (x: number, z: number) => terrainMeshHeight(layout, x, z) - 0.08
+  // seated at the lowest ground under its footprint, so the downhill side never shows air
+  const seat = (x: number, z: number, r: number) =>
+    Math.min(y(x, z), y(x + r, z), y(x - r, z), y(x, z + r), y(x, z - r))
   const rock = (p: Scatter) =>
     out.rock.push(
       matrix(
         p.x,
-        y(p.x, p.z) - p.s * (0.12 + 0.35 * Math.min(1, slope(layout, p.x, p.z))),
+        seat(p.x, p.z, p.s * 0.6) - p.s * 0.12,
         p.z,
         rng.next() * 6.3,
         p.s,

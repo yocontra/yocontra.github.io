@@ -26,6 +26,7 @@ import {
   Vector2,
   Vector3,
 } from 'three'
+import { sackLook, strongboxLook } from '../../scene/surface.ts'
 import { softDot } from '../../scene/textures.ts'
 import { type Bag, PLAIN_BAG } from './bags.ts'
 
@@ -208,32 +209,29 @@ export class Effects {
       ].map(([x, y]) => new Vector2(x, y)),
       10,
     )
-    this.bagMesh = new InstancedMesh(
-      sack,
-      new MeshStandardMaterial({
-        color: 0xff_ff_ff,
-        roughness: 0.7,
-        emissive: 0x6a_48_10,
-        emissiveIntensity: 0.6,
-      }),
-      64,
-    )
+    const bagMat = new MeshStandardMaterial({
+      color: 0xff_ff_ff,
+      roughness: 0.7,
+      emissive: 0x6a_48_10,
+      emissiveIntensity: 0.6,
+    })
+    sackLook(bagMat)
+    this.bagMesh = new InstancedMesh(sack, bagMat, 64)
     this.bagMesh.count = 0
     this.bagMesh.name = 'bags'
     this.bagMesh.frustumCulled = false
     this.bagMesh.castShadow = false
     root.add(this.bagMesh)
     // Strongbox and beacon.
-    this.box = new Mesh(
-      new BoxGeometry(1.1, 0.7, 0.7).translate(0, 0.35, 0),
-      new MeshStandardMaterial({
-        color: 0x5a_3a_22,
-        roughness: 0.6,
-        metalness: 0.3,
-        emissive: 0x40_28_00,
-        emissiveIntensity: 0.4,
-      }),
-    )
+    const boxMat = new MeshStandardMaterial({
+      color: 0x8a_5a_36,
+      roughness: 0.6,
+      metalness: 0.15,
+      emissive: 0x40_28_00,
+      emissiveIntensity: 0.4,
+    })
+    strongboxLook(boxMat)
+    this.box = new Mesh(new BoxGeometry(1.1, 0.7, 0.7).translate(0, 0.35, 0), boxMat)
     this.box.visible = false
     root.add(this.box)
     this.beacon = new Mesh(

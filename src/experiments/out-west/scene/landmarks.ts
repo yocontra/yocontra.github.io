@@ -3,9 +3,18 @@
  * Static scenery merged into single meshes: the helper that adds one, the water tower and the mesas
  * on the horizon.
  */
-import { Group, Mesh, MeshStandardMaterial, type Object3D, PlaneGeometry, Vector3 } from 'three'
+import {
+  Group,
+  Mesh,
+  MeshStandardMaterial,
+  type Object3D,
+  PlaneGeometry,
+  type Texture,
+  Vector3,
+} from 'three'
 import { GeoBuilder } from './geo.ts'
 import { STREET } from './street.ts'
+import { rockLook } from './surface.ts'
 
 /** One merged, static mesh (no per-frame matrix updates); null when the builder is empty. */
 export function addStatic(
@@ -64,7 +73,7 @@ export function buildWaterTower(root: Object3D, trimMat: MeshStandardMaterial): 
 }
 
 /** Mesas ringing the horizon (unlit by shadows, flat shaded). */
-export function buildMesas(root: Object3D): void {
+export function buildMesas(root: Object3D, ground: Texture): void {
   const g = new GeoBuilder(30)
   const rnd = (a: number, b: number) => a + Math.random() * (b - a)
   const mesa = (cx: number, cz: number, r: number, h: number, color: number) => {
@@ -105,6 +114,7 @@ export function buildMesas(root: Object3D): void {
     mesa(x * 1.25, z * 1.25, r, h * 0.55, 0x9a_5a_3a)
   }
   const m = new MeshStandardMaterial({ vertexColors: true, roughness: 1, flatShading: true })
+  rockLook(m, ground)
   const mesh = addStatic(root, g, m, false)
   if (mesh) {
     mesh.receiveShadow = false

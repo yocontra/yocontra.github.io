@@ -73,7 +73,7 @@ const ON_DECK =
 /** Kit pieces whose back belongs on a wall. */
 const WALL_MOUNTED = /^k_(?:window|shutters|door|balcony|support|lantern)/u
 /** Hang or fly by design (matched against the piece's own and every ancestor's name). */
-const HANGS = /(?:^|\/)(?:lantern|postlantern|pickup|bags|bird|cloud)(?:\/|$)/u
+const HANGS = /(?:^|\/)(?:lantern|postlantern|pickup|bags|bird|cloud|tumbleweed)(?:\/|$)/u
 /** Effects, decals and the sky: never pieces (decals still support). */
 const SKIP = /^(?:tracer|flash|puff|ring|aim|beacon|dust|spark|sky|blob)$/u
 const DECAL = /^creek$/u
@@ -253,8 +253,9 @@ function meshParts(out: Collected, m: Mesh, world: Matrix4, label: string): Part
   const radius = (g.boundingSphere?.radius ?? 0) * world.getMaxScaleOnAxis()
   const nt = idx.length / 3
   // (by size, or by name: the outskirts terrain's bounding sphere sits right around the cut-off)
-  if (radius > 150 || LAND.test(m.name)) {
-    // the ground plane, the bluff, the mesas: support only, never audited
+  if (radius > 150 || LAND.test(m.name) || m.userData.support === true) {
+    // the ground plane, the bluff, the mesas, a terrain flagged as ground: support only, never
+    // audited
     for (let t = 0; t < nt; t++) {
       out.large.push(out.owner.length)
       for (let k = 0; k < 3; k++) {
@@ -923,6 +924,66 @@ function zFights(
     }
   }
   return out
+}
+
+/** A lit surface drawn with no texture (flat colour only): the "untextured model" check. */
+export interface Untextured {
+  mesh: string
+  material: string
+  color: string
+  triangles: number
+}
+
+/** Meshes that are flat colour by design: glass panes, water, the sky, effects, decals. */
+const FLAT_OK =
+  /(?:^|\/)(?:windows|creek|sky|tracer|flash|puff|ring|aim|beacon|dust|spark|blob|glint)(?:\/|$)/u
+/** Materials that are plain by design: the clock tower's wrought iron (its hands and rails). */
+const FLAT_MATERIALS = /^(?:Iron)$/u
+
+/**
+ * Every visible, lit mesh whose material has no colour map and no procedural surface
+ * (`userData.procedural`, set by scene/surface.ts and the plant material). Unlit effect materials
+ * and the allow-listed glass, water and sky are skipped.
+ */
+export function textureAudit(scene: Object3D): Untextured[] {
+  const out = new Map<string, Untextured>()
+  scene.traverse((o) => {
+    if (!(o instanceof Mesh && shown(o))) {
+      return
+    }
+    const mats = (Array.isArray(o.material) ? o.material : [o.material]) as {
+      type: string
+      name: string
+      map?: unknown
+      userData: Record<string, unknown>
+      color?: { getHexString: () => string }
+      emissiveIntensity?: number
+    }[]
+    const chain = chainNames(o)
+    if (FLAT_OK.test(chain) || SKIP.test(o.name)) {
+      return
+    }
+    for (const m of mats) {
+      const lit =
+        m.type === 'MeshStandardMaterial' ||
+        m.type === 'MeshPhysicalMaterial' ||
+        m.type === 'MeshLambertMaterial' ||
+        m.type === 'MeshPhongMaterial'
+      if (!lit || m.map || m.userData.procedural || FLAT_MATERIALS.test(m.name)) {
+        continue
+      }
+      const pos = o.geometry.getAttribute('position')
+      const idx = o.geometry.getIndex()
+      const key = `${chain}|${m.name}`
+      out.set(key, {
+        mesh: chain || o.type,
+        material: m.name || '(unnamed)',
+        color: m.color?.getHexString() ?? '',
+        triangles: Math.round((idx ? idx.count : (pos?.count ?? 0)) / 3),
+      })
+    }
+  })
+  return [...out.values()]
 }
 
 /**

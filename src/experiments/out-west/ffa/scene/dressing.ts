@@ -586,6 +586,196 @@ function forge(b: DressBuilders, c: Rect, y: number): void {
   b.wood.box(cx + c.w / 2 - 0.45, y + 1.0, cz - c.d / 2 + 0.45, 0.6, 0.18, 0.7, 0x4a_2e_1e)
 }
 
+function piano(b: DressBuilders, c: Rect, y: number, back: number): void {
+  const alongX = c.w >= c.d
+  const L = Math.max(c.w, c.d) - 0.1
+  const W = Math.min(c.w, c.d)
+  const cx = c.x + c.w / 2
+  const cz = c.z + c.d / 2
+  const body = 0x3a_22_16
+  // case against the wall, keybed out front, white keys and black, a candle stand on top
+  along(b.wood, alongX, cx, cz, 0, back * (W / 2 - 0.3), y, L, 0.55, 1.3, body)
+  along(b.wood, alongX, cx, cz, 0, back * (W / 2 - 0.62), y + 0.05, L - 0.2, 0.12, 0.65, body)
+  along(b.wood, alongX, cx, cz, 0, back * (W / 2 - 0.72), y + 0.7, L - 0.1, 0.32, 0.06, body)
+  along(b.wood, alongX, cx, cz, 0, back * (W / 2 - 0.74), y + 0.76, L - 0.3, 0.24, 0.02, 0xe8_e2_d0)
+  for (let k = -L / 2 + 0.25; k < L / 2 - 0.2; k += 0.16) {
+    along(b.wood, alongX, cx, cz, k, back * (W / 2 - 0.68), y + 0.78, 0.05, 0.12, 0.02, 0x14_10_0e)
+  }
+  along(
+    b.wood,
+    alongX,
+    cx,
+    cz,
+    -L / 2 + 0.25,
+    back * (W / 2 - 0.3),
+    y + 1.3,
+    0.08,
+    0.08,
+    0.2,
+    0xc8_a0_50,
+  )
+}
+
+function shelves(b: DressBuilders, c: Rect, y: number, back: number, r: () => number): void {
+  const alongX = c.w >= c.d
+  const L = Math.max(c.w, c.d) - 0.04
+  const W = Math.min(c.w, c.d) - 0.08
+  const cx = c.x + c.w / 2
+  const cz = c.z + c.d / 2
+  const h = 2.3
+  along(b.wood, alongX, cx, cz, 0, back * (W / 2 - 0.02), y + 0.004, L, 0.04, h - 0.01, 0x5a_3e_28)
+  const posts: number[] = []
+  for (let a = -L / 2 + 0.04; a <= L / 2; a += Math.max(0.9, L / Math.ceil(L / 1.4))) {
+    posts.push(Math.min(a, L / 2 - 0.04))
+  }
+  for (const a of posts) {
+    along(b.wood, alongX, cx, cz, a, -back * 0.022, y, 0.06, W - 0.05, h, 0x4a_32_20)
+  }
+  /** Goods never stand through an upright. */
+  const nearPost = (mid: number, half: number) =>
+    posts.some((u) => Math.abs(mid - u) <= half + 0.05)
+  const goods = [0xb0_3a_2a, 0x3a_5a_8a, 0xd8_c8_9a, 0x6a_8a_4a, 0x8a_6a_3a, 0xe0_d0_b0, 0x2a_2a_2a]
+  for (const sy of [0.12, 0.62, 1.12, 1.62, 2.1]) {
+    along(
+      b.wood,
+      alongX,
+      cx,
+      cz,
+      0,
+      -back * 0.02,
+      y + sy - 0.04,
+      L - 0.13,
+      W - 0.08,
+      0.04,
+      0x6a_4a_30,
+    )
+    if (sy > 2) {
+      continue
+    }
+    // tins, jars, bolts of cloth and boxes, never quite in a row
+    let a = -L / 2 + 0.12
+    while (a < L / 2 - 0.2) {
+      const gw = 0.12 + r() * 0.22
+      const gh = 0.14 + r() * 0.26
+      const gd = Math.min(W - 0.1, 0.16 + r() * 0.2)
+      const clear = !nearPost(a + gw / 2, gw / 2)
+      if (r() < 0.85 && clear) {
+        along(
+          b.wood,
+          alongX,
+          cx,
+          cz,
+          a + gw / 2,
+          back * (W / 2 - 0.05 - gd / 2),
+          y + sy,
+          gw,
+          gd,
+          gh,
+          goods[Math.floor(r() * goods.length)] ?? 0x8a_6a_3a,
+        )
+      }
+      a += gw + 0.03 + r() * 0.05
+    }
+  }
+}
+
+function stairs(b: DressBuilders, c: Rect, y: number, back: number): void {
+  const alongX = c.w >= c.d
+  const L = Math.max(c.w, c.d)
+  const W = Math.min(c.w, c.d)
+  const cx = c.x + c.w / 2
+  const cz = c.z + c.d / 2
+  const rise = 3.2
+  const n = 16
+  const run = (L - 0.2) / n
+  // closed stringer on the open side, treads climbing to the landing, a banister
+  for (let k = 0; k < n; k++) {
+    const top = ((k + 1) / n) * rise
+    along(
+      b.wood,
+      alongX,
+      cx,
+      cz,
+      -L / 2 + 0.1 + (k + 0.5) * run,
+      0,
+      y,
+      run,
+      W - 0.1,
+      top,
+      k % 2 ? 0x7a_5a_3c : 0x72_54_38,
+    )
+  }
+  along(b.wood, alongX, cx, cz, 0, -back * (W / 2 - 0.08), y + 0.008, L - 0.1, 0.14, 0.3, DARK_WOOD)
+  for (let k = 1; k < n; k += 3) {
+    const top = ((k + 1) / n) * rise
+    along(
+      b.wood,
+      alongX,
+      cx,
+      cz,
+      -L / 2 + 0.1 + (k + 0.5) * run,
+      -back * (W / 2 - 0.08),
+      y + top,
+      0.05,
+      0.05,
+      0.85,
+      DARK_WOOD,
+    )
+  }
+}
+
+function safe(b: DressBuilders, c: Rect, y: number, back: number): void {
+  const alongX = c.w >= c.d
+  const L = Math.max(c.w, c.d) - 0.2
+  const W = Math.min(c.w, c.d) - 0.15
+  const cx = c.x + c.w / 2
+  const cz = c.z + c.d / 2
+  along(b.wood, alongX, cx, cz, 0, 0, y, L, W, 0.12, IRON)
+  along(b.wood, alongX, cx, cz, 0, 0, y + 0.12, L - 0.06, W - 0.06, 1.3, 0x2e_34_30)
+  along(b.wood, alongX, cx, cz, 0, -back * (W / 2 - 0.04), y + 0.3, L - 0.3, 0.04, 0.95, 0x3a_44_3c)
+  along(b.wood, alongX, cx, cz, 0.1, -back * (W / 2 + 0.0), y + 0.8, 0.16, 0.05, 0.16, 0xc8_a0_50)
+  along(b.wood, alongX, cx, cz, -0.25, -back * (W / 2 + 0.0), y + 0.62, 0.05, 0.05, 0.3, 0xc8_a0_50)
+}
+
+function stove(b: DressBuilders, c: Rect, y: number): void {
+  const cx = c.x + c.w / 2
+  const cz = c.z + c.d / 2
+  const r0 = Math.min(c.w, c.d) / 2 - 0.12
+  b.wood.box(cx, y + 0.1, cz, r0 * 1.6, 0.2, r0 * 1.6, IRON)
+  cyl(b.extra, r0, 0.75, 10, cx, y + 0.57, cz, 'y', 0x24_22_20)
+  cyl(b.extra, r0 * 0.85, 0.12, 10, cx, y + 1.0, cz, 'y', 0x30_2c_28)
+  cyl(b.extra, 0.08, 2.2, 8, cx, y + 2.16, cz, 'y', 0x24_22_20)
+  b.wood.box(cx, y + 0.45, cz + r0 * 0.98, 0.25, 0.2, 0.04, 0xb0_50_20)
+}
+
+function bed(b: DressBuilders, c: Rect, y: number): void {
+  const alongX = c.w >= c.d
+  const L = Math.max(c.w, c.d) - 0.1
+  const W = Math.min(c.w, c.d) - 0.15
+  const cx = c.x + c.w / 2
+  const cz = c.z + c.d / 2
+  for (const a of [-L / 2 + 0.05, L / 2 - 0.05]) {
+    along(b.wood, alongX, cx, cz, a, 0, y, 0.1, W, 0.6, DARK_WOOD)
+  }
+  along(b.wood, alongX, cx, cz, 0, 0, y + 0.3, L - 0.1, W, 0.08, DARK_WOOD)
+  along(b.cloth, alongX, cx, cz, 0.1, 0, y + 0.386, L - 0.4, W - 0.06, 0.12, 0x8a_5a_4a)
+  along(b.cloth, alongX, cx, cz, -L / 2 + 0.3, 0, y + 0.392, 0.35, W - 0.2, 0.14, 0xe0_d8_c8)
+}
+
+function bars(b: DressBuilders, c: Rect, y: number): void {
+  const alongX = c.w >= c.d
+  const L = Math.max(c.w, c.d)
+  const cx = c.x + c.w / 2
+  const cz = c.z + c.d / 2
+  const h = 2.6
+  for (const yy of [0.05, 1.2, h - 0.05]) {
+    along(b.wood, alongX, cx, cz, 0, 0, y + yy - 0.04, L, 0.08, 0.08, IRON)
+  }
+  for (let a = -L / 2 + 0.06; a <= L / 2 - 0.05; a += 0.14) {
+    along(b.wood, alongX, cx, cz, a, 0, y, 0.035, 0.035, h, 0x2a_2a_2a)
+  }
+}
+
 function bridgeRail(b: DressBuilders, c: Rect, y: number): void {
   const alongX = c.w >= c.d
   const L = Math.max(c.w, c.d)
@@ -626,6 +816,21 @@ function track(layout: TownLayout, wood: GeoBuilder): void {
   }
 }
 
+/**
+ * Which long side of a rect stands against its building's wall: +1 for +z (or +x), −1 for the
+ * other, so shelves, pianos and safes face into the room.
+ */
+function backOf(layout: TownLayout, c: Rect): number {
+  const cx = c.x + c.w / 2
+  const cz = c.z + c.d / 2
+  const b = layout.buildings.find((o) => cx > o.x && cx < o.x + o.w && cz > o.z && cz < o.z + o.d)
+  if (!b) {
+    return 1
+  }
+  const nearLow = c.w >= c.d ? cz - b.z < b.z + b.d - cz : cx - b.x < b.x + b.w - cx
+  return nearLow ? -1 : 1
+}
+
 export function dressCover(
   layout: TownLayout,
   props: GLTF,
@@ -638,7 +843,7 @@ export function dressCover(
   const p: Placed = new Map()
   const unit = (name: string) => propDef(props, name, 1, UNIT[name] ?? 'max')
   for (const c of layout.cover) {
-    place(c, p, b, r, unit, floorAt(c.x + c.w / 2, c.z + c.d / 2), porchRoof)
+    place(c, p, b, r, unit, floorAt(c.x + c.w / 2, c.z + c.d / 2), porchRoof, backOf(layout, c))
   }
   track(layout, b.wood)
   const land = outskirtsProps(layout, OUTSKIRTS_SEED)
@@ -652,7 +857,7 @@ export function dressCover(
     }
   }
   sized('rock', 1.2, 'max', land.rock)
-  sized('cactus', 2.4, 'y', land.cactus)
+  // the cactus spots grow procedural saguaros and Joshua trees instead (wilds.ts)
   // the boundary fence is the kit fence at its own 2 m section size
   for (const m of land.fence) {
     put(p, 'fence@edge', m)
@@ -678,6 +883,7 @@ function place(
   unit: (name: string) => PropDef | null,
   y: number,
   porchRoof: number,
+  back: number,
 ): void {
   const cx = c.x + c.w / 2
   const cz = c.z + c.d / 2
@@ -841,6 +1047,37 @@ function place(
       break
     case 'forge':
       forge(b, c, y)
+      break
+    case 'piano':
+      piano(b, c, y, back)
+      break
+    case 'shelves':
+      shelves(b, c, y, back, r)
+      break
+    case 'stairs':
+      stairs(b, c, y, back)
+      break
+    case 'safe':
+      safe(b, c, y, back)
+      break
+    case 'stove':
+      stove(b, c, y)
+      break
+    case 'bed':
+      bed(b, c, y)
+      break
+    case 'bars':
+      bars(b, c, y)
+      break
+    case 'workbench':
+      kit('k_workbench', (def) =>
+        put(p, 'k_workbench', fitTo(def, cx, y, cz, c.w - 0.08, c.d - 0.08, 0.95)),
+      )
+      break
+    case 'barrel_rack':
+      kit('k_barrel_rack', (def) =>
+        put(p, 'k_barrel_rack', fitTo(def, cx, y, cz, c.w - 0.08, c.d - 0.08, 1.3)),
+      )
       break
     case 'bridge_rail':
       bridgeRail(b, c, y)

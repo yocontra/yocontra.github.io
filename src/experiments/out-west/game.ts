@@ -59,7 +59,7 @@ export async function createGame(o: GameOpts): Promise<Game> {
       : { head: 'casual', body: 'casual', legs: 'casual', feet: 'casual', tint: {}, build: [1, 1] },
     (f) => o.onProgress(f * 0.85),
   )
-  const world = new World(scene, assets.tex, renderer.spec.shadowSize)
+  const world = new World(scene, assets.tex, renderer.spec.shadowSize, renderer.tier)
   const { coffins } = dressStreet(assets.props, world.root)
 
   const dot = softDot()

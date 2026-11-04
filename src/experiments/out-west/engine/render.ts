@@ -18,15 +18,18 @@ import {
   DirectionalLight,
   HalfFloatType,
   type Material,
+  Matrix4,
   MeshBasicMaterial,
   NoToneMapping,
   type PerspectiveCamera,
   type Scene,
   SRGBColorSpace,
   Uniform,
+  Vector2,
   Vector3,
   WebGLRenderer,
 } from 'three'
+import { ATMOS, HAZE_GLSL } from '../scene/atmos.ts'
 import { GpuTimer, PerfOverlay, perfRequested, Window } from '../ui/perf.ts'
 import { LUT_SIZE, lutsAt } from './lut.ts'
 import { TownProbe } from './probe.ts'
@@ -117,6 +120,99 @@ void mainImage(const in vec4 inputColor, const in vec2 uv, const in float depth,
 }
 `
 
+const atmosFrag = /* glsl */ `
+uniform mat4 atmCamWorld;
+uniform mat4 atmProjInv;
+uniform float atmDensity;
+uniform float atmFalloff;
+uniform float atmRays;
+uniform vec2 atmSunUv;
+uniform vec3 atmSunDir;
+${HAZE_GLSL}
+void mainImage(const in vec4 inputColor, const in vec2 uv, const in float depth, out vec4 outputColor) {
+  vec3 col = inputColor.rgb;
+  vec4 vp = atmProjInv * vec4(uv * 2.0 - 1.0, depth * 2.0 - 1.0, 1.0);
+  vp.xyz /= vp.w;
+  vec3 cam = atmCamWorld[3].xyz;
+  vec3 rd = (atmCamWorld * vec4(vp.xyz, 1.0)).xyz - cam;
+  float dist = length(rd);
+  rd /= max(dist, 1e-4);
+  vec3 sd = normalize(atmSunDir);
+  if (depth < 0.99999 && atmDensity > 0.0) {
+    // exponential height fog, integrated along the view ray, coloured like the sky behind it
+    float a = atmDensity * exp(-atmFalloff * max(cam.y, 0.0));
+    float b = rd.y * atmFalloff;
+    float integ = abs(b) > 1e-4 ? (1.0 - exp(-b * dist)) / b : dist;
+    float fog = 1.0 - exp(-a * integ);
+    col = mix(col, atmHaze(rd, sd), clamp(fog, 0.0, 0.96));
+  }
+  if (atmRays > 0.0) {
+    // screen-space sun shafts: march toward the sun, counting open sky
+    vec2 stepUv = (atmSunUv - uv) / 22.0;
+    vec2 q = uv;
+    float w = 1.0;
+    float acc = 0.0;
+    for (int i = 0; i < 22; i++) {
+      q += stepUv;
+      if (q.x < 0.0 || q.x > 1.0 || q.y < 0.0 || q.y > 1.0) {
+        break;
+      }
+      acc += step(0.99999, readDepth(q)) * w;
+      w *= 0.93;
+    }
+    float facing = pow(max(dot(rd, sd), 0.0), 5.0);
+    col += atmSunColor * (acc / 13.0) * atmRays * facing;
+  }
+  outputColor = vec4(col, inputColor.a);
+}
+`
+
+/**
+ * Aerial perspective (exponential height fog in the sky's own haze colour, so the town fades into
+ * the horizon behind it) and, on the high tier, screen-space sun shafts. Reads the depth buffer.
+ */
+export class AtmosEffect extends Effect {
+  private readonly camWorld = new Uniform(new Matrix4())
+  private readonly projInv = new Uniform(new Matrix4())
+  readonly density = new Uniform(0)
+  readonly falloff = new Uniform(0.03)
+  readonly rays = new Uniform(0)
+  private readonly sunUv = new Uniform(new Vector2(0.5, 0.5))
+  private readonly tmp = new Vector3()
+  constructor() {
+    super('AtmosEffect', atmosFrag, {
+      blendFunction: BlendFunction.SRC,
+      attributes: EffectAttribute.DEPTH,
+      uniforms: new Map<string, Uniform>(),
+    })
+    const u = this.uniforms
+    u.set('atmCamWorld', this.camWorld)
+    u.set('atmProjInv', this.projInv)
+    u.set('atmDensity', this.density)
+    u.set('atmFalloff', this.falloff)
+    u.set('atmRays', this.rays)
+    u.set('atmSunUv', this.sunUv)
+    u.set('atmSunDir', ATMOS.atmSunDir)
+    u.set('atmSunColor', ATMOS.atmSunColor)
+    u.set('atmHorizon', ATMOS.atmHorizon)
+    u.set('atmZenith', ATMOS.atmZenith)
+    u.set('atmGlow', ATMOS.atmGlow)
+  }
+
+  /** Per frame: the camera's matrices, and where the sun sits on screen (shafts fade off it). */
+  track(cam: PerspectiveCamera, rays: number): void {
+    cam.updateMatrixWorld()
+    this.camWorld.value.copy(cam.matrixWorld)
+    this.projInv.value.copy(cam.projectionMatrixInverse)
+    const p = this.tmp.copy(ATMOS.atmSunDir.value).multiplyScalar(1000).add(cam.position)
+    p.project(cam)
+    this.sunUv.value.set(p.x * 0.5 + 0.5, p.y * 0.5 + 0.5)
+    // only while the sun is in front of the camera and not far off screen
+    const on = p.z < 1 && Math.abs(p.x) < 1.6 && Math.abs(p.y) < 1.6 ? 1 : 0
+    this.rays.value = rays * on
+  }
+}
+
 /** Live parametric grade plus the time-of-day LUT look, in one effect. */
 export class GradeEffect extends Effect {
   constructor() {
@@ -203,6 +299,7 @@ export class Renderer {
   readonly noise: NoiseEffect
   readonly grade = new GradeEffect()
   readonly lens = new LensEffect()
+  readonly atmos = new AtmosEffect()
   readonly probe: TownProbe
   private readonly lensPass: EffectPass
   private readonly mainPass: EffectPass
@@ -293,7 +390,15 @@ export class Renderer {
     this.lensPass = new EffectPass(camera, this.lens)
     this.lensPass.enabled = false
     this.composer.addPass(this.lensPass)
-    this.mainPass = new EffectPass(camera, this.bloom, tone, this.grade, this.vignette, this.noise)
+    this.mainPass = new EffectPass(
+      camera,
+      this.atmos,
+      this.bloom,
+      tone,
+      this.grade,
+      this.vignette,
+      this.noise,
+    )
     this.composer.addPass(this.mainPass)
     this.applyPostForTier()
 
@@ -447,6 +552,11 @@ export class Renderer {
       this.lastDay = day
       this.grade.setDay(day)
     }
+    const ud = this.scene.userData
+    this.atmos.density.value = (ud.owHaze as number | undefined) ?? 0
+    // sun shafts are a high-tier luxury
+    const rays = this.tier === 'high' ? ((ud.owRays as number | undefined) ?? 0) : 0
+    this.atmos.track(this.camera, rays)
     this.gpu?.begin()
     this.probe.tick()
     this.composer.render(dt)
