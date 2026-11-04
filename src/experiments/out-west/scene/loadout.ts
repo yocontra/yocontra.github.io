@@ -19,7 +19,7 @@ import {
 import type { GLTF } from 'three/examples/jsm/loaders/GLTFLoader.js'
 import { type ItemId, type Loadout, normalizeLoadout } from '../data/catalog.ts'
 import { type Dyes, dyeHex } from '../data/dye.ts'
-import type { HatKey } from '../data/outlaws.ts'
+import type { CoatCut, HatKey } from '../data/outlaws.ts'
 import { Actor, type ActorOpts } from './actor.ts'
 import type { Identity } from './identity.ts'
 import type { HolsterLook } from './kit.ts'
@@ -32,6 +32,7 @@ interface HatLook {
 
 interface OutfitLook {
   coat?: number
+  coatCut?: CoatCut
   poncho?: number
   bandoliers?: boolean
   /** Garment of the player base (Shirt, Sleeves, Pants, Boots...) → colour. */
@@ -65,10 +66,15 @@ const OUTFITS: Partial<Record<ItemId, OutfitLook>> = {
   'outfit.shirt-vest': { tint: { Shirt: 0xd8_cc_b0, Sleeves: 0x3a_2a_1e } },
   'outfit.wool-duster': { coat: 0x6a_50_38 },
   'outfit.striped-poncho': { poncho: 0x9a_3a_28 },
-  'outfit.gamblers-frock': { coat: 0x2a_1c_2e, tint: { Shirt: 0xe8_e0_d0, Pants: 0x2a_22_2a } },
+  'outfit.gamblers-frock': {
+    coat: 0x2a_1c_2e,
+    coatCut: 'frock',
+    tint: { Shirt: 0xe8_e0_d0, Pants: 0x2a_22_2a },
+  },
   'outfit.bandolier-rig': { bandoliers: true, tint: { Shirt: 0x8a_6a_4a, Sleeves: 0x6a_50_38 } },
   'outfit.undertakers-black': {
     coat: 0x12_10_10,
+    coatCut: 'frock',
     tint: { Shirt: 0x1e_1a_1a, Sleeves: 0x1a_16_14, Pants: 0x14_12_10, Boots: 0x14_12_10 },
   },
 }
@@ -184,6 +190,7 @@ export function loadoutOpts(raw: unknown, dyes: Dyes = {}): ActorOpts {
   }
   if (outfit.coat !== undefined) {
     o.coat = outfit.coat
+    o.coatCut = outfit.coatCut ?? 'duster'
   }
   if (outfit.poncho !== undefined) {
     o.poncho = outfit.poncho
