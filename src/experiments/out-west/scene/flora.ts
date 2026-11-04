@@ -160,7 +160,8 @@ class PlantGeo {
     sway: (n: Vector3) => number,
     jit: number,
     rng: Rng,
-  ): void {
+  ): { p: Vector3; d: Vector3 }[] {
+    const out: { p: Vector3; d: Vector3 }[] = []
     const base = this.count
     // each blob turned its own way, so two never share a face plane
     const turn = rng.next() * Math.PI * 2
@@ -174,10 +175,12 @@ class PlantGeo {
       const k = 1 + (rng.next() - 0.5) * jit
       const p = new Vector3(c.x + d.x * r.x * k, c.y + d.y * r.y * k, c.z + d.z * r.z * k)
       this.vert(p, d, color(d), sway(d))
+      out.push({ p, d })
     }
     for (const [a, b, cc] of OCTA_TRIS) {
       this.tri(base + a, base + b, base + cc)
     }
+    return out
   }
 
   /** One thin leaf, spike or blade, two-sided (back to back), base to tip. */
@@ -189,6 +192,7 @@ class PlantGeo {
     cTip: Color,
     swayBase: number,
     swayTip: number,
+    anchored = false,
   ): void {
     const dir = tmpA.subVectors(tip, base)
     const side = tmpB.set(-dir.z, 0, dir.x)
@@ -201,8 +205,9 @@ class PlantGeo {
       n.negate()
     }
     const nb = n.clone().negate()
-    const p0 = base.clone().add(side)
-    const p1 = base.clone().sub(side)
+    // anchored: one corner exactly on `base` (a vertex of what it grows from, so they weld)
+    const p0 = anchored ? base.clone().addScaledVector(side, 2) : base.clone().add(side)
+    const p1 = anchored ? base.clone() : base.clone().sub(side)
     const a = this.vert(p0, n, cBase, swayBase)
     const b = this.vert(p1, n, cBase, swayBase)
     const c = this.vert(tip, n, cTip, swayTip)
@@ -845,7 +850,7 @@ function shrub(
     const ry = r * (0.6 + rng.next() * 0.25)
     const c = new Vector3(x + ox, y + ry * 0.75 - 0.03, z + oz)
     const base = jitter(col, rng, 0.2)
-    g.blob(
+    const verts = g.blob(
       c,
       new Vector3(r, ry, r),
       (n) =>
@@ -857,6 +862,21 @@ function shrub(
       0.45,
       rng,
     )
+    if (lod === 0) {
+      // twigs and leafy sprigs breaking out of the crown (welded to its vertices), so it reads as
+      // a bush, not a lump
+      for (const v of verts) {
+        if (v.d.y < 0.05 || rng.next() < (kind === 'creosote' ? 0.25 : 0.5)) {
+          continue
+        }
+        const to = v.p
+          .clone()
+          .addScaledVector(v.d, r * (0.35 + rng.next() * 0.35))
+          .add(new Vector3(0, r * 0.15, 0))
+        const sw = Math.max(0, v.d.y + 0.4) * 0.45
+        g.blade(v.p, to, 0.035 * s * big, base, tip, sw, Math.min(1, sw + 0.4), true)
+      }
+    }
   }
   // a few woody stems showing at the foot
   if (kind === 'creosote') {
@@ -1061,8 +1081,8 @@ const FOOT: Record<PlantKind, number> = {
   pear: 1,
   cholla: 0.3,
   ocotillo: 0.4,
-  creosote: 1,
-  sage: 0.7,
+  creosote: 1.4,
+  sage: 0.9,
   grass: 0.3,
   snag: 0.35,
   boulder: 2,
