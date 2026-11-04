@@ -109,7 +109,6 @@ export class Hub {
     this.root.setAttribute('aria-label', 'The Last Chance Saloon')
     swallow(this.root)
     const top = el('header', 'ow-hub-top', this.root)
-    el('div', 'ow-hub-sign', top, 'The Last Chance Saloon')
     this.strip = el('div', 'ow-hub-strip', top)
     const side = el('div', 'ow-hub-side', this.root)
     this.tiles = new ModeTiles(side, (m) => this.pick(m))
