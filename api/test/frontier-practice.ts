@@ -68,9 +68,13 @@ if (FRESH) {
   })
   await page.reload()
 }
-await page.waitForFunction(() => typeof Reflect.get(globalThis, '__frontier') === 'function', null, {
-  timeout: 60_000,
-})
+await page.waitForFunction(
+  () => typeof Reflect.get(globalThis, '__frontier') === 'function',
+  null,
+  {
+    timeout: 60_000,
+  },
+)
 await page.waitForFunction(
   () => (Reflect.get(globalThis, '__frontier') as () => { alive: boolean })().alive,
   null,
@@ -81,7 +85,10 @@ const dbg = (): Promise<Debug> =>
 const pilot = (fn: string, ...args: number[]): Promise<void> =>
   page.evaluate(
     ([f, a]) => {
-      const p = Reflect.get(globalThis, '__frontierPilot') as Record<string, (...x: number[]) => void>
+      const p = Reflect.get(globalThis, '__frontierPilot') as Record<
+        string,
+        (...x: number[]) => void
+      >
       p[f as string]?.(...(a as number[]))
     },
     [fn, args] as const,
