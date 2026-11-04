@@ -153,6 +153,16 @@ export class Pickups {
     }
   }
 
+  /**
+   * Every lit fuse this frame: where it lies, how long is left, and the fuse it was thrown with.
+   * The client draws a blast warning from this; the explosion itself is the server's call.
+   */
+  eachFuse(nowS: number, cb: (x: number, z: number, left: number, total: number) => void): void {
+    for (const t of this.thrown) {
+      cb(t.to.x, t.to.z, Math.max(0, t.fuseEnd - nowS), t.fuseEnd - t.born)
+    }
+  }
+
   /** Spark positions of every lit fuse this frame (the effects layer draws them). */
   update(nowS: number, spark: (x: number, y: number, z: number) => void): void {
     for (const [i, it] of this.items.entries()) {

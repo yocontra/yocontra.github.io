@@ -1659,6 +1659,17 @@ export class FrontierGame {
         fx.ring(r.x, r.z, 0.85 + Math.sin(nowS * 6) * 0.05, RING_MW, 0)
       }
     }
+    // a lit bundle shows its whole blast radius while it is close enough to matter, and an
+    // inner ring closes on the bundle as the fuse burns down
+    const blast = 4
+    this.pickups?.eachFuse(nowS, (x, z, left, total) => {
+      if (Math.hypot(x - this.own.x, z - this.own.z) > 12) {
+        return
+      }
+      const k = total > 0 ? Math.min(1, left / total) : 0
+      fx.ring(x, z, blast, RING_FUSE, 0)
+      fx.ring(x, z, 0.25 + blast * k, RING_FUSE_HOT, 12)
+    })
   }
 
   /** The death card's link: your killer's wanted poster (Report and Block on it). */
@@ -2254,6 +2265,8 @@ const RING_MINE_MW = new Color(1.8, 1.4, 0.3)
 const RING_CALLOUT = new Color(2, 0.4, 0.2)
 const RING_SHOWDOWN = new Color(0.9, 0.7, 0.45)
 const RING_MW = new Color(2, 1.5, 0.3)
+const RING_FUSE = new Color(1.1, 0.18, 0.1)
+const RING_FUSE_HOT = new Color(2.2, 0.8, 0.2)
 
 /** The sideways share of each shot, repeating: up-left, up-right, and so on. */
 const RECOIL_SIDE = [0.18, -0.32, 0.42, -0.12, 0.3, -0.4]
