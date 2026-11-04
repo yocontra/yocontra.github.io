@@ -228,6 +228,8 @@ export class FrontierGame {
   private wasInZone = false
   /** The last frame's dt (s), for the HUD's easing. */
   private dtS = 0
+  /** When the pointer lock was last lost (performance.now ms). */
+  private lockLostAt = -1e9
   /** When you last fired (performance.now ms), for the raised-gun pose. */
   private lastShotAt = -1e9
   /** Dev harness ADS (desktop has no touch AIM toggle). */
@@ -284,6 +286,7 @@ export class FrontierGame {
       },
       onScoreboard: (open) => this.score.show(open && this.running),
       onLockLost: () => {
+        this.lockLostAt = performance.now()
         if (!(this.coach.open || this.hud.menuOpen || this.exited)) {
           this.hud.setMenu(true)
         }
@@ -408,7 +411,7 @@ export class FrontierGame {
     if (open) {
       this.desk.unlock()
       this.score.show(false)
-    } else if (!this.coach.open) {
+    } else if (!(this.coach.open || this.touchUi)) {
       // "Back to the fight" is a click: a fine moment to take the mouse again
       this.desk.lock()
     }
@@ -419,7 +422,8 @@ export class FrontierGame {
     if (open) {
       this.desk.unlock()
       this.hud.setMenu(false)
-    } else {
+    } else if (!this.touchUi) {
+      // "Ride" is a click: take the mouse straight into the fight
       this.desk.lock()
     }
   }
@@ -872,7 +876,8 @@ export class FrontierGame {
       e.preventDefault()
       return
     }
-    if (e.code === 'Escape') {
+    if (e.code === 'Escape' && performance.now() - this.lockLostAt > 300) {
+      // (the Esc that let go of the pointer lock already opened the menu)
       this.hud.toggleMenu()
     }
   }

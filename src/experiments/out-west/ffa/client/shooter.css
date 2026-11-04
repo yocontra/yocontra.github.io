@@ -419,7 +419,7 @@
 
 .fr-score-row {
   display: grid;
-  grid-template-columns: 28px minmax(0, 1fr) 40px 36px 36px;
+  grid-template-columns: 24px minmax(0, 1fr) 32px 28px 28px;
   gap: 8px;
   padding: 3px 6px;
   font-size: var(--ow-fs-body);
@@ -427,9 +427,12 @@
 }
 
 .fr-score-row span {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  min-width: 0;
+}
+
+/* a long name wraps rather than hides behind an ellipsis or runs into the tallies */
+.fr-score-row span:nth-child(2) {
+  overflow-wrap: anywhere;
 }
 
 .fr-score-row span:nth-child(n + 3) {

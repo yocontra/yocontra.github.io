@@ -532,7 +532,12 @@ async function frontier(browser: Browser, size: Size): Promise<void> {
     await page.keyboard.up('Tab')
   })
   await step(page, size, 'frontier-pause', async () => {
-    await tap(page, '.fr-menu-btn')
+    // with a mouse, "Ride" took the pointer lock: Esc lets go of it and opens the pause menu
+    await page.keyboard.press('Escape')
+    await page.waitForTimeout(300)
+    if ((await page.locator('.fr-menu.on').count()) === 0) {
+      await tap(page, '.fr-menu-btn')
+    }
     await audit(page, size, 'frontier-pause', '.fr-menu')
     await tap(page, '.fr-menu .fr-menu-quiet >> nth=-1')
   })
