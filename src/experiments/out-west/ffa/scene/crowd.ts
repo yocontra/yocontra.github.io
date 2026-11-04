@@ -809,6 +809,12 @@ export class Crowd {
     }
     this.animate(m, actor, p, nowS)
     m.loco?.body(holder, pivot)
+    if (!holder.visible) {
+      // your own body in first person: nothing shows it, so it doesn't animate (it picks up
+      // where it is when the lens pulls back out)
+      m.wasNear = false
+      return
+    }
     const dist = Math.hypot(p.x - cx, p.z - cz)
     // your own rider at 30 Hz; others at 20 Hz within 12 m and 12 Hz beyond (each tick is a full
     // clip evaluation per playing action: the crowd's biggest CPU and garbage source)
