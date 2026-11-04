@@ -14,8 +14,8 @@
  * packed. Bounty Hunt is the duel's scene and director against a remote opponent; it needs the API
  * and a second client, so the Quick Draw rows stand in for it.
  *
- * Each row: draws and triangles (max), textures (count, estimated MB), JS heap (after a forced GC
- * before sampling, then the median), CPU p50 / p95 / p99 per frame (every rAF callback timed by an
+ * Each row: draws and triangles (max), textures (count, estimated MB), JS heap (the median while
+ * sampling, garbage included, and `retained`: after forced GCs at the end), CPU p50 / p95 / p99 per frame (every rAF callback timed by an
  * init script, so it's the whole frame's JavaScript and GL submission), long frames (a frame
  * interval over 16.7 ms by more than a fifth: a missed vsync) and frames whose CPU alone is over
  * 16.7 ms.
@@ -81,6 +81,8 @@ interface Snap {
 interface Row {
   screen: string
   rate: number
+  /** JS heap right after a forced GC at the end of the run (what's retained, not garbage). */
+  retainedMb?: number
   frames: Frame[]
   snaps: Snap[]
 }
@@ -137,6 +139,16 @@ async function gc(cdp: CDPSession): Promise<void> {
   await cdp.send('HeapProfiler.collectGarbage').catch(() => undefined)
 }
 
+/** MB of JS heap still reachable: two forced GCs, then the used size. */
+async function retained(page: Page, cdp: CDPSession): Promise<number> {
+  await gc(cdp)
+  await gc(cdp)
+  return page.evaluate(() => {
+    const m = (performance as Performance & { memory?: { usedJSHeapSize: number } }).memory
+    return m ? m.usedJSHeapSize / 1_048_576 : 0
+  })
+}
+
 /** Title, hub and Outfitter: one page walked through. */
 async function menus(ctx: BrowserContext, rate: number): Promise<void> {
   if (!['title', 'hub', 'outfitter'].some(want)) {
@@ -153,7 +165,7 @@ async function menus(ctx: BrowserContext, rate: number): Promise<void> {
     const r = await sample(page, secs * 1000, each)
     await maybeProfile(screen, cdp)
     await cdp.send('Emulation.setCPUThrottlingRate', { rate: 1 })
-    rows.push({ screen, rate, ...r })
+    rows.push({ screen, rate, ...r, retainedMb: await retained(page, cdp) })
   }
   if (want('title')) {
     await run('title')
@@ -277,11 +289,18 @@ async function duel(ctx: BrowserContext, rate: number): Promise<void> {
     console.log('profile: duel (walk to kill cam)')
     await stopProfile(cdp, true)
   }
+  const kept = await retained(page, cdp)
   // one row per phase
   for (const ph of ['walk', 'turn', 'wait', 'call', 'win', 'lose', 'coward']) {
     const f = frames.filter((r) => r[2] === ph)
     if (f.length > 10) {
-      rows.push({ screen: `duel ${ph === 'win' ? 'win+killcam' : ph}`, rate, frames: f, snaps })
+      rows.push({
+        screen: `duel ${ph === 'win' ? 'win+killcam' : ph}`,
+        rate,
+        frames: f,
+        snaps,
+        retainedMb: kept,
+      })
     }
   }
   await page.close()
@@ -338,6 +357,7 @@ async function frontier(
     }
   } else {
     const r = await sample(page, ms, pan)
+    row.retainedMb = await retained(page, cdp)
     row.frames = r.frames
     row.snaps = r.snaps
     await maybeProfile(screen, cdp)
@@ -427,6 +447,7 @@ const head = [
   'tex',
   'tex MB',
   'heap MB',
+  'retained',
   'CPU p50',
   'p95',
   'p99',
@@ -444,6 +465,7 @@ const table = rows.map((r) => {
     String(max(r.snaps.map((x) => x.textures))),
     max(r.snaps.map((x) => x.textureMb)).toFixed(0),
     med(r.snaps.map((x) => x.heapMb ?? 0)).toFixed(1),
+    r.retainedMb === undefined ? '-' : r.retainedMb.toFixed(1),
     s.p50.toFixed(1),
     s.p95.toFixed(1),
     s.p99.toFixed(1),
