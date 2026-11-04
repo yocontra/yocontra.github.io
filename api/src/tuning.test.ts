@@ -15,7 +15,8 @@ describe('ranked tuning matches the client roster', () => {
       }
       expect(t.fakeChance).toBe(o.fakeChance)
       // the boss's clock sets his wait, not the table
-      const wait = o.gimmick === 'boss' ? [0, 0] : [o.wait[0] * 1000, o.wait[1] * 1000]
+      const wait: readonly [number, number] =
+        o.gimmick === 'boss' ? [0, 0] : [o.wait[0] * 1000, o.wait[1] * 1000]
       expect(t.waitMs).toEqual(wait)
       // the server's first target is the rooftop rifleman on the underboss
       const main = o.gimmick === 'underboss' ? t.targets[1] : t.targets[0]
