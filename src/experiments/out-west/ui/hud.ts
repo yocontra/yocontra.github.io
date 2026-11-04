@@ -157,8 +157,11 @@ export class Hud {
   call(text: string, ms: number): void {
     clearTimeout(this.callCapClear)
     this.callCap.textContent = text
-    this.callCap.classList.remove('on')
-    void this.callCap.offsetWidth
+    if (this.callCap.classList.contains('on')) {
+      // restart the animation; only then is a forced layout worth it (not on the bell's frame)
+      this.callCap.classList.remove('on')
+      void this.callCap.offsetWidth
+    }
     this.callCap.classList.add('on')
     this.callIndicator.classList.add('on')
     this.callTimer = ms

@@ -43,6 +43,7 @@ import {
   specFor,
   type TierSpec,
 } from './tiers.ts'
+import { compileOverride } from './warm.ts'
 
 /**
  * The coarse hint main.ts passes ('high' on desktop, 'low' on touch). The
@@ -592,6 +593,25 @@ export class Renderer {
   }
 
   private lowPowerSince = 0
+  private shadowFrame = 0
+  private lensWarm = 0
+
+  /**
+   * Floor and legacy redraw the sun's shadow map every other frame (30 Hz). The map and its
+   * matrix stay a matched pair, so a skipped frame shows the last frame's moving shadows (a rider,
+   * a duelist's arm), never a misplaced one. The shadow pass walks the whole scene and redraws
+   * every caster (the duel street's kit batch is 55k triangles): about a tenth of the frame's
+   * CPU on the floor proxy, in both modes.
+   */
+  private shadowRate(): void {
+    const sm = this.gl.shadowMap
+    const half = this.tier === 'floor' || this.tier === 'legacy'
+    this.shadowFrame++
+    sm.autoUpdate = !half
+    if (half) {
+      sm.needsUpdate = (this.shadowFrame & 1) === 0
+    }
+  }
   private lowPowerDropped = false
 
   /**
@@ -629,14 +649,36 @@ export class Renderer {
     const rays = this.tier === 'high' ? ((ud.owRays as number | undefined) ?? 0) : 0
     this.atmos.track(this.camera, rays)
     this.gpu?.begin()
+    this.shadowRate()
     this.probe.tick()
+    // the lens pass's program compiles on its first use: draw the first frames with it on (at
+    // zero strength it changes nothing), so that's at load, not on the frame of the first kill
+    const lensOn = this.lensPass.enabled
+    const warm = this.lensWarm < 2
+    if (warm) {
+      this.lensPass.enabled = true
+    }
     this.composer.render(dt)
+    if (warm) {
+      this.lensWarm++
+      this.lensPass.enabled = lensOn
+    }
     this.gpu?.end()
     const info = this.gl.info.render
     this.frame.calls = info.calls
     this.frame.triangles = info.triangles
     this.cpu.push(performance.now() - frameStart)
     this.perf?.update(frameStart)
+  }
+
+  /**
+   * Compile the red flash frame's programs now (call it at a level's setup), not on the frame of
+   * the winning shot: the black override needs its own variant per kind of object (skinned,
+   * instanced, morphed), and a new outlaw can bring a new one. Same state as the flash frame
+   * (no fog, drawn to the screen), every drawable in the scene, not only what's in view.
+   */
+  warmSilhouette(hidden: readonly { visible: boolean }[]): void {
+    compileOverride({ gl: this.gl, scene: this.scene, camera: this.camera }, this.black, hidden)
   }
 
   /** The red flash frame: black silhouettes on pure #F00, bypassing all grading. */

@@ -991,32 +991,12 @@ export class FrontierGame {
     this.perf.frameMs = performance.now() - t0
     this.audio?.update()
     this.renderer.label = 'frontier'
-    this.shadowRate()
     this.renderer.adapt(dtMs, true)
     this.renderer.render(dt)
     if (this.trace.on) {
       this.pushTrace(now, dtMs, performance.now() - t0)
     }
   }
-
-  /**
-   * Floor and legacy redraw the sun's shadow map every other frame (30 Hz). Only riders, pickups
-   * and props near you cast into it; the map and its matrix stay a matched pair, so a skipped
-   * frame shows the last frame's rider shadows, never a misplaced one. Its scene walk and draws
-   * were a tenth of the frame's CPU on the floor proxy.
-   */
-  private shadowRate(): void {
-    const sm = this.renderer.gl.shadowMap
-    const t = this.renderer.tier
-    const half = t === 'floor' || t === 'legacy'
-    this.shadowFrame++
-    sm.autoUpdate = !half
-    if (half) {
-      sm.needsUpdate = (this.shadowFrame & 1) === 0
-    }
-  }
-
-  private shadowFrame = 0
 
   private pushTrace(now: number, dtMs: number, cpuMs: number): void {
     const r = this.traceRow
