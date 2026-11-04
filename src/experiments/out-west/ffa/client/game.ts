@@ -79,6 +79,7 @@ import { CUT } from '../scene/cutaway.ts'
 import { shareDepthByKind } from '../scene/depth-kinds.ts'
 import { Effects } from '../scene/fx.ts'
 import { installHotPaths } from '../scene/hot-paths.ts'
+import { buildInterior } from '../scene/interior.ts'
 import { lookFor } from '../scene/looks.ts'
 import { Pickups } from '../scene/pickups.ts'
 import { buildTown, type Town } from '../scene/town.ts'
@@ -557,7 +558,13 @@ export class FrontierGame {
     onProgress(0.65, 'Raising the town')
     this.town = buildTown(TOWN, assets, SUN_DIR)
     this.scene.add(this.town.root)
-    shadeTown(this.town.root)
+    const inside = buildInterior(TOWN, presetAt(DAY).windows)
+    shadeTown(this.town.root, inside)
+    if (inside.lamps) {
+      this.town.root.add(inside.lamps)
+      inside.lamps.updateMatrix()
+      inside.lamps.updateMatrixWorld(true)
+    }
     this.scene.add(buildWilds(TOWN, this.renderer.tier))
     this.wilds.roll(TOWN)
     this.fx = new Effects(this.scene)

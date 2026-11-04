@@ -392,6 +392,12 @@ function makeMaterials(assets: Assets): TownMaterials {
     side: DoubleSide,
   })
   cutaway(cloth, false)
+  // names the atmosphere pass (wilds.ts) dispatches on
+  wall.name = 'town-wall'
+  stone.name = 'town-stone'
+  roof.name = 'town-roof'
+  wood.name = 'town-wood'
+  windows.name = 'town-windows'
   return { wall, stone, roof, wood, windows, signs, kit, cloth }
 }
 
