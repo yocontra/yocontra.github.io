@@ -23,6 +23,7 @@ import { GeoBuilder } from './geo.ts'
 import { addStatic, buildMesas, buildPosterPost, buildWaterTower } from './landmarks.ts'
 import { type Preset, presetAt } from './presets.ts'
 import { mergePlaced } from './props.ts'
+import { releaseAfterUpload } from './release.ts'
 import { Sky } from './sky.ts'
 import {
   AWNING,
@@ -265,7 +266,9 @@ float hoof(vec2 p) {
     withCloudShadow(groundMat)
     withCloudShadow(this.wallMat)
     withCloudShadow(this.trimMat)
-    this.ground = new Mesh(desertGeometry(), groundMat)
+    const groundGeo = desertGeometry()
+    releaseAfterUpload(groundGeo)
+    this.ground = new Mesh(groundGeo, groundMat)
     this.ground.name = 'ground'
     this.ground.receiveShadow = true
     this.ground.matrixAutoUpdate = false

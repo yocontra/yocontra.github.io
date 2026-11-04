@@ -28,6 +28,8 @@ import {
 } from 'three'
 import { Rng } from '../ffa/sim/rng.ts'
 import { bindAtmos, withCloudShadow } from './atmos.ts'
+import { buildImpostors } from './impostor.ts'
+import { releaseAfterUpload } from './release.ts'
 
 export type PlantKind =
   | 'saguaro'
@@ -52,6 +54,8 @@ export interface Plant {
   seed: number
   /** 0 = full detail, 1 = far (fewer sides and rings). */
   lod: number
+  /** Drawn as an impostor card pair (far from every camera), not a mesh. */
+  imp?: boolean
 }
 
 // ---------------------------------------------------------------- builder
@@ -452,9 +456,9 @@ function saguaro(
 ): void {
   const h = (5 + rng.next() * 6.5) * s
   const r = 0.2 + h * 0.022
-  const sides = lod > 0 ? 6 : 10
+  const sides = lod > 0 ? 6 : 8
   const lean = new Vector3((rng.next() - 0.5) * 0.06, 1, (rng.next() - 0.5) * 0.06).normalize()
-  const segs = lod > 0 ? 3 : 5
+  const segs = lod > 0 ? 3 : 4
   const trunk: Vector3[] = []
   for (let i = 0; i <= segs; i++) {
     trunk.push(new Vector3(x, y - 0.02, z).addScaledVector(lean, (h * i) / segs))
@@ -515,7 +519,7 @@ function saguaro(
         ? [path[0] as Vector3, path[2] as Vector3, path[3] as Vector3, path[5] as Vector3]
         : path,
       () => ar,
-      lod > 0 ? 4 : 8,
+      lod > 0 ? 4 : 6,
       ribs,
       () => 0,
       ar * 0.7,
@@ -591,7 +595,7 @@ function joshua(
   }
   // a spiky rosette at every tip, a skirt of dead leaves hanging under it
   for (const t of tips) {
-    const n = lod > 0 ? 6 : 11
+    const n = lod > 0 ? 6 : 8
     const len = 0.32 + rng.next() * 0.12
     for (let i = 0; i < n; i++) {
       // a golden-angle spiral: every leaf in its own direction, never two in one plane
@@ -1137,6 +1141,8 @@ export interface FloraOpts {
   chunk: number
   /** Overrides the grid: which chunk a plant at (x, z) merges into. */
   chunkKey?: (x: number, z: number) => string
+  /** Centre the impostors are split round (four quadrant meshes). */
+  centre?: { x: number; z: number }
   /** Chunks whose centre is within this of `near` cast shadows. */
   shadowNear?: { x: number; z: number; r: number }
 }
@@ -1179,17 +1185,24 @@ function spaced(plants: readonly Plant[]): Plant[] {
   return out
 }
 
-/** Drop an attribute's CPU array once it is uploaded (three's documented pattern). */
-function release(this: { array: unknown }): void {
-  this.array = null
-}
-
 /** Bake the plants into merged, chunked, static meshes under one group. */
 export function buildFlora(plants: readonly Plant[], opts: FloraOpts): Group {
   const root = new Group()
   root.name = 'flora'
   const chunks = new Map<string, PlantGeo>()
+  const far = new Map<string, Plant[]>()
+  const ctr = opts.centre ?? { x: 0, z: 0 }
   for (const p of spaced(plants)) {
+    if (p.imp) {
+      const q = `${p.x < ctr.x ? 'w' : 'e'}${p.z < ctr.z ? 'n' : 's'}`
+      const list = far.get(q)
+      if (list) {
+        list.push(p)
+      } else {
+        far.set(q, [p])
+      }
+      continue
+    }
     const key =
       opts.chunkKey?.(p.x, p.z) ?? `${Math.floor(p.x / opts.chunk)},${Math.floor(p.z / opts.chunk)}`
     let g = chunks.get(key)
@@ -1215,15 +1228,7 @@ export function buildFlora(plants: readonly Plant[], opts: FloraOpts): Group {
     if (!geo) {
       continue
     }
-    if (!import.meta.env.DEV) {
-      // once on the GPU the CPU copies are dead weight (dev keeps them for the float audit)
-      for (const attr of Object.values(geo.attributes)) {
-        if (attr instanceof BufferAttribute) {
-          attr.onUpload(release)
-        }
-      }
-      geo.index?.onUpload(release)
-    }
+    releaseAfterUpload(geo)
     const m = new Mesh(geo, mat)
     m.name = 'flora'
     m.userData.chunk = key
@@ -1233,6 +1238,12 @@ export function buildFlora(plants: readonly Plant[], opts: FloraOpts): Group {
     const c = geo.boundingSphere?.center
     m.castShadow = Boolean(sn && c && Math.hypot(c.x - sn.x, c.z - sn.z) < sn.r)
     root.add(m)
+  }
+  for (const list of far.values()) {
+    const m = buildImpostors(list, opts.heightAt)
+    if (m) {
+      root.add(m)
+    }
   }
   return root
 }
@@ -1316,8 +1327,8 @@ export function floraDensity(tier: string): number {
     case 'medium':
       return 0.85
     case 'floor':
-      return 0.65
-    default:
       return 0.45
+    default:
+      return 0.3
   }
 }

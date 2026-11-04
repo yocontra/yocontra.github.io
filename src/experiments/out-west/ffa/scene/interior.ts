@@ -142,6 +142,12 @@ export function buildInterior(layout: TownLayout, glow: number): Interior {
   mask.minFilter = LinearFilter
   mask.flipY = false
   mask.needsUpdate = true
+  if (!import.meta.env.DEV) {
+    // once uploaded, the CPU copy is dead weight
+    mask.onUpdate = () => {
+      mask.image.data = null
+    }
+  }
   const uniforms = {
     inMask: new Uniform(mask),
     inSize: new Uniform(layout.size),

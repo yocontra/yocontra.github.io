@@ -1,6 +1,7 @@
 /**
  * The Bounty Hunt match intro: both wanted posters slam in, then READY once the cock beat opens
- * (10 s, or you dodge). A ghost's poster is sepia and labelled.
+ * (10 s, or you dodge). A ghost's poster is sepia and labelled, and against a ghost or the Town
+ * Outlaw there is no READY at all: nobody is stood up, so you're cocked when the posters are up.
  */
 import type { Poster } from '../contract/duel.ts'
 import { button, el, swallow } from './sheet.ts'
@@ -17,8 +18,13 @@ export class MatchIntro {
   private readonly status: HTMLElement
   private readonly readyBtn: HTMLButtonElement
   private sent = false as boolean
+  /** A ghost or the Town Outlaw: no READY deadline, no dodge. */
+  private readonly ai: boolean
+  private readonly onReady: () => void
 
   constructor(parent: HTMLElement, you: Poster, them: Poster, h: IntroHandlers) {
+    this.ai = them.kind !== 'human'
+    this.onReady = h.ready
     this.root = el('div', 'ow-match', parent)
     this.root.setAttribute('role', 'dialog')
     this.root.setAttribute('aria-label', `Bounty Hunt against ${them.name}`)
@@ -29,7 +35,14 @@ export class MatchIntro {
     row.append(posterEl(you, 'you'))
     el('div', 'ow-match-vs', row, 'vs')
     row.append(posterEl(them, 'them'))
-    this.status = el('div', 'ow-match-status', this.root, 'Sizing each other up…')
+    this.status = el(
+      'div',
+      'ow-match-status',
+      this.root,
+      this.ai
+        ? 'No READY against a ghost: you walk out when the posters are up.'
+        : 'Sizing each other up…',
+    )
     this.status.setAttribute('aria-live', 'polite')
     const btns = el('div', 'ow-hub-row', this.root)
     button(btns, 'Flee', h.flee)
@@ -47,11 +60,21 @@ export class MatchIntro {
       true,
     )
     this.readyBtn.disabled = true
+    this.readyBtn.hidden = this.ai
     requestAnimationFrame(() => this.root.classList.add('on'))
   }
 
   /** The cock beat: READY is live for 10 s. */
   cock(deadline: number | null, serverOffset: number): void {
+    if (this.ai) {
+      // the room cocks you itself; sending it too covers an older room that still asks
+      if (!this.sent) {
+        this.sent = true
+        this.onReady()
+      }
+      this.status.textContent = 'Cocked. Walk out when you’re ready.'
+      return
+    }
     if (!this.sent) {
       this.readyBtn.disabled = false
       this.readyBtn.focus()

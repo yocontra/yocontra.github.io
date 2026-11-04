@@ -235,15 +235,16 @@ export function desertPlants(tier: string): Plant[] {
   const rng = new Rng(SEED)
   const k = floraDensity(tier)
   const plants: Plant[] = []
+  // how far from the street (where the duel's cameras are)
+  const edge = (x: number, z: number) => Math.max(Math.abs(x) - 12, z - 60, -64 - z)
   const add = (x: number, z: number, kind: PlantKind, lod: number, s = 1) => {
-    plants.push({
-      kind,
-      x,
-      z,
-      s: s * (0.8 + rng.next() * 0.45),
-      seed: (rng.next() * 4_294_967_296) >>> 0,
-      lod,
-    })
+    const imp = edge(x, z) > 45
+    const sz = s * (0.8 + rng.next() * 0.45)
+    const seed = (rng.next() * 4_294_967_296) >>> 0
+    if (imp && (kind === 'grass' || kind === 'barrel' || kind === 'pear')) {
+      return
+    }
+    plants.push({ kind, x, z, s: sz, seed, lod, imp })
   }
   // 1. by the town: grass at the boardwalks' feet and in the gaps, a little scrub
   const street = clumpScatter(

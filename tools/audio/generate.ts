@@ -4,14 +4,16 @@
  *
  *   APPARISH_CARD_SPEND="<why>" bun tools/audio/generate.ts <id> [<id>…] [--take 2] [--force]
  *
- * - Writes raw takes to `tools/audio/raw/<id>.mp3` (or `<id>.t2.mp3` for `--take 2`). The raw folder
- *   is not committed.
+ * - Writes raw takes to `tools/audio/raw/<id>.mp3` (or `<id>.t2.mp3` for `--take 2`; Lyria takes are
+ *   `.wav`, and take N uses seed + N − 1). The raw folder is not committed.
+ * - Lyria (Google, cloud credit) runs in-process through `vendors.ts`; it needs no card approval.
  * - Skips takes that already exist unless `--force`, so a rerun never pays twice.
  * - Keys stay in the Apparish env; nothing here reads or prints them.
  */
 import { existsSync, mkdirSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { GENS } from './manifest.ts'
+import { lyria } from './vendors.ts'
 
 const APPARISH = '/Users/contra/Projects/apparish'
 const RAW = resolve(import.meta.dir, 'raw')
@@ -25,10 +27,22 @@ async function one(id: string, take: number, force: boolean): Promise<boolean> {
     console.error(`unknown id ${id}`)
     return false
   }
-  const out = join(RAW, take > 1 ? `${id}.t${take}.mp3` : `${id}.mp3`)
+  const ext = g.kind === 'lyria' ? 'wav' : 'mp3'
+  const out = join(RAW, take > 1 ? `${id}.t${take}.${ext}` : `${id}.${ext}`)
   if (existsSync(out) && !force) {
     console.log(`skip ${id} (have ${out})`)
     return true
+  }
+  if (g.kind === 'lyria') {
+    try {
+      // a later take is a different seed, so it is a different piece
+      await lyria(out, g.prompt, g.negative, g.seed === undefined ? undefined : g.seed + take - 1)
+      console.log(`ok   ${id}${take > 1 ? ` t${take}` : ''} (lyria)`)
+      return true
+    } catch (e) {
+      console.log(`FAIL ${id}: ${String(e).slice(0, 300)}`)
+      return false
+    }
   }
   const script =
     g.kind === 'music'
@@ -60,7 +74,8 @@ async function main(): Promise<void> {
   const ti = argv.indexOf('--take')
   const take = ti >= 0 ? Number(argv[ti + 1]) : 1
   const ids = argv.filter((a, i) => !(a.startsWith('--') || (ti >= 0 && i === ti + 1)))
-  if (!process.env.APPARISH_CARD_SPEND) {
+  const paid = ids.some((id) => GENS.find((g) => g.id === id)?.kind !== 'lyria')
+  if (paid && !process.env.APPARISH_CARD_SPEND) {
     console.error('Set APPARISH_CARD_SPEND to the approved reason first.')
     process.exit(1)
   }

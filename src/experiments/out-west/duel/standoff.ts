@@ -8,6 +8,7 @@ import {
   RIFLEMAN,
 } from '../data/outlaws.ts'
 import type { Press } from '../engine/input.ts'
+import { haptic } from '../platform/haptics.ts'
 import { clamp01 } from '../scene/camera.ts'
 import type { StandoffSpec } from './clock.ts'
 import { playCue } from './cues.ts'
@@ -22,6 +23,12 @@ import { rng, V } from './state.ts'
 
 /** Scheduling margin on top of the output latency, ms (a frame or two of main-thread slack). */
 const BELL_MARGIN_MS = 50
+
+/** As the wait opens, presses are held this long ("steady…") so a double tap isn't a back-shot. */
+export const STEADY_MS = 800
+
+/** The rifleman's scope-glint marker stays up this long, real seconds. */
+const GLINT_MARK_S = 0.3
 
 const NUMBERS = [
   'ONE',
@@ -78,6 +85,23 @@ function resetWaitState(d: Director): void {
   d.ecuDone = false
   d.shotsSent = 0
   d.plan = null
+  d.fakesSeen = 0
+  d.hisMs = null
+  d.lateMs = null
+  d.steadyUntil = Math.max(d.steadyUntil, d.waitStart + STEADY_MS)
+  d.nextBeat = d.waitStart + 60_000 / FEEL.heartStartBpm
+}
+
+/**
+ * A faint heartbeat under the thumb through the wait, on the wait's own clock: it never knows when
+ * the call is coming, so it can't hint at it, and it stops dead with the phase (platform/haptics.ts:
+ * never a buzz on the bell or a fake-out).
+ */
+function hapticBeat(d: Director, now: number, bpm: number): void {
+  if (now >= d.nextBeat) {
+    haptic('beat')
+    d.nextBeat = now + 60_000 / bpm
+  }
 }
 
 export function enterWait(d: Director, fromPause: boolean): void {
@@ -130,6 +154,9 @@ function scheduleBell(d: Director, now: number): void {
   d.bellScheduled = true
   // a call that reached us late rings now: reactions count from now, not from a moment already gone
   d.tCall = Math.max(callAt, now)
+  if (!d.callPresentation.bell) {
+    return
+  }
   const when = c.audio.perfToCtx(d.tCall)
   // The call is never distance-attenuated: it rings close and centred and ducks the mix.
   d.bellVoice = c.audio.call(when)
@@ -146,7 +173,9 @@ function scheduleBell(d: Director, now: number): void {
 export function tickWait(d: Director, now: number): void {
   const c = d.c
   const sec = (now - d.waitStart) / 1000
-  c.audio.heartbeat(Math.min(FEEL.heartMaxBpm, FEEL.heartStartBpm + FEEL.heartBpmPerSecond * sec))
+  const bpm = Math.min(FEEL.heartMaxBpm, FEEL.heartStartBpm + FEEL.heartBpmPerSecond * sec)
+  c.audio.heartbeat(bpm)
+  hapticBeat(d, now, bpm)
   d.vignette = MathUtils.lerp(FEEL.vignetteBase, FEEL.vignetteWait, clamp01(sec / 2))
   // tension without cutting: the letterbox closes in at 2 s, the camera keeps its slow push
   const callAt = d.clock.callAt()
@@ -182,7 +211,9 @@ export function enterBossClock(d: Director): void {
 
 export function tickBossClock(d: Director, now: number): void {
   const sec = d.phaseT
-  d.c.audio.heartbeat(Math.min(FEEL.heartMaxBpm, FEEL.heartStartBpm + 4 * sec))
+  const bpm = Math.min(FEEL.heartMaxBpm, FEEL.heartStartBpm + 4 * sec)
+  d.c.audio.heartbeat(bpm)
+  hapticBeat(d, now, bpm)
   d.vignette = MathUtils.lerp(FEEL.vignetteBase, FEEL.vignetteWait, clamp01(sec / 6))
   // back from a clock-face insert to the standoff
   if (d.c.rig.name === 'clock' && d.realTime >= d.clockInsertUntil) {
@@ -218,6 +249,7 @@ export function onCue(d: Director, duel: number, cue: string): void {
     strike(d, Number(cue.slice('strike:'.length)) || d.strikes + 1)
     return
   }
+  d.fakesSeen++
   playCue(d, cue)
 }
 
@@ -277,19 +309,26 @@ export function onCall(d: Director, duel: number): void {
   d.enter('call')
   // reactions count from the instant the bell is heard (the call frame, within half a frame)
   d.callT = d.bellScheduled ? d.tCall : now
-  if (!d.bellScheduled) {
+  const { bell, text } = d.callPresentation
+  if (!d.bellScheduled && bell) {
     // an old server that sends the call bare: ring it now (late by the output latency)
     d.bellVoice = c.audio.call()
     if (d.callIsScream) {
       c.audio.play('shout', { gain: 1.0, rate: 0.7, pos: d.enemy?.root.position.clone() ?? V() })
     }
   }
-  c.world.toll()
-  c.hud.call('DRAW!', FEEL.callHoldMs)
-  c.hud.fake(d.callIsScream ? '[HE SCREAMS] [BELL TOLLS]' : '[BELL TOLLS]', FEEL.callCaptionMs)
+  if (bell) {
+    c.world.toll()
+  }
+  if (text) {
+    c.hud.call('DRAW!', FEEL.callHoldMs)
+  }
+  if (text && bell) {
+    c.hud.fake(d.callIsScream ? '[HE SCREAMS] [BELL TOLLS]' : '[BELL TOLLS]', FEEL.callCaptionMs)
+  }
   c.hud.letterbox(false)
   c.audio.heartbeat(0)
-  if (!d.reduced) {
+  if (!d.reduced && text) {
     c.renderer.grade.u('flash').value = 0.5
   }
   if (!d.ranked) {
@@ -318,8 +357,16 @@ export function tickCall(d: Director, now: number): void {
   // the rifleman's scope glint, 150 ms after the call
   if (d.rifleman && d.riflemanAlive && !d.glintFired && now - d.callT >= RIFLEMAN.glintAt) {
     d.glintFired = true
-    c.glint.fire(d.rifleman.headPos(V()).add(V(-0.35, -0.02, 0)))
+    d.glintMarkUntil = d.realTime + GLINT_MARK_S
+    c.glint.fire(glintPos(d))
     c.hud.fake('[a glint on the saloon roof]')
+  }
+  // a pulsing ring on the glint, so a thumb knows where the second gun is
+  if (d.rifleman && d.riflemanAlive && d.realTime < d.glintMarkUntil) {
+    const g = d.screenOf(glintPos(d))
+    c.hud.marker(g.x, g.y)
+  } else {
+    c.hud.marker(null, null)
   }
   // ranked: the clock checks the verdict isn't overdue
   d.clock.tick(now)
@@ -333,29 +380,40 @@ export function tickCall(d: Director, now: number): void {
   }
 }
 
-/** Which target a press means: 0 = him, 1 = the rifleman (underboss only). */
-function targetOf(d: Director, p: Press): number {
-  if (!(d.underboss && d.riflemanAlive)) {
-    return 0
-  }
-  if (!d.enemyAlive) {
-    return 1
-  }
-  if (p.source === 'pointer' && p.x >= 0) {
-    const e = d.screenOf(d.enemy?.headPos(V()) ?? V())
-    const r = d.screenOf(d.rifleman?.headPos(V()) ?? V())
-    return Math.hypot(e.x - p.x, e.y - p.y) < Math.hypot(r.x - p.x, r.y - p.y) ? 0 : 1
-  }
-  return 1
+/** Where the rifleman's scope catches the light. */
+function glintPos(d: Director): ReturnType<typeof V> {
+  return (d.rifleman?.headPos(V()) ?? V()).add(V(-0.35, -0.02, 0))
 }
 
-function checkHatShot(d: Director, p: Press, who: number): void {
-  if (p.source !== 'pointer' || !d.enemy || who !== 0) {
+/**
+ * Which target a press means: 0 = him, 1 = the rifleman (underboss only). The rifleman draws
+ * first, so while he lives the first press is always his, on every input (a tap anywhere, a key):
+ * aim never decides it, so touch is as fair as a keyboard. Curly takes the next.
+ */
+function targetOf(d: Director): number {
+  return d.underboss && d.riflemanAlive ? 1 : 0
+}
+
+/**
+ * Pointer aim on him: a tap on his hat takes it (`hatShot`), a tap on his gun hand shoots the gun
+ * out of it (`handShot`). Style only: the duel is judged on time, never on aim.
+ */
+function checkTrickShot(d: Director, p: Press, who: number): void {
+  if (p.source !== 'pointer' || p.x < 0 || !d.enemy || who !== 0) {
     return
   }
-  const h = d.screenOf(d.enemy.headPos(V()).add(V(0, 0.12, 0)))
+  const e = d.enemy
+  const h = d.screenOf(e.headPos(V()).add(V(0, 0.12, 0)))
   if (Math.hypot(h.x - p.x, h.y - p.y) < Math.max(40, globalThis.innerHeight * 0.06)) {
     d.hatShot = true
+    return
+  }
+  const hand = e.handR?.getWorldPosition(V())
+  if (hand) {
+    const s = d.screenOf(hand)
+    if (Math.hypot(s.x - p.x, s.y - p.y) < Math.max(28, globalThis.innerHeight * 0.04)) {
+      d.handShot = true
+    }
   }
 }
 
@@ -368,6 +426,7 @@ function rankedShot(d: Director, p: Press, who: number): void {
   d.shotsSent++
   d.lastReaction ??= p.t - d.callT
   playerFireFx(d)
+  haptic('shot')
   // the server's targets: 0 = the rifleman, 1 = Curly himself; the second shot takes the other
   let target = 0
   if (d.underboss) {
@@ -378,8 +437,8 @@ function rankedShot(d: Director, p: Press, who: number): void {
 }
 
 export function playerShoots(d: Director, p: Press): void {
-  const who = targetOf(d, p)
-  checkHatShot(d, p, who)
+  const who = targetOf(d)
+  checkTrickShot(d, p, who)
   if (d.ranked) {
     rankedShot(d, p, who)
     return
@@ -402,6 +461,7 @@ export function playerShoots(d: Director, p: Press): void {
   d.lastPressT = p.t
   d.lastReaction ??= r
   playerFireFx(d)
+  haptic('shot')
   d.targetsDown++
   if (who === 1) {
     killRifleman(d)

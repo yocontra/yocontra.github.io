@@ -1,4 +1,4 @@
-import { bountyFor, type DuelOutcome, money, scoreRun } from '../data/economy.ts'
+import { bountyFor, type DuelOutcome, type DuelRecord, money, payout } from '../data/economy.ts'
 import { save as persist } from '../save.ts'
 import type { DuelState } from './state.ts'
 
@@ -6,6 +6,33 @@ import type { DuelState } from './state.ts'
 export interface Paid {
   payout: number
   purse: number
+}
+
+/** A practice back-shot never costs more than this share of the purse. */
+export const PRACTICE_FINE_CAP = 0.1
+
+/**
+ * The practice purse: `scoreRun` (each outlaw pays once, never below zero), but a coward's fine is
+ * capped at 10% of the purse at the time, so a double tap on the boss can't take $1,000 off a
+ * practice run. Ranked purses are the server's `scoreRun`, uncapped.
+ */
+export function practicePurse(duels: readonly DuelRecord[]): number {
+  const paid = new Set<number>()
+  let total = 0
+  for (const d of duels) {
+    if (d.outcome === 'win') {
+      if (paid.has(d.level)) {
+        continue
+      }
+      paid.add(d.level)
+    }
+    let delta = payout(d)
+    if (d.outcome === 'coward') {
+      delta = -Math.min(-delta, Math.round(total * PRACTICE_FINE_CAP))
+    }
+    total = Math.max(0, total + delta)
+  }
+  return total
 }
 
 /**
@@ -24,7 +51,7 @@ export function book(
     outcome: rec.outcome,
     reactionMs: rec.reactionMs === null ? null : Math.round(rec.reactionMs * 10) / 10,
   })
-  run.total = paid ? paid.purse : scoreRun(run.duels)
+  run.total = paid ? paid.purse : practicePurse(run.duels)
   persist(s.c.save)
   return paid ? paid.payout : run.total - before
 }

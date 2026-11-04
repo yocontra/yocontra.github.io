@@ -3,6 +3,7 @@
  * element builder, a money formatter, and an in-game confirmation sheet (never `confirm()`).
  */
 import { money } from '../data/economy.ts'
+import { reducedMotion } from '../settings.ts'
 
 export function el<K extends keyof HTMLElementTagNameMap>(
   tag: K,
@@ -44,8 +45,6 @@ export function setBar(fill: HTMLElement, fraction: number): void {
   fill.style.transform = `scaleX(${f.toFixed(4)})`
 }
 
-const reduced = (): boolean => matchMedia('(prefers-reduced-motion: reduce)').matches
-
 /**
  * Count a number up (or down) in an element's text, easing out over `ms`. Text only, so it never
  * relayouts anything but its own line; tabular figures keep the width steady. Reduced motion
@@ -58,7 +57,7 @@ export function countUp(
   ms = 900,
 ): void {
   const { from, to } = range
-  if (reduced() || from === to) {
+  if (reducedMotion() || from === to) {
     target.textContent = format(to)
     return
   }

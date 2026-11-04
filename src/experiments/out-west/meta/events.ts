@@ -53,3 +53,30 @@ export function reportDuel(r: DuelReport): void {
     }
   }
 }
+
+/**
+ * A page the meta-game shows between duels: the Perdition Gazette before the next outlaw's poster,
+ * or the boss epilogue and credits before the end ledger. The duel awaits it with input held, then
+ * carries on. Null when there is nothing to show (or no handler is set).
+ */
+export type Interlude = { kind: 'next'; level: number } | { kind: 'end'; legend: boolean }
+
+let interludeFn: ((i: Interlude) => Promise<void> | null) | null = null
+
+/** The meta-game's single interlude handler (the Gazette). */
+export function setInterlude(fn: ((i: Interlude) => Promise<void> | null) | null): void {
+  interludeFn = fn
+}
+
+/**
+ * Called by the duel at `nextLevel()` (kind 'next', the outlaw about to be faced) and at `toEnd()`
+ * before the ledger (kind 'end'). Await the promise if one comes back; never throws or rejects.
+ */
+export function interlude(i: Interlude): Promise<void> | null {
+  try {
+    const p = interludeFn?.(i) ?? null
+    return p ? p.catch(() => undefined) : null
+  } catch {
+    return null
+  }
+}

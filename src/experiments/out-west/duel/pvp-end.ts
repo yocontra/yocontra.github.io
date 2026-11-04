@@ -77,14 +77,21 @@ export function endView(
   }
 }
 
-/** "Flee?": a dodge before the walk, a forfeit after. */
-export function confirmFlee(d: Director): Promise<boolean> {
+/**
+ * "Flee?": a dodge before the walk, a forfeit after. Against a ghost (or a Town Outlaw) the room
+ * closes before the walk with no fine.
+ */
+export function confirmFlee(d: Director, human: boolean): Promise<boolean> {
   const before = d.phase === 'cock' || d.phase === 'title'
+  let body = 'Running now is a forfeit: a loss with the full penalty.'
+  if (before) {
+    body = human
+      ? 'Running before the walk is a dodge: half your penalty and no XP.'
+      : 'No penalty against a ghost before the walk.'
+  }
   return confirmSheet(d.c.hud.root, {
     title: 'Flee?',
-    body: before
-      ? 'Running before the walk is a dodge: half your penalty and no XP.'
-      : 'Running now is a forfeit: a loss with the full penalty.',
+    body,
     yes: 'Flee',
     no: 'Stand your ground',
     danger: true,
