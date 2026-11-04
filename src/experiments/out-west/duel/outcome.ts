@@ -5,18 +5,21 @@ import { save as persist } from '../save.ts'
 import { clamp01 } from '../scene/camera.ts'
 import { say } from './chatter.ts'
 import type { Director } from './director.ts'
+import { fireGun, spinHolster } from './draws.ts'
 import { killShot } from './framing.ts'
 import { book, type Paid, payLine, showPurse } from './purse.ts'
 import { between, type DuelState, V } from './state.ts'
+
+/** Seconds into a win when you twirl the gun back into the holster (the slow-mo is over). */
+const SPIN_AT = 1.35
 
 /** Your shot: draw, muzzle flash, smoke, report. */
 export function playerFireFx(s: DuelState): void {
   const c = s.c
   const p = s.player
-  finishTurn(s, p)
-  p.draw()
   p.play('Gun_Shoot', 0.04, true, 1.8)
-  p.root.updateMatrixWorld(true)
+  // the gun is out and on him this frame, wherever the draw had got to
+  fireGun(p)
   const m = p.muzzle(V())
   c.flash.fire(m, 0.9)
   c.world.flashLight.position.copy(m)
@@ -35,18 +38,6 @@ export function playerFireFx(s: DuelState): void {
   if (!s.reduced) {
     s.ca = 0.012
   }
-}
-
-/** Snap a still-turning actor to its final facing (a shot can't wait for the spin). */
-export function finishTurn(s: DuelState, a: DuelState['player'] | null): void {
-  if (!a) {
-    return
-  }
-  const t = s.turnAnim.find((x) => x.a === a)
-  if (t) {
-    a.root.rotation.y = t.to
-  }
-  s.turnAnim = s.turnAnim.filter((x) => x.a !== a)
 }
 
 /** He goes down: impact mist at the chest, the hat flies, the fall is timed in his own clock. */
@@ -257,6 +248,10 @@ export function tickWin(d: Director, realDt: number): void {
     c.audio.musicLowpass(18_000, 0.4)
     c.audio.musicLevel(0, 0.6)
     c.audio.playSting('victory')
+  }
+  // the kill cam has eased back to 1x: a twirl on the trigger finger, and into the leather
+  if (t >= SPIN_AT && t - realDt < SPIN_AT) {
+    spinHolster(d.player)
   }
   if (d.boss) {
     tickBossKill(d, k)

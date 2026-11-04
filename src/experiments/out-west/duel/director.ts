@@ -180,19 +180,6 @@ export class Director extends DuelState {
     this.nextToll = this.realTime + 0.9
   }
 
-  turnActor(a: Actor, from: number, to: number): void {
-    this.turnAnim = this.turnAnim.filter((x) => x.a !== a)
-    this.turnAnim.push({ a, from, to, t0: this.realTime, dur: FEEL.callTurn })
-  }
-
-  private tickTurns(): void {
-    for (const t of this.turnAnim) {
-      const k = easeInOutCubic(clamp01((this.realTime - t.t0) / t.dur))
-      t.a.root.rotation.y = MathUtils.lerp(t.from, t.to, k)
-    }
-    this.turnAnim = this.turnAnim.filter((t) => this.realTime - t.t0 < t.dur)
-  }
-
   screenOf(v: Vector3): { x: number; y: number } {
     const p = v.clone().project(this.c.rig.cam)
     return {
@@ -272,7 +259,6 @@ export class Director extends DuelState {
     tickDying(this, dyingDt)
     tickAmbience(this, realDt)
     tickPresentation(this, realDt)
-    this.tickTurns()
     tickFallers(this, dt)
     return dt
   }

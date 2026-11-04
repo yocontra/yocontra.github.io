@@ -11,6 +11,7 @@ import { identityFor } from '../scene/identity.ts'
 import { dressedActor } from '../scene/loadout.ts'
 import { say } from './chatter.ts'
 import type { Director } from './director.ts'
+import { drawAt, fireGun, PLAYER_DRAW_S, REMOTE_DRAW_S } from './draws.ts'
 import { callShot, standoffShot } from './framing.ts'
 import { killEnemyAnim, playerFireFx, win } from './outcome.ts'
 import { AMB, ambience, duckForStandoff } from './present.ts'
@@ -122,9 +123,12 @@ function enemyShot(d: Director): void {
   if (!e) {
     return
   }
-  e.root.rotation.y = Math.PI
-  e.draw()
+  // still facing away (he drew early): he turns as he draws, from the hip
+  if (!e.drawing?.active) {
+    drawAt(e, d.player, Math.PI, REMOTE_DRAW_S)
+  }
   e.play('Gun_Shoot', 0.05, true, 1.6)
+  fireGun(e)
   const m = e.muzzle(V())
   d.c.flash.fire(m, 0.8)
   d.c.audio.play('fireBig', { gain: 1.1, pos: e.root.position.clone(), reverb: 0.7 })
@@ -184,8 +188,11 @@ export function honestWin(d: Director, line: string): void {
   enemyShot(d)
   d.bellVoice?.stop()
   d.bellVoice = null
-  d.turnAnim = []
-  d.player.root.rotation.y = 0
+  if (d.enemy) {
+    drawAt(d.player, d.enemy, 0, PLAYER_DRAW_S)
+  } else {
+    d.player.root.rotation.y = 0
+  }
   if (d.phase === 'walk' || d.phase === 'turn') {
     d.player.stopWalk(0.08)
     d.enemy?.stopWalk(0.08)

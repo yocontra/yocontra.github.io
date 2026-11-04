@@ -192,7 +192,9 @@ export function callShot(s: DuelState): void {
     const E = e ? e.root.position : V(0, 0, 10)
     const dist = Math.abs(E.z - P.z)
     const look = V(-dist * lookOff(s), 1.4, E.z)
-    const pos = V(P.x - 0.55, 1.65, P.z - 1.8)
+    // a step further back and out on your gun side than the standoff's: the turn and the draw
+    // (hand, holster, gun coming up) stay in frame
+    const pos = V(P.x - 0.8, 1.55, P.z - 2.3)
     if (reduced) {
       return { pos, look, fov: restFov(s) }
     }

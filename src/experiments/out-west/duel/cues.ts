@@ -98,11 +98,9 @@ const distantShot: CueFn = (s) => {
 
 const twitch: CueFn = (s) => {
   caption(s, '[his hand twitches]')
-  const e = s.enemy
-  if (e) {
-    e.twitch = 1
-  }
-  s.c.audio.play('holster', { gain: 0.25, pos: e?.root.position.clone() ?? V(), rate: 1.3 })
+  // half a draw: hand to the gun, an inch of it out, and back in the leather
+  s.enemy?.drawing?.flinch()
+  s.c.audio.play('holster', { gain: 0.25, pos: s.enemy?.root.position.clone() ?? V(), rate: 1.3 })
 }
 
 const CUES: Record<string, CueFn> = {
@@ -184,9 +182,7 @@ const CUES: Record<string, CueFn> = {
   miscount: (s) => {
     // the one line the wait allows: it is the fake-out
     say(s, s.outlaw.name, '…TWELVE!', { ms: 1100, force: true })
-    if (s.enemy) {
-      s.enemy.twitch = 1
-    }
+    s.enemy?.drawing?.flinch()
   },
   'distant-shot': distantShot,
   gunshot: distantShot,
