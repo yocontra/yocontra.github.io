@@ -61,6 +61,7 @@ import type { LongHold } from '../../scene/longgun.ts'
 import { propDef, propObject } from '../../scene/props.ts'
 import { rifleObject } from '../../scene/rifle.ts'
 import { RIFLE_ROUNDS, SHOTGUN_SHELLS } from '../sim/constants.ts'
+import { GunBatch } from './crowd/gun-batch.ts'
 import { holdSkin } from './crowd/skin-hold.ts'
 import {
   baseVat,
@@ -238,6 +239,8 @@ export class Crowd {
   readonly ring: Mesh
   private readonly gun: Group | null
   private readonly kit: Material
+  /** Every skinned rider's revolver as one instanced draw per part. */
+  private readonly gunBatch: GunBatch
   /** Skinned cap (8 floor, 6 legacy, 16 medium/high). */
   near: number
   /** Skinned riders casting real shadows, nearest first (the rest get a blob). */
@@ -292,6 +295,13 @@ export class Crowd {
         o.material = this.kit
       }
     })
+    this.gunBatch = new GunBatch(this.root, 40)
+    // the riders' revolvers are copied into their instances once the frame's matrices are current
+    const before = scene.onBeforeRender
+    scene.onBeforeRender = (...args) => {
+      before.apply(scene, args)
+      this.gunBatch.sync()
+    }
   }
 
   /** He took a map weapon (`EV_PICKUP_TAKEN` of a shotgun or rifle spot). */
@@ -548,6 +558,9 @@ export class Crowd {
     shareDepthByKind(holder)
     this.root.add(holder)
     actor.draw()
+    if (actor.gun) {
+      this.gunBatch.adopt(actor.gun)
+    }
     m.shotgun = this.longGun(actor, 'shotgun')
     m.rifle = this.longGun(actor, 'rifle')
     m.actor = actor
@@ -690,6 +703,7 @@ export class Crowd {
       v.mesh.count = 0
     }
     this.hats.reset()
+    this.gunBatch.reset()
     this.blobs.count = 0
     VAT_TIME.value = nowS
     const s = { near: 0, far: 0, actors: 0, casters: 0, builds: this.builds }
@@ -789,6 +803,9 @@ export class Crowd {
     }
     if (actor.hat) {
       actor.hat.visible = (p.flags & EF_HATLESS) === 0
+    }
+    if (holder.visible && actor.gun) {
+      this.gunBatch.push(actor.gun)
     }
     this.animate(m, actor, p, nowS)
     m.loco?.body(holder, pivot)
