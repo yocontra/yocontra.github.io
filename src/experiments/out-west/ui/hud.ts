@@ -528,7 +528,7 @@ export class Hud {
       leg.addEventListener('click', onLegend)
     }
     if (spec.onSaloon) {
-      const saloon = el('button', 'ow-btn', b, 'Saloon')
+      const saloon = el('button', 'ow-btn', b, 'Back')
       saloon.type = 'button'
       saloon.addEventListener('click', spec.onSaloon)
     }
