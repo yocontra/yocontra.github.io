@@ -95,6 +95,11 @@ export class World {
   private readonly streetBell = new Vector3()
   /** The duel arena on show (scene/arenas): the street, or one act's. */
   private readonly arenas: ArenaHost
+  /**
+   * Called when an arena goes up (game.ts warms its shaders and the red silhouette frame's
+   * variants there, so the first call in a new act isn't their first use).
+   */
+  onArena: (() => void) | null = null
 
   constructor(
     scene: Scene,
@@ -320,6 +325,7 @@ float hoof(vec2 p) {
         tier,
       }),
       nightK: () => this.nightK(),
+      shown: () => this.onArena?.(),
     })
     this.apply(0)
   }

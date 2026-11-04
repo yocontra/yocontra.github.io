@@ -28,6 +28,8 @@ export interface ArenaSlots {
   readonly ctx: () => ArenaCtx
   /** How lit the lamps and windows are now (0 by day, 1 at night). */
   readonly nightK: () => number
+  /** A new arena is up: warm what its first frames would otherwise compile (the red DRAW! frame). */
+  readonly shown: () => void
 }
 
 export class ArenaHost {
@@ -112,6 +114,7 @@ export class ArenaHost {
     s.bellPos.copy(next ? next.bell : s.streetBell)
     next?.night?.(s.nightK())
     LIFE.town?.arrange(next ? next.life : null)
+    s.shown()
     // the town light probe sees the new walls
     const ud = s.scene.userData
     ud.owLightVersion = ((ud.owLightVersion as number | undefined) ?? 0) + 1
