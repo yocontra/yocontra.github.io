@@ -6,7 +6,7 @@ import {
   OUTLAWS,
   RIFLEMAN,
 } from '../../src/experiments/out-west/data/outlaws.ts'
-import { BOSS_LEVEL, LAST_LEVEL, TOUCH_ALLOWANCE_MS, tuningFor } from './tuning.ts'
+import { BOSS_LEVEL, LAST_LEVEL, TOUCH_ALLOWANCE_MS, tuningFor, withTouch } from './tuning.ts'
 
 describe('ranked tuning matches the client roster', () => {
   it('has one row per outlaw', () => {
@@ -40,9 +40,12 @@ describe('ranked tuning matches the client roster', () => {
   it('the touch allowance agrees and slows every target by it', () => {
     expect(TOUCH_ALLOWANCE_MS).toBe(CLIENT_TOUCH_MS)
     for (let level = 0; level <= LAST_LEVEL; level++) {
-      const keys = tuningFor(level)?.targets ?? []
-      const touch = tuningFor(level, 1, true)?.targets ?? []
-      expect(touch.map((x) => x.drawMs)).toEqual(keys.map((x) => x.drawMs + TOUCH_ALLOWANCE_MS))
+      const keys = tuningFor(level)
+      if (!keys) {
+        throw new Error(`no tuning for level ${level}`)
+      }
+      const touch = withTouch(keys).targets.map((x) => x.drawMs)
+      expect(touch).toEqual(keys.targets.map((x) => x.drawMs + TOUCH_ALLOWANCE_MS))
     }
   })
   it('the underboss rifleman agrees', () => {

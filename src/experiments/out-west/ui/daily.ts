@@ -30,7 +30,11 @@ export interface DailyDeps {
    * Ride out: hide the hub and play the duel. `back` runs on the empty street with the verdict;
    * the hub stays hidden until `home` (the result offers another try first).
    */
-  start: (spec: DailySpec, session: RankedSession, back: (v: Verdict | null) => void) => void
+  start: (
+    spec: DailySpec,
+    session: RankedSession,
+    back: (v: Verdict | null, drewMs: number | null) => void,
+  ) => void
   /** Back to the saloon from the result. */
   home: () => void
 }
@@ -268,8 +272,8 @@ export class DailyTile {
       return 'failed'
     }
     const spec = this.today?.spec ?? dailySpec(dayKey())
-    this.deps.start(spec, session.value, (v) => {
-      this.result(spec, v).catch(() => undefined)
+    this.deps.start(spec, session.value, (v, drewMs) => {
+      this.result(spec, v, drewMs).catch(() => undefined)
     })
     return 'ok'
   }
@@ -279,7 +283,7 @@ export class DailyTile {
    * "Try again" (a new ticket, the same outlaw, no trip through the saloon); without, your best,
    * your place on the board, and Back. Closing the sheet any way goes back to the saloon.
    */
-  private async result(spec: DailySpec, v: Verdict | null): Promise<void> {
+  private async result(spec: DailySpec, v: Verdict | null, drewMs: number | null): Promise<void> {
     let retrying = false
     const s = panelSheet(this.root, {
       title: 'Daily Outlaw',
@@ -294,15 +298,17 @@ export class DailyTile {
     // the next try's Turnstile token, fetched while the result is read (signed in only)
     const early = currentPlayer() ? this.deps.token() : Promise.resolve(null)
     el('div', 'ow-results-kicker', s.body, spec.title)
-    const { line, note } = verdictLine(v)
+    // the server's time for your shot, or this device's when your shot reached it too late
+    const you = v?.outcome === 'coward' ? null : (v?.reactionMs ?? drewMs)
+    const { line, note } = verdictLine(v, you)
     el('h3', 'ow-daily-big', s.body, line)
     if (note) {
       el('p', 'ow-hub-note', s.body, note)
     }
     const ms = (n: number | null | undefined): string => (n ? `${Math.round(n)} ms` : '')
     facts(s.body, [
-      ['Your draw', ms(v?.reactionMs)],
-      ['His draw', v?.outcome === 'loss' ? ms(v.enemyMs) : ''],
+      ['Your draw', ms(you)],
+      ['His draw', v?.outcome === 'coward' ? '' : ms(v?.enemyMs)],
       ['Reward', v && v.payout > 0 ? reward(v.payout) : ''],
     ])
     const day = el('div', 'ow-daily-standing', s.body)
@@ -386,12 +392,19 @@ export class DailyTile {
 }
 
 /** The result's headline, and a note when the headline needs one. */
-function verdictLine(v: Verdict | null): { line: string; note: string } {
+function verdictLine(v: Verdict | null, you: number | null): { line: string; note: string } {
   if (v?.outcome === 'win') {
     return { line: 'You won', note: '' }
   }
   if (v?.outcome === 'loss') {
-    return { line: 'You lost', note: v.reactionMs ? '' : 'You didn’t draw.' }
+    const him = v.enemyMs
+    if (you && him && you > him) {
+      return {
+        line: 'Too slow',
+        note: `You ${Math.round(you)} ms, him ${Math.round(him)} ms: ${Math.round(you - him)} ms late.`,
+      }
+    }
+    return { line: 'You lost', note: you ? '' : 'You didn’t draw.' }
   }
   if (v?.outcome === 'coward') {
     return { line: 'Too early', note: 'You drew before the bell.' }

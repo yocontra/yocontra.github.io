@@ -67,12 +67,10 @@ interface ActiveDuel {
   phase: Phase
   standoff: Standoff
   done: boolean
-  /** Played by touch (the outlaw got the touch allowance; medals take it off the reaction). */
-  touch: boolean
 }
 
 type ClientMessage =
-  | { type: 'standoff'; duel: number; level: number; touch?: boolean }
+  | { type: 'standoff'; duel: number; level: number }
   | { type: 'shot'; duel: number; target: number; localMs: number | null }
   | { type: 'pong'; n: number }
   | { type: 'finish'; name: string }
@@ -367,7 +365,7 @@ export class DuelSession extends DurableObject<Env> {
     }
     this.touch()
     if (message.type === 'standoff') {
-      this.onStandoff(message.duel, message.level, message.touch === true)
+      this.onStandoff(message.duel, message.level)
     } else if (message.type === 'shot') {
       this.onShot(message.duel, message.target, message.localMs)
     } else if (message.type === 'finish') {
@@ -377,7 +375,7 @@ export class DuelSession extends DurableObject<Env> {
 
   // --- duel flow -------------------------------------------------------------------------------
 
-  private onStandoff(duel: number, level: number, touch: boolean): void {
+  private onStandoff(duel: number, level: number): void {
     const run = this.run
     if (!run || run.finished || run.complete) {
       this.fail('The run is over.')
@@ -395,7 +393,7 @@ export class DuelSession extends DurableObject<Env> {
       this.fail('Ranked runs go in order, starting with outlaw 1.')
       return
     }
-    const tuning = tuningFor(level, run.phase, touch)
+    const tuning = tuningFor(level, run.phase)
     if (!tuning) {
       this.fail('Unknown outlaw.')
       return
@@ -418,7 +416,7 @@ export class DuelSession extends DurableObject<Env> {
         end: (verdict, stats) => this.resolve(active, verdict, stats),
       },
     })
-    const active: ActiveDuel = { duel, level, phase, standoff, done: false, touch }
+    const active: ActiveDuel = { duel, level, phase, standoff, done: false }
     this.active = active
     standoff.start()
   }
@@ -466,14 +464,7 @@ export class DuelSession extends DurableObject<Env> {
     const queued = run.accountId
       ? this.outbox.enqueue(
           String(active.duel).padStart(4, '0'),
-          creditJobFor(run, {
-            level: active.level,
-            outcome,
-            reactionMs,
-            stats,
-            bossPhaseOne,
-            touch: active.touch,
-          }),
+          creditJobFor(run, { level: active.level, outcome, reactionMs, stats, bossPhaseOne }),
         )
       : null
 

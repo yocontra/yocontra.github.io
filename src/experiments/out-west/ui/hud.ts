@@ -141,6 +141,12 @@ export class Hud {
     this.root.classList.toggle('ow-playing', on)
   }
 
+  /** The Daily Outlaw: no gauntlet counter and no run purse (the mode badge says DAILY OUTLAW). */
+  setDaily(on: boolean): void {
+    this.counter.hidden = on
+    this.purse.hidden = on
+  }
+
   setCounter(i: number, total: number, legend: boolean): void {
     this.counter.textContent = `${legend ? 'LEGEND · ' : ''}${i + 1} / ${total}`
   }

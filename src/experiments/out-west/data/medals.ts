@@ -31,8 +31,8 @@ export type TierRank = 0 | 1 | 2 | 3
  * - Bronze is any win: it sits at his slowest possible draw (draw + jitter + the tie window).
  * - Silver beats a median hand (about 300 ms) on the late outlaws.
  * - Gold is hard but in reach on a phone: about one win in six for a 260 ms hand.
- * On a touch screen the touch allowance comes off the reaction first (`medalMs`), the same
- * allowance the outlaw's draw gets, so a phone isn't held to a keyboard's times.
+ * In practice on a touch screen the touch allowance comes off the reaction first (`medalMs`), the
+ * same allowance the outlaw's draw gets. Ranked medals (booked by the server) never take it.
  * Tuned to duel-core's curve (by gauntlet slot): 900/750 for the tutorial pair, then 405 → 295 ms.
  */
 export const MEDAL_MS: readonly (readonly [number, number, number])[] = [

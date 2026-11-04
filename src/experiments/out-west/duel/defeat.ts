@@ -123,7 +123,7 @@ function loseTimes(d: Director): void {
   d.c.hud.cardTimes({ you, him, note })
 }
 
-/** Practice: your press just after he got you (before the card), for the lose card's receipt. */
+/** Your press just after he got you (before the card), for the lose card's receipt. */
 export function lateDraw(d: Director, p: { t: number }): void {
   if (d.lastReaction !== null || d.lateMs !== null || d.hisMs === null || d.callT <= 0) {
     return
