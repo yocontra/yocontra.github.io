@@ -483,6 +483,8 @@ function makeMaterials(assets: Assets): TownMaterials {
   attachArm(wall, 'vplanks', 1)
   attachArm(wood, 'planks', 1)
   attachArm(roof, 'planks', 0.8)
+  withWeathering(wall, 'wall', 0.19)
+  withWeathering(stone, 'stone', 0)
   withContactShade(wall, 'wall')
   withContactShade(stone, 'stone')
   withContactShade(wood, 'wood')
@@ -574,6 +576,77 @@ float contactShade(vec3 p, vec3 n) {
   }
   const k = mat.customProgramCacheKey()
   mat.customProgramCacheKey = () => `${k}-shade-${key}`
+}
+
+/**
+ * Weathering, in the shader so it costs no geometry or textures (the duel street's decal pass,
+ * procedurally): on vertical faces only,
+ * - board-to-board tone variation (no two planks quite the same paint),
+ * - rain streaks running down from the eaves and from window sills, fading toward the ground,
+ * - red street dust kicked up the bottom half-metre and a little higher by the doors,
+ * - sun-bleaching on the faces that catch the afternoon sun (south and west), and chalky, rubbed
+ *   paint high on those walls.
+ * `planks` is the board width in metres (0 for masonry: no plank variation).
+ */
+function withWeathering(mat: MeshStandardMaterial, key: string, planks: number): void {
+  const prev = mat.onBeforeCompile
+  mat.onBeforeCompile = (shader, renderer) => {
+    prev.call(mat, shader, renderer)
+    shader.vertexShader = shader.vertexShader
+      .replace('#include <common>', '#include <common>\nvarying vec3 vWxP;\nvarying vec3 vWxN;')
+      .replace(
+        '#include <worldpos_vertex>',
+        `#include <worldpos_vertex>
+vWxP = (modelMatrix * vec4(transformed, 1.0)).xyz;
+vWxN = normalize(mat3(modelMatrix) * objectNormal);`,
+      )
+    shader.fragmentShader = shader.fragmentShader
+      .replace(
+        '#include <common>',
+        `#include <common>
+varying vec3 vWxP;
+varying vec3 vWxN;
+float wxH(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+float wxN(vec2 p) {
+  vec2 i = floor(p);
+  vec2 f = fract(p);
+  f = f * f * (3.0 - 2.0 * f);
+  return mix(mix(wxH(i), wxH(i + vec2(1.0, 0.0)), f.x), mix(wxH(i + vec2(0.0, 1.0)), wxH(i + vec2(1.0, 1.0)), f.x), f.y);
+}`,
+      )
+      .replace(
+        '#include <map_fragment>',
+        `#include <map_fragment>
+{
+  vec3 n = normalize(vWxN);
+  float vertical = smoothstep(0.6, 0.85, 1.0 - abs(n.y));
+  // position along the wall, and height
+  float along = abs(n.x) > abs(n.z) ? vWxP.z : vWxP.x;
+  float y = vWxP.y;
+  vec3 c = diffuseColor.rgb;
+  ${
+    planks > 0
+      ? `float board = wxH(vec2(floor(along / ${planks.toFixed(3)}), floor(vWxP.x * 0.13 + vWxP.z * 0.07)));
+  c *= mix(0.9, 1.08, board);`
+      : ''
+  }
+  // rain streaks: thin vertical runs, strongest just under the eaves and sills, fading down
+  float streak = smoothstep(0.55, 0.95, wxN(vec2(along * 3.1, y * 0.12 + 11.0)));
+  float fromTop = smoothstep(0.0, 2.5, mod(y, 3.2));
+  c *= 1.0 - streak * 0.16 * (1.0 - fromTop * 0.6);
+  // street dust up the foot of the wall
+  float dust = (1.0 - smoothstep(0.05, 0.75, y)) * (0.7 + 0.3 * wxN(vec2(along * 1.7, 3.0)));
+  c = mix(c, vec3(0.55, 0.38, 0.25), dust * 0.4);
+  // the afternoon sun bleaches the south and west faces, chalkier toward the top
+  float sunny = clamp(dot(n, normalize(vec3(-0.55, 0.0, 0.85))), 0.0, 1.0);
+  float chalk = sunny * (0.5 + 0.5 * smoothstep(1.5, 5.0, y)) * (0.6 + 0.4 * wxN(vec2(along * 0.6, y * 0.4)));
+  c = mix(c, c * vec3(1.1, 1.08, 1.04) + vec3(0.05, 0.045, 0.04), chalk * 0.45);
+  diffuseColor.rgb = mix(diffuseColor.rgb, c, vertical);
+}`,
+      )
+  }
+  const k = mat.customProgramCacheKey()
+  mat.customProgramCacheKey = () => `${k}-wx-${key}`
 }
 
 /** Woven canvas: a fine warp-and-weft grain with a few darker stains (wagon bonnets, laundry). */
