@@ -12,6 +12,7 @@ import type { BodyKey, Look } from '../data/outlaws.ts'
 import { hairDonor } from '../scene/person.ts'
 import { setPropsLibrary } from '../scene/props.ts'
 import { NORMAL_GUARD_GLSL, setCharacterMaps } from '../scene/shade.ts'
+import { glassLook, surfaceProps } from '../scene/surface.ts'
 import { loadTex } from '../scene/textures.ts'
 
 const ROOT = '/experiments/out-west/3d'
@@ -92,6 +93,7 @@ async function kitMaterial(
     roughness: 0.12,
     metalness: 0.4,
   })
+  glassLook(glass)
   for (const s of props.scenes) {
     s.traverse((o) => {
       const m = o as Mesh
@@ -181,6 +183,8 @@ export async function loadAssets(
   const char = { map: cMap, normal: cNor, arm: cArm }
   setCharacterMaps(char)
   await kitMaterial(props, tex)
+  // the flat-coloured rocks, hay and cactus take real surface detail
+  surfaceProps(props.scenes, ground)
   setPropsLibrary(props)
   await first
   return {

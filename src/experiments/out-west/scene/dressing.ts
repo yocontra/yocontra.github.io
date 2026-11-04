@@ -150,24 +150,7 @@ export function dressStreet(props: GLTF, parent: Object3D): { coffins: Instanced
   )
   // broken cart near the end of the street
   add('cart', 4.2, [placeMatrix(-7.1, 0, -30, 0.5), placeMatrix(7, 0, 42, 2.2)])
-  // cacti and rocks out in the desert and at the open end
-  const cacti: Matrix4[] = []
-  for (let i = 0; i < 26; i++) {
-    const side = rng.next() < 0.5 ? -1 : 1
-    const z = r(-140, 60)
-    const x = z < -60 ? r(-60, 60) : side * r(24, 80)
-    if (z < -55 && Math.abs(x) < 10) {
-      continue
-    }
-    cacti.push(placeMatrix(x, 0, z, r(0, 6), r(2.5, 4.6), 0, 0))
-  }
-  add('cactus', 1, cacti, false, 'y')
-  const rocks: Matrix4[] = []
-  for (let i = 0; i < 14; i++) {
-    const side = rng.next() < 0.5 ? -1 : 1
-    rocks.push(placeMatrix(side * r(28, 90), -0.2, r(-150, 80), r(0, 6), r(2, 7)))
-  }
-  add('rock', 1, rocks, false, 'y')
+  // the desert's cacti and boulders are desert.ts's (on the rolling terrain)
   // fence runs out past the stable
   const fence: Matrix4[] = []
   for (let i = 0; i < 6; i++) {

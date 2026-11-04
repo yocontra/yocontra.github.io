@@ -13,6 +13,7 @@ import {
   BufferAttribute,
   BufferGeometry,
   CanvasTexture,
+  Color,
   CylinderGeometry,
   DoubleSide,
   Float32BufferAttribute,
@@ -37,6 +38,7 @@ import {
   propDef,
   propsLibrary,
 } from '../../scene/props.ts'
+import { glassLook } from '../../scene/surface.ts'
 import { signAtlas } from '../../scene/textures.ts'
 import { type Building, buildingWalls, type Side, type TownLayout } from '../sim/layout.ts'
 import { addClockTower } from './clock-tower.ts'
@@ -317,6 +319,9 @@ function makeMaterials(assets: Assets): TownMaterials {
     normalScale: new Vector2(0.7, 0.7),
     vertexColors: true,
     roughness: 0.86,
+    // the plank photo is dark: lift it like the duel street's siding, so paint reads as paint
+    // (not near-black) at eye level
+    color: new Color(1.55, 1.48, 1.4),
   })
   const stone = new MeshStandardMaterial({
     map: brickTexture(),
@@ -328,12 +333,14 @@ function makeMaterials(assets: Assets): TownMaterials {
     normalMap: tiled(assets.tex.planksN),
     vertexColors: true,
     roughness: 0.9,
+    color: new Color(1.35, 1.3, 1.25),
   })
   const wood = new MeshStandardMaterial({
     map: tiled(assets.tex.planks),
     normalMap: tiled(assets.tex.planksN),
     vertexColors: true,
     roughness: 0.82,
+    color: new Color(1.6, 1.52, 1.44),
   })
   const windows = new MeshStandardMaterial({
     vertexColors: true,
@@ -342,6 +349,7 @@ function makeMaterials(assets: Assets): TownMaterials {
     emissive: 0xff_b0_60,
     emissiveIntensity: 0.12,
   })
+  glassLook(windows)
   const signs = new MeshStandardMaterial({ roughness: 0.75 })
   // the props' trim-atlas material, with the see-through cut like every town surface
   const kitSrc = propsLibrary()
