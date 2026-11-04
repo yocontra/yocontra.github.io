@@ -15,6 +15,8 @@ import {
   type WebGLRenderer,
   WebGLRenderTarget,
 } from 'three'
+import { type FormFactor, readDevice } from '../platform/device.ts'
+import { IOS_UA } from '../platform/native.ts'
 import { getSettings } from '../settings.ts'
 
 export type Quality = 'high' | 'medium' | 'floor' | 'legacy'
@@ -169,27 +171,66 @@ const SOFTWARE_GL = /swiftshader|llvmpipe|software/iu
 
 /**
  * The device prior. On iOS the renderer string only says "Apple GPU", so the
- * prior is the form factor: phones start at the floor, tablets at medium,
- * desktops high. The benchmark then confirms or moves it.
+ * prior is the form factor (`platform/device.ts`). The benchmark then confirms
+ * or moves it.
  */
 export function priorQuality(gl: WebGLRenderer): Quality {
-  const coarse = matchMedia('(pointer: coarse)').matches
-  const small = Math.min(screen.width, screen.height) < 600
-  const cores = navigator.hardwareConcurrency || 4
-  const mem = (navigator as Navigator & { deviceMemory?: number }).deviceMemory ?? 4
   const ctx = gl.getContext()
   const ext = ctx.getExtension('WEBGL_debug_renderer_info')
   const name = ext ? String(ctx.getParameter(ext.UNMASKED_RENDERER_WEBGL)) : ''
   if (SOFTWARE_GL.test(name)) {
     return 'legacy'
   }
-  if (coarse && small) {
-    return cores >= 6 && mem >= 4 ? 'floor' : 'legacy'
+  const d = readDevice()
+  return devicePrior({
+    form: d.form,
+    short: d.screenShort,
+    ios: IOS_UA.test(navigator.userAgent),
+    cores: navigator.hardwareConcurrency || 4,
+    mem: (navigator as Navigator & { deviceMemory?: number }).deviceMemory ?? 4,
+    coarse: matchMedia('(pointer: coarse)').matches,
+  })
+}
+
+/**
+ * The prior per form factor:
+ * - a foldable (iPhone Duo, A20 Pro) starts at medium on either panel (its 3x inner panel is
+ *   capped by medium's DPR, and dynamic resolution handles the rest);
+ * - an iPad is high with a short side of 1000+ px (the 13" Pro and Air, M-series), else medium;
+ * - an iPhone (13 mini, A15) is the floor: Safari may report 4 cores, so iOS never goes by
+ *   cores (the benchmark moves it); other phones need 6 cores and 4 GB for the floor;
+ * - a desktop is high (medium with only a coarse pointer).
+ */
+export function devicePrior(d: {
+  form: FormFactor
+  short: number
+  ios: boolean
+  cores: number
+  mem: number
+  coarse: boolean
+}): Quality {
+  switch (d.form) {
+    case 'fold-outer':
+    case 'fold-inner':
+      return 'medium'
+    case 'tablet':
+      return d.short >= 1000 ? 'high' : 'medium'
+    case 'phone':
+      if (d.ios) {
+        return 'floor'
+      }
+      return d.cores >= 6 && d.mem >= 4 ? 'floor' : 'legacy'
+    default:
+      return d.coarse ? 'medium' : 'high'
   }
-  if (coarse) {
-    return 'medium'
-  }
-  return 'high'
+}
+
+/**
+ * main.ts's and Frontier's coarse hint to the renderer: 'low' (start at the floor, no device
+ * prior) for phones only; tablets, foldables and desktops take `priorQuality`.
+ */
+export function tierHint(): 'low' | 'high' {
+  return readDevice().form === 'phone' ? 'low' : 'high'
 }
 
 /**

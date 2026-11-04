@@ -6,7 +6,7 @@
  * `--stress`), in real Chrome. One table, so regressions show.
  *
  *   bun tools/perf-suite.ts [--rate=4] [--stress] [--secs=20] [--screen=substr] [--portrait]
- *     [--no-build] [--port=4387] [--sustained=600] [--profile=screen]
+ *     [--no-build] [--port=4387] [--sustained=600] [--profile=screen] [--devices]
  *
  * Screens: the title, the saloon hub, the Outfitter, a Quick Draw duel (level 7, played: it holds to
  * walk, waits, fires on the call, then sits through the kill cam; one row per phase), and Frontier
@@ -28,6 +28,7 @@
 import process from 'node:process'
 // biome-ignore lint/correctness/noUnresolvedImports: playwright's CommonJS re-exports are invisible to Biome
 import { type BrowserContext, type CDPSession, chromium, type Page } from 'playwright'
+import { deviceTiers } from './perf-devices.ts'
 import { profileMain, serveProd, startProfile, stopProfile } from './perf-lib.ts'
 
 const opt = (k: string, d: string): string =>
@@ -69,6 +70,7 @@ const SAMPLER = `(() => {
 
 type Frame = [number, number, string]
 interface Snap {
+  dpr: number
   draws: number
   tris: number
   textures: number
@@ -162,8 +164,16 @@ async function menus(ctx: BrowserContext, rate: number): Promise<void> {
     await gc(cdp)
     await cdp.send('Emulation.setCPUThrottlingRate', { rate })
     await sleep(3000)
+    // a menu is profiled while it's used (the browsing is where its hitches are)
+    const profiling = profileScreen !== '' && screen.includes(profileScreen)
+    if (profiling) {
+      await startProfile(cdp)
+    }
     const r = await sample(page, secs * 1000, each)
-    await maybeProfile(screen, cdp)
+    if (profiling) {
+      console.log(`profile: ${screen} (while browsing)`)
+      await stopProfile(cdp, true)
+    }
     await cdp.send('Emulation.setCPUThrottlingRate', { rate: 1 })
     rows.push({ screen, rate, ...r, retainedMb: await retained(page, cdp) })
   }
@@ -242,6 +252,35 @@ async function drive(page: Page, cdp: CDPSession, st: DuelState): Promise<boolea
   return st.doneAt > 0 && Date.now() - st.doneAt > 7000
 }
 
+/** Through the intro and the poster to the walk (unthrottled), tapping past them. */
+async function toWalk(page: Page, x: number, y: number): Promise<void> {
+  for (let i = 0; i < 120 && (await label(page)) !== 'walk'; i++) {
+    if (i % 4 === 0) {
+      await page.touchscreen.tap(x, y).catch(() => undefined)
+    }
+    await sleep(500)
+  }
+}
+
+/** `--profile=call`: profile from the wait to 1.5 s after the duel is decided. */
+async function callWindow(
+  page: Page,
+  cdp: CDPSession,
+  st: DuelState,
+  state: 'off' | 'on' | 'done',
+): Promise<'off' | 'on' | 'done'> {
+  if (state === 'off' && (await label(page)) === 'wait') {
+    await startProfile(cdp)
+    return 'on'
+  }
+  if (state === 'on' && st.doneAt && Date.now() - st.doneAt > 1500) {
+    console.log('profile: duel wait, call and shot')
+    await stopProfile(cdp, true, 12)
+    return 'done'
+  }
+  return state
+}
+
 /** A Quick Draw duel, played through: hold to walk, fire on the call, the kill cam. */
 async function duel(ctx: BrowserContext, rate: number): Promise<void> {
   if (!want('duel')) {
@@ -255,26 +294,26 @@ async function duel(ctx: BrowserContext, rate: number): Promise<void> {
   const vp = page.viewportSize() ?? { width: 812, height: 375 }
   const cx = vp.width / 2
   const cy = vp.height / 2
-  // through the intro and poster to the walk, unthrottled
-  for (let i = 0; i < 120 && (await label(page)) !== 'walk'; i++) {
-    if (i % 4 === 0) {
-      await page.touchscreen.tap(cx, cy).catch(() => undefined)
-    }
-    await sleep(500)
-  }
+  await toWalk(page, cx, cy)
   await gc(cdp)
   await cdp.send('Emulation.setCPUThrottlingRate', { rate })
   await drain(page)
   const snaps: Snap[] = []
   const frames: Frame[] = []
-  // `--profile=duel`: the whole played duel, walk to kill cam
+  // `--profile=duel`: the whole played duel, walk to kill cam; `--profile=call`: from the wait
+  // to 1.5 s after the shot (the bell, the draw and the hit)
   const profiling = profileScreen !== '' && 'duel'.includes(profileScreen)
+  const callOnly = profileScreen === 'call'
+  let callProfile: 'off' | 'on' | 'done' = 'off'
   if (profiling) {
     await startProfile(cdp)
   }
   const st: DuelState = { holding: false, fired: false, doneAt: 0, x: cx, y: cy }
   const t0 = Date.now()
   while (Date.now() - t0 < 150_000 && !(await drive(page, cdp, st))) {
+    if (callOnly) {
+      callProfile = await callWindow(page, cdp, st, callProfile)
+    }
     frames.push(...(await drain(page)))
     if (frames.length % 6 === 0) {
       const s = await snap(page)
@@ -288,6 +327,17 @@ async function duel(ctx: BrowserContext, rate: number): Promise<void> {
   if (profiling) {
     console.log('profile: duel (walk to kill cam)')
     await stopProfile(cdp, true)
+  }
+  if (callOnly) {
+    const call = frames.filter((r) => r[2] === 'call' || r[2] === 'win')
+    console.log(
+      `  call/win frames over 12 ms: ${
+        call
+          .filter((r) => r[1] > 12)
+          .map((r) => `${r[2]} ${r[1].toFixed(1)}`)
+          .join(', ') || 'none'
+      }`,
+    )
   }
   const kept = await retained(page, cdp)
   // one row per phase
@@ -411,6 +461,10 @@ const browser = await chromium.launch({
   args: ['--use-angle=metal', '--ignore-gpu-blocklist', '--enable-precise-memory-info'],
 })
 try {
+  if (process.argv.includes('--devices')) {
+    await deviceTiers(browser, GAME)
+    rates.length = 0
+  }
   for (const rate of rates) {
     const ctx = await browser.newContext({ hasTouch: true })
     await menus(ctx, rate)
@@ -477,13 +531,15 @@ const table = rows.map((r) => {
 const widths = head.map((h, i) => Math.max(h.length, ...table.map((r) => (r[i] ?? '').length)))
 const line = (cells: string[]): string =>
   `| ${cells.map((c, i) => (i === 0 ? c.padEnd(widths[i] ?? 0) : c.padStart(widths[i] ?? 0))).join(' | ')} |`
-console.log(line(head))
-console.log(
-  `|${widths.map((w, i) => (i === 0 ? `:${'-'.repeat(w + 1)}` : `${'-'.repeat(w + 1)}:`)).join('|')}|`,
-)
-for (const r of table) {
-  console.log(line(r))
+if (table.length > 0) {
+  console.log(line(head))
+  console.log(
+    `|${widths.map((w, i) => (i === 0 ? `:${'-'.repeat(w + 1)}` : `${'-'.repeat(w + 1)}:`)).join('|')}|`,
+  )
+  for (const r of table) {
+    console.log(line(r))
+  }
+  console.log(
+    'Bounty Hunt shares the duel rows (same scene and director; it needs the API and a second client).',
+  )
 }
-console.log(
-  'Bounty Hunt shares the duel rows (same scene and director; it needs the API and a second client).',
-)

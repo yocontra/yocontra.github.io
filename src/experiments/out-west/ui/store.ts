@@ -26,6 +26,7 @@ import { uiSound } from './sfx.ts'
 import { button, confirmSheet, el, swallow } from './sheet.ts'
 import { dyePanel } from './store-dye.ts'
 import { inReach, SETS, Shelf, setOf, wearSet } from './store-kit.ts'
+import { BAKED_THUMBS } from './thumbs.ts'
 
 const SLOT_TABS: readonly { slot: Slot; label: string }[] = [
   { slot: 'hat', label: 'Hats' },
@@ -216,7 +217,10 @@ export class Outfitter {
   private art(card: HTMLElement, item: CatalogItem): void {
     const art = el('span', 'ow-item-art', card)
     art.setAttribute('aria-hidden', 'true')
-    const url = ART.get(item.id)
+    // baked at build time (tools/item-thumbs.ts): no dressing on the main thread at all
+    const url = BAKED_THUMBS.has(item.id)
+      ? `/experiments/out-west/thumbs/${item.id}.webp`
+      : ART.get(item.id)
     if (url) {
       paint(art, url)
       return
@@ -239,16 +243,34 @@ export class Outfitter {
         this.drawing = false
         return
       }
-      let url = ART.get(next.id)
-      if (!url) {
-        const c = this.deps.thumb?.(next.id)
-        url = c ? c.toDataURL('image/webp', 0.9) : ''
-        ART.set(next.id, url)
+      const have = ART.get(next.id)
+      if (have !== undefined) {
+        if (have && next.art.isConnected) {
+          paint(next.art, have)
+        }
+        requestAnimationFrame(step)
+        return
       }
-      if (url && next.art.isConnected) {
-        paint(next.art, url)
+      const c = this.deps.thumb?.(next.id)
+      if (!c) {
+        ART.set(next.id, '')
+        requestAnimationFrame(step)
+        return
       }
-      requestAnimationFrame(step)
+      // the image encode runs off the frame (toDataURL blocked it for tens of ms on a phone),
+      // and the next piece waits for it, so each frame dresses at most one
+      c.toBlob(
+        (blob) => {
+          const url = blob ? URL.createObjectURL(blob) : ''
+          ART.set(next.id, url)
+          if (url && next.art.isConnected) {
+            paint(next.art, url)
+          }
+          requestAnimationFrame(step)
+        },
+        'image/webp',
+        0.9,
+      )
     }
     requestAnimationFrame(step)
   }

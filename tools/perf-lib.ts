@@ -48,7 +48,11 @@ export async function startProfile(cdp: CDPSession): Promise<void> {
  * Stop the profiler and print where the main thread's time went: self and inclusive time by
  * function (production frames resolve through the perf build's hidden source maps).
  */
-export async function stopProfile(cdp: CDPSession, sourceMaps: boolean): Promise<void> {
+export async function stopProfile(
+  cdp: CDPSession,
+  sourceMaps: boolean,
+  burstMs = 0,
+): Promise<void> {
   const { profile } = (await cdp.send('Profiler.stop')) as {
     profile: {
       nodes: {
@@ -92,6 +96,15 @@ export async function stopProfile(cdp: CDPSession, sourceMaps: boolean): Promise
   }
   const self = new Map<string, number>()
   const incl = new Map<string, number>()
+  // `burstMs`: each uninterrupted run of main-thread work that long (a long frame), itemised
+  const bursts: { us: number; incl: Map<string, number> }[] = []
+  let burst = { us: 0, incl: new Map<string, number>() }
+  const endBurst = (): void => {
+    if (burstMs > 0 && burst.us >= burstMs * 1000) {
+      bursts.push(burst)
+    }
+    burst = { us: 0, incl: new Map<string, number>() }
+  }
   let total = 0
   let idle = 0
   for (const [i, id] of profile.samples.entries()) {
@@ -103,8 +116,10 @@ export async function stopProfile(cdp: CDPSession, sourceMaps: boolean): Promise
     }
     if (fn === '(idle)') {
       idle += dt
+      endBurst()
       continue
     }
+    burst.us += dt
     const key = keyOf(id)
     self.set(key, (self.get(key) ?? 0) + dt)
     const stack = new Set<string>()
@@ -113,8 +128,11 @@ export async function stopProfile(cdp: CDPSession, sourceMaps: boolean): Promise
     }
     for (const k of stack) {
       incl.set(k, (incl.get(k) ?? 0) + dt)
+      burst.incl.set(k, (burst.incl.get(k) ?? 0) + dt)
     }
   }
+  endBurst()
+  printBursts(bursts)
   const busy = total - idle
   // ms of main thread per displayed frame (60 Hz), at the throttled rate
   const perFrame = (us: number): string => ((us / total) * (1000 / 60)).toFixed(2)
@@ -129,6 +147,16 @@ export async function stopProfile(cdp: CDPSession, sourceMaps: boolean): Promise
   console.log('  inclusive time, ms per 60 Hz frame:')
   for (const [k, us] of [...incl].sort((x, y) => y[1] - x[1]).slice(0, 45)) {
     console.log(`    ${perFrame(us).padStart(5)}  ${k}`)
+  }
+}
+
+/** Each long run of main-thread work, by inclusive ms per function. */
+function printBursts(bursts: readonly { us: number; incl: Map<string, number> }[]): void {
+  for (const b of bursts) {
+    console.log(`  long burst ${(b.us / 1000).toFixed(1)} ms:`)
+    for (const [k, us] of [...b.incl].sort((x, y) => y[1] - x[1]).slice(0, 28)) {
+      console.log(`    ${(us / 1000).toFixed(2).padStart(6)}  ${k}`)
+    }
   }
 }
 

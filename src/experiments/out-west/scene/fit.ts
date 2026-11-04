@@ -155,13 +155,18 @@ export function reach(samples: readonly Sample[], q: Probe): number {
   const dx = Math.sin(q.a)
   const dz = Math.cos(q.a)
   const da = q.da ?? 0.4
+  // atan2(|across|, along) <= da, for along > 0, is |across| <= along * tan(da): no atan2 per
+  // sample (dressing a rider runs this for every ring of every garment)
+  const slope = da >= Math.PI / 2 ? Number.POSITIVE_INFINITY : Math.tan(da)
   let best = Number.NaN
   for (const s of samples) {
+    if (Math.abs(s.p.y - q.y) > q.dy) {
+      continue
+    }
     const x = s.p.x - q.cx
     const z = s.p.z - q.cz
     const along = x * dx + z * dz
-    const inBand = Math.abs(s.p.y - q.y) <= q.dy
-    if (inBand && along > 0 && Math.atan2(Math.abs(-x * dz + z * dx), along) <= da) {
+    if (along > 0 && Math.abs(-x * dz + z * dx) <= along * slope) {
       best = Number.isNaN(best) ? along : Math.max(best, along)
     }
   }
@@ -356,17 +361,29 @@ export type WeightFn = (p: Vector3) => readonly (readonly [Bone, number])[]
  * restricted to `from` so a poncho doesn't grab a hand that hangs near it.
  */
 export function nearestWeights(body: Body, from: readonly Sample[], k = 4): WeightFn {
+  // the k nearest, kept sorted by insertion (no allocation or sort per sample): same order as a
+  // stable sort, a newcomer goes after any equal distance
+  const bd = new Float64Array(k)
+  const bs: Sample[] = []
   return (p) => {
-    const best: { d: number; s: Sample }[] = []
+    let n = 0
     for (const s of from) {
       const d = s.p.distanceToSquared(p)
-      if (best.length < k) {
-        best.push({ d, s })
-        best.sort((x, y) => x.d - y.d)
-      } else if (d < (best[k - 1]?.d ?? 0)) {
-        best[k - 1] = { d, s }
-        best.sort((x, y) => x.d - y.d)
+      if (n === k && d >= (bd[k - 1] ?? 0)) {
+        continue
       }
+      let i = n < k ? n++ : k - 1
+      while (i > 0 && (bd[i - 1] ?? 0) > d) {
+        bd[i] = bd[i - 1] ?? 0
+        bs[i] = bs[i - 1] as Sample
+        i--
+      }
+      bd[i] = d
+      bs[i] = s
+    }
+    const best: { d: number; s: Sample }[] = []
+    for (let i = 0; i < n; i++) {
+      best.push({ d: bd[i] ?? 0, s: bs[i] as Sample })
     }
     const acc = new Map<number, number>()
     for (const { d, s } of best) {
