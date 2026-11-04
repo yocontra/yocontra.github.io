@@ -47,6 +47,7 @@ import type { Actor } from '../../scene/actor.ts'
 import type { Clip } from '../../scene/clips.ts'
 import { solveArm } from '../../scene/longgun.ts'
 import { measureStride } from '../../scene/rig.ts'
+import { type GestureKind, Gestures } from './gestures.ts'
 import { SupportHand } from './mirror-hand.ts'
 
 /** Base (full-body) clips, in blend order. */
@@ -119,6 +120,8 @@ const tmpTQ = new Quaternion()
 const tmpQ3 = new Quaternion()
 /** Weights under this are dropped (they'd cost a full clip evaluation for nothing). */
 const DREGS = 0.02
+/** Standing, the feet step round once the aim is this far off them (rad, ~60°). */
+const TURN_AT = 1.05
 
 /** Rotate a bone about a world axis by `angle` (its parent's world matrix must be current). */
 function turnWorld(b: Bone, axis: Vector3, angle: number): void {
@@ -157,6 +160,13 @@ export class Locomotion {
   /** On the sights, eased 0..1: the gun at eye line, the left hand wrapping the right. */
   private adsW = 0
   private readonly support: SupportHand | null
+  private readonly gestures = new Gestures()
+  /**
+   * Standing, his feet keep their heading while he aims around (up to ~60° off), then step round
+   * to it: turn in place. Null until he first stands still.
+   */
+  private feetYaw: number | null = null
+  private turning = false
   /**
    * Every bone's rotation as the clips left it, saved before the procedural layer bends it and put
    * back before the next mixer update: the mixer skips writing a value that hasn't changed since
@@ -297,6 +307,11 @@ export class Locomotion {
     this.input = i
   }
 
+  /** A one-shot gesture: the throw, stooping for a pickup, the call-out, the draw, the bank. */
+  gesture(kind: GestureKind): void {
+    this.gestures.start(kind)
+  }
+
   /** He fired: the shot clip over the gun arm, and a kick through the chest and arm. */
   fired(): void {
     this.shoot?.reset().play()
@@ -330,6 +345,7 @@ export class Locomotion {
    */
   pre(dt: number): void {
     this.unbend()
+    this.gestures.step(dt)
     const i = this.input
     if (i.anim !== this.was) {
       if (i.anim === ANIM_DEAD) {
@@ -479,6 +495,11 @@ export class Locomotion {
       }
       return t
     }
+    if (this.turning) {
+      t.set('Walk', 0.45)
+      t.set(stand, 0.55)
+      return t
+    }
     t.set(stand, 1)
     return t
   }
@@ -502,9 +523,14 @@ export class Locomotion {
       len += (this.stride.get(c) ?? 1) * w
       wsum += w
     }
-    // movement relative to the aim: legs within ±75°, backwards past 105°
-    let rel = 0
+    // movement relative to the aim: legs within ±75°, backwards past 105°; standing, the feet
+    // keep their heading until the aim is ~60° off it, then step round (turn in place)
+    let rel = this.standYaw(dt, speed, i.aim)
     let dir = 1
+    let pace = speed
+    if (this.turning) {
+      pace = Math.max(pace, 1.2)
+    }
     if (speed > 0.3) {
       rel = Math.atan2(i.vz, i.vx) - i.aim
       rel = Math.atan2(Math.sin(rel), Math.cos(rel))
@@ -523,7 +549,7 @@ export class Locomotion {
       ((speed > 0.3 ? Math.sin(rel) * Math.min(1, speed / 6) : 0) - this.lean) *
       (1 - Math.exp(-dt * 6))
     if (wsum > 0.01 && len > 0.01) {
-      const cps = speed / (len / wsum)
+      const cps = pace / (len / wsum)
       this.phase = (this.phase + dir * cps * dt + 1) % 1
     }
     for (const c of CYCLES) {
@@ -560,6 +586,28 @@ export class Locomotion {
     this.bent = true
   }
 
+  /** Standing: the feet's heading off the aim (rad), stepping round past ~60°. 0 when moving. */
+  private standYaw(dt: number, speed: number, aim: number): number {
+    if (speed > 0.3 || this.input.anim === ANIM_DEAD) {
+      this.feetYaw = null
+      this.turning = false
+      return 0
+    }
+    this.feetYaw ??= aim
+    let off = Math.atan2(Math.sin(this.feetYaw - aim), Math.cos(this.feetYaw - aim))
+    if (Math.abs(off) > TURN_AT) {
+      this.turning = true
+    }
+    if (this.turning) {
+      off *= Math.exp(-dt * 9)
+      this.feetYaw = aim + off
+      if (Math.abs(off) < 0.08) {
+        this.turning = false
+      }
+    }
+    return off
+  }
+
   /** After the clips: legs to the movement, spine back to the aim, aim pitch, flinch. */
   private layer(): void {
     const hips = this.bone.get('Hips')
@@ -583,7 +631,7 @@ export class Locomotion {
     const fl =
       this.flinch * this.flinch * 0.35 * this.flinchDir -
       this.kick * this.kick * 0.22 * (1 - 0.5 * this.adsW)
-    if (pitch !== 0 || fl !== 0 || this.lean !== 0 || this.adsW > 0.01) {
+    if (pitch !== 0 || fl !== 0 || this.lean !== 0 || this.adsW > 0.01 || this.gestures.active) {
       hips.updateMatrixWorld(true)
       const right = tmpV.set(0, 0, 0)
       const q = this.actor.root.getWorldQuaternion(tmpQ)
@@ -609,6 +657,18 @@ export class Locomotion {
       }
       if (this.adsW > 0.05 && this.input.detail) {
         this.twoHands()
+      }
+      if (this.gestures.active) {
+        this.actor.root.updateMatrixWorld(true)
+        this.gestures.apply({
+          turn: turnWorld,
+          armR: arm,
+          foreR: fore,
+          torso: spine[1],
+          chest: spine[2],
+          right: r,
+          up,
+        })
       }
     }
   }

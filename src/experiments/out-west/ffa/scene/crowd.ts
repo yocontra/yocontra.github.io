@@ -72,6 +72,7 @@ import {
   vatFrame,
 } from './crowd/vat.ts'
 import { shareDepthByKind } from './depth-kinds.ts'
+import type { GestureKind } from './gestures.ts'
 import { Locomotion } from './locomotion.ts'
 import type { PlayerLook } from './looks.ts'
 import { kitMaterial, shotgunMesh } from './shotgun.ts'
@@ -297,6 +298,8 @@ export class Crowd {
   armed(id: number, weapon: number): void {
     const m = this.members.get(id)
     if (m) {
+      // a new gun comes up from the hip
+      m.loco?.gesture('draw')
       m.weapon = weapon
       m.rounds = weapon === WEAPON_SHOTGUN ? SHOTGUN_SHELLS : RIFLE_ROUNDS
     }
@@ -326,6 +329,11 @@ export class Crowd {
         m.weapon = WEAPON_REVOLVER
       }
     }
+  }
+
+  /** A one-shot gesture for a rider (the throw, a pickup, the call-out, the draw, the bank). */
+  gesture(id: number, kind: GestureKind): void {
+    this.members.get(id)?.loco?.gesture(kind)
   }
 
   /** He took a hit from (`fx`, `fz`) (null: unknown): a flinch and a hit clip. */

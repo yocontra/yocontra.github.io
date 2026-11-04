@@ -86,6 +86,7 @@ import { Crowd, type CrowdPlayer, READ_SCALE } from '../scene/crowd.ts'
 import { CUT } from '../scene/cutaway.ts'
 import { shareDepthByKind } from '../scene/depth-kinds.ts'
 import { Effects } from '../scene/fx.ts'
+import type { GestureKind } from '../scene/gestures.ts'
 import { installHotPaths } from '../scene/hot-paths.ts'
 import { buildInterior } from '../scene/interior.ts'
 import { lookFor } from '../scene/looks.ts'
@@ -1891,6 +1892,10 @@ export class FrontierGame {
       this.crowd?.fired(this.net.you, 0)
       return true
     }
+    if (GESTURES.includes(state as GestureKind)) {
+      this.crowd?.gesture(this.net.you, state as GestureKind)
+      return true
+    }
     if (state === 'hit') {
       this.crowd?.hurt(this.net.you, this.own, {
         x: this.own.x + Math.cos(this.aim) * 5,
@@ -1986,6 +1991,9 @@ export class FrontierGame {
     }
   }
 }
+
+/** The one-shot gestures `__frontierAnim.set` can trigger. */
+const GESTURES: readonly GestureKind[] = ['throw', 'pickup', 'callout', 'draw', 'bank']
 
 /** A held state: anim, stance bits, ground speed, and the move's turn off the aim (rad). */
 interface DevAnim {
