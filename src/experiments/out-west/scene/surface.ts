@@ -79,6 +79,17 @@ const STRAW_GLSL = /* glsl */ `
 }
 `
 
+const PALETTE_GLSL = /* glsl */ `
+{
+  // the shared palette props (pumpkins, crates, small woodwork): a dry, sun-bleached grain
+  vec3 n = normalize(vSurfN);
+  float grain = atmNoise(vAtmW.xz * 46.0 + vAtmW.y * 31.0) * 0.6
+    + atmNoise(vAtmW.zy * 72.0 - vAtmW.y * 17.0) * 0.4;
+  diffuseColor.rgb *= 0.86 + 0.22 * grain;
+  diffuseColor.rgb *= mix(vec3(1.0), vec3(0.94, 0.9, 0.8), smoothstep(-0.2, 0.9, n.y));
+}
+`
+
 const RIBS_GLSL = /* glsl */ `
 {
   float a = atan(vSurfN.z, vSurfN.x);
@@ -100,6 +111,8 @@ export function surfaceProps(scenes: readonly Object3D[], ground: Texture): void
   }
   // by node (rocks share the palette atlas with other props) or by material name
   const byMat: Record<string, [string, string]> = {
+    Atlas: ['palette', PALETTE_GLSL],
+    'Atlas.016': ['palette', PALETTE_GLSL],
     Hay: ['straw', STRAW_GLSL],
     Green: ['ribs', RIBS_GLSL],
   }
