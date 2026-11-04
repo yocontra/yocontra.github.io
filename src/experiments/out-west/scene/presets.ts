@@ -1,6 +1,13 @@
 import { Color } from 'three'
 
-/** Time-of-day lighting (design doc §4.1). Keyframes on a 0 (noon) .. 1 (midnight) scalar. */
+/**
+ * Time-of-day lighting (design doc §4.1). Keyframes on a 0 (noon) .. 1 (midnight) scalar.
+ *
+ * The fill is mostly image-based: the town probe (engine/probe.ts) lights every standard
+ * material with the street's own sky, facades and dirt, directionally. The hemisphere light on
+ * top of it is a small uniform lift only; at full strength it doubled the fill and washed the
+ * form out of every character (sleeves and shirts went flat grey on their shadow side).
+ */
 export interface Preset {
   sunElev: number
   sunAz: number
@@ -61,7 +68,7 @@ const KEYS: Key[] = [
     sunIntensity: 4.6,
     hemiSky: 0xb8_d0_ff,
     hemiGround: 0xb8_86_52,
-    hemiIntensity: 1.7,
+    hemiIntensity: 0.8,
     fog: 0xe2_d4_bc,
     fogNear: 240,
     fogFar: 640,
@@ -96,7 +103,7 @@ const KEYS: Key[] = [
     sunIntensity: 4.0,
     hemiSky: 0xae_c4_f2,
     hemiGround: 0x9a_6e_42,
-    hemiIntensity: 1.15,
+    hemiIntensity: 0.52,
     fog: 0xde_c2_9a,
     fogNear: 220,
     fogFar: 600,
@@ -131,7 +138,7 @@ const KEYS: Key[] = [
     sunIntensity: 3.8,
     hemiSky: 0x8e_a6_e0,
     hemiGround: 0x6a_42_2c,
-    hemiIntensity: 0.85,
+    hemiIntensity: 0.36,
     fog: 0xe0_9a_62,
     fogNear: 200,
     fogFar: 560,
@@ -167,7 +174,7 @@ const KEYS: Key[] = [
     sunIntensity: 3.0,
     hemiSky: 0x6e_7c_c4,
     hemiGround: 0x4a_2c_26,
-    hemiIntensity: 0.8,
+    hemiIntensity: 0.36,
     fog: 0xd0_6e_48,
     fogNear: 180,
     fogFar: 520,
@@ -202,7 +209,7 @@ const KEYS: Key[] = [
     sunIntensity: 0.55,
     hemiSky: 0x4a_5a_9c,
     hemiGround: 0x1e_18_22,
-    hemiIntensity: 0.9,
+    hemiIntensity: 0.6,
     fog: 0x4a_3a_5a,
     fogNear: 160,
     fogFar: 480,
@@ -237,7 +244,7 @@ const KEYS: Key[] = [
     sunIntensity: 1.25,
     hemiSky: 0x3e_50_90,
     hemiGround: 0x10_0e_16,
-    hemiIntensity: 0.75,
+    hemiIntensity: 0.45,
     fog: 0x16_1e_34,
     fogNear: 150,
     fogFar: 420,
@@ -271,7 +278,7 @@ const KEYS: Key[] = [
     sunIntensity: 1.5,
     hemiSky: 0x3e_50_90,
     hemiGround: 0x10_0e_16,
-    hemiIntensity: 0.8,
+    hemiIntensity: 0.48,
     fog: 0x12_1a_2e,
     fogNear: 150,
     fogFar: 420,
