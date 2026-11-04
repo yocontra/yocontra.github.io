@@ -16,6 +16,7 @@ import {
   Fog,
   HemisphereLight,
   Plane,
+  Quaternion,
   Raycaster,
   Scene,
   Vector2,
@@ -245,6 +246,8 @@ export class FrontierGame {
   /** Drives the same camera as `cam` in the shooter views. */
   readonly shooter: ShooterCamera
   private viewModel: ViewModel | null = null
+  private readonly vmSun = new Vector3()
+  private readonly vmQ = new Quaternion()
   private guide: BankGuide | null = null
   private readonly coach: Onboarding
   /** Crouch toggle and slide (local crouch taps → `BTN_CROUCH`). */
@@ -596,7 +599,16 @@ export class FrontierGame {
     this.crowd.casters = near < 16 ? 4 : 6
     this.map = new Minimap(TOWN, this.touch ? 112 : 148)
     this.hud.mapSlot.append(this.map.el)
-    this.viewModel = new ViewModel(this.cam.camera, assets)
+    this.viewModel = new ViewModel(assets)
+    if (import.meta.env.DEV) {
+      Reflect.set(globalThis, '__vm', this.viewModel)
+    }
+    // its own scene and lens, drawn over the world before the post chain
+    this.renderer.setOverlay({
+      scene: this.viewModel.scene,
+      camera: this.viewModel.camera,
+      enabled: false,
+    })
     this.guide = new BankGuide(this.hud.root, this.net.grid)
     this.guide.prepare()
     onProgress(0.75, 'Fitting the posse')
@@ -708,7 +720,7 @@ export class FrontierGame {
   private predictedShot(x: number, z: number, aim: number, weapon: number): void {
     const fp = this.settings.view === 'first' && this.viewModel !== null
     const m = fp
-      ? (this.viewModel?.muzzle(this.tmp) ?? this.tmp.set(x, 1.3, z))
+      ? (this.viewModel?.muzzle(this.cam.camera, this.tmp) ?? this.tmp.set(x, 1.3, z))
       : (this.crowd?.muzzle(this.net.you, x, z, aim, this.tmp) ?? this.tmp.set(x, 1.3, z))
     const range = WEAPON_UI[weapon]?.range ?? MAX_RANGE
     const wall = rayToWall(this.net, x, z, aim, range)
@@ -726,7 +738,7 @@ export class FrontierGame {
       // the view kicks up and settles; the crosshair blooms
       const long = weapon === WEAPON_RIFLE || weapon === WEAPON_SHOTGUN
       this.shooter.kickRecoil(long ? 0.05 : 0.03)
-      this.viewModel?.fired()
+      this.viewModel?.fired(weapon)
       this.bloom = bloomAfterShot(weapon, this.bloom)
     } else {
       this.cam.kick(0.12)
@@ -1293,6 +1305,7 @@ export class FrontierGame {
     }
     const on = this.settings.view === 'first' && this.net.alive
     vm.visible = on
+    this.renderer.setOverlay({ scene: vm.scene, camera: vm.camera, enabled: on })
     if (!on) {
       return
     }
@@ -1304,15 +1317,28 @@ export class FrontierGame {
       { ox: this.own.x, oz: this.own.z, dx: Math.cos(yaw), dz: Math.sin(yaw), maxDist: 1.2 },
       BLOCK_SIGHT,
     )
+    const cam = this.cam.camera
+    vm.setLens(cam.aspect, cam.fov)
+    // the sun, turned into the lens's frame (the view model lives in camera space)
+    this.vmSun.copy(SUN_DIR).applyQuaternion(this.vmQ.copy(cam.quaternion).invert())
+    const pred = this.net.pred
+    const reloading = ((s?.flags ?? 0) & SELF_RELOADING) !== 0
     vm.update(
-      dt,
-      this.devWeapon ?? this.net.weapon.weapon,
-      this.turned.yaw,
-      this.turned.pitch,
-      speed,
-      this.shooter.ads,
-      ((s?.flags ?? 0) & SELF_RELOADING) !== 0,
-      wall,
+      {
+        dt,
+        lookYaw: this.turned.yaw,
+        lookPitch: this.turned.pitch,
+        speed,
+        sprinting: pred.sprinting,
+        ads: this.adsHeld(),
+        crouched: this.stance.crouched,
+        sliding: sliding(pred),
+        lift: this.jumpLift(),
+        reload: reloading && s ? 1 - s.reloadTicks / RELOAD_TICKS : null,
+        weapon: this.devWeapon ?? this.net.weapon.weapon,
+        wall,
+      },
+      this.vmSun,
     )
   }
 
@@ -1551,8 +1577,15 @@ export class FrontierGame {
     const gap = Math.max(2, spreadPx(deg, this.cam.camera.fov, viewport.h))
     const range = WEAPON_UI[w]?.range ?? MAX_RANGE
     const onTarget = this.aimRes.target >= 0 && this.aimRes.range <= range
+    // first person on the sights: the gun's own sights are the crosshair; sprinting: no crosshair
+    const sighted = this.settings.view === 'first' && (this.viewModel?.motion.pose.ads ?? 0) > 0.6
     const show =
-      this.net.alive && !this.hud.menuOpen && !this.coach.open && this.settings.view !== 'top'
+      this.net.alive &&
+      !this.hud.menuOpen &&
+      !this.coach.open &&
+      this.settings.view !== 'top' &&
+      !(sighted && !(s && s.deadEyeTicks > 0)) &&
+      !pred.sprinting
     const closing =
       s && s.deadEyeTicks > 0 ? Math.min(1, s.deadEyeTicks / DEAD_EYE_CLOSE_TICKS) : null
     this.hud.setCrosshair(true, gap, onTarget)

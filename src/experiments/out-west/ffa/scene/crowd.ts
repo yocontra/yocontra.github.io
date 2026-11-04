@@ -16,8 +16,6 @@
  * player's actor exists they're drawn as a VAT instance, so nobody ever pops out.
  */
 import {
-  type AnimationAction,
-  AnimationClip,
   type BufferGeometry,
   CanvasTexture,
   type Color,
@@ -37,14 +35,8 @@ import {
 } from 'three'
 import {
   ANIM_AIM,
-  ANIM_CHANNEL,
   ANIM_DEAD,
-  ANIM_DUEL,
-  ANIM_HOP,
-  ANIM_RELOAD,
   ANIM_ROLL,
-  ANIM_RUN,
-  ANIM_VAULT,
   EF_HATLESS,
   EF_HOLSTERED,
   EF_PROTECTED,
@@ -73,6 +65,7 @@ import {
   vatFrame,
 } from './crowd/vat.ts'
 import { shareDepthByKind } from './depth-kinds.ts'
+import { Locomotion } from './locomotion.ts'
 import type { PlayerLook } from './looks.ts'
 import { kitMaterial, shotgunMesh } from './shotgun.ts'
 
@@ -100,14 +93,6 @@ const SPEED_EASE = 10
 const GAIT_IDLE = 0
 const GAIT_WALK = 1
 const GAIT_RUN = 2
-const ROLL_S = 0.35
-/** Vault and hop arcs (the sim's `VAULT_TICKS` and `HOP_TICKS`), s, and their peak heights, m. */
-const VAULT_S = 0.5
-const VAULT_PEAK_M = 0.85
-const HOP_S = 0.4
-const HOP_PEAK_M = 0.3
-/** Forward lean at the top of a vault (rad): knees tucked over the rail. */
-const VAULT_TUCK = 0.45
 /**
  * Built actors kept beyond the skinned cap. A parked actor (off the graph) costs nothing per frame,
  * only its geometry and bones in memory, while re-casting one is a full dress-and-bake plus a GPU
@@ -123,7 +108,6 @@ export const READ_SCALE = 1.25
 /** Map weapons: how big they read (the coach gun a touch heavier than life, to read from the sky). */
 const SHOTGUN_HELD_SCALE = 1.15
 const RIFLE_LENGTH = 1.1
-const ARM_BONES = /^(?<bone>Shoulder|UpperArm|LowerArm|Index|Middle|Ring|Pinky|Thumb)\d?R$/u
 
 /** What the crowd needs to know about one player this frame. */
 export interface CrowdPlayer {
@@ -137,6 +121,8 @@ export interface CrowdPlayer {
   anim: number
   /** `STANCE_*` bits: crouched, on the sights, sprinting. */
   stance: number
+  /** Aim pitch (rad, up positive), when known (your own rider). */
+  pitch?: number
   flags: number
   self: boolean
   /** `WEAPON_*` in hand, when known for sure (your own, from the self block). */
@@ -154,7 +140,10 @@ interface Member {
   pivot: Group | null
   full: BufferGeometry | null
   lod1: BufferGeometry | null
-  arm: AnimationAction | null
+  /** His animation state machine (scene/locomotion.ts), once his actor exists. */
+  loco: Locomotion | null
+  /** When he last fired (s), so his gun arm stays up a moment. */
+  shotAt: number
   acc: number
   wasNear: boolean
   phase: number
@@ -303,6 +292,7 @@ export class Crowd {
     if (!m) {
       return
     }
+    m.shotAt = performance.now() / 1000
     let w = WEAPON_REVOLVER
     if (flags & SHOT_SHOTGUN) {
       w = WEAPON_SHOTGUN
@@ -319,6 +309,20 @@ export class Crowd {
         m.weapon = WEAPON_REVOLVER
       }
     }
+  }
+
+  /** He took a hit from (`fx`, `fz`) (null: unknown): a flinch and a hit clip. */
+  hurt(id: number, at: { x: number; z: number }, from: { x: number; z: number } | null): void {
+    const m = this.members.get(id)
+    if (m?.loco) {
+      m.loco.hit(from ? at.x - from.x : 0, from ? at.z - from.z : 0)
+    }
+  }
+
+  /** He was killed from (`fx`, `fz`) (null: unknown): his fall, turned away from the shot. */
+  killed(id: number, at: { x: number; z: number }, from: { x: number; z: number } | null): void {
+    const m = this.members.get(id)
+    m?.loco?.died(Math.floor(Math.random() * 1000), from, at)
   }
 
   /** Back to the revolver (died, respawned): map weapons are lost with the life. */
@@ -347,7 +351,8 @@ export class Crowd {
       pivot: null,
       full: null,
       lod1: null,
-      arm: null,
+      loco: null,
+      shotAt: -9,
       acc: 0,
       wasNear: false,
       phase: Math.random() * 4,
@@ -411,7 +416,8 @@ export class Crowd {
     m.skin = []
     m.holder = null
     m.pivot = null
-    m.arm = null
+    m.loco?.dispose()
+    m.loco = null
     m.full = null
     m.lod1 = null
     m.shotgun = null
@@ -482,7 +488,6 @@ export class Crowd {
     actor.draw()
     m.shotgun = this.longGun(actor, 'shotgun')
     m.rifle = this.longGun(actor, 'rifle')
-    actor.play('Idle_Gun', 0)
     m.actor = actor
     m.bones = []
     actor.root.traverse((o) => {
@@ -495,7 +500,7 @@ export class Crowd {
     m.skin = actor.meshes.map(holdSkin)
     m.holder = holder
     m.pivot = pivot
-    m.arm = this.armLayer(actor)
+    m.loco = new Locomotion(actor, this.assets.player.animations, look.look.base)
     const mesh = actor.meshes[0]
     m.full = mesh?.geometry ?? null
     if (!self) {
@@ -574,20 +579,6 @@ export class Crowd {
       actor.draw()
     }
     actor.holdLong(long)
-  }
-
-  /** The gun arm of Idle_Gun_Pointing as its own action, layered over Run while armed. */
-  private armLayer(actor: Actor): AnimationAction | null {
-    const src = this.assets.player.animations.find((c) => c.name.endsWith('Idle_Gun_Pointing'))
-    if (!src) {
-      return null
-    }
-    const tracks = src.tracks.filter((t) => ARM_BONES.test(t.name.split('.')[0] ?? ''))
-    const clip = new AnimationClip('ArmAim', src.duration, tracks)
-    const a = actor.mixer.clipAction(clip)
-    a.setEffectiveWeight(0)
-    a.play()
-    return a
   }
 
   private setCaster(m: Member, on: boolean): void {
@@ -742,7 +733,7 @@ export class Crowd {
       actor.hat.visible = (p.flags & EF_HATLESS) === 0
     }
     this.animate(m, actor, p, nowS)
-    bodyPose({ holder, pivot }, p.anim, nowS - m.animSince)
+    m.loco?.body(holder, pivot)
     const dist = Math.hypot(p.x - cx, p.z - cz)
     const hz = p.self || dist < NEAR_FAST_M ? 30 : 15
     m.acc += dt
@@ -751,6 +742,7 @@ export class Crowd {
       // reads world matrices mid-solve), then freeze until the next tick
       setAuto(m.bones, true)
       actor.longKick = m.recoil
+      m.loco?.pre(m.acc)
       actor.update(m.acc)
       m.acc = 0
       this.kick(m, actor)
@@ -770,28 +762,24 @@ export class Crowd {
     this.arm(m, actor, p.weapon ?? m.weapon, (p.flags & EF_HOLSTERED) !== 0)
     // a long gun can't be holstered: he carries it at the ready
     const holstered = (p.flags & EF_HOLSTERED) !== 0 && !m.held
-    const speed = m.speed
-    const pick = nearClip(p.anim, m.gait, holstered)
-    let clip = pick.clip
-    if (clip === 'Walk' && !actor.action('Walk')) {
-      clip = 'Run'
+    const loco = m.loco
+    if (!loco) {
+      return
     }
-    const a = actor.play(
-      clip,
-      m.wasNear ? 0.15 : 0,
-      pick.once && m.anim === ANIM_DEAD && nowS - m.animSince < 0.05,
-    )
-    const gaited = clip === 'Run' || clip === 'Walk'
-    if (gaited && a) {
-      // Backpedal when moving away from the aim; match the stride to the speed.
-      const raw = Math.hypot(p.vx, p.vz)
-      const dot = raw > 0.01 ? (p.vx * Math.cos(p.aim) + p.vz * Math.sin(p.aim)) / raw : 1
-      a.timeScale = (dot < -0.3 ? -1 : 1) * gaitRate(clip, speed, walkSpeed(actor))
-    }
-    if (m.arm) {
-      m.arm.setEffectiveWeight(gaited ? pick.armW : 0)
-    }
-    this.braceLong(m, actor, gaited)
+    // the snapshots' velocity, at the eased speed (it steps at each snapshot)
+    const raw = Math.hypot(p.vx, p.vz)
+    const k = raw > 0.01 ? m.speed / raw : 0
+    loco.set({
+      anim: p.anim,
+      stance: p.stance,
+      vx: p.vx * k,
+      vz: p.vz * k,
+      aim: p.aim,
+      pitch: p.pitch ?? 0,
+      holstered,
+      long: m.held !== null,
+      shooting: nowS - m.shotAt < 1.2,
+    })
   }
 
   /** The revolver kicks his forearm (a long gun kicks at the shoulder: `longKick`). */
@@ -799,12 +787,6 @@ export class Crowd {
     if (m.recoil > 0 && actor.forearmR && !m.held) {
       actor.forearmR.rotation.z += m.recoil * 0.5
     }
-  }
-
-  /** A long gun: at the low ready on the run, shouldered when he stops, aims or fires. */
-  private braceLong(m: Member, actor: Actor, running: boolean): void {
-    const carry = running && m.recoil <= 0 ? 1 : 0
-    actor.longCarry += (carry - actor.longCarry) * 0.2
   }
 
   private drawFar(m: Member, p: CrowdPlayer, nowS: number): void {
@@ -967,48 +949,11 @@ function nextGait(gait: number, v: number): number {
   return v >= RUN_ON ? GAIT_RUN : GAIT_WALK
 }
 
-/** A skinned rider's clip for his sim anim and gait, whether it plays once, and the arm layer. */
-function nearClip(
-  anim: number,
-  gait: number,
-  holstered: boolean,
-): { clip: Clip; once: boolean; armW: number } {
-  const moving = gait !== GAIT_IDLE
-  const stand: Clip = holstered ? 'Idle' : 'Idle_Gun'
-  const step: Clip = gait === GAIT_RUN ? 'Run' : 'Walk'
-  switch (anim) {
-    case ANIM_DEAD:
-      return { clip: 'Death', once: true, armW: 0 }
-    case ANIM_ROLL:
-      return { clip: 'Run', once: false, armW: holstered ? 0 : 6 }
-    case ANIM_RUN:
-    case ANIM_VAULT:
-    case ANIM_HOP:
-      return { clip: moving ? step : stand, once: false, armW: holstered ? 0 : 6 }
-    case ANIM_AIM:
-      return { clip: 'Idle_Gun_Pointing', once: false, armW: 0 }
-    case ANIM_RELOAD:
-      return { clip: 'Idle_Gun', once: false, armW: 0 }
-    case ANIM_CHANNEL:
-      return { clip: 'Idle_Neutral', once: false, armW: 0 }
-    case ANIM_DUEL:
-      return { clip: 'Idle', once: false, armW: 0 }
-    default:
-      return { clip: moving ? step : stand, once: false, armW: holstered || !moving ? 0 : 6 }
-  }
-}
-
 /** Playback rate of a gait clip at this ground speed, so the feet roughly keep to the ground. */
 function gaitRate(clip: Clip, speed: number, walk: number): number {
   return clip === 'Walk'
     ? Math.max(0.6, Math.min(1.6, speed / walk))
     : Math.max(0.6, Math.min(1.3, speed / CLIP_RUN_SPEED))
-}
-
-/** The walk clip's ground speed as his stride measures it (two paces a cycle). */
-function walkSpeed(actor: Actor): number {
-  const v = (2 * actor.paceLength) / Math.max(0.1, actor.walkDuration)
-  return Number.isFinite(v) && v > 0.3 ? v : CLIP_WALK_SPEED
 }
 
 const hatColors = new WeakMap<PlayerLook, Color>()
@@ -1019,25 +964,4 @@ function hatColor(look: PlayerLook): Color {
     hatColors.set(look, c)
   }
   return c
-}
-
-/**
- * Whole-body moves the rig has no clip for, `since` s into them: the roll (a quick tumble around the
- * hips) and the vault and hop (an arc up and over, leaning into a vault).
- */
-function bodyPose(
-  { holder, pivot }: { holder: Object3D; pivot: Object3D },
-  anim: number,
-  since: number,
-): void {
-  if (anim === ANIM_ROLL) {
-    pivot.rotation.x = Math.min(1, since / ROLL_S) * Math.PI * 2
-  } else if (anim === ANIM_VAULT || anim === ANIM_HOP) {
-    const vault = anim === ANIM_VAULT
-    const t = Math.min(1, since / (vault ? VAULT_S : HOP_S))
-    holder.position.y = (vault ? VAULT_PEAK_M : HOP_PEAK_M) * 4 * t * (1 - t)
-    pivot.rotation.x = vault ? VAULT_TUCK * Math.sin(Math.PI * t) : 0
-  } else {
-    pivot.rotation.x *= 0.5
-  }
 }

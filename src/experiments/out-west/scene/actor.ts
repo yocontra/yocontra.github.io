@@ -96,6 +96,8 @@ export class Actor {
   longCarry = 0
   /** Long gun recoil, 0..1 (lifts the muzzle). */
   longKick = 0
+  /** A procedural layer run after the clips, before the long-gun IK (Frontier's locomotion). */
+  layer: (() => void) | null = null
   /** The hollow of his right shoulder in his chest bone's frame (where a butt plate sits). */
   private readonly pocket: Vector3 | null
   /** The revolver he carries, measured (muzzle, grip, cylinder); null without one. */
@@ -553,6 +555,7 @@ export class Actor {
     this.stance?.undo()
     this.mixer.update(dt)
     this.stance?.apply()
+    this.layer?.()
     // Procedural layers on top of the clip.
     if (this.sway > 0 && this.spine) {
       this.spine.rotation.z += Math.sin(this.t * 1.3) * 0.12 * this.sway
