@@ -652,7 +652,7 @@ export function dressCover(
     }
   }
   sized('rock', 1.2, 'max', land.rock)
-  sized('cactus', 2.4, 'y', land.cactus)
+  // the cactus spots grow procedural saguaros and Joshua trees instead (wilds.ts)
   // the boundary fence is the kit fence at its own 2 m section size
   for (const m of land.fence) {
     put(p, 'fence@edge', m)

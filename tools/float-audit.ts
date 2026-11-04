@@ -13,7 +13,9 @@
  * foot is more than 3 cm above its support and isn't touching anything, every kit facade piece
  * standing more than 2 cm off its wall, props sunk into a deck, and coplanar z-fighting faces.
  * Hanging pieces (lanterns, pickups, money bags) are listed with their mount distance. `--shots`
- * also saves low-angle views along every frontage. Exit code 1 when any float/loose issue remains.
+ * also saves low-angle views along every frontage. It also lists every lit mesh drawn untextured
+ * (no colour map and no procedural surface; glass, water, sky and effects excepted). Exit code 1
+ * when any float/loose issue or untextured mesh remains.
  */
 import { mkdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
@@ -168,6 +170,22 @@ for (const scene of scenes) {
     for (const i of report.issues) {
       i.gap = i.gap >= 1e9 ? Number.POSITIVE_INFINITY : i.gap
       i.contact = i.contact >= 1e9 ? Number.POSITIVE_INFINITY : i.contact
+    }
+    const flat = await page.evaluate(async (mod) => {
+      const m = (await import(
+        /* @vite-ignore */ mod
+      )) as typeof import('../src/experiments/out-west/scene/float-audit.ts')
+      const g = globalThis as unknown as { owAuditScenes: import('three').Object3D[] }
+      return g.owAuditScenes.flatMap((sc) => m.textureAudit(sc))
+    }, MODULE)
+    failing += flat.length
+    if (!json) {
+      console.log(`   untextured ${flat.length}`)
+      for (const u of flat) {
+        console.log(
+          `  flat   ${u.mesh.padEnd(28)} ${u.material.padEnd(14)} #${u.color} ${u.triangles} tris`,
+        )
+      }
     }
     all[`${scene}/${tier}`] = report
     const by = (k: AuditIssue['kind']) => report.issues.filter((i) => i.kind === k)

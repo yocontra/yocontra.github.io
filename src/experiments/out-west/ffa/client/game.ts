@@ -77,6 +77,7 @@ import { installHotPaths } from '../scene/hot-paths.ts'
 import { lookFor } from '../scene/looks.ts'
 import { Pickups } from '../scene/pickups.ts'
 import { buildTown, type Town } from '../scene/town.ts'
+import { buildWilds, shadeTown, Wilds } from '../scene/wilds.ts'
 import type { WireEvent } from '../sim/codec-events.ts'
 import {
   BANK_CHANNEL_TICKS,
@@ -169,6 +170,8 @@ export class FrontierGame {
   private lastMw = NONE
   private readonly audio: AudioEngine | null
   private readonly sun: DirectionalLight
+  /** Sky, haze, cloud shadows and wind. */
+  private readonly wilds: Wilds
   private readonly opts: GameOptions
   private raf = 0
   private hiddenTimer: ReturnType<typeof setInterval> | null = null
@@ -234,6 +237,8 @@ export class FrontierGame {
     this.applyGrade()
     this.sun = new DirectionalLight(0xff_e8_c8, 3.4)
     this.setupLights()
+    this.wilds = new Wilds(this.scene, this.renderer.tier)
+    this.wilds.apply(presetAt(DAY), SUN_DIR)
     this.hud = new Hud(root, {
       touch: coarse,
       onLeave: () => this.desk.tap(BTN_LEAVE),
@@ -374,6 +379,9 @@ export class FrontierGame {
     onProgress(0.65, 'Raising the town')
     this.town = buildTown(TOWN, assets, SUN_DIR)
     this.scene.add(this.town.root)
+    shadeTown(this.town.root)
+    this.scene.add(buildWilds(TOWN, this.renderer.tier))
+    this.wilds.roll(TOWN)
     this.fx = new Effects(this.scene)
     this.pickups = new Pickups(this.scene, TOWN.pickups, assets.props)
     const near = this.nearCap()
@@ -716,6 +724,7 @@ export class FrontierGame {
       this.hatlessSeen.clear()
     }
     this.cam.update(this.own.x, this.own.z, Math.cos(this.aim), Math.sin(this.aim), dt)
+    this.wilds.tick(dt)
     crowd.update(list, this.cam.target.x, this.cam.target.z, dt, nowS)
     this.sound?.steps(
       {
