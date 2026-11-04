@@ -77,13 +77,19 @@ function scoreSpawn(w: World, sp: SpawnPoint, index: number, self: Player): Spaw
   return { index, nearest, seen }
 }
 
+/** Never spawn this close (m) to a living rider: two riders on one point lock up. */
+const SPAWN_CLEAR_M = 4
+
 /**
  * The safest spawn: prefer points ≥25 m from every enemy with no enemy line of sight within 35 m;
- * pick at random among the best few so spawns don't become predictable.
+ * pick at random among the best few so spawns don't become predictable. A point with a rider
+ * standing on it (within 4 m) is never picked while any other is clear.
  */
 export function chooseSpawn(w: World, self: Player): SpawnPoint {
   const spawns = w.layout.spawns
-  const scored = spawns.map((sp, i) => scoreSpawn(w, sp, i, self))
+  const all = spawns.map((sp, i) => scoreSpawn(w, sp, i, self))
+  const clear = all.filter((s) => s.nearest >= SPAWN_CLEAR_M)
+  const scored = clear.length > 0 ? clear : all
   const safe = scored.filter((s) => s.nearest >= SPAWN_MIN_ENEMY_DIST && !s.seen)
   const pool = (safe.length > 0 ? safe : scored).toSorted(
     (a, b) => b.nearest - a.nearest || a.index - b.index,
