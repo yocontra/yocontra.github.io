@@ -424,14 +424,15 @@ export class Hub {
     if (this.licenceGate('bounty', 'Bounty Hunt', 'Bounty Hunt needs a licence.')) {
       return
     }
-    const xpBefore = this.me?.xp ?? null
     this.root.classList.add('dim')
     const q = new QueueSheet(this.parent, {
       token: () => this.deps.token(),
       matched: (match) => {
         this.root.classList.remove('dim')
         this.hide()
-        this.deps.bountyHunt(match, xpBefore)
+        // read at the match, not the search: "Next duel" requeues while the last duel's XP is
+        // still being fetched, and the receipt's bar should start from after that duel
+        this.deps.bountyHunt(match, this.me?.xp ?? null)
       },
       closed: () => this.root.classList.remove('dim'),
       rideRanked: () => {

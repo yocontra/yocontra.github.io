@@ -9,6 +9,7 @@ import {
   saveName,
 } from '../net/leaderboard.ts'
 import { mountMostWanted } from './most-wanted.ts'
+import { recallOne, remember } from './store-memory.ts'
 
 export interface Banked {
   total: number
@@ -31,6 +32,13 @@ export interface BoardOpen {
 
 /** The gauntlet's all-time run board, or the monthly Most Wanted earnings board. */
 export type BoardTab = 'gauntlet' | 'most-wanted'
+
+const BOARD_TAB_KEY = 'out-west-board-tab'
+
+/** The board tab you last looked at on this device, else `fallback`. */
+export function lastBoardTab(fallback: BoardTab): BoardTab {
+  return recallOne<BoardTab>(BOARD_TAB_KEY, ['gauntlet', 'most-wanted'], fallback)
+}
 
 function el<K extends keyof HTMLElementTagNameMap>(
   tag: K,
@@ -190,6 +198,7 @@ export class Board {
       b.addEventListener('click', (e) => {
         e.stopPropagation()
         if (tab !== (this.opts.tab ?? 'gauntlet')) {
+          remember(BOARD_TAB_KEY, tab)
           this.opts = { ...this.opts, tab }
           this.loadSeq++
           this.render()
