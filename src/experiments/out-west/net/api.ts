@@ -29,7 +29,7 @@ function errorOf(body: unknown, status: number): string {
   if (status === 429) {
     return 'Too many requests. Wait a moment and try again.'
   }
-  return 'The server sent something odd back.'
+  return 'Something went wrong. Try again.'
 }
 
 /** JSON in, JSON out, with a timeout. `check` shapes the body; a failed check is an error. */
@@ -53,9 +53,9 @@ export async function apiJson<T>(
     }
     return check(body)
       ? { ok: true, value: body }
-      : { ok: false, error: 'The server sent something odd back.' }
+      : { ok: false, error: 'Something went wrong. Try again.' }
   } catch {
-    return { ok: false, error: 'Couldn’t reach the server.' }
+    return { ok: false, error: 'Couldn’t connect. Check your connection and try again.' }
   } finally {
     clearTimeout(timer)
   }
@@ -83,7 +83,7 @@ export async function fetchLedger(limit = 12): Promise<Result<LedgerRow[]>> {
   const entries = r.value.entries
   return Array.isArray(entries)
     ? { ok: true, value: entries as LedgerRow[] }
-    : { ok: false, error: 'Couldn’t read the ledger.' }
+    : { ok: false, error: 'Couldn’t load your ledger. Try again.' }
 }
 
 export const fetchStore = (): Promise<Result<StoreResponse>> => apiJson('/store', {}, isStore)

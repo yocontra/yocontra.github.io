@@ -249,7 +249,7 @@ export class Hud {
     uiSound('uiStamp')
     this.cardBig.innerHTML = ''
     const img = el('img', '', this.cardBig)
-    img.alt = 'Wanted poster stamped: shot in the back, no bounty'
+    img.alt = 'Wanted poster stamped: drew early, no bounty'
     img.src = src
   }
 

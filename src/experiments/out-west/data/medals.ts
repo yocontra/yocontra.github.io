@@ -144,42 +144,42 @@ const ch = (
 export const CHALLENGES: readonly Challenge[] = [
   ch(0, 'steady', ['Steady Hand', 'Beat him on your first try.'], { kind: 'firstTry' }),
   ch(1, 'hat', ['Talk Through Your Hat', 'Shoot his hat off.'], { kind: 'hat' }),
-  ch(2, 'crow', ['Let the Crow Fly', 'Win after a fake-out, without flinching.'], {
+  ch(2, 'crow', ['Let the Crow Fly', 'Win after a fake-out without drawing early.'], {
     kind: 'fakes',
     min: 1,
   }),
   ch(3, 'hat', ['Hair of the Dog', 'Shoot his hat off.'], { kind: 'hat' }),
-  ch(4, 'coin', ['Heads or Tails', 'Don’t flinch at the coin. Win after it lands.'], {
+  ch(4, 'coin', ['Heads or Tails', 'Don’t draw at the coin. Win after it lands.'], {
     kind: 'fakes',
     min: 1,
   }),
   ch(5, 'hat', ['Hats Off', 'Shoot his hat off, not his hands.'], { kind: 'hat' }),
   ch(6, 'patience', ['Outwait Him', 'Beat him on your first try.'], { kind: 'firstTry' }),
-  ch(7, 'wind', ['Steady in the Wind', 'Win through a fake-out on your first try.'], {
+  ch(7, 'wind', ['Steady in the Wind', 'Ignore the fake-out. Win on your first try.'], {
     kind: 'fakesFirstTry',
     min: 1,
   }),
   ch(8, 'cold', ['Colder Than Laura', 'Win under 250 ms.'], { kind: 'under', ms: 250 }),
-  ch(9, 'whistle', ['False Alarm', 'Win after a fake-out, without flinching.'], {
+  ch(9, 'whistle', ['False Alarm', 'Win after a fake-out without drawing early.'], {
     kind: 'fakes',
     min: 1,
   }),
   ch(10, 'deaf', ['Deaf to It', 'Win after one of her heckles.'], { kind: 'fakes', min: 1 }),
-  ch(11, 'piano', ['Play It Again', 'Win through the piano on your first try.'], {
+  ch(11, 'piano', ['Play It Again', 'Ignore the piano. Win on your first try.'], {
     kind: 'fakesFirstTry',
     min: 1,
   }),
   ch(12, 'dark', ['In the Dark', 'Beat him on your first try.'], { kind: 'firstTry' }),
-  ch(13, 'king', ['Not Fooled', 'Win through his twitch on your first try.'], {
+  ch(13, 'king', ['Not Fooled', 'Ignore his twitch. Win on your first try.'], {
     kind: 'fakesFirstTry',
     min: 1,
   }),
   ch(14, 'hand', ['Dead Man’s Hand', 'Win under 230 ms.'], { kind: 'under', ms: 230 }),
-  ch(15, 'gunshot', ['Gunshot, No Flinch', 'Win after a fake-out, without flinching.'], {
+  ch(15, 'gunshot', ['Gunshot, No Flinch', 'Win after a fake-out without drawing early.'], {
     kind: 'fakes',
     min: 1,
   }),
-  ch(16, 'midnight', ['No Flinch at Midnight', 'Kill Hardin without drawing early on him.'], {
+  ch(16, 'midnight', ['No Flinch at Midnight', 'Beat Hardin without drawing early.'], {
     kind: 'clean',
   }),
 ]

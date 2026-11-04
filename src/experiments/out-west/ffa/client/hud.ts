@@ -103,6 +103,8 @@ export class Hud {
   private readonly last = new Map<string, string | number | boolean>()
   private toastTimer: ReturnType<typeof setTimeout> | null = null
   private rotateSaid = false
+  private readonly dmg: HTMLElement[] = []
+  private dmgNext = 0
 
   constructor(parent: HTMLElement, opts: HudOptions) {
     this.opts = opts
@@ -154,10 +156,14 @@ export class Hud {
     }
     el('div', 'fr-dot', this.ticks)
     this.hitEl = el('div', 'fr-hitmark', this.reticle)
+    const ring = el('div', 'fr-dmg-ring', this.root)
+    for (let i = 0; i < 4; i++) {
+      this.dmg.push(el('div', 'fr-dmg', ring))
+    }
     this.bannerEl = el('div', 'fr-banner', this.root)
     this.lowPowerEl = el('div', 'fr-lowpower', this.root, 'Low Power Mode: 30 fps')
-    this.rotateEl = el('div', 'fr-rotate', this.root, 'Turn your phone sideways for the best view')
-    this.clickEl = el('div', 'fr-rotate fr-click', this.root, 'Click to take aim')
+    this.rotateEl = el('div', 'fr-rotate', this.root, 'Turn your phone sideways')
+    this.clickEl = el('div', 'fr-rotate fr-click', this.root, 'Click to play')
 
     this.deathEl = el('div', 'fr-death', this.root)
     const poster = el('div', 'fr-poster', this.deathEl)
@@ -180,25 +186,25 @@ export class Hud {
 
     this.menuEl = el('div', 'fr-menu fr-hit', this.root)
     const card = el('div', 'fr-menu-card', this.menuEl)
-    el('h2', 'fr-menu-title', card, 'Perdition')
+    el('h2', 'fr-menu-title', card, 'Paused')
     el(
       'p',
       'fr-menu-note',
       card,
-      'Carried cash drops when you leave, unless you leave from inside the bank. Banked money is safe.',
+      'Leaving drops your carried money, unless you’re in the bank. Banked money is safe.',
     )
     const howto = el('button', 'fr-menu-item fr-menu-quiet fr-hit', card, 'How to play')
     // who's in town (report and block live there)
-    this.playersEl = el('button', 'fr-menu-item fr-menu-quiet fr-hit', card, 'Riders in town')
+    this.playersEl = el('button', 'fr-menu-item fr-menu-quiet fr-hit', card, 'Players')
     this.menuSettings = el('div', 'fr-menu-settings', card)
-    const leave = el('button', 'fr-menu-item fr-hit', card, 'Leave town (5 s)')
+    const leave = el('button', 'fr-menu-item fr-hit', card, 'Leave (5 s)')
     const exit = el(
       'button',
       'fr-menu-item fr-menu-quiet fr-hit',
       card,
-      'Quit now (drop your carry)',
+      'Quit now (lose carried money)',
     )
-    const back = el('button', 'fr-menu-item fr-menu-quiet fr-hit', card, 'Back to the fight')
+    const back = el('button', 'fr-menu-item fr-menu-quiet fr-hit', card, 'Resume')
     const players = this.playersEl
     players.addEventListener('click', (e) => {
       e.stopPropagation()
@@ -313,7 +319,7 @@ export class Hud {
       this.bankedEl.hidden = s.banked <= 0
     }
     if (this.changed('players', s.players)) {
-      this.playersEl.textContent = `Riders in town (${s.players})`
+      this.playersEl.textContent = `Players (${s.players})`
     }
     if (this.changed('mw', s.mostWanted)) {
       this.mwEl.classList.toggle('on', s.mostWanted)
@@ -380,10 +386,27 @@ export class Hud {
     st.opacity = '0'
   }
 
-  hit(kill: boolean): void {
-    this.hitEl.className = `fr-hitmark on${kill ? ' kill' : ''}`
+  /** The hit marker: white for a hit, red for a kill, gold for a Dead-Eye (critical) hit. */
+  hit(kill: boolean, crit = false): void {
+    this.hitEl.className = `fr-hitmark on${kill ? ' kill' : ''}${crit ? ' crit' : ''}`
     this.hitEl.getBoundingClientRect()
     this.hitEl.classList.add('fade')
+  }
+
+  /**
+   * A red arc on a ring around the crosshair, pointing where the hit came from: `angle` is
+   * clockwise from straight ahead (radians). Fades over a second; four at most.
+   */
+  damageArc(angle: number): void {
+    const a = this.dmg[this.dmgNext % this.dmg.length]
+    this.dmgNext++
+    if (!a) {
+      return
+    }
+    a.style.transform = `rotate(${angle}rad)`
+    a.classList.remove('on')
+    a.getBoundingClientRect()
+    a.classList.add('on')
   }
 
   /**
@@ -444,7 +467,7 @@ export class Hud {
     }
     const s = Math.ceil(seconds)
     if (this.changed('deathS', s)) {
-      this.deathCount.textContent = s > 0 ? `Back in the saddle in ${s}…` : ''
+      this.deathCount.textContent = s > 0 ? `Respawn in ${s}…` : ''
     }
   }
 

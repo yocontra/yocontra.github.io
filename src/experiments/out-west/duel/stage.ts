@@ -30,7 +30,7 @@ function prepare(d: Director, idx: number): boolean {
   const next = OUTLAWS[idx] as Outlaw
   if (!looksFor(d, next).every((l) => c.assets.lookLoaded(l))) {
     // Lazy-loaded per outlaw; normally prefetched a duel ahead so this is rare.
-    c.hud.fake('[saddling up…]')
+    c.hud.fake('[loading…]')
     return false
   }
   for (const k of [idx + 1, idx + 2]) {

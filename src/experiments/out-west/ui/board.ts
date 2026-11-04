@@ -135,7 +135,10 @@ export class Board {
     const r = this.root
     r.innerHTML = ''
     const panel = el('div', 'ow-board-panel', r)
-    el('h2', 'ow-board-title', panel, 'LEADERBOARD')
+    // the sheets' head: the title and its Close on one line (sheets.css)
+    const head = el('div', 'ow-hub-row ow-sheet-head', panel)
+    el('h2', 'ow-hub-h ow-board-title', head, 'LEADERBOARD')
+    this.closeButton(head)
     const submit = this.opts.submit
     if (!submit) {
       this.tabs(panel)
@@ -144,7 +147,6 @@ export class Board {
       mountMostWanted(el('div', 'ow-feat-mw', panel), this.root)
       this.status = null
       this.list = null
-      this.closeButton(panel)
       return
     }
     if (submit) {
@@ -171,7 +173,6 @@ export class Board {
     this.status = el('div', 'ow-board-status', panel)
     this.status.setAttribute('aria-live', 'polite')
     this.list = el('ol', 'ow-board-list', panel)
-    this.closeButton(panel)
   }
 
   private closeButton(panel: HTMLElement): void {

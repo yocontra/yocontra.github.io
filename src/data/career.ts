@@ -20,7 +20,7 @@ export const career: readonly Role[] = [
   },
   {
     company: 'Veil Labs',
-    href: 'https://appari.sh',
+    href: 'https://veillabs.studio/',
     title: 'Co-founder',
     years: '2026 — now',
     location: 'Phoenix',
@@ -38,7 +38,7 @@ export const career: readonly Role[] = [
   },
   {
     company: 'Apple',
-    href: 'https://sear.apple.com',
+    href: 'https://security.apple.com',
     title: 'Senior Staff Engineer · SEAR',
     years: '2024 — 2026',
     location: 'Cupertino / SF',

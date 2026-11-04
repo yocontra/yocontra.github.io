@@ -27,9 +27,9 @@ export function offerLicensedMode(d: Director, next: number): Promise<boolean> |
   }
   return confirmSheet(d.c.hud.root, {
     title: 'Licence earned',
-    body: `You’ve beaten the first ${LICENCE_OUTLAWS} outlaws. Go to ${MODE_NAME[wish]} now (this ranked run ends), or keep riding.`,
-    yes: MODE_NAME[wish],
-    no: 'Keep riding',
+    body: `You beat the first ${LICENCE_OUTLAWS} outlaws. Play ${MODE_NAME[wish]} now, or keep going. Leaving ends this ranked run.`,
+    yes: `Play ${MODE_NAME[wish]}`,
+    no: 'Keep going',
     focusNo: true,
   }).then((go) => {
     if (go) {

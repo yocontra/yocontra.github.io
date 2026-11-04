@@ -72,6 +72,9 @@ function purse(parent: HTMLElement, meta: Meta): void {
   )
 }
 
+/** A challenge's task loses its full stop when the pay follows it on the same line. */
+const END_STOP = /\.$/u
+
 function outlawRow(list: HTMLElement, meta: Meta, i: number): void {
   const o = OUTLAWS[i]
   const c = CHALLENGES[i]
@@ -102,7 +105,7 @@ function outlawRow(list: HTMLElement, meta: Meta, i: number): void {
     'span',
     'ow-map-ch-task',
     ch,
-    `${c.task} · ${pay.xp} XP${pay.cash ? ` + ${money(pay.cash)}` : ''}${isClaim(c) ? ' · Tap his hat' : ''}`,
+    `${c.task.replace(END_STOP, '')} · ${pay.xp} XP${pay.cash ? ` + ${money(pay.cash)}` : ''}${isClaim(c) ? ' · Tap his hat' : ''}`,
   )
 }
 
@@ -150,6 +153,7 @@ export function openGauntletMap(root: HTMLElement, meta: Meta, links: MapLinks):
     el('div', 'ow-results-kicker', s.body, '17 outlaws')
     sets(s.body, meta)
     purse(s.body, meta)
+    el('p', 'ow-hub-note ow-map-legend', s.body, 'Medal times in ms: bronze · silver · gold')
     const list = el('ol', 'ow-map-list', s.body)
     for (let i = 0; i < OUTLAW_COUNT; i++) {
       outlawRow(list, meta, i)

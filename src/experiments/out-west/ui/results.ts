@@ -101,7 +101,7 @@ export class ResultsPanel {
     this.root.setAttribute('aria-label', v.title)
     swallow(this.root)
     const panel = el('div', 'ow-hub-panel ow-paper-doc ow-results-panel', this.root)
-    el('div', 'ow-results-kicker', panel, 'Bank of Perdition · Receipt')
+    el('div', 'ow-results-kicker', panel, 'Results')
     el('h2', 'ow-results-title', panel, v.title)
     el('p', 'ow-hub-note ow-results-sub', panel, v.sub)
     const draws = el('div', 'ow-results-draws', panel)
@@ -321,7 +321,7 @@ export function resultView(
         : { tone: 'win', title: 'He drew early', sub: 'He drew before the bell. You win.' },
     forfeit:
       r.culprit === me
-        ? { tone: 'loss', title: 'Forfeit', sub: 'You left the street. Full penalty.' }
+        ? { tone: 'loss', title: 'Forfeit', sub: 'You left the duel. Full penalty.' }
         : { tone: 'win', title: 'He left', sub: 'His connection dropped. You win.' },
     dodge:
       r.culprit === me

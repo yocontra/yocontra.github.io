@@ -70,7 +70,7 @@ export function onVerdict(d: Director, v: Verdict): void {
     case 'coward':
       if (d.phase !== 'coward') {
         // shot after the call, but faster than a human can react: the server calls it a guess
-        coward(d, d.phase === 'call' ? 'Too quick to be a reaction. That was a guess.' : '')
+        coward(d, d.phase === 'call' ? 'Too fast to be a reaction. That was a guess.' : '')
       }
       cowardFined(d, paid)
       break
@@ -90,7 +90,7 @@ export function onReconnecting(d: Director, on: boolean): void {
   }
   d.c.hud.setMode(on ? 'RECONNECTING…' : 'RANKED')
   if (on) {
-    d.c.hud.fake('[The line to the ranked server dropped. Hold on…]', 3000)
+    d.c.hud.fake('[Connection lost. Reconnecting…]', 3000)
   }
 }
 
@@ -107,7 +107,7 @@ export function onResumed(d: Director, purse: number): void {
   if (!LIVE.has(d.phase)) {
     return
   }
-  d.c.hud.fake('[Back on the line. The standoff starts over.]', 3000)
+  d.c.hud.fake('[Reconnected. The duel starts over.]', 3000)
   if (d.boss && d.bossPhase === 1) {
     d.enterBossClock()
   } else {
@@ -120,7 +120,7 @@ export function onDropped(d: Director, reason: string): void {
   if (!d.ranked) {
     return
   }
-  d.setPractice(`[${reason} Practice from here, not ranked.]`)
+  d.setPractice(`[${reason} The rest is practice.]`)
   if (!LIVE.has(d.phase)) {
     return
   }

@@ -62,6 +62,7 @@
   line-height: 1.05;
   letter-spacing: 0.04em;
   text-transform: uppercase;
+  text-wrap: balance;
   color: var(--ow-bone);
 }
 .ow-sheet-head > .ow-hub-h {
@@ -76,6 +77,7 @@
   margin: 0;
   font-size: var(--ow-fs-body);
   line-height: 1.45;
+  text-wrap: pretty;
   color: var(--ow-bone-2);
 }
 .ow-hub-note a {
@@ -88,6 +90,7 @@
   flex-wrap: wrap;
   align-items: center;
 }
+/* buttons sharing a row grow from their labels: a long one never breaks to even them up */
 .ow-hub-row > .ow-btn {
   flex: 1 1 auto;
 }
@@ -164,6 +167,16 @@
 }
 .ow-ledger-list li {
   grid-template-columns: 1fr auto 4.5rem 5.5rem;
+}
+/* the receipt's money and XP figures stand in columns down the whole slip, not row by row */
+.ow-results-lines {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  column-gap: var(--ow-s3);
+}
+.ow-results-lines li {
+  grid-column: 1 / -1;
+  grid-template-columns: subgrid;
 }
 .ow-ledger-list b,
 .ow-results-lines b,
@@ -353,8 +366,9 @@
 }
 
 /* ------------------------------------------------------------------- settings */
+/* a group's heading sits nearer its own rows than the rows above it (the body gap adds 16 px) */
 .ow-set-group + .ow-set-group {
-  margin-top: var(--ow-s4);
+  margin-top: var(--ow-s2);
 }
 .ow-set-h {
   margin: 0 0 var(--ow-s2);

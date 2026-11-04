@@ -62,17 +62,17 @@ function politeStatus(status: number, server: string | null): string {
     return 'Too many tries. Wait a minute and try again.'
   }
   if (status >= 500) {
-    return 'Leaderboard trouble. Try again in a few minutes.'
+    return 'Leaderboard error. Try again in a few minutes.'
   }
   if (server) {
     return server
   }
-  return 'The leaderboard refused that.'
+  return 'The leaderboard didn’t accept that.'
 }
 
 async function call(path: string, init: RequestInit = {}): Promise<Result<unknown>> {
   if (typeof navigator !== 'undefined' && navigator.onLine === false) {
-    return { ok: false, error: 'You look to be offline.' }
+    return { ok: false, error: 'You’re offline. Check your connection.' }
   }
   const ctrl = new AbortController()
   const timer = setTimeout(() => ctrl.abort(), TIMEOUT_MS)
@@ -90,7 +90,7 @@ async function call(path: string, init: RequestInit = {}): Promise<Result<unknow
     }
     return { ok: true, value: body }
   } catch {
-    return { ok: false, error: 'Couldn’t reach the leaderboard. Try again in a bit.' }
+    return { ok: false, error: 'Couldn’t connect. Check your connection and try again.' }
   } finally {
     clearTimeout(timer)
   }
@@ -104,7 +104,7 @@ export async function fetchTop(limit = 25): Promise<Result<BoardEntry[]>> {
   }
   const v = r.value
   if (!(isRecord(v) && Array.isArray(v.entries))) {
-    return { ok: false, error: 'The leaderboard sent something odd back.' }
+    return { ok: false, error: 'Something went wrong. Try again.' }
   }
   return { ok: true, value: v.entries.filter(isEntry) }
 }
