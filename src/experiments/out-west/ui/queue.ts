@@ -13,6 +13,8 @@ export interface QueueSheetOpts {
   token: () => Promise<string | null>
   matched: (m: QueueMatch) => void
   closed: () => void
+  /** Leave the queue for a ranked gauntlet run (the way to earn the licence). */
+  rideRanked: () => void
 }
 
 export class QueueSheet {
@@ -20,6 +22,8 @@ export class QueueSheet {
   private readonly line: HTMLElement
   private readonly detail: HTMLElement
   private readonly ghostBtn: HTMLButtonElement
+  private readonly rankedBtn: HTMLButtonElement
+  private readonly leaveBtn: HTMLButtonElement
   private readonly bar: HTMLElement
   private readonly search: QueueSearch
   private readonly o: QueueSheetOpts
@@ -39,9 +43,19 @@ export class QueueSheet {
     this.bar = el('div', 'ow-xp-fill', track)
     this.detail = el('p', 'ow-hub-note', panel, '')
     const row = el('div', 'ow-hub-row', panel)
-    button(row, 'Leave queue', () => this.cancel())
+    this.leaveBtn = button(row, 'Leave queue', () => this.cancel())
     this.ghostBtn = button(row, 'Duel a ghost now', () => this.search.ghost(), true)
     this.ghostBtn.hidden = true
+    this.rankedBtn = button(
+      row,
+      'Ride the ranked gauntlet',
+      () => {
+        this.cancel()
+        o.rideRanked()
+      },
+      true,
+    )
+    this.rankedBtn.hidden = true
     this.search = new QueueSearch({
       queued: (m) => {
         this.line.textContent = m.ghostsOnly
@@ -50,7 +64,7 @@ export class QueueSheet {
       },
       status: (s) => this.status(s),
       matched: (m) => this.matched(m),
-      failed: (msg) => this.failed(msg),
+      failed: (msg, reason) => this.failed(msg, reason),
     })
     this.begin().catch(() => undefined)
   }
@@ -87,9 +101,11 @@ export class QueueSheet {
     this.ghostBtn.hidden = true
     // a ghost is revealed with its own cold breath; a live gun with the found sting
     uiSound(m.mode === 'ghost' ? 'ghost' : 'queueFound')
+    const ghostOf =
+      m.opponent.kind === 'outlaw' ? 'a Town Outlaw' : `the ghost of ${m.opponent.name}`
     this.line.textContent =
       m.mode === 'ghost'
-        ? `Nobody rode in. You’ll duel the ghost of ${m.opponent.name}.`
+        ? `Nobody rode in. You’ll duel ${ghostOf}.`
         : `${m.opponent.name} answers the call.`
     setTimeout(() => {
       this.root.remove()
@@ -97,11 +113,17 @@ export class QueueSheet {
     }, 900)
   }
 
-  private failed(msg: string): void {
+  private failed(msg: string, reason?: string): void {
     this.done = true
     this.line.textContent = msg
     this.detail.textContent = ''
     this.ghostBtn.hidden = true
+    this.leaveBtn.textContent = 'Back to the saloon'
+    // not a dead end: the licence is three outlaws away
+    this.rankedBtn.hidden = reason !== 'unlicensed'
+    if (reason === 'unlicensed') {
+      this.rankedBtn.focus()
+    }
   }
 
   cancel(): void {

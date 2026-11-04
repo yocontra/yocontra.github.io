@@ -148,20 +148,28 @@ export class RoomFlow {
   }
 
   private cock(): void {
-    this.setBeat('cock', this.clock.now() + READY_TIMEOUT_MS)
-    this.after(READY_TIMEOUT_MS, () => {
-      const lazy = ([0, 1] as const).filter((s) => !this.ready[s])
-      const [first] = lazy
-      if (lazy.length === 2 || first === undefined) {
-        this.closeRoom('timeout')
-        return
-      }
-      this.finish('dodge', { winner: other(first), culprit: first })
-    })
+    // No READY deadline (or dodge fine) against a ghost or the Town Outlaw: `maybeWalk` cocks you.
+    this.setBeat('cock', this.makeAi ? null : this.clock.now() + READY_TIMEOUT_MS)
+    if (!this.makeAi) {
+      this.after(READY_TIMEOUT_MS, () => {
+        const lazy = ([0, 1] as const).filter((s) => !this.ready[s])
+        const [first] = lazy
+        if (lazy.length === 2 || first === undefined) {
+          this.closeRoom('timeout')
+          return
+        }
+        this.finish('dodge', { winner: other(first), culprit: first })
+      })
+    }
     this.maybeWalk()
   }
 
   private maybeWalk(): void {
+    if (this.makeAi && this.beat === 'cock' && this.connected[0] && !this.ready[0]) {
+      // against an AI the human is cocked for them, once they're at the table (a drop waits)
+      this.ready[0] = true
+      this.broadcast({ type: 'ready', seat: 0 })
+    }
     if (this.beat === 'cock' && this.ready[0] && this.ready[1]) {
       this.clearTimers()
       this.walk()
@@ -413,6 +421,7 @@ export class RoomFlow {
     this.graceUntil[seat] = null
     this.io.send(seat, this.sync())
     this.sendPresence(seat, true, null)
+    this.maybeWalk()
     if (wasAway && this.beat === 'wait' && !this.standoff) {
       // The wait re-rolls after a reconnect.
       this.turn()
@@ -448,11 +457,21 @@ export class RoomFlow {
 
   private graceExpired(seat: Seat): void {
     this.graceTimers[seat] = null
-    if (this.connected[seat] || !this.preCall()) {
-      return
+    if (!this.connected[seat] && this.preCall()) {
+      this.leave(seat)
     }
-    const dodge = this.beat === 'intro' || this.beat === 'cock'
-    this.finish(dodge ? 'dodge' : 'forfeit', { winner: other(seat), culprit: seat })
+  }
+
+  /** Ran or never came back: a dodge before the walk (against an AI just a close), then a forfeit. */
+  private leave(seat: Seat): void {
+    const beforeWalk = this.beat === 'intro' || this.beat === 'cock'
+    if (beforeWalk && this.makeAi) {
+      this.closeRoom('done')
+    } else if (beforeWalk) {
+      this.finish('dodge', { winner: other(seat), culprit: seat })
+    } else if (this.preCall()) {
+      this.finish('forfeit', { winner: other(seat), culprit: seat })
+    }
   }
 
   private sendPresence(seat: Seat, connected: boolean, graceUntil: number | null): void {
@@ -507,7 +526,7 @@ export class RoomFlow {
         this.vote(seat)
         return
       case 'flee':
-        this.flee(seat)
+        this.leave(seat)
         return
       default:
         return
@@ -524,14 +543,6 @@ export class RoomFlow {
     if (known) {
       this.lastTaunt[seat] = now
       this.broadcast({ type: 'taunt', seat, taunt: known })
-    }
-  }
-
-  private flee(seat: Seat): void {
-    if (this.beat === 'intro' || this.beat === 'cock') {
-      this.finish('dodge', { winner: other(seat), culprit: seat })
-    } else if (this.preCall()) {
-      this.finish('forfeit', { winner: other(seat), culprit: seat })
     }
   }
 
