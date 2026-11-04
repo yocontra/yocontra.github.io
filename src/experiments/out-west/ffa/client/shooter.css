@@ -513,10 +513,16 @@
   display: none;
 }
 
+/* the label face of the game's own Settings (.ow-set-label): small caps, not a sentence */
 .fr-set-label {
+  font-family: var(--ow-font-text);
+  font-weight: 600;
+  font-size: var(--ow-fs-lead);
+  font-variant-caps: all-small-caps;
+  letter-spacing: var(--ow-track-label);
+  color: var(--ow-bone);
   flex: 0 0 auto;
   min-width: 7.5em;
-  color: var(--ow-bone);
 }
 
 .fr-set-slider input {

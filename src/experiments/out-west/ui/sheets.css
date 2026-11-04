@@ -62,6 +62,7 @@
   line-height: 1.05;
   letter-spacing: 0.04em;
   text-transform: uppercase;
+  text-wrap: balance;
   color: var(--ow-bone);
 }
 .ow-sheet-head > .ow-hub-h {
@@ -76,6 +77,7 @@
   margin: 0;
   font-size: var(--ow-fs-body);
   line-height: 1.45;
+  text-wrap: pretty;
   color: var(--ow-bone-2);
 }
 .ow-hub-note a {
@@ -88,9 +90,9 @@
   flex-wrap: wrap;
   align-items: center;
 }
-/* buttons sharing a row share it evenly: a row of plates, never a ragged one */
+/* buttons sharing a row grow from their labels: a long one never breaks to even them up */
 .ow-hub-row > .ow-btn {
-  flex: 1 1 0;
+  flex: 1 1 auto;
 }
 .ow-hub-choices {
   display: flex;

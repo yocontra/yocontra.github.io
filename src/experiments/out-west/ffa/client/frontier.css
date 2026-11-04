@@ -962,6 +962,8 @@
   padding: 0 0 var(--ow-lift-sc);
   color: var(--fr-paper);
   font-size: var(--ow-fs-small);
+  /* "Crouch" and "Reload" clear a 60 px disc with room to breathe */
+  letter-spacing: 0.03em;
   line-height: 1;
   text-shadow: 0 1px 0 rgb(0 0 0 / 0.8);
   touch-action: none;
