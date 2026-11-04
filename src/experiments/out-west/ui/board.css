@@ -22,7 +22,7 @@
   display: flex;
   flex-direction: column;
   gap: var(--ow-s3);
-  padding: var(--ow-s4) var(--ow-s4) var(--ow-s3);
+  padding: var(--ow-s4);
   color: var(--ow-ink);
   background-color: var(--ow-paper);
   background-image:
@@ -37,28 +37,12 @@
   animation: ow-paper-in var(--ow-t-mid) var(--ow-ease-out) both;
   touch-action: pan-y;
 }
-.ow-board-title {
-  margin: 0;
-  font-family: var(--ow-font-display);
-  font-weight: 400;
-  /* one long wood-type word: it shrinks with the panel on a phone instead of running off it */
-  font-size: clamp(var(--ow-fs-h4), 8cqi, var(--ow-fs-h2));
-  overflow-wrap: anywhere;
-  letter-spacing: 0.04em;
-  line-height: 1;
-  text-align: center;
-  text-transform: uppercase;
+/* the sheets' head (sheets.css), printed in ink */
+.ow-board-panel .ow-sheet-head {
+  border-color: var(--ow-rule-ink);
 }
-.ow-board-title::after {
-  content: "";
-  display: block;
-  width: 70%;
-  height: 12px;
-  margin: var(--ow-s2) auto 0;
-  background: currentColor;
-  -webkit-mask: var(--ow-orn-rule) center / contain no-repeat;
-  mask: var(--ow-orn-rule) center / contain no-repeat;
-  opacity: 0.7;
+.ow-board-panel .ow-hub-h {
+  color: var(--ow-ink);
 }
 .ow-board-form {
   display: flex;

@@ -88,8 +88,9 @@
   flex-wrap: wrap;
   align-items: center;
 }
+/* buttons sharing a row share it evenly: a row of plates, never a ragged one */
 .ow-hub-row > .ow-btn {
-  flex: 1 1 auto;
+  flex: 1 1 0;
 }
 .ow-hub-choices {
   display: flex;
@@ -164,6 +165,16 @@
 }
 .ow-ledger-list li {
   grid-template-columns: 1fr auto 4.5rem 5.5rem;
+}
+/* the receipt's money and XP figures stand in columns down the whole slip, not row by row */
+.ow-results-lines {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  column-gap: var(--ow-s3);
+}
+.ow-results-lines li {
+  grid-column: 1 / -1;
+  grid-template-columns: subgrid;
 }
 .ow-ledger-list b,
 .ow-results-lines b,

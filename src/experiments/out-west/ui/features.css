@@ -64,6 +64,8 @@
   justify-content: center;
   min-width: 0;
   padding-block: 6px calc(6px + var(--ow-lift-sc));
+  /* the body size: "Gauntlet runs" holds one line on a 375 px phone */
+  font-size: var(--ow-fs-body);
   white-space: normal;
   text-align: center;
   text-wrap: balance;

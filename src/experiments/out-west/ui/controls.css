@@ -176,8 +176,8 @@
 }
 /* a sheet's Close (or the Outfitter's Done): a tap target tall, the body size */
 .ow-btn.ow-btn-sm,
-.ow-sheet-head > .ow-btn,
-.ow-store-head .ow-btn {
+.ow-store-head .ow-btn,
+.ow-hub-row.ow-sheet-head > .ow-btn {
   flex: none;
   min-height: var(--ow-tap);
   padding-inline: var(--ow-s3);

@@ -110,6 +110,7 @@
     var(--ow-brass) 60%,
     var(--ow-brass-lo)
   );
+  padding-bottom: var(--ow-lift-num);
   color: var(--ow-ink);
   font-family: var(--ow-font-num);
   font-weight: 600;
