@@ -485,19 +485,18 @@ export class Hud {
       el('td', '', tr, String(r.attempts))
       el('td', '', tr, r.paid === null ? '—' : money(r.paid))
     })
-    const foot = el('tr', 'ow-ledger-total', el('tfoot', '', table))
-    el('td', '', foot, '')
-    el('td', '', foot, 'Total earned')
-    for (let i = 0; i < 3; i++) {
-      el('td', '', foot, '')
-    }
-    el('td', '', foot, money(stats.total))
+    // the total sits under the scroll, so it stays in view without covering the last rows
+    const foot = el('div', 'ow-ledger-foot', e)
+    el('span', '', foot, 'Total earned')
+    el('b', '', foot, money(stats.total))
     const s = el('div', 'ow-end-stats', e)
     el(
       'div',
       'ow-end-purse',
       s,
-      `Earned: ${money(stats.total)}${stats.total >= stats.best && stats.total > 0 ? ' · New best' : ` · Best ${money(stats.best)}`}`,
+      stats.total >= stats.best && stats.total > 0
+        ? 'A new best purse'
+        : `Best ${money(stats.best)}`,
     )
     el(
       'div',

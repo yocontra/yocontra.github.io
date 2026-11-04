@@ -106,7 +106,7 @@
 
 /* ------------------------------------------- the gauntlet's end: the ledger */
 .ow-end {
-  background: radial-gradient(90% 80% at 50% 30%, rgb(14 9 6 / 0.35), rgb(14 9 6 / 0.85));
+  background: radial-gradient(90% 80% at 50% 30%, rgb(14 9 6 / 0.62), rgb(14 9 6 / 0.94));
   justify-content: flex-start;
 }
 .ow-end-line {
@@ -192,21 +192,33 @@
   padding-right: var(--ow-s3);
   text-align: right;
 }
-.ow-ledger tfoot td {
-  position: sticky;
-  bottom: 0;
-  background: var(--ow-paper);
-  padding-block: var(--ow-s2) var(--ow-s3);
+/* the total: a receipt line under the scrolling ledger, never a sticky row over it */
+.ow-ledger-foot {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--ow-s3);
+  width: min(40rem, 100%);
+  padding: var(--ow-s2) var(--ow-s3) var(--ow-s3);
   border-top: 2px solid var(--ow-ink);
-  border-bottom: 0;
-  font-weight: 600;
-  font-size: var(--ow-fs-h4);
-  color: var(--ow-red);
-}
-.ow-ledger tfoot td:nth-child(2) {
+  background-color: var(--ow-paper);
+  background-image:
+    radial-gradient(140% 120% at 50% 50%, transparent 55%, rgb(120 84 40 / 0.35)),
+    var(--ow-tex-paper);
+  background-size:
+    100% 100%,
+    256px 256px;
+  color: var(--ow-ink);
+  box-shadow: var(--ow-shadow-2);
   font-variant-caps: all-small-caps;
   letter-spacing: var(--ow-track-label);
-  color: var(--ow-ink);
+}
+.ow-ledger-foot b {
+  font-family: var(--ow-font-num);
+  font-size: var(--ow-fs-h4);
+  font-variant-caps: normal;
+  letter-spacing: 0;
+  color: var(--ow-red);
 }
 .ow-end-stats {
   text-align: center;
@@ -245,7 +257,9 @@
     padding-inline: 5px;
   }
   .ow-ledger th:nth-child(4),
-  .ow-ledger td:nth-child(4) {
+  .ow-ledger td:nth-child(4),
+  .ow-ledger th:nth-child(5),
+  .ow-ledger td:nth-child(5) {
     display: none;
   }
 }
