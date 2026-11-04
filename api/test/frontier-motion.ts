@@ -39,6 +39,7 @@ const SECS = Number(arg('--secs', '12'))
 const THROTTLE = Number(arg('--throttle', '1'))
 const SHOTS = arg('--shots', '')
 const JSON_OUT = process.argv.includes('--json')
+const LOBBY_WS = /\/town\/.*\/ws/u
 const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms))
 
 interface Pilot {
@@ -108,7 +109,7 @@ async function openRider(name: string, spotX: number, spotZ: number): Promise<Pa
 
   // Shape the lobby WebSocket: one-way lag plus uniform jitter, in order, both directions.
   if (MODE === 'remote' && (oneWay > 0 || JITTER > 0)) {
-    await page.routeWebSocket(/\/town\/.*\/ws/u, (ws) => {
+    await page.routeWebSocket(LOBBY_WS, (ws) => {
       const server = ws.connectToServer()
       let lastUp = 0
       let lastDown = 0
