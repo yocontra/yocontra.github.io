@@ -40,6 +40,7 @@ export const COVER_VISUALS: Record<string, CoverVisual> = {
   woodpile: { what: 'split firewood', height: 1.0, vault: true, surface: 'wood' },
   well: { what: 'roofed well', height: 2.6, vault: false, surface: 'wood' },
   post: { what: 'boardwalk post', height: 3.1, vault: false, surface: 'wood' },
+  pole: { what: 'telegraph pole', height: 7, vault: false, surface: 'wood' },
   boxcar: { what: 'railroad boxcar', height: 3.8, vault: false, surface: 'metal' },
   buffer: { what: 'track buffer stop', height: 1.0, vault: true, surface: 'wood' },
   headstone: { what: 'headstone', height: 0.8, vault: true, surface: 'metal' },

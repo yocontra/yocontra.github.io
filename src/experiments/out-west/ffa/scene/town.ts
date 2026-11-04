@@ -1140,6 +1140,57 @@ function addCreek(bs: Builders, layout: TownLayout): void {
 }
 
 /** The depot's platform: a plank deck out to the track, with a timber edge. */
+/** Painted advertisements high on the side walls that face the alleys and the street's ends. */
+const WALL_ADS: Record<string, { side: Side; text: string; bg: string; fg: string }> = {
+  livery: { side: 'e', text: 'FEED & SEED', bg: '#3a2a1e', fg: '#e8dcc0' },
+  saloon: { side: 'w', text: 'BEER · WHISKEY', bg: '#2a1810', fg: '#e8c870' },
+  hotel: { side: 'e', text: 'ROOMS & BATHS', bg: '#e8dcc0', fg: '#3a2a1e' },
+  general_store: { side: 'w', text: 'DRY GOODS · HARDWARE', bg: '#3a2414', fg: '#f0e2c0' },
+  undertaker: { side: 'e', text: 'COFFINS · EMBALMING', bg: '#141010', fg: '#c8c0b0' },
+  stage_line: { side: 'e', text: 'WELLS & CO EXPRESS', bg: '#2a3a2e', fg: '#e8c870' },
+  assay: { side: 'e', text: 'GOLD BOUGHT', bg: '#3a2414', fg: '#e8c870' },
+  depot: { side: 'e', text: 'PERDITION', bg: '#e8d0a0', fg: '#3a2414' },
+  hay_barn: { side: 's', text: 'HAY & GRAIN', bg: '#e8dcc0', fg: '#6a2a1e' },
+}
+
+/**
+ * The ads: a painted board above the ground-floor windows (above the upper ones on a two-storey
+ * wall), about two thirds of the wall wide. Two triangles each, in the shared sign atlas.
+ */
+function addWallAds(bs: Builders, layout: TownLayout): void {
+  for (const b of layout.buildings) {
+    const ad = WALL_ADS[b.id]
+    if (!ad) {
+      continue
+    }
+    const len = sideLength(b, ad.side)
+    const w = Math.min(9, len * 0.66)
+    const y0 = b.floors > 1 ? 5.95 : 2.85
+    const y1 = Math.min(b.height - 0.35, y0 + Math.min(1.2, w * 0.16))
+    bs.signs.push({
+      text: ad.text,
+      bg: ad.bg,
+      fg: ad.fg,
+      quad: faceQuad(b, ad.side, len / 2 - w / 2, len / 2 + w / 2, y0, y1, 0.012),
+    })
+  }
+}
+
+/** Plank crossings over main street at the alley mouths, flush in the dirt (walk-through decks). */
+function addCrossings(bs: Builders, layout: TownLayout): void {
+  const main = layout.streets[0]
+  if (!main) {
+    return
+  }
+  for (const x of [42, 87]) {
+    let k = 0
+    for (let z = main.z + 0.15; z < main.z + main.d - 0.2; z += 0.32) {
+      const shade = [0x9a_7a_58, 0x8a_6c_4c, 0xa8_86_60][k++ % 3] ?? 0x9a_7a_58
+      bs.wood.box(x, 0.02, z + 0.15, 2 - (k % 2) * 0.12, 0.04, 0.29, shade, { skip: ['bottom'] })
+    }
+  }
+}
+
 function addPlatform(bs: Builders, b: Building, front: Side): void {
   const r = sideStrip(b, front, PLATFORM_DEPTH)
   bs.wood.box(r.x + r.w / 2, PORCH_DECK / 2, r.z + r.d / 2, r.w, PORCH_DECK, r.d, WOOD, {
@@ -1563,6 +1614,8 @@ export function buildTown(
   }
   addBank(bs, layout)
   addCreek(bs, layout)
+  addWallAds(bs, layout)
+  addCrossings(bs, layout)
   const lanterns: Matrix4[] = []
   addDecor(bs, layout, lanterns)
   const tiles = new Map<string, Tile>()
