@@ -112,12 +112,33 @@ function queueTokens(root: HTMLElement): () => Promise<string | null> {
   }
 }
 
-/** The phases where nothing may pop up: the walk, the wait for the bell, the draw. */
-const QUIET_PHASES = new Set(['walk', 'turn', 'wait', 'call', 'bossClock'])
+/**
+ * The phases where nothing may pop up: from the cocking through the kill cam and its result card
+ * (the card is up for the whole of win / lose / coward). Held toasts come out once the card is
+ * dismissed, or at the hub.
+ */
+const QUIET_PHASES = new Set([
+  'cock',
+  'walk',
+  'turn',
+  'wait',
+  'call',
+  'win',
+  'lose',
+  'coward',
+  'bossClock',
+  'bossWound',
+])
 
 /** The meta-game: medals, the guest purse, achievements' toasts, the Gazette between duels. */
 function makeMeta(root: HTMLElement, data: SaveData, game: () => Game | null): Meta {
-  const toaster = new Toaster(root, () => QUIET_PHASES.has(game()?.director.phase ?? ''))
+  // the HUD writes the phase on the root (hud.phase); a pause menu or a result card holds them too
+  const toaster = new Toaster(
+    root,
+    () =>
+      QUIET_PHASES.has(root.dataset.duel ?? '') ||
+      root.querySelector('.ow-menu.on, .ow-card.on') !== null,
+  )
   const meta = new Meta({
     save: () => game()?.director.c.save ?? data,
     runId: () => game()?.rankedRunId() ?? null,
@@ -146,15 +167,10 @@ function makeHub(
           return
         }
         hub.hide()
-        g.playDaily({
-          spec,
-          session,
-          onExit: (v) => {
-            hub.show()
-            back(v)
-          },
-        })
+        // the result sheet comes up on the empty street: another try, or `home`
+        g.playDaily({ spec, session, onExit: back })
       },
+      home: () => hub.show(),
     }),
     ready: () => game() !== null,
     continueAt: () => data.level,

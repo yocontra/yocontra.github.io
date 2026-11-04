@@ -9,6 +9,7 @@ import { STREET } from '../scene/street.ts'
 import { clearCards } from './cues.ts'
 import type { Director } from './director.ts'
 import { backToBackShot, otsShot, posterShot } from './framing.ts'
+import { offerLicensedMode } from './licence-road.ts'
 import { ambience } from './present.ts'
 import { STEADY_MS } from './standoff.ts'
 import { BACK_TO_BACK_Z, between, V } from './state.ts'
@@ -335,5 +336,19 @@ export function nextLevel(d: Director): void {
   const next = d.level + 1
   d.c.save.level = next
   persist(d.c.save)
-  holdFor(d, interlude({ kind: 'next', level: next }), () => startLevel(d, next, false))
+  // the licence road: a player who rode here from a licence gate is offered that mode first
+  const offer = offerLicensedMode(d, next)
+  const page = offer
+    ? offer.then((left) => {
+        if (left) {
+          return
+        }
+        return interlude({ kind: 'next', level: next }) ?? undefined
+      })
+    : interlude({ kind: 'next', level: next })
+  holdFor(d, page, () => {
+    if (d.phase === 'win') {
+      startLevel(d, next, false)
+    }
+  })
 }

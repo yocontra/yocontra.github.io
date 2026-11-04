@@ -11,6 +11,7 @@ import type { Dyes } from '../data/dye.ts'
 import { money } from '../data/economy.ts'
 import { licenceCopy, licenceStatus } from '../data/licence.ts'
 import { bountyForLevel, canPrestige, levelProgress, titleFor } from '../data/progression.ts'
+import { type LicensedMode, licenceWish, setLicenceWish } from '../meta/licence-wish.ts'
 import { fetchLedger, fetchMe, fetchTownOpen } from '../net/api.ts'
 import { currentPlayer, onAuthChange } from '../net/auth.ts'
 import type { QueueMatch } from '../net/queue.ts'
@@ -161,8 +162,33 @@ export class Hub {
     this.root.classList.add('on')
     this.deps.stage('hub')
     this.render()
-    this.refresh().catch(() => undefined)
+    this.refresh()
+      .then(() => this.licensedCarryOn(0))
+      .catch(() => undefined)
     this.metaUi?.refresh()
+  }
+
+  /**
+   * The licence road's end: back in the saloon with the licence a gate sent you to earn, carry on
+   * into that mode. The server books clears a moment after the duel, so look again a few times.
+   */
+  private licensedCarryOn(tries: number): void {
+    const wish = licenceWish()
+    if (!(wish && this.visible && this.me)) {
+      return
+    }
+    if (!licenceStatus(this.me.gauntletClears).licensed) {
+      if (tries < 3) {
+        setTimeout(() => {
+          this.refresh()
+            .then(() => this.licensedCarryOn(tries + 1))
+            .catch(() => undefined)
+        }, 1500)
+      }
+      return
+    }
+    setLicenceWish(null)
+    this.pick(wish)
   }
 
   hide(): void {
@@ -312,7 +338,7 @@ export class Hub {
   }
 
   /** Bounty Hunt and Frontier want the licence: say so, with the way to earn it, not a dead end. */
-  private licenceGate(title: string, line: string): boolean {
+  private licenceGate(mode: LicensedMode, title: string, line: string): boolean {
     const me = this.me
     if (!me || licenceStatus(me.gauntletClears).licensed) {
       return false
@@ -328,6 +354,8 @@ export class Hub {
       'Play ranked',
       () => {
         s.close()
+        // once licensed, the duel and the saloon carry on into the mode you wanted
+        setLicenceWish(mode)
         this.rideRanked()
       },
       true,
@@ -377,7 +405,7 @@ export class Hub {
    * (the first three outlaws on a ranked run) and whether the town is open this month.
    */
   private async openFrontier(): Promise<void> {
-    if (this.licenceGate('Frontier', 'Frontier needs a licence.')) {
+    if (this.licenceGate('frontier', 'Frontier', 'Frontier needs a licence.')) {
       return
     }
     const open = await fetchTownOpen()
@@ -393,7 +421,7 @@ export class Hub {
     if (!this.deps.ready()) {
       return
     }
-    if (this.licenceGate('Bounty Hunt', 'Bounty Hunt needs a licence.')) {
+    if (this.licenceGate('bounty', 'Bounty Hunt', 'Bounty Hunt needs a licence.')) {
       return
     }
     const xpBefore = this.me?.xp ?? null
@@ -406,7 +434,10 @@ export class Hub {
         this.deps.bountyHunt(match, xpBefore)
       },
       closed: () => this.root.classList.remove('dim'),
-      rideRanked: () => this.rideRanked(),
+      rideRanked: () => {
+        setLicenceWish('bounty')
+        this.rideRanked()
+      },
     })
     void q
   }

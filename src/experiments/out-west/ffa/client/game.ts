@@ -248,6 +248,7 @@ export class FrontierGame {
   readonly shooter: ShooterCamera
   private viewModel: ViewModel | null = null
   private readonly vmSun = new Vector3()
+  private dustAt = 0
   private readonly vmQ = new Quaternion()
   private guide: BankGuide | null = null
   private readonly coach: Onboarding
@@ -488,6 +489,7 @@ export class FrontierGame {
       hud: this.hud,
       audio: this.audio,
       kick: (a) => (this.shooterView ? this.shooter.kick(a) : this.cam.kick(a)),
+      damageFrom: (from) => this.damageFrom(from),
       posOf: (id) => this.posOf(id),
       muzzleOf: (id, x, z, aim) =>
         this.crowd?.muzzle(id, x, z, aim, new Vector3()) ?? new Vector3(x, 1.3, z),
@@ -597,6 +599,7 @@ export class FrontierGame {
     this.viewModel = new ViewModel(assets)
     if (import.meta.env.DEV) {
       Reflect.set(globalThis, '__vm', this.viewModel)
+      Reflect.set(globalThis, '__crowd', this.crowd)
     }
     // its own scene and lens, drawn over the world before the post chain
     this.renderer.setOverlay({
@@ -739,6 +742,14 @@ export class FrontierGame {
       this.cam.kick(0.12)
     }
     haptic('shot')
+  }
+
+  /** The HUD's damage arc, turned into the view: straight ahead is up on the ring. */
+  private damageFrom(from: { x: number; z: number }): void {
+    const bearing = Math.atan2(from.z - this.own.z, from.x - this.own.x)
+    // shooter views look along the yaw; top-down looks north (−z) with +x to the right
+    const ahead = this.shooterView ? this.shooter.yaw : -Math.PI / 2
+    this.hud.damageArc(Math.atan2(Math.sin(bearing - ahead), Math.cos(bearing - ahead)))
   }
 
   posOf(id: number): { x: number; z: number } | null {
@@ -1099,6 +1110,7 @@ export class FrontierGame {
         ),
         flags: ownFlags(s.flags, s.protectTicks > 0),
         stance: this.ownStance(),
+        pitch: this.shooterView ? this.shooter.pitch : 0,
         self: true,
         weapon: this.net.weapon.weapon,
       })
@@ -1136,6 +1148,7 @@ export class FrontierGame {
       this.coach.maybeShow()
     }
     this.landings(list)
+    this.slideDust(list, nowS)
     const shooter = this.shooterView
     const first = this.settings.view === 'first'
     const speed0 = list[0]?.self ? Math.hypot(list[0].vx, list[0].vz) : 0
@@ -1153,6 +1166,8 @@ export class FrontierGame {
         far: policyFor(this.settings.view, this.renderer.tier).far,
         grid: this.net.grid,
         dt,
+        duck: this.duckHeight(),
+        dead: this.net.alive ? null : this.own,
       })
       crowd.hideSelf = this.net.alive && (first || this.shooter.closeness > 0.85)
     } else {
@@ -1268,6 +1283,14 @@ export class FrontierGame {
     return st
   }
 
+  /** How far your stance lowers the eye (m): crouched, or sliding. */
+  private duckHeight(): number {
+    if (sliding(this.net.pred)) {
+      return 0.6
+    }
+    return this.stance.crouched ? 0.45 : 0
+  }
+
   /** RMB, LT or the touch AIM toggle. */
   private adsHeld(): boolean {
     return this.desk.aimHeld || (this.touch?.ads ?? false) || this.devAdsOn
@@ -1315,6 +1338,19 @@ export class FrontierGame {
       },
       this.vmSun,
     )
+  }
+
+  /** A slide kicks up a trail of dust. */
+  private slideDust(list: readonly CrowdPlayer[], nowS: number): void {
+    if (nowS - this.dustAt < 0.06 || !this.fx) {
+      return
+    }
+    this.dustAt = nowS
+    for (const p of list) {
+      if (p.anim === ANIM_SLIDE) {
+        this.fx.dust(p.x, p.z, 3)
+      }
+    }
   }
 
   /** A thud of boots for every rider (you included) coming down from a vault or a hop. */
@@ -1517,8 +1553,10 @@ export class FrontierGame {
       zoneAt(TOWN, this.own.x, this.own.z)?.kind === 'bank',
       this.dtS,
     )
-    const portrait = viewport.h > viewport.w
-    this.hud.rotateHint(this.touchUi && portrait && this.shooterView && this.net.alive)
+    // only a narrow portrait screen gets the hint (not the open Duo, nor anything squarer)
+    const narrow =
+      viewport.w / viewport.h < 0.65 && document.documentElement.dataset.owForm !== 'fold-inner'
+    this.hud.rotateHint(this.touchUi && narrow && this.shooterView && this.net.alive)
     if (this.map && nowS - this.mapAt > 0.1) {
       this.mapAt = nowS
       this.drawMap(nowS)

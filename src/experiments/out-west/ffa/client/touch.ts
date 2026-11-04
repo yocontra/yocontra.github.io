@@ -160,6 +160,22 @@ export class TouchControls {
       this.off.push(() => this.layer.removeEventListener(type, fn as EventListener))
     }
     listen('pointerdown', (e) => this.down(e))
+    // a rotation, a fold or a resize: no stick keeps an origin from the old layout
+    const relayout = () => this.release()
+    globalThis.addEventListener('resize', relayout)
+    this.off.push(() => globalThis.removeEventListener('resize', relayout))
+    // a gamepad takes over: the thumbs layer steps aside until it's gone
+    const padSwap = () => {
+      const any =
+        typeof navigator.getGamepads === 'function' && navigator.getGamepads().some(Boolean)
+      this.layer.classList.toggle('pad', any)
+    }
+    globalThis.addEventListener('gamepadconnected', padSwap)
+    globalThis.addEventListener('gamepaddisconnected', padSwap)
+    this.off.push(() => {
+      globalThis.removeEventListener('gamepadconnected', padSwap)
+      globalThis.removeEventListener('gamepaddisconnected', padSwap)
+    })
     listen('pointermove', (e) => this.move(e))
     listen('pointerup', (e) => this.up(e))
     listen('pointercancel', (e) => this.up(e))
@@ -274,7 +290,13 @@ export class TouchControls {
       t0: performance.now(),
       moved: false,
     }
-    if (e.clientX < w * 0.45) {
+    // the move stick's zone: the left 45% (an iPad: the left 40%, lower three quarters, where the
+    // thumb rests)
+    const tablet = document.documentElement.dataset.owForm === 'tablet'
+    const inZone = tablet
+      ? e.clientX < w * 0.4 && e.clientY > window.innerHeight * 0.25
+      : e.clientX < w * 0.45
+    if (inZone) {
       if (!this.left) {
         this.left = { ...s, base: this.leftBase, knob: this.leftKnob }
         this.place(this.leftBase, this.left)
@@ -427,6 +449,17 @@ export class TouchControls {
     this.latched = 0
     this.aimHold = 0
     return { mx, mz, buttons, aim: this.shooter ? null : this.aim, assist: true }
+  }
+
+  /** Let go of every stick and the look finger (a layout change). */
+  release(): void {
+    this.left = null
+    this.right = null
+    this.look = null
+    this.fireId = -1
+    this.place(this.leftBase, null)
+    this.place(this.rightBase, null)
+    this.setSprint(false)
   }
 
   private setSprint(on: boolean): void {
