@@ -561,7 +561,7 @@ export class FrontierGame {
   async start(connect: Connect, onProgress: (f: number, label: string) => void): Promise<void> {
     this.transport = connect({
       onMessage: (d) => this.net.handle(d, performance.now()),
-      onState: (st, detail) => this.onTransport(st, detail),
+      onState: (st) => this.onTransport(st),
       onReopen: () => this.net.reset(),
     })
     this.net.attach(this.transport)
@@ -645,14 +645,15 @@ export class FrontierGame {
     return t === 'floor' ? 8 : 16
   }
 
-  private onTransport(state: string, detail?: string): void {
+  private onTransport(state: string): void {
     if (state === 'retrying') {
       this.connBanner = 'Connection lost. Reconnecting…'
     } else if (state === 'open') {
       this.connBanner = null
     } else if (state === 'closed' && !this.exited && this.running) {
-      this.connBanner = `Disconnected${detail ? `: ${detail}` : ''}`
-      setTimeout(() => this.exit('lost'), 2500)
+      // plain words, never the socket's reason; the mount shows Try again / Back
+      this.connBanner = "Connection lost. Couldn't reconnect."
+      this.exit('lost')
     }
   }
 

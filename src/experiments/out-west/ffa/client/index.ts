@@ -66,7 +66,7 @@ export interface FrontierHandle {
 function overlay(root: HTMLElement): {
   el: HTMLElement
   progress: (f: number, label: string) => void
-  refuse: (e: JoinError, onBack: () => void) => void
+  refuse: (e: JoinError, onBack: () => void, onRetry: (() => void) | null) => void
   done: () => void
 } {
   const el = document.createElement('div')
@@ -102,7 +102,7 @@ function overlay(root: HTMLElement): {
         fill.style.transform = `scaleX(${f})`
       }
     },
-    refuse: (e, onBack) => {
+    refuse: (e, onBack, onRetry) => {
       el.classList.add('refused')
       el.innerHTML = ''
       const card = document.createElement('div')
@@ -116,12 +116,22 @@ function overlay(root: HTMLElement): {
       h.textContent = titles[e.reason] ?? 'CAN’T JOIN'
       const p = document.createElement('p')
       p.textContent = e.message
+      card.append(h, p)
+      if (onRetry) {
+        // a full town, a blip, a failed check: worth another go, here and now
+        const again = document.createElement('button')
+        again.type = 'button'
+        again.className = 'fr-menu-item fr-hit'
+        again.textContent = e.reason === 'outdated' ? 'Refresh' : 'Try again'
+        again.addEventListener('click', onRetry)
+        card.append(again)
+      }
       const b = document.createElement('button')
       b.type = 'button'
-      b.className = 'fr-menu-item fr-hit'
-      b.textContent = 'Back to menu'
+      b.className = `fr-menu-item fr-hit${onRetry ? ' fr-menu-quiet' : ''}`
+      b.textContent = onRetry ? 'Back' : 'Back to menu'
       b.addEventListener('click', onBack)
-      card.append(h, p, b)
+      card.append(b)
       el.append(card)
     },
     done: () => {
@@ -144,16 +154,52 @@ function loopbackOptions(opts: FrontierOptions): LoopbackTransportOptions {
   }
 }
 
+/** Refusals worth another try in place (the rest need the saloon, or a refresh). */
+const RETRY = new Set<JoinError['reason']>([
+  'all_full',
+  'network',
+  'server',
+  'turnstile',
+  'outdated',
+])
+
 export function mountFrontier(root: HTMLElement, opts: FrontierOptions = {}): FrontierHandle {
   let destroyed = false
   const onExit = (reason: FrontierExit, detail?: string) => {
     opts.onExit?.(reason, detail)
   }
+  /** Tear this town down and ride in again, in place (the handle keeps working). */
+  const retry = (): void => {
+    handle.destroy()
+    const next = mountFrontier(root, opts)
+    Object.assign(handle, next)
+  }
+  const retryFor = (reason: JoinError['reason']): (() => void) | null => {
+    if (!RETRY.has(reason)) {
+      return null
+    }
+    return reason === 'outdated' ? () => location.reload() : retry
+  }
   const game = new FrontierGame(root, {
     ...(opts.audio ? { audio: opts.audio } : {}),
-    onExit: (reason) => onExit(reason),
+    onExit: (reason) => {
+      if (reason === 'lost') {
+        // the reconnect gave up: say so plainly, and offer another go
+        lostCard()
+        return
+      }
+      onExit(reason)
+    },
   })
   const ui = overlay(root)
+  const lostCard = (): void => {
+    const card = overlay(root)
+    card.refuse(
+      { reason: 'network', message: "Connection lost. Couldn't reconnect." },
+      () => onExit('lost'),
+      retry,
+    )
+  }
   const unlock = () => game.unlockAudio()
   root.addEventListener('pointerup', unlock)
   globalThis.addEventListener('keydown', unlock)
@@ -169,7 +215,7 @@ export function mountFrontier(root: HTMLElement, opts: FrontierOptions = {}): Fr
                 ...(opts.getToken ? { getToken: opts.getToken } : {}),
                 ...(opts.bots === undefined ? {} : { bots: opts.bots }),
                 onRefused: (e) => {
-                  ui.refuse(e, () => onExit('refused', e.reason))
+                  ui.refuse(e, () => onExit('refused', e.reason), retryFor(e.reason))
                 },
               },
               ev,
