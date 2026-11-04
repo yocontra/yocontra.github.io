@@ -28,17 +28,18 @@ import type {
   NameChangeResponse,
   PlayerPoster,
 } from '../../src/experiments/out-west/contract/social.ts'
-import type {
-  TownDirectoryView,
-  TownJoinError,
-  TownJoinResponse,
+import {
+  TOWN_WIRE_VERSION,
+  type TownDirectoryView,
+  type TownJoinError,
+  type TownJoinResponse,
 } from '../../src/experiments/out-west/contract/town.ts'
 import { BASE, Client, ORIGIN, type Player, waitFor } from './duel-client.ts'
 import { check, failed, openLocalD1, seedPlayer } from './local-d1.ts'
 
 const db = openLocalD1()
 /** Every lobby join carries a Turnstile token (dev's always-pass secret accepts any). */
-const JOIN = { turnstileToken: 'XXXX.DUMMY.TOKEN.XXXX' }
+const JOIN = { turnstileToken: 'XXXX.DUMMY.TOKEN.XXXX', wire: TOWN_WIRE_VERSION }
 const BOARD_PATH = `/board/most-wanted?${new URLSearchParams({ limit: '50' })}`
 let ipSeq = 0
 const nextIp = (): string => `10.${120 + (++ipSeq % 100)}.${ipSeq}.1`
@@ -177,7 +178,10 @@ async function frontier(): Promise<void> {
     refused,
   )
   const rider = await seedPlayer(db, { name: 'Rider', ip: nextIp() })
-  const bare = await api<TownJoinError>('POST', '/town/join', { as: rider, body: {} })
+  const bare = await api<TownJoinError>('POST', '/town/join', {
+    as: rider,
+    body: { wire: TOWN_WIRE_VERSION },
+  })
   check(
     'no Turnstile token: 403 turnstile',
     bare.status === 403 && bare.body.reason === 'turnstile',

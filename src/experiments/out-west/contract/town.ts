@@ -34,10 +34,10 @@
  * | 3 | u8 | frame count `n` (1–4, normally 2) |
  * | 4 | u16 | `ackTick`: tick16 of the newest snapshot received |
  * | 6 | u8 | `ackAgeMs`: ms between receiving that snapshot and sending this message (cap 255) |
- * | 7 | n × 8 B | frames |
+ * | 7 | n × 9 B | frames |
  *
- * Frame (8 B): `moveX i8`, `moveZ i8` (−127..127, normalised on the server), `aim u16` (turns,
- * 0 = +x, increasing toward +z), `buttons u8` (`BTN_*`, held state; the server edge-detects),
+ * Frame (9 B): `moveX i8`, `moveZ i8` (−127..127, normalised on the server), `aim u16` (turns,
+ * 0 = +x, increasing toward +z), `buttons u16` (`BTN_*`, held state; the server edge-detects),
  * `viewTick u16` (tick16 of the remote-entity time the client was rendering), `viewFrac u8`
  * (fraction of a tick ×255). The view time is used only to rewind hits, clamped to `MAX_REWIND_MS`.
  *
@@ -45,12 +45,18 @@
  *
  * | Section | Layout |
  * |---|---|
- * | Header (10 B) | `u8 MSG_SNAPSHOT`, `u32 tick`, `u16 lastInputSeq`, `u8 flags` (`SNAP_*`), `u8 entityCount`, `u8 removedCount` |
- * | Self (26 B) | `u16 x`, `u16 z`, `u8 hp`, `u8 ammo`, `u8 selfFlags` (`SELF_*`), `u8 rollTicks`, `u8 rollCooldown`, `u16 rollDir`, `u8 reloadTicks`, `u8 fireCooldown` (ms ÷ 4), `u8 protectTicks`, `u8 deadEyeTicks`, `u8 channelKind` (`CHANNEL_*`), `u8 channelTicks`, `u32 carried`, `u8 respawnTicks`, `u8 holsterTicks`, `u8 lastButtons`, `u8 weapon` (`selfWeapon()`: bits 0–1 `WEAPON_*`, bits 2–4 pickup-weapon rounds, bit 5 holding dynamite; 0 = plain revolver) |
+ * | Header (11 B) | `u8 MSG_SNAPSHOT`, `u32 tick`, `u16 lastInputSeq`, `i8 inputLead`, `u8 flags` (`SNAP_*`), `u8 entityCount`, `u8 removedCount` |
+ * | Self (27 B) | `u16 x`, `u16 z`, `u8 hp`, `u8 ammo`, `u8 selfFlags` (`SELF_*`), `u8 rollTicks`, `u8 rollCooldown`, `u16 rollDir`, `u8 reloadTicks`, `u8 fireCooldown` (ms ÷ 4), `u8 protectTicks`, `u8 deadEyeTicks`, `u8 channelKind` (`CHANNEL_*`), `u8 channelTicks`, `u32 carried`, `u8 respawnTicks`, `u8 holsterTicks`, `u16 lastButtons`, `u8 weapon` (`selfWeapon()`: bits 0–1 `WEAPON_*`, bits 2–4 pickup-weapon rounds, bit 5 holding dynamite; 0 = plain revolver) |
  * | Removed | `removedCount × u8 id` (left interest or left the lobby) |
  * | Entities | `entityCount ×` entity record |
  * | Town (if `SNAP_TOWN`) | `u8 mostWantedId` (255 none), `u8 mwX`, `u8 mwZ` (0.6 m units), `u8 strongboxSpot` (255 none), `u16 strongboxValue`, `u8 strongboxState` (`BOX_*`), `u8 players`, `u32 banked` (this player's wallet, as last confirmed) |
  * | Events | `u8 count`, then `count ×` (`u8 EV_*`, payload; sizes in `EVENT_SIZES`) |
+ *
+ * `inputLead` is how early this player's input arrived: the smallest, over the input messages that
+ * came in since the previous snapshot, of (first frame's seq − the seq the next tick will consume),
+ * clamped to −127..127; `INPUT_LEAD_NONE` when none came in. Negative means a frame arrived after
+ * its number was consumed (the server repeated the previous frame in its place). The client paces
+ * its input ticks to hold it at 1–3 (`ffa/client/tick-clock.ts`).
  *
  * Entity record: `u8 id`, `u8 mask` (`ENT_*`), then the fields whose bits are set, in bit order:
  * `ENT_POS` → `i8 dx, i8 dz` against the last sent position, or with `ENT_POS_FULL` → `u16 x, u16 z`;
@@ -81,8 +87,15 @@
  */
 import { reopensOn } from '../data/sinks.ts'
 
-/** 2: `EV_BAG_DROP` carries the dropper's saddlebag `style`. */
-export const CONTRACT_VERSION = 2
+/**
+ * 2: `EV_BAG_DROP` carries the dropper's saddlebag `style`.
+ * 3: input frames carry `buttons u16`; snapshots carry `inputLead i8` in the header and
+ *    `lastButtons u16` in the self block. Clients send `wire` in `POST /town/join`; an older client
+ *    (no `wire`, or a smaller one) is refused with `outdated`.
+ */
+export const CONTRACT_VERSION = 3
+/** The binary Frontier wire format this build speaks (`TownJoinRequest.wire`). */
+export const TOWN_WIRE_VERSION = 3
 
 // --- saddlebags ----------------------------------------------------------------------------------
 
@@ -112,6 +125,8 @@ export interface TownJoinRequest {
   turnstileToken?: string
   /** Dev only (`RP_ID=localhost`): server bots to add, for load tests and `perf=ffa`. */
   bots?: number
+  /** `TOWN_WIRE_VERSION` of the client; missing or older is refused with `outdated`. */
+  wire?: number
 }
 
 export interface TownJoinResponse {
@@ -134,6 +149,7 @@ export type TownJoinRefusal =
   | 'unauthorized'
   | 'unlicensed'
   | 'turnstile'
+  | 'outdated'
 
 export interface TownJoinError {
   ok: false
@@ -208,10 +224,12 @@ export const ANGLE_SCALE = 65_536
 export const MAX_REWIND_MS = 200
 
 export const INPUT_HEADER_BYTES = 7
-export const INPUT_FRAME_BYTES = 8
+export const INPUT_FRAME_BYTES = 9
 export const MAX_FRAMES_PER_INPUT = 4
-export const SNAPSHOT_HEADER_BYTES = 10
-export const SNAPSHOT_SELF_BYTES = 26
+export const SNAPSHOT_HEADER_BYTES = 11
+export const SNAPSHOT_SELF_BYTES = 27
+/** `inputLead` when no input message arrived since the previous snapshot. */
+export const INPUT_LEAD_NONE = -128
 
 // --- Buttons (held state in each input frame) ---------------------------------------------------
 

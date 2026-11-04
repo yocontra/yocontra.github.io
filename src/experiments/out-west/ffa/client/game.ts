@@ -124,6 +124,7 @@ import { SettingsPanel } from './settings-panel.ts'
 import { ShooterCamera } from './shooter-camera.ts'
 import { FrontierSound, wearsSpurs } from './sound.ts'
 import { TouchControls } from './touch.ts'
+import { MotionTrace, TRACE_FIELDS } from './trace.ts'
 import type { Transport, TransportEvents } from './transport.ts'
 import { fireIntervalMs, policyFor, spreadDeg, spreadPx } from './view.ts'
 import { ViewModel } from './viewmodel.ts'
@@ -133,6 +134,9 @@ import { BankGuide } from './wayfinding.ts'
 const DAY = 0.3
 const SUN_DIR = new Vector3(-0.55, 0.62, 0.56).normalize()
 const SHADOW_HALF = 12
+/** Input ticks catch up on at most this much wall time per frame (ms), at most this many at once. */
+const MAX_CATCH_UP_MS = 250
+const MAX_TICKS_PER_FRAME = 6
 
 export interface GameOptions {
   audio?: AudioEngine | null
@@ -184,7 +188,8 @@ export class FrontierGame {
   private running = false
   private disposed = false
   private exited = false
-  private readonly own = { x: 72, z: 64 }
+  /** Your rendered pose (`NetClient.localRenderPose`): what the camera and the crowd follow. */
+  private readonly own = { x: 72, z: 64, yaw: 0 }
   private aim = 0
   private renderTick = 0
   private readonly showdowns = new Map<number, Showdown>()
@@ -236,6 +241,10 @@ export class FrontierGame {
   private lastShotAt = -1e9
   /** Dev harness ADS (desktop has no touch AIM toggle). */
   private devAdsOn = false
+  /** Dev-only per-frame motion trace (`__frontierTrace`). */
+  readonly trace = new MotionTrace()
+  private ticksThisFrame = 0
+  private readonly traceRow: number[] = Array.from({ length: TRACE_FIELDS.length }, () => 0)
 
   constructor(root: HTMLElement, opts: GameOptions) {
     installHotPaths()
@@ -892,22 +901,29 @@ export class FrontierGame {
    */
   private simulate(now: number): number {
     const t0 = performance.now()
-    const dtMs = Math.min(100, now - this.last)
+    const elapsed = Math.max(0, now - this.last)
+    // The scene steps at most 100 ms; input ticks catch up on up to 250 ms (a GC or a shader
+    // compile) so this client's clock doesn't fall behind the server's. Longer stalls are left to
+    // `TickClock`, which skips frame numbers forward.
+    const dtMs = Math.min(100, elapsed)
     this.last = now
-    this.renderTick = this.net.renderTick(t0)
-    this.acc += dtMs
+    // `now` is the frame's vsync stamp: a steady step, unlike performance.now() at callback time.
+    this.renderTick = this.net.renderTick(now)
+    this.acc += Math.min(MAX_CATCH_UP_MS, elapsed)
+    const period = this.net.tickPeriod
     let ticks = 0
-    while (this.acc >= TICK_MS && ticks < 4) {
-      this.acc -= TICK_MS
+    while (this.acc >= period && ticks < MAX_TICKS_PER_FRAME) {
+      this.acc -= period
       ticks++
       const intent = this.sampleInput()
       this.net.tick(intent, this.renderTick, t0)
       this.showdownInput(intent.buttons)
     }
-    if (this.acc > TICK_MS * 4) {
+    if (this.acc > period * MAX_TICKS_PER_FRAME) {
       this.acc = 0
     }
-    this.net.ownPosition(this.acc / TICK_MS, dtMs, this.own)
+    this.ticksThisFrame = ticks
+    this.net.localRenderPose(Math.min(1, this.acc / period), dtMs, this.own)
     this.remotes = [...this.net.views(this.renderTick)]
     return dtMs
   }
@@ -934,6 +950,30 @@ export class FrontierGame {
     this.audio?.update()
     this.renderer.adapt(dtMs, true)
     this.renderer.render(dt)
+    if (this.trace.on) {
+      this.pushTrace(now, dtMs, performance.now() - t0)
+    }
+  }
+
+  private pushTrace(now: number, dtMs: number, cpuMs: number): void {
+    const r = this.traceRow
+    const rem = this.remotes[0]
+    r[0] = now
+    r[1] = dtMs
+    r[2] = this.own.x
+    r[3] = this.own.z
+    r[4] = this.cam.camera.position.x
+    r[5] = this.cam.camera.position.z
+    r[6] = this.net.pred.x
+    r[7] = this.net.pred.z
+    r[8] = this.net.srvX
+    r[9] = this.net.srvZ
+    r[10] = rem?.x ?? Number.NaN
+    r[11] = rem?.z ?? Number.NaN
+    r[12] = this.renderTick
+    r[13] = this.ticksThisFrame
+    r[14] = cpuMs
+    this.trace.push(r)
   }
 
   private showdownInput(buttons: number): void {

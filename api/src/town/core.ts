@@ -462,7 +462,7 @@ export class LobbyCore {
       const bytes = snapshotFor(
         this.world,
         { viewer: p, stream: s.stream },
-        { banked: s.banked, events: this.world.events },
+        { banked: s.banked, events: this.world.events, inputLead: s.queue.takeLead() },
         this.writer,
       )
       s.peer.send(bytes)

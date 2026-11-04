@@ -1,17 +1,18 @@
 /**
  * Frontier: lobby directory joins and lobby WebSockets. Owned by stream F.
  *   POST /town/join          (Bearer) { turnstileToken, lobbyId?, bots? } → TownJoinResponse;
- *                            403 `turnstile`, 403 `unlicensed`
+ *                            403 `turnstile`, 403 `unlicensed`, 409 `outdated` (no or old `wire`)
  *                            (with `licence: { cleared, remaining }`), 503 full/over budget
  *   GET  /town/lobbies       → TownDirectoryView (for the hub tile)
  *   GET  /town/:lobby/ws     ?ticket=&sig= → WebSocket into that Lobby DO
  *   GET  /town/:lobby/stats  dev only: tick timing and traffic counters (load tests)
  */
 
-import type {
-  TownJoinRefusal,
-  TownJoinRequest,
-  TownJoinResponse,
+import {
+  TOWN_WIRE_VERSION,
+  type TownJoinRefusal,
+  type TownJoinRequest,
+  type TownJoinResponse,
 } from '../../../src/experiments/out-west/contract/town.ts'
 import { licenceStatus } from '../../../src/experiments/out-west/data/licence.ts'
 import { authenticate } from '../auth/session.ts'
@@ -50,6 +51,8 @@ export function refusalMessage(reason: TownJoinRefusal, now = new Date()): strin
       return 'Beat the first 3 outlaws on a ranked run to earn your licence.'
     case 'turnstile':
       return 'Could not verify you are human. Try again.'
+    case 'outdated':
+      return 'Perdition has been updated. Refresh the page to ride in.'
     default:
       return 'Sign in with a passkey to ride into town.'
   }
@@ -108,6 +111,15 @@ async function join(request: Request, env: Env): Promise<Response> {
   }
   // Turnstile tokens run to ~2 KB.
   const body = ((await readJson(request, 8 * 1024)) ?? {}) as TownJoinRequest
+  // A page loaded before a wire change would misread every snapshot: send it to refresh instead.
+  if (!(typeof body.wire === 'number' && body.wire >= TOWN_WIRE_VERSION)) {
+    return json(
+      request,
+      env,
+      { ok: false, error: refusalMessage('outdated'), reason: 'outdated' },
+      409,
+    )
+  }
   // §8: Turnstile at every lobby join, rejoins included (each token is single use).
   const token = body.turnstileToken
   if (!(typeof token === 'string' && token && (await verifyTurnstile(token, request, env)))) {

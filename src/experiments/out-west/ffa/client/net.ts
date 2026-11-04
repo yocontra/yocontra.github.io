@@ -1,12 +1,15 @@
 // biome-ignore-all lint/suspicious/noUnnecessaryConditions: `haveSelf` flips on the first snapshot; Biome narrows it to its initialiser
 /**
- * The Frontier client netcode: send-on-change input (`InputBatcher`), own-player prediction with
- * the server's exact `stepMove`, reconciliation on `lastInputSeq` (snap to the server's move
- * state, replay unacknowledged frames, smooth small errors over 100 ms), interpolation of everyone
- * else 100 ms in the past, and the event stream.
+ * The Frontier client netcode: send-on-change input (`InputBatcher`) paced by `TickClock`,
+ * own-player prediction with the server's exact `stepMove`, reconciliation on `lastInputSeq`
+ * (rebase on the server's move state, replay unacknowledged frames, and carry the difference as a
+ * visual offset that a critically damped spring removes in ~200 ms; only teleports snap),
+ * interpolation of everyone else at a jitter-adaptive delay on a smoothed clock, and the event
+ * stream.
  */
 import {
   BTN_FIRE,
+  INPUT_LEAD_NONE,
   MSG_FULL_RESET,
   MSG_SNAPSHOT,
   NONE,
@@ -42,13 +45,28 @@ import { InputBatcher, quantizeAim } from '../sim/input.ts'
 import { buildGrid, type Grid } from '../sim/layout.ts'
 import { aimRadians, stepMove } from '../sim/move.ts'
 import type { MoveState } from '../sim/types.ts'
-import { INTERP_TICKS, RemoteTrack, type RemoteView, ServerClock } from './interp.ts'
+import { RemoteTrack, type RemoteView, ServerClock } from './interp.ts'
+import { TickClock } from './tick-clock.ts'
 import type { Transport } from './transport.ts'
 
-/** Errors under this are smoothed out over `SMOOTH_MS`; larger ones snap (spec §3.5). */
-const SMOOTH_UNDER_M = 0.1
-const SMOOTH_MS = 100
+/**
+ * Corrections under this are blended out; larger ones are teleports (respawn, a knock across the
+ * street) and snap. A tick of running is 0.28 m and a roll tick 0.6 m, so a frame applied a tick
+ * late, or a roll that started a tick early, must blend, not jump.
+ */
+const SMOOTH_UNDER_M = 2.5
+/**
+ * Stiffness of the correction spring (rad/s): critically damped, so the offset leaves with no
+ * velocity kick (an exponential decay would add its whole size ÷ τ to the speed in one frame). 90%
+ * gone in ~190 ms; a 0.28 m correction moves you at most 2 m/s faster or slower on the way.
+ */
+const SMOOTH_OMEGA = 20
 const MAX_PENDING = 64
+/** Render-clock slew toward its target (per tick of error), and its cap (±10% playback speed). */
+const RT_GAIN = 0.5
+const RT_MAX_SLEW = 0.1
+/** Render clock this far (ticks) from its target: jump instead of slewing (a stall, a resync). */
+const RT_JUMP_TICKS = 4
 
 export interface Intent {
   /** −127..127, +x east, +z south. */
@@ -87,6 +105,8 @@ export class NetClient {
   readonly roster = new Map<number, RosterEntry>()
   readonly remotes = new Map<number, RemoteTrack>()
   readonly clock = new ServerClock()
+  /** Paces the input ticks so frames reach the server just in time (see `tick-clock.ts`). */
+  readonly tickClock = new TickClock()
   you = -1
   lobbyId = ''
   banked = 0
@@ -97,14 +117,27 @@ export class NetClient {
   lastArrival = 0
   /** Smoothed reconciliation error (m) and corrections per second, for the perf overlay. */
   reconErr = 0
+  /** Correction telemetry (dev trace): smoothed and snapped counts, total and worst size (m). */
+  readonly corr = { smooth: 0, snap: 0, sumM: 0, maxM: 0 }
+  /** The newest server-acknowledged own position (m). */
+  srvX = 0
+  srvZ = 0
   snaps = 0
   bytesIn = 0
   bytesOut = 0
   /** Predicted own move state after the newest local tick, and the one before (render lerp). */
   readonly pred: MoveState = { x: 0, z: 0, rollTicks: 0, rollCooldown: 0, rollDirX: 1, rollDirZ: 0 }
   readonly prev: MoveState = { ...this.pred }
-  private smoothX = 0
-  private smoothZ = 0
+  /** The visual correction offset (m) and its velocity (m/s): what the spring still has to remove. */
+  private offX = 0
+  private offZ = 0
+  private offVX = 0
+  private offVZ = 0
+  /** Aim of the newest predicted frame (radians). */
+  private predAim = 0
+  /** The smoothed remote-entity render clock (fractional ticks) and when it last advanced. */
+  private rt = 0
+  private rtAt = -1
   private readonly batcher = new InputBatcher()
   private readonly writer = new Writer(256)
   private readonly baseline = new Map<number, EntityView>()
@@ -129,6 +162,12 @@ export class NetClient {
     this.baseline.clear()
     this.remotes.clear()
     this.pending.length = 0
+    this.tickClock.reset()
+  }
+
+  /** The current input tick period (ms): `TICK_MS`, nudged by `TickClock`. */
+  get tickPeriod(): number {
+    return this.tickClock.period
   }
 
   get alive(): boolean {
@@ -203,9 +242,30 @@ export class NetClient {
       }
     }
     this.reconcile(snap.self, snap.lastInputSeq)
+    const skip = this.tickClock.observe(
+      snap.inputLead === INPUT_LEAD_NONE ? null : snap.inputLead,
+      nowMs,
+    )
+    if (skip > 0) {
+      this.send(this.batcher.skip(skip), nowMs)
+    }
     for (const ev of snap.events) {
       this.handlers.onEvent(ev, snap.tick)
     }
+  }
+
+  private send(out: { seq: number; frames: WireFrame[] } | null, nowMs: number): void {
+    if (!(out && this.transport)) {
+      return
+    }
+    const bytes = encodeInput(this.writer, {
+      seq: out.seq,
+      ackTick: this.lastTick & 0xff_ff,
+      ackAgeMs: Math.round(nowMs - this.lastArrival),
+      frames: out.frames,
+    })
+    this.bytesOut += bytes.byteLength
+    this.transport.send(bytes)
   }
 
   private track(id: number): RemoteTrack {
@@ -251,7 +311,11 @@ export class NetClient {
     this.handlers.onControl(msg)
   }
 
-  /** Snap to the server's move state, then replay every frame it hasn't consumed yet. */
+  /**
+   * Rebase on the server's move state and replay every frame it hasn't consumed yet. The rendered
+   * position must not move when that happens: both ends of the tick lerp shift with the
+   * prediction, and the difference becomes the spring's offset.
+   */
   private reconcile(s: SelfView, lastSeq: number): void {
     while (this.pending.length > 0 && seqDiff(this.pending[0]?.seq ?? 0, lastSeq) <= 0) {
       const p = this.pending.shift()
@@ -296,13 +360,28 @@ export class NetClient {
     const ez = this.pred.z - m.z
     const err = Math.hypot(ex, ez)
     this.reconErr += (err - this.reconErr) * 0.1
-    if (err > 1e-4 && err < SMOOTH_UNDER_M) {
-      this.smoothX += ex
-      this.smoothZ += ez
-    } else if (err >= SMOOTH_UNDER_M) {
-      this.smoothX = 0
-      this.smoothZ = 0
-      // Snap: no lerp across the correction.
+    this.srvX = s.x / POS_SCALE
+    this.srvZ = s.z / POS_SCALE
+    if (err > 1e-4) {
+      this.corr.sumM += err
+      this.corr.maxM = Math.max(this.corr.maxM, err)
+      if (err < SMOOTH_UNDER_M) {
+        this.corr.smooth++
+      } else {
+        this.corr.snap++
+      }
+    }
+    if (err < SMOOTH_UNDER_M) {
+      this.prev.x -= ex
+      this.prev.z -= ez
+      this.offX += ex
+      this.offZ += ez
+    } else {
+      // A teleport: snap, with no lerp across it.
+      this.offX = 0
+      this.offZ = 0
+      this.offVX = 0
+      this.offVZ = 0
       Object.assign(this.prev, m)
     }
     Object.assign(this.pred, m)
@@ -323,17 +402,8 @@ export class NetClient {
       viewFrac: Math.round((renderTick - viewTick) * 255),
     }
     const seq = this.batcher.nextSeq
-    const out = this.batcher.push(frame)
-    if (out && this.transport) {
-      const bytes = encodeInput(this.writer, {
-        seq: out.seq,
-        ackTick: this.lastTick & 0xff_ff,
-        ackAgeMs: Math.round(nowMs - this.lastArrival),
-        frames: out.frames,
-      })
-      this.bytesOut += bytes.byteLength
-      this.transport.send(bytes)
-    }
+    this.send(this.batcher.push(frame), nowMs)
+    this.predAim = aimRadians(frame.aim)
     if (!this.haveSelf) {
       this.prevButtons = frame.buttons
       return
@@ -377,21 +447,45 @@ export class NetClient {
     return true
   }
 
-  /** Own render position: lerp between the last two predicted ticks, plus the decaying error. */
-  ownPosition(alpha: number, dtMs: number, out: { x: number; z: number }): void {
-    const k = Math.exp(-dtMs / (SMOOTH_MS / 3))
-    this.smoothX *= k
-    this.smoothZ *= k
-    out.x = this.prev.x + (this.pred.x - this.prev.x) * alpha + this.smoothX
-    out.z = this.prev.z + (this.pred.z - this.prev.z) * alpha + this.smoothZ
+  /**
+   * Your pose on screen, the one thing every camera mode should follow: the lerp between the last
+   * two predicted ticks at `alpha` (the input accumulator ÷ `tickPeriod`), plus the correction
+   * offset as the spring removes it. `yaw` is the aim of the newest predicted frame (radians).
+   * Call once per rendered frame with that frame's `dtMs`.
+   */
+  localRenderPose(alpha: number, dtMs: number, out: { x: number; z: number; yaw: number }): void {
+    const dt = Math.max(0, dtMs) / 1000
+    const e = Math.exp(-SMOOTH_OMEGA * dt)
+    const tx = (this.offVX + SMOOTH_OMEGA * this.offX) * dt
+    const tz = (this.offVZ + SMOOTH_OMEGA * this.offZ) * dt
+    this.offX = (this.offX + tx) * e
+    this.offZ = (this.offZ + tz) * e
+    this.offVX = (this.offVX - SMOOTH_OMEGA * tx) * e
+    this.offVZ = (this.offVZ - SMOOTH_OMEGA * tz) * e
+    out.x = this.prev.x + (this.pred.x - this.prev.x) * alpha + this.offX
+    out.z = this.prev.z + (this.pred.z - this.prev.z) * alpha + this.offZ
+    out.yaw = this.predAim
   }
 
-  /** Remote-entity render time (fractional ticks). */
+  /**
+   * Remote-entity render time (fractional ticks) for a frame at `nowMs`: the server clock minus the
+   * jitter-adaptive interpolation delay, slewed (±10% playback speed) rather than stepped when the
+   * clock estimate or the delay moves, so remote riders never hop.
+   */
   renderTick(nowMs: number): number {
     if (!this.clock.ready) {
       return this.lastTick
     }
-    return this.clock.now(nowMs) - INTERP_TICKS
+    const target = this.clock.now(nowMs) - this.clock.delay
+    if (this.rtAt < 0 || Math.abs(target - this.rt) > RT_JUMP_TICKS) {
+      this.rt = target
+    } else {
+      const err = target - this.rt
+      const rate = 1 + Math.max(-RT_MAX_SLEW, Math.min(RT_MAX_SLEW, err * RT_GAIN))
+      this.rt += ((nowMs - this.rtAt) / TICK_MS) * rate
+    }
+    this.rtAt = nowMs
+    return this.rt
   }
 
   /** Every remote sampled at render time. */

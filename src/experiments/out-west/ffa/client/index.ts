@@ -186,6 +186,14 @@ export function mountFrontier(root: HTMLElement, opts: FrontierOptions = {}): Fr
   if (import.meta.env.DEV) {
     // Dev harness only: state for Playwright scripts (positions would be a wallhack in prod).
     Reflect.set(globalThis, '__frontier', () => game.debug())
+    Reflect.set(globalThis, '__frontierTrace', {
+      start: () => {
+        Object.assign(game.net.corr, { smooth: 0, snap: 0, sumM: 0, maxM: 0 })
+        game.trace.start()
+      },
+      stop: () => game.trace.stop(),
+      corr: () => ({ ...game.net.corr }),
+    })
     Reflect.set(globalThis, '__frontierFeed', (text: string, kind: FeedKind) =>
       game.hud.feed(text, kind),
     )
@@ -212,6 +220,7 @@ export function mountFrontier(root: HTMLElement, opts: FrontierOptions = {}): Fr
       hold: (bit: number, on: boolean) => ap.hold(bit, on),
       release: () => ap.release(),
       walking: () => ap.walking,
+      stick: (mx: number, mz: number) => ap.stick(mx, mz),
     })
   }
   return handle
