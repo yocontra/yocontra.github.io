@@ -83,6 +83,8 @@ interface Msg {
   duel?: number
   outcome?: string
   n?: number
+  /** `call`: present it this long after it arrives (the server sends it ahead). */
+  inMs?: number
 }
 
 async function main(): Promise<void> {
@@ -142,8 +144,8 @@ async function main(): Promise<void> {
       lock.exec('BEGIN EXCLUSIVE')
     }
     ws.send(JSON.stringify({ type: 'standoff', duel: level, level }))
-    await next('call')
-    await sleep(140)
+    const call = await next('call')
+    await sleep((call.inMs ?? 0) + 140)
     ws.send(JSON.stringify({ type: 'shot', duel: level, target: 0, localMs: 140 }))
     const result = await next('result')
     check(`outlaw ${level + 1}: won`, result.outcome === 'win', result)

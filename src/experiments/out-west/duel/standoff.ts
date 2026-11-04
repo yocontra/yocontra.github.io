@@ -19,6 +19,9 @@ import { killEnemyAnim, killRifleman, playerFireFx, win } from './outcome.ts'
 import { AMB, ambience, bedLevel, duckForStandoff } from './present.ts'
 import { rng, V } from './state.ts'
 
+/** Scheduling margin on top of the output latency, ms (a frame or two of main-thread slack). */
+const BELL_MARGIN_MS = 50
+
 const NUMBERS = [
   'ONE',
   'TWO',
@@ -110,6 +113,36 @@ export function enterWait(d: Director, fromPause: boolean): void {
   c.hud.letterbox(false)
 }
 
+/**
+ * The bell on the audio clock. Whenever the call's time is known ahead (practice rolls it; ranked
+ * and Bounty Hunt servers send it `inMs` ahead), the bell is scheduled so its strike reaches the ear
+ * on the call frame: `perfToCtx` maps through the output timestamp, so the device's output latency
+ * is paid in advance rather than after DRAW! (client presentation only; the server never sees it).
+ * The lookahead covers that latency plus a margin, or the start would land in the past and clamp.
+ */
+function scheduleBell(d: Director, now: number): void {
+  const c = d.c
+  const callAt = d.clock.callAt()
+  const lookahead = Math.max(FEEL.bellLookaheadMs, c.audio.outputLatencyMs + BELL_MARGIN_MS)
+  if (callAt === null || d.bellScheduled || now < callAt - lookahead) {
+    return
+  }
+  d.bellScheduled = true
+  // a call that reached us late rings now: reactions count from now, not from a moment already gone
+  d.tCall = Math.max(callAt, now)
+  const when = c.audio.perfToCtx(d.tCall)
+  // The call is never distance-attenuated: it rings close and centred and ducks the mix.
+  d.bellVoice = c.audio.call(when)
+  if (d.callIsScream) {
+    c.audio.play('shout', {
+      gain: 1.0,
+      when,
+      rate: 0.7,
+      pos: d.enemy?.root.position.clone() ?? V(),
+    })
+  }
+}
+
 export function tickWait(d: Director, now: number): void {
   const c = d.c
   const sec = (now - d.waitStart) / 1000
@@ -123,21 +156,7 @@ export function tickWait(d: Director, now: number): void {
       c.hud.letterbox(true)
     }
   }
-  // practice knows the call ahead: schedule the bell on the audio clock so it lands on the call frame
-  if (callAt !== null && !d.bellScheduled && now >= callAt - FEEL.bellLookaheadMs) {
-    d.bellScheduled = true
-    const when = c.audio.perfToCtx(callAt)
-    // The call is never distance-attenuated: it rings close and centred and ducks the mix.
-    d.bellVoice = c.audio.call(when)
-    if (d.callIsScream) {
-      c.audio.play('shout', {
-        gain: 1.0,
-        when,
-        rate: 0.7,
-        pos: d.enemy?.root.position.clone() ?? V(),
-      })
-    }
-  }
+  scheduleBell(d, now)
   d.clock.tick(now)
 }
 
@@ -169,6 +188,7 @@ export function tickBossClock(d: Director, now: number): void {
   if (d.c.rig.name === 'clock' && d.realTime >= d.clockInsertUntil) {
     otsShot(d, true, 0)
   }
+  scheduleBell(d, now)
   d.clock.tick(now)
 }
 
@@ -179,8 +199,8 @@ function strike(d: Director, n: number): void {
   c.audio.play('bell', { gain: 0.8, pos: c.world.bellPos, reverb: 0.5 })
   c.world.toll()
   c.world.setClock(12, 0)
-  c.hud.line(d.outlaw.name, `${NUMBERS[n - 1] ?? ''}…`, 900)
-  c.hud.fake(`[bell strikes ${n}]`)
+  // the bell counts, not the man: the wait stays silent but for the strikes (chatter.ts)
+  c.hud.fake(`[bell strikes ${NUMBERS[n - 1]?.toLowerCase() ?? n}]`, 900)
   // calm inserts on the clock face: the first strike, and the one before the last
   if (n === 6) {
     clockInsert(d, 1.1)
@@ -246,14 +266,16 @@ export function onCall(d: Director, duel: number): void {
   // the bed holds where the standoff left it (the call ducks it; it must not swell under the bell)
   ambience(d, bedLevel(d), 0.05)
   d.enter('call')
-  d.callT = now
+  // reactions count from the instant the bell is heard (the call frame, within half a frame)
+  d.callT = d.bellScheduled ? d.tCall : now
   if (!d.bellScheduled) {
+    // an old server that sends the call bare: ring it now (late by the output latency)
     d.bellVoice = c.audio.call()
-    c.world.toll()
     if (d.callIsScream) {
       c.audio.play('shout', { gain: 1.0, rate: 0.7, pos: d.enemy?.root.position.clone() ?? V() })
     }
   }
+  c.world.toll()
   c.hud.call('DRAW!', FEEL.callHoldMs)
   c.hud.fake(d.callIsScream ? '[HE SCREAMS] [BELL TOLLS]' : '[BELL TOLLS]', FEEL.callCaptionMs)
   c.hud.letterbox(false)

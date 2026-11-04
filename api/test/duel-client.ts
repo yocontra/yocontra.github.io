@@ -139,13 +139,15 @@ export class Client {
         }
         return
       case 'call': {
-        setCall(performance.now())
+        // the call comes `inMs` ahead of itself: react from when it's presented
+        const lead = m.inMs ?? 0
+        setCall(performance.now() + lead)
         const react =
           this.results.length > 0 && b.rematchReactMs !== undefined ? b.rematchReactMs : b.reactMs
         if (react !== null) {
           setTimeout(
             () => this.send({ type: 'shot', draw: m.draw, localMs: performance.now() - callAt() }),
-            react,
+            lead + react,
           )
         }
         return

@@ -10,6 +10,7 @@ import {
   outlawOpponent,
 } from './opponents.ts'
 import {
+  CALL_LEAD_MS,
   fakeCount,
   MIN_CUE_GAP_MS,
   pvpWaitPlan,
@@ -339,5 +340,70 @@ describe('ghost opponent', () => {
       cueCoward: 1 / 120,
       hazard: 0.5 / 660,
     })
+  })
+})
+
+describe('the call sent ahead (lead)', () => {
+  function leadHarness(
+    seats: [HumanOpponent | AiOpponent, HumanOpponent | AiOpponent],
+    mode: 'ranked' | 'pvp' = 'pvp',
+  ) {
+    const clock = new FakeClock()
+    const calls: [Seat, number][] = []
+    let verdict: Verdict | null = null
+    const standoff = new Standoff({
+      mode,
+      seats,
+      plan: { cues: [], callAtMs: 1000 },
+      clock,
+      rng: seeded(7),
+      leadMs: CALL_LEAD_MS,
+      events: {
+        cue: () => undefined,
+        call: (seat, inMs) => calls.push([seat, inMs]),
+        end: (v) => {
+          verdict = v
+        },
+      },
+    })
+    standoff.start()
+    return { clock, calls, standoff, verdict: (): Verdict | null => verdict }
+  }
+
+  it('goes out lead ms early with inMs, and the call is timed from when it is presented', () => {
+    const h = leadHarness([human(50, 0, 50), human(50, 0, 50)])
+    h.clock.advance(1000 - CALL_LEAD_MS)
+    expect(h.calls).toEqual([
+      [0, CALL_LEAD_MS],
+      [1, CALL_LEAD_MS],
+    ])
+    expect(h.standoff.phase).toBe('waiting')
+    expect(h.standoff.callTimes).toEqual([
+      h.clock.now() + CALL_LEAD_MS,
+      h.clock.now() + CALL_LEAD_MS,
+    ])
+    h.clock.advance(CALL_LEAD_MS)
+    expect(h.standoff.phase).toBe('called')
+    // judged exactly as a call sent at the call: 220 ms reaction plus a 50 ms round trip
+    h.clock.advance(270)
+    h.standoff.shot(0, 220)
+    h.clock.advance(20)
+    h.standoff.shot(1, 240)
+    expect(h.verdict()).toMatchObject({ kind: 'win', winner: 0, ms: [220, 240] })
+  })
+
+  it('a shot inside the lead (before the call is presented) is an early draw', () => {
+    const h = leadHarness([human(), human()])
+    h.clock.advance(1000 - CALL_LEAD_MS + 100)
+    h.standoff.shot(1, null)
+    expect(h.verdict()).toMatchObject({ kind: 'coward', who: 1 })
+  })
+
+  it('ranked: the lead does not move the judged reaction', () => {
+    const h = leadHarness([human(40), fixedAi([400])], 'ranked')
+    h.clock.advance(1000)
+    h.clock.advance(250 + 40)
+    h.standoff.shot(0, 250)
+    expect(h.verdict()).toMatchObject({ kind: 'ranked', outcome: 'win', reactionMs: 250 })
   })
 })

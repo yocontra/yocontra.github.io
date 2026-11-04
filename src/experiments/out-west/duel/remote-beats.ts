@@ -9,6 +9,7 @@ import type { Outlaw } from '../data/outlaws.ts'
 import type { Actor } from '../scene/actor.ts'
 import { identityFor } from '../scene/identity.ts'
 import { dressedActor } from '../scene/loadout.ts'
+import { say } from './chatter.ts'
 import type { Director } from './director.ts'
 import { callShot, standoffShot } from './framing.ts'
 import { killEnemyAnim, playerFireFx, win } from './outcome.ts'
@@ -170,7 +171,7 @@ export function reviveForSuddenDeath(d: Director, p: Poster | undefined): void {
   fresh.holsterGun()
   fresh.play('Idle', 0)
   c.hud.clearCall()
-  c.hud.line('Sudden death', 'No walk. Wait for the bell.', 1800)
+  say(d, 'Sudden death', 'No walk. Wait for the bell.', { ms: 1800, force: true })
   d.enterWait(false)
 }
 
@@ -193,7 +194,7 @@ export function honestWin(d: Director, line: string): void {
   d.callT = performance.now()
   callShot(d)
   // the town calls it (not the coward himself)
-  c.hud.line('The town', line, 2400)
+  say(d, 'The town', line, { ms: 2400, force: true })
   playerFireFx(d)
   d.enemyAlive = false
   win(d, 0, null)

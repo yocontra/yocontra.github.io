@@ -54,6 +54,16 @@ export class CameraRig {
     return this.t
   }
 
+  /** Where the camera framed the last frame (before shake), to move on from without a cut. */
+  pose(): Pose {
+    return {
+      pos: this.last.pos.clone(),
+      look: this.last.look.clone(),
+      fov: this.last.fov,
+      roll: this.last.roll,
+    }
+  }
+
   addTrauma(v: number): void {
     if (this.reduced) {
       return
@@ -116,10 +126,53 @@ export const easeInOutCubic = (t: number): number =>
 export const easeOutCubic = (t: number): number => 1 - (1 - t) ** 3
 export const clamp01 = (t: number): number => Math.min(1, Math.max(0, t))
 
+export interface OrbitOpts {
+  /** The point the camera swings around. */
+  pivot: Vector3
+  /** Progress, 0..1 (already eased). */
+  k: number
+  /** Bows the path out by this much at the halfway point (a smooth parabola: no kink). */
+  bend?: Vector3
+}
+
+/**
+ * A pose on an arc from `from` to `to` around `pivot` at progress `k`: the camera's bearing around
+ * the pivot turns the short way, its distance and height glide, and the look point, field of view
+ * and roll glide with it. With the pivot at a gun the camera swings around the gun instead of
+ * sliding through it.
+ */
+export function orbitPose(from: Pose, to: Pose, o: OrbitOpts): Pose {
+  const { pivot, k } = o
+  const ax = from.pos.x - pivot.x
+  const az = from.pos.z - pivot.z
+  const bx = to.pos.x - pivot.x
+  const bz = to.pos.z - pivot.z
+  const a0 = Math.atan2(ax, az)
+  let da = Math.atan2(bx, bz) - a0
+  da = Math.atan2(Math.sin(da), Math.cos(da))
+  const a = a0 + da * k
+  const r = MathUtils.lerp(Math.hypot(ax, az), Math.hypot(bx, bz), k)
+  const y = MathUtils.lerp(from.pos.y, to.pos.y, k)
+  const pos = new Vector3(pivot.x + Math.sin(a) * r, y, pivot.z + Math.cos(a) * r)
+  if (o.bend) {
+    pos.addScaledVector(o.bend, 4 * k * (1 - k))
+  }
+  return {
+    pos,
+    look: from.look.clone().lerp(to.look, k),
+    fov: MathUtils.lerp(from.fov, to.fov, k),
+    roll: MathUtils.lerp(from.roll ?? 0, to.roll ?? 0, k),
+    handheld: MathUtils.lerp(from.handheld ?? 0, to.handheld ?? 0, k),
+  }
+}
+
 /** Distance to keep a subject the same size when FOV changes (dolly zoom). */
 export function dollyDistance(d: number, fovFrom: number, fovTo: number): number {
   return (d * Math.tan(MathUtils.degToRad(fovFrom) / 2)) / Math.tan(MathUtils.degToRad(fovTo) / 2)
 }
+
+/** Half a man's width at the shoulders, m (for keeping the shooter off the victim). */
+const SHOULDER = 0.28
 
 export interface Framing {
   pos: Vector3
@@ -131,7 +184,7 @@ export interface Framing {
  * The kill-cam two-shot: from behind the shooter on his gun side, about 30°
  * off the duel axis, with the victim filling `frac` of the frame height on a
  * third (centred on portrait screens) and the shooter in frame on the other
- * side. Tries a few camera placements and keeps the best-composed one.
+ * side (on a portrait screen he may be cut at the edge, but never covers the victim). Tries a few camera placements and keeps the best-composed one.
  */
 export interface TwoShotOpts {
   /** Victim's height in metres. */
@@ -140,6 +193,37 @@ export interface TwoShotOpts {
   frac?: number
   /** 1 = the shooter's right (gun) side, -1 = his left. */
   side?: 1 | -1
+}
+
+interface Placement {
+  portrait: boolean
+  /** Metres behind the shooter, and out to his side. */
+  back: number
+  side: number
+  /** Where the shooter's centre lands across the frame (0 centre, 1 edge). */
+  sNdc: number
+  /** Horizontal angle from the victim to the shooter, rad; distance to the victim, m. */
+  ang: number
+  dV: number
+}
+
+/** How badly a two-shot placement composes (lower is better). */
+function placementScore(p: Placement): number {
+  let score = Math.abs(p.back - 3.4) / 8
+  // a narrow frame may cut the shooter at its edge (his gun arm stays in), never hide the victim
+  const edge = p.portrait ? 1 : 0.8
+  if (p.sNdc > edge) {
+    score += (p.sNdc - edge) * 10
+  }
+  if (p.sNdc < 0.4) {
+    score += (0.4 - p.sNdc) * 6
+  }
+  if (p.portrait) {
+    // the angle between the shooter's near shoulder and the victim's far side
+    const clear = Math.abs(p.ang) - Math.atan(SHOULDER / p.back) - Math.atan(SHOULDER / p.dV)
+    return score + Math.max(0, -clear) * 40
+  }
+  return score + Math.abs(MathUtils.radToDeg(Math.atan2(p.side, p.back)) - 32) / 25
 }
 
 export function twoShot(
@@ -179,17 +263,7 @@ export function twoShot(
       const ang = Math.atan2(toV.z * toS.x - toV.x * toS.z, toV.dot(toS))
       const ov = Math.atan(Math.tan(hHalf) * (portrait ? 0 : 1 / 3))
       const sNdc = Math.tan(Math.abs(ang) - ov) / Math.tan(hHalf)
-      const offAxis = MathUtils.radToDeg(Math.atan2(so, back))
-      let score = Math.abs(back - 3.4) / 8
-      if (sNdc > 0.8) {
-        score += (sNdc - 0.8) * 10
-      }
-      if (sNdc < 0.4) {
-        score += (0.4 - sNdc) * 6
-      }
-      if (!portrait) {
-        score += Math.abs(offAxis - 32) / 25
-      }
+      const score = placementScore({ portrait, back, side: so, sNdc, ang, dV })
       if (score < bestScore) {
         bestScore = score
         // turn from the victim toward the shooter by `ov`: victim on one third, shooter on the other

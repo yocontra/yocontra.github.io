@@ -51,6 +51,14 @@ export const FEEL = {
   killCamScaleReduced: 0.5,
   killCamSecondsReduced: 0.4,
   bossKillSeconds: 2.2,
+  /**
+   * The shot swing: the camera holds on the impact for `shotSwingHold` s, then swings around your
+   * gun (past your gun hand, down the line of the shot) from the call framing onto the kill-cam
+   * two-shot over `shotSwingSeconds` s (real time, so it rides through the slow-mo), eased in and
+   * out: no cut, no roll.
+   */
+  shotSwingHold: 0.12,
+  shotSwingSeconds: 1.0,
   /** The victim's death clip never runs slower than this, so the fall reads. */
   victimMinScale: 0.45,
   rampBack: 0.3,
@@ -62,6 +70,8 @@ export const FEEL = {
   resultAt: 2.0,
   resultFor: 2.5,
   loseFall: 1.2,
+  /** Your death: how long the eye-line takes to ease from the standoff framing into the fall, s. */
+  loseBlend: 0.6,
   loseRetryPress: 0.6,
   loseAutoRetry: 2.5,
   cowardAutoRetry: 2.5,

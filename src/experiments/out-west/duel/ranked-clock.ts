@@ -1,6 +1,7 @@
 import type { RankedResumed } from '../contract/ranked.ts'
 import type { RankedSession, ServerMessage } from '../net/ranked.ts'
 import type { ClockEvents, DuelClock, StandoffSpec } from './clock.ts'
+import { callLead, PendingCall } from './pending-call.ts'
 
 interface Queued {
   duel: number
@@ -16,7 +17,6 @@ const CALL_DEADLINE_MS = 16_000
 /** How long a verdict may take after the call (the outlaw's draw plus a round trip). */
 const VERDICT_DEADLINE_MS = 4000
 
-const unknownCall = (): null => null
 const noop = (): void => undefined
 
 /**
@@ -49,6 +49,8 @@ export class RankedDuelClock implements DuelClock {
   private readonly paid = new Map<number, number>()
   /** The link is down and being resumed: nothing is sent, nothing times out. */
   private reconnecting = false as boolean
+  /** The call, sent ahead of itself: presented on its own frame (and its bell scheduled for it). */
+  private readonly pending = new PendingCall()
 
   constructor(session: RankedSession, events: ClockEvents) {
     this.session = session
@@ -67,6 +69,7 @@ export class RankedDuelClock implements DuelClock {
     }
     this.reconnecting = true
     this.deadline = 0
+    this.pending.clear()
     this.events.reconnecting(true)
   }
 
@@ -122,6 +125,7 @@ export class RankedDuelClock implements DuelClock {
     this.over = true
     this.queue = []
     this.deadline = 0
+    this.pending.clear()
     this.events.dropped(reason)
   }
 
@@ -132,9 +136,11 @@ export class RankedDuelClock implements DuelClock {
         break
       case 'call':
         if (m.duel === this.unresolved) {
-          this.deadline = performance.now() + VERDICT_DEADLINE_MS
+          this.deadline = performance.now() + callLead(m.inMs) + VERDICT_DEADLINE_MS
         }
-        this.events.call(m.duel)
+        if (!this.pending.arm(m.duel, m.inMs)) {
+          this.events.call(m.duel)
+        }
         break
       case 'result':
         this.onResult(m)
@@ -193,11 +199,17 @@ export class RankedDuelClock implements DuelClock {
     return duel
   }
 
-  /** The server never says when the call is coming. */
-  readonly callAt: DuelClock['callAt'] = unknownCall
+  /** The call's time once the server has sent it ahead (a moment before it), else null. */
+  callAt(): number | null {
+    return this.pending.time
+  }
 
-  /** Server messages drive the duel; the frame only checks that the server is still talking. */
+  /** Presents a call sent ahead on its frame, and checks that the server is still talking. */
   tick(now: number): void {
+    const due = this.pending.due(now)
+    if (due !== null) {
+      this.events.call(due)
+    }
     if (!this.reconnecting && this.deadline > 0 && now > this.deadline) {
       this.drop('The ranked server went quiet.')
     }
@@ -218,6 +230,7 @@ export class RankedDuelClock implements DuelClock {
 
   dispose(): void {
     this.over = true
+    this.pending.clear()
     this.queue = []
     this.deadline = 0
     this.session.close()
