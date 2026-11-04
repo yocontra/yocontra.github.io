@@ -103,7 +103,7 @@ export class Input {
       return
     }
     const a = this.actionFor(e.code)
-    if (!a) {
+    if (!a || (a !== 'pause' && onMenuControl(e))) {
       return
     }
     // Let Tab work for focus when a menu is open.
@@ -153,6 +153,26 @@ export class Input {
     this.heldKeys.clear()
     this.pointers.clear()
   }
+}
+
+const CONTROL =
+  'button, a[href], input, select, textarea, [contenteditable], [role="radio"], [role="tab"]'
+const MENU = '[role="dialog"], [role="alertdialog"], .ow-hub, .ow-sheet'
+
+/**
+ * Is this key press aimed at a visible menu control (a focused Buy button, a text field)? Then
+ * Space and Enter belong to the browser (activate the button, type the space), never the duel:
+ * swallowing them left a keyboard player unable to confirm a purchase.
+ */
+function onMenuControl(e: KeyboardEvent): boolean {
+  const t = e.target
+  if (!(t instanceof HTMLElement) || t === document.body || !t.closest(CONTROL)) {
+    return false
+  }
+  return (
+    t.closest(MENU) !== null &&
+    t.checkVisibility({ opacityProperty: true, visibilityProperty: true })
+  )
 }
 
 export function keyLabel(code: string): string {
