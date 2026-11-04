@@ -149,6 +149,8 @@ const TOP_SHEET = '.ow-sheet.on'
 const OFF_SCREEN = /outside of the viewport/u
 const TAKEN = /spoken for|taken/iu
 const COVERED = /intercepts pointer events/u
+/** The element in the way, from the click log: "<div class=…>…</div> intercepts pointer events". */
+const COVERED_BY = /(?<tag><[a-z][^>]*>)[^\n]*?intercepts pointer events/u
 const AUTH = '/src/experiments/out-west/net/auth.ts'
 const PROFILE = '/src/experiments/out-west/ui/profile.ts'
 
@@ -163,6 +165,17 @@ async function closeSheets(page: Page): Promise<void> {
       .last()
       .click({ position: { x: 3, y: 3 }, force: true })
     await page.waitForTimeout(150)
+  }
+}
+
+/**
+ * Read out any saloon notice (a level-up, a reward) that has come up since: they are modal on
+ * purpose, and a late one (a second profile load) would otherwise sit over the next control.
+ */
+async function drainNotices(page: Page): Promise<void> {
+  for (let i = 0; i < 12 && (await page.locator('.ow-feat-notice').count()) > 0; i++) {
+    await page.locator('.ow-feat-notice .ow-btn-primary').first().click({ timeout: 6000 })
+    await page.waitForTimeout(400)
   }
 }
 
@@ -185,6 +198,7 @@ async function step(
     return
   }
   try {
+    await drainNotices(page)
     await run()
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e)
@@ -192,7 +206,8 @@ async function step(
     if (OFF_SCREEN.test(msg)) {
       why = 'control is outside the viewport'
     } else if (COVERED.test(msg)) {
-      why = 'control is covered by another element'
+      const by = COVERED_BY.exec(msg)?.groups?.tag
+      why = `control is covered by another element${by ? `: ${by}` : ''}`
     }
     rows.push({
       size: size.name,
@@ -511,10 +526,7 @@ async function member(browser: Browser, size: Size, state: State | null): Promis
   if ((await page.locator('.ow-feat-notice').count()) > 0) {
     await audit(page, size, 'notices', '.ow-feat-notice')
     // the notices come one at a time: read them all out of the way
-    for (let i = 0; i < 12 && (await page.locator('.ow-feat-notice').count()) > 0; i++) {
-      await tap(page, '.ow-feat-notice .ow-btn-primary')
-      await page.waitForTimeout(400)
-    }
+    await drainNotices(page)
   } else if (want('notices')) {
     rows.push({
       size: size.name,
