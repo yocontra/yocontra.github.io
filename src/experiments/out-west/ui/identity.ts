@@ -36,15 +36,10 @@ export function mountNameChange(
   changed: (patch: Partial<MeResponse>) => void,
 ): void {
   const box = el('section', 'ow-standing ow-feat-rename', host)
-  el('h3', 'ow-standing-h', box, 'A new name')
-  el(
-    'p',
-    'ow-hub-note',
-    box,
-    `${money(NAME_CHANGE_PRICE)}, once a month. Your old name is held for you for 30 days.`,
-  )
+  el('h3', 'ow-standing-h', box, 'Change name')
+  el('p', 'ow-hub-note', box, `Costs ${money(NAME_CHANGE_PRICE)}. You can change it once a month.`)
   const form = el('form', 'ow-acct-form', box)
-  const label = el('label', 'ow-acct-label', form, 'New gunslinger name')
+  const label = el('label', 'ow-acct-label', form, 'New name')
   const input = el('input', 'ow-acct-input', label)
   input.type = 'text'
   input.maxLength = NAME_MAX
@@ -72,8 +67,8 @@ export function mountNameChange(
     }
     const root = host.closest<HTMLElement>('.ow-sheet')?.parentElement ?? document.body
     confirmSheet(root, {
-      title: `Ride as ${name}?`,
-      body: `${money(NAME_CHANGE_PRICE)} from your purse of ${money(me.purse)}. You can change again in 30 days.`,
+      title: `Change your name to ${name}?`,
+      body: `Costs ${money(NAME_CHANGE_PRICE)}. You have ${money(me.purse)}. You can change it again in 30 days.`,
       yes: `Change · ${money(NAME_CHANGE_PRICE)}`,
     })
       .then(async (yes) => {
@@ -81,14 +76,14 @@ export function mountNameChange(
           return
         }
         go.disabled = true
-        say('Filing the papers…')
+        say('Saving…')
         const r = await changeName(name)
         if (!r.ok) {
           go.disabled = false
           say(r.error, 'error')
           return
         }
-        say(`You ride as ${r.value.name} now.`, 'ok')
+        say(`Your name is now ${r.value.name}.`, 'ok')
         changed({ name: r.value.name, purse: r.value.purse })
       })
       .catch(() => undefined)
@@ -97,12 +92,12 @@ export function mountNameChange(
 
 export function mountBlocks(host: HTMLElement): void {
   const box = el('section', 'ow-standing ow-feat-blocks', host)
-  el('h3', 'ow-standing-h', box, 'Blocked gunslingers')
+  el('h3', 'ow-standing-h', box, 'Blocked players')
   const say = statusLine(box)
   const list = el('ul', 'ow-ledger-list', box)
   const draw = (names: readonly string[]): void => {
     list.replaceChildren()
-    say(names.length > 0 ? 'You won’t be matched with them or see them.' : 'Nobody blocked.')
+    say(names.length > 0 ? 'You won’t be matched with them or see them.' : 'No one blocked.')
     for (const n of names) {
       const li = el('li', '', list)
       el('span', '', li, n)
@@ -122,7 +117,7 @@ export function mountBlocks(host: HTMLElement): void {
       })
     }
   }
-  say('Reading the list…')
+  say('Loading…')
   fetchBlocks()
     .then((r) => (r.ok ? draw(r.value.blocked) : say(r.error, 'error')))
     .catch(() => undefined)

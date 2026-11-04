@@ -200,9 +200,9 @@ class Panel implements AccountPanel {
     this.root.dataset.view = this.view
     const head = el('div', 'ow-acct-head', this.root)
     const titles: Record<View, string> = {
-      guest: 'Your licence',
+      guest: 'Sign in',
       player: 'Signed in',
-      'confirm-delete': 'Hang up your hat',
+      'confirm-delete': 'Delete account',
     }
     el('h2', 'ow-acct-title', head, titles[this.view])
     if (this.opts.onClose) {
@@ -230,7 +230,7 @@ class Panel implements AccountPanel {
         'p',
         'ow-acct-lede',
         this.root,
-        'This browser can’t use passkeys, so online play is off. Quick Draw still works as a guest.',
+        'This browser can’t use passkeys. Online play is off, but Quick Draw works.',
       )
       return
     }
@@ -238,17 +238,17 @@ class Panel implements AccountPanel {
       'p',
       'ow-acct-lede',
       this.root,
-      'Sign in with your face, fingerprint or device PIN. No password or email.',
+      'Use your face, fingerprint or device PIN. No password or email.',
     )
     const signInBtn = button(this.root, 'Sign in with a passkey', 'primary')
     signInBtn.addEventListener('click', () => void this.doSignIn(false))
-    el('div', 'ow-acct-or', this.root, 'New in town?')
+    el('div', 'ow-acct-or', this.root, 'New here?')
     this.renderSignUp()
     el(
       'p',
       'ow-acct-note',
       this.root,
-      'Your name is public on posters and boards. Pick something you’d say out loud in a saloon.',
+      'Your name is public. Everyone sees it on posters and leaderboards.',
     )
     // Offer saved passkeys in the name field's autofill, too.
     void this.doSignIn(true)
@@ -257,7 +257,7 @@ class Panel implements AccountPanel {
   private renderSignUp(): void {
     const form = el('form', 'ow-acct-form', this.root)
     form.noValidate = true
-    const label = el('label', 'ow-acct-label', form, 'Gunslinger name')
+    const label = el('label', 'ow-acct-label', form, 'Name')
     const input = el('input', 'ow-acct-input', label)
     input.name = 'username'
     input.autocomplete = 'username webauthn'
@@ -316,7 +316,7 @@ class Panel implements AccountPanel {
     if (r.ok) {
       this.draftName = ''
       this.view = 'player'
-      this.status = { text: `Welcome to town, ${r.value.name}.`, kind: 'ok' }
+      this.status = { text: `Welcome, ${r.value.name}.`, kind: 'ok' }
     }
     this.render()
   }
@@ -337,7 +337,7 @@ class Panel implements AccountPanel {
     const btns = el('div', 'ow-acct-btns', this.root)
     button(btns, 'Add a passkey').addEventListener('click', () => void this.doAddPasskey())
     button(btns, 'Sign out').addEventListener('click', () => void this.doSignOut())
-    const del = button(this.root, 'Hang up your hat (delete account)', 'danger ghost')
+    const del = button(this.root, 'Delete account', 'danger ghost')
     del.addEventListener('click', () => {
       this.view = 'confirm-delete'
       this.status = { text: '', kind: 'info' }
@@ -432,7 +432,7 @@ class Panel implements AccountPanel {
     const warn = el('p', 'ow-acct-warn', this.root)
     el('b', '', warn, 'This can’t be undone. ')
     warn.append(
-      `Deleting ${name} removes your purse, kit, ghost, passkeys and history for good. Past duels stay on record without your name. The name is held for 30 days.`,
+      `This deletes ${name}’s purse, kit, ghost, passkeys and history. Past duels stay, without your name. No one can take the name for 30 days.`,
     )
     const form = el('form', 'ow-acct-form', this.root)
     form.noValidate = true

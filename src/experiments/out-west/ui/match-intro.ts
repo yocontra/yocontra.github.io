@@ -40,11 +40,11 @@ export class MatchIntro {
       'ow-match-status',
       this.root,
       // against a ghost nobody needs telling there's no READY: the button just isn't there
-      this.ai ? '' : 'Sizing each other up…',
+      this.ai ? '' : 'Get ready…',
     )
     this.status.setAttribute('aria-live', 'polite')
     const btns = el('div', 'ow-hub-row', this.root)
-    button(btns, 'Flee', h.flee)
+    button(btns, 'Leave', h.flee)
     this.readyBtn = button(
       btns,
       'Ready',
@@ -52,7 +52,7 @@ export class MatchIntro {
         if (!this.sent) {
           this.sent = true
           this.readyBtn.disabled = true
-          this.readyBtn.textContent = 'Cocked'
+          this.readyBtn.textContent = 'Ready ✓'
           h.ready()
         }
       },
@@ -71,7 +71,7 @@ export class MatchIntro {
         this.sent = true
         this.onReady()
       }
-      this.status.textContent = 'Walk out when you’re ready.'
+      this.status.textContent = 'Starting…'
       return
     }
     if (!this.sent) {
@@ -91,7 +91,7 @@ export class MatchIntro {
     const tick = (): void => {
       const left = Math.max(0, Math.ceil((deadline - (Date.now() + offset)) / 1000))
       if (!this.sent) {
-        this.status.textContent = `Cock your gun: ${left}s or you dodge`
+        this.status.textContent = `Press Ready: ${left}s left`
       }
     }
     tick()

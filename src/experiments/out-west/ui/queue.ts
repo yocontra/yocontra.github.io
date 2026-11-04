@@ -37,7 +37,7 @@ export class QueueSheet {
     swallow(this.root)
     const panel = el('div', 'ow-hub-panel ow-sheet-panel', this.root)
     el('h2', 'ow-hub-h', panel).append(icon('bounty'), 'Bounty Hunt')
-    this.line = el('p', 'ow-queue-line', panel, 'Checking you’re no bot…')
+    this.line = el('p', 'ow-queue-line', panel, 'Checking you’re human…')
     this.line.setAttribute('aria-live', 'polite')
     const track = el('div', 'ow-xp ow-queue-track', panel)
     this.bar = el('div', 'ow-xp-fill', track)
@@ -48,7 +48,7 @@ export class QueueSheet {
     this.ghostBtn.hidden = true
     this.rankedBtn = button(
       row,
-      'Ride the ranked gauntlet',
+      'Play ranked',
       () => {
         this.cancel()
         o.rideRanked()
@@ -59,7 +59,7 @@ export class QueueSheet {
     this.search = new QueueSearch({
       queued: (m) => {
         this.line.textContent = m.ghostsOnly
-          ? 'Your connection is rough today. Ghosts only.'
+          ? 'Your connection is weak. Ghost duels only.'
           : 'Looking for a gunslinger…'
       },
       status: (s) => this.status(s),
@@ -75,7 +75,7 @@ export class QueueSheet {
       return
     }
     if (!token) {
-      this.failed('The bot check didn’t pass. Try again.')
+      this.failed('Couldn’t check you’re human. Try again.')
       return
     }
     this.line.textContent = 'Joining the queue…'
@@ -117,7 +117,7 @@ export class QueueSheet {
     this.line.textContent = msg
     this.detail.textContent = ''
     this.ghostBtn.hidden = true
-    this.leaveBtn.textContent = 'Back to the saloon'
+    this.leaveBtn.textContent = 'Back'
     // not a dead end: the licence is three outlaws away
     this.rankedBtn.hidden = reason !== 'unlicensed'
     if (reason === 'unlicensed') {

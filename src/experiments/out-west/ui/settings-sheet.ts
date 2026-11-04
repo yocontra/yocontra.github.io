@@ -89,8 +89,8 @@ function graphics(parent: HTMLElement): void {
     }
     const changed = g !== loaded
     note.textContent = changed
-      ? 'Takes effect the next time the game loads.'
-      : 'Low is smoother on older phones; High adds shadows.'
+      ? 'Reload to apply.'
+      : 'Low runs smoother on older phones. High adds shadows.'
     reload.hidden = !changed
   }
   for (const g of GRAPHICS) {
@@ -115,16 +115,16 @@ export function openSettings(root: HTMLElement, onClose?: () => void): void {
   slider(sound, 'Music', 'music')
   slider(sound, 'Effects', 'sfx')
   slider(sound, 'Voices', 'voice')
-  flag(sound, 'mono', { label: 'Mono audio', hint: 'The whole mix in either ear.' })
+  flag(sound, 'mono', { label: 'Mono audio', hint: 'All sound in both ears.' })
   const feel = el('section', 'ow-set-group', s.body)
-  el('h3', 'ow-set-h', feel, 'Feel')
-  flag(feel, 'captions', { label: 'Captions', hint: 'Sounds and heckles as subtitles.' })
+  el('h3', 'ow-set-h', feel, 'Controls')
+  flag(feel, 'captions', { label: 'Captions', hint: 'Show sounds and speech as text.' })
   flag(feel, 'toggleWalk', { label: 'Toggle walk', hint: 'Press once to walk, again to stop.' })
   const buzz = toggle(feel, {
     label: 'Vibration',
     hint: hapticsSupported()
-      ? 'On your shot and on a hit. Never on the call.'
-      : 'Not on this device.',
+      ? 'When you shoot or get hit. Never on the bell.'
+      : 'Not available on this device.',
     value: getSettings().vibration,
     change: (on) => setSetting('vibration', on),
   })
@@ -134,6 +134,6 @@ export function openSettings(root: HTMLElement, onClose?: () => void): void {
     hint: 'No shake, zoom or flash. Shorter kill cam.',
   })
   const look = el('section', 'ow-set-group', s.body)
-  el('h3', 'ow-set-h', look, 'Look')
+  el('h3', 'ow-set-h', look, 'Display')
   graphics(look)
 }
