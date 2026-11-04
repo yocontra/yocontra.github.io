@@ -202,6 +202,17 @@ function finishGun(g: Object3D, look: GunLook): void {
   })
 }
 
+/** A revolver finished as `id` (an Outfitter thumbnail); null when the id isn't a gun. */
+export function finishedGun(gun: PropDef, id: ItemId): Object3D | null {
+  const look = GUNS[id]
+  if (!look) {
+    return null
+  }
+  const g = propObject(gun)
+  finishGun(g, look)
+  return g
+}
+
 const norm = (name: string): string => name.replace(/[^a-z]/giu, '').toLowerCase()
 
 /** A rowel on each boot heel, riding the foot bone. */

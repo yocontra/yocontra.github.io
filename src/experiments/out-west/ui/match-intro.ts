@@ -40,7 +40,7 @@ export class MatchIntro {
       'ow-match-status',
       this.root,
       this.ai
-        ? 'No READY against a ghost: you walk out when the posters are up.'
+        ? 'No READY needed here: you walk out when the posters are up.'
         : 'Sizing each other up…',
     )
     this.status.setAttribute('aria-live', 'polite')

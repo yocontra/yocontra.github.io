@@ -1,7 +1,9 @@
 /**
- * The Outfitter: browse the catalog by slot, see rarity and level gates, try anything on your own
- * character (the street stays live behind the panel), buy with a confirmation sheet, and equip.
- * Cosmetic only; the server is the authority on price, gates and ownership.
+ * The Outfitter: browse the catalog by slot or by matched set, see each piece rendered (a
+ * thumbnail from the game's own models), rarity, level gates and "New" / "Can afford" badges, try
+ * anything on your own character (the street stays live behind the panel), try dyes on any piece
+ * that takes them, buy with a confirmation sheet, and equip. Cosmetic only; the server is the
+ * authority on price, gates and ownership.
  */
 import type { MeResponse } from '../contract/economy.ts'
 import {
@@ -15,13 +17,15 @@ import {
   type Slot,
   STARTER_ITEMS,
 } from '../data/catalog.ts'
-import { DYES, type DyeId, type Dyes, dyePrice, isDyeable } from '../data/dye.ts'
+import { DYES, type DyeId, type Dyes, isDyeable } from '../data/dye.ts'
 import { money } from '../data/economy.ts'
 import { buyItem, fetchStore, saveLoadout } from '../net/api.ts'
 import { dyeItem } from '../net/social.ts'
 import { type IconName, icon } from './icons.ts'
 import { uiSound } from './sfx.ts'
 import { button, confirmSheet, el, swallow } from './sheet.ts'
+import { dyePanel } from './store-dye.ts'
+import { inReach, SETS, Shelf, setOf, wearSet } from './store-kit.ts'
 
 const SLOT_TABS: readonly { slot: Slot; label: string }[] = [
   { slot: 'hat', label: 'Hats' },
@@ -34,6 +38,8 @@ const SLOT_TABS: readonly { slot: Slot; label: string }[] = [
   { slot: 'drawSound', label: 'Draw sounds' },
   { slot: 'saddlebag', label: 'Saddlebags' },
 ]
+
+type Tab = Slot | 'sets'
 
 const SLOT_ICON: Record<Slot, IconName> = {
   hat: 'hat',
@@ -64,6 +70,19 @@ const SLOT_NOTE: Partial<Record<Slot, string>> = {
   holster: 'Tooling shows up close. Same draw for everyone.',
 }
 
+/** Thumbnails as image URLs, kept for the page: a canvas can only hang in one place. */
+const ART = new Map<string, string>()
+
+/** Hang a rendered thumbnail in a card's picture frame. */
+function paint(art: HTMLElement, url: string): void {
+  const img = el('img', '', null)
+  img.src = url
+  img.alt = ''
+  img.decoding = 'async'
+  art.replaceChildren(img)
+  art.classList.add('drawn')
+}
+
 export interface StoreDeps {
   me: () => MeResponse | null
   /** Dress your character in this loadout (preview or equipped), with these dyes (yours if omitted). */
@@ -71,6 +90,8 @@ export interface StoreDeps {
   /** The server accepted a purchase, a dye job or a new loadout. */
   changed: (patch: Partial<MeResponse>) => void
   close: () => void
+  /** Render one item's thumbnail (null: nothing to see, or the game isn't loaded). */
+  thumb?: (id: ItemId) => HTMLCanvasElement | null
 }
 
 export class Outfitter {
@@ -78,15 +99,19 @@ export class Outfitter {
   private readonly list: HTMLElement
   private readonly purseEl: HTMLElement
   private readonly detail: HTMLElement
-  private readonly tabs = new Map<Slot, HTMLButtonElement>()
+  private readonly tabs = new Map<Tab, HTMLButtonElement>()
   private readonly deps: StoreDeps
   private items: readonly CatalogItem[] = CATALOG
   private owned = new Set<string>(STARTER_ITEMS)
-  private slot: Slot = 'hat'
+  private tab: Tab = 'hat'
   private picked: CatalogItem | null = null
   /** A dye being tried on the picked item (not bought yet). */
   private tryDye: DyeId | null = null
   private busy = false as boolean
+  private shelf: Shelf | null = null
+  /** Cards waiting for their thumbnail, rendered one per frame. */
+  private readonly waiting: { id: ItemId; art: HTMLElement }[] = []
+  private drawing = false as boolean
 
   constructor(parent: HTMLElement, deps: StoreDeps) {
     this.deps = deps
@@ -100,22 +125,27 @@ export class Outfitter {
     button(head, 'Done', () => this.close())
     const tabs = el('div', 'ow-store-tabs', this.root)
     tabs.setAttribute('role', 'tablist')
-    for (const t of SLOT_TABS) {
+    const tabButton = (t: Tab, label: string, ic: IconName): void => {
       const b = el('button', 'ow-store-tab', tabs)
       b.type = 'button'
-      b.append(icon(SLOT_ICON[t.slot]), t.label)
+      b.append(icon(ic), label)
       b.setAttribute('role', 'tab')
       b.addEventListener('click', (e) => {
         e.stopPropagation()
-        this.show(t.slot)
+        this.show(t)
       })
-      this.tabs.set(t.slot, b)
+      this.tabs.set(t, b)
     }
+    for (const t of SLOT_TABS) {
+      tabButton(t.slot, t.label, SLOT_ICON[t.slot])
+    }
+    tabButton('sets', 'Sets', 'badge')
     this.list = el('div', 'ow-store-list', this.root)
     this.detail = el('div', 'ow-store-detail', this.root)
     const me = deps.me()
     if (me) {
       this.owned = new Set(me.owned)
+      this.shelf = new Shelf(me.accountId, this.items, me.level, this.owned)
     }
     this.show('hat')
     requestAnimationFrame(() => this.root.classList.add('on'))
@@ -130,23 +160,30 @@ export class Outfitter {
     if (r.value.items.length > 0) {
       this.items = r.value.items
     }
-    if (this.deps.me()) {
+    const me = this.deps.me()
+    if (me) {
       this.owned = new Set(r.value.owned)
+      // built once per visit: a second read would see this visit's first tab as already looked at
+      this.shelf ??= new Shelf(me.accountId, this.items, me.level, this.owned)
     }
-    this.show(this.slot)
+    this.show(this.tab)
   }
 
   private get equipped(): Loadout {
     return normalizeLoadout(this.deps.me()?.loadout ?? DEFAULT_LOADOUT)
   }
 
-  private show(slot: Slot): void {
-    this.slot = slot
-    for (const [s, b] of this.tabs) {
-      b.classList.toggle('on', s === slot)
-      b.setAttribute('aria-selected', String(s === slot))
-    }
+  private show(tab: Tab): void {
+    this.tab = tab
     const me = this.deps.me()
+    for (const [t, b] of this.tabs) {
+      b.classList.toggle('on', t === tab)
+      b.setAttribute('aria-selected', String(t === tab))
+      const fresh =
+        t === 'sets' ? 0 : (this.shelf?.newIn(this.items.filter((i) => i.slot === t)) ?? 0)
+      b.classList.toggle('fresh', fresh > 0)
+      b.title = fresh > 0 ? `${fresh} new` : ''
+    }
     this.purseEl.replaceChildren()
     this.purseEl.classList.toggle('guest', !me)
     if (me) {
@@ -155,14 +192,65 @@ export class Outfitter {
       this.purseEl.textContent = 'Signed out · try on only'
     }
     this.list.replaceChildren()
+    this.waiting.length = 0
+    if (tab === 'sets') {
+      this.renderSets()
+      this.renderDetail()
+      return
+    }
     const eq = this.equipped
-    for (const item of this.items.filter((i) => i.slot === slot)) {
+    const here = this.items.filter((i) => i.slot === tab)
+    for (const item of here) {
       this.card(item, eq)
     }
-    if (slot === 'extra') {
+    if (tab === 'extra') {
       this.noneCard(eq)
     }
+    // the badges have been seen: they go quiet next visit
+    this.shelf?.look(here)
     this.renderDetail()
+    this.drawThumbs()
+  }
+
+  /** The picture on a card: the rendered piece when the game can draw it, else its slot icon. */
+  private art(card: HTMLElement, item: CatalogItem): void {
+    const art = el('span', 'ow-item-art', card)
+    art.setAttribute('aria-hidden', 'true')
+    const url = ART.get(item.id)
+    if (url) {
+      paint(art, url)
+      return
+    }
+    art.append(icon(SLOT_ICON[item.slot]))
+    if (this.deps.thumb) {
+      this.waiting.push({ id: item.id as ItemId, art })
+    }
+  }
+
+  /** One thumbnail per frame, so a tab of new pieces never hitches the street behind. */
+  private drawThumbs(): void {
+    if (this.drawing || !this.deps.thumb) {
+      return
+    }
+    this.drawing = true
+    const step = (): void => {
+      const next = this.waiting.shift()
+      if (!(next && this.root.isConnected)) {
+        this.drawing = false
+        return
+      }
+      let url = ART.get(next.id)
+      if (!url) {
+        const c = this.deps.thumb?.(next.id)
+        url = c ? c.toDataURL('image/webp', 0.9) : ''
+        ART.set(next.id, url)
+      }
+      if (url && next.art.isConnected) {
+        paint(next.art, url)
+      }
+      requestAnimationFrame(step)
+    }
+    requestAnimationFrame(step)
   }
 
   private card(item: CatalogItem, eq: Loadout): void {
@@ -170,7 +258,7 @@ export class Outfitter {
     const b = el('button', `ow-item r-${item.rarity}`, this.list)
     b.type = 'button'
     b.classList.toggle('picked', this.picked?.id === item.id)
-    b.append(icon(SLOT_ICON[item.slot]))
+    this.art(b, item)
     el('span', 'ow-item-rarity', b, RARITY_LABEL[item.rarity])
     el('span', 'ow-item-name', b, item.name)
     let tag: string
@@ -187,6 +275,13 @@ export class Outfitter {
       tag = item.price > 0 ? money(item.price) : 'Free'
     }
     el('span', 'ow-item-tag', b, tag)
+    const badges = el('span', 'ow-item-badges', b)
+    if (this.shelf?.isNew(item.id)) {
+      el('span', 'ow-item-badge new', badges, 'New')
+    }
+    if (me && inReach(item, me.level, this.owned) && me.purse >= item.price) {
+      el('span', 'ow-item-badge afford', badges, 'Can afford')
+    }
     b.addEventListener('click', (e) => {
       e.stopPropagation()
       this.pick(item)
@@ -196,6 +291,7 @@ export class Outfitter {
   private noneCard(eq: Loadout): void {
     const b = el('button', 'ow-item r-starter', this.list)
     b.type = 'button'
+    el('span', 'ow-item-art', b).append(icon('badge'))
     el('span', 'ow-item-rarity', b, 'Bare')
     el('span', 'ow-item-name', b, 'Nothing extra')
     el('span', 'ow-item-tag', b, eq.extra === null ? 'Equipped' : '')
@@ -207,6 +303,36 @@ export class Outfitter {
     })
   }
 
+  /** The Sets tab: each matched set, how much of it you own, and one tap to try it all on. */
+  private renderSets(): void {
+    for (const set of SETS) {
+      const pieces = set.items
+        .map((id) => this.items.find((i) => i.id === id))
+        .filter((i): i is CatalogItem => i !== undefined)
+      const have = pieces.filter((i) => this.owned.has(i.id)).length
+      const box = el('div', 'ow-set-card', this.list)
+      el('b', 'ow-store-name', box, set.name)
+      el('p', 'ow-hub-note', box, `${set.blurb} ${have}/${pieces.length} owned.`)
+      const row = el('div', 'ow-set-pieces', box)
+      for (const p of pieces) {
+        const chip = el('button', `ow-set-piece${this.owned.has(p.id) ? ' owned' : ''}`, row)
+        chip.type = 'button'
+        this.art(chip, p)
+        el('span', '', chip, p.name)
+        chip.addEventListener('click', (e) => {
+          e.stopPropagation()
+          this.tab = p.slot
+          this.pick(p)
+        })
+      }
+      button(box, 'Try the set on', () => {
+        this.picked = null
+        this.deps.preview(wearSet(this.equipped, set, this.items))
+      })
+    }
+    this.drawThumbs()
+  }
+
   private get dyes(): Dyes {
     return this.deps.me()?.dyes ?? {}
   }
@@ -215,14 +341,18 @@ export class Outfitter {
     this.picked = item
     this.tryDye = null
     this.deps.preview({ ...this.equipped, [item.slot]: item.id })
-    this.show(this.slot)
+    this.show(item.slot)
   }
 
   private renderDetail(): void {
     this.detail.replaceChildren()
     const item = this.picked
-    if (!item || item.slot !== this.slot) {
-      el('p', 'ow-hub-note', this.detail, SLOT_NOTE[this.slot] ?? 'Tap a piece to try it on.')
+    if (!item || item.slot !== this.tab) {
+      const idle =
+        this.tab === 'sets'
+          ? 'Pieces made to be worn together. Each is sold on its own.'
+          : (SLOT_NOTE[this.tab] ?? 'Tap a piece to try it on.')
+      el('p', 'ow-hub-note', this.detail, idle)
       return
     }
     el('b', 'ow-store-name', this.detail, item.name)
@@ -234,8 +364,22 @@ export class Outfitter {
         SLOT_NOTE[item.slot] ? ` · ${SLOT_NOTE[item.slot]}` : ''
       }`,
     )
+    const set = setOf(item.id)
+    if (set) {
+      const have = set.items.filter((id) => this.owned.has(id)).length
+      const line = el('p', 'ow-hub-note ow-store-set', this.detail)
+      line.append(`Part of the ${set.name} set · ${have}/${set.items.length} owned · `)
+      const see = el('button', 'ow-store-link', line, 'See the set')
+      see.type = 'button'
+      see.addEventListener('click', (e) => {
+        e.stopPropagation()
+        this.picked = null
+        this.show('sets')
+      })
+    }
     const me = this.deps.me()
-    if (this.owned.has(item.id)) {
+    const mine = this.owned.has(item.id)
+    if (mine) {
       const on = this.equipped[item.slot] === item.id
       const b = button(
         this.detail,
@@ -246,66 +390,31 @@ export class Outfitter {
         true,
       )
       b.disabled = on || !me
-      if (me && isDyeable(item)) {
-        this.dyeSection(item)
-      }
-      return
+    } else {
+      this.buyButton(item, me)
     }
-    this.buyButton(item, me)
-  }
-
-  /** Dye jobs: try a colour on, then pay for it (natural washes it out for free). */
-  private dyeSection(item: CatalogItem): void {
-    const box = el('div', 'ow-feat-dye', this.detail)
-    const current: DyeId = this.dyes[item.id as ItemId] ?? 'natural'
-    const want = this.tryDye ?? current
-    el('b', 'ow-feat-dye-h', box, 'Dye job')
-    const swatches = el('div', 'ow-feat-swatches', box)
-    swatches.setAttribute('role', 'radiogroup')
-    swatches.setAttribute('aria-label', `Dye for ${item.name}`)
-    for (const d of DYES) {
-      const b = el('button', 'ow-feat-swatch', swatches)
-      b.type = 'button'
-      b.dataset.dye = d.id
-      b.setAttribute('role', 'radio')
-      b.setAttribute('aria-checked', String(d.id === want))
-      b.setAttribute('aria-label', d.name)
-      b.title = d.name
-      b.classList.toggle('on', d.id === want)
-      b.classList.toggle('current', d.id === current)
-      if (d.hex) {
-        b.style.setProperty('--swatch', d.hex)
-      }
+    if (isDyeable(item)) {
+      const current: DyeId = (mine && this.dyes[item.id as ItemId]) || 'natural'
+      dyePanel(this.detail, {
+        item,
+        current,
+        want: this.tryDye ?? current,
+        owned: mine,
+        purse: me?.purse ?? null,
+        busy: this.busy,
+        onTry: (id) => {
+          this.tryDye = id
+          this.deps.preview(
+            { ...this.equipped, [item.slot]: item.id },
+            { ...this.dyes, [item.id]: id },
+          )
+          this.renderDetail()
+        },
+        onDye: (want, price) => {
+          this.dye(item, want, price).catch(() => undefined)
+        },
+      })
     }
-    swatches.addEventListener('click', (e) => {
-      e.stopPropagation()
-      const id = DYES.find(
-        (d) =>
-          e.target instanceof HTMLElement &&
-          e.target.closest('[data-dye]')?.getAttribute('data-dye') === d.id,
-      )?.id
-      if (!id) {
-        return
-      }
-      this.tryDye = id
-      this.deps.preview(this.equipped, { ...this.dyes, [item.id]: id })
-      this.renderDetail()
-    })
-    const name = DYES.find((d) => d.id === want)?.name ?? 'Natural'
-    const price = dyePrice(item.id, want) ?? 0
-    const me = this.deps.me()
-    let label = `Dye ${name} · ${money(price)}`
-    if (want === current) {
-      label = current === 'natural' ? 'Pick a colour' : `Dyed ${name}`
-    } else if (want === 'natural') {
-      label = 'Wash it out · free'
-    } else if (me && me.purse < price) {
-      label = `Need ${money(price - me.purse)} more`
-    }
-    const go = button(box, label, () => {
-      this.dye(item, want, price).catch(() => undefined)
-    })
-    go.disabled = want === current || this.busy || (me !== null && me.purse < price)
   }
 
   private async dye(item: CatalogItem, dye: DyeId, price: number): Promise<void> {
@@ -336,7 +445,7 @@ export class Outfitter {
     this.tryDye = null
     this.deps.changed({ purse: r.value.purse, dyes: r.value.dyes })
     this.deps.preview(this.equipped, r.value.dyes)
-    this.show(this.slot)
+    this.show(this.tab)
   }
 
   private buyButton(item: CatalogItem, me: MeResponse | null): void {
@@ -400,7 +509,7 @@ export class Outfitter {
     }
     this.deps.changed({ loadout: r.value.loadout })
     this.deps.preview(r.value.loadout)
-    this.show(this.slot)
+    this.show(this.tab)
   }
 
   private flash(msg: string): void {

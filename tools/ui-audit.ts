@@ -427,6 +427,7 @@ async function member(browser: Browser, size: Size, state: State | null): Promis
   await audit(page, size, 'hub', '.ow-hub')
   await sheet(page, size, 'licence', '.ow-tile-frontier')
   await sheet(page, size, 'account', HUB_LINK(3))
+  await sheet(page, size, 'settings', HUB_LINK(4))
   await step(page, size, 'account-delete', async () => {
     await tap(page, HUB_LINK(3))
     await page.waitForTimeout(800)
