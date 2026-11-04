@@ -20,7 +20,7 @@ import { readFileSync, writeFileSync } from 'node:fs'
 import process from 'node:process'
 import sharp from 'sharp'
 import { Vector3 } from 'three'
-import { COVER_VISUALS } from '../src/experiments/out-west/ffa/scene/cover-kinds.ts'
+import { COVER_VISUALS, decks } from '../src/experiments/out-west/ffa/scene/cover-kinds.ts'
 import {
   OUTSKIRTS_SEED,
   outskirtsGeometry,
@@ -568,6 +568,21 @@ if (pngOut) {
     out.push(rect(st, 'rgba(150,110,70,0.25)'))
     out.push(
       `<text x="${X(st.x + 1)}" y="${Z(st.z + 2.2)}" font-size="10" fill="#6a4a2a">${st.id}</text>`,
+    )
+  }
+  // porches and the depot platform, and the railroad between its buffer stops
+  for (const dk of decks(L)) {
+    out.push(rect(dk, '#c8a070'))
+  }
+  const buffers = L.cover.filter((c) => c.kind === 'buffer')
+  if (buffers.length >= 2) {
+    const xs = buffers.map((c) => c.x + c.w / 2)
+    const tz = (buffers[0]?.z ?? 0) + (buffers[0]?.d ?? 0) / 2
+    out.push(
+      rect(
+        { x: Math.min(...xs), z: tz - 1.1, w: Math.max(...xs) - Math.min(...xs), d: 2.2 },
+        'rgba(70,60,50,0.45)',
+      ),
     )
   }
   const cr = L.creek

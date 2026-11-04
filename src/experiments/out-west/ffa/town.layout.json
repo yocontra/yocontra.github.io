@@ -1472,25 +1472,43 @@
       "kind": "fence",
       "x": 9,
       "z": 12,
-      "w": 13,
+      "w": 11,
       "d": 0.5,
       "low": true,
       "vaultHeight": 1.1
     },
     {
       "kind": "fence",
-      "x": 26,
+      "x": 23,
       "z": 12,
-      "w": 16,
+      "w": 9,
       "d": 0.5,
       "low": true,
       "vaultHeight": 1.1
     },
     {
       "kind": "fence",
-      "x": 46,
+      "x": 35,
       "z": 12,
-      "w": 22,
+      "w": 9,
+      "d": 0.5,
+      "low": true,
+      "vaultHeight": 1.1
+    },
+    {
+      "kind": "fence",
+      "x": 47,
+      "z": 12,
+      "w": 9,
+      "d": 0.5,
+      "low": true,
+      "vaultHeight": 1.1
+    },
+    {
+      "kind": "fence",
+      "x": 59,
+      "z": 12,
+      "w": 9,
       "d": 0.5,
       "low": true,
       "vaultHeight": 1.1
@@ -1517,25 +1535,43 @@
       "kind": "fence",
       "x": 76,
       "z": 12,
-      "w": 20,
+      "w": 10,
       "d": 0.5,
       "low": true,
       "vaultHeight": 1.1
     },
     {
       "kind": "fence",
-      "x": 100,
+      "x": 89,
       "z": 12,
-      "w": 16,
+      "w": 9,
       "d": 0.5,
       "low": true,
       "vaultHeight": 1.1
     },
     {
       "kind": "fence",
-      "x": 120,
+      "x": 101,
       "z": 12,
-      "w": 15,
+      "w": 9,
+      "d": 0.5,
+      "low": true,
+      "vaultHeight": 1.1
+    },
+    {
+      "kind": "fence",
+      "x": 113,
+      "z": 12,
+      "w": 9,
+      "d": 0.5,
+      "low": true,
+      "vaultHeight": 1.1
+    },
+    {
+      "kind": "fence",
+      "x": 125,
+      "z": 12,
+      "w": 10,
       "d": 0.5,
       "low": true,
       "vaultHeight": 1.1
