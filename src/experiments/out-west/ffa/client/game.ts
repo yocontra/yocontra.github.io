@@ -229,6 +229,7 @@ export class FrontierGame {
   /** The last frame's dt (s), for the HUD's easing. */
   private dtS = 0
   private readonly cutSize = new Vector2()
+  private readonly cutView = new Vector3()
   /** When the pointer lock was last lost (performance.now ms). */
   private lockLostAt = -1e9
   /** When you last fired (performance.now ms), for the raised-gun pose. */
@@ -1154,7 +1155,7 @@ export class FrontierGame {
     }
     const cam = this.cam.camera
     const p = this.tmp.set(this.own.x, 1, this.own.z)
-    const depth = -p.clone().applyMatrix4(cam.matrixWorldInverse).z
+    const depth = -this.cutView.copy(p).applyMatrix4(cam.matrixWorldInverse).z
     p.project(cam)
     const size = this.renderer.gl.getDrawingBufferSize(this.cutSize)
     CUT.screen.value.set((p.x * 0.5 + 0.5) * size.x, (p.y * 0.5 + 0.5) * size.y, depth)
