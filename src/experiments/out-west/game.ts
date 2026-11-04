@@ -11,6 +11,7 @@ import { RankedDuelClock } from './duel/ranked-clock.ts'
 import { type Assets, loadAssets } from './engine/assets.ts'
 import { Input } from './engine/input.ts'
 import { Renderer, type Tier } from './engine/render.ts'
+import { onPostureChange } from './platform/device.ts'
 import { save as persist, resetRun, type SaveData } from './save.ts'
 import { CameraRig } from './scene/camera.ts'
 import { dressStreet } from './scene/dressing.ts'
@@ -68,6 +69,20 @@ function itemThumbs(renderer: Renderer, assets: Assets): (id: ItemId) => HTMLCan
     )
     return studio.render(id)
   }
+}
+
+/**
+ * The renderer follows the viewport; folding or unfolding a foldable swaps panels mid-duel, so a
+ * single-player duel pauses rather than let the bell ring while the player's hands move (Bounty
+ * Hunt plays on: its clock is the server's).
+ */
+function wireViewport(renderer: Renderer, director: Director): void {
+  window.addEventListener('resize', () => renderer.resize())
+  onPostureChange(() => {
+    if (!director.hooks) {
+      director.pauseIfPlaying()
+    }
+  })
 }
 
 /** The server-driven duels: Bounty Hunt, the Daily Outlaw, and the ranked run's id. */
@@ -168,7 +183,7 @@ export async function createGame(o: GameOpts): Promise<Game> {
   glint.sprite.visible = false
   o.onProgress(1)
 
-  window.addEventListener('resize', () => renderer.resize())
+  wireViewport(renderer, director)
   document.addEventListener('visibilitychange', () => {
     // Bounty Hunt has no pause: backgrounding is a drop, and the room's grace rules apply
     if (document.hidden && !director.hooks) {

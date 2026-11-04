@@ -1,0 +1,99 @@
+/*
+ * out west: per-device layout layer, keyed on the attributes platform/device.ts sets on <html>:
+ *   data-ow-form   phone | fold-outer | fold-inner | tablet | desktop
+ *   data-ow-scale  s (under 360 px wide) | m | l (small tablets, the open foldable) | xl (big iPads)
+ *   data-ow-input  touch | pointer | hybrid (an iPad with a trackpad)
+ *   data-ow-window full | split (Split View, Stage Manager)
+ *   .ow-pad        a game controller (or the arrow keys) is driving the focus
+ * Imported last, so it only adjusts what the screens already lay out.
+ */
+
+/* ------------------------------------------------------------ type scale */
+/*
+ * Phone-sized type on a 13" iPad reads like a footnote at arm's length. Every --ow-fs-* token is in
+ * rem, so the whole UI (the duel HUD, captions, cards, the saloon, sheets) scales from one root
+ * size; the spacing tokens step up with it. A Split View or Stage Manager window that's narrow
+ * gets `m` or `s` again, so a small window never inherits tablet type.
+ */
+html[data-ow-scale="l"] {
+  font-size: 112.5%;
+  --ow-s3: 18px;
+  --ow-s4: 26px;
+  --ow-s5: 36px;
+}
+html[data-ow-scale="xl"] {
+  font-size: 125%;
+  --ow-s2: 10px;
+  --ow-s3: 20px;
+  --ow-s4: 30px;
+  --ow-s5: 40px;
+  --ow-s6: 56px;
+}
+/* the duel HUD's corner stack: the purse and badge sit under the counter by a fixed step, which
+   has to grow with the type (32 px and 64 px at 16 px type) */
+html:is([data-ow-scale="l"], [data-ow-scale="xl"]) .ow-purse {
+  top: calc(max(var(--ow-s3), var(--ow-sai-t)) + 2.1rem);
+}
+html:is([data-ow-scale="l"], [data-ow-scale="xl"]) .ow-mode {
+  top: calc(max(var(--ow-s3), var(--ow-sai-t)) + 4.2rem);
+}
+html:is([data-ow-scale="l"], [data-ow-scale="xl"]) .ow-pause {
+  width: 56px;
+  height: 56px;
+}
+/* asides and fake-out captions are read at a glance mid-duel: brighter and larger on big screens */
+html:is([data-ow-scale="l"], [data-ow-scale="xl"]) .ow-cap-fake {
+  font-size: var(--ow-fs-h4);
+}
+
+/* The saloon's per-device layout (iPad side column, foldable, narrow tiles) lives in
+   hub-more.css; only the type scale above reaches it from here. */
+
+/* ------------------------------------------- the title, landscape-ish */
+/*
+ * The broadside sized its woodcut and logo by width only. On a landscape screen of middling height
+ * (the open iPhone Duo at 951x669, an iPad window, an 11" iPad in landscape at 1180x820 with tablet
+ * type) the sheet grew taller than the screen and "tap to draw" sat on the footer links. Cap both
+ * by height too. Under 521 px the art is already dropped (title.css).
+ */
+@media (min-aspect-ratio: 1 / 1) and (min-height: 521px) and (max-height: 860px) {
+  .ow-title-art {
+    width: min(44rem, 100%, calc(32dvh * 1400 / 608));
+  }
+  .ow-logo {
+    font-size: clamp(3.25rem, min(13.5vw, 15dvh), 8.5rem);
+  }
+}
+
+/* ------------------------------------------ narrow windows (Split View) */
+/* tiles under 150 px wide: hub-more.css (the hub's owner) */
+/* in a window under 360 px the title's footer links wrap to two rows: the credits card has to sit
+   above both, or it covers the "credits" button that closes it */
+@media (max-width: 359px) {
+  .ow-credits {
+    bottom: calc(max(var(--ow-s2), var(--ow-sai-b)) + 2 * var(--ow-tap) + var(--ow-s2));
+  }
+  /* sheet headings and the receipt's "<16-letter name> was quicker." fit a 256 px panel */
+  .ow-hub-h,
+  .ow-sheet-head > .ow-hub-h {
+    font-size: var(--ow-fs-body);
+  }
+  .ow-results-sub {
+    font-size: var(--ow-fs-micro);
+  }
+}
+
+/* ------------------------------------------------------------- the pad */
+/* a controller or the arrow keys drive the focus: show where it is, everywhere, at couch distance */
+html.ow-pad :is(button, a[href], [tabindex], [role="tab"], [role="radio"], input):focus {
+  outline: 3px solid var(--ow-brass-hi);
+  outline-offset: 3px;
+}
+
+/* --------------------------------------------- pointer on touch devices */
+/* an iPad trackpad: the pointer morphs over controls; keep hover lift but never on a coarse tap */
+@media (hover: none) {
+  .ow-tile:hover:not(:focus-visible) {
+    transform: none;
+  }
+}

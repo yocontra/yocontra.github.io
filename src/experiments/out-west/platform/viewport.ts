@@ -12,6 +12,8 @@
 import { type Insets, nativeSafeArea } from './bridge.ts'
 
 const SIDES = ['top', 'right', 'bottom', 'left'] as const
+/** `--ow-sai-*` suffixes (tokens.css). */
+const SHORT = { top: 't', right: 'r', bottom: 'b', left: 'l' } as const
 
 /** Measures `env(safe-area-inset-*)` with an off-screen probe. */
 function measureEnvInsets(): Insets {
@@ -46,9 +48,19 @@ function heightValue(): string {
 
 /** Writes the variables once. */
 export function applyViewportVars(root: HTMLElement = document.documentElement): Insets {
-  const insets = nativeSafeArea() ?? measureEnvInsets()
+  const native = nativeSafeArea()
+  const insets = native ?? measureEnvInsets()
   for (const side of SIDES) {
     root.style.setProperty(`--sai-${side}`, `${insets[side]}px`)
+    // The UI reads `--ow-sai-*` (tokens.css: live `env()`). A native push wins over `env()`, which
+    // is 0 in a WebView that isn't edge-to-edge (older Android WebViews, an inset-adjusted
+    // WKWebView); without one, the live `env()` stays in charge.
+    const ow = `--ow-sai-${SHORT[side]}`
+    if (native) {
+      root.style.setProperty(ow, `${native[side]}px`)
+    } else {
+      root.style.removeProperty(ow)
+    }
   }
   root.style.setProperty('--app-h', heightValue())
   return insets
