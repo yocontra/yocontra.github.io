@@ -186,8 +186,9 @@ function onPhase(s: DuelState, ph: Phase): void {
     town?.reset()
   }
   if (ph === 'lose' && s.enemy) {
+    // the camera is at your eyes: a pinch of sparks and dust out of your back, nothing in its face
     const { at, away } = chestHit(s.player, s.enemy.root.position)
-    hitFx(s, s.player, at, away, true)
+    hitFx(s, s.player, at.addScaledVector(away, 0.3), away, false)
   }
 }
 
@@ -298,8 +299,11 @@ export function tickLife(s: DuelState, dt: number, realDt: number): void {
     lastLevel = s.level
     onPhase(s, s.phase)
   }
+  // his hat while it's on his head (kept through his fall; forgotten if he drops it at the turn)
   if (s.enemy?.hat) {
     enemyHat = s.enemy.hat
+  } else if (!s.dying) {
+    enemyHat = null
   }
   if (s.dying && s.dying !== lastDying) {
     onDying(s, s.dying)
