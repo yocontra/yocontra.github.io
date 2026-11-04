@@ -4,9 +4,10 @@
 /**
  * Everyone in the Frontier, drawn within the A15 budget (spec §9.3, stream H's measured design):
  *
- * - The nearest `near` players (12 on the floor tier, 16 above; your own player always) are
+ * - The nearest `near` players (8 on the floor tier, 16 above; your own player always) are
  *   GPU-skinned Actors. Yours stays at LOD0; the rest swap to a meshopt LOD1 (`scene/lod.ts`).
- *   Animation runs at 30 Hz within 12 m and 15 Hz beyond. Only the nearest 6 cast real shadows.
+ *   Animation runs at 30 Hz within 12 m and 15 Hz beyond. Only the nearest `casters` (4 on floor,
+ *   6 above) cast real shadows.
  * - Everyone else is a VAT instance of their base body (≤7 bases, one draw each), tinted per
  *   instance with their palette, with hats as one instanced draw per hat type on the baked head
  *   track, and one draw of blob shadows for everyone who isn't casting.
@@ -61,6 +62,7 @@ import { lodGeometry } from '../../scene/lod.ts'
 import type { LongHold } from '../../scene/longgun.ts'
 import { type PropDef, propDef, propObject } from '../../scene/props.ts'
 import { RIFLE_ROUNDS, SHOTGUN_SHELLS } from '../sim/constants.ts'
+import { holdSkin } from './crowd/skin-hold.ts'
 import {
   baseVat,
   headAt,
@@ -181,6 +183,8 @@ interface Member {
    * are composed then, not by every frame's scene-graph walk.
    */
   bones: Object3D[]
+  /** Marks his bone textures for a rebuild at the next draw (`crowd/skin-hold.ts`). */
+  skin: (() => void)[]
 }
 
 function blobTexture(): CanvasTexture {
@@ -225,8 +229,10 @@ export class Crowd {
   private readonly gun: Group | null
   private readonly kit: Material
   private readonly rifleDef: PropDef | null
-  /** Skinned cap (12 floor, 16 medium/high). */
+  /** Skinned cap (8 floor, 6 legacy, 16 medium/high). */
   near: number
+  /** Skinned riders casting real shadows, nearest first (the rest get a blob). */
+  casters = SHADOW_CASTERS
   /**
    * How big characters read: 1.25 from the top-down camera, life size (1) at eye level, where a
    * bigger-than-life rider would tower over the doors. Set by the game's view mode.
@@ -355,6 +361,7 @@ export class Crowd {
       rifle: null,
       held: null,
       bones: [],
+      skin: [],
     })
     this.assets.body(look.look.base).catch(() => undefined)
     this.ensureVat(look.look.base)
@@ -397,6 +404,7 @@ export class Crowd {
     m.holder?.removeFromParent()
     m.actor = null
     m.bones = []
+    m.skin = []
     m.holder = null
     m.pivot = null
     m.arm = null
@@ -480,6 +488,7 @@ export class Crowd {
         m.bones.push(o)
       }
     })
+    m.skin = actor.meshes.map(holdSkin)
     m.holder = holder
     m.pivot = pivot
     m.arm = this.armLayer(actor)
@@ -714,7 +723,7 @@ export class Crowd {
     if (mesh && geo && mesh.geometry !== geo) {
       mesh.geometry = geo
     }
-    const caster = rank < SHADOW_CASTERS
+    const caster = rank < this.casters
     this.setCaster(m, caster)
     if (caster) {
       s.casters++
@@ -741,6 +750,9 @@ export class Crowd {
         b.updateMatrix()
       }
       setAuto(m.bones, false)
+      for (const touch of m.skin) {
+        touch()
+      }
     }
     m.recoil = Math.max(0, m.recoil - dt * 8)
     m.wasNear = true

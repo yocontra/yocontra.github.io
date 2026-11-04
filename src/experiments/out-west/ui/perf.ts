@@ -137,6 +137,7 @@ export interface PerfSource {
   readonly benchMs: number | null
   readonly thermalDrops: number
   readonly lowPower: boolean
+  readonly label: string
   readonly intervals: Window
   readonly cpu: Window
   readonly gpu: GpuTimer | null
@@ -268,6 +269,7 @@ export class PerfOverlay {
       benchMs: s.benchMs,
       thermalDrops: s.thermalDrops,
       lowPower: s.lowPower,
+      label: s.label,
     }
   }
 }

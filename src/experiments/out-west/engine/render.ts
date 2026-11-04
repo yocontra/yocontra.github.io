@@ -319,6 +319,10 @@ export class Renderer {
   benchMs: number | null = null
   thermalDrops = 0
   lowPower = false
+  /** What is on screen (a duel phase, `frontier`…), for the perf snapshot's per-phase stats. */
+  label = ''
+  /** The WebGL context is gone (iOS memory pressure) until the browser restores it. */
+  readonly context: { lost: boolean } = { lost: false }
   readonly intervals = new Window(240)
   readonly cpu = new Window(240)
   readonly gpu: GpuTimer | null
@@ -361,6 +365,15 @@ export class Renderer {
     this.gl.shadowMap.enabled = true
     // The post passes would each reset the counters: count the whole frame.
     this.gl.info.autoReset = false
+    // iOS drops the WebGL context under memory pressure (often while backgrounded). three.js
+    // keeps the canvas restorable; meanwhile nothing draws. Static geometry frees its CPU copies
+    // after upload (scene/release.ts), so a restored context can't be refilled in place: reload.
+    canvas.addEventListener('webglcontextlost', () => {
+      this.context.lost = true
+    })
+    canvas.addEventListener('webglcontextrestored', () => {
+      location.reload()
+    })
 
     const forced = forcedQuality()
     const cached = cachedQuality()
@@ -411,8 +424,10 @@ export class Renderer {
     this.perf = perfRequested() ? new PerfOverlay(this) : null
     if (this.perf) {
       Reflect.set(globalThis, '__owPerf', () => this.perf?.snapshot())
-      if (import.meta.env.DEV) {
-        // the live renderer reaches the whole scene graph: dev builds only
+      // cheap enough to read every frame (the snapshot walks the scene for texture memory)
+      Reflect.set(globalThis, '__owPerfLabel', () => this.label)
+      if (import.meta.env.DEV || import.meta.env.PUBLIC_OW_PERF_HARNESS === '1') {
+        // the live renderer reaches the whole scene graph: dev and perf-harness builds only
         Reflect.set(globalThis, '__owRenderer', this)
       }
     }
@@ -550,6 +565,9 @@ export class Renderer {
   }
 
   render(dt: number): void {
+    if (this.context.lost) {
+      return
+    }
     // rAF timestamp of this frame (document.timeline tracks it during callbacks)
     const frameStart = Number(document.timeline.currentTime ?? performance.now())
     if (this.lastFrame > 0 && frameStart > this.lastFrame) {
