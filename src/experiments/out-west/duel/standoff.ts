@@ -14,7 +14,7 @@ import type { StandoffSpec } from './clock.ts'
 import { playCue } from './cues.ts'
 import { enemyFires } from './defeat.ts'
 import type { Director } from './director.ts'
-import { drawOnCall, drawSecs, REMOTE_DRAW_S } from './draws.ts'
+import { drawOnCall, drawSecs, REMOTE_DRAW_S, standoffNerves } from './draws.ts'
 import { callShot, clockInsert, otsShot, standoffShot } from './framing.ts'
 import { dueShot, planShots, shotsBefore } from './judge.ts'
 import { killEnemyAnim, killRifleman, playerFireFx, win } from './outcome.ts'
@@ -123,6 +123,7 @@ export function enterWait(d: Director, fromPause: boolean): void {
   c.audio.heartbeat(FEEL.heartStartBpm)
   duckForStandoff(d, fromPause ? 0.1 : 0.5)
   ambience(d, AMB.wait, 0.6)
+  standoffNerves(d.player, d.enemy)
   if (d.enemy) {
     d.enemy.shake = o.gimmick === 'shaky' ? 1 : 0
     if (o.gimmick === 'drunk') {
@@ -204,6 +205,7 @@ export function enterBossClock(d: Director): void {
   ambience(d, AMB.bossClock, 0.6)
   d.player.root.rotation.y = 0
   d.enemy?.root.rotation.set(0, Math.PI, 0)
+  standoffNerves(d.player, d.enemy)
   d.duelId = d.clock.standoff(standoffSpec(d))
   d.standoffSent = true
   otsShot(d, true)

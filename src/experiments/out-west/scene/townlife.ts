@@ -11,6 +11,7 @@
  */
 import { type Color, Group, type Object3D, type Texture, type Vector3 } from 'three'
 import type { Assets } from '../engine/assets.ts'
+import { PROBE } from './anim-probe.ts'
 import { Animals } from './animals.ts'
 import { RIG_TIME } from './critter-rig.ts'
 import { Crows } from './crows.ts'
@@ -51,8 +52,8 @@ export class TownLife {
     this.signs = new Shingles(this.root)
     this.door = new ScreenDoor(this.root)
     this.devil = n.devil ? new DustDevil(this.root, dot) : null
-    if (import.meta.env.DEV) {
-      // for Playwright (perf A/B, cues): dev builds only
+    if (PROBE) {
+      // for Playwright (perf A/B, cues, the animation audit): dev and perf-harness builds only
       Reflect.set(globalThis, '__owLife', this)
     }
   }

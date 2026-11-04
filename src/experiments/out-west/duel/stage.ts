@@ -129,6 +129,7 @@ function spawnActors(d: Director): void {
   p.stopAll()
   p.holsterGun()
   p.play('Idle', 0)
+  p.gestures.clear()
   resetPositions(d)
 }
 
@@ -226,8 +227,10 @@ export function enterCock(d: Director): void {
   d.player.root.visible = true
   d.player.holsterGun()
   d.player.play('Idle', 0.1)
+  d.player.gestures.clear()
   d.enemy?.holsterGun()
   d.enemy?.play('Idle', 0.1)
+  d.enemy?.gestures.clear()
   if (d.enemy) {
     d.enemy.sway = o.gimmick === 'drunk' ? 1 : 0
     d.enemy.shake = o.gimmick === 'shaky' ? 0.6 : 0
@@ -266,6 +269,7 @@ function retryPhaseTwo(d: Director): void {
   d.player.root.visible = true
   d.player.holsterGun()
   d.player.play('Idle', 0.1)
+  d.player.gestures.clear()
   d.enemyAlive = true
   d.enemy?.play('Idle', 0.1)
   d.enemy?.holsterGun()
