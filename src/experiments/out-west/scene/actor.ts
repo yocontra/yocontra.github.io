@@ -22,7 +22,7 @@ import { type Body, boneKey, bounds, sampleBody } from './fit.ts'
 import { hangGuns } from './gunbelt.ts'
 import { fitHat, type HatFit, tuckHair } from './hats.ts'
 import { type GunAnatomy, handGrip } from './holster.ts'
-import { type HolsterLook, mergedProp, PLAIN_HOLSTER } from './kit.ts'
+import { type HolsterLook, PLAIN_HOLSTER } from './kit.ts'
 import { fitLong, type LongHold, poseLong, shoulderPocket } from './longgun.ts'
 import { type Fit, measure } from './outfit.ts'
 import { becomeHimself, type PersonOpts, paintSkin, StanceLayer } from './person.ts'
@@ -413,13 +413,10 @@ export class Actor {
     })
   }
 
-  /** The rooftop rifleman's rifle, shouldered and aimed. */
+  /** The rooftop rifleman's rifle (barrel along +X, scene/rifle.ts), shouldered and aimed. */
   private attachRifle(rifle: Object3D): void {
-    // the rifle prop lies along Z, muzzle at +Z: turn it down +X like every gun here
-    const inner = mergedProp(rifle)
-    inner.rotation.y = Math.PI / 2
     const wrap = new Group()
-    wrap.add(inner)
+    wrap.add(rifle)
     const h = this.addLong(wrap)
     this.rifle = h?.obj ?? null
     this.holdLong(h)

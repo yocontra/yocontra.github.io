@@ -44,7 +44,8 @@ export function gunPointsOf(gun: Object3D): Vector3[] {
   const pts: Vector3[] = []
   gun.traverse((o) => {
     const m = o as Mesh
-    if (!m.isMesh) {
+    // a far level of detail lies inside the near one: measure the near one only
+    if (!m.isMesh || m.userData.lod === true) {
       return
     }
     const to = inv.clone().multiply(m.matrixWorld)

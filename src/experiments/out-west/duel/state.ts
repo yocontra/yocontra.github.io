@@ -33,7 +33,8 @@ export interface Ctx {
   assets: Assets
   save: SaveData
   gun: PropDef | null
-  rifle: PropDef | null
+  /** The rooftop rifleman's Winchester (scene/rifle.ts), a fresh one per call. */
+  rifle: (() => Object3D) | null
   coffins: InstancedMesh[]
   dust: Dust
   puffs: Puffs
