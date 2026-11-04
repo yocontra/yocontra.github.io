@@ -14,6 +14,7 @@ import {
   RANKED_GHOST_MIN_LEVEL,
 } from '../duel/ghost.ts'
 import type { WaitStats } from '../duel/standoff.ts'
+import { medalStatements } from '../economy/medals.ts'
 import type { Env } from '../env.ts'
 import { reviewTiming } from '../moderation/timing.ts'
 import type { RunState } from './run-state.ts'
@@ -32,11 +33,24 @@ export function creditJobFor(
   const paidWin = duel.outcome === 'win' && !duel.bossPhaseOne
   // The Midnight frame (§7): the full gauntlet cleared in one run without drawing early.
   const midnight = paidWin && run.complete && !run.coward
+  // medals and challenges (economy/medals.ts): the attempts on this outlaw in this run, so far
+  const here = run.records.filter((r) => r.level === duel.level)
   return {
     accountId: run.accountId ?? '',
     runId: run.sessionId,
     level: duel.level,
     paidWin,
+    ...(paidWin
+      ? {
+          solo: {
+            reactionMs: duel.reactionMs,
+            fakesSeen: duel.stats.fakesSeen,
+            // the record just booked is this win; any earlier one was a loss or an early draw
+            firstTry: here.length <= 1,
+            clean: !here.some((r) => r.outcome === 'coward'),
+          },
+        }
+      : {}),
     ...(midnight ? { grants: ['frame.midnight'] as const } : {}),
     ghost:
       duel.level >= RANKED_GHOST_MIN_LEVEL
@@ -74,6 +88,11 @@ export class RankedCredits {
       statements.push(
         ...(await gauntletClearStatements(this.env, job.accountId, job.level, job.runId)),
       )
+      if (job.solo) {
+        statements.push(
+          ...(await medalStatements(this.env, job.accountId, job.level, job.runId, job.solo)),
+        )
+      }
     }
     for (const item of job.grants ?? []) {
       statements.push(grantItemStatement(this.env, job.accountId, item))

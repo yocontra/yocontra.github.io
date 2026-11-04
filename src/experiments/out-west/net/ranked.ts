@@ -192,12 +192,20 @@ export class RankedSession {
     if (!created.ok) {
       return created
     }
+    return await RankedSession.attach(created.value)
+  }
+
+  /**
+   * Open the socket of a session created elsewhere (the Daily Outlaw's `POST /daily/sessions`
+   * speaks this same protocol) and wait for hello.
+   */
+  static async attach(created: RankedSessionResponse): Promise<Result<RankedSession>> {
     return await new Promise<Result<RankedSession>>((resolve) => {
       const timer = setTimeout(() => {
         session.close()
         resolve({ ok: false, error: 'The ranked server didn’t answer.' })
       }, CONNECT_TIMEOUT_MS)
-      const session: RankedSession = new RankedSession(created.value, (ok) => {
+      const session: RankedSession = new RankedSession(created, (ok) => {
         clearTimeout(timer)
         resolve(
           ok

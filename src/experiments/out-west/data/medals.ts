@@ -15,6 +15,7 @@
  * Bump MEDALS_VERSION whenever a threshold or a payout changes.
  */
 import { BOUNTIES } from './economy.ts'
+import { gauntletFirstClearCash, gauntletFirstClearXp } from './progression.ts'
 
 export const MEDALS_VERSION = 1
 
@@ -27,26 +28,26 @@ export type TierRank = 0 | 1 | 2 | 3
 /**
  * Bronze, silver and gold thresholds per outlaw, ms (a win's first shot must be faster).
  * Bronze always sits under the outlaw's draw time, so a medal is never just "you won".
- * Tuned to the retuned curve: 900/750 for the tutorial pair, then 520 → 300 ms.
+ * Tuned to duel-core's curve (by gauntlet slot): 900/750 for the tutorial pair, then 520 → 300 ms.
  */
 export const MEDAL_MS: readonly (readonly [number, number, number])[] = [
-  [420, 320, 240], // 1 Bret P. Barsh
-  [400, 310, 235], // 2 Prescott J. House
-  [380, 300, 230], // 3 Calhoun C. Trine
-  [370, 295, 228], // 4 Ace Q. McConly
-  [360, 290, 225], // 5 Burney N. Coover
-  [350, 285, 222], // 6 Salvador R. Gruell
-  [340, 280, 220], // 7 Felipe K. Wheeler
-  [330, 275, 218], // 8 Laura Bullion
-  [320, 270, 215], // 9 Thomas B. Arnold
-  [315, 265, 212], // 10 Delmer F. Gusselman
-  [310, 260, 210], // 11 Pearl Hart
-  [305, 255, 208], // 12 Luke Short
-  [300, 250, 205], // 13 Dallas Stoudenmire
-  [295, 245, 202], // 14 Kid Curry
-  [290, 240, 200], // 15 Wild Bill Hickok
-  [320, 260, 210], // 16 Curly Bill and the rifleman
-  [300, 245, 200], // 17 John Wesley Hardin (the final kill)
+  [420, 320, 240], // 1 Bret P. Barsh (draws 900)
+  [400, 310, 235], // 2 Prescott J. House (750)
+  [390, 300, 230], // 3 Calhoun C. Trine (520)
+  [380, 295, 228], // 4 Burney N. Coover (502 ± 140)
+  [370, 290, 225], // 5 Ace Q. McConly (483)
+  [360, 285, 222], // 6 Delmer F. Gusselman (345, first shot always misses: 465)
+  [350, 280, 220], // 7 Salvador R. Gruell (447)
+  [340, 275, 218], // 8 Felipe K. Wheeler (428)
+  [330, 270, 215], // 9 Laura Bullion (410)
+  [320, 265, 212], // 10 Thomas B. Arnold (392)
+  [310, 260, 210], // 11 Pearl Hart (373)
+  [305, 255, 208], // 12 Luke Short (355)
+  [300, 250, 205], // 13 Dallas Stoudenmire (337)
+  [295, 245, 202], // 14 Kid Curry (318)
+  [285, 240, 200], // 15 Wild Bill Hickok (300)
+  [320, 260, 210], // 16 Curly Bill and the rifleman (rifleman 330)
+  [270, 235, 200], // 17 John Wesley Hardin, the phase-two kill (280)
 ]
 
 export const OUTLAW_COUNT = MEDAL_MS.length
@@ -139,7 +140,7 @@ const ch = (
   rule,
 })
 
-/** One per outlaw, in roster order. */
+/** One per outlaw, by gauntlet slot (OUTLAWS order). */
 export const CHALLENGES: readonly Challenge[] = [
   ch(0, 'steady', ['Steady Hand', 'Beat him on your first try.'], { kind: 'firstTry' }),
   ch(1, 'hat', ['Talk Through Your Hat', 'Shoot his hat off.'], { kind: 'hat' }),
@@ -147,22 +148,22 @@ export const CHALLENGES: readonly Challenge[] = [
     kind: 'fakes',
     min: 1,
   }),
-  ch(3, 'coin', ['Heads or Tails', 'Don’t flinch at the coin. Win after it lands.'], {
+  ch(3, 'hat', ['Hair of the Dog', 'Shoot his hat off.'], { kind: 'hat' }),
+  ch(4, 'coin', ['Heads or Tails', 'Don’t flinch at the coin. Win after it lands.'], {
     kind: 'fakes',
     min: 1,
   }),
-  ch(4, 'hat', ['Hair of the Dog', 'Shoot his hat off.'], { kind: 'hat' }),
-  ch(5, 'patience', ['Outwait Him', 'Beat him on your first try.'], { kind: 'firstTry' }),
-  ch(6, 'wind', ['Steady in the Wind', 'Win through a fake-out on your first try.'], {
+  ch(5, 'hat', ['Hats Off', 'Shoot his hat off, not his hands.'], { kind: 'hat' }),
+  ch(6, 'patience', ['Outwait Him', 'Beat him on your first try.'], { kind: 'firstTry' }),
+  ch(7, 'wind', ['Steady in the Wind', 'Win through a fake-out on your first try.'], {
     kind: 'fakesFirstTry',
     min: 1,
   }),
-  ch(7, 'cold', ['Colder Than Laura', 'Win under 250 ms.'], { kind: 'under', ms: 250 }),
-  ch(8, 'whistle', ['False Alarm', 'Win after a fake-out, without flinching.'], {
+  ch(8, 'cold', ['Colder Than Laura', 'Win under 250 ms.'], { kind: 'under', ms: 250 }),
+  ch(9, 'whistle', ['False Alarm', 'Win after a fake-out, without flinching.'], {
     kind: 'fakes',
     min: 1,
   }),
-  ch(9, 'hat', ['Hats Off', 'Shoot his hat off, not his hands.'], { kind: 'hat' }),
   ch(10, 'deaf', ['Deaf to It', 'Win after one of her heckles.'], { kind: 'fakes', min: 1 }),
   ch(11, 'piano', ['Play It Again', 'Win through the piano on your first try.'], {
     kind: 'fakesFirstTry',
@@ -276,6 +277,125 @@ export function maxSoloPay(): { xp: number; cash: number } {
     cash += pay.cash
   }
   return { xp, cash }
+}
+
+// ─── Gauntlet-earned cosmetics ─────────────────────────────────────────────────────────────────
+
+export type RewardRule =
+  | { kind: 'tierSet'; tier: TierRank }
+  | { kind: 'challenges' }
+  | { kind: 'hats' }
+  | { kind: 'tiers'; count: number }
+  | { kind: 'challenge'; id: string }
+  | { kind: 'daily'; wins: number }
+  | { kind: 'legend'; beaten: number }
+
+/**
+ * The ten gauntlet-earned cosmetics (catalog `reward` items) and what earns each. All but the
+ * Legend pair are granted by the server from its own records; the Legend pair is claimed from the
+ * device (Legend runs aren't server-judged) and only by an account that has cleared the full
+ * gauntlet on ranked runs.
+ */
+export const SOLO_REWARDS: readonly { readonly item: string; readonly rule: RewardRule }[] = [
+  { item: 'hat.bronze-band', rule: { kind: 'tierSet', tier: 1 } },
+  { item: 'holster.silver-conchos', rule: { kind: 'tierSet', tier: 2 } },
+  { item: 'gun.gold-medal', rule: { kind: 'tierSet', tier: 3 } },
+  { item: 'bag.medal-satchel', rule: { kind: 'tiers', count: 25 } },
+  { item: 'frame.tall-tales', rule: { kind: 'challenges' } },
+  { item: 'hat.holed-stetson', rule: { kind: 'hats' } },
+  { item: 'outfit.midnight-coat', rule: { kind: 'challenge', id: 'ch.17.midnight' } },
+  { item: 'extra.black-bandana', rule: { kind: 'daily', wins: 7 } },
+  { item: 'spurs.legend-rowels', rule: { kind: 'legend', beaten: 6 } },
+  { item: 'frame.legend', rule: { kind: 'legend', beaten: 9 } },
+]
+
+export interface RewardState {
+  marks: readonly (OutlawMark | undefined)[]
+  /** Days with a Daily Outlaw win. */
+  dailyWins: number
+  /** Most outlaws beaten in one Legend run. */
+  legendBest: number
+}
+
+export function meetsReward(rule: RewardRule, s: RewardState): boolean {
+  const t = tally(s.marks)
+  switch (rule.kind) {
+    case 'tierSet':
+      return [0, t.bronze, t.silver, t.gold][rule.tier] === OUTLAW_COUNT
+    case 'challenges':
+      return t.challenges === OUTLAW_COUNT
+    case 'hats':
+      return CHALLENGES.filter(isClaim).every((c) => s.marks[c.level]?.challenge === true)
+    case 'tiers':
+      return t.tiers >= rule.count
+    case 'challenge': {
+      const c = challengeById(rule.id)
+      return c !== undefined && s.marks[c.level]?.challenge === true
+    }
+    case 'daily':
+      return s.dailyWins >= rule.wins
+    case 'legend':
+      return s.legendBest >= rule.beaten
+    default:
+      return false
+  }
+}
+
+/** Reward items `s` has earned (catalog ids). */
+export function earnedRewards(s: RewardState): string[] {
+  return SOLO_REWARDS.filter((r) => meetsReward(r.rule, s)).map((r) => r.item)
+}
+
+// ─── The guest purse, and its migration into an account ────────────────────────────────────────
+
+/** A guest's purse and XP ride into a new account up to this much, once per account. */
+export const GUEST_CAP = { xp: 2000, cash: 750 } as const
+
+/** What a device says it earned as a guest. The server sanitises and re-prices it. */
+export interface GuestClaim {
+  /** Per outlaw: best tier and whether the challenge is done. */
+  marks: readonly { tier: number; challenge: boolean }[]
+  /** 17-bit mask of outlaws beaten. */
+  clears: number
+}
+
+/**
+ * The guest purse: first clears, medals and challenges, priced with the account's own one-time
+ * rules. `raw` is the uncapped sum (the guest's own purse on the device), `xp`/`cash` what migrates.
+ */
+export function guestCredit(claim: GuestClaim): {
+  xp: number
+  cash: number
+  raw: { xp: number; cash: number }
+} {
+  let xp = 0
+  let cash = 0
+  const clears = Number.isInteger(claim.clears) ? claim.clears : 0
+  for (let i = 0; i < OUTLAW_COUNT; i++) {
+    if ((clears & (1 << i)) !== 0) {
+      xp += gauntletFirstClearXp(i)
+      cash += gauntletFirstClearCash(i)
+    }
+    const m = claim.marks[i]
+    if (!m) {
+      continue
+    }
+    const tier = Math.min(3, Math.max(0, Math.floor(Number(m.tier) || 0))) as TierRank
+    const pay = medalPay(0, tier)
+    xp += pay.xp
+    cash += pay.cash
+    const c = CHALLENGES[i]
+    if (m.challenge === true && c) {
+      const cp = isClaim(c) ? CLAIM_PAY : CHALLENGE_PAY
+      xp += cp.xp
+      cash += cp.cash
+    }
+  }
+  return {
+    xp: Math.min(GUEST_CAP.xp, xp),
+    cash: Math.min(GUEST_CAP.cash, cash),
+    raw: { xp, cash },
+  }
 }
 
 if (MEDAL_MS.length !== BOUNTIES.length || CHALLENGES.length !== BOUNTIES.length) {

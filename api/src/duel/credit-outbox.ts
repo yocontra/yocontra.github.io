@@ -24,6 +24,16 @@ export interface CreditJob {
   level: number
   /** A paid gauntlet win (not the boss's first phase). */
   paidWin: boolean
+  /**
+   * What a paid win shows for medals and challenges (meta-game stream, `economy/medals.ts`).
+   * Absent on jobs queued by an older Worker: those pay no medals.
+   */
+  solo?: {
+    reactionMs: number | null
+    fakesSeen: number
+    firstTry: boolean
+    clean: boolean
+  }
   /** Reward items this duel earned (e.g. the Midnight frame on a clean full clear). */
   grants?: readonly 'frame.midnight'[]
   /** Ghost evidence, from outlaw 6 up. */
