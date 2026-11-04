@@ -38,7 +38,13 @@ import {
   propsLibrary,
 } from '../../scene/props.ts'
 import { signAtlas } from '../../scene/textures.ts'
-import { type Building, buildingWalls, type Side, type TownLayout } from '../sim/layout.ts'
+import {
+  type Building,
+  buildingWalls,
+  type Cover,
+  type Side,
+  type TownLayout,
+} from '../sim/layout.ts'
 import { addClockTower } from './clock-tower.ts'
 import {
   decks,
@@ -249,6 +255,8 @@ const WALL_T = 0.5
 const WIDE_DOOR = 3.2
 /** Top of a doorway (the kit frame's lintel), m: the wall closes over it. */
 const DOOR_TOP = 2.45
+/** Furniture that stands against a wall and hides the inside of a window there. */
+const AGAINST_WALL = new Set(['shelves', 'stairs', 'piano', 'safe'])
 
 /** Roofs are most of what the top-down camera sees: sun-bleached, never near-black. */
 function bleach(hex: number): number {
@@ -496,7 +504,14 @@ const SHOPFRONT = new Set([
   'jail',
 ])
 
-function addWindows(bs: Builders, b: Building, side: Side, floors: number, front: Side): void {
+function addWindows(
+  bs: Builders,
+  b: Building,
+  side: Side,
+  floors: number,
+  front: Side,
+  against: readonly Cover[],
+): void {
   const len = sideLength(b, side)
   const doors = b.doors.filter((d) => d.side === side)
   const glass = 0x1a_22_2a
@@ -522,7 +537,15 @@ function addWindows(bs: Builders, b: Building, side: Side, floors: number, front
         if (b.hollow && sill < ceilingHeight(b)) {
           // the same window seen from inside the room (the wall itself is solid)
           const [q] = faceQuad(b, side, a + span / 2, 0, 0, 1, -WALL_T)
-          if (q) {
+          const hidden = against.some(
+            (c) =>
+              q &&
+              q.x > c.x - span / 2 - 0.3 &&
+              q.x < c.x + c.w + span / 2 + 0.3 &&
+              q.z > c.z - span / 2 - 0.3 &&
+              q.z < c.z + c.d + span / 2 + 0.3,
+          )
+          if (q && !hidden) {
             const inner = placeMatrix(q.x, sill - 0.97 * s + 0.05, q.z, SIDE_RY[side] + Math.PI)
             inner.multiply(new Matrix4().makeScale(s, s, 1))
             bs.kit.push({ def: win, at: inner })
@@ -763,7 +786,14 @@ function addBuilding(bs: Builders, b: Building, layout: TownLayout, id: number):
   }
   for (const side of ['n', 's', 'e', 'w'] as const) {
     if (b.kind !== 'tower') {
-      addWindows(bs, b, side, b.floors, front)
+      addWindows(
+        bs,
+        b,
+        side,
+        b.floors,
+        front,
+        layout.cover.filter((c) => AGAINST_WALL.has(c.kind)),
+      )
     }
   }
   // Roof: pitched, shingled or tin, with ridge and edge trim (see roofs.ts).
