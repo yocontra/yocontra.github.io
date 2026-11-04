@@ -149,7 +149,7 @@ export class Board {
       input.maxLength = NAME_MAX
       input.setAttribute('autocomplete', 'nickname')
       input.spellcheck = false
-      input.placeholder = 'Your handle'
+      input.placeholder = 'Your name'
       input.value = loadName()
       const btn = el('button', 'ow-btn ow-btn-primary', row, this.opts.submitLabel ?? 'Submit')
       btn.type = 'submit'
@@ -279,7 +279,7 @@ export class Board {
     }
     this.banked = true
     this.myRank = r.value.rank
-    btn.textContent = 'Banked'
+    btn.textContent = 'Submitted'
     this.setStatus(`You’re #${r.value.rank} with ${money(r.value.total)}.`, 'ok')
     await this.refresh()
   }

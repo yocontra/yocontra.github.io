@@ -35,22 +35,22 @@ function recordLines(body: HTMLElement, p: PlayerPoster): void {
     el('b', '', li, value)
   }
   const d = p.duel
-  line('Bounty Hunt', `${d.wins}–${d.losses}–${d.draws}`)
+  line('Bounty Hunt', `${d.wins} W · ${d.losses} L · ${d.draws} T`)
   line('Best streak', d.bestStreak > 0 ? `${d.bestStreak} wins` : '—')
-  line('Cowardice', String(d.cowardice))
+  line('Early draws', String(d.cowardice))
   const f = p.frontier
   line('Frontier', `${f.kills} kills · ${f.deaths} deaths`)
   line('Banked in Frontier', money(f.banked))
   for (const w of p.mostWanted) {
     line(`Most Wanted, ${monthName(w.month)}`, `#${w.rank}`)
   }
-  line('Rode in', joined.format(new Date(p.joinedAt)))
+  line('Joined', joined.format(new Date(p.joinedAt)))
 }
 
 /** The report form: a reason, an optional block, then one POST. */
 export function reportSheet(root: HTMLElement, name: string, o: ProfileOpts = {}): void {
   const sheet = panelSheet(root, { title: `Report ${name}` })
-  el('p', 'ow-hub-note', sheet.body, 'Reports go to the sheriff, not to them. Pick what’s wrong.')
+  el('p', 'ow-hub-note', sheet.body, 'They won’t see your report. What’s wrong?')
   let reason: ReportReason | null = null
   const list = el('div', 'ow-hub-choices', sheet.body)
   list.setAttribute('role', 'radiogroup')
@@ -160,7 +160,7 @@ function actions(root: HTMLElement, body: HTMLElement, p: PlayerPoster, o: Profi
 export function openProfile(root: HTMLElement, name: string, o: ProfileOpts = {}): void {
   const sheet = panelSheet(root, { title: 'Wanted poster', cls: 'ow-feat-profile' })
   const say = statusLine(sheet.body)
-  say('Fetching the poster…')
+  say('Loading…')
   fetchPoster(name)
     .then((r) => {
       if (!r.ok) {

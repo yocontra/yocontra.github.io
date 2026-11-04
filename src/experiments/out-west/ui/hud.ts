@@ -391,9 +391,9 @@ export class Hud {
     restart.type = 'button'
     restart.addEventListener('click', handlers.restart)
     if (handlers.saloon) {
-      const saloon = el('button', 'ow-btn', btns, 'Saloon')
+      const saloon = el('button', 'ow-btn', btns, 'Quit')
       saloon.type = 'button'
-      saloon.title = 'Back to the saloon. Your run is saved where you left it.'
+      saloon.title = 'Back to the menu. Your run is saved.'
       saloon.addEventListener('click', handlers.saloon)
     }
     const list = el('div', 'ow-menu-list', m)
@@ -402,7 +402,7 @@ export class Hud {
     assist.type = 'checkbox'
     assist.checked = s.assist
     el('span', 'ow-toggle-label', row, 'Assist')
-    el('span', 'ow-toggle-hint', row, '+150 ms for every outlaw. Noted on the ledger.')
+    el('span', 'ow-toggle-hint', row, '150 ms extra to react. Shown on your results.')
     assist.addEventListener('change', () => {
       s.assist = assist.checked
       handlers.change(s)
@@ -487,7 +487,7 @@ export class Hud {
       'div',
       'ow-end-purse',
       s,
-      `Purse: ${money(stats.total)}${stats.total >= stats.best && stats.total > 0 ? ' · a new best' : ` · best ${money(stats.best)}`}`,
+      `Earned: ${money(stats.total)}${stats.total >= stats.best && stats.total > 0 ? ' · New best' : ` · Best ${money(stats.best)}`}`,
     )
     el(
       'div',
@@ -499,13 +499,13 @@ export class Hud {
       'div',
       '',
       s,
-      stats.cowardice === 1 ? '1 man shot in the back' : `${stats.cowardice} men shot in the back`,
+      stats.cowardice === 1 ? 'Drew early: 1 time' : `Drew early: ${stats.cowardice} times`,
     )
     if (stats.assist) {
       el('div', '', s, 'Assist mode was on (+150 ms).')
     }
     if (stats.legend) {
-      el('div', '', s, 'Legend mode: the 2019 curve.')
+      el('div', '', s, 'Legend mode: the original 2019 speeds.')
     }
     const b = el('div', 'ow-menu-btns', e)
     const submit = el(

@@ -39,6 +39,26 @@ export function button(
   return b
 }
 
+/**
+ * Label and value rows ("Tries left · 3 of 3") for facts a player scans: rules, rewards, times.
+ * A row with an empty value is left out.
+ */
+export function facts(
+  parent: HTMLElement,
+  rows: readonly (readonly [label: string, value: string])[],
+  cls = '',
+): HTMLUListElement {
+  const list = el('ul', `ow-results-lines ow-facts${cls ? ` ${cls}` : ''}`, parent)
+  for (const [label, value] of rows) {
+    if (value) {
+      const li = el('li', '', list)
+      el('span', '', li, label)
+      el('b', '', li, value)
+    }
+  }
+  return list
+}
+
 /** Fill a bar (`.ow-xp-fill`) to a fraction, 0..1. Scales on the compositor, never relayouts. */
 export function setBar(fill: HTMLElement, fraction: number): void {
   const f = Number.isFinite(fraction) ? Math.min(1, Math.max(0, fraction)) : 0
