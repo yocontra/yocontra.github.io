@@ -2,12 +2,11 @@
  * What the saloon tells you when you walk in: money that came in while you were away (your
  * ghost's royalties, Most Wanted placings), levels gained elsewhere and their rewards, and reward
  * items granted since you last looked (Hardin's Pair, the Midnight frame, the Yellow Hat, a dated
- * Most Wanted frame). One paper notice, dismissed once; the away report is acknowledged on the
- * server so it isn't told twice, the rest is remembered per account on this device.
+ * Most Wanted frame). One paper notice at a time, each dismissed once; the away report is
+ * acknowledged on the server so it isn't told twice, the rest is remembered per account here.
  */
 import type { AwayReport, MeResponse } from '../contract/economy.ts'
 import { itemById } from '../data/catalog.ts'
-import { money } from '../data/economy.ts'
 import { levelRewards, titleFor } from '../data/progression.ts'
 import { MOST_WANTED_FRAME, monthName } from '../data/sinks.ts'
 import { currentPlayer } from '../net/auth.ts'
@@ -126,43 +125,64 @@ export function progressNotices(me: MeResponse): Notice[] {
   return out
 }
 
-/**
- * Show the notices over the saloon (nothing when there are none). Dismissing acknowledges the
- * away report up to its `asOf`, so money arriving later is still reported next time.
- */
 /** The away report already shown this page (its `asOf`): never shown twice before the ack lands. */
 let shownAsOf = 0
 
-export function showNotices(root: HTMLElement, me: MeResponse): void {
-  if (root.querySelector('.ow-feat-notice')) {
+interface Queued extends Notice {
+  /** Dismissing this one acknowledges the away report up to here. */
+  ack?: AwayReport
+}
+
+/** Notices waiting their turn, oldest first. One shows at a time, never over another sheet. */
+const queue: Queued[] = []
+let showing = false as boolean
+let poll: ReturnType<typeof setInterval> | undefined
+
+/** Anything else on screen that a notice must not stack on: a sheet, the Outfitter, a duel. */
+const BUSY = '.ow-sheet:not(.ow-feat-notice), .ow-store, .ow-match'
+
+function clear(root: HTMLElement): boolean {
+  return root.querySelector('.ow-hub.on') !== null && root.querySelector(BUSY) === null
+}
+
+/** Show the next notice once the saloon is clear; check again every half second until it is. */
+function pump(root: HTMLElement): void {
+  if (showing || queue.length === 0) {
+    clearInterval(poll)
+    poll = undefined
     return
   }
-  const away = me.away && me.away.asOf > shownAsOf ? me.away : undefined
-  const notes = [...awayNotices(away), ...progressNotices(me)]
-  if (notes.length === 0) {
+  if (!clear(root)) {
+    poll ??= setInterval(() => pump(root), 500)
     return
   }
-  if (away) {
-    shownAsOf = away.asOf
+  clearInterval(poll)
+  poll = undefined
+  const n = queue.shift()
+  if (n) {
+    showing = true
+    paper(root, n, () => {
+      showing = false
+      pump(root)
+    })
   }
+}
+
+/** One notice on Gazette stock, dismissed with "Much obliged". */
+function paper(root: HTMLElement, n: Queued, done: () => void): void {
   const back = el('div', 'ow-sheet on ow-feat-notice', root)
   back.setAttribute('role', 'alertdialog')
-  back.setAttribute('aria-label', 'News at the saloon')
+  back.setAttribute('aria-label', n.title)
   swallow(back)
   const panel = el('div', 'ow-hub-panel ow-sheet-panel ow-paper-doc', back)
   el('div', 'ow-results-kicker', panel, 'The Perdition Gazette')
-  el('h2', 'ow-hub-h', panel, 'News at the saloon')
-  const list = el('ul', 'ow-ledger-list ow-feat-news', panel)
-  for (const n of notes) {
-    const li = el('li', '', list)
-    const text = el('span', '', li)
-    el('b', 'ow-feat-news-title', text, n.title)
-    el('span', 'ow-feat-news-line', text, n.line)
-    el('b', 'pos', li, n.amount ? signedMoney(n.amount) : '')
+  el('h2', 'ow-hub-h', panel, n.title)
+  el('p', 'ow-feat-news-line', panel, n.line)
+  if (n.amount) {
+    el('p', 'ow-hub-note', panel, `Already in your purse: ${signedMoney(n.amount)}.`)
   }
-  const total = notes.reduce((t, n) => t + (n.amount ?? 0), 0)
-  if (total > 0) {
-    el('p', 'ow-hub-note', panel, `Already in your purse: ${money(total)}.`)
+  if (queue.length > 0) {
+    el('p', 'ow-hub-note ow-feat-news-more', panel, `${queue.length} more after this.`)
   }
   uiSound('uiStamp')
   const row = el('div', 'ow-hub-row', panel)
@@ -171,11 +191,33 @@ export function showNotices(root: HTMLElement, me: MeResponse): void {
     'Much obliged',
     () => {
       back.remove()
-      if (away && (away.total > 0 || away.mostWanted.length > 0)) {
-        ackAway(away.asOf).catch(() => undefined)
+      const a = n.ack
+      if (a && (a.total > 0 || a.mostWanted.length > 0)) {
+        ackAway(a.asOf).catch(() => undefined)
       }
+      done()
     },
     true,
   )
   ok.focus()
+}
+
+/**
+ * Queue what the saloon has to tell you (nothing when there's nothing new). Each notice shows on
+ * its own, one after another, and waits while a sheet, the Outfitter or a duel is up, so signing
+ * in never piles papers on the account sheet. Dismissing the last away notice acknowledges the
+ * away report up to its `asOf`, so money arriving later is still reported next time.
+ */
+export function showNotices(root: HTMLElement, me: MeResponse): void {
+  const away = me.away && me.away.asOf > shownAsOf ? me.away : undefined
+  const fromAway: Queued[] = awayNotices(away)
+  if (away) {
+    shownAsOf = away.asOf
+    const last = fromAway.at(-1)
+    if (last) {
+      last.ack = away
+    }
+  }
+  queue.push(...fromAway, ...progressNotices(me))
+  pump(root)
 }
