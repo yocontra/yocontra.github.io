@@ -276,6 +276,12 @@ async function bank(page: Page, size: string): Promise<void> {
   await pilot(page, 'release')
   await until(page, 'guide off screen', (x) => x.guide?.shown === true && !x.guide.onScreen, 3000)
   await shot(page, size, 'bank-offscreen')
+  const chev = await page.evaluate(() => {
+    const c = document.querySelector('.fr-guide-chevron') as HTMLElement | null
+    const r = c?.getBoundingClientRect()
+    return c ? { hidden: c.hidden, x: r?.x, y: r?.y, t: c.style.transform } : null
+  })
+  console.log(`  chevron ${JSON.stringify(chev)}`)
   // walk to the window: the prompt
   await pilot(page, 'go', w.x, w.z)
   await pilot(page, 'aimPoint', w.x, w.z - 6)

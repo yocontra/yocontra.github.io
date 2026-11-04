@@ -230,6 +230,7 @@ export class BankGuide {
   }
 
   private readonly wp = { x: 0, z: 0 }
+  private wpAge = 0
 
   /**
    * Per frame. `carried` 0 (or dead) hides it. `inZone` (standing at a window) hides the marker:
@@ -256,7 +257,13 @@ export class BankGuide {
       return
     }
     this.shown = true
-    const wp = this.waypoint(x, z, this.wp)
+    // the path walk is a few hundred grid reads: ten times a second is plenty for a glide
+    this.wpAge += dt
+    if (this.wpAge >= 0.1 || !this.at.has) {
+      this.wpAge = 0
+      this.waypoint(x, z, this.wp)
+    }
+    const wp = this.wp
     if (this.at.has) {
       const k = 1 - Math.exp(-dt * 6)
       this.at.x += (wp.x - this.at.x) * k
