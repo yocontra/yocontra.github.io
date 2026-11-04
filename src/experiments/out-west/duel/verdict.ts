@@ -39,7 +39,7 @@ function onLoss(d: Director, v: Verdict, paid: Paid): void {
     return
   }
   const who = d.underboss ? underbossShooter(d, v) : 0
-  shotDown(d, who, paid)
+  shotDown(d, who, paid, { you: v.reactionMs, him: v.enemyMs })
 }
 
 function onWin(d: Director, v: Verdict, paid: Paid): void {

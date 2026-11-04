@@ -14,8 +14,8 @@ export interface QueueHandlers {
   queued: (m: Extract<QueueServerMessage, { type: 'queued' }>) => void
   status: (s: QueueStatus) => void
   matched: (m: QueueMatch) => void
-  /** Refused, errored or dropped: the search is over. */
-  failed: (message: string) => void
+  /** Refused, errored or dropped: the search is over. `reason` is the matchmaker's refusal code. */
+  failed: (message: string, reason?: string) => void
 }
 
 const KNOWN = new Set(['queued', 'ping', 'status', 'matched', 'refused', 'error'])
@@ -103,7 +103,7 @@ export class QueueSearch {
         break
       case 'refused': {
         const wait = m.retryAfterS ? ` Try again in ${Math.ceil(m.retryAfterS / 60)} min.` : ''
-        this.fail(`${REFUSALS[m.reason] ?? m.message}${wait}`)
+        this.fail(`${REFUSALS[m.reason] ?? m.message}${wait}`, m.reason)
         break
       }
       default:
@@ -117,13 +117,13 @@ export class QueueSearch {
     this.send({ type: 'ghost' })
   }
 
-  private fail(message: string): void {
+  private fail(message: string, reason?: string): void {
     if (this.done) {
       return
     }
     this.done = true
     this.ws?.close()
-    this.h.failed(message)
+    this.h.failed(message, reason)
   }
 
   /** Leave the queue quietly. */

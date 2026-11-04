@@ -1,10 +1,12 @@
 import { bountyFor, drawBonus, type RunResult } from '../data/economy.ts'
 import { OUTLAWS } from '../data/outlaws.ts'
+import { interlude } from '../meta/events.ts'
 import { save as persist } from '../save.ts'
 import type { LedgerRow } from '../ui/hud.ts'
 import type { Director } from './director.ts'
 import { endShot } from './framing.ts'
 import { RankedDuelClock } from './ranked-clock.ts'
+import { holdFor } from './stage.ts'
 
 const LEDGER_DELAY_MS = 1800
 
@@ -51,7 +53,7 @@ export function toEnd(d: Director): void {
   const rows = ledgerRows(d)
   const ms = rows.map((r) => r.ms).filter((m): m is number => m !== null)
   const avg = ms.length > 0 ? ms.reduce((a, b) => a + b, 0) / ms.length : null
-  setTimeout(() => {
+  const ledger = (): void => {
     c.hud.showEnd(rows, {
       stats: {
         cowardice: c.save.cowardice,
@@ -67,6 +69,10 @@ export function toEnd(d: Director): void {
       onLegend: () => d.restartRun(true),
       onBoard: () => d.openBoard(true),
     })
+  }
+  setTimeout(() => {
+    // the epilogue and credits (meta-game) come before the ledger, input held
+    holdFor(d, interlude({ kind: 'end', legend: c.save.legend }), ledger)
   }, LEDGER_DELAY_MS)
   endShot(d)
 }

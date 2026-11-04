@@ -6,7 +6,7 @@ import { backShotByEnemy } from './defeat.ts'
 import type { Director } from './director.ts'
 import { standoffShot, walkShot } from './framing.ts'
 import { AMB, ambience, duckForStandoff } from './present.ts'
-import { rng, V } from './state.ts'
+import { BACK_TO_BACK_Z, rng, V } from './state.ts'
 
 const STALL_LINES = [
   'You plannin’ on walkin’ today?',
@@ -65,7 +65,7 @@ export function tickWalk(d: Director, dt: number): void {
   const p = d.player
   p.locomote(d.speed, p.walkDuration / 2 / FEEL.paceSeconds)
   d.pDist += (d.speed * p.paceLength * dt) / FEEL.paceSeconds
-  p.root.position.z = -0.28 - d.pDist
+  p.root.position.z = -BACK_TO_BACK_Z - d.pDist
   countPaces(d)
   if (d.phase !== 'walk') {
     return
@@ -74,7 +74,7 @@ export function tickWalk(d: Director, dt: number): void {
   if (e) {
     e.locomote(d.speed, e.walkDuration / 2 / FEEL.paceSeconds)
     d.eDist += (d.speed * e.paceLength * dt) / FEEL.paceSeconds
-    e.root.position.z = 0.28 + d.eDist
+    e.root.position.z = BACK_TO_BACK_Z + d.eDist
   }
   if (tickStall(d, dt)) {
     return

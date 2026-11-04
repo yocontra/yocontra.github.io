@@ -1,5 +1,6 @@
 import { money } from '../data/economy.ts'
 import { FEEL } from '../data/feel.ts'
+import { haptic } from '../platform/haptics.ts'
 import type { Director } from './director.ts'
 import { drawAt, fireGun } from './draws.ts'
 import { cowardShot, deathShot } from './framing.ts'
@@ -7,6 +8,7 @@ import type { EnemyShot } from './judge.ts'
 import { killEnemyAnim, playerFireFx, slowMo } from './outcome.ts'
 import { AMB, ambience } from './present.ts'
 import { book, type Paid, showPurse } from './purse.ts'
+import { report } from './report.ts'
 import { between, rng, V } from './state.ts'
 
 const CARD_DELAY_MS = 450
@@ -77,6 +79,7 @@ export function enemyFires(d: Director, s: EnemyShot): void {
   s.done = true
   shooterFx(d, s.who)
   if (s.hit) {
+    d.hisMs = s.t - d.callT
     playerHit(d, s.who === 1 ? 'The rifleman got you.' : '', null)
   } else {
     missFx(d)
@@ -84,19 +87,62 @@ export function enemyFires(d: Director, s: EnemyShot): void {
   }
 }
 
-/** Ranked: the server says he got you. Show his shot, then your fall. */
-export function shotDown(d: Director, who: number, paid: Paid): void {
+/**
+ * Ranked: the server says he got you. Show his shot, then your fall. `times` are the server's:
+ * your shot (if any) and his, ms after the call.
+ */
+export function shotDown(
+  d: Director,
+  who: number,
+  paid: Paid,
+  times: { you: number | null; him: number | null },
+): void {
+  d.hisMs = times.him
+  d.lateMs = times.you
   shooterFx(d, who)
   playerHit(d, who === 1 ? 'The rifleman got you.' : '', paid)
+}
+
+/** The lose card's receipt: both times, or why there's only one. */
+function loseTimes(d: Director): void {
+  const you = d.lastReaction ?? d.lateMs
+  const him = d.hisMs
+  if (him === null) {
+    d.c.hud.cardTimes(null)
+    return
+  }
+  let note = 'You never drew.'
+  if (you !== null) {
+    note = you > him ? `${Math.round(you - him)} ms too slow` : 'He got his shot off first.'
+  }
+  d.c.hud.cardTimes({ you, him, note })
+}
+
+/** Practice: your press just after he got you (before the card), for the lose card's receipt. */
+export function lateDraw(d: Director, p: { t: number }): void {
+  if (d.lastReaction !== null || d.lateMs !== null || d.hisMs === null || d.callT <= 0) {
+    return
+  }
+  const ms = p.t - d.callT
+  // a press long after the shot is a tap on the card, not a draw
+  if (ms > 0 && ms < d.hisMs + 1500) {
+    d.lateMs = ms
+    if (d.resultShown) {
+      loseTimes(d)
+    }
+  }
 }
 
 export function playerHit(d: Director, reason: string, paid: Paid | null): void {
   const c = d.c
   d.enter('lose')
   d.loseReason = reason
+  d.resultShown = false
   if (paid || !d.ranked) {
     book(d, { outcome: 'loss', reactionMs: d.lastReaction }, paid)
   }
+  report(d, 'loss', d.lastReaction)
+  haptic('hit')
   c.audio.heartbeat(0)
   c.hud.clearCall()
   c.hud.clearCaptions()
@@ -125,6 +171,8 @@ export function playerHit(d: Director, reason: string, paid: Paid | null): void 
       sub: d.loseReason || `${d.outlaw.name} was quicker.`,
       hint: 'press to try again',
     })
+    d.resultShown = true
+    loseTimes(d)
   }, CARD_DELAY_MS)
   d.player.root.visible = false
 }
@@ -147,6 +195,7 @@ export function backShotByEnemy(d: Director): void {
     }, BACKSHOT_TURN_MS)
   }
   d.enter('lose')
+  d.hisMs = null
   setTimeout(() => {
     playerHit(d, 'SHOT IN THE BACK. HE DIDN’T WAIT EITHER.', null)
   }, BACKSHOT_HIT_MS)
@@ -159,11 +208,18 @@ export function backShotByEnemy(d: Director): void {
 export function coward(d: Director, note: string): void {
   const c = d.c
   // how early: negative ms before the call (or -1 when no call was set yet)
-  const early = d.phase === 'wait' && d.tCall > 0 ? Math.min(-1, performance.now() - d.tCall) : -1
+  const callAt = d.tCall > 0 ? d.tCall : d.clock.callAt()
+  const early =
+    (d.phase === 'wait' || d.phase === 'bossClock') && callAt !== null
+      ? Math.min(-1, performance.now() - callAt)
+      : -1
+  d.cowardEarlyMs = early < -1 ? -early : null
   d.enter('coward')
   d.cowardNote = note
   c.save.cowardice++
   d.cowardDelta = d.ranked ? 0 : book(d, { outcome: 'coward', reactionMs: early }, null)
+  report(d, 'coward', null)
+  haptic('shot')
   d.bellVoice?.stop()
   d.bellVoice = null
   c.audio.heartbeat(0)
@@ -226,6 +282,17 @@ export function tickCoward(d: Director): void {
       hint: 'press to try again',
     })
     c.hud.cardPoster(d.posterCanvas.toDataURL('image/jpeg', 0.8))
+    if (!d.cowardNote) {
+      const ms = d.cowardEarlyMs
+      c.hud.cardTimes({
+        you: null,
+        him: null,
+        note:
+          ms === null
+            ? 'You drew before the bell.'
+            : `You drew ${Math.round(ms)} ms before the bell.`,
+      })
+    }
     showFine(d)
   }
   if (t > FEEL.cowardAutoRetry) {
