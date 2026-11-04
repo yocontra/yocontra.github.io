@@ -493,6 +493,7 @@ export class FrontierGame {
       hud: this.hud,
       audio: this.audio,
       kick: (a) => (this.shooterView ? this.shooter.kick(a) : this.cam.kick(a)),
+      damageFrom: (from) => this.damageFrom(from),
       posOf: (id) => this.posOf(id),
       muzzleOf: (id, x, z, aim) =>
         this.crowd?.muzzle(id, x, z, aim, new Vector3()) ?? new Vector3(x, 1.3, z),
@@ -744,6 +745,14 @@ export class FrontierGame {
       this.cam.kick(0.12)
     }
     haptic('shot')
+  }
+
+  /** The HUD's damage arc, turned into the view: straight ahead is up on the ring. */
+  private damageFrom(from: { x: number; z: number }): void {
+    const bearing = Math.atan2(from.z - this.own.z, from.x - this.own.x)
+    // shooter views look along the yaw; top-down looks north (−z) with +x to the right
+    const ahead = this.shooterView ? this.shooter.yaw : -Math.PI / 2
+    this.hud.damageArc(Math.atan2(Math.sin(bearing - ahead), Math.cos(bearing - ahead)))
   }
 
   posOf(id: number): { x: number; z: number } | null {
@@ -1178,6 +1187,8 @@ export class FrontierGame {
         far: policyFor(this.settings.view, this.renderer.tier).far,
         grid: this.net.grid,
         dt,
+        duck: this.duckHeight(),
+        dead: this.net.alive ? null : this.own,
       })
       crowd.hideSelf = this.net.alive && (first || this.shooter.closeness > 0.85)
     } else {
@@ -1291,6 +1302,14 @@ export class FrontierGame {
       st |= STANCE_SPRINT
     }
     return st
+  }
+
+  /** How far your stance lowers the eye (m): crouched, or sliding. */
+  private duckHeight(): number {
+    if (sliding(this.net.pred)) {
+      return 0.6
+    }
+    return this.stance.crouched ? 0.45 : 0
   }
 
   /** RMB, LT or the touch AIM toggle. */

@@ -103,6 +103,8 @@ export class Hud {
   private readonly last = new Map<string, string | number | boolean>()
   private toastTimer: ReturnType<typeof setTimeout> | null = null
   private rotateSaid = false
+  private readonly dmg: HTMLElement[] = []
+  private dmgNext = 0
 
   constructor(parent: HTMLElement, opts: HudOptions) {
     this.opts = opts
@@ -154,6 +156,10 @@ export class Hud {
     }
     el('div', 'fr-dot', this.ticks)
     this.hitEl = el('div', 'fr-hitmark', this.reticle)
+    const ring = el('div', 'fr-dmg-ring', this.root)
+    for (let i = 0; i < 4; i++) {
+      this.dmg.push(el('div', 'fr-dmg', ring))
+    }
     this.bannerEl = el('div', 'fr-banner', this.root)
     this.lowPowerEl = el('div', 'fr-lowpower', this.root, 'Low Power Mode: 30 fps')
     this.rotateEl = el('div', 'fr-rotate', this.root, 'Turn your phone sideways for the best view')
@@ -380,10 +386,27 @@ export class Hud {
     st.opacity = '0'
   }
 
-  hit(kill: boolean): void {
-    this.hitEl.className = `fr-hitmark on${kill ? ' kill' : ''}`
+  /** The hit marker: white for a hit, red for a kill, gold for a Dead-Eye (critical) hit. */
+  hit(kill: boolean, crit = false): void {
+    this.hitEl.className = `fr-hitmark on${kill ? ' kill' : ''}${crit ? ' crit' : ''}`
     this.hitEl.getBoundingClientRect()
     this.hitEl.classList.add('fade')
+  }
+
+  /**
+   * A red arc on a ring around the crosshair, pointing where the hit came from: `angle` is
+   * clockwise from straight ahead (radians). Fades over a second; four at most.
+   */
+  damageArc(angle: number): void {
+    const a = this.dmg[this.dmgNext % this.dmg.length]
+    this.dmgNext++
+    if (!a) {
+      return
+    }
+    a.style.transform = `rotate(${angle}rad)`
+    a.classList.remove('on')
+    a.getBoundingClientRect()
+    a.classList.add('on')
   }
 
   /**
