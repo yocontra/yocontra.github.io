@@ -3,6 +3,7 @@ import type { AudioEngine } from './audio/audio.ts'
 import type { ItemId, Loadout } from './data/catalog.ts'
 import type { Dyes } from './data/dye.ts'
 import { OUTLAWS } from './data/outlaws.ts'
+import { tickLife } from './duel/cues.ts'
 import { Director, type RankedConnect } from './duel/director.ts'
 import { PvpDuel, type PvpOpts } from './duel/pvp-duel.ts'
 import { type Assets, loadAssets } from './engine/assets.ts'
@@ -16,6 +17,7 @@ import { type HubShot, hubShot, wearLoadout } from './scene/hub-stage.ts'
 import { ItemStudio } from './scene/item-studio.ts'
 import { propDef } from './scene/props.ts'
 import { softDot } from './scene/textures.ts'
+import { LIFE, TownLife } from './scene/townlife.ts'
 import { World } from './scene/world.ts'
 import { Hud } from './ui/hud.ts'
 import type { GauntletChoice } from './ui/mode-select.ts'
@@ -126,6 +128,10 @@ export async function createGame(o: GameOpts): Promise<Game> {
   director.connectRanked = o.connectRanked
   director.onSaloon = o.onSaloon
   world.silhouetteHide.push(dust.points, puffs.points, sparks.points, flash.sprite, glint.sprite)
+  // town life: townsfolk, animals, crows, signs (kept off the red silhouette frame)
+  const town = new TownLife(world.root, assets, renderer.tier, dot)
+  LIFE.town = town
+  world.silhouetteHide.push(town.root)
 
   // Compile every shader up front behind the title so the first shot never hitches.
   flash.sprite.visible = true
@@ -192,6 +198,7 @@ export async function createGame(o: GameOpts): Promise<Game> {
       dust.points.visible = true
     }
     world.update(realDt)
+    tickLife(director, dt, realDt)
     dust.update(realDt, renderer.dpr)
     puffs.update(dt, renderer.dpr, 0.6)
     sparks.update(dt, renderer.dpr, 0)

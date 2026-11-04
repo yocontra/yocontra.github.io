@@ -53,6 +53,20 @@ dressing into one draw. The source of the untouched scenes is `tools/art/props-s
 The earlier Quaternius crate, barrel, broken cart and fence (poly.pizza 3OEFd1AWfa, ONdghDBByN,
 NBDHe8J7f9, U7g0Wxpt63; CC0) were replaced by the kit pieces above.
 
+## Town animals (`models/horse.glb`, `models/dog.glb`)
+
+The horses at the hitching rails and the dog on the barber's porch. Downloaded from Poly Pizza as
+GLB, trimmed to the idle clips the street uses (horse: Idle, Idle_2, Idle_Headlow, Eating,
+Idle_HitReact_Left; dog: Idle, Idle_2_HeadLow, Eating, Attack), quantised and meshopt-compressed
+with gltf-transform. At runtime each animal's flat-colour parts are merged into one skinned mesh
+(one draw), the second horse is recoloured grey, and the horses get a procedural saddle and
+blanket (`scene/beasts.ts`). The crows, chickens, screen door and hanging signs are procedural.
+
+| Model | Source | Licence |
+|---|---|---|
+| Horse (animated) | Quaternius, from the Ultimate Animated Animals pack — https://poly.pizza/m/qvTrSG9pZF | CC0 1.0 |
+| Shiba Inu (animated) | Quaternius, from the Ultimate Animated Animals pack — https://poly.pizza/m/y4wdQpg767 | CC0 1.0 |
+
 ## Textures (Poly Haven, CC0)
 
 Each set ships diffuse, OpenGL normal and ARM (ambient occlusion, roughness, metalness) maps at 1K,
