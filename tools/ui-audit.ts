@@ -51,13 +51,28 @@ interface Size {
   height: number
   touch: boolean
   dpr: number
+  /** A device UA, so platform/device.ts classifies it (form factor, UI scale) as the real one. */
+  ua?: string
 }
+const IPHONE_UA =
+  'Mozilla/5.0 (iPhone; CPU iPhone OS 18_7 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/27.0 Mobile/15E148 Safari/604.1'
+const IPAD_UA =
+  'Mozilla/5.0 (iPad; CPU OS 18_7 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/27.0 Mobile/15E148 Safari/604.1'
 const SIZES: Size[] = [
   { name: '375x812', width: 375, height: 812, touch: true, dpr: 3 },
   { name: '812x375', width: 812, height: 375, touch: true, dpr: 3 },
   { name: '390x844', width: 390, height: 844, touch: true, dpr: 3 },
   { name: '360x740', width: 360, height: 740, touch: true, dpr: 3 },
   { name: '1440x900', width: 1440, height: 900, touch: false, dpr: 1 },
+  // iPhone Duo (foldable): the outer panel full screen and in Safari, the inner panel both ways
+  { name: '466x678', width: 466, height: 678, touch: true, dpr: 3, ua: IPHONE_UA },
+  { name: '382x580', width: 382, height: 580, touch: true, dpr: 3, ua: IPHONE_UA },
+  { name: '951x669', width: 951, height: 669, touch: true, dpr: 3, ua: IPHONE_UA },
+  { name: '669x951', width: 669, height: 951, touch: true, dpr: 3, ua: IPHONE_UA },
+  // iPad: mini portrait, 13-inch landscape, a one-third Split View window
+  { name: '744x1133', width: 744, height: 1133, touch: true, dpr: 2, ua: IPAD_UA },
+  { name: '1376x1032', width: 1376, height: 1032, touch: true, dpr: 2, ua: IPAD_UA },
+  { name: '320x1032', width: 320, height: 1032, touch: true, dpr: 2, ua: IPAD_UA },
 ]
 const sizeArg = arg('size')
 const sizes = sizeArg ? SIZES.filter((s) => sizeArg.split(',').includes(s.name)) : SIZES
@@ -576,6 +591,7 @@ async function newContext(
     isMobile: size.touch,
     hasTouch: size.touch,
     reducedMotion: 'reduce',
+    ...(size.ua ? { userAgent: size.ua } : {}),
     ...(state ? { storageState: state } : {}),
   })
   // the dev server's toolbar sits over the bottom of every screen

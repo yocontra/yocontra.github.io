@@ -43,6 +43,7 @@ import Bare from '~/layouts/Bare.astro'
    * perf harness). Plus the renderer's #tier= and #perf.
    */
   import { mountFrontier } from '~/experiments/out-west/ffa/client/index.ts'
+  import { installDevice } from '~/experiments/out-west/platform/device.ts'
   import { installViewportVars } from '~/experiments/out-west/platform/viewport.ts'
 
   const root = document.querySelector<HTMLElement>('#frontier')
@@ -53,6 +54,8 @@ import Bare from '~/layouts/Bare.astro'
   }
   if (root) {
     installViewportVars()
+    // form factor attributes, fold/unfold, late WebKit resizes (the camera re-fits)
+    installDevice()
     for (const t of ['gesturestart', 'dblclick']) {
       document.addEventListener(t, (e) => e.preventDefault(), { passive: false })
     }
