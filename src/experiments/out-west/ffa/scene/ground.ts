@@ -23,6 +23,7 @@ import {
   type Vector3,
 } from 'three'
 import { buildingWalls, type TownLayout } from '../sim/layout.ts'
+import { COVER_VISUALS } from './cover-kinds.ts'
 
 const MASK_PX = 1024
 
@@ -71,7 +72,10 @@ function paint(
     sweep(b.x, b.z, b.w, b.d, b.height + (b.kind === 'tower' ? 0 : 0.6), 0.09)
   }
   for (const c of layout.cover) {
-    sweep(c.x, c.z, c.w, c.d, c.low ? 0.9 : 3.6, 0.08)
+    // thin pieces (rails, posts, fences) cast thin, faint shadows; not a dark slab per rect
+    const vis = COVER_VISUALS[c.kind]
+    const thin = Math.min(c.w, c.d) <= 0.5
+    sweep(c.x, c.z, c.w, c.d, vis?.height ?? (c.low ? 0.9 : 3.6), thin ? 0.04 : 0.08)
   }
   // --- G: streets, with ruts and soft edges.
   const g = make('#000')
@@ -118,9 +122,14 @@ function paint(
         b.ctx.strokeRect(w.x, w.z, w.w, w.d)
       }
     }
-    b.ctx.lineWidth = 0.45
+    // contact grime only under the big pieces (a dark ring round every crate and rail read as a
+    // dirt patch at eye level)
+    b.ctx.lineWidth = 0.3
+    b.ctx.strokeStyle = 'rgba(255,255,255,0.3)'
     for (const c of layout.cover) {
-      b.ctx.strokeRect(c.x, c.z, c.w, c.d)
+      if (c.w * c.d >= 4) {
+        b.ctx.strokeRect(c.x, c.z, c.w, c.d)
+      }
     }
   }
   return { r: r.c, g: g.c, b: b.c }

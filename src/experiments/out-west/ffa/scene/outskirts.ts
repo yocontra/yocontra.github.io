@@ -124,23 +124,12 @@ function ringHeight(layout: TownLayout, x: number, z: number): number {
 }
 
 /**
- * A low earth berm along the creek's south bank lip, where the bank already blocks movement (so it
- * reads as the bank it is): ~0.4 m high, inside the blocked strip plus a player's radius.
+ * Terrain height at (x, z), m: 0 inside the town; never inside the playable square's walkable
+ * ground. (The creek's south bank used to carry a dirt berm here, a 0.4 m mound with no reason to
+ * be there at eye level; the bank is a rail fence in the layout now.)
  */
-function bermHeight(layout: TownLayout, x: number, z: number): number {
-  let h = 0
-  for (const b of layout.creek.banks) {
-    const dz = Math.abs(z - (b.z + b.d / 2))
-    const along = Math.max(b.x - x, x - (b.x + b.w), 0)
-    const k = (1 - smooth(0.15, 0.75, dz)) * (1 - smooth(0, 1.4, along))
-    h = Math.max(h, k * (0.42 + 0.22 * noise(x * 0.3, 7, 22)))
-  }
-  return h
-}
-
-/** Terrain height at (x, z), m: 0 inside the town; never inside the playable square's walkable ground. */
 export function terrainHeight(layout: TownLayout, x: number, z: number): number {
-  return Math.max(northHeight(layout, x, z), ringHeight(layout, x, z), bermHeight(layout, x, z))
+  return Math.max(northHeight(layout, x, z), ringHeight(layout, x, z))
 }
 
 /** Rows of the terrain grid: fine across the creek's cut bank, coarse elsewhere. */
@@ -388,12 +377,13 @@ export function outskirtsProps(layout: TownLayout, seed: number): OutskirtsProps
   const c = layout.creek
   const out: OutskirtsProps = { rock: [], cactus: [], fence: [] }
   const anywhere = () => nearEdge(rng, layout, REACH - 10)
-  const y = (x: number, z: number) => Math.max(0, terrainHeight(layout, x, z)) - 0.08
+  // the drawn surface: the terrain mesh sits SINK under the analytic height, the ground plane at 0
+  const y = (x: number, z: number) => Math.max(0, terrainHeight(layout, x, z) - SINK) - 0.05
   const rock = (p: Scatter) =>
     out.rock.push(
       matrix(
         p.x,
-        y(p.x, p.z) - p.s * 0.12,
+        y(p.x, p.z) - p.s * (0.12 + 0.35 * Math.min(1, slope(layout, p.x, p.z))),
         p.z,
         rng.next() * 6.3,
         p.s,
@@ -448,21 +438,19 @@ export function outskirtsProps(layout: TownLayout, seed: number): OutskirtsProps
   })) {
     rock(p)
   }
-  // Pebbles and stones along the creek bed's banks (walk-through size, off the walking line).
+  // Stones fallen from the cut bank, lying at its toe: on the unwalkable north strip only (on the
+  // walkable bed and the south bank they were knee-high blobs with no collider).
   for (const p of clumps(rng, {
     count: 10,
     minSep: 10,
     members: [2, 3],
-    spread: 0.8,
+    spread: 0.5,
     size: [0.32, 0.55],
     sample: () => {
       const x = rng.range(c.x + 2, c.x + c.w - 2)
-      return {
-        x,
-        z: rng.next() < 0.5 ? bankToe(x) + rng.range(-0.2, 0.4) : c.z + c.d + rng.range(-0.4, 0.4),
-      }
+      return { x, z: Math.min(c.z - 0.5, bankToe(x)) - rng.range(0.2, 0.8) }
     },
-    ok: (x) => x < c.bridge.x - 1 || x > c.bridge.x + c.bridge.w + 1,
+    ok: (x, z) => z < c.z - 0.3 && (x < c.bridge.x - 1 || x > c.bridge.x + c.bridge.w + 1),
   })) {
     rock(p)
   }
@@ -477,7 +465,16 @@ export function outskirtsProps(layout: TownLayout, seed: number): OutskirtsProps
     ok: (x, z) => outside(layout, x, z, 3) && slope(layout, x, z) < 0.35,
   })) {
     out.cactus.push(
-      matrix(p.x, y(p.x, p.z), p.z, rng.next() * 6.3, p.s, p.s, p.s, (rng.next() - 0.5) * 0.12),
+      matrix(
+        p.x,
+        y(p.x, p.z) - 0.2 * p.s * slope(layout, p.x, p.z),
+        p.z,
+        rng.next() * 6.3,
+        p.s,
+        p.s,
+        p.s,
+        (rng.next() - 0.5) * 0.12,
+      ),
     )
   }
   // The ranch fence on the boundary (west, east, south), sections a little askew, a few down or
@@ -528,7 +525,15 @@ const SAGE = [
  * A sage bush: two or three low, round lobes (five-sided cones with soft, domed normals), dirt
  * textured and tinted grey-green, paler on top.
  */
-function bush(m: Mesh3, rng: Rng, x: number, y: number, z: number, r: number): void {
+function bush(
+  m: Mesh3,
+  rng: Rng,
+  x: number,
+  y: number,
+  z: number,
+  r: number,
+  ground: (x: number, z: number) => number,
+): void {
   const col = SAGE[rng.int(0, SAGE.length - 1)] ?? SAGE[0]
   const lobes = rng.int(2, 3)
   const n = new Vector3()
@@ -551,7 +556,10 @@ function bush(m: Mesh3, rng: Rng, x: number, y: number, z: number, r: number): v
     for (let i = 0; i < 5; i++) {
       const a = rot + (i / 5) * Math.PI * 2
       const rr = lr * rng.range(0.8, 1.1)
-      ring.push(new Vector3(lx + Math.cos(a) * rr, y - 0.02, lz + Math.sin(a) * rr))
+      const vx = lx + Math.cos(a) * rr
+      const vz = lz + Math.sin(a) * rr
+      // each lobe's skirt follows the slope under it (on a hillside the downhill edge floated)
+      ring.push(new Vector3(vx, Math.min(y, ground(vx, vz)) - 0.04, vz))
     }
     const up = new Vector3(0, 1, 0)
     for (let i = 0; i < 5; i++) {
@@ -578,7 +586,7 @@ const STONE = [
 ] as const
 
 /** A flat, faceted stone (a low pentagonal pyramid), dirt-textured and greyed. */
-function stone(m: Mesh3, rng: Rng, x: number, z: number, r: number, y = 0): void {
+function stone(m: Mesh3, rng: Rng, x: number, z: number, r: number, y = 0, maxH = 9): void {
   const k = 5
   const rot = rng.next() * Math.PI
   const ring: Vector3[] = []
@@ -587,7 +595,7 @@ function stone(m: Mesh3, rng: Rng, x: number, z: number, r: number, y = 0): void
     const rr = r * rng.range(0.6, 1.2)
     ring.push(new Vector3(x + Math.cos(a) * rr, y + 0.01, z + Math.sin(a) * rr * 0.75))
   }
-  const top = new Vector3(x, y + r * rng.range(0.35, 0.6), z)
+  const top = new Vector3(x, y + Math.min(maxH, r * rng.range(0.35, 0.6)), z)
   const col = STONE[rng.int(0, STONE.length - 1)] ?? STONE[0]
   const e1 = new Vector3()
   const e2 = new Vector3()
@@ -615,8 +623,10 @@ export function outskirtsGeometry(layout: TownLayout, seed: number, sun: Vector3
   const rng = new Rng(seed ^ 0x5a_6e)
   const c = layout.creek
   const place = (p: Scatter) => {
-    const y = Math.max(0, terrainHeight(layout, p.x, p.z))
-    bush(m, rng, p.x, y, p.z, 0.45 * p.s)
+    const y = Math.max(0, terrainHeight(layout, p.x, p.z) - SINK)
+    bush(m, rng, p.x, y, p.z, 0.45 * p.s, (gx, gz) =>
+      Math.max(0, terrainHeight(layout, gx, gz) - SINK),
+    )
   }
   // Scrub out on the flats and the bench.
   for (const p of clumps(rng, {
@@ -630,25 +640,24 @@ export function outskirtsGeometry(layout: TownLayout, seed: number, sun: Vector3
   })) {
     place(p)
   }
-  // Brush along the creek's banks (the south bank lip blocks movement, the north toe is the wall).
+  // Brush at the foot of the cut bank, on the unwalkable north strip. (A second run along the south
+  // bank put dirt-textured knee-high lobes on walkable ground: the "dirt blobs" by the creek.)
   for (const p of clumps(rng, {
     count: 16,
     minSep: 6,
     members: [2, 4],
-    spread: 0.9,
+    spread: 0.6,
     size: [0.6, 1.1],
     sample: () => {
       const x = rng.range(c.x + 1, c.x + c.w - 1)
-      return {
-        x,
-        z: rng.next() < 0.6 ? bankToe(x) - rng.range(0, 0.8) : c.z + c.d + rng.range(0, 0.4),
-      }
+      return { x, z: Math.min(c.z - 0.6, bankToe(x)) - rng.range(0.2, 0.9) }
     },
-    ok: (x) => x < c.bridge.x - 1.5 || x > c.bridge.x + c.bridge.w + 1.5,
+    ok: (x, z) => z < c.z - 0.5 && (x < c.bridge.x - 1.5 || x > c.bridge.x + c.bridge.w + 1.5),
   })) {
     place(p)
   }
-  // Gravel and stones down the creek bed, thickest along the trickle (flat: walk-through).
+  // Gravel down the creek bed, thickest along the trickle: flat stones a few centimetres proud,
+  // walk-through by design (they were up to 30 cm pyramids before).
   const mid = c.z + c.d / 2 + 0.6
   for (const p of clumps(rng, {
     count: 46,
@@ -665,7 +674,7 @@ export function outskirtsGeometry(layout: TownLayout, seed: number, sun: Vector3
       z < c.z + c.d - 0.3 &&
       (x < c.bridge.x - 0.5 || x > c.bridge.x + c.bridge.w + 0.5),
   })) {
-    stone(m, rng, p.x, p.z, p.s)
+    stone(m, rng, p.x, p.z, p.s, 0, 0.05)
   }
   // Loose stones on the outskirts.
   for (const p of clumps(rng, {
@@ -677,7 +686,7 @@ export function outskirtsGeometry(layout: TownLayout, seed: number, sun: Vector3
     sample: () => nearEdge(rng, layout, REACH - 8),
     ok: (x, z) => outside(layout, x, z, 1) && slope(layout, x, z) < 0.6,
   })) {
-    stone(m, rng, p.x, p.z, p.s, Math.max(0, terrainHeight(layout, p.x, p.z)))
+    stone(m, rng, p.x, p.z, p.s, Math.max(0, terrainHeight(layout, p.x, p.z) - SINK) - 0.02)
   }
   const g = new BufferGeometry()
   g.setAttribute('position', new Float32BufferAttribute(m.pos, 3))

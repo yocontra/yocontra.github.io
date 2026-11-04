@@ -228,6 +228,7 @@ export class FrontierGame {
   private wasInZone = false
   /** The last frame's dt (s), for the HUD's easing. */
   private dtS = 0
+  private readonly cutSize = new Vector2()
   /** When the pointer lock was last lost (performance.now ms). */
   private lockLostAt = -1e9
   /** When you last fired (performance.now ms), for the raised-gun pose. */
@@ -1053,12 +1054,7 @@ export class FrontierGame {
       : this.tmp.copy(this.cam.target)
     this.sun.target.position.copy(focus)
     this.sun.position.copy(focus).addScaledVector(SUN_DIR, 60)
-    if (shooter) {
-      CUT.radius.value = 0
-      CUT.bid.value = -1
-    } else {
-      this.updateCut()
-    }
+    this.updateCut()
     this.updateRings(nowS)
     const town = this.net.town
     const spot =
@@ -1144,16 +1140,32 @@ export class FrontierGame {
   }
 
   /** Player position on screen → the cutaway circle (render-target pixels). */
+  /**
+   * Top-down: a 4.5 m circle around you, and the roof of the building you stand in fades. Over the
+   * shoulder: roofs stay solid; only what stands between the lens and your rider (a porch roof, a
+   * wall edge) dithers away inside a 1.2 m circle. First person: nothing fades.
+   */
   private updateCut(): void {
+    const view = this.settings.view
+    if (view === 'first') {
+      CUT.radius.value = 0
+      CUT.bid.value = -1
+      return
+    }
+    const cam = this.cam.camera
     const p = this.tmp.set(this.own.x, 1, this.own.z)
-    const view = p.clone().applyMatrix4(this.cam.camera.matrixWorldInverse)
-    p.project(this.cam.camera)
-    const size = this.renderer.gl.getDrawingBufferSize(new Vector2())
-    CUT.screen.value.set((p.x * 0.5 + 0.5) * size.x, (p.y * 0.5 + 0.5) * size.y, -view.z)
-    // About 4.5 m around the player, in pixels at this zoom.
-    const pxPerM =
-      size.y / (2 * Math.tan((this.cam.camera.fov * Math.PI) / 360) * this.cam.distance)
-    CUT.radius.value = 4.5 * pxPerM
+    const depth = -p.clone().applyMatrix4(cam.matrixWorldInverse).z
+    p.project(cam)
+    const size = this.renderer.gl.getDrawingBufferSize(this.cutSize)
+    CUT.screen.value.set((p.x * 0.5 + 0.5) * size.x, (p.y * 0.5 + 0.5) * size.y, depth)
+    const shooter = view === 'third'
+    const dist = shooter ? Math.max(0.5, depth) : this.cam.distance
+    const pxPerM = size.y / (2 * Math.tan((cam.fov * Math.PI) / 360) * dist)
+    CUT.radius.value = (shooter ? 1.2 : 4.5) * pxPerM
+    if (shooter) {
+      CUT.bid.value = -1
+      return
+    }
     let bid = -1
     for (const [i, b] of (this.town?.roofs ?? []).entries()) {
       if (

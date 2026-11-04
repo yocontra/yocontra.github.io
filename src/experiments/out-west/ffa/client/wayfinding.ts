@@ -12,7 +12,7 @@
  */
 import type { PerspectiveCamera } from 'three'
 import { MOST_WANTED_MIN } from '../sim/constants.ts'
-import { BLOCK_MOVE, type Grid, rayGrid, TOWN, type TownLayout } from '../sim/layout.ts'
+import { BANK_WINDOWS, BLOCK_MOVE, type Grid, rayGrid, type Zone } from '../sim/layout.ts'
 import { MinHeap } from './min-heap.ts'
 import { type ScreenPoint, toScreen } from './screen.ts'
 
@@ -22,12 +22,9 @@ export interface BankWindow {
   z: number
 }
 
-/**
- * The bank windows. Today they are the layout's bank zones; `perdition-map` adds `BANK_WINDOWS`
- * to `sim/layout.ts`, at which point this becomes a re-export.
- */
-export function bankWindows(layout: TownLayout = TOWN): BankWindow[] {
-  return layout.zones.filter((z) => z.kind === 'bank').map((z) => ({ id: z.id, x: z.x, z: z.z }))
+/** The bank windows, from the layout (`BANK_WINDOWS`), so the guide follows any re-layout. */
+export function bankWindows(windows: readonly Zone[] = BANK_WINDOWS): BankWindow[] {
+  return windows.map((z) => ({ id: z.id, x: z.x, z: z.z }))
 }
 
 const INSET = 30
@@ -109,9 +106,9 @@ export class BankGuide {
   /** Walking metres to the nearest window last frame (for the onboarding hint), or −1. */
   metres = -1
 
-  constructor(parent: HTMLElement, grid: Grid, layout: TownLayout = TOWN) {
+  constructor(parent: HTMLElement, grid: Grid, windows: readonly Zone[] = BANK_WINDOWS) {
     this.grid = grid
-    this.windows = bankWindows(layout)
+    this.windows = bankWindows(windows)
     const layer = document.createElement('div')
     layer.className = 'fr-guide'
     this.marker = document.createElement('div')
