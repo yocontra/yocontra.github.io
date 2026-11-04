@@ -252,6 +252,9 @@ export class Crowd {
   readScale = READ_SCALE
   /** First person (or a lens pulled into your head): your own body isn't drawn. */
   hideSelf = false
+  /** Your body's opacity (dithered): the shooter camera thins it out when the lens is close. */
+  selfFade = 1
+  private selfFaded = 1
   private readonly order: CrowdPlayer[] = []
   /** Ids drawn this frame (reused). */
   private readonly seen = new Set<number>()
@@ -783,6 +786,9 @@ export class Crowd {
     }
     // Spawn protection: a warm pulsing glow on the body (never a blink, never see-through)
     holder.visible = !(p.self && this.hideSelf)
+    if (p.self) {
+      this.fadeSelf(actor)
+    }
     if (holder.scale.x !== this.readScale) {
       holder.scale.setScalar(this.readScale)
     }
@@ -839,6 +845,28 @@ export class Crowd {
     }
     m.recoil = Math.max(0, m.recoil - dt * 8)
     m.wasNear = true
+  }
+
+  /**
+   * Your body thinned out (hashed alpha: no sorting, no blending) while the lens is close, so it
+   * never fills the frame or hides the crosshair.
+   */
+  private fadeSelf(actor: Actor): void {
+    const f = Math.round(this.selfFade * 20) / 20
+    if (f === this.selfFaded) {
+      return
+    }
+    this.selfFaded = f
+    actor.root.traverse((o) => {
+      const mat = (o as Partial<Mesh>).material
+      if (mat && !Array.isArray(mat) && (o as Partial<Mesh>).isMesh) {
+        if (!mat.alphaHash) {
+          mat.alphaHash = true
+          mat.needsUpdate = true
+        }
+        mat.opacity = f
+      }
+    })
   }
 
   /** His hat (unless it was shot off) and his revolver (into the crowd's gun batch). */

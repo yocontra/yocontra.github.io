@@ -1240,6 +1240,7 @@ export class FrontierGame {
       this.cam.update(this.own.x, this.own.z, Math.cos(this.aim), Math.sin(this.aim), dt)
       crowd.hideSelf = false
     }
+    crowd.selfFade = shooter && !first && this.net.alive ? this.shooter.bodyFade : 1
     const cx = shooter ? this.own.x : this.cam.target.x
     const cz = shooter ? this.own.z : this.cam.target.z
     crowd.update(list, cx, cz, dt, nowS)

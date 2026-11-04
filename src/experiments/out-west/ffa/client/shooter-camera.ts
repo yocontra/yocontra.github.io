@@ -25,13 +25,15 @@ import { BLOCK_SIGHT, type Grid, rayGrid } from '../sim/layout.ts'
 export const PIVOT_Y = 1.5
 export const EYE_Y = 1.62
 const BACK = 2.7
-const BACK_ADS = 1.5
+const BACK_ADS = 1.35
 const SIDE = 0.8
-const SIDE_ADS = 0.55
+const SIDE_ADS = 0.72
 const UP = 0.3
-const UP_ADS = 0.18
+const UP_ADS = 0.24
 /** Keep the lens this far off a wall it was pulled in front of (m). */
-const WALL_PAD = 0.3
+const WALL_PAD = 0.4
+/** The lens is a ball this wide (m): its edges are tested too, so a wall can't fill the frame. */
+const LENS_R = 0.25
 /** Never below this height (the camera tucks under when you look straight up). */
 const MIN_Y = 0.35
 const PITCH_MIN = MathUtils.degToRad(-70)
@@ -96,6 +98,10 @@ export class ShooterCamera {
   private bobAmp = 0
   /** How close the lens is to the pivot (0 far … 1 inside the head): hide the body when high. */
   closeness = 0
+  /** Your body's fade (1 solid … 0 gone) as the lens comes within 0.7 m of it. */
+  bodyFade = 1
+  /** The shoulder actually in use (−1 / 1): swaps itself when the chosen side is walled in. */
+  private side0 = 1
   private duck = 0
   /** Seconds into the death camera (0 alive). */
   private deadT = 0
@@ -235,7 +241,22 @@ export class ShooterCamera {
     // a phone held upright is narrow: the shoulder comes in and the lens backs off a little
     const aspect = this.camera.aspect
     const narrow = MathUtils.clamp(aspect / 1.3, 0.45, 1)
-    const sideTo = f.shoulder * MathUtils.lerp(SIDE, SIDE_ADS, a) * narrow
+    // a wall hard on the chosen shoulder: swing to the other one while it lasts
+    const chosen = f.shoulder
+    const reachSide = (s: number) =>
+      clearance(
+        f.grid,
+        this.pivot.x,
+        this.pivot.z,
+        this.pivot.x + right.x * s,
+        this.pivot.z + right.z * s,
+      )
+    if (reachSide(chosen * SIDE) < 0.6 && reachSide(-chosen * SIDE) > 0.95) {
+      this.side0 = -chosen
+    } else if (reachSide(chosen * SIDE) > 0.9) {
+      this.side0 = chosen
+    }
+    const sideTo = this.side0 * MathUtils.lerp(SIDE, SIDE_ADS, a) * narrow
     this.side += (sideTo - this.side) * ease(10)
     this.back = MathUtils.lerp(BACK, BACK_ADS, a) * (aspect < 1 ? 1.15 : 1)
     this.up = MathUtils.lerp(UP, UP_ADS, a)
@@ -249,7 +270,17 @@ export class ShooterCamera {
     const sideK = Math.min(shoulderFree, 1)
     const sx = this.pivot.x + (px - this.pivot.x) * sideK
     const sz = this.pivot.z + (pz - this.pivot.z) * sideK
-    const free = clearance(f.grid, sx, sz, want.x, want.z)
+    // the lens is a ball: its centre and both edges must be clear
+    const ex = -fwd.z
+    const ez = fwd.x
+    const flat = Math.hypot(ex, ez) || 1
+    const lx = (ex / flat) * LENS_R
+    const lz = (ez / flat) * LENS_R
+    const free = Math.min(
+      clearance(f.grid, sx, sz, want.x, want.z),
+      clearance(f.grid, sx + lx, sz + lz, want.x + lx, want.z + lz),
+      clearance(f.grid, sx - lx, sz - lz, want.x - lx, want.z - lz),
+    )
     const target = this.back * free
     // in at once, out gently
     this.reach = target < this.reach ? target : this.reach + (target - this.reach) * ease(5)
@@ -261,6 +292,12 @@ export class ShooterCamera {
     )
     // the closer the lens, the more the body would fill it
     this.closeness = MathUtils.clamp(1 - (this.reach - 0.35) / 0.5, 0, 1)
+    // within 0.7 m your body thins out (dithered), so it never fills the frame or hides the aim
+    const near = Math.hypot(
+      this.camera.position.x - this.pivot.x,
+      this.camera.position.z - this.pivot.z,
+    )
+    this.bodyFade = MathUtils.clamp((near - 0.35) / 0.35, 0.15, 1)
   }
 }
 
