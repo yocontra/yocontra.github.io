@@ -199,7 +199,8 @@
 .ow-toggle input {
   appearance: none;
   -webkit-appearance: none;
-  grid-row: span 2;
+  /* the box sits on the label's line, however long the hint under it runs */
+  grid-row: 1;
   width: 28px;
   height: 28px;
   margin: 0;
@@ -220,7 +221,9 @@
   outline: 2px solid var(--ow-brass-hi);
   outline-offset: 3px;
 }
-.ow-toggle-label {
+.ow-toggle-label,
+.ow-toggle > span:not([class]) {
+  padding-bottom: var(--ow-lift-sc);
   font-weight: 600;
   font-size: var(--ow-fs-lead);
   font-variant-caps: all-small-caps;
@@ -228,15 +231,10 @@
   line-height: 1.1;
 }
 .ow-toggle-hint {
+  grid-column: 2;
   font-size: var(--ow-fs-small);
   line-height: 1.35;
   color: var(--ow-bone-2);
-}
-.ow-toggle > span:not([class]) {
-  font-weight: 600;
-  font-variant-caps: all-small-caps;
-  letter-spacing: var(--ow-track-label);
-  font-size: var(--ow-fs-lead);
 }
 
 @media (prefers-reduced-motion: reduce) {
