@@ -265,6 +265,37 @@ Packed third person, three runs on the floor proxy (the spawn is random, so the 
 to run): triangles 288k, 304k and 288k against 539k before; CPU p95 8.9–10.0 ms at load average
 5–7.
 
+### Frontier baseline, seeded harness (Nov 2026)
+
+`tools/frontier-perf.ts` now starts every run from the same scene. It uses the loopback lobby's
+seed 7 (which fixes the bots, their spawns and the strongbox) and puts you on the bank's front steps
+(72, 69), via the dev-only page params `?seed=7&spawn=72,69`. Other start points: `--spawn=` a name
+(`crossroads`, `saloon-porch`, `west-end`, `east-end`, `depot`, `corral`) or `x,z`.
+`--seed=random --spawn=random` gives the old behaviour.
+
+Repeatability: two back-to-back packed third-person runs gave 298k and 298k triangles, 139 and 139
+draws, 122.3 and 122.2 MB heap, and 9.6 and 9.5 ms CPU p95. Triangle, draw and heap figures are
+now exact comparisons. CPU still moves with machine load, so read it within one sitting.
+
+Floor proxy (812×375 at DPR 3, touch, floor tier, 4× CPU, 31 bots, 15 samples, the camera
+panning a full circle), on `redesign` 1518366 with the town LOD and heap passes, at load average
+4–6:
+
+|                 | Third, spread | Third, packed | First, spread | First, packed | Top, spread | Top, packed |
+| --------------- | ------------- | ------------- | ------------- | ------------- | ----------- | ----------- |
+| CPU p50 (ms)    | 6.1           | 6.8           | 5.3           | 8.3           | 7.0         | 7.2         |
+| CPU p95 (ms)    | 8.3           | 9.1           | 7.4           | 10.5          | 8.5         | 9.2         |
+| Frame p95 (ms)  | 16.7          | 16.8          | 16.7          | 16.8          | 16.8        | 16.8        |
+| Heap, median    | 122.7 MB      | 122.5 MB      | 122.2 MB      | 123.6 MB      | 128.3 MB    | 121.8 MB    |
+| Draws (max)     | 107           | 139           | 105           | 128           | 81          | 150         |
+| Triangles (max) | 229k          | 298k          | 227k          | 274k          | 209k        | 294k        |
+| Riders in view  | 2 (max 7)     | 11 (max 16)   | 2 (max 7)     | 9 (max 15)    | 2 (max 2)   | 19 (max 22) |
+
+Against the budget (≤300k triangles, CPU p95 ≤ 7 ms on a quiet machine, heap ≤ 110 MB):
+- triangles are inside in every view;
+- CPU and heap are over. What's left is the crowd (skinned and VAT riders, 11–17 MB of their own
+  arrays), the desert flora, and the dev build's module source, which production doesn't carry.
+
 ## Real-device checklist (iPhone 13 mini, current iOS, WKWebView)
 
 Do this before signing off any art drop. The pass bar (§9.6): **p95 ≤ 16.7 ms over 10 minutes,

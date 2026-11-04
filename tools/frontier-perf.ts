@@ -6,7 +6,10 @@
  *
  *   bun run dev --port 4369          # in another shell
  *   bun tools/frontier-perf.ts [baseUrl] [--cluster] [--rate=4] [--secs=30] [--portrait]
- *     [--view=third|first|top] [--profile]
+ *     [--view=third|first|top] [--profile] [--seed=7|random] [--spawn=bank-front|x,z|random]
+ *
+ * Runs are repeatable by default: the loopback lobby's seed is 7 and you start on the bank's
+ * front steps (dev-only `?seed=` / `?spawn=` page params), so numbers compare run to run.
  *
  * `--cluster` makes every bot crowd around (and spare) the player, so 20+ riders are on screen at
  * once. Prints CPU p50/p95 (rAF start to end of submit), frame p95, JS heap, draws, triangles and
@@ -26,6 +29,24 @@ const secs = Number(opt('secs', '30'))
 const cluster = process.argv.includes('--cluster')
 const portrait = process.argv.includes('--portrait')
 const viewMode = opt('view', 'third')
+/**
+ * Repeatable runs: the loopback lobby's seed (bots, their spawns, the strongbox) and where you
+ * first appear, by name or as `x,z` in layout metres. Defaults to seed 7 at the bank's front
+ * steps, looking up main street, so two runs (or two commits) see the same scene.
+ * `--spawn=random --seed=random` restores the old behaviour.
+ */
+const SPOTS: Record<string, [number, number]> = {
+  'bank-front': [72, 69],
+  crossroads: [72, 64],
+  'saloon-porch': [56, 58],
+  'west-end': [10, 64],
+  'east-end': [134, 64],
+  depot: [28, 122],
+  corral: [14, 34],
+}
+const spawnArg = opt('spawn', 'bank-front')
+const seedArg = opt('seed', '7')
+const spawnAt = SPOTS[spawnArg] ?? (spawnArg.includes(',') ? spawnArg.split(',').map(Number) : null)
 const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms))
 
 interface Snap {
@@ -62,7 +83,14 @@ await cdp.send('Emulation.setDeviceMetricsOverride', {
   mobile: true,
 })
 await cdp.send('Emulation.setTouchEmulationEnabled', { enabled: true, maxTouchPoints: 5 })
-const q = `?bots=31${cluster ? '&cluster' : ''}&view=${viewMode}`
+const q = [
+  '?bots=31',
+  cluster ? '&cluster' : '',
+  `&view=${viewMode}`,
+  seedArg === 'random' ? '' : `&seed=${Number(seedArg)}`,
+  spawnAt ? `&spawn=${spawnAt.join(',')}` : '',
+].join('')
+console.log(`seed ${seedArg}, spawn ${spawnAt ? `${spawnArg} (${spawnAt.join(', ')})` : 'random'}`)
 await page.goto(`${base}/experiments/out-west/frontier/${q}#perf&tier=floor`)
 await page.waitForFunction(() => typeof Reflect.get(globalThis, '__owPerf') === 'function', null, {
   timeout: 60_000,
