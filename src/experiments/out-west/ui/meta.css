@@ -21,7 +21,11 @@
 }
 @media (max-aspect-ratio: 1 / 1) {
   .ow-tile.ow-tile-daily {
-    min-height: 4.75rem;
+    min-height: 4rem;
+    padding-block: 10px 8px;
+  }
+  .ow-tile-daily .ow-tile-sub {
+    padding-top: 2px;
   }
 }
 @media (max-aspect-ratio: 1 / 1) and (max-height: 760px) {
@@ -316,10 +320,21 @@
 }
 @container (max-width: 34rem) {
   .ow-map-row {
-    grid-template-columns: 2rem minmax(0, 1fr) auto;
+    grid-template-columns: 2rem minmax(0, 1fr);
+    gap: 6px var(--ow-s2);
   }
+  .ow-map-medal,
   .ow-map-ch {
-    grid-column: 2 / -1;
+    grid-column: 2;
+  }
+  .ow-map-medal {
+    grid-template-columns: auto auto 1fr;
+  }
+  .ow-map-pips {
+    grid-row: auto;
+  }
+  .ow-map-need {
+    justify-self: end;
   }
   .ow-map-sets {
     grid-template-columns: repeat(2, 1fr);

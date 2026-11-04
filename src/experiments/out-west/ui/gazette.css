@@ -91,7 +91,7 @@
   font-size: var(--ow-fs-lead);
   line-height: var(--ow-lead-body);
   font-variant-numeric: var(--ow-figs-text);
-  text-align: justify;
+  text-align: left;
   hyphens: auto;
   break-inside: avoid;
 }

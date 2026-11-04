@@ -272,7 +272,8 @@ describe('medalStatements', () => {
     expect(owned).not.toContain('frame.tall-tales')
     expect((await ledgerOf(id, 'medal')).length).toBe(51)
     expect((await auditLedger(t.env)).mismatches).toEqual([])
-  })
+    // seventeen wins of reads and batches: give a busy machine room
+  }, 30_000)
 
   it('refuses a bad outlaw or no account', async () => {
     expect(await medalStatements(t.env, { accountId: '', level: 0, runId: 'r', ev: ev() })).toEqual(

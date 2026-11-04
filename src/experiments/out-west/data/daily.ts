@@ -68,6 +68,12 @@ function seeded(key: string): () => number {
   }
 }
 
+/**
+ * Who the Daily Outlaw can be (gauntlet slots): never the tutorial pair, never Two-Gun Delmer (his
+ * always-missing first shot is his own rule), never the two special fights.
+ */
+export const DAILY_POOL: readonly number[] = [2, 3, 4, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+
 /** Fake-outs every street has; no twitch (on a no-bell day the call *is* his hand). */
 const CUES = ['crow', 'creak', 'dog', 'tumbleweed'] as const
 
@@ -94,8 +100,7 @@ export function dailySpec(day: string): DailySpec {
     modifiers.push(rest[Math.floor(rng() * rest.length)] as DailyModifier)
   }
   modifiers.sort((a, b) => DAILY_MODIFIERS.indexOf(a) - DAILY_MODIFIERS.indexOf(b))
-  // outlaws 3–15: never the tutorial pair, never the two special fights
-  const outlaw = 2 + Math.floor(rng() * 13)
+  const outlaw = DAILY_POOL[Math.floor(rng() * DAILY_POOL.length)] ?? 2
   const noBell = modifiers.includes('no-bell')
   // a hand is slower to read than a bell: the no-bell draw gives you 70 ms more
   const drawMs = Math.round(300 + rng() * 60 + (noBell ? 70 : 0))

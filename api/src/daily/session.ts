@@ -13,14 +13,14 @@
 import { DurableObject } from 'cloudflare:workers'
 import type { DailyResultExtra } from '../../../src/experiments/out-west/contract/meta.ts'
 import type { RankedServerMessage } from '../../../src/experiments/out-west/contract/ranked.ts'
-import { dailySpec } from '../../../src/experiments/out-west/data/daily.ts'
+import { DAILY_PAY, dailySpec } from '../../../src/experiments/out-west/data/daily.ts'
 import { ECONOMY_VERSION } from '../../../src/experiments/out-west/data/economy.ts'
 import { recordUsage } from '../budget.ts'
 import { outlawOpponent } from '../duel/opponents.ts'
 import { CALL_LEAD_MS, pvpWaitPlan, Standoff, type Verdict } from '../duel/standoff.ts'
 import type { Env } from '../env.ts'
 import { rttStats } from '../judge.ts'
-import { settleDaily } from './settle.ts'
+import { dailyKey, settleDaily } from './settle.ts'
 import { dailyTuning } from './tuning.ts'
 
 const PING_INTERVAL_MS = 400
@@ -43,6 +43,8 @@ export class DailySession extends DurableObject<Env> {
   private standoff: Standoff | null = null
   private duel = -1
   private decided = false as boolean
+  /** Whether today's win was already paid (looked up when the standoff starts). */
+  private paidBefore: Promise<boolean> = Promise.resolve(true)
   private pingSeq = 0
   private readonly pingSentAt = new Map<number, number>()
   private readonly rttSamples: number[] = []
@@ -154,33 +156,51 @@ export class DailySession extends DurableObject<Env> {
       },
     })
     this.standoff = standoff
+    this.paidBefore = this.accountId
+      ? this.env.DB.prepare('SELECT 1 AS yes FROM ledger WHERE idem_key = ?')
+          .bind(`${dailyKey(this.accountId, this.day)}#0`)
+          .first<{ yes: number }>()
+          .then((r) => r !== null)
+          .catch(() => true)
+      : Promise.resolve(true)
     standoff.start()
   }
 
+  /**
+   * The verdict goes out at once, like a ranked result: the payout is known from whether today was
+   * already paid (looked up when the standoff began), and the D1 settle runs after, in the
+   * background. The ledger key makes the payout once a day whatever the race.
+   */
   private async resolve(verdict: Verdict): Promise<void> {
     if (this.decided || verdict.kind !== 'ranked') {
       return
     }
     this.decided = true
-    const settled = await settleDaily(this.env, {
-      id: this.id,
-      day: this.day,
-      accountId: this.accountId,
-      outcome: verdict.outcome,
-      reactionMs: verdict.reactionMs,
-    })
-    const extra: DailyResultExtra = { rank: settled.rank, xp: settled.xp }
+    const account = this.accountId
+    const win = verdict.outcome === 'win'
+    const paidBefore = account && win ? await this.paidBefore : true
+    const extra: DailyResultExtra = { rank: null, xp: paidBefore ? 0 : DAILY_PAY.xp }
+    const cash = paidBefore ? 0 : DAILY_PAY.cash
     this.send({
       type: 'result',
       duel: this.duel,
       outcome: verdict.outcome,
       reactionMs: verdict.reactionMs,
       enemyMs: verdict.enemyMs,
-      payout: settled.cash,
-      purse: settled.cash,
+      payout: cash,
+      purse: cash,
       targetsHit: verdict.targetsHit,
       ...extra,
     })
+    this.ctx.waitUntil(
+      settleDaily(this.env, {
+        id: this.id,
+        day: this.day,
+        accountId: account,
+        outcome: verdict.outcome,
+        reactionMs: verdict.reactionMs,
+      }).catch((err: unknown) => console.error('daily result could not be recorded', err)),
+    )
     // let the result reach the client before the line closes
     setTimeout(() => this.close(1000, 'Duel recorded'), 1500)
   }
