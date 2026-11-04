@@ -13,6 +13,7 @@ import type { Press } from '../engine/input.ts'
 import { reportDuel } from '../meta/events.ts'
 import type { RankedSession } from '../net/ranked.ts'
 import { emptyRun, save as persist, type SaveData } from '../save.ts'
+import { confirmSheet } from '../ui/sheet.ts'
 import { LocalDuelClock, type Verdict } from './clock.ts'
 import type { Director, DirectorHooks } from './director.ts'
 import { emptyStreet } from './mode.ts'
@@ -40,6 +41,7 @@ export class DailyDuel implements DirectorHooks {
   private readonly realSave: SaveData
   private verdict = null as Verdict | null
   private over = false as boolean
+  private asking = false as boolean
 
   constructor(d: Director, o: DailyOpts) {
     this.d = d
@@ -172,7 +174,7 @@ export class DailyDuel implements DirectorHooks {
       return false
     }
     if (p.action === 'pause') {
-      this.leave()
+      this.quit()
       return true
     }
     const after = d.phase === 'win' ? d.resultShown : d.phase === 'lose' || d.phase === 'coward'
@@ -184,6 +186,35 @@ export class DailyDuel implements DirectorHooks {
       return true
     }
     return false
+  }
+
+  /**
+   * Pause in the daily: its clock is the server's, so pausing is leaving. Before the verdict that
+   * spends the try, so ask first (a stray Escape shouldn't cost one of three).
+   */
+  private quit(): void {
+    if (this.verdict || this.asking) {
+      if (this.verdict) {
+        this.leave()
+      }
+      return
+    }
+    this.asking = true
+    confirmSheet(this.d.c.hud.root, {
+      title: 'Leave this duel?',
+      body: 'Leaving now uses up this try.',
+      yes: 'Leave',
+      no: 'Keep going',
+      danger: true,
+      focusNo: true,
+    })
+      .then((yes) => {
+        this.asking = false
+        if (yes) {
+          this.leave()
+        }
+      })
+      .catch(() => undefined)
   }
 
   /** Back to the saloon: the ranked clock closed, the gauntlet save restored. */

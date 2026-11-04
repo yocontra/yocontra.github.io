@@ -154,6 +154,19 @@ export class DailyTile {
           ? 'The Daily Outlaw isn’t available yet.'
           : 'Couldn’t connect. Check your connection and try again.',
       )
+      if (today.status !== 404) {
+        // retry in place: the same sheet asks again
+        const row = el('div', 'ow-hub-row', s.body)
+        button(
+          row,
+          'Try again',
+          () => {
+            s.close()
+            this.open().catch(() => undefined)
+          },
+          true,
+        ).focus()
+      }
       return
     }
     this.today = today.value

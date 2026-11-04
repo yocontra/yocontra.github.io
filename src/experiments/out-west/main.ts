@@ -14,7 +14,7 @@ import { setHapticsEnabled } from './platform/haptics.ts'
 import { installViewportVars } from './platform/viewport.ts'
 import { load, type SaveData, save } from './save.ts'
 import { bindRunFlags, getSettings, onSettings, type Settings } from './settings.ts'
-import { Board } from './ui/board.ts'
+import { Board, lastBoardTab } from './ui/board.ts'
 import { installGazette } from './ui/gazette.ts'
 import { Hub } from './ui/hub.ts'
 import { hubMeta } from './ui/meta-hub.ts'
@@ -194,7 +194,7 @@ function makeHub(
     token: queueTokens(root),
     openBoard: () => {
       board ??= new Board(root)
-      board.open({ tab: 'most-wanted' })
+      board.open({ tab: lastBoardTab('most-wanted') })
     },
   })
   return hub
