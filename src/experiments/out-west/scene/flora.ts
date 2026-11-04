@@ -1,5 +1,6 @@
 // biome-ignore-all lint/complexity/useMaxParams: geometry builders take positional numeric args (x, y, z, size…), mirroring three.js APIs
 // biome-ignore-all lint/style/noMagicNumbers: plant proportions and colours, tuned by eye
+// biome-ignore-all lint/complexity/noExcessiveCognitiveComplexity: the coplanarity check is a flat nested scan over two small blobs
 // biome-ignore-all lint/style/noExcessiveLinesPerFile: one module for every desert plant: they share the builder, the material and the scatter
 /**
  * Desert plants, built procedurally: saguaros (heights and arm counts vary), Joshua trees, barrel
@@ -432,7 +433,6 @@ const SAGE_TIP = C(0xa8_ae_96)
 const GRASS = C(0xc4_a8_68)
 const GRASS_BASE = C(0x7a_68_40)
 const SNAG = C(0x8e_86_7c)
-const STEM = C(0x4a_40_34)
 
 const ROCKS = [C(0x9a_5a_3e), C(0xa8_74_52), C(0x8a_6e_5a), C(0xb4_86_60), C(0x7a_5a_48)]
 
@@ -843,6 +843,7 @@ function shrub(
   const col = kind === 'sage' ? SAGE : CREOSOTE
   const tip = kind === 'sage' ? SAGE_TIP : CREOSOTE_TIP
   const big = kind === 'creosote' ? 1.5 : 1
+  const placed: { first: number; n: number }[] = []
   for (let i = 0; i < lobes; i++) {
     const r = (0.28 + rng.next() * 0.28) * s * big
     const ox = (rng.next() - 0.5) * r * 1.4
@@ -850,6 +851,7 @@ function shrub(
     const ry = r * (0.6 + rng.next() * 0.25)
     const c = new Vector3(x + ox, y + ry * 0.75 - 0.03, z + oz)
     const base = jitter(col, rng, 0.2)
+    const first = g.count
     const verts = g.blob(
       c,
       new Vector3(r, ry, r),
@@ -862,6 +864,13 @@ function shrub(
       0.45,
       rng,
     )
+    separate(g, placed, first, verts.length)
+    placed.push({ first, n: verts.length })
+    // (separate may have moved it: the twigs anchor on where its vertices are now)
+    for (const [k, vt] of verts.entries()) {
+      const at = (first + k) * 3
+      vt.p.set(g.pos[at] ?? 0, g.pos[at + 1] ?? 0, g.pos[at + 2] ?? 0)
+    }
     if (lod === 0) {
       // twigs and leafy sprigs breaking out of the crown (welded to its vertices), so it reads as
       // a bush, not a lump
@@ -878,21 +887,54 @@ function shrub(
       }
     }
   }
-  // a few woody stems showing at the foot
-  if (kind === 'creosote') {
-    for (let i = 0; i < 3; i++) {
-      const ang = rng.next() * Math.PI * 2
-      const b = new Vector3(x + Math.cos(ang) * 0.06, y - 0.02, z + Math.sin(ang) * 0.06)
-      const t = b
-        .clone()
-        .add(new Vector3(Math.cos(ang) * 0.25 * s, 0.35 * s, Math.sin(ang) * 0.25 * s))
-      g.tube(
-        [b, t],
-        () => 0.02,
-        3,
-        () => STEM,
-        (q) => q * 0.2,
-      )
+}
+
+/**
+ * Nudge a freshly built blob (vertices `first`..`first + n`) off any face of the blobs already
+ * placed that it would lie in the same plane as (two coplanar overlapping faces flicker).
+ */
+function separate(
+  g: PlantGeo,
+  placed: readonly { first: number; n: number }[],
+  first: number,
+  n: number,
+): void {
+  const P = g.pos
+  const v = (i: number) => new Vector3(P[i * 3] ?? 0, P[i * 3 + 1] ?? 0, P[i * 3 + 2] ?? 0)
+  const face = (b: number, t: readonly [number, number, number]) => {
+    const a = v(b + t[0])
+    const nrm = new Vector3()
+      .subVectors(v(b + t[1]), a)
+      .cross(new Vector3().subVectors(v(b + t[2]), a))
+    return { a, nrm: nrm.normalize() }
+  }
+  for (let pass = 0; pass < 4; pass++) {
+    let clash: Vector3 | null = null
+    for (const o of placed) {
+      for (const ta of OCTA_TRIS) {
+        const fa = face(o.first, ta)
+        for (const tb of OCTA_TRIS) {
+          const fb = face(first, tb)
+          if (fa.nrm.dot(fb.nrm) > 0.995 && Math.abs(fa.nrm.dot(fb.a.clone().sub(fa.a))) < 0.008) {
+            clash = fa.nrm
+            break
+          }
+        }
+        if (clash) {
+          break
+        }
+      }
+      if (clash) {
+        break
+      }
+    }
+    if (!clash) {
+      return
+    }
+    for (let i = first; i < first + n; i++) {
+      P[i * 3] = (P[i * 3] ?? 0) + clash.x * 0.03
+      P[i * 3 + 1] = (P[i * 3 + 1] ?? 0) + clash.y * 0.03
+      P[i * 3 + 2] = (P[i * 3 + 2] ?? 0) + clash.z * 0.03
     }
   }
 }
