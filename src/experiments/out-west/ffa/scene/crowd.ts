@@ -74,7 +74,7 @@ import { shareDepthByKind } from './depth-kinds.ts'
 import type { PlayerLook } from './looks.ts'
 import { kitMaterial, shotgunMesh } from './shotgun.ts'
 
-const VAT_CLIPS: Clip[] = ['Idle', 'Run', 'Idle_Gun_Pointing', 'Death']
+const VAT_CLIPS: Clip[] = ['Idle', 'Walk', 'Run', 'Idle_Gun_Pointing', 'Death']
 const NEAR_FAST_M = 12
 const SHADOW_CASTERS = 6
 const LOD1_TRIS = 3000
@@ -82,6 +82,22 @@ const LOD1_TRIS = 3000
 const NEAR_HAT_TRIS = 800
 /** Running speed the Run clip was authored for (m/s). */
 const CLIP_RUN_SPEED = 5.2
+/** Walking speed the Walk clip was authored for (m/s), until an actor measures his stride. */
+const CLIP_WALK_SPEED = 1.4
+/**
+ * Gait thresholds on the smoothed ground speed (m/s), with hysteresis so a rider near a boundary
+ * doesn't flicker between clips: idle below `WALK_ON` (back to idle under `WALK_OFF`), walk up to
+ * `RUN_ON` (back from a run under `RUN_OFF`). A full stick runs at 5.5 m/s.
+ */
+const WALK_ON = 0.45
+const WALK_OFF = 0.25
+const RUN_ON = 2.6
+const RUN_OFF = 2.1
+/** How fast the drawn ground speed follows the snapshots' (1/s). */
+const SPEED_EASE = 10
+const GAIT_IDLE = 0
+const GAIT_WALK = 1
+const GAIT_RUN = 2
 const ROLL_S = 0.35
 /** Vault and hop arcs (the sim's `VAULT_TICKS` and `HOP_TICKS`), s, and their peak heights, m. */
 const VAULT_S = 0.5
@@ -143,6 +159,10 @@ interface Member {
   lastSeen: number
   /** Distance rank this frame (0 = you); unranked members (out of interest) are Infinity. */
   rank: number
+  /** Ground speed as drawn (m/s): the snapshots' speed, eased. */
+  speed: number
+  /** `GAIT_*`: idle, walk or run, from `speed` with hysteresis (every LOD reads it). */
+  gait: number
   caster: boolean
   recoil: number
   /**
@@ -325,6 +345,8 @@ export class Crowd {
       animSince: 0,
       lastSeen: 0,
       rank: Number.POSITIVE_INFINITY,
+      speed: 0,
+      gait: GAIT_IDLE,
       caster: false,
       recoil: 0,
       weapon: have?.weapon ?? WEAPON_REVOLVER,
@@ -618,6 +640,7 @@ export class Crowd {
         continue
       }
       seen.add(p.id)
+      this.stride(m, p, dt, nowS - m.lastSeen > 0.5)
       m.lastSeen = nowS
       if (p.anim !== m.anim) {
         m.anim = p.anim
@@ -727,53 +750,28 @@ export class Crowd {
     this.arm(m, actor, p.weapon ?? m.weapon, (p.flags & EF_HOLSTERED) !== 0)
     // a long gun can't be holstered: he carries it at the ready
     const holstered = (p.flags & EF_HOLSTERED) !== 0 && !m.held
-    const speed = Math.hypot(p.vx, p.vz)
-    let clip: Clip = holstered ? 'Idle' : 'Idle_Gun'
-    let once = false
-    let armW = 0
-    switch (p.anim) {
-      case ANIM_DEAD:
-        clip = 'Death'
-        once = true
-        break
-      case ANIM_RUN:
-      case ANIM_ROLL:
-      case ANIM_VAULT:
-      case ANIM_HOP:
-        clip = speed > 0.3 || p.anim === ANIM_ROLL ? 'Run' : clip
-        armW = holstered ? 0 : 6
-        break
-      case ANIM_AIM:
-        clip = 'Idle_Gun_Pointing'
-        break
-      case ANIM_RELOAD:
-        clip = 'Idle_Gun'
-        break
-      case ANIM_CHANNEL:
-        clip = 'Idle_Neutral'
-        break
-      case ANIM_DUEL:
-        clip = 'Idle'
-        break
-      default:
-        armW = holstered || speed < 0.3 ? 0 : 6
-        clip = speed > 0.3 ? 'Run' : clip
-        break
+    const speed = m.speed
+    const pick = nearClip(p.anim, m.gait, holstered)
+    let clip = pick.clip
+    if (clip === 'Walk' && !actor.action('Walk')) {
+      clip = 'Run'
     }
     const a = actor.play(
       clip,
       m.wasNear ? 0.15 : 0,
-      once && m.anim === ANIM_DEAD && nowS - m.animSince < 0.05,
+      pick.once && m.anim === ANIM_DEAD && nowS - m.animSince < 0.05,
     )
-    if (clip === 'Run' && a) {
-      // Backpedal when running away from the aim; match the stride to the speed.
-      const dot = speed > 0.01 ? (p.vx * Math.cos(p.aim) + p.vz * Math.sin(p.aim)) / speed : 1
-      a.timeScale = (dot < -0.3 ? -1 : 1) * Math.max(0.6, Math.min(1.3, speed / CLIP_RUN_SPEED))
+    const gaited = clip === 'Run' || clip === 'Walk'
+    if (gaited && a) {
+      // Backpedal when moving away from the aim; match the stride to the speed.
+      const raw = Math.hypot(p.vx, p.vz)
+      const dot = raw > 0.01 ? (p.vx * Math.cos(p.aim) + p.vz * Math.sin(p.aim)) / raw : 1
+      a.timeScale = (dot < -0.3 ? -1 : 1) * gaitRate(clip, speed, walkSpeed(actor))
     }
     if (m.arm) {
-      m.arm.setEffectiveWeight(clip === 'Run' ? armW : 0)
+      m.arm.setEffectiveWeight(gaited ? pick.armW : 0)
     }
-    this.braceLong(m, actor, clip === 'Run')
+    this.braceLong(m, actor, gaited)
   }
 
   /** The revolver kicks his forearm (a long gun kicks at the shoulder: `longKick`). */
@@ -794,11 +792,16 @@ export class Crowd {
     if (!v) {
       return
     }
-    const speed = Math.hypot(p.vx, p.vz)
-    let name: Clip = speed > 0.3 ? 'Run' : 'Idle'
+    const speed = m.speed
+    let name: Clip = 'Idle'
+    if (m.gait === GAIT_RUN || p.anim === ANIM_ROLL) {
+      name = 'Run'
+    } else if (m.gait === GAIT_WALK) {
+      name = v.clip('Walk') ? 'Walk' : 'Run'
+    }
     if (p.anim === ANIM_DEAD) {
       name = 'Death'
-    } else if (p.anim === ANIM_AIM || (speed <= 0.3 && !(p.flags & EF_HOLSTERED))) {
+    } else if (p.anim === ANIM_AIM || (name === 'Idle' && !(p.flags & EF_HOLSTERED))) {
       name = 'Idle_Gun_Pointing'
     }
     const clip = v.clip(name) ?? v.clip('Idle')
@@ -806,7 +809,7 @@ export class Crowd {
       return
     }
     let phase = m.phase
-    let rate = name === 'Run' ? Math.max(0.6, speed / CLIP_RUN_SPEED) : 1
+    let rate = name === 'Run' || name === 'Walk' ? gaitRate(name, speed, CLIP_WALK_SPEED) : 1
     if (name === 'Death') {
       // Play once and hold the last frame: drive the frame from the death time.
       const f = Math.min(clip.frames - 1, (nowS - m.animSince) * 15)
@@ -839,6 +842,17 @@ export class Crowd {
     }
     m4.makeTranslation(x, 0.035, z)
     this.blobs.setMatrixAt(this.blobs.count++, m4)
+  }
+
+  /**
+   * His drawn ground speed and gait this frame: the snapshots' speed eased (interpolated speeds
+   * step at each snapshot), then idle / walk / run with hysteresis. `fresh` (just came into
+   * interest) takes the speed as is.
+   */
+  private stride(m: Member, p: CrowdPlayer, dt: number, fresh: boolean): void {
+    const raw = Math.hypot(p.vx, p.vz)
+    m.speed = fresh ? raw : m.speed + (raw - m.speed) * (1 - Math.exp(-dt * SPEED_EASE))
+    m.gait = nextGait(fresh ? -1 : m.gait, m.speed)
   }
 
   /** Each member's distance rank this frame (`order` is sorted nearest first). */
@@ -908,6 +922,67 @@ function setAuto(bones: readonly Object3D[], on: boolean): void {
   for (const b of bones) {
     b.matrixAutoUpdate = on
   }
+}
+
+/** Idle, walk or run at this ground speed, from the last gait (-1: none yet), with hysteresis. */
+function nextGait(gait: number, v: number): number {
+  if (gait === GAIT_IDLE && v < WALK_ON) {
+    return GAIT_IDLE
+  }
+  if (gait !== GAIT_IDLE && v < WALK_OFF) {
+    return GAIT_IDLE
+  }
+  if (gait < 0 && v < WALK_ON) {
+    return GAIT_IDLE
+  }
+  if (gait === GAIT_RUN) {
+    return v < RUN_OFF ? GAIT_WALK : GAIT_RUN
+  }
+  return v >= RUN_ON ? GAIT_RUN : GAIT_WALK
+}
+
+/** A skinned rider's clip for his sim anim and gait, whether it plays once, and the arm layer. */
+function nearClip(
+  anim: number,
+  gait: number,
+  holstered: boolean,
+): { clip: Clip; once: boolean; armW: number } {
+  const moving = gait !== GAIT_IDLE
+  const stand: Clip = holstered ? 'Idle' : 'Idle_Gun'
+  const step: Clip = gait === GAIT_RUN ? 'Run' : 'Walk'
+  switch (anim) {
+    case ANIM_DEAD:
+      return { clip: 'Death', once: true, armW: 0 }
+    case ANIM_ROLL:
+      return { clip: 'Run', once: false, armW: holstered ? 0 : 6 }
+    case ANIM_RUN:
+    case ANIM_VAULT:
+    case ANIM_HOP:
+      return { clip: moving ? step : stand, once: false, armW: holstered ? 0 : 6 }
+    case ANIM_AIM:
+      return { clip: 'Idle_Gun_Pointing', once: false, armW: 0 }
+    case ANIM_RELOAD:
+      return { clip: 'Idle_Gun', once: false, armW: 0 }
+    case ANIM_CHANNEL:
+      return { clip: 'Idle_Neutral', once: false, armW: 0 }
+    case ANIM_DUEL:
+      return { clip: 'Idle', once: false, armW: 0 }
+    default:
+      return { clip: moving ? step : stand, once: false, armW: holstered || !moving ? 0 : 6 }
+  }
+}
+
+/** Playback rate of a gait clip at this ground speed, so the feet roughly keep to the ground. */
+function gaitRate(clip: Clip, speed: number, walk: number): number {
+  return clip === 'Walk'
+    ? Math.max(0.6, Math.min(1.6, speed / walk))
+    : Math.max(0.6, Math.min(1.3, speed / CLIP_RUN_SPEED))
+}
+
+/** The walk clip's ground speed as his stride measures it (two paces a cycle). */
+function walkSpeed(actor: Actor): number {
+  const v = (2 * actor.paceLength) / Math.max(0.1, actor.walkDuration)
+  return Number.isFinite(v) && v > 0.3 ? v : CLIP_WALK_SPEED
 }
 
 const hatColors = new WeakMap<PlayerLook, Color>()
