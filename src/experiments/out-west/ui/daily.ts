@@ -16,7 +16,7 @@ import { money } from '../data/economy.ts'
 import { OUTLAWS } from '../data/outlaws.ts'
 import type { Verdict } from '../duel/clock.ts'
 import { currentPlayer } from '../net/auth.ts'
-import { fetchDaily, fetchDailyBoard, issueDaily } from '../net/meta.ts'
+import { fetchDaily, fetchDailyBoard, issueDaily, isVerifyRefusal } from '../net/meta.ts'
 import { RankedSession } from '../net/ranked.ts'
 import { icon } from './icons.ts'
 import { button, el, facts, panelSheet, statusLine } from './sheet.ts'
@@ -24,7 +24,7 @@ import { button, el, facts, panelSheet, statusLine } from './sheet.ts'
 export interface DailyDeps {
   /** The game behind the hub is loaded. */
   ready: () => boolean
-  /** A fresh Turnstile token. */
+  /** A fresh Turnstile token (asked for only when signed in: a guest's try posts nothing). */
   token: () => Promise<string | null>
   /**
    * Ride out: hide the hub and play the duel. `back` runs on the empty street with the verdict;
@@ -50,6 +50,20 @@ function modifiers(parent: HTMLElement, spec: DailySpec): void {
   for (const m of spec.modifiers) {
     el('p', 'ow-hub-note ow-daily-rule', parent, modifierRule(m))
   }
+}
+
+/** How a ride out went: `unverified` is a signed-in try the server couldn't verify (Turnstile). */
+type Ride = 'ok' | 'failed' | 'unverified'
+
+const UNVERIFIED =
+  'Couldn’t verify this device, so your time can’t be posted. Try again, or play without posting.'
+
+/** After a failed device check: a second button that plays the try as a guest's (no post, no pay). */
+function offerUnposted(row: HTMLElement, play: () => void): void {
+  if (row.querySelector('.ow-daily-unposted')) {
+    return
+  }
+  button(row, 'Play without posting', play).classList.add('ow-daily-unposted')
 }
 
 /** "$50 + 75 XP" */
@@ -194,62 +208,70 @@ export class DailyTile {
     )
     board(s.body, b.ok ? b.value : null)
     const row = el('div', 'ow-hub-row', s.body)
-    const ride = button(
-      row,
-      left > 0 ? 'Duel' : 'No tries left',
-      () => {
-        ride.disabled = true
-        this.ride(status)
-          .then((ok) => {
-            if (ok) {
-              s.close()
-            } else {
-              ride.disabled = false
-            }
-          })
-          .catch(() => {
-            ride.disabled = false
-          })
-      },
-      true,
-    )
+    const go = (unposted: boolean): void => {
+      ride.disabled = true
+      this.ride(status, null, unposted)
+        .then((r) => {
+          if (r === 'ok') {
+            s.close()
+            return
+          }
+          ride.disabled = false
+          if (r === 'unverified') {
+            ride.textContent = 'Try again'
+            offerUnposted(row, () => go(true))
+          }
+        })
+        .catch(() => {
+          ride.disabled = false
+        })
+    }
+    const ride = button(row, left > 0 ? 'Duel' : 'No tries left', () => go(false), true)
     ride.disabled = left === 0 || !this.deps.ready()
   }
 
   /**
-   * A new ticket and its socket, then the duel. `early` is a token fetched while the player read
-   * the last result; a stale one (Turnstile tokens expire) is replaced once.
+   * A new ticket and its socket, then the duel. A guest needs no Turnstile token (a guest's try
+   * posts nothing), so a guest never waits on, or is blocked by, the widget. Signed in, `early` is
+   * a token fetched while the player read the last result; a stale one (tokens expire) is replaced
+   * once. A failed check is `unverified`: the caller offers a retry and `unposted` (the try runs as
+   * a guest's, with no board and no pay).
    */
   private async ride(
     status: (text: string, kind?: 'info' | 'error') => void,
     early: Promise<string | null> | null = null,
-  ): Promise<boolean> {
-    status('Checking you’re not a bot…')
-    let token = (await early) ?? (await this.deps.token())
-    if (!token) {
-      status('Couldn’t check you’re human. Try again.', 'error')
-      return false
+    unposted = false,
+  ): Promise<Ride> {
+    const verify = currentPlayer() !== null && !unposted
+    let token: string | null = null
+    if (verify) {
+      status('Checking this device…')
+      token = (await early) ?? (await this.deps.token())
     }
     status('Starting…')
-    let ticket = await issueDaily(token)
-    if (!ticket.ok && ticket.status === 403 && early) {
+    let ticket = await issueDaily(token, unposted)
+    if (verify && isVerifyRefusal(ticket) && token && early) {
       token = await this.deps.token()
-      ticket = token ? await issueDaily(token) : ticket
+      ticket = await issueDaily(token)
     }
     if (!ticket.ok) {
+      if (verify && isVerifyRefusal(ticket)) {
+        status(UNVERIFIED, 'error')
+        return 'unverified'
+      }
       status(ticket.error, 'error')
-      return false
+      return 'failed'
     }
     const session = await RankedSession.attach(ticket.value)
     if (!session.ok) {
       status(session.error, 'error')
-      return false
+      return 'failed'
     }
     const spec = this.today?.spec ?? dailySpec(dayKey())
     this.deps.start(spec, session.value, (v) => {
       this.result(spec, v).catch(() => undefined)
     })
-    return true
+    return 'ok'
   }
 
   /**
@@ -269,8 +291,8 @@ export class DailyTile {
         }
       },
     })
-    // the next try's Turnstile token, fetched while the result is read
-    const early = this.deps.token()
+    // the next try's Turnstile token, fetched while the result is read (signed in only)
+    const early = currentPlayer() ? this.deps.token() : Promise.resolve(null)
     el('div', 'ow-results-kicker', s.body, spec.title)
     const { line, note } = verdictLine(v)
     el('h3', 'ow-daily-big', s.body, line)
@@ -296,6 +318,7 @@ export class DailyTile {
           early,
           again,
           back,
+          row,
           sheet: s,
           go: () => {
             retrying = true
@@ -320,26 +343,36 @@ export class DailyTile {
   }
 
   /** "Try again" on the result: the buttons hold while a new ticket is fetched. */
-  private again(o: {
-    status: (text: string, kind?: 'info' | 'error') => void
-    early: Promise<string | null>
-    again: HTMLButtonElement
-    back: HTMLButtonElement
-    sheet: { close: () => void }
-    go: () => void
-  }): void {
+  private again(
+    o: {
+      status: (text: string, kind?: 'info' | 'error') => void
+      early: Promise<string | null>
+      again: HTMLButtonElement
+      back: HTMLButtonElement
+      row: HTMLElement
+      sheet: { close: () => void }
+      go: () => void
+    },
+    unposted = false,
+  ): void {
     const hold = (on: boolean): void => {
       o.again.disabled = on
       o.back.disabled = on
     }
     hold(true)
-    this.ride(o.status, o.early)
-      .then((ok) => {
-        if (ok) {
+    // the early token is spent (or refused) on the first press; a retry asks for a fresh one
+    const early = o.early
+    o.early = Promise.resolve(null)
+    this.ride(o.status, unposted ? null : early, unposted)
+      .then((r) => {
+        if (r === 'ok') {
           o.go()
           o.sheet.close()
-        } else {
-          hold(false)
+          return
+        }
+        hold(false)
+        if (r === 'unverified') {
+          offerUnposted(o.row, () => this.again(o, true))
         }
       })
       .catch(() => hold(false))

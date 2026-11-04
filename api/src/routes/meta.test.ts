@@ -338,11 +338,29 @@ describe('the Daily Outlaw routes', () => {
     expect(d.tries).toBe(0)
   })
 
-  it('a ticket needs Turnstile', async () => {
+  it('a guest plays without Turnstile; a signed-in try needs it to count', async () => {
     turnstileOk = false
-    const r = await call('POST', '/daily/sessions', { body: { turnstileToken: 'x' } })
+    const guest = await call('POST', '/daily/sessions', { ip: '203.0.113.9', body: {} })
+    expect(guest.status).toBe(201)
+    const id = await player()
+    const refused = await call('POST', '/daily/sessions', { as: id, body: { turnstileToken: 'x' } })
+    expect(refused.status).toBe(403)
+    expect((refused.body as { reason?: string }).reason).toBe('turnstile')
+    // unposted: the try runs as a guest's, so the account's own tries are untouched
+    const unposted = await call('POST', '/daily/sessions', {
+      as: id,
+      ip: '203.0.113.10',
+      body: { unposted: true },
+    })
     turnstileOk = true
-    expect(r.status).toBe(403)
+    expect(unposted.status).toBe(201)
+    const sessionId = (unposted.body as RankedSessionResponse).sessionId
+    const row = await t.db
+      .prepare('SELECT account_id, name FROM daily_runs WHERE id = ?')
+      .bind(sessionId)
+      .first<{ account_id: string | null; name: string | null }>()
+    expect(row).toEqual({ account_id: null, name: null })
+    expect(((await call('GET', '/daily', { as: id })).body as DailyResponse).tries).toBe(0)
   })
 
   it('three tries a day per account, then 429; another account is unaffected', async () => {

@@ -33,3 +33,38 @@ Nothing here has been run yet. Do it in this order on release day.
 so usage stays inside the included quota, and Frontier closes for the month instead of overspending.
 
 **Real-device check:** before announcing, run the iPhone 13 mini checklist in `tools/PERF.md`.
+
+## Turnstile in an app WebView
+
+Turnstile can fail where there's no ordinary browser. Headless Chrome returned error 600010 in
+review, and an Expo app's WKWebView (iOS) or Android WebView may do the same. Nobody has tested this
+on a device yet, so check it before an App Store build ships.
+
+**What fails gracefully today:**
+
+- **Guests playing alone never need a token.** Practice, the gauntlet and a guest's Daily Outlaw try
+  don't ask for one. `POST /daily/sessions` accepts a guest's try without a token, because a guest's
+  try is never posted or paid. Tries are still counted per network, 3 a day.
+- **Signed-in Daily Outlaw:** without a valid token the server answers 403 `reason: 'turnstile'`.
+  The sheet says "Couldn't verify this device, so your time can't be posted" and offers **Try again**
+  (a fresh token) or **Play without posting**. That try runs as a guest's: no board, no pay.
+- **Ranked runs:** without a token the run plays on in practice. The HUD says "Couldn't verify this
+  device, so this run is practice. Restart to try ranked again."
+- **Bounty Hunt queue:** "Couldn't verify this device. Try again." with a Try again button.
+- **Sign-up and the first web refresh of each UTC day** still need a token. A failed daily refresh
+  keeps you signed in without an access token until a check passes (`net/auth.ts`). App sessions
+  refresh from native code and skip the daily check (`api/src/auth/daily-turnstile.ts`).
+- **Frontier lobby joins** need a token at every join and show the refusal card without one.
+
+**Options for the app, best first:**
+
+1. **Verify natively.** Use App Attest (iOS) or Play Integrity (Android) through the Expo native
+   bridge, and have the Worker accept that attestation wherever it accepts a Turnstile token today.
+2. **Load the page from its real origin.** Point the WebView at `https://contra.io/...`, not a
+   bundled `file://` or custom-scheme page, so the widget runs on a hostname it knows. Keep
+   JavaScript, third-party iframes and cookies enabled for `challenges.cloudflare.com`.
+3. **Allowlist the app's hostnames** on the Turnstile widget in the Cloudflare dashboard if the app
+   serves the page from another host.
+
+Test on a real device: a signed-in Daily try, a ranked run, a Bounty Hunt search and a Frontier
+join. Each should either work or show its message and retry path above.

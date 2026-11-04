@@ -74,9 +74,20 @@ export const fetchDailyBoard = (day?: string): Promise<Reply<DailyBoardResponse>
     (v) => isRecord(v) && Array.isArray(v.rows),
   )
 
-export const issueDaily = (turnstileToken: string): Promise<Reply<RankedSessionResponse>> =>
+/**
+ * A Daily Outlaw ticket. A guest sends no token (a guest's try posts nothing). Signed in, the token
+ * makes the try the account's; `unposted` plays it as a guest's when the device can't be verified.
+ * A refused check answers 403 with `reason: 'turnstile'` ({@link isVerifyRefusal}).
+ */
+export const issueDaily = (
+  turnstileToken: string | null,
+  unposted = false,
+): Promise<Reply<RankedSessionResponse>> =>
   call(
     '/daily/sessions',
-    { body: { turnstileToken } },
+    { body: unposted ? { unposted: true } : { turnstileToken: turnstileToken ?? '' } },
     (v) => isRecord(v) && typeof v.wsUrl === 'string',
   )
+
+/** The server couldn't verify this device (Turnstile), so the try can't be posted. */
+export const isVerifyRefusal = (r: Reply<unknown>): boolean => !r.ok && r.status === 403

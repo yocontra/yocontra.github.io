@@ -102,7 +102,7 @@ async function queueTicket(request: Request, env: Env, url: URL): Promise<Respon
   const body = (await readJson(request, 8 * 1024)) as { turnstileToken?: unknown } | undefined
   const token = body?.turnstileToken
   if (typeof token !== 'string' || !(await verifyTurnstile(token, request, env))) {
-    return error(request, env, 403, 'Couldn’t check you’re human. Try again.')
+    return error(request, env, 403, 'Couldn’t verify this device. Try again.')
   }
   const ticket = await issueTicket(env, player, 'duel')
   const body2: QueueTicketResponse = {
