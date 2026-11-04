@@ -15,7 +15,7 @@ import { button, el, panelSheet } from './sheet.ts'
 
 let uid = 0
 
-function slider(parent: HTMLElement, label: string, key: 'music' | 'sfx'): void {
+function slider(parent: HTMLElement, label: string, key: 'music' | 'sfx' | 'voice'): void {
   const id = `ow-set-${++uid}`
   const row = el('div', 'ow-set-row', parent)
   const l = el('label', 'ow-set-label', row, label)
@@ -107,6 +107,7 @@ export function openSettings(root: HTMLElement, onClose?: () => void): void {
   el('h3', 'ow-set-h', sound, 'Sound')
   slider(sound, 'Music', 'music')
   slider(sound, 'Effects', 'sfx')
+  slider(sound, 'Voices', 'voice')
   const feel = el('section', 'ow-set-group', s.body)
   el('h3', 'ow-set-h', feel, 'Feel')
   const buzz = toggle(feel, {

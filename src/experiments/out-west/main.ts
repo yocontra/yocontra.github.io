@@ -147,6 +147,7 @@ function makeHub(
 interface Volumes {
   setMusicVolume?: (v: number) => void
   setSfxVolume?: (v: number) => void
+  setVoiceVolume?: (v: number) => void
 }
 
 /**
@@ -164,6 +165,7 @@ function wireSettings(
     const v = audio as AudioEngine & Volumes
     v.setMusicVolume?.(s.music)
     v.setSfxVolume?.(s.sfx)
+    v.setVoiceVolume?.(s.voice)
     setHapticsEnabled(s.vibration)
     root.classList.toggle('ow-reduced', data.settings.reducedMotion)
   }

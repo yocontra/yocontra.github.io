@@ -32,8 +32,8 @@ import type { Actor } from './actor.ts'
 import { dressedActor, finishedGun } from './loadout.ts'
 import type { PropDef } from './props.ts'
 
-/** The print, in pixels (shown at about half size, so it stays crisp on a 2× screen). */
-const SIZE = 192
+/** The print, in pixels: the card shows it about 104 CSS px tall, at the screen's density (≤ 2×). */
+const SIZE = Math.round(112 * Math.min(2, Math.max(1, globalThis.devicePixelRatio || 1)))
 const DIST = 3
 
 /** Slots with something to see on the body or in the hand. */
@@ -128,12 +128,13 @@ export class ItemStudio {
     const h = a.height
     if (slot === 'hat') {
       const box = a.hat ? new Box3().setFromObject(a.hat) : new Box3()
-      const top = Math.max(head.y + 0.22, box.isEmpty() ? 0 : box.max.y) + 0.04
+      // crown to brim with air around it, and the face below
+      const top = Math.max(head.y + 0.22, box.isEmpty() ? 0 : box.max.y) + 0.06
       const brim = box.isEmpty() ? 0.25 : (box.max.x - box.min.x) / 2
-      const bottom = head.y - 0.2 * (h / 1.78)
+      const bottom = head.y - 0.14 * (h / 1.78)
       this.aim(
         new Vector3(head.x, (top + bottom) / 2, head.z),
-        Math.max((top - bottom) / 2, brim + 0.04),
+        Math.max((top - bottom) / 2, brim + 0.06),
       )
       return
     }
