@@ -1,6 +1,7 @@
 import { money } from '../data/economy.ts'
 import { type Action, keyLabel } from '../engine/input.ts'
 import type { Settings } from '../save.ts'
+import { type CardTimes, type ConfirmSpec, renderConfirm, renderTimes } from './hud-parts.ts'
 import { icon } from './icons.ts'
 import { uiSound } from './sfx.ts'
 
@@ -18,6 +19,9 @@ function el<K extends keyof HTMLElementTagNameMap>(
   parent.appendChild(e)
   return e
 }
+
+/** The card's (and DRAW!'s) CSS fade, ms: their text is cleared once it's done. */
+const CARD_FADE_MS = 400
 
 export interface LedgerRow {
   name: string
@@ -65,6 +69,9 @@ export class Hud {
   private readonly cardBig: HTMLElement
   private readonly cardHint: HTMLElement
   private readonly cardPay: HTMLElement
+  private readonly cardTimesEl: HTMLElement
+  private readonly cardStampEl: HTMLElement
+  private readonly glintMark: HTMLElement
   private readonly purse: HTMLElement
   private readonly purseText: HTMLElement
   private purseShown = 0
@@ -80,6 +87,8 @@ export class Hud {
   readonly end: HTMLElement
   readonly debug: HTMLElement
   private readonly callIndicator: HTMLElement
+  private cardClear: ReturnType<typeof setTimeout> | undefined = undefined
+  private callCapClear: ReturnType<typeof setTimeout> | undefined = undefined
   private fakeTimer = 0
   private lineTimer = 0
   private callTimer = 0
@@ -103,6 +112,8 @@ export class Hud {
     this.letterTop = el('div', 'ow-letter ow-letter-top', root)
     this.letterBot = el('div', 'ow-letter ow-letter-bot', root)
     this.callIndicator = el('div', 'ow-call-indicator', root)
+    this.glintMark = el('div', 'ow-glint-mark', root)
+    this.glintMark.setAttribute('aria-hidden', 'true')
     this.callCap = el('div', 'ow-cap-call', root)
     this.callCap.setAttribute('role', 'status')
     this.fakeCap = el('div', 'ow-cap-fake', root)
@@ -111,7 +122,9 @@ export class Hud {
     this.cardTitle = el('div', 'ow-card-title', this.card)
     this.cardBig = el('div', 'ow-card-big', this.card)
     this.cardSub = el('div', 'ow-card-sub', this.card)
+    this.cardTimesEl = el('div', 'ow-card-times', this.card)
     this.cardPay = el('div', 'ow-card-pay', this.card)
+    this.cardStampEl = el('div', 'ow-card-stamp', this.card)
     this.cardHint = el('div', 'ow-card-hint', this.card)
     this.whip = el('div', 'ow-whip', root)
     this.iris = el('div', 'ow-iris', root)
@@ -141,6 +154,7 @@ export class Hud {
   }
 
   call(text: string, ms: number): void {
+    clearTimeout(this.callCapClear)
     this.callCap.textContent = text
     this.callCap.classList.remove('on')
     void this.callCap.offsetWidth
@@ -151,8 +165,22 @@ export class Hud {
 
   clearCall(): void {
     this.callCap.classList.remove('on')
+    this.callCap.textContent = ''
     this.callIndicator.classList.remove('on')
     this.callTimer = 0
+    this.marker(null, null)
+  }
+
+  /**
+   * The pulsing ring on the rifleman's scope glint, at screen pixels (null hides it). Shown only
+   * after the call, so it is never a cue.
+   */
+  marker(x: number | null, y: number | null): void {
+    const on = x !== null && y !== null
+    this.glintMark.classList.toggle('on', on)
+    if (on) {
+      this.glintMark.style.translate = `${Math.round(x)}px ${Math.round(y)}px`
+    }
   }
 
   fake(text: string, ms = 1800): void {
@@ -183,6 +211,7 @@ export class Hud {
   }
 
   showCard(card: CardSpec): void {
+    clearTimeout(this.cardClear)
     if (!this.card.classList.contains('on')) {
       uiSound('uiPaper')
     }
@@ -192,6 +221,21 @@ export class Hud {
     this.cardSub.textContent = card.sub
     this.cardHint.textContent = card.hint
     this.cardPay.textContent = ''
+    this.cardTimes(null)
+    this.cardStamp(null)
+  }
+
+  /** "YOU 412 ms · HIM 318 ms" and the verdict ("94 ms too slow", "You never drew."); null clears. */
+  cardTimes(t: CardTimes | null): void {
+    renderTimes(this.cardTimesEl, t)
+  }
+
+  /** A red stamp across the card (a trick shot: "HAT SHOT"); null clears. */
+  cardStamp(text: string | null): void {
+    this.cardStampEl.textContent = text ?? ''
+    if (text) {
+      uiSound('uiStamp')
+    }
   }
 
   /** The stamped wanted poster on the coward card. */
@@ -235,6 +279,18 @@ export class Hud {
 
   hideCard(): void {
     this.card.classList.remove('on')
+    // once it has faded, empty it: a hidden card's old verdict must not linger in the page (or be
+    // read out) during the next duel or a Bounty Hunt
+    clearTimeout(this.cardClear)
+    this.cardClear = setTimeout(() => {
+      if (!this.card.classList.contains('on')) {
+        for (const e of [this.cardTitle, this.cardBig, this.cardSub, this.cardHint, this.cardPay]) {
+          e.textContent = ''
+        }
+        this.cardTimes(null)
+        this.cardStamp(null)
+      }
+    }, CARD_FADE_MS)
   }
 
   letterbox(on: boolean): void {
@@ -279,6 +335,11 @@ export class Hud {
       this.callTimer -= dtMs
       if (this.callTimer <= 0) {
         this.callCap.classList.remove('on')
+        this.callCapClear = setTimeout(() => {
+          if (!this.callCap.classList.contains('on')) {
+            this.callCap.textContent = ''
+          }
+        }, CARD_FADE_MS)
       }
     }
   }
@@ -359,6 +420,14 @@ export class Hud {
       saloon.addEventListener('click', handlers.saloon)
     }
     resume.focus()
+  }
+
+  /**
+   * A yes/no sheet in place of the pause menu (e.g. abandoning a ranked run). `extra` is an
+   * optional third button (e.g. bank the run first).
+   */
+  menuConfirm(spec: ConfirmSpec): void {
+    renderConfirm(this.menu, spec)
   }
 
   closeMenu(): void {

@@ -88,6 +88,10 @@ void mainImage(const in vec4 inputColor, const in vec2 uv, out vec4 outputColor)
 }
 `
 
+/** Chromatic aberration fades out between these times of day (0 noon, 0.5 sunset, 1 midnight). */
+const NIGHT_CA_FROM = 0.6
+const NIGHT_CA_TO = 0.75
+
 const lensFrag = /* glsl */ `
 uniform float ca;
 uniform float shimmer;
@@ -532,7 +536,13 @@ export class Renderer {
     return false
   }
 
-  setLens(ca: number, shimmer: number, blur: number): void {
+  /**
+   * The lens pass. `night` (0 noon … 1 midnight) fades the chromatic aberration out after dusk:
+   * on a dark frame the split catches every star and dust mote as a red and a blue speck.
+   */
+  setLens(caIn: number, shimmer: number, blur: number, night = 0): void {
+    const t = Math.min(1, Math.max(0, (night - NIGHT_CA_FROM) / (NIGHT_CA_TO - NIGHT_CA_FROM)))
+    const ca = caIn * (1 - t * t * (3 - 2 * t))
     this.lens.u('ca').value = ca
     this.lens.u('shimmer').value = this.spec.shimmer ? shimmer : 0
     this.lens.u('blur').value = blur

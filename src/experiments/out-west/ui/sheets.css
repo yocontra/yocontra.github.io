@@ -342,3 +342,95 @@
     animation: none;
   }
 }
+
+/* the Reduced motion setting, on the game root (main.ts), does the same as the system's */
+.ow-reduced .ow-sheet.on,
+.ow-reduced .ow-sheet-panel,
+.ow-reduced .ow-queue .ow-hub-h .ow-icon {
+  animation: none;
+}
+
+/* ------------------------------------------------------------------- settings */
+.ow-set-group + .ow-set-group {
+  margin-top: var(--ow-s4);
+}
+.ow-set-h {
+  margin: 0 0 var(--ow-s2);
+  font-family: var(--ow-font-text);
+  font-size: var(--ow-fs-body);
+  font-weight: 600;
+  font-variant-caps: all-small-caps;
+  letter-spacing: var(--ow-track-label);
+  color: var(--ow-brass-hi);
+}
+.ow-set-row {
+  display: flex;
+  align-items: center;
+  gap: var(--ow-s3);
+  min-height: 56px;
+  border-bottom: 1px solid var(--ow-rule);
+}
+.ow-set-label {
+  flex: 0 0 5.5em;
+  font-weight: 600;
+  font-size: var(--ow-fs-lead);
+  font-variant-caps: all-small-caps;
+  letter-spacing: var(--ow-track-label);
+}
+.ow-set-range {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 44px;
+  margin: 0;
+  accent-color: var(--ow-red);
+  cursor: pointer;
+}
+.ow-set-range:focus-visible {
+  outline: 2px solid var(--ow-brass-hi);
+  outline-offset: 3px;
+}
+.ow-set-value {
+  flex: 0 0 3.5em;
+  text-align: right;
+  font-family: var(--ow-font-num);
+  font-variant-numeric: var(--ow-figs-hud);
+  color: var(--ow-brass-hi);
+}
+.ow-set-graphics {
+  display: grid;
+  gap: var(--ow-s2);
+}
+.ow-set-seg {
+  display: flex;
+  border: 1px solid var(--ow-brass-lo);
+  border-radius: var(--ow-radius);
+}
+.ow-set-seg-btn {
+  flex: 1 1 0;
+  min-height: 44px;
+  padding: 0 var(--ow-s3);
+  border: 0;
+  background: rgb(0 0 0 / 0.3);
+  color: var(--ow-bone-2);
+  font-family: var(--ow-font-text);
+  font-weight: 600;
+  font-size: var(--ow-fs-lead);
+  font-variant-caps: all-small-caps;
+  letter-spacing: var(--ow-track-label);
+  cursor: pointer;
+}
+.ow-set-seg-btn + .ow-set-seg-btn {
+  border-left: 1px solid var(--ow-brass-lo);
+}
+.ow-set-seg-btn.on {
+  background: var(--ow-red);
+  color: var(--ow-bone);
+}
+.ow-set-seg-btn:focus-visible {
+  outline: 2px solid var(--ow-brass-hi);
+  outline-offset: -3px;
+}
+.ow-toggle:has(input:disabled) {
+  cursor: not-allowed;
+  opacity: 0.6;
+}

@@ -21,6 +21,7 @@ import { type GauntletChoice, gauntletSheet, type Mode, ModeTiles } from './mode
 import { showNotices } from './notices.ts'
 import { QueueSheet } from './queue.ts'
 import { openSaloon, rideAgain } from './saloon.ts'
+import { openSettings } from './settings-sheet.ts'
 import { announceLevel } from './sfx.ts'
 import { button, el, panelSheet, setBar, signedMoney, swallow } from './sheet.ts'
 import { mountStanding } from './standing.ts'
@@ -96,6 +97,8 @@ export class Hub {
   private me = null as Me | null
   private sheet = null as { dispose: () => void } | null
   private visible = false as boolean
+  /** A locked tile tapped while signed out: where signing in carries on to. */
+  private afterSignIn = null as Mode | null
 
   constructor(parent: HTMLElement, deps: HubDeps) {
     this.parent = parent
@@ -118,8 +121,11 @@ export class Hub {
     )
     button(links, 'Ledger', () => this.openLedger())
     button(links, 'Account', () => this.openAccount())
+    button(links, 'Settings', () => openSettings(this.parent))
     onAuthChange(() => {
-      this.refresh().catch(() => undefined)
+      this.refresh()
+        .then(() => this.carryOn())
+        .catch(() => undefined)
     })
   }
 
@@ -232,11 +238,13 @@ export class Hub {
     const nums = el('div', 'ow-hub-nums', this.strip)
     const purse = el('span', 'ow-hub-purse', nums)
     purse.setAttribute('aria-label', `Purse ${money(me.purse)}`)
-    purse.append(icon('money'), money(me.purse))
+    purse.title = 'Purse: your money, won in duels. Spend it at the Outfitter.'
+    purse.append(icon('money'), el('small', '', null, 'Purse'), money(me.purse))
     const bounty = el('span', 'ow-hub-bounty', nums)
     const b = money(me.bounty || bountyForLevel(me.level))
     bounty.setAttribute('aria-label', `Bounty ${b}`)
-    bounty.append(icon('bounty'), b)
+    bounty.title = 'Bounty: the price on your poster. It grows with your level and your win streak.'
+    bounty.append(icon('bounty'), el('small', '', null, 'Bounty'), b)
     if (canPrestige(me.level, me.prestige)) {
       button(
         this.strip,
@@ -250,6 +258,51 @@ export class Hub {
         true,
       ).classList.add('ow-feat-prestige')
     }
+  }
+
+  /** Signed in from a locked tile: close the account sheet and go on into that mode. */
+  private carryOn(): void {
+    const m = this.afterSignIn
+    if (m === null || !currentPlayer() || !this.visible) {
+      return
+    }
+    this.afterSignIn = null
+    this.closeSheet()
+    this.pick(m)
+  }
+
+  /** Straight into a ranked run from outlaw 1 (the licence road), or the Quick Draw sheet. */
+  private rideRanked(): void {
+    if (this.deps.rankedOk && this.deps.ready()) {
+      this.hide()
+      this.deps.playGauntlet({ ranked: true, resume: false })
+    } else {
+      this.pick('gauntlet')
+    }
+  }
+
+  /** Bounty Hunt and Frontier want the licence: say so, with the way to earn it, not a dead end. */
+  private licenceGate(title: string, line: string): boolean {
+    const me = this.me
+    if (!me || licenceStatus(me.gauntletClears).licensed) {
+      return false
+    }
+    const s = panelSheet(this.parent, { title, cls: 'ow-feat-gate' })
+    const copy = licenceCopy(licenceStatus(me.gauntletClears))
+    el('p', 'ow-hub-note', s.body, line)
+    el('p', 'ow-hub-note', s.body, copy.progress ?? copy.kicker)
+    const row = el('div', 'ow-hub-row', s.body)
+    button(row, 'Not now', () => s.close())
+    button(
+      row,
+      'Ride the ranked gauntlet',
+      () => {
+        s.close()
+        this.rideRanked()
+      },
+      true,
+    ).focus()
+    return true
   }
 
   private pick(m: Mode): void {
@@ -277,6 +330,8 @@ export class Hub {
     }
     if (!signedIn) {
       this.openAccount()
+      // set after opening: opening closes any older sheet, whose cleanup clears it
+      this.afterSignIn = m
       return
     }
     if (m === 'bounty') {
@@ -292,22 +347,7 @@ export class Hub {
    * (the first three outlaws on a ranked run) and whether the town is open this month.
    */
   private async openFrontier(): Promise<void> {
-    const me = this.me
-    if (me && !licenceStatus(me.gauntletClears).licensed) {
-      const s = panelSheet(this.parent, { title: 'Frontier', cls: 'ow-feat-gate' })
-      const copy = licenceCopy(licenceStatus(me.gauntletClears))
-      el('p', 'ow-hub-note', s.body, 'Perdition is for licensed gunslingers only.')
-      el('p', 'ow-hub-note', s.body, copy.progress ?? copy.kicker)
-      const row = el('div', 'ow-hub-row', s.body)
-      button(
-        row,
-        'Ride the gauntlet',
-        () => {
-          s.close()
-          this.pick('gauntlet')
-        },
-        true,
-      )
+    if (this.licenceGate('Frontier', 'Perdition is for licensed gunslingers only.')) {
       return
     }
     const open = await fetchTownOpen()
@@ -323,6 +363,9 @@ export class Hub {
     if (!this.deps.ready()) {
       return
     }
+    if (this.licenceGate('Bounty Hunt', 'Bounty Hunt is for licensed gunslingers only.')) {
+      return
+    }
     const xpBefore = this.me?.xp ?? null
     this.root.classList.add('dim')
     const q = new QueueSheet(this.parent, {
@@ -333,6 +376,7 @@ export class Hub {
         this.deps.bountyHunt(match, xpBefore)
       },
       closed: () => this.root.classList.remove('dim'),
+      rideRanked: () => this.rideRanked(),
     })
     void q
   }
@@ -394,12 +438,18 @@ export class Hub {
   private openAccount(): void {
     // the account panel holds a pending conditional sign-in: cancelled however the sheet closes
     const cleanup = { run: (): void => undefined }
-    const body = this.panel('Your poster', false, cleanup)
+    const body = this.panel('Account', false, cleanup)
     const acct = mountAccount(body, {
       onClose: () => this.closeSheet(),
       gauntletClears: this.me?.gauntletClears ?? null,
     })
-    cleanup.run = () => acct.dispose()
+    cleanup.run = () => {
+      acct.dispose()
+      // closed without signing in: the tapped tile stays locked
+      if (!currentPlayer()) {
+        this.afterSignIn = null
+      }
+    }
     mountStanding(body)
     if (this.me) {
       mountNameChange(body, this.me, (patch) => this.patch(patch))

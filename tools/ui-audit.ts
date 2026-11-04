@@ -456,6 +456,11 @@ async function member(browser: Browser, size: Size, state: State | null): Promis
       await closeSheets(page)
     }
   }
+  // unlicensed, Bounty Hunt is a gate with the way to the licence; licensed, the queue
+  await sheet(page, size, 'licence-bounty', '.ow-tile-bounty')
+  sql(`UPDATE profiles SET gauntlet_clears = 7 WHERE account_id = ${accountWhere()}`)
+  await toHub(page, size, false)
+  await closeSheets(page)
   await step(page, size, 'queue', async () => {
     await tap(page, '.ow-tile-bounty')
     await page.waitForTimeout(1500)
@@ -472,7 +477,11 @@ async function member(browser: Browser, size: Size, state: State | null): Promis
   await page.waitForTimeout(800)
   if ((await page.locator('.ow-feat-notice').count()) > 0) {
     await audit(page, size, 'notices', '.ow-feat-notice')
-    await tap(page, '.ow-feat-notice .ow-btn-primary')
+    // the notices come one at a time: read them all out of the way
+    for (let i = 0; i < 12 && (await page.locator('.ow-feat-notice').count()) > 0; i++) {
+      await tap(page, '.ow-feat-notice .ow-btn-primary')
+      await page.waitForTimeout(400)
+    }
   } else if (want('notices')) {
     rows.push({
       size: size.name,

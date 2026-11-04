@@ -45,6 +45,12 @@ export interface Ctx {
   debug: boolean
 }
 
+/** How the call is shown and heard (the Daily Outlaw's no-bell duel turns both off). */
+export interface CallPresentation {
+  bell: boolean
+  text: boolean
+}
+
 /** Phases in which the call can ring (or just rang): every UI sound is hushed. */
 const STANDOFF_PHASES: ReadonlySet<Phase> = new Set<Phase>(['wait', 'bossClock', 'call'])
 
@@ -63,6 +69,12 @@ export type Phase =
   | 'bossClock'
   | 'bossWound'
   | 'end'
+
+/**
+ * Each man's distance from the line they stand back to back on, m: clear of a big belly, a vest
+ * or a poncho, so the two bodies never overlap before the walk.
+ */
+export const BACK_TO_BACK_Z = 0.36
 
 export const rng = Math.random
 export const between = (a: number, b: number): number => a + (b - a) * rng()
@@ -142,7 +154,33 @@ export class DuelState {
   standoffSent = false as boolean
   lastPressT = 0
   hatShot = false as boolean
+  /** Your shot took the gun out of his hand (pointer aim, a kill). */
+  handShot = false as boolean
   glintFired = false as boolean
+  /** realTime the rifleman's scope-glint marker stays up until. */
+  glintMarkUntil = 0
+  /** Fake-outs that fired during this attempt's wait (the duel report). */
+  fakesSeen = 0
+  /**
+   * perf time before which a press can't be a back-shot: just after a retry, and as the wait (or
+   * the boss's clock) opens, so a double tap on the card isn't fined. The call is never gated.
+   */
+  steadyUntil = 0
+  /** perf time of the next haptic heartbeat in the wait. */
+  nextBeat = 0
+  /** His shot that got you, ms after the call (the lose card); null when unknown. */
+  hisMs = null as number | null
+  /** Practice: your press just after he got you, ms after the call (the lose card). */
+  lateMs = null as number | null
+  /** How long before the bell your back-shot was, ms (the coward card); null when unknown. */
+  cowardEarlyMs = null as number | null
+  /** This duel is the Daily Outlaw (set by `daily.ts`; the duel report carries it). */
+  daily = false as boolean
+  /**
+   * How the call is presented. The Daily Outlaw's no-bell duel turns both off: the call is then
+   * only his hand twitching. Judging never changes. Reset to both on for every outlaw.
+   */
+  callPresentation: CallPresentation = { bell: true, text: true }
   // outcomes
   outcomeT = 0
   resultShown = false as boolean

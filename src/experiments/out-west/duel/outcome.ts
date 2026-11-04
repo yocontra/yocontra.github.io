@@ -1,4 +1,4 @@
-import { MathUtils } from 'three'
+import { MathUtils, Quaternion } from 'three'
 import { FEEL } from '../data/feel.ts'
 import { gradeFor } from '../data/outlaws.ts'
 import { save as persist } from '../save.ts'
@@ -8,6 +8,7 @@ import type { Director } from './director.ts'
 import { fireGun, spinHolster } from './draws.ts'
 import { killShot } from './framing.ts'
 import { book, type Paid, payLine, showPurse } from './purse.ts'
+import { report } from './report.ts'
 import { between, type DuelState, V } from './state.ts'
 
 /** Seconds into a win when you twirl the gun back into the holster (the slow-mo is over). */
@@ -79,6 +80,9 @@ export function killEnemyAnim(s: DuelState): void {
     spread: 0.2,
     dir: away.clone().multiplyScalar(0.5),
   })
+  if (s.handShot) {
+    shootGunFromHand(s)
+  }
   const hat = e.popHat()
   if (hat) {
     const big = s.hatShot
@@ -89,6 +93,39 @@ export function killEnemyAnim(s: DuelState): void {
       { floor: 0.002 },
     )
   }
+}
+
+/** The trick shot: his gun leaves his hand and spins into the dirt (style only, never judged). */
+function shootGunFromHand(s: DuelState): void {
+  const e = s.enemy
+  const g = e?.gun
+  if (!(e && g)) {
+    return
+  }
+  g.updateWorldMatrix(true, false)
+  const p = V()
+  const q = new Quaternion()
+  g.matrixWorld.decompose(p, q, V())
+  s.c.scene.add(g)
+  g.position.copy(p)
+  g.quaternion.copy(q)
+  g.scale.setScalar(1)
+  e.gun = null
+  const from = s.player.root.position
+  const away = V(p.x - from.x, 0, p.z - from.z).normalize()
+  s.c.physics.add(g, V(between(-0.6, 0.6), 2.6, 0).addScaledVector(away, 1.4), V(9, 4, 12), {
+    side: true,
+    ground: 0.023,
+  })
+  s.c.audio.play('ricochet', { offset: 0, duration: 0.6, gain: 0.7, pos: p.clone() })
+}
+
+/** The trick shot's stamp on the win card, if there was one (hat first: it's the better story). */
+function trickStamp(s: DuelState): string | null {
+  if (s.hatShot) {
+    return 'HAT SHOT'
+  }
+  return s.handShot ? 'SHOT THE GUN OUT OF HIS HAND' : null
 }
 
 /** Advance the dying man's clock; the body fall lands on ground contact. */
@@ -185,6 +222,7 @@ export function win(d: Director, reactionMs: number, paid: Paid | null): void {
   }
   killEnemyAnim(d)
   d.winDelta = book(d, { outcome: 'win', reactionMs: r }, paid)
+  report(d, 'win', r)
   d.paidShown = false
   if (d.boss) {
     d.killDur = d.reduced ? 0.8 : FEEL.bossKillSeconds
@@ -268,6 +306,7 @@ export function tickWin(d: Director, realDt: number): void {
       hint: 'press to continue',
     })
     c.hud.cardPayout(payLine(d, r))
+    c.hud.cardStamp(trickStamp(d))
     showPurse(d, d.winDelta)
   }
   if (t >= FEEL.resultAt + FEEL.resultFor) {
