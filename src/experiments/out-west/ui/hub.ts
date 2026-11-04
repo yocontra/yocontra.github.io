@@ -15,9 +15,10 @@ import { fetchLedger, fetchMe, fetchTownOpen } from '../net/api.ts'
 import { currentPlayer, onAuthChange } from '../net/auth.ts'
 import type { QueueMatch } from '../net/queue.ts'
 import { mountAccount } from './account.ts'
+import { hubTools, openMore } from './hub-more.ts'
 import { icon } from './icons.ts'
 import { mountBlocks, mountNameChange } from './identity.ts'
-import type { HubMeta } from './meta-hub.ts'
+import type { HubMeta, HubMetaUi } from './meta-hub.ts'
 import { type GauntletChoice, gauntletSheet, type Mode, ModeTiles } from './mode-select.ts'
 import { showNotices } from './notices.ts'
 import { QueueSheet } from './queue.ts'
@@ -106,7 +107,7 @@ export class Hub {
   private me = null as Me | null
   private sheet = null as { dispose: () => void } | null
   private visible = false as boolean
-  private readonly metaUi: { refresh: () => void } | null
+  private readonly metaUi: HubMetaUi | null
   /** A locked tile tapped while signed out: where signing in carries on to. */
   private afterSignIn = null as Mode | null
 
@@ -118,20 +119,36 @@ export class Hub {
     swallow(this.root)
     const top = el('header', 'ow-hub-top', this.root)
     this.strip = el('div', 'ow-hub-strip', top)
+    hubTools(top, {
+      account: () => this.openAccount(),
+      settings: () => openSettings(this.parent),
+    })
     const side = el('div', 'ow-hub-side', this.root)
     this.tiles = new ModeTiles(side, (m) => this.pick(m))
+    this.metaUi = deps.meta?.mount(side) ?? null
+    const meta = this.metaUi
+    // the modes are the tiles; one row under them: the board, and More for everything else
     const links = el('div', 'ow-hub-links', side)
     button(links, 'Leaderboard', () => deps.openBoard())
-    button(links, 'Chalkboard', () =>
-      openSaloon(this.parent, {
-        me: () => this.me,
-        changed: (patch) => this.patch(patch),
-      }),
+    button(links, 'More', () =>
+      openMore(this.parent, [
+        ...(meta
+          ? [
+              { label: 'Gauntlet map', open: meta.map },
+              { label: 'Achievements', open: meta.achievements },
+            ]
+          : []),
+        {
+          label: 'Chalkboard',
+          open: () =>
+            openSaloon(this.parent, {
+              me: () => this.me,
+              changed: (patch) => this.patch(patch),
+            }),
+        },
+        { label: 'Ledger', open: () => this.openLedger() },
+      ]),
     )
-    button(links, 'Ledger', () => this.openLedger())
-    button(links, 'Account', () => this.openAccount())
-    this.metaUi = deps.meta?.mount(side, links) ?? null
-    button(links, 'Settings', () => openSettings(this.parent))
     onAuthChange(() => {
       this.refresh()
         .then(() => this.carryOn())
@@ -327,7 +344,7 @@ export class Hub {
       gauntletSheet(
         this.parent,
         { signedIn, ready: true, continueAt: this.deps.continueAt() },
-        this.deps.rankedOk,
+        { rankedOk: this.deps.rankedOk, ...(this.metaUi ? { map: this.metaUi.map } : {}) },
         (c) => {
           if (c) {
             this.hide()

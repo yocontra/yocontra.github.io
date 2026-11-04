@@ -54,6 +54,26 @@ function board(parent: HTMLElement, b: DailyBoardResponse | null): void {
   }
 }
 
+/**
+ * The banner's one line: how your day stands (tries, best, the pay still on offer). Empty when
+ * the server can't be reached: the kicker already names the day's twist, and a "loading" line
+ * that never resolves reads as stuck.
+ */
+function dailyStatus(t: DailyResponse | null): string {
+  if (!t) {
+    return ''
+  }
+  const left = Math.max(0, t.maxTries - t.tries)
+  if (left === 0) {
+    return t.best ? `Best today ${t.best} ms · back tomorrow` : 'Back tomorrow'
+  }
+  const tries = `${left} ${left === 1 ? 'try' : 'tries'} left`
+  if (t.best) {
+    return `Best today ${t.best} ms · ${tries}`
+  }
+  return t.paid ? tries : `${tries} · win +${money(DAILY_PAY.cash)}`
+}
+
 export class DailyTile {
   readonly button: HTMLButtonElement
   private readonly deps: DailyDeps
@@ -70,7 +90,8 @@ export class DailyTile {
     b.append(icon('badge'))
     this.kicker = el('span', 'ow-tile-kicker', b, 'Daily Outlaw')
     el('span', 'ow-tile-title', b, dailySpec(dayKey()).title)
-    this.sub = el('span', 'ow-tile-sub', b, 'A new outlaw every day')
+    // empty (hidden) until the server says how your day stands: never a loading line
+    this.sub = el('span', 'ow-tile-sub', b)
     b.addEventListener('click', (e) => {
       e.stopPropagation()
       this.open().catch(() => undefined)
@@ -89,15 +110,7 @@ export class DailyTile {
       title.textContent = spec.title
     }
     this.kicker.textContent = `Daily Outlaw · ${spec.modifiers.map((m) => MOD_LABEL[m]).join(' · ')}`
-    const t = this.today
-    if (!t) {
-      this.sub.textContent = 'Saddling up…'
-      return
-    }
-    const left = Math.max(0, t.maxTries - t.tries)
-    this.sub.textContent = t.best
-      ? `Best today ${t.best} ms · ${left} ${left === 1 ? 'try' : 'tries'} left`
-      : `${left} of ${t.maxTries} tries left · ${t.paid ? 'paid today' : `win: +${money(DAILY_PAY.cash)}`}`
+    this.sub.textContent = dailyStatus(this.today)
   }
 
   /** The day's sheet: who, what's different, the board, and the ride out. */

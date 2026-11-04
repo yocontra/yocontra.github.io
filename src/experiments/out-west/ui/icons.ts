@@ -63,3 +63,33 @@ export function drawIcon(
   ctx.fill(new Path2D(PATHS[name]))
   ctx.restore()
 }
+
+/** Eight squared teeth around a hub with a hole: the settings cog, drawn as one even-odd path. */
+function cogPath(): string {
+  const teeth = 8
+  const outer = 11
+  const inner = 8.4
+  const pts: string[] = []
+  for (let i = 0; i < teeth * 4; i++) {
+    // each tooth: two corners at the tip, two at the root
+    const r = i % 4 < 2 ? outer : inner
+    const a = ((i + 0.5 - 1) / (teeth * 4)) * Math.PI * 2
+    pts.push(`${(12 + r * Math.cos(a)).toFixed(2)} ${(12 + r * Math.sin(a)).toFixed(2)}`)
+  }
+  return `M${pts.join(' L')} Z M15.2 12 A3.2 3.2 0 1 0 8.8 12 A3.2 3.2 0 1 0 15.2 12 Z`
+}
+
+/** The settings cog (not in the engraved set: a plain filled shape in the same ink). */
+export function cog(): SVGSVGElement {
+  const svg = document.createElementNS(NS, 'svg')
+  svg.setAttribute('viewBox', '0 0 24 24')
+  svg.setAttribute('class', 'ow-icon ow-icon-cog')
+  svg.setAttribute('aria-hidden', 'true')
+  svg.setAttribute('focusable', 'false')
+  const p = document.createElementNS(NS, 'path')
+  p.setAttribute('d', cogPath())
+  p.setAttribute('fill', 'currentColor')
+  p.setAttribute('fill-rule', 'evenodd')
+  svg.append(p)
+  return svg
+}
