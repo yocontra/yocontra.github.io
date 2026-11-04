@@ -31,7 +31,6 @@ import {
 import { mergeGeometries, toCreasedNormals } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
 
 const HAND = /^(?:Wrist|Index|Middle|Ring|Pinky|Thumb)\d?[LR]$/u
-const FOREARM = /^LowerArm[LR]$/u
 /** Saddle leather, multiplied over the atlas's skin (the cuffs). */
 const LEATHER = [0.46, 0.3, 0.19] as const
 /** Material params for the cuff (styMat: roughness factor, rim strength; no skin flag). */
@@ -42,6 +41,9 @@ const GLOVE_COLOR = 0x3b_23_15
 const FINGERS = ['Index', 'Middle', 'Ring', 'Pinky'] as const
 /** Around each tube, and around the palm. */
 const SIDES = 12
+/** A finger joint's blend (± of a bone's length) and how much fuller its rings are. */
+const JOINT_W = 0.42
+const JOINT_FILL = 0.14
 const PALM_SIDES = 18
 
 type Side = 'L' | 'R'
@@ -257,7 +259,7 @@ function digit(
   for (let s = 0; s < J.length - 1; s++) {
     const a = J[s] as Vector3
     const b = J[s + 1] as Vector3
-    for (const f of [0, 0.25, 0.5, 0.75]) {
+    for (const f of [0, 0.2, 0.4, 0.6, 0.8]) {
       path.push({ p: a.clone().lerp(b, f), u: s + f })
     }
   }
@@ -272,9 +274,11 @@ function digit(
     const f = frame(along, o.up)
     const s = Math.max(0, Math.min(segs - 1, Math.floor(u)))
     const r0 = o.radii[s] ?? 0.008
-    // the knuckles swell, the last joint tapers to the tip
+    // the knuckles fill out: a curled joint's blended rings fold in on the palm side (linear
+    // skinning loses volume at the bend), so a joint's rings are fuller to keep the finger round
     const knuckle =
-      Math.max(0, 1 - Math.abs(u - Math.round(u)) / 0.22) * (Math.round(u) < segs ? 0.1 : 0)
+      Math.max(0, 1 - Math.abs(u - Math.round(u)) / JOINT_W) *
+      (Math.round(u) < segs && Math.round(u) >= 1 ? JOINT_FILL : 0)
     const taper = 1 - smooth(segs - 0.6, segs, u) * 0.12
     const r = r0 * (1 + knuckle) * taper
     // the skin: the wrist into the first bone round the base knuckle, each joint blended
@@ -283,9 +287,9 @@ function digit(
       skin = { a: o.wrist, b: bone(0), t: smooth(-0.15, 0.3, u) }
     } else {
       const j = Math.round(u)
-      const near = Math.abs(u - j) < 0.3 && j >= 1 && j < segs
+      const near = Math.abs(u - j) < JOINT_W && j >= 1 && j < segs
       skin = near
-        ? { a: bone(j - 1), b: bone(j), t: smooth(j - 0.3, j + 0.3, u) }
+        ? { a: bone(j - 1), b: bone(j), t: smooth(j - JOINT_W, j + JOINT_W, u) }
         : { a: bone(s), b: bone(s), t: 0 }
     }
     return { c: p, u: f.u, v: f.v, ru: r * o.flat, rv: r, skin }
@@ -353,10 +357,10 @@ function palm(
   // (fraction along, width, thickness): the gauntlet's flared cuff over the sleeve's end, the
   // wrist, the palm, rounding over the knuckles
   const sections: [number, number, number][] = [
-    [-0.64, (rF * 2.08) / wK, (rF * 2.08) / tK],
-    [-0.56, (rF * 2.36) / wK, (rF * 2.36) / tK],
-    [-0.4, (rF * 2.3) / wK, (rF * 2.3) / tK],
-    [-0.2, (rF * 2.12) / wK, (rF * 2.0) / tK],
+    [-0.6, (rF * 2.04) / wK, (rF * 2.04) / tK],
+    [-0.54, (rF * 2.16) / wK, (rF * 2.16) / tK],
+    [-0.4, (rF * 2.12) / wK, (rF * 2.1) / tK],
+    [-0.2, (rF * 2.02) / wK, (rF * 1.9) / tK],
     [-0.06, 0.62, 0.86],
     [0.06, 0.72, 0.94],
     [0.35, 0.9, 1.04],
@@ -501,12 +505,10 @@ function cuffsAndHands(g: BufferGeometry, skeleton: Skeleton, gloved: ReadonlySe
     return
   }
   const hand = skeleton.bones.map((b) => HAND.test(b.name))
-  const fore = skeleton.bones.map((b) => FOREARM.test(b.name))
   const sideOf = skeleton.bones.map((b) => (b.name.endsWith('L') ? 'L' : 'R'))
   const under = new Uint8Array(idx.count)
   for (let v = 0; v < idx.count; v++) {
     let onHand = 0
-    let onFore = 0
     let side: Side = 'R'
     for (let k = 0; k < 4; k++) {
       const bone = idx.getComponent(v, k)
@@ -514,12 +516,11 @@ function cuffsAndHands(g: BufferGeometry, skeleton: Skeleton, gloved: ReadonlySe
       if (hand[bone]) {
         onHand += wt
         side = sideOf[bone] === 'L' ? 'L' : 'R'
-      } else if (fore[bone]) {
-        onFore += wt
       }
     }
-    // the cuff where the forearm hands over to the wrist (and the hand, where no glove covers it)
-    if (onHand > 0.45 || (onHand > 0.08 && onFore > 0.3)) {
+    // every vertex the hand pulls at all (the seam under the glove's cuff included): leather, so
+    // no sliver of the source hand's skin shows past the cuff at a grazing angle
+    if (onHand > 0.04) {
       color?.setXYZ(v, LEATHER[0], LEATHER[1], LEATHER[2])
       mat?.setXY(v, GLOVE_MAT[0], GLOVE_MAT[1])
       lum?.setX(v, 0)
@@ -540,7 +541,7 @@ function cuffsAndHands(g: BufferGeometry, skeleton: Skeleton, gloved: ReadonlySe
       const b = ix.getX(t + 1)
       const c = ix.getX(t + 2)
       // (any triangle mostly on the hand: the wrist's seam is under the glove's cuff)
-      if ((under[a] ?? 0) + (under[b] ?? 0) + (under[c] ?? 0) < 60) {
+      if ((under[a] ?? 0) + (under[b] ?? 0) + (under[c] ?? 0) < 40) {
         keep.push(a, b, c)
       }
     }

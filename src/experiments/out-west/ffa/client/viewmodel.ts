@@ -56,6 +56,24 @@ import { VmSky } from './vm-sky.ts'
 
 /** The view model's own vertical field of view (degrees), and on the sights. */
 export const VM_FOV = 54
+/** The view model's lens never sees narrower than this across (tan of the half-angle). */
+const MIN_TAN_ACROSS = 0.44
+/** How far the hip hold comes in toward the middle on an upright phone (share of its offset). */
+const PORTRAIT_IN = 0.45
+/** The share of the draw after which the hammer comes back. */
+const COCK_ON_DRAW = 0.45
+
+/** 0 in landscape and square … 1 at a phone held upright (aspect 0.46 and narrower). */
+function portraitK(aspect: number): number {
+  return Math.min(1, Math.max(0, (1 - aspect) / 0.54))
+}
+
+/** The vertical FOV the view model draws with: widened when the frame is narrow. */
+function vmFov(fov: number, aspect: number): number {
+  const tanV = Math.tan((fov * Math.PI) / 360)
+  const need = MIN_TAN_ACROSS / Math.max(0.1, aspect)
+  return tanV >= need ? fov : (Math.atan(need) * 360) / Math.PI
+}
 const VM_FOV_ADS = 46
 /** The eye sits this far above and in front of the head bone (m). */
 const EYE_UP = 0.09
@@ -463,6 +481,8 @@ export class ViewModel {
     }
     this.placeGun(fit, pose)
     if (fit === this.fits.revolver) {
+      // the thumb cocks it as it comes up, and again once the gate shuts after a reload
+      this.action?.arm(input.reload === null && this.motion.drawn > COCK_ON_DRAW)
       this.action?.update(input.dt, input.reload)
     }
     this.rig.updateMatrixWorld(true)
@@ -479,6 +499,8 @@ export class ViewModel {
     const h = fit.hold
     const ads = pose.ads
     const at = tmpV.copy(h.hip).lerp(h.ads, ads)
+    // upright phone: the hip hold comes in toward the middle, so the gun stays in the narrow frame
+    at.x -= h.hip.x * (1 - ads) * PORTRAIT_IN * portraitK(this.aspect)
     at.x += pose.x
     at.y += pose.y
     at.z += pose.z
@@ -604,7 +626,7 @@ export class ViewModel {
   /** The lens (its FOV eases in on the sights, its depth squeezed), the lights and the flash. */
   private lens(pose: VmPose, sunCam: Vector3, dt: number): void {
     const cam = this.camera
-    const fov = VM_FOV + (VM_FOV_ADS - VM_FOV) * pose.ads
+    const fov = vmFov(VM_FOV + (VM_FOV_ADS - VM_FOV) * pose.ads, this.aspect)
     if (cam.fov !== fov || cam.aspect !== this.aspect) {
       cam.fov = fov
       cam.aspect = this.aspect
