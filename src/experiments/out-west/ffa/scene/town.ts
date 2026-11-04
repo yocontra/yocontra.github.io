@@ -29,10 +29,12 @@ import {
   DoubleSide,
   Float32BufferAttribute,
   Group,
+  InstancedMesh,
   type Material,
   Matrix4,
   Mesh,
   MeshStandardMaterial,
+  type Object3D,
   type PerspectiveCamera,
   RepeatWrapping,
   SRGBColorSpace,
@@ -1399,11 +1401,58 @@ interface Tile {
  * inset stand-ins (dressing.ts), and door frames, lanterns and wagon loads aren't missed at 40 m.
  */
 const FAR: Record<string, number | 'flat'> = {
-  rock: 0.2,
-  fence: 0.06,
-  k_door_plank: 0.08,
+  rock: 0.3,
+  fence: 0.1,
+  k_door_plank: 0.12,
   k_window_thin: 'flat',
   k_window_wide: 'flat',
+}
+
+/**
+ * Repeated kit props drawn as instances of their one shared geometry (merged copies cost a
+ * vertex buffer per copy): refilled with the near tiles' instances when that set changes.
+ */
+const INSTANCED = new Set([
+  'barrel',
+  'crate',
+  'hay',
+  'fence',
+  'rock',
+  'k_chair',
+  'k_bench',
+  'k_table',
+  'lantern',
+])
+
+interface Herd {
+  def: PropDef
+  meshes: InstancedMesh[]
+  items: { at: Matrix4; tile: string }[]
+}
+
+/**
+ * Drop the CPU copy of every town-owned vertex and index array once it is on the GPU (iOS
+ * WebViews are killed under memory pressure). Bounding spheres are computed first, which is all
+ * culling needs. Shared prop geometry (instanced, used elsewhere too) is left alone, as is
+ * everything when the dev audits, which read vertices, are watching.
+ */
+function freeAfterUpload(root: Object3D): void {
+  const free = function (this: { array: unknown }) {
+    this.array = null
+  }
+  root.traverse((o) => {
+    const m = o as Mesh
+    if (!m.isMesh || (m as InstancedMesh).isInstancedMesh) {
+      return
+    }
+    const g = m.geometry
+    g.computeBoundingSphere()
+    g.computeBoundingBox()
+    for (const a of Object.values(g.attributes)) {
+      ;(a as BufferAttribute).onUpload(free)
+    }
+    g.index?.onUpload(free)
+  })
 }
 
 const FRAME = 0x5a_3e_28
@@ -1647,7 +1696,8 @@ export function buildTown(
   }
   root.add(waterMesh(layout))
   // the culled layers: detail tiles (near and far versions), and rooms
-  const culled: { group: Group; rect: Rect; within: number }[] = []
+  const culled: { group: Group; rect: Rect; within: number; tile?: string }[] = []
+  const herds = new Map<PropDef, Herd>()
   const farGeos = new Map<Material, BufferGeometry[]>()
   const farRects: { rect: Rect; id: number }[] = []
   const farMeshes: Mesh[] = []
@@ -1657,11 +1707,21 @@ export function buildTown(
     const rect = { x: ix * TILE, z: iz * TILE, w: TILE, d: TILE }
     const near = new Group()
     near.name = `detail ${k}`
-    for (const m of mergePlaced(t.near, near, swap, false)) {
+    const merged: Placement[] = []
+    for (const p of t.near) {
+      if (INSTANCED.has(p.def.name)) {
+        const herd = herds.get(p.def) ?? { def: p.def, meshes: [], items: [] }
+        herd.items.push({ at: p.at, tile: k })
+        herds.set(p.def, herd)
+      } else {
+        merged.push(p)
+      }
+    }
+    for (const m of mergePlaced(merged, near, swap, false)) {
       m.name = 'kit'
     }
     root.add(near)
-    culled.push({ group: near, rect, within: nearM })
+    culled.push({ group: near, rect, within: nearM, tile: k })
     // far stand-ins all go into one batch per material (tagged with their tile), drawn always;
     // the vertex shader folds away the tiles whose full detail is showing
     const id = farIndex(ix, iz)
@@ -1702,18 +1762,63 @@ export function buildTown(
     root.add(g)
     culled.push({ group: g, rect: b, within: roomM })
   }
+  // repeated props: one shared geometry each, instanced over whichever tiles are near
+  for (const herd of herds.values()) {
+    for (const p of herd.def.parts) {
+      const im = new InstancedMesh(
+        p.geometry,
+        swap.get(p.material.name) ?? p.material,
+        herd.items.length,
+      )
+      im.name = herd.def.name
+      im.count = 0
+      im.frustumCulled = false
+      im.receiveShadow = true
+      root.add(im)
+      herd.meshes.push(im)
+    }
+  }
   root.updateMatrixWorld(true)
   // Static: never recompose these matrices again.
   root.traverse((o) => {
     o.matrixAutoUpdate = false
     o.matrixWorldAutoUpdate = false
   })
+  const audit0 = Reflect.has(globalThis, 'owAuditScenes')
+  if (!audit0) {
+    freeAfterUpload(root)
+  }
+  let nearSet = ''
   const update = (cam: Vector3) => {
     // the dev audits (float, collider) need every piece in the scene they capture
     const audit = Reflect.has(globalThis, 'owAuditScenes')
+    const nearTiles: string[] = []
     for (const c of culled) {
       const near = toRect(c.rect, cam.x, cam.z) <= c.within
       c.group.visible = audit || near
+      if (c.tile && c.group.visible) {
+        nearTiles.push(c.tile)
+      }
+    }
+    const key = nearTiles.join('|')
+    if (key !== nearSet) {
+      nearSet = key
+      const show = new Set(nearTiles)
+      for (const herd of herds.values()) {
+        let n = 0
+        for (const it of herd.items) {
+          if (show.has(it.tile)) {
+            for (const im of herd.meshes) {
+              im.setMatrixAt(n, it.at)
+            }
+            n++
+          }
+        }
+        for (const im of herd.meshes) {
+          im.count = n
+          im.instanceMatrix.needsUpdate = true
+        }
+      }
     }
     for (const m of farMeshes) {
       m.visible = !audit
