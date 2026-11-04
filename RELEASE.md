@@ -34,6 +34,17 @@ so usage stays inside the included quota, and Frontier closes for the month inst
 
 **Real-device check:** before announcing, run the iPhone 13 mini checklist in `tools/PERF.md`.
 
+## Quick Draw balance and the ranked board
+
+The second gauntlet retune (outlaws 3–17 ramp 405→295 ms and never miss) makes a ranked clear
+harder than before. Runs posted under the old curve stay on the board as they are. Every run
+stores `economy_version`. If the board should restart with the new curve, bump `ECONOMY_VERSION` in
+`data/economy.ts` and filter the board to it.
+
+The touch allowance (+40 ms on his draw for a tap) applies only to unranked play: practice, the
+story and an unposted guest Daily. Ranked runs and posted Daily runs judge every device the same,
+because a client could claim to be on touch.
+
 ## Turnstile in an app WebView
 
 Turnstile can fail where there's no ordinary browser. Headless Chrome returned error 600010 in
