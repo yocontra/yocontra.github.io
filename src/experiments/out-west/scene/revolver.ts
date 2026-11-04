@@ -335,17 +335,6 @@ function hammer(d: RevolverDetail, look: RevolverLook): BufferGeometry {
       { segments: hi ? 14 : 4, radial: hi ? 10 : 4, flat: 1.55 },
     ),
   ]
-  if (d === 'hi') {
-    // the spur's checkering: a darker pad on top
-    p.push(
-      part(
-        new BoxGeometry(0.011, 0.0012, 0.0094),
-        M().makeRotationZ(0.05).setPosition(-0.0785, 0.0199, 0),
-        tint(f, 0.55),
-        'y',
-      ),
-    )
-  }
   return forge(p)
 }
 

@@ -53,6 +53,8 @@ export class GunBatch {
     im.count = 0
     im.frustumCulled = false
     im.castShadow = true
+    // each instance rides a rider's hand or holster: a character's, like a gun parented to a bone
+    im.userData.character = true
     this.root.add(im)
     return im
   }

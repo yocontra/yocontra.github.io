@@ -265,7 +265,7 @@ export class ViewModel {
     // dressed for the lens: gloves and cuffs, smooth shading (vm-gloves.ts)
     const body = actor.meshes[0]
     if (body) {
-      body.geometry = dressForLens(body.geometry, body.skeleton)
+      dressForLens(body)
     }
     if (actor.gun) {
       this.townSky.adopt(actor.gun)
