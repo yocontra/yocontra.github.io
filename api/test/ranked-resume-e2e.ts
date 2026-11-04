@@ -55,6 +55,8 @@ interface Msg {
   duel?: number
   outcome?: string
   n?: number
+  /** `call`: present it this long after it arrives (the server sends it ahead). */
+  inMs?: number
   purse?: number
   total?: number
   resumed?: RankedResumed
@@ -112,8 +114,8 @@ class Conn {
   /** Wins outlaw `level` as duel `duel`: waits for the call, fires every target at 140 ms. */
   async win(duel: number, level: number): Promise<Msg> {
     this.send({ type: 'standoff', duel, level })
-    await this.next('call', 30_000)
-    await sleep(140)
+    const call = await this.next('call', 30_000)
+    await sleep((call.inMs ?? 0) + 140)
     for (let target = 0; target < (TARGETS[level] ?? 1); target++) {
       this.send({ type: 'shot', duel, target, localMs: 140 })
       await sleep(30)

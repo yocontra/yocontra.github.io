@@ -43,6 +43,15 @@ export interface WaitPlan {
 
 export const MIN_CUE_GAP_MS = 350
 
+/**
+ * How far ahead of the call its message goes out (`call.inMs`). The client presents the call (the
+ * bell, DRAW!, the turn) `inMs` after the message arrives, scheduled on its audio clock so the bell's
+ * strike reaches the ear on the DRAW! frame even through a slow output device. The judging clock
+ * starts at the call itself (send time + lead), so every seat's reaction is measured from the
+ * moment its client presents it, exactly as before; a shot inside the lead is an early draw.
+ */
+export const CALL_LEAD_MS = 250
+
 /** The gauntlet's wait, unchanged: optional boss clock, at most one fake-out, then the call. */
 export function rankedWaitPlan(tuning: DuelTuning, rng: Rng = Math.random): WaitPlan {
   const cues: PlannedCue[] = []
@@ -122,8 +131,11 @@ export interface WaitStats {
 export interface StandoffEvents {
   /** A fake-out cue: send it to every human. */
   cue: (cue: string) => void
-  /** Send the call to this human seat. The send time is recorded right after this returns. */
-  call: (seat: Seat) => void
+  /**
+   * Send the call to this human seat, to be presented `inMs` from now (0: at once). The call's time
+   * on this seat is recorded as the send time (right after this returns) plus `inMs`.
+   */
+  call: (seat: Seat, inMs: number) => void
   /** The draw is decided. Called exactly once (unless aborted first). */
   end: (verdict: Verdict, stats: WaitStats) => void
 }
@@ -135,6 +147,8 @@ export interface StandoffOptions {
   events: StandoffEvents
   clock?: Clock
   rng?: Rng
+  /** Send the call this far ahead of it ({@link CALL_LEAD_MS}); 0 sends it at the call. */
+  leadMs?: number
 }
 
 /** Slack added to the ranked loss deadline on top of the RTT and tolerance. */
@@ -153,6 +167,9 @@ export class Standoff {
   private readonly events: StandoffEvents
   private readonly clock: Clock
   private readonly rng: Rng
+  private readonly leadMs: number
+  /** The call has gone out ahead (the lead); it takes effect at `callAtMs`. */
+  private announced = false as boolean
   private state: 'idle' | 'waiting' | 'called' | 'done' = 'idle'
   private startedAt = 0
   private lastCueAt = Number.NEGATIVE_INFINITY
@@ -174,6 +191,7 @@ export class Standoff {
     this.events = options.events
     this.clock = options.clock ?? realClock
     this.rng = options.rng ?? Math.random
+    this.leadMs = Math.max(0, Math.min(options.leadMs ?? 0, options.plan.callAtMs))
     if (
       this.mode === 'ranked' &&
       (this.seats[0].kind !== 'human' || this.seats[1].kind === 'human')
@@ -199,6 +217,9 @@ export class Standoff {
     this.startedAt = this.clock.now()
     for (const { atMs, cue } of this.plan.cues) {
       this.cancels.push(this.clock.after(atMs, () => this.playCue(cue)))
+    }
+    if (this.leadMs > 0) {
+      this.cancels.push(this.clock.after(this.plan.callAtMs - this.leadMs, () => this.announce()))
     }
     this.cancels.push(this.clock.after(this.plan.callAtMs, () => this.call()))
     this.scheduleAiBreaks()
@@ -255,7 +276,8 @@ export class Standoff {
       return
     }
     const breakAtMs = (-Math.log(Math.max(Number.EPSILON, this.rng())) / ai.hazardPerSecond) * 1000
-    if (breakAtMs < this.plan.callAtMs) {
+    // never inside the lead: the call is already on its way to the human
+    if (breakAtMs < this.plan.callAtMs - this.leadMs) {
       this.cancels.push(this.clock.after(breakAtMs, () => this.earlyDraw(seat)))
     }
   }
@@ -270,8 +292,12 @@ export class Standoff {
     const seat = this.aiSeat()
     const ai = seat === null ? null : this.ai(seat)
     if (seat !== null && ai && this.mode === 'pvp' && ai.flinches(cue)) {
-      // A flinch lands a beat after the cue, like a human's would.
-      this.cancels.push(this.clock.after(between(this.rng, 150, 300), () => this.earlyDraw(seat)))
+      // A flinch lands a beat after the cue, like a human's would (never inside the call's lead).
+      const flinchMs = between(this.rng, 150, 300)
+      const sinceStart = this.clock.now() - this.startedAt
+      if (sinceStart + flinchMs < this.plan.callAtMs - this.leadMs) {
+        this.cancels.push(this.clock.after(flinchMs, () => this.earlyDraw(seat)))
+      }
     }
   }
 
@@ -291,6 +317,24 @@ export class Standoff {
     this.finish({ kind: 'coward', who: seat, ms: [null, null] }, stats)
   }
 
+  /** The lead: every human gets the call now, to present `leadMs` from now. */
+  private announce(): void {
+    if (this.state !== 'waiting') {
+      return
+    }
+    this.announced = true
+    this.sendCall(this.leadMs)
+  }
+
+  private sendCall(inMs: number): void {
+    for (const seat of [0, 1] as const) {
+      if (this.seats[seat].kind === 'human') {
+        this.events.call(seat, inMs)
+        this.callSentAt[seat] = this.clock.now() + inMs
+      }
+    }
+  }
+
   private call(): void {
     if (this.state !== 'waiting') {
       return
@@ -299,11 +343,8 @@ export class Standoff {
     const aiOpponent = ai === null ? null : this.ai(ai)
     this.targets = (aiOpponent?.draw() ?? []).map((landsAtMs) => ({ landsAtMs, alive: true }))
     this.state = 'called'
-    for (const seat of [0, 1] as const) {
-      if (this.seats[seat].kind === 'human') {
-        this.events.call(seat)
-        this.callSentAt[seat] = this.clock.now()
-      }
+    if (!this.announced) {
+      this.sendCall(0)
     }
     // An AI seat "hears" the call when the first human does.
     if (ai !== null) {

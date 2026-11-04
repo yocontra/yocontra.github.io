@@ -77,8 +77,10 @@ const HANGS = /(?:^|\/)(?:lantern|postlantern|pickup|bags|bird|cloud)(?:\/|$)/u
 /** Effects, decals and the sky: never pieces (decals still support). */
 const SKIP = /^(?:tracer|flash|puff|ring|aim|beacon|dust|spark|sky|blob)$/u
 const DECAL = /^creek$/u
+/** Landform meshes: always support, never pieces. */
+const LAND = /^(?:outskirts|ground|terrain)$/u
 
-interface Piece {
+export interface Piece {
   name: string
   mesh: string
   /** World-space vertices, x y z. */
@@ -93,7 +95,7 @@ interface Piece {
   color: number
 }
 
-interface Collected {
+export interface Collected {
   pieces: Piece[]
   /** Triangles in world space, 9 numbers each. */
   tri: number[]
@@ -250,7 +252,8 @@ function meshParts(out: Collected, m: Mesh, world: Matrix4, label: string): Part
   g.computeBoundingSphere()
   const radius = (g.boundingSphere?.radius ?? 0) * world.getMaxScaleOnAxis()
   const nt = idx.length / 3
-  if (radius > 150) {
+  // (by size, or by name: the outskirts terrain's bounding sphere sits right around the cut-off)
+  if (radius > 150 || LAND.test(m.name)) {
     // the ground plane, the bluff, the mesas: support only, never audited
     for (let t = 0; t < nt; t++) {
       out.large.push(out.owner.length)
@@ -321,7 +324,7 @@ function meshParts(out: Collected, m: Mesh, world: Matrix4, label: string): Part
   return parts
 }
 
-function collect(scene: Object3D): Collected {
+export function collect(scene: Object3D): Collected {
   const out: Collected = { pieces: [], tri: [], owner: [], large: [] }
   scene.updateMatrixWorld(true)
   const instanced = new Map<string, { name: string; mesh: string; chain: string; part: Part }>()

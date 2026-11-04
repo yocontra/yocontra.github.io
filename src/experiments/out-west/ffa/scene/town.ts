@@ -14,6 +14,7 @@ import {
   BufferGeometry,
   CanvasTexture,
   CylinderGeometry,
+  DoubleSide,
   Float32BufferAttribute,
   Group,
   Matrix4,
@@ -28,10 +29,28 @@ import {
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
 import type { Assets } from '../../engine/assets.ts'
 import { GeoBuilder } from '../../scene/geo.ts'
-import { mergePlaced, type PropDef, placeMatrix, propDef, propsLibrary } from '../../scene/props.ts'
+import {
+  instance,
+  mergePlaced,
+  type PropDef,
+  placeMatrix,
+  propDef,
+  propsLibrary,
+} from '../../scene/props.ts'
 import { signAtlas } from '../../scene/textures.ts'
 import { type Building, buildingWalls, type Side, type TownLayout } from '../sim/layout.ts'
 import { addClockTower } from './clock-tower.ts'
+import {
+  decks,
+  floorHeight,
+  frontOf,
+  PLATFORM_DEPTH,
+  PORCH_DECK,
+  PORCH_DEPTH,
+  PORCH_ROOF,
+  PORCHED,
+  sideStrip,
+} from './cover-kinds.ts'
 import { cutaway } from './cutaway.ts'
 import { dressCover } from './dressing.ts'
 import { bakeGroundMask, groundMesh } from './ground.ts'
@@ -210,16 +229,26 @@ const PAINT: Record<string, Paint> = {
     falseFront: false,
     gable: false,
   },
+  barn: {
+    wall: 0x8a_2e_22,
+    trim: 0xe8_dc_c0,
+    roof: 0x5a_4a_3c,
+    sign: null,
+    signBg: '',
+    stone: false,
+    falseFront: false,
+    gable: true,
+  },
 }
 const DEFAULT_PAINT: Paint = PAINT.shed ?? (Object.values(PAINT)[0] as Paint)
 
 const WOOD = 0xb0_8a_60
 const DARK_WOOD = 0x6a_4c_34
 const WALL_T = 0.5
-/** Top of a porch's floor boards. */
-const PORCH_DECK = 0.06
-/** Buildings with a porch along their front. */
-const PORCHED = new Set(['saloon', 'hotel', 'general_store', 'stage_line'])
+/** Doorways wider than this get a timber lintel and jambs, not a stretched kit frame. */
+const WIDE_DOOR = 3.2
+/** Top of a doorway (the kit frame's lintel), m: the wall closes over it. */
+const DOOR_TOP = 2.45
 
 /** Roofs are most of what the top-down camera sees: sun-bleached, never near-black. */
 function bleach(hex: number): number {
@@ -234,6 +263,8 @@ export interface TownMaterials {
   wood: MeshStandardMaterial
   windows: MeshStandardMaterial
   signs: MeshStandardMaterial
+  /** Wagon bonnets and laundry: woven canvas. */
+  cloth: MeshStandardMaterial
   /** Kit doors, windows and rails (the props' trim atlas, with the cutaway). */
   kit: MeshStandardMaterial
 }
@@ -338,37 +369,53 @@ function makeMaterials(assets: Assets): TownMaterials {
   cutaway(wood, false)
   cutaway(windows, false)
   cutaway(signs, false)
-  return { wall, stone, roof, wood, windows, signs, kit }
+  const cloth = new MeshStandardMaterial({
+    map: canvasTexture(),
+    vertexColors: true,
+    roughness: 0.95,
+    side: DoubleSide,
+  })
+  cutaway(cloth, false)
+  return { wall, stone, roof, wood, windows, signs, kit, cloth }
 }
 
-/** Which side of a building faces the nearest street (its front). */
-function frontOf(b: Building, layout: TownLayout): Side {
-  const doorSide = b.doors[0]?.side
-  const cx = b.x + b.w / 2
-  const cz = b.z + b.d / 2
-  let best: Side = doorSide ?? 's'
-  let bestD = Number.POSITIVE_INFINITY
-  for (const s of layout.streets) {
-    const sx = Math.max(s.x, Math.min(cx, s.x + s.w))
-    const sz = Math.max(s.z, Math.min(cz, s.z + s.d))
-    const dx = sx - cx
-    const dz = sz - cz
-    const d = Math.hypot(dx, dz)
-    if (d < bestD) {
-      bestD = d
-      if (Math.abs(dx) / b.w > Math.abs(dz) / b.d) {
-        best = dx > 0 ? 'e' : 'w'
-      } else {
-        best = dz > 0 ? 's' : 'n'
-      }
+/** Woven canvas: a fine warp-and-weft grain with a few darker stains (wagon bonnets, laundry). */
+function canvasTexture(): CanvasTexture {
+  const c = document.createElement('canvas')
+  c.width = 128
+  c.height = 128
+  const ctx = c.getContext('2d')
+  if (ctx) {
+    ctx.fillStyle = '#d8d0c0'
+    ctx.fillRect(0, 0, 128, 128)
+    for (let i = 0; i < 128; i += 2) {
+      ctx.fillStyle = `rgba(90,70,40,${0.05 + ((i * 37) % 7) / 100})`
+      ctx.fillRect(i, 0, 1, 128)
+      ctx.fillStyle = `rgba(255,250,235,${0.05 + ((i * 53) % 5) / 100})`
+      ctx.fillRect(0, i, 128, 1)
+    }
+    for (const [x, y, r] of [
+      [30, 90, 18],
+      [96, 40, 12],
+    ] as const) {
+      const g = ctx.createRadialGradient(x, y, 0, x, y, r)
+      g.addColorStop(0, 'rgba(110,80,40,0.18)')
+      g.addColorStop(1, 'rgba(110,80,40,0)')
+      ctx.fillStyle = g
+      ctx.fillRect(x - r, y - r, r * 2, r * 2)
     }
   }
-  return best
+  const t = new CanvasTexture(c)
+  t.wrapS = RepeatWrapping
+  t.wrapT = RepeatWrapping
+  t.colorSpace = SRGBColorSpace
+  return t
 }
 
 interface Builders {
   wall: GeoBuilder
   stone: GeoBuilder
+  cloth: GeoBuilder
   wood: GeoBuilder
   windows: GeoBuilder
   roofs: BufferGeometry[]
@@ -437,23 +484,44 @@ function faceQuad(
 
 const sideLength = (b: Building, side: Side) => (side === 'n' || side === 's' ? b.w : b.d)
 
-function addWindows(bs: Builders, b: Building, side: Side, floors: number): void {
+/** Shopfronts: big display windows either side of the door on the street face. */
+const SHOPFRONT = new Set([
+  'saloon',
+  'hotel',
+  'general_store',
+  'stage_line',
+  'assay',
+  'undertaker',
+  'bank',
+  'jail',
+])
+
+function addWindows(bs: Builders, b: Building, side: Side, floors: number, front: Side): void {
   const len = sideLength(b, side)
   const doors = b.doors.filter((d) => d.side === side)
   const glass = 0x1a_22_2a
-  const win = kitDef('k_window_thin')
+  const thin = kitDef('k_window_thin')
+  const wide = kitDef('k_window_wide')
   for (let f = 0; f < floors; f++) {
-    const y0 = 1.1 + f * 3.2
-    for (let a = 1.6; a + 1.3 < len - 0.8; a += 3.4) {
-      if (f === 0 && doors.some((d) => a + 1.3 > d.at - 0.4 && a < d.at + d.width + 0.4)) {
+    // sills at a rider's waist on the ground floor (windows sized to a 3.2 m storey, not a doll's)
+    const sill = 0.95 + f * 3.2
+    const shop = f === 0 && side === front && SHOPFRONT.has(b.kind) && wide
+    const step = shop ? 3.8 : 3.0
+    const span = shop ? 2.0 : 1.3
+    for (let a = 1.2; a + span < len - 0.7; a += step) {
+      if (f === 0 && doors.some((d) => a + span > d.at - 0.5 && a < d.at + d.width + 0.5)) {
         continue
       }
+      const win = shop ? wide : thin
       if (win) {
-        // a framed sash window with a sill (the kit's sits 0.97 m above its origin)
-        bs.kit.push({ def: win, at: onSide(b, side, a + 0.65, y0 - 0.97 + 0.05) })
+        // the kit's sash sits 0.97 m above its origin; scaled up 1.3x to fit the storey
+        const s = shop ? 1.35 : 1.3
+        const at = onSide(b, side, a + span / 2, sill - 0.97 * s + 0.05)
+        at.multiply(new Matrix4().makeScale(s, s, 1))
+        bs.kit.push({ def: win, at })
         continue
       }
-      const q = faceQuad(b, side, a, a + 1.3, y0, y0 + 1.5, 0.04)
+      const q = faceQuad(b, side, a, a + span, sill, sill + 1.5, 0.04)
       const [p0, p1, p2, p3] = q
       if (p0 && p1 && p2 && p3) {
         bs.windows.quad(p0, p1, p2, p3, glass)
@@ -469,11 +537,131 @@ function addDoorFrames(bs: Builders, b: Building, porch: Side | null): void {
     return
   }
   for (const d of b.doors) {
-    const at = onSide(b, d.side, d.at + d.width / 2, d.side === porch ? PORCH_DECK : 0, 0.02)
+    const y = d.side === porch ? PORCH_DECK : 0
+    if (d.width > WIDE_DOOR) {
+      // a barn or forge opening: heavy jambs and a lintel beam, both faces
+      for (const out of [0.06, -WALL_T - 0.06]) {
+        const [q0, q1] = faceQuad(b, d.side, d.at - 0.12, d.at + d.width + 0.12, 0, 1, out)
+        if (!(q0 && q1)) {
+          continue
+        }
+        const along = d.side === 'n' || d.side === 's'
+        const top = DOOR_TOP + 0.6
+        bs.wood.box(
+          (q0.x + q1.x) / 2,
+          top + 0.15,
+          (q0.z + q1.z) / 2,
+          along ? d.width + 0.5 : 0.14,
+          0.3,
+          along ? 0.14 : d.width + 0.5,
+          DARK_WOOD,
+        )
+        for (const a of [d.at - 0.1, d.at + d.width + 0.1]) {
+          const [q] = faceQuad(b, d.side, a, a, 0, 1, out)
+          if (q) {
+            bs.wood.box(
+              q.x,
+              (y + top) / 2,
+              q.z,
+              along ? 0.2 : 0.14,
+              top - y,
+              along ? 0.14 : 0.2,
+              DARK_WOOD,
+            )
+          }
+        }
+      }
+      continue
+    }
+    const at = onSide(b, d.side, d.at + d.width / 2, y, 0.02)
     // the kit frame is 1.57 m wide: stretch it to the doorway
     at.multiply(new Matrix4().makeScale(Math.max(0.8, (d.width + 0.4) / 1.57), 1, 1))
     bs.kit.push({ def: frame, at })
   }
+}
+
+/** The solid stretches of one side between its doorways, as [from, to] metres along it. */
+function solidRuns(b: Building, side: Side): [number, number][] {
+  const len = sideLength(b, side)
+  const gaps = b.doors
+    .filter((d) => d.side === side)
+    .map((d) => [d.at, d.at + d.width] as const)
+    .toSorted((p, q) => p[0] - q[0])
+  const out: [number, number][] = []
+  let start = 0
+  for (const [g0, g1] of gaps) {
+    if (g0 > start) {
+      out.push([start, g0])
+    }
+    start = Math.max(start, g1)
+  }
+  if (start < len) {
+    out.push([start, len])
+  }
+  return out
+}
+
+/**
+ * What makes a plank wall read as built at eye level: corner boards up every corner, a skirting
+ * board along the foot (stopping at doorways), and on two-storey fronts a belt course where the
+ * floors meet. Brick buildings get a stone plinth instead of the skirting.
+ */
+function addFacadeTrim(bs: Builders, b: Building, p: Paint, front: Side): void {
+  const decked = PORCHED.has(b.kind) || b.kind === 'depot'
+  const h = b.height
+  const out = 0.04
+  if (!p.stone) {
+    for (const [x, z] of [
+      [b.x, b.z],
+      [b.x + b.w, b.z],
+      [b.x, b.z + b.d],
+      [b.x + b.w, b.z + b.d],
+    ] as const) {
+      bs.wood.box(x, (h - 0.3) / 2, z, 0.26, h - 0.3, 0.26, p.trim)
+    }
+  }
+  for (const side of ['n', 's', 'e', 'w'] as const) {
+    const along = side === 'n' || side === 's'
+    if (decked && side === front) {
+      // the porch deck runs along this foot
+      continue
+    }
+    for (const [a0, a1] of solidRuns(b, side)) {
+      const [q0, q1] = faceQuad(b, side, a0 + 0.13, a1 - 0.13, 0, 1, out / 2)
+      if (!(q0 && q1) || a1 - a0 < 0.4) {
+        continue
+      }
+      const cx = (q0.x + q1.x) / 2
+      const cz = (q0.z + q1.z) / 2
+      const len = a1 - a0 - 0.26
+      const base = p.stone ? bs.stone : bs.wood
+      const baseH = p.stone ? 0.45 : 0.24
+      base.box(
+        cx,
+        baseH / 2,
+        cz,
+        along ? len : out,
+        baseH,
+        along ? out : len,
+        p.stone ? 0x8a_80_74 : DARK_WOOD,
+      )
+      if (b.floors > 1) {
+        bs.wood.box(cx, 3.2, cz, along ? len : out * 1.5, 0.16, along ? out * 1.5 : len, p.trim)
+      }
+    }
+  }
+}
+
+/** A closed plank door on the front of a building you can't go into, so it never reads as a box. */
+function addClosedDoor(bs: Builders, b: Building, front: Side): void {
+  const door = kitDef('k_door_plank')
+  const frame = kitDef('k_doorframe')
+  if (!(door && frame)) {
+    return
+  }
+  const a = sideLength(b, front) / 2
+  bs.kit.push({ def: frame, at: onSide(b, front, a, 0, 0.02) })
+  bs.kit.push({ def: door, at: onSide(b, front, a, 0, 0.03) })
 }
 
 function addBuilding(bs: Builders, b: Building, layout: TownLayout, id: number): void {
@@ -492,6 +680,24 @@ function addBuilding(bs: Builders, b: Building, layout: TownLayout, id: number):
   for (const w of buildingWalls(b)) {
     g.box(w.x + w.w / 2, h / 2, w.z + w.d / 2, w.w, h, w.d, p.wall)
   }
+  // the wall over every doorway (the collision gap runs full height; the opening doesn't)
+  for (const d of b.doors) {
+    const [q0, q1] = faceQuad(b, d.side, d.at, d.at + d.width, 0, 1, -WALL_T / 2)
+    if (q0 && q1) {
+      const along = d.side === 'n' || d.side === 's'
+      const y0 = DOOR_TOP + (d.width > WIDE_DOOR ? 0.6 : 0)
+      g.box(
+        (q0.x + q1.x) / 2,
+        (y0 + h) / 2,
+        (q0.z + q1.z) / 2,
+        along ? d.width : WALL_T,
+        h - y0,
+        along ? WALL_T : d.width,
+        p.wall,
+      )
+    }
+  }
+  addFacadeTrim(bs, b, p, front)
   if (b.hollow) {
     bs.wood.box(
       b.x + b.w / 2,
@@ -517,7 +723,7 @@ function addBuilding(bs: Builders, b: Building, layout: TownLayout, id: number):
   }
   for (const side of ['n', 's', 'e', 'w'] as const) {
     if (b.kind !== 'tower') {
-      addWindows(bs, b, side, b.floors)
+      addWindows(bs, b, side, b.floors, front)
     }
   }
   // Roof: pitched, shingled or tin, with ridge and edge trim (see roofs.ts).
@@ -559,14 +765,18 @@ function addBuilding(bs: Builders, b: Building, layout: TownLayout, id: number):
     new BufferAttribute(new Float32Array(rg.getAttribute('position').count).fill(id), 1),
   )
   bs.roofs.push(rg)
-  if (b.kind !== 'tower') {
-    addDoorFrames(bs, b, PORCHED.has(b.kind) ? front : null)
+  addDoorFrames(bs, b, PORCHED.has(b.kind) || b.kind === 'depot' ? front : null)
+  if (b.doors.length === 0) {
+    addClosedDoor(bs, b, front)
   }
   if (p.falseFront) {
     addFalseFront(bs, b, front, p, built.heightAt)
   }
   if (PORCHED.has(b.kind)) {
     addPorch(bs, b, front)
+  }
+  if (b.kind === 'depot') {
+    addPlatform(bs, b, front)
   }
   if (p.sign && !p.falseFront) {
     const q = faceQuad(
@@ -608,7 +818,7 @@ function addFalseFront(
       text: p.sign,
       bg: p.signBg,
       fg,
-      quad: faceQuad(b, front, len / 2 - 3, len / 2 + 3, b.height + 0.2, top - 0.2, 0.2),
+      quad: faceQuad(b, front, len / 2 - 3, len / 2 + 3, b.height + 0.2, top - 0.2, 0.16),
     })
     if (front !== 's') {
       const z = b.z + b.d / 2
@@ -642,8 +852,8 @@ function addFalseFront(
 
 function addPorch(bs: Builders, b: Building, front: Side): void {
   const len = sideLength(b, front)
-  const depth = 2
-  const y = 3.1
+  const depth = PORCH_DEPTH
+  const y = PORCH_ROOF
   const [q0, q1] = faceQuad(b, front, 0, len, 0, 1, depth / 2)
   if (!(q0 && q1)) {
     return
@@ -663,12 +873,6 @@ function addPorch(bs: Builders, b: Building, front: Side): void {
     along ? depth + 0.2 : len + 0.2,
     DARK_WOOD,
   )
-  for (let a = 0.2; a <= len; a += len / Math.max(2, Math.round(len / 3.5))) {
-    const [p0] = faceQuad(b, front, a, a, 0, 1, depth - 0.15)
-    if (p0) {
-      bs.wood.box(p0.x, y / 2, p0.z, 0.16, y, 0.16, DARK_WOOD)
-    }
-  }
   // a balcony rail along the porch roof (two-storey fronts)
   const rail = kitDef('k_balcony')
   if (rail && b.floors > 1) {
@@ -691,8 +895,12 @@ function addWaterTower(bs: Builders, b: Building): void {
     [-1, 1],
   ] as const) {
     // up to the platform's underside, not flush with its top (z-fighting)
-    bs.wood.box(cx + dx * 1.6, 3.9, cz + dz * 1.6, 0.25, 7.8, 0.25, DARK_WOOD)
+    bs.wood.box(cx + dx * 1.86, 3.9, cz + dz * 1.86, 0.26, 7.8, 0.26, DARK_WOOD)
   }
+  // the pump house under the tank fills the footprint (what blocks you is what you see)
+  bs.wall.box(cx, 1.3, cz, b.w - 0.5, 2.6, b.d - 0.5, 0x6a_4e_36)
+  bs.wood.gable(cx, 2.6, cz, b.w - 0.5, b.d - 0.5, 0.6, 'x', 0x5a_4a_3a, 0.12)
+  addClosedDoor(bs, { ...b, x: b.x + 0.25, z: b.z + 0.25, w: b.w - 0.5, d: b.d - 0.5 }, 's')
   bs.wood.box(cx, 7.9, cz, 4.4, 0.2, 4.4, DARK_WOOD)
   const tank = new CylinderGeometry(2.1, 2.1, 3.6, 16, 1, false).toNonIndexed()
   tank.translate(cx, 9.8, cz)
@@ -717,30 +925,168 @@ function addWaterTower(bs: Builders, b: Building): void {
   }
 }
 
+/**
+ * The bank's deposit windows: a teller cage at each one on the lobby partition (a counter ledge,
+ * brass bars, a lamp) under a DEPOSITS board, so the four spots read from the doorways. The
+ * stage-line counter is a cover piece of its own.
+ */
 function addBank(bs: Builders, layout: TownLayout): void {
-  for (const z of layout.zones) {
-    if (z.kind === 'bank') {
-      // A brass teller grille on the partition behind each deposit window.
-      bs.windows.box(z.x, 1.6, z.z + 1.25, 1.6, 1.4, 0.08, 0xc8_a0_50)
-      bs.wood.box(z.x, 0.55, z.z + 1.05, 2, 1.1, 0.4, DARK_WOOD)
-    } else {
-      bs.wood.box(z.x, 0.55, z.z + 1.6, 3, 1.1, 0.5, DARK_WOOD)
+  const windows = layout.zones.filter((z) => z.kind === 'bank')
+  if (windows.length === 0) {
+    return
+  }
+  // the partition's north face sits 1.5 m behind each window's centre
+  const face = (windows[0]?.z ?? 0) + 1.5
+  for (const z of windows) {
+    // counter front a hand proud of the partition, its ledge at waist height
+    bs.wood.box(z.x, 0.52, face - 0.12, 1.9, 1.04, 0.24, 0x4a_2e_1c)
+    bs.wood.box(z.x, 1.07, face - 0.16, 2.0, 0.06, 0.32, 0x8a_5a_34)
+    // brass bars and an arched brass top
+    for (let k = 0; k < 9; k++) {
+      bs.windows.box(z.x - 0.8 + k * 0.2, 1.65, face - 0.03, 0.03, 1.1, 0.03, 0xc8_a0_50)
     }
+    bs.windows.box(z.x, 2.24, face - 0.03, 1.7, 0.08, 0.05, 0xd8_b0_58)
+    bs.windows.box(z.x, 1.12, face - 0.03, 1.7, 0.05, 0.05, 0xd8_b0_58)
+    // a green-shaded teller lamp glows on the ledge
+    bs.windows.box(z.x + 0.6, 1.16, face - 0.2, 0.22, 0.12, 0.16, 0x2a_6a_3a)
+  }
+  const x0 = Math.min(...windows.map((z) => z.x)) - 1
+  const x1 = Math.max(...windows.map((z) => z.x)) + 1
+  bs.signs.push({
+    text: 'DEPOSITS',
+    bg: '#1e2a22',
+    fg: '#e8c870',
+    quad: [
+      // wound to face north, into the lobby
+      new Vector3(x1 - 2, 2.45, face - 0.01),
+      new Vector3(x0 + 2, 2.45, face - 0.01),
+      new Vector3(x0 + 2, 3.05, face - 0.01),
+      new Vector3(x1 - 2, 3.05, face - 0.01),
+    ],
+  })
+}
+
+/** A plank bridge at grade over the dry creek (riders walk at ground level): deck and sills. */
+function addCreek(bs: Builders, layout: TownLayout): void {
+  const br = layout.creek.bridge
+  const deck = PORCH_DECK
+  bs.wood.box(br.x + br.w / 2, deck / 2, br.z + br.d / 2, br.w, deck, br.d, WOOD, {
+    skip: ['bottom'],
+  })
+  // stringers along each edge, under the rails
+  for (const x of [br.x + 0.25, br.x + br.w - 0.25]) {
+    bs.wood.box(x, deck + 0.04, br.z + br.d / 2, 0.5, 0.08, br.d, DARK_WOOD)
   }
 }
 
-function addCreek(bs: Builders, layout: TownLayout): void {
-  const c = layout.creek
-  const br = c.bridge
-  const deck = 0.475
-  bs.wood.box(br.x + br.w / 2, deck - 0.125, br.z + br.d / 2, br.w, 0.25, br.d + 1, WOOD)
-  // sills on the creek bed hold the deck up (it hung 22 cm over the sand on nothing)
-  for (const z of [4, br.z + br.d / 2, br.z + br.d + 0.35]) {
-    bs.wood.box(br.x + br.w / 2, (deck - 0.25) / 2, z, br.w + 0.3, deck - 0.25, 0.3, DARK_WOOD)
+/** The depot's platform: a plank deck out to the track, with a timber edge. */
+function addPlatform(bs: Builders, b: Building, front: Side): void {
+  const r = sideStrip(b, front, PLATFORM_DEPTH)
+  bs.wood.box(r.x + r.w / 2, PORCH_DECK / 2, r.z + r.d / 2, r.w, PORCH_DECK, r.d, WOOD, {
+    skip: ['bottom'],
+  })
+  const along = front === 'n' || front === 's'
+  const [edge] = faceQuad(b, front, sideLength(b, front) / 2, 0, 0, 1, PLATFORM_DEPTH - 0.1)
+  if (edge) {
+    bs.wood.box(
+      edge.x,
+      PORCH_DECK + 0.04,
+      edge.z,
+      along ? r.w : 0.2,
+      0.08,
+      along ? 0.2 : r.d,
+      0xd8_c0_40,
+    )
   }
-  // the rails stand on the deck (they floated 7.5 cm above it)
-  for (const x of [br.x + 0.2, br.x + br.w - 0.2]) {
-    bs.wood.box(x, deck + 0.45, br.z + br.d / 2, 0.15, 0.9, br.d + 1, DARK_WOOD)
+}
+
+/**
+ * Life on the street that never blocks: a lantern under the porch roof by every front door, and
+ * laundry strung high across the back alleys (above any rider's head).
+ */
+function addDecor(bs: Builders, layout: TownLayout, lanterns: Matrix4[]): void {
+  for (const b of layout.buildings) {
+    if (!PORCHED.has(b.kind)) {
+      continue
+    }
+    const front = frontOf(b, layout)
+    for (const d of b.doors.filter((dd) => dd.side === front)) {
+      const [q] = faceQuad(b, front, d.at + d.width + 0.6, 0, 0, 1, 0.5)
+      if (q) {
+        // hung from the porch roof's underside on a short chain
+        bs.wood.box(q.x, PORCH_ROOF - 0.06 - 0.15, q.z, 0.02, 0.3, 0.02, 0x2a_2a_2a)
+        lanterns.push(placeMatrix(q.x, PORCH_ROOF - 0.06 - 0.3 - 0.4, q.z, 0, 1))
+      }
+      // a shingle sign hung from the porch beam, edge-on to the street, readable walking past
+      const paint = PAINT[b.kind]
+      const [s0] = faceQuad(b, front, d.at - 0.9, 0, 0, 1, PORCH_DEPTH - 0.45)
+      if (paint?.sign && s0) {
+        const along = front === 'n' || front === 's'
+        const half = 0.55
+        const y0 = 2.35
+        const y1 = 2.8
+        const fg = paint.signBg.startsWith('#e') ? '#2a1a10' : '#f0e2c0'
+        for (const k of [1, -1]) {
+          const ax = along ? 0 : k * half
+          const az = along ? k * half : 0
+          const nx = along ? k * 0.012 : 0
+          const nz = along ? 0 : k * 0.012
+          bs.signs.push({
+            text: paint.sign,
+            bg: paint.signBg,
+            fg,
+            quad: [
+              new Vector3(s0.x - ax + nx, y0, s0.z - az + nz),
+              new Vector3(s0.x + ax + nx, y0, s0.z + az + nz),
+              new Vector3(s0.x + ax + nx, y1, s0.z + az + nz),
+              new Vector3(s0.x - ax + nx, y1, s0.z - az + nz),
+            ],
+          })
+        }
+        bs.wood.box(
+          s0.x,
+          (y1 + PORCH_ROOF - 0.06) / 2,
+          s0.z,
+          0.02,
+          PORCH_ROOF - 0.06 - y1,
+          0.02,
+          0x2a_2a_2a,
+        )
+      }
+    }
+  }
+  // laundry lines across the alleys between neighbours (east wall of one, west wall of the next)
+  const lines: [string, string, number][] = [
+    ['livery', 'saloon', 46],
+    ['hotel', 'assay', 50],
+    ['bank', 'undertaker', 82],
+    ['general_store', 'bank', 86],
+  ]
+  const shirt = [0xc8_c0_b0, 0x8a_9a_b8, 0xb8_5a_4a, 0xe0_d8_c0, 0x6a_7a_5a]
+  for (const [wId, eId, z] of lines) {
+    const w = layout.buildings.find((x) => x.id === wId)
+    const e = layout.buildings.find((x) => x.id === eId)
+    if (!(w && e)) {
+      continue
+    }
+    const x0 = w.x + w.w
+    const x1 = e.x
+    const y = 3.2
+    bs.wood.box((x0 + x1) / 2, y, z, x1 - x0, 0.02, 0.02, 0x3a_34_2a)
+    let k = 0
+    for (let x = x0 + 0.35; x < x1 - 0.5; x += 0.85) {
+      const wdt = 0.45 + ((k * 7) % 3) * 0.1
+      const h = 0.5 + ((k * 5) % 3) * 0.12
+      const V = (xx: number, yy: number) => new Vector3(xx, yy, z)
+      bs.cloth.quad(
+        V(x, y - h),
+        V(x + wdt, y - h),
+        V(x + wdt, y),
+        V(x, y),
+        shirt[k % shirt.length] ?? 0xc8_c0_b0,
+      )
+      k++
+    }
   }
 }
 
@@ -792,6 +1138,7 @@ export function buildTown(layout: TownLayout, assets: Assets, sun: Vector3): Tow
     wall: new GeoBuilder(2.4),
     stone: new GeoBuilder(2),
     wood: new GeoBuilder(2),
+    cloth: new GeoBuilder(1.5),
     windows: new GeoBuilder(1),
     roofs: [],
     signs: [],
@@ -805,7 +1152,21 @@ export function buildTown(layout: TownLayout, assets: Assets, sun: Vector3): Tow
   }
   addBank(bs, layout)
   addCreek(bs, layout)
-  dressCover(layout, assets.props, root, bs.wood)
+  const lanterns: Matrix4[] = []
+  addDecor(bs, layout, lanterns)
+  const lantern = propDef(assets.props, 'lantern', 0.4, 'y')
+  if (lantern && lanterns.length > 0) {
+    instance(lantern, lanterns, root, false)
+  }
+  const deckRects = decks(layout)
+  dressCover(
+    layout,
+    assets.props,
+    root,
+    bs,
+    (x, z) => floorHeight(layout, deckRects, x, z),
+    PORCH_ROOF - 0.06,
+  )
   const mask = bakeGroundMask(layout, sun)
   const ground = groundMesh(layout, { map: assets.tex.ground, normal: assets.tex.groundN }, mask)
   root.add(ground)
@@ -829,6 +1190,7 @@ export function buildTown(layout: TownLayout, assets: Assets, sun: Vector3): Tow
   const wood = bs.wood.build()
   add(bs.extra.length > 0 ? mergeGeometries([wood, ...bs.extra]) : wood, mats.wood, 'wood')
   add(bs.windows.empty ? null : bs.windows.build(), mats.windows, 'windows')
+  add(bs.cloth.empty ? null : bs.cloth.build(), mats.cloth, 'canvas')
   for (const r of bs.roofs) {
     if (!r.getAttribute('rk')) {
       // the clock tower's roofs: plain boards

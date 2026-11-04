@@ -1,5 +1,6 @@
 import { CylinderGeometry, Mesh, MeshStandardMaterial } from 'three'
 import { makeCard } from '../scene/fx.ts'
+import { say } from './chatter.ts'
 import { AMB, ambience } from './present.ts'
 import { between, type DuelState, rng, V } from './state.ts'
 
@@ -181,7 +182,8 @@ const CUES: Record<string, CueFn> = {
     }
   },
   miscount: (s) => {
-    s.c.hud.line(s.outlaw.name, '…TWELVE!', 1100)
+    // the one line the wait allows: it is the fake-out
+    say(s, s.outlaw.name, '…TWELVE!', { ms: 1100, force: true })
     if (s.enemy) {
       s.enemy.twitch = 1
     }

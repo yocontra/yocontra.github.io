@@ -8,7 +8,8 @@
  */
 
 const SCRIPT = 'https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit'
-const TEST_KEY = '1x00000000000000000000AA'
+// Cloudflare's invisible always-pass test key: dev shows no widget, like the production (invisible) widget.
+const TEST_KEY = '1x00000000000000000000BB'
 const TOKEN_TIMEOUT_MS = 15_000
 
 const configured: unknown = import.meta.env.PUBLIC_TURNSTILE_SITEKEY
@@ -116,6 +117,7 @@ export class Turnstile {
         if (this.widget === null) {
           this.widget = t.render(this.host, {
             sitekey: SITE_KEY,
+            // The production widget is invisible-mode: no box, checkbox or branding is ever drawn.
             appearance: 'interaction-only',
             callback: (tok: string) => this.waiter?.(tok),
             'error-callback': () => this.waiter?.(null),

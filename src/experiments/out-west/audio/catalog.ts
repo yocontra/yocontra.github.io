@@ -63,9 +63,10 @@ const f = (
 
 /** Decoded one-shots. */
 const FILES = {
-  // the call: untouched canonical bell; its first 226 ms are the previous strike's hum, so plays
-  // start at the strike and the call lands on the call frame
-  bell: f('bell', 0, 'core', { start: 0.226 }),
+  // the call: untouched canonical bell. Its first 230 ms are the previous strike's hum and the
+  // strike then swells for ~25 ms (half its brightness at 246 ms), so plays start there: the strike
+  // is at full brightness within a few ms of the call frame instead of ~35 ms after it
+  bell: f('bell', 0, 'core', { start: 0.246 }),
   // revolver kit
   revClose: f('rev_close', 4),
   revTail: f('rev_tail', -3),

@@ -1,5 +1,6 @@
 import { FEEL } from '../data/feel.ts'
 import { clamp01 } from '../scene/camera.ts'
+import { say, TALKER_GAP } from './chatter.ts'
 import { throwCard } from './cues.ts'
 import { backShotByEnemy } from './defeat.ts'
 import type { Director } from './director.ts'
@@ -16,6 +17,7 @@ const STALL_LINES = [
 
 export function enterWalk(d: Director): void {
   d.enter('walk')
+  d.walkLines = 0
   d.c.hud.setPips(0, true)
   // the walk and the standoff play over low drones, clear of the bell's register
   d.c.audio.playSong('tension')
@@ -45,7 +47,7 @@ function tickStall(d: Director, dt: number): boolean {
   d.stall = d.speed < 0.05 ? d.stall + dt : 0
   if (d.stall > FEEL.stallHeckle && !d.stallHeckled) {
     d.stallHeckled = true
-    d.c.hud.line(d.outlaw.name, STALL_LINES[Math.floor(rng() * STALL_LINES.length)] ?? 'Walk.')
+    say(d, d.outlaw.name, STALL_LINES[Math.floor(rng() * STALL_LINES.length)] ?? 'Walk.')
   }
   if (d.stall > FEEL.stallBackShot) {
     backShotByEnemy(d)
@@ -119,35 +121,57 @@ function paceFx(d: Director): void {
   })
 }
 
-/** Per-pace gimmicks: the talker heckles, the counter counts (wrong), the drunk hiccups. */
-function paceGimmick(d: Director): void {
-  const c = d.c
+/** The pace an outlaw's second (and last) walk line lands on: past halfway, clear of the turn. */
+const beatPace = (d: Director): number => Math.max(2, Math.ceil(d.target * 0.6))
+
+/** One walk line from him, if the cadence allows; counts toward his two. */
+function walkSay(d: Director, text: string, ms: number, gap?: number): void {
+  if (say(d, d.outlaw.name, text, gap === undefined ? { ms } : { ms, gap })) {
+    d.walkLines++
+  }
+}
+
+/**
+ * What he says on the walk. Everyone opens with at most one line on the first pace and may add one
+ * more at the beat past halfway; nobody speaks on the last pace (the turn is silent). The talker
+ * heckles and the counter miscounts on whichever pace the floor is free (every 2.5 s or more, so one to three
+ * lines a walk, each still naming its own pace); the drunk hiccups once more if the dice say so;
+ * the whistler's dirge is captioned once.
+ */
+function walkLine(d: Director): void {
   const o = d.outlaw
+  const n = d.paces
+  if (n >= d.target || o.lines.length === 0) {
+    return
+  }
   const line = (i: number): string => o.lines[i % o.lines.length] ?? ''
   switch (o.gimmick) {
     case 'talker':
-      c.hud.line(o.name, line(d.paces - 1), 1100)
-      break
+      walkSay(d, line(n - 1), 1600, TALKER_GAP)
+      return
     case 'counter':
-      c.hud.line(o.name, line(d.paces - 1), 900)
-      break
+      walkSay(d, line(n - 1), 1100, TALKER_GAP)
+      return
     case 'drunk':
-      if (rng() < 0.3) {
-        c.hud.line(o.name, line(Math.floor(rng() * o.lines.length)) || '*hic*', 1000)
+      if (n === 1 || (d.walkLines === 1 && n >= beatPace(d) && rng() < 0.5)) {
+        walkSay(d, line(Math.floor(rng() * o.lines.length)) || '*hic*', 1300)
       }
-      break
-    case 'impatient':
-      if (d.paces === 2) {
-        c.hud.line(o.name, line(0), 1400)
-      }
-      break
+      return
     case 'whistler':
-      if (d.paces % 2 === 1) {
-        c.hud.fake('[he whistles a dirge]')
+      if (n === 1) {
+        d.c.hud.fake('[he whistles a dirge]', 2000)
+      } else if (n === beatPace(d) && d.walkLines === 0) {
+        walkSay(d, line(0), 1800)
       }
-      break
+      return
     default:
       break
+  }
+  // everyone else: the opener on the first pace, a second line (if he has one) at the beat
+  if (n === 1 && d.walkLines === 0) {
+    walkSay(d, line(0), 1800)
+  } else if (n === beatPace(d) && d.walkLines === 1 && o.lines.length > 1) {
+    walkSay(d, line(1), 1800)
   }
 }
 
@@ -158,7 +182,7 @@ function onPace(d: Director): void {
   d.paces++
   d.c.hud.setPips(d.paces, true)
   paceFx(d)
-  paceGimmick(d)
+  walkLine(d)
   if (d.paces >= d.target) {
     enterTurn(d)
   }
