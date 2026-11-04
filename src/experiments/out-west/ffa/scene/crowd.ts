@@ -673,9 +673,18 @@ export class Crowd {
       m.actor.root.updateWorldMatrix(true, true)
       const long = m.held
       if (long) {
-        return out.copy(long.a.muzzle).applyMatrix4(long.obj.matrixWorld)
+        out.copy(long.a.muzzle).applyMatrix4(long.obj.matrixWorld)
+      } else {
+        m.actor.muzzle(out)
       }
-      return m.actor.muzzle(out)
+      // the gun comes up with the shot (the arm layer, the shouldered long gun) a tick after this:
+      // a muzzle still at the hip or the holster gets the raised one's spot instead
+      const ahead = (out.x - x) * Math.cos(aim) + (out.z - z) * Math.sin(aim)
+      if (out.y > 1.15 * this.readScale && ahead > 0.25) {
+        return out
+      }
+      const reach = long ? 1.05 : 0.75
+      return out.set(x + Math.cos(aim) * reach, 1.42 * this.readScale, z + Math.sin(aim) * reach)
     }
     return out.set(x + Math.cos(aim) * 0.7, 1.35, z + Math.sin(aim) * 0.7)
   }

@@ -30,6 +30,8 @@ const SIDE = 0.8
 const SIDE_ADS = 0.72
 const UP = 0.3
 const UP_ADS = 0.24
+/** The kill cam: this long from behind your killer before the lens drifts round your body (s). */
+const KILL_CAM_S = 2.5
 /** Keep the lens this far off a wall it was pulled in front of (m). */
 const WALL_PAD = 0.4
 /** The lens is a ball this wide (m): its edges are tested too, so a wall can't fill the frame. */
@@ -74,6 +76,8 @@ export interface ShooterFrame {
   duck: number
   /** Where your body lies while you're dead (the death camera), or null. */
   dead: { x: number; z: number } | null
+  /** Who killed you, where he stands (the kill cam's first 2.5 s look from behind him). */
+  killer?: { x: number; z: number } | null
 }
 
 export class ShooterCamera {
@@ -205,11 +209,31 @@ export class ShooterCamera {
       return
     }
     this.deadT += dt
-    const t = Math.min(1, this.deadT / 1.2)
+    const cam = this.camera
+    const k = f.killer
+    if (k && this.deadT < KILL_CAM_S) {
+      // the kill cam: over his shoulder, looking at you where you fell
+      const dx = k.x - body.x
+      const dz = k.z - body.z
+      const d = Math.hypot(dx, dz) || 1
+      want.set(
+        k.x + (dx / d) * 1.6 + (-dz / d) * 0.6,
+        EYE_Y + 0.5,
+        k.z + (dz / d) * 1.6 + (dx / d) * 0.6,
+      )
+      const freeK = clearance(f.grid, k.x, k.z, want.x, want.z)
+      want.x = k.x + (want.x - k.x) * freeK
+      want.z = k.z + (want.z - k.z) * freeK
+      cam.position.lerp(want, this.deadT < 0.05 ? 1 : 1 - Math.exp(-dt * 6))
+      cam.up.set(0, 1, 0)
+      cam.lookAt(body.x, 0.6, body.z)
+      this.closeness = 0
+      return
+    }
+    const t = Math.min(1, Math.max(0, this.deadT - (k ? KILL_CAM_S : 0)) / 1.2)
     const e = t * t * (3 - 2 * t)
     const orbit = this.yaw + Math.PI + this.deadT * 0.25
     const dist = 1.5 + 2.5 * e
-    const cam = this.camera
     want.set(body.x + Math.cos(orbit) * dist, EYE_Y + 2.2 * e, body.z + Math.sin(orbit) * dist)
     // keep out of walls: pull in toward the body
     const free = clearance(f.grid, body.x, body.z, want.x, want.z)
