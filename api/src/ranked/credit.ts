@@ -28,6 +28,8 @@ export function creditJobFor(
     reactionMs: number | null
     stats: WaitStats
     bossPhaseOne: boolean
+    /** Played by touch: medals and timed challenges take the touch allowance off the reaction. */
+    touch?: boolean
   },
 ): CreditJob {
   const paidWin = duel.outcome === 'win' && !duel.bossPhaseOne
@@ -44,6 +46,7 @@ export function creditJobFor(
       ? {
           solo: {
             reactionMs: duel.reactionMs,
+            touch: duel.touch === true,
             fakesSeen: duel.stats.fakesSeen,
             // the record just booked is this win; any earlier one was a loss or an early draw
             firstTry: here.length <= 1,

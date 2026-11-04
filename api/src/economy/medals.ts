@@ -31,6 +31,8 @@ import { ledgerStatements } from './ledger.ts'
 /** What a server-judged ranked win shows (the hat shot is never server evidence). */
 export interface SoloEvidence {
   reactionMs: number | null
+  /** Played by touch (see `medalMs`). Absent on jobs queued before it existed. */
+  touch?: boolean
   fakesSeen: number
   firstTry: boolean
   clean: boolean
@@ -135,7 +137,7 @@ export async function medalStatements(
   }
   const marks = await marksOf(env, accountId)
   const cur = marks[level] ?? emptyMark()
-  const tier = tierFor(level, ev.reactionMs)
+  const tier = tierFor(level, ev.reactionMs, ev.touch === true)
   const c = challengeFor(level)
   const met = c !== undefined && !isClaim(c) && meets(c, { ...ev, hatShot: false })
   const statements: D1PreparedStatement[] = []

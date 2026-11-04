@@ -193,7 +193,7 @@ export class RankedDuelClock implements DuelClock {
     this.queue.push({
       duel,
       standoff: true,
-      send: () => this.session.standoff(duel, spec.level),
+      send: () => this.session.standoff(duel, spec.level, spec.touch),
     })
     this.flush()
     return duel

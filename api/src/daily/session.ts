@@ -20,6 +20,7 @@ import { outlawOpponent } from '../duel/opponents.ts'
 import { CALL_LEAD_MS, pvpWaitPlan, Standoff, type Verdict } from '../duel/standoff.ts'
 import type { Env } from '../env.ts'
 import { rttStats } from '../judge.ts'
+import { withTouch } from '../tuning.ts'
 import { dailyKey, settleDaily } from './settle.ts'
 import { dailyTuning } from './tuning.ts'
 
@@ -29,7 +30,7 @@ const RTT_SAMPLES = 12
 const LIFETIME_MS = 90_000
 
 type ClientMessage =
-  | { type: 'standoff'; duel: number; level: number }
+  | { type: 'standoff'; duel: number; level: number; touch?: boolean }
   | { type: 'shot'; duel: number; target: number; localMs: number | null }
   | { type: 'pong'; n: number }
   | { type: 'finish'; name: string }
@@ -118,13 +119,13 @@ export class DailySession extends DurableObject<Env> {
       return
     }
     if (m.type === 'standoff') {
-      this.onStandoff(m.duel)
+      this.onStandoff(m.duel, m.touch === true)
     } else if (m.type === 'shot' && m.duel === this.duel) {
       this.standoff?.shot(0, typeof m.localMs === 'number' ? m.localMs : null, 0)
     }
   }
 
-  private onStandoff(duel: number): void {
+  private onStandoff(duel: number, touch: boolean): void {
     if (this.standoff || this.decided) {
       this.send({ type: 'error', message: 'One duel per ticket.', fatal: false })
       return
@@ -135,7 +136,8 @@ export class DailySession extends DurableObject<Env> {
     }
     this.duel = duel
     const spec = dailySpec(this.day)
-    const tuning = dailyTuning(spec)
+    const day = dailyTuning(spec)
+    const tuning = touch ? withTouch(day) : day
     const standoff = new Standoff({
       mode: 'ranked',
       seats: [

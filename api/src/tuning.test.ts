@@ -1,7 +1,12 @@
 import { describe, expect, it } from 'bun:test'
 import { FEEL } from '../../src/experiments/out-west/data/feel.ts'
-import { OUTLAWS, RIFLEMAN } from '../../src/experiments/out-west/data/outlaws.ts'
-import { LAST_LEVEL, tuningFor } from './tuning.ts'
+import {
+  BOSS_PHASE2,
+  TOUCH_ALLOWANCE_MS as CLIENT_TOUCH_MS,
+  OUTLAWS,
+  RIFLEMAN,
+} from '../../src/experiments/out-west/data/outlaws.ts'
+import { BOSS_LEVEL, LAST_LEVEL, TOUCH_ALLOWANCE_MS, tuningFor } from './tuning.ts'
 
 describe('ranked tuning matches the client roster', () => {
   it('has one row per outlaw', () => {
@@ -26,6 +31,19 @@ describe('ranked tuning matches the client roster', () => {
       expect(main?.jitterMs).toBe(o.jitter)
       expect(main?.accuracy).toBe(o.accuracy)
     })
+  })
+  it('the boss’s second phase agrees', () => {
+    const t = tuningFor(BOSS_LEVEL, 2)?.targets[0]
+    expect(t?.drawMs).toBe(BOSS_PHASE2.draw)
+    expect(t?.jitterMs).toBe(BOSS_PHASE2.jitter)
+  })
+  it('the touch allowance agrees and slows every target by it', () => {
+    expect(TOUCH_ALLOWANCE_MS).toBe(CLIENT_TOUCH_MS)
+    for (let level = 0; level <= LAST_LEVEL; level++) {
+      const keys = tuningFor(level)?.targets ?? []
+      const touch = tuningFor(level, 1, true)?.targets ?? []
+      expect(touch.map((x) => x.drawMs)).toEqual(keys.map((x) => x.drawMs + TOUCH_ALLOWANCE_MS))
+    }
   })
   it('the underboss rifleman agrees', () => {
     const t = tuningFor(15)?.targets[0]

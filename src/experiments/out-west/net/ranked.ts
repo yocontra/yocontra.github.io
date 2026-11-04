@@ -310,8 +310,8 @@ export class RankedSession {
     this.handlers?.closed(reason)
   }
 
-  standoff(duel: number, level: number): void {
-    this.send({ type: 'standoff', duel, level })
+  standoff(duel: number, level: number, touch: boolean): void {
+    this.send({ type: 'standoff', duel, level, touch })
   }
 
   shot(duel: number, target: number, localMs: number | null): void {

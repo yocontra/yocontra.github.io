@@ -40,6 +40,11 @@ export class Input {
   enabled = true
   /** Called with every keydown so a remap UI can capture it. */
   capture: ((code: string) => void) | null = null
+  /**
+   * The last press came from a touch screen (or a pen). Before any press: a coarse primary
+   * pointer. The duel slows the outlaw by its touch allowance while this holds.
+   */
+  touch = globalThis.matchMedia?.('(pointer: coarse)').matches ?? false
 
   constructor(target: HTMLElement, keys: KeyMap) {
     this.target = target
@@ -117,6 +122,7 @@ export class Input {
     if (e.repeat) {
       return
     }
+    this.touch = false
     this.heldKeys.add(e.code)
     if (a === 'walk' && this.toggleWalk) {
       this.toggled = !this.toggled
@@ -131,6 +137,7 @@ export class Input {
     if (p.action === 'fire' && this.toggleWalk) {
       this.toggled = !this.toggled
     }
+    this.touch = false
     this.emit({ action: p.action, t: p.t, source: 'key', x: -1, y: -1 })
   }
 
@@ -146,6 +153,7 @@ export class Input {
       return
     }
     e.preventDefault()
+    this.touch = e.pointerType === 'touch' || e.pointerType === 'pen'
     this.pointers.add(e.pointerId)
     try {
       this.target.setPointerCapture(e.pointerId)

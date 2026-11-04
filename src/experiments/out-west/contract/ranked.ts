@@ -107,7 +107,8 @@ export type RankedServerMessage =
   | { type: 'error'; message: string; fatal: boolean }
 
 export type RankedClientMessage =
-  | { type: 'standoff'; duel: number; level: number }
+  /** `touch`: playing on a touch screen, so the outlaws get the touch allowance. */
+  | { type: 'standoff'; duel: number; level: number; touch?: boolean }
   /**
    * `localMs`: ms from presenting the call (its arrival plus `inMs`) to the press, or null if
    * pressed before it was presented.

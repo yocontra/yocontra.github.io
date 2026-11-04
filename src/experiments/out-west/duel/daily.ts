@@ -94,6 +94,7 @@ export class DailyDuel implements DirectorHooks {
         ranked: true,
         outcome: v.outcome,
         reactionMs: v.outcome === 'coward' ? null : v.reactionMs,
+        touch: d.c.input.touch,
         secondChance: d.secondChance,
         hatShot: d.hatShot,
         fakesSeen: d.fakesSeen,

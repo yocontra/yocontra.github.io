@@ -5,7 +5,7 @@
  * against the real roster data and the real enemy planner (`duel/judge.ts`), and reports the
  * expected losses per outlaw. Tune `data/roster-*.ts` (and `api/src/tuning.ts` to match) against it.
  *
- *   bun tools/duel-sim.ts [--runs=20000] [--seed=1] [--json]
+ *   bun tools/duel-sim.ts [--runs=20000] [--seed=1] [--touch] [--json]
  *
  * The human model:
  * - Reaction (measured from the bell, as the game measures it): log-normal around the player's
@@ -18,9 +18,12 @@
  * - The underboss: the first press takes the rifleman, the second follows 100 ms or more later
  *   (a human double tap, about 170 ± 40 ms).
  * - The boss: phase one, then phase two; a loss in phase two retries phase two.
+ * - Touch (`--touch`): the same hands on a phone. A tap lands 35–60 ms later than a key (touch
+ *   sampling and the compositor), so each reaction gains that much, and the game adds its touch
+ *   allowance (`TOUCH_ALLOWANCE_MS`) to the outlaw's draw, as it does for a touch press.
  *
- * "Losses" are failed attempts (shot or coward). The target: a median human (250–350 ms) loses
- * 3–6 times on outlaws 1–15, before the underboss.
+ * "Losses" are failed attempts (shot or coward). The target: a median human (280–320 ms on keys)
+ * loses 8–12 times on a first clear of all 17, with no single outlaw a wall.
  */
 import { FEEL } from '../src/experiments/out-west/data/feel.ts'
 import {
@@ -28,6 +31,7 @@ import {
   OUTLAWS,
   type Outlaw,
   RIFLEMAN,
+  TOUCH_ALLOWANCE_MS,
 } from '../src/experiments/out-west/data/outlaws.ts'
 import { planFakes, planShots, type Rng } from '../src/experiments/out-west/duel/judge.ts'
 
@@ -35,6 +39,9 @@ const arg = (k: string): string | null =>
   process.argv.find((a) => a.startsWith(`--${k}=`))?.slice(k.length + 3) ?? null
 const RUNS = Number(arg('runs') ?? 20_000)
 const JSON_OUT = process.argv.includes('--json')
+const TOUCH = process.argv.includes('--touch')
+/** What the game adds to his draw for this input. */
+const ALLOWANCE = TOUCH ? TOUCH_ALLOWANCE_MS : 0
 
 /** Mulberry32: a small seeded RNG, so runs are reproducible. */
 function seeded(seed: number): Rng {
@@ -63,6 +70,9 @@ function reactionMs(h: Human): number {
   let r = h.medianMs * Math.exp(0.13 * gauss())
   if (rng() < 0.04) {
     r += 100 + 150 * rng()
+  }
+  if (TOUCH) {
+    r += 35 + 25 * rng()
   }
   return r
 }
@@ -112,7 +122,7 @@ function winsDraw(h: Human, o: Outlaw, phase2: boolean): boolean {
       draw: phase2 ? BOSS_PHASE2.draw : o.draw,
       jitter: phase2 ? BOSS_PHASE2.jitter : o.jitter,
       accuracy: o.accuracy,
-      assist: 0,
+      assist: ALLOWANCE,
       twoGuns: o.gimmick === 'two-guns',
       rifleman: under ? RIFLEMAN : null,
       secondShotMs: FEEL.secondShotMs,
@@ -156,8 +166,12 @@ interface Row {
   perOutlaw: number[]
   firstTry: number[]
   beforeUnderboss: number
-  /** Share of players losing 3–6 times before the underboss. */
+  /** Expected losses on a first clear of all 17. */
+  total: number
+  /** Share of players losing 8–12 times on a first clear. */
   inBand: number
+  /** Share of players whose single worst outlaw took 6 or more losses (a wall). */
+  walled: number
   underboss: number
   boss: number
 }
@@ -167,10 +181,14 @@ function profile(name: string, medianOf: () => number): Row {
   const sum = new Array<number>(n).fill(0)
   const first = new Array<number>(n).fill(0)
   let early = 0
+  let all = 0
   let band = 0
+  let walls = 0
   for (let run = 0; run < RUNS; run++) {
     const h: Human = { medianMs: medianOf() }
     let pre = 0
+    let tot = 0
+    let worst = 0
     OUTLAWS.forEach((o, i) => {
       const l = lossesAt(h, o)
       sum[i] = (sum[i] ?? 0) + l
@@ -180,10 +198,16 @@ function profile(name: string, medianOf: () => number): Row {
       if (i < 15) {
         pre += l
       }
+      tot += l
+      worst = Math.max(worst, l)
     })
     early += pre
-    if (pre >= 3 && pre <= 6) {
+    all += tot
+    if (tot >= 8 && tot <= 12) {
       band++
+    }
+    if (worst >= 6) {
+      walls++
     }
   }
   const per = sum.map((s) => s / RUNS)
@@ -192,20 +216,24 @@ function profile(name: string, medianOf: () => number): Row {
     perOutlaw: per,
     firstTry: first.map((f) => f / RUNS),
     beforeUnderboss: early / RUNS,
+    total: all / RUNS,
     inBand: band / RUNS,
+    walled: walls / RUNS,
     underboss: per[15] ?? 0,
     boss: per[16] ?? 0,
   }
 }
 
-const rows: Row[] = [250, 275, 300, 325, 350].map((m) => profile(`${m} ms`, () => m))
+const rows: Row[] = [250, 280, 300, 320, 350].map((m) => profile(`${m} ms`, () => m))
 rows.push(profile('population', () => Math.min(450, Math.max(210, 300 + 35 * gauss()))))
 
 if (JSON_OUT) {
   console.log(JSON.stringify(rows, null, 2))
 } else {
   const pad = (s: string, w: number): string => s.padStart(w)
-  console.log(`out west difficulty sim · ${RUNS} gauntlets per profile\n`)
+  console.log(
+    `out west difficulty sim · ${RUNS} gauntlets per profile · ${TOUCH ? `touch (+${ALLOWANCE} ms allowance)` : 'keys'}\n`,
+  )
   console.log('expected losses per outlaw (draw ms · fakeChance)')
   const head = ['#', 'outlaw', 'draw', 'fake', ...rows.map((r) => r.profile)]
   console.log(
@@ -235,9 +263,10 @@ if (JSON_OUT) {
   console.log('\n(each cell: expected failed attempts · chance of a first-try clear)\n')
   for (const r of rows) {
     console.log(
-      `${r.profile.padEnd(11)} before the underboss ${r.beforeUnderboss.toFixed(2)} losses` +
-        ` (${Math.round(r.inBand * 100)}% in 3–6) · underboss ${r.underboss.toFixed(2)}` +
-        ` · boss ${r.boss.toFixed(2)}`,
+      `${r.profile.padEnd(11)} first clear ${r.total.toFixed(2)} losses` +
+        ` (${Math.round(r.inBand * 100)}% in 8–12, ${Math.round(r.walled * 100)}% hit a 6+ wall)` +
+        ` · before the underboss ${r.beforeUnderboss.toFixed(2)}` +
+        ` · underboss ${r.underboss.toFixed(2)} · boss ${r.boss.toFixed(2)}`,
     )
   }
 }

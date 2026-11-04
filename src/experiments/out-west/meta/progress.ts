@@ -213,12 +213,13 @@ export class Meta {
     const clean = !this.drewEarly.has(level)
     this.drewEarly.delete(level)
     const prev = this.data.marks[level] ?? emptyMark()
-    const tier = tierFor(level, r.reactionMs)
+    const tier = tierFor(level, r.reactionMs, r.touch)
     const c = challengeFor(level)
     const met =
       c !== undefined &&
       meets(c, {
         reactionMs: r.reactionMs,
+        touch: r.touch,
         fakesSeen: r.fakesSeen,
         firstTry: r.firstTry,
         clean,

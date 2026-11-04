@@ -19,6 +19,8 @@ export interface DuelReport {
   outcome: DuelReportOutcome
   /** Your first shot after the call, ms. Null when you never drew (or drew early). */
   reactionMs: number | null
+  /** The shot was a tap (medals take the touch allowance off the reaction). */
+  touch: boolean
   /** You won on a second chance (he missed). */
   secondChance: boolean
   /** Your shot took his hat (pointer aim). */

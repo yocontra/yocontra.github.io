@@ -20,6 +20,8 @@ export interface StandoffSpec {
   forced: readonly string[]
   /** Cues played in order before the call (the boss's clock). */
   sequence: { cues: readonly string[]; intervalMs: readonly [number, number] } | null
+  /** Playing by touch: the outlaw's draw gets the touch allowance (`TOUCH_ALLOWANCE_MS`). */
+  touch: boolean
 }
 
 /** The server's (or the local judge's) verdict on a duel. */
