@@ -47,6 +47,7 @@ import type { Actor } from '../../scene/actor.ts'
 import type { Clip } from '../../scene/clips.ts'
 import { solveArm } from '../../scene/longgun.ts'
 import { measureStride } from '../../scene/rig.ts'
+import { type GestureKind, Gestures } from './gestures.ts'
 import { SupportHand } from './mirror-hand.ts'
 
 /** Base (full-body) clips, in blend order. */
@@ -108,6 +109,19 @@ const up = new Vector3(0, 1, 0)
 const tmpQ = new Quaternion()
 const tmpQ2 = new Quaternion()
 const tmpV = new Vector3()
+const tmpR = new Vector3()
+const tmpF = new Vector3()
+const tmpN = new Vector3()
+const tmpU = new Vector3()
+const tmpP = new Vector3()
+const tmpC = new Vector3()
+const tmpO = new Vector3()
+const tmpTQ = new Quaternion()
+const tmpQ3 = new Quaternion()
+/** Weights under this are dropped (they'd cost a full clip evaluation for nothing). */
+const DREGS = 0.02
+/** Standing, the feet step round once the aim is this far off them (rad, ~60°). */
+const TURN_AT = 1.05
 
 /** Rotate a bone about a world axis by `angle` (its parent's world matrix must be current). */
 function turnWorld(b: Bone, axis: Vector3, angle: number): void {
@@ -132,6 +146,8 @@ export class Locomotion {
   private readonly actor: Actor
   private readonly base = new Map<Base, AnimationAction>()
   private readonly w = new Map<Base, number>()
+  /** This tick's target weights (reused: nothing allocated per tick). */
+  private readonly target = new Map<Base, number>()
   private readonly stride = new Map<Cycle, number>()
   private readonly arm: AnimationAction | null
   private readonly reload: AnimationAction | null
@@ -144,6 +160,13 @@ export class Locomotion {
   /** On the sights, eased 0..1: the gun at eye line, the left hand wrapping the right. */
   private adsW = 0
   private readonly support: SupportHand | null
+  private readonly gestures = new Gestures()
+  /**
+   * Standing, his feet keep their heading while he aims around (up to ~60° off), then step round
+   * to it: turn in place. Null until he first stands still.
+   */
+  private feetYaw: number | null = null
+  private turning = false
   /**
    * Every bone's rotation as the clips left it, saved before the procedural layer bends it and put
    * back before the next mixer update: the mixer skips writing a value that hasn't changed since
@@ -284,6 +307,11 @@ export class Locomotion {
     this.input = i
   }
 
+  /** A one-shot gesture: the throw, stooping for a pickup, the call-out, the draw, the bank. */
+  gesture(kind: GestureKind): void {
+    this.gestures.start(kind)
+  }
+
   /** He fired: the shot clip over the gun arm, and a kick through the chest and arm. */
   fired(): void {
     this.shoot?.reset().play()
@@ -317,6 +345,7 @@ export class Locomotion {
    */
   pre(dt: number): void {
     this.unbend()
+    this.gestures.step(dt)
     const i = this.input
     if (i.anim !== this.was) {
       if (i.anim === ANIM_DEAD) {
@@ -333,12 +362,23 @@ export class Locomotion {
     const speed = Math.hypot(i.vx, i.vz)
     const target = this.mix(i, speed)
     const k = 1 - Math.exp(-dt * (i.anim === ANIM_DEAD ? 30 : BLEND))
-    for (const [n, a] of this.base) {
+    // ease every weight, then drop the dregs (a clip at weight 0.0001 still costs a full
+    // evaluation every tick) and give what they held back to the rest, so they sum to one
+    let kept = 0
+    for (const n of this.base.keys()) {
       const t = target.get(n) ?? 0
-      const w = (this.w.get(n) ?? 0) + (t - (this.w.get(n) ?? 0)) * k
+      let w = (this.w.get(n) ?? 0) + (t - (this.w.get(n) ?? 0)) * k
+      if (w < DREGS && t === 0) {
+        w = 0
+      }
+      this.w.set(n, w)
+      kept += w
+    }
+    this.base.forEach((a, n) => {
+      const w = kept > 0 ? (this.w.get(n) ?? 0) / kept : 0
       this.w.set(n, w)
       a.setEffectiveWeight(w)
-    }
+    })
     this.pace(dt, speed, i)
     this.upper(dt, speed)
   }
@@ -358,9 +398,15 @@ export class Locomotion {
         crouched)
     const sprinting = (i.stance & STANCE_SPRINT) !== 0
     this.armW += ((armUp && !sprinting ? 7 : 0) - this.armW) * (1 - Math.exp(-dt * 12))
+    if (this.armW < DREGS) {
+      this.armW = 0
+    }
     this.arm?.setEffectiveWeight(this.armW)
     const reloading = i.anim === ANIM_RELOAD && !i.long
     this.reloadW += ((reloading ? 6 : 0) - this.reloadW) * (1 - Math.exp(-dt * 10))
+    if (this.reloadW < DREGS) {
+      this.reloadW = 0
+    }
     this.reload?.setEffectiveWeight(this.reloadW)
     this.hitW = Math.max(0, this.hitW - dt * 2.2)
     for (const a of this.hits) {
@@ -391,17 +437,19 @@ export class Locomotion {
       return
     }
     this.bent = false
-    for (const [k, b] of this.bones.entries()) {
+    const bones = this.bones
+    for (let k = 0; k < bones.length; k++) {
       const q = this.clean[k]
       if (q) {
-        b.quaternion.copy(q)
+        bones[k]?.quaternion.copy(q)
       }
     }
   }
 
   /** The base clips' target weights for this state. */
   private mix(i: LocoInput, speed: number): Map<Base, number> {
-    const t = new Map<Base, number>()
+    const t = this.target
+    t.clear()
     const a = i.anim
     if (a === ANIM_DEAD) {
       t.set('Death', 1)
@@ -447,6 +495,11 @@ export class Locomotion {
       }
       return t
     }
+    if (this.turning) {
+      t.set('Walk', 0.45)
+      t.set(stand, 0.55)
+      return t
+    }
     t.set(stand, 1)
     return t
   }
@@ -470,9 +523,14 @@ export class Locomotion {
       len += (this.stride.get(c) ?? 1) * w
       wsum += w
     }
-    // movement relative to the aim: legs within ±75°, backwards past 105°
-    let rel = 0
+    // movement relative to the aim: legs within ±75°, backwards past 105°; standing, the feet
+    // keep their heading until the aim is ~60° off it, then step round (turn in place)
+    let rel = this.standYaw(dt, speed, i.aim)
     let dir = 1
+    let pace = speed
+    if (this.turning) {
+      pace = Math.max(pace, 1.2)
+    }
     if (speed > 0.3) {
       rel = Math.atan2(i.vz, i.vx) - i.aim
       rel = Math.atan2(Math.sin(rel), Math.cos(rel))
@@ -491,7 +549,7 @@ export class Locomotion {
       ((speed > 0.3 ? Math.sin(rel) * Math.min(1, speed / 6) : 0) - this.lean) *
       (1 - Math.exp(-dt * 6))
     if (wsum > 0.01 && len > 0.01) {
-      const cps = speed / (len / wsum)
+      const cps = pace / (len / wsum)
       this.phase = (this.phase + dir * cps * dt + 1) % 1
     }
     for (const c of CYCLES) {
@@ -502,29 +560,69 @@ export class Locomotion {
     }
   }
 
-  /** After the clips: legs to the movement, spine back to the aim, aim pitch, flinch. */
-  private layer(): void {
-    const hips = this.bone.get('Hips')
-    const spine = ['Abdomen', 'Torso', 'Chest'].map((n) => this.bone.get(n))
-    if (!hips || this.input.anim === ANIM_DEAD) {
-      return
-    }
+  private spineBones: (Bone | undefined)[] | null = null
+
+  /** Abdomen, torso, chest (looked up once). */
+  private spine(): (Bone | undefined)[] {
+    this.spineBones ??= ['Abdomen', 'Torso', 'Chest'].map((n) => this.bone.get(n))
+    return this.spineBones
+  }
+
+  /** Save the clips' rotations, to put back before the next mixer update (see `clean`). */
+  private snapshot(): void {
     if (this.bones.length === 0) {
       this.bones.push(...this.bone.values())
       for (const b of this.bones) {
         this.clean.push(b.quaternion.clone())
       }
     }
-    for (const [k, b] of this.bones.entries()) {
-      this.clean[k]?.copy(b.quaternion)
+    const bones = this.bones
+    for (let k = 0; k < bones.length; k++) {
+      const b = bones[k]
+      if (b) {
+        this.clean[k]?.copy(b.quaternion)
+      }
     }
     this.bent = true
+  }
+
+  /** Standing: the feet's heading off the aim (rad), stepping round past ~60°. 0 when moving. */
+  private standYaw(dt: number, speed: number, aim: number): number {
+    if (speed > 0.3 || this.input.anim === ANIM_DEAD) {
+      this.feetYaw = null
+      this.turning = false
+      return 0
+    }
+    this.feetYaw ??= aim
+    let off = Math.atan2(Math.sin(this.feetYaw - aim), Math.cos(this.feetYaw - aim))
+    if (Math.abs(off) > TURN_AT) {
+      this.turning = true
+    }
+    if (this.turning) {
+      off *= Math.exp(-dt * 9)
+      this.feetYaw = aim + off
+      if (Math.abs(off) < 0.08) {
+        this.turning = false
+      }
+    }
+    return off
+  }
+
+  /** After the clips: legs to the movement, spine back to the aim, aim pitch, flinch. */
+  private layer(): void {
+    const hips = this.bone.get('Hips')
+    const spine = this.spine()
+    if (!hips || this.input.anim === ANIM_DEAD) {
+      return
+    }
+    this.snapshot()
     this.actor.root.updateMatrixWorld(true)
     const yaw = this.legYaw
     // the hips turn the legs (and everything above); the spine turns the rest back
     // the sim measures angles toward +z, a turn about +y the other way: hence the minus
     turnWorld(hips, up, -yaw)
-    for (const [k, b] of spine.entries()) {
+    for (let k = 0; k < spine.length; k++) {
+      const b = spine[k]
       if (b) {
         turnWorld(b, up, yaw * (TWIST[k] ?? 0))
       }
@@ -533,14 +631,15 @@ export class Locomotion {
     const fl =
       this.flinch * this.flinch * 0.35 * this.flinchDir -
       this.kick * this.kick * 0.22 * (1 - 0.5 * this.adsW)
-    if (pitch !== 0 || fl !== 0 || this.lean !== 0 || this.adsW > 0.01) {
+    if (pitch !== 0 || fl !== 0 || this.lean !== 0 || this.adsW > 0.01 || this.gestures.active) {
       hips.updateMatrixWorld(true)
       const right = tmpV.set(0, 0, 0)
       const q = this.actor.root.getWorldQuaternion(tmpQ)
       right.set(-1, 0, 0).applyQuaternion(q)
-      const r = right.clone()
-      const fwd = new Vector3(0, 0, 1).applyQuaternion(q)
-      for (const [k, b] of spine.entries()) {
+      const r = tmpR.copy(right)
+      const fwd = tmpF.set(0, 0, 1).applyQuaternion(q)
+      for (let k = 0; k < spine.length; k++) {
+        const b = spine[k]
         if (b) {
           const share = PITCH[k] ?? 0
           turnWorld(b, r, (pitch + fl) * share)
@@ -559,6 +658,18 @@ export class Locomotion {
       if (this.adsW > 0.05 && this.input.detail) {
         this.twoHands()
       }
+      if (this.gestures.active) {
+        this.actor.root.updateMatrixWorld(true)
+        this.gestures.apply({
+          turn: turnWorld,
+          armR: arm,
+          foreR: fore,
+          torso: spine[1],
+          chest: spine[2],
+          right: r,
+          up,
+        })
+      }
     }
   }
 
@@ -575,20 +686,20 @@ export class Locomotion {
     }
     this.actor.root.updateMatrixWorld(true)
     const on = tmpV.copy(a.grip).applyMatrix4(gun.matrixWorld)
-    const n = new Vector3().setFromMatrixColumn(gun.matrixWorld, 2).setY(0).normalize()
-    const up2 = new Vector3().setFromMatrixColumn(gun.matrixWorld, 1).normalize()
-    const tp = new Vector3()
-    const tq = new Quaternion()
+    const n = tmpN.setFromMatrixColumn(gun.matrixWorld, 2).setY(0).normalize()
+    const up2 = tmpU.setFromMatrixColumn(gun.matrixWorld, 1).normalize()
+    const tp = tmpP
+    const tq = tmpTQ
     if (!sh.target(on, n, tp, tq)) {
       return
     }
     tp.addScaledVector(up2, -0.02)
     // eased in from wherever the clip holds it
     const w = this.adsW
-    const cur = end.getWorldPosition(new Vector3())
+    const cur = end.getWorldPosition(tmpC)
     tp.lerp(cur, 1 - w)
-    tq.slerp(end.getWorldQuaternion(new Quaternion()), 1 - w)
-    const pole = upper.getWorldPosition(new Vector3()).addScaledVector(up, -0.6)
+    tq.slerp(end.getWorldQuaternion(tmpQ3), 1 - w)
+    const pole = upper.getWorldPosition(tmpO).addScaledVector(up, -0.6)
     solveArm({ upper, lower, end }, tp, tq, pole)
     if (w > 0.5) {
       sh.fingersLike(n)

@@ -69,6 +69,7 @@ import {
   stopFuse,
   waitingOnMyCall,
 } from './event-sounds.ts'
+import { gestureFor } from './gesture-events.ts'
 import type { Hud } from './hud.ts'
 import { killLine } from './kill-line.ts'
 import type { NetClient } from './net.ts'
@@ -381,6 +382,7 @@ function verdict(
 
 export function handleEvent(s: Sink, ev: WireEvent): void {
   const you = s.net.you
+  gestureFor(s.crowd, ev)
   switch (ev.type) {
     case EV_SHOT:
       onShot(s, ev)

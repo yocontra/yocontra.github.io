@@ -86,6 +86,7 @@ import { Crowd, type CrowdPlayer, READ_SCALE } from '../scene/crowd.ts'
 import { CUT } from '../scene/cutaway.ts'
 import { shareDepthByKind } from '../scene/depth-kinds.ts'
 import { Effects } from '../scene/fx.ts'
+import type { GestureKind } from '../scene/gestures.ts'
 import { installHotPaths } from '../scene/hot-paths.ts'
 import { buildInterior } from '../scene/interior.ts'
 import { lookFor } from '../scene/looks.ts'
@@ -250,6 +251,8 @@ export class FrontierGame {
   private viewModel: ViewModel | null = null
   private readonly vmSun = new Vector3()
   private dustAt = 0
+  /** When you last went down (s). */
+  private diedAt = 0
   private readonly vmQ = new Quaternion()
   private guide: BankGuide | null = null
   private readonly coach: Onboarding
@@ -1190,6 +1193,7 @@ export class FrontierGame {
       list.push(row)
     }
     if (!this.net.alive && this.wasAlive) {
+      this.diedAt = nowS
       // down: on your feet, sights dropped, for the next life
       this.stance.reset()
       this.desk.dropAds()
@@ -1226,7 +1230,10 @@ export class FrontierGame {
         duck: this.duckHeight(),
         dead: this.net.alive ? null : this.own,
       })
-      crowd.hideSelf = this.net.alive && (first || this.shooter.closeness > 0.85)
+      // dead in first person: the death camera starts inside your head, so your body shows only
+      // once it has pulled out (0.3 s)
+      const justDied = !this.net.alive && first && nowS - this.diedAt < 0.3
+      crowd.hideSelf = (this.net.alive && (first || this.shooter.closeness > 0.85)) || justDied
     } else {
       this.cam.update(this.own.x, this.own.z, Math.cos(this.aim), Math.sin(this.aim), dt)
       crowd.hideSelf = false
@@ -1885,6 +1892,10 @@ export class FrontierGame {
       this.crowd?.fired(this.net.you, 0)
       return true
     }
+    if (GESTURES.includes(state as GestureKind)) {
+      this.crowd?.gesture(this.net.you, state as GestureKind)
+      return true
+    }
     if (state === 'hit') {
       this.crowd?.hurt(this.net.you, this.own, {
         x: this.own.x + Math.cos(this.aim) * 5,
@@ -1980,6 +1991,9 @@ export class FrontierGame {
     }
   }
 }
+
+/** The one-shot gestures `__frontierAnim.set` can trigger. */
+const GESTURES: readonly GestureKind[] = ['throw', 'pickup', 'callout', 'draw', 'bank']
 
 /** A held state: anim, stance bits, ground speed, and the move's turn off the aim (rad). */
 interface DevAnim {
