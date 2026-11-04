@@ -113,9 +113,31 @@ export interface GauntletChoice {
   resume: boolean
 }
 
+type QuickDrawPick = 'ranked' | 'continue' | 'practice'
+const LAST_KEY = 'out-west-last-quickdraw'
+
+/** The Quick Draw choice made last time on this device (it leads the sheet next time). */
+function lastPick(): QuickDrawPick | null {
+  try {
+    const v = localStorage.getItem(LAST_KEY)
+    return v === 'ranked' || v === 'continue' || v === 'practice' ? v : null
+  } catch {
+    return null
+  }
+}
+
+function rememberPick(p: QuickDrawPick): void {
+  try {
+    localStorage.setItem(LAST_KEY, p)
+  } catch {
+    // private mode: the sheet just leads with the default
+  }
+}
+
 /**
  * Ranked from outlaw 1, or practice (continuing a saved run when there is one), and the way to
- * the Gauntlet map when the meta-game is there.
+ * the Gauntlet map when the meta-game is there. The choice you made last time leads (and has the
+ * focus), so Enter or one tap repeats it.
  */
 export function gauntletSheet(
   root: HTMLElement,
@@ -137,27 +159,47 @@ export function gauntletSheet(
       ? 'Ranked runs pay XP and money. Beat 3 outlaws to earn your licence.'
       : 'Ranked runs go on the leaderboard. Sign in to earn XP and money.',
   )
+  const onKey = (e: KeyboardEvent): void => {
+    if (e.key === 'Escape') {
+      e.stopImmediatePropagation()
+      close(null)
+    }
+  }
+  globalThis.addEventListener('keydown', onKey, true)
   const close = (c: GauntletChoice | null): void => {
+    globalThis.removeEventListener('keydown', onKey, true)
     back.remove()
     done(c)
   }
   const list = el('div', 'ow-hub-choices', panel)
-  const choice = (title: string, sub: string, c: GauntletChoice, primary: boolean): void => {
-    const b = el('button', `ow-choice${primary ? ' primary' : ''}`, list)
+  const offered: QuickDrawPick[] = [
+    ...(rankedOk ? (['ranked'] as const) : []),
+    ...(s.continueAt > 0 ? (['continue'] as const) : []),
+    'practice',
+  ]
+  const last = lastPick()
+  const lead: QuickDrawPick = last && offered.includes(last) ? last : (offered[0] ?? 'practice')
+  let focus = null as HTMLButtonElement | null
+  const choice = (title: string, sub: string, c: GauntletChoice, pick: QuickDrawPick): void => {
+    const b = el('button', `ow-choice${pick === lead ? ' primary' : ''}`, list)
     b.type = 'button'
     el('b', '', b, title)
     el('span', '', b, sub)
     b.addEventListener('click', (e) => {
       e.stopPropagation()
+      rememberPick(pick)
       close(c)
     })
+    if (pick === lead) {
+      focus = b
+    }
   }
   if (rankedOk) {
     choice(
       'Ranked gauntlet',
       'From outlaw 1 · pays XP and money',
       { ranked: true, resume: false },
-      true,
+      'ranked',
     )
   }
   if (s.continueAt > 0) {
@@ -165,10 +207,11 @@ export function gauntletSheet(
       `Continue · outlaw ${s.continueAt + 1}`,
       'Practice · not ranked',
       { ranked: false, resume: true },
-      !rankedOk,
+      'continue',
     )
   }
-  choice('Practice', 'From outlaw 1 · not ranked', { ranked: false, resume: false }, false)
+  choice('Practice', 'From outlaw 1 · not ranked', { ranked: false, resume: false }, 'practice')
+  requestAnimationFrame(() => focus?.focus())
   const row = el('div', 'ow-hub-row', panel)
   const cancel = el('button', 'ow-btn', row, 'Back')
   cancel.type = 'button'

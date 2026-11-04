@@ -167,15 +167,10 @@ function makeHub(
           return
         }
         hub.hide()
-        g.playDaily({
-          spec,
-          session,
-          onExit: (v) => {
-            hub.show()
-            back(v)
-          },
-        })
+        // the result sheet comes up on the empty street: another try, or `home`
+        g.playDaily({ spec, session, onExit: back })
       },
+      home: () => hub.show(),
     }),
     ready: () => game() !== null,
     continueAt: () => data.level,

@@ -5,6 +5,7 @@ import { save as persist } from '../save.ts'
 import type { LedgerRow } from '../ui/hud.ts'
 import type { Director } from './director.ts'
 import { endShot } from './framing.ts'
+import { toSaloon } from './mode.ts'
 import { RankedDuelClock } from './ranked-clock.ts'
 import { holdFor } from './stage.ts'
 
@@ -68,6 +69,7 @@ export function toEnd(d: Director): void {
       onAgain: () => d.restartRun(false),
       onLegend: () => d.restartRun(true),
       onBoard: () => d.openBoard(true),
+      ...(d.onSaloon ? { onSaloon: () => toSaloon(d) } : {}),
     })
   }
   setTimeout(() => {
