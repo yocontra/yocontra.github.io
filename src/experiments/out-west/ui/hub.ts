@@ -217,14 +217,14 @@ export class Hub {
     const me = this.me
     if (!me) {
       nameplate(this.strip, signedIn ? (currentPlayer()?.name ?? '') : 'Stranger')
-      el(
-        'div',
-        'ow-hub-meta',
-        this.strip,
-        signedIn
-          ? 'Couldn’t reach the server. Quick Draw still works.'
-          : (this.deps.meta?.guestLine() ?? 'Guest'),
-      )
+      // a guest's line only when it carries something (the guest purse); "Stranger" and the Sign
+      // in button already say you're a guest
+      const line = signedIn
+        ? 'Couldn’t reach the server. Quick Draw still works.'
+        : (this.deps.meta?.guestLine() ?? null)
+      if (line) {
+        el('div', 'ow-hub-meta', this.strip, line)
+      }
       if (!signedIn) {
         button(this.strip, 'Sign in', () => this.openAccount(), true).classList.add('ow-hub-signin')
       }

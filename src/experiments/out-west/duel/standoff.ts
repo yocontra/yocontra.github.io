@@ -294,6 +294,19 @@ function enemyDrawSecs(d: Director, now: number): number {
   return d.hooks ? REMOTE_DRAW_S : drawSecs(d.outlaw.draw)
 }
 
+/** DRAW! is the bell's caption; a line under it only says what DRAW! can't (a scream). */
+function callCaption(d: Director): void {
+  const { bell, text } = d.callPresentation
+  if (!bell) {
+    return
+  }
+  if (d.callIsScream) {
+    d.c.hud.fake(text ? '[he screams]' : '[he screams · the bell tolls]', FEEL.callCaptionMs)
+  } else if (!text) {
+    d.c.hud.fake('[the bell tolls]', FEEL.callCaptionMs)
+  }
+}
+
 /** The bell. Both men turn on it, in the same frame; nobody turns early. */
 export function onCall(d: Director, duel: number): void {
   if (duel !== d.duelId || (d.phase !== 'wait' && d.phase !== 'bossClock')) {
@@ -323,9 +336,7 @@ export function onCall(d: Director, duel: number): void {
   if (text) {
     c.hud.call('DRAW!', FEEL.callHoldMs)
   }
-  if (text && bell) {
-    c.hud.fake(d.callIsScream ? '[HE SCREAMS] [BELL TOLLS]' : '[BELL TOLLS]', FEEL.callCaptionMs)
-  }
+  callCaption(d)
   c.hud.letterbox(false)
   c.audio.heartbeat(0)
   if (!d.reduced && text) {

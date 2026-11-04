@@ -29,7 +29,7 @@ export class MatchIntro {
     this.root.setAttribute('role', 'dialog')
     this.root.setAttribute('aria-label', `Bounty Hunt against ${them.name}`)
     swallow(this.root)
-    const label = them.kind === 'human' ? 'Bounty Hunt' : 'Ghost duel · no live opponent'
+    const label = them.kind === 'human' ? 'Bounty Hunt' : 'Ghost duel'
     el('div', `ow-match-mode${them.kind === 'human' ? '' : ' ghost'}`, this.root, label)
     const row = el('div', 'ow-match-posters', this.root)
     row.append(posterEl(you, 'you'))
@@ -39,9 +39,8 @@ export class MatchIntro {
       'div',
       'ow-match-status',
       this.root,
-      this.ai
-        ? 'No READY needed here: you walk out when the posters are up.'
-        : 'Sizing each other up…',
+      // against a ghost nobody needs telling there's no READY: the button just isn't there
+      this.ai ? '' : 'Sizing each other up…',
     )
     this.status.setAttribute('aria-live', 'polite')
     const btns = el('div', 'ow-hub-row', this.root)
@@ -72,7 +71,7 @@ export class MatchIntro {
         this.sent = true
         this.onReady()
       }
-      this.status.textContent = 'Cocked. Walk out when you’re ready.'
+      this.status.textContent = 'Walk out when you’re ready.'
       return
     }
     if (!this.sent) {

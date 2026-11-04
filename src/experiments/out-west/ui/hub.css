@@ -347,6 +347,9 @@
   color: var(--ow-brass-hi);
   text-wrap: balance;
 }
+.ow-tile-sub:empty {
+  display: none;
+}
 .ow-tile.locked .ow-tile-sub {
   color: var(--ow-bad);
 }

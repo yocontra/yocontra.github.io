@@ -266,6 +266,9 @@
   font-style: italic;
   font-size: var(--ow-fs-lead);
 }
+.ow-results-sub:empty {
+  display: none;
+}
 .ow-results-draws {
   display: grid;
   grid-template-columns: 1fr 1fr;

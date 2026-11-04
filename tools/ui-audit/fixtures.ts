@@ -242,7 +242,6 @@ export function pause(): string {
     resume: noop,
     change: noop,
     restart: noop,
-    leaderboard: noop,
     saloon: noop,
     remap: noop,
   })

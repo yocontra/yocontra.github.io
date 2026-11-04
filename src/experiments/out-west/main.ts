@@ -11,7 +11,7 @@ import { unlockAudio } from './platform/audio.ts'
 import { setHapticsEnabled } from './platform/haptics.ts'
 import { installViewportVars } from './platform/viewport.ts'
 import { load, type SaveData, save } from './save.ts'
-import { bindReducedMotion, getSettings, onSettings, type Settings } from './settings.ts'
+import { bindRunFlags, getSettings, onSettings, type Settings } from './settings.ts'
 import { Board } from './ui/board.ts'
 import { installGazette } from './ui/gazette.ts'
 import { Hub } from './ui/hub.ts'
@@ -191,8 +191,8 @@ interface Volumes {
 
 /**
  * The Settings sheet's choices, applied: volumes to the audio engine, vibration to the haptics
- * gate, and reduced motion bound to the run's save (the pause menu edits the same flag) and to a
- * root class the CSS honours like the system preference.
+ * gate, and reduced motion, captions, mono audio and toggle walk bound to the run's save (the duel
+ * reads them there); reduced motion is also a root class the CSS honours like the system's.
  */
 function wireSettings(
   root: HTMLElement,
@@ -208,10 +208,10 @@ function wireSettings(
     setHapticsEnabled(s.vibration)
     root.classList.toggle('ow-reduced', data.settings.reducedMotion)
   }
-  bindReducedMotion(
-    () => data.settings.reducedMotion,
-    (on) => {
-      data.settings.reducedMotion = on
+  bindRunFlags(
+    (k) => data.settings[k],
+    (k, on) => {
+      data.settings[k] = on
       save(data)
       const g = game()
       if (g) {
