@@ -16,6 +16,7 @@ import type { GLTF } from 'three/examples/jsm/loaders/GLTFLoader.js'
 import { clone as cloneSkinned } from 'three/examples/jsm/utils/SkeletonUtils.js'
 import type { BodyKey, HatKey } from '../data/outlaws.ts'
 import { bake, bodyPieces, type Piece } from './bake.ts'
+import { DrawLayer } from './draw.ts'
 import { type Body, boneKey, bounds, sampleBody } from './fit.ts'
 import { hangGuns } from './gunbelt.ts'
 import { fitHat, type HatFit, tuckHair } from './hats.ts'
@@ -96,10 +97,10 @@ export class Actor {
   gun: Object3D | null = null
   offGun: Object3D | null = null
   rifle: Object3D | null = null
-  private holster: Group | null = null
-  private handSlot: Group | null = null
-  private offSlot: Group | null = null
-  private offHolster: Group | null = null
+  holster: Group | null = null
+  handSlot: Group | null = null
+  offSlot: Group | null = null
+  offHolster: Group | null = null
   /** The long gun in his hands, if any (scene/longgun.ts). */
   longHeld: LongHold | null = null
   /** Long gun: 0 = shouldered and aimed, 1 = carried at the low ready. */
@@ -142,6 +143,7 @@ export class Actor {
   readonly label: string
   /** His standing habit, layered on every clip (null: none). */
   private readonly stance: StanceLayer | null = null
+  readonly drawing: DrawLayer | null = null
 
   constructor(gltf: GLTF, opts: ActorOpts = {}) {
     this.label = `${opts.base ?? 'player'} ${opts.seed ?? ''}`.trim()
@@ -197,6 +199,7 @@ export class Actor {
     }
     if (opts.gun) {
       this.gripGuns(opts.offGun ?? false)
+      this.drawing = this.anatomy ? new DrawLayer(this, this.anatomy, (n) => this.bone(n)) : null
     }
     if (opts.rifle) {
       this.attachRifle(opts.rifle)
@@ -284,6 +287,7 @@ export class Actor {
     if (this.current === a && !once && posing(a)) {
       return a
     }
+    this.drawing?.onClip(name)
     a.enabled = true
     a.reset()
     a.setLoop(once ? LoopOnce : LoopRepeat, once ? 1 : Number.POSITIVE_INFINITY)
@@ -479,6 +483,7 @@ export class Actor {
   }
 
   holsterGun(): void {
+    this.drawing?.reset()
     if (this.gun && this.holster && this.gun.parent !== this.holster) {
       this.holster.add(this.gun)
       this.gun.position.set(0, 0, 0)
@@ -555,6 +560,7 @@ export class Actor {
   update(dt: number): void {
     this.floor.value = this.root.position.y
     this.t += dt
+    this.drawing?.undo()
     this.stance?.undo()
     this.mixer.update(dt)
     this.stance?.apply()
@@ -572,6 +578,7 @@ export class Actor {
       this.armR.rotation.x += 0.15 * this.twitch
       this.twitch = Math.max(0, this.twitch - dt * 3)
     }
+    this.drawing?.update(dt)
     if (this.longHeld?.obj.visible) {
       this.root.updateMatrixWorld(true)
       poseLong(this.longHeld, {
