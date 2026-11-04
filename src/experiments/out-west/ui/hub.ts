@@ -21,6 +21,7 @@ import { type GauntletChoice, gauntletSheet, type Mode, ModeTiles } from './mode
 import { showNotices } from './notices.ts'
 import { QueueSheet } from './queue.ts'
 import { openSaloon, rideAgain } from './saloon.ts'
+import { openSettings } from './settings-sheet.ts'
 import { announceLevel } from './sfx.ts'
 import { button, el, panelSheet, setBar, signedMoney, swallow } from './sheet.ts'
 import { mountStanding } from './standing.ts'
@@ -120,6 +121,7 @@ export class Hub {
     )
     button(links, 'Ledger', () => this.openLedger())
     button(links, 'Account', () => this.openAccount())
+    button(links, 'Settings', () => openSettings(this.parent))
     onAuthChange(() => {
       this.refresh()
         .then(() => this.carryOn())

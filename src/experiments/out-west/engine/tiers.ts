@@ -3,6 +3,7 @@
  * GPU micro-benchmark. Pure data plus two small functions; render.ts applies
  * the result.
  */
+
 import {
   DirectionalLight,
   Mesh,
@@ -14,6 +15,7 @@ import {
   type WebGLRenderer,
   WebGLRenderTarget,
 } from 'three'
+import { getSettings } from '../settings.ts'
 
 export type Quality = 'high' | 'medium' | 'floor' | 'legacy'
 
@@ -125,7 +127,12 @@ export function forcedQuality(): Quality | null {
   if (v === 'low') {
     return 'floor'
   }
-  return null
+  // the Settings sheet's Graphics: Low is the floor tier, High the top; Auto benchmarks
+  const g = getSettings().graphics
+  if (g === 'low') {
+    return 'floor'
+  }
+  return g === 'high' ? 'high' : null
 }
 
 interface Cached {
