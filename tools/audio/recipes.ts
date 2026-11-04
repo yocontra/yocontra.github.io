@@ -1,5 +1,6 @@
 // biome-ignore-all lint/complexity/useMaxParams: DSP helpers take positional numeric args (counts, times, levels)
 // biome-ignore-all lint/correctness/noUndeclaredVariables: Bun is a global in this Bun script
+// biome-ignore-all lint/style/noExcessiveLinesPerFile: one recipe per shipped sound, in one table
 /**
  * How every shipped out west 3D sound is made from its raw take (`manifest.ts`) or a first-party /
  * CC0 original. Run with `build.ts`. Each recipe returns audio at 48 kHz; `build.ts` masters it to
@@ -10,6 +11,7 @@
  */
 import { existsSync, mkdirSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
+import { beatGrid, gallop } from './beats.ts'
 import {
   type Ch,
   concat,
@@ -20,6 +22,7 @@ import {
   linToDb,
   load,
   loopify,
+  loudness,
   mixInto,
   mono,
   onset,
@@ -32,7 +35,7 @@ import {
   thump,
   tick,
 } from './dsp.ts'
-import { findLoop } from './loops.ts'
+import { findLoop, findLoopAmong } from './loops.ts'
 
 const HERE = import.meta.dir
 const RAW = resolve(HERE, 'raw')
@@ -53,6 +56,8 @@ export interface Recipe {
 }
 
 const raw = (id: string) => `${RAW}/${id}.mp3`
+/** A Lyria take (`generate.ts`: take N is seed + N − 1). */
+const lyriaTake = (id: string, take: number) => `${RAW}/${id}${take > 1 ? `.t${take}` : ''}.wav`
 
 /** An original from the repo at ORIGIN, extracted once into raw/orig. */
 function orig(path: string): string {
@@ -120,6 +125,50 @@ function theme(path: string, sMax: number, endBy: number): Packed {
   return pack(body, fade(intro, 0.01, 0), 2)
 }
 
+/** Lyria takes end mid-phrase: a loop must close this long before the end (plus `findLoop`'s 4 s window). */
+const LYRIA_TAIL = 0.6
+
+/**
+ * A Lyria theme looped on whole bars: the beat grid (`beats.ts`) gives the downbeats, and the loop
+ * is the best-matching (start downbeat, whole-bar length) pair that leaves room for the comparison
+ * window, the longest few lengths preferred. `hot` lays the galloping streak layer on the beats:
+ * its grid is fitted to the loop exactly (whole bars), so it wraps with the music.
+ */
+function act(take: string, hot: boolean): Packed {
+  const ch = load(take, 2)
+  const g = beatGrid(ch)
+  const bar = g.period * 4
+  const last = secs(ch) - LYRIA_TAIL - 4
+  const downs = g.beats.filter((t, i) => i % 4 === g.first % 4 && t >= 0.25 && t <= 7)
+  const most = Math.floor((last - (downs[0] ?? 0)) / bar)
+  const pairs: [number, number][] = []
+  for (const s of downs) {
+    for (let n = Math.max(4, most - 2); s + n * bar <= last; n++) {
+      pairs.push([s, s + n * bar])
+    }
+  }
+  const lp = findLoopAmong(ch, pairs)
+  const bars = Math.round((lp.end - lp.start) / bar)
+  console.log(
+    `  ${take.split('/').pop()}: ${g.bpm.toFixed(1)} bpm, loop ${lp.start.toFixed(2)}–${lp.end.toFixed(2)} s (${bars} bars, match ${lp.score.toFixed(3)})`,
+  )
+  let body = loopify(ch, lp.start, lp.end, 0.25)
+  let intro = fade(slice(ch, 0, lp.start), 0.01, 0)
+  if (hot) {
+    // beats every (loop / whole beats) s from the body's first sample, so the layer wraps exactly
+    const p = secs(body) / (bars * 4)
+    const layer = (len: number, downbeat: number) => gallop(len, downbeat, p)
+    const level = loudness(body).lufs - 7
+    const drums = layer(secs(body), 0)
+    const k = level - loudness(drums).lufs
+    body = mixInto(body, drums, 0, k)
+    const lead = layer(secs(intro), secs(intro))
+    intro = mixInto(intro, fade(lead, Math.min(2, secs(intro)), 0), 0, k)
+  }
+  return pack(body, intro, 2)
+}
+
+const LYRIA = 'generated (Lyria 2, Google)'
 const GEN = 'generated (ElevenLabs)'
 /** Wind takes are mostly sub-80 Hz rumble that phone speakers can't play: thin it, add air. */
 const WIND_AIR = 'highpass=f=55,equalizer=f=900:t=q:w=1:g=3,highshelf=f=2500:g=6'
@@ -547,5 +596,69 @@ export const RECIPES: Record<string, Recipe> = {
     kbps: 128,
     credit: GEN,
     make: () => fade(load(raw('s_defeat'), 2), 0.005, 1),
+  },
+  // ---------------------------------------------------------------- music, round two (Lyria 2)
+  m_saloon: {
+    out: 'music/saloon.m4a',
+    lufs: -18,
+    kbps: 96,
+    credit: LYRIA,
+    make: () => act(lyriaTake('l_saloon_b', 2), false),
+  },
+  m_act_day: {
+    out: 'music/act_day.m4a',
+    lufs: -18,
+    kbps: 96,
+    credit: LYRIA,
+    make: () => act(lyriaTake('l_day_b', 3), false),
+  },
+  m_act_day_hot: {
+    out: 'music/act_day_hot.m4a',
+    lufs: -18,
+    kbps: 96,
+    credit: `${LYRIA}, with a synthesised percussion layer`,
+    make: () => act(lyriaTake('l_day_b', 3), true),
+  },
+  m_act_dusk: {
+    out: 'music/act_dusk.m4a',
+    lufs: -18,
+    kbps: 96,
+    credit: LYRIA,
+    make: () => act(lyriaTake('l_dusk_b', 1), false),
+  },
+  m_act_dusk_hot: {
+    out: 'music/act_dusk_hot.m4a',
+    lufs: -18,
+    kbps: 96,
+    credit: `${LYRIA}, with a synthesised percussion layer`,
+    make: () => act(lyriaTake('l_dusk_b', 1), true),
+  },
+  m_act_night: {
+    out: 'music/act_night.m4a',
+    lufs: -18,
+    kbps: 96,
+    credit: LYRIA,
+    make: () => act(lyriaTake('l_night_b', 1), false),
+  },
+  m_act_night_hot: {
+    out: 'music/act_night_hot.m4a',
+    lufs: -18,
+    kbps: 96,
+    credit: `${LYRIA}, with a synthesised percussion layer`,
+    make: () => act(lyriaTake('l_night_b', 1), true),
+  },
+  m_victory_big: {
+    out: 'music/victory_big.m4a',
+    lufs: -18,
+    kbps: 128,
+    credit: GEN,
+    make: () => shot(load(raw('s_victory_big'), 2), 5, 1.2, -40),
+  },
+  m_victory_lucky: {
+    out: 'music/victory_lucky.m4a',
+    lufs: -18,
+    kbps: 128,
+    credit: GEN,
+    make: () => shot(load(`${RAW}/s_victory_lucky.t2.mp3`, 2), 5, 1.2, -40),
   },
 }

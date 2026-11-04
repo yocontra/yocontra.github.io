@@ -293,7 +293,7 @@ export function boot(root: HTMLElement): void {
       if (audio.ctx) {
         unlockAudio(audio.ctx)
       }
-      audio.playSong('intro')
+      audio.playSong('saloon')
     }
     globalThis.addEventListener('pointerdown', unlockOnce, { once: true })
   }

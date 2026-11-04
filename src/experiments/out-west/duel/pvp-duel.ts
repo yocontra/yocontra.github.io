@@ -7,6 +7,7 @@
  *
  * The gauntlet's save is never touched: the duel runs on a scratch copy, restored on the way out.
  */
+import { actSong } from '../audio/catalog.ts'
 import type { Beat, DuelResult, Poster, RoomServerMessage, Seat } from '../contract/duel.ts'
 import { FEEL } from '../data/feel.ts'
 import type { Press } from '../engine/input.ts'
@@ -361,7 +362,7 @@ export class PvpDuel implements DirectorHooks {
     c.world.setClock(17, 0)
     // the street's wanted-poster post carries the gauntlet's outlaw: not his, so it comes down
     c.world.poster.visible = false
-    c.audio.playSong('intro')
+    c.audio.playSong(actSong(0, d.outlaw.day))
     d.enterCock()
   }
 

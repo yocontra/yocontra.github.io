@@ -15,12 +15,21 @@
 export interface Gen {
   /** Raw take id; the file is `raw/<id>.mp3`. */
   id: string
-  kind: 'sfx' | 'music'
+  /** `lyria`: Google Lyria 2 on Vertex AI (about 30 s of instrumental music; `seconds` is ignored). */
+  kind: 'sfx' | 'music' | 'lyria'
   seconds: number
   prompt: string
   /** ElevenLabs seamless-loop mode (SFX only). */
   loop?: boolean
+  /** Lyria: what to keep out. */
+  negative?: string
+  /** Lyria: fixed seed, so a take can be regenerated. */
+  seed?: number
 }
+
+/** Lyria: never a bell, a chime or a voice (spec §7: nothing may sound like the call). */
+const LYRIA_NO =
+  'vocals, singing, choir, bells, chimes, church bell, glockenspiel, celesta, music box, synthesizer, electronic, modern drum kit'
 
 const NO_BELL = 'no bells, no chimes'
 
@@ -361,5 +370,106 @@ export const GENS: readonly Gen[] = [
     loop: true,
     prompt:
       'Honky-tonk upright saloon piano music loop in A minor, lively ragtime, slightly out of tune, old west saloon, solo piano only, no vocals',
+  },
+  // -------------------------------------------------------- music, round two (Lyria 2)
+  // The ElevenLabs Music API stays paid-only, so the hub bed, the three act themes and the streak
+  // stings come from Google's Lyria 2 (Vertex AI, on the cloud credit): 30 s instrumental takes,
+  // looped in `recipes.ts`.
+  {
+    id: 'l_saloon',
+    kind: 'lyria',
+    seconds: 30,
+    seed: 1881,
+    prompt:
+      'Honky-tonk upright saloon piano, lively ragtime stride, slightly out of tune, old west saloon, solo piano with a walking left hand, warm and cheerful, steady tempo, instrumental',
+    negative: LYRIA_NO,
+  },
+  {
+    id: 'l_day',
+    kind: 'lyria',
+    seconds: 30,
+    seed: 1877,
+    prompt:
+      'Spaghetti western theme at high noon in A minor: brisk strummed nylon-string guitar, a lonely harmonica melody, a twangy baritone guitar answering, light shaker and low tom heartbeat, sun-bleached and tense but adventurous, cinematic, instrumental',
+    negative: LYRIA_NO,
+  },
+  {
+    id: 'l_dusk',
+    kind: 'lyria',
+    seconds: 30,
+    seed: 1879,
+    prompt:
+      'Spaghetti western theme at sunset in A minor: slow twangy reverb electric guitar melody, a mournful muted trumpet, warm low strings swelling, gentle strummed acoustic guitar, golden, brooding and wide, cinematic, instrumental',
+    negative: LYRIA_NO,
+  },
+  {
+    id: 'l_night',
+    kind: 'lyria',
+    seconds: 30,
+    seed: 1883,
+    prompt:
+      'Dark night western theme in A minor: low tremolo baritone guitar, a sparse plucked double bass, a distant lonely harmonica, eerie sustained low strings, slow and ominous, moonlit desert, cinematic, instrumental',
+    negative: LYRIA_NO,
+  },
+  {
+    id: 's_victory_big',
+    kind: 'sfx',
+    seconds: 5,
+    prompt:
+      'Short triumphant spaghetti western victory fanfare in A major: a heroic soaring trumpet call over fast strummed guitar and a booming timpani roll, ending on one big held major chord, no vocals, no bells',
+  },
+  {
+    id: 's_victory_lucky',
+    kind: 'sfx',
+    seconds: 5,
+    prompt:
+      'Short wry western music sting: a plucky comic twangy guitar phrase and a slightly wobbly harmonica, relieved and cheeky, ending on a quick major chord stab, no vocals, no bells',
+  },
+  // Second-round prompts: Lyria writes a whole piece with an intro and a fade, so these ask for a
+  // groove that never ends (the recipe still loops only the steady middle).
+  {
+    id: 'l_saloon_b',
+    kind: 'lyria',
+    seconds: 30,
+    seed: 2101,
+    prompt:
+      'Honky-tonk upright saloon piano, lively ragtime stride in A minor, slightly out of tune, old west saloon, solo piano, 110 bpm, one continuous steady groove from start to finish, no intro, no ending',
+    negative: `${LYRIA_NO}, drums, modern, fade out`,
+  },
+  {
+    id: 'l_day_b',
+    kind: 'lyria',
+    seconds: 30,
+    seed: 2103,
+    prompt:
+      'Spaghetti western high noon theme in A minor, 110 bpm: galloping strummed nylon-string guitar, a lonely harmonica melody, twangy baritone guitar riff, low tom pulse, sun-bleached, tense and adventurous, cinematic, one continuous steady groove from start to finish, no intro, no ending',
+    negative: `${LYRIA_NO}, fade out`,
+  },
+  {
+    id: 'l_dusk_b',
+    kind: 'lyria',
+    seconds: 30,
+    seed: 2105,
+    prompt:
+      'Spaghetti western sunset theme in A minor, 80 bpm: slow twangy reverb electric guitar melody, mournful trumpet, warm low strings, gently strummed acoustic guitar, golden, brooding and wide, one continuous steady piece from start to finish, no intro, no ending',
+    negative: `${LYRIA_NO}, piano, jazz, fade out`,
+  },
+  {
+    id: 'l_night_b',
+    kind: 'lyria',
+    seconds: 30,
+    seed: 2107,
+    prompt:
+      'Dark night western theme in A minor, 70 bpm: low tremolo baritone guitar, sparse plucked double bass, distant lonely harmonica, eerie sustained low strings, slow and ominous, moonlit desert, one continuous steady piece from start to finish, no intro, no ending',
+    negative: `${LYRIA_NO}, piano, jazz, fade out`,
+  },
+  {
+    id: 'l_lucky',
+    kind: 'lyria',
+    seconds: 30,
+    seed: 2109,
+    prompt:
+      'A short wry comic western music sting: a plucky twangy guitar lick, a cheeky wobbly harmonica answer and a jaw harp twang, then a final major chord stab, relieved and funny, instrumental',
+    negative: LYRIA_NO,
   },
 ]

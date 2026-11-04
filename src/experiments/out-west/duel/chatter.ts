@@ -43,6 +43,7 @@ export function say(s: DuelState, who: string, text: string, o: SayOpts = {}): b
     return false
   }
   s.c.hud.line(who, text, ms)
+  s.c.audio.voiceLine(who, text)
   // the next line waits for this one to clear, and at least the gap
   s.lineFreeAt = s.realTime + Math.max(LINE_GAP, ms / 1000 + LINE_BREATH)
   return true
