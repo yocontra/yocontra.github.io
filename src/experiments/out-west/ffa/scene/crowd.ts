@@ -42,6 +42,7 @@ import {
   EF_PROTECTED,
   SHOT_RIFLE,
   SHOT_SHOTGUN,
+  STANCE_ADS,
   WEAPON_REVOLVER,
   WEAPON_RIFLE,
   WEAPON_SHOTGUN,
@@ -759,9 +760,11 @@ export class Crowd {
   }
 
   private animate(m: Member, actor: Actor, p: CrowdPlayer, nowS: number): void {
-    this.arm(m, actor, p.weapon ?? m.weapon, (p.flags & EF_HOLSTERED) !== 0)
+    // on the sights the gun is out, whatever the holster timer says (it's the sim's Dead-Eye clock)
+    const drawn = (p.stance & STANCE_ADS) !== 0
+    this.arm(m, actor, p.weapon ?? m.weapon, (p.flags & EF_HOLSTERED) !== 0 && !drawn)
     // a long gun can't be holstered: he carries it at the ready
-    const holstered = (p.flags & EF_HOLSTERED) !== 0 && !m.held
+    const holstered = (p.flags & EF_HOLSTERED) !== 0 && !m.held && !drawn
     const loco = m.loco
     if (!loco) {
       return

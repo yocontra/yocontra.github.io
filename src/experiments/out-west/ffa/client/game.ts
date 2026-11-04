@@ -598,6 +598,7 @@ export class FrontierGame {
     this.viewModel = new ViewModel(assets)
     if (import.meta.env.DEV) {
       Reflect.set(globalThis, '__vm', this.viewModel)
+      Reflect.set(globalThis, '__crowd', this.crowd)
     }
     // its own scene and lens, drawn over the world before the post chain
     this.renderer.setOverlay({
@@ -1108,6 +1109,7 @@ export class FrontierGame {
         ),
         flags: ownFlags(s.flags, s.protectTicks > 0),
         stance: this.ownStance(),
+        pitch: this.shooterView ? this.shooter.pitch : 0,
         self: true,
         weapon: this.net.weapon.weapon,
       })

@@ -284,7 +284,11 @@ export class Locomotion {
       !(i.holstered || i.long) &&
       i.anim !== ANIM_DEAD &&
       i.anim !== ANIM_RELOAD &&
-      ((i.stance & STANCE_ADS) !== 0 || i.shooting || speed > 0.3 || crouched)
+      ((i.stance & STANCE_ADS) !== 0 ||
+        i.anim === ANIM_AIM ||
+        i.shooting ||
+        speed > 0.3 ||
+        crouched)
     const sprinting = (i.stance & STANCE_SPRINT) !== 0
     this.armW += ((armUp && !sprinting ? 7 : 0) - this.armW) * (1 - Math.exp(-dt * 12))
     this.arm?.setEffectiveWeight(this.armW)
@@ -329,11 +333,8 @@ export class Locomotion {
       t.set('Crouch_Idle', 1 - cw)
       return t
     }
-    let stand: Base =
-      (i.stance & STANCE_ADS) !== 0 || a === ANIM_AIM ? 'Idle_Gun_Pointing' : 'Idle_Gun'
-    if (i.holstered) {
-      stand = 'Idle'
-    }
+    // on the sights he stands tall (the aiming clip hunches him): the arm layer raises the gun
+    const stand: Base = i.holstered ? 'Idle' : 'Idle_Gun'
     const sprint = (i.stance & STANCE_SPRINT) !== 0 && this.base.has('Sprint')
     const walkV = this.speedOf('Walk')
     const runV = this.speedOf('Run')
@@ -418,10 +419,11 @@ export class Locomotion {
     this.actor.root.updateMatrixWorld(true)
     const yaw = this.legYaw
     // the hips turn the legs (and everything above); the spine turns the rest back
-    turnWorld(hips, up, yaw)
+    // the sim measures angles toward +z, a turn about +y the other way: hence the minus
+    turnWorld(hips, up, -yaw)
     for (const [k, b] of spine.entries()) {
       if (b) {
-        turnWorld(b, up, -yaw * (TWIST[k] ?? 0))
+        turnWorld(b, up, yaw * (TWIST[k] ?? 0))
       }
     }
     const pitch = Math.max(-0.7, Math.min(0.7, this.input.pitch))
