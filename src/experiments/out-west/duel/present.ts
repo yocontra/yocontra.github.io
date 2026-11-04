@@ -96,7 +96,7 @@ export function tickPresentation(s: DuelState, realDt: number): void {
     s.vignette += (FEEL.vignetteBase - s.vignette) * Math.min(1, realDt * 2)
   }
   s.ca = Math.max(0, s.ca - realDt * (0.012 / 0.2))
-  r.setLens(s.ca, p.shimmer, s.satTarget < 1 ? clamp01(s.phaseT) * 0.6 : 0)
+  r.setLens(s.ca, p.shimmer, s.satTarget < 1 ? clamp01(s.phaseT) * 0.6 : 0, c.world.day)
   const windy = s.outlaw.gimmick === 'windy'
   c.dust.wind = 0.6 + (windy ? s.wind : 0.35) * 1.6
   if (!(windy && WINDY_PHASES.has(s.phase))) {
