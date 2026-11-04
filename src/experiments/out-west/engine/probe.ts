@@ -13,12 +13,18 @@
  * far enough to matter; the renderer calls `tick()` every frame.
  */
 import {
+  BackSide,
+  Color,
   CubeCamera,
   HalfFloatType,
+  type HemisphereLight,
+  Mesh,
   type Object3D,
   type PerspectiveCamera,
   PMREMGenerator,
-  type Scene,
+  Scene,
+  ShaderMaterial,
+  SphereGeometry,
   type Texture,
   Vector3,
   WebGLCubeRenderTarget,
@@ -41,10 +47,15 @@ function skip(o: Object3D): boolean {
 export class TownProbe {
   private readonly gl: WebGLRenderer
   private readonly scene: Scene
+  /** True: capture the real street. False: a cheap gradient in the street's own colours. */
+  private readonly town: boolean
   private readonly target = new WebGLCubeRenderTarget(SIZE, { type: HalfFloatType })
   private readonly cube: CubeCamera
   private readonly pmrem: PMREMGenerator
   private env: WebGLRenderTarget | null = null
+  private envScene: Scene | null = null
+  private envMat: ShaderMaterial | null = null
+  private hemi: HemisphereLight | null = null
   private version = -1
   /** Next face to capture; 6 means idle. */
   private face = 6
@@ -56,9 +67,10 @@ export class TownProbe {
    */
   intensity = 1.2
 
-  constructor(gl: WebGLRenderer, scene: Scene) {
+  constructor(gl: WebGLRenderer, scene: Scene, town = true) {
     this.gl = gl
     this.scene = scene
+    this.town = town
     this.cube = new CubeCamera(0.5, 1200, this.target)
     this.cube.coordinateSystem = gl.coordinateSystem
     this.cube.updateCoordinateSystem()
@@ -72,6 +84,10 @@ export class TownProbe {
   /** Capture now, all faces at once (used at load, behind the title). */
   captureNow(): void {
     this.version = (this.scene.userData.owLightVersion as number | undefined) ?? 0
+    if (!this.town) {
+      this.gradient()
+      return
+    }
     for (let f = 0; f < 6; f++) {
       this.captureFace(f)
     }
@@ -81,6 +97,14 @@ export class TownProbe {
   /** Call once per frame. Returns true while a capture is in flight. */
   tick(): boolean {
     const v = (this.scene.userData.owLightVersion as number | undefined) ?? 0
+    if (!this.town) {
+      // A gradient is a fraction of a capture: rebuild it when the light moves, in this frame.
+      if (v !== this.version) {
+        this.version = v
+        this.gradient()
+      }
+      return false
+    }
     if (this.face === 6 && v !== this.version) {
       this.version = v
       this.face = 0
@@ -97,6 +121,72 @@ export class TownProbe {
       return true
     }
     return false
+  }
+
+  /**
+   * The phone fallback: a sky/ground gradient in the current hemisphere light's colours, run
+   * through the same PMREM. It gives standard materials their fill and their metal something to
+   * reflect without compiling a linear variant of every town material (which is what capturing
+   * the street costs).
+   */
+  private gradient(): void {
+    if (!this.hemi) {
+      this.scene.traverse((o) => {
+        if (!this.hemi && (o as HemisphereLight).isHemisphereLight) {
+          this.hemi = o as HemisphereLight
+        }
+      })
+    }
+    const sky = this.hemi?.color ?? new Color(0xb8_d0_ff)
+    const ground = this.hemi?.groundColor ?? new Color(0xb8_86_52)
+    if (!(this.envScene && this.envMat)) {
+      this.envScene = new Scene()
+      this.envMat = new ShaderMaterial({
+        side: BackSide,
+        depthWrite: false,
+        uniforms: {
+          sky: { value: new Color() },
+          horizon: { value: new Color() },
+          ground: { value: new Color() },
+        },
+        vertexShader: /* glsl */ `
+          varying vec3 vDir;
+          void main() {
+            vDir = position;
+            gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+          }
+        `,
+        fragmentShader: /* glsl */ `
+          uniform vec3 sky;
+          uniform vec3 horizon;
+          uniform vec3 ground;
+          varying vec3 vDir;
+          void main() {
+            float h = normalize(vDir).y;
+            vec3 c = h >= 0.0
+              ? mix(horizon, sky, pow(h, 0.55))
+              : mix(horizon, ground, pow(-h, 0.45));
+            gl_FragColor = vec4(c, 1.0);
+          }
+        `,
+      })
+      this.envScene.add(new Mesh(new SphereGeometry(10, 16, 8), this.envMat))
+    }
+    const u = this.envMat.uniforms
+    const set = (name: 'sky' | 'ground' | 'horizon', color: Color): void => {
+      const uniform = u[name]
+      if (uniform) {
+        ;(uniform.value as Color).copy(color)
+      }
+    }
+    set('sky', sky)
+    set('ground', ground)
+    set('horizon', sky.clone().lerp(ground, 0.5))
+    const next = this.pmrem.fromScene(this.envScene, 0.04, 0.1, 100)
+    this.env?.dispose()
+    this.env = next
+    this.scene.environment = next.texture
+    this.scene.environmentIntensity = this.intensity
   }
 
   private captureFace(face: number): void {

@@ -20,7 +20,7 @@ import { type HubShot, hubShot, wearLoadout } from './scene/hub-stage.ts'
 import { ItemStudio } from './scene/item-studio.ts'
 import { revolverDef } from './scene/revolver.ts'
 import { rifleObject } from './scene/rifle.ts'
-import { softDot } from './scene/textures.ts'
+import { setLowRes, softDot } from './scene/textures.ts'
 import { LIFE, TownLife } from './scene/townlife.ts'
 import { World } from './scene/world.ts'
 import { Hud } from './ui/hud.ts'
@@ -28,6 +28,8 @@ import type { GauntletChoice } from './ui/mode-select.ts'
 
 export interface Game {
   begin: (skipIntro: boolean) => void
+  /** Resolves when the scene's programs and uniforms are warm and the first frame can draw. */
+  whenWarm: () => Promise<void>
   readonly director: Director
   /** From the hub: a ranked or practice gauntlet, fresh or continued. */
   playGauntlet: (c: GauntletChoice) => void
@@ -127,10 +129,13 @@ function warmArenas(world: World, renderer: Renderer, rig: CameraRig, scene: Sce
   }
 }
 
+// biome-ignore lint/complexity/noExcessiveLinesPerFunction: one boot function wires the scene, director, loop and warm-up
 export async function createGame(o: GameOpts): Promise<Game> {
   const scene = new Scene()
   const rig = new CameraRig(window.innerWidth / window.innerHeight)
   const renderer = new Renderer(o.canvas, scene, rig.cam, o.tier)
+  // Phones read the half-size texture set (scene/textures.ts): ~550 KB instead of ~2.7 MB.
+  setLowRes(renderer.tier === 'floor' || renderer.tier === 'legacy')
   const aniso = Math.min(8, renderer.gl.capabilities.getMaxAnisotropy())
   const first = OUTLAWS[o.save.level] ?? OUTLAWS[0]
   const assets = await loadAssets(
@@ -198,18 +203,26 @@ export async function createGame(o: GameOpts): Promise<Game> {
   town.arrange(world.lifeLayout)
   world.silhouetteHide.push(town.root)
 
-  // Compile every shader up front behind the title so the first shot never hitches.
-  const unwarm = warmExtras(scene, [flash.sprite, glint.sprite])
-  try {
-    await renderer.gl.compileAsync(scene, rig.cam)
-  } catch {
-    // compileAsync unsupported: the warm-up render below still helps
-  }
-  rig.update(0.016, 0.016)
-  renderer.render(0.016)
-  renderer.renderSilhouette(world.silhouetteHide)
-  unwarm()
-  o.onProgress(1)
+  // Compile and warm behind the title, but do not block the title on it: `whenWarm` gates the
+  // first hub/duel instead. The warm runs one program per frame (render.ts), so the page stays
+  // responsive while the driver reflects uniforms.
+  const warm = (async () => {
+    const unwarm = warmExtras(scene, [flash.sprite, glint.sprite])
+    rig.update(0.016, 0.016)
+    try {
+      // Set the environment before compiling: three bakes USE_ENVMAP into the program, and a
+      // probe captured after the warm would make every material compile a second variant.
+      renderer.probe.captureNow()
+      await renderer.warm(scene, rig.cam, (f) => o.onProgress(0.85 + f * 0.13))
+      renderer.warmSilhouette(world.silhouetteHide)
+      renderer.renderSilhouette(world.silhouetteHide)
+    } finally {
+      unwarm()
+    }
+    o.onProgress(1)
+  })()
+  // Never let a driver failure strand the title: the first real frame will report it.
+  warm.catch(() => undefined)
 
   wireViewport(renderer, director)
   document.addEventListener('visibilitychange', () => {
@@ -290,10 +303,18 @@ export async function createGame(o: GameOpts): Promise<Game> {
       hud.setDebug(director.debugText({ fps, ms: frameMs, calls: frameCalls, tris: frameTris }))
     }
   }
-  requestAnimationFrame(loop)
+  // The loop starts with the warm: until then the title is the screen, and drawing now would pay
+  // the whole uniform reflection in one frozen frame.
+  warm
+    .then(() => {
+      last = performance.now()
+      requestAnimationFrame(loop)
+    })
+    .catch(() => undefined)
 
   return {
     director,
+    whenWarm: () => warm,
     // Ranked when this load allows it; begin() still keeps legend and mid-gauntlet saves in practice.
     begin: (skipIntro: boolean) => director.begin(skipIntro, o.connectRanked !== null),
     playGauntlet: (c: GauntletChoice) => {

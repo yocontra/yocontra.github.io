@@ -7,9 +7,15 @@ import Bare from '~/layouts/Bare.astro'
   description="Frontier: a 32-player free-for-all in a western town."
   viewport="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover"
   noindex
+  appleIcon="/experiments/out-west/icon-180.png"
 >
   <Fragment slot="head">
     <meta name="theme-color" content="#2a1d12" />
+    <link rel="manifest" href="/experiments/out-west/manifest.webmanifest" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="Out West" />
     <link
       rel="preload"
       href="/experiments/out-west/fonts/ultra.woff2"
@@ -44,8 +50,10 @@ import Bare from '~/layouts/Bare.astro'
    */
   import { mountFrontier } from '~/experiments/out-west/ffa/client/index.ts'
   import { installDevice } from '~/experiments/out-west/platform/device.ts'
+  import { registerServiceWorker } from '~/experiments/out-west/platform/sw.ts'
   import { installViewportVars } from '~/experiments/out-west/platform/viewport.ts'
 
+  registerServiceWorker()
   const root = document.querySelector<HTMLElement>('#frontier')
   const q = new URLSearchParams(location.search)
   const num = (k: string): number | undefined => {

@@ -29,6 +29,14 @@ Nothing here has been run yet. Do it in this order on release day.
 6. **Verify:** sign up with a passkey on https://contra.io/experiments/out-west/, play a ranked run,
    and check `https://api.contra.io/leaderboard`.
 
+## Service worker cache
+
+The game registers `/experiments/out-west/sw.js` in production. After the first visit it serves
+the shell and the game's assets from the cache, so a home-screen launch is a cache read (the
+repeat load is ~0 MB on the wire). Bump `VERSION` in that file whenever an unhashed file under
+`public/experiments/out-west/` changes (models, textures, fonts, UI art). Hashed `/_astro/` bundles
+carry their own names and need no bump.
+
 **Budget:** the Workers Paid plan is $5/month. The API enforces its own ceilings (`api/src/budget.ts`)
 so usage stays inside the included quota, and Frontier closes for the month instead of overspending.
 

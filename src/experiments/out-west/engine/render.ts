@@ -1,4 +1,5 @@
 // biome-ignore-all lint/style/noExcessiveClassesPerFile: small, related effect classes kept together
+// biome-ignore-all lint/style/noExcessiveLinesPerFile: the renderer, its effects and the boot warm-up are one cohesive module
 import {
   BlendFunction,
   BloomEffect,
@@ -371,6 +372,11 @@ export class Renderer {
     this.gl.outputColorSpace = SRGBColorSpace
     this.gl.toneMapping = NoToneMapping
     this.gl.shadowMap.enabled = true
+    // three.js fetches every program's and shader's info log after linking when this is on. On
+    // ANGLE (Chrome) and WebKit that call blocks until the driver has finished compiling, so the
+    // programs link one at a time: tens of seconds of the boot on a phone. Keep it for development
+    // (where a broken shader must say so) and never pay for it in a shipped build.
+    this.gl.debug.checkShaderErrors = import.meta.env.DEV
     // The post passes would each reset the counters: count the whole frame.
     this.gl.info.autoReset = false
     // iOS drops the WebGL context under memory pressure (often while backgrounded). three.js
@@ -427,7 +433,12 @@ export class Renderer {
     this.composer.addPass(this.mainPass)
     this.applyPostForTier()
 
-    this.probe = new TownProbe(this.gl, scene)
+    // The town light probe captures the whole scene into a cube and pre-filters it. That capture
+    // compiles a *linear* variant of every standard-material program (roughly doubles the program
+    // count) and renders the street six more times, which is the wrong trade on a phone. The phone
+    // tiers get a cheap gradient environment in the same colours instead (probe.ts), so the look
+    // holds and the boot does not.
+    this.probe = new TownProbe(this.gl, scene, this.tier === 'high' || this.tier === 'medium')
     this.gpu = perfRequested() ? new GpuTimer(this.gl.getContext() as WebGL2RenderingContext) : null
     this.perf = perfRequested() ? new PerfOverlay(this) : null
     if (this.perf) {
@@ -677,6 +688,86 @@ export class Renderer {
     this.frame.triangles = info.triangles
     this.cpu.push(performance.now() - frameStart)
     this.perf?.update(frameStart)
+  }
+
+  /**
+   * Compile and draw once, synchronously. Use when a loading screen is already up and total time
+   * matters more than keeping the page responsive (Frontier's own boot). The duel uses `warm`,
+   * which spreads the same reflection across frames behind the title.
+   */
+  warmSync(scene: Scene, camera: PerspectiveCamera): void {
+    try {
+      this.gl.compile(scene, camera)
+      this.gl.render(scene, camera)
+    } catch {
+      // the first real frame will report it
+    }
+  }
+
+  /**
+   * Compile the scene's programs, then reflect their uniforms in small slices.
+   *
+   * `WebGLRenderer.compile` builds the programs, but three does not query their uniforms until the
+   * first draw that uses them. That reflection (`WebGLUniforms`) is one blocking driver call per
+   * active uniform, and a standard material has a hundred of them: on a phone it is tens of
+   * seconds, and doing it on the first frame freezes the title. One program per animation frame
+   * keeps the page responsive and lets the loading copy move. Call `warmSilhouette` afterwards.
+   */
+  async warm(
+    scene: Scene,
+    camera: PerspectiveCamera,
+    onProgress?: (fraction: number) => void,
+  ): Promise<void> {
+    try {
+      this.gl.compile(scene, camera)
+    } catch {
+      // Older drivers: the draw below compiles whatever is missing.
+    }
+    const programs = new Set<{ getUniforms: () => unknown }>()
+    scene.traverse((o) => {
+      const d = o as { material?: Material | Material[] }
+      const material = d.material
+      if (!material) {
+        return
+      }
+      for (const m of Array.isArray(material) ? material : [material]) {
+        const props = this.gl.properties.get(m) as
+          | { currentProgram?: { getUniforms: () => unknown } }
+          | undefined
+        const program = props?.currentProgram
+        if (program) {
+          programs.add(program)
+        }
+      }
+    })
+    const list = [...programs]
+    if (list.length === 0) {
+      onProgress?.(1)
+      return
+    }
+    let i = 0
+    await new Promise<void>((resolve) => {
+      const step = () => {
+        // One program per slice: a shared program is reflected once, and a single call can still
+        // be a few hundred ms on a slow driver.
+        list[i]?.getUniforms()
+        i++
+        onProgress?.(i / list.length)
+        if (i < list.length) {
+          requestAnimationFrame(step)
+        } else {
+          resolve()
+        }
+      }
+      requestAnimationFrame(step)
+    })
+    // A real draw now creates the shadow-depth programs and fills the draw state. The uniforms are
+    // already reflected, so this is the cheap part.
+    try {
+      this.gl.render(scene, camera)
+    } catch {
+      // the first real frame will report it
+    }
   }
 
   /**

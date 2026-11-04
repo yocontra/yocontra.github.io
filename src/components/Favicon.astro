@@ -1,5 +1,14 @@
+---
+interface Props {
+  /** Override the site-wide home-screen icon (the game pages use their own). */
+  appleIcon?: string
+}
+
+const { appleIcon = '/apple-touch-icon.png' } = Astro.props
+---
+
 <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
-<link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+<link rel="apple-touch-icon" href={appleIcon} />
 <script>
   import { spinFavicon } from '~/lib/spinning-favicon.ts'
 
