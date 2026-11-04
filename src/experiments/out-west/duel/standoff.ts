@@ -16,7 +16,7 @@ import { playCue } from './cues.ts'
 import { enemyFires } from './defeat.ts'
 import type { Director } from './director.ts'
 import { drawOnCall, drawSecs, REMOTE_DRAW_S, standoffNerves } from './draws.ts'
-import { callShot, clockInsert, otsShot, standoffShot } from './framing.ts'
+import { callShot, clockInsert, otsShot, secondTargetShot, standoffShot } from './framing.ts'
 import { dueShot, planShots, shotsBefore } from './judge.ts'
 import { killEnemyAnim, killRifleman, playerFireFx, win } from './outcome.ts'
 import { AMB, ambience, bedLevel, duckForStandoff } from './present.ts'
@@ -402,6 +402,19 @@ export function tickCall(d: Director, now: number): void {
   }
 }
 
+/** One gun is down: point the lens at the one still standing (and re-light the roof glint). */
+function focusRemaining(d: Director, who: 0 | 1): void {
+  const c = d.c
+  secondTargetShot(d, who)
+  if (who === 1 && d.riflemanAlive) {
+    d.glintFired = true
+    d.glintMarkUntil = d.realTime + 3
+    c.hud.fake('[the rifleman on the roof]', 2200)
+  } else {
+    c.hud.fake('[he’s still standing]', 2200)
+  }
+}
+
 /** Where the rifleman's scope catches the light. */
 function glintPos(d: Director): ReturnType<typeof V> {
   return (d.rifleman?.headPos(V()) ?? V()).add(V(-0.35, -0.02, 0))
@@ -490,6 +503,7 @@ export function playerShoots(d: Director, p: Press): void {
   if (who === 1) {
     killRifleman(d)
     if (d.enemyAlive) {
+      focusRemaining(d, 0)
       return
     }
   } else {
@@ -497,6 +511,7 @@ export function playerShoots(d: Director, p: Press): void {
     if (d.underboss && d.riflemanAlive) {
       // shot Curly first: the rifleman still gets you
       killEnemyAnim(d)
+      focusRemaining(d, 1)
       return
     }
   }

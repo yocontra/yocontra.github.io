@@ -1,3 +1,4 @@
+// biome-ignore-all lint/style/noExcessiveLinesPerFile: the Outfitter shelf, detail and purchase flow live together
 /**
  * The Outfitter: browse the catalog by slot or by matched set, see each piece rendered (a
  * thumbnail from the game's own models), rarity, level gates and "New" / "Can afford" badges, try
@@ -17,13 +18,13 @@ import {
   type Slot,
   STARTER_ITEMS,
 } from '../data/catalog.ts'
-import { DYES, type DyeId, type Dyes, isDyeable } from '../data/dye.ts'
+import { DYES, type DyeId, type Dyes, dyePrice, isDyeable } from '../data/dye.ts'
 import { money } from '../data/economy.ts'
 import { buyItem, fetchStore, saveLoadout } from '../net/api.ts'
 import { dyeItem } from '../net/social.ts'
 import { type IconName, icon } from './icons.ts'
 import { uiSound } from './sfx.ts'
-import { button, confirmSheet, el, swallow } from './sheet.ts'
+import { button, closeButton, confirmSheet, el, swallow } from './sheet.ts'
 import { dyePanel } from './store-dye.ts'
 import { inReach, SETS, Shelf, setOf, wearSet } from './store-kit.ts'
 import { buyLabel, keptLoadout, recallOne, remember, TAB_KEY } from './store-memory.ts'
@@ -94,6 +95,8 @@ export interface StoreDeps {
   close: () => void
   /** Render one item's thumbnail (null: nothing to see, or the game isn't loaded). */
   thumb?: (id: ItemId) => HTMLCanvasElement | null
+  /** Play a draw sound's preview when its card is picked. */
+  previewSound?: (id: ItemId) => void
 }
 
 export class Outfitter {
@@ -126,7 +129,7 @@ export class Outfitter {
     const head = el('div', 'ow-store-head', this.root)
     el('h2', 'ow-hub-h', head, 'Outfitter')
     this.purseEl = el('div', 'ow-store-purse', head)
-    button(head, 'Done', () => this.close())
+    closeButton(head, () => this.close())
     const tabs = el('div', 'ow-store-tabs', this.root)
     tabs.setAttribute('role', 'tablist')
     const tabButton = (t: Tab, label: string, ic: IconName): void => {
@@ -306,6 +309,15 @@ export class Outfitter {
       tag = item.price > 0 ? money(item.price) : 'Free'
     }
     el('span', 'ow-item-tag', b, tag)
+    const unaffordable =
+      item.source === 'store' &&
+      item.price > 0 &&
+      !this.owned.has(item.id) &&
+      (!me || me.purse < item.price)
+    if (unaffordable) {
+      b.classList.add('unaffordable')
+      b.setAttribute('aria-disabled', 'true')
+    }
     const badges = el('span', 'ow-item-badges', b)
     if (this.shelf?.isNew(item.id)) {
       el('span', 'ow-item-badge new', badges, 'New')
@@ -372,6 +384,9 @@ export class Outfitter {
     this.picked = item
     this.tryDye = null
     this.tryOn({ ...this.equipped, [item.slot]: item.id })
+    if (item.slot === 'drawSound') {
+      this.deps.previewSound?.(item.id as ItemId)
+    }
     this.show(item.slot)
   }
 
@@ -477,21 +492,41 @@ export class Outfitter {
     this.show(this.tab)
   }
 
+  /** The dye selected on the detail page, when it is an extra on top of the item. */
+  private dyeExtra(item: CatalogItem): { dye: DyeId; price: number } | null {
+    if (!(isDyeable(item) && this.tryDye && this.tryDye !== 'natural')) {
+      return null
+    }
+    const price = dyePrice(item.id, this.tryDye) ?? 0
+    return price > 0 ? { dye: this.tryDye, price } : null
+  }
+
   private buyButton(item: CatalogItem, me: MeResponse | null): void {
     if (!me) {
       el('p', 'ow-hub-note', this.detail, 'Sign in to buy and equip.')
       return
     }
-    const verdict = canBuy({ level: me.level, purse: me.purse }, item, this.owned)
+    const extra = this.dyeExtra(item)
+    const total = item.price + (extra?.price ?? 0)
+    const priced = extra ? { ...item, price: total } : item
+    const verdict = canBuy({ level: me.level, purse: me.purse }, priced, this.owned)
     const b = button(
       this.detail,
-      buyLabel(verdict, item, me.purse),
+      buyLabel(verdict, priced, me.purse),
       () => {
         this.buy(item).catch(() => undefined)
       },
       true,
     )
     b.disabled = verdict !== 'ok' || this.busy
+    if (extra) {
+      el(
+        'p',
+        'ow-hub-note',
+        this.detail,
+        `${item.name} ${money(item.price)} + dye ${money(extra.price)} = ${money(total)}`,
+      )
+    }
   }
 
   private async buy(item: CatalogItem): Promise<void> {
@@ -499,24 +534,39 @@ export class Outfitter {
     if (!me || this.busy) {
       return
     }
+    const extra = this.dyeExtra(item)
+    const total = item.price + (extra?.price ?? 0)
     const yes = await confirmSheet(this.root.parentElement ?? this.root, {
       title: `Buy ${item.name}?`,
-      body: `Costs ${money(item.price)}. You have ${money(me.purse)}. No refunds.`,
-      yes: `Buy · ${money(item.price)}`,
+      body: extra
+        ? `${item.name} ${money(item.price)} + dye ${money(extra.price)} = ${money(total)}. You have ${money(me.purse)}. No refunds.`
+        : `Costs ${money(item.price)}. You have ${money(me.purse)}. No refunds.`,
+      yes: extra ? `Buy + dye · ${money(total)}` : `Buy · ${money(item.price)}`,
     })
     if (!yes) {
       return
     }
     this.busy = true
     const r = await buyItem(item.id as ItemId)
-    this.busy = false
     if (!r.ok) {
+      this.busy = false
       this.flash(r.error)
       return
     }
-    uiSound('uiBuy')
     this.owned = new Set(r.value.owned)
     this.deps.changed({ purse: r.value.purse, owned: r.value.owned })
+    if (extra) {
+      // the dye is the extra on the same purchase; the server owns the final price
+      const d = await dyeItem(item.id as ItemId, extra.dye)
+      if (d.ok) {
+        this.tryDye = null
+        this.deps.changed({ purse: d.value.purse, dyes: d.value.dyes })
+      } else {
+        this.flash(d.error)
+      }
+    }
+    this.busy = false
+    uiSound('uiBuy')
     await this.equip({ ...this.equipped, [item.slot]: item.id })
   }
 

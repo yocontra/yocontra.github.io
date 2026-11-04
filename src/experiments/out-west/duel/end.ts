@@ -1,13 +1,11 @@
 import { bountyFor, drawBonus, type RunResult } from '../data/economy.ts'
 import { OUTLAWS } from '../data/outlaws.ts'
-import { interlude } from '../meta/events.ts'
 import { save as persist } from '../save.ts'
 import type { LedgerRow } from '../ui/hud.ts'
 import type { Director } from './director.ts'
 import { endShot } from './framing.ts'
 import { toSaloon } from './mode.ts'
 import { RankedDuelClock } from './ranked-clock.ts'
-import { holdFor } from './stage.ts'
 
 const LEDGER_DELAY_MS = 1800
 
@@ -73,8 +71,8 @@ export function toEnd(d: Director): void {
     })
   }
   setTimeout(() => {
-    // the epilogue and credits (meta-game) come before the ledger, input held
-    holdFor(d, interlude({ kind: 'end', legend: c.save.legend }), ledger)
+    // straight to the ledger: no epilogue or credits card between the last shot and the score
+    ledger()
   }, LEDGER_DELAY_MS)
   endShot(d)
 }

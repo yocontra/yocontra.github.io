@@ -381,8 +381,11 @@ export class Meta {
       this.commit()
       return
     }
+    // Only the first signed-in sync may announce a guest purse: later background syncs (a hat
+    // claim after a ranked win) must not tell an already signed-in player they were a guest.
+    const firstSignIn = this.data.stats.signedIn !== true
     this.data.stats.signedIn = true
-    await this.migrate(player.accountId)
+    await this.migrate(player.accountId, firstSignIn)
     const r = await fetchProgress()
     // an older server has no /progress: the device's marks carry on alone
     this.account = r.ok ? r.value : null
@@ -390,7 +393,7 @@ export class Meta {
     this.finish()
   }
 
-  private async migrate(accountId: string): Promise<void> {
+  private async migrate(accountId: string, announce: boolean): Promise<void> {
     if (this.data.migrated.includes(accountId)) {
       return
     }
@@ -402,16 +405,18 @@ export class Meta {
     const r = await migrateGuest({ marks: this.data.marks, clears: this.data.clears })
     if (r.ok) {
       this.data.migrated.push(accountId)
-      this.deps.toast({
-        kind: 'purse',
-        kicker: 'Guest purse',
-        title: 'Guest earnings saved',
-        line: `$${r.value.cash} + ${r.value.xp} XP added to your account.${
-          r.value.claimed.xp > GUEST_CAP.xp || r.value.claimed.cash > GUEST_CAP.cash
-            ? ` Guests can keep up to $${GUEST_CAP.cash} + ${GUEST_CAP.xp} XP.`
-            : ''
-        }`,
-      })
+      if (announce) {
+        this.deps.toast({
+          kind: 'purse',
+          kicker: 'Guest purse',
+          title: 'Guest earnings saved',
+          line: `$${r.value.cash} + ${r.value.xp} XP added to your account.${
+            r.value.claimed.xp > GUEST_CAP.xp || r.value.claimed.cash > GUEST_CAP.cash
+              ? ` Guests can keep up to $${GUEST_CAP.cash} + ${GUEST_CAP.xp} XP.`
+              : ''
+          }`,
+        })
+      }
     } else if (r.status === 409) {
       this.data.migrated.push(accountId)
     }

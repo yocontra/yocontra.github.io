@@ -1,3 +1,4 @@
+// biome-ignore-all lint/complexity/noExcessiveLinesPerFunction: the per-frame scene update is one hot pass
 // biome-ignore-all lint/complexity/noExcessiveCognitiveComplexity: the per-frame scene and HUD passes read many independent bits of state
 // biome-ignore-all lint/complexity/useMaxParams: small positional helpers on the hot path
 // biome-ignore-all lint/suspicious/noUnnecessaryConditions: lifecycle flags (running, exited, disposed) are mutated from callbacks and awaits; Biome narrows them to their initialisers
@@ -289,12 +290,12 @@ export class FrontierGame {
   private wasInZone = false
   /** The last frame's dt (s), for the HUD's easing. */
   private dtS = 0
+  /** Consecutive shots, for the recoil's alternating sideways kick. */
+  private recoilShots = 0
   private readonly cutSize = new Vector2()
   private readonly cutView = new Vector3()
   /** When the pointer lock was last lost (performance.now ms). */
   private lockLostAt = -1e9
-  /** When you last fired (performance.now ms), for the raised-gun pose. */
-  private lastShotAt = -1e9
   /** Dev harness ADS (desktop has no touch AIM toggle). */
   private devAdsOn = false
   /** Dev / audit: your rider held in a named state. */
@@ -840,11 +841,17 @@ export class FrontierGame {
       // the lever chambers the next round as the barrel settles
       a.play('rifleLever', { gain: 0.6, when: a.now + RIFLE_LEVER_DELAY })
     }
-    this.lastShotAt = performance.now()
     if (this.shooterView) {
       // the view kicks up and settles; the crosshair blooms
       const long = weapon === WEAPON_RIFLE || weapon === WEAPON_SHOTGUN
-      this.shooter.kickRecoil(long ? 0.05 : 0.03)
+      const side = RECOIL_SIDE[this.recoilShots++ % RECOIL_SIDE.length] ?? 0
+      let pitch = 0.03
+      if (weapon === WEAPON_SHOTGUN) {
+        pitch = 0.075
+      } else if (long) {
+        pitch = 0.045
+      }
+      this.shooter.kickRecoil(pitch, side * (long ? 0.012 : 0.008))
       this.viewModel?.fired(weapon)
       this.bloom = bloomAfterShot(weapon, this.bloom)
     } else {
@@ -857,7 +864,7 @@ export class FrontierGame {
   private damageFrom(from: { x: number; z: number }): void {
     const bearing = Math.atan2(from.z - this.own.z, from.x - this.own.x)
     // shooter views look along the yaw; top-down looks north (−z) with +x to the right
-    const ahead = this.shooterView ? this.shooter.yaw : -Math.PI / 2
+    const ahead = this.shooterView ? this.shooter.viewYaw : -Math.PI / 2
     this.hud.damageArc(Math.atan2(Math.sin(bearing - ahead), Math.cos(bearing - ahead)))
   }
 
@@ -987,7 +994,7 @@ export class FrontierGame {
       mz = 0
       buttons = 0
     }
-    const yaw = this.shooter.yaw
+    const yaw = this.shooter.viewYaw
     const fwd = -mz
     const side = mx
     let wx = fwd * Math.cos(yaw) - side * Math.sin(yaw)
@@ -1047,7 +1054,7 @@ export class FrontierGame {
       moveZ: Math.round(wz * 127),
       aim: radiansToAim(aim),
       buttons,
-      pitch: Math.round((this.shooter.pitch / (Math.PI / 2)) * 127),
+      pitch: Math.round((this.shooter.viewPitch / (Math.PI / 2)) * 127),
     }
   }
 
@@ -1057,8 +1064,8 @@ export class FrontierGame {
     const origin = this.tmp.copy(cam.position)
     return resolveAim(
       origin,
-      this.shooter.yaw,
-      this.shooter.pitch,
+      this.shooter.viewYaw,
+      this.shooter.viewPitch,
       this.own.x,
       this.own.z,
       this.net.grid,
@@ -1071,8 +1078,8 @@ export class FrontierGame {
   private magnet(): void {
     const pull = assistPull(
       this.cam.camera.position,
-      this.shooter.yaw,
-      this.shooter.pitch,
+      this.shooter.viewYaw,
+      this.shooter.viewPitch,
       this.remotes,
     )
     if (pull) {
@@ -1089,7 +1096,7 @@ export class FrontierGame {
       return
     }
     const c = this.cam.camera
-    crowd.setView(this.shooter.yaw, Math.atan(Math.tan((c.fov * Math.PI) / 360) * c.aspect))
+    crowd.setView(this.shooter.viewYaw, Math.atan(Math.tan((c.fov * Math.PI) / 360) * c.aspect))
   }
 
   /** The touch shot's aim pull, a share of what's left each frame (~90 ms to settle). */
@@ -1129,8 +1136,8 @@ export class FrontierGame {
       const friction = steering
         ? assistFriction(
             this.cam.camera.position,
-            this.shooter.yaw,
-            this.shooter.pitch,
+            this.shooter.viewYaw,
+            this.shooter.viewPitch,
             this.remotes,
           )
         : 1
@@ -1262,6 +1269,7 @@ export class FrontierGame {
       return
     }
     const s = this.net.self
+    const shooter0 = this.shooterView
     const list = this.crowdList
     list.length = 0
     if (s && this.net.you >= 0) {
@@ -1288,9 +1296,12 @@ export class FrontierGame {
           ),
           speed > 0.3,
         ),
-        flags: ownFlags(s.flags, s.protectTicks > 0),
+        // Frontier is a shooter: the gun stays out, whatever the sim's holster timer says
+        flags: shooter0
+          ? ownFlags(s.flags, s.protectTicks > 0) & ~EF_HOLSTERED
+          : ownFlags(s.flags, s.protectTicks > 0),
         stance: this.ownStance(),
-        pitch: this.shooterView ? this.shooter.pitch : 0,
+        pitch: this.shooterView ? this.shooter.viewPitch : 0,
         self: true,
         weapon: this.devWeapon ?? this.net.weapon.weapon,
       })
@@ -1311,13 +1322,13 @@ export class FrontierGame {
       row.anim = r.anim
       row.stance = r.stance
       row.pitch = r.pitch
-      row.flags = r.flags
+      row.flags = shooter0 ? r.flags & ~EF_HOLSTERED : r.flags
       list.push(row)
     }
     this.lifeEdges(nowS)
     this.landings(list)
     this.slideDust(list, nowS)
-    const shooter = this.shooterView
+    const shooter = shooter0
     const first = this.settings.view === 'first'
     const speed0 = list[0]?.self ? Math.hypot(list[0].vx, list[0].vz) : 0
     if (shooter) {
@@ -1377,9 +1388,9 @@ export class FrontierGame {
     const ahead = policyFor(this.settings.view, this.renderer.tier).shadowAhead
     const focus = shooter
       ? this.tmp.set(
-          this.own.x + Math.cos(this.shooter.yaw) * ahead,
+          this.own.x + Math.cos(this.shooter.viewYaw) * ahead,
           0,
-          this.own.z + Math.sin(this.shooter.yaw) * ahead,
+          this.own.z + Math.sin(this.shooter.viewYaw) * ahead,
         )
       : this.tmp.copy(this.cam.target)
     this.sun.target.position.copy(focus)
@@ -1413,9 +1424,9 @@ export class FrontierGame {
         this.own.x,
         1.6,
         this.own.z,
-        Math.cos(this.shooter.yaw),
+        Math.cos(this.shooter.viewYaw),
         0,
-        Math.sin(this.shooter.yaw),
+        Math.sin(this.shooter.viewYaw),
       )
     } else {
       this.audio?.setListener(this.own.x, 8, this.own.z + 4, 0, -0.8, -0.6)
@@ -1431,7 +1442,8 @@ export class FrontierGame {
     if (!this.shooterView || anim !== ANIM_IDLE || moving) {
       return anim
     }
-    return this.adsHeld() || performance.now() - this.lastShotAt < 1200 ? ANIM_AIM : anim
+    // a shooter view keeps the revolver out and pointing, not hanging in the leather
+    return ANIM_AIM
   }
 
   /**
@@ -1490,7 +1502,7 @@ export class FrontierGame {
       return
     }
     const s = this.net.self
-    const yaw = this.shooter.yaw
+    const yaw = this.shooter.viewYaw
     // a wall close ahead pushes the gun back rather than through it
     const wall = rayGrid(
       this.net.grid,
@@ -1933,7 +1945,7 @@ export class FrontierGame {
         strongbox: spot ?? null,
         mostWanted: mw,
         callout: caller === NONE ? null : this.posOf(caller),
-        heading: this.shooterView ? this.shooter.yaw : null,
+        heading: this.shooterView ? this.shooter.viewYaw : null,
         bank:
           this.guide && this.net.alive && (this.net.self?.carried ?? 0) > 0
             ? this.guide.nearest(this.own.x, this.own.z)
@@ -2252,6 +2264,9 @@ const RING_MINE_MW = new Color(1.8, 1.4, 0.3)
 const RING_CALLOUT = new Color(2, 0.4, 0.2)
 const RING_SHOWDOWN = new Color(0.9, 0.7, 0.45)
 const RING_MW = new Color(2, 1.5, 0.3)
+
+/** The sideways share of each shot, repeating: up-left, up-right, and so on. */
+const RECOIL_SIDE = [0.18, -0.32, 0.42, -0.12, 0.3, -0.4]
 
 /** Muzzle-flash size by view (the top-down flash would fill a shoulder or an eye). */
 const FLASH_SCALE: Record<ViewMode, number> = { top: 1, third: 0.45, first: 0.18 }

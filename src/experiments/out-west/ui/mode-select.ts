@@ -4,7 +4,7 @@
  * ask for a sign-in instead. A 2×2 grid in portrait, one row in landscape.
  */
 import { type IconName, icon } from './icons.ts'
-import { el } from './sheet.ts'
+import { closeButton, el, onSwipeDown } from './sheet.ts'
 
 export type Mode = 'gauntlet' | 'bounty' | 'frontier' | 'store'
 
@@ -151,15 +151,6 @@ export function gauntletSheet(
   back.setAttribute('role', 'dialog')
   back.setAttribute('aria-label', 'Quick Draw')
   const panel = el('div', 'ow-hub-panel ow-sheet-panel', back)
-  el('h2', 'ow-hub-h', panel, 'Quick Draw')
-  el(
-    'p',
-    'ow-hub-note',
-    panel,
-    s.signedIn
-      ? 'Ranked runs pay XP and money. Beat 3 outlaws to earn your licence.'
-      : 'Ranked runs go on the leaderboard. Sign in to earn XP and money.',
-  )
   const onKey = (e: KeyboardEvent): void => {
     if (e.key === 'Escape') {
       e.stopImmediatePropagation()
@@ -172,6 +163,18 @@ export function gauntletSheet(
     back.remove()
     done(c)
   }
+  const head = el('div', 'ow-hub-row ow-sheet-head', panel)
+  el('h2', 'ow-hub-h', head, 'Quick Draw')
+  closeButton(head, () => close(null))
+  onSwipeDown(back, () => close(null))
+  el(
+    'p',
+    'ow-hub-note',
+    panel,
+    s.signedIn
+      ? 'Ranked runs pay XP and money. Beat 3 outlaws to earn your licence.'
+      : 'Ranked runs go on the leaderboard. Sign in to earn XP and money.',
+  )
   const list = el('div', 'ow-hub-choices', panel)
   const offered: QuickDrawPick[] = [
     ...(rankedOk ? (['ranked'] as const) : []),
@@ -213,15 +216,9 @@ export function gauntletSheet(
   }
   choice('Practice', 'From outlaw 1 · not ranked', { ranked: false, resume: false }, 'practice')
   requestAnimationFrame(() => focus?.focus())
-  const row = el('div', 'ow-hub-row', panel)
-  const cancel = el('button', 'ow-btn', row, 'Back')
-  cancel.type = 'button'
-  cancel.addEventListener('click', (e) => {
-    e.stopPropagation()
-    close(null)
-  })
   const { map } = o
   if (map) {
+    const row = el('div', 'ow-hub-row', panel)
     const m = el('button', 'ow-btn', row, 'Gauntlet map')
     m.type = 'button'
     m.addEventListener('click', (e) => {

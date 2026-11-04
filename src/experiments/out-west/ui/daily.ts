@@ -314,7 +314,6 @@ export class DailyTile {
     const day = el('div', 'ow-daily-standing', s.body)
     const status = statusLine(s.body)
     const row = el('div', 'ow-hub-row', s.body)
-    const back = button(row, 'Back', () => s.close())
     const again = button(
       row,
       'Try again',
@@ -323,7 +322,6 @@ export class DailyTile {
           status,
           early,
           again,
-          back,
           row,
           sheet: s,
           go: () => {
@@ -341,8 +339,6 @@ export class DailyTile {
       again.disabled = !this.deps.ready()
     } else {
       again.remove()
-      back.classList.add('ow-btn-primary')
-      back.focus()
     }
     standing(day, today, b.ok ? b.value : null)
     board(s.body, b.ok ? b.value : null)
@@ -354,7 +350,6 @@ export class DailyTile {
       status: (text: string, kind?: 'info' | 'error') => void
       early: Promise<string | null>
       again: HTMLButtonElement
-      back: HTMLButtonElement
       row: HTMLElement
       sheet: { close: () => void }
       go: () => void
@@ -363,7 +358,6 @@ export class DailyTile {
   ): void {
     const hold = (on: boolean): void => {
       o.again.disabled = on
-      o.back.disabled = on
     }
     hold(true)
     // the early token is spent (or refused) on the first press; a retry asks for a fresh one

@@ -6,7 +6,7 @@ import { GHOST_FALLBACK_MS } from '../contract/duel.ts'
 import { type QueueMatch, QueueSearch, type QueueStatus } from '../net/queue.ts'
 import { icon } from './icons.ts'
 import { uiSound } from './sfx.ts'
-import { button, el, setBar, swallow } from './sheet.ts'
+import { button, closeButton, el, onSwipeDown, setBar, swallow } from './sheet.ts'
 
 export interface QueueSheetOpts {
   /** A fresh Turnstile token, or null when the check failed. */
@@ -23,7 +23,6 @@ export class QueueSheet {
   private readonly detail: HTMLElement
   private readonly ghostBtn: HTMLButtonElement
   private readonly rankedBtn: HTMLButtonElement
-  private readonly leaveBtn: HTMLButtonElement
   private readonly retryBtn: HTMLButtonElement
   private readonly bar: HTMLElement
   private search: QueueSearch
@@ -37,14 +36,16 @@ export class QueueSheet {
     this.root.setAttribute('aria-label', 'Bounty Hunt queue')
     swallow(this.root)
     const panel = el('div', 'ow-hub-panel ow-sheet-panel', this.root)
-    el('h2', 'ow-hub-h', panel).append(icon('bounty'), 'Bounty Hunt')
+    const head = el('div', 'ow-hub-row ow-sheet-head', panel)
+    el('h2', 'ow-hub-h', head).append(icon('bounty'), 'Bounty Hunt')
+    closeButton(head, () => this.cancel())
+    onSwipeDown(this.root, () => this.cancel())
     this.line = el('p', 'ow-queue-line', panel, 'Checking this device…')
     this.line.setAttribute('aria-live', 'polite')
     const track = el('div', 'ow-xp ow-queue-track', panel)
     this.bar = el('div', 'ow-xp-fill', track)
     this.detail = el('p', 'ow-hub-note', panel, '')
     const row = el('div', 'ow-hub-row', panel)
-    this.leaveBtn = button(row, 'Leave queue', () => this.cancel())
     this.ghostBtn = button(row, 'Duel a ghost now', () => this.search.ghost(), true)
     this.ghostBtn.hidden = true
     this.rankedBtn = button(
@@ -82,7 +83,6 @@ export class QueueSheet {
     this.done = false
     this.retryBtn.hidden = true
     this.rankedBtn.hidden = true
-    this.leaveBtn.textContent = 'Leave queue'
     this.line.textContent = 'Checking this device…'
     setBar(this.bar, 0)
     this.search = this.newSearch()
@@ -137,7 +137,6 @@ export class QueueSheet {
     this.line.textContent = msg
     this.detail.textContent = ''
     this.ghostBtn.hidden = true
-    this.leaveBtn.textContent = 'Back'
     // not a dead end: the licence is three outlaws away
     this.rankedBtn.hidden = reason !== 'unlicensed'
     this.retryBtn.hidden =

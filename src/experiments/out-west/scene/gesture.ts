@@ -56,7 +56,14 @@ interface Bones {
   upper: [Bone | null, Bone | null]
   lower: [Bone | null, Bone | null]
   wrist: [Bone | null, Bone | null]
+  /** The strong hand's finger joints: opened flat in the ready stance. */
+  fingers: Bone[]
 }
+
+/** The strong hand's joints, from the knuckle to the fingertip (the rig's names). */
+const FINGER_NAMES = ['Index', 'Middle', 'Ring', 'Pinky']
+  .flatMap((f) => [1, 2, 3, 4].map((j) => `${f}${j}R`))
+  .concat(['Thumb1R', 'Thumb2R', 'Thumb3R'])
 
 const pq = new Quaternion()
 const tq = new Quaternion()
@@ -105,6 +112,8 @@ export class GestureLayer {
   private readonly b: Bones
   private readonly list: Bone[]
   private readonly saved: Quaternion[]
+  /** The Idle-clip finger pose: the open hand the ready stance returns to. */
+  private readonly restFingers: Quaternion[]
   private applied: boolean = false as boolean
 
   constructor(bone: (n: string) => Bone | null, root: Object3D) {
@@ -118,6 +127,7 @@ export class GestureLayer {
       upper: [bone('UpperArmL'), bone('UpperArmR')],
       lower: [bone('LowerArmL'), bone('LowerArmR')],
       wrist: [bone('WristL') ?? bone('FistL'), bone('WristR') ?? bone('FistR')],
+      fingers: FINGER_NAMES.map((n) => bone(n)).filter((x): x is Bone => x !== null),
     }
     const b = this.b
     this.list = [
@@ -129,8 +139,10 @@ export class GestureLayer {
       ...b.upper,
       ...b.lower,
       ...b.wrist,
+      ...b.fingers,
     ].filter((x): x is Bone => x !== null)
     this.saved = this.list.map(() => new Quaternion())
+    this.restFingers = b.fingers.map((f) => f.quaternion.clone())
   }
 
   /** Play a beat now (it replaces one under way). */
@@ -250,6 +262,13 @@ export class GestureLayer {
       turn(b.upper[0], F, hv * 0.1)
       turn(b.chest, P, hv * 0.06)
       turn(b.head, P, -hv * 0.08)
+      // a quick-draw hand is open, not a fist: let the walk clip's fingers out flat
+      for (const [i, f] of b.fingers.entries()) {
+        const rest = this.restFingers[i]
+        if (rest) {
+          f.quaternion.slerp(rest, hv)
+        }
+      }
     }
     if (this.beat) {
       this.poseBeat(this.beat, this.bt / SECS[this.beat], BODY_ONLY.has(this.beat) ? 1 : w)

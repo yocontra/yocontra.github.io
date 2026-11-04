@@ -1,3 +1,4 @@
+// biome-ignore-all lint/style/noExcessiveLinesPerFile: the HUD card, menu copy and end ledger live together
 import { money } from '../data/economy.ts'
 import { type Action, keyLabel } from '../engine/input.ts'
 import type { Settings } from '../save.ts'
@@ -532,7 +533,30 @@ export class Hud {
     if (stats.legendUnlocked) {
       const leg = el('button', 'ow-btn', b, 'Legend mode')
       leg.type = 'button'
-      leg.addEventListener('click', onLegend)
+      leg.addEventListener('click', () => {
+        // a second click, not a single stray one: starting Legend leaves this ledger
+        e.querySelector('.ow-end-confirm')?.remove()
+        const note = el(
+          'div',
+          'ow-end-confirm',
+          e,
+          stats.ranked
+            ? 'Legend mode starts a new run. This one is not on the board yet: submit it first, or start anyway.'
+            : 'Legend mode starts a new run. The 2019 speeds are faster.',
+        )
+        const row = el('div', 'ow-menu-btns ow-end-confirm-row', note)
+        const yes = el('button', 'ow-btn ow-btn-primary', row, 'Start Legend run')
+        yes.type = 'button'
+        yes.addEventListener('click', onLegend)
+        if (stats.ranked) {
+          const submitFirst = el('button', 'ow-btn', row, 'Submit first')
+          submitFirst.type = 'button'
+          submitFirst.addEventListener('click', onBoard)
+        }
+        const no = el('button', 'ow-btn', row, 'Cancel')
+        no.type = 'button'
+        no.addEventListener('click', () => note.remove())
+      })
     }
     if (spec.onSaloon) {
       const saloon = el('button', 'ow-btn', b, 'Back')

@@ -37,6 +37,7 @@
   font-size: var(--ow-fs-h1);
   letter-spacing: 0.06em;
   line-height: 1;
+  text-align: center;
   text-transform: uppercase;
 }
 .ow-menu-title::after {
@@ -327,4 +328,17 @@
   .ow-ledger-wrap {
     animation: none;
   }
+}
+
+/* the end ledger's Legend confirmation, inline so the score stays on screen */
+.ow-end-confirm {
+  max-width: min(32rem, 100%);
+  margin-top: var(--ow-s3);
+  text-align: center;
+  font-size: var(--ow-fs-body);
+  line-height: 1.4;
+  color: var(--ow-bone-2);
+}
+.ow-end-confirm-row {
+  margin-top: var(--ow-s2);
 }

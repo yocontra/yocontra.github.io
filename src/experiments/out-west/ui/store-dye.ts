@@ -74,6 +74,18 @@ export function dyePanel(parent: HTMLElement, o: DyePanel): void {
   })
   const name = DYES.find((d) => d.id === o.want)?.name ?? 'Natural'
   const price = dyePrice(o.item.id, o.want) ?? 0
+  if (!o.owned) {
+    // the colour is an add-on to the Buy button, not a second purchase of its own
+    el(
+      'p',
+      'ow-hub-note ow-feat-dye-note',
+      box,
+      o.want === 'natural'
+        ? 'Pick a colour; it is added at checkout.'
+        : `Added at checkout: +${money(price)}`,
+    )
+    return
+  }
   const go = button(box, label(o, name, price), () => o.onDye(o.want, price))
-  go.disabled = !o.owned || o.purse === null || o.want === o.current || o.busy || o.purse < price
+  go.disabled = o.purse === null || o.want === o.current || o.busy || o.purse < price
 }

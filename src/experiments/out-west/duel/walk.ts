@@ -24,6 +24,11 @@ export function enterWalk(d: Director): void {
   d.c.audio.musicLevel(FEEL.walkDuckDb, 0.8)
   d.c.audio.musicLowpass(FEEL.walkLowpass, 0.8)
   walkShot(d)
+  // the quick-draw ready stance through the pacing: the gun hand open over the leather
+  d.player.gestures.hover = 1
+  if (d.enemy) {
+    d.enemy.gestures.hover = 1
+  }
   if (d.outlaw.gimmick === 'windy') {
     d.wind = 0.4
   }

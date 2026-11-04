@@ -112,6 +112,72 @@ export function swallow(e: HTMLElement): void {
   }
 }
 
+/** The one close control a modal gets: an X, never a text button or a second footer "Close". */
+export function closeButton(parent: HTMLElement, onClose: () => void): HTMLButtonElement {
+  const b = el('button', 'ow-btn ow-sheet-close', parent, '×')
+  b.type = 'button'
+  b.setAttribute('aria-label', 'Close')
+  b.title = 'Close'
+  b.addEventListener('click', (e) => {
+    e.stopPropagation()
+    onClose()
+  })
+  return b
+}
+
+/**
+ * Swipe down to dismiss a modal on a touch screen. Only starts on non-interactive content and
+ * only when the scroll container is at its top, so a normal scroll or a button press is untouched.
+ */
+export function onSwipeDown(target: HTMLElement, close: () => void, threshold = 90): () => void {
+  let id = -1
+  let y0 = 0
+  let x0 = 0
+  let y = 0
+  let x = 0
+  let live = false
+  const down = (e: PointerEvent): void => {
+    if (e.pointerType === 'mouse' || (target.scrollTop ?? 0) > 0) {
+      return
+    }
+    const at = e.target as HTMLElement | null
+    if (at?.closest('button, a, input, textarea, select, .ow-btn')) {
+      return
+    }
+    id = e.pointerId
+    y0 = e.clientY
+    y = y0
+    x0 = e.clientX
+    x = x0
+    live = true
+  }
+  const move = (e: PointerEvent): void => {
+    if (live && e.pointerId === id) {
+      y = e.clientY
+      x = e.clientX
+    }
+  }
+  const up = (e: PointerEvent): void => {
+    if (!live || e.pointerId !== id) {
+      return
+    }
+    live = false
+    if (y - y0 > threshold && Math.abs(x - x0) < Math.abs(y - y0)) {
+      close()
+    }
+  }
+  target.addEventListener('pointerdown', down, { passive: true })
+  target.addEventListener('pointermove', move, { passive: true })
+  target.addEventListener('pointerup', up, { passive: true })
+  target.addEventListener('pointercancel', up, { passive: true })
+  return () => {
+    target.removeEventListener('pointerdown', down)
+    target.removeEventListener('pointermove', move)
+    target.removeEventListener('pointerup', up)
+    target.removeEventListener('pointercancel', up)
+  }
+}
+
 export interface ConfirmOpts {
   title: string
   body: string
@@ -220,7 +286,9 @@ export function panelSheet(
   }
   openSheets.push(back)
   globalThis.addEventListener('keydown', onKey, true)
-  button(head, 'Close', close)
+  closeButton(head, close)
+  onSwipeDown(panel, close)
+  onSwipeDown(back, close)
   const body = el('div', 'ow-sheet-body', panel)
   back.addEventListener('click', (e) => {
     if (e.target === back) {

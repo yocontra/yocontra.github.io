@@ -257,7 +257,9 @@ export const DUEL_CUE: Partial<Record<SongName, SongName>> = {
 
 /** Songs heard so often that alternates take turns, one per time they are asked for. */
 export const SONG_TURNS: Partial<Record<SongName, readonly SongName[]>> = {
-  saloon: ['saloon', 'saloonB'],
+  // the 2019 main theme is the hub's signature; the saloon band and the accordion take the
+  // other turns, so it returns on every third visit instead of only on the title and the end
+  saloon: ['intro', 'saloon', 'saloonB'],
 }
 
 /** First-try wins in a row that light the streak layer. */

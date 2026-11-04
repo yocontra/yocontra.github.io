@@ -272,3 +272,42 @@
   outline-offset: 2px;
   background: rgb(255 250 236 / 0.7);
 }
+
+/* the one close control a modal gets: an X at the header's edge, not a text button */
+.ow-sheet-close {
+  flex: none;
+  width: var(--ow-tap);
+  min-width: var(--ow-tap);
+  height: var(--ow-tap);
+  padding: 0;
+  display: grid;
+  place-items: center;
+  font-family: var(--ow-font-num);
+  font-size: 1.5rem;
+  line-height: 1;
+}
+
+/* the header rule above is for a text Close; the X keeps its square target */
+.ow-store-head > .ow-sheet-close {
+  flex: none;
+  width: var(--ow-tap);
+  min-width: var(--ow-tap);
+  height: var(--ow-tap);
+  padding: 0;
+  display: grid;
+  place-items: center;
+  font-size: 1.5rem;
+  line-height: 1;
+}
+
+.ow-hub-row.ow-sheet-head > .ow-sheet-close {
+  flex: none;
+  width: var(--ow-tap);
+  min-width: var(--ow-tap);
+  height: var(--ow-tap);
+  padding: 0;
+  display: grid;
+  place-items: center;
+  font-size: 1.5rem;
+  line-height: 1;
+}

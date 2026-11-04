@@ -97,8 +97,9 @@ export class ShooterCamera {
   /** ADS blend, 0..1. */
   ads = 0
   private fov = 72
-  /** Recoil: extra pitch (rad) that settles back. */
+  /** Recoil: extra pitch and yaw (rad) that settle back. */
   private recoil = 0
+  private recoilYaw = 0
   /** First person: the view model's own kick (rad), added to the lens's pitch. */
   vmKick = 0
   private readonly shake = { t: 0, amp: 0 }
@@ -129,6 +130,7 @@ export class ShooterCamera {
     this.yaw = yaw
     this.pitch = -0.08
     this.recoil = 0
+    this.recoilYaw = 0
     this.reach = BACK
   }
 
@@ -142,10 +144,12 @@ export class ShooterCamera {
     )
   }
 
-  /** A shot's kick: the view jumps up and settles (cosmetic: the aim stays where you put it). */
-  kickRecoil(rad: number): void {
+  /** A shot's kick: the view jumps up and a little sideways, then settles. */
+  kickRecoil(rad: number, yaw = 0): void {
     if (!REDUCED_MOTION) {
-      this.recoil = Math.min(0.12, this.recoil + rad)
+      const k = 1 - this.ads * 0.45
+      this.recoil = Math.min(0.12, this.recoil + rad * k)
+      this.recoilYaw = Math.max(-0.04, Math.min(0.04, this.recoilYaw + yaw * k))
     }
   }
 
@@ -156,9 +160,13 @@ export class ShooterCamera {
     }
   }
 
-  /** The view's pitch including the recoil kick (what the lens shows). */
+  /** The view's pitch and yaw including recoil (what the lens shows, and what the shot follows). */
   get viewPitch(): number {
     return this.pitch + this.recoil
+  }
+
+  get viewYaw(): number {
+    return wrap(this.yaw + this.recoilYaw)
   }
 
   update(f: ShooterFrame): void {
@@ -185,13 +193,15 @@ export class ShooterCamera {
     // the pivot rides the (already smoothed) render pose, lifted through a vault or a hop
     this.pivot.set(f.x, PIVOT_Y + f.lift - this.duck + this.dip, f.z)
     this.recoil *= Math.exp(-dt * 9)
+    this.recoilYaw *= Math.exp(-dt * 9)
     this.shake.t += dt
     this.shake.amp *= Math.exp(-dt * 10)
     const pitch = this.pitch + this.recoil + (f.first ? this.vmKick : 0)
     const sx = Math.sin(this.shake.t * 63) * this.shake.amp * 0.04
     const sy = Math.cos(this.shake.t * 51) * this.shake.amp * 0.04
-    const cy = Math.cos(this.yaw)
-    const sy0 = Math.sin(this.yaw)
+    const viewYaw = this.viewYaw
+    const cy = Math.cos(viewYaw)
+    const sy0 = Math.sin(viewYaw)
     fwd.set(cy * Math.cos(pitch), Math.sin(pitch), sy0 * Math.cos(pitch))
     right.set(-sy0, 0, cy)
     if (f.first) {
@@ -272,10 +282,11 @@ export class ShooterCamera {
     const bob = REDUCED_MOTION ? 0 : this.bobAmp
     const by = Math.abs(Math.sin(this.bobPhase)) * 0.045 * bob
     const bx = Math.cos(this.bobPhase) * 0.025 * bob
+    const yaw = this.viewYaw
     this.camera.position.set(
-      this.pivot.x + Math.cos(this.yaw) * 0.12 + right.x * bx,
+      this.pivot.x + Math.cos(yaw) * 0.12 + right.x * bx,
       this.pivot.y - PIVOT_Y + EYE_Y + by - 0.02 * bob,
-      this.pivot.z + Math.sin(this.yaw) * 0.12 + right.z * bx,
+      this.pivot.z + Math.sin(yaw) * 0.12 + right.z * bx,
     )
     this.closeness = 1
   }

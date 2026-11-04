@@ -14,6 +14,7 @@ import { setHapticsEnabled } from './platform/haptics.ts'
 import { registerServiceWorker } from './platform/sw.ts'
 import { installViewportVars } from './platform/viewport.ts'
 import { load, type SaveData, save } from './save.ts'
+import { DRAW_SOUNDS } from './scene/loadout.ts'
 import { bindRunFlags, getSettings, onSettings, type Settings } from './settings.ts'
 import { Board, lastBoardTab } from './ui/board.ts'
 import { installGazette } from './ui/gazette.ts'
@@ -156,9 +157,9 @@ function makeMeta(root: HTMLElement, data: SaveData, game: () => Game | null): M
 /** The saloon hub between the title and every mode. */
 function makeHub(
   root: HTMLElement,
-  o: { data: SaveData; rankedOk: boolean; game: () => Game | null; meta: Meta },
+  o: { data: SaveData; rankedOk: boolean; game: () => Game | null; meta: Meta; audio: AudioEngine },
 ): Hub {
-  const { data, rankedOk, game, meta } = o
+  const { data, rankedOk, game, meta, audio } = o
   let board: Board | null = null
   const dailyTokens = queueTokens(root)
   const hub: Hub = new Hub(root, {
@@ -183,6 +184,16 @@ function makeHub(
     stage: (shot) => game()?.hubShot(shot),
     dress: (l, dyes) => game()?.dress(l, dyes),
     thumb: (id) => game()?.itemThumb(id) ?? null,
+    previewSound: (id) => {
+      if (!id.startsWith('sound.')) {
+        return
+      }
+      const s = DRAW_SOUNDS[id] ?? { rate: 1, gain: 0.7 }
+      audio.play('fireBig', { gain: s.gain, rate: s.rate, reverb: 0.8 })
+      if (s.hawk) {
+        audio.play('hawk', { gain: 0.5, when: audio.now + 0.35 })
+      }
+    },
     playGauntlet: (c) => game()?.playGauntlet(c),
     bountyHunt: (match, xpBefore) =>
       game()?.startPvp({
@@ -300,7 +311,13 @@ export function boot(root: HTMLElement): void {
   const hub =
     jump || debug
       ? null
-      : makeHub(root, { data, rankedOk: connectRanked !== null, game: () => game, meta })
+      : makeHub(root, {
+          data,
+          rankedOk: connectRanked !== null,
+          game: () => game,
+          meta,
+          audio,
+        })
   wireSettings(root, audio, data, () => game)
   installViewportVars()
   // form factor, fold/unfold, late WebKit resizes, the pinch guard; then pads and menu arrows

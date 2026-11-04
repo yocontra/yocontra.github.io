@@ -104,6 +104,8 @@ class Folk {
   private readonly pose: FolkPose
   private readonly mix = restMix()
   private readonly want = restMix()
+  /** His standing idle, kept across duels so a reset always leaves the Run clip behind. */
+  private readonly idle: 'Idle' | 'Idle_Neutral'
   private mode: Mode = 'idle'
   private reaction: Reaction = 'flinch'
   private t = Math.random() * 20
@@ -126,7 +128,8 @@ class Folk {
     this.spot = spot
     this.yaw = spot.yaw
     this.pose = new FolkPose(actor.model)
-    actor.play(Math.random() < 0.5 ? 'Idle' : 'Idle_Neutral', 0, false, 0.8 + Math.random() * 0.3)
+    this.idle = Math.random() < 0.5 ? 'Idle' : 'Idle_Neutral'
+    actor.play(this.idle, 0, false, 0.8 + Math.random() * 0.3)
     actor.update(0)
     actor.root.updateMatrixWorld(true)
     const hp = actor.hips?.getWorldPosition(new Vector3())
@@ -151,13 +154,17 @@ class Folk {
   home(): void {
     const s = this.spot
     this.mode = 'idle'
+    this.reactIn = 0
+    this.reactT = 0
+    this.fleer = false
+    this.path = []
     this.yaw = s.yaw
     this.actor.root.visible = true
     this.actor.root.position.set(s.x, s.y, s.z)
     Object.assign(this.mix, habitMix(s.habit))
-    if (s.habit === 'sit' || s.habit === 'whittle') {
-      this.actor.play('Idle_Neutral', 0.2)
-    }
+    // Always cut back to an idle: a man who ran indoors last duel was still playing Run when the
+    // next arena's crowd arrived (the rail depot opened with the whole platform sprinting in place).
+    this.actor.play(s.habit === 'sit' || s.habit === 'whittle' ? 'Idle_Neutral' : this.idle, 0.2)
     this.skin.touch()
   }
 

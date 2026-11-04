@@ -44,6 +44,8 @@ export interface HubDeps {
   dress: (l: Loadout, dyes: Dyes) => void
   /** The Outfitter's picture of one piece of kit (null until the game has loaded). */
   thumb: (id: ItemId) => HTMLCanvasElement | null
+  /** Preview a piece's sound (the draw sounds) from the Outfitter. */
+  previewSound: (id: ItemId) => void
   playGauntlet: (c: GauntletChoice) => void
   bountyHunt: (m: QueueMatch, xpBefore: number | null) => void
   /** A fresh Turnstile token for the queue. */
@@ -476,6 +478,7 @@ export class Hub {
       me: () => this.me,
       preview: (l, dyes) => this.deps.dress(l, dyes ?? this.dyes),
       thumb: (id) => this.deps.thumb(id),
+      previewSound: (id) => this.deps.previewSound(id),
       changed: (patch) => this.patch(patch),
       close: () => {
         this.root.classList.remove('shop')

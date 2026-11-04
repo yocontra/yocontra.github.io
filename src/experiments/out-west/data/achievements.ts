@@ -1,6 +1,6 @@
 /**
- * Achievements: twenty milestones read from the solo meta-game (medals, challenges, the gauntlet,
- * Legend, the Daily Outlaw, the Gazette). Pure. Owned by the meta-game stream.
+ * Achievements: eight milestones read from the solo meta-game (medals, the gauntlet, Legend, the
+ * Daily Outlaw and signing in). Pure. Owned by the meta-game stream.
  *
  * The ids are stable forever: the Expo app maps them one-to-one onto Game Center and Play Games
  * achievements (`ow.<slug>` → `io.contra.outwest.<slug>` / a Play Games id table), so never rename
@@ -46,56 +46,16 @@ export const ACHIEVEMENTS: readonly Achievement[] = [
   a('first-medal', ['Pinned', 'Win a medal.'], (s) => tally(s.marks).bronze >= 1),
   a('first-gold', ['Struck Gold', 'Win a gold medal.'], (s) => tally(s.marks).gold >= 1),
   a(
-    'bronze-set',
-    ['Bronze Age', 'Bronze on all 17 outlaws.'],
-    (s) => tally(s.marks).bronze >= OUTLAW_COUNT,
-  ),
-  a(
-    'silver-set',
-    ['Silver Tongue', 'Silver on all 17 outlaws.'],
-    (s) => tally(s.marks).silver >= OUTLAW_COUNT,
-  ),
-  a(
-    'gold-set',
-    ['Gold Rush', 'Gold on all 17 outlaws.'],
-    (s) => tally(s.marks).gold >= OUTLAW_COUNT,
-  ),
-  a(
-    'first-challenge',
-    ['Called Out', 'Finish a challenge.'],
-    (s) => tally(s.marks).challenges >= 1,
-  ),
-  a(
-    'tall-tales',
-    ['Tall Tales', 'Finish all 17 challenges.'],
-    (s) => tally(s.marks).challenges >= OUTLAW_COUNT,
-  ),
-  a('hat-trick', ['Hat Trick', 'Shoot the hat off 3 outlaws.'], (s) => s.hats >= 3),
-  a(
     'gauntlet',
     ['Last Man Standing', 'Kill John Wesley Hardin.'],
     (s) => (s.clears & BOSS_BIT) !== 0,
   ),
-  a('clean-hands', ['Clean Hands', 'Clear the gauntlet without drawing early.'], (s) =>
-    s.moments.has('clean-clear'),
-  ),
-  a('nerves', ['Nerves of Iron', 'Win after a fake-out 10 times.'], (s) => s.fakesBeaten >= 10),
   a('lightning', ['Greased Lightning', 'Win a duel under 180 ms.'], (s) =>
     s.moments.has('lightning'),
   ),
-  a('stubborn', ['Mule-Headed', 'Beat an outlaw after he beat you 5 times.'], (s) =>
-    s.moments.has('stubborn'),
-  ),
-  a(
-    'legend-3',
-    ['Tall in the Saddle', 'Beat 3 outlaws in one Legend run.'],
-    (s) => s.legendBest >= 3,
-  ),
   a('legend-6', ['Legend', 'Beat 6 outlaws in one Legend run.'], (s) => s.legendBest >= 6),
   a('daily-first', ['Daily Bread', 'Win the Daily Outlaw.'], (s) => s.dailyDays >= 1),
-  a('daily-week', ['Regular', 'Win the Daily Outlaw on 7 days.'], (s) => s.dailyDays >= 7),
   a('signed', ['On the Books', 'Sign in with a passkey.'], (s) => s.signedIn),
-  a('extra', ['Extra! Extra!', 'Read the last Gazette.'], (s) => s.epilogue),
 ]
 
 /** Achievements `s` meets that aren't in `have` yet. */

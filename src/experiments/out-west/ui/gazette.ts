@@ -4,12 +4,12 @@
  * it through `meta/events.ts` `interlude`), and every page read can be read again from the map.
  * Any press turns the page; nothing here can fire a shot.
  */
-import { CREDITS, EPILOGUE, type FrontPage, frontPage } from '../data/gazette.ts'
+import { EPILOGUE, type FrontPage, frontPage } from '../data/gazette.ts'
 import { OUTLAWS } from '../data/outlaws.ts'
 import { type Interlude, setInterlude } from '../meta/events.ts'
 import type { Meta } from '../meta/progress.ts'
 import { uiSound } from './sfx.ts'
-import { button, el, panelSheet, swallow } from './sheet.ts'
+import { button, el, onSwipeDown, panelSheet, swallow } from './sheet.ts'
 
 /** A page can't be dismissed for this long (the press that won the duel isn't a page turn). */
 const READ_GRACE_MS = 900
@@ -55,7 +55,14 @@ function overlay(
     swallow(back)
     const paper = el('article', 'ow-gz-paper', back)
     paint(paper)
-    const hint = el('div', 'ow-gz-hint', back, 'press to read on')
+    const touch = matchMedia('(pointer: coarse)').matches
+    // the page is one sheet: a press puts it down, it does not turn to more copy
+    const hint = el(
+      'div',
+      'ow-gz-hint',
+      back,
+      touch ? 'tap anywhere to close' : 'click anywhere to close',
+    )
     const opened = performance.now()
     uiSound('uiStamp')
     let done = false
@@ -85,6 +92,7 @@ function overlay(
       close()
     }
     globalThis.addEventListener('keydown', onKey, true)
+    onSwipeDown(back, close)
     back.addEventListener('pointerup', (e) => {
       e.stopPropagation()
       close()
@@ -103,16 +111,8 @@ export function showFrontPage(root: HTMLElement, slot: number): Promise<void> | 
 }
 
 export async function showEpilogue(root: HTMLElement): Promise<void> {
+  // The credits card is gone: the end ledger is the last screen after the boss.
   await overlay(root, 'ow-gz-epilogue', (paper) => page(paper, EPILOGUE, null))
-  await overlay(root, 'ow-gz-credits', (paper) => {
-    el('div', 'ow-gz-mast ow-t-ornate', paper, 'Out West')
-    el('div', 'ow-gz-date', paper, 'The end')
-    const list = el('dl', 'ow-gz-credits-list', paper)
-    for (const c of CREDITS) {
-      el('dt', '', list, c.role)
-      el('dd', '', list, c.name)
-    }
-  })
 }
 
 /**

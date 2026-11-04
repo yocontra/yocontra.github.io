@@ -9,6 +9,7 @@ import {
   saveName,
 } from '../net/leaderboard.ts'
 import { mountMostWanted } from './most-wanted.ts'
+import { closeButton, onSwipeDown } from './sheet.ts'
 import { recallOne, remember } from './store-memory.ts'
 
 export interface Banked {
@@ -139,6 +140,7 @@ export class Board {
     const head = el('div', 'ow-hub-row ow-sheet-head', panel)
     el('h2', 'ow-hub-h ow-board-title', head, 'LEADERBOARD')
     this.closeButton(head)
+    onSwipeDown(panel, () => this.close())
     const submit = this.opts.submit
     if (!submit) {
       this.tabs(panel)
@@ -176,10 +178,7 @@ export class Board {
   }
 
   private closeButton(panel: HTMLElement): void {
-    const close = el('button', 'ow-btn', panel, 'Close')
-    close.type = 'button'
-    close.addEventListener('click', () => this.close())
-    this.closeBtn = close
+    this.closeBtn = closeButton(panel, () => this.close())
   }
 
   /** Gauntlet runs | Most Wanted, for a view-only board. */

@@ -838,11 +838,11 @@ export class Crowd {
       return
     }
     const dist = Math.hypot(p.x - cx, p.z - cz)
-    // your own rider at 30 Hz; others at 20 Hz within 12 m and 12 Hz beyond (each tick is a full
-    // clip evaluation per playing action: the crowd's biggest CPU and garbage source)
-    let hz = dist < NEAR_FAST_M ? 20 : 12
+    // Your own rider every frame; other skinned riders at 30 Hz within 12 m and 20 Hz beyond.
+    // The VAT crowd (everyone past the near slots) still animates every frame in the shader.
+    let hz = dist < NEAR_FAST_M ? 30 : 20
     if (p.self) {
-      hz = 30
+      hz = 60
     }
     m.acc += dt
     const first = !m.wasNear

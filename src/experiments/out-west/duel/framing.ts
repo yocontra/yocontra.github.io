@@ -370,6 +370,45 @@ export function killShot(s: DuelState): void {
   )
 }
 
+/**
+ * The underboss's second target: after one gun falls, cut to the one still standing so the
+ * player never has to guess who fired the next shot. Holds until the win, loss or next call
+ * replaces it. Presentation only: the press is already judged on time.
+ */
+export function secondTargetShot(s: DuelState, who: 0 | 1): void {
+  const start = s.realTime
+  s.c.rig.cut(
+    'second',
+    () => {
+      const t = s.realTime - start
+      const target = who === 1 ? s.rifleman : s.enemy
+      const P = s.player.root.position
+      if (!target) {
+        return { pos: V(P.x - 0.8, 1.55, P.z - 2.3), look: V(0, 1.4, P.z + 8), fov: 42 }
+      }
+      const head = target.headPos(V())
+      if (who === 1) {
+        // the roof: step back and look up, the same angle as the kill cam's roof beat
+        const R = target.root.position
+        return {
+          pos: V(R.x - 5, R.y + 1.1, R.z - 5),
+          look: head,
+          fov: 38,
+          handheld: 0.08,
+        }
+      }
+      // the street: over your shoulder, a little tighter than the call
+      return {
+        pos: V(P.x - 0.7, 1.55, P.z - 2.1 + Math.min(0.3, t * 0.04)),
+        look: head,
+        fov: MathUtils.lerp(restFov(s), 40, Math.min(1, t * 2)),
+        handheld: 0.12,
+      }
+    },
+    0.35,
+  )
+}
+
 /** The coward back-shot: the same swing onto the kill-cam two-shot, then held calm. */
 export function cowardShot(s: DuelState): void {
   const e = s.enemy

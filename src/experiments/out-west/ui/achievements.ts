@@ -1,6 +1,6 @@
 /**
- * The achievements sheet (meta-game stream): all twenty, earned ones stamped with the day, the
- * rest greyed with how to get them. The toast that announces each lives in `ui/toast.ts`.
+ * The achievements sheet (meta-game stream): the eight milestones, earned ones stamped with the
+ * day, the rest greyed with how to get them. The toast that announces each lives in `ui/toast.ts`.
  */
 import { ACHIEVEMENTS } from '../data/achievements.ts'
 import type { Meta } from '../meta/progress.ts'
