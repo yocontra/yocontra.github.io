@@ -286,7 +286,7 @@ function sleeve(f: Fit, s: 'L' | 'R', color: Color): { pieces: Piece[]; segs: Se
     }),
     ...wool(),
     weights,
-    overArm: true,
+    unbelted: true,
   })
   const lu = sh.distanceTo(el)
   const ll = el.distanceTo(wr)

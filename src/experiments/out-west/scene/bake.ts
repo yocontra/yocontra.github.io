@@ -50,8 +50,8 @@ export interface Piece {
    * (dominant `bone`) covered?
    */
   hide?: (p: Vector3, bone: string, garment: string) => boolean
-  /** Rides an arm (a coat sleeve): not a surface the gunbelt and holster sit on. */
-  overArm?: boolean
+  /** Not a surface the gunbelt and holster sit on (a coat sleeve; a poncho, worn over the belt). */
+  unbelted?: boolean
 }
 
 /** A rigid piece riding one bone. */
