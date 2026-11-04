@@ -353,8 +353,21 @@ export class ScreenDoor {
       1,
     )
     this.herd.mesh.name = 'screen-door'
-    this.herd.setMatrix(0, new Matrix4().makeTranslation(this.at.x, this.at.y, this.at.z))
+    this.hang(null)
     root.add(this.herd.mesh)
+  }
+
+  /**
+   * Hang it in another arena's doorway: hinge foot at (x, y, z), turned `yaw` about it (0: the
+   * street's, on a +x front opening toward -x); null puts it back on the barber's.
+   */
+  hang(p: { x: number; y: number; z: number; yaw: number } | null): void {
+    const at = p ?? { x: 11.0, y: 0.34, z: 27 - DOOR_W / 2, yaw: 0 }
+    this.at.set(at.x, at.y, at.z)
+    this.herd.setMatrix(
+      0,
+      new Matrix4().makeRotationY(at.yaw).setPosition(this.at.x, this.at.y, this.at.z),
+    )
   }
 
   bang(): void {

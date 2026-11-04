@@ -135,6 +135,23 @@ export class Crows {
     root.add(this.herd.mesh)
   }
 
+  /**
+   * Move the flock to another arena's perch: a rail, ridge or roof edge centred on (x, y, z) and
+   * running along `along`, the birds facing `face` (yaw); null puts them back on the street's rail.
+   */
+  perchAt(p: { x: number; y: number; z: number; along: 'x' | 'z'; face: number } | null): void {
+    const at = p ?? { x: RAIL_X, y: RAIL_Y, z: RAIL_Z, along: 'z' as const, face: Math.PI / 2 }
+    const n = this.crows.length
+    this.crows.forEach((c, i) => {
+      const off = -1.0 + (i / Math.max(1, n - 1)) * 2.0 + (Math.random() - 0.5) * 0.12
+      c.perch.set(at.x + (at.along === 'x' ? off : 0), at.y, at.z + (at.along === 'z' ? off : 0))
+      c.yaw = at.face + (Math.random() - 0.5) * 1.8
+      c.fly = -1
+      c.pos.copy(c.perch)
+    })
+    this.where.set(at.x, at.y + 0.4, at.z)
+  }
+
   /** Burst off the rail: each a beat after the last, up and away over the roofs. */
   takeOff(): void {
     this.crows.forEach((c, i) => {

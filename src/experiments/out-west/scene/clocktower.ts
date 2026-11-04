@@ -399,6 +399,8 @@ function occlusion(tz: number) {
 export class ClockTower {
   readonly bellPos: Vector3
   readonly dialMat: MeshStandardMaterial
+  /** The masonry atlas material (the duel arenas build their brick and stone with it too). */
+  readonly civic: MeshStandardMaterial
   private readonly spin: SpinUniforms
   private readonly hand = [
     { x: 0, v: 0, to: 0 },
@@ -431,7 +433,8 @@ export class ClockTower {
       root.add(mesh)
       return mesh
     }
-    add(c.m.build(occlusion(tz)), civicMaterial(4, onReady), true)
+    this.civic = civicMaterial(4, onReady)
+    add(c.m.build(occlusion(tz)), this.civic, true)
     const iron = ironMaterials()
     this.spin = iron.uniforms
     const ironMesh = add(mergeGeometries(c.iron, false), iron.mat, true)

@@ -134,7 +134,7 @@ export async function createGame(o: GameOpts): Promise<Game> {
     (f) => o.onProgress(f * 0.85),
   )
   const world = new World(scene, assets.tex, renderer.spec.shadowSize, renderer.tier)
-  const { coffins } = dressStreet(assets.props, world.root)
+  const { coffins } = dressStreet(assets.props, world.town)
 
   const dot = softDot()
   const dust = new Dust(renderer.spec.dust, dot)
@@ -187,6 +187,7 @@ export async function createGame(o: GameOpts): Promise<Game> {
   // town life: townsfolk, animals, crows, signs (kept off the red silhouette frame)
   const town = new TownLife(world.root, assets, renderer.tier, dot)
   LIFE.town = town
+  town.arrange(world.lifeLayout)
   world.silhouetteHide.push(town.root)
 
   // Compile every shader up front behind the title so the first shot never hitches.

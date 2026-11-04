@@ -385,8 +385,24 @@ function saddle(h: number): Rider[] {
 
 const HORSE_IDLES = ['Idle', 'Idle_2', 'Idle_Headlow', 'Eating'] as const
 
+/** A tethered or standing animal's place in another arena: feet and facing. */
+export interface Stand {
+  x: number
+  y: number
+  z: number
+  yaw: number
+}
+
 export class Horses {
-  private readonly herd: { beast: Beast; next: number; lag: number; skin: SkinThrottle }[] = []
+  private readonly herd: {
+    beast: Beast
+    next: number
+    lag: number
+    skin: SkinThrottle
+    outer: Group
+  }[] = []
+  /** Another arena's tethers (null: the street's rails). */
+  private places: readonly Stand[] | null = null
 
   constructor(root: Group) {
     load('horse')
@@ -411,10 +427,28 @@ export class Horses {
             next: 3 + Math.random() * 6,
             lag: 0,
             skin: new SkinThrottle(outer),
+            outer,
           })
         }
+        this.tether(this.places)
       })
       .catch((e: unknown) => console.warn('[life] horses', e))
+  }
+
+  /** Tie the horses at another arena's rails (null: the street's); a horse with no place hides. */
+  tether(places: readonly Stand[] | null): void {
+    this.places = places
+    this.herd.forEach((h, i) => {
+      const t = TETHERS[i]
+      const home = t ? { x: t.at.x, y: t.at.y, z: t.at.z, yaw: t.yaw } : null
+      const p = places ? places[i] : home
+      h.outer.visible = p !== undefined && p !== null
+      if (p) {
+        h.outer.position.set(p.x, p.y, p.z)
+        h.outer.rotation.y = p.yaw
+        h.skin.touch()
+      }
+    })
   }
 
   /** A whinny or a gunshot: heads thrown. */
@@ -456,6 +490,9 @@ const DOG_YAW = -Math.PI / 2
 export class Dog {
   private beast: Beast | null = null
   private holder: Object3D | null = null
+  /** Where he lies and which way he faces (another arena's porch, or the barber's). */
+  private readonly pos = DOG_POS.clone()
+  private yaw = DOG_YAW
   private lunge = 0
   private next = 4
 
@@ -470,8 +507,8 @@ export class Dog {
         })
         const outer = new Group()
         outer.add(beast.root)
-        outer.position.copy(DOG_POS)
-        outer.rotation.y = DOG_YAW
+        outer.position.copy(this.pos)
+        outer.rotation.y = this.yaw
         outer.name = 'dog'
         root.add(outer)
         beast.play('Idle', 0)
@@ -480,6 +517,18 @@ export class Dog {
         this.skin = new SkinThrottle(outer)
       })
       .catch((e: unknown) => console.warn('[life] dog', e))
+  }
+
+  /** Move him to another arena's porch (null: back to the barber's). */
+  place(p: Stand | null): void {
+    this.pos.set(p?.x ?? DOG_POS.x, p?.y ?? DOG_POS.y, p?.z ?? DOG_POS.z)
+    this.yaw = p?.yaw ?? DOG_YAW
+    this.lunge = 0
+    if (this.holder) {
+      this.holder.position.copy(this.pos)
+      this.holder.rotation.y = this.yaw
+    }
+    this.skin?.touch()
   }
 
   /** The bark: he lunges to the porch edge, snapping, then backs off. */
@@ -510,8 +559,8 @@ export class Dog {
     const u = 1.4 - this.lunge
     const out = this.lunge > 0 ? Math.min(1, u / 0.15) * Math.min(1, this.lunge / 0.5) : 0
     h.position
-      .copy(DOG_POS)
-      .add(new Vector3(Math.sin(DOG_YAW), 0, Math.cos(DOG_YAW)).multiplyScalar(out * 0.55))
+      .copy(this.pos)
+      .add(new Vector3(Math.sin(this.yaw), 0, Math.cos(this.yaw)).multiplyScalar(out * 0.55))
     // lunging, every frame; otherwise at 60 / every Hz
     if (this.lunge > 0 || this.frame % every === 0) {
       b.mixer.update(this.lag)

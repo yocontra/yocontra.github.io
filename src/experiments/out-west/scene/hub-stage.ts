@@ -45,6 +45,7 @@ export function wearLoadout(s: DuelState, loadout: unknown, dyes: Dyes = {}): vo
 export function hubShot(s: DuelState, shot: HubShot): void {
   const c = s.c
   const p = s.player
+  c.world.setArena('street')
   c.world.apply(HUB_DAY)
   c.world.setFires(false)
   c.world.setClock(18, 0)

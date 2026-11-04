@@ -230,8 +230,15 @@ function chunkKey(x: number, z: number): string {
   return `w${Math.floor(((a + Math.PI) / (Math.PI * 2)) * 8)}`
 }
 
+/**
+ * Which plants: `street`, the tufts and scrub by the street's boardwalks (they belong to the
+ * street, so another duel arena hides them with its buildings); `land`, everything behind the
+ * buildings and out to the hills (every arena's); `all`, both.
+ */
+export type DesertPart = 'street' | 'land' | 'all'
+
 /** Every plant and boulder around the street (seeded). */
-export function desertPlants(tier: string): Plant[] {
+export function desertPlants(tier: string, part: DesertPart = 'all'): Plant[] {
   const rng = new Rng(SEED)
   const k = floraDensity(tier)
   const plants: Plant[] = []
@@ -280,6 +287,7 @@ export function desertPlants(tier: string): Plant[] {
       ax < STREET.half ? 0.8 : 1,
     )
   }
+  const streetEnd = plants.length
   // 2. behind the buildings and out past both ends: dense, varied, clumped
   const ring = clumpScatter(
     rng,
@@ -319,12 +327,15 @@ export function desertPlants(tier: string): Plant[] {
     const kind = pickKind(rng, FAR_KINDS)
     add(p.x, p.z, kind, 1, kind === 'boulder' ? 1.6 : 1.1)
   }
-  return plants
+  if (part === 'street') {
+    return plants.slice(0, streetEnd)
+  }
+  return part === 'land' ? plants.slice(streetEnd) : plants
 }
 
 /** The desert's plants baked into chunked meshes. */
-export function buildDesert(tier: string): Group {
-  return buildFlora(desertPlants(tier), {
+export function buildDesert(tier: string, part: DesertPart = 'all'): Group {
+  return buildFlora(desertPlants(tier, part), {
     heightAt: (x, z) => desertMeshHeight(x, z),
     chunk: 50,
     chunkKey,
