@@ -417,6 +417,10 @@ for (let i = 0; i < solids.length; i++) {
     if (g > 0.01 && g < PLAYER_RADIUS * 2 + 0.1) {
       const mx = (Math.max(a.r.x, b.r.x) + Math.min(a.r.x + a.r.w, b.r.x + b.r.w)) / 2
       const mz = (Math.max(a.r.z, b.r.z) + Math.min(a.r.z + a.r.d, b.r.z + b.r.d)) / 2
+      if ((cellAt(grid, mx, mz) & BLOCK_MOVE) !== 0) {
+        // something else (a wall between them) already fills the gap
+        continue
+      }
       flag(
         'warn',
         'pinch',
