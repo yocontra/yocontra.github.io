@@ -4,7 +4,7 @@ import Bare from '~/layouts/Bare.astro'
 
 <Bare
   title="out west: Frontier"
-  description="Frontier: a 32-player free-for-all in the western town of Perdition."
+  description="Frontier: a 32-player free-for-all in a western town."
   viewport="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover"
   noindex
 >
@@ -43,6 +43,7 @@ import Bare from '~/layouts/Bare.astro'
    * perf harness). Plus the renderer's #tier= and #perf.
    */
   import { mountFrontier } from '~/experiments/out-west/ffa/client/index.ts'
+  import { installDevice } from '~/experiments/out-west/platform/device.ts'
   import { installViewportVars } from '~/experiments/out-west/platform/viewport.ts'
 
   const root = document.querySelector<HTMLElement>('#frontier')
@@ -53,6 +54,8 @@ import Bare from '~/layouts/Bare.astro'
   }
   if (root) {
     installViewportVars()
+    // form factor attributes, fold/unfold, late WebKit resizes (the camera re-fits)
+    installDevice()
     for (const t of ['gesturestart', 'dblclick']) {
       document.addEventListener(t, (e) => e.preventDefault(), { passive: false })
     }
@@ -64,9 +67,11 @@ import Bare from '~/layouts/Bare.astro'
     // Dev only: a pre-minted access token (automated runs without a passkey).
     // Never honoured in production builds: tokens must not travel in URLs.
     const token = import.meta.env.DEV ? q.get('token') : null
-    // Dev only (perf harness): a fixed lobby seed and first spawn, `seed=7&spawn=72,66`.
-    const seed = import.meta.env.DEV ? num('seed') : undefined
-    const [sx, sz] = (import.meta.env.DEV ? (q.get('spawn') ?? '') : '').split(',').map(Number)
+    // Dev and perf-harness builds only (`PUBLIC_OW_PERF_HARNESS=1`, never set for the deploy):
+    // a fixed lobby seed and first spawn, `seed=7&spawn=72,66`.
+    const harness = import.meta.env.DEV || import.meta.env.PUBLIC_OW_PERF_HARNESS === '1'
+    const seed = harness ? num('seed') : undefined
+    const [sx, sz] = (harness ? (q.get('spawn') ?? '') : '').split(',').map(Number)
     const spawn =
       sx !== undefined && sz !== undefined && Number.isFinite(sx) && Number.isFinite(sz)
         ? { x: sx, z: sz }

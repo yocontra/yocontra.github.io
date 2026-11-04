@@ -4,10 +4,10 @@
  */
 import { BOUNTIES } from '../../../src/experiments/out-west/data/economy.ts'
 import {
-  GAUNTLET_REPEAT_XP,
   GAUNTLET_REPEAT_XP_PER_DAY,
   gauntletFirstClearCash,
   gauntletFirstClearXp,
+  gauntletRepeatXp,
 } from '../../../src/experiments/out-west/data/progression.ts'
 import type { Env } from '../env.ts'
 import { ledgerStatements } from './ledger.ts'
@@ -22,7 +22,7 @@ const dayStart = (now: number): number => now - (now % 86_400_000)
  * - **First clear** (per account, ever): 40 + 15·level XP and 10% of the poster in dollars,
  *   idempotency key `gauntlet:first:<accountId>:<level>`. Sets the bit in `gauntlet_clears`, and the
  *   17th bit grants Hardin's Pair.
- * - **Repeat win:** 10 XP, at most 200 XP per UTC day, key `gauntlet:repeat:<runId>:<level>`.
+ * - **Repeat win:** 10 + 2·level XP, at most 600 XP per UTC day, key `gauntlet:repeat:<runId>:<level>`.
  * Returns [] when there's no profile, the level is out of range, the daily cap is reached, or this
  * run already first-cleared this level (so a retried write is a no-op, not a repeat-XP grant).
  * Callers put the statements in their own batch.
@@ -79,7 +79,8 @@ export async function gauntletClearStatements(
       ).bind(accountId, now, FULL_CLEAR_MASK),
     ]
   }
-  if (row.repeat_xp + GAUNTLET_REPEAT_XP > GAUNTLET_REPEAT_XP_PER_DAY) {
+  const repeatXp = gauntletRepeatXp(level)
+  if (row.repeat_xp + repeatXp > GAUNTLET_REPEAT_XP_PER_DAY) {
     return []
   }
   return ledgerStatements(env, `gauntlet:repeat:${runId}:${level}`, [
@@ -87,7 +88,7 @@ export async function gauntletClearStatements(
       accountId,
       kind: 'gauntlet_clear',
       amount: 0,
-      xp: GAUNTLET_REPEAT_XP,
+      xp: repeatXp,
       ref: `repeat:${runId}:${level}`,
     },
   ])

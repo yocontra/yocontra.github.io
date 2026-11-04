@@ -179,8 +179,8 @@ async function api(path: string, init: RequestInit & { bearer?: string } = {}): 
 function politeError(r: Reply, fallback: string): string {
   if (r.status === 0) {
     return navigator.onLine === false
-      ? 'You look to be offline.'
-      : 'Couldn’t reach the server. Try again in a moment.'
+      ? 'You’re offline. Check your connection.'
+      : 'Couldn’t connect. Check your connection and try again.'
   }
   if (r.status === 429) {
     return 'Too many tries. Wait a minute and try again.'
@@ -188,7 +188,7 @@ function politeError(r: Reply, fallback: string): string {
   if (isRecord(r.body) && typeof r.body.error === 'string') {
     return r.body.error
   }
-  return r.status >= 500 ? 'Server trouble. Try again in a few minutes.' : fallback
+  return r.status >= 500 ? 'Server error. Try again in a few minutes.' : fallback
 }
 
 const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms))
@@ -370,7 +370,7 @@ export async function signIn(opts: { conditional?: boolean } = {}): Promise<Auth
     return { ok: false, error: 'This browser can’t use passkeys.' }
   }
   if (opts.conditional && !(await browserSupportsWebAuthnAutofill())) {
-    return { ok: false, error: 'No autofill here.', cancelled: true }
+    return { ok: false, error: 'Autofill isn’t available here.', cancelled: true }
   }
   const r = await api('/auth/login/options', { body: '{}' })
   if (!isOptions(r.body)) {

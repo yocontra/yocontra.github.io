@@ -66,7 +66,7 @@ export interface FrontierHandle {
 function overlay(root: HTMLElement): {
   el: HTMLElement
   progress: (f: number, label: string) => void
-  refuse: (e: JoinError, onBack: () => void) => void
+  refuse: (e: JoinError, onBack: () => void, onRetry: (() => void) | null) => void
   done: () => void
 } {
   const el = document.createElement('div')
@@ -89,8 +89,8 @@ function overlay(root: HTMLElement): {
   if (tip) {
     const touch = matchMedia('(pointer: coarse)').matches
     tip.textContent = touch
-      ? 'Left thumb moves, right thumb looks. Space jumps fences. Kill riders, grab their money, bank it before you die.'
-      : 'WASD moves, the mouse looks, click fires, right-click aims. Space jumps fences. Kill riders, grab their money, bank it before you die.'
+      ? 'Left thumb moves. Right thumb looks. Kill players, take their money and bank it.'
+      : 'WASD moves. Click shoots. Right-click aims. Kill players, take their money and bank it.'
   }
   return {
     el,
@@ -102,7 +102,7 @@ function overlay(root: HTMLElement): {
         fill.style.transform = `scaleX(${f})`
       }
     },
-    refuse: (e, onBack) => {
+    refuse: (e, onBack, onRetry) => {
       el.classList.add('refused')
       el.innerHTML = ''
       const card = document.createElement('div')
@@ -110,18 +110,28 @@ function overlay(root: HTMLElement): {
       const h = document.createElement('div')
       h.className = 'fr-load-title'
       const titles: Partial<Record<JoinError['reason'], string>> = {
-        all_full: "TOWN'S FULL",
-        over_budget: 'CLOSED FOR NOW',
+        all_full: 'SERVERS FULL',
+        over_budget: 'CLOSED',
       }
-      h.textContent = titles[e.reason] ?? 'HOLD UP'
+      h.textContent = titles[e.reason] ?? 'CAN’T JOIN'
       const p = document.createElement('p')
       p.textContent = e.message
+      card.append(h, p)
+      if (onRetry) {
+        // a full town, a blip, a failed check: worth another go, here and now
+        const again = document.createElement('button')
+        again.type = 'button'
+        again.className = 'fr-menu-item fr-hit'
+        again.textContent = e.reason === 'outdated' ? 'Refresh' : 'Try again'
+        again.addEventListener('click', onRetry)
+        card.append(again)
+      }
       const b = document.createElement('button')
       b.type = 'button'
-      b.className = 'fr-menu-item fr-hit'
-      b.textContent = 'Back to the saloon'
+      b.className = `fr-menu-item fr-hit${onRetry ? ' fr-menu-quiet' : ''}`
+      b.textContent = onRetry ? 'Back' : 'Back to menu'
       b.addEventListener('click', onBack)
-      card.append(h, p, b)
+      card.append(b)
       el.append(card)
     },
     done: () => {
@@ -144,16 +154,52 @@ function loopbackOptions(opts: FrontierOptions): LoopbackTransportOptions {
   }
 }
 
+/** Refusals worth another try in place (the rest need the saloon, or a refresh). */
+const RETRY = new Set<JoinError['reason']>([
+  'all_full',
+  'network',
+  'server',
+  'turnstile',
+  'outdated',
+])
+
 export function mountFrontier(root: HTMLElement, opts: FrontierOptions = {}): FrontierHandle {
   let destroyed = false
   const onExit = (reason: FrontierExit, detail?: string) => {
     opts.onExit?.(reason, detail)
   }
+  /** Tear this town down and ride in again, in place (the handle keeps working). */
+  const retry = (): void => {
+    handle.destroy()
+    const next = mountFrontier(root, opts)
+    Object.assign(handle, next)
+  }
+  const retryFor = (reason: JoinError['reason']): (() => void) | null => {
+    if (!RETRY.has(reason)) {
+      return null
+    }
+    return reason === 'outdated' ? () => location.reload() : retry
+  }
   const game = new FrontierGame(root, {
     ...(opts.audio ? { audio: opts.audio } : {}),
-    onExit: (reason) => onExit(reason),
+    onExit: (reason) => {
+      if (reason === 'lost') {
+        // the reconnect gave up: say so plainly, and offer another go
+        lostCard()
+        return
+      }
+      onExit(reason)
+    },
   })
   const ui = overlay(root)
+  const lostCard = (): void => {
+    const card = overlay(root)
+    card.refuse(
+      { reason: 'network', message: "Connection lost. Couldn't reconnect." },
+      () => onExit('lost'),
+      retry,
+    )
+  }
   const unlock = () => game.unlockAudio()
   root.addEventListener('pointerup', unlock)
   globalThis.addEventListener('keydown', unlock)
@@ -169,7 +215,7 @@ export function mountFrontier(root: HTMLElement, opts: FrontierOptions = {}): Fr
                 ...(opts.getToken ? { getToken: opts.getToken } : {}),
                 ...(opts.bots === undefined ? {} : { bots: opts.bots }),
                 onRefused: (e) => {
-                  ui.refuse(e, () => onExit('refused', e.reason))
+                  ui.refuse(e, () => onExit('refused', e.reason), retryFor(e.reason))
                 },
               },
               ev,
@@ -196,7 +242,9 @@ export function mountFrontier(root: HTMLElement, opts: FrontierOptions = {}): Fr
     },
     debug: () => game.debug(),
   }
-  if (import.meta.env.DEV) {
+  // Dev builds, or a perf-harness build (`PUBLIC_OW_PERF_HARNESS=1`, tools/frontier-perf.ts
+  // --prod; never set for the real deploy), so both fold away in production.
+  if (import.meta.env.DEV || import.meta.env.PUBLIC_OW_PERF_HARNESS === '1') {
     // Dev harness only: state for Playwright scripts (positions would be a wallhack in prod).
     Reflect.set(globalThis, '__frontier', () => game.debug())
     Reflect.set(globalThis, '__frontierTrace', {
@@ -217,6 +265,12 @@ export function mountFrontier(root: HTMLElement, opts: FrontierOptions = {}): Fr
       set: (v: 'third' | 'first' | 'top') => game.setView(v),
       closeHowTo: () => game.devCloseHowTo(),
       weapon: (w: number | null) => game.devShowWeapon(w),
+    })
+    // The animation audit: hold your rider in a named state (idle, walk, run, sprint, strafe,
+    // ads, ads-walk, crouch, crouch-walk, slide, jump, vault, roll, reload, channel, dead), or
+    // trigger one (fire, hit); null hands him back.
+    Reflect.set(globalThis, '__frontierAnim', {
+      set: (state: string | null) => game.devAnimSet(state),
     })
   }
   const ap = game.autopilot

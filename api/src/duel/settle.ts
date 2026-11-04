@@ -169,7 +169,7 @@ function winnerMoney(input: SettleInput, seat: Seat, h: HumanSeat, money: SeatMo
       amount: bonus,
       ref: `${ref}:streak`,
     })
-    money.lines.push({ label: `Streak of ${streak}`, amount: bonus, xp: 0 })
+    money.lines.push({ label: `${streak}-win streak`, amount: bonus, xp: 0 })
   }
   if (h.stats.lastWinDay !== today && input.pairFactor > 0) {
     const daily = ghostCapped ? 0 : Math.round(dailyWinBonus(base) * input.pairFactor)
@@ -224,7 +224,7 @@ function loserMoney({ input, seat, h }: SeatTurn, result: DuelXpResult, money: S
     xp,
     ref: input.matchId,
   })
-  const label = { loss: 'Gunned down', coward: 'Drew early', forfeit: 'Forfeit', dodge: 'Dodged' }[
+  const label = { loss: 'Loss', coward: 'Drew early', forfeit: 'Forfeit', dodge: 'Dodged' }[
     result as 'loss' | 'coward' | 'forfeit' | 'dodge'
   ]
   money.lines.push({ label: label ?? 'Loss', amount: -penalty, xp })
@@ -267,7 +267,7 @@ function seatMoney(input: SettleInput, seat: Seat, h: HumanSeat): SeatMoney {
       xp,
       ref: input.matchId,
     })
-    money.lines.push({ label: result === 'froze' ? 'Both froze' : 'Dead heat', amount: 0, xp })
+    money.lines.push({ label: result === 'froze' ? 'No one drew' : 'Tie', amount: 0, xp })
     money.stats = { ...money.stats, draws: h.stats.draws + 1 }
   } else if (result === 'dodge' && input.culprit !== seat) {
     // The dodged player: nothing moves. They are requeued at the front.

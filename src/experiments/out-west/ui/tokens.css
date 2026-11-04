@@ -105,6 +105,19 @@
   --ow-figs-hud: lining-nums tabular-nums;
   --ow-figs-text: oldstyle-nums proportional-nums;
   --ow-measure: 34em;
+  /*
+   * Optical centring. A line box centres the font's em box, not its letters: EB Garamond's ascent
+   * is 1.01em and its descent 0.30em, so the box's middle is 0.355em over the baseline, while its
+   * small caps (0.47em tall) have their middle at 0.235em. Small-caps labels therefore sit 0.12em
+   * low in every control, whatever its height or line-height. A control set in them carries twice
+   * that as extra bottom padding (`--ow-lift-sc`), which lifts the letters by exactly 0.12em.
+   * Oswald's figures (0.82em tall, ascent 1.19, descent 0.29) sit 0.045em low: `--ow-lift-num`.
+   * Ultra and Rye capitals sit within 0.01em of centre and need nothing. In ems on purpose: the
+   * lift scales with the label's own size. (text-box-trim can't do this: it doesn't apply to the
+   * flex and button boxes the labels live in, and Firefox has none.)
+   */
+  --ow-lift-sc: 0.24em;
+  --ow-lift-num: 0.09em;
   /* major third on 16 px; nothing under 13 px */
   --ow-fs-micro: 0.8125rem;
   --ow-fs-small: 0.875rem;
@@ -174,7 +187,7 @@
   --ow-tex-leather: url("/experiments/out-west/ui/leather.webp");
   --ow-tex-smoke: url("/experiments/out-west/ui/smoke.webp");
   --ow-img-seal: url("/experiments/out-west/ui/seal.webp");
-  --ow-img-woodcut: url("/experiments/out-west/ui/duel-woodcut.webp");
+  --ow-img-woodcut: url("/experiments/out-west/ui/title-duel.svg");
   --ow-orn-corner: url("/experiments/out-west/ui/corner.svg");
   --ow-orn-rule: url("/experiments/out-west/ui/rule.svg");
   --ow-mask-torn: url("/experiments/out-west/ui/torn.svg");

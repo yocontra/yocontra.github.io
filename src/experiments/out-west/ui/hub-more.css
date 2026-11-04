@@ -1,0 +1,172 @@
+/*
+ * out west: the saloon's quiet doors (ui/hub-more.ts): Account and Settings as icons beside the
+ * plate, the Daily Outlaw as a slim banner, one link row (Leaderboard, More) and the More sheet.
+ * Loaded after hub.css and meta.css, whose tile and banner rules it narrows.
+ */
+/* Account and Settings: two brass-rimmed buttons beside the plate */
+.ow-hub-top {
+  flex-wrap: nowrap;
+}
+.ow-hub-tools {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ow-s2);
+  flex: none;
+}
+.ow-hub-tool {
+  display: grid;
+  place-items: center;
+  width: 48px;
+  height: 48px;
+  padding: 0;
+  color: var(--ow-brass);
+  background:
+    radial-gradient(circle at 35% 30%, rgb(255 255 255 / 0.1), transparent 60%), rgb(14 9 6 / 0.7);
+  border: 2px solid var(--ow-brass-lo);
+  border-radius: 50%;
+  box-shadow: var(--ow-shadow-1);
+  cursor: pointer;
+  transition:
+    color var(--ow-t-fast),
+    border-color var(--ow-t-fast),
+    transform var(--ow-t-fast) var(--ow-ease-out);
+}
+.ow-hub-tool:hover,
+.ow-hub-tool:focus-visible {
+  color: var(--ow-brass-hi);
+  border-color: var(--ow-brass);
+}
+.ow-hub-tool:active {
+  transform: scale(0.94);
+}
+.ow-hub-tool .ow-icon {
+  width: 24px;
+  height: 24px;
+}
+/* the tiles' second line is only there when it says something: no room held for it */
+.ow-hub-side .ow-tile {
+  min-height: 6.5rem;
+}
+/* the Daily Outlaw: a slim banner over the tiles, the day's twist above its name, status right */
+.ow-hub-side .ow-tile.ow-tile-daily {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  column-gap: var(--ow-s3);
+  min-height: 48px;
+  padding: 10px 56px 10px 14px;
+}
+.ow-hub-side .ow-tile-daily .ow-tile-kicker {
+  grid-column: 1;
+  padding-right: 0;
+  white-space: normal;
+  overflow: visible;
+  text-overflow: clip;
+}
+/* each piece of the kicker stays whole; a narrow banner puts the twist on its own line */
+.ow-kick-part {
+  display: inline-block;
+  white-space: nowrap;
+}
+/* the day's name wraps between words and shrinks with the banner, never splits a word */
+.ow-hub-side .ow-tile-daily .ow-tile-title {
+  grid-column: 1;
+  padding-right: 0;
+  overflow-wrap: normal;
+  hyphens: none;
+  font-size: min(clamp(1.125rem, 1.8vw, 1.375rem), 7.5cqi);
+}
+.ow-hub-side .ow-tile-daily .ow-tile-sub {
+  grid-column: 2;
+  grid-row: 1 / span 2;
+  max-width: 11rem;
+  margin: 0;
+  padding: 0;
+  text-align: right;
+}
+.ow-hub-side .ow-tile-daily .ow-icon {
+  top: 50%;
+  right: 14px;
+  width: 30px;
+  height: 30px;
+  translate: 0 -50%;
+}
+/* the More sheet: its doors stacked, full width */
+.ow-hub-more-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ow-s2);
+}
+/* phones: tiles a little shorter, so the gunslinger stands clear between the plate and them */
+@media (max-aspect-ratio: 1 / 1) {
+  .ow-hub-strip {
+    flex: 1 1 auto;
+    width: auto;
+    min-width: 0;
+  }
+  .ow-hub-side .ow-tile {
+    min-height: 5.25rem;
+  }
+  .ow-hub-side .ow-tile.ow-tile-daily {
+    padding: 8px 48px 8px 12px;
+  }
+  .ow-hub-side .ow-tile-daily .ow-icon {
+    right: 12px;
+    width: 26px;
+    height: 26px;
+  }
+  .ow-hub-side .ow-tile-daily .ow-tile-sub {
+    max-width: 8.5rem;
+  }
+}
+@media (max-aspect-ratio: 1 / 1) and (max-height: 760px) {
+  .ow-hub-side .ow-tile {
+    min-height: 4.75rem;
+  }
+}
+/* short landscape phones: the column runs the full height, so the tiles stay compact */
+@media (max-height: 480px) and (min-aspect-ratio: 1 / 1) {
+  .ow-hub-side .ow-tile {
+    min-height: 4.5rem;
+  }
+  .ow-hub-tools {
+    flex-direction: row;
+  }
+}
+/* tablets and the open Duo in landscape: a full-height right column with weightier tiles */
+@media (pointer: coarse) and (min-aspect-ratio: 1 / 1) and (min-width: 900px) and (
+    min-height: 640px
+  ) {
+  .ow-hub {
+    grid-template-columns: 1fr min(34rem, 42vw);
+  }
+  .ow-hub-side .ow-tile {
+    min-height: 9rem;
+  }
+}
+/* tablets in portrait: the tile band gets more presence */
+@media (max-aspect-ratio: 1 / 1) and (min-width: 744px) {
+  .ow-hub-side .ow-tile {
+    min-height: 8.5rem;
+  }
+  .ow-hub-side .ow-tile .ow-icon {
+    width: 36px;
+    height: 36px;
+  }
+  .ow-hub-side .ow-tile-kicker {
+    padding-right: 40px;
+  }
+}
+/* a tile under 150 px wide (one-third Split View): no icon, the kicker wraps, the title shrinks */
+@container (max-width: 150px) {
+  .ow-tile .ow-icon {
+    display: none;
+  }
+  .ow-tile .ow-tile-kicker {
+    padding-right: 0;
+    white-space: normal;
+  }
+  .ow-tile .ow-tile-title {
+    font-size: 10cqi;
+  }
+}

@@ -48,12 +48,12 @@ export function watchAway(d: Director, link: AwayLink, live: () => boolean): () 
     const was = away
     away = null
     const gone = performance.now() - since
-    let text = 'After the call there’s no grace. The duel was judged on what the server had.'
+    let text = 'You left after the bell. The duel was judged as it stood.'
     if (was === 'before') {
       text =
         gone < RECONNECT_GRACE_MS
-          ? 'Back in time. The duel goes on.'
-          : `Gone ${Math.round(gone / 1000)} s, past the ${RECONNECT_GRACE_MS / 1000} s grace. That’s a forfeit.`
+          ? 'You’re back in time. The duel goes on.'
+          : `Away ${Math.round(gone / 1000)} s. The limit is ${RECONNECT_GRACE_MS / 1000} s. You forfeit.`
     }
     d.c.hud.line('You stepped away', text, 4500)
     link.resume()

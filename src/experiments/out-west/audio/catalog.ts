@@ -213,8 +213,9 @@ export const SONGS = {
    * the end screen only.
    */
   intro: song('title', LOOP_POINTS.m_title),
-  /** The saloon hub: a honky-tonk upright. */
+  /** The saloon hub: a live fiddle band, and an accordion two-step; they take turns by visit. */
   saloon: song('saloon', LOOP_POINTS.m_saloon),
+  saloonB: song('saloon_b', LOOP_POINTS.m_saloon_b),
   /** Act one (outlaws by daylight). */
   actDay: song('act_day', LOOP_POINTS.m_act_day),
   /** Act two (sunset). */
@@ -225,6 +226,13 @@ export const SONGS = {
   actDayHot: song('act_day_hot', LOOP_POINTS.m_act_day_hot),
   actDuskHot: song('act_dusk_hot', LOOP_POINTS.m_act_dusk_hot),
   actNightHot: song('act_night_hot', LOOP_POINTS.m_act_night_hot),
+  /**
+   * The duel cues: on the walk and in the standoff the act theme thins to its cue, a sparse
+   * arrangement in the act's key and tempo with no percussion (the heartbeat owns the pulse).
+   */
+  duelDay: song('duel_day', LOOP_POINTS.m_duel_day),
+  duelDusk: song('duel_dusk', LOOP_POINTS.m_duel_dusk),
+  duelNight: song('duel_night', LOOP_POINTS.m_duel_night),
   /** Midnight boss theme. */
   boss: song('boss', LOOP_POINTS.m_boss),
   /** Walk and standoff bed: low drones only, under the heartbeat and clear of the bell. */
@@ -234,6 +242,23 @@ export const SONGS = {
 } as const satisfies Record<string, LoopDef>
 
 export type SongName = keyof typeof SONGS
+
+/** The cue each act theme thins to for the walk and the standoff (`AudioEngine.musicSection`). */
+export const DUEL_CUE: Partial<Record<SongName, SongName>> = {
+  actDay: 'duelDay',
+  actDayHot: 'duelDay',
+  actDusk: 'duelDusk',
+  actDuskHot: 'duelDusk',
+  actNight: 'duelNight',
+  actNightHot: 'duelNight',
+  // the 2019 boss theme has bells and a choir in it: nothing bell-like may sit under the clock
+  boss: 'duelNight',
+}
+
+/** Songs heard so often that alternates take turns, one per time they are asked for. */
+export const SONG_TURNS: Partial<Record<SongName, readonly SongName[]>> = {
+  saloon: ['saloon', 'saloonB'],
+}
 
 /** First-try wins in a row that light the streak layer. */
 export const STREAK_HOT = 3

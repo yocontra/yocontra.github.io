@@ -1,6 +1,8 @@
+import type { Object3D } from 'three'
 import { DEFAULT_LOADOUT, type Loadout } from '../data/catalog.ts'
 import type { Dyes } from '../data/dye.ts'
 import { type Look, OUTLAWS, type Outlaw, RIFLEMAN_LOOK } from '../data/outlaws.ts'
+import { shotgunMesh } from '../ffa/scene/shotgun.ts'
 import type { Actor } from '../scene/actor.ts'
 import { castActor } from '../scene/cast.ts'
 import { dressedActor } from '../scene/loadout.ts'
@@ -33,6 +35,13 @@ export async function lineup(s: DuelState, day: number): Promise<Actor[]> {
   const actors: Actor[] = []
   const hash = new URLSearchParams(location.hash.slice(1))
   const aim = hash.has('aim')
+  // `long=shotgun`: the rifleman shoulders the coach gun instead (review only)
+  const longGun = (): Object3D | null => {
+    if (hash.get('long') === 'shotgun') {
+      return shotgunMesh()
+    }
+    return c.rifle ? c.rifle() : null
+  }
   const row = (o: Outlaw | null, look: Look, i: number): void => {
     const a = castActor(c.assets, {
       look,
@@ -40,7 +49,9 @@ export async function lineup(s: DuelState, day: number): Promise<Actor[]> {
       hatColor: o?.hatColor ?? 0x1a_14_10,
       // his own neckerchief (or none): only the rifleman's mask needs a cloth colour
       bandana: o ? o.bandana : 0x3a_2a_1a,
-      gun: c.gun ? propObject(c.gun) : null,
+      // the rifleman shoulders his rifle, as on the saloon roof
+      gun: c.gun && o ? propObject(c.gun) : null,
+      rifle: o ? null : longGun(),
       offGun: o?.gimmick === 'two-guns' || o?.gimmick === 'boss',
     })
     stand(a, i)
@@ -58,7 +69,13 @@ export async function lineup(s: DuelState, day: number): Promise<Actor[]> {
     } else {
       a.play('Idle', 0)
     }
-    a.mixer.update(aim ? 0.2 : Math.random())
+    if (a.rifle) {
+      // the rifle's hold is solved in his update (scene/longgun.ts)
+      a.play('Idle_Gun_Pointing', 0)
+      a.update(0.2)
+    } else {
+      a.mixer.update(aim ? 0.2 : Math.random())
+    }
     c.scene.add(a.root)
     actors.push(a)
   }

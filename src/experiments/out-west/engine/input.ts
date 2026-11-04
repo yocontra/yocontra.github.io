@@ -4,6 +4,7 @@
  * event.timeStamp (performance.now() timebase) so the duel can be judged on
  * when the player actually pressed, not when a frame got around to it.
  */
+import { onPad, type PadPress, padWalking } from '../platform/gamepad.ts'
 
 export type Action = 'walk' | 'fire' | 'pause' | 'retry' | 'skip'
 
@@ -50,6 +51,8 @@ export class Input {
     globalThis.addEventListener('pointercancel', this.onPointerUp)
     globalThis.addEventListener('blur', this.onBlur)
     target.addEventListener('contextmenu', (e) => e.preventDefault())
+    // game controllers (platform/gamepad.ts): judged on the pad's own timestamp, like a key
+    onPad(this.onPad)
   }
 
   on(cb: (p: Press) => void): () => void {
@@ -77,7 +80,7 @@ export class Input {
     if (this.toggleWalk) {
       return this.toggled
     }
-    if (this.pointers.size > 0) {
+    if (this.pointers.size > 0 || (this.enabled && padWalking())) {
       return true
     }
     for (const code of this.keys.walk) {
@@ -119,6 +122,16 @@ export class Input {
       this.toggled = !this.toggled
     }
     this.emit({ action: a, t: e.timeStamp, source: 'key', x: -1, y: -1 })
+  }
+
+  private readonly onPad = (p: PadPress): void => {
+    if (!this.enabled && p.action !== 'pause') {
+      return
+    }
+    if (p.action === 'fire' && this.toggleWalk) {
+      this.toggled = !this.toggled
+    }
+    this.emit({ action: p.action, t: p.t, source: 'key', x: -1, y: -1 })
   }
 
   private readonly onKeyUp = (e: KeyboardEvent): void => {

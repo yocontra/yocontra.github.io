@@ -44,9 +44,9 @@ function step(
 function closesIn(at: number): string {
   const days = Math.ceil((at - Date.now()) / DAY_MS)
   if (days <= 1) {
-    return 'closes tonight (UTC)'
+    return 'Ends tonight (UTC)'
   }
-  return `closes in ${days} days`
+  return `Ends in ${days} days`
 }
 
 function rows(
@@ -63,7 +63,7 @@ function rows(
     el('span', 'ow-board-rank', li, String(r.rank))
     const who = el('button', 'ow-board-who ow-feat-name', li)
     who.type = 'button'
-    who.textContent = hidden ? 'A blocked gunslinger' : r.name
+    who.textContent = hidden ? 'A blocked player' : r.name
     who.disabled = hidden
     if (!hidden) {
       who.setAttribute('aria-label', `${r.name}'s poster`)
@@ -91,7 +91,7 @@ export function mountMostWanted(host: HTMLElement, sheets: HTMLElement, month?: 
   const say = statusLine(host)
   const list = el('ol', 'ow-board-list', host)
   const prev = el('div', 'ow-feat-mw-prev', host)
-  say('Counting the take…')
+  say('Loading…')
   const draw = (r: MostWantedResponse, blocked: ReadonlySet<string>): void => {
     const now = monthOf(Date.now())
     nav.replaceChildren()
@@ -114,8 +114,8 @@ export function mountMostWanted(host: HTMLElement, sheets: HTMLElement, month?: 
       'ow-hub-note',
       head,
       r.final
-        ? `Final. The top ${MOST_WANTED_WINNERS} each got a dated Most Wanted frame.`
-        : `Open · ${closesIn(r.closesAt)}. Ranked by dollars earned in Bounty Hunt and Frontier. The top ${MOST_WANTED_WINNERS} get a dated frame.`,
+        ? `Final. The top ${MOST_WANTED_WINNERS} won a dated frame.`
+        : `${closesIn(r.closesAt)}. Ranked by money earned in Bounty Hunt and Frontier. Top ${MOST_WANTED_WINNERS} win a dated frame.`,
     )
     if (r.you) {
       el(
@@ -123,14 +123,14 @@ export function mountMostWanted(host: HTMLElement, sheets: HTMLElement, month?: 
         'ow-hub-note ow-feat-mw-you',
         head,
         r.you.rank === null
-          ? `You: ${money(r.you.earned)} so far, not on the board yet.`
-          : `You: #${r.you.rank} with ${money(r.you.earned)}.`,
+          ? `You: ${money(r.you.earned)} so far. Not ranked yet.`
+          : `You: #${r.you.rank} · ${money(r.you.earned)}`,
       )
     }
     const me = currentPlayer()?.name.toLowerCase() ?? null
     const redraw = (): void => mountMostWanted(host, sheets, r.month)
     list.replaceChildren()
-    say(r.rows.length > 0 ? '' : 'Nobody’s earned a dollar this month yet.')
+    say(r.rows.length > 0 ? '' : 'No one has earned money this month yet.')
     rows(list, r.rows, { sheets, blocked, me, redraw })
     prev.replaceChildren()
     if (r.previous.winners.length > 0) {

@@ -96,14 +96,14 @@ export function hitFx(
   c.rig.addTrauma(lethal ? 0.22 : 0.16)
 }
 
-interface Style {
+export interface Style {
   lead: 'HitRecieve' | 'HitRecieve_2' | null
   leadS: number
   rate: number
   hatFlip: boolean
 }
 
-const STYLES: Record<string, Style> = {
+export const DEATH_STYLES: Record<string, Style> = {
   LIGHTNING: { lead: null, leadS: 0, rate: 0.62, hatFlip: true },
   DEADEYE: { lead: null, leadS: 0, rate: 1.15, hatFlip: false },
   QUICK: { lead: 'HitRecieve', leadS: 0.22, rate: 1.0, hatFlip: false },
@@ -123,7 +123,8 @@ let enemyHat: Object3D | null = null
  */
 export function deathStyle(s: DuelState, grade: string): { contact: number; slow: number } {
   const e = s.enemy
-  const st = STYLES[grade] ?? STYLES.LUCKY ?? { lead: null, leadS: 0, rate: 1, hatFlip: false }
+  const st = DEATH_STYLES[grade] ??
+    DEATH_STYLES.LUCKY ?? { lead: null, leadS: 0, rate: 1, hatFlip: false }
   if (!e) {
     return { contact: 1, slow: 1 }
   }
@@ -186,8 +187,9 @@ function onPhase(s: DuelState, ph: Phase): void {
     town?.reset()
   }
   if (ph === 'lose' && s.enemy) {
+    // the camera is at your eyes: a pinch of sparks and dust out of your back, nothing in its face
     const { at, away } = chestHit(s.player, s.enemy.root.position)
-    hitFx(s, s.player, at, away, true)
+    hitFx(s, s.player, at.addScaledVector(away, 0.3), away, false)
   }
 }
 
@@ -298,8 +300,11 @@ export function tickLife(s: DuelState, dt: number, realDt: number): void {
     lastLevel = s.level
     onPhase(s, s.phase)
   }
+  // his hat while it's on his head (kept through his fall; forgotten if he drops it at the turn)
   if (s.enemy?.hat) {
     enemyHat = s.enemy.hat
+  } else if (!s.dying) {
+    enemyHat = null
   }
   if (s.dying && s.dying !== lastDying) {
     onDying(s, s.dying)

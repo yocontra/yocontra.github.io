@@ -33,7 +33,8 @@ export interface Ctx {
   assets: Assets
   save: SaveData
   gun: PropDef | null
-  rifle: PropDef | null
+  /** The rooftop rifleman's Winchester (scene/rifle.ts), a fresh one per call. */
+  rifle: (() => Object3D) | null
   coffins: InstancedMesh[]
   dust: Dust
   puffs: Puffs
@@ -265,6 +266,7 @@ export class DuelState {
   enter(p: Phase): void {
     this.phase = p
     this.phaseT = 0
+    this.c.hud.phase(p)
     // no menu sound may play while the street waits for the call
     this.c.audio.hushUi(STANDOFF_PHASES.has(p))
   }

@@ -39,6 +39,7 @@ export function castActor(assets: Assets, s: CastSpec): Actor {
     rifle: s.rifle ?? null,
     scale: L.scale,
     coat: L.coat,
+    coatCut: L.coatCut,
     poncho: L.poncho,
     vest: L.vest,
     moustache: L.moustache,

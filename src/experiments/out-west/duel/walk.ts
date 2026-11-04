@@ -19,9 +19,10 @@ export function enterWalk(d: Director): void {
   d.enter('walk')
   d.walkLines = 0
   d.c.hud.setPips(0, true)
-  // the walk and the standoff play over low drones, clear of the bell's register
-  d.c.audio.playSong('tension')
-  d.c.audio.musicLevel(0, 0.6)
+  // the act theme thins to its sparse duel cue and steps back (the standoff ducks it further)
+  d.c.audio.musicSection('duel')
+  d.c.audio.musicLevel(FEEL.walkDuckDb, 0.8)
+  d.c.audio.musicLowpass(FEEL.walkLowpass, 0.8)
   walkShot(d)
   if (d.outlaw.gimmick === 'windy') {
     d.wind = 0.4
@@ -73,6 +74,8 @@ export function tickWalk(d: Director, dt: number): void {
   const e = d.enemy
   if (e) {
     e.locomote(d.speed, e.walkDuration / 2 / FEEL.paceSeconds)
+    // the talker talks with his hands, over his shoulder, as he walks
+    e.gestures.talk = o.gimmick === 'talker' ? d.speed : 0
     d.eDist += (d.speed * e.paceLength * dt) / FEEL.paceSeconds
     e.root.position.z = BACK_TO_BACK_Z + d.eDist
   }
@@ -199,6 +202,9 @@ function enterTurn(d: Director): void {
   c.hud.setPips(d.paces, false)
   d.player.stopWalk(0.2)
   d.enemy?.stopWalk(0.2)
+  if (d.enemy) {
+    d.enemy.gestures.talk = 0
+  }
   // music ducks gently (still clearly there), wind drops
   duckForStandoff(d, 0.9)
   ambience(d, AMB.turn, 0.9)

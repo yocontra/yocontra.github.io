@@ -26,12 +26,14 @@
       { "name": "MATCHMAKER", "class_name": "Matchmaker" },
       { "name": "DUEL_ROOMS", "class_name": "DuelRoom" },
       { "name": "LOBBY_DIR", "class_name": "LobbyDirectory" },
-      { "name": "LOBBIES", "class_name": "Lobby" }
+      { "name": "LOBBIES", "class_name": "Lobby" },
+      { "name": "DAILY_SESSIONS", "class_name": "DailySession" }
     ]
   },
   "migrations": [
     { "tag": "v1", "new_sqlite_classes": ["DuelSession"] },
-    { "tag": "v2", "new_sqlite_classes": ["Matchmaker", "DuelRoom", "LobbyDirectory", "Lobby"] }
+    { "tag": "v2", "new_sqlite_classes": ["Matchmaker", "DuelRoom", "LobbyDirectory", "Lobby"] },
+    { "tag": "v3", "new_sqlite_classes": ["DailySession"] }
   ],
   "vars": {
     "ALLOWED_ORIGINS": "https://contra.io",

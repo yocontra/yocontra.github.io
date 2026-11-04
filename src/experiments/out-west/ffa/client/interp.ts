@@ -2,10 +2,10 @@
 // biome-ignore-all lint/suspicious/noUnnecessaryConditions: `init` flips on the first observation; Biome narrows it to its initialiser
 /**
  * Other players: rendered in the past between buffered snapshots, at a delay of two ticks (100 ms)
- * plus the recent worst snapshot lateness (`ServerClock.delay`), with up to 150 ms of
+ * plus the recent worst snapshot lateness (`ServerClock.delay`), with up to 100 ms of
  * extrapolation when a snapshot is later still. Positions are metres, aim is radians.
  */
-import { ANGLE_SCALE, EF_ALIVE, POS_SCALE } from '../../contract/town.ts'
+import { ANGLE_SCALE, ANIM_MASK, EF_ALIVE, POS_SCALE } from '../../contract/town.ts'
 import type { EntityView } from '../sim/codec.ts'
 
 /** The interpolation delay with no jitter (ticks): far riders refresh every other tick. */
@@ -14,7 +14,9 @@ export const INTERP_TICKS = 2
 const MAX_INTERP_TICKS = 6
 /** Per-snapshot decay of the remembered worst lateness: it halves in ~7 s of calm. */
 const LATE_DECAY = 0.995
-const MAX_EXTRAP_TICKS = 3
+const MAX_EXTRAP_TICKS = 2
+/** Ticks to ease an overshoot back onto the newest sample. */
+const EXTRAP_RETURN_TICKS = 4
 const HISTORY = 16
 /** A jump this large between samples is a respawn or a teleport: no lerp. */
 const TELEPORT_M = 3
@@ -28,6 +30,7 @@ interface Sample {
   flags: number
   anim: number
   carry: number
+  pitch: number
 }
 
 /** What the scene draws for one remote player this frame. */
@@ -38,8 +41,13 @@ export interface RemoteView {
   aim: number
   hp: number
   flags: number
+  /** `ANIM_*` (the low nibble of the wire's anim byte). */
   anim: number
+  /** `STANCE_*` bits (crouched, on the sights, sprinting). */
+  stance: number
   carry: number
+  /** Aim pitch (rad, up positive). */
+  pitch: number
   /** Ground velocity (m/s), from the samples around the render time. */
   vx: number
   vz: number
@@ -70,7 +78,9 @@ export class RemoteTrack {
       hp: 100,
       flags: 0,
       anim: 0,
+      stance: 0,
       carry: 0,
+      pitch: 0,
       vx: 0,
       vz: 0,
       ready: false,
@@ -95,6 +105,7 @@ export class RemoteTrack {
       flags: e.flags,
       anim: e.anim,
       carry: e.carry,
+      pitch: ((e.pitch ?? 0) / 127) * (Math.PI / 2),
     })
     if (this.samples.length > HISTORY) {
       this.samples.shift()
@@ -116,22 +127,7 @@ export class RemoteTrack {
       return v
     }
     if (rt >= last.t) {
-      const prev = s.at(-2) ?? last
-      const ahead = Math.min(rt - last.t, MAX_EXTRAP_TICKS)
-      const span = Math.max(1, last.t - prev.t)
-      const moving = (last.flags & EF_ALIVE) !== 0 && dist(prev, last) < TELEPORT_M
-      this.assign(last, last, 0)
-      if (moving) {
-        const vx = (last.x - prev.x) / span
-        const vz = (last.z - prev.z) / span
-        v.x += vx * ahead
-        v.z += vz * ahead
-        v.vx = vx * 20
-        v.vz = vz * 20
-      } else {
-        v.vx = 0
-        v.vz = 0
-      }
+      this.extrapolate(s.at(-2) ?? last, last, rt)
       return v
     }
     for (let i = s.length - 1; i > 0; i--) {
@@ -155,16 +151,45 @@ export class RemoteTrack {
     return v
   }
 
+  /**
+   * Past the newest sample: carried on along its last step for up to 2 ticks, then eased back onto
+   * the newest sample over the next 4 (a far rider who stopped sends nothing more, so holding the
+   * overshoot would leave him ~0.5 m past where he really stands).
+   */
+  private extrapolate(prev: Sample, last: Sample, rt: number): void {
+    const v = this.view
+    const over = rt - last.t
+    const span = Math.max(1, last.t - prev.t)
+    const moving = (last.flags & EF_ALIVE) !== 0 && dist(prev, last) < TELEPORT_M
+    this.assign(last, last, 0)
+    const vx = moving ? (last.x - prev.x) / span : 0
+    const vz = moving ? (last.z - prev.z) / span : 0
+    let ahead = Math.min(over, MAX_EXTRAP_TICKS)
+    if (over > MAX_EXTRAP_TICKS) {
+      const back = Math.min(1, (over - MAX_EXTRAP_TICKS) / EXTRAP_RETURN_TICKS)
+      ahead = MAX_EXTRAP_TICKS * (1 - back * back * (3 - 2 * back))
+    }
+    v.x += vx * ahead
+    v.z += vz * ahead
+    // Past the cap the drawn rider stands (his last two samples still say "running": report the
+    // ground speed he is actually drawn at, or the crowd runs him in place).
+    const still = over >= MAX_EXTRAP_TICKS
+    v.vx = still ? 0 : vx * 20
+    v.vz = still ? 0 : vz * 20
+  }
+
   private assign(a: Sample, b: Sample, k: number): void {
     const v = this.view
     v.x = a.x + (b.x - a.x) * k
     v.z = a.z + (b.z - a.z) * k
     v.aim = lerpAngle(a.aim, b.aim, k)
+    v.pitch = a.pitch + (b.pitch - a.pitch) * k
     // Discrete state switches at the midpoint.
     const d = k < 0.5 ? a : b
     v.hp = d.hp
     v.flags = d.flags
-    v.anim = d.anim
+    v.anim = d.anim & ANIM_MASK
+    v.stance = d.anim & ~ANIM_MASK
     v.carry = d.carry
   }
 }

@@ -16,9 +16,9 @@ import {
   type AnimationAction,
   AnimationMixer,
   Box3,
-  BoxGeometry,
   type BufferAttribute,
   BufferGeometry,
+  CapsuleGeometry,
   Color,
   CylinderGeometry,
   Float32BufferAttribute,
@@ -34,7 +34,7 @@ import {
 } from 'three'
 import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.js'
 import { type GLTF, GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js'
-import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
+import { mergeGeometries, mergeVertices } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
 import { clone as cloneSkinned } from 'three/examples/jsm/utils/SkeletonUtils.js'
 import { watchPose } from './pose-watch.ts'
 import { SkinThrottle } from './skin-throttle.ts'
@@ -65,7 +65,7 @@ function coatMaterial(): MeshStandardMaterial {
       .replace(
         '#include <color_fragment>',
         `#include <color_fragment>
-diffuseColor.rgb *= 0.82 + 0.2 * furN(vFurP * vec3(9.0, 90.0, 9.0)) + 0.1 * furN(vFurP * 3.0);`,
+diffuseColor.rgb *= 0.78 + 0.26 * furN(vFurP * vec3(14.0, 140.0, 14.0)) + 0.12 * furN(vFurP * 4.0);`,
       )
   }
   mat.customProgramCacheKey = () => 'ow-coat'
@@ -84,6 +84,17 @@ function plain(a: BufferAttribute, joints: boolean): BufferAttribute {
   return joints
     ? new Uint16BufferAttribute(out, a.itemSize)
     : new Float32BufferAttribute(out, a.itemSize)
+}
+
+/**
+ * The low-poly files are flat-shaded (every face its own vertices): weld each part's vertices that
+ * share a position and skin, and give it smooth normals, so a coat reads as a coat, not card.
+ */
+function smooth(g: BufferGeometry): BufferGeometry {
+  g.deleteAttribute('normal')
+  const welded = mergeVertices(g, 1e-4)
+  welded.computeVertexNormals()
+  return welded
 }
 
 /** Extra geometry skinned rigidly to one bone (a saddle on the back), in mesh space. */
@@ -128,7 +139,7 @@ function mergeParts(scene: Object3D, paint: Record<string, number>): SkinnedMesh
       col.set([c.r, c.g, c.b], i * 3)
     }
     g.setAttribute('color', new Float32BufferAttribute(col, 3))
-    return g
+    return smooth(g)
   })
   const merged = mergeGeometries(geos)
   if (!merged) {
@@ -323,65 +334,52 @@ const TETHERS: readonly Tether[] = [
   {
     at: new Vector3(9 - 0.6 - 1.25, 0, 4.4),
     yaw: Math.PI / 2,
-    paint: { Main: 0x6a_46_30, Hair: 0x24_1a_14 },
+    paint: {
+      Main: 0x4c_2c_1a,
+      Main_Dark: 0x30_1c_10,
+      Main_Light: 0x64_40_28,
+      Hair: 0x14_0e_0a,
+      Muzzle: 0x24_1a_14,
+      Hooves: 0x22_1c_18,
+    },
   },
   {
     at: new Vector3(-(9 - 0.6 - 1.25), 0, 16.2),
     yaw: -Math.PI / 2,
     paint: {
-      Main: 0x5a_54_4c,
-      Main_Dark: 0x4a_44_3e,
-      Main_Light: 0x6e_66_5c,
-      Muzzle: 0x2e_2a_26,
-      Hair: 0x2a_26_22,
+      Main: 0x44_40_3a,
+      Main_Dark: 0x30_2c_28,
+      Main_Light: 0x56_50_48,
+      Muzzle: 0x26_22_1e,
+      Hair: 0x16_12_10,
+      Hooves: 0x22_1c_18,
     },
   },
 ]
 
-/** A saddle, blanket, horn and stirrups on the back (metres, the horse's space, +z forward). */
+/**
+ * A stock saddle on the back (metres, the horse's space, +z forward): a rounded leather seat on a
+ * muted blanket, a raised cantle behind and the horn in front. Smooth shapes, no straps.
+ */
 function saddle(h: number): Rider[] {
-  const back = h * 0.69
-  const piece = (
-    size: [number, number, number],
-    at: [number, number, number],
-    roll = 0,
-  ): BufferGeometry => {
-    const g = new BoxGeometry(...size)
-    g.rotateZ(roll)
+  const back = h * 0.712
+  const pad = (r: number, len: number, flat: number, at: [number, number, number]) => {
+    const g = new CapsuleGeometry(r, len, 4, 14)
+    g.rotateX(Math.PI / 2)
+    g.scale(1, flat, 1)
     g.translate(...at)
     return g
   }
-  const horn = new CylinderGeometry(0.022, 0.03, 0.12, 6)
-  horn.translate(0, back + 0.14, 0.22)
-  const blanket = 0x6a_24_1a
-  const leather = 0x4a_2e_1a
-  const strap = 0x2e_1c_12
+  const horn = new CylinderGeometry(0.022, 0.03, 0.11, 8)
+  horn.translate(0, back + 0.1, 0.21)
+  const cantle = new CapsuleGeometry(0.035, 0.18, 3, 8)
+  cantle.rotateZ(Math.PI / 2)
+  cantle.translate(0, back + 0.09, -0.16)
   return [
-    // the blanket over the back and draped down both flanks
-    { geo: piece([0.3, 0.03, 0.7], [0, back, 0.02]), color: blanket, bone: 'Torso' },
-    {
-      geo: piece([0.03, 0.34, 0.7], [0.19, back - 0.14, 0.02], 0.35),
-      color: blanket,
-      bone: 'Torso',
-    },
-    {
-      geo: piece([0.03, 0.34, 0.7], [-0.19, back - 0.14, 0.02], -0.35),
-      color: blanket,
-      bone: 'Torso',
-    },
-    // the seat, its cantle and horn
-    { geo: piece([0.3, 0.07, 0.5], [0, back + 0.05, 0.02]), color: leather, bone: 'Torso' },
-    { geo: piece([0.28, 0.1, 0.06], [0, back + 0.1, -0.2]), color: leather, bone: 'Torso' },
-    { geo: horn, color: strap, bone: 'Torso' },
-    // stirrup leathers down the blanket, and the irons
-    { geo: piece([0.02, 0.5, 0.05], [0.26, back - 0.33, 0.05], 0.12), color: strap, bone: 'Torso' },
-    {
-      geo: piece([0.02, 0.5, 0.05], [-0.26, back - 0.33, 0.05], -0.12),
-      color: strap,
-      bone: 'Torso',
-    },
-    { geo: piece([0.05, 0.04, 0.11], [0.3, back - 0.6, 0.05]), color: 0x5a_4a_3a, bone: 'Torso' },
-    { geo: piece([0.05, 0.04, 0.11], [-0.3, back - 0.6, 0.05]), color: 0x5a_4a_3a, bone: 'Torso' },
+    { geo: pad(0.24, 0.3, 0.12, [0, back - 0.005, 0.02]), color: 0x4a_26_1c, bone: 'Torso' },
+    { geo: pad(0.17, 0.24, 0.3, [0, back + 0.035, 0.02]), color: 0x3a_24_16, bone: 'Torso' },
+    { geo: cantle, color: 0x3a_24_16, bone: 'Torso' },
+    { geo: horn, color: 0x2a_1a_10, bone: 'Torso' },
   ]
 }
 

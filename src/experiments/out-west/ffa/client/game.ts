@@ -16,6 +16,7 @@ import {
   Fog,
   HemisphereLight,
   Plane,
+  Quaternion,
   Raycaster,
   Scene,
   Vector2,
@@ -32,9 +33,11 @@ import {
   ANIM_RELOAD,
   ANIM_ROLL,
   ANIM_RUN,
+  ANIM_SLIDE,
   ANIM_VAULT,
   BOX_NONE,
   BOX_OPENING,
+  BTN_AIM,
   BTN_CALLOUT,
   BTN_FIRE,
   BTN_INTERACT,
@@ -52,6 +55,7 @@ import {
   EV_DEPOSIT,
   EV_KILL,
   NONE,
+  POS_SCALE,
   type RosterEntry,
   SELF_ALIVE,
   SELF_DEAD_EYE_READY,
@@ -62,12 +66,16 @@ import {
   type ServerControl,
   SHOT_RIFLE,
   SHOT_SHOTGUN,
+  STANCE_ADS,
+  STANCE_CROUCH,
+  STANCE_SPRINT,
   WEAPON_REVOLVER,
   WEAPON_RIFLE,
   WEAPON_SHOTGUN,
 } from '../../contract/town.ts'
 import { loadAssets } from '../../engine/assets.ts'
 import { Renderer } from '../../engine/render.ts'
+import { tierHint } from '../../engine/tiers.ts'
 import { haptic } from '../../platform/haptics.ts'
 import { presetAt } from '../../scene/presets.ts'
 import { RIM } from '../../scene/style.ts'
@@ -78,15 +86,18 @@ import { Crowd, type CrowdPlayer, READ_SCALE } from '../scene/crowd.ts'
 import { CUT } from '../scene/cutaway.ts'
 import { shareDepthByKind } from '../scene/depth-kinds.ts'
 import { Effects } from '../scene/fx.ts'
+import type { GestureKind } from '../scene/gestures.ts'
 import { installHotPaths } from '../scene/hot-paths.ts'
 import { buildInterior } from '../scene/interior.ts'
 import { lookFor } from '../scene/looks.ts'
+import { loadMoves } from '../scene/moves.ts'
 import { Pickups } from '../scene/pickups.ts'
 import { buildTown, type Town } from '../scene/town.ts'
 import { buildWilds, shadeTown, Wilds } from '../scene/wilds.ts'
 import type { WireEvent } from '../sim/codec-events.ts'
 import {
   BANK_CHANNEL_TICKS,
+  BLOOM_DECAY_DEG,
   DEAD_EYE_CLOSE_TICKS,
   HOP_TICKS,
   LEAVE_CHANNEL_TICKS,
@@ -104,10 +115,13 @@ import {
   VAULT_TICKS,
 } from '../sim/constants.ts'
 import { BLOCK_SHOT, BLOCK_SIGHT, rayGrid, spawnFacing, TOWN, zoneAt } from '../sim/layout.ts'
-import { radiansToAim } from '../sim/move.ts'
+import { airborne, radiansToAim, sliding } from '../sim/move.ts'
+import { bloomAfterShot } from '../sim/spread.ts'
+import type { MoveState } from '../sim/types.ts'
 import { type AimResult, assistFriction, assistPull, resolveAim } from './aim.ts'
 import { ThreatArrows } from './arrows.ts'
 import { Autopilot } from './autopilot.ts'
+import { LOCAL_BITS } from './bindings.ts'
 import { assistAim, currentAction } from './context.ts'
 import { DesktopControls } from './controls.ts'
 import { type Fuse, shotSound, stopFuse } from './event-sounds.ts'
@@ -130,6 +144,7 @@ import { type FrontierSettings, loadSettings, saveSettings, type ViewMode } from
 import { SettingsPanel } from './settings-panel.ts'
 import { ShooterCamera } from './shooter-camera.ts'
 import { FrontierSound, wearsSpurs } from './sound.ts'
+import { Stance } from './stance.ts'
 import { onBoardwalk } from './surface.ts'
 import { TouchControls } from './touch.ts'
 import { MotionTrace, TRACE_FIELDS } from './trace.ts'
@@ -157,9 +172,9 @@ export type Connect = (ev: TransportEvents) => Transport
 
 const CHANNEL_LABEL: Record<number, [string, number]> = {
   [CHANNEL_BANK]: ['Banking…', BANK_CHANNEL_TICKS],
-  [CHANNEL_STAGE]: ['Shipping by stage…', STAGE_CHANNEL_TICKS],
-  [CHANNEL_STRONGBOX]: ['Cracking the strongbox…', STRONGBOX_CHANNEL_TICKS],
-  [CHANNEL_LEAVE]: ['Leaving town…', LEAVE_CHANNEL_TICKS],
+  [CHANNEL_STAGE]: ['Shipping…', STAGE_CHANNEL_TICKS],
+  [CHANNEL_STRONGBOX]: ['Opening the strongbox…', STRONGBOX_CHANNEL_TICKS],
+  [CHANNEL_LEAVE]: ['Leaving…', LEAVE_CHANNEL_TICKS],
 }
 
 export class FrontierGame {
@@ -199,6 +214,8 @@ export class FrontierGame {
   private running = false
   private disposed = false
   private exited = false
+  /** The connection's banner ("Reconnecting…", "Disconnected"), or null while connected. */
+  private connBanner: string | null = null
   /** Your rendered pose (`NetClient.localRenderPose`): what the camera and the crowd follow. */
   private readonly own = { x: 72, z: 64, yaw: 0 }
   private aim = 0
@@ -211,8 +228,11 @@ export class FrontierGame {
   private readonly aimPlane = new Plane(new Vector3(0, 1, 0), -1.2)
   private readonly tmp = new Vector3()
   private readonly ndc = new Vector2()
-  private remotes: RemoteView[] = []
+  /** Every remote rider at render time, refilled in place each frame. */
+  private readonly remotes: RemoteView[] = []
   private readonly crowdList: CrowdPlayer[] = []
+  /** Reused rows for `crowdList` (one per remote rider; nothing allocated per frame). */
+  private readonly crowdRows: CrowdPlayer[] = []
   private mapAt = 0
   private readonly hatlessSeen = new Set<number>()
   private wasAlive = false
@@ -229,8 +249,15 @@ export class FrontierGame {
   /** Drives the same camera as `cam` in the shooter views. */
   readonly shooter: ShooterCamera
   private viewModel: ViewModel | null = null
+  private readonly vmSun = new Vector3()
+  private dustAt = 0
+  /** When you last went down (s). */
+  private diedAt = 0
+  private readonly vmQ = new Quaternion()
   private guide: BankGuide | null = null
   private readonly coach: Onboarding
+  /** Crouch toggle and slide (local crouch taps → `BTN_CROUCH`). */
+  private readonly stance = new Stance()
   private readonly score: Scoreboard
   private readonly panel: SettingsPanel
   private readonly touchUi: boolean
@@ -254,6 +281,8 @@ export class FrontierGame {
   private lastShotAt = -1e9
   /** Dev harness ADS (desktop has no touch AIM toggle). */
   private devAdsOn = false
+  /** Dev / audit: your rider held in a named state. */
+  private devAnim: DevAnim | null = null
   private devWeapon: number | null = null
   /** Dev-only per-frame motion trace (`__frontierTrace`). */
   readonly trace = new MotionTrace()
@@ -280,13 +309,7 @@ export class FrontierGame {
     const coarse = matchMedia('(pointer: coarse)').matches || navigator.maxTouchPoints > 0
     this.touchUi = coarse
     this.settings = loadSettings()
-    this.renderer = new Renderer(
-      this.canvas,
-      this.scene,
-      this.cam.camera,
-      coarse ? 'low' : 'high',
-      'ffa',
-    )
+    this.renderer = new Renderer(this.canvas, this.scene, this.cam.camera, tierHint(), 'ffa')
     this.scene.userData.owDay = DAY
     this.shooter = new ShooterCamera(this.cam.camera)
     // the first-person view model rides on the camera, so the camera joins the scene graph
@@ -403,6 +426,7 @@ export class FrontierGame {
     const was = this.root.dataset.view
     this.root.dataset.view = this.settings.view
     this.desk.setShooter(shooter)
+    this.desk.adsToggle = this.settings.adsToggle
     this.touch?.setShooter(shooter)
     if (this.crowd) {
       this.crowd.readScale = shooter ? 1 : READ_SCALE
@@ -471,6 +495,7 @@ export class FrontierGame {
       hud: this.hud,
       audio: this.audio,
       kick: (a) => (this.shooterView ? this.shooter.kick(a) : this.cam.kick(a)),
+      damageFrom: (from) => this.damageFrom(from),
       posOf: (id) => this.posOf(id),
       muzzleOf: (id, x, z, aim) =>
         this.crowd?.muzzle(id, x, z, aim, new Vector3()) ?? new Vector3(x, 1.3, z),
@@ -542,7 +567,7 @@ export class FrontierGame {
   async start(connect: Connect, onProgress: (f: number, label: string) => void): Promise<void> {
     this.transport = connect({
       onMessage: (d) => this.net.handle(d, performance.now()),
-      onState: (st, detail) => this.onTransport(st, detail),
+      onState: (st) => this.onTransport(st),
       onReopen: () => this.net.reset(),
     })
     this.net.attach(this.transport)
@@ -550,12 +575,14 @@ export class FrontierGame {
     const assets = await loadAssets(
       Math.min(8, this.renderer.gl.capabilities.getMaxAnisotropy()),
       first.look,
-      (f) => onProgress(f * 0.6, 'Saddling up'),
+      (f) => onProgress(f * 0.6, 'Loading'),
     )
+    // sprint, crouch, jump and reload clips: Frontier's own file, on top of the player's
+    await loadMoves(assets).catch((e: unknown) => console.warn('moves.glb failed', e))
     if (this.disposed) {
       return
     }
-    onProgress(0.65, 'Raising the town')
+    onProgress(0.65, 'Building the town')
     this.town = buildTown(TOWN, assets, SUN_DIR, this.renderer.tier)
     this.scene.add(this.town.root)
     const inside = buildInterior(TOWN, presetAt(DAY).windows)
@@ -571,17 +598,30 @@ export class FrontierGame {
     this.pickups = new Pickups(this.scene, TOWN.pickups, assets.props)
     const near = this.nearCap()
     this.crowd = new Crowd(this.scene, assets, near)
+    // real shadows for the nearest few: 4 on floor and legacy (each is a shadow-pass draw set)
+    // the floor tier: only the nearest two riders cast real shadows (the rest get blobs)
+    this.crowd.casters = near < 16 ? 2 : 6
     this.map = new Minimap(TOWN, this.touch ? 112 : 148)
     this.hud.mapSlot.append(this.map.el)
-    this.viewModel = new ViewModel(this.cam.camera, assets)
+    this.viewModel = new ViewModel(assets)
+    if (import.meta.env.DEV) {
+      Reflect.set(globalThis, '__vm', this.viewModel)
+      Reflect.set(globalThis, '__crowd', this.crowd)
+    }
+    // its own scene and lens, drawn over the world before the post chain
+    this.renderer.setOverlay({
+      scene: this.viewModel.scene,
+      camera: this.viewModel.camera,
+      enabled: false,
+    })
     this.guide = new BankGuide(this.hud.root, this.net.grid)
     this.guide.prepare()
-    onProgress(0.75, 'Fitting the posse')
+    onProgress(0.75, 'Loading players')
     await this.crowd.prepare(['casual', 'worker', 'rugged', 'suit'])
     if (this.disposed) {
       return
     }
-    onProgress(0.95, 'Riding in')
+    onProgress(0.95, 'Joining')
     shareDepthByKind(this.scene)
     this.renderer.probe.position.set(72, 1.7, 66)
     try {
@@ -591,6 +631,11 @@ export class FrontierGame {
     }
     this.renderer.probe.captureNow()
     this.syncRoster()
+    // the riders' bodies, cast now (behind the loading screen) instead of mid-fight
+    await this.precastRiders(onProgress)
+    if (this.disposed) {
+      return
+    }
     this.applyView()
     this.running = true
     this.last = performance.now()
@@ -599,32 +644,67 @@ export class FrontierGame {
     onProgress(1, '')
   }
 
-  /** Skinned cap: 12 on the floor tier, 8 on legacy, 16 above (stream H's measurements). */
+  /**
+   * Wait (up to 3 s) for the roster, then cast the near tier's worth of rider bodies, each in its
+   * own macrotask, so the loading bar moves and no cast lands on a gameplay frame.
+   */
+  private async precastRiders(onProgress: (f: number, label: string) => void): Promise<void> {
+    const crowd = this.crowd
+    if (!crowd) {
+      return
+    }
+    const until = performance.now() + 3000
+    while (this.net.roster.size < 2 && performance.now() < until && !this.disposed) {
+      // biome-ignore lint/performance/noAwaitInLoops: polling the socket's first roster, on purpose
+      await new Promise((r) => setTimeout(r, 100))
+      this.syncRoster()
+    }
+    const want = Math.min(this.net.roster.size, this.nearCap() + 4)
+    // nearest first, where the snapshots already place them
+    const at = new Map<number, number>()
+    const me = this.net.self
+    const mx = (me?.x ?? 0) / POS_SCALE
+    const mz = (me?.z ?? 0) / POS_SCALE
+    for (const v of this.net.views(this.net.renderTick(performance.now()))) {
+      at.set(v.id, Math.hypot(v.x - mx, v.z - mz))
+    }
+    onProgress(0.96, 'Fitting the posse')
+    await crowd.precast(
+      want,
+      this.net.you,
+      (id) => at.get(id) ?? 1e6,
+      (n) => onProgress(0.96 + 0.04 * Math.min(1, n / Math.max(1, want)), 'Fitting the posse'),
+    )
+  }
+
+  /**
+   * Skinned cap: 6 on the floor tier, 5 on legacy, 16 above. Past the cap riders are VAT instances,
+   * which read correctly from street level (hats included); each skinned rider costs its mixer, a
+   * bone texture upload and 3–5 draws.
+   */
   private nearCap(): number {
     const t = this.renderer.tier
     if (t === 'legacy') {
-      return 8
+      return 5
     }
-    return t === 'floor' ? 12 : 16
+    // the floor tier: six skinned riders (the far crowd now crouches, sprints and slides too)
+    return t === 'floor' ? 6 : 16
   }
 
-  private onTransport(state: string, detail?: string): void {
+  private onTransport(state: string): void {
     if (state === 'retrying') {
-      this.hud.banner('Connection lost. Reconnecting…')
+      this.connBanner = 'Connection lost. Reconnecting…'
     } else if (state === 'open') {
-      this.hud.banner(null)
+      this.connBanner = null
     } else if (state === 'closed' && !this.exited && this.running) {
-      this.hud.banner(`Disconnected${detail ? `: ${detail}` : ''}`)
-      setTimeout(() => this.exit('lost'), 2500)
+      // plain words, never the socket's reason; the mount shows Try again / Back
+      this.connBanner = "Connection lost. Couldn't reconnect."
+      this.exit('lost')
     }
   }
 
   private onWelcome(): void {
     this.syncRoster()
-    this.hud.feed(
-      `Welcome to Perdition${this.net.lobbyId === 'loopback' ? ' (practice town)' : ''}.`,
-      'info',
-    )
   }
 
   private syncRoster(): void {
@@ -685,7 +765,7 @@ export class FrontierGame {
   private predictedShot(x: number, z: number, aim: number, weapon: number): void {
     const fp = this.settings.view === 'first' && this.viewModel !== null
     const m = fp
-      ? (this.viewModel?.muzzle(this.tmp) ?? this.tmp.set(x, 1.3, z))
+      ? (this.viewModel?.muzzle(this.cam.camera, this.tmp) ?? this.tmp.set(x, 1.3, z))
       : (this.crowd?.muzzle(this.net.you, x, z, aim, this.tmp) ?? this.tmp.set(x, 1.3, z))
     const range = WEAPON_UI[weapon]?.range ?? MAX_RANGE
     const wall = rayToWall(this.net, x, z, aim, range)
@@ -703,12 +783,20 @@ export class FrontierGame {
       // the view kicks up and settles; the crosshair blooms
       const long = weapon === WEAPON_RIFLE || weapon === WEAPON_SHOTGUN
       this.shooter.kickRecoil(long ? 0.05 : 0.03)
-      this.viewModel?.fired()
-      this.bloom = Math.min(6, this.bloom + (long ? 3 : 1.6))
+      this.viewModel?.fired(weapon)
+      this.bloom = bloomAfterShot(weapon, this.bloom)
     } else {
       this.cam.kick(0.12)
     }
     haptic('shot')
+  }
+
+  /** The HUD's damage arc, turned into the view: straight ahead is up on the ring. */
+  private damageFrom(from: { x: number; z: number }): void {
+    const bearing = Math.atan2(from.z - this.own.z, from.x - this.own.x)
+    // shooter views look along the yaw; top-down looks north (−z) with +x to the right
+    const ahead = this.shooterView ? this.shooter.yaw : -Math.PI / 2
+    this.hud.damageArc(Math.atan2(Math.sin(bearing - ahead), Math.cos(bearing - ahead)))
   }
 
   posOf(id: number): { x: number; z: number } | null {
@@ -735,7 +823,13 @@ export class FrontierGame {
     return Math.atan2(hit.z - this.own.z, hit.x - this.own.x)
   }
 
-  private sampleInput(): { moveX: number; moveZ: number; aim: number; buttons: number } {
+  private sampleInput(): {
+    moveX: number
+    moveZ: number
+    aim: number
+    buttons: number
+    pitch?: number
+  } {
     if (this.shooterView) {
       return this.sampleShooter()
     }
@@ -783,7 +877,7 @@ export class FrontierGame {
       moveX: Math.round(mx * 127),
       moveZ: Math.round(mz * 127),
       aim: radiansToAim(aim),
-      buttons,
+      buttons: buttons & ~LOCAL_BITS,
     }
   }
 
@@ -792,7 +886,13 @@ export class FrontierGame {
    * along the yaw from you to whatever the crosshair rests on (`aim.ts`); touch FIRE repeats at
    * the gun's rate while held, with a light magnetism on each shot.
    */
-  private sampleShooter(): { moveX: number; moveZ: number; aim: number; buttons: number } {
+  private sampleShooter(): {
+    moveX: number
+    moveZ: number
+    aim: number
+    buttons: number
+    pitch: number
+  } {
     const d = this.desk.sample()
     const t = this.touch?.sample()
     let mx = d.mx
@@ -815,6 +915,9 @@ export class FrontierGame {
         // a tick with the trigger up between repeats: the server fires on the press
         buttons &= ~BTN_FIRE
       }
+    }
+    if (this.devAdsOn) {
+      buttons |= BTN_AIM
     }
     if (!this.desk.enabled) {
       // paused: stand still, hands off
@@ -844,12 +947,15 @@ export class FrontierGame {
     if (buttons & BTN_INTERACT && this.actionBit === BTN_CALLOUT) {
       buttons = (buttons & ~BTN_INTERACT) | BTN_CALLOUT
     }
+    // crouch toggle and slide (local bits in, BTN_CROUCH out)
+    buttons = this.stance.apply(buttons, this.net.pred.sprinting, this.net.alive)
     this.aim = aim
     return {
       moveX: Math.round(wx * 127),
       moveZ: Math.round(wz * 127),
       aim: radiansToAim(aim),
       buttons,
+      pitch: Math.round((this.shooter.pitch / (Math.PI / 2)) * 127),
     }
   }
 
@@ -961,7 +1067,10 @@ export class FrontierGame {
     }
     this.ticksThisFrame = ticks
     this.net.localRenderPose(Math.min(1, this.acc / period), dtMs, this.own)
-    this.remotes = [...this.net.views(this.renderTick)]
+    this.remotes.length = 0
+    for (const v of this.net.views(this.renderTick)) {
+      this.remotes.push(v)
+    }
     return dtMs
   }
 
@@ -985,6 +1094,7 @@ export class FrontierGame {
     this.perf.simMs = t1 - t0
     this.perf.frameMs = performance.now() - t0
     this.audio?.update()
+    this.renderer.label = 'frontier'
     this.renderer.adapt(dtMs, true)
     this.renderer.render(dt)
     if (this.trace.on) {
@@ -1050,7 +1160,7 @@ export class FrontierGame {
         anim: this.shooterAnim(
           ownAnim(
             s.flags,
-            this.net.pred.rollTicks > 0,
+            dodgeAnim(this.net.pred),
             speed > 0.3,
             s.reloadTicks > 0,
             s.channelKind,
@@ -1059,22 +1169,37 @@ export class FrontierGame {
           speed > 0.3,
         ),
         flags: ownFlags(s.flags, s.protectTicks > 0),
+        stance: this.ownStance(),
+        pitch: this.shooterView ? this.shooter.pitch : 0,
         self: true,
-        weapon: this.net.weapon.weapon,
+        weapon: this.devWeapon ?? this.net.weapon.weapon,
       })
+      this.forceAnim(list.at(-1))
     }
-    for (const r of this.remotes) {
-      list.push({
-        id: r.id,
-        x: r.x,
-        z: r.z,
-        aim: r.aim,
-        vx: r.vx,
-        vz: r.vz,
-        anim: r.anim,
-        flags: r.flags,
-        self: false,
-      })
+    for (const [i, r] of this.remotes.entries()) {
+      let row = this.crowdRows[i]
+      if (!row) {
+        row = { id: 0, x: 0, z: 0, aim: 0, vx: 0, vz: 0, anim: 0, stance: 0, flags: 0, self: false }
+        this.crowdRows.push(row)
+      }
+      row.id = r.id
+      row.x = r.x
+      row.z = r.z
+      row.aim = r.aim
+      row.vx = r.vx
+      row.vz = r.vz
+      row.anim = r.anim
+      row.stance = r.stance
+      row.pitch = r.pitch
+      row.flags = r.flags
+      list.push(row)
+    }
+    if (!this.net.alive && this.wasAlive) {
+      this.diedAt = nowS
+      // down: on your feet, sights dropped, for the next life
+      this.stance.reset()
+      this.desk.dropAds()
+      this.touch?.setAds(false)
     }
     if (this.net.alive && !this.wasAlive) {
       // (re)spawned: face into town until the stick or the mouse says otherwise
@@ -1086,6 +1211,7 @@ export class FrontierGame {
       this.coach.maybeShow()
     }
     this.landings(list)
+    this.slideDust(list, nowS)
     const shooter = this.shooterView
     const first = this.settings.view === 'first'
     const speed0 = list[0]?.self ? Math.hypot(list[0].vx, list[0].vz) : 0
@@ -1103,8 +1229,13 @@ export class FrontierGame {
         far: policyFor(this.settings.view, this.renderer.tier).far,
         grid: this.net.grid,
         dt,
+        duck: this.duckHeight(),
+        dead: this.net.alive ? null : this.own,
       })
-      crowd.hideSelf = this.net.alive && (first || this.shooter.closeness > 0.85)
+      // dead in first person: the death camera starts inside your head, so your body shows only
+      // once it has pulled out (0.3 s)
+      const justDied = !this.net.alive && first && nowS - this.diedAt < 0.3
+      crowd.hideSelf = (this.net.alive && (first || this.shooter.closeness > 0.85)) || justDied
     } else {
       this.cam.update(this.own.x, this.own.z, Math.cos(this.aim), Math.sin(this.aim), dt)
       crowd.hideSelf = false
@@ -1202,6 +1333,30 @@ export class FrontierGame {
     return (vault ? VAULT_PEAK_M : HOP_PEAK_M) * 4 * t * (1 - t)
   }
 
+  /** Your stance bits, as remote riders see them (crouched, on the sights, sprinting). */
+  private ownStance(): number {
+    const pred = this.net.pred
+    let st = 0
+    if (this.stance.crouched) {
+      st |= STANCE_CROUCH
+    }
+    if (this.adsHeld() && !pred.sprinting) {
+      st |= STANCE_ADS
+    }
+    if (pred.sprinting) {
+      st |= STANCE_SPRINT
+    }
+    return st
+  }
+
+  /** How far your stance lowers the eye (m): crouched, or sliding. */
+  private duckHeight(): number {
+    if (sliding(this.net.pred)) {
+      return 0.6
+    }
+    return this.stance.crouched ? 0.45 : 0
+  }
+
   /** RMB, LT or the touch AIM toggle. */
   private adsHeld(): boolean {
     return this.desk.aimHeld || (this.touch?.ads ?? false) || this.devAdsOn
@@ -1214,6 +1369,7 @@ export class FrontierGame {
     }
     const on = this.settings.view === 'first' && this.net.alive
     vm.visible = on
+    this.renderer.setOverlay({ scene: vm.scene, camera: vm.camera, enabled: on })
     if (!on) {
       return
     }
@@ -1225,16 +1381,45 @@ export class FrontierGame {
       { ox: this.own.x, oz: this.own.z, dx: Math.cos(yaw), dz: Math.sin(yaw), maxDist: 1.2 },
       BLOCK_SIGHT,
     )
+    const cam = this.cam.camera
+    vm.setLens(cam.aspect, cam.fov)
+    vm.townSky.update(this.scene.environment, this.scene.environmentIntensity, cam.quaternion)
+    // the sun, turned into the lens's frame (the view model lives in camera space)
+    this.vmSun.copy(SUN_DIR).applyQuaternion(this.vmQ.copy(cam.quaternion).invert())
+    const pred = this.net.pred
+    const reloading = ((s?.flags ?? 0) & SELF_RELOADING) !== 0
     vm.update(
-      dt,
-      this.devWeapon ?? this.net.weapon.weapon,
-      this.turned.yaw,
-      this.turned.pitch,
-      speed,
-      this.shooter.ads,
-      ((s?.flags ?? 0) & SELF_RELOADING) !== 0,
-      wall,
+      {
+        dt,
+        lookYaw: this.turned.yaw,
+        lookPitch: this.turned.pitch,
+        speed,
+        sprinting: pred.sprinting,
+        ads: this.adsHeld(),
+        crouched: this.stance.crouched,
+        sliding: sliding(pred),
+        lift: this.jumpLift(),
+        reload: reloading && s ? 1 - s.reloadTicks / RELOAD_TICKS : null,
+        weapon: this.devWeapon ?? this.net.weapon.weapon,
+        wall,
+      },
+      this.vmSun,
     )
+    // the gun's kick rides into the lens (CoD's view punch)
+    this.shooter.vmKick = vm.motion.pose.viewKick
+  }
+
+  /** A slide kicks up a trail of dust. */
+  private slideDust(list: readonly CrowdPlayer[], nowS: number): void {
+    if (nowS - this.dustAt < 0.06 || !this.fx) {
+      return
+    }
+    this.dustAt = nowS
+    for (const p of list) {
+      if (p.anim === ANIM_SLIDE) {
+        this.fx.dust(p.x, p.z, 3)
+      }
+    }
   }
 
   /** A thud of boots for every rider (you included) coming down from a vault or a hop. */
@@ -1303,10 +1488,9 @@ export class FrontierGame {
       return
     }
     fx.beginRings()
-    const gold = new Color(1.6, 1.2, 0.4)
     const carrying = s.carried > 0
     for (const z of TOWN.zones) {
-      fx.ring(z.x, z.z, z.r, carrying ? gold : new Color(0.5, 0.4, 0.2), carrying ? 3 : 0)
+      fx.ring(z.x, z.z, z.r, carrying ? RING_GOLD : RING_ZONE, carrying ? 3 : 0)
     }
     for (const [i, sp] of TOWN.pickups.entries()) {
       if (this.pickups?.isAvailable(i)) {
@@ -1315,7 +1499,7 @@ export class FrontierGame {
     }
     // your own ground ring is a top-down readability aid: over the shoulder it's just in the way
     if (this.net.alive && !this.shooterView) {
-      const mine = s.flags & SELF_MOST_WANTED ? new Color(1.8, 1.4, 0.3) : new Color(1.2, 1, 0.7)
+      const mine = s.flags & SELF_MOST_WANTED ? RING_MINE_MW : RING_MINE
       fx.ring(this.own.x, this.own.z, 0.7, mine, 0)
     }
     const now = performance.now()
@@ -1324,16 +1508,16 @@ export class FrontierGame {
       for (const id of [c.challenger, c.target]) {
         const p = this.posOf(id)
         if (p) {
-          fx.ring(p.x, p.z, 1.1, new Color(2, 0.4, 0.2), 10)
+          fx.ring(p.x, p.z, 1.1, RING_CALLOUT, 10)
         }
       }
     }
     for (const sd of this.showdowns.values()) {
-      fx.ring(sd.cx, sd.cz, 5.5, new Color(0.9, 0.7, 0.45), sd.called ? 0 : 2)
+      fx.ring(sd.cx, sd.cz, 5.5, RING_SHOWDOWN, sd.called ? 0 : 2)
     }
     for (const r of this.remotes) {
       if (r.flags & EF_MOST_WANTED && r.flags & EF_ALIVE) {
-        fx.ring(r.x, r.z, 0.85 + Math.sin(nowS * 6) * 0.05, new Color(2, 1.5, 0.3), 0)
+        fx.ring(r.x, r.z, 0.85 + Math.sin(nowS * 6) * 0.05, RING_MW, 0)
       }
     }
   }
@@ -1357,8 +1541,11 @@ export class FrontierGame {
 
   private updateHud(nowS: number): void {
     const s = this.net.self
+    // The banner is only ever the connection's state: "Riding in…" until the first snapshot
+    // (cleared the moment you're in town), "Reconnecting…" while the socket retries.
+    const duel = ((s?.flags ?? 0) & SELF_IN_SHOWDOWN) !== 0
+    this.hud.banner(duel ? null : (this.connBanner ?? (s ? null : 'Joining…')))
     if (!s) {
-      this.hud.banner('Riding into Perdition…')
       return
     }
     const action = this.net.alive
@@ -1375,6 +1562,7 @@ export class FrontierGame {
       : null
     this.actionBit = action?.bit ?? 0
     this.touch?.setAction(action?.bit ?? 0, action?.label ?? null)
+    this.touch?.setCrouched(this.stance.crouched)
     const weapon = this.net.weapon
     this.touch?.setThrow(weapon.dynamite && this.net.alive)
     const wui = WEAPON_UI[weapon.weapon] ?? WEAPON_UI[WEAPON_REVOLVER]
@@ -1412,8 +1600,8 @@ export class FrontierGame {
       const lvl = k && k.id !== NONE ? this.net.roster.get(k.id)?.level : undefined
       const carry =
         this.lastCarry > 0
-          ? `Your $${this.lastCarry.toLocaleString('en-US')} is in the dirt.`
-          : 'You carried nothing.'
+          ? `You dropped $${this.lastCarry.toLocaleString('en-US')}.`
+          : 'You weren’t carrying money.'
       const person = this.riders.live && k !== null && this.riders.person(k.id) !== null
       this.hud.death(name, lvl ? `Level ${lvl}. ${carry}` : carry, s.respawnTicks / TICK_HZ, person)
     }
@@ -1434,8 +1622,10 @@ export class FrontierGame {
       zoneAt(TOWN, this.own.x, this.own.z)?.kind === 'bank',
       this.dtS,
     )
-    const portrait = viewport.h > viewport.w
-    this.hud.rotateHint(this.touchUi && portrait && this.shooterView && this.net.alive)
+    // only a narrow portrait screen gets the hint (not the open Duo, nor anything squarer)
+    const narrow =
+      viewport.w / viewport.h < 0.65 && document.documentElement.dataset.owForm !== 'fold-inner'
+    this.hud.rotateHint(this.touchUi && narrow && this.shooterView && this.net.alive)
     if (this.map && nowS - this.mapAt > 0.1) {
       this.mapAt = nowS
       this.drawMap(nowS)
@@ -1450,13 +1640,34 @@ export class FrontierGame {
       this.net.alive &&
       Math.hypot(this.net.pred.x - this.net.prev.x, this.net.pred.z - this.net.prev.z) > 0.01
     const deadEyeReady = (flags & SELF_DEAD_EYE_READY) !== 0
-    this.bloom *= Math.exp(-this.dtS * 5)
-    const deg = spreadDeg(w, moving, deadEyeReady) + this.bloom
-    const gap = Math.max(3, spreadPx(deg, this.cam.camera.fov, viewport.h))
+    // the sim's bloom, mirrored: it settles 0.3° a tick
+    this.bloom = Math.max(0, this.bloom - this.dtS * BLOOM_DECAY_DEG * TICK_HZ)
+    const pred = this.net.pred
+    const ads = this.adsHeld()
+    const deg = spreadDeg(
+      {
+        weapon: w,
+        ads,
+        crouched: this.stance.crouched,
+        moving,
+        sliding: sliding(pred),
+        airborne: airborne(pred),
+        bloom: this.bloom,
+      },
+      deadEyeReady,
+    )
+    const gap = Math.max(2, spreadPx(deg, this.cam.camera.fov, viewport.h))
     const range = WEAPON_UI[w]?.range ?? MAX_RANGE
     const onTarget = this.aimRes.target >= 0 && this.aimRes.range <= range
+    // first person on the sights: the gun's own sights are the crosshair; sprinting: no crosshair
+    const sighted = this.settings.view === 'first' && (this.viewModel?.motion.pose.ads ?? 0) > 0.6
     const show =
-      this.net.alive && !this.hud.menuOpen && !this.coach.open && this.settings.view !== 'top'
+      this.net.alive &&
+      !this.hud.menuOpen &&
+      !this.coach.open &&
+      this.settings.view !== 'top' &&
+      !(sighted && !(s && s.deadEyeTicks > 0)) &&
+      !pred.sprinting
     const closing =
       s && s.deadEyeTicks > 0 ? Math.min(1, s.deadEyeTicks / DEAD_EYE_CLOSE_TICKS) : null
     this.hud.setCrosshair(true, gap, onTarget)
@@ -1533,9 +1744,6 @@ export class FrontierGame {
     }
     this.wasReady = ready
     const showdown = (flags & SELF_IN_SHOWDOWN) !== 0
-    if (showdown) {
-      this.hud.banner(null)
-    }
     // no menu sound while your showdown waits for its call
     this.audio?.hushUi(showdown)
   }
@@ -1551,7 +1759,7 @@ export class FrontierGame {
       return
     }
     if (mw === this.net.you) {
-      this.hud.toast("YOU'RE MOST WANTED: +50% ON YOUR HEAD", 'gold', 2600)
+      this.hud.toast('YOU’RE MOST WANTED: +50% BOUNTY ON YOU', 'gold', 2600)
     } else {
       this.hud.feed(`★ ${this.net.name(mw)} is Most Wanted: +50% bounty`, 'gold')
     }
@@ -1657,12 +1865,51 @@ export class FrontierGame {
     this.desk.injectLook(dx, dy)
   }
 
-  /** Dev harness only: show a weapon in the first-person hands (null: the one you hold). */
+  /** Dev harness only: show a weapon in your hands, first and third person (null: the one you hold). */
   devShowWeapon(w: number | null): void {
     this.devWeapon = w
   }
 
   /** Dev harness only: hold or release aim-down-sights. */
+  /** The animation audit's hook: your rider in a named state. */
+  private forceAnim(own: CrowdPlayer | undefined): void {
+    const f = this.devAnim
+    if (!(f && own)) {
+      return
+    }
+    own.anim = f.anim
+    own.stance = f.stance
+    const dir = this.aim + (f.turn ?? 0)
+    own.vx = Math.cos(dir) * f.speed
+    own.vz = Math.sin(dir) * f.speed
+  }
+
+  /** Dev / audit: hold your rider in a state (null: back to play). See `ANIM_STATES`. */
+  devAnimSet(state: string | null): boolean {
+    if (state === null) {
+      this.devAnim = null
+      return true
+    }
+    if (state === 'fire') {
+      this.crowd?.fired(this.net.you, 0)
+      return true
+    }
+    if (GESTURES.includes(state as GestureKind)) {
+      this.crowd?.gesture(this.net.you, state as GestureKind)
+      return true
+    }
+    if (state === 'hit') {
+      this.crowd?.hurt(this.net.you, this.own, {
+        x: this.own.x + Math.cos(this.aim) * 5,
+        z: this.own.z + Math.sin(this.aim) * 5,
+      })
+      return true
+    }
+    const s = ANIM_STATES[state]
+    this.devAnim = s ?? null
+    return s !== undefined
+  }
+
   devAds(on: boolean): void {
     this.touch?.setAds(on)
     this.devAdsOn = on
@@ -1747,6 +1994,38 @@ export class FrontierGame {
   }
 }
 
+/** The one-shot gestures `__frontierAnim.set` can trigger. */
+const GESTURES: readonly GestureKind[] = ['throw', 'pickup', 'callout', 'draw', 'bank']
+
+/** A held state: anim, stance bits, ground speed, and the move's turn off the aim (rad). */
+interface DevAnim {
+  anim: number
+  stance: number
+  speed: number
+  turn?: number
+}
+
+/** The animation audit's named states (dev hook `__frontierAnim.set`). */
+const ANIM_STATES: Record<string, DevAnim> = {
+  idle: { anim: ANIM_IDLE, stance: 0, speed: 0 },
+  walk: { anim: ANIM_RUN, stance: 0, speed: 1.6 },
+  run: { anim: ANIM_RUN, stance: 0, speed: 5.5 },
+  sprint: { anim: ANIM_RUN, stance: STANCE_SPRINT, speed: 7.6 },
+  strafe: { anim: ANIM_RUN, stance: 0, speed: 5.5, turn: Math.PI / 2 },
+  back: { anim: ANIM_RUN, stance: 0, speed: 5.5, turn: Math.PI },
+  ads: { anim: ANIM_IDLE, stance: STANCE_ADS, speed: 0 },
+  'ads-walk': { anim: ANIM_RUN, stance: STANCE_ADS, speed: 3 },
+  crouch: { anim: ANIM_IDLE, stance: STANCE_CROUCH, speed: 0 },
+  'crouch-walk': { anim: ANIM_RUN, stance: STANCE_CROUCH, speed: 2.9 },
+  slide: { anim: ANIM_SLIDE, stance: 0, speed: 7 },
+  jump: { anim: ANIM_HOP, stance: 0, speed: 5.5 },
+  vault: { anim: ANIM_VAULT, stance: 0, speed: 4 },
+  roll: { anim: ANIM_ROLL, stance: 0, speed: 8 },
+  reload: { anim: ANIM_RELOAD, stance: 0, speed: 0 },
+  channel: { anim: ANIM_CHANNEL, stance: 0, speed: 0 },
+  dead: { anim: ANIM_DEAD, stance: 0, speed: 0 },
+}
+
 /** `ANIM_VAULT` or `ANIM_HOP` while one is under way, else 0. */
 function jumpAnim(jumpTicks: number, vaultStep: number): number {
   if (jumpTicks <= 0) {
@@ -1755,9 +2034,17 @@ function jumpAnim(jumpTicks: number, vaultStep: number): number {
   return vaultStep > 0 ? ANIM_VAULT : ANIM_HOP
 }
 
+/** `ANIM_ROLL` or `ANIM_SLIDE` while one is under way, else 0. */
+function dodgeAnim(m: MoveState): number {
+  if (m.rollTicks > 0) {
+    return ANIM_ROLL
+  }
+  return m.slideTicks > 0 ? ANIM_SLIDE : 0
+}
+
 function ownAnim(
   flags: number,
-  rolling: boolean,
+  dodge: number,
   moving: boolean,
   reloading: boolean,
   channel: number,
@@ -1769,8 +2056,8 @@ function ownAnim(
   if (flags & SELF_IN_SHOWDOWN) {
     return ANIM_DUEL
   }
-  if (rolling) {
-    return ANIM_ROLL
+  if (dodge !== 0) {
+    return dodge
   }
   if (jump !== 0) {
     return jump
@@ -1805,13 +2092,22 @@ function rayToWall(net: NetClient, x: number, z: number, aim: number, range: num
 }
 
 const PICKUP_RING = new Color(1.4, 0.6, 0.3)
+/** Ground ring colours (shared, never mutated: the fx reads them the same frame). */
+const RING_GOLD = new Color(1.6, 1.2, 0.4)
+const RING_ZONE = new Color(0.5, 0.4, 0.2)
+const RING_MINE = new Color(1.2, 1, 0.7)
+const RING_MINE_MW = new Color(1.8, 1.4, 0.3)
+const RING_CALLOUT = new Color(2, 0.4, 0.2)
+const RING_SHOWDOWN = new Color(0.9, 0.7, 0.45)
+const RING_MW = new Color(2, 1.5, 0.3)
 
 /** Muzzle-flash size by view (the top-down flash would fill a shoulder or an eye). */
 const FLASH_SCALE: Record<ViewMode, number> = { top: 1, third: 0.45, first: 0.18 }
 
 /** How high the camera rides a vault and a hop (m): the body's arc. */
-const VAULT_PEAK_M = 0.55
-const HOP_PEAK_M = 0.3
+/** The lens's vault and jump arcs: the body's (scene/locomotion.ts), so the view rides with it. */
+const VAULT_PEAK_M = 0.75
+const HOP_PEAK_M = 0.45
 
 /** From a rifle shot to the lever working the next round in, s (the rifle fires every 0.9 s). */
 const RIFLE_LEVER_DELAY = 0.32

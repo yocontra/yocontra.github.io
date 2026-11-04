@@ -10,7 +10,7 @@
  *
  * Copy follows the copy pass: "purse" is banked money, "carried" is money at risk, "bank window".
  */
-import { DESKTOP_HELP, TOUCH_HELP } from './bindings.ts'
+import { DESKTOP_HELP, PAD_HELP, TOUCH_HELP } from './bindings.ts'
 import { type CoachFlag, coachSeen, markCoach } from './settings.ts'
 
 interface Step {
@@ -26,24 +26,24 @@ const money = (n: number): string => `$${Math.max(0, Math.round(n)).toLocaleStri
 function steps(touch: boolean): Step[] {
   return [
     {
-      title: 'Ride in',
+      title: 'Move',
       body: touch
-        ? 'Left thumb moves. Drag on the right to look. Low cover stops bullets, so duck behind it.'
-        : 'Click to take the mouse. Low cover stops bullets, so duck behind it.',
+        ? 'Left thumb moves. Drag on the right to look. Hide behind low cover.'
+        : 'Click to use the mouse. Hide behind low cover.',
       keys: true,
     },
     {
-      title: 'Shoot riders',
-      body: 'Everyone here is fair game. A rider you kill drops the money he was carrying.',
+      title: 'Shoot players',
+      body: 'Everyone is an enemy. Kill a player to drop the money they carried.',
     },
     {
-      title: 'Grab the bag',
-      body: 'Walk over a dropped bag to pick it up. That money is now carried: it is at risk.',
+      title: 'Grab the money',
+      body: 'Walk over a dropped bag to pick it up. Carried money is at risk.',
       focus: '.fr-tc',
     },
     {
       title: 'Bank it',
-      body: 'Follow the $ marker to a bank window and bank it. Banked money goes in your purse and is safe. Die first and you drop what you carry.',
+      body: 'Follow the $ marker to a bank window. Banked money is safe in your purse. If you die first, you drop it.',
       focus: '.fr-tc',
     },
   ]
@@ -188,7 +188,7 @@ export class Onboarding {
     const back = button('Back', 'fr-menu-quiet', () => this.go(this.step - 1))
     back.hidden = this.step === 0
     const last = this.step === this.list.length - 1
-    const next = button(last ? 'Ride' : 'Next', '', () => this.next())
+    const next = button(last ? 'Play' : 'Next', '', () => this.next())
     row.append(this.step === 0 ? skip : back, next)
     inner.append(dots, row)
     c.append(inner)
@@ -199,7 +199,12 @@ export class Onboarding {
   private keyTable(): HTMLElement {
     const t = document.createElement('dl')
     t.className = 'fr-howto-keys'
-    for (const [k, what] of this.touch ? TOUCH_HELP : DESKTOP_HELP) {
+    const pad = typeof navigator.getGamepads === 'function' && navigator.getGamepads().some(Boolean)
+    let rows = this.touch ? TOUCH_HELP : DESKTOP_HELP
+    if (pad) {
+      rows = PAD_HELP
+    }
+    for (const [k, what] of rows) {
       const dt = document.createElement('dt')
       dt.textContent = k
       const dd = document.createElement('dd')
@@ -231,11 +236,7 @@ export class Onboarding {
   }
 
   firstCarry(amount: number): void {
-    this.once(
-      'carry',
-      `You're carrying ${money(amount)}. Follow the $ marker to a bank window before someone takes it.`,
-      7000,
-    )
+    this.once('carry', `You’re carrying ${money(amount)}. Follow the $ marker to bank it.`, 7000)
   }
 
   atWindow(): void {
@@ -253,12 +254,7 @@ export class Onboarding {
   }
 
   banked(amount: number): void {
-    this.once(
-      'banked',
-      `Banked ${money(amount)}. It's in your purse now, safe for good.`,
-      5000,
-      'gold',
-    )
+    this.once('banked', `Banked ${money(amount)}. It’s safe in your purse.`, 5000, 'gold')
   }
 
   dispose(): void {

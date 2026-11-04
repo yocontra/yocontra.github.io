@@ -22,6 +22,7 @@ import {
   type SkinnedMesh,
   Vector3,
 } from 'three'
+import { creaseNormals } from './normals.ts'
 
 export interface Sample {
   readonly p: Vector3
@@ -155,13 +156,18 @@ export function reach(samples: readonly Sample[], q: Probe): number {
   const dx = Math.sin(q.a)
   const dz = Math.cos(q.a)
   const da = q.da ?? 0.4
+  // atan2(|across|, along) <= da, for along > 0, is |across| <= along * tan(da): no atan2 per
+  // sample (dressing a rider runs this for every ring of every garment)
+  const slope = da >= Math.PI / 2 ? Number.POSITIVE_INFINITY : Math.tan(da)
   let best = Number.NaN
   for (const s of samples) {
+    if (Math.abs(s.p.y - q.y) > q.dy) {
+      continue
+    }
     const x = s.p.x - q.cx
     const z = s.p.z - q.cz
     const along = x * dx + z * dz
-    const inBand = Math.abs(s.p.y - q.y) <= q.dy
-    if (inBand && along > 0 && Math.atan2(Math.abs(-x * dz + z * dx), along) <= da) {
+    if (along > 0 && Math.abs(-x * dz + z * dx) <= along * slope) {
       best = Number.isNaN(best) ? along : Math.max(best, along)
     }
   }
@@ -196,6 +202,20 @@ export interface ShellSpec {
   ts?: readonly number[]
   /** Colour per ring (linear sRGB), or one colour. */
   color: Color | ((t: number, ring: number) => Color)
+  /**
+   * Arc per ring as [from, to] radians (overrides `arc`, `half` and `taper`): a coat panel whose
+   * front edge sweeps back behind the holster.
+   */
+  span?: (t: number) => readonly [number, number]
+  /** Largest radius allowed at direction `a`, ring `t` (cloth that hangs, not flares). */
+  limit?: (a: number, t: number) => number
+  /**
+   * How far down the column at direction `a` reaches, as a fraction of yTop → yBot (a poncho
+   * longer in front and back than at the sides). Default 1.
+   */
+  drop?: (a: number) => number
+  /** Most the radius may grow per metre down (cloth sloping off the shoulders, not a shelf). */
+  grow?: number
 }
 
 /** Resolved ring layout shared by the shell's passes. */
@@ -214,7 +234,7 @@ function layout(s: ShellSpec): Layout {
   const ts = s.ts ?? Array.from({ length: (s.rings ?? 8) + 1 }, (_, i) => i / (s.rings ?? 8))
   const segs = s.segs ?? 20
   const half = s.half ?? Math.PI
-  const full = half >= Math.PI - 1e-6
+  const full = !s.span && half >= Math.PI - 1e-6
   const rings = ts.length - 1
   return {
     ts,
@@ -225,18 +245,27 @@ function layout(s: ShellSpec): Layout {
     band: s.band ?? Math.max(0.012, Math.abs(s.yTop - s.yBot) / rings / 1.5),
     ring: (i) => {
       const t = ts[i] ?? 0
+      if (s.span) {
+        const [from, to] = s.span(t)
+        return { t, y: s.yTop + (s.yBot - s.yTop) * t, a0: from, step: (to - from) / segs }
+      }
       const h = half * (s.taper ? s.taper(t) : 1)
       return { t, y: s.yTop + (s.yBot - s.yTop) * t, a0: (s.arc ?? 0) - h, step: (2 * h) / segs }
     },
   }
 }
 
+/** Height of ring `t` in the column at direction `a`. */
+const colY = (s: ShellSpec, t: number, a: number): number =>
+  s.yTop + (s.yBot - s.yTop) * t * (s.drop ? s.drop(a) : 1)
+
 /** Surface radius per column of one ring, holes filled, smoothed without dipping inside. */
 function ringRadii(s: ShellSpec, L: Layout, i: number): number[] {
-  const { y, a0, step } = L.ring(i)
+  const { t, a0, step } = L.ring(i)
   const row: number[] = []
   for (let j = 0; j < L.cols; j++) {
-    const q = { cx: s.cx, cz: s.cz, y, a: a0 + step * j, dy: L.band, da: Math.max(0.25, step) }
+    const a = a0 + step * j
+    const q = { cx: s.cx, cz: s.cz, y: colY(s, t, a), a, dy: L.band, da: Math.max(0.25, step) }
     row.push(reach(s.samples, q))
   }
   const known = row.filter((x) => Number.isFinite(x))
@@ -278,16 +307,40 @@ export function shell(s: ShellSpec): BufferGeometry {
       r[i] = (r[i] ?? []).map((x, j) => Math.max(x, above[j] ?? 0))
     }
   }
+  const grow = s.grow
+  if (grow !== undefined) {
+    for (let i = 1; i < r.length; i++) {
+      const above = r[i - 1] ?? []
+      const { t } = L.ring(i)
+      const t0 = L.ring(i - 1).t
+      r[i] = (r[i] ?? []).map((x, j) => {
+        const a = L.ring(i).a0 + L.ring(i).step * j
+        const dy = Math.abs(colY(s, t, a) - colY(s, t0, a))
+        return Math.min(x, (above[j] ?? x) + grow * dy)
+      })
+    }
+  }
+  const limit = s.limit
+  if (limit) {
+    r.forEach((row, i) => {
+      const { t, a0, step } = L.ring(i)
+      r[i] = row.map((x, j) => Math.min(x, limit(a0 + step * j, t)))
+    })
+  }
   const pos: number[] = []
   const col: number[] = []
   const uv: number[] = []
   r.forEach((row, i) => {
-    const { t, y, a0, step } = L.ring(i)
+    const { t, a0, step } = L.ring(i)
     const c = typeof s.color === 'function' ? s.color(t, i) : s.color
     const extra = s.margin + (s.bulge ? s.bulge(t) : 0)
     row.forEach((rad, j) => {
       const a = a0 + step * j
-      pos.push(s.cx + Math.sin(a) * (rad + extra), y, s.cz + Math.cos(a) * (rad + extra))
+      pos.push(
+        s.cx + Math.sin(a) * (rad + extra),
+        colY(s, t, a),
+        s.cz + Math.cos(a) * (rad + extra),
+      )
       col.push(c.r, c.g, c.b)
       // A full ring mirrors its swatch (0 → 1 → 0) so there is no seam at the back.
       uv.push(L.full ? 1 - Math.abs((2 * j) / L.cols - 1) : j / Math.max(1, L.cols - 1), t)
@@ -298,7 +351,7 @@ export function shell(s: ShellSpec): BufferGeometry {
   g.setAttribute('color', new BufferAttribute(new Float32Array(col), 3))
   g.setAttribute('uv', new BufferAttribute(new Float32Array(uv), 2))
   g.setIndex(quads(L))
-  g.computeVertexNormals()
+  creaseNormals(g)
   return g
 }
 
@@ -309,17 +362,29 @@ export type WeightFn = (p: Vector3) => readonly (readonly [Bone, number])[]
  * restricted to `from` so a poncho doesn't grab a hand that hangs near it.
  */
 export function nearestWeights(body: Body, from: readonly Sample[], k = 4): WeightFn {
+  // the k nearest, kept sorted by insertion (no allocation or sort per sample): same order as a
+  // stable sort, a newcomer goes after any equal distance
+  const bd = new Float64Array(k)
+  const bs: Sample[] = []
   return (p) => {
-    const best: { d: number; s: Sample }[] = []
+    let n = 0
     for (const s of from) {
       const d = s.p.distanceToSquared(p)
-      if (best.length < k) {
-        best.push({ d, s })
-        best.sort((x, y) => x.d - y.d)
-      } else if (d < (best[k - 1]?.d ?? 0)) {
-        best[k - 1] = { d, s }
-        best.sort((x, y) => x.d - y.d)
+      if (n === k && d >= (bd[k - 1] ?? 0)) {
+        continue
       }
+      let i = n < k ? n++ : k - 1
+      while (i > 0 && (bd[i - 1] ?? 0) > d) {
+        bd[i] = bd[i - 1] ?? 0
+        bs[i] = bs[i - 1] as Sample
+        i--
+      }
+      bd[i] = d
+      bs[i] = s
+    }
+    const best: { d: number; s: Sample }[] = []
+    for (let i = 0; i < n; i++) {
+      best.push({ d: bd[i] ?? 0, s: bs[i] as Sample })
     }
     const acc = new Map<number, number>()
     for (const { d, s } of best) {

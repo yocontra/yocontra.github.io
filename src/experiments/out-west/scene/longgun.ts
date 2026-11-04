@@ -10,7 +10,8 @@
  * - his left hand under the fore-end, as far forward as his arm reaches, cupped the way the
  *   aiming clip cups it.
  *
- * Every point on the gun is measured from its geometry (`longAnatomy`), barrel along +X.
+ * Every point on the gun is measured from its geometry (`longAnatomy`), barrel along +X, unless
+ * the gun's builder carries them (`userData.longAnatomy`: the Winchester, the coach gun).
  */
 import { type Bone, type Group, Matrix4, type Object3D, Quaternion, Vector3 } from 'three'
 import { type Body, onBones } from './fit.ts'
@@ -25,6 +26,45 @@ export interface LongAnatomy {
   wrist: Vector3
   /** Under the fore-end, where the support hand cups it. */
   fore: Vector3
+  /** The rear sight's notch and the front sight's top: the sight line (when the builder knows). */
+  rear?: Vector3
+  front?: Vector3
+  /** A lever gun: the middle of the lever's hand loop, and its pivot (for a lever throw). */
+  lever?: Vector3
+  leverPivot?: Vector3
+  /** A break-open gun: the hinge pin its barrels drop on. */
+  hinge?: Vector3
+}
+
+/** The landmarks a gun's builder carried on it, in the gun's frame (null: measure them). */
+function carried(gun: Object3D): LongAnatomy | null {
+  let src: Object3D | null = null
+  gun.traverse((n) => {
+    if (!src && n.userData.longAnatomy) {
+      src = n
+    }
+  })
+  const o = src as Object3D | null
+  if (!o) {
+    return null
+  }
+  const a = o.userData.longAnatomy as LongAnatomy
+  gun.updateMatrixWorld(true)
+  const to = gun.matrixWorld.clone().invert().multiply(o.matrixWorld)
+  const map = (v: Vector3 | undefined) => v?.clone().applyMatrix4(to)
+  const out: LongAnatomy = {
+    muzzle: a.muzzle.clone().applyMatrix4(to),
+    butt: a.butt.clone().applyMatrix4(to),
+    wrist: a.wrist.clone().applyMatrix4(to),
+    fore: a.fore.clone().applyMatrix4(to),
+  }
+  for (const k of ['rear', 'front', 'lever', 'leverPivot', 'hinge'] as const) {
+    const v = map(a[k])
+    if (v) {
+      out[k] = v
+    }
+  }
+  return out
 }
 
 /**
@@ -33,6 +73,10 @@ export interface LongAnatomy {
  * section first slims to the barrel's), under it.
  */
 export function longAnatomy(gun: Object3D): LongAnatomy {
+  const known = carried(gun)
+  if (known) {
+    return known
+  }
   const pts = gunPointsOf(gun)
   let x0 = 1e9
   let x1 = -1e9

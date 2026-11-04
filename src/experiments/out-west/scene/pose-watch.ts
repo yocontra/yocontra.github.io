@@ -2,9 +2,10 @@
  * Dev-only T-pose watchdog. Every frame it checks each live actor: if he is drawn (in a scene,
  * every ancestor visible, his mesh visible) but no clip poses him, he stands in his bind pose (a
  * T-pose). It warns once per episode, and counts episodes on `globalThis.__owTPose` for
- * Playwright. A no-op outside `import.meta.env.DEV`.
+ * Playwright. A no-op outside dev and perf-harness builds (`PROBE`).
  */
 import type { Object3D } from 'three'
+import { PROBE } from './anim-probe.ts'
 
 export interface Posed {
   readonly root: Object3D
@@ -55,9 +56,9 @@ function check(): void {
   requestAnimationFrame(check)
 }
 
-/** Watch an actor (dev builds only; a no-op in production). */
+/** Watch an actor (dev and perf-harness builds only; a no-op in production). */
 export function watchPose(a: Posed): void {
-  if (!import.meta.env.DEV) {
+  if (!PROBE) {
     return
   }
   watched.add(new WeakRef(a))

@@ -4,8 +4,8 @@
  * for prediction of its own movement (`move.ts`) only.
  */
 
-import { NONE, WEAPON_REVOLVER } from '../../contract/town.ts'
-import { canFire, fire, updateWeapon } from './combat.ts'
+import { BTN_AIM, BTN_CROUCH, NONE, WEAPON_REVOLVER } from '../../contract/town.ts'
+import { canFire, fire, trigger, updateWeapon } from './combat.ts'
 import {
   HOLSTER_TICKS,
   LINGER_TICKS,
@@ -28,7 +28,7 @@ import {
   updateBags,
   updateStrongbox,
 } from './money.ts'
-import { inIframes, stepMove } from './move.ts'
+import { inIframes, stepMove, stopMoves } from './move.ts'
 import {
   clearPickups,
   firePickupWeapon,
@@ -108,10 +108,12 @@ export function spawnPlayer(w: World, p: Player): void {
   p.protectUntil = w.tick + SPAWN_PROTECT_TICKS
   p.ammo = REVOLVER_ROUNDS
   p.reloadTicks = 0
-  p.rollTicks = 0
-  p.jumpTicks = 0
+  stopMoves(p)
   p.jumpCooldown = 0
-  p.vaultStep = 0
+  p.slideCooldown = 0
+  p.sprintLock = 0
+  p.bloom = 0
+  p.fireQueued = false
   p.fireCooldownMs = 0
   p.lastFireTick = w.tick - HOLSTER_TICKS
   p.deadEyeStart = -1
@@ -198,7 +200,7 @@ function act(w: World, p: Player, f: InputFrame, aliveAtStart: boolean): void {
     return
   }
   updateWeapon(w, p, f.buttons)
-  if (canFire(p, f.buttons, aliveAtStart)) {
+  if (canFire(p, trigger(p, f.buttons, aliveAtStart), aliveAtStart)) {
     if (p.weapon === WEAPON_REVOLVER) {
       fire(w, p, f.aim, f.viewTime)
     } else {
@@ -229,6 +231,9 @@ export function step(w: World, frames: readonly (InputFrame | null | undefined)[
     if (p.lingerUntil < 0) {
       p.aim = f.aim
     }
+    p.pitch = f.pitch ?? 0
+    p.crouched = p.alive && (f.buttons & BTN_CROUCH) !== 0
+    p.ads = p.alive && (f.buttons & BTN_AIM) !== 0
     p.moving = stepMove(w.grid, p, {
       moveX: f.moveX,
       moveZ: f.moveZ,

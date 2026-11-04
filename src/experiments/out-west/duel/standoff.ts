@@ -14,7 +14,7 @@ import type { StandoffSpec } from './clock.ts'
 import { playCue } from './cues.ts'
 import { enemyFires } from './defeat.ts'
 import type { Director } from './director.ts'
-import { drawOnCall, drawSecs, REMOTE_DRAW_S } from './draws.ts'
+import { drawOnCall, drawSecs, REMOTE_DRAW_S, standoffNerves } from './draws.ts'
 import { callShot, clockInsert, otsShot, standoffShot } from './framing.ts'
 import { dueShot, planShots, shotsBefore } from './judge.ts'
 import { killEnemyAnim, killRifleman, playerFireFx, win } from './outcome.ts'
@@ -123,6 +123,7 @@ export function enterWait(d: Director, fromPause: boolean): void {
   c.audio.heartbeat(FEEL.heartStartBpm)
   duckForStandoff(d, fromPause ? 0.1 : 0.5)
   ambience(d, AMB.wait, 0.6)
+  standoffNerves(d.player, d.enemy)
   if (d.enemy) {
     d.enemy.shake = o.gimmick === 'shaky' ? 1 : 0
     if (o.gimmick === 'drunk') {
@@ -204,6 +205,7 @@ export function enterBossClock(d: Director): void {
   ambience(d, AMB.bossClock, 0.6)
   d.player.root.rotation.y = 0
   d.enemy?.root.rotation.set(0, Math.PI, 0)
+  standoffNerves(d.player, d.enemy)
   d.duelId = d.clock.standoff(standoffSpec(d))
   d.standoffSent = true
   otsShot(d, true)
@@ -294,6 +296,19 @@ function enemyDrawSecs(d: Director, now: number): number {
   return d.hooks ? REMOTE_DRAW_S : drawSecs(d.outlaw.draw)
 }
 
+/** DRAW! is the bell's caption; a line under it only says what DRAW! can't (a scream). */
+function callCaption(d: Director): void {
+  const { bell, text } = d.callPresentation
+  if (!bell) {
+    return
+  }
+  if (d.callIsScream) {
+    d.c.hud.fake(text ? '[he screams]' : '[he screams · the bell tolls]', FEEL.callCaptionMs)
+  } else if (!text) {
+    d.c.hud.fake('[the bell tolls]', FEEL.callCaptionMs)
+  }
+}
+
 /** The bell. Both men turn on it, in the same frame; nobody turns early. */
 export function onCall(d: Director, duel: number): void {
   if (duel !== d.duelId || (d.phase !== 'wait' && d.phase !== 'bossClock')) {
@@ -323,9 +338,7 @@ export function onCall(d: Director, duel: number): void {
   if (text) {
     c.hud.call('DRAW!', FEEL.callHoldMs)
   }
-  if (text && bell) {
-    c.hud.fake(d.callIsScream ? '[HE SCREAMS] [BELL TOLLS]' : '[BELL TOLLS]', FEEL.callCaptionMs)
-  }
+  callCaption(d)
   c.hud.letterbox(false)
   c.audio.heartbeat(0)
   if (!d.reduced && text) {
@@ -340,7 +353,14 @@ export function onCall(d: Director, duel: number): void {
   if (d.backsTurned && d.outlaw.gimmick === 'shaky' && d.enemy) {
     const hat = d.enemy.popHat()
     if (hat) {
-      c.physics.add(hat, V(0.3, 1.4, -0.4), V(2, 1, 3), { floor: 0.002 })
+      // tossed up, off to his side and back away from you, spinning, so it reads as a hat
+      // (falling straight past his belt, the edge-on brim read as a ring at the call)
+      const p = d.player.root.position
+      const e = d.enemy.root.position
+      const away = V(e.x - p.x, 0, e.z - p.z).normalize()
+      const side = V(-away.z, 0, away.x)
+      const vel = V(0, 2.4, 0).addScaledVector(side, 1.3).addScaledVector(away, 1.1)
+      c.physics.add(hat, vel, V(7, 2, 9), { floor: 0.002 })
     }
   }
   callShot(d)

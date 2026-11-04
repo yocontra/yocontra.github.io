@@ -29,7 +29,7 @@ export class MatchIntro {
     this.root.setAttribute('role', 'dialog')
     this.root.setAttribute('aria-label', `Bounty Hunt against ${them.name}`)
     swallow(this.root)
-    const label = them.kind === 'human' ? 'Bounty Hunt' : 'Ghost duel · no live opponent'
+    const label = them.kind === 'human' ? 'Bounty Hunt' : 'Ghost duel'
     el('div', `ow-match-mode${them.kind === 'human' ? '' : ' ghost'}`, this.root, label)
     const row = el('div', 'ow-match-posters', this.root)
     row.append(posterEl(you, 'you'))
@@ -39,13 +39,12 @@ export class MatchIntro {
       'div',
       'ow-match-status',
       this.root,
-      this.ai
-        ? 'No READY needed here: you walk out when the posters are up.'
-        : 'Sizing each other up…',
+      // against a ghost nobody needs telling there's no READY: the button just isn't there
+      this.ai ? '' : 'Get ready…',
     )
     this.status.setAttribute('aria-live', 'polite')
     const btns = el('div', 'ow-hub-row', this.root)
-    button(btns, 'Flee', h.flee)
+    button(btns, 'Leave', h.flee)
     this.readyBtn = button(
       btns,
       'Ready',
@@ -53,7 +52,7 @@ export class MatchIntro {
         if (!this.sent) {
           this.sent = true
           this.readyBtn.disabled = true
-          this.readyBtn.textContent = 'Cocked'
+          this.readyBtn.textContent = 'Ready ✓'
           h.ready()
         }
       },
@@ -72,7 +71,7 @@ export class MatchIntro {
         this.sent = true
         this.onReady()
       }
-      this.status.textContent = 'Cocked. Walk out when you’re ready.'
+      this.status.textContent = 'Starting…'
       return
     }
     if (!this.sent) {
@@ -92,7 +91,7 @@ export class MatchIntro {
     const tick = (): void => {
       const left = Math.max(0, Math.ceil((deadline - (Date.now() + offset)) / 1000))
       if (!this.sent) {
-        this.status.textContent = `Cock your gun: ${left}s or you dodge`
+        this.status.textContent = `Press Ready: ${left}s left`
       }
     }
     tick()

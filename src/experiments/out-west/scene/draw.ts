@@ -111,6 +111,11 @@ export class DrawLayer {
     return this.mode !== 'off'
   }
 
+  /** What the layer is doing (the dev probe reads it). */
+  get state(): Mode {
+    return this.mode
+  }
+
   /** Has the gun(s) out of the leather. */
   get drawn(): boolean {
     return this.mode === 'draw' && this.u >= U_GRIP
@@ -201,6 +206,40 @@ export class DrawLayer {
       s.offP.set(0, 0, 0)
       s.offQ.identity()
     }
+  }
+
+  /**
+   * Run whole draws through this code once (the turn, both off-hand habits, a hip shot, the spin)
+   * and put him back exactly as he stood, so V8 has compiled it before the bell instead of on the
+   * call's frame (7 ms of first-run JIT at the floor proxy). Call it at a level's setup, between
+   * frames, while he's at ease with his gun(s) holstered; it does nothing mid-draw.
+   */
+  warm(target: () => Vector3 | null): void {
+    if (this.mode !== 'off') {
+      return
+    }
+    const yaw = this.man.root.rotation.y
+    for (const off of ['steady', 'fan'] as const) {
+      this.draw({ secs: 0.3, turn: { from: yaw, to: yaw + 0.5 }, target, off })
+      const holsters = this.states.map((st) => st.h.gun.parent === st.h.holster)
+      for (let i = 0; i < 10; i++) {
+        this.update(0.05)
+        if (i === 2) {
+          this.fire()
+        }
+      }
+      this.spin()
+      this.update(0.1)
+      this.reset()
+      this.undo()
+      for (const [i, st] of this.states.entries()) {
+        if (holsters[i]) {
+          toHolster(st)
+        }
+      }
+    }
+    this.man.root.rotation.y = yaw
+    this.man.root.updateMatrixWorld(true)
   }
 
   private begin(mode: Mode): void {

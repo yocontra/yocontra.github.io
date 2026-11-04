@@ -94,16 +94,16 @@
 .ow-title .ow-orn-rule {
   color: var(--ow-ink);
 }
+/* the key art: a two-ink cut (tools/build-title-art.ts) printed inside a thick-and-thin rule;
+   the SVG slices to fill, so narrower boxes crop in on the tower and the two gunmen */
 .ow-title-art {
   width: min(44rem, 100%);
-  aspect-ratio: 1400 / 608;
-  background: var(--ow-img-woodcut) center / contain no-repeat;
+  aspect-ratio: 1400 / 640;
+  background: var(--ow-img-woodcut) center / cover no-repeat;
+  border: 2px solid var(--ow-ink);
+  outline: 1px solid var(--ow-ink);
+  outline-offset: 3px;
   mix-blend-mode: multiply;
-  opacity: 0.92;
-  -webkit-mask: radial-gradient(closest-side, #000 82%, transparent);
-  mask: radial-gradient(closest-side, #000 82%, transparent);
-  -webkit-mask-size: 100% 100%;
-  mask-size: 100% 100%;
   animation: ow-fade-in 1.2s 0.2s var(--ow-ease-out) both;
 }
 .ow-start {
@@ -144,7 +144,7 @@
   letter-spacing: 0.06em;
   border: 1px solid var(--ow-rule-ink);
   border-radius: var(--ow-radius);
-  padding: 0 0.3em;
+  padding: 0 0.3em var(--ow-lift-sc);
 }
 .ow-title-links {
   position: absolute;
@@ -164,7 +164,7 @@
   display: inline-flex;
   align-items: center;
   min-height: var(--ow-tap);
-  padding: 0 var(--ow-s2);
+  padding: 0 var(--ow-s2) var(--ow-lift-sc);
   color: var(--ow-ink);
   font: inherit;
   font-weight: 600;
@@ -184,7 +184,7 @@
   }
   .ow-title-links a,
   .ow-title-links button {
-    padding: 0 6px;
+    padding-inline: 6px;
     letter-spacing: 0.04em;
   }
 }
@@ -235,8 +235,8 @@
 }
 @media (max-aspect-ratio: 1 / 1) {
   .ow-title-art {
-    width: 118%;
-    max-width: none;
+    width: min(40rem, 100% - 8px);
+    aspect-ratio: 7 / 5;
   }
   .ow-title-sheet::before,
   .ow-title-sheet::after {
@@ -256,7 +256,7 @@
   }
   .ow-title-links a,
   .ow-title-links button {
-    padding: 0 6px;
+    padding-inline: 6px;
     font-size: var(--ow-fs-small);
     letter-spacing: 0.06em;
   }

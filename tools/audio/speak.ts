@@ -4,6 +4,7 @@
  *
  *   APPARISH_CARD_SPEND="<why>" bun --env-file=/Users/contra/Projects/apparish/server/.env \
  *     tools/audio/speak.ts <cast id…|all|player> [--only stall,death] [--take 2] [--force] [--qa]
+ *   bun tools/audio/speak.ts <cast id…|all|player> --rank [--force]
  *   bun tools/audio/speak.ts --pick
  *
  * - Takes land in `raw/voice/<cast>/<key>.t<take>.mp3` (`.wav` from Gemini). An existing take is
@@ -11,16 +12,21 @@
  * - `--qa` has Gemini listen to every take without a review yet and writes `<take>.qa.json`: the
  *   transcript, whether the words match the caption (or, for a grunt, that it has none), the
  *   delivery, artifacts, and a 1–10 fit to the character.
- * - `--pick` chooses each line's best reviewed take and writes `voice-picks.ts` for the build.
+ * - `--rank` plays every take of a line to Gemini back to back (shuffled, blind) and asks a
+ *   demanding voice director to pick one: `<key>.rank.json`. Independent 1–10 scores saturate (a
+ *   listening model calls most takes a 9); a side-by-side choice does not.
+ * - `--pick` chooses each line's take (the ranked winner when its words match, else the best
+ *   reviewed take) and writes `voice-picks.ts` for the build.
  */
 import { existsSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
+import { concat, encode, load, silence } from './dsp.ts'
 import { elevenTts, geminiTts, listen } from './vendors.ts'
 import { CAST, type Cast, castById, effortLines, type Line, linesOf, PLAYER } from './voices.ts'
 
 const RAW = resolve(import.meta.dir, 'raw/voice')
 const PICKS = resolve(import.meta.dir, 'voice-picks.ts')
-const CONCURRENCY = 2
+const CONCURRENCY = Number(process.env.OW_VOICE_JOBS ?? '2')
 
 export interface Review {
   transcript: string
@@ -70,6 +76,73 @@ async function review(c: Cast, l: Line, take: number): Promise<string> {
   return `${j.wordsMatch ? 'match' : 'MISMATCH'} fit ${j.fitsCharacter} "${j.transcript}"`
 }
 
+export interface Rank {
+  /** Take numbers in the order they were played. */
+  order: number[]
+  takes: { n: number; transcript: string; wordsMatch: boolean; performance: number; note: string }[]
+  /** The winning take number (not its position). */
+  best: number
+  why: string
+}
+
+const rankPath = (c: Cast, key: string) => join(RAW, c.id, `${key}.rank.json`)
+
+/** Every take of a line, back to back and shuffled, for Gemini to choose between. */
+async function rank(c: Cast, l: Line, force: boolean): Promise<string> {
+  const out = rankPath(c, l.key)
+  const takes: number[] = []
+  for (let t = 1; t <= 9; t++) {
+    if (existsSync(takePath(c, l.key, t))) {
+      takes.push(t)
+    }
+  }
+  if (takes.length < 2 || (existsSync(out) && !force)) {
+    return 'skip'
+  }
+  const order = takes
+    .map((t) => ({ t, k: Math.random() }))
+    .sort((a, b) => a.k - b.k)
+    .map((x) => x.t)
+  const mix = join(RAW, c.id, `${l.key}.rank.m4a`)
+  encode(
+    concat(
+      ...order.flatMap((t) => [
+        load(takePath(c, l.key, t), 1, 'loudnorm=I=-18:TP=-2'),
+        silence(1.5, 1),
+      ]),
+    ),
+    mix,
+    96,
+  )
+  const want = l.text
+    ? `the line "${l.text}" (an ellipsis is a pause; "*hic*" is a hiccup; "…" alone is a cold breath)`
+    : `a non-verbal sound with no words: ${l.say.replaceAll(/\[|\]/gu, '')}`
+  const ask = () =>
+    listen(
+      mix,
+      `This recording holds ${order.length} alternative takes of ${want}, for a gritty western video game, in order, separated by 1.5 seconds of silence. Character: ${c.voice}. Act as a demanding AAA voice director: the words must be exactly right (a non-verbal take must have no words), then the performance must be the most real, gritty and in character. Reply JSON only: {"takes": [{"n": 1-based position, "transcript": string, "wordsMatch": boolean, "performance": 1-10, "note": string}], "best": 1-based position, "why": string}`,
+    )
+  const r = JSON.parse(await ask().catch(ask)) as Omit<Rank, 'order'>
+  const best = order[r.best - 1] ?? 0
+  const ranked: Rank = {
+    order,
+    takes: r.takes.map((x) => ({ ...x, n: order[x.n - 1] ?? 0 })),
+    best,
+    why: r.why,
+  }
+  writeFileSync(out, `${JSON.stringify(ranked, null, 2)}\n`)
+  const w = ranked.takes.find((x) => x.n === best)
+  return `best t${best} (${w?.wordsMatch ? 'match' : 'MISMATCH'}) "${w?.transcript ?? ''}" ${r.why.slice(0, 120)}`
+}
+
+function readRank(c: Cast, key: string): Rank | null {
+  try {
+    return JSON.parse(readFileSync(rankPath(c, key), 'utf8')) as Rank
+  } catch {
+    return null
+  }
+}
+
 function readReview(f: string): Review | null {
   try {
     return JSON.parse(readFileSync(`${f}.qa.json`, 'utf8')) as Review
@@ -88,6 +161,23 @@ function pick(): void {
     const dir = join(RAW, c.id)
     const files = existsSync(dir) ? readdirSync(dir) : []
     for (const l of linesFor(c)) {
+      const ranked = readRank(c, l.key)
+      if (ranked) {
+        // the director's choice when its words are right, else the best performance that is
+        const ok = ranked.takes
+          .filter((x) => x.wordsMatch && existsSync(takePath(c, l.key, x.n)))
+          .sort(
+            (a, b) =>
+              (b.n === ranked.best ? 1 : 0) - (a.n === ranked.best ? 1 : 0) ||
+              b.performance - a.performance,
+          )
+        const t = ok[0]?.n ?? ranked.best
+        if (!ok[0]) {
+          console.log(`weak: ${c.id}/${l.key} (no take with the right words; shipping t${t})`)
+        }
+        rows.push(`  '${c.id}/${l.key}': ${t},`)
+        continue
+      }
       let best = 0
       let bestScore = -2
       for (let t = 1; t <= 9; t++) {
@@ -123,6 +213,7 @@ async function main(): Promise<void> {
     pick()
     return
   }
+  const ranking = argv.includes('--rank')
   const flag = (n: string) => {
     const i = argv.indexOf(n)
     return i >= 0 ? argv[i + 1] : undefined
@@ -150,7 +241,12 @@ async function main(): Promise<void> {
     for (let j = jobs.shift(); j !== undefined; j = jobs.shift()) {
       const tag = `${j.c.id}/${j.l.key} t${take}`
       try {
-        // biome-ignore lint/performance/noAwaitInLoops: each worker runs its share one at a time on purpose (rate limits)
+        if (ranking) {
+          // biome-ignore lint/performance/noAwaitInLoops: each worker runs its share one at a time on purpose (rate limits)
+          const r = await rank(j.c, j.l, force)
+          console.log(`${j.c.id}/${j.l.key} rank: ${r}`)
+          continue
+        }
         const made = await make(j.c, j.l, take, force)
         const rev = qa ? await review(j.c, j.l, take) : ''
         console.log(`${tag}: ${made}${rev ? ` | ${rev}` : ''}`)

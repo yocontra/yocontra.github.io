@@ -24,8 +24,9 @@ export class QueueSheet {
   private readonly ghostBtn: HTMLButtonElement
   private readonly rankedBtn: HTMLButtonElement
   private readonly leaveBtn: HTMLButtonElement
+  private readonly retryBtn: HTMLButtonElement
   private readonly bar: HTMLElement
-  private readonly search: QueueSearch
+  private search: QueueSearch
   private readonly o: QueueSheetOpts
   private done = false as boolean
 
@@ -37,7 +38,7 @@ export class QueueSheet {
     swallow(this.root)
     const panel = el('div', 'ow-hub-panel ow-sheet-panel', this.root)
     el('h2', 'ow-hub-h', panel).append(icon('bounty'), 'Bounty Hunt')
-    this.line = el('p', 'ow-queue-line', panel, 'Checking you’re no bot…')
+    this.line = el('p', 'ow-queue-line', panel, 'Checking you’re human…')
     this.line.setAttribute('aria-live', 'polite')
     const track = el('div', 'ow-xp ow-queue-track', panel)
     this.bar = el('div', 'ow-xp-fill', track)
@@ -48,7 +49,7 @@ export class QueueSheet {
     this.ghostBtn.hidden = true
     this.rankedBtn = button(
       row,
-      'Ride the ranked gauntlet',
+      'Play ranked',
       () => {
         this.cancel()
         o.rideRanked()
@@ -56,16 +57,35 @@ export class QueueSheet {
       true,
     )
     this.rankedBtn.hidden = true
-    this.search = new QueueSearch({
+    // a dropped line or a failed bot check: search again in place, never back to the saloon first
+    this.retryBtn = button(row, 'Try again', () => this.retry(), true)
+    this.retryBtn.hidden = true
+    this.search = this.newSearch()
+    this.begin().catch(() => undefined)
+  }
+
+  private newSearch(): QueueSearch {
+    return new QueueSearch({
       queued: (m) => {
         this.line.textContent = m.ghostsOnly
-          ? 'Your connection is rough today. Ghosts only.'
-          : 'Looking for a gunslinger…'
+          ? 'Your connection is weak. Ghost duels only.'
+          : 'Finding an opponent…'
       },
       status: (s) => this.status(s),
       matched: (m) => this.matched(m),
       failed: (msg, reason) => this.failed(msg, reason),
     })
+  }
+
+  private retry(): void {
+    this.search.leave()
+    this.done = false
+    this.retryBtn.hidden = true
+    this.rankedBtn.hidden = true
+    this.leaveBtn.textContent = 'Leave queue'
+    this.line.textContent = 'Checking you’re human…'
+    setBar(this.bar, 0)
+    this.search = this.newSearch()
     this.begin().catch(() => undefined)
   }
 
@@ -75,7 +95,7 @@ export class QueueSheet {
       return
     }
     if (!token) {
-      this.failed('The bot check didn’t pass. Try again.')
+      this.failed('Couldn’t check you’re human. Try again.')
       return
     }
     this.line.textContent = 'Joining the queue…'
@@ -85,13 +105,12 @@ export class QueueSheet {
   private status(s: QueueStatus): void {
     const secs = Math.floor(s.waitedMs / 1000)
     this.line.textContent = s.ghostsOnly
-      ? `Finding you a ghost… ${secs}s`
-      : `Looking for a gunslinger… ${secs}s`
-    const rating = s.ratingWindow === null ? 'any draw speed' : `±${s.ratingWindow} ms draw speed`
+      ? `Finding a ghost… ${secs}s`
+      : `Finding an opponent… ${secs}s`
+    // the matchmaker's windows are its business; only company in the queue is worth a line
     const others = Math.max(0, s.waiting - 1)
-    this.detail.textContent = `Within ±${s.levelWindow} levels · ${rating} · ${others} other${
-      others === 1 ? '' : 's'
-    } waiting`
+    this.detail.textContent =
+      others === 0 ? '' : `${others} other${others === 1 ? '' : 's'} waiting`
     setBar(this.bar, s.waitedMs / GHOST_FALLBACK_MS)
     this.ghostBtn.hidden = !s.ghostButton
   }
@@ -102,10 +121,10 @@ export class QueueSheet {
     // a ghost is revealed with its own cold breath; a live gun with the found sting
     uiSound(m.mode === 'ghost' ? 'ghost' : 'queueFound')
     const ghostOf =
-      m.opponent.kind === 'outlaw' ? 'a Town Outlaw' : `the ghost of ${m.opponent.name}`
+      m.opponent.kind === 'outlaw' ? 'a computer opponent' : `the ghost of ${m.opponent.name}`
     this.line.textContent =
       m.mode === 'ghost'
-        ? `Nobody rode in. You’ll duel ${ghostOf}.`
+        ? `No one found. You’ll duel ${ghostOf}.`
         : `${m.opponent.name} answers the call.`
     setTimeout(() => {
       this.root.remove()
@@ -118,11 +137,18 @@ export class QueueSheet {
     this.line.textContent = msg
     this.detail.textContent = ''
     this.ghostBtn.hidden = true
-    this.leaveBtn.textContent = 'Back to the saloon'
+    this.leaveBtn.textContent = 'Back'
     // not a dead end: the licence is three outlaws away
     this.rankedBtn.hidden = reason !== 'unlicensed'
+    this.retryBtn.hidden =
+      reason === 'unlicensed' ||
+      reason === 'budget' ||
+      reason === 'cooldown' ||
+      reason === 'no-profile'
     if (reason === 'unlicensed') {
       this.rankedBtn.focus()
+    } else if (!this.retryBtn.hidden) {
+      this.retryBtn.focus()
     }
   }
 

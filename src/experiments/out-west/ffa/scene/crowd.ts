@@ -4,9 +4,10 @@
 /**
  * Everyone in the Frontier, drawn within the A15 budget (spec §9.3, stream H's measured design):
  *
- * - The nearest `near` players (12 on the floor tier, 16 above; your own player always) are
+ * - The nearest `near` players (8 on the floor tier, 16 above; your own player always) are
  *   GPU-skinned Actors. Yours stays at LOD0; the rest swap to a meshopt LOD1 (`scene/lod.ts`).
- *   Animation runs at 30 Hz within 12 m and 15 Hz beyond. Only the nearest 6 cast real shadows.
+ *   Animation runs at 30 Hz for you, 20 Hz within 12 m and 12 Hz beyond. Only the nearest `casters` (4 on floor,
+ *   6 above) cast real shadows.
  * - Everyone else is a VAT instance of their base body (≤7 bases, one draw each), tinted per
  *   instance with their palette, with hats as one instanced draw per hat type on the baked head
  *   track, and one draw of blob shadows for everyone who isn't casting.
@@ -15,8 +16,6 @@
  * player's actor exists they're drawn as a VAT instance, so nobody ever pops out.
  */
 import {
-  type AnimationAction,
-  AnimationClip,
   type BufferGeometry,
   CanvasTexture,
   type Color,
@@ -36,19 +35,19 @@ import {
 } from 'three'
 import {
   ANIM_AIM,
-  ANIM_CHANNEL,
   ANIM_DEAD,
-  ANIM_DUEL,
   ANIM_HOP,
-  ANIM_RELOAD,
   ANIM_ROLL,
-  ANIM_RUN,
+  ANIM_SLIDE,
   ANIM_VAULT,
   EF_HATLESS,
   EF_HOLSTERED,
   EF_PROTECTED,
   SHOT_RIFLE,
   SHOT_SHOTGUN,
+  STANCE_ADS,
+  STANCE_CROUCH,
+  STANCE_SPRINT,
   WEAPON_REVOLVER,
   WEAPON_RIFLE,
   WEAPON_SHOTGUN,
@@ -59,8 +58,11 @@ import type { Actor, Clip } from '../../scene/actor.ts'
 import { castActor } from '../../scene/cast.ts'
 import { lodGeometry } from '../../scene/lod.ts'
 import type { LongHold } from '../../scene/longgun.ts'
-import { type PropDef, propDef, propObject } from '../../scene/props.ts'
+import { propDef, propObject } from '../../scene/props.ts'
+import { rifleObject } from '../../scene/rifle.ts'
 import { RIFLE_ROUNDS, SHOTGUN_SHELLS } from '../sim/constants.ts'
+import { GunBatch } from './crowd/gun-batch.ts'
+import { holdSkin } from './crowd/skin-hold.ts'
 import {
   baseVat,
   headAt,
@@ -71,10 +73,21 @@ import {
   vatFrame,
 } from './crowd/vat.ts'
 import { shareDepthByKind } from './depth-kinds.ts'
+import type { GestureKind } from './gestures.ts'
+import { Locomotion } from './locomotion.ts'
 import type { PlayerLook } from './looks.ts'
 import { kitMaterial, shotgunMesh } from './shotgun.ts'
 
-const VAT_CLIPS: Clip[] = ['Idle', 'Run', 'Idle_Gun_Pointing', 'Death']
+const VAT_CLIPS: Clip[] = [
+  'Idle',
+  'Walk',
+  'Run',
+  'Idle_Gun_Pointing',
+  'Death',
+  'Sprint',
+  'Crouch_Idle',
+  'Crouch_Walk',
+]
 const NEAR_FAST_M = 12
 const SHADOW_CASTERS = 6
 const LOD1_TRIS = 3000
@@ -82,14 +95,22 @@ const LOD1_TRIS = 3000
 const NEAR_HAT_TRIS = 800
 /** Running speed the Run clip was authored for (m/s). */
 const CLIP_RUN_SPEED = 5.2
-const ROLL_S = 0.35
-/** Vault and hop arcs (the sim's `VAULT_TICKS` and `HOP_TICKS`), s, and their peak heights, m. */
-const VAULT_S = 0.5
-const VAULT_PEAK_M = 0.85
-const HOP_S = 0.4
-const HOP_PEAK_M = 0.3
-/** Forward lean at the top of a vault (rad): knees tucked over the rail. */
-const VAULT_TUCK = 0.45
+/** Walking speed the Walk clip was authored for (m/s), until an actor measures his stride. */
+const CLIP_WALK_SPEED = 1.4
+/**
+ * Gait thresholds on the smoothed ground speed (m/s), with hysteresis so a rider near a boundary
+ * doesn't flicker between clips: idle below `WALK_ON` (back to idle under `WALK_OFF`), walk up to
+ * `RUN_ON` (back from a run under `RUN_OFF`). A full stick runs at 5.5 m/s.
+ */
+const WALK_ON = 0.45
+const WALK_OFF = 0.25
+const RUN_ON = 2.6
+const RUN_OFF = 2.1
+/** How fast the drawn ground speed follows the snapshots' (1/s). */
+const SPEED_EASE = 10
+const GAIT_IDLE = 0
+const GAIT_WALK = 1
+const GAIT_RUN = 2
 /**
  * Built actors kept beyond the skinned cap. A parked actor (off the graph) costs nothing per frame,
  * only its geometry and bones in memory, while re-casting one is a full dress-and-bake plus a GPU
@@ -98,14 +119,14 @@ const VAULT_TUCK = 0.45
 const MAX_ACTORS_EXTRA = 20
 /** An actor whose rider has been out of interest this long is freed even under the cap (s). */
 const PARK_S = 90
+/** Mid-match actor casts are spaced at least this far apart (ms): each is a long task. */
+const CAST_GAP_MS = 1500
 /** Players this many ranks beyond the skinned cap get their actor built ahead of time. */
 const PREBUILD_RING = 4
 /** Characters read 25% bigger than life from the top-down camera (visual only; collision is the sim's). */
 export const READ_SCALE = 1.25
 /** Map weapons: how big they read (the coach gun a touch heavier than life, to read from the sky). */
 const SHOTGUN_HELD_SCALE = 1.15
-const RIFLE_LENGTH = 1.1
-const ARM_BONES = /^(?<bone>Shoulder|UpperArm|LowerArm|Index|Middle|Ring|Pinky|Thumb)\d?R$/u
 
 /** What the crowd needs to know about one player this frame. */
 export interface CrowdPlayer {
@@ -117,6 +138,10 @@ export interface CrowdPlayer {
   vx: number
   vz: number
   anim: number
+  /** `STANCE_*` bits: crouched, on the sights, sprinting. */
+  stance: number
+  /** Aim pitch (rad, up positive), when known (your own rider). */
+  pitch?: number
   flags: number
   self: boolean
   /** `WEAPON_*` in hand, when known for sure (your own, from the self block). */
@@ -134,7 +159,10 @@ interface Member {
   pivot: Group | null
   full: BufferGeometry | null
   lod1: BufferGeometry | null
-  arm: AnimationAction | null
+  /** His animation state machine (scene/locomotion.ts), once his actor exists. */
+  loco: Locomotion | null
+  /** When he last fired (s), so his gun arm stays up a moment. */
+  shotAt: number
   acc: number
   wasNear: boolean
   phase: number
@@ -143,6 +171,10 @@ interface Member {
   lastSeen: number
   /** Distance rank this frame (0 = you); unranked members (out of interest) are Infinity. */
   rank: number
+  /** Ground speed as drawn (m/s): the snapshots' speed, eased. */
+  speed: number
+  /** `GAIT_*`: idle, walk or run, from `speed` with hysteresis (every LOD reads it). */
+  gait: number
   caster: boolean
   recoil: number
   /**
@@ -161,6 +193,8 @@ interface Member {
    * are composed then, not by every frame's scene-graph walk.
    */
   bones: Object3D[]
+  /** Marks his bone textures for a rebuild at the next draw (`crowd/skin-hold.ts`). */
+  skin: (() => void)[]
 }
 
 function blobTexture(): CanvasTexture {
@@ -190,6 +224,7 @@ const hp = new Vector3()
 const pos = new Vector3()
 const one = new Vector3(1, 1, 1)
 const up = new Vector3(0, 1, 0)
+const side = new Vector3(1, 0, 0)
 
 export class Crowd {
   readonly root = new Group()
@@ -204,9 +239,12 @@ export class Crowd {
   readonly ring: Mesh
   private readonly gun: Group | null
   private readonly kit: Material
-  private readonly rifleDef: PropDef | null
-  /** Skinned cap (12 floor, 16 medium/high). */
+  /** Every skinned rider's revolver as one instanced draw per part. */
+  private readonly gunBatch: GunBatch
+  /** Skinned cap (8 floor, 6 legacy, 16 medium/high). */
   near: number
+  /** Skinned riders casting real shadows, nearest first (the rest get a blob). */
+  casters = SHADOW_CASTERS
   /**
    * How big characters read: 1.25 from the top-down camera, life size (1) at eye level, where a
    * bigger-than-life rider would tower over the doors. Set by the game's view mode.
@@ -215,6 +253,8 @@ export class Crowd {
   /** First person (or a lens pulled into your head): your own body isn't drawn. */
   hideSelf = false
   private readonly order: CrowdPlayer[] = []
+  /** Ids drawn this frame (reused). */
+  private readonly seen = new Set<number>()
   stats = { near: 0, far: 0, actors: 0, casters: 0, builds: 0 }
   /** Actors cast so far (each is a full dress-and-bake; churn here is the crowd's main CPU cost). */
   private builds = 0
@@ -255,13 +295,21 @@ export class Crowd {
         o.material = this.kit
       }
     })
-    this.rifleDef = propDef(assets.props, 'rifle', RIFLE_LENGTH)
+    this.gunBatch = new GunBatch(this.root, 40)
+    // the riders' revolvers are copied into their instances once the frame's matrices are current
+    const before = scene.onBeforeRender
+    scene.onBeforeRender = (...args) => {
+      before.apply(scene, args)
+      this.gunBatch.sync()
+    }
   }
 
   /** He took a map weapon (`EV_PICKUP_TAKEN` of a shotgun or rifle spot). */
   armed(id: number, weapon: number): void {
     const m = this.members.get(id)
     if (m) {
+      // a new gun comes up from the hip
+      m.loco?.gesture('draw')
       m.weapon = weapon
       m.rounds = weapon === WEAPON_SHOTGUN ? SHOTGUN_SHELLS : RIFLE_ROUNDS
     }
@@ -273,6 +321,8 @@ export class Crowd {
     if (!m) {
       return
     }
+    m.shotAt = performance.now() / 1000
+    m.loco?.fired()
     let w = WEAPON_REVOLVER
     if (flags & SHOT_SHOTGUN) {
       w = WEAPON_SHOTGUN
@@ -289,6 +339,25 @@ export class Crowd {
         m.weapon = WEAPON_REVOLVER
       }
     }
+  }
+
+  /** A one-shot gesture for a rider (the throw, a pickup, the call-out, the draw, the bank). */
+  gesture(id: number, kind: GestureKind): void {
+    this.members.get(id)?.loco?.gesture(kind)
+  }
+
+  /** He took a hit from (`fx`, `fz`) (null: unknown): a flinch and a hit clip. */
+  hurt(id: number, at: { x: number; z: number }, from: { x: number; z: number } | null): void {
+    const m = this.members.get(id)
+    if (m?.loco) {
+      m.loco.hit(from ? at.x - from.x : 0, from ? at.z - from.z : 0)
+    }
+  }
+
+  /** He was killed from (`fx`, `fz`) (null: unknown): his fall, turned away from the shot. */
+  killed(id: number, at: { x: number; z: number }, from: { x: number; z: number } | null): void {
+    const m = this.members.get(id)
+    m?.loco?.died(Math.floor(Math.random() * 1000), from, at)
   }
 
   /** Back to the revolver (died, respawned): map weapons are lost with the life. */
@@ -317,7 +386,8 @@ export class Crowd {
       pivot: null,
       full: null,
       lod1: null,
-      arm: null,
+      loco: null,
+      shotAt: -9,
       acc: 0,
       wasNear: false,
       phase: Math.random() * 4,
@@ -325,6 +395,8 @@ export class Crowd {
       animSince: 0,
       lastSeen: 0,
       rank: Number.POSITIVE_INFINITY,
+      speed: 0,
+      gait: GAIT_IDLE,
       caster: false,
       recoil: 0,
       weapon: have?.weapon ?? WEAPON_REVOLVER,
@@ -333,6 +405,7 @@ export class Crowd {
       rifle: null,
       held: null,
       bones: [],
+      skin: [],
     })
     this.assets.body(look.look.base).catch(() => undefined)
     this.ensureVat(look.look.base)
@@ -375,9 +448,11 @@ export class Crowd {
     m.holder?.removeFromParent()
     m.actor = null
     m.bones = []
+    m.skin = []
     m.holder = null
     m.pivot = null
-    m.arm = null
+    m.loco?.dispose()
+    m.loco = null
     m.full = null
     m.lod1 = null
     m.shotgun = null
@@ -400,11 +475,48 @@ export class Crowd {
     return false
   }
 
-  /** One actor build at a time, in idle time (with a deadline so it can't starve). */
+  /**
+   * Cast actors before the match, on the loading screen, so none lands on a gameplay frame: your
+   * own first, then the nearest (`distOf`), up to `limit` actors in all. One cast per
+   * macrotask, so the loading bar keeps moving. Returns how many it cast.
+   */
+  async precast(
+    limit: number,
+    self: number,
+    distOf: (id: number) => number,
+    onEach?: (n: number) => void,
+  ): Promise<number> {
+    let n = 0
+    const key = (m: Member) => (m.id === self ? -1 : distOf(m.id))
+    const order = [...this.members.values()].sort((a, b) => key(a) - key(b))
+    for (const m of order) {
+      if (this.actorCount() >= limit) {
+        break
+      }
+      if (m.actor) {
+        continue
+      }
+      // biome-ignore lint/performance/noAwaitInLoops: one cast per macrotask, on purpose
+      await this.assets.body(m.look.look.base).catch(() => undefined)
+      this.build(m, m.id === self)
+      // parked off the graph until he's drawn
+      m.holder?.removeFromParent()
+      n++
+      onEach?.(n)
+      await new Promise((r) => setTimeout(r, 0))
+    }
+    return n
+  }
+
+  /** Mid-match casts: not before this time (ms): at most one every `CAST_GAP_MS`. */
+  private castOk = 0
+
+  /** One actor build at a time, in idle time, spaced out (a cast is a long task). */
   private scheduleBuild(m: Member): void {
-    if (this.pending) {
+    if (this.pending || performance.now() < this.castOk) {
       return
     }
+    this.castOk = performance.now() + CAST_GAP_MS
     this.pending = m
     const run = () => {
       const target = this.pending
@@ -414,7 +526,7 @@ export class Crowd {
       }
     }
     if (typeof requestIdleCallback === 'function') {
-      requestIdleCallback(run, { timeout: 250 })
+      requestIdleCallback(run, { timeout: 1500 })
     } else {
       setTimeout(run, 0)
     }
@@ -446,9 +558,11 @@ export class Crowd {
     shareDepthByKind(holder)
     this.root.add(holder)
     actor.draw()
+    if (actor.gun) {
+      this.gunBatch.adopt(actor.gun)
+    }
     m.shotgun = this.longGun(actor, 'shotgun')
     m.rifle = this.longGun(actor, 'rifle')
-    actor.play('Idle_Gun', 0)
     m.actor = actor
     m.bones = []
     actor.root.traverse((o) => {
@@ -458,9 +572,10 @@ export class Crowd {
         m.bones.push(o)
       }
     })
+    m.skin = actor.meshes.map(holdSkin)
     m.holder = holder
     m.pivot = pivot
-    m.arm = this.armLayer(actor)
+    m.loco = new Locomotion(actor, this.assets.player.animations, look.look.base)
     const mesh = actor.meshes[0]
     m.full = mesh?.geometry ?? null
     if (!self) {
@@ -500,23 +615,18 @@ export class Crowd {
 
   /**
    * One map weapon fitted to him (butt in his shoulder, both hands on it), hidden until he holds
-   * it. One mesh sharing the template's geometry and material (the shotgun is one draw in the kit
-   * material; the rifle its prop's).
+   * it. One mesh sharing the template's geometry and the long guns' one material
+   * (scene/gunsmith.ts): one draw each.
    */
   private longGun(actor: Actor, kind: 'shotgun' | 'rifle'): LongGun | null {
     const obj = new Group()
     if (kind === 'shotgun') {
-      const gun = shotgunMesh(this.kit)
+      const gun = shotgunMesh()
       gun.scale.set(SHOTGUN_HELD_SCALE, SHOTGUN_HELD_SCALE * 1.2, SHOTGUN_HELD_SCALE * 1.2)
       obj.add(gun)
     } else {
-      if (!this.rifleDef) {
-        return null
-      }
-      // the rifle prop lies along Z, muzzle at +Z; turn it down +X
-      const inner = propObject(this.rifleDef)
-      inner.rotation.y = Math.PI / 2
-      obj.add(inner)
+      // the Winchester, its far level of detail past a few metres
+      obj.add(rifleObject({ lod: true }))
     }
     return actor.addLong(obj)
   }
@@ -541,20 +651,6 @@ export class Crowd {
     actor.holdLong(long)
   }
 
-  /** The gun arm of Idle_Gun_Pointing as its own action, layered over Run while armed. */
-  private armLayer(actor: Actor): AnimationAction | null {
-    const src = this.assets.player.animations.find((c) => c.name.endsWith('Idle_Gun_Pointing'))
-    if (!src) {
-      return null
-    }
-    const tracks = src.tracks.filter((t) => ARM_BONES.test(t.name.split('.')[0] ?? ''))
-    const clip = new AnimationClip('ArmAim', src.duration, tracks)
-    const a = actor.mixer.clipAction(clip)
-    a.setEffectiveWeight(0)
-    a.play()
-    return a
-  }
-
   private setCaster(m: Member, on: boolean): void {
     if (m.caster === on || !m.actor) {
       return
@@ -570,6 +666,7 @@ export class Crowd {
     const m = this.members.get(id)
     if (m?.actor && m.holder?.parent && m.holder.visible) {
       m.recoil = 1
+      m.loco?.fired()
       m.actor.root.updateWorldMatrix(true, true)
       const long = m.held
       if (long) {
@@ -596,13 +693,17 @@ export class Crowd {
   update(players: readonly CrowdPlayer[], cx: number, cz: number, dt: number, nowS: number): void {
     const order = this.order
     order.length = 0
-    order.push(...players)
-    const d2 = (p: CrowdPlayer) => (p.self ? -1 : (p.x - cx) ** 2 + (p.z - cz) ** 2)
-    order.sort((a, b) => d2(a) - d2(b))
+    for (const p of players) {
+      order.push(p)
+    }
+    rankX = cx
+    rankZ = cz
+    order.sort(byDistance)
     for (const v of this.vats.values()) {
       v.mesh.count = 0
     }
     this.hats.reset()
+    this.gunBatch.reset()
     this.blobs.count = 0
     VAT_TIME.value = nowS
     const s = { near: 0, far: 0, actors: 0, casters: 0, builds: this.builds }
@@ -610,7 +711,8 @@ export class Crowd {
     // Free slots before building: the furthest actors go first, so a packed crowd keeps its
     // nearest riders cast instead of dropping and re-baking them every few frames.
     this.evict(nowS)
-    const seen = new Set<number>()
+    const seen = this.seen
+    seen.clear()
     let built = false
     for (const [rank, p] of order.entries()) {
       const m = this.members.get(p.id)
@@ -618,6 +720,7 @@ export class Crowd {
         continue
       }
       seen.add(p.id)
+      this.stride(m, p, dt, nowS - m.lastSeen > 0.5)
       m.lastSeen = nowS
       if (p.anim !== m.anim) {
         m.anim = p.anim
@@ -691,89 +794,88 @@ export class Crowd {
     if (mesh && geo && mesh.geometry !== geo) {
       mesh.geometry = geo
     }
-    const caster = rank < SHADOW_CASTERS
+    const caster = rank < this.casters
     this.setCaster(m, caster)
     if (caster) {
       s.casters++
     } else {
       this.blob(p.x, p.z)
     }
-    if (actor.hat) {
-      actor.hat.visible = (p.flags & EF_HATLESS) === 0
-    }
+    this.rigidParts(actor, holder, p)
     this.animate(m, actor, p, nowS)
-    bodyPose({ holder, pivot }, p.anim, nowS - m.animSince)
+    m.loco?.body(holder, pivot)
+    if (!holder.visible) {
+      // your own body in first person: nothing shows it, so it doesn't animate (it picks up
+      // where it is when the lens pulls back out)
+      m.wasNear = false
+      return
+    }
     const dist = Math.hypot(p.x - cx, p.z - cz)
-    const hz = p.self || dist < NEAR_FAST_M ? 30 : 15
+    // your own rider at 30 Hz; others at 20 Hz within 12 m and 12 Hz beyond (each tick is a full
+    // clip evaluation per playing action: the crowd's biggest CPU and garbage source)
+    let hz = dist < NEAR_FAST_M ? 20 : 12
+    if (p.self) {
+      hz = 30
+    }
     m.acc += dt
-    if (m.acc >= 1 / hz || !m.wasNear) {
+    const first = !m.wasNear
+    if (m.acc >= 1 / hz || first) {
       // the bones compose themselves while the clip, stance and long-gun IK pose them (the IK
       // reads world matrices mid-solve), then freeze until the next tick
       setAuto(m.bones, true)
       actor.longKick = m.recoil
+      m.loco?.pre(m.acc)
       actor.update(m.acc)
-      m.acc = 0
+      // stagger the riders' mixer ticks across frames (by id), so they don't all land on one
+      m.acc = first ? -(m.id % 4) / 60 : 0
       this.kick(m, actor)
       for (const b of m.bones) {
         b.updateMatrix()
       }
       setAuto(m.bones, false)
+      for (const touch of m.skin) {
+        touch()
+      }
     }
     m.recoil = Math.max(0, m.recoil - dt * 8)
     m.wasNear = true
   }
 
+  /** His hat (unless it was shot off) and his revolver (into the crowd's gun batch). */
+  private rigidParts(actor: Actor, holder: Object3D, p: CrowdPlayer): void {
+    if (actor.hat) {
+      actor.hat.visible = (p.flags & EF_HATLESS) === 0
+    }
+    if (holder.visible && actor.gun) {
+      this.gunBatch.push(actor.gun)
+    }
+  }
+
   private animate(m: Member, actor: Actor, p: CrowdPlayer, nowS: number): void {
-    this.arm(m, actor, p.weapon ?? m.weapon, (p.flags & EF_HOLSTERED) !== 0)
+    // on the sights the gun is out, whatever the holster timer says (it's the sim's Dead-Eye clock)
+    const drawn = (p.stance & STANCE_ADS) !== 0
+    this.arm(m, actor, p.weapon ?? m.weapon, (p.flags & EF_HOLSTERED) !== 0 && !drawn)
     // a long gun can't be holstered: he carries it at the ready
-    const holstered = (p.flags & EF_HOLSTERED) !== 0 && !m.held
-    const speed = Math.hypot(p.vx, p.vz)
-    let clip: Clip = holstered ? 'Idle' : 'Idle_Gun'
-    let once = false
-    let armW = 0
-    switch (p.anim) {
-      case ANIM_DEAD:
-        clip = 'Death'
-        once = true
-        break
-      case ANIM_RUN:
-      case ANIM_ROLL:
-      case ANIM_VAULT:
-      case ANIM_HOP:
-        clip = speed > 0.3 || p.anim === ANIM_ROLL ? 'Run' : clip
-        armW = holstered ? 0 : 6
-        break
-      case ANIM_AIM:
-        clip = 'Idle_Gun_Pointing'
-        break
-      case ANIM_RELOAD:
-        clip = 'Idle_Gun'
-        break
-      case ANIM_CHANNEL:
-        clip = 'Idle_Neutral'
-        break
-      case ANIM_DUEL:
-        clip = 'Idle'
-        break
-      default:
-        armW = holstered || speed < 0.3 ? 0 : 6
-        clip = speed > 0.3 ? 'Run' : clip
-        break
+    const holstered = (p.flags & EF_HOLSTERED) !== 0 && !m.held && !drawn
+    const loco = m.loco
+    if (!loco) {
+      return
     }
-    const a = actor.play(
-      clip,
-      m.wasNear ? 0.15 : 0,
-      once && m.anim === ANIM_DEAD && nowS - m.animSince < 0.05,
-    )
-    if (clip === 'Run' && a) {
-      // Backpedal when running away from the aim; match the stride to the speed.
-      const dot = speed > 0.01 ? (p.vx * Math.cos(p.aim) + p.vz * Math.sin(p.aim)) / speed : 1
-      a.timeScale = (dot < -0.3 ? -1 : 1) * Math.max(0.6, Math.min(1.3, speed / CLIP_RUN_SPEED))
-    }
-    if (m.arm) {
-      m.arm.setEffectiveWeight(clip === 'Run' ? armW : 0)
-    }
-    this.braceLong(m, actor, clip === 'Run')
+    // the snapshots' velocity, at the eased speed (it steps at each snapshot)
+    const raw = Math.hypot(p.vx, p.vz)
+    const k = raw > 0.01 ? m.speed / raw : 0
+    loco.set({
+      anim: p.anim,
+      stance: p.stance,
+      vx: p.vx * k,
+      vz: p.vz * k,
+      aim: p.aim,
+      pitch: p.pitch ?? 0,
+      holstered,
+      long: m.held !== null,
+      shooting: nowS - m.shotAt < 1.2,
+      detail: p.self || m.rank < 6,
+    })
   }
 
   /** The revolver kicks his forearm (a long gun kicks at the shoulder: `longKick`). */
@@ -783,30 +885,28 @@ export class Crowd {
     }
   }
 
-  /** A long gun: at the low ready on the run, shouldered when he stops, aims or fires. */
-  private braceLong(m: Member, actor: Actor, running: boolean): void {
-    const carry = running && m.recoil <= 0 ? 1 : 0
-    actor.longCarry += (carry - actor.longCarry) * 0.2
-  }
-
   private drawFar(m: Member, p: CrowdPlayer, nowS: number): void {
     const v = this.vats.get(m.look.look.base)
     if (!v) {
       return
     }
-    const speed = Math.hypot(p.vx, p.vz)
-    let name: Clip = speed > 0.3 ? 'Run' : 'Idle'
-    if (p.anim === ANIM_DEAD) {
-      name = 'Death'
-    } else if (p.anim === ANIM_AIM || (speed <= 0.3 && !(p.flags & EF_HOLSTERED))) {
-      name = 'Idle_Gun_Pointing'
+    const speed = m.speed
+    let name: Clip = 'Idle'
+    if (m.gait === GAIT_RUN || p.anim === ANIM_ROLL) {
+      name = 'Run'
+    } else if (m.gait === GAIT_WALK) {
+      name = v.clip('Walk') ? 'Walk' : 'Run'
     }
+    name = farStance(p, name, (c) => v.clip(c) !== null)
     const clip = v.clip(name) ?? v.clip('Idle')
     if (!clip) {
       return
     }
     let phase = m.phase
-    let rate = name === 'Run' ? Math.max(0.6, speed / CLIP_RUN_SPEED) : 1
+    let rate = name === 'Run' || name === 'Walk' ? gaitRate(name, speed, CLIP_WALK_SPEED) : 1
+    if (name === 'Sprint' || name === 'Crouch_Walk') {
+      rate = Math.max(0.6, Math.min(1.6, speed / (name === 'Sprint' ? 7.2 : 1.6)))
+    }
     if (name === 'Death') {
       // Play once and hold the last frame: drive the frame from the death time.
       const f = Math.min(clip.frames - 1, (nowS - m.animSince) * 15)
@@ -816,7 +916,12 @@ export class Crowd {
     const i = v.mesh.count++
     v.set(i, clip, { phase, speed: rate }, m.look)
     q.setFromAxisAngle(up, facing(p.aim))
-    pos.set(p.x, 0, p.z)
+    pos.set(p.x, farLift(p.anim, nowS - m.animSince), p.z)
+    if (p.anim === ANIM_SLIDE) {
+      // the crouch, leaning back feet first
+      q.multiply(hq.setFromAxisAngle(side, -0.7))
+      pos.y -= 0.2
+    }
     m4.compose(pos, q, one.setScalar(this.readScale))
     one.set(1, 1, 1)
     v.mesh.setMatrixAt(i, m4)
@@ -839,6 +944,17 @@ export class Crowd {
     }
     m4.makeTranslation(x, 0.035, z)
     this.blobs.setMatrixAt(this.blobs.count++, m4)
+  }
+
+  /**
+   * His drawn ground speed and gait this frame: the snapshots' speed eased (interpolated speeds
+   * step at each snapshot), then idle / walk / run with hysteresis. `fresh` (just came into
+   * interest) takes the speed as is.
+   */
+  private stride(m: Member, p: CrowdPlayer, dt: number, fresh: boolean): void {
+    const raw = Math.hypot(p.vx, p.vz)
+    m.speed = fresh ? raw : m.speed + (raw - m.speed) * (1 - Math.exp(-dt * SPEED_EASE))
+    m.gait = nextGait(fresh ? -1 : m.gait, m.speed)
   }
 
   /** Each member's distance rank this frame (`order` is sorted nearest first). */
@@ -904,10 +1020,71 @@ export class Crowd {
   }
 }
 
+/** The ranking centre for `byDistance` (module state: the sort runs with no closure per frame). */
+let rankX = 0
+let rankZ = 0
+const d2 = (p: CrowdPlayer): number => (p.self ? -1 : (p.x - rankX) ** 2 + (p.z - rankZ) ** 2)
+const byDistance = (a: CrowdPlayer, b: CrowdPlayer): number => d2(a) - d2(b)
+
 function setAuto(bones: readonly Object3D[], on: boolean): void {
   for (const b of bones) {
     b.matrixAutoUpdate = on
   }
+}
+
+/** Idle, walk or run at this ground speed, from the last gait (-1: none yet), with hysteresis. */
+function nextGait(gait: number, v: number): number {
+  if (gait === GAIT_IDLE && v < WALK_ON) {
+    return GAIT_IDLE
+  }
+  if (gait !== GAIT_IDLE && v < WALK_OFF) {
+    return GAIT_IDLE
+  }
+  if (gait < 0 && v < WALK_ON) {
+    return GAIT_IDLE
+  }
+  if (gait === GAIT_RUN) {
+    return v < RUN_OFF ? GAIT_WALK : GAIT_RUN
+  }
+  return v >= RUN_ON ? GAIT_RUN : GAIT_WALK
+}
+
+/** Playback rate of a gait clip at this ground speed, so the feet roughly keep to the ground. */
+function gaitRate(clip: Clip, speed: number, walk: number): number {
+  return clip === 'Walk'
+    ? Math.max(0.6, Math.min(1.6, speed / walk))
+    : Math.max(0.6, Math.min(1.3, speed / CLIP_RUN_SPEED))
+}
+
+/** A far rider's clip for his stance: the crouch, the sprint, the slide, the sights, his death. */
+function farStance(p: CrowdPlayer, gait: Clip, has: (c: Clip) => boolean): Clip {
+  if (p.anim === ANIM_DEAD) {
+    return 'Death'
+  }
+  if (p.anim === ANIM_SLIDE && has('Crouch_Idle')) {
+    return 'Crouch_Idle'
+  }
+  if ((p.stance & STANCE_CROUCH) !== 0 && has('Crouch_Idle')) {
+    return gait === 'Idle' ? 'Crouch_Idle' : 'Crouch_Walk'
+  }
+  if ((p.stance & STANCE_SPRINT) !== 0 && has('Sprint')) {
+    return 'Sprint'
+  }
+  const drawn = !(p.flags & EF_HOLSTERED) || (p.stance & STANCE_ADS) !== 0
+  if (p.anim === ANIM_AIM || (p.stance & STANCE_ADS) !== 0 || (gait === 'Idle' && drawn)) {
+    return gait === 'Idle' || (p.stance & STANCE_ADS) !== 0 ? 'Idle_Gun_Pointing' : gait
+  }
+  return gait
+}
+
+/** A far rider's jump or vault arc (m), from his anim and how long he's been at it. */
+function farLift(anim: number, since: number): number {
+  if (anim !== ANIM_HOP && anim !== ANIM_VAULT) {
+    return 0
+  }
+  const vault = anim === ANIM_VAULT
+  const t = Math.min(1, since / (vault ? 0.5 : 0.55))
+  return (vault ? 0.75 : 0.45) * 4 * t * (1 - t)
 }
 
 const hatColors = new WeakMap<PlayerLook, Color>()
@@ -918,25 +1095,4 @@ function hatColor(look: PlayerLook): Color {
     hatColors.set(look, c)
   }
   return c
-}
-
-/**
- * Whole-body moves the rig has no clip for, `since` s into them: the roll (a quick tumble around the
- * hips) and the vault and hop (an arc up and over, leaning into a vault).
- */
-function bodyPose(
-  { holder, pivot }: { holder: Object3D; pivot: Object3D },
-  anim: number,
-  since: number,
-): void {
-  if (anim === ANIM_ROLL) {
-    pivot.rotation.x = Math.min(1, since / ROLL_S) * Math.PI * 2
-  } else if (anim === ANIM_VAULT || anim === ANIM_HOP) {
-    const vault = anim === ANIM_VAULT
-    const t = Math.min(1, since / (vault ? VAULT_S : HOP_S))
-    holder.position.y = (vault ? VAULT_PEAK_M : HOP_PEAK_M) * 4 * t * (1 - t)
-    pivot.rotation.x = vault ? VAULT_TUCK * Math.sin(Math.PI * t) : 0
-  } else {
-    pivot.rotation.x *= 0.5
-  }
 }

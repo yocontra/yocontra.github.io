@@ -72,7 +72,8 @@ export class Hud {
   private readonly dynamiteEl: HTMLElement
   private readonly carriedEl: HTMLElement
   private readonly bankedEl: HTMLElement
-  private readonly playersEl: HTMLElement
+  private readonly playersEl: HTMLButtonElement
+  private readonly tcEl: HTMLElement
   private readonly mwEl: HTMLElement
   private readonly channelEl: HTMLElement
   private readonly channelFill: HTMLElement
@@ -101,6 +102,9 @@ export class Hud {
   readonly mapSlot: HTMLElement
   private readonly last = new Map<string, string | number | boolean>()
   private toastTimer: ReturnType<typeof setTimeout> | null = null
+  private rotateSaid = false
+  private readonly dmg: HTMLElement[] = []
+  private dmgNext = 0
 
   constructor(parent: HTMLElement, opts: HudOptions) {
     this.opts = opts
@@ -119,26 +123,21 @@ export class Hud {
     }
     this.reloadEl = el('div', 'fr-reload', ammo, 'RELOADING')
     this.weaponEl = el('div', 'fr-weapon', vitals)
-    this.dynamiteEl = el('div', 'fr-dynamite', vitals, 'Dynamite: G / throw')
+    this.dynamiteEl = el('div', 'fr-dynamite', vitals, opts.touch ? 'Dynamite' : 'Dynamite · G')
     this.dynamiteEl.prepend(icon('dynamite'))
     this.protectEl = el('div', 'fr-protect', vitals, 'PROTECTED')
 
-    const tc = el('div', 'fr-tc', this.root)
-    this.carriedEl = el('div', 'fr-carried', tc, '$0')
-    el('div', 'fr-carried-label', tc, 'carried · at risk')
-    this.bankedEl = el('div', 'fr-banked', tc, 'purse $0 · safe')
-    this.mwEl = el('div', 'fr-mw', tc, '★ MOST WANTED · +50% BOUNTY')
+    // The money readout: only the banked purse until you carry cash, then the carry, big, with an
+    // AT RISK tag (it drops if you die).
+    this.tcEl = el('div', 'fr-tc', this.root)
+    const carry = el('div', 'fr-carry', this.tcEl)
+    this.carriedEl = el('div', 'fr-carried', carry, '$0')
+    el('div', 'fr-carried-label', carry, 'at risk')
+    this.bankedEl = el('div', 'fr-banked', this.tcEl, '$0 banked')
+    this.mwEl = el('div', 'fr-mw', this.tcEl, '★ MOST WANTED · +50%')
 
     const tr = el('div', 'fr-tr', this.root)
     this.mapSlot = el('div', 'fr-map-slot', tr)
-    const players = el('button', 'fr-players fr-hit', tr, '')
-    players.type = 'button'
-    players.setAttribute('aria-label', 'Riders in town')
-    players.addEventListener('click', (e) => {
-      e.stopPropagation()
-      opts.onRiders()
-    })
-    this.playersEl = players
     this.feedEl = el('div', 'fr-feed', tr)
 
     this.channelEl = el('div', 'fr-channel', this.root)
@@ -157,10 +156,14 @@ export class Hud {
     }
     el('div', 'fr-dot', this.ticks)
     this.hitEl = el('div', 'fr-hitmark', this.reticle)
+    const ring = el('div', 'fr-dmg-ring', this.root)
+    for (let i = 0; i < 4; i++) {
+      this.dmg.push(el('div', 'fr-dmg', ring))
+    }
     this.bannerEl = el('div', 'fr-banner', this.root)
     this.lowPowerEl = el('div', 'fr-lowpower', this.root, 'Low Power Mode: 30 fps')
-    this.rotateEl = el('div', 'fr-rotate', this.root, 'Turn your phone sideways for the best view')
-    this.clickEl = el('div', 'fr-rotate fr-click', this.root, 'Click to take aim')
+    this.rotateEl = el('div', 'fr-rotate', this.root, 'Turn your phone sideways')
+    this.clickEl = el('div', 'fr-rotate fr-click', this.root, 'Click to play')
 
     this.deathEl = el('div', 'fr-death', this.root)
     const poster = el('div', 'fr-poster', this.deathEl)
@@ -183,24 +186,32 @@ export class Hud {
 
     this.menuEl = el('div', 'fr-menu fr-hit', this.root)
     const card = el('div', 'fr-menu-card', this.menuEl)
-    el('h2', 'fr-menu-title', card, 'Perdition')
+    el('h2', 'fr-menu-title', card, 'Paused')
     el(
       'p',
       'fr-menu-note',
       card,
-      'Carried cash drops when you leave, unless you leave from inside the bank. Banked money is safe.',
+      'Leaving drops your carried money, unless you’re in the bank. Banked money is safe.',
     )
     const howto = el('button', 'fr-menu-item fr-menu-quiet fr-hit', card, 'How to play')
+    // who's in town (report and block live there)
+    this.playersEl = el('button', 'fr-menu-item fr-menu-quiet fr-hit', card, 'Players')
     this.menuSettings = el('div', 'fr-menu-settings', card)
-    const leave = el('button', 'fr-menu-item fr-hit', card, 'Leave town (5 s)')
+    const leave = el('button', 'fr-menu-item fr-hit', card, 'Leave (5 s)')
     const exit = el(
       'button',
       'fr-menu-item fr-menu-quiet fr-hit',
       card,
-      'Quit now (drop your carry)',
+      'Quit now (lose carried money)',
     )
-    const back = el('button', 'fr-menu-item fr-menu-quiet fr-hit', card, 'Back to the fight')
-    for (const b of [howto, leave, exit, back]) {
+    const back = el('button', 'fr-menu-item fr-menu-quiet fr-hit', card, 'Resume')
+    const players = this.playersEl
+    players.addEventListener('click', (e) => {
+      e.stopPropagation()
+      close()
+      opts.onRiders()
+    })
+    for (const b of [howto, players, leave, exit, back]) {
       b.type = 'button'
     }
     const close = () => this.setMenu(false)
@@ -253,7 +264,12 @@ export class Hud {
   /** Portrait phone in a shooter view: a polite hint to turn sideways (play still works). */
   rotateHint(on: boolean): void {
     if (this.changed('rot', on)) {
-      this.rotateEl.classList.toggle('on', on)
+      // said once, for four seconds: a fixture over the fight is noise
+      this.rotateEl.classList.toggle('on', on && !this.rotateSaid)
+      if (on && !this.rotateSaid) {
+        this.rotateSaid = true
+        setTimeout(() => this.rotateEl.classList.remove('on'), 4000)
+      }
     }
   }
 
@@ -289,6 +305,9 @@ export class Hud {
     if (this.changed('reload', reloading)) {
       this.reloadEl.classList.toggle('on', reloading)
     }
+    if (this.changed('carry', s.carried > 0)) {
+      this.tcEl.classList.toggle('carry', s.carried > 0)
+    }
     if (this.changed('carried', s.carried)) {
       this.carriedEl.textContent = money(s.carried)
       this.carriedEl.classList.remove('bump')
@@ -296,10 +315,11 @@ export class Hud {
       this.carriedEl.classList.add('bump')
     }
     if (this.changed('banked', s.banked)) {
-      this.bankedEl.textContent = `purse ${money(s.banked)} · safe`
+      this.bankedEl.textContent = `${money(s.banked)} banked`
+      this.bankedEl.hidden = s.banked <= 0
     }
     if (this.changed('players', s.players)) {
-      this.playersEl.textContent = `${s.players} in Perdition`
+      this.playersEl.textContent = `Players (${s.players})`
     }
     if (this.changed('mw', s.mostWanted)) {
       this.mwEl.classList.toggle('on', s.mostWanted)
@@ -308,7 +328,11 @@ export class Hud {
       this.protectEl.classList.toggle('on', s.protectedFor > 0)
     }
     if (this.changed('lp', s.lowPower)) {
+      // a notice, not a fixture: up for five seconds when Low Power Mode kicks in
       this.lowPowerEl.classList.toggle('on', s.lowPower)
+      if (s.lowPower) {
+        setTimeout(() => this.lowPowerEl.classList.remove('on'), 5000)
+      }
     }
     const ch = s.channel
     if (this.changed('ch', ch ? ch.label : '')) {
@@ -325,18 +349,18 @@ export class Hud {
   }
 
   /**
-   * One line in the kill feed. Portrait phones keep 3 single-line rows that fade after 3 s (the
-   * feed shares the narrow top-right with the map); everywhere else, 5 rows for 5 s.
+   * One line in the kill feed. Portrait phones keep 2 single-line rows that fade after 3 s (the
+   * feed shares the narrow top-right with the map); everywhere else, 4 rows for 4 s.
    */
   feed(html: string, kind: FeedKind): void {
     const portrait = matchMedia('(orientation: portrait)').matches
     const row = el('div', `fr-feed-row fr-feed-${kind}`, this.feedEl)
     row.textContent = html
     row.title = html
-    while (this.feedEl.childElementCount > (portrait ? 3 : 5)) {
+    while (this.feedEl.childElementCount > (portrait ? 2 : 4)) {
       this.feedEl.firstElementChild?.remove()
     }
-    const ms = portrait ? 3000 : 5000
+    const ms = portrait ? 3000 : 4000
     setTimeout(() => row.classList.add('out'), ms)
     setTimeout(() => row.remove(), ms + 500)
   }
@@ -362,10 +386,27 @@ export class Hud {
     st.opacity = '0'
   }
 
-  hit(kill: boolean): void {
-    this.hitEl.className = `fr-hitmark on${kill ? ' kill' : ''}`
+  /** The hit marker: white for a hit, red for a kill, gold for a Dead-Eye (critical) hit. */
+  hit(kill: boolean, crit = false): void {
+    this.hitEl.className = `fr-hitmark on${kill ? ' kill' : ''}${crit ? ' crit' : ''}`
     this.hitEl.getBoundingClientRect()
     this.hitEl.classList.add('fade')
+  }
+
+  /**
+   * A red arc on a ring around the crosshair, pointing where the hit came from: `angle` is
+   * clockwise from straight ahead (radians). Fades over a second; four at most.
+   */
+  damageArc(angle: number): void {
+    const a = this.dmg[this.dmgNext % this.dmg.length]
+    this.dmgNext++
+    if (!a) {
+      return
+    }
+    a.style.transform = `rotate(${angle}rad)`
+    a.classList.remove('on')
+    a.getBoundingClientRect()
+    a.classList.add('on')
   }
 
   /**
@@ -426,7 +467,7 @@ export class Hud {
     }
     const s = Math.ceil(seconds)
     if (this.changed('deathS', s)) {
-      this.deathCount.textContent = s > 0 ? `Back in the saddle in ${s}…` : ''
+      this.deathCount.textContent = s > 0 ? `Respawn in ${s}…` : ''
     }
   }
 

@@ -152,18 +152,18 @@ export function togglePause(d: Director): void {
  * Leaving a ranked run (to the saloon, or a restart) ends it for good: say so first, and offer to
  * bank what it has earned. Practice leaves at once.
  */
-function leaveRanked(d: Director, verb: string, go: () => void): void {
+function leaveRanked(d: Director, go: () => void): void {
   if (!d.ranked) {
     go()
     return
   }
   const banked = d.c.save.run.total > 0
   d.c.hud.menuConfirm({
-    title: 'Abandon this ranked run?',
-    body: `A ranked run can’t be picked up again: ${verb}, and the rest of this gauntlet is practice.${banked ? ' Bank it first to put its purse on the board.' : ''}`,
-    no: { label: 'Keep riding', run: () => pauseMenu(d) },
-    ...(banked ? { extra: { label: 'Bank this run', run: () => openBoard(d, false) } } : {}),
-    yes: { label: 'Abandon run', run: go },
+    title: 'Quit this ranked run?',
+    body: `You can’t resume a ranked run. The rest will be practice.${banked ? ' Submit it first to put your score on the board.' : ''}`,
+    no: { label: 'Keep playing', run: () => pauseMenu(d) },
+    ...(banked ? { extra: { label: 'Submit run', run: () => openBoard(d, false) } } : {}),
+    yes: { label: 'Quit run', run: go },
   })
 }
 
@@ -177,14 +177,11 @@ function pauseMenu(d: Director): void {
       applySettings(d)
     },
     restart: () =>
-      leaveRanked(d, 'a fresh gauntlet starts', () => {
+      leaveRanked(d, () => {
         togglePause(d)
         restartRun(d, c.save.legend)
       }),
-    leaderboard: () => openBoard(d, false),
-    ...(d.onSaloon
-      ? { saloon: () => leaveRanked(d, 'you go back to the saloon', () => toSaloon(d)) }
-      : {}),
+    ...(d.onSaloon ? { saloon: () => leaveRanked(d, () => toSaloon(d)) } : {}),
     remap: (_a, done) => {
       c.input.capture = (code) => {
         c.input.capture = null

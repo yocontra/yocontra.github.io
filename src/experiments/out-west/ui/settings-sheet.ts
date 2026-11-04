@@ -1,14 +1,16 @@
 /**
- * The Settings sheet, from the saloon and the pause menu: music and effects volume, vibration,
- * reduced motion and graphics quality. Everything saves as you change it (`settings.ts`).
+ * The Settings sheet, from the saloon and the pause menu: volumes and mono audio, captions and
+ * toggle walk, vibration, reduced motion and graphics quality. Everything saves as you change it
+ * (`settings.ts`).
  */
 import { hapticsSupported } from '../platform/haptics.ts'
 import {
   type Graphics,
   getSettings,
-  reducedMotion,
+  type RunFlag,
+  runFlag,
   type Settings,
-  setReducedMotion,
+  setRunFlag,
   setSetting,
 } from '../settings.ts'
 import { button, el, panelSheet } from './sheet.ts'
@@ -58,6 +60,11 @@ function toggle(parent: HTMLElement, o: ToggleOpts): HTMLInputElement {
   return input
 }
 
+/** A switch kept in the run's save (reduced motion, captions, mono, toggle walk). */
+function flag(parent: HTMLElement, key: RunFlag, copy: { label: string; hint: string }): void {
+  toggle(parent, { ...copy, value: runFlag(key), change: (on) => setRunFlag(key, on) })
+}
+
 const GRAPHICS: readonly { id: Graphics; label: string }[] = [
   { id: 'auto', label: 'Auto' },
   { id: 'low', label: 'Low' },
@@ -82,8 +89,8 @@ function graphics(parent: HTMLElement): void {
     }
     const changed = g !== loaded
     note.textContent = changed
-      ? 'Takes effect the next time the game loads.'
-      : 'Auto picks for this device. Low is smoother on older phones; High adds shadows and detail.'
+      ? 'Reload to apply.'
+      : 'Low runs smoother on older phones. High adds shadows.'
     reload.hidden = !changed
   }
   for (const g of GRAPHICS) {
@@ -108,24 +115,25 @@ export function openSettings(root: HTMLElement, onClose?: () => void): void {
   slider(sound, 'Music', 'music')
   slider(sound, 'Effects', 'sfx')
   slider(sound, 'Voices', 'voice')
+  flag(sound, 'mono', { label: 'Mono audio', hint: 'All sound in both ears.' })
   const feel = el('section', 'ow-set-group', s.body)
-  el('h3', 'ow-set-h', feel, 'Feel')
+  el('h3', 'ow-set-h', feel, 'Controls')
+  flag(feel, 'captions', { label: 'Captions', hint: 'Show sounds and speech as text.' })
+  flag(feel, 'toggleWalk', { label: 'Toggle walk', hint: 'Press once to walk, again to stop.' })
   const buzz = toggle(feel, {
     label: 'Vibration',
     hint: hapticsSupported()
-      ? 'A buzz on your own shot and on a hit. Never on the call.'
-      : 'This device can’t vibrate.',
+      ? 'When you shoot or get hit. Never on the bell.'
+      : 'Not available on this device.',
     value: getSettings().vibration,
     change: (on) => setSetting('vibration', on),
   })
   buzz.disabled = !hapticsSupported()
-  toggle(feel, {
+  flag(feel, 'reducedMotion', {
     label: 'Reduced motion',
     hint: 'No shake, zoom or flash. Shorter kill cam.',
-    value: reducedMotion(),
-    change: setReducedMotion,
   })
   const look = el('section', 'ow-set-group', s.body)
-  el('h3', 'ow-set-h', look, 'Look')
+  el('h3', 'ow-set-h', look, 'Display')
   graphics(look)
 }

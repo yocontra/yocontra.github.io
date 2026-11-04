@@ -182,27 +182,40 @@ export class Minimap {
     }
   }
 
+  /** The rim's N, rasterised once: text is the turned map's dearest call on a phone. */
+  private northGlyph: HTMLCanvasElement | null = null
+
   /** The N on the rim of the turned map. */
   private north(heading: number, r: number): void {
     const ctx = this.ctx
     if (!ctx) {
       return
     }
+    let g = this.northGlyph
+    if (!g) {
+      g = document.createElement('canvas')
+      const side = Math.ceil(16 * r)
+      g.width = side
+      g.height = side
+      const gc = g.getContext('2d')
+      if (gc) {
+        gc.fillStyle = '#f0d898'
+        gc.strokeStyle = '#1a120a'
+        gc.lineWidth = 2 * r
+        gc.font = `bold ${10 * r}px Georgia, serif`
+        gc.textAlign = 'center'
+        gc.textBaseline = 'middle'
+        gc.strokeText('N', side / 2, side / 2)
+        gc.fillText('N', side / 2, side / 2)
+      }
+      this.northGlyph = g
+    }
     // north (−z) relative to a heading-up map
     const a = -Math.PI / 2 - heading - Math.PI / 2
     const rad = this.px / 2 - 9 * r
     const x = this.px / 2 + Math.cos(a) * rad
     const y = this.px / 2 + Math.sin(a) * rad
-    ctx.save()
-    ctx.fillStyle = '#f0d898'
-    ctx.strokeStyle = '#1a120a'
-    ctx.lineWidth = 2 * r
-    ctx.font = `bold ${10 * r}px Georgia, serif`
-    ctx.textAlign = 'center'
-    ctx.textBaseline = 'middle'
-    ctx.strokeText('N', x, y)
-    ctx.fillText('N', x, y)
-    ctx.restore()
+    ctx.drawImage(g, x - g.width / 2, y - g.height / 2)
   }
 
   private dots(f: MapFrame, nowS: number, r: number): void {

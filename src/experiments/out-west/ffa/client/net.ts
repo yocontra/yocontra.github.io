@@ -10,6 +10,7 @@
 import {
   BTN_FIRE,
   INPUT_LEAD_NONE,
+  MOVE_SPRINTING,
   MSG_FULL_RESET,
   MSG_SNAPSHOT,
   NONE,
@@ -75,6 +76,8 @@ export interface Intent {
   /** u16 turns. */
   aim: number
   buttons: number
+  /** Aim pitch, ±127 = ±90° (cosmetic). */
+  pitch?: number
 }
 
 export interface NetHandlers {
@@ -137,8 +140,18 @@ export class NetClient {
     jumpCooldown: 0,
     vaultStep: 0,
     vaultAim: 0,
+    sprinting: false,
+    sprintLock: 0,
+    sprintOut: 0,
+    slideTicks: 0,
+    slideCooldown: 0,
+    slideAim: 0,
+    airX: 0,
+    airZ: 0,
   }
   readonly prev: MoveState = { ...this.pred }
+  /** A trigger pull waiting out the sprint-to-fire delay (mirrors the server's `fireQueued`). */
+  private queuedShot = false
   /** The visual correction offset (m) and its velocity (m/s): what the spring still has to remove. */
   private offX = 0
   private offZ = 0
@@ -350,6 +363,14 @@ export class NetClient {
       jumpCooldown: s.jumpCooldown,
       vaultStep: s.vaultStep / 100,
       vaultAim: s.vaultAim,
+      sprinting: (s.moveFlags & MOVE_SPRINTING) !== 0,
+      sprintLock: s.sprintLock,
+      sprintOut: s.sprintOut,
+      slideTicks: s.slideTicks,
+      slideCooldown: s.slideCooldown,
+      slideAim: s.slideAim,
+      airX: s.airX / 100,
+      airZ: s.airZ / 100,
     }
     const canMove =
       (s.flags & SELF_ALIVE) !== 0 && (s.flags & (SELF_FROZEN | SELF_IN_SHOWDOWN)) === 0
@@ -415,6 +436,7 @@ export class NetClient {
       buttons: intent.buttons,
       viewTick: viewTick & 0xff_ff,
       viewFrac: Math.round((renderTick - viewTick) * 255),
+      pitch: intent.pitch ?? 0,
     }
     const seq = this.batcher.nextSeq
     this.send(this.batcher.push(frame), nowMs)
@@ -423,12 +445,8 @@ export class NetClient {
       this.prevButtons = frame.buttons
       return
     }
-    const shot = this.predictShot(frame, nowMs)
-    this.pending.push({ seq, frame, shot })
-    if (this.pending.length > MAX_PENDING) {
-      this.pending.shift()
-    }
     Object.assign(this.prev, this.pred)
+    // The server moves first, then fires (a pull that ends a sprint waits for the gun to come up).
     stepMove(this.grid, this.pred, {
       moveX: frame.moveX,
       moveZ: frame.moveZ,
@@ -437,17 +455,25 @@ export class NetClient {
       prevButtons: this.prevButtons,
       canMove: this.canMove,
     })
+    const shot = this.predictShot(frame, nowMs)
+    this.pending.push({ seq, frame, shot })
+    if (this.pending.length > MAX_PENDING) {
+      this.pending.shift()
+    }
     this.prevButtons = frame.buttons
   }
 
   /** Mirror the server's fire checks closely enough to flash the muzzle without waiting. */
   private predictShot(frame: WireFrame, nowMs: number): boolean {
-    const pressed = (frame.buttons & BTN_FIRE) !== 0 && (this.prevButtons & BTN_FIRE) === 0
     const s = this.self
-    if (!(pressed && s && this.canMove)) {
+    const pull =
+      ((frame.buttons & BTN_FIRE) !== 0 && (this.prevButtons & BTN_FIRE) === 0) || this.queuedShot
+    this.queuedShot = pull && this.canMove && this.pred.sprintOut > 0
+    if (!(pull && s && this.canMove) || this.queuedShot) {
       return false
     }
     const blocked =
+      this.pred.sprinting ||
       this.pred.rollTicks > 0 ||
       vaulting(this.pred) ||
       (s.reloadTicks > 0 && this.weapon.weapon === WEAPON_REVOLVER) ||

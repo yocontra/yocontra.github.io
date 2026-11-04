@@ -51,13 +51,28 @@ interface Size {
   height: number
   touch: boolean
   dpr: number
+  /** A device UA, so platform/device.ts classifies it (form factor, UI scale) as the real one. */
+  ua?: string
 }
+const IPHONE_UA =
+  'Mozilla/5.0 (iPhone; CPU iPhone OS 18_7 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/27.0 Mobile/15E148 Safari/604.1'
+const IPAD_UA =
+  'Mozilla/5.0 (iPad; CPU OS 18_7 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/27.0 Mobile/15E148 Safari/604.1'
 const SIZES: Size[] = [
   { name: '375x812', width: 375, height: 812, touch: true, dpr: 3 },
   { name: '812x375', width: 812, height: 375, touch: true, dpr: 3 },
   { name: '390x844', width: 390, height: 844, touch: true, dpr: 3 },
   { name: '360x740', width: 360, height: 740, touch: true, dpr: 3 },
   { name: '1440x900', width: 1440, height: 900, touch: false, dpr: 1 },
+  // iPhone Duo (foldable): the outer panel full screen and in Safari, the inner panel both ways
+  { name: '466x678', width: 466, height: 678, touch: true, dpr: 3, ua: IPHONE_UA },
+  { name: '382x580', width: 382, height: 580, touch: true, dpr: 3, ua: IPHONE_UA },
+  { name: '951x669', width: 951, height: 669, touch: true, dpr: 3, ua: IPHONE_UA },
+  { name: '669x951', width: 669, height: 951, touch: true, dpr: 3, ua: IPHONE_UA },
+  // iPad: mini portrait, 13-inch landscape, a one-third Split View window
+  { name: '744x1133', width: 744, height: 1133, touch: true, dpr: 2, ua: IPAD_UA },
+  { name: '1376x1032', width: 1376, height: 1032, touch: true, dpr: 2, ua: IPAD_UA },
+  { name: '320x1032', width: 320, height: 1032, touch: true, dpr: 2, ua: IPAD_UA },
 ]
 const sizeArg = arg('size')
 const sizes = sizeArg ? SIZES.filter((s) => sizeArg.split(',').includes(s.name)) : SIZES
@@ -134,6 +149,8 @@ const TOP_SHEET = '.ow-sheet.on'
 const OFF_SCREEN = /outside of the viewport/u
 const TAKEN = /spoken for|taken/iu
 const COVERED = /intercepts pointer events/u
+/** The element in the way, from the click log: "<div class=…>…</div> intercepts pointer events". */
+const COVERED_BY = /(?<tag><[a-z][^>]*>)[^\n]*?intercepts pointer events/u
 const AUTH = '/src/experiments/out-west/net/auth.ts'
 const PROFILE = '/src/experiments/out-west/ui/profile.ts'
 
@@ -148,6 +165,17 @@ async function closeSheets(page: Page): Promise<void> {
       .last()
       .click({ position: { x: 3, y: 3 }, force: true })
     await page.waitForTimeout(150)
+  }
+}
+
+/**
+ * Read out any saloon notice (a level-up, a reward) that has come up since: they are modal on
+ * purpose, and a late one (a second profile load) would otherwise sit over the next control.
+ */
+async function drainNotices(page: Page): Promise<void> {
+  for (let i = 0; i < 12 && (await page.locator('.ow-feat-notice').count()) > 0; i++) {
+    await page.locator('.ow-feat-notice .ow-btn-primary').first().click({ timeout: 6000 })
+    await page.waitForTimeout(400)
   }
 }
 
@@ -170,6 +198,7 @@ async function step(
     return
   }
   try {
+    await drainNotices(page)
     await run()
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e)
@@ -177,7 +206,8 @@ async function step(
     if (OFF_SCREEN.test(msg)) {
       why = 'control is outside the viewport'
     } else if (COVERED.test(msg)) {
-      why = 'control is covered by another element'
+      const by = COVERED_BY.exec(msg)?.groups?.tag
+      why = `control is covered by another element${by ? `: ${by}` : ''}`
     }
     rows.push({
       size: size.name,
@@ -214,6 +244,10 @@ async function toHub(page: Page, size: Size, title: boolean): Promise<void> {
 }
 
 const HUB_LINK = (i: number): string => `.ow-hub-links .ow-btn >> nth=${i}`
+/** The link row is Leaderboard and More; Account and Settings are the icons by the plate. */
+const MORE = HUB_LINK(1)
+const ACCOUNT = '.ow-hub-tool >> nth=0'
+const SETTINGS = '.ow-hub-tool >> nth=1'
 
 /** The Outfitter: every tab, an item picked, and (signed in) a dye job. */
 async function store(page: Page, size: Size, who: string): Promise<void> {
@@ -257,9 +291,20 @@ async function board(page: Page, size: Size): Promise<void> {
   await closeSheets(page)
 }
 
+/** `more:Label` opens the hub's More sheet and picks that door; anything else is tapped as is. */
+async function openDoor(page: Page, open: string): Promise<void> {
+  if (open.startsWith('more:')) {
+    await tap(page, MORE)
+    await page.waitForTimeout(300)
+    await tap(page, `.ow-hub-more-list .ow-btn:text-is("${open.slice(5)}")`)
+    return
+  }
+  await tap(page, open)
+}
+
 async function sheet(page: Page, size: Size, screen: string, open: string): Promise<void> {
   await step(page, size, screen, async () => {
-    await tap(page, open)
+    await openDoor(page, open)
     await page.waitForTimeout(700)
     await audit(page, size, screen, TOP_SHEET, { last: true })
     await closeSheets(page)
@@ -400,9 +445,11 @@ async function guest(browser: Browser, size: Size): Promise<void> {
   await toHub(page, size, true)
   await audit(page, size, 'hub-guest', '.ow-hub')
   await sheet(page, size, 'gauntlet-sheet', '.ow-tile-gauntlet')
-  await sheet(page, size, 'account-guest', HUB_LINK(3))
-  await sheet(page, size, 'chalkboard-guest', HUB_LINK(1))
-  await sheet(page, size, 'ledger-guest', HUB_LINK(2))
+  await sheet(page, size, 'account-guest', ACCOUNT)
+  await sheet(page, size, 'more', MORE)
+  await sheet(page, size, 'settings-guest', SETTINGS)
+  await sheet(page, size, 'chalkboard-guest', 'more:Chalkboard')
+  await sheet(page, size, 'ledger-guest', 'more:Ledger')
   await step(page, size, 'leaderboard', () => board(page, size))
   await step(page, size, 'store-guest', () => store(page, size, 'guest'))
   await duelFixtures(page, size)
@@ -426,17 +473,17 @@ async function member(browser: Browser, size: Size, state: State | null): Promis
   await closeSheets(page)
   await audit(page, size, 'hub', '.ow-hub')
   await sheet(page, size, 'licence', '.ow-tile-frontier')
-  await sheet(page, size, 'account', HUB_LINK(3))
-  await sheet(page, size, 'settings', HUB_LINK(4))
+  await sheet(page, size, 'account', ACCOUNT)
+  await sheet(page, size, 'settings', SETTINGS)
   await step(page, size, 'account-delete', async () => {
-    await tap(page, HUB_LINK(3))
+    await tap(page, ACCOUNT)
     await page.waitForTimeout(800)
-    await tap(page, '.ow-acct-btn.danger')
+    await tap(page, '.ow-acct .ow-btn-ghost.ow-btn-danger')
     await audit(page, size, 'account-delete', TOP_SHEET, { last: true })
     await closeSheets(page)
   })
-  await sheet(page, size, 'ledger', HUB_LINK(2))
-  await sheet(page, size, 'chalkboard', HUB_LINK(1))
+  await sheet(page, size, 'ledger', 'more:Ledger')
+  await sheet(page, size, 'chalkboard', 'more:Chalkboard')
   if (want('profile') || want('report')) {
     for (const [screen, fn] of [
       ['profile', 'openProfile'],
@@ -479,10 +526,7 @@ async function member(browser: Browser, size: Size, state: State | null): Promis
   if ((await page.locator('.ow-feat-notice').count()) > 0) {
     await audit(page, size, 'notices', '.ow-feat-notice')
     // the notices come one at a time: read them all out of the way
-    for (let i = 0; i < 12 && (await page.locator('.ow-feat-notice').count()) > 0; i++) {
-      await tap(page, '.ow-feat-notice .ow-btn-primary')
-      await page.waitForTimeout(400)
-    }
+    await drainNotices(page)
   } else if (want('notices')) {
     rows.push({
       size: size.name,
@@ -576,6 +620,7 @@ async function newContext(
     isMobile: size.touch,
     hasTouch: size.touch,
     reducedMotion: 'reduce',
+    ...(size.ua ? { userAgent: size.ua } : {}),
     ...(state ? { storageState: state } : {}),
   })
   // the dev server's toolbar sits over the bottom of every screen

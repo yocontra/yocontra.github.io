@@ -40,6 +40,7 @@ const randomFrame = (): WireFrame => ({
   buttons: u16(),
   viewTick: u16(),
   viewFrac: u8(),
+  pitch: rng.int(-127, 127),
 })
 
 const randomSelf = (): SelfView => ({
@@ -66,6 +67,14 @@ const randomSelf = (): SelfView => ({
   jumpCooldown: u8(),
   vaultStep: u8(),
   vaultAim: u16(),
+  moveFlags: u8(),
+  sprintLock: u8(),
+  sprintOut: u8(),
+  slideTicks: u8(),
+  slideCooldown: u8(),
+  slideAim: u16(),
+  airX: rng.int(-127, 127),
+  airZ: rng.int(-127, 127),
 })
 
 function randomEvent(): WireEvent {
@@ -92,6 +101,7 @@ function mutate(truth: Map<number, EntityView>): void {
         flags: u8(),
         anim: rng.int(0, 7),
         carry: u8(),
+        pitch: rng.int(-127, 127),
       })
     } else if (e && rng.next() < 0.02) {
       truth.delete(id)
@@ -125,14 +135,14 @@ describe('input codec', () => {
     }
   })
 
-  it('a normal two-frame message is 25 bytes', () => {
+  it('a normal two-frame message is 27 bytes', () => {
     const bytes = encodeInput(new Writer(), {
       seq: 1,
       ackTick: 0,
       ackAgeMs: 0,
       frames: [randomFrame(), randomFrame()],
     })
-    expect(bytes.length).toBe(25)
+    expect(bytes.length).toBe(27)
   })
 
   it('rejects garbage, truncation, wrong types and too many frames', () => {

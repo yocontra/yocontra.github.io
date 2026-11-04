@@ -1,6 +1,7 @@
 /**
  * The pause menu's settings: view (over the shoulder, first person, top-down), field of view for
- * the current view, look sensitivity (mouse on desktop, thumbs on touch), invert-Y and the shoulder.
+ * the current view, look sensitivity (mouse on desktop, thumbs on touch), invert-Y, hold or toggle
+ * aim (desktop) and the shoulder.
  * Every change applies at once and is saved per device.
  */
 import { FOV_RANGE, type FrontierSettings, SENS_RANGE, type ViewMode } from './settings.ts'
@@ -30,6 +31,7 @@ export class SettingsPanel {
   private readonly sens: HTMLInputElement
   private readonly sensOut: HTMLOutputElement
   private readonly invert: HTMLInputElement
+  private readonly adsToggle: HTMLInputElement
   private readonly shoulderRow: HTMLElement
   private readonly shoulderBtn: HTMLButtonElement
   private readonly lookRows: HTMLElement[] = []
@@ -99,6 +101,23 @@ export class SettingsPanel {
     inv.append(this.invert, invText)
     this.el.append(inv)
     this.lookRows.push(inv)
+    const ads = document.createElement('label')
+    ads.className = 'fr-set-row fr-set-check fr-hit'
+    this.adsToggle = document.createElement('input')
+    this.adsToggle.type = 'checkbox'
+    this.adsToggle.addEventListener('change', () => {
+      this.change((s) => {
+        s.adsToggle = this.adsToggle.checked
+      })
+    })
+    const adsText = document.createElement('span')
+    adsText.textContent = 'Right click toggles the sights'
+    ads.append(this.adsToggle, adsText)
+    if (!touch) {
+      // touch AIM is always a toggle
+      this.el.append(ads)
+      this.lookRows.push(ads)
+    }
     this.shoulderRow = document.createElement('div')
     this.shoulderRow.className = 'fr-set-row'
     const sl = document.createElement('span')
@@ -174,6 +193,7 @@ export class SettingsPanel {
     this.sens.value = String(sens)
     this.sensOut.textContent = `${sens.toFixed(2)}×`
     this.invert.checked = s.invertY
+    this.adsToggle.checked = s.adsToggle
     this.shoulderBtn.textContent = s.shoulder === 1 ? 'Right' : 'Left'
   }
 }

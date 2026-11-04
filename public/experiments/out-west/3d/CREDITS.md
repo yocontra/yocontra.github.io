@@ -28,6 +28,11 @@ at runtime, and each outlaw's garment colours recolour only the main fabric of e
 and holsters are procedural, fitted to each body and woven from the Poly Haven fabric swatches
 below.
 
+Frontier's move clips (`models/moves.glb`: sprint, crouch idle and walk, jump start / loop / land,
+pistol reload, pistol aim up and down) are built by `tools/build-moves.ts` from the same Universal
+Animation Library [Standard] (CC0 1.0), retargeted the same way. That copy of `UAL1_Standard.glb`
+came from a mirror of the unmodified pack: https://raw.githubusercontent.com/DyingStar-game/DyingStar/HEAD/assets/Universal%20Animation%20Library/Unreal-Godot/UAL1_Standard.glb
+
 Quaternius: https://quaternius.com
 
 ## Props and building kit (`models/props.glb`, `tex/kit_*.webp`)
@@ -160,7 +165,7 @@ Prompts are in `tools/audio/manifest.ts` (music) and `tools/audio/voices.ts` (vo
 | `paper.webp` (768², 45 KB), `leather.webp` (768², 83 KB), `smoke.webp` (768², 8 KB) | Cotton rag handbill stock, worn saddle leather, smoke-darkened endpaper: generated (Gemini, 2026-11 art pass), made seamless with `tools/seamless.ts` | First-party |
 | `poster.webp`, `wood.webp` | Wanted-poster stock, saloon planks: generated (Gemini), resized and compressed | First-party |
 | `seal.webp` | Red wax seal: generated (Gemini), chroma-keyed | First-party |
-| `duel-woodcut.webp` | Title woodcut of a street duel: generated (Gemini) | First-party |
+| `title-duel.svg` (100 KB, 34 KB gzipped) | Title key art: the duel street at noon (the courthouse clock tower, false fronts, mesas, two gunmen) as a two-ink relief print. Drawn by hand as geometry in `tools/build-title-art.ts` (true one-point perspective, no image generator, no lettering); ink spread, wear and misregistration are SVG filters | First-party |
 | `corner.svg`, `rule.svg`, `src/experiments/out-west/ui/icons.ts` | Printer's ornaments and the 12-icon set: generated (Gemini) as raster references, traced to vectors with potrace | First-party |
 | `torn.svg` | Torn paper edge mask: generated procedurally | First-party |
 

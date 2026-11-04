@@ -23,6 +23,8 @@ export interface FrontierSettings {
   invertY: boolean
   /** 1 = right shoulder, −1 = left. */
   shoulder: 1 | -1
+  /** Desktop: right click toggles the sights instead of holding them. */
+  adsToggle: boolean
 }
 
 export const FOV_RANGE = { min: 60, max: 95 } as const
@@ -36,6 +38,7 @@ export const DEFAULTS: FrontierSettings = {
   touchSens: 1,
   invertY: false,
   shoulder: 1,
+  adsToggle: false,
 }
 
 const KEY = 'ow.frontier.settings.v1'
@@ -77,6 +80,7 @@ export function loadSettings(search = globalThis.location?.search ?? ''): Fronti
     touchSens: clamp(r.touchSens, SENS_RANGE.min, SENS_RANGE.max, DEFAULTS.touchSens),
     invertY: r.invertY === true,
     shoulder: r.shoulder === -1 ? -1 : 1,
+    adsToggle: r.adsToggle === true,
   }
   const q = new URLSearchParams(search).get('view')
   if (isView(q)) {

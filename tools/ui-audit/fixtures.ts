@@ -65,7 +65,7 @@ const settlement = (delta: number, levelUp = false): Settlement =>
     pairFactor: 0.5,
     lines: [
       { label: delta > 0 ? 'Bounty collected' : 'Bounty paid', amount: delta, xp: 100 },
-      { label: 'Hot streak bonus', amount: delta > 0 ? 1250 : 0, xp: 40 },
+      { label: '4-win streak', amount: delta > 0 ? 1250 : 0, xp: 40 },
       ...(levelUp ? [{ label: 'Level up · Lv 50', amount: 1250, xp: 0 }] : []),
     ],
     xpBefore: levelUp ? 99_000 : 120_000,
@@ -116,15 +116,15 @@ const RESULTS: Record<
   },
   'forfeit-him': {
     r: result({ outcome: 'forfeit', winner: 0, culprit: 1 }),
-    closed: 'He lit out of town.',
+    closed: 'He left the duel.',
   },
   'dodge-you': {
     r: result({ outcome: 'dodge', winner: null, culprit: 0, you: settlement(-1200) }),
-    closed: 'He lit out of town.',
+    closed: 'He left the duel.',
   },
   'dodge-him': {
     r: result({ outcome: 'dodge', winner: null, culprit: 1, you: null }),
-    closed: 'He lit out of town.',
+    closed: 'He left the duel.',
   },
   'ghost-win': { r: result({}), ghost: true },
   'ghost-loss': { r: result({ winner: 1, you: settlement(-2400) }), ghost: true },
@@ -141,11 +141,11 @@ const RESULTS: Record<
     votes: [false, true],
     early: true,
   },
-  'opponent-left': { r: result({}), closed: 'He lit out of town.' },
+  'opponent-left': { r: result({}), closed: 'He left the duel.' },
   'rematch-he-wants': { r: result({}), votes: [false, true] },
   'line-dead': {
     r: result({ outcome: 'forfeit', winner: null, you: null }),
-    lost: 'The room hit a snag.',
+    lost: 'Connection lost.',
   },
   pending: { r: result({ you: null, settled: false }) },
 }
@@ -172,7 +172,7 @@ export function results(name: string): string {
     { name: LONG, kind: s.ghost ? 'ghost' : 'human', context: 'room:0' },
   )
   panel.root.classList.add('on')
-  panel.setRecord('Record 120–48 · best streak 14')
+  panel.setRecord('Record 120 W · 48 L · 3 T · 4-win streak (best 14) · Early draws: 2')
   // what pvp-duel does: the room's news after its verdict goes through RoomNews, which hands it
   // to the receipt now or (early) when the receipt opens
   const news = new RoomNews()
@@ -242,7 +242,6 @@ export function pause(): string {
     resume: noop,
     change: noop,
     restart: noop,
-    leaderboard: noop,
     saloon: noop,
     remap: noop,
   })

@@ -101,7 +101,7 @@ export function currentAction(c: ContextInput): Action | null {
   if (spot && Math.hypot(spot.x - c.x, spot.z - c.z) <= STRONGBOX_RADIUS) {
     return {
       bit: BTN_INTERACT,
-      prompt: `E: crack the strongbox (${money(town?.strongboxValue ?? 0)}, 3 s)`,
+      prompt: `E: open the strongbox (${money(town?.strongboxValue ?? 0)}, 3 s)`,
       label: 'OPEN',
       target: NONE,
     }

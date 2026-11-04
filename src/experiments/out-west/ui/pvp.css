@@ -26,7 +26,7 @@
   position: relative;
   z-index: 3;
   margin-bottom: var(--ow-s2);
-  padding: 4px var(--ow-s3);
+  padding: 4px var(--ow-s3) calc(4px + var(--ow-lift-sc));
   font-weight: 700;
   font-size: var(--ow-fs-lead);
   font-variant-caps: all-small-caps;
@@ -265,6 +265,9 @@
   text-align: center;
   font-style: italic;
   font-size: var(--ow-fs-lead);
+}
+.ow-results-sub:empty {
+  display: none;
 }
 .ow-results-draws {
   display: grid;

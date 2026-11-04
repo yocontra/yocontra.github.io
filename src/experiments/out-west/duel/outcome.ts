@@ -6,7 +6,7 @@ import { clamp01 } from '../scene/camera.ts'
 import { say } from './chatter.ts'
 import { deathStyle, hitFx } from './cues-life.ts'
 import type { Director } from './director.ts'
-import { fireGun, spinHolster } from './draws.ts'
+import { fireGun, spinHolster, victoryTaunt } from './draws.ts'
 import { killShot } from './framing.ts'
 import { book, type Paid, payLine, showPurse } from './purse.ts'
 import { report } from './report.ts'
@@ -14,6 +14,8 @@ import { between, type DuelState, V } from './state.ts'
 
 /** Seconds into a win when you twirl the gun back into the holster (the slow-mo is over). */
 const SPIN_AT = 1.35
+/** After the twirl drops it in the leather: a hat tip to the town. */
+const TAUNT_AT = 2.55
 
 /** Your shot: draw, muzzle flash, smoke, report. */
 export function playerFireFx(s: DuelState): void {
@@ -272,6 +274,9 @@ export function tickWin(d: Director, realDt: number): void {
   // the kill cam has eased back to 1x: a twirl on the trigger finger, and into the leather
   if (t >= SPIN_AT && t - realDt < SPIN_AT) {
     spinHolster(d.player)
+  }
+  if (t >= TAUNT_AT && t - realDt < TAUNT_AT) {
+    victoryTaunt(d.player)
   }
   if (d.boss) {
     tickBossKill(d, k)

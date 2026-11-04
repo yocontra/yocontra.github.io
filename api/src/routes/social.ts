@@ -84,7 +84,7 @@ async function round(request: Request, env: Env, player: Player): Promise<Respon
     )
   } catch (err) {
     if (isOverdraft(err)) {
-      return error(request, env, 402, "You can't stand the house a round on what you've got.")
+      return error(request, env, 402, "You don't have enough money for a round.")
     }
     throw err
   }
@@ -103,7 +103,7 @@ async function report(request: Request, env: Env, player: Player): Promise<Respo
   }
   const target = await accountByName(env, body?.name)
   if (!target) {
-    return error(request, env, 404, 'No gunslinger by that name.')
+    return error(request, env, 404, 'No player with that name.')
   }
   if (target.id === player.accountId) {
     return error(request, env, 400, "You can't report yourself.")
@@ -134,7 +134,7 @@ async function blocks(
     const body = (await readJson(request, 1024)) as { name?: unknown } | undefined
     const target = await accountByName(env, rawName ?? body?.name)
     if (!target) {
-      return error(request, env, 404, 'No gunslinger by that name.')
+      return error(request, env, 404, 'No player with that name.')
     }
     if (target.id === player.accountId) {
       return error(request, env, 400, "You can't block yourself.")
@@ -188,7 +188,7 @@ export const socialRoutes: RouteHandler = async (request, env, url) => {
     const viewer = await authenticate(request, env)
     const poster = await playerPoster(env, decode(playerName), viewer?.accountId ?? null)
     if (!poster) {
-      return error(request, env, 404, 'No gunslinger by that name.')
+      return error(request, env, 404, 'No player with that name.')
     }
     return json(request, env, poster, 200, {
       'Cache-Control': viewer ? 'private, no-store' : 'public, max-age=30',

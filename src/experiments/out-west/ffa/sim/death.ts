@@ -20,6 +20,7 @@ import {
   PARDON_TICKS,
 } from './constants.ts'
 import type { Point } from './layout.ts'
+import { stopMoves } from './move.ts'
 import type { World } from './state.ts'
 import type { Player } from './types.ts'
 
@@ -142,9 +143,7 @@ export function killPlayer(
   victim.hp = 0
   victim.respawnTick = w.tick + DEATH_CAM_TICKS
   victim.stats.deaths++
-  victim.rollTicks = 0
-  victim.jumpTicks = 0
-  victim.vaultStep = 0
+  stopMoves(victim)
   victim.deadEyeStart = -1
   victim.calledBy = NONE
   // Pickup weapons and dynamite are lost with the life.

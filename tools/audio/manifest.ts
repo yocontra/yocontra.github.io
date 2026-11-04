@@ -463,6 +463,74 @@ export const GENS: readonly Gen[] = [
       'Dark night western theme in A minor, 70 bpm: low tremolo baritone guitar, sparse plucked double bass, distant lonely harmonica, eerie sustained low strings, slow and ominous, moonlit desert, one continuous steady piece from start to finish, no intro, no ending',
     negative: `${LYRIA_NO}, piano, jazz, fade out`,
   },
+  // The duel cues (audio director pass, Nov 2026): the act theme thins to one of these for the
+  // walk and the standoff, in the act's key and tempo, so the score never stops but steps back to a
+  // sparse Morricone texture: no percussion (the heartbeat owns the pulse) and nothing bell-like.
+  {
+    id: 'l_duel_day',
+    kind: 'lyria',
+    seconds: 30,
+    seed: 3101,
+    prompt:
+      'Spaghetti western duel standoff underscore in A minor, 110 bpm, very sparse: a quiet low tremolo baritone guitar holding the A minor chord, a soft sustained low string drone, a lonely distant harmonica phrase now and then, lots of space, tense and suspended, slowly simmering at one steady level, one continuous piece from start to finish, no intro, no ending',
+    negative: `${LYRIA_NO}, drums, percussion, toms, piano, fade out, crescendo, climax`,
+  },
+  {
+    id: 'l_duel_dusk',
+    kind: 'lyria',
+    seconds: 30,
+    seed: 3111,
+    prompt:
+      'Spaghetti western sunset duel underscore in A minor, 80 bpm, very sparse: a slow twangy reverb electric guitar note every bar, a soft sustained low string pad, a faint mournful distant trumpet line, lots of space, tense and brooding, holding at one steady level, one continuous piece from start to finish, no intro, no ending',
+    negative: `${LYRIA_NO}, drums, percussion, toms, piano, fade out, crescendo, climax`,
+  },
+  {
+    id: 'l_duel_night',
+    kind: 'lyria',
+    seconds: 30,
+    seed: 3121,
+    prompt:
+      'Dark night western duel underscore in A minor, 70 bpm, very sparse: low tremolo baritone guitar, an eerie sustained low cello drone, a sparse plucked double bass note now and then, a faint distant lonely whistle, moonlit desert, ominous and still, holding at one steady level, one continuous piece from start to finish, no intro, no ending',
+    negative: `${LYRIA_NO}, drums, percussion, toms, piano, fade out, crescendo, climax`,
+  },
+  // The hub is heard between every duel: two saloon tunes that take turns (a real band, not a
+  // lone piano that reads as MIDI), and the two stings Gemini rated weakest, redone acoustic.
+  {
+    id: 'l_saloon_c',
+    kind: 'lyria',
+    seconds: 30,
+    seed: 3201,
+    prompt:
+      'Old west saloon band playing a lively honky-tonk ragtime tune in A minor, 112 bpm: a slightly out-of-tune upright piano with a stride left hand, a fiddle playing the melody, a plunky banjo, an upright bass, brushed snare, warm wooden room, recorded live, one continuous steady groove from start to finish, no intro, no ending',
+    negative: `${LYRIA_NO}, electric bass, synth, drum machine, fade out`,
+  },
+  {
+    id: 'l_saloon_d',
+    kind: 'lyria',
+    seconds: 30,
+    seed: 3211,
+    prompt:
+      'Dusty frontier saloon, a loping cowboy two-step in A minor, 104 bpm: honky-tonk upright piano, harmonica melody, strummed acoustic guitar, upright bass, washboard, relaxed and warm, recorded live in a wooden room, one continuous steady groove from start to finish, no intro, no ending',
+    negative: `${LYRIA_NO}, electric bass, synth, drum machine, fade out`,
+  },
+  {
+    id: 'l_victory',
+    kind: 'lyria',
+    seconds: 30,
+    seed: 3221,
+    prompt:
+      'A short triumphant spaghetti western victory flourish in A major: a bold solo trumpet call over fast strummed acoustic guitar and a timpani roll, ending on a big sustained major chord, cinematic, instrumental',
+    negative: `${LYRIA_NO}, drum kit, synth`,
+  },
+  {
+    id: 'l_lucky_b',
+    kind: 'lyria',
+    seconds: 30,
+    seed: 3231,
+    prompt:
+      'A short wry comic western sting: a twangy acoustic guitar lick, a cheeky bent harmonica answer and a jaw harp boing, then a final major chord, relieved and funny, played by real musicians, instrumental',
+    negative: `${LYRIA_NO}, drum kit, synth`,
+  },
   {
     id: 'l_lucky',
     kind: 'lyria',

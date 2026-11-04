@@ -1,10 +1,18 @@
-import { MathUtils, type Object3D, SRGBColorSpace, type Vector3 } from 'three'
+import {
+  CanvasTexture,
+  MathUtils,
+  type Object3D,
+  SRGBColorSpace,
+  type Texture,
+  type Vector3,
+} from 'three'
 import { FEEL } from '../data/feel.ts'
 import type { Press } from '../engine/input.ts'
 import type { Result } from '../net/leaderboard.ts'
 import type { RankedSession } from '../net/ranked.ts'
 import { save as persist } from '../save.ts'
 import type { Actor } from '../scene/actor.ts'
+import { PROBE } from '../scene/anim-probe.ts'
 import { clamp01, easeInOutCubic } from '../scene/camera.ts'
 import { PortraitStudio } from '../scene/portrait.ts'
 import { Board } from '../ui/board.ts'
@@ -128,7 +136,7 @@ export class Director extends DuelState {
     if (rankedEligible && this.c.save.level === 0) {
       tryRanked(this).catch(() => undefined)
     } else {
-      this.c.hud.setMode('PRACTICE · not ranked')
+      this.c.hud.setMode('Practice')
     }
     if (skipIntro) {
       this.startLevel(this.c.save.level, false)
@@ -144,9 +152,41 @@ export class Director extends DuelState {
   }
 
   drawPosterTex(stamp: 'coward' | 'dead' | null): void {
+    const dead = this.deadPoster
+    if (stamp === 'dead' && dead.level === this.level && dead.outlaw === this.outlaw) {
+      // drawn and uploaded with the level: the shot's frame only swaps a texture
+      this.showPoster(dead.tex)
+      return
+    }
     const portrait = this.studio.render(this.level, this.outlaw)
     drawPoster(this.posterCanvas, this.outlaw, { index: this.level, stamp, portrait })
     this.posterTex.needsUpdate = true
+    this.showPoster(this.posterTex)
+    if (stamp === null) {
+      // The kill's DEAD-stamped poster, painted and uploaded now (a level's setup) instead of on
+      // the frame of the winning shot, where the canvas work and the upload were a long frame.
+      drawPoster(dead.canvas, this.outlaw, { index: this.level, stamp: 'dead', portrait })
+      dead.tex.needsUpdate = true
+      this.c.renderer.gl.initTexture(dead.tex)
+      dead.level = this.level
+      dead.outlaw = this.outlaw
+      // and the red flash frame's shader variants for whoever stands in the street now
+      this.c.renderer.warmSilhouette(this.c.world.silhouetteHide)
+      // and both men's draw code, run once, so the bell's frame isn't its first run
+      const enemy = this.enemy
+      this.player.drawing?.warm(() => enemy?.root.position ?? null)
+      enemy?.drawing?.warm(() => this.player.root.position)
+    }
+  }
+
+  private readonly deadPoster = posterTwin()
+
+  private showPoster(t: Texture): void {
+    const m = this.c.world.posterMat
+    if (m.map !== t) {
+      m.map = t
+      m.emissiveMap = t
+    }
   }
 
   enterCock(): void {
@@ -281,6 +321,7 @@ export class Director extends DuelState {
     const e = this.enemy
     if (t >= FEEL.enemyCockDelay && this.lastTick < FEEL.enemyCockDelay && e) {
       this.c.audio.play('cocking', { gain: 0.8, pos: e.root.position.clone(), rate: 0.95 })
+      e.gestures.play('thumb', 1)
     }
     if (t >= FEEL.inputEnableDelay) {
       if (this.boss) {
@@ -296,6 +337,11 @@ export class Director extends DuelState {
 
   async lineup(day = 0.3): Promise<void> {
     this.lineupActors = await lineup(this, day)
+    if (PROBE) {
+      // the animation audit drives the lineup (tools/anim-audit.ts); tree-shaken from the deploy
+      const { installStage } = await import('./anim-stage.ts')
+      installStage(this, this.lineupActors)
+    }
   }
 
   posters(): Promise<void> {
@@ -305,4 +351,18 @@ export class Director extends DuelState {
   debugText(st: DebugStats): string {
     return debugText(this, st)
   }
+}
+
+/** A second poster canvas and texture for the DEAD stamp, set up like the street poster's. */
+function posterTwin(): {
+  canvas: HTMLCanvasElement
+  tex: CanvasTexture
+  level: number
+  outlaw: unknown
+} {
+  const canvas = document.createElement('canvas')
+  const tex = new CanvasTexture(canvas)
+  tex.colorSpace = SRGBColorSpace
+  tex.anisotropy = 4
+  return { canvas, tex, level: -1, outlaw: null }
 }

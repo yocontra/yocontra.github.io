@@ -55,6 +55,8 @@ export interface EndSpec {
   onAgain: () => void
   onLegend: () => void
   onBoard: () => void
+  /** Back to the hub (absent where there's no hub: debug and level-jump loads). */
+  onSaloon?: () => void
 }
 
 export class Hud {
@@ -157,8 +159,11 @@ export class Hud {
   call(text: string, ms: number): void {
     clearTimeout(this.callCapClear)
     this.callCap.textContent = text
-    this.callCap.classList.remove('on')
-    void this.callCap.offsetWidth
+    if (this.callCap.classList.contains('on')) {
+      // restart the animation; only then is a forced layout worth it (not on the bell's frame)
+      this.callCap.classList.remove('on')
+      void this.callCap.offsetWidth
+    }
     this.callCap.classList.add('on')
     this.callIndicator.classList.add('on')
     this.callTimer = ms
@@ -244,14 +249,23 @@ export class Hud {
     uiSound('uiStamp')
     this.cardBig.innerHTML = ''
     const img = el('img', '', this.cardBig)
-    img.alt = 'Wanted poster stamped: shot in the back, no bounty'
+    img.alt = 'Wanted poster stamped: drew early, no bounty'
     img.src = src
   }
 
-  /** "RANKED" or "PRACTICE · not ranked". */
+  /** "RANKED", "Practice", "BOUNTY HUNT"; a line still connecting ("…") stays up through the duel. */
   setMode(text: string): void {
     this.mode.textContent = text
     this.mode.classList.toggle('ranked', text === 'RANKED')
+    this.mode.classList.toggle('alert', text.endsWith('…'))
+  }
+
+  /**
+   * The duel's phase, on the root: from the cocking to the kill the CSS clears the counter, purse
+   * and mode badge off the street (out-west.css), so only the duel is on screen.
+   */
+  phase(p: string): void {
+    this.root.dataset.duel = p
   }
 
   /** The payout line on the result card, e.g. "+$150 · 212 ms draw bonus +$37". */
@@ -261,6 +275,8 @@ export class Hud {
 
   /** Set the purse; `animate` counts up (or down) gently instead of snapping. */
   setPurse(total: number, animate: boolean): void {
+    // an empty purse is nothing to show
+    this.purse.classList.toggle('zero', total === 0)
     if (!animate) {
       this.purseShown = total
       this.purseTo = total
@@ -347,13 +363,16 @@ export class Hud {
 
   // ---------------------------------------------------------------- menus
 
+  /**
+   * Paused: the ways out first, then the run's one rule (assist) and, with a keyboard, the keys.
+   * Captions, toggle walk, sound and the rest live in the Settings sheet.
+   */
   openMenu(
     s: Settings,
     handlers: {
       resume: () => void
       change: (s: Settings) => void
       restart: () => void
-      leaderboard: () => void
       /** Back to the hub, keeping the run's save (absent where there's no hub). */
       saloon?: () => void
       remap: (a: Action, done: (code: string) => void) => void
@@ -363,24 +382,35 @@ export class Hud {
     m.innerHTML = ''
     m.classList.add('on')
     el('h2', 'ow-menu-title', m, 'Paused')
-    const list = el('div', 'ow-menu-list', m)
-    const toggle = (key: keyof Omit<Settings, 'keys'>, label: string, hint: string) => {
-      const row = el('label', 'ow-toggle', list)
-      const input = el('input', '', row)
-      input.type = 'checkbox'
-      input.checked = s[key]
-      el('span', 'ow-toggle-label', row, label)
-      el('span', 'ow-toggle-hint', row, hint)
-      input.addEventListener('change', () => {
-        s[key] = input.checked
-        handlers.change(s)
-      })
+    const btns = el('div', 'ow-menu-btns', m)
+    const resume = el('button', 'ow-btn ow-btn-primary', btns, 'Resume')
+    resume.type = 'button'
+    resume.addEventListener('click', handlers.resume)
+    const settings = el('button', 'ow-btn', btns, 'Settings')
+    settings.type = 'button'
+    settings.addEventListener('click', () => openSettings(this.root, () => handlers.change(s)))
+    const restart = el('button', 'ow-btn', btns, 'Restart')
+    restart.type = 'button'
+    restart.addEventListener('click', handlers.restart)
+    if (handlers.saloon) {
+      const saloon = el('button', 'ow-btn', btns, 'Quit')
+      saloon.type = 'button'
+      saloon.title = 'Back to the menu. Your run is saved.'
+      saloon.addEventListener('click', handlers.saloon)
     }
-    toggle('captions', 'Captions', 'Sound captions and heckles.')
-    toggle('toggleWalk', 'Toggle walk', 'Press once to start walking, again to stop.')
-    toggle('assist', 'Assist', '+150 ms for every outlaw. Noted on the ledger.')
-    toggle('mono', 'Mono audio', 'Fold the mix to one channel.')
-    const keys = el('div', 'ow-keys', m)
+    const list = el('div', 'ow-menu-list', m)
+    const row = el('label', 'ow-toggle', list)
+    const assist = el('input', '', row)
+    assist.type = 'checkbox'
+    assist.checked = s.assist
+    el('span', 'ow-toggle-label', row, 'Assist')
+    el('span', 'ow-toggle-hint', row, '150 ms extra to react. Shown on your results.')
+    assist.addEventListener('change', () => {
+      s.assist = assist.checked
+      handlers.change(s)
+    })
+    // a phone has no keys to remap
+    const keys = el('div', 'ow-keys desktop-only', m)
     el('div', 'ow-keys-title', keys, 'Keys · click to remap')
     const actions: [Action, string][] = [
       ['walk', 'Walk'],
@@ -390,9 +420,9 @@ export class Hud {
       ['skip', 'Skip poster'],
     ]
     for (const [a, label] of actions) {
-      const row = el('div', 'ow-key-row', keys)
-      el('span', '', row, label)
-      const b = el('button', 'ow-key', row, s.keys[a].map(keyLabel).join(' / '))
+      const r = el('div', 'ow-key-row', keys)
+      el('span', '', r, label)
+      const b = el('button', 'ow-key', r, s.keys[a].map(keyLabel).join(' / '))
       b.type = 'button'
       b.addEventListener('click', () => {
         b.textContent = 'press a key…'
@@ -402,26 +432,6 @@ export class Hud {
           handlers.change(s)
         })
       })
-    }
-    const btns = el('div', 'ow-menu-btns', m)
-    const resume = el('button', 'ow-btn ow-btn-primary', btns, 'Resume')
-    resume.type = 'button'
-    resume.addEventListener('click', handlers.resume)
-    // sound, vibration, reduced motion and graphics: one sheet over the pause menu
-    const settings = el('button', 'ow-btn', btns, 'Settings')
-    settings.type = 'button'
-    settings.addEventListener('click', () => openSettings(this.root, () => handlers.change(s)))
-    const board = el('button', 'ow-btn', btns, 'Leaderboard')
-    board.type = 'button'
-    board.addEventListener('click', handlers.leaderboard)
-    const restart = el('button', 'ow-btn', btns, 'Restart gauntlet')
-    restart.type = 'button'
-    restart.addEventListener('click', handlers.restart)
-    if (handlers.saloon) {
-      const saloon = el('button', 'ow-btn', btns, 'Saloon')
-      saloon.type = 'button'
-      saloon.title = 'Back to the saloon. Your run is saved where you left it.'
-      saloon.addEventListener('click', handlers.saloon)
     }
     resume.focus()
   }
@@ -479,7 +489,7 @@ export class Hud {
       'div',
       'ow-end-purse',
       s,
-      `Purse: ${money(stats.total)}${stats.total >= stats.best && stats.total > 0 ? ' · a new best' : ` · best ${money(stats.best)}`}`,
+      `Earned: ${money(stats.total)}${stats.total >= stats.best && stats.total > 0 ? ' · New best' : ` · Best ${money(stats.best)}`}`,
     )
     el(
       'div',
@@ -491,24 +501,25 @@ export class Hud {
       'div',
       '',
       s,
-      stats.cowardice === 1 ? '1 man shot in the back' : `${stats.cowardice} men shot in the back`,
+      stats.cowardice === 1 ? 'Drew early: 1 time' : `Drew early: ${stats.cowardice} times`,
     )
     if (stats.assist) {
       el('div', '', s, 'Assist mode was on (+150 ms).')
     }
     if (stats.legend) {
-      el('div', '', s, 'Legend mode: the 2019 curve.')
+      el('div', '', s, 'Legend mode: the original 2019 speeds.')
     }
     const b = el('div', 'ow-menu-btns', e)
+    // ranked: banking the purse comes first; practice: another run
     const submit = el(
       'button',
-      'ow-btn ow-btn-primary',
+      stats.ranked ? 'ow-btn ow-btn-primary' : 'ow-btn',
       b,
       stats.ranked ? 'Submit to leaderboard' : 'Leaderboard',
     )
     submit.type = 'button'
     submit.addEventListener('click', onBoard)
-    const again = el('button', 'ow-btn', b, 'Play again')
+    const again = el('button', stats.ranked ? 'ow-btn' : 'ow-btn ow-btn-primary', b, 'Play again')
     again.type = 'button'
     again.addEventListener('click', onAgain)
     if (stats.legendUnlocked) {
@@ -516,6 +527,12 @@ export class Hud {
       leg.type = 'button'
       leg.addEventListener('click', onLegend)
     }
+    if (spec.onSaloon) {
+      const saloon = el('button', 'ow-btn', b, 'Back')
+      saloon.type = 'button'
+      saloon.addEventListener('click', spec.onSaloon)
+    }
+    ;(stats.ranked ? submit : again).focus()
   }
 
   hideEnd(): void {
