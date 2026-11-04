@@ -106,6 +106,8 @@ const GAIT_RUN = 2
 const MAX_ACTORS_EXTRA = 20
 /** An actor whose rider has been out of interest this long is freed even under the cap (s). */
 const PARK_S = 90
+/** Mid-match actor casts are spaced at least this far apart (ms): each is a long task. */
+const CAST_GAP_MS = 1500
 /** Players this many ranks beyond the skinned cap get their actor built ahead of time. */
 const PREBUILD_RING = 4
 /** Characters read 25% bigger than life from the top-down camera (visual only; collision is the sim's). */
@@ -446,11 +448,48 @@ export class Crowd {
     return false
   }
 
-  /** One actor build at a time, in idle time (with a deadline so it can't starve). */
+  /**
+   * Cast actors before the match, on the loading screen, so none lands on a gameplay frame: your
+   * own first, then the nearest (`distOf`), up to `limit` actors in all. One cast per
+   * macrotask, so the loading bar keeps moving. Returns how many it cast.
+   */
+  async precast(
+    limit: number,
+    self: number,
+    distOf: (id: number) => number,
+    onEach?: (n: number) => void,
+  ): Promise<number> {
+    let n = 0
+    const key = (m: Member) => (m.id === self ? -1 : distOf(m.id))
+    const order = [...this.members.values()].sort((a, b) => key(a) - key(b))
+    for (const m of order) {
+      if (this.actorCount() >= limit) {
+        break
+      }
+      if (m.actor) {
+        continue
+      }
+      // biome-ignore lint/performance/noAwaitInLoops: one cast per macrotask, on purpose
+      await this.assets.body(m.look.look.base).catch(() => undefined)
+      this.build(m, m.id === self)
+      // parked off the graph until he's drawn
+      m.holder?.removeFromParent()
+      n++
+      onEach?.(n)
+      await new Promise((r) => setTimeout(r, 0))
+    }
+    return n
+  }
+
+  /** Mid-match casts: not before this time (ms): at most one every `CAST_GAP_MS`. */
+  private castOk = 0
+
+  /** One actor build at a time, in idle time, spaced out (a cast is a long task). */
   private scheduleBuild(m: Member): void {
-    if (this.pending) {
+    if (this.pending || performance.now() < this.castOk) {
       return
     }
+    this.castOk = performance.now() + CAST_GAP_MS
     this.pending = m
     const run = () => {
       const target = this.pending
@@ -460,7 +499,7 @@ export class Crowd {
       }
     }
     if (typeof requestIdleCallback === 'function') {
-      requestIdleCallback(run, { timeout: 250 })
+      requestIdleCallback(run, { timeout: 1500 })
     } else {
       setTimeout(run, 0)
     }

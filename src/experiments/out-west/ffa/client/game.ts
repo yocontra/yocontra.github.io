@@ -55,6 +55,7 @@ import {
   EV_DEPOSIT,
   EV_KILL,
   NONE,
+  POS_SCALE,
   type RosterEntry,
   SELF_ALIVE,
   SELF_DEAD_EYE_READY,
@@ -624,12 +625,50 @@ export class FrontierGame {
     }
     this.renderer.probe.captureNow()
     this.syncRoster()
+    // the riders' bodies, cast now (behind the loading screen) instead of mid-fight
+    await this.precastRiders(onProgress)
+    if (this.disposed) {
+      return
+    }
     this.applyView()
     this.running = true
     this.last = performance.now()
     this.raf = requestAnimationFrame(this.frame)
     this.hiddenTimer = setInterval(this.hiddenTick, TICK_MS)
     onProgress(1, '')
+  }
+
+  /**
+   * Wait (up to 3 s) for the roster, then cast the near tier's worth of rider bodies, each in its
+   * own macrotask, so the loading bar moves and no cast lands on a gameplay frame.
+   */
+  private async precastRiders(onProgress: (f: number, label: string) => void): Promise<void> {
+    const crowd = this.crowd
+    if (!crowd) {
+      return
+    }
+    const until = performance.now() + 3000
+    while (this.net.roster.size < 2 && performance.now() < until && !this.disposed) {
+      // biome-ignore lint/performance/noAwaitInLoops: polling the socket's first roster, on purpose
+      await new Promise((r) => setTimeout(r, 100))
+      this.syncRoster()
+    }
+    const want = Math.min(this.net.roster.size, this.nearCap() + 4)
+    // nearest first, where the snapshots already place them
+    const at = new Map<number, number>()
+    const me = this.net.self
+    const mx = (me?.x ?? 0) / POS_SCALE
+    const mz = (me?.z ?? 0) / POS_SCALE
+    for (const v of this.net.views(this.net.renderTick(performance.now()))) {
+      at.set(v.id, Math.hypot(v.x - mx, v.z - mz))
+    }
+    onProgress(0.96, 'Fitting the posse')
+    await crowd.precast(
+      want,
+      this.net.you,
+      (id) => at.get(id) ?? 1e6,
+      (n) => onProgress(0.96 + 0.04 * Math.min(1, n / Math.max(1, want)), 'Fitting the posse'),
+    )
   }
 
   /**
