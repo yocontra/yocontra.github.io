@@ -68,6 +68,7 @@ import {
 } from '../../contract/town.ts'
 import { loadAssets } from '../../engine/assets.ts'
 import { Renderer } from '../../engine/render.ts'
+import { tierHint } from '../../engine/tiers.ts'
 import { haptic } from '../../platform/haptics.ts'
 import { presetAt } from '../../scene/presets.ts'
 import { RIM } from '../../scene/style.ts'
@@ -285,13 +286,7 @@ export class FrontierGame {
     const coarse = matchMedia('(pointer: coarse)').matches || navigator.maxTouchPoints > 0
     this.touchUi = coarse
     this.settings = loadSettings()
-    this.renderer = new Renderer(
-      this.canvas,
-      this.scene,
-      this.cam.camera,
-      coarse ? 'low' : 'high',
-      'ffa',
-    )
+    this.renderer = new Renderer(this.canvas, this.scene, this.cam.camera, tierHint(), 'ffa')
     this.scene.userData.owDay = DAY
     this.shooter = new ShooterCamera(this.cam.camera)
     // the first-person view model rides on the camera, so the camera joins the scene graph

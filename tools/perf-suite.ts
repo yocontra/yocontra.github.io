@@ -6,7 +6,7 @@
  * `--stress`), in real Chrome. One table, so regressions show.
  *
  *   bun tools/perf-suite.ts [--rate=4] [--stress] [--secs=20] [--screen=substr] [--portrait]
- *     [--no-build] [--port=4387] [--sustained=600] [--profile=screen]
+ *     [--no-build] [--port=4387] [--sustained=600] [--profile=screen] [--devices]
  *
  * Screens: the title, the saloon hub, the Outfitter, a Quick Draw duel (level 7, played: it holds to
  * walk, waits, fires on the call, then sits through the kill cam; one row per phase), and Frontier
@@ -28,6 +28,7 @@
 import process from 'node:process'
 // biome-ignore lint/correctness/noUnresolvedImports: playwright's CommonJS re-exports are invisible to Biome
 import { type BrowserContext, type CDPSession, chromium, type Page } from 'playwright'
+import { deviceTiers } from './perf-devices.ts'
 import { profileMain, serveProd, startProfile, stopProfile } from './perf-lib.ts'
 
 const opt = (k: string, d: string): string =>
@@ -69,6 +70,7 @@ const SAMPLER = `(() => {
 
 type Frame = [number, number, string]
 interface Snap {
+  dpr: number
   draws: number
   tris: number
   textures: number
@@ -411,6 +413,10 @@ const browser = await chromium.launch({
   args: ['--use-angle=metal', '--ignore-gpu-blocklist', '--enable-precise-memory-info'],
 })
 try {
+  if (process.argv.includes('--devices')) {
+    await deviceTiers(browser, GAME)
+    rates.length = 0
+  }
   for (const rate of rates) {
     const ctx = await browser.newContext({ hasTouch: true })
     await menus(ctx, rate)
@@ -477,13 +483,15 @@ const table = rows.map((r) => {
 const widths = head.map((h, i) => Math.max(h.length, ...table.map((r) => (r[i] ?? '').length)))
 const line = (cells: string[]): string =>
   `| ${cells.map((c, i) => (i === 0 ? c.padEnd(widths[i] ?? 0) : c.padStart(widths[i] ?? 0))).join(' | ')} |`
-console.log(line(head))
-console.log(
-  `|${widths.map((w, i) => (i === 0 ? `:${'-'.repeat(w + 1)}` : `${'-'.repeat(w + 1)}:`)).join('|')}|`,
-)
-for (const r of table) {
-  console.log(line(r))
+if (table.length > 0) {
+  console.log(line(head))
+  console.log(
+    `|${widths.map((w, i) => (i === 0 ? `:${'-'.repeat(w + 1)}` : `${'-'.repeat(w + 1)}:`)).join('|')}|`,
+  )
+  for (const r of table) {
+    console.log(line(r))
+  }
+  console.log(
+    'Bounty Hunt shares the duel rows (same scene and director; it needs the API and a second client).',
+  )
 }
-console.log(
-  'Bounty Hunt shares the duel rows (same scene and director; it needs the API and a second client).',
-)
