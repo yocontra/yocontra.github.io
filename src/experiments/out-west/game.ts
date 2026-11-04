@@ -120,6 +120,17 @@ function warmExtras(scene: Scene, sprites: readonly Object3D[]): () => void {
   }
 }
 
+/**
+ * A new act's arena: its materials compiled and the red DRAW! frame's silhouette variants warmed as
+ * it goes up (behind the poster), not on the first call there.
+ */
+function warmArenas(world: World, renderer: Renderer, rig: CameraRig, scene: Scene): void {
+  world.onArena = () => {
+    renderer.warmSilhouette(world.silhouetteHide)
+    renderer.gl.compileAsync(world.root, rig.cam, scene).catch(() => undefined)
+  }
+}
+
 export async function createGame(o: GameOpts): Promise<Game> {
   const scene = new Scene()
   const rig = new CameraRig(window.innerWidth / window.innerHeight)
@@ -135,6 +146,7 @@ export async function createGame(o: GameOpts): Promise<Game> {
   )
   const world = new World(scene, assets.tex, renderer.spec.shadowSize, renderer.tier)
   const { coffins } = dressStreet(assets.props, world.town)
+  warmArenas(world, renderer, rig, scene)
 
   const dot = softDot()
   const dust = new Dust(renderer.spec.dust, dot)
