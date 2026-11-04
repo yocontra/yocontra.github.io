@@ -573,6 +573,8 @@ export class FrontierGame {
     this.pickups = new Pickups(this.scene, TOWN.pickups, assets.props)
     const near = this.nearCap()
     this.crowd = new Crowd(this.scene, assets, near)
+    // real shadows for the nearest few: 4 on floor and legacy (each is a shadow-pass draw set)
+    this.crowd.casters = near < 16 ? 4 : 6
     this.map = new Minimap(TOWN, this.touch ? 112 : 148)
     this.hud.mapSlot.append(this.map.el)
     this.viewModel = new ViewModel(this.cam.camera, assets)
@@ -601,13 +603,17 @@ export class FrontierGame {
     onProgress(1, '')
   }
 
-  /** Skinned cap: 12 on the floor tier, 8 on legacy, 16 above (stream H's measurements). */
+  /**
+   * Skinned cap: 8 on the floor tier, 6 on legacy, 16 above. Past the cap riders are VAT instances,
+   * which read correctly from street level (hats included); each skinned rider costs its mixer, a
+   * bone texture upload and 3–5 draws.
+   */
   private nearCap(): number {
     const t = this.renderer.tier
     if (t === 'legacy') {
-      return 8
+      return 6
     }
-    return t === 'floor' ? 12 : 16
+    return t === 'floor' ? 8 : 16
   }
 
   private onTransport(state: string, detail?: string): void {
@@ -983,6 +989,7 @@ export class FrontierGame {
     this.perf.simMs = t1 - t0
     this.perf.frameMs = performance.now() - t0
     this.audio?.update()
+    this.renderer.label = 'frontier'
     this.renderer.adapt(dtMs, true)
     this.renderer.render(dt)
     if (this.trace.on) {

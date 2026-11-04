@@ -213,6 +213,7 @@ export async function createGame(o: GameOpts): Promise<Game> {
     }
     const dt = director.frame(now, realDt)
     const phase = director.phase
+    renderer.label = phase
     const tense = phase === 'wait' || phase === 'call' || phase === 'win' || phase === 'bossClock'
     if (!tense && renderer.adapt(raw, true)) {
       dust.points.visible = true
@@ -222,8 +223,7 @@ export async function createGame(o: GameOpts): Promise<Game> {
     dust.update(realDt, renderer.dpr)
     puffs.update(dt, renderer.dpr, 0.6)
     sparks.update(dt, renderer.dpr, 0)
-    const flashK = flash.update(dt)
-    void flashK
+    flash.update(dt)
     glint.update(realDt)
     physics.update(dt, 1)
     for (const t of tumbleweeds) {
