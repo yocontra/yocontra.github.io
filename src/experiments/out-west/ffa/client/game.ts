@@ -52,6 +52,7 @@ import {
   EV_DEPOSIT,
   EV_KILL,
   NONE,
+  type RosterEntry,
   SELF_ALIVE,
   SELF_DEAD_EYE_READY,
   SELF_HOLSTERED,
@@ -252,6 +253,7 @@ export class FrontierGame {
   private lastShotAt = -1e9
   /** Dev harness ADS (desktop has no touch AIM toggle). */
   private devAdsOn = false
+  private devWeapon: number | null = null
   /** Dev-only per-frame motion trace (`__frontierTrace`). */
   readonly trace = new MotionTrace()
   private ticksThisFrame = 0
@@ -624,13 +626,22 @@ export class FrontierGame {
       return
     }
     for (const r of this.net.roster.values()) {
-      crowd.setLook(r.id, lookFor(r.loadout, r.id, r.bot))
+      this.dress(r)
+    }
+  }
+
+  /** One rider's look, on the crowd (and on your first-person arms when it's you). */
+  private dress(r: RosterEntry): void {
+    const look = lookFor(r.loadout, r.id, r.bot)
+    this.crowd?.setLook(r.id, look)
+    if (r.id === this.net.you) {
+      this.viewModel?.setLook(look)
     }
   }
 
   private onControl(m: ServerControl): void {
     if (m.type === 'roster_add') {
-      this.crowd?.setLook(m.entry.id, lookFor(m.entry.loadout, m.entry.id, m.entry.bot))
+      this.dress(m.entry)
     } else if (m.type === 'roster_remove') {
       this.crowd?.remove(m.id)
       this.score.forget(m.id)
@@ -1209,7 +1220,7 @@ export class FrontierGame {
     )
     vm.update(
       dt,
-      this.net.weapon.weapon,
+      this.devWeapon ?? this.net.weapon.weapon,
       this.turned.yaw,
       this.turned.pitch,
       speed,
@@ -1637,6 +1648,11 @@ export class FrontierGame {
   /** Dev harness only: look as if the mouse moved (pointer lock doesn't run headless). */
   devLook(dx: number, dy: number): void {
     this.desk.injectLook(dx, dy)
+  }
+
+  /** Dev harness only: show a weapon in the first-person hands (null: the one you hold). */
+  devShowWeapon(w: number | null): void {
+    this.devWeapon = w
   }
 
   /** Dev harness only: hold or release aim-down-sights. */
