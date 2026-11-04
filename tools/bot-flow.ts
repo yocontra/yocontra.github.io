@@ -49,7 +49,8 @@ for (let t = 0; t < seconds * TICK_HZ; t++) {
       kills++
       const v = w.players[e.victim]
       if (v) {
-        deaths[(v.x > layout.size / 2 ? 1 : 0) + (v.z > layout.size / 2 ? 2 : 0)]++
+        const quarter = (v.x > layout.size / 2 ? 1 : 0) + (v.z > layout.size / 2 ? 2 : 0)
+        deaths[quarter] = (deaths[quarter] ?? 0) + 1
         const key = `${Math.floor(v.x / 24)},${Math.floor(v.z / 24)}`
         heat.set(key, (heat.get(key) ?? 0) + 1)
       }
