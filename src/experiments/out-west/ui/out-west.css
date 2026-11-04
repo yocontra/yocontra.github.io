@@ -430,6 +430,13 @@ body {
 .ow-card-coward .ow-card-pay {
   color: var(--ow-bad-ink);
 }
+/* phones (and short landscape): a result card would sit over the counter, purse and mode badge
+   at the top left, so they step back while it shows; the card says what was paid */
+@media (max-width: 720px), (max-height: 500px) {
+  .ow:has(.ow-card.on) :is(.ow-counter, .ow-purse, .ow-mode) {
+    opacity: 0;
+  }
+}
 @media (max-width: 480px) {
   .ow-card {
     padding: var(--ow-s3);

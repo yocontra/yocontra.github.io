@@ -6,7 +6,7 @@
  */
 import type { LedgerKind, MeResponse } from '../contract/economy.ts'
 import { townClosedCopy } from '../contract/town.ts'
-import { DEFAULT_LOADOUT, type Loadout, normalizeLoadout } from '../data/catalog.ts'
+import { DEFAULT_LOADOUT, type ItemId, type Loadout, normalizeLoadout } from '../data/catalog.ts'
 import type { Dyes } from '../data/dye.ts'
 import { money } from '../data/economy.ts'
 import { licenceCopy, licenceStatus } from '../data/licence.ts'
@@ -38,6 +38,8 @@ export interface HubDeps {
   stage: (shot: 'hub' | 'store') => void
   /** Dress your gunslinger (equipped loadout, or a preview), with your dye jobs. */
   dress: (l: Loadout, dyes: Dyes) => void
+  /** The Outfitter's picture of one piece of kit (null until the game has loaded). */
+  thumb: (id: ItemId) => HTMLCanvasElement | null
   playGauntlet: (c: GauntletChoice) => void
   bountyHunt: (m: QueueMatch, xpBefore: number | null) => void
   /** A fresh Turnstile token for the queue. */
@@ -396,6 +398,7 @@ export class Hub {
     const store = new Outfitter(this.parent, {
       me: () => this.me,
       preview: (l, dyes) => this.deps.dress(l, dyes ?? this.dyes),
+      thumb: (id) => this.deps.thumb(id),
       changed: (patch) => this.patch(patch),
       close: () => {
         this.root.classList.remove('shop')

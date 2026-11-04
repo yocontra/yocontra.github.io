@@ -120,6 +120,7 @@ function makeHub(
     rankedOk,
     stage: (shot) => game()?.hubShot(shot),
     dress: (l, dyes) => game()?.dress(l, dyes),
+    thumb: (id) => game()?.itemThumb(id) ?? null,
     playGauntlet: (c) => game()?.playGauntlet(c),
     bountyHunt: (match, xpBefore) =>
       game()?.startPvp({
