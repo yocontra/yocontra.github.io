@@ -64,6 +64,12 @@ export const FRONTIER_VIEWS: TownView[] = [
   eye('facade-store', 52, 69, 48, 76),
   eye('trough-corral', 15, 47, 12.5, 44.5),
   { name: 'bank-deposits', from: [72, 1.7, 76], to: [72, 2.2, 83] },
+  eye('coach-close', 27, 58.5, 33, 61),
+  eye('wreck-close', 124, 60, 131, 64),
+  eye('telegraph', 50, 132, 96, 126),
+  eye('ads-alley', 43.5, 64, 43.5, 40),
+  { name: 'ad-livery', from: [45, 2.5, 48], to: [40, 3.4, 44] },
+  { name: 'ad-store', from: [37.5, 2.5, 80], to: [40, 3.3, 82] },
   // interiors
   eye('saloon-bar', 64, 52, 50, 40),
   eye('store-inside', 56, 76, 42, 86),
