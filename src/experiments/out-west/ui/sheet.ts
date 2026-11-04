@@ -104,8 +104,16 @@ export interface ConfirmOpts {
 /** A modal sheet with two buttons. Resolves true for yes, false for no, Escape or a tap outside. */
 export function confirmSheet(root: HTMLElement, o: ConfirmOpts): Promise<boolean> {
   return new Promise((resolve) => {
+    // everything behind the sheet goes inert: one live Buy button, not two with the same label
+    const behind = [...root.children].filter(
+      (c): c is HTMLElement => c instanceof HTMLElement && !c.inert,
+    )
+    for (const c of behind) {
+      c.inert = true
+    }
     const back = el('div', 'ow-sheet on', root)
     back.setAttribute('role', 'alertdialog')
+    back.setAttribute('aria-modal', 'true')
     back.setAttribute('aria-label', o.title)
     swallow(back)
     const panel = el('div', 'ow-hub-panel ow-sheet-panel', back)
@@ -113,6 +121,9 @@ export function confirmSheet(root: HTMLElement, o: ConfirmOpts): Promise<boolean
     el('p', 'ow-hub-note', panel, o.body)
     const row = el('div', 'ow-hub-row', panel)
     const done = (v: boolean): void => {
+      for (const c of behind) {
+        c.inert = false
+      }
       globalThis.removeEventListener('keydown', onKey, true)
       back.remove()
       resolve(v)

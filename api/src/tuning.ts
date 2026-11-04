@@ -40,46 +40,52 @@ const t = (drawMs: number, jitterMs: number, accuracy: number): TargetTuning => 
 
 const COMMON_CUES = ['tumbleweed', 'crow', 'creak', 'dog']
 
+/**
+ * One row per outlaw, in gauntlet order (`data/outlaws.ts` ORDER), with the client roster's draw,
+ * jitter, accuracy, wait and fake chance. Outlaws 1–2 are the tutorial pair; 3–15 ramp 520→300 ms
+ * (tuned with tools/duel-sim.ts). Two-Gun Delmer (6) is entered at his effective draw: his first
+ * shot always misses and the second follows 120 ms later, so the single shot here is 345 + 120.
+ */
 const TABLE: readonly DuelTuning[] = [
   { waitMs: [1000, 2000], fakeChance: 0, cues: [], targets: [t(900, 50, 0.3)] },
-  { waitMs: [1000, 2500], fakeChance: 0, cues: [], targets: [t(820, 60, 0.45)] },
-  { waitMs: [1200, 2800], fakeChance: 0.2, cues: ['crow'], targets: [t(750, 60, 0.55)] },
-  { waitMs: [1200, 3000], fakeChance: 0.3, cues: ['coin'], targets: [t(690, 50, 0.65)] },
+  { waitMs: [1000, 2500], fakeChance: 0, cues: [], targets: [t(750, 50, 0.45)] },
+  { waitMs: [1200, 2800], fakeChance: 0.4, cues: ['crow'], targets: [t(520, 50, 0.6)] },
   {
     waitMs: [1000, 3000],
-    fakeChance: 0.15,
+    fakeChance: 0.35,
     cues: ['hiccup', 'bottle'],
-    targets: [t(640, 150, 0.4)],
+    targets: [t(502, 140, 0.55)],
   },
-  { waitMs: [800, 1800], fakeChance: 0.2, cues: COMMON_CUES, targets: [t(590, 50, 0.7)] },
+  { waitMs: [1200, 3000], fakeChance: 0.45, cues: ['coin'], targets: [t(483, 40, 0.7)] },
+  { waitMs: [1500, 4000], fakeChance: 0.45, cues: COMMON_CUES, targets: [t(465, 30, 0.8)] },
+  { waitMs: [800, 1800], fakeChance: 0.5, cues: COMMON_CUES, targets: [t(447, 40, 0.8)] },
   {
     waitMs: [1500, 3500],
-    fakeChance: 0.25,
+    fakeChance: 0.5,
     cues: ['gust', ...COMMON_CUES],
-    targets: [t(550, 40, 0.75)],
+    targets: [t(428, 30, 0.88)],
   },
-  { waitMs: [1500, 3500], fakeChance: 0.25, cues: COMMON_CUES, targets: [t(510, 20, 0.8)] },
-  { waitMs: [1500, 4000], fakeChance: 0.3, cues: ['whistle'], targets: [t(475, 40, 0.8)] },
-  { waitMs: [1500, 4000], fakeChance: 0.25, cues: COMMON_CUES, targets: [t(445, 40, 0.9)] },
-  { waitMs: [1500, 4000], fakeChance: 0.4, cues: ['gang-drr'], targets: [t(420, 40, 0.85)] },
-  { waitMs: [2000, 4500], fakeChance: 0.4, cues: ['piano-stop'], targets: [t(395, 30, 0.85)] },
+  { waitMs: [1500, 3500], fakeChance: 0.5, cues: COMMON_CUES, targets: [t(410, 15, 0.9)] },
+  { waitMs: [1500, 4000], fakeChance: 0.55, cues: ['whistle'], targets: [t(392, 30, 0.92)] },
+  { waitMs: [1500, 4000], fakeChance: 0.6, cues: ['gang-drr'], targets: [t(373, 30, 0.92)] },
+  { waitMs: [2000, 4500], fakeChance: 0.6, cues: ['piano-stop'], targets: [t(355, 25, 0.94)] },
   {
     waitMs: [2000, 4500],
-    fakeChance: 0.35,
+    fakeChance: 0.55,
     cues: ['lantern', ...COMMON_CUES],
-    targets: [t(375, 30, 0.9)],
+    targets: [t(337, 25, 0.94)],
+  },
+  {
+    waitMs: [2000, 5000],
+    fakeChance: 0.75,
+    cues: ['twitch', ...COMMON_CUES],
+    targets: [t(318, 25, 0.92)],
   },
   {
     waitMs: [2000, 5000],
     fakeChance: 0.6,
-    cues: ['twitch', ...COMMON_CUES],
-    targets: [t(355, 30, 0.9)],
-  },
-  {
-    waitMs: [2000, 5000],
-    fakeChance: 0.4,
     cues: ['cards', ...COMMON_CUES],
-    targets: [t(335, 10, 0.95)],
+    targets: [t(300, 10, 0.92)],
   },
   {
     waitMs: [2000, 5000],

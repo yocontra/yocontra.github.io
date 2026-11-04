@@ -37,6 +37,7 @@ import type { Preset } from '../../scene/presets.ts'
 import { Sky } from '../../scene/sky.ts'
 import type { TownLayout } from '../sim/layout.ts'
 import { Rng } from '../sim/rng.ts'
+import { type Interior, withInterior } from './interior.ts'
 import {
   OUTSKIRTS_SEED,
   outskirtsProps,
@@ -205,12 +206,18 @@ export function buildWilds(layout: TownLayout, tier: string): Group {
       const a = Math.atan2(z - s / 2, x - s / 2)
       return `w${Math.floor(((a + Math.PI) / (Math.PI * 2)) * 8)}`
     },
-    shadowNear: { x: s / 2, z: s / 2, r: s },
+    // no real-time shadows: the plants all stand outside the square, past the shadow map's reach
   })
 }
 
-/** Moving cloud shadows on every lit, static town surface under `root`. */
-export function shadeTown(root: Object3D): void {
+/** Plank-faced town materials (boards vary one by one). */
+const BOARDS = new Set(['town-wall', 'town-roof', 'town-wood'])
+
+/**
+ * Moving cloud shadows and interior light on every lit, static town surface under `root`; window
+ * glass gets the indoor/outdoor look.
+ */
+export function shadeTown(root: Object3D, inside: Interior): void {
   const seen = new Set<Material>()
   root.traverse((o) => {
     if (o.name === 'outskirts') {
@@ -225,6 +232,11 @@ export function shadeTown(root: Object3D): void {
       if (!seen.has(mat) && (mat as { isMeshStandardMaterial?: boolean }).isMeshStandardMaterial) {
         seen.add(mat)
         withCloudShadow(mat)
+        if (mat.name === 'town-windows') {
+          withInterior(mat, 'glass', inside)
+        } else {
+          withInterior(mat, BOARDS.has(mat.name) ? 'boards' : 'surface', inside)
+        }
       }
     }
   })
@@ -282,7 +294,6 @@ export class Wilds {
     for (const [i, lane] of lanes.entries()) {
       const m = new Mesh(geo, mat)
       m.name = 'tumbleweed'
-      m.castShadow = true
       this.scene.add(m)
       this.weeds.push(new Roller(m, lane, layout, i * 23))
     }

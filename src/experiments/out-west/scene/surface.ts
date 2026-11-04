@@ -140,9 +140,10 @@ const GLASS_GLSL = /* glsl */ `
  */
 export function glassLook(mat: MeshStandardMaterial): void {
   mat.userData.procedural = true
-  mat.roughness = 0.1
-  mat.metalness = 0.35
-  mat.envMapIntensity = 1.4
+  mat.roughness = 0.12
+  mat.metalness = 0.15
+  // a dark pane catching a dim sheen of the sky, not a mirror of it
+  mat.envMapIntensity = 0.55
   const prev = mat.onBeforeCompile.bind(mat)
   mat.onBeforeCompile = (shader: WebGLProgramParametersWithUniforms, r: WebGLRenderer) => {
     prev(shader, r)

@@ -25,7 +25,41 @@ export type {
   Stance,
 } from './outlaw-types.ts'
 
-export const OUTLAWS: readonly Outlaw[] = [...ROSTER_EARLY, ...ROSTER_LATE]
+/**
+ * The gauntlet order, by name: the roster files hold the men, this holds the running order
+ * (each man's `bounty` and `day` follow his slot here). The gimmicks teach early: the drunk's
+ * wild timing at 4, the coin at 5 and the two-gun man's sure miss at 6, so 7–15 can lean on
+ * draw speed and fake-outs. Must match `api/src/tuning.ts` row for row.
+ */
+const ORDER: readonly string[] = [
+  'Bret P. Barsh',
+  'Prescott J. House',
+  'Calhoun C. Trine',
+  'Burney N. Coover',
+  'Ace Q. McConly',
+  'Delmer F. Gusselman',
+  'Salvador R. Gruell',
+  'Felipe K. Wheeler',
+  'Laura Bullion',
+  'Thomas B. Arnold',
+  'Pearl Hart',
+  'Luke Short',
+  'Dallas Stoudenmire',
+  'Harvey “Kid Curry” Logan',
+  'James “Wild Bill” Hickok',
+  'William “Curly Bill” Brocius',
+  'John Wesley Hardin',
+]
+
+const POOL: readonly Outlaw[] = [...ROSTER_EARLY, ...ROSTER_LATE]
+
+export const OUTLAWS: readonly Outlaw[] = ORDER.map((name) => {
+  const o = POOL.find((p) => p.name === name)
+  if (!o) {
+    throw new Error(`gauntlet order names an outlaw not on the roster: ${name}`)
+  }
+  return o
+})
 
 export const LEATHER_COLOR = LEATHER
 

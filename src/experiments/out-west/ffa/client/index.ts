@@ -203,6 +203,7 @@ export function mountFrontier(root: HTMLElement, opts: FrontierOptions = {}): Fr
       ads: (on: boolean) => game.devAds(on),
       set: (v: 'third' | 'first' | 'top') => game.setView(v),
       closeHowTo: () => game.devCloseHowTo(),
+      weapon: (w: number | null) => game.devShowWeapon(w),
     })
   }
   const ap = game.autopilot
