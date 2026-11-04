@@ -24,7 +24,13 @@ import type { AuditIssue, AuditReport } from '../src/experiments/out-west/scene/
 const base = process.argv.find((a) => a.startsWith('http')) ?? 'http://localhost:4365'
 const arg = (k: string) =>
   process.argv.find((a) => a.startsWith(`--${k}=`))?.slice(k.length + 3) ?? null
-const scenes = arg('scene') ? [arg('scene') as string] : ['duel', 'frontier']
+/** The duel is audited in every arena (`duel` is the street; `duel:depot` and so on, scene/arenas). */
+const DUEL_ARENAS = ['duel', 'duel:depot', 'duel:mission', 'duel:bank']
+const scenes = (arg('scene') ? [arg('scene') as string] : ['duel', 'frontier']).flatMap((s) =>
+  s === 'duel' ? DUEL_ARENAS : [s],
+)
+/** `#arena=` for a duel scene (the street when none). */
+const arenaHash = (scene: string): string => `&arena=${scene.split(':')[1] ?? 'street'}`
 const tiers = arg('tier') ? [arg('tier') as string] : ['high', 'low']
 const shots = arg('shots')
 const json = process.argv.includes('--json')
@@ -86,11 +92,18 @@ function frontierViews(): View[] {
   ]
 }
 
+/** The low-angle views for a scene (the arenas have none of their own yet: their audit is the list). */
+function viewsFor(scene: string): View[] {
+  if (scene === 'frontier') {
+    return frontierViews()
+  }
+  return scene === 'duel' ? duelViews() : []
+}
+
 async function open(page: Page, scene: string, tier: string): Promise<void> {
-  const url =
-    scene === 'duel'
-      ? `${base}/experiments/out-west/#lineup&day=0.3&tier=${tier}`
-      : `${base}/experiments/out-west/frontier/?bots=0#tier=${tier === 'low' ? 'floor' : 'high'}`
+  const url = scene.startsWith('duel')
+    ? `${base}/experiments/out-west/#lineup&day=0.3&tier=${tier}${arenaHash(scene)}`
+    : `${base}/experiments/out-west/frontier/?bots=0#tier=${tier === 'low' ? 'floor' : 'high'}`
   await page.goto(url)
   // the town is built once the biggest captured scene stops growing
   await page.waitForFunction(
@@ -102,7 +115,7 @@ async function open(page: Page, scene: string, tier: string): Promise<void> {
     undefined,
     { timeout: 120_000 },
   )
-  await page.waitForTimeout(scene === 'duel' ? 6000 : 8000)
+  await page.waitForTimeout(scene.startsWith('duel') ? 6000 : 8000)
 }
 
 function line(i: AuditIssue): string {
@@ -211,7 +224,7 @@ for (const scene of scenes) {
     }
     if (shots) {
       mkdirSync(shots, { recursive: true })
-      const views = scene === 'duel' ? duelViews() : frontierViews()
+      const views = viewsFor(scene)
       for (const [name, from, to] of views) {
         const url = await page.evaluate(
           async ([mod, f, t]) => {

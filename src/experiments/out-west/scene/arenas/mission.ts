@@ -110,13 +110,13 @@ function arcade(p: ArenaParts): void {
     (ARC_X + CONVENTO_X) / 2,
     ARC_H - 0.02,
     (z0 + ARC_Z1) / 2,
-    CONVENTO_X - ARC_X,
+    CONVENTO_X - ARC_X - 0.02,
     0.04,
-    len,
+    len - 0.04,
     0x4a_36_28,
     {
       rotUV: true,
-      skip: ['top'],
+      skip: ['top', 'pz', 'nz'],
     },
   )
   // the convento behind: adobe, plastered, a flat roof with its own parapet and canales
@@ -220,11 +220,11 @@ function row(p: ArenaParts): void {
   p.put('k_table', placeAt(-9.9, 0, 18.4, 0.1))
   // a ladder up to the third house's roof
   for (const s of [-0.24, 0.24]) {
-    beam(t, V(ROW_X + 0.9, 0, 30 + s), V(ROW_X + 0.05, 4.6, 30 + s), 0.06, 0.06, 0x8a_6a_48)
+    beam(t, V(ROW_X + 0.9, 0, 30.5 + s), V(ROW_X + 0.05, 4.6, 30.5 + s), 0.06, 0.06, 0x8a_6a_48)
   }
   for (let k = 1; k < 11; k++) {
     const f = k / 11
-    t.box(ROW_X + 0.9 - f * 0.85, f * 4.6, 30, 0.05, 0.05, 0.5, 0x8a_6a_48)
+    t.box(ROW_X + 0.9 - f * 0.85, f * 4.6, 30.5, 0.05, 0.05, 0.5, 0x8a_6a_48)
   }
   // a beehive oven out front
   for (let i = 0; i < 5; i++) {
@@ -267,16 +267,16 @@ function plaza(p: ArenaParts): void {
   // the well: a stone ring, a timber frame, a crossbar and a bucket
   const wx = -5.6
   const wz = 31
-  cyl(p.m.cell('stone'), wx, 0, wz, 1.0, 1.0, 0.8, 16, 0xe0_d0_b8)
+  cyl(p.m.cell('stone'), wx, 0, wz, 1.0, 1.0, 0.8, 16, 0xe0_d0_b8, false)
   cyl(p.m.cell('stone'), wx, 0.8, wz, 1.06, 1.06, 0.1, 16, 0xd0_c0_a8, false)
-  p.adobe.box(wx, 0.79, wz, 1.6, 0.02, 1.6, 0x2a_22_1c)
+  p.adobe.box(wx, 0.25, wz, 1.3, 0.5, 1.3, 0x2a_22_1c)
   const t = p.trim
   for (const dx of [-0.95, 0.95]) {
     t.box(wx + dx, 1.3, wz, 0.14, 1.9, 0.14, BEAM)
   }
   t.box(wx, 2.2, wz, 2.2, 0.14, 0.16, BEAM)
   t.box(wx, 1.8, wz, 0.01, 0.8, 0.01, 0x6a_5a_3a)
-  p.put('k_bucket', placeAt(wx, 1.2, wz))
+  p.put('k_bucket', placeAt(wx + 1.45, 0, wz + 0.4, 0.4))
   // the cross on its stepped base, in the church yard (screen left of the lane)
   const cx = 5.2
   const cz = 40

@@ -181,7 +181,12 @@ export function church(p: ArenaParts): void {
   t.box(tx, 18.2, tz, 0.12, 1.1, 0.12, IRON)
   t.box(tx, 18.4, tz, 0.55, 0.1, 0.1, IRON)
   cyl(p.m.cell('tin'), tx, 13.1, tz, 0.5, 0.22, 0.8, 12, 0x6a_4a_26)
-  t.box(tx, 14.05, tz, 3.2, 0.14, 0.16, BEAM)
+  // the bell's headstock on a beam across the belfry, carried by two beams pier to pier
+  for (const dz of [-1.55, 1.55]) {
+    t.box(tx, 14.05, tz + dz, 3.6, 0.14, 0.16, BEAM)
+  }
+  t.box(tx, 14.19, tz, 0.16, 0.14, 3.26, BEAM)
+  t.box(tx, 14.0, tz, 0.12, 0.24, 0.12, IRON)
 }
 
 /** A half-annulus outline (an archivolt) centred on the origin. */

@@ -223,10 +223,12 @@ function shopfront(p: ArenaParts, b: Block): void {
   const zc = (b.z0 + b.z1) / 2
   // the shopfront: iron columns, plate glass to the doors, a transom band and the sign over it
   for (let z = b.z0 + 0.25; z <= b.z1 - 0.2; z += len / Math.max(2, Math.round(len / 3))) {
+    if (b.doors.some((dz) => Math.abs(dz - z) < 1.0)) {
+      continue
+    }
     t.box(s * (FRONT - 0.12), (DECK + 4.0) / 2, z, 0.24, 4.0 - DECK, 0.24, IRON)
   }
   t.box(s * (FRONT - 0.12), 4.0, zc, 0.26, 0.2, len, IRON)
-  t.box(s * (FRONT - 0.04), DECK + 0.35, zc, 0.08, 0.7, len, 0x3a_2a_22)
   const doorW = 1.2
   const panes: [number, number][] = []
   let from = b.z0 + 0.4
@@ -239,6 +241,7 @@ function shopfront(p: ArenaParts, b: Block): void {
     if (z1 - z0 > 0.5) {
       // plate glass in lights a metre wide, a transom row over them, a panelled stall board below
       const gx = s * (FRONT - 0.03)
+      t.box(s * (FRONT - 0.035), DECK + 0.36, (z0 + z1) / 2, 0.05, 0.68, z1 - z0, 0x3a_2a_22)
       p.glass.box(gx, DECK + 0.7 + 0.95, (z0 + z1) / 2, 0.04, 1.9, z1 - z0, 0xff_ff_ff)
       p.glass.box(gx, DECK + 3.05, (z0 + z1) / 2, 0.04, 0.42, z1 - z0, 0xff_ff_ff)
       t.box(s * (FRONT - 0.07), DECK + 2.72, (z0 + z1) / 2, 0.08, 0.24, z1 - z0, IRON)
@@ -377,10 +380,10 @@ function bank(p: ArenaParts): void {
       skip: ['bottom', 'top'],
     },
   )
-  st.box(0, plinth + 4.7, z - 0.1, BANK_HALF * 2 + 0.3, 0.3, 0.6, STONE)
+  st.box(0, plinth + 5.0, z - 0.1, BANK_HALF * 2 + 0.3, 0.84, 0.6, STONE)
   const face: Face = { nx: 0, nz: -1, d: z }
   for (const x of [-6, -3, 0, 3, 6]) {
-    sashWindow(p, face, x, plinth + 5.5)
+    sashWindow(p, face, x, plinth + 5.75)
   }
   quoins(st, -BANK_HALF, z, -1, -1, plinth + 4.8, 9.4)
   quoins(st, BANK_HALF, z, 1, -1, plinth + 4.8, 9.4)
@@ -388,8 +391,8 @@ function bank(p: ArenaParts): void {
   p.board(
     { text: 'FIRST NATIONAL BANK', bg: '#141210', fg: '#e8c870' },
     0,
-    plinth + 5.22,
-    z - 0.42,
+    plinth + 5.0,
+    z - 0.405,
     '-z',
     8.6,
     0.62,
@@ -454,12 +457,11 @@ function square(p: ArenaParts): [number, number, number][] {
   p.prop('lantern', 0.45, 'y', placeAt(3.4, 2.6, BANK_Z - 2.4), false)
   hitchRail(p.trim, H - 0.6, 4.4, 'z')
   hitchRail(p.trim, -(H - 0.6), 16.2, 'z')
-  hitchRail(p.trim, -(H - 0.6), 28, 'z')
+  hitchRail(p.trim, -(H - 0.6), 28, 'z', 3.8)
   // a trough at the kerb
   p.trim.box(8.3, 0.35, -14, 0.9, 0.7, 2.4, 0x5a_44_30)
   // the express wagon waiting at the bank, a strongbox on it
   p.prop('cart', 4.2, 'max', placeAt(5.6, 0, BANK_Z - 6, 0.15))
-  p.put('k_chest', placeAt(5.55, 1.05, BANK_Z - 6.2, 0.15))
   // benches on the sidewalks where the street's folk sit
   for (const [x, z] of [
     [10.8, 11.3],
