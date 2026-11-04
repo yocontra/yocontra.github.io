@@ -27,7 +27,8 @@ export function bankWindows(windows: readonly Zone[] = BANK_WINDOWS): BankWindow
   return windows.map((z) => ({ id: z.id, x: z.x, z: z.z }))
 }
 
-const INSET = 30
+/** Inside the threat arrows' ring (26 px), so the bank chevron never hides among them. */
+const INSET = 52
 /** How far down the path (cells) to look for a straight-line waypoint. */
 const LOOKAHEAD = 40
 const NEIGHBOURS: readonly (readonly [number, number, number])[] = [
