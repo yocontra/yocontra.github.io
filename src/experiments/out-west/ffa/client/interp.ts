@@ -116,22 +116,7 @@ export class RemoteTrack {
       return v
     }
     if (rt >= last.t) {
-      const prev = s.at(-2) ?? last
-      const ahead = Math.min(rt - last.t, MAX_EXTRAP_TICKS)
-      const span = Math.max(1, last.t - prev.t)
-      const moving = (last.flags & EF_ALIVE) !== 0 && dist(prev, last) < TELEPORT_M
-      this.assign(last, last, 0)
-      if (moving) {
-        const vx = (last.x - prev.x) / span
-        const vz = (last.z - prev.z) / span
-        v.x += vx * ahead
-        v.z += vz * ahead
-        v.vx = vx * 20
-        v.vz = vz * 20
-      } else {
-        v.vx = 0
-        v.vz = 0
-      }
+      this.extrapolate(s.at(-2) ?? last, last, rt)
       return v
     }
     for (let i = s.length - 1; i > 0; i--) {
@@ -153,6 +138,26 @@ export class RemoteTrack {
       }
     }
     return v
+  }
+
+  /** Past the newest sample: hold it, carried on along its last step for up to 3 ticks. */
+  private extrapolate(prev: Sample, last: Sample, rt: number): void {
+    const v = this.view
+    const ahead = Math.min(rt - last.t, MAX_EXTRAP_TICKS)
+    const span = Math.max(1, last.t - prev.t)
+    const moving = (last.flags & EF_ALIVE) !== 0 && dist(prev, last) < TELEPORT_M
+    this.assign(last, last, 0)
+    const vx = moving ? (last.x - prev.x) / span : 0
+    const vz = moving ? (last.z - prev.z) / span : 0
+    v.x += vx * ahead
+    v.z += vz * ahead
+    // Past the extrapolation cap the drawn rider stands still. A far rider who stopped sends
+    // nothing more (silence beyond the full-rate radius is not a sample), so his last two samples
+    // still say "running": report the ground speed he is actually drawn at, or the crowd runs him
+    // in place.
+    const still = rt - last.t >= MAX_EXTRAP_TICKS
+    v.vx = still ? 0 : vx * 20
+    v.vz = still ? 0 : vz * 20
   }
 
   private assign(a: Sample, b: Sample, k: number): void {
