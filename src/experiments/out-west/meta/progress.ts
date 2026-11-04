@@ -60,7 +60,8 @@ type Where = 'ledger' | 'practice' | 'guest'
 const WHERE: Readonly<Record<Where, string>> = {
   ledger: 'Added to your account.',
   practice: 'Practice only. Win it on a ranked run to get paid.',
-  guest: 'Saved to your guest purse.',
+  // a guest's pay needs no footnote: the purse is just where it goes
+  guest: '',
 }
 
 const shortName = (level: number): string => OUTLAWS[level]?.name ?? `Outlaw ${level + 1}`
@@ -282,7 +283,7 @@ export class Meta {
       tier,
       kicker: `${name} medal`,
       title: shortName(level),
-      line: `${Math.round(ms)} ms · ${pay.xp} XP + $${pay.cash}. ${WHERE[where]}`,
+      line: `${Math.round(ms)} ms · ${pay.xp} XP + $${pay.cash}. ${WHERE[where]}`.trimEnd(),
     })
   }
 

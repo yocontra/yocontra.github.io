@@ -123,7 +123,13 @@ export class DailyTile {
     if (title) {
       title.textContent = spec.title
     }
-    this.kicker.textContent = `Daily Outlaw · ${spec.modifiers.map((m) => MOD_LABEL[m]).join(' · ')}`
+    // whole pieces that wrap between them, never inside one: "Daily Outlaw" / "· Two fake-outs"
+    this.kicker.replaceChildren()
+    el('span', 'ow-kick-part', this.kicker, 'Daily Outlaw')
+    for (const m of spec.modifiers) {
+      this.kicker.append(' ')
+      el('span', 'ow-kick-part', this.kicker, `· ${MOD_LABEL[m]}`)
+    }
     this.sub.textContent = dailyStatus(this.today)
   }
 

@@ -82,6 +82,10 @@
   opacity: 0;
   transform: translateY(-8px);
 }
+/* a slip already up steps aside while the pause menu is open (new ones wait: main.ts) */
+.ow:has(.ow-menu.on) .ow-toasts {
+  visibility: hidden;
+}
 .ow-toast-seal {
   flex: none;
   width: 40px;
