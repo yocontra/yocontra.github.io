@@ -44,7 +44,7 @@ const PITCH_MIN_FIRST = MathUtils.degToRad(-85)
 const PITCH_MAX_FIRST = MathUtils.degToRad(85)
 /** ADS field of view as a fraction of the base. */
 const ADS_ZOOM_THIRD = 0.72
-const ADS_ZOOM_FIRST = 0.68
+const ADS_ZOOM_FIRST = 0.78
 
 const REDUCED_MOTION =
   typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches
