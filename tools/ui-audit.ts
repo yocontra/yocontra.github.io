@@ -214,6 +214,10 @@ async function toHub(page: Page, size: Size, title: boolean): Promise<void> {
 }
 
 const HUB_LINK = (i: number): string => `.ow-hub-links .ow-btn >> nth=${i}`
+/** The link row is Leaderboard and More; Account and Settings are the icons by the plate. */
+const MORE = HUB_LINK(1)
+const ACCOUNT = '.ow-hub-tool >> nth=0'
+const SETTINGS = '.ow-hub-tool >> nth=1'
 
 /** The Outfitter: every tab, an item picked, and (signed in) a dye job. */
 async function store(page: Page, size: Size, who: string): Promise<void> {
@@ -257,9 +261,20 @@ async function board(page: Page, size: Size): Promise<void> {
   await closeSheets(page)
 }
 
+/** `more:Label` opens the hub's More sheet and picks that door; anything else is tapped as is. */
+async function openDoor(page: Page, open: string): Promise<void> {
+  if (open.startsWith('more:')) {
+    await tap(page, MORE)
+    await page.waitForTimeout(300)
+    await tap(page, `.ow-hub-more-list .ow-btn:text-is("${open.slice(5)}")`)
+    return
+  }
+  await tap(page, open)
+}
+
 async function sheet(page: Page, size: Size, screen: string, open: string): Promise<void> {
   await step(page, size, screen, async () => {
-    await tap(page, open)
+    await openDoor(page, open)
     await page.waitForTimeout(700)
     await audit(page, size, screen, TOP_SHEET, { last: true })
     await closeSheets(page)
@@ -400,9 +415,11 @@ async function guest(browser: Browser, size: Size): Promise<void> {
   await toHub(page, size, true)
   await audit(page, size, 'hub-guest', '.ow-hub')
   await sheet(page, size, 'gauntlet-sheet', '.ow-tile-gauntlet')
-  await sheet(page, size, 'account-guest', HUB_LINK(3))
-  await sheet(page, size, 'chalkboard-guest', HUB_LINK(1))
-  await sheet(page, size, 'ledger-guest', HUB_LINK(2))
+  await sheet(page, size, 'account-guest', ACCOUNT)
+  await sheet(page, size, 'more', MORE)
+  await sheet(page, size, 'settings-guest', SETTINGS)
+  await sheet(page, size, 'chalkboard-guest', 'more:Chalkboard')
+  await sheet(page, size, 'ledger-guest', 'more:Ledger')
   await step(page, size, 'leaderboard', () => board(page, size))
   await step(page, size, 'store-guest', () => store(page, size, 'guest'))
   await duelFixtures(page, size)
@@ -426,17 +443,17 @@ async function member(browser: Browser, size: Size, state: State | null): Promis
   await closeSheets(page)
   await audit(page, size, 'hub', '.ow-hub')
   await sheet(page, size, 'licence', '.ow-tile-frontier')
-  await sheet(page, size, 'account', HUB_LINK(3))
-  await sheet(page, size, 'settings', HUB_LINK(4))
+  await sheet(page, size, 'account', ACCOUNT)
+  await sheet(page, size, 'settings', SETTINGS)
   await step(page, size, 'account-delete', async () => {
-    await tap(page, HUB_LINK(3))
+    await tap(page, ACCOUNT)
     await page.waitForTimeout(800)
     await tap(page, '.ow-acct-btn.danger')
     await audit(page, size, 'account-delete', TOP_SHEET, { last: true })
     await closeSheets(page)
   })
-  await sheet(page, size, 'ledger', HUB_LINK(2))
-  await sheet(page, size, 'chalkboard', HUB_LINK(1))
+  await sheet(page, size, 'ledger', 'more:Ledger')
+  await sheet(page, size, 'chalkboard', 'more:Chalkboard')
   if (want('profile') || want('report')) {
     for (const [screen, fn] of [
       ['profile', 'openProfile'],

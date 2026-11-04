@@ -113,13 +113,17 @@ export interface GauntletChoice {
   resume: boolean
 }
 
-/** Ranked from outlaw 1, or practice (continuing a saved run when there is one). */
+/**
+ * Ranked from outlaw 1, or practice (continuing a saved run when there is one), and the way to
+ * the Gauntlet map when the meta-game is there.
+ */
 export function gauntletSheet(
   root: HTMLElement,
   s: TileState,
-  rankedOk: boolean,
+  o: { rankedOk: boolean; map?: () => void },
   done: (c: GauntletChoice | null) => void,
 ): void {
+  const { rankedOk } = o
   const back = el('div', 'ow-sheet on', root)
   back.setAttribute('role', 'dialog')
   back.setAttribute('aria-label', 'Quick Draw')
@@ -165,12 +169,23 @@ export function gauntletSheet(
     )
   }
   choice('Practice', 'From outlaw 1 · not ranked', { ranked: false, resume: false }, false)
-  const cancel = el('button', 'ow-btn', panel, 'Back')
+  const row = el('div', 'ow-hub-row', panel)
+  const cancel = el('button', 'ow-btn', row, 'Back')
   cancel.type = 'button'
   cancel.addEventListener('click', (e) => {
     e.stopPropagation()
     close(null)
   })
+  const { map } = o
+  if (map) {
+    const m = el('button', 'ow-btn', row, 'Gauntlet map')
+    m.type = 'button'
+    m.addEventListener('click', (e) => {
+      e.stopPropagation()
+      close(null)
+      map()
+    })
+  }
   back.addEventListener('click', (e) => {
     if (e.target === back) {
       close(null)
