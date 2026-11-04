@@ -28,7 +28,7 @@
 import process from 'node:process'
 // biome-ignore lint/correctness/noUnresolvedImports: playwright's CommonJS re-exports are invisible to Biome
 import { type BrowserContext, type CDPSession, chromium, type Page } from 'playwright'
-import { profileMain, serveProd } from './perf-lib.ts'
+import { profileMain, serveProd, startProfile, stopProfile } from './perf-lib.ts'
 
 const opt = (k: string, d: string): string =>
   process.argv.find((a) => a.startsWith(`--${k}=`))?.slice(k.length + 3) ?? d
@@ -255,6 +255,11 @@ async function duel(ctx: BrowserContext, rate: number): Promise<void> {
   await drain(page)
   const snaps: Snap[] = []
   const frames: Frame[] = []
+  // `--profile=duel`: the whole played duel, walk to kill cam
+  const profiling = profileScreen !== '' && 'duel'.includes(profileScreen)
+  if (profiling) {
+    await startProfile(cdp)
+  }
   const st: DuelState = { holding: false, fired: false, doneAt: 0, x: cx, y: cy }
   const t0 = Date.now()
   while (Date.now() - t0 < 150_000 && !(await drive(page, cdp, st))) {
@@ -268,7 +273,10 @@ async function duel(ctx: BrowserContext, rate: number): Promise<void> {
     await sleep(200)
   }
   frames.push(...(await drain(page)))
-  await maybeProfile('duel', cdp)
+  if (profiling) {
+    console.log('profile: duel (walk to kill cam)')
+    await stopProfile(cdp, true)
+  }
   // one row per phase
   for (const ph of ['walk', 'turn', 'wait', 'call', 'win', 'lose', 'coward']) {
     const f = frames.filter((r) => r[2] === ph)
