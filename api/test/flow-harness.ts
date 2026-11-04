@@ -130,10 +130,18 @@ export async function duel(
         const at = Number(globalThis.__owCallAt ?? 0)
         const shown = document.querySelector('.ow-call-indicator.on') !== null
         if (${early} && now - t0 > 2500) {
-          // a draw key mid-walk is a back-shot
-          fire()
-          key('keyup', 'KeyW')
-          return
+          // a draw key mid-walk is a back-shot: press until the street takes it (the poster and
+          // the cock before the walk ignore it)
+          if (document.querySelector('.ow-card-coward.on, .ow-card-lose.on, .ow-daily-result')) {
+            key('keyup', 'KeyW')
+            resolve()
+            return
+          }
+          if (now - (globalThis.__owLastPress ?? 0) > 400) {
+            globalThis.__owLastPress = now
+            key('keydown', 'Space')
+            setTimeout(() => key('keyup', 'Space'), 40)
+          }
         }
         if (!${early} && (shown || (at > 0 && now >= at))) {
           key('keyup', 'KeyW')

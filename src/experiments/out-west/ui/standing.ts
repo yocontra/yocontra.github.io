@@ -1,17 +1,17 @@
 /**
  * Your Bounty Hunt standing on the poster panel: the record (wins, losses, draws, streak,
- * cowardice) and the "Let my ghost ride" switch, on by default.
+ * cowardice) and the ghost switch, on by default.
  */
 import type { DuelStatsResponse } from '../contract/duel.ts'
 import { fetchDuelSettings, fetchDuelStats, saveDuelSettings } from '../net/api.ts'
 import { currentPlayer } from '../net/auth.ts'
 import { el } from './sheet.ts'
 
-/** "12–8–1 · 3-win streak (best 5) · 0 cowardice" */
+/** "12 W · 8 L · 1 T · 3-win streak (best 5) · Early draws: 0" */
 export function recordLine(s: DuelStatsResponse): string {
   const streak = s.streak > 1 ? ` · ${s.streak}-win streak` : ''
   const best = s.bestStreak > 1 ? ` (best ${s.bestStreak})` : ''
-  return `${s.wins}–${s.losses}–${s.draws}${streak}${best} · ${s.cowardice} cowardice`
+  return `${s.wins} W · ${s.losses} L · ${s.draws} T${streak}${best} · Early draws: ${s.cowardice}`
 }
 
 export function mountStanding(host: HTMLElement): void {
@@ -20,10 +20,10 @@ export function mountStanding(host: HTMLElement): void {
   }
   const box = el('section', 'ow-standing', host)
   el('h3', 'ow-standing-h', box, 'Bounty Hunt')
-  const rec = el('p', 'ow-hub-note', box, 'Reading the record…')
+  const rec = el('p', 'ow-hub-note', box, 'Loading…')
   fetchDuelStats()
     .then((r) => {
-      rec.textContent = r.ok ? `Record ${recordLine(r.value)}` : 'No duels on the books yet.'
+      rec.textContent = r.ok ? `Record ${recordLine(r.value)}` : 'No duels yet.'
     })
     .catch(() => undefined)
   const label = el('label', 'ow-toggle', box)
@@ -31,12 +31,12 @@ export function mountStanding(host: HTMLElement): void {
   input.type = 'checkbox'
   input.checked = true
   input.disabled = true
-  el('span', '', label, 'Let my ghost ride')
+  el('span', '', label, 'Let others duel my ghost')
   el(
     'span',
     'ow-toggle-hint',
     label,
-    'When nobody’s online, other players can duel a recording of your draw. Your ghost earns you a cut when it wins.',
+    'When no one is online, players can duel a recording of you. You earn money when your ghost wins.',
   )
   fetchDuelSettings()
     .then((r) => {

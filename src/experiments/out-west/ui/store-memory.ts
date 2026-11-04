@@ -59,7 +59,7 @@ export function buyLabel(verdict: string, item: CatalogItem, purse: number): str
   const label: Record<string, string> = {
     ok: `Buy · ${money(item.price)}`,
     funds: `Need ${money(item.price - purse)} more`,
-    level: `Unlocks at Lv ${item.level}`,
+    level: `Unlocks at level ${item.level}`,
     not_for_sale: item.unlock ?? 'Not for sale',
     owned: 'Owned',
   }

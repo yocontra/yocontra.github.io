@@ -31,6 +31,8 @@ export interface DailyOpts {
 const FOG = 0.85
 /** Presses this soon after a result is shown are the draw's follow-through, not "leave". */
 const PRESS_GRACE_S = 0.8
+/** The server's verdict can trail the client's own card (a back-shot is judged at its call). */
+const VERDICT_WAIT_S = 8
 
 export class DailyDuel implements DirectorHooks {
   private readonly d: Director
@@ -122,6 +124,12 @@ export class DailyDuel implements DirectorHooks {
       this.dress()
     }
     const t = d.phaseT
+    // leaving closes the socket, and a socket closed before the verdict voids the try
+    if (!this.verdict && t < VERDICT_WAIT_S) {
+      return phase === 'win' || phase === 'lose' || phase === 'coward'
+        ? this.holdForVerdict(phase)
+        : false
+    }
     switch (phase) {
       case 'win':
         if (t >= FEEL.resultAt + FEEL.resultFor - 0.05) {
@@ -146,6 +154,18 @@ export class DailyDuel implements DirectorHooks {
     }
   }
 
+  /**
+   * The client has shown its result but the server hasn't ruled: let the phase play out (its own
+   * tick runs) except for the gauntlet's auto-retry and next outlaw, which the daily never takes.
+   */
+  private holdForVerdict(phase: Phase): boolean {
+    const t = this.d.phaseT
+    if (phase === 'win') {
+      return t >= FEEL.resultAt + FEEL.resultFor - 0.05
+    }
+    return t >= (phase === 'lose' ? FEEL.loseAutoRetry : FEEL.cowardAutoRetry) - 0.05
+  }
+
   press(p: Press): boolean {
     const d = this.d
     if (this.over) {
@@ -157,7 +177,10 @@ export class DailyDuel implements DirectorHooks {
     }
     const after = d.phase === 'win' ? d.resultShown : d.phase === 'lose' || d.phase === 'coward'
     if (after && d.phaseT > PRESS_GRACE_S) {
-      this.leave()
+      // not before the server's verdict (leaving would void the try); swallowed meanwhile
+      if (this.verdict || d.phaseT >= VERDICT_WAIT_S) {
+        this.leave()
+      }
       return true
     }
     return false

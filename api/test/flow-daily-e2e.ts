@@ -42,7 +42,7 @@ await toHub(page)
 console.log('\n1. Hub → the first daily duel')
 await resetTaps(page)
 await page.locator('.ow-tile-daily').click()
-await page.locator('.ow-daily .ow-btn-primary', { hasText: 'Ride out' }).click()
+await page.locator('.ow-daily .ow-btn-primary', { hasText: 'Duel' }).click()
 await page.waitForSelector('.ow-hub:not(.on)', { state: 'attached' })
 await checkTaps(page, 'hub → riding out', 2)
 
@@ -74,13 +74,13 @@ for (const [i, o] of outcomes.entries()) {
     await checkTaps(page, 'result → the next daily duel', 1)
     await sleep(500)
   } else {
-    await page.locator(`${result} .ow-daily-terms`, { hasText: 'No tries left' }).waitFor()
+    await page.locator(`${result} .ow-daily-terms`, { hasText: 'None today' }).waitFor()
     check(
       'no Try again with no tries left',
       (await page.locator(`${result} .ow-btn`, { hasText: 'Try again' }).count()) === 0,
     )
     const terms = (await page.locator(`${result} .ow-daily-terms`).textContent()) ?? ''
-    check('your best is shown', terms.includes('your best'), terms)
+    check('your best is shown', terms.includes('Your best'), terms)
     await shot(page, 'daily-result-done')
     await resetTaps(page)
     await page.locator(`${result} .ow-btn-primary`, { hasText: 'Back' }).click()

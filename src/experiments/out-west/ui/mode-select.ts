@@ -39,7 +39,7 @@ const TILES: readonly TileDef[] = [
     kicker: 'Single player',
     sub: (s) => {
       if (!s.ready) {
-        return 'Saddling up…'
+        return 'Loading…'
       }
       return s.continueAt > 0 ? `Outlaw ${s.continueAt + 1} of 17` : ''
     },
@@ -156,8 +156,8 @@ export function gauntletSheet(
     'ow-hub-note',
     panel,
     s.signedIn
-      ? 'Ranked runs pay XP and dollars. Beat the first 3 outlaws to earn your licence.'
-      : 'Ranked runs go on the board under a name you type. Sign in to earn XP and dollars.',
+      ? 'Ranked runs pay XP and money. Beat 3 outlaws to earn your licence.'
+      : 'Ranked runs go on the leaderboard. Sign in to earn XP and money.',
   )
   const onKey = (e: KeyboardEvent): void => {
     if (e.key === 'Escape') {
@@ -197,7 +197,7 @@ export function gauntletSheet(
   if (rankedOk) {
     choice(
       'Ranked gauntlet',
-      'From outlaw 1 · server-judged',
+      'From outlaw 1 · pays XP and money',
       { ranked: true, resume: false },
       'ranked',
     )

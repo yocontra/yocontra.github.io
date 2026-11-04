@@ -57,24 +57,24 @@ type Me = MeResponse
 
 const LEDGER_LABEL: Record<LedgerKind, string> = {
   // biome-ignore-start lint/style/useNamingConvention: ledger kinds are snake_case on the wire
-  start_grant: 'Grubstake',
+  start_grant: 'Starting money',
   gauntlet_clear: 'Gauntlet bounty',
   duel_win: 'Bounty Hunt win',
   duel_loss: 'Bounty Hunt loss',
-  duel_draw: 'Standoff: dead heat',
-  duel_froze: 'Standoff: both froze',
+  duel_draw: 'Standoff: tie',
+  duel_froze: 'Standoff: no one drew',
   ghost_win: 'Ghost duel',
-  ghost_royalty: 'Your ghost’s cut',
+  ghost_royalty: 'Ghost winnings',
   ffa_kill_mint: 'Frontier kill',
   ffa_deposit: 'Banked in Frontier',
   ffa_strongbox: 'Strongbox',
-  ffa_commission: 'Banker’s commission',
+  ffa_commission: 'Bank fee',
   store_purchase: 'Outfitter',
   level_reward: 'Level reward',
   admin_adjust: 'Adjustment',
   dye_job: 'Dye job',
   name_change: 'Name change',
-  house_round: 'A round for the house',
+  house_round: 'Bought a round',
   medal: 'Medal',
   challenge: 'Challenge',
   daily_outlaw: 'Daily Outlaw',
@@ -87,7 +87,7 @@ const SINK_LABEL: Readonly<Record<string, string>> = {
   // biome-ignore-start lint/style/useNamingConvention: ledger kinds are snake_case on the wire
   dye_job: 'Dye job',
   name_change: 'Name change',
-  house_round: 'A round for the house',
+  house_round: 'Bought a round',
   // biome-ignore-end lint/style/useNamingConvention: ledger kinds are snake_case on the wire
 }
 
@@ -259,7 +259,7 @@ export class Hub {
     this.strip.replaceChildren()
     const me = this.me
     if (!me) {
-      nameplate(this.strip, signedIn ? (currentPlayer()?.name ?? '') : 'Stranger')
+      nameplate(this.strip, signedIn ? (currentPlayer()?.name ?? '') : 'Guest')
       // a guest's line only when it carries something (the guest purse); "Stranger" and the Sign
       // in button already say you're a guest
       const line = signedIn
@@ -299,12 +299,12 @@ export class Hub {
     const bounty = el('span', 'ow-hub-bounty', nums)
     const b = money(me.bounty || bountyForLevel(me.level))
     bounty.setAttribute('aria-label', `Bounty ${b}`)
-    bounty.title = 'Bounty: the price on your poster. It grows with your level and your win streak.'
+    bounty.title = 'Bounty: the reward for beating you. It grows with your level and win streak.'
     bounty.append(icon('bounty'), el('small', '', null, 'Bounty'), b)
     if (canPrestige(me.level, me.prestige)) {
       button(
         this.strip,
-        'Ride again',
+        'Prestige',
         () =>
           rideAgain(this.parent, me, (next) => {
             this.me = { ...this.me, ...next }
@@ -351,7 +351,7 @@ export class Hub {
     button(row, 'Not now', () => s.close())
     button(
       row,
-      'Ride the ranked gauntlet',
+      'Play ranked',
       () => {
         s.close()
         // once licensed, the duel and the saloon carry on into the mode you wanted
@@ -405,7 +405,7 @@ export class Hub {
    * (the first three outlaws on a ranked run) and whether the town is open this month.
    */
   private async openFrontier(): Promise<void> {
-    if (this.licenceGate('frontier', 'Frontier', 'Perdition is for licensed gunslingers only.')) {
+    if (this.licenceGate('frontier', 'Frontier', 'Frontier needs a licence.')) {
       return
     }
     const open = await fetchTownOpen()
@@ -421,9 +421,7 @@ export class Hub {
     if (!this.deps.ready()) {
       return
     }
-    if (
-      this.licenceGate('bounty', 'Bounty Hunt', 'Bounty Hunt is for licensed gunslingers only.')
-    ) {
+    if (this.licenceGate('bounty', 'Bounty Hunt', 'Bounty Hunt needs a licence.')) {
       return
     }
     const xpBefore = this.me?.xp ?? null
@@ -524,10 +522,10 @@ export class Hub {
   private openLedger(): void {
     const body = this.panel('Ledger', true)
     if (!currentPlayer()) {
-      el('p', 'ow-hub-note', body, 'Sign in to keep a ledger of your money and XP.')
+      el('p', 'ow-hub-note', body, 'Sign in to see your money and XP history.')
       return
     }
-    const note = el('p', 'ow-hub-note', body, 'Opening the books…')
+    const note = el('p', 'ow-hub-note', body, 'Loading…')
     fetchLedger(15)
       .then((r) => {
         if (!r.ok) {
@@ -537,7 +535,7 @@ export class Hub {
         note.remove()
         const list = el('ul', 'ow-ledger-list', body)
         if (r.value.length === 0) {
-          el('li', '', list, 'Nothing in the books yet.')
+          el('li', '', list, 'No entries yet.')
         }
         for (const row of r.value) {
           const li = el('li', '', list)

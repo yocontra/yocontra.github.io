@@ -80,14 +80,17 @@ const CUES = ['crow', 'creak', 'dog', 'tumbleweed'] as const
 const COPY: Readonly<Record<DailyModifier, { title: string; blurb: string }>> = {
   fog: {
     title: 'Fog on Main Street',
-    blurb: 'Fog off the river. You’ll hear the bell before you see him.',
+    blurb: 'Thick fog. Listen for the bell.',
   },
   'double-fakes': {
     title: 'Double Trouble',
-    blurb: 'Two fake-outs before the bell. Sit on your hands.',
+    blurb: 'Two fake sounds before the bell. Don’t draw early.',
   },
-  'no-bell': { title: 'Watch His Hand', blurb: 'No bell today. Draw when his hand moves.' },
+  'no-bell': { title: 'Watch His Hand', blurb: 'No bell. Draw when his hand moves.' },
 }
+
+/** What a modifier changes, in one plain line (the Daily sheet shows one per modifier). */
+export const modifierRule = (m: DailyModifier): string => COPY[m].blurb
 
 /** Today's duel. Deterministic in `day`. */
 export function dailySpec(day: string): DailySpec {
