@@ -47,7 +47,27 @@ export const LEDGER_KINDS = [
   'name_change',
   /** `POST /saloon/round`: "Buy the house a round" (debit, $1,000). */
   'house_round',
+  /** A per-outlaw medal tier, from a server-judged ranked win (once per tier per outlaw). */
+  'medal',
+  /** A per-outlaw challenge (once each). Hat shots are claimed: XP only. */
+  'challenge',
+  /** The Daily Outlaw won (once per UTC day). */
+  'daily_outlaw',
+  /** A guest's device purse migrated into the account (once, capped). Never Most Wanted earnings. */
+  'guest_migration',
 ] as const
+
+/**
+ * Kinds whose XP is single-player XP (`profiles.solo_xp`), which lowers the Outfitter's level gates
+ * (`storeLevel` in data/progression.ts). Level rewards follow the XP that caused them, so aren't here.
+ */
+export const SOLO_KINDS = [
+  'gauntlet_clear',
+  'medal',
+  'challenge',
+  'daily_outlaw',
+  'guest_migration',
+] as const satisfies readonly LedgerKind[]
 export type LedgerKind = (typeof LEDGER_KINDS)[number]
 
 /**
@@ -64,6 +84,9 @@ export const EARNING_KINDS = [
   'ffa_strongbox',
   'gauntlet_clear',
   'level_reward',
+  'medal',
+  'challenge',
+  'daily_outlaw',
 ] as const satisfies readonly LedgerKind[]
 export type EarningKind = (typeof EARNING_KINDS)[number]
 
@@ -88,6 +111,11 @@ export interface MeResponse extends Profile {
   owned: ItemId[]
   /** 17-bit mask of gauntlet outlaws cleared while signed in. */
   gauntletClears: number
+  /**
+   * The level the Outfitter's gates are checked against (solo levels count ~3×). Absent from an
+   * older server: use `level`.
+   */
+  storeLevel?: number
   /** Dye per owned item that has one (absent = natural). */
   dyes: Partial<Record<ItemId, DyeId>>
   /** Passive earnings since your last visit, for the hub notice. See {@link AwayReport}. */

@@ -189,7 +189,7 @@ export class Outfitter {
     if (me) {
       this.purseEl.append(icon('money'), `${money(me.purse)} · Lv ${me.level}`)
     } else {
-      this.purseEl.textContent = 'Signed out · try on only'
+      this.purseEl.textContent = 'Sign in to buy'
     }
     this.list.replaceChildren()
     this.waiting.length = 0
@@ -348,11 +348,12 @@ export class Outfitter {
     this.detail.replaceChildren()
     const item = this.picked
     if (!item || item.slot !== this.tab) {
+      // nothing picked: only a note the shelf can't say for itself (what a frame is for)
       const idle =
-        this.tab === 'sets'
-          ? 'Pieces made to be worn together. Each is sold on its own.'
-          : (SLOT_NOTE[this.tab] ?? 'Tap a piece to try it on.')
-      el('p', 'ow-hub-note', this.detail, idle)
+        this.tab === 'sets' ? 'Each piece is sold on its own.' : (SLOT_NOTE[this.tab] ?? null)
+      if (idle) {
+        el('p', 'ow-hub-note', this.detail, idle)
+      }
       return
     }
     el('b', 'ow-store-name', this.detail, item.name)

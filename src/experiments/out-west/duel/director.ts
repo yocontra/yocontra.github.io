@@ -128,7 +128,7 @@ export class Director extends DuelState {
     if (rankedEligible && this.c.save.level === 0) {
       tryRanked(this).catch(() => undefined)
     } else {
-      this.c.hud.setMode('PRACTICE · not ranked')
+      this.c.hud.setMode('Practice')
     }
     if (skipIntro) {
       this.startLevel(this.c.save.level, false)

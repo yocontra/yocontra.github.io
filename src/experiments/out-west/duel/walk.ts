@@ -19,9 +19,9 @@ export function enterWalk(d: Director): void {
   d.enter('walk')
   d.walkLines = 0
   d.c.hud.setPips(0, true)
-  // the walk and the standoff play over low drones, clear of the bell's register
-  d.c.audio.playSong('tension')
-  d.c.audio.musicLevel(0, 0.6)
+  // the act theme keeps playing through the walk, just quieter (the standoff ducks it further)
+  d.c.audio.musicLevel(FEEL.walkDuckDb, 0.8)
+  d.c.audio.musicLowpass(FEEL.walkLowpass, 0.8)
   walkShot(d)
   if (d.outlaw.gimmick === 'windy') {
     d.wind = 0.4

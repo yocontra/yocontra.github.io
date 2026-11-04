@@ -199,6 +199,8 @@ export class FrontierGame {
   private running = false
   private disposed = false
   private exited = false
+  /** The connection's banner ("Reconnecting…", "Disconnected"), or null while connected. */
+  private connBanner: string | null = null
   /** Your rendered pose (`NetClient.localRenderPose`): what the camera and the crowd follow. */
   private readonly own = { x: 72, z: 64, yaw: 0 }
   private aim = 0
@@ -619,21 +621,17 @@ export class FrontierGame {
 
   private onTransport(state: string, detail?: string): void {
     if (state === 'retrying') {
-      this.hud.banner('Connection lost. Reconnecting…')
+      this.connBanner = 'Connection lost. Reconnecting…'
     } else if (state === 'open') {
-      this.hud.banner(null)
+      this.connBanner = null
     } else if (state === 'closed' && !this.exited && this.running) {
-      this.hud.banner(`Disconnected${detail ? `: ${detail}` : ''}`)
+      this.connBanner = `Disconnected${detail ? `: ${detail}` : ''}`
       setTimeout(() => this.exit('lost'), 2500)
     }
   }
 
   private onWelcome(): void {
     this.syncRoster()
-    this.hud.feed(
-      `Welcome to Perdition${this.net.lobbyId === 'loopback' ? ' (practice town)' : ''}.`,
-      'info',
-    )
   }
 
   private syncRoster(): void {
@@ -1392,8 +1390,11 @@ export class FrontierGame {
 
   private updateHud(nowS: number): void {
     const s = this.net.self
+    // The banner is only ever the connection's state: "Riding in…" until the first snapshot
+    // (cleared the moment you're in town), "Reconnecting…" while the socket retries.
+    const duel = ((s?.flags ?? 0) & SELF_IN_SHOWDOWN) !== 0
+    this.hud.banner(duel ? null : (this.connBanner ?? (s ? null : 'Riding into Perdition…')))
     if (!s) {
-      this.hud.banner('Riding into Perdition…')
       return
     }
     const action = this.net.alive
@@ -1568,9 +1569,6 @@ export class FrontierGame {
     }
     this.wasReady = ready
     const showdown = (flags & SELF_IN_SHOWDOWN) !== 0
-    if (showdown) {
-      this.hud.banner(null)
-    }
     // no menu sound while your showdown waits for its call
     this.audio?.hushUi(showdown)
   }

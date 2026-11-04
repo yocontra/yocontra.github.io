@@ -4,8 +4,10 @@ import type { ItemId, Loadout } from './data/catalog.ts'
 import type { Dyes } from './data/dye.ts'
 import { OUTLAWS } from './data/outlaws.ts'
 import { tickLife } from './duel/cues.ts'
+import { DailyDuel, type DailyOpts } from './duel/daily.ts'
 import { Director, type RankedConnect } from './duel/director.ts'
 import { PvpDuel, type PvpOpts } from './duel/pvp-duel.ts'
+import { RankedDuelClock } from './duel/ranked-clock.ts'
 import { type Assets, loadAssets } from './engine/assets.ts'
 import { Input } from './engine/input.ts'
 import { Renderer, type Tier } from './engine/render.ts'
@@ -33,6 +35,10 @@ export interface Game {
   dress: (l: Loadout, dyes?: Dyes) => void
   /** A Bounty Hunt match, driven by the duel room. */
   startPvp: (o: PvpOpts) => void
+  /** The Daily Outlaw: one server-judged duel, then back to the saloon. */
+  playDaily: (o: DailyOpts) => void
+  /** The ranked run's id while one is on (a hat-shot claim names it), else null. */
+  rankedRunId: () => string | null
   /** The Outfitter's picture of one piece of kit (rendered once, cached). */
   itemThumb: (id: ItemId) => HTMLCanvasElement | null
 }
@@ -61,6 +67,20 @@ function itemThumbs(renderer: Renderer, assets: Assets): (id: ItemId) => HTMLCan
       propDef(assets.props, 'revolver', 0.3, 'max'),
     )
     return studio.render(id)
+  }
+}
+
+/** The server-driven duels: Bounty Hunt, the Daily Outlaw, and the ranked run's id. */
+function serverDuels(director: Director): Pick<Game, 'startPvp' | 'playDaily' | 'rankedRunId'> {
+  return {
+    startPvp: (opts: PvpOpts) => {
+      void new PvpDuel(director, opts)
+    },
+    playDaily: (opts: DailyOpts) => {
+      void new DailyDuel(director, opts)
+    },
+    rankedRunId: () =>
+      director.clock instanceof RankedDuelClock ? director.clock.session.sessionId : null,
   }
 }
 
@@ -244,8 +264,6 @@ export async function createGame(o: GameOpts): Promise<Game> {
     hubShot: (shot: HubShot) => hubShot(director, shot),
     dress: (l: Loadout, dyes?: Dyes) => wearLoadout(director, l, dyes),
     itemThumb: itemThumbs(renderer, assets),
-    startPvp: (opts: PvpOpts) => {
-      void new PvpDuel(director, opts)
-    },
+    ...serverDuels(director),
   }
 }

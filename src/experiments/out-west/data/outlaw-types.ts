@@ -49,6 +49,12 @@ export interface Stance {
   hip?: number
 }
 
+/**
+ * A long coat's cut: the duster to the calf, loose from the chest; the frock coat to the knee,
+ * fitted at the waist. Both open at the front and vented at the back.
+ */
+export type CoatCut = 'duster' | 'frock'
+
 export interface Look {
   /** Which whole character he is: never mixed with parts of another. */
   base: BodyKey
@@ -61,6 +67,8 @@ export interface Look {
   /** Uniform build: 1 = a 1.78 m man. */
   scale: number
   coat?: number
+  /** How the coat is cut (default `duster`). */
+  coatCut?: CoatCut
   poncho?: number
   /** Waistcoat over the shirt, open at the front. */
   vest?: number

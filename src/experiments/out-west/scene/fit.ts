@@ -196,6 +196,13 @@ export interface ShellSpec {
   ts?: readonly number[]
   /** Colour per ring (linear sRGB), or one colour. */
   color: Color | ((t: number, ring: number) => Color)
+  /**
+   * Arc per ring as [from, to] radians (overrides `arc`, `half` and `taper`): a coat panel whose
+   * front edge sweeps back behind the holster.
+   */
+  span?: (t: number) => readonly [number, number]
+  /** Largest radius allowed at direction `a`, ring `t` (cloth that hangs, not flares). */
+  limit?: (a: number, t: number) => number
 }
 
 /** Resolved ring layout shared by the shell's passes. */
@@ -214,7 +221,7 @@ function layout(s: ShellSpec): Layout {
   const ts = s.ts ?? Array.from({ length: (s.rings ?? 8) + 1 }, (_, i) => i / (s.rings ?? 8))
   const segs = s.segs ?? 20
   const half = s.half ?? Math.PI
-  const full = half >= Math.PI - 1e-6
+  const full = !s.span && half >= Math.PI - 1e-6
   const rings = ts.length - 1
   return {
     ts,
@@ -225,6 +232,10 @@ function layout(s: ShellSpec): Layout {
     band: s.band ?? Math.max(0.012, Math.abs(s.yTop - s.yBot) / rings / 1.5),
     ring: (i) => {
       const t = ts[i] ?? 0
+      if (s.span) {
+        const [from, to] = s.span(t)
+        return { t, y: s.yTop + (s.yBot - s.yTop) * t, a0: from, step: (to - from) / segs }
+      }
       const h = half * (s.taper ? s.taper(t) : 1)
       return { t, y: s.yTop + (s.yBot - s.yTop) * t, a0: (s.arc ?? 0) - h, step: (2 * h) / segs }
     },
@@ -277,6 +288,13 @@ export function shell(s: ShellSpec): BufferGeometry {
       const above = r[i - 1] ?? []
       r[i] = (r[i] ?? []).map((x, j) => Math.max(x, above[j] ?? 0))
     }
+  }
+  const limit = s.limit
+  if (limit) {
+    r.forEach((row, i) => {
+      const { t, a0, step } = L.ring(i)
+      r[i] = row.map((x, j) => Math.min(x, limit(a0 + step * j, t)))
+    })
   }
   const pos: number[] = []
   const col: number[] = []

@@ -20,7 +20,7 @@ import {
   Vector3,
 } from 'three'
 import { intoRect, SWATCH, SWATCH_LUM, type Swatch } from './atlas.ts'
-import type { Body, WeightFn } from './fit.ts'
+import { type Body, boneKey, type WeightFn } from './fit.ts'
 
 /**
  * One piece of the final character: root-space geometry (position, normal,
@@ -45,6 +45,13 @@ export interface Piece {
   /** Per-vertex weights (garments); or `skin`, precomputed indices into `Body.bones` (the body). */
   weights?: WeightFn
   skin?: { index: Uint16Array; weight: Float32Array }
+  /**
+   * A garment that hides the base cloth under it: is point `p` of base garment `garment`
+   * (dominant `bone`) covered?
+   */
+  hide?: (p: Vector3, bone: string, garment: string) => boolean
+  /** Rides an arm (a coat sleeve): not a surface the gunbelt and holster sit on. */
+  overArm?: boolean
 }
 
 /** A rigid piece riding one bone. */
@@ -282,12 +289,69 @@ export function mergePieces(pieces: readonly Piece[]): BufferGeometry {
 }
 
 /** Merge every piece into one skinned mesh under `parent`, bound in the current pose. */
+/** Base garments a fitted garment may hide where it covers them. */
+const HIDEABLE = new Set(['Shirt', 'Sleeves', 'Bracer', 'Pauldron', 'Belt', 'Skin'])
+
+/** The bone carrying most of body vertex `k` (punctuation-free name). */
+function dominant(skin: NonNullable<Piece['skin']>, body: Body, k: number): string {
+  let best = 0
+  let bone = ''
+  for (let c = 0; c < 4; c++) {
+    const w = skin.weight[k * 4 + c] ?? 0
+    if (w > best) {
+      best = w
+      bone = boneKey(body.bones[skin.index[k * 4 + c] ?? 0]?.name ?? '')
+    }
+  }
+  return bone
+}
+
+/**
+ * Take off the base garments a fitted garment covers (`Piece.hide`): a triangle goes when all
+ * three of its corners are under cloth. Nothing pokes through, and the coat's triangles are paid
+ * for by the shirt and sleeves it hides.
+ */
+function hideUnder(pieces: readonly Piece[], body: Body): void {
+  const hiders = pieces.filter((p) => p.hide)
+  if (hiders.length === 0) {
+    return
+  }
+  const v = new Vector3()
+  for (const p of pieces) {
+    const skin = p.skin
+    const idx = p.geo.getIndex()
+    if (!(skin && idx && HIDEABLE.has(p.name ?? ''))) {
+      continue
+    }
+    const pos = p.geo.getAttribute('position')
+    const hidden = new Uint8Array(pos.count)
+    for (let k = 0; k < pos.count; k++) {
+      v.fromBufferAttribute(pos, k)
+      const bone = dominant(skin, body, k)
+      hidden[k] = hiders.some((h) => h.hide?.(v, bone, p.name ?? '')) ? 1 : 0
+    }
+    const keep: number[] = []
+    for (let i = 0; i < idx.count; i += 3) {
+      const a = idx.getX(i)
+      const b = idx.getX(i + 1)
+      const c = idx.getX(i + 2)
+      if (!(hidden[a] && hidden[b] && hidden[c])) {
+        keep.push(a, b, c)
+      }
+    }
+    if (keep.length < idx.count) {
+      p.geo.setIndex(new BufferAttribute(new Uint32Array(keep), 1))
+    }
+  }
+}
+
 export function bake(
   pieces: readonly Piece[],
   body: Body,
   parent: Object3D,
   material: Material,
 ): SkinnedMesh {
+  hideUnder(pieces, body)
   const geo = mergePieces(pieces)
   const verts = geo.getAttribute('position').count
   const outI = new Uint16Array(verts * 4)

@@ -25,13 +25,24 @@ interface TileDef {
   icon: IconName
 }
 
+/**
+ * A tile's line under its title is only for what the kicker and title can't say: still loading,
+ * a run to continue, or a sign-in standing in the way. Otherwise it is empty and hidden.
+ */
+const signInFirst = (s: TileState): string => (s.signedIn ? '' : 'Sign in to play')
+
 const TILES: readonly TileDef[] = [
   {
     mode: 'gauntlet',
     icon: 'revolver',
     title: 'Quick Draw',
     kicker: 'Single player',
-    sub: (s) => (s.ready ? '17 outlaws · ranked board' : 'Saddling up…'),
+    sub: (s) => {
+      if (!s.ready) {
+        return 'Saddling up…'
+      }
+      return s.continueAt > 0 ? `Outlaw ${s.continueAt + 1} of 17` : ''
+    },
     online: false,
   },
   {
@@ -39,7 +50,7 @@ const TILES: readonly TileDef[] = [
     icon: 'bounty',
     title: 'Bounty Hunt',
     kicker: 'Live duels',
-    sub: (s) => (s.signedIn ? 'Live PvP · ghosts if the street’s empty' : 'Sign in with a passkey'),
+    sub: signInFirst,
     online: true,
   },
   {
@@ -47,7 +58,7 @@ const TILES: readonly TileDef[] = [
     icon: 'dynamite',
     title: 'Frontier',
     kicker: 'Free-for-all',
-    sub: (s) => (s.signedIn ? '32 guns · bank what you take' : 'Sign in with a passkey'),
+    sub: signInFirst,
     online: true,
   },
   {
@@ -55,7 +66,7 @@ const TILES: readonly TileDef[] = [
     icon: 'hat',
     title: 'Outfitter',
     kicker: 'Cosmetics',
-    sub: (s) => (s.signedIn ? 'Hats, irons, dusters' : 'Browse and try on'),
+    sub: () => '',
     online: false,
   },
 ]

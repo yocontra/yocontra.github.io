@@ -47,7 +47,7 @@ const ROOF = 3.16
 const H = STREET.half
 
 /**
- * In tier order (the floor tier takes the first five, medium seven, high all nine): those in the
+ * In tier order (the floor tier takes the first four, medium seven, high all nine): those in the
  * standoff's frame first, up the street beyond the outlaw.
  */
 const SPOTS: readonly Spot[] = [

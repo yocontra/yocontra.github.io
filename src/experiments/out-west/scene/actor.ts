@@ -26,14 +26,14 @@ import { fitLong, type LongHold, poseLong, shoulderPocket } from './longgun.ts'
 import { type Fit, measure } from './outfit.ts'
 import { becomeHimself, type PersonOpts, paintSkin, StanceLayer } from './person.ts'
 import { watchPose } from './pose-watch.ts'
-import { dressPieces, measureStride, seatHat, slotOn, tintModel } from './rig.ts'
+import { type DressOpts, dressPieces, measureStride, seatHat, slotOn, tintModel } from './rig.ts'
 import { characterMaterial, type Glow } from './shade.ts'
 import type { Floor } from './style.ts'
 
 const HEIGHT = 1.78
 const ORIGIN = new Vector3()
 
-export interface ActorOpts extends PersonOpts {
+export interface ActorOpts extends PersonOpts, Pick<DressOpts, 'coatCut'> {
   /** Which whole base character this is (prunes its hard hat, crown, mohawk, backpack). */
   base?: BodyKey | null
   /** Animation clips, when the base file carries none (they share the player's rig). */
@@ -228,7 +228,7 @@ export class Actor {
         ...this.armWith(fit, {
           gun: opts.gun,
           two: opts.offGun ?? false,
-          clothes,
+          clothes: clothes.filter((c) => !c.overArm),
           look: opts.holster ?? PLAIN_HOLSTER,
           scale: opts.scale ?? 1,
         }),

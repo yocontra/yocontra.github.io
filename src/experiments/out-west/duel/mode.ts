@@ -12,7 +12,7 @@ import { standoffSpec } from './standoff.ts'
  * run to practice and the game carries on.
  */
 
-const PRACTICE = 'PRACTICE · not ranked'
+const PRACTICE = 'Practice'
 
 export function setPractice(d: Director, note: string): void {
   d.rankedTry++

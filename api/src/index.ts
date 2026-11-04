@@ -8,15 +8,18 @@ import type { Env } from './env.ts'
 import { corsHeaders, error, type RouteHandler } from './http.ts'
 import { accountRoutes } from './routes/account.ts'
 import { authRoutes } from './routes/auth.ts'
+import { dailyRoutes } from './routes/daily.ts'
 import { duelRoutes } from './routes/duel.ts'
 import { leaderboardRoutes } from './routes/leaderboard.ts'
 import { meRoutes } from './routes/me.ts'
+import { progressRoutes } from './routes/progress.ts'
 import { rankedRoutes } from './routes/ranked.ts'
 import { socialRoutes } from './routes/social.ts'
 import { storeRoutes } from './routes/store.ts'
 import { townRoutes } from './routes/town.ts'
 
 // biome-ignore lint/performance/noBarrelFile: the Workers runtime needs every Durable Object class exported from the entry module
+export { DailySession } from './daily/session.ts'
 export { Matchmaker } from './duel/matchmaker.ts'
 export { DuelRoom } from './duel/room.ts'
 export { DuelSession } from './session.ts'
@@ -33,6 +36,8 @@ const ROUTES: readonly RouteHandler[] = [
   duelRoutes,
   townRoutes,
   socialRoutes,
+  progressRoutes,
+  dailyRoutes,
 ]
 
 export default {
