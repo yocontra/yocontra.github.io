@@ -14,6 +14,13 @@ import {
   SLOTS,
   STARTER_ITEMS,
 } from '../../../src/experiments/out-west/data/catalog.ts'
+import {
+  DYE_PRICE_MAX,
+  DYE_PRICE_MIN,
+  dyeCost,
+  dyePrice,
+  isDyeable,
+} from '../../../src/experiments/out-west/data/dye.ts'
 
 const ITEMS: readonly CatalogItem[] = CATALOG
 
@@ -47,8 +54,8 @@ const GO_IN = /go in/u
 const SLOT = /slot/u
 
 const RARITY_BANDS: Record<string, { price: [number, number]; level: [number, number] }> = {
-  common: { price: [250, 500], level: [1, 4] },
-  uncommon: { price: [1500, 4000], level: [4, 14] },
+  common: { price: [250, 500], level: [1, 2] },
+  uncommon: { price: [600, 2500], level: [2, 7] },
   rare: { price: [7500, 14_000], level: [15, 26] },
   legendary: { price: [25_000, 45_000], level: [30, 50] },
 }
@@ -93,7 +100,7 @@ describe('catalog shape', () => {
       'extra.black-bandana',
     ])
     expect(ITEMS).toHaveLength(53)
-    expect(bySource('store').reduce((sum, i) => sum + i.price, 0)).toBe(306_950)
+    expect(bySource('store').reduce((sum, i) => sum + i.price, 0)).toBe(292_550)
   })
 
   it('ids are unique and slot-prefixed', () => {
@@ -177,10 +184,10 @@ describe('cosmetic only', () => {
 describe('canBuy', () => {
   const nickel = itemById('gun.nickel-six') as CatalogItem
   it('checks sale, ownership, level and funds in that order', () => {
-    expect(canBuy({ level: 5, purse: 1800 }, nickel)).toBe('ok')
-    expect(canBuy({ level: 4, purse: 1800 }, nickel)).toBe('level')
-    expect(canBuy({ level: 5, purse: 1799 }, nickel)).toBe('funds')
-    expect(canBuy({ level: 5, purse: 1800 }, nickel, new Set(['gun.nickel-six']))).toBe('owned')
+    expect(canBuy({ level: 3, purse: 900 }, nickel)).toBe('ok')
+    expect(canBuy({ level: 2, purse: 900 }, nickel)).toBe('level')
+    expect(canBuy({ level: 3, purse: 899 }, nickel)).toBe('funds')
+    expect(canBuy({ level: 3, purse: 900 }, nickel, new Set(['gun.nickel-six']))).toBe('owned')
     expect(canBuy({ level: 50, purse: 1e9 }, itemById('gun.rusty-six') as CatalogItem)).toBe(
       'not_for_sale',
     )
@@ -215,5 +222,47 @@ describe('loadouts', () => {
       gun: 'gun.gilded-sovereign',
     })
     expect(normalizeLoadout('garbage')).toEqual({ ...DEFAULT_LOADOUT })
+  })
+})
+
+describe('the first purchase', () => {
+  // The Lv 5 purse of a new solo player: about $1,100 (the second premium review saw $1,090).
+  const lv5 = { level: 5, purse: 1100 }
+  it('every piece below rare is in reach at Lv 5: three hats, three outfits, both cheap guns', () => {
+    const buyable = (slot: string): number =>
+      ITEMS.filter((i) => i.slot === slot && canBuy(lv5, i) === 'ok').length
+    expect(buyable('hat')).toBeGreaterThanOrEqual(3)
+    expect(buyable('outfit')).toBeGreaterThanOrEqual(3)
+    expect(buyable('gun')).toBeGreaterThanOrEqual(2)
+    expect(buyable('extra')).toBeGreaterThanOrEqual(2)
+  })
+  it('every uncommon is open by Lv 7', () => {
+    for (const item of ITEMS.filter((i) => i.rarity === 'uncommon')) {
+      expect(item.level).toBeLessThanOrEqual(7)
+    }
+  })
+})
+
+describe('dye prices', () => {
+  it('cost 40% of the item, rounded to $50, between $100 and $2,000', () => {
+    for (const item of ITEMS.filter(isDyeable)) {
+      const cost = dyeCost(item)
+      expect(cost % 50).toBe(0)
+      expect(cost).toBeGreaterThanOrEqual(DYE_PRICE_MIN)
+      expect(cost).toBeLessThanOrEqual(DYE_PRICE_MAX)
+      expect(
+        Math.abs(cost - Math.min(DYE_PRICE_MAX, Math.max(DYE_PRICE_MIN, 0.4 * item.price))),
+      ).toBeLessThanOrEqual(25)
+      expect(dyePrice(item.id, 'coal')).toBe(cost)
+      expect(dyePrice(item.id, 'natural')).toBe(0)
+    }
+  })
+  it('a dye never costs more than a store item it colours', () => {
+    for (const item of ITEMS.filter((i) => isDyeable(i) && i.source === 'store')) {
+      expect(dyeCost(item)).toBeLessThan(item.price)
+    }
+  })
+  it("guns don't take dye", () => {
+    expect(dyePrice('gun.blued-six', 'coal')).toBeNull()
   })
 })

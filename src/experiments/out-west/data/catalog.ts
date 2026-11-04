@@ -12,7 +12,7 @@
  *
  * Bump CATALOG_VERSION whenever an item is added, removed or repriced.
  */
-export const CATALOG_VERSION = 3
+export const CATALOG_VERSION = 4
 
 export const SLOTS = [
   'gun',
@@ -126,7 +126,7 @@ export const CATALOG = [
   // Gun
   starter('gun.rusty-six', 'Rusty Six', 'gun'),
   store('gun.blued-six', 'Blued Six-Shooter', 'gun', ['common', 300, 1]),
-  store('gun.nickel-six', 'Nickel Six', 'gun', ['uncommon', 1800, 5]),
+  store('gun.nickel-six', 'Nickel Six', 'gun', ['uncommon', 900, 3]),
   store('gun.engraved-ivory', 'Engraved Ivory', 'gun', ['rare', 8000, 15]),
   store('gun.buntline', 'Buntline Long Nine', 'gun', ['rare', 12_000, 20]),
   store('gun.gilded-sovereign', 'Gilded Sovereign', 'gun', ['legendary', 35_000, 35]),
@@ -135,8 +135,8 @@ export const CATALOG = [
   // Hat
   starter('hat.battered-brim', 'Battered Brim', 'hat'),
   store('hat.plainsman', 'Plainsman', 'hat', ['common', 250, 1]),
-  store('hat.sombrero', 'Sombrero', 'hat', ['uncommon', 1500, 6, { silhouette: 1.08 }]),
-  store('hat.stovepipe', 'Stovepipe', 'hat', ['uncommon', 3000, 10, { silhouette: 1.06 }]),
+  store('hat.sombrero', 'Sombrero', 'hat', ['uncommon', 750, 3, { silhouette: 1.08 }]),
+  store('hat.stovepipe', 'Stovepipe', 'hat', ['uncommon', 1000, 5, { silhouette: 1.06 }]),
   store('hat.rattler-band', 'Rattler Band', 'hat', ['rare', 7500, 18]),
   store('hat.ghost-white', 'Ghost-White Cattleman', 'hat', ['legendary', 30_000, 40]),
   reward('hat.yellow', 'Yellow Hat', 'hat', 'Draw early 10 times'),
@@ -144,12 +144,12 @@ export const CATALOG = [
   reward('hat.holed-stetson', 'Holed Stetson', 'hat', 'Shoot the hat off all three hat outlaws'),
   // Outfit
   starter('outfit.trail-duds', 'Trail Duds', 'outfit', WALK('cloth')),
-  store('outfit.shirt-vest', 'Shirt & Vest', 'outfit', ['common', 350, 2]),
-  store('outfit.wool-duster', 'Wool Duster', 'outfit', ['uncommon', 2000, 5, { silhouette: 1.05 }]),
+  store('outfit.shirt-vest', 'Shirt & Vest', 'outfit', ['common', 350, 1]),
+  store('outfit.wool-duster', 'Wool Duster', 'outfit', ['uncommon', 900, 3, { silhouette: 1.05 }]),
   store('outfit.striped-poncho', 'Striped Poncho', 'outfit', [
     'uncommon',
-    2800,
-    8,
+    1100,
+    4,
     {
       silhouette: 1.05,
     },
@@ -167,8 +167,8 @@ export const CATALOG = [
   starter('spurs.plain-rowels', 'Plain Rowels', 'spurs', WALK('spur-rattle')),
   store('spurs.silver-jinglebobs', 'Silver Jinglebobs', 'spurs', [
     'uncommon',
-    3500,
-    12,
+    1750,
+    6,
     {
       sound: WALK('spur-jingle'),
     },
@@ -184,12 +184,12 @@ export const CATALOG = [
   reward('spurs.legend-rowels', 'Legend Rowels', 'spurs', 'Beat 6 outlaws in one Legend run'),
   // Holster
   starter('holster.plain-leather', 'Plain Leather', 'holster'),
-  store('holster.tooled-floral', 'Tooled Floral', 'holster', ['uncommon', 2200, 7]),
+  store('holster.tooled-floral', 'Tooled Floral', 'holster', ['uncommon', 1100, 4]),
   store('holster.buscadero', 'Buscadero Rig', 'holster', ['rare', 10_000, 20]),
   reward('holster.silver-conchos', 'Silver Conchos', 'holster', 'Silver on all 17 outlaws'),
   // Poster frame
   starter('frame.pine-board', 'Pine Board', 'frame'),
-  store('frame.brass-tacks', 'Brass Tacks', 'frame', ['uncommon', 2000, 9]),
+  store('frame.brass-tacks', 'Brass Tacks', 'frame', ['uncommon', 1000, 5]),
   store('frame.gilt-saloon', 'Gilt Saloon', 'frame', ['rare', 8000, 24]),
   store('frame.most-wanted-gilt', 'Most Wanted Gilt', 'frame', ['legendary', 40_000, 50]),
   reward('frame.midnight', 'Midnight', 'frame', 'Clear the full gauntlet without drawing early'),
@@ -205,8 +205,8 @@ export const CATALOG = [
   starter('sound.standard', 'Standard Report', 'drawSound', SHOT('gunshot')),
   store('sound.thunder-crack', 'Thunder Crack', 'drawSound', [
     'uncommon',
-    1500,
-    4,
+    750,
+    2,
     {
       sound: SHOT('thunder'),
     },
@@ -229,13 +229,13 @@ export const CATALOG = [
   ]),
   // Saddlebag (the bag you drop in Frontier FFA)
   starter('bag.plain-sack', 'Plain Sack', 'saddlebag'),
-  store('bag.branded-satchel', 'Branded Satchel', 'saddlebag', ['uncommon', 2500, 8]),
+  store('bag.branded-satchel', 'Branded Satchel', 'saddlebag', ['uncommon', 1250, 4]),
   store('bag.gold-thread', 'Gold-Thread Purse', 'saddlebag', ['rare', 12_000, 26]),
   reward('bag.medal-satchel', 'Medal Satchel', 'saddlebag', 'Win 25 medals'),
   // Extra
   store('extra.handlebar', 'Handlebar Moustache', 'extra', ['common', 250, 1]),
-  store('extra.red-bandana', 'Red Bandana', 'extra', ['common', 500, 4]),
-  store('extra.tin-star', 'Tin Star', 'extra', ['uncommon', 4000, 14]),
+  store('extra.red-bandana', 'Red Bandana', 'extra', ['common', 400, 2]),
+  store('extra.tin-star', 'Tin Star', 'extra', ['uncommon', 2000, 7]),
   reward('extra.black-bandana', 'Black Bandana', 'extra', 'Win the Daily Outlaw on 7 days'),
 ] as const satisfies readonly CatalogItem[]
 

@@ -16,6 +16,7 @@ import type {
   PlayerPoster,
   RoundResponse,
 } from '../../../src/experiments/out-west/contract/social.ts'
+import { DYE_PRICE_MIN } from '../../../src/experiments/out-west/data/dye.ts'
 import { LICENCE_MASK } from '../../../src/experiments/out-west/data/licence.ts'
 import {
   HOUSE_ROUND_PRICE,
@@ -245,8 +246,9 @@ describe('POST /store/dye', () => {
     })
     expect(res.status).toBe(200)
     const dyed = res.body as DyeResponse
-    expect(dyed.price).toBe(500)
-    expect(dyed.purse).toBe(before - 500)
+    // a starter hat costs nothing, so its dye costs the minimum
+    expect(dyed.price).toBe(DYE_PRICE_MIN)
+    expect(dyed.purse).toBe(before - DYE_PRICE_MIN)
     expect(dyed.dyes).toEqual({ 'hat.battered-brim': 'oxblood' })
     const same = await call('POST', '/store/dye', {
       as: p.id,
@@ -259,7 +261,7 @@ describe('POST /store/dye', () => {
     })
     expect((wash.body as DyeResponse).price).toBe(0)
     expect((wash.body as DyeResponse).dyes).toEqual({})
-    expect(await purseOf(p.id)).toBe(before - 500)
+    expect(await purseOf(p.id)).toBe(before - DYE_PRICE_MIN)
     expect((await auditLedger(t.env)).mismatches).toEqual([])
   })
 
@@ -295,7 +297,7 @@ describe('POST /store/dye', () => {
     // The client didn't hear back and retries: the dye is already on, so 409, and no new charge.
     const again = await call('POST', '/store/dye', { as: p.id, body })
     expect(again.status).toBe(409)
-    expect(await purseOf(p.id)).toBe(before - 500)
+    expect(await purseOf(p.id)).toBe(before - DYE_PRICE_MIN)
   })
 })
 
