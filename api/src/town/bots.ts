@@ -4,10 +4,14 @@
  * lobby awake: the lobby only ticks while a human is connected.
  */
 import {
+  BTN_AIM,
+  BTN_CROUCH,
   BTN_FIRE,
   BTN_INTERACT,
+  BTN_JUMP,
   BTN_RELOAD,
   BTN_ROLL,
+  BTN_SPRINT,
   BTN_THROW,
   NONE,
 } from '../../../src/experiments/out-west/contract/town.ts'
@@ -64,6 +68,8 @@ interface BotBrain {
   lastX: number
   lastZ: number
   stuck: number
+  /** Not before this tick: the next slide. */
+  slideAt: number
 }
 
 /** The `n`th bot name (64 distinct, then they repeat). */
@@ -128,6 +134,7 @@ export class BotDirector {
         lastX: 0,
         lastZ: 0,
         stuck: 0,
+        slideAt: 0,
       }
       this.brains.set(id, b)
     }
@@ -193,6 +200,18 @@ export class BotDirector {
     f.moveZ = Math.round(((dz / d) * approach + (dx / d) * b.strafe * 0.8) * 100)
     const fireNow = (w.tick + p.id) % 7 === 0
     f.buttons = fireNow ? BTN_FIRE : 0
+    // CoD habits (wire v5), so riders read as shooters: on the sights at range, some crouch to
+    // shoot (by temperament, in spells), the odd jump while strafing
+    const spell = Math.floor((w.tick + p.id * 37) / 60)
+    if (d > 6 && (spell + p.id) % 4 !== 0) {
+      f.buttons |= BTN_AIM
+    }
+    if (d > 8 && p.id % 3 === 0 && spell % 2 === 0) {
+      f.buttons |= BTN_CROUCH
+    }
+    if (d < 9 && this.rng.next() < 0.012) {
+      f.buttons |= BTN_JUMP
+    }
     if (p.ammo === 0) {
       f.buttons |= BTN_RELOAD
     }
@@ -236,6 +255,16 @@ export class BotDirector {
     f.moveX = Math.round((dx / d) * 127)
     f.moveZ = Math.round((dz / d) * 127)
     f.aim = radiansToAim(Math.atan2(dz, dx))
+    // travelling: sprint on the long legs, and now and then slide into a corner or hop
+    if (b.path.length > 2) {
+      f.buttons |= BTN_SPRINT
+      if (p.sprinting && b.slideAt <= w.tick && this.rng.next() < 0.02) {
+        f.buttons |= BTN_CROUCH
+        b.slideAt = w.tick + 80
+      } else if (this.rng.next() < 0.006) {
+        f.buttons |= BTN_JUMP
+      }
+    }
   }
 
   /**

@@ -723,3 +723,84 @@
 .fr-root:not([data-view="top"]) .fr-canvas {
   cursor: default;
 }
+
+/* iPad: thumbs rest at mid-height, so the cluster rises (FIRE's centre about a third of the way
+   up), insets grow and the buttons with them */
+html[data-ow-form="tablet"] .fr-touch.shooter {
+  & .fr-pad .fr-btn {
+    width: 64px;
+    height: 64px;
+  }
+
+  & .fr-btn-fire:not(.fr-btn-fire-l) {
+    right: calc(var(--fr-right) + 48px);
+    bottom: calc(var(--fr-bottom) + 32% - 52px);
+    width: 104px;
+    height: 104px;
+  }
+
+  & .fr-btn-ads {
+    right: calc(var(--fr-right) + 176px);
+    bottom: calc(var(--fr-bottom) + 32% - 40px);
+    width: 64px;
+    height: 64px;
+  }
+
+  & .fr-pad .fr-btn-jump {
+    right: calc(var(--fr-right) + 56px);
+    bottom: calc(var(--fr-bottom) + 32% + 76px);
+  }
+
+  & .fr-pad .fr-btn-crouch {
+    right: calc(var(--fr-right) + 156px);
+    bottom: calc(var(--fr-bottom) + 32% + 52px);
+  }
+
+  & .fr-pad .fr-btn-reload {
+    right: calc(var(--fr-right) + 262px);
+    bottom: calc(var(--fr-bottom) + 32% - 36px);
+  }
+
+  & .fr-pad .fr-btn-throw {
+    right: calc(var(--fr-right) + 254px);
+    bottom: calc(var(--fr-bottom) + 32% + 52px);
+  }
+
+  & .fr-pad .fr-btn-act {
+    right: calc(var(--fr-right) + 110px);
+    bottom: calc(var(--fr-bottom) + 32% + 160px);
+    width: 150px;
+    height: 68px;
+  }
+
+  & .fr-btn-fire.fr-btn-fire-l {
+    left: calc(var(--fr-left) + 48px);
+    bottom: calc(var(--fr-bottom) + 32% + 120px);
+    width: 64px;
+    height: 64px;
+  }
+}
+
+/* the open Duo: a touch bigger all round */
+html[data-ow-form="fold-inner"] .fr-touch.shooter .fr-hit.fr-btn.fr-btn {
+  transform: scale(1.1);
+  transform-origin: 50% 50%;
+}
+
+/* bigger screens read the HUD a size up */
+html[data-ow-scale="l"]
+  .fr-hud
+  :is(.fr-vitals, .fr-tc, .fr-feed, .fr-prompt, .fr-toast, .fr-channel) {
+  zoom: 1.125;
+}
+
+html[data-ow-scale="xl"]
+  .fr-hud
+  :is(.fr-vitals, .fr-tc, .fr-feed, .fr-prompt, .fr-toast, .fr-channel) {
+  zoom: 1.25;
+}
+
+/* a gamepad drives: the thumbs layer steps aside */
+.fr-touch.pad {
+  display: none;
+}

@@ -46,8 +46,8 @@ import { gunAnatomy, gunPointsOf } from '../../scene/holster.ts'
 import { type LongHold, solveArm } from '../../scene/longgun.ts'
 import { propDef, propObject } from '../../scene/props.ts'
 import type { PlayerLook } from '../scene/looks.ts'
+import { SupportHand } from '../scene/mirror-hand.ts'
 import { kitMaterial, shotgunMesh } from '../scene/shotgun.ts'
-import { SupportHand } from './vm-mirror.ts'
 import { type VmInput, VmMotion, type VmPose } from './vm-motion.ts'
 
 /** The view model's own vertical field of view (degrees), and on the sights. */
@@ -279,9 +279,23 @@ export class ViewModel {
     this.actor = actor
     // the hands' mirror pairs, measured in the bind pose (symmetric: the clip's hands aren't),
     // across his left-right axis (he faces +Z turned to −Z: still the rig's X)
-    actor.meshes[0]?.skeleton.pose()
+    const skel = actor.meshes[0]?.skeleton
+    const saved =
+      skel?.bones.map(
+        (b) => [b.position.clone(), b.quaternion.clone(), b.scale.clone()] as const,
+      ) ?? []
+    skel?.pose()
     this.rig.updateMatrixWorld(true)
     this.support = new SupportHand(this.bones, new Vector3(1, 0, 0))
+    for (const [k, b] of (skel?.bones ?? []).entries()) {
+      const s0 = saved[k]
+      if (s0) {
+        b.position.copy(s0[0])
+        b.quaternion.copy(s0[1])
+        b.scale.copy(s0[2])
+        b.updateMatrix()
+      }
+    }
     actor.update(0)
     this.rig.updateMatrixWorld(true)
     this.fits = {

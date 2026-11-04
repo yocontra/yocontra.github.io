@@ -15,6 +15,9 @@
  *   front of a wall at once and eases back out (never a frame inside a building).
  * - First person: eye at 1.62 m with a walk bob; the gun is the view model (`viewmodel.ts`).
  * - Recoil kicks the view up and settles back; hits and blasts shake it (off under reduced motion).
+ * - Crouch lowers the eye (and the shoulder pivot) 0.45 m, a slide 0.6 m, eased.
+ * - Dead: the lens rises off your shoulder and drifts round your body, looking down at it, until
+ *   you ride back in (the respawn snaps it back).
  */
 import { MathUtils, type PerspectiveCamera, Vector3 } from 'three'
 import { BLOCK_SIGHT, type Grid, rayGrid } from '../sim/layout.ts'
@@ -65,6 +68,10 @@ export interface ShooterFrame {
   far: number
   grid: Grid
   dt: number
+  /** How far the stance lowers the eye (m): 0 standing, 0.45 crouched, 0.6 sliding. */
+  duck: number
+  /** Where your body lies while you're dead (the death camera), or null. */
+  dead: { x: number; z: number } | null
 }
 
 export class ShooterCamera {
@@ -87,6 +94,9 @@ export class ShooterCamera {
   private bobAmp = 0
   /** How close the lens is to the pivot (0 far … 1 inside the head): hide the body when high. */
   closeness = 0
+  private duck = 0
+  /** Seconds into the death camera (0 alive). */
+  private deadT = 0
 
   constructor(camera: PerspectiveCamera) {
     this.camera = camera
@@ -135,8 +145,14 @@ export class ShooterCamera {
     const cam = this.camera
     const ease = (rate: number) => 1 - Math.exp(-dt * rate)
     this.ads += ((f.ads ? 1 : 0) - this.ads) * ease(14)
+    this.duck += (f.duck - this.duck) * ease(12)
+    if (f.dead) {
+      this.deathCam(f, dt)
+      return
+    }
+    this.deadT = 0
     // the pivot rides the (already smoothed) render pose, lifted through a vault or a hop
-    this.pivot.set(f.x, PIVOT_Y + f.lift, f.z)
+    this.pivot.set(f.x, PIVOT_Y + f.lift - this.duck, f.z)
     this.recoil *= Math.exp(-dt * 9)
     this.shake.t += dt
     this.shake.amp *= Math.exp(-dt * 10)
@@ -172,6 +188,29 @@ export class ShooterCamera {
       cam.fov = this.fov
       cam.updateProjectionMatrix()
     }
+  }
+
+  /** Up off the shoulder and round the body, looking down at it. */
+  private deathCam(f: ShooterFrame, dt: number): void {
+    const body = f.dead
+    if (!body) {
+      return
+    }
+    this.deadT += dt
+    const t = Math.min(1, this.deadT / 1.2)
+    const e = t * t * (3 - 2 * t)
+    const orbit = this.yaw + Math.PI + this.deadT * 0.25
+    const dist = 1.5 + 2.5 * e
+    const cam = this.camera
+    want.set(body.x + Math.cos(orbit) * dist, EYE_Y + 2.2 * e, body.z + Math.sin(orbit) * dist)
+    // keep out of walls: pull in toward the body
+    const free = clearance(f.grid, body.x, body.z, want.x, want.z)
+    want.x = body.x + (want.x - body.x) * free
+    want.z = body.z + (want.z - body.z) * free
+    cam.position.lerp(want, 1 - Math.exp(-dt * 4))
+    cam.up.set(0, 1, 0)
+    cam.lookAt(body.x, 0.4, body.z)
+    this.closeness = 0
   }
 
   private firstPerson(f: ShooterFrame, dt: number): void {

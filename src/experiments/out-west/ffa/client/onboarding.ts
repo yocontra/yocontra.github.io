@@ -10,7 +10,7 @@
  *
  * Copy follows the copy pass: "purse" is banked money, "carried" is money at risk, "bank window".
  */
-import { DESKTOP_HELP, TOUCH_HELP } from './bindings.ts'
+import { DESKTOP_HELP, PAD_HELP, TOUCH_HELP } from './bindings.ts'
 import { type CoachFlag, coachSeen, markCoach } from './settings.ts'
 
 interface Step {
@@ -199,7 +199,12 @@ export class Onboarding {
   private keyTable(): HTMLElement {
     const t = document.createElement('dl')
     t.className = 'fr-howto-keys'
-    for (const [k, what] of this.touch ? TOUCH_HELP : DESKTOP_HELP) {
+    const pad = typeof navigator.getGamepads === 'function' && navigator.getGamepads().some(Boolean)
+    let rows = this.touch ? TOUCH_HELP : DESKTOP_HELP
+    if (pad) {
+      rows = PAD_HELP
+    }
+    for (const [k, what] of rows) {
       const dt = document.createElement('dt')
       dt.textContent = k
       const dd = document.createElement('dd')
