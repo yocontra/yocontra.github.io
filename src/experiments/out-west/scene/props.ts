@@ -189,6 +189,8 @@ export function propObject(def: PropDef): Group {
   for (const p of def.parts) {
     const m = new Mesh(p.geometry, p.material)
     m.castShadow = true
+    // a gun in a hand or a holster sits in its owner's shadow, like the hand does
+    m.receiveShadow = true
     g.add(m)
   }
   return g

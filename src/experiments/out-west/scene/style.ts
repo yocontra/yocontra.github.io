@@ -78,9 +78,9 @@ export const FABRIC_BY_MATERIAL: Record<string, Fabric> = {
 /**
  * Roughness multiplier on the character atlas's own roughness, per kind of surface. The source
  * maps put skin at ~0.78 and leather at ~0.77, which reads as chalk: skin wants ~0.55 (an oily
- * sheen on the nose, brow and cheekbones) and worn leather ~0.62. Cloth keeps the map's value.
+ * sheen on the nose, brow and cheekbones) and worn leather ~0.55. Cloth keeps the map's value.
  */
-const ATLAS_ROUGHNESS: Partial<Record<Fabric, number>> = { skin: 0.72, leather: 0.8 }
+const ATLAS_ROUGHNESS: Partial<Record<Fabric, number>> = { skin: 0.72, leather: 0.72 }
 
 /** Roughness multiplier (styMat.x) for an atlas-textured part named after its source material. */
 export function atlasRoughness(materialName: string): number {

@@ -26,6 +26,7 @@ import { type Floor, RIM, SKIN_FLAG } from './style.ts'
  *   read as a flat cel outline). A faint sky-tinted fresnel stays for the shadow side;
  * - horizon specular occlusion: a normal-mapped texel can't reflect the environment from behind
  *   its own surface, so crevices and folds stop glowing with sky;
+ * - a silhouette falloff on the diffuse (FORM_GLSL), so a front-lit figure rounds off;
  * - contact darkening toward the boots, which also occludes the environment's specular.
  */
 
@@ -101,8 +102,26 @@ export const SPEC_OCCLUSION_GLSL = `#include <lights_fragment_maps>
   radiance *= styHor * styHor * styOcc;
 }`
 
+/** Strength of the silhouette falloff (FORM_GLSL); 0 = plain Lambert. */
+const FORM_POWER = 0.4
+
 /** Character normal-map strength (the Quaternius maps are shallow). */
 const NORMAL_STRENGTH = 1.4
+
+/**
+ * After `lights_fragment_end`: a view-dependent falloff on the diffuse (Minnaert-style, the
+ * darkening rough cloth and skin show toward their silhouette). A front-lit figure is otherwise
+ * one even Lambert value from edge to edge and reads as a cut-out; with it the chest, arms and
+ * legs round off. Half strength on the ambient, so the shadow side keeps some form too. The rim
+ * (directSpecular) is untouched, so a backlit edge still glows.
+ */
+export const FORM_GLSL = `#include <lights_fragment_end>
+{
+  float styNv = saturate( dot( geometryNormal, geometryViewDir ) );
+  float styForm = pow( max( styNv, 0.02 ), ${FORM_POWER.toFixed(2)} );
+  reflectedLight.directDiffuse *= styForm;
+  reflectedLight.indirectDiffuse *= mix( 1.0, styForm, 0.5 );
+}`
 
 /** Light-loop rim gain over the old emissive rim (it's now multiplied by the light's irradiance). */
 const RIM_GAIN = 1.6
@@ -190,6 +209,7 @@ float styOcc = 1.0;`,
       .replace('#include <lights_physical_pars_fragment>', LIGHTS_WITH_WRAP)
       .replace('#include <normal_fragment_maps>', NORMAL_GUARD_GLSL)
       .replace('#include <lights_fragment_maps>', SPEC_OCCLUSION_GLSL)
+      .replace('#include <lights_fragment_end>', FORM_GLSL)
       .replace(
         '#include <roughnessmap_fragment>',
         '#include <roughnessmap_fragment>\nroughnessFactor = clamp(roughnessFactor * vStyMat.x, 0.04, 1.0);',
@@ -219,6 +239,6 @@ diffuseColor.rgb *= styOcc;`,
 }`,
       )
   }
-  mat.customProgramCacheKey = () => `ow-character-4${maps ? '-tex' : ''}`
+  mat.customProgramCacheKey = () => `ow-character-5${maps ? '-tex' : ''}`
   return mat
 }
