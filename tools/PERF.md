@@ -222,8 +222,8 @@ What `ffa/scene/town.ts` does now:
   - fences, closed doors and rocks are vertex-clustered (`ffa/scene/lod.ts`; a 432-triangle rock
     comes out at a few dozen);
   - windows become two flat quads.
-  Every vertex carries its tile id. A uniform array in the vertex shader folds away the tiles that
-  show full detail, so the whole far layer costs one draw per material.
+    Every vertex carries its tile id. A uniform array in the vertex shader folds away the tiles that
+    show full detail, so the whole far layer costs one draw per material.
 - **Small props never vanish.** Barrels, crates, crate stacks and hay get an inset box or cylinder
   stand-in in the always-drawn wood batch. From afar that is the prop; up close the kit prop
   covers it.
