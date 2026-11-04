@@ -150,6 +150,8 @@ async function createSession(token: string): Promise<Result<RankedSessionRespons
 }
 
 export class RankedSession {
+  /** The run's id (the server's session id): a hat-shot claim names the run that won the duel. */
+  readonly sessionId: string
   private readonly link: ReconnectingSocket
   private handlers: RankedHandlers | null = null
   private closedReason = null as string | null
@@ -161,6 +163,7 @@ export class RankedSession {
   private linkUp = false as boolean
 
   private constructor(created: RankedSessionResponse, firstHello: (ok: boolean) => void) {
+    this.sessionId = created.sessionId
     this.onFirstHello = firstHello
     this.link = openReconnecting({
       // the first attempt opens the run; later ones resume it, or give up without a token
