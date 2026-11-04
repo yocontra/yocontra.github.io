@@ -55,9 +55,12 @@ const HATS: Partial<Record<ItemId, HatLook>> = {
   'hat.rattler-band': { key: 'tall', color: 0x4a_3a_24 },
   'hat.ghost-white': { key: 'cowboy', color: 0xee_e8_da },
   'hat.yellow': { key: 'cowboy', color: 0xe8_c8_20 },
+  'hat.bronze-band': { key: 'cowboy', color: 0x8a_5a_30 },
+  'hat.holed-stetson': { key: 'cowboy', color: 0x6a_58_44 },
 }
 
 const OUTFITS: Partial<Record<ItemId, OutfitLook>> = {
+  'outfit.midnight-coat': { coat: 0x1a_1a_2e, tint: { Shirt: 0x2a_2a_3a, Pants: 0x1a_1a_24 } },
   'outfit.trail-duds': {},
   'outfit.shirt-vest': { tint: { Shirt: 0xd8_cc_b0, Sleeves: 0x3a_2a_1e } },
   'outfit.wool-duster': { coat: 0x6a_50_38 },
@@ -71,6 +74,7 @@ const OUTFITS: Partial<Record<ItemId, OutfitLook>> = {
 }
 
 const GUNS: Partial<Record<ItemId, GunLook>> = {
+  'gun.gold-medal': { color: 0xe8_b8_4a, metalness: 1, roughness: 0.2, length: 1 },
   'gun.rusty-six': { color: 0x9a_7a_66, metalness: 0.3, roughness: 0.7, length: 1 },
   'gun.blued-six': { color: 0x6a_80_a8, metalness: 0.7, roughness: 0.35, length: 1 },
   'gun.nickel-six': { color: 0xe0_e4_ea, metalness: 0.9, roughness: 0.22, length: 1 },
@@ -90,6 +94,7 @@ const SPURS: Partial<Record<ItemId, { color: number; points: number; metalness: 
   'spurs.plain-rowels': { color: 0x6a_60_58, points: 8, metalness: 0.5 },
   'spurs.silver-jinglebobs': { color: 0xe6_e8_ee, points: 10, metalness: 0.95 },
   'spurs.star-rowels': { color: 0xf0_c8_60, points: 5, metalness: 1 },
+  'spurs.legend-rowels': { color: 0x2a_2a_30, points: 6, metalness: 0.9 },
 }
 
 /** Holster leather, baked on the thigh like the plain one (the gun's slot never moves). */
@@ -97,6 +102,7 @@ const HOLSTERS: Partial<Record<ItemId, HolsterLook>> = {
   'holster.plain-leather': { color: 0x3a_24_14, roughness: 0.55 },
   'holster.tooled-floral': { color: 0x8a_5a_30, roughness: 0.45, trim: 0xd8_b0_70 },
   'holster.buscadero': { color: 0x2a_18_10, roughness: 0.4, trim: 0xc8_c8_d0, rig: true },
+  'holster.silver-conchos': { color: 0x2a_18_10, roughness: 0.45, trim: 0xd8_dc_e4 },
 }
 
 /**
@@ -110,6 +116,8 @@ export const FRAME_COLORS: Readonly<Record<string, string>> = {
   'frame.most-wanted-gilt': '#ffd870',
   'frame.midnight': '#2a2a40',
   'frame.most-wanted-dated': '#d8b45a',
+  'frame.tall-tales': '#7a2a1e',
+  'frame.legend': '#2a4a32',
 }
 
 /** Draw-sound layers on your own shot: [sfx rate, gain]. The standard report adds nothing. */
@@ -124,6 +132,7 @@ const EXTRAS: Partial<Record<ItemId, Partial<ActorOpts>>> = {
   'extra.handlebar': { moustache: 0x3a_24_14 },
   'extra.red-bandana': { bandana: 0x9a_1a_14 },
   'extra.tin-star': { star: true },
+  'extra.black-bandana': { bandana: 0x15_12_0f },
 }
 
 /** An outfit recoloured by its dye: the coat or poncho takes it, else the shirt and sleeves. */

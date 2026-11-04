@@ -17,6 +17,7 @@ import type { QueueMatch } from '../net/queue.ts'
 import { mountAccount } from './account.ts'
 import { icon } from './icons.ts'
 import { mountBlocks, mountNameChange } from './identity.ts'
+import type { HubMeta } from './meta-hub.ts'
 import { type GauntletChoice, gauntletSheet, type Mode, ModeTiles } from './mode-select.ts'
 import { showNotices } from './notices.ts'
 import { QueueSheet } from './queue.ts'
@@ -45,6 +46,8 @@ export interface HubDeps {
   /** A fresh Turnstile token for the queue. */
   token: () => Promise<string | null>
   openBoard: () => void
+  /** The meta-game: the Daily Outlaw tile, the Gauntlet map and Achievements, the guest purse. */
+  meta?: HubMeta
 }
 
 /** Your profile as the hub holds it: `GET /me` plus the fields the server branch adds. */
@@ -70,6 +73,10 @@ const LEDGER_LABEL: Record<LedgerKind, string> = {
   dye_job: 'Dye job',
   name_change: 'Name change',
   house_round: 'A round for the house',
+  medal: 'Medal',
+  challenge: 'Challenge',
+  daily_outlaw: 'Daily Outlaw',
+  guest_migration: 'Guest purse',
   // biome-ignore-end lint/style/useNamingConvention: ledger kinds are snake_case on the wire
 }
 
@@ -99,6 +106,7 @@ export class Hub {
   private me = null as Me | null
   private sheet = null as { dispose: () => void } | null
   private visible = false as boolean
+  private readonly metaUi: { refresh: () => void } | null
   /** A locked tile tapped while signed out: where signing in carries on to. */
   private afterSignIn = null as Mode | null
 
@@ -122,6 +130,7 @@ export class Hub {
     )
     button(links, 'Ledger', () => this.openLedger())
     button(links, 'Account', () => this.openAccount())
+    this.metaUi = deps.meta?.mount(side, links) ?? null
     button(links, 'Settings', () => openSettings(this.parent))
     onAuthChange(() => {
       this.refresh()
@@ -136,6 +145,7 @@ export class Hub {
     this.deps.stage('hub')
     this.render()
     this.refresh().catch(() => undefined)
+    this.metaUi?.refresh()
   }
 
   hide(): void {
@@ -211,7 +221,9 @@ export class Hub {
         'div',
         'ow-hub-meta',
         this.strip,
-        signedIn ? 'Couldn’t reach the server. Quick Draw still works.' : 'Guest',
+        signedIn
+          ? 'Couldn’t reach the server. Quick Draw still works.'
+          : (this.deps.meta?.guestLine() ?? 'Guest'),
       )
       if (!signedIn) {
         button(this.strip, 'Sign in', () => this.openAccount(), true).classList.add('ow-hub-signin')
