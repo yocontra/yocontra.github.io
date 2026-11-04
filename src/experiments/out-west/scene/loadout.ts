@@ -38,6 +38,10 @@ interface OutfitLook {
   coatCut?: CoatCut
   poncho?: number
   bandoliers?: boolean
+  /** A waistcoat over the shirt. */
+  vest?: number
+  /** A neckerchief (the extra slot's bandana, when one is worn, replaces it). */
+  bandana?: number
   /** Garment of the player base (Shirt, Sleeves, Pants, Boots...) → colour. */
   tint?: Readonly<Record<string, number>>
 }
@@ -49,7 +53,8 @@ interface GunLook {
 }
 
 const HATS: Partial<Record<ItemId, HatLook>> = {
-  'hat.battered-brim': { key: 'cowboy', color: 0x5a_42_2e },
+  // the starter: a dark, sweat-stained cattleman's crown, not a farmhand's straw-brown
+  'hat.battered-brim': { key: 'cowboy', color: 0x3a_2c_22 },
   'hat.plainsman': { key: 'flat', color: 0x8a_70_50 },
   'hat.sombrero': { key: 'sombrero', color: 0xc8_a0_60 },
   'hat.stovepipe': { key: 'tophat', color: 0x1a_14_10 },
@@ -62,7 +67,16 @@ const HATS: Partial<Record<ItemId, HatLook>> = {
 
 const OUTFITS: Partial<Record<ItemId, OutfitLook>> = {
   'outfit.midnight-coat': { coat: 0x1a_1a_2e, tint: { Shirt: 0x2a_2a_3a, Pants: 0x1a_1a_24 } },
-  'outfit.trail-duds': {},
+  /**
+   * The starter reads as a gunslinger at 64 px, front and back: a near-black waistcoat over a faded
+   * chambray shirt, an oxblood neckerchief, dark wool trousers and dark boots, the gunbelt on top.
+   * Kept well apart from outlaws 1–3 (dun, blue-grey and russet coats and shirts).
+   */
+  'outfit.trail-duds': {
+    vest: 0x24_1c_18,
+    bandana: 0x7a_1e_16,
+    tint: { Shirt: 0x6a_74_7e, Sleeves: 0x3a_2a_20, Pants: 0x2e_2a_28, Boots: 0x22_18_12 },
+  },
   'outfit.shirt-vest': { tint: { Shirt: 0xd8_cc_b0, Sleeves: 0x3a_2a_1e } },
   'outfit.wool-duster': { coat: 0x6a_50_38 },
   'outfit.striped-poncho': { poncho: 0x9a_3a_28 },
@@ -224,6 +238,13 @@ export function loadoutOpts(raw: unknown, dyes: Dyes = {}): ActorOpts {
   }
   if (outfit.bandoliers) {
     o.bandoliers = true
+  }
+  if (outfit.vest !== undefined) {
+    o.vest = outfit.vest
+  }
+  // the outfit's own neckerchief, unless the extra slot puts one on
+  if (outfit.bandana !== undefined && o.bandana === undefined) {
+    o.bandana = outfit.bandana
   }
   return o
 }

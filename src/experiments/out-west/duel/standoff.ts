@@ -473,6 +473,8 @@ export function playerShoots(d: Director, p: Press): void {
   for (const s of shotsBefore(plan, p.t, FEEL.tieMs, (w) => alive(d, w))) {
     enemyFires(d, s)
     if (d.phase !== 'call') {
+      // he got there first in this same frame: your press still goes on the lose card
+      d.lateMs ??= p.t - d.callT
       return
     }
   }

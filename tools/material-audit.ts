@@ -24,7 +24,13 @@ import type { MaterialReport, MatRow } from '../src/experiments/out-west/scene/m
 const base = process.argv.find((a) => a.startsWith('http')) ?? 'http://localhost:4396'
 const arg = (k: string) =>
   process.argv.find((a) => a.startsWith(`--${k}=`))?.slice(k.length + 3) ?? null
-const scenes = arg('scene') ? [arg('scene') as string] : ['duel', 'frontier']
+/** The duel is audited in every arena (`duel` is the street; `duel:depot` and so on, scene/arenas). */
+const DUEL_ARENAS = ['duel', 'duel:depot', 'duel:mission', 'duel:bank']
+const scenes = (arg('scene') ? [arg('scene') as string] : ['duel', 'frontier']).flatMap((s) =>
+  s === 'duel' ? DUEL_ARENAS : [s],
+)
+/** `#arena=` for a duel scene (the street when none). */
+const arenaHash = (scene: string): string => `&arena=${scene.split(':')[1] ?? 'street'}`
 const tiers = arg('tier') ? [arg('tier') as string] : ['high', 'low']
 const json = process.argv.includes('--json')
 const all = process.argv.includes('--all')
@@ -84,10 +90,9 @@ for (const scene of scenes) {
       })
       Reflect.set(g, '__THREE_DEVTOOLS__', hook)
     })
-    const url =
-      scene === 'duel'
-        ? `${base}/experiments/out-west/#lineup&day=0.45&tier=${tier}`
-        : `${base}/experiments/out-west/frontier/?bots=8&seed=7#tier=${tier === 'low' ? 'floor' : 'high'}`
+    const url = scene.startsWith('duel')
+      ? `${base}/experiments/out-west/#lineup&day=0.45&tier=${tier}${arenaHash(scene)}`
+      : `${base}/experiments/out-west/frontier/?bots=8&seed=7#tier=${tier === 'low' ? 'floor' : 'high'}`
     await page.goto(url)
     await page.waitForFunction(
       () => {
@@ -98,7 +103,7 @@ for (const scene of scenes) {
       undefined,
       { timeout: 120_000 },
     )
-    await page.waitForTimeout(scene === 'duel' ? 9000 : 12_000)
+    await page.waitForTimeout(scene.startsWith('duel') ? 9000 : 12_000)
     const report = await page.evaluate(async (mod) => {
       const m = (await import(
         /* @vite-ignore */ mod

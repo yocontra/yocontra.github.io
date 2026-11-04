@@ -398,8 +398,11 @@ export class Hud {
 
   /** The hit marker: white for a hit, red for a kill, gold for a Dead-Eye (critical) hit. */
   hit(kill: boolean, crit = false): void {
+    // the pop restarts on every hit (a held class would play it once)
+    this.hitEl.style.animation = 'none'
     this.hitEl.className = `fr-hitmark on${kill ? ' kill' : ''}${crit ? ' crit' : ''}`
     this.hitEl.getBoundingClientRect()
+    this.hitEl.style.animation = ''
     this.hitEl.classList.add('fade')
   }
 

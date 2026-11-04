@@ -143,7 +143,9 @@ export class Crows {
     const at = p ?? { x: RAIL_X, y: RAIL_Y, z: RAIL_Z, along: 'z' as const, face: Math.PI / 2 }
     const n = this.crows.length
     this.crows.forEach((c, i) => {
-      const off = -1.0 + (i / Math.max(1, n - 1)) * 2.0 + (Math.random() - 0.5) * 0.12
+      // an arena's perch spreads them a little wider (no two birds in one another)
+      const half = p ? 1.5 : 1.0
+      const off = -half + (i / Math.max(1, n - 1)) * 2 * half + (Math.random() - 0.5) * 0.12
       c.perch.set(at.x + (at.along === 'x' ? off : 0), at.y, at.z + (at.along === 'z' ? off : 0))
       c.yaw = at.face + (Math.random() - 0.5) * 1.8
       c.fly = -1

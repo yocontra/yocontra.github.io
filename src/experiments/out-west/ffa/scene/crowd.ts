@@ -699,6 +699,21 @@ export class Crowd {
     return h
   }
 
+  /**
+   * The shooter views: the skinned slots go to riders inside the view cone first (yaw: forward is
+   * (cos, sin); half: the lens's horizontal half-angle). Null (top-down) ranks by distance alone.
+   */
+  setView(yaw: number | null, half = 0): void {
+    if (yaw === null) {
+      viewCos = 2
+      return
+    }
+    viewX = Math.cos(yaw)
+    viewZ = Math.sin(yaw)
+    // a margin past the frame's edge, so the swap to skinned happens off screen
+    viewCos = Math.cos(Math.min(Math.PI, half + VIEW_MARGIN))
+  }
+
   update(players: readonly CrowdPlayer[], cx: number, cz: number, dt: number, nowS: number): void {
     const order = this.order
     order.length = 0
@@ -1054,10 +1069,31 @@ export class Crowd {
   }
 }
 
+/** How far past the frame's edge (rad) a rider still counts as in view. */
+const VIEW_MARGIN = 0.4
 /** The ranking centre for `byDistance` (module state: the sort runs with no closure per frame). */
 let rankX = 0
 let rankZ = 0
-const d2 = (p: CrowdPlayer): number => (p.self ? -1 : (p.x - rankX) ** 2 + (p.z - rankZ) ** 2)
+/** The look direction and the cone (cos of half its angle) the skinned slots favour; off = 2. */
+let viewX = 1
+let viewZ = 0
+let viewCos = 2
+/** Past this (m², 4 m) a rider out of view ranks as if this much further (m²): 30 m. */
+const BEHIND_FROM2 = 16
+const BEHIND_ADD2 = 900
+const d2 = (p: CrowdPlayer): number => {
+  if (p.self) {
+    return -1
+  }
+  const dx = p.x - rankX
+  const dz = p.z - rankZ
+  const r2 = dx * dx + dz * dz
+  // riders out of view (behind you, off to the side) give their skinned slot to riders in view
+  if (r2 > BEHIND_FROM2 && (dx * viewX + dz * viewZ) / Math.sqrt(r2) < viewCos) {
+    return r2 + BEHIND_ADD2
+  }
+  return r2
+}
 const byDistance = (a: CrowdPlayer, b: CrowdPlayer): number => d2(a) - d2(b)
 
 function setAuto(bones: readonly Object3D[], on: boolean): void {
