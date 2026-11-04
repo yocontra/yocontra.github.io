@@ -30,6 +30,8 @@ export interface Action {
   prompt: string
   /** Touch button label. */
   label: string
+  /** Touch: a line over the play area for actions that need explaining (banking), or null. */
+  touchPrompt?: string | null
   /** The player it targets (call-outs), or NONE. */
   target: number
 }
@@ -78,13 +80,15 @@ export function currentAction(c: ContextInput): Action | null {
     return zone.kind === 'bank'
       ? {
           bit: BTN_INTERACT,
-          prompt: `E: bank ${money(s.carried)} (2 s, hold still)`,
+          prompt: `Press E to bank ${money(s.carried)}, then hold still 2 s`,
+          touchPrompt: 'Tap BANK, then hold still 2 s',
           label: 'BANK',
           target: NONE,
         }
       : {
           bit: BTN_INTERACT,
-          prompt: `E: ship ${money(s.carried)} by stage (4 s)`,
+          prompt: `Press E to ship ${money(s.carried)} by stage, then hold still 4 s`,
+          touchPrompt: 'Tap SHIP, then hold still 4 s',
           label: 'SHIP',
           target: NONE,
         }

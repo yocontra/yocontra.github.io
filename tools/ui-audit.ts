@@ -495,9 +495,15 @@ async function member(browser: Browser, size: Size, state: State | null): Promis
 
 async function frontier(browser: Browser, size: Size): Promise<void> {
   if (
-    !['frontier-hud', 'frontier-pause', 'frontier-busy', 'frontier-death', 'frontier-riders'].some(
-      want,
-    )
+    ![
+      'frontier-howto',
+      'frontier-hud',
+      'frontier-pause',
+      'frontier-score',
+      'frontier-busy',
+      'frontier-death',
+      'frontier-riders',
+    ].some(want)
   ) {
     return
   }
@@ -509,7 +515,22 @@ async function frontier(browser: Browser, size: Size): Promise<void> {
     timeout: 120_000,
   })
   await page.waitForTimeout(1500)
+  // the first ride in on a device opens How to play: audit every step, then ride
+  await page.locator('.fr-howto:not([hidden])').waitFor({ timeout: 10_000 })
+  for (let i = 1; i <= 4; i++) {
+    if (want('frontier-howto')) {
+      await audit(page, size, 'frontier-howto', '.fr-howto')
+    }
+    await tap(page, '.fr-howto .fr-howto-row .fr-menu-item >> nth=-1')
+    await page.waitForTimeout(250)
+  }
   await audit(page, size, 'frontier-hud', '.fr-hud')
+  await step(page, size, 'frontier-score', async () => {
+    await page.keyboard.down('Tab')
+    await page.waitForTimeout(300)
+    await audit(page, size, 'frontier-score', '.fr-score')
+    await page.keyboard.up('Tab')
+  })
   await step(page, size, 'frontier-pause', async () => {
     await tap(page, '.fr-menu-btn')
     await audit(page, size, 'frontier-pause', '.fr-menu')

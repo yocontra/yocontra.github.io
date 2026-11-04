@@ -198,6 +198,13 @@ export class Crowd {
   private readonly rifleDef: PropDef | null
   /** Skinned cap (12 floor, 16 medium/high). */
   near: number
+  /**
+   * How big characters read: 1.25 from the top-down camera, life size (1) at eye level, where a
+   * bigger-than-life rider would tower over the doors. Set by the game's view mode.
+   */
+  readScale = READ_SCALE
+  /** First person (or a lens pulled into your head): your own body isn't drawn. */
+  hideSelf = false
   private readonly order: CrowdPlayer[] = []
   stats = { near: 0, far: 0, actors: 0, casters: 0, builds: 0 }
   /** Actors cast so far (each is a full dress-and-bake; churn here is the crowd's main CPU cost). */
@@ -663,7 +670,10 @@ export class Crowd {
       this.root.add(holder)
     }
     // Spawn protection: a warm pulsing glow on the body (never a blink, never see-through)
-    holder.visible = true
+    holder.visible = !(p.self && this.hideSelf)
+    if (holder.scale.x !== this.readScale) {
+      holder.scale.setScalar(this.readScale)
+    }
     actor.glow.value = p.flags & EF_PROTECTED ? 0.6 + 0.4 * Math.sin(nowS * Math.PI * 2 * 2.2) : 0
     holder.position.set(p.x, 0, p.z)
     holder.rotation.y = facing(p.aim)
@@ -802,7 +812,7 @@ export class Crowd {
     v.set(i, clip, { phase, speed: rate }, m.look)
     q.setFromAxisAngle(up, facing(p.aim))
     pos.set(p.x, 0, p.z)
-    m4.compose(pos, q, one.setScalar(READ_SCALE))
+    m4.compose(pos, q, one.setScalar(this.readScale))
     one.set(1, 1, 1)
     v.mesh.setMatrixAt(i, m4)
     if (!(p.flags & EF_HATLESS)) {

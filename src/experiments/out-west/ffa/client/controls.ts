@@ -1,11 +1,15 @@
 // biome-ignore-all lint/suspicious/noUnnecessaryConditions: input flags are mutated from DOM and gamepad callbacks; Biome narrows them to their initialisers
 /**
- * Desktop and gamepad input → one held-button word, a move vector and an aim. Presses shorter
- * than a 50 ms tick are latched so the server always sees their edge.
+ * Desktop and gamepad input → one held-button word, a move vector, and either an aim (top-down) or
+ * look deltas (over the shoulder / first person). Presses shorter than a 50 ms tick are latched so
+ * the server always sees their edge. The key table lives in `bindings.ts`.
  *
- * Desktop: WASD/arrows move, the mouse aims, LMB fires, hold RMB for Dead-Eye, Space rolls,
- * R reloads, E banks/opens/accepts, Q calls out. Gamepad: sticks, RT fire, LT Dead-Eye, A roll,
- * X reload, B interact, Y call out, RB throw dynamite. G throws dynamite on the keyboard.
+ * Shooter views: the first click on the game takes the pointer lock (and doesn't fire); then the
+ * mouse looks, LMB fires and RMB aims down the sights. Losing the lock (Esc, alt-tab) tells the
+ * game, which opens the pause menu. Gamepad: left stick moves, right stick looks, RT fire, LT aim,
+ * A jump, B roll, X reload, Y interact, RB throw, LB call out.
+ *
+ * Top-down: WASD/arrows move, the mouse aims at the ground, LMB fires, hold RMB for Dead-Eye.
  */
 import {
   BTN_AIM,
@@ -16,9 +20,17 @@ import {
   BTN_ROLL,
   BTN_THROW,
 } from '../../contract/town.ts'
+import {
+  JUMP_BIT,
+  KEY_SCOREBOARD,
+  KEY_SHOULDER,
+  KEY_VIEW_TOGGLE,
+  SHOOTER_KEYS,
+  TOP_KEYS,
+} from './bindings.ts'
 
 export interface Sampled {
-  /** −1..1 each, +x east, +z south. */
+  /** −1..1 each. Top-down: +x east, +z south. Shooter: +x right, +z back (screen terms). */
   mx: number
   mz: number
   buttons: number
@@ -28,16 +40,18 @@ export interface Sampled {
   assist: boolean
 }
 
-const KEY_BUTTONS: Record<string, number> = {
-  Space: BTN_ROLL,
-  KeyR: BTN_RELOAD,
-  KeyE: BTN_INTERACT,
-  KeyF: BTN_INTERACT,
-  KeyQ: BTN_CALLOUT,
-  KeyG: BTN_THROW,
+export interface DesktopHooks {
+  /** V: swap first and third person. */
+  onViewToggle: () => void
+  /** X: swap the shoulder. */
+  onShoulder: () => void
+  /** Tab held / released. */
+  onScoreboard: (open: boolean) => void
+  /** The pointer lock was lost while playing (Esc, alt-tab, a system dialog). */
+  onLockLost: () => void
 }
 
-const PAD_BUTTONS: readonly (readonly [number, number])[] = [
+const PAD_TOP: readonly (readonly [number, number])[] = [
   [7, BTN_FIRE],
   [6, BTN_AIM],
   [0, BTN_ROLL],
@@ -47,7 +61,22 @@ const PAD_BUTTONS: readonly (readonly [number, number])[] = [
   [5, BTN_THROW],
 ]
 
+const PAD_SHOOTER: readonly (readonly [number, number])[] = [
+  [7, BTN_FIRE],
+  [6, BTN_AIM],
+  [0, JUMP_BIT],
+  [1, BTN_ROLL],
+  [2, BTN_RELOAD],
+  [3, BTN_INTERACT],
+  [4, BTN_CALLOUT],
+  [5, BTN_THROW],
+]
+
 const PAD_DEAD = 0.18
+/** Right stick at full tilt turns this fast (rad/s) before the sensitivity setting. */
+const PAD_LOOK_RATE = 3.2
+/** A single mouse event never moves more than this (Chrome's occasional pointer-lock spikes). */
+const MAX_MOUSE_STEP = 240
 
 export class DesktopControls {
   private readonly keys = new Set<string>()
@@ -57,15 +86,25 @@ export class DesktopControls {
   readonly pointer = { x: 0, y: 0, has: false }
   private padAim: number | null = null
   usingPad = false
+  /** Over the shoulder or first person: mouse-look under pointer lock. */
+  private shooter = false
+  /** Accumulated look since the last `takeLook`, px (mouse) or px-equivalent (right stick). */
+  private lookX = 0
+  private lookY = 0
+  /** The game wants input (not paused, not dead in a menu): a click may take the lock. */
+  enabled = true
   private readonly root: HTMLElement
+  private readonly hooks: DesktopHooks | null
   private readonly off: (() => void)[] = []
+  private lastPad = 0
 
-  constructor(root: HTMLElement) {
+  constructor(root: HTMLElement, hooks: DesktopHooks | null = null) {
     this.root = root
-    const on = <K extends keyof WindowEventMap>(
+    this.hooks = hooks
+    const on = <K extends keyof WindowEventMap | 'pointerlockchange'>(
       type: K,
-      fn: (e: WindowEventMap[K]) => void,
-      target: Window | HTMLElement = globalThis as unknown as Window,
+      fn: (e: K extends keyof WindowEventMap ? WindowEventMap[K] : Event) => void,
+      target: Window | HTMLElement | Document = globalThis as unknown as Window,
     ) => {
       target.addEventListener(type, fn as EventListener, { passive: false })
       this.off.push(() => target.removeEventListener(type, fn as EventListener))
@@ -75,31 +114,10 @@ export class DesktopControls {
     on('blur', () => {
       this.keys.clear()
       this.held = 0
+      this.hooks?.onScoreboard(false)
     })
-    on(
-      'pointermove',
-      (e) => {
-        if (e.pointerType === 'mouse') {
-          this.pointer.x = e.clientX
-          this.pointer.y = e.clientY
-          this.pointer.has = true
-          this.usingPad = false
-        }
-      },
-      root,
-    )
-    on(
-      'pointerdown',
-      (e) => {
-        if (e.pointerType !== 'mouse' || (e.target as HTMLElement).closest('.fr-hit')) {
-          return
-        }
-        e.preventDefault()
-        const bit = e.button === 2 ? BTN_AIM : BTN_FIRE
-        this.press(bit)
-      },
-      root,
-    )
+    on('pointermove', (e) => this.move(e), root)
+    on('pointerdown', (e) => this.down(e), root)
     on(
       'pointerup',
       (e) => {
@@ -110,6 +128,87 @@ export class DesktopControls {
       root,
     )
     on('contextmenu', (e) => e.preventDefault(), root)
+    on(
+      'pointerlockchange',
+      () => {
+        if (!this.locked) {
+          // the lock went away (Esc, alt-tab): let go of everything held under it
+          this.held = 0
+          if (this.shooter && this.enabled) {
+            this.hooks?.onLockLost()
+          }
+        }
+      },
+      document,
+    )
+  }
+
+  /** Switch between mouse-look (shooter views) and pointer aim (top-down). */
+  setShooter(on: boolean): void {
+    this.shooter = on
+    if (!on) {
+      this.unlock()
+    }
+  }
+
+  get locked(): boolean {
+    return document.pointerLockElement === this.root
+  }
+
+  /** Take the pointer (must run inside a user gesture, such as a click). */
+  lock(): void {
+    if (!this.shooter || this.locked || typeof this.root.requestPointerLock !== 'function') {
+      return
+    }
+    // raw mouse deltas where supported (no OS acceleration); a plain lock otherwise
+    this.requestLock({ unadjustedMovement: true }).catch(() => this.requestLock())
+  }
+
+  private async requestLock(opts?: { unadjustedMovement: boolean }): Promise<void> {
+    try {
+      await (this.root.requestPointerLock(opts) as Promise<void> | undefined)
+    } catch (e) {
+      if (opts) {
+        throw e
+      }
+      // Chrome refuses a re-lock for about a second after Esc: the next click retries.
+    }
+  }
+
+  unlock(): void {
+    if (this.locked) {
+      document.exitPointerLock()
+    }
+  }
+
+  private move(e: PointerEvent): void {
+    if (e.pointerType !== 'mouse') {
+      return
+    }
+    this.pointer.x = e.clientX
+    this.pointer.y = e.clientY
+    this.pointer.has = true
+    this.usingPad = false
+    if (this.shooter && this.locked) {
+      const clamp = (v: number) => Math.max(-MAX_MOUSE_STEP, Math.min(MAX_MOUSE_STEP, v))
+      this.lookX += clamp(e.movementX)
+      this.lookY += clamp(e.movementY)
+    }
+  }
+
+  private down(e: PointerEvent): void {
+    if (e.pointerType !== 'mouse' || (e.target as HTMLElement).closest('.fr-hit')) {
+      return
+    }
+    e.preventDefault()
+    if (this.shooter && !this.locked) {
+      // the first click only takes the mouse; it never fires
+      if (this.enabled) {
+        this.lock()
+      }
+      return
+    }
+    this.press(e.button === 2 ? BTN_AIM : BTN_FIRE)
   }
 
   private press(bit: number): void {
@@ -123,7 +222,7 @@ export class DesktopControls {
 
   private key(e: KeyboardEvent, down: boolean): void {
     const t = e.target as HTMLElement | null
-    if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA')) {
+    if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT')) {
       return
     }
     if (down) {
@@ -131,7 +230,21 @@ export class DesktopControls {
     } else {
       this.keys.delete(e.code)
     }
-    const bit = KEY_BUTTONS[e.code]
+    if (e.code === KEY_SCOREBOARD) {
+      e.preventDefault()
+      if (!e.repeat) {
+        this.hooks?.onScoreboard(down)
+      }
+      return
+    }
+    if (down && !e.repeat && this.shooter && this.enabled) {
+      if (e.code === KEY_VIEW_TOGGLE) {
+        this.hooks?.onViewToggle()
+      } else if (e.code === KEY_SHOULDER) {
+        this.hooks?.onShoulder()
+      }
+    }
+    const bit = (this.shooter ? SHOOTER_KEYS : TOP_KEYS)[e.code]
     if (bit !== undefined) {
       e.preventDefault()
       if (down && !e.repeat) {
@@ -145,7 +258,7 @@ export class DesktopControls {
     }
   }
 
-  /** RMB / LT held (the Dead-Eye reticle shows). */
+  /** RMB / LT held (aiming down the sights; the Dead-Eye reticle from the holster). */
   get aimHeld(): boolean {
     return (this.held & BTN_AIM) !== 0 || (this.padHeld & BTN_AIM) !== 0
   }
@@ -153,6 +266,30 @@ export class DesktopControls {
   /** Inject a one-tick press (HUD buttons, menu actions). */
   tap(bit: number): void {
     this.latched |= bit
+  }
+
+  /** Look movement since the last call, in mouse pixels (the game applies the sensitivity). */
+  takeLook(out: { x: number; y: number }): { x: number; y: number } {
+    const now = performance.now()
+    const dt = Math.min(0.1, (now - (this.lastPad || now)) / 1000)
+    this.lastPad = now
+    const pad = this.padLook
+    if (pad.x !== 0 || pad.y !== 0) {
+      // the stick is a rate: convert to mouse pixels at the default sensitivity
+      this.lookX += (pad.x * PAD_LOOK_RATE * dt) / 0.0022
+      this.lookY += (pad.y * PAD_LOOK_RATE * 0.7 * dt) / 0.0022
+    }
+    out.x = this.lookX
+    out.y = this.lookY
+    this.lookX = 0
+    this.lookY = 0
+    return out
+  }
+
+  /** Dev harness only: inject look as if the mouse moved. */
+  injectLook(dx: number, dy: number): void {
+    this.lookX += dx
+    this.lookY += dy
   }
 
   sample(): Sampled {
@@ -176,14 +313,18 @@ export class DesktopControls {
       mx /= len
       mz /= len
     }
-    return { mx, mz, buttons, aim: this.usingPad ? this.padAim : null, assist: this.usingPad }
+    const aim = this.usingPad && !this.shooter ? this.padAim : null
+    return { mx, mz, buttons, aim, assist: this.usingPad }
   }
 
   private padHeld = 0
+  private readonly padLook = { x: 0, y: 0 }
 
   private pad(): { mx: number; mz: number; buttons: number } | null {
     const pads = typeof navigator.getGamepads === 'function' ? navigator.getGamepads() : []
     const p = pads.find((g) => g?.connected)
+    this.padLook.x = 0
+    this.padLook.y = 0
     if (!p) {
       return null
     }
@@ -192,7 +333,7 @@ export class DesktopControls {
       return Math.abs(v) < PAD_DEAD ? 0 : v
     }
     let held = 0
-    for (const [i, bit] of PAD_BUTTONS) {
+    for (const [i, bit] of this.shooter ? PAD_SHOOTER : PAD_TOP) {
       const b = p.buttons[i]
       if (b && (b.pressed || b.value > 0.4)) {
         held |= bit
@@ -200,7 +341,14 @@ export class DesktopControls {
     }
     const rx = ax(2)
     const rz = ax(3)
-    if (Math.hypot(rx, rz) > 0.35) {
+    if (this.shooter) {
+      // a squared response: fine aim near the centre, fast turns at full tilt
+      this.padLook.x = rx * Math.abs(rx)
+      this.padLook.y = rz * Math.abs(rz)
+      if (rx || rz) {
+        this.usingPad = true
+      }
+    } else if (Math.hypot(rx, rz) > 0.35) {
       this.padAim = Math.atan2(rz, rx)
       this.usingPad = true
     }
@@ -215,6 +363,7 @@ export class DesktopControls {
   }
 
   dispose(): void {
+    this.unlock()
     for (const f of this.off) {
       f()
     }
