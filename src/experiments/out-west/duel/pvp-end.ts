@@ -64,16 +64,16 @@ export function endView(
   const view = resultView(r, seat, o.name, o.xp)
   if (lost === null) {
     return o.synced && r.you === null
-      ? { ...view, pending: 'Settled while you were away. It’s in your ledger.' }
+      ? { ...view, pending: 'Settled while you were away. See your ledger.' }
       : view
   }
   return {
     ...view,
     tone: 'even',
-    title: 'The line went dead',
+    title: 'Connection lost',
     sub: lost,
     canRematch: false,
-    pending: 'Whatever was settled is in your ledger.',
+    pending: 'Any result is in your ledger.',
   }
 }
 
@@ -83,17 +83,17 @@ export function endView(
  */
 export function confirmFlee(d: Director, human: boolean): Promise<boolean> {
   const before = d.phase === 'cock' || d.phase === 'title'
-  let body = 'Running now is a forfeit: a loss with the full penalty.'
+  let body = 'Leaving now counts as a loss, with the full penalty.'
   if (before) {
     body = human
-      ? 'Running before the walk is a dodge: half your penalty and no XP.'
-      : 'No penalty against a ghost before the walk.'
+      ? 'Leaving now is a dodge: half penalty and no XP.'
+      : 'No penalty for leaving a ghost duel now.'
   }
   return confirmSheet(d.c.hud.root, {
-    title: 'Flee?',
+    title: 'Leave the duel?',
     body,
-    yes: 'Flee',
-    no: 'Stand your ground',
+    yes: 'Leave',
+    no: 'Stay',
     danger: true,
   })
 }

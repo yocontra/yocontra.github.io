@@ -26,6 +26,7 @@ import { uiSound } from './sfx.ts'
 import { button, confirmSheet, el, swallow } from './sheet.ts'
 import { dyePanel } from './store-dye.ts'
 import { inReach, SETS, Shelf, setOf, wearSet } from './store-kit.ts'
+import { BAKED_THUMBS } from './thumbs.ts'
 
 const SLOT_TABS: readonly { slot: Slot; label: string }[] = [
   { slot: 'hat', label: 'Hats' },
@@ -65,9 +66,9 @@ const RARITY_LABEL: Record<CatalogItem['rarity'], string> = {
 /** Where a piece of kit shows (the ones you can't see on the street say so). */
 const SLOT_NOTE: Partial<Record<Slot, string>> = {
   frame: 'Frames your poster in Bounty Hunt.',
-  drawSound: 'Plays when you fire in Bounty Hunt, never before.',
+  drawSound: 'Plays when you fire in Bounty Hunt.',
   saddlebag: 'The bag you drop in Frontier.',
-  holster: 'Tooling shows up close. Same draw for everyone.',
+  holster: 'Looks only. Every gun draws the same.',
 }
 
 /** Thumbnails as image URLs, kept for the page: a canvas can only hang in one place. */
@@ -216,7 +217,10 @@ export class Outfitter {
   private art(card: HTMLElement, item: CatalogItem): void {
     const art = el('span', 'ow-item-art', card)
     art.setAttribute('aria-hidden', 'true')
-    const url = ART.get(item.id)
+    // baked at build time (tools/item-thumbs.ts): no dressing on the main thread at all
+    const url = BAKED_THUMBS.has(item.id)
+      ? `/experiments/out-west/thumbs/${item.id}.webp`
+      : ART.get(item.id)
     if (url) {
       paint(art, url)
       return
@@ -239,16 +243,34 @@ export class Outfitter {
         this.drawing = false
         return
       }
-      let url = ART.get(next.id)
-      if (!url) {
-        const c = this.deps.thumb?.(next.id)
-        url = c ? c.toDataURL('image/webp', 0.9) : ''
-        ART.set(next.id, url)
+      const have = ART.get(next.id)
+      if (have !== undefined) {
+        if (have && next.art.isConnected) {
+          paint(next.art, have)
+        }
+        requestAnimationFrame(step)
+        return
       }
-      if (url && next.art.isConnected) {
-        paint(next.art, url)
+      const c = this.deps.thumb?.(next.id)
+      if (!c) {
+        ART.set(next.id, '')
+        requestAnimationFrame(step)
+        return
       }
-      requestAnimationFrame(step)
+      // the image encode runs off the frame (toDataURL blocked it for tens of ms on a phone),
+      // and the next piece waits for it, so each frame dresses at most one
+      c.toBlob(
+        (blob) => {
+          const url = blob ? URL.createObjectURL(blob) : ''
+          ART.set(next.id, url)
+          if (url && next.art.isConnected) {
+            paint(next.art, url)
+          }
+          requestAnimationFrame(step)
+        },
+        'image/webp',
+        0.9,
+      )
     }
     requestAnimationFrame(step)
   }
@@ -312,7 +334,7 @@ export class Outfitter {
       const have = pieces.filter((i) => this.owned.has(i.id)).length
       const box = el('div', 'ow-set-card', this.list)
       el('b', 'ow-store-name', box, set.name)
-      el('p', 'ow-hub-note', box, `${set.blurb} ${have}/${pieces.length} owned.`)
+      el('p', 'ow-hub-note', box, `${set.blurb} Owned: ${have}/${pieces.length}`)
       const row = el('div', 'ow-set-pieces', box)
       for (const p of pieces) {
         const chip = el('button', `ow-set-piece${this.owned.has(p.id) ? ' owned' : ''}`, row)
@@ -325,7 +347,7 @@ export class Outfitter {
           this.pick(p)
         })
       }
-      button(box, 'Try the set on', () => {
+      button(box, 'Try on', () => {
         this.picked = null
         this.deps.preview(wearSet(this.equipped, set, this.items))
       })
@@ -369,7 +391,7 @@ export class Outfitter {
     if (set) {
       const have = set.items.filter((id) => this.owned.has(id)).length
       const line = el('p', 'ow-hub-note ow-store-set', this.detail)
-      line.append(`Part of the ${set.name} set · ${have}/${set.items.length} owned · `)
+      line.append(`${set.name} set · Owned: ${have}/${set.items.length} · `)
       const see = el('button', 'ow-store-link', line, 'See the set')
       see.type = 'button'
       see.addEventListener('click', (e) => {
@@ -425,12 +447,12 @@ export class Outfitter {
     }
     const colour = DYES.find((d) => d.id === dye)?.name ?? dye
     const yes = await confirmSheet(this.root.parentElement ?? this.root, {
-      title: dye === 'natural' ? `Wash out ${item.name}?` : `Dye ${item.name} ${colour}?`,
+      title: dye === 'natural' ? `Remove dye from ${item.name}?` : `Dye ${item.name} ${colour}?`,
       body:
         dye === 'natural'
           ? 'Back to its natural colour. Free.'
-          : `${money(price)} from your purse of ${money(me.purse)}. Cosmetic only.`,
-      yes: dye === 'natural' ? 'Wash it out' : `Dye · ${money(price)}`,
+          : `Costs ${money(price)}. You have ${money(me.purse)}.`,
+      yes: dye === 'natural' ? 'Remove dye' : `Dye · ${money(price)}`,
     })
     if (!yes) {
       return
@@ -451,14 +473,14 @@ export class Outfitter {
 
   private buyButton(item: CatalogItem, me: MeResponse | null): void {
     if (!me) {
-      el('p', 'ow-hub-note', this.detail, 'Sign in with a passkey to buy and equip.')
+      el('p', 'ow-hub-note', this.detail, 'Sign in to buy and equip.')
       return
     }
     const verdict = canBuy({ level: me.level, purse: me.purse }, item, this.owned)
     const label: Record<string, string> = {
       ok: `Buy · ${money(item.price)}`,
       funds: `Need ${money(item.price - me.purse)} more`,
-      level: `Unlocks at Lv ${item.level}`,
+      level: `Unlocks at level ${item.level}`,
       not_for_sale: item.unlock ?? 'Not for sale',
       owned: 'Owned',
     }
@@ -480,7 +502,7 @@ export class Outfitter {
     }
     const yes = await confirmSheet(this.root.parentElement ?? this.root, {
       title: `Buy ${item.name}?`,
-      body: `${money(item.price)} from your purse of ${money(me.purse)}. Cosmetic only, no refunds.`,
+      body: `Costs ${money(item.price)}. You have ${money(me.purse)}. No refunds.`,
       yes: `Buy · ${money(item.price)}`,
     })
     if (!yes) {

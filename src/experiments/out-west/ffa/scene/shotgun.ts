@@ -334,5 +334,6 @@ export function shotgunMesh(material: Material): Object3D {
   const m = new Mesh(shotgunGeometry(), material)
   m.name = 'shotgun'
   m.castShadow = true
+  m.receiveShadow = true
   return m
 }

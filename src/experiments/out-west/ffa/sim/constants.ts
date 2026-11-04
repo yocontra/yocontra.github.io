@@ -34,8 +34,35 @@ export const ROLL_COOLDOWN_TICKS = s(2.5)
 export const VAULT_TICKS = s(0.5)
 export const VAULT_REACH = 1
 export const VAULT_MAX_M = 4
-export const HOP_TICKS = s(0.4)
-export const JUMP_COOLDOWN_TICKS = s(0.8)
+export const HOP_TICKS = s(0.55)
+export const JUMP_COOLDOWN_TICKS = s(0.7)
+/** In the air you keep your take-off velocity, steering this fraction toward the stick a tick. */
+export const AIR_CONTROL = 0.12
+
+// --- CoD movement (wire v5) -----------------------------------------------------------------------
+
+/** Sprint (`BTN_SPRINT` held, the stick within `SPRINT_CONE_DEG` of your aim, half a stick or more). */
+export const SPRINT_SPEED = 7.6
+export const SPRINT_CONE_DEG = 50
+export const SPRINT_MIN_STICK = 0.5
+/** A trigger pull ends the sprint; the gun is up (and the shot goes) this many ticks later. */
+export const SPRINT_OUT_TICKS = s(0.15)
+/** No sprint for this long after a trigger pull (or while the trigger is held). */
+export const SPRINT_LOCK_TICKS = s(0.4)
+/** Crouched (`BTN_CROUCH` held). */
+export const CROUCH_SPEED = 2.9
+/** On the sights (`BTN_AIM` held) your feet slow to this fraction. */
+export const ADS_SPEED_FACTOR = 0.55
+/**
+ * Slide: crouch pressed mid-sprint. `SLIDE_TICKS` along the sprint's heading, easing from
+ * `SLIDE_SPEED` to `SLIDE_END_SPEED` (about 4.4 m). The first `SLIDE_IFRAME_TICKS` dodge bullets
+ * like the roll did. You can shoot from a slide (at a wider spread).
+ */
+export const SLIDE_TICKS = s(0.65)
+export const SLIDE_SPEED = 9.5
+export const SLIDE_END_SPEED = 4
+export const SLIDE_IFRAME_TICKS = s(0.25)
+export const SLIDE_COOLDOWN_TICKS = s(1.6)
 
 // --- Health -------------------------------------------------------------------------------------
 
@@ -62,6 +89,27 @@ export const FALLOFF_FACTOR = 0.6
 export const MAX_RANGE = 22
 export const SPREAD_STANDING_DEG = 1.5
 export const SPREAD_MOVING_DEG = 4
+/**
+ * Hip fire versus the sights (wire v5): each gun's spread from the hip and on the sights, scaled
+ * by how you move (`SPREAD_*_K`), plus bloom: every shot adds `*_BLOOM_DEG` (halved on the sights)
+ * up to `MAX_BLOOM_DEG`, and it settles at `BLOOM_DECAY_DEG` a tick.
+ */
+export const REVOLVER_HIP_DEG = 2.2
+export const REVOLVER_ADS_DEG = 0.35
+export const REVOLVER_BLOOM_DEG = 1.2
+export const RIFLE_HIP_DEG = 4
+export const RIFLE_ADS_DEG = 0.15
+export const RIFLE_BLOOM_DEG = 2.5
+/** The shotgun's cone (full width) on the sights; `SHOTGUN_CONE_DEG` from the hip. */
+export const SHOTGUN_ADS_CONE_DEG = 8
+export const MAX_BLOOM_DEG = 5
+export const BLOOM_DECAY_DEG = 0.3
+export const SPREAD_MOVING_K = 1.6
+export const SPREAD_CROUCH_K = 0.7
+export const SPREAD_SLIDE_K = 1.8
+export const SPREAD_AIR_K = 2.5
+/** Extra degrees in the air (a jump shot is a gamble). */
+export const SPREAD_AIR_DEG = 3
 
 // --- Map pickups (§3.2: equal-access, fixed spots, 45 s respawn) ------------------------------------
 

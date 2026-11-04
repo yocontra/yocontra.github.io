@@ -31,7 +31,7 @@ import {
   SHOWDOWN_WAIT_MIN_TICKS,
 } from './constants.ts'
 import { cancelChannel, killPlayer } from './death.ts'
-import { aimDir } from './move.ts'
+import { aimDir, stopMoves } from './move.ts'
 import { activePlayers, dist2, pairKey, type World } from './state.ts'
 import type { Player, Showdown } from './types.ts'
 
@@ -99,9 +99,7 @@ function startShowdown(w: World, a: Player, b: Player): void {
     cancelChannel(w, p)
     p.showdown = sd.id
     p.calledBy = NONE
-    p.rollTicks = 0
-    p.jumpTicks = 0
-    p.vaultStep = 0
+    stopMoves(p)
     p.deadEyeStart = -1
   }
   w.events.push({ type: 'showdown_start', showdown: sd })

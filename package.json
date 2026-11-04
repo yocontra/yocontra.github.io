@@ -13,7 +13,7 @@
     "check": "biome ci --error-on-warnings . && bun run typecheck && bun run api:test && bun scripts/no-js.ts",
     "api:dev": "wrangler dev --config api/wrangler.jsonc --local --port 8787 --infer-origin-from-routes=false",
     "api:migrate:local": "wrangler d1 migrations apply contra-leaderboard --config api/wrangler.jsonc --local",
-    "api:test": "bun test api"
+    "api:test": "bun test --timeout 30000 api"
   },
   "dependencies": {
     "@astrojs/sitemap": "^3.7.4",

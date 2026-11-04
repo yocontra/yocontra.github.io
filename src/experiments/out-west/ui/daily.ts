@@ -4,7 +4,14 @@
  * The duel itself is `duel/daily.ts`; the server is `api/src/daily/*`.
  */
 import type { DailyBoardResponse, DailyResponse } from '../contract/meta.ts'
-import { DAILY_PAY, type DailyModifier, type DailySpec, dailySpec, dayKey } from '../data/daily.ts'
+import {
+  DAILY_PAY,
+  type DailyModifier,
+  type DailySpec,
+  dailySpec,
+  dayKey,
+  modifierRule,
+} from '../data/daily.ts'
 import { money } from '../data/economy.ts'
 import { OUTLAWS } from '../data/outlaws.ts'
 import type { Verdict } from '../duel/clock.ts'
@@ -12,7 +19,7 @@ import { currentPlayer } from '../net/auth.ts'
 import { fetchDaily, fetchDailyBoard, issueDaily } from '../net/meta.ts'
 import { RankedSession } from '../net/ranked.ts'
 import { icon } from './icons.ts'
-import { button, el, panelSheet, statusLine } from './sheet.ts'
+import { button, el, facts, panelSheet, statusLine } from './sheet.ts'
 
 export interface DailyDeps {
   /** The game behind the hub is loaded. */
@@ -25,21 +32,28 @@ export interface DailyDeps {
 
 const MOD_LABEL: Readonly<Record<DailyModifier, string>> = {
   fog: 'Fog',
-  'double-fakes': 'Two fake-outs',
+  'double-fakes': '2 fake-outs',
   'no-bell': 'No bell',
 }
 
+/** The day's modifiers as chips, then one plain line each on what changes. */
 function modifiers(parent: HTMLElement, spec: DailySpec): void {
   const row = el('div', 'ow-daily-mods', parent)
   for (const m of spec.modifiers) {
     el('span', `ow-daily-mod ow-daily-mod-${m}`, row, MOD_LABEL[m])
   }
+  for (const m of spec.modifiers) {
+    el('p', 'ow-hub-note ow-daily-rule', parent, modifierRule(m))
+  }
 }
 
+/** "$50 + 75 XP" */
+const reward = (cash: number): string => `${money(cash)} + ${DAILY_PAY.xp} XP`
+
 function board(parent: HTMLElement, b: DailyBoardResponse | null): void {
-  el('h3', 'ow-map-h', parent, 'Today’s board')
+  el('h3', 'ow-map-h', parent, 'Today’s best times')
   if (!b || b.rows.length === 0) {
-    el('p', 'ow-hub-note', parent, 'Nobody has beaten him yet today.')
+    el('p', 'ow-hub-note', parent, 'No one has beaten him yet.')
     return
   }
   const list = el('ol', 'ow-ledger-list ow-daily-board', parent)
@@ -50,7 +64,7 @@ function board(parent: HTMLElement, b: DailyBoardResponse | null): void {
     el('b', 'ow-t-num', li, `${r.ms} ms`)
   }
   if (b.you && b.you.rank > 10) {
-    el('p', 'ow-hub-note', parent, `You: #${b.you.rank}, ${b.you.ms} ms.`)
+    el('p', 'ow-hub-note', parent, `You: #${b.you.rank} · ${b.you.ms} ms`)
   }
 }
 
@@ -65,13 +79,13 @@ function dailyStatus(t: DailyResponse | null): string {
   }
   const left = Math.max(0, t.maxTries - t.tries)
   if (left === 0) {
-    return t.best ? `Best today ${t.best} ms · back tomorrow` : 'Back tomorrow'
+    return t.best ? `Best ${t.best} ms · No tries left` : 'No tries left today'
   }
   const tries = `${left} ${left === 1 ? 'try' : 'tries'} left`
   if (t.best) {
-    return `Best today ${t.best} ms · ${tries}`
+    return `Best ${t.best} ms · ${tries}`
   }
-  return t.paid ? tries : `${tries} · win +${money(DAILY_PAY.cash)}`
+  return t.paid ? tries : `${tries} · Win ${money(DAILY_PAY.cash)}`
 }
 
 export class DailyTile {
@@ -121,9 +135,9 @@ export class DailyTile {
 
   /** The day's sheet: who, what's different, the board, and the ride out. */
   async open(): Promise<void> {
-    const s = panelSheet(this.root, { title: 'The Daily Outlaw', paper: true, cls: 'ow-daily' })
+    const s = panelSheet(this.root, { title: 'Daily Outlaw', paper: true, cls: 'ow-daily' })
     const status = statusLine(s.body)
-    status('Asking around town…')
+    status('Loading…')
     const [today, b] = await Promise.all([fetchDaily(), fetchDailyBoard()])
     status('')
     if (!today.ok) {
@@ -132,8 +146,8 @@ export class DailyTile {
         'ow-hub-note',
         s.body,
         today.status === 404
-          ? 'The Daily Outlaw isn’t on this server yet.'
-          : 'Couldn’t reach the server. The Daily Outlaw needs a connection.',
+          ? 'The Daily Outlaw isn’t available yet.'
+          : 'Couldn’t connect. Check your connection and try again.',
       )
       return
     }
@@ -141,31 +155,30 @@ export class DailyTile {
     const t = today.value
     const spec = t.spec
     const o = OUTLAWS[spec.outlaw]
-    el('div', 'ow-results-kicker', s.body, `${spec.day} · ${spec.title}`)
+    el('div', 'ow-results-kicker', s.body, spec.title)
+    el('h3', 'ow-daily-big', s.body, o ? o.name : 'Daily Outlaw')
     modifiers(s.body, spec)
-    el('p', 'ow-hub-note', s.body, spec.blurb)
-    if (o) {
-      el(
-        'p',
-        'ow-hub-note',
-        s.body,
-        `He rides in as ${o.name}, ${o.epithet}, and draws in about ${spec.drawMs} ms.`,
-      )
-    }
     const left = Math.max(0, t.maxTries - t.tries)
-    el(
-      'p',
-      'ow-hub-note ow-daily-terms',
+    let pay = `${reward(DAILY_PAY.cash)} (first win today)`
+    if (!currentPlayer()) {
+      pay = `Sign in to earn ${reward(DAILY_PAY.cash)}`
+    } else if (t.paid) {
+      pay = 'Paid today'
+    }
+    facts(
       s.body,
-      currentPlayer()
-        ? `${left} of ${t.maxTries} tries left today. A win pays +${money(DAILY_PAY.cash)} and +${DAILY_PAY.xp} XP once a day${t.paid ? ' (paid today)' : ''}; your best time goes on the board.`
-        : `${left} of ${t.maxTries} tries left today. Sign in to get paid and go on the board.`,
+      [
+        ['His draw', `~${Math.round(spec.drawMs / 10) * 10} ms`],
+        ['Tries left', `${left} of ${t.maxTries}`],
+        ['Reward', pay],
+      ],
+      'ow-daily-facts',
     )
     board(s.body, b.ok ? b.value : null)
     const row = el('div', 'ow-hub-row', s.body)
     const ride = button(
       row,
-      left > 0 ? 'Ride out' : 'Back tomorrow',
+      left > 0 ? 'Duel' : 'No tries left',
       () => {
         ride.disabled = true
         this.ride(status)
@@ -189,10 +202,10 @@ export class DailyTile {
     status('Checking you’re not a bot…')
     const token = await this.deps.token()
     if (!token) {
-      status('Couldn’t verify you. Try again.', 'error')
+      status('Couldn’t check you’re human. Try again.', 'error')
       return false
     }
-    status('Saddling up…')
+    status('Starting…')
     const ticket = await issueDaily(token)
     if (!ticket.ok) {
       status(ticket.error, 'error')
@@ -213,27 +226,30 @@ export class DailyTile {
 
   /** Back at the saloon: how it went, and the board. */
   private async result(spec: DailySpec, v: Verdict | null): Promise<void> {
-    const s = panelSheet(this.root, { title: 'The Daily Outlaw', paper: true, cls: 'ow-daily' })
-    el('div', 'ow-results-kicker', s.body, `${spec.day} · ${spec.title}`)
-    let line = 'The line dropped before the bell. That try is void.'
+    const s = panelSheet(this.root, { title: 'Daily Outlaw', paper: true, cls: 'ow-daily' })
+    el('div', 'ow-results-kicker', s.body, spec.title)
+    const ms = (n: number | null | undefined): string => (n ? `${Math.round(n)} ms` : '')
+    let line = 'Connection lost'
+    let note = 'That try didn’t count.'
     if (v?.outcome === 'win') {
-      line = `You beat him: ${Math.round(v.reactionMs ?? 0)} ms.`
+      line = 'You won'
+      note = ''
     } else if (v?.outcome === 'loss') {
-      line = v.reactionMs
-        ? `He was quicker. You drew in ${Math.round(v.reactionMs)} ms${v.enemyMs ? `, he drew in ${Math.round(v.enemyMs)} ms` : ''}.`
-        : 'He was quicker. You never drew.'
+      line = 'You lost'
+      note = v.reactionMs ? '' : 'You didn’t draw.'
     } else if (v?.outcome === 'coward') {
-      line = 'You drew before the bell. No time for that.'
+      line = 'Too early'
+      note = 'You drew before the bell.'
     }
     el('h3', 'ow-daily-big', s.body, line)
-    if (v && v.payout > 0) {
-      el(
-        'p',
-        'ow-hub-note',
-        s.body,
-        `+${money(v.payout)} and +${DAILY_PAY.xp} XP, booked to your ledger.`,
-      )
+    if (note) {
+      el('p', 'ow-hub-note', s.body, note)
     }
+    facts(s.body, [
+      ['Your draw', ms(v?.reactionMs)],
+      ['His draw', v?.outcome === 'loss' ? ms(v.enemyMs) : ''],
+      ['Reward', v && v.payout > 0 ? reward(v.payout) : ''],
+    ])
     const b = await fetchDailyBoard()
     board(s.body, b.ok ? b.value : null)
   }

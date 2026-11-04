@@ -38,7 +38,7 @@ export const FEEL = {
   walkDuckDb: -6,
   walkLowpass: 9000,
   /** Music during the turn and wait: the cue again, quieter and darker, under the bell's register. */
-  waitDuckDb: -13,
+  waitDuckDb: -14,
   /**
    * The tension bed's standoff duck. Its drones sit below the lowpass, so it ducks deeper to land
    * where the score has always sat under the bell (about -35 dB on the music bus).

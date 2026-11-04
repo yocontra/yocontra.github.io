@@ -29,21 +29,21 @@ function label(o: DyePanel, name: string, price: number): string {
   }
   if (!o.owned) {
     return o.want === 'natural'
-      ? 'Buy it to dye it'
-      : `Dye ${name} · ${money(price)} once it’s yours`
+      ? 'Buy it first to dye it'
+      : `Buy it first · Dye costs ${money(price)}`
   }
   if (o.want === o.current) {
     return o.current === 'natural' ? 'Pick a colour' : `Dyed ${name}`
   }
   if (o.want === 'natural') {
-    return 'Wash it out · free'
+    return 'Remove dye · Free'
   }
   return o.purse < price ? `Need ${money(price - o.purse)} more` : `Dye ${name} · ${money(price)}`
 }
 
 export function dyePanel(parent: HTMLElement, o: DyePanel): void {
   const box = el('div', 'ow-feat-dye', parent)
-  el('b', 'ow-feat-dye-h', box, o.owned ? 'Dye job' : 'Dye job · try a colour on')
+  el('b', 'ow-feat-dye-h', box, o.owned ? 'Dye' : 'Dye · Try a colour')
   const swatches = el('div', 'ow-feat-swatches', box)
   swatches.setAttribute('role', 'radiogroup')
   swatches.setAttribute('aria-label', `Dye for ${o.item.name}`)

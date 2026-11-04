@@ -79,7 +79,9 @@ export class Meta {
   constructor(deps: MetaDeps) {
     this.deps = deps
     this.data = loadMeta()
-    onDuelReport((r) => this.onReport(r))
+    onDuelReport((r) => this.later(r))
+    // a report still queued when the page goes away is booked then
+    globalThis.addEventListener?.('pagehide', () => this.flush())
     onAuthChange(() => {
       this.sync().catch(() => undefined)
     })
@@ -137,6 +139,33 @@ export class Meta {
   private moment(m: string): void {
     if (!this.data.stats.moments.includes(m)) {
       this.data.stats.moments.push(m)
+    }
+  }
+
+  /** Reports waiting for idle time, in order. */
+  private readonly pending: DuelReport[] = []
+
+  /**
+   * Book a duel's report in idle time, not on the frame of the shot that ended it (the stats,
+   * marks, achievements and the save were 2 ms of the winning frame at the floor proxy). Order is
+   * kept, so a drawn-early report still lands before the win that reads it.
+   */
+  private later(r: DuelReport): void {
+    this.pending.push(r)
+    if (this.pending.length > 1) {
+      return
+    }
+    const run = (): void => this.flush()
+    if (typeof requestIdleCallback === 'function') {
+      requestIdleCallback(run, { timeout: 1200 })
+    } else {
+      setTimeout(run, 400)
+    }
+  }
+
+  private flush(): void {
+    for (const r of this.pending.splice(0)) {
+      this.onReport(r)
     }
   }
 

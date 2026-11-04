@@ -5,7 +5,7 @@
  * plus the recent worst snapshot lateness (`ServerClock.delay`), with up to 100 ms of
  * extrapolation when a snapshot is later still. Positions are metres, aim is radians.
  */
-import { ANGLE_SCALE, EF_ALIVE, POS_SCALE } from '../../contract/town.ts'
+import { ANGLE_SCALE, ANIM_MASK, EF_ALIVE, POS_SCALE } from '../../contract/town.ts'
 import type { EntityView } from '../sim/codec.ts'
 
 /** The interpolation delay with no jitter (ticks): far riders refresh every other tick. */
@@ -40,7 +40,10 @@ export interface RemoteView {
   aim: number
   hp: number
   flags: number
+  /** `ANIM_*` (the low nibble of the wire's anim byte). */
   anim: number
+  /** `STANCE_*` bits (crouched, on the sights, sprinting). */
+  stance: number
   carry: number
   /** Ground velocity (m/s), from the samples around the render time. */
   vx: number
@@ -72,6 +75,7 @@ export class RemoteTrack {
       hp: 100,
       flags: 0,
       anim: 0,
+      stance: 0,
       carry: 0,
       vx: 0,
       vz: 0,
@@ -178,7 +182,8 @@ export class RemoteTrack {
     const d = k < 0.5 ? a : b
     v.hp = d.hp
     v.flags = d.flags
-    v.anim = d.anim
+    v.anim = d.anim & ANIM_MASK
+    v.stance = d.anim & ~ANIM_MASK
     v.carry = d.carry
   }
 }

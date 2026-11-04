@@ -478,7 +478,7 @@ async function member(browser: Browser, size: Size, state: State | null): Promis
   await step(page, size, 'account-delete', async () => {
     await tap(page, ACCOUNT)
     await page.waitForTimeout(800)
-    await tap(page, '.ow-acct-btn.danger')
+    await tap(page, '.ow-acct .ow-btn-ghost.ow-btn-danger')
     await audit(page, size, 'account-delete', TOP_SHEET, { last: true })
     await closeSheets(page)
   })

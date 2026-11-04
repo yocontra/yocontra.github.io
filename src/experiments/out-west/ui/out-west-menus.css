@@ -263,7 +263,7 @@
 /* --------------------------------------------- mode badge: RANKED / PRACTICE */
 .ow-mode {
   top: calc(max(var(--ow-s3), var(--ow-sai-t)) + 64px);
-  padding: 3px var(--ow-s2) 4px;
+  padding: 3px var(--ow-s2) calc(3px + var(--ow-lift-sc));
   font-weight: 600;
   font-size: var(--ow-fs-body);
   font-variant-caps: all-small-caps;

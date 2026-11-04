@@ -1,5 +1,6 @@
 import { describe, expect, test as it } from 'bun:test'
 import {
+  BTN_AIM,
   BTN_FIRE,
   BTN_THROW,
   EV_DYNAMITE_THROWN,
@@ -68,14 +69,14 @@ describe('map pickups', () => {
     expect(ready.length).toBe(1)
   })
 
-  it('rifle: 60 damage at 30 m, five rounds, then back to the revolver', () => {
+  it('rifle: 60 damage at 30 m on the sights, five rounds, then back to the revolver', () => {
     const { w, a } = armed('rifle')
     const b = place(w, 50, 64)
     run(w, 1)
     const shots = runCollect(
       w,
       1,
-      { [a.id]: () => ({ aim: aimAt(a, b), buttons: BTN_FIRE }) },
+      { [a.id]: () => ({ aim: aimAt(a, b), buttons: BTN_FIRE | BTN_AIM }) },
       'shot',
     ) as Shot[]
     expect((shots[0]?.flags ?? 0) & SHOT_RIFLE).toBeTruthy()
