@@ -584,7 +584,12 @@ function addWindows(
           if (q && !hidden) {
             const inner = placeMatrix(q.x, sill - 0.97 * s + 0.05, q.z, SIDE_RY[side] + Math.PI)
             inner.multiply(new Matrix4().makeScale(s, s, 1))
-            bs.room(b.id).kit.push({ def: win, at: inner })
+            if (bs.lean) {
+              // floor tier: the inside of a window is two flat quads
+              flatWindow(bs.room(b.id).windows, win, inner)
+            } else {
+              bs.room(b.id).kit.push({ def: win, at: inner })
+            }
           }
         }
         continue
@@ -1184,9 +1189,9 @@ function addCrossings(bs: Builders, layout: TownLayout): void {
   }
   for (const x of [42, 87]) {
     let k = 0
-    for (let z = main.z + 0.15; z < main.z + main.d - 0.2; z += 0.32) {
+    for (let z = main.z + 0.15; z < main.z + main.d - 0.2; z += 0.46) {
       const shade = [0x9a_7a_58, 0x8a_6c_4c, 0xa8_86_60][k++ % 3] ?? 0x9a_7a_58
-      bs.wood.box(x, 0.02, z + 0.15, 2 - (k % 2) * 0.12, 0.04, 0.29, shade, { skip: ['bottom'] })
+      bs.wood.box(x, 0.02, z + 0.22, 2 - (k % 2) * 0.12, 0.04, 0.43, shade, { skip: ['bottom'] })
     }
   }
 }

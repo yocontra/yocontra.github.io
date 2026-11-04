@@ -13,11 +13,11 @@
  * fence come from `outskirts.ts` and stay outside the playable square.
  */
 import {
-  BoxGeometry,
   type BufferGeometry,
   CylinderGeometry,
   Float32BufferAttribute,
   Matrix4,
+  PlaneGeometry,
   Quaternion,
   RingGeometry,
   Vector3,
@@ -212,14 +212,18 @@ function wheel(
     ring.translate(x, y, z)
     b.extra.push(colorize(ring, color))
   }
+  // spokes as flat slats in the wheel's plane, one face each way (4 triangles, not a box's 12)
   for (let k = 0; k < 3; k++) {
-    const spoke = new BoxGeometry(0.04, r * 1.8, 0.04).toNonIndexed()
-    spoke.rotateZ((k * Math.PI) / 3)
-    if (axleAlongX) {
-      spoke.rotateY(Math.PI / 2)
+    for (const face of [0, Math.PI]) {
+      const spoke = new PlaneGeometry(0.05, r * 1.76).toNonIndexed()
+      spoke.rotateY(face)
+      spoke.rotateZ((k * Math.PI) / 3)
+      if (axleAlongX) {
+        spoke.rotateY(Math.PI / 2)
+      }
+      spoke.translate(x, y, z)
+      b.extra.push(colorize(spoke, color))
     }
-    spoke.translate(x, y, z)
-    b.extra.push(colorize(spoke, color))
   }
   cyl(b.extra, r * 0.18, 0.18, 6, x, y, z, axleAlongX ? 'x' : 'z', IRON)
 }
@@ -615,7 +619,7 @@ function woodpile(b: DressBuilders, c: Rect, y: number, r: () => number): void {
       const len = W - r() * 0.15
       const x = alongX ? cx + a : cx
       const z = alongX ? cz : cz + a
-      cyl(b.extra, lr * (1 + r() * 0.06), len, 7, x, yy, z, alongX ? 'z' : 'x', 0x8a_64_44)
+      cyl(b.extra, lr * (1 + r() * 0.06), len, 6, x, yy, z, alongX ? 'z' : 'x', 0x8a_64_44)
     }
   }
 }
