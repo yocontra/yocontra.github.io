@@ -68,6 +68,13 @@
   display: inline-block;
   white-space: nowrap;
 }
+/* the day's modifiers ("2 fake-outs, Fog"): always their own line under "Daily Outlaw" */
+.ow-kick-mods {
+  display: block;
+  font-variant-caps: normal;
+  letter-spacing: normal;
+  font-style: italic;
+}
 /* the day's name wraps between words and shrinks with the banner, never splits a word */
 .ow-hub-side .ow-tile-daily .ow-tile-title {
   grid-column: 1;

@@ -290,7 +290,9 @@ export class RoomNews {
   close(reason: string): void {
     this.closed = reason
     this.panel?.disableRematch()
-    this.panel?.say(reason)
+    if (reason) {
+      this.panel?.say(reason)
+    }
   }
 }
 
