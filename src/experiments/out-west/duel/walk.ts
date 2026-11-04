@@ -19,7 +19,8 @@ export function enterWalk(d: Director): void {
   d.enter('walk')
   d.walkLines = 0
   d.c.hud.setPips(0, true)
-  // the act theme keeps playing through the walk, just quieter (the standoff ducks it further)
+  // the act theme thins to its sparse duel cue and steps back (the standoff ducks it further)
+  d.c.audio.musicSection('duel')
   d.c.audio.musicLevel(FEEL.walkDuckDb, 0.8)
   d.c.audio.musicLowpass(FEEL.walkLowpass, 0.8)
   walkShot(d)

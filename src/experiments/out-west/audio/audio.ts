@@ -20,6 +20,7 @@
 
 import {
   BUFFER_LOOPS,
+  DUEL_CUE,
   type FileName,
   type Layer,
   LOOPS,
@@ -30,6 +31,7 @@ import {
   PRIORITY,
   SFX_FILES,
   type SfxName,
+  SONG_TURNS,
   SONGS,
   type SongName,
   STINGS,
@@ -81,15 +83,23 @@ const CALL_DUCK: readonly (readonly [Bus, number])[] = [
 const taper = (x: number) => x * x
 /** Breathing room baked between voice lines in a sprite is trimmed off at play: fade out over this. */
 const VOICE_FADE = 0.03
-/** How far the score dips under an outlaw's line (linear: about −5 dB). */
-const VOICE_DUCK = 0.56
+/** How far the score dips under an outlaw's line (linear: −6 dB; `tools/audio/MIX.md`). */
+const VOICE_DUCK = 0.5
+/** How much of a line goes to the street's slap and room (the player is close: less). */
+const VOICE_ROOM = { outlaw: 1, player: 0.35 } as const
 /** Each speaker's lines play this far off centre (the outlaw stands across the street). */
 const VOICE_PAN = 0.12
 /**
  * Songs that duck deeper under the call. The tension bed is low drones that a lowpass can't thin,
  * so at the bell it drops away (on the bell's own clock: never a beat early, which would be a tell).
  */
-const CALL_DUCK_SONG: Partial<Record<SongName, number>> = { tension: 0.05 }
+const CALL_DUCK_SONG: Partial<Record<SongName, number>> = {
+  tension: 0.05,
+  // the duel cues sit in the bell's own midrange (guitar, cello), so they clear further for it
+  duelDay: 0.1,
+  duelDusk: 0.1,
+  duelNight: 0.1,
+}
 /** Seconds the duck holds before music and ambience swell back. */
 const CALL_DUCK_HOLD = 0.7
 /** No heartbeat may sound this close after the call's strike (it would blur the bell's attack). */
@@ -216,6 +226,8 @@ export class AudioEngine {
   private voiceDuck!: GainNode
   private reverbIn!: GainNode
   private slapIn!: GainNode
+  /** The street a voice is heard in: a slap off the far boardwalk and a short room, on the voice bus. */
+  private voiceRoom!: GainNode
   private pool: DeckPool | null = null
   private readonly raw = new Map<string, Promise<ArrayBuffer | null>>()
   private readonly buffers = new Map<string, AudioBuffer>()
@@ -225,6 +237,10 @@ export class AudioEngine {
   private ticker: ReturnType<typeof setInterval> | null = null
   private song: { name: SongName; stream: Stream } | null = null
   private wantSong: SongName | null = null
+  /** Whether the score has thinned to the duel cue (`musicSection`). */
+  private section: 'full' | 'duel' = 'full'
+  /** How many times each alternating song has been asked for (`SONG_TURNS`). */
+  private readonly turns = new Map<SongName, number>()
   private readonly songOffset = new Map<SongName, number>()
   private sting: Stream | null = null
   private beds: Partial<Record<'wind' | 'windDusk' | 'windNight' | 'crickets', Loop>> = {}
@@ -437,6 +453,7 @@ export class AudioEngine {
     slapGain.gain.value = 0.25
     this.slapIn = ctx.createGain()
     this.slapIn.connect(slap).connect(slapFilter).connect(slapGain).connect(this.buses.sfx)
+    this.buildVoiceRoom(ctx)
 
     if (this.dbg) {
       this.dbg.tap('out', clip)
@@ -490,6 +507,34 @@ export class AudioEngine {
     void fetch(SONGS[name].url)
       .then((r) => r.blob())
       .catch(() => null)
+  }
+
+  /**
+   * Dry TTS floats on top of a scene; a voice in the street comes back off the facades. Every line
+   * sends into a slap (95 ms, band-limited like timber and adobe) and a short, dark room (0.6 s),
+   * both returning on the voice bus so the voice slider still owns them. Sends: `VOICE_ROOM`.
+   */
+  private buildVoiceRoom(ctx: AudioContext): void {
+    this.voiceRoom = ctx.createGain()
+    const slap = ctx.createDelay(0.3)
+    slap.delayTime.value = 0.095
+    const hp = ctx.createBiquadFilter()
+    hp.type = 'highpass'
+    hp.frequency.value = 350
+    const lp = ctx.createBiquadFilter()
+    lp.type = 'lowpass'
+    lp.frequency.value = 3200
+    const slapGain = ctx.createGain()
+    slapGain.gain.value = db(-15)
+    this.voiceRoom.connect(slap).connect(hp).connect(lp).connect(slapGain).connect(this.buses.voice)
+    const room = ctx.createConvolver()
+    room.buffer = this.makeImpulse(ctx, 0.6)
+    const roomLp = ctx.createBiquadFilter()
+    roomLp.type = 'lowpass'
+    roomLp.frequency.value = 4500
+    const roomGain = ctx.createGain()
+    roomGain.gain.value = db(-17)
+    this.voiceRoom.connect(room).connect(roomLp).connect(roomGain).connect(this.buses.voice)
   }
 
   private makeImpulse(ctx: AudioContext, seconds: number): AudioBuffer {
@@ -1067,7 +1112,23 @@ export class AudioEngine {
    */
   playSong(name: SongName): void {
     this.dbg?.log('playSong', name, this.song?.name ?? null)
+    if (this.wantSong !== name) {
+      const alts = SONG_TURNS[name]
+      if (alts) {
+        const n = this.turns.get(name) ?? 0
+        this.turns.set(name, n + 1)
+        this.turnOf.set(name, alts[n % alts.length] ?? name)
+      }
+    }
     this.wantSong = name
+    this.section = 'full'
+    this.startSong(this.turnOf.get(name) ?? name)
+  }
+
+  /** Which alternate a turn-taking song is on this time. */
+  private readonly turnOf = new Map<SongName, SongName>()
+
+  private startSong(name: SongName): void {
     if (!this.ctx || this.song?.name === name) {
       return
     }
@@ -1086,6 +1147,23 @@ export class AudioEngine {
     s.start(db(def.trim), resume < def.points.end ? resume : def.points.start, old ? 1.2 : 0.4)
     this.song = { name, stream: s }
     this.dbg?.log('songStart', name, old?.name ?? null)
+  }
+
+  /**
+   * The score's arrangement: `duel` thins the act theme to its sparse cue for the walk and the
+   * standoff (the level and lowpass still come from `musicLevel` and `musicLowpass`); `full` brings
+   * the theme back. Songs without a cue (title, boss, tension) just keep playing.
+   */
+  musicSection(section: 'full' | 'duel'): void {
+    if (this.section === section) {
+      return
+    }
+    this.section = section
+    const want = this.wantSong
+    if (want) {
+      const cue = section === 'duel' ? DUEL_CUE[want] : undefined
+      this.startSong(cue ?? this.turnOf.get(want) ?? want)
+    }
   }
 
   /** The song asked for last (whether or not it is audible yet). */
@@ -1239,6 +1317,9 @@ export class AudioEngine {
     const p = ctx.createStereoPanner()
     p.pan.value = pan
     src.connect(g).connect(p).connect(this.buses.voice)
+    const send = ctx.createGain()
+    send.gain.value = who ? VOICE_ROOM.outlaw : VOICE_ROOM.player
+    p.connect(send).connect(this.voiceRoom)
     src.start(when, line.at, line.len + 0.01)
     const mine = { src, gain: g }
     this.speaking.set(who, mine)
@@ -1251,6 +1332,8 @@ export class AudioEngine {
     }
     src.onended = () => {
       src.disconnect()
+      // the room's tail is already in the convolver: cut the send only after it has rung out
+      setTimeout(() => send.disconnect(), 1000)
       if (this.speaking.get(who) === mine) {
         this.speaking.delete(who)
       }
@@ -1259,7 +1342,7 @@ export class AudioEngine {
     return true
   }
 
-  /** Music level in dB with a ramp in seconds; -Infinity silences. */
+  /** Music level in dB with a ramp in seconds; -Infinity silences. Back near 0 dB ends a duel cue. */
   musicLevel(dB: number, ramp = 0.4): void {
     this.dbg?.log('musicLevel', dB, ramp)
     const ctx = this.ctx
@@ -1267,6 +1350,10 @@ export class AudioEngine {
       return
     }
     const gain = dB === Number.NEGATIVE_INFINITY ? 0 : db(this.num('musicLevel', dB, 0, -120, 12))
+    if (gain >= db(-1)) {
+      // the score back at full is the whole arrangement again (after the kill, on a new stage)
+      this.musicSection('full')
+    }
     glide(this.musicGain.gain, gain, ctx.currentTime, this.num('musicLevel ramp', ramp, 0.4, 0, 30))
   }
 
