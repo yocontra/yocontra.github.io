@@ -115,9 +115,11 @@ export function buildMesas(root: Object3D, ground: Texture): void {
   }
   const m = new MeshStandardMaterial({ vertexColors: true, roughness: 1, flatShading: true })
   rockLook(m, ground)
+  // the far mesas are deliberately faceted: the audit accepts flat shading that opts in
+  m.userData.faceted = true
   const mesh = addStatic(root, g, m, false)
   if (mesh) {
-    mesh.receiveShadow = false
+    mesh.receiveShadow = true
   }
 }
 
@@ -138,6 +140,7 @@ export function buildPosterPost(root: Object3D, trimMat: MeshStandardMaterial): 
   paper.position.set(0.12, 1.75, 0)
   paper.rotation.y = Math.PI / 2
   paper.castShadow = true
+  paper.receiveShadow = true
   g.add(paper)
   g.userData.mat = mat
   g.userData.paper = paper

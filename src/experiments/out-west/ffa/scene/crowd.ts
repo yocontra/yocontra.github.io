@@ -30,6 +30,7 @@ import {
   RingGeometry,
   type Scene,
   type SkinnedMesh,
+  SRGBColorSpace,
   Vector3,
 } from 'three'
 import {
@@ -212,7 +213,9 @@ function blobTexture(): CanvasTexture {
     ctx.fillStyle = g
     ctx.fillRect(0, 0, 64, 64)
   }
-  return new CanvasTexture(c)
+  const tex = new CanvasTexture(c)
+  tex.colorSpace = SRGBColorSpace
+  return tex
 }
 
 const facing = (aim: number): number => Math.PI / 2 - aim

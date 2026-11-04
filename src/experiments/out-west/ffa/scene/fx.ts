@@ -241,6 +241,7 @@ export class Effects {
     })
     strongboxLook(boxMat)
     this.box = new Mesh(new BoxGeometry(1.1, 0.7, 0.7).translate(0, 0.35, 0), boxMat)
+    this.box.receiveShadow = true
     this.box.visible = false
     root.add(this.box)
     this.beacon = new Mesh(

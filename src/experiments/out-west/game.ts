@@ -20,6 +20,7 @@ import { type HubShot, hubShot, wearLoadout } from './scene/hub-stage.ts'
 import { ItemStudio } from './scene/item-studio.ts'
 import { revolverDef } from './scene/revolver.ts'
 import { rifleObject } from './scene/rifle.ts'
+import { twigLook } from './scene/surface.ts'
 import { setLowRes, softDot } from './scene/textures.ts'
 import { LIFE, TownLife } from './scene/townlife.ts'
 import { World } from './scene/world.ts'
@@ -163,8 +164,10 @@ export async function createGame(o: GameOpts): Promise<Game> {
   const physics = new Physics()
   const twGeo = tumbleweedGeometry()
   const twMat = new MeshStandardMaterial({ color: 0x8a_6a_42, roughness: 1 })
+  twigLook(twMat)
   const tumbleweeds = [0, 1, 2].map(() => {
     const t = new Tumbleweed(twGeo, twMat)
+    t.mesh.receiveShadow = true
     scene.add(t.mesh)
     return t
   })

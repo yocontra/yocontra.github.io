@@ -1644,7 +1644,11 @@ function signMesh(signs: Builders['signs'], mat: MeshStandardMaterial): Mesh | n
   geo.setAttribute('normal', new Float32BufferAttribute(nor, 3))
   geo.setAttribute('uv', new Float32BufferAttribute(uv, 2))
   geo.computeBoundingSphere()
-  return new Mesh(geo, mat)
+  const mesh = new Mesh(geo, mat)
+  mesh.name = 'signs'
+  // signs hang on the facades: they must take the porch and building shadows like the walls
+  mesh.receiveShadow = true
+  return mesh
 }
 
 function newBuilders(room: (id: string) => Builders, lean: boolean): Builders {

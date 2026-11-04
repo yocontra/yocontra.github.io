@@ -121,6 +121,7 @@ export class Shingles {
     this.mesh = new Mesh(mergeWithUv([rig, ...parts]), this.mat)
     this.mesh.name = 'shingles'
     this.mesh.castShadow = false
+    this.mesh.receiveShadow = true
     root.add(this.mesh)
   }
 }

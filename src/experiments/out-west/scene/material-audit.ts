@@ -76,7 +76,7 @@ export interface MaterialReport {
 
 /** Materials that are meant to be unlit or are not surfaces (sky, effects, glows, impostor cards). */
 const UNLIT_OK =
-  /sky|fx|flash|smoke|dust|spark|glow|muzzle|tracer|beam|ring|shadow|blob|fog|cloud|star|moon|sun|halo|flare|marker|cue|ui|decal|water|black|wind|ray|lamp|flame|fire|ember|silhouette|poster/iu
+  /sky|fx|flash|smoke|dust|spark|glow|muzzle|tracer|beam|ring|shadow|blob|fog|cloud|star|moon|sun|halo|flare|marker|cue|ui|decal|water|black|wind|ray|lamp|flame|fire|ember|silhouette|poster|impostor/iu
 
 const NON_PBR = /Lambert|Phong|Toon/u
 
@@ -235,7 +235,7 @@ export function auditMaterials(scenes: Object3D[], renderer?: WebGLRenderer): Ma
       } else if (envI <= 0.05) {
         issues.push('envMapIntensity ~0')
       }
-      if (std.flatShading) {
+      if (std.flatShading && mat.userData.faceted !== true) {
         issues.push('flatShading')
       }
     }
