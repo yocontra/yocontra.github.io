@@ -801,12 +801,7 @@ export class Crowd {
     } else {
       this.blob(p.x, p.z)
     }
-    if (actor.hat) {
-      actor.hat.visible = (p.flags & EF_HATLESS) === 0
-    }
-    if (holder.visible && actor.gun) {
-      this.gunBatch.push(actor.gun)
-    }
+    this.rigidParts(actor, holder, p)
     this.animate(m, actor, p, nowS)
     m.loco?.body(holder, pivot)
     if (!holder.visible) {
@@ -844,6 +839,16 @@ export class Crowd {
     }
     m.recoil = Math.max(0, m.recoil - dt * 8)
     m.wasNear = true
+  }
+
+  /** His hat (unless it was shot off) and his revolver (into the crowd's gun batch). */
+  private rigidParts(actor: Actor, holder: Object3D, p: CrowdPlayer): void {
+    if (actor.hat) {
+      actor.hat.visible = (p.flags & EF_HATLESS) === 0
+    }
+    if (holder.visible && actor.gun) {
+      this.gunBatch.push(actor.gun)
+    }
   }
 
   private animate(m: Member, actor: Actor, p: CrowdPlayer, nowS: number): void {
