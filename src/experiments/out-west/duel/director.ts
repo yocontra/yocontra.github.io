@@ -171,6 +171,10 @@ export class Director extends DuelState {
       dead.outlaw = this.outlaw
       // and the red flash frame's shader variants for whoever stands in the street now
       this.c.renderer.warmSilhouette(this.c.world.silhouetteHide)
+      // and both men's draw code, run once, so the bell's frame isn't its first run
+      const enemy = this.enemy
+      this.player.drawing?.warm(() => enemy?.root.position ?? null)
+      enemy?.drawing?.warm(() => this.player.root.position)
     }
   }
 
