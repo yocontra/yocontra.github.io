@@ -369,8 +369,8 @@ export function cowardShot(s: DuelState): void {
   )
 }
 
-/** The eye-line never closer than this to a standing man's spine, m (no camera inside a poncho). */
-const DEATH_CLEARANCE = 1.15
+/** The eye-line keeps this far from a standing man's spine, m: no camera inside a poncho, and he reads whole. */
+const DEATH_CLEARANCE = 2.2
 
 /**
  * Pull a camera position out of any visible actor near it: back along the line from him to the

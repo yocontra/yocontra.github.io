@@ -15,7 +15,7 @@ import { drawAt, fireGun, PLAYER_DRAW_S, REMOTE_DRAW_S } from './draws.ts'
 import { callShot, standoffShot } from './framing.ts'
 import { killEnemyAnim, playerFireFx, win } from './outcome.ts'
 import { AMB, ambience, duckForStandoff } from './present.ts'
-import { rng, V } from './state.ts'
+import { BACK_TO_BACK_Z, rng, V } from './state.ts'
 
 export interface HoldState {
   /** Our walk input as last sent to the room. */
@@ -52,13 +52,13 @@ export function tickRemoteWalk(
   const cap = (d.paces + 1) * p.paceLength
   p.locomote(d.speed, p.walkDuration / 2 / FEEL.paceSeconds)
   d.pDist = Math.min(cap, d.pDist + (d.speed * p.paceLength * dt) / FEEL.paceSeconds)
-  p.root.position.z = -0.28 - d.pDist
+  p.root.position.z = -BACK_TO_BACK_Z - d.pDist
   const e = d.enemy
   if (e) {
     e.locomote(d.speed, e.walkDuration / 2 / FEEL.paceSeconds)
     const eCap = (d.paces + 1) * e.paceLength
     d.eDist = Math.min(eCap, d.eDist + (d.speed * e.paceLength * dt) / FEEL.paceSeconds)
-    e.root.position.z = 0.28 + d.eDist
+    e.root.position.z = BACK_TO_BACK_Z + d.eDist
   }
 }
 

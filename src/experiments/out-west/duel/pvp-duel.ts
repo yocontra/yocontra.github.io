@@ -532,7 +532,7 @@ export class PvpDuel implements DirectorHooks {
       return
     }
     this.fleeing = true
-    const yes = await confirmFlee(this.d)
+    const yes = await confirmFlee(this.d, this.o.opponent.kind === 'human')
     this.fleeing = false
     if (yes && !this.over) {
       this.link.send({ type: 'flee' })

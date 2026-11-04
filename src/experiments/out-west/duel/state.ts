@@ -70,6 +70,12 @@ export type Phase =
   | 'bossWound'
   | 'end'
 
+/**
+ * Each man's distance from the line they stand back to back on, m: clear of a big belly, a vest
+ * or a poncho, so the two bodies never overlap before the walk.
+ */
+export const BACK_TO_BACK_Z = 0.36
+
 export const rng = Math.random
 export const between = (a: number, b: number): number => a + (b - a) * rng()
 export const V = (x = 0, y = 0, z = 0): Vector3 => new Vector3(x, y, z)

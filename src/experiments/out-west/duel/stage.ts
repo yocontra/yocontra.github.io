@@ -9,7 +9,7 @@ import type { Director } from './director.ts'
 import { backToBackShot, otsShot, posterShot } from './framing.ts'
 import { ambience } from './present.ts'
 import { STEADY_MS } from './standoff.ts'
-import { between, V } from './state.ts'
+import { BACK_TO_BACK_Z, between, V } from './state.ts'
 
 /**
  * Setting the stage for each outlaw: his models, the street, the poster, and
@@ -73,7 +73,9 @@ function resetPositions(d: Director): void {
   d.paces = 0
   d.speed = 0
   // the boss: face to face under the clock tower; everyone else back to back
-  const [pz, ez, pr, er] = d.boss ? [44, 53, 0, Math.PI] : [-0.28, 0.28, Math.PI, 0]
+  const [pz, ez, pr, er] = d.boss
+    ? [44, 53, 0, Math.PI]
+    : [-BACK_TO_BACK_Z, BACK_TO_BACK_Z, Math.PI, 0]
   p.root.position.set(0, 0, pz)
   p.root.rotation.set(0, pr, 0)
   e?.root.position.set(0, 0, ez)
