@@ -208,6 +208,11 @@ function finishGun(g: Object3D, look: GunLook): void {
       return
     }
     const src = m.material as MeshStandardMaterial
+    // the finish is the steel's: the walnut grip stays walnut
+    if (src.name === 'GunGrip') {
+      m.scale.x *= look.length
+      return
+    }
     const mat = src.clone()
     mat.color.setHex(look.color)
     mat.metalness = look.metalness

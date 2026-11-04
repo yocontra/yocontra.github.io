@@ -144,7 +144,7 @@ function clean(c: Cast, l: Line): Ch | null {
   if (existsSync(f)) {
     const r = 2 ** ((c.semis ?? 0) / 12)
     const shift = c.semis
-      ? `asetrate=${Math.round(SR * r)},aresample=${SR},atempo=${(1 / r).toFixed(6)},`
+      ? `aresample=${SR},asetrate=${Math.round(SR * r)},aresample=${SR},atempo=${(1 / r).toFixed(6)},`
       : ''
     const x = load(f, 1, `${shift}${CHAIN}`)
     const ch = x[0] ?? new Float32Array(0)

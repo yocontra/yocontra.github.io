@@ -16,6 +16,7 @@ import { type Bone, Color, Matrix4, Vector3 } from 'three'
 import type { CoatCut } from '../data/outlaw-types.ts'
 import type { Piece } from './bake.ts'
 import { nearestWeights, onBones, type Sample, shell } from './fit.ts'
+import { creaseNormals } from './normals.ts'
 import type { Fit } from './outfit.ts'
 import { FABRIC } from './style.ts'
 
@@ -108,7 +109,7 @@ function lapels(
   }
   pos.needsUpdate = true
   col.needsUpdate = true
-  geo.computeVertexNormals()
+  creaseNormals(geo)
 }
 
 /** The coat's body, collar to waist, open at the front with lapels. */
@@ -250,7 +251,7 @@ function tube(
     color: o.color,
   })
   geo.applyMatrix4(m)
-  geo.computeVertexNormals()
+  creaseNormals(geo)
   return geo
 }
 

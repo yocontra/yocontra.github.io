@@ -49,8 +49,12 @@ export class TownProbe {
   /** Next face to capture; 6 means idle. */
   private face = 6
   readonly position = new Vector3(0, 1.7, 0)
-  /** Environment intensity applied through scene.environmentIntensity. */
-  intensity = 1
+  /**
+   * Environment intensity applied through scene.environmentIntensity. A little over 1: the probe
+   * carries most of the fill (the hemisphere light is only a small lift, see presets.ts), and the
+   * capture misses the characters and particles that would bounce some light back.
+   */
+  intensity = 1.2
 
   constructor(gl: WebGLRenderer, scene: Scene) {
     this.gl = gl

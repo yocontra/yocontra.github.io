@@ -133,6 +133,8 @@ export const CAST: readonly Cast[] = [
     name: 'Ace Q. McConly',
     voice: 'smooth, sly and amused; never raises his voice (Gemini Charon)',
     base: 'Charon',
+    // lifted a semitone: Hickok (Iapetus) shares his deep, slow register (cast-audit pairs check)
+    semis: 1,
     notes:
       'Ace, a smooth, sly card cheat in his thirties flipping a coin: cool and quietly amused, never raising his voice, a faint smirk, an easy pause between the two halves as if the coin is in the air. Soft Southern gentleman lilt, silky.',
     deaths: [
@@ -218,6 +220,8 @@ export const CAST: readonly Cast[] = [
     name: 'Dallas Stoudenmire',
     voice: 'a huge, booming Texas lawman (Gemini Zubenelgenubi)',
     base: 'Zubenelgenubi',
+    // a semitone lower and bigger: Felipe (Enceladus) was too close (cast-audit pairs check)
+    semis: -1,
     notes:
       'Dallas Stoudenmire, a six-foot-four Texas town marshal in his forties: deep, booming and authoritative, a slow Texas drawl, final and certain, like a door closing on the night.',
     deaths: ['[deep grunt] Unnh— [heavy groan]', GROAN],

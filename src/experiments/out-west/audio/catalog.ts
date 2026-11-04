@@ -251,6 +251,8 @@ export const DUEL_CUE: Partial<Record<SongName, SongName>> = {
   actDuskHot: 'duelDusk',
   actNight: 'duelNight',
   actNightHot: 'duelNight',
+  // the 2019 boss theme has bells and a choir in it: nothing bell-like may sit under the clock
+  boss: 'duelNight',
 }
 
 /** Songs heard so often that alternates take turns, one per time they are asked for. */
