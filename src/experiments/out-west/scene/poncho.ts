@@ -183,6 +183,16 @@ export function poncho(f: Fit, hex: number, sides: GunSides): Piece[] {
     color: (_t, i) => new Color(colors[i] ?? hex),
   })
   fold(geo, ts, cx, cz)
+  // A blanket hides everything under it. Without this the shirt, sleeves and belt poke through
+  // the poncho whenever its panels move (an arm lift shears the blanket against the chest).
+  const hide = (p: Vector3, _bone: string, garment: string): boolean => {
+    if (!HIDEABLE.has(garment)) {
+      return false
+    }
+    const a = Math.atan2(p.x - cx, p.z - cz)
+    const hem = yTop + (yBot - yTop) * drop(a)
+    return p.y > hem + 0.004 && p.y < yTop - 0.002
+  }
   return [
     {
       geo,
@@ -191,6 +201,10 @@ export function poncho(f: Fit, hex: number, sides: GunSides): Piece[] {
       swatch: FABRIC.hessian.swatch,
       weights: ponchoWeights(f, { cx, cz, sides }),
       unbelted: true,
+      hide,
     },
   ]
 }
+
+/** Base garments the poncho covers (the gunbelt and hat are separate, on top). */
+const HIDEABLE = new Set(['Shirt', 'Sleeves', 'Bracer', 'Belt', 'Skin'])

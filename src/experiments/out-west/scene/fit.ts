@@ -181,6 +181,11 @@ export interface ShellSpec {
   cz: number
   yTop: number
   yBot: number
+  /**
+   * Top edge height at direction `a`, overriding `yTop` (a waistcoat's V neckline, a hem cut
+   * higher at the sides). Rings keep their fractional position between this and `yBot`.
+   */
+  top?: (a: number) => number
   /** Arc centre (radians from +Z toward +X) and half-width. Full ring: half = π. */
   arc?: number
   half?: number
@@ -227,7 +232,7 @@ interface Layout {
   minR: number
   band: number
   /** Height and arc (start angle, step) of ring i. */
-  ring: (i: number) => { t: number; y: number; a0: number; step: number }
+  ring: (i: number) => { t: number; a0: number; step: number }
 }
 
 function layout(s: ShellSpec): Layout {
@@ -247,17 +252,19 @@ function layout(s: ShellSpec): Layout {
       const t = ts[i] ?? 0
       if (s.span) {
         const [from, to] = s.span(t)
-        return { t, y: s.yTop + (s.yBot - s.yTop) * t, a0: from, step: (to - from) / segs }
+        return { t, a0: from, step: (to - from) / segs }
       }
       const h = half * (s.taper ? s.taper(t) : 1)
-      return { t, y: s.yTop + (s.yBot - s.yTop) * t, a0: (s.arc ?? 0) - h, step: (2 * h) / segs }
+      return { t, a0: (s.arc ?? 0) - h, step: (2 * h) / segs }
     },
   }
 }
 
 /** Height of ring `t` in the column at direction `a`. */
-const colY = (s: ShellSpec, t: number, a: number): number =>
-  s.yTop + (s.yBot - s.yTop) * t * (s.drop ? s.drop(a) : 1)
+const colY = (s: ShellSpec, t: number, a: number): number => {
+  const top = s.top ? s.top(a) : s.yTop
+  return top + (s.yBot - top) * t * (s.drop ? s.drop(a) : 1)
+}
 
 /** Surface radius per column of one ring, holes filled, smoothed without dipping inside. */
 function ringRadii(s: ShellSpec, L: Layout, i: number): number[] {
