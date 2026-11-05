@@ -258,6 +258,19 @@ cu('crates', 67, 89, 1.5, 1.5, 3.3)
 // Ground-floor details the walk-in shells were missing (solid sheds keep their props outside).
 c('workbench', 27, 46, 2, 1)
 c('crates', 36, 40, 1.5, 1.5)
+c('barrels', 27, 49, 1.5, 1.5)
+c('wagon', 8.5, 104, 5, 2)
+c('hay', 18, 100, 2, 1)
+c('bench', 16, 82, 2.5, 0.5)
+c('table', 89, 78, 2, 1)
+c('barrels', 31, 80, 1, 1)
+c('barrel_rack', 27, 78, 2, 1)
+c('crates', 37, 112, 1.5, 1.5)
+c('bench', 22, 116, 2.5, 0.5)
+c('table', 99, 50, 2, 1)
+c('barrels', 51, 86, 1.5, 1.5)
+c('counter', 117, 33, 2, 1)
+c('bench', 70, 88, 2.5, 0.5)
 
 for (const [bd, stair] of upper) {
   bd.stairs = [stair]

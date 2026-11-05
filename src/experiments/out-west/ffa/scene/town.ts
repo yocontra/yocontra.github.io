@@ -1015,15 +1015,52 @@ function addStairs(bs: Builders, b: Building): void {
         along ? depth + 0.02 : 0.07,
         DARK_WOOD,
       )
-      if (i % 2 === 0) {
-        room.wood.box(railX, y + 0.48, railZ, 0.05, 0.9, 0.05, 0x6a_4c_34)
-      }
+      room.wood.box(railX, y + 0.48, railZ, 0.05, 0.9, 0.05, 0x6a_4c_34)
     }
     const foot = at(0)
     const head = at(1)
     room.wood.box(foot.x, st.fromY + 0.58, foot.z, 0.12, 1.16, 0.12, DARK_WOOD)
     room.wood.box(head.x, st.toY + 0.58, head.z, 0.12, 1.16, 0.12, DARK_WOOD)
+    // A low rail round the stairwell opening on the upper floor, so the hole reads safely.
+    const railY = st.toY + 0.9
+    if (along) {
+      for (const x of [st.x, st.x + st.w]) {
+        room.wood.box(x, railY, st.z + st.d / 2, 0.08, 0.08, st.d, DARK_WOOD)
+        room.wood.box(x, st.toY + 0.45, st.z, 0.08, 0.9, 0.08, 0x6a_4c_34)
+        room.wood.box(x, st.toY + 0.45, st.z + st.d, 0.08, 0.9, 0.08, 0x6a_4c_34)
+      }
+    } else {
+      for (const z of [st.z, st.z + st.d]) {
+        room.wood.box(st.x + st.w / 2, railY, z, st.w, 0.08, 0.08, DARK_WOOD)
+        room.wood.box(st.x, st.toY + 0.45, z, 0.08, 0.9, 0.08, 0x6a_4c_34)
+        room.wood.box(st.x + st.w, st.toY + 0.45, z, 0.08, 0.9, 0.08, 0x6a_4c_34)
+      }
+    }
   }
+}
+
+/** Rugs and wall pictures: the cheap, non-colliding detail that makes a room read as lived-in. */
+function addRoomDressing(bs: Builders, b: Building): void {
+  const room = bs.room(b.id)
+  const cx = b.x + b.w / 2
+  const cz = b.z + b.d / 2
+  const big = b.w * b.d > 180
+  const rug =
+    b.kind === 'church'
+      ? [0x5a_1e_18, 0x7a_3a_2a]
+      : b.kind === 'saloon'
+        ? [0x5a_2a_24, 0x74_40_38]
+        : b.kind === 'hotel'
+          ? [0x2a_3a_42, 0x3e_4e_56]
+          : b.kind === 'bank'
+            ? [0x2e_3a_28, 0x46_54_3a]
+            : [0x3a_2e_24, 0x55_45_38]
+  const rw = b.kind === 'church' ? 2.2 : big ? 4.2 : 2.8
+  const rd = b.kind === 'church' ? b.d - 5 : big ? 2.8 : 1.9
+  room.cloth.box(cx, 0.045, cz, rw, 0.02, rd, rug[0] ?? 0x3a_2a_20, { skip: ['bottom'] })
+  room.cloth.box(cx, 0.056, cz, rw - 0.35, 0.012, rd - 0.3, rug[1] ?? 0x5a_40_30, {
+    skip: ['bottom'],
+  })
 }
 
 /** The solid stretches of one side between its doorways, as [from, to] metres along it. */
@@ -1112,7 +1149,7 @@ function addClosedDoor(bs: Builders, b: Building, front: Side): void {
   const a = sideLength(b, front) / 2 - width / 2
   addDoorFrames(bs, { ...b, doors: [{ side: front, at: a, width }] }, null)
   // Fit the native 1.118 × 2.092 leaf to the opening.
-  const at = onSide(b, front, a + width / 2, 0.04, 0.04)
+  const at = onSide(b, front, a + width / 2, -0.01, 0.04)
   at.multiply(new Matrix4().makeScale(width / 1.118, (doorTop(width) - 0.12) / 2.092, 1))
   bs.kit.push({ def: door, at })
 }
@@ -1165,6 +1202,7 @@ function addBuilding(bs: Builders, b: Building, layout: TownLayout, id: number):
       { skip: ['bottom'] },
     )
     addCeiling(bs, b)
+    addRoomDressing(bs, b)
   }
   // Trim: a band round the top of the walls, flush on their faces (an open-bottomed shell 6 cm
   // out left a slot of air between the band and the wall)

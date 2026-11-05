@@ -122,6 +122,16 @@ export function buildInterior(layout: TownLayout, glow: number): Interior {
       pool(cx, cz, 4.2, 0.85)
     }
   }
+  // A lamp over every stairwell, hanging in the upper room, so the hole reads as a room above.
+  for (const b of hollow) {
+    for (const st of b.stairs ?? []) {
+      const x = st.x + st.w / 2
+      // biome-ignore lint/style/noNestedTernary: three stair directions, one coordinate
+      const z = st.dir === 'n' ? st.z + 0.8 : st.dir === 's' ? st.z + st.d - 0.8 : st.z + st.d / 2
+      lamps.push({ x, z, y: b.height - 1 })
+      pool(x, z, 3.2, 0.75)
+    }
+  }
   // every room gets at least one lamp, in its middle
   for (const b of hollow) {
     const cx = b.x + b.w / 2
@@ -256,10 +266,12 @@ function lightPatch(shader: WebGLProgramParametersWithUniforms): void {
   // indoors: under the ceiling (not its top side, not the roof)
   float inside = step(0.01, m.r) * (1.0 - smoothstep(ceilY - 0.05, ceilY + 0.15, vInW.y));
   if (inside > 0.0) {
-    // the sky's fill drops inside, darkest in the corners and at the foot of the walls
-    float fill = mix(1.0, max(m.r * 0.5, 0.5), inside);
+    // the sky's fill drops inside, but never to black: a room keeps a warm ambient bounce
+    float fill = mix(1.0, max(m.r * 0.6, 0.72), inside);
     reflectedLight.indirectDiffuse *= fill;
     reflectedLight.indirectSpecular *= fill;
+    // a neutral interior bounce, so corners and the foot of the walls do not crush
+    reflectedLight.directDiffuse += diffuseColor.rgb * vec3(0.52, 0.45, 0.35) * inside;
     // lamp light: strongest under the lamp's height, gently flickering
     float fl = 0.9 + 0.06 * sin(atmTime * 7.0 + vInW.x) + 0.04 * sin(atmTime * 17.0 + vInW.z * 1.3);
     float lampH = 1.0 - smoothstep(0.6, 1.0, vInW.y / max(ceilY, 1.0)) * 0.4;

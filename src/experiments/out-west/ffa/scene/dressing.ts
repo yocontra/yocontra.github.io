@@ -355,6 +355,26 @@ function bonnet(b: DressBuilders, c: Rect, bedTop: number): void {
       }
     }
   }
+  // Canvas seams over the bows: three darker bands across the barrel, so the canvas has structure.
+  for (const a of [-L / 4, 0, L / 4]) {
+    for (let i = 0; i < segs; i++) {
+      const t0 = (i / segs) * Math.PI
+      const t1 = ((i + 1) / segs) * Math.PI
+      const c0 = Math.cos(t0) * (r + 0.012)
+      const c1 = Math.cos(t1) * (r + 0.012)
+      const y0 = bedTop + rise + Math.sin(t0) * (r + 0.012)
+      const y1 = bedTop + rise + Math.sin(t1) * (r + 0.012)
+      const p0 = V(a - 0.035, c0, y0)
+      const p1 = V(a + 0.035, c0, y0)
+      const p2 = V(a + 0.035, c1, y1)
+      const p3 = V(a - 0.035, c1, y1)
+      if (alongX) {
+        b.cloth.quad(p0, p1, p2, p3, CANVAS_DARK)
+      } else {
+        b.cloth.quad(p1, p0, p3, p2, CANVAS_DARK)
+      }
+    }
+  }
 }
 
 function stagecoach(b: DressBuilders, c: Rect, y: number, r: () => number): void {
