@@ -961,26 +961,68 @@ function addStairs(bs: Builders, b: Building): void {
     const run = along ? st.d : st.w
     const depth = run / steps
     const width = along ? st.w : st.d
-    for (let i = 0; i < steps; i++) {
-      const t0 = i / steps
-      const y = st.fromY + rise * (t0 + 1 / steps)
-      const x = along
-        ? st.x + st.w / 2
-        : st.dir === 'e'
-          ? st.x + run * (t0 + 1 / steps)
-          : st.x + run * (1 - t0 - 1 / steps)
-      const z = along
-        ? st.dir === 's'
-          ? st.z + run * (t0 + 1 / steps)
-          : st.z + run * (1 - t0 - 1 / steps)
-        : st.z + st.d / 2
-      room.wood.box(x, y - 0.06, z, along ? width : depth, 0.12, along ? depth : width, 0x9a_7a_58)
+    const stepRise = rise / steps
+    const at = (t: number): { x: number; z: number } => {
+      const u = Math.max(0, Math.min(1, t))
+      if (along) {
+        return {
+          x: st.x + st.w / 2,
+          z: st.dir === 's' ? st.z + run * u : st.z + run * (1 - u),
+        }
+      }
+      return {
+        x: st.dir === 'e' ? st.x + run * u : st.x + run * (1 - u),
+        z: st.z + st.d / 2,
+      }
     }
-    // a handrail on the open side, so the stair reads and you can catch the edge
-    const railY = (st.fromY + st.toY) / 2 + 0.95
-    const railX = st.dir === 'e' ? st.x + st.w / 2 : st.dir === 'w' ? st.x + st.w / 2 : st.x + 0.08
-    const railZ = st.dir === 's' ? st.z + st.d / 2 : st.dir === 'n' ? st.z + st.d / 2 : st.z + 0.08
-    room.wood.box(railX, railY, railZ, along ? 0.08 : st.w, 0.08, along ? st.d : 0.08, DARK_WOOD)
+    // A solid staircase: treads with risers, two side stringers, a handrail and newels.
+    for (let i = 0; i < steps; i++) {
+      const t = (i + 0.5) / steps
+      const p = at(t)
+      const y = st.fromY + stepRise * (i + 1)
+      const h = stepRise + 0.08
+      room.wood.box(
+        p.x,
+        y - h / 2,
+        p.z,
+        along ? width : depth,
+        h,
+        along ? depth : width,
+        0x9a_7a_58,
+      )
+      // stringers under the treads, one each side
+      for (const s of [-1, 1] as const) {
+        room.wood.box(
+          along ? p.x + (s * (width - 0.08)) / 2 : p.x,
+          y - h / 2 - 0.14,
+          along ? p.z : p.z + (s * (width - 0.08)) / 2,
+          along ? 0.1 : depth + 0.05,
+          0.28,
+          along ? depth + 0.05 : 0.1,
+          0x6a_4c_34,
+        )
+      }
+      // the rail and its balusters on the open side
+      const railSide = 1
+      const railX = along ? p.x + (railSide * (width - 0.1)) / 2 : p.x
+      const railZ = along ? p.z : p.z + (railSide * (width - 0.1)) / 2
+      room.wood.box(
+        railX,
+        y + 0.95,
+        railZ,
+        along ? 0.07 : depth + 0.02,
+        0.07,
+        along ? depth + 0.02 : 0.07,
+        DARK_WOOD,
+      )
+      if (i % 2 === 0) {
+        room.wood.box(railX, y + 0.48, railZ, 0.05, 0.9, 0.05, 0x6a_4c_34)
+      }
+    }
+    const foot = at(0)
+    const head = at(1)
+    room.wood.box(foot.x, st.fromY + 0.58, foot.z, 0.12, 1.16, 0.12, DARK_WOOD)
+    room.wood.box(head.x, st.toY + 0.58, head.z, 0.12, 1.16, 0.12, DARK_WOOD)
   }
 }
 
