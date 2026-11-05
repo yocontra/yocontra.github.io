@@ -1,3 +1,4 @@
+// biome-ignore-all lint/style/noExcessiveLinesPerFile: voice lifecycle and the existing room/lobby flow live together
 /**
  * DuelRoom: one Bounty Hunt duel (two humans, or a human and a ghost or Town Outlaw), plus its
  * rematches. Server-authoritative; the beat sheet lives in `room-flow.ts`.
@@ -23,6 +24,12 @@ import type { Env } from '../env.ts'
 import { rttStats } from '../judge.ts'
 import { accountFlags, isShadowed } from '../moderation/flags.ts'
 import { reviewTiming } from '../moderation/timing.ts'
+import {
+  addVoiceParticipant,
+  createVoiceMeeting,
+  refreshVoiceToken,
+  removeVoiceParticipant,
+} from '../voice/realtime.ts'
 import { getProfile, isConstraintError } from './external.ts'
 import { loadGhostTraits } from './ghost.ts'
 import { type Pair, type PvpLink, rttCapped, type Seat } from './judge-pvp.ts'
@@ -61,6 +68,8 @@ export interface RoomInit {
 interface Stored {
   init: RoomInit
   traits: GhostTraits | null
+  /** RealtimeKit voice, created lazily when a seat turns it on. */
+  voice?: { meetingId: string; participants: [string | null, string | null] }
 }
 
 interface Attachment {
@@ -92,6 +101,10 @@ export class DuelRoom extends DurableObject<Env> {
   private pingSeq = 0
   private pingTimer: ReturnType<typeof setInterval> | undefined
   private startedOnce: boolean
+  private readonly voiceBusy: [boolean, boolean] = [false, false]
+  private readonly voiceAt: [number, number] = [0, 0]
+  /** One voice request at a time: two seats can ask for the same lazily-created meeting. */
+  private voiceChain: Promise<void> = Promise.resolve()
 
   constructor(ctx: DurableObjectState, env: Env) {
     super(ctx, env)
@@ -157,6 +170,10 @@ export class DuelRoom extends DurableObject<Env> {
     }
     if (message.type === 'pong') {
       this.onPong(attachment.seat, message.n)
+      return
+    }
+    if (message.type === 'voice_on' || message.type === 'voice_off') {
+      await this.voiceMessage(stored, attachment.seat, message.type === 'voice_on')
       return
     }
     const flow = this.ensureFlow(stored)
@@ -327,14 +344,91 @@ export class DuelRoom extends DurableObject<Env> {
       }
     }
     const accounts = this.stored?.init.accounts.filter((a): a is string => a !== null) ?? []
+    const voice = this.stored?.voice
+    const voiceCleanup =
+      voice === undefined
+        ? []
+        : voice.participants
+            .filter((p): p is string => p !== null)
+            .map((p) => removeVoiceParticipant(this.env, voice.meetingId, p).catch(() => undefined))
     this.ctx.waitUntil(
       Promise.all([
         this.ctx.storage.deleteAll().then(() => this.ctx.storage.put('closed', true)),
         this.env.MATCHMAKER.get(this.env.MATCHMAKER.idFromName('mm:global'))
           .release(accounts)
           .catch(() => undefined),
+        ...voiceCleanup,
       ]),
     )
+  }
+
+  /** Mint or revoke this seat's RealtimeKit participant token. Never reaches the duel flow. */
+  private voiceMessage(stored: Stored, seat: Seat, on: boolean): Promise<void> {
+    const next = this.voiceChain.then(() => this.voiceMessageNow(stored, seat, on))
+    this.voiceChain = next.catch(() => undefined)
+    return next
+  }
+
+  private async voiceMessageNow(stored: Stored, seat: Seat, on: boolean): Promise<void> {
+    if (on) {
+      const now = Date.now()
+      if (this.voiceBusy[seat] || this.voiceAt[seat] + 2000 > now) {
+        return
+      }
+      this.voiceAt[seat] = now
+    } else if (this.voiceBusy[seat]) {
+      return
+    }
+    const sockets = this.ctx.getWebSockets(`seat:${seat}`)
+    const socket = sockets.at(-1)
+    if (!socket) {
+      return
+    }
+    if (!on) {
+      const voice = stored.voice
+      const participant = voice?.participants[seat]
+      if (voice && participant) {
+        voice.participants[seat] = null
+        await this.ctx.storage.put('stored', stored)
+        await removeVoiceParticipant(this.env, voice.meetingId, participant).catch(() => undefined)
+      }
+      return
+    }
+    if (stored.init.mode !== 'pvp' || stored.init.accounts[seat === 0 ? 1 : 0] === null) {
+      socket.send(JSON.stringify({ type: 'voice_error', message: 'Voice is for human duels.' }))
+      return
+    }
+    this.voiceBusy[seat] = true
+    try {
+      if (!stored.voice) {
+        stored.voice = {
+          meetingId: await createVoiceMeeting(this.env, `bounty-${stored.init.roomId}`),
+          participants: [null, null],
+        }
+      }
+      const voice = stored.voice
+      const existing = voice.participants[seat]
+      let token: string
+      if (existing) {
+        token = await refreshVoiceToken(this.env, voice.meetingId, existing)
+      } else {
+        const added = await addVoiceParticipant(
+          this.env,
+          voice.meetingId,
+          stored.init.posters[seat].name,
+          String(seat),
+        )
+        voice.participants[seat] = added.id
+        token = added.token
+      }
+      await this.ctx.storage.put('stored', stored)
+      socket.send(JSON.stringify({ type: 'voice_ready', meetingId: voice.meetingId, token }))
+    } catch (err) {
+      console.error('duel voice token failed', err)
+      socket.send(JSON.stringify({ type: 'voice_error', message: 'Voice is unavailable.' }))
+    } finally {
+      this.voiceBusy[seat] = false
+    }
   }
 
   private requeue(stored: Stored, seat: Seat): void {

@@ -80,7 +80,10 @@ import { haptic } from '../../platform/haptics.ts'
 import { presetAt } from '../../scene/presets.ts'
 import { RIM } from '../../scene/style.ts'
 import { setLowRes } from '../../scene/textures.ts'
+import { getSettings, onSettings } from '../../settings.ts'
 import { installUiSounds } from '../../ui/sfx.ts'
+import { VoiceChat, type VoiceCredentials } from '../../voice/voice-chat.ts'
+import { VoiceControls } from '../../voice/voice-ui.ts'
 import { bagColor, bagStyleColor } from '../scene/bags.ts'
 import { TopDownCamera } from '../scene/camera.ts'
 import { Crowd, type CrowdPlayer, READ_SCALE } from '../scene/crowd.ts'
@@ -273,6 +276,11 @@ export class FrontierGame {
   private readonly stance = new Stance()
   private readonly score: Scoreboard
   private readonly panel: SettingsPanel
+  private voice: VoiceChat | null = null
+  private voiceUi: VoiceControls | null = null
+  private voiceWait: ((v: VoiceCredentials | null) => void) | null = null
+  // biome-ignore lint/style/useReadonlyClassProperties: assigned once in the constructor
+  private unwatchVoice: (() => void) | null = null
   private readonly touchUi: boolean
   private readonly aimRes: AimResult = { yaw: 0, point: new Vector3(), target: -1, range: 0 }
   private readonly look = { x: 0, y: 0 }
@@ -415,6 +423,34 @@ export class FrontierGame {
       mostWanted: () => this.net.town?.mostWanted ?? NONE,
     })
     this.sink = this.makeSink()
+    if (!opts.practice) {
+      this.voice = new VoiceChat({
+        audio: this.audio,
+        requestToken: () => this.requestVoiceToken(),
+        sendOff: () => this.transport?.send(JSON.stringify({ type: 'voice_off' })),
+        settings: () => ({
+          voiceChat: getSettings().voiceChat,
+          voicePushToTalk: getSettings().voicePushToTalk,
+        }),
+        muted: (id) => this.riders.isBlocked(id),
+        onState: (state, message) => this.voiceUi?.setState(state, message),
+        maxPeers: 4,
+      })
+      this.audio?.setVoiceChatVolume(getSettings().voiceChatVolume)
+      this.voiceUi = new VoiceControls({
+        settings: () => ({
+          voiceChat: getSettings().voiceChat,
+          voicePushToTalk: getSettings().voicePushToTalk,
+        }),
+        talk: (down) => this.voice?.setTalking(down),
+        mute: (muted) => this.voice?.setMicMuted(muted),
+      })
+      this.unwatchVoice = onSettings((s) => {
+        this.audio?.setVoiceChatVolume(s.voiceChatVolume)
+        this.voice?.setEnabled(s.voiceChat)
+        this.voiceUi?.refresh()
+      })
+    }
     // The scripted aim/walk/fire harness exists only in dev builds: never an aimbot API in prod.
     this.autopilot =
       import.meta.env.DEV && new URLSearchParams(location.search).has('debug')
@@ -763,6 +799,8 @@ export class FrontierGame {
 
   private onWelcome(): void {
     this.syncRoster()
+    // The socket is open and the roster is known: it is safe to ask for a voice token now.
+    this.voice?.setEnabled(getSettings().voiceChat)
   }
 
   private syncRoster(): void {
@@ -785,6 +823,19 @@ export class FrontierGame {
   }
 
   private onControl(m: ServerControl): void {
+    if (m.type === 'voice_ready') {
+      const wait = this.voiceWait
+      this.voiceWait = null
+      wait?.({ meetingId: m.meetingId, token: m.token })
+      return
+    }
+    if (m.type === 'voice_error') {
+      const wait = this.voiceWait
+      this.voiceWait = null
+      wait?.(null)
+      this.hud.toast(m.message, 'gold', 2200)
+      return
+    }
     if (m.type === 'roster_add') {
       this.dress(m.entry)
     } else if (m.type === 'roster_remove') {
@@ -795,6 +846,43 @@ export class FrontierGame {
       handleControl(this.sink, m)
     }
     this.rounds.control(m)
+  }
+
+  private requestVoiceToken(): Promise<VoiceCredentials | null> {
+    return new Promise((resolve) => {
+      if (!this.transport) {
+        resolve(null)
+        return
+      }
+      this.voiceWait = resolve
+      this.transport.send(JSON.stringify({ type: 'voice_on' }))
+      setTimeout(() => {
+        if (this.voiceWait === resolve) {
+          this.voiceWait = null
+          resolve(null)
+        }
+      }, 12_000)
+    })
+  }
+
+  private voiceTick(): void {
+    if (!this.voice) {
+      return
+    }
+    // A pause card, the coach, the round summary or the death poster owns the screen: keep the
+    // talk control out of its way.
+    this.voiceUi?.setBlocked(
+      this.hud.menuOpen || this.coach.open || this.rounds.summaryOpen || !this.net.alive,
+    )
+    const peers: { id: number; name: string; x: number; y: number; z: number }[] = []
+    for (const r of this.remotes) {
+      const entry = this.net.roster.get(r.id)
+      if (!entry || entry.bot || this.riders.isBlocked(r.id)) {
+        continue
+      }
+      peers.push({ id: r.id, name: entry.name, x: r.x, y: r.y, z: r.z })
+    }
+    this.voice.update(peers, { x: this.own.x, z: this.own.z })
   }
 
   private onEvent(ev: WireEvent): void {
@@ -1189,6 +1277,7 @@ export class FrontierGame {
     for (const v of this.net.views(this.renderTick)) {
       this.remotes.push(v)
     }
+    this.voiceTick()
     return dtMs
   }
 
@@ -2015,6 +2104,11 @@ export class FrontierGame {
 
   dispose(): void {
     this.disposed = true
+    this.unwatchVoice?.()
+    void this.voice?.dispose()
+    this.voiceUi?.dispose()
+    this.voice = null
+    this.voiceUi = null
     this.running = false
     cancelAnimationFrame(this.raf)
     if (this.hiddenTimer) {

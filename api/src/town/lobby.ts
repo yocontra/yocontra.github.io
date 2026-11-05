@@ -1,3 +1,5 @@
+// biome-ignore-all lint/suspicious/noUnnecessaryConditions: Durable Object fields change between awaited calls
+// biome-ignore-all lint/style/noExcessiveLinesPerFile: voice lifecycle and the existing room/lobby flow live together
 /**
  * One Frontier lobby: the authoritative 20 Hz tick, **only while a human is present**. When the
  * last human leaves (after their 10 s linger), the loop stops, everything is flushed and the object
@@ -13,6 +15,12 @@ import { recordUsage } from '../budget.ts'
 import { getProfile } from '../economy/profile.ts'
 import type { Env } from '../env.ts'
 import { FLAG_BADLANDS, flagStatements, isShadowed, standing } from '../moderation/flags.ts'
+import {
+  addVoiceParticipant,
+  createVoiceMeeting,
+  refreshVoiceToken,
+  removeVoiceParticipant,
+} from '../voice/realtime.ts'
 import {
   DEFAULT_TOWN_POPULATION,
   type Departure,
@@ -75,6 +83,13 @@ export class Lobby extends DurableObject<Env> {
   private readonly departed: string[] = []
   private lastDirectoryReport = 0
   private tickDurations: number[] = []
+  /** RealtimeKit meeting for this lobby, and each player's participant id. */
+  private voiceMeetingId = ''
+  private readonly voiceParticipants = new Map<number, string>()
+  private readonly voiceBusy = new Set<number>()
+  private readonly voiceAt = new Map<number, number>()
+  /** Serialize meeting creation and participant changes across sockets. */
+  private voiceChain: Promise<void> = Promise.resolve()
 
   constructor(ctx: DurableObjectState, env: Env) {
     super(ctx, env)
@@ -84,6 +99,16 @@ export class Lobby extends DurableObject<Env> {
       for (const [key, d] of saved) {
         this.pending.set(key.slice(4), d)
         this.lobbyId ||= d.lobbyId
+      }
+      const voice = await ctx.storage.get<{
+        meetingId: string
+        participants: Record<string, string>
+      }>('voice')
+      if (voice) {
+        this.voiceMeetingId = voice.meetingId
+        for (const [id, participant] of Object.entries(voice.participants)) {
+          this.voiceParticipants.set(Number(id), participant)
+        }
       }
     })
   }
@@ -160,6 +185,9 @@ export class Lobby extends DurableObject<Env> {
     server.addEventListener('message', (event) => {
       const data = event.data
       if (typeof data === 'string') {
+        if (this.voiceText(core, id, data)) {
+          return
+        }
         core.onText(id, data, Date.now())
       } else {
         core.onBinary(id, data, Date.now())
@@ -188,6 +216,7 @@ export class Lobby extends DurableObject<Env> {
    * evict the object before the linger finishes, and stats or usage must not be lost with it.
    */
   private onDisconnect(core: LobbyCore, playerId: number): void {
+    void this.voiceOff(playerId)
     const s = core.sessionOf(playerId)
     const p = core.world.players[playerId]
     if (s && p) {
@@ -284,6 +313,144 @@ export class Lobby extends DurableObject<Env> {
     this.reportDirectory(true)
     // Nobody's left, so nothing of value is in the world: start fresh next time.
     this.core = null
+    this.ctx.waitUntil(this.voiceClose())
+  }
+
+  /** Voice control messages never reach the sim: they only mint RealtimeKit tokens. */
+  private voiceText(core: LobbyCore, playerId: number, text: string): boolean {
+    if (!text.includes('voice_')) {
+      return false
+    }
+    let msg: unknown
+    try {
+      msg = JSON.parse(text)
+    } catch {
+      return false
+    }
+    if (typeof msg !== 'object' || msg === null) {
+      return false
+    }
+    const type = Reflect.get(msg, 'type')
+    if (type === 'voice_on') {
+      this.ctx.waitUntil(this.voiceOn(core, playerId))
+      return true
+    }
+    if (type === 'voice_off') {
+      this.ctx.waitUntil(this.voiceOff(playerId))
+      return true
+    }
+    return false
+  }
+
+  private voiceOn(core: LobbyCore, playerId: number): Promise<void> {
+    const next = this.voiceChain.then(() => this.voiceOnNow(core, playerId))
+    this.voiceChain = next.catch(() => undefined)
+    return next
+  }
+
+  private async voiceOnNow(core: LobbyCore, playerId: number): Promise<void> {
+    const now = Date.now()
+    if (this.voiceBusy.has(playerId) || (this.voiceAt.get(playerId) ?? 0) + 2000 > now) {
+      return
+    }
+    this.voiceAt.set(playerId, now)
+    const session = core.sessionOf(playerId)
+    const player = core.world.players[playerId]
+    if (!(session?.peer && player)) {
+      return
+    }
+    this.voiceBusy.add(playerId)
+    try {
+      if (!this.voiceMeetingId) {
+        this.voiceMeetingId = await createVoiceMeeting(
+          this.env,
+          `frontier-${this.lobbyId || 'lobby'}`,
+        )
+      }
+      const participant = this.voiceParticipants.get(playerId)
+      let token: string
+      if (participant) {
+        token = await refreshVoiceToken(this.env, this.voiceMeetingId, participant)
+      } else {
+        const added = await addVoiceParticipant(
+          this.env,
+          this.voiceMeetingId,
+          player.name,
+          String(playerId),
+        )
+        this.voiceParticipants.set(playerId, added.id)
+        await this.saveVoice()
+        token = added.token
+      }
+      this.sendVoice(session.peer, {
+        type: 'voice_ready',
+        meetingId: this.voiceMeetingId,
+        token,
+      })
+    } catch (err) {
+      console.error('frontier voice token failed', err)
+      this.sendVoice(session.peer, { type: 'voice_error', message: 'Voice is unavailable.' })
+    } finally {
+      this.voiceBusy.delete(playerId)
+    }
+  }
+
+  private voiceOff(playerId: number): Promise<void> {
+    const next = this.voiceChain.then(() => this.voiceOffNow(playerId))
+    this.voiceChain = next.catch(() => undefined)
+    return next
+  }
+
+  private async voiceOffNow(playerId: number): Promise<void> {
+    const participant = this.voiceParticipants.get(playerId)
+    if (!participant) {
+      return
+    }
+    this.voiceParticipants.delete(playerId)
+    await this.saveVoice()
+    if (this.voiceMeetingId) {
+      await removeVoiceParticipant(this.env, this.voiceMeetingId, participant).catch(
+        () => undefined,
+      )
+    }
+  }
+
+  private async voiceClose(): Promise<void> {
+    // RealtimeKit has no delete-meeting API; an idle meeting costs nothing. Keep the meeting id
+    // so the next session in this lobby reuses it, and remove the participants' live tokens.
+    const meetingId = this.voiceMeetingId
+    const participants = [...this.voiceParticipants.values()]
+    this.voiceParticipants.clear()
+    await this.saveVoice()
+    if (meetingId) {
+      await Promise.all(
+        participants.map((p) =>
+          removeVoiceParticipant(this.env, meetingId, p).catch(() => undefined),
+        ),
+      )
+    }
+  }
+
+  private async saveVoice(): Promise<void> {
+    if (!this.voiceMeetingId) {
+      await this.ctx.storage.delete('voice')
+      return
+    }
+    await this.ctx.storage.put('voice', {
+      meetingId: this.voiceMeetingId,
+      participants: Object.fromEntries(
+        [...this.voiceParticipants].map(([id, participant]) => [String(id), participant]),
+      ),
+    })
+  }
+
+  // biome-ignore lint/style/useThisInClassMethods: a tiny send helper
+  private sendVoice(peer: { send: (data: Uint8Array | string) => void }, msg: object): void {
+    try {
+      peer.send(JSON.stringify(msg))
+    } catch {
+      // the socket closed while the token was minted; the disconnect path removes the participant
+    }
   }
 
   // --- Settlement -------------------------------------------------------------------------------

@@ -222,6 +222,16 @@
       }
     },
     {
+      "includes": ["package.json"],
+      "linter": {
+        "rules": {
+          "suspicious": {
+            "noUntrustedLicenses": "off"
+          }
+        }
+      }
+    },
+    {
       "includes": ["api/**"],
       "javascript": {
         "globals": ["WebSocketPair"]

@@ -23,6 +23,12 @@ export interface Settings {
   sfx: number
   /** Voices (barks, taunts, grunts), 0..1. */
   voice: number
+  /** Other players' proximity voice, 0..1. */
+  voiceChatVolume: number
+  /** Opt-in proximity chat (off until the player asks for it). */
+  voiceChat: boolean
+  /** Hold to talk (true) or an open microphone. */
+  voicePushToTalk: boolean
   /** Buzz on your own shot and on a hit (never on the call). */
   vibration: boolean
   /**
@@ -38,6 +44,9 @@ export const DEFAULT_SETTINGS: Readonly<Settings> = {
   music: 0.8,
   sfx: 1,
   voice: 1,
+  voiceChatVolume: 1,
+  voiceChat: false,
+  voicePushToTalk: true,
   vibration: true,
   silentAudio: true,
   graphics: 'auto',
@@ -62,6 +71,9 @@ function read(): Settings {
     music: unit(v.music, DEFAULT_SETTINGS.music),
     sfx: unit(v.sfx, DEFAULT_SETTINGS.sfx),
     voice: unit(v.voice, DEFAULT_SETTINGS.voice),
+    voiceChatVolume: unit(v.voiceChatVolume, DEFAULT_SETTINGS.voiceChatVolume),
+    voiceChat: v.voiceChat === true,
+    voicePushToTalk: v.voicePushToTalk !== false,
     vibration: typeof v.vibration === 'boolean' ? v.vibration : DEFAULT_SETTINGS.vibration,
     silentAudio: typeof v.silentAudio === 'boolean' ? v.silentAudio : DEFAULT_SETTINGS.silentAudio,
     graphics: GRAPHICS.includes(v.graphics as Graphics)

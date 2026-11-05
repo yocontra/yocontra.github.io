@@ -540,7 +540,8 @@
 
 .fr-set-slider input {
   flex: 1 1 auto;
-  min-width: 0;
+  /* the audit's minimum touch target: a long label may squeeze the range otherwise */
+  min-width: 44px;
   height: 44px;
   accent-color: var(--ow-brass);
 }

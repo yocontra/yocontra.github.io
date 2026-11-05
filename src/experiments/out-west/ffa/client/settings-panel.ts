@@ -1,3 +1,4 @@
+// biome-ignore-all lint/security/noSecrets: voice setting keys and key names are not credentials
 /**
  * The pause menu's settings: view (over the shoulder, first person, top-down), field of view for
  * the current view, look sensitivity (mouse on desktop, thumbs on touch), invert-Y, hold or toggle
@@ -5,6 +6,7 @@
  * sprint, auto fire, auto reload and the ADS look speed.
  * Every change applies at once and is saved per device.
  */
+import { getSettings, setSetting } from '../../settings.ts'
 import {
   ADS_SENS_RANGE,
   CONTROL_RANGE,
@@ -55,6 +57,10 @@ export class SettingsPanel {
   private joyOut: HTMLOutputElement | null = null
   private adsSens: HTMLInputElement | null = null
   private adsSensOut: HTMLOutputElement | null = null
+  private voiceChat: HTMLInputElement | null = null
+  private voicePtt: HTMLInputElement | null = null
+  private voiceVol: HTMLInputElement | null = null
+  private voiceVolOut: HTMLOutputElement | null = null
 
   constructor(hooks: PanelHooks, touch: boolean) {
     this.hooks = hooks
@@ -157,6 +163,7 @@ export class SettingsPanel {
     if (touch) {
       this.addTouchControls()
     }
+    this.addVoiceControls()
     this.sync()
   }
 
@@ -227,6 +234,25 @@ export class SettingsPanel {
     })
     this.adsSens = adsSens
     this.adsSensOut = adsSensOut
+  }
+
+  /** The shared proximity-voice switches (the same values the hub's Settings sheet edits). */
+  private addVoiceControls(): void {
+    const head = document.createElement('div')
+    head.className = 'fr-set-head'
+    head.textContent = 'Voice chat'
+    this.el.append(head)
+    this.voiceChat = this.check('Proximity voice (off by default)', (v) => {
+      setSetting('voiceChat', v)
+    })
+    this.voicePtt = this.check('Push to talk (hold T / TALK)', (v) => {
+      setSetting('voicePushToTalk', v)
+    })
+    const [, vol, out] = this.slider('Voice chat volume', { min: 0, max: 1 }, 0.05, (n) => {
+      setSetting('voiceChatVolume', n)
+    })
+    this.voiceVol = vol
+    this.voiceVolOut = out
   }
 
   /** A labelled checkbox row. */
@@ -327,6 +353,17 @@ export class SettingsPanel {
     if (this.adsSens && this.adsSensOut) {
       this.adsSens.value = String(s.touchAdsSens)
       this.adsSensOut.textContent = `${Math.round(s.touchAdsSens * 100)}%`
+    }
+    const voice = getSettings()
+    if (this.voiceChat) {
+      this.voiceChat.checked = voice.voiceChat
+    }
+    if (this.voicePtt) {
+      this.voicePtt.checked = voice.voicePushToTalk
+    }
+    if (this.voiceVol && this.voiceVolOut) {
+      this.voiceVol.value = String(voice.voiceChatVolume)
+      this.voiceVolOut.textContent = `${Math.round(voice.voiceChatVolume * 100)}%`
     }
   }
 }

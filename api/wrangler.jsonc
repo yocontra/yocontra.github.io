@@ -43,6 +43,9 @@
   "vars": {
     "ALLOWED_ORIGINS": "https://contra.io",
     "RP_ID": "contra.io",
-    "RP_ORIGINS": "https://contra.io"
+    "RP_ORIGINS": "https://contra.io",
+    "CLOUDFLARE_ACCOUNT_ID": "5947ed3a469d16386b7f9f74a6bed807",
+    "REALTIMEKIT_APP_ID": "bd20498e-64a8-4f8a-849e-fa4caca3ec7d",
+    "REALTIMEKIT_PRESET": "out-west-voice"
   }
 }

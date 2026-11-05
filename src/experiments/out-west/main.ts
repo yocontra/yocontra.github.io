@@ -221,6 +221,7 @@ interface Volumes {
   setMusicVolume?: (v: number) => void
   setSfxVolume?: (v: number) => void
   setVoiceVolume?: (v: number) => void
+  setVoiceChatVolume?: (v: number) => void
 }
 
 /**
@@ -239,6 +240,7 @@ function wireSettings(
     v.setMusicVolume?.(s.music)
     v.setSfxVolume?.(s.sfx)
     v.setVoiceVolume?.(s.voice)
+    v.setVoiceChatVolume?.(s.voiceChatVolume)
     setHapticsEnabled(s.vibration)
     // iOS: `playback` keeps the game audible with the Ring/Silent switch on; `ambient` respects it.
     setAudioSessionMode(s.silentAudio ? 'playback' : 'ambient')

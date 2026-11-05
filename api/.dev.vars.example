@@ -3,3 +3,8 @@ AUTH_SECRET=dev-only-not-secret-change-me
 RP_ID=localhost
 RP_ORIGINS=http://localhost:4321
 ALLOWED_ORIGINS=http://localhost:4321
+
+CLOUDFLARE_ACCOUNT_ID=<account id>
+REALTIMEKIT_APP_ID=<realtimekit app id>
+REALTIMEKIT_PRESET=out-west-voice
+REALTIMEKIT_API_TOKEN=<cloudflare api token with Realtime permission>

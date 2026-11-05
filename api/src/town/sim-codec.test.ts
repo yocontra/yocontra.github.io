@@ -7,6 +7,8 @@ import {
   INPUT_LEAD_NONE,
   POS_SCALE,
   SNAP_FULL,
+  SNAPSHOT_HEADER_BYTES,
+  SNAPSHOT_SELF_BYTES,
 } from '../../../src/experiments/out-west/contract/town.ts'
 import { Writer } from '../../../src/experiments/out-west/ffa/sim/bytes.ts'
 import {
@@ -241,6 +243,31 @@ describe('snapshot codec', () => {
           .toSorted((a, b) => a[0] - b[0]),
       )
     }
+  })
+
+  it('accepts a bare delta snapshot (no entities, events or town)', () => {
+    // The shortest legal snapshot: header, self, and the event count byte. The decoder's minimum
+    // length must not reject it, or every quiet tick fails to decode on the client.
+    const self = randomSelf()
+    const bytes = encodeSnapshot(
+      new Writer(),
+      {
+        tick: 1,
+        lastInputSeq: 0,
+        inputLead: INPUT_LEAD_NONE,
+        flags: 0,
+        self,
+        entities: [],
+        removed: [],
+        town: null,
+        events: [],
+      },
+      new Map(),
+    )
+    expect(bytes.length).toBe(SNAPSHOT_HEADER_BYTES + SNAPSHOT_SELF_BYTES + 1)
+    const snap = decodeSnapshot(bytes, new Map())
+    expect(snap).not.toBeNull()
+    expect(snap?.self).toEqual(self)
   })
 
   it('event layouts match the contract sizes', () => {
