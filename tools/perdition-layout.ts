@@ -165,7 +165,9 @@ const bank = b(
   [D('n', 8, 4), D('e', 4, 2), D('s', 8, 4), D('w', 4, 2)],
   {
     walls: [
-      { x: 62, z: 83, w: 9, d: 0.5 },
+      // The teller partition stops either side of the stairwell, so the stair has a clear entry.
+      { x: 62, z: 83, w: 1, d: 0.5 },
+      { x: 67, z: 83, w: 4, d: 0.5 },
       { x: 73, z: 83, w: 9, d: 0.5 },
     ],
   },

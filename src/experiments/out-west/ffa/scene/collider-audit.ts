@@ -21,6 +21,8 @@ import { collect } from '../../scene/float-audit.ts'
 import { BLOCK_MOVE, buildGrid, TOWN } from '../sim/layout.ts'
 import { ROOF_WALKS } from '../sim/roofwalks.ts'
 
+const STAIRS = TOWN.buildings.flatMap((b) => b.stairs ?? [])
+
 export interface ColliderBlob {
   kind: 'invisible' | 'walkthrough'
   /** Centre of the blob, layout metres. */
@@ -89,10 +91,22 @@ export function colliderAudit(scene: Object3D): ColliderReport {
       const r1 = Math.min(n - 1, Math.floor((z1 - Math.min(0.06, (z1 - z0) / 2)) / cell))
       for (let row = r0; row <= r1; row++) {
         for (let col = c0; col <= c1; col++) {
-          // A ladder is deliberately walk-through: the sim's ladder point is the collider.
+          // A ladder and a staircase are deliberately walk-through in the 2D grid: the sim's
+          // surface model (catwalk decks, stair ramps, boxcar roofs) is their collider.
           const lx = (col + 0.5) * cell
           const lz = (row + 0.5) * cell
           if (ROOF_WALKS.some((w) => Math.hypot(lx - w.ladderX, lz - w.ladderZ) < 0.75)) {
+            continue
+          }
+          if (
+            STAIRS.some(
+              (s) =>
+                lx >= s.x - 0.75 &&
+                lx <= s.x + s.w + 0.75 &&
+                lz >= s.z - 0.75 &&
+                lz <= s.z + s.d + 0.75,
+            )
+          ) {
             continue
           }
           visual[row * n + col] = 1
