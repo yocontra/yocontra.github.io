@@ -19,7 +19,7 @@ import {
   SPAWN_MIN_ENEMY_DIST,
   SPAWN_PROTECT_TICKS,
 } from './constants.ts'
-import { spillCarry } from './death.ts'
+import { applyFallDamage, spillCarry } from './death.ts'
 import { hasLineOfSight, type SpawnPoint } from './layout.ts'
 import {
   progressChannel,
@@ -41,6 +41,7 @@ import {
   activePlayers,
   dist2,
   HIST_ALIVE,
+  HIST_CROUCHED,
   HIST_IFRAMES,
   HIST_PRESENT,
   HIST_PROTECTED,
@@ -170,6 +171,9 @@ function historyFlags(w: World, p: Player): number {
   if (p.showdown >= 0) {
     f |= HIST_SHOWDOWN
   }
+  if (p.crouched) {
+    f |= HIST_CROUCHED
+  }
   return f
 }
 
@@ -243,6 +247,10 @@ export function step(w: World, frames: readonly (InputFrame | null | undefined)[
       prevButtons: p.lastButtons,
       canMove: p.alive && p.showdown < 0 && p.lingerUntil < 0,
     })
+    if (p.fallDamage > 0 && p.alive) {
+      applyFallDamage(w, p, p.fallDamage)
+      p.fallDamage = 0
+    }
   }
   // Every shot this tick sees the same start-of-tick liveness, so trades are possible.
   for (const [i, p] of players.entries()) {

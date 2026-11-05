@@ -39,6 +39,8 @@ export type WireEvent =
       range: number
       target: number
       flags: number
+      /** Height of the impact, decimetres. */
+      y: number
     }
   | { type: typeof EV_DAMAGE; victim: number; attacker: number; amount: number; hp: number }
   | { type: typeof EV_KILL; victim: number; killer: number; flags: number; bounty: number }
@@ -81,6 +83,7 @@ export const EVENT_LAYOUTS: Readonly<Record<number, Layout>> = {
     ['range', 1],
     ['target', 1],
     ['flags', 1],
+    ['y', 1],
   ],
   [EV_DAMAGE]: [
     ['victim', 1],

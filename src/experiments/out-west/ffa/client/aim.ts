@@ -16,15 +16,12 @@
  */
 import { Vector3 } from 'three'
 import { EF_ALIVE, EF_PROTECTED, EF_SHOWDOWN } from '../../contract/town.ts'
-import { PLAYER_RADIUS } from '../sim/constants.ts'
-import { BLOCK_SHOT, BLOCK_SIGHT, type Grid, rayGrid } from '../sim/layout.ts'
+import { BODY_HEIGHT, PLAYER_RADIUS } from '../sim/constants.ts'
+import type { Grid } from '../sim/layout.ts'
+import { rayWorld } from '../sim/surfaces.ts'
 import type { RemoteView } from './interp.ts'
 
-/** What a rider's hit volume looks like from eye level (a man and his hat). */
-const BODY_TOP = 2
 const BODY_R = PLAYER_RADIUS
-/** Low cover (troughs, barrels, crates) stands about this high. */
-const LOW_COVER_Y = 1.05
 const FAR = 160
 /** Closer than this (planar, from the player) the yaw to the point is unstable: use the view's. */
 const MIN_PLANAR = 1.2
@@ -64,30 +61,9 @@ export function resolveAim(
   const planar = Math.max(1e-5, cp)
   const pdx = Math.cos(yaw)
   const pdz = Math.sin(yaw)
-  // walls (planar distance → ray parameter by dividing by the planar part)
-  let t = FAR
-  const wall = rayGrid(
-    grid,
-    { ox: origin.x, oz: origin.z, dx: pdx, dz: pdz, maxDist: FAR * planar },
-    BLOCK_SIGHT,
-  )
-  t = Math.min(t, wall / planar)
-  // low cover: the first shot-blocking cell before the wall, if the ray is under its top there
-  const shot = rayGrid(
-    grid,
-    { ox: origin.x, oz: origin.z, dx: pdx, dz: pdz, maxDist: wall },
-    BLOCK_SHOT,
-  )
-  if (shot < wall) {
-    const tc = shot / planar
-    if (origin.y + dir.y * tc < LOW_COVER_Y) {
-      t = Math.min(t, tc)
-    }
-  }
-  // the ground
-  if (dir.y < -1e-4) {
-    t = Math.min(t, -origin.y / dir.y)
-  }
+  // The world first: walls, crates, porch roofs, floors and pitched roofs in 3D.
+  const world = rayWorld(grid, origin.x, origin.y, origin.z, dir.x, dir.y, dir.z, FAR)
+  let t = world?.dist ?? FAR
   // riders, but only past the player (someone between the lens and your back isn't the target)
   const behind = Math.max(0, ((px - origin.x) * pdx + (pz - origin.z) * pdz) / planar)
   let target = -1
@@ -95,7 +71,7 @@ export function resolveAim(
     if (!hittable(r)) {
       continue
     }
-    const hit = rayCylinder(origin, pdx, pdz, planar, dir.y, r.x, r.z)
+    const hit = rayCylinder(origin, pdx, pdz, planar, dir.y, r.x, r.y, r.z)
     if (hit !== null && hit < t && hit > behind) {
       t = hit
       target = r.id
@@ -115,7 +91,7 @@ function hittable(r: RemoteView): boolean {
   return (r.flags & EF_ALIVE) !== 0 && (r.flags & (EF_SHOWDOWN | EF_PROTECTED)) === 0
 }
 
-/** Ray (origin + t·dir) against an upright cylinder at (cx, cz), 0..BODY_TOP tall. */
+/** Ray (origin + t·dir) against an upright capsule at (cx, cy, cz). */
 function rayCylinder(
   o: Vector3,
   pdx: number,
@@ -123,6 +99,7 @@ function rayCylinder(
   planar: number,
   dy: number,
   cx: number,
+  cy: number,
   cz: number,
 ): number | null {
   const ox = cx - o.x
@@ -138,7 +115,7 @@ function rayCylinder(
   const planarT = along - Math.sqrt(BODY_R * BODY_R - perp2)
   const t = Math.max(0, planarT) / planar
   const y = o.y + dy * t
-  return y >= 0 && y <= BODY_TOP ? t : null
+  return y >= cy - 0.05 && y <= cy + BODY_HEIGHT + 0.05 ? t : null
 }
 
 /** The nearest hittable rider's angular offset from the view (yaw, pitch), within `cone`. */
@@ -162,7 +139,7 @@ function nearestOffset(
       continue
     }
     const ry = Math.atan2(dz, dx)
-    const rp = Math.atan2(1.2 - origin.y, d)
+    const rp = Math.atan2(r.y + 1.2 - origin.y, d)
     const dYaw = Math.atan2(Math.sin(ry - yaw), Math.cos(ry - yaw))
     const dPitch = rp - pitch
     const err = Math.hypot(dYaw, dPitch)

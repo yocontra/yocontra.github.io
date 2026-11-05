@@ -79,9 +79,7 @@ const BLEND = 14
 const MAX_LEG_YAW = 1.3
 const ROLL_S = 0.35
 const VAULT_S = 0.5
-const VAULT_PEAK_M = 0.75
 const HOP_S = 0.55
-const HOP_PEAK_M = 0.45
 /** How the spine (abdomen, torso, chest) shares the twist back to the aim, and the aim's pitch. */
 const TWIST = [0.3, 0.3, 0.4] as const
 const PITCH = [0.25, 0.35, 0.4] as const
@@ -722,7 +720,7 @@ export class Locomotion {
     } else if (a === ANIM_VAULT || a === ANIM_HOP) {
       const vault = a === ANIM_VAULT
       const u = Math.min(1, t / (vault ? VAULT_S : HOP_S))
-      y += (vault ? VAULT_PEAK_M : HOP_PEAK_M) * 4 * u * (1 - u)
+      // The holder's y is the sim's real feet height now; only the pose tilt is cosmetic.
       rx = vault ? 0.45 * Math.sin(Math.PI * u) : 0.12 * Math.sin(Math.PI * u)
     } else if (a === ANIM_SLIDE) {
       // low and leaning back, feet first

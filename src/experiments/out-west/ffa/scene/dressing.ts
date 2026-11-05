@@ -1082,7 +1082,7 @@ export function dressCover(ctx: DressContext): void {
         }
       },
     }
-    const y = ctx.floorAt(c.x + c.w / 2, c.z + c.d / 2)
+    const y = ctx.floorAt(c.x + c.w / 2, c.z + c.d / 2) + (c.y0 ?? 0)
     if (near) {
       standIn(ctx.structure, c, y)
     }

@@ -66,7 +66,7 @@ export class ThreatArrows {
       if (d > RANGE || d < 0.5) {
         continue
       }
-      toScreen(cam, r.x, 1, r.z, INSET, sp)
+      toScreen(cam, r.x, r.y + 1, r.z, INSET, sp)
       if (sp.on) {
         continue
       }

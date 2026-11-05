@@ -87,6 +87,11 @@ const randomSelf = (): SelfView => ({
   slideAim: u16(),
   airX: rng.int(-127, 127),
   airZ: rng.int(-127, 127),
+  vy: rng.int(-127, 127) / 10,
+  grounded: rng.int(0, 1),
+  support: u16() / 100,
+  airPeakY: u16() / 100,
+  mantleTicks: u8(),
 })
 
 function randomEvent(): WireEvent {

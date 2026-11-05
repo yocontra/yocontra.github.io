@@ -214,6 +214,11 @@ export function selfView(w: World, p: Player): SelfView {
     slideAim: p.slideAim,
     airX: Math.round(p.airX * 100),
     airZ: Math.round(p.airZ * 100),
+    vy: p.vy,
+    grounded: p.grounded ? 1 : 0,
+    support: p.support,
+    airPeakY: p.airPeakY,
+    mantleTicks: p.mantleTicks,
   }
 }
 

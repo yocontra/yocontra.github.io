@@ -36,10 +36,8 @@ import {
 import {
   ANIM_AIM,
   ANIM_DEAD,
-  ANIM_HOP,
   ANIM_ROLL,
   ANIM_SLIDE,
-  ANIM_VAULT,
   EF_HATLESS,
   EF_HOLSTERED,
   EF_PROTECTED,
@@ -970,7 +968,7 @@ export class Crowd {
     const i = v.mesh.count++
     v.set(i, clip, { phase, speed: rate }, m.look)
     q.setFromAxisAngle(up, facing(p.aim))
-    pos.set(p.x, p.y + farLift(p.anim, nowS - m.animSince), p.z)
+    pos.set(p.x, p.y, p.z)
     if (p.anim === ANIM_SLIDE) {
       // the crouch, leaning back feet first
       q.multiply(hq.setFromAxisAngle(side, -0.7))
@@ -1150,16 +1148,6 @@ function farStance(p: CrowdPlayer, gait: Clip, has: (c: Clip) => boolean): Clip 
     return gait === 'Idle' || (p.stance & STANCE_ADS) !== 0 ? 'Idle_Gun_Pointing' : gait
   }
   return gait
-}
-
-/** A far rider's jump or vault arc (m), from his anim and how long he's been at it. */
-function farLift(anim: number, since: number): number {
-  if (anim !== ANIM_HOP && anim !== ANIM_VAULT) {
-    return 0
-  }
-  const vault = anim === ANIM_VAULT
-  const t = Math.min(1, since / (vault ? 0.5 : 0.55))
-  return (vault ? 0.75 : 0.45) * 4 * t * (1 - t)
 }
 
 const hatColors = new WeakMap<PlayerLook, Color>()

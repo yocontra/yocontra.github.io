@@ -19,10 +19,12 @@ export const HIST_ALIVE = 1
 export const HIST_IFRAMES = 2
 export const HIST_PROTECTED = 4
 export const HIST_SHOWDOWN = 8
+/** The rider was crouched when this history row was written (lower hitbox). */
+export const HIST_CROUCHED = 32
 /** Set for every occupied slot, so a zero flags word means "nobody here". */
 export const HIST_PRESENT = 16
 /** x, z, flags per player per history tick. */
-const HIST_STRIDE = 3
+const HIST_STRIDE = 4
 
 export interface World {
   tick: number
@@ -145,6 +147,18 @@ export function newPlayer(id: number, init: PlayerInit): Player {
     slideAim: 0,
     airX: 0,
     airZ: 0,
+    vy: 0,
+    grounded: true,
+    support: 0,
+    airPeakY: 0,
+    mantleTicks: 0,
+    mantleFromX: 0,
+    mantleFromY: 0,
+    mantleFromZ: 0,
+    mantleToX: 0,
+    mantleToY: 0,
+    mantleToZ: 0,
+    fallDamage: 0,
     aim: 0,
     prevAim: 0,
     moving: false,
@@ -222,15 +236,17 @@ export function recordHistory(w: World, flagsFor: (p: Player) => number): void {
     if (p && !p.gone) {
       w.history[i] = p.x
       w.history[i + 1] = p.z
-      w.history[i + 2] = flagsFor(p)
+      w.history[i + 2] = p.y
+      w.history[i + 3] = flagsFor(p)
     } else {
-      w.history[i + 2] = 0
+      w.history[i + 3] = 0
     }
   }
 }
 
 export interface PastPose {
   x: number
+  y: number
   z: number
   flags: number
 }
@@ -243,21 +259,23 @@ export function poseAt(w: World, id: number, time: number): PastPose | null {
   const t0 = Math.floor(time)
   const frac = time - t0
   const i0 = histIndex(t0, id)
-  const flags = w.history[i0 + 2] ?? 0
+  const flags = w.history[i0 + 3] ?? 0
   if (flags === 0) {
     return null
   }
   const x0 = w.history[i0] ?? 0
   const z0 = w.history[i0 + 1] ?? 0
+  const y0 = w.history[i0 + 2] ?? 0
   if (frac <= 0 || t0 + 1 > w.tick) {
-    return { x: x0, z: z0, flags }
+    return { x: x0, y: y0, z: z0, flags }
   }
   const i1 = histIndex(t0 + 1, id)
-  if ((w.history[i1 + 2] ?? 0) === 0) {
-    return { x: x0, z: z0, flags }
+  if ((w.history[i1 + 3] ?? 0) === 0) {
+    return { x: x0, y: y0, z: z0, flags }
   }
   return {
     x: x0 + ((w.history[i1] ?? x0) - x0) * frac,
+    y: y0 + ((w.history[i1 + 2] ?? y0) - y0) * frac,
     z: z0 + ((w.history[i1 + 1] ?? z0) - z0) * frac,
     flags,
   }

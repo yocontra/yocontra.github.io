@@ -1,3 +1,4 @@
+// biome-ignore-all lint/style/noNestedTernary: stair/door directions read as small switches
 // biome-ignore-all lint/complexity/noExcessiveLinesPerFunction: buildTown wires the layers (structure, detail tiles, far batch, rooms) and their culling in one pass
 // biome-ignore-all lint/style/noExcessiveLinesPerFile: one town builder; the paint table and the per-feature builders share private helpers
 // biome-ignore-all lint/suspicious/noUnnecessaryConditions: array lookups narrowed by the layout's types
@@ -54,13 +55,26 @@ import { signAtlas } from '../../scene/textures.ts'
 import { attachArm } from '../../scene/town-pbr.ts'
 import {
   type Building,
-  buildingWalls,
+  buildingWallSpans,
   type Cover,
   type Rect,
   type Side,
   type TownLayout,
 } from '../sim/layout.ts'
 import { ROOF_WALKS } from '../sim/roofwalks.ts'
+import {
+  DOOR_FRAME_DEPTH,
+  DOOR_HEAD,
+  DOOR_JAMB,
+  doorTop,
+  SHOP_WINDOW_SCALE,
+  STOREY_H,
+  WALL_T,
+  WINDOW_LIFT,
+  WINDOW_SASH,
+  WINDOW_SCALE,
+  WINDOW_SILL,
+} from './building-rules.ts'
 import { addClockTower } from './clock-tower.ts'
 import {
   decks,
@@ -267,11 +281,6 @@ const DEFAULT_PAINT: Paint = PAINT.shed ?? (Object.values(PAINT)[0] as Paint)
 
 const WOOD = 0xb0_8a_60
 const DARK_WOOD = 0x6a_4c_34
-const WALL_T = 0.5
-/** Doorways wider than this get a timber lintel and jambs, not a stretched kit frame. */
-const WIDE_DOOR = 3.2
-/** Top of a doorway (the kit frame's lintel), m: the wall closes over it. */
-const DOOR_TOP = 2.45
 /** Furniture that stands against a wall and hides the inside of a window there. */
 const AGAINST_WALL = new Set(['shelves', 'stairs', 'piano', 'safe'])
 
@@ -787,29 +796,30 @@ function addWindows(
   const wide = kitDef('k_window_wide')
   for (let f = 0; f < floors; f++) {
     // sills at a rider's waist on the ground floor (windows sized to a 3.2 m storey, not a doll's)
-    const sill = 0.95 + f * 3.2
+    const sill = WINDOW_SILL + f * STOREY_H
     const shop = f === 0 && side === front && SHOPFRONT.has(b.kind) && wide
     const step = shop ? 3.8 : 3.0
     const span = shop ? 2.0 : 1.3
     for (let a = 1.2; a + span < len - 0.7; a += step) {
-      if (f === 0 && doors.some((d) => a + span > d.at - 0.5 && a < d.at + d.width + 0.5)) {
+      if (f === 0 && doors.some((d) => a + span > d.at - 0.7 && a < d.at + d.width + 0.7)) {
         continue
       }
       const win = shop ? wide : thin
       if (win) {
-        // the kit's sash sits 0.97 m above its origin; scaled up 1.3x to fit the storey
-        const s = shop ? 1.35 : 1.3
-        const at = onSide(b, side, a + span / 2, sill - 0.97 * s + 0.05)
+        // the kit's sash sits `WINDOW_SASH` above its origin; scale it to the storey
+        const s = shop ? SHOP_WINDOW_SCALE : WINDOW_SCALE
+        const y = sill - WINDOW_SASH * s + WINDOW_LIFT
+        const at = onSide(b, side, a + span / 2, y)
         at.multiply(new Matrix4().makeScale(s, s, 1))
         bs.kit.push({ def: win, at })
         // shutters, as on the duel street's upper windows: on every upper floor, and round the
         // houses' and barns' windows (never a shopfront's display glass)
         if (shutter && !shop && (f > 0 || !SHOPFRONT.has(b.kind)) && !bs.lean) {
-          const st = onSide(b, side, a + span / 2, sill - 0.97 * s + 0.05, -0.12)
+          const st = onSide(b, side, a + span / 2, y, -0.12)
           st.multiply(new Matrix4().makeScale(s, s, 1))
           bs.kit.push({ def: shutter, at: st })
         }
-        if (b.hollow && sill < ceilingHeight(b)) {
+        if (b.hollow && sill < b.height - 0.2) {
           // the same window seen from inside the room (the wall itself is solid)
           const [q] = faceQuad(b, side, a + span / 2, 0, 0, 1, -WALL_T)
           const hidden = against.some(
@@ -821,7 +831,7 @@ function addWindows(
               q.z < c.z + c.d + span / 2 + 0.3,
           )
           if (q && !hidden) {
-            const inner = placeMatrix(q.x, sill - 0.97 * s + 0.05, q.z, SIDE_RY[side] + Math.PI)
+            const inner = placeMatrix(q.x, y, q.z, SIDE_RY[side] + Math.PI)
             inner.multiply(new Matrix4().makeScale(s, s, 1))
             if (bs.lean) {
               // floor tier: the inside of a window is two flat quads
@@ -842,53 +852,42 @@ function addWindows(
   }
 }
 
-/** A dark-wood frame round every doorway, standing on the porch deck where there is one. */
+/**
+ * A dark-wood frame round every doorway. Built from jambs and a lintel rather than stretching the
+ * 2.30 m kit frame over a 2.45 m opening: the frame now reaches the wall over the door exactly,
+ * on every side and every door width.
+ */
 function addDoorFrames(bs: Builders, b: Building, porch: Side | null): void {
-  const frame = kitDef('k_doorframe')
-  if (!frame) {
-    return
-  }
   for (const d of b.doors) {
-    const y = d.side === porch ? PORCH_DECK : 0
-    if (d.width > WIDE_DOOR) {
-      // a barn or forge opening: heavy jambs and a lintel beam, both faces
-      for (const out of [0.06, -WALL_T - 0.06]) {
-        const [q0, q1] = faceQuad(b, d.side, d.at - 0.12, d.at + d.width + 0.12, 0, 1, out)
-        if (!(q0 && q1)) {
-          continue
-        }
-        const along = d.side === 'n' || d.side === 's'
-        const top = DOOR_TOP + 0.6
-        bs.wood.box(
-          (q0.x + q1.x) / 2,
-          top + 0.15,
-          (q0.z + q1.z) / 2,
-          along ? d.width + 0.5 : 0.14,
-          0.3,
-          along ? 0.14 : d.width + 0.5,
-          DARK_WOOD,
-        )
-        for (const a of [d.at - 0.1, d.at + d.width + 0.1]) {
-          const [q] = faceQuad(b, d.side, a, a, 0, 1, out)
-          if (q) {
-            bs.wood.box(
-              q.x,
-              (y + top) / 2,
-              q.z,
-              along ? 0.2 : 0.14,
-              top - y,
-              along ? 0.14 : 0.2,
-              DARK_WOOD,
-            )
-          }
-        }
-      }
-      continue
+    const base = d.side === porch ? PORCH_DECK : 0
+    const top = doorTop(d.width)
+    const along = d.side === 'n' || d.side === 's'
+    const cx = along ? b.x + d.at + d.width / 2 : b.x + b.w / 2
+    const cz = along ? b.z + b.d / 2 : b.z + d.at + d.width / 2
+    const zWall = d.side === 'n' ? b.z + DOOR_FRAME_DEPTH / 2 : b.z + b.d - DOOR_FRAME_DEPTH / 2
+    const xWall = d.side === 'w' ? b.x + DOOR_FRAME_DEPTH / 2 : b.x + b.w - DOOR_FRAME_DEPTH / 2
+    // jambs, one each side of the opening
+    for (const a of [d.at - DOOR_JAMB / 2, d.at + d.width + DOOR_JAMB / 2]) {
+      bs.wood.box(
+        along ? b.x + a : xWall,
+        (base + top) / 2,
+        along ? zWall : b.z + a,
+        along ? DOOR_JAMB : DOOR_FRAME_DEPTH,
+        top - base,
+        along ? DOOR_FRAME_DEPTH : DOOR_JAMB,
+        DARK_WOOD,
+      )
     }
-    const at = onSide(b, d.side, d.at + d.width / 2, y, 0.02)
-    // the kit frame is 1.57 m wide: stretch it to the doorway
-    at.multiply(new Matrix4().makeScale(Math.max(0.8, (d.width + 0.4) / 1.57), 1, 1))
-    bs.kit.push({ def: frame, at })
+    // lintel: its underside is the opening's top, so there is no gap
+    bs.wood.box(
+      along ? cx : xWall,
+      top + DOOR_HEAD / 2,
+      along ? zWall : cz,
+      along ? d.width + DOOR_JAMB * 2 : DOOR_FRAME_DEPTH,
+      DOOR_HEAD,
+      along ? DOOR_FRAME_DEPTH : d.width + DOOR_JAMB * 2,
+      DARK_WOOD,
+    )
   }
 }
 
@@ -903,26 +902,83 @@ export function ceilingHeight(b: Building): number {
  * over you) back-face culling hides it, so the top-down view is unchanged. Joists run across.
  */
 function addCeiling(bs: Builders, b: Building): void {
-  const y = ceilingHeight(b)
+  const room = bs.room(b.id)
   const cx = b.x + b.w / 2
   const cz = b.z + b.d / 2
   const iw = b.w - WALL_T * 2
   const id = b.d - WALL_T * 2
   const only = { skip: ['top', 'px', 'nx', 'pz', 'nz'] }
-  const room = bs.room(b.id)
+  if (b.floors > 1 && b.upperFloor && b.upperFloor.length > 0) {
+    // A real second floor: boards you can walk on, a ceiling above, and the stair opening.
+    for (const f of b.upperFloor) {
+      room.wood.box(f.x + f.w / 2, f.y - 0.05, f.z + f.d / 2, f.w, 0.1, f.d, 0x9a_7a_58, {
+        skip: ['bottom'],
+      })
+    }
+    addStairs(bs, b)
+    addFlatCeiling(room, b, b.height - 0.05, iw, id, cx, cz, bs.lean)
+    return
+  }
+  addFlatCeiling(room, b, ceilingHeight(b), iw, id, cx, cz, bs.lean, only)
+}
+
+/** The plank ceiling (and its joists) at one height. */
+function addFlatCeiling(
+  room: Builders,
+  b: Building,
+  y: number,
+  iw: number,
+  id: number,
+  cx: number,
+  cz: number,
+  lean: boolean,
+  only: { skip?: string[] } = {},
+): void {
   room.wood.box(cx, y, cz, iw, 0.02, id, 0x8a_6a_4a, only)
-  if (bs.lean) {
+  if (lean) {
     return
   }
   const alongX = iw <= id
   const span = alongX ? id : iw
   for (let a = 1.2; a < span - 0.6; a += 1.8) {
-    // joists: their undersides and sides only (no top face to show from above)
     const jx = alongX ? cx : b.x + WALL_T + a
     const jz = alongX ? b.z + WALL_T + a : cz
     room.wood.box(jx, y - 0.1, jz, alongX ? iw : 0.14, 0.18, alongX ? 0.14 : id, DARK_WOOD, {
       skip: ['top'],
     })
+  }
+}
+
+/** Steps and a handrail for a real second floor. */
+function addStairs(bs: Builders, b: Building): void {
+  const room = bs.room(b.id)
+  for (const st of b.stairs ?? []) {
+    const rise = st.toY - st.fromY
+    const steps = Math.max(4, Math.ceil(Math.abs(rise) / 0.22))
+    const along = st.dir === 'n' || st.dir === 's'
+    const run = along ? st.d : st.w
+    const depth = run / steps
+    const width = along ? st.w : st.d
+    for (let i = 0; i < steps; i++) {
+      const t0 = i / steps
+      const y = st.fromY + rise * (t0 + 1 / steps)
+      const x = along
+        ? st.x + st.w / 2
+        : st.dir === 'e'
+          ? st.x + run * (t0 + 1 / steps)
+          : st.x + run * (1 - t0 - 1 / steps)
+      const z = along
+        ? st.dir === 's'
+          ? st.z + run * (t0 + 1 / steps)
+          : st.z + run * (1 - t0 - 1 / steps)
+        : st.z + st.d / 2
+      room.wood.box(x, y - 0.06, z, along ? width : depth, 0.12, along ? depth : width, 0x9a_7a_58)
+    }
+    // a handrail on the open side, so the stair reads and you can catch the edge
+    const railY = (st.fromY + st.toY) / 2 + 0.95
+    const railX = st.dir === 'e' ? st.x + st.w / 2 : st.dir === 'w' ? st.x + st.w / 2 : st.x + 0.08
+    const railZ = st.dir === 's' ? st.z + st.d / 2 : st.dir === 'n' ? st.z + st.d / 2 : st.z + 0.08
+    room.wood.box(railX, railY, railZ, along ? 0.08 : st.w, 0.08, along ? st.d : 0.08, DARK_WOOD)
   }
 }
 
@@ -1005,13 +1061,16 @@ function addFacadeTrim(bs: Builders, b: Building, p: Paint, front: Side): void {
 /** A closed plank door on the front of a building you can't go into, so it never reads as a box. */
 function addClosedDoor(bs: Builders, b: Building, front: Side): void {
   const door = kitDef('k_door_plank')
-  const frame = kitDef('k_doorframe')
-  if (!(door && frame)) {
+  if (!door) {
     return
   }
-  const a = sideLength(b, front) / 2
-  bs.kit.push({ def: frame, at: onSide(b, front, a, 0, 0.02) })
-  bs.kit.push({ def: door, at: onSide(b, front, a, 0, 0.03) })
+  const width = 1.4
+  const a = sideLength(b, front) / 2 - width / 2
+  addDoorFrames(bs, { ...b, doors: [{ side: front, at: a, width }] }, null)
+  // Fit the native 1.118 × 2.092 leaf to the opening.
+  const at = onSide(b, front, a + width / 2, 0.04, 0.04)
+  at.multiply(new Matrix4().makeScale(width / 1.118, (doorTop(width) - 0.12) / 2.092, 1))
+  bs.kit.push({ def: door, at })
 }
 
 function addBuilding(bs: Builders, b: Building, layout: TownLayout, id: number): void {
@@ -1027,15 +1086,17 @@ function addBuilding(bs: Builders, b: Building, layout: TownLayout, id: number):
     addClockTower(bs, b, id, layout.buildings)
     return
   }
-  for (const w of buildingWalls(b)) {
-    g.box(w.x + w.w / 2, h / 2, w.z + w.d / 2, w.w, h, w.d, p.wall)
+  for (const w of buildingWallSpans(b)) {
+    const y0 = w.y0 ?? 0
+    const y1 = w.y1 ?? h
+    g.box(w.x + w.w / 2, (y0 + y1) / 2, w.z + w.d / 2, w.w, y1 - y0, w.d, p.wall)
   }
   // the wall over every doorway (the collision gap runs full height; the opening doesn't)
   for (const d of b.doors) {
     const [q0, q1] = faceQuad(b, d.side, d.at, d.at + d.width, 0, 1, -WALL_T / 2)
     if (q0 && q1) {
       const along = d.side === 'n' || d.side === 's'
-      const y0 = DOOR_TOP + (d.width > WIDE_DOOR ? 0.6 : 0)
+      const y0 = doorTop(d.width)
       g.box(
         (q0.x + q1.x) / 2,
         (y0 + h) / 2,

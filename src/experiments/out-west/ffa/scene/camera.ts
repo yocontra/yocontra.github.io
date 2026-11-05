@@ -66,7 +66,7 @@ export class TopDownCamera {
   }
 
   /** Follow the player with a little look-ahead toward where they aim. */
-  update(px: number, pz: number, aimX: number, aimZ: number, dt: number): void {
+  update(px: number, pz: number, aimX: number, aimZ: number, dt: number, py = 0): void {
     const k = 1 - Math.exp(-dt * 3)
     this.lead.x += (aimX * this.reach.x - this.lead.x) * k
     this.lead.z += (aimZ * this.reach.z - this.lead.z) * k
@@ -79,19 +79,20 @@ export class TopDownCamera {
     const ox = Math.sin(this.shake.t * 61) * s
     const oz = Math.cos(this.shake.t * 47) * s
     const d = this.distance
+    const y = AIM_Y + py
     this.camera.position.set(
       this.target.x + ox,
-      AIM_Y + Math.sin(PITCH) * d,
+      y + Math.sin(PITCH) * d,
       this.target.z + Math.cos(PITCH) * d + oz,
     )
-    this.camera.lookAt(tmp.set(this.target.x + ox, AIM_Y, this.target.z + oz))
+    this.camera.lookAt(tmp.set(this.target.x + ox, y, this.target.z + oz))
   }
 
   /** Snap without easing (spawn, respawn), already leading toward the aim (unit x, z). */
-  snap(px: number, pz: number, aimX = 0, aimZ = 0): void {
+  snap(px: number, pz: number, aimX = 0, aimZ = 0, py = 0): void {
     this.lead.set(aimX * this.reach.x, 0, aimZ * this.reach.z)
     this.target.set(px + this.lead.x, 0, pz + this.lead.z)
-    this.update(px, pz, aimX, aimZ, 0)
+    this.update(px, pz, aimX, aimZ, 0, py)
   }
 }
 

@@ -24,7 +24,10 @@ type Shot = Extract<SimEvent, { type: 'shot' }>
 type Kill = Extract<SimEvent, { type: 'kill' }>
 
 /** Press fire on every other tick (press, release). */
-const spam = (aim: number) => (t: number) => ({ aim, buttons: t % 2 === 0 ? BTN_FIRE : 0 })
+const spam = (aim: number) => (t: number) => ({
+  aim,
+  buttons: t % 2 === 0 ? BTN_FIRE | BTN_AIM : BTN_AIM,
+})
 
 function duel() {
   const w = testWorld()
@@ -109,7 +112,7 @@ describe('revolver', () => {
 
   it('regenerates 12 HP/s after 5 s without damage', () => {
     const { w, a, b, aim } = duel()
-    run(w, 1, { [a.id]: () => ({ aim, buttons: BTN_FIRE }) })
+    run(w, 1, { [a.id]: () => ({ aim, buttons: BTN_FIRE | BTN_AIM }) })
     expect(b.hp).toBe(66)
     run(w, REGEN_DELAY_TICKS + 20)
     expect(b.hp).toBeGreaterThan(66 + 10)
@@ -223,7 +226,7 @@ describe('lag compensation', () => {
     run(w, 6, { [b.id]: () => ({ moveZ: -127 }) })
     const seenAt = w.tick - 4
     const aim = aimAt(a, { x: 30, z: 64 - 0.275 * (seenAt + 1) })
-    run(w, 1, { [a.id]: () => ({ aim, buttons: BTN_FIRE, viewTime: seenAt }) })
+    run(w, 1, { [a.id]: () => ({ aim, buttons: BTN_FIRE | BTN_AIM, viewTime: seenAt }) })
     expect(b.hp).toBe(MAX_HP - 34)
   })
 

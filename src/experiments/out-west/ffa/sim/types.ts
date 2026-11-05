@@ -58,6 +58,24 @@ export interface MoveState {
   /** Velocity in the air (m per tick, whole centimetres): kept from take-off, steered a little. */
   airX: number
   airZ: number
+  /** Vertical velocity, m/s (positive up). */
+  vy: number
+  /** Feet are on a surface this tick. */
+  grounded: boolean
+  /** Height of the surface under the feet, metres. */
+  support: number
+  /** Highest point since leaving the ground, for fall damage. */
+  airPeakY: number
+  /** A committed ledge pull-up. */
+  mantleTicks: number
+  mantleFromX: number
+  mantleFromY: number
+  mantleFromZ: number
+  mantleToX: number
+  mantleToY: number
+  mantleToZ: number
+  /** Damage from the last landing, for the world to apply (0 when none). */
+  fallDamage: number
 }
 
 export interface Channel {
@@ -223,6 +241,8 @@ export type SimEvent =
       flags: number
       x: number
       z: number
+      /** Height of the impact, decimetres. */
+      y: number
     }
   | { type: 'damage'; victim: number; attacker: number; amount: number; hp: number }
   | { type: 'kill'; victim: number; killer: number; flags: number; bounty: number }

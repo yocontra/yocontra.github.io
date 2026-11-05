@@ -47,7 +47,7 @@
  * | Section | Layout |
  * |---|---|
  * | Header (11 B) | `u8 MSG_SNAPSHOT`, `u32 tick`, `u16 lastInputSeq`, `i8 inputLead`, `u8 flags` (`SNAP_*`), `u8 entityCount`, `u8 removedCount` |
- * | Self (59 B) | `u16 x`, `u16 z`, `u16 y` (cm), `u8 roof` (0 street, n = deck n), `u8 climbTicks`, `u8 climbDeck`, `i8 climbDir`, `u8 fallTicks`, `u8 fallTotal`, `u16 fallFromX`, `u16 fallFromZ`, `u8 fallFromY` (dm), `u16 fallToX`, `u16 fallToZ` (cm), `u8 hp`, `u8 ammo`, `u8 selfFlags` (`SELF_*`), `u8 rollTicks`, `u8 rollCooldown`, `u16 rollDir`, `u8 reloadTicks`, `u8 fireCooldown` (ms ÷ 4), `u8 protectTicks`, `u8 deadEyeTicks`, `u8 channelKind` (`CHANNEL_*`), `u8 channelTicks`, `u32 carried`, `u8 respawnTicks`, `u8 holsterTicks`, `u16 lastButtons`, `u8 weapon` (`selfWeapon()`: bits 0–1 `WEAPON_*`, bits 2–4 pickup-weapon rounds, bit 5 holding dynamite; 0 = plain revolver), `u8 jumpTicks`, `u8 jumpCooldown`, `u8 vaultStep` (cm per tick; 0 = a hop), `u16 vaultAim`, `u8 moveFlags` (`MOVE_*`), `u8 sprintLock`, `u8 sprintOut`, `u8 slideTicks`, `u8 slideCooldown`, `u16 slideAim`, `i8 airX`, `i8 airZ` (cm per tick) |
+ * | Self (66 B) | `u16 x`, `u16 z`, `u16 y` (cm), `u8 roof` (0 street, n = deck n), `u8 climbTicks`, `u8 climbDeck`, `i8 climbDir`, `u8 fallTicks`, `u8 fallTotal`, `u16 fallFromX`, `u16 fallFromZ`, `u8 fallFromY` (dm), `u16 fallToX`, `u16 fallToZ` (cm), `u8 hp`, `u8 ammo`, `u8 selfFlags` (`SELF_*`), `u8 rollTicks`, `u8 rollCooldown`, `u16 rollDir`, `u8 reloadTicks`, `u8 fireCooldown` (ms ÷ 4), `u8 protectTicks`, `u8 deadEyeTicks`, `u8 channelKind` (`CHANNEL_*`), `u8 channelTicks`, `u32 carried`, `u8 respawnTicks`, `u8 holsterTicks`, `u16 lastButtons`, `u8 weapon` (`selfWeapon()`: bits 0–1 `WEAPON_*`, bits 2–4 pickup-weapon rounds, bit 5 holding dynamite; 0 = plain revolver), `u8 jumpTicks`, `u8 jumpCooldown`, `u8 vaultStep` (cm per tick; 0 = a hop), `u16 vaultAim`, `u8 moveFlags` (`MOVE_*`), `u8 sprintLock`, `u8 sprintOut`, `u8 slideTicks`, `u8 slideCooldown`, `u16 slideAim`, `i8 airX`, `i8 airZ` (cm per tick), `i8 vy` (dm/s), `u8 grounded`, `u16 support` (cm), `u16 airPeakY` (cm), `u8 mantleTicks` |
  * | Removed | `removedCount × u8 id` (left interest or left the lobby) |
  * | Entities | `entityCount ×` entity record |
  * | Town (if `SNAP_TOWN`) | `u8 mostWantedId` (255 none), `u8 mwX`, `u8 mwZ` (0.6 m units), `u8 strongboxSpot` (255 none), `u16 strongboxValue`, `u8 strongboxState` (`BOX_*`), `u8 players`, `u32 banked` (this player's wallet, as last confirmed) |
@@ -101,10 +101,13 @@ import { reopensOn } from '../data/sinks.ts'
  *    nibble and the stance bits (`STANCE_*`) above it; `ANIM_SLIDE`.
  * 6: aim pitch, for the riders' upper bodies (cosmetic: hits stay yaw-only): input frames end with
  *    `i8 pitch` (10 B a frame) and entities carry it under `ENT_PITCH` (`i8`, ±127 = ±90°).
+ * 7: 2.5D collision: the self block grows by 7 bytes (`i8 vy` dm/s, `u8 grounded`,
+ *    `u16 support` cm, `u16 airPeakY` cm, `u8 mantleTicks`); hits use the full pitch.
+ * 8: nothing further; kept for a clean cutover with v7 clients.
  */
-export const CONTRACT_VERSION = 7
+export const CONTRACT_VERSION = 8
 /** The binary Frontier wire format this build speaks (`TownJoinRequest.wire`). */
-export const TOWN_WIRE_VERSION = 7
+export const TOWN_WIRE_VERSION = 8
 
 // --- saddlebags ----------------------------------------------------------------------------------
 
@@ -236,7 +239,7 @@ export const INPUT_HEADER_BYTES = 7
 export const INPUT_FRAME_BYTES = 10
 export const MAX_FRAMES_PER_INPUT = 4
 export const SNAPSHOT_HEADER_BYTES = 11
-export const SNAPSHOT_SELF_BYTES = 59
+export const SNAPSHOT_SELF_BYTES = 66
 /** `inputLead` when no input message arrived since the previous snapshot. */
 export const INPUT_LEAD_NONE = -128
 
@@ -391,7 +394,7 @@ export const EV_DYNAMITE_THROWN = 20
 export const EV_EXPLOSION = 21
 
 export const EVENT_SIZES: Readonly<Record<number, number>> = {
-  [EV_SHOT]: 6,
+  [EV_SHOT]: 7,
   [EV_DAMAGE]: 4,
   [EV_KILL]: 5,
   [EV_BAG_DROP]: 10,

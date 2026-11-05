@@ -175,6 +175,16 @@ export interface SelfView {
   /** Velocity in the air, centimetres per tick. */
   airX: number
   airZ: number
+  /** Vertical velocity, decimetres per second. */
+  vy: number
+  /** Feet on a surface (1) or in the air (0). */
+  grounded: number
+  /** Height of the surface under the feet, centimetres. */
+  support: number
+  /** Highest point since leaving the ground, centimetres. */
+  airPeakY: number
+  /** Ticks left on a committed mantle. */
+  mantleTicks: number
 }
 
 export interface TownView {
@@ -348,6 +358,11 @@ function writeSelf(w: Writer, s: SelfView): void {
     .u16(s.slideAim)
     .i8(s.airX)
     .i8(s.airZ)
+    .i8(clampI8(Math.round(s.vy * 10)))
+    .u8(s.grounded)
+    .u16(clampU16(s.support * 100))
+    .u16(clampU16(s.airPeakY * 100))
+    .u8(clampU8(s.mantleTicks))
 }
 
 function readSelf(r: Reader): SelfView {
@@ -395,6 +410,11 @@ function readSelf(r: Reader): SelfView {
     slideAim: r.u16(),
     airX: r.i8(),
     airZ: r.i8(),
+    vy: r.i8() / 10,
+    grounded: r.u8(),
+    support: r.u16() / 100,
+    airPeakY: r.u16() / 100,
+    mantleTicks: r.u8(),
   }
   return s
 }

@@ -1,6 +1,7 @@
 import { describe, expect, test as it } from 'bun:test'
 import {
   BAG_STYLES,
+  BTN_AIM,
   BTN_FIRE,
   BTN_LEAVE,
   bagStyleIndex,
@@ -31,7 +32,10 @@ import { disconnectPlayer } from '../../../src/experiments/out-west/ffa/sim/worl
 import { aimAt, place, run, runCollect, testWorld } from './test-helpers.ts'
 
 type Kill = Extract<SimEvent, { type: 'kill' }>
-const spam = (aim: number) => (t: number) => ({ aim, buttons: t % 2 === 0 ? BTN_FIRE : 0 })
+const spam = (aim: number) => (t: number) => ({
+  aim,
+  buttons: t % 2 === 0 ? BTN_FIRE | BTN_AIM : BTN_AIM,
+})
 const hold = (buttons: number) => () => ({ buttons })
 
 /** A kills B with revolver shots; returns the kill event. */

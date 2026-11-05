@@ -182,6 +182,31 @@ export function killPlayer(
   })
 }
 
+/** Apply a landing's fall damage. No attacker, no bounty: an environmental death. */
+export function applyFallDamage(w: World, target: Player, amount: number): boolean {
+  if (amount <= 0 || !target.alive) {
+    return false
+  }
+  const dealt = Math.min(target.hp, amount)
+  target.hp -= amount
+  target.lastDamageTick = w.tick
+  if (target.channel && target.channel.kind !== CHANNEL_NONE) {
+    cancelChannel(w, target)
+  }
+  w.events.push({
+    type: 'damage',
+    victim: target.id,
+    attacker: NONE,
+    amount: Math.round(dealt),
+    hp: Math.max(0, Math.ceil(target.hp)),
+  })
+  if (target.hp <= 0) {
+    killPlayer(w, target, NONE)
+    return true
+  }
+  return false
+}
+
 /** Apply hit damage. Returns true if the hit killed the target. */
 export function applyDamage(
   w: World,

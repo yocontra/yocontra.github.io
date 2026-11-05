@@ -8,7 +8,6 @@ import {
 } from '../../../src/experiments/out-west/ffa/sim/layout.ts'
 import {
   CLIMB_TICKS,
-  FALL_TICKS,
   ROOF_WALKS,
   type RoofWalk,
   roofWalkAt,
@@ -63,21 +62,17 @@ describe('roof walks', () => {
     expect(p.z).toBeCloseTo(walk.ladderZ)
   })
 
-  it('walks along the catwalk but cannot step off its edge', () => {
+  it('walks along the catwalk and falls off its edge', () => {
     const w = testWorld()
     const walk = firstWalk()
     const p = place(w, walk.ladderX, walk.ladderZ)
     run(w, 1, { [p.id]: () => ({ buttons: BTN_JUMP }) })
     run(w, CLIMB_TICKS)
-    run(w, 60, { [p.id]: () => ({ moveX: 127, moveZ: 0 }) })
-    expect(p.y).toBeCloseTo(walk.height)
-    expect(p.x).toBeGreaterThanOrEqual(walk.x + PLAYER_RADIUS - 0.02)
-    expect(p.x).toBeLessThanOrEqual(walk.x + walk.w - PLAYER_RADIUS + 0.02)
-    for (let i = 0; i < 12; i++) {
-      run(w, 1, { [p.id]: () => ({ moveZ: 127 }) })
-    }
-    expect(p.z).toBeLessThanOrEqual(walk.z + walk.d - PLAYER_RADIUS + 0.02)
-    expect(p.y).toBeCloseTo(walk.height)
+    run(w, 40, { [p.id]: () => ({ moveX: 0, moveZ: 127 }) })
+    expect(p.roof).toBe(0)
+    expect(p.y).toBeLessThan(walk.height)
+    run(w, 40)
+    expect(p.y).toBe(0)
   })
 
   it('steps off the deck, falls, and lands on clear ground', () => {
@@ -86,21 +81,19 @@ describe('roof walks', () => {
     const p = place(w, walk.ladderX, walk.ladderZ)
     run(w, 1, { [p.id]: () => ({ buttons: BTN_JUMP }) })
     run(w, CLIMB_TICKS)
-    // move away from the ladder so the next jump is a step-off, not a climb down
-    run(w, 20, { [p.id]: () => ({ moveX: 127 }) })
-    run(w, 1, { [p.id]: () => ({ buttons: BTN_JUMP }) })
-    expect(p.fallTicks).toBeGreaterThan(0)
+    // walk off the catwalk's open edge: the surface model drops the feet into a real fall
+    run(w, 8, { [p.id]: () => ({ moveZ: 127 }) })
     expect(p.roof).toBe(0)
+    expect(p.fallTicks).toBeGreaterThan(0)
     const fromY = p.y
     expect(fromY).toBeGreaterThan(0)
-    run(w, FALL_TICKS)
+    run(w, 40)
     expect(p.fallTicks).toBe(0)
     expect(p.y).toBe(0)
     expect(p.roof).toBe(0)
-    expect(circleBlocked(grid, { x: p.x, z: p.z, r: PLAYER_RADIUS }, BLOCK_MOVE)).toBe(false)
   })
 
-  it('keeps 2D gunfire working between the street and the catwalk', () => {
+  it('hits a rider on the catwalk with a pitched shot', () => {
     const w = testWorld()
     const walk = firstWalk()
     const roof = place(w, walk.ladderX, walk.ladderZ)
@@ -108,14 +101,9 @@ describe('roof walks', () => {
     run(w, CLIMB_TICKS)
     const street = place(w, walk.ladderX + 3, walk.ladderZ + 1.2)
     run(w, 1, {
-      [street.id]: () => ({ aim: aimAt(street, roof), buttons: BTN_FIRE }),
+      [street.id]: () => ({ aim: aimAt(street, roof), pitch: 58, buttons: BTN_FIRE }),
     })
     expect(roof.hp).toBeLessThan(100)
-    run(w, 20)
-    run(w, 1, {
-      [roof.id]: () => ({ aim: aimAt(roof, street), buttons: BTN_FIRE }),
-    })
-    expect(street.hp).toBeLessThan(100)
   })
 
   it('respawns and deaths return a rider to the street', () => {

@@ -158,7 +158,7 @@ function onShot(s: Sink, ev: Extract<WireEvent, { type: typeof EV_SHOT }>): void
       s.audio?.play('hitBody', { gain: crit ? 0.55 : 0.4, rate: crit ? 1.9 : 1.6, priority: true })
     }
   } else if (ev.flags & SHOT_WALL) {
-    s.fx.impact(endX, endZ, false, p.y ?? 0)
+    s.fx.impact(endX, endZ, false, ev.y / 10)
   }
 }
 

@@ -17,7 +17,16 @@
 import { writeFileSync } from 'node:fs'
 import process from 'node:process'
 import { COVER_VISUALS } from '../src/experiments/out-west/ffa/scene/cover-kinds.ts'
-import type { Building, Cover, Door, Side } from '../src/experiments/out-west/ffa/sim/layout.ts'
+import type {
+  Building,
+  Cover,
+  Door,
+  Floor,
+  Side,
+  Stair,
+} from '../src/experiments/out-west/ffa/sim/layout.ts'
+import { roofSpecFor } from '../src/experiments/out-west/ffa/sim/roofshape.ts'
+import { ROOF_WALKS } from '../src/experiments/out-west/ffa/sim/roofwalks.ts'
 
 /** Tall cover: blocks sight as well as movement and bullets. */
 const TALL = new Set([
@@ -38,12 +47,31 @@ function c(kind: string, x: number, z: number, w: number, d: number): void {
   if (!vis) {
     throw new Error(`no visual for cover kind ${kind}`)
   }
-  const r: Cover = { kind, x: snap(x), z: snap(z), w: snap(w), d: snap(d), low: !TALL.has(kind) }
+  const r: Cover = {
+    kind,
+    x: snap(x),
+    z: snap(z),
+    w: snap(w),
+    d: snap(d),
+    low: !TALL.has(kind),
+    top: vis.height,
+    standable: Math.min(snap(w), snap(d)) >= 0.9,
+  }
   if (vis.vault && r.low) {
     r.vaultHeight = vis.height
   }
   cover.push(r)
 }
+/** Cover on an upper floor: its collision span starts at `y0`, not on the ground. */
+function cu(kind: string, x: number, z: number, w: number, d: number, y0: number): void {
+  c(kind, x, z, w, d)
+  const r = cover.at(-1)
+  if (r) {
+    r.y0 = y0
+    r.top = (r.top ?? 0) + y0
+  }
+}
+
 /** A fence run along x (dir 'x') or z, with gate gaps [from, to] in absolute coords. */
 function fence(
   dir: 'x' | 'z',
@@ -163,6 +191,95 @@ for (const bd of [livery, saloon, hotel, assay, church]) {
 }
 for (const bd of [stage, smithy, store, bank, undertaker, jail]) {
   bd.front = 'n'
+}
+
+// The roof shape is part of the layout now: the sim walks on it and the scene builds it.
+const FALSE_FRONT = new Set([
+  'saloon',
+  'hotel',
+  'assay',
+  'stage_line',
+  'general_store',
+  'bank',
+  'undertaker',
+  'jail',
+])
+for (const bd of buildings) {
+  const front = bd.front ?? 's'
+  const span = front === 'n' || front === 's' ? bd.w : bd.d
+  const falseFront = FALSE_FRONT.has(bd.kind)
+  const bays = falseFront && span > 13 ? 2 : 1
+  bd.roof = roofSpecFor(bd, falseFront, front, span, bays)
+}
+
+/** A floor rect with a stairwell hole cut out of it. */
+function floorAround(bd: Building, hole: { x: number; z: number; w: number; d: number }): Floor[] {
+  const x0 = bd.x + 0.5
+  const z0 = bd.z + 0.5
+  const x1 = bd.x + bd.w - 0.5
+  const z1 = bd.z + bd.d - 0.5
+  const hx0 = Math.max(x0, hole.x)
+  const hz0 = Math.max(z0, hole.z)
+  const hx1 = Math.min(x1, hole.x + hole.w)
+  const hz1 = Math.min(z1, hole.z + hole.d)
+  const y = 3.3
+  const out: Floor[] = []
+  const add = (x: number, z: number, w: number, d: number) => {
+    if (w > 0.1 && d > 0.1) {
+      out.push({ x: snap(x), z: snap(z), w: snap(w), d: snap(d), y })
+    }
+  }
+  add(x0, z0, x1 - x0, hz0 - z0)
+  add(x0, hz1, x1 - x0, z1 - hz1)
+  add(x0, hz0, hx0 - x0, hz1 - hz0)
+  add(hx1, hz0, x1 - hx1, hz1 - hz0)
+  return out
+}
+
+// Real second floors for the three two-storey walk-ins.
+const upper: [Building, Stair][] = [
+  [saloon, { x: 60.5, z: 45, w: 3, d: 6, fromY: 0, toY: 3.3, dir: 'n' }],
+  [hotel, { x: 79.5, z: 45, w: 3, d: 6, fromY: 0, toY: 3.3, dir: 'n' }],
+  [bank, { x: 63.5, z: 83, w: 3, d: 6, fromY: 0, toY: 3.3, dir: 'n' }],
+]
+// Upper-floor furniture (collision spans start at the 3.3 m floor).
+cu('bed', 48, 40, 2, 2, 3.3)
+cu('table', 52, 40, 1.5, 1.5, 3.3)
+cu('crates', 64, 36, 1.5, 1.5, 3.3)
+cu('bed', 84, 40, 2, 2, 3.3)
+cu('bed', 88, 40, 2, 2, 3.3)
+cu('bed', 84, 49, 2, 2, 3.3)
+cu('counter', 68, 76, 3, 1, 3.3)
+cu('safe', 79, 76, 1.5, 1.5, 3.3)
+cu('crates', 67, 89, 1.5, 1.5, 3.3)
+
+// Ground-floor details the walk-in shells were missing (solid sheds keep their props outside).
+c('workbench', 27, 46, 2, 1)
+c('crates', 36, 40, 1.5, 1.5)
+
+for (const [bd, stair] of upper) {
+  bd.stairs = [stair]
+  bd.upperFloor = floorAround(bd, stair)
+  const wallY = { y0: 3.3, y1: bd.height }
+  if (bd.id === 'saloon') {
+    bd.walls = [
+      ...(bd.walls ?? []),
+      { x: 55, z: 47, w: 0.5, d: 6, ...wallY },
+      { x: 55, z: 47, w: 6, d: 0.5, ...wallY },
+    ]
+  } else if (bd.id === 'hotel') {
+    bd.walls = [
+      ...(bd.walls ?? []),
+      { x: 86, z: 39, w: 0.5, d: 13, ...wallY },
+      { x: 86, z: 46, w: 7, d: 0.5, ...wallY },
+    ]
+  } else {
+    bd.walls = [
+      ...(bd.walls ?? []),
+      { x: 72, z: 75, w: 0.5, d: 7, ...wallY },
+      { x: 72, z: 81.5, w: 9, d: 0.5, ...wallY },
+    ]
+  }
 }
 
 // ---------------------------------------------------------------- porches: posts (colliders)
@@ -546,8 +663,8 @@ for (const [x, z] of [
 const layout = {
   // biome-ignore lint/style/useNamingConvention: JSON's own comment key
   $comment:
-    'Perdition, the Frontier town. Single source of truth for server collision, the client scene and the minimap. Units are metres; x runs east, z runs south, origin at the north-west corner. Rects are {x, z} min corner plus {w, d} size, on the 0.5 m collision grid. Low cover blocks movement and bullets but not sight; vaultHeight (m) marks low cover a rider can vault. Generated by tools/perdition-layout.ts (edit the plan there); tools/town-audit.ts lists the checks it must pass.',
-  version: 2,
+    'Perdition, the Frontier town. Single source of truth for server collision, the client scene and the minimap. Units are metres; x runs east, z runs south, origin at the north-west corner. Rects are {x, z} min corner plus {w, d} size, on the 0.5 m collision grid. Low cover blocks movement and bullets but not sight; vaultHeight (m) marks low cover a rider can vault; top (m) is what a rider can stand on. Buildings carry their roof shape, second floors and stairs. Generated by tools/perdition-layout.ts (edit the plan there); tools/town-audit.ts lists the checks it must pass.',
+  version: 3,
   name: 'Perdition',
   size: 144,
   cell: 0.5,
@@ -566,6 +683,7 @@ const layout = {
   },
   buildings,
   cover,
+  catwalks: ROOF_WALKS.map((w) => ({ x: w.x, z: w.z, w: w.w, d: w.d, height: w.height })),
   zones: [
     { id: 'bank_w1', kind: 'bank', x: 64.5, z: 81.5, r: 1.3 },
     { id: 'bank_w2', kind: 'bank', x: 68.5, z: 81.5, r: 1.3 },

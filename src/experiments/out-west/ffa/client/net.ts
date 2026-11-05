@@ -1,3 +1,4 @@
+// biome-ignore-all lint/style/noExcessiveLinesPerFile: prediction, reconciliation, interpolation and events are one netcode file
 // biome-ignore-all lint/suspicious/noUnnecessaryConditions: `haveSelf` flips on the first snapshot; Biome narrows it to its initialiser
 /**
  * The Frontier client netcode: send-on-change input (`InputBatcher`) paced by `TickClock`,
@@ -160,6 +161,18 @@ export class NetClient {
     slideAim: 0,
     airX: 0,
     airZ: 0,
+    vy: 0,
+    grounded: true,
+    support: 0,
+    airPeakY: 0,
+    mantleTicks: 0,
+    mantleFromX: 0,
+    mantleFromY: 0,
+    mantleFromZ: 0,
+    mantleToX: 0,
+    mantleToY: 0,
+    mantleToZ: 0,
+    fallDamage: 0,
   }
   readonly prev: MoveState = { ...this.pred }
   /** A trigger pull waiting out the sprint-to-fire delay (mirrors the server's `fireQueued`). */
@@ -395,6 +408,18 @@ export class NetClient {
       slideAim: s.slideAim,
       airX: s.airX / 100,
       airZ: s.airZ / 100,
+      vy: s.vy,
+      grounded: s.grounded !== 0,
+      support: s.support,
+      airPeakY: s.airPeakY,
+      mantleTicks: s.mantleTicks,
+      mantleFromX: 0,
+      mantleFromY: 0,
+      mantleFromZ: 0,
+      mantleToX: 0,
+      mantleToY: 0,
+      mantleToZ: 0,
+      fallDamage: 0,
     }
     const canMove =
       (s.flags & SELF_ALIVE) !== 0 && (s.flags & (SELF_FROZEN | SELF_IN_SHOWDOWN)) === 0

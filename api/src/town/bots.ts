@@ -24,7 +24,6 @@ import {
   BTN_THROW,
   NONE,
 } from '../../../src/experiments/out-west/contract/town.ts'
-import { hasLineOfSight } from '../../../src/experiments/out-west/ffa/sim/layout.ts'
 import { aimRadians, radiansToAim } from '../../../src/experiments/out-west/ffa/sim/move.ts'
 import { Rng } from '../../../src/experiments/out-west/ffa/sim/rng.ts'
 import {
@@ -32,9 +31,13 @@ import {
   dist2,
   type World,
 } from '../../../src/experiments/out-west/ffa/sim/state.ts'
+import { hasLineOfSight3D } from '../../../src/experiments/out-west/ffa/sim/surfaces.ts'
 import type { InputFrame, Player } from '../../../src/experiments/out-west/ffa/sim/types.ts'
 import { aimFor, type BotAim } from './bot-skill.ts'
 import { buildNav, findPath, type NavGrid } from './nav.ts'
+
+/** A rider's eye, for 3D sight checks. */
+const eyeOf = (p: Player) => ({ x: p.x, y: p.y + 1.45, z: p.z })
 
 const BANK_AT = 300
 /** Practice bots bank small carries, so the windows are busy and the town reads as alive. */
@@ -158,7 +161,7 @@ function pickTarget({ w, p, b, pack, grace, spare }: Scan): Player | null {
       continue
     }
     const d2 = dist2(p.x, p.z, q.x, q.z)
-    if (d2 < bestD && hasLineOfSight(w.grid, p, q)) {
+    if (d2 < bestD && hasLineOfSight3D(w.grid, eyeOf(p), eyeOf(q))) {
       bestD = d2
       best = q
     }
@@ -351,6 +354,14 @@ export class BotDirector {
     const d = Math.sqrt(dx * dx + dz * dz) || 1
     const offBy = this.track(w, b, q, { dx: q.x - p.x, dz: q.z - p.z })
     f.aim = radiansToAim(b.aimRad + b.wander)
+    // Aim pitch at the target's chest, so elevated riders are actually shootable.
+    const chest = q.y + 1.2
+    const eye = p.y + 1.45
+    const horiz = Math.hypot(q.x - p.x, q.z - p.z) || 1
+    f.pitch = Math.max(
+      -127,
+      Math.min(127, Math.round((Math.atan2(chest - eye, horiz) / (Math.PI / 2)) * 127)),
+    )
     // Strafe around the target, closing to ~10 m (straight at the spot it was last seen).
     if (this.rng.next() < 0.03) {
       b.strafe = -b.strafe
@@ -412,7 +423,7 @@ export class BotDirector {
     const old = b.target >= 0 ? w.players[b.target] : null
     const keep = (b.aim.range + 3) ** 2
     if (old?.alive && old.showdown < 0 && dist2(p.x, p.z, old.x, old.z) < keep) {
-      if (hasLineOfSight(w.grid, p, old)) {
+      if (hasLineOfSight3D(w.grid, eyeOf(p), eyeOf(old))) {
         if (!b.visible) {
           b.visible = true
           b.fireAt = Math.max(b.fireAt, w.tick + (b.aim.reactTicks >> 1))

@@ -15,7 +15,7 @@ import {
   WEAPON_RIFLE,
   WEAPON_SHOTGUN,
 } from '../../contract/town.ts'
-import { pressed, rewindTime, spreadFor, strike, traceTargets } from './combat.ts'
+import { pressed, rewindTime, shotRay, spreadFor, strike, traceTargets } from './combat.ts'
 import {
   DYNAMITE_DAMAGE,
   DYNAMITE_FUSE_TICKS,
@@ -35,11 +35,12 @@ import {
   TICK_MS,
 } from './constants.ts'
 import { applyDamage } from './death.ts'
-import { BLOCK_SHOT, BLOCK_SIGHT, hasLineOfSight, rayGrid } from './layout.ts'
+import { BLOCK_SIGHT, hasLineOfSight, rayGrid } from './layout.ts'
 import { aimRadians, inIframes, quantize, radiansToAim, vaulting } from './move.ts'
 import { hashSigned } from './rng.ts'
 import { bloomAfterShot } from './spread.ts'
 import { activePlayers, dist2, isProtected, type World } from './state.ts'
+import { rayWorld } from './surfaces.ts'
 import type { Player } from './types.ts'
 
 const DEG = Math.PI / 180
@@ -130,6 +131,7 @@ function shotEvent(w: World, p: Player, { angle, range, target, flags }: ShotTra
     flags,
     x: p.x,
     z: p.z,
+    y: Math.round((p.y + 1.2) * 10),
   })
 }
 
@@ -137,12 +139,13 @@ function fireRifle(w: World, p: Player, aim: number, viewTime: number): void {
   spend(w, p, RIFLE_FIRE_MS)
   const spread = spreadFor(p)
   p.bloom = bloomAfterShot(p.weapon, p.bloom)
-  const angle = aimRadians(aim) + hashSigned(w.seed, p.id, w.tick, p.stats.shots) * spread * DEG
-  const dx = Math.cos(angle)
-  const dz = Math.sin(angle)
-  const wall = rayGrid(w.grid, { ox: p.x, oz: p.z, dx, dz, maxDist: RIFLE_RANGE }, BLOCK_SHOT)
+  const jitter = hashSigned(w.seed, p.id, w.tick, p.stats.shots)
+  const angle = aimRadians(aim) + jitter * spread * DEG
+  const ray = shotRay(p, aim, jitter * spread * DEG, jitter * spread * DEG * 0.6)
+  const world = rayWorld(w.grid, ray.ox, ray.oy, ray.oz, ray.dx, ray.dy, ray.dz, RIFLE_RANGE)
+  const wall = world?.dist ?? RIFLE_RANGE
   const time = rewindTime(w, viewTime)
-  const hit = traceTargets(w, p, { dx, dz, maxT: wall }, time)
+  const hit = traceTargets(w, p, { ...ray, maxT: wall }, time)
   let flags = SHOT_RIFLE
   if (hit) {
     flags |= SHOT_HIT
@@ -164,11 +167,10 @@ function fireShotgun(w: World, p: Player, aim: number, viewTime: number): void {
     // An even fan with a little jitter, so the pattern is fair but not a fixed comb.
     const lane = (i / (SHOTGUN_PELLETS - 1) - 0.5) * cone
     const jitter = hashSigned(w.seed, p.id, w.tick, i) * (cone / SHOTGUN_PELLETS / 2)
-    const angle = base + (lane + jitter) * DEG
-    const dx = Math.cos(angle)
-    const dz = Math.sin(angle)
-    const wall = rayGrid(w.grid, { ox: p.x, oz: p.z, dx, dz, maxDist: SHOTGUN_RANGE }, BLOCK_SHOT)
-    const hit = traceTargets(w, p, { dx, dz, maxT: wall }, time)
+    const ray = shotRay(p, aim, (lane + jitter) * DEG, jitter * DEG * 0.4)
+    const world = rayWorld(w.grid, ray.ox, ray.oy, ray.oz, ray.dx, ray.dy, ray.dz, SHOTGUN_RANGE)
+    const wall = world?.dist ?? SHOTGUN_RANGE
+    const hit = traceTargets(w, p, { ...ray, maxT: wall }, time)
     if (hit) {
       damage.set(hit.id, (damage.get(hit.id) ?? 0) + SHOTGUN_PELLET_DAMAGE)
     }

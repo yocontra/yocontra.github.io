@@ -15,6 +15,8 @@ import {
   WEAPON_REVOLVER,
 } from '../../contract/town.ts'
 import {
+  BODY_HEIGHT,
+  CROUCH_HEIGHT,
   DEAD_EYE_CLOSE_TICKS,
   DEAD_EYE_MULTIPLIER,
   DEAD_EYE_WINDOW_TICKS,
@@ -30,18 +32,19 @@ import {
   TICK_MS,
 } from './constants.ts'
 import { applyDamage } from './death.ts'
-import { BLOCK_SHOT, rayGrid } from './layout.ts'
-import { aimRadians, airborne, climbing, falling, radiansToAim, sliding, vaulting } from './move.ts'
+import { aimRadians, airborne, climbing, radiansToAim, sliding, vaulting } from './move.ts'
 import { hashSigned } from './rng.ts'
 import { bloomAfterShot, settleBloom, spreadDeg } from './spread.ts'
 import {
   HIST_ALIVE,
+  HIST_CROUCHED,
   HIST_IFRAMES,
   HIST_PROTECTED,
   HIST_SHOWDOWN,
   poseAt,
   type World,
 } from './state.ts'
+import { rayWorld } from './surfaces.ts'
 import type { Player } from './types.ts'
 
 const REWIND_TICKS = MAX_REWIND_MS / TICK_MS
@@ -109,15 +112,53 @@ export interface Strike {
   aim: number
 }
 
+/** The shooter's eye height, metres above the feet. */
+export const eyeHeight = (p: Player): number => (p.crouched ? CROUCH_HEIGHT : BODY_HEIGHT) - 0.18
+
+export interface ShotRay {
+  ox: number
+  oy: number
+  oz: number
+  dx: number
+  dy: number
+  dz: number
+  maxT: number
+}
+
+/** A pitch in wire units (±127 = ±90°) as radians. */
+export const pitchRadians = (pitch: number): number => (pitch / 127) * (Math.PI / 2)
+
+/** A shot ray from the shooter's eye along `aim` and their pitch, with a yaw/pitch spread. */
+export function shotRay(p: Player, aim: number, yawSpread = 0, pitchSpread = 0): ShotRay {
+  const yaw = aimRadians(aim) + yawSpread
+  const pitch = pitchRadians(p.pitch) + pitchSpread
+  const cp = Math.cos(pitch)
+  return {
+    ox: p.x,
+    oy: p.y + eyeHeight(p),
+    oz: p.z,
+    dx: Math.cos(yaw) * cp,
+    dy: Math.sin(pitch),
+    dz: Math.sin(yaw) * cp,
+    maxT: MAX_RANGE,
+  }
+}
+
 /** Ray against every other player's rewound capsule. Returns the nearest hit before `maxT`. */
 export function traceTargets(
   w: World,
   shooter: Player,
-  { dx, dz, maxT }: { dx: number; dz: number; maxT: number },
+  { ox, oy, oz, dx, dy, dz, maxT }: ShotRay,
   time: number,
 ): { id: number; t: number } | null {
   let best: { id: number; t: number } | null = null
   const r2 = PLAYER_RADIUS * PLAYER_RADIUS
+  const planar = Math.hypot(dx, dz)
+  if (planar < 1e-6) {
+    return null
+  }
+  const pdx = dx / planar
+  const pdz = dz / planar
   for (const target of w.players) {
     if (!target || target.gone || target.id === shooter.id) {
       continue
@@ -131,20 +172,26 @@ export function traceTargets(
     ) {
       continue
     }
-    const ox = pose.x - shooter.x
-    const oz = pose.z - shooter.z
-    const along = ox * dx + oz * dz
+    const cx = pose.x - ox
+    const cz = pose.z - oz
+    const along = cx * pdx + cz * pdz
     if (along <= 0) {
       continue
     }
-    const perp2 = ox * ox + oz * oz - along * along
+    const perp2 = cx * cx + cz * cz - along * along
     if (perp2 > r2) {
       continue
     }
-    const t = along - Math.sqrt(r2 - perp2)
-    if (t < (best?.t ?? maxT)) {
-      best = { id: target.id, t: Math.max(0, t) }
+    const t = (along - Math.sqrt(r2 - perp2)) / planar
+    if (t < 0 || t >= (best?.t ?? maxT)) {
+      continue
     }
+    const hitY = oy + dy * t
+    const height = pose.flags & HIST_CROUCHED ? CROUCH_HEIGHT : BODY_HEIGHT
+    if (hitY < pose.y - 0.05 || hitY > pose.y + height + 0.05) {
+      continue
+    }
+    best = { id: target.id, t }
   }
   return best
 }
@@ -188,12 +235,12 @@ export function fire(w: World, p: Player, aim: number, viewTime: number): ShotRe
   p.stats.shots++
   const spread = deadEye ? 0 : spreadFor(p)
   p.bloom = bloomAfterShot(p.weapon, p.bloom)
-  const angle = aimRadians(aim) + hashSigned(w.seed, p.id, w.tick, p.stats.shots) * spread * DEG
-  const dx = Math.cos(angle)
-  const dz = Math.sin(angle)
-  const wall = rayGrid(w.grid, { ox: p.x, oz: p.z, dx, dz, maxDist: MAX_RANGE }, BLOCK_SHOT)
+  const jitter = hashSigned(w.seed, p.id, w.tick, p.stats.shots)
+  const ray = shotRay(p, aim, jitter * spread * DEG, jitter * spread * DEG * 0.6)
+  const world = rayWorld(w.grid, ray.ox, ray.oy, ray.oz, ray.dx, ray.dy, ray.dz, MAX_RANGE)
+  const wall = world?.dist ?? MAX_RANGE
   const time = rewindTime(w, viewTime)
-  const hit = traceTargets(w, p, { dx, dz, maxT: wall }, time)
+  const hit = traceTargets(w, p, { ...ray, maxT: wall }, time)
   const range = hit ? hit.t : wall
   let flags = deadEye ? SHOT_DEAD_EYE : 0
   let killed = false
@@ -212,12 +259,13 @@ export function fire(w: World, p: Player, aim: number, viewTime: number): ShotRe
   w.events.push({
     type: 'shot',
     shooter: p.id,
-    aim: radiansToAim(angle),
+    aim: radiansToAim(aimRadians(aim) + jitter * spread * DEG),
     range: Math.min(255, Math.round(range / SHOT_RANGE_UNIT)),
     target: hit ? hit.id : NONE,
     flags,
     x: p.x,
     z: p.z,
+    y: Math.round((ray.oy + ray.dy * range) * 10),
   })
   return { target: hit ? hit.id : NONE, range, deadEye, killed }
 }
@@ -257,7 +305,6 @@ export function canFire(p: Player, pulled: boolean, aliveAtTickStart: boolean): 
     p.rollTicks === 0 &&
     !vaulting(p) &&
     !climbing(p) &&
-    !falling(p) &&
     p.fireCooldownMs <= 0 &&
     (p.weapon === WEAPON_REVOLVER ? p.reloadTicks === 0 && p.ammo > 0 : p.weaponRounds > 0)
   )

@@ -1,9 +1,24 @@
+// biome-ignore-all lint/style/noExcessiveLinesPerFile: the layout, the grid and its surfaces are one source of truth
+// biome-ignore-all lint/complexity/useMaxParams: grid builders take positional numeric args
+// biome-ignore-all lint/complexity/noExcessiveCognitiveComplexity: the grid sweep and surface build are one pass
+// biome-ignore-all lint/style/noNestedTernary: stair directions read as a small switch
 /**
  * The town layout (`ffa/town.layout.json`) and the collision grid built from it. The JSON is the
  * single source of truth: the server and the client build the same grid from it here, and the
  * Blender build and the client scene read the same file.
  */
 import townJson from '../town.layout.json' with { type: 'json' }
+import {
+  frontOf,
+  PLATFORM_DEPTH,
+  PORCH_DEPTH,
+  PORCH_ROOF,
+  PORCH_ROOF_T,
+  PORCHED,
+  sideStrip,
+  UPPER_FLOOR_T,
+} from './porches.ts'
+import { roofHeightAt, roofSlopeAt } from './roofshape.ts'
 
 export interface Rect {
   x: number
@@ -18,6 +33,34 @@ export interface Door {
   at: number
   width: number
 }
+export interface Wall extends Rect {
+  /** Bottom of the wall span, metres (default 0: a ground-floor partition). */
+  y0?: number
+  /** Top of the wall span, metres (default the building's height). */
+  y1?: number
+}
+export interface Stair extends Rect {
+  /** Bottom and top of the ramp, metres. */
+  fromY: number
+  toY: number
+  /** The direction the stair climbs toward. */
+  dir: Side
+}
+export interface Floor extends Rect {
+  /** Top of the floor boards, metres. */
+  y: number
+}
+export interface RoofSpec {
+  /** Ridge direction. */
+  axis: 'x' | 'z'
+  /** Ridge height above the wall top. */
+  rise: number
+  /** Side-by-side gables across the span. */
+  bays: number
+  overhang: number
+  /** The end hidden by a false front: no overhang, no gable wall. */
+  front: Side | null
+}
 export interface Building extends Rect {
   id: string
   kind: string
@@ -27,9 +70,14 @@ export interface Building extends Rect {
   hollow: boolean
   doors: Door[]
   /** Interior partitions (hollow buildings only). */
-  walls?: Rect[]
+  walls?: Wall[]
   /** The side its facade faces, where the nearest street doesn't say (depot on the track, sheds). */
   front?: Side
+  /** The pitched roof shape (the sim walks on it, the scene builds it). */
+  roof?: RoofSpec
+  /** Real second-floor boards and the stairs that reach them. */
+  upperFloor?: Floor[]
+  stairs?: Stair[]
 }
 export interface Cover extends Rect {
   kind: string
@@ -40,6 +88,12 @@ export interface Cover extends Rect {
    * troughs 0.7...). Absent on tall cover and on low pieces that can't be vaulted (posts, wells).
    */
   vaultHeight?: number
+  /** Top surface height, metres. Every cover carries it so the sim knows what to stand on. */
+  top?: number
+  /** Whether the top is wide enough to stand on (crates, wagons, boxcars; not fences or rails). */
+  standable?: boolean
+  /** Base height for furniture placed on an upper floor. */
+  y0?: number
 }
 export interface Zone {
   id: string
@@ -74,6 +128,8 @@ export interface TownLayout {
   spawns: SpawnPoint[]
   strongboxes: Spot[]
   pickups: PickupSpot[]
+  /** The porch catwalk decks (mirrors `ROOF_WALKS`, written by the town plan). */
+  catwalks?: { x: number; z: number; w: number; d: number; height: number }[]
 }
 
 export const TOWN: TownLayout = townJson as TownLayout
@@ -96,6 +152,23 @@ const WALL = BLOCK_MOVE | BLOCK_SHOT | BLOCK_SIGHT
 const WALL_THICKNESS = 0.5
 const EPS = 1e-6
 
+/** A walkable or blocking surface in the 2.5D world. */
+export interface Surface {
+  x: number
+  z: number
+  w: number
+  d: number
+  /** Bottom of the solid span, metres. */
+  bottom: number
+  /** Top of the solid span, metres. */
+  top: number
+  kind: 'solid' | 'overhead' | 'roof' | 'stair' | 'rail'
+  /** A pitched roof or stair: the top varies with (x, z). */
+  heightAt?: ((x: number, z: number) => number) | undefined
+  /** The surface's slope as rise/run, for the walkable-slope check. */
+  slope?: number | undefined
+}
+
 export interface Grid {
   /** Cells per side. */
   n: number
@@ -104,6 +177,18 @@ export interface Grid {
   cells: Uint8Array
   /** Interior rect of the bank building: leaving town in here banks your carry. */
   bankArea: Rect
+  /** Top of the base solid per cell, metres (0 = open ground). */
+  tops: Float32Array
+  /** 1 where the base top is wide enough to stand on (crates, wagons, boxcars). */
+  standable: Uint8Array
+  /** Thin slabs you can walk under and stand on: porch roofs, catwalks, upper floors. */
+  overheads: Surface[]
+  /** Stairs and ramps. */
+  stairs: Surface[]
+  /** Pitched building roofs. */
+  roofs: Surface[]
+  /** Raised outdoor decks (porches, the depot platform), metres. */
+  decks: Surface[]
 }
 
 function fill(grid: Grid, r: Rect, flags: number): void {
@@ -151,14 +236,73 @@ function wallWithGaps(b: Building, side: Side): Rect[] {
   })
 }
 
-/** Every blocking rect a building contributes. */
+/** Every ground-level blocking rect a building contributes (upper-floor walls live in surfaces). */
 export function buildingWalls(b: Building): Rect[] {
   if (!b.hollow) {
     return [b]
   }
   const sides: Side[] = ['n', 's', 'e', 'w']
-  return [...sides.flatMap((side) => wallWithGaps(b, side)), ...(b.walls ?? [])]
+  const ground = (b.walls ?? []).filter((w) => (w.y0 ?? 0) <= 0.01)
+  return [...sides.flatMap((side) => wallWithGaps(b, side)), ...ground]
 }
+
+/** Every wall span a building contributes, ground and upper floors. */
+export function buildingWallSpans(b: Building): Wall[] {
+  if (!b.hollow) {
+    return [{ ...b, y0: 0, y1: b.height }]
+  }
+  const sides: Side[] = ['n', 's', 'e', 'w']
+  return [
+    ...sides.flatMap((side) =>
+      wallWithGaps(b, side).map((r) => ({ ...r, y0: 0, y1: b.height }) as Wall),
+    ),
+    ...(b.walls ?? []).map((w) => ({ ...w, y0: w.y0 ?? 0, y1: w.y1 ?? b.height }) as Wall),
+  ]
+}
+
+/** Set the top of the base solid in every cell a rect covers. */
+function fillTop(grid: Grid, r: Rect, top: number): void {
+  if (r.w <= 0 || r.d <= 0) {
+    return
+  }
+  const c0 = Math.max(0, Math.floor((r.x + EPS) / grid.cell))
+  const c1 = Math.min(grid.n - 1, Math.ceil((r.x + r.w - EPS) / grid.cell) - 1)
+  const r0 = Math.max(0, Math.floor((r.z + EPS) / grid.cell))
+  const r1 = Math.min(grid.n - 1, Math.ceil((r.z + r.d - EPS) / grid.cell) - 1)
+  for (let row = r0; row <= r1; row++) {
+    for (let col = c0; col <= c1; col++) {
+      const i = row * grid.n + col
+      if (top > (grid.tops[i] ?? 0)) {
+        grid.tops[i] = top
+      }
+    }
+  }
+}
+
+/** Mark every cell a rect covers as standable. */
+function fillStandable(grid: Grid, r: Rect): void {
+  if (r.w <= 0 || r.d <= 0) {
+    return
+  }
+  const c0 = Math.max(0, Math.floor((r.x + EPS) / grid.cell))
+  const c1 = Math.min(grid.n - 1, Math.ceil((r.x + r.w - EPS) / grid.cell) - 1)
+  const r0 = Math.max(0, Math.floor((r.z + EPS) / grid.cell))
+  const r1 = Math.min(grid.n - 1, Math.ceil((r.z + r.d - EPS) / grid.cell) - 1)
+  for (let row = r0; row <= r1; row++) {
+    for (let col = c0; col <= c1; col++) {
+      grid.standable[row * grid.n + col] = 1
+    }
+  }
+}
+
+const surface = (
+  r: Rect,
+  bottom: number,
+  top: number,
+  kind: Surface['kind'],
+  heightAt?: (x: number, z: number) => number,
+  slope?: number,
+): Surface => ({ ...r, bottom, top, kind, heightAt, slope })
 
 export function buildGrid(layout: TownLayout = TOWN): Grid {
   const n = Math.round(layout.size / layout.cell)
@@ -168,6 +312,12 @@ export function buildGrid(layout: TownLayout = TOWN): Grid {
     cell: layout.cell,
     size: layout.size,
     cells: new Uint8Array(n * n),
+    tops: new Float32Array(n * n),
+    standable: new Uint8Array(n * n),
+    overheads: [],
+    stairs: [],
+    roofs: [],
+    decks: [],
     bankArea: bank
       ? {
           x: bank.x + WALL_THICKNESS,
@@ -183,23 +333,102 @@ export function buildGrid(layout: TownLayout = TOWN): Grid {
   fill(grid, { x: 0, z: s - layout.cell, w: s, d: layout.cell }, WALL)
   fill(grid, { x: 0, z: 0, w: layout.cell, d: s }, WALL)
   fill(grid, { x: s - layout.cell, z: 0, w: layout.cell, d: s }, WALL)
+  fillTop(grid, { x: 0, z: 0, w: s, d: Math.max(layout.cell, layout.creek.z) }, 12)
+  fillTop(grid, { x: 0, z: s - layout.cell, w: s, d: layout.cell }, 12)
+  fillTop(grid, { x: 0, z: 0, w: layout.cell, d: s }, 12)
+  fillTop(grid, { x: s - layout.cell, z: 0, w: layout.cell, d: s }, 12)
   for (const bankEdge of layout.creek.banks) {
     fill(grid, bankEdge, BLOCK_MOVE)
   }
   for (const b of layout.buildings) {
     for (const r of buildingWalls(b)) {
       fill(grid, r, WALL)
+      fillTop(grid, r, b.height)
+    }
+    // Upper-floor walls are solid only above the ground floor.
+    for (const w of b.walls ?? []) {
+      if ((w.y0 ?? 0) > 0.01) {
+        grid.overheads.push(surface(w, w.y0 ?? 0, w.y1 ?? b.height, 'rail'))
+      }
+    }
+    // Porch roofs are thin slabs: walk under them, stand on them.
+    if (PORCHED.has(b.kind)) {
+      const strip = sideStrip(b, frontOf(b, layout), PORCH_DEPTH)
+      grid.decks.push(surface(strip, 0, 0.06, 'solid'))
+      grid.overheads.push(
+        surface(strip, PORCH_ROOF - PORCH_ROOF_T / 2, PORCH_ROOF + PORCH_ROOF_T / 2, 'overhead'),
+      )
+    } else if (b.kind === 'depot') {
+      const strip = sideStrip(b, frontOf(b, layout), PLATFORM_DEPTH)
+      grid.decks.push(surface(strip, 0, 0.06, 'solid'))
+    }
+    // Real second floors.
+    for (const f of b.upperFloor ?? []) {
+      grid.overheads.push(surface(f, f.y - UPPER_FLOOR_T, f.y, 'overhead'))
+    }
+    for (const st of b.stairs ?? []) {
+      const along = st.dir === 'n' || st.dir === 's' ? st.d : st.w
+      const heightAt = (x: number, z: number): number => {
+        const t =
+          st.dir === 'n'
+            ? (st.z + st.d - z) / Math.max(1e-6, along)
+            : st.dir === 's'
+              ? (z - st.z) / Math.max(1e-6, along)
+              : st.dir === 'w'
+                ? (st.x + st.w - x) / Math.max(1e-6, along)
+                : (x - st.x) / Math.max(1e-6, along)
+        return st.fromY + (st.toY - st.fromY) * Math.max(0, Math.min(1, t))
+      }
+      grid.stairs.push(
+        surface(
+          st,
+          st.fromY,
+          st.toY,
+          'stair',
+          heightAt,
+          Math.abs(st.toY - st.fromY) / Math.max(1e-6, along),
+        ),
+      )
+    }
+    // Pitched roof: a walkable surface over the footprint plus the eave overhang.
+    if (b.roof) {
+      const pad = b.roof.overhang
+      const r = { x: b.x - pad, z: b.z - pad, w: b.w + pad * 2, d: b.d + pad * 2 }
+      grid.roofs.push(
+        surface(
+          r,
+          b.height,
+          b.height + b.roof.rise,
+          'roof',
+          (x, z) => roofHeightAt(b, x, z),
+          roofSlopeAt(b),
+        ),
+      )
     }
   }
+  // The four porch catwalks sit a couple of centimetres above the porch roof.
+  for (const w of layout.catwalks ?? []) {
+    grid.overheads.push(surface(w, w.height - 0.02, w.height, 'overhead'))
+  }
   for (const c of layout.cover) {
+    const top = c.top ?? c.vaultHeight ?? (c.low ? 1 : 3)
+    if ((c.y0 ?? 0) > 0.01) {
+      // Upper-floor furniture: a solid span above the ground floor, not a base solid.
+      grid.overheads.push(surface(c, c.y0 ?? 0, top, 'solid'))
+      continue
+    }
     if (c.vaultHeight === undefined) {
       fill(grid, c, c.low ? BLOCK_MOVE | BLOCK_SHOT : WALL)
+    }
+    fillTop(grid, c, top)
+    if (c.standable) {
+      fillStandable(grid, c)
     }
   }
   // Vaultable cover last, so a cell it shares with anything solid stays solid.
   const solid = grid.cells.slice()
   for (const c of layout.cover) {
-    if (c.vaultHeight !== undefined) {
+    if (c.vaultHeight !== undefined && (c.y0 ?? 0) <= 0.01) {
       fill(grid, c, BLOCK_MOVE | BLOCK_SHOT | BLOCK_VAULT)
     }
   }

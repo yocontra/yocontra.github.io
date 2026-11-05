@@ -20,6 +20,25 @@ const s = (seconds: number): number => Math.round(seconds * TICK_HZ)
 
 export const RUN_SPEED = 5.5
 export const PLAYER_RADIUS = 0.4
+/** Standing and crouched capsule heights, metres. */
+export const BODY_HEIGHT = 1.8
+export const CROUCH_HEIGHT = 1.2
+/** The tallest ledge a rider walks up without jumping, and the deepest drop that keeps contact. */
+export const STEP_UP = 0.35
+export const STEP_DOWN = 0.45
+/** The steepest roof a rider can walk up (rise/run). */
+export const MAX_WALK_SLOPE = 0.8
+/** Gravity and the CoD-style jump/mantle. */
+export const GRAVITY = 18
+export const JUMP_APEX = 1.35
+export const JUMP_SPEED = Math.sqrt(2 * GRAVITY * JUMP_APEX)
+export const MANTLE_REACH = 2.4
+export const MANTLE_TICKS = s(0.3)
+/** Falls past three storeys hurt; ~20 m is lethal. */
+export const STOREY_HEIGHT = 3.2
+export const FALL_DAMAGE_MIN = STOREY_HEIGHT * 3
+export const FALL_DAMAGE_PER_M = 10
+export const FALL_DAMAGE_CAP = 100
 export const ROLL_TICKS = s(0.35)
 export const ROLL_DISTANCE = 4
 export const ROLL_SPEED = ROLL_DISTANCE / (ROLL_TICKS * DT)

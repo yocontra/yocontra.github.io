@@ -100,7 +100,6 @@ import {
   BANK_CHANNEL_TICKS,
   BLOOM_DECAY_DEG,
   DEAD_EYE_CLOSE_TICKS,
-  HOP_TICKS,
   LEAVE_CHANNEL_TICKS,
   MAX_RANGE,
   RELOAD_TICKS,
@@ -113,7 +112,6 @@ import {
   STRONGBOX_CHANNEL_TICKS,
   TICK_HZ,
   TICK_MS,
-  VAULT_TICKS,
 } from '../sim/constants.ts'
 import { BLOCK_SHOT, BLOCK_SIGHT, rayGrid, spawnFacing, TOWN, zoneAt } from '../sim/layout.ts'
 import { airborne, radiansToAim, sliding } from '../sim/move.ts'
@@ -482,7 +480,7 @@ export class FrontierGame {
     if (!shooter) {
       // back to the map: the top-down camera owns the projection again
       this.cam.resize(window.innerWidth / window.innerHeight)
-      this.cam.snap(this.own.x, this.own.z, Math.cos(this.aim), Math.sin(this.aim))
+      this.cam.snap(this.own.x, this.own.z, Math.cos(this.aim), Math.sin(this.aim), this.own.y)
       CUT.radius.value = 0
     } else if (was === 'top' || was === undefined) {
       this.shooter.snap(this.own.x, this.own.z, this.aim)
@@ -1362,7 +1360,14 @@ export class FrontierGame {
       const justDied = !this.net.alive && first && nowS - this.diedAt < 0.3
       crowd.hideSelf = (this.net.alive && (first || this.shooter.closeness > 0.85)) || justDied
     } else {
-      this.cam.update(this.own.x, this.own.z, Math.cos(this.aim), Math.sin(this.aim), dt)
+      this.cam.update(
+        this.own.x,
+        this.own.z,
+        Math.cos(this.aim),
+        Math.sin(this.aim),
+        dt,
+        this.own.y,
+      )
       crowd.hideSelf = false
     }
     crowd.selfFade = shooter && !first && this.net.alive ? this.shooter.bodyFade : 1
@@ -1428,14 +1433,14 @@ export class FrontierGame {
       // your ears are where your head is, facing the way you look
       this.audio?.setListener(
         this.own.x,
-        1.6,
+        this.own.y + 1.6,
         this.own.z,
         Math.cos(this.shooter.viewYaw),
         0,
         Math.sin(this.shooter.viewYaw),
       )
     } else {
-      this.audio?.setListener(this.own.x, 8, this.own.z + 4, 0, -0.8, -0.6)
+      this.audio?.setListener(this.own.x, this.own.y + 8, this.own.z + 4, 0, -0.8, -0.6)
     }
     this.wasAlive = this.net.alive
   }
@@ -1457,14 +1462,8 @@ export class FrontierGame {
    * t interpolated between ticks so the arc is smooth at any frame rate.
    */
   private jumpLift(): number {
-    const pred = this.net.pred
-    if (pred.jumpTicks <= 0) {
-      return this.own.y
-    }
-    const vault = pred.vaultStep > 0
-    const total = vault ? VAULT_TICKS : HOP_TICKS
-    const t = Math.min(1, Math.max(0, (total - pred.jumpTicks + this.acc / TICK_MS) / total))
-    return this.own.y + (vault ? VAULT_PEAK_M : HOP_PEAK_M) * 4 * t * (1 - t)
+    // The prediction already carries the real feet height; no cosmetic arc on top.
+    return this.own.y
   }
 
   /** Your stance bits, as remote riders see them (crouched, on the sights, sprinting). */
@@ -1556,7 +1555,7 @@ export class FrontierGame {
       this.tally.clear()
       // (re)spawned: face into town until the stick or the mouse says otherwise
       this.aim = spawnFacing(this.own)
-      this.cam.snap(this.own.x, this.own.z, Math.cos(this.aim), Math.sin(this.aim))
+      this.cam.snap(this.own.x, this.own.z, Math.cos(this.aim), Math.sin(this.aim), this.own.y)
       this.shooter.snap(this.own.x, this.own.z, this.aim)
       this.hatlessSeen.clear()
       // the first ride into town on this device: how to play
@@ -1609,7 +1608,7 @@ export class FrontierGame {
       return
     }
     const cam = this.cam.camera
-    const p = this.tmp.set(this.own.x, 1, this.own.z)
+    const p = this.tmp.set(this.own.x, this.own.y + 1, this.own.z)
     const depth = -this.cutView.copy(p).applyMatrix4(cam.matrixWorldInverse).z
     p.project(cam)
     const size = this.renderer.gl.getDrawingBufferSize(this.cutSize)
@@ -2311,8 +2310,6 @@ const FLASH_SCALE: Record<ViewMode, number> = { top: 1, third: 0.45, first: 0.18
 
 /** How high the camera rides a vault and a hop (m): the body's arc. */
 /** The lens's vault and jump arcs: the body's (scene/locomotion.ts), so the view rides with it. */
-const VAULT_PEAK_M = 0.75
-const HOP_PEAK_M = 0.45
 
 /** From a rifle shot to the lever working the next round in, s (the rifle fires every 0.9 s). */
 const RIFLE_LEVER_DELAY = 0.32
