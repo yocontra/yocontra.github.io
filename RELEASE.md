@@ -29,6 +29,19 @@ Nothing here has been run yet. Do it in this order on release day.
 6. **Verify:** sign up with a passkey on https://contra.io/experiments/out-west/, play a ranked run,
    and check `https://api.contra.io/leaderboard`.
 
+## Proximity voice (Cloudflare RealtimeKit)
+
+The opt-in voice chat in Frontier and Bounty Hunt uses a RealtimeKit app named `out-west` and the
+audio-only preset `out-west-voice` (video, screenshare and chat disabled). The account, app and
+preset ids are `vars` in `api/wrangler.jsonc`; `REALTIMEKIT_API_TOKEN` is a Worker secret with the
+**Realtime** permission and is never sent to the browser. `api/.dev.vars.example` lists the local
+equivalents.
+
+The client fetches the RealtimeKit Core SDK only after a player turns voice on; it stays off by
+default, push-to-talk. On a real iPhone 13 mini check the microphone prompt, echo with the speaker
+(not headphones), the switch to a Bluetooth headset, and the Ring/Silent audio session while a
+Frontier round is running.
+
 ## Service worker cache
 
 The game registers `/experiments/out-west/sw.js` in production. After the first visit it serves
