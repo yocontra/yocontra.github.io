@@ -166,9 +166,9 @@ const bank = b(
   {
     walls: [
       // The teller partition stops either side of the stairwell, so the stair has a clear entry.
-      { x: 62, z: 83, w: 1, d: 0.5 },
-      { x: 67, z: 83, w: 4, d: 0.5 },
-      { x: 73, z: 83, w: 9, d: 0.5 },
+      { x: 62, z: 83.1, w: 1, d: 0.5 },
+      { x: 67, z: 83.1, w: 4, d: 0.5 },
+      { x: 73, z: 83.1, w: 9, d: 0.5 },
     ],
   },
 )
@@ -290,10 +290,29 @@ c('barrels', 34, 81, 1, 1)
 // Stage office and undertaker: luggage, benches and more coffins.
 c('crates', 8, 76, 1.5, 1.5)
 c('bench', 8, 84, 2.5, 0.5)
-c('coffins', 87, 78, 2.5, 1)
+c('coffins', 86, 78, 2.5, 1)
 c('coffins', 92, 82, 1, 2.5)
 // General store: a barrel rack by the counter.
 c('barrel_rack', 45, 77, 2, 1)
+
+// More life in the emptiest rooms.
+c('shelves', 24.5, 38, 0.5, 4)
+c('barrel_rack', 38, 48, 2, 1)
+c('hay', 12, 105, 2, 1)
+c('shelves', 21.5, 99, 0.5, 2)
+c('barrel_rack', 10, 107, 2, 1)
+c('workbench', 27, 86, 2, 1)
+c('shelves', 24.5, 86, 0.5, 3)
+c('shelves', 6.5, 84, 0.5, 2)
+c('barrels', 18, 86, 1.5, 1.5)
+c('table', 117, 34, 2, 1)
+c('counter', 112, 34, 2, 1)
+c('table', 8, 80, 2, 1)
+c('bench', 16, 84, 2.5, 0.5)
+c('crates', 17, 76, 1.5, 1.5)
+c('coffins', 87, 82, 2.5, 1)
+c('coffins', 93, 78, 1, 2.5)
+c('bench', 90, 88, 2.5, 0.5)
 
 for (const [bd, stair] of upper) {
   bd.stairs = [stair]

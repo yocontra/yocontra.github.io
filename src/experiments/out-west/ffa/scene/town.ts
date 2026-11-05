@@ -812,6 +812,26 @@ function addWindows(
         const at = onSide(b, side, a + span / 2, y)
         at.multiply(new Matrix4().makeScale(s, s, 1))
         bs.kit.push({ def: win, at })
+        if (!bs.lean) {
+          // A proud sill and lintel give the flat wall a shadow line and depth at eye level.
+          const along = side === 'n' || side === 's'
+          const [q] = faceQuad(b, side, a + span / 2, a + span / 2, 0, 1, 0.075)
+          if (q) {
+            const bottom = y + 0.975 * s
+            const top = y + 2.533 * s
+            for (const yy of [bottom - 0.04, top + 0.04]) {
+              bs.wood.box(
+                q.x,
+                yy,
+                q.z,
+                along ? span + 0.32 : 0.11,
+                0.08,
+                along ? 0.11 : span + 0.32,
+                DARK_WOOD,
+              )
+            }
+          }
+        }
         // shutters, as on the duel street's upper windows: on every upper floor, and round the
         // houses' and barns' windows (never a shopfront's display glass)
         if (shutter && !shop && (f > 0 || !SHOPFRONT.has(b.kind)) && !bs.lean) {
@@ -859,7 +879,9 @@ function addWindows(
  */
 function addDoorFrames(bs: Builders, b: Building, porch: Side | null): void {
   for (const d of b.doors) {
-    const base = d.side === porch ? PORCH_DECK : 0
+    // A hair above the floor/wall sole: a jamb foot coplanar with the wall's bottom face is a
+    // z-fight the float audit sees even though it is underfoot.
+    const base = (d.side === porch ? PORCH_DECK : 0) + 0.012
     const top = doorTop(d.width)
     const along = d.side === 'n' || d.side === 's'
     const cx = along ? b.x + d.at + d.width / 2 : b.x + b.w / 2
@@ -868,8 +890,9 @@ function addDoorFrames(bs: Builders, b: Building, porch: Side | null): void {
     // faces, so it reads from the street and from the room.
     const zWall = d.side === 'n' ? b.z + WALL_T / 2 : b.z + b.d - WALL_T / 2
     const xWall = d.side === 'w' ? b.x + WALL_T / 2 : b.x + b.w - WALL_T / 2
-    // jambs, one each side of the opening
-    for (const a of [d.at - DOOR_JAMB / 2, d.at + d.width + DOOR_JAMB / 2]) {
+    // jambs, one each side, nudged 12 mm into the opening so their faces are not coplanar with
+    // the wall's cut faces at the door edges.
+    for (const a of [d.at - DOOR_JAMB / 2 + 0.012, d.at + d.width + DOOR_JAMB / 2 - 0.012]) {
       bs.wood.box(
         along ? b.x + a : xWall,
         (base + top) / 2,
@@ -1177,7 +1200,9 @@ function addBuilding(bs: Builders, b: Building, layout: TownLayout, id: number):
     const [q0, q1] = faceQuad(b, d.side, d.at, d.at + d.width, 0, 1, -WALL_T / 2)
     if (q0 && q1) {
       const along = d.side === 'n' || d.side === 's'
-      const y0 = doorTop(d.width)
+      // Start the wall above the lintel's top, not the opening's top: otherwise the lintel's
+      // bottom face and the wall's bottom face are coplanar (the z-fight the float audit finds).
+      const y0 = doorTop(d.width) + DOOR_HEAD
       g.box(
         (q0.x + q1.x) / 2,
         (y0 + h) / 2,
@@ -1498,6 +1523,22 @@ function addPorch(bs: Builders, b: Building, front: Side): void {
     along ? len + 0.2 : depth + 0.2,
     0.12,
     along ? depth + 0.2 : len + 0.2,
+    DARK_WOOD,
+  )
+  // A deep fascia beam under the roof's outer edge: the porch reads as built, not a flat slab.
+  const outer = { x: cx, z: cz }
+  if (along) {
+    outer.z += front === 's' ? depth / 2 : -depth / 2
+  } else {
+    outer.x += front === 'e' ? depth / 2 : -depth / 2
+  }
+  bs.wood.box(
+    outer.x,
+    y - 0.17,
+    outer.z,
+    along ? len + 0.25 : 0.18,
+    0.18,
+    along ? 0.18 : len + 0.25,
     DARK_WOOD,
   )
   // a balcony rail along the porch roof (two-storey fronts)

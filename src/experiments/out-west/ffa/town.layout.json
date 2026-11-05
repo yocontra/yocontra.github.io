@@ -508,19 +508,19 @@
       "walls": [
         {
           "x": 62,
-          "z": 83,
+          "z": 83.1,
           "w": 1,
           "d": 0.5
         },
         {
           "x": 67,
-          "z": 83,
+          "z": 83.1,
           "w": 4,
           "d": 0.5
         },
         {
           "x": 73,
-          "z": 83,
+          "z": 83.1,
           "w": 9,
           "d": 0.5
         },
@@ -1261,7 +1261,7 @@
     },
     {
       "kind": "coffins",
-      "x": 87,
+      "x": 86,
       "z": 78,
       "w": 2.5,
       "d": 1,
@@ -1290,6 +1290,187 @@
       "low": true,
       "top": 1.3,
       "standable": true
+    },
+    {
+      "kind": "shelves",
+      "x": 24.5,
+      "z": 38,
+      "w": 0.5,
+      "d": 4,
+      "low": false,
+      "top": 2.3,
+      "standable": false
+    },
+    {
+      "kind": "barrel_rack",
+      "x": 38,
+      "z": 48,
+      "w": 2,
+      "d": 1,
+      "low": true,
+      "top": 1.3,
+      "standable": true
+    },
+    {
+      "kind": "hay",
+      "x": 12,
+      "z": 105,
+      "w": 2,
+      "d": 1,
+      "low": true,
+      "top": 1,
+      "standable": true,
+      "vaultHeight": 1
+    },
+    {
+      "kind": "shelves",
+      "x": 21.5,
+      "z": 99,
+      "w": 0.5,
+      "d": 2,
+      "low": false,
+      "top": 2.3,
+      "standable": false
+    },
+    {
+      "kind": "barrel_rack",
+      "x": 10,
+      "z": 107,
+      "w": 2,
+      "d": 1,
+      "low": true,
+      "top": 1.3,
+      "standable": true
+    },
+    {
+      "kind": "workbench",
+      "x": 27,
+      "z": 86,
+      "w": 2,
+      "d": 1,
+      "low": true,
+      "top": 0.95,
+      "standable": true,
+      "vaultHeight": 0.95
+    },
+    {
+      "kind": "shelves",
+      "x": 24.5,
+      "z": 86,
+      "w": 0.5,
+      "d": 3,
+      "low": false,
+      "top": 2.3,
+      "standable": false
+    },
+    {
+      "kind": "shelves",
+      "x": 6.5,
+      "z": 84,
+      "w": 0.5,
+      "d": 2,
+      "low": false,
+      "top": 2.3,
+      "standable": false
+    },
+    {
+      "kind": "barrels",
+      "x": 18,
+      "z": 86,
+      "w": 1.5,
+      "d": 1.5,
+      "low": true,
+      "top": 0.95,
+      "standable": true,
+      "vaultHeight": 0.95
+    },
+    {
+      "kind": "table",
+      "x": 117,
+      "z": 34,
+      "w": 2,
+      "d": 1,
+      "low": true,
+      "top": 0.8,
+      "standable": true,
+      "vaultHeight": 0.8
+    },
+    {
+      "kind": "counter",
+      "x": 112,
+      "z": 34,
+      "w": 2,
+      "d": 1,
+      "low": true,
+      "top": 1.1,
+      "standable": true,
+      "vaultHeight": 1.1
+    },
+    {
+      "kind": "table",
+      "x": 8,
+      "z": 80,
+      "w": 2,
+      "d": 1,
+      "low": true,
+      "top": 0.8,
+      "standable": true,
+      "vaultHeight": 0.8
+    },
+    {
+      "kind": "bench",
+      "x": 16,
+      "z": 84,
+      "w": 2.5,
+      "d": 0.5,
+      "low": true,
+      "top": 0.5,
+      "standable": false,
+      "vaultHeight": 0.5
+    },
+    {
+      "kind": "crates",
+      "x": 17,
+      "z": 76,
+      "w": 1.5,
+      "d": 1.5,
+      "low": true,
+      "top": 0.75,
+      "standable": true,
+      "vaultHeight": 0.75
+    },
+    {
+      "kind": "coffins",
+      "x": 87,
+      "z": 82,
+      "w": 2.5,
+      "d": 1,
+      "low": true,
+      "top": 0.9,
+      "standable": true,
+      "vaultHeight": 0.9
+    },
+    {
+      "kind": "coffins",
+      "x": 93,
+      "z": 78,
+      "w": 1,
+      "d": 2.5,
+      "low": true,
+      "top": 0.9,
+      "standable": true,
+      "vaultHeight": 0.9
+    },
+    {
+      "kind": "bench",
+      "x": 90,
+      "z": 88,
+      "w": 2.5,
+      "d": 0.5,
+      "low": true,
+      "top": 0.5,
+      "standable": false,
+      "vaultHeight": 0.5
     },
     {
       "kind": "post",
