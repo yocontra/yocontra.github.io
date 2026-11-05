@@ -271,6 +271,29 @@ c('table', 99, 50, 2, 1)
 c('barrels', 51, 86, 1.5, 1.5)
 c('counter', 117, 33, 2, 1)
 c('bench', 70, 88, 2.5, 0.5)
+// Livery: stalls on both walls and a wagon in the aisle.
+c('hay', 30, 36, 2, 2)
+c('wagon', 30, 48.5, 4, 2)
+c('barrels', 26, 52, 1.5, 1.5)
+// Hay barn: bales across the floor, a wagon and a feed trough.
+c('hay', 10, 99, 2, 1)
+c('hay', 14, 101, 2, 1)
+c('hay', 18, 99, 2, 1)
+c('hay', 10, 103, 2, 1)
+c('hay', 16, 103, 2, 1)
+c('wagon', 14, 106, 4, 2)
+c('crates', 20, 107, 1.5, 1.5)
+// Smithy: tool shelves, a quench trough and a barrel rack.
+c('shelves', 24.5, 78, 0.5, 4)
+c('barrel_rack', 34, 78, 2, 1)
+c('barrels', 34, 81, 1, 1)
+// Stage office and undertaker: luggage, benches and more coffins.
+c('crates', 8, 76, 1.5, 1.5)
+c('bench', 8, 84, 2.5, 0.5)
+c('coffins', 87, 78, 2.5, 1)
+c('coffins', 92, 82, 1, 2.5)
+// General store: a barrel rack by the counter.
+c('barrel_rack', 45, 77, 2, 1)
 
 for (const [bd, stair] of upper) {
   bd.stairs = [stair]
