@@ -416,6 +416,8 @@ function startClimb(m: MoveState, c: Climb, dir: 1 | -1): void {
   m.jumpCooldown = JUMP_COOLDOWN_TICKS
   m.x = dir > 0 ? c.bottomX : c.topX
   m.z = dir > 0 ? c.bottomZ : c.topZ
+  m.fallFromX = m.x
+  m.fallFromZ = m.z
   m.climbTicks = CLIMB_TICKS
   m.climbDeck = c.index
   m.climbDir = dir
@@ -446,10 +448,10 @@ function stepClimb(m: MoveState): void {
     m.support = 0
     return
   }
-  m.x = c.x
-  m.z = c.z
   m.climbTicks--
   const t = 1 - m.climbTicks / CLIMB_TICKS
+  m.x = quantize(m.fallFromX + (c.x - m.fallFromX) * t)
+  m.z = quantize(m.fallFromZ + (c.z - m.fallFromZ) * t)
   m.y = quantize(
     m.climbDir > 0 ? c.bottom + (c.top - c.bottom) * t : c.top - (c.top - c.bottom) * t,
   )

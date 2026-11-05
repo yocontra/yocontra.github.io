@@ -151,9 +151,9 @@ export function buildInterior(layout: TownLayout, glow: number): Interior {
   const uniforms = {
     inMask: new Uniform(mask),
     inSize: new Uniform(layout.size),
-    inLamp: new Uniform(new Color(1.0, 0.56, 0.24)),
-    inLampK: new Uniform(4),
-    inDayK: new Uniform(0.9),
+    inLamp: new Uniform(new Color(1.0, 0.78, 0.54)),
+    inLampK: new Uniform(3.4),
+    inDayK: new Uniform(1.15),
     /** Lit windows: 0 by day, 1 at night. */
     inGlow: new Uniform(glow),
     ...ATMOS,
@@ -257,7 +257,7 @@ function lightPatch(shader: WebGLProgramParametersWithUniforms): void {
   float inside = step(0.01, m.r) * (1.0 - smoothstep(ceilY - 0.05, ceilY + 0.15, vInW.y));
   if (inside > 0.0) {
     // the sky's fill drops inside, darkest in the corners and at the foot of the walls
-    float fill = mix(1.0, m.r * 0.5, inside);
+    float fill = mix(1.0, max(m.r * 0.5, 0.5), inside);
     reflectedLight.indirectDiffuse *= fill;
     reflectedLight.indirectSpecular *= fill;
     // lamp light: strongest under the lamp's height, gently flickering
