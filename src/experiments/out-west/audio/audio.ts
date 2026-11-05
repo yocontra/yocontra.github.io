@@ -53,9 +53,16 @@ import {
 export type { LoopName, Pack, SfxName, SongName, StingName, UiName } from './catalog.ts'
 export type { EffortKind, VoiceKind } from './voices.ts'
 /** `call` carries only the call's bell: past the SFX slider, so no setting can silence the cue. */
-export type Bus = 'sfx' | 'amb' | 'music' | 'voice' | 'call'
+export type Bus = 'sfx' | 'amb' | 'music' | 'voice' | 'chat' | 'call'
 /** What the player's volume sliders scale (ambience follows SFX). */
-export type VolumeKind = 'music' | 'sfx' | 'voice'
+export type VolumeKind = 'music' | 'sfx' | 'voice' | 'chat'
+
+/** A live remote voice stream routed through one positional panner. */
+export interface VoiceChatNode {
+  setPose: (x: number, y: number, z: number) => void
+  setGain: (v: number) => void
+  dispose: () => void
+}
 
 /** Resting bus levels. */
 const BUS_LEVELS: Readonly<Record<Bus, number>> = {
@@ -63,6 +70,7 @@ const BUS_LEVELS: Readonly<Record<Bus, number>> = {
   amb: 0.5,
   music: 1.15,
   voice: 1.2,
+  chat: 1,
   call: 0.72,
 }
 /** Which slider each bus answers to (the call answers to none). */
@@ -71,6 +79,7 @@ const BUS_VOLUME: Readonly<Record<Bus, VolumeKind | null>> = {
   amb: 'sfx',
   music: 'music',
   voice: 'voice',
+  chat: 'chat',
   call: null,
 }
 /** How far each bus ducks under the call (linear gain multiplier). */
@@ -244,7 +253,7 @@ export class AudioEngine {
   private buses!: Record<Bus, GainNode>
   /** The player's sliders, one gain per kind between the buses and the master. */
   private sliders!: Record<VolumeKind, GainNode>
-  private readonly volumes: Record<VolumeKind, number> = { music: 1, sfx: 1, voice: 1 }
+  private readonly volumes: Record<VolumeKind, number> = { music: 1, sfx: 1, voice: 1, chat: 1 }
   /** The line each speaker is saying now: a new line from the same mouth cuts the old one. */
   private readonly speaking = new Map<string, { src: AudioBufferSourceNode; gain: GainNode }>()
   private musicFilter!: BiquadFilterNode
@@ -280,6 +289,8 @@ export class AudioEngine {
   private paused = false
   private dbg: AudioDebug | null = null
   private readonly listener = { x: 0, y: 0, z: 0 }
+  /** Live remote voice-chat streams, one panner each; disconnected on unsubscribe/leave. */
+  private readonly chatNodes = new Map<number, VoiceChatNode>()
   private readonly packs = new Set<Pack>()
   /** Recent scheduled start times and the newest handle, per sample. */
   private readonly starts = new Map<SfxName, Starts>()
@@ -475,6 +486,7 @@ export class AudioEngine {
       music: gainTo(taper(this.volumes.music), this.master),
       sfx: gainTo(taper(this.volumes.sfx), this.master),
       voice: gainTo(taper(this.volumes.voice), this.master),
+      chat: gainTo(taper(this.volumes.chat), this.master),
     }
     const bus = (b: Bus) => {
       const kind = BUS_VOLUME[b]
@@ -485,6 +497,7 @@ export class AudioEngine {
       amb: bus('amb'),
       music: bus('music'),
       voice: bus('voice'),
+      chat: bus('chat'),
       call: bus('call'),
     }
 
@@ -1280,6 +1293,61 @@ export class AudioEngine {
   /** The player's voice slider, 0..1: outlaws' barks and your own breaths. */
   setVoiceVolume(x: number): void {
     this.setVolume('voice', x)
+  }
+
+  /** The player's chat slider, 0..1: other players' proximity voice. */
+  setVoiceChatVolume(x: number): void {
+    this.setVolume('chat', x)
+  }
+
+  /**
+   * Put one remote microphone track into the world: a positional panner on the chat bus. The
+   * RealtimeKit SFU owns the track itself; this only detaches it when the peer is unsubscribed.
+   */
+  attachVoiceChat(id: number, track: MediaStreamTrack): VoiceChatNode | null {
+    const ctx = this.ctx
+    if (!ctx) {
+      return null
+    }
+    this.detachVoiceChat(id)
+    const stream = new MediaStream([track])
+    const source = ctx.createMediaStreamSource(stream)
+    const panner = ctx.createPanner()
+    panner.panningModel = 'equalpower'
+    panner.distanceModel = 'inverse'
+    panner.refDistance = 5
+    panner.maxDistance = 28
+    panner.rolloffFactor = 0.8
+    const gain = ctx.createGain()
+    gain.gain.value = 1
+    source.connect(panner).connect(gain).connect(this.buses.chat)
+    const node: VoiceChatNode = {
+      setPose: (x, y, z) => {
+        const t = ctx.currentTime
+        panner.positionX.setTargetAtTime(x, t, 0.02)
+        panner.positionY.setTargetAtTime(y, t, 0.02)
+        panner.positionZ.setTargetAtTime(z, t, 0.02)
+      },
+      setGain: (v) => {
+        gain.gain.setTargetAtTime(Math.max(0, Math.min(1, v)), ctx.currentTime, 0.03)
+      },
+      dispose: () => {
+        source.disconnect()
+        panner.disconnect()
+        gain.disconnect()
+        this.chatNodes.delete(id)
+      },
+    }
+    this.chatNodes.set(id, node)
+    return node
+  }
+
+  private detachVoiceChat(id: number): void {
+    const node = this.chatNodes.get(id)
+    if (node) {
+      node.dispose()
+      this.chatNodes.delete(id)
+    }
   }
 
   /** Slider positions as last set (1 until a setting arrives). */

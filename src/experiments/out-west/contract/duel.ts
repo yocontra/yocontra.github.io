@@ -246,6 +246,9 @@ export type RoomClientMessage =
   | { type: 'rematch' }
   /** "Flee": counts as a dodge before the walk starts and a forfeit after. Results: just leaves. */
   | { type: 'flee' }
+  /** Ask for a RealtimeKit participant token (proximity voice). */
+  | { type: 'voice_on' }
+  | { type: 'voice_off' }
 
 /** A beat of the duel. `sync` and `beat` carry the current one. */
 export type Beat =
@@ -398,6 +401,9 @@ export type RoomServerMessage =
   /** The opponent's connection changed. */
   | { type: 'presence'; seat: Seat; connected: boolean; graceUntil: number | null }
   | { type: 'taunt'; seat: Seat; taunt: Taunt }
+  /** A Cloudflare RealtimeKit voice meeting this seat may join. */
+  | { type: 'voice_ready'; meetingId: string; token: string }
+  | { type: 'voice_error'; message: string }
   /** Rematch votes; the window closes at `deadline`. */
   | { type: 'rematch'; votes: readonly [boolean, boolean]; deadline: number; left: number }
   | { type: 'error'; message: string; fatal: boolean }

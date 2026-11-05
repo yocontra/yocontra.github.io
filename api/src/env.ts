@@ -26,6 +26,14 @@ export interface Env {
    * (`routes/daily.ts`). Optional: absent in unit tests that don't exercise it.
    */
   DAILY_GUEST_LIMIT?: RateLimit
+  /** Cloudflare account that owns the RealtimeKit app. */
+  CLOUDFLARE_ACCOUNT_ID: string
+  /** RealtimeKit app id (a UUID). */
+  REALTIMEKIT_APP_ID: string
+  /** RealtimeKit voice-only preset name. */
+  REALTIMEKIT_PRESET: string
+  /** Worker secret: a Cloudflare API token with the Realtime permission. */
+  REALTIMEKIT_API_TOKEN: string
   /** Comma-separated list of origins allowed to call the API from a browser. */
   ALLOWED_ORIGINS: string
   /** Cloudflare Turnstile secret. Local dev uses Cloudflare's always-pass test secret. */

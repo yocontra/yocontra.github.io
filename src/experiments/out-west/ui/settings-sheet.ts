@@ -1,3 +1,4 @@
+// biome-ignore-all lint/security/noSecrets: voice setting keys and key names are not credentials
 /**
  * The Settings sheet, from the saloon and the pause menu: volumes and mono audio, captions and
  * toggle walk, vibration, reduced motion and graphics quality. Everything saves as you change it
@@ -18,7 +19,11 @@ import { button, el, panelSheet } from './sheet.ts'
 
 let uid = 0
 
-function slider(parent: HTMLElement, label: string, key: 'music' | 'sfx' | 'voice'): void {
+function slider(
+  parent: HTMLElement,
+  label: string,
+  key: 'music' | 'sfx' | 'voice' | 'voiceChatVolume',
+): void {
   const id = `ow-set-${++uid}`
   const row = el('div', 'ow-set-row', parent)
   const l = el('label', 'ow-set-label', row, label)
@@ -136,6 +141,24 @@ export function openSettings(root: HTMLElement, onClose?: () => void): void {
       )
     }
   }
+  const chat = el('section', 'ow-set-group', s.body)
+  el('h3', 'ow-set-h', chat, 'Voice chat')
+  const voice = getSettings()
+  toggle(chat, {
+    label: 'Proximity voice',
+    hint: 'Hear and talk to nearby players. Off by default.',
+    value: voice.voiceChat,
+    change: (on) => setSetting('voiceChat', on),
+  })
+  toggle(chat, {
+    label: 'Push to talk',
+    hint: 'Hold T or the TALK button. Off means an open microphone.',
+    value: voice.voicePushToTalk,
+    change: (on) => setSetting('voicePushToTalk', on),
+  })
+  slider(chat, 'Chat volume', 'voiceChatVolume')
+  el('p', 'ow-hub-note', chat, 'Headphones recommended: open speakers can echo into your mic.')
+
   const feel = el('section', 'ow-set-group', s.body)
   el('h3', 'ow-set-h', feel, 'Controls')
   flag(feel, 'captions', { label: 'Captions', hint: 'Show sounds and speech as text.' })

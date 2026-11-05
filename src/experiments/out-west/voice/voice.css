@@ -1,0 +1,71 @@
+/* The shared proximity-voice control: outside the HUD layers, over the canvas. */
+.ow-voice {
+  position: fixed;
+  left: 50%;
+  bottom: max(12px, env(safe-area-inset-bottom));
+  z-index: 29;
+  display: none;
+  align-items: center;
+  gap: 8px;
+  transform: translateX(-50%);
+  pointer-events: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+.ow-voice.on {
+  display: flex;
+}
+.ow-voice.blocked {
+  display: none;
+}
+.ow-voice-btn {
+  pointer-events: auto;
+  touch-action: none;
+  min-width: 64px;
+  height: 44px;
+  padding: 0 14px;
+  border: 1px solid rgb(214 177 93 / 0.72);
+  border-radius: 999px;
+  background: rgb(24 17 11 / 0.78);
+  color: var(--ow-bone, #efe4cc);
+  font-family: var(--ow-font-text, Georgia, serif);
+  font-size: 12px;
+  font-weight: 700;
+  font-variant-caps: all-small-caps;
+  letter-spacing: 0.1em;
+  box-shadow: 0 4px 14px rgb(0 0 0 / 0.35);
+  backdrop-filter: blur(4px);
+  cursor: pointer;
+}
+.ow-voice-btn:hover {
+  background: rgb(48 31 18 / 0.9);
+}
+.ow-voice-btn:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+.ow-voice-btn.talking {
+  border-color: #e2b85c;
+  background: rgb(132 40 24 / 0.9);
+  color: #fff7df;
+}
+.ow-voice-status {
+  color: rgb(239 228 204 / 0.72);
+  font-family: var(--ow-font-text, Georgia, serif);
+  font-size: 11px;
+  font-style: italic;
+  text-shadow: 0 1px 4px rgb(0 0 0 / 0.8);
+  white-space: nowrap;
+}
+.ow-voice-status.bad {
+  color: #e58a72;
+  font-style: normal;
+}
+.ow-voice.open .ow-voice-status {
+  color: #cfb274;
+}
+@media (pointer: coarse) {
+  .ow-voice {
+    bottom: max(84px, calc(env(safe-area-inset-bottom) + 64px));
+  }
+}

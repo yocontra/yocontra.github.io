@@ -219,8 +219,6 @@ function tube(
     margin: number
     flare: number
     color: Color
-    /** Largest radius at the top and the bottom of the tube (a sleeve, not a puff). */
-    cap: readonly [number, number]
   },
 ): ReturnType<typeof shell> {
   const axis = from.clone().sub(to)
@@ -247,7 +245,6 @@ function tube(
     margin: o.margin,
     bulge: (t) => t * o.flare,
     minR: 0.03,
-    limit: (_a, t) => mix(o.cap[0], o.cap[1], t),
     color: o.color,
   })
   geo.applyMatrix4(m)
@@ -276,23 +273,20 @@ function sleeve(f: Fit, s: 'L' | 'R', color: Color): { pieces: Piece[]; segs: Se
     f.body,
     onBones(f.body, [`UpperArm${s}`, `LowerArm${s}`, `Shoulder${s}`]),
   )
-  const make = (g: Seg, rings: number, cap: readonly [number, number]): Piece => ({
+  const make = (g: Seg, rings: number): Piece => ({
     geo: tube(onBones(f.body, g.bones), g.from, g.to, {
       rings,
       segs: 12,
-      margin: 0.007,
+      margin: 0.012,
       flare: rings > 5 ? 0.008 : 0.002,
       color,
-      cap,
     }),
     ...wool(),
     weights,
     unbelted: true,
   })
-  const lu = sh.distanceTo(el)
-  const ll = el.distanceTo(wr)
   return {
-    pieces: [make(upper, 5, [0.23 * lu, 0.17 * lu]), make(lower, 6, [0.19 * ll, 0.15 * ll])],
+    pieces: [make(upper, 5), make(lower, 6)],
     segs: [upper, lower],
   }
 }
@@ -328,11 +322,9 @@ export function coat(f: Fit, hex: number, cut: CoatCut, sides: GunSides): Piece[
     if (garment === 'Pauldron') {
       return true
     }
-    const seg = segs.find((g) => g.bones.includes(bone))
-    if (seg) {
-      const ax = seg.from.clone().sub(seg.to)
-      const u = p.clone().sub(seg.to).dot(ax) / ax.lengthSq()
-      return u > 0.02 && u < 0.98
+    // a coated arm: the base shirt, skin and bracer are all under the coat sleeve now
+    if (segs.some((g) => g.bones.includes(bone))) {
+      return true
     }
     if (!TORSO.includes(bone) || p.y < b.yBot + 0.005 || p.y > b.yTop - 0.03) {
       return false

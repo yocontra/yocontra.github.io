@@ -1,3 +1,4 @@
+// biome-ignore-all lint/style/noExcessiveLinesPerFile: voice lifecycle and the existing room/lobby flow live together
 /**
  * Bounty Hunt: a duel against another gunslinger (or a labelled ghost), driven entirely by the
  * DuelRoom. The room owns every beat: the walk only advances while both men hold, the server sends
@@ -16,9 +17,12 @@ import { DuelRoomLink } from '../net/pvp.ts'
 import { haptic } from '../platform/haptics.ts'
 import type { SaveData } from '../save.ts'
 import { DRAW_SOUNDS } from '../scene/loadout.ts'
+import { getSettings, onSettings } from '../settings.ts'
 import { MatchIntro } from '../ui/match-intro.ts'
 import { type OpponentRef, ResultsPanel, RoomNews } from '../ui/results.ts'
 import { recordLine } from '../ui/standing.ts'
+import { VoiceChat, type VoiceCredentials } from '../voice/voice-chat.ts'
+import { VoiceControls } from '../voice/voice-ui.ts'
 import { say } from './chatter.ts'
 import { tickCoward } from './defeat.ts'
 import type { Director, DirectorHooks } from './director.ts'
@@ -94,6 +98,11 @@ export class PvpDuel implements DirectorHooks {
   /** His line dropped and he hasn't come back yet. */
   private oppDropped = false as boolean
   private readonly unwatch: () => void
+  private voice: VoiceChat | null = null
+  private voiceUi: VoiceControls | null = null
+  private voiceWait: ((v: VoiceCredentials | null) => void) | null = null
+  // biome-ignore lint/style/useReadonlyClassProperties: assigned once in the constructor
+  private unwatchVoice: (() => void) | null = null
 
   constructor(d: Director, o: PvpOpts) {
     this.d = d
@@ -114,6 +123,25 @@ export class PvpDuel implements DirectorHooks {
       },
       gone: (reason) => this.onGone(reason),
     })
+    this.voice = new VoiceChat({
+      audio: d.c.audio,
+      requestToken: () => this.requestVoiceToken(),
+      sendOff: () => this.link.send({ type: 'voice_off' }),
+      settings: () => ({
+        voiceChat: getSettings().voiceChat,
+        voicePushToTalk: getSettings().voicePushToTalk,
+      }),
+      onState: (state, message) => this.voiceUi?.setState(state, message),
+      maxPeers: 1,
+      inRange: 80,
+      outRange: 90,
+    })
+    this.unwatchVoice = onSettings((s) => {
+      d.c.audio.setVoiceChatVolume(s.voiceChatVolume)
+      this.voice?.setEnabled(s.voiceChat && this.posters?.[this.opp]?.kind === 'human')
+      this.voiceUi?.refresh()
+    })
+    d.c.audio.setVoiceChatVolume(getSettings().voiceChatVolume)
     this.clock = new RemoteDuelClock(this.link)
     d.clock.dispose()
     d.clock = this.clock
@@ -140,6 +168,7 @@ export class PvpDuel implements DirectorHooks {
 
   tick(phase: Phase, _now: number, dt: number): boolean {
     const d = this.d
+    this.voiceTick()
     switch (phase) {
       case 'cock':
         return true
@@ -294,6 +323,19 @@ export class PvpDuel implements DirectorHooks {
       case 'rematch':
         this.news.vote(m, this.seat)
         break
+      case 'voice_ready': {
+        const wait = this.voiceWait
+        this.voiceWait = null
+        wait?.({ meetingId: m.meetingId, token: m.token })
+        break
+      }
+      case 'voice_error': {
+        const wait = this.voiceWait
+        this.voiceWait = null
+        wait?.(null)
+        d.c.hud.fake(`[${m.message}]`, 2400)
+        break
+      }
       case 'error':
         if (m.fatal) {
           this.onGone(m.message)
@@ -327,6 +369,7 @@ export class PvpDuel implements DirectorHooks {
     this.results?.close()
     this.results = null
     this.stage(them)
+    this.voiceStart(them)
     if (rematch === 0) {
       this.intro?.close()
       this.intro = new MatchIntro(d.c.hud.root, posters[you], them, {
@@ -368,6 +411,9 @@ export class PvpDuel implements DirectorHooks {
 
   private onBeat(beat: Beat, deadline: number | null): void {
     const d = this.d
+    const silent = beat === 'turn' || beat === 'wait' || beat === 'called'
+    this.voice?.setSilenced(silent)
+    this.voiceUi?.setSilenced(silent)
     switch (beat) {
       case 'cock':
         if (this.intro && !this.intro.readySent) {
@@ -435,6 +481,8 @@ export class PvpDuel implements DirectorHooks {
 
   private onResult(r: DuelResult): void {
     const d = this.d
+    this.voice?.setSilenced(false)
+    this.voiceUi?.setSilenced(false)
     this.result = r
     this.deadHeat = false
     const me = this.seat
@@ -544,6 +592,11 @@ export class PvpDuel implements DirectorHooks {
     if (this.over) {
       return
     }
+    this.unwatchVoice?.()
+    void this.voice?.dispose()
+    this.voice = null
+    this.voiceUi?.dispose()
+    this.voiceUi = null
     if (this.result) {
       // a ghost (or a Town Outlaw) never offers a rematch, so "no more rematches" means nothing
       const human = this.posters?.[this.opp]?.kind === 'human'
@@ -556,6 +609,58 @@ export class PvpDuel implements DirectorHooks {
     this.quietEnd(this.result)
   }
 
+  private voiceStart(them: Poster): void {
+    if (them.kind !== 'human') {
+      this.voice?.setEnabled(false)
+      this.voiceUi?.dispose()
+      this.voiceUi = null
+      return
+    }
+    if (!this.voiceUi) {
+      this.voiceUi = new VoiceControls({
+        settings: () => ({
+          voiceChat: getSettings().voiceChat,
+          voicePushToTalk: getSettings().voicePushToTalk,
+        }),
+        talk: (down) => this.voice?.setTalking(down),
+        mute: (muted) => this.voice?.setMicMuted(muted),
+      })
+    }
+    this.voice?.setEnabled(getSettings().voiceChat)
+    this.voiceUi.refresh()
+  }
+
+  private requestVoiceToken(): Promise<VoiceCredentials | null> {
+    return new Promise((resolve) => {
+      this.voiceWait = resolve
+      if (!this.link.send({ type: 'voice_on' })) {
+        this.voiceWait = null
+        resolve(null)
+        return
+      }
+      setTimeout(() => {
+        if (this.voiceWait === resolve) {
+          this.voiceWait = null
+          resolve(null)
+        }
+      }, 12_000)
+    })
+  }
+
+  private voiceTick(): void {
+    const voice = this.voice
+    const enemy = this.d.enemy
+    const posters = this.posters
+    if (!(voice && enemy && posters && posters[this.opp]?.kind === 'human')) {
+      return
+    }
+    const p = enemy.root.position
+    voice.update([{ id: this.opp, name: posters[this.opp].name, x: p.x, y: p.y, z: p.z }], {
+      x: this.d.player.root.position.x,
+      z: this.d.player.root.position.z,
+    })
+  }
+
   /** Back to the saloon (or straight back into the queue). */
   leave(how: PvpExit): void {
     if (this.over) {
@@ -566,6 +671,11 @@ export class PvpDuel implements DirectorHooks {
     const d = this.d
     this.link.send({ type: 'flee' })
     this.link.close()
+    this.unwatchVoice?.()
+    void this.voice?.dispose()
+    this.voiceUi?.dispose()
+    this.voice = null
+    this.voiceUi = null
     this.intro?.close()
     this.results?.close()
     clearStreet(d, this.realSave)
