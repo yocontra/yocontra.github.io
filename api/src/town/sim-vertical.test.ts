@@ -1,6 +1,8 @@
 import { describe, expect, test as it } from 'bun:test'
 import { BTN_AIM, BTN_FIRE, BTN_JUMP } from '../../../src/experiments/out-west/contract/town.ts'
 import { FALL_DAMAGE_MIN, MAX_HP } from '../../../src/experiments/out-west/ffa/sim/constants.ts'
+import { TOWN } from '../../../src/experiments/out-west/ffa/sim/layout.ts'
+import { CLIMB_TICKS, CLIMBS } from '../../../src/experiments/out-west/ffa/sim/roofwalks.ts'
 import { aimAt, place, run, testWorld } from './test-helpers.ts'
 
 describe('2.5D movement', () => {
@@ -8,7 +10,8 @@ describe('2.5D movement', () => {
     const w = testWorld()
     const p = place(w, 64, 70)
     run(w, 10, { [p.id]: () => ({ moveX: 127 }) })
-    run(w, 1, { [p.id]: () => ({ moveX: 127, buttons: BTN_JUMP }) })
+    // Stop and tap jump to mantle onto it (running at low cover vaults it instead).
+    run(w, 1, { [p.id]: () => ({ buttons: BTN_JUMP }) })
     run(w, 10, { [p.id]: () => ({}) })
     expect(p.y).toBeCloseTo(0.75, 2)
     expect(p.grounded).toBe(true)
@@ -18,7 +21,7 @@ describe('2.5D movement', () => {
     const w = testWorld()
     const p = place(w, 20.5, 57.5)
     run(w, 20, { [p.id]: () => ({ moveX: 127 }) })
-    run(w, 1, { [p.id]: () => ({ moveX: 127, buttons: BTN_JUMP }) })
+    run(w, 1, { [p.id]: () => ({ buttons: BTN_JUMP }) })
     run(w, 10, { [p.id]: () => ({}) })
     expect(p.y).toBeCloseTo(2.2, 2)
     expect(p.grounded).toBe(true)
@@ -64,6 +67,46 @@ describe('2.5D movement', () => {
     p.airPeakY = 9
     run(w, 60)
     expect(p.hp).toBe(MAX_HP)
+  })
+
+  it('vaults low cover with a real arc and lands on the far side', () => {
+    const w = testWorld()
+    const fence = TOWN.cover.find((c) => c.kind === 'fence')
+    expect(fence).toBeDefined()
+    if (!fence) {
+      return
+    }
+    const p = place(w, fence.x + fence.w / 2, fence.z + fence.d + 1.2)
+    run(w, 10, { [p.id]: () => ({ moveZ: -127 }) })
+    run(w, 1, { [p.id]: () => ({ moveZ: -127, buttons: BTN_JUMP }) })
+    expect(p.vaultStep).toBeGreaterThan(0)
+    run(w, 4, { [p.id]: () => ({}) })
+    expect(p.y).toBeGreaterThan(0.4)
+    run(w, 12, { [p.id]: () => ({}) })
+    expect(p.z).toBeLessThan(fence.z)
+    expect(p.y).toBe(0)
+  })
+
+  it('climbs a boxcar end ladder onto its roof and back down', () => {
+    const w = testWorld()
+    const climb = CLIMBS.find((c) => c.walk === null)
+    expect(climb).toBeDefined()
+    if (!climb) {
+      return
+    }
+    const p = place(w, climb.bottomX, climb.bottomZ)
+    run(w, 1, { [p.id]: () => ({ buttons: BTN_JUMP }) })
+    expect(p.climbDir).toBe(1)
+    run(w, CLIMB_TICKS)
+    expect(p.y).toBeCloseTo(climb.top, 2)
+    expect(p.grounded).toBe(true)
+    expect(p.x).toBeCloseTo(climb.topX, 1)
+    expect(p.z).toBeCloseTo(climb.topZ, 1)
+    run(w, 1, { [p.id]: () => ({ buttons: BTN_JUMP }) })
+    expect(p.climbDir).toBe(-1)
+    run(w, CLIMB_TICKS)
+    expect(p.y).toBe(0)
+    expect(p.grounded).toBe(true)
   })
 
   it('a pitched shot hits an elevated rider', () => {

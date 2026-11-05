@@ -55,8 +55,15 @@ import {
   VAULT_TICKS,
 } from './constants.ts'
 import { BLOCK_MOVE, BLOCK_VAULT, circleBlocked, type Grid } from './layout.ts'
-import { CLIMB_TICKS, ladderAt, onRoofWalk, type RoofWalk, roofWalkAt } from './roofwalks.ts'
-import { blockedAt, ceilingAt, pushOutVertical, standableSupport, supportAt } from './surfaces.ts'
+import { CLIMB_TICKS, type Climb, climbAt, ladderAt, onRoofWalk, roofWalkAt } from './roofwalks.ts'
+import {
+  blockedAt,
+  ceilingAt,
+  pushOutVertical,
+  standableSupport,
+  supportAt,
+  topAt,
+} from './surfaces.ts'
 import type { MoveState } from './types.ts'
 
 const STICK_MAX = 127
@@ -128,12 +135,12 @@ export function stopMoves(m: MoveState): void {
   m.vy = 0
   m.mantleTicks = 0
   if (m.climbTicks > 0) {
-    const w = roofWalkAt(m.climbDeck)
-    if (w) {
-      m.x = w.ladderX
-      m.z = w.ladderZ
-      m.y = m.climbDir > 0 ? 0 : w.height
-      m.roof = m.climbDir > 0 ? 0 : w.index
+    const c = climbAt(m.climbDeck)
+    if (c) {
+      m.x = m.climbDir > 0 ? c.topX : c.bottomX
+      m.z = m.climbDir > 0 ? c.topZ : c.bottomZ
+      m.y = m.climbDir > 0 ? c.top : c.bottom
+      m.roof = m.climbDir > 0 && c.walk ? c.walk.index : 0
     }
     m.climbTicks = 0
     m.climbDeck = 0
@@ -162,6 +169,7 @@ export function resetVertical(m: MoveState): void {
   m.fallFromZ = 0
   m.fallFromY = 0
   m.fallToX = 0
+  m.fallToY = 0
   m.fallToZ = 0
   m.vy = 0
   m.grounded = true
@@ -280,9 +288,9 @@ function startJump(
   stick: Stick,
   sprint: boolean,
 ): void {
-  const ladder = ladderAt(m.x, m.z, m.roof)
+  const ladder = ladderAt(m.x, m.z, m.y, m.roof)
   if (ladder) {
-    startClimb(m, ladder.walk, ladder.dir)
+    startClimb(m, ladder.climb, ladder.dir)
     return
   }
   // A jump away from a catwalk's ladder is a step off: drop the deck hint and fall normally.
@@ -291,13 +299,14 @@ function startJump(
   const dir = aimDir(dirAim)
   const d = vaultDistance(grid, m, dir.x, dir.z)
   m.jumpCooldown = JUMP_COOLDOWN_TICKS
-  if (tryMantle(grid, m, dirAim)) {
+  // Running at low cover vaults it; stopping and tapping jump mantles onto it.
+  const running = stick.mag >= 0.5
+  if (d > 0 && running) {
+    startVault(grid, m, dirAim, dir, d)
+  } else if (tryMantle(grid, m, dirAim)) {
     return
-  }
-  if (d > 0) {
-    m.jumpTicks = VAULT_TICKS
-    m.vaultStep = Math.ceil((d * 100) / VAULT_TICKS) / 100
-    m.vaultAim = dirAim
+  } else if (d > 0) {
+    startVault(grid, m, dirAim, dir, d)
   } else {
     m.jumpTicks = HOP_TICKS
     m.vaultStep = 0
@@ -314,6 +323,28 @@ function startJump(
   }
   m.slideTicks = 0
   m.sprinting = false
+}
+
+/** Start a committed vault: a real arc over the cover, not a cosmetic camera lift. */
+// biome-ignore lint/complexity/useMaxParams: the per-tick hot path takes its state positionally
+function startVault(
+  grid: Grid,
+  m: MoveState,
+  aim: number,
+  dir: { x: number; z: number },
+  distance: number,
+): void {
+  m.jumpTicks = VAULT_TICKS
+  m.vaultStep = Math.ceil((distance * 100) / VAULT_TICKS) / 100
+  m.vaultAim = aim
+  m.fallFromY = m.y
+  let peak = m.y
+  for (let s = 0.2; s <= distance; s += 0.2) {
+    peak = Math.max(peak, topAt(grid, m.x + dir.x * s, m.z + dir.z * s))
+  }
+  m.fallToY = peak + 0.35
+  m.vy = 0
+  m.grounded = false
 }
 
 /**
@@ -381,15 +412,15 @@ function stepMantle(m: MoveState): void {
 }
 
 /** Start a committed climb from one end of a ladder. */
-function startClimb(m: MoveState, w: RoofWalk, dir: 1 | -1): void {
+function startClimb(m: MoveState, c: Climb, dir: 1 | -1): void {
   m.jumpCooldown = JUMP_COOLDOWN_TICKS
-  m.x = w.ladderX
-  m.z = w.ladderZ
+  m.x = dir > 0 ? c.bottomX : c.topX
+  m.z = dir > 0 ? c.bottomZ : c.topZ
   m.climbTicks = CLIMB_TICKS
-  m.climbDeck = w.index
+  m.climbDeck = c.index
   m.climbDir = dir
-  m.roof = dir > 0 ? 0 : w.index
-  m.y = dir > 0 ? 0 : w.height
+  m.roof = 0
+  m.y = dir > 0 ? c.bottom : c.top
   m.grounded = false
   m.vy = 0
   m.airPeakY = m.y
@@ -404,8 +435,8 @@ function startClimb(m: MoveState, w: RoofWalk, dir: 1 | -1): void {
 
 /** One tick of the ladder: straight up or down, fixed duration, no steering. */
 function stepClimb(m: MoveState): void {
-  const w = roofWalkAt(m.climbDeck)
-  if (!w) {
+  const c = climbAt(m.climbDeck)
+  if (!c) {
     m.climbTicks = 0
     m.climbDeck = 0
     m.climbDir = 0
@@ -415,15 +446,19 @@ function stepClimb(m: MoveState): void {
     m.support = 0
     return
   }
-  m.x = w.ladderX
-  m.z = w.ladderZ
+  m.x = c.x
+  m.z = c.z
   m.climbTicks--
   const t = 1 - m.climbTicks / CLIMB_TICKS
-  m.y = quantize(m.climbDir > 0 ? w.height * t : w.height * (1 - t))
+  m.y = quantize(
+    m.climbDir > 0 ? c.bottom + (c.top - c.bottom) * t : c.top - (c.top - c.bottom) * t,
+  )
   if (m.climbTicks <= 0) {
     m.climbTicks = 0
-    m.y = m.climbDir > 0 ? w.height : 0
-    m.roof = m.climbDir > 0 ? w.index : 0
+    m.x = m.climbDir > 0 ? c.topX : c.bottomX
+    m.z = m.climbDir > 0 ? c.topZ : c.bottomZ
+    m.y = m.climbDir > 0 ? c.top : c.bottom
+    m.roof = m.climbDir > 0 && c.walk ? c.walk.index : 0
     m.climbDeck = 0
     m.climbDir = 0
     m.grounded = true
@@ -467,11 +502,14 @@ const COUNTDOWNS = [
 /** Vault travel: one tick of the committed arc over the cover. */
 function stepVault(grid: Grid, m: MoveState): void {
   m.jumpTicks--
+  const t = 1 - m.jumpTicks / VAULT_TICKS
+  m.y = quantize(m.fallFromY + (m.fallToY - m.fallFromY) * 4 * t * (1 - t))
+  m.airPeakY = Math.max(m.airPeakY, m.y)
   const dir = aimDir(m.vaultAim)
   slideMasked(grid, m, { dx: dir.x * m.vaultStep, dz: dir.z * m.vaultStep, except: BLOCK_VAULT })
   if (m.jumpTicks === 0) {
     m.vaultStep = 0
-    // Landed: settle onto whatever is under the feet.
+    // Landed: settle out of anything the last step grazed, onto the far side.
     slide(grid, m, 0, 0)
     const sup = supportAt(grid, m.x, m.z, m.y)
     m.y = sup.top
@@ -479,6 +517,7 @@ function stepVault(grid: Grid, m: MoveState): void {
     m.grounded = true
     m.vy = 0
     m.airPeakY = m.y
+    m.fallTicks = 0
   }
 }
 

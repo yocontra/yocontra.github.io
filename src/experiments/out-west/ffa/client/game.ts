@@ -1606,6 +1606,10 @@ export class FrontierGame {
     const cam = this.cam.camera
     vm.setLens(cam.aspect, cam.fov)
     vm.townSky.update(this.scene.environment, this.scene.environmentIntensity, cam.quaternion)
+    // The body and gloves are not guns: give them the same town probe, or skin/metal reads black
+    // in the view model's own scene.
+    vm.scene.environment = this.scene.environment
+    vm.scene.environmentIntensity = this.scene.environmentIntensity
     // the sun, turned into the lens's frame (the view model lives in camera space)
     this.vmSun.copy(SUN_DIR).applyQuaternion(this.vmQ.copy(cam.quaternion).invert())
     const pred = this.net.pred

@@ -58,15 +58,16 @@ export function deposit(w: World, p: Player): void {
   w.events.push({ type: 'deposit', player: p.id, amount, commission })
 }
 
-function strongboxInReach(w: World, p: Player): boolean {
+function strongboxDistance(w: World, p: Player): boolean {
   const box = w.strongbox
   const spot = box ? w.layout.strongboxes[box.spot] : undefined
   return (
-    box !== null &&
-    spot !== undefined &&
-    box.openedBy < 0 &&
-    dist2(p.x, p.z, spot.x, spot.z) <= STRONGBOX_RADIUS ** 2
+    box !== null && spot !== undefined && dist2(p.x, p.z, spot.x, spot.z) <= STRONGBOX_RADIUS ** 2
   )
+}
+
+function strongboxInReach(w: World, p: Player): boolean {
+  return w.strongbox !== null && w.strongbox.openedBy < 0 && strongboxDistance(w, p)
 }
 
 /** Start a channel from a fresh press. Accepting a call-out is handled before this, by the showdown. */
@@ -93,6 +94,7 @@ export function startChannel(w: World, p: Player, buttons: number): void {
       kind: bank ? CHANNEL_BANK : CHANNEL_STAGE,
       ticks: 0,
       total: bank ? BANK_CHANNEL_TICKS : STAGE_CHANNEL_TICKS,
+      zoneId: zone.id,
     }
   } else if (strongboxInReach(w, p) && w.strongbox) {
     w.strongbox.openedBy = p.id
@@ -128,13 +130,29 @@ export function leaveTown(w: World, p: Player): void {
   w.events.push({ type: 'left', player: p.id })
 }
 
-/** Advance a channel; moving or taking damage this tick cancels it. */
+/**
+ * Advance a channel. Damage (and death) always cancels it; a zone channel only cancels when the
+ * rider leaves its zone, and the strongbox channel only when the rider leaves its circle. The
+ * short "leave town" channel still needs you to stand still.
+ */
 export function progressChannel(w: World, p: Player): void {
   const ch = p.channel
   if (!ch) {
     return
   }
-  if (p.moving || p.lastDamageTick === w.tick || !p.alive) {
+  let cancel = p.lastDamageTick === w.tick || !p.alive
+  if (!cancel) {
+    if (ch.kind === CHANNEL_BANK || ch.kind === CHANNEL_STAGE) {
+      const zone = zoneAt(w.layout, p.x, p.z)
+      const want = ch.kind === CHANNEL_BANK ? 'bank' : 'stage'
+      cancel = !zone || zone.kind !== want || (ch.zoneId !== undefined && zone.id !== ch.zoneId)
+    } else if (ch.kind === CHANNEL_STRONGBOX) {
+      cancel = !strongboxDistance(w, p) || w.strongbox?.openedBy !== p.id
+    } else if (ch.kind === CHANNEL_LEAVE) {
+      cancel = p.moving
+    }
+  }
+  if (cancel) {
     if (ch.kind === CHANNEL_STRONGBOX && w.strongbox?.openedBy === p.id) {
       w.strongbox.openedBy = -1
       w.strongbox.progress = 0

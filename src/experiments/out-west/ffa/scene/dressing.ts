@@ -32,6 +32,7 @@ const DARK_WOOD = 0x6a_4c_34
 const WEATHERED = 0x8a_74_5a
 const IRON = 0x3a_38_36
 const CANVAS = 0xe8_dc_c0
+const CANVAS_DARK = 0xd8_c8_a8
 
 /** The builders the town merges everything into (one draw per material). */
 export interface DressBuilders {
@@ -316,44 +317,41 @@ function chassis(
 /** A canvas bonnet over a bed: ribbed hoops and a half-barrel of canvas. */
 function bonnet(b: DressBuilders, c: Rect, bedTop: number): void {
   const alongX = c.w >= c.d
-  const L = Math.max(c.w, c.d) - 1.3
-  const W = Math.min(c.w, c.d) - 0.4
-  const cx = c.x + c.w / 2 + (alongX ? 0.45 : 0)
-  const cz = c.z + c.d / 2 + (alongX ? 0 : 0.45)
-  const r = W / 2
-  const segs = 8
+  const L = Math.max(c.w, c.d) - 1.35
+  const W = Math.min(c.w, c.d) - 0.5
+  const cx = c.x + c.w / 2
+  const cz = c.z + c.d / 2
+  const r = Math.max(0.45, W / 2)
+  const segs = 10
   const V = (a: number, cc: number, y: number) =>
     alongX ? new Vector3(cx + a, y, cz + cc) : new Vector3(cx + cc, y, cz + a)
-  const rise = 0.55
+  const rise = 0.5
+  // The canvas is a proper half-cylinder: a smooth arc along the length, closed at both ends.
   for (let i = 0; i < segs; i++) {
     const t0 = (i / segs) * Math.PI
     const t1 = ((i + 1) / segs) * Math.PI
     const c0 = Math.cos(t0) * r
     const c1 = Math.cos(t1) * r
-    const y0 = bedTop + rise + Math.sin(t0) * r * 1.05
-    const y1 = bedTop + rise + Math.sin(t1) * r * 1.05
-    const yb0 = i === 0 ? bedTop : y0
-    const yb1 = i === segs - 1 ? bedTop : y1
-    const p0 = V(-L / 2, c0, yb0)
-    const p1 = V(L / 2, c0, yb0)
-    const p2 = V(L / 2, c1, yb1)
-    const p3 = V(-L / 2, c1, yb1)
+    const y0 = bedTop + rise + Math.sin(t0) * r
+    const y1 = bedTop + rise + Math.sin(t1) * r
+    const p0 = V(-L / 2, c0, y0)
+    const p1 = V(L / 2, c0, y0)
+    const p2 = V(L / 2, c1, y1)
+    const p3 = V(-L / 2, c1, y1)
     if (alongX) {
       b.cloth.quad(p0, p1, p2, p3, CANVAS)
     } else {
       b.cloth.quad(p1, p0, p3, p2, CANVAS)
     }
-    // the canvas gathered at the ends, a darker puckered ring
+    // End caps: the half-disc at each end of the barrel, so the tent is not an open tube.
     for (const e of [-1, 1]) {
-      const q0 = V((e * L) / 2, c0 * 0.55, bedTop + rise + Math.sin(t0) * r * 0.75)
-      const q1 = V((e * L) / 2, c1 * 0.55, bedTop + rise + Math.sin(t1) * r * 0.75)
-      const q2 = V((e * L) / 2, c1, yb1)
-      const q3 = V((e * L) / 2, c0, yb0)
-      const flip = e > 0 !== alongX
-      if (flip) {
-        b.cloth.quad(q3, q2, q1, q0, 0xd8_c8_a8)
+      const hub = V((e * L) / 2, 0, bedTop)
+      const a = V((e * L) / 2, c0, y0)
+      const cpt = V((e * L) / 2, c1, y1)
+      if (e > 0 === alongX) {
+        b.cloth.tri(hub, a, cpt, CANVAS_DARK)
       } else {
-        b.cloth.quad(q0, q1, q2, q3, 0xd8_c8_a8)
+        b.cloth.tri(hub, cpt, a, CANVAS_DARK)
       }
     }
   }

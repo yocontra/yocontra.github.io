@@ -120,27 +120,110 @@ export const roofWalkAt = (level: number): RoofWalk | null =>
   level > 0 ? (ROOF_WALKS[level - 1] ?? null) : null
 
 /**
- * A ladder you can use from here: `dir` 1 climbs from the street, -1 from the roof. The caller
- * already knows whether it is on a roof, because the two ends sit on the same ground point.
+ * One climbable ladder. Porch catwalks use the four `ROOF_WALKS`; the boxcars carry end ladders
+ * on their models, so those are real too. `landing` is the walkable top surface the ladder reaches.
+ */
+export interface Climb {
+  /** 1-based id on the wire (`climbDeck`); roof walks keep their existing indices. */
+  index: number
+  /** The ladder line on the ground plane (the rungs / the climb path). */
+  x: number
+  z: number
+  /** Where the rider stands at the foot and steps off at the top. */
+  bottomX: number
+  bottomZ: number
+  topX: number
+  topZ: number
+  bottom: number
+  top: number
+  /** The surface at the top (a catwalk, a boxcar roof). */
+  landing: { x: number; z: number; w: number; d: number }
+  /** The porch catwalk this ladder belongs to, if any. */
+  walk: RoofWalk | null
+}
+
+/** Boxcar end ladders, built from the cover entries the scene draws. */
+function boxcarClimbs(start: number): Climb[] {
+  const out: Climb[] = []
+  let index = start
+  for (const c of TOWN.cover) {
+    if (c.kind !== 'boxcar') {
+      continue
+    }
+    const alongX = c.w >= c.d
+    const L = Math.max(c.w, c.d)
+    const cx = c.x + c.w / 2
+    const cz = c.z + c.d / 2
+    for (const e of [-1, 1] as const) {
+      out.push({
+        index: index++,
+        x: alongX ? cx + e * (L / 2 - 0.12) : cx,
+        z: alongX ? cz : cz + e * (L / 2 - 0.12),
+        bottomX: alongX ? cx + e * (L / 2 + 0.5) : cx,
+        bottomZ: alongX ? cz : cz + e * (L / 2 + 0.5),
+        topX: alongX ? cx + e * (L / 2 - 0.7) : cx,
+        topZ: alongX ? cz : cz + e * (L / 2 - 0.7),
+        bottom: 0,
+        top: c.top ?? 3.8,
+        landing: { x: c.x, z: c.z, w: c.w, d: c.d },
+        walk: null,
+      })
+    }
+  }
+  return out
+}
+
+/** Every ladder in town: porch catwalks first, then the boxcar end ladders. */
+export const CLIMBS: readonly Climb[] = [
+  ...ROOF_WALKS.map(
+    (w): Climb => ({
+      index: w.index,
+      x: w.ladderX,
+      z: w.ladderZ,
+      bottomX: w.ladderX,
+      bottomZ: w.ladderZ,
+      topX: w.ladderX,
+      topZ: w.ladderZ,
+      bottom: 0,
+      top: w.height,
+      landing: { x: w.x, z: w.z, w: w.w, d: w.d },
+      walk: w,
+    }),
+  ),
+  ...boxcarClimbs(ROOF_WALKS.length + 1),
+]
+
+/** The climb for a 1-based id, or null. */
+export const climbAt = (index: number): Climb | null =>
+  index > 0 ? (CLIMBS.find((c) => c.index === index) ?? null) : null
+
+/**
+ * A ladder you can use from here: `dir` 1 climbs up, -1 climbs down. A rider can be near either
+ * end, so the height decides the direction; a catwalk's `roof` hint still wins when set.
  */
 export function ladderAt(
   x: number,
   z: number,
+  y: number,
   roof: number,
-): { walk: RoofWalk; dir: 1 | -1 } | null {
-  let best: RoofWalk | null = null
+): { climb: Climb; dir: 1 | -1 } | null {
+  let best: Climb | null = null
   let bestD = LADDER_REACH
-  for (const w of ROOF_WALKS) {
-    if (roof > 0 && w.index !== roof) {
+  for (const c of CLIMBS) {
+    if (roof > 0 && c.walk && c.walk.index !== roof) {
       continue
     }
-    const d = Math.hypot(w.ladderX - x, w.ladderZ - z)
+    const d = Math.hypot(c.x - x, c.z - z)
     if (d < bestD) {
-      best = w
+      best = c
       bestD = d
     }
   }
-  return best ? { walk: best, dir: roof > 0 ? -1 : 1 } : null
+  if (!best) {
+    return null
+  }
+  const dir: 1 | -1 = y >= best.top - 0.6 ? -1 : 1
+  return { climb: best, dir }
 }
 
 /** Is (x, z) on this walk's catwalk (the centre point, before the capsule radius)? */

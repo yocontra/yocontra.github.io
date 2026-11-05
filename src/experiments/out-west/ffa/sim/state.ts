@@ -130,6 +130,7 @@ export function newPlayer(id: number, init: PlayerInit): Player {
     fallFromZ: 0,
     fallFromY: 0,
     fallToX: 0,
+    fallToY: 0,
     fallToZ: 0,
     rollTicks: 0,
     rollCooldown: 0,

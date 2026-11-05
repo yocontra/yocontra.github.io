@@ -53,6 +53,81 @@ const flag = (level: Level, building: string, kind: string, msg: string) =>
 
 const sideLength = (b: Building, side: string): number => (side === 'n' || side === 's' ? b.w : b.d)
 
+const overlaps = (
+  a: { x: number; z: number; w: number; d: number },
+  b: { x: number; z: number; w: number; d: number },
+  pad = 0,
+): boolean =>
+  a.x < b.x + b.w + pad && b.x < a.x + a.w + pad && a.z < b.z + b.d + pad && b.z < a.z + a.d + pad
+
+/** The clear strip just inside a doorway. */
+function doorInside(
+  b: Building,
+  side: string,
+  at: number,
+  width: number,
+): { x: number; z: number; w: number; d: number } {
+  const depth = 1.6
+  switch (side) {
+    case 'n':
+      return { x: b.x + at + 0.1, z: b.z + 0.5, w: Math.max(0.2, width - 0.2), d: depth }
+    case 's':
+      return {
+        x: b.x + at + 0.1,
+        z: b.z + b.d - 0.5 - depth,
+        w: Math.max(0.2, width - 0.2),
+        d: depth,
+      }
+    case 'e':
+      return {
+        x: b.x + b.w - 0.5 - depth,
+        z: b.z + at + 0.1,
+        w: depth,
+        d: Math.max(0.2, width - 0.2),
+      }
+    default:
+      return { x: b.x + 0.5, z: b.z + at + 0.1, w: depth, d: Math.max(0.2, width - 0.2) }
+  }
+}
+
+/** The strip at the bottom of a stair, where a rider walks on. */
+function stairFoot(st: { x: number; z: number; w: number; d: number; dir: string }): {
+  x: number
+  z: number
+  w: number
+  d: number
+} {
+  switch (st.dir) {
+    case 'n':
+      return { x: st.x, z: st.z + st.d, w: st.w, d: 1.4 }
+    case 's':
+      return { x: st.x, z: st.z - 1.4, w: st.w, d: 1.4 }
+    case 'e':
+      return { x: st.x - 1.4, z: st.z, w: 1.4, d: st.d }
+    default:
+      return { x: st.x + st.w, z: st.z, w: 1.4, d: st.d }
+  }
+}
+
+/** The landing at the top of a stair, on the upper floor. */
+function stairLanding(st: { x: number; z: number; w: number; d: number; dir: string }): {
+  x: number
+  z: number
+  w: number
+  d: number
+} {
+  switch (st.dir) {
+    case 'n':
+      return { x: st.x, z: st.z, w: st.w, d: 1.4 }
+    case 's':
+      return { x: st.x, z: st.z + st.d - 1.4, w: st.w, d: 1.4 }
+    case 'e':
+      return { x: st.x + st.w - 1.4, z: st.z, w: 1.4, d: st.d }
+    default:
+      return { x: st.x, z: st.z, w: 1.4, d: st.d }
+  }
+}
+
 interface Slot {
   side: string
   floor: number
@@ -97,8 +172,59 @@ for (const b of TOWN.buildings) {
   const front = frontOf(b, TOWN)
   const id = b.id
   const slots = windowSlots(b, front)
+  const inside = TOWN.cover.filter(
+    (c) =>
+      c.x >= b.x &&
+      c.z >= b.z &&
+      c.x + c.w <= b.x + b.w &&
+      c.z + c.d <= b.z + b.d &&
+      (c.y0 ?? 0) === 0,
+  )
+
+  // A decorative `stairs` cover with no real stair behind it is a staircase to nowhere.
+  for (const c of inside) {
+    if (c.kind === 'stairs') {
+      flag('error', id, 'stair', 'decorative staircase to nowhere (use Building.stairs)')
+    }
+  }
 
   // Doors: a frame that reaches the wall, a wall above it, and a wide enough opening.
+  // Nothing may stand in the strip just inside a doorway.
+  for (const d of b.doors) {
+    const approach = doorInside(b, d.side, d.at, d.width)
+    for (const c of inside) {
+      if (overlaps(approach, c)) {
+        flag('error', id, 'door', `${d.side} door is blocked inside by ${c.kind}`)
+      }
+    }
+  }
+
+  // Stairs need a clear footprint, a clear foot, and a landing that is not inside an upper wall.
+  for (const st of b.stairs ?? []) {
+    for (const c of inside) {
+      if (overlaps(st, c)) {
+        flag('error', id, 'stair', `stair is blocked by ${c.kind}`)
+      }
+    }
+    const foot = stairFoot(st)
+    for (const c of inside) {
+      if (overlaps(foot, c)) {
+        flag('error', id, 'stair', `stair foot is blocked by ${c.kind}`)
+      }
+    }
+    const landing = stairLanding(st)
+    for (const w of b.walls ?? []) {
+      if ((w.y0 ?? 0) > 0 && overlaps(landing, w)) {
+        flag('error', id, 'stair', 'stair lands inside an upper wall')
+      }
+    }
+    for (const c of TOWN.cover.filter((q) => (q.y0 ?? 0) > 0)) {
+      if (overlaps(landing, c)) {
+        flag('error', id, 'stair', `stair lands inside ${c.kind}`)
+      }
+    }
+  }
+
   for (const d of b.doors) {
     const top = doorTop(d.width)
     if (top > b.height - 0.6) {

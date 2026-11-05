@@ -141,6 +141,7 @@ export interface SelfView {
   fallFromZ: number
   fallFromY: number
   fallToX: number
+  fallToY: number
   fallToZ: number
   hp: number
   ammo: number
@@ -328,6 +329,7 @@ function writeSelf(w: Writer, s: SelfView): void {
     .u16(clampU16(s.fallFromZ * 100))
     .u8(clampU8(s.fallFromY * 10))
     .u16(clampU16(s.fallToX * 100))
+    .u8(clampU8(s.fallToY * 10))
     .u16(clampU16(s.fallToZ * 100))
     .u8(clampU8(s.hp))
     .u8(s.ammo)
@@ -380,6 +382,7 @@ function readSelf(r: Reader): SelfView {
     fallFromZ: r.u16() / 100,
     fallFromY: r.u8() / 10,
     fallToX: r.u16() / 100,
+    fallToY: r.u8() / 10,
     fallToZ: r.u16() / 100,
     hp: r.u8(),
     ammo: r.u8(),

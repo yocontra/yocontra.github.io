@@ -864,8 +864,10 @@ function addDoorFrames(bs: Builders, b: Building, porch: Side | null): void {
     const along = d.side === 'n' || d.side === 's'
     const cx = along ? b.x + d.at + d.width / 2 : b.x + b.w / 2
     const cz = along ? b.z + b.d / 2 : b.z + d.at + d.width / 2
-    const zWall = d.side === 'n' ? b.z + DOOR_FRAME_DEPTH / 2 : b.z + b.d - DOOR_FRAME_DEPTH / 2
-    const xWall = d.side === 'w' ? b.x + DOOR_FRAME_DEPTH / 2 : b.x + b.w - DOOR_FRAME_DEPTH / 2
+    // Centred on the wall, not tucked inside it: the frame protrudes a few centimetres on both
+    // faces, so it reads from the street and from the room.
+    const zWall = d.side === 'n' ? b.z + WALL_T / 2 : b.z + b.d - WALL_T / 2
+    const xWall = d.side === 'w' ? b.x + WALL_T / 2 : b.x + b.w - WALL_T / 2
     // jambs, one each side of the opening
     for (const a of [d.at - DOOR_JAMB / 2, d.at + d.width + DOOR_JAMB / 2]) {
       bs.wood.box(

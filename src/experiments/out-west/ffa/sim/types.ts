@@ -34,6 +34,7 @@ export interface MoveState {
   fallFromZ: number
   fallFromY: number
   fallToX: number
+  fallToY: number
   fallToZ: number
   rollTicks: number
   rollCooldown: number
@@ -82,6 +83,8 @@ export interface Channel {
   kind: number
   ticks: number
   total: number
+  /** The bank/stage zone that started it; the channel survives small moves inside it. */
+  zoneId?: string
 }
 
 export interface DamageRecord {

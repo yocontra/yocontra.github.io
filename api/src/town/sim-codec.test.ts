@@ -59,6 +59,7 @@ const randomSelf = (): SelfView => ({
   fallFromZ: u16() / 100,
   fallFromY: u8() / 10,
   fallToX: u16() / 100,
+  fallToY: u8() / 10,
   fallToZ: u16() / 100,
   hp: rng.int(0, 100),
   ammo: rng.int(0, 6),

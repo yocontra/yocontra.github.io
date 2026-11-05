@@ -184,6 +184,7 @@ export function selfView(w: World, p: Player): SelfView {
     fallFromZ: p.fallFromZ,
     fallFromY: p.fallFromY,
     fallToX: p.fallToX,
+    fallToY: p.fallToY,
     fallToZ: p.fallToZ,
     hp: Math.ceil(Math.max(0, p.hp)),
     ammo: p.ammo,

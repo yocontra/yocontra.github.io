@@ -30,6 +30,7 @@ import {
   type Material,
   Matrix4,
   Mesh,
+  MeshStandardMaterial,
   type Object3D,
   PerspectiveCamera,
   Quaternion,
@@ -82,8 +83,8 @@ const EYE_FWD = 0.1
  * His body sits this much further forward and lower than his eye would put it (m): his head is
  * folded away, and it brings his shoulders up behind the gun so his elbows bend like a shooter's.
  */
-const BODY_FWD = 0.13
-const BODY_DOWN = 0.04
+const BODY_FWD = 0.33
+const BODY_DOWN = 0.15
 /** A long gun's support hand turns this far under the fore-end from the mirrored grip (rad). */
 const FORE_TURN = 0.9
 /** Fraction of the depth buffer the view model may use (the nearest slice). */
@@ -283,6 +284,17 @@ export class ViewModel {
     // dressed for the lens: gloves and cuffs, smooth shading (vm-gloves.ts)
     const body = actor.meshes[0]
     if (body) {
+      // The character material is metalness 1 with an ARM map; in the view model's tiny scene that
+      // reads as black skin without the world probe. The lens wants a diffuse read.
+      const mats = Array.isArray(body.material) ? body.material : [body.material]
+      for (const mat of mats) {
+        if (mat instanceof MeshStandardMaterial) {
+          mat.metalness = Math.min(mat.metalness, 0.05)
+          mat.roughness = Math.max(mat.roughness, 0.75)
+          mat.envMapIntensity = 1
+          mat.needsUpdate = true
+        }
+      }
       dressForLens(body)
     }
     if (actor.gun) {
@@ -633,6 +645,9 @@ export class ViewModel {
       cam.updateProjectionMatrix()
       squeezeDepth(cam)
     }
+    // Tilt the lens down a touch at the hip: the hands and forearms sit low in camera space.
+    // Level it on the sights so the notch and blade stay on the crosshair.
+    cam.rotation.x = -0.16 * (1 - pose.ads)
     this.key.position.copy(sunCam).multiplyScalar(2)
     // the flash: a frame or two of light on the hands, the star at the muzzle
     this.flashT += dt

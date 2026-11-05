@@ -107,12 +107,13 @@ export function currentAction(c: ContextInput): Action | null {
     }
   }
   const roof = c.net.pred.roof
-  const ladder = ladderAt(c.x, c.z, roof)
+  const ladder = ladderAt(c.x, c.z, c.net.pred.y, roof)
   if (ladder) {
+    const up = ladder.dir > 0
     return {
       bit: 0,
-      prompt: roof > 0 ? 'JUMP: climb down the ladder' : 'JUMP: climb to the roof',
-      touchPrompt: roof > 0 ? 'JUMP: climb down the ladder' : 'JUMP: climb to the roof',
+      prompt: up ? 'JUMP: climb up the ladder' : 'JUMP: climb down the ladder',
+      touchPrompt: up ? 'JUMP: climb up the ladder' : 'JUMP: climb down the ladder',
       label: '',
       target: NONE,
     }

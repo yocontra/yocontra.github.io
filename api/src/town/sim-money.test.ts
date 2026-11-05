@@ -168,7 +168,12 @@ describe('banking', () => {
     const w = testWorld()
     const p = place(w, 64.5, 81.5, { carried: 200 })
     run(w, 10)
+    // Moving inside the zone does not interrupt the bank.
     run(w, 1, { [p.id]: () => ({ moveX: 127 }) })
+    expect(p.channel).not.toBeNull()
+    // Leaving the zone does.
+    p.x = 70
+    run(w, 1)
     expect(p.channel).toBeNull()
     p.x = 30
     p.z = 64
