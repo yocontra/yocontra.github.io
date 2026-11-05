@@ -49,6 +49,40 @@ export function circleHitsRect(x: number, z: number, r: number, rect: Rect): boo
   return (x - nx) ** 2 + (z - nz) ** 2 < r * r
 }
 
+/**
+ * The highest surface the feet can rest on, without allocating a support record. The movement
+ * hot path calls this several times per tick; `supportAt` is only for the mantle probe.
+ */
+export function supportTop(grid: Grid, x: number, z: number, feetY: number): number {
+  let top = 0
+  const base = topAt(grid, x, z)
+  if (base <= feetY + STEP_UP + EPS) {
+    top = base
+  }
+  const consider = (s: Surface): void => {
+    if (!inside(s, x, z)) {
+      return
+    }
+    const t = surfaceTop(s, x, z)
+    if (t <= feetY + STEP_UP + EPS && t > top) {
+      top = t
+    }
+  }
+  for (const s of grid.decks) {
+    consider(s)
+  }
+  for (const s of grid.stairs) {
+    consider(s)
+  }
+  for (const s of grid.overheads) {
+    consider(s)
+  }
+  for (const s of grid.roofs) {
+    consider(s)
+  }
+  return top
+}
+
 /** The highest surface the feet can rest on at (x, z), at or below `feetY + STEP_UP`. */
 export function supportAt(grid: Grid, x: number, z: number, feetY: number): Support {
   let top = 0

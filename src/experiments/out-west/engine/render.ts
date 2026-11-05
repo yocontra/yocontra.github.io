@@ -15,6 +15,7 @@ import {
   VignetteEffect,
 } from 'postprocessing'
 import {
+  ACESFilmicToneMapping,
   Color,
   DirectionalLight,
   HalfFloatType,
@@ -26,6 +27,7 @@ import {
   type Scene,
   SRGBColorSpace,
   Uniform,
+  UnsignedByteType,
   Vector2,
   Vector3,
   WebGLRenderer,
@@ -319,6 +321,7 @@ export class Renderer {
   private readonly renderPass: RenderPass
   /** A scene drawn over the main one, before the post chain (Frontier's first-person gun). */
   private overlayPass: RenderPass | null = null
+  private overlaySpec: OverlaySpec | null = null
   /** The active quality tier. */
   tier: Quality
   spec: TierSpec
@@ -367,7 +370,9 @@ export class Renderer {
     this.camera = camera
     this.gl = new WebGLRenderer({
       canvas,
-      antialias: false,
+      // The phone fast path draws straight to the default framebuffer, so it needs the MSAA
+      // default buffer; the composer tiers keep their own multisampled targets.
+      antialias: mode === 'ffa',
       stencil: false,
       depth: true,
       powerPreference: 'high-performance',
@@ -401,7 +406,9 @@ export class Renderer {
     this.dpr = this.baseDpr()
 
     this.composer = new EffectComposer(this.gl, {
-      frameBufferType: HalfFloatType,
+      // The phone pass has no bloom or full-screen HDR effects: an LDR intermediate is enough and
+      // halves the intermediate framebuffer traffic.
+      frameBufferType: this.spec.fullPost ? HalfFloatType : UnsignedByteType,
       multisampling: this.maxSamples(this.spec.msaa),
     })
     this.renderPass = new RenderPass(scene, camera)
@@ -503,6 +510,12 @@ export class Renderer {
   /** Legacy: no MSAA, an FXAA pass instead, and only tonemap + LUT. */
   private applyPostForTier(): void {
     const s = this.spec
+    // The phone pass renders the scene directly with ACES tone mapping instead of paying for a
+    // full-screen tone/grade EffectPass. The high tiers keep the graded composer.
+    const fast = !s.fullPost && this.mode === 'ffa'
+    this.gl.toneMapping = fast ? ACESFilmicToneMapping : NoToneMapping
+    this.gl.toneMappingExposure = fast ? 0.9 : 1
+    this.gl.shadowMap.enabled = !fast
     this.composer.multisampling = this.maxSamples(s.msaa)
     this.bloom.resolution.scale = s.bloomRes
     // postprocessing exposes `levels` at runtime; its typings only carry the getter on the pass
@@ -671,6 +684,7 @@ export class Renderer {
 
   /** The Frontier view model's overlay pass (`engine/overlay.ts`); null removes it. */
   setOverlay(o: OverlaySpec | null): void {
+    this.overlaySpec = o
     this.overlayPass = applyOverlay(this.composer, this.overlayPass, o)
   }
 
@@ -684,7 +698,9 @@ export class Renderer {
     this.lens.u('ca').value = ca
     this.lens.u('shimmer').value = this.spec.shimmer ? shimmer : 0
     this.lens.u('blur').value = blur
-    this.lensPass.enabled = ca > 0.0001 || (this.spec.shimmer && shimmer > 0) || blur > 0
+    // The phone pass skips the extra full-screen lens pass entirely (CA, shimmer and sprint blur).
+    this.lensPass.enabled =
+      this.spec.fullPost && (ca > 0.0001 || (this.spec.shimmer && shimmer > 0) || blur > 0)
   }
 
   render(dt: number): void {
@@ -718,7 +734,19 @@ export class Renderer {
     if (warm) {
       this.lensPass.enabled = true
     }
-    this.composer.render(dt)
+    if (this.spec.fullPost || this.mode !== 'ffa') {
+      this.composer.render(dt)
+    } else {
+      // Phone fast path: one scene draw (plus the first-person overlay) with the renderer's ACES
+      // tone mapping; no composer render target, no full-screen pass.
+      this.gl.render(this.scene, this.camera)
+      const ov = this.overlaySpec
+      if (ov?.enabled) {
+        this.gl.autoClear = false
+        this.gl.render(ov.scene, ov.camera)
+        this.gl.autoClear = true
+      }
+    }
     if (warm) {
       this.lensWarm++
       this.lensPass.enabled = lensOn

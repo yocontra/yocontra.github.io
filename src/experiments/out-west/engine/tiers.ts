@@ -142,7 +142,9 @@ const FFA_DPR: Record<Quality, Partial<TierSpec>> = {
     fullPost: false,
     atmos: false,
     lut: false,
-    shadowHz: 3,
+    // 2 Hz shadows on the phone pass: the sun barely moves, and the redraw is a whole extra
+    // scene pass. Riders' shadows still follow at 2 Hz, which reads fine at phone distance.
+    shadowHz: 10,
   },
   legacy: {
     dprMax: 1,

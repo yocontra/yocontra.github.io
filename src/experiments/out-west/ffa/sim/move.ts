@@ -62,6 +62,7 @@ import {
   pushOutVertical,
   standableSupport,
   supportAt,
+  supportTop,
   topAt,
 } from './surfaces.ts'
 import type { MoveState } from './types.ts'
@@ -513,9 +514,9 @@ function stepVault(grid: Grid, m: MoveState): void {
     m.vaultStep = 0
     // Landed: settle out of anything the last step grazed, onto the far side.
     slide(grid, m, 0, 0)
-    const sup = supportAt(grid, m.x, m.z, m.y)
-    m.y = sup.top
-    m.support = sup.top
+    const top = supportTop(grid, m.x, m.z, m.y)
+    m.y = top
+    m.support = top
     m.grounded = true
     m.vy = 0
     m.airPeakY = m.y
@@ -544,17 +545,17 @@ function stepAir(grid: Grid, m: MoveState, stick: Stick): boolean {
   const x0 = m.x
   const z0 = m.z
   slide(grid, m, m.airX, m.airZ)
-  const sup = supportAt(grid, m.x, m.z, m.y)
-  if (m.vy <= 0 && m.y <= sup.top + 0.02) {
-    const drop = Math.max(0, m.airPeakY - sup.top)
+  const top = supportTop(grid, m.x, m.z, m.y)
+  if (m.vy <= 0 && m.y <= top + 0.02) {
+    const drop = Math.max(0, m.airPeakY - top)
     if (drop > FALL_DAMAGE_MIN) {
       m.fallDamage = Math.min(
         FALL_DAMAGE_CAP,
         Math.round((drop - FALL_DAMAGE_MIN) * FALL_DAMAGE_PER_M),
       )
     }
-    m.y = sup.top
-    m.support = sup.top
+    m.y = top
+    m.support = top
     m.grounded = true
     m.vy = 0
     m.jumpTicks = 0
@@ -570,16 +571,16 @@ function stepAir(grid: Grid, m: MoveState, stick: Stick): boolean {
 
 /** Settle the feet on the surface under them, or start falling off a ledge. */
 function settleGround(grid: Grid, m: MoveState): void {
-  const sup = supportAt(grid, m.x, m.z, m.y)
-  if (sup.top < m.y - STEP_DOWN) {
+  const top = supportTop(grid, m.x, m.z, m.y)
+  if (top < m.y - STEP_DOWN) {
     m.grounded = false
     m.vy = 0
     m.fallTicks = 1
     m.airPeakY = m.y
     return
   }
-  m.y = sup.top
-  m.support = sup.top
+  m.y = top
+  m.support = top
   m.grounded = true
   m.fallTicks = 0
   if (m.roof > 0) {

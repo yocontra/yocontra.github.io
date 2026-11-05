@@ -294,6 +294,12 @@ export class FrontierGame {
   private wasInZone = false
   /** The last frame's dt (s), for the HUD's easing. */
   private dtS = 0
+  /** Next HUD refresh (ms, rAF time): the HUD changes at 20 Hz, not 60. */
+  private hudNext = 0
+  /** Next world-ring refresh (s): ladder/strongbox markers do not need 60 Hz. */
+  private ringsNext = 0
+  /** Next cutaway refresh (s): the roof/wall cut hole can trail the lens by a frame or two. */
+  private cutNext = 0
   /** Consecutive shots, for the recoil's alternating sideways kick. */
   private recoilShots = 0
   private readonly cutSize = new Vector2()
@@ -689,7 +695,8 @@ export class FrontierGame {
     const small = this.renderer.tier === 'floor' || this.renderer.tier === 'legacy'
     let casters = 6
     if (small) {
-      casters = this.renderer.tier === 'legacy' ? 1 : 2
+      // No real shadow map on the phone pass: every rider keeps its blob instead.
+      casters = this.renderer.tier === 'floor' ? 0 : 1
     }
     this.crowd.casters = casters
     this.map = new Minimap(TOWN, this.touch ? 112 : 148)
@@ -779,8 +786,8 @@ export class FrontierGame {
     if (t === 'legacy') {
       return 5
     }
-    // the floor tier: six skinned riders (the far crowd now crouches, sprints and slides too)
-    return t === 'floor' ? 6 : 16
+    // the floor tier: four skinned riders (the far crowd still crouches, sprints and slides)
+    return t === 'floor' ? 3 : 16
   }
 
   private onTransport(state: string): void {
@@ -1295,7 +1302,10 @@ export class FrontierGame {
     const dt = dtMs / 1000
     const t1 = performance.now()
     this.updateScene(dt, now / 1000)
-    this.updateHud(now / 1000)
+    if (now >= this.hudNext) {
+      this.hudNext = now + 50
+      this.updateHud(now / 1000)
+    }
     this.perf.simMs = t1 - t0
     this.perf.frameMs = performance.now() - t0
     this.audio?.update()
@@ -1495,8 +1505,14 @@ export class FrontierGame {
       : this.tmp.copy(this.cam.target)
     this.sun.target.position.copy(focus)
     this.sun.position.copy(focus).addScaledVector(SUN_DIR, 60)
-    this.updateCut()
-    this.updateRings(nowS)
+    if (nowS >= this.cutNext) {
+      this.cutNext = nowS + 0.033
+      this.updateCut()
+    }
+    if (nowS >= this.ringsNext) {
+      this.ringsNext = nowS + 0.05
+      this.updateRings(nowS)
+    }
     const town = this.net.town
     const spot =
       town && town.strongboxState !== BOX_NONE ? TOWN.strongboxes[town.strongboxSpot] : undefined
