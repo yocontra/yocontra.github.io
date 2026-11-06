@@ -75,7 +75,7 @@ const WALL_MOUNTED = /^k_(?:window|shutters|door|balcony|support|lantern)/u
 /** Hang or fly by design (matched against the piece's own and every ancestor's name). */
 const HANGS = /(?:^|\/)(?:lantern|postlantern|pickup|bags|bird|cloud|tumbleweed)(?:\/|$)/u
 /** Effects, decals and the sky: never pieces (decals still support). */
-const SKIP = /^(?:tracer|flash|puff|ring|aim|beacon|dust|spark|sky|blob)$/u
+const SKIP = /^(?:tracer|flash|puff|ring|aim|beacon|dust|spark|sky|blob|shaft)$/u
 const DECAL = /^creek$/u
 /** Landform meshes: always support, never pieces. */
 const LAND = /^(?:outskirts|ground|terrain)$/u
@@ -940,7 +940,7 @@ export interface Untextured {
 
 /** Meshes that are flat colour by design: glass panes, water, the sky, effects, decals. */
 const FLAT_OK =
-  /(?:^|\/)(?:windows|creek|sky|tracer|flash|puff|ring|aim|beacon|dust|spark|blob|glint)(?:\/|$)/u
+  /(?:^|\/)(?:windows|creek|sky|tracer|flash|puff|ring|aim|beacon|dust|spark|blob|glint|casing|hole|shaft)(?:\/|$)/u
 /** Materials that are plain by design: the clock tower's wrought iron (its hands and rails). */
 const FLAT_MATERIALS = /^(?:Iron)$/u
 

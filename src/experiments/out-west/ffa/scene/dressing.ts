@@ -686,11 +686,23 @@ function headstone(b: DressBuilders, c: Rect, y: number, r: () => number): void 
   }
 }
 
+/** Bottles, glasses and a hand of cards on a table or bar top. */
+function tableClutter(b: DressBuilders, cx: number, cz: number, top: number): void {
+  // A bottle and its neck, two glasses, and a fan of cards.
+  b.wood.box(cx + 0.12, top + 0.13, cz + 0.04, 0.06, 0.26, 0.06, 0x2f_4a_38)
+  b.wood.box(cx + 0.12, top + 0.29, cz + 0.04, 0.035, 0.06, 0.035, 0x6a_4a_2a)
+  for (const dx of [-0.16, -0.08]) {
+    b.wood.box(cx + dx, top + 0.045, cz + 0.1, 0.06, 0.09, 0.06, 0xc8_d8_d0)
+  }
+  b.wood.box(cx + 0.02, top + 0.008, cz - 0.12, 0.14, 0.016, 0.1, 0xe8_e0_c8)
+}
+
 function counter(b: DressBuilders, c: Rect, y: number): void {
   const cx = c.x + c.w / 2
   const cz = c.z + c.d / 2
   b.wood.box(cx, y + 0.52, cz, c.w - 0.04, 1.04, c.d - 0.04, 0x5a_3a_24)
   b.wood.box(cx, y + 1.07, cz, c.w + 0.06, 0.06, c.d + 0.06, 0x8a_5a_34)
+  tableClutter(b, cx, cz, y + 1.1)
 }
 
 function forge(b: DressBuilders, c: Rect, y: number): void {
@@ -1193,6 +1205,7 @@ function place(
       break
     case 'table':
       kit('k_table', (def) => put(p, 'k_table', fitTo(def, cx, y, cz, c.w * 0.54, c.d * 0.54, 0.8)))
+      tableClutter(b, cx, cz, y + 0.8)
       kit('k_chair', (def) => {
         for (const s of [-1, 1]) {
           put(

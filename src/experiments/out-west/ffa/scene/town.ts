@@ -21,6 +21,7 @@
  * - the floor and legacy tiers also drop facade trim and ceiling joists.
  */
 import {
+  AdditiveBlending,
   Box3,
   BufferAttribute,
   BufferGeometry,
@@ -35,6 +36,7 @@ import {
   type Material,
   Matrix4,
   Mesh,
+  MeshBasicMaterial,
   MeshStandardMaterial,
   type Object3D,
   type PerspectiveCamera,
@@ -329,6 +331,8 @@ export interface TownMaterials {
   kit: MeshStandardMaterial
   /** Breakable window panes. */
   glass: MeshStandardMaterial
+  /** Sunlit window beams (high tier only). */
+  shaft: MeshBasicMaterial
 }
 
 export interface Town {
@@ -562,7 +566,17 @@ function makeMaterials(assets: Assets): TownMaterials {
     depthWrite: false,
   })
   cutaway(glass, false)
-  return { wall, stone, roof, wood, windows, signs, kit, cloth, glass }
+  const shaft = new MeshBasicMaterial({
+    name: 'window-shaft',
+    map: shaftTexture(),
+    transparent: true,
+    opacity: SHAFT_OPACITY,
+    blending: AdditiveBlending,
+    depthWrite: false,
+    side: DoubleSide,
+    toneMapped: false,
+  })
+  return { wall, stone, roof, wood, windows, signs, kit, cloth, glass, shaft }
 }
 
 /** How many porch and platform rects the contact-shade patch carries. */
@@ -725,6 +739,39 @@ function glassTexture(): CanvasTexture {
   const t = new CanvasTexture(c)
   t.wrapS = RepeatWrapping
   t.wrapT = RepeatWrapping
+  t.colorSpace = SRGBColorSpace
+  return t
+}
+
+/** Sunlit window shafts: length limit, how square-on a window must face the sun, and opacity. */
+const SHAFT_LENGTH = 4.5
+const SHAFT_SUN_MIN = 0.15
+const SHAFT_OPACITY = 0.13
+const SHAFT_MAX = 160
+const SHAFT_TEX = 64
+
+/** A soft beam texture: bright at the window end, fading along the throw and at the edges. */
+function shaftTexture(): CanvasTexture {
+  const c = document.createElement('canvas')
+  c.width = SHAFT_TEX
+  c.height = SHAFT_TEX
+  const ctx = c.getContext('2d')
+  if (ctx) {
+    const along = ctx.createLinearGradient(0, 0, 0, SHAFT_TEX)
+    along.addColorStop(0, 'rgba(255,240,210,0.85)')
+    along.addColorStop(0.35, 'rgba(255,236,200,0.5)')
+    along.addColorStop(1, 'rgba(255,236,200,0)')
+    ctx.fillStyle = along
+    ctx.fillRect(0, 0, SHAFT_TEX, SHAFT_TEX)
+    const across = ctx.createLinearGradient(0, 0, SHAFT_TEX, 0)
+    across.addColorStop(0, 'rgba(0,0,0,0)')
+    across.addColorStop(0.5, 'rgba(0,0,0,1)')
+    across.addColorStop(1, 'rgba(0,0,0,0)')
+    ctx.globalCompositeOperation = 'destination-in'
+    ctx.fillStyle = across
+    ctx.fillRect(0, 0, SHAFT_TEX, SHAFT_TEX)
+  }
+  const t = new CanvasTexture(c)
   t.colorSpace = SRGBColorSpace
   return t
 }
@@ -2419,6 +2466,97 @@ function buildWindowGlass(
   }
 }
 
+/**
+ * Sunlit window beams for the high tier: two crossed ribbons per sun-facing opening, fading from
+ * the window into the room. One merged additive mesh, so all the shafts are one draw.
+ */
+function buildWindowShafts(
+  layout: TownLayout,
+  sun: Vector3,
+  material: MeshBasicMaterial,
+): Mesh | null {
+  const d = sun.clone().negate().normalize()
+  const positions: number[] = []
+  const uvs: number[] = []
+  const point = (x: number, y: number, z: number) => ({ x, y, z })
+  const push = (p: { x: number; y: number; z: number }, u: number, v: number): void => {
+    positions.push(p.x, p.y, p.z)
+    uvs.push(u, v)
+  }
+  const quad = (
+    a: { x: number; y: number; z: number },
+    b: { x: number; y: number; z: number },
+    c: { x: number; y: number; z: number },
+    e: { x: number; y: number; z: number },
+  ): void => {
+    push(a, 0, 0)
+    push(b, 1, 0)
+    push(c, 1, 1)
+    push(a, 0, 0)
+    push(c, 1, 1)
+    push(e, 0, 1)
+  }
+  let count = 0
+  for (const { b, w } of townWindows(layout)) {
+    if (!b.hollow || count >= SHAFT_MAX) {
+      continue
+    }
+    const pane = windowPane(b, w)
+    let nx = 0
+    let nz = 0
+    if (w.side === 'e') {
+      nx = 1
+    } else if (w.side === 'w') {
+      nx = -1
+    } else if (w.side === 'n') {
+      nz = -1
+    } else {
+      nz = 1
+    }
+    if (nx * sun.x + nz * sun.z < SHAFT_SUN_MIN) {
+      continue
+    }
+    // Stop at the opposite wall so a beam never cuts through the far side of the room.
+    let len = SHAFT_LENGTH
+    if (w.side === 'e') {
+      len = Math.min(len, pane.at - (b.x + WALL_T) - 0.4)
+    } else if (w.side === 'w') {
+      len = Math.min(len, b.x + b.w - WALL_T - pane.at - 0.4)
+    } else if (w.side === 'n') {
+      len = Math.min(len, b.z + b.d - WALL_T - pane.at - 0.4)
+    } else {
+      len = Math.min(len, pane.at - (b.z + WALL_T) - 0.4)
+    }
+    if (len < 0.9) {
+      continue
+    }
+    const midA = (pane.a0 + pane.a1) / 2
+    const midY = (pane.y0 + pane.y1) / 2
+    const at = (a: number, y: number) =>
+      point(pane.axis === 0 ? pane.at : a, y, pane.axis === 0 ? a : pane.at)
+    const far = (q: { x: number; y: number; z: number }) =>
+      point(q.x + d.x * len, q.y + d.y * len, q.z + d.z * len)
+    const wl = at(pane.a0, midY)
+    const wr = at(pane.a1, midY)
+    quad(wl, wr, far(wr), far(wl))
+    const hb = at(midA, pane.y0)
+    const ht = at(midA, pane.y1)
+    quad(hb, ht, far(ht), far(hb))
+    count++
+  }
+  if (positions.length === 0) {
+    return null
+  }
+  const geo = new BufferGeometry()
+  geo.setAttribute('position', new Float32BufferAttribute(positions, 3))
+  geo.setAttribute('uv', new Float32BufferAttribute(uvs, 2))
+  const mesh = new Mesh(geo, material)
+  mesh.name = 'shaft'
+  mesh.frustumCulled = false
+  mesh.matrixAutoUpdate = false
+  return mesh
+}
+
 export function buildTown(
   layout: TownLayout,
   assets: Assets,
@@ -2516,6 +2654,10 @@ export function buildTown(
   const glass = lean ? null : buildWindowGlass(layout, mats.glass)
   if (glass) {
     root.add(glass.mesh)
+  }
+  const shafts = lean ? null : buildWindowShafts(layout, sun, mats.shaft)
+  if (shafts) {
+    root.add(shafts)
   }
   const swap = new Map([
     ['Kit', mats.kit],
@@ -2640,6 +2782,7 @@ export function buildTown(
   ground.onBeforeRender = onCamera(update)
   const disposeTown = disposer(root, Object.values(mats), mask)
   const glassMap = mats.glass.map
+  const shaftMap = mats.shaft.map
   return {
     root,
     roofs,
@@ -2649,6 +2792,7 @@ export function buildTown(
     dispose: () => {
       disposeTown()
       glassMap?.dispose()
+      shaftMap?.dispose()
     },
   }
 }

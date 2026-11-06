@@ -134,9 +134,11 @@ function onShot(s: Sink, ev: Extract<WireEvent, { type: typeof EV_SHOT }>): void
   const range = ev.range * SHOT_RANGE_UNIT
   const endX = p.x + Math.cos(aim) * range
   const endZ = p.z + Math.sin(aim) * range
-  if (ev.shooter !== you) {
-    const m = s.muzzleOf(ev.shooter, p.x, p.z, aim)
-    shotFx(s, m, aim, range, ev.flags)
+  const muzzle = s.muzzleOf(ev.shooter, p.x, p.z, aim)
+  if (ev.shooter === you) {
+    s.fx.casing(muzzle.x, muzzle.y, muzzle.z, aim)
+  } else {
+    shotFx(s, muzzle, aim, range, ev.flags)
     play(s, shotSound(ev.flags), p, 0.75)
     if (ev.target === you) {
       s.kick(0.25)
@@ -163,7 +165,15 @@ function onShot(s: Sink, ev: Extract<WireEvent, { type: typeof EV_SHOT }>): void
       s.audio?.play('hitBody', { gain: crit ? 0.55 : 0.4, rate: crit ? 1.9 : 1.6, priority: true })
     }
   } else if (ev.flags & SHOT_WALL) {
-    s.fx.impact(endX, endZ, false, ev.y / 10)
+    const impactY = ev.y / 10
+    s.fx.impact(endX, endZ, false, impactY)
+    // The hole faces back down the bullet: from the shooter's eye to the impact.
+    const oy = (s.posOf(ev.shooter)?.y ?? 0) + 1.35
+    const dx = endX - p.x
+    const dy = impactY - oy
+    const dz = endZ - p.z
+    const d = Math.hypot(dx, dy, dz) || 1
+    s.fx.hole(endX, impactY, endZ, -dx / d, -dy / d, -dz / d)
   }
 }
 

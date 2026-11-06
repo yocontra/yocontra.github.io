@@ -46,7 +46,8 @@ const HEAD = 1.7
 /** Kit hung on a wall face: its footprint is the wall's. */
 const ON_WALL = /^k_(?:window|shutters|door|doorframe|balcony|support|lantern|roof|corner)/u
 /** Live things the town didn't build (riders' guns too, held or in the view model). */
-const LIVE = /^(?:pickup|bags|strongbox|dynamite|rifle|shotgun|revolver|coins|money|tracer|gun)/iu
+const LIVE =
+  /^(?:pickup|bags|strongbox|dynamite|rifle|shotgun|revolver|coins|money|tracer|gun|shaft)/iu
 
 export function colliderAudit(scene: Object3D): ColliderReport {
   const grid = buildGrid(TOWN)

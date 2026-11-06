@@ -10,6 +10,7 @@
 import {
   AdditiveBlending,
   BoxGeometry,
+  CanvasTexture,
   Color,
   CylinderGeometry,
   DoubleSide,
@@ -36,6 +37,7 @@ const q = new Quaternion()
 const v = new Vector3()
 const s = new Vector3()
 const up = new Vector3(0, 1, 0)
+const forward = new Vector3(0, 0, 1)
 const tc = new Color()
 const flat = new Quaternion().setFromAxisAngle(new Vector3(1, 0, 0), -Math.PI / 2)
 
@@ -52,6 +54,10 @@ interface Slot {
   vx: number
   vy: number
   vz: number
+  /** Surface normal for decal quads. */
+  nx: number
+  ny: number
+  nz: number
   color: Color
 }
 
@@ -69,6 +75,9 @@ function pool(n: number): Slot[] {
     vx: 0,
     vy: 0,
     vz: 0,
+    nx: 0,
+    ny: 0,
+    nz: 1,
     color: new Color(),
   }))
 }
@@ -139,6 +148,37 @@ function seedColors(mesh: InstancedMesh): void {
   mesh.setColorAt(0, c)
 }
 
+/** A soft soot hole with a ragged bright lip, for wall impacts. */
+function holeTexture(): CanvasTexture {
+  const c = document.createElement('canvas')
+  c.width = 64
+  c.height = 64
+  const ctx = c.getContext('2d')
+  if (ctx) {
+    const g = ctx.createRadialGradient(32, 32, 1, 32, 32, 30)
+    g.addColorStop(0, 'rgba(12,10,8,0.95)')
+    g.addColorStop(0.35, 'rgba(26,20,14,0.8)')
+    g.addColorStop(0.62, 'rgba(70,56,40,0.35)')
+    g.addColorStop(1, 'rgba(70,56,40,0)')
+    ctx.fillStyle = g
+    ctx.beginPath()
+    ctx.arc(32, 32, 30, 0, Math.PI * 2)
+    ctx.fill()
+    // a few spokes so the round stays a chip, not a dot
+    ctx.strokeStyle = 'rgba(18,14,10,0.55)'
+    ctx.lineWidth = 2
+    for (let i = 0; i < 5; i++) {
+      const a = (i / 5) * Math.PI * 2 + 0.4
+      ctx.beginPath()
+      ctx.moveTo(32, 32)
+      ctx.lineTo(32 + Math.cos(a) * 22, 32 + Math.sin(a) * 22)
+      ctx.stroke()
+    }
+  }
+  const t = new CanvasTexture(c)
+  return t
+}
+
 const bagTint = new Color() // each bag's instance colour: the dropper's saddlebag
 
 export type { Bag } from './bags.ts'
@@ -148,6 +188,20 @@ export class Effects {
   private readonly tracers: Burst
   private readonly flashes: Burst
   private readonly puffs: Burst
+  private readonly holes: Burst
+  private readonly casingMesh: InstancedMesh
+  private readonly casings = Array.from({ length: 24 }, () => ({
+    x: 0,
+    y: 0,
+    z: 0,
+    vx: 0,
+    vy: 0,
+    vz: 0,
+    spin: 0,
+    t: 1,
+    life: 0,
+  }))
+  private casingNext = 0
   private readonly bagMesh: InstancedMesh
   readonly bags = new Map<number, Bag>()
   /** Muzzle-flash size (1 top-down; the shooter views shrink it). */
@@ -200,10 +254,39 @@ export class Effects {
         out.compose(v.set(sl.x, sl.y, sl.z), flat, s)
       },
     )
-    for (const b of [this.tracers, this.flashes, this.puffs]) {
+    const holeMat = new MeshBasicMaterial({
+      map: holeTexture(),
+      transparent: true,
+      depthWrite: false,
+      polygonOffset: true,
+      polygonOffsetFactor: -4,
+      polygonOffsetUnits: -4,
+      side: DoubleSide,
+      toneMapped: false,
+    })
+    this.holes = new Burst(
+      new InstancedMesh(new PlaneGeometry(1, 1), holeMat, 48),
+      48,
+      (sl, k, out) => {
+        q.setFromUnitVectors(forward, v.set(sl.nx, sl.ny, sl.nz))
+        s.setScalar(sl.size * (1 - k * 0.2))
+        out.compose(v.set(sl.x + sl.nx * 0.012, sl.y + sl.ny * 0.012, sl.z + sl.nz * 0.012), q, s)
+      },
+    )
+    this.holes.mesh.renderOrder = 4
+    for (const b of [this.tracers, this.flashes, this.puffs, this.holes]) {
       seedColors(b.mesh)
       root.add(b.mesh)
     }
+    this.casingMesh = new InstancedMesh(
+      new BoxGeometry(0.012, 0.012, 0.03),
+      new MeshStandardMaterial({ color: 0xc8_9a_4a, metalness: 0.65, roughness: 0.35 }),
+      24,
+    )
+    this.casingMesh.name = 'casing'
+    this.casingMesh.count = 0
+    this.casingMesh.frustumCulled = false
+    root.add(this.casingMesh)
     // Money bags: a lathed sack, gold-tinted.
     const sack = new LatheGeometry(
       [
@@ -314,6 +397,54 @@ export class Effects {
     f.vy = 0
     f.vz = 0
     f.color.setRGB(3, 2.2, 1)
+    // A little muzzle smoke drifting off the barrel.
+    const smoke = this.puffs.spawn()
+    smoke.life = 0.55
+    smoke.x = x + Math.cos(aim) * 0.3
+    smoke.y = y
+    smoke.z = z + Math.sin(aim) * 0.3
+    smoke.vx = Math.cos(aim) * 0.55
+    smoke.vy = 0.25
+    smoke.vz = Math.sin(aim) * 0.55
+    smoke.size = 0.28
+    smoke.color.setRGB(0.42, 0.4, 0.36)
+  }
+
+  /** A bullet hole on a surface, its quad facing (nx, ny, nz). */
+  hole(x: number, y: number, z: number, nx: number, ny: number, nz: number, size = 0.13): void {
+    const h = this.holes.spawn()
+    h.life = 30
+    h.x = x
+    h.y = y
+    h.z = z
+    h.nx = nx
+    h.ny = ny
+    h.nz = nz
+    h.size = size
+    h.vx = 0
+    h.vy = 0
+    h.vz = 0
+    h.color.setRGB(1, 1, 1)
+  }
+
+  /** A brass casing from your own gun, kicked out to the side and falling to the street. */
+  casing(x: number, y: number, z: number, aim: number): void {
+    const c = this.casings[this.casingNext]
+    this.casingNext = (this.casingNext + 1) % this.casings.length
+    if (!c) {
+      return
+    }
+    c.t = 0
+    c.life = 1.4
+    c.x = x
+    c.y = y
+    c.z = z
+    const side = aim + Math.PI / 2
+    const kick = 0.8 + Math.random() * 0.6
+    c.vx = Math.cos(side) * kick
+    c.vz = Math.sin(side) * kick
+    c.vy = 1.1 + Math.random() * 0.5
+    c.spin = (Math.random() - 0.5) * 18
   }
 
   /** Dust off a wall, or blood on a hit; `y` lifts it to the shooter/target's feet. */
@@ -483,11 +614,43 @@ export class Effects {
     }
   }
 
+  /** Fall, bounce and settle this frame's shell casings. */
+  private updateCasings(dt: number): void {
+    let cn = 0
+    for (const c of this.casings) {
+      if (c.t >= c.life) {
+        continue
+      }
+      c.t += dt
+      c.vy -= 9.8 * dt
+      c.x += c.vx * dt
+      c.y += c.vy * dt
+      c.z += c.vz * dt
+      if (c.y < 0.02) {
+        c.y = 0.02
+        c.vy = -c.vy * 0.3
+        c.vx *= 0.55
+        c.vz *= 0.55
+      }
+      q.setFromAxisAngle(up, c.spin * c.t)
+      s.setScalar(1)
+      m4.compose(v.set(c.x, c.y, c.z), q, s)
+      this.casingMesh.setMatrixAt(cn, m4)
+      cn++
+    }
+    this.casingMesh.count = cn
+    if (cn > 0) {
+      this.casingMesh.instanceMatrix.needsUpdate = true
+    }
+  }
+
   update(dt: number, bobT: number): void {
     this.time += dt
     this.tracers.update(dt)
     this.flashes.update(dt)
     this.puffs.update(dt)
+    this.holes.update(dt)
+    this.updateCasings(dt)
     let i = 0
     for (const b of this.bags.values()) {
       if (i >= 64) {
