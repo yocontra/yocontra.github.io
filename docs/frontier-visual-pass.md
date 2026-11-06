@@ -36,7 +36,7 @@ dynamic resolution remain the fallback.
 ## Verification
 
 ```
-bun run api:test                 491 pass, 0 fail
+bun run api:test                 494 pass, 0 fail
 bun run build                    clean
 bun tools/building-audit.ts      21 buildings, 0 errors, 0 warnings
 bun tools/collider-check.ts      0 invisible walls, 0 walk-through visuals
