@@ -1,5 +1,4 @@
 // biome-ignore-all lint/complexity/useMaxParams: geometry builders take positional numeric args (x, y, z, size…), mirroring three.js APIs
-// biome-ignore-all lint/style/noMagicNumbers: plant proportions and colours, tuned by eye
 // biome-ignore-all lint/complexity/noExcessiveCognitiveComplexity: the coplanarity check is a flat nested scan over two small blobs
 // biome-ignore-all lint/style/noExcessiveLinesPerFile: one module for every desert plant: they share the builder, the material and the scatter
 /**

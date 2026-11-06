@@ -1,4 +1,3 @@
-// biome-ignore-all lint/style/noMagicNumbers: light radii, strengths and lamp proportions, tuned by eye inside the rooms
 // biome-ignore-all lint/complexity/noExcessiveCognitiveComplexity: the mask bake is flat loops over the layout
 /**
  * Perdition's interiors, lit without real lights: one small mask baked from the layout, read by

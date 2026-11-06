@@ -1,5 +1,4 @@
 // biome-ignore-all lint/complexity/useMaxParams: placement helpers take positional numeric args (x, z, kind, lod, size)
-// biome-ignore-all lint/style/noMagicNumbers: terrain shaping and scatter densities, tuned by eye from the street's cameras
 // biome-ignore-all lint/complexity/noExcessiveCognitiveComplexity: placement rules are flat checks, kept inline
 /**
  * The desert around the duel street: rolling terrain past the town's flat pad (swells, then hills

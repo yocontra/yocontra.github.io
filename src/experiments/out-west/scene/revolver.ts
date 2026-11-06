@@ -1,7 +1,6 @@
 // biome-ignore-all lint/suspicious/noUnnecessaryConditions: class fields are flags mutated from outside the method; Biome narrows them to their literal initializer
 // biome-ignore-all lint/complexity/noExcessiveLinesPerFunction: one gun built part by part, top to bottom, reads best as one list
 // biome-ignore-all lint/complexity/noExcessiveCognitiveComplexity: the cylinder's grid is one flat pass over rings and sides
-// biome-ignore-all lint/style/noMagicNumbers: a gunsmith's measurements, in metres
 // biome-ignore-all lint/style/noNestedTernary: three levels of detail picked inline, hi : mid : lo
 // biome-ignore-all lint/style/noExcessiveLinesPerFile: one gun, its moving parts and its placement read best together
 // biome-ignore-all lint/complexity/useMaxParams: geometry builders take positional numbers, like three.js

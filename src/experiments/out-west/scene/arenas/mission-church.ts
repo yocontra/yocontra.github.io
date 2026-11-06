@@ -1,5 +1,4 @@
 // biome-ignore-all lint/complexity/useMaxParams: geometry builders take positional numeric args (x, y, z, size…), mirroring three.js APIs
-// biome-ignore-all lint/style/noMagicNumbers: an arena is a table of measurements, in metres
 /**
  * The mission church across the head of the plaza: a limestone front with its carved doorway,
  * niches and choir window, the curved bell gable with three bells and a cross, the nave behind,

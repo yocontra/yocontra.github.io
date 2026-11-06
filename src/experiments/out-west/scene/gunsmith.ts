@@ -1,6 +1,5 @@
 // biome-ignore-all lint/complexity/noExcessiveCognitiveComplexity: flat loops over rings and texels
 // biome-ignore-all lint/complexity/useMaxParams: geometry builders take positional numbers, like three.js
-// biome-ignore-all lint/style/noMagicNumbers: a gunsmith's measurements and a texture's colours
 /**
  * The gunsmith's workshop: one small procedural texture, one material and the geometry helpers
  * the Winchester (`scene/rifle.ts`), the coach gun (`ffa/scene/shotgun.ts`) and the Colt

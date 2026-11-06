@@ -1,5 +1,4 @@
 // biome-ignore-all lint/complexity/noExcessiveLinesPerFunction: one gun built part by part, top to bottom, reads best as one list
-// biome-ignore-all lint/style/noMagicNumbers: a gunsmith's measurements, in metres
 /**
  * A side-by-side double-barrel coach gun (the 1870s–80s Wells Fargo kind: a 12-bore hammer gun
  * with 20" barrels), built in code (`scene/gunsmith.ts`) as ONE indexed geometry in the long guns'

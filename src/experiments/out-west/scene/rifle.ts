@@ -1,5 +1,4 @@
 // biome-ignore-all lint/complexity/noExcessiveLinesPerFunction: one gun built part by part, top to bottom, reads best as one list
-// biome-ignore-all lint/style/noMagicNumbers: a gunsmith's measurements, in metres
 /**
  * The rifle: a Winchester Model 1873 saddle-ring carbine, built in code (`scene/gunsmith.ts`) as
  * ONE indexed geometry in the long guns' one material.

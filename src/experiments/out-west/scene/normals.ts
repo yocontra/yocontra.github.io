@@ -1,4 +1,3 @@
-// biome-ignore-all lint/style/noMagicNumbers: position quantisation and vector component offsets
 // biome-ignore-all lint/complexity/noExcessiveCognitiveComplexity: one flat pass over flat arrays (faces, corners, vertices)
 /**
  * Smooth vertex normals with a crease angle, in place, keeping the index buffer (so the pieces

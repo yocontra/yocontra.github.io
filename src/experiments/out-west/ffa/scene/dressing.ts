@@ -2,7 +2,6 @@
 // biome-ignore-all lint/complexity/noExcessiveCognitiveComplexity: placement loops over layout rects
 // biome-ignore-all lint/complexity/useMaxParams: placement and geometry helpers take positional numeric args
 // biome-ignore-all lint/style/noExcessiveLinesPerFile: one builder per cover kind, sharing the fit and cylinder helpers
-// biome-ignore-all lint/style/noMagicNumbers: prop proportions in metres, tuned against the eye-level camera
 /**
  * Cover and set dressing from the layout. Every cover rect is exactly what blocks movement and
  * bullets on the server, so every kind here fills its rect and nothing more: barrels, crates and

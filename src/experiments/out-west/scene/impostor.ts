@@ -1,4 +1,3 @@
-// biome-ignore-all lint/style/noMagicNumbers: silhouette proportions and colours, painted by eye to match the meshes in flora.ts
 // biome-ignore-all lint/complexity/useMaxParams: canvas painters take positional numeric args (x, y, size…)
 /**
  * Distant plants as impostors: each far saguaro, Joshua tree, ocotillo, shrub, snag or boulder is

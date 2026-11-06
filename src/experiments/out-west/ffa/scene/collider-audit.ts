@@ -1,5 +1,4 @@
 // biome-ignore-all lint/complexity/noExcessiveCognitiveComplexity: two grid sweeps and a blob fill, kept flat
-// biome-ignore-all lint/style/noMagicNumbers: tolerances in metres, named where they matter
 /**
  * Dev-only collider-vs-visual check for Perdition. `tools/collider-check.ts` imports this into the
  * running page from the dev server; the game never imports it, so it never ships.

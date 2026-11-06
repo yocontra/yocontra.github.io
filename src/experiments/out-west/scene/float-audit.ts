@@ -1,7 +1,6 @@
 // biome-ignore-all lint/style/noExcessiveLinesPerFile: one self-contained dev audit (collect, index, query, classify); nothing here ships
 // biome-ignore-all lint/complexity/noExcessiveCognitiveComplexity: geometry queries over flat arrays
 // biome-ignore-all lint/complexity/useMaxParams: point/segment/triangle helpers take positional numbers
-// biome-ignore-all lint/style/noMagicNumbers: tolerances in metres, named where they matter
 /**
  * Dev-only floating-object audit. `tools/float-audit.ts` imports this into the running page from
  * the dev server; the game never imports it, so it never ships.

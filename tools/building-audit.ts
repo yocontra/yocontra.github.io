@@ -1,4 +1,3 @@
-// biome-ignore-all lint/style/noMagicNumbers: tolerances and building rules in metres
 /**
  * Per-building audit of Perdition. No browser needed:
  *

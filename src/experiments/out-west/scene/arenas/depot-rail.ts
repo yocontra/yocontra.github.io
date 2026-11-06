@@ -1,5 +1,4 @@
 // biome-ignore-all lint/complexity/useMaxParams: geometry builders take positional numeric args (x, y, z, size…), mirroring three.js APIs
-// biome-ignore-all lint/style/noMagicNumbers: an arena is a table of measurements, in metres
 /**
  * The depot's railroad: the main line (ballast, ties, rails), the cars standing on it (boxcars, a
  * flatcar, the caboose), the water tower over the track and the windmill down the lane.

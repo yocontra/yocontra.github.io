@@ -1,6 +1,5 @@
 // biome-ignore-all lint/complexity/useMaxParams: geometry builders take positional numeric args
 // biome-ignore-all lint/complexity/noExcessiveCognitiveComplexity: one roof builder walks bays, slopes, ends and trims in a single pass over shared local coordinates
-// biome-ignore-all lint/style/noMagicNumbers: roof proportions and shader constants, tuned by eye from the top-down camera
 /**
  * Pitched roofs for Perdition, which the top-down camera sees more of than anything else.
  *

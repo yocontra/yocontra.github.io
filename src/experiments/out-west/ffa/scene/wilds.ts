@@ -1,6 +1,5 @@
 // biome-ignore-all lint/complexity/useMaxParams: placement helpers take positional numeric args (x, z, kind, lod, size)
 // biome-ignore-all lint/style/noExcessiveClassesPerFile: the atmosphere and its tumbleweeds are one small module
-// biome-ignore-all lint/style/noMagicNumbers: scatter densities and bounds, tuned by eye at eye level and from above
 // biome-ignore-all lint/complexity/noExcessiveCognitiveComplexity: placement rules are flat checks, kept inline
 /**
  * Perdition's sky, atmosphere and plant life: the shared sky dome and aerial perspective, moving

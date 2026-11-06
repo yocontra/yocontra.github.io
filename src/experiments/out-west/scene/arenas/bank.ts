@@ -1,5 +1,4 @@
 // biome-ignore-all lint/complexity/useMaxParams: geometry builders take positional numeric args (x, y, z, size…), mirroring three.js APIs
-// biome-ignore-all lint/style/noMagicNumbers: an arena is a table of measurements, in metres
 /**
  * Act IV: the bank square at night (outlaws 14–15).
  *

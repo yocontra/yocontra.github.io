@@ -1,5 +1,4 @@
 // biome-ignore-all lint/style/noExcessiveLinesPerFile: one glove builder (its tubes, the rig it is measured on, the palm, the fingers) and the body it is fitted to
-// biome-ignore-all lint/style/noMagicNumbers: a glover's proportions, fractions of the hand they are cut to
 // biome-ignore-all lint/complexity/noExcessiveCognitiveComplexity: flat passes over rings, sides and vertices
 /**
  * The first-person arms, dressed for the lens: the source bodies are built to read at street

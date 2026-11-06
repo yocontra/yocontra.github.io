@@ -1,5 +1,4 @@
 // biome-ignore-all lint/complexity/useMaxParams: noise and placement helpers take positional numeric args
-// biome-ignore-all lint/style/noMagicNumbers: terrain shaping constants, tuned by eye against the top-down camera
 // biome-ignore-all lint/complexity/noExcessiveCognitiveComplexity: the grid and scatter passes are flat loops with placement rules inline
 // biome-ignore-all lint/style/noExcessiveLinesPerFile: one module for the land past the edge: heights, grid, scatter, bushes and stones share the noise
 /**

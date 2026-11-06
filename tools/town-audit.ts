@@ -1,7 +1,6 @@
 // biome-ignore-all lint/style/noExcessiveLinesPerFile: one self-contained level-design audit and its map render
 // biome-ignore-all lint/complexity/noExcessiveCognitiveComplexity: grid sweeps and per-feature checks kept flat
 // biome-ignore-all lint/complexity/noExcessiveLinesPerFunction: the SVG render is one long, linear drawing
-// biome-ignore-all lint/style/noMagicNumbers: thresholds in metres, named where they matter
 /**
  * Level-design audit of Perdition (`ffa/town.layout.json`), no browser needed:
  *

@@ -1,5 +1,4 @@
 // biome-ignore-all lint/complexity/noExcessiveCognitiveComplexity: one flat classification pass per material
-// biome-ignore-all lint/style/noMagicNumbers: report thresholds, named where they matter
 // biome-ignore-all lint/style/noNestedTernary: short label picks in a dev report
 /**
  * Dev-only material audit. `tools/material-audit.ts` imports this into the running page from the
