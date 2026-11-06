@@ -1,6 +1,6 @@
 import { describe, expect, test as it } from 'bun:test'
 import { Group } from 'three'
-import { Ragdolls } from '../../../src/experiments/out-west/ffa/scene/ragdoll.ts'
+import { Ragdolls } from '../src/experiments/out-west/ffa/scene/ragdoll.ts'
 
 const at = { x: 10, y: 0, z: 10 }
 const from = { x: 8, z: 10 }

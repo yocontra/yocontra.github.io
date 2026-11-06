@@ -9,10 +9,11 @@
     "lint": "biome lint .",
     "format": "biome format --write .",
     "fix": "biome check --write .",
-    "typecheck": "astro check && tsc --noEmit && tsc -p api && tsc -p scripts && tsc -p tools",
-    "check": "biome ci --error-on-warnings . && bun run typecheck && bun run api:test && bun scripts/no-js.ts",
+    "typecheck": "astro check && tsc --noEmit && tsc -p api && tsc -p scripts && tsc -p tests && tsc -p tools",
+    "check": "biome ci --error-on-warnings . && bun run typecheck && bun run test && bun scripts/no-js.ts",
     "api:dev": "wrangler dev --config api/wrangler.jsonc --local --port 8787 --infer-origin-from-routes=false",
     "api:migrate:local": "wrangler d1 migrations apply contra-leaderboard --config api/wrangler.jsonc --local",
+    "test": "bun test --timeout 30000 api tests",
     "api:test": "bun test --timeout 30000 api",
     "audit:buildings": "bun tools/building-audit.ts"
   },

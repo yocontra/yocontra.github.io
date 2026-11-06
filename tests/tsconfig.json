@@ -1,0 +1,9 @@
+{
+  "extends": "../tsconfig.json",
+  "compilerOptions": {
+    "types": ["bun", "@webgpu/types", "vite/client"],
+    "noEmit": true
+  },
+  "include": ["**/*.ts"],
+  "exclude": []
+}
