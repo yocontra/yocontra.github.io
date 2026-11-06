@@ -25,6 +25,7 @@ import {
   PlaneGeometry,
   Quaternion,
   RingGeometry,
+  SphereGeometry,
   Vector2,
   Vector3,
 } from 'three'
@@ -191,6 +192,16 @@ export class Effects {
   private readonly puffs: Burst
   private readonly holes: Burst
   private readonly casingMesh: InstancedMesh
+  private readonly dustMesh: InstancedMesh
+  /** Where the ambient dust field follows (the player), set by the game each frame. */
+  readonly dustFocus = new Vector3()
+  private readonly dustSeeds = Array.from({ length: 32 }, (_, i) => ({
+    ox: (((i * 37) % 100) / 100 - 0.5) * 12,
+    oy: 0.35 + (((i * 53) % 100) / 100) * 2.8,
+    oz: (((i * 71) % 100) / 100 - 0.5) * 12,
+    phase: (i * 2.399) % (Math.PI * 2),
+  }))
+  private dustTime = 0
   private readonly casings = Array.from({ length: 24 }, () => ({
     x: 0,
     y: 0,
@@ -288,6 +299,13 @@ export class Effects {
     this.casingMesh.count = 0
     this.casingMesh.frustumCulled = false
     root.add(this.casingMesh)
+    const dustMat = additive(dot)
+    dustMat.opacity = 0.3
+    this.dustMesh = new InstancedMesh(new SphereGeometry(0.03, 4, 3), dustMat, 32)
+    this.dustMesh.name = 'dust'
+    this.dustMesh.frustumCulled = false
+    this.dustMesh.visible = false
+    root.add(this.dustMesh)
     // Money bags: a lathed sack, gold-tinted.
     const sack = new LatheGeometry(
       [
@@ -446,6 +464,22 @@ export class Effects {
     c.vz = Math.sin(side) * kick
     c.vy = 1.1 + Math.random() * 0.5
     c.spin = (Math.random() - 0.5) * 18
+  }
+
+  /** A pane's shards and glass dust: pale, fast, and gone in a moment. */
+  glass(x: number, y: number, z: number): void {
+    for (let i = 0; i < 10; i++) {
+      const p = this.puffs.spawn()
+      p.life = 0.35 + Math.random() * 0.3
+      p.x = x
+      p.y = y
+      p.z = z
+      p.vx = (Math.random() - 0.5) * 4.5
+      p.vy = Math.random() * 2.4
+      p.vz = (Math.random() - 0.5) * 4.5
+      p.size = 0.07 + Math.random() * 0.12
+      p.color.setRGB(0.85, 0.95, 1)
+    }
   }
 
   /** Dust off a wall, or blood on a hit; `y` lifts it to the shooter/target's feet. */
@@ -615,6 +649,29 @@ export class Effects {
     }
   }
 
+  /** Turn the ambient dust field on (high tier only). */
+  showDust(on: boolean): void {
+    this.dustMesh.visible = on
+  }
+
+  /** Slow motes around the player, so the window shafts have something to catch. */
+  private updateDust(dt: number): void {
+    if (!this.dustMesh.visible) {
+      return
+    }
+    this.dustTime += dt
+    q.identity()
+    for (const [i, seed] of this.dustSeeds.entries()) {
+      const x = this.dustFocus.x + seed.ox + Math.sin(this.dustTime * 0.25 + seed.phase) * 0.5
+      const y = seed.oy + Math.sin(this.dustTime * 0.18 + seed.phase * 1.7) * 0.22
+      const z = this.dustFocus.z + seed.oz + Math.cos(this.dustTime * 0.21 + seed.phase) * 0.5
+      s.setScalar(0.02 + (i % 3) * 0.008)
+      m4.compose(v.set(x, y, z), q, s)
+      this.dustMesh.setMatrixAt(i, m4)
+    }
+    this.dustMesh.instanceMatrix.needsUpdate = true
+  }
+
   /** Fall, bounce and settle this frame's shell casings. */
   private updateCasings(dt: number): void {
     let cn = 0
@@ -652,6 +709,7 @@ export class Effects {
     this.flashes.update(dt)
     this.puffs.update(dt)
     this.holes.update(dt)
+    this.updateDust(dt)
     this.updateCasings(dt)
     let i = 0
     for (const b of this.bags.values()) {

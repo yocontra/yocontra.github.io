@@ -691,6 +691,7 @@ export class FrontierGame {
     this.floraChunks = floraChunks(flora)
     this.wilds.roll(TOWN)
     this.fx = new Effects(this.scene)
+    this.fx.showDust(this.renderer.tier === 'high')
     this.pickups = new Pickups(this.scene, TOWN.pickups, assets.props)
     const near = this.nearCap()
     this.crowd = new Crowd(this.scene, assets, near)
@@ -1361,6 +1362,7 @@ export class FrontierGame {
       return
     }
     const s = this.net.self
+    fx.dustFocus.set(this.own.x, this.own.y, this.own.z)
     const shooter0 = this.shooterView
     const list = this.crowdList
     list.length = 0

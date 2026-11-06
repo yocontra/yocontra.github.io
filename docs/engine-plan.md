@@ -50,13 +50,13 @@ A Babylon port rewrites roughly the 38k three-coupled lines. A Unity rebuild rew
 
 What you've flagged (characters, clothing, guns, animation polish) is mostly **content**: authored assets and animation. We have no paid assets and no Blender, so we generate garments and guns in code from CC0 parts. **No engine changes that.** An engine gives better runtime systems (animation graphs, physics, editors) but the same CC0 art.
 
-One free lever: **Mixamo** has a large professional animation library, free with an Adobe account (you would sign in and download; I can't create accounts). Plus Quaternius, Kenney and Poly Haven, all CC0.
+One free lever: **CC0 animation libraries** — Quaternius's Universal Animation Library, Kenney and Poly Haven. Mixamo is deliberately not used: its terms do not allow shipping the clips in an OSS repository.
 
 ## Options
 
 ### A. Stay on three.js, adopt proven libraries (recommended now)
 
-- Libraries: Rapier (physics/character controller), three-mesh-bvh (collision and raycasts), a small animation state-graph layer over AnimationMixer, and Mixamo animations (free) retargeted to our rig.
+- Libraries: Rapier (physics/character controller), three-mesh-bvh (collision and raycasts), a small animation state-graph layer over AnimationMixer, and Quaternius UAL clips retargeted to our rig.
 - Keeps everything that works and keeps shipping continuously.
 - Gets most of the remaining animation quality, the main visible gap.
 - Cost: low and incremental.
@@ -84,12 +84,12 @@ One free lever: **Mixamo** has a large professional animation library, free with
 
 1. Finish the current agents' work (in progress).
 2. Spike A for 1–2 days:
-   - retarget 15–20 Mixamo clips (aim, fire, reload per weapon, crouch, slide, sprint, strafe, deaths, hits) onto our rig, via `tools/build-moves.ts`;
+   - retarget the needed UAL clips (aim, fire, reload per weapon, crouch, slide, sprint, strafe, deaths, hits) onto our rig, via `tools/build-moves.ts`;
    - add a small animation state graph;
    - add three-mesh-bvh for camera and shot raycasts;
    - measure perf.
 
-   Needs you to download the Mixamo pack (free account).
+   Uses the CC0 UAL source; no account sign-in and no redistributed Mixamo clips.
 3. Spike B in parallel for 2–3 days, as a throwaway:
    - Frontier's town and one animated, aiming rider in Babylon;
    - compare animation quality, perf on the iPhone 13 mini emulation, and code size.

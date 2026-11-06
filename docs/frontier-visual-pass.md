@@ -45,18 +45,10 @@ pre-pass baseline at p50 5.8–6.5, p95 7.8–9.3. The best run of the pass was 
 Contact sheets: `.playwright-mcp/interiors/contact-sheet.png` (high tier) and
 `.playwright-mcp/interiors/floor-exterior.png` (floor tier).
 
-## Blocked: Phase 5 animation and ragdoll
+## Animation and ragdoll
 
-This needs the Mixamo downloads only the account holder can make. Open
-<https://www.mixamo.com>, sign in, and download the clips listed in
-[`tools/art/mixamo/README.md`](../tools/art/mixamo/README.md) into `tools/art/mixamo/` (FBX Binary,
-in place, 30 fps, same character). The manifest is `tools/art/mixamo/manifest.json`.
-
-Once those files are present, the remaining work is:
-
-1. Retarget the clips onto the rig and write `models/moves.glb`.
-2. Replace the procedural locomotion layer with the idle/aim/walk/run/sprint/crouch/slide/jump/
-   fall/reload/death state graph, with upper-body masks for aiming and firing.
-3. Add additive hit reactions and the simple client-side Verlet ragdoll (server capsule stays
-   authoritative), pooled and faded after settling.
-4. Re-run the gates and capture the animation contact sheet.
+The authored `Death` clip remains the death presentation. Full animation (aim/fire/reload per
+weapon, crouch/slide/strafe, hit reactions, deaths) and the simple Verlet ragdoll are deferred to a
+separate pass. They will use **CC0 sources only** — Quaternius's Universal Animation Library and the
+rig already in `tools/build-moves.ts`. Mixamo is ruled out: its terms do not allow shipping the
+clips in an OSS repository, so no Mixamo asset or manifest is part of this repo.

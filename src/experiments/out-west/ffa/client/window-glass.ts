@@ -8,8 +8,7 @@ import { TOWN } from '../sim/layout.ts'
 import { play } from './event-sounds.ts'
 import type { Sink } from './events.ts'
 
-/** Shatter FX: one spark per shard burst, and the bottle sample's gain. */
-const GLASS_SPARKS = 3
+/** Shatter FX: the bottle sample's gain. */
 const GLASS_SOUND_GAIN = 0.7
 
 /** Window pane centres by shared index: xyz per opening, built once on the first break. */
@@ -45,8 +44,6 @@ export function onGlassBreak(s: Sink, index: number): void {
   if (!at) {
     return
   }
-  for (let i = 0; i < GLASS_SPARKS; i++) {
-    s.fx.spark(at.x, at.y, at.z)
-  }
+  s.fx.glass(at.x, at.y, at.z)
   play(s, 'bottle', { x: at.x, z: at.z }, GLASS_SOUND_GAIN)
 }
