@@ -41,6 +41,7 @@ import {
 } from './catalog.ts'
 import { AudioDebug, audioDebugMode } from './debug.ts'
 import { DeckPool } from './deck-pool.ts'
+import { db, glide, lineKey, smooth, softClipCurve, taper } from './math.ts'
 import { Stream } from './stream.ts'
 import {
   type EffortKind,
@@ -88,8 +89,6 @@ const CALL_DUCK: readonly (readonly [Bus, number])[] = [
   ['amb', 0.25],
   ['voice', 0.25],
 ]
-/** A slider position (0..1) to gain: squared, so the travel feels even (0.5 ≈ −12 dB). */
-const taper = (x: number) => x * x
 /** Breathing room baked between voice lines in a sprite is trimmed off at play: fade out over this. */
 const VOICE_FADE = 0.03
 /** How far the score dips under an outlaw's line (linear: −6 dB; `tools/audio/MIX.md`). */
@@ -197,31 +196,6 @@ interface Active {
   done: boolean
 }
 
-const db = (d: number) => 10 ** (d / 20)
-const smooth = (x: number) => {
-  const t = Math.min(1, Math.max(0, x))
-  return t * t * (3 - 2 * t)
-}
-
-/**
- * Click-free parameter change: hold whatever value the param has right now
- * (mid-ramp included) and glide exponentially toward the target. Never reads
- * `.value` (which can lag the audio thread) and never jumps.
- */
-function glide(p: AudioParam, target: number, now: number, seconds: number): void {
-  if (!(Number.isFinite(target) && Number.isFinite(now) && Number.isFinite(seconds))) {
-    return
-  }
-  const hold = (p as AudioParam & { cancelAndHoldAtTime?: (t: number) => AudioParam })
-    .cancelAndHoldAtTime
-  if (hold) {
-    hold.call(p, now)
-  } else {
-    p.cancelScheduledValues(now)
-    p.setValueAtTime(p.value, now)
-  }
-  p.setTargetAtTime(target, now, Math.max(0.01, seconds / 4))
-}
 /** Max simultaneous one-shot voices. */
 const MAX_VOICES = 24
 /**
@@ -1666,30 +1640,4 @@ export class AudioEngine {
       musicTrimDb: MUSIC_TRIM,
     }
   }
-}
-
-const NOT_WORD = /[^\p{L}\p{N}]+/gu
-
-/** A caption reduced to its words, so a stray quote mark or ellipsis never loses its voice. */
-function lineKey(text: string): string {
-  return text.normalize('NFKD').toLowerCase().replaceAll(NOT_WORD, ' ').trim()
-}
-
-/**
- * Soft-clip transfer curve over the WaveShaper's -1..1 input domain: exact
- * identity up to 0.8, then a tanh knee. The limiter sits at -2 dBFS (≈0.79),
- * so in normal play the knee is never reached.
- */
-function softClipCurve(): Float32Array<ArrayBuffer> {
-  const n = 4097
-  const knee = 0.8
-  const room = 1 - knee
-  const curve = new Float32Array(n)
-  for (let i = 0; i < n; i++) {
-    const x = (i / (n - 1)) * 2 - 1
-    const a = Math.abs(x)
-    const y = a <= knee ? a : knee + room * Math.tanh((a - knee) / room)
-    curve[i] = Math.sign(x) * y
-  }
-  return curve
 }
