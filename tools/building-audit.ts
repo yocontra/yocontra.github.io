@@ -14,6 +14,7 @@ import process from 'node:process'
 import {
   doorTop,
   windowSlots as sharedWindowSlots,
+  WALL_T,
   type WindowOpening,
 } from '../src/experiments/out-west/ffa/scene/building-rules.ts'
 import { type Building, TOWN } from '../src/experiments/out-west/ffa/sim/layout.ts'
@@ -134,6 +135,209 @@ function windowSlots(b: Building, front: string): Slot[] {
     top: w.top,
     shop: w.shop,
   }))
+}
+
+/** Room reachability audit: raster step, minimum room area (m²), body clearance and upper storey. */
+const ROOM_CELL = 0.2
+const ROOM_MIN_AREA = 2
+const ROOM_CLEARANCE = 0.3
+const UPPER_Y = 3.3
+/** How far inside an exterior door the reachability seed starts, metres. */
+const DOOR_SEED_INSET = 0.6
+
+interface Seed {
+  x: number
+  z: number
+}
+
+/** The stair's top landing (or its foot, for the ground-floor connectivity check). */
+function stairPoint(st: NonNullable<Building['stairs']>[number], top: boolean): Seed {
+  const x = st.x + st.w / 2
+  const z = st.z + st.d / 2
+  const out = 0.6
+  switch (st.dir) {
+    case 'n':
+      return top ? { x, z: st.z - out } : { x, z: st.z + st.d - 0.4 }
+    case 's':
+      return top ? { x, z: st.z + st.d + out } : { x, z: st.z + 0.4 }
+    case 'e':
+      return top ? { x: st.x + st.w + out, z } : { x: st.x + 0.4, z }
+    default:
+      return top ? { x: st.x - out, z } : { x: st.x + st.w - 0.4, z }
+  }
+}
+
+/**
+ * Flood each storey's floor and report sealed rooms and walled-off stairs. Walls are the same
+ * `b.walls` rects the scene and sim use; the stairwell is a hole in the floor, not a wall, so it
+ * connects the strips around it.
+ */
+// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: one floor raster and two floods are one audit
+function auditRooms(b: Building, id: string): void {
+  const x0 = b.x + WALL_T + ROOM_CLEARANCE
+  const z0 = b.z + WALL_T + ROOM_CLEARANCE
+  const x1 = b.x + b.w - WALL_T - ROOM_CLEARANCE
+  const z1 = b.z + b.d - WALL_T - ROOM_CLEARANCE
+  const cols = Math.max(1, Math.floor((x1 - x0) / ROOM_CELL))
+  const rows = Math.max(1, Math.floor((z1 - z0) / ROOM_CELL))
+  const n = cols * rows
+  const cell = (x: number, z: number): number | null => {
+    const c = Math.floor((x - x0) / ROOM_CELL)
+    const r = Math.floor((z - z0) / ROOM_CELL)
+    return c < 0 || r < 0 || c >= cols || r >= rows ? null : r * cols + c
+  }
+  for (const floorY of [0, UPPER_Y]) {
+    if (floorY > 0 && !(b.upperFloor && b.upperFloor.length > 0)) {
+      continue
+    }
+    const label = floorY > 0 ? 'upper' : 'ground'
+    const blocked = new Uint8Array(n)
+    for (const w of b.walls ?? []) {
+      const y0 = w.y0 ?? 0
+      const y1 = w.y1 ?? b.height
+      if (y0 > floorY + 0.2 || y1 < floorY + 1) {
+        continue
+      }
+      const c0 = Math.max(0, Math.floor((w.x - ROOM_CLEARANCE - x0) / ROOM_CELL))
+      const c1 = Math.min(cols - 1, Math.ceil((w.x + w.w + ROOM_CLEARANCE - x0) / ROOM_CELL) - 1)
+      const r0 = Math.max(0, Math.floor((w.z - ROOM_CLEARANCE - z0) / ROOM_CELL))
+      const r1 = Math.min(rows - 1, Math.ceil((w.z + w.d + ROOM_CLEARANCE - z0) / ROOM_CELL) - 1)
+      for (let r = r0; r <= r1; r++) {
+        for (let c = c0; c <= c1; c++) {
+          const cx = x0 + (c + 0.5) * ROOM_CELL
+          const cz = z0 + (r + 0.5) * ROOM_CELL
+          if (
+            cx >= w.x - ROOM_CLEARANCE &&
+            cx <= w.x + w.w + ROOM_CLEARANCE &&
+            cz >= w.z - ROOM_CLEARANCE &&
+            cz <= w.z + w.d + ROOM_CLEARANCE
+          ) {
+            blocked[r * cols + c] = 1
+          }
+        }
+      }
+    }
+    const seeds: Seed[] = []
+    if (floorY === 0) {
+      for (const d of b.doors) {
+        const along = d.side === 'n' || d.side === 's'
+        let x = b.x + d.at + d.width / 2
+        let z = b.z + d.at + d.width / 2
+        if (along) {
+          z = d.side === 'n' ? z0 + DOOR_SEED_INSET : z1 - DOOR_SEED_INSET
+        } else {
+          x = d.side === 'w' ? x0 + DOOR_SEED_INSET : x1 - DOOR_SEED_INSET
+        }
+        seeds.push({ x, z })
+      }
+    } else {
+      for (const st of b.stairs ?? []) {
+        seeds.push(stairPoint(st, true))
+      }
+    }
+    if (seeds.length === 0) {
+      flag('error', id, 'room', `${label} floor has no way in`)
+      continue
+    }
+    const seen = new Uint8Array(n)
+    const queue: number[] = []
+    for (const s of seeds) {
+      let cellIndex = cell(s.x, s.z)
+      if (cellIndex !== null && blocked[cellIndex] === 1) {
+        // A door or stair seed can sit in a jamb: look a little way around it.
+        outer: for (let rad = 1; rad <= 5; rad++) {
+          for (let dr = -rad; dr <= rad; dr++) {
+            for (let dc = -rad; dc <= rad; dc++) {
+              const q = cell(s.x + dc * ROOM_CELL, s.z + dr * ROOM_CELL)
+              if (q !== null && blocked[q] === 0) {
+                cellIndex = q
+                break outer
+              }
+            }
+          }
+        }
+      }
+      if (cellIndex === null || blocked[cellIndex] === 1) {
+        flag('error', id, 'room', `${label} floor: a door or stair landing is walled off`)
+        continue
+      }
+      if (seen[cellIndex] === 0) {
+        seen[cellIndex] = 1
+        queue.push(cellIndex)
+      }
+    }
+    for (const i of queue) {
+      const c = i % cols
+      const r = Math.floor(i / cols)
+      for (const [dc, dr] of [
+        [1, 0],
+        [-1, 0],
+        [0, 1],
+        [0, -1],
+      ] as const) {
+        const nc = c + dc
+        const nr = r + dr
+        if (nc < 0 || nr < 0 || nc >= cols || nr >= rows) {
+          continue
+        }
+        const q = nr * cols + nc
+        if (blocked[q] === 0 && seen[q] === 0) {
+          seen[q] = 1
+          queue.push(q)
+        }
+      }
+    }
+    if (floorY === 0) {
+      for (const st of b.stairs ?? []) {
+        const p = stairPoint(st, false)
+        const i = cell(p.x, p.z)
+        if (i !== null && seen[i] === 0) {
+          flag('error', id, 'stair', 'stair foot is walled off from the ground floor')
+        }
+      }
+    }
+    // Any decent-sized free area the doors/stairs could not reach is a sealed room.
+    const open = new Uint8Array(n)
+    for (let i = 0; i < n; i++) {
+      if (blocked[i] === 0 && seen[i] === 0) {
+        open[i] = 1
+      }
+    }
+    for (let i = 0; i < n; i++) {
+      if (open[i] === 0) {
+        continue
+      }
+      let area = 0
+      const q: number[] = [i]
+      open[i] = 0
+      for (const j of q) {
+        area++
+        const c = j % cols
+        const r = Math.floor(j / cols)
+        for (const [dc, dr] of [
+          [1, 0],
+          [-1, 0],
+          [0, 1],
+          [0, -1],
+        ] as const) {
+          const nc = c + dc
+          const nr = r + dr
+          if (nc < 0 || nr < 0 || nc >= cols || nr >= rows) {
+            continue
+          }
+          const k = nr * cols + nc
+          if (open[k] === 1) {
+            open[k] = 0
+            q.push(k)
+          }
+        }
+      }
+      const m2 = area * ROOM_CELL * ROOM_CELL
+      if (m2 >= ROOM_MIN_AREA) {
+        flag('error', id, 'room', `${label} room of ${m2.toFixed(1)} m² is sealed off`)
+      }
+    }
+  }
 }
 
 for (const b of TOWN.buildings) {
@@ -289,6 +493,11 @@ for (const b of TOWN.buildings) {
         flag('warn', id, 'wall', `upper wall starts at ${w.y0} m, below the 3.3 m floor`)
       }
     }
+  }
+
+  // Every room on every storey must be reachable from a door or the stair landing.
+  if (b.hollow) {
+    auditRooms(b, id)
   }
 
   // Closed doors on solid buildings.

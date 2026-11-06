@@ -250,9 +250,9 @@ const upper: [Building, Stair][] = [
 cu('bed', 48, 40, 2, 2, 3.3)
 cu('table', 52, 40, 1.5, 1.5, 3.3)
 cu('crates', 64, 36, 1.5, 1.5, 3.3)
-cu('bed', 84, 40, 2, 2, 3.3)
+cu('bed', 80, 40, 2, 2, 3.3)
 cu('bed', 88, 40, 2, 2, 3.3)
-cu('bed', 84, 49, 2, 2, 3.3)
+cu('bed', 90, 49, 2, 2, 3.3)
 cu('counter', 68, 76, 3, 1, 3.3)
 cu('safe', 79, 76, 1.5, 1.5, 3.3)
 cu('crates', 67, 89, 1.5, 1.5, 3.3)
@@ -329,14 +329,21 @@ for (const [bd, stair] of upper) {
   } else if (bd.id === 'hotel') {
     bd.walls = [
       ...(bd.walls ?? []),
-      { x: 86, z: 39, w: 0.5, d: 13, ...wallY },
-      { x: 86, z: 46, w: 7, d: 0.5, ...wallY },
+      // A guest room off the stair landing, and two east rooms behind a spine wall with doors.
+      { x: 78.5, z: 42.5, w: 5, d: 0.5, ...wallY },
+      { x: 84.6, z: 42.5, w: 1.4, d: 0.5, ...wallY },
+      { x: 86, z: 39, w: 0.5, d: 5, ...wallY },
+      { x: 86, z: 45.1, w: 0.5, d: 6.9, ...wallY },
+      { x: 86.5, z: 46, w: 1.5, d: 0.5, ...wallY },
+      { x: 89.1, z: 46, w: 3.9, d: 0.5, ...wallY },
     ]
   } else {
     bd.walls = [
       ...(bd.walls ?? []),
       { x: 72, z: 75, w: 0.5, d: 7, ...wallY },
-      { x: 72, z: 81.5, w: 9, d: 0.5, ...wallY },
+      // A door onto the stair hall, then around the teller wall's south end.
+      { x: 72, z: 81.5, w: 4, d: 0.5, ...wallY },
+      { x: 77.1, z: 81.5, w: 3.9, d: 0.5, ...wallY },
     ]
   }
 }
