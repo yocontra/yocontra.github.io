@@ -28,6 +28,7 @@ import {
 } from 'three'
 import { FONT } from '../ui/type.ts'
 import { CIVIC_CELL_U, CIVIC_GUTTER } from './civic-atlas.ts'
+import { markFlat, markSlot, SLOT } from './roles.ts'
 import { loadTex } from './textures.ts'
 
 const ROOT = '/experiments/out-west/3d/tex'
@@ -192,6 +193,8 @@ export function ironMaterials(): {
   })
   mat.onBeforeCompile = spinPatch(uniforms, true)
   mat.customProgramCacheKey = () => 'ow-iron'
+  markFlat(mat)
+  markSlot(mat, SLOT.Iron)
   const depth = new MeshDepthMaterial({ depthPacking: RGBADepthPacking })
   depth.onBeforeCompile = spinPatch(uniforms, false)
   depth.customProgramCacheKey = () => 'ow-iron-depth'

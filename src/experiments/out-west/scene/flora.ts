@@ -30,6 +30,7 @@ import { Rng } from '../ffa/sim/rng.ts'
 import { bindAtmos, withCloudShadow } from './atmos.ts'
 import { buildImpostors } from './impostor.ts'
 import { releaseAfterUpload } from './release.ts'
+import { markRole, ROLE } from './roles.ts'
 
 export type PlantKind =
   | 'saguaro'
@@ -1189,6 +1190,7 @@ function spaced(plants: readonly Plant[]): Plant[] {
 export function buildFlora(plants: readonly Plant[], opts: FloraOpts): Group {
   const root = new Group()
   root.name = 'flora'
+  markRole(root, ROLE.Flora)
   const chunks = new Map<string, PlantGeo>()
   const far = new Map<string, Plant[]>()
   const ctr = opts.centre ?? { x: 0, z: 0 }
@@ -1231,6 +1233,7 @@ export function buildFlora(plants: readonly Plant[], opts: FloraOpts): Group {
     releaseAfterUpload(geo)
     const m = new Mesh(geo, mat)
     m.name = 'flora'
+    markRole(m, ROLE.Flora)
     m.userData.chunk = key
     m.matrixAutoUpdate = false
     m.receiveShadow = true

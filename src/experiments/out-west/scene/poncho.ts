@@ -17,6 +17,7 @@ import type { GunSides } from './coat.ts'
 import { nearestWeights, onBones, shell } from './fit.ts'
 import { creaseNormals } from './normals.ts'
 import type { Fit } from './outfit.ts'
+import { SLOT, type Slot } from './roles.ts'
 import { FABRIC } from './style.ts'
 
 const TORSO = ['Chest', 'Torso', 'Abdomen', 'Hips', 'ShoulderL', 'ShoulderR', 'Neck']
@@ -185,8 +186,8 @@ export function poncho(f: Fit, hex: number, sides: GunSides): Piece[] {
   fold(geo, ts, cx, cz)
   // A blanket hides everything under it. Without this the shirt, sleeves and belt poke through
   // the poncho whenever its panels move (an arm lift shears the blanket against the chest).
-  const hide = (p: Vector3, _bone: string, garment: string): boolean => {
-    if (!HIDEABLE.has(garment)) {
+  const hide = (p: Vector3, _bone: string, garment: Slot | undefined): boolean => {
+    if (garment === undefined || !HIDEABLE.has(garment)) {
       return false
     }
     const a = Math.atan2(p.x - cx, p.z - cz)
@@ -207,4 +208,10 @@ export function poncho(f: Fit, hex: number, sides: GunSides): Piece[] {
 }
 
 /** Base garments the poncho covers (the gunbelt and hat are separate, on top). */
-const HIDEABLE = new Set(['Shirt', 'Sleeves', 'Bracer', 'Belt', 'Skin'])
+const HIDEABLE: ReadonlySet<Slot> = new Set([
+  SLOT.Shirt,
+  SLOT.Sleeves,
+  SLOT.Bracer,
+  SLOT.Belt,
+  SLOT.Skin,
+])

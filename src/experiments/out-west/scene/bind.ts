@@ -6,6 +6,7 @@
  */
 import { type Material, type Object3D, type SkinnedMesh, Vector3 } from 'three'
 import { boneKey } from './fit.ts'
+import { SLOT, slotOf } from './roles.ts'
 
 export const isSkinned = (o: Object3D): o is SkinnedMesh => (o as SkinnedMesh).isSkinnedMesh
 export const matName = (m: SkinnedMesh): string =>
@@ -82,15 +83,16 @@ export function landmarks(meshes: readonly SkinnedMesh[]): Land | null {
   let eyeN = 0
   let chin = Number.POSITIVE_INFINITY
   for (const sm of meshes) {
-    const name = matName(sm)
+    const mat = Array.isArray(sm.material) ? sm.material[0] : sm.material
+    const slot = mat ? slotOf(mat) : undefined
     const pos = sm.geometry.getAttribute('position')
     for (let k = 0; k < pos.count; k++) {
       v.fromBufferAttribute(pos, k).applyMatrix4(sm.bindMatrix)
-      if (name === 'Eye') {
+      if (slot === SLOT.Eye) {
         eyeSum += v.y
         eyeN++
       } else if (
-        name === 'Skin' &&
+        slot === SLOT.Skin &&
         v.z > head.z &&
         (weightsOf(sm, k, ['Head']).get('Head') ?? 0) > 0.9
       ) {

@@ -27,6 +27,7 @@ import {
 import type { HatKey } from '../data/outlaws.ts'
 import { mergePieces, meshPieces, type Piece } from './bake.ts'
 import type { Body } from './fit.ts'
+import { SLOT } from './roles.ts'
 import { characterMaterial, type Glow } from './shade.ts'
 import type { Floor } from './style.ts'
 
@@ -407,7 +408,7 @@ export function tuckHair(pieces: readonly Piece[], fit: HatFit): void {
   const ceiling = fit.seat + (c.topY - c.openY) * fit.s - 0.006
   const f: Frame = { cx: fit.cx, cz: fit.cz, sx: Math.cos(fit.yaw), sz: -Math.sin(fit.yaw) }
   for (const p of pieces) {
-    if (p.name !== 'Hair') {
+    if (p.slot !== SLOT.Hair) {
       continue
     }
     const pos = p.geo.getAttribute('position')

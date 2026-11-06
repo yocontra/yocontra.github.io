@@ -25,6 +25,7 @@ import {
 } from 'three'
 import { meshPieces, onBone, type Piece } from './bake.ts'
 import { type Body, bounds, nearestWeights, onBones, shell } from './fit.ts'
+import { SLOT, slotOf } from './roles.ts'
 import { FABRIC } from './style.ts'
 
 /**
@@ -39,7 +40,7 @@ export function prune(model: Object3D, o: { beard: boolean }): void {
       return
     }
     const mat = Array.isArray(mesh.material) ? mesh.material[0] : mesh.material
-    if (mat?.userData.optional && !(o.beard && mat.name === 'Beard')) {
+    if (mat?.userData.optional && !(o.beard && slotOf(mat) === SLOT.Beard)) {
       drop.push(obj)
     }
   })

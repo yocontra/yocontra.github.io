@@ -27,6 +27,7 @@ import { addStatic, buildMesas, buildPosterPost, buildWaterTower } from './landm
 import { type Preset, presetAt } from './presets.ts'
 import { mergePlaced } from './props.ts'
 import { releaseAfterUpload } from './release.ts'
+import { markRole, markSlot, ROLE, SLOT } from './roles.ts'
 import { Sky } from './sky.ts'
 import {
   AWNING,
@@ -181,6 +182,7 @@ export class World {
       emissiveIntensity: 0,
     })
     glassLook(this.windowMat)
+    markSlot(this.windowMat, SLOT.Glass)
     const atlas = signAtlas(SIGNS)
     this.signMat = new MeshStandardMaterial({ map: atlas.tex, roughness: 0.85 })
     attachBoard(this.signMat, atlas.rows)
@@ -290,6 +292,7 @@ float hoof(vec2 p) {
     releaseAfterUpload(groundGeo)
     this.ground = new Mesh(groundGeo, groundMat)
     this.ground.name = 'ground'
+    markRole(this.ground, ROLE.Land)
     this.ground.receiveShadow = true
     this.ground.matrixAutoUpdate = false
     this.ground.updateMatrix()

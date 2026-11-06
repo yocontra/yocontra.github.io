@@ -8,6 +8,7 @@
  * The dome is drawn after the opaque scene at the far plane (depth test on), so only the pixels
  * the town leaves open pay for it. It ignores the camera's position (direction only).
  */
+
 import {
   BackSide,
   Color,
@@ -19,6 +20,7 @@ import {
   Vector3,
 } from 'three'
 import { ATMOS, CLOUD_GLSL, HAZE_GLSL } from './atmos.ts'
+import { markRole, ROLE } from './roles.ts'
 
 const skyVert = /* glsl */ `
 varying vec3 vDir;
@@ -211,6 +213,7 @@ export class Sky {
     })
     this.mesh = new Mesh(new SphereGeometry(10, 32, 16), mat)
     this.mesh.name = 'sky'
+    markRole(this.mesh, ROLE.Backdrop)
     this.mesh.frustumCulled = false
     // after the opaque scene: early depth rejects every pixel the town already covers
     this.mesh.renderOrder = 1000

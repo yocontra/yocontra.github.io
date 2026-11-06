@@ -5,6 +5,7 @@
  */
 import type { Mesh, Object3D } from 'three'
 import type { Quality } from '../../engine/tiers.ts'
+import { ROLE } from '../../scene/roles.ts'
 
 export interface FloraChunk {
   obj: Object3D
@@ -22,7 +23,7 @@ export function floraChunks(root: Object3D): FloraChunk[] {
   root.updateMatrixWorld(true)
   for (const o of root.children) {
     const s = (o as Mesh).geometry?.boundingSphere
-    if (o.name === 'flora' && s) {
+    if (o.userData.role === ROLE.Flora && s) {
       const c = s.center.clone().applyMatrix4(o.matrixWorld)
       out.push({ obj: o, x: c.x, z: c.z, r: s.radius })
     }

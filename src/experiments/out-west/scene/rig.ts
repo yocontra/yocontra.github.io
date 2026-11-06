@@ -24,6 +24,7 @@ import { type HatFit, makeHat } from './hats.ts'
 import { bandana, bandoliers, type Fit, mask, star } from './outfit.ts'
 import { HAIR_LUM } from './person.ts'
 import { poncho } from './poncho.ts'
+import { SLOT, slotOf } from './roles.ts'
 import type { Glow } from './shade.ts'
 import { type Floor, vary } from './style.ts'
 
@@ -72,11 +73,11 @@ function tintFor(
     return own
   }
   // the sculpted beard is also his moustache and side whiskers (scene/whiskers.ts)
-  const whisker = src.name === 'Beard' ? (o.beard ?? o.moustache ?? o.sideburns) : undefined
+  const whisker = slotOf(src) === SLOT.Beard ? (o.beard ?? o.moustache ?? o.sideburns) : undefined
   if (whisker !== undefined) {
     return whisker
   }
-  if ((src.name === 'Brows' || src.name === 'Beard') && tint.Hair !== undefined) {
+  if ((slotOf(src) === SLOT.Brows || slotOf(src) === SLOT.Beard) && tint.Hair !== undefined) {
     return tint.Hair
   }
   return src.userData.tint as number | undefined

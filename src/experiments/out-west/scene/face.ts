@@ -22,6 +22,7 @@ import type { BeardKey } from '../data/outlaws.ts'
 import { meshPieces, onBone, type Piece } from './bake.ts'
 import { nearestWeights, onBones, reach, shell } from './fit.ts'
 import type { Fit } from './outfit.ts'
+import { SLOT, type Slot } from './roles.ts'
 import { FABRIC } from './style.ts'
 
 const HEAD = ['Head']
@@ -278,13 +279,13 @@ export function vest(f: Fit, color: number): Piece[] {
   )
   const weights = nearestWeights(f.body, onBones(f.body, VEST_BONES))
   const strapWeights = nearestWeights(f.body, onBones(f.body, STRAP_BONES))
-  const hide = (p: Vector3, _bone: string, garment: string): boolean => {
-    if (garment !== 'Shirt' && garment !== 'Sleeves') {
+  const hide = (p: Vector3, _bone: string, garment: Slot | undefined): boolean => {
+    if (garment !== SLOT.Shirt && garment !== SLOT.Sleeves) {
       return false
     }
     // nothing under the band (keep the shirt in the V above its dipping top edge); the sleeves
     // are the arms, which the band does not cover, so only the shirt goes
-    if (garment === 'Shirt') {
+    if (garment === SLOT.Shirt) {
       const a = Math.atan2(p.x - cx, p.z - cz)
       if (p.y > yBot - 0.02 && p.y < topAt(a) - 0.004) {
         return true

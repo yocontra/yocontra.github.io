@@ -35,6 +35,7 @@ import {
   Vector3,
   type WebGLRenderer,
 } from 'three'
+import { isFlatMaterial, ROLE, type Role, roleOf, SLOT, slotOf } from './roles.ts'
 
 export interface AuditIssue {
   kind: 'float' | 'loose' | 'sunk' | 'zfight'
@@ -74,11 +75,9 @@ const ON_DECK =
 const WALL_MOUNTED = /^k_(?:window|shutters|door|balcony|support|lantern)/u
 /** Hang or fly by design (matched against the piece's own and every ancestor's name). */
 const HANGS = /(?:^|\/)(?:lantern|postlantern|pickup|bags|bird|cloud|tumbleweed)(?:\/|$)/u
-/** Effects, decals and the sky: never pieces (decals still support). */
-const SKIP = /^(?:tracer|flash|puff|ring|aim|beacon|dust|spark|sky|blob|shaft)$/u
-const DECAL = /^creek$/u
-/** Landform meshes: always support, never pieces. */
-const LAND = /^(?:outskirts|ground|terrain)$/u
+
+/** Effects and backdrops (`scene/roles.ts`): never pieces. */
+const isEffect = (o: Object3D): boolean => roleOf(o) === ROLE.Effect || roleOf(o) === ROLE.Backdrop
 
 export interface Piece {
   name: string
@@ -196,7 +195,8 @@ function addPiece(
   chain: string,
   verts: number[],
   tris: number[],
-  color = -1,
+  color: number,
+  role: Role | undefined,
 ): void {
   const id = out.pieces.length
   const min = new Vector3(FAR, FAR, FAR)
@@ -223,7 +223,7 @@ function addPiece(
     min,
     max,
     hangs: HANGS.test(`${name}/${chain}`),
-    decal: DECAL.test(name),
+    decal: role === ROLE.Decal,
     color,
   })
 }
@@ -253,7 +253,7 @@ function meshParts(out: Collected, m: Mesh, world: Matrix4, label: string): Part
   const radius = (g.boundingSphere?.radius ?? 0) * world.getMaxScaleOnAxis()
   const nt = idx.length / 3
   // (by size, or by name: the outskirts terrain's bounding sphere sits right around the cut-off)
-  if (radius > 150 || LAND.test(m.name) || m.userData.support === true) {
+  if (radius > 150 || roleOf(m) === ROLE.Land || m.userData.support === true) {
     // the ground plane, the bluff, the mesas, a terrain flagged as ground: support only, never
     // audited
     for (let t = 0; t < nt; t++) {
@@ -328,7 +328,10 @@ function meshParts(out: Collected, m: Mesh, world: Matrix4, label: string): Part
 export function collect(scene: Object3D): Collected {
   const out: Collected = { pieces: [], tri: [], owner: [], large: [] }
   scene.updateMatrixWorld(true)
-  const instanced = new Map<string, { name: string; mesh: string; chain: string; part: Part }>()
+  const instanced = new Map<
+    string,
+    { name: string; mesh: string; chain: string; part: Part; role: Role | undefined }
+  >()
   scene.traverse((o) => {
     if (
       o instanceof SkinnedMesh ||
@@ -336,7 +339,7 @@ export function collect(scene: Object3D): Collected {
       o instanceof Sprite ||
       !(o instanceof Mesh) ||
       !shown(o) ||
-      SKIP.test(o.name)
+      isEffect(o)
     ) {
       return
     }
@@ -362,13 +365,18 @@ export function collect(scene: Object3D): Collected {
         o.getMatrixAt(i, im)
         const w = new Matrix4().multiplyMatrices(o.matrixWorld, im)
         const key = `${o.parent?.uuid}|${o.name || o.uuid}|${i}`
-        const acc: { name: string; mesh: string; chain: string; part: Part } = instanced.get(
-          key,
-        ) ?? {
+        const acc: {
+          name: string
+          mesh: string
+          chain: string
+          part: Part
+          role: Role | undefined
+        } = instanced.get(key) ?? {
           name: label,
           mesh: firstName(o),
           chain,
           part: { name: label, verts: [], tris: [], color: -1 },
+          role: roleOf(o),
         }
         for (const part of meshParts(out, o, w, label)) {
           acc.part.verts.push(...part.verts)
@@ -379,12 +387,12 @@ export function collect(scene: Object3D): Collected {
       return
     }
     for (const part of meshParts(out, o, o.matrixWorld, label)) {
-      addPiece(out, part.name, firstName(o), chain, part.verts, part.tris, part.color)
+      addPiece(out, part.name, firstName(o), chain, part.verts, part.tris, part.color, roleOf(o))
     }
   })
   for (const acc of instanced.values()) {
     if (acc.part.verts.length > 0) {
-      addPiece(out, acc.name, acc.mesh, acc.chain, acc.part.verts, acc.part.tris)
+      addPiece(out, acc.name, acc.mesh, acc.chain, acc.part.verts, acc.part.tris, -1, acc.role)
     }
   }
   return out
@@ -938,16 +946,10 @@ export interface Untextured {
   triangles: number
 }
 
-/** Meshes that are flat colour by design: glass panes, water, the sky, effects, decals. */
-const FLAT_OK =
-  /(?:^|\/)(?:windows|creek|sky|tracer|flash|puff|ring|aim|beacon|dust|spark|blob|glint|casing|hole|shaft)(?:\/|$)/u
-/** Materials that are plain by design: the clock tower's wrought iron (its hands and rails). */
-const FLAT_MATERIALS = /^(?:Iron)$/u
-
 /**
  * Every visible, lit mesh whose material has no colour map and no procedural surface
- * (`userData.procedural`, set by scene/surface.ts and the plant material). Unlit effect materials
- * and the allow-listed glass, water and sky are skipped.
+ * (`userData.procedural`, set by scene/surface.ts and the plant material). Unlit effect materials,
+ * and the glass, water, sky, effect and decal roles, are skipped.
  */
 export function textureAudit(scene: Object3D): Untextured[] {
   const out = new Map<string, Untextured>()
@@ -963,8 +965,9 @@ export function textureAudit(scene: Object3D): Untextured[] {
       color?: { getHexString: () => string }
       emissiveIntensity?: number
     }[]
+    const role = roleOf(o)
     const chain = chainNames(o)
-    if (FLAT_OK.test(chain) || SKIP.test(o.name)) {
+    if (role === ROLE.Effect || role === ROLE.Backdrop || role === ROLE.Decal) {
       return
     }
     for (const m of mats) {
@@ -973,7 +976,14 @@ export function textureAudit(scene: Object3D): Untextured[] {
         m.type === 'MeshPhysicalMaterial' ||
         m.type === 'MeshLambertMaterial' ||
         m.type === 'MeshPhongMaterial'
-      if (!lit || m.map || m.userData.procedural || FLAT_MATERIALS.test(m.name)) {
+      if (
+        !lit ||
+        m.map ||
+        m.userData.procedural ||
+        isFlatMaterial(m) ||
+        slotOf(m) === SLOT.Iron ||
+        slotOf(m) === SLOT.Glass
+      ) {
         continue
       }
       const pos = o.geometry.getAttribute('position')

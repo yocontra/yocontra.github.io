@@ -53,6 +53,7 @@ import type { Assets } from '../../engine/assets.ts'
 import type { Quality } from '../../engine/tiers.ts'
 import { GeoBuilder } from '../../scene/geo.ts'
 import { mergePlaced, type PropDef, placeMatrix, propDef, propsLibrary } from '../../scene/props.ts'
+import { markRole, markSlot, ROLE, SLOT } from '../../scene/roles.ts'
 import { glassLook } from '../../scene/surface.ts'
 import { signAtlas } from '../../scene/textures.ts'
 import { attachArm } from '../../scene/town-pbr.ts'
@@ -508,7 +509,7 @@ function makeMaterials(assets: Assets): TownMaterials {
       const found: MeshStandardMaterial[] = []
       sc.traverse((o) => {
         const m = (o as Mesh).material as MeshStandardMaterial | undefined
-        if (m?.name === 'Kit') {
+        if (m?.userData.slot === SLOT.Kit) {
           found.push(m)
         }
       })
@@ -548,10 +549,14 @@ function makeMaterials(assets: Assets): TownMaterials {
   cutaway(cloth, false)
   // names the atmosphere pass (wilds.ts) dispatches on
   wall.name = 'town-wall'
+  markSlot(wall, SLOT.Board)
   stone.name = 'town-stone'
   roof.name = 'town-roof'
+  markSlot(roof, SLOT.Board)
   wood.name = 'town-wood'
+  markSlot(wood, SLOT.Board)
   windows.name = 'town-windows'
+  markSlot(windows, SLOT.Glass)
   const glass = new MeshStandardMaterial({
     name: 'window-glass',
     map: glassTexture(),
@@ -2577,6 +2582,7 @@ function buildWindowShafts(
   geo.setAttribute('uv', new Float32BufferAttribute(uvs, 2))
   const mesh = new Mesh(geo, material)
   mesh.name = 'shaft'
+  markRole(mesh, ROLE.Effect)
   mesh.frustumCulled = false
   mesh.matrixAutoUpdate = false
   return mesh
@@ -2672,6 +2678,8 @@ export function buildTown(
   for (const [k, part] of splitTriangles(landGeo, (x, z) => sectorOf(layout, x, z))) {
     const land = new Mesh(part, ground.material)
     land.name = 'outskirts'
+    markRole(land, ROLE.Land)
+    land.userData.support = true
     land.userData.sector = k
     land.receiveShadow = true
     root.add(land)
@@ -2909,6 +2917,7 @@ function waterMesh(layout: TownLayout): Mesh {
   })
   const m = new Mesh(g.build(), mat)
   m.name = 'creek'
+  markRole(m, ROLE.Decal)
   m.receiveShadow = true
   return m
 }

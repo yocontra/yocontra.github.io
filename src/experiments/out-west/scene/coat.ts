@@ -18,6 +18,7 @@ import type { Piece } from './bake.ts'
 import { nearestWeights, onBones, type Sample, shell } from './fit.ts'
 import { creaseNormals } from './normals.ts'
 import type { Fit } from './outfit.ts'
+import { SLOT } from './roles.ts'
 import { FABRIC } from './style.ts'
 
 /** Which hips carry a holster (1 = his right, -X). */
@@ -319,7 +320,7 @@ export function coat(f: Fit, hex: number, cut: CoatCut, sides: GunSides): Piece[
   const segs = arms.flatMap((a) => a.segs)
   b.piece.hide = (p, bone, garment) => {
     // the king's shoulder plate would stand through the coat's shoulder
-    if (garment === 'Pauldron') {
+    if (garment === SLOT.Pauldron) {
       return true
     }
     // a coated arm: the base shirt, skin and bracer are all under the coat sleeve now

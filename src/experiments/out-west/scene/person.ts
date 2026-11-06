@@ -38,6 +38,7 @@ import { isSkinned, type Land, landmarks, matName, weightsOf } from './bind.ts'
 import { tuckNeck } from './collar.ts'
 import { type Body, boneKey } from './fit.ts'
 import { prune } from './outfit.ts'
+import { SLOT } from './roles.ts'
 import { trimWhiskers, type WhiskerLook, wearsWhiskers } from './whiskers.ts'
 
 /**
@@ -343,7 +344,7 @@ export function paintSkin(pieces: readonly Piece[], body: Body, head: Head, o: S
   }
   for (const p of pieces) {
     const skin = p.skin
-    if (p.name !== 'Skin' || !skin) {
+    if (p.slot !== SLOT.Skin || !skin) {
       continue
     }
     const col = p.geo.getAttribute('color')

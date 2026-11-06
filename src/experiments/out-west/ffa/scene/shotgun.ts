@@ -44,6 +44,7 @@ import {
   WALNUT,
 } from '../../scene/gunsmith.ts'
 import type { LongAnatomy } from '../../scene/longgun.ts'
+import { SLOT } from '../../scene/roles.ts'
 
 const BARREL_Y = 0.032
 /** A 12-bore's tubes: 24 mm across at the breech, 21 at the muzzle, touching. */
@@ -318,7 +319,12 @@ const loose = new WeakMap<Material, Material>()
 export function kitMaterial(props: GLTF | null): Material {
   let found: Material | null = null
   const look = (o: Object3D): void => {
-    if (!found && o instanceof Mesh && !Array.isArray(o.material) && o.material.name === 'Kit') {
+    if (
+      !found &&
+      o instanceof Mesh &&
+      !Array.isArray(o.material) &&
+      o.material.userData.slot === SLOT.Kit
+    ) {
       found = o.material
     }
   }

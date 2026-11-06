@@ -21,6 +21,7 @@ import {
 } from 'three'
 import { intoRect, SWATCH, SWATCH_LUM, type Swatch } from './atlas.ts'
 import { type Body, boneKey, type WeightFn } from './fit.ts'
+import { SLOT, type Slot, slotOf } from './roles.ts'
 import { atlasRoughness } from './style.ts'
 
 /**
@@ -33,6 +34,8 @@ export interface Piece {
   geo: BufferGeometry
   /** The source material's name, for body parts (Hair, Skin, Shirt...). */
   name?: string
+  /** The typed body slot, when the material is one of the character slots. */
+  slot?: Slot | undefined
   /** Roughness multiplier on the atlas (plain swatch: the roughness itself). */
   roughness: number
   rim: number
@@ -50,7 +53,7 @@ export interface Piece {
    * A garment that hides the base cloth under it: is point `p` of base garment `garment`
    * (dominant `bone`) covered?
    */
-  hide?: (p: Vector3, bone: string, garment: string) => boolean
+  hide?: (p: Vector3, bone: string, garment: Slot | undefined) => boolean
   /** Not a surface the gunbelt and holster sit on (a coat sleeve; a poncho, worn over the belt). */
   unbelted?: boolean
 }
@@ -164,6 +167,7 @@ export function bodyPieces(model: Object3D, space: Object3D, body: Body): Piece[
     out.push({
       geo,
       name: mat.name,
+      slot: slotOf(mat),
       // textured body parts take their roughness from the atlas (skin and leather a touch glossier)
       roughness: uvA ? atlasRoughness(mat.name) : mat.roughness,
       rim: (mat.userData.rim as number | undefined) ?? 1,
@@ -291,7 +295,14 @@ export function mergePieces(pieces: readonly Piece[]): BufferGeometry {
 
 /** Merge every piece into one skinned mesh under `parent`, bound in the current pose. */
 /** Base garments a fitted garment may hide where it covers them. */
-const HIDEABLE = new Set(['Shirt', 'Sleeves', 'Bracer', 'Pauldron', 'Belt', 'Skin'])
+const HIDEABLE: ReadonlySet<Slot> = new Set([
+  SLOT.Shirt,
+  SLOT.Sleeves,
+  SLOT.Bracer,
+  SLOT.Pauldron,
+  SLOT.Belt,
+  SLOT.Skin,
+])
 
 /** The bone carrying most of body vertex `k` (punctuation-free name). */
 function dominant(skin: NonNullable<Piece['skin']>, body: Body, k: number): string {
@@ -321,7 +332,7 @@ function hideUnder(pieces: readonly Piece[], body: Body): void {
   for (const p of pieces) {
     const skin = p.skin
     const idx = p.geo.getIndex()
-    if (!(skin && idx && HIDEABLE.has(p.name ?? ''))) {
+    if (!(skin && idx && p.slot !== undefined && HIDEABLE.has(p.slot))) {
       continue
     }
     const pos = p.geo.getAttribute('position')
@@ -329,7 +340,7 @@ function hideUnder(pieces: readonly Piece[], body: Body): void {
     for (let k = 0; k < pos.count; k++) {
       v.fromBufferAttribute(pos, k)
       const bone = dominant(skin, body, k)
-      hidden[k] = hiders.some((h) => h.hide?.(v, bone, p.name ?? '')) ? 1 : 0
+      hidden[k] = hiders.some((h) => h.hide?.(v, bone, p.slot)) ? 1 : 0
     }
     const keep: number[] = []
     for (let i = 0; i < idx.count; i += 3) {

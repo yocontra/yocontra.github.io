@@ -7,6 +7,7 @@
  * and its beacon, ground rings (your marker, bank windows, the Call Out ring, the showdown dust
  * ring), the aim line, and thrown hats. Bright colours go above 1 so the bloom picks them up.
  */
+
 import {
   AdditiveBlending,
   BoxGeometry,
@@ -29,6 +30,7 @@ import {
   Vector2,
   Vector3,
 } from 'three'
+import { markRole, ROLE } from '../../scene/roles.ts'
 import { sackLook, strongboxLook } from '../../scene/surface.ts'
 import { softDot } from '../../scene/textures.ts'
 import { type Bag, PLAIN_BAG } from './bags.ts'
@@ -296,6 +298,7 @@ export class Effects {
       24,
     )
     this.casingMesh.name = 'casing'
+    markRole(this.casingMesh, ROLE.Effect)
     this.casingMesh.count = 0
     this.casingMesh.frustumCulled = false
     root.add(this.casingMesh)
@@ -303,6 +306,7 @@ export class Effects {
     dustMat.opacity = 0.3
     this.dustMesh = new InstancedMesh(new SphereGeometry(0.03, 4, 3), dustMat, 32)
     this.dustMesh.name = 'dust'
+    markRole(this.dustMesh, ROLE.Effect)
     this.dustMesh.frustumCulled = false
     this.dustMesh.visible = false
     root.add(this.dustMesh)
@@ -329,6 +333,7 @@ export class Effects {
     this.bagMesh = new InstancedMesh(sack, bagMat, 64)
     this.bagMesh.count = 0
     this.bagMesh.name = 'bags'
+    markRole(this.bagMesh, ROLE.Hanging)
     this.bagMesh.frustumCulled = false
     this.bagMesh.castShadow = false
     this.bagMesh.receiveShadow = true

@@ -13,10 +13,11 @@
 
 import type { Object3D } from 'three'
 import { type SkinnedMesh, Vector3 } from 'three'
-import { bindBones, matName, skinnedOf, weightsOf } from './bind.ts'
+import { bindBones, skinnedOf, weightsOf } from './bind.ts'
+import { SLOT, type Slot, slotOf } from './roles.ts'
 
 /** Garments whose neck-weighted vertices form a collar. */
-const CLOTH = new Set(['Shirt', 'Sleeves'])
+const CLOTH: ReadonlySet<Slot> = new Set([SLOT.Shirt, SLOT.Sleeves])
 /** How far in the neck is drawn under the collar, as a fraction of its distance from the axis. */
 const TUCK = 0.14
 
@@ -30,7 +31,12 @@ function collarBand(meshes: readonly SkinnedMesh[]): { top: number; bottom: numb
   const v = new Vector3()
   let top = Number.NEGATIVE_INFINITY
   let bottom = Number.POSITIVE_INFINITY
-  for (const sm of meshes.filter((m) => CLOTH.has(matName(m)))) {
+  const cloth = meshes.filter((m) => {
+    const mat = Array.isArray(m.material) ? m.material[0] : m.material
+    const slot = mat ? slotOf(mat) : undefined
+    return slot !== undefined && CLOTH.has(slot)
+  })
+  for (const sm of cloth) {
     const pos = sm.geometry.getAttribute('position')
     for (let k = 0; k < pos.count; k++) {
       if ((weightsOf(sm, k, ['Neck']).get('Neck') ?? 0) > 0.3) {
@@ -66,7 +72,10 @@ export function tuckNeck(model: Object3D): void {
   const { top, bottom } = band
   const fade = Math.max(0.004, 0.25 * (top - bottom))
   const v = new Vector3()
-  for (const sm of meshes.filter((m) => matName(m) === 'Skin')) {
+  for (const sm of meshes.filter((m) => {
+    const mat = Array.isArray(m.material) ? m.material[0] : m.material
+    return mat ? slotOf(mat) === SLOT.Skin : false
+  })) {
     sm.geometry = sm.geometry.clone()
     const pos = sm.geometry.getAttribute('position')
     for (let k = 0; k < pos.count; k++) {

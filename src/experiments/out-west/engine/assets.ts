@@ -11,9 +11,41 @@ import { type GLTF, GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js'
 import type { BodyKey, Look } from '../data/outlaws.ts'
 import { hairDonor } from '../scene/person.ts'
 import { setPropsLibrary } from '../scene/props.ts'
+
+import { markSlot, SLOT, type Slot, slotOf } from '../scene/roles.ts'
 import { NORMAL_GUARD_GLSL, setCharacterMaps } from '../scene/shade.ts'
 import { glassLook, surfaceProps } from '../scene/surface.ts'
 import { loadTex } from '../scene/textures.ts'
+
+const CHARACTER_SLOTS: Readonly<Record<string, Slot>> = {
+  Skin: SLOT.Skin,
+  Hair: SLOT.Hair,
+  Brows: SLOT.Brows,
+  Beard: SLOT.Beard,
+  Eye: SLOT.Eye,
+  Shirt: SLOT.Shirt,
+  Sleeves: SLOT.Sleeves,
+  Bracer: SLOT.Bracer,
+  Pauldron: SLOT.Pauldron,
+  Belt: SLOT.Belt,
+}
+
+/** Map the character GLB's baked material names to slots once, at load. */
+function markCharacterSlots(gltf: GLTF): void {
+  for (const scene of gltf.scenes) {
+    scene.traverse((o) => {
+      if (!(o instanceof Mesh)) {
+        return
+      }
+      for (const m of Array.isArray(o.material) ? o.material : [o.material]) {
+        const slot = CHARACTER_SLOTS[m.name]
+        if (slot !== undefined && slotOf(m) === undefined) {
+          markSlot(m, slot)
+        }
+      }
+    })
+  }
+}
 
 const ROOT = '/experiments/out-west/3d'
 
@@ -87,6 +119,7 @@ async function kitMaterial(
     )
   }
   kit.customProgramCacheKey = () => 'ow-kit'
+  markSlot(kit, SLOT.Kit)
   const glass = new MeshStandardMaterial({
     name: 'KitGlass',
     color: 0x1a_1c_1e,
@@ -94,6 +127,7 @@ async function kitMaterial(
     metalness: 0.4,
   })
   glassLook(glass)
+  markSlot(glass, SLOT.Glass)
   for (const s of props.scenes) {
     s.traverse((o) => {
       if (!(o instanceof Mesh)) {
@@ -181,6 +215,7 @@ export async function loadAssets(
       return have
     }
     const p = glb(key).then((g) => {
+      markCharacterSlots(g)
       loaded.set(key, g)
       return g
     })
@@ -203,6 +238,7 @@ export async function loadAssets(
       atlas('char_nor', false),
       atlas('char_arm', false),
     ])
+  markCharacterSlots(player)
   const char = { map: cMap, normal: cNor, arm: cArm }
   setCharacterMaps(char)
   await kitMaterial(props, tex)

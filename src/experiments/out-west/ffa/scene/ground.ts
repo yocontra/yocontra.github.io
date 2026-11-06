@@ -22,6 +22,7 @@ import {
   Vector2,
   type Vector3,
 } from 'three'
+import { markRole, ROLE } from '../../scene/roles.ts'
 import { buildingWalls, type TownLayout } from '../sim/layout.ts'
 import { COVER_VISUALS } from './cover-kinds.ts'
 
@@ -328,5 +329,6 @@ reflectedLight.indirectDiffuse *= mix(0.78, 1.0, gM.r);`,
   const mesh = new Mesh(geo, mat)
   mesh.receiveShadow = true
   mesh.name = 'ground'
+  markRole(mesh, ROLE.Land)
   return mesh
 }

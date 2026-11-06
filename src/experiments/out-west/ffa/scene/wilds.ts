@@ -34,6 +34,7 @@ import {
 } from '../../scene/flora.ts'
 import { tumbleweedGeometry } from '../../scene/fx.ts'
 import type { Preset } from '../../scene/presets.ts'
+import { SLOT } from '../../scene/roles.ts'
 import { Sky } from '../../scene/sky.ts'
 import { twigLook } from '../../scene/surface.ts'
 import type { TownLayout } from '../sim/layout.ts'
@@ -217,9 +218,6 @@ export function buildWilds(layout: TownLayout, tier: string): Group {
   })
 }
 
-/** Plank-faced town materials (boards vary one by one). */
-const BOARDS = new Set(['town-wall', 'town-roof', 'town-wood'])
-
 /**
  * Moving cloud shadows and interior light on every lit, static town surface under `root`; window
  * glass gets the indoor/outdoor look.
@@ -227,10 +225,6 @@ const BOARDS = new Set(['town-wall', 'town-roof', 'town-wood'])
 export function shadeTown(root: Object3D, inside: Interior): void {
   const seen = new Set<Material>()
   root.traverse((o) => {
-    if (o.name === 'outskirts') {
-      // the terrain past the edge is ground: plants and rocks stand in it (the float audit)
-      o.userData.support = true
-    }
     const m = (o as Mesh).material as Material | Material[] | undefined
     if (!m) {
       return
@@ -239,10 +233,10 @@ export function shadeTown(root: Object3D, inside: Interior): void {
       if (!seen.has(mat) && (mat as { isMeshStandardMaterial?: boolean }).isMeshStandardMaterial) {
         seen.add(mat)
         withCloudShadow(mat)
-        if (mat.name === 'town-windows') {
+        if (mat.userData.slot === SLOT.Glass) {
           withInterior(mat, 'glass', inside)
         } else {
-          withInterior(mat, BOARDS.has(mat.name) ? 'boards' : 'surface', inside)
+          withInterior(mat, mat.userData.slot === SLOT.Board ? 'boards' : 'surface', inside)
         }
       }
     }
