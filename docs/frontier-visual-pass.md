@@ -36,12 +36,13 @@ dynamic resolution remain the fallback.
 ## Verification
 
 ```
-bun run api:test                 494 pass, 0 fail
+bun run api:test                 495 pass, 0 fail
 bun run build                    clean
 bun tools/building-audit.ts      21 buildings, 0 errors, 0 warnings
 bun tools/collider-check.ts      0 invisible walls, 0 walk-through visuals
 bun tools/float-audit.ts         0 float, 0 z-fight, 0 untextured (high + floor)
-bun tools/frontier-perf.ts       CPU p50 4.6–6.4 ms, p95 6.3–8.2 ms, frame p95 16.8 ms
+bun tools/anim-audit.ts          22/22 Frontier animation states pass
+bun tools/frontier-perf.ts       CPU p50 4.6–6.7 ms, p95 6.3–8.7 ms, frame p95 16.8 ms
 ```
 
 The perf spread is the measurement machine, not the build: the same environment measures the
@@ -50,12 +51,24 @@ pre-pass baseline at p50 5.8–6.5, p95 7.8–9.3. The best run of the pass was 
 Contact sheets: `.playwright-mcp/interiors/contact-sheet.png` (high tier) and
 `.playwright-mcp/interiors/floor-exterior.png` (floor tier).
 
-## Animation and ragdoll
+## Animation state graph and ragdoll
 
-The authored `Death` clip remains the fallback. The simple client-side Verlet ragdoll is shipped on
-the high tier: three pooled bodies, spawned on `EV_KILL`, hidden crowd actor, released on respawn.
-The floor tier keeps the authored clip. The full animation state graph (aim/fire/reload per weapon,
-crouch/slide/strafe, hit reactions, deaths) is deferred to a separate pass using **CC0 sources only**
-— Quaternius's Universal Animation Library and the rig already in `tools/build-moves.ts`. Mixamo is
-ruled out: its terms do not allow shipping the clips in an OSS repository, so no Mixamo asset or
-manifest is part of this repo.
+The full locomotion graph is in `scene/locomotion.ts` and uses the CC0 Quaternius Universal
+Animation Library clips already baked into `player.glb` and `moves.glb`:
+
+- **Base states:** idle, holstered/aiming, walk, run, sprint, crouch idle/walk, jump/fall, death.
+- **Upper-body layers:** the gun arm (`Idle_Gun_Pointing`), pistol shot (`Idle_Gun_Shoot`), reload
+  (`Reload`), and two hit reactions (`HitRecieve`, `HitRecieve_2`), all masked by `UPPER`/`ARM_R`.
+- **Procedural layers:** leg yaw and stride for strafing/backpedalling, turn-in-place, slide, roll,
+  vault, landing dip, long-gun IK and the support hand.
+- **Audited:** `bun tools/anim-audit.ts --skip=duel,live` passes **22/22** Frontier states, including
+  third- and first-person reload, hip/ADS fire, strafe, backpedal, sprint, crouch, slide, jump and
+  the remote riders.
+
+UAL has no rifle- or strafe-specific clips, so the rifle uses the pistol aim/shoot/reload layers
+with the long-gun IK, and strafing uses the walk/run cycles with procedural leg yaw. Mixamo is ruled
+out: its terms do not allow shipping the clips in an OSS repository.
+
+The authored `Death` clip remains the floor-tier fallback. The simple client-side Verlet ragdoll is
+shipped on the high tier: three pooled bodies, spawned on `EV_KILL`, hidden crowd actor, released on
+respawn.

@@ -3,7 +3,6 @@
 /** The animation audit's Frontier section: the local rider, the remote riders, the view model. */
 import { mkdir, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
-// biome-ignore lint/correctness/noUnresolvedImports: playwright's CommonJS re-exports are invisible to Biome
 import type { BrowserContext, CDPSession, Page } from 'playwright'
 import {
   all,
@@ -120,6 +119,13 @@ const FRONTIER: FrontierState[] = [
     hold: '.fr-btn-fire',
     ms: 1500,
     expect: { clip: 'Idle_Gun_Pointing|LocoArm', offIdle: 30 },
+  },
+  {
+    name: 'fire-one',
+    view: 'third',
+    hold: '.fr-btn-fire',
+    ms: 700,
+    expect: { moves: 1 },
   },
   {
     name: 'reload',
