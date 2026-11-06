@@ -1,0 +1,30 @@
+---
+import Base from '~/layouts/Base.astro'
+---
+
+<Base title="Not found" description="That page does not exist." noindex>
+  <main class="wrap">
+    <p class="eyebrow">404</p>
+    <h1>This page wandered off.</h1>
+    <p class="lede">
+      The trail ends here. <a href="/">Head back home</a>, or
+      <a href="/experiments/">browse the experiments</a>.
+    </p>
+  </main>
+</Base>
+
+<style>
+  main {
+    padding-block: clamp(6rem, 18vw, 12rem) 6rem;
+    max-width: 40rem;
+  }
+  h1 {
+    font-size: clamp(2.5rem, 8vw, 5rem);
+    margin-block: 0.75rem 1.25rem;
+    text-wrap: balance;
+  }
+  .lede {
+    color: var(--fg-muted);
+    font-size: 1.15rem;
+  }
+</style>

@@ -5,6 +5,7 @@ Status: decided 2026-11-04: stay on three.js (option A). This plan is kept for r
 ## What the research says (Nov 2026)
 
 **Unity**
+
 - Mobile web: supported. Unity 6's web platform officially lists iOS Safari 15+ and Android Chrome. Builds are WebGL2 (the "compatibility" renderer). WebGPU support for web export is reported inconsistently, and I couldn't confirm it from Unity's own docs.
 - Mobile web in practice: builds are large (WASM + data, typically tens of MB for a 3D game), first load on phones is slow, and mobile Safari's memory ceiling is tight. Unity's web build is a secondary target, not its strength.
 - TypeScript: **not official.** Unity is C#. TypeScript is possible through community runtimes:
@@ -15,6 +16,7 @@ Status: decided 2026-11-04: stay on three.js (option A). This plan is kept for r
 - Native: Unity's real strength. Call of Duty Mobile is a Unity game. Native iOS/Android performance and a huge asset store, but paid assets are out of scope here.
 
 **Babylon.js**
+
 - TypeScript-native, MIT-licensed, Microsoft-backed, actively released (9.33.2 on 2026-11-02). WebGL2 and WebGPU.
 - What it gives us that we hand-rolled:
   - animation groups with weights, blending and masks;
@@ -28,12 +30,14 @@ Status: decided 2026-11-04: stay on three.js (option A). This plan is kept for r
 - **Babylon React Native (native in Expo): not viable today.** The project's own tracker has an open issue (Oct 2026), "New Architecture is not supported". React Native 0.82+ and current Expo always run the New Architecture. Its README also says it isn't tested with Expo, and it's touch-only with a single view. So Babylon in an Expo app today means **WebView**, the same as three.js.
 
 **Staying on three.js**
+
 - Proven: Krunker is a large three.js web FPS.
 - Today the game holds 60 fps at 4× CPU throttle on every screen except packed Frontier (7.3–8.2 ms vs a 7 ms target), and heap fits 110 MB.
 
 ## What we'd keep vs rewrite
 
 About **70k lines** of TypeScript in the client and **22k** in the API.
+
 - **Engine-agnostic (keep in any web port):**
   - the Cloudflare Worker / Durable Object server;
   - the shared Frontier simulation and netcode (client prediction uses the same TS sim as the server);

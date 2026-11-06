@@ -35,6 +35,7 @@ still required before any of it counts. See the checklist at the end.
 ## How these were measured
 
 Playwright (Chromium 156, ANGLE Metal on an **Apple M2 Max**), in a new page:
+
 - `Emulation.setDeviceMetricsOverride` at 812×375 CSS, DPR 3, mobile, touch on;
 - `Emulation.setCPUThrottlingRate` at 1×, 4× and 6×;
 - a duel at `#level=6&debug` (the walk phase, two heroes, the full street).
@@ -43,6 +44,7 @@ GPU time comes from an init script that wraps every rAF batch in an
 `EXT_disjoint_timer_query_webgl2` query. CPU time is the same batch's wall time.
 
 How to read the throttle rates:
+
 - **4×** is a conservative A15-in-WKWebView proxy. The A15 single-core is roughly 1.5–2× slower
   than an M2 Max; the extra margin is for WKWebView's JIT and thermals.
 - **6×** is a worst case.
@@ -66,6 +68,7 @@ How to read the throttle rates:
 
 The in-renderer GPU timer (`#perf`, which brackets only the composer) put the floor frame at
 ~3.0 ms on the M2 Max. The breakdown below was measured by disabling one stage at a time:
+
 - turning off the IBL saves ~0.15 ms;
 - turning off MSAA saves ~0.6 ms;
 - turning off post saves ~1.3 ms;
@@ -99,6 +102,7 @@ character atlas (2048×3072 albedo + two 1024×1536 maps ≈ 50 MB with mips) an
 ### Frontier crowd (measured on the M1 crowd test page, since folded into Frontier; FFA floor tier, DPR 1.3)
 
 Final architecture:
+
 - the nearest 16 are skinned (own player at LOD0, the rest at LOD1, ~4k tris);
 - the nearest 6 cast real shadows; everyone else gets a blob;
 - everyone else is a VAT instance of their base body (LOD2, 1.5k tris, ~900 verts, 252 KB each,
@@ -114,6 +118,7 @@ Final architecture:
 | (first spike) 32 skinned LOD0       | 2.1 / 2.5      | 12.6 / 18.3      | 20.2 / 26.3 | ~170  | 460k     |
 
 Notes:
+
 - Mixer p95 at 4× is 0.8–1.3 ms; most of the skinned cost is three.js submission plus bone-texture
   uploads.
 - M2 Max GPU: 1.2–1.9 ms.
@@ -141,6 +146,7 @@ peaks at 110–150 MB right after a burst of actor casts, until the next GC. Dev
 about 20 MB of module source strings that production doesn't.
 
 What changed:
+
 - **Crowd churn.** The crowd evicted actors in arbitrary order and re-baked the same riders every
   few frames (54 casts in 30 s, packed). Each cast is a full dress-and-bake plus a GPU upload.
   Now:
@@ -177,6 +183,7 @@ run; don't compare them with the older tables.
 
 The shooter views cost about the same as top-down: within ±1 ms p95 in the same run. Two runs of
 the same view differ by up to 1.5 ms under the current machine load. What keeps the horizon cheap:
+
 - **Draw distance and fog by tier** (`ffa/client/view.ts`):
   - floor: 120 m far plane, fog 38 to 118 m;
   - legacy: 90 m, fog 28 to 88 m;
@@ -215,6 +222,7 @@ riders, pickups and effects are the rest. The heap grows by about 30 MB: merged 
 the far batch replace instancing, which shared one geometry per prop.
 
 What `ffa/scene/town.ts` does now:
+
 - **Detail tiles.** Every kit piece (windows, frames, doors, fences, barrels, crates, hay, lanterns,
   outskirts rocks and the boundary fence) merges into a 36 m tile. A tile draws only when the
   camera is within 46 m of it (30 m on floor and legacy).
@@ -242,6 +250,7 @@ What `ffa/scene/town.ts` does now:
 The +30 MB above was mostly a leak, not merging. `buildTown`'s update and dispose closures were
 created in its scope, so they kept every builder's plain-number vertex arrays alive (the
 structure batch alone is about 1M numbers). Fixed:
+
 - the culler and the disposer are now built by module-level factories, so their closures capture
   only what they use;
 - every town-owned vertex and index array drops its CPU copy on GPU upload
@@ -292,6 +301,7 @@ panning a full circle), on `redesign` 1518366 with the town LOD and heap passes,
 | Riders in view  | 2 (max 7)     | 11 (max 16)   | 2 (max 7)     | 9 (max 15)    | 2 (max 2)   | 19 (max 22) |
 
 Against the budget (≤300k triangles, CPU p95 ≤ 7 ms on a quiet machine, heap ≤ 110 MB):
+
 - triangles are inside in every view;
 - CPU and heap are over. What's left is the crowd (skinned and VAT riders, 11–17 MB of their own
   arrays), the desert flora, and the dev build's module source, which production doesn't carry.
@@ -338,6 +348,7 @@ Floor proxy (812×375 at DPR 3, touch, floor tier), production build, load avera
 
 The texture estimate is 145 MB in the duel scenes and 128 MB in the Frontier. Before this pass, the
 same suite showed:
+
 - Outfitter p99 at 144 ms (20 frames over 16.7 ms);
 - the duel call at p95 8.1 and p99 17.3;
 - Frontier packed third person at p95 9.6–11.8, with 141 draws and 303k triangles.
@@ -357,6 +368,7 @@ The dev heap keeps every geometry's CPU copy for the float audit; production ret
 third person reads CPU p50 4.4 ms and p95 6.1 ms.
 
 What changed:
+
 - **Frontier crowd on floor:**
   - 8 skinned riders (was 12; legacy 6) and 4 real shadow casters (was 6).
   - A rider's bone texture is rebuilt only when his mixer ticks (`ffa/scene/crowd/skin-hold.ts`).
@@ -389,6 +401,7 @@ What changed:
 
 A 10-minute sustained run (`--sustained=600`, third person packed, 4×) showed no leak and no
 adaptation drift:
+
 - CPU p95 by minute: 8.8, 8.6, 7.9, 8.1, 7.7, 7.8, 7.7, 7.8, 7.5 and 6.9 ms;
 - live heap 100–109 MB, rising and falling with each GC;
 - floor tier the whole run, scale 1.00, no thermal drops;
@@ -396,6 +409,7 @@ adaptation drift:
 
 Still over the 7 ms p95 at 4×: Frontier third person packed (8.2 ms) and first person packed
 (7.3 ms). What remains there is three.js submission:
+
 - about 1.8 ms of `renderObject`, uniforms and VAO binds for about 110 draws;
 - 0.7 ms of `projectObject` over about 1,000 objects (the crowd's bones are about half of the
   graph);

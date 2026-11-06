@@ -1,7 +1,16 @@
 # Releasing contra.io
 
 The site is GitHub Pages; the out-west API is a Cloudflare Worker on `api.contra.io`.
-Nothing here has been run yet. Do it in this order on release day.
+Status: **live**. The one-time setup below is kept for a rebuild or a new account.
+
+## Routine deploys
+
+Push to `master`. `deploy.yml` runs `bun run check` and publishes `dist/`; `deploy-api.yml` runs
+the same gate, applies D1 migrations, and deploys the Worker when `api/` or the shared sim changes.
+Run `bun run check` before pushing, or enable the hook (`git config core.hooksPath .githooks`).
+The `Check` workflow gives a second, clean-runner result on every push.
+
+## One-time setup (done)
 
 1. **Move contra.io DNS to Cloudflare.** Add the zone, then switch the registrar's nameservers.
    Recreate the GitHub Pages records (`A`/`AAAA` for the apex, or `CNAME`), DNS-only (grey cloud).
