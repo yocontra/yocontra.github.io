@@ -24,42 +24,11 @@ import {
   vaultDistance,
   vaulting,
 } from '../../../src/experiments/out-west/ffa/sim/move.ts'
-import type { MoveState } from '../../../src/experiments/out-west/ffa/sim/types.ts'
+import { type MoveState, makeMoveState } from '../../../src/experiments/out-west/ffa/sim/types.ts'
 import { place, runCollect, testWorld } from './test-helpers.ts'
 
 const grid = buildGrid()
-const state = (x: number, z: number): MoveState => ({
-  x,
-  z,
-  y: 0,
-  roof: 0,
-  climbTicks: 0,
-  climbDeck: 0,
-  climbDir: 0,
-  fallTicks: 0,
-  fallTotal: 0,
-  fallFromX: 0,
-  fallFromZ: 0,
-  fallFromY: 0,
-  fallToX: 0,
-  fallToZ: 0,
-  rollTicks: 0,
-  rollCooldown: 0,
-  rollDirX: 0,
-  rollDirZ: 0,
-  jumpTicks: 0,
-  jumpCooldown: 0,
-  vaultStep: 0,
-  vaultAim: 0,
-  sprinting: false,
-  sprintLock: 0,
-  sprintOut: 0,
-  slideTicks: 0,
-  slideCooldown: 0,
-  slideAim: 0,
-  airX: 0,
-  airZ: 0,
-})
+const state = (x: number, z: number): MoveState => makeMoveState(x, z)
 const input = (moveX: number, moveZ: number, buttons = 0, prevButtons = 0) => ({
   moveX,
   moveZ,

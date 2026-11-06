@@ -21,42 +21,11 @@ import {
 import { buildGrid } from '../../../src/experiments/out-west/ffa/sim/layout.ts'
 import { inIframes, stepMove } from '../../../src/experiments/out-west/ffa/sim/move.ts'
 import { spreadDeg } from '../../../src/experiments/out-west/ffa/sim/spread.ts'
-import type { MoveState } from '../../../src/experiments/out-west/ffa/sim/types.ts'
+import { type MoveState, makeMoveState } from '../../../src/experiments/out-west/ffa/sim/types.ts'
 import { aimAt, place, run, testWorld } from './test-helpers.ts'
 
 const grid = buildGrid()
-const state = (x: number, z: number): MoveState => ({
-  x,
-  z,
-  y: 0,
-  roof: 0,
-  climbTicks: 0,
-  climbDeck: 0,
-  climbDir: 0,
-  fallTicks: 0,
-  fallTotal: 0,
-  fallFromX: 0,
-  fallFromZ: 0,
-  fallFromY: 0,
-  fallToX: 0,
-  fallToZ: 0,
-  rollTicks: 0,
-  rollCooldown: 0,
-  rollDirX: 0,
-  rollDirZ: 0,
-  jumpTicks: 0,
-  jumpCooldown: 0,
-  vaultStep: 0,
-  vaultAim: 0,
-  sprinting: false,
-  sprintLock: 0,
-  sprintOut: 0,
-  slideTicks: 0,
-  slideCooldown: 0,
-  slideAim: 0,
-  airX: 0,
-  airZ: 0,
-})
+const state = (x: number, z: number): MoveState => makeMoveState(x, z)
 // biome-ignore lint/complexity/useMaxParams: a test helper with stick defaults
 const go = (m: MoveState, ticks: number, buttons: number, moveX = 127, moveZ = 0) => {
   let prev = 0

@@ -283,3 +283,56 @@ export function newStats(): PlayerStats {
     snapHits: 0,
   }
 }
+
+/**
+ * A complete movement state standing at rest at (x, z). Tests build their fixtures from this so a
+ * new `MoveState` field is filled once, not three times; the live sim builds its own in
+ * `state.ts` (`newPlayer`) with the same defaults.
+ */
+export function makeMoveState(x: number, z: number): MoveState {
+  return {
+    x,
+    z,
+    y: 0,
+    roof: 0,
+    climbTicks: 0,
+    climbDeck: 0,
+    climbDir: 0,
+    fallTicks: 0,
+    fallTotal: 0,
+    fallFromX: 0,
+    fallFromZ: 0,
+    fallFromY: 0,
+    fallToX: 0,
+    fallToY: 0,
+    fallToZ: 0,
+    rollTicks: 0,
+    rollCooldown: 0,
+    rollDirX: 0,
+    rollDirZ: 0,
+    jumpTicks: 0,
+    jumpCooldown: 0,
+    vaultStep: 0,
+    vaultAim: 0,
+    sprinting: false,
+    sprintLock: 0,
+    sprintOut: 0,
+    slideTicks: 0,
+    slideCooldown: 0,
+    slideAim: 0,
+    airX: 0,
+    airZ: 0,
+    vy: 0,
+    grounded: true,
+    support: 0,
+    airPeakY: 0,
+    mantleTicks: 0,
+    mantleFromX: 0,
+    mantleFromY: 0,
+    mantleFromZ: 0,
+    mantleToX: 0,
+    mantleToY: 0,
+    mantleToZ: 0,
+    fallDamage: 0,
+  }
+}
