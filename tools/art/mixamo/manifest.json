@@ -1,0 +1,31 @@
+{
+  "format": "fbx-binary",
+  "fps": 30,
+  "inPlace": true,
+  "clips": {
+    "Idle": "Idle.fbx",
+    "Idle_Gun_Pointing": "Idle_Gun_Pointing.fbx",
+    "Walk": "Walk.fbx",
+    "Run": "Run.fbx",
+    "Sprint": "Sprint.fbx",
+    "Strafe_Left": "Strafe_Left.fbx",
+    "Strafe_Right": "Strafe_Right.fbx",
+    "Rifle_Aim_Idle": "Rifle_Aim_Idle.fbx",
+    "Rifle_Walk": "Rifle_Walk.fbx",
+    "Rifle_Run": "Rifle_Run.fbx",
+    "Firing_Pistol": "Firing_Pistol.fbx",
+    "Firing_Rifle": "Firing_Rifle.fbx",
+    "Reloading_Pistol": "Reloading_Pistol.fbx",
+    "Reloading_Rifle": "Reloading_Rifle.fbx",
+    "Crouch_Idle": "Crouch_Idle.fbx",
+    "Crouch_Walk": "Crouch_Walk.fbx",
+    "Crouch_Aim": "Crouch_Aim.fbx",
+    "Jump": "Jump.fbx",
+    "Fall": "Fall.fbx",
+    "Land": "Land.fbx",
+    "Hit_Reaction_Front": "Hit_Reaction_Front.fbx",
+    "Hit_Reaction_Back": "Hit_Reaction_Back.fbx",
+    "Death_Front": "Death_Front.fbx",
+    "Death_Back": "Death_Back.fbx"
+  }
+}
