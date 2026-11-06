@@ -19,7 +19,6 @@
  */
 import { mkdirSync } from 'node:fs'
 import process from 'node:process'
-// biome-ignore lint/correctness/noUnresolvedImports: playwright's CommonJS re-exports are invisible to Biome
 import { chromium } from 'playwright'
 
 const base = process.argv.find((a) => a.startsWith('http')) ?? 'http://localhost:4401'

@@ -6,7 +6,7 @@
  * (`getParameters`, cache-key strings: CPU and garbage, every frame). Giving each kind its own
  * depth material keeps every program stable. Same shader, same output: nothing visual changes.
  */
-import { type InstancedMesh, type Mesh, MeshDepthMaterial, type Object3D } from 'three'
+import { type InstancedMesh, Mesh, MeshDepthMaterial, type Object3D } from 'three'
 
 const SKINNED = new MeshDepthMaterial()
 const INSTANCED = new MeshDepthMaterial()
@@ -15,11 +15,11 @@ const INSTANCED_COLOR = new MeshDepthMaterial()
 /** Assign the kind's depth material to every shadow caster under `root` that has none yet. */
 export function shareDepthByKind(root: Object3D): void {
   root.traverse((o) => {
-    const m = o as Mesh & Partial<Pick<InstancedMesh, 'isInstancedMesh' | 'instanceColor'>>
-    // biome-ignore lint/suspicious/noUnnecessaryConditions: three types isMesh as `true` on the cast; this is the runtime type check
-    if (!(m.isMesh && m.castShadow) || m.customDepthMaterial !== undefined) {
+    if (!(o instanceof Mesh && o.castShadow) || o.customDepthMaterial !== undefined) {
       return
     }
+    const m = o as Mesh & Partial<Pick<InstancedMesh, 'isInstancedMesh' | 'instanceColor'>>
+
     const mat = m.material
     if (
       Array.isArray(mat) ||

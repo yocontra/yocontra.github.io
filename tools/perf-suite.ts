@@ -26,7 +26,6 @@
  * game's own adaptation and leaks over time, and the real-device checklist in PERF.md still applies.
  */
 import process from 'node:process'
-// biome-ignore lint/correctness/noUnresolvedImports: playwright's CommonJS re-exports are invisible to Biome
 import { type BrowserContext, type CDPSession, chromium, type Page } from 'playwright'
 import { deviceTiers } from './perf-devices.ts'
 import { profileMain, serveProd, startProfile, stopProfile } from './perf-lib.ts'

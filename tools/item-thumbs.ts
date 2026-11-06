@@ -15,7 +15,6 @@
  */
 import { mkdirSync, writeFileSync } from 'node:fs'
 import process from 'node:process'
-// biome-ignore lint/correctness/noUnresolvedImports: playwright's CommonJS re-exports are invisible to Biome
 import { chromium } from 'playwright'
 import { CATALOG } from '../src/experiments/out-west/data/catalog.ts'
 

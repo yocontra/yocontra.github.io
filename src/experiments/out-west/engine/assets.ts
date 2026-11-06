@@ -1,7 +1,7 @@
 import {
   ClampToEdgeWrapping,
   type Material,
-  type Mesh,
+  Mesh,
   MeshStandardMaterial,
   RepeatWrapping,
   type Texture,
@@ -96,11 +96,10 @@ async function kitMaterial(
   glassLook(glass)
   for (const s of props.scenes) {
     s.traverse((o) => {
-      const m = o as Mesh
-      // biome-ignore lint/suspicious/noUnnecessaryConditions: three types isMesh as `true` on the cast; this is the runtime type check
-      if (!m.isMesh) {
+      if (!(o instanceof Mesh)) {
         return
       }
+      const m = o
       const name = (m.material as Material).name
       if (name === 'Kit') {
         m.material = kit

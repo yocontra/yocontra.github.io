@@ -6,7 +6,7 @@
  *   bun tools/building-audit.ts [--json]
  *
  * It checks every building's door/window/roof/floor rules against the same constants the scene
- * builder uses (`ffa/scene/building-rules.ts`): frames reach the lintel, windows clear doors,
+ * builder uses (`ffa/sim/building-rules.ts`): frames reach the lintel, windows clear doors,
  * porches and eaves, two-storey walk-ins have real floors and stairs, every building has a roof
  * shape, and closed doors fit their facades. Exit code 1 on errors.
  */
@@ -16,7 +16,7 @@ import {
   windowSlots as sharedWindowSlots,
   WALL_T,
   type WindowOpening,
-} from '../src/experiments/out-west/ffa/scene/building-rules.ts'
+} from '../src/experiments/out-west/ffa/sim/building-rules.ts'
 import { type Building, TOWN } from '../src/experiments/out-west/ffa/sim/layout.ts'
 import {
   frontOf,

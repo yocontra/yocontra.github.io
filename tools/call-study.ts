@@ -13,7 +13,6 @@
  * `--fire` shoots back ~200 ms after the call (a win, the kill cam); without it he shoots you
  * (a lose, and the retry replays the same call).
  */
-// biome-ignore lint/correctness/noUnresolvedImports: playwright's CommonJS re-exports are invisible to Biome
 import { type BrowserContext, type CDPSession, chromium, type Page } from 'playwright'
 import { serveProd, startProfile, stopProfile } from './perf-lib.ts'
 

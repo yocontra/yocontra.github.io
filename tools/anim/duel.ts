@@ -2,7 +2,6 @@
 /** The animation audit's duel sections: the #lineup stage (duel/anim-stage.ts) and a played duel. */
 import { mkdir, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
-// biome-ignore lint/correctness/noUnresolvedImports: playwright's CommonJS re-exports are invisible to Biome
 import type { BrowserContext, CDPSession, Page } from 'playwright'
 import {
   all,

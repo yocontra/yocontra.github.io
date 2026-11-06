@@ -17,7 +17,6 @@
 // biome-ignore-all lint/style/useGlobalThis: these snippets run in the browser page, where window is the global
 // biome-ignore-all lint/style/useNamingConvention: the page's dev hooks are snake-ish (__frontier, __frontierPilot)
 import process from 'node:process'
-// biome-ignore lint/correctness/noUnresolvedImports: playwright's CommonJS re-exports are invisible to Biome
 import { chromium } from 'playwright'
 import { check, failed, openLocalD1, seedPlayer } from '../api/test/local-d1.ts'
 

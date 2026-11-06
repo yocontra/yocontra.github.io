@@ -57,15 +57,6 @@ import { glassLook } from '../../scene/surface.ts'
 import { signAtlas } from '../../scene/textures.ts'
 import { attachArm } from '../../scene/town-pbr.ts'
 import {
-  type Building,
-  buildingSideBoxes,
-  type Cover,
-  type Rect,
-  type Side,
-  type TownLayout,
-} from '../sim/layout.ts'
-import { ROOF_WALKS } from '../sim/roofwalks.ts'
-import {
   DOOR_FRAME_DEPTH,
   DOOR_HEAD,
   DOOR_JAMB,
@@ -88,7 +79,16 @@ import {
   WINDOW_TRIM_THICKNESS,
   WINDOW_TRIM_WIDTH,
   windowPane,
-} from './building-rules.ts'
+} from '../sim/building-rules.ts'
+import {
+  type Building,
+  buildingSideBoxes,
+  type Cover,
+  type Rect,
+  type Side,
+  type TownLayout,
+} from '../sim/layout.ts'
+import { ROOF_WALKS } from '../sim/roofwalks.ts'
 import { addClockTower } from './clock-tower.ts'
 import {
   decks,

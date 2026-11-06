@@ -243,6 +243,16 @@
           }
         }
       }
+    },
+    {
+      "includes": ["tools/**"],
+      "linter": {
+        "rules": {
+          "correctness": {
+            "noUnresolvedImports": "off"
+          }
+        }
+      }
     }
   ]
 }

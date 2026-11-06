@@ -9,7 +9,6 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import process from 'node:process'
 import { file as bunFile, serve, spawnSync } from 'bun'
-// biome-ignore lint/correctness/noUnresolvedImports: playwright's CommonJS re-exports are invisible to Biome
 import type { CDPSession } from 'playwright'
 
 /** Base64 digit values for source-map VLQs. */

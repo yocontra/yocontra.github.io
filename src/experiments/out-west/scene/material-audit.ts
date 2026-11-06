@@ -20,7 +20,7 @@ import {
   type HemisphereLight,
   type Light,
   type Material,
-  type Mesh,
+  Mesh,
   type MeshStandardMaterial,
   type Object3D,
   type Scene,
@@ -182,14 +182,13 @@ export function auditMaterials(scenes: Object3D[], renderer?: WebGLRenderer): Ma
         })
         return
       }
-      const m = o as Mesh
-      // biome-ignore lint/suspicious/noUnnecessaryConditions: three types isMesh as `true` on the cast; this is the runtime type check
-      if (!(m.isMesh && m.material)) {
+      if (!(o instanceof Mesh && o.material)) {
         return
       }
+      const m = o
       const mats = Array.isArray(m.material) ? m.material : [m.material]
       for (const mat of mats) {
-        const a = accs.get(mat.uuid) ?? { mat, meshes: [] }
+        const a: Acc = accs.get(mat.uuid) ?? { mat, meshes: [] }
         a.meshes.push(m)
         accs.set(mat.uuid, a)
       }

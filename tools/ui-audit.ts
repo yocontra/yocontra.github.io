@@ -27,7 +27,6 @@ import { spawnSync } from 'node:child_process'
 import { mkdirSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-// biome-ignore lint/correctness/noUnresolvedImports: playwright re-exports these types from playwright-core
 import type { Browser, BrowserContext, Page } from 'playwright'
 import { CATALOG } from '../src/experiments/out-west/data/catalog.ts'
 import { xpForLevel } from '../src/experiments/out-west/data/progression.ts'

@@ -23,7 +23,6 @@
 import { mkdir, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import process from 'node:process'
-// biome-ignore lint/correctness/noUnresolvedImports: playwright's CommonJS re-exports are invisible to Biome
 import { chromium } from 'playwright'
 import { duelStage, liveDuel } from './anim/duel.ts'
 import { frontier } from './anim/frontier.ts'

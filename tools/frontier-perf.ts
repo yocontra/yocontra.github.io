@@ -30,7 +30,6 @@
  * turns slowly through a full circle while sampling so the horizon is measured in every direction.
  */
 import process from 'node:process'
-// biome-ignore lint/correctness/noUnresolvedImports: playwright's CommonJS re-exports are invisible to Biome
 import { chromium } from 'playwright'
 import { allocProfile, profileMain, serveProd } from './perf-lib.ts'
 

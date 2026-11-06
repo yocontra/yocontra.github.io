@@ -29,14 +29,28 @@ async function shot(name: string, x: number, z: number, view: 'first' | 'third' 
   await page.goto(`${base}/experiments/out-west/frontier/?debug&bots=0&spawn=${x},${z}`, {
     waitUntil: 'domcontentloaded',
   })
-  await page.waitForTimeout(4200)
+  // Wait for the dev harness, not a wall-clock guess: the game publishes `__frontierView` once
+  // the round is up (ffa/client/index.ts).
+  await page.waitForFunction(() => Reflect.has(globalThis, '__frontierView'), undefined, {
+    timeout: 30_000,
+  })
   await page
     .getByRole('button', { name: 'Skip' })
-    .click({ force: true })
+    .click({ timeout: 5000 })
     .catch(() => undefined)
-  await page.waitForTimeout(400)
-  await page.evaluate((v) => globalThis.__frontierView?.set(v), view)
-  await page.waitForTimeout(450)
+  // Drive the view and wait in frames, so the camera's ease has run however fast the machine is.
+  await page.evaluate(
+    async ({ view: v, frames }) => {
+      const hook = Reflect.get(globalThis, '__frontierView') as
+        | { set: (view: 'first' | 'third' | 'top') => void }
+        | undefined
+      hook?.set(v)
+      for (let i = 0; i < frames; i++) {
+        await new Promise((resolve) => requestAnimationFrame(resolve))
+      }
+    },
+    { view, frames: 30 },
+  )
   const path = join(out, `${name}.png`)
   await page.screenshot({ path })
   return path
