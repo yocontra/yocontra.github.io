@@ -432,6 +432,17 @@ export async function getTicket(purpose: TicketPurpose): Promise<AuthResult<stri
   return { ok: false, error: politeError(r, 'Couldn’t get a connection ticket.') }
 }
 
+/** The account payload: a player, a creation time and the passkey list. */
+function isAccountInfo(v: unknown): v is AccountInfo {
+  return (
+    isRecord(v) &&
+    isRecord(v.player) &&
+    typeof v.player.accountId === 'string' &&
+    typeof v.createdAt === 'number' &&
+    Array.isArray(v.passkeys)
+  )
+}
+
 /** The account's details and passkeys. */
 export async function accountInfo(): Promise<AuthResult<AccountInfo>> {
   const bearer = await getAccessToken()
@@ -439,8 +450,8 @@ export async function accountInfo(): Promise<AuthResult<AccountInfo>> {
     return { ok: false, error: 'Sign in first.' }
   }
   const r = await api('/account', { method: 'GET', bearer })
-  if (r.status === 200 && isRecord(r.body) && Array.isArray(r.body.passkeys)) {
-    return { ok: true, value: r.body as unknown as AccountInfo }
+  if (r.status === 200 && isAccountInfo(r.body)) {
+    return { ok: true, value: r.body }
   }
   return { ok: false, error: politeError(r, 'Couldn’t load your account.') }
 }

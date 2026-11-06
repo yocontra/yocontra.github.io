@@ -264,7 +264,9 @@ function facing<T extends [Vector3, Vector3, Vector3, ...Vector3[]]>(
   p: T,
   want: (n: Vector3) => boolean,
 ): T {
-  const [a, b, c] = p as unknown as [Vector3, Vector3, Vector3]
+  const a = p[0]
+  const b = p[1]
+  const c = p[2]
   const n = new Vector3().subVectors(b, a).cross(new Vector3().subVectors(c, a))
   return (want(n) ? p : [p[0], ...p.slice(1).reverse()]) as T
 }

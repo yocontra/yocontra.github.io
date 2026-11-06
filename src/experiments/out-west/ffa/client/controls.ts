@@ -113,7 +113,7 @@ export class DesktopControls {
     const on = <K extends keyof WindowEventMap | 'pointerlockchange'>(
       type: K,
       fn: (e: K extends keyof WindowEventMap ? WindowEventMap[K] : Event) => void,
-      target: Window | HTMLElement | Document = globalThis as unknown as Window,
+      target: EventTarget = globalThis,
     ) => {
       target.addEventListener(type, fn as EventListener, { passive: false })
       this.off.push(() => target.removeEventListener(type, fn as EventListener))
