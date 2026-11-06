@@ -9,6 +9,7 @@
  * The gauntlet's save is never touched: the duel runs on a scratch copy, restored on the way out.
  */
 import { actSong } from '../audio/catalog.ts'
+import { assertNever } from '../contract/assertNever.ts'
 import type { Beat, DuelResult, Poster, RoomServerMessage, Seat } from '../contract/duel.ts'
 import { FEEL } from '../data/feel.ts'
 import type { Press } from '../engine/input.ts'
@@ -208,8 +209,13 @@ export class PvpDuel implements DirectorHooks {
       case 'intro':
         this.maybeResults()
         return true
-      default:
+      case 'title':
+      case 'wait':
+      case 'call':
+      case 'bossClock':
         return false
+      default:
+        assertNever(phase)
     }
   }
 

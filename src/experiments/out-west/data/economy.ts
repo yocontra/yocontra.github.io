@@ -1,3 +1,5 @@
+import { assertNever } from '../contract/assertNever.ts'
+
 /**
  * The bounty economy, shared verbatim by the game and the leaderboard server.
  *
@@ -74,8 +76,10 @@ export function payout(record: DuelRecord): number {
       return bountyFor(record.level) + drawBonus(record.level, record.reactionMs)
     case 'coward':
       return -cowardFine(record.level)
-    default:
+    case 'loss':
       return 0
+    default:
+      assertNever(record.outcome)
   }
 }
 

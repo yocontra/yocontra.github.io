@@ -1,3 +1,4 @@
+import { assertNever } from '../contract/assertNever.ts'
 import type { Verdict } from './clock.ts'
 import { coward, cowardFined, shotDown } from './defeat.ts'
 import type { Director } from './director.ts'
@@ -78,9 +79,11 @@ export function onVerdict(d: Director, v: Verdict): void {
     case 'loss':
       onLoss(d, v, paid)
       break
-    default:
+    case 'win':
       onWin(d, v, paid)
       break
+    default:
+      assertNever(v.outcome)
   }
 }
 

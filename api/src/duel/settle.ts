@@ -4,6 +4,8 @@
  * Idempotent: the match row's primary key and the ledger's `match:<id>` idempotency keys make a
  * retried batch fail as a whole instead of paying twice.
  */
+
+import { assertNever } from '../../../src/experiments/out-west/contract/assertNever.ts'
 import type { MatchOutcome, Settlement } from '../../../src/experiments/out-west/contract/duel.ts'
 import {
   baseBounty,
@@ -101,8 +103,10 @@ function seatResult(input: SettleInput, seat: Seat): DuelXpResult {
       return input.outcome === 'dodge' ? 'dodge' : 'win'
     case 'draw':
       return 'dead_heat'
-    default:
+    case 'froze':
       return 'froze'
+    default:
+      assertNever(input.outcome)
   }
 }
 

@@ -7,6 +7,7 @@
  * `Director.hooks` it stops the gauntlet from moving on: no next outlaw, no retry (a retry is a
  * new ticket). Your gauntlet save is set aside for the duel and put back after, untouched.
  */
+import { assertNever } from '../contract/assertNever.ts'
 import type { DailySpec } from '../data/daily.ts'
 import { FEEL } from '../data/feel.ts'
 import type { Press } from '../engine/input.ts'
@@ -157,8 +158,20 @@ export class DailyDuel implements DirectorHooks {
           return true
         }
         return false
-      default:
+      case 'title':
+      case 'intro':
+      case 'poster':
+      case 'cock':
+      case 'walk':
+      case 'turn':
+      case 'wait':
+      case 'call':
+      case 'bossClock':
+      case 'bossWound':
+      case 'end':
         return false
+      default:
+        assertNever(phase)
     }
   }
 
