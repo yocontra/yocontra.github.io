@@ -13,7 +13,7 @@
 
 import type { Object3D } from 'three'
 import { type SkinnedMesh, Vector3 } from 'three'
-import { bindBones, skinnedOf, weightsOf } from './bind.ts'
+import { bindBones, matSlot, skinnedOf, weightsOf } from './bind.ts'
 import { SLOT, type Slot, slotOf } from './roles.ts'
 
 /** Garments whose neck-weighted vertices form a collar. */
@@ -32,8 +32,7 @@ function collarBand(meshes: readonly SkinnedMesh[]): { top: number; bottom: numb
   let top = Number.NEGATIVE_INFINITY
   let bottom = Number.POSITIVE_INFINITY
   const cloth = meshes.filter((m) => {
-    const mat = Array.isArray(m.material) ? m.material[0] : m.material
-    const slot = mat ? slotOf(mat) : undefined
+    const slot = matSlot(m)
     return slot !== undefined && CLOTH.has(slot)
   })
   for (const sm of cloth) {

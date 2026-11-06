@@ -6,11 +6,17 @@
  */
 import { type Material, type Object3D, type SkinnedMesh, Vector3 } from 'three'
 import { boneKey } from './fit.ts'
-import { SLOT, slotOf } from './roles.ts'
+import { SLOT, type Slot, slotOf } from './roles.ts'
 
 export const isSkinned = (o: Object3D): o is SkinnedMesh => (o as SkinnedMesh).isSkinnedMesh
 export const matName = (m: SkinnedMesh): string =>
   ((Array.isArray(m.material) ? m.material[0] : m.material) as Material | undefined)?.name ?? ''
+
+/** The typed slot of a skinned mesh's material, when it has one. */
+export const matSlot = (m: SkinnedMesh): Slot | undefined => {
+  const mat = Array.isArray(m.material) ? m.material[0] : m.material
+  return mat ? slotOf(mat) : undefined
+}
 
 /** Every skinned mesh under `model`. */
 export function skinnedOf(model: Object3D): SkinnedMesh[] {
@@ -83,8 +89,7 @@ export function landmarks(meshes: readonly SkinnedMesh[]): Land | null {
   let eyeN = 0
   let chin = Number.POSITIVE_INFINITY
   for (const sm of meshes) {
-    const mat = Array.isArray(sm.material) ? sm.material[0] : sm.material
-    const slot = mat ? slotOf(mat) : undefined
+    const slot = matSlot(sm)
     const pos = sm.geometry.getAttribute('position')
     for (let k = 0; k < pos.count; k++) {
       v.fromBufferAttribute(pos, k).applyMatrix4(sm.bindMatrix)

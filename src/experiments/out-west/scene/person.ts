@@ -34,7 +34,7 @@ import type {
   Stance,
 } from '../data/outlaws.ts'
 import type { Piece } from './bake.ts'
-import { isSkinned, type Land, landmarks, matName, weightsOf } from './bind.ts'
+import { isSkinned, type Land, landmarks, matSlot, weightsOf } from './bind.ts'
 import { tuckNeck } from './collar.ts'
 import { type Body, boneKey } from './fit.ts'
 import { prune } from './outfit.ts'
@@ -123,7 +123,7 @@ export function swapHair(
   }
   const own: SkinnedMesh[] = []
   model.traverse((o) => {
-    if (isSkinned(o) && matName(o) === 'Hair') {
+    if (isSkinned(o) && matSlot(o) === SLOT.Hair) {
       own.push(o)
     }
   })
@@ -135,7 +135,7 @@ export function swapHair(
     return
   }
   donor.scene.traverse((o) => {
-    if (!isSkinned(o) || matName(o) !== 'Hair') {
+    if (!isSkinned(o) || matSlot(o) !== SLOT.Hair) {
       return
     }
     const mapped = o.skeleton.bones.map((b) => bones.get(boneKey(b.name)) ?? null)
@@ -177,7 +177,7 @@ export function becomeHimself(
     if (b.isBone) {
       bones.set(boneKey(b.name), b)
     }
-    if (isSkinned(obj) && matName(obj) === 'Beard') {
+    if (isSkinned(obj) && matSlot(obj) === SLOT.Beard) {
       sculpted = true
     }
   })

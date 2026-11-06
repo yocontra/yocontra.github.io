@@ -14,7 +14,8 @@
  */
 import { type Object3D, type SkinnedMesh, Vector3 } from 'three'
 import type { BeardKey, MoustacheKey } from '../data/outlaws.ts'
-import { matName, skinnedOf } from './bind.ts'
+import { matSlot, skinnedOf } from './bind.ts'
+import { SLOT } from './roles.ts'
 
 /** The facial hair he wears (colours; styles default to a handlebar and the full sculpted beard). */
 export interface WhiskerLook {
@@ -192,7 +193,7 @@ export function trimWhiskers(model: Object3D, o: WhiskerLook): void {
   if (!region) {
     return
   }
-  const beards = skinnedOf(model).filter((m) => matName(m) === 'Beard')
+  const beards = skinnedOf(model).filter((m) => matSlot(m) === SLOT.Beard)
   const handlebar = o.moustache !== undefined && (o.moustacheStyle ?? 'handlebar') === 'handlebar'
   for (const sm of beards) {
     if (cut(sm, region, handlebar) === 0) {
