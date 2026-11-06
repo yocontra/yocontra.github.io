@@ -1,6 +1,4 @@
-// biome-ignore-all lint/correctness/noUndeclaredVariables: Bun is a global in this Bun script
 // biome-ignore-all lint/complexity/noExcessiveLinesPerFunction: one linear test script
-// biome-ignore-all lint/performance/noAwaitInLoops: polling a live page, one probe at a time
 // biome-ignore-all lint/suspicious/noPlaywrightWaitForTimeout: a real-time duel: waits are game beats, not flaky selectors
 // biome-ignore-all lint/style/useNamedCaptureGroup: one-number captures from debug event strings
 /**

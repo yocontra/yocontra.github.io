@@ -1,7 +1,4 @@
-// biome-ignore-all lint/correctness/noUndeclaredVariables: Bun is a global in this Bun script
-// biome-ignore-all lint/performance/noAwaitInLoops: one page, one scene at a time
 // biome-ignore-all lint/suspicious/noPlaywrightWaitForTimeout: the town streams in; settle waits are deliberate
-// biome-ignore-all lint/suspicious/noConsole: a CLI audit reports to the terminal
 // biome-ignore-all lint/style/noNestedTernary: short label picks in a CLI report
 /**
  * Material audit for both out west scenes (the duel street with the whole cast in the lineup, and

@@ -18,7 +18,6 @@
  * `RP_ORIGINS` and `ALLOWED_ORIGINS` in `api/.dev.vars` must include the site origin. Not part of
  * `bun test`.
  */
-// biome-ignore-all lint/suspicious/noConsole: a CLI harness reports to the terminal
 import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
@@ -254,7 +253,6 @@ async function ranked(): Promise<void> {
   ): Promise<boolean> => {
     const until = Date.now() + ms
     while (Date.now() < until) {
-      // biome-ignore lint/performance/noAwaitInLoops: polling the page
       if (pred(await log())) {
         return true
       }
@@ -272,7 +270,6 @@ async function ranked(): Promise<void> {
     )
   await sleep(1200)
   for (const level of [0, 1]) {
-    // biome-ignore lint/performance/noAwaitInLoops: duels happen strictly in order
     await stage(level, level)
     check(
       `outlaw ${level + 1}: won`,

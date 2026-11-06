@@ -1,7 +1,6 @@
 #!/usr/bin/env bun
 // biome-ignore-all lint/style/useNamingConvention: BAND_OF keys mirror the kits' texture file names
 // biome-ignore-all lint/complexity/noExcessiveCognitiveComplexity: per-vertex loops over typed arrays, kept flat for speed and readability
-// biome-ignore-all lint/performance/noAwaitInLoops: an offline build that reads one source file at a time, in order
 /**
  * Build `models/props.glb` and its trim atlas (`tex/kit_{diff,nor,arm}.webp`) from Quaternius's
  * CC0 "Medieval Village MegaKit" and "Fantasy Props MegaKit" (standard, free editions; see

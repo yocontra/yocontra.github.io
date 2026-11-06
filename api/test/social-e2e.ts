@@ -16,7 +16,6 @@
  *
  * Not part of `bun test`. Seeds its own accounts straight into the local D1.
  */
-// biome-ignore-all lint/suspicious/noConsole: a CLI harness reports to the terminal
 import process from 'node:process'
 import type {
   DyeResponse,

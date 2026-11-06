@@ -1,5 +1,3 @@
-// biome-ignore-all lint/suspicious/noConsole: a CLI audit reports to the terminal
-// biome-ignore-all lint/performance/noAwaitInLoops: the pages are captured one after another
 /**
  * Interior / exterior visual pass for Perdition. Every building is spawned into through the dev
  * `?spawn=` hook, captured in third person, and (optionally) stitched into a contact sheet.

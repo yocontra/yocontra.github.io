@@ -66,7 +66,6 @@ export async function seedPlayer(db: Database, seed: Seed): Promise<Player> {
 
 let failures = 0
 export function check(label: string, ok: boolean, detail: unknown = ''): void {
-  // biome-ignore lint/suspicious/noConsole: a CLI harness reports to the terminal
   console.log(`${ok ? '  ✓' : '  ✗'} ${label}${ok ? '' : `  ${JSON.stringify(detail)}`}`)
   if (!ok) {
     failures++

@@ -1,5 +1,3 @@
-// biome-ignore-all lint/suspicious/noConsole: a CLI harness reports to the terminal
-// biome-ignore-all lint/performance/noAwaitInLoops: states and frames run one after another on purpose
 /**
  * The animation audit (docs/animation-matrix.md): drives every character state it can reach, in
  * the PRODUCTION build with the harness hooks kept (`PUBLIC_OW_PERF_HARNESS=1`, never set for the

@@ -1,6 +1,4 @@
 // biome-ignore-all lint/security/noSecrets: the lineup's URL fragments, not secrets
-// biome-ignore-all lint/suspicious/noConsole: a CLI harness reports to the terminal
-// biome-ignore-all lint/performance/noAwaitInLoops: one page, one step at a time, on purpose
 // biome-ignore-all lint/complexity/noExcessiveLinesPerFunction: one linear walk through the shots
 /**
  * The guns, photographed close up: each one in first person (hip and on the sights) and held in

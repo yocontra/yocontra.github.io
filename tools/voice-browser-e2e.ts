@@ -12,8 +12,6 @@
  * `api/.dev.vars` needs the RealtimeKit app, preset and token, and `RP_ORIGINS` and
  * `ALLOWED_ORIGINS` must include the site origin. Not part of `bun test`.
  */
-// biome-ignore-all lint/suspicious/noConsole: a CLI harness reports to the terminal
-// biome-ignore-all lint/performance/noAwaitInLoops: a CLI harness polls one page at a time
 // biome-ignore-all lint/style/useGlobalThis: these snippets run in the browser page, where window is the global
 // biome-ignore-all lint/style/useNamingConvention: the page's dev hooks are snake-ish (__frontier, __frontierPilot)
 import process from 'node:process'

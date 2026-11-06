@@ -9,8 +9,8 @@ import { readFile } from 'node:fs/promises'
 import { Glob } from 'bun'
 
 const BASELINE = {
-  directives: 467,
-  ignoreAll: 351,
+  directives: 360,
+  ignoreAll: 259,
 } as const
 
 const DIRECTIVE = /biome-ignore(?:-all|-start)?\s+(?:lint|assist)\/(?<rule>[a-z]+\/[A-Za-z0-9]+)/gu

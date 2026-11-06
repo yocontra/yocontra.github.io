@@ -1,5 +1,3 @@
-// biome-ignore-all lint/suspicious/noConsole: a CLI harness reports to the terminal
-// biome-ignore-all lint/performance/noAwaitInLoops: screens and samples run one after another on purpose
 /**
  * Every out west screen on the floor-device proxy, in the PRODUCTION build (tools/PERF.md): a phone
  * viewport (812×375 CSS at DPR 3, touch), the floor tier and a CPU throttle (4×, plus 6× with

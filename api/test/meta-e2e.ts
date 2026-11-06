@@ -19,9 +19,7 @@
  * `RP_ORIGINS` and `ALLOWED_ORIGINS` in `api/.dev.vars` must include the site origin. Not part of
  * `bun test`.
  */
-// biome-ignore-all lint/suspicious/noConsole: a CLI harness reports to the terminal
 // biome-ignore-all lint/style/noPlaywrightWaitForSelector: the harness waits on the game's own DOM
-// biome-ignore-all lint/performance/noAwaitInLoops: the duel and the polls run strictly in order
 import { mkdirSync } from 'node:fs'
 import { join } from 'node:path'
 import process from 'node:process'

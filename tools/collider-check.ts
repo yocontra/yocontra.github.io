@@ -1,4 +1,3 @@
-// biome-ignore-all lint/suspicious/noConsole: a CLI audit reports to the terminal
 // biome-ignore-all lint/suspicious/noPlaywrightWaitForTimeout: the town streams in; settle waits are deliberate
 /**
  * Collider-vs-visual check for Perdition, in real Chrome against a running dev server.

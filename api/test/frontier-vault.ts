@@ -12,8 +12,6 @@
  *
  * Not part of `bun test`.
  */
-// biome-ignore-all lint/suspicious/noConsole: a CLI harness reports to the terminal
-// biome-ignore-all lint/performance/noAwaitInLoops: the rider is polled one step at a time, on purpose
 import process from 'node:process'
 import { type Browser, chromium, type Page } from 'playwright'
 import { BTN_JUMP } from '../../src/experiments/out-west/contract/town.ts'

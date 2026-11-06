@@ -18,8 +18,6 @@
  * reconciliation corrections (smoothed, snapped, mean and worst size), and frame CPU p95. Not part
  * of `bun test`.
  */
-// biome-ignore-all lint/suspicious/noConsole: a CLI harness reports to the terminal
-// biome-ignore-all lint/performance/noAwaitInLoops: the walk is scripted one leg after another
 import { writeFileSync } from 'node:fs'
 import process from 'node:process'
 import { type Browser, chromium, type Page } from 'playwright'

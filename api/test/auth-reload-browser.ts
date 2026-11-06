@@ -17,7 +17,6 @@
  *    fix this was theft detection (401, cookie cleared, family revoked); now it is a replay.
  * 4. Open the handoff page in a second tab and count refreshes for a few seconds: one, not a loop.
  */
-// biome-ignore-all lint/suspicious/noConsole: a CLI harness reports to the terminal
 import { spawn } from 'node:child_process'
 import { existsSync, mkdtempSync } from 'node:fs'
 import { homedir, tmpdir } from 'node:os'
@@ -143,7 +142,6 @@ async function main(): Promise<void> {
   try {
     let version: Json | null = null
     for (let i = 0; i < 50 && !version; i++) {
-      // biome-ignore lint/performance/noAwaitInLoops: polling Chrome's startup
       version = await fetch(`http://127.0.0.1:${DEBUG_PORT}/json/version`)
         .then((r) => r.json() as Promise<Json>)
         .catch(() => null)
@@ -211,7 +209,6 @@ async function refreshCookie(cdp: Cdp, s: string): Promise<string | null> {
 /** The next paused `/auth/refresh` POST; CORS preflights are let through. */
 async function pausedPost(cdp: Cdp, s: string): Promise<CdpEvent> {
   for (;;) {
-    // biome-ignore lint/performance/noAwaitInLoops: one paused request at a time
     const e = await cdp.wait((x) => x.sessionId === s && x.method === 'Fetch.requestPaused', 60_000)
     if ((e.params.request as Json).method === 'POST') {
       return e

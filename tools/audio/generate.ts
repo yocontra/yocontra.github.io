@@ -1,4 +1,3 @@
-// biome-ignore-all lint/correctness/noUndeclaredVariables: Bun is a global in this Bun script
 /**
  * Run ElevenLabs generations from `manifest.ts` through the Apparish generators.
  *
@@ -85,7 +84,6 @@ async function main(): Promise<void> {
   const results: boolean[] = []
   const worker = async (): Promise<void> => {
     for (let id = queue.shift(); id !== undefined; id = queue.shift()) {
-      // biome-ignore lint/performance/noAwaitInLoops: each worker runs its share one at a time on purpose (rate limit)
       results.push(await one(id, take, force))
     }
   }

@@ -1,6 +1,4 @@
-// biome-ignore-all lint/correctness/noUndeclaredVariables: Bun is a global in this Bun script
 // biome-ignore-all lint/complexity/noExcessiveLinesPerFunction: one linear test script
-// biome-ignore-all lint/performance/noAwaitInLoops: driving a live page, one step at a time
 // biome-ignore-all lint/suspicious/noPlaywrightWaitForTimeout: a real-time town: waits are game beats, not flaky selectors
 /**
  * Plays the practice Frontier town (loopback, 15 bots) in real Chrome and reads the `#audiodebug`

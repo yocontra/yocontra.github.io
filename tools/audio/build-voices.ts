@@ -1,4 +1,3 @@
-// biome-ignore-all lint/correctness/noUndeclaredVariables: Bun is a global in this Bun script
 /**
  * Master the voice takes (`speak.ts`, picks in `voice-picks.ts`) into one small file per speaker.
  *

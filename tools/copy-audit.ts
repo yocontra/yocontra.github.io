@@ -1,5 +1,3 @@
-// biome-ignore-all lint/correctness/noUndeclaredVariables: Bun is a global in this Bun script
-// biome-ignore-all lint/suspicious/noConsole: a CLI report
 // biome-ignore-all lint/performance/useTopLevelRegex: a one-shot CLI; the patterns read best where they're used
 // biome-ignore-all lint/style/useNamedCaptureGroup: the groups are alternations, never read back
 // biome-ignore-all lint/complexity/noExcessiveCognitiveComplexity: one rule list per string, read top to bottom

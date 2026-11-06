@@ -11,7 +11,6 @@
  *
  * Not part of `bun test`.
  */
-// biome-ignore-all lint/suspicious/noConsole: a CLI harness reports to the terminal
 // biome-ignore-all lint/style/noPlaywrightWaitForSelector: the harness waits on the game's own DOM
 import type { Page } from 'playwright'
 import {

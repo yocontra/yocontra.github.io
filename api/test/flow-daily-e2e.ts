@@ -11,9 +11,7 @@
  *
  * Not part of `bun test`.
  */
-// biome-ignore-all lint/suspicious/noConsole: a CLI harness reports to the terminal
 // biome-ignore-all lint/style/noPlaywrightWaitForSelector: the harness waits on the game's own DOM
-// biome-ignore-all lint/performance/noAwaitInLoops: the tries run strictly in order
 import { DAILY_ATTEMPTS, dayKey } from '../../src/experiments/out-west/data/daily.ts'
 import {
   check,

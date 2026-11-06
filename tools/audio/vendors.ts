@@ -1,4 +1,3 @@
-// biome-ignore-all lint/correctness/noUndeclaredVariables: Bun is a global in this Bun script
 // biome-ignore-all lint/style/useNamedCaptureGroup: one-number capture from a MIME type
 /**
  * The generators behind the out west voice and music, reached through the sibling Apparish repo's

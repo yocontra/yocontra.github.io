@@ -1,4 +1,3 @@
-// biome-ignore-all lint/suspicious/noConsole: a command-line report
 // biome-ignore-all lint/complexity/noExcessiveLinesPerFunction: one linear simulation
 /**
  * Difficulty simulator for the out west gauntlet. It plays outlaws 1–17 with simulated humans

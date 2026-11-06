@@ -1,5 +1,3 @@
-// biome-ignore-all lint/suspicious/noConsole: a CLI harness reports to the terminal
-// biome-ignore-all lint/performance/noAwaitInLoops: states and frames run one after another on purpose
 /** The animation audit's Frontier section: the local rider, the remote riders, the view model. */
 import { mkdir, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'

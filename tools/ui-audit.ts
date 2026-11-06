@@ -1,9 +1,6 @@
 // biome-ignore-all lint/style/noExcessiveLinesPerFile: one CLI walk through every screen, read top to bottom
-// biome-ignore-all lint/correctness/noUndeclaredVariables: Bun is a global in this Bun script
 // biome-ignore-all lint/complexity/noExcessiveLinesPerFunction: one linear audit script
-// biome-ignore-all lint/performance/noAwaitInLoops: one page, one screen at a time
 // biome-ignore-all lint/suspicious/noPlaywrightWaitForTimeout: sheets fetch and settle; the waits are deliberate
-// biome-ignore-all lint/suspicious/noConsole: a CLI report
 /**
  * UI layout audit for out west, in real Chrome against a running dev server (and, for the
  * signed-in screens, a local API with its D1).

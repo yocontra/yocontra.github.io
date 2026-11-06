@@ -1,4 +1,3 @@
-// biome-ignore-all lint/performance/noAwaitInLoops: states and frames run one after another on purpose
 /** The animation audit's duel sections: the #lineup stage (duel/anim-stage.ts) and a played duel. */
 import { mkdir, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'

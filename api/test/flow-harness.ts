@@ -6,7 +6,6 @@
  * swallow their pointer events, never the click's capture). Keys pressed to walk and draw in a
  * duel are not taps. A flow asserts how many taps it took from one screen to the next.
  */
-// biome-ignore-all lint/suspicious/noConsole: a CLI harness reports to the terminal
 // biome-ignore-all lint/style/noPlaywrightWaitForSelector: the harness waits on the game's own DOM
 import { mkdirSync } from 'node:fs'
 import { join } from 'node:path'

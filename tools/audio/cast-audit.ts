@@ -1,4 +1,3 @@
-// biome-ignore-all lint/correctness/noUndeclaredVariables: Bun is a global in this Bun script
 /**
  * Casting audit: Gemini listens to each shipped voice file (`public/.../voice/<id>.m4a`) blind and
  * reports the perceived gender, age, accent and timbre of the speaker, with a transcript and any
@@ -158,7 +157,6 @@ async function checkLines(ids: string[], tmp: string): Promise<void> {
       ])
       const ask = () => listen(wav, `Caption: "${j.text}". ${LINE}`)
       try {
-        // biome-ignore lint/performance/noAwaitInLoops: each worker listens one line at a time (rate limits)
         const r = JSON.parse(await ask().catch(ask)) as LineCheck
         console.log(
           `${r.matches ? 'ok      ' : 'MISMATCH'} q${r.quality} ${j.c.id}/${j.i} "${j.text}" heard "${r.transcript}" | ${r.delivery} | ${r.problems}`,
@@ -197,7 +195,6 @@ async function main(): Promise<void> {
   const worker = async (): Promise<void> => {
     for (let c = jobs.shift(); c !== undefined; c = jobs.shift()) {
       try {
-        // biome-ignore lint/performance/noAwaitInLoops: each worker listens one file at a time (rate limits)
         const h = await hear(`${PUB}/${c.id}.m4a`)
         const want = intended(c)
         rows[c.id] = { ...h, intended: want }

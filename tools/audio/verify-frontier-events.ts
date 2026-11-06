@@ -1,4 +1,3 @@
-// biome-ignore-all lint/correctness/noUndeclaredVariables: Bun is a global in this Bun script
 /**
  * Frontier's event → sound wiring, without a browser: feeds `handleEvent` / `handleControl` the
  * server events a session produces (shots of each weapon, hits, dynamite, a bag, the strongbox, a

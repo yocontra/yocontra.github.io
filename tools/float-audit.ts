@@ -1,6 +1,4 @@
-// biome-ignore-all lint/correctness/noUndeclaredVariables: Bun is a global in this Bun script
 // biome-ignore-all lint/complexity/noExcessiveLinesPerFunction: one linear audit script
-// biome-ignore-all lint/performance/noAwaitInLoops: one page, one scene at a time
 // biome-ignore-all lint/suspicious/noPlaywrightWaitForTimeout: the town streams in; settle waits are deliberate
 /**
  * Floating-object audit for both out west scenes, in real Chrome against a running dev server.

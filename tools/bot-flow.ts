@@ -1,4 +1,3 @@
-// biome-ignore-all lint/suspicious/noConsole: a CLI harness reports to the terminal
 // biome-ignore-all lint/style/noMagicNumbers: window lengths and thresholds in seconds and metres
 /**
  * Bots on Perdition, headless: 32 server bots play the town for a few minutes in-process (the

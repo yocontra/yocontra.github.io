@@ -1,5 +1,4 @@
 // biome-ignore-all lint/complexity/useMaxParams: DSP helpers take positional numeric args (counts, times, levels)
-// biome-ignore-all lint/correctness/noUndeclaredVariables: Bun is a global in this Bun script
 // biome-ignore-all lint/style/noExcessiveLinesPerFile: one recipe per shipped sound, in one table
 /**
  * How every shipped out west 3D sound is made from its raw take (`manifest.ts`) or a first-party /

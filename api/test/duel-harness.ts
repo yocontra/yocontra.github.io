@@ -10,8 +10,6 @@
  * forfeit on disconnect, a ghost duel (with the owner's royalty), and the same-network rule. It
  * checks the ledger and match rows after each.
  */
-// biome-ignore-all lint/suspicious/noConsole: a CLI harness reports to the terminal
-// biome-ignore-all lint/performance/noAwaitInLoops: scenarios run strictly in order
 import { Database } from 'bun:sqlite'
 import { readdirSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'

@@ -1,4 +1,3 @@
-// biome-ignore-all lint/performance/noAwaitInLoops: one image at a time keeps sharp's memory flat
 /**
  * Generate the phone texture set: a half-size WebP beside every full map
  * (`scene/textures.ts` reads `-half.webp` on the floor and legacy tiers). The full set is ~2.7 MB;

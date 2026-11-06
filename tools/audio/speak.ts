@@ -1,4 +1,3 @@
-// biome-ignore-all lint/correctness/noUndeclaredVariables: Bun is a global in this Bun script
 /**
  * Generate and review the voice takes behind `voices.ts`.
  *
@@ -242,7 +241,6 @@ async function main(): Promise<void> {
       const tag = `${j.c.id}/${j.l.key} t${take}`
       try {
         if (ranking) {
-          // biome-ignore lint/performance/noAwaitInLoops: each worker runs its share one at a time on purpose (rate limits)
           const r = await rank(j.c, j.l, force)
           console.log(`${j.c.id}/${j.l.key} rank: ${r}`)
           continue

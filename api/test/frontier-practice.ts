@@ -12,8 +12,6 @@
  * `--fresh` clears the device record first (a brand-new player: green bots). `--touch` plays at
  * 812×375 with touch emulation. Not part of `bun test`.
  */
-// biome-ignore-all lint/suspicious/noConsole: a CLI harness reports to the terminal
-// biome-ignore-all lint/performance/noAwaitInLoops: the play loop is one step after another
 import process from 'node:process'
 import { chromium } from 'playwright'
 import { BTN_AIM, BTN_FIRE, BTN_INTERACT } from '../../src/experiments/out-west/contract/town.ts'

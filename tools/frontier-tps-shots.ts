@@ -1,5 +1,3 @@
-// biome-ignore-all lint/suspicious/noConsole: a CLI harness reports to the terminal
-// biome-ignore-all lint/performance/noAwaitInLoops: one page, one step at a time, on purpose
 // biome-ignore-all lint/complexity/noExcessiveLinesPerFunction: one linear walk through the shots
 /**
  * Frontier shooter views, photographed: the over-the-shoulder and first-person cameras at desktop,

@@ -900,7 +900,6 @@ async function buildAtlas(all: Geo[], out: string): Promise<void> {
     const region = REGION[t]
     const f = TEX_FILES[t]
     const size = inner(region, 1)
-    // biome-ignore lint/performance/noAwaitInLoops: one full-resolution source texture decoded at a time bounds peak memory
     const { data: rgb } = await sharp(`${SRC}/${f.diff}`)
       .resize(size.w, size.h, { fit: 'fill' })
       .removeAlpha()
@@ -962,7 +961,6 @@ async function buildAtlas(all: Geo[], out: string): Promise<void> {
     const r = SWATCH[s]
     const id = SWATCH_SRC[s]
     if (id) {
-      // biome-ignore lint/performance/noAwaitInLoops: swatches are decoded one at a time to bound peak memory; layer order must match SWATCH order
       diff.push(await placed(sharp(`${SRC}/swatch/${id}_diff.webp`), r, 1))
       nor.push(await placed(sharp(`${SRC}/swatch/${id}_nor.webp`), r, 0.5))
       const { data, info } = await sharp(`${SRC}/swatch/${id}_arm.webp`)
@@ -1176,7 +1174,6 @@ async function main(): Promise<void> {
   for (const [key, r] of Object.entries(RECIPES)) {
     const geos: Geo[] = []
     for (const part of r.parts) {
-      // biome-ignore lint/performance/noAwaitInLoops: parts are extracted one at a time so the console tri report and geos order stay deterministic and memory bounded
       const g = await extract(part, masters[r.sex])
       if (g) {
         geos.push(simplify(g))
@@ -1202,7 +1199,6 @@ async function main(): Promise<void> {
     scene.addChild(top)
     scene.addChild(writeMesh(out, geos, m, joints))
     if (key === 'player') {
-      // biome-ignore lint/performance/noAwaitInLoops: only the player model gets clips; models are built and written one at a time to bound memory
       await addClips(out, joints, m)
     }
     await out.transform(

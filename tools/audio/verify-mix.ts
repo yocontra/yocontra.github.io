@@ -1,6 +1,4 @@
-// biome-ignore-all lint/correctness/noUndeclaredVariables: Bun is a global in this Bun script
 // biome-ignore-all lint/security/noSecrets: engine calls and captions in page scripts, not secrets
-// biome-ignore-all lint/performance/noAwaitInLoops: one moment at a time on a live page, on purpose
 // biome-ignore-all lint/suspicious/noPlaywrightWaitForTimeout: real-time playback: waits are listening time
 /**
  * The mix, moment by moment (`tools/audio/MIX.md`), in real Chrome through the `#audiodebug` taps:

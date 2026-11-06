@@ -1,5 +1,4 @@
 #!/usr/bin/env bun
-// biome-ignore-all lint/performance/noAwaitInLoops: an offline build that fetches one Poly Haven set at a time, in order
 /**
  * Build the clock tower's masonry atlas (`tex/civic_{diff,nor,arm}.webp`) from four CC0 Poly Haven
  * sets: red brick, dressed sandstone, roof slates and rusty sheet metal (see CREDITS.md).

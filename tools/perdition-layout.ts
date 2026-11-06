@@ -1,4 +1,3 @@
-// biome-ignore-all lint/suspicious/noConsole: a CLI generator reports what it wrote
 // biome-ignore-all lint/complexity/useMaxParams: placement helpers take a rect positionally (x, z, w, d), like the layout JSON
 // biome-ignore-all lint/style/noMagicNumbers: this file is the town plan: every number is a position in metres
 // biome-ignore-all lint/style/noExcessiveLinesPerFile: one town plan, top to bottom

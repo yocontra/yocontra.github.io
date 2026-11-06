@@ -1,4 +1,3 @@
-// biome-ignore-all lint/suspicious/noConsole: a CLI harness reports to the terminal
 // biome-ignore-all lint/complexity/noExcessiveLinesPerFunction: one page script, top to bottom
 /**
  * The guns on a bench: the Winchester carbine and the coach gun rendered on their own under

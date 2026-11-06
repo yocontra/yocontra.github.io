@@ -1,4 +1,3 @@
-// biome-ignore-all lint/suspicious/noConsole: a CLI harness reports to the terminal
 /** The animation audit's shared pieces (tools/anim-audit.ts): options, measures, judging, sheets. */
 
 import { tmpdir } from 'node:os'
@@ -77,7 +76,6 @@ export function serveProd(build: boolean): () => void {
       }
       for (const p of [path, `${path}/index.html`, `${path}index.html`]) {
         const f = bunFile(`${out}${p}`)
-        // biome-ignore lint/performance/noAwaitInLoops: the first path that exists wins
         if (!p.endsWith('/') && (await f.exists())) {
           return new Response(f)
         }

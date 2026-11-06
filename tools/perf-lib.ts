@@ -1,5 +1,3 @@
-// biome-ignore-all lint/suspicious/noConsole: CLI harness helpers report to the terminal
-// biome-ignore-all lint/performance/noAwaitInLoops: source maps load one after another
 /**
  * Shared pieces of the perf harnesses (tools/frontier-perf.ts, tools/perf-suite.ts): the
  * production build served statically, the floor-device phone emulation, a per-frame CPU sampler

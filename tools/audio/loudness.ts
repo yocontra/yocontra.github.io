@@ -1,4 +1,3 @@
-// biome-ignore-all lint/correctness/noUndeclaredVariables: Bun is a global in this Bun script
 // biome-ignore-all lint/performance/useTopLevelRegex: ffmpeg log parsing, run once per file
 // biome-ignore-all lint/style/useNamedCaptureGroup: one-number captures from ffmpeg logs
 /**

@@ -17,7 +17,6 @@ async function main(): Promise<void> {
   const files = argv.filter((a) => !a.startsWith('--'))
   for (const f of files) {
     const ask = () => listen(f, music ? MUSIC : 'Transcribe this voice take and rate it as JSON.')
-    // biome-ignore lint/performance/noAwaitInLoops: one listening pass at a time (rate limits)
     const r = await ask()
       .catch(ask)
       .catch((e: unknown) => `error: ${String(e).slice(0, 200)}`)

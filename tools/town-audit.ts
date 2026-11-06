@@ -1,4 +1,3 @@
-// biome-ignore-all lint/suspicious/noConsole: a CLI audit reports to the terminal
 // biome-ignore-all lint/style/noExcessiveLinesPerFile: one self-contained level-design audit and its map render
 // biome-ignore-all lint/complexity/noExcessiveCognitiveComplexity: grid sweeps and per-feature checks kept flat
 // biome-ignore-all lint/complexity/noExcessiveLinesPerFunction: the SVG render is one long, linear drawing

@@ -1,6 +1,3 @@
-// biome-ignore-all lint/correctness/noUndeclaredVariables: Bun is a global in this Bun script
-// biome-ignore-all lint/suspicious/noConsole: a CLI study reports to the terminal
-// biome-ignore-all lint/performance/noAwaitInLoops: one duel at a time, in order
 /**
  * The call, sampled long: the same outlaw's duel replayed `--calls=8` times on the production
  * build (perf harness hooks on) at 4× CPU, phone viewport, floor tier. Every frame from the last

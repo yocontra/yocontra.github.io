@@ -1,5 +1,3 @@
-// biome-ignore-all lint/suspicious/noConsole: a CLI harness reports to the terminal
-// biome-ignore-all lint/performance/noAwaitInLoops: samples are taken one after another on purpose
 /**
  * Frontier perf on the floor-device proxy (tools/PERF.md): the loopback town with 31 bots, a phone
  * viewport (812×375 CSS, DPR 3, touch), the floor tier and 4× CPU throttle, in real Chrome.

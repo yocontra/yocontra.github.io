@@ -1,5 +1,3 @@
-// biome-ignore-all lint/suspicious/noConsole: a CLI harness reports to the terminal
-// biome-ignore-all lint/performance/noAwaitInLoops: one emulated device after another
 /** `perf-suite --devices`: which quality tier each Apple form factor starts at. */
 import type { Browser, Page } from 'playwright'
 

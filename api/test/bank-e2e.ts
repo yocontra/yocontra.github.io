@@ -21,8 +21,6 @@
  * `ALLOWED_ORIGINS` in `api/.dev.vars` must include the site origin, and the local D1 must be
  * migrated. Not part of `bun test`.
  */
-// biome-ignore-all lint/suspicious/noConsole: a CLI harness reports to the terminal
-// biome-ignore-all lint/performance/noAwaitInLoops: the riders are polled one step at a time, on purpose
 import process from 'node:process'
 import { type Browser, chromium, type Page } from 'playwright'
 import { BTN_FIRE, BTN_INTERACT, BTN_RELOAD } from '../../src/experiments/out-west/contract/town.ts'

@@ -192,7 +192,24 @@
             "noProcessEnv": "off"
           },
           "correctness": {
-            "noProcessGlobal": "off"
+            "noProcessGlobal": "off",
+            "noUndeclaredVariables": "off"
+          },
+          "performance": {
+            "noAwaitInLoops": "off"
+          },
+          "suspicious": {
+            "noConsole": "off"
+          }
+        }
+      }
+    },
+    {
+      "includes": ["api/test/**"],
+      "linter": {
+        "rules": {
+          "performance": {
+            "noAwaitInLoops": "off"
           },
           "suspicious": {
             "noConsole": "off"

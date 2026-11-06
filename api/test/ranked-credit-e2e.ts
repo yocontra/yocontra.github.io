@@ -10,8 +10,6 @@
  *
  * Not part of `bun test`. Seeds its own account straight into the local D1.
  */
-// biome-ignore-all lint/suspicious/noConsole: a CLI harness reports to the terminal
-// biome-ignore-all lint/performance/noAwaitInLoops: duels happen strictly in order
 import { Database } from 'bun:sqlite'
 import { readdirSync, readFileSync, utimesSync } from 'node:fs'
 import { join } from 'node:path'

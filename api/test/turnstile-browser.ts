@@ -12,7 +12,6 @@
  * Frontier page (remote) then has to: refresh (403 `turnstile: required`), get a token from the
  * invisible widget, refresh again (200), and join with a fresh token of its own (201) and a socket.
  */
-// biome-ignore-all lint/suspicious/noConsole: a CLI harness reports to the terminal
 import process from 'node:process'
 import { chromium } from 'playwright'
 import { randomToken, sha256Hex } from '../src/auth/crypto.ts'

@@ -1,5 +1,3 @@
-// biome-ignore-all lint/suspicious/noConsole: a CLI tool reports to the terminal
-// biome-ignore-all lint/performance/noAwaitInLoops: one thumbnail after another through one page
 /**
  * Bakes the Outfitter's item thumbnails into static images, so the store never dresses a
  * gunslinger at runtime just to draw a card (each worn piece was a full dress-and-bake plus a
