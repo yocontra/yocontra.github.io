@@ -295,6 +295,15 @@ const WOOD = 0xb0_8a_60
 const DARK_WOOD = 0x6a_4c_34
 /** How close furniture may stand to the inside face before interior trim is skipped, metres. */
 const WINDOW_TRIM_CLEAR = 0.6
+/** Interior doorway gaps: collinear partition spans with a gap a door can fill. */
+const INTERIOR_DOOR_MIN = 0.8
+const INTERIOR_DOOR_MAX = 2.2
+/** An open leaf's thickness and its stand-off from the jamb, metres. */
+const DOOR_LEAF = 0.055
+const DOOR_LEAF_CLEAR = 0.02
+/** The raised panel on a leaf, a shade lighter than the stiles. */
+const DOOR_PANEL = 0x7a_56_38
+
 /** Glass grime map: pixels and the number of faint diagonal streaks. */
 const GLASS_TEX = 64
 const GLASS_STREAKS = 18
@@ -759,6 +768,8 @@ interface Builders {
   cloth: GeoBuilder
   wood: GeoBuilder
   windows: GeoBuilder
+  /** Interior door frames, thresholds and leaves (named `k_door_trim` for the audits). */
+  doors: GeoBuilder
   roofs: BufferGeometry[]
   signs: { text: string; bg: string; fg: string; quad: Vector3[] }[]
   extra: BufferGeometry[]
@@ -955,6 +966,121 @@ function addWindows(bs: Builders, b: Building, side: Side, against: readonly Cov
       st.multiply(new Matrix4().makeScale(w.scale, w.scale, 1))
       bs.kit.push({ def: shutter, at: st })
     }
+  }
+}
+
+/**
+ * Frames, thresholds and open leaves at the gaps between collinear interior partition spans. A gap
+ * is a doorway by construction (the collision grid already leaves it open); wider gaps stay
+ * passages.
+ */
+function addInteriorDoors(bs: Builders, b: Building): void {
+  interface Run {
+    alongX: boolean
+    /** Wall centre line on the other axis. */
+    at: number
+    y0: number
+    y1: number
+    spans: { a0: number; a1: number }[]
+  }
+  const runs = new Map<string, Run>()
+  for (const w of b.walls ?? []) {
+    const alongX = w.w > w.d
+    const y0 = w.y0 ?? 0
+    const y1 = w.y1 ?? b.height
+    const at = alongX ? w.z + w.d / 2 : w.x + w.w / 2
+    const key = `${alongX ? 'x' : 'z'}:${at.toFixed(3)}:${y0.toFixed(2)}:${y1.toFixed(2)}`
+    let run = runs.get(key)
+    if (!run) {
+      run = { alongX, at, y0, y1, spans: [] }
+      runs.set(key, run)
+    }
+    run.spans.push(alongX ? { a0: w.x, a1: w.x + w.w } : { a0: w.z, a1: w.z + w.d })
+  }
+  for (const run of runs.values()) {
+    run.spans.sort((p, q) => p.a0 - q.a0)
+    for (let i = 0; i < run.spans.length - 1; i++) {
+      const a0 = run.spans[i]?.a1 ?? 0
+      const a1 = run.spans[i + 1]?.a0 ?? 0
+      const width = a1 - a0
+      if (width < INTERIOR_DOOR_MIN || width > INTERIOR_DOOR_MAX) {
+        continue
+      }
+      addInteriorDoor(bs, run.alongX, run.at, a0, a1, run.y0, run.y1)
+    }
+  }
+}
+
+/** One interior door: jambs and head, a threshold, and one or two open leaves. */
+function addInteriorDoor(
+  bs: Builders,
+  alongX: boolean,
+  at: number,
+  a0: number,
+  a1: number,
+  y0: number,
+  y1: number,
+): void {
+  const width = a1 - a0
+  const base = y0 + 0.012
+  const top = y0 + doorTop(width)
+  if (top + DOOR_HEAD > y1 - 0.03) {
+    return
+  }
+  /** A box in wall space: `a` runs along the wall, `cross` is the wall's centre line. */
+  const box = (
+    a: number,
+    cross: number,
+    y: number,
+    long: number,
+    height: number,
+    deep: number,
+    color: number,
+  ) => {
+    bs.doors.box(
+      alongX ? a : cross,
+      y,
+      alongX ? cross : a,
+      alongX ? long : deep,
+      height,
+      alongX ? deep : long,
+      color,
+    )
+  }
+  // Jambs sit a hair inside the opening, so their faces are not coplanar with the wall's cut.
+  for (const a of [a0 - DOOR_JAMB / 2 + 0.012, a1 + DOOR_JAMB / 2 - 0.012]) {
+    box(a, at, (base + top) / 2, DOOR_JAMB, top - base, DOOR_FRAME_DEPTH, DARK_WOOD)
+  }
+  box(
+    (a0 + a1) / 2,
+    at,
+    top + DOOR_HEAD / 2,
+    width + DOOR_JAMB * 2,
+    DOOR_HEAD,
+    DOOR_FRAME_DEPTH,
+    DARK_WOOD,
+  )
+  box((a0 + a1) / 2, at, y0 + 0.028, width, 0.04, WALL_T + 0.06, DARK_WOOD)
+  // Wide openings get a pair of leaves; a normal one gets a single leaf hinged at the west/north jamb.
+  const leaves = width > INTERIOR_DOOR_MAX / 2 ? 2 : 1
+  const leafLength = (leaves === 2 ? width / 2 : width) - 0.08
+  const leafHeight = top - y0 - 0.08
+  const open = at + (leafLength / 2 + DOOR_LEAF_CLEAR)
+  for (let i = 0; i < leaves; i++) {
+    const hinge = leaves === 2 ? (i === 0 ? a0 : a1) : a0
+    const dir = leaves === 2 ? (i === 0 ? 1 : -1) : 1
+    const a = hinge + dir * (DOOR_LEAF / 2)
+    box(a, open, y0 + leafHeight / 2 + 0.04, DOOR_LEAF, leafHeight, leafLength, DARK_WOOD)
+    // A raised panel on the leaf face, so the slab reads as a door rather than a board.
+    box(
+      a,
+      open,
+      y0 + leafHeight / 2 + 0.04,
+      DOOR_LEAF * 1.2,
+      leafHeight * 0.62,
+      leafLength * 0.62,
+      DOOR_PANEL,
+    )
   }
 }
 
@@ -1380,6 +1506,7 @@ function addBuilding(bs: Builders, b: Building, layout: TownLayout, id: number):
   )
   bs.roofs.push(rg)
   addDoorFrames(bs, b, PORCHED.has(b.kind) || b.kind === 'depot' ? front : null)
+  addInteriorDoors(bs, b)
   if (b.doors.length === 0) {
     addClosedDoor(bs, b, front)
   }
@@ -2005,6 +2132,7 @@ function newBuilders(room: (id: string) => Builders, lean: boolean): Builders {
     wood: new GeoBuilder(2),
     cloth: new GeoBuilder(1.5),
     windows: new GeoBuilder(1),
+    doors: new GeoBuilder(2),
     roofs: [],
     signs: [],
     extra: [],
@@ -2412,6 +2540,7 @@ export function buildTown(
       add(set.extra.length > 0 ? mergeGeometries([wood, ...set.extra]) : wood, mats.wood, 'wood')
     }
     add(set.windows.empty ? null : set.windows.build(), mats.windows, 'windows')
+    add(set.doors.empty ? null : set.doors.build(), mats.wood, 'k_door_trim')
     add(set.cloth.empty ? null : set.cloth.build(), mats.cloth, 'canvas')
     if (set.kit.length > 0) {
       for (const m of mergePlaced(set.kit, parent, swap, false)) {
