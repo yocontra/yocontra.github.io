@@ -198,6 +198,8 @@ export class FrontierGame {
   private town: Town | null = null
   private lamps: Mesh | null = null
   private ragdolls: Ragdolls | null = null
+  /** Next ambient dust gust, seconds on the scene clock. */
+  private gustAt = 0
   private crowd: Crowd | null = null
   private fx: Effects | null = null
   private pickups: Pickups | null = null
@@ -1372,6 +1374,10 @@ export class FrontierGame {
     }
     const s = this.net.self
     fx.dustFocus.set(this.own.x, this.own.y, this.own.z)
+    if (nowS > this.gustAt) {
+      this.gustAt = nowS + 18 + Math.random() * 12
+      fx.gust(this.own.x, this.own.z)
+    }
     const shooter0 = this.shooterView
     const list = this.crowdList
     list.length = 0
@@ -1551,6 +1557,10 @@ export class FrontierGame {
     fx.update(dt, nowS)
     flickerLamps(this.lamps, nowS)
     this.ragdolls?.update(dt)
+    const creak = this.town?.doors.update(this.own.x, this.own.z, dt)
+    if (creak) {
+      this.audio?.play('door', { gain: 0.55, pos: { x: creak.x, y: 1.1, z: creak.z } })
+    }
     if (shooter) {
       // your ears are where your head is, facing the way you look
       this.audio?.setListener(

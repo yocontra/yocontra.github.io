@@ -12,7 +12,9 @@ and deterministic.
   never blocks sight. `EV_GLASS_BREAK` (wire v9) plus full-snapshot catch-up; panes are one instanced
   draw, removed by zero scale.
 - **Interior doors.** Doorway gaps between collinear partition spans get jambs, heads, thresholds
-  and open leaves (double leaves for wide openings), in a wall-mounted `k_door_trim` mesh.
+  and open leaves (double leaves for wide openings). On the high tier the leaves swing open as a
+  player approaches and creak; the floor tier keeps them merged and static, one draw.
+- **Weather.** Periodic dust gusts sweep the street, on top of the airborne motes.
 - **Upstairs rooms.** Hotel guest room plus two east rooms; the bank's sealed upstairs room gets a
   door. The building audit now floods every storey with body clearance and fails on sealed rooms or
   walled-off stairs.

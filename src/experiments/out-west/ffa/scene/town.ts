@@ -102,6 +102,7 @@ import {
   sideStrip,
 } from './cover-kinds.ts'
 import { cutaway } from './cutaway.ts'
+import { type DoorSpec, Doors } from './doors.ts'
 import { dressCover } from './dressing.ts'
 import { bakeGroundMask, groundMesh } from './ground.ts'
 import { farDef } from './lod.ts'
@@ -300,11 +301,6 @@ const WINDOW_TRIM_CLEAR = 0.6
 /** Interior doorway gaps: collinear partition spans with a gap a door can fill. */
 const INTERIOR_DOOR_MIN = 0.8
 const INTERIOR_DOOR_MAX = 2.2
-/** An open leaf's thickness and its stand-off from the jamb, metres. */
-const DOOR_LEAF = 0.055
-const DOOR_LEAF_CLEAR = 0.02
-/** The raised panel on a leaf, a shade lighter than the stiles. */
-const DOOR_PANEL = 0x7a_56_38
 
 /** Glass grime map: pixels and the number of faint diagonal streaks. */
 const GLASS_TEX = 64
@@ -340,6 +336,8 @@ export interface Town {
   /** Building rects by roof id, for the roof fade. */
   roofs: Building[]
   sun: Vector3
+  /** Swinging interior doors (cosmetic; the grid is already open). */
+  doors: Doors
   /** Shatter one window pane by its shared window index. */
   breakWindow: (index: number) => void
   /**
@@ -1021,7 +1019,7 @@ function addWindows(bs: Builders, b: Building, side: Side, against: readonly Cov
  * is a doorway by construction (the collision grid already leaves it open); wider gaps stay
  * passages.
  */
-function addInteriorDoors(bs: Builders, b: Building): void {
+function addInteriorDoors(bs: Builders, b: Building, doors: DoorSpec[]): void {
   interface Run {
     alongX: boolean
     /** Wall centre line on the other axis. */
@@ -1053,7 +1051,7 @@ function addInteriorDoors(bs: Builders, b: Building): void {
       if (width < INTERIOR_DOOR_MIN || width > INTERIOR_DOOR_MAX) {
         continue
       }
-      addInteriorDoor(bs, run.alongX, run.at, a0, a1, run.y0, run.y1)
+      addInteriorDoor(bs, doors, run.alongX, run.at, a0, a1, run.y0, run.y1)
     }
   }
 }
@@ -1061,6 +1059,7 @@ function addInteriorDoors(bs: Builders, b: Building): void {
 /** One interior door: jambs and head, a threshold, and one or two open leaves. */
 function addInteriorDoor(
   bs: Builders,
+  doors: DoorSpec[],
   alongX: boolean,
   at: number,
   a0: number,
@@ -1112,22 +1111,43 @@ function addInteriorDoor(
   const leaves = width > INTERIOR_DOOR_MAX / 2 ? 2 : 1
   const leafLength = (leaves === 2 ? width / 2 : width) - 0.08
   const leafHeight = top - y0 - 0.08
-  const open = at + (leafLength / 2 + DOOR_LEAF_CLEAR)
+  const centre = (a0 + a1) / 2
+  if (bs.lean) {
+    // Floor and legacy tiers keep the leaves merged open: one draw, no swinging.
+    const open = at + (leafLength / 2 + 0.02)
+    for (let i = 0; i < leaves; i++) {
+      const hinge = leaves === 2 ? (i === 0 ? a0 : a1) : a0
+      const dir: 1 | -1 = leaves === 2 ? (i === 0 ? 1 : -1) : 1
+      box(
+        hinge + dir * 0.0275,
+        open,
+        y0 + leafHeight / 2 + 0.04,
+        0.055,
+        leafHeight,
+        leafLength,
+        DARK_WOOD,
+      )
+    }
+    return
+  }
+  const cx = alongX ? centre : at
+  const cz = alongX ? at : centre
   for (let i = 0; i < leaves; i++) {
     const hinge = leaves === 2 ? (i === 0 ? a0 : a1) : a0
-    const dir = leaves === 2 ? (i === 0 ? 1 : -1) : 1
-    const a = hinge + dir * (DOOR_LEAF / 2)
-    box(a, open, y0 + leafHeight / 2 + 0.04, DOOR_LEAF, leafHeight, leafLength, DARK_WOOD)
-    // A raised panel on the leaf face, so the slab reads as a door rather than a board.
-    box(
-      a,
-      open,
-      y0 + leafHeight / 2 + 0.04,
-      DOOR_LEAF * 1.2,
-      leafHeight * 0.62,
-      leafLength * 0.62,
-      DOOR_PANEL,
-    )
+    const dir: 1 | -1 = leaves === 2 ? (i === 0 ? 1 : -1) : 1
+    const hingeAlong = hinge + dir * 0.04
+    doors.push({
+      x: alongX ? hingeAlong : at,
+      y: y0 + 0.04,
+      z: alongX ? at : hingeAlong,
+      alongX,
+      dir,
+      length: leafLength,
+      height: leafHeight,
+      swing: alongX ? (-dir * Math.PI) / 2 : (dir * Math.PI) / 2,
+      cx,
+      cz,
+    })
   }
 }
 
@@ -1436,7 +1456,13 @@ function addClosedDoor(bs: Builders, b: Building, front: Side): void {
   bs.kit.push({ def: door, at })
 }
 
-function addBuilding(bs: Builders, b: Building, layout: TownLayout, id: number): void {
+function addBuilding(
+  bs: Builders,
+  b: Building,
+  layout: TownLayout,
+  id: number,
+  doors: DoorSpec[],
+): void {
   const p = PAINT[b.kind] ?? DEFAULT_PAINT
   const g = p.stone ? bs.stone : bs.wall
   const front = frontOf(b, layout)
@@ -1553,7 +1579,7 @@ function addBuilding(bs: Builders, b: Building, layout: TownLayout, id: number):
   )
   bs.roofs.push(rg)
   addDoorFrames(bs, b, PORCHED.has(b.kind) || b.kind === 'depot' ? front : null)
-  addInteriorDoors(bs, b)
+  addInteriorDoors(bs, b, doors)
   if (b.doors.length === 0) {
     addClosedDoor(bs, b, front)
   }
@@ -2578,8 +2604,9 @@ export function buildTown(
   }
   const bs = newBuilders(room, lean)
   const roofs: Building[] = []
+  const doorSpecs: DoorSpec[] = []
   for (const b of layout.buildings) {
-    addBuilding(bs, b, layout, roofs.length)
+    addBuilding(bs, b, layout, roofs.length, doorSpecs)
     roofs.push(b)
   }
   addRoofWalks(bs)
@@ -2780,6 +2807,10 @@ export function buildTown(
   // every builder's vertex arrays alive with it
   const update = culler({ culled, farRects, farMeshes, nearM })
   ground.onBeforeRender = onCamera(update)
+  const doorSystem = new Doors(doorSpecs)
+  if (doorSpecs.length > 0) {
+    root.add(doorSystem.root)
+  }
   const disposeTown = disposer(root, Object.values(mats), mask)
   const glassMap = mats.glass.map
   const shaftMap = mats.shaft.map
@@ -2787,10 +2818,12 @@ export function buildTown(
     root,
     roofs,
     sun,
+    doors: doorSystem,
     breakWindow: (id) => glass?.breakWindow(id),
     update,
     dispose: () => {
       disposeTown()
+      doorSystem.dispose()
       glassMap?.dispose()
       shaftMap?.dispose()
     },

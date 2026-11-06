@@ -506,6 +506,25 @@ export class Effects {
     }
   }
 
+  /** A dust gust across the street: weather without a particle system of its own. */
+  gust(cx: number, cz: number): void {
+    const angle = Math.random() * Math.PI * 2
+    const dx = Math.cos(angle)
+    const dz = Math.sin(angle)
+    for (let i = 0; i < 18; i++) {
+      const p = this.puffs.spawn()
+      p.life = 1.1 + Math.random() * 0.9
+      p.x = cx + (Math.random() - 0.5) * 14 - dx * 8
+      p.y = 0.12 + Math.random() * 0.7
+      p.z = cz + (Math.random() - 0.5) * 14 - dz * 8
+      p.vx = dx * (4 + Math.random() * 3)
+      p.vy = 0.1 + Math.random() * 0.25
+      p.vz = dz * (4 + Math.random() * 3)
+      p.size = 0.3 + Math.random() * 0.3
+      p.color.setRGB(0.55, 0.45, 0.33)
+    }
+  }
+
   /** A burst of gold (pickups, deposits, strongbox). */
   sparkle(x: number, z: number, n = 10): void {
     for (let i = 0; i < n; i++) {
