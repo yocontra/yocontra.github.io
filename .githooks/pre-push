@@ -1,0 +1,5 @@
+#!/bin/sh
+# Run the same gate CI runs, before the push leaves the machine.
+# Enable once per clone: git config core.hooksPath .githooks
+set -eu
+bun run check
