@@ -38,6 +38,7 @@ import {
 import type { Env } from './env.ts'
 import { rttStats } from './judge.ts'
 import { type NameResult, validateName } from './names.ts'
+import { PING_INTERVAL_MS, RTT_SAMPLES } from './net/constants.ts'
 import { creditJobFor, RankedCredits } from './ranked/credit.ts'
 import { recordRun } from './ranked/finish.ts'
 import {
@@ -53,8 +54,6 @@ import { BOSS_LEVEL, LAST_LEVEL, tuningFor } from './tuning.ts'
 /** Kept for older imports; the session sees the whole Worker environment. */
 export type SessionEnv = Env
 
-const PING_INTERVAL_MS = 400
-const RTT_SAMPLES = 12
 const IDLE_TIMEOUT_MS = 15 * 60 * 1000
 /** Close code for a socket replaced by a resume from elsewhere. */
 const REPLACED = 4000

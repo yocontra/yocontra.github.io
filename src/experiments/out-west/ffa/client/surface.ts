@@ -6,10 +6,10 @@
  * headstones, the forge), which ricochet; anything else is dirt.
  */
 import { COVER_VISUALS, decks, frontOf, PORCH_DEPTH, sideStrip } from '../scene/cover-kinds.ts'
-import { type Rect, TOWN, type TownLayout } from '../sim/layout.ts'
+import { type BuildingKind, type Rect, TOWN, type TownLayout } from '../sim/layout.ts'
 
 /** Masonry and iron: bullets ricochet off them. */
-const STONE = new Set(['bank', 'jail', 'water_tower', 'tower'])
+const STONE: ReadonlySet<BuildingKind> = new Set(['bank', 'jail', 'water_tower', 'tower'])
 const WALL = 0.5
 /** How close to a wall or cover a stopped bullet counts as hitting it, m. */
 const NEAR = 0.8

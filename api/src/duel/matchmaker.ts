@@ -33,6 +33,7 @@ import { dyesOf } from '../economy/sinks.ts'
 import type { Env } from '../env.ts'
 import { rttStats } from '../judge.ts'
 import { isShadowed, standing } from '../moderation/flags.ts'
+import { DODGE_WINDOW_MS } from '../net/constants.ts'
 import { getProfileDetail } from './external.ts'
 import { eligibleGhosts, type GhostCandidate } from './ghost.ts'
 import { linkOkForPvp } from './judge-pvp.ts'
@@ -56,7 +57,6 @@ const GHOST_INDEX_TTL_MS = 5 * 60 * 1000
 const IN_ROOM_TTL_MS = 6 * 60 * 1000
 const PRIORITY_TTL_MS = 60 * 1000
 const DODGE_LIMIT = 3
-const DODGE_WINDOW_MS = 10 * 60 * 1000
 const DODGE_COOLDOWN_MS = 5 * 60 * 1000
 /** Ping samples needed before a link is judged. */
 const MIN_PING_SAMPLES = 3

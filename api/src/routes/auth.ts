@@ -7,6 +7,7 @@ import {
   TICKET_TTL_MS,
   type TicketPurpose,
 } from '../../../src/experiments/out-west/contract/auth.ts'
+import { isRecord } from '../../../src/experiments/out-west/contract/validate.ts'
 import { createAccount, reserveName } from '../auth/accounts.ts'
 import { clearRefreshCookie, readRefreshCookie } from '../auth/cookie.ts'
 import { randomToken, sha256Hex } from '../auth/crypto.ts'
@@ -16,7 +17,6 @@ import { LIMITS } from '../auth/rate.ts'
 import { endFamily, endSession, rotateSession, startSession } from '../auth/refresh.ts'
 import {
   isPlatform,
-  isRecord,
   limited,
   originRejected,
   requireAuth,
@@ -33,13 +33,21 @@ import {
   verifyRegistration,
 } from '../auth/webauthn.ts'
 import type { Env } from '../env.ts'
-import { clientHash, error, json, type RouteHandler, readJson, verifyTurnstile } from '../http.ts'
+import {
+  BODY_LARGE,
+  clientHash,
+  error,
+  json,
+  type RouteHandler,
+  readJson,
+  verifyTurnstile,
+} from '../http.ts'
 import { validateName } from '../names.ts'
 
 type Handler = (request: Request, env: Env, url: URL) => Promise<Response>
 
 async function body(request: Request): Promise<Record<string, unknown>> {
-  const v = await readJson(request, 32 * 1024)
+  const v = await readJson(request, BODY_LARGE)
   return isRecord(v) ? v : {}
 }
 

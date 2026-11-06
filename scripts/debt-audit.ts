@@ -9,23 +9,24 @@
  * Fails when a count exceeds the committed baseline. Lower the baseline in the same commit as a
  * cleanup; raise it only with a reason.
  */
+import { readFile } from 'node:fs/promises'
 import { Glob } from 'bun'
 
 const BASELINE = {
-  crossBoundaryConstants: 3,
+  crossBoundaryConstants: 0,
   nameClassification: 17,
   doubleAssertions: 14,
 } as const
 
-async function texts(pattern: string): Promise<{ file: string; text: string }[]> {
-  const out: { file: string; text: string }[] = []
-  for (const file of new Glob(pattern).scanSync('.')) {
-    if (file.includes('.test.') || file.includes('/testing/')) {
-      continue
-    }
-    out.push({ file, text: await Bun.file(file).text() })
-  }
-  return out
+const CONST =
+  /^\s*(?:export\s+)?const\s+(?<name>[A-Z][A-Z0-9_]{1,40})\s*=\s*(?<value>-?\d+(?:\.\d+)?)\s*$/gmu
+const NAME_EQ = /\.name\s*(?:===|!==)/u
+
+function texts(pattern: string): Promise<{ file: string; text: string }[]> {
+  const files = [...new Glob(pattern).scanSync('.')].filter(
+    (file) => !(file.includes('.test.') || file.includes('/testing/')),
+  )
+  return Promise.all(files.map(async (file) => ({ file, text: await readFile(file, 'utf8') })))
 }
 
 // --- 1. Constants declared on both sides of the client/server boundary -------------------------
@@ -33,12 +34,10 @@ async function texts(pattern: string): Promise<{ file: string; text: string }[]>
 const declarations = new Map<string, { value: string; source: 'src' | 'api' }[]>()
 for (const { file, text } of await texts('{src,api}/**/*.ts')) {
   const side = file.startsWith('src/') ? 'src' : 'api'
-  for (const match of text.matchAll(
-    /^\s*(?:export\s+)?const\s+([A-Z][A-Z0-9_]{1,40})\s*=\s*(-?\d+(?:\.\d+)?)\s*$/gmu,
-  )) {
-    const name = match[1]
-    const value = match[2]
-    if (!name || !value) {
+  for (const match of text.matchAll(CONST)) {
+    const name = match.groups?.name
+    const value = match.groups?.value
+    if (!(name && value)) {
       continue
     }
     const list = declarations.get(name) ?? []
@@ -50,10 +49,9 @@ for (const { file, text } of await texts('{src,api}/**/*.ts')) {
 const crossBoundary: string[] = []
 for (const [name, list] of declarations) {
   const values = new Set(list.map((item) => item.value))
-  if (values.size !== 1) {
-    continue
-  }
-  if (list.some((item) => item.source === 'src') && list.some((item) => item.source === 'api')) {
+  const onBothSides =
+    list.some((item) => item.source === 'src') && list.some((item) => item.source === 'api')
+  if (values.size === 1 && onBothSides) {
     crossBoundary.push(`${name} = ${[...values][0]}`)
   }
 }
@@ -62,22 +60,22 @@ for (const [name, list] of declarations) {
 
 const nameHits: string[] = []
 for (const { file, text } of await texts('src/experiments/out-west/{scene,ffa,duel}/**/*.ts')) {
-  text.split('\n').forEach((line, index) => {
-    if (/\.name\s*(?:===|!==)/u.test(line)) {
+  for (const [index, line] of text.split('\n').entries()) {
+    if (NAME_EQ.test(line)) {
       nameHits.push(`${file}:${index + 1}`)
     }
-  })
+  }
 }
 
 // --- 3. Double assertions in shipping source ---------------------------------------------------
 
 const doubleCasts: string[] = []
 for (const { file, text } of await texts('src/**/*.ts')) {
-  text.split('\n').forEach((line, index) => {
+  for (const [index, line] of text.split('\n').entries()) {
     if (line.includes('as unknown as')) {
       doubleCasts.push(`${file}:${index + 1}`)
     }
-  })
+  }
 }
 
 const checks = [

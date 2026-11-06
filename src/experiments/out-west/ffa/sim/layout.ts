@@ -28,6 +28,71 @@ export interface Rect {
   d: number
 }
 export type Side = 'n' | 's' | 'e' | 'w'
+
+/** Every building kind in `town.layout.json`. Closed: a new kind is a deliberate edit here. */
+export const BUILDING_KINDS = [
+  'assay',
+  'bank',
+  'barn',
+  'church',
+  'depot',
+  'general_store',
+  'hotel',
+  'jail',
+  'outhouse',
+  'saloon',
+  'shed',
+  'smithy',
+  'stable',
+  'stage_line',
+  'tower',
+  'undertaker',
+  'water_tower',
+] as const
+export type BuildingKind = (typeof BUILDING_KINDS)[number]
+
+/** Every cover kind in `town.layout.json` (fences, furniture, wagons, wrecks). */
+export const COVER_KINDS = [
+  'anvil',
+  'barrel_rack',
+  'barrels',
+  'bars',
+  'bed',
+  'bench',
+  'boxcar',
+  'bridge_rail',
+  'buffer',
+  'coffins',
+  'counter',
+  'covered_wagon',
+  'crate_stack',
+  'crates',
+  'fence',
+  'forge',
+  'freight_wagon',
+  'hay',
+  'headstone',
+  'hitch_rail',
+  'lumber',
+  'piano',
+  'pole',
+  'post',
+  'safe',
+  'shelves',
+  'stagecoach',
+  'stove',
+  'table',
+  'trough',
+  'wagon',
+  'well',
+  'woodpile',
+  'workbench',
+  'wreck',
+] as const
+export type CoverKind = (typeof COVER_KINDS)[number]
+
+export const ZONE_KINDS = ['bank', 'stage'] as const
+export type ZoneKind = (typeof ZONE_KINDS)[number]
 export interface Door {
   side: Side
   /** Offset of the gap from the wall's west (n/s) or north (e/w) end, in metres. */
@@ -64,7 +129,7 @@ export interface RoofSpec {
 }
 export interface Building extends Rect {
   id: string
-  kind: string
+  kind: BuildingKind
   height: number
   floors: number
   /** Hollow buildings are walkable inside: 0.5 m perimeter walls with door gaps. */
@@ -83,7 +148,7 @@ export interface Building extends Rect {
   windows?: WindowOpening[]
 }
 export interface Cover extends Rect {
-  kind: string
+  kind: CoverKind
   /** Low cover blocks movement and bullets but not sight. Tall cover (boxcars) blocks all three. */
   low: boolean
   /**
@@ -100,7 +165,7 @@ export interface Cover extends Rect {
 }
 export interface Zone {
   id: string
-  kind: 'bank' | 'stage'
+  kind: ZoneKind
   x: number
   z: number
   r: number

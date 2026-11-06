@@ -32,7 +32,7 @@ import { isConstraintError, isOverdraft } from '../economy/ledger.ts'
 import { createProfile, getProfileDetail, ownedItems } from '../economy/profile.ts'
 import { dyesOf, nameChangeStatements, nameRefusal } from '../economy/sinks.ts'
 import type { Env } from '../env.ts'
-import { error, json, type RouteHandler, readJson } from '../http.ts'
+import { BODY_LOADOUT, BODY_TINY, error, json, type RouteHandler, readJson } from '../http.ts'
 import { validateName } from '../names.ts'
 
 /** With no acknowledgement yet, the notice covers this far back. */
@@ -109,7 +109,7 @@ export async function meResponse(env: Env, player: Player): Promise<MeResponse |
 }
 
 async function awayAck(request: Request, env: Env, player: Player): Promise<Response> {
-  const body = (await readJson(request, 1024)) as { asOf?: unknown } | undefined
+  const body = (await readJson(request, BODY_TINY)) as { asOf?: unknown } | undefined
   const asked = body?.asOf
   if (typeof asked !== 'number' || !Number.isFinite(asked)) {
     return error(request, env, 400, 'asOf is required.')
@@ -139,7 +139,7 @@ interface NameRow {
 }
 
 async function changeName(request: Request, env: Env, player: Player): Promise<Response> {
-  const body = (await readJson(request, 1024)) as { name?: unknown } | undefined
+  const body = (await readJson(request, BODY_TINY)) as { name?: unknown } | undefined
   const wanted = validateName(body?.name)
   if (!wanted.ok) {
     return error(request, env, 400, wanted.error)
@@ -236,7 +236,7 @@ async function ledger(env: Env, accountId: string, url: URL): Promise<LedgerResp
 }
 
 async function putLoadout(request: Request, env: Env, player: Player): Promise<Response> {
-  const body = (await readJson(request, 4 * 1024)) as { loadout?: unknown } | undefined
+  const body = (await readJson(request, BODY_LOADOUT)) as { loadout?: unknown } | undefined
   const owned = new Set<string>(await ownedItems(env, player.accountId))
   const problem = loadoutError(body?.loadout, owned)
   if (problem) {

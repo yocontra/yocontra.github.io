@@ -3,6 +3,7 @@
  * `CustomEvent('ow-bridge')` in. Messages are `{ v: 1, id, type, payload }`. Everything here is a
  * no-op (or rejects) on the web. Most code should use `bridge.ts` instead. Owned by stream A.
  */
+import { isRecord } from '../contract/validate.ts'
 
 const BRIDGE_VERSION = 1
 export const APP_UA = /\bOutWestApp\/\d+/u
@@ -20,9 +21,6 @@ interface BridgeDetail {
   ok?: boolean
   payload?: unknown
 }
-
-export const isRecord = (v: unknown): v is Record<string, unknown> =>
-  typeof v === 'object' && v !== null
 
 export function nativeChannel(): NativeChannel | null {
   const rn: unknown = Reflect.get(globalThis, 'ReactNativeWebView')

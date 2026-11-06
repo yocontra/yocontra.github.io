@@ -1,3 +1,4 @@
+import type { DuelOutcome } from '../data/economy.ts'
 import { reportDuel } from '../meta/events.ts'
 import type { Director } from './director.ts'
 
@@ -5,11 +6,7 @@ import type { Director } from './director.ts'
  * One decided single-player attempt, to the meta-game: a win (for the boss, only the phase-two
  * kill), a loss or a coward. Never for Bounty Hunt (the server-driven duel installs `hooks`).
  */
-export function report(
-  d: Director,
-  outcome: 'win' | 'loss' | 'coward',
-  reactionMs: number | null,
-): void {
+export function report(d: Director, outcome: DuelOutcome, reactionMs: number | null): void {
   if (d.hooks) {
     return
   }

@@ -10,17 +10,9 @@
  *
  * Game code imports `platform` and never checks the shell itself. Owned by stream A.
  */
+import { isRecord } from '../contract/validate.ts'
 import { onPause, onResume } from './lifecycle.ts'
-import {
-  APP_UA,
-  IOS_UA,
-  isRecord,
-  nativeChannel,
-  onNative,
-  post,
-  request,
-  userAgent,
-} from './native.ts'
+import { APP_UA, IOS_UA, nativeChannel, onNative, post, request, userAgent } from './native.ts'
 
 const MAC_PLATFORM = /\bMac/u
 

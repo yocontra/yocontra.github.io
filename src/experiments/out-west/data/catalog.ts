@@ -52,7 +52,7 @@ export interface ItemSound {
   readonly trigger: SoundTrigger
 }
 
-export interface CatalogItem {
+interface CatalogItemShape {
   readonly id: string
   readonly name: string
   readonly slot: Slot
@@ -69,7 +69,7 @@ export interface CatalogItem {
   readonly silhouette?: number
 }
 
-type Item<I extends string> = CatalogItem & { readonly id: I }
+type Item<I extends string> = CatalogItemShape & { readonly id: I }
 
 const starter = <const I extends string>(
   id: I,
@@ -92,7 +92,7 @@ type StoreBand = readonly [
   Exclude<Rarity, 'starter' | 'reward'>,
   number,
   number,
-  Pick<CatalogItem, 'sound' | 'silhouette'>?,
+  Pick<CatalogItemShape, 'sound' | 'silhouette'>?,
 ]
 
 const store = <const I extends string>(
@@ -237,9 +237,10 @@ export const CATALOG = [
   store('extra.red-bandana', 'Red Bandana', 'extra', ['common', 400, 2]),
   store('extra.tin-star', 'Tin Star', 'extra', ['uncommon', 2000, 7]),
   reward('extra.black-bandana', 'Black Bandana', 'extra', 'Win the Daily Outlaw on 7 days'),
-] as const satisfies readonly CatalogItem[]
+] as const satisfies readonly CatalogItemShape[]
 
-export type ItemId = (typeof CATALOG)[number]['id']
+export type CatalogItem = (typeof CATALOG)[number]
+export type ItemId = CatalogItem['id']
 
 const BY_ID: ReadonlyMap<string, CatalogItem> = new Map(CATALOG.map((item) => [item.id, item]))
 

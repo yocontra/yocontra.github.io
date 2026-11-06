@@ -22,13 +22,13 @@ import {
 } from '../../../src/experiments/out-west/data/progression.ts'
 import type { Env } from '../env.ts'
 import { looksAutomated } from '../judge.ts'
+import { DODGE_WINDOW_MS } from '../net/constants.ts'
 import { grantItemStatement, type LedgerEntry, ledgerStatements, type Profile } from './external.ts'
 import { drawRating, ghostRecordStatements } from './ghost.ts'
 import type { Pair, Seat } from './judge-pvp.ts'
 import type { WaitStats } from './standoff.ts'
 import { type DuelStats, duelStatsStatement, utcDay } from './stats.ts'
 
-const DODGE_WINDOW_MS = 10 * 60 * 1000
 const DAY_MS = 24 * 60 * 60 * 1000
 
 /** Public cowardice tally that earns the Yellow Hat. */

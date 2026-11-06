@@ -34,12 +34,12 @@ import {
 } from 'three'
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
 import { ATMOS } from '../../scene/atmos.ts'
-import type { Building, TownLayout } from '../sim/layout.ts'
+import type { Building, CoverKind, TownLayout } from '../sim/layout.ts'
 
 /** Mask texels per metre. */
 const RES = 3
 /** Cover pieces that get a lamp hung over them, and stoves that glow. */
-const LAMP_OVER = new Set([
+const LAMP_OVER: ReadonlySet<CoverKind> = new Set([
   'counter',
   'table',
   'workbench',
@@ -49,7 +49,7 @@ const LAMP_OVER = new Set([
   'bed',
   'forge',
 ])
-const GLOW = new Set(['stove', 'forge'])
+const GLOW: ReadonlySet<CoverKind> = new Set(['stove', 'forge'])
 /** Base emissive strength of the lamp chimneys, and the flicker envelope around it. */
 const LAMP_INTENSITY = 3.2
 const FLICKER_FAST = 0.011

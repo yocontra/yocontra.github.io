@@ -74,7 +74,7 @@ const SLOT_NOTE: Partial<Record<Slot, string>> = {
 }
 
 /** Thumbnails as image URLs, kept for the page: a canvas can only hang in one place. */
-const ART = new Map<string, string>()
+const ART = new Map<ItemId, string>()
 
 /** Hang a rendered thumbnail in a card's picture frame. */
 function paint(art: HTMLElement, url: string): void {
@@ -107,7 +107,7 @@ export class Outfitter {
   private readonly tabs = new Map<Tab, HTMLButtonElement>()
   private readonly deps: StoreDeps
   private items: readonly CatalogItem[] = CATALOG
-  private owned = new Set<string>(STARTER_ITEMS)
+  private owned = new Set<ItemId>(STARTER_ITEMS)
   private tab = recallOne(TAB_KEY, ['sets', ...SLOT_TABS.map((t) => t.slot)], 'hat' as Tab)
   /** What's being tried on (a piece or a set), or null when you're in what you have equipped. */
   private wearing = null as Loadout | null
@@ -239,7 +239,7 @@ export class Outfitter {
     }
     art.append(icon(SLOT_ICON[item.slot]))
     if (this.deps.thumb) {
-      this.waiting.push({ id: item.id as ItemId, art })
+      this.waiting.push({ id: item.id, art })
     }
   }
 
@@ -386,7 +386,7 @@ export class Outfitter {
     this.tryDye = null
     this.tryOn({ ...this.equipped, [item.slot]: item.id })
     if (item.slot === 'drawSound') {
-      this.deps.previewSound?.(item.id as ItemId)
+      this.deps.previewSound?.(item.id)
     }
     this.show(item.slot)
   }
@@ -442,7 +442,7 @@ export class Outfitter {
       this.buyButton(item, me)
     }
     if (isDyeable(item)) {
-      const current: DyeId = (mine && this.dyes[item.id as ItemId]) || 'natural'
+      const current: DyeId = (mine && this.dyes[item.id]) || 'natural'
       dyePanel(this.detail, {
         item,
         current,
@@ -480,7 +480,7 @@ export class Outfitter {
       return
     }
     this.busy = true
-    const r = await dyeItem(item.id as ItemId, dye)
+    const r = await dyeItem(item.id, dye)
     this.busy = false
     if (!r.ok) {
       this.flash(r.error)
@@ -548,7 +548,7 @@ export class Outfitter {
       return
     }
     this.busy = true
-    const r = await buyItem(item.id as ItemId)
+    const r = await buyItem(item.id)
     if (!r.ok) {
       this.busy = false
       this.flash(r.error)
@@ -558,7 +558,7 @@ export class Outfitter {
     this.deps.changed({ purse: r.value.purse, owned: r.value.owned })
     if (extra) {
       // the dye is the extra on the same purchase; the server owns the final price
-      const d = await dyeItem(item.id as ItemId, extra.dye)
+      const d = await dyeItem(item.id, extra.dye)
       if (d.ok) {
         this.tryDye = null
         this.deps.changed({ purse: d.value.purse, dyes: d.value.dyes })

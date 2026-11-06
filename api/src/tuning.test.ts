@@ -2,11 +2,11 @@ import { describe, expect, it } from 'bun:test'
 import { FEEL } from '../../src/experiments/out-west/data/feel.ts'
 import {
   BOSS_PHASE2,
-  TOUCH_ALLOWANCE_MS as CLIENT_TOUCH_MS,
   OUTLAWS,
   RIFLEMAN,
+  TOUCH_ALLOWANCE_MS,
 } from '../../src/experiments/out-west/data/outlaws.ts'
-import { BOSS_LEVEL, LAST_LEVEL, TOUCH_ALLOWANCE_MS, tuningFor, withTouch } from './tuning.ts'
+import { BOSS_LEVEL, LAST_LEVEL, tuningFor, withTouch } from './tuning.ts'
 
 describe('ranked tuning matches the client roster', () => {
   it('has one row per outlaw', () => {
@@ -38,7 +38,6 @@ describe('ranked tuning matches the client roster', () => {
     expect(t?.jitterMs).toBe(BOSS_PHASE2.jitter)
   })
   it('the touch allowance agrees and slows every target by it', () => {
-    expect(TOUCH_ALLOWANCE_MS).toBe(CLIENT_TOUCH_MS)
     for (let level = 0; level <= LAST_LEVEL; level++) {
       const keys = tuningFor(level)
       if (!keys) {

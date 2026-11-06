@@ -20,12 +20,11 @@ import { outlawOpponent } from '../duel/opponents.ts'
 import { CALL_LEAD_MS, pvpWaitPlan, Standoff, type Verdict } from '../duel/standoff.ts'
 import type { Env } from '../env.ts'
 import { rttStats } from '../judge.ts'
+import { PING_INTERVAL_MS, RTT_SAMPLES } from '../net/constants.ts'
 import { withTouch } from '../tuning.ts'
 import { dailyKey, settleDaily } from './settle.ts'
 import { dailyTuning } from './tuning.ts'
 
-const PING_INTERVAL_MS = 400
-const RTT_SAMPLES = 12
 /** The whole attempt (walk, wait, duel) must finish inside this. */
 const LIFETIME_MS = 90_000
 

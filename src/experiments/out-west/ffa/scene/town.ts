@@ -1534,10 +1534,9 @@ function addBuilding(
   ] as const) {
     bs.wood.box(x, h - 0.15, z, w, 0.3, d, p.trim, { skip: ['top'] })
   }
+  // the clock tower and the water tower returned above: every building here takes windows
   for (const side of ['n', 's', 'e', 'w'] as const) {
-    if (b.kind !== 'tower') {
-      addWindows(bs, b, side, layout.cover)
-    }
+    addWindows(bs, b, side, layout.cover)
   }
   // Roof: pitched, shingled or tin, with ridge and edge trim (see roofs.ts).
   const skin = roofSkin(b.kind, id)

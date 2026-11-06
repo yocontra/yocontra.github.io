@@ -8,6 +8,7 @@ import {
   CLIENT_PLATFORMS,
   type ClientPlatform,
 } from '../../../src/experiments/out-west/contract/auth.ts'
+import { isRecord } from '../../../src/experiments/out-west/contract/validate.ts'
 import { b64urlToBytes, bytesToB64url, fromUtf8, hmacSign, hmacVerify, utf8 } from './crypto.ts'
 
 export interface AccessClaims {
@@ -29,7 +30,6 @@ const HEADER = bytesToB64url(utf8(JSON.stringify({ alg: 'HS256', typ: 'JWT' })))
 const SKEW_S = 60
 const MIN_SECRET_LENGTH = 16
 
-const isRecord = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null
 const isPlatform = (v: unknown): v is ClientPlatform =>
   typeof v === 'string' && (CLIENT_PLATFORMS as readonly string[]).includes(v)
 

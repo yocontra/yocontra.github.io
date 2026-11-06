@@ -4,7 +4,7 @@
  * on this device) and the "Can afford" badge. Presentation only: prices, gates and ownership are
  * the server's.
  */
-import type { CatalogItem, ItemId, Loadout } from '../data/catalog.ts'
+import { type CatalogItem, type ItemId, isItemId, type Loadout } from '../data/catalog.ts'
 
 export interface KitSet {
   id: string
@@ -57,8 +57,7 @@ export const SETS: readonly KitSet[] = [
   },
 ]
 
-export const setOf = (id: string): KitSet | undefined =>
-  SETS.find((s) => s.items.includes(id as ItemId))
+export const setOf = (id: ItemId): KitSet | undefined => SETS.find((s) => s.items.includes(id))
 
 /** Your loadout with every piece of the set swapped in. */
 export function wearSet(base: Loadout, set: KitSet, items: readonly CatalogItem[]): Loadout {
@@ -76,17 +75,17 @@ export function wearSet(base: Loadout, set: KitSet, items: readonly CatalogItem[
 
 const KEY = 'ow.store.seen.v1:'
 
-function readSeen(account: string): Set<string> | null {
+function readSeen(account: string): Set<ItemId> | null {
   try {
     const raw = localStorage.getItem(KEY + account)
     const v: unknown = raw ? JSON.parse(raw) : null
-    return Array.isArray(v) ? new Set(v.filter((x): x is string => typeof x === 'string')) : null
+    return Array.isArray(v) ? new Set(v.filter(isItemId)) : null
   } catch {
     return null
   }
 }
 
-function writeSeen(account: string, seen: Set<string>): void {
+function writeSeen(account: string, seen: Set<ItemId>): void {
   try {
     localStorage.setItem(KEY + account, JSON.stringify([...seen]))
   } catch {
@@ -95,7 +94,7 @@ function writeSeen(account: string, seen: Set<string>): void {
 }
 
 /** Kit you could buy at your level (not owned, not a reward, priced). */
-export const inReach = (item: CatalogItem, level: number, owned: ReadonlySet<string>): boolean =>
+export const inReach = (item: CatalogItem, level: number, owned: ReadonlySet<ItemId>): boolean =>
   item.source === 'store' && item.price > 0 && level >= item.level && !owned.has(item.id)
 
 /**
@@ -105,14 +104,14 @@ export const inReach = (item: CatalogItem, level: number, owned: ReadonlySet<str
  */
 export class Shelf {
   private readonly account: string
-  private readonly seen: Set<string>
-  private readonly fresh: Set<string>
+  private readonly seen: Set<ItemId>
+  private readonly fresh: Set<ItemId>
 
   constructor(
     account: string,
     items: readonly CatalogItem[],
     level: number,
-    owned: ReadonlySet<string>,
+    owned: ReadonlySet<ItemId>,
   ) {
     this.account = account
     const seen = readSeen(account)
@@ -124,7 +123,7 @@ export class Shelf {
     }
   }
 
-  isNew(id: string): boolean {
+  isNew(id: ItemId): boolean {
     return this.fresh.has(id)
   }
 

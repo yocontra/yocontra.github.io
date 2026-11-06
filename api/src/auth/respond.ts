@@ -6,6 +6,7 @@ import {
   type ClientPlatform,
   REAUTH_WINDOW_MS,
 } from '../../../src/experiments/out-west/contract/auth.ts'
+import { isRecord } from '../../../src/experiments/out-west/contract/validate.ts'
 import type { Env } from '../env.ts'
 import { allowedOrigin, clientHash, error, json } from '../http.ts'
 import { setRefreshCookie } from './cookie.ts'
@@ -15,9 +16,6 @@ import { authenticateClaims } from './session.ts'
 import type { AccessClaims } from './token.ts'
 import { signAccessToken } from './token.ts'
 import { consumeChallenge, verifyAssertion } from './webauthn.ts'
-
-export const isRecord = (v: unknown): v is Record<string, unknown> =>
-  typeof v === 'object' && v !== null
 
 export const isPlatform = (v: unknown): v is ClientPlatform =>
   typeof v === 'string' && (CLIENT_PLATFORMS as readonly string[]).includes(v)

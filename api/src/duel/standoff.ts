@@ -11,7 +11,9 @@
  *
  * The caller (DuelSession or DuelRoom) owns the transport and everything before and after.
  */
-import { judgedReaction, MIN_REACTION_MS, tolerance } from '../judge.ts'
+import type { DuelOutcome } from '../../../src/experiments/out-west/data/economy.ts'
+import { MIN_REACTION_MS } from '../../../src/experiments/out-west/data/progression.ts'
+import { judgedReaction, tolerance } from '../judge.ts'
 import type { DuelTuning } from '../tuning.ts'
 import { judgePvp, type Pair, type PvpLink, type PvpVerdict, type Seat } from './judge-pvp.ts'
 import { type AiOpponent, between, type Opponent, type Rng } from './opponents.ts'
@@ -108,7 +110,7 @@ export type JudgeMode = 'ranked' | 'pvp'
 
 export interface RankedVerdict {
   kind: 'ranked'
-  outcome: 'win' | 'loss' | 'coward'
+  outcome: DuelOutcome
   reactionMs: number | null
   /** The earliest landing among the outlaws still standing at the end (or all, if none fired). */
   enemyMs: number | null

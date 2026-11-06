@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'bun:test'
+import { JUDGE_TIMEOUT_MS } from '../../../src/experiments/out-west/contract/duel.ts'
 import {
-  JUDGE_TIMEOUT_MS,
   judgePvp,
   linkOkForPvp,
   type PvpJudgeInput,

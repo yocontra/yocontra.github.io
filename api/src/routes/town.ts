@@ -21,6 +21,7 @@ import { getProfileDetail } from '../economy/profile.ts'
 import type { Env } from '../env.ts'
 import {
   allowedOrigin,
+  BODY_STANDARD,
   error,
   json,
   type RouteHandler,
@@ -110,7 +111,7 @@ async function join(request: Request, env: Env): Promise<Response> {
     )
   }
   // Turnstile tokens run to ~2 KB.
-  const body = ((await readJson(request, 8 * 1024)) ?? {}) as TownJoinRequest
+  const body = ((await readJson(request, BODY_STANDARD)) ?? {}) as TownJoinRequest
   // A page loaded before a wire change would misread every snapshot: send it to refresh instead.
   if (!(typeof body.wire === 'number' && body.wire >= TOWN_WIRE_VERSION)) {
     return json(

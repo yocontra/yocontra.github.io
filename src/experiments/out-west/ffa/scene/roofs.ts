@@ -17,7 +17,7 @@
 import { BufferAttribute, type BufferGeometry, type MeshStandardMaterial, Vector3 } from 'three'
 import type { GeoBuilder } from '../../scene/geo.ts'
 import { GeoBuilder as Geo } from '../../scene/geo.ts'
-import type { Building, Side } from '../sim/layout.ts'
+import type { Building, BuildingKind, Side } from '../sim/layout.ts'
 
 export const RK_PLAIN = 0
 export const RK_SHINGLE = 1
@@ -300,7 +300,7 @@ function mergeTwo(a: BufferGeometry, b: BufferGeometry): BufferGeometry {
 }
 
 /** Which skin a building wears. */
-export function roofSkin(kind: string, id: number): RoofSkin {
+export function roofSkin(kind: BuildingKind, id: number): RoofSkin {
   switch (kind) {
     case 'hotel':
     case 'assay':
@@ -320,7 +320,7 @@ export function roofSkin(kind: string, id: number): RoofSkin {
 /** Tin colours: galvanised, red-painted, weathered green. */
 const TIN = [0xb6_b4_ac, 0xb8_6c_50, 0x92_a2_8e] as const
 
-export function tinColor(kind: string, id: number): number {
+export function tinColor(kind: BuildingKind, id: number): number {
   if (kind === 'bank' || kind === 'jail') {
     return TIN[0]
   }

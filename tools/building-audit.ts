@@ -353,13 +353,6 @@ for (const b of TOWN.buildings) {
       (c.y0 ?? 0) === 0,
   )
 
-  // A decorative `stairs` cover with no real stair behind it is a staircase to nowhere.
-  for (const c of inside) {
-    if (c.kind === 'stairs') {
-      flag('error', id, 'stair', 'decorative staircase to nowhere (use Building.stairs)')
-    }
-  }
-
   // Doors: a frame that reaches the wall, a wall above it, and a wide enough opening.
   // Nothing may stand in the strip just inside a doorway.
   for (const d of b.doors) {

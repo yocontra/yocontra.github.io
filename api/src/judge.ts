@@ -8,8 +8,6 @@
  * is clamped to the server's view.
  */
 
-/** Faster than this is anticipation or automation, not a reaction to a bell. */
-export const MIN_REACTION_MS = 100
 /** Base slack for clock and scheduling noise between client and server. */
 export const BASE_TOLERANCE_MS = 30
 export const MAX_TOLERANCE_MS = 120

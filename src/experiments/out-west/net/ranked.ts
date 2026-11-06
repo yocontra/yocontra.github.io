@@ -1,10 +1,12 @@
 import {
   RANKED_RESUME_WINDOW_MS,
+  type RankedOutcome,
   type RankedResumed,
   type RankedSessionResponse,
   rankedClosedCopy,
   resumeUrl,
 } from '../contract/ranked.ts'
+import { isRecord } from '../contract/validate.ts'
 import { openReconnecting, type ReconnectingSocket } from '../platform/reconnect.ts'
 import { getAccessToken } from './auth.ts'
 import { LEADERBOARD_URL, type Result } from './leaderboard.ts'
@@ -28,7 +30,7 @@ export type ServerMessage =
   | {
       type: 'result'
       duel: number
-      outcome: 'win' | 'loss' | 'coward'
+      outcome: RankedOutcome
       reactionMs: number | null
       enemyMs: number | null
       payout: number
@@ -53,11 +55,10 @@ const FINAL_TIMEOUT_MS = 10_000
 /** The server pings every 400 ms: this much silence is a dead link. */
 const STALE_MS = 2500
 
-const isRecord = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null
 const num = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v)
 const numOrNull = (v: unknown): v is number | null => v === null || num(v)
 
-const OUTCOMES = new Set(['win', 'loss', 'coward'])
+const OUTCOMES: ReadonlySet<string> = new Set<RankedOutcome>(['win', 'loss', 'coward'])
 
 function validResult(m: Record<string, unknown>): boolean {
   return (

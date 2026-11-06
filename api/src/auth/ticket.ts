@@ -15,7 +15,7 @@ export type { TicketPurpose } from '../../../src/experiments/out-west/contract/a
 
 const TICKET_SHAPE = /^[A-Za-z0-9_-]{20,64}$/u
 /** Swept rows: anything that expired more than this long ago. */
-const SWEEP_AFTER_MS = 5 * 60 * 1000
+const TICKET_SWEEP_MS = 5 * 60 * 1000
 
 export class AccountGoneError extends Error {
   constructor() {
@@ -37,7 +37,7 @@ export async function issueTicket(
   const ticket = randomToken(24)
   const hash = await sha256Hex(ticket)
   const [, inserted] = await env.DB.batch([
-    env.DB.prepare('DELETE FROM ws_tickets WHERE expires_at < ?').bind(now - SWEEP_AFTER_MS),
+    env.DB.prepare('DELETE FROM ws_tickets WHERE expires_at < ?').bind(now - TICKET_SWEEP_MS),
     env.DB.prepare(
       `INSERT INTO ws_tickets (ticket_hash, account_id, name, purpose, expires_at)
        SELECT ?, id, name, ?, ? FROM accounts WHERE id = ?`,

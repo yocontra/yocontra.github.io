@@ -27,6 +27,7 @@ import {
   type RefreshRequest,
   type TicketPurpose,
 } from '../contract/auth.ts'
+import { isRecord } from '../contract/validate.ts'
 import { platform, provideWebTokens } from '../platform/bridge.ts'
 import { pageTurnstile } from './turnstile.ts'
 
@@ -64,8 +65,6 @@ let restored = false
 let refreshing: Promise<Session | null> | null = null
 const listeners = new Set<(p: Player | null) => void>()
 const channel = typeof BroadcastChannel === 'undefined' ? null : new BroadcastChannel(CHANNEL)
-
-const isRecord = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null
 
 function isSession(v: unknown): v is AuthSession {
   return (

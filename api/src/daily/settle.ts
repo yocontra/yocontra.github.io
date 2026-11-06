@@ -4,6 +4,7 @@
  * with the server's own verdict; kept apart from the Durable Object so it is unit-tested.
  */
 import { DAILY_PAY } from '../../../src/experiments/out-west/data/daily.ts'
+import type { DuelOutcome } from '../../../src/experiments/out-west/data/economy.ts'
 import { ledgerStatements } from '../economy/ledger.ts'
 import { dailyRewardStatements } from '../economy/medals.ts'
 import type { Env } from '../env.ts'
@@ -13,7 +14,7 @@ export interface DailyAttempt {
   id: string
   day: string
   accountId: string | null
-  outcome: 'win' | 'loss' | 'coward'
+  outcome: DuelOutcome
   reactionMs: number | null
 }
 

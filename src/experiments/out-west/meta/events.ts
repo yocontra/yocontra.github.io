@@ -7,7 +7,9 @@
  * `duel/defeat.ts` on a loss or a coward. Never called for Bounty Hunt.
  */
 
-export type DuelReportOutcome = 'win' | 'loss' | 'coward'
+import type { DuelOutcome } from '../data/economy.ts'
+
+export type DuelReportOutcome = DuelOutcome
 
 export interface DuelReport {
   /** Outlaw index into OUTLAWS (0-based). For a daily duel, the outlaw it borrowed. */

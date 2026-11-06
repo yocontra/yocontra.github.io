@@ -3,7 +3,7 @@
  * owned pieces you were trying on), and what its Buy button says. The memory is device-local and
  * best effort: private mode forgets.
  */
-import type { CatalogItem, Loadout } from '../data/catalog.ts'
+import type { CatalogItem, ItemId, Loadout } from '../data/catalog.ts'
 import { money } from '../data/economy.ts'
 
 export const TAB_KEY = 'out-west-store-tab'
@@ -37,7 +37,7 @@ export function remember(key: string, value: string): void {
 export function keptLoadout(
   wearing: Loadout | null,
   equipped: Loadout,
-  owned: ReadonlySet<string>,
+  owned: ReadonlySet<ItemId>,
 ): Loadout | null {
   if (!wearing) {
     return null

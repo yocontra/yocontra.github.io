@@ -38,6 +38,7 @@ import {
   removePlayer,
   step,
 } from '../../../src/experiments/out-west/ffa/sim/world.ts'
+import { RTT_SAMPLES } from '../net/constants.ts'
 import { looksLikeAimbot } from './aimbot.ts'
 import { BotDirector, freshBotName } from './bots.ts'
 import { ShowdownJudge } from './core-showdown.ts'
@@ -47,7 +48,6 @@ import { applyPractice, botLevel, type PracticeOptions, stakeRespawns } from './
 export const DEFAULT_TOWN_POPULATION = 6
 const MAX_MALFORMED = 20
 const MAX_FLOOD_STRIKES = 60
-const RTT_SAMPLES = 12
 /** Aimbot heuristics (§3.7): flag, never auto-ban. */
 export const FLAG_AIMBOT = 1
 export const FLAG_FLOOD = 2

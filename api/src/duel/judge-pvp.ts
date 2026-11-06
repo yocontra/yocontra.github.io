@@ -17,12 +17,13 @@
  * `now − callSentAt[q] − rttFor(q) − tolFor(q) > R[p] + TIE_MS`, because even an instant
  * `localMs` could not then bring q's floor within a tie of p.
  */
-import { MIN_REACTION_MS, type RttStats } from '../judge.ts'
+import { JUDGE_TIMEOUT_MS } from '../../../src/experiments/out-west/contract/duel.ts'
+import { MIN_REACTION_MS } from '../../../src/experiments/out-west/data/progression.ts'
+import type { RttStats } from '../judge.ts'
 
 export const PVP_BASE_TOL = 20
 export const PVP_MAX_TOL = 60
 export const TIE_MS = 5
-export const JUDGE_TIMEOUT_MS = 1500
 /** Slack allowed above Cloudflare's TCP/QUIC RTT for the app-level round trip. */
 export const TCP_RTT_SLACK_MS = 40
 /** Above either of these, a player is offered ghosts only. */

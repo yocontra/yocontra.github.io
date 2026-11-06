@@ -3,10 +3,10 @@
  * Pure layout geometry, so the collision grid can be built on the server without importing the
  * renderer.
  */
-import type { Building, Rect, Side, TownLayout } from './layout.ts'
+import type { Building, BuildingKind, Rect, Side, TownLayout } from './layout.ts'
 
 /** Buildings with a boardwalk porch along their street front. */
-export const PORCHED: ReadonlySet<string> = new Set([
+export const PORCHED: ReadonlySet<BuildingKind> = new Set([
   'saloon',
   'hotel',
   'general_store',

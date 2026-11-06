@@ -24,6 +24,7 @@ import type { Env } from '../env.ts'
 import { rttStats } from '../judge.ts'
 import { accountFlags, isShadowed } from '../moderation/flags.ts'
 import { reviewTiming } from '../moderation/timing.ts'
+import { PING_INTERVAL_MS, RTT_SAMPLES } from '../net/constants.ts'
 import {
   addVoiceParticipant,
   createVoiceMeeting,
@@ -48,8 +49,6 @@ import {
 import { realClock } from './standoff.ts'
 import { duelStats } from './stats.ts'
 
-const PING_INTERVAL_MS = 400
-const RTT_SAMPLES = 12
 /** Nobody connected within this long: the room closes without a duel. */
 const CONNECT_TIMEOUT_MS = 30_000
 const ROUGH_JITTER_MS = 50

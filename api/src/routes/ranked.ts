@@ -16,6 +16,7 @@ import { authenticate, getProfile } from '../duel/external.ts'
 import type { Env } from '../env.ts'
 import {
   allowedOrigin,
+  BODY_STANDARD,
   clientHash,
   error,
   json,
@@ -61,7 +62,9 @@ export const rankedRoutes: RouteHandler = async (request, env, url) => {
     if (!allowedOrigin(request, env)) {
       return error(request, env, 403, 'Origin not allowed.')
     }
-    const body = (await readJson(request, 8 * 1024)) as { turnstileToken?: unknown } | undefined
+    const body = (await readJson(request, BODY_STANDARD)) as
+      | { turnstileToken?: unknown }
+      | undefined
     const token = body?.turnstileToken
     if (typeof token !== 'string' || !(await verifyTurnstile(token, request, env))) {
       return error(request, env, 403, 'Couldn’t verify this device. Try again.')

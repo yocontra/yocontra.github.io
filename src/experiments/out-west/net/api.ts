@@ -11,13 +11,12 @@ import type {
   MeResponse,
   StoreResponse,
 } from '../contract/economy.ts'
+import { isRecord } from '../contract/validate.ts'
 import type { ItemId, Loadout } from '../data/catalog.ts'
 import { apiFetch } from './auth.ts'
 import type { Result } from './leaderboard.ts'
 
 const TIMEOUT_MS = 8000
-
-const isRecord = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null
 
 function errorOf(body: unknown, status: number): string {
   if (isRecord(body) && typeof body.error === 'string') {

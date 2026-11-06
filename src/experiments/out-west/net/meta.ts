@@ -12,14 +12,13 @@ import type {
   ProgressResponse,
 } from '../contract/meta.ts'
 import type { RankedSessionResponse } from '../contract/ranked.ts'
+import { isRecord } from '../contract/validate.ts'
 import type { GuestClaim } from '../data/medals.ts'
 import { apiFetch } from './auth.ts'
 
 const TIMEOUT_MS = 8000
 
 export type Reply<T> = { ok: true; value: T } | { ok: false; status: number; error: string }
-
-const isRecord = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null
 
 async function call<T>(
   path: string,

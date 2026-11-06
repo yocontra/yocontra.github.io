@@ -1,3 +1,4 @@
+import type { DuelOutcome } from '../data/economy.ts'
 import { planFakes } from './judge.ts'
 import { CALL_FRAME_SLACK_MS } from './pending-call.ts'
 import { between, rng } from './state.ts'
@@ -27,7 +28,7 @@ export interface StandoffSpec {
 /** The server's (or the local judge's) verdict on a duel. */
 export interface Verdict {
   duel: number
-  outcome: 'win' | 'loss' | 'coward'
+  outcome: DuelOutcome
   reactionMs: number | null
   enemyMs: number | null
   payout: number

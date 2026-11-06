@@ -25,7 +25,7 @@ import {
 import type { GLTF } from 'three/examples/jsm/loaders/GLTFLoader.js'
 import type { GeoBuilder } from '../../scene/geo.ts'
 import { type PropDef, propDef } from '../../scene/props.ts'
-import type { Cover, Rect, TownLayout } from '../sim/layout.ts'
+import type { Cover, CoverKind, Rect, TownLayout } from '../sim/layout.ts'
 import { OUTSKIRTS_SEED, outskirtsProps } from './outskirts.ts'
 
 const DARK_WOOD = 0x6a_4c_34
@@ -89,7 +89,14 @@ export interface DressContext {
 }
 
 /** Cover kinds whose kit props are fine detail (stand-ins carry them at distance). */
-const NEAR_KINDS = new Set(['barrels', 'crates', 'crate_stack', 'hay', 'bench', 'coffins'])
+const NEAR_KINDS: ReadonlySet<CoverKind> = new Set([
+  'barrels',
+  'crates',
+  'crate_stack',
+  'hay',
+  'bench',
+  'coffins',
+])
 
 /** Kit props normalised to 1 m along x, so their proportions are known for fitting. */
 const UNIT: Record<string, 'x' | 'y' | 'max'> = {
@@ -847,51 +854,6 @@ function shelves(b: DressBuilders, c: Rect, y: number, back: number, r: () => nu
   }
 }
 
-function stairs(b: DressBuilders, c: Rect, y: number, back: number): void {
-  const alongX = c.w >= c.d
-  const L = Math.max(c.w, c.d)
-  const W = Math.min(c.w, c.d)
-  const cx = c.x + c.w / 2
-  const cz = c.z + c.d / 2
-  const rise = 3.2
-  const n = 16
-  const run = (L - 0.2) / n
-  // closed stringer on the open side, treads climbing to the landing, a banister
-  for (let k = 0; k < n; k++) {
-    const top = ((k + 1) / n) * rise
-    along(
-      b.wood,
-      alongX,
-      cx,
-      cz,
-      -L / 2 + 0.1 + (k + 0.5) * run,
-      0,
-      y,
-      run,
-      W - 0.1,
-      top,
-      k % 2 ? 0x7a_5a_3c : 0x72_54_38,
-    )
-  }
-  along(b.wood, alongX, cx, cz, 0, -back * (W / 2 - 0.08), y + 0.008, L - 0.1, 0.14, 0.3, DARK_WOOD)
-  for (let k = 1; k < n; k += 3) {
-    const top = ((k + 1) / n) * rise
-    along(
-      b.wood,
-      alongX,
-      cx,
-      cz,
-      -L / 2 + 0.1 + (k + 0.5) * run,
-      -back * (W / 2 - 0.08),
-      y + top,
-      0.05,
-      0.05,
-      0.85,
-      DARK_WOOD,
-    )
-  }
-}
-
 function safe(b: DressBuilders, c: Rect, y: number, back: number): void {
   const alongX = c.w >= c.d
   const L = Math.max(c.w, c.d) - 0.2
@@ -1352,9 +1314,6 @@ function place(
       break
     case 'shelves':
       shelves(b, c, y, back, r)
-      break
-    case 'stairs':
-      stairs(b, c, y, back)
       break
     case 'safe':
       safe(b, c, y, back)

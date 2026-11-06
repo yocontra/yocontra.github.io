@@ -31,7 +31,7 @@ import { isOverdraft } from '../economy/ledger.ts'
 import { getProfile } from '../economy/profile.ts'
 import { chalkboard, requestIdOf, roundStatements } from '../economy/sinks.ts'
 import type { Env } from '../env.ts'
-import { error, json, type RouteHandler, readJson } from '../http.ts'
+import { BODY_SMALL, BODY_TINY, error, json, type RouteHandler, readJson } from '../http.ts'
 import { block, blockedNames, fileReport, unblock } from '../moderation/reports.ts'
 import { accountByName } from '../social/lookup.ts'
 import { playerPoster } from '../social/players.ts'
@@ -69,7 +69,7 @@ async function board(request: Request, env: Env, url: URL): Promise<Response> {
 }
 
 async function round(request: Request, env: Env, player: Player): Promise<Response> {
-  const body = (await readJson(request, 1024)) as { requestId?: unknown } | undefined
+  const body = (await readJson(request, BODY_TINY)) as { requestId?: unknown } | undefined
   const profile = await getProfile(env, player.accountId)
   if (!profile) {
     return error(request, env, 404, 'No profile.')
@@ -94,7 +94,7 @@ async function round(request: Request, env: Env, player: Player): Promise<Respon
 }
 
 async function report(request: Request, env: Env, player: Player): Promise<Response> {
-  const body = (await readJson(request, 2048)) as
+  const body = (await readJson(request, BODY_SMALL)) as
     | { name?: unknown; reason?: unknown; context?: unknown; block?: unknown }
     | undefined
   const reason = body?.reason
@@ -131,7 +131,7 @@ async function blocks(
   rawName: string | null,
 ): Promise<Response> {
   if (request.method !== 'GET') {
-    const body = (await readJson(request, 1024)) as { name?: unknown } | undefined
+    const body = (await readJson(request, BODY_TINY)) as { name?: unknown } | undefined
     const target = await accountByName(env, rawName ?? body?.name)
     if (!target) {
       return error(request, env, 404, 'No player with that name.')

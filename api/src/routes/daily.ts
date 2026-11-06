@@ -37,6 +37,7 @@ import { authenticate } from '../economy/auth.ts'
 import type { Env } from '../env.ts'
 import {
   allowedOrigin,
+  BODY_STANDARD,
   clientHash,
   error,
   json,
@@ -111,7 +112,7 @@ async function issue(request: Request, env: Env, verify: Verify): Promise<Respon
   if (!allowedOrigin(request, env)) {
     return error(request, env, 403, 'Origin not allowed.')
   }
-  const body = (await readJson(request, 8 * 1024)) as
+  const body = (await readJson(request, BODY_STANDARD)) as
     | { turnstileToken?: unknown; unposted?: unknown }
     | undefined
   const player = await authenticate(request, env)

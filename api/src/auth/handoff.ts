@@ -24,7 +24,7 @@ const VERIFIER_SHAPE = /^[A-Za-z0-9._~-]{43,128}$/u
 const CODE_SHAPE = /^[A-Za-z0-9_-]{22}$/u
 const STATE_SHAPE = /^[\x21-\x7e]{1,256}$/u
 const PURPOSES: readonly AppAuthPurpose[] = ['login', 'register', 'reauth']
-const SWEEP_AFTER_MS = 10 * 60 * 1000
+const HANDOFF_SWEEP_MS = 10 * 60 * 1000
 
 export interface AuthorizeInput {
   accountId: string
@@ -61,7 +61,7 @@ export async function authorizeAppCode(
   }
   const code = randomToken(16)
   await env.DB.batch([
-    env.DB.prepare('DELETE FROM app_auth_codes WHERE expires_at < ?').bind(now - SWEEP_AFTER_MS),
+    env.DB.prepare('DELETE FROM app_auth_codes WHERE expires_at < ?').bind(now - HANDOFF_SWEEP_MS),
     env.DB.prepare(
       `INSERT INTO app_auth_codes
          (code_hash, account_id, challenge, redirect_uri, purpose, auth_time, expires_at)

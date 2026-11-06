@@ -3,6 +3,8 @@
  * typed result and never throws: offline, rate limits and rejections become a
  * short, polite message and the game carries on.
  */
+
+import { isRecord } from '../contract/validate.ts'
 import { API_URL } from './auth.ts'
 
 export interface BoardEntry {
@@ -44,8 +46,6 @@ export function saveName(name: string): void {
     // private mode: the name just won't be remembered
   }
 }
-
-const isRecord = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null
 
 function isEntry(v: unknown): v is BoardEntry {
   return (

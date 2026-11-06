@@ -20,7 +20,9 @@ import { COVER_VISUALS } from '../src/experiments/out-west/ffa/scene/cover-kinds
 import { windowSlots } from '../src/experiments/out-west/ffa/sim/building-rules.ts'
 import type {
   Building,
+  BuildingKind,
   Cover,
+  CoverKind,
   Door,
   Floor,
   Side,
@@ -43,7 +45,7 @@ const TALL = new Set([
 
 const snap = (v: number) => Math.round(v * 2) / 2
 const cover: Cover[] = []
-function c(kind: string, x: number, z: number, w: number, d: number): void {
+function c(kind: CoverKind, x: number, z: number, w: number, d: number): void {
   const vis = COVER_VISUALS[kind]
   if (!vis) {
     throw new Error(`no visual for cover kind ${kind}`)
@@ -64,7 +66,7 @@ function c(kind: string, x: number, z: number, w: number, d: number): void {
   cover.push(r)
 }
 /** Cover on an upper floor: its collision span starts at `y0`, not on the ground. */
-function cu(kind: string, x: number, z: number, w: number, d: number, y0: number): void {
+function cu(kind: CoverKind, x: number, z: number, w: number, d: number, y0: number): void {
   c(kind, x, z, w, d)
   const r = cover.at(-1)
   if (r) {
@@ -98,7 +100,7 @@ function fence(
 const buildings: Building[] = []
 function b(
   id: string,
-  kind: string,
+  kind: BuildingKind,
   x: number,
   z: number,
   w: number,

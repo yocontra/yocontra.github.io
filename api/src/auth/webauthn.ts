@@ -18,6 +18,7 @@ import {
   type CeremonyOptions,
   CHALLENGE_TTL_MS,
 } from '../../../src/experiments/out-west/contract/auth.ts'
+import { isRecord } from '../../../src/experiments/out-west/contract/validate.ts'
 import type { Env } from '../env.ts'
 import type { NewPasskey } from './accounts.ts'
 import { b64urlToBytes, bytesToB64url, randomToken } from './crypto.ts'
@@ -44,8 +45,6 @@ export function rpOrigins(env: Env): string[] {
     .map((o) => o.trim())
     .filter(Boolean)
 }
-
-const isRecord = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null
 
 /** Cheap shape check before handing untrusted JSON to the verifier. */
 function looksLikeCredential(v: unknown): v is { id: string; type: string; response: object } {

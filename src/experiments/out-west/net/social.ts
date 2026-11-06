@@ -13,12 +13,12 @@ import type {
   ReportResponse,
   RoundResponse,
 } from '../contract/social.ts'
+import { isRecord } from '../contract/validate.ts'
 import type { ItemId } from '../data/catalog.ts'
 import type { DyeId } from '../data/dye.ts'
 import { apiJson } from './api.ts'
 import type { Result } from './leaderboard.ts'
 
-const isRecord = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null
 const okTrue = (v: unknown): v is Record<string, unknown> & { ok: true } =>
   isRecord(v) && v.ok === true
 

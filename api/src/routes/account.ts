@@ -9,6 +9,8 @@
  *   POST   /auth/passkeys { challengeId, response } → PasskeyList
  *   DELETE /auth/passkeys/:id { proof? } → PasskeyList (never the last one)
  */
+
+import { isRecord } from '../../../src/experiments/out-west/contract/validate.ts'
 import {
   accountName,
   deleteAccount,
@@ -18,11 +20,11 @@ import {
 } from '../auth/accounts.ts'
 import { clearRefreshCookie } from '../auth/cookie.ts'
 import { LIMITS } from '../auth/rate.ts'
-import { isRecord, limited, reauthOk, requireAuth } from '../auth/respond.ts'
+import { limited, reauthOk, requireAuth } from '../auth/respond.ts'
 import type { AccessClaims } from '../auth/token.ts'
 import { consumeChallenge, registrationOptions, verifyRegistration } from '../auth/webauthn.ts'
 import type { Env } from '../env.ts'
-import { error, json, type RouteHandler, readJson } from '../http.ts'
+import { BODY_LARGE, error, json, type RouteHandler, readJson } from '../http.ts'
 
 type Handler = (request: Request, env: Env, url: URL, claims: AccessClaims) => Promise<Response>
 
@@ -30,7 +32,7 @@ const PASSKEY_PATH = /^\/auth\/passkeys\/(?<id>[A-Za-z0-9_-]{1,1400})$/u
 const NO_STORE = { 'Cache-Control': 'no-store' }
 
 async function body(request: Request): Promise<Record<string, unknown>> {
-  const v = await readJson(request, 32 * 1024)
+  const v = await readJson(request, BODY_LARGE)
   return isRecord(v) ? v : {}
 }
 

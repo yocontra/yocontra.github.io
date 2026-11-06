@@ -2,7 +2,7 @@
  * Shared building rules: door and window dimensions the scene builder, the layout generator, the
  * collision grid and the building audit all read. Pure constants and arithmetic, no renderer.
  */
-import type { Building, Side, TownLayout } from './layout.ts'
+import type { Building, BuildingKind, Side, TownLayout } from './layout.ts'
 
 /** Wall thickness, metres (matches the collision grid). */
 export const WALL_T = 0.5
@@ -64,7 +64,7 @@ export const WINDOW_GLASS_ROUGHNESS = 0.12
 export const WINDOW_GLASS_METALNESS = 0.18
 
 /** Buildings whose ground floor gets display windows on the street face. */
-export const SHOPFRONT: ReadonlySet<string> = new Set([
+export const SHOPFRONT: ReadonlySet<BuildingKind> = new Set([
   'saloon',
   'hotel',
   'general_store',

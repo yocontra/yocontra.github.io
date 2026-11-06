@@ -23,7 +23,7 @@ import { isConstraintError, ledgerStatements } from '../economy/ledger.ts'
 import { claimStatements, dailyWinsOf, marksOf } from '../economy/medals.ts'
 import { getProfileDetail, ownedItems } from '../economy/profile.ts'
 import type { Env } from '../env.ts'
-import { error, json, type RouteHandler, readJson } from '../http.ts'
+import { BODY_STANDARD, BODY_TINY, error, json, type RouteHandler, readJson } from '../http.ts'
 
 const REWARD_ITEMS = new Set(SOLO_REWARDS.map((r) => r.item))
 
@@ -73,7 +73,7 @@ async function progress(env: Env, accountId: string): Promise<ProgressResponse |
 }
 
 async function migrate(request: Request, env: Env, player: Player): Promise<Response> {
-  const body = (await readJson(request, 8 * 1024)) as { claim?: unknown } | undefined
+  const body = (await readJson(request, BODY_STANDARD)) as { claim?: unknown } | undefined
   const claim = sanitizeClaim(body?.claim)
   if (!claim) {
     return error(request, env, 400, 'Couldn’t read your guest earnings.')
@@ -139,7 +139,7 @@ const CLAIM_REFUSALS = {
 } as const
 
 async function claimRoute(request: Request, env: Env, player: Player): Promise<Response> {
-  const body = (await readJson(request, 1024)) as
+  const body = (await readJson(request, BODY_TINY)) as
     | { challengeId?: unknown; runId?: unknown }
     | undefined
   const challengeId = typeof body?.challengeId === 'string' ? body.challengeId : ''
@@ -156,7 +156,7 @@ async function claimRoute(request: Request, env: Env, player: Player): Promise<R
 
 /** Legend items: claimed from the device, only by an account that cleared the gauntlet ranked. */
 async function legend(request: Request, env: Env, player: Player): Promise<Response> {
-  const body = (await readJson(request, 1024)) as { beaten?: unknown } | undefined
+  const body = (await readJson(request, BODY_TINY)) as { beaten?: unknown } | undefined
   const beaten =
     typeof body?.beaten === 'number' && Number.isInteger(body.beaten) ? body.beaten : -1
   if (beaten < 0 || beaten > OUTLAW_COUNT) {
