@@ -34,7 +34,16 @@ import {
   Vector3,
   type WebGLRenderer,
 } from 'three'
-import { isFlatMaterial, ROLE, type Role, roleOf, SLOT, slotOf } from './roles.ts'
+import {
+  flagsOf,
+  isFlatMaterial,
+  type PieceFlags,
+  ROLE,
+  type Role,
+  roleOf,
+  SLOT,
+  slotOf,
+} from './roles.ts'
 
 export interface AuditIssue {
   kind: 'float' | 'loose' | 'sunk' | 'zfight'
@@ -64,17 +73,6 @@ const DEEP = 0.05
 const CELL = 1
 const FAR = 1e9
 
-/** Props that must stand on something (never just lean on a wall). */
-const GROUNDED =
-  /^(?:barrel|crate|hay|cart|cactus|rock|fence|coffin|k_bench|k_bucket|k_sack|k_chest|k_barrel_rack|k_table|k_chair|k_stool|k_crate_big|k_workbench|k_anvil|k_door|k_door_braced|k_door_plank|k_doorframe)$/u
-/** Doorways and props that stand on a deck when there is one. */
-const ON_DECK =
-  /^(?:barrel|crate|hay|cart|coffin|fence|k_bench|k_bucket|k_sack|k_chest|k_barrel_rack|k_door|k_door_braced|k_door_plank|k_doorframe)$/u
-/** Kit pieces whose back belongs on a wall. */
-const WALL_MOUNTED = /^k_(?:window|shutters|door|balcony|support|lantern)/u
-/** Hang or fly by design (matched against the piece's own and every ancestor's name). */
-const HANGS = /(?:^|\/)(?:lantern|postlantern|pickup|bags|bird|cloud|tumbleweed)(?:\/|$)/u
-
 /** Effects and backdrops (`scene/roles.ts`): never pieces. */
 const isEffect = (o: Object3D): boolean => roleOf(o) === ROLE.Effect || roleOf(o) === ROLE.Backdrop
 
@@ -89,6 +87,8 @@ export interface Piece {
   max: Vector3
   hangs: boolean
   decal: boolean
+  /** Props metadata from the kit definition (). */
+  flags?: PieceFlags | undefined
   /** Vertex colour of its first vertex (GeoBuilder boxes are one colour), or -1. */
   color: number
 }
@@ -191,11 +191,11 @@ function addPiece(
   out: Collected,
   name: string,
   mesh: string,
-  chain: string,
   verts: number[],
   tris: number[],
   color: number,
   role: Role | undefined,
+  flags?: PieceFlags,
 ): void {
   const id = out.pieces.length
   const min = new Vector3(FAR, FAR, FAR)
@@ -221,9 +221,10 @@ function addPiece(
     tn: out.owner.length - t0,
     min,
     max,
-    hangs: HANGS.test(`${name}/${chain}`),
+    hangs: flags?.hangs === true,
     decal: role === ROLE.Decal,
     color,
+    flags,
   })
 }
 
@@ -232,6 +233,7 @@ interface Part {
   verts: number[]
   tris: number[]
   color: number
+  flags?: PieceFlags | undefined
 }
 
 /** One mesh (or one instance of it) in world space, split into named parts. */
@@ -267,7 +269,9 @@ function meshParts(out: Collected, m: Mesh, world: Matrix4, label: string): Part
   }
   let pieceOf: Int32Array
   let names: string[] = []
-  const ranges = m.userData.pieces as { name: string; start: number; count: number }[] | undefined
+  const ranges = m.userData.pieces as
+    | { name: string; start: number; count: number; flags?: PieceFlags }[]
+    | undefined
   if (ranges) {
     names = ranges.map((range) => range.name)
     pieceOf = new Int32Array(nt)
@@ -319,7 +323,7 @@ function meshParts(out: Collected, m: Mesh, world: Matrix4, label: string): Part
         Math.round(col.getY(first) * 255) * 256 +
         Math.round(col.getZ(first) * 255)
       : -1
-    parts.push({ name: names[p] ?? label, verts, tris, color })
+    parts.push({ name: names[p] ?? label, verts, tris, color, flags: ranges?.[p]?.flags })
   }
   return parts
 }
@@ -329,7 +333,14 @@ export function collect(scene: Object3D): Collected {
   scene.updateMatrixWorld(true)
   const instanced = new Map<
     string,
-    { name: string; mesh: string; chain: string; part: Part; role: Role | undefined }
+    {
+      name: string
+      mesh: string
+      chain: string
+      part: Part
+      role: Role | undefined
+      flags: PieceFlags | undefined
+    }
   >()
   scene.traverse((o) => {
     if (
@@ -370,12 +381,14 @@ export function collect(scene: Object3D): Collected {
           chain: string
           part: Part
           role: Role | undefined
+          flags: PieceFlags | undefined
         } = instanced.get(key) ?? {
           name: label,
           mesh: firstName(o),
           chain,
           part: { name: label, verts: [], tris: [], color: -1 },
           role: roleOf(o),
+          flags: flagsOf(o),
         }
         for (const part of meshParts(out, o, w, label)) {
           acc.part.verts.push(...part.verts)
@@ -386,12 +399,21 @@ export function collect(scene: Object3D): Collected {
       return
     }
     for (const part of meshParts(out, o, o.matrixWorld, label)) {
-      addPiece(out, part.name, firstName(o), chain, part.verts, part.tris, part.color, roleOf(o))
+      addPiece(
+        out,
+        part.name,
+        firstName(o),
+        part.verts,
+        part.tris,
+        part.color,
+        roleOf(o),
+        part.flags ?? flagsOf(o),
+      )
     }
   })
   for (const acc of instanced.values()) {
     if (acc.part.verts.length > 0) {
-      addPiece(out, acc.name, acc.mesh, acc.chain, acc.part.verts, acc.part.tris, -1, acc.role)
+      addPiece(out, acc.name, acc.mesh, acc.part.verts, acc.part.tris, -1, acc.role, acc.flags)
     }
   }
   return out
@@ -733,7 +755,7 @@ export function auditScene(scene: Object3D): AuditReport {
       for (const t of near) {
         const o = owner[t] as number
         const q = pieces[o]
-        if (o === id || !q || GROUNDED.test(q.name) || WALL_MOUNTED.test(q.name)) {
+        if (o === id || !q || q.flags?.grounded === true || q.flags?.wall === true) {
           continue
         }
         const hit = heightAt(triAt(tri, t), x, z)
@@ -821,7 +843,7 @@ export function auditScene(scene: Object3D): AuditReport {
       allowed.push({ name: p.name, mount: r3(Math.min(gap, c.dist)), at: where(p) })
       continue
     }
-    if (ON_DECK.test(p.name)) {
+    if (p.flags?.onDeck === true) {
       const sunk = buried(id, p, near)
       if (sunk > DEEP && sunk < FAR) {
         issues.push(issue('sunk', p, sunk, { dist: 0, other: 'deck' }))
@@ -829,12 +851,12 @@ export function auditScene(scene: Object3D): AuditReport {
         issues.push(issue('sunk', p, -p.min.y, { dist: 0, other: 'ground' }))
       }
     }
-    const mounted = WALL_MOUNTED.test(p.name)
+    const mounted = p.flags?.wall === true
     if (gap <= FLOAT_TOL && !mounted) {
       continue
     }
     const c = contact(id, p, near)
-    if (c.dist <= WALL_TOL && (!GROUNDED.test(p.name) || gap <= FLOAT_TOL)) {
+    if (c.dist <= WALL_TOL && (p.flags?.grounded !== true || gap <= FLOAT_TOL)) {
       continue
     }
     issues.push(issue(gap <= FLOAT_TOL ? 'loose' : 'float', p, gap, c))

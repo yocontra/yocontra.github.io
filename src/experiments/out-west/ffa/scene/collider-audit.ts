@@ -42,11 +42,6 @@ export interface ColliderReport {
 /** Below this a piece is flat (decks, rails, ties); above `HEAD` it's overhead. */
 const ANKLE = 0.25
 const HEAD = 1.7
-/** Kit hung on a wall face: its footprint is the wall's. */
-const ON_WALL = /^k_(?:window|shutters|door|doorframe|balcony|support|lantern|roof|corner)/u
-/** Live things the town didn't build (riders' guns too, held or in the view model). */
-const LIVE =
-  /^(?:pickup|bags|strongbox|dynamite|rifle|shotgun|revolver|coins|money|tracer|gun|shaft)/iu
 
 export function colliderAudit(scene: Object3D): ColliderReport {
   const grid = buildGrid(TOWN)
@@ -57,7 +52,7 @@ export function colliderAudit(scene: Object3D): ColliderReport {
   const who = new Map<number, string>()
   let checked = 0
   for (const p of c.pieces) {
-    if (p.hangs || p.decal || ON_WALL.test(p.name) || LIVE.test(p.name)) {
+    if (p.hangs || p.decal || p.flags?.wall === true || p.flags?.live === true) {
       continue
     }
     if (p.max.y < ANKLE || p.min.y > HEAD) {

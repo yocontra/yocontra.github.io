@@ -30,7 +30,7 @@ import {
   Vector2,
   Vector3,
 } from 'three'
-import { markRole, ROLE } from '../../scene/roles.ts'
+import { markFlags, markRole, ROLE } from '../../scene/roles.ts'
 import { sackLook, strongboxLook } from '../../scene/surface.ts'
 import { softDot } from '../../scene/textures.ts'
 import { type Bag, PLAIN_BAG } from './bags.ts'
@@ -333,6 +333,7 @@ export class Effects {
     this.bagMesh = new InstancedMesh(sack, bagMat, 64)
     this.bagMesh.count = 0
     this.bagMesh.name = 'bags'
+    markFlags(this.bagMesh, { hangs: true, live: true })
     markRole(this.bagMesh, ROLE.Hanging)
     this.bagMesh.frustumCulled = false
     this.bagMesh.castShadow = false
@@ -349,6 +350,7 @@ export class Effects {
     strongboxLook(boxMat)
     this.box = new Mesh(new BoxGeometry(1.1, 0.7, 0.7).translate(0, 0.35, 0), boxMat)
     this.box.receiveShadow = true
+    markFlags(this.box, { grounded: true, live: true })
     this.box.visible = false
     root.add(this.box)
     this.beacon = new Mesh(

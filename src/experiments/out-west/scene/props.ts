@@ -16,6 +16,7 @@ import {
 } from 'three'
 import type { GLTF } from 'three/examples/jsm/loaders/GLTFLoader.js'
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
+import { markFlags, type PieceFlags } from './roles.ts'
 
 export interface Part {
   geometry: BufferGeometry
@@ -27,6 +28,8 @@ export interface PropDef {
   name: string
   parts: Part[]
   size: Vector3
+  /** What the piece is for the audits: support, wall, hanging or a live pickup. */
+  flags?: PieceFlags | undefined
   /** Carried onto every `propObject` of it (a built gun's landmarks, scene/revolver.ts). */
   userData?: Record<string, unknown>
   /** Builds the object instead of its parts (a gun with moving parts, scene/revolver.ts). */
@@ -38,6 +41,77 @@ export interface PieceRange {
   name: string
   start: number
   count: number
+  flags?: PieceFlags | undefined
+}
+
+/**
+ * The one place a kit prop's name becomes metadata. The GLB scenes carry names, not roles; the
+ * audits and the builders read `flags` from here on. A new kit piece is tagged here once.
+ */
+const GROUNDED = new Set([
+  'barrel',
+  'crate',
+  'hay',
+  'cart',
+  'cactus',
+  'rock',
+  'fence',
+  'coffin',
+  'k_bench',
+  'k_bucket',
+  'k_sack',
+  'k_chest',
+  'k_barrel_rack',
+  'k_table',
+  'k_chair',
+  'k_stool',
+  'k_crate_big',
+  'k_workbench',
+  'k_anvil',
+  'k_door',
+  'k_door_braced',
+  'k_door_plank',
+  'k_doorframe',
+])
+const ON_DECK = new Set([
+  'barrel',
+  'crate',
+  'hay',
+  'cart',
+  'coffin',
+  'fence',
+  'k_bench',
+  'k_bucket',
+  'k_sack',
+  'k_chest',
+  'k_barrel_rack',
+  'k_door',
+  'k_door_braced',
+  'k_door_plank',
+  'k_doorframe',
+])
+const WALL = /^k_(?:window|shutters|door|doorframe|balcony|support|lantern|roof|corner)/u
+const HANGS = /(?:^|\/)(?:lantern|postlantern|pickup|bags|bird|cloud|tumbleweed)(?:\/|$)/u
+const LIVE = /^(?:pickup|bags|strongbox|dynamite|rifle|shotgun|revolver|coins|money|tracer|gun)/iu
+
+export function pieceFlags(name: string): PieceFlags {
+  const flags: PieceFlags = {}
+  if (GROUNDED.has(name)) {
+    flags.grounded = true
+  }
+  if (ON_DECK.has(name)) {
+    flags.onDeck = true
+  }
+  if (WALL.test(name)) {
+    flags.wall = true
+  }
+  if (HANGS.test(name)) {
+    flags.hangs = true
+  }
+  if (LIVE.test(name)) {
+    flags.live = true
+  }
+  return flags
 }
 
 function findScene(gltf: GLTF, name: string): Object3D | null {
@@ -138,7 +212,7 @@ function makeDef(
       parts.push({ geometry: g, material: mat })
     }
   })
-  return { name, parts, size: native ? dims : dims.multiplyScalar(k) }
+  return { name, parts, size: native ? dims : dims.multiplyScalar(k), flags: pieceFlags(name) }
 }
 
 export function placeMatrix(
@@ -181,6 +255,9 @@ export function instance(
     // Instances are scattered widely; skip per-mesh culling.
     im.frustumCulled = false
     im.name = def.name
+    if (def.flags) {
+      markFlags(im, def.flags)
+    }
     parent.add(im)
     out.push(im)
   }
@@ -203,6 +280,9 @@ export function propObject(def: PropDef): Group {
   }
   if (def.userData) {
     Object.assign(g.userData, def.userData)
+  }
+  if (def.flags) {
+    markFlags(g, def.flags)
   }
   return g
 }
@@ -238,7 +318,12 @@ export function mergePlaced(
       const last = list.pieces.at(-1)
       const start = last ? last.start + last.count : 0
       list.geos.push(g)
-      list.pieces.push({ name: def.name, start, count: g.getAttribute('position').count })
+      list.pieces.push({
+        name: def.name,
+        start,
+        count: g.getAttribute('position').count,
+        flags: def.flags,
+      })
       groups.set(mat, list)
     }
   }

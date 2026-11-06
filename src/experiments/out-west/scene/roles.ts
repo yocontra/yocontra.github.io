@@ -45,6 +45,28 @@ export const SLOT = {
 } as const
 export type Slot = (typeof SLOT)[keyof typeof SLOT]
 
+/** Placement and behaviour flags a prop piece carries into the audits. */
+export interface PieceFlags {
+  /** Must stand on something (never just lean on a wall). */
+  grounded?: boolean
+  /** Stands on a deck when there is one (doors, benches, barrels). */
+  onDeck?: boolean
+  /** Its back belongs on a wall (kit windows, shutters, doors, balconies, lanterns). */
+  wall?: boolean
+  /** Hangs or flies by design (lanterns, bags, birds, clouds, tumbleweed). */
+  hangs?: boolean
+  /** Live gameplay props (pickups, bags, the strongbox, guns, money). */
+  live?: boolean
+}
+
+/** The flags carried in an object's `userData`. */
+export const flagsOf = (o: Object3D): PieceFlags | undefined =>
+  o.userData.pieceFlags as PieceFlags | undefined
+
+export const markFlags = (o: Object3D, flags: PieceFlags): void => {
+  o.userData.pieceFlags = flags
+}
+
 /** Anything with three's `userData` bag: Object3D or Material. */
 interface HasUserData {
   userData: Record<string, unknown>
