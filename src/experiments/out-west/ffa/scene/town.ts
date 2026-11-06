@@ -31,13 +31,14 @@ import {
   DoubleSide,
   Float32BufferAttribute,
   Group,
-  type InstancedMesh,
+  InstancedMesh,
   type Material,
   Matrix4,
   Mesh,
   MeshStandardMaterial,
   type Object3D,
   type PerspectiveCamera,
+  PlaneGeometry,
   RepeatWrapping,
   SRGBColorSpace,
   type Texture,
@@ -55,7 +56,7 @@ import { signAtlas } from '../../scene/textures.ts'
 import { attachArm } from '../../scene/town-pbr.ts'
 import {
   type Building,
-  buildingWallSpans,
+  buildingSideBoxes,
   type Cover,
   type Rect,
   type Side,
@@ -67,13 +68,24 @@ import {
   DOOR_HEAD,
   DOOR_JAMB,
   doorTop,
-  SHOP_WINDOW_SCALE,
-  STOREY_H,
+  SHOPFRONT,
+  townWindows,
   WALL_T,
-  WINDOW_LIFT,
-  WINDOW_SASH,
-  WINDOW_SCALE,
-  WINDOW_SILL,
+  WINDOW_FACE_PROUD,
+  WINDOW_GLASS_COLOR,
+  WINDOW_GLASS_METALNESS,
+  WINDOW_GLASS_OPACITY,
+  WINDOW_GLASS_ROUGHNESS,
+  WINDOW_KIT_SASH,
+  WINDOW_MEETING_MIN,
+  WINDOW_MULLION,
+  WINDOW_PANE_MARGIN,
+  WINDOW_PANE_MIN,
+  WINDOW_TRIM_OVERHANG,
+  WINDOW_TRIM_PROUD,
+  WINDOW_TRIM_THICKNESS,
+  WINDOW_TRIM_WIDTH,
+  windowPane,
 } from './building-rules.ts'
 import { addClockTower } from './clock-tower.ts'
 import {
@@ -281,8 +293,13 @@ const DEFAULT_PAINT: Paint = PAINT.shed ?? (Object.values(PAINT)[0] as Paint)
 
 const WOOD = 0xb0_8a_60
 const DARK_WOOD = 0x6a_4c_34
-/** Furniture that stands against a wall and hides the inside of a window there. */
-const AGAINST_WALL = new Set(['shelves', 'stairs', 'piano', 'safe'])
+/** How close furniture may stand to the inside face before interior trim is skipped, metres. */
+const WINDOW_TRIM_CLEAR = 0.6
+/** Glass grime map: pixels and the number of faint diagonal streaks. */
+const GLASS_TEX = 64
+const GLASS_STREAKS = 18
+/** Floor tier's flat pane colour on solid buildings (no 3D frame, no transparency). */
+const WINDOW_LEAN_GLASS = 0x1a_22_2a
 
 /** Roofs are most of what the top-down camera sees: sun-bleached, never near-black. */
 function bleach(hex: number): number {
@@ -301,6 +318,8 @@ export interface TownMaterials {
   cloth: MeshStandardMaterial
   /** Kit doors, windows and rails (the props' trim atlas, with the cutaway). */
   kit: MeshStandardMaterial
+  /** Breakable window panes. */
+  glass: MeshStandardMaterial
 }
 
 export interface Town {
@@ -308,6 +327,8 @@ export interface Town {
   /** Building rects by roof id, for the roof fade. */
   roofs: Building[]
   sun: Vector3
+  /** Shatter one window pane by its shared window index. */
+  breakWindow: (index: number) => void
   /**
    * Show the detail the camera can use and hide the rest: small-prop tiles near the camera, the
    * interiors of the buildings it is in or beside. The town also calls it itself from the
@@ -520,7 +541,19 @@ function makeMaterials(assets: Assets): TownMaterials {
   roof.name = 'town-roof'
   wood.name = 'town-wood'
   windows.name = 'town-windows'
-  return { wall, stone, roof, wood, windows, signs, kit, cloth }
+  const glass = new MeshStandardMaterial({
+    name: 'window-glass',
+    map: glassTexture(),
+    color: WINDOW_GLASS_COLOR,
+    roughness: WINDOW_GLASS_ROUGHNESS,
+    metalness: WINDOW_GLASS_METALNESS,
+    transparent: true,
+    opacity: WINDOW_GLASS_OPACITY,
+    side: DoubleSide,
+    depthWrite: false,
+  })
+  cutaway(glass, false)
+  return { wall, stone, roof, wood, windows, signs, kit, cloth, glass }
 }
 
 /** How many porch and platform rects the contact-shade patch carries. */
@@ -659,6 +692,34 @@ float wxN(vec2 p) {
   mat.customProgramCacheKey = () => `${k}-wx-${key}`
 }
 
+/** Glass is a tinted, slightly grimy pane: a faint streak map keeps it from reading as flat glass. */
+function glassTexture(): CanvasTexture {
+  const c = document.createElement('canvas')
+  c.width = GLASS_TEX
+  c.height = GLASS_TEX
+  const ctx = c.getContext('2d')
+  if (ctx) {
+    ctx.fillStyle = '#eef3f4'
+    ctx.fillRect(0, 0, GLASS_TEX, GLASS_TEX)
+    for (let i = 0; i < GLASS_STREAKS; i++) {
+      const x = ((i * 23) % GLASS_TEX) + 0.5
+      ctx.strokeStyle = `rgba(255,255,255,${0.06 + (i % 3) * 0.03})`
+      ctx.lineWidth = 1
+      ctx.beginPath()
+      ctx.moveTo(x, 0)
+      ctx.lineTo(x + 4, GLASS_TEX)
+      ctx.stroke()
+    }
+    ctx.fillStyle = 'rgba(120,140,145,0.08)'
+    ctx.fillRect(0, GLASS_TEX * 0.52, GLASS_TEX, GLASS_TEX * 0.12)
+  }
+  const t = new CanvasTexture(c)
+  t.wrapS = RepeatWrapping
+  t.wrapT = RepeatWrapping
+  t.colorSpace = SRGBColorSpace
+  return t
+}
+
 /** Woven canvas: a fine warp-and-weft grain with a few darker stains (wagon bonnets, laundry). */
 function canvasTexture(): CanvasTexture {
   const c = document.createElement('canvas')
@@ -768,106 +829,131 @@ function faceQuad(
 
 const sideLength = (b: Building, side: Side) => (side === 'n' || side === 's' ? b.w : b.d)
 
-/** Shopfronts: big display windows either side of the door on the street face. */
-const SHOPFRONT = new Set([
-  'saloon',
-  'hotel',
-  'general_store',
-  'stage_line',
-  'assay',
-  'undertaker',
-  'bank',
-  'jail',
-])
-
-function addWindows(
-  bs: Builders,
-  b: Building,
-  side: Side,
-  floors: number,
-  front: Side,
-  against: readonly Cover[],
-): void {
-  const len = sideLength(b, side)
-  const doors = b.doors.filter((d) => d.side === side)
-  const glass = 0x1a_22_2a
-  const thin = kitDef('k_window_thin')
+/**
+ * Window frames, trim and reveals, built from the shared opening table (`b.windows`). The wall cut
+ * and the sim's glass read the same table, so the frame, the hole and the pane always agree.
+ */
+function addWindows(bs: Builders, b: Building, side: Side, against: readonly Cover[]): void {
+  const openings = (b.windows ?? []).filter((w) => w.side === side)
+  if (openings.length === 0) {
+    return
+  }
+  // Floor and legacy tiers carry no 3D trim. Solid blocks keep a flat dark pane so they still read
+  // as windows; a hollow building's hole stays open so you can see and shoot through it.
+  if (bs.lean) {
+    if (!b.hollow) {
+      for (const w of openings) {
+        const [p0, p1, p2, p3] = faceQuad(
+          b,
+          side,
+          w.at,
+          w.at + w.width,
+          w.sill,
+          w.top,
+          WINDOW_FACE_PROUD,
+        )
+        if (p0 && p1 && p2 && p3) {
+          bs.windows.quad(p0, p1, p2, p3, WINDOW_LEAN_GLASS)
+        }
+      }
+    }
+    return
+  }
+  const along = side === 'n' || side === 's'
   const shutter = kitDef('k_shutters_thin')
-  const wide = kitDef('k_window_wide')
-  for (let f = 0; f < floors; f++) {
-    // sills at a rider's waist on the ground floor (windows sized to a 3.2 m storey, not a doll's)
-    const sill = WINDOW_SILL + f * STOREY_H
-    const shop = f === 0 && side === front && SHOPFRONT.has(b.kind) && wide
-    const step = shop ? 3.8 : 3.0
-    const span = shop ? 2.0 : 1.3
-    for (let a = 1.2; a + span < len - 0.7; a += step) {
-      if (f === 0 && doors.some((d) => a + span > d.at - 0.7 && a < d.at + d.width + 0.7)) {
-        continue
+  /** One trim member, `a` metres along the side and `out` from the wall face. */
+  const member = (
+    a: number,
+    y: number,
+    out: number,
+    long: number,
+    height: number,
+    deep: number,
+  ) => {
+    const [p] = faceQuad(b, side, a, a, 0, 1, out)
+    if (p) {
+      bs.wood.box(p.x, y, p.z, along ? long : deep, height, along ? deep : long, DARK_WOOD)
+    }
+  }
+  /** True when furniture stands against the inside face, where interior trim would z-fight. */
+  const blockedInside = (mid: number): boolean => {
+    const [q] = faceQuad(b, side, mid, mid, 0, 1, -WALL_T)
+    return (
+      q !== undefined &&
+      against.some(
+        (c) =>
+          q.x > c.x - WINDOW_TRIM_CLEAR &&
+          q.x < c.x + c.w + WINDOW_TRIM_CLEAR &&
+          q.z > c.z - WINDOW_TRIM_CLEAR &&
+          q.z < c.z + c.d + WINDOW_TRIM_CLEAR,
+      )
+    )
+  }
+  for (const w of openings) {
+    const end = w.at + w.width
+    const mid = w.at + w.width / 2
+    const height = w.top - w.sill
+    // Sill and lintel give the flat wall a shadow line and depth at eye level.
+    for (const y of [w.sill, w.top]) {
+      member(
+        mid,
+        y,
+        WINDOW_TRIM_PROUD,
+        w.width + 2 * WINDOW_TRIM_OVERHANG,
+        WINDOW_TRIM_THICKNESS,
+        WINDOW_TRIM_THICKNESS,
+      )
+    }
+    for (const a of [w.at - WINDOW_TRIM_WIDTH / 2, end + WINDOW_TRIM_WIDTH / 2]) {
+      member(
+        a,
+        (w.sill + w.top) / 2,
+        WINDOW_TRIM_PROUD,
+        WINDOW_TRIM_WIDTH,
+        height,
+        WINDOW_TRIM_THICKNESS,
+      )
+    }
+    member(
+      mid,
+      (w.sill + w.top) / 2,
+      WINDOW_TRIM_PROUD,
+      WINDOW_MULLION,
+      height,
+      WINDOW_TRIM_THICKNESS,
+    )
+    if (height >= WINDOW_MEETING_MIN) {
+      member(
+        mid,
+        (w.sill + w.top) / 2,
+        WINDOW_TRIM_PROUD,
+        w.width,
+        WINDOW_MULLION,
+        WINDOW_TRIM_THICKNESS,
+      )
+    }
+    if (b.hollow && !blockedInside(mid)) {
+      // Casing and stool on the room side; the reveal is the cut wall's own faces.
+      const inside = -(WALL_T + WINDOW_TRIM_PROUD)
+      for (const a of [w.at - WINDOW_TRIM_WIDTH / 2, end + WINDOW_TRIM_WIDTH / 2]) {
+        member(a, (w.sill + w.top) / 2, inside, WINDOW_TRIM_WIDTH, height, WINDOW_TRIM_THICKNESS)
       }
-      const win = shop ? wide : thin
-      if (win) {
-        // the kit's sash sits `WINDOW_SASH` above its origin; scale it to the storey
-        const s = shop ? SHOP_WINDOW_SCALE : WINDOW_SCALE
-        const y = sill - WINDOW_SASH * s + WINDOW_LIFT
-        const at = onSide(b, side, a + span / 2, y)
-        at.multiply(new Matrix4().makeScale(s, s, 1))
-        bs.kit.push({ def: win, at })
-        if (!bs.lean) {
-          // A proud sill and lintel give the flat wall a shadow line and depth at eye level.
-          const along = side === 'n' || side === 's'
-          const [q] = faceQuad(b, side, a + span / 2, a + span / 2, 0, 1, 0.075)
-          if (q) {
-            const bottom = y + 0.975 * s
-            const top = y + 2.533 * s
-            for (const yy of [bottom - 0.04, top + 0.04]) {
-              bs.wood.box(
-                q.x,
-                yy,
-                q.z,
-                along ? span + 0.32 : 0.11,
-                0.08,
-                along ? 0.11 : span + 0.32,
-                DARK_WOOD,
-              )
-            }
-          }
-        }
-        // shutters, as on the duel street's upper windows: on every upper floor, and round the
-        // houses' and barns' windows (never a shopfront's display glass)
-        if (shutter && !shop && (f > 0 || !SHOPFRONT.has(b.kind)) && !bs.lean) {
-          const st = onSide(b, side, a + span / 2, y, -0.12)
-          st.multiply(new Matrix4().makeScale(s, s, 1))
-          bs.kit.push({ def: shutter, at: st })
-        }
-        if (b.hollow && sill < b.height - 0.2) {
-          // the same window seen from inside the room (the wall itself is solid)
-          const [q] = faceQuad(b, side, a + span / 2, 0, 0, 1, -WALL_T)
-          const hidden = against.some(
-            (c) =>
-              q &&
-              q.x > c.x - span / 2 - 0.3 &&
-              q.x < c.x + c.w + span / 2 + 0.3 &&
-              q.z > c.z - span / 2 - 0.3 &&
-              q.z < c.z + c.d + span / 2 + 0.3,
-          )
-          if (q && !hidden) {
-            const inner = placeMatrix(q.x, y, q.z, SIDE_RY[side] + Math.PI)
-            inner.multiply(new Matrix4().makeScale(s, s, 1))
-            if (bs.lean) {
-              // floor tier: the inside of a window is two flat quads
-              flatWindow(bs.room(b.id).windows, win, inner)
-            } else {
-              bs.room(b.id).kit.push({ def: win, at: inner })
-            }
-          }
-        }
-        continue
+      for (const y of [w.sill, w.top]) {
+        member(
+          mid,
+          y,
+          inside,
+          w.width + 2 * WINDOW_TRIM_OVERHANG,
+          WINDOW_TRIM_THICKNESS,
+          WINDOW_TRIM_THICKNESS,
+        )
       }
-      const q = faceQuad(b, side, a, a + span, sill, sill + 1.5, 0.04)
-      const [p0, p1, p2, p3] = q
-      if (p0 && p1 && p2 && p3) {
-        bs.windows.quad(p0, p1, p2, p3, glass)
-      }
+    }
+    // Shutters on every upper floor, and round the houses' and barns' windows (never a shopfront).
+    if (shutter && !w.shop && (w.floor > 0 || !SHOPFRONT.has(b.kind))) {
+      const st = onSide(b, side, mid, w.sill - WINDOW_KIT_SASH * w.scale, -0.12)
+      st.multiply(new Matrix4().makeScale(w.scale, w.scale, 1))
+      bs.kit.push({ def: shutter, at: st })
     }
   }
 }
@@ -1190,10 +1276,19 @@ function addBuilding(bs: Builders, b: Building, layout: TownLayout, id: number):
     addClockTower(bs, b, id, layout.buildings)
     return
   }
-  for (const w of buildingWallSpans(b)) {
-    const y0 = w.y0 ?? 0
-    const y1 = w.y1 ?? h
-    g.box(w.x + w.w / 2, (y0 + y1) / 2, w.z + w.d / 2, w.w, y1 - y0, w.d, p.wall)
+  if (b.hollow) {
+    for (const side of ['n', 's', 'e', 'w'] as const) {
+      for (const w of buildingSideBoxes(b, side)) {
+        g.box(w.x + w.w / 2, (w.y0 + w.y1) / 2, w.z + w.d / 2, w.w, w.y1 - w.y0, w.d, p.wall)
+      }
+    }
+    for (const w of b.walls ?? []) {
+      const y0 = w.y0 ?? 0
+      const y1 = w.y1 ?? h
+      g.box(w.x + w.w / 2, (y0 + y1) / 2, w.z + w.d / 2, w.w, y1 - y0, w.d, p.wall)
+    }
+  } else {
+    g.box(b.x + b.w / 2, h / 2, b.z + b.d / 2, b.w, h, b.d, p.wall)
   }
   // the wall over every doorway (the collision gap runs full height; the opening doesn't)
   for (const d of b.doors) {
@@ -1242,14 +1337,7 @@ function addBuilding(bs: Builders, b: Building, layout: TownLayout, id: number):
   }
   for (const side of ['n', 's', 'e', 'w'] as const) {
     if (b.kind !== 'tower') {
-      addWindows(
-        bs,
-        b,
-        side,
-        b.floors,
-        front,
-        layout.cover.filter((c) => AGAINST_WALL.has(c.kind)),
-      )
+      addWindows(bs, b, side, layout.cover)
     }
   }
   // Roof: pitched, shingled or tin, with ridge and edge trim (see roofs.ts).
@@ -2156,6 +2244,53 @@ function splitTriangles(
 const toRect = (r: Rect, x: number, z: number): number =>
   Math.hypot(Math.max(r.x - x, 0, x - r.x - r.w), Math.max(r.z - z, 0, z - r.z - r.d))
 
+/**
+ * One instanced pane per opening, indexed by the shared town window order (`townWindows`). A broken
+ * pane collapses to zero scale: no per-window draw call, no rebuilt geometry.
+ */
+function buildWindowGlass(
+  layout: TownLayout,
+  material: MeshStandardMaterial,
+): { mesh: InstancedMesh; breakWindow: (index: number) => void } | null {
+  const all = townWindows(layout)
+  if (all.length === 0) {
+    return null
+  }
+  const zero = new Matrix4().makeScale(0, 0, 0)
+  const mesh = new InstancedMesh(new PlaneGeometry(1, 1), material, all.length)
+  mesh.name = 'window-glass'
+  mesh.frustumCulled = false
+  for (const { b, w, index } of all) {
+    const pane = windowPane(b, w)
+    const across = (pane.a0 + pane.a1) / 2
+    const m = new Matrix4().makeRotationY(SIDE_RY[w.side])
+    m.scale(
+      new Vector3(
+        Math.max(WINDOW_PANE_MIN, w.width - 2 * WINDOW_PANE_MARGIN),
+        Math.max(WINDOW_PANE_MIN, w.top - w.sill - 2 * WINDOW_PANE_MARGIN),
+        1,
+      ),
+    )
+    m.setPosition(
+      pane.axis === 0 ? pane.at : across,
+      (pane.y0 + pane.y1) / 2,
+      pane.axis === 0 ? across : pane.at,
+    )
+    mesh.setMatrixAt(index, m)
+  }
+  mesh.instanceMatrix.needsUpdate = true
+  return {
+    mesh,
+    breakWindow: (index) => {
+      if (index < 0 || index >= all.length) {
+        return
+      }
+      mesh.setMatrixAt(index, zero)
+      mesh.instanceMatrix.needsUpdate = true
+    },
+  }
+}
+
 export function buildTown(
   layout: TownLayout,
   assets: Assets,
@@ -2250,6 +2385,10 @@ export function buildTown(
     root.add(land)
   }
   landGeo.dispose()
+  const glass = lean ? null : buildWindowGlass(layout, mats.glass)
+  if (glass) {
+    root.add(glass.mesh)
+  }
   const swap = new Map([
     ['Kit', mats.kit],
     ['KitGlass', mats.windows],
@@ -2370,7 +2509,19 @@ export function buildTown(
   // every builder's vertex arrays alive with it
   const update = culler({ culled, farRects, farMeshes, nearM })
   ground.onBeforeRender = onCamera(update)
-  return { root, roofs, sun, update, dispose: disposer(root, Object.values(mats), mask) }
+  const disposeTown = disposer(root, Object.values(mats), mask)
+  const glassMap = mats.glass.map
+  return {
+    root,
+    roofs,
+    sun,
+    breakWindow: (id) => glass?.breakWindow(id),
+    update,
+    dispose: () => {
+      disposeTown()
+      glassMap?.dispose()
+    },
+  }
 }
 
 interface CullState {

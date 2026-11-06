@@ -11,6 +11,7 @@ import {
   EV_DEPOSIT,
   EV_DYNAMITE_THROWN,
   EV_EXPLOSION,
+  EV_GLASS_BREAK,
   EV_HAT_OFF,
   EV_KILL,
   EV_LEFT,
@@ -71,6 +72,7 @@ export type WireEvent =
   | { type: typeof EV_PICKUP_READY; spot: number }
   | { type: typeof EV_DYNAMITE_THROWN; player: number; x: number; z: number; fuseTicks: number }
   | { type: typeof EV_EXPLOSION; by: number; x: number; z: number }
+  | { type: typeof EV_GLASS_BREAK; window: number }
 
 type Width = 1 | 2
 type Layout = readonly (readonly [string, Width])[]
@@ -168,6 +170,7 @@ export const EVENT_LAYOUTS: Readonly<Record<number, Layout>> = {
     ['x', 2],
     ['z', 2],
   ],
+  [EV_GLASS_BREAK]: [['window', 2]],
 }
 
 const clampWidth = (v: number, width: Width): number =>
@@ -264,6 +267,8 @@ export function toWireEvent(ev: SimEvent): WireEvent {
       return { ...ev, type: EV_DYNAMITE_THROWN, x: q(ev.x), z: q(ev.z) }
     case 'explosion':
       return { ...ev, type: EV_EXPLOSION, x: q(ev.x), z: q(ev.z) }
+    case 'glass_break':
+      return { ...ev, type: EV_GLASS_BREAK }
     default:
       return { type: EV_LEFT, player: ev.player }
   }

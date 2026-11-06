@@ -53,6 +53,8 @@ export interface World {
   deposits: Deposit[]
   /** Ring buffer of positions for lag compensation: [tick % HISTORY][player][x, z, flags]. */
   history: Float64Array
+  /** One byte per window opening: 0 intact, 1 broken (`grid.glass` holds the geometry). */
+  glass: Uint8Array
   /** Economy audit, in dollars since the world started. */
   minted: number
   burned: number
@@ -76,12 +78,13 @@ export interface WorldOptions {
 export function createWorld(options: WorldOptions = {}): World {
   const layout = options.layout ?? TOWN
   const seed = (options.seed ?? 1) >>> 0
+  const grid = options.grid ?? buildGrid(layout)
   return {
     tick: 0,
     seed,
     rng: new Rng(seed),
     layout,
-    grid: options.grid ?? buildGrid(layout),
+    grid,
     players: Array.from({ length: MAX_PLAYERS }, () => null),
     bags: [],
     nextBagId: 1,
@@ -96,6 +99,7 @@ export function createWorld(options: WorldOptions = {}): World {
     events: [],
     deposits: [],
     history: new Float64Array(HISTORY_TICKS * MAX_PLAYERS * HIST_STRIDE),
+    glass: new Uint8Array(grid.glass.length),
     minted: 0,
     burned: 0,
     practice: options.practice === true,

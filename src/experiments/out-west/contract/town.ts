@@ -104,10 +104,12 @@ import { reopensOn } from '../data/sinks.ts'
  * 7: 2.5D collision: the self block grows by 7 bytes (`i8 vy` dm/s, `u8 grounded`,
  *    `u16 support` cm, `u16 airPeakY` cm, `u8 mantleTicks`); hits use the full pitch.
  * 8: nothing further; kept for a clean cutover with v7 clients.
+ * 9: breakable windows: `EV_GLASS_BREAK` (`u16` window index) marks one shattered pane; a full
+ *    snapshot replays every broken pane.
  */
-export const CONTRACT_VERSION = 8
+export const CONTRACT_VERSION = 9
 /** The binary Frontier wire format this build speaks (`TownJoinRequest.wire`). */
-export const TOWN_WIRE_VERSION = 8
+export const TOWN_WIRE_VERSION = 9
 
 // --- saddlebags ----------------------------------------------------------------------------------
 
@@ -398,6 +400,8 @@ export const EV_PICKUP_READY = 19
 export const EV_DYNAMITE_THROWN = 20
 /** `u8 by, u16 x, u16 z` */
 export const EV_EXPLOSION = 21
+/** `u16 window` (index into the shared town window order) */
+export const EV_GLASS_BREAK = 22
 
 export const EVENT_SIZES: Readonly<Record<number, number>> = {
   [EV_SHOT]: 7,
@@ -421,6 +425,7 @@ export const EVENT_SIZES: Readonly<Record<number, number>> = {
   [EV_PICKUP_READY]: 1,
   [EV_DYNAMITE_THROWN]: 6,
   [EV_EXPLOSION]: 5,
+  [EV_GLASS_BREAK]: 2,
 }
 
 /** Shot range units: metres = rangeQ × SHOT_RANGE_UNIT. */

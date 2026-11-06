@@ -46,6 +46,7 @@ import {
 } from './state.ts'
 import { rayWorld } from './surfaces.ts'
 import type { Player } from './types.ts'
+import { shatterGlass } from './windows.ts'
 
 const REWIND_TICKS = MAX_REWIND_MS / TICK_MS
 const DEG = Math.PI / 180
@@ -239,6 +240,7 @@ export function fire(w: World, p: Player, aim: number, viewTime: number): ShotRe
   const ray = shotRay(p, aim, jitter * spread * DEG, jitter * spread * DEG * 0.6)
   const world = rayWorld(w.grid, ray.ox, ray.oy, ray.oz, ray.dx, ray.dy, ray.dz, MAX_RANGE)
   const wall = world?.dist ?? MAX_RANGE
+  shatterGlass(w, ray.ox, ray.oy, ray.oz, ray.dx, ray.dy, ray.dz, wall)
   const time = rewindTime(w, viewTime)
   const hit = traceTargets(w, p, { ...ray, maxT: wall }, time)
   const range = hit ? hit.t : wall

@@ -311,6 +311,11 @@ function catchUpEvents(w: World): WireEvent[] {
       out.push(toWireEvent({ type: 'pickup_taken', spot: pk.spot, player: NONE }))
     }
   }
+  for (const [i, broken] of w.glass.entries()) {
+    if (broken === 1) {
+      out.push(toWireEvent({ type: 'glass_break', window: i }))
+    }
+  }
   for (const f of w.fuses) {
     const fuseTicks = Math.max(0, f.explodeAt - w.tick)
     out.push(toWireEvent({ type: 'dynamite_thrown', player: f.by, x: f.x, z: f.z, fuseTicks }))

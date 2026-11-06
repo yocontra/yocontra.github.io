@@ -22,7 +22,8 @@ import { rayWorld } from '../sim/surfaces.ts'
 import type { RemoteView } from './interp.ts'
 
 const BODY_R = PLAYER_RADIUS
-const FAR = 160
+/** Crosshair reach, metres: past the longest weapon range, short of a full-map ray walk. */
+const FAR = 60
 /** Closer than this (planar, from the player) the yaw to the point is unstable: use the view's. */
 const MIN_PLANAR = 1.2
 const ASSIST_CONE = (2.5 * Math.PI) / 180

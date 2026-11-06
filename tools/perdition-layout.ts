@@ -17,6 +17,7 @@
 import { writeFileSync } from 'node:fs'
 import process from 'node:process'
 import { COVER_VISUALS } from '../src/experiments/out-west/ffa/scene/cover-kinds.ts'
+import { windowSlots } from '../src/experiments/out-west/ffa/sim/building-rules.ts'
 import type {
   Building,
   Cover,
@@ -212,6 +213,7 @@ for (const bd of buildings) {
   const falseFront = FALSE_FRONT.has(bd.kind)
   const bays = falseFront && span > 13 ? 2 : 1
   bd.roof = roofSpecFor(bd, falseFront, front, span, bays)
+  bd.windows = windowSlots(bd, front)
 }
 
 /** A floor rect with a stairwell hole cut out of it. */

@@ -1,5 +1,6 @@
 // biome-ignore-all lint/complexity/useMaxParams: the tracer helper takes positional options
 // biome-ignore-all lint/complexity/noExcessiveCognitiveComplexity: event dispatch is one flat switch per event type
+// biome-ignore-all lint/style/noExcessiveLinesPerFile: one flat switch per event type stays auditable
 /**
  * Server events → what the player sees and hears: tracers and impacts, hit markers and the hurt
  * flash, the kill feed, the death poster, money bags dropping and being taken, deposits, the
@@ -16,6 +17,7 @@ import {
   EV_DEPOSIT,
   EV_DYNAMITE_THROWN,
   EV_EXPLOSION,
+  EV_GLASS_BREAK,
   EV_HAT_OFF,
   EV_KILL,
   EV_LEFT,
@@ -73,6 +75,7 @@ import { gestureFor } from './gesture-events.ts'
 import type { Hud } from './hud.ts'
 import { killLine, killToast } from './kill-line.ts'
 import type { NetClient } from './net.ts'
+import { onGlassBreak } from './window-glass.ts'
 
 export interface Showdown {
   id: number
@@ -109,6 +112,8 @@ export interface Sink {
   /** True when the player behind this entity is on your block list (never shown to you). */
   blocked: (id: number) => boolean
   pickups: Pickups
+  /** Shatter one window pane in the scene by its shared index. */
+  breakWindow: (index: number) => void
   /** You took a hit from (`x`, `z`): the HUD's damage arc points there. */
   damageFrom: (from: { x: number; z: number; y?: number }) => void
   /** You took `amount` from `attacker` (the death card's tally). */
@@ -474,6 +479,9 @@ export function handleEvent(s: Sink, ev: WireEvent): void {
       }
       break
     }
+    case EV_GLASS_BREAK:
+      onGlassBreak(s, ev.window)
+      break
     case EV_PICKUP_TAKEN:
     case EV_PICKUP_READY:
     case EV_DYNAMITE_THROWN:

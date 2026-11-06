@@ -13,12 +13,8 @@
 import process from 'node:process'
 import {
   doorTop,
-  SHOP_WINDOW_SCALE,
-  STOREY_H,
-  WINDOW_SCALE,
-  WINDOW_SILL,
-  windowBottom,
-  windowTop,
+  windowSlots as sharedWindowSlots,
+  type WindowOpening,
 } from '../src/experiments/out-west/ffa/scene/building-rules.ts'
 import { type Building, TOWN } from '../src/experiments/out-west/ffa/sim/layout.ts'
 import {
@@ -29,17 +25,6 @@ import {
 } from '../src/experiments/out-west/ffa/sim/porches.ts'
 
 const asJson = process.argv.includes('--json')
-const SHOPFRONT = new Set([
-  'saloon',
-  'hotel',
-  'general_store',
-  'stage_line',
-  'assay',
-  'undertaker',
-  'bank',
-  'jail',
-])
-
 type Level = 'error' | 'warn'
 interface Issue {
   level: Level
@@ -138,34 +123,17 @@ interface Slot {
   shop: boolean
 }
 
+/** The shared opening table, in the audit's local shape. */
 function windowSlots(b: Building, front: string): Slot[] {
-  const out: Slot[] = []
-  for (const side of ['n', 's', 'e', 'w'] as const) {
-    const len = sideLength(b, side)
-    const doors = b.doors.filter((d) => d.side === side)
-    for (let f = 0; f < b.floors; f++) {
-      const sill = WINDOW_SILL + f * STOREY_H
-      const shop = f === 0 && side === front && SHOPFRONT.has(b.kind)
-      const step = shop ? 3.8 : 3
-      const span = shop ? 2 : 1.3
-      const s = shop ? SHOP_WINDOW_SCALE : WINDOW_SCALE
-      for (let a = 1.2; a + span < len - 0.7; a += step) {
-        if (f === 0 && doors.some((d) => a + span > d.at - 0.7 && a < d.at + d.width + 0.7)) {
-          continue
-        }
-        out.push({
-          side,
-          floor: f,
-          at: a,
-          span,
-          bottom: windowBottom(sill, s),
-          top: windowTop(sill, s),
-          shop,
-        })
-      }
-    }
-  }
-  return out
+  return sharedWindowSlots(b, front as WindowOpening['side']).map((w) => ({
+    side: w.side,
+    floor: w.floor,
+    at: w.at,
+    span: w.width,
+    bottom: w.sill,
+    top: w.top,
+    shop: w.shop,
+  }))
 }
 
 for (const b of TOWN.buildings) {

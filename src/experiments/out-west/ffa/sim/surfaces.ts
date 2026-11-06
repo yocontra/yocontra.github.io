@@ -297,31 +297,60 @@ export function pushOutVertical(
   return p
 }
 
+/** Whether (x, y, z) lies inside one raised surface (deck, stair, overhead, roof). */
+function insideSurface(s: Surface, x: number, y: number, z: number): boolean {
+  if (!inside(s, x, z)) {
+    return false
+  }
+  const top = surfaceTop(s, x, z)
+  return y >= s.bottom - EPS && y <= top + EPS
+}
+
 /** Whether a point in space is inside a solid (for a 3D shot). */
 export function solidAt(grid: Grid, x: number, y: number, z: number): boolean {
   const top = topAt(grid, x, z)
   if (y >= -0.01 && y <= top + EPS) {
-    return true
-  }
-  const test = (s: Surface): boolean => {
-    if (!inside(s, x, z)) {
-      return false
-    }
-    const st = surfaceTop(s, x, z)
-    return y >= s.bottom - EPS && y <= st + EPS
+    return !insideWindowHole(grid, x, y, z)
   }
   for (const s of grid.stairs) {
-    if (test(s)) {
+    if (insideSurface(s, x, y, z)) {
       return true
     }
   }
   for (const s of grid.overheads) {
-    if (test(s)) {
+    if (insideSurface(s, x, y, z)) {
       return true
     }
   }
   for (const s of grid.roofs) {
-    if (test(s)) {
+    if (insideSurface(s, x, y, z)) {
+      return true
+    }
+  }
+  return false
+}
+
+/** Whether (x, y, z) is inside a cut window opening, so a 3D ray passes through the wall. */
+function insideWindowHole(grid: Grid, x: number, y: number, z: number): boolean {
+  const col = Math.floor(x / grid.cell)
+  const row = Math.floor(z / grid.cell)
+  if (col < 0 || row < 0 || col >= grid.n || row >= grid.n) {
+    return false
+  }
+  const i = row * grid.n + col
+  const from = grid.holeStarts[i] ?? 0
+  const to = grid.holeStarts[i + 1] ?? 0
+  for (let k = from; k < to; k++) {
+    const h = grid.windowHoles[grid.holeRefs[k] ?? -1]
+    if (
+      h &&
+      x >= h.x - EPS &&
+      x <= h.x + h.w + EPS &&
+      z >= h.z - EPS &&
+      z <= h.z + h.d + EPS &&
+      y >= h.y0 - EPS &&
+      y <= h.y1 + EPS
+    ) {
       return true
     }
   }

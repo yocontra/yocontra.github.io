@@ -608,6 +608,7 @@ export class FrontierGame {
       get pickups() {
         return game.pickups as Pickups
       },
+      breakWindow: (index) => this.town?.breakWindow(index),
     }
   }
 

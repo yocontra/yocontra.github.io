@@ -8,6 +8,7 @@
  * Blender build and the client scene read the same file.
  */
 import townJson from '../town.layout.json' with { type: 'json' }
+import { type GlassPlane, townWindows, type WindowOpening, windowPane } from './building-rules.ts'
 import {
   frontOf,
   PLATFORM_DEPTH,
@@ -78,6 +79,8 @@ export interface Building extends Rect {
   /** Real second-floor boards and the stairs that reach them. */
   upperFloor?: Floor[]
   stairs?: Stair[]
+  /** Real wall openings: cut by the scene, seen and fired through by the sim. */
+  windows?: WindowOpening[]
 }
 export interface Cover extends Rect {
   kind: string
@@ -189,6 +192,20 @@ export interface Grid {
   roofs: Surface[]
   /** Raised outdoor decks (porches, the depot platform), metres. */
   decks: Surface[]
+  /** Static glass panes, one per window opening, indexed like `World.glass`. */
+  glass: GlassPlane[]
+  /** Real openings in hollow walls: 3D rays pass between `y0` and `y1`, movement still blocks. */
+  windowHoles: WindowHole[]
+  /** Per-cell bucket into `windowHoles`: `holeRefs[holeStarts[i]..holeStarts[i + 1]]`. */
+  holeStarts: Int32Array
+  holeRefs: Int32Array
+}
+
+/** A cut window opening, used only by 3D ray tests. */
+export interface WindowHole extends Rect {
+  /** Opening bottom/top, metres. */
+  y0: number
+  y1: number
 }
 
 function fill(grid: Grid, r: Rect, flags: number): void {
@@ -205,6 +222,83 @@ function fill(grid: Grid, r: Rect, flags: number): void {
       grid.cells[i] = (grid.cells[i] ?? 0) | flags
     }
   }
+}
+
+/** One box of a building's wall: a rect plus its vertical span. */
+export interface WallBox extends Rect {
+  y0: number
+  y1: number
+}
+
+/** The wall rect for one run along a side, metres from its west/north end. */
+function sideWallRect(b: Building, side: Side, a0: number, a1: number): Rect {
+  const horizontal = side === 'n' || side === 's'
+  if (horizontal) {
+    const zz = side === 'n' ? b.z : b.z + b.d - WALL_THICKNESS
+    return { x: b.x + a0, z: zz, w: a1 - a0, d: WALL_THICKNESS }
+  }
+  const xx = side === 'w' ? b.x : b.x + b.w - WALL_THICKNESS
+  return { x: xx, z: b.z + a0, w: WALL_THICKNESS, d: a1 - a0 }
+}
+
+/**
+ * Split one exterior side into real wall boxes: full height between openings, and below/above
+ * every window. Door gaps stay empty to the floor; window middles are the actual holes the scene
+ * cuts and the sim looks through.
+ */
+export function buildingSideBoxes(b: Building, side: Side): WallBox[] {
+  const horizontal = side === 'n' || side === 's'
+  const len = horizontal ? b.w : b.d
+  const gaps = b.doors
+    .filter((d) => d.side === side)
+    .map((d) => [d.at, d.at + d.width] as const)
+    .toSorted((p, q) => p[0] - q[0])
+  const windows = (b.windows ?? [])
+    .filter((w) => w.side === side)
+    .map((w) => [w.at, w.at + w.width, w.sill, w.top] as const)
+    .toSorted((p, q) => p[0] - q[0])
+  const pieces: [number, number][] = []
+  let start = 0
+  for (const [g0, g1] of gaps) {
+    if (g0 > start) {
+      pieces.push([start, g0])
+    }
+    start = Math.max(start, g1)
+  }
+  if (start < len) {
+    pieces.push([start, len])
+  }
+  const out: WallBox[] = []
+  for (const [a0, a1] of pieces) {
+    const cuts = new Set<number>([a0, a1])
+    for (const [w0, w1] of windows) {
+      if (w1 > a0 && w0 < a1) {
+        cuts.add(Math.max(a0, w0))
+        cuts.add(Math.min(a1, w1))
+      }
+    }
+    const xs = [...cuts].sort((p, q) => p - q)
+    for (let i = 0; i < xs.length - 1; i++) {
+      const x0 = xs[i] ?? a0
+      const x1 = xs[i + 1] ?? a1
+      if (x1 - x0 < 1e-6) {
+        continue
+      }
+      const win = windows.find(([w0, w1]) => x0 >= w0 - 1e-6 && x1 <= w1 + 1e-6)
+      if (win && b.hollow) {
+        const [, , sill, top] = win
+        if (sill > 0.01) {
+          out.push({ ...sideWallRect(b, side, x0, x1), y0: 0, y1: sill })
+        }
+        if (top < b.height - 0.01) {
+          out.push({ ...sideWallRect(b, side, x0, x1), y0: top, y1: b.height })
+        }
+      } else {
+        out.push({ ...sideWallRect(b, side, x0, x1), y0: 0, y1: b.height })
+      }
+    }
+  }
+  return out
 }
 
 /** Split one wall segment around its door gaps. `along` is x for n/s walls, z for e/w walls. */
@@ -258,6 +352,23 @@ export function buildingWallSpans(b: Building): Wall[] {
     ),
     ...(b.walls ?? []).map((w) => ({ ...w, y0: w.y0 ?? 0, y1: w.y1 ?? b.height }) as Wall),
   ]
+}
+
+/** Clear flags from every cell a rect covers. */
+function clearFlags(grid: Grid, r: Rect, flags: number): void {
+  if (r.w <= 0 || r.d <= 0) {
+    return
+  }
+  const c0 = Math.max(0, Math.floor((r.x + EPS) / grid.cell))
+  const c1 = Math.min(grid.n - 1, Math.ceil((r.x + r.w - EPS) / grid.cell) - 1)
+  const r0 = Math.max(0, Math.floor((r.z + EPS) / grid.cell))
+  const r1 = Math.min(grid.n - 1, Math.ceil((r.z + r.d - EPS) / grid.cell) - 1)
+  for (let row = r0; row <= r1; row++) {
+    for (let col = c0; col <= c1; col++) {
+      const i = row * grid.n + col
+      grid.cells[i] = (grid.cells[i] ?? 0) & ~flags
+    }
+  }
 }
 
 /** Set the top of the base solid in every cell a rect covers. */
@@ -318,6 +429,10 @@ export function buildGrid(layout: TownLayout = TOWN): Grid {
     stairs: [],
     roofs: [],
     decks: [],
+    glass: [],
+    windowHoles: [],
+    holeStarts: new Int32Array(n * n + 1),
+    holeRefs: new Int32Array(0),
     bankArea: bank
       ? {
           x: bank.x + WALL_THICKNESS,
@@ -344,6 +459,13 @@ export function buildGrid(layout: TownLayout = TOWN): Grid {
     for (const r of buildingWalls(b)) {
       fill(grid, r, WALL)
       fillTop(grid, r, b.height)
+    }
+    // Real windows: movement still blocks on the wall cells; 3D rays pass through the opening
+    // (see `windowHoles`), and sight ignores the pane. Glass below/above stays solid.
+    if (b.hollow) {
+      for (const w of b.windows ?? []) {
+        clearFlags(grid, sideWallRect(b, w.side, w.at, w.at + w.width), BLOCK_SHOT | BLOCK_SIGHT)
+      }
     }
     // Upper-floor walls are solid only above the ground floor.
     for (const w of b.walls ?? []) {
@@ -437,7 +559,66 @@ export function buildGrid(layout: TownLayout = TOWN): Grid {
       grid.cells[i] = (grid.cells[i] ?? 0) & ~BLOCK_VAULT
     }
   }
+  for (const { b, w, index } of townWindows(layout)) {
+    grid.glass.push({ index, ...windowPane(b, w) })
+  }
+  indexWindowHoles(grid, layout)
   return grid
+}
+
+/**
+ * Bucket every hollow window opening by grid cell, so a 3D ray finds the hole it is passing
+ * through with one lookup. Openings only affect ray tests: the wall cells stay solid for movement.
+ */
+function indexWindowHoles(grid: Grid, layout: TownLayout): void {
+  const holes: WindowHole[] = []
+  for (const b of layout.buildings) {
+    if (!b.hollow) {
+      continue
+    }
+    for (const w of b.windows ?? []) {
+      holes.push({
+        ...sideWallRect(b, w.side, w.at, w.at + w.width),
+        y0: w.sill,
+        y1: w.top,
+      })
+    }
+  }
+  grid.windowHoles = holes
+  const n = grid.n
+  const starts = new Int32Array(n * n + 1)
+  const bounds = (h: WindowHole): [number, number, number, number] => [
+    Math.max(0, Math.floor((h.x + EPS) / grid.cell)),
+    Math.min(n - 1, Math.ceil((h.x + h.w - EPS) / grid.cell) - 1),
+    Math.max(0, Math.floor((h.z + EPS) / grid.cell)),
+    Math.min(n - 1, Math.ceil((h.z + h.d - EPS) / grid.cell) - 1),
+  ]
+  for (const h of holes) {
+    const [c0, c1, r0, r1] = bounds(h)
+    for (let row = r0; row <= r1; row++) {
+      for (let col = c0; col <= c1; col++) {
+        const ci = row * n + col + 1
+        starts[ci] = (starts[ci] ?? 0) + 1
+      }
+    }
+  }
+  for (let i = 1; i < starts.length; i++) {
+    starts[i] = (starts[i] ?? 0) + (starts[i - 1] ?? 0)
+  }
+  const refs = new Int32Array(starts[n * n] ?? 0)
+  const cursor = starts.slice(0, n * n)
+  for (const [k, h] of holes.entries()) {
+    const [c0, c1, r0, r1] = bounds(h)
+    for (let row = r0; row <= r1; row++) {
+      for (let col = c0; col <= c1; col++) {
+        const slot = row * n + col
+        refs[cursor[slot] ?? 0] = k
+        cursor[slot] = (cursor[slot] ?? 0) + 1
+      }
+    }
+  }
+  grid.holeStarts = starts
+  grid.holeRefs = refs
 }
 
 export function cellAt(grid: Grid, x: number, z: number): number {

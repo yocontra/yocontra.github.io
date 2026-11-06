@@ -42,6 +42,7 @@ import { bloomAfterShot } from './spread.ts'
 import { activePlayers, dist2, isProtected, type World } from './state.ts'
 import { rayWorld } from './surfaces.ts'
 import type { Player } from './types.ts'
+import { shatterGlass } from './windows.ts'
 
 const DEG = Math.PI / 180
 
@@ -144,6 +145,7 @@ function fireRifle(w: World, p: Player, aim: number, viewTime: number): void {
   const ray = shotRay(p, aim, jitter * spread * DEG, jitter * spread * DEG * 0.6)
   const world = rayWorld(w.grid, ray.ox, ray.oy, ray.oz, ray.dx, ray.dy, ray.dz, RIFLE_RANGE)
   const wall = world?.dist ?? RIFLE_RANGE
+  shatterGlass(w, ray.ox, ray.oy, ray.oz, ray.dx, ray.dy, ray.dz, wall)
   const time = rewindTime(w, viewTime)
   const hit = traceTargets(w, p, { ...ray, maxT: wall }, time)
   let flags = SHOT_RIFLE
@@ -170,6 +172,7 @@ function fireShotgun(w: World, p: Player, aim: number, viewTime: number): void {
     const ray = shotRay(p, aim, (lane + jitter) * DEG, jitter * DEG * 0.4)
     const world = rayWorld(w.grid, ray.ox, ray.oy, ray.oz, ray.dx, ray.dy, ray.dz, SHOTGUN_RANGE)
     const wall = world?.dist ?? SHOTGUN_RANGE
+    shatterGlass(w, ray.ox, ray.oy, ray.oz, ray.dx, ray.dy, ray.dz, wall)
     const hit = traceTargets(w, p, { ...ray, maxT: wall }, time)
     if (hit) {
       damage.set(hit.id, (damage.get(hit.id) ?? 0) + SHOTGUN_PELLET_DAMAGE)
