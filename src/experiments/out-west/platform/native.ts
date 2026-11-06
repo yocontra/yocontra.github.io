@@ -23,11 +23,16 @@ interface BridgeDetail {
   payload?: unknown
 }
 
+const isNativeChannel = (v: unknown): v is NativeChannel =>
+  isRecord(v) && typeof v.postMessage === 'function'
+
+function isBridgeDetail(v: unknown): v is BridgeDetail {
+  return isRecord(v) && v.v === BRIDGE_VERSION && typeof v.type === 'string'
+}
+
 export function nativeChannel(): NativeChannel | null {
   const rn: unknown = Reflect.get(globalThis, 'ReactNativeWebView')
-  return isRecord(rn) && typeof rn.postMessage === 'function'
-    ? (rn as unknown as NativeChannel)
-    : null
+  return isNativeChannel(rn) ? rn : null
 }
 
 export const userAgent = (): string => (typeof navigator === 'undefined' ? '' : navigator.userAgent)
@@ -38,10 +43,10 @@ const eventHandlers = new Map<string, Set<(payload: unknown) => void>>()
 
 function onBridgeEvent(e: Event): void {
   const detail: unknown = (e as CustomEvent<unknown>).detail
-  if (!(isRecord(detail) && detail.v === BRIDGE_VERSION && typeof detail.type === 'string')) {
+  if (!isBridgeDetail(detail)) {
     return
   }
-  const d = detail as unknown as BridgeDetail
+  const d = detail
   if (d.id && pending.has(d.id)) {
     pending.get(d.id)?.(d)
     pending.delete(d.id)

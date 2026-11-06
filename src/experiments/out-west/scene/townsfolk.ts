@@ -9,7 +9,7 @@
  * They stand only on the boardwalks (|x| > 9), never in the street, so they never cross the
  * sightline or read as the opponent: muted clothes, in porch shade, at the edges of the frame.
  */
-import { type Group, MathUtils, type Object3D, type SkinnedMesh, Vector3 } from 'three'
+import { type Group, MathUtils, Mesh, type Object3D, SkinnedMesh, Vector3 } from 'three'
 import type { HatKey, Look } from '../data/outlaws.ts'
 import type { Assets } from '../engine/assets.ts'
 import type { Actor } from './actor.ts'
@@ -42,6 +42,10 @@ const CLIP_RUN = 5.2
 const pick = <T>(list: readonly T[], r: number, fallback: T): T =>
   list[Math.floor(r * list.length) % list.length] ?? fallback
 
+/** Drop the undefined optional fields () without losing the shape. */
+function compact<T>(value: object): T {
+  return Object.fromEntries(Object.entries(value).filter(([, v]) => v !== undefined)) as T
+}
 function lookFor(
   spot: Spot,
   assets: Assets,
@@ -73,9 +77,7 @@ function lookFor(
     ...whiskers,
   }
   // exact optional properties: an absent trait is left out, never set to undefined
-  const look = Object.fromEntries(
-    Object.entries(loose).filter(([, v]) => v !== undefined),
-  ) as unknown as Look
+  const look = compact<Look>(loose)
   return { look, hat: pick(HATS, r(5), 'bowler'), hatColor: pick(HAT_COLORS, r(6), 0x3a_32_2a) }
 }
 
@@ -479,19 +481,17 @@ export class Townsfolk {
 function cheapen(root: Object3D, key: string): void {
   let n = 0
   root.traverse((o) => {
-    const m = o as Object3D & { isMesh?: boolean; isSkinnedMesh?: boolean; geometry?: never }
-    if (!m.isMesh) {
+    if (!(o instanceof Mesh)) {
       return
     }
     o.castShadow = false
-    const mesh = o as unknown as { geometry: import('three').BufferGeometry }
-    const geo = mesh.geometry
+    const geo = o.geometry
     const tris = (geo.index ? geo.index.count : geo.getAttribute('position').count) / 3
-    const target = m.isSkinnedMesh ? FOLK_TRIS : HAT_TRIS
+    const target = o instanceof SkinnedMesh ? FOLK_TRIS : HAT_TRIS
     if (tris > target * 1.5 && geo.index) {
       lodGeometry(geo, `${key}:${n++}`, target, 0.04)
         .then((lod) => {
-          mesh.geometry = lod
+          o.geometry = lod
         })
         .catch(() => undefined)
     }
