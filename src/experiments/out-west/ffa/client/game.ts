@@ -27,14 +27,9 @@ import {
 import { AudioEngine, type SfxName } from '../../audio/audio.ts'
 import {
   ANIM_AIM,
-  ANIM_CHANNEL,
   ANIM_DEAD,
-  ANIM_DUEL,
   ANIM_HOP,
   ANIM_IDLE,
-  ANIM_RELOAD,
-  ANIM_ROLL,
-  ANIM_RUN,
   ANIM_SLIDE,
   ANIM_VAULT,
   BOX_NONE,
@@ -51,14 +46,12 @@ import {
   EF_ALIVE,
   EF_HOLSTERED,
   EF_MOST_WANTED,
-  EF_PROTECTED,
   EV_BAG_DROP,
   EV_DEPOSIT,
   EV_KILL,
   NONE,
   POS_SCALE,
   type RosterEntry,
-  SELF_ALIVE,
   SELF_DEAD_EYE_READY,
   SELF_HOLSTERED,
   SELF_IN_SHOWDOWN,
@@ -123,7 +116,6 @@ import { airborne, radiansToAim, sliding } from '../sim/move.ts'
 import { ROOF_WALKS } from '../sim/roofwalks.ts'
 import { bloomAfterShot } from '../sim/spread.ts'
 import { supportTop } from '../sim/surfaces.ts'
-import type { MoveState } from '../sim/types.ts'
 import { type AimResult, assistFriction, assistPull, resolveAim } from './aim.ts'
 import { ThreatArrows } from './arrows.ts'
 import { Autopilot } from './autopilot.ts'
@@ -140,6 +132,17 @@ import {
   shotFx,
 } from './events.ts'
 import { cullFlora, FIRST_FLORA_M, type FloraChunk, floraChunks } from './flora-cull.ts'
+import {
+  ANIM_STATES,
+  type DevAnim,
+  dodgeAnim,
+  GESTURES,
+  jumpAnim,
+  ownAnim,
+  ownFlags,
+  ownMoving,
+  verticalAnim,
+} from './game-anim.ts'
 import { Hud } from './hud.ts'
 import type { RemoteView } from './interp.ts'
 import { Minimap } from './minimap.ts'
@@ -2407,103 +2410,6 @@ export class FrontierGame {
   }
 }
 
-/** The one-shot gestures `__frontierAnim.set` can trigger. */
-const GESTURES: readonly GestureKind[] = ['throw', 'pickup', 'callout', 'draw', 'bank']
-
-/** A held state: anim, stance bits, ground speed, and the move's turn off the aim (rad). */
-interface DevAnim {
-  anim: number
-  stance: number
-  speed: number
-  turn?: number
-}
-
-/** The animation audit's named states (dev hook `__frontierAnim.set`). */
-const ANIM_STATES: Record<string, DevAnim> = {
-  idle: { anim: ANIM_IDLE, stance: 0, speed: 0 },
-  walk: { anim: ANIM_RUN, stance: 0, speed: 1.6 },
-  run: { anim: ANIM_RUN, stance: 0, speed: 5.5 },
-  sprint: { anim: ANIM_RUN, stance: STANCE_SPRINT, speed: 7.6 },
-  strafe: { anim: ANIM_RUN, stance: 0, speed: 5.5, turn: Math.PI / 2 },
-  back: { anim: ANIM_RUN, stance: 0, speed: 5.5, turn: Math.PI },
-  ads: { anim: ANIM_IDLE, stance: STANCE_ADS, speed: 0 },
-  'ads-walk': { anim: ANIM_RUN, stance: STANCE_ADS, speed: 3 },
-  crouch: { anim: ANIM_IDLE, stance: STANCE_CROUCH, speed: 0 },
-  'crouch-walk': { anim: ANIM_RUN, stance: STANCE_CROUCH, speed: 2.9 },
-  slide: { anim: ANIM_SLIDE, stance: 0, speed: 7 },
-  jump: { anim: ANIM_HOP, stance: 0, speed: 5.5 },
-  vault: { anim: ANIM_VAULT, stance: 0, speed: 4 },
-  roll: { anim: ANIM_ROLL, stance: 0, speed: 8 },
-  reload: { anim: ANIM_RELOAD, stance: 0, speed: 0 },
-  channel: { anim: ANIM_CHANNEL, stance: 0, speed: 0 },
-  dead: { anim: ANIM_DEAD, stance: 0, speed: 0 },
-}
-
-/** `ANIM_VAULT` or `ANIM_HOP` while one is under way, else 0. */
-function jumpAnim(jumpTicks: number, vaultStep: number): number {
-  if (jumpTicks <= 0) {
-    return 0
-  }
-  return vaultStep > 0 ? ANIM_VAULT : ANIM_HOP
-}
-
-/** A ladder or a step-off, in the crowd's animation vocabulary. */
-function verticalAnim(m: MoveState): number {
-  if (m.climbTicks > 0) {
-    return ANIM_VAULT
-  }
-  return m.fallTicks > 0 ? ANIM_HOP : 0
-}
-
-/** `ANIM_ROLL` or `ANIM_SLIDE` while one is under way, else 0. */
-function dodgeAnim(m: MoveState): number {
-  if (m.rollTicks > 0) {
-    return ANIM_ROLL
-  }
-  return m.slideTicks > 0 ? ANIM_SLIDE : 0
-}
-
-function ownAnim(
-  flags: number,
-  dodge: number,
-  moving: boolean,
-  reloading: boolean,
-  channel: number,
-  jump: number,
-): number {
-  if (!(flags & SELF_ALIVE)) {
-    return ANIM_DEAD
-  }
-  if (flags & SELF_IN_SHOWDOWN) {
-    return ANIM_DUEL
-  }
-  if (dodge !== 0) {
-    return dodge
-  }
-  if (jump !== 0) {
-    return jump
-  }
-  if (reloading) {
-    return ANIM_RELOAD
-  }
-  if (channel !== CHANNEL_NONE) {
-    return ANIM_CHANNEL
-  }
-  return moving ? ANIM_RUN : ANIM_IDLE
-}
-
-/** The self flags in remote-entity terms, for the crowd. */
-function ownFlags(selfFlags: number, prot: boolean): number {
-  let f = selfFlags & SELF_ALIVE ? EF_ALIVE : 0
-  if (prot) {
-    f |= EF_PROTECTED
-  }
-  if (selfFlags & SELF_HOLSTERED) {
-    f |= EF_HOLSTERED
-  }
-  return f
-}
-
 function rayToWall(net: NetClient, x: number, z: number, aim: number, range: number): number {
   return rayGrid(
     net.grid,
@@ -2554,15 +2460,4 @@ const WEAPON_UI: Record<number, { label: string; max: number; range: number; sho
     shotFlag: SHOT_SHOTGUN,
   },
   [WEAPON_RIFLE]: { label: 'RIFLE', max: RIFLE_ROUNDS, range: RIFLE_RANGE, shotFlag: SHOT_RIFLE },
-}
-
-/** Your feet are on the move: alive, running (or reloading on the run), and not mid-roll. */
-function ownMoving(me: CrowdPlayer | undefined, rolling: boolean): boolean {
-  return (
-    me?.self === true &&
-    !rolling &&
-    (me.flags & EF_ALIVE) !== 0 &&
-    me.anim !== ANIM_DUEL &&
-    Math.hypot(me.vx, me.vz) > 0.3
-  )
 }

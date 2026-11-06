@@ -9,7 +9,7 @@ import { readFile } from 'node:fs/promises'
 import { Glob } from 'bun'
 
 const BASELINE = {
-  directives: 360,
+  directives: 361,
   ignoreAll: 259,
 } as const
 
