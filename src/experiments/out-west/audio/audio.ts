@@ -261,6 +261,8 @@ export class AudioEngine {
   /** Dips the score under an outlaw's line, so the words sit on top of it. */
   private voiceDuck!: GainNode
   private reverbIn!: GainNode
+  /** Room-tail amount requested before the audio context existed (0 outdoors, 1 indoors). */
+  private roomAmount = 0
   private slapIn!: GainNode
   /** The street a voice is heard in: a slap off the far boardwalk and a short room, on the voice bus. */
   private voiceRoom!: GainNode
@@ -512,7 +514,7 @@ export class AudioEngine {
     const reverb = ctx.createConvolver()
     reverb.buffer = this.makeImpulse(ctx, 1.4)
     this.reverbIn = ctx.createGain()
-    this.reverbIn.gain.value = 0.3
+    this.reverbIn.gain.value = 0.16 + this.roomAmount * 0.42
     this.reverbIn.connect(reverb).connect(this.buses.sfx)
     const slap = ctx.createDelay(0.5)
     slap.delayTime.value = 0.14
@@ -703,6 +705,20 @@ export class AudioEngine {
   duration(name: SfxName): number {
     const first = layersOf(name)[0]
     return first ? (this.buffers.get(SFX_FILES[first.of].url)?.duration ?? 0) : 0
+  }
+
+  /**
+   * How much room tail the sound effects get: 0 outdoors, 1 in a hollow building. The global
+   * reverb send is the short 1.4 s impulse into the SFX bus.
+   */
+  setRoom(amount: number): void {
+    const a = Math.min(1, Math.max(0, amount))
+    this.roomAmount = a
+    const ctx = this.ctx
+    if (!ctx) {
+      return
+    }
+    this.reverbIn.gain.setTargetAtTime(0.16 + a * 0.42, ctx.currentTime, 0.25)
   }
 
   /** Free a pool slot: fade out the oldest non-priority voice. */

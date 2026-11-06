@@ -299,6 +299,33 @@ function chassis(
       )
     }
   }
+  // brake lever on the front board, beside the driver
+  along(
+    b.wood,
+    alongX,
+    cx,
+    cz,
+    a0 - bedLen / 2 + 0.2,
+    bedW * 0.34,
+    y + opts.bed + 0.12,
+    0.05,
+    0.05,
+    0.55,
+    IRON,
+  )
+  along(
+    b.wood,
+    alongX,
+    cx,
+    cz,
+    a0 - bedLen / 2 + 0.2,
+    bedW * 0.34,
+    y + opts.bed + 0.62,
+    0.16,
+    0.05,
+    0.05,
+    IRON,
+  )
   // axles and wheels, inside the rect's width
   const wr = opts.wheelR
   for (const a of [a0 - bedLen / 2 + wr + 0.1, a0 + bedLen / 2 - wr - 0.1]) {
@@ -315,6 +342,18 @@ function chassis(
 }
 
 /** A canvas bonnet over a bed: ribbed hoops and a half-barrel of canvas. */
+/** A driver's bench and backrest on the front of an open wagon's bed. */
+function driverSeat(b: DressBuilders, c: Rect, bedTop: number, color: number): void {
+  const alongX = c.w >= c.d
+  const L = Math.max(c.w, c.d)
+  const W = Math.min(c.w, c.d)
+  const cx = c.x + c.w / 2
+  const cz = c.z + c.d / 2
+  const a = -L / 2 + 1.2
+  along(b.wood, alongX, cx, cz, a, 0, bedTop, 0.52, W * 0.42, 0.1, color)
+  along(b.wood, alongX, cx, cz, a - 0.24, 0, bedTop + 0.1, 0.07, W * 0.42, 0.42, color)
+}
+
 function bonnet(b: DressBuilders, c: Rect, bedTop: number): void {
   const alongX = c.w >= c.d
   const L = Math.max(c.w, c.d) - 1.35
@@ -1239,6 +1278,7 @@ function place(
       break
     case 'wagon': {
       const top = chassis(b, c, y, { bed: 0.75, wheelR: 0.5, sides: 0.35, color: 0x8a_62_40 })
+      driverSeat(b, c, top, 0x8a_62_40)
       // a couple of sacks and a crate in the bed
       kit('k_sack', (def) => put(p, 'k_sack', fitTo(def, cx, top, cz, 0.6, 0.45, 0.4, r())))
       break

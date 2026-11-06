@@ -14,13 +14,19 @@ and deterministic.
 - **Interior doors.** Doorway gaps between collinear partition spans get jambs, heads, thresholds
   and open leaves (double leaves for wide openings). On the high tier the leaves swing open as a
   player approaches and creak; the floor tier keeps them merged and static, one draw.
-- **Weather.** Periodic dust gusts sweep the street, on top of the airborne motes.
+- **Weather.** A slow clear → dust-storm → clear cycle: fog closes in, the sun and exposure drop,
+  the grade warms, and dust gusts come more often. Periodic street gusts remain in clear weather.
+- **HUD.** The kill stamp: "KILL"/"DEAD-EYE KILL", the victim's name, and the bounty, stamped in
+  the centre and gone in 1.6 s. The existing feed, hit marker, toasts and death poster stay.
+- **Audio.** Hollow buildings raise the global SFX room tail; outdoors it drops back. The change is
+  applied when the audio context starts, so an indoor spawn is correct on the first sound.
 - **Upstairs rooms.** Hotel guest room plus two east rooms; the bank's sealed upstairs room gets a
   door. The building audit now floods every storey with body clearance and fails on sealed rooms or
   walled-off stairs.
 - **Lighting.** Sunlit window shafts on the high tier (one merged additive draw), the existing
   baked interior mask and lamp pools, and a slow three-sine lamp flicker.
-- **Materials and clutter.** Bottles, glasses and cards on tables and bar counters.
+- **Materials and clutter.** Bottles, glasses and cards on tables and bar counters; open wagons get
+  a driver's bench and backrest, and every wagon a brake lever.
 - **Combat feedback.** Soot bullet holes on wall impacts, brass casings from your gun, muzzle smoke,
   the existing dust/blood puffs and hit markers.
 - **Death ragdoll.** Three pooled client-side Verlet bodies on the high tier; the crowd actor hides
@@ -42,8 +48,11 @@ bun tools/building-audit.ts      21 buildings, 0 errors, 0 warnings
 bun tools/collider-check.ts      0 invisible walls, 0 walk-through visuals
 bun tools/float-audit.ts         0 float, 0 z-fight, 0 untextured (high + floor)
 bun tools/anim-audit.ts          22/22 Frontier animation states pass
-bun tools/frontier-perf.ts       CPU p50 4.6–6.7 ms, p95 6.3–8.7 ms, frame p95 16.8 ms
+bun tools/frontier-perf.ts       CPU p50 4.2–6.7 ms, p95 6.0–8.7 ms, frame p95 16.8 ms
 ```
+
+The weather and room-audio hooks were checked in the browser: `storm 1` gives `fogNear 55`, and
+`room` is `1` inside the saloon and `0` on the street.
 
 The perf spread is the measurement machine, not the build: the same environment measures the
 pre-pass baseline at p50 5.8–6.5, p95 7.8–9.3. The best run of the pass was **4.6 / 6.3**.

@@ -81,6 +81,8 @@ export class Hud {
   private readonly promptEl: HTMLElement
   private readonly feedEl: HTMLElement
   private readonly toastEl: HTMLElement
+  private readonly killBannerEl: HTMLElement
+  private killBannerTimer: ReturnType<typeof setTimeout> | null = null
   private readonly hurtEl: HTMLElement
   private readonly reticle: HTMLElement
   private readonly hitEl: HTMLElement
@@ -146,6 +148,7 @@ export class Hud {
     this.channelFill = el('div', 'fr-channel-fill', bar)
     this.promptEl = el('div', 'fr-prompt', this.root)
     this.toastEl = el('div', 'fr-toast', this.root)
+    this.killBannerEl = el('div', 'fr-kill-banner', this.root)
     this.hurtEl = el('div', 'fr-hurt', this.root)
     this.reticle = el('div', 'fr-reticle', this.root)
     el('div', 'fr-reticle-ring', this.reticle)
@@ -498,9 +501,29 @@ export class Hud {
     }
   }
 
+  /** A kill stamp: who fell, and what it paid. Fades after 1.6 s. */
+  killBanner(name: string, bounty: number, deadEye: boolean): void {
+    this.killBannerEl.replaceChildren()
+    el('div', 'fr-kill-banner-top', this.killBannerEl, deadEye ? 'DEAD-EYE KILL' : 'KILL')
+    el('div', 'fr-kill-banner-name', this.killBannerEl, name)
+    if (bounty > 0) {
+      el('div', 'fr-kill-banner-bounty', this.killBannerEl, `+$${bounty}`)
+    }
+    this.killBannerEl.className = `fr-kill-banner on${deadEye ? ' deadeye' : ''}`
+    if (this.killBannerTimer) {
+      clearTimeout(this.killBannerTimer)
+    }
+    this.killBannerTimer = setTimeout(() => {
+      this.killBannerEl.classList.remove('on')
+    }, 1600)
+  }
+
   dispose(): void {
     if (this.toastTimer) {
       clearTimeout(this.toastTimer)
+    }
+    if (this.killBannerTimer) {
+      clearTimeout(this.killBannerTimer)
     }
     this.root.remove()
   }

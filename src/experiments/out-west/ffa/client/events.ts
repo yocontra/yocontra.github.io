@@ -298,6 +298,7 @@ function onKill(s: Sink, ev: Extract<WireEvent, { type: typeof EV_KILL }>): void
     s.hud.hit(true, (ev.flags & KILL_DEAD_EYE) !== 0)
     s.audio?.play('uiStamp', { gain: 0.6, priority: true })
     const paid = ev.flags & (KILL_PARDON | KILL_FARMED) ? 0 : ev.bounty
+    s.hud.killBanner(s.net.name(ev.victim), paid, (ev.flags & KILL_DEAD_EYE) !== 0)
     if (ev.flags & KILL_SHOWDOWN) {
       // The showdown verdict owns the big toast; the bounty goes in the feed.
       s.hud.feed(`+$${paid} bounty`, 'gold')

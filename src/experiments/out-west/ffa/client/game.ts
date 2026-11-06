@@ -200,6 +200,18 @@ export class FrontierGame {
   private ragdolls: Ragdolls | null = null
   /** Next ambient dust gust, seconds on the scene clock. */
   private gustAt = 0
+  /** Weather: a slow clear → dust-storm → clear cycle, and a dev override. */
+  private weatherClock = 0
+  private dustStorm = 0
+  private weatherOverride: number | null = null
+  private hemi: HemisphereLight | null = null
+  private readonly fogBase = new Color()
+  private readonly fogDust = new Color(0x8a_6a_44)
+  private sunBase = 0
+  private hemiBase = 0
+  private exposureBase = 1
+  /** Indoor reverb mix last sent to the audio engine (-1 = unset). */
+  private roomMix = -1
   private crowd: Crowd | null = null
   private fx: Effects | null = null
   private pickups: Pickups | null = null
@@ -629,6 +641,7 @@ export class FrontierGame {
     r.grade.u('contrast').value = p.contrast
     r.grade.u('lift').value = p.lift
     r.grade.u('exposure').value = p.exposure
+    this.exposureBase = p.exposure
     ;(r.grade.u('shadowTint').value as Vector3).set(...p.shadowTint)
     // Half the sunset warmth: Perdition is late afternoon, not a sunset.
     const [hr, hg, hb] = p.highTint
@@ -644,8 +657,12 @@ export class FrontierGame {
     const p = presetAt(DAY)
     this.scene.background = new Color(p.fog)
     this.scene.fog = new Fog(p.fog, 120, 260)
+    this.fogBase.copy(p.fog)
     const hemi = new HemisphereLight(p.hemiSky, p.hemiGround, p.hemiIntensity * 0.75)
     this.scene.add(hemi)
+    this.hemi = hemi
+    this.hemiBase = p.hemiIntensity * 0.75
+    this.sunBase = p.sunIntensity * 0.8
     this.sun.color.copy(p.sunColor).lerp(new Color(0xff_f2_e0), 0.5)
     this.sun.intensity = p.sunIntensity * 0.8
     this.sun.castShadow = true
@@ -662,6 +679,59 @@ export class FrontierGame {
     this.sun.shadow.bias = -0.0005
     this.sun.shadow.normalBias = 0.03
     this.scene.add(this.sun, this.sun.target)
+  }
+
+  /** Clear → dust storm → clear, with fog, sun and grade easing together. */
+  private updateWeather(dt: number): void {
+    this.weatherClock += dt
+    const cycle = this.weatherClock % 90
+    const target = this.weatherOverride ?? (cycle > 50 && cycle < 70 ? 1 : 0)
+    const speed = this.weatherOverride === null ? 0.8 : 6
+    this.dustStorm += (target - this.dustStorm) * (1 - Math.exp(-dt * speed))
+    if (this.dustStorm < 0.002) {
+      this.dustStorm = 0
+    }
+    const w = this.dustStorm
+    const fog = this.scene.fog
+    if (fog instanceof Fog) {
+      fog.near = 120 + (55 - 120) * w
+      fog.far = 260 + (140 - 260) * w
+      fog.color.lerpColors(this.fogBase, this.fogDust, w)
+      if (this.scene.background instanceof Color) {
+        this.scene.background.lerpColors(this.fogBase, this.fogDust, w)
+      }
+    }
+    this.sun.intensity = this.sunBase * (1 - 0.35 * w)
+    if (this.hemi) {
+      this.hemi.intensity = this.hemiBase * (1 - 0.22 * w)
+    }
+    this.renderer.grade.u('exposure').value = this.exposureBase * (1 - 0.1 * w)
+  }
+
+  /** Dev harness: force the dust storm (0 clear, 1 full) or hand it back to the cycle. */
+  devWeather(value: number | null): void {
+    this.weatherOverride = value
+    if (value !== null) {
+      this.dustStorm = value
+    }
+  }
+
+  /** True when the player is inside a hollow building, where the audio gets a room tail. */
+  private indoors(): boolean {
+    const x = this.own.x
+    const z = this.own.z
+    for (const b of TOWN.buildings) {
+      if (
+        b.hollow &&
+        x > b.x + 0.4 &&
+        x < b.x + b.w - 0.4 &&
+        z > b.z + 0.4 &&
+        z < b.z + b.d - 0.4
+      ) {
+        return true
+      }
+    }
+    return false
   }
 
   /** Load assets and build the town while the socket connects. */
@@ -1372,10 +1442,18 @@ export class FrontierGame {
     if (!(crowd && fx)) {
       return
     }
+    this.updateWeather(dt)
+    const indoor = this.indoors()
+    const room = indoor ? 1 : 0
+    if (room !== this.roomMix) {
+      this.roomMix = room
+      this.audio?.setRoom(room)
+    }
     const s = this.net.self
     fx.dustFocus.set(this.own.x, this.own.y, this.own.z)
     if (nowS > this.gustAt) {
-      this.gustAt = nowS + 18 + Math.random() * 12
+      const calm = 18 - 12 * this.dustStorm
+      this.gustAt = nowS + calm + Math.random() * calm * 0.5
       fx.gust(this.own.x, this.own.z)
     }
     const shooter0 = this.shooterView
@@ -2270,6 +2348,9 @@ export class FrontierGame {
       menu: this.hud.menuOpen,
       guide: this.guide?.state ?? null,
       fov: Math.round(this.cam.camera.fov * 10) / 10,
+      room: this.roomMix,
+      storm: Math.round(this.dustStorm * 100) / 100,
+      fogNear: Math.round((this.scene.fog as Fog).near),
       textures: this.renderer.gl.info.memory.textures,
       geometries: this.renderer.gl.info.memory.geometries,
       x: Math.round(this.own.x * 10) / 10,

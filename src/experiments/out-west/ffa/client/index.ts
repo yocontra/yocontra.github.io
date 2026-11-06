@@ -283,6 +283,14 @@ export function mountFrontier(root: HTMLElement, opts: FrontierOptions = {}): Fr
     Reflect.set(globalThis, '__frontierAnim', {
       set: (state: string | null) => game.devAnimSet(state),
     })
+    // Dev harness: force the dust storm (0 clear, 1 full) for weather screenshots.
+    Reflect.set(globalThis, '__frontierWeather', {
+      set: (v: number | null) => game.devWeather(v),
+    })
+    // Dev harness: preview the kill stamp without waiting for a kill.
+    Reflect.set(globalThis, '__frontierKill', (name: string, bounty: number, deadEye: boolean) =>
+      game.hud.killBanner(name, bounty, deadEye),
+    )
   }
   const ap = game.autopilot
   if (import.meta.env.DEV && ap) {

@@ -499,6 +499,63 @@
     0 0 36px rgb(200 56 42 / 0.75);
 }
 
+/* A kill stamp: your victim's name, a hard red rule and the bounty. */
+.fr-kill-banner {
+  position: absolute;
+  left: 50%;
+  top: 26%;
+  transform: translate(-50%, -50%) rotate(-2deg) scale(0.82);
+  display: grid;
+  justify-items: center;
+  gap: 2px;
+  pointer-events: none;
+  opacity: 0;
+  text-align: center;
+  transition:
+    opacity 0.16s ease-out,
+    transform 0.16s ease-out;
+}
+
+.fr-kill-banner.on {
+  opacity: 1;
+  transform: translate(-50%, -50%) rotate(-2deg) scale(1);
+}
+
+.fr-kill-banner-top {
+  font-family: var(--ow-font-display);
+  font-size: 15px;
+  letter-spacing: 0.22em;
+  color: var(--ow-red-hi);
+  text-shadow: 0 2px 0 #000;
+}
+
+.fr-kill-banner-name {
+  font-family: var(--ow-font-display);
+  font-size: clamp(30px, 6vw, 54px);
+  line-height: 0.95;
+  letter-spacing: 0.03em;
+  color: var(--ow-bone);
+  text-transform: uppercase;
+  text-shadow:
+    0 3px 0 var(--ow-red-lo),
+    0 5px 0 #000,
+    0 0 30px rgb(200 56 42 / 0.6);
+}
+
+.fr-kill-banner-bounty {
+  margin-top: 2px;
+  font-family: var(--ow-font-text);
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: var(--ow-brass-hi);
+  text-shadow: 0 2px 0 #000;
+}
+
+.fr-kill-banner.deadeye .fr-kill-banner-top {
+  color: var(--ow-brass-hi);
+}
+
 .fr-hurt {
   position: absolute;
   inset: 0;
