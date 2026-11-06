@@ -31,7 +31,7 @@ import { isOverdraft } from '../economy/ledger.ts'
 import { getProfile } from '../economy/profile.ts'
 import { chalkboard, requestIdOf, roundStatements } from '../economy/sinks.ts'
 import type { Env } from '../env.ts'
-import { BODY_SMALL, BODY_TINY, error, json, type RouteHandler, readJson } from '../http.ts'
+import { BODY_SMALL, BODY_TINY, error, json, type RouteHandler, readObject } from '../http.ts'
 import { block, blockedNames, fileReport, unblock } from '../moderation/reports.ts'
 import { accountByName } from '../social/lookup.ts'
 import { playerPoster } from '../social/players.ts'
@@ -69,7 +69,7 @@ async function board(request: Request, env: Env, url: URL): Promise<Response> {
 }
 
 async function round(request: Request, env: Env, player: Player): Promise<Response> {
-  const body = (await readJson(request, BODY_TINY)) as { requestId?: unknown } | undefined
+  const body = await readObject(request, BODY_TINY)
   const profile = await getProfile(env, player.accountId)
   if (!profile) {
     return error(request, env, 404, 'No profile.')
@@ -79,7 +79,7 @@ async function round(request: Request, env: Env, player: Player): Promise<Respon
       roundStatements(env, {
         accountId: player.accountId,
         name: profile.name,
-        requestId: requestIdOf(body?.requestId),
+        requestId: requestIdOf(body.requestId),
       }),
     )
   } catch (err) {
@@ -94,14 +94,12 @@ async function round(request: Request, env: Env, player: Player): Promise<Respon
 }
 
 async function report(request: Request, env: Env, player: Player): Promise<Response> {
-  const body = (await readJson(request, BODY_SMALL)) as
-    | { name?: unknown; reason?: unknown; context?: unknown; block?: unknown }
-    | undefined
-  const reason = body?.reason
+  const body = await readObject(request, BODY_SMALL)
+  const reason = body.reason
   if (!(REPORT_REASONS as readonly unknown[]).includes(reason)) {
     return error(request, env, 400, 'Pick a reason.')
   }
-  const target = await accountByName(env, body?.name)
+  const target = await accountByName(env, body.name)
   if (!target) {
     return error(request, env, 404, 'No player with that name.')
   }
@@ -109,7 +107,7 @@ async function report(request: Request, env: Env, player: Player): Promise<Respo
     return error(request, env, 400, "You can't report yourself.")
   }
   const context =
-    typeof body?.context === 'string' && body.context.length <= 80 ? body.context : null
+    typeof body.context === 'string' && body.context.length <= 80 ? body.context : null
   await fileReport(env, {
     reporterId: player.accountId,
     targetId: target.id,
@@ -117,7 +115,7 @@ async function report(request: Request, env: Env, player: Player): Promise<Respo
     context,
   })
   const blocked =
-    body?.block === true
+    body.block === true
       ? await block(env, { blockerId: player.accountId, targetId: target.id })
       : false
   const out: ReportResponse = { ok: true, blocked }
@@ -131,8 +129,8 @@ async function blocks(
   rawName: string | null,
 ): Promise<Response> {
   if (request.method !== 'GET') {
-    const body = (await readJson(request, BODY_TINY)) as { name?: unknown } | undefined
-    const target = await accountByName(env, rawName ?? body?.name)
+    const body = await readObject(request, BODY_TINY)
+    const target = await accountByName(env, rawName ?? body.name)
     if (!target) {
       return error(request, env, 404, 'No player with that name.')
     }

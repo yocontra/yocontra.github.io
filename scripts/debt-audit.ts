@@ -15,7 +15,7 @@ import { Glob } from 'bun'
 const BASELINE = {
   crossBoundaryConstants: 0,
   nameClassification: 7,
-  doubleAssertions: 14,
+  doubleAssertions: 13,
 } as const
 
 const CONST =

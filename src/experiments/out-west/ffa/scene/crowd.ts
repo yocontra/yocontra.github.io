@@ -18,7 +18,6 @@
 import {
   type BufferGeometry,
   CanvasTexture,
-  type Color,
   Group,
   InstancedMesh,
   Matrix4,
@@ -34,8 +33,6 @@ import {
   Vector3,
 } from 'three'
 import {
-  ANIM_AIM,
-  ANIM_DEAD,
   ANIM_ROLL,
   ANIM_SLIDE,
   EF_HATLESS,
@@ -44,8 +41,6 @@ import {
   SHOT_RIFLE,
   SHOT_SHOTGUN,
   STANCE_ADS,
-  STANCE_CROUCH,
-  STANCE_SPRINT,
   WEAPON_REVOLVER,
   WEAPON_RIFLE,
   WEAPON_SHOTGUN,
@@ -71,6 +66,17 @@ import {
   VatHats,
   vatFrame,
 } from './crowd/vat.ts'
+import {
+  CLIP_WALK_SPEED,
+  farStance,
+  GAIT_IDLE,
+  GAIT_RUN,
+  GAIT_WALK,
+  gaitRate,
+  hatColor,
+  nextGait,
+  setAuto,
+} from './crowd-motion.ts'
 import { shareDepthByKind } from './depth-kinds.ts'
 import type { GestureKind } from './gestures.ts'
 import { Locomotion } from './locomotion.ts'
@@ -92,24 +98,8 @@ const SHADOW_CASTERS = 6
 const LOD1_TRIS = 3000
 /** Triangles in a skinned (near) rider's hat, other than yours. */
 const NEAR_HAT_TRIS = 800
-/** Running speed the Run clip was authored for (m/s). */
-const CLIP_RUN_SPEED = 5.2
-/** Walking speed the Walk clip was authored for (m/s), until an actor measures his stride. */
-const CLIP_WALK_SPEED = 1.4
-/**
- * Gait thresholds on the smoothed ground speed (m/s), with hysteresis so a rider near a boundary
- * doesn't flicker between clips: idle below `WALK_ON` (back to idle under `WALK_OFF`), walk up to
- * `RUN_ON` (back from a run under `RUN_OFF`). A full stick runs at 5.5 m/s.
- */
-const WALK_ON = 0.45
-const WALK_OFF = 0.25
-const RUN_ON = 2.6
-const RUN_OFF = 2.1
 /** How fast the drawn ground speed follows the snapshots' (1/s). */
 const SPEED_EASE = 10
-const GAIT_IDLE = 0
-const GAIT_WALK = 1
-const GAIT_RUN = 2
 /**
  * Built actors kept beyond the skinned cap. A parked actor (off the graph) costs nothing per frame,
  * only its geometry and bones in memory, while re-casting one is a full dress-and-bake plus a GPU
@@ -1129,64 +1119,3 @@ const d2 = (p: CrowdPlayer): number => {
   return r2
 }
 const byDistance = (a: CrowdPlayer, b: CrowdPlayer): number => d2(a) - d2(b)
-
-function setAuto(bones: readonly Object3D[], on: boolean): void {
-  for (const b of bones) {
-    b.matrixAutoUpdate = on
-  }
-}
-
-/** Idle, walk or run at this ground speed, from the last gait (-1: none yet), with hysteresis. */
-function nextGait(gait: number, v: number): number {
-  if (gait === GAIT_IDLE && v < WALK_ON) {
-    return GAIT_IDLE
-  }
-  if (gait !== GAIT_IDLE && v < WALK_OFF) {
-    return GAIT_IDLE
-  }
-  if (gait < 0 && v < WALK_ON) {
-    return GAIT_IDLE
-  }
-  if (gait === GAIT_RUN) {
-    return v < RUN_OFF ? GAIT_WALK : GAIT_RUN
-  }
-  return v >= RUN_ON ? GAIT_RUN : GAIT_WALK
-}
-
-/** Playback rate of a gait clip at this ground speed, so the feet roughly keep to the ground. */
-function gaitRate(clip: Clip, speed: number, walk: number): number {
-  return clip === 'Walk'
-    ? Math.max(0.6, Math.min(1.6, speed / walk))
-    : Math.max(0.6, Math.min(1.3, speed / CLIP_RUN_SPEED))
-}
-
-/** A far rider's clip for his stance: the crouch, the sprint, the slide, the sights, his death. */
-function farStance(p: CrowdPlayer, gait: Clip, has: (c: Clip) => boolean): Clip {
-  if (p.anim === ANIM_DEAD) {
-    return 'Death'
-  }
-  if (p.anim === ANIM_SLIDE && has('Crouch_Idle')) {
-    return 'Crouch_Idle'
-  }
-  if ((p.stance & STANCE_CROUCH) !== 0 && has('Crouch_Idle')) {
-    return gait === 'Idle' ? 'Crouch_Idle' : 'Crouch_Walk'
-  }
-  if ((p.stance & STANCE_SPRINT) !== 0 && has('Sprint')) {
-    return 'Sprint'
-  }
-  const drawn = !(p.flags & EF_HOLSTERED) || (p.stance & STANCE_ADS) !== 0
-  if (p.anim === ANIM_AIM || (p.stance & STANCE_ADS) !== 0 || (gait === 'Idle' && drawn)) {
-    return gait === 'Idle' || (p.stance & STANCE_ADS) !== 0 ? 'Idle_Gun_Pointing' : gait
-  }
-  return gait
-}
-
-const hatColors = new WeakMap<PlayerLook, Color>()
-function hatColor(look: PlayerLook): Color {
-  let c = hatColors.get(look)
-  if (!c) {
-    c = look.top.clone().setHex(look.hatColor)
-    hatColors.set(look, c)
-  }
-  return c
-}

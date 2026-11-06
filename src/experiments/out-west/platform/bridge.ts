@@ -11,31 +11,19 @@
  * Game code imports `platform` and never checks the shell itself. Owned by stream A.
  */
 import { isRecord } from '../contract/validate.ts'
+import type { HapticKind, Insets, SharePayload, SignInPurpose } from './bridge-types.ts'
 import { onPause, onResume } from './lifecycle.ts'
 import { APP_UA, IOS_UA, nativeChannel, onNative, post, request, userAgent } from './native.ts'
+
+export type { HapticKind, Insets, SharePayload, SignInPurpose } from './bridge-types.ts'
 
 const MAC_PLATFORM = /\bMac/u
 
 export type PlatformKind = 'web' | 'ios-app' | 'android-app'
-export type HapticKind = 'shot' | 'hit' | 'beat'
-export type SignInPurpose = 'login' | 'register' | 'reauth'
-
-export interface Insets {
-  top: number
-  right: number
-  bottom: number
-  left: number
-}
 
 /** Where access tokens come from: the cookie refresh on the web, the native secure store in the app. */
 export interface TokenSource {
   getAccessToken: () => Promise<string | null>
-}
-
-export interface SharePayload {
-  title: string
-  url: string
-  image?: string
 }
 
 export interface Platform {
@@ -99,7 +87,7 @@ onNative('safeArea', (payload) => {
     isRecord(payload) &&
     ['top', 'right', 'bottom', 'left'].every((k) => typeof payload[k] === 'number')
   ) {
-    nativeInsets = payload as unknown as Insets
+    nativeInsets = payload
     globalThis.dispatchEvent(new CustomEvent('ow-safe-area'))
   }
 })

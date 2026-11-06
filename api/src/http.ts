@@ -1,4 +1,5 @@
 /** Shared HTTP plumbing for every route module. Owned by the lead. */
+import { isRecord } from '../../src/experiments/out-west/contract/validate.ts'
 import type { Env } from './env.ts'
 
 /** A route module claims a request by returning a Response, or passes with null. */
@@ -104,4 +105,16 @@ export async function verifyTurnstile(token: string, request: Request, env: Env)
   })
   const outcome = await res.json<{ success: boolean }>()
   return outcome.success
+}
+
+/**
+ * Read a JSON object body. Invalid or oversized bodies become `{}` so a route can narrow the
+ * fields it knows; a caller that needs to distinguish an invalid body uses `readJson`.
+ */
+export async function readObject(
+  request: Request,
+  maxBytes = BODY_DEFAULT,
+): Promise<Record<string, unknown>> {
+  const value = await readJson(request, maxBytes)
+  return isRecord(value) ? value : {}
 }

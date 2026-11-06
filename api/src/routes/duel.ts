@@ -25,7 +25,7 @@ import {
   error,
   json,
   type RouteHandler,
-  readJson,
+  readObject,
   verifyTurnstile,
 } from '../http.ts'
 
@@ -101,8 +101,8 @@ async function queueTicket(request: Request, env: Env, url: URL): Promise<Respon
   if (!player) {
     return error(request, env, 401, 'Sign in to play Bounty Hunt.')
   }
-  const body = (await readJson(request, BODY_STANDARD)) as { turnstileToken?: unknown } | undefined
-  const token = body?.turnstileToken
+  const body = await readObject(request, BODY_STANDARD)
+  const token = body.turnstileToken
   if (typeof token !== 'string' || !(await verifyTurnstile(token, request, env))) {
     return error(request, env, 403, 'Couldn’t verify this device. Try again.')
   }
@@ -185,8 +185,8 @@ async function settings(request: Request, env: Env): Promise<Response> {
     return error(request, env, 401, 'Sign in first.')
   }
   if (request.method === 'PUT') {
-    const body = (await readJson(request, BODY_TINY)) as { ghostOptOut?: unknown } | undefined
-    if (typeof body?.ghostOptOut !== 'boolean') {
+    const body = await readObject(request, BODY_TINY)
+    if (typeof body.ghostOptOut !== 'boolean') {
       return error(request, env, 400, 'Expected { ghostOptOut: boolean }.')
     }
     await env.DB.batch(setGhostOptOutStatements(env, player.accountId, body.ghostOptOut))

@@ -21,7 +21,7 @@ import {
   error,
   json,
   type RouteHandler,
-  readJson,
+  readObject,
   verifyTurnstile,
 } from '../http.ts'
 import { resumeToken, verifyResumeToken } from '../ranked/resume-token.ts'
@@ -62,10 +62,8 @@ export const rankedRoutes: RouteHandler = async (request, env, url) => {
     if (!allowedOrigin(request, env)) {
       return error(request, env, 403, 'Origin not allowed.')
     }
-    const body = (await readJson(request, BODY_STANDARD)) as
-      | { turnstileToken?: unknown }
-      | undefined
-    const token = body?.turnstileToken
+    const body = await readObject(request, BODY_STANDARD)
+    const token = body.turnstileToken
     if (typeof token !== 'string' || !(await verifyTurnstile(token, request, env))) {
       return error(request, env, 403, 'Couldn’t verify this device. Try again.')
     }

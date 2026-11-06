@@ -42,7 +42,7 @@ import {
   error,
   json,
   type RouteHandler,
-  readJson,
+  readObject,
   verifyTurnstile,
 } from '../http.ts'
 
@@ -112,18 +112,16 @@ async function issue(request: Request, env: Env, verify: Verify): Promise<Respon
   if (!allowedOrigin(request, env)) {
     return error(request, env, 403, 'Origin not allowed.')
   }
-  const body = (await readJson(request, BODY_STANDARD)) as
-    | { turnstileToken?: unknown; unposted?: unknown }
-    | undefined
+  const body = await readObject(request, BODY_STANDARD)
   const player = await authenticate(request, env)
-  const token = body?.turnstileToken
+  const token = body.turnstileToken
   // a guest's try posts nothing, so it never spends a siteverify call
   const verified =
     player !== null &&
     typeof token === 'string' &&
     token !== '' &&
     (await verify(token, request, env))
-  if (player && !verified && body?.unposted !== true) {
+  if (player && !verified && body.unposted !== true) {
     return json(
       request,
       env,

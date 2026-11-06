@@ -4,6 +4,7 @@
  * no-op (or rejects) on the web. Most code should use `bridge.ts` instead. Owned by stream A.
  */
 import { isRecord } from '../contract/validate.ts'
+import type { BridgeCommands, BridgeEvents } from './bridge-types.ts'
 
 const BRIDGE_VERSION = 1
 export const APP_UA = /\bOutWestApp\/\d+/u
@@ -56,14 +57,17 @@ if (typeof document !== 'undefined') {
 }
 
 /** Fire-and-forget message to the native side. No-op on the web. */
-export function post(type: string, payload?: unknown): void {
+export function post<K extends keyof BridgeCommands>(type: K, payload?: BridgeCommands[K]): void {
   nativeChannel()?.postMessage(
     JSON.stringify({ v: BRIDGE_VERSION, id: `m${++seq}`, type, payload }),
   )
 }
 
 /** Request/response to the native side. Rejects on the web, on timeout, or when native says no. */
-export function request(type: string, payload?: unknown): Promise<unknown> {
+export function request<K extends keyof BridgeCommands>(
+  type: K,
+  payload?: BridgeCommands[K],
+): Promise<unknown> {
   const channel = nativeChannel()
   if (!channel) {
     return Promise.reject(new Error('no native bridge'))
@@ -87,12 +91,16 @@ export function request(type: string, payload?: unknown): Promise<unknown> {
 }
 
 /** Subscribes to a native event (e.g. `pause`, `resume`, `safeArea`). Returns an unsubscribe. */
-export function onNative(type: string, cb: (payload: unknown) => void): () => void {
+export function onNative<K extends keyof BridgeEvents>(
+  type: K,
+  cb: (payload: BridgeEvents[K]) => void,
+): () => void {
   let set = eventHandlers.get(type)
   if (!set) {
     set = new Set()
     eventHandlers.set(type, set)
   }
-  set.add(cb)
-  return () => set.delete(cb)
+  const handler = (payload: unknown): void => cb(payload as BridgeEvents[K])
+  set.add(handler)
+  return () => set.delete(handler)
 }

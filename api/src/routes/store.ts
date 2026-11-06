@@ -33,7 +33,7 @@ import { isConstraintError, isOverdraft, ledgerStatements } from '../economy/led
 import { getProfileDetail, ownedItems } from '../economy/profile.ts'
 import { dyeStatements, dyesOf, requestIdOf } from '../economy/sinks.ts'
 import type { Env } from '../env.ts'
-import { BODY_TINY, error, json, type RouteHandler, readJson } from '../http.ts'
+import { BODY_TINY, error, json, type RouteHandler, readObject } from '../http.ts'
 
 const REFUSALS: Record<string, [number, string]> = {
   not_for_sale: [403, "That one isn't for sale."],
@@ -65,8 +65,8 @@ export function purchaseStatements(
 }
 
 async function buy(request: Request, env: Env, player: Player): Promise<Response> {
-  const body = (await readJson(request, BODY_TINY)) as { itemId?: unknown } | undefined
-  const itemId = body?.itemId
+  const body = await readObject(request, BODY_TINY)
+  const itemId = body.itemId
   const item = isItemId(itemId) ? itemById(itemId) : undefined
   if (!(isItemId(itemId) && item)) {
     return error(request, env, 400, 'Unknown item.')
@@ -118,11 +118,9 @@ async function currentDye(env: Env, accountId: string, itemId: ItemId): Promise<
 
 /** `POST /store/dye`: recolour an owned item (§5 dye jobs). One guarded batch. */
 async function dye(request: Request, env: Env, player: Player): Promise<Response> {
-  const body = (await readJson(request, BODY_TINY)) as
-    | { itemId?: unknown; dye?: unknown; requestId?: unknown }
-    | undefined
-  const itemId = body?.itemId
-  const wanted = body?.dye
+  const body = await readObject(request, BODY_TINY)
+  const itemId = body.itemId
+  const wanted = body.dye
   if (!(isItemId(itemId) && isDyeId(wanted))) {
     return error(request, env, 400, 'Unknown item or dye.')
   }
@@ -138,7 +136,7 @@ async function dye(request: Request, env: Env, player: Player): Promise<Response
     return error(request, env, status, message)
   }
   const price = dyePrice(itemId, wanted) ?? 0
-  const requestId = requestIdOf(body?.requestId)
+  const requestId = requestIdOf(body.requestId)
   try {
     await env.DB.batch(
       dyeStatements(env, {
