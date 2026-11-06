@@ -174,6 +174,8 @@ interface Member {
   lastSeen: number
   /** Distance rank this frame (0 = you); unranked members (out of interest) are Infinity. */
   rank: number
+  /** A ragdoll has replaced his body until he respawns. */
+  hidden: boolean
   /** Ground speed as drawn (m/s): the snapshots' speed, eased. */
   speed: number
   /** `GAIT_*`: idle, walk or run, from `speed` with hysteresis (every LOD reads it). */
@@ -363,6 +365,29 @@ export class Crowd {
     m?.loco?.died(Math.floor(Math.random() * 1000), from, at)
   }
 
+  /** A ragdoll took over his body: stop drawing and animating the crowd actor. */
+  hide(id: number): void {
+    const m = this.members.get(id)
+    if (m) {
+      m.hidden = true
+      m.holder?.removeFromParent()
+      m.wasNear = false
+    }
+  }
+
+  /** He respawned: let the crowd actor draw again. */
+  show(id: number): void {
+    const m = this.members.get(id)
+    if (m) {
+      m.hidden = false
+    }
+  }
+
+  /** His look, for the ragdoll's colours. */
+  lookOf(id: number): PlayerLook | null {
+    return this.members.get(id)?.look ?? null
+  }
+
   /** Back to the revolver (died, respawned): map weapons are lost with the life. */
   disarm(id: number): void {
     const m = this.members.get(id)
@@ -398,6 +423,7 @@ export class Crowd {
       animSince: 0,
       lastSeen: 0,
       rank: Number.POSITIVE_INFINITY,
+      hidden: false,
       speed: 0,
       gait: GAIT_IDLE,
       caster: false,
@@ -717,6 +743,7 @@ export class Crowd {
     viewCos = Math.cos(Math.min(Math.PI, half + VIEW_MARGIN))
   }
 
+  // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: one flat per-player draw pass
   update(players: readonly CrowdPlayer[], cx: number, cz: number, dt: number, nowS: number): void {
     const order = this.order
     order.length = 0
@@ -744,6 +771,10 @@ export class Crowd {
     for (const [rank, p] of order.entries()) {
       const m = this.members.get(p.id)
       if (!m) {
+        continue
+      }
+      if (m.hidden) {
+        m.holder?.removeFromParent()
         continue
       }
       seen.add(p.id)

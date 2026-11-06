@@ -97,6 +97,7 @@ import { buildInterior, flickerLamps } from '../scene/interior.ts'
 import { lookFor } from '../scene/looks.ts'
 import { loadMoves } from '../scene/moves.ts'
 import { Pickups } from '../scene/pickups.ts'
+import { Ragdolls } from '../scene/ragdoll.ts'
 import { buildTown, type Town } from '../scene/town.ts'
 import { buildWilds, shadeTown, Wilds } from '../scene/wilds.ts'
 import type { WireEvent } from '../sim/codec-events.ts'
@@ -121,6 +122,7 @@ import { BLOCK_SHOT, BLOCK_SIGHT, rayGrid, spawnFacing, TOWN, zoneAt } from '../
 import { airborne, radiansToAim, sliding } from '../sim/move.ts'
 import { ROOF_WALKS } from '../sim/roofwalks.ts'
 import { bloomAfterShot } from '../sim/spread.ts'
+import { supportTop } from '../sim/surfaces.ts'
 import type { MoveState } from '../sim/types.ts'
 import { type AimResult, assistFriction, assistPull, resolveAim } from './aim.ts'
 import { ThreatArrows } from './arrows.ts'
@@ -195,6 +197,7 @@ export class FrontierGame {
   private transport: Transport | null = null
   private town: Town | null = null
   private lamps: Mesh | null = null
+  private ragdolls: Ragdolls | null = null
   private crowd: Crowd | null = null
   private fx: Effects | null = null
   private pickups: Pickups | null = null
@@ -611,6 +614,9 @@ export class FrontierGame {
         return game.pickups as Pickups
       },
       breakWindow: (index) => this.town?.breakWindow(index),
+      get ragdolls() {
+        return game.ragdolls
+      },
     }
   }
 
@@ -692,6 +698,9 @@ export class FrontierGame {
     this.wilds.roll(TOWN)
     this.fx = new Effects(this.scene)
     this.fx.showDust(this.renderer.tier === 'high')
+    this.ragdolls = new Ragdolls(this.scene, this.renderer.tier === 'high', (x, z, feetY) =>
+      supportTop(this.net.grid, x, z, feetY),
+    )
     this.pickups = new Pickups(this.scene, TOWN.pickups, assets.props)
     const near = this.nearCap()
     this.crowd = new Crowd(this.scene, assets, near)
@@ -1541,6 +1550,7 @@ export class FrontierGame {
     this.pickups?.update(nowS, (x, y, z) => fx.spark(x, y, z))
     fx.update(dt, nowS)
     flickerLamps(this.lamps, nowS)
+    this.ragdolls?.update(dt)
     if (shooter) {
       // your ears are where your head is, facing the way you look
       this.audio?.setListener(
@@ -2157,6 +2167,7 @@ export class FrontierGame {
     this.hud.dispose()
     this.crowd?.dispose()
     this.town?.dispose()
+    this.ragdolls?.dispose()
     this.renderer.probe.dispose()
     this.renderer.composer.dispose()
     this.renderer.gl.dispose()

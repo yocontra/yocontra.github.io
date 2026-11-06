@@ -21,6 +21,9 @@ and deterministic.
 - **Materials and clutter.** Bottles, glasses and cards on tables and bar counters.
 - **Combat feedback.** Soot bullet holes on wall impacts, brass casings from your gun, muzzle smoke,
   the existing dust/blood puffs and hit markers.
+- **Death ragdoll.** Three pooled client-side Verlet bodies on the high tier; the crowd actor hides
+  while its body falls and is restored on respawn. The authored Death clip is the floor-tier
+  fallback and the overflow fallback.
 
 ## Floor tier
 
@@ -47,8 +50,10 @@ Contact sheets: `.playwright-mcp/interiors/contact-sheet.png` (high tier) and
 
 ## Animation and ragdoll
 
-The authored `Death` clip remains the death presentation. Full animation (aim/fire/reload per
-weapon, crouch/slide/strafe, hit reactions, deaths) and the simple Verlet ragdoll are deferred to a
-separate pass. They will use **CC0 sources only** — Quaternius's Universal Animation Library and the
-rig already in `tools/build-moves.ts`. Mixamo is ruled out: its terms do not allow shipping the
-clips in an OSS repository, so no Mixamo asset or manifest is part of this repo.
+The authored `Death` clip remains the fallback. The simple client-side Verlet ragdoll is shipped on
+the high tier: three pooled bodies, spawned on `EV_KILL`, hidden crowd actor, released on respawn.
+The floor tier keeps the authored clip. The full animation state graph (aim/fire/reload per weapon,
+crouch/slide/strafe, hit reactions, deaths) is deferred to a separate pass using **CC0 sources only**
+— Quaternius's Universal Animation Library and the rig already in `tools/build-moves.ts`. Mixamo is
+ruled out: its terms do not allow shipping the clips in an OSS repository, so no Mixamo asset or
+manifest is part of this repo.

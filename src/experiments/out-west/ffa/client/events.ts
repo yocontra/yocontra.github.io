@@ -55,6 +55,7 @@ import { haptic } from '../../platform/haptics.ts'
 import type { Crowd } from '../scene/crowd.ts'
 import type { Effects } from '../scene/fx.ts'
 import type { Pickups } from '../scene/pickups.ts'
+import type { Ragdolls } from '../scene/ragdoll.ts'
 import type { WireEvent } from '../sim/codec-events.ts'
 import { CALLOUT_ACCEPT_TICKS, SHOTGUN_CONE_DEG, SHOTGUN_RANGE, TICK_MS } from '../sim/constants.ts'
 import { TOWN } from '../sim/layout.ts'
@@ -112,6 +113,8 @@ export interface Sink {
   /** True when the player behind this entity is on your block list (never shown to you). */
   blocked: (id: number) => boolean
   pickups: Pickups
+  /** Client-side death ragdolls (null on the floor tier, which keeps the authored clip). */
+  ragdolls: Ragdolls | null
   /** Shatter one window pane in the scene by its shared index. */
   breakWindow: (index: number) => void
   /** You took a hit from (`x`, `z`): the HUD's damage arc points there. */
@@ -283,7 +286,11 @@ function onKill(s: Sink, ev: Extract<WireEvent, { type: typeof EV_KILL }>): void
   )
   const p = s.posOf(ev.victim)
   if (p) {
-    s.crowd.killed(ev.victim, p, ev.killer === ev.victim ? null : s.posOf(ev.killer))
+    const from = ev.killer === ev.victim ? null : s.posOf(ev.killer)
+    s.crowd.killed(ev.victim, p, from)
+    if (s.ragdolls?.spawn(ev.victim, p, from, s.crowd.lookOf(ev.victim))) {
+      s.crowd.hide(ev.victim)
+    }
     s.fx.dust(p.x, p.z, 8)
     play(s, 'bodyfall', p, 0.8)
   }
@@ -452,6 +459,8 @@ export function handleEvent(s: Sink, ev: WireEvent): void {
       break
     case EV_RESPAWN: {
       s.crowd.disarm(ev.player)
+      s.crowd.show(ev.player)
+      s.ragdolls?.release(ev.player)
       const p = s.posOf(ev.player)
       if (p) {
         s.fx.dust(p.x, p.z, 10)
