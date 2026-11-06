@@ -50,6 +50,25 @@ const LAMP_OVER = new Set([
   'forge',
 ])
 const GLOW = new Set(['stove', 'forge'])
+/** Base emissive strength of the lamp chimneys, and the flicker envelope around it. */
+const LAMP_INTENSITY = 3.2
+const FLICKER_FAST = 0.011
+const FLICKER_SLOW = 0.022
+const FLICKER_DEEP = 0.005
+
+/** A slow, three-sine oil-lamp flicker, so the practicals never read as a steady LED. */
+export function flickerLamps(m: Mesh | null, t: number): void {
+  if (!m) {
+    return
+  }
+  const mat = m.material as MeshStandardMaterial
+  mat.emissiveIntensity =
+    LAMP_INTENSITY *
+    (0.965 +
+      Math.sin(t * 6.7) * FLICKER_SLOW +
+      Math.sin(t * 15.3) * FLICKER_FAST +
+      Math.sin(t * 27.1) * FLICKER_DEEP)
+}
 
 const ceilingOf = (b: Building): number => (b.floors > 1 ? 3.3 : b.height - 0.05)
 
@@ -205,7 +224,7 @@ function lampMesh(spots: readonly { x: number; z: number; y: number }[]): Mesh |
     roughness: 0.4,
     metalness: 0.3,
     emissive: new Color(1.0, 0.6, 0.28),
-    emissiveIntensity: 3.2,
+    emissiveIntensity: LAMP_INTENSITY,
   })
   mat.userData.procedural = true
   // the glow only where the vertex colour is bright (the chimney), not the brass

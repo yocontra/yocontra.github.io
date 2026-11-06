@@ -16,6 +16,7 @@ import {
   DirectionalLight,
   Fog,
   HemisphereLight,
+  type Mesh,
   Plane,
   Quaternion,
   Raycaster,
@@ -92,7 +93,7 @@ import { shareDepthByKind } from '../scene/depth-kinds.ts'
 import { Effects } from '../scene/fx.ts'
 import type { GestureKind } from '../scene/gestures.ts'
 import { installHotPaths } from '../scene/hot-paths.ts'
-import { buildInterior } from '../scene/interior.ts'
+import { buildInterior, flickerLamps } from '../scene/interior.ts'
 import { lookFor } from '../scene/looks.ts'
 import { loadMoves } from '../scene/moves.ts'
 import { Pickups } from '../scene/pickups.ts'
@@ -193,6 +194,7 @@ export class FrontierGame {
   readonly net: NetClient
   private transport: Transport | null = null
   private town: Town | null = null
+  private lamps: Mesh | null = null
   private crowd: Crowd | null = null
   private fx: Effects | null = null
   private pickups: Pickups | null = null
@@ -682,6 +684,7 @@ export class FrontierGame {
       this.town.root.add(inside.lamps)
       inside.lamps.updateMatrix()
       inside.lamps.updateMatrixWorld(true)
+      this.lamps = inside.lamps
     }
     const flora = buildWilds(TOWN, this.renderer.tier)
     this.scene.add(flora)
@@ -1535,6 +1538,7 @@ export class FrontierGame {
     )
     this.pickups?.update(nowS, (x, y, z) => fx.spark(x, y, z))
     fx.update(dt, nowS)
+    flickerLamps(this.lamps, nowS)
     if (shooter) {
       // your ears are where your head is, facing the way you look
       this.audio?.setListener(

@@ -746,7 +746,7 @@ function glassTexture(): CanvasTexture {
 /** Sunlit window shafts: length limit, how square-on a window must face the sun, and opacity. */
 const SHAFT_LENGTH = 4.5
 const SHAFT_SUN_MIN = 0.15
-const SHAFT_OPACITY = 0.13
+const SHAFT_OPACITY = 0.09
 const SHAFT_MAX = 160
 const SHAFT_TEX = 64
 

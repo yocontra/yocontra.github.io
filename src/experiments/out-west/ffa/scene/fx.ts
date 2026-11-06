@@ -122,6 +122,7 @@ class Burst {
       n++
     }
     this.mesh.count = n
+    this.mesh.visible = n > 0
     this.mesh.instanceMatrix.needsUpdate = true
     if (this.mesh.instanceColor) {
       this.mesh.instanceColor.needsUpdate = true
@@ -639,6 +640,7 @@ export class Effects {
       cn++
     }
     this.casingMesh.count = cn
+    this.casingMesh.visible = cn > 0
     if (cn > 0) {
       this.casingMesh.instanceMatrix.needsUpdate = true
     }
