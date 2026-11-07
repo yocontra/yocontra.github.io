@@ -1,28 +1,23 @@
 import { expect, it } from 'bun:test'
-import { createHash } from 'node:crypto'
 import { Vector3 } from 'three'
 import { corpseGround } from '../src/experiments/out-west/ffa/scene/ragdoll-cloth-contact.ts'
 import { buildGrid, TOWN } from '../src/experiments/out-west/ffa/sim/layout.ts'
+import { referenceClothGround } from './helpers/cloth-ground-reference.ts'
 import { type ClothQuery, clothQueries } from './helpers/cloth-query-corpus.ts'
 
-/** Golden IEEE-754 outputs from the original provider, before its spatial-index optimization. */
+/** Compare exact IEEE-754 results on the same host; shaped-surface math can vary across hosts. */
 it('preserves all exact town corrections at surfaces, cell boundaries and broken panes', () => {
   const grid = buildGrid(TOWN)
   const queries = clothQueries(grid, TOWN)
   const broken = new Set<number>()
   const ground = corpseGround(grid, TOWN, broken)
+  const reference = referenceClothGround(grid, TOWN, broken)
   expect(queries.length).toBe(54_043)
-  expect(digest(ground, queries)).toEqual([
-    0x13_1a_8e_8c, 0x73_55_7c_c5, 0x70_a5_d6_ab, 0x30_f7_31_63, 0xf8_8b_d1_0d, 0x1c_9d_1e_22,
-    0x6a_b3_3a_57, 0xeb_de_89_7b,
-  ])
+  expect(firstDifference(ground, reference, queries)).toBeNull()
   for (const pane of grid.glass) {
     broken.add(pane.index)
   }
-  expect(digest(ground, queries)).toEqual([
-    0x4b_9a_f4_1a, 0xe1_e6_25_33, 0x8e_71_9c_40, 0x6d_e4_36_77, 0x65_3d_69_23, 0xfc_39_fc_c7,
-    0x52_b0_1d_25, 0xb5_b3_c4_32,
-  ])
+  expect(firstDifference(ground, reference, queries)).toBeNull()
 })
 
 it('skips irrelevant shaped support math and observes base changes in previously empty cells', () => {
@@ -78,17 +73,40 @@ it('retains support outside the base grid and resets correction on invalid input
   expect(correction.lengthSq()).toBe(0)
 })
 
-function digest(ground: ReturnType<typeof corpseGround>, queries: readonly ClothQuery[]): number[] {
-  const hash = createHash('sha256')
-  const bytes = Buffer.alloc(32)
-  const correction = new Vector3()
-  for (const query of queries) {
-    const height = ground(...query, correction)
-    for (const [i, value] of [height, correction.x, correction.y, correction.z].entries()) {
-      bytes.writeDoubleLE(value, i * 8)
+it('detects omitted support candidates and even a single changed correction component', () => {
+  const layout = { ...TOWN, buildings: [], cover: [], catwalks: [] }
+  const grid = buildGrid(layout)
+  grid.tops.fill(0)
+  grid.overheads = [{ x: 4, z: 4, w: 1, d: 1, bottom: 1.9, top: 2, kind: 'overhead' }]
+  const reference = referenceClothGround(grid, layout)
+  const omitted = corpseGround({ ...grid, overheads: [] }, layout)
+  expect(firstDifference(omitted, reference, [[4.5, 2.1, 4.5]])).not.toBeNull()
+  const ground = corpseGround(grid, layout)
+  const changed: ReturnType<typeof corpseGround> = (x, y, z, correction) => {
+    const height = ground(x, y, z, correction)
+    if (correction) {
+      correction.x += Number.EPSILON
     }
-    hash.update(bytes)
+    return height
   }
-  const bytes256 = hash.digest()
-  return Array.from({ length: 8 }, (_, i) => bytes256.readUInt32BE(i * 4))
+  expect(firstDifference(changed, reference, [[4.5, 2.1, 4.5]])).not.toBeNull()
+})
+
+function firstDifference(
+  ground: ReturnType<typeof corpseGround>,
+  reference: ReturnType<typeof corpseGround>,
+  queries: readonly ClothQuery[],
+) {
+  const correction = new Vector3()
+  const original = new Vector3()
+  for (const [index, query] of queries.entries()) {
+    const actual = [ground(...query, correction), correction.x, correction.y, correction.z]
+    const expected = [reference(...query, original), original.x, original.y, original.z]
+    actual.push(ground(...query))
+    expected.push(reference(...query))
+    if (actual.some((value, component) => !Object.is(value, expected[component]))) {
+      return { index, query, actual, expected }
+    }
+  }
+  return null
 }
