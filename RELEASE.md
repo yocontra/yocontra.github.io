@@ -5,8 +5,16 @@ Status: **live**. The one-time setup below is kept for a rebuild or a new accoun
 
 ## Routine deploys
 
-Push to `master`. `deploy.yml` runs `bun run check` and publishes `dist/`; `deploy-api.yml` runs
-the same gate, applies D1 migrations, and deploys the Worker when `api/` or the shared sim changes.
+Push to `master`, or manually dispatch **Deploy** for a full release. `deploy.yml` checks and
+builds one exact commit, calls the reusable `deploy-api.yml` to migrate D1 and deploy that same
+commit's Worker, then publishes Pages only after the Worker succeeds. A newer push does not cancel
+an in-progress publication. There is no separate manual API-only entry point.
+
+The Worker uses immediate Durable Object updates. The Worker → Pages cutover is not atomic:
+mismatched Frontier versions are refused, so refresh after Pages finishes publishing. The Pages
+build keys model, texture and catalog-image URLs by its commit SHA, bypassing old service-worker
+asset keys without forcing other active tabs to reload.
+
 Run `bun run check` before pushing, or enable the hook (`git config core.hooksPath .githooks`).
 The `Check` workflow gives a second, clean-runner result on every push.
 

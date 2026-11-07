@@ -47,7 +47,7 @@ import {
   specFor,
   type TierSpec,
 } from './tiers.ts'
-import { compileOverride } from './warm.ts'
+import { compileOverride, ProgramWarmError, warmDrawables } from './warm.ts'
 
 /**
  * The coarse hint main.ts passes ('high' on desktop, 'low' on touch). The
@@ -768,11 +768,26 @@ export class Renderer {
    * which spreads the same reflection across frames behind the title.
    */
   warmSync(scene: Scene, camera: PerspectiveCamera): void {
+    const target = this.gl.getRenderTarget()
     try {
-      this.gl.compile(scene, camera)
-      this.gl.render(scene, camera)
-    } catch {
-      // the first real frame will report it
+      // Floor draws directly, while higher tiers draw into a linear composer buffer. Keep
+      // both programs on these actual materials before a replacement releases its old owner.
+      warmDrawables(scene, this.gl.shadowMap, () => {
+        for (const output of [null, this.composer.inputBuffer]) {
+          try {
+            this.gl.setRenderTarget(output)
+            this.gl.compile(scene, camera)
+            this.gl.render(scene, camera)
+          } catch (cause) {
+            throw new ProgramWarmError(
+              cause instanceof Error ? cause.message : 'Renderer program warming failed',
+              { cause },
+            )
+          }
+        }
+      })
+    } finally {
+      this.gl.setRenderTarget(target)
     }
   }
 

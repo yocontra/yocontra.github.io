@@ -4,8 +4,10 @@
  * and guns merged into one mesh. Looks only: a holster never moves the gun's seat, so the draw is
  * the same for everyone.
  */
+
 import { Group, Mesh, MeshStandardMaterial, type Object3D } from 'three'
-import { mergePieces, meshPieces } from './bake.ts'
+import { meshPieces } from './bake.ts'
+import { mergePieces } from './piece-merge.ts'
 
 /**
  * How a holster and its gunbelt look (scene/holster.ts fits them). Pure leatherwork: the gun's

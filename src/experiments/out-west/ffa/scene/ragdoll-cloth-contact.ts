@@ -5,7 +5,7 @@ import { surfaceTop } from '../sim/surfaces.ts'
 import type { CorpseGround } from './crowd/corpse-rig.ts'
 import { facadeSolids } from './facade-profile.ts'
 
-const tileKey = (x: number, z: number) => (Math.floor(x / 8) << 16) ^ (Math.floor(z / 8) & 0xff_ff)
+const tileKey = (x: number, z: number) => (x << 16) ^ (z & 0xff_ff)
 const inside = (surface: Surface, x: number, z: number) =>
   x >= surface.x && x <= surface.x + surface.w && z >= surface.z && z <= surface.z + surface.d
 
@@ -38,7 +38,8 @@ export function corpseGround(
   layout: TownLayout = TOWN,
   broken: ReadonlySet<number> = new Set(),
 ): CorpseGround {
-  const bins = new Map<number, ClothSurface[]>()
+  const bins: (ClothSurface[] | undefined)[] = new Array(grid.n * grid.n)
+  const outside = new Map<number, ClothSurface[]>()
   for (const surface of [
     ...grid.decks,
     ...grid.stairs,
@@ -47,16 +48,34 @@ export function corpseGround(
     ...facadeSolids(layout),
     ...paneSurfaces(grid),
   ]) {
-    for (let z = Math.floor(surface.z / 8); z <= Math.floor((surface.z + surface.d) / 8); z++) {
-      for (let x = Math.floor(surface.x / 8); x <= Math.floor((surface.x + surface.w) / 8); x++) {
-        const key = (x << 16) ^ (z & 0xff_ff)
-        const list = bins.get(key) ?? []
+    for (
+      let z = Math.floor(surface.z / grid.cell);
+      z <= Math.floor((surface.z + surface.d) / grid.cell);
+      z++
+    ) {
+      for (
+        let x = Math.floor(surface.x / grid.cell);
+        x <= Math.floor((surface.x + surface.w) / grid.cell);
+        x++
+      ) {
+        const index = cellIndex(x, z, grid.n)
+        const key = tileKey(x, z)
+        const list = (index < 0 ? outside.get(key) : bins[index]) ?? []
         list.push(surface)
-        bins.set(key, list)
+        if (index < 0) {
+          outside.set(key, list)
+        } else {
+          bins[index] = list
+        }
       }
     }
   }
-  const spans = (x: number, z: number) => bins.get(tileKey(x, z)) ?? EMPTY
+  const spans = (x: number, z: number) => {
+    const col = Math.floor(x / grid.cell)
+    const row = Math.floor(z / grid.cell)
+    const index = cellIndex(col, row, grid.n)
+    return (index < 0 ? outside.get(tileKey(col, row)) : bins[index]) ?? EMPTY
+  }
   const inBase = (x: number, y: number, z: number) => {
     const col = Math.floor(x / grid.cell)
     const row = Math.floor(z / grid.cell)
@@ -119,11 +138,11 @@ export function corpseGround(
       }
     }
     for (const surface of spans(x, z)) {
-      if (surface.pane !== undefined) {
+      if (surface.pane !== undefined || surface.bottom > y || !inside(surface, x, z)) {
         continue
       }
       const value = surfaceTop(surface, x, z)
-      if (inside(surface, x, z) && surface.bottom <= y && value <= y + 0.35 && value > top) {
+      if (value <= y + 0.35 && value > top) {
         top = value
       }
     }
@@ -132,6 +151,14 @@ export function corpseGround(
   return (x, y, z, correction) => {
     correction?.set(0, 0, 0)
     if (!(Number.isFinite(x) && Number.isFinite(y) && Number.isFinite(z))) {
+      return 0
+    }
+    const index = cellIndex(Math.floor(x / grid.cell), Math.floor(z / grid.cell), grid.n)
+    if (
+      (grid.tops[index] ?? 0) === 0 &&
+      (grid.shapeCells[index]?.length ?? 0) === 0 &&
+      spans(x, z).length === 0
+    ) {
       return 0
     }
     if (correction && solid(x, y, z)) {
@@ -146,6 +173,10 @@ export function corpseGround(
     }
     return height(projectedX, y, projectedZ)
   }
+}
+
+function cellIndex(col: number, row: number, size: number): number {
+  return col >= 0 && row >= 0 && col < size && row < size ? row * size + col : -1
 }
 
 function resolve(

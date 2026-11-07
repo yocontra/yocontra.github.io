@@ -1,5 +1,5 @@
 /** Plain front/side/back shoulders and every fitted base/outfit, through the real character path. */
-import { type Object3D, SkinnedMesh } from 'three'
+import { type Object3D, SkinnedMesh, Vector3 } from 'three'
 import { CATALOG, DEFAULT_LOADOUT } from '../../src/experiments/out-west/data/catalog.ts'
 import type { Assets } from '../../src/experiments/out-west/engine/assets.ts'
 import { Actor, type Clip } from '../../src/experiments/out-west/scene/actor.ts'
@@ -28,6 +28,7 @@ export async function captureTailored(
   assets: Assets,
   gun: Object3D,
   stage: Stage,
+  closeupsOnly = false,
 ): Promise<ModelEvidence[]> {
   const models: ModelEvidence[] = []
   for (const base of ['casual', 'worker', 'suit', 'rugged', 'punk', 'king', 'woman'] as const) {
@@ -50,6 +51,7 @@ export async function captureTailored(
       actor.update(time)
       stage.pose(actor, 'bases', `${base}-${clip}-${time}`)
       if (clip === 'Idle') {
+        captureCloseups(actor, base, stage)
         stage.crop(actor, {
           group: 'tailoring',
           name: base,
@@ -57,6 +59,7 @@ export async function captureTailored(
           distance: 1.65,
         })
       }
+      captureWaist(actor, clip, base, stage)
       if (clip === 'Idle' || clip === 'Idle_Gun_Pointing') {
         for (const [view, yaw] of [
           ['front', 0],
@@ -88,7 +91,9 @@ export async function captureTailored(
       }
     })
     models.push({ base, sceneUuid: model.scene.uuid, sourceSkins })
-    for (const item of CATALOG.filter((candidate) => candidate.slot === 'outfit')) {
+    for (const item of CATALOG.filter(
+      (candidate) => !closeupsOnly && candidate.slot === 'outfit',
+    )) {
       const dressed = new Actor(model, {
         ...loadoutOpts({ ...DEFAULT_LOADOUT, outfit: item.id }),
         base,
@@ -102,4 +107,44 @@ export async function captureTailored(
     }
   }
   return models
+}
+
+function captureCloseups(actor: Actor, base: string, stage: Stage): void {
+  for (const [part, y, distance] of [
+    ['face', actor.height * 0.91, 0.85],
+    ['shirt', actor.height * 0.72, 1.25],
+    ['boots', 0.23, 1.05],
+  ] as const) {
+    for (const [view, yaw] of [
+      ['front', 0],
+      ['quarter', 0.6],
+    ] as const) {
+      stage.crop(actor, {
+        group: 'closeups',
+        name: `${base}-${part}-${view}`,
+        y,
+        distance,
+        yaw,
+      })
+    }
+  }
+}
+
+function captureWaist(actor: Actor, clip: Clip, base: string, stage: Stage): void {
+  if (clip === 'Run') {
+    const waist = actor.hips?.getWorldPosition(new Vector3()).y ?? actor.height * 0.5
+    for (const [view, yaw] of [
+      ['front', 0],
+      ['side', Math.PI / 2],
+      ['back', Math.PI],
+    ] as const) {
+      stage.crop(actor, {
+        group: 'waist-action',
+        name: `${base}-${clip}-${view}`,
+        y: waist + 0.1,
+        distance: 0.9,
+        yaw,
+      })
+    }
+  }
 }

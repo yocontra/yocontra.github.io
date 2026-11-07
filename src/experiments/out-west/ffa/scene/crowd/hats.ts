@@ -1,12 +1,5 @@
 /** Far hats share the near material response and preserve their defining catalog detail. */
-import {
-  BufferAttribute,
-  BufferGeometry,
-  type Color,
-  InstancedMesh,
-  type Matrix4,
-  type Mesh,
-} from 'three'
+import { BufferAttribute, BufferGeometry, Color, InstancedMesh, Matrix4, type Mesh } from 'three'
 import type { HatKey } from '../../../data/outlaws.ts'
 import type { HatDetail } from '../../../scene/hat-detail.ts'
 import { makeHat } from '../../../scene/hats.ts'
@@ -17,6 +10,7 @@ const FAR_HAT_TRIS = 300
 
 /** One instanced mesh per hat and detail variant, with felt tinted per rider. */
 export class VatHats {
+  private readonly warmed = new WeakSet<InstancedMesh>()
   private stopped = false
   private isStopped(): boolean {
     return this.stopped
@@ -108,6 +102,53 @@ vStyTint *= mix(vec3(1.0), instanceColor, hatTintMask);
   reset(): void {
     for (const m of this.meshes.values()) {
       m.count = 0
+    }
+  }
+
+  /** Loading/reentry: retain the real instanced-color shader on every newly prepared hat. */
+  warm(warm: () => void): void {
+    const pending = [...this.meshes.values()].filter((mesh) => !this.warmed.has(mesh))
+    if (pending.length === 0 || this.isStopped()) {
+      return
+    }
+    const states = pending.map((mesh) => {
+      const matrix = new Matrix4()
+      const color = new Color(0xff_ff_ff)
+      mesh.getMatrixAt(0, matrix)
+      if (mesh.instanceColor) {
+        mesh.getColorAt(0, color)
+      }
+      return {
+        mesh,
+        matrix,
+        color,
+        count: mesh.count,
+        visible: mesh.visible,
+        culled: mesh.frustumCulled,
+      }
+    })
+    try {
+      for (const { mesh } of states) {
+        mesh.count = 1
+        mesh.visible = true
+        mesh.frustumCulled = false
+        mesh.setMatrixAt(0, new Matrix4())
+        mesh.setColorAt(0, new Color(0xff_ff_ff))
+      }
+      this.commit()
+      warm()
+      for (const mesh of pending) {
+        this.warmed.add(mesh)
+      }
+    } finally {
+      for (const { mesh, matrix, color, count, visible, culled } of states) {
+        mesh.count = count
+        mesh.visible = visible
+        mesh.frustumCulled = culled
+        mesh.setMatrixAt(0, matrix)
+        mesh.setColorAt(0, color)
+      }
+      this.commit()
     }
   }
 

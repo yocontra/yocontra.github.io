@@ -7,6 +7,7 @@ import {
   Matrix4,
   Mesh,
   type Object3D,
+  Quaternion,
   SkinnedMesh,
   Sphere,
   Vector3,
@@ -184,6 +185,7 @@ export function corpseBounds({ root, skins, full, bones, links }: Options) {
   const transformed = new Box3()
   const scratch = { point: new Vector3(), contribution: new Vector3() }
   const meshInverse = new Matrix4()
+  const parentInverse = new Quaternion()
   const margin = cloth ? CORPSE_CLOTH_LIMIT : 0
   return (poses: readonly CorpsePose[]): Box3 => {
     result.copy(fixed)
@@ -193,10 +195,16 @@ export function corpseBounds({ root, skins, full, bones, links }: Options) {
         frame.rotation.copy(pose.rotation)
       }
       const parent = frames[frame.link.parent]
-      if (parent) {
-        frame.position.copy(frame.offset).applyQuaternion(parent.rotation).add(parent.position)
-      } else if (pose) {
+      if (pose) {
         frame.position.copy(pose.position)
+        if (parent) {
+          frame.offset
+            .copy(pose.position)
+            .sub(parent.position)
+            .applyQuaternion(parentInverse.copy(parent.rotation).invert())
+        }
+      } else if (parent) {
+        frame.position.copy(frame.offset).applyQuaternion(parent.rotation).add(parent.position)
       }
       frame.matrix.compose(frame.position, frame.rotation, unit)
       if (!frame.box.isEmpty()) {

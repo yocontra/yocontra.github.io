@@ -22,6 +22,7 @@ import { DYES, type DyeId, type Dyes, dyePrice, isDyeable } from '../data/dye.ts
 import { money } from '../data/economy.ts'
 import { buyItem, fetchStore, saveLoadout } from '../net/api.ts'
 import { dyeItem } from '../net/social.ts'
+import { assetUrl } from '../platform/asset-url.ts'
 import { type IconName, icon } from './icons.ts'
 import { uiSound } from './sfx.ts'
 import { button, closeButton, confirmSheet, el, swallow } from './sheet.ts'
@@ -234,7 +235,7 @@ export class Outfitter {
       ? `/experiments/out-west/thumbs/${item.id}.webp`
       : ART.get(item.id)
     if (url) {
-      paint(art, url)
+      paint(art, assetUrl(url))
       return
     }
     art.append(icon(SLOT_ICON[item.slot]))

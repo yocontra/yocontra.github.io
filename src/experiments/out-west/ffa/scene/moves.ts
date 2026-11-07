@@ -8,6 +8,7 @@
 import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.js'
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js'
 import type { Assets } from '../../engine/assets.ts'
+import { assetUrl } from '../../platform/asset-url.ts'
 
 const URL = '/experiments/out-west/3d/models/moves.glb'
 
@@ -19,7 +20,7 @@ export async function loadMoves(assets: Assets): Promise<void> {
   }
   const loader = new GLTFLoader()
   loader.setMeshoptDecoder(MeshoptDecoder)
-  const g = await loader.loadAsync(URL)
+  const g = await loader.loadAsync(assetUrl(URL))
   for (const clip of g.animations) {
     if (!have.some((c) => c.name === clip.name)) {
       have.push(clip)

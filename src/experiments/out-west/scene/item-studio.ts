@@ -35,6 +35,7 @@ import {
   type Slot,
 } from '../data/catalog.ts'
 import type { Actor } from './actor.ts'
+import { badgeBounds } from './item-feature.ts'
 import { dressedActor, finishedGun } from './loadout.ts'
 import type { PropDef } from './props.ts'
 
@@ -111,7 +112,7 @@ export class ItemStudio {
       actor.holsterGun()
       actor.play('Idle', 0)
       actor.update(0.4)
-      actor.root.rotation.y = TURN[item.slot] ?? 0.45
+      actor.root.rotation.y = item.id === 'extra.tin-star' ? 0.3 : (TURN[item.slot] ?? 0.45)
       actor.root.updateMatrixWorld(true)
       this.frameActor(actor, item)
     }
@@ -147,9 +148,10 @@ export class ItemStudio {
     }
     if (slot === 'extra') {
       if (item.id === 'extra.tin-star') {
-        const chest =
-          a.spine?.getWorldPosition(new Vector3()) ?? head.clone().add(new Vector3(0, -0.3, 0))
-        this.aim(chest.add(new Vector3(0.055, 0.04, 0.07)), 0.22)
+        const box = badgeBounds(a)
+        if (!box.isEmpty()) {
+          this.frameBox(box, 1.8)
+        }
       } else {
         const offset = item.id === 'extra.handlebar' ? -0.055 : -0.14
         this.aim(head.clone().add(new Vector3(0, offset, 0.035)), 0.19)

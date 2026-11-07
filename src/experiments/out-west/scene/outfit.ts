@@ -13,13 +13,13 @@ import {
   CatmullRomCurve3,
   Color,
   CylinderGeometry,
+  ExtrudeGeometry,
   Group,
   Mesh,
   MeshStandardMaterial,
   type Object3D,
   Quaternion,
   Shape,
-  ShapeGeometry,
   TubeGeometry,
   Vector3,
 } from 'three'
@@ -219,15 +219,25 @@ export function star(f: Fit, space: Object3D): Piece[] {
       sh.lineTo(Math.sin(a) * r, Math.cos(a) * r)
     }
   }
-  const m = new Mesh(
-    new ShapeGeometry(sh),
-    new MeshStandardMaterial({ color: 0xb9_bd_bc, roughness: 0.55 }),
-  )
+  const geometry = new ExtrudeGeometry(sh, {
+    depth: 0.0025,
+    bevelEnabled: true,
+    bevelSize: 0.0012,
+    bevelThickness: 0.0007,
+    bevelSegments: 1,
+    steps: 1,
+  }).translate(0, 0, -0.001_25)
+  // Cap and bevel use the same tin finish; they are one authored material region.
+  geometry.clearGroups()
+  const m = new Mesh(geometry, new MeshStandardMaterial({ color: 0xb9_bd_bc, roughness: 0.55 }))
   m.position.set(sx, sy, (Number.isFinite(z) ? z : f.at('Chest').z + 0.12) + 0.006)
   m.material.userData.rim = 1.6
   m.material.userData.swatch = 'metal'
   space.add(m)
   const out = meshPieces(m, space, onBone(b))
+  for (const piece of out) {
+    piece.feature = 'badge'
+  }
   m.removeFromParent()
   return out
 }

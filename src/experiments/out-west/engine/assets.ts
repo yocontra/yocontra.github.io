@@ -9,6 +9,7 @@ import {
 import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.js'
 import { type GLTF, GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js'
 import type { BodyKey, Look } from '../data/outlaws.ts'
+import { assetUrl } from '../platform/asset-url.ts'
 import { hairDonor } from '../scene/person.ts'
 import { setPropsLibrary } from '../scene/props.ts'
 
@@ -195,7 +196,7 @@ export async function loadAssets(
       onProgress(done / total)
       return v
     })
-  const glb = (name: string) => loader.loadAsync(`${ROOT}/models/${name}.glb`)
+  const glb = (name: string) => loader.loadAsync(assetUrl(`${ROOT}/models/${name}.glb`))
   const tex = (name: string, srgb: boolean) =>
     tick(loadTex(`${ROOT}/tex/${name}.webp`, srgb, anisotropy))
   // glTF UV space (origin top left), clamped: the atlas is never tiled

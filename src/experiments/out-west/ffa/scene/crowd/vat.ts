@@ -43,7 +43,7 @@ import { runVatJob } from './worker-client.ts'
 
 export const VAT_FPS = 15
 /** Bump when the bake changes; also part of the IndexedDB key. */
-const VAT_VERSION = 'vat28-sewn-armholes'
+const VAT_VERSION = 'vat33-anatomical-waist-boots'
 const LOD2_TRIS = 1500
 
 /** Clothing materials per base, recoloured per player (slot 1 top, slot 2 bottoms). */
@@ -427,6 +427,10 @@ void vatSample() {
 }`
 
 export class VatCrowd {
+  private warmed = false
+  get warmReady(): boolean {
+    return this.warmed
+  }
   readonly mesh: InstancedMesh
   readonly bake: VatBake
   private readonly clipAttr: InstancedBufferAttribute
@@ -485,6 +489,48 @@ vStyTint = vatSlot < 0.5 ? color.rgb : (vatSlot < 1.5 ? vatTop : vatPaint) * col
 
   clip(name: string): VatClipInfo | null {
     return this.bake.clips.find((c) => c.name === name) ?? null
+  }
+
+  /** Stage a real idle/palette instance so a zero-count material is actually drawn during warmup. */
+  stageWarm(colors: VatColors): ((ready: boolean) => void) | null {
+    const clip = this.bake.clips[0]
+    if (this.warmReady || !clip) {
+      return null
+    }
+    const mesh = this.mesh
+    const state = { count: mesh.count, visible: mesh.visible, culled: mesh.frustumCulled }
+    const matrix = new Matrix4()
+    mesh.getMatrixAt(0, matrix)
+    const attributes = [
+      this.clipAttr,
+      this.topAttr,
+      this.bottomAttr,
+      this.sleevesAttr,
+      this.hairAttr,
+      this.skinAttr,
+    ]
+    const values = attributes.map((attribute) =>
+      Array.from({ length: attribute.itemSize }, (_, i) => attribute.getComponent(0, i)),
+    )
+    mesh.count = 1
+    mesh.visible = true
+    mesh.frustumCulled = false
+    mesh.setMatrixAt(0, new Matrix4())
+    this.set(0, clip, { phase: 0, speed: 1 }, colors)
+    this.commit()
+    return (ready) => {
+      this.warmed = ready
+      mesh.count = state.count
+      mesh.visible = state.visible
+      mesh.frustumCulled = state.culled
+      mesh.setMatrixAt(0, matrix)
+      for (const [index, attribute] of attributes.entries()) {
+        for (let i = 0; i < attribute.itemSize; i++) {
+          attribute.setComponent(0, i, values[index]?.[i] ?? 0)
+        }
+      }
+      this.commit()
+    }
   }
 
   /** One instance's full state, written per frame without allocating. */

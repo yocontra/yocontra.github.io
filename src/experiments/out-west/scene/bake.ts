@@ -19,9 +19,10 @@ import {
   SkinnedMesh,
   Vector3,
 } from 'three'
-import { intoRect, SWATCH, SWATCH_LUM, type Swatch } from './atlas.ts'
+import type { Swatch } from './atlas.ts'
 import { type Body, boneKey, type WeightFn } from './fit.ts'
 import type { Cuff } from './garment-mesh.ts'
+import { mergePieces } from './piece-merge.ts'
 import { SLOT, type Slot, slotOf } from './roles.ts'
 import { atlasRoughness } from './style.ts'
 import { westernKit } from './western-kit.ts'
@@ -32,6 +33,8 @@ import { westernKit } from './western-kit.ts'
  * it is skinned.
  */
 export interface Piece {
+  /** An authored feature whose actual drawn bounds can frame a catalog detail. */
+  feature?: 'badge' | undefined
   /** Root-space geometry: position, normal, colour (the tint), index, and `uv` when it has one. */
   geo: BufferGeometry
   /** The source material's name, for body parts (Hair, Skin, Shirt...). */
@@ -42,6 +45,8 @@ export interface Piece {
   palette?: Uint8Array | undefined
   /** Roughness multiplier on the atlas (plain swatch: the roughness itself). */
   roughness: number
+  /** Authored local surface variation, packed into the existing styMat.x channel. */
+  roughnessAt?: Float32Array | undefined
   rim: number
   /**
    * Where its UVs point: `atlas` (a body part, already in atlas space) or a fabric swatch its
@@ -233,78 +238,6 @@ export function meshPieces(obj: Object3D, space: Object3D, weights?: WeightFn): 
   return out
 }
 
-/** Atlas UV of one vertex of a piece (its own UVs mapped onto its swatch). */
-function atlasUv(p: Piece, u: number, v: number): [number, number] {
-  const sw = p.swatch ?? 'plain'
-  if (sw === 'atlas') {
-    return [u, v]
-  }
-  const c = (x: number) => Math.min(1, Math.max(0, x))
-  return intoRect(SWATCH[sw], c(u), c(v))
-}
-
-/** Luminance the shader normalises a piece's texels by (0 = multiply). */
-function pieceLum(p: Piece): number {
-  const sw = p.swatch ?? 'plain'
-  return sw === 'atlas' ? (p.lum ?? 0) : SWATCH_LUM[sw]
-}
-
-/** Plain merged geometry (position, normal, color, uv, styMat, styLum, index). */
-export function mergePieces(pieces: readonly Piece[]): BufferGeometry {
-  let verts = 0
-  let tris = 0
-  for (const p of pieces) {
-    verts += p.geo.getAttribute('position').count
-    tris += p.geo.index?.count ?? 0
-  }
-  const outP = new Float32Array(verts * 3)
-  const outN = new Float32Array(verts * 3)
-  const outC = new Float32Array(verts * 3)
-  const outS = new Float32Array(verts * 2)
-  const outU = new Float32Array(verts * 2)
-  const outL = new Float32Array(verts)
-  const idx = new Uint32Array(tris)
-  let vo = 0
-  let io = 0
-  for (const p of pieces) {
-    const g = p.geo
-    if (!g.getAttribute('normal')) {
-      g.computeVertexNormals()
-    }
-    const pa = g.getAttribute('position')
-    const na = g.getAttribute('normal')
-    const ca = g.getAttribute('color')
-    const ua = g.getAttribute('uv')
-    const lum = pieceLum(p)
-    for (let k = 0; k < pa.count; k++) {
-      outU.set(atlasUv(p, ua ? ua.getX(k) : 0.5, ua ? ua.getY(k) : 0.5), (vo + k) * 2)
-      outL[vo + k] = lum
-      const o = (vo + k) * 3
-      outP.set([pa.getX(k), pa.getY(k), pa.getZ(k)], o)
-      outN.set([na.getX(k), na.getY(k), na.getZ(k)], o)
-      outC.set(ca ? [ca.getX(k), ca.getY(k), ca.getZ(k)] : [1, 1, 1], o)
-      outS.set([p.roughness, p.rim], (vo + k) * 2)
-    }
-    const ia = g.index
-    if (ia) {
-      for (let k = 0; k < ia.count; k++) {
-        idx[io + k] = ia.getX(k) + vo
-      }
-      io += ia.count
-    }
-    vo += pa.count
-  }
-  const out = new BufferGeometry()
-  out.setAttribute('position', new BufferAttribute(outP, 3))
-  out.setAttribute('normal', new BufferAttribute(outN, 3))
-  out.setAttribute('color', new BufferAttribute(outC, 3))
-  out.setAttribute('uv', new BufferAttribute(outU, 2))
-  out.setAttribute('styMat', new BufferAttribute(outS, 2))
-  out.setAttribute('styLum', new BufferAttribute(outL, 1))
-  out.setIndex(new BufferAttribute(verts > 65_535 ? idx : Uint16Array.from(idx), 1))
-  return out
-}
-
 /** Merge every piece into one skinned mesh under `parent`, bound in the current pose. */
 /** Base garments a fitted garment may hide where it covers them. */
 const HIDEABLE: ReadonlySet<Slot> = new Set([
@@ -343,11 +276,16 @@ function hideUnder(pieces: readonly Piece[], body: Body): void {
   const v = new Vector3()
   for (const p of pieces) {
     const skin = p.skin
-    const idx = p.geo.getIndex()
-    if (!(skin && idx && p.slot !== undefined && HIDEABLE.has(p.slot))) {
+    if (!(skin && p.slot !== undefined && HIDEABLE.has(p.slot))) {
       continue
     }
     const pos = p.geo.getAttribute('position')
+    const idx =
+      p.geo.getIndex() ??
+      new BufferAttribute(
+        Uint32Array.from({ length: pos.count }, (_, i) => i),
+        1,
+      )
     const hidden = new Uint8Array(pos.count)
     for (let k = 0; k < pos.count; k++) {
       v.fromBufferAttribute(pos, k)
@@ -355,16 +293,26 @@ function hideUnder(pieces: readonly Piece[], body: Body): void {
       hidden[k] = hiders.some((h) => h.hide?.(v, bone, p.slot)) ? 1 : 0
     }
     const keep: number[] = []
+    const prefix = new Uint32Array(idx.count + 1)
     for (let i = 0; i < idx.count; i += 3) {
+      prefix[i] = keep.length
       const a = idx.getX(i)
       const b = idx.getX(i + 1)
       const c = idx.getX(i + 2)
       if (!(hidden[a] && hidden[b] && hidden[c])) {
         keep.push(a, b, c)
       }
+      prefix[i + 3] = keep.length
     }
     if (keep.length < idx.count) {
       p.geo.setIndex(new BufferAttribute(new Uint32Array(keep), 1))
+      const groups = [...p.geo.groups]
+      p.geo.clearGroups()
+      for (const group of groups) {
+        const start = prefix[group.start] ?? 0
+        const count = (prefix[group.start + group.count] ?? keep.length) - start
+        p.geo.addGroup(start, count, group.materialIndex)
+      }
     }
   }
 }
@@ -458,14 +406,35 @@ export function bake(
   return mesh
 }
 
-function garmentMetadata(pieces: readonly Piece[]) {
+export interface VertexRange {
+  start: number
+  count: number
+}
+export interface GarmentRanges {
+  anatomyRanges: VertexRange[]
+  clothRanges: VertexRange[]
+  sleeveRanges: VertexRange[]
+  bootRanges: VertexRange[]
+  badgeRanges: VertexRange[]
+  cuffs: Cuff[]
+}
+
+function garmentMetadata(pieces: readonly Piece[]): GarmentRanges {
   const anatomy: { start: number; count: number }[] = []
   const cloth: { start: number; count: number }[] = []
   const sleeves: { start: number; count: number }[] = []
   const cuffs: Cuff[] = []
+  const badge: { start: number; count: number }[] = []
+  const boots: VertexRange[] = []
   let vo = 0
   for (const piece of pieces) {
     const count = piece.geo.getAttribute('position').count
+    if (piece.slot === SLOT.Boots) {
+      boots.push({ start: vo, count })
+    }
+    if (piece.feature === 'badge') {
+      badge.push({ start: vo, count })
+    }
     if (
       [SLOT.Skin, SLOT.Shirt, SLOT.Sleeves, SLOT.Pants, SLOT.Boots].some(
         (slot) => slot === piece.slot,
@@ -489,5 +458,12 @@ function garmentMetadata(pieces: readonly Piece[]) {
     }
     vo += count
   }
-  return { anatomyRanges: anatomy, clothRanges: cloth, sleeveRanges: sleeves, cuffs }
+  return {
+    anatomyRanges: anatomy,
+    clothRanges: cloth,
+    sleeveRanges: sleeves,
+    badgeRanges: badge,
+    bootRanges: boots,
+    cuffs,
+  }
 }

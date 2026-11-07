@@ -35,6 +35,7 @@ import { castActor } from '../../src/experiments/out-west/scene/cast.ts'
 import { dressedActor } from '../../src/experiments/out-west/scene/loadout.ts'
 import { propObject } from '../../src/experiments/out-west/scene/props.ts'
 import { revolverDef } from '../../src/experiments/out-west/scene/revolver.ts'
+import { captureBadge } from './badge-preview.ts'
 import { stressCorpseResidency } from './corpse-stress.ts'
 import { type GpuEvidence, measureFar } from './gpu.ts'
 import { type CropFrame, captureTailored, type ModelEvidence } from './tailored-preview.ts'
@@ -57,7 +58,10 @@ interface Source {
 }
 
 /** Uses the running Frontier's context and cached assets; no new WebGL context or live writes. */
-export async function captureCharacters(artOnly = false): Promise<{
+export async function captureCharacters(
+  artOnly = false,
+  closeupsOnly = false,
+): Promise<{
   captures: Capture[]
   models: ModelEvidence[]
   fit: FitFinding[]
@@ -145,7 +149,7 @@ export async function captureCharacters(artOnly = false): Promise<{
     a.root.removeFromParent()
   }
   const gun = propObject(revolverDef(0.32))
-  for (const [i, outlaw] of OUTLAWS.entries()) {
+  for (const [i, outlaw] of (closeupsOnly ? [] : OUTLAWS).entries()) {
     await assets.lookReady(outlaw.look)
     const actor = castActor(assets, { ...outlaw, gun })
     actor.play('Idle', 0)
@@ -158,11 +162,16 @@ export async function captureCharacters(artOnly = false): Promise<{
     )
     actor.dispose()
   }
-  const models = await captureTailored(assets, gun, {
-    pose,
-    crop: (actor, frame) => crop(actor, frame, { scene, cam, take }),
-  })
-  for (const item of CATALOG.filter((candidate) => candidate.slot === 'outfit')) {
+  const models = await captureTailored(
+    assets,
+    gun,
+    {
+      pose,
+      crop: (actor, frame) => crop(actor, frame, { scene, cam, take }),
+    },
+    closeupsOnly,
+  )
+  for (const item of CATALOG.filter((candidate) => !closeupsOnly && candidate.slot === 'outfit')) {
     const actor = dressedActor(assets.player, revolverDef(0.3), {
       ...DEFAULT_LOADOUT,
       outfit: item.id,
@@ -181,6 +190,9 @@ export async function captureCharacters(artOnly = false): Promise<{
       }
     }
     actor.dispose()
+  }
+  if (!closeupsOnly) {
+    captureBadge(assets, scene, cam, take)
   }
   if (artOnly) {
     rt.dispose()

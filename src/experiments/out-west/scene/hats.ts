@@ -12,6 +12,7 @@
  *
  * The VAT crowd reads the same fit through the near actor's hat transform (crowd/vat.ts).
  */
+
 import {
   type BufferGeometry,
   Color,
@@ -25,9 +26,10 @@ import {
   Vector2,
 } from 'three'
 import type { HatKey } from '../data/outlaws.ts'
-import { mergePieces, meshPieces, type Piece } from './bake.ts'
+import { meshPieces, type Piece } from './bake.ts'
 import type { Body } from './fit.ts'
 import { detailHat, type HatDetail } from './hat-detail.ts'
+import { mergePieces } from './piece-merge.ts'
 import { SLOT } from './roles.ts'
 import { characterMaterial, type Glow } from './shade.ts'
 import type { Floor } from './style.ts'

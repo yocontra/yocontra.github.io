@@ -44,7 +44,7 @@ beforeAll(async () => {
     }),
   )
 })
-/** Independent original recursive implementation retained as the exact transform oracle. */
+/** Independent recursive world-frame mapping retained as the exact transform oracle. */
 function legacyPose(rig: CorpseRig, poses: readonly CorpsePose[]): void {
   const byKey = new Map<string, Bone>()
   rig.root.traverse((node) => {
@@ -60,10 +60,8 @@ function legacyPose(rig: CorpseRig, poses: readonly CorpsePose[]): void {
       continue
     }
     bone.parent?.updateWorldMatrix(true, false)
-    if (link.parent === -1) {
-      bone.position.copy(target.position)
-      bone.parent?.worldToLocal(bone.position)
-    }
+    bone.position.copy(target.position)
+    bone.parent?.worldToLocal(bone.position)
     inverse.identity()
     bone.parent?.getWorldQuaternion(inverse)
     bone.quaternion.copy(inverse.invert().multiply(target.rotation))

@@ -9,7 +9,8 @@ import { fileHash, itemArtFingerprint } from './item-art.ts'
 
 const SHADER_ERROR = /WebGL|Shader|GL_INVALID|program not valid/u
 const base = process.argv.find((arg) => arg.startsWith('http')) ?? 'http://127.0.0.1:4321'
-const artOnly = process.argv.includes('--art-only')
+const closeupsOnly = process.argv.includes('--closeups-only')
+const artOnly = closeupsOnly || process.argv.includes('--art-only')
 let out = '.playwright-mcp/quality'
 if (artOnly) {
   out += '/character-fitting'
@@ -76,13 +77,16 @@ try {
     timeout: 120_000,
   })
   await page.locator('.fr-load').waitFor({ state: 'detached', timeout: 120_000 })
-  const result = (await page.evaluate(async (onlyArt) => {
-    const url = '/tools/character-quality/probe.ts'
-    const studio = (await import(
-      /* @vite-ignore */ url
-    )) as typeof import('./character-quality/probe.ts')
-    return studio.captureCharacters(onlyArt)
-  }, artOnly)) as Awaited<ReturnType<typeof captureCharacters>>
+  const result = (await page.evaluate(
+    async ({ onlyArt, onlyCloseups }) => {
+      const url = '/tools/character-quality/probe.ts'
+      const studio = (await import(
+        /* @vite-ignore */ url
+      )) as typeof import('./character-quality/probe.ts')
+      return studio.captureCharacters(onlyArt, onlyCloseups)
+    },
+    { onlyArt: artOnly, onlyCloseups: closeupsOnly },
+  )) as Awaited<ReturnType<typeof captureCharacters>>
   if (itemArtFingerprint() !== sourceHash) {
     throw new Error('Character source changed during capture; rerun the full gallery')
   }

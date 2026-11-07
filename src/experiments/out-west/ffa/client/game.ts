@@ -70,6 +70,7 @@ import {
 import { loadAssets } from '../../engine/assets.ts'
 import { Renderer } from '../../engine/render.ts'
 import { tierHint } from '../../engine/tiers.ts'
+import { ProgramWarmError } from '../../engine/warm.ts'
 import { haptic } from '../../platform/haptics.ts'
 import { presetAt } from '../../scene/presets.ts'
 import { RIM } from '../../scene/style.ts'
@@ -94,6 +95,8 @@ import { lookFor } from '../scene/looks.ts'
 import { loadMoves } from '../scene/moves.ts'
 import { Pickups } from '../scene/pickups.ts'
 import { bootFitStats } from '../scene/ragdoll-boot.ts'
+import { loadGsKernel } from '../scene/ragdoll-gs-load.ts'
+import { primeCorpseSolver } from '../scene/ragdoll-prime.ts'
 import { Ragdolls } from '../scene/ragdolls.ts'
 import { buildTown, type Town } from '../scene/town.ts'
 import { buildWilds, shadeTown, Wilds } from '../scene/wilds.ts'
@@ -292,6 +295,7 @@ export class FrontierGame {
   /** Drives the same camera as `cam` in the shooter views. */
   readonly shooter: ShooterCamera
   private viewModel: ViewModel | null = null
+  private warmRetryAt = 0
   private readonly vmSun = new Vector3()
   private dustAt = 0
   /** This life's hits taken, by attacker (the death card). */
@@ -803,11 +807,13 @@ export class FrontierGame {
       return
     }
     const first = lookFor([], 0)
+    const nativeSolver = loadGsKernel()
     const assets = await loadAssets(
       Math.min(8, this.renderer.gl.capabilities.getMaxAnisotropy()),
       first.look,
       (f) => onProgress(f * 0.6, 'Loading'),
     )
+    const solverModule = await nativeSolver
     if (this.disposed || this.exited) {
       return
     }
@@ -841,6 +847,7 @@ export class FrontierGame {
       source: this.crowd,
       grid: this.net.grid,
       props: assets.props,
+      solverModule,
     })
     this.reconcilePersistent()
     this.applyQuality()
@@ -872,7 +879,9 @@ export class FrontierGame {
     this.renderer.probe.captureNow()
     // The loading screen is up: one synchronous draw warms every program and is faster than
     // spreading the same reflection across frames (the duel's title uses the chunked warm).
-    this.renderer.warmSync(this.scene, this.cam.camera)
+    if (!(await this.warmUntilReady(() => this.renderer.warmSync(this.scene, this.cam.camera)))) {
+      return
+    }
     onProgress(0.95, 'Joining')
     this.syncRoster()
     // the riders' bodies, cast now (behind the loading screen) instead of mid-fight
@@ -951,13 +960,18 @@ export class FrontierGame {
       return
     }
     onProgress(0.99, 'Finishing the town')
-    await this.ragdolls?.prepareCorpses(
-      this.net.roster.keys(),
-      () => this.renderer.warmSync(this.scene, this.cam.camera),
+    const valid = () =>
+      !(this.disposed || this.exited) &&
+      generation === this.connectionGeneration &&
+      this.net.persistent.ready
+    await this.warmUntilReady(
       () =>
-        !(this.disposed || this.exited) &&
-        generation === this.connectionGeneration &&
-        this.net.persistent.ready,
+        this.ragdolls?.prepareCorpses(
+          this.net.roster.keys(),
+          () => this.renderer.warmSync(this.scene, this.cam.camera),
+          valid,
+        ),
+      valid,
     )
     if (this.disposed || this.exited) {
       return
@@ -966,7 +980,77 @@ export class FrontierGame {
       await this.finishPlayers(onProgress)
       return
     }
+    const warmed = await this.warmUntilReady(() => this.warmSelfPrograms(), valid)
+    if (this.disposed || this.exited) {
+      return
+    }
+    if (!warmed) {
+      await this.finishPlayers(onProgress)
+      return
+    }
+    const world = this.ragdolls?.world
+    const crowd = this.crowd
+    if (!this.running && world && crowd) {
+      await primeCorpseSolver(world, {
+        ids: [...this.net.roster.keys()],
+        capture: (id) => crowd.captureCorpse(id),
+        valid: () => valid() && this.ragdolls?.world === world,
+      })
+    }
+    if (this.disposed || this.exited) {
+      return
+    }
+    if (!valid()) {
+      await this.finishPlayers(onProgress)
+      return
+    }
     this.recoverAfterWelcome = false
+  }
+
+  private warmUntilReady(
+    operation: () => void | Promise<void>,
+    valid: () => boolean = () => true,
+  ): Promise<boolean> {
+    return new Promise((resolve, reject) => {
+      const failed = (error: unknown) => {
+        if (error instanceof ProgramWarmError) {
+          setTimeout(attempt, 100)
+        } else {
+          reject(error)
+        }
+      }
+      const attempt = () => {
+        if (this.disposed || this.exited || !valid()) {
+          resolve(false)
+          return
+        }
+        try {
+          Promise.resolve(operation()).then(
+            () => resolve(!(this.disposed || this.exited) && valid()),
+            failed,
+          )
+        } catch (error) {
+          failed(error)
+        }
+      }
+      attempt()
+    })
+  }
+
+  private warmSelfPrograms(): void {
+    this.crowd?.warmFar(() => this.renderer.warmSync(this.scene, this.cam.camera))
+    this.crowd?.warmSelf(this.net.you, () => this.renderer.warmSync(this.scene, this.cam.camera))
+    const vm = this.viewModel
+    if (vm) {
+      vm.scene.environment = this.scene.environment
+      vm.scene.environmentIntensity = this.scene.environmentIntensity
+      vm.townSky.update(
+        this.scene.environment,
+        this.scene.environmentIntensity,
+        this.cam.camera.quaternion,
+      )
+      vm.warm(() => this.renderer.warmSync(vm.scene, vm.camera))
+    }
   }
 
   /** Reapply scene budgets after the GPU benchmark or any adaptive tier change. */
@@ -990,6 +1074,7 @@ export class FrontierGame {
     this.unwatchAudio = null
     this.exited = true
     this.running = false
+    this.disposeViewModel()
     this.ragdolls?.clear()
     this.desk.enabled = false
     this.desk.unlock()
@@ -1679,10 +1764,27 @@ export class FrontierGame {
     this.audio?.update()
     this.renderer.label = 'frontier'
     this.renderer.adapt(dtMs, true)
-    this.renderer.render(dt)
+    this.drawFrame(dt)
     if (this.trace.on) {
       this.pushTrace(now, dtMs, performance.now() - t0)
     }
+  }
+
+  private drawFrame(dt: number): void {
+    if (performance.now() < this.warmRetryAt) {
+      return
+    }
+    try {
+      this.warmSelfPrograms()
+    } catch (error) {
+      if (!(error instanceof ProgramWarmError)) {
+        throw error
+      }
+      // Retry without committing a failed warm; normal rendering resumes after success.
+      this.warmRetryAt = performance.now() + 100
+      return
+    }
+    this.renderer.render(dt)
   }
 
   private pushTrace(now: number, dtMs: number, cpuMs: number): void {
@@ -2536,6 +2638,7 @@ export class FrontierGame {
     this.voice = null
     this.voiceUi = null
     this.running = false
+    this.disposeViewModel()
     cancelAnimationFrame(this.raf)
     if (this.hiddenTimer) {
       clearInterval(this.hiddenTimer)
@@ -2563,6 +2666,15 @@ export class FrontierGame {
     this.renderer.gl.dispose()
     this.canvas.remove()
     this.root.classList.remove('fr-root')
+  }
+
+  private disposeViewModel(): void {
+    const vm = this.viewModel
+    this.viewModel = null
+    if (vm) {
+      this.renderer.setOverlay(null)
+      vm.dispose()
+    }
   }
 
   /** Dev harness only: look as if the mouse moved (pointer lock doesn't run headless). */

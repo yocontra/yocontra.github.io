@@ -1,5 +1,4 @@
-/** Bounded client-only physics of the actual dressed player meshes. */
-import { type Body, Vec3, World } from 'cannon-es'
+import type { Body, World } from 'cannon-es'
 import { type Camera, type Object3D, Vector3 } from 'three'
 import type { GLTF } from 'three/examples/jsm/loaders/GLTFLoader.js'
 import type { RagdollImpact } from '../client/shot-impact.ts'
@@ -10,12 +9,12 @@ import { CorpseWarmup } from './crowd/corpse-warmup.ts'
 import { CorpsePhysics } from './ragdoll-body.ts'
 import { CorpseBroadphase } from './ragdoll-broadphase.ts'
 import { corpseGround } from './ragdoll-cloth-contact.ts'
-import { SparseCorpseContacts } from './ragdoll-collisions.ts'
 import { RAGDOLL_STEP as STEP } from './ragdoll-joints.ts'
 import { CorpseShadows } from './ragdoll-shadows.ts'
 import { CorpseSolver } from './ragdoll-solver.ts'
 import { ragdollPanes, ragdollStatic } from './ragdoll-static.ts'
 import { CorpsePresentation } from './ragdoll-view.ts'
+import { createRagdollWorld } from './ragdoll-world.ts'
 
 interface Position {
   x: number
@@ -39,7 +38,7 @@ const LIFETIME = 12
 const CAPACITY = 32
 
 export class Ragdolls {
-  readonly world = new World({ gravity: new Vec3(0, -9.81, 0), allowSleep: true })
+  readonly world: World
   private readonly root: Object3D
   private readonly source: Source
   private readonly ground: ReturnType<typeof corpseGround>
@@ -71,23 +70,14 @@ export class Ragdolls {
     grid: Grid
     props: GLTF
     layout?: TownLayout
+    solverModule?: WebAssembly.Module | null
   }) {
     const started = performance.now()
     this.root = options.root
     this.source = options.source
+    this.world = createRagdollWorld(options.solverModule)
     this.warmup = new CorpseWarmup((id) => this.source.captureCorpse(id))
     this.ground = corpseGround(options.grid, options.layout, this.broken)
-    this.world.broadphase = new CorpseBroadphase(this.world)
-    this.world.collisionMatrix = new SparseCorpseContacts()
-    this.world.collisionMatrixPrevious = new SparseCorpseContacts()
-    this.world.doProfiling = import.meta.env.DEV || import.meta.env.PUBLIC_OW_PERF_HARNESS === '1'
-    const solver = new CorpseSolver()
-    solver.iterations = 24
-    solver.tolerance = 1e-7
-    this.world.solver = solver
-    this.world.defaultContactMaterial.friction = 0.72
-    this.world.defaultContactMaterial.restitution = 0.02
-    this.world.defaultContactMaterial.contactEquationStiffness = 1e8
     for (const body of ragdollStatic(options.grid, options.props, options.layout)) {
       this.world.addBody(body)
     }
@@ -517,6 +507,9 @@ export class Ragdolls {
     }
     if (this.world.broadphase instanceof CorpseBroadphase) {
       this.world.broadphase.dispose()
+    }
+    if (this.world.solver instanceof CorpseSolver) {
+      this.world.solver.dispose()
     }
   }
 }

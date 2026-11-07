@@ -92,6 +92,11 @@ export function corpseGearProof(): GearProof[] {
         new Vector3(1, 0.7, 1),
         new Vector3(-1, 0.7, -1),
         new Vector3(1, 0.2, -1),
+        // Settled gear can face down or away from world-up; retain the complete corpse as
+        // occluder and also inspect its real local faces (the spur rowel lies in local XZ).
+        ...nodes.flatMap((node) =>
+          [-1, 1].map((side) => new Vector3(0, side, 0).transformDirection(node.matrixWorld)),
+        ),
       ]) {
         camera.position
           .copy(center)

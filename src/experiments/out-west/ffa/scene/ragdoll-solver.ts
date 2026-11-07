@@ -36,10 +36,11 @@ import {
   Vec3,
   type World,
 } from 'cannon-es'
+import { GS_ROW_WIDTH, GsKernel } from './ragdoll-gs.ts'
 
 // Per-row doubles: A/B spatial + angular Jacobians (12), inverse-inertia angular
 // responses (6), RHS, inverse denominator, epsilon, force bounds and accumulated impulse.
-const ROW_WIDTH = 24
+const ROW_WIDTH = GS_ROW_WIDTH
 const RHS = 18
 const INV_C = 19
 const EPS = 20
@@ -49,6 +50,18 @@ const LAMBDA = 23
 // Reserved typed-array ranges contain numbers. A broken offset remains NaN, never a false zero.
 const read = (values: Float64Array, index: number): number => values[index] ?? Number.NaN
 const indexAt = (values: Int32Array, index: number): number => values[index] ?? -1
+
+function finiteResponse(rows: Float64Array, at: number, a: number, b: number): boolean {
+  if (!(Number.isFinite(a) && Number.isFinite(b))) {
+    return false
+  }
+  for (let i = 0; i < 18; i++) {
+    if (!Number.isFinite(read(rows, at + i))) {
+      return false
+    }
+  }
+  return true
+}
 
 function store(values: Float64Array, offset: number, v: Vec3): void {
   values[offset] = v.x
@@ -96,9 +109,16 @@ export class CorpseSolver extends GSSolver {
     friction: 0,
     constraints: 0,
     iterations: 0,
+    zeroDeltas: 0,
+    backend: 'javascript',
+    kernelBytes: 0,
+    nativeCalls: 0,
+    primed: false,
   }
+  private kernel: GsKernel | null
   private rows = new Float64Array(0)
   private indices = new Int32Array(0)
+  private finite = new Uint8Array(0)
   private velocities = new Float64Array(0)
   private masses = new Float64Array(0)
   private readonly response = new Vec3()
@@ -106,11 +126,19 @@ export class CorpseSolver extends GSSolver {
   private zeros = new Int32Array(0)
   private responderCount = 0
   private zeroCount = 0
+  private zeroDeltas = 0
+
+  constructor(module?: WebAssembly.Module | null) {
+    super()
+    this.kernel = module ? GsKernel.create(module) : null
+    this.stats.kernelBytes = this.kernel?.bytes ?? 0
+  }
 
   override solve(dt: number, world: World): number {
     // Keep Cannon's extension contract: a custom row with different iteration methods or a
     // body outside this world uses the stock path. Production contacts/joints use Equation's.
     const supported = this.equations.every((row) => supportedRow(row, world))
+    this.stats.backend = 'javascript'
     const iterations = supported ? this.solveCached(dt, world) : super.solve(dt, world)
     if (world.doProfiling) {
       const count = this.equations.length
@@ -123,22 +151,61 @@ export class CorpseSolver extends GSSolver {
         count - world.contacts.length - world.frictionEquations.length,
       )
       this.stats.iterations = count === 0 ? 0 : Math.min(this.iterations, iterations + 1)
+      this.stats.zeroDeltas = this.zeroDeltas
     }
     return iterations
   }
 
+  private allocate(count: number, bodies: number): void {
+    if (this.rows.length < count * ROW_WIDTH) {
+      const rows = new Float64Array(count * ROW_WIDTH)
+      const indices = new Int32Array(count * 2)
+      const finite = new Uint8Array(count)
+      this.rows = rows
+      this.indices = indices
+      this.finite = finite
+    }
+    if (this.velocities.length < bodies * 6) {
+      const velocities = new Float64Array(bodies * 6)
+      const masses = new Float64Array(bodies)
+      const responders = new Int32Array(bodies)
+      const zeros = new Int32Array(bodies)
+      this.velocities = velocities
+      this.masses = masses
+      this.responders = responders
+      this.zeros = zeros
+    }
+  }
+
+  reserve(rows: number, bodies: number): boolean {
+    if (!(Number.isSafeInteger(rows) && Number.isSafeInteger(bodies)) || rows < 0 || bodies < 0) {
+      return false
+    }
+    try {
+      this.allocate(rows, bodies)
+      this.kernel?.run({
+        count: rows,
+        iterations: 0,
+        tolerance: 0,
+        rows: this.rows,
+        indices: this.indices,
+        velocities: this.velocities,
+        masses: this.masses,
+        finite: this.finite,
+      })
+      this.stats.kernelBytes = this.kernel?.bytes ?? 0
+      return true
+    } catch (error: unknown) {
+      if (error instanceof RangeError) {
+        return false
+      }
+      throw error
+    }
+  }
+
   private prepare(dt: number, world: World): void {
     const count = this.equations.length
-    if (this.rows.length < count * ROW_WIDTH) {
-      this.rows = new Float64Array(count * ROW_WIDTH)
-      this.indices = new Int32Array(count * 2)
-    }
-    if (this.velocities.length < world.bodies.length * 6) {
-      this.velocities = new Float64Array(world.bodies.length * 6)
-      this.masses = new Float64Array(world.bodies.length)
-      this.responders = new Int32Array(world.bodies.length)
-      this.zeros = new Int32Array(world.bodies.length)
-    }
+    this.allocate(count, world.bodies.length)
     this.velocities.fill(0, 0, world.bodies.length * 6)
     this.responderCount = 0
     this.zeroCount = 0
@@ -160,7 +227,6 @@ export class CorpseSolver extends GSSolver {
       // Cannon calls the runtime one-argument overload (Contact/Friction/RotationalEquation).
       // Reflect preserves that exact call even though the base Equation declaration has3 args.
       rows[o + RHS] = Reflect.apply(row.computeB, row, [dt])
-      rows[o + INV_C] = 1 / row.computeC()
       rows[o + EPS] = row.eps
       rows[o + MIN_FORCE] = row.minForce
       rows[o + MAX_FORCE] = row.maxForce
@@ -169,10 +235,17 @@ export class CorpseSolver extends GSSolver {
       store(rows, o + 3, row.jacobianElementA.rotational)
       store(rows, o + 6, row.jacobianElementB.spatial)
       store(rows, o + 9, row.jacobianElementB.rotational)
+      // Stock computeGiMGt adds these two responses in this order. Keep the same doubles
+      // for iteration rather than multiplying each inverse inertia by its Jacobian twice.
+      let denominator = row.bi.invMassSolve + row.bj.invMassSolve
       row.bi.invInertiaWorldSolve.vmult(row.jacobianElementA.rotational, this.response)
       store(rows, o + 12, this.response)
+      denominator += this.response.dot(row.jacobianElementA.rotational)
       row.bj.invInertiaWorldSolve.vmult(row.jacobianElementB.rotational, this.response)
       store(rows, o + 15, this.response)
+      denominator += this.response.dot(row.jacobianElementB.rotational)
+      rows[o + INV_C] = 1 / (denominator + row.eps)
+      this.finite[i] = Number(finiteResponse(rows, o, row.bi.invMassSolve, row.bj.invMassSolve))
       this.indices[i * 2] = row.bi.index
       this.indices[i * 2 + 1] = row.bj.index
     }
@@ -183,6 +256,7 @@ export class CorpseSolver extends GSSolver {
     const indices = this.indices
     const velocity = this.velocities
     let iteration = 0
+    let zeroDeltas = 0
     for (; iteration < this.iterations; iteration++) {
       let total = 0
       for (let j = 0; j < count; j++) {
@@ -206,6 +280,12 @@ export class CorpseSolver extends GSSolver {
         }
         rows[o + LAMBDA] = lambda + delta
         total += Math.abs(delta)
+        // With finite responses, an exactly zero impulse leaves the scratch velocities
+        // unchanged. Invalid extension data must still take the original IEEE arithmetic.
+        if (delta === 0 && this.finite[j]) {
+          zeroDeltas++
+          continue
+        }
         this.add(a, o, read(this.masses, ai) * delta)
         this.add(b, o + 6, read(this.masses, bi) * delta)
         this.add(a + 3, o + 12, delta)
@@ -215,6 +295,7 @@ export class CorpseSolver extends GSSolver {
         break
       }
     }
+    this.zeroDeltas = zeroDeltas
     return iteration
   }
 
@@ -269,8 +350,39 @@ export class CorpseSolver extends GSSolver {
       return 0
     }
     this.prepare(dt, world)
-    const iterations = this.iterate(this.equations.length)
+    const native = this.kernel?.run({
+      count: this.equations.length,
+      iterations: this.iterations,
+      tolerance: this.tolerance,
+      rows: this.rows,
+      indices: this.indices,
+      velocities: this.velocities,
+      masses: this.masses,
+      finite: this.finite,
+    })
+    const iterations = native ? native.iterations : this.iterate(this.equations.length)
+    if (native) {
+      this.zeroDeltas = native.zeros
+      this.stats.backend = 'wasm'
+      this.stats.nativeCalls++
+    }
+    this.stats.kernelBytes = this.kernel?.bytes ?? 0
     this.commit(world.bodies, dt)
     return iterations
+  }
+
+  dispose(): void {
+    this.kernel?.dispose()
+    this.kernel = null
+    this.rows = new Float64Array(0)
+    this.indices = new Int32Array(0)
+    this.finite = new Uint8Array(0)
+    this.velocities = new Float64Array(0)
+    this.masses = new Float64Array(0)
+    this.responders = new Int32Array(0)
+    this.zeros = new Int32Array(0)
+    this.stats.kernelBytes = 0
+    this.stats.backend = 'javascript'
+    this.stats.primed = false
   }
 }

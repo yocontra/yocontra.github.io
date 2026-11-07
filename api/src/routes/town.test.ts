@@ -5,6 +5,7 @@ import { fakeEnv, seedAccount, TEST_SECRET } from '../auth/d1-fake.ts'
 import { signAccessToken } from '../auth/token.ts'
 import { createProfileStatements } from '../economy/profile.ts'
 import type { Env } from '../env.ts'
+import { LOBBY_WIRE_HEADER } from '../town/wire.ts'
 import { townRoutes } from './town.ts'
 
 const ORIGIN = 'http://localhost:4341'
@@ -141,8 +142,12 @@ async function socketUrl(env: Env, bearer: string): Promise<URL> {
   return new URL(body.wsUrl)
 }
 
-async function connect(env: Env, url: URL): Promise<Response> {
-  const request = new Request(url, { headers: { Origin: ORIGIN, Upgrade: 'websocket' } })
+async function connect(env: Env, url: URL, callerWire?: string): Promise<Response> {
+  const headers = new Headers({ Origin: ORIGIN, Upgrade: 'websocket' })
+  if (callerWire !== undefined) {
+    headers.set(LOBBY_WIRE_HEADER, callerWire)
+  }
+  const request = new Request(url, { headers })
   const response = await townRoutes(request, env, url, {} as ExecutionContext)
   if (!response) {
     throw new Error('no socket route')
@@ -174,11 +179,12 @@ describe('Frontier socket ticket wire binding', () => {
   it('forwards a current join URL once, with the authenticated lobby and player', async () => {
     const { env, bearer, forwarded, upgradeHeaders } = await setup(true)
     const url = await socketUrl(env, bearer)
-    expect((await connect(env, url)).status).toBe(200)
+    expect((await connect(env, url, String(W - 1))).status).toBe(200)
     expect(forwarded()).toBe(1)
     expect(upgradeHeaders()?.get('X-Lobby-Id')).toBe('lobby:1')
     expect(upgradeHeaders()?.get('X-Account-Id')).toBe('acct-1')
     expect(upgradeHeaders()?.get('X-Name')).toBe('Rider')
+    expect(upgradeHeaders()?.get(LOBBY_WIRE_HEADER)).toBe(String(W))
     expect((await connect(env, url)).status).toBe(401)
     expect(forwarded()).toBe(1)
   })

@@ -1,8 +1,8 @@
 /** Update physical bone frames parent-first, then visit fingers, clothing and gear once. */
 import { type Bone, type Group, Matrix4, type Object3D, Quaternion, Vector3 } from 'three'
-import type { CorpseLink, CorpsePose } from './corpse-rig.ts'
+import type { CorpsePose } from './corpse-rig.ts'
 
-export function corpsePose(root: Group, bones: Bone[], links: CorpseLink[]) {
+export function corpsePose(root: Group, bones: Bone[]) {
   const indices = new Map(bones.map((bone, index) => [bone, index]))
   const ancestors = new Set<Object3D>()
   for (const bone of bones) {
@@ -25,11 +25,9 @@ export function corpsePose(root: Group, bones: Bone[], links: CorpseLink[]) {
     for (const { node, index } of path) {
       const target = index === undefined ? undefined : poses[index]
       if (target) {
-        if (index !== undefined && links[index]?.parent === -1) {
-          node.position.copy(target.position)
-          if (node.parent) {
-            node.position.applyMatrix4(inverse.copy(node.parent.matrixWorld).invert())
-          }
+        node.position.copy(target.position)
+        if (node.parent) {
+          node.position.applyMatrix4(inverse.copy(node.parent.matrixWorld).invert())
         }
         rotation.identity()
         node.parent?.matrixWorld.decompose(position, rotation, scale)

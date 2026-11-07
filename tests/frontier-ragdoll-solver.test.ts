@@ -33,6 +33,7 @@ const bases = ['casual', 'worker', 'rugged', 'suit', 'king', 'punk', 'woman'] as
 const models = new Map<BodyKey, GLTF>()
 let player: GLTF
 let moves: GLTF
+let kernelModule: WebAssembly.Module
 beforeAll(async () => {
   const load = async (name: string) =>
     new GLTFLoader()
@@ -43,6 +44,11 @@ beforeAll(async () => {
         ).arrayBuffer(),
         '',
       )
+  kernelModule = await WebAssembly.compile(
+    await file(
+      new URL('../src/experiments/out-west/ffa/scene/ragdoll-gs.wasm', import.meta.url),
+    ).arrayBuffer(),
+  )
   ;[player, moves] = await Promise.all([load('player'), load('moves')])
   await Promise.all(
     bases.map(async (base) => {
@@ -98,85 +104,124 @@ function contacts(world: World): number[] {
   ])
 }
 
-describe.each(bases)('cached GS on the actual %s model', (base) => {
-  it('matches stock poses, velocities, contact equations and impulses through fast falls at different yaws', () => {
-    const model = models.get(base)
-    if (!model) {
-      throw new Error(`Missing ${base} asset`)
-    }
-    for (const clip of ['Idle', 'Run', 'Idle_Gun_Pointing', 'Crouch_Idle'] as const) {
-      const actor = new Actor(model, {
-        base,
-        clips: [...player.animations, ...moves.animations],
-        seed: 'solver-equivalence',
-      })
-      new Group().add(actor.root)
-      actor.root.scale.setScalar(1.25)
-      actor.root.position.set(0, 8, 0)
-      actor.play(clip, 0)
-      actor.update(0.37)
-      prepareCorpseFit(actor)
-      const geometry = actor.meshes[0]?.geometry
-      if (!geometry) {
-        throw new Error('Actual skin missing')
-      }
-      ownGeometry(geometry)
-      try {
-        for (const yaw of [0, 0.73]) {
-          actor.root.rotation.y = yaw
-          actor.root.updateMatrixWorld(true)
-          const stock = worldFor(new GSSolver())
-          const cached = worldFor(new CorpseSolver())
-          const build = (world: World) =>
-            new CorpsePhysics(world, cloneCorpse(actor, geometry, `${base}/${clip}`), {
-              velocity: new Vector3(2, -16.2, 1),
-              impulse: new Vector3(0, 0, -3),
-            })
-          const a = build(stock)
-          const b = build(cached)
-          let error = 0
-          try {
-            error = trajectoryError(a, b, stock, cached)
-            // Operation order is retained, so the complete physical trajectory is bit exact.
-            expect(error).toBe(0)
-          } finally {
-            a.dispose()
-            b.dispose()
-          }
-        }
-      } finally {
-        releaseGeometry(geometry)
-        actor.dispose()
-      }
-    }
-  }, 30_000)
-})
+const backends = ['javascript', 'wasm'] as const
+const makeSolver = (backend: (typeof backends)[number]) =>
+  new CorpseSolver(backend === 'wasm' ? kernelModule : null)
 
-it('keeps custom equation iteration overrides on Cannon’s stock path', () => {
-  let calls = 0
-  const run = (solver: GSSolver) => {
-    const world = new World()
-    const a = new Body({ mass: 1, shape: new Sphere(0.1) })
-    const b = new Body({ mass: 2, shape: new Sphere(0.1) })
-    world.addBody(a)
-    world.addBody(b)
-    a.linearFactor.set(0.5, 1, 0)
-    const row = new Equation(a, b)
-    row.jacobianElementA.spatial.set(1, 0, 0)
-    row.jacobianElementB.spatial.set(-1, 0, 0)
-    row.computeB = () => 1
-    const add = row.addToWlambda.bind(row)
-    row.addToWlambda = (delta) => {
-      calls++
-      add(delta)
+describe.each(bases.flatMap((base) => backends.map((backend) => [base, backend] as const)))(
+  'cached GS on the actual %s model via %s',
+  (base, backend) => {
+    it('matches stock poses, velocities, contact equations and impulses through fast falls at different yaws', () => {
+      const model = models.get(base)
+      if (!model) {
+        throw new Error(`Missing ${base} asset`)
+      }
+      for (const clip of ['Idle', 'Run', 'Idle_Gun_Pointing', 'Crouch_Idle'] as const) {
+        const actor = new Actor(model, {
+          base,
+          clips: [...player.animations, ...moves.animations],
+          seed: 'solver-equivalence',
+        })
+        new Group().add(actor.root)
+        actor.root.scale.setScalar(1.25)
+        actor.root.position.set(0, 8, 0)
+        actor.play(clip, 0)
+        actor.update(0.37)
+        prepareCorpseFit(actor)
+        const geometry = actor.meshes[0]?.geometry
+        if (!geometry) {
+          throw new Error('Actual skin missing')
+        }
+        ownGeometry(geometry)
+        try {
+          for (const yaw of [0, 0.73]) {
+            actor.root.rotation.y = yaw
+            actor.root.updateMatrixWorld(true)
+            const stock = worldFor(new GSSolver())
+            const cached = worldFor(makeSolver(backend))
+            const build = (world: World) =>
+              new CorpsePhysics(world, cloneCorpse(actor, geometry, `${base}/${clip}`), {
+                velocity: new Vector3(2, -16.2, 1),
+                impulse: new Vector3(0, 0, -3),
+              })
+            const a = build(stock)
+            const b = build(cached)
+            let error = 0
+            try {
+              error = trajectoryError(a, b, stock, cached)
+              // Operation order is retained, so the complete physical trajectory is bit exact.
+              expect(error).toBe(0)
+              expect((cached.solver as CorpseSolver).stats.nativeCalls > 0).toBe(backend === 'wasm')
+            } finally {
+              a.dispose()
+              b.dispose()
+            }
+          }
+        } finally {
+          releaseGeometry(geometry)
+          actor.dispose()
+        }
+      }
+    }, 30_000)
+  },
+)
+
+it.each(backends)(
+  'keeps custom equation iteration overrides on Cannon’s stock path via %s',
+  (backend) => {
+    let calls = 0
+    const run = (solver: GSSolver) => {
+      const world = new World()
+      const a = new Body({ mass: 1, shape: new Sphere(0.1) })
+      const b = new Body({ mass: 2, shape: new Sphere(0.1) })
+      world.addBody(a)
+      world.addBody(b)
+      a.linearFactor.set(0.5, 1, 0)
+      const row = new Equation(a, b)
+      row.jacobianElementA.spatial.set(1, 0, 0)
+      row.jacobianElementB.spatial.set(-1, 0, 0)
+      row.computeB = () => 1
+      const add = row.addToWlambda.bind(row)
+      row.addToWlambda = (delta) => {
+        calls++
+        add(delta)
+      }
+      solver.addEquation(row)
+      solver.solve(1 / 120, world)
+      return [...bodyState(a), ...bodyState(b), row.multiplier]
     }
-    solver.addEquation(row)
-    solver.solve(1 / 120, world)
-    return [...bodyState(a), ...bodyState(b), row.multiplier]
-  }
-  expect(run(new CorpseSolver())).toEqual(run(new GSSolver()))
-  expect(calls).toBeGreaterThan(0)
-})
+    expect(run(makeSolver(backend))).toEqual(run(new GSSolver()))
+    expect(calls).toBeGreaterThan(0)
+  },
+)
+
+it.each(backends)(
+  'retains stock IEEE propagation for nonfinite inverse-inertia extension data via %s',
+  (backend) => {
+    const run = (solver: GSSolver, invalid: number) => {
+      const world = new World()
+      const floor = new Body({ mass: 0, shape: new Plane() })
+      const body = new Body({ mass: 1, shape: new Sphere(0.1) })
+      body.invInertiaWorld.elements[0] = invalid
+      world.addBody(floor)
+      world.addBody(body)
+      const row = new ContactEquation(floor, body)
+      row.ni.set(0, 1, 0)
+      row.rj.set(1, 0, 0)
+      solver.addEquation(row)
+      solver.solve(1 / 120, world)
+      return [
+        ...bodyState(body),
+        ...body.vlambda.toArray(),
+        ...body.wlambda.toArray(),
+        row.multiplier,
+      ]
+    }
+    for (const invalid of [Number.NaN, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY]) {
+      expect(run(makeSolver(backend), invalid)).toEqual(run(new GSSolver(), invalid))
+    }
+  },
+)
 
 function trajectoryError(a: CorpsePhysics, b: CorpsePhysics, stock: World, cached: World): number {
   let error = 0
@@ -206,31 +251,34 @@ function trajectoryError(a: CorpsePhysics, b: CorpsePhysics, stock: World, cache
   return error
 }
 
-it('falls back when a custom RHS changes a previously prepared row’s force bound', () => {
-  const run = (solver: GSSolver) => {
-    const world = new World()
-    const a = new Body({ mass: 0, shape: new Sphere(0.1) })
-    const b = new Body({ mass: 1, shape: new Sphere(0.1) })
-    b.position.y = -0.1
-    world.addBody(a)
-    world.addBody(b)
-    const first = new ContactEquation(a, b, 1)
-    first.ni.set(0, 1, 0)
-    const second = new ContactEquation(a, b, 0)
-    second.ni.set(0, 1, 0)
-    const compute = second.computeB.bind(second)
-    second.computeB = (dt) => {
-      first.maxForce = 0
-      return compute(dt)
+it.each(backends)(
+  'falls back when a custom RHS changes a previously prepared row’s force bound via %s',
+  (backend) => {
+    const run = (solver: GSSolver) => {
+      const world = new World()
+      const a = new Body({ mass: 0, shape: new Sphere(0.1) })
+      const b = new Body({ mass: 1, shape: new Sphere(0.1) })
+      b.position.y = -0.1
+      world.addBody(a)
+      world.addBody(b)
+      const first = new ContactEquation(a, b, 1)
+      first.ni.set(0, 1, 0)
+      const second = new ContactEquation(a, b, 0)
+      second.ni.set(0, 1, 0)
+      const compute = second.computeB.bind(second)
+      second.computeB = (dt) => {
+        first.maxForce = 0
+        return compute(dt)
+      }
+      solver.addEquation(first)
+      solver.addEquation(second)
+      solver.iterations = 24
+      solver.solve(1 / 120, world)
+      return { velocity: b.velocity.toArray(), impulse: first.multiplier }
     }
-    solver.addEquation(first)
-    solver.addEquation(second)
-    solver.iterations = 24
-    solver.solve(1 / 120, world)
-    return { velocity: b.velocity.toArray(), impulse: first.multiplier }
-  }
-  expect(run(new CorpseSolver())).toEqual(run(new GSSolver()))
-})
+    expect(run(makeSolver(backend))).toEqual(run(new GSSolver()))
+  },
+)
 
 function transitions(solver: GSSolver) {
   const world = worldFor(solver)
@@ -281,27 +329,30 @@ function change(state: Transition, phase: number): void {
   }
 }
 
-it('matches stock zero-response state across sleep, body-type and pane membership changes', () => {
-  const stock = transitions(new GSSolver())
-  const cached = transitions(new CorpseSolver())
-  for (let phase = 0; phase < 8; phase++) {
-    change(stock, phase)
-    change(cached, phase)
-    for (let step = 0; step < 20; step++) {
-      stock.world.step(1 / 120)
-      cached.world.step(1 / 120)
-      const state = (value: Transition) =>
-        value.world.bodies.flatMap((body) => [
-          ...bodyState(body),
-          ...body.vlambda.toArray(),
-          ...body.wlambda.toArray(),
-          body.invMassSolve,
-          ...body.invInertiaWorldSolve.elements,
-        ])
-      expect(state(cached)).toEqual(state(stock))
-      expect(cached.joint.equations.map((row) => row.multiplier)).toEqual(
-        stock.joint.equations.map((row) => row.multiplier),
-      )
+it.each(backends)(
+  'matches stock zero-response state across sleep, body-type and pane membership changes via %s',
+  (backend) => {
+    const stock = transitions(new GSSolver())
+    const cached = transitions(makeSolver(backend))
+    for (let phase = 0; phase < 8; phase++) {
+      change(stock, phase)
+      change(cached, phase)
+      for (let step = 0; step < 20; step++) {
+        stock.world.step(1 / 120)
+        cached.world.step(1 / 120)
+        const state = (value: Transition) =>
+          value.world.bodies.flatMap((body) => [
+            ...bodyState(body),
+            ...body.vlambda.toArray(),
+            ...body.wlambda.toArray(),
+            body.invMassSolve,
+            ...body.invInertiaWorldSolve.elements,
+          ])
+        expect(state(cached)).toEqual(state(stock))
+        expect(cached.joint.equations.map((row) => row.multiplier)).toEqual(
+          stock.joint.equations.map((row) => row.multiplier),
+        )
+      }
     }
-  }
-})
+  },
+)

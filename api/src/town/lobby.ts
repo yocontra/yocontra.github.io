@@ -37,6 +37,7 @@ import {
   xpFlushStatements,
 } from './settle.ts'
 import { SocketPeer } from './socket-peer.ts'
+import { lobbyUpgradeError } from './wire.ts'
 
 const DEPOSIT_FLUSH_MS = 2000
 const MINUTE_MS = 60_000
@@ -122,8 +123,9 @@ export class Lobby extends DurableObject<Env> {
     if (url.pathname === '/stats') {
       return Response.json(this.stats())
     }
-    if (request.headers.get('Upgrade') !== 'websocket') {
-      return new Response('Expected WebSocket', { status: 426 })
+    const upgradeError = lobbyUpgradeError(request)
+    if (upgradeError) {
+      return upgradeError
     }
     this.lobbyId = request.headers.get('X-Lobby-Id') ?? this.lobbyId
     const accountId = request.headers.get('X-Account-Id') ?? ''

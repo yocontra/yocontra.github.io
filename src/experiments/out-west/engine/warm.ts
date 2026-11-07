@@ -1,4 +1,44 @@
-import type { Camera, Material, Object3D, Scene, WebGLRenderer } from 'three'
+import {
+  type Camera,
+  type Material,
+  Mesh,
+  type Object3D,
+  type Scene,
+  type WebGLRenderer,
+} from 'three'
+
+export class ProgramWarmError extends Error {
+  override name = 'ProgramWarmError'
+}
+
+/** Visit actual off-camera casters during loading, then restore the normal culling policy. */
+export function warmDrawables(
+  scene: Scene,
+  shadows: { enabled: boolean; autoUpdate: boolean; needsUpdate: boolean },
+  draw: () => void,
+): void {
+  const meshes: [Mesh, boolean][] = []
+  scene.traverse((node) => {
+    if (node instanceof Mesh) {
+      meshes.push([node, node.frustumCulled])
+      node.frustumCulled = false
+    }
+  })
+  const automatic = shadows.autoUpdate
+  const pending = shadows.needsUpdate
+  try {
+    if (shadows.enabled) {
+      shadows.needsUpdate = true
+    }
+    draw()
+  } finally {
+    for (const [mesh, culled] of meshes) {
+      mesh.frustumCulled = culled
+    }
+    shadows.autoUpdate = automatic
+    shadows.needsUpdate = pending
+  }
+}
 
 /**
  * Compile the programs `override` needs for every drawable in `scene` (except `hidden`), the way

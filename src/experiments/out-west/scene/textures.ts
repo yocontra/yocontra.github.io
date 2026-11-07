@@ -7,13 +7,14 @@ import {
   type Texture,
   TextureLoader,
 } from 'three'
+import { assetUrl } from '../platform/asset-url.ts'
 import { FONT } from '../ui/type.ts'
 
 /** Painted signs use the display wood type (see ui/type.ts). */
 export const SLAB = FONT.display
 
 const loader = new TextureLoader()
-const WEBP = /\.webp$/iu
+const WEBP = /\.webp(?=[?#]|$)/iu
 
 /**
  * Phone tiers read the half-size WebP variants (generated beside each map): the download is about
@@ -55,7 +56,7 @@ export function loadTex(url: string, srgb: boolean, anisotropy: number): Promise
       resolve(t)
     }
     const load = (from: string, fallback: string | null): void => {
-      loader.load(from, done, undefined, () => {
+      loader.load(assetUrl(from), done, undefined, () => {
         if (fallback) {
           load(fallback, null)
         } else {

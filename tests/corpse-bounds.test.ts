@@ -155,7 +155,7 @@ function containVertices(rig: CorpseRig, bounds: Box3): number {
 function target(rig: CorpseRig, frame: number, x = 0): CorpsePose[] {
   const axis = new Vector3(0.3, 0.8, -0.4).normalize()
   return rig.links.map((link, index) => ({
-    // Child physics anchors may drift: rendered child translations remain authored.
+    // Exercise physical joint-origin separation independently of the captured hierarchy.
     position: link.position.clone().add(new Vector3(x + index * 0.02, -frame * 3, frame * 4)),
     rotation: link.rotation
       .clone()

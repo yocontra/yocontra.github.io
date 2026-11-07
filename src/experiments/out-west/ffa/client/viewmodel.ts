@@ -21,6 +21,7 @@ import {
   AdditiveBlending,
   type Bone,
   BoxGeometry,
+  type BufferGeometry,
   CanvasTexture,
   Color,
   DirectionalLight,
@@ -56,6 +57,7 @@ import { shotgunMesh } from '../scene/shotgun.ts'
 import { dressForLens } from './vm-gloves.ts'
 import { type VmInput, VmMotion, type VmPose } from './vm-motion.ts'
 import { VmSky } from './vm-sky.ts'
+import { warmViewModel } from './vm-warm.ts'
 
 /** The view model's own vertical field of view (degrees), and on the sights. */
 export const VM_FOV = 54
@@ -185,6 +187,10 @@ export class ViewModel {
   private readonly flash: Sprite
   private flashT = 1
   private actor: Actor | null = null
+  private warmed: Actor | null = null
+  private readonly retiredSkin = new Set<Material>()
+  private readonly sightGeometries = new Set<BufferGeometry>()
+  private disposed = false
   private readonly bones = new Map<string, Bone>()
   private fits: { revolver: Fit | null; rifle: Fit | null; shotgun: Fit | null } = {
     revolver: null,
@@ -245,12 +251,31 @@ export class ViewModel {
 
   /** Dress the view model as your rider (built lazily, once first person is on). */
   setLook(look: PlayerLook): void {
+    if (this.disposed) {
+      return
+    }
     if (look.key === this.lookKey) {
+      this.pending = null
       return
     }
     this.pending = look
     if (this.on) {
       this.build(look)
+    }
+  }
+
+  /** Prepare this actual look before entering first person; keep its program references alive. */
+  warm(draw: () => void): void {
+    if (this.disposed) {
+      return
+    }
+    if (this.pending) {
+      this.build(this.pending)
+    }
+    if (this.actor && this.actor !== this.warmed) {
+      warmViewModel(this.scene, draw)
+      this.warmed = this.actor
+      this.releaseRetired()
     }
   }
 
@@ -272,7 +297,7 @@ export class ViewModel {
     }
     this.pending = null
     this.lookKey = look.key
-    this.clearBody()
+    this.clearBody(true)
     // the Peacemaker with its hammer and cylinder on their pivots, to cock and to turn
     this.paired = gunIsPair(look.gun)
     const gun = revolverObject({ size: 0.32, articulated: true, look: gunFinish(look.gun) })
@@ -304,8 +329,12 @@ export class ViewModel {
       }
       dressForLens(body)
     }
+    for (const held of [actor.gun, actor.offGun]) {
+      if (held) {
+        this.townSky.adopt(held)
+      }
+    }
     if (actor.gun) {
-      this.townSky.adopt(actor.gun)
       this.action = actionOf(actor.gun)
       if (this.action) {
         this.action.arm(true)
@@ -375,7 +404,8 @@ export class ViewModel {
     const gunW = gun.matrixWorld.clone()
     const right = gunW.clone().invert().multiply(wristR.matrixWorld)
     // its own sights when it carries them (scene/revolver.ts: the notch's floor, the blade's top)
-    const sights = a.rear && a.front ? { rear: a.rear, front: a.front } : addSights(gun, a)
+    const sights =
+      a.rear && a.front ? { rear: a.rear, front: a.front } : addSights(gun, a, this.sightGeometries)
     return {
       obj: gun,
       rear: sights.rear,
@@ -681,21 +711,61 @@ export class ViewModel {
     this.fill.intensity = 0.55 + f * 3
   }
 
-  private clearBody(): void {
+  private releaseRetired(): void {
+    this.actor?.root.traverse((object) => {
+      if (object instanceof SkinnedMesh) {
+        for (const material of Array.isArray(object.material)
+          ? object.material
+          : [object.material]) {
+          this.retiredSkin.delete(material)
+        }
+      }
+    })
+    for (const material of this.retiredSkin) {
+      material.dispose()
+    }
+    this.retiredSkin.clear()
+  }
+
+  private clearBody(retainPrograms = false): void {
     const actor = this.actor
     if (actor) {
+      const materials = new Set<Material>()
+      // Hats are fitted per actor, unlike the shared weapon geometry. Warmup draws this
+      // hidden mesh too, so retain its programs with the skin and release its owned buffers.
+      actor.hat?.traverse((object) => {
+        if (object instanceof Mesh) {
+          object.geometry.dispose()
+          for (const material of Array.isArray(object.material)
+            ? object.material
+            : [object.material]) {
+            materials.add(material)
+          }
+        }
+      })
       actor.root.traverse((object) => {
         if (object instanceof SkinnedMesh) {
           object.geometry.dispose()
           for (const material of Array.isArray(object.material)
             ? object.material
             : [object.material]) {
-            material.dispose()
+            materials.add(material)
           }
         }
       })
+      for (const material of materials) {
+        if (retainPrograms && actor === this.warmed) {
+          this.retiredSkin.add(material)
+        } else {
+          material.dispose()
+        }
+      }
       actor.dispose()
     }
+    for (const geometry of this.sightGeometries) {
+      geometry.dispose()
+    }
+    this.sightGeometries.clear()
     // Long guns are rehomed outside the actor for the overlay's independent pose.
     // They must leave too when a look changes, including a currently visible map weapon.
     this.fits.rifle?.obj.removeFromParent()
@@ -703,6 +773,7 @@ export class ViewModel {
     this.fits = { revolver: null, rifle: null, shotgun: null }
     this.held = null
     this.actor = null
+    this.warmed = null
     this.support = null
     this.action = null
     this.bones.clear()
@@ -710,7 +781,14 @@ export class ViewModel {
   }
 
   dispose(): void {
+    if (this.disposed) {
+      return
+    }
+    this.disposed = true
+    this.pending = null
     this.clearBody()
+    this.releaseRetired()
+    this.townSky.dispose()
     this.flash.material.map?.dispose()
     this.flash.material.dispose()
   }
@@ -721,7 +799,11 @@ export class ViewModel {
  * a rear notch (two posts) on the frame, in the gun's own steel. Returns the sight line's two
  * points (the notch's top and the blade's top, level with each other on the sights).
  */
-function addSights(gun: Object3D, a: GunAnatomy): { rear: Vector3; front: Vector3 } {
+function addSights(
+  gun: Object3D,
+  a: GunAnatomy,
+  owned: Set<BufferGeometry>,
+): { rear: Vector3; front: Vector3 } {
   let steel: Material | null = null
   gun.traverse((o) => {
     if (!steel && o instanceof Mesh && !Array.isArray(o.material)) {
@@ -734,11 +816,15 @@ function addSights(gun: Object3D, a: GunAnatomy): { rear: Vector3; front: Vector
   // the notch at the back of the top strap, just behind the cylinder
   const notchX = a.mouthX - 0.03
   if (steel) {
-    const front = new Mesh(new BoxGeometry(0.012, 0.009, 0.0026), steel)
+    const frontGeometry = new BoxGeometry(0.012, 0.009, 0.0026)
+    owned.add(frontGeometry)
+    const front = new Mesh(frontGeometry, steel)
     front.position.copy(blade)
     gun.add(front)
     for (const z of [-0.0042, 0.0042]) {
-      const post = new Mesh(new BoxGeometry(0.008, 0.008, 0.0028), steel)
+      const geometry = new BoxGeometry(0.008, 0.008, 0.0028)
+      owned.add(geometry)
+      const post = new Mesh(geometry, steel)
       post.position.set(notchX, frame + 0.004, z)
       gun.add(post)
     }

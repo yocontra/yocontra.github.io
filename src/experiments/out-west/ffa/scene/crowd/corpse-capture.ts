@@ -73,6 +73,11 @@ export class CorpsePreparation {
       if (!body) {
         throw new Error('Prepared corpse has no body')
       }
+      // Three also needs this center for opaque depth sorting, even with skin culling disabled.
+      actor.root.updateMatrixWorld(true)
+      for (const mesh of actor.meshes) {
+        mesh.computeBoundingSphere()
+      }
       ownGeometry(body.geometry)
       const template = actor.template()
       const rifle = actor.addLong(rifleObject())

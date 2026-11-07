@@ -11,37 +11,8 @@ import type { Actor } from '../src/experiments/out-west/scene/actor.ts'
 
 it('parks actual prepared roster actors without scene or mixer work and reenters with the same independent instances', async () => {
   const look = lookFor(['outfit.striped-poncho', 'gun.hardins-pair'], 701)
-  const load = async (name: string) =>
-    new GLTFLoader()
-      .setMeshoptDecoder(MeshoptDecoder)
-      .parseAsync(await file(`public/experiments/out-west/3d/models/${name}.glb`).arrayBuffer(), '')
-  const [model, player, moves] = await Promise.all([
-    load(look.look.base),
-    load('player'),
-    load('moves'),
-  ])
-  if (!(model && player && moves)) {
-    throw new Error('Missing real actor assets')
-  }
-  markCharacterSlots(model)
-  const texture = new Texture()
-  const assets: Assets = {
-    player: { ...player, animations: [...player.animations, ...moves.animations] },
-    props: player,
-    tex: {
-      ground: texture,
-      groundN: texture,
-      planks: texture,
-      planksN: texture,
-      vplanks: texture,
-      vplanksN: texture,
-      char: { map: texture, normal: texture, arm: texture },
-    },
-    bodyNow: () => model,
-    body: async () => model,
-    lookReady: async () => undefined,
-    lookLoaded: () => true,
-  }
+  const assets = await realAssets(look.look.base)
+  const texture = assets.tex.ground
   const scene = new Scene()
   const previousDocument = Reflect.get(globalThis, 'document')
   Reflect.set(globalThis, 'document', {
@@ -77,6 +48,15 @@ it('parks actual prepared roster actors without scene or mixer work and reenters
   }))
   try {
     crowd.update(rows, 0, 0, 1 / 60, 0)
+    crowd.selfFade = 0.4
+    crowd.update(rows, 0, 0, 1 / 60, 0)
+    expect(Reflect.get(crowd, 'selfFaded')).toBe(0.4)
+    crowd.releaseCorpse(702)
+    expect(Reflect.get(crowd, 'selfFaded')).toBe(0.4)
+    crowd.releaseCorpse(701)
+    expect(Reflect.get(crowd, 'selfFaded')).toBe(-1)
+    crowd.update(rows, 0, 0, 1 / 60, 0)
+    expect(Reflect.get(crowd, 'selfFaded')).toBe(0.4)
     const builds = crowd.stats.builds
     const calls = [firstUpdate.mock.calls.length, secondUpdate.mock.calls.length] as const
     const clocks = [first.actor.mixer.time, second.actor.mixer.time] as const
@@ -93,6 +73,18 @@ it('parks actual prepared roster actors without scene or mixer work and reenters
     expect(first.actor.mixer.time).toBe(clocks[0])
     expect(second.actor.mixer.time).toBe(clocks[1])
     expect(crowd.stats.near).toBe(0)
+    const privateMaterial = first.actor.meshes[0]?.material
+    let warmed = 0
+    crowd.warmSelf(701, () => {
+      warmed++
+    })
+    expect(warmed).toBe(2)
+    crowd.warmSelf(701, () => {
+      warmed++
+    })
+    expect(warmed).toBe(2)
+    expect(first.holder.parent).toBeNull()
+    expect(first.actor.meshes[0]?.material).toBe(privateMaterial)
     crowd.near = 2
     crowd.update(rows, 0, 0, 1 / 60, 1)
     expect(first.holder.parent).not.toBeNull()
@@ -101,6 +93,52 @@ it('parks actual prepared roster actors without scene or mixer work and reenters
     expect(secondUpdate.mock.calls.length).toBeGreaterThan(calls[1])
     expect(members.get(701)?.actor).toBe(first.actor)
     expect(crowd.stats.builds).toBe(builds)
+    const retired = first.actor
+    const retiredDispose = spyOn(retired, 'dispose')
+    crowd.setLook(701, { ...look, key: `${look.key}/pending-look` })
+    expect(Reflect.get(crowd, 'selfFaded')).toBe(-1)
+    expect(retiredDispose).not.toHaveBeenCalled()
+    await crowd.prepareLooks()
+    await crowd.precast(2, 701, (id) => id)
+    const abandoned = members.get(701)?.actor
+    if (!abandoned) {
+      throw new Error('Missing pending self replacement')
+    }
+    const abandonedDispose = spyOn(abandoned, 'dispose')
+    crowd.setLook(701, { ...look, key: `${look.key}/final-look` })
+    expect(abandonedDispose).toHaveBeenCalledTimes(1)
+    expect(retiredDispose).not.toHaveBeenCalled()
+    await crowd.prepareLooks()
+    await crowd.precast(2, 701, (id) => id)
+    expect(() =>
+      crowd.warmSelf(701, () => {
+        throw new Error('retry warm')
+      }),
+    ).toThrow('retry warm')
+    expect(retiredDispose).not.toHaveBeenCalled()
+    crowd.warmSelf(701, () => expect(retiredDispose).not.toHaveBeenCalled())
+    expect(retiredDispose).toHaveBeenCalledTimes(1)
+    expect(Reflect.get(crowd, 'retiredSelf')).toBeNull()
+    crowd.update(rows, 0, 0, 1 / 60, 2)
+    const former = members.get(701)?.actor
+    crowd.warmSelf(702, () => undefined)
+    const formerMaterial = former?.meshes[0]?.material
+    if (!formerMaterial || Array.isArray(formerMaterial)) {
+      throw new Error('Missing private self material')
+    }
+    expect(formerMaterial.opacity).toBe(1)
+    expect(formerMaterial.alphaHash).toBe(false)
+    expect(members.get(702)?.actor).toBe(second.actor)
+    expect(former === members.get(701)?.actor).toBe(true)
+    const finalRetired = second.actor
+    const finalDispose = spyOn(finalRetired, 'dispose')
+    crowd.setLook(702, { ...look, key: `${look.key}/dispose-before-warm` })
+    expect(finalDispose).not.toHaveBeenCalled()
+    crowd.dispose()
+    expect(finalDispose).toHaveBeenCalledTimes(1)
+    retiredDispose.mockRestore()
+    abandonedDispose.mockRestore()
+    finalDispose.mockRestore()
   } finally {
     firstUpdate.mockRestore()
     secondUpdate.mockRestore()
@@ -113,3 +151,33 @@ it('parks actual prepared roster actors without scene or mixer work and reenters
     }
   }
 })
+
+async function realAssets(base: string): Promise<Assets> {
+  const load = async (name: string) =>
+    new GLTFLoader()
+      .setMeshoptDecoder(MeshoptDecoder)
+      .parseAsync(await file(`public/experiments/out-west/3d/models/${name}.glb`).arrayBuffer(), '')
+  const [model, player, moves] = await Promise.all([load(base), load('player'), load('moves')])
+  if (!(model && player && moves)) {
+    throw new Error('Missing real actor assets')
+  }
+  markCharacterSlots(model)
+  const texture = new Texture()
+  return {
+    player: { ...player, animations: [...player.animations, ...moves.animations] },
+    props: player,
+    tex: {
+      ground: texture,
+      groundN: texture,
+      planks: texture,
+      planksN: texture,
+      vplanks: texture,
+      vplanksN: texture,
+      char: { map: texture, normal: texture, arm: texture },
+    },
+    bodyNow: () => model,
+    body: async () => model,
+    lookReady: async () => undefined,
+    lookLoaded: () => true,
+  }
+}

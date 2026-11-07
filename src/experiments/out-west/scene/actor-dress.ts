@@ -3,6 +3,7 @@ import { type AnimationClip, type Bone, type Object3D, SkinnedMesh } from 'three
 import type { Actor } from './actor.ts'
 import type { ActorOpts } from './actor-options.ts'
 import { bake, bodyPieces, type Piece } from './bake.ts'
+import { finishFaces } from './face-finish.ts'
 import { type Body, sampleBody } from './fit.ts'
 import { fitHat, tuckHair } from './hats.ts'
 import type { Fit } from './outfit.ts'
@@ -27,6 +28,7 @@ export function dressActor(model: Object3D, root: Object3D, opts: ActorOpts, fit
     ...bodyPieces(model, root, body, opts.base === 'woman' ? 'fitted' : 'straight'),
     ...clothes,
   ]
+  finishFaces(pieces, body, fit.head)
   paintSkin(
     pieces,
     body,
@@ -41,7 +43,10 @@ export function dressActor(model: Object3D, root: Object3D, opts: ActorOpts, fit
     pieces.push(
       ...fitted.armWith(
         fit,
-        clothes.filter((c) => !c.unbelted),
+        // The tailored shirt replaces the source tunic, so the strap must fit its real waist.
+        pieces.filter(
+          (piece) => !piece.unbelted && (clothes.includes(piece) || piece.slot === SLOT.Shirt),
+        ),
         opts.gun,
       ),
     )

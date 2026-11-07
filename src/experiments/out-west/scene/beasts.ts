@@ -36,6 +36,7 @@ import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.j
 import { type GLTF, GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js'
 import { mergeGeometries, mergeVertices } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
 import { clone as cloneSkinned } from 'three/examples/jsm/utils/SkeletonUtils.js'
+import { assetUrl } from '../platform/asset-url.ts'
 import { watchPose } from './pose-watch.ts'
 import { SkinThrottle } from './skin-throttle.ts'
 
@@ -220,7 +221,7 @@ function riderGeometry(r: Rider, bone: number): BufferGeometry {
 let loader: GLTFLoader | null = null
 function load(name: string): Promise<GLTF> {
   loader ??= new GLTFLoader().setMeshoptDecoder(MeshoptDecoder)
-  return loader.loadAsync(`${ROOT}/${name}.glb`)
+  return loader.loadAsync(assetUrl(`${ROOT}/${name}.glb`))
 }
 
 /** One animated animal: its model, mixer and named clips. */

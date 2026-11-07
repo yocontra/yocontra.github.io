@@ -12,6 +12,7 @@ import {
   type BufferGeometry,
   Group,
   InstancedMesh,
+  type Material,
   Matrix4,
   Mesh,
   MeshBasicMaterial,
@@ -59,6 +60,7 @@ import {
 import { GunBatch } from './crowd/gun-batch.ts'
 import { VatHats } from './crowd/hats.ts'
 import { isResourceReleasedError } from './crowd/resource-cache.ts'
+import { warmSelfMaterials } from './crowd/self-warm.ts'
 import { silhouetteKey } from './crowd/silhouette.ts'
 import { holdSkin } from './crowd/skin-hold.ts'
 import { headAt, socketAt } from './crowd/tracks.ts'
@@ -265,6 +267,11 @@ export class Crowd {
   /** Your body's opacity (dithered): the shooter camera thins it out when the lens is close. */
   selfFade = 1
   private selfFaded = 1
+  private selfActor: Actor | null = null
+  private warmedSelf: Actor | null = null
+  private warmedSelfId: number | null = null
+  private retiredSelf: Member | null = null
+  private retiredFarMaterials: Material[] = []
   private readonly order: CrowdPlayer[] = []
   /** Ids drawn this frame (reused). */
   private readonly seen = new Set<number>()
@@ -471,7 +478,9 @@ export class Crowd {
           bone.updateMatrix()
         }
         setAuto(m.bones, false)
-        this.selfFaded = -1
+        if (m.actor === this.selfActor) {
+          this.selfFaded = -1
+        }
         if (m.actor.hat) {
           m.actor.hat.visible = true
           m.actor.hat.traverse((node) => {
@@ -661,8 +670,14 @@ export class Crowd {
       vat.mesh.dispose()
       vat.mesh.geometry.dispose()
       const material = vat.mesh.material
-      for (const mat of Array.isArray(material) ? material : [material]) {
-        mat.dispose()
+      const materials = [...new Set(Array.isArray(material) ? material : [material])]
+      if (!this.isDisposed() && vat.warmReady) {
+        this.discardFarMaterials()
+        this.retiredFarMaterials = materials
+      } else {
+        for (const mat of materials) {
+          mat.dispose()
+        }
       }
     }
     this.vats.delete(key)
@@ -672,7 +687,36 @@ export class Crowd {
     releaseVat(look, VAT_CLIPS)
   }
 
+  private discardFarMaterials(): void {
+    for (const material of this.retiredFarMaterials) {
+      material.dispose()
+    }
+    this.retiredFarMaterials = []
+  }
+
   private dropActor(m: Member): void {
+    if (!this.isDisposed() && m.actor && m.actor === this.warmedSelf) {
+      if (this.retiredSelf) {
+        this.destroyActor(this.retiredSelf)
+      }
+      this.retiredSelf = { ...m }
+      this.retiredSelf.loco = null
+      m.holder?.removeFromParent()
+      if (m.actor === this.selfActor) {
+        this.selfActor = null
+        this.selfFaded = -1
+      }
+      this.clearActor(m)
+      return
+    }
+    this.destroyActor(m)
+  }
+
+  private destroyActor(m: Member): void {
+    if (m.actor === this.selfActor) {
+      this.selfActor = null
+      this.selfFaded = -1
+    }
     if (m.actor) {
       const geometry = new Set([m.full, m.lod1, ...m.actor.meshes.map((mesh) => mesh.geometry)])
       for (const geo of geometry) {
@@ -711,6 +755,10 @@ export class Crowd {
       m.actor.dispose()
     }
     m.holder?.removeFromParent()
+    this.clearActor(m)
+  }
+
+  private clearActor(m: Member): void {
     m.actor = null
     m.bones = []
     m.skin = []
@@ -774,6 +822,95 @@ export class Crowd {
       await new Promise((r) => setTimeout(r, 0))
     }
     return n
+  }
+
+  /** Loading-only: compile and reflect the actual self actor's retained material variants. */
+  warmSelf(id: number, warm: () => void): void {
+    if (this.isDisposed()) {
+      return
+    }
+    if (id !== this.warmedSelfId) {
+      const former = this.warmedSelfId === null ? null : this.members.get(this.warmedSelfId)?.actor
+      if (former) {
+        former.root.traverse((node) => {
+          if (node instanceof Mesh) {
+            for (const material of Array.isArray(node.material) ? node.material : [node.material]) {
+              material.opacity = 1
+              if (material.alphaHash) {
+                material.alphaHash = false
+                material.needsUpdate = true
+              }
+            }
+          }
+        })
+      }
+      this.selfActor = null
+      this.selfFaded = -1
+      this.warmedSelfId = id
+    }
+    const member = this.members.get(id)
+    if (member?.actor && member.holder && member.actor !== this.warmedSelf) {
+      const actor = member.actor
+      try {
+        warmSelfMaterials(member.holder, this.root, warm)
+        if (this.isDisposed() || this.members.get(id) !== member || member.actor !== actor) {
+          return
+        }
+        this.warmedSelf = actor
+        if (this.retiredSelf) {
+          this.destroyActor(this.retiredSelf)
+          this.retiredSelf = null
+        }
+      } finally {
+        // The temporary render may have refreshed a held skeleton under its loading transform.
+        for (const touch of member.skin) {
+          touch()
+        }
+      }
+    }
+  }
+
+  /** Prepare roster hat variants, including their actual instanced-color program. */
+  warmFar(warm: () => void): void {
+    if (this.isDisposed()) {
+      return
+    }
+    for (const member of this.members.values()) {
+      this.hats.mesh(member.look.hat, member.look.hatDetail)
+    }
+    const finish: ((ready: boolean) => void)[] = []
+    for (const [key, vat] of this.vats) {
+      if (vat.warmReady) {
+        continue
+      }
+      const member = [...this.members.values()].find((candidate) => candidate.vatKey === key)
+      const staged = member ? vat.stageWarm(member.look) : null
+      if (staged) {
+        finish.push(staged)
+      }
+    }
+    const visible = this.root.visible
+    let ready = false
+    try {
+      this.root.visible = true
+      let drawn = false
+      this.hats.warm(() => {
+        warm()
+        drawn = true
+      })
+      if (!drawn && finish.length > 0) {
+        warm()
+      }
+      ready = true
+    } finally {
+      for (const restore of finish) {
+        restore(ready)
+      }
+      if (ready && finish.length > 0) {
+        this.discardFarMaterials()
+      }
+      this.root.visible = visible
+    }
   }
 
   /** Mid-match casts: not before this time (ms): at most one every `CAST_GAP_MS`. */
@@ -1185,10 +1322,11 @@ export class Crowd {
    */
   private fadeSelf(actor: Actor): void {
     const f = Math.round(this.selfFade * 20) / 20
-    if (f === this.selfFaded) {
+    if (f === this.selfFaded && actor === this.selfActor) {
       return
     }
     this.selfFaded = f
+    this.selfActor = actor
     actor.root.traverse((o) => {
       const mat = (o as Partial<Mesh>).material
       if (mat && !Array.isArray(mat) && (o as Partial<Mesh>).isMesh) {
@@ -1412,9 +1550,15 @@ export class Crowd {
     for (const [key, look] of this.vatOwners) {
       this.releaseVariant(key, look)
     }
+    this.discardFarMaterials()
     for (const m of this.members.values()) {
       this.dropActor(m)
     }
+    if (this.retiredSelf) {
+      this.destroyActor(this.retiredSelf)
+      this.retiredSelf = null
+    }
+    this.warmedSelf = null
     this.members.clear()
     this.failedVats.clear()
     this.hats.dispose()

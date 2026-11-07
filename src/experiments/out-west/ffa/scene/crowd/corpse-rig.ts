@@ -199,7 +199,7 @@ export function cloneCorpse(actor: Actor, full: BufferGeometry, identity: string
   fitBoots(skins, bones, links)
   fitRigidContacts(root, bones, links)
   const cloth = skins.map((skin) => corpseCloth(skin, full))
-  const updatePose = corpsePose(root, bones, links)
+  const updatePose = corpsePose(root, bones)
   const bounds = corpseBounds({ root, skins, full, bones, links })
   bounds(links)
   let disposed = false

@@ -68,4 +68,12 @@ export class VmSky {
       t.envMapRotation.set(-euler.x, -euler.y, -euler.z, 'XYZ')
     }
   }
+
+  dispose(): void {
+    for (const material of this.twins.values()) {
+      material.dispose()
+    }
+    this.twins.clear()
+    this.env = null
+  }
 }

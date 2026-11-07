@@ -1,4 +1,6 @@
 import { describe, expect, it } from 'bun:test'
+import { PerspectiveCamera, Scene } from 'three'
+import { Renderer } from '../src/experiments/out-west/engine/render.ts'
 import { FrontierGame } from '../src/experiments/out-west/ffa/client/game.ts'
 import type {
   Transport,
@@ -221,4 +223,211 @@ it('keeps loading through retained-program warming and repeats it if a new welco
   expect(passes).toBe(2)
   expect(compiled).toBe(1)
   expect(finished).toBe(true)
+})
+
+it('warms the actual self fade variants in the world scene before loading completes', async () => {
+  const calls: string[] = []
+  const scene = {}
+  const camera = {}
+  const state = {
+    disposed: false,
+    exited: false,
+    connectionGeneration: 0,
+    recoverAfterWelcome: true,
+    net: { you: 7, persistent: { ready: true }, roster: new Map([[7, {}]]) },
+    precastRiders: () => {
+      calls.push('precast')
+      return Promise.resolve()
+    },
+    recoverDeadRiders: () => {
+      calls.push('recover')
+      return Promise.resolve()
+    },
+    scene,
+    cam: { camera },
+    renderer: {
+      warmSync: (actualScene: object, actualCamera: object) => {
+        expect(actualScene).toBe(scene)
+        expect(actualCamera).toBe(camera)
+        calls.push('draw')
+      },
+    },
+    ragdolls: {
+      prepareCorpses: (_ids: Iterable<number>, warm: () => void) => {
+        calls.push('corpses')
+        warm()
+        return Promise.resolve()
+      },
+    },
+    crowd: {
+      warmFar: () => undefined,
+      warmSelf: (id: number, warm: () => void) => {
+        expect(id).toBe(7)
+        expect(state.recoverAfterWelcome).toBe(true)
+        calls.push('self')
+        warm()
+        warm()
+      },
+    },
+  }
+  Object.setPrototypeOf(state, FrontierGame.prototype)
+  await Reflect.apply(Reflect.get(FrontierGame.prototype, 'finishPlayers'), state, [
+    () => undefined,
+  ])
+  expect(calls).toEqual(['precast', 'recover', 'corpses', 'draw', 'self', 'draw', 'draw'])
+  expect(state.recoverAfterWelcome).toBe(false)
+})
+
+it('checks the current self materials synchronously before each world draw after a welcome', () => {
+  const calls: string[] = []
+  const state = {
+    net: { you: 7 },
+    scene: {},
+    cam: { camera: {} },
+    crowd: {
+      warmFar: () => undefined,
+      warmSelf: (id: number, warm: () => void) => {
+        calls.push(`self:${id}`)
+        warm()
+      },
+    },
+    renderer: {
+      warmSync: () => calls.push('warm'),
+      render: (dt: number) => calls.push(`draw:${dt}`),
+    },
+  }
+  Object.setPrototypeOf(state, FrontierGame.prototype)
+  const draw = Reflect.get(FrontierGame.prototype, 'drawFrame')
+  Reflect.apply(draw, state, [0.01])
+  state.net.you = 9
+  Reflect.apply(draw, state, [0.02])
+  Reflect.apply(draw, state, [0.03])
+  expect(calls).toEqual([
+    'self:7',
+    'warm',
+    'draw:0.01',
+    'self:9',
+    'warm',
+    'draw:0.02',
+    'self:9',
+    'warm',
+    'draw:0.03',
+  ])
+})
+
+it('detaches and disposes the view model once on terminal teardown', () => {
+  let disposals = 0
+  const overlays: unknown[] = []
+  const state = {
+    viewModel: { dispose: () => disposals++ },
+    renderer: { setOverlay: (value: unknown) => overlays.push(value) },
+  }
+  const dispose = Reflect.get(FrontierGame.prototype, 'disposeViewModel')
+  Reflect.apply(dispose, state, [])
+  Reflect.apply(dispose, state, [])
+  expect(state.viewModel).toBeNull()
+  expect(disposals).toBe(1)
+  expect(overlays).toEqual([null])
+})
+
+function failingWarm() {
+  const target = {}
+  const composer = {}
+  let current: object | null = target
+  let failure = true
+  let attempts = 0
+  const state = {
+    gl: {
+      shadowMap: { enabled: true, autoUpdate: false, needsUpdate: false },
+      getRenderTarget: () => current,
+      setRenderTarget: (value: object | null) => {
+        current = value
+      },
+      compile: () => undefined,
+      render: () => {
+        if (current === composer) {
+          attempts++
+          if (failure) {
+            failure = false
+            throw new Error('driver')
+          }
+        }
+      },
+    },
+    composer: { inputBuffer: composer },
+  }
+  return {
+    warm: () =>
+      Reflect.apply(Renderer.prototype.warmSync, state, [new Scene(), new PerspectiveCamera()]),
+    attempts: () => attempts,
+    restored: () => current === target && !state.gl.shadowMap.needsUpdate,
+  }
+}
+
+it('retries an actual renderer driver failure behind loading, with restored state', async () => {
+  const state = { disposed: false, exited: false }
+  Object.setPrototypeOf(state, FrontierGame.prototype)
+  const fixture = failingWarm()
+  const ready = await Reflect.apply(Reflect.get(FrontierGame.prototype, 'warmUntilReady'), state, [
+    fixture.warm,
+  ])
+  expect(ready).toBe(true)
+  expect(fixture.attempts()).toBe(2)
+  expect(fixture.restored()).toBe(true)
+})
+
+it('does not retry a real capture failure as a graphics-driver failure', async () => {
+  const state = { disposed: false, exited: false }
+  Object.setPrototypeOf(state, FrontierGame.prototype)
+  const failure = new Error('capture could not retain geometry')
+  let attempts = 0
+  const operation = () => {
+    attempts++
+    return Promise.reject(failure)
+  }
+  const pending = Reflect.apply(Reflect.get(FrontierGame.prototype, 'warmUntilReady'), state, [
+    operation,
+  ])
+  await expect(pending).rejects.toBe(failure)
+  expect(attempts).toBe(1)
+})
+
+it('abandons a delayed warm after its connection generation changes or it is disposed', async () => {
+  const state = { disposed: false, exited: false, generation: 0 }
+  Object.setPrototypeOf(state, FrontierGame.prototype)
+  let complete: (() => void) | undefined
+  const operation = () =>
+    new Promise<void>((resolve) => {
+      complete = resolve
+    })
+  const warm = Reflect.get(FrontierGame.prototype, 'warmUntilReady')
+  const first = Reflect.apply(warm, state, [operation, () => state.generation === 0])
+  state.generation++
+  complete?.()
+  expect(await first).toBe(false)
+  const second = Reflect.apply(warm, state, [operation])
+  state.disposed = true
+  complete?.()
+  expect(await second).toBe(false)
+})
+
+it('fails soft on a driver error during live warming, then retries without a frame crash loop', () => {
+  const fixture = failingWarm()
+  let renders = 0
+  const state = {
+    warmRetryAt: 0,
+    warmSelfPrograms: fixture.warm,
+    renderer: { render: () => renders++ },
+  }
+  const draw = Reflect.get(FrontierGame.prototype, 'drawFrame')
+  Reflect.apply(draw, state, [0.01])
+  expect(renders).toBe(0)
+  expect(fixture.attempts()).toBe(1)
+  Reflect.apply(draw, state, [0.01])
+  expect(fixture.attempts()).toBe(1)
+  state.warmRetryAt = performance.now() - 1
+  Reflect.apply(draw, state, [0.01])
+  expect(fixture.attempts()).toBe(2)
+  expect(renders).toBe(1)
+  expect(fixture.restored()).toBe(true)
 })

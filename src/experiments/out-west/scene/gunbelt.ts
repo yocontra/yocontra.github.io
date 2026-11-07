@@ -331,7 +331,10 @@ export function gunbeltPieces(
   const brass = lin(0xc8_a0_50)
   const pts = hipSurface(body, clothes)
   const width = BELT_W * o.scale * (o.look.rig ? 1.25 : 1)
-  const beltW = nearestWeights(body, onBones(body, ['Hips', 'Abdomen']))
+  const pelvis = o.bone('Hips')
+  const beltW: WeightFn = pelvis
+    ? () => [[pelvis, 1]]
+    : nearestWeights(body, onBones(body, ['Hips', 'Abdomen']))
   const out: Piece[] = []
   for (const g of beltBand(pts, fit, {
     cx: o.hips.x,

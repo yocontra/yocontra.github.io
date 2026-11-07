@@ -1,4 +1,4 @@
-import { beforeAll, expect, it } from 'bun:test'
+import { beforeAll, expect, it, spyOn } from 'bun:test'
 import { file } from 'bun'
 import {
   Bone,
@@ -248,6 +248,95 @@ function disposeFork(actor: Actor): void {
   }
   actor.dispose()
 }
+
+it.each(bases)(
+  'prepares the actual %s sort sphere before any living fork can enter view',
+  async (base) => {
+    const prepared = new CorpsePreparation(assets())
+    const look = lookFor(['outfit.gamblers-frock', 'gun.hardins-pair'], 800 + bases.indexOf(base))
+    look.look.base = base
+    const source = await prepared.retain(look)
+    const first = prepared.fork(look)
+    const second = prepared.fork(look)
+    if (!(first && second)) {
+      throw new Error('Missing prepared living forks')
+    }
+    try {
+      for (const [index, mesh] of source.actor.meshes.entries()) {
+        const a = first.meshes[index]
+        const b = second.meshes[index]
+        if (!(a && b)) {
+          throw new Error('Missing prepared living skin')
+        }
+        expect(mesh.boundingSphere).not.toBeNull()
+        // Compute the exact same-pose reference through Three's actual CPU skinning method.
+        const expected = a.clone()
+        expected.computeBoundingSphere()
+        expect(a.boundingSphere?.equals(expected.boundingSphere)).toBe(true)
+        expect(b.boundingSphere?.equals(expected.boundingSphere)).toBe(true)
+        expect(a.boundingSphere).not.toBe(mesh.boundingSphere)
+        expect(a.boundingSphere).not.toBe(b.boundingSphere)
+        expect(a.geometry).toBe(mesh.geometry)
+        expect(a.frustumCulled).toBe(false)
+        const scan = spyOn(a, 'computeBoundingSphere')
+        const saved = a.boundingSphere?.clone()
+        for (const clip of ['Run', 'Reload', 'Idle_Gun_Pointing'] as const) {
+          pose(first, clip, 0.37)
+          // This is the renderer's sortObjects path, even though skin culling is disabled.
+          if (a.boundingSphere === null) {
+            a.computeBoundingSphere()
+          }
+          expect(a.frustumCulled).toBe(false)
+        }
+        expect(scan).not.toHaveBeenCalled()
+        expect(a.boundingSphere?.equals(saved)).toBe(true)
+        expect(first.mixer.time).toBe(0)
+        expect(second.mixer.time).toBe(0)
+        scan.mockRestore()
+      }
+    } finally {
+      disposeFork(first)
+      disposeFork(second)
+      prepared.releaseUnused(new Set())
+    }
+  },
+)
+
+it('retains prepared sort spheres on local and shared cache hits without rescanning', async () => {
+  const first = new CorpsePreparation(assets())
+  const second = new CorpsePreparation(assets())
+  const look = lookFor(['outfit.striped-poncho'], 890)
+  const source = await first.retain(look)
+  const mesh = source.actor.meshes[0]
+  if (!mesh) {
+    throw new Error('Missing prepared skin')
+  }
+  const scan = spyOn(mesh, 'computeBoundingSphere')
+  const forks: Actor[] = []
+  try {
+    expect(await first.retain(look)).toBe(source)
+    expect(await second.retain(look)).toBe(source)
+    for (const owner of [first, second]) {
+      const fork = owner.fork(look)
+      if (!fork) {
+        throw new Error('Missing cache-hit fork')
+      }
+      forks.push(fork)
+      expect(fork.meshes[0]?.boundingSphere?.equals(mesh.boundingSphere)).toBe(true)
+      expect(fork.meshes[0]?.boundingSphere).not.toBe(mesh.boundingSphere)
+    }
+    expect(forks[0]?.meshes[0]?.boundingSphere).not.toBe(forks[1]?.meshes[0]?.boundingSphere)
+    expect(scan).not.toHaveBeenCalled()
+  } finally {
+    scan.mockRestore()
+    for (const fork of forks) {
+      disposeFork(fork)
+    }
+    first.releaseUnused(new Set())
+    second.releaseUnused(new Set())
+  }
+})
+
 it('keeps parked forks leased through template departure/reskin and restores a new life hat and pose', async () => {
   const prepared = new CorpsePreparation(assets())
   const look = lookFor(['outfit.striped-poncho', 'gun.hardins-pair', 'hat.bronze-band'], 601)

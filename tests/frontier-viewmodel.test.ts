@@ -66,6 +66,7 @@ describe('view-model look replacement', () => {
     rig.add(root, rifle, shotgun)
     const state = {
       actor: { root, dispose: () => root.removeFromParent() },
+      sightGeometries: new Set<BufferGeometry>(),
       fits: { revolver: null, rifle: { obj: rifle }, shotgun: { obj: shotgun } } as Record<
         'revolver' | 'rifle' | 'shotgun',
         { obj: Group } | null

@@ -12,6 +12,7 @@ import {
   WEAPON_SHOTGUN,
 } from '../../src/experiments/out-west/contract/town.ts'
 import type { ItemId } from '../../src/experiments/out-west/data/catalog.ts'
+import type { BodyKey } from '../../src/experiments/out-west/data/outlaws.ts'
 import { FrontierGame } from '../../src/experiments/out-west/ffa/client/game.ts'
 import '../../src/experiments/out-west/ffa/client/index.ts'
 import type { ShotImpacts } from '../../src/experiments/out-west/ffa/client/shot-impact.ts'
@@ -23,6 +24,7 @@ import {
 } from '../../src/experiments/out-west/ffa/sim/codec-events.ts'
 import { TOWN } from '../../src/experiments/out-west/ffa/sim/layout.ts'
 import { roofHeightAt } from '../../src/experiments/out-west/ffa/sim/roofshape.ts'
+import { surfaceTop } from '../../src/experiments/out-west/ffa/sim/surfaces.ts'
 import {
   beginRealFall,
   deathLoopback,
@@ -30,11 +32,15 @@ import {
   killDuringRealFall,
   placeForDeath,
 } from './death-server.ts'
+import { corpseFrames } from './frame-mapping.ts'
 
 export interface DeathOptions {
+  base?: BodyKey
   roof?: boolean
+  stairs?: boolean
   facade?: boolean
   outfit?: ItemId
+  extra?: ItemId
   weapon?: number
   direction?: number
   hatless?: boolean
@@ -59,20 +65,23 @@ export async function prepareDeath(far = false, settings: DeathOptions = {}): Pr
   game.setView('third')
   game.devShowWeapon(settings.weapon ?? WEAPON_RIFLE)
   const crowd = Reflect.get(game, 'crowd') as Crowd
-  crowd.setLook(
+  const look = lookFor(
+    [
+      settings.outfit ?? 'outfit.striped-poncho',
+      settings.outfit === 'outfit.gamblers-frock' ? 'gun.hardins-pair' : 'gun.engraved-ivory',
+      'hat.bronze-band',
+      'spurs.silver-jinglebobs',
+      'holster.silver-conchos',
+      settings.extra ??
+        (settings.outfit === 'outfit.gamblers-frock' ? 'extra.tin-star' : 'extra.red-bandana'),
+    ],
     game.net.you,
-    lookFor(
-      [
-        settings.outfit ?? 'outfit.striped-poncho',
-        settings.outfit === 'outfit.gamblers-frock' ? 'gun.hardins-pair' : 'gun.engraved-ivory',
-        'hat.bronze-band',
-        'spurs.silver-jinglebobs',
-        'holster.silver-conchos',
-        settings.outfit === 'outfit.gamblers-frock' ? 'extra.tin-star' : 'extra.red-bandana',
-      ],
-      game.net.you,
-    ),
   )
+  if (settings.base) {
+    look.look.base = settings.base
+    look.key += `/quality-base/${settings.base}`
+  }
+  crowd.setLook(game.net.you, look)
   await crowd.prepareLooks()
   await crowd.precast(1, game.net.you, () => 0)
   if (far) {
@@ -80,6 +89,15 @@ export async function prepareDeath(far = false, settings: DeathOptions = {}): Pr
   }
   const transport = Reflect.get(game, 'transport') as { send: (data: string) => void }
   Reflect.set(globalThis, '__qualityDeathGame', game)
+  if (settings.stairs) {
+    const stair = game.net.grid.stairs[0]
+    if (!stair) {
+      throw new Error('Missing actual stair fixture')
+    }
+    const x = stair.x + stair.w * 0.37
+    const z = stair.z + stair.d * 0.41
+    await placeForDeath({ x, y: surfaceTop(stair, x, z), z })
+  }
   if (settings.roof || settings.facade) {
     const building = TOWN.buildings.find((candidate) => candidate.id === 'saloon')
     if (!building) {
@@ -172,7 +190,7 @@ export function deathFrame(): Record<string, unknown> {
   const scene = Reflect.get(game, 'scene') as Scene
   const camera = (Reflect.get(game, 'cam') as { camera: PerspectiveCamera }).camera
   let roots = 0
-  const bounds = new Box3()
+  const { bounds, mapping } = corpseFrames(game)
   const gear: Record<string, { visible: number; meshes: number; materials: number }> = {}
   scene.traverse((root) => {
     if (root.name !== 'dressed-corpse') {
@@ -180,9 +198,6 @@ export function deathFrame(): Record<string, unknown> {
     }
     roots++
     root.traverse((node) => {
-      if ('isBone' in node) {
-        bounds.expandByPoint(node.getWorldPosition(new Vector3()))
-      }
       if (!node.userData.corpseGear) {
         return
       }
@@ -209,6 +224,7 @@ export function deathFrame(): Record<string, unknown> {
     liveState: game.net.alive ? fallTrace() : null,
     actors: debug.crowd,
     ragdolls: debug.ragdolls,
+    mapping,
     camera: camera.position.toArray(),
     cameraFov: camera.fov,
     corpses: roots,

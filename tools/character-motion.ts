@@ -9,6 +9,7 @@ import {
   WEAPON_REVOLVER,
   WEAPON_RIFLE,
 } from '../src/experiments/out-west/contract/town.ts'
+import type { BodyKey } from '../src/experiments/out-west/data/outlaws.ts'
 import type * as Death from './character-quality/death.ts'
 import type { DeathOptions } from './character-quality/death.ts'
 import type { corpseGearProof } from './character-quality/gear-proof.ts'
@@ -21,6 +22,11 @@ const out = '.playwright-mcp/quality/physical-motion'
 const SHADER_ERROR = /WebGL|Shader|GL_INVALID|program not valid/u
 const width = 1280
 const height = 800
+const body = process.argv.find((arg) => arg.startsWith('--body='))?.slice(7)
+const bodies: readonly string[] = ['casual', 'worker', 'rugged', 'suit', 'king', 'punk', 'woman']
+if (body && !bodies.includes(body)) {
+  throw new Error(`Unknown character body: ${body}`)
+}
 interface Case {
   name: string
   tier: 'high' | 'floor'
@@ -63,6 +69,18 @@ const cases: Case[] = [
     setup: { roof: true, outfit: 'outfit.gamblers-frock', weapon: WEAPON_REVOLVER },
   },
   { name: 'floor-far-roof-poncho-rifle', tier: 'floor', far: true, setup: { roof: true } },
+  {
+    name: 'high-near-stairs-poncho-rifle',
+    tier: 'high',
+    far: false,
+    setup: { stairs: true, direction: Math.PI / 2 },
+  },
+  {
+    name: 'floor-far-stairs-frock-pair',
+    tier: 'floor',
+    far: true,
+    setup: { stairs: true, outfit: 'outfit.gamblers-frock', weapon: WEAPON_REVOLVER },
+  },
   {
     name: 'high-far-facade-poncho-rifle',
     tier: 'high',
@@ -109,9 +127,16 @@ const sourceHash = fingerprint()
 const browser = await chromium.launch({ channel: 'chrome', args: ['--use-angle=metal'] })
 mkdirSync(out, { recursive: true })
 try {
-  for (const test of cases) {
+  for (const definition of cases) {
+    const test = body
+      ? {
+          ...definition,
+          name: `${definition.name}-${body}`,
+          setup: { ...definition.setup, base: body as BodyKey },
+        }
+      : definition
     const filter = process.argv.find((arg) => arg.startsWith('--case='))?.slice(7)
-    if (filter && !test.name.includes(filter)) {
+    if (filter && !filter.split(',').some((name) => test.name.includes(name))) {
       continue
     }
     await capture(test)
@@ -181,11 +206,6 @@ async function capture(test: Case): Promise<void> {
       'stopDeathVideo',
     )
     writeFileSync(join(dir, 'motion.webm'), Buffer.from(video.url.split(',')[1] ?? '', 'base64'))
-    let gear: unknown
-    if (test.gear) {
-      gear = await proveGear(page, dir)
-    }
-    await filmstrip(dir, frames)
     const metadata = {
       sourceMode: 'development-current-source',
       sourceHash,
@@ -199,10 +219,27 @@ async function capture(test: Case): Promise<void> {
       frames: frames.map(({ state }) => state),
       frameTimes: video.frameTimes,
       videoMime: video.mime,
-      gear,
+      gear: undefined as unknown,
+      gearStatus: test.gear ? 'pending' : 'not-requested',
+      gearError: null as string | null,
       errors,
     }
-    writeFileSync(join(dir, 'motion.json'), `${JSON.stringify(metadata, null, 2)}\n`)
+    const save = () =>
+      writeFileSync(join(dir, 'motion.json'), `${JSON.stringify(metadata, null, 2)}\n`)
+    save()
+    await filmstrip(dir, frames)
+    if (test.gear) {
+      try {
+        metadata.gear = await proveGear(page, dir)
+        metadata.gearStatus = 'passed'
+      } catch (error) {
+        metadata.gearStatus = 'failed'
+        metadata.gearError = error instanceof Error ? error.message : String(error)
+        save()
+        throw error
+      }
+    }
+    save()
     if (errors.length > 0) {
       throw new Error(errors.join('\n'))
     }

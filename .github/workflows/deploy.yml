@@ -13,14 +13,20 @@ permissions:
   id-token: write
 
 concurrency:
-  group: pages
-  cancel-in-progress: true
+  group: production-release
+  cancel-in-progress: false
 
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
+        with:
+          ref: ${{ github.sha }}
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "24.14.1"
+          package-manager-cache: false
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version-file: package.json
@@ -36,12 +42,21 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           PUBLIC_API_URL: https://api.contra.io
           PUBLIC_TURNSTILE_SITEKEY: ${{ vars.TURNSTILE_SITEKEY }}
+          PUBLIC_OW_PERF_HARNESS: ""
+          PUBLIC_OW_ASSET_REVISION: ${{ github.sha }}
       - uses: actions/upload-pages-artifact@v4
         with:
           path: dist
 
-  deploy:
+  api:
     needs: build
+    permissions:
+      contents: read
+    uses: ./.github/workflows/deploy-api.yml
+    secrets: inherit
+
+  deploy:
+    needs: [build, api]
     runs-on: ubuntu-latest
     environment:
       name: github-pages

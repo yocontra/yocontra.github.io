@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, expect, it, spyOn } from 'bun:test'
 import { file } from 'bun'
-import { type ContactEquation, Plane, Sphere, Vec3 } from 'cannon-es'
+import { Body, type ContactEquation, Plane, Sphere, Vec3 } from 'cannon-es'
 import { type BufferGeometry, Group, SkinnedMesh, Vector3 } from 'three'
 import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.js'
 import { type GLTF, GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js'
@@ -64,7 +64,11 @@ beforeAll(async () => {
 afterAll(() => pool.dispose())
 
 function bootVertices(root: Group) {
-  const entries: { mesh: SkinnedMesh; side: 'FootL' | 'FootR'; vertices: number[] }[] = []
+  const entries: {
+    mesh: SkinnedMesh
+    side: 'FootL' | 'FootR'
+    vertices: number[]
+  }[] = []
   root.traverse((mesh) => {
     if (!(mesh instanceof SkinnedMesh)) {
       return
@@ -73,15 +77,16 @@ function bootVertices(root: Group) {
     const weights = mesh.geometry.getAttribute('skinWeight')
     for (const side of ['FootL', 'FootR'] as const) {
       const vertices: number[] = []
+      const suffix = side.slice(-1)
       for (const vertex of new Set<number>(mesh.geometry.index?.array ?? [])) {
-        let weight = 0
+        let shoe = 0
         for (let slot = 0; slot < 4; slot++) {
           const key = boneKey(mesh.skeleton.bones[skin.getComponent(vertex, slot)]?.name ?? '')
-          if (key === side || key === side.replace('Foot', 'Toe')) {
-            weight += weights.getComponent(vertex, slot)
+          if (key === `Foot${suffix}` || key === `Toe${suffix}`) {
+            shoe += weights.getComponent(vertex, slot)
           }
         }
-        if (weight > 0.5) {
+        if (shoe >= 1 - 1e-6) {
           vertices.push(vertex)
         }
       }
@@ -102,15 +107,23 @@ function supportPlane(contact: ContactEquation, body: import('cannon-es').Body) 
 }
 
 function checkContacts(physics: CorpsePhysics, vertices: ReturnType<typeof bootVertices>) {
-  const samples: { error: number; gap: number; ground: boolean; travel: number; drift: number }[] =
-    []
+  const samples: {
+    error: number
+    gap: number
+    ground: boolean
+    travel: number
+    drift: number
+    side: string
+    normal: number[]
+    collider: number
+  }[] = []
   const point = new Vector3()
   for (const entry of vertices) {
     const part = physics.parts.find((candidate) => candidate.link.key === entry.side)
     if (!part) {
       throw new Error('Missing actual foot')
     }
-    const anatomy = part.body.shapes.slice(0, 12)
+    const anatomy = part.body.shapes.slice(0, part.link.anatomySpheres?.length ?? 0)
     const contacts = pool.world.contacts.filter((contact) => {
       if (contact.bi === part.body) {
         return contact.bj.mass === 0 && anatomy.includes(contact.si) && contact.multiplier > 0.01
@@ -149,6 +162,9 @@ function checkContacts(physics: CorpsePhysics, vertices: ReturnType<typeof bootV
       const drift = new Vector3().setFromMatrixPosition(bone.matrixWorld).sub(part.pose.position)
       samples.push({
         error: gap - collider - drift.dot(plane.normal),
+        side: entry.side,
+        normal: plane.normal.toArray(),
+        collider,
         drift: drift.dot(plane.normal),
         gap,
         ground: other.shapes.some((shape) => shape instanceof Plane),
@@ -217,8 +233,14 @@ it.each(bases)(
       for (const part of physics.parts.filter((candidate) =>
         candidate.link.key.startsWith('Foot'),
       )) {
-        expect(part.link.anatomySpheres).toHaveLength(12)
-        expect(part.body.shapes).toHaveLength(12 + (part.link.contacts?.length ?? 0))
+        const count = part.link.anatomySpheres?.length ?? 0
+        expect(count).toBeGreaterThanOrEqual(12)
+        expect(count).toBeLessThanOrEqual(14)
+        expect(part.body.shapes).toHaveLength(count + (part.link.contacts?.length ?? 0))
+        const massReference = originalMassBody(part.body, count)
+        expect(part.body.mass).toBe(massReference.mass)
+        expect(part.body.inertia.toArray()).toEqual(massReference.inertia.toArray())
+        expect(part.body.invInertia.toArray()).toEqual(massReference.invInertia.toArray())
       }
       for (let tick = 0; tick < 240; tick++) {
         physics.limitSpeed()
@@ -240,7 +262,7 @@ it.each(bases)(
         expect(Math.max(0, ...groundGaps)).toBeLessThan(0.025)
         for (const sample of samples) {
           // The measured2cm support approximation plus the source skin's15mm sole baseline.
-          expect(sample.error).toBeLessThan(0.035)
+          expect(sample.error, JSON.stringify({ base, position, tick, sample })).toBeLessThan(0.035)
           expect(sample.error).toBeGreaterThan(-0.035)
           supported++
         }
@@ -256,6 +278,26 @@ it.each(bases)(
     actor.dispose()
   },
 )
+
+/** Compare the constructed body against the same old twelve supports and unchanged gear. */
+function originalMassBody(body: Body, count: number): Body {
+  const original = new Body({ mass: body.mass, position: body.position.clone() })
+  const update = original.updateMassProperties
+  original.updateMassProperties = () => undefined
+  for (const [index, shape] of body.shapes.entries()) {
+    if (index >= 12 && index < count) {
+      continue
+    }
+    const offset = body.shapeOffsets[index]
+    if (!(shape instanceof Sphere && offset)) {
+      throw new Error('Unexpected boot contact shape')
+    }
+    original.addShape(new Sphere(shape.radius), offset.clone())
+  }
+  original.updateMassProperties = update
+  original.updateMassProperties()
+  return original
+}
 
 function soleHeight(vertices: ReturnType<typeof bootVertices>, point: Vector3): number {
   let minimum = Number.POSITIVE_INFINITY

@@ -5,6 +5,7 @@ import { type Body, boneKey, type WeightFn } from './fit.ts'
 import { type Cuff, compactGarment } from './garment-mesh.ts'
 import { SLOT } from './roles.ts'
 import { sewSleeve, sleeveUv } from './western-sleeves.ts'
+import { outlineFront, waistOutline } from './western-waist.ts'
 import { shirtSkin, shirtTorsoWeights } from './western-weights.ts'
 
 export interface TailoredShirt {
@@ -37,8 +38,8 @@ export function tailorShirt(body: Body, source: Piece, fitted = false): Tailored
     return null
   }
   const shoulderY = (left.y + right.y) / 2
-  const lo = hips.y + 0.025
-  const hi = neck.y + 0.047
+  const lo = hips.y + 0.045
+  const hi = neck.y + 0.008
   const samples = body.samples.filter((s) => s.slot === SLOT.Shirt || s.slot === SLOT.Sleeves)
   const core = samples.filter((s) =>
     ['Hips', 'Abdomen', 'Torso', 'Chest', 'Neck', 'ShoulderL', 'ShoulderR'].includes(s.bone),
@@ -61,28 +62,23 @@ export function tailorShirt(body: Body, source: Piece, fitted = false): Tailored
     const rx = Math.max(rawRx, waist + (shoulderWidth - waist) * shoulderT)
     const neckT = Math.max(0, Math.min(1, (y - shoulderY) / (hi - shoulderY)))
     profile.push({
-      rx: Math.min(shoulderWidth, Math.max(fitted ? 0.12 : 0.13, rx)) * (1 - neckT) + 0.067 * neckT,
-      rz: Math.min(0.14, rz) * (1 - neckT) + 0.055 * neckT,
+      rx: Math.min(shoulderWidth, Math.max(fitted ? 0.12 : 0.13, rx)) * (1 - neckT) + 0.058 * neckT,
+      rz: Math.min(0.14, rz) * (1 - neckT) + 0.048 * neckT,
       cx: hips.x + (neck.x - hips.x) * ((y - lo) / (hi - lo)),
       cz: (front + back) * 0.5 * (1 - neckT) + neck.z * neckT,
     })
   }
   softenProfile(profile)
-  const radius = (y: number) => {
+  const outlines = profile.map((shape, row) => {
+    const y = lo + ((hi - lo) * row) / ROWS
+    return waistOutline(body, shape, y, y < hips.y + 0.2)
+  })
+  const surface = (x: number, y: number) => {
     const t = Math.max(0, Math.min(ROWS, ((y - lo) / (hi - lo)) * ROWS))
     const row = Math.floor(t)
-    const a = profile[row] ?? { rx: 0.15, rz: 0.11, cx: hips.x, cz: hips.z }
-    const b = profile[Math.min(ROWS, row + 1)] ?? a
-    return {
-      rx: a.rx + (b.rx - a.rx) * (t - row),
-      rz: a.rz + (b.rz - a.rz) * (t - row),
-      x: a.cx + (b.cx - a.cx) * (t - row),
-      z: a.cz + (b.cz - a.cz) * (t - row),
-    }
-  }
-  const surface = (x: number, y: number) => {
-    const r = radius(y)
-    return r.z + r.rz * Math.sqrt(Math.max(0.01, 1 - ((x - r.x) / r.rx) ** 2))
+    const a = outlineFront(outlines[row] ?? [], x)
+    const b = outlineFront(outlines[Math.min(ROWS, row + 1)] ?? [], x)
+    return Number.isFinite(a) && Number.isFinite(b) ? a + (b - a) * (t - row) : hips.z + 0.1
   }
   const colors = source.geo.getAttribute('color')
   const color = new Color().setRGB(colors.getX(0), colors.getY(0), colors.getZ(0))
@@ -114,7 +110,11 @@ export function tailorShirt(body: Body, source: Piece, fitted = false): Tailored
       const a = (j / SEGS) * Math.PI * 2
       // Broad woven folds stay soft and sewn into the shirt, without a separate front patch.
       const fold = 1 + 0.009 * Math.sin(a * 5) * Math.sin((row / ROWS) * Math.PI)
-      pos.push(r.cx + Math.sin(a) * r.rx * fold, y, r.cz + Math.cos(a) * r.rz * fold)
+      pos.push(
+        (outlines[row]?.[j % SEGS]?.[0] ?? r.cx) * fold,
+        y - 0.018 * Math.max(0, (row - ROWS + 3) / 3) * Math.max(0, Math.cos(a)) ** 8,
+        (outlines[row]?.[j % SEGS]?.[1] ?? r.cz) * fold,
+      )
       col.push(color.r, color.g, color.b)
       uv.push(j / SEGS, row / ROWS)
       if (row > 0 && j < SEGS) {

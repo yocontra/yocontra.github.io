@@ -23,6 +23,7 @@ export function shirtTorsoWeights(body: Body): WeightFn {
     bone,
     position: bone.getWorldPosition(new Vector3()),
   }))
+  const pelvis = frames.find(({ bone }) => boneKey(bone.name) === 'Hips')
   const yoke = yokeFrames(body)
   return (point) => {
     const weights = nearest(point).filter(([bone]) => allowed.has(bone))
@@ -30,7 +31,11 @@ export function shirtTorsoWeights(body: Body): WeightFn {
     if (total > 1e-8) {
       return yokeBinding(
         point,
-        weights.map(([bone, weight]) => [bone, weight / total] as const),
+        tuckBinding(
+          point,
+          weights.map(([bone, weight]) => [bone, weight / total] as const),
+          pelvis,
+        ),
         yoke,
       )
     }
@@ -43,8 +48,33 @@ export function shirtTorsoWeights(body: Body): WeightFn {
         closest = frame
       }
     }
-    return yokeBinding(point, closest ? [[closest.bone, 1]] : [], yoke)
+    return yokeBinding(point, tuckBinding(point, closest ? [[closest.bone, 1]] : [], pelvis), yoke)
   }
+}
+
+/** Only the tucked waist shares the strap's pelvis anchor; the upper trunk keeps its authored blend. */
+function tuckBinding(
+  point: Vector3,
+  trunk: ReturnType<WeightFn>,
+  pelvis: { bone: Bone; position: Vector3 } | undefined,
+): ReturnType<WeightFn> {
+  if (!pelvis) {
+    return trunk
+  }
+  const amount = 1 - smooth((point.y - pelvis.position.y - 0.07) / 0.07)
+  if (amount === 0) {
+    return trunk
+  }
+  let hip = amount
+  const rest: (readonly [Bone, number])[] = []
+  for (const [bone, weight] of trunk) {
+    if (bone === pelvis.bone) {
+      hip += weight * (1 - amount)
+    } else {
+      rest.push([bone, weight * (1 - amount)])
+    }
+  }
+  return [[pelvis.bone, hip], ...rest]
 }
 
 function yokeFrames(body: Body): Yoke[] {

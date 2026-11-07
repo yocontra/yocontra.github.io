@@ -29,6 +29,7 @@ import {
   verifyTurnstile,
 } from '../http.ts'
 import { accountFlags, isShadowed } from '../moderation/flags.ts'
+import { LOBBY_WIRE_HEADER } from '../town/wire.ts'
 
 const LOBBY_PATH = /^\/town\/(?<lobby>lobby:\d{1,3})\/(?<what>ws|stats)$/u
 const DIRECTORY = 'dir:global'
@@ -203,6 +204,7 @@ async function connect(request: Request, env: Env, url: URL, lobbyId: string): P
     return new Response('Wrong town', { status: 403 })
   }
   const headers = new Headers(request.headers)
+  headers.set(LOBBY_WIRE_HEADER, String(TOWN_WIRE_VERSION))
   headers.set('X-Lobby-Id', lobbyId)
   headers.set('X-Account-Id', player.accountId)
   headers.set('X-Name', player.name)
