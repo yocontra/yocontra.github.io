@@ -1,7 +1,6 @@
 // biome-ignore-all lint/suspicious/noUnnecessaryConditions: class fields are flags mutated from outside the method; Biome narrows them to their literal initializer
 import {
   type AnimationAction,
-  type AnimationClip,
   AnimationMixer,
   type Bone,
   Group,
@@ -14,63 +13,33 @@ import {
 } from 'three'
 import type { GLTF } from 'three/examples/jsm/loaders/GLTFLoader.js'
 import { clone as cloneSkinned } from 'three/examples/jsm/utils/SkeletonUtils.js'
-import type { BodyKey, HatKey } from '../data/outlaws.ts'
+import { dressActor, measureActorWalk } from './actor-dress.ts'
+import { type ActorOpts, actorClips, actorLabel } from './actor-options.ts'
+import { type ActorTemplate, forkPlayback, forkTemplate, snapshotActor } from './actor-template.ts'
 import { PROBE, probeIdle, probeRest } from './anim-probe.ts'
-import { bake, bodyPieces, type Piece } from './bake.ts'
-import type { Clip } from './clips.ts'
+import type { Piece } from './bake.ts'
+import { type Clip, clipPoseWeight, posing } from './clips.ts'
 import { DrawLayer } from './draw.ts'
 import { type Body, boneKey, bounds, sampleBody } from './fit.ts'
 import { GestureLayer } from './gesture.ts'
 import { hangGuns } from './gunbelt.ts'
-import { fitHat, type HatFit, tuckHair } from './hats.ts'
+import type { HatFit } from './hats.ts'
 import { type GunAnatomy, handGrip } from './holster.ts'
 import { type HolsterLook, PLAIN_HOLSTER } from './kit.ts'
 import { fitLong, type LongHold, poseLong, shoulderPocket } from './longgun.ts'
 import { nudge } from './nudge.ts'
-import { type Fit, measure } from './outfit.ts'
-import { becomeHimself, type PersonOpts, paintSkin, StanceLayer } from './person.ts'
+import type { Fit } from './outfit.ts'
+import { becomeHimself, StanceLayer } from './person.ts'
 import { watchPose } from './pose-watch.ts'
 import { tickGuns } from './revolver.ts'
-import { type DressOpts, dressPieces, measureStride, seatHat, slotOn, tintModel } from './rig.ts'
+import { hatStyle, retireRig, seatHat, seatProp, slotOn, tintModel } from './rig.ts'
 import { characterMaterial, type Glow } from './shade.ts'
 import type { Floor } from './style.ts'
 
 const HEIGHT = 1.78
 const ORIGIN = new Vector3()
 
-export interface ActorOpts extends PersonOpts, Pick<DressOpts, 'coatCut'> {
-  /** Which whole base character this is (prunes its hard hat, crown, mohawk, backpack). */
-  base?: BodyKey | null
-  /** Animation clips, when the base file carries none (they share the player's rig). */
-  clips?: readonly AnimationClip[] | null
-  tint?: Readonly<Record<string, number>>
-  hat?: HatKey | null
-  hatColor?: number
-  bandana?: number | undefined
-  /** Revolver geometry to clone into the holster/hand. */
-  gun?: Object3D | null
-  /** Second gun (two-gun Delmer, Hardin). */
-  offGun?: boolean
-  rifle?: Object3D | null
-  /** Uniform build: 1 = a 1.78 m man. */
-  scale?: number
-  coat?: number | undefined
-  poncho?: number | undefined
-  moustache?: number | undefined
-  beard?: number | undefined
-  bandoliers?: boolean | undefined
-  star?: boolean | undefined
-  mask?: number | undefined
-  /** Seed for the subtle per-material colour/roughness variation. */
-  seed?: string
-  /** The holster cosmetic (leather colour, tooling, a buscadero drop loop). Looks only. */
-  holster?: HolsterLook | undefined
-}
-
-/** An action posing him: scheduled on its mixer and enabled (a paused, clamped clip still holds). */
-function posing(a: AnimationAction): boolean {
-  return a.enabled && a.isScheduled()
-}
+export type { ActorOpts } from './actor-options.ts'
 
 export type { Clip } from './clips.ts'
 
@@ -130,6 +99,7 @@ export class Actor {
   /** Emissive pulse on his body and hat, 0..1 (Frontier spawn protection). */
   readonly glow: Glow = { value: 0 }
   private readonly bones = new Map<string, Bone>()
+  private readonly neutralFrames: NonNullable<Body['neutralFrames']>
   /** The base carries a sculpted beard (kept by prune when he wears one). */
   private readonly realBeard: boolean
   /** Where his hat sits (null when he has none); the VAT crowd reads it through `hat`. */
@@ -145,9 +115,57 @@ export class Actor {
   readonly gestures: GestureLayer
   /** The rooftop rifleman's rifle kick decays on its own (Frontier drives `longKick` itself). */
   private kickDecays = false
+  private readonly stanceSpec: ActorOpts['stance']
 
-  constructor(gltf: GLTF, opts: ActorOpts = {}) {
-    this.label = `${opts.base ?? 'player'} ${opts.seed ?? ''}`.trim()
+  constructor(gltf: GLTF | ActorTemplate, opts: ActorOpts = {}) {
+    if ('prepared' in gltf) {
+      const fork = forkTemplate(gltf, this.floor, this.glow)
+      this.root = fork.root
+      this.model = fork.model
+      this.label = gltf.label
+      this.realBeard = gltf.realBeard
+      this.neutralFrames = gltf.neutralFrames
+      this.stanceSpec = gltf.stance
+      this.height = gltf.height
+      this.paceLength = gltf.paceLength
+      this.heelStrikes = [...gltf.heelStrikes]
+      this.walkDuration = gltf.walkDuration
+      this.pocket = fork.pocket
+      this.anatomy = fork.anatomy
+      this.hatFit = fork.hatFit
+      for (const [name, bone] of fork.bones) {
+        this.bones.set(name, bone)
+      }
+      this.head = fork.head
+      this.handR = fork.handR
+      this.handL = fork.handL
+      this.hips = fork.hips
+      this.spine = fork.spine
+      this.armR = fork.armR
+      this.forearmR = fork.forearmR
+      this.hat = fork.hat
+      this.gun = fork.gun
+      this.offGun = fork.offGun
+      this.holster = fork.holster
+      this.handSlot = fork.handSlot
+      this.offSlot = fork.offSlot
+      this.offHolster = fork.offHolster
+      this.meshes.push(...fork.meshes)
+      const playback = forkPlayback(gltf, this.model)
+      this.mixer = playback.mixer
+      this.actions = playback.actions
+      this.walkAction = playback.walkAction
+      this.idleAction = playback.idleAction
+      this.drawing = this.anatomy ? new DrawLayer(this, this.anatomy, (n) => this.bone(n)) : null
+      this.stance = StanceLayer.of(this.bones, this.stanceSpec)
+      this.gestures = new GestureLayer((n) => this.bone(n), this.root)
+      this.play('Idle', 0)
+      this.mixer.update(0)
+      this.root.updateMatrixWorld(true)
+      watchPose(this)
+      return
+    }
+    this.label = actorLabel(opts)
     this.model = cloneSkinned(gltf.scene)
     // his bones, his own cut, face, torso and proportions, before he is normalised or measured
     this.realBeard = becomeHimself(this.model, this.bones, opts)
@@ -171,11 +189,17 @@ export class Actor {
     this.armR = this.bone('UpperArmR')
     this.forearmR = this.bone('LowerArmR')
 
+    const neutralSpace = this.root.matrixWorld.clone().invert()
+    this.neutralFrames = [...this.bones].map(([key, bone]) => ({
+      key,
+      matrix: neutralSpace.clone().multiply(bone.matrixWorld).toArray(),
+    }))
     this.mixer = new AnimationMixer(this.model)
     if (PROBE) {
       probeRest(this, this.bones, this.mixer)
     }
-    const clips = opts.clips && opts.clips.length > 0 ? opts.clips : gltf.animations
+    const clips = actorClips(gltf, opts)
+    this.stanceSpec = opts.stance
     for (const clip of clips) {
       const name = clip.name.split('|').pop() ?? clip.name
       this.actions.set(name, this.mixer.clipAction(clip))
@@ -184,7 +208,7 @@ export class Actor {
     this.idleAction = this.actions.get('Idle') ?? null
     if (this.walkAction) {
       this.walkDuration = this.walkAction.getClip().duration
-      this.measureWalk(this.walkAction.getClip())
+      measureActorWalk(this, this.walkAction.getClip(), this.bones)
     }
     this.play('Idle', 0)
     this.mixer.update(0)
@@ -198,11 +222,10 @@ export class Actor {
     this.pocket = this.measurePocket(body)
 
     if (this.hatFit && this.head) {
-      this.hat = seatHat(
-        this.hatFit,
-        { color: opts.hatColor ?? 0x3a_2a_1a, floor: this.floor, glow: this.glow },
-        { head: this.head, root: this.root },
-      )
+      this.hat = seatHat(this.hatFit, hatStyle(opts, this.floor, this.glow), {
+        head: this.head,
+        root: this.root,
+      })
     }
     if (opts.gun) {
       this.gripGuns(opts.offGun ?? false)
@@ -216,45 +239,43 @@ export class Actor {
     watchPose(this)
   }
 
+  /** Freeze fitted geometry and attachment seats before any mutable corpse staging. */
+  template(): ActorTemplate {
+    return snapshotActor(
+      this,
+      {
+        clips: [...this.actions.values()].map((action) => action.getClip()),
+        realBeard: this.realBeard,
+        neutralFrames: this.neutralFrames,
+        pocket: this.pocket,
+        stance: this.stanceSpec,
+      },
+      this.bones,
+    )
+  }
+
   /**
    * Dress him in the idle pose, fitted to his own surface, then bake it all into one skinned mesh
    * bound in that pose. Returns the surface he was measured on.
    */
   private dress(opts: ActorOpts): Body {
-    const body = sampleBody(this.model, this.root)
-    const fit = measure(body, this.bones)
-    const clothes = dressPieces(fit, opts, this.root, this.realBeard)
-    const pieces = [...bodyPieces(this.model, this.root, body), ...clothes]
-    paintSkin(pieces, body, fit.head, opts)
-    // the hat is fitted to his skull now, so the hair it covers is pressed under it before baking
-    this.hatFit = opts.hat ? fitHat(body, fit.head.eye, opts.hat) : null
-    if (this.hatFit) {
-      tuckHair(pieces, this.hatFit)
-    }
-    if (opts.gun) {
-      pieces.push(
-        ...this.armWith(fit, {
-          gun: opts.gun,
+    const dressed = dressActor(this.model, this.root, opts, {
+      neutralFrames: this.neutralFrames,
+      realBeard: this.realBeard,
+      bones: this.bones,
+      material: characterMaterial(this.floor, 'Character', this.glow),
+      armWith: (fit, clothes, gun) =>
+        this.armWith(fit, {
+          gun,
           two: opts.offGun ?? false,
-          clothes: clothes.filter((c) => !c.unbelted),
+          clothes,
           look: opts.holster ?? PLAIN_HOLSTER,
           scale: opts.scale ?? 1,
         }),
-      )
-    }
-    const drop: Object3D[] = []
-    this.model.traverse((o) => {
-      if ((o as SkinnedMesh).isSkinnedMesh) {
-        drop.push(o)
-      }
     })
-    for (const d of drop) {
-      d.removeFromParent()
-    }
-    this.meshes.push(
-      bake(pieces, body, this.root, characterMaterial(this.floor, 'Character', this.glow)),
-    )
-    return body
+    this.hatFit = dressed.hatFit
+    this.meshes.push(dressed.mesh)
+    return dressed.body
   }
 
   /** The hollow of his right shoulder, kept in his chest bone's frame (it rides his chest). */
@@ -266,18 +287,6 @@ export class Actor {
 
   private bone(name: string): Bone | null {
     return this.bones.get(boneKey(name)) ?? null
-  }
-
-  /** Stride length and heel strikes from the walk clip, so his feet never slide. */
-  private measureWalk(clip: AnimationClip): void {
-    const footL = this.bone('FootL')
-    const footR = this.bone('FootR')
-    if (!(footL && footR)) {
-      return
-    }
-    const stride = measureStride({ mixer: this.mixer, root: this.root, feet: [footL, footR] }, clip)
-    this.paceLength = stride.paceLength ?? this.paceLength
-    this.heelStrikes = stride.heelStrikes
   }
 
   /** The rifle kicks (the rooftop rifleman's shot); it settles on its own. */
@@ -352,7 +361,10 @@ export class Actor {
    * Never call mixer.stopAllAction() on an actor from outside: play() would think the stopped
    * clip still runs and leave him in his bind pose.
    */
-  stopAll(): void {
+  stopAll(resetStance = false): void {
+    if (resetStance) {
+      this.stance?.undo()
+    }
     this.mixer.stopAllAction()
     this.current = null
     this.walkWeight = 0
@@ -360,13 +372,7 @@ export class Actor {
 
   /** Total weight of the clips posing him (0 = his bind pose). A clamped Death still counts. */
   poseWeight(): number {
-    let w = 0
-    for (const a of this.actions.values()) {
-      if (posing(a)) {
-        w += a.getEffectiveWeight()
-      }
-    }
-    return w
+    return clipPoseWeight(this.actions.values())
   }
 
   get walkTime(): number {
@@ -482,30 +488,14 @@ export class Actor {
 
   /** Move the revolver from holster to hand (the draw). */
   draw(): void {
-    if (this.gun && this.handSlot && this.gun.parent !== this.handSlot) {
-      this.handSlot.add(this.gun)
-      this.gun.position.set(0, 0, 0)
-      this.gun.rotation.set(0, 0, 0)
-    }
-    if (this.offGun && this.offSlot && this.offGun.parent !== this.offSlot) {
-      this.offSlot.add(this.offGun)
-      this.offGun.position.set(0, 0, 0)
-      this.offGun.rotation.set(0, 0, 0)
-    }
+    seatProp(this.gun, this.handSlot)
+    seatProp(this.offGun, this.offSlot)
   }
 
   holsterGun(): void {
     this.drawing?.reset()
-    if (this.gun && this.holster && this.gun.parent !== this.holster) {
-      this.holster.add(this.gun)
-      this.gun.position.set(0, 0, 0)
-      this.gun.rotation.set(0, 0, 0)
-    }
-    if (this.offGun && this.offHolster && this.offGun.parent !== this.offHolster) {
-      this.offHolster.add(this.offGun)
-      this.offGun.position.set(0, 0, 0)
-      this.offGun.rotation.set(0, 0, 0)
-    }
+    seatProp(this.gun, this.holster)
+    seatProp(this.offGun, this.offHolster)
   }
 
   /**
@@ -543,10 +533,7 @@ export class Actor {
   }
 
   headPos(out: Vector3): Vector3 {
-    if (this.head) {
-      return this.head.getWorldPosition(out)
-    }
-    return this.root.getWorldPosition(out).setY(1.6)
+    return this.head ? this.head.getWorldPosition(out) : this.root.getWorldPosition(out).setY(1.6)
   }
 
   /** Detach the hat into world space for physics; returns it. */
@@ -557,6 +544,7 @@ export class Actor {
     }
     const p = h.getWorldPosition(new Vector3())
     const q = h.getWorldQuaternion(new Quaternion())
+    const slot = h.parent
     const parent = this.root.parent
     if (!parent) {
       return null
@@ -565,6 +553,9 @@ export class Actor {
     h.position.copy(p)
     h.quaternion.copy(q)
     h.scale.setScalar(1)
+    if (slot && slot.children.length === 0) {
+      slot.removeFromParent()
+    }
     this.hat = null
     return h
   }
@@ -598,7 +589,6 @@ export class Actor {
 
   dispose(): void {
     this.disposed = true
-    this.mixer.stopAllAction()
-    this.root.removeFromParent()
+    retireRig(this.mixer, this.root, this.meshes)
   }
 }

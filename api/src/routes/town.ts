@@ -59,7 +59,7 @@ export function refusalMessage(reason: TownJoinRefusal, now = new Date()): strin
   }
 }
 
-/** HMAC binding a ticket's account to the lobby the directory chose (so tickets can't pick lobbies). */
+/** Binds the account, chosen lobby and exact wire version; cached older URLs cannot reach the DO. */
 async function lobbySig(
   env: Env,
   lobbyId: string,
@@ -68,7 +68,7 @@ async function lobbySig(
 ): Promise<string> {
   const key = await crypto.subtle.importKey(
     'raw',
-    new TextEncoder().encode(`town:${env.AUTH_SECRET}`),
+    new TextEncoder().encode(`town:v${TOWN_WIRE_VERSION}:${env.AUTH_SECRET}`),
     { name: 'HMAC', hash: 'SHA-256' },
     false,
     ['sign'],
@@ -113,7 +113,7 @@ async function join(request: Request, env: Env): Promise<Response> {
   // Turnstile tokens run to ~2 KB.
   const body = ((await readJson(request, BODY_STANDARD)) ?? {}) as TownJoinRequest
   // A page loaded before a wire change would misread every snapshot: send it to refresh instead.
-  if (!(typeof body.wire === 'number' && body.wire >= TOWN_WIRE_VERSION)) {
+  if (body.wire !== TOWN_WIRE_VERSION) {
     return json(
       request,
       env,

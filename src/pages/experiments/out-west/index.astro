@@ -64,10 +64,7 @@ import '~/experiments/out-west/ui/device.css'
         <h1 class="ow-logo">Out West</h1>
         <span class="ow-orn-rule" aria-hidden="true"></span>
         <div class="ow-title-art" aria-hidden="true"></div>
-        <div class="ow-start">
-          <span class="desktop-only">click to start</span
-          ><span class="touch-only">tap to start</span>
-        </div>
+        <button type="button" class="ow-start">Start playing</button>
         <div class="ow-loading" aria-live="polite"></div>
         <div class="ow-howto">
           <span class="desktop-only"
@@ -81,11 +78,22 @@ import '~/experiments/out-west/ui/device.css'
       <div class="ow-title-links">
         <a href="/experiments/out-west/classic/">play the 2019 original</a>
         <span aria-hidden="true">·</span>
-        <button type="button" class="ow-credits-btn">credits</button>
+        <button
+          type="button"
+          class="ow-credits-btn"
+          aria-controls="ow-credits"
+          aria-expanded="false"
+        >
+          credits
+        </button>
         <span aria-hidden="true">·</span>
         <button type="button" class="ow-board-btn">leaderboard</button>
       </div>
-      <div class="ow-credits" role="dialog" aria-label="Credits">
+      <div id="ow-credits" class="ow-credits" role="dialog" aria-label="Credits">
+        <div class="ow-credits-head">
+          <b>Credits</b
+          ><button type="button" class="ow-credits-close" aria-label="Close credits">×</button>
+        </div>
         <p>
           <b>out west</b>
           by Eric Schoffstall. Music and the original sounds from the 2019 game.
@@ -93,10 +101,10 @@ import '~/experiments/out-west/ui/device.css'
         <p>Characters, guns and props: Quaternius (CC0), Kay Lousberg (CC0), via poly.pizza.</p>
         <p>Textures: Poly Haven (CC0). Sound effects: freesound.org contributors (CC0).</p>
         <p>
-          Type: Ultra (Astigmatic, Apache 2.0). Rye (Sorkin Type), EB Garamond (Georg Duffner,
-          Octavio Pardo) and Oswald (Vernon Adams), SIL OFL. Title print drawn in code. Paper, seal
-          and icon art generated with Gemini.
+          Type: Ultra by Astigmatic (Apache 2.0). Rye by Sorkin Type (SIL OFL). EB Garamond by Georg
+          Duffner and Octavio Pardo (SIL OFL). Oswald by Vernon Adams (SIL OFL).
         </p>
+        <p>Title print drawn in code. Paper, seal and icon art generated with Gemini.</p>
         <p>Full list: <a href="/experiments/out-west/3d/CREDITS.md">CREDITS.md</a></p>
       </div>
     </div>

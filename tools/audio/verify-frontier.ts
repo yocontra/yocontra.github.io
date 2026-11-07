@@ -6,8 +6,9 @@
  * (`__frontierPilot`, `?debug`).
  *
  *   PLAYWRIGHT=/abs/path/to/node_modules/playwright bun tools/audio/verify-frontier.ts [baseUrl] [--bots=15]
+ *   Add --stress for 90 seconds of real-input combat instead of the quiet interaction tour.
  *
- * A full town (15 bots) is the stress test for voices; a quiet one (`--bots=1`) is where the
+ * A full town (15 bots) is the stress test for voices; a quiet one (`--bots=0`) is where the
  * pickups, the strongbox and the bank are reliably reachable (bots never mint bounties).
  *
  * Walks the street and the saloon porch (dirt and wood steps), takes the porch rifle and the
@@ -30,11 +31,14 @@ interface Ev {
   args: string
 }
 interface PageLike {
+  routeWebSocket: (
+    url: (url: URL) => boolean,
+    handle: (socket: { send: (data: string) => void }) => void,
+  ) => Promise<void>
   goto: (url: string) => Promise<unknown>
   waitForFunction: (fn: string, arg?: unknown, opts?: { timeout?: number }) => Promise<unknown>
   evaluate: <T>(fn: string) => Promise<T>
   mouse: { click: (x: number, y: number) => Promise<void> }
-  keyboard: { down: (k: string) => Promise<void>; up: (k: string) => Promise<void> }
   waitForTimeout: (ms: number) => Promise<void>
 }
 interface Pw {
@@ -52,6 +56,7 @@ interface Debug {
   z: number
   carried: number
   banked: number
+  ammo: number
   weapon: { weapon: number; rounds: number; dynamite: boolean }
   others: { id: number; x: number; z: number; alive: boolean }[]
   bags: { id: number; x: number; z: number }[]
@@ -63,11 +68,13 @@ const BTN_FIRE = 1
 const BTN_RELOAD = 8
 const BTN_INTERACT = 16
 const BTN_THROW = 128
+const ENGINE = 'globalThis.__owAudioEngine'
 const town = (await Bun.file(
   new URL('../../src/experiments/out-west/ffa/town.layout.json', import.meta.url),
 ).json()) as { strongboxes: { x: number; z: number }[] }
 const base = process.argv.find((a) => a.startsWith('http')) ?? 'http://localhost:4353'
 const bots = Number(process.argv.find((a) => a.startsWith('--bots='))?.slice(7) ?? '15')
+const stress = process.argv.includes('--stress')
 const pwPath = process.env.PLAYWRIGHT ?? 'playwright'
 const { chromium } = (await import(pwPath)) as Pw
 const f1 = (n: number) => n.toFixed(1)
@@ -78,15 +85,22 @@ const browser = await chromium.launch({
   args: ['--autoplay-policy=no-user-gesture-required', '--use-angle=metal'],
 })
 const page = await browser.newPage({ viewport: { width: 1280, height: 720 } })
+await page.routeWebSocket(
+  (url) => url.host === new URL(base).host,
+  (socket) => socket.send(JSON.stringify({ type: 'connected' })),
+)
 await page.goto(`${base}/experiments/out-west/frontier/?bots=${bots}&debug#audiodebug`)
 await page.waitForFunction('typeof globalThis.__frontier === "function"', undefined, {
   timeout: 60_000,
 })
 await page.waitForFunction(
-  'globalThis.__frontier().you >= 0 && globalThis.__frontier().alive',
+  'globalThis.__frontier().ready && globalThis.__frontier().alive && globalThis.__frontier().howto',
   undefined,
   { timeout: 90_000 },
 )
+// A fresh practice visit pauses behind How to play; measure a running town.
+await page.evaluate('globalThis.__frontierView.closeHowTo()')
+await page.waitForFunction('!globalThis.__frontier().howto')
 await page.mouse.click(640, 360)
 await page.waitForFunction('globalThis.__owAudio !== undefined', undefined, { timeout: 30_000 })
 await page.waitForFunction(
@@ -95,6 +109,9 @@ await page.waitForFunction(
   undefined,
   { timeout: 30_000 },
 )
+await page.evaluate(`${ENGINE}.setMusicVolume(1)`)
+await page.evaluate(`${ENGINE}.setSfxVolume(1)`)
+await page.evaluate(`${ENGINE}.setVoiceVolume(1)`)
 console.log(
   `${bots} bots; frontier pack decoded:`,
   await page.evaluate<string>('JSON.stringify(globalThis.__owAudio.stats())'),
@@ -126,9 +143,19 @@ async function walkTo(x: number, z: number, ms = 90_000): Promise<boolean> {
   }
   const end = Date.now() + ms
   while (Date.now() < end && (await pilot('walking()'))) {
+    if (!(await dbg()).alive) {
+      await alive()
+      await pilot(`go(${x}, ${z})`)
+    }
     await page.waitForTimeout(200)
   }
-  // the path ends on a nav cell: step the last metre with the keys (WASD move along the world axes)
+  const timedOut = (await pilot('walking()')) as boolean
+  await pilot('stop()')
+  if (timedOut) {
+    console.log(`  path timed out before ${x},${z}`)
+    return false
+  }
+  // Paths end on a nav cell. Refine in world space; WASD follows the shooter camera's yaw.
   for (let i = 0; i < 25; i++) {
     const p = await dbg()
     const dx = x - p.x
@@ -136,17 +163,10 @@ async function walkTo(x: number, z: number, ms = 90_000): Promise<boolean> {
     if (Math.hypot(dx, dz) < 0.5) {
       break
     }
-    const keys = [
-      ...(Math.abs(dx) > 0.3 ? [dx > 0 ? 'KeyD' : 'KeyA'] : []),
-      ...(Math.abs(dz) > 0.3 ? [dz > 0 ? 'KeyS' : 'KeyW'] : []),
-    ]
-    for (const k of keys) {
-      await page.keyboard.down(k)
-    }
-    await page.waitForTimeout(Math.min(150, Math.hypot(dx, dz) * 120))
-    for (const k of keys) {
-      await page.keyboard.up(k)
-    }
+    const distance = Math.hypot(dx, dz)
+    await pilot(`stick(${dx / distance}, ${dz / distance})`)
+    await page.waitForTimeout(Math.min(150, distance * 120))
+    await pilot('stick(0, 0)')
     await page.waitForTimeout(150)
   }
   const at = await dbg()
@@ -193,66 +213,92 @@ async function take(kind: string): Promise<boolean> {
   return false
 }
 
-// 0. Money: bots never mint bounties, so crack the strongbox (the first turns up a minute in),
-// pick up any bag lying about, then bank the carry at the teller's window.
-console.log('money: wait for the strongbox')
-await page.waitForFunction('globalThis.__frontier().strongbox?.state > 0', undefined, {
-  timeout: 240_000,
-})
-for (let tries = 0; tries < 3 && (await dbg()).carried === 0; tries++) {
-  await alive()
-  const spot = (await dbg()).strongbox?.spot ?? -1
-  const box = town.strongboxes[spot]
-  if (!box) {
-    break
+if (stress) {
+  const until = Date.now() + 90_000
+  let pathAt = 0
+  while (Date.now() < until) {
+    const d = await dbg()
+    if (d.alive) {
+      const target = d.others
+        .filter((p) => p.alive)
+        .sort((a, b) => Math.hypot(a.x - d.x, a.z - d.z) - Math.hypot(b.x - d.x, b.z - d.z))[0]
+      if (target) {
+        await pilot(`aimAt(${target.id})`)
+        if (Date.now() >= pathAt) {
+          await pilot(`go(${target.x}, ${target.z})`)
+          pathAt = Date.now() + 3000
+        }
+      }
+      const rounds = d.weapon.weapon === 0 ? d.ammo : d.weapon.rounds
+      await pilot(`tap(${rounds === 0 ? BTN_RELOAD : BTN_FIRE})`)
+      if (d.weapon.dynamite) {
+        await pilot(`tap(${BTN_THROW})`)
+      }
+    }
+    await page.waitForTimeout(400)
   }
-  console.log(`walk: to the strongbox at ${box.x},${box.z}`)
-  await walkTo(box.x, box.z + 1)
-  await pilot(`tap(${BTN_INTERACT})`)
-  await page.waitForTimeout(4000)
-}
-const bags = (await dbg()).bags
-if (bags[0]) {
-  console.log('walk: to a bag')
-  await walkTo(bags[0].x, bags[0].z, 20_000)
-  await page.waitForTimeout(400)
-}
-console.log('walk: to the bank window; carrying', (await dbg()).carried)
-await alive()
-await walkTo(64.5, 81, 90_000)
-for (let tries = 0; tries < 3 && (await dbg()).carried > 0; tries++) {
-  await pilot(`tap(${BTN_INTERACT})`)
-  await page.waitForTimeout(3000)
-}
-console.log('  carrying after the window', (await dbg()).carried)
+} else {
+  // 0. Money: bots never mint bounties, so crack the strongbox (the first turns up a minute in),
+  // pick up any bag lying about, then bank the carry at the teller's window.
+  console.log('money: wait for the strongbox')
+  await page.waitForFunction('globalThis.__frontier().strongbox?.state > 0', undefined, {
+    timeout: 240_000,
+  })
+  for (let tries = 0; tries < 3 && (await dbg()).carried === 0; tries++) {
+    await alive()
+    const spot = (await dbg()).strongbox?.spot ?? -1
+    const box = town.strongboxes[spot]
+    if (!box) {
+      break
+    }
+    console.log(`walk: to the strongbox at ${box.x},${box.z}`)
+    await walkTo(box.x, box.z + 1)
+    await pilot(`tap(${BTN_INTERACT})`)
+    await page.waitForTimeout(4000)
+  }
+  const bags = (await dbg()).bags
+  if (bags[0]) {
+    console.log('walk: to a bag')
+    await walkTo(bags[0].x, bags[0].z, 20_000)
+    await page.waitForTimeout(400)
+  }
+  console.log('walk: to the bank window; carrying', (await dbg()).carried)
+  await alive()
+  await walkTo(64.5, 81, 90_000)
+  for (let tries = 0; tries < 3 && (await dbg()).carried > 0; tries++) {
+    await pilot(`tap(${BTN_INTERACT})`)
+    await page.waitForTimeout(3000)
+  }
+  console.log('  carrying after the window', (await dbg()).carried)
 
-// 1. The street (dirt) to the saloon porch (wood), where a rifle waits.
-console.log('walk: street to the saloon porch')
-await walkTo(56, 55)
-if (await take('rifle')) {
-  await pilot('aimPoint(56, 75)')
-  await fire(3, 1100)
-}
+  // 1. The street (dirt) to the saloon porch (wood), where a rifle waits.
+  console.log('walk: street to the saloon porch')
+  await walkTo(56, 55)
+  if (await take('rifle')) {
+    await pilot('aimPoint(56, 75)')
+    await fire(3, 1100)
+  }
 
-// 2. A shotgun.
-if (await take('shotgun')) {
-  await pilot('aimPoint(50, 100)')
-  await fire(2, 900)
-}
+  // 2. A shotgun.
+  if (await take('shotgun')) {
+    await pilot('aimPoint(50, 100)')
+    await fire(2, 900)
+  }
 
-// 3. The revolver: a few shots and a reload.
-await alive()
-await pilot('aimPoint(40, 100)')
-await fire(3, 400)
-await pilot(`tap(${BTN_RELOAD})`)
-await page.waitForTimeout(2000)
+  // 3. The revolver: a few shots and a reload.
+  await alive()
+  await pilot('aimPoint(40, 100)')
+  await fire(3, 400)
+  await pilot(`tap(${BTN_RELOAD})`)
+  await page.waitForTimeout(2000)
 
-// 4. Dynamite, lobbed a few metres ahead.
-if (await take('dynamite')) {
-  const d = await dbg()
-  await pilot(`aimPoint(${d.x + 6}, ${d.z})`)
-  await pilot(`tap(${BTN_THROW})`)
-  await page.waitForTimeout(3500)
+  // 4. Dynamite, lobbed a few metres ahead.
+  if (await take('dynamite')) {
+    const d = await dbg()
+    await pilot(`aimPoint(${d.x + 6}, ${d.z})`)
+    await pilot(`tap(${BTN_THROW})`)
+    await page.waitForTimeout(3500)
+  }
 }
 
 const frames = await page.evaluate<Frame[]>('globalThis.__owAudio.frames')

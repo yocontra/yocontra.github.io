@@ -46,6 +46,13 @@ export class Writer {
     return this
   }
 
+  i16(v: number): this {
+    this.ensure(2)
+    this.view.setInt16(this.offset, v, true)
+    this.offset += 2
+    return this
+  }
+
   u32(v: number): this {
     this.ensure(4)
     this.view.setUint32(this.offset, v >>> 0, true)

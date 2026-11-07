@@ -6,24 +6,25 @@ still required before any of it counts. See the checklist at the end.
 
 ## What's in the engine
 
-- **Tiers** (`engine/tiers.ts`): high / medium / floor / legacy, per §9.4. Quick Draw floor runs at
-  DPR 1.6 (dynamic 0.8–1.0), 4× MSAA, a 1024² shadow and half-res 4-mip bloom. Frontier mode
-  (`new Renderer(..., 'ffa')`) uses DPR 1.3 (0.7–1.0). Legacy drops MSAA for FXAA, plus vignette
-  and grain.
+- **Tiers** (`engine/tiers.ts`): high / medium / floor / legacy. Quick Draw floor uses DPR 1.6
+  (dynamic 0.72–1.0), 4× MSAA, a 1024² shadow map and half-resolution 4-mip bloom. Frontier floor
+  uses DPR 1.3 (dynamic 0.6–1.0); floor and legacy draw directly with ACES, without a shadow map
+  or postprocessing passes. Their riders use blob shadows. Runtime changes reapply the scene's
+  crowd and fog budgets: near actors high/medium 16, floor 3, legacy 2. Sky shaders apply output
+  conversion in the direct path and stay linear into the composer on higher tiers.
 - **Detection:** a form-factor prior (touch + small screen means floor; touch means medium; desktop
   means high; a software GL means legacy), then a 1.5 s GPU micro-benchmark. The benchmark renders
   a lit, shadowed 40k-tri standard-material scene into a 1024×512 4× MSAA target, sliced across
   rAFs and timed with `gl.finish()`. The result is cached in `localStorage` per user agent and
   benchmark version (`ow-quality:v1`). Force a tier with `#tier=high|medium|floor|legacy`; main.ts's
   `#tier=low` maps to floor.
-- **Dynamic resolution** (`Renderer.adapt`), every 0.5 s:
-  - If the p90 rAF interval misses the display refresh (estimated as p10) by more than 15 %, the
-    scale steps down 0.05.
-  - If frames are on time and CPU p90 is under 60 % of refresh, it steps up 0.05, after a 4 s hold.
-  - Pinned at the floor for 3 minutes is treated as thermal: drop one tier, never climbing back.
-  - Never during tense duel phases (game.ts only calls `adapt` outside them).
-  - Low Power Mode (steady ~33 ms frames with idle CPU) is detected and shown, and doesn't drop
-    resolution.
+- **Dynamic resolution** (`Renderer.adapt`), every 300 ms:
+  - A missed frame budget lowers scale by 0.06 (0.12 for a large miss).
+  - On-time frames and CPU p90 below 55% of refresh allow a 0.06 increase after a 4 s hold.
+  - Pinned at the floor for 3 minutes drops one tier.
+  - Duel adaptation avoids tense phases; Frontier adapts during play.
+  - Low Power Mode's steady 30 Hz cap keeps resolution and drops one tier after 3 s, once per
+    session. Dropping a tier never increases the skinned crowd budget.
 - **Post:** one merged EffectPass: bloom composite, AgX, grade + per-time-of-day 32³ LUT pair,
   vignette and grain. Bloom's own mip chain runs at half res. The lens pass (CA, shimmer, blur)
   only runs while a moment asks for it.
@@ -32,7 +33,12 @@ still required before any of it counts. See the checklist at the end.
   estimated MB), geometries, programs, JS heap, tier, DPR and scale, benchmark ms, thermal drops and
   low power. `globalThis.__owPerf()` returns a snapshot for scripts.
 
-## How these were measured
+## Historical measurements
+
+The tables below describe earlier builds and harness runs. They are comparison records, not
+verification of the current checkout. Current quality-pass evidence is in `.playwright-mcp/quality/`.
+
+### How these were measured
 
 Playwright (Chromium 156, ANGLE Metal on an **Apple M2 Max**), in a new page:
 
@@ -81,7 +87,7 @@ Downloads added: ARM maps (390 KB) and the signboard normal/ARM (165 KB). LUTs a
 runtime (128 KB of GPU each, 2 resident). The probe is ~0.6 MB of GPU (128² half-float cube plus
 PMREM).
 
-### AAA asset pass (textured characters, kit props and buildings), Nov 2026
+### Textured asset pass (historical), Nov 2026
 
 Same harness (`#perf&tier=floor`, 812×375 CSS at DPR 3, CPU 4×), Quick Draw level 7 walk/wait and
 the Frontier (`?bots=31`), before (`87d93c9`) vs after:

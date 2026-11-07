@@ -6,7 +6,7 @@
  * flash, the kill feed, the death poster, money bags dropping and being taken, deposits, the
  * strongbox, Most Wanted, Call Out and the showdown (fake-out cues, the bell, the verdict).
  */
-import { Color, type Vector3 } from 'three'
+import { Color, Vector3 } from 'three'
 import type { AudioEngine } from '../../audio/audio.ts'
 import {
   EV_BAG_DROP,
@@ -44,7 +44,6 @@ import {
   type ServerControl,
   SHOT_DEAD_EYE,
   SHOT_HIT,
-  SHOT_RANGE_UNIT,
   SHOT_RIFLE,
   SHOT_SHOTGUN,
   SHOT_WALL,
@@ -55,11 +54,12 @@ import { haptic } from '../../platform/haptics.ts'
 import type { Crowd } from '../scene/crowd.ts'
 import type { Effects } from '../scene/fx.ts'
 import type { Pickups } from '../scene/pickups.ts'
-import type { Ragdolls } from '../scene/ragdoll.ts'
-import type { WireEvent } from '../sim/codec-events.ts'
-import { CALLOUT_ACCEPT_TICKS, SHOTGUN_CONE_DEG, SHOTGUN_RANGE, TICK_MS } from '../sim/constants.ts'
+import { shotCoord, type WireEvent } from '../sim/codec-events.ts'
+import { CALLOUT_ACCEPT_TICKS, TICK_MS } from '../sim/constants.ts'
 import { TOWN } from '../sim/layout.ts'
 import { aimRadians } from '../sim/move.ts'
+import { impactNormal } from '../sim/surfaces.ts'
+import type { ShotPoint } from '../sim/types.ts'
 import {
   bagSound,
   FAKE_CUES,
@@ -76,6 +76,7 @@ import { gestureFor } from './gesture-events.ts'
 import type { Hud } from './hud.ts'
 import { killLine, killToast } from './kill-line.ts'
 import type { NetClient } from './net.ts'
+import type { RagdollImpact } from './shot-impact.ts'
 import { onGlassBreak } from './window-glass.ts'
 
 export interface Showdown {
@@ -113,8 +114,15 @@ export interface Sink {
   /** True when the player behind this entity is on your block list (never shown to you). */
   blocked: (id: number) => boolean
   pickups: Pickups
-  /** Client-side death ragdolls (null on the floor tier, which keeps the authored clip). */
-  ragdolls: Ragdolls | null
+  /** Capture the actual dressed pose before the crowd starts its temporary death animation. */
+  ragdollKilled: (
+    victim: number,
+    at: { x: number; z: number; y?: number },
+    from: { x: number; z: number; y?: number } | null,
+    impact: RagdollImpact | null,
+  ) => void
+  /** Release the physical body before the player's live actor returns. */
+  ragdollReleased: (player: number) => void
   /** Shatter one window pane in the scene by its shared index. */
   breakWindow: (index: number) => void
   /** You took a hit from (`x`, `z`): the HUD's damage arc points there. */
@@ -129,38 +137,53 @@ const DEAD_EYE_GOLD = new Color(3, 2.4, 0.8)
 
 function onShot(s: Sink, ev: Extract<WireEvent, { type: typeof EV_SHOT }>): void {
   const you = s.net.you
+  const origin = new Vector3(shotCoord(ev.ox), shotCoord(ev.oy), shotCoord(ev.oz))
+  const end = { x: shotCoord(ev.ex), y: shotCoord(ev.ey), z: shotCoord(ev.ez) }
+  const pellets = ev.pellets.map((pellet) => ({
+    x: shotCoord(pellet.x),
+    y: shotCoord(pellet.y),
+    z: shotCoord(pellet.z),
+  }))
   const p = s.posOf(ev.shooter)
-  if (!p) {
-    return
-  }
   const aim = aimRadians(ev.aim)
-  const range = ev.range * SHOT_RANGE_UNIT
-  const endX = p.x + Math.cos(aim) * range
-  const endZ = p.z + Math.sin(aim) * range
-  const muzzle = s.muzzleOf(ev.shooter, p.x, p.z, aim)
+  const muzzle =
+    p && Math.hypot(p.x - origin.x, (p.y ?? 0) + 1.62 - origin.y, p.z - origin.z) < 2
+      ? s.muzzleOf(ev.shooter, p.x, p.z, aim)
+      : origin
+  // Local fire was predicted immediately. Its authoritative ray corrects spread without replaying
+  // the flash/report; remote fire gets the full presentation once.
+  shotFx(s, muzzle, end, ev.flags, pellets, ev.shooter !== you)
   if (ev.shooter === you) {
     s.fx.casing(muzzle.x, muzzle.y, muzzle.z, aim)
   } else {
-    shotFx(s, muzzle, aim, range, ev.flags)
-    play(s, shotSound(ev.flags), p, 0.75)
+    s.audio?.play(shotSound(ev.flags), { pos: origin, gain: 0.75 })
     if (ev.target === you) {
       s.kick(0.25)
     } else {
       // A miss that passed close to you whizzes.
       const me = s.posOf(you)
       if (me) {
-        const t = (me.x - p.x) * Math.cos(aim) + (me.z - p.z) * Math.sin(aim)
-        const px = p.x + Math.cos(aim) * t
-        const pz = p.z + Math.sin(aim) * t
-        if (t > 0 && t < range && Math.hypot(me.x - px, me.z - pz) < 2.5) {
+        const dx = end.x - origin.x
+        const dy = end.y - origin.y
+        const dz = end.z - origin.z
+        const len2 = dx * dx + dy * dy + dz * dz
+        const eyeY = (me.y ?? 0) + 1.2
+        const t =
+          len2 > 0
+            ? ((me.x - origin.x) * dx + (eyeY - origin.y) * dy + (me.z - origin.z) * dz) / len2
+            : -1
+        const px = origin.x + dx * t
+        const py = origin.y + dy * t
+        const pz = origin.z + dz * t
+        if (t > 0 && t < 1 && Math.hypot(me.x - px, eyeY - py, me.z - pz) < 2.5) {
           s.audio?.whizz((px - me.x) / 2.5)
         }
       }
     }
   }
-  impactSound(s.audio, ev.flags, endX, endZ, s.posOf(you))
+  impactSound(s.audio, ev.flags, end, s.posOf(you))
   if (ev.flags & SHOT_HIT) {
-    s.fx.impact(endX, endZ, true, s.posOf(ev.target)?.y ?? 0)
+    s.fx.impactAt(end.x, end.y, end.z, true)
     if (ev.shooter === you) {
       // a Dead-Eye hit is the critical one: gold, and a sharper tick
       const crit = (ev.flags & SHOT_DEAD_EYE) !== 0
@@ -168,29 +191,36 @@ function onShot(s: Sink, ev: Extract<WireEvent, { type: typeof EV_SHOT }>): void
       s.audio?.play('hitBody', { gain: crit ? 0.55 : 0.4, rate: crit ? 1.9 : 1.6, priority: true })
     }
   } else if (ev.flags & SHOT_WALL) {
-    const impactY = ev.y / 10
-    s.fx.impact(endX, endZ, false, impactY)
-    // The hole faces back down the bullet: from the shooter's eye to the impact.
-    const oy = (s.posOf(ev.shooter)?.y ?? 0) + 1.35
-    const dx = endX - p.x
-    const dy = impactY - oy
-    const dz = endZ - p.z
-    const d = Math.hypot(dx, dy, dz) || 1
-    s.fx.hole(endX, impactY, endZ, -dx / d, -dy / d, -dz / d)
+    s.fx.impactAt(end.x, end.y, end.z, false)
+    // The mark sits flush to the surface, independent of the incoming bullet angle.
+    const dx = end.x - origin.x
+    const dy = end.y - origin.y
+    const dz = end.z - origin.z
+    const normal = impactNormal(s.net.grid, end, { x: dx, y: dy, z: dz })
+    s.fx.hole(end.x, end.y, end.z, normal.x, normal.y, normal.z)
   }
 }
 
 const RIFLE_WHITE = new Color(3, 2.8, 2.2)
-const SHOTGUN_CONE = (SHOTGUN_CONE_DEG * Math.PI) / 180
-
-/** Tracer and flash for a shot, by weapon (a shotgun shell is one event: draw its fan). */
-export function shotFx(s: Sink, m: Vector3, aim: number, range: number, flags: number): void {
+/** Immediate no-spread feedback or a server-confirmed ray, always aimed at a 3D endpoint. */
+export function shotFx(
+  s: Sink,
+  m: Vector3,
+  end: ShotPoint,
+  flags: number,
+  pellets: readonly ShotPoint[] = [],
+  flash = true,
+): void {
   if (flags & SHOT_SHOTGUN) {
-    s.fx.pellets(m.x, m.y, m.z, aim, Math.min(range, SHOTGUN_RANGE), SHOTGUN_CONE / 2)
-  } else if (flags & SHOT_RIFLE) {
-    s.fx.shot(m.x, m.y, m.z, aim, range, RIFLE_WHITE)
+    s.fx.pellets(m, pellets.length > 0 ? pellets : [end], flash)
   } else {
-    s.fx.shot(m.x, m.y, m.z, aim, range, flags & SHOT_DEAD_EYE ? DEAD_EYE_GOLD : undefined)
+    let color: Color | undefined
+    if (flags & SHOT_RIFLE) {
+      color = RIFLE_WHITE
+    } else if (flags & SHOT_DEAD_EYE) {
+      color = DEAD_EYE_GOLD
+    }
+    s.fx.shot(m, end, color, flash)
   }
 }
 
@@ -285,12 +315,11 @@ function onKill(s: Sink, ev: Extract<WireEvent, { type: typeof EV_KILL }>): void
     kind,
   )
   const p = s.posOf(ev.victim)
+  const impact = s.net.takeRagdollImpact(ev.victim, ev.killer, performance.now())
   if (p) {
     const from = ev.killer === ev.victim ? null : s.posOf(ev.killer)
+    s.ragdollKilled(ev.victim, p, from, impact)
     s.crowd.killed(ev.victim, p, from)
-    if (s.ragdolls?.spawn(ev.victim, p, from, s.crowd.lookOf(ev.victim))) {
-      s.crowd.hide(ev.victim)
-    }
     s.fx.dust(p.x, p.z, 8)
     play(s, 'bodyfall', p, 0.8)
   }
@@ -459,9 +488,8 @@ export function handleEvent(s: Sink, ev: WireEvent): void {
       }
       break
     case EV_RESPAWN: {
+      s.ragdollReleased(ev.player)
       s.crowd.disarm(ev.player)
-      s.crowd.show(ev.player)
-      s.ragdolls?.release(ev.player)
       const p = s.posOf(ev.player)
       if (p) {
         s.fx.dust(p.x, p.z, 10)
@@ -519,12 +547,6 @@ export function handleEvent(s: Sink, ev: WireEvent): void {
   }
   if (ev.type === EV_SHOT && ev.shooter === you && ev.flags & SHOT_DEAD_EYE) {
     s.hud.toast('DEAD-EYE', 'gold', 700)
-  }
-  if (ev.type === EV_DAMAGE && ev.attacker === you && ev.victim !== you) {
-    const p = s.posOf(ev.victim)
-    if (p) {
-      s.fx.impact(p.x, p.z, true)
-    }
   }
 }
 

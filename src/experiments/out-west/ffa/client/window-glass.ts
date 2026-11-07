@@ -5,7 +5,6 @@
 
 import { townWindows, windowPane } from '../sim/building-rules.ts'
 import { TOWN } from '../sim/layout.ts'
-import { play } from './event-sounds.ts'
 import type { Sink } from './events.ts'
 
 /** Shatter FX: the bottle sample's gain. */
@@ -45,5 +44,5 @@ export function onGlassBreak(s: Sink, index: number): void {
     return
   }
   s.fx.glass(at.x, at.y, at.z)
-  play(s, 'bottle', { x: at.x, z: at.z }, GLASS_SOUND_GAIN)
+  s.audio?.play('bottle', { pos: at, gain: GLASS_SOUND_GAIN })
 }

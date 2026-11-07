@@ -200,6 +200,7 @@ export function poncho(f: Fit, hex: number, sides: GunSides): Piece[] {
       roughness: 1,
       rim: FABRIC.hessian.rim,
       swatch: FABRIC.hessian.swatch,
+      contactCloth: true,
       weights: ponchoWeights(f, { cx, cz, sides }),
       unbelted: true,
       hide,

@@ -211,7 +211,7 @@ export function groundMesh(layout: TownLayout, tex: GroundTex, mask: Texture): M
   geo.translate(layout.size / 2, 0, layout.size / 2)
   const uv = geo.getAttribute('uv')
   const pos = geo.getAttribute('position')
-  const tile = 5
+  const tile = 3.5
   for (let i = 0; i < uv.count; i++) {
     uv.setXY(i, pos.getX(i) / tile, -pos.getZ(i) / tile)
   }
@@ -224,7 +224,7 @@ export function groundMesh(layout: TownLayout, tex: GroundTex, mask: Texture): M
   const mat = new MeshStandardMaterial({
     map,
     normalMap: normal,
-    normalScale: new Vector2(0.8, 0.8),
+    normalScale: new Vector2(0.45, 0.45),
     roughness: 0.96,
     metalness: 0,
     color: 0xd2_ce_c8,
@@ -298,20 +298,26 @@ gM.g = max(gM.g, ${trails});`,
   // broad patches (pale hardpan, darker scrub soil) so open ground isn't one flat colour from above
   float gPatch = smoothstep(0.35, 0.75, gNoise(vGW * 0.06 + 17.0));
   float scrub = smoothstep(0.62, 0.8, gNoise(vGW * 0.11 - 5.0));
-  // the dirt texture's grain, contrast-lifted around its (linear) mean so it survives the
-  // top-down distance: the texture's sRGB mean (146, 111, 76) decoded, times the material tint
+  // Keep the photo as fine soil detail; broad hardpan patches and packed street wear carry
+  // the composition. A contrast boost here made the whole town read as coarse gravel.
   vec3 gMean = vec3(0.288, 0.159, 0.073) * vec3(0.644, 0.617, 0.578);
-  diffuseColor.rgb = max(gMean + (diffuseColor.rgb - gMean) * 1.6, vec3(0.0));
+  diffuseColor.rgb = max(gMean + (diffuseColor.rgb - gMean) * 0.85, vec3(0.0));
   vec3 dirt = diffuseColor.rgb * mix(vec3(1.03, 0.98, 0.9), vec3(0.84, 0.8, 0.76), n);
   dirt *= mix(vec3(1.0), vec3(0.9, 0.88, 0.86), gPatch);
   dirt = mix(dirt, dirt * vec3(0.78, 0.8, 0.66), scrub * 0.7);
-  vec3 street = diffuseColor.rgb * vec3(0.78, 0.7, 0.62) * (0.9 + 0.2 * n);
+  vec3 street = mix(diffuseColor.rgb, gMean, 0.4) * vec3(0.88, 0.82, 0.72) * (0.96 + 0.08 * n);
   diffuseColor.rgb = mix(dirt, street, gM.g * 0.85);
   diffuseColor.rgb *= 1.0 - gM.b * 0.38;
   // Scrub tint out past the edge of town.
   float far = smoothstep(0.0, 40.0, max(max(-vGW.x, vGW.x - gSize), max(-vGW.y, vGW.y - gSize)));
   diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * vec3(0.92, 0.94, 0.8), far * n);
 }`,
+      )
+      .replace(
+        '#include <normal_fragment_maps>',
+        `#include <normal_fragment_maps>
+// Packed wheel-worn dirt has less relief than the scrub at the street edges.
+normal = normalize(mix(nonPerturbedNormal, normal, 1.0 - gM.g * 0.6));`,
       )
       .replace(
         '#include <roughnessmap_fragment>',

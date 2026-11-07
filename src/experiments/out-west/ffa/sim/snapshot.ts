@@ -42,10 +42,11 @@ import {
   STANCE_ADS,
   STANCE_CROUCH,
   STANCE_SPRINT,
+  type TownPersistentState,
 } from '../../contract/town.ts'
 import type { Writer } from './bytes.ts'
 import { type EntityView, encodeSnapshot, type SelfView, type TownView } from './codec.ts'
-import { toWireEvent, type WireEvent } from './codec-events.ts'
+import { toWireEvent } from './codec-events.ts'
 import { deadEyeReady, isHolstered } from './combat.ts'
 import {
   HOLSTER_TICKS,
@@ -297,30 +298,35 @@ export interface SnapshotContext {
   inputLead?: number
 }
 
-/** Events that rebuild the world for a fresh baseline: bags, showdowns, taken pickups, lit fuses. */
-function catchUpEvents(w: World): WireEvent[] {
-  const out: WireEvent[] = []
-  for (const bag of w.bags) {
-    out.push(toWireEvent({ type: 'bag_drop', bag }))
+/** Complete current state, sent separately so 296 broken panes cannot consume the event budget. */
+export function persistentStateFor(w: World): TownPersistentState {
+  return {
+    tick: Math.max(0, w.tick - 1),
+    bags: w.bags.map((bag) => ({ ...bag })),
+    unavailablePickups: w.pickups
+      .filter((pickup) => pickup.availableAt > 0)
+      .map((pickup) => pickup.spot),
+    brokenWindows: Array.from(w.glass.keys()).filter((index) => w.glass[index] === 1),
+    callouts: w.players.flatMap((player) =>
+      player && player.calledBy !== NONE && player.calledUntil >= w.tick - 1
+        ? [{ challenger: player.calledBy, target: player.id, untilTick: player.calledUntil }]
+        : [],
+    ),
+    showdowns: Array.from(w.showdowns.values(), (showdown) => ({
+      id: showdown.id,
+      a: showdown.a,
+      b: showdown.b,
+      cx: showdown.cx,
+      cz: showdown.cz,
+      calledTick: showdown.phase === 'called' ? showdown.callTick : null,
+    })),
+    fuses: w.fuses.map((fuse) => ({
+      player: fuse.by,
+      x: fuse.x,
+      z: fuse.z,
+      explodeAt: fuse.explodeAt,
+    })),
   }
-  for (const sd of w.showdowns.values()) {
-    out.push(toWireEvent({ type: 'showdown_start', showdown: sd }))
-  }
-  for (const pk of w.pickups) {
-    if (pk.availableAt > 0) {
-      out.push(toWireEvent({ type: 'pickup_taken', spot: pk.spot, player: NONE }))
-    }
-  }
-  for (const [i, broken] of w.glass.entries()) {
-    if (broken === 1) {
-      out.push(toWireEvent({ type: 'glass_break', window: i }))
-    }
-  }
-  for (const f of w.fuses) {
-    const fuseTicks = Math.max(0, f.explodeAt - w.tick)
-    out.push(toWireEvent({ type: 'dynamite_thrown', player: f.by, x: f.x, z: f.z, fuseTicks }))
-  }
-  return out
 }
 
 /** Build and encode this tick's snapshot for one viewer. */
@@ -370,7 +376,7 @@ export function snapshotFor(
       entities,
       removed,
       town,
-      events: full ? [...catchUpEvents(w), ...events] : events,
+      events,
     },
     stream.baseline,
   )

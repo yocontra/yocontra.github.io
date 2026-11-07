@@ -14,23 +14,27 @@ import {
   type MeshStandardMaterial,
   type Object3D,
   Quaternion,
+  type SkinnedMesh,
   Vector3,
 } from 'three'
 import type { BeardKey, CoatCut, MoustacheKey } from '../data/outlaws.ts'
 import type { Piece } from './bake.ts'
 import { coat, type GunSides } from './coat.ts'
 import { beard, eyepatch, scar, vest } from './face.ts'
+import type { HatDetail } from './hat-detail.ts'
 import { type HatFit, makeHat } from './hats.ts'
 import { bandana, bandoliers, type Fit, mask, star } from './outfit.ts'
 import { HAIR_LUM } from './person.ts'
 import { poncho } from './poncho.ts'
-import { SLOT, slotOf } from './roles.ts'
+import { SLOT, type Slot, slotOf } from './roles.ts'
 import type { Glow } from './shade.ts'
 import { type Floor, vary } from './style.ts'
 
 /** What the dressing and tinting read from an actor's options. */
 export interface DressOpts {
   tint?: Readonly<Record<string, number>>
+  /** Explicit palette channels used by the VAT authoring pass, independent of tint brightness. */
+  paletteSlots?: Readonly<Partial<Record<Slot, number>>> | undefined
   bandana?: number | undefined
   coat?: number | undefined
   coatCut?: CoatCut | undefined
@@ -95,6 +99,11 @@ export function tintModel(model: Object3D, o: DressOpts): void {
     }
     const c = src.clone() as MeshStandardMaterial
     const hex = tintFor(src, tint, o)
+    const slot = slotOf(src)
+    const palette = slot ? o.paletteSlots?.[slot] : undefined
+    if (palette !== undefined) {
+      c.userData.paletteSlot = palette
+    }
     c.color.setHex(hex ?? 0xff_ff_ff)
     // a tinted garment is recoloured (its main fabric), untinted keeps its texture
     c.userData.recolor = hex !== undefined && ((src.userData.lum as number | undefined) ?? 0) > 0
@@ -209,16 +218,25 @@ export function measureStride(
   }
 }
 
+/** The actor's hat finish and the material state it follows. */
+export function hatStyle(
+  o: { hatColor?: number; hatDetail?: HatDetail | undefined },
+  floor: Floor,
+  glow: Glow,
+) {
+  return { color: o.hatColor ?? 0x3a_2a_1a, floor, glow, detail: o.hatDetail }
+}
+
 /**
  * Seat a hat on his head bone where `fitHat` measured it (scene/hats.ts): the band on his
  * skull, the crown hugging it, turned with his face.
  */
 export function seatHat(
   f: HatFit,
-  hat: { color: number; floor: Floor; glow: Glow },
+  hat: { color: number; floor: Floor; glow: Glow; detail?: HatDetail | undefined },
   on: { head: Bone; root: Object3D },
 ): Group {
-  const g = makeHat(f.key, hat.color, hat.floor, hat.glow)
+  const g = makeHat(f.key, hat.color, hat)
   g.children[0]?.scale.setScalar(f.s)
   const q = on.root
     .getWorldQuaternion(new Quaternion())
@@ -227,4 +245,26 @@ export function seatHat(
   slot.add(g)
   g.rotation.x = -f.tilt
   return g
+}
+
+/** Every actor owns its skeleton's bone texture; release it with the animation rig. */
+export function retireRig(
+  mixer: AnimationMixer,
+  root: Object3D,
+  meshes: readonly SkinnedMesh[],
+): void {
+  mixer.stopAllAction()
+  for (const mesh of meshes) {
+    mesh.skeleton.dispose()
+  }
+  root.removeFromParent()
+}
+
+/** Move a carried prop to its fitted slot; leave an already-seated draw pose alone. */
+export function seatProp(prop: Object3D | null, slot: Object3D | null): void {
+  if (prop && slot && prop.parent !== slot) {
+    slot.add(prop)
+    prop.position.set(0, 0, 0)
+    prop.rotation.set(0, 0, 0)
+  }
 }

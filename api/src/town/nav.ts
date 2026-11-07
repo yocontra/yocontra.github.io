@@ -5,6 +5,7 @@ import {
   circleBlocked,
   type Grid,
 } from '../../../src/experiments/out-west/ffa/sim/layout.ts'
+import { blockedAt } from '../../../src/experiments/out-west/ffa/sim/surfaces.ts'
 
 const NAV_CELL = 1
 const NEIGHBOURS = [
@@ -23,6 +24,49 @@ export interface NavGrid {
   free: Uint8Array
 }
 
+interface Point {
+  x: number
+  z: number
+}
+
+/** The small extra test radius covers the continuous leg between its sampled circles. */
+function legClear(grid: Grid, from: Point & { y?: number }, to: Point): boolean {
+  const distance = Math.hypot(to.x - from.x, to.z - from.z)
+  const steps = Math.max(1, Math.ceil(distance / (grid.cell / 8)))
+  const radius = PLAYER_RADIUS + distance / steps / 2
+  for (let i = 0; i <= steps; i++) {
+    const t = i / steps
+    const x = from.x + (to.x - from.x) * t
+    const z = from.z + (to.z - from.z) * t
+    if (
+      circleBlocked(grid, { x, z, r: radius }, BLOCK_MOVE) ||
+      blockedAt(grid, x, z, radius, from.y ?? 0)
+    ) {
+      return false
+    }
+  }
+  return true
+}
+
+/** Near a corner, retain its waypoint until the actual actor can take the following leg. */
+export function nextWaypoint(
+  grid: Grid,
+  path: Point[],
+  at: Point & { y?: number; arrivalSquared?: number },
+): Point | undefined {
+  let next = path[0]
+  const arrivalSquared = at.arrivalSquared ?? 0.6
+  while (next && (next.x - at.x) ** 2 + (next.z - at.z) ** 2 < arrivalSquared) {
+    const after = path[1]
+    if (after && !legClear(grid, at, after)) {
+      break
+    }
+    path.shift()
+    next = path[0]
+  }
+  return next
+}
+
 export function buildNav(grid: Grid): NavGrid {
   const n = Math.floor(grid.size / NAV_CELL)
   const free = new Uint8Array(n * n)
@@ -30,9 +74,11 @@ export function buildNav(grid: Grid): NavGrid {
     for (let col = 0; col < n; col++) {
       const x = (col + 0.5) * NAV_CELL
       const z = (row + 0.5) * NAV_CELL
-      free[row * n + col] = circleBlocked(grid, { x, z, r: PLAYER_RADIUS + 0.05 }, BLOCK_MOVE)
-        ? 0
-        : 1
+      free[row * n + col] =
+        circleBlocked(grid, { x, z, r: PLAYER_RADIUS + 0.05 }, BLOCK_MOVE) ||
+        blockedAt(grid, x, z, PLAYER_RADIUS + 0.05, 0)
+          ? 0
+          : 1
     }
   }
   return { n, free }
@@ -85,7 +131,21 @@ function expand(nav: NavGrid, i: number, prev: Int32Array, queue: number[]): voi
   }
 }
 
-/** Waypoints (cell centres, every few cells) from a to b, or null if unreachable. */
+/** Keep every BFS turn; a fixed stride alone cuts chords through blocked corners. */
+function isTurn(cells: readonly number[], index: number, n: number): boolean {
+  const before = cells[index - 1]
+  const cell = cells[index]
+  const after = cells[index + 1]
+  if (before === undefined || cell === undefined || after === undefined) {
+    return true
+  }
+  return (
+    (cell % n) - (before % n) !== (after % n) - (cell % n) ||
+    Math.floor(cell / n) - Math.floor(before / n) !== Math.floor(after / n) - Math.floor(cell / n)
+  )
+}
+
+/** Cell-centre waypoints, at most three cells apart and preserving every turn. */
 export function findPath(
   nav: NavGrid,
   from: { x: number; z: number },
@@ -109,9 +169,10 @@ export function findPath(
   for (let c = goal; c !== start; c = prev[c] ?? start) {
     cells.push(c)
   }
+  cells.push(start)
   cells.reverse()
   return cells
-    .filter((_, i) => i % 3 === 2 || i === cells.length - 1)
+    .filter((_, i) => i > 0 && (i % 3 === 0 || isTurn(cells, i, nav.n)))
     .map((c) => ({
       x: ((c % nav.n) + 0.5) * NAV_CELL,
       z: (Math.floor(c / nav.n) + 0.5) * NAV_CELL,

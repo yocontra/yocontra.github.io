@@ -20,14 +20,14 @@ import { hitSurface } from './surface.ts'
 export function play(
   s: { audio: AudioEngine | null },
   name: SfxName,
-  at: { x: number; z: number } | null,
+  at: { x: number; z: number; y?: number } | null,
   gain = 1,
   priority = false,
 ): void {
   s.audio?.play(name, {
     gain,
     priority,
-    ...(at ? { pos: { x: at.x, y: 1.2, z: at.z } } : {}),
+    ...(at ? { pos: { x: at.x, y: (at.y ?? 0) + 1.2, z: at.z } } : {}),
   })
 }
 
@@ -82,19 +82,20 @@ export function shotSound(flags: number): SfxName {
 export function impactSound(
   audio: AudioEngine | null,
   flags: number,
-  x: number,
-  z: number,
-  you: { x: number; z: number } | null,
+  pos: { x: number; y: number; z: number },
+  you: { x: number; z: number; y?: number } | null,
 ): void {
-  if (!you || Math.hypot(x - you.x, z - you.z) > IMPACT_EARSHOT) {
+  if (
+    !you ||
+    Math.hypot(pos.x - you.x, pos.y - (you.y ?? 0) - 1.2, pos.z - you.z) > IMPACT_EARSHOT
+  ) {
     // a far hit is inaudible under its own report: spend no voice on it
     return
   }
-  const pos = { x, y: 1.1, z }
   if (flags & SHOT_HIT) {
     audio?.impact('body', { pos, gain: 0.8 })
   } else if (flags & SHOT_WALL) {
-    audio?.impact(hitSurface(x, z), { pos, gain: 0.6 })
+    audio?.impact(hitSurface(pos.x, pos.z), { pos, gain: 0.6 })
   }
 }
 

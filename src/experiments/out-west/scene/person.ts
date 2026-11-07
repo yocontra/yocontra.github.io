@@ -353,6 +353,10 @@ export function paintSkin(pieces: readonly Piece[], body: Body, head: Head, o: S
       const bone = dominant(skin, body, k)
       if (glove && HANDS.test(bone)) {
         col.setXYZ(k, glove[0], glove[1], glove[2])
+        if (p.paletteSlot !== undefined) {
+          p.palette ??= new Uint8Array(col.count).fill(p.paletteSlot)
+          p.palette[k] = 0
+        }
         continue
       }
       const a = bone === 'Head' ? stubbleAt(head, stubble, pos.getY(k), pos.getZ(k)) : 0

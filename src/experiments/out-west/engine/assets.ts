@@ -28,10 +28,12 @@ const CHARACTER_SLOTS: Readonly<Record<string, Slot>> = {
   Bracer: SLOT.Bracer,
   Pauldron: SLOT.Pauldron,
   Belt: SLOT.Belt,
+  Pants: SLOT.Pants,
+  Boots: SLOT.Boots,
 }
 
 /** Map the character GLB's baked material names to slots once, at load. */
-function markCharacterSlots(gltf: GLTF): void {
+export function markCharacterSlots(gltf: GLTF): void {
   for (const scene of gltf.scenes) {
     scene.traverse((o) => {
       if (!(o instanceof Mesh)) {

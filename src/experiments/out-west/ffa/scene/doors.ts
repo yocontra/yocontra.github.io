@@ -14,6 +14,7 @@ import {
   type Object3D,
 } from 'three'
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
+import { markFlags } from '../../scene/roles.ts'
 
 /** How close a player must come for a door to swing, metres. */
 const OPEN_RADIUS = 2.8
@@ -98,8 +99,10 @@ export class Doors {
       group.rotation.y = baseRotation(spec)
       const mesh = new Mesh(geometry, this.material)
       mesh.name = 'k_door_trim'
+      markFlags(mesh, { nonBlocking: true })
       mesh.position.x = spec.dir * (spec.length / 2)
       mesh.castShadow = true
+      mesh.receiveShadow = true
       group.add(mesh)
       this.root.add(group)
       this.leaves.push({ spec, group, mesh, geometry, t: 0, target: 0, cooldown: 0 })

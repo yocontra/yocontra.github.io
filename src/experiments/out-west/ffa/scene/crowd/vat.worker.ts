@@ -18,25 +18,9 @@ import {
   Vector3,
 } from 'three'
 import { simplifyIndex } from '../../../scene/lod.ts'
+import { atlasRows, packNormal, unpackNormal } from './packing.ts'
+import { paletteColor } from './palette.ts'
 import { VAT_W, type VatClipInfo, type VatJob, type VatResult } from './vat-shared.ts'
-
-function nearestMarker(
-  r: number,
-  g: number,
-  b: number,
-  markers: [number, number, number][],
-): number {
-  let best = 0
-  let bestD = 0.12
-  for (const [i, m] of markers.entries()) {
-    const d = (r - m[0]) ** 2 + (g - m[1]) ** 2 + (b - m[2]) ** 2
-    if (d < bestD) {
-      bestD = d
-      best = i + 1
-    }
-  }
-  return best
-}
 
 function findBody(root: Object3D): SkinnedMesh | null {
   let body: SkinnedMesh | null = null
@@ -118,11 +102,16 @@ async function bake(job: VatJob): Promise<VatResult> {
   })
   const { keep, index, sourceTris } = await lod2(body, job.targetTris)
   const nv = keep.length
-  const rows = Math.ceil(nv / VAT_W)
   const geo = body.geometry
   const col = geo.getAttribute('color')
+  const palette = geo.getAttribute('paletteSlot')
+  if (!palette) {
+    throw new Error('VAT source lacks semantic palette metadata')
+  }
   const uvA = geo.getAttribute('uv')
   const lumA = geo.getAttribute('styLum')
+  const styleA = geo.getAttribute('styMat')
+  const style = new Float32Array(nv * 2)
   const color = new Float32Array(nv * 3)
   const uv = new Float32Array(nv * 2)
   const lum = new Float32Array(nv)
@@ -130,11 +119,12 @@ async function bake(job: VatJob): Promise<VatResult> {
   for (const [i, v] of keep.entries()) {
     uv.set([uvA ? uvA.getX(v) : 0.5, uvA ? uvA.getY(v) : 0.5], i * 2)
     lum[i] = lumA ? lumA.getX(v) : 0
+    style.set([styleA ? styleA.getX(v) : 1, styleA ? styleA.getY(v) : 1], i * 2)
     const r = col ? col.getX(v) : 1
     const g = col ? col.getY(v) : 1
     const b = col ? col.getZ(v) : 1
-    color.set([r, g, b], i * 3)
-    slot[i] = nearestMarker(r, g, b, job.markers)
+    slot[i] = palette.getX(v)
+    color.set(paletteColor(slot[i] ?? 0, [r, g, b], job.markers), i * 3)
   }
 
   const mixer = new AnimationMixer(root)
@@ -146,9 +136,22 @@ async function bake(job: VatJob): Promise<VatResult> {
     infos.push({ name: c.name.split('|').pop() ?? c.name, start: total, frames })
     total += frames
   }
-  const pos = new Uint16Array(VAT_W * rows * total * 4)
-  const nrm = new Uint8Array(VAT_W * rows * total * 4)
+  const posRows = atlasRows(nv, total, 3, VAT_W)
+  const nrmRows = atlasRows(nv, total, 2, VAT_W)
+  const pos = new Uint16Array(VAT_W * posRows * 4)
+  const nrm = new Uint8Array(VAT_W * nrmRows * 4)
+  const quantization = { positionM: 0, normalDeg: 0 }
+  const decoded = new Vector3()
   const headTrack = new Float32Array(total * 7)
+  const sockets: Record<string, Float32Array> = {}
+  const nodes: Record<string, Object3D> = {}
+  for (const [name, uuid] of Object.entries(job.sockets)) {
+    const node = root.getObjectByProperty('uuid', uuid)
+    if (node) {
+      nodes[name] = node
+      sockets[name] = new Float32Array(total * 10)
+    }
+  }
   const srcPos = geo.getAttribute('position')
   const p = new Float32Array(nv * 3)
   const n = new Float32Array(nv * 3)
@@ -196,18 +199,37 @@ async function bake(job: VatJob): Promise<VatResult> {
           n[i * 3 + 2] = (n[i * 3 + 2] ?? 0) + c.z
         }
       }
-      const base = (info.start + f) * rows * VAT_W
+      const base = (info.start + f) * nv
       for (let i = 0; i < nv; i++) {
-        const t = (base + i) * 4
-        pos[t] = toHalf(p[i * 3] ?? 0)
-        pos[t + 1] = toHalf(p[i * 3 + 1] ?? 0)
-        pos[t + 2] = toHalf(p[i * 3 + 2] ?? 0)
-        pos[t + 3] = toHalf(1)
-        tmp.fromArray(n, i * 3).normalize()
-        nrm[t] = Math.round((tmp.x * 0.5 + 0.5) * 255)
-        nrm[t + 1] = Math.round((tmp.y * 0.5 + 0.5) * 255)
-        nrm[t + 2] = Math.round((tmp.z * 0.5 + 0.5) * 255)
-        nrm[t + 3] = 255
+        const t = (base + i) * 3
+        let positionSq = 0
+        for (let axis = 0; axis < 3; axis++) {
+          const value = p[i * 3 + axis] ?? 0
+          const half = toHalf(value)
+          pos[t + axis] = half
+          positionSq += (DataUtils.fromHalfFloat(half) - value) ** 2
+        }
+        quantization.positionM = Math.max(quantization.positionM, Math.sqrt(positionSq))
+        tmp.fromArray(n, i * 3)
+        if (tmp.lengthSq() < 1e-12) {
+          tmp.set(0, 1, 0)
+        } else {
+          tmp.normalize()
+        }
+        const norm = (base + i) * 2
+        packNormal(tmp, nrm, norm)
+        unpackNormal(nrm[norm] ?? 0, nrm[norm + 1] ?? 0, decoded)
+        quantization.normalDeg = Math.max(
+          quantization.normalDeg,
+          (Math.acos(Math.min(1, Math.max(-1, tmp.dot(decoded)))) * 180) / Math.PI,
+        )
+      }
+      for (const [name, node] of Object.entries(nodes)) {
+        node.matrixWorld.decompose(hp, hq, hs)
+        sockets[name]?.set(
+          [hp.x, hp.y, hp.z, hq.x, hq.y, hq.z, hq.w, hs.x, hs.y, hs.z],
+          (info.start + f) * 10,
+        )
       }
       const h = head as Bone | null
       if (h) {
@@ -224,8 +246,12 @@ async function bake(job: VatJob): Promise<VatResult> {
     uv,
     lum,
     slot,
+    style,
+    sockets,
     index,
-    rows,
+    posRows,
+    nrmRows,
+    quantization,
     vertexCount: nv,
     clips: infos,
     head: headTrack,
@@ -245,6 +271,8 @@ scope.onmessage = async (e: MessageEvent<{ id: number; job: VatJob }>) => {
       r.uv.buffer,
       r.lum.buffer,
       r.slot.buffer,
+      r.style.buffer,
+      ...Object.values(r.sockets).map((s) => s.buffer),
       r.index.buffer,
       r.head.buffer,
     ])

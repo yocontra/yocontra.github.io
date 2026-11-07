@@ -7,7 +7,7 @@
  * Bump VERSION when an unhashed file under public/experiments/out-west/ changes. The hashed
  * /_astro/ files carry their own names and never need a bump.
  */
-const VERSION = 'ow-v1'
+const VERSION = 'ow-v2'
 const CACHE = `out-west-${VERSION}`
 const SHELL = [
   '/experiments/out-west/',

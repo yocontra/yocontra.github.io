@@ -10,7 +10,7 @@
     "format": "biome format --write .",
     "fix": "biome check --write .",
     "typecheck": "astro check && tsc --noEmit && tsc -p api && tsc -p scripts && tsc -p tests && tsc -p tools",
-    "check": "biome ci --error-on-warnings . && bun run typecheck && bun run test && bun run debt && bun scripts/no-js.ts",
+    "check": "biome ci --error-on-warnings . && bun run typecheck && bun run test && bun run debt && bun scripts/no-js.ts && bun tools/check-item-thumbs.ts",
     "debt": "bun scripts/lint-debt.ts && bun scripts/debt-audit.ts",
     "api:dev": "wrangler dev --config api/wrangler.jsonc --local --port 8787 --infer-origin-from-routes=false",
     "api:migrate:local": "wrangler d1 migrations apply contra-leaderboard --config api/wrangler.jsonc --local",
@@ -27,6 +27,7 @@
     "@simplewebauthn/browser": "^14.0.0",
     "@simplewebauthn/server": "^14.0.3",
     "astro": "^7.4.7",
+    "cannon-es": "0.20.0",
     "meshoptimizer": "^1.3.0",
     "postprocessing": "^6.39.6",
     "three": "^0.187.0"

@@ -34,6 +34,7 @@ export const JUMP_APEX = 1.35
 export const JUMP_SPEED = Math.sqrt(2 * GRAVITY * JUMP_APEX)
 export const MANTLE_REACH = 2.4
 export const MANTLE_TICKS = s(0.3)
+export const MANTLE_MAX_PROBE = 1.2
 /** Falls past three storeys hurt; ~20 m is lethal. */
 export const STOREY_HEIGHT = 3.2
 export const FALL_DAMAGE_MIN = STOREY_HEIGHT * 3
@@ -53,6 +54,7 @@ export const ROLL_COOLDOWN_TICKS = s(2.5)
 export const VAULT_TICKS = s(0.5)
 export const VAULT_REACH = 1
 export const VAULT_MAX_M = 4
+export const VAULT_ARC_CLEARANCE = 0.35
 export const HOP_TICKS = s(0.55)
 export const JUMP_COOLDOWN_TICKS = s(0.7)
 /** In the air you keep your take-off velocity, steering this fraction toward the stick a tick. */

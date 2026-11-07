@@ -15,6 +15,8 @@ export const CUT = {
   radius: { value: 0 },
   /** Building id whose roof hides (−1 none). */
   bid: { value: -1 },
+  /** Death camera: clear the whole physical body aperture, with only a pixel-scale edge. */
+  clean: { value: 0 },
 }
 
 const IGN = 'fract(52.9829189 * fract(dot(gl_FragCoord.xy, vec2(0.06711056, 0.00583715))))'
@@ -26,6 +28,7 @@ export function cutaway(mat: MeshStandardMaterial, roof: boolean): Material {
     shader.uniforms.cutScreen = CUT.screen
     shader.uniforms.cutRadius = CUT.radius
     shader.uniforms.cutBid = CUT.bid
+    shader.uniforms.cutClean = CUT.clean
     shader.vertexShader = shader.vertexShader
       .replace(
         '#include <common>',
@@ -46,6 +49,7 @@ ${roof ? 'vBid = bid;' : ''}`,
 uniform vec3 cutScreen;
 uniform float cutRadius;
 uniform float cutBid;
+uniform float cutClean;
 varying float vCutY;
 ${roof ? 'varying float vBid;' : ''}`,
       )
@@ -57,12 +61,15 @@ ${roof ? 'varying float vBid;' : ''}`,
   float d = distance(gl_FragCoord.xy, cutScreen.xy);
   float inside = 1.0 - smoothstep(cutRadius * 0.62, cutRadius, d);
   float nearer = step(vViewPosition.z, cutScreen.z - 0.6) * step(0.45, vCutY);
-  if (inside * nearer * 0.93 > ign) discard;
+  float coverage = cutClean > 0.5
+    ? 1.0 - smoothstep(max(0.0, cutRadius - 1.5), cutRadius, d)
+    : inside * 0.93;
+  if (coverage * nearer > ign) discard;
   ${roof ? 'if (abs(vBid - cutBid) < 0.5 && ign < 0.85) discard;' : ''}
 }`,
       )
   }
   const key = mat.customProgramCacheKey()
-  mat.customProgramCacheKey = () => `${key}-cut${roof ? 'r' : ''}`
+  mat.customProgramCacheKey = () => `${key}-cut2${roof ? 'r' : ''}`
   return mat
 }

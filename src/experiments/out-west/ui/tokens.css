@@ -7,7 +7,7 @@
  * EB Garamond (text: real small caps, old-style and lining figures), Oswald (numerals: tabular).
  * Each has a metric-matched local fallback (size-adjust + ascent/descent overrides) so the swap
  * doesn't reflow a screen.
- * Art lives in /experiments/out-west/ui/ (paper, poster stock, wood, leather, smoke, seal, woodcut,
+ * Art lives in /experiments/out-west/ui/ (paper, poster stock, wood, leather, seal, woodcut,
  * ornaments, torn edge). Light comes from the top left everywhere.
  */
 @font-face {
@@ -185,7 +185,8 @@
   --ow-tex-poster: url("/experiments/out-west/ui/poster.webp");
   --ow-tex-wood: url("/experiments/out-west/ui/wood.webp");
   --ow-tex-leather: url("/experiments/out-west/ui/leather.webp");
-  --ow-tex-smoke: url("/experiments/out-west/ui/smoke.webp");
+  /* Older panel rules keep this layer slot; a quiet surface gives text the contrast. */
+  --ow-tex-smoke: none;
   --ow-img-seal: url("/experiments/out-west/ui/seal.webp");
   --ow-img-woodcut: url("/experiments/out-west/ui/title-duel.svg");
   --ow-orn-corner: url("/experiments/out-west/ui/corner.svg");

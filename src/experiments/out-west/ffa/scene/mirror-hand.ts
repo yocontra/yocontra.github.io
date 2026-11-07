@@ -72,12 +72,15 @@ export class SupportHand {
   }
 
   /** Curl the left fingers as the right ones are curled, mirrored (after the left arm is solved). */
-  fingersLike(n: Vector3): void {
+  fingersLike(n: Vector3, turn?: Quaternion): void {
     // world matrices are current here (the arms were just solved), so read them as they stand
     // rather than through getWorldQuaternion, which re-walks every parent on every call
     for (const f of this.fingers) {
       f.r.matrixWorld.decompose(tmpV, tmpQ, tmpS)
       const want = mirrorQ(tmpQ, n, tmpQ).multiply(f.c)
+      if (turn) {
+        want.premultiply(turn)
+      }
       const parent = f.l.parent
       if (parent) {
         parent.matrixWorld.decompose(tmpV, tmpQ2, tmpS)

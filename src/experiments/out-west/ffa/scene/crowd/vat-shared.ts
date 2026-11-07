@@ -9,6 +9,8 @@ export interface VatJob {
   fps: number
   targetTris: number
   headUuid: string
+  /** Attachment frames baked with the same clip clock as the body. */
+  sockets: Record<string, string>
   /** Linear-RGB marker colours for palette slots 1 and 2. */
   markers: [number, number, number][]
 }
@@ -27,11 +29,15 @@ export interface VatResult {
   uv: Float32Array
   lum: Float32Array
   slot: Float32Array
+  style: Float32Array
   index: Uint32Array
-  rows: number
+  posRows: number
+  nrmRows: number
+  quantization: { positionM: number; normalDeg: number }
   vertexCount: number
   clips: VatClipInfo[]
   /** Per frame: head position xyz + quaternion xyzw, in actor-root space. */
   head: Float32Array
+  sockets: Record<string, Float32Array>
   sourceTris: number
 }

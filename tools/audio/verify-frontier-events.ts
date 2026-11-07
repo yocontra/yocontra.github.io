@@ -9,6 +9,7 @@
  * The live soundscape (footsteps, beds, voices, meters) is `verify-frontier.ts`; this covers the
  * money and showdown beats a scripted session can't reliably reach in loopback (bots never mint).
  */
+import { Vector3 } from 'three'
 import type { AudioEngine } from '../../src/experiments/out-west/audio/audio.ts'
 import {
   EV_BAG_DROP,
@@ -18,7 +19,6 @@ import {
   EV_EXPLOSION,
   EV_PICKUP_TAKEN,
   EV_RESPAWN,
-  EV_SHOT,
   EV_SHOWDOWN_CALL,
   EV_SHOWDOWN_START,
   EV_STRONGBOX_OPEN,
@@ -36,14 +36,20 @@ import {
   type Showdown,
   type Sink,
 } from '../../src/experiments/out-west/ffa/client/events.ts'
-import type { WireEvent } from '../../src/experiments/out-west/ffa/sim/codec-events.ts'
+import { toWireEvent, type WireEvent } from '../../src/experiments/out-west/ffa/sim/codec-events.ts'
+import { buildGrid } from '../../src/experiments/out-west/ffa/sim/layout.ts'
 
 const calls: string[] = []
+const locations: string[] = []
 const record =
   (kind: string) =>
   (name?: unknown, o?: unknown): { stop: () => void; set: () => void } => {
-    const pos = typeof o === 'object' && o !== null && 'pos' in o ? ' @pos' : ''
-    calls.push(`${kind} ${String(name ?? '')}${pos}`.trim())
+    const pos = typeof o === 'object' && o !== null && 'pos' in o ? o.pos : null
+    const cue = `${kind} ${String(name ?? '')}`.trim()
+    calls.push(`${cue}${pos ? ' @pos' : ''}`)
+    if (pos) {
+      locations.push(`${cue} ${JSON.stringify(pos)}`)
+    }
     return { stop: () => calls.push(`loopStop ${String(name)}`), set: () => undefined }
   }
 const audio = {
@@ -76,7 +82,7 @@ const bags = new Map<number, { id: number; x: number; z: number; amount: number 
 const showdowns = new Map<number, Showdown>()
 const fuses = new Map<number, Fuse>()
 const sink = {
-  net: new Proxy({ you, name: () => 'Someone' }, { get: (t, k) => Reflect.get(t, k) ?? inert }),
+  net: { you, grid: buildGrid(), name: () => 'Someone', takeRagdollImpact: () => null },
   fx: new Proxy({ bags }, { get: (t, k) => Reflect.get(t, k) ?? inert }),
   crowd: inert,
   hud: inert,
@@ -84,41 +90,69 @@ const sink = {
   kick: () => undefined,
   // 2: beside you; 3: far away; 4: 10 m short of the hotel's wood wall; 5: of the bank's stone
   posOf: (id: number) => SPOTS[id] ?? null,
-  muzzleOf: () => inert,
+  muzzleOf: (_id: number, x: number, z: number) => new Vector3(x, 1.62, z),
   showdowns,
   callouts: [],
   killer: null,
   onLeft: () => undefined,
   blocked: () => false,
   pickups: inert,
+  ragdollKilled: () => undefined,
+  ragdollReleased: () => undefined,
   fuses,
 } as unknown as Sink
 
 const failures: string[] = []
-function expect(label: string, ev: WireEvent | (() => void), want: string[]): void {
+let cueChecks = 0
+let positionChecks = 0
+let scenarios = 0
+function expect(
+  label: string,
+  ev: WireEvent | (() => void),
+  want: string[],
+  positions: readonly { cue: string; pos: { x: number; y: number; z: number } }[] = [],
+): void {
+  scenarios++
+  cueChecks += want.length
+  positionChecks += positions.length
   calls.length = 0
+  locations.length = 0
   if (typeof ev === 'function') {
     ev()
   } else {
     handleEvent(sink, ev)
   }
-  const ok = want.every((w) => calls.filter((c) => c === w).length === 1)
+  const ok =
+    want.every((w) => calls.filter((c) => c === w).length === 1) &&
+    positions.every(({ cue, pos }) => locations.includes(`${cue} ${JSON.stringify(pos)}`))
   console.log(`${ok ? 'ok  ' : 'FAIL'} ${label.padEnd(34)} ${calls.join(', ')}`)
   if (!ok) {
     failures.push(label)
   }
 }
 
-const shot = (flags: number, shooter = 2): WireEvent =>
-  ({
-    type: EV_SHOT,
+function shot(flags: number, shooter = 2, feetY = 0): WireEvent {
+  const from = SPOTS[shooter]
+  if (!from) {
+    throw new Error(`unknown shooter ${shooter}`)
+  }
+  const end = { x: from.x + 10, y: feetY + 1.1, z: from.z }
+  return toWireEvent({
+    type: 'shot',
     shooter,
+    x: from.x,
+    z: from.z,
     aim: 0,
     range: 10 / SHOT_RANGE_UNIT,
-    target: 255,
+    target: flags & SHOT_HIT ? 7 : 255,
     flags,
-  }) as unknown as WireEvent
-expect("someone's revolver hits you", shot(SHOT_HIT), ['play fire @pos', 'impact body @pos'])
+    y: Math.round((feetY + 1.1) * 10),
+    origin: { x: from.x, y: feetY + 1.62, z: from.z },
+    end,
+    pellets: flags & SHOT_SHOTGUN ? Array.from({ length: 8 }, () => ({ ...end })) : [],
+  })
+}
+expect("someone's revolver hits a rider", shot(SHOT_HIT), ['play fire @pos', 'impact body @pos'])
 expect("someone's rifle hits a wood wall", shot(SHOT_RIFLE | SHOT_WALL, 4), [
   'play rifleFire @pos',
   'impact wood @pos',
@@ -130,6 +164,15 @@ expect("someone's revolver hits the bank", shot(SHOT_WALL, 5), [
 expect('a shot into the open street', shot(SHOT_WALL), ['play fire @pos', 'impact dirt @pos'])
 expect("someone's shotgun misses", shot(SHOT_SHOTGUN), ['play shotgunFire @pos'])
 expect('a far shot spends no impact', shot(SHOT_HIT, 3), ['play fire @pos'])
+expect(
+  'elevated shot source and impact',
+  shot(SHOT_RIFLE | SHOT_HIT, 2, 7),
+  ['play rifleFire @pos', 'impact body @pos'],
+  [
+    { cue: 'play rifleFire', pos: { x: 66, y: 8.62, z: 50 } },
+    { cue: 'impact body', pos: { x: 76, y: 8.1, z: 50 } },
+  ],
+)
 expect('you take the rifle', { type: EV_PICKUP_TAKEN, spot: 1, player: you } as WireEvent, [
   'play rifleLever',
 ])
@@ -185,6 +228,7 @@ handleEvent(sink, sd(3, 7, 8))
 calls.length = 0
 handleEvent(sink, { type: EV_SHOWDOWN_CALL, id: 3 } as WireEvent)
 const leaked = calls.length
+scenarios++
 console.log(
   `${leaked === 0 ? 'ok  ' : 'FAIL'} ${"another's call while yours waits".padEnd(34)} ${calls.join(', ') || '(silent)'}`,
 )
@@ -203,5 +247,9 @@ expect(
 for (const f of fuses.values()) {
   clearTimeout(f.timer)
 }
-console.log(failures.length === 0 ? '\nall cues wired' : `\nFAILED: ${failures.join('; ')}`)
+console.log(
+  failures.length === 0
+    ? `\nall cues wired: ${scenarios} scenarios, ${cueChecks} cue checks, ${positionChecks} position checks, 1 suppression check`
+    : `\nFAILED: ${failures.join('; ')}`,
+)
 process.exit(failures.length === 0 ? 0 : 1)

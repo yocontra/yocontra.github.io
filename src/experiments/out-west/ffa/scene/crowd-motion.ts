@@ -13,6 +13,7 @@ import {
   STANCE_SPRINT,
 } from '../../contract/town.ts'
 import type { Clip } from '../../scene/actor.ts'
+import type { FarClip } from './crowd/aim-gait.ts'
 import type { CrowdPlayer } from './crowd.ts'
 import type { PlayerLook } from './looks.ts'
 
@@ -64,7 +65,7 @@ export function gaitRate(clip: Clip, speed: number, walk: number): number {
 }
 
 /** A far rider's clip for his stance: the crouch, the sprint, the slide, the sights, his death. */
-export function farStance(p: CrowdPlayer, gait: Clip, has: (c: Clip) => boolean): Clip {
+export function farStance(p: CrowdPlayer, gait: Clip, has: (c: FarClip) => boolean): FarClip {
   if (p.anim === ANIM_DEAD) {
     return 'Death'
   }
@@ -79,7 +80,11 @@ export function farStance(p: CrowdPlayer, gait: Clip, has: (c: Clip) => boolean)
   }
   const drawn = !(p.flags & EF_HOLSTERED) || (p.stance & STANCE_ADS) !== 0
   if (p.anim === ANIM_AIM || (p.stance & STANCE_ADS) !== 0 || (gait === 'Idle' && drawn)) {
-    return gait === 'Idle' || (p.stance & STANCE_ADS) !== 0 ? 'Idle_Gun_Pointing' : gait
+    if (gait === 'Idle') {
+      return 'Idle_Gun_Pointing'
+    }
+    const aimed = gait === 'Walk' ? 'Walk_Aim' : 'Run_Aim'
+    return has(aimed) ? aimed : gait
   }
   return gait
 }

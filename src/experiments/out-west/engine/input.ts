@@ -179,7 +179,7 @@ export class Input {
 const CONTROL =
   'button, a[href], input, select, textarea, [contenteditable], [role="radio"], [role="tab"]'
 // biome-ignore lint/security/noSecrets: a CSS selector list, not a credential
-const MENU = '[role="dialog"], [role="alertdialog"], .ow-hub, .ow-sheet'
+const MENU = '[role="dialog"], [role="alertdialog"], .ow-title, .ow-hub, .ow-sheet'
 
 /**
  * Is this key press aimed at a visible menu control (a focused Buy button, a text field)? Then

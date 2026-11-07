@@ -168,6 +168,8 @@ void main() {
   // below the horizon the dome is the haze (the ground covers it)
   col = mix(col, haze, smoothstep(0.0, -0.04, h));
   gl_FragColor = vec4(col, 1.0);
+  #include <tonemapping_fragment>
+  #include <colorspace_fragment>
 }
 `
 

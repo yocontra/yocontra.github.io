@@ -8,42 +8,25 @@
  * Pure presentation: nothing here changes a timing, a clip length, the muzzle or the hit capsule.
  * An unknown id falls back to the starter for its slot (`normalizeLoadout`).
  */
-import {
-  Bone,
-  CylinderGeometry,
-  Mesh,
-  MeshStandardMaterial,
-  type Object3D,
-  Quaternion,
-  Vector3,
-} from 'three'
+import { Bone, Group, Mesh, MeshStandardMaterial, type Object3D, Quaternion, Vector3 } from 'three'
 import type { GLTF } from 'three/examples/jsm/loaders/GLTFLoader.js'
-import { type ItemId, type Loadout, normalizeLoadout } from '../data/catalog.ts'
+import { type ItemId, itemById, type Loadout, normalizeLoadout } from '../data/catalog.ts'
 import { type Dyes, dyeHex } from '../data/dye.ts'
-import type { CoatCut, HatKey } from '../data/outlaws.ts'
+import type { HatKey } from '../data/outlaws.ts'
 import { Actor, type ActorOpts } from './actor.ts'
 import { BLUED, BRASS, CASE, type Finish, NICKEL, WALNUT } from './gunsmith.ts'
+import { hatDetailFor } from './hat-detail.ts'
 import type { Identity } from './identity.ts'
 import type { HolsterLook } from './kit.ts'
 import type { PropDef } from './props.ts'
 import { PEACEMAKER, type RevolverLook, revolverObject } from './revolver.ts'
+import { markFlat } from './roles.ts'
+import { spurGeometry } from './spurs.ts'
+import { OUTFITS, type OutfitLook } from './wardrobe.ts'
 
 interface HatLook {
   key: HatKey
   color: number
-}
-
-interface OutfitLook {
-  coat?: number
-  coatCut?: CoatCut
-  poncho?: number
-  bandoliers?: boolean
-  /** A waistcoat over the shirt. */
-  vest?: number
-  /** A neckerchief (the extra slot's bandana, when one is worn, replaces it). */
-  bandana?: number
-  /** Garment of the player base (Shirt, Sleeves, Pants, Boots...) → colour. */
-  tint?: Readonly<Record<string, number>>
 }
 
 interface GunLook {
@@ -63,34 +46,6 @@ const HATS: Partial<Record<ItemId, HatLook>> = {
   'hat.yellow': { key: 'cowboy', color: 0xe8_c8_20 },
   'hat.bronze-band': { key: 'cowboy', color: 0x8a_5a_30 },
   'hat.holed-stetson': { key: 'cowboy', color: 0x6a_58_44 },
-}
-
-const OUTFITS: Partial<Record<ItemId, OutfitLook>> = {
-  'outfit.midnight-coat': { coat: 0x1a_1a_2e, tint: { Shirt: 0x2a_2a_3a, Pants: 0x1a_1a_24 } },
-  /**
-   * The starter reads as a gunslinger at 64 px, front and back: a near-black waistcoat over a faded
-   * chambray shirt, an oxblood neckerchief, dark wool trousers and dark boots, the gunbelt on top.
-   * Kept well apart from outlaws 1–3 (dun, blue-grey and russet coats and shirts).
-   */
-  'outfit.trail-duds': {
-    vest: 0x24_1c_18,
-    bandana: 0x7a_1e_16,
-    tint: { Shirt: 0x6a_74_7e, Sleeves: 0x3a_2a_20, Pants: 0x2e_2a_28, Boots: 0x22_18_12 },
-  },
-  'outfit.shirt-vest': { tint: { Shirt: 0xd8_cc_b0, Sleeves: 0x3a_2a_1e } },
-  'outfit.wool-duster': { coat: 0x6a_50_38 },
-  'outfit.striped-poncho': { poncho: 0x9a_3a_28 },
-  'outfit.gamblers-frock': {
-    coat: 0x2a_1c_2e,
-    coatCut: 'frock',
-    tint: { Shirt: 0xe8_e0_d0, Pants: 0x2a_22_2a },
-  },
-  'outfit.bandolier-rig': { bandoliers: true, tint: { Shirt: 0x8a_6a_4a, Sleeves: 0x6a_50_38 } },
-  'outfit.undertakers-black': {
-    coat: 0x12_10_10,
-    coatCut: 'frock',
-    tint: { Shirt: 0x1e_1a_1a, Sleeves: 0x1a_16_14, Pants: 0x14_12_10, Boots: 0x14_12_10 },
-  },
 }
 
 const finish = (f: Finish, rgb: Finish['rgb'], metal: number, rough: number): Finish => ({
@@ -122,7 +77,7 @@ const GUNS: Partial<Record<ItemId, GunLook>> = {
     finish: { barrel: 5.5, steel: NICKEL, frame: NICKEL, guard: NICKEL, grip: WALNUT },
   },
   'gun.engraved-ivory': {
-    finish: { barrel: 5.5, steel: NICKEL, frame: NICKEL, guard: GILT, grip: IVORY },
+    finish: { barrel: 5.5, steel: NICKEL, frame: NICKEL, guard: GILT, grip: IVORY, engraved: true },
   },
   'gun.buntline': { finish: { ...PEACEMAKER, barrel: 12 } },
   'gun.gilded-sovereign': {
@@ -147,9 +102,19 @@ const SPURS: Partial<Record<ItemId, { color: number; points: number; metalness: 
 /** Holster leather, baked on the thigh like the plain one (the gun's slot never moves). */
 const HOLSTERS: Partial<Record<ItemId, HolsterLook>> = {
   'holster.plain-leather': { color: 0x3a_24_14, roughness: 0.55 },
-  'holster.tooled-floral': { color: 0x8a_5a_30, roughness: 0.45, trim: 0xd8_b0_70 },
+  'holster.tooled-floral': {
+    color: 0x8a_5a_30,
+    roughness: 0.45,
+    trim: 0xd8_b0_70,
+    detail: 'floral',
+  },
   'holster.buscadero': { color: 0x2a_18_10, roughness: 0.4, trim: 0xc8_c8_d0, rig: true },
-  'holster.silver-conchos': { color: 0x2a_18_10, roughness: 0.45, trim: 0xd8_dc_e4 },
+  'holster.silver-conchos': {
+    color: 0x2a_18_10,
+    roughness: 0.45,
+    trim: 0xd8_dc_e4,
+    detail: 'conchos',
+  },
 }
 
 /**
@@ -176,7 +141,7 @@ export const DRAW_SOUNDS: Partial<Record<ItemId, { rate: number; gain: number; h
   }
 
 const EXTRAS: Partial<Record<ItemId, Partial<ActorOpts>>> = {
-  'extra.handlebar': { moustache: 0x3a_24_14 },
+  'extra.handlebar': { moustache: 0x3a_24_14, moustacheStyle: 'handlebar' },
   'extra.red-bandana': { bandana: 0x9a_1a_14 },
   'extra.tin-star': { star: true },
   'extra.black-bandana': { bandana: 0x15_12_0f },
@@ -210,6 +175,18 @@ function dyedExtra(extra: Partial<ActorOpts>, hex: number | null): Partial<Actor
   return extra
 }
 
+/** Convert roster item IDs to the slot map used by the Outfitter. */
+export function catalogLoadout(ids: readonly string[]): Loadout {
+  const slots: Record<string, string> = {}
+  for (const id of ids) {
+    const item = itemById(id)
+    if (item) {
+      slots[item.slot] = item.id
+    }
+  }
+  return normalizeLoadout(slots)
+}
+
 /**
  * Actor options for a loadout and its dye jobs (the gun is added by `dressedActor`). A dye is a
  * tint over cloth and leather only: never a mesh, a sound or a silhouette.
@@ -223,6 +200,7 @@ export function loadoutOpts(raw: unknown, dyes: Dyes = {}): ActorOpts {
   const holsterDye = dyeHex(dyes[l.holster])
   const o: ActorOpts = {
     hat: hat?.key ?? 'cowboy',
+    hatDetail: hatDetailFor(l.hat),
     hatColor: dyeHex(dyes[l.hat]) ?? hat?.color ?? 0x5a_42_2e,
     tint: outfit.tint ?? {},
     seed: `loadout/${l.hat}/${l.outfit}/${l.extra ?? ''}`,
@@ -264,10 +242,33 @@ function finishedRevolver(gun: PropDef, look: GunLook, still = false): Object3D 
   return g
 }
 
-/** A revolver finished as `id` (an Outfitter thumbnail); null when the id isn't a gun. */
+/** The equipped gun's finish, shared by world, crowd and first-person rendering. */
+export function gunFinish(id: ItemId | undefined): RevolverLook {
+  return (id ? GUNS[id] : undefined)?.finish ?? PEACEMAKER
+}
+export const gunIsPair = (id: ItemId | undefined): boolean => Boolean(id && GUNS[id]?.twin)
+export function equippedGun(gun: PropDef, id: ItemId | undefined): Object3D {
+  return finishedRevolver(gun, (id ? GUNS[id] : undefined) ?? { finish: PEACEMAKER })
+}
+
+/** A catalog gun preview, including both guns for a pair; null for non-gun items. */
 export function finishedGun(gun: PropDef, id: ItemId): Object3D | null {
   const look = GUNS[id]
-  return look ? finishedRevolver(gun, look, true) : null
+  if (!look) {
+    return null
+  }
+  const first = finishedRevolver(gun, look, true)
+  if (!look.twin) {
+    return first
+  }
+  const pair = new Group()
+  first.position.set(0.035, 0.065, 0.025)
+  first.rotation.z = 0.12
+  const second = finishedRevolver(gun, look, true)
+  second.position.set(-0.035, -0.065, -0.025)
+  second.rotation.z = -0.12
+  pair.add(first, second)
+  return pair
 }
 
 const norm = (name: string): string => name.replace(/[^a-z]/giu, '').toLowerCase()
@@ -288,18 +289,22 @@ function fitSpurs(a: Actor, look: { color: number; points: number; metalness: nu
     metalness: look.metalness,
     roughness: 0.3,
   })
-  const geo = new CylinderGeometry(0.028, 0.028, 0.006, look.points)
+  markFlat(mat)
+  const geo = spurGeometry(look.points, look.points === 10)
   for (const foot of feet) {
     const rowel = new Mesh(geo, mat)
     const p = foot.getWorldPosition(new Vector3())
     rowel.position
       .copy(p)
-      .addScaledVector(back, 0.07)
+      .addScaledVector(back, 0.11)
       .setY(Math.max(0.05, p.y - 0.02))
     rowel.quaternion
       .copy(rootQ)
       .multiply(new Quaternion().setFromAxisAngle(new Vector3(0, 0, 1), Math.PI / 2))
+    rowel.userData.actorMaterial = true
+    rowel.userData.corpseGear = 'spurs'
     rowel.castShadow = true
+    rowel.receiveShadow = true
     a.root.add(rowel)
     foot.attach(rowel)
   }
@@ -310,6 +315,13 @@ function fitSpurs(a: Actor, look: { color: number; points: number; metalness: nu
  * Bounty Hunt) and for your opponent, built from their server-validated loadout and dyes, with
  * their own face and build (`who`, scene/identity.ts) under the kit.
  */
+export function fitCatalogSpurs(actor: Actor, id: ItemId | undefined): void {
+  const look = id ? SPURS[id] : undefined
+  if (look) {
+    fitSpurs(actor, look)
+  }
+}
+
 export function dressedActor(
   model: GLTF,
   gun: PropDef | null,

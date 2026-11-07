@@ -52,8 +52,9 @@ import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js
 import type { Assets } from '../../engine/assets.ts'
 import type { Quality } from '../../engine/tiers.ts'
 import { GeoBuilder } from '../../scene/geo.ts'
+import { creaseNormals } from '../../scene/normals.ts'
 import { mergePlaced, type PropDef, placeMatrix, propDef, propsLibrary } from '../../scene/props.ts'
-import { markRole, markSlot, ROLE, SLOT } from '../../scene/roles.ts'
+import { markFlags, markRole, markSlot, ROLE, SLOT } from '../../scene/roles.ts'
 import { glassLook } from '../../scene/surface.ts'
 import { signAtlas } from '../../scene/textures.ts'
 import { attachArm } from '../../scene/town-pbr.ts'
@@ -105,6 +106,7 @@ import {
 import { cutaway } from './cutaway.ts'
 import { type DoorSpec, Doors } from './doors.ts'
 import { dressCover } from './dressing.ts'
+import { falseFrontProfile } from './facade-profile.ts'
 import { bakeGroundMask, groundMesh } from './ground.ts'
 import { farDef } from './lod.ts'
 import { OUTSKIRTS_SEED, outskirtsGeometry } from './outskirts.ts'
@@ -157,6 +159,8 @@ export interface Town {
   doors: Doors
   /** Shatter one window pane by its shared window index. */
   breakWindow: (index: number) => void
+  /** Replace persistent pane visibility silently, including restoring panes after a town reset. */
+  setBrokenWindows: (indices: readonly number[]) => void
   /**
    * Show the detail the camera can use and hide the rest: small-prop tiles near the camera, the
    * interiors of the buildings it is in or beside. The town also calls it itself from the
@@ -207,7 +211,7 @@ function masonryTextures(): { map: CanvasTexture; normal: CanvasTexture } {
         const grad = ctx.createLinearGradient(0, y0, 0, y0 + bh)
         grad.addColorStop(0, `rgb(${r - 10},${g - 10},${b - 10})`)
         grad.addColorStop(0.5, `rgb(${r},${g},${b})`)
-        grad.addColorStop(1, `rgb(${r - 26},${g - 24},${b - 22})`)
+        grad.addColorStop(1, `rgb(${r - 16},${g - 14},${b - 12})`)
         ctx.fillStyle = grad
         for (const dx of [0, N]) {
           ctx.fillRect(x0 - dx, y0, bw, bh)
@@ -291,7 +295,7 @@ function makeMaterials(assets: Assets): TownMaterials {
   const stone = new MeshStandardMaterial({
     map: masonry.map,
     normalMap: masonry.normal,
-    normalScale: new Vector2(0.9, 0.9),
+    normalScale: new Vector2(0.5, 0.5),
     vertexColors: true,
     roughness: 0.9,
     color: new Color(1.25, 1.2, 1.15),
@@ -602,29 +606,21 @@ function canvasTexture(): CanvasTexture {
   c.height = 128
   const ctx = c.getContext('2d')
   if (ctx) {
-    ctx.fillStyle = '#d8d0c0'
+    ctx.fillStyle = '#eee8da'
     ctx.fillRect(0, 0, 128, 128)
     for (let i = 0; i < 128; i += 2) {
-      ctx.fillStyle = `rgba(90,70,40,${0.05 + ((i * 37) % 7) / 100})`
+      ctx.fillStyle = `rgba(90,70,40,${0.025 + ((i * 37) % 7) / 300})`
       ctx.fillRect(i, 0, 1, 128)
-      ctx.fillStyle = `rgba(255,250,235,${0.05 + ((i * 53) % 5) / 100})`
+      ctx.fillStyle = `rgba(255,250,235,${0.025 + ((i * 53) % 5) / 300})`
       ctx.fillRect(0, i, 128, 1)
-    }
-    for (const [x, y, r] of [
-      [30, 90, 18],
-      [96, 40, 12],
-    ] as const) {
-      const g = ctx.createRadialGradient(x, y, 0, x, y, r)
-      g.addColorStop(0, 'rgba(110,80,40,0.18)')
-      g.addColorStop(1, 'rgba(110,80,40,0)')
-      ctx.fillStyle = g
-      ctx.fillRect(x - r, y - r, r * 2, r * 2)
     }
   }
   const t = new CanvasTexture(c)
   t.wrapS = RepeatWrapping
   t.wrapT = RepeatWrapping
   t.colorSpace = SRGBColorSpace
+  t.repeat.set(3, 3)
+  t.anisotropy = 4
   return t
 }
 
@@ -1433,46 +1429,49 @@ function addFalseFront(
   p: Paint,
   roofAt: (x: number, z: number) => number,
 ): void {
-  const len = sideLength(b, front)
-  const top = b.height + 1.8
+  const { len, top, along, drop, sections, at } = falseFrontProfile(b, front)
   const g = p.stone ? bs.stone : bs.wall
-  const [q0, q1, q2, q3] = faceQuad(b, front, 0, len, b.height, top, 0)
-  if (!(q0 && q1 && q2 && q3)) {
-    return
-  }
-  const cx = (q0.x + q1.x) / 2
-  const cz = (q0.z + q1.z) / 2
-  const along = front === 'n' || front === 's'
-  g.box(cx, (b.height + top) / 2, cz, along ? len : 0.3, top - b.height, along ? 0.3 : len, p.wall)
-  bs.wood.box(cx, top + 0.1, cz, along ? len + 0.3 : 0.5, 0.2, along ? 0.5 : len + 0.3, p.trim)
-  // the duel street's false-front joinery: a cornice band under the cap on a row of brackets,
-  // and pilasters at both ends
-  const at = (a: number, out: number) => faceQuad(b, front, a, a, 0, 1, out)[0] ?? new Vector3()
-  const mid = at(len / 2, 0.25)
-  bs.wood.box(
-    mid.x,
-    top - 0.28,
-    mid.z,
-    along ? len + 0.2 : 0.2,
-    0.16,
-    along ? 0.2 : len + 0.2,
-    p.trim,
-  )
-  if (!bs.lean) {
-    const n = Math.max(2, Math.round(len / 1.1))
-    for (let k = 0; k <= n; k++) {
-      const q = at(0.2 + ((len - 0.4) * k) / n, 0.22)
-      bs.wood.box(q.x, top - 0.47, q.z, along ? 0.12 : 0.14, 0.22, along ? 0.14 : 0.12, p.trim)
+  // Give the street landmarks distinct rooflines: the saloon's raised centre, the hotel's
+  // shallow shoulders, a broad store pediment, and the bank's level civic cornice.
+  for (const [a0, a1, cap] of sections) {
+    const width = a1 - a0
+    const center = at((a0 + a1) / 2, 0)
+    g.box(
+      center.x,
+      (b.height + cap) / 2,
+      center.z,
+      along ? width : 0.3,
+      cap - b.height,
+      along ? 0.3 : width,
+      p.wall,
+    )
+    bs.wood.box(
+      center.x,
+      cap + 0.1,
+      center.z,
+      along ? width + 0.02 : 0.5,
+      0.2,
+      along ? 0.5 : width + 0.02,
+      p.trim,
+    )
+    const mid = at((a0 + a1) / 2, 0.25)
+    bs.wood.box(mid.x, cap - 0.28, mid.z, along ? width : 0.2, 0.16, along ? 0.2 : width, p.trim)
+    if (!bs.lean) {
+      const n = Math.max(2, Math.round(width / 1.1))
+      for (let k = 0; k <= n; k++) {
+        const q = at(a0 + 0.2 + ((width - 0.4) * k) / n, 0.22)
+        bs.wood.box(q.x, cap - 0.47, q.z, along ? 0.12 : 0.14, 0.22, along ? 0.14 : 0.12, p.trim)
+      }
     }
   }
   for (const a of [0.14, len - 0.14]) {
     const q = at(a, 0.2)
     bs.wood.box(
       q.x,
-      (b.height - 0.2 + top - 0.36) / 2,
+      (b.height - 0.2 + top - drop - 0.36) / 2,
       q.z,
       along ? 0.28 : 0.1,
-      top - b.height - 0.16,
+      top - drop - b.height - 0.16,
       along ? 0.1 : 0.28,
       p.trim,
     )
@@ -2269,10 +2268,14 @@ const toRect = (r: Rect, x: number, z: number): number =>
  * One instanced pane per opening, indexed by the shared town window order (`townWindows`). A broken
  * pane collapses to zero scale: no per-window draw call, no rebuilt geometry.
  */
-function buildWindowGlass(
+export function buildWindowGlass(
   layout: TownLayout,
   material: MeshStandardMaterial,
-): { mesh: InstancedMesh; breakWindow: (index: number) => void } | null {
+): {
+  mesh: InstancedMesh
+  breakWindow: (index: number) => void
+  setBrokenWindows: (indices: readonly number[]) => void
+} | null {
   const all = townWindows(layout)
   if (all.length === 0) {
     return null
@@ -2300,14 +2303,34 @@ function buildWindowGlass(
     mesh.setMatrixAt(index, m)
   }
   mesh.instanceMatrix.needsUpdate = true
+  const intact = new Float32Array(mesh.instanceMatrix.array)
+  const restored = new Matrix4()
+  let broken = new Set<number>()
   return {
     mesh,
     breakWindow: (index) => {
-      if (index < 0 || index >= all.length) {
+      if (!Number.isInteger(index) || index < 0 || index >= all.length || broken.has(index)) {
         return
       }
+      broken.add(index)
       mesh.setMatrixAt(index, zero)
       mesh.instanceMatrix.needsUpdate = true
+    },
+    setBrokenWindows: (indices) => {
+      const next = new Set(
+        indices.filter((index) => Number.isInteger(index) && index >= 0 && index < all.length),
+      )
+      let changed = false
+      for (let i = 0; i < all.length; i++) {
+        if (next.has(i) !== broken.has(i)) {
+          mesh.setMatrixAt(i, next.has(i) ? zero : restored.fromArray(intact, i * 16))
+          changed = true
+        }
+      }
+      broken = next
+      if (changed) {
+        mesh.instanceMatrix.needsUpdate = true
+      }
     },
   }
 }
@@ -2524,6 +2547,7 @@ export function buildTown(
       m.receiveShadow = true
       m.matrixAutoUpdate = false
       parent.add(m)
+      return m
     }
     add(set.wall.empty ? null : set.wall.build(), mats.wall, 'walls')
     add(set.stone.empty ? null : set.stone.build(), mats.stone, 'stone')
@@ -2532,8 +2556,15 @@ export function buildTown(
       add(set.extra.length > 0 ? mergeGeometries([wood, ...set.extra]) : wood, mats.wood, 'wood')
     }
     add(set.windows.empty ? null : set.windows.build(), mats.windows, 'windows')
-    add(set.doors.empty ? null : set.doors.build(), mats.wood, 'k_door_trim')
-    add(set.cloth.empty ? null : set.cloth.build(), mats.cloth, 'canvas')
+    const doorTrim = add(set.doors.empty ? null : set.doors.build(), mats.wood, 'k_door_trim')
+    if (doorTrim) {
+      markFlags(doorTrim, { nonBlocking: true })
+    }
+    const cloth = set.cloth.empty ? null : set.cloth.build()
+    if (cloth) {
+      creaseNormals(cloth, 50)
+    }
+    add(cloth, mats.cloth, 'canvas')
     if (set.kit.length > 0) {
       for (const m of mergePlaced(set.kit, parent, swap, false)) {
         m.name = 'kit'
@@ -2643,6 +2674,7 @@ export function buildTown(
     sun,
     doors: doorSystem,
     breakWindow: (id) => glass?.breakWindow(id),
+    setBrokenWindows: (indices) => glass?.setBrokenWindows(indices),
     update,
     dispose: () => {
       disposeTown()

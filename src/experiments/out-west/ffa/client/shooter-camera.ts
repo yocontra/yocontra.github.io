@@ -11,7 +11,7 @@
  *   along the same arc the body takes.
  * - Over the shoulder: 2.7 m back, 0.6 m to the side, 0.3 m up from a 1.5 m pivot; aiming down the
  *   sights pulls in to 1.5 m and 0.45 m and narrows the field of view. The shoulder swap eases over.
- * - Walls: a ray on the town's sight grid from the pivot to the wanted spot; the camera snaps in in
+ * - Walls: a padded 3D sweep from the pivot to the wanted spot; the camera snaps in in
  *   front of a wall at once and eases back out (never a frame inside a building).
  * - First person: eye at 1.62 m with a walk bob; the gun is the view model (`viewmodel.ts`).
  * - Recoil kicks the view up and settles back; hits and blasts shake it (off under reduced motion).
@@ -20,7 +20,8 @@
  *   you ride back in (the respawn snaps it back).
  */
 import { MathUtils, type PerspectiveCamera, Vector3 } from 'three'
-import { BLOCK_SIGHT, type Grid, rayGrid } from '../sim/layout.ts'
+import type { Grid } from '../sim/layout.ts'
+import { rayWorld } from '../sim/surfaces.ts'
 
 export const PIVOT_Y = 1.5
 export const EYE_Y = 1.62
@@ -34,6 +35,16 @@ const UP_ADS = 0.24
 const SPRINT_FOV = 0.08
 /** The kill cam: this long from behind your killer before the lens drifts round your body (s). */
 const KILL_CAM_S = 2.5
+const ORBIT_OFFSETS = [
+  0,
+  Math.PI / 4,
+  -Math.PI / 4,
+  Math.PI / 2,
+  -Math.PI / 2,
+  Math.PI * 0.75,
+  -Math.PI * 0.75,
+  Math.PI,
+]
 /** Keep the lens this far off a wall it was pulled in front of (m). */
 const WALL_PAD = 0.4
 /** The lens is a ball this wide (m): its edges are tested too, so a wall can't fill the frame. */
@@ -62,8 +73,10 @@ export interface ShooterFrame {
   z: number
   /** Planar speed (m/s), for the first-person bob. */
   speed: number
-  /** Height of a vault or hop arc right now (m), 0 on the ground. */
-  lift: number
+  /** Absolute feet height, including the support beneath the player. */
+  feetY: number
+  /** True while supported, regardless of world elevation. */
+  grounded: boolean
   first: boolean
   ads: boolean
   /** Base vertical FOV for this mode, degrees. */
@@ -80,6 +93,10 @@ export interface ShooterFrame {
   sprinting?: boolean
   /** Where your body lies while you're dead (the death camera), or null. */
   dead: { x: number; z: number; y?: number } | null
+  /** Centre of the dressed physical body, while a local corpse exists. */
+  corpseFocus?: { x: number; y: number; z: number } | null
+  /** Envelope of the actual physical body and fitted gear, around corpseFocus. */
+  corpseRadius?: number
   /** Who killed you, where he stands (the kill cam's first 2.5 s look from behind him). */
   killer?: { x: number; z: number; y?: number } | null
 }
@@ -116,22 +133,26 @@ export class ShooterCamera {
   private sprintK = 0
   private dip = 0
   private dipV = 0
-  private lastLift = 0
+  private wasGrounded = true as boolean
   /** Seconds into the death camera (0 alive). */
   private deadT = 0
+  private deadOrbit = 0
 
   constructor(camera: PerspectiveCamera) {
     this.camera = camera
   }
 
   /** Face a direction at once (spawn, respawn, a view switch). */
-  snap(x: number, z: number, yaw: number): void {
-    this.pivot.set(x, PIVOT_Y, z)
+  snap(x: number, z: number, yaw: number, feetY = 0): void {
+    this.pivot.set(x, PIVOT_Y + feetY, z)
     this.yaw = yaw
     this.pitch = -0.08
     this.recoil = 0
     this.recoilYaw = 0
     this.reach = BACK
+    this.wasGrounded = true
+    this.dip = 0
+    this.dipV = 0
   }
 
   /** Mouse / touch look, radians. */
@@ -177,10 +198,10 @@ export class ShooterCamera {
     this.duck += (f.duck - this.duck) * ease(12)
     this.sprintK += ((f.sprinting ? 1 : 0) - this.sprintK) * ease(f.sprinting ? 6 : 10)
     // the landing: the view dips and springs back
-    if (this.lastLift > 0.05 && f.lift <= 0.02 && !REDUCED_MOTION) {
+    if (!this.wasGrounded && f.grounded && !REDUCED_MOTION) {
       this.dipV -= 1.6
     }
-    this.lastLift = f.lift
+    this.wasGrounded = f.grounded
     // a stiff spring: stepped at most 1/30 s at a time so a hitch can't throw it
     const sd = Math.min(dt, 1 / 30)
     this.dipV += (-140 * this.dip - 18 * this.dipV) * sd
@@ -191,7 +212,7 @@ export class ShooterCamera {
     }
     this.deadT = 0
     // the pivot rides the (already smoothed) render pose, lifted through a vault or a hop
-    this.pivot.set(f.x, PIVOT_Y + f.lift - this.duck + this.dip, f.z)
+    this.pivot.set(f.x, PIVOT_Y + f.feetY - this.duck + this.dip, f.z)
     this.recoil *= Math.exp(-dt * 9)
     this.recoilYaw *= Math.exp(-dt * 9)
     this.shake.t += dt
@@ -234,14 +255,20 @@ export class ShooterCamera {
 
   /** Up off the shoulder and round the body, looking down at it. */
   private deathCam(f: ShooterFrame, dt: number): void {
-    const body = f.dead
-    if (!body) {
+    const dead = f.dead
+    if (!dead) {
       return
     }
-    const bodyY = body.y ?? 0
+    const body = f.corpseFocus ?? dead
+    const bodyY = f.corpseFocus ? f.corpseFocus.y - 0.4 : (dead.y ?? 0)
     this.deadT += dt
+    if (this.deadT <= dt) {
+      this.deadOrbit = this.yaw + Math.PI
+    }
+    const separation = Math.max(1.4, (f.corpseRadius ?? 1) + LENS_R + 0.15)
     const cam = this.camera
     const k = f.killer
+    const killerY = k?.y ?? 0
     if (k && this.deadT < KILL_CAM_S) {
       // the kill cam: over his shoulder, looking at you where you fell
       const dx = k.x - body.x
@@ -249,35 +276,52 @@ export class ShooterCamera {
       const d = Math.hypot(dx, dz) || 1
       want.set(
         k.x + (dx / d) * 1.6 + (-dz / d) * 0.6,
-        EYE_Y + 0.5 + (k.y ?? 0),
+        EYE_Y + 0.5 + killerY,
         k.z + (dz / d) * 1.6 + (dx / d) * 0.6,
       )
-      const freeK = clearance(f.grid, k.x, k.z, want.x, want.z)
-      want.x = k.x + (want.x - k.x) * freeK
-      want.z = k.z + (want.z - k.z) * freeK
-      cam.position.lerp(want, this.deadT < 0.05 ? 1 : 1 - Math.exp(-dt * 6))
-      cam.up.set(0, 1, 0)
-      cam.lookAt(body.x, bodyY + 0.6, body.z)
-      this.closeness = 0
-      return
+      const eye = killerY + EYE_Y
+      const freeK = cameraClearance(f.grid, k.x, eye, k.z, want.x, want.y, want.z)
+      want.set(
+        k.x + (want.x - k.x) * freeK,
+        eye + (want.y - eye) * freeK,
+        k.z + (want.z - k.z) * freeK,
+      )
+      if (Math.hypot(want.x - body.x, want.y - bodyY - 0.4, want.z - body.z) >= separation) {
+        cam.position.lerp(want, this.deadT < 0.05 ? 1 : 1 - Math.exp(-dt * 6))
+        if (!deathLensClear(f.grid, body, cam.position, separation)) {
+          cam.position.copy(want)
+        }
+        cam.up.set(0, 1, 0)
+        cam.lookAt(body.x, bodyY + 0.6, body.z)
+        this.closeness = 0
+        return
+      }
     }
     const t = Math.min(1, Math.max(0, this.deadT - (k ? KILL_CAM_S : 0)) / 1.2)
     const e = t * t * (3 - 2 * t)
-    const orbit = this.yaw + Math.PI + this.deadT * 0.25
-    const dist = 1.5 + 2.5 * e
-    want.set(body.x + Math.cos(orbit) * dist, EYE_Y + 2.2 * e, body.z + Math.sin(orbit) * dist)
-    // keep out of walls: pull in toward the body
-    const free = clearance(f.grid, body.x, body.z, want.x, want.z)
-    want.x = body.x + (want.x - body.x) * free
-    want.z = body.z + (want.z - body.z) * free
+    this.deadOrbit = deathOrbit(
+      {
+        grid: f.grid,
+        focus: body,
+        angle: this.deadOrbit + dt * 0.25,
+        distance: Math.max(separation, 1.5 + 2.5 * e),
+        rise: EYE_Y - 0.4 + 2.2 * e,
+        separation,
+      },
+      want,
+    )
     cam.position.lerp(want, 1 - Math.exp(-dt * 4))
+    // Lerp chords can cut through the body or an alley corner when the safe angle changes.
+    if (!deathLensClear(f.grid, body, cam.position, separation)) {
+      cam.position.copy(want)
+    }
     cam.up.set(0, 1, 0)
-    cam.lookAt(body.x, 0.4, body.z)
+    cam.lookAt(body.x, bodyY + 0.4, body.z)
     this.closeness = 0
   }
 
   private firstPerson(f: ShooterFrame, dt: number): void {
-    const moving = Math.min(1, f.speed / 5.5)
+    const moving = f.grounded ? Math.min(1, f.speed / 5.5) : 0
     this.bobAmp += (moving * (1 - this.ads * 0.7) - this.bobAmp) * (1 - Math.exp(-dt * 8))
     this.bobPhase += dt * (6 + f.speed * 1.4)
     const bob = REDUCED_MOTION ? 0 : this.bobAmp
@@ -300,11 +344,13 @@ export class ShooterCamera {
     // a wall hard on the chosen shoulder: swing to the other one while it lasts
     const chosen = f.shoulder
     const reachSide = (s: number) =>
-      clearance(
+      cameraClearance(
         f.grid,
         this.pivot.x,
+        this.pivot.y,
         this.pivot.z,
         this.pivot.x + right.x * s,
+        this.pivot.y,
         this.pivot.z + right.z * s,
       )
     if (reachSide(chosen * SIDE) < 0.6 && reachSide(-chosen * SIDE) > 0.95) {
@@ -320,30 +366,29 @@ export class ShooterCamera {
     const px = this.pivot.x + right.x * this.side
     const pz = this.pivot.z + right.z * this.side
     const py = this.pivot.y + this.up
-    want.set(px - fwd.x * this.back, py - fwd.y * this.back, pz - fwd.z * this.back)
     // walls: from the body's centre to the shoulder, then on to the lens
-    const shoulderFree = clearance(f.grid, this.pivot.x, this.pivot.z, px, pz)
+    const shoulderFree = cameraClearance(
+      f.grid,
+      this.pivot.x,
+      this.pivot.y,
+      this.pivot.z,
+      px,
+      py,
+      pz,
+    )
     const sideK = Math.min(shoulderFree, 1)
     const sx = this.pivot.x + (px - this.pivot.x) * sideK
     const sz = this.pivot.z + (pz - this.pivot.z) * sideK
-    // the lens is a ball: its centre and both edges must be clear
-    const ex = -fwd.z
-    const ez = fwd.x
-    const flat = Math.hypot(ex, ez) || 1
-    const lx = (ex / flat) * LENS_R
-    const lz = (ez / flat) * LENS_R
-    const free = Math.min(
-      clearance(f.grid, sx, sz, want.x, want.z),
-      clearance(f.grid, sx + lx, sz + lz, want.x + lx, want.z + lz),
-      clearance(f.grid, sx - lx, sz - lz, want.x - lx, want.z - lz),
-    )
+    const sy = this.pivot.y + (py - this.pivot.y) * sideK
+    want.set(sx - fwd.x * this.back, sy - fwd.y * this.back, sz - fwd.z * this.back)
+    const free = cameraClearance(f.grid, sx, sy, sz, want.x, want.y, want.z)
     const target = this.back * free
     // in at once, out gently
     this.reach = target < this.reach ? target : this.reach + (target - this.reach) * ease(5)
     const k = this.back > 0 ? this.reach / this.back : 1
     this.camera.position.set(
       sx - fwd.x * this.back * k,
-      Math.max(MIN_Y, py - fwd.y * this.back * k),
+      Math.max(MIN_Y, sy - fwd.y * this.back * k),
       sz - fwd.z * this.back * k,
     )
     // the closer the lens, the more the body would fill it
@@ -367,25 +412,116 @@ export function portraitFov(fov: number, aspect: number): number {
   return Math.min(MAX_VFOV, Math.max(fov, need))
 }
 
-/** Fraction (0..1) of the way from a to b that's clear of sight-blocking walls, padded. */
-function clearance(grid: Grid, ax: number, az: number, bx: number, bz: number): number {
+const LENS_OFFSETS = [
+  [0, 0, 0],
+  [1, 0, 0],
+  [-1, 0, 0],
+  [0, 1, 0],
+  [0, -1, 0],
+  [0, 0, 1],
+  [0, 0, -1],
+] as const
+
+/**
+ * Fraction of a padded 3D camera sweep that is clear. The seven rays protect the lens's centre
+ * and its horizontal/vertical extent; roofs and upper floors count at their real elevation.
+ */
+export function cameraClearance(
+  grid: Grid,
+  ax: number,
+  ay: number,
+  az: number,
+  bx: number,
+  by: number,
+  bz: number,
+  radius = LENS_R,
+  pad = WALL_PAD,
+): number {
   const dx = bx - ax
+  const dy = by - ay
   const dz = bz - az
-  const d = Math.hypot(dx, dz)
+  const d = Math.hypot(dx, dy, dz)
   if (d < 1e-4) {
     return 1
   }
-  const hit = rayGrid(
-    grid,
-    { ox: ax, oz: az, dx: dx / d, dz: dz / d, maxDist: d + WALL_PAD },
-    BLOCK_SIGHT,
-  )
-  if (hit >= d + WALL_PAD) {
-    return 1
+  const max = d + pad
+  let hit = max
+  for (const [ox, oy, oz] of LENS_OFFSETS) {
+    const x = ax + ox * radius
+    const y = ay + oy * radius
+    const z = az + oz * radius
+    const found = rayWorld(grid, x, y, z, dx / d, dy / d, dz / d, max)
+    if (found) {
+      hit = Math.min(hit, found.dist)
+    }
   }
-  return Math.max(0, (hit - WALL_PAD) / d)
+  return hit === max ? 1 : Math.max(0, (hit - pad) / d)
 }
 
 export function wrap(a: number): number {
   return Math.atan2(Math.sin(a), Math.cos(a))
+}
+
+interface DeathOrbit {
+  grid: Grid
+  focus: { x: number; y?: number; z: number }
+  angle: number
+  distance: number
+  rise: number
+  separation: number
+}
+
+function deathLensClear(
+  grid: Grid,
+  focus: DeathOrbit['focus'],
+  lens: Vector3,
+  separation: number,
+): boolean {
+  if (Math.hypot(lens.x - focus.x, lens.y - (focus.y ?? 0), lens.z - focus.z) < separation) {
+    return false
+  }
+  for (const [x, y, z] of LENS_OFFSETS) {
+    if (
+      rayWorld(grid, lens.x + x * LENS_R, lens.y + y * LENS_R, lens.z + z * LENS_R, 0, 1, 0, 0.01)
+    ) {
+      return false
+    }
+  }
+  return true
+}
+
+/** Choose an open angle/height instead of shortening a blocked boom into the dressed body. */
+export function deathOrbit(options: DeathOrbit, out: Vector3): number {
+  const { grid, focus, distance, separation } = options
+  const y = focus.y ?? 0
+  for (const lift of [0, 1.5, 3]) {
+    for (const offset of ORBIT_OFFSETS) {
+      const angle = options.angle + offset
+      out.set(
+        focus.x + Math.cos(angle) * distance,
+        y + options.rise + lift,
+        focus.z + Math.sin(angle) * distance,
+      )
+      const free = cameraClearance(grid, focus.x, y + 0.2, focus.z, out.x, out.y, out.z, 0, LENS_R)
+      if (free > 0.99 && deathLensClear(grid, focus, out, separation)) {
+        return angle
+      }
+    }
+  }
+  // A small enclosed room may have no full-length sightline. Keep the lens outside solid
+  // architecture and the body; the death cutaway clears the intervening foreground.
+  for (const lift of [1.5, 3, 6]) {
+    for (const offset of ORBIT_OFFSETS) {
+      const angle = options.angle + offset
+      out.set(
+        focus.x + Math.cos(angle) * distance,
+        y + options.rise + lift,
+        focus.z + Math.sin(angle) * distance,
+      )
+      if (deathLensClear(grid, focus, out, separation)) {
+        return angle
+      }
+    }
+  }
+  return options.angle
 }

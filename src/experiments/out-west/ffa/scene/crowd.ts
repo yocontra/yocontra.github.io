@@ -2,22 +2,14 @@
 // biome-ignore-all lint/style/useThisInClassMethods: private helpers kept on the class next to the state they describe
 // biome-ignore-all lint/style/noExcessiveLinesPerFile: the near/far crowd is one system (ranking, LOD swaps, actors, VAT instances, hats, blobs)
 /**
- * Everyone in the Frontier, drawn within the A15 budget (spec §9.3, stream H's measured design):
- *
- * - The nearest `near` players (8 on the floor tier, 16 above; your own player always) are
- *   GPU-skinned Actors. Yours stays at LOD0; the rest swap to a meshopt LOD1 (`scene/lod.ts`).
- *   Animation runs at 30 Hz for you, 20 Hz within 12 m and 12 Hz beyond. Only the nearest `casters` (4 on floor,
- *   6 above) cast real shadows.
- * - Everyone else is a VAT instance of their base body (≤7 bases, one draw each), tinted per
- *   instance with their palette, with hats as one instanced draw per hat type on the baked head
- *   track, and one draw of blob shadows for everyone who isn't casting.
- *
- * Actors are built lazily (at most one per frame) and kept for players who stay around; until a
- * player's actor exists they're drawn as a VAT instance, so nobody ever pops out.
+ * Frontier riders share a configured skinned budget near the camera and cached outfit VATs
+ * beyond it. Your body keeps full geometry; other near actors use a mesh LOD and staggered
+ * animation ticks (60 Hz local, 30 Hz nearby, 20 Hz farther away). Renderer policy chooses real
+ * shadow casters; every other rider gets a contact blob. Hats and finished weapons stay visible
+ * on the far tier through instancing and baked attachment tracks.
  */
 import {
   type BufferGeometry,
-  CanvasTexture,
   Group,
   InstancedMesh,
   Matrix4,
@@ -29,7 +21,6 @@ import {
   RingGeometry,
   type Scene,
   type SkinnedMesh,
-  SRGBColorSpace,
   Vector3,
 } from 'three'
 import {
@@ -48,24 +39,39 @@ import {
 import type { BodyKey } from '../../data/outlaws.ts'
 import type { Assets } from '../../engine/assets.ts'
 import type { Actor, Clip } from '../../scene/actor.ts'
-import { castActor } from '../../scene/cast.ts'
+import { ownPropMaterials } from '../../scene/actor-template.ts'
 import { lodGeometry } from '../../scene/lod.ts'
 import type { LongHold } from '../../scene/longgun.ts'
-import { propObject } from '../../scene/props.ts'
-import { REVOLVER_LOD_FAR, revolverDef, revolverGeometry } from '../../scene/revolver.ts'
+import { REVOLVER_LOD_FAR, revolverGeometry } from '../../scene/revolver.ts'
 import { rifleObject } from '../../scene/rifle.ts'
 import { RIFLE_ROUNDS, SHOTGUN_SHELLS } from '../sim/constants.ts'
+import { contactShadowTexture } from './contact-shadow.ts'
+import { copyPlayerLook } from './crowd/actor.ts'
+import type { FarClip } from './crowd/aim-gait.ts'
+import { CorpsePreparation, type CorpseSnapshot } from './crowd/corpse-capture.ts'
+import { type CorpseRig, cloneCorpse } from './crowd/corpse-rig.ts'
+import {
+  geometryReferences,
+  ownGeometry,
+  releaseGeometry,
+  retainGeometry,
+} from './crowd/geometry-lease.ts'
 import { GunBatch } from './crowd/gun-batch.ts'
+import { VatHats } from './crowd/hats.ts'
+import { isResourceReleasedError } from './crowd/resource-cache.ts'
+import { silhouetteKey } from './crowd/silhouette.ts'
 import { holdSkin } from './crowd/skin-hold.ts'
+import { headAt, socketAt } from './crowd/tracks.ts'
 import {
   baseVat,
-  headAt,
+  releaseVat,
+  setVatIdleLimit,
   VAT_TIME,
   type VatBake,
   VatCrowd,
-  VatHats,
   vatFrame,
 } from './crowd/vat.ts'
+import { VatWeapons } from './crowd/weapons.ts'
 import {
   CLIP_WALK_SPEED,
   farStance,
@@ -81,6 +87,7 @@ import { shareDepthByKind } from './depth-kinds.ts'
 import type { GestureKind } from './gestures.ts'
 import { Locomotion } from './locomotion.ts'
 import type { PlayerLook } from './looks.ts'
+import { CORPSE_MAX_FALL, CORPSE_MAX_RISE } from './ragdoll-motion.ts'
 import { shotgunMesh } from './shotgun.ts'
 
 const VAT_CLIPS: Clip[] = [
@@ -105,9 +112,6 @@ const SPEED_EASE = 10
  * only its geometry and bones in memory, while re-casting one is a full dress-and-bake plus a GPU
  * upload (a frame spike); so riders who drift out and back in keep theirs.
  */
-const MAX_ACTORS_EXTRA = 20
-/** An actor whose rider has been out of interest this long is freed even under the cap (s). */
-const PARK_S = 90
 /** Mid-match actor casts are spaced at least this far apart (ms): each is a long task. */
 const CAST_GAP_MS = 1500
 /** Players this many ranks beyond the skinned cap get their actor built ahead of time. */
@@ -147,6 +151,22 @@ type LongGun = LongHold
 interface Member {
   id: number
   look: PlayerLook
+  vatKey: string
+  generation: number
+  suppressed: boolean
+  hatLost: boolean
+  lastPlayer: CrowdPlayer | null
+  lastFeetY: number | null
+  verticalSpeed: number
+  farPose: {
+    clip: string
+    time: number
+    phase: number
+    primarySocket?: 'hand' | 'holster'
+    world: Matrix4
+    weapon: number
+    attachments: NonNullable<CorpseSnapshot['attachments']>
+  } | null
   actor: Actor | null
   holder: Group | null
   pivot: Group | null
@@ -164,8 +184,6 @@ interface Member {
   lastSeen: number
   /** Distance rank this frame (0 = you); unranked members (out of interest) are Infinity. */
   rank: number
-  /** A ragdoll has replaced his body until he respawns. */
-  hidden: boolean
   /** Ground speed as drawn (m/s): the snapshots' speed, eased. */
   speed: number
   /** `GAIT_*`: idle, walk or run, from `speed` with hysteresis (every LOD reads it). */
@@ -192,32 +210,16 @@ interface Member {
   skin: (() => void)[]
 }
 
-function blobTexture(): CanvasTexture {
-  const c = document.createElement('canvas')
-  c.width = 64
-  c.height = 64
-  const ctx = c.getContext('2d')
-  if (ctx) {
-    const g = ctx.createRadialGradient(32, 32, 0, 32, 32, 32)
-    g.addColorStop(0, 'rgba(0,0,0,0.5)')
-    g.addColorStop(0.55, 'rgba(0,0,0,0.24)')
-    g.addColorStop(1, 'rgba(0,0,0,0)')
-    ctx.fillStyle = g
-    ctx.fillRect(0, 0, 64, 64)
-  }
-  const tex = new CanvasTexture(c)
-  tex.colorSpace = SRGBColorSpace
-  return tex
-}
-
 const facing = (aim: number): number => Math.PI / 2 - aim
 
 const m4 = new Matrix4()
 const headM = new Matrix4()
 const hatM = new Matrix4()
+const weaponM = new Matrix4()
 const q = new Quaternion()
 const hq = new Quaternion()
 const hp = new Vector3()
+const headPose = { position: hp, rotation: hq }
 const pos = new Vector3()
 const one = new Vector3(1, 1, 1)
 const up = new Vector3(0, 1, 0)
@@ -228,17 +230,29 @@ export class Crowd {
   private readonly scene: Scene
   private readonly assets: Assets
   private readonly members = new Map<number, Member>()
-  private readonly vats = new Map<BodyKey, VatCrowd>()
-  private readonly vatLoading = new Set<BodyKey>()
+  private generation = 0
+  private readonly corpsePreparation: CorpsePreparation
+  private readonly vats = new Map<string, VatCrowd>()
+  private readonly vatLoading = new Map<string, Promise<void>>()
+  private readonly vatOwners = new Map<string, PlayerLook['look']>()
+  private readonly failedVats = new Set<string>()
+  private readonly lifecycle = { disposed: false }
   private readonly hats: VatHats
-  private readonly hatLocal = new Map<BodyKey, Matrix4>()
+  private readonly farWeapons: VatWeapons
+  private readonly hatLocal = new Map<string, Matrix4>()
   private readonly blobs: InstancedMesh
   readonly ring: Mesh
-  private readonly gun: Group | null
   /** Every skinned rider's revolver as one instanced draw per part. */
   private readonly gunBatch: GunBatch
-  /** Skinned cap (8 floor, 6 legacy, 16 medium/high). */
-  near: number
+  /** Skinned cap supplied by the current renderer policy. */
+  private nearBudget = 0
+  get near(): number {
+    return this.nearBudget
+  }
+  set near(value: number) {
+    this.nearBudget = value
+    setVatIdleLimit(value <= 2 ? 1 : 4)
+  }
   /** Skinned riders casting real shadows, nearest first (the rest get a blob). */
   casters = SHADOW_CASTERS
   /**
@@ -256,18 +270,40 @@ export class Crowd {
   private readonly seen = new Set<number>()
   stats = { near: 0, far: 0, actors: 0, casters: 0, builds: 0 }
   /** Actors cast so far (each is a full dress-and-bake; churn here is the crowd's main CPU cost). */
+  private readonly blobTexture = contactShadowTexture()
   private builds = 0
+  private lastBuildMs = 0
+  private maxBuildMs = 0
+
+  livingStats() {
+    let parked = 0
+    for (const member of this.members.values()) {
+      if (member.actor && !member.holder?.parent) {
+        parked++
+      }
+    }
+    return {
+      ...this.corpsePreparation.stats,
+      actors: this.actorCount(),
+      parked,
+      builds: this.builds,
+      lastBuildMs: this.lastBuildMs,
+      maxBuildMs: this.maxBuildMs,
+    }
+  }
 
   constructor(scene: Scene, assets: Assets, near: number) {
     this.scene = scene
     this.assets = assets
+    this.corpsePreparation = new CorpsePreparation(assets)
     this.near = near
     this.root.name = 'crowd'
     scene.add(this.root)
     this.hats = new VatHats(this.root, 40)
+    this.farWeapons = new VatWeapons(this.root, 80)
     this.blobs = new InstancedMesh(
       new PlaneGeometry(1.5, 1.5).rotateX(-Math.PI / 2),
-      new MeshBasicMaterial({ map: blobTexture(), transparent: true, depthWrite: false }),
+      new MeshBasicMaterial({ map: this.blobTexture, transparent: true, depthWrite: false }),
       40,
     )
     this.blobs.frustumCulled = false
@@ -286,7 +322,6 @@ export class Crowd {
     this.ring.renderOrder = 2
     this.root.add(this.ring)
     // the Peacemaker (scene/revolver.ts) at its riders' detail, the low level past a few metres
-    this.gun = propObject(revolverDef(GUN_SIZE, 'mid'))
     this.gunBatch = new GunBatch(this.root, 40, {
       geometry: revolverGeometry(GUN_SIZE, 'lo'),
       distance: REVOLVER_LOD_FAR,
@@ -355,27 +390,99 @@ export class Crowd {
     m?.loco?.died(Math.floor(Math.random() * 1000), from, at)
   }
 
-  /** A ragdoll took over his body: stop drawing and animating the crowd actor. */
-  hide(id: number): void {
+  /** Snapshot the currently visible dress/pose before the kill event changes animation state. */
+  captureCorpse(id: number, at?: { x: number; y?: number; z: number }): Promise<CorpseRig | null> {
+    const m = this.members.get(id)
+    if (!m || m.suppressed || this.isDisposed()) {
+      return Promise.resolve(null)
+    }
+    const generation = m.generation
+    const identity = `${generation}/${m.look.key}`
+    if (m.actor && m.full && m.wasNear) {
+      const rig = cloneCorpse(m.actor, m.full, identity)
+      rig.velocity.set(m.lastPlayer?.vx ?? 0, m.verticalSpeed, m.lastPlayer?.vz ?? 0)
+      return Promise.resolve(rig)
+    }
+    const p = m.lastPlayer
+    const world =
+      m.farPose?.world.clone() ??
+      new Matrix4()
+        .makeRotationY(facing(p?.aim ?? 0))
+        .setPosition(p?.x ?? at?.x ?? 0, p?.y ?? at?.y ?? 0, p?.z ?? at?.z ?? 0)
+        .scale(new Vector3().setScalar(this.readScale))
+    const snapshot: CorpseSnapshot = {
+      identity,
+      look: copyPlayerLook(m.look),
+      world,
+      clip: m.farPose?.clip ?? 'Idle_Gun_Pointing',
+      time: m.farPose?.time ?? 0,
+      flags: (p?.flags ?? 0) | (m.hatLost ? EF_HATLESS : 0),
+      weapon: m.farPose?.weapon ?? p?.weapon ?? m.weapon,
+      velocity: new Vector3(p?.vx ?? 0, m.verticalSpeed, p?.vz ?? 0),
+      phase: m.farPose?.phase ?? 0,
+      primarySocket:
+        m.farPose?.primarySocket ?? ((p?.flags ?? 0) & EF_HOLSTERED ? 'holster' : 'hand'),
+      attachments: Object.fromEntries(
+        Object.entries(m.farPose?.attachments ?? {}).map(([key, matrix]) => [key, matrix.clone()]),
+      ),
+    }
+    return this.corpsePreparation.capture(snapshot).then((rig) => {
+      if (this.isDisposed() || this.members.get(id) !== m || m.generation !== generation) {
+        rig.dispose()
+        return null
+      }
+      return rig
+    })
+  }
+
+  /** Only the captured life/look can hand its rendering over to physics. */
+  suppressCorpse(id: number, identity: string): boolean {
+    const m = this.members.get(id)
+    if (!m || identity !== `${m.generation}/${m.look.key}`) {
+      return false
+    }
+    m.suppressed = true
+    m.holder?.removeFromParent()
+    m.wasNear = false
+    return true
+  }
+
+  /** A new life invalidates pending captures; corpse expiry never calls this. */
+  releaseCorpse(id: number): void {
     const m = this.members.get(id)
     if (m) {
-      m.hidden = true
-      m.holder?.removeFromParent()
+      m.generation = ++this.generation
+      m.suppressed = false
+      m.hatLost = false
+      m.farPose = null
+      m.lastFeetY = null
+      m.verticalSpeed = 0
+      m.shotAt = -9
+      m.recoil = 0
+      m.anim = -1
+      m.acc = 0
       m.wasNear = false
+      if (m.actor) {
+        setAuto(m.bones, true)
+        m.loco?.dispose()
+        this.corpsePreparation.reset(m.look, m.actor)
+        m.loco = new Locomotion(m.actor, this.assets.player.animations, m.look.look.base)
+        for (const bone of m.bones) {
+          bone.updateMatrix()
+        }
+        setAuto(m.bones, false)
+        this.selfFaded = -1
+        if (m.actor.hat) {
+          m.actor.hat.visible = true
+          m.actor.hat.traverse((node) => {
+            node.castShadow = m.caster
+          })
+        }
+        for (const touch of m.skin) {
+          touch()
+        }
+      }
     }
-  }
-
-  /** He respawned: let the crowd actor draw again. */
-  show(id: number): void {
-    const m = this.members.get(id)
-    if (m) {
-      m.hidden = false
-    }
-  }
-
-  /** His look, for the ragdoll's colours. */
-  lookOf(id: number): PlayerLook | null {
-    return this.members.get(id)?.look ?? null
   }
 
   /** Back to the revolver (died, respawned): map weapons are lost with the life. */
@@ -399,6 +506,14 @@ export class Crowd {
     this.members.set(id, {
       id,
       look,
+      vatKey: silhouetteKey(look.look),
+      generation: ++this.generation,
+      suppressed: have?.suppressed ?? false,
+      hatLost: false,
+      lastPlayer: null,
+      lastFeetY: null,
+      verticalSpeed: 0,
+      farPose: null,
       actor: null,
       holder: null,
       pivot: null,
@@ -413,7 +528,6 @@ export class Crowd {
       animSince: 0,
       lastSeen: 0,
       rank: Number.POSITIVE_INFINITY,
-      hidden: false,
       speed: 0,
       gait: GAIT_IDLE,
       caster: false,
@@ -427,7 +541,12 @@ export class Crowd {
       skin: [],
     })
     this.assets.body(look.look.base).catch(() => undefined)
-    this.ensureVat(look.look.base)
+    this.releaseUnusedVats()
+    this.corpsePreparation.releaseUnused(
+      new Set([...this.members.values()].map((member) => member.look.key)),
+    )
+    void this.corpsePreparation.retain(look).catch(() => undefined)
+    void this.ensureVat(look.look)
   }
 
   remove(id: number): void {
@@ -435,35 +554,162 @@ export class Crowd {
     if (m) {
       this.dropActor(m)
       this.members.delete(id)
+      this.corpsePreparation.releaseUnused(
+        new Set([...this.members.values()].map((member) => member.look.key)),
+      )
+      this.releaseUnusedVats()
     }
   }
 
-  /** Bake (or load from IndexedDB) the VATs for these bases up front. */
+  /** Load the base models needed by the initial roster. Outfit bakes follow in prepareLooks. */
   async prepare(bases: readonly BodyKey[]): Promise<void> {
     await Promise.all(bases.map((b) => this.assets.body(b)))
-    await Promise.all(bases.map((b) => this.ensureVat(b)))
   }
 
-  private ensureVat(base: BodyKey): Promise<void> {
-    if (this.vats.has(base) || this.vatLoading.has(base)) {
+  /** Finish the roster's defining garments before the loading screen leaves. */
+  async prepareLooks(): Promise<void> {
+    await Promise.all(
+      [...this.members.values()].flatMap((m) => [
+        this.ensureVat(m.look.look),
+        this.corpsePreparation.retain(m.look).catch(() => undefined),
+      ]),
+    )
+  }
+
+  private isDisposed(): boolean {
+    return this.lifecycle.disposed
+  }
+
+  private ensureVat(source: BodyKey | PlayerLook['look']): Promise<void> {
+    const look = typeof source === 'string' ? { base: source, tint: {}, scale: 1 } : source
+    const key = silhouetteKey(look)
+    if (this.isDisposed() || this.vats.has(key)) {
       return Promise.resolve()
     }
-    this.vatLoading.add(base)
-    return this.assets
-      .body(base)
-      .then(() => baseVat(this.assets, base, VAT_CLIPS))
+    const pending = this.vatLoading.get(key)
+    if (pending) {
+      return pending
+    }
+    this.vatOwners.set(key, look)
+    const job = baseVat(this.assets, look, VAT_CLIPS)
       .then((bake: VatBake) => {
+        if (this.isDisposed() || this.vatOwners.get(key) !== look) {
+          return
+        }
         const c = new VatCrowd(bake, 40)
-        this.vats.set(base, c)
-        this.hatLocal.set(base, new Matrix4().fromArray(bake.hatLocal))
+        this.vats.set(key, c)
+        this.failedVats.delete(key)
+        this.hatLocal.set(key, new Matrix4().fromArray(bake.hatLocal))
         this.root.add(c.mesh)
       })
-      .catch((e: unknown) => console.warn('VAT bake failed', base, e))
-      .finally(() => this.vatLoading.delete(base))
+      .catch(async (e: unknown) => {
+        if (this.vatOwners.get(key) !== look) {
+          return
+        }
+        this.vatOwners.delete(key)
+        if (!isResourceReleasedError(e)) {
+          console.warn('VAT bake failed; using skinned riders', key, e)
+          this.failedVats.add(key)
+          await this.fallbackActors(key)
+        }
+      })
+      .finally(() => {
+        if (this.vatLoading.get(key) === job) {
+          this.vatLoading.delete(key)
+        }
+      })
+    this.vatLoading.set(key, job)
+    return job
+  }
+
+  /** Keep bodies visible if a worker/texture bake fails. Exceptional casts stay off gameplay tasks. */
+  private async fallbackActors(key: string): Promise<void> {
+    for (const m of this.members.values()) {
+      if (m.vatKey !== key || m.actor) {
+        continue
+      }
+      // biome-ignore lint/performance/noAwaitInLoops: one fallback cast per macrotask
+      await new Promise((resolve) => setTimeout(resolve, 0))
+      if (this.isDisposed() || !this.failedVats.has(key)) {
+        return
+      }
+      if (this.members.get(m.id) === m && !m.actor) {
+        this.build(m, false)
+        m.holder?.removeFromParent()
+      }
+    }
+  }
+
+  private releaseUnusedVats(): void {
+    const needed = new Set([...this.members.values()].map((m) => m.vatKey))
+    for (const key of this.failedVats) {
+      if (!needed.has(key)) {
+        this.failedVats.delete(key)
+      }
+    }
+    for (const [key, look] of this.vatOwners) {
+      if (!needed.has(key)) {
+        this.releaseVariant(key, look)
+      }
+    }
+  }
+
+  private releaseVariant(key: string, look: PlayerLook['look']): void {
+    const vat = this.vats.get(key)
+    if (vat) {
+      vat.mesh.removeFromParent()
+      vat.mesh.dispose()
+      vat.mesh.geometry.dispose()
+      const material = vat.mesh.material
+      for (const mat of Array.isArray(material) ? material : [material]) {
+        mat.dispose()
+      }
+    }
+    this.vats.delete(key)
+    this.hatLocal.delete(key)
+    this.vatOwners.delete(key)
+    this.vatLoading.delete(key)
+    releaseVat(look, VAT_CLIPS)
   }
 
   private dropActor(m: Member): void {
-    m.actor?.dispose()
+    if (m.actor) {
+      const geometry = new Set([m.full, m.lod1, ...m.actor.meshes.map((mesh) => mesh.geometry)])
+      for (const geo of geometry) {
+        if (geo) {
+          releaseGeometry(geo)
+        }
+      }
+      const materials = new Set<import('three').Material>()
+      for (const mesh of m.actor.meshes) {
+        for (const material of Array.isArray(mesh.material) ? mesh.material : [mesh.material]) {
+          materials.add(material)
+        }
+      }
+      m.actor.root.traverse((object) => {
+        if (object instanceof Mesh && object.userData.actorMaterial === true) {
+          for (const material of Array.isArray(object.material)
+            ? object.material
+            : [object.material]) {
+            materials.add(material)
+          }
+        }
+      })
+      m.actor.hat?.traverse((object) => {
+        if (object instanceof Mesh) {
+          object.geometry.dispose()
+          for (const material of Array.isArray(object.material)
+            ? object.material
+            : [object.material]) {
+            materials.add(material)
+          }
+        }
+      })
+      for (const material of materials) {
+        material.dispose()
+      }
+      m.actor.dispose()
+    }
     m.holder?.removeFromParent()
     m.actor = null
     m.bones = []
@@ -487,7 +733,7 @@ export class Crowd {
       this.build(m, true)
       return true
     }
-    if (rank < this.near + PREBUILD_RING && this.actorCount() < this.near + MAX_ACTORS_EXTRA) {
+    if (rank < this.near + PREBUILD_RING) {
       this.scheduleBuild(m)
       return true
     }
@@ -516,7 +762,10 @@ export class Crowd {
         continue
       }
       // biome-ignore lint/performance/noAwaitInLoops: one cast per macrotask, on purpose
-      await this.assets.body(m.look.look.base).catch(() => undefined)
+      await this.corpsePreparation.retain(m.look).catch(() => undefined)
+      if (this.isDisposed() || this.members.get(m.id) !== m) {
+        continue
+      }
       this.build(m, m.id === self)
       // parked off the graph until he's drawn
       m.holder?.removeFromParent()
@@ -540,7 +789,7 @@ export class Crowd {
     const run = () => {
       const target = this.pending
       this.pending = null
-      if (target && !target.actor && this.members.get(target.id) === target) {
+      if (!this.isDisposed() && target && !target.actor && this.members.get(target.id) === target) {
         this.build(target, false)
       }
     }
@@ -553,20 +802,17 @@ export class Crowd {
 
   /** Build one actor (the caller rate-limits to one per frame). */
   private build(m: Member, self: boolean): void {
+    const started = performance.now()
     const look = m.look
     if (!this.assets.bodyNow(look.look.base)) {
       return
     }
-    this.builds++
-    const actor = castActor(this.assets, {
-      look: look.look,
-      hat: look.hat,
-      hatColor: look.hatColor,
-      gun: this.gun,
-    })
-    if (actor.hat) {
-      actor.hat.scale.multiplyScalar(look.hatScale)
+    const actor = this.corpsePreparation.fork(look)
+    if (!actor) {
+      void this.corpsePreparation.retain(look).catch(() => undefined)
+      return
     }
+    this.builds++
     const holder = new Group()
     holder.scale.setScalar(READ_SCALE)
     const pivot = new Group()
@@ -579,6 +825,9 @@ export class Crowd {
     actor.draw()
     if (actor.gun) {
       this.gunBatch.adopt(actor.gun)
+    }
+    if (actor.offGun) {
+      this.gunBatch.adopt(actor.offGun)
     }
     m.shotgun = this.longGun(actor, 'shotgun')
     m.rifle = this.longGun(actor, 'rifle')
@@ -595,7 +844,7 @@ export class Crowd {
     m.holder = holder
     m.pivot = pivot
     m.loco = new Locomotion(actor, this.assets.player.animations, look.look.base)
-    const mesh = actor.meshes[0]
+    const mesh = actor.meshes.at(0)
     m.full = mesh?.geometry ?? null
     if (!self) {
       this.lodHat(m, actor)
@@ -605,10 +854,21 @@ export class Crowd {
     if (!self && mesh) {
       lodGeometry(mesh.geometry, `${look.key}:lod1`, LOD1_TRIS)
         .then((g) => {
-          m.lod1 = g
+          if (m.actor === actor) {
+            if (geometryReferences(g)) {
+              retainGeometry(g)
+            } else {
+              ownGeometry(g)
+            }
+            m.lod1 = g
+          } else if (!geometryReferences(g)) {
+            g.dispose()
+          }
         })
         .catch(() => undefined)
     }
+    this.lastBuildMs = performance.now() - started
+    this.maxBuildMs = Math.max(this.maxBuildMs, this.lastBuildMs)
   }
 
   /**
@@ -625,7 +885,10 @@ export class Crowd {
       lodGeometry(o.geometry as BufferGeometry, key, NEAR_HAT_TRIS)
         .then((g) => {
           if (m.actor === actor) {
+            o.geometry.dispose()
             o.geometry = g
+          } else {
+            g.dispose()
           }
         })
         .catch(() => undefined)
@@ -647,6 +910,7 @@ export class Crowd {
       // the Winchester, its far level of detail past a few metres
       obj.add(rifleObject({ lod: true }))
     }
+    ownPropMaterials(obj)
     return actor.addLong(obj)
   }
 
@@ -668,6 +932,12 @@ export class Crowd {
       actor.draw()
     }
     actor.holdLong(long)
+    // The pair shares one firing mechanic; the spare remains visibly in its own holster.
+    if (actor.offGun && actor.offHolster) {
+      actor.offHolster.add(actor.offGun)
+      actor.offGun.position.set(0, 0, 0)
+      actor.offGun.rotation.set(0, 0, 0)
+    }
   }
 
   private setCaster(m: Member, on: boolean): void {
@@ -681,7 +951,7 @@ export class Crowd {
   }
 
   /** Muzzle world position for a player's shot (falls back to chest height). */
-  muzzle(id: number, x: number, z: number, aim: number, out: Vector3): Vector3 {
+  muzzle(id: number, x: number, z: number, aim: number, out: Vector3, feetY = 0): Vector3 {
     const m = this.members.get(id)
     if (m?.actor && m.holder?.parent && m.holder.visible) {
       m.recoil = 1
@@ -696,18 +966,25 @@ export class Crowd {
       // the gun comes up with the shot (the arm layer, the shouldered long gun) a tick after this:
       // a muzzle still at the hip or the holster gets the raised one's spot instead
       const ahead = (out.x - x) * Math.cos(aim) + (out.z - z) * Math.sin(aim)
-      if (out.y > 1.15 * this.readScale && ahead > 0.25) {
+      if (out.y > feetY + 1.15 * this.readScale && ahead > 0.25) {
         return out
       }
       const reach = long ? 1.05 : 0.75
-      return out.set(x + Math.cos(aim) * reach, 1.42 * this.readScale, z + Math.sin(aim) * reach)
+      return out.set(
+        x + Math.cos(aim) * reach,
+        feetY + 1.42 * this.readScale,
+        z + Math.sin(aim) * reach,
+      )
     }
-    return out.set(x + Math.cos(aim) * 0.7, 1.35, z + Math.sin(aim) * 0.7)
+    return out.set(x + Math.cos(aim) * 0.7, feetY + 1.35, z + Math.sin(aim) * 0.7)
   }
 
   /** Detach a player's hat (a Dead-Eye hit); returns it in world space for the fx to throw. */
   popHat(id: number): Group | null {
     const m = this.members.get(id)
+    if (m) {
+      m.hatLost = true
+    }
     if (!(m?.actor && m.holder?.visible)) {
       return null
     }
@@ -747,6 +1024,7 @@ export class Crowd {
       v.mesh.count = 0
     }
     this.hats.reset()
+    this.farWeapons.reset()
     this.gunBatch.reset()
     this.blobs.count = 0
     VAT_TIME.value = nowS
@@ -754,7 +1032,6 @@ export class Crowd {
     this.rank(order)
     // Free slots before building: the furthest actors go first, so a packed crowd keeps its
     // nearest riders cast instead of dropping and re-baking them every few frames.
-    this.evict(nowS)
     const seen = this.seen
     seen.clear()
     let built = false
@@ -763,7 +1040,16 @@ export class Crowd {
       if (!m) {
         continue
       }
-      if (m.hidden) {
+      m.verticalSpeed =
+        m.lastFeetY === null
+          ? 0
+          : Math.max(
+              -CORPSE_MAX_FALL,
+              Math.min(CORPSE_MAX_RISE, (p.y - m.lastFeetY) / Math.max(0.001, dt)),
+            )
+      m.lastFeetY = p.y
+      m.lastPlayer = p
+      if (m.suppressed) {
         m.holder?.removeFromParent()
         continue
       }
@@ -774,7 +1060,7 @@ export class Crowd {
         m.anim = p.anim
         m.animSince = nowS
       }
-      const wantNear = rank < this.near
+      const wantNear = rank < this.near || this.failedVats.has(m.vatKey)
       if (!(m.actor || built)) {
         built = this.maybeBuild(m, p.self, rank)
       }
@@ -800,6 +1086,7 @@ export class Crowd {
       v.commit()
     }
     this.hats.commit()
+    this.farWeapons.commit()
     this.blobs.instanceMatrix.needsUpdate = true
     for (const m of this.members.values()) {
       if (m.actor) {
@@ -840,7 +1127,7 @@ export class Crowd {
     actor.glow.value = p.flags & EF_PROTECTED ? 0.6 + 0.4 * Math.sin(nowS * Math.PI * 2 * 2.2) : 0
     holder.position.set(p.x, p.y, p.z)
     holder.rotation.y = facing(p.aim)
-    const mesh = actor.meshes[0] as SkinnedMesh | undefined
+    const mesh = actor.meshes.at(0) as SkinnedMesh | undefined
     const geo = p.self || !m.lod1 ? m.full : m.lod1
     if (mesh && geo && mesh.geometry !== geo) {
       mesh.geometry = geo
@@ -852,7 +1139,7 @@ export class Crowd {
     } else {
       this.blob(p.x, p.y, p.z)
     }
-    this.rigidParts(actor, holder, p)
+    this.rigidParts(actor, holder, p, m.hatLost)
     this.animate(m, actor, p, nowS)
     m.loco?.body(holder, pivot)
     if (!holder.visible) {
@@ -915,12 +1202,15 @@ export class Crowd {
   }
 
   /** His hat (unless it was shot off) and his revolver (into the crowd's gun batch). */
-  private rigidParts(actor: Actor, holder: Object3D, p: CrowdPlayer): void {
+  private rigidParts(actor: Actor, holder: Object3D, p: CrowdPlayer, hatLost: boolean): void {
     if (actor.hat) {
-      actor.hat.visible = (p.flags & EF_HATLESS) === 0
+      actor.hat.visible = (p.flags & EF_HATLESS) === 0 && !hatLost
     }
     if (holder.visible && actor.gun) {
       this.gunBatch.push(actor.gun)
+    }
+    if (holder.visible && actor.offGun) {
+      this.gunBatch.push(actor.offGun)
     }
   }
 
@@ -959,12 +1249,13 @@ export class Crowd {
   }
 
   private drawFar(m: Member, p: CrowdPlayer, nowS: number): void {
-    const v = this.vats.get(m.look.look.base)
+    const key = m.vatKey
+    const v = this.vats.get(key)
     if (!v) {
       return
     }
     const speed = m.speed
-    let name: Clip = 'Idle'
+    let name: FarClip = 'Idle'
     if (m.gait === GAIT_RUN || p.anim === ANIM_ROLL) {
       name = 'Run'
     } else if (m.gait === GAIT_WALK) {
@@ -976,7 +1267,9 @@ export class Crowd {
       return
     }
     let phase = m.phase
-    let rate = name === 'Run' || name === 'Walk' ? gaitRate(name, speed, CLIP_WALK_SPEED) : 1
+    const walking = name === 'Walk' || name === 'Walk_Aim'
+    const running = name === 'Run' || name === 'Run_Aim'
+    let rate = walking || running ? gaitRate(walking ? 'Walk' : 'Run', speed, CLIP_WALK_SPEED) : 1
     if (name === 'Sprint' || name === 'Crouch_Walk') {
       rate = Math.max(0.6, Math.min(1.6, speed / (name === 'Sprint' ? 7.2 : 1.6)))
     }
@@ -998,17 +1291,79 @@ export class Crowd {
     m4.compose(pos, q, one.setScalar(this.readScale))
     one.set(1, 1, 1)
     v.mesh.setMatrixAt(i, m4)
-    if (!(p.flags & EF_HATLESS)) {
-      headAt(v.bake, clip, vatFrame(clip, phase, rate), hp, hq)
+    const pose = m.farPose ?? {
+      clip: name,
+      time: 0,
+      phase: 0,
+      world: new Matrix4(),
+      weapon: WEAPON_REVOLVER,
+      attachments: {},
+    }
+    pose.clip = name
+    pose.time = vatFrame(clip, phase, rate) / 15
+    pose.phase = vatFrame(clip, phase, rate) / clip.frames
+    pose.world.copy(m4)
+    pose.weapon = p.weapon ?? m.weapon
+    m.farPose = pose
+    if (!(p.flags & EF_HATLESS || m.hatLost)) {
+      headAt(v.bake, clip, vatFrame(clip, phase, rate), headPose)
       headM.compose(hp, hq, one)
-      hatM
-        .multiplyMatrices(m4, headM)
-        .multiply(this.hatLocal.get(m.look.look.base) ?? headM.identity())
+      hatM.multiplyMatrices(m4, headM).multiply(this.hatLocal.get(key) ?? headM.identity())
       hatM.scale(one.set(m.look.hatScale, m.look.hatScale, m.look.hatScale))
       one.set(1, 1, 1)
-      this.hats.push(m.look.hat, hatM, hatColor(m.look))
+      this.recordFarSocket(m, 'hat', hatM)
+      this.hats.push(m.look.hat, hatM, hatColor(m.look), m.look.hatDetail)
     }
+    this.drawFarWeapons(m, p, v, clip, vatFrame(clip, phase, rate))
     this.blob(p.x, p.y, p.z)
+  }
+
+  private drawFarWeapons(
+    m: Member,
+    p: CrowdPlayer,
+    v: VatCrowd,
+    clip: VatBake['clips'][number],
+    frame: number,
+  ): void {
+    const weapon = p.weapon ?? m.weapon
+    const holstered =
+      weapon !== WEAPON_REVOLVER ||
+      ((p.flags & EF_HOLSTERED) !== 0 && (p.stance & STANCE_ADS) === 0)
+    const socket = holstered ? 'holster' : 'hand'
+    if (m.farPose) {
+      m.farPose.primarySocket = socket
+    }
+    if (socketAt(v.bake.sockets[socket], clip, frame, weaponM)) {
+      weaponM.premultiply(m4)
+      this.recordFarSocket(m, 'primary', weaponM)
+      this.farWeapons.push(WEAPON_REVOLVER, weaponM, m.look.gun)
+    }
+    if (m.look.look.offGun && socketAt(v.bake.sockets.offHolster, clip, frame, weaponM)) {
+      weaponM.premultiply(m4)
+      this.recordFarSocket(m, 'offhand', weaponM)
+      this.farWeapons.push(WEAPON_REVOLVER, weaponM, m.look.gun)
+    }
+    if (
+      (weapon === WEAPON_RIFLE || weapon === WEAPON_SHOTGUN) &&
+      socketAt(v.bake.sockets[weapon === WEAPON_RIFLE ? 'rifle' : 'shotgun'], clip, frame, weaponM)
+    ) {
+      weaponM.premultiply(m4)
+      this.recordFarSocket(m, 'long', weaponM)
+      this.farWeapons.push(weapon, weaponM)
+    }
+  }
+
+  private recordFarSocket(
+    m: Member,
+    key: 'primary' | 'offhand' | 'long' | 'hat',
+    matrix: Matrix4,
+  ): void {
+    const pose = m.farPose
+    if (pose) {
+      const socket = pose.attachments[key] ?? new Matrix4()
+      socket.copy(matrix)
+      pose.attachments[key] = socket
+    }
   }
 
   private blob(x: number, y: number, z: number): void {
@@ -1051,44 +1406,36 @@ export class Crowd {
     return n
   }
 
-  /**
-   * Keep at most near + 20 actors. Actors gone from interest for 90 s go first, then the furthest
-   * by rank; anyone inside the prebuild ring (rank < near + 4) is never evicted, so a rider is
-   * only re-cast after he really left the ring (each cast is a full dress-and-bake).
-   */
-  private evict(nowS: number): void {
-    const cap = this.near + MAX_ACTORS_EXTRA
-    const keep = this.near + PREBUILD_RING
-    const withActor: Member[] = []
-    for (const m of this.members.values()) {
-      if (m.actor && m.rank !== 0) {
-        if (m.rank === Number.POSITIVE_INFINITY && nowS - m.lastSeen > PARK_S) {
-          this.dropActor(m)
-        } else {
-          withActor.push(m)
-        }
-      }
-    }
-    // one slot spare, so a rider entering the ring can be cast without waiting a frame
-    let over = withActor.length + 1 - cap
-    if (over <= 0) {
-      return
-    }
-    withActor.sort((a, b) => b.rank - a.rank)
-    for (const m of withActor) {
-      if (over <= 0 || m.rank < keep) {
-        break
-      }
-      this.dropActor(m)
-      over--
-    }
-  }
-
   dispose(): void {
+    this.lifecycle.disposed = true
+    this.corpsePreparation.releaseUnused(new Set())
+    for (const [key, look] of this.vatOwners) {
+      this.releaseVariant(key, look)
+    }
     for (const m of this.members.values()) {
       this.dropActor(m)
     }
     this.members.clear()
+    this.failedVats.clear()
+    this.hats.dispose()
+    this.root.traverse((object) => {
+      if (object instanceof InstancedMesh) {
+        object.dispose()
+      }
+    })
+    this.blobTexture.dispose()
+    this.blobs.geometry.dispose()
+    for (const mat of Array.isArray(this.blobs.material)
+      ? this.blobs.material
+      : [this.blobs.material]) {
+      mat.dispose()
+    }
+    this.ring.geometry.dispose()
+    for (const mat of Array.isArray(this.ring.material)
+      ? this.ring.material
+      : [this.ring.material]) {
+      mat.dispose()
+    }
     this.root.removeFromParent()
   }
 }

@@ -97,7 +97,7 @@ function outlawRow(list: HTMLElement, meta: Meta, i: number): void {
   }
   el('span', 'ow-map-best ow-t-num', medal, best)
   el('span', 'ow-map-need ow-t-num', medal, `Silver ${ms[1]} · Gold ${ms[2]} ms`).title =
-    'Any win earns bronze. In practice on a touch screen, 40 ms comes off your time first.'
+    'Any win earns bronze. Touchscreen practice subtracts 40 ms before awarding your medal.'
   const ch = el('div', `ow-map-ch${m?.challenge ? ' done' : ''}`, li)
   el('b', 'ow-map-ch-title', ch, `${m?.challenge ? '✓ ' : ''}${c.title}`)
   const pay = challengePay(c)

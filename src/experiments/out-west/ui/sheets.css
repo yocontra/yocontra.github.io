@@ -23,16 +23,9 @@
   padding: var(--ow-s4);
   color: var(--ow-bone);
   background-color: var(--ow-night);
-  background-image:
-    radial-gradient(120% 100% at 30% 0%, rgb(110 64 30 / 0.3), transparent 60%), var(--ow-tex-smoke);
-  background-size:
-    100% 100%,
-    384px 384px;
-  border: 1px solid rgb(210 173 92 / 0.55);
-  box-shadow:
-    inset 0 0 0 4px rgb(0 0 0 / 0.55),
-    inset 0 0 0 5px rgb(210 173 92 / 0.22),
-    var(--ow-shadow-2);
+  background-image: linear-gradient(145deg, rgb(89 59 37 / 0.18), transparent 55%);
+  border: 1px solid rgb(210 173 92 / 0.35);
+  box-shadow: var(--ow-shadow-2);
 }
 .ow-sheet-panel {
   container-type: inline-size;
@@ -120,7 +113,7 @@
 }
 .ow-choice:hover {
   background-color: rgb(239 228 204 / 0.1);
-  transform: translateX(3px);
+  border-left-color: var(--ow-brass);
 }
 .ow-choice.primary {
   border-left-color: var(--ow-red-hi);
@@ -135,7 +128,8 @@
 }
 .ow-choice span {
   font-size: var(--ow-fs-small);
-  font-style: italic;
+  font-style: normal;
+  line-height: 1.4;
   color: var(--ow-bone-2);
 }
 .ow-choice:focus-visible,
@@ -269,9 +263,7 @@
   color: var(--ow-ink);
   background-color: transparent;
   border-color: var(--ow-ink-2);
-  box-shadow:
-    inset 0 0 0 3px transparent,
-    inset 0 0 0 4px var(--ow-rule-ink);
+  box-shadow: none;
 }
 .ow-paper-doc .ow-btn:hover {
   background-color: rgb(29 20 12 / 0.08);

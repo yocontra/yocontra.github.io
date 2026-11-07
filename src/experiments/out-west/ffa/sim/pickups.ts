@@ -7,7 +7,6 @@ import {
   BTN_THROW,
   NONE,
   SHOT_HIT,
-  SHOT_RANGE_UNIT,
   SHOT_RIFLE,
   SHOT_SHOTGUN,
   SHOT_WALL,
@@ -15,7 +14,17 @@ import {
   WEAPON_RIFLE,
   WEAPON_SHOTGUN,
 } from '../../contract/town.ts'
-import { pressed, rewindTime, shotRay, spreadFor, strike, traceTargets } from './combat.ts'
+import {
+  pressed,
+  rayEnd,
+  recordShot,
+  rewindTime,
+  type ShotRay,
+  shotRay,
+  spreadFor,
+  strike,
+  traceTargets,
+} from './combat.ts'
 import {
   DYNAMITE_DAMAGE,
   DYNAMITE_FUSE_TICKS,
@@ -36,7 +45,7 @@ import {
 } from './constants.ts'
 import { applyDamage } from './death.ts'
 import { BLOCK_SIGHT, hasLineOfSight, rayGrid } from './layout.ts'
-import { aimRadians, inIframes, quantize, radiansToAim, vaulting } from './move.ts'
+import { aimRadians, inIframes, quantize, vaulting } from './move.ts'
 import { hashSigned } from './rng.ts'
 import { bloomAfterShot } from './spread.ts'
 import { activePlayers, dist2, isProtected, type World } from './state.ts'
@@ -114,34 +123,11 @@ function spend(w: World, p: Player, intervalMs: number): void {
   }
 }
 
-/** A shot as the wire sees it: direction, how far it went, who it hit (or NONE), and flags. */
-interface ShotTrace {
-  angle: number
-  range: number
-  target: number
-  flags: number
-}
-
-function shotEvent(w: World, p: Player, { angle, range, target, flags }: ShotTrace): void {
-  w.events.push({
-    type: 'shot',
-    shooter: p.id,
-    aim: radiansToAim(angle),
-    range: Math.min(255, Math.round(range / SHOT_RANGE_UNIT)),
-    target,
-    flags,
-    x: p.x,
-    z: p.z,
-    y: Math.round((p.y + 1.2) * 10),
-  })
-}
-
 function fireRifle(w: World, p: Player, aim: number, viewTime: number): void {
   spend(w, p, RIFLE_FIRE_MS)
   const spread = spreadFor(p)
   p.bloom = bloomAfterShot(p.weapon, p.bloom)
   const jitter = hashSigned(w.seed, p.id, w.tick, p.stats.shots)
-  const angle = aimRadians(aim) + jitter * spread * DEG
   const ray = shotRay(p, aim, jitter * spread * DEG, jitter * spread * DEG * 0.6)
   const world = rayWorld(w.grid, ray.ox, ray.oy, ray.oz, ray.dx, ray.dy, ray.dz, RIFLE_RANGE)
   const wall = world?.dist ?? RIFLE_RANGE
@@ -155,14 +141,14 @@ function fireRifle(w: World, p: Player, aim: number, viewTime: number): void {
   } else if (wall < RIFLE_RANGE) {
     flags |= SHOT_WALL
   }
-  shotEvent(w, p, { angle, range: hit ? hit.t : wall, target: hit ? hit.id : NONE, flags })
+  recordShot(w, p, ray, { range: hit ? hit.t : wall, target: hit ? hit.id : NONE, flags })
 }
 
 function fireShotgun(w: World, p: Player, aim: number, viewTime: number): void {
   spend(w, p, SHOTGUN_FIRE_MS)
-  const base = aimRadians(aim)
   const time = rewindTime(w, viewTime)
   const damage = new Map<number, number>()
+  const traces: { ray: ShotRay; range: number; target: number; wall: boolean }[] = []
   // the cone: tighter on the sights (spread.ts)
   const cone = spreadFor(p)
   for (let i = 0; i < SHOTGUN_PELLETS; i++) {
@@ -177,6 +163,7 @@ function fireShotgun(w: World, p: Player, aim: number, viewTime: number): void {
     if (hit) {
       damage.set(hit.id, (damage.get(hit.id) ?? 0) + SHOTGUN_PELLET_DAMAGE)
     }
+    traces.push({ ray, range: hit?.t ?? wall, target: hit?.id ?? NONE, wall: wall < SHOTGUN_RANGE })
   }
   let target = NONE
   let most = 0
@@ -188,16 +175,20 @@ function fireShotgun(w: World, p: Player, aim: number, viewTime: number): void {
       target = id
     }
   }
-  const range =
-    target === NONE
-      ? SHOTGUN_RANGE
-      : Math.sqrt(dist2(p.x, p.z, w.players[target]?.x ?? p.x, w.players[target]?.z ?? p.z))
-  shotEvent(w, p, {
-    angle: base,
-    range,
-    target,
-    flags: SHOT_SHOTGUN | (target === NONE ? 0 : SHOT_HIT),
-  })
+  // Pick a real pellet for the shell's representative hit, while retaining every pellet ray.
+  const representative = traces.find((t) => t.target === target) ?? traces[0]
+  if (representative) {
+    const flags =
+      SHOT_SHOTGUN |
+      (target === NONE ? 0 : SHOT_HIT) |
+      (target === NONE && representative.wall ? SHOT_WALL : 0)
+    recordShot(w, p, representative.ray, {
+      range: representative.range,
+      target,
+      flags,
+      pellets: traces.map((t) => rayEnd(t.ray, t.range)),
+    })
+  }
 }
 
 /** Fire the pickup weapon in hand. Assumes `canFire` passed and `p.weapon` isn't the revolver. */

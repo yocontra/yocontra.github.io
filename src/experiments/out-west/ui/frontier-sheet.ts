@@ -13,7 +13,7 @@ export function frontierSheet(parent: HTMLElement, signedIn: boolean, live: () =
     'p',
     'ow-hub-note',
     s.body,
-    'Free-for-all in Perdition: shoot riders, grab the money they drop, bank it before you fall.',
+    'Free-for-all in Perdition. Shoot riders, collect their money, and bank it before you die.',
   )
   const row = el('div', 'ow-hub-row', s.body)
   button(

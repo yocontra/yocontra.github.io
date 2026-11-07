@@ -1,14 +1,19 @@
 import type { Object3D } from 'three'
 import type { HatKey, Look } from '../data/outlaws.ts'
 import type { Assets } from '../engine/assets.ts'
-import { Actor } from './actor.ts'
+import { Actor, type ActorOpts } from './actor.ts'
+import type { HatDetail } from './hat-detail.ts'
+import type { HolsterLook } from './kit.ts'
 import { hairDonor } from './person.ts'
 
 export interface CastSpec {
   look: Look
+  paletteSlots?: ActorOpts['paletteSlots']
   hat: HatKey
   hatColor: number
+  hatDetail?: HatDetail | undefined
   bandana?: number | undefined
+  holster?: HolsterLook | undefined
   gun?: Object3D | null
   offGun?: boolean
   rifle?: Object3D | null
@@ -31,10 +36,13 @@ export function castActor(assets: Assets, s: CastSpec): Actor {
     // Bases without clips of their own play the player's (same skeleton).
     clips: base.animations.length > 0 ? base.animations : assets.player.animations,
     tint: L.tint,
+    paletteSlots: s.paletteSlots,
     hat: s.hat,
     hatColor: s.hatColor,
+    hatDetail: s.hatDetail,
     bandana: L.mask ? undefined : s.bandana,
     gun: s.gun ?? null,
+    holster: s.holster,
     offGun: s.offGun ?? false,
     rifle: s.rifle ?? null,
     scale: L.scale,

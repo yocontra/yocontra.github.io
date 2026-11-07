@@ -3,8 +3,6 @@ import {
   BTN_AIM,
   BTN_FIRE,
   BTN_THROW,
-  EV_DYNAMITE_THROWN,
-  EV_PICKUP_TAKEN,
   SHOT_RIFLE,
   SHOT_SHOTGUN,
   selfWeapon,
@@ -22,6 +20,7 @@ import {
 } from '../../../src/experiments/out-west/ffa/sim/constants.ts'
 import {
   ClientStream,
+  persistentStateFor,
   selfView,
   snapshotFor,
 } from '../../../src/experiments/out-west/ffa/sim/snapshot.ts'
@@ -144,7 +143,7 @@ describe('map pickups', () => {
     expect(a.dynamite).toBe(0)
   })
 
-  it('the self block carries the weapon; a full snapshot replays taken spots and lit fuses', () => {
+  it('carries weapons in self and persistent pickups/fuses outside transient event history', () => {
     const { w, a } = armed('rifle')
     a.dynamite = 1
     expect(selfWeapon(selfView(w, a).weapon)).toEqual({
@@ -166,8 +165,17 @@ describe('map pickups', () => {
       ),
       new Map<number, EntityView>(),
     )
-    const types = snap?.events.map((e) => e.type) ?? []
-    expect(types).toContain(EV_PICKUP_TAKEN)
-    expect(types).toContain(EV_DYNAMITE_THROWN)
+    expect(snap?.events).toEqual([])
+    const persistent = persistentStateFor(w)
+    expect(persistent.unavailablePickups).toContain(s.i)
+    expect(persistent.fuses).toEqual(
+      w.fuses.map((fuse) => ({
+        player: fuse.by,
+        x: fuse.x,
+        z: fuse.z,
+        explodeAt: fuse.explodeAt,
+      })),
+    )
+    expect(persistent.fuses).toHaveLength(1)
   })
 })

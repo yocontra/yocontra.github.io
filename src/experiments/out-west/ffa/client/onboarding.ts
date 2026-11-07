@@ -28,13 +28,13 @@ function steps(touch: boolean): Step[] {
     {
       title: 'Move',
       body: touch
-        ? 'Left thumb moves, and pushing it forward sprints. Drag on the right to look. FIRE shoots; AIM holds the sights.'
-        : 'Click to use the mouse. Hide behind low cover.',
+        ? 'Move with your left thumb. Push forward to sprint. Drag on the right to look. FIRE shoots. AIM raises the sights.'
+        : 'Click the game to aim with your mouse. Move between cover to avoid enemy fire.',
       keys: true,
     },
     {
       title: 'Shoot players',
-      body: 'Everyone is an enemy. Kill a player to drop the money they carried.',
+      body: 'Every rider is an enemy. Defeated riders drop the money they carried.',
     },
     {
       title: 'Grab the money',
@@ -250,7 +250,12 @@ export class Onboarding {
   }
 
   diedCarrying(amount: number): void {
-    this.once('deathMoney', `You lost ${money(amount)}. Bank sooner.`, 6000, 'red')
+    this.once(
+      'deathMoney',
+      `You dropped ${money(amount)}. Deposit money at a bank to keep it safe.`,
+      6000,
+      'red',
+    )
   }
 
   banked(amount: number): void {

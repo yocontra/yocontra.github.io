@@ -25,11 +25,14 @@ import {
   EV_SHOWDOWN_START,
   EV_STRONGBOX_OPEN,
   EV_STRONGBOX_SPAWN,
+  MAX_SHOT_PELLETS,
   POS_SCALE,
+  SHOT_COORD_BIAS,
+  SHOT_COORD_SCALE,
 } from '../../contract/town.ts'
 import type { Writer } from './bytes.ts'
 import type { Reader } from './reader.ts'
-import type { SimEvent } from './types.ts'
+import type { ShotPoint, SimEvent } from './types.ts'
 
 /** Events on the wire. Field names match `SimEvent` where they overlap. */
 export type WireEvent =
@@ -42,6 +45,14 @@ export type WireEvent =
       flags: number
       /** Height of the impact, decimetres. */
       y: number
+      /** Biased centimetres: decode with `shotCoord` before rendering. */
+      ox: number
+      oy: number
+      oz: number
+      ex: number
+      ey: number
+      ez: number
+      pellets: ShotPoint[]
     }
   | { type: typeof EV_DAMAGE; victim: number; attacker: number; amount: number; hp: number }
   | { type: typeof EV_KILL; victim: number; killer: number; flags: number; bounty: number }
@@ -86,6 +97,13 @@ export const EVENT_LAYOUTS: Readonly<Record<number, Layout>> = {
     ['target', 1],
     ['flags', 1],
     ['y', 1],
+    ['ox', 2],
+    ['oy', 2],
+    ['oz', 2],
+    ['ex', 2],
+    ['ey', 2],
+    ['ez', 2],
+    ['pelletCount', 1],
   ],
   [EV_DAMAGE]: [
     ['victim', 1],
@@ -181,31 +199,62 @@ export function writeEvent(w: Writer, ev: WireEvent): void {
   if (!layout) {
     return
   }
+  if (ev.type === EV_SHOT && ev.pellets.length > MAX_SHOT_PELLETS) {
+    throw new RangeError('too many shot pellets')
+  }
   const fields = ev as unknown as Record<string, number>
   w.u8(ev.type)
   for (const [name, width] of layout) {
-    const v = clampWidth(fields[name] ?? 0, width)
+    const value = name === 'pelletCount' && ev.type === EV_SHOT ? ev.pellets.length : fields[name]
+    const v = clampWidth(value ?? 0, width)
     if (width === 1) {
       w.u8(v)
     } else {
       w.u16(v)
     }
   }
+  if (ev.type === EV_SHOT) {
+    for (const p of ev.pellets) {
+      w.u16(clampWidth(p.x, 2)).u16(clampWidth(p.y, 2)).u16(clampWidth(p.z, 2))
+    }
+  }
 }
 
-/** Reads one event; unknown types return null (and stop being parseable, so they end the list). */
+/** Unknown, truncated or oversized events invalidate the snapshot. */
 export function readEvent(r: Reader): WireEvent | null {
+  if (r.remaining < 1) {
+    return null
+  }
   const type = r.u8()
   const layout = EVENT_LAYOUTS[type]
-  if (!layout) {
+  if (!layout || r.remaining < layout.reduce((n, [, width]) => n + width, 0)) {
     return null
   }
   const ev: Record<string, number> = { type }
   for (const [name, width] of layout) {
     ev[name] = width === 1 ? r.u8() : r.u16()
   }
+  if (type === EV_SHOT) {
+    const count = Number(ev.pelletCount)
+    if (count > MAX_SHOT_PELLETS || r.remaining < count * 6) {
+      return null
+    }
+    const pellets = Array.from({ length: count }, () => ({ x: r.u16(), y: r.u16(), z: r.u16() }))
+    const { pelletCount: _count, ...fields } = ev
+    return { ...fields, type: EV_SHOT, pellets } as WireEvent
+  }
   return ev as unknown as WireEvent
 }
+
+/** Signed world coordinate packed in an unsigned short, with centimetre precision. */
+export const packShotCoord = (m: number): number =>
+  clampWidth(Math.round(m * SHOT_COORD_SCALE) + SHOT_COORD_BIAS, 2)
+export const shotCoord = (wire: number): number => (wire - SHOT_COORD_BIAS) / SHOT_COORD_SCALE
+const packPoint = (p: ShotPoint): ShotPoint => ({
+  x: packShotCoord(p.x),
+  y: packShotCoord(p.y),
+  z: packShotCoord(p.z),
+})
 
 const q = (m: number): number => Math.round(m * POS_SCALE)
 
@@ -213,7 +262,22 @@ const q = (m: number): number => Math.round(m * POS_SCALE)
 export function toWireEvent(ev: SimEvent): WireEvent {
   switch (ev.type) {
     case 'shot':
-      return { ...ev, type: EV_SHOT }
+      return {
+        type: EV_SHOT,
+        shooter: ev.shooter,
+        aim: ev.aim,
+        range: ev.range,
+        target: ev.target,
+        flags: ev.flags,
+        y: ev.y,
+        ox: packShotCoord(ev.origin.x),
+        oy: packShotCoord(ev.origin.y),
+        oz: packShotCoord(ev.origin.z),
+        ex: packShotCoord(ev.end.x),
+        ey: packShotCoord(ev.end.y),
+        ez: packShotCoord(ev.end.z),
+        pellets: ev.pellets.map(packPoint),
+      }
     case 'damage':
       return { ...ev, type: EV_DAMAGE }
     case 'kill':

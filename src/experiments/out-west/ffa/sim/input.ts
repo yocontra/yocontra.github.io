@@ -38,9 +38,8 @@ export const sameInput = (a: WireFrame, b: WireFrame): boolean =>
   a.buttons === b.buttons &&
   (a.pitch ?? 0) === (b.pitch ?? 0)
 
-/** Pitch goes in steps of 4 (about 3°): enough for a body to look up, few extra sends. */
-export const quantizePitch = (p: number): number =>
-  Math.max(-124, Math.min(124, Math.round(p / 4) * 4))
+/** Keep every signed wire unit: larger pitch steps can send an aimed shot above a distant rider. */
+export const quantizePitch = (p: number): number => Math.max(-127, Math.min(127, Math.round(p)))
 
 export const seqDiff = (a: number, b: number): number => ((a - b + 98_304) % 65_536) - 32_768
 

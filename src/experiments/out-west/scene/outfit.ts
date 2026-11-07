@@ -40,7 +40,12 @@ export function prune(model: Object3D, o: { beard: boolean }): void {
       return
     }
     const mat = Array.isArray(mesh.material) ? mesh.material[0] : mesh.material
-    if (mat?.userData.optional && !(o.beard && slotOf(mat) === SLOT.Beard)) {
+    const slot = mat ? slotOf(mat) : undefined
+    if (
+      slot === SLOT.Bracer ||
+      slot === SLOT.Pauldron ||
+      (mat?.userData.optional && !(o.beard && slot === SLOT.Beard))
+    ) {
       drop.push(obj)
     }
   })
@@ -216,7 +221,7 @@ export function star(f: Fit, space: Object3D): Piece[] {
   }
   const m = new Mesh(
     new ShapeGeometry(sh),
-    new MeshStandardMaterial({ color: 0xe0_c0_60, roughness: 0.3 }),
+    new MeshStandardMaterial({ color: 0xb9_bd_bc, roughness: 0.55 }),
   )
   m.position.set(sx, sy, (Number.isFinite(z) ? z : f.at('Chest').z + 0.12) + 0.006)
   m.material.userData.rim = 1.6

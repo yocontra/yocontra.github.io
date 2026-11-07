@@ -43,6 +43,7 @@ import {
   SphereGeometry,
   Vector3,
 } from 'three'
+import { scrollEngraving } from './engraving.ts'
 import {
   alongX,
   at,
@@ -69,6 +70,7 @@ export type RevolverDetail = 'hi' | 'mid' | 'lo'
 
 /** A finish: the barrel and cylinder's steel, the frame and hammer, the guard and straps, the grip. */
 export interface RevolverLook {
+  engraved?: boolean
   /** Barrel length, inches (5½ the Artillery, 7½ the Cavalry, 12 the Buntline). */
   barrel: number
   steel: Finish
@@ -591,6 +593,9 @@ function body(d: RevolverDetail, look: RevolverLook): BufferGeometry[] {
       'y',
     ),
   )
+  if (look.engraved && !lo) {
+    p.push(...scrollEngraving())
+  }
   return p
 }
 
@@ -776,7 +781,7 @@ export function revolverObject(
   }
   obj.name = 'revolver'
   obj.userData.gunAnatomy = revolverAnatomy(size, look)
-  obj.userData.revolver = { size }
+  obj.userData.revolver = { size, look }
   return obj
 }
 

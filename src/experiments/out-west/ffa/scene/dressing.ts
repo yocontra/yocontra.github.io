@@ -16,12 +16,23 @@ import {
   CylinderGeometry,
   type Matrix4,
   PlaneGeometry,
+  Quaternion,
   RingGeometry,
   Vector3,
 } from 'three'
 import type { GLTF } from 'three/examples/jsm/loaders/GLTFLoader.js'
 import type { GeoBuilder } from '../../scene/geo.ts'
 import { type PropDef, propDef } from '../../scene/props.ts'
+import {
+  CANOPY_SEGMENTS,
+  CANOPY_SPANS,
+  canopyPoint,
+  WAGON_BED,
+  WAGON_WHEEL,
+  WELL_CAP,
+  WELL_EAVE,
+  WELL_RISE,
+} from '../sim/cover-shape.ts'
 import type { Cover, CoverKind, Rect, TownLayout } from '../sim/layout.ts'
 import { cells, colorize, fitTo, rand } from './dressing-kit.ts'
 import { OUTSKIRTS_SEED, outskirtsProps } from './outskirts.ts'
@@ -273,7 +284,6 @@ function chassis(
   return y + opts.bed + 0.12
 }
 
-/** A canvas bonnet over a bed: ribbed hoops and a half-barrel of canvas. */
 /** A driver's bench and backrest on the front of an open wagon's bed. */
 function driverSeat(b: DressBuilders, c: Rect, bedTop: number, color: number): void {
   const alongX = c.w >= c.d
@@ -286,63 +296,88 @@ function driverSeat(b: DressBuilders, c: Rect, bedTop: number, color: number): v
   along(b.wood, alongX, cx, cz, a - 0.24, 0, bedTop + 0.1, 0.07, W * 0.42, 0.42, color)
 }
 
-function bonnet(b: DressBuilders, c: Rect, bedTop: number): void {
+/** A structural timber or iron rod between two points, merged into the shared wood draw. */
+function beam(out: BufferGeometry[], a: Vector3, b: Vector3, radius: number, color: number): void {
+  const delta = b.clone().sub(a)
+  const length = delta.length()
+  const g = new CylinderGeometry(radius, radius, length, 6).toNonIndexed()
+  g.applyQuaternion(
+    new Quaternion().setFromUnitVectors(new Vector3(0, 1, 0), delta.divideScalar(length)),
+  )
+  g.translate((a.x + b.x) / 2, (a.y + b.y) / 2, (a.z + b.z) / 2)
+  out.push(colorize(g, color))
+}
+
+/** Bowed canvas with stitched panels, sag between bows and open, hemmed end curtains. */
+function bonnet(b: DressBuilders, c: Rect, bedTop: number, top: number): void {
   const alongX = c.w >= c.d
   const L = Math.max(c.w, c.d) - 1.35
-  const W = Math.min(c.w, c.d) - 0.5
+  const r = Math.max(0.45, (Math.min(c.w, c.d) - 0.5) / 2)
   const cx = c.x + c.w / 2
   const cz = c.z + c.d / 2
-  const r = Math.max(0.45, W / 2)
-  const segs = 10
+  const height = top - bedTop - 0.38
+  const segs = CANOPY_SEGMENTS
+  const spans = CANOPY_SPANS
   const V = (a: number, cc: number, y: number) =>
     alongX ? new Vector3(cx + a, y, cz + cc) : new Vector3(cx + cc, y, cz + a)
-  const rise = 0.5
-  // The canvas is a proper half-cylinder: a smooth arc along the length, closed at both ends.
-  for (let i = 0; i < segs; i++) {
-    const t0 = (i / segs) * Math.PI
-    const t1 = ((i + 1) / segs) * Math.PI
-    const c0 = Math.cos(t0) * r
-    const c1 = Math.cos(t1) * r
-    const y0 = bedTop + rise + Math.sin(t0) * r
-    const y1 = bedTop + rise + Math.sin(t1) * r
-    const p0 = V(-L / 2, c0, y0)
-    const p1 = V(L / 2, c0, y0)
-    const p2 = V(L / 2, c1, y1)
-    const p3 = V(-L / 2, c1, y1)
+  const point = (u: number, t: number, seam = 0) => {
+    const p = canopyPoint(c, bedTop, top, { u, t, seam })
+    return V(p.along, p.across, p.y)
+  }
+  const panel = (a: Vector3, bb: Vector3, cc: Vector3, d: Vector3, color: number) => {
     if (alongX) {
-      b.cloth.quad(p0, p1, p2, p3, CANVAS)
+      b.cloth.quad(a, bb, cc, d, color)
     } else {
-      b.cloth.quad(p1, p0, p3, p2, CANVAS)
+      b.cloth.quad(a, d, cc, bb, color)
     }
-    // End caps: the half-disc at each end of the barrel, so the tent is not an open tube.
-    for (const e of [-1, 1]) {
-      const hub = V((e * L) / 2, 0, bedTop)
-      const a = V((e * L) / 2, c0, y0)
-      const cpt = V((e * L) / 2, c1, y1)
-      if (e > 0 === alongX) {
-        b.cloth.tri(hub, a, cpt, CANVAS_DARK)
-      } else {
-        b.cloth.tri(hub, cpt, a, CANVAS_DARK)
+  }
+  for (let j = 0; j < spans; j++) {
+    const u0 = j / spans
+    const u1 = (j + 1) / spans
+    for (let i = 0; i < segs; i++) {
+      const t0 = i / segs
+      const t1 = (i + 1) / segs
+      panel(point(u0, t0), point(u1, t0), point(u1, t1), point(u0, t1), CANVAS)
+    }
+  }
+  // Narrow seams sit directly on the cloth; their supports remain just inside it.
+  for (const u of [0, 1 / 3, 2 / 3, 1]) {
+    const half = 0.018 / L
+    for (let i = 0; i < segs; i++) {
+      const t0 = i / segs
+      const t1 = (i + 1) / segs
+      panel(
+        point(Math.max(0, u - half), t0, 0.004),
+        point(Math.min(1, u + half), t0, 0.004),
+        point(Math.min(1, u + half), t1, 0.004),
+        point(Math.max(0, u - half), t1, 0.004),
+        CANVAS_DARK,
+      )
+      if (u === 0 || u === 1) {
+        const a = point(u, t0, -0.025)
+        const cc = point(u, t1, -0.025)
+        beam(b.extra, a, cc, 0.022, WEATHERED)
       }
     }
   }
-  // Canvas seams over the bows: three darker bands across the barrel, so the canvas has structure.
-  for (const a of [-L / 4, 0, L / 4]) {
+  for (const u of [0, 1]) {
     for (let i = 0; i < segs; i++) {
-      const t0 = (i / segs) * Math.PI
-      const t1 = ((i + 1) / segs) * Math.PI
-      const c0 = Math.cos(t0) * (r + 0.012)
-      const c1 = Math.cos(t1) * (r + 0.012)
-      const y0 = bedTop + rise + Math.sin(t0) * (r + 0.012)
-      const y1 = bedTop + rise + Math.sin(t1) * (r + 0.012)
-      const p0 = V(a - 0.035, c0, y0)
-      const p1 = V(a + 0.035, c0, y0)
-      const p2 = V(a + 0.035, c1, y1)
-      const p3 = V(a - 0.035, c1, y1)
-      if (alongX) {
-        b.cloth.quad(p0, p1, p2, p3, CANVAS_DARK)
+      const t0 = i / segs
+      const t1 = (i + 1) / segs
+      const inner = (t: number) =>
+        V(
+          (u - 0.5) * L + 0.45,
+          Math.cos(t * Math.PI) * r * 0.62,
+          bedTop + 0.04 + Math.sin(t * Math.PI) * height * 0.78,
+        )
+      const a = point(u, t0)
+      const bb = point(u, t1)
+      const cc = inner(t1)
+      const d = inner(t0)
+      if (u === 1) {
+        panel(a, bb, cc, d, CANVAS_DARK)
       } else {
-        b.cloth.quad(p1, p0, p3, p2, CANVAS_DARK)
+        panel(bb, a, d, cc, CANVAS_DARK)
       }
     }
   }
@@ -618,22 +653,75 @@ function well(b: DressBuilders, c: Rect, y: number): void {
   const cz = c.z + c.d / 2
   const s = Math.min(c.w, c.d) - 0.1
   const t = 0.28
-  // fieldstone curb, a winch on two posts, a little shingled roof
-  for (const [dx, dz, w, d] of [
-    [0, -(s - t) / 2, s, t],
-    [0, (s - t) / 2, s, t],
-    [-(s - t) / 2, 0, t, s - 2 * t],
-    [(s - t) / 2, 0, t, s - 2 * t],
-  ] as const) {
-    b.stone.box(cx + dx, y + 0.42, cz + dz, w, 0.84, d, 0xb8_b0_a0)
+  // Staggered, individually cut curb stones and wider coping protect the well mouth.
+  const stones = [0xb8_b0_a0, 0xa8_9e_8b, 0xc0_b7_a7] as const
+  for (let course = 0; course < 3; course++) {
+    const n = course % 2 === 0 ? 4 : 5
+    const w = s / n
+    for (let k = 0; k < n; k++) {
+      const at = -s / 2 + (k + 0.5) * w
+      const color = stones[(k + course) % stones.length] ?? stones[0]
+      for (const side of [-1, 1]) {
+        b.stone.box(
+          cx + at,
+          y + 0.13 + course * 0.25,
+          cz + (side * (s - t)) / 2,
+          w - 0.012,
+          0.24,
+          t,
+          color,
+        )
+        b.stone.box(
+          cx + (side * (s - t)) / 2,
+          y + 0.13 + course * 0.25,
+          cz + (at * (s - t * 2)) / s,
+          t,
+          0.24,
+          (s - t * 2) / n - 0.012,
+          color,
+        )
+      }
+    }
+  }
+  for (const side of [-1, 1]) {
+    b.stone.box(cx, y + 0.81, cz + (side * (s - t)) / 2, s, 0.12, t + 0.04, 0xc8_be_ab)
+    b.stone.box(
+      cx + (side * (s - t)) / 2,
+      y + 0.81,
+      cz,
+      t + 0.04,
+      0.12,
+      s - t * 2 - 0.04,
+      0xc8_be_ab,
+    )
   }
   b.wood.box(cx, y + 0.04, cz, s - 2 * t, 0.02, s - 2 * t, 0x1a_20_22)
+  // The entire ridge cap ends at the same 2.6 m top the authoritative collider uses.
+  const eave = y + WELL_EAVE
   for (const dx of [-(s / 2 - 0.12), s / 2 - 0.12]) {
-    b.wood.box(cx + dx, y + 0.84 + 0.85, cz, 0.12, 1.7, 0.12, DARK_WOOD)
+    b.wood.box(cx + dx, (y + 0.76 + eave) / 2, cz, 0.12, eave - y - 0.76, 0.12, DARK_WOOD)
+    b.wood.box(cx + dx, eave - 0.02, cz, 0.12, 0.08, s - 0.1, DARK_WOOD)
+    for (const side of [-1, 1]) {
+      beam(
+        b.extra,
+        new Vector3(cx + dx, eave - 0.32, cz),
+        new Vector3(cx + dx, eave, cz + side * 0.35),
+        0.035,
+        WEATHERED,
+      )
+    }
   }
-  cyl(b.extra, 0.08, s - 0.3, 8, cx, y + 1.5, cz, 'x', WEATHERED)
-  b.wood.gable(cx, y + 2.54, cz, s - 0.2, s - 0.4, 0.55, 'x', 0x6a_54_40, 0.1)
-  b.wood.box(cx, y + 2.52, cz, s - 0.2, 0.06, s - 0.4, DARK_WOOD)
+  cyl(b.extra, 0.075, s - 0.15, 10, cx, y + 1.5, cz, 'x', WEATHERED)
+  // Rope wound onto the axle and descending into the dark water, plus a working crank.
+  for (let i = -3; i <= 3; i++) {
+    cyl(b.extra, 0.088, 0.018, 10, cx + i * 0.021, y + 1.5, cz, 'x', 0x9a_84_60)
+  }
+  cyl(b.extra, 0.018, 0.9, 6, cx, y + 0.99, cz, 'y', 0x9a_84_60)
+  b.wood.box(cx + s / 2 - 0.08, y + 1.35, cz, 0.05, 0.3, 0.05, IRON)
+  cyl(b.extra, 0.035, 0.14, 6, cx + s / 2 - 0.1, y + 1.2, cz, 'x', DARK_WOOD)
+  b.wood.gable(cx, eave, cz, s - 0.1, s - 0.1, WELL_RISE, 'x', 0x6a_54_40, 0)
+  b.wood.box(cx, eave - 0.02, cz, s - 0.08, 0.08, 0.12, DARK_WOOD)
+  b.wood.box(cx, y + WELL_CAP - 0.03, cz, s - 0.08, 0.06, 0.09, WEATHERED)
 }
 
 function buffer(b: DressBuilders, c: Rect, y: number): void {
@@ -1171,8 +1259,13 @@ function place(
       break
     }
     case 'covered_wagon': {
-      const top = chassis(b, c, y, { bed: 0.85, wheelR: 0.6, sides: 0.4, color: 0x7a_58_3a })
-      bonnet(b, c, top)
+      const top = chassis(b, c, y, {
+        bed: WAGON_BED,
+        wheelR: WAGON_WHEEL,
+        sides: 0.4,
+        color: 0x7a_58_3a,
+      })
+      bonnet(b, c, top, y + (c.top ?? 3))
       break
     }
     case 'freight_wagon': {
@@ -1219,7 +1312,7 @@ function place(
     case 'well':
       well(b, c, y)
       kit('k_bucket', (def) =>
-        put(p, 'k_bucket', fitTo(def, cx, y + 0.84, cz + (c.d - 0.1) / 2 - 0.14, 0.24, 0.24, 0.26)),
+        put(p, 'k_bucket', fitTo(def, cx, y + 0.87, cz + (c.d - 0.1) / 2 - 0.14, 0.24, 0.24, 0.26)),
       )
       break
     case 'buffer':

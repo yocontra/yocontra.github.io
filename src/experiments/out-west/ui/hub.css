@@ -110,12 +110,9 @@
   background-size:
     100% 100%,
     256px 256px;
-  border-radius: 6px;
-  outline: 1px dashed rgb(239 228 204 / 0.35);
-  outline-offset: -6px;
-  box-shadow:
-    inset 0 0 0 1px rgb(0 0 0 / 0.6),
-    var(--ow-shadow-2);
+  border: 1px solid rgb(239 228 204 / 0.2);
+  border-radius: var(--ow-radius);
+  box-shadow: var(--ow-shadow-1);
   animation: ow-paper-in var(--ow-t-slow) 0.08s var(--ow-ease-out) both;
 }
 /*
@@ -220,39 +217,14 @@
   color: var(--ow-bone);
   background-color: #2a1b11;
   background-image:
-    radial-gradient(circle at 10px 10px, #e8cf8a 0 2px, #6a4c1c 2.5px 3.5px, transparent 4px),
-    radial-gradient(
-      circle at calc(100% - 10px) 10px,
-      #e8cf8a 0 2px,
-      #6a4c1c 2.5px 3.5px,
-      transparent 4px
-    ),
-    radial-gradient(
-      circle at 10px calc(100% - 10px),
-      #e8cf8a 0 2px,
-      #6a4c1c 2.5px 3.5px,
-      transparent 4px
-    ),
-    radial-gradient(
-      circle at calc(100% - 10px) calc(100% - 10px),
-      #e8cf8a 0 2px,
-      #6a4c1c 2.5px 3.5px,
-      transparent 4px
-    ),
-    linear-gradient(180deg, rgb(255 230 190 / 0.1), transparent 35%, rgb(0 0 0 / 0.45)),
-    var(--ow-tex-wood);
+    linear-gradient(180deg, rgb(18 12 8 / 0.72), rgb(18 12 8 / 0.5)), var(--ow-tex-wood);
   background-size:
-    100% 100%,
-    100% 100%,
-    100% 100%,
-    100% 100%,
     100% 100%,
     320px 320px;
   border: 1px solid #000;
   border-radius: var(--ow-radius);
   box-shadow:
     inset 0 3px 0 var(--tile-accent),
-    inset 0 0 0 1px rgb(255 230 190 / 0.08),
     var(--ow-shadow-1);
   cursor: pointer;
   transition:
@@ -283,7 +255,6 @@
   transform: translateY(-3px);
   box-shadow:
     inset 0 3px 0 var(--tile-accent),
-    inset 0 0 0 1px rgb(255 230 190 / 0.18),
     var(--ow-shadow-2);
 }
 .ow-tile:hover::after,
@@ -314,9 +285,7 @@
   height: 36px;
   /* one ink for every icon: brass, struck like a die (light top-left, shadow bottom-right) */
   color: var(--ow-brass);
-  opacity: 0.92;
-  filter: drop-shadow(-0.5px -0.5px 0 rgb(255 236 190 / 0.35))
-    drop-shadow(1px 1.5px 0 rgb(0 0 0 / 0.85));
+  opacity: 0.85;
 }
 .ow-tile-kicker {
   padding-right: 40px;
@@ -342,8 +311,8 @@
   margin-top: auto;
   padding-top: var(--ow-s2);
   font-size: var(--ow-fs-small);
-  font-style: italic;
-  line-height: 1.25;
+  font-style: normal;
+  line-height: 1.35;
   color: var(--ow-brass-hi);
   text-wrap: balance;
 }

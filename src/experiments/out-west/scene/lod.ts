@@ -25,6 +25,10 @@ export interface SimplifyJob {
   colors: Float32Array
   /** Floats per vertex in `colors` (3 = RGB only, 5 = RGB + UV). */
   stride?: number
+  /** Optional semantic weld groups (skin bindings, material IDs or cloth ownership). */
+  seams?: Uint32Array
+  /** Attribute importance; omitted by the existing RGB/UV character jobs. */
+  weights?: number[]
   targetTris: number
   /** Relative error bound (fraction of the mesh extent). */
   maxError: number
@@ -44,18 +48,17 @@ export interface SimplifyResult {
  * representative: flat-shading splits disappear, colour seams stay seams.
  * Every representative is an original vertex, so skin weights still apply.
  */
-function weld(
-  index: Uint32Array,
-  positions: Float32Array,
-  colors: Float32Array,
-  stride: number,
-): Uint32Array {
+function weld(job: SimplifyJob, stride: number): Uint32Array {
+  const { index, positions, colors, seams } = job
   const n = positions.length / 3
   const rep = new Uint32Array(n)
   const seen = new Map<string, number>()
   const q = (x: number, k: number) => Math.round(x * k)
   for (let i = 0; i < n; i++) {
     let key = `${q(positions[i * 3] ?? 0, 1e4)},${q(positions[i * 3 + 1] ?? 0, 1e4)},${q(positions[i * 3 + 2] ?? 0, 1e4)}`
+    if (seams) {
+      key += `/${seams[i]}`
+    }
     for (let c = 0; c < (colors.length > 0 ? stride : 0); c++) {
       // colours to 1/48, UVs to about a texel of the atlas
       key += `|${q(colors[i * stride + c] ?? 0, c < 3 ? 48 : 2048)}`
@@ -80,7 +83,7 @@ export async function simplifyIndex(job: SimplifyJob): Promise<SimplifyResult> {
   await MeshoptSimplifier.ready
   const target = Math.min(job.index.length, Math.max(3, Math.floor(job.targetTris) * 3))
   const stride = job.stride ?? 3
-  const welded = weld(job.index, job.positions, job.colors, stride)
+  const welded = weld(job, stride)
   if (job.colors.length > 0) {
     const [index, error] = MeshoptSimplifier.simplifyWithAttributes(
       welded,
@@ -88,7 +91,7 @@ export async function simplifyIndex(job: SimplifyJob): Promise<SimplifyResult> {
       3,
       job.colors,
       stride,
-      stride === 5 ? [0.6, 0.6, 0.6, 1.5, 1.5] : [0.6, 0.6, 0.6],
+      job.weights ?? (stride === 5 ? [0.6, 0.6, 0.6, 1.5, 1.5] : [0.6, 0.6, 0.6]),
       null,
       target,
       job.maxError,
@@ -109,17 +112,41 @@ export async function simplifyIndex(job: SimplifyJob): Promise<SimplifyResult> {
 
 let worker: Worker | null = null
 let seq = 0
-const waiting = new Map<number, (r: SimplifyResult) => void>()
+const waiting = new Map<
+  number,
+  { resolve: (result: SimplifyResult) => void; reject: (error: Error) => void }
+>()
 
 function getWorker(): Worker | null {
   if (worker) {
     return worker
   }
   try {
-    worker = new Worker(new URL('./lod.worker.ts', import.meta.url), { type: 'module' })
-    worker.onmessage = (e: MessageEvent<{ id: number; result: SimplifyResult }>) => {
-      waiting.get(e.data.id)?.(e.data.result)
-      waiting.delete(e.data.id)
+    const created = new Worker(new URL('./lod.worker.ts', import.meta.url), { type: 'module' })
+    worker = created
+    const failed = () => {
+      if (worker !== created) {
+        return
+      }
+      worker = null
+      created.terminate()
+      for (const job of waiting.values()) {
+        job.reject(new Error('LOD worker failed'))
+      }
+      waiting.clear()
+    }
+    created.onerror = failed
+    created.onmessageerror = failed
+    created.onmessage = (
+      event: MessageEvent<{ id: number; result?: SimplifyResult; error?: string }>,
+    ) => {
+      const job = waiting.get(event.data.id)
+      waiting.delete(event.data.id)
+      if (event.data.result) {
+        job?.resolve(event.data.result)
+      } else {
+        job?.reject(new Error(event.data.error ?? 'LOD simplification failed'))
+      }
     }
   } catch {
     worker = null
@@ -134,10 +161,15 @@ export function simplifyAsync(job: SimplifyJob): Promise<SimplifyResult> {
     return simplifyIndex(job)
   }
   const id = ++seq
-  return new Promise((resolve) => {
-    waiting.set(id, resolve)
-    // copies, so the caller's geometry keeps its buffers
-    w.postMessage({ id, job })
+  return new Promise((resolve, reject) => {
+    waiting.set(id, { resolve, reject })
+    try {
+      // Copies preserve the caller's geometry buffers.
+      w.postMessage({ id, job })
+    } catch (error) {
+      waiting.delete(id)
+      reject(error)
+    }
   })
 }
 
@@ -173,7 +205,7 @@ function jobFor(geo: BufferGeometry, targetTris: number, maxError: number): Simp
 /** Crease angle for LOD normals: smooth across the simplifier's big facets, sharp at real edges. */
 const LOD_CREASE = 60
 
-const cache = new Map<string, Promise<BufferGeometry>>()
+let cache = new WeakMap<BufferGeometry, Map<string, Promise<BufferGeometry>>>()
 
 /**
  * An LOD of `geo` with about `targetTris` triangles, sharing all of its
@@ -185,7 +217,12 @@ export function lodGeometry(
   targetTris = 3000,
   maxError = 0.12,
 ): Promise<BufferGeometry> {
-  const have = cache.get(key)
+  let entries = cache.get(geo)
+  if (!entries) {
+    entries = new Map()
+    cache.set(geo, entries)
+  }
+  const have = entries.get(key)
   if (have) {
     return have
   }
@@ -204,11 +241,11 @@ export function lodGeometry(
     out.userData.lodOf = key
     return out
   })
-  cache.set(key, p)
+  entries.set(key, p)
   return p
 }
 
 /** Drop cached LODs (e.g. when leaving the Frontier). */
 export function clearLods(): void {
-  cache.clear()
+  cache = new WeakMap()
 }

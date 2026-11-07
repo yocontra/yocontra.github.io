@@ -128,7 +128,7 @@ export function openSettings(root: HTMLElement, onClose?: () => void): void {
       label: 'Play on silent',
       hint: hasSession
         ? 'Keep sound when the Ring/Silent switch is on.'
-        : 'This iOS version mutes web audio on silent; update iOS to use it.',
+        : 'This iOS version mutes web audio in silent mode. Update iOS to enable sound.',
       value: getSettings().silentAudio,
       change: (on) => setSetting('silentAudio', on),
     })

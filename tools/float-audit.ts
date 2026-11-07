@@ -37,6 +37,10 @@ const MODULE = '/src/experiments/out-west/scene/float-audit.ts'
 
 /** The slice of Playwright used here (resolved from PLAYWRIGHT, else the repo's devDependency). */
 interface Page {
+  routeWebSocket: (
+    url: (value: URL) => boolean,
+    handler: (socket: { send: (data: string) => void }) => void,
+  ) => Promise<void>
   goto: (url: string) => Promise<unknown>
   on: (event: 'pageerror', cb: (e: Error) => void) => void
   addInitScript: (fn: () => void) => Promise<void>
@@ -114,6 +118,13 @@ async function open(page: Page, scene: string, tier: string): Promise<void> {
     { timeout: 120_000 },
   )
   await page.waitForTimeout(scene.startsWith('duel') ? 6000 : 8000)
+  if (scene === 'frontier') {
+    await page.waitForFunction(
+      () => Boolean(Reflect.get(globalThis, '__frontier')?.().ready),
+      undefined,
+      { timeout: 180_000 },
+    )
+  }
 }
 
 function line(i: AuditIssue): string {
@@ -132,6 +143,10 @@ const all: Record<string, AuditReport> = {}
 for (const scene of scenes) {
   for (const tier of tiers) {
     const page = await browser.newPage({ viewport: { width: 1280, height: 800 } })
+    await page.routeWebSocket(
+      (url) => url.host === new URL(base).host,
+      (socket) => socket.send(JSON.stringify({ type: 'connected' })),
+    )
     page.on('pageerror', (e) => console.error(`[${scene}/${tier}] page error: ${e.message}`))
     await page.addInitScript(() => {
       const g = globalThis as unknown as Record<string, unknown>

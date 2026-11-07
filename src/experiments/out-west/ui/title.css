@@ -107,13 +107,28 @@
   animation: ow-fade-in 1.2s 0.2s var(--ow-ease-out) both;
 }
 .ow-start {
-  min-height: 1.4em;
+  min-height: 52px;
+  padding: 12px 28px;
   font-family: var(--ow-font-display);
+  font-weight: 400;
+  line-height: 1.1;
+  background: transparent;
+  border: 1px solid var(--ow-ink);
+  border-radius: var(--ow-radius);
+  cursor: pointer;
+  touch-action: manipulation;
   font-size: clamp(1.25rem, 4.6vw, 2rem);
   letter-spacing: 0.06em;
   text-transform: uppercase;
   color: var(--ow-ink);
-  animation: ow-breathe 1.8s ease-in-out infinite;
+}
+.ow-start:hover {
+  color: var(--ow-paper);
+  background: var(--ow-ink);
+}
+.ow-start:focus-visible {
+  outline: 3px solid var(--ow-red);
+  outline-offset: 5px;
 }
 .ow-title.pressed .ow-start {
   animation: none;
@@ -127,6 +142,9 @@
   letter-spacing: var(--ow-track-label);
   font-size: var(--ow-fs-body);
   color: var(--ow-ink-2);
+}
+.ow-title.ready:not(.pressed) .ow-loading {
+  visibility: hidden;
 }
 .ow-howto {
   max-width: 34rem;
@@ -200,12 +218,13 @@
   left: 50%;
   translate: -50% 0;
   width: min(32rem, calc(100% - 32px));
+  max-height: calc(100% - 100px - var(--ow-sai-t) - var(--ow-sai-b));
+  overflow-y: auto;
+  overscroll-behavior: contain;
   padding: var(--ow-s3) var(--ow-s4);
   color: var(--ow-ink);
   background: var(--ow-paper);
   border: 1px solid var(--ow-rule-ink);
-  outline: 1px solid var(--ow-rule-ink);
-  outline-offset: -5px;
   box-shadow: var(--ow-shadow-2);
   font-size: var(--ow-fs-small);
   line-height: 1.5;
@@ -215,6 +234,27 @@
 .ow-credits.on {
   display: block;
   animation: ow-paper-in var(--ow-t-mid) var(--ow-ease-out) both;
+}
+.ow-credits-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--ow-s3);
+  margin-bottom: var(--ow-s2);
+  border-bottom: 1px solid var(--ow-rule-ink);
+}
+.ow-credits-close {
+  flex: none;
+  min-width: var(--ow-tap);
+  min-height: var(--ow-tap);
+  color: var(--ow-ink);
+  background: transparent;
+  border: 0;
+  font: 24px var(--ow-font-num);
+  cursor: pointer;
+}
+.ow-credits-close:focus-visible {
+  outline: 2px solid var(--ow-red);
 }
 .ow-credits p {
   margin: 0 0 var(--ow-s2);
@@ -241,6 +281,12 @@
   .ow-title-sheet::before,
   .ow-title-sheet::after {
     bottom: calc(max(var(--ow-s3), var(--ow-sai-b)) + var(--ow-s6));
+  }
+}
+/* Short portrait windows still need room for two instruction lines above the footer links. */
+@media (max-aspect-ratio: 1 / 1) and (max-height: 640px) {
+  .ow-title-art {
+    width: min(40rem, 100% - 8px, calc(30dvh * 7 / 5));
   }
 }
 @media (max-width: 520px) {

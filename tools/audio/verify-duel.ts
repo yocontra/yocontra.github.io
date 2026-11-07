@@ -30,6 +30,10 @@ interface Ev {
   args: string
 }
 interface PageLike {
+  routeWebSocket: (
+    url: (url: URL) => boolean,
+    handle: (socket: { send: (data: string) => void }) => void,
+  ) => Promise<void>
   goto: (url: string) => Promise<unknown>
   waitForFunction: (fn: string, arg?: unknown, opts?: { timeout?: number }) => Promise<unknown>
   evaluate: <T>(fn: string) => Promise<T>
@@ -52,6 +56,7 @@ interface Pw {
 
 const base = process.argv.find((a) => a.startsWith('http')) ?? 'http://localhost:4350'
 const SHOT = /^(fire|fireBig)/u
+const ENGINE = 'globalThis.__owAudioEngine'
 const UI_CUE = /^(uiPaper|uiStamp|uiTick|uiBuy|queueFound|levelUp|ghost|ghostVanish),/u
 const loops = process.argv.includes('--loops')
 const lose = process.argv.includes('--lose')
@@ -70,6 +75,10 @@ const browser = await chromium.launch({
   args: ['--autoplay-policy=no-user-gesture-required'],
 })
 const page = await browser.newPage({ viewport: { width: 1280, height: 720 } })
+await page.routeWebSocket(
+  (url) => url.host === new URL(base).host,
+  (socket) => socket.send(JSON.stringify({ type: 'connected' })),
+)
 await page.goto(
   `${base}/experiments/out-west/#level=1&audiodebug${hashExtra ? `&${hashExtra}` : ''}`,
 )
@@ -77,6 +86,9 @@ await page.waitForTimeout(1500)
 await page.mouse.move(640, 360)
 await page.mouse.click(640, 360)
 await page.waitForFunction('globalThis.__owAudio !== undefined', undefined, { timeout: 30_000 })
+await page.evaluate(`${ENGINE}.setMusicVolume(1)`)
+await page.evaluate(`${ENGINE}.setSfxVolume(1)`)
+await page.evaluate(`${ENGINE}.setVoiceVolume(1)`)
 const events = () => page.evaluate<Ev[]>('globalThis.__owAudio.events')
 const since = async (): Promise<number> => (await events()).length
 const waitEvent = async (pred: (e: Ev) => boolean, ms: number, from = 0): Promise<Ev | null> => {

@@ -7,8 +7,11 @@
  */
 import { CylinderGeometry, Group, Mesh, MeshStandardMaterial, type Object3D, Vector3 } from 'three'
 import type { GLTF } from 'three/examples/jsm/loaders/GLTFLoader.js'
+import type { TownPersistentState } from '../../contract/town.ts'
 import { propDef, propObject } from '../../scene/props.ts'
 import { rifleObject } from '../../scene/rifle.ts'
+import { markFlags } from '../../scene/roles.ts'
+import { DYNAMITE_FUSE_TICKS, TICK_MS } from '../sim/constants.ts'
 import type { PickupSpot } from '../sim/layout.ts'
 import { shotgunMesh } from './shotgun.ts'
 
@@ -69,6 +72,7 @@ interface Thrown {
   to: Vector3
   born: number
   fuseEnd: number
+  totalS: number
 }
 
 export class Pickups {
@@ -97,8 +101,9 @@ export class Pickups {
         obj = longPickup(rifleObject(), 0.18)
       }
       obj.position.set(spot.x, 0.9, spot.z)
-      // floats over its ring by design (the float audit allows it by this name)
+      // Metadata belongs on the meshes the audits collect, not just on their parent name.
       obj.name = 'pickup'
+      obj.traverse((part) => markFlags(part, { live: true, hangs: true }))
       root.add(obj)
       this.items.push({ spot, obj })
     }
@@ -124,6 +129,7 @@ export class Pickups {
   /** A stick lobbed from (fx, fz) to land at (x, z), exploding `fuseS` seconds from now. */
   throw(fx: number, fz: number, x: number, z: number, fuseS: number, nowS: number): void {
     const obj = this.template.clone()
+    obj.traverse((part) => markFlags(part, { live: true }))
     obj.scale.setScalar(THROWN_SCALE)
     this.root.add(obj)
     this.thrown.push({
@@ -132,7 +138,44 @@ export class Pickups {
       to: new Vector3(x, LIE_Y, z),
       born: nowS,
       fuseEnd: nowS + fuseS,
+      totalS: fuseS,
     })
+  }
+
+  /** Exact persistent state: no throw arc, pickup sparkle, report or explosion is replayed. */
+  reconcile(
+    unavailable: ReadonlySet<number>,
+    fuses: Iterable<TownPersistentState['fuses'][number]>,
+    tick: number,
+    nowS: number,
+  ): void {
+    for (let i = 0; i < this.available.length; i++) {
+      this.setAvailable(i, !unavailable.has(i))
+    }
+    for (const thrown of this.thrown) {
+      thrown.obj.removeFromParent()
+    }
+    this.thrown.length = 0
+    for (const fuse of fuses) {
+      const remaining = ((fuse.explodeAt - tick) * TICK_MS) / 1000
+      if (remaining <= 0) {
+        continue
+      }
+      const obj = this.template.clone()
+      obj.scale.setScalar(THROWN_SCALE)
+      obj.position.set(fuse.x, LIE_Y, fuse.z)
+      obj.rotation.z = LIE_ROLL
+      obj.traverse((part) => markFlags(part, { live: true }))
+      this.root.add(obj)
+      this.thrown.push({
+        obj,
+        from: obj.position.clone(),
+        to: obj.position.clone(),
+        born: nowS - ARC_S,
+        fuseEnd: nowS + remaining,
+        totalS: (DYNAMITE_FUSE_TICKS * TICK_MS) / 1000,
+      })
+    }
   }
 
   /** Remove the stick nearest (x, z) (it just went off). */
@@ -159,7 +202,7 @@ export class Pickups {
    */
   eachFuse(nowS: number, cb: (x: number, z: number, left: number, total: number) => void): void {
     for (const t of this.thrown) {
-      cb(t.to.x, t.to.z, Math.max(0, t.fuseEnd - nowS), t.fuseEnd - t.born)
+      cb(t.to.x, t.to.z, Math.max(0, t.fuseEnd - nowS), t.totalS)
     }
   }
 

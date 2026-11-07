@@ -51,7 +51,6 @@ The ratchets in `scripts/` keep the debt visible:
 | `api/`                               | Cloudflare Worker: auth, ranked, Daily, Frontier lobbies, D1 + Durable Objects                                                    |
 | `tests/`                             | Client tests (DOM allowed)                                                                                                        |
 | `tools/`                             | Asset pipeline, audits and perf harnesses; see `tools/README.md`                                                                  |
-| `docs/`                              | Design decisions (e.g. the engine plan)                                                                                           |
 
 Tuning lives in the client data modules and the server imports them; a judged number has one
 source. Scene objects and materials carry `userData.role` / `userData.slot` (`scene/roles.ts`)

@@ -32,7 +32,7 @@ import {
 } from '../../../src/experiments/out-west/ffa/sim/state.ts'
 import type { Player } from '../../../src/experiments/out-west/ffa/sim/types.ts'
 import { LobbyCore } from './core.ts'
-import { buildNav, findPath, type NavGrid } from './nav.ts'
+import { buildNav, findPath, type NavGrid, nextWaypoint } from './nav.ts'
 import type { PracticeOptions } from './practice.ts'
 
 export interface PracticeResult {
@@ -62,7 +62,7 @@ export const HANDS: Record<string, Hand> = {
 }
 
 /** The reviewer-shaped player: perfect aim after a beat, walks to money and then to the bank. */
-class Player1 {
+export class PracticePilot {
   private readonly rng: Rng
   private readonly nav: NavGrid
   private target = -1
@@ -138,11 +138,7 @@ class Player1 {
       const goal = this.goal(w, p)
       this.path = findPath(this.nav, p, goal) ?? []
     }
-    let next = this.path[0]
-    while (next && dist2(p.x, p.z, next.x, next.z) < 0.6) {
-      this.path.shift()
-      next = this.path[0]
-    }
+    const next = nextWaypoint(w.grid, this.path, p)
     const zone = zoneAt(w.layout, p.x, p.z)
     if (zone && p.carried > 0) {
       out.buttons = this.lastButtons & BTN_INTERACT ? 0 : BTN_INTERACT
@@ -242,7 +238,7 @@ export function practiceRun(
     throw new Error('no session')
   }
   const me = s.playerId
-  const brain = new Player1(core.world, seed ^ 0x77, hand)
+  const brain = new PracticePilot(core.world, seed ^ 0x77, hand)
   const writer = new Writer(64)
   const res: PracticeResult = {
     kills: 0,

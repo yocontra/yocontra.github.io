@@ -51,8 +51,8 @@ export interface VmInput {
   ads: boolean
   crouched: boolean
   sliding: boolean
-  /** Height of a jump arc right now (m); 0 on the ground. */
-  lift: number
+  /** True while supported, including on a deck, upper floor or roof. */
+  grounded: boolean
   /** 0..1 through a reload, or null. */
   reload: number | null
   weapon: number
@@ -105,7 +105,7 @@ export class VmMotion {
   private crouch = 0
   private slide = 0
   private wall = 0
-  private lastLift = 0
+  private wasGrounded = true as boolean
   private air = 0
   private readonly land = spring(260)
   private readonly kickZ = spring(320)
@@ -184,11 +184,11 @@ export class VmMotion {
     this.slide += ((i.sliding ? 1 : 0) - this.slide) * e(12)
     this.wall += (Math.min(0.3, Math.max(0, 0.75 - i.wall)) - this.wall) * e(14)
     // jump: the gun floats up a touch in the air and kicks down on the landing
-    this.air += ((i.lift > 0.02 ? 1 : 0) - this.air) * e(10)
-    if (this.lastLift > 0.02 && i.lift <= 0.02) {
+    this.air += ((i.grounded ? 0 : 1) - this.air) * e(10)
+    if (!this.wasGrounded && i.grounded) {
       this.land.v -= 1.2
     }
-    this.lastLift = i.lift
+    this.wasGrounded = i.grounded
     const land = stepSpring(this.land, dt)
     const kz = stepSpring(this.kickZ, dt)
     const kp = stepSpring(this.kickP, dt)

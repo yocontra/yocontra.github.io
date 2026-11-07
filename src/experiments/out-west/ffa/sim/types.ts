@@ -11,7 +11,7 @@ export interface InputFrame {
   buttons: number
   /** Full server tick (+ fraction) of the remote-entity time the client rendered. */
   viewTime: number
-  /** Aim pitch, ±127 = ±90° (wire v6; cosmetic, for the riders' upper bodies). */
+  /** Aim pitch, ±127 = ±90° (wire v6; used for 3D hits since v7). */
   pitch?: number
 }
 
@@ -124,7 +124,7 @@ export interface Player extends MoveState {
   aim: number
   prevAim: number
   moving: boolean
-  /** Aim pitch as the client last sent it (±127 = ±90°; cosmetic). */
+  /** Aim pitch as the client last sent it (±127 = ±90°; authoritative). */
   pitch: number
   /** Held this tick: crouched, on the sights (the stance bits remote riders see). */
   crouched: boolean
@@ -234,6 +234,13 @@ export interface Deposit {
   bot: boolean
 }
 
+/** World-space point on an authoritative shot, metres. */
+export interface ShotPoint {
+  x: number
+  y: number
+  z: number
+}
+
 export type SimEvent =
   | {
       type: 'shot'
@@ -244,8 +251,12 @@ export type SimEvent =
       flags: number
       x: number
       z: number
-      /** Height of the impact, decimetres. */
+      /** Height of the impact, decimetres (legacy range metadata). */
       y: number
+      origin: ShotPoint
+      end: ShotPoint
+      /** Every pellet's actual endpoint; empty for a single bullet. */
+      pellets: ShotPoint[]
     }
   | { type: 'damage'; victim: number; attacker: number; amount: number; hp: number }
   | { type: 'kill'; victim: number; killer: number; flags: number; bounty: number }

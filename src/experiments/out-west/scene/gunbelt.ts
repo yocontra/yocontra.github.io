@@ -30,6 +30,7 @@ import {
   hipSurface,
   LEATHER,
 } from './holster.ts'
+import { holsterDetail } from './holster-detail.ts'
 import { type HolsterLook, mergedProp } from './kit.ts'
 import type { Fit } from './outfit.ts'
 import { slotOn } from './rig.ts'
@@ -351,6 +352,16 @@ export function gunbeltPieces(
     const m = new Matrix4().compose(h.pos, h.quat, new Vector3(1, 1, 1))
     for (const s of sleeve(o.a, color, trim)) {
       out.push({ geo: place(s, m), ...leather(), weights: leg })
+    }
+    for (const detail of holsterDetail(o.a, o.look)) {
+      detail.geo.applyMatrix4(m)
+      out.push({
+        geo: detail.geo,
+        roughness: detail.metal ? 0.6 : 1,
+        rim: detail.metal ? 1.2 : FABRIC.leather.rim,
+        swatch: detail.metal ? 'metal' : 'leather',
+        weights: leg,
+      })
     }
     const strap = toGeo(dropStrap(h, color, width * (o.look.rig ? 1.6 : 1.1)))
     const top = h.strap.top.y

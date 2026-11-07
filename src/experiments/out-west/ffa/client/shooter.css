@@ -268,15 +268,9 @@
   border-radius: var(--ow-radius);
   color: var(--ow-bone);
   background-color: var(--ow-night);
-  background-image:
-    radial-gradient(120% 100% at 30% 0%, rgb(90 52 26 / 0.32), transparent 60%), var(--ow-tex-smoke);
-  background-size:
-    100% 100%,
-    384px 384px;
-  border: 1px solid #000;
-  box-shadow:
-    inset 0 0 0 1px rgb(210 173 92 / 0.35),
-    var(--ow-shadow-2);
+  background-image: linear-gradient(145deg, rgb(89 59 37 / 0.18), transparent 55%);
+  border: 1px solid rgb(210 173 92 / 0.35);
+  box-shadow: var(--ow-shadow-2);
   display: flex;
   flex-direction: column;
   gap: 10px;

@@ -33,7 +33,7 @@ import {
 } from '../../scene/flora.ts'
 import { tumbleweedGeometry } from '../../scene/fx.ts'
 import type { Preset } from '../../scene/presets.ts'
-import { SLOT } from '../../scene/roles.ts'
+import { markFlags, SLOT } from '../../scene/roles.ts'
 import { Sky } from '../../scene/sky.ts'
 import { twigLook } from '../../scene/surface.ts'
 import type { TownLayout } from '../sim/layout.ts'
@@ -295,6 +295,7 @@ export class Wilds {
     for (const [i, lane] of lanes.entries()) {
       const m = new Mesh(geo, mat)
       m.name = 'tumbleweed'
+      markFlags(m, { live: true, hangs: true })
       m.receiveShadow = true
       this.scene.add(m)
       this.weeds.push(new Roller(m, lane, layout, i * 23))

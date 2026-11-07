@@ -4,7 +4,7 @@
  * own collision grid), aim at a player or a point, and tap buttons. The server can't tell it from
  * a person with a very steady hand, so it exercises the real netcode end to end.
  */
-import { buildNav, findPath, type NavGrid } from '../../../../../api/src/town/nav.ts'
+import { buildNav, findPath, type NavGrid, nextWaypoint } from '../../../../../api/src/town/nav.ts'
 import type { Grid } from '../sim/layout.ts'
 
 export interface Steer {
@@ -87,11 +87,7 @@ export class Autopilot {
   }
 
   steer(x: number, z: number, posOf: (id: number) => { x: number; z: number } | null): Steer {
-    let next = this.path[0]
-    while (next && (next.x - x) ** 2 + (next.z - z) ** 2 < 0.5) {
-      this.path.shift()
-      next = this.path[0]
-    }
+    const next = nextWaypoint(this.grid, this.path, { x, z, arrivalSquared: 0.5 })
     let mx = this.stickX
     let mz = this.stickZ
     if (next) {

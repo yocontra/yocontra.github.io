@@ -30,6 +30,7 @@ import {
   HOP_TICKS,
   JUMP_COOLDOWN_TICKS,
   JUMP_SPEED,
+  MANTLE_MAX_PROBE,
   MANTLE_REACH,
   MANTLE_TICKS,
   PLAYER_RADIUS,
@@ -50,6 +51,7 @@ import {
   SPRINT_SPEED,
   STEP_DOWN,
   STEP_UP,
+  VAULT_ARC_CLEARANCE,
   VAULT_MAX_M,
   VAULT_REACH,
   VAULT_TICKS,
@@ -72,7 +74,6 @@ const STICK_DEAD_ZONE = 16
 /** Never move further than this per collision sub-step (less than the capsule radius). */
 const MAX_SUBSTEP = 0.2
 const MANTLE_PROBE_STEP = 0.1
-const MANTLE_MAX_PROBE = 1.2
 
 export const quantize = (v: number): number => Math.round(v * POS_SCALE) / POS_SCALE
 
@@ -343,7 +344,7 @@ function startVault(
   for (let s = 0.2; s <= distance; s += 0.2) {
     peak = Math.max(peak, topAt(grid, m.x + dir.x * s, m.z + dir.z * s))
   }
-  m.fallToY = peak + 0.35
+  m.fallToY = peak + VAULT_ARC_CLEARANCE
   m.vy = 0
   m.grounded = false
 }

@@ -24,9 +24,10 @@ import {
 } from '../../contract/town.ts'
 import { clampI8, clampU8, type Writer } from './bytes.ts'
 import { readEvent, type WireEvent, writeEvent } from './codec-events.ts'
+import { readSelf, type SelfView, writeSelf } from './codec-self.ts'
 import { Reader } from './reader.ts'
 
-const clampU16 = (v: number): number => Math.max(0, Math.min(65_535, Math.round(v)))
+export type { SelfView } from './codec-self.ts'
 
 // --- Input --------------------------------------------------------------------------------------
 
@@ -37,7 +38,7 @@ export interface WireFrame {
   buttons: number
   viewTick: number
   viewFrac: number
-  /** Aim pitch, ±127 = ±90° up/down (wire v6; cosmetic). */
+  /** Aim pitch, ±127 = ±90° up/down (wire v6; authoritative since v7). */
   pitch?: number
 }
 
@@ -124,68 +125,6 @@ export interface EntityView {
   carry: number
   /** Aim pitch, ±127 = ±90° (wire v6). */
   pitch?: number
-}
-
-export interface SelfView {
-  x: number
-  z: number
-  /** Feet height, centimetres. */
-  y: number
-  roof: number
-  climbTicks: number
-  climbDeck: number
-  climbDir: number
-  fallTicks: number
-  fallTotal: number
-  fallFromX: number
-  fallFromZ: number
-  fallFromY: number
-  fallToX: number
-  fallToY: number
-  fallToZ: number
-  hp: number
-  ammo: number
-  flags: number
-  rollTicks: number
-  rollCooldown: number
-  rollDir: number
-  reloadTicks: number
-  fireCooldown: number
-  protectTicks: number
-  deadEyeTicks: number
-  channelKind: number
-  channelTicks: number
-  carried: number
-  respawnTicks: number
-  holsterTicks: number
-  lastButtons: number
-  /** Packed weapon state; unpack with `selfWeapon()` from the contract. */
-  weapon: number
-  jumpTicks: number
-  jumpCooldown: number
-  /** Vault travel per tick, centimetres (0: a hop or nothing). */
-  vaultStep: number
-  vaultAim: number
-  /** `MOVE_*` bits (wire v5). */
-  moveFlags: number
-  sprintLock: number
-  sprintOut: number
-  slideTicks: number
-  slideCooldown: number
-  slideAim: number
-  /** Velocity in the air, centimetres per tick. */
-  airX: number
-  airZ: number
-  /** Vertical velocity, decimetres per second. */
-  vy: number
-  /** Feet on a surface (1) or in the air (0). */
-  grounded: number
-  /** Height of the surface under the feet, centimetres. */
-  support: number
-  /** Highest point since leaving the ground, centimetres. */
-  airPeakY: number
-  /** Ticks left on a committed mantle. */
-  mantleTicks: number
 }
 
 export interface TownView {
@@ -315,113 +254,6 @@ function readEntity(r: Reader, baseline: Map<number, EntityView>): EntityView {
   return e
 }
 
-function writeSelf(w: Writer, s: SelfView): void {
-  w.u16(s.x)
-    .u16(s.z)
-    .u16(clampU16(s.y * 100))
-    .u8(clampU8(s.roof))
-    .u8(clampU8(s.climbTicks))
-    .u8(clampU8(s.climbDeck))
-    .i8(clampI8(s.climbDir))
-    .u8(clampU8(s.fallTicks))
-    .u8(clampU8(s.fallTotal))
-    .u16(clampU16(s.fallFromX * 100))
-    .u16(clampU16(s.fallFromZ * 100))
-    .u8(clampU8(s.fallFromY * 10))
-    .u16(clampU16(s.fallToX * 100))
-    .u8(clampU8(s.fallToY * 10))
-    .u16(clampU16(s.fallToZ * 100))
-    .u8(clampU8(s.hp))
-    .u8(s.ammo)
-    .u8(s.flags)
-    .u8(s.rollTicks)
-    .u8(s.rollCooldown)
-    .u16(s.rollDir)
-    .u8(s.reloadTicks)
-    .u8(clampU8(s.fireCooldown))
-    .u8(clampU8(s.protectTicks))
-    .u8(clampU8(s.deadEyeTicks))
-    .u8(s.channelKind)
-    .u8(clampU8(s.channelTicks))
-    .u32(s.carried)
-    .u8(clampU8(s.respawnTicks))
-    .u8(clampU8(s.holsterTicks))
-    .u16(s.lastButtons)
-    .u8(s.weapon)
-    .u8(clampU8(s.jumpTicks))
-    .u8(clampU8(s.jumpCooldown))
-    .u8(clampU8(s.vaultStep))
-    .u16(s.vaultAim)
-    .u8(s.moveFlags)
-    .u8(clampU8(s.sprintLock))
-    .u8(clampU8(s.sprintOut))
-    .u8(clampU8(s.slideTicks))
-    .u8(clampU8(s.slideCooldown))
-    .u16(s.slideAim)
-    .i8(s.airX)
-    .i8(s.airZ)
-    .i8(clampI8(Math.round(s.vy * 10)))
-    .u8(s.grounded)
-    .u16(clampU16(s.support * 100))
-    .u16(clampU16(s.airPeakY * 100))
-    .u8(clampU8(s.mantleTicks))
-}
-
-function readSelf(r: Reader): SelfView {
-  const s: SelfView = {
-    x: r.u16(),
-    z: r.u16(),
-    y: r.u16() / 100,
-    roof: r.u8(),
-    climbTicks: r.u8(),
-    climbDeck: r.u8(),
-    climbDir: r.i8(),
-    fallTicks: r.u8(),
-    fallTotal: r.u8(),
-    fallFromX: r.u16() / 100,
-    fallFromZ: r.u16() / 100,
-    fallFromY: r.u8() / 10,
-    fallToX: r.u16() / 100,
-    fallToY: r.u8() / 10,
-    fallToZ: r.u16() / 100,
-    hp: r.u8(),
-    ammo: r.u8(),
-    flags: r.u8(),
-    rollTicks: r.u8(),
-    rollCooldown: r.u8(),
-    rollDir: r.u16(),
-    reloadTicks: r.u8(),
-    fireCooldown: r.u8(),
-    protectTicks: r.u8(),
-    deadEyeTicks: r.u8(),
-    channelKind: r.u8(),
-    channelTicks: r.u8(),
-    carried: r.u32(),
-    respawnTicks: r.u8(),
-    holsterTicks: r.u8(),
-    lastButtons: r.u16(),
-    weapon: r.u8(),
-    jumpTicks: r.u8(),
-    jumpCooldown: r.u8(),
-    vaultStep: r.u8(),
-    vaultAim: r.u16(),
-    moveFlags: r.u8(),
-    sprintLock: r.u8(),
-    sprintOut: r.u8(),
-    slideTicks: r.u8(),
-    slideCooldown: r.u8(),
-    slideAim: r.u16(),
-    airX: r.i8(),
-    airZ: r.i8(),
-    vy: r.i8() / 10,
-    grounded: r.u8(),
-    support: r.u16() / 100,
-    airPeakY: r.u16() / 100,
-    mantleTicks: r.u8(),
-  }
-  return s
-}
-
 function writeTown(w: Writer, t: TownView): void {
   w.u8(t.mostWanted)
     .u8(t.mwX)
@@ -504,6 +336,29 @@ export function decodeSnapshot(
   data: ArrayBuffer | Uint8Array,
   baseline: Map<number, EntityView>,
 ): Snapshot | null {
+  const next = new Map(baseline)
+  let snapshot: Snapshot | null
+  try {
+    snapshot = readSnapshot(data, next)
+  } catch (error: unknown) {
+    if (error instanceof RangeError) {
+      return null
+    }
+    throw error
+  }
+  if (snapshot) {
+    baseline.clear()
+    for (const [id, entity] of next) {
+      baseline.set(id, entity)
+    }
+  }
+  return snapshot
+}
+
+function readSnapshot(
+  data: ArrayBuffer | Uint8Array,
+  baseline: Map<number, EntityView>,
+): Snapshot | null {
   const r = new Reader(data)
   if (r.remaining < SNAPSHOT_HEADER_BYTES + SNAPSHOT_SELF_BYTES || r.u8() !== MSG_SNAPSHOT) {
     return null
@@ -530,12 +385,13 @@ export function decodeSnapshot(
   const events: WireEvent[] = []
   for (let i = 0; i < eventCount; i++) {
     const ev = readEvent(r)
-    if (ev) {
-      events.push(ev)
+    if (!ev) {
+      return null
     }
+    events.push(ev)
   }
   return { tick, lastInputSeq, inputLead, flags, self, entities, removed, town, events }
 }
 
-/** Bytes an event of `type` occupies after its type byte. */
+/** Minimum bytes after the type byte (EV_SHOT adds six bytes per pellet). */
 export const eventSize = (type: number): number => EVENT_SIZES[type] ?? 0

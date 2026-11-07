@@ -9,6 +9,7 @@
  */
 import townJson from '../town.layout.json' with { type: 'json' }
 import { type GlassPlane, townWindows, type WindowOpening, windowPane } from './building-rules.ts'
+import { type ShapedCover, shapedCover } from './cover-shape.ts'
 import {
   frontOf,
   PLATFORM_DEPTH,
@@ -247,6 +248,9 @@ export interface Grid {
   bankArea: Rect
   /** Top of the base solid per cell, metres (0 = open ground). */
   tops: Float32Array
+  /** Exact cover profiles, indexed only in the cells they overlap; flat solids stay in tops. */
+  shapeCells: (readonly ShapedCover[] | undefined)[]
+  shaped: ShapedCover[]
   /** 1 where the base top is wide enough to stand on (crates, wagons, boxcars). */
   standable: Uint8Array
   /** Thin slabs you can walk under and stand on: porch roofs, catwalks, upper floors. */
@@ -489,6 +493,8 @@ export function buildGrid(layout: TownLayout = TOWN): Grid {
     size: layout.size,
     cells: new Uint8Array(n * n),
     tops: new Float32Array(n * n),
+    shapeCells: new Array(n * n),
+    shaped: [],
     standable: new Uint8Array(n * n),
     overheads: [],
     stairs: [],
@@ -607,7 +613,22 @@ export function buildGrid(layout: TownLayout = TOWN): Grid {
     if (c.vaultHeight === undefined) {
       fill(grid, c, c.low ? BLOCK_MOVE | BLOCK_SHOT : WALL)
     }
-    fillTop(grid, c, top)
+    const shape = shapedCover(c)
+    if (shape) {
+      grid.shaped.push(shape)
+      const c0 = Math.max(0, Math.floor(c.x / grid.cell))
+      const c1 = Math.min(grid.n - 1, Math.ceil((c.x + c.w) / grid.cell) - 1)
+      const r0 = Math.max(0, Math.floor(c.z / grid.cell))
+      const r1 = Math.min(grid.n - 1, Math.ceil((c.z + c.d) / grid.cell) - 1)
+      for (let row = r0; row <= r1; row++) {
+        for (let col = c0; col <= c1; col++) {
+          const i = row * grid.n + col
+          grid.shapeCells[i] = [...(grid.shapeCells[i] ?? []), shape]
+        }
+      }
+    } else {
+      fillTop(grid, c, top)
+    }
     if (c.standable) {
       fillStandable(grid, c)
     }

@@ -1,10 +1,12 @@
 import { describe, expect, test as it } from 'bun:test'
 import {
   BTN_FIRE,
+  EV_SHOT,
   EVENT_SIZES,
   INPUT_FRAME_BYTES,
   INPUT_HEADER_BYTES,
   INPUT_LEAD_NONE,
+  MAX_SHOT_PELLETS,
   POS_SCALE,
   SNAP_FULL,
   SNAPSHOT_HEADER_BYTES,
@@ -23,6 +25,9 @@ import {
 } from '../../../src/experiments/out-west/ffa/sim/codec.ts'
 import {
   EVENT_LAYOUTS,
+  packShotCoord,
+  shotCoord,
+  toWireEvent,
   type WireEvent,
 } from '../../../src/experiments/out-west/ffa/sim/codec-events.ts'
 import { InputBatcher, quantizeAim } from '../../../src/experiments/out-west/ffa/sim/input.ts'
@@ -90,19 +95,49 @@ const randomSelf = (): SelfView => ({
   slideAim: u16(),
   airX: rng.int(-127, 127),
   airZ: rng.int(-127, 127),
-  vy: rng.int(-127, 127) / 10,
+  vy: rng.int(-32_768, 32_767) / 10,
   grounded: rng.int(0, 1),
   support: u16() / 100,
   airPeakY: u16() / 100,
   mantleTicks: u8(),
 })
 
+function selfPacket(self: SelfView, capacity = 2): Uint8Array {
+  return encodeSnapshot(
+    new Writer(capacity),
+    {
+      tick: 1,
+      lastInputSeq: 0,
+      inputLead: INPUT_LEAD_NONE,
+      flags: 0,
+      self,
+      entities: [],
+      removed: [],
+      town: null,
+      events: [],
+    },
+    new Map(),
+  )
+}
+
 function randomEvent(): WireEvent {
   const types = Object.keys(EVENT_LAYOUTS).map(Number)
   const type = types[rng.int(0, types.length - 1)] ?? 1
   const ev: Record<string, number> = { type }
   for (const [name, width] of EVENT_LAYOUTS[type] ?? []) {
-    ev[name] = width === 1 ? u8() : u16()
+    if (name !== 'pelletCount') {
+      ev[name] = width === 1 ? u8() : u16()
+    }
+  }
+  if (type === EV_SHOT) {
+    return {
+      ...ev,
+      pellets: Array.from({ length: rng.int(0, MAX_SHOT_PELLETS) }, () => ({
+        x: u16(),
+        y: u16(),
+        z: u16(),
+      })),
+    } as unknown as WireEvent
   }
   return ev as unknown as WireEvent
 }
@@ -251,25 +286,11 @@ describe('snapshot codec', () => {
     }
   })
 
-  it('accepts a bare delta snapshot (no entities, events or town)', () => {
+  it.each([0, 1, 64, 77, 4096])('accepts a bare delta with writer capacity %i', (capacity) => {
     // The shortest legal snapshot: header, self, and the event count byte. The decoder's minimum
     // length must not reject it, or every quiet tick fails to decode on the client.
     const self = randomSelf()
-    const bytes = encodeSnapshot(
-      new Writer(),
-      {
-        tick: 1,
-        lastInputSeq: 0,
-        inputLead: INPUT_LEAD_NONE,
-        flags: 0,
-        self,
-        entities: [],
-        removed: [],
-        town: null,
-        events: [],
-      },
-      new Map(),
-    )
+    const bytes = selfPacket(self, capacity)
     expect(bytes.length).toBe(SNAPSHOT_HEADER_BYTES + SNAPSHOT_SELF_BYTES + 1)
     const snap = decodeSnapshot(bytes, new Map())
     expect(snap).not.toBeNull()
@@ -313,6 +334,100 @@ describe('snapshot codec', () => {
     }
     expect(Math.max(...sizes.slice(5))).toBeLessThan(first.length + 40)
   })
+})
+
+describe('3D shot codec', () => {
+  it('round-trips authoritative elevated shot and pellet endpoints, and refuses old/truncated payloads', () => {
+    const wire = toWireEvent({
+      type: 'shot',
+      shooter: 1,
+      aim: 0,
+      range: 40,
+      target: 2,
+      flags: 8,
+      x: 20,
+      z: 64,
+      y: 12,
+      origin: { x: 20, y: 8.62, z: 64 },
+      end: { x: 28.5, y: 1.23, z: 63.2 },
+      pellets: Array.from({ length: 8 }, (_, i) => ({
+        x: 28 + i * 0.1,
+        y: -0.02,
+        z: 63 + i * 0.2,
+      })),
+    })
+    const encode = (events: WireEvent[]) =>
+      encodeSnapshot(
+        new Writer(64),
+        {
+          tick: 3,
+          lastInputSeq: 0,
+          inputLead: INPUT_LEAD_NONE,
+          flags: 0,
+          self: randomSelf(),
+          entities: [],
+          removed: [],
+          town: null,
+          events,
+        },
+        new Map(),
+      )
+    const bytes = encode([wire])
+    expect(bytes.length).toBe(
+      SNAPSHOT_HEADER_BYTES + SNAPSHOT_SELF_BYTES + 1 + 1 + (EVENT_SIZES[EV_SHOT] ?? 0) + 48,
+    )
+    expect(decodeSnapshot(bytes, new Map())?.events).toEqual([wire])
+    expect(shotCoord(packShotCoord(-0.02))).toBe(-0.02)
+    expect(shotCoord(packShotCoord(8.624))).toBe(8.62)
+    expect(decodeSnapshot(bytes.slice(0, -1), new Map())).toBeNull()
+    // A v9 event carried only seven payload bytes; it cannot be consumed as the new geometry.
+    expect(
+      decodeSnapshot(
+        bytes.slice(0, SNAPSHOT_HEADER_BYTES + SNAPSHOT_SELF_BYTES + 1 + 8),
+        new Map(),
+      ),
+    ).toBeNull()
+    const invalid = bytes.slice()
+    invalid[SNAPSHOT_HEADER_BYTES + SNAPSHOT_SELF_BYTES + 1 + (EVENT_SIZES[EV_SHOT] ?? 0)] = 9
+    expect(decodeSnapshot(invalid, new Map())).toBeNull()
+  })
+
+  it.each([0, 1, 64, 8192, 32_768])(
+    'retains the 255-event cap with maximum pellets at writer capacity %i',
+    (capacity) => {
+      const event = toWireEvent({
+        type: 'shot',
+        shooter: 1,
+        aim: 0,
+        range: 40,
+        target: 255,
+        flags: 8,
+        x: 20,
+        z: 64,
+        y: 12,
+        origin: { x: 20, y: 8, z: 64 },
+        end: { x: 28, y: 8, z: 64 },
+        pellets: Array.from({ length: 8 }, () => ({ x: 28, y: 8, z: 64 })),
+      })
+      const bytes = encodeSnapshot(
+        new Writer(capacity),
+        {
+          tick: 3,
+          lastInputSeq: 0,
+          inputLead: INPUT_LEAD_NONE,
+          flags: 0,
+          self: randomSelf(),
+          entities: [],
+          removed: [],
+          town: null,
+          events: Array.from({ length: 260 }, () => event),
+        },
+        new Map(),
+      )
+      expect(decodeSnapshot(bytes, new Map())?.events.length).toBe(255)
+      expect(bytes.length).toBe(SNAPSHOT_HEADER_BYTES + SNAPSHOT_SELF_BYTES + 1 + 255 * 69)
+    },
+  )
 })
 
 describe('send-on-change input', () => {
@@ -371,9 +486,12 @@ describe('send-on-change input', () => {
     }
     expect(applied.length).toBeGreaterThan(380)
     for (const a of applied) {
-      const f = made[a.seq]
-      expect(a.frame.moveX).toBe(f?.moveX ?? -1)
-      expect(a.frame.aim).toBe(f?.aim ?? -1)
+      const f = made.at(a.seq)
+      if (!f) {
+        throw new Error(`Applied an unknown input sequence ${a.seq}`)
+      }
+      expect(a.frame.moveX).toBe(f.moveX)
+      expect(a.frame.aim).toBe(f.aim)
     }
     expect(applied.filter((a) => a.frame.buttons & BTN_FIRE).length).toBe(8)
     expect(q.dropped).toBe(0)

@@ -199,11 +199,14 @@ function vestStrap(
   const col: number[] = []
   const uv: number[] = []
   const idx: number[] = []
-  for (const [k, rail] of [inner, outer].entries()) {
-    for (const [i, p] of rail.entries()) {
-      pos.push(p.x, p.y, p.z)
-      col.push(color.r, color.g, color.b)
-      uv.push(k, i / (rows - 1))
+  for (let i = 0; i < rows; i++) {
+    for (const [k, rail] of [inner, outer].entries()) {
+      const p = rail[i]
+      if (p) {
+        pos.push(p.x, p.y, p.z)
+        col.push(color.r, color.g, color.b)
+        uv.push(k, i / (rows - 1))
+      }
     }
   }
   for (let i = 0; i < rows - 1; i++) {
@@ -231,8 +234,8 @@ function vestStrap(
     }
   }
   nrm.needsUpdate = true
-  const lo = Math.min(xIn, xOut) - 0.028
-  const hi = Math.max(xIn, xOut) + 0.028
+  const lo = Math.min(xIn, xOut) + 0.003
+  const hi = Math.max(xIn, xOut) - 0.003
   return {
     geo,
     hide: (p) => p.x >= lo && p.x <= hi && Math.abs(p.z - chest.z) < 0.19,
@@ -280,7 +283,7 @@ export function vest(f: Fit, color: number): Piece[] {
   const weights = nearestWeights(f.body, onBones(f.body, VEST_BONES))
   const strapWeights = nearestWeights(f.body, onBones(f.body, STRAP_BONES))
   const hide = (p: Vector3, _bone: string, garment: Slot | undefined): boolean => {
-    if (garment !== SLOT.Shirt && garment !== SLOT.Sleeves) {
+    if (garment !== SLOT.Shirt) {
       return false
     }
     // nothing under the band (keep the shirt in the V above its dipping top edge); the sleeves
@@ -298,6 +301,7 @@ export function vest(f: Fit, color: number): Piece[] {
     geo: band,
     roughness: 1,
     rim: FABRIC.wool.rim,
+    contactCloth: true,
     swatch: 'wool',
     weights,
     hide,
@@ -308,6 +312,7 @@ export function vest(f: Fit, color: number): Piece[] {
       geo: s.geo,
       roughness: 1,
       rim: FABRIC.wool.rim,
+      contactCloth: true,
       swatch: 'wool' as const,
       weights: strapWeights,
       hide,

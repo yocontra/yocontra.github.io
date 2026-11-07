@@ -10,6 +10,7 @@
  */
 import {
   BTN_FIRE,
+  CONTRACT_VERSION,
   INPUT_LEAD_NONE,
   MOVE_SPRINTING,
   MSG_FULL_RESET,
@@ -43,11 +44,13 @@ import {
   SHOTGUN_FIRE_MS,
   TICK_MS,
 } from '../sim/constants.ts'
-import { InputBatcher, quantizeAim } from '../sim/input.ts'
-import { buildGrid, type Grid } from '../sim/layout.ts'
+import { InputBatcher, quantizeAim, quantizePitch } from '../sim/input.ts'
+import { buildGrid, type Grid, TOWN } from '../sim/layout.ts'
 import { aimRadians, stepMove, vaulting } from '../sim/move.ts'
 import type { MoveState } from '../sim/types.ts'
 import { RemoteTrack, type RemoteView, ServerClock } from './interp.ts'
+import { PersistentTownState, validPersistentState } from './persistent-state.ts'
+import { type RagdollImpact, ShotImpacts } from './shot-impact.ts'
 import { TickClock } from './tick-clock.ts'
 import type { Transport } from './transport.ts'
 
@@ -77,16 +80,20 @@ export interface Intent {
   /** u16 turns. */
   aim: number
   buttons: number
-  /** Aim pitch, ±127 = ±90° (cosmetic). */
+  /** Authoritative aim pitch, ±127 = ±90°. */
   pitch?: number
 }
 
 export interface NetHandlers {
   onWelcome: (you: number) => void
+  /** A terminal protocol/state refusal; the connection is closed without retrying. */
+  onIncompatible?: (message: string) => void
+  /** A complete authoritative replacement is ready for silent scene reconciliation. */
+  onPersistentState?: () => void
   onControl: (msg: ServerControl) => void
   onEvent: (ev: WireEvent, tick: number) => void
   /** A shot this client predicted (muzzle flash, tracer and sound before the server answers). */
-  onPredictedShot: (x: number, z: number, aim: number, weapon: number) => void
+  onPredictedShot: (x: number, z: number, aim: number, weapon: number, pitch: number) => void
 }
 
 interface Pending {
@@ -108,6 +115,8 @@ export class NetClient {
   readonly grid: Grid = buildGrid()
   readonly roster = new Map<number, RosterEntry>()
   readonly remotes = new Map<number, RemoteTrack>()
+  readonly persistent = new PersistentTownState()
+  private readonly impacts = new ShotImpacts()
   readonly clock = new ServerClock()
   /** Paces the input ticks so frames reach the server just in time (see `tick-clock.ts`). */
   readonly tickClock = new TickClock()
@@ -198,6 +207,8 @@ export class NetClient {
   private predictedShots = 0
   private readonly handlers: NetHandlers
   private transport: Transport | null = null
+  private welcomeAccepted = false
+  private rejected = false
 
   constructor(handlers: NetHandlers) {
     this.handlers = handlers
@@ -209,6 +220,13 @@ export class NetClient {
 
   /** A reconnect: the server sends `MSG_FULL_RESET` too, but never trust a stale baseline. */
   reset(): void {
+    this.welcomeAccepted = false
+    this.persistent.ready = false
+    this.clearBaseline()
+  }
+
+  private clearBaseline(): void {
+    this.impacts.clear()
     this.baseline.clear()
     this.remotes.clear()
     this.pending.length = 0
@@ -242,6 +260,9 @@ export class NetClient {
   }
 
   handle(data: ArrayBuffer | string, nowMs: number): void {
+    if (this.rejected) {
+      return
+    }
     if (typeof data === 'string') {
       this.bytesIn += data.length
       this.onText(data)
@@ -250,10 +271,10 @@ export class NetClient {
     this.bytesIn += data.byteLength
     const kind = new Uint8Array(data)[0]
     if (kind === MSG_FULL_RESET) {
-      this.reset()
+      this.clearBaseline()
       return
     }
-    if (kind !== MSG_SNAPSHOT) {
+    if (kind !== MSG_SNAPSHOT || !this.welcomeAccepted) {
       return
     }
     const snap = decodeSnapshot(data, this.baseline)
@@ -262,6 +283,7 @@ export class NetClient {
     }
     this.snaps++
     this.lastTick = snap.tick
+    this.persistent.advance(snap.tick)
     this.lastArrival = nowMs
     this.clock.observe(snap.tick, nowMs)
     this.self = snap.self
@@ -299,13 +321,20 @@ export class NetClient {
     if (skip > 0) {
       this.send(this.batcher.skip(skip), nowMs)
     }
+    this.impacts.remember(snap.events, snap.tick, nowMs)
     for (const ev of snap.events) {
-      this.handlers.onEvent(ev, snap.tick)
+      if (this.persistent.event(ev, snap.tick)) {
+        this.handlers.onEvent(ev, snap.tick)
+      }
     }
   }
 
+  takeRagdollImpact(victim: number, killer: number, nowMs: number): RagdollImpact | null {
+    return this.impacts.take(victim, killer, this.lastTick, nowMs)
+  }
+
   private send(out: { seq: number; frames: WireFrame[] } | null, nowMs: number): void {
-    if (!(out && this.transport)) {
+    if (!(out && this.transport && this.welcomeAccepted)) {
       return
     }
     const bytes = encodeInput(this.writer, {
@@ -334,8 +363,21 @@ export class NetClient {
     } catch {
       return
     }
+    if (!msg || typeof msg !== 'object') {
+      return
+    }
+    if (msg.type !== 'welcome' && !this.welcomeAccepted) {
+      return
+    }
     switch (msg.type) {
       case 'welcome':
+        if (msg.contractVersion !== CONTRACT_VERSION) {
+          this.reject('The town is updating. Refresh the page in a moment to play.')
+          return
+        }
+        this.welcomeAccepted = true
+        this.impacts.clear()
+        this.persistent.ready = false
         this.you = msg.you
         this.lobbyId = msg.lobbyId
         this.banked = msg.banked
@@ -345,10 +387,19 @@ export class NetClient {
         }
         this.handlers.onWelcome(msg.you)
         break
+      case 'town_state':
+        if (!validPersistentState(msg.state, this.grid, TOWN.pickups.length)) {
+          this.reject('The town could not be loaded. Refresh the page to try again.')
+          return
+        }
+        this.persistent.replace(msg.state)
+        this.handlers.onPersistentState?.()
+        break
       case 'roster_add':
         this.roster.set(msg.entry.id, msg.entry)
         break
       case 'roster_remove':
+        this.impacts.remove(msg.id)
         this.roster.delete(msg.id)
         this.remotes.delete(msg.id)
         break
@@ -359,6 +410,15 @@ export class NetClient {
         break
     }
     this.handlers.onControl(msg)
+  }
+
+  private reject(message: string): void {
+    this.impacts.clear()
+    this.rejected = true
+    this.welcomeAccepted = false
+    this.persistent.ready = false
+    this.handlers.onIncompatible?.(message)
+    this.transport?.close()
   }
 
   /**
@@ -479,6 +539,9 @@ export class NetClient {
    * `renderTick` is the remote-entity time on screen (for the server's hit rewind).
    */
   tick(intent: Intent, renderTick: number, nowMs: number): void {
+    if (!this.welcomeAccepted) {
+      return
+    }
     const viewTick = Math.max(0, Math.floor(renderTick))
     const frame: WireFrame = {
       moveX: intent.moveX,
@@ -487,7 +550,7 @@ export class NetClient {
       buttons: intent.buttons,
       viewTick: viewTick & 0xff_ff,
       viewFrac: Math.round((renderTick - viewTick) * 255),
-      pitch: intent.pitch ?? 0,
+      pitch: quantizePitch(intent.pitch ?? 0),
     }
     const seq = this.batcher.nextSeq
     this.send(this.batcher.push(frame), nowMs)
@@ -536,7 +599,13 @@ export class NetClient {
     const weapon = this.weapon.weapon
     this.localCooldownUntil = nowMs + (FIRE_MS[weapon] ?? REVOLVER_FIRE_MS) - TICK_MS / 2
     this.predictedShots++
-    this.handlers.onPredictedShot(this.pred.x, this.pred.z, aimRadians(frame.aim), weapon)
+    this.handlers.onPredictedShot(
+      this.pred.x,
+      this.pred.z,
+      aimRadians(frame.aim),
+      weapon,
+      frame.pitch ?? 0,
+    )
     return true
   }
 

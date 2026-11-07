@@ -7,18 +7,27 @@
  * and hair colour (the same for near and far: the VAT recolours skin and hair per instance too).
  */
 import { Color } from 'three'
+import type { ItemId } from '../../data/catalog.ts'
 import type { BodyKey, HatKey, Look, MoustacheKey, SkinKey } from '../../data/outlaws.ts'
+import type { ActorOpts } from '../../scene/actor.ts'
+import { type HatDetail, hatDetailFor } from '../../scene/hat-detail.ts'
 import { HAIR_COLORS, SKINS, seeded } from '../../scene/identity.ts'
+import { catalogLoadout, gunIsPair, loadoutOpts } from '../../scene/loadout.ts'
 import { HAIR_LUM, SKIN_TONES } from '../../scene/person.ts'
+import type { VatLook } from './crowd/silhouette.ts'
 import { PALETTE } from './crowd/vat.ts'
 
 export interface PlayerLook {
   key: string
-  look: Look
+  look: VatLook
+  gun: ItemId
+  spurs?: ItemId | undefined
   hat: HatKey
   hatColor: number
+  hatDetail?: HatDetail | undefined
   top: Color
   bottom: Color
+  sleeves: Color
   /** Hair tint as the shader takes it (the colour over the grey hair texels). */
   hair: Color
   /** Skin tone multiplier on the atlas skin. */
@@ -35,7 +44,7 @@ interface OutfitStyle {
   base: BodyKey
   tops: number[]
   bottoms: number[]
-  extra?: Partial<Pick<Look, 'coat' | 'poncho' | 'bandoliers'>>
+  extra?: Partial<Pick<Look, 'coat' | 'coatCut' | 'poncho' | 'bandoliers' | 'vest'>>
 }
 
 const OUTFITS: Record<string, OutfitStyle> = {
@@ -61,19 +70,34 @@ const OUTFITS: Record<string, OutfitStyle> = {
     bottoms: [0x5a_44_30],
     extra: { poncho: 0xb8_5a_2a },
   },
-  'outfit.gamblers-frock': { base: 'suit', tops: [0x2a_2a_3a, 0x4a_1f_24], bottoms: [0x2a_2a_30] },
+  'outfit.gamblers-frock': {
+    base: 'suit',
+    tops: [0x2a_2a_3a, 0x4a_1f_24],
+    bottoms: [0x2a_2a_30],
+    extra: { coat: 0x2a_1c_2e, coatCut: 'frock' },
+  },
   'outfit.bandolier-rig': {
     base: 'rugged',
     tops: [0x6a_5a_3a, 0x4a_5a_4a],
     bottoms: [0x3a_30_28],
     extra: { bandoliers: true },
   },
-  'outfit.undertakers-black': { base: 'suit', tops: [0x18_16_16], bottoms: [0x18_16_16] },
-  'outfit.midnight-coat': { base: 'suit', tops: [0x1a_1a_2e], bottoms: [0x1a_1a_24] },
+  'outfit.undertakers-black': {
+    base: 'suit',
+    tops: [0x18_16_16],
+    bottoms: [0x18_16_16],
+    extra: { coat: 0x12_10_10, coatCut: 'frock' },
+  },
+  'outfit.midnight-coat': {
+    base: 'suit',
+    tops: [0x1a_1a_2e],
+    bottoms: [0x1a_1a_24],
+    extra: { coat: 0x1a_1a_2e },
+  },
 }
 const STARTER = OUTFITS['outfit.trail-duds'] as OutfitStyle
 
-const HATS: Record<string, { hat: HatKey; colors: number[] }> = {
+const HATS: Partial<Record<string, { hat: HatKey; colors: number[] }>> = {
   'hat.battered-brim': { hat: 'cowboy', colors: [0x6a_4a_2e, 0x8a_6a_44, 0x4a_3a_2a] },
   'hat.plainsman': { hat: 'flat', colors: [0xb5_9a_6a, 0x8a_7a_5a] },
   'hat.sombrero': { hat: 'sombrero', colors: [0xc8_a8_6a] },
@@ -152,10 +176,55 @@ function identity(r: () => number, hairHex: number, skin: SkinKey): Partial<Look
  * town's whole wardrobe (coats, ponchos, vests, frocks, other hats): a lobby of bots shouldn't be
  * a lobby of clones.
  */
+function catalogGarment(ids: readonly string[], bot: boolean): { kit: ActorOpts; spurs?: ItemId } {
+  if (bot) {
+    return { kit: {} }
+  }
+  const slots = catalogLoadout(ids)
+  return { kit: loadoutOpts(slots), spurs: slots.spurs }
+}
+
+function garmentLook(kit: ActorOpts): Partial<VatLook> {
+  const out: Partial<VatLook> = {}
+  for (const key of [
+    'coat',
+    'coatCut',
+    'poncho',
+    'vest',
+    'bandoliers',
+    'bandana',
+    'star',
+    'moustache',
+    'moustacheStyle',
+    'holster',
+  ] as const) {
+    if (kit[key] !== undefined) {
+      Object.assign(out, { [key]: kit[key] })
+    }
+  }
+  if (kit.moustache !== undefined) {
+    out.catalogMoustache = kit.moustache
+  }
+  return out
+}
+
+function catalogHat(kit: ActorOpts, hat: HatKey, color: number, id: string) {
+  return {
+    hat: kit.hat ?? hat,
+    hatColor: kit.hatColor ?? color,
+    hatDetail: kit.hatDetail ?? hatDetailFor(id),
+  }
+}
+
+function sleeveColor(tint: Readonly<Record<string, number | undefined>>, fallback: number): number {
+  return tint.Sleeves ?? tint.Shirt ?? fallback
+}
+
 export function lookFor(loadout: readonly string[], id: number, bot = false): PlayerLook {
   const r = seeded(`ow-rider/${id}`)
   const ownOutfit = loadout.find((i) => i.startsWith('outfit.'))
   const ownHat = loadout.find((i) => i.startsWith('hat.'))
+  const gun = (loadout.find((i) => i.startsWith('gun.')) ?? 'gun.rusty-six') as ItemId
   const outfitId = bot
     ? (OUTFIT_IDS[Math.floor(r() * OUTFIT_IDS.length)] ?? 'outfit.trail-duds')
     : (ownOutfit ?? 'outfit.trail-duds')
@@ -196,22 +265,35 @@ export function lookFor(loadout: readonly string[], id: number, bot = false): Pl
       ? pick(VESTS, Math.floor(r() * VESTS.length), 0x3a_2a_1e)
       : undefined
   const tone = SKIN_TONES[skin] ?? SKIN_TONES.tan
-  const look: Look = {
+  const appearance = catalogGarment(loadout, bot)
+  const garment = appearance.kit
+  // Paid kit keeps its catalog cut and colour; identity variation belongs to the wearer.
+  const catalogTint = garment.tint ?? {}
+  Object.assign(tint, catalogTint)
+  const look: PlayerLook['look'] = {
+    offGun: gunIsPair(gun),
     base: o.base,
-    tint,
     scale: 1,
     skin,
     ...o.extra,
+    // Never replace the assembled tint map with the garment's partial map.
+    tint,
     ...who,
+    ...garmentLook(garment),
     ...(vest === undefined ? {} : { vest }),
   }
+  if (appearance.spurs) {
+    look.spurs = appearance.spurs
+  }
   return {
-    key: `rider/${id}/${outfitId}/${hatId}/${top}/${bottom}/${hatColor}/${skin}/${hairHex}`,
+    key: `rider/${id}/${outfitId}/${hatId}/${loadout.join(',')}/${gun}/${top}/${bottom}/${hatColor}/${skin}/${hairHex}`,
     look,
-    hat: h.hat,
-    hatColor,
-    top: new Color(top),
-    bottom: new Color(bottom),
+    gun,
+    spurs: appearance.spurs,
+    ...catalogHat(garment, h.hat, hatColor, hatId),
+    top: new Color(tint[topMats[0] ?? ''] ?? top),
+    bottom: new Color(tint[bottomMats[0] ?? ''] ?? bottom),
+    sleeves: new Color(sleeveColor(tint, top)),
     hair: new Color(hairHex).multiplyScalar(1 / HAIR_LUM),
     skin: new Color(tone[0], tone[1], tone[2]),
     hatScale: 1,

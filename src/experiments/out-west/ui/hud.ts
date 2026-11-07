@@ -540,7 +540,7 @@ export class Hud {
           'ow-end-confirm',
           e,
           stats.ranked
-            ? 'Legend mode starts a new run. This one is not on the board yet: submit it first, or start anyway.'
+            ? 'Legend mode starts a new run. Submit this run to the leaderboard first, or start anyway.'
             : 'Legend mode starts a new run. The 2019 speeds are faster.',
         )
         const row = el('div', 'ow-menu-btns ow-end-confirm-row', note)

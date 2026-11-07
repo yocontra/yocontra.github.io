@@ -34,7 +34,7 @@ import {
 import { hasLineOfSight3D } from '../../../src/experiments/out-west/ffa/sim/surfaces.ts'
 import type { InputFrame, Player } from '../../../src/experiments/out-west/ffa/sim/types.ts'
 import { aimFor, type BotAim } from './bot-skill.ts'
-import { buildNav, findPath, type NavGrid } from './nav.ts'
+import { buildNav, findPath, type NavGrid, nextWaypoint } from './nav.ts'
 
 /** A rider's eye, for 3D sight checks. */
 const eyeOf = (p: Player) => ({ x: p.x, y: p.y + 1.45, z: p.z })
@@ -481,11 +481,7 @@ export class BotDirector {
       b.path = findPath(this.navFor(w), p, b.goal) ?? []
       b.replanAt = w.tick + REPLAN_TICKS + this.rng.int(0, 20)
     }
-    let next = b.path[0]
-    while (next && dist2(p.x, p.z, next.x, next.z) < 0.6) {
-      b.path.shift()
-      next = b.path[0]
-    }
+    const next = nextWaypoint(w.grid, b.path, p)
     if (!next) {
       // At the goal: press E (bank, open the box). If no channel starts within a few ticks there
       // was nothing to do here: pick the next goal at once rather than idling until the replan.

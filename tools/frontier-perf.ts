@@ -27,8 +27,11 @@
  * (over the shoulder by default, as players get it; `top` is the old map view), and the camera
  * turns slowly through a full circle while sampling so the horizon is measured in every direction.
  */
+
+import { writeFile } from 'node:fs/promises'
 import process from 'node:process'
 import { chromium } from 'playwright'
+import { textureMeterScript } from './character-quality/memory.ts'
 import { allocProfile, profileMain, serveProd } from './perf-lib.ts'
 
 const opt = (k: string, d: string): string =>
@@ -78,6 +81,19 @@ interface Snap {
 interface Extra {
   textures: number
   geometries: number
+  textureMb: number
+  corpseLod: {
+    models: number
+    pending: number
+    ready: number
+    fallback: number
+    full: number
+    middle: number
+    far: number
+  }
+  ragdolls: Record<string, unknown>
+  living: Record<string, number>
+  bootFits: { prepared: number; late: number; milliseconds: number }
 }
 interface Frontier {
   x: number
@@ -93,6 +109,13 @@ const browser = await chromium.launch({
 })
 const ctx = await browser.newContext()
 const page = await ctx.newPage()
+await page.addInitScript({ content: textureMeterScript })
+if (!prodArg) {
+  await page.routeWebSocket(
+    (url) => url.host === new URL(base).host,
+    (socket) => socket.send(JSON.stringify({ type: 'connected' })),
+  )
+}
 const cdp = await ctx.newCDPSession(page)
 await cdp.send('Emulation.setDeviceMetricsOverride', {
   width: portrait ? 375 : 812,
@@ -113,15 +136,64 @@ await page.goto(`${base}/experiments/out-west/frontier/${q}#perf&tier=floor`)
 await page.waitForFunction(() => typeof Reflect.get(globalThis, '__owPerf') === 'function', null, {
   timeout: 60_000,
 })
-await sleep(8000)
-// the first-spawn How to play card would sit over the first samples
+// Prepared VAT variants and actual corpse rigs are part of loading. A fixed eight-second
+// delay used to sample unfinished towns on slower machines or after cold asset caches.
+await page.waitForFunction(
+  () => {
+    const f = Reflect.get(globalThis, '__frontier')?.()
+    return (
+      f?.ready &&
+      f.riders === 32 &&
+      f.vat?.loading === 0 &&
+      f.vat?.queued === 0 &&
+      f.corpsePreparation?.loading === 0 &&
+      f.corpsePreparation?.queued === 0 &&
+      f.corpseLod?.pending === 0 &&
+      f.corpseLod.ready === f.corpseLod.models &&
+      f.corpseLod.fallback === 0 &&
+      f.living?.pending === 0 &&
+      f.living.actors === f.riders &&
+      f.bootFits?.late === 0
+    )
+  },
+  null,
+  { timeout: 180_000 },
+)
+await page.evaluate(
+  () => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))),
+)
+// The card first opens in a running game frame, after start() resolves.
 await page.evaluate(() => {
   const v = Reflect.get(globalThis, '__frontierView') as { closeHowTo?: () => void } | undefined
   v?.closeHowTo?.()
 })
+await page.waitForFunction(() => !Reflect.get(globalThis, '__frontier')?.().howto)
+const ready = await page.evaluate(() => Reflect.get(globalThis, '__frontier')())
+await page.evaluate(() => {
+  const game = Reflect.get(globalThis, '__frontierGame')
+  const builds: { id: number; at: number; ms: number }[] = []
+  const measurement = { builds, start: performance.now(), sampleAt: 0 }
+  Reflect.set(globalThis, '__livingBuildMeasure', measurement)
+  const build = game.crowd.build.bind(game.crowd)
+  game.crowd.build = (...args: unknown[]) => {
+    const at = performance.now()
+    try {
+      return build(...args)
+    } finally {
+      builds.push({
+        id: Number(Reflect.get(args[0] as object, 'id')),
+        at,
+        ms: performance.now() - at,
+      })
+    }
+  }
+})
 await cdp.send('Emulation.setCPUThrottlingRate', { rate })
 await sleep(cluster ? 25_000 : 12_000)
 await cdp.send('HeapProfiler.collectGarbage').catch(() => undefined)
+await page.evaluate(() => {
+  Reflect.get(globalThis, '__livingBuildMeasure').sampleAt = performance.now()
+})
 
 const rows: (Snap & Extra & { inView: number; near: number; far: number; builds: number })[] = []
 for (let t = 0; t < secs; t += 2) {
@@ -178,6 +250,11 @@ for (let t = 0; t < secs; t += 2) {
       builds: f.crowd?.builds ?? 0,
       textures: f.textures,
       geometries: f.geometries,
+      textureMb: Number(Reflect.get(globalThis, '__owTextureBytes')?.() ?? 0) / 1_048_576,
+      corpseLod: f.corpseLod,
+      ragdolls: f.ragdolls,
+      living: f.living,
+      bootFits: f.bootFits,
     }
   })
   if (s) {
@@ -190,6 +267,7 @@ if (process.argv.includes('--profile')) {
 if (process.argv.includes('--alloc')) {
   await allocProfile(cdp, 8000, prodArg !== undefined)
 }
+const livingBuilds = await page.evaluate(() => Reflect.get(globalThis, '__livingBuildMeasure'))
 await browser.close()
 stopServer?.()
 
@@ -219,4 +297,29 @@ console.log(
 console.log(
   `  textures ≤${max(rows.map((r) => r.textures))}, geometries ≤${max(rows.map((r) => r.geometries))}`,
 )
+console.log(`  texture storage ≤${f1(max(rows.map((r) => r.textureMb)))} MB`)
 console.log(`  riders on screen per sample: ${rows.map((r) => r.inView).join(' ')}`)
+const output = opt('out', '')
+if (output) {
+  await writeFile(
+    output,
+    JSON.stringify(
+      {
+        base,
+        production: Boolean(prodArg),
+        rate,
+        secs,
+        cluster,
+        portrait,
+        viewMode,
+        seedArg,
+        spawnAt,
+        ready,
+        livingBuilds,
+        rows,
+      },
+      null,
+      2,
+    ),
+  )
+}

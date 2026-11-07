@@ -96,6 +96,9 @@ function overlay(root: HTMLElement): {
   return {
     el,
     progress: (f, text) => {
+      if (el.classList.contains('refused')) {
+        return
+      }
       if (label) {
         label.textContent = text
       }
@@ -175,6 +178,7 @@ const RETRY = new Set<JoinError['reason']>([
 
 export function mountFrontier(root: HTMLElement, opts: FrontierOptions = {}): FrontierHandle {
   let destroyed = false
+  let terminalCard: ReturnType<typeof overlay> | null = null
   const onExit = (reason: FrontierExit, detail?: string) => {
     opts.onExit?.(reason, detail)
   }
@@ -193,6 +197,18 @@ export function mountFrontier(root: HTMLElement, opts: FrontierOptions = {}): Fr
   const game = new FrontierGame(root, {
     ...(opts.audio ? { audio: opts.audio } : {}),
     practice: opts.server === 'loopback' && !harnessTown(opts),
+    onIncompatible: (message) => {
+      if (destroyed) {
+        return
+      }
+      const card = ui.el.classList.contains('gone') ? overlay(root) : ui
+      terminalCard = card
+      card.refuse(
+        { reason: 'outdated', message },
+        () => onExit('refused', 'outdated'),
+        retryFor('outdated'),
+      )
+    },
     onExit: (reason) => {
       if (reason === 'lost') {
         // the reconnect gave up: say so plainly, and offer another go
@@ -205,6 +221,7 @@ export function mountFrontier(root: HTMLElement, opts: FrontierOptions = {}): Fr
   const ui = overlay(root)
   const lostCard = (): void => {
     const card = overlay(root)
+    terminalCard = card
     card.refuse(
       { reason: 'network', message: "Connection lost. Couldn't reconnect." },
       () => onExit('lost'),
@@ -226,6 +243,7 @@ export function mountFrontier(root: HTMLElement, opts: FrontierOptions = {}): Fr
                 ...(opts.getToken ? { getToken: opts.getToken } : {}),
                 ...(opts.bots === undefined ? {} : { bots: opts.bots }),
                 onRefused: (e) => {
+                  game.refuseJoin()
                   ui.refuse(e, () => onExit('refused', e.reason), retryFor(e.reason))
                 },
               },
@@ -249,6 +267,7 @@ export function mountFrontier(root: HTMLElement, opts: FrontierOptions = {}): Fr
       root.removeEventListener('pointerup', unlock)
       globalThis.removeEventListener('keydown', unlock)
       ui.el.remove()
+      terminalCard?.el.remove()
       game.dispose()
     },
     debug: () => game.debug(),
@@ -256,6 +275,7 @@ export function mountFrontier(root: HTMLElement, opts: FrontierOptions = {}): Fr
   // Dev builds, or a perf-harness build (`PUBLIC_OW_PERF_HARNESS=1`, tools/frontier-perf.ts
   // --prod; never set for the real deploy), so both fold away in production.
   if (import.meta.env.DEV || import.meta.env.PUBLIC_OW_PERF_HARNESS === '1') {
+    Reflect.set(globalThis, '__frontierGame', game)
     // Dev harness only: state for Playwright scripts (positions would be a wallhack in prod).
     Reflect.set(globalThis, '__frontier', () => game.debug())
     Reflect.set(globalThis, '__frontierTrace', {

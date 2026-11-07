@@ -4,6 +4,13 @@ import { type SimplifyJob, simplifyIndex } from './lod.ts'
 const scope = globalThis as unknown as Worker
 
 scope.onmessage = async (e: MessageEvent<{ id: number; job: SimplifyJob }>) => {
-  const result = await simplifyIndex(e.data.job)
-  scope.postMessage({ id: e.data.id, result }, [result.index.buffer])
+  try {
+    const result = await simplifyIndex(e.data.job)
+    scope.postMessage({ id: e.data.id, result }, [result.index.buffer])
+  } catch (error) {
+    scope.postMessage({
+      id: e.data.id,
+      error: error instanceof Error ? error.message : String(error),
+    })
+  }
 }

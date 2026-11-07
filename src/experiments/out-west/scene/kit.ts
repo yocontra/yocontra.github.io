@@ -18,6 +18,7 @@ export interface HolsterLook {
   roughness?: number
   trim?: number
   rig?: boolean
+  detail?: 'floral' | 'conchos'
 }
 
 /** The starter holster: plain dark leather. */

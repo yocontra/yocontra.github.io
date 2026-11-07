@@ -42,6 +42,8 @@ export const SLOT = {
   Bracer: 'bracer',
   Pauldron: 'pauldron',
   Belt: 'belt',
+  Pants: 'pants',
+  Boots: 'boots',
 } as const
 export type Slot = (typeof SLOT)[keyof typeof SLOT]
 
@@ -55,6 +57,8 @@ export interface PieceFlags {
   wall?: boolean
   /** Hangs or flies by design (lanterns, bags, birds, clouds, tumbleweed). */
   hangs?: boolean
+  /** Cosmetic doorway parts; never add blocking collision across their open passage. */
+  nonBlocking?: boolean
   /** Live gameplay props (pickups, bags, the strongbox, guns, money). */
   live?: boolean
 }

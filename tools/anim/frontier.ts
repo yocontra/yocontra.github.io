@@ -2,6 +2,7 @@
 import { mkdir, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import type { BrowserContext, CDPSession, Page } from 'playwright'
+import { REVOLVER_ROUNDS } from '../../src/experiments/out-west/ffa/sim/constants.ts'
 import {
   all,
   type Expect,
@@ -10,6 +11,7 @@ import {
   OUT,
   only,
   record,
+  renderedPose,
   sheet,
   sleep,
   tposes,
@@ -132,10 +134,10 @@ const FRONTIER: FrontierState[] = [
     ms: 1800,
     expect: { clip: 'LocoReload|Reload' },
   },
-  { name: 'fp-idle', view: 'first', ms: 1500, expect: { moves: 0.3 } },
+  { name: 'fp-idle', view: 'first', ms: 1500, expect: { shifts: 0.0005 } },
   { name: 'fp-fire', view: 'first', hold: '.fr-btn-fire', ms: 1500, expect: { moves: 0.3 } },
   { name: 'fp-reload', view: 'first', tap: '.fr-btn-reload', ms: 2200, expect: { moves: 1 } },
-  { name: 'fp-ads', view: 'first', ads: true, ms: 1500, expect: { moves: 0.3 } },
+  { name: 'fp-ads', view: 'first', ads: true, ms: 1500, expect: { shifts: 0.000_15 } },
   { name: 'fp-sprint', view: 'first', keys: ['KeyW', 'ShiftLeft'], ms: 1500, expect: { moves: 1 } },
 ]
 
@@ -162,14 +164,37 @@ async function arrive(page: Page, base: string): Promise<void> {
   )
   await page.waitForFunction(
     () => {
-      const f = Reflect.get(globalThis, '__frontier') as () => { alive?: boolean }
-      return f().alive === true
+      const f = Reflect.get(globalThis, '__frontier') as () => { alive?: boolean; ready?: boolean }
+      const state = f()
+      return state.ready === true && state.alive === true
     },
     undefined,
     { timeout: 120_000 },
   )
+  await page.evaluate(
+    () => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))),
+  )
   await view(page, 'closeHowTo')
+  await page.waitForFunction(() => !Reflect.get(globalThis, '__frontier')?.().howto)
   await sleep(1500)
+}
+
+/** The prior held-fire state can already have auto-reloaded; start a fresh manual reload. */
+async function prepareReload(page: Page, cdp: CDPSession): Promise<void> {
+  await page.waitForFunction(() => {
+    const game = Reflect.get(globalThis, '__frontierGame')
+    return game?.net.alive && game.net.self?.reloadTicks === 0 && game.net.ammo > 0
+  })
+  const ammo = Number((await debugOf(page)).ammo)
+  if (ammo === REVOLVER_ROUNDS) {
+    await holdButton(page, cdp, '.fr-btn-fire', true)
+    await sleep(80)
+    await holdButton(page, cdp, '.fr-btn-fire', false)
+    await page.waitForFunction(
+      (rounds) => Reflect.get(globalThis, '__frontierGame')?.net.ammo < rounds,
+      ammo,
+    )
+  }
 }
 
 /** Start a state's input: the view, the sights, held keys, a tap, a held touch button. */
@@ -182,6 +207,9 @@ async function begin(page: Page, cdp: CDPSession, st: FrontierState): Promise<vo
   await view(page, 'set', st.view)
   await view(page, 'ads', st.ads ?? false)
   await sleep(500)
+  if (st.tap === '.fr-btn-reload') {
+    await prepareReload(page, cdp)
+  }
   for (const k of st.keys ?? []) {
     await page.keyboard.down(k)
   }
@@ -200,6 +228,11 @@ async function begin(page: Page, cdp: CDPSession, st: FrontierState): Promise<vo
   }
   if (st.hold) {
     await holdButton(page, cdp, st.hold, true)
+  }
+  if (st.tap === '.fr-btn-reload') {
+    await page.waitForFunction(
+      () => Reflect.get(globalThis, '__frontierGame')?.net.self?.reloadTicks > 0,
+    )
   }
 }
 
@@ -222,18 +255,46 @@ async function sampleOnce(
 ): Promise<{ local: Measure | undefined; remotes: Measure[] }> {
   const d = await debugOf(page)
   const shown = (await all(page)).filter((m) => m.shown)
-  const scenes = new Map<string, number>()
-  for (const m of shown) {
-    scenes.set(m.scene, (scenes.get(m.scene) ?? 0) + 1)
-  }
-  const worldScene = [...scenes.entries()].sort((a, b) => b[1] - a[1])[0]?.[0]
+  const scenes = await page.evaluate(() => {
+    const game = Reflect.get(globalThis, '__frontierGame') as
+      | {
+          scene: import('three').Object3D
+          viewModel?: { actor?: { root: import('three').Object3D } }
+        }
+      | undefined
+    const sceneOf = (node: import('three').Object3D | undefined) => {
+      if (!node) {
+        return
+      }
+      let root = node
+      while (root.parent) {
+        root = root.parent
+      }
+      return root.name || root.uuid.slice(0, 8)
+    }
+    return { world: sceneOf(game?.scene), view: sceneOf(game?.viewModel?.actor?.root) }
+  })
   const x = Number(d.x ?? 0)
   const z = Number(d.z ?? 0)
-  const world = shown.filter((m) => m.scene === worldScene)
+  const world = shown.filter((m) => m.scene === scenes.world)
   const near = (m: Measure) => Math.hypot(m.pos[0] - x, m.pos[2] - z)
   const local = first
-    ? shown.find((m) => m.scene !== worldScene)
+    ? shown.find((m) => m.scene === scenes.view)
     : [...world].sort((a, b) => near(a) - near(b))[0]
+  if (first && local) {
+    // First-person reload/recoil moves the held gun in camera space while the actor's
+    // underlying hold clip stays idle. Measure that rendered transform as well as bones.
+    const handle = await page.evaluateHandle(() => {
+      const game = Reflect.get(globalThis, '__frontierGame') as
+        | { viewModel?: { held?: { obj: import('three').Object3D } } }
+        | undefined
+      return game?.viewModel?.held?.obj
+    })
+    const gun = await handle.evaluate(renderedPose)
+    await handle.dispose()
+    local.q.push(...gun.q)
+    local.renderPos = gun.pos
+  }
   return { local, remotes: world.filter((m) => m !== local && near(m) > 2) }
 }
 
@@ -254,7 +315,7 @@ export async function frontier(ctx: BrowserContext, base: string): Promise<void>
     const ms: Measure[] = []
     const shots: Buffer[] = []
     const t0 = Date.now()
-    while (Date.now() - t0 < st.ms || ms.length < 5) {
+    while ((Date.now() - t0 < st.ms || ms.length < 5) && Date.now() - t0 < st.ms + 5000) {
       const { local, remotes } = await sampleOnce(page, st.view === 'first')
       if (local) {
         ms.push(local)

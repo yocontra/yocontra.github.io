@@ -18,11 +18,13 @@ import {
   BufferAttribute,
   BufferGeometry,
   type Color,
+  type Material,
   type Object3D,
   type SkinnedMesh,
   Vector3,
 } from 'three'
 import { creaseNormals } from './normals.ts'
+import { type Slot, slotOf } from './roles.ts'
 
 export interface Sample {
   readonly p: Vector3
@@ -30,6 +32,8 @@ export interface Sample {
   readonly bone: string
   /** Material name of the primitive the vertex belongs to. */
   readonly mat: string
+  /** Semantic garment slot assigned when the source model is imported. */
+  readonly slot?: Slot | undefined
   /** Up to four (bone index, weight) pairs, bone index into `Body.bones`. */
   readonly w: readonly (readonly [number, number])[]
 }
@@ -37,7 +41,12 @@ export interface Sample {
 export interface Body {
   readonly samples: readonly Sample[]
   readonly bones: readonly Bone[]
+  /** Normalized authored hierarchy before any animation is evaluated. */
+  readonly neutralFrames?: readonly { key: string; matrix: readonly number[] }[]
 }
+
+const materialSlot = (mat: Material | undefined): Slot | undefined =>
+  mat ? slotOf(mat) : undefined
 
 const PUNCT = /[.\s]/gu
 const DUP_SUFFIX = /_\d+$/u
@@ -64,6 +73,7 @@ export function sampleBody(model: Object3D, space: Object3D): Body {
     }
     const mat = Array.isArray(sm.material) ? sm.material[0] : sm.material
     const matName = mat?.name ?? ''
+    const slot = materialSlot(mat)
     const toSpace = inv.clone().multiply(sm.matrixWorld)
     const local = sm.skeleton.bones.map((b) => {
       let i = index.get(b)
@@ -98,6 +108,7 @@ export function sampleBody(model: Object3D, space: Object3D): Body {
         p: v.clone().applyMatrix4(toSpace),
         bone: best >= 0 ? strip(bones[best]?.name ?? '') : '',
         mat: matName,
+        slot,
         w,
       })
     }

@@ -45,7 +45,7 @@ import {
   type World,
 } from './state.ts'
 import { rayWorld } from './surfaces.ts'
-import type { Player } from './types.ts'
+import type { Player, ShotPoint } from './types.ts'
 import { shatterGlass } from './windows.ts'
 
 const REWIND_TICKS = MAX_REWIND_MS / TICK_MS
@@ -114,7 +114,8 @@ export interface Strike {
 }
 
 /** The shooter's eye height, metres above the feet. */
-export const eyeHeight = (p: Player): number => (p.crouched ? CROUCH_HEIGHT : BODY_HEIGHT) - 0.18
+export const eyeHeight = (p: Pick<Player, 'crouched'>): number =>
+  (p.crouched ? CROUCH_HEIGHT : BODY_HEIGHT) - 0.18
 
 export interface ShotRay {
   ox: number
@@ -258,18 +259,38 @@ export function fire(w: World, p: Player, aim: number, viewTime: number): ShotRe
   } else if (wall < MAX_RANGE) {
     flags |= SHOT_WALL
   }
+  recordShot(w, p, ray, { range, target: hit ? hit.id : NONE, flags })
+
+  return { target: hit ? hit.id : NONE, range, deadEye, killed }
+}
+
+/** Emit the exact ray the sim used; presentation must never reconstruct it from current poses. */
+export function recordShot(
+  w: World,
+  p: Player,
+  ray: ShotRay,
+  trace: { range: number; target: number; flags: number; pellets?: ShotPoint[] },
+): void {
+  const { range, target, flags, pellets = [] } = trace
+  const end = rayEnd(ray, range)
   w.events.push({
     type: 'shot',
     shooter: p.id,
-    aim: radiansToAim(aimRadians(aim) + jitter * spread * DEG),
+    aim: radiansToAim(Math.atan2(ray.dz, ray.dx)),
     range: Math.min(255, Math.round(range / SHOT_RANGE_UNIT)),
-    target: hit ? hit.id : NONE,
+    target,
     flags,
     x: p.x,
     z: p.z,
-    y: Math.round((ray.oy + ray.dy * range) * 10),
+    y: Math.round(end.y * 10),
+    origin: { x: ray.ox, y: ray.oy, z: ray.oz },
+    end,
+    pellets,
   })
-  return { target: hit ? hit.id : NONE, range, deadEye, killed }
+}
+
+export function rayEnd(ray: ShotRay, range: number): ShotPoint {
+  return { x: ray.ox + ray.dx * range, y: ray.oy + ray.dy * range, z: ray.oz + ray.dz * range }
 }
 
 /** This player's spread right now (degrees; the shotgun's is its cone). */

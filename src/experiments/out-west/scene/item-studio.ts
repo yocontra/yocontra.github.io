@@ -27,7 +27,13 @@ import {
 } from 'three'
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js'
 import type { GLTF } from 'three/examples/jsm/loaders/GLTFLoader.js'
-import { DEFAULT_LOADOUT, type ItemId, itemById, type Slot } from '../data/catalog.ts'
+import {
+  type CatalogItem,
+  DEFAULT_LOADOUT,
+  type ItemId,
+  itemById,
+  type Slot,
+} from '../data/catalog.ts'
 import type { Actor } from './actor.ts'
 import { dressedActor, finishedGun } from './loadout.ts'
 import type { PropDef } from './props.ts'
@@ -107,7 +113,7 @@ export class ItemStudio {
       actor.update(0.4)
       actor.root.rotation.y = TURN[item.slot] ?? 0.45
       actor.root.updateMatrixWorld(true)
-      this.frameActor(actor, item.slot)
+      this.frameActor(actor, item)
     }
     const canvas = this.shoot()
     subject.removeFromParent()
@@ -123,7 +129,8 @@ export class ItemStudio {
   }
 
   /** Aim at the part of him this slot dresses. */
-  private frameActor(a: Actor, slot: Slot): void {
+  private frameActor(a: Actor, item: CatalogItem): void {
+    const slot = item.slot
     const head = a.headPos(new Vector3())
     const h = a.height
     if (slot === 'hat') {
@@ -136,6 +143,17 @@ export class ItemStudio {
         new Vector3(head.x, (top + bottom) / 2, head.z),
         Math.max((top - bottom) / 2, brim + 0.06),
       )
+      return
+    }
+    if (slot === 'extra') {
+      if (item.id === 'extra.tin-star') {
+        const chest =
+          a.spine?.getWorldPosition(new Vector3()) ?? head.clone().add(new Vector3(0, -0.3, 0))
+        this.aim(chest.add(new Vector3(0.055, 0.04, 0.07)), 0.22)
+      } else {
+        const offset = item.id === 'extra.handlebar' ? -0.055 : -0.14
+        this.aim(head.clone().add(new Vector3(0, offset, 0.035)), 0.19)
+      }
       return
     }
     if (slot === 'holster' && a.holster) {
@@ -155,7 +173,7 @@ export class ItemStudio {
       }
     }
     const band: Record<string, [number, number]> = {
-      outfit: [0.3, 1.04],
+      outfit: [0.02, 1.04],
       extra: [0.5, 1.02],
       holster: [0.38, 0.64],
       spurs: [0, 0.2],

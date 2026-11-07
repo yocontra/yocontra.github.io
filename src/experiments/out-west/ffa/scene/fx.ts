@@ -27,6 +27,7 @@ import {
   Quaternion,
   RingGeometry,
   SphereGeometry,
+  SRGBColorSpace,
   Vector2,
   Vector3,
 } from 'three'
@@ -51,6 +52,7 @@ interface Slot {
   y: number
   z: number
   dx: number
+  dy: number
   dz: number
   len: number
   size: number
@@ -72,6 +74,7 @@ function pool(n: number): Slot[] {
     y: 0,
     z: 0,
     dx: 0,
+    dy: 0,
     dz: 0,
     len: 0,
     size: 0,
@@ -180,6 +183,7 @@ function holeTexture(): CanvasTexture {
     }
   }
   const t = new CanvasTexture(c)
+  t.colorSpace = SRGBColorSpace
   return t
 }
 
@@ -243,13 +247,12 @@ export class Effects {
   constructor(root: Object3D) {
     this.root = root
     const dot = softDot()
-    // Tracers: a unit quad lying flat, stretched along the shot.
-    const tracerGeo = new PlaneGeometry(1, 1).rotateX(-Math.PI / 2).translate(0, 0, -0.5)
+    // A narrow volume, visible from above and at eye level, along the real 3D bullet path.
+    const tracerGeo = new BoxGeometry(1, 1, 1).translate(0, 0, -0.5)
     this.tracers = new Burst(new InstancedMesh(tracerGeo, additive(dot), 48), 48, (sl, k, out) => {
-      const yaw = Math.atan2(-sl.dx, -sl.dz)
-      q.setFromAxisAngle(up, yaw)
+      q.setFromUnitVectors(forward, v.set(-sl.dx, -sl.dy, -sl.dz).normalize())
       const len = sl.len * Math.min(1, k * 3 + 0.35)
-      s.set(0.09 * (1 - k * 0.5), 1, len)
+      s.set(0.035 * (1 - k * 0.5), 0.035 * (1 - k * 0.5), len)
       out.compose(v.set(sl.x, sl.y, sl.z), q, s)
     })
     this.flashes = new Burst(
@@ -284,7 +287,7 @@ export class Effects {
       (sl, k, out) => {
         q.setFromUnitVectors(forward, v.set(sl.nx, sl.ny, sl.nz))
         s.setScalar(sl.size * (1 - k * 0.2))
-        out.compose(v.set(sl.x + sl.nx * 0.012, sl.y + sl.ny * 0.012, sl.z + sl.nz * 0.012), q, s)
+        out.compose(v.set(sl.x + sl.nx * 0.01, sl.y + sl.ny * 0.01, sl.z + sl.nz * 0.01), q, s)
       },
     )
     this.holes.mesh.renderOrder = 4
@@ -394,25 +397,17 @@ export class Effects {
   }
 
   shot(
-    x: number,
-    y: number,
-    z: number,
-    aim: number,
-    range: number,
+    from: { x: number; y: number; z: number },
+    end: { x: number; y: number; z: number },
     color = new Color(2.4, 1.8, 0.9),
+    flash = true,
   ): void {
-    const t = this.tracers.spawn()
-    t.life = 0.11
-    t.x = x
-    t.y = y
-    t.z = z
-    t.dx = Math.cos(aim)
-    t.dz = Math.sin(aim)
-    t.len = Math.max(0.5, range)
-    t.vx = 0
-    t.vy = 0
-    t.vz = 0
-    t.color.copy(color)
+    this.tracer(from, end, color, 0.11)
+    if (!flash) {
+      return
+    }
+    const { x, y, z } = from
+    const aim = Math.atan2(end.z - z, end.x - x)
     const f = this.flashes.spawn()
     f.life = 0.07
     f.x = x + Math.cos(aim) * 0.15
@@ -453,9 +448,34 @@ export class Effects {
     h.color.setRGB(1, 1, 1)
   }
 
+  private tracer(
+    from: { x: number; y: number; z: number },
+    end: { x: number; y: number; z: number },
+    color: Color,
+    life: number,
+  ): void {
+    const t = this.tracers.spawn()
+    const dx = end.x - from.x
+    const dy = end.y - from.y
+    const dz = end.z - from.z
+    const length = Math.hypot(dx, dy, dz)
+    t.life = life
+    t.x = from.x
+    t.y = from.y
+    t.z = from.z
+    t.dx = length > 0 ? dx / length : 0
+    t.dy = length > 0 ? dy / length : 0
+    t.dz = length > 0 ? dz / length : 1
+    t.len = length
+    t.vx = 0
+    t.vy = 0
+    t.vz = 0
+    t.color.copy(color)
+  }
+
   /** A brass casing from your own gun, kicked out to the side and falling to the street. */
   casing(x: number, y: number, z: number, aim: number): void {
-    const c = this.casings[this.casingNext]
+    const c = this.casings.at(this.casingNext)
     this.casingNext = (this.casingNext + 1) % this.casings.length
     if (!c) {
       return
@@ -490,7 +510,12 @@ export class Effects {
   }
 
   /** Dust off a wall, or blood on a hit; `y` lifts it to the shooter/target's feet. */
-  impact(x: number, z: number, hit: boolean, y = 0): void {
+  impact(x: number, z: number, hit: boolean, feetY = 0): void {
+    this.impactAt(x, feetY + (hit ? 1.1 : 0.9), z, hit)
+  }
+
+  /** A bullet impact at its exact world-space endpoint. */
+  impactAt(x: number, y: number, z: number, hit: boolean): void {
     const eye = this.eye
     if (eye && Math.hypot(x - eye.x, z - eye.z) < 0.9) {
       return
@@ -499,7 +524,7 @@ export class Effects {
       const p = this.puffs.spawn()
       p.life = hit ? 0.35 : 0.5
       p.x = x
-      p.y = y + (hit ? 1.1 : 0.9)
+      p.y = y
       p.z = z
       p.vx = (Math.random() - 0.5) * 2
       p.vy = Math.random() * 1.2
@@ -607,28 +632,24 @@ export class Effects {
     }
   }
 
-  /** A shotgun shell: eight short pellet tracers fanned over the cone. */
-  pellets(x: number, y: number, z: number, aim: number, range: number, coneRad: number): void {
-    for (let i = 0; i < 8; i++) {
-      const a = aim + ((i / 7) * 2 - 1) * coneRad * (0.7 + Math.random() * 0.3)
-      const t = this.tracers.spawn()
-      t.life = 0.09
-      t.x = x
-      t.y = y
-      t.z = z
-      t.dx = Math.cos(a)
-      t.dz = Math.sin(a)
-      t.len = range * (0.75 + Math.random() * 0.25)
-      t.vx = 0
-      t.vy = 0
-      t.vz = 0
-      t.color.setRGB(2.2, 1.5, 0.7)
+  /** The server's pellet endpoints, one flash for the shell. */
+  pellets(
+    from: { x: number; y: number; z: number },
+    ends: readonly { x: number; y: number; z: number }[],
+    flash = true,
+  ): void {
+    const color = tc.setRGB(2.2, 1.5, 0.7)
+    for (const end of ends) {
+      this.tracer(from, end, color, 0.09)
+    }
+    if (!flash) {
+      return
     }
     const f = this.flashes.spawn()
     f.life = 0.09
-    f.x = x + Math.cos(aim) * 0.2
-    f.y = y
-    f.z = z + Math.sin(aim) * 0.2
+    f.x = from.x
+    f.y = from.y
+    f.z = from.z
     f.size = 1.8 * this.flashScale
     f.vx = 0
     f.vy = 0

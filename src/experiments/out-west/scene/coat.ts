@@ -44,7 +44,7 @@ const CUTS: Readonly<Record<CoatCut, Cut>> = {
     hem: 0.55,
     open: [0.62, 0.44, 0.3],
     front: [0.45, 0.55],
-    flare: 1.15,
+    flare: 1.32,
     vent: [0.28, 0.09],
     loose: true,
   },
@@ -52,7 +52,7 @@ const CUTS: Readonly<Record<CoatCut, Cut>> = {
     hem: -0.04,
     open: [0.6, 0.38, 0.13],
     front: [0.2, 0.5],
-    flare: 1.08,
+    flare: 1.22,
     vent: [0.22, 0.06],
     loose: false,
   },
@@ -70,7 +70,12 @@ const smooth = (a: number, b: number, x: number): number => {
 }
 const mix = (a: number, b: number, t: number): number => a + (b - a) * t
 
-const wool = () => ({ roughness: 1, rim: FABRIC.wool.rim, swatch: FABRIC.wool.swatch })
+const wool = () => ({
+  contactCloth: true,
+  roughness: 1,
+  rim: FABRIC.wool.rim,
+  swatch: FABRIC.wool.swatch,
+})
 
 /** Half-width of the open front at body ring `t` (0 = collar, 1 = waist). */
 function openAt(c: Cut, t: number): number {
@@ -170,8 +175,11 @@ function panel(
   // never wider than his hips (times `flare` at the hem): it hangs straight, it doesn't flare
   const limit = (a: number, t: number): number =>
     (mix(1.04, c.flare, t) * hipW) / Math.max(0.05, Math.abs(Math.sin(a))) - margin
-  const frontAt = (t: number): number =>
-    o.holster ? mix(c.front[0], HOLSTER_SWEEP, smooth(0, 0.22, t)) : mix(c.front[0], c.front[1], t)
+  const frontAt = (t: number): number => {
+    const hem = mix(c.front[0], c.front[1], t)
+    const notch = smooth(0, 0.2, t) * (1 - smooth(0.52, 0.82, t))
+    return o.holster ? mix(hem, HOLSTER_SWEEP, notch) : hem
+  }
   const ventAt = (t: number): number => c.vent[1] * smooth(c.vent[0], 1, t)
   // angles run from the front toward +X (his left): his left panel is (front, π), his right (π, 2π)
   const span = (t: number): readonly [number, number] =>
@@ -179,7 +187,9 @@ function panel(
       ? [frontAt(t), Math.PI - ventAt(t)]
       : [Math.PI + ventAt(t), 2 * Math.PI - frontAt(t)]
   const geo = shell({
-    samples: onBones(f.body, SKIRT),
+    samples: onBones(f.body, SKIRT).filter(
+      (sample) => sample.slot === SLOT.Pants || sample.slot === SLOT.Boots,
+    ),
     cx,
     cz,
     yTop: o.yTop,
@@ -193,6 +203,32 @@ function panel(
     limit,
     color: o.color,
   })
+  // The skirt hangs as soft cloth around an elliptical hip, with sewn edges and broad folds.
+  // It must not inherit the old tunic's wide, flat lower panels or the removed arm armor.
+  const positions = geo.getAttribute('position')
+  const colors = geo.getAttribute('color')
+  for (let i = 0; i < positions.count; i++) {
+    const t = Math.max(0, Math.min(1, (o.yTop - positions.getY(i)) / (o.yTop - o.yBot)))
+    const x = positions.getX(i) - cx
+    const z = positions.getZ(i) - cz
+    const a = Math.atan2(x, z)
+    const ellipse =
+      1 /
+      Math.hypot(
+        Math.sin(a) / (hipW * mix(1.05, c.flare, t)),
+        Math.cos(a) / (hipW * mix(0.88, 1.08, t)),
+      )
+    const radius =
+      ellipse + (0.015 * Math.sin(a * 4 + o.side) + 0.004 * Math.sin(a * 9)) * smooth(0.12, 0.75, t)
+    positions.setX(i, cx + Math.sin(a) * radius)
+    positions.setZ(i, cz + Math.cos(a) * radius)
+    const hem = smooth(0.88, 1, t)
+    positions.setY(i, positions.getY(i) + 0.006 * Math.sin(a * 4) * hem)
+    const edge = i % 15 === 0 || i % 15 === 14
+    const shade = edge ? 0.82 : 1 - hem * 0.12
+    colors.setXYZ(i, colors.getX(i) * shade, colors.getY(i) * shade, colors.getZ(i) * shade)
+  }
+  creaseNormals(geo, 65)
   const hipB = f.bone('Hips')
   const thigh = f.bone(o.side === 1 ? 'UpperLegR' : 'UpperLegL')
   const weights = (p: Vector3): readonly (readonly [Bone, number])[] => {
@@ -327,7 +363,7 @@ export function coat(f: Fit, hex: number, cut: CoatCut, sides: GunSides): Piece[
     if (segs.some((g) => g.bones.includes(bone))) {
       return true
     }
-    if (!TORSO.includes(bone) || p.y < b.yBot + 0.005 || p.y > b.yTop - 0.03) {
+    if (!TORSO.includes(bone) || p.y < b.yBot + 0.005 || p.y > b.yTop + 0.015) {
       return false
     }
     const t = (b.yTop - p.y) / (b.yTop - b.yBot)

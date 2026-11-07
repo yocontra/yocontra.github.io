@@ -117,6 +117,49 @@ async function audit(
   }
   const findings = await page.evaluate(probe, args)
   rows.push({ size: size.name, screen, findings })
+  if (findings.length > 0) {
+    const layout = await page.evaluate(
+      (selectors) => ({
+        viewport: { width: innerWidth, height: innerHeight, visual: visualViewport?.height },
+        device: { ...document.documentElement.dataset },
+        scale: getComputedStyle(document.documentElement).getPropertyValue('--ow-ui-scale'),
+        overlays: [
+          ...document.querySelectorAll<HTMLElement>(
+            '.ow-sheet.on, .ow-menu.on, .ow-board.on, .ow-store.on',
+          ),
+        ].map((e) => ({ className: e.className, text: (e.textContent ?? '').slice(0, 120) })),
+        elements: selectors.flatMap((selector) =>
+          [...document.querySelectorAll<HTMLElement>(selector)].map((e) => {
+            const r = e.getBoundingClientRect()
+            const style = getComputedStyle(e)
+            return {
+              selector,
+              text: e.textContent,
+              x: r.x,
+              y: r.y,
+              width: r.width,
+              height: r.height,
+              font: style.font,
+              lineHeight: style.lineHeight,
+              overflow: style.overflow,
+              display: style.display,
+              transform: style.transform,
+              root: e.closest('.ow')?.getAttribute('style'),
+            }
+          }),
+        ),
+      }),
+      findings.map((f) => f.el),
+    )
+    mkdirSync('.playwright-mcp/quality', { recursive: true })
+    writeFileSync(
+      `.playwright-mcp/quality/ui-failure-${size.name}-${screen}.json`,
+      JSON.stringify({ findings, layout }, null, 2),
+    )
+    if (!json) {
+      console.log(`DETAIL ${size.name} ${screen}: ${JSON.stringify(findings)}`)
+    }
+  }
   if (shots) {
     mkdirSync('.playwright-mcp', { recursive: true })
     await page.screenshot({ path: `.playwright-mcp/ui-${shots}-${size.name}-${screen}.png` })
@@ -619,6 +662,12 @@ async function newContext(
     ...(size.ua ? { userAgent: size.ua } : {}),
     ...(state ? { storageState: state } : {}),
   })
+  // A code save during this long audit must not navigate away from a modal or passkey ceremony.
+  // Keep game/API sockets; only the dev server's HMR websocket is blocked.
+  await ctx.routeWebSocket(
+    (url) => url.host === new URL(base).host,
+    (socket) => socket.send(JSON.stringify({ type: 'connected' })),
+  )
   // the dev server's toolbar sits over the bottom of every screen
   await ctx.addInitScript(() => {
     const s = document.createElement('style')

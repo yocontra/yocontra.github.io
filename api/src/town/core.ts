@@ -19,7 +19,7 @@ import {
   TICK_HZ,
 } from '../../../src/experiments/out-west/ffa/sim/constants.ts'
 import { InputQueue } from '../../../src/experiments/out-west/ffa/sim/input-queue.ts'
-import { ClientStream, snapshotFor } from '../../../src/experiments/out-west/ffa/sim/snapshot.ts'
+import { ClientStream } from '../../../src/experiments/out-west/ffa/sim/snapshot.ts'
 import {
   activePlayers,
   createWorld,
@@ -42,6 +42,7 @@ import { RTT_SAMPLES } from '../net/constants.ts'
 import { looksLikeAimbot } from './aimbot.ts'
 import { BotDirector, freshBotName } from './bots.ts'
 import { ShowdownJudge } from './core-showdown.ts'
+import { broadcastSnapshots } from './core-snapshots.ts'
 import { applyPractice, botLevel, type PracticeOptions, stakeRespawns } from './practice.ts'
 
 /** Lobbies keep at least this many bodies in town (bots fill in) while any human is present. */
@@ -461,21 +462,12 @@ export class LobbyCore {
 
   private sendSnapshots(now: number): void {
     this.sentAt[(this.world.tick - 1) & 63] = now
-    for (const s of this.sessions.values()) {
-      const p = this.world.players[s.playerId]
-      if (!(s.peer && p)) {
-        continue
-      }
-      const bytes = snapshotFor(
-        this.world,
-        { viewer: p, stream: s.stream },
-        { banked: s.banked, events: this.world.events, inputLead: s.queue.takeLead() },
-        this.writer,
-      )
-      s.peer.send(bytes)
-      this.metrics.bytesOut += bytes.length
-      this.metrics.msgsOut++
-    }
+    broadcastSnapshots({
+      world: this.world,
+      sessions: this.sessions.values(),
+      writer: this.writer,
+      metrics: this.metrics,
+    })
   }
 
   /** Free slots of players who have gone; returns departing humans. */

@@ -81,7 +81,7 @@ export function dyePanel(parent: HTMLElement, o: DyePanel): void {
       'ow-hub-note ow-feat-dye-note',
       box,
       o.want === 'natural'
-        ? 'Pick a colour; it is added at checkout.'
+        ? 'Pick a colour. It is added at checkout.'
         : `Added at checkout: +${money(price)}`,
     )
     return

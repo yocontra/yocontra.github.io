@@ -32,6 +32,12 @@ export class Reader {
     return v
   }
 
+  i16(): number {
+    const v = this.view.getInt16(this.offset, true)
+    this.offset += 2
+    return v
+  }
+
   u32(): number {
     const v = this.view.getUint32(this.offset, true)
     this.offset += 4

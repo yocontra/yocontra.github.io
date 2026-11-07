@@ -5,6 +5,8 @@
  * slabs (porch roofs, catwalks, upper floors), stairs and pitched roofs. Pure and deterministic, so
  * the server and the client's prediction run exactly the same step.
  */
+
+import type { ShapedCover } from './cover-shape.ts'
 import { cellAt, type Grid, type Point, type Rect, type Surface } from './layout.ts'
 
 /** A standing rider's capsule, metres. */
@@ -27,14 +29,60 @@ export interface Support {
 const inside = (r: Rect, x: number, z: number): boolean =>
   x >= r.x && x <= r.x + r.w && z >= r.z && z <= r.z + r.d
 
-/** Top of the base solid at (x, z), metres (0 = open ground). */
-export function topAt(grid: Grid, x: number, z: number): number {
-  const col = Math.floor(x / grid.cell)
-  const row = Math.floor(z / grid.cell)
+function flatCellTop(grid: Grid, col: number, row: number): number {
   if (col < 0 || row < 0 || col >= grid.n || row >= grid.n) {
     return 12
   }
   return grid.tops[row * grid.n + col] ?? 0
+}
+
+/** Top of flat and shaped base solids at this point, metres (0 = open ground). */
+function cellTop(grid: Grid, col: number, row: number, x: number, z: number): number {
+  const i = row * grid.n + col
+  let top = flatCellTop(grid, col, row)
+  const shapes = grid.shapeCells[i]
+  if (shapes) {
+    for (const shape of shapes) {
+      if (inside(shape, x, z)) {
+        top = Math.max(top, shape.heightAt(x, z))
+      }
+    }
+  }
+  return top
+}
+
+function pushOutShapes(grid: Grid, p: Point, radius: number, feetY: number): boolean {
+  let moved = false
+  for (const shape of grid.shaped) {
+    const barrier = shapeBarrier(shape, p.x, p.z, radius, feetY)
+    if (barrier && resolveRect(p, barrier, radius)) {
+      moved = true
+    }
+  }
+  return moved
+}
+
+export function topAt(grid: Grid, x: number, z: number): number {
+  return cellTop(grid, Math.floor(x / grid.cell), Math.floor(z / grid.cell), x, z)
+}
+
+function shapeBarrier(
+  shape: ShapedCover,
+  x: number,
+  z: number,
+  radius: number,
+  feetY: number,
+): Rect | null {
+  if (!circleHitsRect(x, z, radius, shape)) {
+    return null
+  }
+  const center = shape.slopeAt(x, z) ? shape.heightAt(x, z) : 0
+  // A rider landing or standing on the continuous roof follows its local slope. A low tongue
+  // or an exposed bed never gets this exemption from a distinct taller part of the vehicle.
+  if (center > EPS && center <= feetY + STEP_UP + EPS) {
+    return null
+  }
+  return shape.boundsAbove(feetY + STEP_UP)
 }
 
 /** The top of a surface at (x, z), following roofs and stairs. */
@@ -175,10 +223,16 @@ export function blockedAt(
       if ((x - nx) ** 2 + (z - nz) ** 2 >= r * r) {
         continue
       }
-      const top = topAt(grid, (col + 0.5) * c, (row + 0.5) * c)
+      const top = flatCellTop(grid, col, row)
       if (top > feetY + STEP_UP + EPS && feetY < top - EPS) {
         return true
       }
+    }
+  }
+  for (const shape of grid.shaped) {
+    const barrier = shapeBarrier(shape, x, z, r, feetY)
+    if (barrier && circleHitsRect(x, z, r, barrier)) {
+      return true
     }
   }
   const slab = (s: Surface): boolean => {
@@ -262,7 +316,7 @@ export function pushOutVertical(
         if (except !== 0 && (cellAt(grid, cx, cz) & except) !== 0) {
           continue
         }
-        const top = topAt(grid, cx, cz)
+        const top = flatCellTop(grid, col, row)
         if (
           top > feetY + STEP_UP + EPS &&
           feetY < top - EPS &&
@@ -272,6 +326,7 @@ export function pushOutVertical(
         }
       }
     }
+    moved = pushOutShapes(grid, p, r, feetY) || moved
     const slab = (s: Surface): void => {
       if (!circleHitsRect(p.x, p.z, r, s)) {
         return
@@ -378,16 +433,95 @@ export function rayWorld(
   dz: number,
   maxDist: number,
 ): RayHit | null {
+  // Ground is a plane, not a one-centimetre sampling band. A 15 cm step can skip that band
+  // entirely on a downward shot and carry the ray underground. Keep the exact plane hit as the
+  // backstop, still returning any wall or raised slab encountered before it.
+  if (oy < -EPS || (oy <= EPS && dy < 0)) {
+    return { dist: 0, x: ox, y: oy, z: oz }
+  }
+  const ground = dy < 0 ? -oy / dy : Number.POSITIVE_INFINITY
+  const limit = Math.min(maxDist, ground)
   const step = 0.15
-  for (let t = step; t <= maxDist + EPS; t += step) {
+  for (let t = step; t <= limit + EPS; t += step) {
+    if (t >= ground - EPS) {
+      break
+    }
     const x = ox + dx * t
     const y = oy + dy * t
     const z = oz + dz * t
     if (solidAt(grid, x, y, z)) {
-      return { dist: Math.max(0, t - step), x, y, z }
+      // Refine the last free / first solid interval. Returning the last whole step made decals
+      // hover up to 15 cm off a wall and disagreed with the returned point inside that wall.
+      let lo = Math.max(0, t - step)
+      let hi = t
+      for (let i = 0; i < 8; i++) {
+        const mid = (lo + hi) / 2
+        if (solidAt(grid, ox + dx * mid, oy + dy * mid, oz + dz * mid)) {
+          hi = mid
+        } else {
+          lo = mid
+        }
+      }
+      return { dist: hi, x: ox + dx * hi, y: oy + dy * hi, z: oz + dz * hi }
     }
   }
+  if (ground >= 0 && ground <= maxDist) {
+    return { dist: ground, x: ox + dx * ground, y: 0, z: oz + dz * ground }
+  }
   return null
+}
+
+/** Outward surface normal at a quantized shot contact, including the slope of pitched roofs. */
+export function impactNormal(
+  grid: Grid,
+  at: { x: number; y: number; z: number },
+  direction: { x: number; y: number; z: number },
+): { x: number; y: number; z: number } {
+  const e = 0.03
+  for (const slab of [...grid.overheads, ...grid.stairs, ...grid.roofs]) {
+    if (!inside(slab, at.x, at.z)) {
+      continue
+    }
+    const top = surfaceTop(slab, at.x, at.z)
+    if (Math.abs(at.y - top) < e) {
+      const dx = (surfaceTop(slab, at.x + e, at.z) - surfaceTop(slab, at.x - e, at.z)) / (2 * e)
+      const dz = (surfaceTop(slab, at.x, at.z + e) - surfaceTop(slab, at.x, at.z - e)) / (2 * e)
+      const length = Math.hypot(dx, 1, dz)
+      if (-dx * direction.x + direction.y - dz * direction.z < 0) {
+        return { x: -dx / length, y: 1 / length, z: -dz / length }
+      }
+    }
+    if (Math.abs(at.y - slab.bottom) < e && direction.y > 0) {
+      return { x: 0, y: -1, z: 0 }
+    }
+  }
+  if (Math.abs(at.y) < e && direction.y < 0) {
+    return { x: 0, y: 1, z: 0 }
+  }
+  const col = Math.floor(at.x / grid.cell)
+  const row = Math.floor(at.z / grid.cell)
+  for (const shape of grid.shapeCells[row * grid.n + col] ?? []) {
+    if (inside(shape, at.x, at.z) && Math.abs(at.y - shape.heightAt(at.x, at.z)) < e) {
+      const dx = (shape.heightAt(at.x + e, at.z) - shape.heightAt(at.x - e, at.z)) / (2 * e)
+      const dz = (shape.heightAt(at.x, at.z + e) - shape.heightAt(at.x, at.z - e)) / (2 * e)
+      const length = Math.hypot(dx, 1, dz)
+      if (-dx * direction.x + direction.y - dz * direction.z < 0) {
+        return { x: -dx / length, y: 1 / length, z: -dz / length }
+      }
+    }
+  }
+  // Walls/cover are axis-aligned cells; sampling across the contact finds their actual face,
+  // unlike a decal facing back along an oblique bullet. Tolerance covers centimetre wire rounding.
+  const solid = (x: number, y: number, z: number) => Number(solidAt(grid, x, y, z))
+  const nx = solid(at.x - e, at.y, at.z) - solid(at.x + e, at.y, at.z)
+  const ny = solid(at.x, at.y - e, at.z) - solid(at.x, at.y + e, at.z)
+  const nz = solid(at.x, at.y, at.z - e) - solid(at.x, at.y, at.z + e)
+  const length = Math.hypot(nx, ny, nz)
+  if (length > 0) {
+    return { x: nx / length, y: ny / length, z: nz / length }
+  }
+  const back = Math.hypot(direction.x, direction.y, direction.z) || 1
+  return { x: -direction.x / back, y: -direction.y / back, z: -direction.z / back }
 }
 
 /** Line of sight between two 3D points. */

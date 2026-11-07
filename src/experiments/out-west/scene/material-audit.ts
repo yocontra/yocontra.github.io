@@ -27,6 +27,7 @@ import {
   type Texture,
   type WebGLRenderer,
 } from 'three'
+import { ROLE, roleOf } from './roles.ts'
 
 export interface MatRow {
   name: string
@@ -199,7 +200,10 @@ export function auditMaterials(scenes: Object3D[], renderer?: WebGLRenderer): Ma
     const issues: string[] = []
     const lit = 'isMeshStandardMaterial' in std && std.isMeshStandardMaterial === true
     const label = `${mat.name} ${meshes[0]?.name ?? ''}`
-    const unlitOk = UNLIT_OK.test(label) || mat.type === 'ShaderMaterial'
+    const unlitOk =
+      meshes.every((mesh) => roleOf(mesh) === ROLE.Effect) ||
+      UNLIT_OK.test(label) ||
+      mat.type === 'ShaderMaterial'
     if (!lit && NON_PBR.test(mat.type)) {
       issues.push('non-PBR lit')
     }

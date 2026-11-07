@@ -27,6 +27,7 @@ import {
 import type { HatKey } from '../data/outlaws.ts'
 import { mergePieces, meshPieces, type Piece } from './bake.ts'
 import type { Body } from './fit.ts'
+import { detailHat, type HatDetail } from './hat-detail.ts'
 import { SLOT } from './roles.ts'
 import { characterMaterial, type Glow } from './shade.ts'
 import type { Floor } from './style.ts'
@@ -220,9 +221,10 @@ function shapeHat(geo: BufferGeometry, key: HatKey, lathe: boolean): void {
 export function makeHat(
   key: HatKey,
   color: number,
-  floor: Floor = { value: 0 },
-  glow: Glow = { value: 0 },
+  options: { floor?: Floor; glow?: Glow; detail?: HatDetail | undefined } = {},
 ): Group {
+  const floor = options.floor ?? { value: 0 }
+  const glow = options.glow ?? { value: 0 }
   const { pts: raw } = profile(key)
   const pts = raw.map(([x, y]) => new Vector2(x, y))
   // lathe needs the profile ordered bottom→top for outward normals; a spline through the
@@ -249,6 +251,7 @@ export function makeHat(
   bandGeo.translate(0, bandY, 0)
   shapeHat(bandGeo, key, false)
   g.add(new Mesh(bandGeo, bandMat))
+  detailHat({ felt: lathe, group: g, bandY, radius: r, wall: c.wall }, options.detail)
   const geo = mergePieces(meshPieces(g, g))
   // the brim and the crown are single sheets: both faces show
   const mat = characterMaterial(floor, 'Felt', glow)
@@ -262,7 +265,7 @@ export function makeHat(
   inner.add(mesh)
   out.add(inner)
   // Crumple the brim a touch so it doesn't read as CG-perfect.
-  out.rotation.z = (Math.random() - 0.5) * 0.06
+  out.rotation.z = Math.sin(color * 0.17) * 0.018
   return out
 }
 

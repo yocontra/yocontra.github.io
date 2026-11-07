@@ -21,8 +21,10 @@ import {
 } from 'three'
 import { intoRect, SWATCH, SWATCH_LUM, type Swatch } from './atlas.ts'
 import { type Body, boneKey, type WeightFn } from './fit.ts'
+import type { Cuff } from './garment-mesh.ts'
 import { SLOT, type Slot, slotOf } from './roles.ts'
 import { atlasRoughness } from './style.ts'
+import { westernKit } from './western-kit.ts'
 
 /**
  * One piece of the final character: root-space geometry (position, normal,
@@ -36,6 +38,8 @@ export interface Piece {
   name?: string
   /** The typed body slot, when the material is one of the character slots. */
   slot?: Slot | undefined
+  paletteSlot?: number | undefined
+  palette?: Uint8Array | undefined
   /** Roughness multiplier on the atlas (plain swatch: the roughness itself). */
   roughness: number
   rim: number
@@ -56,6 +60,8 @@ export interface Piece {
   hide?: (p: Vector3, bone: string, garment: Slot | undefined) => boolean
   /** Not a surface the gunbelt and holster sit on (a coat sleeve; a poncho, worn over the belt). */
   unbelted?: boolean
+  /** Cloth may conform to support after the dressed skeleton falls. */
+  contactCloth?: boolean
 }
 
 /** A rigid piece riding one bone. */
@@ -103,7 +109,12 @@ function blendBones(sm: SkinnedMesh, k: number, out: Matrix4): Matrix4 {
 }
 
 /** The posed body meshes under `model` as pieces (posed positions and normals in `space`). */
-export function bodyPieces(model: Object3D, space: Object3D, body: Body): Piece[] {
+export function bodyPieces(
+  model: Object3D,
+  space: Object3D,
+  body: Body,
+  shirtCut: 'straight' | 'fitted' = 'straight',
+): Piece[] {
   const out: Piece[] = []
   const index = new Map<Bone, number>(body.bones.map((b, i) => [b, i]))
   const inv = space.matrixWorld.clone().invert()
@@ -168,6 +179,7 @@ export function bodyPieces(model: Object3D, space: Object3D, body: Body): Piece[
       geo,
       name: mat.name,
       slot: slotOf(mat),
+      paletteSlot: mat.userData.paletteSlot as number | undefined,
       // textured body parts take their roughness from the atlas (skin and leather a touch glossier)
       roughness: uvA ? atlasRoughness(mat.name) : mat.roughness,
       rim: (mat.userData.rim as number | undefined) ?? 1,
@@ -176,7 +188,7 @@ export function bodyPieces(model: Object3D, space: Object3D, body: Body): Piece[
       lum: recolor ? ((mat.userData.lum as number | undefined) ?? 0) : 0,
     })
   })
-  return out
+  return westernKit(out, body, shirtCut)
 }
 
 /** Pieces from plain procedural meshes under `obj`, coloured by their material. */
@@ -357,41 +369,56 @@ function hideUnder(pieces: readonly Piece[], body: Body): void {
   }
 }
 
+/** Bind fitted cloth before occlusion too, so its covered vertices obey the same layering as the base. */
+function fittedSkin(piece: Piece, body: Body): NonNullable<Piece['skin']> {
+  if (piece.skin) {
+    return piece.skin
+  }
+  const map = new Map(body.bones.map((bone, i) => [bone, i]))
+  const pos = piece.geo.getAttribute('position')
+  const skin = { index: new Uint16Array(pos.count * 4), weight: new Float32Array(pos.count * 4) }
+  const p = new Vector3()
+  for (let k = 0; k < pos.count; k++) {
+    p.fromBufferAttribute(pos, k)
+    const weights = [...(piece.weights?.(p) ?? [])]
+      .map(([bone, w]) => [map.get(bone) ?? 0, w] as const)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 4)
+    const sum = weights.reduce((total, [, w]) => total + w, 0) || 1
+    weights.forEach(([bone, w], i) => {
+      skin.index[k * 4 + i] = bone
+      skin.weight[k * 4 + i] = w / sum
+    })
+  }
+  return skin
+}
+
 export function bake(
   pieces: readonly Piece[],
   body: Body,
   parent: Object3D,
   material: Material,
 ): SkinnedMesh {
-  hideUnder(pieces, body)
-  const geo = mergePieces(pieces)
+  const skinned = pieces.map((piece) => ({ ...piece, skin: fittedSkin(piece, body) }))
+  hideUnder(skinned, body)
+  const geo = mergePieces(skinned)
   const verts = geo.getAttribute('position').count
   const outI = new Uint16Array(verts * 4)
   const outW = new Float32Array(verts * 4)
-  const index = new Map<Bone, number>(body.bones.map((b, i) => [b, i]))
-  const p = new Vector3()
+  const palette = skinned.some((piece) => piece.paletteSlot !== undefined)
+    ? new Float32Array(verts)
+    : null
   let vo = 0
-  for (const piece of pieces) {
-    const pa = piece.geo.getAttribute('position')
-    for (let k = 0; k < pa.count; k++) {
-      const o = (vo + k) * 4
-      if (piece.skin) {
-        outI.set(piece.skin.index.subarray(k * 4, k * 4 + 4), o)
-        outW.set(piece.skin.weight.subarray(k * 4, k * 4 + 4), o)
-        continue
-      }
-      p.fromBufferAttribute(pa, k)
-      const ws = [...(piece.weights ? piece.weights(p) : [])]
-        .map(([b, w]) => [index.get(b) ?? 0, w] as const)
-        .sort((a, b) => b[1] - a[1])
-        .slice(0, 4)
-      const sum = ws.reduce((t, [, w]) => t + w, 0) || 1
-      ws.forEach(([bi, w], c) => {
-        outI[o + c] = bi
-        outW[o + c] = w / sum
-      })
+  const metadata = garmentMetadata(skinned)
+  for (const piece of skinned) {
+    const count = piece.geo.getAttribute('position').count
+    palette?.fill(piece.paletteSlot ?? 0, vo, vo + count)
+    if (piece.palette) {
+      palette?.set(piece.palette, vo)
     }
-    vo += pa.count
+    outI.set(piece.skin.index, vo * 4)
+    outW.set(piece.skin.weight, vo * 4)
+    vo += count
   }
   // Compact the palette to the bones that actually carry weight.
   const used = new Map<number, number>()
@@ -407,8 +434,19 @@ export function bake(
     outI[k] = (outW[k] ?? 0) > 0 ? (used.get(outI[k] ?? 0) ?? 0) : 0
   }
   const bones = [...used.keys()].map((bi) => body.bones[bi]).filter((b) => b !== undefined)
+  Object.assign(geo.userData, metadata)
+  const inverseMesh = parent.matrixWorld.clone().invert()
+  geo.userData.restFrames =
+    body.neutralFrames ??
+    body.bones.map((bone) => ({
+      key: boneKey(bone.name),
+      matrix: inverseMesh.clone().multiply(bone.matrixWorld).toArray(),
+    }))
   geo.setAttribute('skinIndex', new BufferAttribute(outI, 4))
   geo.setAttribute('skinWeight', new BufferAttribute(outW, 4))
+  if (palette) {
+    geo.setAttribute('paletteSlot', new BufferAttribute(palette, 1))
+  }
   const mesh = new SkinnedMesh(geo, material)
   mesh.name = 'Character'
   parent.add(mesh)
@@ -418,4 +456,38 @@ export function bake(
   mesh.receiveShadow = true
   mesh.frustumCulled = false
   return mesh
+}
+
+function garmentMetadata(pieces: readonly Piece[]) {
+  const anatomy: { start: number; count: number }[] = []
+  const cloth: { start: number; count: number }[] = []
+  const sleeves: { start: number; count: number }[] = []
+  const cuffs: Cuff[] = []
+  let vo = 0
+  for (const piece of pieces) {
+    const count = piece.geo.getAttribute('position').count
+    if (
+      [SLOT.Skin, SLOT.Shirt, SLOT.Sleeves, SLOT.Pants, SLOT.Boots].some(
+        (slot) => slot === piece.slot,
+      )
+    ) {
+      anatomy.push({ start: vo, count })
+    }
+    const vertexOffset = vo
+    const pieceCuffs = piece.geo.userData.cuffs as Cuff[] | undefined
+    for (const cuff of pieceCuffs ?? []) {
+      cuffs.push({
+        side: cuff.side,
+        vertices: cuff.vertices.map((vertex) => vertex + vertexOffset),
+      })
+    }
+    if (piece.slot === SLOT.Sleeves) {
+      sleeves.push({ start: vo, count })
+    }
+    if (piece.contactCloth) {
+      cloth.push({ start: vo, count })
+    }
+    vo += count
+  }
+  return { anatomyRanges: anatomy, clothRanges: cloth, sleeveRanges: sleeves, cuffs }
 }

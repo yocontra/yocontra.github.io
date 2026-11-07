@@ -21,19 +21,40 @@ afterAll(() => {
   globalThis.fetch = realFetch
 })
 
-async function setup(): Promise<{ env: Env; bearer: string; asked: () => number }> {
+async function setup(assigned = false): Promise<{
+  env: Env
+  bearer: string
+  asked: () => number
+  forwarded: () => number
+  upgradeHeaders: () => Headers | undefined
+}> {
   let asks = 0
-  const env = fakeEnv({
-    // The directory only answers "full", which is enough to show the join got past Turnstile.
+  let forwards = 0
+  let headers: Headers | undefined
+  const env = Object.assign(fakeEnv(), {
     LOBBY_DIR: {
       idFromName: () => ({}),
       get: () => ({
         assign: () => {
           asks++
-          return Promise.resolve({ ok: false, reason: 'all_full' })
+          return Promise.resolve(
+            assigned
+              ? { ok: true, lobbyId: 'lobby:1', players: 3 }
+              : { ok: false, reason: 'all_full' },
+          )
         },
       }),
-    } as unknown as Env['LOBBY_DIR'],
+    },
+    LOBBIES: {
+      idFromName: () => ({}),
+      get: () => ({
+        fetch: (request: Request) => {
+          forwards++
+          headers = request.headers
+          return Promise.resolve(new Response('Lobby reached'))
+        },
+      }),
+    },
   })
   seedAccount(env, 'acct-1', 'Rider')
   await env.DB.batch(createProfileStatements(env, 'acct-1'))
@@ -45,7 +66,13 @@ async function setup(): Promise<{ env: Env; bearer: string; asked: () => number 
     platform: 'web',
     authTime: Date.now(),
   })
-  return { env, bearer: token, asked: () => asks }
+  return {
+    env,
+    bearer: token,
+    asked: () => asks,
+    forwarded: () => forwards,
+    upgradeHeaders: () => headers,
+  }
 }
 
 async function join(env: Env, bearer: string, body: unknown): Promise<Response> {
@@ -89,14 +116,100 @@ describe('POST /town/join and Turnstile', () => {
     expect(asked()).toBe(1)
   })
 
-  it('sends a client on an older wire format to refresh, before Turnstile or the directory', async () => {
+  it('refuses missing, older or future wire formats before Turnstile or the directory', async () => {
     const { env, bearer, asked } = await setup()
-    for (const body of [{ turnstileToken: 'ok' }, { wire: W - 1, turnstileToken: 'ok' }]) {
+    for (const body of [
+      { turnstileToken: 'ok' },
+      { wire: W - 1, turnstileToken: 'ok' },
+      { wire: W + 1, turnstileToken: 'ok' },
+    ]) {
       // biome-ignore lint/performance/noAwaitInLoops: one request at a time keeps the counter honest
       const res = await join(env, bearer, body)
       expect(res.status).toBe(409)
       expect(await res.json()).toMatchObject({ ok: false, reason: 'outdated' })
     }
     expect(asked()).toBe(0)
+  })
+})
+
+async function socketUrl(env: Env, bearer: string): Promise<URL> {
+  const response = await join(env, bearer, { wire: W, turnstileToken: 'ok' })
+  if (response.status !== 201) {
+    throw new Error(`Current-version join failed: ${response.status}`)
+  }
+  const body: { wsUrl: string } = await response.json()
+  return new URL(body.wsUrl)
+}
+
+async function connect(env: Env, url: URL): Promise<Response> {
+  const request = new Request(url, { headers: { Origin: ORIGIN, Upgrade: 'websocket' } })
+  const response = await townRoutes(request, env, url, {} as ExecutionContext)
+  if (!response) {
+    throw new Error('no socket route')
+  }
+  return response
+}
+
+/** Independent signer reproduces old and wrong-version deployments without changing the ticket. */
+async function signSocket(url: URL, domain: string): Promise<void> {
+  const key = await crypto.subtle.importKey(
+    'raw',
+    new TextEncoder().encode(`${domain}:${TEST_SECRET}`),
+    { name: 'HMAC', hash: 'SHA-256' },
+    false,
+    ['sign'],
+  )
+  const mac = await crypto.subtle.sign(
+    'HMAC',
+    key,
+    new TextEncoder().encode(`lobby:1|acct-1|${url.searchParams.get('exp')}`),
+  )
+  url.searchParams.set(
+    'sig',
+    [...new Uint8Array(mac).slice(0, 16)].map((b) => b.toString(16).padStart(2, '0')).join(''),
+  )
+}
+
+describe('Frontier socket ticket wire binding', () => {
+  it('forwards a current join URL once, with the authenticated lobby and player', async () => {
+    const { env, bearer, forwarded, upgradeHeaders } = await setup(true)
+    const url = await socketUrl(env, bearer)
+    expect((await connect(env, url)).status).toBe(200)
+    expect(forwarded()).toBe(1)
+    expect(upgradeHeaders()?.get('X-Lobby-Id')).toBe('lobby:1')
+    expect(upgradeHeaders()?.get('X-Account-Id')).toBe('acct-1')
+    expect(upgradeHeaders()?.get('X-Name')).toBe('Rider')
+    expect((await connect(env, url)).status).toBe(401)
+    expect(forwarded()).toBe(1)
+  })
+
+  it.each(['town', `town:v${W - 1}`, `town:v${W + 1}`])(
+    'rejects an otherwise valid ticket signed by the %s deployment before reaching the lobby',
+    async (domain) => {
+      const { env, bearer, forwarded } = await setup(true)
+      const url = await socketUrl(env, bearer)
+      await signSocket(url, domain)
+      const response = await connect(env, url)
+      expect(response.status).toBe(403)
+      expect(await response.text()).toBe('Wrong town')
+      expect(forwarded()).toBe(0)
+    },
+  )
+
+  it('rejects an expired current-version signature before reaching the lobby', async () => {
+    const { env, bearer, forwarded } = await setup(true)
+    const url = await socketUrl(env, bearer)
+    url.searchParams.set('exp', String(Date.now() - 1))
+    await signSocket(url, `town:v${W}`)
+    expect((await connect(env, url)).status).toBe(401)
+    expect(forwarded()).toBe(0)
+  })
+
+  it('rejects a missing signature before reaching the lobby', async () => {
+    const { env, bearer, forwarded } = await setup(true)
+    const url = await socketUrl(env, bearer)
+    url.searchParams.delete('sig')
+    expect((await connect(env, url)).status).toBe(403)
+    expect(forwarded()).toBe(0)
   })
 })

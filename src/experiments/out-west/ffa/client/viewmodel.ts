@@ -35,6 +35,7 @@ import {
   PerspectiveCamera,
   Quaternion,
   Scene,
+  SkinnedMesh,
   Sprite,
   SpriteMaterial,
   type Texture,
@@ -45,6 +46,7 @@ import type { Assets } from '../../engine/assets.ts'
 import type { Actor } from '../../scene/actor.ts'
 import { castActor } from '../../scene/cast.ts'
 import { type GunAnatomy, gunAnatomy, gunPointsOf } from '../../scene/holster.ts'
+import { gunFinish, gunIsPair } from '../../scene/loadout.ts'
 import { type LongHold, solveArm } from '../../scene/longgun.ts'
 import { actionOf, type RevolverAction, revolverObject } from '../../scene/revolver.ts'
 import { rifleObject } from '../../scene/rifle.ts'
@@ -193,6 +195,7 @@ export class ViewModel {
   private mixAcc = 1
   private support: SupportHand | null = null
   private lookKey = ''
+  private paired = false
   private pending: PlayerLook | null = null
   readonly motion = new VmMotion()
   /** The town's sky on the guns (their metal reads black without it). */
@@ -269,14 +272,18 @@ export class ViewModel {
     }
     this.pending = null
     this.lookKey = look.key
-    this.actor?.dispose()
+    this.clearBody()
     // the Peacemaker with its hammer and cylinder on their pivots, to cock and to turn
-    const gun = revolverObject({ size: 0.32, articulated: true })
+    this.paired = gunIsPair(look.gun)
+    const gun = revolverObject({ size: 0.32, articulated: true, look: gunFinish(look.gun) })
     const actor = castActor(this.assets, {
       look: look.look,
       hat: look.hat,
       hatColor: look.hatColor,
       gun,
+      offGun: this.paired,
+      bandana: look.look.bandana,
+      holster: look.look.holster,
     })
     if (actor.hat) {
       actor.hat.visible = false
@@ -360,6 +367,7 @@ export class ViewModel {
   private fitRevolver(actor: Actor, gun: Object3D): Fit | null {
     const a = actor.anatomy ?? gunAnatomy(gun)
     const wristR = this.bones.get('WristR')
+    const wristL = this.bones.get('WristL')
     if (!wristR) {
       return null
     }
@@ -374,7 +382,10 @@ export class ViewModel {
       front: sights.front,
       muzzle: a.muzzle.clone(),
       right,
-      left: null,
+      left:
+        this.paired && actor.offGun && wristL
+          ? actor.offGun.matrixWorld.clone().invert().multiply(wristL.matrixWorld)
+          : null,
       grip: a.grip.clone(),
       hold: HOLDS.revolver,
     }
@@ -478,6 +489,9 @@ export class ViewModel {
       if (this.fits.revolver) {
         this.fits.revolver.obj.visible = fit === this.fits.revolver
       }
+      if (actor.offGun) {
+        actor.offGun.visible = fit === this.fits.revolver
+      }
     }
     actor.play(fit === this.fits.revolver ? 'Idle_Gun_Pointing' : 'Idle_Gun', 0.15)
     actor.longKick = 0
@@ -540,7 +554,7 @@ export class ViewModel {
       ['R', fit.right, 1],
       ['L', fit.left, -1],
     ] as const) {
-      if (side === 'L' && fit.grip) {
+      if (side === 'L' && fit.grip && !this.paired) {
         this.supportGrip(fit.grip, pose)
         continue
       }
@@ -558,6 +572,10 @@ export class ViewModel {
       const tp = new Vector3()
       const tq = new Quaternion()
       t.decompose(tp, tq, tmpV2)
+      if (side === 'L' && fit.grip && this.paired) {
+        tp.x -= (0.22 - pose.ads * 0.055) * (1 - portraitK(this.aspect) * 0.4)
+        tp.y -= 0.035
+      }
       if (side === 'L' && pose.load > 0) {
         // loading: the support hand goes to the gate and back
         tp.x += 0.03 * pose.load
@@ -591,7 +609,7 @@ export class ViewModel {
       return
     }
     // a touch lower and forward, so it cups the right fist rather than sharing its grip
-    tp.addScaledVector(up, -0.018).addScaledVector(fwd, 0.008)
+    tp.addScaledVector(up, -0.035).addScaledVector(fwd, 0.018).addScaledVector(n, -0.008)
     if (pose.load > 0) {
       // loading: the support hand goes to the gate and back
       tp.addScaledVector(up, 0.03 * pose.load).addScaledVector(fwd, 0.04 * pose.load)
@@ -629,10 +647,11 @@ export class ViewModel {
     const pivot = fore.clone().applyMatrix4(this.gunM)
     const turn = tmpQ.setFromAxisAngle(fwd, FORE_TURN)
     tp.sub(pivot).applyQuaternion(turn).add(pivot)
+    tp.addScaledVector(new Vector3().setFromMatrixColumn(this.gunM, 1).normalize(), -0.012)
     tq.premultiply(turn)
     const pole = upper.getWorldPosition(new Vector3()).add(tmpV2.set(-0.3, -0.6, 0))
     solveArm({ upper, lower, end }, tp, tq, pole)
-    sh.fingersLike(n)
+    sh.fingersLike(n, turn)
   }
 
   /** The lens (its FOV eases in on the sights, its depth squeezed), the lights and the flash. */
@@ -662,8 +681,36 @@ export class ViewModel {
     this.fill.intensity = 0.55 + f * 3
   }
 
+  private clearBody(): void {
+    const actor = this.actor
+    if (actor) {
+      actor.root.traverse((object) => {
+        if (object instanceof SkinnedMesh) {
+          object.geometry.dispose()
+          for (const material of Array.isArray(object.material)
+            ? object.material
+            : [object.material]) {
+            material.dispose()
+          }
+        }
+      })
+      actor.dispose()
+    }
+    // Long guns are rehomed outside the actor for the overlay's independent pose.
+    // They must leave too when a look changes, including a currently visible map weapon.
+    this.fits.rifle?.obj.removeFromParent()
+    this.fits.shotgun?.obj.removeFromParent()
+    this.fits = { revolver: null, rifle: null, shotgun: null }
+    this.held = null
+    this.actor = null
+    this.support = null
+    this.action = null
+    this.bones.clear()
+    this.mixAcc = 1
+  }
+
   dispose(): void {
-    this.actor?.dispose()
+    this.clearBody()
     this.flash.material.map?.dispose()
     this.flash.material.dispose()
   }

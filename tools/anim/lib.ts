@@ -6,6 +6,7 @@ import process from 'node:process'
 import { file as bunFile, serve, spawnSync } from 'bun'
 import type { CDPSession, Page } from 'playwright'
 import sharp from 'sharp'
+import type { Object3D } from 'three'
 
 export const opt = (k: string, d: string): string =>
   process.argv.find((a) => a.startsWith(`--${k}=`))?.slice(k.length + 3) ?? d
@@ -31,6 +32,8 @@ export interface Measure {
   yaw: number
   pos: [number, number, number]
   q: number[]
+  /** Rendered first-person gun parts, in the overlay's world metres. */
+  renderPos?: number[]
 }
 
 export interface Row {
@@ -44,6 +47,7 @@ export interface Row {
   bind: number
   idle: number
   motion: number
+  translation: number
   hipsDy: number
   yaw: number
   frames: string
@@ -98,7 +102,10 @@ export function qDelta(a: number[], b: number[]): number {
         (a[k + 2] ?? 0) * (b[k + 2] ?? 0) +
         (a[k + 3] ?? 1) * (b[k + 3] ?? 1),
     )
-    m = Math.max(m, 2 * Math.acos(Math.min(1, dot)) * DEG)
+    const length =
+      Math.hypot(a[k] ?? 0, a[k + 1] ?? 0, a[k + 2] ?? 0, a[k + 3] ?? 1) *
+      Math.hypot(b[k] ?? 0, b[k + 1] ?? 0, b[k + 2] ?? 0, b[k + 3] ?? 1)
+    m = Math.max(m, 2 * Math.acos(Math.min(1, dot / Math.max(1e-20, length))) * DEG)
   }
   return m
 }
@@ -111,6 +118,48 @@ export function motionOf(ms: Measure[]): number {
     }
   }
   return m
+}
+
+/** A view-model's breathing translates it without requiring a rotating aim. */
+export function translationOf(ms: Measure[]): number {
+  let largest = 0
+  for (let i = 0; i < ms.length; i++) {
+    const a = ms[i]?.renderPos ?? []
+    for (let j = i + 1; j < ms.length; j++) {
+      const b = ms[j]?.renderPos ?? []
+      for (let k = 0; k + 2 < Math.min(a.length, b.length); k += 3) {
+        largest = Math.max(
+          largest,
+          Math.hypot(
+            (a[k] ?? 0) - (b[k] ?? 0),
+            (a[k + 1] ?? 0) - (b[k + 1] ?? 0),
+            (a[k + 2] ?? 0) - (b[k + 2] ?? 0),
+          ),
+        )
+      }
+    }
+  }
+  return largest
+}
+
+/** Read the submitted transform; updating a manually posed hierarchy would change the subject. */
+export function renderedPose(root: Object3D | undefined): { q: number[]; pos: number[] } {
+  if (!root) {
+    throw new Error('Missing live rendered gun for animation audit')
+  }
+  const q: number[] = []
+  const pos: number[] = []
+  const rotation = root.quaternion.clone()
+  const position = root.position.clone()
+  const scale = root.scale.clone()
+  root.traverse((part) => {
+    if (Reflect.get(part, 'isMesh') && part.visible) {
+      part.matrixWorld.decompose(position, rotation, scale)
+      q.push(...rotation.normalize().toArray())
+      pos.push(...position.toArray())
+    }
+  })
+  return { q, pos }
 }
 
 export const tposes = (page: Page): Promise<number> =>
@@ -160,6 +209,8 @@ export interface Expect {
   clip?: string
   layer?: string
   drops?: number
+  /** Minimum rendered translation in metres (first-person breath and weapon motion). */
+  shifts?: number
 }
 
 /** Each lineup state's evidence bar (duel/anim-stage.ts names them). */
@@ -171,6 +222,9 @@ export function judge(ms: Measure[], ex: Expect, tp: number): Record<string, boo
   }
   if (ex.moves !== undefined) {
     c.moves = motionOf(ms) > ex.moves
+  }
+  if (ex.shifts !== undefined) {
+    c.shifts = translationOf(ms) > ex.shifts
   }
   if (ex.offIdle !== undefined) {
     c.offIdle = Math.max(...ms.map((m) => m.idle)) > ex.offIdle
@@ -215,6 +269,7 @@ export function record(r: {
     bind: Math.round(Math.min(...ms.map((m) => m.bind)) * 10) / 10,
     idle: Math.round(Math.max(...ms.map((m) => m.idle)) * 10) / 10,
     motion: Math.round(motionOf(ms) * 10) / 10,
+    translation: Math.round(translationOf(ms) * 1_000_000) / 1_000_000,
     hipsDy: Math.round(Math.min(...ms.map((m) => m.hipsDy)) * 100) / 100,
     yaw:
       Math.round((Math.max(...ms.map((m) => m.yaw)) - Math.min(...ms.map((m) => m.yaw))) * 100) /

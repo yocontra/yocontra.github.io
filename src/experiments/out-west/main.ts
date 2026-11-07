@@ -22,11 +22,11 @@ import { Hub } from './ui/hub.ts'
 import { hubMeta } from './ui/meta-hub.ts'
 import { loadPosterArt } from './ui/poster.ts'
 import { installUiSounds } from './ui/sfx.ts'
+import { installTitleInput } from './ui/title-input.ts'
 import { Toaster } from './ui/toast.ts'
 
 /** Hashes that jump into a debug view or a non-default run: never ranked. */
 const UNRANKED_HASHES = ['level', 'legend', 'lineup', 'posters']
-const START_KEYS = ['Space', 'Enter', 'KeyJ', 'KeyW', 'ArrowUp', 'ArrowLeft']
 
 function pickTier(param: string | null): Tier {
   if (param === 'low' || param === 'high') {
@@ -93,9 +93,30 @@ function rankedConnector(root: HTMLElement, hash: URLSearchParams): RankedConnec
 /** Credits and leaderboard buttons on the title; their clicks never start the game. */
 function wireTitleLinks(root: HTMLElement, title: HTMLElement): void {
   const credits = root.querySelector<HTMLElement>('.ow-credits')
-  root.querySelector('.ow-credits-btn')?.addEventListener('click', (e) => {
+  const creditsButton = root.querySelector('.ow-credits-btn')
+  const showCredits = (open: boolean) => {
+    credits?.classList.toggle('on', open)
+    creditsButton?.setAttribute('aria-expanded', String(open))
+    if (open) {
+      credits?.querySelector<HTMLButtonElement>('.ow-credits-close')?.focus()
+    }
+  }
+  creditsButton?.addEventListener('click', (e) => {
     e.stopPropagation()
-    credits?.classList.toggle('on')
+    showCredits(!credits?.classList.contains('on'))
+  })
+  const closeCredits = () => {
+    showCredits(false)
+    if (creditsButton instanceof HTMLElement) {
+      creditsButton.focus()
+    }
+  }
+  credits?.querySelector('.ow-credits-close')?.addEventListener('click', closeCredits)
+  title.addEventListener('keydown', (e) => {
+    if (e.code === 'Escape' && credits?.classList.contains('on')) {
+      e.stopPropagation()
+      closeCredits()
+    }
   })
   let board: Board | null = null
   root.querySelector('.ow-board-btn')?.addEventListener('click', (e) => {
@@ -299,7 +320,7 @@ export function boot(root: HTMLElement): void {
   const title = root.querySelector<HTMLElement>('.ow-title')
   const loading = root.querySelector<HTMLElement>('.ow-loading')
   const startText = root.querySelector<HTMLElement>('.ow-start')
-  if (!(canvas && title)) {
+  if (!(canvas && title && startText)) {
     return
   }
   wireTitleLinks(root, title)
@@ -362,17 +383,12 @@ export function boot(root: HTMLElement): void {
     })()
   }
 
-  const press = (e: Event) => {
+  let stopTitleInput: () => void = () => undefined
+  const press = () => {
     if (pressed) {
       return
     }
-    if (e instanceof KeyboardEvent) {
-      if (!START_KEYS.includes(e.code)) {
-        return
-      }
-      e.preventDefault()
-      e.stopImmediatePropagation()
-    }
+    stopTitleInput()
     pressed = true
     // Set the iOS session before the context is created: switching it afterwards can interrupt
     // the first sound. `playback` (the default) is audible with the Ring/Silent switch on.
@@ -386,17 +402,17 @@ export function boot(root: HTMLElement): void {
     audio.playSong(data.level >= 15 ? 'boss' : 'intro')
     title.classList.add('pressed')
     if (startText) {
-      startText.textContent = 'loading…'
+      startText.textContent = 'Loading…'
+      startText.setAttribute('aria-busy', 'true')
     }
     go()
   }
-  title.addEventListener('pointerdown', press)
-  title.addEventListener('touchend', press, { passive: false })
-  globalThis.addEventListener('keydown', press)
+  stopTitleInput = installTitleInput(title, startText, press)
 
   // Back from Frontier: straight to the saloon, no title screen. Audio unlocks on the first tap.
   if (hub && new URLSearchParams(location.search).has('saloon')) {
     pressed = true
+    stopTitleInput()
     history.replaceState(null, '', location.pathname + location.hash)
     let unlocked = false
     const unlockOnce = () => {
@@ -439,6 +455,7 @@ export function boot(root: HTMLElement): void {
         Reflect.set(globalThis, '__ow', g)
       }
       if (hash.has('lineup') || hash.has('posters')) {
+        stopTitleInput()
         // debug views draw the scene: run them once it is warm, not on a cold first frame
         void (async () => {
           try {

@@ -22,6 +22,10 @@ interface Frame {
   rms: number
 }
 interface PageLike {
+  routeWebSocket: (
+    url: (url: URL) => boolean,
+    handle: (socket: { send: (data: string) => void }) => void,
+  ) => Promise<void>
   goto: (url: string) => Promise<unknown>
   waitForFunction: (fn: string, arg?: unknown, opts?: { timeout?: number }) => Promise<unknown>
   evaluate: <T>(fn: string) => Promise<T>
@@ -77,6 +81,10 @@ async function live(): Promise<void> {
     args: ['--autoplay-policy=no-user-gesture-required'],
   })
   const page = await browser.newPage({ viewport: { width: 1280, height: 720 } })
+  await page.routeWebSocket(
+    (url) => url.host === new URL(base).host,
+    (socket) => socket.send(JSON.stringify({ type: 'connected' })),
+  )
   await page.goto(`${base}/experiments/out-west/#audiodebug`)
   await page.waitForTimeout(1500)
   await page.mouse.click(640, 360)
@@ -84,6 +92,9 @@ async function live(): Promise<void> {
     timeout: 30_000,
   })
   const E = 'globalThis.__owAudioEngine'
+  await page.evaluate(`${E}.setMusicVolume(1)`)
+  await page.evaluate(`${E}.setSfxVolume(1)`)
+  await page.evaluate(`${E}.setVoiceVolume(1)`)
   await page.evaluate(`${E}.loadVoice('Prescott J. House')`)
   await page.waitForTimeout(3000)
   const measure = async (label: string, setup: string, settle: number, secs: number) => {

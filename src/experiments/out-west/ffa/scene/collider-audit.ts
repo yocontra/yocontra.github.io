@@ -52,7 +52,8 @@ export function colliderAudit(scene: Object3D): ColliderReport {
   const who = new Map<number, string>()
   let checked = 0
   for (const p of c.pieces) {
-    if (p.hangs || p.decal || p.flags?.wall === true || p.flags?.live === true) {
+    const skip = p.hangs || p.decal || p.flags?.wall || p.flags?.live || p.flags?.nonBlocking
+    if (skip) {
       continue
     }
     if (p.max.y < ANKLE || p.min.y > HEAD) {

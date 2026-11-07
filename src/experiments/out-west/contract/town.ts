@@ -34,12 +34,12 @@
  * | 3 | u8 | frame count `n` (1–4, normally 2) |
  * | 4 | u16 | `ackTick`: tick16 of the newest snapshot received |
  * | 6 | u8 | `ackAgeMs`: ms between receiving that snapshot and sending this message (cap 255) |
- * | 7 | n × 9 B | frames |
+ * | 7 | n × 10 B | frames |
  *
  * Frame (10 B): `moveX i8`, `moveZ i8` (−127..127, normalised on the server), `aim u16` (turns,
  * 0 = +x, increasing toward +z), `buttons u16` (`BTN_*`, held state; the server edge-detects),
  * `viewTick u16` (tick16 of the remote-entity time the client was rendering), `viewFrac u8`
- * (fraction of a tick ×255), `pitch i8` (±127 = ±90°, wire v6; cosmetic). The view time is used only
+ * (fraction of a tick ×255), `pitch i8` (±127 = ±90°, wire v6; authoritative since v7). The view time is used only
  * to rewind hits, clamped to `MAX_REWIND_MS`.
  *
  * # Server → client: `MSG_SNAPSHOT` (20 Hz)
@@ -47,7 +47,7 @@
  * | Section | Layout |
  * |---|---|
  * | Header (11 B) | `u8 MSG_SNAPSHOT`, `u32 tick`, `u16 lastInputSeq`, `i8 inputLead`, `u8 flags` (`SNAP_*`), `u8 entityCount`, `u8 removedCount` |
- * | Self (65 B) | `u16 x`, `u16 z`, `u16 y` (cm), `u8 roof` (0 street, n = deck n), `u8 climbTicks`, `u8 climbDeck`, `i8 climbDir`, `u8 fallTicks`, `u8 fallTotal`, `u16 fallFromX`, `u16 fallFromZ`, `u8 fallFromY` (dm), `u16 fallToX`, `u8 fallToY` (dm), `u16 fallToZ` (cm), `u8 hp`, `u8 ammo`, `u8 selfFlags` (`SELF_*`), `u8 rollTicks`, `u8 rollCooldown`, `u16 rollDir`, `u8 reloadTicks`, `u8 fireCooldown` (ms ÷ 4), `u8 protectTicks`, `u8 deadEyeTicks`, `u8 channelKind` (`CHANNEL_*`), `u8 channelTicks`, `u32 carried`, `u8 respawnTicks`, `u8 holsterTicks`, `u16 lastButtons`, `u8 weapon` (`selfWeapon()`: bits 0–1 `WEAPON_*`, bits 2–4 pickup-weapon rounds, bit 5 holding dynamite; 0 = plain revolver), `u8 jumpTicks`, `u8 jumpCooldown`, `u8 vaultStep` (cm per tick; 0 = a hop), `u16 vaultAim`, `u8 moveFlags` (`MOVE_*`), `u8 sprintLock`, `u8 sprintOut`, `u8 slideTicks`, `u8 slideCooldown`, `u16 slideAim`, `i8 airX`, `i8 airZ` (cm per tick), `i8 vy` (dm/s), `u8 grounded`, `u16 support` (cm), `u16 airPeakY` (cm), `u8 mantleTicks` |
+ * | Self (66 B) | `u16 x`, `u16 z`, `u16 y` (cm), `u8 roof` (0 street, n = deck n), `u8 climbTicks`, `u8 climbDeck`, `i8 climbDir`, `u8 fallTicks`, `u8 fallTotal`, `u16 fallFromX`, `u16 fallFromZ`, `u8 fallFromY` (dm), `u16 fallToX`, `u8 fallToY` (dm), `u16 fallToZ` (cm), `u8 hp`, `u8 ammo`, `u8 selfFlags` (`SELF_*`), `u8 rollTicks`, `u8 rollCooldown`, `u16 rollDir`, `u8 reloadTicks`, `u8 fireCooldown` (ms ÷ 4), `u8 protectTicks`, `u8 deadEyeTicks`, `u8 channelKind` (`CHANNEL_*`), `u8 channelTicks`, `u32 carried`, `u8 respawnTicks`, `u8 holsterTicks`, `u16 lastButtons`, `u8 weapon` (`selfWeapon()`: bits 0–1 `WEAPON_*`, bits 2–4 pickup-weapon rounds, bit 5 holding dynamite; 0 = plain revolver), `u8 jumpTicks`, `u8 jumpCooldown`, `u8 vaultStep` (cm per tick; 0 = a hop), `u16 vaultAim`, `u8 moveFlags` (`MOVE_*`), `u8 sprintLock`, `u8 sprintOut`, `u8 slideTicks`, `u8 slideCooldown`, `u16 slideAim`, `i8 airX`, `i8 airZ` (cm per tick), `i16 vy` (dm/s), `u8 grounded`, `u16 support` (cm), `u16 airPeakY` (cm), `u8 mantleTicks` |
  * | Removed | `removedCount × u8 id` (left interest or left the lobby) |
  * | Entities | `entityCount ×` entity record |
  * | Town (if `SNAP_TOWN`) | `u8 mostWantedId` (255 none), `u8 mwX`, `u8 mwZ` (0.6 m units), `u8 strongboxSpot` (255 none), `u16 strongboxValue`, `u8 strongboxState` (`BOX_*`), `u8 players`, `u32 banked` (this player's wallet, as last confirmed) |
@@ -106,10 +106,13 @@ import { reopensOn } from '../data/sinks.ts'
  * 8: nothing further; kept for a clean cutover with v7 clients.
  * 9: breakable windows: `EV_GLASS_BREAK` (`u16` window index) marks one shattered pane; a full
  *    snapshot replays every broken pane.
+ * 10: shots carry authoritative origin and endpoint (six biased u16 centimetre coordinates),
+ *    plus u8 pellet count and up to eight endpoints. Self vertical velocity widens to i16 dm/s
+ *    to retain ordinary roof-fall speeds at the same precision. Old clients must refresh before joining.
  */
-export const CONTRACT_VERSION = 9
+export const CONTRACT_VERSION = 10
 /** The binary Frontier wire format this build speaks (`TownJoinRequest.wire`). */
-export const TOWN_WIRE_VERSION = 9
+export const TOWN_WIRE_VERSION = 10
 
 // --- saddlebags ----------------------------------------------------------------------------------
 
@@ -191,6 +194,35 @@ export interface RosterEntry {
   loadout: readonly string[]
 }
 
+/** Persistent world presentation, outside the capped transient-event list. Positions are metres. */
+export interface TownPersistentState {
+  /** Last completed simulation tick. Deadlines below use the same absolute tick clock. */
+  tick: number
+  bags: {
+    id: number
+    x: number
+    z: number
+    amount: number
+    style: number
+    exclusiveFor: number
+    exclusiveUntil: number
+    expiresAt: number
+  }[]
+  unavailablePickups: number[]
+  brokenWindows: number[]
+  callouts: { challenger: number; target: number; untilTick: number }[]
+  showdowns: {
+    id: number
+    a: number
+    b: number
+    cx: number
+    cz: number
+    /** Null until the call has happened: never reveal the future call time. */
+    calledTick: number | null
+  }[]
+  fuses: { player: number; x: number; z: number; explodeAt: number }[]
+}
+
 export type ServerControl =
   | {
       type: 'welcome'
@@ -202,6 +234,7 @@ export type ServerControl =
       roster: RosterEntry[]
       banked: number
     }
+  | { type: 'town_state'; state: TownPersistentState }
   | { type: 'roster_add'; entry: RosterEntry }
   | { type: 'roster_remove'; id: number }
   /** A deposit was committed to the ledger (or failed and will retry). */
@@ -247,7 +280,7 @@ export const INPUT_HEADER_BYTES = 7
 export const INPUT_FRAME_BYTES = 10
 export const MAX_FRAMES_PER_INPUT = 4
 export const SNAPSHOT_HEADER_BYTES = 11
-export const SNAPSHOT_SELF_BYTES = 65
+export const SNAPSHOT_SELF_BYTES = 66
 /** `inputLead` when no input message arrived since the previous snapshot. */
 export const INPUT_LEAD_NONE = -128
 
@@ -354,7 +387,11 @@ export const BOX_OPENING = 2
 
 // --- Events -------------------------------------------------------------------------------------
 
-/** `u8 shooter, u16 aim (with spread), u8 rangeQ (× SHOT_RANGE_UNIT m), u8 target (255 none), u8 flags (SHOT_*)` */
+/**
+ * `u8 shooter, u16 aim, u8 rangeQ, u8 target, u8 flags, u8 y` (legacy range metadata),
+ * six `u16` coordinates (`ox,oy,oz,ex,ey,ez`, biased centimetres), `u8 pelletCount`, then
+ * `pelletCount × (u16 x,u16 y,u16 z)`. One event per shell; pellet count is 0 or 8.
+ */
 export const EV_SHOT = 1
 /** `u8 victim, u8 attacker, u8 amount, u8 hpAfter` */
 export const EV_DAMAGE = 2
@@ -404,7 +441,7 @@ export const EV_EXPLOSION = 21
 export const EV_GLASS_BREAK = 22
 
 export const EVENT_SIZES: Readonly<Record<number, number>> = {
-  [EV_SHOT]: 7,
+  [EV_SHOT]: 20,
   [EV_DAMAGE]: 4,
   [EV_KILL]: 5,
   [EV_BAG_DROP]: 10,
@@ -427,6 +464,11 @@ export const EVENT_SIZES: Readonly<Record<number, number>> = {
   [EV_EXPLOSION]: 5,
   [EV_GLASS_BREAK]: 2,
 }
+
+/** Shot coordinate metres = (wire - SHOT_COORD_BIAS) / SHOT_COORD_SCALE. */
+export const SHOT_COORD_SCALE = 100
+export const SHOT_COORD_BIAS = 32_768
+export const MAX_SHOT_PELLETS = 8
 
 /** Shot range units: metres = rangeQ × SHOT_RANGE_UNIT. */
 export const SHOT_RANGE_UNIT = 0.25

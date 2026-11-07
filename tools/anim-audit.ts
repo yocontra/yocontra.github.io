@@ -1,5 +1,5 @@
 /**
- * The animation audit (docs/animation-matrix.md): drives every character state it can reach, in
+ * The animation audit (tools/anim/MATRIX.md): drives every character state it can reach, in
  * the PRODUCTION build with the harness hooks kept (`PUBLIC_OW_PERF_HARNESS=1`, never set for the
  * deploy), captures frame sequences from the state's camera and checks each one programmatically:
  *
@@ -34,6 +34,13 @@ const browser = await chromium.launch({
 })
 try {
   const ctx = await browser.newContext({ viewport: { width: 960, height: 540 }, hasTouch: true })
+  if (baseArg) {
+    // A concurrent source save must not replace the state whose frames are being measured.
+    await ctx.routeWebSocket(
+      (url) => url.host === new URL(base).host,
+      (socket) => socket.send(JSON.stringify({ type: 'connected' })),
+    )
+  }
   if (!skip.has('duel')) {
     await duelStage(ctx, base)
   }

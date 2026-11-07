@@ -325,6 +325,8 @@ export class Renderer {
   /** The active quality tier. */
   tier: Quality
   spec: TierSpec
+  /** Scene owners reapply their crowd, fog and shadow policies after benchmark/adaptation. */
+  onTierChange: (() => void) | null = null
   /** Backing-store pixel ratio now in use (tier ratio × dynamic scale). */
   dpr: number
   /** Dynamic resolution scale within the tier's range. */
@@ -554,6 +556,7 @@ export class Renderer {
       }
     })
     this.resize()
+    this.onTierChange?.()
   }
 
   /**
