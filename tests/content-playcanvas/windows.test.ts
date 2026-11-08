@@ -1,6 +1,7 @@
 import { expect, test as it } from 'bun:test'
 import { NodeIO } from '@gltf-transform/core'
 import { ALL_EXTENSIONS } from '@gltf-transform/extensions'
+import { ASSETS } from '../../src/experiments/out-west/content/manifest.ts'
 import { buildGrid, TOWN } from '../../src/experiments/out-west/ffa/sim/layout.ts'
 
 const PANE_NAME = /^glass-\d+$/u
@@ -8,7 +9,7 @@ const PANE_NAME = /^glass-\d+$/u
 it('authored breakable panes address every domain window with matching placement', async () => {
   const document = await new NodeIO()
     .registerExtensions(ALL_EXTENSIONS)
-    .read('public/experiments/out-west/3d/baked/frontier.glb')
+    .read(`public${ASSETS.frontier.url.split('?')[0]}`)
   const nodes = new Map(
     document
       .getRoot()

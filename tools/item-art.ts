@@ -11,13 +11,19 @@ export function itemArtInputs(): string[] {
   return [
     'src/experiments/out-west/data/catalog.ts',
     'src/experiments/out-west/client/application.ts',
+    'src/experiments/out-west/scene/native-materials.ts',
+    'src/experiments/out-west/content/equipment.ts',
+    'src/experiments/out-west/content/skies.ts',
     'tools/content/item-preview.ts',
     'tools/item-thumbs.ts',
     'tools/item-art.ts',
-    ...readdirSync(`${ART}/equipment`)
+    ...readdirSync(`${ART}/native-v2/equipment`)
       .filter((name) => name.endsWith('.glb'))
-      .map((name) => `${ART}/equipment/${name}`),
-    `${ART}/env/kloppenheim_06_puresky_1k.hdr`,
+      .map((name) => `${ART}/native-v2/equipment/${name}`),
+    ...readdirSync(`${ART}/native-v2/characters`)
+      .filter((name) => name.endsWith('.ktx2'))
+      .map((name) => `${ART}/native-v2/characters/${name}`),
+    `${ART}/env/sky-noon.hdr`,
   ].sort((a, b) => a.localeCompare(b))
 }
 export function itemArtFingerprint(): string {

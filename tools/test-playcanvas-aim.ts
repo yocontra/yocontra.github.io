@@ -9,7 +9,7 @@ interface Probe {
   __playcanvasFrontier?: GameViewport
   __nativeFrontierSession?: FrontierSession
 }
-const dynamicPath = /\/3d\/dynamic\/(?<name>[^/]+)\.glb$/u
+const dynamicPath = /\/3d\/(?:native-v2\/)?dynamic\/(?<name>[^/]+)\.glb$/u
 const origin = process.env.OW_ORIGIN ?? 'http://127.0.0.1:4390'
 const browser = await chromium.launch({ channel: 'chrome', headless: true })
 try {
@@ -43,7 +43,9 @@ try {
       const applications = Reflect.get(pc.AppBase, '_applications')
       const app = Reflect.get(applications, '') as InstanceType<typeof pc.AppBase>
       const camera = app.root.findByName('camera')
-      const models = app.root.find((node) => Boolean(Reflect.get(node, 'anim')))
+      const models = app.root.find(
+        (node) => Boolean(Reflect.get(node, 'anim')) && Boolean(node.parent?.tags.has('rider:0')),
+      )
       const model = models[0] as InstanceType<typeof pc.Entity>
       const mount = app.root.find((node) => node.name === 'mount.WristR.drawn')[0]
       if (!(camera instanceof pc.Entity && camera.camera && mount && model.anim)) {
@@ -122,6 +124,8 @@ try {
     'bag2',
     'bag3',
     'dynamite',
+    'held-rifle',
+    'held-shotgun',
     'rifle',
     'shotgun',
     'strongbox',

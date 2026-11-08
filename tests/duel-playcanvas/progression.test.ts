@@ -1,5 +1,4 @@
 import { expect, test as it } from 'bun:test'
-import { FogParams } from 'playcanvas'
 import { OUTLAWS } from '../../src/experiments/out-west/data/outlaws.ts'
 import { arenaForSlot } from '../../src/experiments/out-west/duel/native-arenas.ts'
 import { resolve } from '../../src/experiments/out-west/duel/native-combat.ts'
@@ -30,7 +29,7 @@ function fixture(level = 0): NativeDirector {
     dailyVerdict: null,
     events: {},
     clock: { cancel: noop, dispose: noop },
-    game: { app: { scene: { fog: new FogParams() } } },
+    arenas: { dailyFog: noop },
     c: {
       save: load(),
       input: { touch: false },
@@ -89,6 +88,10 @@ it('Daily fog and progression live in a scratch save and restore the gauntlet on
   saved.run.total = 500
   saved.level = 4
   let exits = 0
+  const fogModes: boolean[] = []
+  d.arenas.dailyFog = (enabled) => {
+    fogModes.push(enabled)
+  }
   const session = { listen: noop, close: noop } as unknown as RankedSession
   await dailyDuel(d, { outlaw: 0, modifiers: ['fog', 'no-bell'] }, session, () => {
     exits++
@@ -96,10 +99,10 @@ it('Daily fog and progression live in a scratch save and restore the gauntlet on
   expect(d.c.save).not.toBe(saved)
   expect(saved.level).toBe(4)
   expect(saved.run.total).toBe(500)
-  expect(d.game.app.scene.fog.type).toBe('exp2')
+  expect(fogModes).toEqual([true])
   leaveSpecial(d)
   expect(d.c.save).toBe(saved)
-  expect(d.game.app.scene.fog.type).toBe('none')
+  expect(fogModes).toEqual([true, false])
   expect(exits).toBe(1)
   leaveSpecial(d)
   expect(exits).toBe(1)

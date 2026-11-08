@@ -2,7 +2,7 @@
 // biome-ignore-all lint/style/noExcessiveLinesPerFile: voice lifecycle and the existing room/lobby flow live together
 /**
  * One Frontier lobby: the authoritative 20 Hz tick, **only while a human is present**. When the
- * last human leaves (after their 10 s linger), the loop stops, everything is flushed and the object
+ * last online human leaves, the loop stops immediately, everything is flushed and the object
  * goes idle, so an empty lobby costs nothing. Bots never keep it awake. Owned by stream F.
  *
  * Money: deposits are settled in D1 every 2 s (each idempotent under its own key, persisted to DO
@@ -18,6 +18,7 @@ import { dyesOf } from '../economy/sinks.ts'
 import type { Env } from '../env.ts'
 import { NativeBudgetRefusal } from '../game/admission.ts'
 import { createNativeRoom, type NativeFrontierRoom, reserveNativeRoom } from '../game/room.ts'
+import { NativeSeats } from '../game/seats.ts'
 import { CloudflareClient } from '../game/socket.ts'
 import { FLAG_BADLANDS, flagStatements, isShadowed, standing } from '../moderation/flags.ts'
 import {
@@ -75,7 +76,7 @@ export interface LobbyStats {
 }
 
 export class Lobby extends DurableObject<Env> {
-  private nativeCleanup: ReturnType<typeof setTimeout> | undefined
+  private readonly seats: NativeSeats
   private nativeLeaseId = ''
   private nativeLeaseTimer: ReturnType<typeof setTimeout> | undefined
   private nativeLeaseWatchdog: ReturnType<typeof setTimeout> | undefined
@@ -88,56 +89,12 @@ export class Lobby extends DurableObject<Env> {
   private readonly xpFlushes = new WeakMap<Session, Promise<void>>()
   private readonly pendingXp = new WeakMap<Session, PendingXp>()
   private settlementRetryMs = 5000
+  private alarmAt: number | undefined
 
-  /** Called only through the authenticated Worker router, never from user-supplied HTTP headers. */
+  /** Authenticated HTTP admission persists only a one-use seat, without a native room. */
   async reserveNative(lobbyId: string, accountId: string, protocol: number) {
-    if (this.core && !this.native && this.core.connectedHumans() > 0) {
-      throw new Error('Legacy room draining')
-    }
-    this.lobbyId = lobbyId
-    this.core ??= new LobbyCore(lobbyId, crypto.getRandomValues(new Uint32Array(1))[0] ?? 1)
-    const core = this.core
-    this.nativeInitializing ??= (async () => {
-      this.nativeLeaseId = crypto.randomUUID()
-      const grant = await this.directory().leaseRoom(this.nativeLeaseId, 0)
-      if (!grant.ok) {
-        this.nativeLeaseId = ''
-        throw new NativeBudgetRefusal('Today’s free hosting allowance is exhausted')
-      }
-      return createNativeRoom({
-        id: this.ctx.id.toString(),
-        core,
-        onTick: (out) => {
-          this.handle(out)
-          this.afterNativeStep(core)
-        },
-        onJoin: (session) => this.onNativeJoin(core, session),
-        onLeave: (session) => this.onDisconnect(core, session.playerId),
-        onEmpty: () => this.lingerNative(core),
-        onControl: (session, text, gameNow) => {
-          if (!this.voiceText(core, session.playerId, text)) {
-            core.onText(session.playerId, text, gameNow, true)
-          }
-        },
-      })
-    })()
-      .then((created) => {
-        this.native = created
-        this.armNativeLease(core)
-        return created
-      })
-      .catch((error) => {
-        this.nativeInitializing = undefined
-        throw error
-      })
-    let room: NativeFrontierRoom
-    try {
-      room = await this.nativeInitializing
-    } catch (error) {
-      if (error instanceof NativeBudgetRefusal) {
-        return { refused: 'over_budget' as const }
-      }
-      throw error
+    if (!(this.native?.running || (await this.directory().canLeaseRoom()).ok)) {
+      return { refused: 'over_budget' as const }
     }
     const [profile, status, dyes] = await Promise.all([
       getProfile(this.env, accountId),
@@ -147,21 +104,10 @@ export class Lobby extends DurableObject<Env> {
     if (!profile) {
       throw new Error('Profile unavailable')
     }
-    const now = Date.now()
-    this.occupiedSince ||= now
-    this.lastMinute ||= now
-    this.lastDepositFlush ||= now
-    if (this.nativeCleanup === undefined) {
-      this.nativeCleanup = setTimeout(() => {
-        this.nativeCleanup = undefined
-        if (core.connectedHumans() === 0) {
-          this.stop(core, Date.now())
-        }
-      }, 30_000)
-    }
-    return reserveNativeRoom(
-      room,
-      {
+    const reservation = this.seats.issue(this.ctx.id.toString(), {
+      lobbyId,
+      protocol,
+      profile: {
         accountId,
         name: profile.name,
         level: profile.level,
@@ -175,8 +121,48 @@ export class Lobby extends DurableObject<Env> {
         blocked: status.blocked,
         appearance: { loadout: profile.loadout, dyes },
       },
-      protocol,
-    )
+    })
+    await this.scheduleSettlementRetry(false)
+    return reservation
+  }
+
+  private nativeRoom(lobbyId: string): Promise<NativeFrontierRoom> {
+    this.lobbyId = lobbyId
+    this.core ??= new LobbyCore(lobbyId, crypto.getRandomValues(new Uint32Array(1))[0] ?? 1)
+    const core = this.core
+    this.nativeInitializing ??= createNativeRoom({
+      id: this.ctx.id.toString(),
+      core,
+      onTick: (out) => {
+        this.handle(out)
+        this.afterNativeStep(core)
+      },
+      onStart: () => this.startNative(core),
+      onJoin: (session) => this.onNativeJoin(core, session),
+      onLeave: (session) => this.onDisconnect(core, session.playerId),
+      onEmpty: () => this.stop(core, Date.now()),
+      onControl: (session, text, gameNow) => {
+        if (!this.voiceText(core, session.playerId, text)) {
+          core.onText(session.playerId, text, gameNow, true)
+        }
+      },
+    })
+      .then(async (created) => {
+        if (this.core !== core) {
+          created.stopGameplay()
+          await created.disconnect()
+          throw new DOMException('Town was closed', 'AbortError')
+        }
+        this.native = created
+        return created
+      })
+      .catch((error) => {
+        if (this.core === core) {
+          this.nativeInitializing = undefined
+        }
+        throw error
+      })
+    return this.nativeInitializing
   }
 
   private async onNativeJoin(core: LobbyCore, session: Session) {
@@ -191,29 +177,44 @@ export class Lobby extends DurableObject<Env> {
           throw new Error('Session settlement is pending. Try reconnecting shortly.')
         }
       }
-      await sessionStartStatement(this.env, this.lobbyId, session).run()
       const visit = { sessionId: session.sessionId, lobbyId: this.lobbyId }
+      await sessionStartStatement(this.env, this.lobbyId, session).run()
       await this.ctx.storage.put(`visit:${session.sessionId}`, visit)
+      if (this.core !== core || !session.peer || core.sessionOf(session.playerId) !== session) {
+        const player = core.world.players[session.playerId]
+        if (player) {
+          await this.flushXp({ session, player }, Date.now())
+        }
+        this.staleVisits.set(visit.sessionId, visit)
+        await this.closeNativeVisits([visit], Date.now())
+        return
+      }
       this.nativeVisits.set(session.sessionId, visit)
     }
-    clearTimeout(this.nativeCleanup)
-    this.nativeCleanup = undefined
     this.arrived.push(session.accountId)
     this.reportDirectory(true)
     this.peakHumans = Math.max(this.peakHumans, core.humans())
   }
 
-  private lingerNative(core: LobbyCore) {
-    if (this.core !== core || this.nativeCleanup !== undefined) {
-      return
+  private async startNative(core: LobbyCore): Promise<void> {
+    if (this.core !== core) {
+      throw new DOMException('Town was closed', 'AbortError')
     }
-    // Keep the native world ticking through the same ten-second avatar/rejoin grace.
-    this.nativeCleanup = setTimeout(() => {
-      this.nativeCleanup = undefined
-      if (this.core === core && core.connectedHumans() === 0) {
-        this.stop(core, Date.now())
+    const id = crypto.randomUUID()
+    this.nativeLeaseId = id
+    const grant = await this.directory().leaseRoom(id, 0)
+    if (this.core !== core || this.nativeLeaseId !== id) {
+      if (grant.ok) {
+        await this.directory().leaseRoom(id, 0, true)
       }
-    }, 10_000)
+      throw new DOMException('Town was closed', 'AbortError')
+    }
+    if (!grant.ok) {
+      this.nativeLeaseId = ''
+      throw new NativeBudgetRefusal('Today’s free hosting allowance is exhausted')
+    }
+    this.occupiedSince = grant.observedAt
+    this.armNativeLease(core)
   }
 
   override webSocketMessage(socket: WebSocket, message: ArrayBuffer | string) {
@@ -283,16 +284,14 @@ export class Lobby extends DurableObject<Env> {
     const now = Date.now()
     this.peakHumans = Math.max(this.peakHumans, core.humans())
     if (core.world.tick % 40 === 0) {
-      this.lastDepositFlush = now
       void this.flushDeposits()
     }
     if (core.world.tick % 1200 === 0) {
-      this.lastMinute = now
       this.ctx.waitUntil(
         this.minute(core, now).then(async () => {
-          if (!(await budgetState(this.env)).frontierOpen) {
+          const budget = await budgetState(this.env)
+          if (this.core === core && !budget.frontierOpen) {
             core.notice('Town has reached today’s free hosting allowance. Practice is still open.')
-            await this.native?.disconnect()
             this.stop(core, Date.now())
           }
         }),
@@ -307,8 +306,6 @@ export class Lobby extends DurableObject<Env> {
   /** Sessions whose aimbot flag has been written to `accounts.flags` already. */
   private readonly aimbotFlagged = new Set<string>()
   private flushing: boolean
-  private lastDepositFlush = 0
-  private lastMinute = 0
   private occupiedSince = 0
   private msgsReported = 0
   private mintedReported = 0
@@ -330,8 +327,10 @@ export class Lobby extends DurableObject<Env> {
 
   constructor(ctx: DurableObjectState, env: Env) {
     super(ctx, env)
+    this.seats = new NativeSeats(ctx.storage)
     this.flushing = false
     const restored = ctx.blockConcurrencyWhile(async () => {
+      this.alarmAt = (await ctx.storage.getAlarm()) ?? undefined
       ctx.storage.sql.exec(
         'CREATE TABLE IF NOT EXISTS pending_deposits (key TEXT PRIMARY KEY, data TEXT NOT NULL)',
       )
@@ -359,7 +358,7 @@ export class Lobby extends DurableObject<Env> {
       }
       return [...(await ctx.storage.list<NativeVisit>({ prefix: 'visit:' })).values()]
     })
-    // Native worlds/seats are transient. Close only this DO's recorded visits after a restart.
+    // Native worlds are transient; seats are durable. Close only this DO's recorded visits after a restart.
     ctx.waitUntil(
       restored.then((visits) => {
         for (const visit of visits) {
@@ -377,17 +376,28 @@ export class Lobby extends DurableObject<Env> {
       if (upgradeError) {
         return upgradeError
       }
-      if (!this.native || request.headers.get('X-Native-Room') !== this.native.roomId) {
+      if (request.headers.get('X-Native-Room') !== this.ctx.id.toString()) {
         return new Response('Room expired', { status: 409 })
       }
       const sessionId = url.searchParams.get('sessionId')
       if (!sessionId) {
         return new Response('Seat required', { status: 401 })
       }
+      const seat = this.seats.consume(
+        sessionId,
+        request.headers.get('X-Account-Id') ?? '',
+        request.headers.get('X-Lobby-Id') ?? '',
+      )
+      if (!seat || seat.lobbyId !== request.headers.get('X-Lobby-Id')) {
+        return new Response('Seat expired or already consumed', { status: 409 })
+      }
+      await this.scheduleSettlementRetry(false)
+      const native = await this.nativeRoom(seat.lobbyId)
       const core = this.core
       if (!core) {
         return new Response('Room expired', { status: 409 })
       }
+      await reserveNativeRoom(native, seat.profile, seat.protocol, sessionId)
       const pair = new WebSocketPair()
       const server = pair[1]
       this.ctx.acceptWebSocket(server)
@@ -396,17 +406,17 @@ export class Lobby extends DurableObject<Env> {
         core.metrics.msgsOut++
       })
       this.nativeClients.set(server, client)
-      try {
-        await connectClientToRoom(
-          this.native,
+      this.ctx.waitUntil(
+        connectClientToRoom(
+          native,
           client,
           createAuthContext({ headers: request.headers }),
           {},
-        )
-      } catch (error) {
-        this.nativeClients.delete(server)
-        server.close(4001, error instanceof Error ? error.message : 'Join failed')
-      }
+        ).catch((error: unknown) => {
+          this.nativeClients.delete(server)
+          server.close(4001, error instanceof Error ? error.message : 'Join failed')
+        }),
+      )
       return new Response(null, { status: 101, webSocket: pair[0] })
     }
     if (url.pathname === '/stats') {
@@ -485,18 +495,12 @@ export class Lobby extends DurableObject<Env> {
     if (this.core !== core) {
       return
     }
-    if (this.nativeCleanup !== undefined) {
-      clearTimeout(this.nativeCleanup)
-    }
-    this.nativeCleanup = undefined
     this.core = null
     this.departed.push(...core.accounts())
     void this.flushDeposits()
     const visits = [...this.nativeVisits.values()]
     this.ctx.waitUntil(this.minute(core, now).then(() => this.closeNativeVisits(visits, now)))
     this.occupiedSince = 0
-    this.lastMinute = 0
-    this.lastDepositFlush = 0
     this.reportDirectory(true)
     if (this.nativeLeaseId) {
       const id = this.nativeLeaseId
@@ -516,6 +520,7 @@ export class Lobby extends DurableObject<Env> {
     this.native = undefined
     this.nativeInitializing = undefined
     if (native) {
+      native.stopGameplay()
       this.ctx.waitUntil(native.disconnect().then(() => undefined))
     }
     this.ctx.waitUntil(this.voiceClose())
@@ -667,6 +672,7 @@ export class Lobby extends DurableObject<Env> {
     for (const visit of visits) {
       this.staleVisits.set(visit.sessionId, visit)
     }
+    let failed = true
     try {
       await this.env.DB.batch(
         visits.map((visit) =>
@@ -680,18 +686,31 @@ export class Lobby extends DurableObject<Env> {
         this.nativeVisits.delete(visit.sessionId)
         this.staleVisits.delete(visit.sessionId)
       }
+      failed = false
     } finally {
-      await this.scheduleSettlementRetry()
+      await this.scheduleSettlementRetry(failed)
     }
   }
 
-  private async scheduleSettlementRetry() {
-    if (this.pending.size > 0 || this.staleVisits.size > 0) {
-      await this.ctx.storage.setAlarm(Date.now() + this.settlementRetryMs)
-      this.settlementRetryMs = Math.min(3_600_000, this.settlementRetryMs * 2)
-    } else {
-      this.settlementRetryMs = 5000
+  private async scheduleSettlementRetry(advanceBackoff = false) {
+    const settlement = this.pending.size > 0 || this.staleVisits.size > 0
+    const seat = this.seats.nextExpiry()
+    const hasWork = settlement || seat !== undefined
+    const retry = settlement ? Date.now() + this.settlementRetryMs : Number.POSITIVE_INFINITY
+    const next = hasWork
+      ? Math.min(seat ?? Number.POSITIVE_INFINITY, retry, this.alarmAt ?? Number.POSITIVE_INFINITY)
+      : Number.POSITIVE_INFINITY
+    // Publish the deadline before the first await: concurrent seats cannot postpone economic recovery.
+    this.alarmAt = Number.isFinite(next) ? next : undefined
+    if (this.alarmAt === undefined) {
       await this.ctx.storage.deleteAlarm()
+    } else {
+      await this.ctx.storage.setAlarm(this.alarmAt)
+    }
+    if (!settlement) {
+      this.settlementRetryMs = 5000
+    } else if (advanceBackoff) {
+      this.settlementRetryMs = Math.min(3_600_000, this.settlementRetryMs * 2)
     }
   }
 
@@ -725,12 +744,15 @@ export class Lobby extends DurableObject<Env> {
       }
     } finally {
       this.flushing = false
-      await this.scheduleSettlementRetry()
+      await this.scheduleSettlementRetry(this.pending.size > 0)
     }
   }
 
   override async alarm() {
+    this.alarmAt = undefined
+    this.seats.expire()
     await this.recoverPersistedState()
+    await this.scheduleSettlementRetry(false)
   }
 
   private flushXp(dep: Departure, leftAt: number | null): Promise<void> {
@@ -799,7 +821,7 @@ export class Lobby extends DurableObject<Env> {
       const p = core.world.players[s.playerId]
       return p ? [this.flushXp({ session: s, player: p }, null)] : []
     })
-    const seconds = (now - this.occupiedSince) / 1000
+    const seconds = this.occupiedSince > 0 ? Math.max(0, (now - this.occupiedSince) / 1000) : 0
     this.occupiedSince = now
     const msgs = core.metrics.msgsIn - this.msgsReported
     this.msgsReported = core.metrics.msgsIn

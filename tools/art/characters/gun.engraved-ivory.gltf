@@ -1,0 +1,392 @@
+{
+  "asset": {
+    "generator": "glTF-Transform v4.5.1",
+    "version": "2.0"
+  },
+  "accessors": [
+    {
+      "type": "VEC3",
+      "componentType": 5126,
+      "count": 6539,
+      "max": [
+        0.15067461133003235,
+        0.1616959273815155,
+        0.02372356876730919
+      ],
+      "min": [
+        -0.15187299251556396,
+        -0.001819087308831513,
+        -0.02372356876730919
+      ],
+      "bufferView": 0,
+      "byteOffset": 0
+    },
+    {
+      "type": "VEC3",
+      "componentType": 5126,
+      "count": 6539,
+      "bufferView": 0,
+      "byteOffset": 12
+    },
+    {
+      "type": "VEC2",
+      "componentType": 5126,
+      "count": 6539,
+      "bufferView": 0,
+      "byteOffset": 24
+    },
+    {
+      "type": "VEC3",
+      "componentType": 5126,
+      "count": 6539,
+      "bufferView": 0,
+      "byteOffset": 32
+    },
+    {
+      "type": "VEC2",
+      "componentType": 5126,
+      "count": 6539,
+      "bufferView": 0,
+      "byteOffset": 44
+    },
+    {
+      "type": "SCALAR",
+      "componentType": 5123,
+      "count": 25344,
+      "bufferView": 1,
+      "byteOffset": 0
+    }
+  ],
+  "bufferViews": [
+    {
+      "buffer": 0,
+      "byteOffset": 0,
+      "byteLength": 340028,
+      "byteStride": 52,
+      "target": 34962
+    },
+    {
+      "buffer": 0,
+      "byteOffset": 340028,
+      "byteLength": 50688,
+      "target": 34963
+    }
+  ],
+  "samplers": [
+    {
+      "magFilter": 9728,
+      "minFilter": 9987,
+      "wrapS": 10497,
+      "wrapT": 33071
+    }
+  ],
+  "textures": [
+    {
+      "source": 0,
+      "sampler": 0
+    }
+  ],
+  "images": [
+    {
+      "mimeType": "image/webp",
+      "uri": "textures/b0e62369b2db4c1d0631.webp"
+    }
+  ],
+  "buffers": [
+    {
+      "uri": "gun.engraved-ivory.bin",
+      "byteLength": 390716
+    }
+  ],
+  "materials": [
+    {
+      "name": "GunLong",
+      "pbrMetallicRoughness": {
+        "baseColorTexture": {
+          "index": 0
+        }
+      }
+    }
+  ],
+  "meshes": [
+    {
+      "primitives": [
+        {
+          "attributes": {
+            "POSITION": 0,
+            "NORMAL": 1,
+            "TEXCOORD_0": 2,
+            "COLOR_0": 3,
+            "_PBR": 4
+          },
+          "mode": 4,
+          "material": 0,
+          "indices": 5
+        }
+      ]
+    }
+  ],
+  "nodes": [
+    {
+      "extras": {
+        "authoring": "Out West pre-engine fitted source",
+        "paceLength": 0.6577429093045508,
+        "walkDuration": 1.3333333730697632
+      },
+      "children": [
+        1,
+        3
+      ]
+    },
+    {
+      "name": "mount.UpperLegR.holstered",
+      "children": [
+        2
+      ]
+    },
+    {
+      "name": "revolver",
+      "extras": {
+        "gunAnatomy": {
+          "muzzle": {
+            "x": 0.1500000050395938,
+            "y": 0.13915058215853107,
+            "z": 0
+          },
+          "grip": {
+            "x": -0.10657434052609135,
+            "y": 0.056511605826025116,
+            "z": 0
+          },
+          "rearX": -0.15000000596046448,
+          "mouthX": -0.028432723449776202,
+          "cylinder": {
+            "cy": 0.12408442865029189,
+            "hy": 0.023723570076406474,
+            "hz": 0.023723570076406474
+          },
+          "barrel": {
+            "cy": 0.13707055350254282,
+            "hy": 0.017595918089846507,
+            "hz": 0.012142869991715162
+          },
+          "rear": {
+            "x": -0.06418672953649307,
+            "y": 0.15466647159238933,
+            "z": 0
+          },
+          "front": {
+            "x": 0.13931877680614063,
+            "y": 0.15466647159238933,
+            "z": 0
+          }
+        },
+        "revolver": {
+          "size": 0.3,
+          "look": {
+            "barrel": 5.5,
+            "steel": {
+              "band": 4,
+              "rgb": [
+                0.92,
+                0.91,
+                0.88
+              ],
+              "metal": 1,
+              "rough": 0.24
+            },
+            "frame": {
+              "band": 4,
+              "rgb": [
+                0.92,
+                0.91,
+                0.88
+              ],
+              "metal": 1,
+              "rough": 0.24
+            },
+            "guard": {
+              "band": 3,
+              "rgb": [
+                1.12,
+                1,
+                0.78
+              ],
+              "metal": 1,
+              "rough": 0.2
+            },
+            "grip": {
+              "band": 4,
+              "rgb": [
+                0.98,
+                0.92,
+                0.8
+              ],
+              "metal": 0,
+              "rough": 0.36
+            },
+            "engraved": true
+          }
+        },
+        "pieceRanges": [
+          {
+            "start": 0,
+            "count": 6539
+          }
+        ]
+      },
+      "translation": [
+        -0.14102017253620025,
+        0.17253658614600897,
+        0.07605139316712065
+      ],
+      "rotation": [
+        0.5917157539274519,
+        0.5118291552676243,
+        -0.46725691963603494,
+        -0.41179406595828466
+      ],
+      "scale": [
+        1.0354021615193654,
+        1.035402160752582,
+        1.0354021603730108
+      ],
+      "mesh": 0
+    },
+    {
+      "name": "mount.WristR.drawn",
+      "children": [
+        4
+      ]
+    },
+    {
+      "name": "revolver",
+      "extras": {
+        "gunAnatomy": {
+          "muzzle": {
+            "x": 0.1500000050395938,
+            "y": 0.13915058215853107,
+            "z": 0
+          },
+          "grip": {
+            "x": -0.10657434052609135,
+            "y": 0.056511605826025116,
+            "z": 0
+          },
+          "rearX": -0.15000000596046448,
+          "mouthX": -0.028432723449776202,
+          "cylinder": {
+            "cy": 0.12408442865029189,
+            "hy": 0.023723570076406474,
+            "hz": 0.023723570076406474
+          },
+          "barrel": {
+            "cy": 0.13707055350254282,
+            "hy": 0.017595918089846507,
+            "hz": 0.012142869991715162
+          },
+          "rear": {
+            "x": -0.06418672953649307,
+            "y": 0.15466647159238933,
+            "z": 0
+          },
+          "front": {
+            "x": 0.13931877680614063,
+            "y": 0.15466647159238933,
+            "z": 0
+          }
+        },
+        "revolver": {
+          "size": 0.3,
+          "look": {
+            "barrel": 5.5,
+            "steel": {
+              "band": 4,
+              "rgb": [
+                0.92,
+                0.91,
+                0.88
+              ],
+              "metal": 1,
+              "rough": 0.24
+            },
+            "frame": {
+              "band": 4,
+              "rgb": [
+                0.92,
+                0.91,
+                0.88
+              ],
+              "metal": 1,
+              "rough": 0.24
+            },
+            "guard": {
+              "band": 3,
+              "rgb": [
+                1.12,
+                1,
+                0.78
+              ],
+              "metal": 1,
+              "rough": 0.2
+            },
+            "grip": {
+              "band": 4,
+              "rgb": [
+                0.98,
+                0.92,
+                0.8
+              ],
+              "metal": 0,
+              "rough": 0.36
+            },
+            "engraved": true
+          }
+        },
+        "pieceRanges": [
+          {
+            "start": 0,
+            "count": 6539
+          }
+        ]
+      },
+      "translation": [
+        -0.025229796950979932,
+        0.1590751000142986,
+        -0.09370912957349817
+      ],
+      "rotation": [
+        0.4198302258200137,
+        0.5718818519222286,
+        0.44216693533905854,
+        0.5488005958739325
+      ],
+      "scale": [
+        1.035402851512892,
+        1.0354028729434381,
+        1.0354028542493037
+      ],
+      "mesh": 0,
+      "children": [
+        5
+      ]
+    },
+    {
+      "name": "socket.muzzle",
+      "translation": [
+        0.1500000050395938,
+        0.13915058215853107,
+        0
+      ]
+    }
+  ],
+  "scenes": [
+    {
+      "name": "AuxScene",
+      "nodes": [
+        0
+      ]
+    }
+  ],
+  "scene": 0
+}

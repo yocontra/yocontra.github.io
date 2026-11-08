@@ -10,6 +10,7 @@ import { confirmSheet } from '../ui/sheet.ts'
 import { LocalDuelClock } from './clock.ts'
 import { watchRemoteAway } from './native-away.ts'
 import type { NativeDirector } from './native-director.ts'
+import { dropEnemyProps, duelShot } from './native-shot.ts'
 import type { PvpOpts } from './options.ts'
 import { RemoteDuelClock } from './remote.ts'
 
@@ -31,6 +32,8 @@ export class NativeRemoteDuel {
   private rematch = -1
   private opponentEpoch = 0
   private fleeing = false as boolean
+  private enemyShotDraw = -1
+  private ownShotDraw = -1
   private readonly confirmation = new AbortController()
   private readonly unwatch: () => void
   private readonly director: NativeDirector
@@ -84,14 +87,10 @@ export class NativeRemoteDuel {
       return
     }
     if (this.beat === 'called') {
-      const sound = this.drawSound ? DRAW_SOUNDS[this.drawSound] : undefined
-      if (sound && this.director.shots === 0) {
-        const audio = this.director.c.audio
-        audio.play('fireBig', { gain: sound.gain, rate: sound.rate, reverb: 0.8 })
-        if (sound.hawk) {
-          audio.play('hawk', { gain: 0.5, when: audio.now + 0.35 })
-        }
+      if (this.director.shots === 0) {
+        this.purchasedDrawReport()
       }
+      this.ownShotDraw = this.clock.draw
       this.director.shoot(press)
     } else if (
       this.beat === 'wait' ||
@@ -141,6 +140,8 @@ export class NativeRemoteDuel {
           break
         }
         this.rematch = message.rematch
+        this.enemyShotDraw = -1
+        this.ownShotDraw = -1
         this.lastPace = 0
         this.result = null
         this.results?.root.remove()
@@ -213,6 +214,8 @@ export class NativeRemoteDuel {
         this.showResult(message)
         break
       case 'deadHeat':
+        this.opponentShot(true)
+        this.historicalOwnShot()
         d.player?.play('Death', 0)
         d.enemy?.play('Death', 0)
         d.c.hud.fake('DEAD HEAT · sudden death', 2000)
@@ -269,11 +272,48 @@ export class NativeRemoteDuel {
     actor.face(this.beat === 'called' ? 180 : 0)
     this.applyBeat(this.beat)
   }
+  private purchasedDrawReport(): void {
+    const sound = this.drawSound ? DRAW_SOUNDS[this.drawSound] : undefined
+    if (!sound) {
+      return
+    }
+    const audio = this.director.c.audio
+    audio.play('fireBig', { gain: sound.gain, rate: sound.rate, reverb: 0.8 })
+    if (sound.hawk) {
+      audio.play('hawk', { gain: 0.5, when: audio.now + 0.35 })
+    }
+  }
+  private opponentShot(hit: boolean): void {
+    if (this.enemyShotDraw === this.clock.draw) {
+      return
+    }
+    this.enemyShotDraw = this.clock.draw
+    duelShot(this.director, this.director.enemy, hit ? this.director.player : null)
+    this.director.c.audio.play('fireBig', {
+      gain: 1.1,
+      ...(this.director.enemy ? { pos: this.director.enemy.root.getPosition() } : {}),
+    })
+  }
+  private historicalOwnShot(): void {
+    if (this.ownShotDraw === this.clock.draw || this.director.shots > 0) {
+      return
+    }
+    this.ownShotDraw = this.clock.draw
+    duelShot(this.director, this.director.player, this.director.enemy)
+    this.purchasedDrawReport()
+    this.director.c.audio.play('fire', { gain: 0.8 })
+  }
   private showResult(result: DuelResult): void {
     if (this.result?.draw === result.draw && (this.result.settled || !result.settled)) {
       return
     }
     this.results?.close()
+    if (result.reactions[this.seat === 0 ? 1 : 0] !== null) {
+      this.opponentShot(result.winner !== this.seat)
+    }
+    if (result.reactions[this.seat] !== null) {
+      this.historicalOwnShot()
+    }
     this.result = result
     this.beat = 'result'
     const win = result.winner === this.seat
@@ -281,6 +321,9 @@ export class NativeRemoteDuel {
     const phase = even ? 'coward' : 'lose'
     this.director.enter(win ? 'win' : phase)
     if (win) {
+      if (result.reactions[this.seat] !== null) {
+        dropEnemyProps(this.director, this.director.enemy)
+      }
       this.director.enemy?.play('Death', 0)
     } else {
       this.director.player?.play('Death', 0)

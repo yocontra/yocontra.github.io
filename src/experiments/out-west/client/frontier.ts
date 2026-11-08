@@ -6,7 +6,7 @@ import { Buttons } from '../runtime/protocol.ts'
 import { FrontierHud } from './frontier-hud.ts'
 import { createLocalFrontierSession } from './frontier-session.ts'
 import { FrontierVoice } from './frontier-voice.ts'
-import { createRemoteFrontierSession } from './remote-session.ts'
+import { createRemoteFrontierSession, loadRemoteAppearance } from './remote-session.ts'
 import { mountGameViewport } from './viewport.ts'
 import '../ui/tokens.css'
 import '../ffa/client/frontier.css'
@@ -42,16 +42,23 @@ export function mountNativeFrontier(
   options: FrontierOptions = {},
 ): FrontierHandle {
   const lifecycle = new AbortController()
-  root.classList.add('pc-game-root', 'fr-root')
+  root.classList.add('pc-game-root', 'fr-root', 'pc-loading')
   const status = document.createElement('div')
-  status.className = 'pc-game-status'
+  status.className = 'pc-game-status pc-travel'
+  status.setAttribute('role', 'status')
+  status.setAttribute('aria-live', 'polite')
   const title = document.createElement('strong')
   title.textContent = 'PERDITION'
   const message = document.createElement('span')
-  message.textContent = 'Riding into town…'
-  status.append(title, message)
+  message.textContent = 'Saddling up…'
+  const art = document.createElement('img')
+  art.className = 'pc-travel-art'
+  art.src = '/experiments/out-west/ui/title-duel.svg'
+  art.alt = ''
+  status.append(art, title, message)
   let presentation: FrontierHud | undefined
   let voice: FrontierVoice | undefined
+  let started = false
   const exit = (reason: 'left' | 'quit' | 'lost' | 'refused', detail?: string): void => {
     destroy()
     if (options.onExit) {
@@ -64,6 +71,15 @@ export function mountNativeFrontier(
     collision: collisionData,
     townUrl: ASSETS.frontier.url,
     playerUrl: ASSETS.player.url,
+    ...(options.server === 'loopback'
+      ? {}
+      : {
+          prepareAppearance: () =>
+            loadRemoteAppearance({
+              ...(options.apiUrl ? { apiUrl: options.apiUrl } : {}),
+              ...(options.getToken ? { getToken: options.getToken } : {}),
+            }),
+        }),
     createSession: async () => {
       const session =
         options.server === 'loopback'
@@ -74,18 +90,23 @@ export function mountNativeFrontier(
               ...(options.getToken ? { getToken: options.getToken } : {}),
               onState(state, detail) {
                 if (state === 'retrying') {
+                  game.resetFeedback()
                   status.hidden = false
                   root.append(status)
-                  message.textContent = 'Reconnecting…'
+                  title.textContent = 'Rejoining Perdition'
+                  message.textContent = 'Finding your place in town…'
+                  root.classList.add('pc-loading')
                   game.inputEnabled(false)
                 }
-                if (state === 'open') {
+                if (state === 'open' && started) {
                   status.remove()
+                  root.classList.remove('pc-loading')
                   game.inputEnabled(true)
                 }
                 if (state === 'closed') {
                   message.textContent = detail ?? 'Connection lost.'
                   status.hidden = false
+                  root.classList.add('pc-loading')
                   root.append(status)
                   game.inputEnabled(false)
                 }
@@ -110,6 +131,11 @@ export function mountNativeFrontier(
       }
       return session
     },
+    onStage(text) {
+      if (!started) {
+        message.textContent = text
+      }
+    },
     onState() {
       presentation?.update()
       voice?.update()
@@ -121,6 +147,8 @@ export function mountNativeFrontier(
       if (lifecycle.signal.aborted) {
         return
       }
+      started = true
+      root.classList.remove('pc-loading')
       status.remove()
       if (import.meta.env.DEV) {
         Reflect.set(globalThis, '__playcanvasFrontier', game)
@@ -150,7 +178,7 @@ export function mountNativeFrontier(
     voice?.destroy()
     game.destroy()
     status.remove()
-    root.classList.remove('pc-game-root', 'fr-root')
+    root.classList.remove('pc-game-root', 'fr-root', 'pc-loading')
     if (import.meta.env.DEV) {
       Reflect.deleteProperty(globalThis, '__playcanvasFrontier')
       Reflect.deleteProperty(globalThis, '__nativeFrontierSession')

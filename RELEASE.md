@@ -19,6 +19,16 @@ obtain fresh authenticated, Turnstile-verified one-use tickets. The Pages
 build keys model, texture and catalog-image URLs by its commit SHA, bypassing old service-worker
 asset keys without forcing other active tabs to reload.
 
+The repaired native assets live under `/3d/native-v2/`. The previous GLBs remain at their original
+paths so an already open v1 tab can safely load additional gear or arenas. A query hash does not
+preserve historical bytes on Pages. Protocol 2 refuses outdated online clients and asks them to
+refresh. Shared PBR maps load through native PlayCanvas assets as needed; retired character texture
+leases and inactive arena containers release their GPU resources. KTX2 maps retain their authored
+dimensions and use the pinned native Basis decoder in `/vendor/basis/2.23.3/`.
+Service-worker updates wait for existing games to close. Activation preserves downloaded
+non-HTML assets, including the decoder and KTX2 files, while keeping the new shell HTML.
+`bun tools/test-playcanvas-cache.ts` verifies that transition and offline byte integrity in a real browser.
+
 Run `bun run check` before pushing, or enable the hook (`git config core.hooksPath .githooks`).
 The `Check` workflow gives a second, clean-runner result on every push.
 
@@ -93,8 +103,12 @@ occupied time against the directory's actual UTC timestamp, and close on denial 
 failure. A socket closes above 20 outer messages/second; normal inputs batch two SDK frames at 10 Hz.
 Expired, unreported reservations remain charged conservatively. Usage keys reset at UTC midnight;
 old monthly rows stay intact. Admission refuses new online play after a ceiling, while local practice
-continues. Last-human departure releases the lease and native physics world; abandoned seat
-reservations are cleaned up after 30 seconds. Pending D1 settlements retain their idempotency keys.
+continues. Frontier keeps at most four bots, independently of its 32 human seats. Last-human departure
+immediately retires the native world, fixed timer and duration lease. A new authenticated connection
+starts a fresh room; banked money and settled XP persist. Reservations retain only one-use SQLite
+seat metadata for 30 seconds, with a durable cleanup alarm. They allocate no SDK room, native physics,
+gameplay timer or duration lease until an authenticated WebSocket arrives. Pending D1 settlements
+retain their idempotency keys and autonomous retry alarms.
 
 ## Native runtime checks
 
@@ -111,8 +125,10 @@ See `src/experiments/out-west/runtime/vendor/README.md` for reproducible Ammo as
 the Workers-only precompiled callback trampoline. Do not replace the Wrangler bundle test with a
 Node-only physics test: Workers prohibit dynamic Wasm compilation.
 
-**Real-device check:** the physical iPhone 13 mini check remains outstanding. Before announcing,
-run the checklist in `tools/PERF.md`; desktop measurements do not verify the 30 FPS device minimum.
+**Simulator QA:** use the requested iPhone 13 mini simulator checklist in `tools/PERF.md` and
+record the build/content revision, canvas size, host GPU and measured frame times. The target is
+at least 30 FPS; simulator and desktop results do not guarantee physical A15 performance or
+thermal behavior. Publication does not wait for access to a physical phone.
 
 ## Quick Draw balance and the ranked board
 

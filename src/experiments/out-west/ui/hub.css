@@ -403,7 +403,7 @@
   }
   .ow-hub-side {
     grid-row: 1 / -1;
-    align-self: end;
+    align-self: safe end;
   }
   .ow-tile {
     min-height: 5.5rem;

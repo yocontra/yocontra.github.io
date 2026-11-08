@@ -1,35 +1,58 @@
-import { type Asset, Color, Entity, StandardMaterial, Vec3 } from 'playcanvas'
+import { type Asset, Entity, Vec3 } from 'playcanvas'
+import {
+  SHOT_HIT,
+  SHOT_RIFLE,
+  SHOT_SHOTGUN,
+  SHOT_WALL,
+  WEAPON_RIFLE,
+  WEAPON_SHOTGUN,
+} from '../contract/town.ts'
 import { canFire, pressed } from '../ffa/sim/combat.ts'
+import { REVOLVER_FIRE_MS, RIFLE_FIRE_MS, SHOTGUN_FIRE_MS } from '../ffa/sim/constants.ts'
 import type { Player, SimEvent } from '../ffa/sim/types.ts'
 import { haptic } from '../platform/haptics.ts'
-import { Buttons, type PlayerInput } from '../runtime/protocol.ts'
-import { getSettings } from '../settings.ts'
+import { Buttons, type PlayerInput, type PlayerState } from '../runtime/protocol.ts'
+import { getSettings, reducedMotion } from '../settings.ts'
 import type { GameApplication } from './application.ts'
+import { poseEye } from './player-pose.ts'
+import { ShotFeedback } from './shot-feedback.ts'
+import {
+  type ShotPoint as Point,
+  type ShotTrace,
+  type ShotVisuals,
+  shotVisuals,
+} from './shot-visuals.ts'
 
-/** Engine sound components and short-lived entities present confirmed game events. */
-export class GameEffects {
-  private readonly game: GameApplication
-  private readonly material = new StandardMaterial()
-  private readonly tracers: { entity: Entity; life: number }[] = []
-  private readonly emitters = new Map<number, Entity>()
-  private readonly soundAssets = new Map<string, Asset>()
-  private readonly abort = new AbortController()
-  private readonly start = new Vec3()
-  private readonly end = new Vec3()
-  readonly ready: Promise<void>
-  private readonly predicted = new Map<number, number>()
-  private lastButtons = 0
-  private nextShot = 0
-  constructor(game: GameApplication) {
-    this.game = game
-    this.material.diffuse = new Color(1, 0.77, 0.3)
-    this.material.emissive = new Color(1, 0.65, 0.15)
-    this.material.useLighting = false
-    this.material.update()
-    game.camera.addComponent('audiolistener')
-    const sounds: Promise<unknown>[] = []
-    for (const [name, file] of [
+interface EffectHooks {
+  fire?: (id: string) => void
+  muzzle?: (id: string) => { position: Vec3; direction: Vec3 } | null
+  trace?: (from: Vec3, to: Vec3) => Vec3 | null | undefined
+}
+interface PendingShot {
+  trace: ShotTrace | undefined
+  end?: Point
+  pellets?: readonly Point[]
+}
+const REVOLVER = { sound: 'shot', interval: REVOLVER_FIRE_MS, kick: 0.012, flash: 0.09 }
+const RIFLE = { sound: 'rifle', interval: RIFLE_FIRE_MS, kick: 0.016, flash: 0.09 }
+const SHOTGUN = { sound: 'shotgun', interval: SHOTGUN_FIRE_MS, kick: 0.022, flash: 0.14 }
+const WEAPON_REPORTS = new Map([
+  [WEAPON_RIFLE, RIFLE],
+  [WEAPON_SHOTGUN, SHOTGUN],
+])
+const sounds = new WeakMap<GameApplication, Promise<Map<string, Asset>>>()
+function loadSounds(game: GameApplication): Promise<Map<string, Asset>> {
+  const previous = sounds.get(game)
+  if (previous) {
+    return previous
+  }
+  const assets = new Map<string, Asset>()
+  const ready = Promise.all(
+    [
       ['shot', 'rev_close'],
+      ['tail', 'rev_tail'],
+      ['rifle', 'rifle'],
+      ['shotgun', 'shotgun'],
       ['reload', 'shotgun_load'],
       ['hit', 'bodyfall'],
       ['coin', 'coin'],
@@ -40,19 +63,73 @@ export class GameEffects {
       ['fake2', 'door'],
       ['explosion', 'explosion'],
       ['respawn', 'respawn'],
-    ] as const) {
-      sounds.push(
-        game
-          .loadAudio(`/experiments/out-west/3d/sfx/${file}.m4a`)
-          .then((asset) => {
-            if (!this.abort.signal.aborted) {
-              this.soundAssets.set(name, asset)
-            }
-          })
-          .catch(() => undefined),
-      )
-    }
-    this.ready = Promise.all(sounds).then(() => undefined)
+    ].map(async ([name, file]) => {
+      try {
+        const asset = await game.loadAudio(`/experiments/out-west/3d/sfx/${file}.m4a`)
+        if (name) {
+          assets.set(name, asset)
+        }
+      } catch {
+        // A missing optional report must not prevent joining the town.
+      }
+    }),
+  ).then(() => assets)
+  sounds.set(game, ready)
+  return ready
+}
+function reportForFlags(flags: number) {
+  if (flags & SHOT_RIFLE) {
+    return RIFLE
+  }
+  if (flags & SHOT_SHOTGUN) {
+    return SHOTGUN
+  }
+  return REVOLVER
+}
+
+/** Native pooled presentation: input fires immediately; only authoritative events confirm impacts. */
+export class GameEffects {
+  private readonly game: GameApplication
+  private readonly hooks: EffectHooks
+  private readonly visuals: ShotVisuals
+  private readonly emitters = new Map<number, Entity>()
+  private readonly soundAssets = new Map<string, Asset>()
+  private readonly abort = new AbortController()
+  private readonly start = new Vec3()
+  private readonly end = new Vec3()
+  readonly ready: Promise<void>
+  private readonly predicted = new ShotFeedback<PendingShot>()
+  private lastButtons = 0
+  private nextShot = 0
+  private kick = 0
+  private queued:
+    | {
+        pending: PendingShot
+        player: Player
+        weapon: number
+        report: typeof REVOLVER
+        muzzle: ReturnType<NonNullable<EffectHooks['muzzle']>>
+        input: PlayerInput
+      }
+    | undefined
+  get recoilPitch(): number {
+    return this.kick
+  }
+  static preloadAudio(game: GameApplication): Promise<void> {
+    return loadSounds(game).then(() => undefined)
+  }
+  constructor(game: GameApplication, hooks: EffectHooks = {}) {
+    this.game = game
+    this.hooks = hooks
+    this.visuals = shotVisuals(game)
+    game.camera.addComponent('audiolistener')
+    this.ready = loadSounds(game).then((assets) => {
+      if (!this.abort.signal.aborted) {
+        for (const [name, asset] of assets) {
+          this.soundAssets.set(name, asset)
+        }
+      }
+    })
     game.app.on('update', this.update)
     globalThis.addEventListener('pointerup', () => void game.app.soundManager.resume(), {
       signal: this.abort.signal,
@@ -63,13 +140,7 @@ export class GameEffects {
   }
   event(event: SimEvent): void {
     if (event.type === 'shot') {
-      this.trace(event.origin, event.end)
-      for (const endpoint of event.pellets) {
-        this.trace(event.origin, endpoint)
-      }
-      if ((this.predicted.get(event.shooter) ?? 0) < performance.now()) {
-        this.play(event.shooter, 'shot', event.origin)
-      }
+      this.confirmShot(event)
     } else if (event.type === 'showdown_call') {
       this.play(-1, 'bell', this.game.camera.getPosition())
     } else if (event.type === 'showdown_fake') {
@@ -84,6 +155,43 @@ export class GameEffects {
       this.play(event.player, 'respawn', this.game.camera.getPosition())
     }
   }
+  private confirmShot(event: Extract<SimEvent, { type: 'shot' }>): void {
+    const feedback = this.predicted.confirm(
+      event.shooter,
+      event.spawnTick,
+      event.shotId,
+      performance.now(),
+    )
+    if (feedback.duplicate) {
+      return
+    }
+    const pending = feedback.predicted
+    if (!pending) {
+      this.hooks.fire?.(String(event.shooter))
+    }
+    const muzzle = this.hooks.muzzle?.(String(event.shooter))
+    const origin = muzzle?.position ?? event.origin
+    if (pending) {
+      pending.end = event.end
+      this.visuals.retarget(pending.trace, event.end)
+    } else {
+      this.visuals.trace(origin, event.end)
+    }
+    if (pending && this.queued?.pending === pending) {
+      pending.pellets = event.pellets
+    } else {
+      for (const endpoint of event.pellets) {
+        this.visuals.trace(origin, endpoint)
+      }
+    }
+    if (!pending) {
+      this.visuals.muzzle(origin)
+      this.report(event.shooter, reportForFlags(event.flags).sound, origin)
+    }
+    if (event.flags & (SHOT_HIT | SHOT_WALL)) {
+      this.visuals.impact(event.end, Boolean(event.flags & SHOT_HIT))
+    }
+  }
   predictShot(player: Player | null | undefined, input: PlayerInput): boolean {
     const pulled =
       pressed(input.buttons, this.lastButtons, Buttons.fire) || Boolean(player?.fireQueued)
@@ -91,37 +199,63 @@ export class GameEffects {
     if (!(player && canFire(player, pulled, player.alive)) || performance.now() < this.nextShot) {
       return false
     }
-    this.nextShot = performance.now() + 280
-    this.predicted.set(player.id, performance.now() + 250)
-    this.play(player.id, 'shot', { x: player.x, y: player.y + 1.5, z: player.z })
+    const report = WEAPON_REPORTS.get(player.weapon) ?? REVOLVER
+    this.nextShot = performance.now() + report.interval
+    this.hooks.fire?.(String(player.id))
+    const pending: PendingShot = { trace: undefined }
+    this.predicted.predict(
+      { id: player.id, spawnTick: player.spawnTick, shots: player.stats.shots },
+      pending,
+      performance.now(),
+    )
+    this.queued = {
+      pending,
+      player,
+      weapon: player.weapon,
+      report,
+      muzzle: this.hooks.muzzle?.(String(player.id)) ?? null,
+      input: { ...input },
+    }
+    if (!reducedMotion()) {
+      this.kick = report.kick
+    }
     if (getSettings().vibration) {
       haptic('shot')
     }
     return true
   }
-  private trace(
-    from: { x: number; y: number; z: number },
-    to: { x: number; y: number; z: number },
-  ): void {
-    if (this.tracers.length >= 48) {
+  /** Resolve the cosmetic ray after the same native motor step used by this frame's camera. */
+  flushShot(pose: PlayerState): void {
+    const queued = this.queued
+    this.queued = undefined
+    if (!queued) {
       return
     }
-    this.start.set(from.x, from.y, from.z)
-    this.end.set(to.x, to.y, to.z)
-    const entity = new Entity('bullet-trace', this.game.app)
-    entity.addComponent('render', {
-      type: 'box',
-      material: this.material,
-      castShadows: false,
-      receiveShadows: false,
-    })
-    entity.setPosition((from.x + to.x) / 2, (from.y + to.y) / 2, (from.z + to.z) / 2)
-    entity.lookAt(this.end)
-    entity.setLocalScale(0.018, 0.018, this.start.distance(this.end))
-    this.game.stage.addChild(entity)
-    this.tracers.push({ entity, life: 0.055 })
+    const { player, input, pending, report } = queued
+    const point = poseEye(pose)
+    this.start.set(point.x, point.y, point.z)
+    const cp = Math.cos(input.pitch)
+    this.end.set(
+      this.start.x - Math.sin(input.yaw) * cp * 55,
+      this.start.y + Math.sin(input.pitch) * 55,
+      this.start.z - Math.cos(input.yaw) * cp * 55,
+    )
+    const hit = this.hooks.trace?.(this.start, this.end)
+    const muzzle =
+      player.weapon === queued.weapon ? this.hooks.muzzle?.(String(player.id)) : queued.muzzle
+    const origin = muzzle?.position ?? this.start
+    pending.trace = this.visuals.trace(origin, pending.end ?? hit ?? this.end)
+    for (const endpoint of pending.pellets ?? []) {
+      this.visuals.trace(origin, endpoint)
+    }
+    this.visuals.muzzle(origin, report.flash)
+    this.report(player.id, report.sound, origin)
   }
-  private play(id: number, name: string, position: { x: number; y: number; z: number }): void {
+  private report(id: number, sound: string, at: Point): void {
+    this.play(id, sound, at)
+    this.play(id, 'tail', at)
+  }
+  private play(id: number, name: string, position: Point): void {
     const asset = this.soundAssets.get(name)
     if (!asset) {
       return
@@ -143,34 +277,30 @@ export class GameEffects {
     }
     const slot = sound.slot(name)
     if (slot) {
-      slot.volume = name === 'bell' ? 1 : getSettings().sfx * 0.7
+      slot.volume = name === 'bell' ? 1 : getSettings().sfx * (name === 'tail' ? 0.25 : 0.7)
     }
     sound.play(name)
   }
   private readonly update = (dt: number): void => {
-    for (let i = this.tracers.length - 1; i >= 0; i--) {
-      const tracer = this.tracers[i]
-      if (!tracer) {
-        continue
-      }
-      tracer.life -= dt
-      if (tracer.life <= 0) {
-        tracer.entity.destroy()
-        this.tracers.splice(i, 1)
-      }
-    }
+    this.kick = Math.max(0, this.kick - dt * 0.2)
+  }
+  reset(): void {
+    this.queued = undefined
+    this.predicted.clear()
+    this.lastButtons = 0
+    this.nextShot = 0
+    this.kick = 0
+    this.visuals.reset()
   }
   destroy(): void {
+    this.queued = undefined
     this.abort.abort()
     this.game.app.off('update', this.update)
-    for (const tracer of this.tracers) {
-      tracer.entity.destroy()
-    }
     for (const emitter of this.emitters.values()) {
       emitter.destroy()
     }
-    this.tracers.length = 0
+    this.predicted.clear()
     this.emitters.clear()
-    this.material.destroy()
+    this.visuals.destroy()
   }
 }

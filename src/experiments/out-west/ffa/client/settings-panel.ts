@@ -245,7 +245,7 @@ export class SettingsPanel {
     this.voiceChat = this.check('Proximity voice (off by default)', (v) => {
       setSetting('voiceChat', v)
     })
-    this.voicePtt = this.check('Push to talk (hold T / TALK)', (v) => {
+    this.voicePtt = this.check(this.touch ? 'Hold TALK to speak' : 'Push to talk (hold T)', (v) => {
       setSetting('voicePushToTalk', v)
     })
     const [, vol, out] = this.slider('Voice chat volume', { min: 0, max: 1 }, 0.05, (n) => {

@@ -2,6 +2,9 @@ import { Client, Predict, type Room, type SeatReservation } from '@colyseus/sdk'
 import { type Entity, Vec3 } from 'playcanvas'
 import { COLLISION_VERSION } from '../content/manifest.ts'
 import { type ServerControl, TOWN_WIRE_VERSION } from '../contract/town.ts'
+import { isRecord } from '../contract/validate.ts'
+import { normalizeLoadout } from '../data/catalog.ts'
+import type { Dyes } from '../data/dye.ts'
 import { createWorld } from '../ffa/sim/state.ts'
 import type { SimEvent } from '../ffa/sim/types.ts'
 import { makeMoveState } from '../ffa/sim/types.ts'
@@ -19,6 +22,7 @@ import { FrontierState, MoveInput, type PlayerRecord } from '../runtime/schema.t
 import { createSimulation } from '../runtime/world.ts'
 import type { Appearance } from './actors.ts'
 import type { FrontierSession } from './frontier-session.ts'
+import { predictionInput, RenderedVelocity, snapshotPresentation } from './player-pose.ts'
 import { reconnectableSession } from './reconnect-session.ts'
 import { ShowdownInput } from './showdown-input.ts'
 import { applyFrontierState } from './state.ts'
@@ -35,6 +39,33 @@ export interface RemoteSessionOptions {
   getToken?: () => Promise<string | null>
   onState?: (state: 'open' | 'retrying' | 'closed', reason?: string) => void
   onControl?: (control: ServerControl) => void
+}
+
+/** Read cosmetic assets before reserving a live seat; downloads must not consume spawn protection. */
+export async function loadRemoteAppearance(
+  options: RemoteSessionOptions = {},
+): Promise<Appearance> {
+  const token = await (options.getToken ?? getAccessToken)()
+  if (!token) {
+    throw new Error('Sign in to play Frontier.')
+  }
+  const response = await fetch(`${options.apiUrl ?? API_URL}/me`, {
+    headers: { authorization: `Bearer ${token}` },
+    signal: AbortSignal.timeout(15_000),
+  })
+  const profile: unknown = await response.json().catch(() => null)
+  if (!response.ok) {
+    throw new Error(
+      response.status === 401
+        ? 'Sign in to play Frontier.'
+        : 'Could not load your rider. Check your connection and try again.',
+    )
+  }
+  if (!(isRecord(profile) && isRecord(profile.loadout) && isRecord(profile.dyes))) {
+    throw new Error('Could not load your rider. Try again.')
+  }
+  const appearance = { loadout: normalizeLoadout(profile.loadout), dyes: profile.dyes as Dyes }
+  return { ...appearance, key: JSON.stringify(appearance) }
 }
 
 async function reserve(options: RemoteSessionOptions): Promise<JoinResponse> {
@@ -93,6 +124,17 @@ function waitForPlayer(room: Room<unknown, FrontierState>): Promise<PlayerRecord
   })
 }
 
+function deliverEvents(
+  events: readonly SimEvent[],
+  listeners: Set<(event: SimEvent) => void>,
+): void {
+  for (const event of events) {
+    for (const listener of listeners) {
+      listener(event)
+    }
+  }
+}
+
 /** Colyseus owns prediction/reconciliation; the adapter supplies the native motor and pose. */
 export function createRemoteFrontierSession(
   collision: CollisionData,
@@ -149,6 +191,7 @@ function connectSession(
   const selfSlot = Number(selfId)
   const poses = new Map<string, PlayerState>()
   const appearances = new Map<string, Appearance>()
+  const renderedVelocity = new RenderedVelocity()
   const listeners = new Set<(event: SimEvent) => void>()
   const controls = new Set<(control: ServerControl) => void>()
   let banked = options.initialBanked
@@ -157,7 +200,7 @@ function connectSession(
   let lastButtons = 0
   physics.addPlayer(selfId, [self.x, self.y + 0.9, self.z])
   const predict = Predict.get(room, { mode: 'lerp', delay: 100 })
-  predict.attachAll('players', { mode: 'lerp', fields: ['x', 'y', 'z', 'yaw'] })
+  predict.attachAll('players', { mode: 'lerp', fields: ['x', 'y', 'z'] })
   const input = room.input({ type: MoveInput, mode: 'reliable' })
   const showdownInput = new ShowdownInput({
     world,
@@ -167,7 +210,8 @@ function connectSession(
   const mine = predict.sim({
     input,
     world: { physics },
-    step: (_context, local, command) => local.physics.step(new Map([[selfId, command]])),
+    step: (_context, local, command) =>
+      local.physics.step(new Map([[selfId, predictionInput(command, self)]])),
     adopt: (local) => {
       const previous = local.physics.players.get(selfId)
       if (previous) {
@@ -183,6 +227,7 @@ function connectSession(
           pitch: ((self.pitch / 127) * Math.PI) / 2,
           seq: self.seq,
           grounded: self.grounded,
+          crouched: self.crouched,
           hp: self.hp,
           ammo: self.ammo,
           motion: {
@@ -211,11 +256,7 @@ function connectSession(
   room.onStateChange(sync)
   sync()
   room.onMessage<{ tick: number; events: SimEvent[] }>('events', (message) => {
-    for (const event of message.events) {
-      for (const listener of listeners) {
-        listener(event)
-      }
-    }
+    deliverEvents(message.events, listeners)
   })
   room.onMessage<ServerControl>('control', (control) => {
     showdownInput.control(control)
@@ -228,21 +269,47 @@ function connectSession(
     }
   })
   room.onDrop(() => options.onState?.('retrying'))
-  room.onReconnect(() => options.onState?.('open'))
   room.onLeave((_code, reason) => {
     if (!disposed) {
       options.onState?.('closed', reason)
     }
   })
   options.onState?.('open')
+  function renderPlayer(
+    record: PlayerRecord,
+    intent: import('../runtime/protocol.ts').PlayerInput,
+  ): PlayerState {
+    if (record.id === selfId) {
+      return snapshotPresentation(
+        record,
+        {
+          x: mine.value('x'),
+          y: mine.value('y') + 0.9,
+          z: mine.value('z'),
+        },
+        { predicted: physics.players.get(selfId), intent, yaw: intent.yaw },
+      )
+    }
+    return renderedVelocity.sample(
+      snapshotPresentation(
+        record,
+        {
+          x: predict.value(record, 'x'),
+          y: predict.value(record, 'y') + 0.9,
+          z: predict.value(record, 'z'),
+        },
+        { predicted: undefined, intent: undefined, yaw: record.yaw },
+      ),
+      record.spawnTick,
+      performance.now(),
+    )
+  }
   return {
     selfId,
     selfSlot,
     practice: false,
     lobbyId: room.roomId,
-    control(text) {
-      room.send('control', JSON.parse(text))
-    },
+    control: (text) => room.send('control', JSON.parse(text)),
     subscribeControl(listener) {
       controls.add(listener)
       return () => controls.delete(listener)
@@ -282,23 +349,9 @@ function connectSession(
       }
       poses.clear()
       for (const record of room.state.players.values()) {
-        const own = record.id === selfId
-        poses.set(record.id, {
-          id: record.id,
-          x: own ? mine.value('x') : predict.value(record, 'x'),
-          y: (own ? mine.value('y') : predict.value(record, 'y')) + 0.9,
-          z: own ? mine.value('z') : predict.value(record, 'z'),
-          vx: record.vx,
-          vy: record.vy,
-          vz: record.vz,
-          yaw: record.yaw,
-          pitch: ((record.pitch / 127) * Math.PI) / 2,
-          grounded: record.grounded,
-          hp: record.hp,
-          ammo: record.ammo,
-          seq: record.seq,
-        })
+        poses.set(record.id, renderPlayer(record, intent))
       }
+      renderedVelocity.retain(poses)
     },
     cameraTrace(from, to) {
       const hit = physics.app.systems.rigidbody?.raycastFirst(from, to, {

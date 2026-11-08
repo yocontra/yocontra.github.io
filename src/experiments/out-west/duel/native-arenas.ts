@@ -1,12 +1,14 @@
 import { Color, Entity } from 'playcanvas'
 import type { GameApplication } from '../client/application.ts'
+import { NativeEnvironment } from '../client/environment.ts'
 import bank from '../content/bank.json' with { type: 'json' }
 import depot from '../content/depot.json' with { type: 'json' }
 import { ASSETS } from '../content/manifest.ts'
 import mission from '../content/mission.json' with { type: 'json' }
+import streetLife from '../content/street-life.json' with { type: 'json' }
 
 export type ArenaId = 'street' | 'depot' | 'mission' | 'bank'
-interface Stand {
+export interface Stand {
   x: number
   y: number
   z: number
@@ -15,24 +17,12 @@ interface Stand {
 export interface ArenaLife {
   dog: Stand
   horses: readonly Stand[]
-  crows: { x: number; y: number; z: number; face: number }
+  crows: { x: number; y: number; z: number; face: number; along?: string }
   door: Stand
-  folk: readonly Stand[]
+  folk: readonly (Stand & { habit?: string; door?: readonly number[] | null; base?: string })[]
+  hens?: { x: number; z: number } | null
 }
-const STREET: ArenaLife = {
-  dog: { x: 10.05, y: 0.34, z: 25.4, yaw: -Math.PI / 2 },
-  horses: [
-    { x: 7.15, y: 0, z: 4.4, yaw: Math.PI / 2 },
-    { x: -7.15, y: 0, z: 16.2, yaw: -Math.PI / 2 },
-  ],
-  crows: { x: -8.4, y: 1, z: 28, face: Math.PI / 2 },
-  door: { x: 10.7, y: 1.35, z: 2, yaw: 0 },
-  folk: [
-    { x: 10, y: 0.34, z: 16, yaw: -1.6 },
-    { x: -10, y: 0.34, z: 20, yaw: 1.6 },
-    { x: 10, y: 0.34, z: 29, yaw: -1.6 },
-  ],
-}
+const STREET: ArenaLife = streetLife
 const ARENAS = { depot, mission, bank }
 export function arenaForSlot(slot: number): ArenaId {
   if (slot >= 6 && slot <= 9) {
@@ -50,28 +40,55 @@ export function arenaForSlot(slot: number): ArenaId {
 export class NativeArenas {
   private current: Entity | null = null
   private epoch = 0
+  private currentUrl = '' as string
+  private requestedUrl = '' as string
   private readonly lights: Entity[] = []
   private readonly game: GameApplication
+  private readonly environment: NativeEnvironment
   id: ArenaId = 'street'
   life: ArenaLife = STREET
   constructor(game: GameApplication) {
     this.game = game
+    this.environment = new NativeEnvironment(game)
   }
   async show(id: ArenaId): Promise<void> {
     const epoch = ++this.epoch
-    const next = id === 'street' ? null : await this.game.instantiate(ASSETS[id].url, `arena-${id}`)
+    const url = id === 'street' ? '' : ASSETS[id].url
+    this.requestedUrl = url
+    const next = url ? await this.game.instantiate(url, `arena-${id}`) : null
     if (epoch !== this.epoch) {
       next?.destroy()
+      if (url && url !== this.requestedUrl && url !== this.currentUrl) {
+        this.game.releaseContainer(url)
+      }
       return
     }
+    const previousUrl = this.currentUrl
     this.current?.destroy()
     this.current = next
+    this.currentUrl = url
+    if (previousUrl && previousUrl !== url) {
+      this.game.releaseContainer(previousUrl)
+    }
     this.id = id
+    this.environment.street(id === 'street')
     const street = this.game.stage.findByName('street')
     if (street) {
       street.enabled = id === 'street'
     }
     this.life = id === 'street' ? STREET : ARENAS[id].life
+    const root = next ?? this.game.stage.findByName('duel-street')
+    if (root instanceof Entity) {
+      const asset = await this.game.loadContainer(ASSETS[id === 'street' ? 'duel' : id].url)
+      if (epoch !== this.epoch) {
+        return
+      }
+      this.environment.attach(root, asset)
+    }
+    await this.environment.ready
+    if (epoch !== this.epoch) {
+      return
+    }
     for (const light of this.lights) {
       light.destroy()
     }
@@ -104,9 +121,25 @@ export class NativeArenas {
       }
     }
   }
+  async lighting(day: number, index = 0): Promise<void> {
+    this.night(day)
+    this.environment.poster(index)
+    await this.environment.setTime(day)
+    this.environment.clock(day, index === 16)
+  }
+  toll(): void {
+    this.environment.toll()
+  }
+  dailyFog(enabled: boolean): void {
+    this.environment.dailyFog(enabled)
+  }
   destroy(): void {
     this.epoch++
+    this.environment.destroy()
     this.current?.destroy()
+    if (this.currentUrl) {
+      this.game.releaseContainer(this.currentUrl)
+    }
     for (const light of this.lights) {
       light.destroy()
     }

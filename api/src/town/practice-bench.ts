@@ -226,7 +226,7 @@ export async function practiceRun(
   )
   const simulation = createFrontierSimulation({ ammo, collision: COLLISION, seed })
   try {
-    const core = new LobbyCore('bench', seed)
+    const core = new LobbyCore('bench', seed, 31)
     core.world = simulation.world
     core.botTarget = 15
     if (practice) {

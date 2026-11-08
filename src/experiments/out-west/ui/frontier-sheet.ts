@@ -1,5 +1,5 @@
 /**
- * The hub's Frontier sheet: two towns. The practice town (15 bots, in the browser, no account and
+ * The hub's Frontier sheet: two towns. The practice town (up to four bots, in the browser, no account and
  * no money at stake) is open to everyone, guests included; the live town wants a passkey and the
  * licence (spec §2), which the hub checks when `live` is chosen.
  */
@@ -33,6 +33,6 @@ export function frontierSheet(parent: HTMLElement, signedIn: boolean, live: () =
     'p',
     'ow-hub-note',
     s.body,
-    'Practice: 15 bots, free, and the money stays on this device. Live: real riders and real money (needs a licence).',
+    'Practice: up to four bots, free, and the money stays on this device. Live: real riders and real money (needs a licence).',
   )
 }

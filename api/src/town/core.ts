@@ -10,6 +10,7 @@ import {
   type ServerControl,
 } from '../../../src/experiments/out-west/contract/town.ts'
 import {
+  MAX_FRONTIER_BOTS,
   MAX_INPUT_MSGS_PER_SEC,
   MAX_PLAYERS,
   SOFT_CAP,
@@ -121,6 +122,7 @@ export interface CoreMetrics {
 }
 
 export class LobbyCore {
+  private readonly maxBots: number
   readonly lobbyId: string
   world: World
   readonly sessions = new Map<number, Session>()
@@ -128,14 +130,15 @@ export class LobbyCore {
   /** The bots' brains (dev harnesses set `rally` on it; see `BotDirector.rally`). */
   readonly bots: BotDirector
   private readonly judge: ShowdownJudge
-  /** Extra bots asked for (dev / load tests), on top of the default town population. */
+  /** Explicit test/bench target; the constructor's production bot limit still applies. */
   botTarget = 0
   /** Bodies bots keep the town at while a human is in; only dev `?bots=0` sets it to 0. */
   ambientPopulation = DEFAULT_TOWN_POPULATION
   practice: PracticeOptions | null = null
   readonly metrics: CoreMetrics = { ticks: 0, bytesOut: 0, msgsOut: 0, msgsIn: 0, droppedIn: 0 }
 
-  constructor(lobbyId: string, seed: number) {
+  constructor(lobbyId: string, seed: number, maxBots = MAX_FRONTIER_BOTS) {
+    this.maxBots = maxBots
     this.lobbyId = lobbyId
     this.world = createWorld({ seed })
     this.bots = new BotDirector(seed)
@@ -290,6 +293,15 @@ export class LobbyCore {
       return
     }
     s.peer = null
+    if (this.connectedHumans() === 0) {
+      for (const bot of activePlayers(this.world)) {
+        if (bot.bot) {
+          this.world.burned += bot.carried
+          this.bots.forget(bot.id)
+          removePlayer(this.world, bot.id)
+        }
+      }
+    }
     const p = this.world.players[playerId]
     if (p) {
       disconnectPlayer(this.world, p)
@@ -359,14 +371,15 @@ export class LobbyCore {
   }
 
   private balanceBots(): void {
-    const humans = this.humans()
-    if (humans === 0) {
-      return
-    }
+    const humans = this.connectedHumans()
     // Ambient bots stay under the soft cap (room for humans); an explicit dev/load-test target may
     // fill all 32 slots (a joining human still sends one home).
-    const cap = (this.botTarget > 0 ? MAX_PLAYERS : SOFT_CAP) - humans
-    const wanted = Math.min(cap, Math.max(this.botTarget, this.ambientPopulation - humans, 0))
+    const cap = Math.max(
+      0,
+      Math.min(this.maxBots, (this.botTarget > 0 ? MAX_PLAYERS : SOFT_CAP) - humans),
+    )
+    const wanted =
+      humans > 0 ? Math.min(cap, Math.max(this.botTarget, this.ambientPopulation - humans, 0)) : 0
     let bots = 0
     const names = new Set<string>()
     for (const p of activePlayers(this.world)) {

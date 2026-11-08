@@ -35,6 +35,11 @@ export class LobbyDirectory extends DurableObject<Env> {
     await this.ctx.storage.put(KEY, reg)
   }
 
+  /** Reservation metadata may inspect capacity without starting a billable gameplay lease. */
+  canLeaseRoom() {
+    return new AdmissionLeases(this.ctx.storage).available()
+  }
+
   /** RPC admission lease, serialized atomically in this directory’s SQLite storage. */
   async leaseRoom(
     id: string,

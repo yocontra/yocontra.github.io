@@ -1,0 +1,238 @@
+{
+  "asset": {
+    "generator": "glTF-Transform v4.5.1",
+    "version": "2.0"
+  },
+  "accessors": [
+    {
+      "type": "VEC3",
+      "componentType": 5126,
+      "count": 1911,
+      "max": [
+        0.2939999997615814,
+        0.2004387378692627,
+        0.30799999833106995
+      ],
+      "min": [
+        -0.2939999997615814,
+        -0.0018629152327775955,
+        -0.30799999833106995
+      ],
+      "bufferView": 0,
+      "byteOffset": 0
+    },
+    {
+      "type": "VEC3",
+      "componentType": 5126,
+      "count": 1911,
+      "bufferView": 0,
+      "byteOffset": 12
+    },
+    {
+      "type": "VEC3",
+      "componentType": 5126,
+      "count": 1911,
+      "bufferView": 0,
+      "byteOffset": 24
+    },
+    {
+      "type": "VEC2",
+      "componentType": 5126,
+      "count": 1911,
+      "bufferView": 0,
+      "byteOffset": 36
+    },
+    {
+      "type": "VEC3",
+      "componentType": 5126,
+      "count": 1911,
+      "bufferView": 0,
+      "byteOffset": 44
+    },
+    {
+      "type": "SCALAR",
+      "componentType": 5126,
+      "count": 1911,
+      "bufferView": 0,
+      "byteOffset": 56
+    },
+    {
+      "type": "VEC2",
+      "componentType": 5126,
+      "count": 1911,
+      "bufferView": 0,
+      "byteOffset": 60
+    },
+    {
+      "type": "SCALAR",
+      "componentType": 5123,
+      "count": 10656,
+      "bufferView": 1,
+      "byteOffset": 0
+    }
+  ],
+  "bufferViews": [
+    {
+      "buffer": 0,
+      "byteOffset": 0,
+      "byteLength": 129948,
+      "byteStride": 68,
+      "target": 34962
+    },
+    {
+      "buffer": 0,
+      "byteOffset": 129948,
+      "byteLength": 21312,
+      "target": 34963
+    }
+  ],
+  "samplers": [
+    {
+      "magFilter": 9729,
+      "minFilter": 9987,
+      "wrapS": 33071,
+      "wrapT": 33071
+    }
+  ],
+  "textures": [
+    {
+      "source": 1,
+      "sampler": 0
+    },
+    {
+      "source": 2,
+      "sampler": 0
+    },
+    {
+      "source": 0,
+      "sampler": 0
+    }
+  ],
+  "images": [
+    {
+      "mimeType": "image/webp",
+      "uri": "textures/9d94afb35288d3c7ec88.webp"
+    },
+    {
+      "mimeType": "image/webp",
+      "uri": "textures/b04ecfbc62ca864375fb.webp"
+    },
+    {
+      "mimeType": "image/webp",
+      "uri": "textures/3d93278a952b78169896.webp"
+    }
+  ],
+  "buffers": [
+    {
+      "uri": "hat.sombrero.bin",
+      "byteLength": 151260
+    }
+  ],
+  "materials": [
+    {
+      "name": "Felt",
+      "doubleSided": true,
+      "pbrMetallicRoughness": {
+        "baseColorTexture": {
+          "index": 0
+        },
+        "metallicRoughnessTexture": {
+          "index": 2
+        }
+      },
+      "normalTexture": {
+        "index": 1,
+        "scale": 1.4
+      }
+    }
+  ],
+  "meshes": [
+    {
+      "primitives": [
+        {
+          "attributes": {
+            "POSITION": 0,
+            "NORMAL": 1,
+            "COLOR_0": 2,
+            "TEXCOORD_0": 3,
+            "_DYE": 4,
+            "_STYLE_LUMINANCE": 5,
+            "_STYLE_MATERIAL": 6
+          },
+          "mode": 4,
+          "material": 0,
+          "indices": 7
+        }
+      ]
+    }
+  ],
+  "nodes": [
+    {
+      "extras": {
+        "authoring": "Out West pre-engine fitted source",
+        "paceLength": 0.6577429093045508,
+        "walkDuration": 1.3333333730697632
+      },
+      "children": [
+        1
+      ]
+    },
+    {
+      "name": "Head",
+      "children": [
+        2
+      ]
+    },
+    {
+      "translation": [
+        -0.001569669800021184,
+        0.11370385012552275,
+        0.00855262343314328
+      ],
+      "rotation": [
+        -0.1669622511167615,
+        -0.005580162409426906,
+        -0.032076635938948654,
+        0.9854255719821503
+      ],
+      "scale": [
+        1.0354041610573197,
+        1.0354041610845897,
+        1.0354041610838052
+      ],
+      "children": [
+        3
+      ]
+    },
+    {
+      "scale": [
+        1.1220853462351172,
+        1.1220853462351172,
+        1.1220853462351172
+      ],
+      "children": [
+        4
+      ]
+    },
+    {
+      "extras": {
+        "pieceRanges": [
+          {
+            "start": 0,
+            "count": 1911
+          }
+        ]
+      },
+      "mesh": 0
+    }
+  ],
+  "scenes": [
+    {
+      "name": "AuxScene",
+      "nodes": [
+        0
+      ]
+    }
+  ],
+  "scene": 0
+}

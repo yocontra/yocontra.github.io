@@ -61,83 +61,297 @@
   text-decoration: none;
   cursor: pointer;
 }
-.pc-touch-controls {
-  display: none;
-}
-@media (pointer: coarse) {
-  .pc-touch-controls {
-    position: absolute;
-    inset: 0;
-    display: flex;
-    flex-wrap: wrap;
-    gap: 10px;
-    align-content: flex-end;
-    justify-content: flex-end;
-    padding: 20px max(20px, env(safe-area-inset-right)) max(24px, env(safe-area-inset-bottom)) 55%;
-    pointer-events: none;
-  }
-  .pc-control {
-    width: 72px;
-    height: 54px;
-    border: 1px solid #c7ab77;
-    border-radius: 18px;
-    color: #fff1d1;
-    background: #21150e99;
-    font:
-      bold 12px Georgia,
-      serif;
-    pointer-events: auto;
-    touch-action: none;
-  }
-  .pc-control.held {
-    background: #815c2cdd;
-  }
-  .pc-fire {
-    width: 90px;
-    height: 70px;
-    font-size: 18px;
-  }
-  .pc-movement-hint {
-    position: absolute;
-    left: 10%;
-    bottom: 16%;
-    width: 100px;
-    height: 100px;
-    display: grid;
-    place-items: center;
-    border: 1px solid #fff4;
-    border-radius: 50%;
-    color: #fff8;
-    font-size: 12px;
-  }
-  .pc-game-status {
-    font-size: 12px;
-    padding: 8px;
-  }
-  .pc-game-status strong {
-    font-size: 18px;
-  }
-}
-
 .pc-game-status button {
   pointer-events: auto;
 }
+/* A full travel card owns the screen until models, audio and the first rendered frame are ready. */
+.pc-travel {
+  position: absolute;
+  z-index: 80;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  gap: 18px;
+  padding: max(28px, env(safe-area-inset-top)) max(24px, env(safe-area-inset-right))
+    max(28px, env(safe-area-inset-bottom)) max(24px, env(safe-area-inset-left));
+  text-align: center;
+  color: var(--ow-ink);
+  background: var(--ow-tex-paper), #e5d3ac;
+  border: 0;
+  pointer-events: auto;
+}
+.pc-travel::before {
+  content: "OUT WEST · FRONTIER";
+  color: var(--ow-red);
+  font: 600 13px var(--ow-font-text);
+  letter-spacing: 0.2em;
+}
+.pc-travel::after {
+  content: "";
+  width: 120px;
+  height: 3px;
+  background: var(--ow-red);
+  animation: pc-travel-pulse 1.5s ease-in-out infinite;
+}
+.pc-travel strong {
+  max-width: 25rem;
+  font: 400 clamp(34px, 7vw, 52px) var(--ow-font-display);
+  letter-spacing: 0;
+  text-wrap: balance;
+}
+.pc-travel span {
+  max-width: 28rem;
+  margin: 0;
+  font: italic 20px var(--ow-font-text);
+  text-wrap: balance;
+}
+.pc-travel button {
+  padding: 12px 20px;
+  background: var(--ow-red);
+  color: var(--ow-paper);
+  border: 1px solid var(--ow-ink);
+  font: 600 16px var(--ow-font-text);
+}
+.pc-loading > .fr-hud,
+.pc-loading > .fr-round,
+.pc-loading > .fr-obj,
+.pc-loading > .fr-bank-guide {
+  visibility: hidden;
+}
+@keyframes pc-travel-pulse {
+  50% {
+    opacity: 0.35;
+    transform: scaleX(0.6);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .pc-travel::after {
+    animation: none;
+  }
+}
+.pc-touch-controls,
+.pc-touch-controls[hidden] {
+  display: none;
+}
 @media (pointer: coarse) {
+  .pc-touch-controls:not([hidden]) {
+    --hand: 1;
+    --edge: max(16px, env(safe-area-inset-right));
+    position: absolute;
+    z-index: 12;
+    inset: 0;
+    display: block;
+    pointer-events: none;
+  }
   .pc-control {
-    width: calc(60px * var(--control-scale, 1));
-    height: calc(43px * var(--control-scale, 1));
+    position: absolute;
+    width: max(44px, calc(48px * var(--control-scale, 1)));
+    height: max(44px, calc(48px * var(--control-scale, 1)));
+    border: 1px solid #f6dfab99;
+    border-radius: 50%;
+    color: #fff1d1;
+    background: #21150e78;
+    box-shadow: inset 0 0 0 2px #21150e66;
+    font: 600 10px var(--ow-font-num);
+    text-shadow: 0 1px 2px #000;
+    pointer-events: auto;
+    touch-action: none;
+    right: calc(var(--edge) + var(--x, 0px) * max(1, var(--control-scale, 1)));
+    bottom: calc(
+      max(18px, env(safe-area-inset-bottom)) +
+      var(--y, 0px) *
+      max(1, var(--control-scale, 1))
+    );
+  }
+  .pc-control.held {
+    background: #a17338cc;
+    border-color: #ffe2a3;
   }
   .pc-fire {
-    width: calc(80px * var(--control-scale, 1));
-    height: calc(64px * var(--control-scale, 1));
+    --x: 16px;
+    --y: 60px;
+    width: calc(72px * var(--control-scale, 1));
+    height: calc(72px * var(--control-scale, 1));
+    font-size: 14px;
+    border-width: 2px;
+  }
+  .pc-aim {
+    --x: 94px;
+    --y: 70px;
+  }
+  .pc-reload {
+    --x: 26px;
+    --y: 4px;
+  }
+  .pc-jump {
+    --x: 8px;
+    --y: 152px;
+  }
+  .pc-crouch {
+    --x: 68px;
+    --y: 138px;
+  }
+  .pc-roll {
+    --x: 86px;
+    --y: 8px;
+  }
+  .pc-throw {
+    --x: 146px;
+    --y: 8px;
+  }
+  .pc-use {
+    --x: 128px;
+    --y: 142px;
+  }
+  .pc-call {
+    --x: 148px;
+    --y: 78px;
+  }
+  .pc-movement-hint {
+    position: absolute;
+    left: max(26px, env(safe-area-inset-left));
+    bottom: calc(max(30px, env(safe-area-inset-bottom)) + 24px);
+    width: calc(94px * var(--stick-scale, 1));
+    height: calc(94px * var(--stick-scale, 1));
+    display: grid;
+    place-items: center;
+    border: 1px solid #fff5;
+    border-radius: 50%;
+    color: #fff9;
+    background: #21150e22;
+    font: 500 11px var(--ow-font-num);
+  }
+  .pc-movement-hint::after {
+    content: "";
+    position: absolute;
+    width: 40%;
+    height: 40%;
+    border-radius: 50%;
+    border: 1px solid #ffebc799;
+    background: #ffebc711;
+    transform: translate(var(--move-x, 0px), var(--move-z, 0px));
   }
   .pc-touch-controls.left-handed {
-    padding-left: max(20px, env(safe-area-inset-left));
-    padding-right: 55%;
-    justify-content: flex-start;
+    transform: scaleX(-1);
   }
+  .pc-touch-controls.left-handed .pc-control,
   .pc-touch-controls.left-handed .pc-movement-hint {
-    left: auto;
-    right: 10%;
+    transform: scaleX(-1);
+  }
+}
+@media (pointer: coarse) and (orientation: portrait) {
+  .pc-movement-hint {
+    bottom: calc(max(34px, env(safe-area-inset-bottom)) + 28px);
+  }
+  .pc-control {
+    --edge: 12px;
+  }
+}
+
+/* Expanded Safari bars leave less than 320px: keep utility buttons below the map. */
+@media (pointer: coarse) and (orientation: landscape) and (max-height: 320px) {
+  .pc-control {
+    width: clamp(44px, calc(48px * var(--control-scale, 1)), 48px);
+    height: clamp(44px, calc(48px * var(--control-scale, 1)), 48px);
+  }
+  .pc-fire,
+  .pc-aim,
+  .pc-jump,
+  .pc-crouch,
+  .pc-roll,
+  .pc-reload {
+    right: calc(var(--edge) + var(--x, 0px));
+    bottom: calc(max(18px, env(safe-area-inset-bottom)) + var(--y, 0px));
+  }
+  .pc-fire {
+    width: min(72px, calc(72px * var(--control-scale, 1)));
+    height: min(72px, calc(72px * var(--control-scale, 1)));
+  }
+  .pc-jump {
+    --y: 0px;
+  }
+  .pc-crouch {
+    --x: 150px;
+    --y: 70px;
+  }
+  .pc-roll {
+    --x: 120px;
+  }
+  .pc-reload {
+    --x: 64px;
+  }
+}
+
+.pc-travel-art {
+  width: min(330px, 74vw);
+  max-height: 42vh;
+  object-fit: contain;
+  border: 1px solid var(--ow-ink);
+  padding: 3px;
+  filter: sepia(0.1);
+}
+@media (orientation: landscape) and (max-height: 500px) {
+  .pc-travel {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    grid-template-rows: auto auto auto auto;
+    align-content: center;
+    justify-items: center;
+    column-gap: 30px;
+    row-gap: 12px;
+  }
+  .pc-travel-art {
+    grid-column: 1;
+    grid-row: 1 / 5;
+    width: 100%;
+    max-height: 72vh;
+  }
+  .pc-travel::before {
+    grid-column: 2;
+    grid-row: 1;
+  }
+  .pc-travel strong {
+    grid-column: 2;
+    grid-row: 2;
+    font-size: clamp(28px, 5vw, 46px);
+  }
+  .pc-travel span {
+    grid-column: 2;
+    grid-row: 3;
+    font-size: 18px;
+  }
+  .pc-travel::after {
+    grid-column: 2;
+    grid-row: 4;
+  }
+}
+
+.pc-control[hidden] {
+  display: none;
+}
+
+@media (pointer: coarse) {
+  .pc-use,
+  .pc-call,
+  .pc-throw {
+    bottom: max(18px, env(safe-area-inset-bottom));
+  }
+  .pc-use {
+    right: calc(50% + 56px * max(1, var(--control-scale, 1)));
+  }
+  .pc-call {
+    right: 50%;
+  }
+  .pc-throw {
+    right: calc(50% - 56px * max(1, var(--control-scale, 1)));
+  }
+}
+@media (pointer: coarse) and (orientation: portrait) {
+  .pc-use,
+  .pc-call,
+  .pc-throw {
+    bottom: calc(max(18px, env(safe-area-inset-bottom)) + 210px * var(--control-scale, 1));
   }
 }

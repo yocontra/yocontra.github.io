@@ -3,6 +3,6 @@ import { Clock } from '@colyseus/core'
 export class FixedRoomClock extends Clock {
   constructor() {
     super()
-    this.now = () => this.currentTime + 50
+    this.now = () => Math.max(Date.now(), this.currentTime + 50)
   }
 }

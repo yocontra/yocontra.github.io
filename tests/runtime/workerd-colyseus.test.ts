@@ -62,18 +62,45 @@ it('Wrangler bundle sends autonomous Colyseus state to quiet clients in isolated
   const rooms=[];
   try{
    const base=(await mf.ready).origin;
+   const seatsCheck=await(await fetch(base+'/seats?room=seat-probe')).json();
+   if(!seatsCheck.accountBound||!seatsCheck.lobbyBound||!seatsCheck.oneUse||!seatsCheck.expired||!seatsCheck.replaced)throw new Error('Durable seat binding failed');
+   const clock=await(await fetch(base+'/clock?room=clock-probe')).json();
+   if(JSON.stringify(clock.steps)!==JSON.stringify([1,1,2,5,5,1])||!clock.disposed)throw new Error('Clock regression: '+JSON.stringify(clock));
+   await fetch(base+'/reserve?account=unused&room=unused-seat');
+   await new Promise(resolve=>setTimeout(resolve,250));
+   const unused=await(await fetch(base+'/timing?room=unused-seat')).json();
+   if(unused.tick!==0||unused.running||unused.timer||unused.elapsed!==0||unused.physics)throw new Error('Unused seat ran native work: '+JSON.stringify(unused));
+   await fetch(base+'/dispose?room=unused-seat');
+   const stopped=await(await fetch(base+'/timing?room=unused-seat')).json();
+   await new Promise(resolve=>setTimeout(resolve,150));
+   const stillStopped=await(await fetch(base+'/timing?room=unused-seat')).json();
+   if(stopped.running||stopped.timer||stillStopped.elapsed!==stopped.elapsed)throw new Error('Disposed unused seat retained a timer');
+   const closingSeat=await(await fetch(base+'/reserve?account=closing&room=close-before-join&holdStart=1')).json();
+   const closing=new WebSocket(base.replace('http:','ws:')+'/native/'+closingSeat.roomId+'?account=closing&sessionId='+closingSeat.sessionId);
+   await new Promise((resolve,reject)=>{closing.addEventListener('open',resolve,{once:true});closing.addEventListener('error',reject,{once:true})});
+   const didClose=new Promise(resolve=>closing.addEventListener('close',resolve,{once:true}));closing.close();await didClose;
+   await new Promise(resolve=>setTimeout(resolve,650));
+   const closedJoin=await(await fetch(base+'/timing?room=close-before-join')).json();
+   if(closedJoin.physics||closedJoin.running||closedJoin.timer||closedJoin.tick!==0||closedJoin.elapsed!==0)throw new Error('Close during first join resurrected native work: '+JSON.stringify(closedJoin));
    const seats=[];
    for(const [account,which]of [['alice','first'],['bob','first'],['carol','second']]){
     const reservation=await(await fetch(base+'/reserve?account='+account+'&room='+which)).json();
     seats.push({account,reservation});
    }
+   await new Promise(resolve=>setTimeout(resolve,750));
+   const delayedJoin=await(await fetch(base+'/timing?room=first')).json();
+   if(delayedJoin.tick!==0||delayedJoin.elapsed!==0||delayedJoin.running||delayedJoin.physics||delayedJoin.timer)throw new Error('Reserved room advanced gameplay before delayed join: '+JSON.stringify(delayedJoin));
    rooms.push(...await Promise.all(seats.map(async({account,reservation})=>{
     const room=await new Client(base+'?account='+account).consumeSeatReservation(reservation);
     room.onMessage('control',()=>{});room.onMessage('events',()=>{});room.onMessage('network-ping',message=>room.send('network-pong',{nonce:message.nonce}));return room;
    })));
    await new Promise(resolve=>setTimeout(resolve,1000));
    const before=rooms.map(room=>room.state.tick);
+   const timingBefore=await(await fetch(base+'/timing?room=first')).json();
    await new Promise(resolve=>setTimeout(resolve,3000));
+   const timingAfter=await(await fetch(base+'/timing?room=first')).json();
+   const clockRatio=(timingAfter.elapsed-timingBefore.elapsed)/((timingAfter.tick-timingBefore.tick)*50);
+   if(!(clockRatio>.8&&clockRatio<1.25))throw new Error('Room has extra clock ticks: '+JSON.stringify({timingBefore,timingAfter,clockRatio}));
    const after=rooms.map(room=>({tick:room.state.tick,players:room.state.players.size,own:[...room.state.players.values()].some(player=>player.sessionId===room.sessionId)}));
    const currentInput=rooms[0].input({mode:'reliable'});Object.assign(currentInput.data,{seq:42,moveX:.5,moveZ:0,yaw:0,pitch:0,buttons:0,viewTime:0});currentInput.send();
    await new Promise(resolve=>setTimeout(resolve,150));

@@ -273,6 +273,8 @@ export function recordShot(
   const end = rayEnd(ray, range)
   w.events.push({
     type: 'shot',
+    shotId: p.stats.shots,
+    spawnTick: p.spawnTick,
     shooter: p.id,
     aim: radiansToAim(Math.atan2(ray.dz, ray.dx)),
     range: Math.min(255, Math.round(range / SHOT_RANGE_UNIT)),

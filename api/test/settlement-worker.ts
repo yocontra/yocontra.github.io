@@ -1,5 +1,7 @@
 /** Exercise the production lobby settlement methods against the integration fixture's real D1. */
+import { PROTOCOL_VERSION } from '../../src/experiments/out-west/runtime/protocol.ts'
 import { createProfileStatements } from '../src/economy/profile.ts'
+import type { NativeSeats } from '../src/game/seats.ts'
 import { type Departure, LobbyCore, type Session } from '../src/town/core.ts'
 import { Lobby } from '../src/town/lobby.ts'
 import { sessionStartStatement } from '../src/town/settle.ts'
@@ -120,6 +122,7 @@ export class SettlementProbe extends Lobby {
     if (immediateAlarm === null) {
       throw new Error('Recorded deposit has no autonomous recovery alarm')
     }
+    await this.checkSeatAlarm(core.lobbyId, accountId, immediateAlarm)
     handle({ deposits: [{ ...pendingDeposit, amount: 999 }], departures: [] })
     const pendingSql = [
       ...this.ctx.storage.sql.exec<{ data: string }>('SELECT data FROM pending_deposits'),
@@ -154,5 +157,39 @@ export class SettlementProbe extends Lobby {
       pendingSql: pendingSql.length,
       immediateAlarm: immediateAlarm !== null,
     })
+  }
+  private async checkSeatAlarm(lobbyId: string, accountId: string, deadline: number) {
+    const seats = Reflect.get(this, 'seats') as NativeSeats
+    const schedule: (advance: boolean) => Promise<void> = Reflect.get(
+      this,
+      'scheduleSettlementRetry',
+    ).bind(this)
+    const backoff = Reflect.get(this, 'settlementRetryMs')
+    for (let index = 0; index < 3; index++) {
+      const reserved = seats.issue(this.ctx.id.toString(), {
+        lobbyId,
+        protocol: PROTOCOL_VERSION,
+        profile: {
+          accountId,
+          name: 'Settlement probe',
+          level: 1,
+          prestige: 0,
+          loadout: [],
+          banked: 0,
+          tcpRtt: null,
+        },
+      })
+      await schedule(false)
+      seats.consume(reserved.sessionId, accountId, lobbyId)
+    }
+    await schedule(false)
+    const seatAlarm = await this.ctx.storage.getAlarm()
+    if (
+      seatAlarm === null ||
+      seatAlarm > deadline ||
+      Reflect.get(this, 'settlementRetryMs') !== backoff
+    ) {
+      throw new Error('Seat metadata postponed settlement recovery or advanced retry backoff')
+    }
   }
 }

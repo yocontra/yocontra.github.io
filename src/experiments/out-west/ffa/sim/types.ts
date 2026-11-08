@@ -244,6 +244,9 @@ export interface ShotPoint {
 export type SimEvent =
   | {
       type: 'shot'
+      /** Monotonic confirmed shot count within this rider's current incarnation. */
+      shotId: number
+      spawnTick: number
       shooter: number
       aim: number
       range: number

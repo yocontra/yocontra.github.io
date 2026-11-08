@@ -11,6 +11,8 @@ export const DT = 1 / TICK_HZ
 export const INPUT_SEND_HZ = 10
 export const FRAMES_PER_INPUT = TICK_HZ / INPUT_SEND_HZ
 export const MAX_PLAYERS = 32
+/** Live and normal practice towns add at most four bots; human seat capacity is independent. */
+export const MAX_FRONTIER_BOTS = 4
 /** The directory fills a lobby to this many; slots above are for rejoins and late fills. */
 export const SOFT_CAP = 28
 

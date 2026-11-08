@@ -3,7 +3,7 @@ import { NodeIO } from '@gltf-transform/core'
 import { ALL_EXTENSIONS } from '@gltf-transform/extensions'
 import { buildGrid, TOWN } from '../../src/experiments/out-west/ffa/sim/layout.ts'
 
-const path = 'public/experiments/out-west/3d/baked/frontier.glb'
+const path = 'public/experiments/out-west/3d/native-v2/baked/frontier.glb'
 const io = new NodeIO().registerExtensions(ALL_EXTENSIONS)
 const document = await io.read(path)
 const root = document.getRoot()
@@ -18,7 +18,9 @@ for (const node of root.listNodes()) {
 }
 const panes = buildGrid(TOWN).glass
 // Remove opaque old facade faces at real openings; each new pane can disappear independently.
-const facade = root.listNodes().find((node) => node.getName() === 'windows')
+const facade = root
+  .listNodes()
+  .find((node) => node.getName() === 'windows' || node.getName().startsWith('windows-'))
 const primitive = facade?.getMesh()?.listPrimitives()[0]
 const position = primitive?.getAttribute('POSITION')
 const oldIndices = primitive?.getIndices()

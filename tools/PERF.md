@@ -1,8 +1,19 @@
 # Out West native performance evidence
 
-The target is at least 30 FPS sustained on a physical iPhone 13 mini, including a full 32-player
-town. Desktop Chromium with CPU throttling is a regression proxy. It cannot reproduce an A15
-GPU, iOS Safari scheduling, memory pressure or heat, and cannot certify the physical target.
+The target is at least 30 FPS sustained on an iPhone 13 mini, including a full 32-player town.
+Use the iPhone 13 mini simulator and Safari as the requested acceptance and regression surface.
+Record its host GPU and simulator/iOS versions: simulator results describe that environment,
+not guaranteed A15 performance, memory pressure or thermal behavior. Desktop Chromium with
+CPU throttling remains a separate regression proxy.
+
+The 2026-11-08 interim production-mode Safari checkpoint used the release engine on the simulator's
+Apple GPU at an 812×265 canvas and resolution scale 1. Ordinary remote play (one human and four bots)
+measured a median 22.98 FPS and 299 draws; the explicitly synthetic 32-rider fixture measured 15.37 FPS
+and 430 draws. Turning its HUD off did not improve performance. These short samples do not meet the
+30 FPS target, and performance work remains open. They preceded the final vest/mount artifact refresh;
+retain their exact source/content hashes with the raw measurements before comparing another build.
+Development builds resolve PlayCanvas's debug engine and are diagnostic evidence, so acceptance
+measurements must use a production build with the release engine.
 
 Use the native engine metrics and actual production mount paths:
 
@@ -25,20 +36,27 @@ bounded resolution adaptation and native skeletal Anim components. Models and ou
 prebaked GLBs. Native Ammo runs fixed-step authoritative collision, and cosmetic corpse physics
 has an explicit active-body cap before actors freeze into a native pose.
 
-On an iPhone 13 mini, verify the production build at the actual device resolution. Record the
-build/content revision, iOS/Safari version, orientation, power mode and starting temperature.
+In the iPhone 13 mini simulator, verify the production build at the requested resolution. Record
+the build/content revision, simulator/iOS/Safari version, host GPU, orientation and canvas size.
 Play a full Duel run through all four arenas, then at least fifteen minutes in a packed town,
 including indoor fights, stairs/roofs, repeated deaths, respawns, dynamite and camera turns.
 Collect sustained FPS and frame times after warming, memory growth, visible quality, touch
-latency and any thermal deterioration. Repeat disconnect/reconnect and background/foreground.
-The required evidence is the measured physical run; older Three-renderer benchmark tables were
-removed because they do not describe the native engine.
+latency. Repeat disconnect/reconnect and background/foreground. Profile packed remote play and
+local practice separately: the authoritative server runs the remote town's AI and physics, while
+loopback runs them on the simulator. Keep both results visible. Older Three-renderer benchmark
+tables were removed because they do not describe the native engine.
 
-The actual packed32 Chromium regression currently runs near60FPS on this development Mac,
-with a lowest rolling one-second rate of about53FPS while firing and simulating four jointed
-corpses (40native bodies). The packed street camera uses roughly350–400visible draw calls,
-including independently breakable panes; movement and native frustum culling lower that count. These are desktop observations, not an iPhone13mini result. The physical minimum
-remains unverified. Repeat measurements on the final build/content revision after changes.
+Before the visual restoration, the packed 32-rider Chromium regression ran near 60 FPS on this
+development Mac, with a lowest rolling one-second rate of about 53 FPS while firing and simulating
+four jointed corpses (40 native bodies). The packed street camera used roughly 350–400 visible
+draw calls, including independently breakable panes; movement and native frustum culling lowered
+that count. These are historical desktop observations, not current simulator acceptance evidence.
+Repeat measurements on the final build/content revision after changes.
+
+The test-only authoritative packed fixture keeps bot AI and full-town physics on the actual local
+Worker while the browser predicts its own rider. Its 31 bots are synthetic load; production online
+and ordinary local practice cap actual bots at four. Keep its result separate from the 32-human
+capacity target and from loopback stress, which runs every bot and native motor on the client.
 
 For the real local auth/D1/DO browser fixture, use:
 
@@ -51,12 +69,14 @@ the authoritative pose and increments confirmed shots, then closes the socket an
 fresh authenticated connection resumes state. The seed endpoint exists only in the unshipped
 test fixture. The harness does not print account tokens or signed WebSocket tickets.
 
-The desktop lifetime soak completed900.3active simulation seconds (917.4wall seconds), crossing
-three practice rounds through the real Ride again button. It retained32riders and at most40
-active corpse bodies, with no page errors and a lowest rolling one-second rate of53.21FPS.
-Natural garbage collection returned the JS heap to roughly92MB after a248MB peak; the final
-sample was126MB. Unmount left zero players, corpse bodies and canvases. These measurements
+The pre-restoration desktop lifetime soak completed 900.3 active simulation seconds (917.4 wall
+seconds), crossing three practice rounds through the real Ride again button. It retained 32 riders
+and at most 40 active corpse bodies, with no page errors and a lowest rolling one-second rate of
+53.21 FPS. Natural garbage collection returned the JS heap to roughly 92 MB after a 248 MB peak;
+the final sample was 126 MB. Unmount left zero players, corpse bodies and canvases. These measurements
 cover desktop lifecycle and memory regression; they do not establish device memory/GPU limits.
+They do not measure the repaired materials, vegetation, ambient life or lighting; repeat the
+packed-scene measurement on the final repaired build before using it as current performance evidence.
 
 ```sh
 OW_ORIGIN=http://localhost:4390 OW_SOAK_SECONDS=900 bun tools/soak-playcanvas-frontier.ts
