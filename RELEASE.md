@@ -1,7 +1,7 @@
 # Releasing contra.io
 
 The site is GitHub Pages; the out-west API is a Cloudflare Worker on `api.contra.io`.
-The PlayCanvas rewrite is implemented locally; this work has not deployed it or changed Cloudflare billing.
+Out West uses PlayCanvas for rendering and physics, with Colyseus replication on SQLite Durable Objects.
 The one-time setup below describes the existing hosting arrangement.
 
 ## Routine deploys
@@ -75,10 +75,10 @@ repeat load is ~0 MB on the wire). Bump `VERSION` in that file whenever an unhas
 `public/experiments/out-west/` changes (models, textures, fonts, UI art). Hashed `/_astro/` bundles
 carry their own names and need no bump.
 
-**Budget:** the rewrite targets **Workers Free, $0/month** with SQLite Durable Objects. The source
-configuration does not prove the account's subscription tier. The available API token has no billing
-read permission, so an account owner still needs to confirm Workers Free in the dashboard. No billing
-setting has been changed by this rewrite.
+**Budget:** Out West targets **Workers Free, $0/month** with SQLite Durable Objects. Workers Free
+was confirmed in the signed-in account dashboard on 2026-11-08. The available API token has no billing
+read permission; its Workers Standard usage-model metadata does not establish the subscription tier.
+No billing setting has been changed by this rewrite.
 
 Gameplay admits at most 80% of the documented daily allowance: 10,400 GB-s, split into 66,560
 Frontier room-seconds and 16,640 duel room-seconds at the conservative 128 MiB allocation. Incoming
@@ -111,7 +111,8 @@ See `src/experiments/out-west/runtime/vendor/README.md` for reproducible Ammo as
 the Workers-only precompiled callback trampoline. Do not replace the Wrangler bundle test with a
 Node-only physics test: Workers prohibit dynamic Wasm compilation.
 
-**Real-device check:** before announcing, run the iPhone 13 mini checklist in `tools/PERF.md`.
+**Real-device check:** the physical iPhone 13 mini check remains outstanding. Before announcing,
+run the checklist in `tools/PERF.md`; desktop measurements do not verify the 30 FPS device minimum.
 
 ## Quick Draw balance and the ranked board
 
