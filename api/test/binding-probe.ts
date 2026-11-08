@@ -1,5 +1,6 @@
 /** Exercise production room methods with the delayed-close state that Colyseus can retain. */
 import { ClientState, getMessageBytes, Protocol } from '@colyseus/core'
+import { PROTOCOL_VERSION } from '../../src/experiments/out-west/runtime/protocol.ts'
 import { createNativeRoom } from '../src/game/room.ts'
 import { CloudflareClient } from '../src/game/socket.ts'
 import { LobbyCore, type Peer, type Session } from '../src/town/core.ts'
@@ -26,6 +27,11 @@ export async function bindingProbe(id: string) {
       departures++
     },
   })
+  // This adversarial fixture drives room methods directly rather than consuming a seat.
+  const pendingJoins = Reflect.get(room, 'pendingJoins') as Set<string>
+  pendingJoins.add('fixture-preparation')
+  await Reflect.get(room, 'prepareGame').call(room)
+  pendingJoins.clear()
   const profile = (accountId: string) => ({
     accountId,
     name: accountId,
@@ -149,7 +155,10 @@ export async function bindingProbe(id: string) {
   joinBarrier = new Promise<void>((resolve) => {
     releaseJoin = resolve
   })
-  const joining = room.onJoin(fakeClient('final'), { profile: profile('new'), protocol: 1 })
+  const joining = room.onJoin(fakeClient('final'), {
+    profile: profile('new'),
+    protocol: PROTOCOL_VERSION,
+  })
   const retired = !sessions.has('newest') && sessions.has('final')
   releaseJoin()
   await joining

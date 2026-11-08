@@ -7,7 +7,7 @@
  * Bump VERSION when an unhashed file under public/experiments/out-west/ changes. The hashed
  * /_astro/ files carry their own names and never need a bump.
  */
-const VERSION = 'ow-playcanvas-v1'
+const VERSION = 'ow-playcanvas-v2-visual-repair'
 const CACHE = `out-west-${VERSION}`
 const SHELL = [
   '/experiments/out-west/',
@@ -39,17 +39,35 @@ self.addEventListener('install', (event) => {
 })
 
 self.addEventListener('activate', (event) => {
-  event.waitUntil(
-    caches
-      .keys()
-      .then((keys) =>
-        Promise.all(
-          keys.filter((k) => k.startsWith('out-west-') && k !== CACHE).map((k) => caches.delete(k)),
-        ),
-      )
-      .then(() => self.clients.claim()),
-  )
+  event.waitUntil(migrateAssets().then(() => self.clients.claim()))
 })
+
+/** Assets fetched while this worker waited remain usable on the next offline launch. */
+async function migrateAssets() {
+  const current = await caches.open(CACHE)
+  for (const name of await caches.keys()) {
+    if (!name.startsWith('out-west-') || name === CACHE) {
+      continue
+    }
+    const previous = await caches.open(name)
+    for (const request of await previous.keys()) {
+      const url = new URL(request.url)
+      if (
+        url.origin !== self.location.origin ||
+        !cacheable(url.pathname) ||
+        request.mode === 'navigate' ||
+        (await current.match(request))
+      ) {
+        continue
+      }
+      const response = await previous.match(request)
+      if (response?.ok && !response.headers.get('content-type')?.includes('text/html')) {
+        await current.put(request, response)
+      }
+    }
+    await caches.delete(name)
+  }
+}
 
 /** Assets that never change under their URL: the hashed bundles. */
 const hashed = (path) => path.startsWith('/_astro/')

@@ -49,7 +49,7 @@ for (const path of process.argv.slice(2)) {
       }
       const uv = primitive.getAttribute('TEXCOORD_0')
       const indices = primitive.getIndices()
-      if (!(uv && indices)) {
+      if (!uv) {
         continue
       }
       const groups = new Map<number, number[]>()
@@ -57,16 +57,17 @@ for (const path of process.argv.slice(2)) {
       if (!array) {
         continue
       }
-      for (let i = 0; i < indices.getCount(); i += 3) {
-        const a = indices.getScalar(i)
+      const count = indices?.getCount() ?? uv.getCount()
+      for (let i = 0; i < count; i += 3) {
+        const a = indices?.getScalar(i) ?? i
         const cell = Math.floor((uv.getElement(a, [0, 0])[0] ?? 0) / 1000)
         const list = groups.get(cell) ?? []
-        list.push(a, indices.getScalar(i + 1), indices.getScalar(i + 2))
+        list.push(a, indices?.getScalar(i + 1) ?? i + 1, indices?.getScalar(i + 2) ?? i + 2)
         groups.set(cell, list)
       }
       const values = Float32Array.from(array)
       for (let i = 0; i < values.length; i += 2) {
-        values[i] = (values[i] ?? 0) - Math.floor((values[i] ?? 0) / 1000) * 1000
+        values[i] = (values[i] ?? 0) - Math.floor((values[i] ?? 0) / 1000) * 1000 - 500
       }
       const remap = uv.clone().setArray(values)
       for (const [cell, group] of groups) {
@@ -74,7 +75,13 @@ for (const path of process.argv.slice(2)) {
         next.setBaseColorTexture(await tile(material.getBaseColorTexture(), cell))
         next.setNormalTexture(await tile(material.getNormalTexture(), cell))
         next.setMetallicRoughnessTexture(await tile(material.getMetallicRoughnessTexture(), cell))
-        next.setOcclusionTexture(await tile(material.getOcclusionTexture(), cell))
+        // The original Civic shader read ARM.r itself; make that AO channel explicit in glTF.
+        next.setOcclusionTexture(
+          await tile(
+            material.getOcclusionTexture() ?? material.getMetallicRoughnessTexture(),
+            cell,
+          ),
+        )
         const part = primitive
           .clone()
           .setAttribute('TEXCOORD_0', remap)
@@ -83,7 +90,7 @@ for (const path of process.argv.slice(2)) {
               .createAccessor()
               .setType('SCALAR')
               .setArray(Uint32Array.from(group))
-              .setBuffer(indices.getBuffer()),
+              .setBuffer(uv.getBuffer()),
           )
           .setMaterial(next)
         mesh.addPrimitive(part)

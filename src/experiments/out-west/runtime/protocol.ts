@@ -1,6 +1,6 @@
 import type { MoveState } from '../ffa/sim/types.ts'
 /** Shared authoritative input contract; positions and rewards never come from clients. */
-export const PROTOCOL_VERSION = 1
+export const PROTOCOL_VERSION = 2
 export const SIMULATION_HZ = 20
 export const PHYSICS_HZ = 60
 export const INPUT_SEND_HZ = 10
@@ -39,6 +39,8 @@ export interface PlayerState {
   yaw: number
   pitch: number
   grounded: boolean
+  /** Effective native capsule stance, including blocked stand-up and committed traversal. */
+  crouched?: boolean
   hp: number
   ammo: number
   seq: number

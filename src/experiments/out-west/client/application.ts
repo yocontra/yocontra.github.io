@@ -6,6 +6,7 @@ import {
   AudioHandler,
   AudioListenerComponentSystem,
   BatchManager,
+  basisInitialize,
   CameraComponentSystem,
   Color,
   ContainerHandler,
@@ -16,6 +17,7 @@ import {
   FILLMODE_FILL_WINDOW,
   GAMMA_SRGB,
   LightComponentSystem,
+  ParticleSystemComponentSystem,
   RESOLUTION_AUTO,
   RenderComponentSystem,
   SoundComponentSystem,
@@ -24,7 +26,7 @@ import {
   TextureHandler,
   TONEMAP_ACES,
 } from 'playcanvas'
-import { ENVIRONMENT } from '../content/manifest.ts'
+import { SKIES } from '../content/skies.ts'
 import { assetUrl } from '../platform/asset-url.ts'
 import { FrameBudget } from './frame-budget.ts'
 
@@ -45,6 +47,8 @@ export class GameApplication {
   private readonly loads = new Map<string, Promise<Asset>>()
   private previousTime = 0
   private readonly environmentTextures: Texture[] = []
+  private environmentEpoch = 0
+  private environmentSource = '' as string
   readonly app: AppBase
   private readonly options: ApplicationOptions
   private constructor(app: AppBase, options: ApplicationOptions) {
@@ -97,6 +101,7 @@ export class GameApplication {
     this.resize()
   }
   static async create(options: ApplicationOptions): Promise<GameApplication> {
+    initializeBasis()
     const graphicsDevice = await createGraphicsDevice(options.canvas, {
       deviceTypes: ['webgl2'],
       antialias: true,
@@ -113,6 +118,7 @@ export class GameApplication {
         RenderComponentSystem,
         CameraComponentSystem,
         LightComponentSystem,
+        ParticleSystemComponentSystem,
         AnimComponentSystem,
         SoundComponentSystem,
         AudioListenerComponentSystem,
@@ -159,9 +165,60 @@ export class GameApplication {
   loadAudio(url: string): Promise<Asset> {
     return this.loadAsset(url, 'audio')
   }
-  private async environment(): Promise<void> {
-    const asset = await this.loadAsset(ENVIRONMENT.url, 'texture')
-    if (this.controller.signal.aborted) {
+  loadTexture(url: string, options?: { srgb?: boolean; flipY?: boolean }): Promise<Asset> {
+    return this.loadAsset(url, 'texture', options)
+  }
+  releaseTexture(url: string): void {
+    this.releaseAsset(url)
+  }
+  /** Call after the last entity using this arena has been destroyed. */
+  releaseContainer(url: string): void {
+    this.releaseAsset(url)
+  }
+  private releaseAsset(url: string): void {
+    const pending = this.loads.get(url)
+    if (!pending) {
+      return
+    }
+    this.loads.delete(url)
+    void this.unloadReleasedAsset(url, pending)
+  }
+  private async unloadReleasedAsset(url: string, pending: Promise<Asset>): Promise<void> {
+    try {
+      const asset = await pending
+      const replacement = this.loads.get(url)
+      let next: Asset | null = null
+      if (replacement) {
+        try {
+          next = await replacement
+        } catch {
+          // A failed replacement cannot retain the old texture.
+        }
+      }
+      if (this.controller.signal.aborted) {
+        return
+      }
+      this.app.assets.remove(asset)
+      // The loader may coalesce an immediate re-acquisition onto the same Texture.
+      if (next?.resource !== asset.resource) {
+        asset.unload()
+      }
+    } catch {
+      // Failed or cancelled loads have no resource to release.
+    }
+  }
+  async environment(
+    url: string = SKIES.noon.url,
+    intensity = 0.7,
+    skyboxSize = 256,
+  ): Promise<void> {
+    const epoch = ++this.environmentEpoch
+    this.environmentSource = url
+    const asset = await this.loadTexture(url)
+    if (this.controller.signal.aborted || epoch !== this.environmentEpoch) {
+      if (url !== this.environmentSource) {
+        this.releaseTexture(url)
+      }
       return
     }
     const texture = asset.resource as Texture
@@ -172,16 +229,26 @@ export class GameApplication {
         numReflectionSamples: 64,
         numAmbientSamples: 128,
       })
-      const sky = EnvLighting.generateSkyboxCubemap(texture, 256)
+      const sky = EnvLighting.generateSkyboxCubemap(texture, skyboxSize)
+      const previous = this.environmentTextures.splice(0)
       this.environmentTextures.push(atlas, sky)
       this.app.scene.envAtlas = atlas
       this.app.scene.skybox = sky
-      this.app.scene.skyboxIntensity = 0.7
+      this.app.scene.skyboxIntensity = intensity
+      for (const old of previous) {
+        old.destroy()
+      }
     } finally {
       lighting.destroy()
+      // Convolution owns its native outputs; retain no full-resolution source HDR on the GPU.
+      this.releaseTexture(url)
     }
   }
-  private loadAsset(url: string, type: 'container' | 'audio' | 'texture'): Promise<Asset> {
+  private loadAsset(
+    url: string,
+    type: 'container' | 'audio' | 'texture',
+    textureOptions?: { srgb?: boolean; flipY?: boolean },
+  ): Promise<Asset> {
     if (this.controller.signal.aborted) {
       return Promise.reject(new Error('Game has been disposed'))
     }
@@ -190,7 +257,7 @@ export class GameApplication {
       return previous
     }
     const promise = new Promise<Asset>((resolve, reject) => {
-      const asset = new Asset(url, type, { url: assetUrl(url) })
+      const asset = new Asset(url, type, { url: assetUrl(url) }, textureOptions)
       if (type === 'container') {
         // Container HTTP requests outlive unload(). Native glTF hooks stop late parsing before
         // it can register textures or create GPU resources on a disposed application.
@@ -270,4 +337,20 @@ export class GameApplication {
     this.app.destroy()
     this.loads.clear()
   }
+}
+
+let basisConfigured = false
+function initializeBasis(): void {
+  if (basisConfigured) {
+    return
+  }
+  const prefix = '/experiments/out-west/vendor/basis/2.23.3'
+  basisInitialize({
+    glueUrl: `${prefix}/basis.wasm.js`,
+    wasmUrl: `${prefix}/basis.wasm.wasm`,
+    fallbackUrl: `${prefix}/basis.js`,
+    numWorkers: 2,
+    lazyInit: true,
+  })
+  basisConfigured = true
 }

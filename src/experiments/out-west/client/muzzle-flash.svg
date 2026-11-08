@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="-64 -64 128 128">
+  <title>Brief muzzle flash</title>
+  <defs>
+    <radialGradient id="fire">
+      <stop stop-color="#fffef0" />
+      <stop offset=".16" stop-color="#fff4ca" />
+      <stop offset=".4" stop-color="#ffd080" stop-opacity=".8" />
+      <stop offset="1" stop-color="#ff8c35" stop-opacity="0" />
+    </radialGradient>
+  </defs>
+  <circle r="34" fill="url(#fire)" opacity=".35" />
+  <path
+    d="M0-60 4-10 32-36 10-3 62 7 10 5 25 52 1 10-45 40-8 5-61-12-9-5-28-48-3-11Z"
+    fill="url(#fire)"
+  />
+</svg>

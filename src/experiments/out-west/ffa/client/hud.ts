@@ -207,6 +207,34 @@ export class Hud {
       'Leaving drops your carried money, unless you’re in the bank. Banked money is safe.',
     )
     const howto = el('button', 'fr-menu-item fr-menu-quiet fr-hit', right, 'How to play')
+    const help = el('section', 'fr-help', left)
+    help.hidden = true
+    el('h3', '', help, 'How to play')
+    const instructions = opts.touch
+      ? [
+          [
+            'Move and look',
+            'Move with your left thumb. Drag the right side to look. Push forward to sprint.',
+          ],
+          ['Shoot', 'FIRE shoots. Hold AIM to line up a shot. RELOAD fills your gun.'],
+          ['Take cover', 'JUMP clears low cover. CROUCH lowers your stance. ROLL dodges.'],
+          ['Win the money', 'Defeated riders drop bags. Walk over a bag to collect it.'],
+          ['Bank it', 'Follow the $ marker. Hold USE at a bank window to save your carry.'],
+          ['Call a duel', 'Aim at a rider and tap CALL. Wait for the bell before firing.'],
+        ]
+      : [
+          ['Move and look', 'Click the game to aim. WASD moves; Shift sprints.'],
+          ['Shoot', 'Left click fires. Right click aims. R reloads.'],
+          ['Take cover', 'Space jumps. C crouches. Alt rolls. G throws dynamite.'],
+          ['Win the money', 'Defeated riders drop bags. Walk over a bag to collect it.'],
+          ['Bank it', 'Follow the $ marker. Hold E at a bank window to save your carry.'],
+          ['Call a duel', 'Aim at a rider and press Q. Wait for the bell before firing.'],
+        ]
+    for (const [label, text] of instructions) {
+      el('h4', '', help, label)
+      el('p', '', help, text)
+    }
+
     // who's in town (report and block live there)
     this.playersEl = el('button', 'fr-menu-item fr-menu-quiet fr-hit', right, 'Players')
     const leave = el('button', 'fr-menu-item fr-hit', right, 'Leave (5 s)')
@@ -238,8 +266,14 @@ export class Hud {
     }
     howto.addEventListener('click', (e) => {
       e.stopPropagation()
-      close()
-      opts.onHowTo?.()
+      if (opts.onHowTo) {
+        close()
+        opts.onHowTo()
+      } else {
+        help.hidden = !help.hidden
+        this.menuSettings.hidden = !help.hidden
+        howto.textContent = help.hidden ? 'How to play' : 'Back to settings'
+      }
     })
     leave.addEventListener('click', () => {
       close()

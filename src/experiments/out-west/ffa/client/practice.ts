@@ -8,6 +8,7 @@
  * bank into your account's wallet on the server). Stored in localStorage, wrapped: a private
  * window or blocked storage just plays with a fresh record.
  */
+import { MAX_FRONTIER_BOTS, MAX_PLAYERS } from '../sim/constants.ts'
 
 const KEY = 'ow.frontier.record.v1'
 
@@ -40,6 +41,11 @@ const EMPTY: FrontierRecord = {
 
 const count = (v: unknown, cap = Number.MAX_SAFE_INTEGER): number =>
   typeof v === 'number' && Number.isFinite(v) ? Math.min(cap, Math.max(0, Math.floor(v))) : 0
+
+/** Larger artificial crowds exist only in explicitly enabled development/performance builds. */
+export function practiceBots(requested = MAX_FRONTIER_BOTS, stress = false): number {
+  return count(requested, stress ? MAX_PLAYERS - 1 : MAX_FRONTIER_BOTS)
+}
 
 export function loadRecord(): FrontierRecord {
   try {

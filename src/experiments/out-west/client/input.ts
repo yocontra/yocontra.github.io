@@ -36,6 +36,7 @@ export class GameInput {
     this.settings = settings
     this.controls.classList.toggle('left-handed', settings.leftHanded)
     this.controls.style.setProperty('--control-scale', String(settings.controlScale))
+    this.controls.style.setProperty('--stick-scale', String(settings.joyScale))
   }
   readonly cursor = { x: 0, y: 0 }
   cursorAim = true as boolean
@@ -50,6 +51,7 @@ export class GameInput {
   private readonly held = new Map<number, number>()
   private readonly edges = new Map<number, number>()
   private readonly controls: HTMLElement
+  private readonly buttons = new Map<number, HTMLButtonElement>()
   private get enabled(): boolean {
     return !this.controls.inert
   }
@@ -78,7 +80,8 @@ export class GameInput {
       const button = document.createElement('button')
       button.type = 'button'
       button.textContent = name
-      button.className = name === 'FIRE' ? 'pc-control pc-fire' : 'pc-control'
+      button.className = `pc-control pc-${name.toLowerCase()}`
+      button.setAttribute('aria-label', name)
       button.addEventListener(
         'pointerdown',
         (event) => {
@@ -104,6 +107,7 @@ export class GameInput {
       button.addEventListener('pointerup', release, { signal: this.abort.signal })
       button.addEventListener('pointercancel', release, { signal: this.abort.signal })
       this.controls.append(button)
+      this.buttons.set(bit, button)
     }
     parent.append(this.controls)
     this.mouse.on('mousemove', this.look)
@@ -221,6 +225,7 @@ export class GameInput {
         -1,
         Math.min(1, (event.clientY - origin.y) / (60 * this.settings.joyScale)),
       )
+      this.updateStick()
     } else {
       this.cursorAim = false
       if (this.settings.view === 'top') {
@@ -253,11 +258,29 @@ export class GameInput {
     if (this.pointers.get(event.pointerId)?.kind === 'move') {
       this.touchX = 0
       this.touchZ = 0
+      this.updateStick()
     }
     this.pointers.delete(event.pointerId)
   }
+  setContext(context: { use: boolean; call: boolean; throw: boolean }): void {
+    for (const [bit, visible] of [
+      [Buttons.interact, context.use],
+      [Buttons.callout, context.call],
+      [Buttons.throw, context.throw],
+    ] as const) {
+      const button = this.buttons.get(bit)
+      if (button) {
+        button.hidden = !visible
+      }
+    }
+  }
+  private updateStick(): void {
+    this.controls.style.setProperty('--move-x', `${this.touchX * 22}px`)
+    this.controls.style.setProperty('--move-z', `${this.touchZ * 22}px`)
+  }
   setEnabled(enabled: boolean): void {
     this.controls.inert = !enabled
+    this.controls.hidden = !enabled
     if (!enabled) {
       this.release()
     }
@@ -269,6 +292,7 @@ export class GameInput {
     this.edges.clear()
     this.touchX = 0
     this.touchZ = 0
+    this.updateStick()
     this.keyboard.detach()
     this.keyboard.attach(document.body)
     for (const control of this.controls.children) {

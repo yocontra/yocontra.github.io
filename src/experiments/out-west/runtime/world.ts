@@ -14,6 +14,7 @@ import {
   StandardMaterial,
   Vec3,
 } from 'playcanvas'
+import { BODY_HEIGHT, CROUCH_HEIGHT } from '../ffa/sim/constants.ts'
 import { roofWalkAt } from '../ffa/sim/roofwalks.ts'
 import { motorFrame, newMotion } from './abilities.ts'
 import {
@@ -97,6 +98,7 @@ export function createSimulation(options: SimulationOptions) {
       yaw: 0,
       pitch: 0,
       grounded: false,
+      crouched: false,
       hp: 100,
       ammo: 6,
       seq: 0,
@@ -179,21 +181,14 @@ export function createSimulation(options: SimulationOptions) {
       state.vx = velocity.x
       state.vy = velocity.y
       state.vz = velocity.z
+      state.crouched = (entity.collision?.height ?? BODY_HEIGHT) < BODY_HEIGHT
       updateMotion(state, entity, physics)
     }
   }
   function adopt(id: string, state: PlayerState) {
-    const entity = entities.get(id)
-    if (!entity?.rigidbody) {
-      return
+    if (restoreCapsule(entities.get(id), state)) {
+      Object.assign(players.get(id) ?? {}, state)
     }
-    entity.rigidbody.teleport(
-      state.x,
-      state.y - 0.9 + (entity.collision?.height ?? 1.8) / 2,
-      state.z,
-    )
-    entity.rigidbody.linearVelocity = new Vec3(state.vx, state.vy, state.vz)
-    Object.assign(players.get(id) ?? {}, state)
   }
   function dispose() {
     if (disposed) {
@@ -213,6 +208,22 @@ export function createSimulation(options: SimulationOptions) {
   return { app, players, addPlayer, removePlayer, step, adopt, castWorld, dispose }
 }
 export type Simulation = ReturnType<typeof createSimulation>
+
+function restoreCapsule(entity: Entity | undefined, state: PlayerState): boolean {
+  if (!entity?.rigidbody) {
+    return false
+  }
+  if (entity.collision && state.crouched !== undefined) {
+    entity.collision.height = state.crouched ? CROUCH_HEIGHT : BODY_HEIGHT
+  }
+  entity.rigidbody.teleport(
+    state.x,
+    state.y - 0.9 + (entity.collision?.height ?? BODY_HEIGHT) / 2,
+    state.z,
+  )
+  entity.rigidbody.linearVelocity = new Vec3(state.vx, state.vy, state.vz)
+  return true
+}
 
 function stepRiser({
   body,

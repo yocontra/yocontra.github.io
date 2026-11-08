@@ -1,7 +1,10 @@
 /** Native asset studio used only by the offline catalogue image build. */
+
+import type { ContainerResource } from 'playcanvas'
 import { BoundingBox, Vec3 } from 'playcanvas'
 import { GameApplication } from '../../src/experiments/out-west/client/application.ts'
 import { EQUIPMENT } from '../../src/experiments/out-west/content/equipment.ts'
+import { prepareNativeMaterials } from '../../src/experiments/out-west/scene/native-materials.ts'
 
 let game: GameApplication | null = null
 let subject: Awaited<ReturnType<GameApplication['instantiate']>> | null = null
@@ -19,11 +22,19 @@ export async function previewItem(id: keyof typeof EQUIPMENT): Promise<void> {
     }
   }
   subject?.destroy()
-  subject = await game.instantiate(EQUIPMENT[id].url, id)
+  const container = await game.loadContainer(EQUIPMENT[id].url)
+  const release = await prepareNativeMaterials(game, container.resource as ContainerResource)
+  try {
+    subject = await game.instantiate(EQUIPMENT[id].url, id)
+    subject.once('destroy', release)
+  } catch (error) {
+    release()
+    throw error
+  }
   for (const node of subject.find((candidate) => candidate.name.startsWith('mount.'))) {
     node.enabled = !(
       node.name.includes('holstered') ||
-      node.name.includes('WristL') ||
+      (node.name.includes('WristL') && id !== 'gun.hardins-pair') ||
       node.name === 'FootL'
     )
   }

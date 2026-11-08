@@ -6,6 +6,7 @@ import { join } from 'node:path'
 import process from 'node:process'
 import { build, spawn, write } from 'bun'
 import { COLLISION_VERSION } from '../../src/experiments/out-west/content/manifest.ts'
+import { PROTOCOL_VERSION } from '../../src/experiments/out-west/runtime/protocol.ts'
 
 async function execute(args: string[], source?: string) {
   const child = spawn(args, {
@@ -69,10 +70,36 @@ it('production auth joins and batched input work, then a quiet room closes when 
      const statements=sql.split(/;\\s*$/mu).map(value=>value.trim()).filter(Boolean);
      await db.batch(statements.map(sql=>db.prepare(sql)));
     }
+    const staleBudget=await(await fetch(base+'/__test/stale-native-budget')).json();
+    if(!staleBudget.replacementPreserved)throw new Error('Stale budget continuation crossed room generation');
     const account=await(await fetch(base+'/__test/seed')).json();
     const headers={Origin:'http://127.0.0.1:4390',Authorization:'Bearer '+account.token,'Content-Type':'application/json'};
-    const response=await fetch(base+'/town/join',{method:'POST',headers,body:JSON.stringify({wire:10,protocol:1,collision:${JSON.stringify(COLLISION_VERSION)},turnstileToken:'fixture-provider-proof'})});
+    const abandonedResponse=await fetch(base+'/town/join',{method:'POST',headers,body:JSON.stringify({wire:10,protocol:${PROTOCOL_VERSION},collision:${JSON.stringify(COLLISION_VERSION)},turnstileToken:'fixture-provider-proof'})});
+    const abandoned=await abandonedResponse.json();if(abandonedResponse.status!==201)throw new Error(JSON.stringify(abandoned));
+    const timingUrl=base+'/__test/native-timing?lobbyId='+encodeURIComponent(abandoned.lobbyId);
+    const waiting=await(await fetch(timingUrl)).json();
+    if(waiting.timers.length||waiting.active||waiting.physics||waiting.core||waiting.tick!==0||waiting.timer||waiting.cleanup||waiting.lease||waiting.leaseTimer||waiting.seats!==1||!waiting.alarm)throw new Error('Reserved seat retained native resources instead of durable metadata: '+JSON.stringify(waiting));
+    await new Promise(resolve=>setTimeout(resolve,31000));
+    const expired=await(await fetch(timingUrl)).json();
+    if(expired.timers.length||expired.active||expired.physics||expired.core||expired.timer||expired.running||expired.cleanup||expired.leaseTimer||expired.lease||expired.seats!==0||expired.alarm!==null)throw new Error('Abandoned reservation retained room duration or lease: '+JSON.stringify(expired));
+    const closingResponse=await fetch(base+'/town/join',{method:'POST',headers,body:JSON.stringify({wire:10,protocol:${PROTOCOL_VERSION},collision:${JSON.stringify(COLLISION_VERSION)},turnstileToken:'fixture-provider-proof'})});
+    const closingSeat=await closingResponse.json();
+    await fetch(base+'/__test/delay-native-lease');
+    const {WebSocket:RawSocket}=await import(${JSON.stringify(join(root, 'node_modules/ws/wrapper.mjs'))});
+    const closing=new RawSocket(closingSeat.wsUrl+'&sessionId='+encodeURIComponent(closingSeat.reservation.sessionId),{headers:{Origin:headers.Origin}});
+    await new Promise((resolve,reject)=>{closing.once('open',resolve);closing.once('error',reject)});
+    const closedEarly=new Promise(resolve=>closing.once('close',resolve));closing.close();await closedEarly;
+    await new Promise(resolve=>setTimeout(resolve,650));
+    const early=await(await fetch(base+'/__test/native-timing?lobbyId='+encodeURIComponent(closingSeat.lobbyId))).json();
+    const earlyLeases=await(await fetch(base+'/__test/native-leases')).json();
+    if(early.active||early.physics||early.core||early.timer||early.lease||early.leaseTimer||early.humans||early.bots||earlyLeases.active)throw new Error('Close during delayed first lease resurrected native work: '+JSON.stringify({early,earlyLeases}));
+    const response=await fetch(base+'/town/join',{method:'POST',headers,body:JSON.stringify({wire:10,protocol:${PROTOCOL_VERSION},collision:${JSON.stringify(COLLISION_VERSION)},turnstileToken:'fixture-provider-proof'})});
     const seat=await response.json();if(response.status!==201)throw new Error(JSON.stringify(seat));
+    const warm=await(await fetch(base+'/__test/native-timing?lobbyId='+encodeURIComponent(seat.lobbyId))).json();
+    try{await fetch(base+'/__test/restart-native?lobbyId='+encodeURIComponent(seat.lobbyId))}catch{}
+    const cold=await(await fetch(base+'/__test/native-timing?lobbyId='+encodeURIComponent(seat.lobbyId))).json();
+    if(cold.instance===warm.instance||cold.active||cold.physics||cold.core||cold.seats!==1||cold.lease)throw new Error('Cold metadata seat did not survive without native allocation: '+JSON.stringify({warm,cold}));
+    await new Promise(resolve=>setTimeout(resolve,750));
     const client=new Client(base+'/town/'+seat.lobbyId+'?'+new URL(seat.wsUrl).searchParams.toString(),{headers:{Origin:headers.Origin}});
     room=await client.consumeSeatReservation(seat.reservation);room.reconnection.enabled=false;
     room.onMessage('control',()=>{});room.onMessage('events',()=>{});room.onMessage('network-ping',message=>setTimeout(()=>room.send('network-pong',{nonce:message.nonce}),100));
@@ -87,20 +114,26 @@ it('production auth joins and batched input work, then a quiet room closes when 
     const applied={seq:self()?.seq,yaw:self()?.yaw,tick:room.state.tick};batches.dispose();
     const linkStats=await(await fetch(base+'/town/'+seat.lobbyId+'/stats')).json();
     const measured=linkStats.links.find(link=>link.rtt.length>0);if(!measured||measured.rtt[0]<80)throw new Error('Native game judging did not measure trusted socket round trips: '+JSON.stringify(linkStats.links));
+    const population=await(await fetch(base+'/__test/native-timing?lobbyId='+encodeURIComponent(seat.lobbyId))).json();
+    if(population.bots!==4||population.humans!==1||!population.physics||!population.timer||!population.lease)throw new Error('Actual production bot population/lifecycle violated: '+JSON.stringify(population));
     const originalVisit=visit.results[0].id;
-    await room.leave(false);await new Promise(resolve=>setTimeout(resolve,300));
-    const rejoinResponse=await fetch(base+'/town/join',{method:'POST',headers,body:JSON.stringify({wire:10,protocol:1,collision:${JSON.stringify(COLLISION_VERSION)},turnstileToken:'fixture-provider-proof'})});
+    await room.leave(false);await new Promise(resolve=>setTimeout(resolve,150));
+    const empty=await(await fetch(base+'/__test/native-timing?lobbyId='+encodeURIComponent(seat.lobbyId))).json();
+    if(empty.timers.some(timer=>timer.kind==='interval'||timer.delay>1000)||empty.active||empty.physics||empty.core||empty.timer||empty.running||empty.cleanup||empty.leaseTimer||empty.lease||empty.bots||empty.humans)throw new Error('Last online human left resident work: '+JSON.stringify(empty));
+    await new Promise(resolve=>setTimeout(resolve,1500));
+    const flushedEmpty=await(await fetch(base+'/__test/native-timing?lobbyId='+encodeURIComponent(seat.lobbyId))).json();
+    if(flushedEmpty.timers.length||flushedEmpty.active||flushedEmpty.physics||flushedEmpty.lease)throw new Error('Final SDK flush retained recurring work: '+JSON.stringify(flushedEmpty));
+    const rejoinResponse=await fetch(base+'/town/join',{method:'POST',headers,body:JSON.stringify({wire:10,protocol:${PROTOCOL_VERSION},collision:${JSON.stringify(COLLISION_VERSION)},turnstileToken:'fixture-provider-proof'})});
     const rejoinSeat=await rejoinResponse.json();if(rejoinResponse.status!==201)throw new Error(JSON.stringify(rejoinSeat));
     room=await new Client(base+'/town/'+rejoinSeat.lobbyId+'?'+new URL(rejoinSeat.wsUrl).searchParams.toString(),{headers:{Origin:headers.Origin}}).consumeSeatReservation(rejoinSeat.reservation);room.reconnection.enabled=false;
     room.onMessage('control',()=>{});room.onMessage('events',()=>{});room.onMessage('network-ping',message=>setTimeout(()=>room.send('network-pong',{nonce:message.nonce}),100));
     await new Promise(resolve=>setTimeout(resolve,300));
     const rejoinedVisit=await db.prepare('SELECT id,left_at FROM ffa_sessions WHERE account_id=?').bind(account.accountId).all();
-    if(rejoinedVisit.results.length!==1||rejoinedVisit.results[0].id!==originalVisit||rejoinedVisit.results[0].left_at!==null)throw new Error('Native reconnect lost/replaced its lingering session: '+JSON.stringify(rejoinedVisit.results));
-    if(room.state.tick<=applied.tick)throw new Error('Last-human reconnect reset the native world');
+    if(rejoinedVisit.results.length!==2||!rejoinedVisit.results.some(value=>value.id===originalVisit&&value.left_at!==null)||rejoinedVisit.results.filter(value=>value.left_at===null).length!==1)throw new Error('Fresh room return did not close and settle the zero-human visit: '+JSON.stringify(rejoinedVisit.results));
     await new Promise(resolve=>setTimeout(resolve,31000));
     const account2=await(await fetch(base+'/__test/seed')).json();
     const otherHeaders={...headers,Authorization:'Bearer '+account2.token};
-    const otherResponse=await fetch(base+'/town/join',{method:'POST',headers:otherHeaders,body:JSON.stringify({wire:10,protocol:1,collision:${JSON.stringify(COLLISION_VERSION)},turnstileToken:'fixture-provider-proof'})});
+    const otherResponse=await fetch(base+'/town/join',{method:'POST',headers:otherHeaders,body:JSON.stringify({wire:10,protocol:${PROTOCOL_VERSION},collision:${JSON.stringify(COLLISION_VERSION)},turnstileToken:'fixture-provider-proof'})});
     const otherSeat=await otherResponse.json();if(otherResponse.status!==201)throw new Error(JSON.stringify(otherSeat));
     other=await new Client(base+'/town/'+otherSeat.lobbyId+'?'+new URL(otherSeat.wsUrl).searchParams.toString(),{headers:{Origin:headers.Origin}}).consumeSeatReservation(otherSeat.reservation);other.reconnection.enabled=false;
     other.onMessage('control',()=>{});other.onMessage('events',()=>{});other.onMessage('network-ping',message=>other.send('network-pong',{nonce:message.nonce}));
@@ -114,7 +147,7 @@ it('production auth joins and batched input work, then a quiet room closes when 
     const closeElapsed=Date.now()-start;
     const beforeRefusal=await(await fetch(base+'/town/lobbies')).json();
     const account3=await(await fetch(base+'/__test/seed')).json();
-    const denied=await fetch(base+'/town/join',{method:'POST',headers:{...headers,Authorization:'Bearer '+account3.token},body:JSON.stringify({wire:10,protocol:1,collision:${JSON.stringify(COLLISION_VERSION)},turnstileToken:'fixture-provider-proof'})});
+    const denied=await fetch(base+'/town/join',{method:'POST',headers:{...headers,Authorization:'Bearer '+account3.token},body:JSON.stringify({wire:10,protocol:${PROTOCOL_VERSION},collision:${JSON.stringify(COLLISION_VERSION)},turnstileToken:'fixture-provider-proof'})});
     const deniedBody=await denied.json();
     const afterRefusal=await(await fetch(base+'/town/lobbies')).json();
     if(denied.status!==503||deniedBody.reason!=='over_budget'||JSON.stringify(beforeRefusal)!==JSON.stringify(afterRefusal))throw new Error('Lease denial did not gracefully release directory assignment: '+JSON.stringify({status:denied.status,deniedBody,beforeRefusal,afterRefusal}));
@@ -186,4 +219,4 @@ it('production auth joins and batched input work, then a quiet room closes when 
   } finally {
     await rm(directory, { recursive: true, force: true })
   }
-}, 120_000)
+}, 150_000)

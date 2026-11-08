@@ -2,18 +2,22 @@ import { type Entity, PROJECTION_ORTHOGRAPHIC, PROJECTION_PERSPECTIVE, Vec3 } fr
 import { type FrontierSettings, loadSettings } from '../ffa/client/settings.ts'
 import { BankGuide } from '../ffa/client/wayfinding.ts'
 import { canFire } from '../ffa/sim/combat.ts'
-import { zoneAt } from '../ffa/sim/layout.ts'
+import { TOWN, zoneAt } from '../ffa/sim/layout.ts'
 import type { World } from '../ffa/sim/state.ts'
 import type { SimEvent } from '../ffa/sim/types.ts'
 import type { CollisionData, PlayerInput, PlayerState } from '../runtime/protocol.ts'
 import { Buttons } from '../runtime/protocol.ts'
-import { Actors, type Appearance } from './actors.ts'
+import { Actors, type Appearance, type PreparedCharacters } from './actors.ts'
 import { GameApplication } from './application.ts'
 import { GameEffects } from './effects.ts'
+import { NativeEnvironment } from './environment.ts'
 import { GameInput } from './input.ts'
 import { FrontierItems } from './items.ts'
+import { poseEye } from './player-pose.ts'
 import { NativeRagdolls } from './ragdolls.ts'
+import { shotVisuals } from './shot-visuals.ts'
 import { aimedTarget } from './targeting.ts'
+import { touchActions } from './touch-actions.ts'
 import { BreakableWindows } from './windows.ts'
 
 export interface GameSession {
@@ -31,9 +35,11 @@ export interface ViewportOptions {
   townUrl: string
   playerUrl: string
   createSession: () => Promise<GameSession>
+  prepareAppearance?: () => Promise<Appearance | undefined>
   firstPerson?: boolean
   onState?: (player: PlayerState, players: number) => void
   onReady?: () => void
+  onStage?: (stage: string) => void
   onError?: (error: unknown) => void
 }
 export interface GameViewport {
@@ -42,6 +48,7 @@ export interface GameViewport {
   firstPerson: (value: boolean) => void
   configure: (settings: FrontierSettings) => void
   inputEnabled: (value: boolean) => void
+  resetFeedback: () => void
   tap: (bit: number) => void
   event: (event: SimEvent) => void
   aimPoint: () => { x: number; y: number; shooter: boolean }
@@ -66,14 +73,17 @@ function placeCamera(options: {
   input: GameInput
   settings: FrontierSettings
   first: boolean
+  recoil: number
   trace: GameSession['cameraTrace']
 }): void {
   const { camera, player, input, settings, first, trace } = options
-  head.set(player.x, player.y + 0.65, player.z)
-  const cp = Math.cos(input.pitch)
+  const point = poseEye(player)
+  head.set(point.x, point.y, point.z)
+  const pitch = input.pitch + options.recoil
+  const cp = Math.cos(pitch)
   target.set(
     head.x - Math.sin(input.yaw) * cp * 20,
-    head.y + Math.sin(input.pitch) * 20,
+    head.y + Math.sin(pitch) * 20,
     head.z - Math.cos(input.yaw) * cp * 20,
   )
   if (first) {
@@ -81,7 +91,7 @@ function placeCamera(options: {
   } else {
     eye.set(
       head.x + Math.sin(input.yaw) * cp * 4.5 + Math.cos(input.yaw) * settings.shoulder * 0.6,
-      head.y - Math.sin(input.pitch) * 4.5 + 0.5,
+      head.y - Math.sin(pitch) * 4.5 + 0.5,
       head.z + Math.cos(input.yaw) * cp * 4.5 - Math.sin(input.yaw) * settings.shoulder * 0.6,
     )
     const hit = trace?.(head, eye)
@@ -125,6 +135,9 @@ function sampleInput(options: {
     intent.buttons |= Buttons.reload
   }
   const combat = session.world?.players[Number(session.selfId)]
+  if (touch && session.world && combat) {
+    input.setContext(touchActions(session.world, combat))
+  }
   if (
     touch &&
     settings.autoFire &&
@@ -145,12 +158,113 @@ function sampleInput(options: {
   return intent
 }
 
-/** The viewport consumes either a Colyseus session or a local native-physics session. */
-export function mountGameViewport(root: HTMLElement, options: ViewportOptions): GameViewport {
+function createEffects(
+  application: GameApplication,
+  actors: Actors,
+  session: GameSession,
+): GameEffects {
+  return new GameEffects(application, {
+    fire: (id) => actors.fire(id),
+    muzzle: (id) => actors.muzzle(id),
+    trace: (from, to) => session.cameraTrace?.(from, to),
+  })
+}
+
+function createInput(
+  canvas: HTMLCanvasElement,
+  root: HTMLElement,
+  settings: FrontierSettings,
+  initial: PlayerState | undefined,
+): GameInput {
+  const input = new GameInput(canvas, root)
+  if (initial) {
+    input.yaw = initial.yaw
+    input.pitch = initial.pitch
+  }
+  input.configure(settings)
+  input.setEnabled(false)
+  return input
+}
+
+async function warmCharacter(
+  application: GameApplication,
+  prepared: PreparedCharacters,
+  signal: AbortSignal,
+): Promise<void> {
+  const spawn = TOWN.spawns[0]
+  if (!spawn) {
+    throw new Error('The town has no arrival point.')
+  }
+  prepared.root.enabled = true
+  prepared.root.setPosition(spawn.x, 0, spawn.z)
+  application.camera.setPosition(spawn.x + 3, 2, spawn.z + 5)
+  application.camera.lookAt(new Vec3(spawn.x, 1, spawn.z))
+  // Render real PBR/skin/shot variants behind loading before reserving a live player.
+  await shotVisuals(application).warm({ x: spawn.x, y: 1.3, z: spawn.z })
+  await firstFrame(application, signal)
+  await firstFrame(application, signal)
+}
+
+function updateGuide(
+  guide: BankGuide | undefined,
+  camera: Entity,
+  session: GameSession,
+  dt: number,
+): void {
+  const domain = session.world?.players[Number(session.selfId)]
+  if (camera.camera && domain && session.world) {
+    guide?.update(
+      camera.camera,
+      domain.x,
+      domain.z,
+      domain.carried,
+      domain.alive,
+      Boolean(zoneAt(session.world.layout, domain.x, domain.z)),
+      dt,
+    )
+  }
+}
+
+async function loadTown(application: GameApplication, url: string) {
+  const town = await application.instantiate(url, 'town')
+  const environment = new NativeEnvironment(application, true)
+  try {
+    environment.attach(town, await application.loadContainer(url))
+    await environment.ready
+    return { town, environment }
+  } catch (error) {
+    environment.destroy()
+    throw error
+  }
+}
+
+function firstFrame(application: GameApplication, signal: AbortSignal): Promise<void> {
+  return new Promise((resolve) => {
+    const done = () => {
+      application.app.off('postrender', done)
+      signal.removeEventListener('abort', done)
+      resolve()
+    }
+    application.app.once('postrender', done)
+    if (signal.aborted) {
+      done()
+    } else {
+      signal.addEventListener('abort', done, { once: true })
+    }
+  })
+}
+
+function createCanvas(root: HTMLElement): HTMLCanvasElement {
   const canvas = document.createElement('canvas')
   canvas.className = 'pc-game-canvas'
   canvas.setAttribute('aria-label', 'Out West game')
   root.append(canvas)
+  return canvas
+}
+
+/** The viewport consumes either a Colyseus session or a local native-physics session. */
+export function mountGameViewport(root: HTMLElement, options: ViewportOptions): GameViewport {
+  const canvas = createCanvas(root)
   let application: GameApplication | undefined
   let session: GameSession | undefined
   let actors: Actors | undefined
@@ -160,6 +274,8 @@ export function mountGameViewport(root: HTMLElement, options: ViewportOptions): 
   let items: FrontierItems | undefined
   let guide: BankGuide | undefined
   let windows: BreakableWindows | undefined
+  let environment: NativeEnvironment | undefined
+  let prepared: PreparedCharacters | undefined
   const lifecycle = new AbortController()
   let settings = loadSettings()
   let first = options.firstPerson ?? settings.view === 'first'
@@ -180,10 +296,8 @@ export function mountGameViewport(root: HTMLElement, options: ViewportOptions): 
       dt,
     })
     const combat = session.world?.players[Number(session.selfId)]
-    if (playing && effects?.predictShot(combat, intent)) {
-      actors?.fire(session.selfId)
-    }
     if (playing) {
+      effects?.predictShot(combat, intent)
       session.update(Math.min(dt, 0.1), intent)
     }
     actors?.update(session.players, dt, first ? session.selfId : undefined)
@@ -193,29 +307,21 @@ export function mountGameViewport(root: HTMLElement, options: ViewportOptions): 
     if (!player) {
       return
     }
+    effects?.flushShot(player)
     placeCamera({
       camera: application.camera,
       player,
       input,
       settings,
       first,
+      recoil: effects?.recoilPitch ?? 0,
       trace: session.cameraTrace,
     })
-    const domain = session.world?.players[Number(session.selfId)]
-    if (application.camera.camera && domain && session.world) {
-      guide?.update(
-        application.camera.camera,
-        domain.x,
-        domain.z,
-        domain.carried,
-        domain.alive,
-        Boolean(zoneAt(session.world.layout, domain.x, domain.z)),
-        dt,
-      )
-    }
+    updateGuide(guide, application.camera, session, dt)
     options.onState?.(player, session.players.size)
   }
   const ready = (async () => {
+    options.onStage?.('Preparing the trail…')
     const created = await GameApplication.create({ canvas, viewport: root })
     application = created
     if (lifecycle.signal.aborted) {
@@ -223,39 +329,48 @@ export function mountGameViewport(root: HTMLElement, options: ViewportOptions): 
       return
     }
     try {
+      options.onStage?.('Loading the streets…')
+      const loaded = await loadTown(created, options.townUrl)
+      environment = loaded.environment
+      windows = new BreakableWindows(loaded.town)
+      if (lifecycle.signal.aborted) {
+        return
+      }
+      ragdolls = await NativeRagdolls.create(created, options.collision)
+      options.onStage?.('Getting your rider and gear ready…')
+      prepared = await Actors.prepare(created, await options.prepareAppearance?.())
+      await GameEffects.preloadAudio(created)
+      items = await FrontierItems.create(created)
+      await warmCharacter(created, prepared, lifecycle.signal)
+      if (lifecycle.signal.aborted) {
+        return
+      }
+      options.onStage?.('Finding your place in town…')
       const createdSession = await options.createSession()
       session = createdSession
       if (lifecycle.signal.aborted) {
         createdSession.dispose()
         return
       }
-      const town = await created.instantiate(options.townUrl, 'town')
-      windows = new BreakableWindows(town)
-      if (lifecycle.signal.aborted) {
-        return
-      }
-      ragdolls = await NativeRagdolls.create(created, options.collision)
-      actors = new Actors(created, ragdolls, session.appearance, () => session?.world)
-      await actors.initialize(session.players)
-      input = new GameInput(canvas, root)
-      const initial = session.players.get(session.selfId)
-      if (initial) {
-        input.yaw = initial.yaw
-        input.pitch = initial.pitch
-      }
-      input.configure(settings)
-      input.setEnabled(false)
-      effects = new GameEffects(created)
+      actors = new Actors(
+        created,
+        ragdolls,
+        (id) => session?.appearance?.(id),
+        () => session?.world,
+      )
+      await actors.initialize(session.players, session.selfId, prepared)
+      prepared = undefined
+      input = createInput(canvas, root, settings, session.players.get(session.selfId))
+      effects = createEffects(created, actors, createdSession)
       await effects.ready
       if (session.world) {
-        items = await FrontierItems.create(created)
         guide = new BankGuide(root, session.world.grid)
+      } else {
+        items.destroy()
+        items = undefined
       }
       created.app.on('update', update)
-      await new Promise<void>((resolve) => {
-        created.app.once('postrender', resolve)
-        lifecycle.signal.addEventListener('abort', () => resolve(), { once: true })
-      })
+      await firstFrame(created, lifecycle.signal)
       if (lifecycle.signal.aborted) {
         return
       }
@@ -279,9 +394,11 @@ export function mountGameViewport(root: HTMLElement, options: ViewportOptions): 
     }
     input?.destroy()
     items?.destroy()
+    environment?.destroy()
     guide?.destroy()
     effects?.destroy()
     actors?.destroy()
+    prepared?.dispose()
     ragdolls?.destroy()
     session?.dispose()
     application?.destroy()
@@ -290,23 +407,15 @@ export function mountGameViewport(root: HTMLElement, options: ViewportOptions): 
   return {
     ready,
     destroy,
-    event(event) {
-      effects?.event(event)
-      if (event.type === 'shot') {
-        actors?.fire(String(event.shooter))
-      }
-    },
+    event: (event) => effects?.event(event),
     configure(value) {
       settings = value
       first = value.view === 'first'
       input?.configure(value)
     },
-    inputEnabled(value) {
-      input?.setEnabled(value)
-    },
-    tap(bit) {
-      input?.tap(bit)
-    },
+    inputEnabled: (value) => input?.setEnabled(value),
+    resetFeedback: () => effects?.reset(),
+    tap: (bit) => input?.tap(bit),
     firstPerson(value) {
       first = value
       settings = { ...settings, view: value ? 'first' : 'third' }

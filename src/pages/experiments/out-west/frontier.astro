@@ -69,7 +69,6 @@ import Bare from '~/layouts/Bare.astro'
     }
     const lag = num('lag')
     const jitter = num('jitter')
-    const bots = num('bots')
     const lobby = q.get('lobby')
     const name = q.get('name')
     // Dev only: a pre-minted access token (automated runs without a passkey).
@@ -79,6 +78,7 @@ import Bare from '~/layouts/Bare.astro'
     // Dev and perf-harness builds only (`PUBLIC_OW_PERF_HARNESS=1`, never set for the deploy):
     // a fixed lobby seed and first spawn, `seed=7&spawn=72,66`.
     const harness = import.meta.env.DEV || import.meta.env.PUBLIC_OW_PERF_HARNESS === '1'
+    const bots = harness ? num('bots') : undefined
     const seed = harness ? num('seed') : undefined
     const [sx, sz] = (harness ? (q.get('spawn') ?? '') : '').split(',').map(Number)
     const spawn =
@@ -92,7 +92,7 @@ import Bare from '~/layouts/Bare.astro'
       ...(jitter === undefined ? {} : { jitterMs: jitter }),
       ...(lobby ? { lobbyId: lobby } : {}),
       ...(name ? { name } : {}),
-      ...(q.has('cluster') ? { cluster: true } : {}),
+      ...(harness && q.has('cluster') ? { cluster: true } : {}),
       ...(seed === undefined ? {} : { seed }),
       ...(spawn ? { spawn } : {}),
       ...(token ? { getToken: () => Promise.resolve(token) } : {}),

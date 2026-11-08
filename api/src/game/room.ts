@@ -31,6 +31,7 @@ interface CreationOptions {
   id: string
   core: LobbyCore
   onTick: (output: TickOutput) => void
+  onStart?: () => Promise<void>
   onJoin?: (session: Session) => Promise<void>
   onLeave?: (session: Session) => void
   onEmpty?: () => void
@@ -63,26 +64,28 @@ export class NativeFrontierRoom extends Room<{ state: FrontierState; input: Move
   private gameTime = Date.now()
   private creation: CreationOptions | undefined
   private onTick: ((output: TickOutput) => void) | undefined
-  private started = false
-  override async onCreate(options: CreationOptions) {
+  private started = false as boolean
+  private closed = false as boolean
+  private preparing: Promise<void> | undefined
+  private readonly pendingJoins = new Set<string>()
+  override onCreate(options: CreationOptions) {
     this.creation = options
     this.roomId = options.id
     this.maxClients = 32
     this.autoDispose = false
-    this.setPatchRate(null)
     // Workers clocks only advance on observable I/O. The fixed timer owns logical time;
     // quiet clients must not pause the match or receive stale state.
     this.clock.stop()
     this.clock = new FixedRoomClock()
+    // Public SDK setters clear the initial patch timer without installing a clock-only timer.
+    // setTimestep(undefined) then clears the temporary fixed timer; reserved seats own no interval.
+    this.setFixedTimestep(() => undefined, 20, { subSteps: 3 })
+    this.setPatchRate(null)
+    this.setTimestep()
+    this.clock.stop()
     this.maxMessagesPerSecond = 30
     this.core = options.core
     this.onTick = options.onTick
-    this.simulation = createFrontierSimulation({
-      ammo: await initializeAmmo(physicsModule, callbackModule),
-      collision,
-      seed: options.core.world.seed,
-    })
-    this.core.world = this.simulation.world
     this.state.content = collision.version
     this.state.protocol = PROTOCOL_VERSION
     this.onMessage('control', (client, message: unknown) => {
@@ -103,6 +106,40 @@ export class NativeFrontierRoom extends Room<{ state: FrontierState; input: Move
       }
     })
   }
+  private async prepareGame(): Promise<void> {
+    if (this.simulation) {
+      return
+    }
+    this.preparing ??= (async () => {
+      await this.creation?.onStart?.()
+      if (this.closed || this.pendingJoins.size === 0 || !this.core) {
+        throw new DOMException('Town was closed', 'AbortError')
+      }
+      const ammo = await initializeAmmo(physicsModule, callbackModule)
+      if (this.closed || this.pendingJoins.size === 0 || !this.core) {
+        throw new DOMException('Town was closed', 'AbortError')
+      }
+      this.simulation = createFrontierSimulation({ ammo, collision, seed: this.core.world.seed })
+      this.core.world = this.simulation.world
+    })().catch((error) => {
+      this.preparing = undefined
+      throw error
+    })
+    await this.preparing
+  }
+  /** Stop native work synchronously; economic settlement and SDK socket disposal may finish later. */
+  stopGameplay(): void {
+    this.closed = true
+    this.started = false
+    this.pendingJoins.clear()
+    this.setTimestep()
+    this.clock.stop()
+    this.simulation?.dispose()
+    this.simulation = undefined
+  }
+  get running(): boolean {
+    return this.started && !this.closed
+  }
   override onAuth(_client: Client, options: { profile: NativeJoinProfile }, context: AuthContext) {
     const transport = context.headers.get('X-Tcp-Rtt')
     const tcp = Number(transport)
@@ -114,51 +151,77 @@ export class NativeFrontierRoom extends Room<{ state: FrontierState; input: Move
     if (options.protocol !== PROTOCOL_VERSION) {
       throw new Error('Refresh the game to join this room')
     }
-    if (!this.core) {
+    if (!this.core || this.closed || Reflect.get(client.ref, 'readyState') !== 1) {
       throw new Error('Room unavailable')
     }
-    const peer = {
-      send: (data: Uint8Array | string) => {
-        if (typeof data === 'string') {
-          client.send('control', JSON.parse(data))
+    this.pendingJoins.add(client.sessionId)
+    const earlyClose = () => {
+      if (this.pendingJoins.has(client.sessionId)) {
+        this.onLeave(client)
+      }
+    }
+    client.ref.once('close', earlyClose)
+    try {
+      if (!this.simulation) {
+        await this.prepareGame()
+      }
+      if (
+        this.closed ||
+        !this.pendingJoins.has(client.sessionId) ||
+        Reflect.get(client.ref, 'readyState') !== 1
+      ) {
+        throw new DOMException('Socket was closed', 'AbortError')
+      }
+      const peer = {
+        send: (data: Uint8Array | string) => {
+          if (typeof data === 'string') {
+            client.send('control', JSON.parse(data))
+          }
+        },
+        close: (code: number, reason: string) => client.leave(code, reason),
+      }
+      const session = this.core.join(options.profile, peer, Date.now())
+      if (!session) {
+        throw new Error('Room full')
+      }
+      // Replacement closes asynchronously; retire its authority before awaiting persistence.
+      for (const [id, previous] of this.sessions) {
+        if (previous.playerId === session.playerId) {
+          this.forgetBinding(id)
         }
-      },
-      close: (code: number, reason: string) => client.leave(code, reason),
-    }
-    const session = this.core.join(options.profile, peer, Date.now())
-    if (!session) {
-      throw new Error('Room full')
-    }
-    // Replacement closes asynchronously; retire its authority before awaiting persistence.
-    for (const [id, previous] of this.sessions) {
-      if (previous.playerId === session.playerId) {
-        this.forgetBinding(id)
       }
-    }
-    this.appearances.set(session.playerId, options.profile.appearance)
-    this.sessions.set(client.sessionId, session)
-    this.peers.set(client.sessionId, peer)
-    await this.creation?.onJoin?.(session)
-    if (this.currentSession(client.sessionId) !== session) {
-      return
-    }
-    const link = new GameLinkSampler(session.rtt, (nonce) => client.send('network-ping', { nonce }))
-    this.links.set(client.sessionId, link)
-    client.ref.on('activity', (now: number) => {
-      if (this.currentSession(client.sessionId)) {
-        link.activity(now)
+      this.appearances.set(session.playerId, options.profile.appearance)
+      this.sessions.set(client.sessionId, session)
+      this.peers.set(client.sessionId, peer)
+      await this.creation?.onJoin?.(session)
+      if (this.currentSession(client.sessionId) !== session) {
+        return
       }
-    })
-    // biome-ignore lint/suspicious/noUnnecessaryConditions: concurrent joins await persistence before reaching this guard
-    if (!this.started) {
-      this.started = true
-      this.setFixedTimestep(() => this.advance(), 20, { subSteps: 3 })
+      const link = new GameLinkSampler(session.rtt, (nonce) =>
+        client.send('network-ping', { nonce }),
+      )
+      this.links.set(client.sessionId, link)
+      client.ref.on('activity', (now: number) => {
+        if (this.currentSession(client.sessionId)) {
+          link.activity(now)
+        }
+      })
+      this.pendingJoins.delete(client.sessionId)
+      if (!this.started) {
+        this.started = true
+        this.clock.start()
+        this.gameTime = Date.now()
+        this.setFixedTimestep(() => this.advance(), 20, { subSteps: 3 })
+      }
+      this.replicate()
+    } finally {
+      client.ref.removeListener('close', earlyClose)
     }
-    this.replicate()
   }
+
   advance() {
     const core = this.core
-    if (!core) {
+    if (!core || this.closed || core.connectedHumans() === 0) {
       return
     }
     const frames: (InputFrame | null)[] = []
@@ -264,6 +327,7 @@ export class NativeFrontierRoom extends Room<{ state: FrontierState; input: Move
     this.clients.find((client) => client.sessionId === id)?.ref.removeAllListeners('activity')
   }
   override onLeave(client: Client) {
+    this.pendingJoins.delete(client.sessionId)
     const session = this.currentSession(client.sessionId)
     const peer = this.peers.get(client.sessionId)
     if (session && peer) {
@@ -274,17 +338,20 @@ export class NativeFrontierRoom extends Room<{ state: FrontierState; input: Move
     }
     this.forgetBinding(client.sessionId)
     client.ref.removeAllListeners('activity')
-    if (this.core?.connectedHumans() === 0) {
+    if (!this.closed && this.core?.connectedHumans() === 0 && this.pendingJoins.size === 0) {
+      this.stopGameplay()
       this.creation?.onEmpty?.()
     }
   }
   override onDispose() {
-    this.simulation?.dispose()
-    this.simulation = undefined
+    this.stopGameplay()
     this.sessions.clear()
     this.peers.clear()
     this.appearances.clear()
     this.links.clear()
+    this.core = undefined
+    this.creation = undefined
+    this.onTick = undefined
   }
 }
 let initialized: Promise<void> | undefined
@@ -302,7 +369,14 @@ export async function reserveNativeRoom(
   room: NativeFrontierRoom,
   profile: NativeJoinProfile,
   protocol: number,
+  sessionId?: string,
 ) {
-  const result = await matchMaker.joinById(room.roomId, { profile, protocol })
+  const listing = sessionId ? await matchMaker.driver.findOne({ roomId: room.roomId }) : undefined
+  if (sessionId && !listing) {
+    throw new Error('Room expired')
+  }
+  const result = listing
+    ? await matchMaker.reserveSeatFor(listing, { profile, protocol }, { sessionId })
+    : await matchMaker.joinById(room.roomId, { profile, protocol })
   return { ...result, processId: 'native' }
 }

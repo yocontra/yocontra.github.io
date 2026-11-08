@@ -17,6 +17,7 @@ import { save } from '../save.ts'
 import type { Verdict } from './clock.ts'
 import { planShots, shotsBefore } from './judge.ts'
 import type { NativeDirector } from './native-director.ts'
+import { dropEnemyProps, duelShot, plannedShot } from './native-shot.ts'
 import { practicePurse } from './purse.ts'
 
 export function wait(d: NativeDirector): void {
@@ -53,6 +54,11 @@ export function wait(d: NativeDirector): void {
       : null,
     touch: d.c.input.touch,
   })
+  const identity = new Map([
+    ['drunk', 'Idle_Drunk'],
+    ['shaky', 'Idle_Shaky'],
+  ])
+  d.enemy?.idle(identity.get(outlaw.gimmick) ?? 'Idle_Character')
   d.player?.play('Idle_Gun')
   d.enemy?.play('Idle_Gun')
   if (outlaw.gimmick === 'cards') {
@@ -73,9 +79,10 @@ export function call(d: NativeDirector): void {
   d.enter('call')
   d.player?.face(0)
   d.enemy?.face(180)
-  d.player?.play('Idle_Gun_Pointing', 0.08)
-  d.enemy?.play('Idle_Gun_Pointing', 0.08)
+  d.player?.play('Draw', 0.03)
+  d.enemy?.play('Draw', 0.03)
   if (!d.dailyModifiers.includes('no-bell')) {
+    d.arenas.toll()
     if (!d.bellScheduled) {
       d.c.audio.call()
     }
@@ -134,7 +141,7 @@ export function playCue(d: NativeDirector, cue: string): void {
     d.c.audio.play(sound, { gain: 0.5 })
   }
   if (cue === 'twitch' || cue === 'hiccup') {
-    d.enemy?.play('HitRecieve', 0.04)
+    d.enemy?.play(cue === 'hiccup' ? 'Idle_Drunk' : 'Flinch', 0.04)
   }
 }
 
@@ -277,9 +284,10 @@ export function shoot(d: NativeDirector, press: Press): void {
   d.shots++
   const ms = press.t - d.callTime
   d.reactionMs ??= ms
-  d.player?.play('Gun_Shoot', 0)
   d.c.audio.play('fire', { gain: 0.8 })
   const target = shotTarget(d, press)
+  const victim = d.riflemanAlive && (target === 0 || !d.enemyAlive) ? d.rifleman : d.enemy
+  duelShot(d, d.player, victim)
   trickShot(d, press, target)
   d.clock.shot(target, ms)
   if (d.ranked || d.remote) {
@@ -292,6 +300,7 @@ export function shoot(d: NativeDirector, press: Press): void {
     who === 0 ? d.enemyAlive : d.riflemanAlive,
   )) {
     shot.done = true
+    plannedShot(d, shot)
     if (shot.hit) {
       d.resolve('loss', ms)
       return
@@ -299,9 +308,13 @@ export function shoot(d: NativeDirector, press: Press): void {
   }
   if (d.riflemanAlive && (target === 0 || !d.enemyAlive)) {
     d.riflemanAlive = false
+    dropEnemyProps(d, d.rifleman)
     d.rifleman?.play('Death', 0)
   } else {
     d.enemyAlive = false
+    if (d.outlaw.gimmick !== 'boss' || d.bossPhase !== 1) {
+      dropEnemyProps(d, d.enemy)
+    }
     d.enemy?.play('Death', 0)
   }
   if (!(d.enemyAlive || d.riflemanAlive)) {
@@ -312,6 +325,13 @@ export function shoot(d: NativeDirector, press: Press): void {
 export function applyVerdict(d: NativeDirector, verdict: Verdict): void {
   if (verdict.duel !== d.duel) {
     return
+  }
+  if (verdict.outcome === 'loss' && verdict.enemyMs !== null && d.phase !== 'lose') {
+    duelShot(d, d.enemy, d.player)
+    d.c.audio.play('fireBig', {
+      gain: 1.1,
+      ...(d.enemy ? { pos: d.enemy.root.getPosition() } : {}),
+    })
   }
   d.dailyVerdict = verdict
   d.resolve(verdict.outcome, verdict.reactionMs, verdict)
@@ -337,7 +357,9 @@ export function resolve(
   }
   d.enter(outcome === 'loss' ? 'lose' : outcome)
   if (outcome === 'win') {
+    dropEnemyProps(d, d.enemy)
     d.enemy?.play('Death', 0)
+    dropEnemyProps(d, d.rifleman)
     d.rifleman?.play('Death', 0)
   } else {
     d.player?.play('Death', 0)

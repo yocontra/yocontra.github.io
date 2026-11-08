@@ -101,5 +101,6 @@ function applyPose(player: Player, pose: import('./protocol.ts').PlayerState) {
   player.z = pose.z
   player.vy = pose.vy
   player.grounded = pose.grounded
+  player.crouched = pose.crouched ?? player.crouched
   player.moving = Math.hypot(pose.vx, pose.vz) > 0.1
 }

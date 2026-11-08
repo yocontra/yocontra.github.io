@@ -1,4 +1,3 @@
-import { FOG_EXP2, FOG_NONE } from 'playcanvas'
 import { OUTLAWS } from '../data/outlaws.ts'
 import { interlude } from '../meta/events.ts'
 import type { RankedSession } from '../net/ranked.ts'
@@ -177,11 +176,7 @@ export async function dailyDuel(
   d.c.save = structuredClone(d.c.save)
   d.exitDuel = exit
   d.dailyModifiers = spec.modifiers
-  if (spec.modifiers.includes('fog')) {
-    d.game.app.scene.fog.type = FOG_EXP2
-    d.game.app.scene.fog.color.set(0.6, 0.58, 0.53)
-    d.game.app.scene.fog.density = 0.07
-  }
+  d.arenas.dailyFog(spec.modifiers.includes('fog'))
   d.dailyVerdict = null
   d.c.hud.setMode('DAILY OUTLAW')
   d.c.hud.setDaily(true)
@@ -200,7 +195,7 @@ export function leaveSpecial(d: NativeDirector): void {
   }
   d.exitDuel = null
   d.dailyModifiers = []
-  d.game.app.scene.fog.type = FOG_NONE
+  d.arenas.dailyFog(false)
   d.clock.dispose()
   d.clock = new LocalDuelClock(d.events)
   d.c.hud.setDaily(false)

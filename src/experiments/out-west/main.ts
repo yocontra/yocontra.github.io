@@ -1,4 +1,5 @@
 import { AudioEngine } from './audio/audio.ts'
+import { startupFailure } from './client/startup-error.ts'
 import { OUTLAWS } from './data/outlaws.ts'
 import type { NativeRankedConnect as RankedConnect } from './duel/native-director.ts'
 
@@ -301,7 +302,7 @@ function debugView(g: Game, hash: URLSearchParams, title: HTMLElement): boolean 
 
 /**
  * Entry point. Kept tiny so the title broadside is interactive immediately; the
- * three.js game streams in behind it via a dynamic import.
+ * native game streams in behind it via a dynamic import.
  */
 export function boot(root: HTMLElement): void {
   registerServiceWorker()
@@ -481,9 +482,16 @@ export function boot(root: HTMLElement): void {
         go()
       }
     })
-    .catch(() => {
+    .catch((error: unknown) => {
+      stopTitleInput()
+      game?.destroy()
+      game = null
+      title.classList.remove('ready', 'pressed', 'wipe')
+      startText.removeAttribute('aria-busy')
+      startText.textContent = 'Retry loading'
       if (loading) {
-        loading.textContent = 'This needs WebGL2. Try the 2019 original below.'
+        loading.textContent = startupFailure(error)
       }
+      startText.addEventListener('click', () => location.reload(), { once: true })
     })
 }

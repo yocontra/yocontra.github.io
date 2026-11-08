@@ -1,4 +1,3 @@
-import { Entity } from 'playcanvas'
 import type { AudioEngine } from '../audio/audio.ts'
 import type { GameApplication } from '../client/application.ts'
 import { ASSETS, DYNAMIC_ASSETS } from '../content/manifest.ts'
@@ -10,7 +9,8 @@ import type { Input, Press } from '../engine/input.ts'
 import type { Result } from '../net/leaderboard.ts'
 import type { RankedSession } from '../net/ranked.ts'
 import { type SaveData, save } from '../save.ts'
-import { equippedActor } from '../scene/native-equipment.ts'
+import { NativeDebris } from '../scene/native-debris.ts'
+import { attachHeldWeapon, equippedActor } from '../scene/native-equipment.ts'
 import { Board } from '../ui/board.ts'
 import type { Hud } from '../ui/hud.ts'
 import { type ClockEvents, type DuelClock, LocalDuelClock, type Verdict } from './clock.ts'
@@ -41,6 +41,7 @@ import {
   saloon,
   togglePause,
 } from './native-progress.ts'
+import { prepareDuelShotVisuals } from './native-shot.ts'
 import { RankedDuelClock } from './ranked-clock.ts'
 
 export type NativeRankedConnect = () => Promise<Result<RankedSession>>
@@ -112,6 +113,7 @@ export class NativeDirector {
   readonly lifecycle = new AbortController()
   readonly tick = (dt: number): void => this.update(dt)
   readonly arenas: NativeArenas
+  readonly debris = new NativeDebris()
   readonly atmosphere: NativeAtmosphere
   readonly game: GameApplication
   readonly c: NativeContext
@@ -168,6 +170,7 @@ export class NativeDirector {
     this.clock.dispose()
     this.c.input.dispose()
     this.board.close()
+    this.debris.destroy()
     this.arenas.destroy()
     this.atmosphere.destroy()
     this.player?.destroy()
@@ -192,10 +195,12 @@ export class NativeDirector {
     const [player] = await Promise.all([
       equippedActor(this.game, DEFAULT_LOADOUT),
       this.atmosphere.load(),
+      this.debris.ready,
     ])
     this.player = player
     this.player.root.enabled = false
     this.hubShot('hub')
+    await prepareDuelShotVisuals(this)
     this.game.app.on('update', this.tick)
   }
   applySettings(): void {
@@ -258,6 +263,7 @@ export class NativeDirector {
   }
   async startLevel(index: number, retry = false): Promise<void> {
     const epoch = ++this.epoch
+    this.debris.reset()
     this.level = Math.max(0, Math.min(OUTLAWS.length - 1, index))
     this.duel = -1
     this.enemy?.destroy()
@@ -286,16 +292,25 @@ export class NativeDirector {
       this.rifleman = rifleman
       rifleman.place(11, 4, 8)
       this.rifleman.face(180)
-      const rifle = await this.game.instantiate(DYNAMIC_ASSETS.rifle.url, 'rifleman-carbine')
-      if (epoch !== this.epoch) {
-        rifle.destroy()
-        return
-      }
-      const wrist = this.rifleman.model.findByName('WristR')
-      if (wrist) {
-        rifle.reparent(wrist)
-        rifle.setLocalPosition(0, 0, 0)
-        rifle.setLocalEulerAngles(0, 0, 0)
+      try {
+        const rifle = await attachHeldWeapon(
+          this.game,
+          rifleman,
+          'rifle',
+          DYNAMIC_ASSETS['held-rifle'].url,
+        )
+        if (epoch !== this.epoch) {
+          rifle.destroy()
+          return
+        }
+        rifleman.hold('rifle', true)
+        rifleman.idle('Hold_rifle')
+        rifleman.play('Hold_rifle', 0)
+      } catch (error) {
+        if (epoch !== this.epoch || this.lifecycle.signal.aborted) {
+          return
+        }
+        throw error
       }
     }
     this.player?.root.setLocalScale(1, 1, 1)
@@ -309,13 +324,7 @@ export class NativeDirector {
     enemy.face(0)
     this.bossPhase = 1
     const night = this.outlaw.day
-    this.arenas.night(night)
-    this.game.app.scene.exposure = Math.max(0.45, 1.1 - night * 0.65)
-    const sun = this.game.app.root.findByName('sun')
-    if (sun instanceof Entity && sun.light) {
-      sun.light.intensity = Math.max(0.25, 2.3 - night * 2)
-      sun.light.color.set(1 - night * 0.45, 0.87 - night * 0.3, 0.67 + night * 0.2)
-    }
+    await this.arenas.lighting(night, this.level)
     this.c.audio.playSong('intro')
     this.walkLines = 0
     this.walked = 0

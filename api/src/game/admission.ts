@@ -29,6 +29,29 @@ export class AdmissionLeases {
       'CREATE TABLE IF NOT EXISTS room_leases (id INTEGER PRIMARY KEY, data TEXT NOT NULL)',
     )
   }
+  /** Capacity preflight consumes no room seconds; actual socket joins still acquire atomically. */
+  available(now = Date.now()): LeaseGrant {
+    const day = new Date(now).toISOString().slice(0, 10)
+    const saved = this.storage.sql
+      .exec<{ data: string }>('SELECT data FROM room_leases WHERE id=1')
+      .toArray()[0]
+    const state: Ledger | undefined = saved ? (JSON.parse(saved.data) as Ledger) : undefined
+    const current = state?.day === day ? state : undefined
+    const leases = Object.values(current?.leases ?? {})
+    return {
+      ok:
+        (current?.seconds ?? 0) +
+          leases.reduce((sum, lease) => sum + lease.seconds, 0) +
+          LEASE_SECONDS <=
+          CEILINGS.lobby_seconds &&
+        (current?.messages ?? 0) +
+          leases.reduce((sum, lease) => sum + lease.messages, 0) +
+          MAX_MESSAGES <=
+          CEILINGS.ws_messages,
+      observedAt: now,
+      renewAfterTicks: 600,
+    }
+  }
   renew(id: string, messages: number, finish = false, now = Date.now()): LeaseGrant {
     return this.storage.transactionSync(() => {
       const day = new Date(now).toISOString().slice(0, 10)

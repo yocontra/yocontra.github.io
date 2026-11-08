@@ -238,7 +238,9 @@ export function step(w: World, frames: readonly (InputFrame | null | undefined)[
       p.aim = f.aim
     }
     p.pitch = f.pitch ?? 0
-    p.crouched = p.alive && (f.buttons & BTN_CROUCH) !== 0
+    if (!w.movePlayers) {
+      p.crouched = p.alive && (f.buttons & BTN_CROUCH) !== 0
+    }
     p.ads = p.alive && (f.buttons & BTN_AIM) !== 0
     // Domain-only fixtures are stationary; shipping worlds supply the native engine phase.
     if (!w.movePlayers) {

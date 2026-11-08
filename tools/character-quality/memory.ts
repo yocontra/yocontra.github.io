@@ -259,6 +259,16 @@ class TextureMeter {
         bpp: this.bytesPerPixel(Number(args[2]), Number(args[7]), Number(args[8])),
       })
     })
+    TextureMeter.wrap('compressedTexImage2D', (gl, args) => {
+      const texture = this.bound(gl, Number(args[0]))
+      if (!texture) {
+        return
+      }
+      const data = args[6]
+      const size = ArrayBuffer.isView(data) ? data.byteLength : 0
+      const length = typeof args[8] === 'number' && args[8] > 0 ? args[8] : size
+      texture.levels.set(`${Number(args[0])}/${Number(args[1])}`, length)
+    })
     TextureMeter.wrap('texStorage2D', (gl, args) => this.storage(gl, args, 1))
     TextureMeter.wrap('texStorage3D', (gl, args) => this.storage(gl, args, Number(args[5])))
     TextureMeter.wrap('generateMipmap', (gl, args) => {

@@ -1,10 +1,13 @@
 import { DurableObject } from 'cloudflare:workers'
 import { connectClientToRoom, createAuthContext } from '@colyseus/core'
+import { PROTOCOL_VERSION } from '../../src/experiments/out-west/runtime/protocol.ts'
 import { AdmissionLeases } from '../src/game/admission.ts'
 import { createNativeRoom, type NativeFrontierRoom, reserveNativeRoom } from '../src/game/room.ts'
 import { CloudflareClient } from '../src/game/socket.ts'
 import { LobbyCore } from '../src/town/core.ts'
 import { bindingProbe } from './binding-probe.ts'
+import { clockProbe } from './clock-probe.ts'
+import { seatsProbe } from './seats-probe.ts'
 
 interface TestEnv {
   ROOMS: DurableObjectNamespace<TestRoom>
@@ -14,6 +17,25 @@ export class TestRoom extends DurableObject<TestEnv> {
   private readonly clients = new Map<WebSocket, CloudflareClient>()
   override async fetch(request: Request) {
     const url = new URL(request.url)
+    if (url.pathname === '/seats') {
+      return Response.json(seatsProbe(this.ctx.storage))
+    }
+    if (url.pathname === '/clock') {
+      return Response.json(await clockProbe())
+    }
+    if (url.pathname === '/timing') {
+      return Response.json({
+        tick: this.room?.state.tick ?? 0,
+        elapsed: this.room?.clock.elapsedTime,
+        running: this.room?.clock.running,
+        timer: this.room?.running ?? false,
+        physics: Boolean(this.room && Reflect.get(this.room, 'simulation')),
+      })
+    }
+    if (url.pathname === '/dispose') {
+      await this.room?.disconnect()
+      return Response.json({ disposed: true })
+    }
     if (url.pathname === '/bindings') {
       return Response.json(await bindingProbe(`${this.ctx.id.toString()}-bindings`))
     }
@@ -40,6 +62,13 @@ export class TestRoom extends DurableObject<TestEnv> {
         id: this.ctx.id.toString(),
         core,
         onTick: () => undefined,
+        ...(url.searchParams.has('holdStart')
+          ? {
+              onStart: async () => {
+                await this.env.ROOMS.get(this.env.ROOMS.idFromName('join-barrier')).joinBarrier(500)
+              },
+            }
+          : {}),
         onJoin: async () => {
           await this.env.ROOMS.get(this.env.ROOMS.idFromName('join-barrier')).joinBarrier()
         },
@@ -62,7 +91,7 @@ export class TestRoom extends DurableObject<TestEnv> {
             tcpRtt: null,
             ledger: false,
           },
-          1,
+          PROTOCOL_VERSION,
         ),
       )
     }
@@ -77,15 +106,17 @@ export class TestRoom extends DurableObject<TestEnv> {
     this.clients.set(server, client)
     const headers = new Headers(request.headers)
     headers.set('X-Account-Id', url.searchParams.get('account') ?? 'alice')
-    try {
-      await connectClientToRoom(this.room, client, createAuthContext({ headers }), {})
-    } catch (error) {
-      server.close(4001, error instanceof Error ? error.message : 'Join failed')
-    }
+    this.ctx.waitUntil(
+      connectClientToRoom(this.room, client, createAuthContext({ headers }), {}).catch(
+        (error: unknown) => {
+          server.close(4001, error instanceof Error ? error.message : 'Join failed')
+        },
+      ),
+    )
     return new Response(null, { status: 101, webSocket: pair[0] })
   }
-  async joinBarrier() {
-    await new Promise((resolve) => setTimeout(resolve, 50))
+  async joinBarrier(delay = 50) {
+    await new Promise((resolve) => setTimeout(resolve, delay))
     return this.ctx.id.toString()
   }
   override webSocketMessage(socket: WebSocket, message: ArrayBuffer | string) {

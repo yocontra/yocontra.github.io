@@ -1,6 +1,10 @@
 import { describe, expect, test as it } from 'bun:test'
 import { BTN_CALLOUT, type ServerControl } from '../../../src/experiments/out-west/contract/town.ts'
-import { MAX_PLAYERS, SOFT_CAP } from '../../../src/experiments/out-west/ffa/sim/constants.ts'
+import {
+  MAX_FRONTIER_BOTS,
+  MAX_PLAYERS,
+  SOFT_CAP,
+} from '../../../src/experiments/out-west/ffa/sim/constants.ts'
 import { calloutTarget } from '../../../src/experiments/out-west/ffa/sim/showdown.ts'
 import { pairKey } from '../../../src/experiments/out-west/ffa/sim/state.ts'
 import type { InputFrame } from '../../../src/experiments/out-west/ffa/sim/types.ts'
@@ -77,8 +81,8 @@ describe('LobbyCore', () => {
     expect(peer.binary).toHaveLength(0)
   })
 
-  it('fills the town with bots while a human is present, never past 28', () => {
-    const core = new LobbyCore('lobby:0', 1)
+  it('an explicitly synthetic core can fill32 while normal production cores remain capped', () => {
+    const core = new LobbyCore('lobby:0', 1, 31)
     core.join(profile('a'), new FakePeer(), 0)
     for (let t = 0; t < 20; t++) {
       advance(core, t * 50)
@@ -90,6 +94,54 @@ describe('LobbyCore', () => {
       advance(core, t * 50)
     }
     expect(core.world.players.filter(Boolean).length).toBe(MAX_PLAYERS)
+  })
+
+  it('production caps bots at four across joins and clears them at zero online humans without reducing32 human seats', () => {
+    const core = new LobbyCore('production', 11)
+    const peer = new FakePeer()
+    const first = core.join(profile('first'), peer, 0)
+    if (!first) {
+      throw new Error('Missing first human')
+    }
+    core.botTarget = 31
+    for (let tick = 0; tick < 40; tick++) {
+      advance(core, tick * 50)
+    }
+    expect(core.world.players.filter((player) => player?.bot && !player.gone)).toHaveLength(
+      MAX_FRONTIER_BOTS,
+    )
+    for (let index = 1; index < MAX_PLAYERS; index++) {
+      expect(core.join(profile(`human-${index}`), new FakePeer(), 2000)).not.toBeNull()
+      advance(core, 2000 + index * 50)
+      expect(
+        core.world.players.filter((player) => player?.bot && !player.gone).length,
+      ).toBeLessThanOrEqual(MAX_FRONTIER_BOTS)
+    }
+    expect(core.connectedHumans()).toBe(MAX_PLAYERS)
+    expect(core.world.players.filter((player) => player?.bot)).toHaveLength(0)
+    for (const session of core.sessions.values()) {
+      if (session.peer) {
+        core.disconnect(session.playerId, session.peer)
+      }
+    }
+    expect(core.connectedHumans()).toBe(0)
+    expect(core.world.players.filter((player) => player?.bot)).toHaveLength(0)
+    const lone = new LobbyCore('empty', 12)
+    const lonePeer = new FakePeer()
+    const session = lone.join(profile('lone'), lonePeer, 0)
+    for (let tick = 0; tick < 20; tick++) {
+      advance(lone, tick * 50)
+    }
+    expect(lone.world.players.filter((player) => player?.bot)).toHaveLength(MAX_FRONTIER_BOTS)
+    if (!session) {
+      throw new Error('Missing lone human')
+    }
+    lone.disconnect(session.playerId, lonePeer)
+    expect(lone.world.players.filter((player) => player?.bot)).toHaveLength(0)
+    for (let tick = 20; tick < 25; tick++) {
+      advance(lone, tick * 50)
+    }
+    expect(lone.world.players.filter((player) => player?.bot)).toHaveLength(0)
   })
 
   it('with ambient bots off (dev ?bots=0) the town empties of bots', () => {
@@ -107,8 +159,8 @@ describe('LobbyCore', () => {
     expect(core.world.players.filter(Boolean).length).toBe(1)
   })
 
-  it('a human joining a full town sends a bot home', () => {
-    const core = new LobbyCore('lobby:0', 1)
+  it('a human joining a synthetic full town sends a bot home', () => {
+    const core = new LobbyCore('lobby:0', 1, 31)
     core.join(profile('a'), new FakePeer(), 0)
     core.botTarget = 40
     for (let t = 0; t < 40; t++) {

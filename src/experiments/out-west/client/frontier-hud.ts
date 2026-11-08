@@ -142,7 +142,7 @@ export class FrontierHud {
       feed: (text) => this.hud.feed(escaped(text), 'info'),
       onOpen: (open) => viewport.inputEnabled(!open),
       leave: () => viewport.tap(Buttons.leave),
-      blocked: () => this.hud.menuOpen,
+      blocked: () => this.hud.menuOpen || root.classList.contains('pc-loading'),
     })
     this.unsubscribeControl = session.subscribeControl((control) => this.rounds.control(control))
     this.unsubscribe = session.subscribe((event) => this.event(event))
@@ -225,12 +225,13 @@ export class FrontierHud {
     const duel = world.showdowns.get(player.showdown)
     const cue = duel?.phase === 'called' ? 'DRAW!' : 'Wait for the bell…'
     this.hud.banner(duel ? cue : null)
-    let prompt = 'Q / CALL: challenge a rider · E / USE: interact'
+    const touch = this.hud.root.classList.contains('fr-touchui')
+    let prompt: string | null = null
     if (zone && player.carried > 0) {
-      prompt = 'Hold E / USE to bank or ship your carry'
+      prompt = touch ? 'Hold USE to bank your carry' : 'Hold E to bank or ship your carry'
     }
     if (challenger) {
-      prompt = `${challenger.name} called you out · Q / CALL to accept`
+      prompt = `${challenger.name} called you out · ${touch ? 'Tap CALL' : 'Q'} to accept`
     }
     this.hud.update({
       hp: player.hp,

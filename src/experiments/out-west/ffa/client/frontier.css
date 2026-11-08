@@ -1426,3 +1426,195 @@
   border-left-color: var(--ow-red-hi);
   filter: drop-shadow(0 0 6px var(--ow-red));
 }
+
+/* Keep instructional copy readable inside the pause card, away from the fight. */
+.fr-help {
+  color: var(--ow-bone-2);
+  text-align: left;
+  padding: 4px 0 20px;
+}
+.fr-help[hidden],
+.fr-menu-settings[hidden] {
+  display: none;
+}
+.fr-help h3 {
+  margin: 0 0 14px;
+  font: 24px var(--ow-font-display);
+  color: var(--ow-bone);
+}
+.fr-help h4 {
+  margin: 14px 0 4px;
+  font: 600 18px var(--ow-font-text);
+  color: var(--ow-brass-hi);
+}
+.fr-help p {
+  margin: 0;
+  font: 17px / 1.4 var(--ow-font-text);
+}
+/* Touch HUD keeps the aiming area clear; objectives remain readable without becoming a banner. */
+@media (pointer: coarse) {
+  .fr-touchui.fr-hud {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    align-content: start;
+    justify-items: center;
+    row-gap: 4px;
+    padding: calc(var(--fr-top) + 12px) calc(var(--fr-right) + 12px) 0 calc(var(--fr-left) + 12px);
+  }
+  .fr-touchui :is(.fr-tc, .fr-round, .fr-obj) {
+    position: static;
+    transform: none;
+    grid-column: 1;
+    justify-self: center;
+  }
+  .fr-touchui .fr-tl {
+    grid-row: 1;
+  }
+  .fr-touchui .fr-tc {
+    grid-row: 2;
+  }
+  .fr-touchui .fr-round {
+    grid-row: 3;
+    font-size: 12px;
+  }
+  .fr-touchui .fr-prompt {
+    max-width: min(70vw, 340px);
+    font-size: 12px;
+    bottom: max(220px, calc(env(safe-area-inset-bottom) + 200px));
+    padding: 5px 8px;
+  }
+  .fr-touchui .fr-channel {
+    bottom: max(250px, calc(env(safe-area-inset-bottom) + 230px));
+  }
+  .fr-touchui .fr-obj {
+    grid-row: 4;
+    width: min(270px, calc(100% - 32px));
+    box-sizing: border-box;
+    padding: 5px 8px;
+    text-align: left;
+  }
+  .fr-touchui .fr-obj-kicker {
+    font-size: 10px;
+  }
+  .fr-touchui .fr-obj-text {
+    font-size: 13px;
+    line-height: 1.2;
+  }
+  .fr-touchui .fr-obj.on.tick {
+    animation: none;
+  }
+}
+@media (pointer: coarse) and (orientation: landscape) {
+  .fr-touchui.fr-hud {
+    grid-template-columns: minmax(0, 1fr) min(270px, 36vw) minmax(0, 1fr);
+  }
+  .fr-touchui :is(.fr-tc, .fr-round, .fr-obj) {
+    grid-column: 2;
+  }
+  .fr-touchui .fr-tc {
+    display: flex;
+    justify-content: center;
+    align-items: baseline;
+    flex-wrap: wrap;
+    gap: 4px 8px;
+    grid-row: 1;
+  }
+  .fr-touchui .fr-tc.carry .fr-carry {
+    display: flex;
+    align-items: baseline;
+    gap: 4px;
+  }
+  .fr-touchui .fr-carried {
+    font-size: 24px;
+  }
+  .fr-touchui .fr-carried-label {
+    font-size: 9px;
+  }
+  .fr-touchui .fr-obj {
+    grid-row: 3;
+    width: min(270px, 36vw);
+  }
+  .fr-touchui .fr-round {
+    grid-row: 2;
+  }
+  .fr-touchui .fr-prompt {
+    bottom: calc(var(--fr-bottom) + 15px);
+    max-width: 34vw;
+    font-size: 11px;
+  }
+  .fr-root .fr-touchui .fr-feed {
+    max-width: calc((100vw - min(270px, 36vw)) / 2 - var(--fr-left) - 32px);
+  }
+  .fr-root .fr-touchui .fr-feed-row {
+    max-width: 100%;
+    font-size: 12px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+}
+
+@media (pointer: coarse) and (orientation: portrait) {
+  .fr-touchui .fr-tl {
+    justify-self: start;
+    width: min(200px, calc(100% - 112px));
+    gap: 8px;
+  }
+  .fr-touchui .fr-menu-btn {
+    flex-shrink: 0;
+  }
+  .fr-touchui .fr-vitals {
+    min-width: 0;
+    flex: 1;
+  }
+  .fr-touchui .fr-hp {
+    width: 100%;
+  }
+  .fr-touchui .fr-tr {
+    display: contents;
+  }
+  .fr-touchui .fr-map-slot {
+    position: absolute;
+    top: calc(var(--fr-top) + 12px);
+    right: calc(var(--fr-right) + 12px);
+  }
+  .fr-touchui .fr-banner {
+    grid-row: 5;
+  }
+  .fr-root .fr-touchui .fr-feed {
+    position: static;
+    grid-column: 1;
+    grid-row: 6;
+    justify-self: end;
+  }
+}
+
+@media (pointer: coarse) and (orientation: landscape) and (max-height: 320px) {
+  /* The left-handed FIRE button shares this corner; retain the latest kill above its target. */
+  .fr-root:has(.pc-touch-controls.left-handed) .fr-feed-row {
+    font-size: 11px;
+    line-height: 1.1;
+    padding: 1px 6px;
+  }
+  .fr-root:has(.pc-touch-controls.left-handed) .fr-feed > :not(:last-child) {
+    display: none;
+  }
+}
+
+@media (pointer: coarse) {
+  .fr-touchui .fr-obj.on.tick .fr-obj-text {
+    overflow: hidden;
+    animation: fr-objective-settle 8s forwards;
+  }
+}
+@keyframes fr-objective-settle {
+  0%,
+  70% {
+    opacity: 1;
+    max-height: 5em;
+  }
+  100% {
+    opacity: 0;
+    max-height: 0;
+  }
+}

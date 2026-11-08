@@ -250,6 +250,28 @@ try {
     autoFire,
     { timeout: 5000 },
   )
+  for (const name of ['ROLL', 'JUMP', 'CROUCH', 'RELOAD', 'AIM', 'FIRE']) {
+    if (!(await mobile.getByRole('button', { name, exact: true }).isVisible())) {
+      throw new Error(`Missing primary touch action: ${name}`)
+    }
+  }
+  await mobile.evaluate(() => {
+    const session = (globalThis as Probe).__nativeFrontierSession
+    const self = session?.world.players[session.selfSlot]
+    const bank = session?.world.layout.zones.find((zone) => zone.kind === 'bank')
+    if (!(session && self && bank)) {
+      throw new Error('Missing contextual action fixture')
+    }
+    Object.assign(self, {
+      x: bank.x,
+      z: bank.z,
+      carried: 100,
+      dynamite: 1,
+      calledBy: 1,
+      calledUntil: session.world.tick + 10_000,
+    })
+  })
+  await mobile.getByRole('button', { name: 'USE', exact: true }).waitFor()
   for (const name of ['USE', 'CALL', 'ROLL', 'THROW', 'JUMP', 'CROUCH', 'RELOAD', 'AIM', 'FIRE']) {
     if (!(await mobile.getByRole('button', { name, exact: true }).isVisible())) {
       throw new Error(`Missing touch action: ${name}`)

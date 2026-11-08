@@ -7,6 +7,7 @@ import {
   loadRecord,
   PRACTICE_PURSE_CAP,
   patchRecord,
+  practiceBots,
   practiceOptions,
 } from '../ffa/client/practice.ts'
 import type { World } from '../ffa/sim/state.ts'
@@ -16,6 +17,7 @@ import { loadAmmo } from '../runtime/ammo.ts'
 import { createFrontierSimulation } from '../runtime/frontier.ts'
 import { type CollisionData, type PlayerInput, SIMULATION_HZ } from '../runtime/protocol.ts'
 import { ShowdownJudge } from '../runtime/showdown.ts'
+import { ownPresentation } from './player-pose.ts'
 import { ShowdownInput } from './showdown-input.ts'
 import type { GameSession } from './viewport.ts'
 
@@ -55,6 +57,18 @@ function syncPoses(simulation: ReturnType<typeof createFrontierSimulation>): voi
   }
 }
 
+function syncPresentation(
+  poses: Map<string, import('../runtime/protocol.ts').PlayerState>,
+  bodies: ReadonlyMap<string, import('../runtime/protocol.ts').PlayerState>,
+  selfId: string,
+  input: PlayerInput,
+): void {
+  poses.clear()
+  for (const [id, body] of bodies) {
+    poses.set(id, id === selfId ? ownPresentation(body, input) : body)
+  }
+}
+
 /** Full Frontier domain rules and bots use the same native motor as online matches. */
 export async function createLocalFrontierSession(
   collision: CollisionData,
@@ -86,7 +100,8 @@ export async function createLocalFrontierSession(
   let rules = practiceOptions(record)
   let banked = record.purse
   applyPractice(world, bots, rules)
-  for (let i = 0; i < Math.max(0, Math.min(31, options.bots ?? 15)); i++) {
+  const stress = import.meta.env.DEV || import.meta.env.PUBLIC_OW_PERF_HARNESS === '1'
+  for (let i = 0; i < practiceBots(options.bots, Boolean(stress)); i++) {
     addPlayer(world, {
       accountId: `bot-${i}`,
       name: freshBotName(
@@ -103,7 +118,7 @@ export async function createLocalFrontierSession(
     self.x = options.spawn.x
     self.z = options.spawn.z
   }
-  if (options.cluster) {
+  if (stress && options.cluster) {
     bots.rally = selfSlot
     for (const player of world.players) {
       if (player?.bot && self) {
@@ -181,6 +196,7 @@ export async function createLocalFrontierSession(
   }
   simulation.step([])
   syncPoses(simulation)
+  const poses = new Map(simulation.physics.players)
   return {
     selfId,
     selfSlot,
@@ -209,7 +225,7 @@ export async function createLocalFrontierSession(
       }
     },
     world,
-    players: simulation.physics.players,
+    players: poses,
     appearance: (id) =>
       id === selfId ? { loadout: DEFAULT_LOADOUT, dyes: {}, key: 'local-player' } : undefined,
     get banked() {
@@ -237,6 +253,7 @@ export async function createLocalFrontierSession(
         settleDeposits()
         elapsed -= 1 / SIMULATION_HZ
       }
+      syncPresentation(poses, simulation.physics.players, selfId, input)
     },
     cameraTrace(from, to) {
       const hit = simulation.physics.app.systems.rigidbody?.raycastFirst(from, to, {

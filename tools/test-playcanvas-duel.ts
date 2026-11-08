@@ -63,15 +63,25 @@ try {
     }
     const mats = d.player.root
       .findComponents('render')
-      .flatMap(
-        (render: {
-          meshInstances: { material: { name: string; diffuse: { b: number; r: number } } }[]
-        }) => render.meshInstances.map((mesh) => mesh.material),
+      .flatMap((render: { meshInstances: { material: { name: string; diffuseMap: unknown } }[] }) =>
+        render.meshInstances.map((mesh) => mesh.material),
       )
+    const equipmentPath = '/src/experiments/out-west/content/equipment.ts'
+    const { EQUIPMENT } = await import(/* @vite-ignore */ equipmentPath)
+    const outfit = EQUIPMENT['outfit.wool-duster']
+    const fitted = await d.game.loadContainer((outfit.pair ?? outfit).url)
+    const fabric = fitted.resource.data.gltf.materials.find(
+      (material: { name?: string }) => material.name === 'Dyeable',
+    )
+    const indigoUrl = fabric?.extras?.nativePbr?.dyes?.indigo
+    if (!indigoUrl) {
+      throw new Error('Authored indigo PBR map missing')
+    }
+    const indigo = await d.game.loadTexture(indigoUrl, { srgb: true, flipY: false })
     if (
       !mats.some(
-        (mat: { name: string; diffuse: { b: number; r: number } }) =>
-          mat.name === 'Dyeable' && mat.diffuse.b > mat.diffuse.r,
+        (mat: { name: string; diffuseMap: unknown }) =>
+          mat.name === 'Dyeable' && mat.diffuseMap === indigo.resource,
       )
     ) {
       throw new Error('Indigo dye missing')
@@ -102,12 +112,12 @@ try {
         await new Promise<void>((resolve) =>
           requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
         )
-        const actor = d.game.stage.findByName(`fakeout-${cue}`)
+        const actor = d.game.stage.findByName(cue === 'crow' ? 'town-crow-0' : `fakeout-${cue}`)
         if (!actor?.enabled) {
           throw new Error(`Missing readable native ${cue} fakeout`)
         }
         const component = actor.findComponents('anim')[0]
-        if (component?.baseLayer?.activeState !== 'Gun_Shoot') {
+        if (component?.baseLayer?.activeState !== (cue === 'crow' ? 'Fly' : 'Gun_Shoot')) {
           throw new Error(`Native ${cue} animation did not play`)
         }
       },
@@ -152,15 +162,20 @@ try {
     }
     d.saloon()
     let exited = false
+    const normalFog = d.game.app.scene.fog.type
     const session = { listen: () => undefined, send: () => undefined, close: () => undefined }
     await d.dailyDuel({ outlaw: 0, modifiers: ['fog', 'no-bell'] }, session, () => {
       exited = true
     })
-    if (d.c.save === original || d.game.app.scene.fog.type !== 'exp2') {
+    if (
+      d.c.save === original ||
+      d.game.app.scene.fog.type !== 'exp2' ||
+      d.game.app.scene.fog.density !== 0.07
+    ) {
       throw new Error('Daily did not isolate save or apply native fog')
     }
     d.leaveSpecial()
-    if (d.c.save !== original || !exited || d.game.app.scene.fog.type !== 'none') {
+    if (d.c.save !== original || !exited || d.game.app.scene.fog.type !== normalFog) {
       throw new Error('Daily did not restore gauntlet and environment')
     }
     const keys = d.c.input.keys
