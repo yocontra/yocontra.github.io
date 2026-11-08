@@ -1,0 +1,49 @@
+{
+  "$schema": "../../node_modules/wrangler/config-schema.json",
+  "name": "out-west-native-test",
+  "main": "production-worker.ts",
+  "compatibility_date": "2026-10-01",
+  "compatibility_flags": ["nodejs_compat"],
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "out-west-native-test",
+      "database_id": "00000000-0000-0000-0000-000000000001",
+      "migrations_dir": "../migrations"
+    }
+  ],
+  "durable_objects": {
+    "bindings": [
+      { "name": "DUELS", "class_name": "DuelSession" },
+      { "name": "MATCHMAKER", "class_name": "Matchmaker" },
+      { "name": "DUEL_ROOMS", "class_name": "DuelRoom" },
+      { "name": "LOBBY_DIR", "class_name": "LobbyDirectory" },
+      { "name": "LOBBIES", "class_name": "Lobby" },
+      { "name": "DAILY_SESSIONS", "class_name": "DailySession" }
+    ]
+  },
+  "migrations": [
+    {
+      "tag": "v1",
+      "new_sqlite_classes": [
+        "DuelSession",
+        "Matchmaker",
+        "DuelRoom",
+        "LobbyDirectory",
+        "Lobby",
+        "DailySession"
+      ]
+    }
+  ],
+  "vars": {
+    "AUTH_SECRET": "native-integration-fixture-secret-only",
+    "ALLOWED_ORIGINS": "http://127.0.0.1:4390,http://localhost:4343",
+    "RP_ID": "localhost",
+    "RP_ORIGINS": "http://127.0.0.1:4390",
+    "TURNSTILE_SECRET": "1x0000000000000000000000000000000AA",
+    "DISABLE_VOICE": "true",
+    "CLOUDFLARE_ACCOUNT_ID": "",
+    "REALTIMEKIT_APP_ID": "",
+    "REALTIMEKIT_PRESET": ""
+  }
+}

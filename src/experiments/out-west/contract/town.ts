@@ -1,117 +1,14 @@
-/**
- * Frontier HTTP types, JSON control messages, and the binary snapshot/input codec spec.
- * Shared by the browser and the Worker, so it must stay pure TypeScript: no DOM, no Workers types,
- * no imports outside `contract/` and `data/`. Owned by stream F.
- *
- * The codec itself is `ffa/sim/codec.ts`; this file is its spec and the shared constants.
- *
- * # Transport
- *
- * One WebSocket per player: `GET {wsUrl}` where `wsUrl` comes from `POST /town/join` and already
- * carries `?ticket=` (single use, 30 s, purpose `town`). Binary frames carry inputs and snapshots,
- * text frames carry JSON control messages (`ClientControl` / `ServerControl`).
- * The socket is TCP: every frame arrives, in order, or the socket dies. Delta compression therefore
- * diffs against the **last snapshot sent** to that socket, and a reconnect always starts from a full
- * snapshot. There are no app-level pings: RTT comes from `ackTick`/`ackAgeMs` on inputs.
- *
- * All multi-byte integers are little-endian. Positions are quantised to `POS_SCALE` units per metre
- * (u16 covers the 144 m town at 2.2 mm). Angles are u16 turns (`ANGLE_SCALE` units per 2π), or u8
- * turns on remote entities. Ticks are 20 Hz; `tick16` means the low 16 bits of the server tick.
- *
- * # Client → server: `MSG_INPUT` (send-on-change, at most 10 Hz, two 20 Hz frames per message)
- *
- * The client numbers one frame per 20 Hz tick. At each 10 Hz slot it sends that slot's two frames
- * **only if either differs** from the last frame sent (stick, aim quantised to 1/1024 turn, or
- * buttons), and otherwise stays silent, apart from a one-frame keepalive every 500 ms.
- * **Silence means "unchanged"**: the server re-applies the last frame for every frame number it
- * wasn't sent, exactly as the client predicted. Use `InputBatcher` / `InputQueue` in
- * `ffa/sim/input.ts`; they implement both ends of this rule.
- *
- * | Offset | Type | Field |
- * |---|---|---|
- * | 0 | u8 | `MSG_INPUT` |
- * | 1 | u16 | `seq` of the first frame (wraps; frame i has seq + i) |
- * | 3 | u8 | frame count `n` (1–4, normally 2) |
- * | 4 | u16 | `ackTick`: tick16 of the newest snapshot received |
- * | 6 | u8 | `ackAgeMs`: ms between receiving that snapshot and sending this message (cap 255) |
- * | 7 | n × 10 B | frames |
- *
- * Frame (10 B): `moveX i8`, `moveZ i8` (−127..127, normalised on the server), `aim u16` (turns,
- * 0 = +x, increasing toward +z), `buttons u16` (`BTN_*`, held state; the server edge-detects),
- * `viewTick u16` (tick16 of the remote-entity time the client was rendering), `viewFrac u8`
- * (fraction of a tick ×255), `pitch i8` (±127 = ±90°, wire v6; authoritative since v7). The view time is used only
- * to rewind hits, clamped to `MAX_REWIND_MS`.
- *
- * # Server → client: `MSG_SNAPSHOT` (20 Hz)
- *
- * | Section | Layout |
- * |---|---|
- * | Header (11 B) | `u8 MSG_SNAPSHOT`, `u32 tick`, `u16 lastInputSeq`, `i8 inputLead`, `u8 flags` (`SNAP_*`), `u8 entityCount`, `u8 removedCount` |
- * | Self (66 B) | `u16 x`, `u16 z`, `u16 y` (cm), `u8 roof` (0 street, n = deck n), `u8 climbTicks`, `u8 climbDeck`, `i8 climbDir`, `u8 fallTicks`, `u8 fallTotal`, `u16 fallFromX`, `u16 fallFromZ`, `u8 fallFromY` (dm), `u16 fallToX`, `u8 fallToY` (dm), `u16 fallToZ` (cm), `u8 hp`, `u8 ammo`, `u8 selfFlags` (`SELF_*`), `u8 rollTicks`, `u8 rollCooldown`, `u16 rollDir`, `u8 reloadTicks`, `u8 fireCooldown` (ms ÷ 4), `u8 protectTicks`, `u8 deadEyeTicks`, `u8 channelKind` (`CHANNEL_*`), `u8 channelTicks`, `u32 carried`, `u8 respawnTicks`, `u8 holsterTicks`, `u16 lastButtons`, `u8 weapon` (`selfWeapon()`: bits 0–1 `WEAPON_*`, bits 2–4 pickup-weapon rounds, bit 5 holding dynamite; 0 = plain revolver), `u8 jumpTicks`, `u8 jumpCooldown`, `u8 vaultStep` (cm per tick; 0 = a hop), `u16 vaultAim`, `u8 moveFlags` (`MOVE_*`), `u8 sprintLock`, `u8 sprintOut`, `u8 slideTicks`, `u8 slideCooldown`, `u16 slideAim`, `i8 airX`, `i8 airZ` (cm per tick), `i16 vy` (dm/s), `u8 grounded`, `u16 support` (cm), `u16 airPeakY` (cm), `u8 mantleTicks` |
- * | Removed | `removedCount × u8 id` (left interest or left the lobby) |
- * | Entities | `entityCount ×` entity record |
- * | Town (if `SNAP_TOWN`) | `u8 mostWantedId` (255 none), `u8 mwX`, `u8 mwZ` (0.6 m units), `u8 strongboxSpot` (255 none), `u16 strongboxValue`, `u8 strongboxState` (`BOX_*`), `u8 players`, `u32 banked` (this player's wallet, as last confirmed) |
- * | Events | `u8 count`, then `count ×` (`u8 EV_*`, payload; sizes in `EVENT_SIZES`) |
- *
- * `inputLead` is how early this player's input arrived: the smallest, over the input messages that
- * came in since the previous snapshot, of (first frame's seq − the seq the next tick will consume),
- * clamped to −127..127; `INPUT_LEAD_NONE` when none came in. Negative means a frame arrived after
- * its number was consumed (the server repeated the previous frame in its place). The client paces
- * its input ticks to hold it at 1–3 (`ffa/client/tick-clock.ts`).
- *
- * Entity record: `u8 id`, `u8 mask` (`ENT_*`), then the fields whose bits are set, in bit order:
- * `ENT_POS` → `i8 dx, i8 dz, u8 y` against the last sent position, or with `ENT_POS_FULL` → `u16 x, u16 z, u8 y` (decimetres);
- * `ENT_AIM` → `u8 aim`; `ENT_HP` → `u8 hp`; `ENT_FLAGS` → `u8 flags` (`EF_*`); `ENT_ANIM` → `u8 anim`
- * (`ANIM_*`); `ENT_CARRY` → `u8 carryTier`. An entity entering interest sends every field with
- * `ENT_POS_FULL` (10–11 B); a steady one sends 3–7 B. Entities 40–60 m away are refreshed every other
- * tick; beyond 60 m they are removed (the Most Wanted star rides in the town section instead).
- *
- * # Map pickups (server-authoritative)
- *
- * The spots are `pickups` in `town.layout.json` (event `spot` = index in that array). Every spot
- * starts available; walking within 1.2 m takes it, and it respawns 45 s later (`EV_PICKUP_TAKEN`,
- * then `EV_PICKUP_READY`). A full snapshot replays `EV_PICKUP_TAKEN` (player 255) for every spot
- * that's currently gone, and `EV_DYNAMITE_THROWN` for every lit fuse.
- * - Shotgun: 2 shells, 8 pellets × 12 damage, 9 m, 700 ms between shells. One `EV_SHOT` per shell
- *   with `SHOT_SHOTGUN` (target = the player hit hardest).
- * - Rifle: 5 rounds, 60 damage, 35 m, 900 ms bolt. `EV_SHOT` with `SHOT_RIFLE`.
- * - Dynamite (×1): `BTN_THROW` lobs it up to 10 m along your aim (stopped by walls); 2 s fuse, then
- *   80 damage to everyone within 4 m with no wall in between, including the thrower.
- * A pickup weapon replaces the gun in your hand until its rounds run out (then back to the
- * revolver, which keeps its own six); Dead-Eye is revolver-only. Dying drops nothing extra: pickup
- * weapons and dynamite are simply lost.
- *
- * # Server → client: `MSG_FULL_RESET`
- *
- * One byte. The next snapshot is a full snapshot; the client must drop its delta baseline. Sent on
- * reconnect before the first snapshot.
+/** Shared Frontier product controls, refusal types and gameplay constants.
+ * HTTP joins validate the engine protocol and generated collision revision before reserving a
+ * Colyseus seat. Native SDK schema/input packets travel over a signed, DO-owned WebSocket;
+ * runtime/packets.ts batches two unmodified SDK inputs per outgoing WebSocket message.
+ * ClientControl/ServerControl remain game-specific messages inside Colyseus ROOM_DATA.
  */
 import { reopensOn } from '../data/sinks.ts'
 
-/**
- * 2: `EV_BAG_DROP` carries the dropper's saddlebag `style`.
- * 3: input frames carry `buttons u16`; snapshots carry `inputLead i8` in the header and
- *    `lastButtons u16` in the self block. Clients send `wire` in `POST /town/join`; an older client
- *    (no `wire`, or a smaller one) is refused with `outdated`.
- * 4: `BTN_JUMP` (vault / hop); the self block carries the jump state; `ANIM_VAULT`, `ANIM_HOP`.
- * 5: CoD movement: `BTN_SPRINT`, `BTN_CROUCH` (slide from a sprint), `BTN_AIM` held slows you and
- *    tightens the spread; the self block grows by 9 bytes (`u8 moveFlags` (`MOVE_*`),
- *    `u8 sprintLock`, `u8 sprintOut`, `u8 slideTicks`, `u8 slideCooldown`, `u16 slideAim`,
- *    `i8 airX`, `i8 airZ` (cm per tick)); an entity's `anim` byte carries `ANIM_*` in its low
- *    nibble and the stance bits (`STANCE_*`) above it; `ANIM_SLIDE`.
- * 6: aim pitch, for the riders' upper bodies (cosmetic: hits stay yaw-only): input frames end with
- *    `i8 pitch` (10 B a frame) and entities carry it under `ENT_PITCH` (`i8`, ±127 = ±90°).
- * 7: 2.5D collision: the self block grows by 7 bytes (`i8 vy` dm/s, `u8 grounded`,
- *    `u16 support` cm, `u16 airPeakY` cm, `u8 mantleTicks`); hits use the full pitch.
- * 8: nothing further; kept for a clean cutover with v7 clients.
- * 9: breakable windows: `EV_GLASS_BREAK` (`u16` window index) marks one shattered pane; a full
- *    snapshot replays every broken pane.
- * 10: shots carry authoritative origin and endpoint (six biased u16 centimetre coordinates),
- *    plus u8 pellet count and up to eight endpoints. Self vertical velocity widens to i16 dm/s
- *    to retain ordinary roof-fall speeds at the same precision. Old clients must refresh before joining.
- */
+/** Public product contract version. Colyseus handles binary schema evolution. */
 export const CONTRACT_VERSION = 10
-/** The binary Frontier wire format this build speaks (`TownJoinRequest.wire`). */
+/** HTTP admission compatibility value (`TownJoinRequest.wire`). */
 export const TOWN_WIRE_VERSION = 10
 
 // --- saddlebags ----------------------------------------------------------------------------------

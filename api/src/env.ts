@@ -8,6 +8,9 @@ import type { LobbyDirectory } from './town/directory.ts'
 import type { Lobby } from './town/lobby.ts'
 
 export interface Env {
+  /** Disable metered media in the zero-cost deployment. */
+  DISABLE_VOICE?: string
+
   DB: D1Database
   /** Ranked single-player gauntlet runs (one object per run). */
   DUELS: DurableObjectNamespace<DuelSession>

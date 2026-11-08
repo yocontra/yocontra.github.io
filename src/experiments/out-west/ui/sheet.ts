@@ -186,11 +186,17 @@ export interface ConfirmOpts {
   danger?: boolean
   /** Focus the safe choice (a sheet that can open under a player's key presses). */
   focusNo?: boolean
+  /** Dismiss without accepting when the owning view is disposed. */
+  signal?: AbortSignal
 }
 
 /** A modal sheet with two buttons. Resolves true for yes, false for no, Escape or a tap outside. */
 export function confirmSheet(root: HTMLElement, o: ConfirmOpts): Promise<boolean> {
   return new Promise((resolve) => {
+    if (o.signal?.aborted) {
+      resolve(false)
+      return
+    }
     // everything behind the sheet goes inert: one live Buy button, not two with the same label
     const behind = [...root.children].filter(
       (c): c is HTMLElement => c instanceof HTMLElement && !c.inert,
@@ -207,7 +213,14 @@ export function confirmSheet(root: HTMLElement, o: ConfirmOpts): Promise<boolean
     el('h2', 'ow-hub-h', panel, o.title)
     el('p', 'ow-hub-note', panel, o.body)
     const row = el('div', 'ow-hub-row', panel)
+    let settled = false
+    const onAbort = () => done(false)
     const done = (v: boolean): void => {
+      if (settled) {
+        return
+      }
+      settled = true
+      o.signal?.removeEventListener('abort', onAbort)
       for (const c of behind) {
         c.inert = false
       }
@@ -222,6 +235,7 @@ export function confirmSheet(root: HTMLElement, o: ConfirmOpts): Promise<boolean
       }
     }
     globalThis.addEventListener('keydown', onKey, true)
+    o.signal?.addEventListener('abort', onAbort, { once: true })
     const no = button(row, o.no ?? 'Not now', () => done(false))
     const yes = button(row, o.yes, () => done(true), true)
     if (o.danger) {

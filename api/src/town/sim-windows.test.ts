@@ -4,10 +4,10 @@ import {
   type WindowOpening,
   windowPane,
 } from '../../../src/experiments/out-west/ffa/sim/building-rules.ts'
-import { BLOCK_MOVE, cellAt, TOWN } from '../../../src/experiments/out-west/ffa/sim/layout.ts'
-import { solidAt } from '../../../src/experiments/out-west/ffa/sim/surfaces.ts'
+import { TOWN } from '../../../src/experiments/out-west/ffa/sim/layout.ts'
 import { shatterGlass } from '../../../src/experiments/out-west/ffa/sim/windows.ts'
 import { testWorld } from './test-helpers.ts'
+import { nativeWorld } from './testing/native.ts'
 
 /** A ground-floor window on a hollow building, with the opening clear of the eave. */
 function openWindow() {
@@ -37,20 +37,19 @@ function throughPane(win: WindowOpening, pane: ReturnType<typeof windowPane>, ou
 }
 
 describe('breakable windows', () => {
-  it('the opening is a real hole: clear at pane height, solid below the sill and above the header', () => {
-    const w = testWorld()
-    const { b, w: win, pane } = openWindow()
-    const across = (pane.a0 + pane.a1) / 2
-    const x = pane.axis === 0 ? pane.at : across
-    const z = pane.axis === 0 ? across : pane.at
-    expect(solidAt(w.grid, x, (pane.y0 + pane.y1) / 2, z)).toBe(false)
-    expect(solidAt(w.grid, x, pane.y0 - 0.2, z)).toBe(true)
-    expect(solidAt(w.grid, x, pane.y1 + 0.2, z)).toBe(true)
-    // Movement still treats the wall as solid: the glass is not a doorway.
-    expect(cellAt(w.grid, x, z) & BLOCK_MOVE).not.toBe(0)
-    expect(b.height).toBeGreaterThan(win.top)
+  it('native frame colliders leave the shot opening clear before and after the pane breaks', async () => {
+    const { world: w, physics } = await nativeWorld()
+    const { w: win, index, pane } = openWindow()
+    const ray = { ...throughPane(win, pane, 1), dy: 0, maxT: 2 }
+    expect(physics.castWorld(ray)).toBeNull()
+    expect(w.glass[index]).toBe(0)
+    shatterGlass(w, ray.ox, ray.oy, ray.oz, ray.dx, ray.dy, ray.dz, ray.maxT)
+    expect(w.glass[index]).toBe(1)
+    expect(w.events).toContainEqual({ type: 'glass_break', window: index })
+    expect(physics.castWorld(ray)).toBeNull()
+    expect(physics.castWorld({ ...ray, oy: pane.y0 - 0.2 })).toBeLessThan(2)
+    expect(physics.castWorld({ ...ray, oy: pane.y1 + 0.2 })).toBeLessThan(2)
   })
-
   it('a shot through the opening shatters the pane and carries on', () => {
     const w = testWorld()
     const { w: win, index, pane } = openWindow()

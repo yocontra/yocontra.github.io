@@ -49,7 +49,6 @@ import { aimRadians, inIframes, quantize, vaulting } from './move.ts'
 import { hashSigned } from './rng.ts'
 import { bloomAfterShot } from './spread.ts'
 import { activePlayers, dist2, isProtected, type World } from './state.ts'
-import { rayWorld } from './surfaces.ts'
 import type { Player } from './types.ts'
 import { shatterGlass } from './windows.ts'
 
@@ -129,8 +128,7 @@ function fireRifle(w: World, p: Player, aim: number, viewTime: number): void {
   p.bloom = bloomAfterShot(p.weapon, p.bloom)
   const jitter = hashSigned(w.seed, p.id, w.tick, p.stats.shots)
   const ray = shotRay(p, aim, jitter * spread * DEG, jitter * spread * DEG * 0.6)
-  const world = rayWorld(w.grid, ray.ox, ray.oy, ray.oz, ray.dx, ray.dy, ray.dz, RIFLE_RANGE)
-  const wall = world?.dist ?? RIFLE_RANGE
+  const wall = w.castWorld?.({ ...ray, maxT: RIFLE_RANGE }) ?? RIFLE_RANGE
   shatterGlass(w, ray.ox, ray.oy, ray.oz, ray.dx, ray.dy, ray.dz, wall)
   const time = rewindTime(w, viewTime)
   const hit = traceTargets(w, p, { ...ray, maxT: wall }, time)
@@ -156,8 +154,7 @@ function fireShotgun(w: World, p: Player, aim: number, viewTime: number): void {
     const lane = (i / (SHOTGUN_PELLETS - 1) - 0.5) * cone
     const jitter = hashSigned(w.seed, p.id, w.tick, i) * (cone / SHOTGUN_PELLETS / 2)
     const ray = shotRay(p, aim, (lane + jitter) * DEG, jitter * DEG * 0.4)
-    const world = rayWorld(w.grid, ray.ox, ray.oy, ray.oz, ray.dx, ray.dy, ray.dz, SHOTGUN_RANGE)
-    const wall = world?.dist ?? SHOTGUN_RANGE
+    const wall = w.castWorld?.({ ...ray, maxT: SHOTGUN_RANGE }) ?? SHOTGUN_RANGE
     shatterGlass(w, ray.ox, ray.oy, ray.oz, ray.dx, ray.dy, ray.dz, wall)
     const hit = traceTargets(w, p, { ...ray, maxT: wall }, time)
     if (hit) {

@@ -19,6 +19,7 @@ import {
 } from '../../../src/experiments/out-west/ffa/sim/constants.ts'
 import type { SimEvent } from '../../../src/experiments/out-west/ffa/sim/types.ts'
 import { aimAt, place, run, runCollect, testWorld } from './test-helpers.ts'
+import { nativeTestWorld } from './testing/native.ts'
 
 type Shot = Extract<SimEvent, { type: 'shot' }>
 type Kill = Extract<SimEvent, { type: 'kill' }>
@@ -101,8 +102,8 @@ describe('revolver', () => {
     expect(b.hp).toBe(MAX_HP)
   })
 
-  it('walls stop bullets', () => {
-    const w = testWorld()
+  it('walls stop bullets', async () => {
+    const w = await nativeTestWorld()
     // Saloon west wall at x = 47; stand either side of it.
     const a = place(w, 45.5, 40)
     const b = place(w, 50, 40)
@@ -166,8 +167,12 @@ describe('Dead-Eye', () => {
 })
 
 describe('roll i-frames, spawn protection and the pardon', () => {
-  it('a rolling target takes no damage during the i-frames', () => {
-    const { w, a, b, aim } = duel()
+  it('a rolling target takes no damage during the i-frames', async () => {
+    const w = await nativeTestWorld()
+    const a = place(w, 20, 64)
+    const b = place(w, 30, 64)
+    const aim = aimAt(a, b)
+    run(w, 4)
     run(w, 1, { [b.id]: () => ({ moveZ: 127, buttons: BTN_ROLL }) })
     run(w, 1, {
       [a.id]: () => ({ aim: aimAt(a, b), buttons: BTN_FIRE }),
@@ -218,8 +223,8 @@ describe('roll i-frames, spawn protection and the pardon', () => {
 })
 
 describe('lag compensation', () => {
-  it('a shot rewinds the target to where the shooter saw it, up to 200 ms', () => {
-    const w = testWorld()
+  it('a shot rewinds the target to where the shooter saw it, up to 200 ms', async () => {
+    const w = await nativeTestWorld()
     const a = place(w, 20, 64)
     const b = place(w, 30, 64)
     // B runs north for 6 ticks (1.65 m): out of the line A is aiming down.
@@ -230,8 +235,8 @@ describe('lag compensation', () => {
     expect(b.hp).toBe(MAX_HP - 34)
   })
 
-  it('claims older than 200 ms are clamped (and miss)', () => {
-    const w = testWorld()
+  it('claims older than 200 ms are clamped (and miss)', async () => {
+    const w = await nativeTestWorld()
     const a = place(w, 20, 64)
     const b = place(w, 30, 64)
     run(w, 12, { [b.id]: () => ({ moveZ: -127 }) })

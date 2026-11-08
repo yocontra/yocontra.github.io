@@ -75,6 +75,7 @@ import Bare from '~/layouts/Bare.astro'
     // Dev only: a pre-minted access token (automated runs without a passkey).
     // Never honoured in production builds: tokens must not travel in URLs.
     const token = import.meta.env.DEV ? q.get('token') : null
+    const apiUrl = import.meta.env.DEV ? q.get('api') : null
     // Dev and perf-harness builds only (`PUBLIC_OW_PERF_HARNESS=1`, never set for the deploy):
     // a fixed lobby seed and first spawn, `seed=7&spawn=72,66`.
     const harness = import.meta.env.DEV || import.meta.env.PUBLIC_OW_PERF_HARNESS === '1'
@@ -95,6 +96,7 @@ import Bare from '~/layouts/Bare.astro'
       ...(seed === undefined ? {} : { seed }),
       ...(spawn ? { spawn } : {}),
       ...(token ? { getToken: () => Promise.resolve(token) } : {}),
+      ...(apiUrl ? { apiUrl } : {}),
       onExit: () => {
         location.href = '/experiments/out-west/?saloon'
       },

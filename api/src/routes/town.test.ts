@@ -1,6 +1,8 @@
 /** `POST /town/join`: Turnstile at every lobby join (§8), checked before the directory is asked. */
 import { afterAll, beforeAll, describe, expect, it } from 'bun:test'
+import { COLLISION_VERSION } from '../../../src/experiments/out-west/content/manifest.ts'
 import { TOWN_WIRE_VERSION as W } from '../../../src/experiments/out-west/contract/town.ts'
+import { PROTOCOL_VERSION } from '../../../src/experiments/out-west/runtime/protocol.ts'
 import { fakeEnv, seedAccount, TEST_SECRET } from '../auth/d1-fake.ts'
 import { signAccessToken } from '../auth/token.ts'
 import { createProfileStatements } from '../economy/profile.ts'
@@ -49,6 +51,13 @@ async function setup(assigned = false): Promise<{
     LOBBIES: {
       idFromName: () => ({}),
       get: () => ({
+        reserveNative: () =>
+          Promise.resolve({
+            name: 'frontier',
+            sessionId: 'reserved-session',
+            roomId: 'a'.repeat(64),
+            processId: 'native',
+          }),
         fetch: (request: Request) => {
           forwards++
           headers = request.headers
@@ -84,7 +93,11 @@ async function join(env: Env, bearer: string, body: unknown): Promise<Response> 
       Authorization: `Bearer ${bearer}`,
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify(body),
+    body: JSON.stringify(
+      typeof body === 'object' && body !== null
+        ? { protocol: PROTOCOL_VERSION, collision: COLLISION_VERSION, ...body }
+        : body,
+    ),
   })
   const res = await townRoutes(request, env, new URL(request.url), {} as ExecutionContext)
   if (!res) {
@@ -138,7 +151,7 @@ async function socketUrl(env: Env, bearer: string): Promise<URL> {
   if (response.status !== 201) {
     throw new Error(`Current-version join failed: ${response.status}`)
   }
-  const body: { wsUrl: string } = await response.json()
+  const body = (await response.json()) as { wsUrl: string }
   return new URL(body.wsUrl)
 }
 
@@ -147,7 +160,7 @@ async function connect(env: Env, url: URL, callerWire?: string): Promise<Respons
   if (callerWire !== undefined) {
     headers.set(LOBBY_WIRE_HEADER, callerWire)
   }
-  const request = new Request(url, { headers })
+  const request = new Request(url.toString(), { headers })
   const response = await townRoutes(request, env, url, {} as ExecutionContext)
   if (!response) {
     throw new Error('no socket route')
@@ -217,5 +230,66 @@ describe('Frontier socket ticket wire binding', () => {
     url.searchParams.delete('sig')
     expect((await connect(env, url)).status).toBe(403)
     expect(forwarded()).toBe(0)
+  })
+})
+
+async function joinNative(env: Env, bearer: string, body: unknown) {
+  const request = new Request('http://localhost:8791/town/native/join', {
+    method: 'POST',
+    headers: {
+      Origin: ORIGIN,
+      Authorization: `Bearer ${bearer}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(body),
+  })
+  const response = await townRoutes(request, env, new URL(request.url), {} as ExecutionContext)
+  if (!response) {
+    throw new Error('No native route')
+  }
+  return response
+}
+describe('native engine join', () => {
+  it('requires matching protocol and collision assets before allocating a room', async () => {
+    const { env, bearer, asked } = await setup(true)
+    const results = await Promise.all(
+      [
+        { wire: W, turnstileToken: 'pass' },
+        {
+          wire: W,
+          protocol: PROTOCOL_VERSION + 1,
+          collision: COLLISION_VERSION,
+          turnstileToken: 'pass',
+        },
+        { wire: W, protocol: PROTOCOL_VERSION, collision: 'old', turnstileToken: 'pass' },
+      ].map((body) => joinNative(env, bearer, body)),
+    )
+    expect(results.map((response) => response.status)).toEqual([409, 409, 409])
+    expect(asked()).toBe(0)
+  })
+  it('issues a native seat behind the existing auth, Turnstile and signed one-use socket ticket', async () => {
+    const { env, bearer, asked, forwarded, upgradeHeaders } = await setup(true)
+    const response = await joinNative(env, bearer, {
+      wire: W,
+      protocol: PROTOCOL_VERSION,
+      collision: COLLISION_VERSION,
+      turnstileToken: 'pass',
+    })
+    expect(response.status).toBe(201)
+    expect(asked()).toBe(1)
+    const body = (await response.json()) as {
+      reservation: { sessionId: string }
+      wsUrl: string
+      banked: number
+    }
+    expect(body.reservation.sessionId).toBe('reserved-session')
+    expect(typeof body.banked).toBe('number')
+    const url = new URL(body.wsUrl)
+    url.searchParams.set('sessionId', body.reservation.sessionId)
+    expect((await connect(env, url)).status).toBe(200)
+    expect(upgradeHeaders()?.get('X-Native-Room')).toBe('a'.repeat(64))
+    expect(upgradeHeaders()?.get('X-Account-Id')).toBe('acct-1')
+    expect((await connect(env, url)).status).toBe(401)
+    expect(forwarded()).toBe(1)
   })
 })

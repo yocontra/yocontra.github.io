@@ -7,15 +7,15 @@ import {
   circleBlocked,
   TOWN,
 } from '../../../src/experiments/out-west/ffa/sim/layout.ts'
-import { radiansToAim, stepMove } from '../../../src/experiments/out-west/ffa/sim/move.ts'
-import { createWorld } from '../../../src/experiments/out-west/ffa/sim/state.ts'
+import { radiansToAim } from '../../../src/experiments/out-west/ffa/sim/move.ts'
 import { blockedAt } from '../../../src/experiments/out-west/ffa/sim/surfaces.ts'
 import type { InputFrame } from '../../../src/experiments/out-west/ffa/sim/types.ts'
 import { step } from '../../../src/experiments/out-west/ffa/sim/world.ts'
 import { BotDirector } from './bots.ts'
 import { buildNav, findPath, type NavGrid, nextWaypoint } from './nav.ts'
 import { HANDS, PracticePilot } from './practice-bench.ts'
-import { place, testWorld } from './test-helpers.ts'
+import { place } from './test-helpers.ts'
+import { nativeTestWorld } from './testing/native.ts'
 
 interface Point {
   x: number
@@ -137,8 +137,8 @@ it('preserves the original straight-road and diagonal three-cell waypoint cadenc
   ])
 })
 
-it('the actual autopilot reaches the bank through authoritative movement without a stuck corner', () => {
-  const world = testWorld()
+it('the actual autopilot reaches the bank through authoritative movement without a stuck corner', async () => {
+  const world = await nativeTestWorld()
   const player = place(world, FROM.x, FROM.z)
   const pilot = new Autopilot(world.grid)
   expect(pilot.go(player.x, player.z, BANK.x, BANK.z)).toBe(true)
@@ -147,14 +147,16 @@ it('the actual autopilot reaches the bank through authoritative movement without
   for (let tick = 0; tick < 80 * 20 && pilot.walking; tick++) {
     const intent = pilot.steer(player.x, player.z, () => null)
     const before = { x: player.x, z: player.z }
-    stepMove(world.grid, player, {
+    const frames: (InputFrame | null)[] = []
+    frames[player.id] = {
       moveX: Math.round(intent.mx * 127),
       moveZ: Math.round(intent.mz * 127),
       aim: radiansToAim(Math.atan2(intent.mz, intent.mx)),
       buttons: 0,
-      prevButtons: 0,
-      canMove: true,
-    })
+      seq: tick,
+      viewTime: tick,
+    }
+    step(world, frames)
     still =
       pilot.walking && Math.hypot(player.x - before.x, player.z - before.z) < 0.005 ? still + 1 : 0
     longest = Math.max(longest, still)
@@ -164,12 +166,12 @@ it('the actual autopilot reaches the bank through authoritative movement without
   expect(longest).toBeLessThan(20)
 })
 
-it('the actual bot follower banks its carry on the route with its normal corner-arrival threshold', () => {
+it('the actual bot follower banks its carry on the route with its normal corner-arrival threshold', async () => {
   const bank = TOWN.zones.find((zone) => zone.id === 'bank_w1')
   if (!bank) {
     throw new Error('Missing bank fixture')
   }
-  const world = createWorld({ seed: 7, layout: { ...TOWN, zones: [bank] } })
+  const world = await nativeTestWorld({ seed: 7, layout: { ...TOWN, zones: [bank] } })
   world.nextStrongboxTick = 1_000_000
   const player = place(world, FROM.x, FROM.z, { bot: true, carried: 1000 })
   const director = new BotDirector(3)
@@ -182,13 +184,13 @@ it('the actual bot follower banks its carry on the route with its normal corner-
   expect(player.carried).toBe(0)
 })
 
-it('the actual practice pilot reaches and banks on the same route', () => {
+it('the actual practice pilot reaches and banks on the same route', async () => {
   const bank = TOWN.zones.find((zone) => zone.id === 'bank_w1')
   const hand = HANDS.reviewer
   if (!(bank && hand)) {
     throw new Error('Missing practice banking fixture')
   }
-  const world = createWorld({ seed: 7, layout: { ...TOWN, zones: [bank] } })
+  const world = await nativeTestWorld({ seed: 7, layout: { ...TOWN, zones: [bank] } })
   world.nextStrongboxTick = 1_000_000
   const player = place(world, FROM.x, FROM.z, { carried: 1000 })
   const pilot = new PracticePilot(world, 3, hand)

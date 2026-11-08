@@ -5,6 +5,7 @@ import {
   emptyRegistry,
   GC_EMPTY_MS,
   HOME_LOBBY,
+  POPULATION_TTL_MS,
   poolOf,
   RESERVE_MS,
   report,
@@ -17,6 +18,30 @@ function fill(reg: ReturnType<typeof emptyRegistry>, lobbyId: string, humans: nu
 }
 
 describe('lobby directory', () => {
+  it('reclaims stale positive populations after owner restart, while healthy lease heartbeats retain capacity', () => {
+    const reg = emptyRegistry(0)
+    for (let i = 0; i < 4; i++) {
+      fill(reg, `lobby:${i}`, 32)
+    }
+    collect(reg, POPULATION_TTL_MS - 1)
+    expect(assign(reg, opts('full', POPULATION_TTL_MS - 1))).toEqual({
+      ok: false,
+      reason: 'all_full',
+    })
+    for (let i = 0; i < 4; i++) {
+      fill(reg, `lobby:${i}`, 32, 60_000)
+    }
+    collect(reg, POPULATION_TTL_MS + 1)
+    expect(assign(reg, opts('healthy', POPULATION_TTL_MS + 1))).toEqual({
+      ok: false,
+      reason: 'all_full',
+    })
+    collect(reg, 60_000 + POPULATION_TTL_MS + 1)
+    expect(assign(reg, opts('recovered', 60_000 + POPULATION_TTL_MS + 1))).toMatchObject({
+      ok: true,
+      lobbyId: HOME_LOBBY,
+    })
+  })
   it('lobby:0 always exists and takes the first player', () => {
     const reg = emptyRegistry(0)
     expect(assign(reg, opts('a'))).toEqual({ ok: true, lobbyId: HOME_LOBBY, players: 1 })

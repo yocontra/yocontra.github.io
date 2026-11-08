@@ -35,6 +35,7 @@ export class Input {
   private readonly pointers = new Set<number>()
   private toggled = false
   private readonly listeners = new Set<(p: Press) => void>()
+  private readonly stopPad: () => void
   private readonly target: HTMLElement
   /** When false, pointer presses are ignored (menus are open). */
   enabled = true
@@ -55,9 +56,24 @@ export class Input {
     globalThis.addEventListener('pointerup', this.onPointerUp)
     globalThis.addEventListener('pointercancel', this.onPointerUp)
     globalThis.addEventListener('blur', this.onBlur)
-    target.addEventListener('contextmenu', (e) => e.preventDefault())
+    target.addEventListener('contextmenu', preventContextMenu)
     // game controllers (platform/gamepad.ts): judged on the pad's own timestamp, like a key
-    onPad(this.onPad)
+    this.stopPad = onPad(this.onPad)
+  }
+
+  dispose(): void {
+    globalThis.removeEventListener('keydown', this.onKeyDown)
+    globalThis.removeEventListener('keyup', this.onKeyUp)
+    this.target.removeEventListener('pointerdown', this.onPointerDown)
+    globalThis.removeEventListener('pointerup', this.onPointerUp)
+    globalThis.removeEventListener('pointercancel', this.onPointerUp)
+    globalThis.removeEventListener('blur', this.onBlur)
+    this.target.removeEventListener('contextmenu', preventContextMenu)
+    this.stopPad()
+    this.listeners.clear()
+    this.onBlur()
+    this.enabled = false
+    this.capture = null
   }
 
   on(cb: (p: Press) => void): () => void {
@@ -215,4 +231,8 @@ export function keyLabel(code: string): string {
     Tab: 'Tab',
   }
   return map[code] ?? code
+}
+
+function preventContextMenu(event: Event): void {
+  event.preventDefault()
 }

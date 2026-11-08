@@ -7,8 +7,7 @@
 import { LICENCE_OUTLAWS } from '../data/licence.ts'
 import { type LicensedMode, licenceWish, setLicenceWish } from '../meta/licence-wish.ts'
 import { confirmSheet } from '../ui/sheet.ts'
-import type { Director } from './director.ts'
-import { toSaloon } from './mode.ts'
+import type { NativeDirector as Director } from './native-director.ts'
 
 const MODE_NAME: Readonly<Record<LicensedMode, string>> = {
   bounty: 'Bounty Hunt',
@@ -33,7 +32,7 @@ export function offerLicensedMode(d: Director, next: number): Promise<boolean> |
     focusNo: true,
   }).then((go) => {
     if (go) {
-      toSaloon(d)
+      d.saloon()
     } else {
       // the wish is spent: the player chose the gauntlet
       setLicenceWish(null)

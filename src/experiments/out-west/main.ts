@@ -1,7 +1,7 @@
 import { AudioEngine } from './audio/audio.ts'
 import { OUTLAWS } from './data/outlaws.ts'
-import type { RankedConnect } from './duel/director.ts'
-import type { Tier } from './engine/render.ts'
+import type { NativeRankedConnect as RankedConnect } from './duel/native-director.ts'
+
 import type { Game } from './game.ts'
 import { Meta } from './meta/progress.ts'
 import { restoreSession } from './net/auth.ts'
@@ -14,7 +14,7 @@ import { setHapticsEnabled } from './platform/haptics.ts'
 import { registerServiceWorker } from './platform/sw.ts'
 import { installViewportVars } from './platform/viewport.ts'
 import { load, type SaveData, save } from './save.ts'
-import { DRAW_SOUNDS } from './scene/loadout.ts'
+import { DRAW_SOUNDS } from './scene/draw-sounds.ts'
 import { bindRunFlags, getSettings, onSettings, type Settings } from './settings.ts'
 import { Board, lastBoardTab } from './ui/board.ts'
 import { installGazette } from './ui/gazette.ts'
@@ -24,6 +24,8 @@ import { loadPosterArt } from './ui/poster.ts'
 import { installUiSounds } from './ui/sfx.ts'
 import { installTitleInput } from './ui/title-input.ts'
 import { Toaster } from './ui/toast.ts'
+
+type Tier = 'low' | 'high'
 
 /** Hashes that jump into a debug view or a non-default run: never ranked. */
 const UNRANKED_HASHES = ['level', 'legend', 'lineup', 'posters']
@@ -274,7 +276,7 @@ function wireSettings(
       save(data)
       const g = game()
       if (g) {
-        import('./duel/controls.ts').then((m) => m.applySettings(g.director)).catch(() => undefined)
+        g.director.applySettings()
       }
     },
   )
@@ -451,6 +453,12 @@ export function boot(root: HTMLElement): void {
     )
     .then((g) => {
       game = g
+      globalThis.addEventListener('pagehide', (event) => {
+        // A bfcache entry resumes this same engine and its suspended match connection.
+        if (!event.persisted) {
+          g.destroy()
+        }
+      })
       if (import.meta.env.DEV && debug) {
         Reflect.set(globalThis, '__ow', g)
       }

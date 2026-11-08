@@ -140,7 +140,10 @@ export class Matchmaker extends DurableObject<Env> {
     }
     const budget = await budgetState(this.env)
     if (!budget.duelsOpen) {
-      return { reason: 'budget', message: 'Bounty Hunt is closed until next month.' }
+      return {
+        reason: 'budget',
+        message: 'Bounty Hunt is closed until the next daily reset (00:00 UTC).',
+      }
     }
     const busyUntil = await this.ctx.storage.get<number>(`room:${accountId}`)
     const queued = this.ctx.getWebSockets(accountId).length > 1

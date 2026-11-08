@@ -14,19 +14,11 @@
  * Also hosts the first-bank objective chain and the bank moment (`objectives.ts`).
  */
 import type { AudioEngine } from '../../audio/audio.ts'
-import {
-  EV_DEPOSIT,
-  EV_KILL,
-  EV_STRONGBOX_OPEN,
-  KILL_DEAD_EYE,
-  KILL_FARMED,
-  KILL_PARDON,
-  type ServerControl,
-} from '../../contract/town.ts'
+import { KILL_DEAD_EYE, KILL_FARMED, KILL_PARDON, type ServerControl } from '../../contract/town.ts'
 import { FFA_XP, ffaBankXp } from '../../data/progression.ts'
-import type { WireEvent } from '../sim/codec-events.ts'
 import { PRACTICE_BOT_KILL_XP } from '../sim/constants.ts'
 import { BOT_KILL_XP } from '../sim/death.ts'
+import type { SimEvent } from '../sim/types.ts'
 import { Objectives } from './objectives.ts'
 import {
   type FrontierRecord,
@@ -198,9 +190,9 @@ export class Rounds {
   }
 
   /** Server events: your kills, deaths, deposits and strongboxes count toward the round. */
-  event(ev: WireEvent): void {
+  event(ev: SimEvent): void {
     const you = this.host.you()
-    if (ev.type === EV_KILL) {
+    if (ev.type === 'kill') {
       if (ev.victim === you) {
         this.stats.deaths++
         this.stats.streak = 0
@@ -217,7 +209,7 @@ export class Rounds {
           this.stats.xp += this.killXp(ev.victim, ev.flags)
         }
       }
-    } else if (ev.type === EV_DEPOSIT && ev.player === you) {
+    } else if (ev.type === 'deposit' && ev.player === you) {
       this.stats.banked += ev.amount + ev.commission
       this.stats.xp += ffaBankXp(ev.amount) * FFA_XP.bankPer10
       const purse = this.host.banked() + ev.amount + ev.commission
@@ -229,7 +221,7 @@ export class Rounds {
       if (this.pending) {
         setTimeout(() => this.end(), 1600)
       }
-    } else if (ev.type === EV_STRONGBOX_OPEN && ev.by === you) {
+    } else if (ev.type === 'strongbox_open' && ev.by === you) {
       this.stats.xp += FFA_XP.strongbox
     }
   }

@@ -1,6 +1,4 @@
 import { afterAll, beforeAll, describe, expect, test as it } from 'bun:test'
-import { InputQueue } from '../../../src/experiments/out-west/ffa/sim/input-queue.ts'
-import { ClientStream } from '../../../src/experiments/out-west/ffa/sim/snapshot.ts'
 import { newPlayer } from '../../../src/experiments/out-west/ffa/sim/state.ts'
 import { createProfileStatements } from '../economy/profile.ts'
 import { freshId, insertAccount, type TestDb, testDb } from '../economy/testing/d1.ts'
@@ -36,8 +34,6 @@ function session(accountId: string): Session {
     sessionId: crypto.randomUUID(),
     joinedAt: Date.now(),
     peer: null,
-    queue: new InputQueue(),
-    stream: new ClientStream(),
     banked: 0,
     roster: { id: 0, name: 'Settler', level: 1, prestige: 0, bot: false, loadout: [] },
     rtt: [],

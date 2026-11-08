@@ -3,6 +3,7 @@
   "name": "contra-leaderboard",
   "main": "src/index.ts",
   "compatibility_date": "2026-10-01",
+  "compatibility_flags": ["nodejs_compat"],
   "observability": { "enabled": true },
   // The API is served on its own subdomain (same site as contra.io, so refresh cookies stay first-party).
   // Requires the contra.io zone on Cloudflare (the DNS move at release; see RELEASE.md).
@@ -41,6 +42,7 @@
     { "name": "DAILY_GUEST_LIMIT", "namespace_id": "1001", "simple": { "limit": 4, "period": 60 } }
   ],
   "vars": {
+    "DISABLE_VOICE": "true",
     "ALLOWED_ORIGINS": "https://contra.io",
     "RP_ID": "contra.io",
     "RP_ORIGINS": "https://contra.io",

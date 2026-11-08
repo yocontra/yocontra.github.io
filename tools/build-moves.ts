@@ -1,26 +1,26 @@
 #!/usr/bin/env bun
 /**
- * Frontier's extra character clips (`models/moves.glb`): sprint, crouch, the jump, the pistol
+ * Frontier's extra character clips (`baked/moves.glb`): sprint, crouch, the jump, the pistol
  * reload, aim up and down, from Quaternius's CC0 Universal Animation Library (Standard), retargeted
- * exactly as `build-characters.ts` retargets the player's clips: joints renamed to the game's rig
+ * against the canonical player's skeleton: joints renamed to the game's rig
  * names, translation dropped except the hips (scaled to this skeleton's pelvis height), scale
  * dropped. The file holds the rig's joint hierarchy and the clips, no mesh; the Frontier client
  * loads it on top of `player.glb` (which the duel modes load alone), so only Frontier pays for it.
  *
- *   bun tools/build-moves.ts <UAL1_Standard.glb> [out=public/experiments/out-west/3d/models/moves.glb]
+ *   bun tools/build-moves.ts <UAL1_Standard.glb> [out=public/experiments/out-west/3d/baked/moves.glb]
  */
 import { stat } from 'node:fs/promises'
 import { Document, type Node as GNode, NodeIO } from '@gltf-transform/core'
-import { EXTMeshoptCompression, KHRMeshQuantization } from '@gltf-transform/extensions'
+import { ALL_EXTENSIONS } from '@gltf-transform/extensions'
 import { quantize, resample } from '@gltf-transform/functions'
-import { MeshoptDecoder, MeshoptEncoder } from 'meshoptimizer'
+import { MeshoptDecoder } from 'meshoptimizer'
 import { rigName } from './build-characters-rig.ts'
 
-const [SRC = '', OUT = 'public/experiments/out-west/3d/models/moves.glb'] = process.argv.slice(2)
+const [SRC = '', OUT = 'public/experiments/out-west/3d/baked/moves.glb'] = process.argv.slice(2)
 if (!SRC) {
   throw new Error('usage: bun tools/build-moves.ts <UAL1_Standard.glb> [out]')
 }
-const PLAYER = 'public/experiments/out-west/3d/models/player.glb'
+const PLAYER = 'public/experiments/out-west/3d/baked/player.glb'
 
 /** Game clip name ← Universal Animation Library clip. */
 const CLIPS: Record<string, string> = {
@@ -43,10 +43,9 @@ const CLIPS: Record<string, string> = {
 }
 
 await MeshoptDecoder.ready
-await MeshoptEncoder.ready
 const io = new NodeIO()
-  .registerExtensions([EXTMeshoptCompression, KHRMeshQuantization])
-  .registerDependencies({ 'meshopt.decoder': MeshoptDecoder, 'meshopt.encoder': MeshoptEncoder })
+  .registerExtensions(ALL_EXTENSIONS)
+  .registerDependencies({ 'meshopt.decoder': MeshoptDecoder })
 
 const ual = await io.read(SRC)
 const player = await io.read(PLAYER)
@@ -146,10 +145,6 @@ for (const [ours, theirs] of Object.entries(CLIPS)) {
 }
 
 await out.transform(resample({ tolerance: 2e-4 }), quantize())
-out
-  .createExtension(EXTMeshoptCompression)
-  .setRequired(true)
-  .setEncoderOptions({ method: EXTMeshoptCompression.EncoderMethod.FILTER })
 await io.write(OUT, out)
 const { size } = await stat(OUT)
 console.log(`wrote ${OUT} ${(size / 1024).toFixed(0)} KB`)

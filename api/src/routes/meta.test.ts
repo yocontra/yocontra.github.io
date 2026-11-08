@@ -82,7 +82,7 @@ async function call(
   if (opts.body !== undefined) {
     init.body = JSON.stringify(opts.body)
   }
-  const request = new Request(url, init)
+  const request = new Request(url.toString(), init)
   const response =
     (await progressRoutes(request, env, url, ctx)) ??
     (await daily(request, env, url, ctx)) ??
@@ -392,11 +392,11 @@ describe('the Daily Outlaw routes', () => {
     expect(tries.filter((r) => r.status === 429)).toHaveLength(2)
   })
 
-  it('closes when the month is over budget', async () => {
-    const month = new Date().toISOString().slice(0, 7)
+  it('closes when today is over budget', async () => {
+    const day = new Date().toISOString().slice(0, 10)
     await t.db
       .prepare("INSERT INTO usage (month, metric, amount) VALUES (?, 'duel_seconds', 10000000)")
-      .bind(month)
+      .bind(day)
       .run()
     const id = await player()
     const r = await call('POST', '/daily/sessions', { as: id, body: { turnstileToken: 'x' } })

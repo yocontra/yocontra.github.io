@@ -6,7 +6,7 @@
  * - a lobby with ≤4 players is drained (no new joins) while another lobby has room for them;
  * - players are never moved; a leaver's slot is reserved for 60 s for a rejoin;
  * - an empty extra lobby is forgotten after 2 minutes;
- * - at most `MAX_LOBBIES`, and nothing new while the month's budget is spent;
+ * - at most `MAX_LOBBIES`, and nothing new while the daily budget is spent;
  * - **the Badlands** (§8): flagged accounts ride only in Badlands lobbies (`lobby:500` and up), and
  *   honest accounts never do. A Badlands lobby counts toward `MAX_LOBBIES`, never drains, and is
  *   left out of the public directory view (it's a shadow pool). Its lobby runs server bots so a
@@ -17,6 +17,8 @@ import { MAX_PLAYERS, SOFT_CAP } from '../../../src/experiments/out-west/ffa/sim
 export const HOME_LOBBY = 'lobby:0'
 export const RESERVE_MS = 60_000
 export const GC_EMPTY_MS = 120_000
+/** Healthy native rooms renew their population with their thirty-second usage lease. */
+export const POPULATION_TTL_MS = 90_000
 export const DRAIN_AT = 4
 /** A join the lobby hasn't confirmed yet holds its slot this long. */
 export const PENDING_MS = 30_000
@@ -144,9 +146,7 @@ function overflow(reg: RegistryState): LobbyEntry | undefined {
 
 export function assign(reg: RegistryState, opts: AssignOptions): Assignment {
   const { now, accountId } = opts
-  for (const e of Object.values(reg.lobbies)) {
-    prune(e, now)
-  }
+  collect(reg, now)
   const pool = opts.pool ?? 'main'
   // A rejoin goes back to the lobby holding your slot, budget or not: your carry may be there.
   const held = heldFor(reg, accountId, pool)
@@ -228,8 +228,14 @@ function updateDraining(reg: RegistryState): void {
 /** Forget empty extra lobbies after 2 minutes. Returns the ids removed. */
 export function collect(reg: RegistryState, now: number): string[] {
   const removed: string[] = []
+  let populationExpired = false
   for (const e of Object.values(reg.lobbies)) {
     prune(e, now)
+    if (e.count > 0 && now - e.lastBeat > POPULATION_TTL_MS) {
+      e.count = 0
+      e.emptySince = now
+      populationExpired = true
+    }
     const idle =
       e.count === 0 && occupancy(e) === 0 && e.emptySince > 0 && now - e.emptySince >= GC_EMPTY_MS
     if (e.id !== HOME_LOBBY && idle) {
@@ -237,7 +243,7 @@ export function collect(reg: RegistryState, now: number): string[] {
       removed.push(e.id)
     }
   }
-  if (removed.length > 0) {
+  if (removed.length > 0 || populationExpired) {
     updateDraining(reg)
   }
   return removed

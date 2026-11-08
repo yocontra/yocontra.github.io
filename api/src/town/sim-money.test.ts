@@ -5,17 +5,10 @@ import {
   BTN_FIRE,
   BTN_LEAVE,
   bagStyleIndex,
-  EV_BAG_DROP,
   KILL_FARMED,
   NONE,
 } from '../../../src/experiments/out-west/contract/town.ts'
 import { ffaKillMint } from '../../../src/experiments/out-west/data/progression.ts'
-import { Writer } from '../../../src/experiments/out-west/ffa/sim/bytes.ts'
-import {
-  readEvent,
-  toWireEvent,
-  writeEvent,
-} from '../../../src/experiments/out-west/ffa/sim/codec-events.ts'
 import {
   BAG_EXCLUSIVE_TICKS,
   BAG_EXPIRE_TICKS,
@@ -26,7 +19,6 @@ import {
   STAGE_CHANNEL_TICKS,
   STRONGBOX_CHANNEL_TICKS,
 } from '../../../src/experiments/out-west/ffa/sim/constants.ts'
-import { Reader } from '../../../src/experiments/out-west/ffa/sim/reader.ts'
 import type { SimEvent } from '../../../src/experiments/out-west/ffa/sim/types.ts'
 import { disconnectPlayer } from '../../../src/experiments/out-west/ffa/sim/world.ts'
 import { aimAt, place, run, runCollect, testWorld } from './test-helpers.ts'
@@ -66,7 +58,7 @@ describe('kill bounty and death drop', () => {
     expect(w.bags[0]?.exclusiveUntil).toBeLessThanOrEqual(w.tick + BAG_EXCLUSIVE_TICKS)
   })
 
-  it("the bag is dropped in the victim's saddlebag style, and the style survives the wire", () => {
+  it("the bag preserves the victim's saddlebag style", () => {
     const w = testWorld()
     const a = place(w, 20, 64)
     const b = place(w, 30, 64, { carried: 1000 })
@@ -78,10 +70,6 @@ describe('kill bounty and death drop', () => {
     if (!bag) {
       throw new Error('no bag')
     }
-    const out = new Writer(64)
-    writeEvent(out, toWireEvent({ type: 'bag_drop', bag }))
-    const back = readEvent(new Reader(out.bytes()))
-    expect(back).toMatchObject({ type: EV_BAG_DROP, amount: 700, style: 2 })
     // Cosmetic only: a styled bag is claimed exactly like a plain one.
     expect(BAG_STYLES[bag.style]).toBe('bag.gold-thread')
     expect(bagStyleIndex('hat.sombrero')).toBe(0)

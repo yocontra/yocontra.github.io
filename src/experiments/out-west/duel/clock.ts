@@ -1,7 +1,9 @@
 import type { DuelOutcome } from '../data/economy.ts'
 import { planFakes } from './judge.ts'
 import { CALL_FRAME_SLACK_MS } from './pending-call.ts'
-import { between, rng } from './state.ts'
+
+const rng = Math.random
+const between = (a: number, b: number): number => a + (b - a) * rng()
 
 /**
  * Who owns the standoff's timing. The director never knows which clock it

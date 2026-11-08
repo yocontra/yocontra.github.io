@@ -1,7 +1,8 @@
 # Releasing contra.io
 
 The site is GitHub Pages; the out-west API is a Cloudflare Worker on `api.contra.io`.
-Status: **live**. The one-time setup below is kept for a rebuild or a new account.
+The PlayCanvas rewrite is implemented locally; this work has not deployed it or changed Cloudflare billing.
+The one-time setup below describes the existing hosting arrangement.
 
 ## Routine deploys
 
@@ -11,7 +12,10 @@ commit's Worker, then publishes Pages only after the Worker succeeds. A newer pu
 an in-progress publication. There is no separate manual API-only entry point.
 
 The Worker uses immediate Durable Object updates. The Worker → Pages cutover is not atomic:
-mismatched Frontier versions are refused, so refresh after Pages finishes publishing. The Pages
+Frontier checks the public wire version, shared runtime protocol and generated collision content hash
+before allocating a room. Mismatches are refused; refresh after Pages finishes publishing. The old
+custom WebSocket endpoint returns 410. The new signed seat is consumed by the Colyseus SDK; reconnects
+obtain fresh authenticated, Turnstile-verified one-use tickets. The Pages
 build keys model, texture and catalog-image URLs by its commit SHA, bypassing old service-worker
 asset keys without forcing other active tabs to reload.
 
@@ -48,6 +52,10 @@ The `Check` workflow gives a second, clean-runner result on every push.
 
 ## Proximity voice (Cloudflare RealtimeKit)
 
+`DISABLE_VOICE=true` in the production configuration keeps this service off under the $0 hosting
+requirement. Existing voice controls remain compatible, but no provider session is created. Enabling
+voice requires an explicitly approved change to the hosting policy and verified provider limits.
+
 The opt-in voice chat in Frontier and Bounty Hunt uses a RealtimeKit app named `out-west` and the
 audio-only preset `out-west-voice` (video, screenshare and chat disabled). The account, app and
 preset ids are `vars` in `api/wrangler.jsonc`; `REALTIMEKIT_API_TOKEN` is a Worker secret with the
@@ -67,8 +75,41 @@ repeat load is ~0 MB on the wire). Bump `VERSION` in that file whenever an unhas
 `public/experiments/out-west/` changes (models, textures, fonts, UI art). Hashed `/_astro/` bundles
 carry their own names and need no bump.
 
-**Budget:** the Workers Paid plan is $5/month. The API enforces its own ceilings (`api/src/budget.ts`)
-so usage stays inside the included quota, and Frontier closes for the month instead of overspending.
+**Budget:** the rewrite targets **Workers Free, $0/month** with SQLite Durable Objects. The source
+configuration does not prove the account's subscription tier. The available API token has no billing
+read permission, so an account owner still needs to confirm Workers Free in the dashboard. No billing
+setting has been changed by this rewrite.
+
+Gameplay admits at most 80% of the documented daily allowance: 10,400 GB-s, split into 66,560
+Frontier room-seconds and 16,640 duel room-seconds at the conservative 128 MiB allocation. Incoming
+WebSocket messages are capped at 1,200,000/day (60,000 request equivalents), leaving 20,000 of the
+80,000 gameplay request allocation for coordination and 20,000 requests for account/settlement work.
+These counters are application admission controls; they do not account for unrelated account traffic
+or replace the provider's Free-plan limits.
+
+The singleton SQLite directory atomically reserves 60-second Frontier leases and a worst-case
+32-player × 20 messages/second allowance. Rooms renew on an independent 30-second timer, reconcile
+occupied time against the directory's actual UTC timestamp, and close on denial or five-second renewal
+failure. A socket closes above 20 outer messages/second; normal inputs batch two SDK frames at 10 Hz.
+Expired, unreported reservations remain charged conservatively. Usage keys reset at UTC midnight;
+old monthly rows stay intact. Admission refuses new online play after a ceiling, while local practice
+continues. Last-human departure releases the lease and native physics world; abandoned seat
+reservations are cleaned up after 30 seconds. Pending D1 settlements retain their idempotency keys.
+
+## Native runtime checks
+
+Frontier runs 20 Hz game rules with three native 60 Hz physics steps. Rendering, PBR materials,
+animation and local prediction use PlayCanvas; the authoritative DO uses AppBase with
+NullGraphicsDevice and a room-owned AmmoPhysicsWorld. Colyseus supplies schema replication, input
+encoding and prediction. The SQLite directory selects the owner DO before its local Colyseus
+registry is consulted; LocalPresence/LocalDriver do not represent global room state.
+
+Run `bun test tests/runtime` for real workerd physics, Wrangler-bundled quiet-client state delivery,
+room isolation, global lease races and authenticated production-route input/lease shutdown tests.
+`bun test --timeout 30000 api` covers accounts, economy, settlement and native gameplay parity.
+See `src/experiments/out-west/runtime/vendor/README.md` for reproducible Ammo assets, licenses and
+the Workers-only precompiled callback trampoline. Do not replace the Wrangler bundle test with a
+Node-only physics test: Workers prohibit dynamic Wasm compilation.
 
 **Real-device check:** before announcing, run the iPhone 13 mini checklist in `tools/PERF.md`.
 

@@ -6,7 +6,16 @@
     "useIgnoreFile": true
   },
   "files": {
-    "includes": ["**", "!dist", "!.astro", "!public", "!node_modules", "!bun.lock"]
+    "maxSize": 2097152,
+    "includes": [
+      "**",
+      "!dist",
+      "!.astro",
+      "!public",
+      "!node_modules",
+      "!bun.lock",
+      "!src/experiments/out-west/runtime/vendor"
+    ]
   },
   "formatter": {
     "enabled": true,
@@ -155,6 +164,12 @@
     }
   },
   "overrides": [
+    {
+      "includes": ["src/experiments/out-west/content/collision.json"],
+      "formatter": {
+        "enabled": false
+      }
+    },
     {
       "includes": ["src/styles/global.css"],
       "linter": {

@@ -1,112 +1,20 @@
-/** Wire v5 movement and gunplay: sprint, sprint-to-fire, crouch, slide, the sights, jump, spread. */
 import { describe, expect, test as it } from 'bun:test'
 import {
   BTN_AIM,
   BTN_CROUCH,
   BTN_FIRE,
-  BTN_JUMP,
   BTN_SPRINT,
   WEAPON_REVOLVER,
   WEAPON_SHOTGUN,
 } from '../../../src/experiments/out-west/contract/town.ts'
-import {
-  ADS_SPEED_FACTOR,
-  CROUCH_SPEED,
-  RUN_SPEED,
-  SLIDE_COOLDOWN_TICKS,
-  SPRINT_OUT_TICKS,
-  SPRINT_SPEED,
-  TICK_HZ,
-} from '../../../src/experiments/out-west/ffa/sim/constants.ts'
-import { buildGrid } from '../../../src/experiments/out-west/ffa/sim/layout.ts'
-import { inIframes, stepMove } from '../../../src/experiments/out-west/ffa/sim/move.ts'
+import { SPRINT_OUT_TICKS } from '../../../src/experiments/out-west/ffa/sim/constants.ts'
 import { spreadDeg } from '../../../src/experiments/out-west/ffa/sim/spread.ts'
-import { type MoveState, makeMoveState } from '../../../src/experiments/out-west/ffa/sim/types.ts'
-import { aimAt, place, run, testWorld } from './test-helpers.ts'
+import { aimAt, place, run } from './test-helpers.ts'
+import { nativeTestWorld } from './testing/native.ts'
 
-const grid = buildGrid()
-const state = (x: number, z: number): MoveState => makeMoveState(x, z)
-// biome-ignore lint/complexity/useMaxParams: a test helper with stick defaults
-const go = (m: MoveState, ticks: number, buttons: number, moveX = 127, moveZ = 0) => {
-  let prev = 0
-  for (let i = 0; i < ticks; i++) {
-    stepMove(grid, m, { moveX, moveZ, aim: 0, buttons, prevButtons: prev, canMove: true })
-    prev = buttons
-  }
-}
-
-describe('v5 movement', () => {
-  it('sprints at 7.6 m/s along the aim, not sideways or backwards', () => {
-    const m = state(20, 64)
-    go(m, TICK_HZ, BTN_SPRINT)
-    expect(m.x - 20).toBeCloseTo(SPRINT_SPEED, 1)
-    expect(m.sprinting).toBe(true)
-    const side = state(20, 60)
-    go(side, TICK_HZ, BTN_SPRINT, 0, 127)
-    expect(side.z - 60).toBeCloseTo(RUN_SPEED, 1)
-    expect(side.sprinting).toBe(false)
-  })
-
-  it('crouch and the sights slow you', () => {
-    const c = state(20, 64)
-    go(c, TICK_HZ, BTN_CROUCH)
-    expect(c.x - 20).toBeCloseTo(CROUCH_SPEED, 1)
-    const a = state(20, 64)
-    go(a, TICK_HZ, BTN_AIM)
-    expect(a.x - 20).toBeCloseTo(RUN_SPEED * ADS_SPEED_FACTOR, 1)
-    const s = state(20, 64)
-    go(s, TICK_HZ, BTN_AIM | BTN_SPRINT)
-    expect(s.sprinting).toBe(false)
-  })
-
-  it('crouch mid-sprint slides about 4.4 m with i-frames up front, then a cooldown', () => {
-    const m = state(14, 64)
-    go(m, 4, BTN_SPRINT)
-    const x0 = m.x
-    stepMove(grid, m, {
-      moveX: 127,
-      moveZ: 0,
-      aim: 0,
-      buttons: BTN_SPRINT | BTN_CROUCH,
-      prevButtons: BTN_SPRINT,
-      canMove: true,
-    })
-    expect(m.slideTicks).toBeGreaterThan(0)
-    expect(inIframes(m)).toBe(true)
-    let ticks = 1
-    while (m.slideTicks > 0) {
-      go(m, 1, BTN_CROUCH, 0, 0)
-      ticks++
-    }
-    expect(m.x - x0).toBeGreaterThan(3.8)
-    expect(m.x - x0).toBeLessThan(5)
-    expect(ticks).toBe(13)
-    expect(m.slideCooldown).toBeGreaterThan(0)
-    expect(m.slideCooldown).toBeLessThan(SLIDE_COOLDOWN_TICKS)
-  })
-
-  it('a jump keeps its take-off speed and steers only a little', () => {
-    const m = state(14, 64)
-    go(m, 4, BTN_SPRINT)
-    stepMove(grid, m, {
-      moveX: 127,
-      moveZ: 0,
-      aim: 0,
-      buttons: BTN_SPRINT | BTN_JUMP,
-      prevButtons: BTN_SPRINT,
-      canMove: true,
-    })
-    expect(m.jumpTicks).toBeGreaterThan(0)
-    const x0 = m.x
-    // stick pulled back in the air: momentum carries on
-    go(m, 4, 0, -127, 0)
-    expect(m.x).toBeGreaterThan(x0 + 0.5)
-  })
-})
-
-describe('v5 gunplay', () => {
-  it('a trigger pull mid-sprint fires once the gun is up', () => {
-    const w = testWorld()
+describe('native movement and gunplay', () => {
+  it('a trigger pull mid-sprint fires once the gun is up', async () => {
+    const w = await nativeTestWorld()
     const a = place(w, 20, 64)
     const b = place(w, 30, 64)
     const aim = aimAt(a, b)
@@ -148,8 +56,8 @@ describe('v5 gunplay', () => {
     )
   })
 
-  it('anim byte carries the stance bits', () => {
-    const w = testWorld()
+  it('replicates crouch and ADS stance', async () => {
+    const w = await nativeTestWorld()
     const a = place(w, 20, 64)
     run(w, 1, { [a.id]: () => ({ buttons: BTN_CROUCH | BTN_AIM }) })
     expect(a.crouched).toBe(true)

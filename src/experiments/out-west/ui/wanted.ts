@@ -6,7 +6,7 @@ import type { Poster } from '../contract/duel.ts'
 import { itemById, normalizeLoadout } from '../data/catalog.ts'
 import { money } from '../data/economy.ts'
 import { titleFor } from '../data/progression.ts'
-import { FRAME_COLORS } from '../scene/loadout.ts'
+import { FRAME_COLORS } from '../scene/draw-sounds.ts'
 import { type IconName, icon } from './icons.ts'
 import { el } from './sheet.ts'
 

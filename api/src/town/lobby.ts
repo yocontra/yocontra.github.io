@@ -8,12 +8,17 @@
  * Money: deposits are settled in D1 every 2 s (each idempotent under its own key, persisted to DO
  * storage first so a failed batch retries under the same key). Carried cash lives in memory only.
  */
+
 import { DurableObject } from 'cloudflare:workers'
+import { connectClientToRoom, createAuthContext } from '@colyseus/core'
 import { bagStyleIndex } from '../../../src/experiments/out-west/contract/town.ts'
-import { TICK_MS } from '../../../src/experiments/out-west/ffa/sim/constants.ts'
-import { recordUsage } from '../budget.ts'
+import { budgetState, recordUsage } from '../budget.ts'
 import { getProfile } from '../economy/profile.ts'
+import { dyesOf } from '../economy/sinks.ts'
 import type { Env } from '../env.ts'
+import { NativeBudgetRefusal } from '../game/admission.ts'
+import { createNativeRoom, type NativeFrontierRoom, reserveNativeRoom } from '../game/room.ts'
+import { CloudflareClient } from '../game/socket.ts'
 import { FLAG_BADLANDS, flagStatements, isShadowed, standing } from '../moderation/flags.ts'
 import {
   addVoiceParticipant,
@@ -22,10 +27,10 @@ import {
   removeVoiceParticipant,
 } from '../voice/realtime.ts'
 import {
-  DEFAULT_TOWN_POPULATION,
   type Departure,
   FLAG_AIMBOT,
   LobbyCore,
+  type Session,
   type SettledDeposit,
   type TickOutput,
 } from './core.ts'
@@ -36,15 +41,22 @@ import {
   sessionStartStatement,
   xpFlushStatements,
 } from './settle.ts'
-import { SocketPeer } from './socket-peer.ts'
 import { lobbyUpgradeError } from './wire.ts'
 
-const DEPOSIT_FLUSH_MS = 2000
-const MINUTE_MS = 60_000
 const DIRECTORY_DEBOUNCE_MS = 5000
-const MAX_CATCH_UP_TICKS = 4
-const MAX_DEV_BOTS = 31
 const DIRECTORY = 'dir:global'
+interface NativeVisit {
+  sessionId: string
+  lobbyId: string
+}
+interface PendingXp {
+  xp: number
+  flushIndex: number
+  stats: import('../../../src/experiments/out-west/ffa/sim/types.ts').Player['stats']
+  flags: number
+  flagNow: boolean
+  leftAt: number | null
+}
 
 export interface LobbyStats {
   lobbyId: string
@@ -56,17 +68,241 @@ export interface LobbyStats {
   msgsIn: number
   msgsOut: number
   droppedIn: number
+  links: { playerId: number; rtt: number[]; tcpRtt: number | null }[]
   tickMs: { p50: number; p95: number; p99: number; max: number; samples: number }
   minted: number
   burned: number
 }
 
 export class Lobby extends DurableObject<Env> {
+  private nativeCleanup: ReturnType<typeof setTimeout> | undefined
+  private nativeLeaseId = ''
+  private nativeLeaseTimer: ReturnType<typeof setTimeout> | undefined
+  private nativeLeaseWatchdog: ReturnType<typeof setTimeout> | undefined
+  private nativeLeaseMessages = 0
+  private native: NativeFrontierRoom | undefined
+  private nativeInitializing: Promise<NativeFrontierRoom> | undefined
+  private readonly nativeClients = new Map<WebSocket, CloudflareClient>()
+  private readonly nativeVisits = new Map<string, NativeVisit>()
+  private readonly staleVisits = new Map<string, NativeVisit>()
+  private readonly xpFlushes = new WeakMap<Session, Promise<void>>()
+  private readonly pendingXp = new WeakMap<Session, PendingXp>()
+  private settlementRetryMs = 5000
+
+  /** Called only through the authenticated Worker router, never from user-supplied HTTP headers. */
+  async reserveNative(lobbyId: string, accountId: string, protocol: number) {
+    if (this.core && !this.native && this.core.connectedHumans() > 0) {
+      throw new Error('Legacy room draining')
+    }
+    this.lobbyId = lobbyId
+    this.core ??= new LobbyCore(lobbyId, crypto.getRandomValues(new Uint32Array(1))[0] ?? 1)
+    const core = this.core
+    this.nativeInitializing ??= (async () => {
+      this.nativeLeaseId = crypto.randomUUID()
+      const grant = await this.directory().leaseRoom(this.nativeLeaseId, 0)
+      if (!grant.ok) {
+        this.nativeLeaseId = ''
+        throw new NativeBudgetRefusal('Today’s free hosting allowance is exhausted')
+      }
+      return createNativeRoom({
+        id: this.ctx.id.toString(),
+        core,
+        onTick: (out) => {
+          this.handle(out)
+          this.afterNativeStep(core)
+        },
+        onJoin: (session) => this.onNativeJoin(core, session),
+        onLeave: (session) => this.onDisconnect(core, session.playerId),
+        onEmpty: () => this.lingerNative(core),
+        onControl: (session, text, gameNow) => {
+          if (!this.voiceText(core, session.playerId, text)) {
+            core.onText(session.playerId, text, gameNow, true)
+          }
+        },
+      })
+    })()
+      .then((created) => {
+        this.native = created
+        this.armNativeLease(core)
+        return created
+      })
+      .catch((error) => {
+        this.nativeInitializing = undefined
+        throw error
+      })
+    let room: NativeFrontierRoom
+    try {
+      room = await this.nativeInitializing
+    } catch (error) {
+      if (error instanceof NativeBudgetRefusal) {
+        return { refused: 'over_budget' as const }
+      }
+      throw error
+    }
+    const [profile, status, dyes] = await Promise.all([
+      getProfile(this.env, accountId),
+      standing(this.env, accountId),
+      dyesOf(this.env, accountId),
+    ])
+    if (!profile) {
+      throw new Error('Profile unavailable')
+    }
+    const now = Date.now()
+    this.occupiedSince ||= now
+    this.lastMinute ||= now
+    this.lastDepositFlush ||= now
+    if (this.nativeCleanup === undefined) {
+      this.nativeCleanup = setTimeout(() => {
+        this.nativeCleanup = undefined
+        if (core.connectedHumans() === 0) {
+          this.stop(core, Date.now())
+        }
+      }, 30_000)
+    }
+    return reserveNativeRoom(
+      room,
+      {
+        accountId,
+        name: profile.name,
+        level: profile.level,
+        prestige: profile.prestige,
+        loadout: Object.values(profile.loadout),
+        banked: profile.purse,
+        tcpRtt: null,
+        ledger: true,
+        saddlebag: bagStyleIndex(profile.loadout.saddlebag),
+        frozen: isShadowed(status.flags),
+        blocked: status.blocked,
+        appearance: { loadout: profile.loadout, dyes },
+      },
+      protocol,
+    )
+  }
+
+  private async onNativeJoin(core: LobbyCore, session: Session) {
+    if (session.ledger) {
+      await this.xpFlushes.get(session)
+      if (this.pendingXp.has(session)) {
+        const player = core.world.players[session.playerId]
+        if (player) {
+          await this.flushXp({ session, player }, null)
+        }
+        if (this.pendingXp.has(session)) {
+          throw new Error('Session settlement is pending. Try reconnecting shortly.')
+        }
+      }
+      await sessionStartStatement(this.env, this.lobbyId, session).run()
+      const visit = { sessionId: session.sessionId, lobbyId: this.lobbyId }
+      await this.ctx.storage.put(`visit:${session.sessionId}`, visit)
+      this.nativeVisits.set(session.sessionId, visit)
+    }
+    clearTimeout(this.nativeCleanup)
+    this.nativeCleanup = undefined
+    this.arrived.push(session.accountId)
+    this.reportDirectory(true)
+    this.peakHumans = Math.max(this.peakHumans, core.humans())
+  }
+
+  private lingerNative(core: LobbyCore) {
+    if (this.core !== core || this.nativeCleanup !== undefined) {
+      return
+    }
+    // Keep the native world ticking through the same ten-second avatar/rejoin grace.
+    this.nativeCleanup = setTimeout(() => {
+      this.nativeCleanup = undefined
+      if (this.core === core && core.connectedHumans() === 0) {
+        this.stop(core, Date.now())
+      }
+    }, 10_000)
+  }
+
+  override webSocketMessage(socket: WebSocket, message: ArrayBuffer | string) {
+    const client = this.nativeClients.get(socket)
+    if (!client) {
+      socket.close(1012, 'The room restarted. Reconnect with a fresh ticket.')
+      return
+    }
+    if (this.core) {
+      this.core.metrics.msgsIn++
+    }
+    client.dispatch(message)
+  }
+  override webSocketClose(socket: WebSocket, code: number, reason: string) {
+    // A hibernatable socket must acknowledge the close frame. Otherwise browsers wait
+    // for their close timeout before reconnecting, beyond the avatar's linger grace.
+    socket.close(code === 1005 || code === 1006 ? 1000 : code, reason)
+    this.nativeClients.get(socket)?.disconnected(code, reason)
+    this.nativeClients.delete(socket)
+  }
+  override webSocketError(socket: WebSocket) {
+    this.webSocketClose(socket, 1011, 'Connection unavailable')
+  }
+
+  private directory() {
+    return this.env.LOBBY_DIR.get(this.env.LOBBY_DIR.idFromName(DIRECTORY))
+  }
+  private armNativeLease(core: LobbyCore) {
+    clearTimeout(this.nativeLeaseTimer)
+    this.nativeLeaseTimer = setTimeout(() => {
+      if (this.core !== core) {
+        return
+      }
+      this.nativeLeaseWatchdog = setTimeout(() => this.stop(core, Date.now()), 5000)
+      this.ctx.waitUntil(this.renewNativeLease(core))
+    }, 30_000)
+  }
+  private async renewNativeLease(core: LobbyCore) {
+    const id = this.nativeLeaseId
+    const messages = core.metrics.msgsIn - this.nativeLeaseMessages
+    this.nativeLeaseMessages = core.metrics.msgsIn
+    try {
+      const grant = await this.directory().leaseRoom(id, messages, false, {
+        lobbyId: this.lobbyId,
+        humans: core.humans(),
+        accounts: core.accounts(),
+      })
+      if (this.core !== core || this.nativeLeaseId !== id) {
+        await this.directory().leaseRoom(id, 0, true)
+        return
+      }
+      clearTimeout(this.nativeLeaseWatchdog)
+      this.nativeLeaseWatchdog = undefined
+      if (grant.ok) {
+        this.armNativeLease(core)
+      } else {
+        core.notice('Today’s free hosting allowance is exhausted. Practice remains open.')
+        this.stop(core, grant.observedAt)
+      }
+    } catch {
+      if (this.core === core && this.nativeLeaseId === id) {
+        this.stop(core, Date.now())
+      }
+    }
+  }
+  private afterNativeStep(core: LobbyCore) {
+    const now = Date.now()
+    this.peakHumans = Math.max(this.peakHumans, core.humans())
+    if (core.world.tick % 40 === 0) {
+      this.lastDepositFlush = now
+      void this.flushDeposits()
+    }
+    if (core.world.tick % 1200 === 0) {
+      this.lastMinute = now
+      this.ctx.waitUntil(
+        this.minute(core, now).then(async () => {
+          if (!(await budgetState(this.env)).frontierOpen) {
+            core.notice('Town has reached today’s free hosting allowance. Practice is still open.')
+            await this.native?.disconnect()
+            this.stop(core, Date.now())
+          }
+        }),
+      )
+    }
+    this.reportDirectory(false)
+  }
+
   private core: LobbyCore | null = null
   private lobbyId = ''
-  private timer: ReturnType<typeof setInterval> | undefined
-  private epoch = 0
-  private ticksRun = 0
   private readonly pending = new Map<string, SettledDeposit>()
   /** Sessions whose aimbot flag has been written to `accounts.flags` already. */
   private readonly aimbotFlagged = new Set<string>()
@@ -83,7 +319,7 @@ export class Lobby extends DurableObject<Env> {
   private readonly arrived: string[] = []
   private readonly departed: string[] = []
   private lastDirectoryReport = 0
-  private tickDurations: number[] = []
+  private readonly tickDurations: number[] = []
   /** RealtimeKit meeting for this lobby, and each player's participant id. */
   private voiceMeetingId = ''
   private readonly voiceParticipants = new Map<number, string>()
@@ -95,7 +331,17 @@ export class Lobby extends DurableObject<Env> {
   constructor(ctx: DurableObjectState, env: Env) {
     super(ctx, env)
     this.flushing = false
-    void ctx.blockConcurrencyWhile(async () => {
+    const restored = ctx.blockConcurrencyWhile(async () => {
+      ctx.storage.sql.exec(
+        'CREATE TABLE IF NOT EXISTS pending_deposits (key TEXT PRIMARY KEY, data TEXT NOT NULL)',
+      )
+      for (const row of ctx.storage.sql.exec<{ key: string; data: string }>(
+        'SELECT key,data FROM pending_deposits',
+      )) {
+        const deposit = JSON.parse(row.data) as SettledDeposit & { lobbyId: string }
+        this.pending.set(row.key, deposit)
+        this.lobbyId ||= deposit.lobbyId
+      }
       const saved = await ctx.storage.list<SettledDeposit & { lobbyId: string }>({ prefix: 'dep:' })
       for (const [key, d] of saved) {
         this.pending.set(key.slice(4), d)
@@ -111,106 +357,62 @@ export class Lobby extends DurableObject<Env> {
           this.voiceParticipants.set(Number(id), participant)
         }
       }
+      return [...(await ctx.storage.list<NativeVisit>({ prefix: 'visit:' })).values()]
     })
-  }
-
-  private dev(): boolean {
-    return this.env.RP_ID === 'localhost'
+    // Native worlds/seats are transient. Close only this DO's recorded visits after a restart.
+    ctx.waitUntil(
+      restored.then((visits) => {
+        for (const visit of visits) {
+          this.staleVisits.set(visit.sessionId, visit)
+        }
+        return this.recoverPersistedState()
+      }),
+    )
   }
 
   override async fetch(request: Request): Promise<Response> {
     const url = new URL(request.url)
+    if (request.headers.get('X-Native-Room')) {
+      const upgradeError = lobbyUpgradeError(request)
+      if (upgradeError) {
+        return upgradeError
+      }
+      if (!this.native || request.headers.get('X-Native-Room') !== this.native.roomId) {
+        return new Response('Room expired', { status: 409 })
+      }
+      const sessionId = url.searchParams.get('sessionId')
+      if (!sessionId) {
+        return new Response('Seat required', { status: 401 })
+      }
+      const core = this.core
+      if (!core) {
+        return new Response('Room expired', { status: 409 })
+      }
+      const pair = new WebSocketPair()
+      const server = pair[1]
+      this.ctx.acceptWebSocket(server)
+      const client = new CloudflareClient(sessionId, server, (bytes) => {
+        core.metrics.bytesOut += bytes
+        core.metrics.msgsOut++
+      })
+      this.nativeClients.set(server, client)
+      try {
+        await connectClientToRoom(
+          this.native,
+          client,
+          createAuthContext({ headers: request.headers }),
+          {},
+        )
+      } catch (error) {
+        this.nativeClients.delete(server)
+        server.close(4001, error instanceof Error ? error.message : 'Join failed')
+      }
+      return new Response(null, { status: 101, webSocket: pair[0] })
+    }
     if (url.pathname === '/stats') {
       return Response.json(this.stats())
     }
-    const upgradeError = lobbyUpgradeError(request)
-    if (upgradeError) {
-      return upgradeError
-    }
-    this.lobbyId = request.headers.get('X-Lobby-Id') ?? this.lobbyId
-    const accountId = request.headers.get('X-Account-Id') ?? ''
-    const name = request.headers.get('X-Name') ?? ''
-    if (!(accountId && this.lobbyId)) {
-      return new Response('Bad join', { status: 400 })
-    }
-    const [profile, standingNow] = await Promise.all([
-      getProfile(this.env, accountId),
-      standing(this.env, accountId),
-    ])
-    if (!(profile || this.dev())) {
-      return new Response('No profile', { status: 403 })
-    }
-    this.core ??= new LobbyCore(this.lobbyId, crypto.getRandomValues(new Uint32Array(1))[0] ?? 1)
-    const core = this.core
-    // Dev only: `?bots=N` asks for N bots; an explicit `?bots=0` empties the town of bots
-    // (humans only, for end-to-end tests such as test/bank-e2e.ts). No header: ambient bots.
-    const botsHeader = request.headers.get('X-Bots') ?? ''
-    const bots = Number(botsHeader)
-    if (this.dev() && botsHeader !== '' && Number.isInteger(bots) && bots >= 0) {
-      if (bots === 0) {
-        core.ambientPopulation = 0
-        core.botTarget = 0
-      } else {
-        core.ambientPopulation = DEFAULT_TOWN_POPULATION
-        core.botTarget = Math.min(MAX_DEV_BOTS, Math.max(core.botTarget, bots))
-      }
-    }
-    const pair = new WebSocketPair()
-    const [client, server] = [pair[0], pair[1]]
-    // Newer compatibility dates deliver binary frames as Blob by default; the codec wants bytes.
-    server.binaryType = 'arraybuffer'
-    server.accept()
-    const peer = new SocketPeer(server)
-    const tcp = Number(request.headers.get('X-Tcp-Rtt'))
-    const session = core.join(
-      {
-        accountId,
-        name: profile?.name || name,
-        level: profile?.level ?? 1,
-        prestige: profile?.prestige ?? 0,
-        loadout: profile ? Object.values(profile.loadout) : [],
-        banked: profile?.purse ?? 0,
-        tcpRtt: Number.isFinite(tcp) && tcp > 0 ? tcp : null,
-        ledger: profile !== null,
-        saddlebag: bagStyleIndex(profile?.loadout.saddlebag),
-        frozen: isShadowed(standingNow.flags),
-        blocked: standingNow.blocked,
-      },
-      peer,
-      Date.now(),
-    )
-    if (!session) {
-      server.close(4001, 'The town is full.')
-      return new Response(null, { status: 101, webSocket: client })
-    }
-    const id = session.playerId
-    server.addEventListener('message', (event) => {
-      const data = event.data
-      if (typeof data === 'string') {
-        if (this.voiceText(core, id, data)) {
-          return
-        }
-        core.onText(id, data, Date.now())
-      } else {
-        core.onBinary(id, data, Date.now())
-      }
-    })
-    const drop = (): void => {
-      core.disconnect(id, peer)
-      this.onDisconnect(core, id)
-    }
-    server.addEventListener('close', drop)
-    server.addEventListener('error', drop)
-    if (session.ledger) {
-      this.ctx.waitUntil(
-        sessionStartStatement(this.env, this.lobbyId, session)
-          .run()
-          .catch(() => undefined),
-      )
-    }
-    this.arrived.push(accountId)
-    this.start()
-    return new Response(null, { status: 101, webSocket: client })
+    return new Response('The game has been updated. Refresh to reconnect.', { status: 410 })
   }
 
   /**
@@ -232,56 +434,6 @@ export class Lobby extends DurableObject<Env> {
 
   // --- The loop ---------------------------------------------------------------------------------
 
-  private start(): void {
-    if (this.timer !== undefined) {
-      return
-    }
-    const now = Date.now()
-    this.epoch = now
-    this.ticksRun = 0
-    this.lastMinute = now
-    this.lastDepositFlush = now
-    this.occupiedSince = now
-    this.timer = setInterval(() => this.loop(), TICK_MS)
-    this.reportDirectory(true)
-  }
-
-  private loop(): void {
-    const core = this.core
-    if (!core) {
-      return
-    }
-    const now = Date.now()
-    let due = Math.floor((now - this.epoch) / TICK_MS) - this.ticksRun
-    if (due > MAX_CATCH_UP_TICKS) {
-      // Fell behind (a long GC or a slow event): skip ahead rather than spiral.
-      this.ticksRun += due - 1
-      due = 1
-    }
-    for (let i = 0; i < due; i++) {
-      const t0 = performance.now()
-      this.handle(core.tick(now))
-      this.tickDurations.push(performance.now() - t0)
-      this.ticksRun++
-    }
-    if (this.tickDurations.length > 2400) {
-      this.tickDurations = this.tickDurations.slice(-1200)
-    }
-    this.peakHumans = Math.max(this.peakHumans, core.humans())
-    if (now - this.lastDepositFlush >= DEPOSIT_FLUSH_MS) {
-      this.lastDepositFlush = now
-      void this.flushDeposits()
-    }
-    if (now - this.lastMinute >= MINUTE_MS) {
-      this.lastMinute = now
-      void this.minute(core, now)
-    }
-    this.reportDirectory(false)
-    if (core.humans() === 0) {
-      this.stop(core, now)
-    }
-  }
-
   private handle(out: TickOutput): void {
     const core = this.core
     for (const d of out.deposits) {
@@ -293,8 +445,26 @@ export class Lobby extends DurableObject<Env> {
         continue
       }
       const key = depositKey(this.lobbyId, d)
-      this.pending.set(key, d)
-      void this.ctx.storage.put(`dep:${key}`, { ...d, lobbyId: this.lobbyId })
+      if (this.pending.has(key)) {
+        continue
+      }
+      this.ctx.storage.sql.exec(
+        'INSERT OR IGNORE INTO pending_deposits(key,data) VALUES(?,?)',
+        key,
+        JSON.stringify({ ...d, lobbyId: this.lobbyId }),
+      )
+      const stored = this.ctx.storage.sql
+        .exec<{ data: string }>('SELECT data FROM pending_deposits WHERE key=?', key)
+        .toArray()[0]
+      if (!stored) {
+        throw new Error('Pending deposit was not recorded')
+      }
+      this.pending.set(key, JSON.parse(stored.data) as SettledDeposit)
+      if (this.pending.size === 1) {
+        // Begin the durable alarm write in this callback: Workers output gates hold outgoing
+        // deposit state until storage commits, including if the process dies before its next tick.
+        this.ctx.waitUntil(this.scheduleSettlementRetry())
+      }
     }
     for (const ev of core?.world.events ?? []) {
       if (ev.type === 'kill') {
@@ -303,18 +473,51 @@ export class Lobby extends DurableObject<Env> {
     }
     for (const dep of out.departures) {
       this.departed.push(dep.session.accountId)
-      void this.flushXp(dep, Date.now())
+      const now = Date.now()
+      const visit = this.nativeVisits.get(dep.session.sessionId)
+      this.ctx.waitUntil(
+        this.flushXp(dep, now).then(() => this.closeNativeVisits(visit ? [visit] : [], now)),
+      )
     }
   }
 
   private stop(core: LobbyCore, now: number): void {
-    clearInterval(this.timer)
-    this.timer = undefined
-    void this.flushDeposits()
-    void this.minute(core, now)
-    this.reportDirectory(true)
-    // Nobody's left, so nothing of value is in the world: start fresh next time.
+    if (this.core !== core) {
+      return
+    }
+    if (this.nativeCleanup !== undefined) {
+      clearTimeout(this.nativeCleanup)
+    }
+    this.nativeCleanup = undefined
     this.core = null
+    this.departed.push(...core.accounts())
+    void this.flushDeposits()
+    const visits = [...this.nativeVisits.values()]
+    this.ctx.waitUntil(this.minute(core, now).then(() => this.closeNativeVisits(visits, now)))
+    this.occupiedSince = 0
+    this.lastMinute = 0
+    this.lastDepositFlush = 0
+    this.reportDirectory(true)
+    if (this.nativeLeaseId) {
+      const id = this.nativeLeaseId
+      this.nativeLeaseId = ''
+      this.ctx.waitUntil(
+        this.directory()
+          .leaseRoom(id, Math.max(0, core.metrics.msgsIn - this.nativeLeaseMessages), true)
+          .then(() => undefined),
+      )
+    }
+    clearTimeout(this.nativeLeaseTimer)
+    clearTimeout(this.nativeLeaseWatchdog)
+    this.nativeLeaseTimer = undefined
+    this.nativeLeaseWatchdog = undefined
+    this.nativeLeaseMessages = 0
+    const native = this.native
+    this.native = undefined
+    this.nativeInitializing = undefined
+    if (native) {
+      this.ctx.waitUntil(native.disconnect().then(() => undefined))
+    }
     this.ctx.waitUntil(this.voiceClose())
   }
 
@@ -457,6 +660,50 @@ export class Lobby extends DurableObject<Env> {
 
   // --- Settlement -------------------------------------------------------------------------------
 
+  private async closeNativeVisits(visits: readonly NativeVisit[], now: number) {
+    if (visits.length === 0) {
+      return
+    }
+    for (const visit of visits) {
+      this.staleVisits.set(visit.sessionId, visit)
+    }
+    try {
+      await this.env.DB.batch(
+        visits.map((visit) =>
+          this.env.DB.prepare(
+            'UPDATE ffa_sessions SET left_at=COALESCE(left_at,?) WHERE id=? AND lobby_id=?',
+          ).bind(now, visit.sessionId, visit.lobbyId),
+        ),
+      )
+      await this.ctx.storage.delete(visits.map((visit) => `visit:${visit.sessionId}`))
+      for (const visit of visits) {
+        this.nativeVisits.delete(visit.sessionId)
+        this.staleVisits.delete(visit.sessionId)
+      }
+    } finally {
+      await this.scheduleSettlementRetry()
+    }
+  }
+
+  private async scheduleSettlementRetry() {
+    if (this.pending.size > 0 || this.staleVisits.size > 0) {
+      await this.ctx.storage.setAlarm(Date.now() + this.settlementRetryMs)
+      this.settlementRetryMs = Math.min(3_600_000, this.settlementRetryMs * 2)
+    } else {
+      this.settlementRetryMs = 5000
+      await this.ctx.storage.deleteAlarm()
+    }
+  }
+
+  private async recoverPersistedState() {
+    await this.flushDeposits()
+    try {
+      await this.closeNativeVisits([...this.staleVisits.values()], Date.now())
+    } catch (error) {
+      console.error('ffa visit recovery failed; will retry', error)
+    }
+  }
+
   private async flushDeposits(): Promise<void> {
     if (this.flushing || this.pending.size === 0) {
       return
@@ -467,8 +714,9 @@ export class Lobby extends DurableObject<Env> {
         try {
           // biome-ignore lint/performance/noAwaitInLoops: one batch per deposit keeps failures independent
           await this.env.DB.batch(depositStatements(this.env, this.lobbyId, d))
-          this.pending.delete(key)
+          this.ctx.storage.sql.exec('DELETE FROM pending_deposits WHERE key=?', key)
           await this.ctx.storage.delete(`dep:${key}`)
+          this.pending.delete(key)
           this.core?.confirmDeposit(d, true)
         } catch (err) {
           console.error('ffa deposit failed; will retry', key, err)
@@ -477,23 +725,44 @@ export class Lobby extends DurableObject<Env> {
       }
     } finally {
       this.flushing = false
+      await this.scheduleSettlementRetry()
     }
   }
 
-  private async flushXp(dep: Departure, leftAt: number | null): Promise<void> {
+  override async alarm() {
+    await this.recoverPersistedState()
+  }
+
+  private flushXp(dep: Departure, leftAt: number | null): Promise<void> {
+    const previous = this.xpFlushes.get(dep.session) ?? Promise.resolve()
+    const next = previous.catch(() => undefined).then(() => this.flushXpNow(dep, leftAt))
+    this.xpFlushes.set(dep.session, next)
+    return next
+  }
+
+  private async flushXpNow(dep: Departure, leftAt: number | null): Promise<void> {
     const { session: s, player: p } = dep
     if (!s.ledger) {
       return
     }
-    const { statements, xp } = xpFlushStatements(this.env, {
-      session: s,
-      player: p,
+    const previous = this.pendingXp.get(s)
+    const pending = previous ?? {
+      xp: Math.max(0, p.stats.xp - s.xpFlushed),
       flushIndex: s.xpFlushIndex,
+      stats: { ...p.stats },
+      flags: s.flags,
+      flagNow: (s.flags & FLAG_AIMBOT) !== 0 && !this.aimbotFlagged.has(s.sessionId),
       leftAt,
+    }
+    const { statements, xp } = xpFlushStatements(this.env, {
+      session: { ...s, flags: pending.flags, xpFlushed: pending.stats.xp - pending.xp },
+      player: { ...p, stats: pending.stats },
+      flushIndex: pending.flushIndex,
+      leftAt: pending.leftAt,
     })
     // The aimbot heuristic (§3.7) flags the account (§8): it rides in the Badlands from its next
     // join. Written once per session, in the same batch as the stats that carry the evidence.
-    const flagNow = (s.flags & FLAG_AIMBOT) !== 0 && !this.aimbotFlagged.has(s.sessionId)
+    const flagNow = pending.flagNow
     if (flagNow) {
       statements.push(
         ...flagStatements(this.env, {
@@ -504,6 +773,8 @@ export class Lobby extends DurableObject<Env> {
         }),
       )
     }
+    // A lost D1 acknowledgement must replay the original amount/key, never later earnings.
+    this.pendingXp.set(s, pending)
     try {
       await this.env.DB.batch(statements)
       s.xpFlushed += xp
@@ -512,6 +783,10 @@ export class Lobby extends DurableObject<Env> {
       }
       if (flagNow) {
         this.aimbotFlagged.add(s.sessionId)
+      }
+      this.pendingXp.delete(s)
+      if (previous && (p.stats.xp > s.xpFlushed || previous.leftAt !== leftAt)) {
+        await this.flushXpNow(dep, leftAt)
       }
     } catch (err) {
       console.error('ffa xp flush failed', s.sessionId, err)
@@ -586,7 +861,7 @@ export class Lobby extends DurableObject<Env> {
     const core = this.core
     return {
       lobbyId: this.lobbyId,
-      running: this.timer !== undefined,
+      running: Boolean(this.native && this.core?.connectedHumans()),
       humans: core?.humans() ?? 0,
       bodies: core ? core.world.players.filter(Boolean).length : 0,
       ticks: core?.metrics.ticks ?? 0,
@@ -594,6 +869,11 @@ export class Lobby extends DurableObject<Env> {
       msgsIn: core?.metrics.msgsIn ?? 0,
       msgsOut: core?.metrics.msgsOut ?? 0,
       droppedIn: core?.metrics.droppedIn ?? 0,
+      links: [...(core?.sessions.values() ?? [])].map((session) => ({
+        playerId: session.playerId,
+        rtt: [...session.rtt],
+        tcpRtt: session.tcpRtt,
+      })),
       tickMs: {
         p50: pct(0.5),
         p95: pct(0.95),

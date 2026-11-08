@@ -1,271 +1,119 @@
-/**
- * End-to-end Frontier load test against a running API (e.g. `wrangler dev` on :8794).
- * Opens N real WebSocket clients that join through `POST /town/join`, play with human-like
- * send-on-change input (fights with a moving mouse, straight runs, idling), and asks the lobby
- * to add server bots. Reports bytes/s and messages/s per client and the DO's tick timing.
- *
- *   bun api/src/town/loadtest.ts [api=http://localhost:8794] [clients=3] [bots=29] [seconds=60]
- *
- * Signs real access tokens with the API's AUTH_SECRET (read from `api/.dev.vars`), so accounts
- * lt-1..lt-N must exist (accounts + profiles rows) for tickets and ledger writes, and hold the
- * Frontier licence (`profiles.gauntlet_clears & 7 = 7`): `POST /town/join` refuses unlicensed players.
+/** Real SDK load against the isolated, fully authenticated local production fixture.
+ * Run fixture Wrangler config on8792, then: bun api/src/town/loadtest.ts [url] [clients=3] [seconds=30]
+ * Accounts come from the local fixture's D1 seeder and normal signed JWT; all public join guards run.
  */
-import { readFileSync } from 'node:fs'
-import { join } from 'node:path'
 import { argv, stdout } from 'node:process'
-import {
-  BTN_FIRE,
-  BTN_INTERACT,
-  MSG_SNAPSHOT,
-  TOWN_WIRE_VERSION,
-  type TownJoinResponse,
-} from '../../../src/experiments/out-west/contract/town.ts'
-import { Writer } from '../../../src/experiments/out-west/ffa/sim/bytes.ts'
-import {
-  decodeSnapshot,
-  type EntityView,
-  encodeInput,
-  type WireFrame,
-} from '../../../src/experiments/out-west/ffa/sim/codec.ts'
-import { TICK_MS } from '../../../src/experiments/out-west/ffa/sim/constants.ts'
-import { InputBatcher } from '../../../src/experiments/out-west/ffa/sim/input.ts'
-import { Rng } from '../../../src/experiments/out-west/ffa/sim/rng.ts'
-import { signAccessToken } from '../auth/token.ts'
-import type { LobbyStats } from './lobby.ts'
+import { Client, type Room } from '@colyseus/sdk'
+import { COLLISION_VERSION } from '../../../src/experiments/out-west/content/manifest.ts'
+import { TOWN_WIRE_VERSION } from '../../../src/experiments/out-west/contract/town.ts'
+import { batchInputs } from '../../../src/experiments/out-west/runtime/packets.ts'
+import { PROTOCOL_VERSION } from '../../../src/experiments/out-west/runtime/protocol.ts'
+import { FrontierState, MoveInput } from '../../../src/experiments/out-west/runtime/schema.ts'
 
-const ORIGIN = 'http://localhost:4344'
-
-type Phase = 'fight' | 'walk' | 'idle'
-/** Share of play time per phase, and how long each lasts (ticks). */
-const PHASES: readonly [Phase, number, number, number][] = [
-  ['fight', 0.45, 20, 80],
-  ['walk', 0.25, 30, 100],
-  ['idle', 0.3, 10, 60],
-]
-
-interface ClientStats {
-  bytesIn: number
-  msgsIn: number
-  msgsOut: number
-  bytesOut: number
-  snapshots: number
-  deposits: number
+const base = argv[2] ?? 'http://127.0.0.1:8792'
+const url = new URL(base)
+if (!['localhost', '127.0.0.1', '[::1]'].includes(url.hostname)) {
+  throw new Error('Use the isolated localhost fixture')
 }
-
-class FakeHuman {
-  readonly stats: ClientStats = {
-    bytesIn: 0,
-    msgsIn: 0,
-    msgsOut: 0,
-    bytesOut: 0,
-    snapshots: 0,
-    deposits: 0,
-  }
-  private readonly batcher = new InputBatcher()
-  private readonly writer = new Writer(64)
-  private readonly baseline = new Map<number, EntityView>()
-  private readonly rng: Rng
-  private phase: Phase = 'idle'
-  private phaseLeft = 0
-  private move = { x: 0, z: 0 }
-  private aim = 0
-  private aimVel = 0
-  private lastTick = 0
-  private lastSnapAt = 0
-  private ws: WebSocket | null = null
-  private timer: ReturnType<typeof setInterval> | undefined
-  private n = 0
-
-  constructor(seed: number) {
-    this.rng = new Rng(seed)
-  }
-
-  connect(url: string): Promise<void> {
-    return new Promise((resolve, reject) => {
-      // Bun's WebSocket accepts headers, so the origin check passes like a browser.
-      const ws = new WebSocket(url, { headers: { Origin: ORIGIN } } as unknown as string[])
-      ws.binaryType = 'arraybuffer'
-      ws.onopen = (): void => {
-        this.timer = setInterval(() => this.frame(), TICK_MS)
-        resolve()
-      }
-      ws.onerror = (): void => reject(new Error('socket error'))
-      ws.onmessage = (ev: MessageEvent): void => this.onMessage(ev.data as ArrayBuffer | string)
-      this.ws = ws
-    })
-  }
-
-  private onMessage(data: ArrayBuffer | string): void {
-    this.stats.msgsIn++
-    if (typeof data === 'string') {
-      this.stats.bytesIn += data.length
-      if (data.includes('"deposit"')) {
-        this.stats.deposits++
-      }
-      return
-    }
-    this.stats.bytesIn += data.byteLength
-    const bytes = new Uint8Array(data)
-    if (bytes[0] === MSG_SNAPSHOT) {
-      const snap = decodeSnapshot(bytes, this.baseline)
-      if (snap) {
-        this.stats.snapshots++
-        this.lastTick = snap.tick
-        this.lastSnapAt = performance.now()
-      }
-    }
-  }
-
-  private nextPhase(): void {
-    let r = this.rng.next()
-    for (const [phase, share, min, max] of PHASES) {
-      r -= share
-      if (r <= 0) {
-        this.phase = phase
-        this.phaseLeft = this.rng.int(min, max)
-        break
-      }
-    }
-    const a = this.rng.range(0, Math.PI * 2)
-    this.move = this.phase === 'idle' ? { x: 0, z: 0 } : { x: Math.cos(a), z: Math.sin(a) }
-    this.aimVel = this.phase === 'fight' ? this.rng.range(-900, 900) : 0
-    if (this.phase === 'walk') {
-      this.aim = Math.round((a / (Math.PI * 2)) * 65_536) & 0xff_ff
-    }
-  }
-
-  private frame(): void {
-    if (--this.phaseLeft <= 0) {
-      this.nextPhase()
-    }
-    this.n++
-    // A moving mouse in fights: aim drifts and jitters every frame.
-    this.aim =
-      (this.aim +
-        Math.round(this.aimVel + this.rng.range(-200, 200) * (this.phase === 'fight' ? 1 : 0))) &
-      0xff_ff
-    let buttons = 0
-    if (this.phase === 'fight' && this.n % 9 === 0) {
-      buttons |= BTN_FIRE
-    }
-    if (this.phase === 'idle' && this.n % 40 === 0) {
-      buttons |= BTN_INTERACT
-    }
-    const f: WireFrame = {
-      moveX: Math.round(this.move.x * 127),
-      moveZ: Math.round(this.move.z * 127),
-      aim: this.aim,
-      buttons,
-      viewTick: (this.lastTick - 2) & 0xff_ff,
-      viewFrac: 0,
-    }
-    const msg = this.batcher.push(f)
-    if (msg && this.ws?.readyState === WebSocket.OPEN) {
-      const age = Math.min(255, Math.round(performance.now() - this.lastSnapAt))
-      const bytes = encodeInput(this.writer, {
-        ...msg,
-        ackTick: this.lastTick & 0xff_ff,
-        ackAgeMs: age,
-      })
-      this.ws.send(bytes)
-      this.stats.msgsOut++
-      this.stats.bytesOut += bytes.length
-    }
-  }
-
-  close(): void {
-    clearInterval(this.timer)
-    this.ws?.close(1000, 'done')
-  }
+const origin = 'http://127.0.0.1:4390'
+const count = Math.min(32, Math.max(1, Number(argv[3] ?? 3)))
+const seconds = Math.min(300, Math.max(1, Number(argv[4] ?? 30)))
+interface Rider {
+  room: Room<unknown, FrontierState>
+  stop: () => void
+  outgoing: number
+  bytes: number
+  updates: number
+  shots: number
 }
-
-const AUTH_SECRET =
-  /^AUTH_SECRET=(?<s>.+)$/mu.exec(readFileSync(join(import.meta.dir, '../../.dev.vars'), 'utf8'))
-    ?.groups?.s ?? ''
-
-async function joinTown(api: string, i: number, bots: number): Promise<TownJoinResponse> {
-  const { token } = await signAccessToken(AUTH_SECRET, {
-    accountId: `lt-${i}`,
-    name: `Loadtest${i}`,
-    sid: `loadtest-${i}`,
-    platform: 'web',
-    authTime: Date.now(),
-  })
-  const res = await fetch(`${api}/town/join`, {
+async function joinRider(index: number): Promise<Rider> {
+  const account = (await (await fetch(`${base}/__test/seed`)).json()) as { token: string }
+  const response = await fetch(`${base}/town/join`, {
     method: 'POST',
     headers: {
-      Authorization: `Bearer ${token}`,
-      Origin: ORIGIN,
+      Origin: origin,
+      Authorization: `Bearer ${account.token}`,
       'Content-Type': 'application/json',
     },
-    // Dev's always-pass Turnstile secret accepts any token.
     body: JSON.stringify({
-      turnstileToken: 'XXXX.DUMMY.TOKEN.XXXX',
       wire: TOWN_WIRE_VERSION,
-      ...(i === 1 ? { bots } : {}),
+      protocol: PROTOCOL_VERSION,
+      collision: COLLISION_VERSION,
+      turnstileToken: 'official-local-provider-test',
     }),
   })
-  if (!res.ok) {
-    throw new Error(`join ${i}: ${res.status} ${await res.text()}`)
+  const seat = (await response.json()) as {
+    lobbyId: string
+    wsUrl: string
+    reservation: Parameters<Client['consumeSeatReservation']>[0]
+    error?: string
   }
-  return res.json() as Promise<TownJoinResponse>
-}
-
-const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms))
-
-async function main(): Promise<void> {
-  const api = argv[2] ?? 'http://localhost:8794'
-  const clients = Number(argv[3] ?? 3)
-  const bots = Number(argv[4] ?? 29)
-  const seconds = Number(argv[5] ?? 60)
-  const humans: FakeHuman[] = []
-  let lobbyId = ''
-  for (let i = 1; i <= clients; i++) {
-    // biome-ignore lint/performance/noAwaitInLoops: joins are sequential like real arrivals
-    const joined = await joinTown(api, i, bots)
-    lobbyId = joined.lobbyId
-    const h = new FakeHuman(i * 7919)
-    await h.connect(joined.wsUrl)
-    humans.push(h)
+  if (!response.ok) {
+    throw new Error(seat.error ?? `Join failed:${response.status}`)
   }
-  // Let bots fill in, then measure.
-  await sleep(3000)
-  const start = humans.map((h) => ({ ...h.stats }))
-  const t0 = performance.now()
-  await sleep(seconds * 1000)
-  const elapsed = (performance.now() - t0) / 1000
-  const stats = (await (await fetch(`${api}/town/${lobbyId}/stats`)).json()) as LobbyStats
-  const per = humans.map((h, i) => {
-    const s0 = start[i] ?? h.stats
-    return {
-      bytesInPerSec: (h.stats.bytesIn - s0.bytesIn) / elapsed,
-      msgsInPerSec: (h.stats.msgsIn - s0.msgsIn) / elapsed,
-      msgsOutPerSec: (h.stats.msgsOut - s0.msgsOut) / elapsed,
-      bytesOutPerSec: (h.stats.bytesOut - s0.bytesOut) / elapsed,
-      snapshotsPerSec: (h.stats.snapshots - s0.snapshots) / elapsed,
-    }
+  const client = new Client(`${base}/town/${seat.lobbyId}?${new URL(seat.wsUrl).searchParams}`, {
+    headers: { Origin: origin },
   })
-  for (const h of humans) {
-    h.close()
-  }
-  const msgsPerHumanHour = (per.reduce((a, p) => a + p.msgsOutPerSec, 0) / per.length) * 3600
-  stdout.write(
-    `${JSON.stringify(
-      {
-        lobbyId,
-        clients,
-        botsRequested: bots,
-        seconds: elapsed,
-        perClient: per,
-        msgsPerHumanHour,
-        humanHoursPer16M: 16_000_000 / msgsPerHumanHour,
-        humanHoursPer1MBillable: 20_000_000 / msgsPerHumanHour,
-        lobby: stats,
-      },
-      null,
-      2,
-    )}\n`,
+  const room: Room<unknown, FrontierState> = await client.consumeSeatReservation(
+    seat.reservation,
+    FrontierState,
   )
+  room.reconnection.enabled = false
+  const result: Rider = { room, stop: () => undefined, outgoing: 0, bytes: 0, updates: 0, shots: 0 }
+  const send = room.connection.send.bind(room.connection)
+  room.connection.send = (packet: Uint8Array) => {
+    result.outgoing++
+    result.bytes += packet.byteLength
+    send(packet)
+  }
+  const batching = batchInputs(room.connection)
+  const input = room.input({ type: MoveInput, mode: 'reliable' })
+  room.onMessage('control', () => undefined)
+  room.onMessage('events', (message: { events: { type: string }[] }) => {
+    result.shots += message.events.filter((event) => event.type === 'shot').length
+  })
+  room.onStateChange(() => {
+    result.updates++
+  })
+  let seq = 0
+  const timer = setInterval(() => {
+    const phase = Math.floor(seq / 100) % 3
+    Object.assign(input.data, {
+      seq: ++seq,
+      moveX: phase === 2 ? 0 : Math.sin(seq / 40 + index),
+      moveZ: phase === 2 ? 0 : Math.cos(seq / 40 + index),
+      yaw: seq / 30,
+      pitch: 0,
+      buttons: phase === 0 && seq % 10 === 0 ? 1 : 0,
+      viewTime: Math.max(0, room.state.tick - 2),
+    })
+    input.send()
+  }, 50)
+  result.stop = () => {
+    clearInterval(timer)
+    batching.dispose()
+  }
+  return result
 }
-
-await main()
+const riders: Rider[] = []
+try {
+  const joined = await Promise.allSettled(
+    Array.from({ length: count }, (_, index) => joinRider(index)),
+  )
+  for (const result of joined) {
+    if (result.status === 'fulfilled') {
+      riders.push(result.value)
+    } else {
+      throw result.reason
+    }
+  }
+  await new Promise((resolve) => setTimeout(resolve, seconds * 1000))
+  stdout.write(
+    `${JSON.stringify({ clients: riders.length, seconds, clientsMeasured: riders.map((rider) => ({ tick: rider.room.state.tick, players: rider.room.state.players.size, updates: rider.updates, observedShots: rider.shots, outgoingMessagesPerSecond: rider.outgoing / seconds, outgoingBytesPerSecond: rider.bytes / seconds })) }, null, 2)}\n`,
+  )
+} finally {
+  for (const rider of riders) {
+    rider.stop()
+  }
+  await Promise.all(riders.map((rider) => rider.room.leave()))
+}

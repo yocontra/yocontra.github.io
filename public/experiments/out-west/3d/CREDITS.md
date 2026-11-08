@@ -1,5 +1,7 @@
 # out west (3D) — credits
 
+Software copyright and license texts: [third-party notices](../THIRD_PARTY_NOTICES.txt).
+
 Game, code, wanted posters, town, church, water tower, hats, sky and effects by Eric Schoffstall.
 The title and boss themes (`music/title.m4a`, `music/boss.m4a`) are the 2019 originals (`intro.m4a`,
 `boss.m4a`), remastered and looped; `sfx/shout.m4a` and `sfx/whip.m4a` are remastered 2019 originals
@@ -175,3 +177,25 @@ Prompts are in `tools/audio/manifest.ts` (music) and `tools/audio/voices.ts` (vo
 - "Rye" by Nicole Fally (Sorkin Type Co), SIL Open Font License 1.1.
 - "EB Garamond" by Georg Duffner and Octavio Pardo, SIL Open Font License 1.1.
 - "Oswald" by Vernon Adams, Kalapi Gajjar and Cyreal, SIL Open Font License 1.1.
+
+## PlayCanvas migration bakes
+
+`baked/{frontier,duel}.glb` bake the Out West town geometry and the credited Quaternius props
+and Poly Haven texture sources above into standard glTF. `baked/player.glb` and
+`baked/outlaw-{0..16}.glb` bake the credited Quaternius character bases and animations together
+with Out West's fitted western clothing, hats and accessories. `baked/moves.glb` is a decoded
+standard-glTF copy of the existing movement animation library. No new external art or license
+was introduced by the migration. Embedded textures are resized and encoded as WebP.
+
+`env/kloppenheim_06_puresky_1k.hdr`: **Kloppenheim 06 (Pure Sky)** by Greg Zaal
+(original) and Jarod Guest (sky edits), Poly Haven, **CC0**.
+Source: https://polyhaven.com/a/kloppenheim_06_puresky
+License: https://polyhaven.com/license
+
+`baked/{depot,mission,bank}.glb` preserve Out West's authored rail-depot, mission courtyard
+and bank square, with the same credited masonry, props and texture sources. Legacy atlas
+selector UVs are flattened offline into ordinary repeating PBR material tiles.
+`equipment/*.glb` preserve all 37 catalogue guns, hats, outfits, spurs, holsters and extras
+with standardized rigs or bone mounts. `dynamic/*.glb` preserve pickups, saddlebags and the
+strongbox, plus authored coin/card/crow/tumbleweed/door fake-out clips and the credited CC0
+Quaternius animated dog and horse. Cue transform clips are first-party animation.

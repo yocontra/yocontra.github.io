@@ -44,7 +44,6 @@ import {
   poseAt,
   type World,
 } from './state.ts'
-import { rayWorld } from './surfaces.ts'
 import type { Player, ShotPoint } from './types.ts'
 import { shatterGlass } from './windows.ts'
 
@@ -239,8 +238,7 @@ export function fire(w: World, p: Player, aim: number, viewTime: number): ShotRe
   p.bloom = bloomAfterShot(p.weapon, p.bloom)
   const jitter = hashSigned(w.seed, p.id, w.tick, p.stats.shots)
   const ray = shotRay(p, aim, jitter * spread * DEG, jitter * spread * DEG * 0.6)
-  const world = rayWorld(w.grid, ray.ox, ray.oy, ray.oz, ray.dx, ray.dy, ray.dz, MAX_RANGE)
-  const wall = world?.dist ?? MAX_RANGE
+  const wall = w.castWorld?.({ ...ray, maxT: MAX_RANGE }) ?? MAX_RANGE
   shatterGlass(w, ray.ox, ray.oy, ray.oz, ray.dx, ray.dy, ray.dz, wall)
   const time = rewindTime(w, viewTime)
   const hit = traceTargets(w, p, { ...ray, maxT: wall }, time)

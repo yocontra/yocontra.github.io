@@ -1,21 +1,9 @@
 import { describe, expect, test as it } from 'bun:test'
-import {
-  BTN_CALLOUT,
-  MSG_FULL_RESET,
-  MSG_SNAPSHOT,
-  type ServerControl,
-} from '../../../src/experiments/out-west/contract/town.ts'
-import { Writer } from '../../../src/experiments/out-west/ffa/sim/bytes.ts'
-import {
-  decodeSnapshot,
-  type EntityView,
-  encodeInput,
-  type WireFrame,
-} from '../../../src/experiments/out-west/ffa/sim/codec.ts'
+import { BTN_CALLOUT, type ServerControl } from '../../../src/experiments/out-west/contract/town.ts'
 import { MAX_PLAYERS, SOFT_CAP } from '../../../src/experiments/out-west/ffa/sim/constants.ts'
-import { InputBatcher } from '../../../src/experiments/out-west/ffa/sim/input.ts'
 import { calloutTarget } from '../../../src/experiments/out-west/ffa/sim/showdown.ts'
 import { pairKey } from '../../../src/experiments/out-west/ffa/sim/state.ts'
+import type { InputFrame } from '../../../src/experiments/out-west/ffa/sim/types.ts'
 import {
   DEFAULT_TOWN_POPULATION,
   type JoinProfile,
@@ -23,6 +11,7 @@ import {
   type Peer,
   type SettledDeposit,
 } from './core.ts'
+import { nativeWorld } from './testing/native.ts'
 
 class FakePeer implements Peer {
   readonly binary: Uint8Array[] = []
@@ -51,37 +40,31 @@ const profile = (accountId: string, extra: Partial<JoinProfile> = {}): JoinProfi
   ...extra,
 })
 
+type WireFrame = Omit<InputFrame, 'seq' | 'viewTime'> & { viewTick: number; viewFrac: number }
 const still: WireFrame = { moveX: 0, moveZ: 0, aim: 0, buttons: 0, viewTick: 0, viewFrac: 0 }
-
-/** One player's input `f`, pushed through their batcher `b`. */
+const pending = new WeakMap<LobbyCore, (InputFrame | null)[]>()
 interface Press {
   id: number
-  b: InputBatcher
+  b: { nextSeq: number }
   f: WireFrame
 }
-
-function send(core: LobbyCore, { id, b, f }: Press, now: number): void {
-  const msg = b.push({ ...f, viewTick: (core.world.tick - 2) & 0xff_ff })
-  if (msg) {
-    core.onBinary(
-      id,
-      encodeInput(new Writer(64), {
-        ...msg,
-        ackTick: (core.world.tick - 1) & 0xff_ff,
-        ackAgeMs: 5,
-      }),
-      now,
-    )
-  }
+function send(core: LobbyCore, { id, b, f }: Press, _now: number) {
+  const frames = pending.get(core) ?? []
+  frames[id] = { ...f, seq: b.nextSeq++, viewTime: core.world.tick - 2 }
+  pending.set(core, frames)
+}
+function advance(core: LobbyCore, now: number) {
+  const result = core.tick(now, { frames: pending.get(core) ?? [] })
+  pending.delete(core)
+  return result
 }
 
 describe('LobbyCore', () => {
-  it('join: full reset, welcome with roster and wallet, then a full snapshot every tick', () => {
+  it('join sends the welcome roster and wallet while Colyseus owns replication', () => {
     const core = new LobbyCore('lobby:0', 1)
     const peer = new FakePeer()
     const s = core.join(profile('a'), peer, 0)
     expect(s).not.toBeNull()
-    expect(peer.binary[0]).toEqual(new Uint8Array([MSG_FULL_RESET]))
     const welcome = peer.text.find((m) => m.type === 'welcome')
     expect(welcome).toMatchObject({
       type: 'welcome',
@@ -89,25 +72,22 @@ describe('LobbyCore', () => {
       you: s?.playerId,
       banked: 1000,
     })
-    core.tick(50)
-    core.tick(100)
-    const snaps = peer.binary.filter((b) => b[0] === MSG_SNAPSHOT)
-    expect(snaps.length).toBe(2)
-    const base = new Map<number, EntityView>()
-    expect((decodeSnapshot(snaps[0] ?? new Uint8Array(), base)?.flags ?? 0) & 1).toBe(1)
+    advance(core, 50)
+    advance(core, 100)
+    expect(peer.binary).toHaveLength(0)
   })
 
   it('fills the town with bots while a human is present, never past 28', () => {
     const core = new LobbyCore('lobby:0', 1)
     core.join(profile('a'), new FakePeer(), 0)
     for (let t = 0; t < 20; t++) {
-      core.tick(t * 50)
+      advance(core, t * 50)
     }
     const bodies = core.world.players.filter(Boolean).length
     expect(bodies).toBe(DEFAULT_TOWN_POPULATION)
     core.botTarget = 40
     for (let t = 0; t < 60; t++) {
-      core.tick(t * 50)
+      advance(core, t * 50)
     }
     expect(core.world.players.filter(Boolean).length).toBe(MAX_PLAYERS)
   })
@@ -116,12 +96,12 @@ describe('LobbyCore', () => {
     const core = new LobbyCore('lobby:0', 1)
     core.join(profile('a'), new FakePeer(), 0)
     for (let t = 0; t < 20; t++) {
-      core.tick(t * 50)
+      advance(core, t * 50)
     }
     expect(core.world.players.filter((p) => p?.bot && !p.gone).length).toBeGreaterThan(0)
     core.ambientPopulation = 0
     for (let t = 20; t < 40; t++) {
-      core.tick(t * 50)
+      advance(core, t * 50)
     }
     expect(core.world.players.filter((p) => p?.bot && !p.gone).length).toBe(0)
     expect(core.world.players.filter(Boolean).length).toBe(1)
@@ -132,7 +112,7 @@ describe('LobbyCore', () => {
     core.join(profile('a'), new FakePeer(), 0)
     core.botTarget = 40
     for (let t = 0; t < 40; t++) {
-      core.tick(t * 50)
+      advance(core, t * 50)
     }
     for (let i = 0; i < MAX_PLAYERS - SOFT_CAP; i++) {
       core.join(profile(`h${i}`), new FakePeer(), 0)
@@ -140,42 +120,38 @@ describe('LobbyCore', () => {
     expect(core.join(profile('late'), new FakePeer(), 0)).not.toBeNull()
   })
 
-  it('send-on-change inputs move the player and lastInputSeq tracks the client', () => {
+  it('native authoritative input frames move the player and track the consumed sequence', async () => {
     const core = new LobbyCore('lobby:0', 1)
+    const simulation = await nativeWorld({
+      version: 'floor',
+      boxes: [{ center: [72, -0.5, 72], halfExtents: [256, 0.5, 256] }],
+      meshes: [],
+    })
+    core.world = simulation.world
     const peer = new FakePeer()
     const s = core.join(profile('a'), peer, 0)
     const id = s?.playerId ?? 0
     const p = core.world.players[id]
     const x0 = p?.x ?? 0
-    const b = new InputBatcher()
+    const b = { nextSeq: 0 }
     for (let t = 0; t < 40; t++) {
       send(core, { id, b, f: { ...still, moveX: t < 20 ? 127 : 0 } }, t * 50)
-      core.tick(t * 50)
+      advance(core, t * 50)
     }
     expect(Math.abs((p?.x ?? 0) - x0)).toBeGreaterThan(3)
-    expect(s?.msgsIn).toBeLessThan(15)
-    expect(s?.rtt.length).toBeGreaterThan(0)
+    expect(p?.lastSeq).toBe(39)
+    simulation.dispose()
   })
 
-  it('floods are dropped and persistent flooding is kicked; garbage is kicked', () => {
+  it('control floods are dropped and persistent flooding is kicked', () => {
     const core = new LobbyCore('lobby:0', 1)
     const peer = new FakePeer()
-    const s = core.join(profile('a'), peer, 0)
+    const session = core.join(profile('a'), peer, 0)
     for (let i = 0; i < 200; i++) {
-      core.onBinary(
-        s?.playerId ?? 0,
-        new Uint8Array([1, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]),
-        10,
-      )
+      core.onText(session?.playerId ?? 0, JSON.stringify({ type: 'unknown' }), 10)
     }
     expect(core.metrics.droppedIn).toBeGreaterThan(100)
     expect(peer.closed?.code).toBe(1008)
-    const peer2 = new FakePeer()
-    const s2 = core.join(profile('b'), peer2, 2000)
-    for (let i = 0; i < 25; i++) {
-      core.onBinary(s2?.playerId ?? 0, new Uint8Array([7, 7, 7]), 2000 + i * 100)
-    }
-    expect(peer2.closed?.code).toBe(1008)
   })
 })
 
@@ -190,13 +166,13 @@ describe('LobbyCore sessions and money', () => {
     }
     core.disconnect(s?.playerId ?? 0, peer)
     for (let t = 0; t < 100; t++) {
-      core.tick(t * 50)
+      advance(core, t * 50)
     }
     const peer2 = new FakePeer()
     const again = core.join(profile('a'), peer2, 5000)
     expect(again?.playerId).toBe(s?.playerId)
     expect(core.world.players[again?.playerId ?? 0]?.carried).toBe(250)
-    expect(peer2.binary[0]).toEqual(new Uint8Array([MSG_FULL_RESET]))
+    expect(peer2.text.some((message) => message.type === 'welcome')).toBe(true)
   })
 
   it('lingering out drops the carry and reports a departure', () => {
@@ -210,7 +186,7 @@ describe('LobbyCore sessions and money', () => {
     core.disconnect(s?.playerId ?? 0, peer)
     let departed = 0
     for (let t = 0; t < 220; t++) {
-      departed += core.tick(t * 50).departures.length
+      departed += advance(core, t * 50).departures.length
     }
     expect(departed).toBe(1)
     expect(core.humans()).toBe(0)
@@ -228,11 +204,11 @@ describe('LobbyCore sessions and money', () => {
     p.z = 81.5
     p.carried = 600
     p.protectUntil = 0
-    const b = new InputBatcher()
+    const b = { nextSeq: 0 }
     const deposits: SettledDeposit[] = []
     for (let t = 0; t < 60; t++) {
       send(core, { id: s.playerId, b, f: { ...still } }, t * 50)
-      deposits.push(...core.tick(t * 50).deposits)
+      deposits.push(...advance(core, t * 50).deposits)
     }
     expect(deposits).toHaveLength(1)
     expect(deposits[0]).toMatchObject({
@@ -260,11 +236,11 @@ describe('LobbyCore sessions and money', () => {
     p.z = 81.5
     p.carried = 600
     p.protectUntil = 0
-    const b = new InputBatcher()
+    const b = { nextSeq: 0 }
     const deposits: SettledDeposit[] = []
     for (let t = 0; t < 60; t++) {
       send(core, { id: s.playerId, b, f: { ...still } }, t * 50)
-      deposits.push(...core.tick(t * 50).deposits)
+      deposits.push(...advance(core, t * 50).deposits)
     }
     expect(deposits).toHaveLength(1)
     expect(deposits[0]).toMatchObject({ accountId: 'cheat', frozen: true })
@@ -306,7 +282,7 @@ describe('LobbyCore sessions and money', () => {
     const core = new LobbyCore('lobby:0', 3)
     const peer = new FakePeer()
     const s = core.join(profile('a'), peer, 0)
-    core.tick(0)
+    advance(core, 0)
     const me = core.world.players[s?.playerId ?? 0]
     const bot = core.world.players.find((q) => q?.bot && q.id % 4 !== 0)
     if (!(me && bot && s)) {
@@ -320,7 +296,7 @@ describe('LobbyCore sessions and money', () => {
     bot.carried = 100
     bot.lastDamageTick = -1000
     me.lastDamageTick = -1000
-    const b = new InputBatcher()
+    const b = { nextSeq: 0 }
     let callAt = -1
     let ended = false
     for (let t = 1; t < 200 && !ended; t++) {
@@ -331,7 +307,7 @@ describe('LobbyCore sessions and money', () => {
         { id: s.playerId, b, f: { ...still, aim: 0, buttons: t % 4 === 1 ? BTN_CALLOUT : 0 } },
         t * 50,
       )
-      core.tick(t * 50)
+      advance(core, t * 50)
       if (callAt < 0 && peer.text.some((m) => m.type === 'showdown_call')) {
         callAt = t * 50
         const call = peer.text.find((m) => m.type === 'showdown_call')

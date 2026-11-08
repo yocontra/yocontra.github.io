@@ -50,7 +50,11 @@ async function post(opts: { ip: string; as?: string; body: unknown }): Promise<R
     })
     headers.Authorization = `Bearer ${token}`
   }
-  const request = new Request(url, { method: 'POST', headers, body: JSON.stringify(opts.body) })
+  const request = new Request(url.toString(), {
+    method: 'POST',
+    headers,
+    body: JSON.stringify(opts.body),
+  })
   const r = await daily(request, env, url, {} as ExecutionContext)
   if (!r) {
     throw new Error('no route')

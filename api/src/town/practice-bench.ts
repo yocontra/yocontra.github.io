@@ -11,6 +11,7 @@
  * and 30 rounds.
  */
 import { argv, stdout } from 'node:process'
+import { file } from 'bun'
 import {
   BTN_AIM,
   BTN_FIRE,
@@ -19,8 +20,6 @@ import {
   BTN_SPRINT,
   KILL_PARDON,
 } from '../../../src/experiments/out-west/contract/town.ts'
-import { Writer } from '../../../src/experiments/out-west/ffa/sim/bytes.ts'
-import { encodeInput } from '../../../src/experiments/out-west/ffa/sim/codec.ts'
 import { MAX_RANGE, TICK_HZ } from '../../../src/experiments/out-west/ffa/sim/constants.ts'
 import { hasLineOfSight, zoneAt } from '../../../src/experiments/out-west/ffa/sim/layout.ts'
 import { radiansToAim } from '../../../src/experiments/out-west/ffa/sim/move.ts'
@@ -31,6 +30,9 @@ import {
   type World,
 } from '../../../src/experiments/out-west/ffa/sim/state.ts'
 import type { Player } from '../../../src/experiments/out-west/ffa/sim/types.ts'
+import { initializeAmmo } from '../../../src/experiments/out-west/runtime/ammo.ts'
+import { COLLISION } from '../../../src/experiments/out-west/runtime/collision.ts'
+import { createFrontierSimulation } from '../../../src/experiments/out-west/runtime/frontier.ts'
 import { LobbyCore } from './core.ts'
 import { buildNav, findPath, type NavGrid, nextWaypoint } from './nav.ts'
 import type { PracticeOptions } from './practice.ts'
@@ -209,80 +211,82 @@ function tally(
   }
 }
 
-export function practiceRun(
+export async function practiceRun(
   minutes: number,
   seed: number,
   practice: PracticeOptions | null,
   hand: Hand = HANDS.reviewer as Hand,
-): PracticeResult {
-  const core = new LobbyCore('bench', seed)
-  core.botTarget = 15
-  if (practice) {
-    core.usePractice(practice)
-  }
-  const s = core.join(
-    {
-      accountId: 'you',
-      name: 'You',
-      level: 7,
-      prestige: 0,
-      loadout: [],
-      banked: 0,
-      tcpRtt: null,
-      ledger: false,
-    },
-    { send: () => undefined, close: () => undefined },
-    0,
+): Promise<PracticeResult> {
+  const ammo = await initializeAmmo(
+    await WebAssembly.compile(
+      await file(
+        new URL('../../../public/experiments/out-west/physics/ammo.wasm.wasm', import.meta.url),
+      ).arrayBuffer(),
+    ),
   )
-  if (!s) {
-    throw new Error('no session')
-  }
-  const me = s.playerId
-  const brain = new PracticePilot(core.world, seed ^ 0x77, hand)
-  const writer = new Writer(64)
-  const res: PracticeResult = {
-    kills: 0,
-    deaths: 0,
-    avgLife: 0,
-    firstBank: null,
-    banked: 0,
-    botKills: 0,
-    pardoned: 0,
-  }
-  const life = { start: 0, lives: [] as number[] }
-  const ticks = minutes * 60 * TICK_HZ
-  for (let t = 0; t < ticks; t++) {
-    const w = core.world
-    const p = w.players[me]
-    if (p) {
-      const f = brain.frame(w, p)
-      const bytes = encodeInput(writer, {
-        seq: t & 0xff_ff,
-        ackTick: w.tick & 0xff_ff,
-        ackAgeMs: 0,
-        frames: [
-          {
-            ...f,
-            viewTick: Math.max(0, w.tick - 2) & 0xff_ff,
-            viewFrac: 0,
-            pitch: 0,
-          },
-        ],
-      })
-      core.onBinary(me, bytes, t * 50)
+  const simulation = createFrontierSimulation({ ammo, collision: COLLISION, seed })
+  try {
+    const core = new LobbyCore('bench', seed)
+    core.world = simulation.world
+    core.botTarget = 15
+    if (practice) {
+      core.usePractice(practice)
     }
-    const out = core.tick(t * 50)
-    for (const d of out.deposits) {
-      core.confirmDeposit(d, true)
+    const s = core.join(
+      {
+        accountId: 'you',
+        name: 'You',
+        level: 7,
+        prestige: 0,
+        loadout: [],
+        banked: 0,
+        tcpRtt: null,
+        ledger: false,
+      },
+      { send: () => undefined, close: () => undefined },
+      0,
+    )
+    if (!s) {
+      throw new Error('no session')
     }
-    tally(core.world, me, res, life)
+    const me = s.playerId
+    const brain = new PracticePilot(core.world, seed ^ 0x77, hand)
+    const res: PracticeResult = {
+      kills: 0,
+      deaths: 0,
+      avgLife: 0,
+      firstBank: null,
+      banked: 0,
+      botKills: 0,
+      pardoned: 0,
+    }
+    const life = { start: 0, lives: [] as number[] }
+    const ticks = minutes * 60 * TICK_HZ
+    for (let t = 0; t < ticks; t++) {
+      const w = core.world
+      const p = w.players[me]
+      const frames: (
+        | import('../../../src/experiments/out-west/ffa/sim/types.ts').InputFrame
+        | null
+      )[] = []
+      if (p) {
+        frames[me] = { ...brain.frame(w, p), seq: t, viewTime: Math.max(0, w.tick - 2), pitch: 0 }
+      }
+      const out = core.tick(t * 50, { frames })
+      for (const d of out.deposits) {
+        core.confirmDeposit(d, true)
+      }
+      tally(core.world, me, res, life)
+    }
+    if (core.world.players[me]?.alive) {
+      life.lives.push((core.world.tick - life.start) / TICK_HZ)
+    }
+    const lives = life.lives
+    res.avgLife = lives.reduce((a, b) => a + b, 0) / Math.max(1, lives.length)
+    return res
+  } finally {
+    simulation.dispose()
   }
-  if (core.world.players[me]?.alive) {
-    life.lives.push((core.world.tick - life.start) / TICK_HZ)
-  }
-  const lives = life.lives
-  res.avgLife = lives.reduce((a, b) => a + b, 0) / Math.max(1, lives.length)
-  return res
 }
 
 if (import.meta.main) {
@@ -294,7 +298,8 @@ if (import.meta.main) {
     record === 'off' ? null : { rounds: { new: 0, mid: 6, vet: 30 }[record] ?? 0, kd: 1 }
   const all: PracticeResult[] = []
   for (let i = 0; i < runs; i++) {
-    const r = practiceRun(minutes, 1000 + i * 77, practice, hand)
+    // biome-ignore lint/performance/noAwaitInLoops: independent runs are deliberately sequential to bound native physics memory
+    const r = await practiceRun(minutes, 1000 + i * 77, practice, hand)
     all.push(r)
     stdout.write(`${JSON.stringify(r)}\n`)
   }

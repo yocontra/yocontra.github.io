@@ -1,13 +1,13 @@
 /*
- * Out West app shell cache. The game is ~6 MB of models, textures and sound; on a phone that is
- * the slowest part of a cold load. The worker keeps everything under /experiments/out-west/ (and
+ * Out West app shell cache. Native models, textures and sound load on demand. The worker keeps
+ * fetched files under /experiments/out-west/ (and
  * the hashed /_astro/ bundles the page asks for) after the first visit, so launching from the
  * home screen is a cache read, and a repeat visit only revalidates the HTML.
  *
  * Bump VERSION when an unhashed file under public/experiments/out-west/ changes. The hashed
  * /_astro/ files carry their own names and never need a bump.
  */
-const VERSION = 'ow-v2'
+const VERSION = 'ow-playcanvas-v1'
 const CACHE = `out-west-${VERSION}`
 const SHELL = [
   '/experiments/out-west/',

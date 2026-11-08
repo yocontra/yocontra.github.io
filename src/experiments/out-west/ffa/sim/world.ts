@@ -28,7 +28,7 @@ import {
   updateBags,
   updateStrongbox,
 } from './money.ts'
-import { inIframes, resetVertical, stepMove, stopMoves } from './move.ts'
+import { inIframes, resetVertical, stopMoves } from './move.ts'
 import {
   clearPickups,
   firePickupWeapon,
@@ -157,7 +157,7 @@ export function reconnectPlayer(p: Player): void {
   p.lingerUntil = -1
 }
 
-function historyFlags(w: World, p: Player): number {
+export function historyFlags(w: World, p: Player): number {
   if (!p.alive) {
     return HIST_PRESENT
   }
@@ -230,6 +230,7 @@ export function step(w: World, frames: readonly (InputFrame | null | undefined)[
   const frameOf = (id: number): InputFrame => frames[id] ?? IDLE_FRAME
   const players = [...activePlayers(w)]
   const aliveAtStart = players.map((p) => p.alive)
+  w.movePlayers?.(frames)
   for (const p of players) {
     const f = frameOf(p.id)
     p.prevAim = p.aim
@@ -239,14 +240,10 @@ export function step(w: World, frames: readonly (InputFrame | null | undefined)[
     p.pitch = f.pitch ?? 0
     p.crouched = p.alive && (f.buttons & BTN_CROUCH) !== 0
     p.ads = p.alive && (f.buttons & BTN_AIM) !== 0
-    p.moving = stepMove(w.grid, p, {
-      moveX: f.moveX,
-      moveZ: f.moveZ,
-      aim: p.aim,
-      buttons: f.buttons,
-      prevButtons: p.lastButtons,
-      canMove: p.alive && p.showdown < 0 && p.lingerUntil < 0,
-    })
+    // Domain-only fixtures are stationary; shipping worlds supply the native engine phase.
+    if (!w.movePlayers) {
+      p.moving = false
+    }
     if (p.fallDamage > 0 && p.alive) {
       applyFallDamage(w, p, p.fallDamage)
       p.fallDamage = 0

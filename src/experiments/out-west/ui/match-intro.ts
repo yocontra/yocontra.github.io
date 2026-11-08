@@ -50,9 +50,7 @@ export class MatchIntro {
       'Ready',
       () => {
         if (!this.sent) {
-          this.sent = true
-          this.readyBtn.disabled = true
-          this.readyBtn.textContent = 'Ready ✓'
+          this.acknowledgeReady()
           h.ready()
         }
       },
@@ -61,6 +59,13 @@ export class MatchIntro {
     this.readyBtn.disabled = true
     this.readyBtn.hidden = this.ai
     requestAnimationFrame(() => this.root.classList.add('on'))
+  }
+
+  /** Restore accepted readiness after keyboard input or a room reconnect. */
+  acknowledgeReady(): void {
+    this.sent = true
+    this.readyBtn.disabled = true
+    this.readyBtn.textContent = 'Ready ✓'
   }
 
   /** The cock beat: READY is live for 10 s. */

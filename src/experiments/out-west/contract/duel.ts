@@ -175,7 +175,7 @@ export type QueueClientMessage =
   | { type: 'leave' }
 
 export type QueueRefusal =
-  /** The monthly spend cap is reached. Try again next month. */
+  /** The daily free-tier allocation is reached. Try again after midnight UTC. */
   | 'budget'
   /** Signed-in but no licence yet: beat the first 3 outlaws on a ranked run. */
   | 'unlicensed'

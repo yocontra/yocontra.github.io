@@ -6,11 +6,13 @@ Eric Schoffstall's site: a static Astro build for GitHub Pages, a Cloudflare Wor
 ## Quick start
 
 ```bash
+# Node >=22.23.4 (or Node26) and Bun1.3.14
 bun install
 bun dev                  # http://localhost:4321
 ```
 
-The API is a separate Worker (only the games need it):
+The API runs on Cloudflare Workers Free with D1 and SQLite Durable Objects. Frontier rooms use
+Colyseus0.18 and the same native PlayCanvas/Ammo movement on the server and client:
 
 ```bash
 bun run api:dev          # http://localhost:8787
@@ -41,20 +43,34 @@ The ratchets in `scripts/` keep the debt visible:
 
 ## Layout
 
-| Path                                 | What                                                                                                                              |
-| ------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------- |
-| `src/pages/`                         | Site routes, including `/experiments/*`                                                                                           |
-| `src/components/`, `src/layouts/`    | The portfolio site                                                                                                                |
-| `src/experiments/out-west/`          | The games: `duel/` (standoff), `ffa/` (Frontier), `scene/` (three.js), `ffa/sim/` (pure deterministic sim shared with the server) |
-| `src/experiments/out-west/data/`     | Roster, economy, catalogue, tuning — shared by client and server                                                                  |
-| `src/experiments/out-west/contract/` | Wire types and protocol constants                                                                                                 |
-| `api/`                               | Cloudflare Worker: auth, ranked, Daily, Frontier lobbies, D1 + Durable Objects                                                    |
-| `tests/`                             | Client tests (DOM allowed)                                                                                                        |
-| `tools/`                             | Asset pipeline, audits and perf harnesses; see `tools/README.md`                                                                  |
+| Path                                 | What                                                                                                                                       |
+| ------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| `src/pages/`                         | Site routes, including `/experiments/*`                                                                                                    |
+| `src/components/`, `src/layouts/`    | The portfolio site                                                                                                                         |
+| `src/experiments/out-west/`          | PlayCanvas games: `duel/` directors, `client/` native rendering/input/HUD, `runtime/` shared Ammo and SDK schemas, `ffa/sim/` domain rules |
+| `src/experiments/out-west/data/`     | Roster, economy, catalogue, tuning — shared by client and server                                                                           |
+| `src/experiments/out-west/contract/` | Wire types and protocol constants                                                                                                          |
+| `api/`                               | Cloudflare Worker: auth, ranked, Daily, Frontier lobbies, D1 + Durable Objects                                                             |
+| `tests/`                             | Client tests (DOM allowed)                                                                                                                 |
+| `tools/`                             | Asset pipeline, audits and perf harnesses; see `tools/README.md`                                                                           |
 
-Tuning lives in the client data modules and the server imports them; a judged number has one
-source. Scene objects and materials carry `userData.role` / `userData.slot` (`scene/roles.ts`)
-instead of being recognised by name.
+Tuning and domain rules are shared by client and server. PlayCanvas owns rendering, skeletal
+animation, PBR lighting, sound components, rigid bodies and joints. Authored GLBs, equipment and
+collision artifacts live in `content/` and `public/experiments/out-west/3d/`. Colyseus owns room
+replication, prediction and reconciliation; signed account reservations retain the API's auth
+and Turnstile checks. Practice runs the same native motor and game rules locally.
+
+Native browser regressions run against the real game pages:
+
+```bash
+bun tools/test-playcanvas-duel.ts http://localhost:4321
+OW_ORIGIN=http://localhost:4321 bun tools/test-playcanvas-frontier.ts
+```
+
+The Frontier harness exercises32 riders, firing, native movement, bounded corpse physics,
+respawn and disposal. With `OW_API` pointed at the unshipped local API test fixture, it also
+checks authenticated authoritative input and fresh-seat reconnect. See `tools/PERF.md` for
+performance measurements and the physical iPhone13mini30FPS target.
 
 ## Deploy
 

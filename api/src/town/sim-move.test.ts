@@ -1,270 +1,124 @@
+/** Product movement cases run through the exact native motor used by the room and prediction. */
 import { describe, expect, test as it } from 'bun:test'
-import { BTN_FIRE, BTN_JUMP, BTN_ROLL } from '../../../src/experiments/out-west/contract/town.ts'
 import {
-  HOP_TICKS,
-  JUMP_COOLDOWN_TICKS,
-  PLAYER_RADIUS,
-  ROLL_COOLDOWN_TICKS,
-  ROLL_DISTANCE,
-  RUN_SPEED,
-  TICK_HZ,
-  VAULT_TICKS,
-} from '../../../src/experiments/out-west/ffa/sim/constants.ts'
-import {
-  BLOCK_MOVE,
-  buildGrid,
-  circleBlocked,
-  type Rect,
-  TOWN,
-} from '../../../src/experiments/out-west/ffa/sim/layout.ts'
-import {
-  inIframes,
-  quantize,
-  stepMove,
-  vaultDistance,
-  vaulting,
-} from '../../../src/experiments/out-west/ffa/sim/move.ts'
-import { type MoveState, makeMoveState } from '../../../src/experiments/out-west/ffa/sim/types.ts'
-import { place, runCollect, testWorld } from './test-helpers.ts'
+  BTN_AIM,
+  BTN_CROUCH,
+  BTN_FIRE,
+  BTN_JUMP,
+  BTN_ROLL,
+  BTN_SPRINT,
+} from '../../../src/experiments/out-west/contract/town.ts'
+import { inIframes } from '../../../src/experiments/out-west/ffa/sim/move.ts'
+import type { CollisionData } from '../../../src/experiments/out-west/runtime/protocol.ts'
+import { place, run, runCollect } from './test-helpers.ts'
+import { nativeWorld } from './testing/native.ts'
 
-const grid = buildGrid()
-const state = (x: number, z: number): MoveState => makeMoveState(x, z)
-const input = (moveX: number, moveZ: number, buttons = 0, prevButtons = 0) => ({
-  moveX,
-  moveZ,
-  aim: 0,
-  buttons,
-  prevButtons,
-  canMove: true,
-})
-
-describe('movement', () => {
-  it('runs at 5.5 m/s on open ground', () => {
-    const m = state(30, 64)
-    for (let i = 0; i < TICK_HZ; i++) {
-      stepMove(grid, m, input(127, 0))
-    }
-    expect(m.x - 30).toBeCloseTo(RUN_SPEED, 1)
-  })
-
-  it('a hacked stick magnitude is clamped (no speed hack)', () => {
-    const honest = state(30, 64)
-    const hacked = state(30, 64)
-    stepMove(grid, honest, input(127, 127))
-    stepMove(grid, hacked, input(127, 127))
-    const step = Math.hypot(honest.x - 30, honest.z - 64)
-    expect(step).toBeCloseTo(RUN_SPEED / TICK_HZ, 2)
-    expect(hacked).toEqual(honest)
-  })
-
-  it('the dead zone ignores stick noise', () => {
-    const m = state(30, 64)
-    expect(stepMove(grid, m, input(10, -8))).toBe(false)
-    expect(m.x).toBe(30)
-  })
-
-  it('walls stop you and you slide along them', () => {
-    // Run east into the saloon's west wall (x = 47) at z = 40, pushing diagonally.
-    const m = state(44, 40)
-    for (let i = 0; i < 40; i++) {
-      stepMove(grid, m, input(127, 40))
-    }
-    expect(m.x).toBeLessThanOrEqual(47 - 0.4 + 1e-6)
-    expect(m.z).toBeGreaterThan(41)
-  })
-
-  it('no tunnelling through a 0.5 m wall at roll speed', () => {
-    const m = state(45.5, 40)
-    for (let i = 0; i < 10; i++) {
-      stepMove(grid, m, input(127, 0, i === 0 ? BTN_ROLL : 0, i === 1 ? BTN_ROLL : 0))
-    }
-    expect(m.x).toBeLessThan(47)
-  })
-
-  it('positions are quantised to the codec grid', () => {
-    const m = state(30, 64)
-    stepMove(grid, m, input(90, 37))
-    expect(m.x).toBe(quantize(m.x))
-    expect(m.z).toBe(quantize(m.z))
-  })
-
-  it('roll: 4 m in 0.35 s, i-frames for 0.25 s, 2.5 s cooldown', () => {
-    const m = state(20, 64)
-    stepMove(grid, m, input(127, 0, BTN_ROLL, 0))
-    let iframeTicks = inIframes(m) ? 1 : 0
-    let ticks = 1
-    while (m.rollTicks > 0) {
-      stepMove(grid, m, input(0, 0, BTN_ROLL, BTN_ROLL))
-      iframeTicks += inIframes(m) ? 1 : 0
-      ticks++
-    }
-    expect(ticks).toBe(7)
-    expect(iframeTicks).toBe(5)
-    expect(m.x - 20).toBeCloseTo(ROLL_DISTANCE, 1)
-    // Can't roll again until the cooldown ends.
-    const x = m.x
-    stepMove(grid, m, input(0, 0, BTN_ROLL, 0))
-    expect(m.x).toBe(x)
-    for (let i = 0; i < ROLL_COOLDOWN_TICKS; i++) {
-      stepMove(grid, m, input(0, 0))
-    }
-    stepMove(grid, m, input(0, 0, BTN_ROLL, 0))
-    expect(m.rollTicks).toBeGreaterThan(0)
-  })
-
-  it('roll without a stick goes where you aim', () => {
-    const m = state(20, 64)
-    stepMove(grid, m, { ...input(0, 0, BTN_ROLL, 0), aim: 16_384 })
-    expect(m.rollDirZ).toBeCloseTo(1, 5)
-  })
-})
-
-/** A vaultable piece with a clear run-up and landing across its thin side, and which way to go. */
-interface Approach {
-  from: MoveState
-  moveX: number
-  moveZ: number
-  cover: Rect
+const floor: CollisionData = {
+  version: 'movement',
+  boxes: [{ center: [64, -0.5, 64], halfExtents: [128, 0.5, 128] }],
+  meshes: [],
 }
-
-const free = (m: MoveState): boolean =>
-  !circleBlocked(grid, { x: m.x, z: m.z, r: PLAYER_RADIUS }, BLOCK_MOVE)
-
-/** Both run-ups across a piece of cover's thin side. */
-function approaches(c: Rect): Approach[] {
-  const across = c.w < c.d
-  const cx = c.x + c.w / 2
-  const cz = c.z + c.d / 2
-  const off = (across ? c.w : c.d) / 2 + PLAYER_RADIUS + 0.3
-  return [1, -1].map((side) => ({
-    from: state(across ? cx + side * off : cx, across ? cz : cz + side * off),
-    moveX: across ? -side * 127 : 0,
-    moveZ: across ? 0 : -side * 127,
-    cover: c,
-  }))
+async function fixture(extra: CollisionData['boxes'] = []) {
+  const simulation = await nativeWorld({ ...floor, boxes: [...floor.boxes, ...extra] })
+  const p = place(simulation.world, 30, 64)
+  run(simulation.world, 4)
+  return { w: simulation.world, p }
 }
-
-/** A vaultable piece with a clear run-up and landing across its thin side, and which way to go. */
-function vaultSpot(kind: string): Approach {
-  const spot = TOWN.cover
-    .filter((c) => c.kind === kind && c.vaultHeight !== undefined)
-    .flatMap(approaches)
-    .find(
-      (a) =>
-        free(a.from) && vaultDistance(grid, a.from, Math.sign(a.moveX), Math.sign(a.moveZ)) > 0,
-    )
-  if (!spot) {
-    throw new Error(`no clear ${kind} to vault`)
-  }
-  return spot
-}
-
-const jump = (mx: number, mz: number, pressed: boolean) =>
-  input(mx, mz, pressed ? BTN_JUMP : 0, pressed ? 0 : BTN_JUMP)
-
-describe('vault and hop (BTN_JUMP)', () => {
-  it('vaults a fence: a committed 0.5 s arc to clear ground on the far side', () => {
-    const { from, moveX, moveZ, cover } = vaultSpot('fence')
-    const m = { ...from }
-    stepMove(grid, m, jump(moveX, moveZ, true))
-    expect(vaulting(m)).toBe(true)
-    let ticks = 1
-    while (vaulting(m)) {
-      // the stick is ignored mid-vault: it's committed
-      stepMove(grid, m, jump(-moveX, -moveZ, false))
-      ticks++
-    }
-    expect(ticks).toBe(VAULT_TICKS)
-    const beyond =
-      moveX === 0
-        ? Math.sign(moveZ) * (m.z - (cover.z + cover.d / 2))
-        : Math.sign(moveX) * (m.x - (cover.x + cover.w / 2))
-    expect(beyond).toBeGreaterThan(PLAYER_RADIUS)
-    expect(circleBlocked(grid, { ...m, r: PLAYER_RADIUS }, BLOCK_MOVE)).toBe(false)
+describe('native movement', () => {
+  it.each([
+    [0, 127, 0, 5.5],
+    [BTN_SPRINT, 127, 0, 7.6],
+    [BTN_CROUCH, 127, 0, 2.9],
+    [BTN_AIM, 127, 0, 3.025],
+    [BTN_SPRINT, 0, 127, 5.5],
+    [BTN_SPRINT | BTN_AIM, 127, 0, 3.025],
+  ])('speed for buttons %i and stick %i,%i', async (buttons, moveX, moveZ, speed) => {
+    const { w, p } = await fixture()
+    const start = { x: p.x, z: p.z }
+    run(w, 20, { [p.id]: () => ({ buttons, moveX, moveZ }) })
+    expect(Math.hypot(p.x - start.x, p.z - start.z)).toBeCloseTo(speed, 1)
   })
-
-  it('crates vault too; the same press on open ground is a hop that goes nowhere', () => {
-    expect(vaultSpot('crates').cover.w).toBeGreaterThan(0)
-    const m = state(20, 64)
-    stepMove(grid, m, jump(0, 0, true))
-    expect(m.jumpTicks).toBe(HOP_TICKS - 1)
-    expect(m.vaultStep).toBe(0)
-    expect(m.x).toBe(20)
-    expect(m.z).toBe(64)
+  it('normalizes diagonals and ignores stick noise', async () => {
+    const { w, p } = await fixture()
+    run(w, 20, { [p.id]: () => ({ moveX: 10, moveZ: -8 }) })
+    expect(p.x).toBeCloseTo(30, 3)
+    run(w, 20, { [p.id]: () => ({ moveX: 127, moveZ: 127 }) })
+    expect(Math.hypot(p.x - 30, p.z - 64)).toBeCloseTo(5.5, 1)
   })
-
-  it('never vaults a wall or tall cover (the server runs this check itself)', () => {
-    // the saloon's west wall at x = 47 (see "walls stop you")
-    const wall = state(46.2, 40)
-    expect(vaultDistance(grid, wall, 1, 0)).toBe(0)
-    stepMove(grid, wall, jump(127, 0, true))
-    expect(vaulting(wall)).toBe(false)
-    for (let i = 0; i < 20; i++) {
-      stepMove(grid, wall, jump(127, 0, false))
-    }
-    expect(wall.x).toBeLessThanOrEqual(47 - PLAYER_RADIUS + 1e-6)
-    const tall = TOWN.cover
-      .filter((q) => q.vaultHeight === undefined)
-      .flatMap(approaches)
-      .filter((a) => free(a.from))
-    expect(tall.length).toBeGreaterThan(3)
-    const vaulted = tall.filter(
-      (a) => vaultDistance(grid, a.from, Math.sign(a.moveX), Math.sign(a.moveZ)) > 0,
-    )
-    expect(vaulted).toEqual([])
+  it('slides along walls and cannot roll through a half metre wall', async () => {
+    const { w, p } = await fixture([{ center: [33, 1.5, 64], halfExtents: [0.25, 1.5, 10] }])
+    run(w, 40, { [p.id]: () => ({ moveX: 127, moveZ: 40 }) })
+    expect(p.x).toBeLessThan(32.4)
+    expect(p.z).toBeGreaterThan(65)
+    run(w, 7, { [p.id]: (t) => ({ moveX: 127, buttons: t === w.tick ? BTN_ROLL : 0 }) })
+    expect(p.x).toBeLessThan(32.4)
   })
-
-  it('has a cooldown, and no roll or second jump mid-vault', () => {
-    const { from, moveX, moveZ } = vaultSpot('fence')
-    const m = { ...from }
-    stepMove(grid, m, jump(moveX, moveZ, true))
-    stepMove(grid, m, input(moveX, moveZ, BTN_ROLL, 0))
-    expect(m.rollTicks).toBe(0)
-    while (vaulting(m)) {
-      stepMove(grid, m, input(0, 0))
+  it('rolls four metres with five iframe ticks and a cooldown; stationary roll follows aim', async () => {
+    const { w, p } = await fixture()
+    run(w, 1, { [p.id]: () => ({ moveX: 127, buttons: BTN_ROLL }) })
+    let iframes = inIframes(p) ? 1 : 0
+    while (p.rollTicks > 0) {
+      run(w, 1)
+      iframes += inIframes(p) ? 1 : 0
     }
-    stepMove(grid, m, jump(0, 0, true))
-    expect(m.jumpTicks).toBe(0)
-    for (let i = 0; i < JUMP_COOLDOWN_TICKS; i++) {
-      stepMove(grid, m, input(0, 0))
-    }
-    stepMove(grid, m, jump(0, 0, true))
-    expect(m.jumpTicks).toBeGreaterThan(0)
+    expect(p.x - 30).toBeCloseTo(4, 1)
+    expect(iframes).toBe(5)
+    expect(p.rollCooldown).toBeGreaterThan(0)
+    run(w, 1, { [p.id]: () => ({ buttons: BTN_ROLL }) })
+    expect(p.rollTicks).toBe(0)
+    run(w, 50)
+    run(w, 1, { [p.id]: () => ({ buttons: BTN_ROLL, aim: 16_384 }) })
+    expect(p.rollDirZ).toBeCloseTo(1, 4)
   })
-
-  it('the lobby applies it from input frames: fence yes, saloon wall no, no shots mid-vault', () => {
-    const w = testWorld()
-    const spot = vaultSpot('fence')
-    const a = place(w, spot.from.x, spot.from.z)
-    const b = place(w, 46.2, 40)
+  it('slides after sprint, covers about 4.4m and cannot restart during cooldown', async () => {
+    const { w, p } = await fixture()
+    run(w, 4, { [p.id]: () => ({ moveX: 127, buttons: BTN_SPRINT }) })
+    const x = p.x
+    run(w, 1, { [p.id]: () => ({ moveX: 127, buttons: BTN_CROUCH }) })
+    expect(inIframes(p)).toBe(true)
+    while (p.slideTicks > 0) {
+      run(w, 1)
+    }
+    expect(p.x - x).toBeGreaterThan(3.8)
+    expect(p.x - x).toBeLessThan(5)
+    expect(p.slideCooldown).toBeGreaterThan(0)
+  })
+  it('keeps takeoff momentum while allowing limited air steering', async () => {
+    const { w, p } = await fixture()
+    run(w, 4, { [p.id]: () => ({ moveX: 127, buttons: BTN_SPRINT }) })
+    run(w, 1, { [p.id]: () => ({ moveX: 127, buttons: BTN_SPRINT | BTN_JUMP }) })
+    expect(p.grounded).toBe(false)
+    const x = p.x
+    run(w, 4, { [p.id]: () => ({ moveX: -127 }) })
+    expect(p.x).toBeGreaterThan(x + 0.5)
+  })
+  it('vaults committed cover without rolling or firing mid arc, then lands clear', async () => {
+    const { w, p } = await fixture([{ center: [31.2, 0.55, 64], halfExtents: [0.2, 0.55, 1] }])
+    run(w, 1, { [p.id]: () => ({ moveX: 127, buttons: BTN_JUMP }) })
+    expect(p.vaultStep).toBeGreaterThan(0)
     const shots = runCollect(
       w,
-      VAULT_TICKS + 2,
-      {
-        [a.id]: (t) => ({
-          moveX: spot.moveX,
-          moveZ: spot.moveZ,
-          buttons: (t === 0 ? BTN_JUMP : 0) | (t === 3 ? BTN_FIRE : 0),
-        }),
-        [b.id]: (t) => ({ moveX: 127, buttons: t === 0 ? BTN_JUMP : 0 }),
-      },
+      4,
+      { [p.id]: () => ({ moveX: -127, buttons: BTN_ROLL | BTN_FIRE | BTN_JUMP }) },
       'shot',
     )
-    expect(Math.hypot(a.x - spot.from.x, a.z - spot.from.z)).toBeGreaterThan(1)
-    expect(circleBlocked(w.grid, { x: a.x, z: a.z, r: PLAYER_RADIUS }, BLOCK_MOVE)).toBe(false)
-    expect(b.x).toBeLessThanOrEqual(47 - PLAYER_RADIUS + 1e-6)
+    expect(p.y).toBeGreaterThan(0.4)
+    expect(p.rollTicks).toBe(0)
     expect(shots).toEqual([])
+    run(w, 12)
+    expect(p.x).toBeGreaterThan(32)
+    expect(Math.abs(p.y)).toBeLessThan(0.02)
   })
-
-  it('replays exactly from the wire (u16 direction, centimetre step)', () => {
-    const { from, moveX, moveZ } = vaultSpot('fence')
-    const a = { ...from }
-    stepMove(grid, a, jump(moveX, moveZ, true))
-    const b: MoveState = { ...a, vaultStep: Math.round(a.vaultStep * 100) / 100 }
-    while (vaulting(a)) {
-      stepMove(grid, a, input(0, 0))
-      stepMove(grid, b, input(0, 0))
-      expect(b).toEqual(a)
-    }
+  it('refuses a tall wall and does not double jump while airborne', async () => {
+    const { w, p } = await fixture([{ center: [31.2, 2, 64], halfExtents: [0.2, 2, 1] }])
+    run(w, 1, { [p.id]: () => ({ moveX: 127, buttons: BTN_JUMP }) })
+    expect(p.vaultStep).toBe(0)
+    expect(p.mantleTicks).toBe(0)
+    run(w, 1)
+    const before = p.vy
+    run(w, 1, { [p.id]: () => ({ buttons: BTN_JUMP }) })
+    expect(p.vy).toBeLessThan(before)
+    run(w, 30, { [p.id]: () => ({ moveX: 127 }) })
+    expect(p.x).toBeLessThan(30.7)
   })
 })

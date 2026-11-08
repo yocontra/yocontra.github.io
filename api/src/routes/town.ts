@@ -8,13 +8,14 @@
  *   GET  /town/:lobby/stats  dev only: tick timing and traffic counters (load tests)
  */
 
+import { COLLISION_VERSION } from '../../../src/experiments/out-west/content/manifest.ts'
 import {
   TOWN_WIRE_VERSION,
   type TownJoinRefusal,
   type TownJoinRequest,
-  type TownJoinResponse,
 } from '../../../src/experiments/out-west/contract/town.ts'
 import { licenceStatus } from '../../../src/experiments/out-west/data/licence.ts'
+import { PROTOCOL_VERSION } from '../../../src/experiments/out-west/runtime/protocol.ts'
 import { authenticate } from '../auth/session.ts'
 import { AccountGoneError, issueTicket, redeemTicket } from '../auth/ticket.ts'
 import { getProfileDetail } from '../economy/profile.ts'
@@ -32,21 +33,22 @@ import { accountFlags, isShadowed } from '../moderation/flags.ts'
 import { LOBBY_WIRE_HEADER } from '../town/wire.ts'
 
 const LOBBY_PATH = /^\/town\/(?<lobby>lobby:\d{1,3})\/(?<what>ws|stats)$/u
+const NATIVE_PATH = /^\/town\/(?<lobby>lobby:\d{1,3})\/native\/(?<room>[a-f0-9]{64})$/u
 const DIRECTORY = 'dir:global'
 const SIG_TTL_MS = 60_000
 
 const isDev = (env: Env): boolean => env.RP_ID === 'localhost'
 
-/** The 1st of next month, UTC, for the "town's closed" message. */
+/** The next UTC daily reset for the "town's closed" message. */
 export function reopensOn(now = new Date()): string {
-  const next = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1))
+  const next = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + 1))
   return next.toLocaleDateString('en-US', { month: 'long', day: 'numeric', timeZone: 'UTC' })
 }
 
 export function refusalMessage(reason: TownJoinRefusal, now = new Date()): string {
   switch (reason) {
     case 'over_budget':
-      return `Perdition is closed for the rest of the month. It reopens on ${reopensOn(now)} (UTC). Quick Draw is still open.`
+      return `Perdition is closed for the rest of the day. It reopens on ${reopensOn(now)} (UTC). Quick Draw is still open.`
     case 'all_full':
       return 'Every lobby in Perdition is full. Try again in a minute.'
     case 'unlicensed':
@@ -114,7 +116,11 @@ async function join(request: Request, env: Env): Promise<Response> {
   // Turnstile tokens run to ~2 KB.
   const body = ((await readJson(request, BODY_STANDARD)) ?? {}) as TownJoinRequest
   // A page loaded before a wire change would misread every snapshot: send it to refresh instead.
-  if (body.wire !== TOWN_WIRE_VERSION) {
+  if (
+    body.wire !== TOWN_WIRE_VERSION ||
+    Reflect.get(body, 'protocol') !== PROTOCOL_VERSION ||
+    Reflect.get(body, 'collision') !== COLLISION_VERSION
+  ) {
     return json(
       request,
       env,
@@ -180,15 +186,46 @@ async function join(request: Request, env: Env): Promise<Response> {
   if (isDev(env) && Number.isInteger(bots) && bots >= 0) {
     ws.searchParams.set('bots', String(Math.min(31, bots)))
   }
-  const out: TownJoinResponse = {
-    lobbyId: assigned.lobbyId,
-    wsUrl: ws.toString(),
-    players: assigned.players,
+  {
+    const lobby = env.LOBBIES.get(env.LOBBIES.idFromName(assigned.lobbyId))
+    const reservation = await lobby.reserveNative(
+      assigned.lobbyId,
+      player.accountId,
+      PROTOCOL_VERSION,
+    )
+    if ('refused' in reservation) {
+      await dir.cancelAssignment(assigned.lobbyId, player.accountId)
+      return json(
+        request,
+        env,
+        { ok: false, error: refusalMessage('over_budget'), reason: 'over_budget' },
+        503,
+        { 'Retry-After': '86400' },
+      )
+    }
+    ws.pathname = `/town/${assigned.lobbyId}/native/${reservation.roomId}`
+    return json(
+      request,
+      env,
+      {
+        lobbyId: assigned.lobbyId,
+        wsUrl: ws.toString(),
+        players: assigned.players,
+        banked: profile.purse,
+        reservation,
+      },
+      201,
+    )
   }
-  return json(request, env, out, 201)
 }
 
-async function connect(request: Request, env: Env, url: URL, lobbyId: string): Promise<Response> {
+async function connect(
+  request: Request,
+  env: Env,
+  url: URL,
+  target: { lobbyId: string; nativeRoom?: string },
+): Promise<Response> {
+  const { lobbyId, nativeRoom } = target
   if (request.headers.get('Upgrade') !== 'websocket') {
     return new Response('Expected WebSocket', { status: 426 })
   }
@@ -205,6 +242,10 @@ async function connect(request: Request, env: Env, url: URL, lobbyId: string): P
   }
   const headers = new Headers(request.headers)
   headers.set(LOBBY_WIRE_HEADER, String(TOWN_WIRE_VERSION))
+  headers.delete('X-Native-Room')
+  if (nativeRoom) {
+    headers.set('X-Native-Room', nativeRoom)
+  }
   headers.set('X-Lobby-Id', lobbyId)
   headers.set('X-Account-Id', player.accountId)
   headers.set('X-Name', player.name)
@@ -222,6 +263,15 @@ async function connect(request: Request, env: Env, url: URL, lobbyId: string): P
 }
 
 export const townRoutes: RouteHandler = async (request, env, url) => {
+  if (url.pathname === '/town/native/join' && request.method === 'POST') {
+    return join(request, env)
+  }
+  const nativePath = NATIVE_PATH.exec(url.pathname)
+  const nativeLobby = nativePath?.groups?.lobby
+  const nativeRoom = nativePath?.groups?.room
+  if (nativeLobby && nativeRoom && request.method === 'GET') {
+    return connect(request, env, url, { lobbyId: nativeLobby, nativeRoom })
+  }
   if (url.pathname === '/town/join' && request.method === 'POST') {
     return join(request, env)
   }
@@ -239,7 +289,7 @@ export const townRoutes: RouteHandler = async (request, env, url) => {
       return null
     }
     const lobby = env.LOBBIES.get(env.LOBBIES.idFromName(lobbyId))
-    return lobby.fetch(new Request(new URL('/stats', url)))
+    return lobby.fetch(new Request(new URL('/stats', url).toString()))
   }
-  return connect(request, env, url, lobbyId)
+  return new Response('The game has been updated. Refresh to reconnect.', { status: 410 })
 }

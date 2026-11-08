@@ -27,6 +27,11 @@ export const HIST_PRESENT = 16
 const HIST_STRIDE = 4
 
 export interface World {
+  /** Static collision query supplied by the room-owned native physics world. */
+  castWorld?: (ray: import('./combat.ts').ShotRay) => number | null
+  /** Engine movement phase supplied by PlayCanvas; called once before combat. */
+  movePlayers?: (frames: readonly (import('./types.ts').InputFrame | null | undefined)[]) => void
+
   tick: number
   seed: number
   rng: Rng

@@ -12,7 +12,8 @@ import {
   type RoofWalk,
   roofWalkAt,
 } from '../../../src/experiments/out-west/ffa/sim/roofwalks.ts'
-import { aimAt, place, run, testWorld } from './test-helpers.ts'
+import { aimAt, place, run } from './test-helpers.ts'
+import { nativeTestWorld } from './testing/native.ts'
 
 const grid = buildGrid()
 
@@ -36,8 +37,8 @@ describe('roof walks', () => {
     }
   })
 
-  it('climbs a ladder to its deck and back down', () => {
-    const w = testWorld()
+  it('climbs a ladder to its deck and back down', async () => {
+    const w = await nativeTestWorld()
     const walk = firstWalk()
     const p = place(w, walk.ladderX, walk.ladderZ)
     run(w, 1, { [p.id]: () => ({ buttons: BTN_JUMP }) })
@@ -57,13 +58,13 @@ describe('roof walks', () => {
     expect(p.climbDir).toBe(-1)
     run(w, CLIMB_TICKS)
     expect(p.roof).toBe(0)
-    expect(p.y).toBe(0)
+    expect(Math.abs(p.y)).toBeLessThan(0.08)
     expect(p.x).toBeCloseTo(walk.ladderX)
     expect(p.z).toBeCloseTo(walk.ladderZ)
   })
 
-  it('walks along the catwalk and falls off its edge', () => {
-    const w = testWorld()
+  it('walks along the catwalk and falls off its edge', async () => {
+    const w = await nativeTestWorld()
     const walk = firstWalk()
     const p = place(w, walk.ladderX, walk.ladderZ)
     run(w, 1, { [p.id]: () => ({ buttons: BTN_JUMP }) })
@@ -72,11 +73,11 @@ describe('roof walks', () => {
     expect(p.roof).toBe(0)
     expect(p.y).toBeLessThan(walk.height)
     run(w, 40)
-    expect(p.y).toBe(0)
+    expect(Math.abs(p.y)).toBeLessThan(0.08)
   })
 
-  it('steps off the deck, falls, and lands on clear ground', () => {
-    const w = testWorld()
+  it('steps off the deck, falls, and lands on clear ground', async () => {
+    const w = await nativeTestWorld()
     const walk = firstWalk()
     const p = place(w, walk.ladderX, walk.ladderZ)
     run(w, 1, { [p.id]: () => ({ buttons: BTN_JUMP }) })
@@ -89,25 +90,25 @@ describe('roof walks', () => {
     expect(fromY).toBeGreaterThan(0)
     run(w, 40)
     expect(p.fallTicks).toBe(0)
-    expect(p.y).toBe(0)
+    expect(Math.abs(p.y)).toBeLessThan(0.08)
     expect(p.roof).toBe(0)
   })
 
-  it('hits a rider on the catwalk with a pitched shot', () => {
-    const w = testWorld()
+  it('hits a rider on the catwalk with a pitched shot', async () => {
+    const w = await nativeTestWorld()
     const walk = firstWalk()
     const roof = place(w, walk.ladderX, walk.ladderZ)
     run(w, 1, { [roof.id]: () => ({ buttons: BTN_JUMP }) })
     run(w, CLIMB_TICKS)
     const street = place(w, walk.ladderX + 3, walk.ladderZ + 1.2)
     run(w, 1, {
-      [street.id]: () => ({ aim: aimAt(street, roof), pitch: 58, buttons: BTN_FIRE }),
+      [street.id]: () => ({ aim: aimAt(street, roof), pitch: 65, buttons: BTN_FIRE }),
     })
     expect(roof.hp).toBeLessThan(100)
   })
 
-  it('respawns and deaths return a rider to the street', () => {
-    const w = testWorld()
+  it('respawns and deaths return a rider to the street', async () => {
+    const w = await nativeTestWorld()
     const walk = firstWalk()
     const p = place(w, walk.ladderX, walk.ladderZ)
     run(w, 1, { [p.id]: () => ({ buttons: BTN_JUMP }) })
@@ -117,7 +118,7 @@ describe('roof walks', () => {
     p.alive = false
     p.respawnTick = 0
     run(w, 1)
-    expect(p.y).toBe(0)
+    expect(Math.abs(p.y)).toBeLessThan(0.08)
     expect(p.roof).toBe(0)
   })
 })

@@ -3,6 +3,7 @@ import type { InputFrame } from '../../../src/experiments/out-west/ffa/sim/types
 import { spawnPlayer, step } from '../../../src/experiments/out-west/ffa/sim/world.ts'
 import { BotDirector, botName, freshBotName } from './bots.ts'
 import { place, testWorld } from './test-helpers.ts'
+import { nativeTestWorld } from './testing/native.ts'
 
 const DIGIT = /\d/u
 
@@ -29,8 +30,8 @@ function tick(w: ReturnType<typeof testWorld>, director: BotDirector): void {
 }
 
 describe('bots in town', () => {
-  it('two bots on the same spot back away from each other instead of locking up', () => {
-    const w = testWorld()
+  it('two bots on the same spot back away from each other instead of locking up', async () => {
+    const w = await nativeTestWorld()
     const a = place(w, 60, 61, { bot: true })
     const b = place(w, 60, 61, { bot: true })
     const director = new BotDirector(3)
@@ -40,8 +41,8 @@ describe('bots in town', () => {
     expect(Math.hypot(a.x - b.x, a.z - b.z)).toBeGreaterThan(1.5)
   })
 
-  it('a bot alone in town never stands about: at a goal it moves on within a few ticks', () => {
-    const w = testWorld()
+  it('a bot alone in town never stands about: at a goal it moves on within a few ticks', async () => {
+    const w = await nativeTestWorld()
     const p = place(w, 60, 61, { bot: true })
     const director = new BotDirector(5)
     let still = 0

@@ -5,8 +5,7 @@
  * you) is mirrored so its edge arrow points the right way round instead of flipping across the
  * screen. Off-screen points are clamped to an inset rectangle with the angle for a chevron.
  */
-import { type PerspectiveCamera, Vector3 } from 'three'
-import { viewport } from './viewport.ts'
+import { type CameraComponent, Vec3 } from 'playcanvas'
 
 export interface ScreenPoint {
   /** Client pixels (clamped to the inset edge when off screen). */
@@ -18,40 +17,41 @@ export interface ScreenPoint {
   angle: number
 }
 
-const v = new Vector3()
+const v = new Vec3()
+const world = new Vec3()
+const direction = new Vec3()
 
 export function toScreen(
-  cam: PerspectiveCamera,
+  cam: CameraComponent,
   wx: number,
   wy: number,
   wz: number,
   inset: number,
   out: ScreenPoint,
 ): ScreenPoint {
-  const w = viewport.w
-  const h = viewport.h
-  v.set(wx, wy, wz).applyMatrix4(cam.matrixWorldInverse)
-  const behind = v.z > -cam.near
-  v.applyMatrix4(cam.projectionMatrix)
-  let sx = v.x
-  let sy = -v.y
+  const canvas = cam.system.app.graphicsDevice.canvas
+  const w = canvas.clientWidth
+  const h = canvas.clientHeight
+  world.set(wx, wy, wz)
+  direction.sub2(world, cam.entity.getPosition())
+  const behind = direction.dot(cam.entity.forward) < cam.nearClip
+  cam.worldToScreen(world, v)
+  let ox = v.x - w / 2
+  let oy = v.y - h / 2
   if (behind) {
-    // behind the lens the projection inverts: flip it, and push it out to the edge
-    sx = -sx
-    sy = -sy
-    if (Math.abs(sx) < 1e-3 && Math.abs(sy) < 1e-3) {
-      sy = 1
+    ox = -ox
+    oy = -oy
+    if (Math.abs(ox) + Math.abs(oy) < 0.001) {
+      oy = h
     }
-    const m = Math.max(Math.abs(sx), Math.abs(sy))
-    sx = (sx / m) * 2
-    sy = (sy / m) * 2
+    const scale = Math.max(w / Math.max(Math.abs(ox), 0.001), h / Math.max(Math.abs(oy), 0.001))
+    ox *= scale
+    oy *= scale
   }
-  const px = w / 2 + (sx * w) / 2
-  const py = h / 2 + (sy * h) / 2
+  const px = w / 2 + ox
+  const py = h / 2 + oy
   const hx = w / 2 - inset
   const hy = h / 2 - inset
-  const ox = px - w / 2
-  const oy = py - h / 2
   out.angle = Math.atan2(oy, ox)
   if (!behind && Math.abs(ox) <= hx && Math.abs(oy) <= hy) {
     out.x = px

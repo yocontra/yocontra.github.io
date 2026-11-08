@@ -70,7 +70,7 @@ async function call(
   if (opts.body !== undefined) {
     init.body = JSON.stringify(opts.body)
   }
-  const request = new Request(url, init)
+  const request = new Request(url.toString(), init)
   const response =
     (await socialRoutes(request, t.env, url, ctx)) ??
     (await meRoutes(request, t.env, url, ctx)) ??

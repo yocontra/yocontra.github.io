@@ -1,9 +1,8 @@
 /** Fail when catalog preview images no longer match their art inputs or were replaced piecemeal. */
 import { existsSync, readFileSync } from 'node:fs'
 import { CATALOG } from '../src/experiments/out-west/data/catalog.ts'
-import { hasThumb } from '../src/experiments/out-west/scene/item-studio.ts'
 import { BAKED_THUMBS } from '../src/experiments/out-west/ui/thumbs.ts'
-import { fileHash, itemArtFingerprint } from './item-art.ts'
+import { fileHash, hasThumb, itemArtFingerprint } from './item-art.ts'
 
 const dir = new URL('../public/experiments/out-west/thumbs/', import.meta.url).pathname
 const manifestPath = `${dir}manifest.json`

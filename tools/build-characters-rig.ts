@@ -1,6 +1,6 @@
 /**
  * UE-mannequin joint names (Quaternius's packs) → the game's rig names (Hips, Torso, UpperArmR,
- * WristR…). Shared by `build-characters.ts` and `build-moves.ts`.
+ * WristR…). Used by the offline animation importer `build-moves.ts`.
  */
 
 const SIDE: Record<string, string> = { l: 'L', r: 'R' }

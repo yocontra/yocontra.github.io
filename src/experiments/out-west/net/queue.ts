@@ -36,7 +36,7 @@ export function parseQueueMessage(raw: unknown): QueueServerMessage | null {
 }
 
 const REFUSALS: Record<string, string> = {
-  budget: 'Bounty Hunt is closed until the 1st of next month.',
+  budget: 'Bounty Hunt is resting until the next UTC day.',
   unlicensed: 'You need a licence. Beat 3 outlaws on a ranked run.',
   cooldown: 'You dodged too many duels. Wait a while, then try again.',
   busy: 'You’re already in a queue or duel in another tab.',

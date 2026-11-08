@@ -10,7 +10,7 @@
  *
  * The windows come from the layout (`bankWindows()`), so the arrow follows any re-layout.
  */
-import type { PerspectiveCamera } from 'three'
+import type { CameraComponent } from 'playcanvas'
 import { MOST_WANTED_MIN } from '../sim/constants.ts'
 import { BANK_WINDOWS, BLOCK_MOVE, type Grid, rayGrid, type Zone } from '../sim/layout.ts'
 import { MinHeap } from './min-heap.ts'
@@ -248,7 +248,7 @@ export class BankGuide {
    * the bank prompt takes over there.
    */
   update(
-    cam: PerspectiveCamera,
+    cam: CameraComponent,
     x: number,
     z: number,
     carried: number,
@@ -307,6 +307,10 @@ export class BankGuide {
       this.marker.style.transform = `translate(${ix}px, ${iy}px)`
       this.chevron.style.transform = `translate(${sp.x}px, ${sp.y}px) rotate(${sp.angle}rad)`
     }
+  }
+
+  destroy(): void {
+    this.marker.parentElement?.remove()
   }
 
   /** Dev and onboarding: the marker's state. */

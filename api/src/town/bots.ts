@@ -31,13 +31,31 @@ import {
   dist2,
   type World,
 } from '../../../src/experiments/out-west/ffa/sim/state.ts'
-import { hasLineOfSight3D } from '../../../src/experiments/out-west/ffa/sim/surfaces.ts'
 import type { InputFrame, Player } from '../../../src/experiments/out-west/ffa/sim/types.ts'
 import { aimFor, type BotAim } from './bot-skill.ts'
 import { buildNav, findPath, type NavGrid, nextWaypoint } from './nav.ts'
 
 /** A rider's eye, for 3D sight checks. */
 const eyeOf = (p: Player) => ({ x: p.x, y: p.y + 1.45, z: p.z })
+function hasLineOfSight3D(w: World, a: ReturnType<typeof eyeOf>, b: ReturnType<typeof eyeOf>) {
+  const dx = b.x - a.x
+  const dy = b.y - a.y
+  const dz = b.z - a.z
+  const distance = Math.hypot(dx, dy, dz)
+  if (distance < 0.0001) {
+    return true
+  }
+  const hit = w.castWorld?.({
+    ox: a.x,
+    oy: a.y,
+    oz: a.z,
+    dx: dx / distance,
+    dy: dy / distance,
+    dz: dz / distance,
+    maxT: distance,
+  })
+  return hit === null || hit === undefined || hit >= distance - 0.05
+}
 
 const BANK_AT = 300
 /** Practice bots bank small carries, so the windows are busy and the town reads as alive. */
@@ -161,7 +179,7 @@ function pickTarget({ w, p, b, pack, grace, spare }: Scan): Player | null {
       continue
     }
     const d2 = dist2(p.x, p.z, q.x, q.z)
-    if (d2 < bestD && hasLineOfSight3D(w.grid, eyeOf(p), eyeOf(q))) {
+    if (d2 < bestD && hasLineOfSight3D(w, eyeOf(p), eyeOf(q))) {
       bestD = d2
       best = q
     }
@@ -423,7 +441,7 @@ export class BotDirector {
     const old = b.target >= 0 ? w.players[b.target] : null
     const keep = (b.aim.range + 3) ** 2
     if (old?.alive && old.showdown < 0 && dist2(p.x, p.z, old.x, old.z) < keep) {
-      if (hasLineOfSight3D(w.grid, eyeOf(p), eyeOf(old))) {
+      if (hasLineOfSight3D(w, eyeOf(p), eyeOf(old))) {
         if (!b.visible) {
           b.visible = true
           b.fireAt = Math.max(b.fireAt, w.tick + (b.aim.reactTicks >> 1))

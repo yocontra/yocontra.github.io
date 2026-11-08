@@ -1,4 +1,4 @@
-import type { DuelState } from './state.ts'
+import type { NativeDirector as DuelState } from './native-director.ts'
 
 /**
  * Who talks, and when. Every spoken line in a duel goes through `say`, so the cadence lives in one

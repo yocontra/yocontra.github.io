@@ -1,16 +1,22 @@
 import { describe, expect, it } from 'bun:test'
+import { Vec3 } from 'playcanvas'
 import { WEAPON_RIFLE, WEAPON_SHOTGUN } from '../../../src/experiments/out-west/contract/town.ts'
 import { eyeHeight, fire } from '../../../src/experiments/out-west/ffa/sim/combat.ts'
-import { buildGrid, TOWN } from '../../../src/experiments/out-west/ffa/sim/layout.ts'
 import { firePickupWeapon } from '../../../src/experiments/out-west/ffa/sim/pickups.ts'
-import { impactNormal, rayWorld } from '../../../src/experiments/out-west/ffa/sim/surfaces.ts'
 import type { SimEvent } from '../../../src/experiments/out-west/ffa/sim/types.ts'
-import { place, testWorld } from './test-helpers.ts'
+import type { CollisionData } from '../../../src/experiments/out-west/runtime/protocol.ts'
+import { place } from './test-helpers.ts'
+import { nativeWorld } from './testing/native.ts'
 
+const floor: CollisionData = {
+  version: 'shot-test',
+  boxes: [{ center: [64, -0.5, 64], halfExtents: [128, 0.5, 128] }],
+  meshes: [],
+}
 type Shot = Extract<SimEvent, { type: 'shot' }>
 
-function elevatedShot(weapon: number): Shot {
-  const w = testWorld()
+async function elevatedShot(weapon: number): Promise<Shot> {
+  const w = (await nativeWorld(floor)).world
   const p = place(w, 20, 64)
   p.y = 7
   p.pitch = -63
@@ -29,8 +35,8 @@ function elevatedShot(weapon: number): Shot {
 }
 
 describe('authoritative shot geometry', () => {
-  it('records the true sloped revolver endpoint, with no pellet extension', () => {
-    const shot = elevatedShot(0)
+  it('records the true sloped revolver endpoint, with no pellet extension', async () => {
+    const shot = await elevatedShot(0)
     expect(shot.origin).toEqual({ x: 20, y: 7 + eyeHeight({ crouched: false }), z: 64 })
     expect(shot.pellets).toEqual([])
     expect(shot.end.x).toBeLessThan(shot.origin.x + shot.range * 0.25 - 1)
@@ -38,15 +44,15 @@ describe('authoritative shot geometry', () => {
     expect(shot.end.y).toBeGreaterThan(-0.01)
   })
 
-  it('records the rifle actual impact height rather than the old constant body height', () => {
-    const shot = elevatedShot(WEAPON_RIFLE)
+  it('records the rifle actual impact height rather than the old constant body height', async () => {
+    const shot = await elevatedShot(WEAPON_RIFLE)
     expect(shot.end.y).toBeLessThan(0.2)
     expect(shot.y).toBe(Math.round(shot.end.y * 10))
     expect(shot.pellets).toEqual([])
   })
 
-  it('preserves all eight shotgun pellet endpoints without changing shell statistics', () => {
-    const shot = elevatedShot(WEAPON_SHOTGUN)
+  it('preserves all eight shotgun pellet endpoints without changing shell statistics', async () => {
+    const shot = await elevatedShot(WEAPON_SHOTGUN)
     expect(shot.pellets.length).toBe(8)
     expect(shot.pellets.every((p) => p.y < shot.origin.y && p.x > shot.origin.x)).toBe(true)
     expect(shot.pellets).toContainEqual(shot.end)
@@ -54,71 +60,63 @@ describe('authoritative shot geometry', () => {
   })
 })
 
-describe('ground ray intersection', () => {
-  const openGrid = () => buildGrid({ ...TOWN, buildings: [], cover: [] })
-
-  it('finds the exact plane at shallow and steep angles that step over the old ground band', () => {
+describe('native static ray intersection', () => {
+  it('finds ground accurately for shallow and steep rays, with no hit beyond range', async () => {
+    const s = await nativeWorld(floor)
     for (const dy of [-0.1, -Math.SQRT1_2, -0.99]) {
-      const dx = Math.sqrt(1 - dy * dy)
-      const hit = rayWorld(openGrid(), 20, 0.42, 64, dx, dy, 0, 35)
-      expect(hit?.y).toBe(0)
-      expect(hit?.dist).toBeCloseTo(-0.42 / dy, 6)
+      const hit = s.physics.castWorld({
+        ox: 20,
+        oy: 0.42,
+        oz: 64,
+        dx: Math.sqrt(1 - dy * dy),
+        dy,
+        dz: 0,
+        maxT: 35,
+      })
+      expect(hit).toBeCloseTo(-0.42 / dy, 4)
     }
+    expect(
+      s.physics.castWorld({ ox: 20, oy: 2, oz: 64, dx: 1, dy: -0.01, dz: 0, maxT: 2 }),
+    ).toBeNull()
+    expect(
+      s.physics.castWorld({ ox: 20, oy: 0.001, oz: 64, dx: 0, dy: 1, dz: 0, maxT: 2 }),
+    ).toBeNull()
   })
-
-  it('keeps an earlier raised roof and wall ahead of the ground backstop', () => {
-    const roof = openGrid()
-    roof.overheads.push({ x: 23, z: 63, w: 3, d: 2, bottom: 2, top: 2.3, kind: 'overhead' })
-    const d = Math.sqrt(1.25)
-    const roofHit = rayWorld(roof, 20, 4, 64, 1 / d, -0.5 / d, 0, 20)
-    expect(roofHit?.dist ?? 20).toBeLessThan(5)
-    const wall = openGrid()
-    const col = Math.floor(21 / wall.cell)
-    const row = Math.floor(64 / wall.cell)
-    wall.tops[row * wall.n + col] = 4
-    expect(rayWorld(wall, 20, 3, 64, 1 / d, -0.5 / d, 0, 20)?.dist ?? 20).toBeLessThan(2)
-  })
-
-  it('handles origins on or below ground without blocking rays that leave the plane upward', () => {
-    expect(rayWorld(openGrid(), 20, 0, 64, 0, -1, 0, 20)?.dist).toBe(0)
-    expect(rayWorld(openGrid(), 20, -0.1, 64, 0, 1, 0, 20)?.dist).toBe(0)
-    expect(rayWorld(openGrid(), 20, 0, 64, 0, 1, 0, 2)).toBeNull()
-    expect(rayWorld(openGrid(), 20, 2, 64, 1, -0.01, 0, 2)).toBeNull()
-  })
-})
-
-describe('flush wall and ground contacts', () => {
-  it('refines an oblique hit to the wall and returns a matching distance, point and face normal', () => {
-    const grid = buildGrid({ ...TOWN, buildings: [], cover: [] })
-    for (let row = 124; row < 134; row++) {
-      grid.tops[row * grid.n + 20] = 4
-    }
-    const norm = Math.hypot(1, 0.1, 0.3)
-    const direction = { x: 1 / norm, y: -0.1 / norm, z: 0.3 / norm }
-    const hit = rayWorld(grid, 9, 1.62, 64, direction.x, direction.y, direction.z, 5)
-    expect(hit?.x ?? 0).toBeCloseTo(10, 2)
-    expect(hit?.x).toBeCloseTo(9 + direction.x * (hit?.dist ?? 0), 6)
-    expect(hit?.y).toBeCloseTo(1.62 + direction.y * (hit?.dist ?? 0), 6)
-    const normal = impactNormal(grid, hit ?? { x: 0, y: 0, z: 0 }, direction)
-    expect(normal).toEqual({ x: -1, y: 0, z: 0 })
-    expect(impactNormal(grid, { x: 5, y: 0, z: 64 }, direction)).toEqual({ x: 0, y: 1, z: 0 })
-  })
-
-  it('uses a pitched roof surface normal rather than the incoming ray', () => {
-    const grid = buildGrid({ ...TOWN, buildings: [], cover: [] })
-    grid.roofs.push({
-      x: 10,
-      z: 60,
-      w: 10,
-      d: 10,
-      bottom: 3,
-      top: 8,
-      kind: 'roof',
-      heightAt: (x) => 3 + (x - 10) * 0.5,
+  it('keeps an earlier raised roof and wall ahead of the ground backstop', async () => {
+    const s = await nativeWorld({
+      ...floor,
+      boxes: [
+        ...floor.boxes,
+        { center: [24.5, 2.15, 64], halfExtents: [1.5, 0.15, 1] },
+        { center: [21, 2, 60], halfExtents: [0.1, 2, 1] },
+      ],
     })
-    const n = impactNormal(grid, { x: 14, y: 5, z: 64 }, { x: 0, y: -1, z: 0 })
-    expect(n.x).toBeCloseTo(-1 / Math.sqrt(5), 6)
-    expect(n.y).toBeCloseTo(2 / Math.sqrt(5), 6)
-    expect(n.z).toBeCloseTo(0, 6)
+    const d = Math.sqrt(1.25)
+    expect(
+      s.physics.castWorld({ ox: 20, oy: 4, oz: 64, dx: 1 / d, dy: -0.5 / d, dz: 0, maxT: 20 }),
+    ).toBeLessThan(5)
+    expect(
+      s.physics.castWorld({ ox: 20, oy: 3, oz: 60, dx: 1 / d, dy: -0.5 / d, dz: 0, maxT: 20 }),
+    ).toBeLessThan(2)
+  })
+  it('returns exact engine face normals for oblique wall and pitched roof contacts', async () => {
+    const s = await nativeWorld({
+      ...floor,
+      boxes: [...floor.boxes, { center: [10.5, 2, 64], halfExtents: [0.5, 2, 5] }],
+      meshes: [
+        { positions: [20, 3, 60, 30, 8, 60, 30, 8, 70, 20, 3, 70], indices: [0, 2, 1, 0, 3, 2] },
+      ],
+    })
+    const physics = s.physics.app.systems.rigidbody
+    if (!physics) {
+      throw new Error('Native physics missing')
+    }
+    const wall = physics.raycastFirst(new Vec3(9, 1.62, 64), new Vec3(14, 1.12, 65.5))
+    expect(wall?.point.x).toBeCloseTo(10, 4)
+    expect(wall?.normal.x).toBeCloseTo(-1, 4)
+    const roof = physics.raycastFirst(new Vec3(24, 9, 64), new Vec3(24, 0, 64))
+    expect(roof?.point.y).toBeCloseTo(5, 4)
+    expect(roof?.normal.x).toBeCloseTo(-1 / Math.sqrt(5), 4)
+    expect(roof?.normal.y).toBeCloseTo(2 / Math.sqrt(5), 4)
   })
 })

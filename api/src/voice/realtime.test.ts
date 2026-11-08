@@ -41,6 +41,7 @@ describe('RealtimeKit voice service', () => {
   it('knows when it is not configured', () => {
     expect(voiceConfigured({} as Env)).toBe(false)
     expect(voiceConfigured(env)).toBe(true)
+    expect(voiceConfigured({ ...env, DISABLE_VOICE: 'true' })).toBe(false)
   })
 
   it('creates an audio-only meeting', async () => {

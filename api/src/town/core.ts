@@ -6,20 +6,15 @@
  */
 import {
   CONTRACT_VERSION,
-  MSG_FULL_RESET,
   type RosterEntry,
   type ServerControl,
 } from '../../../src/experiments/out-west/contract/town.ts'
-import { Writer } from '../../../src/experiments/out-west/ffa/sim/bytes.ts'
-import { decodeInput, unwrapTick16 } from '../../../src/experiments/out-west/ffa/sim/codec.ts'
 import {
   MAX_INPUT_MSGS_PER_SEC,
   MAX_PLAYERS,
   SOFT_CAP,
   TICK_HZ,
 } from '../../../src/experiments/out-west/ffa/sim/constants.ts'
-import { InputQueue } from '../../../src/experiments/out-west/ffa/sim/input-queue.ts'
-import { ClientStream } from '../../../src/experiments/out-west/ffa/sim/snapshot.ts'
 import {
   activePlayers,
   createWorld,
@@ -38,16 +33,13 @@ import {
   removePlayer,
   step,
 } from '../../../src/experiments/out-west/ffa/sim/world.ts'
-import { RTT_SAMPLES } from '../net/constants.ts'
+import { ShowdownJudge } from '../../../src/experiments/out-west/runtime/showdown.ts'
 import { looksLikeAimbot } from './aimbot.ts'
 import { BotDirector, freshBotName } from './bots.ts'
-import { ShowdownJudge } from './core-showdown.ts'
-import { broadcastSnapshots } from './core-snapshots.ts'
 import { applyPractice, botLevel, type PracticeOptions, stakeRespawns } from './practice.ts'
 
 /** Lobbies keep at least this many bodies in town (bots fill in) while any human is present. */
 export const DEFAULT_TOWN_POPULATION = 6
-const MAX_MALFORMED = 20
 const MAX_FLOOD_STRIKES = 60
 /** Aimbot heuristics (§3.7): flag, never auto-ban. */
 export const FLAG_AIMBOT = 1
@@ -85,8 +77,6 @@ export interface Session {
   sessionId: string
   joinedAt: number
   peer: Peer | null
-  queue: InputQueue
-  stream: ClientStream
   banked: number
   roster: RosterEntry
   rtt: number[]
@@ -138,9 +128,6 @@ export class LobbyCore {
   /** The bots' brains (dev harnesses set `rally` on it; see `BotDirector.rally`). */
   readonly bots: BotDirector
   private readonly judge: ShowdownJudge
-  private readonly writer = new Writer(4096)
-  /** When each tick's snapshots went out (ms), for RTT from input acks. */
-  private readonly sentAt = new Float64Array(64)
   /** Extra bots asked for (dev / load tests), on top of the default town population. */
   botTarget = 0
   /** Bodies bots keep the town at while a human is in; only dev `?bots=0` sets it to 0. */
@@ -198,7 +185,6 @@ export class LobbyCore {
   }
 
   private welcome(s: Session): void {
-    s.peer?.send(new Uint8Array([MSG_FULL_RESET]))
     s.peer?.send(
       JSON.stringify({
         type: 'welcome',
@@ -239,8 +225,6 @@ export class LobbyCore {
     if (existing) {
       existing.peer?.close(4000, 'Joined from somewhere else.')
       existing.peer = peer
-      existing.stream.reset()
-      existing.queue = new InputQueue()
       existing.tcpRtt = profile.tcpRtt
       const p = this.world.players[existing.playerId]
       if (p) {
@@ -271,8 +255,6 @@ export class LobbyCore {
       sessionId: crypto.randomUUID(),
       joinedAt: now,
       peer,
-      queue: new InputQueue(),
-      stream: new ClientStream(),
       banked: profile.banked,
       roster: rosterOf(p, profile.loadout),
       rtt: [],
@@ -326,14 +308,16 @@ export class LobbyCore {
   }
 
   /** Flood control: at most 40 input messages per second; persistent flooding is kicked. */
-  private admit(s: Session, now: number): boolean {
+  private admit(s: Session, now: number, counted = false): boolean {
     if (now - s.windowStart >= 1000) {
       s.windowStart = now
       s.windowCount = 0
     }
     s.windowCount++
     s.msgsIn++
-    this.metrics.msgsIn++
+    if (!counted) {
+      this.metrics.msgsIn++
+    }
     if (s.windowCount <= MAX_INPUT_MSGS_PER_SEC) {
       return true
     }
@@ -346,41 +330,9 @@ export class LobbyCore {
     return false
   }
 
-  onBinary(playerId: number, data: ArrayBuffer | Uint8Array, now: number): void {
+  onText(playerId: number, text: string, now: number, counted = false): void {
     const s = this.sessions.get(playerId)
-    if (!(s && this.admit(s, now))) {
-      return
-    }
-    const msg = decodeInput(data)
-    if (!msg) {
-      s.malformed++
-      if (s.malformed > MAX_MALFORMED) {
-        this.kick(s, 'Malformed input.')
-      }
-      return
-    }
-    s.queue.push(msg.seq, msg.frames)
-    // RTT from the ack: when that snapshot left, minus how long the client held it.
-    const acked = unwrapTick16(msg.ackTick, this.world.tick)
-    const sent = this.sentAt[acked & 63] ?? 0
-    const rtt = now - sent - msg.ackAgeMs
-    if (
-      sent > 0 &&
-      acked <= this.world.tick &&
-      this.world.tick - acked < 60 &&
-      rtt >= 0 &&
-      rtt < 2000
-    ) {
-      s.rtt.push(rtt)
-      if (s.rtt.length > RTT_SAMPLES) {
-        s.rtt.shift()
-      }
-    }
-  }
-
-  onText(playerId: number, text: string, now: number): void {
-    const s = this.sessions.get(playerId)
-    if (!(s && this.admit(s, now)) || text.length > 512) {
+    if (!(s && this.admit(s, now, counted)) || text.length > 512) {
       return
     }
     let msg: unknown
@@ -439,37 +391,6 @@ export class LobbyCore {
     }
   }
 
-  private framesForTick(): (InputFrame | null)[] {
-    const frames: (InputFrame | null)[] = []
-    for (const s of this.sessions.values()) {
-      const next = s.queue.next()
-      if (next) {
-        const f = next.frame
-        frames[s.playerId] = {
-          seq: next.seq,
-          moveX: f.moveX,
-          moveZ: f.moveZ,
-          aim: f.aim,
-          buttons: f.buttons,
-          viewTime: unwrapTick16(f.viewTick, this.world.tick) + f.viewFrac / 255,
-          pitch: f.pitch ?? 0,
-        }
-      }
-    }
-    this.bots.frames(this.world, frames)
-    return frames
-  }
-
-  private sendSnapshots(now: number): void {
-    this.sentAt[(this.world.tick - 1) & 63] = now
-    broadcastSnapshots({
-      world: this.world,
-      sessions: this.sessions.values(),
-      writer: this.writer,
-      metrics: this.metrics,
-    })
-  }
-
   /** Free slots of players who have gone; returns departing humans. */
   private reapGone(): Departure[] {
     const out: Departure[] = []
@@ -503,13 +424,13 @@ export class LobbyCore {
   }
 
   /** One 20 Hz tick. */
-  tick(now: number): TickOutput {
+  tick(now: number, options: { frames?: (InputFrame | null)[] } = {}): TickOutput {
     this.balanceBots()
-    const frames = this.framesForTick()
+    const frames = options.frames ?? []
+    this.bots.frames(this.world, frames)
     step(this.world, frames)
     stakeRespawns(this.world, this.practice)
     this.judge.update(this, now)
-    this.sendSnapshots(now)
     this.metrics.ticks++
     if (this.world.tick % TICK_HZ === 0) {
       this.flagCheats()

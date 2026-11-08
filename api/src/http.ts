@@ -103,7 +103,7 @@ export async function verifyTurnstile(token: string, request: Request, env: Env)
     method: 'POST',
     body: form,
   })
-  const outcome = await res.json<{ success: boolean }>()
+  const outcome = (await res.json()) as { success: boolean }
   return outcome.success
 }
 

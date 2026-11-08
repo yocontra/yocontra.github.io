@@ -45,7 +45,7 @@ async function call(
   if (opts.body !== undefined) {
     init.body = JSON.stringify(opts.body)
   }
-  const request = new Request(url, init)
+  const request = new Request(url.toString(), init)
   const response =
     (await meRoutes(request, t.env, url, ctx)) ?? (await storeRoutes(request, t.env, url, ctx))
   if (!response) {
@@ -97,7 +97,7 @@ describe('GET /me', () => {
 
   it('rejects a forged token', async () => {
     const url = new URL('https://api.contra.io/me')
-    const req = new Request(url, { headers: { Authorization: 'Bearer dev:x:y' } })
+    const req = new Request(url.toString(), { headers: { Authorization: 'Bearer dev:x:y' } })
     expect((await meRoutes(req, t.env, url, ctx))?.status).toBe(401)
   })
 })

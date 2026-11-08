@@ -5,25 +5,16 @@ import {
   BTN_THROW,
   SHOT_RIFLE,
   SHOT_SHOTGUN,
-  selfWeapon,
   WEAPON_REVOLVER,
   WEAPON_RIFLE,
   WEAPON_SHOTGUN,
 } from '../../../src/experiments/out-west/contract/town.ts'
-import { Writer } from '../../../src/experiments/out-west/ffa/sim/bytes.ts'
-import { decodeSnapshot, type EntityView } from '../../../src/experiments/out-west/ffa/sim/codec.ts'
 import {
   DYNAMITE_FUSE_TICKS,
   MAX_HP,
   PICKUP_RESPAWN_TICKS,
   RIFLE_ROUNDS,
 } from '../../../src/experiments/out-west/ffa/sim/constants.ts'
-import {
-  ClientStream,
-  persistentStateFor,
-  selfView,
-  snapshotFor,
-} from '../../../src/experiments/out-west/ffa/sim/snapshot.ts'
 import type { World } from '../../../src/experiments/out-west/ffa/sim/state.ts'
 import type { SimEvent } from '../../../src/experiments/out-west/ffa/sim/types.ts'
 import { aimAt, place, run, runCollect, testWorld } from './test-helpers.ts'
@@ -143,39 +134,27 @@ describe('map pickups', () => {
     expect(a.dynamite).toBe(0)
   })
 
-  it('carries weapons in self and persistent pickups/fuses outside transient event history', () => {
+  it('preserves equipped weapons, pickup cooldowns and active fuses across transient event clears', () => {
     const { w, a } = armed('rifle')
     a.dynamite = 1
-    expect(selfWeapon(selfView(w, a).weapon)).toEqual({
-      weapon: WEAPON_RIFLE,
-      rounds: 5,
-      dynamite: true,
-    })
+    expect(a.weapon).toBe(WEAPON_RIFLE)
+    expect(a.weaponRounds).toBe(5)
     const s = spot(w, 'shotgun')
     const taker = place(w, s.x, s.z)
     run(w, 1)
     run(w, 1, { [a.id]: () => ({ aim: 0, buttons: BTN_THROW }) })
     expect(taker.weapon).toBe(WEAPON_SHOTGUN)
-    const snap = decodeSnapshot(
-      snapshotFor(
-        w,
-        { viewer: a, stream: new ClientStream() },
-        { banked: 0, events: [] },
-        new Writer(),
-      ),
-      new Map<number, EntityView>(),
-    )
-    expect(snap?.events).toEqual([])
-    const persistent = persistentStateFor(w)
-    expect(persistent.unavailablePickups).toContain(s.i)
-    expect(persistent.fuses).toEqual(
-      w.fuses.map((fuse) => ({
-        player: fuse.by,
-        x: fuse.x,
-        z: fuse.z,
-        explodeAt: fuse.explodeAt,
-      })),
-    )
-    expect(persistent.fuses).toHaveLength(1)
+    const unavailable = w.pickups[s.i]?.availableAt
+    expect(unavailable).toBeGreaterThan(w.tick)
+    expect(w.fuses).toHaveLength(1)
+    const active = w.fuses[0]
+    if (!active) {
+      throw new Error('Expected active fuse')
+    }
+    const fuse = { ...active }
+    run(w, 1)
+    expect(w.events.some((event) => event.type === 'dynamite_thrown')).toBe(false)
+    expect(w.pickups[s.i]?.availableAt).toBe(unavailable)
+    expect(w.fuses).toEqual([fuse])
   })
 })

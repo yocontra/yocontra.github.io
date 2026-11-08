@@ -1,0 +1,143 @@
+.pc-game-root {
+  position: fixed;
+  inset: 0;
+  overflow: hidden;
+  background: #22180f;
+  color: #fff1d1;
+  font:
+    16px Georgia,
+    serif;
+  touch-action: none;
+}
+.pc-game-canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  touch-action: none;
+}
+.pc-game-status {
+  position: absolute;
+  top: max(18px, env(safe-area-inset-top));
+  left: max(18px, env(safe-area-inset-left));
+  padding: 12px 18px;
+  background: #21150ed9;
+  border: 1px solid #b59764;
+  pointer-events: none;
+}
+.pc-game-status strong {
+  display: block;
+  font-size: 24px;
+  letter-spacing: 3px;
+}
+.pc-game-status span {
+  display: block;
+  margin-top: 8px;
+}
+.pc-crosshair {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: #fff5d5;
+  box-shadow: 0 0 0 1px #21150e;
+  pointer-events: none;
+}
+.pc-game-actions {
+  position: absolute;
+  top: max(18px, env(safe-area-inset-top));
+  right: max(18px, env(safe-area-inset-right));
+  display: flex;
+  gap: 8px;
+}
+.pc-game-actions button,
+.pc-game-actions a {
+  padding: 12px 18px;
+  color: #fff1d1;
+  background: #21150ed9;
+  border: 1px solid #b59764;
+  font: inherit;
+  text-decoration: none;
+  cursor: pointer;
+}
+.pc-touch-controls {
+  display: none;
+}
+@media (pointer: coarse) {
+  .pc-touch-controls {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    align-content: flex-end;
+    justify-content: flex-end;
+    padding: 20px max(20px, env(safe-area-inset-right)) max(24px, env(safe-area-inset-bottom)) 55%;
+    pointer-events: none;
+  }
+  .pc-control {
+    width: 72px;
+    height: 54px;
+    border: 1px solid #c7ab77;
+    border-radius: 18px;
+    color: #fff1d1;
+    background: #21150e99;
+    font:
+      bold 12px Georgia,
+      serif;
+    pointer-events: auto;
+    touch-action: none;
+  }
+  .pc-control.held {
+    background: #815c2cdd;
+  }
+  .pc-fire {
+    width: 90px;
+    height: 70px;
+    font-size: 18px;
+  }
+  .pc-movement-hint {
+    position: absolute;
+    left: 10%;
+    bottom: 16%;
+    width: 100px;
+    height: 100px;
+    display: grid;
+    place-items: center;
+    border: 1px solid #fff4;
+    border-radius: 50%;
+    color: #fff8;
+    font-size: 12px;
+  }
+  .pc-game-status {
+    font-size: 12px;
+    padding: 8px;
+  }
+  .pc-game-status strong {
+    font-size: 18px;
+  }
+}
+
+.pc-game-status button {
+  pointer-events: auto;
+}
+@media (pointer: coarse) {
+  .pc-control {
+    width: calc(60px * var(--control-scale, 1));
+    height: calc(43px * var(--control-scale, 1));
+  }
+  .pc-fire {
+    width: calc(80px * var(--control-scale, 1));
+    height: calc(64px * var(--control-scale, 1));
+  }
+  .pc-touch-controls.left-handed {
+    padding-left: max(20px, env(safe-area-inset-left));
+    padding-right: 55%;
+    justify-content: flex-start;
+  }
+  .pc-touch-controls.left-handed .pc-movement-hint {
+    left: auto;
+    right: 10%;
+  }
+}
