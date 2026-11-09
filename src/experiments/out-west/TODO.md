@@ -1,6 +1,6 @@
 # Out West remaining work
 
-Last verified game release: `c3db37d` (2026-11-09). Map grounding, terrain cliffs, scenery support, character cuffs/coats/shirt fronts, native shot effects, duplicate rifle LOD removal, and lazy voice are shipped. This list tracks unfinished work; it is not a claim that final visual or performance QA is complete.
+Last verified site release: `8e6c916` (2026-11-09; public client revision checked). It includes the earlier map/model/voice repairs plus Frontier haze, Live town/voice controls, spectator isolation and restored special-duel rules. Later completed tasks below may still be deploying. This list tracks unfinished work; it is not a claim that final visual or performance QA is complete.
 
 ## Current playtest feedback (2026-11-09)
 
@@ -22,7 +22,7 @@ Complete and push these in small working tasks, with native visual/audio evidenc
 - [ ] Replace thick, clog-like boot soles and knee-high generic shapes with properly proportioned cowboy boots. Preserve fitted garment boundaries and review all affected fits.
 - [x] Add distance haze that obscures far hills and foliage while retaining nearby combat readability: native Frontier fog now spans 25–110 m. Matched native renders preserve scene resources and near detail; day/night colors and dense Daily fog remain intact.
 - [ ] Restore appropriate distance haze in campaign duels too. Current distant fog presets were carried over without the original engine's additional atmosphere shader; tune native fog at the actual duel/depot/mission/bank cameras while preserving opponent visibility and Daily fog.
-- [ ] Make the wanted poster respond to actual scene lighting and shadows as printed paper; remove any unintended unlit/emissive treatment while preserving readable artwork and UVs.
+- [x] Make the wanted poster respond to lighting/shadows as nonemissive printed paper. A reused, properly scaled Kit lantern and one bounded native night light keep it readable across all four arenas. Native day/shadow/night checks preserve existing geometry/UVs/textures and verify light cleanup; no global ambient lift or extra shadow map.
 - [ ] Correct squashed barrels, cacti and other distorted props at their source/placement transforms. Preserve natural proportions and matching gameplay collision.
 - [ ] Improve cactus and environment model/texture fidelity; replace shiny generic gradients with appropriate authored surface detail. Use detailed source meshes and native LOD where useful, measuring the 30 FPS simulator / approximately 60 FPS Chrome budget before promoting assets.
 - [x] Make **Live town** the first and primary Frontier CTA, retaining sign-in/licence handling and secondary practice access.

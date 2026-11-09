@@ -73,6 +73,8 @@ export class NativeEnvironment {
   private readonly materials = new Set<StandardMaterial>()
   private readonly windows = new Set<StandardMaterial>()
   private readonly posterMaterials = new Set<StandardMaterial>()
+  private readonly posterLights = new Set<Entity>()
+  private posterLightIntensity = 0
   private readonly cloudMaterials = new Set<StandardMaterial>()
   private readonly groundMaterials = new Set<StandardMaterial>()
   private cloudTexture: Texture | undefined
@@ -220,6 +222,8 @@ export class NativeEnvironment {
       material.emissiveIntensity = preset.windows * 1.6
       material.update()
     }
+    this.posterLightIntensity = Math.max(0, Math.min(1, (day - 0.6) / 0.2)) * 1.2
+    this.updatePosterLights()
     const sky = Object.values(SKIES).reduce((nearest, candidate) =>
       Math.abs(candidate.day - day) < Math.abs(nearest.day - day) ? candidate : nearest,
     )
@@ -228,6 +232,15 @@ export class NativeEnvironment {
       this.ready = this.game.environment(sky.url, 0.7, sky.day >= 0.75 ? 1024 : 256)
     }
     return this.ready
+  }
+  private updatePosterLights(): void {
+    // The wanted post is shared across arenas; its entity hierarchy owns light visibility.
+    for (const fixture of this.posterLights) {
+      if (fixture.light) {
+        fixture.light.intensity = this.posterLightIntensity
+        fixture.light.enabled = this.posterLightIntensity > 0
+      }
+    }
   }
   dailyFog(enabled: boolean): void {
     if (this.disposed) {
@@ -266,9 +279,9 @@ export class NativeEnvironment {
     this.posterTexture.setSource(this.posterCanvas)
     for (const material of this.posterMaterials) {
       material.diffuseMap = this.posterTexture
-      material.emissiveMap = this.posterTexture
-      material.emissive.set(1, 1, 1)
-      material.emissiveIntensity = 0.28
+      material.emissiveMap = null
+      material.emissive.set(0, 0, 0)
+      material.emissiveIntensity = 0
       material.update()
     }
   }
@@ -336,11 +349,26 @@ export class NativeEnvironment {
     }
     const ids = [group, panes].flatMap((entry) => (entry ? [entry.id] : []))
     this.groups.set(root, ids)
+    const posterLight = root.findByName('poster-lantern-light')
+    if (posterLight instanceof Entity) {
+      posterLight.addComponent('light', {
+        type: 'omni',
+        color: new Color(1, 0.62, 0.27),
+        range: 2.5,
+        intensity: 0,
+        castShadows: false,
+      })
+      this.posterLights.add(posterLight)
+      this.updatePosterLights()
+    }
     this.game.app.batcher?.generate(ids)
     if (this.posterMaterials.size > 0) {
       this.poster(0)
     }
     root.once('destroy', () => {
+      if (posterLight instanceof Entity) {
+        this.posterLights.delete(posterLight)
+      }
       for (const id of this.groups.get(root) ?? []) {
         this.game.app.batcher?.removeGroup(id)
       }
@@ -375,6 +403,10 @@ export class NativeEnvironment {
     this.materials.clear()
     this.windows.clear()
     this.posterMaterials.clear()
+    for (const fixture of this.posterLights) {
+      fixture.removeComponent('light')
+    }
+    this.posterLights.clear()
     this.cloudMaterials.clear()
     this.groundMaterials.clear()
     this.posterTexture?.destroy()

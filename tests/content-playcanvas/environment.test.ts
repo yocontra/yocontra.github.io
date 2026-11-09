@@ -3,6 +3,7 @@ import { createHash } from 'node:crypto'
 import { readFile } from 'node:fs/promises'
 import { NodeIO } from '@gltf-transform/core'
 import { ALL_EXTENSIONS } from '@gltf-transform/extensions'
+import { getBounds } from '@gltf-transform/functions'
 import { AMBIENT_ASSETS } from '../../src/experiments/out-west/content/ambient.ts'
 import { ASSETS } from '../../src/experiments/out-west/content/manifest.ts'
 import streetLife from '../../src/experiments/out-west/content/street-life.json' with {
@@ -75,10 +76,34 @@ it('the wanted paper retains UVs and its original placement rather than appearin
   const paper = node?.getMesh()?.listPrimitives()[0]
   expect(paper?.getAttribute('TEXCOORD_0')?.getCount()).toBeGreaterThan(0)
   expect(paper?.getMaterial()?.getBaseColorTexture()).toBeTruthy()
+  expect(paper?.getMaterial()?.getEmissiveTexture()).toBeNull()
+  expect(paper?.getMaterial()?.getEmissiveFactor()).toEqual([0, 0, 0])
+  expect(paper?.getMaterial()?.getExtension('KHR_materials_emissive_strength')).toBeNull()
+  expect(paper?.getMaterial()?.getRoughnessFactor()).toBeCloseTo(0.9)
+  expect(paper?.getMaterial()?.getMetallicFactor()).toBe(0)
   const matrix = node?.getWorldMatrix()
   expect(matrix?.[12]).toBeCloseTo(-8.08, 1)
   expect(matrix?.[13]).toBeCloseTo(1.75, 1)
   expect(matrix?.[14]).toBeCloseTo(-2.5, 1)
+  const lantern = document
+    .getRoot()
+    .listNodes()
+    .find((candidate) => candidate.getName() === 'poster-lantern')
+  expect(lantern).toBeDefined()
+  if (!lantern) {
+    throw new Error('Missing the wanted post lantern')
+  }
+  const bounds = getBounds(lantern)
+  expect(bounds.max[1] - bounds.min[1]).toBeCloseTo(0.36)
+  expect(bounds.min[1]).toBeGreaterThan(matrix?.[13] ?? 0)
+  const fixture = lantern.listChildren().find((child) => child.getMesh())
+  const material = fixture?.getMesh()?.listPrimitives()[0]?.getMaterial()
+  expect(material?.getName()).toBe('Western original Kit PBR')
+  expect(material?.getNormalTexture()).toBeTruthy()
+  expect(material?.getMetallicRoughnessTexture()).toBeTruthy()
+  expect(lantern.listChildren().some((child) => child.getName() === 'poster-lantern-light')).toBe(
+    true,
+  )
 })
 
 it('ambient native clips and textures match their generated content hashes', async () => {

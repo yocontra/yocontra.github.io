@@ -50,7 +50,11 @@ for (const name of names.filter((candidate) => !only || candidate === only)) {
       .setMimeType('image/png')
     for (const material of authored.getRoot().listMaterials()) {
       if (material.getName() === 'WantedPaper') {
-        material.setBaseColorTexture(image).setEmissiveTexture(image)
+        material
+          .setBaseColorTexture(image)
+          .setEmissiveTexture(null)
+          .setEmissiveFactor([0, 0, 0])
+          .setExtension('KHR_materials_emissive_strength', null)
       }
     }
     await io.write(path, authored)
