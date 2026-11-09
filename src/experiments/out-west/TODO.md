@@ -16,7 +16,8 @@ Last verified game release: `c3db37d` (2026-11-09). Map grounding, terrain cliff
 
 ## First-person models and aiming
 
-- [ ] Complete the arms-only native viewmodel pipeline from the WIP branch. The offline extractor preserves fitted sleeves/hands, skinning, clips and shared PBR; default and wool-duster prototypes exist, and 34 fits passed CPU extraction checks. Public production derivatives have not been promoted.
+- [x] Recover the bounded offline arms extractor (`tools/content/first-person-arms.ts`). Trail-duds and wool-duster CPU checks preserve native triangles/typed streams, full PBR and external texture URLs, skeleton/TRS/IBMs and humanoid clips; provenance includes authored garments and shared helpers. Repeated staging outputs are byte-identical and remain temporary.
+- [ ] Complete the arms-only native viewmodel runtime pipeline from the WIP branch. Current extraction acceptance covers trail-duds and wool-duster; public production derivatives have not been promoted.
 - [ ] Generate and validate all required fits, descriptors and content hashes. Exclude head, torso, legs, accessories and stale embedded weapon mounts; preserve complete humanoid joints and both hands/weapons for paired mode. Do not substitute one generic sleeve/skin for every outfit.
 - [ ] Keep the physical world actor at its gameplay pose for shadows. Only the separate local arms actor receives first-person/ADS transforms. Use native forward-pass masking, preserve exact mask restoration, and opt local world/arms attachments out of shared rigid batching.
 - [ ] Finish one active arms actor plus one serialized disabled pending replacement. Handle appearance/gun/life changes, cancellation, late attachments and disposal without flashes or leaked actors/textures. Arms cast no shadows; world-body shadows continue animating.
