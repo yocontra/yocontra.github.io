@@ -1,6 +1,26 @@
-/** Actual native pane batching: a domain bullet crossing, reset, image parity and group lifetime. */
+/** Actual native shot removes the original textured pane; adjacent panes, reset and batches survive. */
 import { mkdir, writeFile } from 'node:fs/promises'
 import { chromium } from 'playwright'
+import sharp from 'sharp'
+
+async function imageDifference(first: string, second: string) {
+  const [a, b] = await Promise.all(
+    [first, second].map((path) => sharp(path).ensureAlpha().raw().toBuffer()),
+  )
+  if (!(a && b) || a.length !== b.length) {
+    throw new Error('Pane snapshots changed size')
+  }
+  let changed = 0
+  let total = 0
+  let maximum = 0
+  for (let index = 0; index < a.length; index++) {
+    const difference = Math.abs((a[index] ?? 0) - (b[index] ?? 0))
+    changed += Number(difference > 0)
+    total += difference
+    maximum = Math.max(maximum, difference)
+  }
+  return { changed, mean: total / a.length, maximum }
+}
 
 const origin = process.env.OW_ORIGIN ?? 'http://127.0.0.1:4390'
 const output = process.env.OW_EVIDENCE ?? '/tmp/out-west-native-panes'
@@ -28,22 +48,34 @@ export const removeStyle = () => {};`,
     const environmentPath = '/src/experiments/out-west/client/environment.ts'
     const windowsPath = '/src/experiments/out-west/client/windows.ts'
     const assetsPath = '/src/experiments/out-west/content/manifest.ts'
-    const statePath = '/src/experiments/out-west/ffa/sim/state.ts'
-    const combatPath = '/src/experiments/out-west/ffa/sim/windows.ts'
+    const simulationPath = '/src/experiments/out-west/runtime/frontier.ts'
+    const ammoPath = '/src/experiments/out-west/runtime/ammo.ts'
+    const collisionPath = '/src/experiments/out-west/content/collision.json'
+    const worldPath = '/src/experiments/out-west/ffa/sim/world.ts'
+    const protocolPath = '/src/experiments/out-west/runtime/protocol.ts'
+    const contractPath = '/src/experiments/out-west/contract/town.ts'
     const [
       { GameApplication },
       { NativeEnvironment },
       { BreakableWindows },
       { ASSETS },
-      state,
-      combat,
+      { createFrontierSimulation },
+      { loadAmmo },
+      { default: collision },
+      { addPlayer },
+      { Buttons },
+      { ANGLE_SCALE },
     ] = await Promise.all([
       import(applicationPath),
       import(environmentPath),
       import(windowsPath),
       import(assetsPath),
-      import(statePath),
-      import(combatPath),
+      import(simulationPath),
+      import(ammoPath),
+      import(collisionPath),
+      import(worldPath),
+      import(protocolPath),
+      import(contractPath),
     ])
     document.body.innerHTML =
       '<div id="view" style="position:fixed;inset:0"><canvas></canvas></div>'
@@ -58,7 +90,15 @@ export const removeStyle = () => {};`,
     environment.attach(town, await game.loadContainer(ASSETS.frontier.url))
     await environment.ready
     const windows = new BreakableWindows(town)
-    const world = state.createWorld()
+    const simulation = createFrontierSimulation({ ammo: await loadAmmo(), collision, seed: 7 })
+    const world = simulation.world
+    const shooter = addPlayer(world, {
+      accountId: 'native-pane-fixture',
+      name: 'Rider',
+      level: 1,
+      prestige: 0,
+      bot: false,
+    })
     const pane = world.grid.glass[0]
     const across = (pane.a0 + pane.a1) / 2
     const x = pane.axis === 0 ? pane.at : across
@@ -78,6 +118,33 @@ export const removeStyle = () => {};`,
     if (!batcher || groups.size !== 1 || groups.has(-1)) {
       throw new Error('Panes did not receive a separate native batch group')
     }
+    const glazing = town
+      .findComponents('render')
+      .filter((component: { meshInstances: { material: { name: string } }[] }) =>
+        component.meshInstances.some((instance) =>
+          ['window-glass', 'breakable-glass'].includes(instance.material.name),
+        ),
+      )
+    if (
+      glazing.length !== 296 ||
+      panes.length !== 296 ||
+      town.find((node: { name: string }) => node.name.startsWith('window-glass-')).length > 0
+    ) {
+      throw new Error('Original and synthetic glazing still overlap')
+    }
+    if (
+      !panes.every(
+        (component: {
+          meshInstances: { material: { name: string; diffuseMap: object | null } }[]
+        }) =>
+          component.meshInstances.every(
+            (instance) => instance.material.name === 'window-glass' && instance.material.diffuseMap,
+          ),
+      )
+    ) {
+      throw new Error('Breakable planes did not preserve the original native PBR texture')
+    }
+    game.app.timeScale = 0
     const times: number[] = []
     const generate = batcher.generate
     batcher.generate = function (...args: Parameters<typeof generate>) {
@@ -92,7 +159,10 @@ export const removeStyle = () => {};`,
       environment,
       windows,
       world,
-      combat,
+      simulation,
+      shooter,
+      Buttons,
+      ANGLE_SCALE,
       panes,
       groups,
       times,
@@ -116,28 +186,46 @@ export const removeStyle = () => {};`,
           (batch: { meshInstance: { castShadow: boolean } }) => batch.meshInstance.castShadow,
         ).length,
         originals: panes.length,
+        firstEnabled: panes[0].entity.enabled,
+        adjacentEnabled: panes[1].entity.enabled,
         draws: game.app.stats.drawCalls.total,
       }
     })
   const intact = await sample()
   await page.screenshot({ path: `${output}/intact.png` })
   const crossed = await page.evaluate(() => {
-    const { world, combat } = Reflect.get(globalThis, '__paneProbe')
+    const { world, simulation, shooter, Buttons, ANGLE_SCALE } = Reflect.get(
+      globalThis,
+      '__paneProbe',
+    )
     const pane = world.grid.glass[0]
     const across = (pane.a0 + pane.a1) / 2
     const x = pane.axis === 0 ? pane.at : across
     const z = pane.axis === 0 ? across : pane.at
     const y = (pane.y0 + pane.y1) / 2
-    combat.shatterGlass(
-      world,
-      x - (pane.axis === 0 ? 1 : 0),
-      y,
-      z - (pane.axis === 1 ? 1 : 0),
-      pane.axis === 0 ? 1 : 0,
-      0,
-      pane.axis === 1 ? 1 : 0,
-      2,
-    )
+    const player = world.players[shooter]
+    player.x = x - (pane.axis === 0 ? 1 : 0)
+    player.y = y - 1.62
+    player.z = z - (pane.axis === 1 ? 1 : 0)
+    for (let tick = 0; tick < 20; tick++) {
+      simulation.step([
+        {
+          seq: tick,
+          moveX: 0,
+          moveZ: 0,
+          aim: pane.axis === 0 ? 0 : ANGLE_SCALE / 4,
+          pitch: 0,
+          buttons: Buttons.fire,
+          viewTime: world.tick,
+        },
+      ])
+      if (world.events.some((event: { type: string }) => event.type === 'shot')) {
+        break
+      }
+    }
+    if (player.stats.shots !== 1 || world.glass[pane.index] !== 1) {
+      throw new Error('Native authoritative shot failed to shatter the textured pane')
+    }
     return world.events.filter((event: { type: string }) => event.type === 'glass_break').length
   })
   const broken = await sample()
@@ -146,10 +234,14 @@ export const removeStyle = () => {};`,
   const restored = await sample()
   await page.screenshot({ path: `${output}/restored.png` })
   const lifecycle = await page.evaluate(() => {
-    const { game, town, environment, groups, times } = Reflect.get(globalThis, '__paneProbe')
+    const { game, town, environment, simulation, groups, times } = Reflect.get(
+      globalThis,
+      '__paneProbe',
+    )
     town.destroy()
     const remaining = [...groups].flatMap((id) => game.app.batcher.getBatches(id)).length
     environment.destroy()
+    simulation.dispose()
     game.destroy()
     return { remaining, rebuildMs: times }
   })
@@ -160,6 +252,12 @@ export const removeStyle = () => {};`,
       broken.members === intact.members - crossed &&
       restored.members === intact.members &&
       restored.intact === intact.intact &&
+      intact.firstEnabled &&
+      !broken.firstEnabled &&
+      restored.firstEnabled &&
+      intact.adjacentEnabled &&
+      broken.adjacentEnabled &&
+      restored.adjacentEnabled &&
       intact.batches < intact.originals / 10 &&
       [intact, broken, restored].every((state) => state.shadows === 0) &&
       lifecycle.remaining === 0 &&
@@ -170,7 +268,15 @@ export const removeStyle = () => {};`,
       `Native pane regression: ${JSON.stringify({ intact, crossed, broken, restored, lifecycle, errors })}`,
     )
   }
-  const result = { intact, crossed, broken, restored, lifecycle, errors }
+  const image = {
+    broken: await imageDifference(`${output}/intact.png`, `${output}/broken.png`),
+    restored: await imageDifference(`${output}/intact.png`, `${output}/restored.png`),
+  }
+  // A broken pane changes the image; reset may differ by native batch rounding, never a visible pane.
+  if (image.broken.mean < 0.1 || image.restored.mean > 0.02) {
+    throw new Error(`Pane break/reset image regression: ${JSON.stringify(image)}`)
+  }
+  const result = { intact, crossed, broken, restored, lifecycle, image, errors }
   await writeFile(`${output}/results.json`, JSON.stringify(result, null, 2))
   console.log(JSON.stringify(result))
 } finally {

@@ -126,9 +126,10 @@ the Workers-only precompiled callback trampoline. Do not replace the Wrangler bu
 Node-only physics test: Workers prohibit dynamic Wasm compilation.
 
 **Simulator QA:** use the requested iPhone 13 mini simulator checklist in `tools/PERF.md` and
-record the build/content revision, canvas size, host GPU and measured frame times. The target is
-at least 30 FPS; simulator and desktop results do not guarantee physical A15 performance or
-thermal behavior. Publication does not wait for access to a physical phone.
+record the build/content revision, release engine, actual canvas buffer, host GPU and frame times.
+Verify the device window and host foreground state; prior measurements without that verification
+are diagnostic evidence. The 30 FPS target remains open. Simulator and desktop results do not
+guarantee physical A15 performance or thermal behavior. Publication does not wait for a physical phone.
 
 ## Quick Draw balance and the ranked board
 

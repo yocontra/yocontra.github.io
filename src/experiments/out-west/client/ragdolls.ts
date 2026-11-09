@@ -182,10 +182,14 @@ export class NativeRagdolls {
     if (document.hidden) {
       return
     }
-    this.elapsed = Math.min(0.1, this.elapsed + dt)
-    while (this.elapsed >= 1 / 60) {
-      this.physics.app.systems.rigidbody?.step(1 / 60)
-      this.elapsed -= 1 / 60
+    if (this.corpses.size > 0) {
+      this.elapsed = Math.min(0.1, this.elapsed + dt)
+      while (this.elapsed >= 1 / 60) {
+        this.physics.app.systems.rigidbody?.step(1 / 60)
+        this.elapsed -= 1 / 60
+      }
+    } else {
+      this.elapsed = 0
     }
     for (const [id, corpse] of this.corpses) {
       corpse.seconds += dt
