@@ -17,7 +17,8 @@ Complete and push these in small working tasks, with native visual/audio evidenc
 - [ ] Make moving tumbleweeds roll with their travel direction/distance and actual radius, preserving ground contact and ambient-path timing.
 - [ ] Correct plastic-looking character materials: skin, cloth and fabric need appropriate roughness, metalness and specular response. Check every outfit and crowd material under actual game lighting.
 - [ ] Repair missing rear-neck geometry/seams and forward-hunched head/neck posture on player, opponents and crowds. Compare bind pose and animated poses before changing the rig.
-- [ ] Fix the main-screen idle glitch: approximately every four seconds, a roughly 200 ms arms-forward pose interrupts idle. Verify a continuous animation capture across several loops.
+- [x] Remove the shared idle-loop arms-forward pop: correct 126 stray first-quaternion keys across three idle clips. Native loop captures reduce the right-arm jump from about 131° to 1.16°; the real title clock runs at rate one, and the other 69 clips are unchanged.
+- [ ] Smooth the smaller authored `Idle_Drunk` torso seam (about 12.4° at the next interval), separately from the corrected gun-pose keys. Preserve the intentional sway and clip timing.
 - [ ] Restore the horse's textures and validate its actual native render, not only material metadata.
 - [ ] Replace thick, clog-like boot soles and knee-high generic shapes with properly proportioned cowboy boots. Preserve fitted garment boundaries and review all affected fits.
 - [x] Add distance haze that obscures far hills and foliage while retaining nearby combat readability: native Frontier fog now spans 25–110 m. Matched native renders preserve scene resources and near detail; day/night colors and dense Daily fog remain intact.
