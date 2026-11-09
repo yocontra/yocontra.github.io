@@ -5,10 +5,7 @@
   "backDepth": 0.93,
   "backSlope": 2,
   "backWidth": 0.1,
-  "armCenters": [
-    0.25,
-    0.75
-  ],
+  "armCenters": [0.25, 0.75],
   "armWidth": 0.07,
   "armHeight": 0.14,
   "armLevel": 0.76,

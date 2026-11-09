@@ -1,11 +1,7 @@
 {
   "schema": 1,
   "title": "Perdition",
-  "arrival": [
-    52,
-    0,
-    52
-  ],
+  "arrival": [52, 0, 52],
   "districts": [
     {
       "id": "backlot",
@@ -7205,86 +7201,32 @@
   "style": {
     "fogNear": 50,
     "fogFar": 130,
-    "woodTint": [
-      0.66,
-      0.52,
-      0.4
-    ],
-    "stoneTint": [
-      0.86,
-      0.78,
-      0.61
-    ],
+    "woodTint": [0.66, 0.52, 0.4],
+    "stoneTint": [0.86, 0.78, 0.61],
     "buildingPaint": {
-      "saloon": [
-        0.68,
-        0.23,
-        0.16
-      ],
-      "hotel": [
-        0.31,
-        0.41,
-        0.36
-      ],
-      "general_store": [
-        0.38,
-        0.46,
-        0.28
-      ],
-      "stage_line": [
-        0.32,
-        0.39,
-        0.32
-      ],
-      "livery": [
-        0.53,
-        0.32,
-        0.18
-      ],
-      "jail": [
-        0.69,
-        0.63,
-        0.5
-      ],
-      "undertaker": [
-        0.29,
-        0.24,
-        0.25
-      ]
+      "saloon": [0.68, 0.23, 0.16],
+      "hotel": [0.31, 0.41, 0.36],
+      "general_store": [0.38, 0.46, 0.28],
+      "stage_line": [0.32, 0.39, 0.32],
+      "livery": [0.53, 0.32, 0.18],
+      "jail": [0.69, 0.63, 0.5],
+      "undertaker": [0.29, 0.24, 0.25]
     },
     "staticDrawBudget": 100,
     "triangleBudget": 300000
   },
   "tumbleweedPaths": [
     {
-      "center": [
-        12,
-        54
-      ],
-      "radius": [
-        5,
-        1
-      ]
+      "center": [12, 54],
+      "radius": [5, 1]
     },
     {
-      "center": [
-        39,
-        54
-      ],
-      "radius": [
-        2.5,
-        0.7
-      ]
+      "center": [39, 54],
+      "radius": [2.5, 0.7]
     },
     {
-      "center": [
-        76,
-        54
-      ],
-      "radius": [
-        5,
-        1
-      ]
+      "center": [76, 54],
+      "radius": [5, 1]
     }
   ],
   "life": {

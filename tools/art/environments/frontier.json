@@ -2,11 +2,7 @@
   "schema": 1,
   "sourceHash": "6b70abdaf5bd24b1af5a5e1e4993064227e1bf92b14c5212e7e8ca734e65ed1b",
   "collisionVersion": "0f63f86d9b7ddf1efe507faa734294f6d337b398aa9401c69462dfeb9823d898",
-  "arrival": [
-    52,
-    0,
-    52
-  ],
+  "arrival": [52, 0, 52],
   "life": {
     "folk": [
       {
@@ -97,34 +93,16 @@
   },
   "tumbleweedPaths": [
     {
-      "center": [
-        12,
-        54
-      ],
-      "radius": [
-        5,
-        1
-      ]
+      "center": [12, 54],
+      "radius": [5, 1]
     },
     {
-      "center": [
-        39,
-        54
-      ],
-      "radius": [
-        2.5,
-        0.7
-      ]
+      "center": [39, 54],
+      "radius": [2.5, 0.7]
     },
     {
-      "center": [
-        76,
-        54
-      ],
-      "radius": [
-        5,
-        1
-      ]
+      "center": [76, 54],
+      "radius": [5, 1]
     }
   ],
   "panes": 241
