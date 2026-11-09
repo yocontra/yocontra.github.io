@@ -61,6 +61,14 @@ export class Lobby extends ProductionLobby {
       state: voice.snapshot(),
       trace: this.voiceTrace,
       peers: (Reflect.get(voice, 'o') as { peers: () => readonly VoicePeer[] }).peers(),
+      humans: (
+        (Reflect.get(this, 'core') as import('../src/town/core.ts').LobbyCore | null)?.world
+          .players ?? []
+      ).flatMap((player) =>
+        player && !player.bot
+          ? [{ id: player.id, spawnTick: player.spawnTick, protectUntil: player.protectUntil }]
+          : [],
+      ),
     }
   }
   placeVoicePeers() {
@@ -69,6 +77,8 @@ export class Lobby extends ProductionLobby {
       if (player && !player.bot) {
         player.x = 70 + player.id
         player.z = 70
+        // Voice delays must exercise leases, not random bot deaths and out-of-range respawns.
+        player.protectUntil = Number.MAX_SAFE_INTEGER
       }
     }
   }

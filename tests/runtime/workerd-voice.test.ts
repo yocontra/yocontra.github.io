@@ -99,6 +99,8 @@ try{
  const observe=async()=>await(await fetch(endpoint('/__voice/observe'))).json();
  diagnostics=async()=>({runtime,now:Date.now(),calls,voiceEvents,observed:await observe()});
  await fetch(endpoint('/__voice/place'));
+ const fixtureHumans=(await observe()).humans;
+ if(fixtureHumans.length!==2||fixtureHumans.some(p=>p.protectUntil!==Number.MAX_SAFE_INTEGER))throw new Error('Voice fixture did not protect both actual humans');
  rooms[0].send('control',{type:'voice_on'});
  speak(true);
  await until(async()=>{const seen=await observe();return seen.resources.intents===1&&seen.trace.some(e=>e.id===0&&e.message.type==='voice_talk'&&e.message.talking===true)},'server acknowledged alone speech');
@@ -134,6 +136,9 @@ try{
  const expiredVoice=await observe();
  failKick=true;speak(true);
  await until(()=>tokens.size===2,'second speech allocation');
+ const active=await observe();
+ const activePeers=active.peers.filter(p=>p.human&&p.connected&&p.available);
+ if(JSON.stringify(active.humans)!==JSON.stringify(fixtureHumans)||activePeers.length!==2||Math.hypot(activePeers[0].x-activePeers[1].x,activePeers[0].z-activePeers[1].z)>24)throw new Error('Voice delay changed participant lives or proximity '+JSON.stringify({fixtureHumans,active}));
  stopHeartbeat();
  await Promise.all(rooms.splice(0).map(room=>room.leave(false)));await sleep(200);
  const warm=await observe();const timing=await(await fetch(endpoint('/__test/native-timing'))).json();
@@ -159,7 +164,7 @@ try{
  if(reserved.amount!==ceiling)throw new Error('Reservation aggregate exceeded cap');
  const expired=await(await fetch(base+'/__voice/budget?count=1&now='+Date.parse('2027-01-03T00:00:00.000Z'))).json();
  if(!expired.allowed)throw new Error('Old conservative reservations never expired');
- console.log('RESULT:'+JSON.stringify({runtime,heartbeatMs:${VOICE_HEARTBEAT_MS},delayedPositive:{resources:delayedPositive.resources,request:firstCall},expiredIntent:{resources:expiredVoice.resources,request:expiredCall,readyCounts:beforeExpired},voiceEvents,controls:controls.map(list=>list.filter(m=>m.type.startsWith('voice_')).map(m=>m.type)),calls:calls.length,idle:{providerCalls:0,resources:idle.resources},timeline:{provider:calls,controls:warm.trace},cold,settled,tokens:tokens.size,duel:closed.keys,budget:{claims:claims.filter(c=>c.allowed).length,reserved:reserved.amount,expired:expired.allowed}}));
+ console.log('RESULT:'+JSON.stringify({runtime,heartbeatMs:${VOICE_HEARTBEAT_MS},fixtureHumans,activeHumans:active.humans,delayedPositive:{resources:delayedPositive.resources,request:firstCall},expiredIntent:{resources:expiredVoice.resources,request:expiredCall,readyCounts:beforeExpired},voiceEvents,controls:controls.map(list=>list.filter(m=>m.type.startsWith('voice_')).map(m=>m.type)),calls:calls.length,idle:{providerCalls:0,resources:idle.resources},timeline:{provider:calls,controls:warm.trace},cold,settled,tokens:tokens.size,duel:closed.keys,budget:{claims:claims.filter(c=>c.allowed).length,reserved:reserved.amount,expired:expired.allowed}}));
 }finally{stopHeartbeat();await Promise.all(rooms.map(room=>room.leave(false).catch(()=>{})));await mf.dispose()}
 `
     const runner = join(directory, 'voice-runtime.mjs')
