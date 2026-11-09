@@ -321,7 +321,7 @@ export class VoiceCoordinator {
     try {
       while (this.live.dirty) {
         this.live.dirty = false
-        // biome-ignore lint/performance/noAwaitInLoops: reconcile generations serially across concurrent game controls
+        // reconcile generations serially across concurrent game controls
         await this.reconcile()
       }
     } catch (error) {
@@ -390,7 +390,7 @@ export class VoiceCoordinator {
       return
     }
     for (const id of [...this.desired]) {
-      // biome-ignore lint/performance/noAwaitInLoops: allocation is serialized and generation-fenced per participant
+      // allocation is serialized and generation-fenced per participant
       await this.add(generation, id)
     }
   }
@@ -493,7 +493,7 @@ export class VoiceCoordinator {
         if (entry.retryAt > this.now()) {
           continue
         }
-        // biome-ignore lint/performance/noAwaitInLoops: persist each independent cleanup generation before continuing
+        // persist each independent cleanup generation before continuing
         await this.clean(entry)
       }
     } finally {

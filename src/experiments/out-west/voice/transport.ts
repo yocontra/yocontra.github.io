@@ -322,7 +322,7 @@ export class VoiceTransport {
         for (const id of subscribed) {
           const peerId = peerIds.get(id)
           if (!wanted.has(id) && peerId) {
-            // biome-ignore lint/performance/noAwaitInLoops: RealtimeKit serializes subscription changes
+            // RealtimeKit serializes subscription changes
             await meeting.participants.unsubscribe([peerId], ['audio']).catch(() => undefined)
             if (!current()) {
               return
@@ -333,7 +333,7 @@ export class VoiceTransport {
         for (const id of wanted) {
           const peerId = peerIds.get(id)
           if (peerId && !subscribed.has(id)) {
-            // biome-ignore lint/performance/noAwaitInLoops: one subscription request per nearby peer
+            // one subscription request per nearby peer
             await meeting.participants.subscribe([peerId], ['audio']).catch(() => undefined)
           }
           if (!current()) {
