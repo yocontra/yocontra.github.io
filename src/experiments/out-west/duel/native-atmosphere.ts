@@ -1,4 +1,3 @@
-import { Entity } from 'playcanvas'
 import type { GameApplication } from '../client/application.ts'
 import { NativeWilds } from '../client/wilds.ts'
 import { AMBIENT_ASSETS } from '../content/ambient.ts'
@@ -43,7 +42,11 @@ function placeSpectator(spectator: Spectator, home: Spectator['home']) {
     const hips = spectator.actor.model.findByName('Hips')
     if (hips) {
       const localHips = hips.getPosition().y - spectator.actor.root.getPosition().y
-      spectator.actor.place(home.x, home.seatY + 0.06 - localHips, home.z)
+      spectator.actor.place(
+        home.x,
+        home.seatY + spectator.actor.seatedHipOffset - localHips,
+        home.z,
+      )
     }
   } else {
     habit(spectator)
@@ -119,15 +122,7 @@ export class NativeAtmosphere {
           const actor = await create(source.url, `townsfolk-${index}`)
           const hips = actor.model.findByName('Hips')
           const hipsHeight = hips ? hips.getPosition().y - actor.root.getPosition().y : 0.95
-          // Town spectators are civilians. Hide only mounted weapon renderers, preserving clothing.
-          for (const mount of actor.weaponMounts) {
-            if (!(mount.node instanceof Entity)) {
-              continue
-            }
-            for (const render of mount.node.findComponents('render')) {
-              Reflect.set(render, 'enabled', false)
-            }
-          }
+          actor.weaponsVisible(false)
           this.folk[index] = { actor, home: spot, hipsHeight, running: false }
         }),
       (async () => {

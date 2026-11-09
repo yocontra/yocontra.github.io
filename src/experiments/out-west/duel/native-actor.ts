@@ -1,4 +1,4 @@
-import { type AnimTrack, type ContainerResource, Entity, Vec3 } from 'playcanvas'
+import { type AnimTrack, type Component, type ContainerResource, Entity, Vec3 } from 'playcanvas'
 import type { GameApplication } from '../client/application.ts'
 import { ASSETS } from '../content/manifest.ts'
 import { nativeActionSpeed } from '../scene/native-animation-timing.ts'
@@ -15,6 +15,7 @@ const DRAWN = /Pointing|Shoot|Death|Hit|Draw|Spin|Flinch/u
 /** The engine owns skeletal playback; duel logic requests named authored clips. */
 export class DuelActor {
   private current = ''
+  private readonly hiddenWeaponComponents = new Map<Component, boolean>()
   private idleClip = 'Idle_Character'
   paired = false as boolean
   readonly weaponMounts: WeaponMount[] = []
@@ -24,13 +25,17 @@ export class DuelActor {
   private readonly bonePaths = new Map<string, Set<string>>()
   private held: 'revolver' | 'rifle' | 'shotgun' = 'revolver'
   private carryDrawn = false as boolean
+  seatedHipOffset = 0.06
   walkSpeed = 1.13
   gaitSpeeds: Record<string, number> = {}
   private playbackRate = 1
   readonly root: Entity
   readonly model: Entity
   private constructor(root: Entity, model: Entity, animations: ReadonlyMap<string, AnimTrack>) {
-    root.once('destroy', () => this.clearDetached())
+    root.once('destroy', () => {
+      this.clearDetached()
+      this.hiddenWeaponComponents.clear()
+    })
     this.root = root
     this.model = model
     this.animations = animations
@@ -46,6 +51,34 @@ export class DuelActor {
           paths.add(path.entityPath.join('/'))
           this.bonePaths.set(bone, paths)
         }
+      }
+    }
+  }
+  /** Civilians stop hidden weapon renderers/controllers; body and clothing keep their own state. */
+  weaponsVisible(visible: boolean): void {
+    if (visible) {
+      for (const [component, enabled] of this.hiddenWeaponComponents) {
+        component.enabled = enabled
+      }
+      this.hiddenWeaponComponents.clear()
+      return
+    }
+    for (const mount of this.weaponMounts) {
+      if (!(mount.node instanceof Entity)) {
+        continue
+      }
+      const components = [
+        ...mount.node.findComponents('render'),
+        ...mount.node.findComponents('anim'),
+      ]
+      for (const component of components) {
+        if (component === this.model.anim) {
+          continue
+        }
+        if (!this.hiddenWeaponComponents.has(component)) {
+          this.hiddenWeaponComponents.set(component, component.enabled)
+        }
+        component.enabled = false
       }
     }
   }
@@ -124,6 +157,22 @@ export class DuelActor {
               data: { gltf?: { extras?: { gaitSpeeds?: Record<string, number> } } }
             }
           ).data.gltf?.extras?.gaitSpeeds ?? {}
+      }
+      const authoredSeat = (
+        resource as ContainerResource & {
+          data: {
+            gltf?: {
+              animations?: {
+                name?: string
+                extras?: { seatedContact?: { hipsAboveSeat?: number } }
+              }[]
+            }
+          }
+        }
+      ).data.gltf?.animations?.find((clip) => clip.name === 'Town_Sit')?.extras?.seatedContact
+        ?.hipsAboveSeat
+      if (authoredSeat !== undefined && Number.isFinite(authoredSeat) && authoredSeat > 0) {
+        actor.seatedHipOffset = authoredSeat
       }
       const metadata = (
         resource as ContainerResource & {

@@ -13,9 +13,8 @@ not a runtime dependency. The native build is reproducible from this preserved
 source, without the previous renderer or shader implementations:
 
 ```
-bun tools/content/character-materials.ts
+KTX_ENCODER=/path/to/KTX-Software-4.4.2/bin/toktx bun tools/content/human-assets.ts
 bun tools/content/character-clips.ts
-KTX_ENCODER=/path/to/KTX-Software-4.4.2/bin/toktx bun tools/content/character-textures.ts
 ```
 
 `character-materials.ts` evaluates the original masked recolor operation in linear
@@ -45,7 +44,7 @@ Nine waistcoat sources identify the obsolete apron pieces with `waistcoatFit`
 metadata. Their replacement garments are authored by Blender from the actual
 shirt tailoring surface, including a V neckline, continuous shoulders, armholes,
 and folded edges. Blender transfers the original joint weights through its native
-mesh modifiers, preserves UV seams, and bounds each garment to about 2,200 triangles including buttons and welt pockets.
+mesh modifiers, preserves UV seams, and bounds each garment to about 1,800 triangles including buttons and welt pockets.
 The portable authoring GLBs in `waistcoats/` store those skin IDs and the original
 wool UV swatch. The native baker copies that geometry and removes shirt details
 covered by the new cloth. No garment fitting or cloth solver runs in the game.
@@ -75,3 +74,25 @@ Their native materials retain each variant's iron, silver, brass or blued finish
 with linear roughness/metalness and fine surface normals compressed to shared KTX2.
 Linen and worn leather receive semantic roughness adjustment during the atlas bake;
 the replacement waistcoat attenuates the old apron normal map's exaggerated folds.
+
+The continuous coat sleeves and boot transition sources are portable native-skin
+geometry in `coat-sleeves/` and `boot-bridges/`. Rebuild with Blender:
+
+```
+blender --background --factory-startup --python tools/content/coat-sleeves-authoring.py
+blender --background --factory-startup --python tools/content/boot-bridges-authoring.py
+blender --background --factory-startup --python tools/content/paired-poses-authoring.py
+blender --background --factory-startup --python tools/content/seated-poses-authoring.py -- outlaw-2 outlaw-6
+```
+
+Coat/boot source fingerprints and exact joint order, plus portable pose input
+fingerprints, are validated before those artifacts are merged. Paired corrections affect only the left upper/lower arm and
+wrist rotations where the original hands crossed; right-side motion, fingers,
+clip durations and natural flinch motion remain authored. Seated clips carry the
+measured per-body hip-to-seat offset; furniture and floor heights must match their
+contact frame. The final native skin normalization always runs after export.
+
+Gun styles keep their authored albedo UVs and part-specific metallic factors.
+A padded UV1 atlas adds spatial roughness/wear and one shared fine normal map;
+all gun styles still combine into the same rigid material draw. Prop palettes
+retain their original conversion path.

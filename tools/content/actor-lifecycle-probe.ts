@@ -21,7 +21,7 @@ export function riderView(id: string): unknown {
   const actor = app?.root.findByTag(`rider:${id}`)[0]
   const camera = app?.root.findByName('camera')
   const head = actor?.findByName('Head')
-  if (!(actor && camera && head)) {
+  if (!(actor instanceof Entity && camera && head)) {
     throw new Error('Missing native FP pose')
   }
   const point = head.getPosition().clone()
@@ -36,5 +36,13 @@ export function riderView(id: string): unknown {
     muzzleForward: muzzle?.getWorldTransform().transformVector(Vec3.RIGHT, new Vec3()).normalize(),
     forward: camera.forward.clone(),
     root: actor.getPosition().clone(),
+    controllers: actor
+      .findComponents('anim')
+      .filter((component) => component.enabled && component.entity.enabled)
+      .map((component) => ({
+        node: component.entity.name,
+        state: component.baseLayer?.activeState,
+        time: component.baseLayer?.activeStateCurrentTime,
+      })),
   }
 }

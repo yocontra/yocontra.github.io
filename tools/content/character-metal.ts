@@ -2,7 +2,7 @@
 import { resolve } from 'node:path'
 import type { Primitive } from '@gltf-transform/core'
 import sharp from 'sharp'
-import { imageFile } from './character-atlas.ts'
+import { imageFile, type Pixels } from './character-atlas.ts'
 
 const surfaces = new Map<number, Promise<{ albedo: string; normal: string; arm: string }>>()
 async function surface(metal: number): Promise<{ albedo: string; normal: string; arm: string }> {
@@ -41,4 +41,26 @@ export async function prepareSpurSurface(primitive: Primitive): Promise<void> {
     .setMetallicFactor(1)
     .setRoughnessFactor(1)
     .setExtras({ nativePbr: await result })
+}
+
+let gunSurface: Promise<{ normal: string; wear: Pixels }> | undefined
+/** One shared, subtle authored steel texture; per-part material factors remain intact. */
+export function gunSurfaceDetail(): Promise<{ normal: string; wear: Pixels }> {
+  gunSurface ??= Promise.all(
+    ['normal', 'wear'].map((role) =>
+      sharp(resolve('tools/art/characters/textures', `worn-metal-${role}.png`))
+        .ensureAlpha()
+        .raw()
+        .toBuffer({ resolveWithObject: true }),
+    ),
+  ).then(async ([normal, wear]) => {
+    if (!(normal && wear)) {
+      throw new Error('Run Blender tools/content/metal-authoring.py first')
+    }
+    return {
+      normal: await imageFile(normal.data, normal.info.width, normal.info.height, false),
+      wear: { data: wear.data, width: wear.info.width, height: wear.info.height },
+    }
+  })
+  return gunSurface
 }

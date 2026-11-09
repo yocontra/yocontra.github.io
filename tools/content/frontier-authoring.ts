@@ -9,8 +9,9 @@ import { buildGrid, type TownLayout } from '../../src/experiments/out-west/ffa/s
 import { projectedUv, surfaceMaterial } from './animal-prop-surfaces.ts'
 import { compressEnvironmentTextures } from './environment-textures.ts'
 import { bankServiceSigns, buildingDetails, surround } from './frontier-architecture.ts'
-import { compileFrontierCollision, structuralWalls } from './frontier-collision.ts'
+import { compileFrontierCollision, perimeterSpans, structuralWalls } from './frontier-collision.ts'
 import { FrontierGeometry, frontierIO, type Rgb } from './frontier-geometry.ts'
+import { frontierFlatGround, frontierGround, frontierGroundTransform } from './frontier-ground.ts'
 import { authoredMaterials } from './frontier-materials.ts'
 import { coverModel } from './frontier-props.ts'
 import { optimizeAsset } from './optimize.ts'
@@ -30,13 +31,15 @@ function canyonBoundary(g: FrontierGeometry, layout: TownLayout) {
   const root = g.group('Perdition creek fence / rail line / canyon boundaries')
   const size = layout.size
   // North: a cattle fence along the creek. South: a stationary freight consist.
-  g.box(root, 'wood', { x: 0, z: 0, w: size, d: 0.5, y0: 0, top: 2.7 }, [0.48, 0.42, 0.31])
+  for (const span of perimeterSpans(size)) {
+    g.box(root, 'wood', { ...span, top: span.y1 }, [0.48, 0.42, 0.31])
+  }
   for (let x = 0; x < size; x += 4) {
     g.box(root, 'wood', { x, z: 0, w: 0.2, d: 0.7, y0: 0, top: 2.9 }, [0.38, 0.31, 0.22])
   }
   for (let x = 0; x < size; x += 13) {
-    g.box(root, 'wood', { x, z: size - 0.5, w: 13, d: 3.2, y0: 0, top: 4 }, [0.37, 0.29, 0.23])
-    for (const y of [0.45, 3.6]) {
+    g.box(root, 'wood', { x, z: size - 0.5, w: 13, d: 3.2, y0: 0, top: 5.6 }, [0.37, 0.29, 0.23])
+    for (const y of [0.45, 3.6, 5.3]) {
       g.box(
         root,
         'wood',
@@ -47,47 +50,9 @@ function canyonBoundary(g: FrontierGeometry, layout: TownLayout) {
     g.box(
       root,
       'wood',
-      { x: x + 4, z: size - 0.58, w: 4.8, d: 0.1, y0: 0.65, top: 3.5 },
+      { x: x + 4, z: size - 0.58, w: 4.8, d: 0.1, y0: 0.65, top: 5.2 },
       [0.32, 0.27, 0.21],
     )
-  }
-  // West/east: continuous native cliff faces and irregular, sloping outer rock formations.
-  for (const side of [0, 1]) {
-    for (let z = -8; z < size + 8; z += 8) {
-      const inner = side === 0 ? 0.5 : size - 0.5
-      const direction = side === 0 ? -1 : 1
-      const shoulder = inner + direction * (3.7 + 1.3 * Math.sin(z * 0.57))
-      const outer = inner + direction * 14
-      const height = 13.6 + 2.5 * Math.sin(z * 0.33 + side)
-      const topA = Math.max(12, height)
-      const topB = Math.max(12, 13.6 + 2.5 * Math.sin((z + 8) * 0.33 + side))
-      const surfaces = [
-        [
-          [inner, -0.03, z],
-          [inner, -0.03, z + 8],
-          [inner, 12, z + 8],
-          [inner, 12, z],
-        ],
-        [
-          [inner, 12, z],
-          [inner, 12, z + 8],
-          [shoulder, topB, z + 8],
-          [shoulder, topA, z],
-        ],
-        [
-          [shoulder, topA, z],
-          [shoulder, topB, z + 8],
-          [outer, 8, z + 8],
-          [outer, 7.5, z],
-        ],
-      ]
-      for (const points of surfaces) {
-        if (side === 0) {
-          points.reverse()
-        }
-        g.quad(root, 'ground', points, { tile: 5, tint: [0.61, 0.48, 0.34] })
-      }
-    }
   }
 }
 
@@ -97,15 +62,21 @@ export async function authorFrontier(output: string): Promise<void> {
   ) as FrontierPlan
   const layout = { ...plan.layout, ambient: plan.life } as TownLayout
   const collision = compileFrontierCollision(layout)
-  const g = await FrontierGeometry.create()
+  const g = await FrontierGeometry.create(layout.size)
   await authoredMaterials(g)
   const ground = g.group('ground-Perdition')
-  g.box(
-    ground,
-    'ground',
-    { x: -48, z: -48, w: layout.size + 96, d: layout.size + 96, y0: -0.06, top: -0.005 },
-    [0.92, 0.85, 0.7],
-  )
+  g.box(ground, 'ground', frontierFlatGround(layout.size), [0.92, 0.85, 0.7])
+  for (const mesh of frontierGround(layout.size)) {
+    g.surface(
+      ground,
+      'ground',
+      {
+        ...mesh,
+        uvs: mesh.positions.flatMap((value, index) => (index % 3 === 1 ? [] : [value / 1.8])),
+      },
+      [0.92, 0.85, 0.7],
+    )
+  }
   canyonBoundary(g, layout)
   const groups = new Map(layout.buildings.map((b) => [b.id, g.group(`building-${b.id}`)]))
   for (const b of layout.buildings) {
@@ -174,6 +145,12 @@ export async function authorFrontier(output: string): Promise<void> {
         collisionVersion: collision.version,
         arrival: plan.arrival,
         life: plan.life,
+        terrain: {
+          ...frontierGroundTransform(layout.size),
+          referenceHash: createHash('sha256')
+            .update(await readFile(join(SOURCE, 'frontier-ground.json')))
+            .digest('hex'),
+        },
         tumbleweedPaths: plan.tumbleweedPaths,
         panes: panes.length,
       },

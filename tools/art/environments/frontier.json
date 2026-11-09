@@ -1,7 +1,7 @@
 {
   "schema": 1,
-  "sourceHash": "6b70abdaf5bd24b1af5a5e1e4993064227e1bf92b14c5212e7e8ca734e65ed1b",
-  "collisionVersion": "0f63f86d9b7ddf1efe507faa734294f6d337b398aa9401c69462dfeb9823d898",
+  "sourceHash": "147373272e5dffc5951112622008e6edcbd6f20b4a0de17d50a7c6f482b4dc49",
+  "collisionVersion": "da29516af2ad4f42cc678a1d3dd1ab1b36b74ba5c950c81f5d3d6a5864aae3aa",
   "arrival": [52, 0, 52],
   "life": {
     "folk": [
@@ -13,7 +13,7 @@
         "z": 44.25,
         "yaw": 0,
         "habit": "sit",
-        "seatY": 0.68,
+        "seatY": 0.556151,
         "support": {
           "kind": "cover",
           "index": 170,
@@ -28,7 +28,7 @@
         "z": 94.75,
         "yaw": 0,
         "habit": "whittle",
-        "seatY": 0.61,
+        "seatY": 0.556151,
         "support": {
           "kind": "cover",
           "index": 175,
@@ -90,6 +90,11 @@
       "fakeouts": false
     },
     "routes": []
+  },
+  "terrain": {
+    "scale": 0.8888888888888888,
+    "translation": [-12, -0.005, -12],
+    "referenceHash": "9b291efa8904c6189ded131155a6583402e17e8e67821f05e62e55c2f7af9a26"
   },
   "tumbleweedPaths": [
     {

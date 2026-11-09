@@ -5449,7 +5449,7 @@
       "w": 2,
       "d": 0.5,
       "low": true,
-      "top": 0.68,
+      "top": 0.556151,
       "standable": false,
       "vaultHeight": 0.5,
       "y0": 0.06
@@ -5505,7 +5505,7 @@
       "w": 2.5,
       "d": 0.5,
       "low": true,
-      "top": 0.61,
+      "top": 0.556151,
       "standable": false,
       "vaultHeight": 0.5,
       "y0": 0.06
@@ -5601,7 +5601,7 @@
       "w": 2,
       "d": 1.5,
       "low": false,
-      "top": 2.2,
+      "top": 4,
       "standable": true
     },
     {
@@ -5641,7 +5641,7 @@
       "w": 2,
       "d": 1.5,
       "low": false,
-      "top": 2.2,
+      "top": 4,
       "standable": true
     },
     {
@@ -5651,7 +5651,7 @@
       "w": 2,
       "d": 1.5,
       "low": false,
-      "top": 2.2,
+      "top": 4,
       "standable": true
     },
     {
@@ -5970,7 +5970,7 @@
       "w": 1.6,
       "d": 3,
       "low": false,
-      "top": 2.3,
+      "top": 4,
       "standable": true
     },
     {
@@ -5980,12 +5980,12 @@
       "w": 1.6,
       "d": 2,
       "low": false,
-      "top": 2.3,
+      "top": 4,
       "standable": true
     },
     {
       "kind": "crate_stack",
-      "x": 95.2,
+      "x": 92.2,
       "z": 44,
       "w": 3.3,
       "d": 2.2,
@@ -6000,7 +6000,7 @@
       "w": 1.7,
       "d": 2,
       "low": false,
-      "top": 2.3,
+      "top": 4,
       "standable": true
     },
     {
@@ -6010,7 +6010,7 @@
       "w": 1.6,
       "d": 2,
       "low": false,
-      "top": 2.3,
+      "top": 4,
       "standable": true
     },
     {
@@ -6945,7 +6945,7 @@
       "interior": false
     },
     {
-      "x": 98,
+      "x": 98.8,
       "z": 20,
       "interior": false
     },
@@ -7080,7 +7080,7 @@
       "interior": false
     },
     {
-      "x": 98,
+      "x": 99.5,
       "z": 12,
       "interior": false
     }
@@ -7189,7 +7189,7 @@
         "z": 44.25,
         "yaw": 0,
         "habit": "sit",
-        "seatY": 0.68,
+        "seatY": 0.556151,
         "support": {
           "kind": "cover",
           "index": 170,
@@ -7204,7 +7204,7 @@
         "z": 94.75,
         "yaw": 0,
         "habit": "whittle",
-        "seatY": 0.61,
+        "seatY": 0.556151,
         "support": {
           "kind": "cover",
           "index": 175,

@@ -40,8 +40,8 @@ export async function fitWaistcoats(doc: Document, id: string): Promise<void> {
         garment,
         (original.getExtras().pieceRanges as Range[] | undefined) ?? ranges,
       )
-      original.setExtras({ ...original.getExtras(), waistcoatFit: undefined })
       garment.dispose()
+      original.setExtras({ ...original.getExtras(), waistcoatFit: undefined })
     }
   }
 }

@@ -80,6 +80,11 @@ try {
       yaw: 120,
     },
   ]
+  for (const outfit of ['outfit.wool-duster', 'outfit.midnight-coat']) {
+    for (const clip of ['Draw', 'Idle_Gun_Pointing', 'Gun_Shoot', 'Crouch_Idle', 'Run', 'Death']) {
+      cases.push({ name: `${outfit}-${clip}`, loadout: { outfit }, clip, yaw: -55 })
+    }
+  }
   for (const item of cases) {
     const pose = await page.evaluate(async (sample) => {
       const path = '/tools/content/character-preview.ts'

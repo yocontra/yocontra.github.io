@@ -7,6 +7,7 @@ import { ASSETS, DYNAMIC_ASSETS } from '../../src/experiments/out-west/content/m
 import { DuelActor } from '../../src/experiments/out-west/duel/native-actor.ts'
 import type { PlayerState } from '../../src/experiments/out-west/runtime/protocol.ts'
 import { RECOIL_SECONDS } from '../../src/experiments/out-west/scene/native-animation-timing.ts'
+import { nativeCivilianWeapons } from './civilian-weapons.ts'
 
 interface ToeFrame {
   at: number
@@ -193,8 +194,10 @@ export async function nativeCharacterTiming() {
     }
     actor.destroy()
     actor = undefined
+    shots.push(...(await pairedRecoil(game, step)))
     const cues = await nativeCues(game, step)
-    return { gaits, shots, cues }
+    const civilian = await nativeCivilianWeapons(game)
+    return { gaits, shots, cues, civilian }
   } finally {
     actor?.destroy()
     game.destroy()
@@ -222,4 +225,49 @@ async function nativeCues(game: GameApplication, step: (dt: number) => void) {
     }
   }
   return cues
+}
+
+async function pairedRecoil(game: GameApplication, step: (dt: number) => void) {
+  const actor = await DuelActor.create(game, ASSETS['outlaw-5'].url, 'paired-timing')
+  try {
+    if (!actor.paired) {
+      throw new Error('Paired native recoil fixture must own both actual mounted revolvers')
+    }
+    const resource = (await game.loadContainer(ASSETS['outlaw-5'].url))
+      .resource as ContainerResource
+    const durations = new Map(
+      resource.animations.map((asset) => {
+        const track = asset.resource as import('playcanvas').AnimTrack
+        return [track.name, track.duration]
+      }),
+    )
+    return [30, 60, 100].map((fps) => {
+      actor.play('Idle_Gun_Pointing', 0)
+      actor.shoot()
+      for (let frame = 0; frame < Math.round(fps * RECOIL_SECONDS); frame++) {
+        step(1 / fps)
+      }
+      const clip = actor.shotClip()
+      return {
+        fps,
+        weapon: 'paired-duel',
+        clip,
+        seconds: RECOIL_SECONDS,
+        nativeTime: current(actor.model.anim?.baseLayer).activeStateCurrentTime,
+        duration: actor.animationTrack(clip)?.duration ?? 0,
+        mechanisms: actor.weaponMounts
+          .filter((mount) => mount.drawn)
+          .map((mount) => {
+            const layer = (mount.node as Entity).anim?.baseLayer
+            return {
+              clip: layer?.activeState,
+              nativeTime: layer?.activeStateCurrentTime ?? 0,
+              duration: durations.get(layer?.activeState ?? '') ?? 0,
+            }
+          }),
+      }
+    })
+  } finally {
+    actor.destroy()
+  }
 }

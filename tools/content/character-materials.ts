@@ -12,9 +12,10 @@ import {
   unpartition,
   weld,
 } from '@gltf-transform/functions'
+import { validateAuthoringInputs } from './authoring-inputs.ts'
 import { cache, type Range } from './character-atlas.ts'
 import { appendClips } from './character-clips.ts'
-import { prepareSpurSurface } from './character-metal.ts'
+import { gunSurfaceDetail, prepareSpurSurface } from './character-metal.ts'
 import { convertCharacterSurface } from './character-surfaces.ts'
 import { integrateGarmentParts } from './garment-parts.ts'
 import { labelActorHatGlb } from './label-actor-hats.ts'
@@ -70,8 +71,13 @@ export async function bakeCharacter(path: string): Promise<void> {
   }
   if (id.startsWith('outlaw-')) {
     appendClips(doc, await io.read(resolve(source, 'stances', `${id}.glb`)))
+    await appendSeatedPose(doc, id)
   }
-  await consolidateRigidMaterials(doc)
+  await consolidateRigidMaterials(
+    doc,
+    undefined,
+    WEAPON_BEARER.test(id) ? (await gunSurfaceDetail()).wear : undefined,
+  )
   completeCharacterClips(doc)
   await appendGunMechanisms(doc, id)
   await doc.transform(dedup())
@@ -99,6 +105,15 @@ export async function bakeCharacter(path: string): Promise<void> {
   await normalizeSkinnedAsset(target)
   cache.clear()
   console.log(`baked native PBR ${id}`)
+}
+async function appendSeatedPose(doc: Document, id: string): Promise<void> {
+  const path = resolve(source, 'seated-poses', `${id}.glb`)
+  if (!(await Bun.file(path).exists())) {
+    return
+  }
+  const pose = await io.read(path)
+  await validateAuthoringInputs(pose)
+  appendClips(doc, pose, new Set(['Town_Sit']))
 }
 async function convertSurfaces(doc: Document, id: string): Promise<void> {
   const dyeable = DYEABLE.test(id) && id !== 'extra.tin-star'

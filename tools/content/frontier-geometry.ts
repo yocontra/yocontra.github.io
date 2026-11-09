@@ -14,6 +14,8 @@ import { calculateNormals, calculateTangents } from 'playcanvas'
 import sharp from 'sharp'
 import { projectedUv, surfaceMaterial } from './animal-prop-surfaces.ts'
 import type { CollisionMesh } from './frontier-collision.ts'
+import { frontierGroundTransform } from './frontier-ground.ts'
+import { repairFrontierWinding } from './frontier-winding.ts'
 
 export type Rgb = readonly [number, number, number]
 export interface Placement {
@@ -156,7 +158,7 @@ export class FrontierGeometry {
   private readonly prototypes = new Map<string, Node>()
   private readonly buffers = new Map<string, { root: Node; material: Material; data: Geometry }>()
   private readonly buffer
-  private constructor(doc: Document) {
+  private constructor(doc: Document, size: number) {
     this.doc = doc
     this.buffer = doc.getRoot().listBuffers()[0] ?? doc.createBuffer('Perdition geometry')
     for (const node of doc.getRoot().listNodes()) {
@@ -174,12 +176,16 @@ export class FrontierGeometry {
     this.root = doc.createNode('town')
     doc.createScene('Perdition').addChild(this.root)
     if (vegetation) {
-      vegetation.setTranslation([-20, 0, -20])
+      const ground = frontierGroundTransform(size)
+      vegetation
+        .setTranslation(ground.translation)
+        .setScale([ground.scale, ground.scale, ground.scale])
       this.root.addChild(vegetation)
     }
   }
-  static async create(): Promise<FrontierGeometry> {
-    const result = new FrontierGeometry(await frontierIO.read(libraryPath))
+  static async create(size = 104): Promise<FrontierGeometry> {
+    const result = new FrontierGeometry(await frontierIO.read(libraryPath), size)
+    console.log('Authored winding repairs', repairFrontierWinding(result.doc))
     for (const [name, kind] of [
       ['flora', 'bark'],
       ['Hay', 'straw'],
@@ -197,6 +203,7 @@ export class FrontierGeometry {
         }
       }
     }
+    result.materials.set('straw', await surfaceMaterial(result.doc, 'straw', 'Hay'))
     result.materials.set('iron', await surfaceMaterial(result.doc, 'iron'))
     for (const [role, prefix] of [
       ['wood', 'vplanks'],

@@ -27,14 +27,8 @@ function swatch(primitive: Primitive, range: Range): { lo: number[]; hi: number[
     hi: [0, 1].map((c) => Math.max(...points.map((p) => p[c] ?? 0))),
   }
 }
-async function writeGarment(
-  garment: Garment,
-  original: Primitive,
-  range: Range,
-  { jointNames, id }: { jointNames: string[]; id: string },
-): Promise<void> {
-  const doc = new Document()
-  const buffer = doc.createBuffer()
+function surface(doc: Document, garment: Garment, original: Primitive, range: Range): Primitive {
+  const buffer = doc.getRoot().listBuffers()[0] ?? doc.createBuffer()
   const primitive = doc.createPrimitive()
   const { lo, hi } = swatch(original, range)
   const values: [string, number[][]][] = [
@@ -72,19 +66,24 @@ async function writeGarment(
       .setType('SCALAR')
       .setArray(Uint32Array.from(garment.triangles.flat())),
   )
-  doc
-    .createScene()
-    .addChild(
-      doc
-        .createNode('Blender authored waistcoat')
-        .setMesh(doc.createMesh().addPrimitive(primitive)),
-    )
+  primitive.setExtras({
+    pieceRanges: garment.pieces.map((piece) => ({ ...piece, swatch: range.swatch })),
+  })
+  return primitive
+}
+async function writeGarment(
+  garment: Garment,
+  original: Primitive,
+  range: Range,
+  { jointNames, id }: { jointNames: string[]; id: string },
+): Promise<void> {
+  const doc = new Document()
+  const primitive = surface(doc, garment, original, range)
+  const mesh = doc.createMesh().addPrimitive(primitive)
+  doc.createScene().addChild(doc.createNode('Blender authored waistcoat').setMesh(mesh))
   doc.getRoot().setExtras({
     jointNames,
     authoring: 'Blender native UV pattern, Decimate, Solidify; no runtime cloth solver',
-  })
-  primitive.setExtras({
-    pieceRanges: garment.pieces.map((piece) => ({ ...piece, swatch: 'wool' })),
   })
   await mkdir(resolve(source, 'waistcoats'), { recursive: true })
   await io.write(resolve(source, 'waistcoats', `${id}.glb`), doc)
@@ -141,10 +140,15 @@ async function author(path: string): Promise<boolean> {
       if (code !== 0 || !(await Bun.file(output).exists())) {
         throw new Error(`Blender waistcoat failed: ${stdout}\n${stderr}`)
       }
-      await writeGarment((await Bun.file(output).json()) as Garment, original, wool, {
-        jointNames: skin.listJoints().map((j) => j.getName()),
-        id: basename(path, '.gltf'),
-      })
+      await writeGarment(
+        (await Bun.file(output).json()) as Garment,
+        original,
+        { ...wool, swatch: 'wool' },
+        {
+          jointNames: skin.listJoints().map((j) => j.getName()),
+          id: basename(path, '.gltf'),
+        },
+      )
       console.log(`Authored waistcoat ${basename(path)}: ${stdout.trim()}`)
     } finally {
       await rm(temporary, { recursive: true, force: true })

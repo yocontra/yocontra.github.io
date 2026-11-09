@@ -8,6 +8,7 @@ import { dedup, dequantize, prune, weld } from '@gltf-transform/functions'
 import { compressedCharacterTexture } from './character-textures.ts'
 import { compressEnvironmentTextures } from './environment-textures.ts'
 import { formatContent } from './format-content.ts'
+import { packFrontierVertices } from './frontier-vertex-packing.ts'
 import { optimizeAsset } from './optimize.ts'
 
 const argument = (name: string, fallback: string) =>
@@ -134,6 +135,11 @@ for (const name of names.filter((candidate) => !only || candidate === only)) {
   console.log(
     `${name}: ${root.listMeshes().length} meshes, ${root.listTextures().length} PBR textures, ${foliage.length} foliage chunks`,
   )
+  if (name === 'frontier') {
+    const packed = await io.read(path)
+    console.log('Frontier vertex packing', await packFrontierVertices(packed))
+    await io.write(path, packed)
+  }
   await compressEnvironmentTextures(path)
 }
 if (only) {

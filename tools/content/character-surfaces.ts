@@ -14,6 +14,7 @@ import {
   rangeIndices,
   renderPatch,
 } from './character-atlas.ts'
+import { gunSurfaceDetail } from './character-metal.ts'
 
 async function addGun(doc: Document, mesh: Mesh, primitive: Primitive): Promise<boolean> {
   const original = primitive.getMaterial()
@@ -40,7 +41,12 @@ async function addGun(doc: Document, mesh: Mesh, primitive: Primitive): Promise<
         .setRoughnessFactor(group.rough)
       const map = original.getBaseColorTexture()
       if (map) {
-        material.setExtras({ nativePbr: { albedo: await originalFile(map, true) } })
+        material.setExtras({
+          nativePbr: {
+            albedo: await originalFile(map, true),
+            normal: (await gunSurfaceDetail()).normal,
+          },
+        })
         material.setBaseColorTexture(null)
       }
       mesh.addPrimitive(appendPrimitive(doc, primitive, group.indices, material))

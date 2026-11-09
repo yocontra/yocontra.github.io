@@ -19,6 +19,7 @@ import {
 } from '../../src/experiments/out-west/ffa/sim/layout.ts'
 import { roofHeightAt } from '../../src/experiments/out-west/ffa/sim/roofshape.ts'
 import type { CollisionData } from '../../src/experiments/out-west/runtime/protocol.ts'
+import { frontierFlatGround, frontierGround } from './frontier-ground.ts'
 
 export type CollisionBox = CollisionData['boxes'][number] & { id: string }
 export type CollisionMesh = CollisionData['meshes'][number] & { id: string }
@@ -240,27 +241,52 @@ function stairMesh(surface: Surface, index: number): CollisionMesh {
   return { id: `stair:${index}`, positions, indices: [0, 2, 1, 1, 2, 3] }
 }
 
-export function compileFrontierCollision(
-  layout: TownLayout,
-): CollisionData & { boxes: CollisionBox[]; meshes: CollisionMesh[] } {
+/** Tall stockyard pickets leave real bullet gaps without climbable horizontal steps. */
+export function perimeterSpans(size: number): Structure[] {
+  const edges = [
+    { id: 'n', x: 0, z: 0, w: size, d: 0.5 },
+    { id: 'w', x: 0, z: 0, w: 0.5, d: size },
+    { id: 'e', x: size - 0.5, z: 0, w: 0.5, d: size },
+  ]
+  return edges.flatMap((edge) => {
+    const horizontal = edge.w >= edge.d
+    const count = Math.ceil(size / 0.5)
+    return Array.from({ length: count + 1 }, (_, index) => ({
+      id: `boundary:${edge.id}:picket:${index}`,
+      x: edge.x + (horizontal ? ((size - 0.14) * index) / count : (edge.w - 0.14) / 2),
+      z: edge.z + (horizontal ? (edge.d - 0.14) / 2 : ((size - 0.14) * index) / count),
+      w: 0.14,
+      d: 0.14,
+      y0: 0,
+      y1: 2.7,
+    }))
+  })
+}
+
+export function compileFrontierCollision(layout: TownLayout): {
+  version: string
+  boxes: CollisionBox[]
+  meshes: CollisionMesh[]
+} {
   const size = layout.size
   const boxes = [
-    box('ground', { x: 0, z: 0, w: size, d: size }, -1, 0),
-    box('boundary:n', { x: 0, z: 0, w: size, d: 0.5 }, 0, 2.7),
-    box('boundary:s', { x: 0, z: size - 0.5, w: size, d: 0.5 }, 0, 4),
-    box('boundary:w', { x: 0, z: 0, w: 0.5, d: size }, 0, 12),
-    box('boundary:e', { x: size - 0.5, z: 0, w: 0.5, d: size }, 0, 12),
+    box('ground', frontierFlatGround(size), -1, 0),
+
+    box('boundary:s', { x: 0, z: size - 0.5, w: size, d: 3.2 }, 0, 5.6),
+
+    ...perimeterSpans(size).map((span) => box(span.id, span, span.y0, span.y1)),
     ...structuralWalls(layout).map((wall) => box(wall.id, wall, wall.y0, wall.y1)),
   ]
   const grid = buildGrid(layout)
   for (let x = 0; x < size; x += 4) {
-    boxes.push(box(`boundary:n:post:${x}`, { x, z: 0, w: 0.2, d: 0.7 }, 0, 2.9))
+    boxes.push(box(`boundary:n:crow-post:${x}`, { x, z: 0, w: 0.2, d: 0.7 }, 0, 2.9))
   }
   for (const building of layout.buildings.filter((value) => value.hollow)) {
     boxes.push(box(`floor:${building.id}`, building, 0, 0.03))
     boxes.push(box(`ceiling:${building.id}`, building, building.height - 0.14, building.height))
   }
   const meshes = [
+    ...frontierGround(size),
     ...grid.stairs.map(stairMesh),
     ...layout.buildings.flatMap((building) => roofMesh(building) ?? []),
   ]

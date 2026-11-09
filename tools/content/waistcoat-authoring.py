@@ -226,7 +226,7 @@ def surface_at(u, v):
 
 def detail(u, v, size, sphere, tint, roughness, name):
     anchor = surface_at(u, v)
-    center = Vector((anchor["p"][0], -anchor["p"][2] - 0.011, anchor["p"][1]))
+    center = Vector((anchor["p"][0], -anchor["p"][2] - settings["clearance"] - 0.003, anchor["p"][1]))
     shape = bmesh.new()
     if sphere:
         bmesh.ops.create_uvsphere(shape, u_segments=10, v_segments=6, radius=1)

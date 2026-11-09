@@ -4,6 +4,7 @@ import { resolve } from 'node:path'
 import { type Animation, type Document, NodeIO } from '@gltf-transform/core'
 import { ALL_EXTENSIONS } from '@gltf-transform/extensions'
 import { dedup, mergeDocuments, prune, resample, unpartition } from '@gltf-transform/functions'
+import { validateAuthoringInputs } from './authoring-inputs.ts'
 import { appendCrouchClips } from './crouch-character-clips.ts'
 import { completeCharacterClips } from './normalize-character-clips.ts'
 import { normalizeSkinnedAsset } from './normalize-skinned-nodes.ts'
@@ -69,6 +70,9 @@ export async function bakeCharacterClips(): Promise<void> {
     appendClips(target, await io.read(resolve(root, `${name}.gltf`)))
   }
   appendClips(target, await io.read(resolve(root, 'character-pair-actions.glb')))
+  const paired = await io.read(resolve(root, 'paired-poses/left-arm.glb'))
+  await validateAuthoringInputs(paired)
+  appendClips(target, paired)
   appendClips(
     target,
     await io.read(resolve(root, 'character-draw-actions.glb')),

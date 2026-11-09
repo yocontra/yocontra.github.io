@@ -362,7 +362,8 @@ export async function nativeRateProbe(): Promise<unknown> {
     throw new Error('Locomotion controller wrote upper bones')
   }
   const shotTime = upper.activeStateCurrentTime
-  if (Math.abs(shotTime - 0.1) > 0.001) {
+  const shotDuration = actor.animationTrack('Gun_Shoot')?.duration ?? 0
+  if (Math.abs(shotTime - shotDuration / 2) > 0.001) {
     throw new Error(`Upper action scaled with stride rate:${shotTime}`)
   }
   return { phaseError: error, rateAssignments: assignments, upperShotTime: shotTime }

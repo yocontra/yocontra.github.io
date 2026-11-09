@@ -11,7 +11,20 @@ import type { ArenaLife } from '../contract/ambient.ts'
 export type ArenaId = 'street' | 'depot' | 'mission' | 'bank'
 export type { ArenaLife, Stand } from '../contract/ambient.ts'
 
-const STREET: ArenaLife = streetLife
+/** Kit bench wood tops sit 0.496151m above their authored floor. */
+export function campaignSeats(life: ArenaLife): ArenaLife {
+  return {
+    ...life,
+    folk: life.folk.map((spot) => {
+      if (spot.habit !== 'sit' && spot.habit !== 'whittle') {
+        return spot
+      }
+      const floor = spot.floor ?? 0.34
+      return { ...spot, floor, seatY: floor + 0.496_151 }
+    }),
+  }
+}
+const STREET: ArenaLife = campaignSeats(streetLife)
 const ARENAS = { depot, mission, bank }
 export function arenaForSlot(slot: number): ArenaId {
   if (slot >= 6 && slot <= 9) {
@@ -67,7 +80,7 @@ export class NativeArenas {
     if (street) {
       street.enabled = id === 'street'
     }
-    this.life = id === 'street' ? STREET : ARENAS[id].life
+    this.life = id === 'street' ? STREET : campaignSeats(ARENAS[id].life)
     const root = next ?? this.game.stage.findByName('duel-street')
     if (root instanceof Entity) {
       const asset = await this.game.loadContainer(ASSETS[id === 'street' ? 'duel' : id].url)

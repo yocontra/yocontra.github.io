@@ -85,9 +85,38 @@ try {
       }
       results.push({ name, crouched, error, dot, pose: result })
       await page.screenshot({ path: `${output}/${name}-${crouched ? 'crouched' : 'standing'}.png` })
-      await page.evaluate(() =>
-        (Reflect.get(globalThis, '__playcanvasFrontier') as GameViewport).tap(1),
-      )
+      await page.waitForFunction(() => {
+        const session = Reflect.get(globalThis, '__nativeFrontierSession') as FrontierSession
+        const self = session.world.players[session.selfSlot]
+        return self && self.fireCooldownMs <= 0 && self.reloadTicks === 0
+      })
+      const shot = await page.evaluate(async (expectedWeapon) => {
+        const session = Reflect.get(globalThis, '__nativeFrontierSession') as FrontierSession
+        const self = session.world.players[session.selfSlot]
+        if (!self || self.weapon !== expectedWeapon) {
+          throw new Error('First-person fixture did not equip requested weapon')
+        }
+        const before = self.lastFireTick
+        const path = '/tools/content/actor-lifecycle-probe.ts'
+        const probe = await import(path)
+        ;(Reflect.get(globalThis, '__playcanvasFrontier') as GameViewport).tap(1)
+        for (let frame = 0; frame < 30; frame++) {
+          await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()))
+          const pose = probe.riderView(session.selfId) as {
+            controllers: { state?: string; time?: number }[]
+          }
+          if (
+            self.lastFireTick > before &&
+            pose.controllers.some(
+              (controller) => controller.state?.includes('Shoot') && (controller.time ?? 0) > 0,
+            )
+          ) {
+            return { weapon: self.weapon, fireTick: self.lastFireTick, pose }
+          }
+        }
+        throw new Error('First-person input did not produce a real shot/native recoil')
+      }, weapon)
+      results.push({ name, crouched, shot })
       await page.screenshot({
         path: `${output}/${name}-${crouched ? 'crouched' : 'standing'}-shot.png`,
       })

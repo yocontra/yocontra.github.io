@@ -135,3 +135,55 @@ it('conflicting shared vertices and existing detail maps are preserved rather th
     expect(mesh.listPrimitives()).toHaveLength(2)
   }
 })
+
+it('opt-in gun wear follows original UVs while preserving one draw, authored albedo and part metal factors', async () => {
+  const source = fixture()
+  const wear = {
+    width: 2,
+    height: 2,
+    data: Buffer.from([
+      255, 96, 240, 255, 255, 128, 252, 255, 255, 128, 252, 255, 255, 96, 240, 255,
+    ]),
+  }
+  let image: Uint8Array | undefined
+  await consolidateRigidMaterials(
+    source.doc,
+    (bytes) => {
+      image = bytes
+      return Promise.resolve('/gun-wear.data.ktx2')
+    },
+    wear,
+  )
+  const combined = source.mesh.listPrimitives()[0]
+  expect(source.mesh.listPrimitives()).toHaveLength(1)
+  expect(combined?.getAttribute('TEXCOORD_0')).toBe(source.uv)
+  expect(combined?.getAttribute('POSITION')).toBe(source.position)
+  expect(source.mount.getTranslation()).toEqual([0.2, 0.3, 0.4])
+  expect(combined?.getMaterial()?.getExtras().nativePbr).toEqual({
+    albedo: '/unchanged.color.ktx2',
+    normal: '/unchanged-normal.data.ktx2',
+    arm: '/gun-wear.data.ktx2',
+    armUv: 1,
+  })
+  if (!image) {
+    throw new Error('Gun wear was not encoded')
+  }
+  const { data, info } = await sharp(image).raw().toBuffer({ resolveWithObject: true })
+  expect([info.width, info.height]).toEqual([128, 64])
+  const rough = new Set<number>()
+  const metal = new Set<number>()
+  const woodMetal = new Set<number>()
+  for (let y = 4; y < 60; y++) {
+    for (let x = 4; x < 60; x++) {
+      rough.add(data[(y * info.width + x) * 4 + 1] ?? 0)
+      metal.add(data[(y * info.width + x) * 4 + 2] ?? 0)
+      woodMetal.add(data[(y * info.width + x + 64) * 4 + 2] ?? 255)
+    }
+  }
+  expect(woodMetal).toEqual(new Set([0]))
+  expect(rough.size).toBeGreaterThan(1)
+  expect(metal.size).toBeGreaterThan(1)
+  expect(combined?.getAttribute('TEXCOORD_1')?.getElement(0, [])).not.toEqual(
+    combined?.getAttribute('TEXCOORD_1')?.getElement(1, []),
+  )
+})

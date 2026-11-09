@@ -197,16 +197,16 @@ function hangingSign(g: FrontierGeometry, root: Node, b: Building, front: Side) 
   const z = front === 's' ? b.z + b.d + 0.22 : b.z - 1.72
   const index = Object.keys(LABELS).length + Object.keys(SHORT_LABELS).indexOf(b.id)
   signQuad(g, root, index, [
-    [x - 0.041, 2.25, z],
-    [x - 0.041, 2.25, z + 1.5],
-    [x - 0.041, 2.95, z + 1.5],
-    [x - 0.041, 2.95, z],
+    [x - 0.001, 2.25, z],
+    [x - 0.001, 2.25, z + 1.5],
+    [x - 0.001, 2.95, z + 1.5],
+    [x - 0.001, 2.95, z],
   ])
   signQuad(g, root, index, [
-    [x + 0.041, 2.25, z + 1.5],
-    [x + 0.041, 2.25, z],
-    [x + 0.041, 2.95, z],
-    [x + 0.041, 2.95, z + 1.5],
+    [x + 0.081, 2.25, z + 1.5],
+    [x + 0.081, 2.25, z],
+    [x + 0.081, 2.95, z],
+    [x + 0.081, 2.95, z + 1.5],
   ])
 }
 export function bankServiceSigns(g: FrontierGeometry, root: Node, layout: FrontierPlan['layout']) {

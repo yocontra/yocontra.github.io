@@ -14,7 +14,6 @@ const KIT_PROPS: Partial<Record<Cover['kind'], string>> = {
   crates: 'k_crate_big',
   workbench: 'k_workbench',
   table: 'k_table',
-  hay: 'hay',
   safe: 'k_chest',
   headstone: 'coffin',
 }
@@ -22,6 +21,10 @@ const KIT_PROPS: Partial<Record<Cover['kind'], string>> = {
 export function coverModel(g: FrontierGeometry, root: Node, c: Cover) {
   const top = c.top ?? 1
   const area: Placement = { ...c, top }
+  if (c.kind === 'hay') {
+    hayBales(g, root, area)
+    return
+  }
   const prefab = KIT_PROPS[c.kind]
   if (prefab) {
     g.prefab(root, prefab, area)
@@ -62,6 +65,49 @@ export function coverModel(g: FrontierGeometry, root: Node, c: Cover) {
   if (c.kind === 'boxcar') {
     for (const z of [c.z + 0.1, c.z + c.d - 0.1]) {
       g.box(root, 'wood', { x: c.x, z, w: c.w, d: 0.13, y0: 0.3, top: 0.52 }, [0.19, 0.17, 0.15])
+    }
+  }
+}
+
+/** Tied straw bales fill the authored cover volume; the old cinched spool read as a placeholder. */
+function hayBales(g: FrontierGeometry, root: Node, area: Placement) {
+  const bottom = area.y0 ?? 0
+  const columns = Math.max(1, Math.round(area.w / 1.05))
+  const rows = Math.max(1, Math.round(area.d / 0.8))
+  const layers = Math.max(1, Math.round((area.top - bottom) / 0.5))
+  const w = area.w / columns
+  const d = area.d / rows
+  const h = (area.top - bottom) / layers
+  for (let level = 0; level < layers; level++) {
+    for (let col = 0; col < columns; col++) {
+      for (let row = 0; row < rows; row++) {
+        const x = area.x + col * w
+        const z = area.z + row * d
+        const y = bottom + level * h
+        g.box(root, 'straw', { x, z, w, d, y0: y, top: y + h }, [0.86, 0.7, 0.35])
+        for (const fraction of [0.26, 0.74]) {
+          const band = x + w * fraction
+          const tint: Rgb = [0.23, 0.18, 0.09]
+          g.box(
+            root,
+            'straw',
+            { x: band, z: z - 0.003, w: 0.025, d: 0.012, y0: y, top: y + h },
+            tint,
+          )
+          g.box(
+            root,
+            'straw',
+            { x: band, z: z + d - 0.009, w: 0.025, d: 0.012, y0: y, top: y + h },
+            tint,
+          )
+          g.box(
+            root,
+            'straw',
+            { x: band, z, w: 0.025, d, y0: y + h - 0.003, top: y + h + 0.003 },
+            tint,
+          )
+        }
+      }
     }
   }
 }
