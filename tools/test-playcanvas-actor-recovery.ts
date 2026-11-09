@@ -101,65 +101,11 @@ try {
     throw new Error('Late load retained a disposed native actor')
   }
   await page.unroute('**/baked/outlaw-2.glb?*')
-  await page.addInitScript(() => {
-    const original = globalThis.createImageBitmap
-    const waiting: (() => void)[] = []
-    Reflect.set(globalThis, '__pauseNativeImages', false)
-    Reflect.set(globalThis, '__blockedNativeImages', 0)
-    Reflect.set(globalThis, '__releaseNativeImages', () => {
-      Reflect.set(globalThis, '__pauseNativeImages', false)
-      for (const decode of waiting.splice(0)) {
-        decode()
-      }
-    })
-    Reflect.set(globalThis, 'createImageBitmap', (...arguments_: unknown[]) => {
-      const decode = () => Reflect.apply(original, globalThis, arguments_) as Promise<ImageBitmap>
-      if (!Reflect.get(globalThis, '__pauseNativeImages')) {
-        return decode()
-      }
-      Reflect.set(
-        globalThis,
-        '__blockedNativeImages',
-        Number(Reflect.get(globalThis, '__blockedNativeImages')) + 1,
-      )
-      return new Promise<ImageBitmap>((resolve, reject) =>
-        waiting.push(() => {
-          void decode().then(resolve, reject)
-        }),
-      )
-    })
-  })
-  await page.goto(
-    `${origin}/experiments/out-west/frontier/?server=loopback&bots=0&seed=7&spawn=72,66`,
-    { waitUntil: 'domcontentloaded' },
-  )
-  await page.waitForFunction(
-    () => Boolean(Reflect.get(globalThis, '__playcanvasFrontier')),
-    undefined,
-    { timeout: 90_000 },
-  )
-  await page.evaluate(() => Reflect.set(globalThis, '__pauseNativeImages', true))
-  await add()
-  await page.waitForFunction(() => Number(Reflect.get(globalThis, '__blockedNativeImages')) > 0)
-  await page.evaluate(() => {
-    ;(Reflect.get(globalThis, '__playcanvasFrontier') as GameViewport).destroy()
-    Reflect.get(globalThis, '__releaseNativeImages')()
-  })
-  await new Promise((resolve) => setTimeout(resolve, 1000))
-  const decodedAfterDisposal = await stats()
-  if (decodedAfterDisposal.loaded || decodedAfterDisposal.loading || decodedAfterDisposal.visible) {
-    throw new Error('Late image decode retained a disposed actor')
-  }
+  // Shared/dye/Basis decode cancellation uses the real KTX path in test-playcanvas-character-lifecycle.ts.
   if (errors.length > 0) {
     throw new Error(errors.join('\n'))
   }
-  console.log(
-    JSON.stringify(
-      { requests, failed, recovered, disposed, decodedAfterDisposal, errors },
-      null,
-      2,
-    ),
-  )
+  console.log(JSON.stringify({ requests, failed, recovered, disposed, errors }, null, 2))
 } finally {
   await browser.close()
 }

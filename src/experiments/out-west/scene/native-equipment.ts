@@ -30,8 +30,13 @@ function rigidBatch(game: GameApplication, components: RenderComponent[]): void 
   }
   let id = batchGroups.get(game)
   if (id === undefined) {
-    id = batcher.addGroup('Rider equipment', true, 24).id
+    const group = batcher.addGroup('Rider equipment', true, 24)
+    id = group.id
     batchGroups.set(game, id)
+    game.stage.once('destroy', () => {
+      batcher.removeGroup(group.id)
+      batchGroups.delete(game)
+    })
   }
   for (const component of components) {
     component.batchGroupId = id
@@ -100,8 +105,7 @@ function bindSkin(model: Entity, actor: DuelActor, id: string): void {
     ),
   )
   const oldRoots = new Set<GraphNode>()
-  // Multiple material primitives can share one SkinInstance. Resolve it exactly once,
-  // before collecting the next original joint graph; otherwise its bones already belong to the rider.
+  // Shared skins reference one original joint graph. Collect it before components rebind.
   for (const skin of skins) {
     for (const name of skin.skin.boneNames) {
       if (!actor.model.findByName(name)) {
@@ -112,7 +116,12 @@ function bindSkin(model: Entity, actor: DuelActor, id: string): void {
     for (const bone of skin.bones) {
       oldRoots.add(jointRoot(bone, joints))
     }
-    skin.resolve(actor.model, actor.model)
+  }
+  // The native component setter balances the old cache lease before rebinding to the rider.
+  for (const component of components) {
+    if (component.meshInstances.some((instance) => instance.skinInstance)) {
+      component.rootBone = actor.model
+    }
   }
   for (const root of oldRoots) {
     if (root.find((node) => renderNodes.has(node)).length > 0) {

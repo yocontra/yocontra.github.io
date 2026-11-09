@@ -6,6 +6,7 @@ import type { DuelActor } from '../../src/experiments/out-west/duel/native-actor
 import { equippedActor } from '../../src/experiments/out-west/scene/native-equipment.ts'
 
 import { assertNativeCharacter } from './character-bindings.ts'
+import { characterTextureSnapshot, probeCharacterOwnership } from './character-ownership.ts'
 
 let game: GameApplication | null = null
 let actor: DuelActor | null = null
@@ -111,37 +112,11 @@ export function pauseCharacter(time: number): void {
 }
 
 let population: DuelActor[] = []
-function textureSnapshot(): {
-  count: number
-  bytes: number
-  maps: { url: string; bytes: number; width: number; height: number; format: number }[]
-  vram: number
-  drawCalls: unknown
-} {
+function textureSnapshot(): ReturnType<typeof characterTextureSnapshot> {
   if (!game) {
     throw new Error('Missing preview application')
   }
-  const maps = game.app.assets
-    .filter(
-      (asset) =>
-        asset.type === 'texture' &&
-        Boolean(asset.resource) &&
-        String((asset.file as { url?: string } | null)?.url).includes('/native-v2/characters/'),
-    )
-    .map((asset) => ({
-      url: (asset.file as { url: string }).url,
-      bytes: (asset.resource as import('playcanvas').Texture).gpuSize,
-      width: (asset.resource as import('playcanvas').Texture).width,
-      height: (asset.resource as import('playcanvas').Texture).height,
-      format: (asset.resource as import('playcanvas').Texture).format,
-    }))
-  return {
-    count: maps.length,
-    bytes: maps.reduce((sum, map) => sum + map.bytes, 0),
-    maps,
-    vram: game.app.stats.vram.tex,
-    drawCalls: { ...game.app.stats.drawCalls },
-  }
+  return characterTextureSnapshot(game)
 }
 export async function clearCharacters(): Promise<ReturnType<typeof textureSnapshot>> {
   actor?.destroy()
@@ -192,70 +167,9 @@ export async function materialLifecycleProbe(): Promise<unknown> {
   if (!game) {
     throw new Error('Missing preview application')
   }
-  const [{ StandardMaterial }] = await Promise.all([import('playcanvas')])
-  const original = game
-  const cloth = (rider: DuelActor) => {
-    for (const render of rider.model.findComponents('render')) {
-      for (const instance of render.meshInstances) {
-        if (
-          render.entity.name === 'Character' &&
-          instance.material instanceof StandardMaterial &&
-          instance.material.name === 'Dyeable' &&
-          instance.material.normalMap
-        ) {
-          return instance.material
-        }
-      }
-    }
-    throw new Error('Missing fitted cloth native material')
-  }
-  const first = await equippedActor(original, DEFAULT_LOADOUT, {
-    [DEFAULT_LOADOUT.outfit]: 'oxblood',
-  })
-  const second = await equippedActor(original, DEFAULT_LOADOUT, {
-    [DEFAULT_LOADOUT.outfit]: 'sage',
-  })
-  const a = cloth(first)
-  const b = cloth(second)
-  if (a.normalMap !== b.normalMap || a.glossMap !== b.glossMap || a.diffuseMap === b.diffuseMap) {
-    throw new Error(
-      `Native sharing/dye isolation failed: ${JSON.stringify({ a: { normal: a.normalMap?.name, gloss: a.glossMap?.name, color: a.diffuseMap?.name }, b: { normal: b.normalMap?.name, gloss: b.glossMap?.name, color: b.diffuseMap?.name }, sameNormal: a.normalMap === b.normalMap, sameGloss: a.glossMap === b.glossMap, sameColor: a.diffuseMap === b.diffuseMap })}`,
-    )
-  }
-  const two = textureSnapshot()
-  const normal = b.normalMap
-  first.destroy()
-  await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()))
-  if (!normal?.gpuSize || b.normalMap !== normal) {
-    throw new Error('Destroying one rider invalidated another material')
-  }
-  second.destroy()
-  await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()))
-  const empty = textureSnapshot()
-  if (empty.count !== 0) {
-    throw new Error(`Retired character maps retained: ${empty.count}`)
-  }
-  actor = await equippedActor(original, DEFAULT_LOADOUT)
-  const reopened = cloth(actor)
-  if (!(reopened.diffuseMap && reopened.normalMap) || reopened.normalMap === normal) {
-    throw new Error('Retired maps failed to rehydrate')
-  }
-  const canvas = document.createElement('canvas')
-  document.body.append(canvas)
-  const other = await GameApplication.create({ canvas, viewport: document.body, pixelRatio: 1 })
-  const otherActor = await equippedActor(other, DEFAULT_LOADOUT)
-  const ownMap = reopened.normalMap
-  const otherMap = cloth(otherActor).normalMap
-  if (ownMap === otherMap || ownMap.device === otherMap?.device) {
-    throw new Error('Two applications shared a GPU Texture')
-  }
-  otherActor.destroy()
-  other.destroy()
-  canvas.remove()
-  if (!ownMap.gpuSize) {
-    throw new Error('Destroying the second application invalidated the first')
-  }
-  return { two, empty, reopened: textureSnapshot(), separateDevices: true }
+  const result = await probeCharacterOwnership(game)
+  actor = result.actor
+  return result.proof
 }
 
 export async function animationGraphProbe(): Promise<unknown> {

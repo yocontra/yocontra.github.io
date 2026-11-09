@@ -1,4 +1,4 @@
-import { beforeAll, expect, it } from 'bun:test'
+import { beforeAll, expect, it, spyOn } from 'bun:test'
 import { file } from 'bun'
 import { Entity } from 'playcanvas'
 import { predictionInput } from '../../src/experiments/out-west/client/player-pose.ts'
@@ -20,6 +20,65 @@ beforeAll(async () => {
   )
 })
 const floor = { center: [10, -0.5, 10] as const, halfExtents: [20, 0.5, 20] as const }
+
+it('same-stance authoritative adopts retain the native body and floor contact', () => {
+  const game = createSimulation({
+    ammo,
+    collision: { version: 'stance-adopt', boxes: [floor], meshes: [] },
+  })
+  try {
+    const state = game.addPlayer('self', [10, 0.9, 10])
+    for (let tick = 0; tick < 20; tick++) {
+      game.step(new Map())
+    }
+    const entity = game.app.root.findByName('self')
+    const physics = game.app.systems.rigidbody
+    const collision = game.app.systems.collision
+    if (
+      !(entity instanceof Entity && entity.rigidbody && entity.collision && physics && collision)
+    ) {
+      throw new Error('Missing native body or collision system')
+    }
+    const body = entity.rigidbody.body
+    const shape = entity.collision.shape
+    const dispatcher = physics.dispatcher
+    expect(dispatcher.getNumManifolds()).toBe(1)
+    const contact = dispatcher.getManifoldByIndexInternal(0)
+    expect(contact.getNumContacts()).toBeGreaterThan(0)
+    const rebuild = spyOn(collision, 'recreatePhysicalShapes')
+    try {
+      for (let tick = 0; tick < 20; tick++) {
+        game.adopt('self', structuredClone(state))
+        game.step(new Map())
+        expect(entity.rigidbody.body).toBe(body)
+        expect(entity.collision.shape).toBe(shape)
+        expect(dispatcher.getManifoldByIndexInternal(0)).toBe(contact)
+        expect(contact.getNumContacts()).toBeGreaterThan(0)
+      }
+      expect(rebuild).not.toHaveBeenCalled()
+      const standing = structuredClone(state)
+      game.adopt('self', { ...standing, crouched: true })
+      expect(entity.collision.height).toBe(1.2)
+      expect(entity.collision.shape).not.toBe(shape)
+      expect(entity.getPosition().y).toBeCloseTo(standing.y - 0.3, 4)
+      expect(rebuild).toHaveBeenCalledTimes(1)
+      const crouchedShape = entity.collision.shape
+      for (let tick = 0; tick < 20; tick++) {
+        game.adopt('self', structuredClone(state))
+      }
+      expect(entity.collision.shape).toBe(crouchedShape)
+      expect(rebuild).toHaveBeenCalledTimes(1)
+      game.adopt('self', standing)
+      expect(entity.collision.height).toBe(1.8)
+      expect(entity.getPosition().y).toBeCloseTo(standing.y, 4)
+      expect(rebuild).toHaveBeenCalledTimes(2)
+    } finally {
+      rebuild.mockRestore()
+    }
+  } finally {
+    game.dispose()
+  }
+})
 
 it('blocked standing preserves native/domain crouch and shot height, then recovers outside cover and after restore', () => {
   const game = createFrontierSimulation({

@@ -6,6 +6,7 @@ import { ALL_EXTENSIONS } from '@gltf-transform/extensions'
 import { dedup, mergeDocuments, prune, resample, unpartition } from '@gltf-transform/functions'
 import { appendCrouchClips } from './crouch-character-clips.ts'
 import { completeCharacterClips } from './normalize-character-clips.ts'
+import { normalizeSkinnedAsset } from './normalize-skinned-nodes.ts'
 
 const root = resolve('tools/art/characters')
 const io = new NodeIO().registerExtensions(ALL_EXTENSIONS)
@@ -89,6 +90,7 @@ export async function bakeCharacterClips(): Promise<void> {
   appendCrouchClips(target)
   await target.transform(resample(), dedup(), prune({ keepLeaves: true }), unpartition())
   await io.write(path, target)
+  await normalizeSkinnedAsset(path)
   console.log(
     target
       .getRoot()

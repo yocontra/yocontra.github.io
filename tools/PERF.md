@@ -9,13 +9,29 @@ CPU throttling remains a separate regression proxy.
 The 2026-11-08 interim production-mode Safari checkpoint used the release engine on the simulator's
 Apple GPU at an 812×265 canvas and resolution scale 1. Ordinary remote play (one human and four bots)
 measured a median 22.98 FPS and 299 draws; the explicitly synthetic 32-rider fixture measured 15.37 FPS
-and 430 draws. Turning its HUD off did not improve performance. These short samples do not meet the
-30 FPS target, and performance work remains open. They preceded the final vest/mount artifact refresh;
-retain their exact source/content hashes with the raw measurements before comparing another build.
+and 430 draws. Turning its HUD off did not improve performance. Host foreground/presentation state
+was not verified, so these are diagnostics, not acceptance evidence. They preceded the final
+vest/mount artifact refresh; retain their source/content hashes before comparing another build.
 Development builds resolve PlayCanvas's debug engine and are diagnostic evidence, so acceptance
 measurements must use a production build with the release engine.
 
-Use the native engine metrics and actual production mount paths:
+A later minimal recorder measured 15.94 rAF/s over 30 seconds in the release-engine 32-rider scene
+(p95 80 ms, p99 87 ms), versus 59.97 rAF/s in an empty DOM control. Safari reported visible/focused,
+but the host's frontmost application was loginwindow. Separate WebGL clear and empty native-engine
+controls reached about 60 rAF/s with different settled buffer dimensions. These observations do not
+establish foreground acceptance or isolate a rendering bottleneck. The 30 FPS target remains open.
+
+For acceptance, verify the actual device window and host foreground state before and after the run.
+Xcode 27 uses DeviceHub; absence of the older Simulator.app process does not establish headless operation.
+Record frozen source/content hashes, release-engine resolution, renderer, CSS and drawing-buffer
+dimensions, DPR, resolution scale and native MSAA samples. Close competing jobs and inspector,
+profiler, recorder and interaction-observer sessions. Use a minimal timestamp recorder during the
+measurement; collect expensive counters separately. Compare the same camera, population, scene state
+and adaptive-resolution policy. Preserve all stalls and report frame percentiles and the lowest
+rolling one-second rate. Include at least 60 active seconds of movement, firing, death/respawn and
+window break/reset before longer lifecycle runs.
+
+Use these desktop/DEV-hook regression tools against a development server:
 
 ```sh
 bun tools/test-playcanvas-duel.ts http://localhost:4389
@@ -23,7 +39,8 @@ OW_ORIGIN=http://localhost:4389 bun tools/test-playcanvas-frontier.ts
 bun tools/playcanvas-perf.ts http://localhost:4389 --rate=4 --seconds=30
 ```
 
-The Frontier regression creates 32 riders, exercises native input/combat and bounded Ammo corpse
+These commands do not create a production release-engine simulator fixture. The Frontier regression
+creates 32 riders, exercises native input/combat and bounded Ammo corpse
 lifecycles, and checks respawn and unmount. The performance tool creates the same packed local
 town at 375×812 CSS pixels with DPR 3 and CPU throttling, then records frame interval p50/p95/p99,
 native draw calls, actual player count, resolution scale, FPS and ragdoll counts. It saves JSON

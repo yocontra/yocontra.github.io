@@ -16,6 +16,7 @@ import { cache, type Range } from './character-atlas.ts'
 import { appendClips } from './character-clips.ts'
 import { convertCharacterSurface } from './character-surfaces.ts'
 import { completeCharacterClips } from './normalize-character-clips.ts'
+import { normalizeSkinnedAsset } from './normalize-skinned-nodes.ts'
 import { consolidateRigidMaterials } from './rigid-materials.ts'
 import { fitWaistcoats } from './waistcoat-fit.ts'
 import { captureWeaponSockets, restoreWeaponSockets } from './weapon-sockets.ts'
@@ -96,7 +97,9 @@ export async function bakeCharacter(path: string): Promise<void> {
   } else if (id === 'player' || id.startsWith('outlaw-')) {
     category = 'baked'
   }
-  await io.write(resolve(output, category, `${id}.glb`), doc)
+  const target = resolve(output, category, `${id}.glb`)
+  await io.write(target, doc)
+  await normalizeSkinnedAsset(target)
   cache.clear()
   console.log(`baked native PBR ${id}`)
 }

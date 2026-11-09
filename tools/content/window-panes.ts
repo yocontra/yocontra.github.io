@@ -1,6 +1,7 @@
 /** Author independently addressable panes once; the runtime toggles native entities. */
 import { NodeIO } from '@gltf-transform/core'
 import { ALL_EXTENSIONS } from '@gltf-transform/extensions'
+import { prune } from '@gltf-transform/functions'
 import { buildGrid, TOWN } from '../../src/experiments/out-west/ffa/sim/layout.ts'
 
 const path = 'public/experiments/out-west/3d/native-v2/baked/frontier.glb'
@@ -11,25 +12,58 @@ const town = root.listNodes().find((node) => node.getName() === 'town')
 if (!town) {
   throw new Error('Missing authored town')
 }
+const panes = buildGrid(TOWN).glass
+const authored = root.listNodes().filter((node) =>
+  node
+    .getMesh()
+    ?.listPrimitives()
+    .some((primitive) => primitive.getMaterial()?.getName() === 'window-glass'),
+)
+if (authored.length !== panes.length) {
+  throw new Error(`Expected ${panes.length} authored panes, found ${authored.length}`)
+}
+const assigned = new Set<(typeof authored)[number]>()
+for (const pane of panes) {
+  const along = (pane.a0 + pane.a1) / 2
+  const position =
+    pane.axis === 0
+      ? [pane.at, (pane.y0 + pane.y1) / 2, along]
+      : [along, (pane.y0 + pane.y1) / 2, pane.at]
+  const matches = authored.filter((candidate) => {
+    const world = candidate.getWorldTranslation()
+    return Math.hypot(...world.map((value, axis) => value - (position[axis] ?? 0))) < 0.001
+  })
+  const node = matches[0]
+  if (!node || matches.length !== 1 || assigned.has(node)) {
+    throw new Error(`Pane ${pane.index} must match exactly one authored textured plane`)
+  }
+  assigned.add(node)
+  node.setName(`glass-${pane.index}`)
+}
+// Older bakes added a second, untextured plane over the original glazing.
 for (const node of root.listNodes()) {
-  if (node.getName().startsWith('glass-')) {
+  if (
+    node
+      .getMesh()
+      ?.listPrimitives()
+      .some((primitive) => primitive.getMaterial()?.getName() === 'breakable-glass')
+  ) {
     node.dispose()
   }
 }
-const panes = buildGrid(TOWN).glass
-// Remove opaque old facade faces at real openings; each new pane can disappear independently.
+// Remove opaque old facade faces at real openings; each pane can disappear independently.
 const facade = root
   .listNodes()
   .find((node) => node.getName() === 'windows' || node.getName().startsWith('windows-'))
-const primitive = facade?.getMesh()?.listPrimitives()[0]
-const position = primitive?.getAttribute('POSITION')
-const oldIndices = primitive?.getIndices()
-if (facade && primitive && position && oldIndices) {
+const facadePrimitive = facade?.getMesh()?.listPrimitives()[0]
+const facadePosition = facadePrimitive?.getAttribute('POSITION')
+const oldIndices = facadePrimitive?.getIndices()
+if (facade && facadePrimitive && facadePosition && oldIndices) {
   const matrix = facade.getWorldMatrix()
   const kept: number[] = []
   for (let index = 0; index < oldIndices.getCount(); index += 3) {
     const triangle = [0, 1, 2].map((offset) => {
-      const value = position.getElement(oldIndices.getScalar(index + offset), [])
+      const value = facadePosition.getElement(oldIndices.getScalar(index + offset), [])
       const x = value[0] ?? 0
       const y = value[1] ?? 0
       const z = value[2] ?? 0
@@ -57,7 +91,7 @@ if (facade && primitive && position && oldIndices) {
       )
     }
   }
-  primitive.setIndices(
+  facadePrimitive.setIndices(
     document
       .createAccessor()
       .setType('SCALAR')
@@ -65,54 +99,6 @@ if (facade && primitive && position && oldIndices) {
       .setBuffer(oldIndices.getBuffer()),
   )
 }
-const buffer = root.listBuffers()[0] ?? document.createBuffer()
-const positions = document
-  .createAccessor()
-  .setType('VEC3')
-  .setArray(new Float32Array([-0.5, -0.5, 0, 0.5, -0.5, 0, 0.5, 0.5, 0, -0.5, 0.5, 0]))
-  .setBuffer(buffer)
-const normals = document
-  .createAccessor()
-  .setType('VEC3')
-  .setArray(new Float32Array([0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1]))
-  .setBuffer(buffer)
-const indices = document
-  .createAccessor()
-  .setType('SCALAR')
-  .setArray(new Uint16Array([0, 1, 2, 0, 2, 3]))
-  .setBuffer(buffer)
-const material = document
-  .createMaterial('breakable-glass')
-  .setBaseColorFactor([0.55, 0.72, 0.77, 0.18])
-  .setMetallicFactor(0)
-  .setRoughnessFactor(0.12)
-  .setAlphaMode('BLEND')
-  .setDoubleSided(true)
-const mesh = document
-  .createMesh('pane')
-  .addPrimitive(
-    document
-      .createPrimitive()
-      .setAttribute('POSITION', positions)
-      .setAttribute('NORMAL', normals)
-      .setIndices(indices)
-      .setMaterial(material),
-  )
-for (const pane of panes) {
-  const along = (pane.a0 + pane.a1) / 2
-  const node = document
-    .createNode(`glass-${pane.index}`)
-    .setMesh(mesh)
-    .setTranslation(
-      pane.axis === 0
-        ? [pane.at, (pane.y0 + pane.y1) / 2, along]
-        : [along, (pane.y0 + pane.y1) / 2, pane.at],
-    )
-    .setScale([pane.a1 - pane.a0, pane.y1 - pane.y0, 1])
-  if (pane.axis === 0) {
-    node.setRotation([0, Math.SQRT1_2, 0, Math.SQRT1_2])
-  }
-  town.addChild(node)
-}
+await document.transform(prune({ keepLeaves: true, keepAttributes: true }))
 await io.write(path, document)
-console.log(`Authored ${panes.length} individually named panes`)
+console.log(`Indexed ${panes.length} original textured panes without duplicate glazing`)

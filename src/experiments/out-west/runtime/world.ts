@@ -214,7 +214,10 @@ function restoreCapsule(entity: Entity | undefined, state: PlayerState): boolean
     return false
   }
   if (entity.collision && state.crouched !== undefined) {
-    entity.collision.height = state.crouched ? CROUCH_HEIGHT : BODY_HEIGHT
+    const height = state.crouched ? CROUCH_HEIGHT : BODY_HEIGHT
+    if (entity.collision.height !== height) {
+      entity.collision.height = height
+    }
   }
   entity.rigidbody.teleport(
     state.x,

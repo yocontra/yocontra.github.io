@@ -6,6 +6,7 @@ import { basename, join, resolve } from 'node:path'
 import { type Document, NodeIO } from '@gltf-transform/core'
 import { ALL_EXTENSIONS } from '@gltf-transform/extensions'
 import sharp from 'sharp'
+import { normalizeSkinnedAsset } from './normalize-skinned-nodes.ts'
 
 const BAKED = /^(?:player|moves|outlaw-\d+)\.glb$/u
 const DYNAMIC = /^(?:dog|horse|held-rifle|held-shotgun)\.glb$/u
@@ -140,6 +141,7 @@ export async function compressCharacterAssets(): Promise<void> {
     if (replaceTextureMetadata(doc, replacements)) {
       await io.write(path, doc)
     }
+    await normalizeSkinnedAsset(path)
   }
   await writeFile(
     resolve('tools/art/characters/texture-encoding.json'),
