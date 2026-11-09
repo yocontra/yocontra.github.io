@@ -21,8 +21,14 @@ interface Point {
   x: number
   z: number
 }
-const FROM = { x: 115.2, z: 118.2 }
-const BANK = { x: 64.5, z: 81 }
+const FROM = TOWN.spawns.find((spawn) => spawn.x === 88 && spawn.z === 80)
+if (!FROM) {
+  throw new Error('Missing water-tower lane spawn')
+}
+const BANK = TOWN.zones.find((zone) => zone.id === 'bank_w1')
+if (!BANK) {
+  throw new Error('Missing authored bank counter')
+}
 
 function maze(rows: string[]): NavGrid {
   const n = rows.length
@@ -60,7 +66,7 @@ it('keeps the real water-tower to bank route clear for the actual player capsule
   if (!path) {
     throw new Error('The reachable bank has no path')
   }
-  expect(path.at(-1)).toEqual({ x: 64.5, z: 81.5 })
+  expect(path.at(-1)).toEqual({ x: BANK.x, z: BANK.z })
   expect(
     blockedSegments(
       path,
@@ -74,10 +80,10 @@ it('keeps the real water-tower to bank route clear for the actual player capsule
 
 it('excludes bank-stair waypoints that have clear 2D cells but insufficient capsule headroom', () => {
   const grid = buildGrid()
-  expect(circleBlocked(grid, { x: 66.5, z: 87.5, r: PLAYER_RADIUS }, BLOCK_MOVE)).toBe(false)
-  expect(blockedAt(grid, 66.5, 87.5, PLAYER_RADIUS, 0)).toBe(true)
+  expect(circleBlocked(grid, { x: 38.5, z: 73.5, r: PLAYER_RADIUS }, BLOCK_MOVE)).toBe(false)
+  expect(blockedAt(grid, 38.5, 73.5, PLAYER_RADIUS, 0)).toBe(true)
   const nav = buildNav(grid)
-  expect(nav.free[87 * nav.n + 66]).toBe(0)
+  expect(nav.free[73 * nav.n + 38]).toBe(0)
 })
 
 it('retains a nearby corner until the following actual-capsule leg is clear', () => {

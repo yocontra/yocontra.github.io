@@ -9,7 +9,13 @@ import { nativeTestWorld } from './testing/native.ts'
 describe('2.5D movement', () => {
   it('mantles onto a crate and stands on it', async () => {
     const w = await nativeTestWorld()
-    const p = place(w, 64, 70.5)
+    const cover = TOWN.cover.find(
+      (candidate) => candidate.kind === 'crates' && candidate.x === 16 && candidate.z === 30,
+    )
+    if (!cover) {
+      throw new Error('Missing livery mantle crate')
+    }
+    const p = place(w, cover.x - 1.5, cover.z + cover.d / 2)
     run(w, 10, { [p.id]: () => ({ moveX: 127 }) })
     // Stop and tap jump to mantle onto it (running at low cover vaults it instead).
     run(w, 1, { [p.id]: () => ({ buttons: BTN_JUMP }) })
@@ -20,17 +26,27 @@ describe('2.5D movement', () => {
 
   it('mantles onto a crate stack', async () => {
     const w = await nativeTestWorld()
-    const p = place(w, 20.5, 58.25)
-    run(w, 20, { [p.id]: () => ({ moveX: 127 }) })
-    run(w, 1, { [p.id]: () => ({ buttons: BTN_JUMP }) })
+    const cover = TOWN.cover.find(
+      (candidate) => candidate.kind === 'crate_stack' && candidate.x === 20 && candidate.z === 13,
+    )
+    if (!cover) {
+      throw new Error('Missing backlot mantle stack')
+    }
+    const p = place(w, cover.x + cover.w + 1.5, cover.z + cover.d / 2)
+    run(w, 20, { [p.id]: () => ({ moveX: -127 }) })
+    run(w, 1, { [p.id]: () => ({ aim: 32_768, buttons: BTN_JUMP }) })
     run(w, 10, { [p.id]: () => ({}) })
     expect(p.y).toBeCloseTo(2.2, 1)
     expect(p.grounded).toBe(true)
   })
 
-  it('walks under a porch roof, then stands on it via the catwalk ladder', async () => {
+  it('walks beneath the actual saloon porch roof with standing headroom', async () => {
     const w = await nativeTestWorld()
-    const under = place(w, 50, 55.2)
+    const saloon = TOWN.buildings.find((building) => building.id === 'saloon')
+    if (!saloon) {
+      throw new Error('Missing saloon porch')
+    }
+    const under = place(w, saloon.x + 7, saloon.z + saloon.d + 1)
     run(w, 2)
     expect(under.y).toBeCloseTo(0.06, 2)
     // The roof is above the head, not a wall.
@@ -39,8 +55,13 @@ describe('2.5D movement', () => {
 
   it('steps up the boardwalk without jumping', async () => {
     const w = await nativeTestWorld()
-    const p = place(w, 50, 57)
-    run(w, 20, { [p.id]: () => ({ moveZ: -127 }) })
+    const saloon = TOWN.buildings.find((building) => building.id === 'saloon')
+    if (!saloon) {
+      throw new Error('Missing saloon boardwalk')
+    }
+    const p = place(w, saloon.x + 7, saloon.z + saloon.d + 3.5)
+    run(w, 7, { [p.id]: () => ({ moveZ: -127 }) })
+    run(w, 6)
     expect(p.y).toBeCloseTo(0.06, 2)
   })
 
@@ -72,12 +93,12 @@ describe('2.5D movement', () => {
 
   it('vaults low cover with a real arc and lands on the far side', async () => {
     const w = await nativeTestWorld()
-    const fence = TOWN.cover.find((c) => c.kind === 'fence')
+    const fence = TOWN.cover.find((c) => c.kind === 'fence' && c.x === 15.5 && c.z === 36)
     expect(fence).toBeDefined()
     if (!fence) {
       return
     }
-    const p = place(w, fence.x + fence.w / 2, fence.z + fence.d + 1.2)
+    const p = place(w, fence.x + 0.5, fence.z + fence.d + 1.2)
     run(w, 10, { [p.id]: () => ({ moveZ: -127 }) })
     run(w, 1, { [p.id]: () => ({ moveZ: -127, aim: 49_152, buttons: BTN_JUMP }) })
     expect(p.vaultStep).toBeGreaterThan(0)
@@ -85,7 +106,25 @@ describe('2.5D movement', () => {
     expect(p.y).toBeGreaterThan(0.4)
     run(w, 12, { [p.id]: () => ({}) })
     expect(p.z).toBeLessThan(fence.z)
-    expect(Math.abs(p.y)).toBeLessThan(0.02)
+    expect(p.y).toBeCloseTo(0.03, 2)
+  })
+
+  it('does not vault or mantle a full-height native cargo barrier', async () => {
+    const w = await nativeTestWorld()
+    const cover = TOWN.cover.find(
+      (candidate) => candidate.kind === 'crate_stack' && candidate.x === 44 && candidate.z === 51.5,
+    )
+    if (!cover) {
+      throw new Error('Missing main-street cargo barrier')
+    }
+    const p = place(w, cover.x + cover.w + 1.5, cover.z + cover.d / 2)
+    run(w, 20, { [p.id]: () => ({ moveX: -127 }) })
+    run(w, 1, { [p.id]: () => ({ moveX: -127, aim: 32_768, buttons: BTN_JUMP }) })
+    expect(p.vaultStep).toBe(0)
+    expect(p.mantleTicks).toBe(0)
+    run(w, 20, { [p.id]: () => ({ moveX: -127 }) })
+    expect(p.x).toBeGreaterThan(cover.x + cover.w)
+    expect(p.y).toBeLessThan(cover.top ?? 0)
   })
 
   it('climbs a boxcar end ladder onto its roof and back down', async () => {
@@ -112,12 +151,12 @@ describe('2.5D movement', () => {
 
   it('a pitched shot hits an elevated rider', async () => {
     const w = await nativeTestWorld()
-    const high = place(w, 20, 64)
+    const high = place(w, 50, 55)
     high.y = 4
     high.support = 4
     high.grounded = true
     high.airPeakY = 4
-    const low = place(w, 30, 64)
+    const low = place(w, 60, 55)
     run(w, 1)
     run(w, 1, {
       [low.id]: () => ({ aim: aimAt(low, high), pitch: 28, buttons: BTN_FIRE | BTN_AIM }),

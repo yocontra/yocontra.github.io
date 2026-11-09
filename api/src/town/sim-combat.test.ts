@@ -17,8 +17,10 @@ import {
   RELOAD_TICKS,
   SPAWN_PROTECT_TICKS,
 } from '../../../src/experiments/out-west/ffa/sim/constants.ts'
+import { TOWN } from '../../../src/experiments/out-west/ffa/sim/layout.ts'
 import type { SimEvent } from '../../../src/experiments/out-west/ffa/sim/types.ts'
 import { aimAt, place, run, runCollect, testWorld } from './test-helpers.ts'
+import { COMBAT_LANE } from './testing/map-fixtures.ts'
 import { nativeTestWorld } from './testing/native.ts'
 
 type Shot = Extract<SimEvent, { type: 'shot' }>
@@ -104,9 +106,14 @@ describe('revolver', () => {
 
   it('walls stop bullets', async () => {
     const w = await nativeTestWorld()
-    // Saloon west wall at x = 47; stand either side of it.
-    const a = place(w, 45.5, 40)
-    const b = place(w, 50, 40)
+    const saloon = TOWN.buildings.find((building) => building.kind === 'saloon')
+    if (!saloon) {
+      throw new Error('Missing saloon')
+    }
+    // A solid part of the authored west wall, between the actual window openings.
+    const a = place(w, saloon.x - 1.5, saloon.z + 6)
+    const b = place(w, saloon.x + 2, saloon.z + 6)
+    expect(Math.hypot(a.x - b.x, a.z - b.z)).toBeLessThan(5)
     run(w, 2, { [a.id]: spam(aimAt(a, b)) })
     expect(b.hp).toBe(MAX_HP)
   })
@@ -225,22 +232,24 @@ describe('roll i-frames, spawn protection and the pardon', () => {
 describe('lag compensation', () => {
   it('a shot rewinds the target to where the shooter saw it, up to 200 ms', async () => {
     const w = await nativeTestWorld()
-    const a = place(w, 20, 64)
-    const b = place(w, 30, 64)
+    const a = place(w, COMBAT_LANE.from.x, COMBAT_LANE.from.z)
+    const b = place(w, COMBAT_LANE.to.x, COMBAT_LANE.to.z)
     // B runs north for 6 ticks (1.65 m): out of the line A is aiming down.
     run(w, 6, { [b.id]: () => ({ moveZ: -127 }) })
+    expect(COMBAT_LANE.to.z - b.z).toBeGreaterThan(1.4)
     const seenAt = w.tick - 4
-    const aim = aimAt(a, { x: 30, z: 64 - 0.275 * (seenAt + 1) })
+    const aim = aimAt(a, { x: COMBAT_LANE.to.x, z: COMBAT_LANE.to.z - 0.275 * (seenAt + 1) })
     run(w, 1, { [a.id]: () => ({ aim, buttons: BTN_FIRE | BTN_AIM, viewTime: seenAt }) })
     expect(b.hp).toBe(MAX_HP - 34)
   })
 
   it('claims older than 200 ms are clamped (and miss)', async () => {
     const w = await nativeTestWorld()
-    const a = place(w, 20, 64)
-    const b = place(w, 30, 64)
+    const a = place(w, COMBAT_LANE.from.x, COMBAT_LANE.from.z)
+    const b = place(w, COMBAT_LANE.to.x, COMBAT_LANE.to.z)
     run(w, 12, { [b.id]: () => ({ moveZ: -127 }) })
-    const aim = aimAt(a, { x: 30, z: 64 })
+    expect(COMBAT_LANE.to.z - b.z).toBeGreaterThan(3)
+    const aim = aimAt(a, COMBAT_LANE.to)
     run(w, 1, { [a.id]: () => ({ aim, buttons: BTN_FIRE, viewTime: w.tick - 12 }) })
     expect(b.hp).toBe(MAX_HP)
   })

@@ -15,6 +15,7 @@ import {
   type Peer,
   type SettledDeposit,
 } from './core.ts'
+import { serviceZone } from './testing/map-fixtures.ts'
 import { nativeWorld } from './testing/native.ts'
 
 class FakePeer implements Peer {
@@ -252,8 +253,8 @@ describe('LobbyCore sessions and money', () => {
     if (!(p && s)) {
       throw new Error('no player')
     }
-    p.x = 64.5
-    p.z = 81.5
+    const bank = serviceZone('bank')
+    Object.assign(p, { x: bank.x, y: bank.y ?? 0, z: bank.z })
     p.carried = 600
     p.protectUntil = 0
     const b = { nextSeq: 0 }
@@ -284,8 +285,8 @@ describe('LobbyCore sessions and money', () => {
     if (!(p && s)) {
       throw new Error('no player')
     }
-    p.x = 64.5
-    p.z = 81.5
+    const bank = serviceZone('bank')
+    Object.assign(p, { x: bank.x, y: bank.y ?? 0, z: bank.z })
     p.carried = 600
     p.protectUntil = 0
     const b = { nextSeq: 0 }

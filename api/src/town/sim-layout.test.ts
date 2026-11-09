@@ -1,7 +1,8 @@
 import { describe, expect, test as it } from 'bun:test'
 import {
+  PICKUP_RADIUS,
   PLAYER_RADIUS,
-  SPAWN_BANK_CLEARANCE,
+  STRONGBOX_RADIUS,
 } from '../../../src/experiments/out-west/ffa/sim/constants.ts'
 import {
   BLOCK_MOVE,
@@ -14,6 +15,8 @@ import {
   TOWN,
   zoneAt,
 } from '../../../src/experiments/out-west/ffa/sim/layout.ts'
+
+import { COMBAT_LANE, serviceZone } from './testing/map-fixtures.ts'
 
 const grid = buildGrid()
 
@@ -55,34 +58,51 @@ const at = (seen: Uint8Array, x: number, z: number): boolean =>
   seen[Math.floor(z / grid.cell) * grid.n + Math.floor(x / grid.cell)] === 1
 
 describe('town layout', () => {
-  it('the grid is 288² cells of 0.5 m', () => {
-    expect(grid.n).toBe(288)
-    expect(grid.cells.length).toBe(288 * 288)
+  it('the authored 104 m grid is 208² cells of 0.5 m', () => {
+    expect(grid.n).toBe(TOWN.size / 0.5)
+    expect(grid.cell).toBe(0.5)
+    expect(grid.cells.length).toBe(208 * 208)
   })
 
-  it('32 spawns: 24 perimeter, 8 interior, none within 30 m of the bank, all clear', () => {
-    expect(TOWN.spawns.length).toBe(32)
-    expect(TOWN.spawns.filter((s) => s.interior).length).toBe(8)
-    const bank = TOWN.buildings.find((b) => b.kind === 'bank')
-    expect(bank).toBeDefined()
-    const bx = (bank?.x ?? 0) + (bank?.w ?? 0) / 2
-    const bz = (bank?.z ?? 0) + (bank?.d ?? 0) / 2
-    for (const s of TOWN.spawns) {
-      expect(Math.hypot(s.x - bx, s.z - bz)).toBeGreaterThanOrEqual(SPAWN_BANK_CLEARANCE)
-      expect(circleBlocked(grid, { x: s.x, z: s.z, r: PLAYER_RADIUS }, BLOCK_MOVE)).toBe(false)
+  it('48 screened spawns span perimeter and interior, all capsule-clear', () => {
+    expect(TOWN.spawns).toHaveLength(48)
+    expect(TOWN.spawns.some((spawn) => spawn.interior)).toBe(true)
+    expect(TOWN.spawns.some((spawn) => !spawn.interior)).toBe(true)
+    expect(new Set(TOWN.spawns.map((spawn) => `${spawn.x},${spawn.z}`)).size).toBe(48)
+    for (const spawn of TOWN.spawns) {
+      expect(spawn.x).toBeGreaterThan(PLAYER_RADIUS)
+      expect(spawn.z).toBeGreaterThan(PLAYER_RADIUS)
+      expect(spawn.x).toBeLessThan(TOWN.size - PLAYER_RADIUS)
+      expect(spawn.z).toBeLessThan(TOWN.size - PLAYER_RADIUS)
+      expect(circleBlocked(grid, { ...spawn, r: PLAYER_RADIUS }, BLOCK_MOVE)).toBe(false)
     }
   })
 
-  it('every spawn, bank window, Stage Line counter, strongbox and pickup spot is reachable from main street', () => {
-    const seen = reachable(30, 64)
+  it('every spawn, service and loot approach connects to main street in the ground grid', () => {
+    const seen = reachable(COMBAT_LANE.from.x, COMBAT_LANE.from.z)
     for (const s of TOWN.spawns) {
       expect([s.x, s.z, at(seen, s.x, s.z)]).toEqual([s.x, s.z, true])
     }
     for (const z of TOWN.zones) {
       expect([z.id, at(seen, z.x, z.z)]).toEqual([z.id, true])
     }
-    for (const s of [...TOWN.strongboxes, ...TOWN.pickups]) {
-      expect([s.id, at(seen, s.x, s.z)]).toEqual([s.id, true])
+    for (const [spots, radius] of [
+      [TOWN.strongboxes, STRONGBOX_RADIUS],
+      [TOWN.pickups, PICKUP_RADIUS],
+    ] as const) {
+      for (const spot of spots) {
+        // Loot can sit on hay or a balcony: its centre need not be a ground cell.
+        // Native traversal/height tests cover the supporting three-dimensional surface.
+        let approach = false
+        const x0 = (Math.floor((spot.x - radius) / grid.cell) + 0.5) * grid.cell
+        const z0 = (Math.floor((spot.z - radius) / grid.cell) + 0.5) * grid.cell
+        for (let z = z0; z <= spot.z + radius; z += grid.cell) {
+          for (let x = x0; x <= spot.x + radius; x += grid.cell) {
+            approach ||= Math.hypot(x - spot.x, z - spot.z) <= radius && at(seen, x, z)
+          }
+        }
+        expect([spot.id, approach]).toEqual([spot.id, true])
+      }
     }
   })
 
@@ -91,37 +111,47 @@ describe('town layout', () => {
     expect(
       new Set(TOWN.buildings.find((b) => b.kind === 'bank')?.doors.map((d) => d.side)).size,
     ).toBe(4)
-    expect(zoneAt(TOWN, 64.5, 81.5)?.kind).toBe('bank')
-    expect(zoneAt(TOWN, 13, 84)?.kind).toBe('stage')
-    expect(zoneAt(TOWN, 30, 64)).toBeNull()
+    for (const kind of ['bank', 'stage'] as const) {
+      const zone = serviceZone(kind)
+      expect(zoneAt(TOWN, zone.x, zone.z, zone.y)?.kind).toBe(kind)
+      expect(zoneAt(TOWN, zone.x, zone.z, (zone.y ?? 0) + 3.3)).toBeNull()
+    }
+    expect(zoneAt(TOWN, COMBAT_LANE.from.x, COMBAT_LANE.from.z)).toBeNull()
   })
 
   it('walls block bullets and sight; low cover blocks bullets but not sight', () => {
-    // The saloon's west wall at x = 47.
-    expect(cellAt(grid, 47.2, 40) & BLOCK_SHOT).toBeTruthy()
-    expect(rayGrid(grid, { ox: 45.5, oz: 40, dx: 1, dz: 0, maxDist: 20 }, BLOCK_SHOT)).toBeCloseTo(
-      1.5,
-      5,
-    )
-    expect(hasLineOfSight(grid, { x: 45.5, z: 40 }, { x: 60, z: 40 })).toBe(false)
-    // A trough on main street: blocks the shot, not the view.
-    const trough = TOWN.cover.find((c) => c.kind === 'trough' && c.low)
-    expect(trough).toBeDefined()
-    const tx = (trough?.x ?? 0) + (trough?.w ?? 0) / 2
-    const tz = (trough?.z ?? 0) + (trough?.d ?? 0) / 2
+    const saloon = TOWN.buildings.find((building) => building.kind === 'saloon')
+    if (!saloon) {
+      throw new Error('Missing saloon')
+    }
+    const wz = saloon.z + 6
+    expect(cellAt(grid, saloon.x + 0.2, wz) & BLOCK_SHOT).toBeTruthy()
     expect(
-      rayGrid(grid, { ox: tx - 5, oz: tz, dx: 1, dz: 0, maxDist: 10 }, BLOCK_SHOT),
-    ).toBeLessThan(5)
-    expect(hasLineOfSight(grid, { x: tx - 5, z: tz }, { x: tx + 5, z: tz })).toBe(true)
+      rayGrid(grid, { ox: saloon.x - 1.5, oz: wz, dx: 1, dz: 0, maxDist: 5 }, BLOCK_SHOT),
+    ).toBeCloseTo(1.5, 5)
+    expect(hasLineOfSight(grid, { x: saloon.x - 1.5, z: wz }, { x: saloon.x + 2, z: wz })).toBe(
+      false,
+    )
+    const bench = TOWN.cover.find((cover) => cover.kind === 'workbench' && cover.low && !cover.y0)
+    if (!bench) {
+      throw new Error('Missing low workbench')
+    }
+    const z = bench.z + bench.d / 2
+    const from = { x: bench.x - 0.5, z }
+    const to = { x: bench.x + bench.w + 0.5, z }
+    expect(
+      rayGrid(grid, { ox: from.x, oz: z, dx: 1, dz: 0, maxDist: bench.w + 1 }, BLOCK_SHOT),
+    ).toBeCloseTo(0.5, 5)
+    expect(hasLineOfSight(grid, from, to)).toBe(true)
   })
 
-  it('vault heights: low cover only, 0.5 to 1.1 m; tall cover never', () => {
+  it('vault heights stay within the native 1.2 m low traversal limit; tall cover never', () => {
     const vaultable = TOWN.cover.filter((c) => c.vaultHeight !== undefined)
     expect(vaultable.length).toBeGreaterThan(100)
     expect(vaultable.filter((c) => !c.low).map((c) => c.kind)).toEqual([])
     const heights = vaultable.map((c) => c.vaultHeight ?? 0)
     expect(Math.min(...heights)).toBeGreaterThanOrEqual(0.5)
-    expect(Math.max(...heights)).toBeLessThanOrEqual(1.1)
+    expect(Math.max(...heights)).toBeLessThanOrEqual(1.2)
   })
 
   it('outside the map is solid', () => {

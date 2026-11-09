@@ -22,6 +22,7 @@ import {
 import type { SimEvent } from '../../../src/experiments/out-west/ffa/sim/types.ts'
 import { disconnectPlayer } from '../../../src/experiments/out-west/ffa/sim/world.ts'
 import { aimAt, place, run, runCollect, testWorld } from './test-helpers.ts'
+import { serviceZone } from './testing/map-fixtures.ts'
 
 type Kill = Extract<SimEvent, { type: 'kill' }>
 const spam = (aim: number) => (t: number) => ({
@@ -136,7 +137,9 @@ describe('kill bounty and death drop', () => {
 describe('banking', () => {
   it('a 2 s channel at a bank window deposits the whole carry, with commission over $500', () => {
     const w = testWorld()
-    const p = place(w, 64.5, 81.5, { carried: 1000 })
+    const bank = serviceZone('bank')
+    const p = place(w, bank.x, bank.z, { carried: 1000 })
+    p.y = bank.y ?? 0
     run(w, BANK_CHANNEL_TICKS + 1)
     expect(p.carried).toBe(0)
     expect(w.deposits).toEqual([
@@ -154,22 +157,25 @@ describe('banking', () => {
 
   it('moving or taking damage cancels the channel', () => {
     const w = testWorld()
-    const p = place(w, 64.5, 81.5, { carried: 200 })
+    const bank = serviceZone('bank')
+    const p = place(w, bank.x, bank.z, { carried: 200 })
+    p.y = bank.y ?? 0
     run(w, 10)
-    // Moving inside the zone does not interrupt the bank.
+    // Domain fixtures do not simulate movement: update the position inside the zone explicitly.
+    p.x += 0.25
     run(w, 1, { [p.id]: () => ({ moveX: 127 }) })
     expect(p.channel).not.toBeNull()
     // Leaving the zone does.
-    p.x = 70
+    p.x = bank.x + bank.r + 1
     run(w, 1)
     expect(p.channel).toBeNull()
     p.x = 30
     p.z = 64
     run(w, BANK_CHANNEL_TICKS + 2)
     expect(p.carried).toBe(200)
-    const shooter = place(w, 64.5, 76)
-    p.x = 64.5
-    p.z = 81.5
+    const shooter = place(w, bank.x, bank.z - 5)
+    Object.assign(p, { x: bank.x, y: bank.y ?? 0, z: bank.z })
+    shooter.y = p.y
     run(w, 1, { [p.id]: () => ({ buttons: 0 }) })
     run(w, 5)
     expect(p.channel).not.toBeNull()
@@ -181,7 +187,9 @@ describe('banking', () => {
 
   it('the Stage Line office takes 4 s', () => {
     const w = testWorld()
-    const p = place(w, 13, 84, { carried: 100 })
+    const stage = serviceZone('stage')
+    const p = place(w, stage.x, stage.z, { carried: 100 })
+    p.y = stage.y ?? 0
     run(w, BANK_CHANNEL_TICKS + 1)
     expect(p.carried).toBe(100)
     run(w, STAGE_CHANNEL_TICKS - BANK_CHANNEL_TICKS)
@@ -200,7 +208,9 @@ describe('banking', () => {
 describe('leaving, lingering, Most Wanted and strongboxes', () => {
   it('leave town inside the bank banks the carry; outside it drops', () => {
     const w = testWorld()
-    const inBank = place(w, 72, 80, { carried: 400 })
+    const bank = serviceZone('bank')
+    const inBank = place(w, bank.x, bank.z, { carried: 400 })
+    inBank.y = bank.y ?? 0
     const outside = place(w, 30, 64, { carried: 400 })
     run(w, LEAVE_CHANNEL_TICKS + 1, { [inBank.id]: hold(BTN_LEAVE), [outside.id]: hold(BTN_LEAVE) })
     expect(inBank.gone && outside.gone).toBe(true)

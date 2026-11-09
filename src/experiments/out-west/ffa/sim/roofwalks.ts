@@ -1,126 +1,50 @@
-/**
- * Rooftop walkways on Perdition's porch roofs. Every walk is a narrow catwalk on top of an
- * existing two-metre porch roof, outside the building footprint, so a rider above the street is
- * still on the collision grid's open ground from below: 2D shots, bags and bots keep working
- * exactly as they do at street level.
- *
- * Both the sim and the scene read this table. The sim owns the deck rectangle and the ladder
- * point; the scene builds the ladder, the plank catwalk and (on one-storey fronts) a handrail.
- */
-import { type Rect, type Side, TOWN } from './layout.ts'
+/** Native porch decks share the authored town rectangles. Their real access is the building
+ * stairs; only ladders present on native vehicle models expose the ladder ability. */
+import { type Side, TOWN } from './layout.ts'
 
-/** Metres: top of the porch roof (PORCH_ROOF 3.1) plus the catwalk boards. */
 export const ROOF_DECK_Y = 3.18
-/** A porch's depth out from the wall, matching `PORCH_DEPTH` in the scene. */
-const PORCH_DEPTH = 2
-/** Keep the walk a little inside the roof's eaves and fascia. */
-const EDGE = 0.15
-/** Ladder foot/top, this far in from the eave. */
-const LADDER_IN = 0.55
-/** How close you must stand to a ladder to use it, m. */
 export const LADDER_REACH = 1.1
-/** Full climb, up or down. */
 export const CLIMB_TICKS = 16
-/** A deliberate step off the roof: a short committed fall. */
 export const FALL_TICKS = 11
-/** How far a step-off carries you, m. */
 export const FALL_DISTANCE = 2.8
 
 export interface RoofWalk {
-  /** 1-based walking level: 0 is the street, `index + 1` this deck. */
   index: number
   id: string
-  /** The building whose porch carries the walk. */
   building: string
   side: Side
-  /** The deck's walkable rectangle, metres. */
   x: number
   z: number
   w: number
   d: number
-  /** Deck top, metres. */
   height: number
-  /** The single point where the ladder meets the ground and the deck. */
-  ladderX: number
-  ladderZ: number
-  /** The building's storey count, so the scene knows whether it already has a porch rail. */
   floors: number
 }
 
-/** One porch roof turned into a catwalk. `along` is the ladder's offset along the front wall. */
-function walk(building: string, side: Side, along: number, index: number): RoofWalk {
-  const b = TOWN.buildings.find((q) => q.id === building)
-  if (!b) {
-    throw new Error(`roof walk: no building ${building}`)
+const PORCH_BUILDINGS = ['saloon', 'hotel', 'general_store', 'jail'] as const
+/** The canonical decks are baked and collided directly from these same layout entries. */
+export const ROOF_WALKS: readonly RoofWalk[] = (TOWN.catwalks ?? []).map((deck, index) => {
+  const id = PORCH_BUILDINGS[index]
+  const building = TOWN.buildings.find((candidate) => candidate.id === id)
+  if (!building) {
+    throw new Error(`roof walk: missing building ${id}`)
   }
-  const horizontal = side === 'n' || side === 's'
-  const strip = sideStrip(b, side, PORCH_DEPTH)
-  const deck: Rect = horizontal
-    ? {
-        x: b.x + EDGE,
-        z: strip.z + EDGE,
-        w: b.w - 2 * EDGE,
-        d: strip.d - 2 * EDGE,
-      }
-    : {
-        x: strip.x + EDGE,
-        z: b.z + EDGE,
-        w: strip.w - 2 * EDGE,
-        d: b.d - 2 * EDGE,
-      }
-  const ladderX = horizontal
-    ? b.x + along
-    : strip.x + (side === 'e' ? PORCH_DEPTH - LADDER_IN : LADDER_IN)
-  const ladderZ = horizontal
-    ? strip.z + (side === 's' ? PORCH_DEPTH - LADDER_IN : LADDER_IN)
-    : b.z + along
   return {
-    index,
-    id: `${building}-roof`,
-    building,
-    side,
-    x: deck.x,
-    z: deck.z,
-    w: deck.w,
-    d: deck.d,
-    height: ROOF_DECK_Y,
-    ladderX,
-    ladderZ,
-    floors: b.floors,
+    ...deck,
+    index: index + 1,
+    id: `${building.id}-roof`,
+    building: building.id,
+    side: deck.z >= building.z + building.d ? 's' : 'n',
+    floors: building.floors,
   }
-}
-
-/** The strip of ground `depth` metres out from one side of a building. */
-function sideStrip(b: Rect, side: Side, depth: number): Rect {
-  switch (side) {
-    case 'n':
-      return { x: b.x, z: b.z - depth, w: b.w, d: depth }
-    case 's':
-      return { x: b.x, z: b.z + b.d, w: b.w, d: depth }
-    case 'e':
-      return { x: b.x + b.w, z: b.z, w: depth, d: b.d }
-    default:
-      return { x: b.x - depth, z: b.z, w: depth, d: b.d }
-  }
-}
-
-/**
- * The four porch roofs a rider can reach. The ladder points sit between porch posts, clear of
- * both doorways and cover; `sim-roof.test.ts` checks the ground under each foot is walkable.
- */
-export const ROOF_WALKS: readonly RoofWalk[] = [
-  walk('saloon', 's', 2.5, 1),
-  walk('hotel', 's', 2, 2),
-  walk('general_store', 'n', 2.25, 3),
-  walk('jail', 'n', 2, 4),
-]
+})
 
 /** The walk for a 1-based level (0 = street), or null. */
 export const roofWalkAt = (level: number): RoofWalk | null =>
   level > 0 ? (ROOF_WALKS[level - 1] ?? null) : null
 
 /**
- * One climbable ladder. Porch catwalks use the four `ROOF_WALKS`; the boxcars carry end ladders
+ * One climbable ladder. Native boxcars carry end ladders
  * on their models, so those are real too. `landing` is the walkable top surface the ladder reaches.
  */
 export interface Climb {
@@ -173,25 +97,8 @@ function boxcarClimbs(start: number): Climb[] {
   return out
 }
 
-/** Every ladder in town: porch catwalks first, then the boxcar end ladders. */
-export const CLIMBS: readonly Climb[] = [
-  ...ROOF_WALKS.map(
-    (w): Climb => ({
-      index: w.index,
-      x: w.ladderX,
-      z: w.ladderZ,
-      bottomX: w.ladderX,
-      bottomZ: w.ladderZ,
-      topX: w.ladderX,
-      topZ: w.ladderZ,
-      bottom: 0,
-      top: w.height,
-      landing: { x: w.x, z: w.z, w: w.w, d: w.d },
-      walk: w,
-    }),
-  ),
-  ...boxcarClimbs(ROOF_WALKS.length + 1),
-]
+/** Native boxcars carry end ladders. Porch decks use actual stairs, never invisible ladders. */
+export const CLIMBS: readonly Climb[] = boxcarClimbs(ROOF_WALKS.length + 1)
 
 /** The climb for a 1-based id, or null. */
 export const climbAt = (index: number): Climb | null =>

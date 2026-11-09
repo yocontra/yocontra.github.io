@@ -15,6 +15,7 @@ import {
   PICKUP_RESPAWN_TICKS,
   RIFLE_ROUNDS,
 } from '../../../src/experiments/out-west/ffa/sim/constants.ts'
+import { hasLineOfSight, TOWN } from '../../../src/experiments/out-west/ffa/sim/layout.ts'
 import type { World } from '../../../src/experiments/out-west/ffa/sim/state.ts'
 import type { SimEvent } from '../../../src/experiments/out-west/ffa/sim/types.ts'
 import { aimAt, place, run, runCollect, testWorld } from './test-helpers.ts'
@@ -97,15 +98,23 @@ describe('map pickups', () => {
 
   it('dynamite: thrown along the aim, 2 s fuse, 80 damage within 4 m behind no wall', () => {
     const w = testWorld()
-    const a = place(w, 20, 64)
+    const bank = TOWN.buildings.find((building) => building.kind === 'bank')
+    if (!bank) {
+      throw new Error('Missing bank')
+    }
+    const blast = { x: bank.x + bank.w + 0.5, z: bank.z - 1.5 }
+    const a = place(w, blast.x - 9.5, blast.z)
     a.dynamite = 1
-    const victim = place(w, 30, 65)
-    const sheltered = place(w, 45.5, 40)
+    const victim = place(w, blast.x, blast.z - 1)
+    const sheltered = place(w, bank.x + bank.w - 0.5, bank.z + 1)
+    expect(Math.hypot(blast.x - sheltered.x, blast.z - sheltered.z)).toBeLessThan(4)
+    expect(hasLineOfSight(w.grid, blast, victim)).toBe(true)
+    expect(hasLineOfSight(w.grid, blast, sheltered)).toBe(false)
     run(w, 1)
     const thrown = runCollect(
       w,
       1,
-      { [a.id]: () => ({ aim: aimAt(a, { x: 30, z: 64 }), buttons: BTN_THROW }) },
+      { [a.id]: () => ({ aim: aimAt(a, blast), buttons: BTN_THROW }) },
       'dynamite_thrown',
     )
     expect(thrown.length).toBe(1)

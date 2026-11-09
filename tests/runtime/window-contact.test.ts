@@ -256,3 +256,30 @@ it('pane sensors preserve native uncrouch head clearance and physical step traje
     f.sensor.dispose()
   }
 })
+
+it('waist-height pane sensors cannot supply a vault obstacle or landing', () => {
+  const f = sensorSimulation(0, { y0: 0.85, y1: 0.96 })
+  try {
+    const a = f.baseline.addPlayer('probe', [-0.8, 0.95, 0])
+    const b = f.sensor.addPlayer('probe', [-0.8, 0.95, 0])
+    for (let tick = 0; tick < 20; tick++) {
+      f.baseline.step(new Map())
+      f.sensor.step(new Map())
+    }
+    for (let tick = 0; tick < 20; tick++) {
+      const input = new Map([
+        ['probe', { ...neutralInput(), moveX: 1, buttons: tick === 0 ? Buttons.jump : 0 }],
+      ])
+      f.baseline.step(input)
+      f.sensor.step(input)
+      expect(b.motion?.vaultStep).toBe(0)
+      expect(b.motion?.mantleTicks).toBe(0)
+      expect(b.x).toBeCloseTo(a.x, 5)
+      expect(b.y).toBeCloseTo(a.y, 5)
+    }
+  } finally {
+    f.release()
+    f.baseline.dispose()
+    f.sensor.dispose()
+  }
+})

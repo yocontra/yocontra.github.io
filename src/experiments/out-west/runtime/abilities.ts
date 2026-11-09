@@ -49,12 +49,15 @@ function startTraversal(m: MoveState & { vaultArc?: number }, input: PlayerInput
   const reach = 1.2
   const aheadX = m.x + f.x * reach
   const aheadZ = m.z + f.z * reach
-  const obstacle = cast([m.x, m.y + 0.35, m.z], [aheadX, m.y + 0.35, aheadZ])
+  const shin = cast([m.x, m.y + 0.35, m.z], [aheadX, m.y + 0.35, aheadZ])
+  const obstacle = shin ?? cast([m.x, m.y + 0.9, m.z], [aheadX, m.y + 0.9, aheadZ])
   if (!obstacle) {
     return false
   }
-  const topX = obstacle.point.x + f.x * 0.25
-  const topZ = obstacle.point.z + f.z * 0.25
+  // Open rails have a thin top: keep the fallback probe on that actual native surface.
+  const inset = shin ? 0.25 : 0.02
+  const topX = obstacle.point.x + f.x * inset
+  const topZ = obstacle.point.z + f.z * inset
   const top = cast([topX, m.y + 2.4, topZ], [topX, m.y + 0.25, topZ])
   if (!top || top.normal.y < 0.65) {
     return false

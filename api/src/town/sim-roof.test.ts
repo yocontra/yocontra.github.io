@@ -1,124 +1,119 @@
 import { describe, expect, test as it } from 'bun:test'
 import { BTN_FIRE, BTN_JUMP } from '../../../src/experiments/out-west/contract/town.ts'
-import { PLAYER_RADIUS } from '../../../src/experiments/out-west/ffa/sim/constants.ts'
+import { TOWN } from '../../../src/experiments/out-west/ffa/sim/layout.ts'
 import {
-  BLOCK_MOVE,
-  buildGrid,
-  circleBlocked,
-} from '../../../src/experiments/out-west/ffa/sim/layout.ts'
-import {
-  CLIMB_TICKS,
+  CLIMBS,
+  ladderAt,
   ROOF_WALKS,
-  type RoofWalk,
   roofWalkAt,
 } from '../../../src/experiments/out-west/ffa/sim/roofwalks.ts'
 import { aimAt, place, run } from './test-helpers.ts'
 import { nativeTestWorld } from './testing/native.ts'
 
-const grid = buildGrid()
-
-function firstWalk(): RoofWalk {
-  const w = ROOF_WALKS[0]
-  if (!w) {
-    throw new Error('roof walks missing')
+function firstWalk() {
+  const deck = ROOF_WALKS[0]
+  if (!deck) {
+    throw new Error('Missing authored saloon deck')
   }
-  return w
+  return deck
+}
+const walk = firstWalk()
+
+async function onDeck() {
+  const world = await nativeTestWorld()
+  const player = place(world, walk.x + 2, walk.z + walk.d / 2)
+  player.y = walk.height
+  player.roof = walk.index
+  player.support = walk.height
+  run(world, 2)
+  return { world, player }
 }
 
 describe('roof walks', () => {
-  it('puts every ladder foot on walkable street and every deck clear of the walls', () => {
-    for (const w of ROOF_WALKS) {
-      expect(
-        circleBlocked(grid, { x: w.ladderX, z: w.ladderZ, r: PLAYER_RADIUS }, BLOCK_MOVE),
-      ).toBe(false)
-      expect(roofWalkAt(w.index)).toBe(w)
-      expect(w.w).toBeGreaterThan(PLAYER_RADIUS * 2)
-      expect(w.d).toBeGreaterThan(PLAYER_RADIUS * 2)
+  it('uses exactly the authored native deck rectangles and no invisible porch ladders', () => {
+    expect(ROOF_WALKS).toHaveLength(4)
+    for (const deck of ROOF_WALKS) {
+      expect(roofWalkAt(deck.index)).toBe(deck)
+      expect(TOWN.catwalks?.[deck.index - 1]).toEqual({
+        x: deck.x,
+        z: deck.z,
+        w: deck.w,
+        d: deck.d,
+        height: deck.height,
+      })
+      expect(ladderAt(deck.x + 2.35, deck.z + deck.d - 0.4, 0, 0)).toBeNull()
+    }
+    expect(CLIMBS.length).toBeGreaterThan(0)
+    expect(CLIMBS.every((climb) => climb.walk === null)).toBe(true)
+  })
+
+  it('ascends and descends every actual authored staircase without a ladder teleport', async () => {
+    for (const building of TOWN.buildings) {
+      for (const stair of building.stairs ?? []) {
+        const world = await nativeTestWorld()
+        const player = place(world, stair.x + stair.w / 2, stair.z + stair.d + 0.5)
+        for (let tick = 0; tick < 60 && player.y < stair.toY - 0.1; tick++) {
+          run(world, 1, { [player.id]: () => ({ moveZ: -127 }) })
+        }
+        expect(player.y).toBeGreaterThan(stair.toY - 0.1)
+        expect(player.climbTicks).toBe(0)
+        for (let tick = 0; tick < 60 && player.y > stair.fromY + 0.1; tick++) {
+          run(world, 1, { [player.id]: () => ({ moveZ: 127 }) })
+        }
+        expect(player.y).toBeLessThan(stair.fromY + 0.1)
+      }
     }
   })
 
-  it('climbs a ladder to its deck and back down', async () => {
-    const w = await nativeTestWorld()
-    const walk = firstWalk()
-    const p = place(w, walk.ladderX, walk.ladderZ)
-    run(w, 1, { [p.id]: () => ({ buttons: BTN_JUMP }) })
-    expect(p.climbTicks).toBeGreaterThan(0)
-    expect(p.climbDir).toBe(1)
-    expect(p.roof).toBe(0)
-    run(w, CLIMB_TICKS)
-    expect(p.climbTicks).toBe(0)
-    expect(p.roof).toBe(walk.index)
-    expect(p.y).toBeCloseTo(walk.height)
-    expect(p.x).toBeCloseTo(walk.ladderX)
-    expect(p.z).toBeCloseTo(walk.ladderZ)
-
-    // A second jump at the same spot takes the ladder down.
-    run(w, 1, { [p.id]: () => ({ buttons: BTN_JUMP }) })
-    expect(p.climbTicks).toBeGreaterThan(0)
-    expect(p.climbDir).toBe(-1)
-    run(w, CLIMB_TICKS)
-    expect(p.roof).toBe(0)
-    expect(Math.abs(p.y)).toBeLessThan(0.08)
-    expect(p.x).toBeCloseTo(walk.ladderX)
-    expect(p.z).toBeCloseTo(walk.ladderZ)
+  it('physical front railings stop a rider walking straight off the balcony', async () => {
+    const { world, player } = await onDeck()
+    run(world, 30, { [player.id]: () => ({ moveZ: 127 }) })
+    expect(player.y).toBeCloseTo(walk.height, 1)
+    expect(player.z).toBeLessThan(walk.z + walk.d)
+    expect(player.grounded).toBe(true)
   })
 
-  it('walks along the catwalk and falls off its edge', async () => {
-    const w = await nativeTestWorld()
-    const walk = firstWalk()
-    const p = place(w, walk.ladderX, walk.ladderZ)
-    run(w, 1, { [p.id]: () => ({ buttons: BTN_JUMP }) })
-    run(w, CLIMB_TICKS)
-    run(w, 40, { [p.id]: () => ({ moveX: 0, moveZ: 127 }) })
-    expect(p.roof).toBe(0)
-    expect(p.y).toBeLessThan(walk.height)
-    run(w, 40)
-    expect(Math.abs(p.y)).toBeLessThan(0.08)
-  })
-
-  it('steps off the deck, falls, and lands on clear ground', async () => {
-    const w = await nativeTestWorld()
-    const walk = firstWalk()
-    const p = place(w, walk.ladderX, walk.ladderZ)
-    run(w, 1, { [p.id]: () => ({ buttons: BTN_JUMP }) })
-    run(w, CLIMB_TICKS)
-    // walk off the catwalk's open edge: the surface model drops the feet into a real fall
-    run(w, 8, { [p.id]: () => ({ moveZ: 127 }) })
-    expect(p.roof).toBe(0)
-    expect(p.fallTicks).toBeGreaterThan(0)
-    const fromY = p.y
-    expect(fromY).toBeGreaterThan(0)
-    run(w, 40)
-    expect(p.fallTicks).toBe(0)
-    expect(Math.abs(p.y)).toBeLessThan(0.08)
-    expect(p.roof).toBe(0)
+  it('can step from the open balcony end and physically fall to the ground', async () => {
+    const { world, player } = await onDeck()
+    run(world, 16, { [player.id]: () => ({ moveX: -127 }) })
+    expect(player.roof).toBe(0)
+    expect(player.y).toBeLessThan(walk.height)
+    run(world, 40)
+    expect(Math.abs(player.y)).toBeLessThan(0.08)
+    expect(player.fallTicks).toBe(0)
   })
 
   it('hits a rider on the catwalk with a pitched shot', async () => {
-    const w = await nativeTestWorld()
-    const walk = firstWalk()
-    const roof = place(w, walk.ladderX, walk.ladderZ)
-    run(w, 1, { [roof.id]: () => ({ buttons: BTN_JUMP }) })
-    run(w, CLIMB_TICKS)
-    const street = place(w, walk.ladderX + 3, walk.ladderZ + 1.2)
-    run(w, 1, {
-      [street.id]: () => ({ aim: aimAt(street, roof), pitch: 65, buttons: BTN_FIRE }),
+    const { world, player } = await onDeck()
+    const street = place(world, player.x, walk.z + walk.d + 6)
+    run(world, 1, {
+      [street.id]: () => ({
+        aim: aimAt(street, player),
+        pitch: Math.round(
+          (Math.atan2(
+            player.y + 1.65 - (street.y + 1.62),
+            Math.hypot(player.x - street.x, player.z - street.z),
+          ) *
+            127) /
+            (Math.PI / 2),
+        ),
+        buttons: BTN_FIRE,
+      }),
     })
-    expect(roof.hp).toBeLessThan(100)
+    expect(player.hp).toBeLessThan(100)
   })
 
-  it('respawns and deaths return a rider to the street', async () => {
-    const w = await nativeTestWorld()
-    const walk = firstWalk()
-    const p = place(w, walk.ladderX, walk.ladderZ)
-    run(w, 1, { [p.id]: () => ({ buttons: BTN_JUMP }) })
-    run(w, CLIMB_TICKS)
-    expect(p.roof).toBe(walk.index)
-    // A showdown still leaves the rider on the deck; a respawn does not.
-    p.alive = false
-    p.respawnTick = 0
-    run(w, 1)
-    expect(Math.abs(p.y)).toBeLessThan(0.08)
-    expect(p.roof).toBe(0)
+  it('respawns return a rider from the deck to a valid street spawn', async () => {
+    const { world, player } = await onDeck()
+    player.alive = false
+    player.respawnTick = 0
+    run(world, 1)
+    expect(Math.abs(player.y)).toBeLessThan(0.08)
+    expect(player.roof).toBe(0)
+    // Jumping at the old phantom ladder foot remains a normal native jump.
+    player.x = walk.x + 2.35
+    player.z = walk.z + walk.d - 0.4
+    run(world, 1, { [player.id]: () => ({ buttons: BTN_JUMP }) })
+    expect(player.climbTicks).toBe(0)
   })
 })
