@@ -4,6 +4,7 @@ import { DuelRoom as ProductionDuel } from '../src/duel/room.ts'
 import type { Env } from '../src/env.ts'
 import { reserveVoiceBudget } from '../src/voice/budget.ts'
 import type { VoiceCoordinator, VoiceStorage } from '../src/voice/coordinator.ts'
+import type { VoicePeer } from '../src/voice/proximity.ts'
 import fixture, { Lobby as ProductionLobby } from './production-worker.ts'
 
 export class Lobby extends ProductionLobby {
@@ -59,6 +60,7 @@ export class Lobby extends ProductionLobby {
       retryAt: voice.nextRetry,
       state: voice.snapshot(),
       trace: this.voiceTrace,
+      peers: (Reflect.get(voice, 'o') as { peers: () => readonly VoicePeer[] }).peers(),
     }
   }
   placeVoicePeers() {

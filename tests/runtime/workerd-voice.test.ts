@@ -5,6 +5,11 @@ import { join } from 'node:path'
 import process from 'node:process'
 import { spawn, write } from 'bun'
 import { COLLISION_VERSION } from '../../src/experiments/out-west/content/manifest.ts'
+import {
+  VOICE_HEARTBEAT_MS,
+  VOICE_IDLE_MS,
+  VOICE_INTENT_TTL_MS,
+} from '../../src/experiments/out-west/contract/voice.ts'
 import { PROTOCOL_VERSION } from '../../src/experiments/out-west/runtime/protocol.ts'
 
 async function execute(args: string[], source?: string) {
@@ -54,24 +59,28 @@ it('native SDK voice controls are lazy and failed teardown survives real cold DO
     const script = `
 import {Miniflare,convertV4MiniflareOptions} from ${JSON.stringify(join(root, 'node_modules/miniflare/dist/src/index.js'))};
 import fs from 'node:fs';
+const runtime={version:process.version,execPath:process.execPath};
 delete globalThis.WebSocket;
 const {Client}=await import(${JSON.stringify(join(root, 'node_modules/@colyseus/sdk/build/index.mjs'))});
 const modules=${JSON.stringify(wasm)}.map(name=>({type:'CompiledWasm',path:${JSON.stringify(root)}+'/'+name,contents:fs.readFileSync(${JSON.stringify(output)}+'/'+name)}));
 modules.unshift({type:'ESModule',path:${JSON.stringify(join(root, 'voice-worker.js'))},contents:${JSON.stringify(entry)}});
-let failKick=false,serial=0;const calls=[],tokens=new Set();
+let failKick=false,serial=0;const calls=[],tokens=new Set();const providerDelay=${VOICE_INTENT_TTL_MS + VOICE_IDLE_MS + 500};let meetingRequests=0;
 const objects=Object.fromEntries(Object.entries({DUELS:'DuelSession',MATCHMAKER:'Matchmaker',DUEL_ROOMS:'DuelRoom',LOBBY_DIR:'LobbyDirectory',LOBBIES:'Lobby',DAILY_SESSIONS:'DailySession',SETTLEMENT:'SettlementProbe'}).map(([key,className])=>[key,{className,useSQLite:true}]));
 const mf=new Miniflare(convertV4MiniflareOptions({modules,compatibilityDate:'2026-10-01',compatibilityFlags:['nodejs_compat'],durableObjects:objects,d1Databases:{DB:'voice-fixture'},bindings:{VOICE_RELEASE_DELAY_MS:'40',AUTH_SECRET:'voice-fixture-secret',ALLOWED_ORIGINS:'http://127.0.0.1:4390',RP_ID:'localhost',TURNSTILE_SECRET:'fixture-only',CLOUDFLARE_ACCOUNT_ID:'fixture',REALTIMEKIT_APP_ID:'fixture',REALTIMEKIT_API_TOKEN:'fixture-only',REALTIMEKIT_PRESET:'voice'},outboundService:async request=>{
  if(request.url.startsWith('https://challenges.cloudflare.com/'))return Response.json({success:true});
  if(!request.url.startsWith('https://api.cloudflare.com/'))throw new Error('Unexpected external request');
- const path=new URL(request.url).pathname;calls.push({path,method:request.method,at:Date.now()});
+ const path=new URL(request.url).pathname;const call={path,method:request.method,at:Date.now(),responseAt:null,meetingId:null};calls.push(call);
  if(failKick&&path.endsWith('/kick-all'))return Response.json({success:false},{status:500});
- if(path.endsWith('/meetings'))return Response.json({success:true,data:{id:'fixture-meeting-'+(++serial)}});
+ if(path.endsWith('/meetings')){if(++meetingRequests<=2)await new Promise(r=>setTimeout(r,providerDelay));const id='fixture-meeting-'+(++serial);call.responseAt=Date.now();call.meetingId=id;return Response.json({success:true,data:{id}})}
  if(path.endsWith('/participants')&&request.method==='POST'){const id='fixture-participant-'+(++serial);tokens.add(id);return Response.json({success:true,data:{id,token:'nonbillable-fixture-token'}})}
  if(request.method==='DELETE')tokens.delete(path.split('/').at(-1));
  return Response.json({success:true,data:{}});
 }}));
-const rooms=[];const sleep=ms=>new Promise(r=>setTimeout(r,ms));
-const until=async(test,label)=>{for(let i=0;i<100;i++){if(await test())return;await sleep(50)}throw new Error('Timed out: '+label)};
+const rooms=[],voiceEvents=[];const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+let heartbeat;const stopHeartbeat=()=>{clearInterval(heartbeat);heartbeat=undefined};
+const speak=on=>{stopHeartbeat();rooms[0].send('control',{type:'voice_talk',talking:on});if(on)heartbeat=setInterval(()=>rooms[0].send('control',{type:'voice_talk',talking:true}),${VOICE_HEARTBEAT_MS})};
+let diagnostics=async()=>({runtime,calls});
+const until=async(test,label)=>{for(let i=0;i<100;i++){if(await test())return;await sleep(50)}throw new Error('Timed out: '+label+' '+JSON.stringify(await diagnostics()))};
 try{
  const base=(await mf.ready).origin,db=await mf.getD1Database('DB');
  for(const name of fs.readdirSync(${JSON.stringify(join(root, 'api/migrations'))}).filter(n=>n.endsWith('.sql')).sort()){
@@ -84,16 +93,17 @@ try{
   const admission=await response.json();if(response.status!==201)throw new Error(JSON.stringify(admission));
   lobbyId=admission.lobbyId;
   const room=await new Client(base+'/town/'+lobbyId+'?'+new URL(admission.wsUrl).searchParams.toString(),{headers:{Origin:'http://127.0.0.1:4390'}}).consumeSeatReservation(admission.reservation);room.reconnection.enabled=false;rooms.push(room);
-  room.onMessage('control',m=>controls[i].push(m));room.onMessage('events',()=>{});room.onMessage('network-ping',m=>room.send('network-pong',{nonce:m.nonce}));
+  room.onMessage('control',m=>{controls[i].push(m);if(m.type.startsWith('voice_'))voiceEvents.push({at:Date.now(),id:i,type:m.type,generation:m.generation,listeners:m.listeners,speakers:m.speakers})});room.onMessage('events',()=>{});room.onMessage('network-ping',m=>room.send('network-pong',{nonce:m.nonce}));
  }
  const endpoint=path=>base+path+'?lobbyId='+encodeURIComponent(lobbyId);
  const observe=async()=>await(await fetch(endpoint('/__voice/observe'))).json();
+ diagnostics=async()=>({runtime,now:Date.now(),calls,voiceEvents,observed:await observe()});
  await fetch(endpoint('/__voice/place'));
  rooms[0].send('control',{type:'voice_on'});
- rooms[0].send('control',{type:'voice_talk',talking:true});
+ speak(true);
  await until(async()=>{const seen=await observe();return seen.resources.intents===1&&seen.trace.some(e=>e.id===0&&e.message.type==='voice_talk'&&e.message.talking===true)},'server acknowledged alone speech');
  if(calls.length)throw new Error('Alone voice allocated provider resources '+JSON.stringify({calls,observed:await observe()}));
- rooms[0].send('control',{type:'voice_talk',talking:false});
+ speak(false);
  await until(async()=>{const seen=await observe();return seen.resources.intents===0&&seen.trace.some(e=>e.id===0&&e.message.type==='voice_talk'&&e.message.talking===false&&e.phase==='release-processed')},'server processed release before enabling audience');
  rooms[1].send('control',{type:'voice_on'});
 
@@ -102,17 +112,29 @@ try{
  const idle=await observe();
  rooms[1].send('control',{type:'voice_off'});
  await until(async()=> (await observe()).resources.interests===1,'listener off before positive late arrival');
- rooms[0].send('control',{type:'voice_talk',talking:true});
+ speak(true);
  await until(async()=> (await observe()).resources.intents===1,'known server speech before new listener');
  if(calls.length)throw new Error('Known speaking but alone allocated provider resources');
  rooms[1].send('control',{type:'voice_on'});
  await until(()=>controls.every(list=>list.some(m=>m.type==='voice_ready'&&Number.isInteger(m.generation))),'two unsolicited credentials');
  if(tokens.size!==2)throw new Error('Two actual humans were not admitted');
- rooms[0].send('control',{type:'voice_talk',talking:false});
+ const delayedPositive=await observe(),firstCall=calls.find(c=>c.path.endsWith('/meetings'));
+ if(delayedPositive.resources.intents!==1||firstCall.responseAt-firstCall.at<${VOICE_INTENT_TTL_MS})throw new Error('Delayed allocation did not retain actual speaking intent');
+ speak(false);
  await until(()=>tokens.size===0,'silence teardown');
  await until(()=>controls.every(list=>list.some(m=>m.type==='voice_standby')),'standby routing');
- failKick=true;rooms[0].send('control',{type:'voice_talk',talking:true});
+ const beforeExpired=controls.map(list=>list.filter(m=>m.type==='voice_ready').length);
+ speak(true);
+ await until(()=>calls.filter(c=>c.path.endsWith('/meetings')).length===2,'expiry scenario meeting allocation began');
+ stopHeartbeat();
+ const expiredCall=calls.filter(c=>c.path.endsWith('/meetings'))[1];
+ await until(async()=>{const seen=await observe();return seen.resources.intents===0},'stopped heartbeat intent expiry');
+ await until(async()=>{const seen=await observe();return expiredCall.responseAt!==null&&seen.resources.members===0&&seen.resources.cleanup===0&&!seen.state.active&&calls.some(c=>c.path.endsWith('/'+expiredCall.meetingId+'/active-session/kick-all'))},'expired late allocation revoked');
+ if(tokens.size||controls.some((list,i)=>list.filter(m=>m.type==='voice_ready').length!==beforeExpired[i]))throw new Error('Expired one-shot intent delivered credentials');
+ const expiredVoice=await observe();
+ failKick=true;speak(true);
  await until(()=>tokens.size===2,'second speech allocation');
+ stopHeartbeat();
  await Promise.all(rooms.splice(0).map(room=>room.leave(false)));await sleep(200);
  const warm=await observe();const timing=await(await fetch(endpoint('/__test/native-timing'))).json();
  if(warm.resources.timers||warm.resources.members||!warm.resources.cleanup||timing.active||timing.core||timing.physics||timing.running||timing.timer)throw new Error('Last human retained live voice/game work '+JSON.stringify({warm,timing}));
@@ -137,8 +159,8 @@ try{
  if(reserved.amount!==ceiling)throw new Error('Reservation aggregate exceeded cap');
  const expired=await(await fetch(base+'/__voice/budget?count=1&now='+Date.parse('2027-01-03T00:00:00.000Z'))).json();
  if(!expired.allowed)throw new Error('Old conservative reservations never expired');
- console.log('RESULT:'+JSON.stringify({controls:controls.map(list=>list.filter(m=>m.type.startsWith('voice_')).map(m=>m.type)),calls:calls.length,idle:{providerCalls:0,resources:idle.resources},timeline:{provider:calls,controls:warm.trace},cold,settled,tokens:tokens.size,duel:closed.keys,budget:{claims:claims.filter(c=>c.allowed).length,reserved:reserved.amount,expired:expired.allowed}}));
-}finally{await Promise.all(rooms.map(room=>room.leave(false).catch(()=>{})));await mf.dispose()}
+ console.log('RESULT:'+JSON.stringify({runtime,heartbeatMs:${VOICE_HEARTBEAT_MS},delayedPositive:{resources:delayedPositive.resources,request:firstCall},expiredIntent:{resources:expiredVoice.resources,request:expiredCall,readyCounts:beforeExpired},voiceEvents,controls:controls.map(list=>list.filter(m=>m.type.startsWith('voice_')).map(m=>m.type)),calls:calls.length,idle:{providerCalls:0,resources:idle.resources},timeline:{provider:calls,controls:warm.trace},cold,settled,tokens:tokens.size,duel:closed.keys,budget:{claims:claims.filter(c=>c.allowed).length,reserved:reserved.amount,expired:expired.allowed}}));
+}finally{stopHeartbeat();await Promise.all(rooms.map(room=>room.leave(false).catch(()=>{})));await mf.dispose()}
 `
     const runner = join(directory, 'voice-runtime.mjs')
     await write(runner, script)
