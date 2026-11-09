@@ -60,10 +60,10 @@ const modules=${JSON.stringify(wasm)}.map(name=>({type:'CompiledWasm',path:${JSO
 modules.unshift({type:'ESModule',path:${JSON.stringify(join(root, 'voice-worker.js'))},contents:${JSON.stringify(entry)}});
 let failKick=false,serial=0;const calls=[],tokens=new Set();
 const objects=Object.fromEntries(Object.entries({DUELS:'DuelSession',MATCHMAKER:'Matchmaker',DUEL_ROOMS:'DuelRoom',LOBBY_DIR:'LobbyDirectory',LOBBIES:'Lobby',DAILY_SESSIONS:'DailySession',SETTLEMENT:'SettlementProbe'}).map(([key,className])=>[key,{className,useSQLite:true}]));
-const mf=new Miniflare(convertV4MiniflareOptions({modules,compatibilityDate:'2026-10-01',compatibilityFlags:['nodejs_compat'],durableObjects:objects,d1Databases:{DB:'voice-fixture'},bindings:{AUTH_SECRET:'voice-fixture-secret',ALLOWED_ORIGINS:'http://127.0.0.1:4390',RP_ID:'localhost',TURNSTILE_SECRET:'fixture-only',CLOUDFLARE_ACCOUNT_ID:'fixture',REALTIMEKIT_APP_ID:'fixture',REALTIMEKIT_API_TOKEN:'fixture-only',REALTIMEKIT_PRESET:'voice'},outboundService:async request=>{
+const mf=new Miniflare(convertV4MiniflareOptions({modules,compatibilityDate:'2026-10-01',compatibilityFlags:['nodejs_compat'],durableObjects:objects,d1Databases:{DB:'voice-fixture'},bindings:{VOICE_RELEASE_DELAY_MS:'40',AUTH_SECRET:'voice-fixture-secret',ALLOWED_ORIGINS:'http://127.0.0.1:4390',RP_ID:'localhost',TURNSTILE_SECRET:'fixture-only',CLOUDFLARE_ACCOUNT_ID:'fixture',REALTIMEKIT_APP_ID:'fixture',REALTIMEKIT_API_TOKEN:'fixture-only',REALTIMEKIT_PRESET:'voice'},outboundService:async request=>{
  if(request.url.startsWith('https://challenges.cloudflare.com/'))return Response.json({success:true});
  if(!request.url.startsWith('https://api.cloudflare.com/'))throw new Error('Unexpected external request');
- const path=new URL(request.url).pathname;calls.push({path,method:request.method});
+ const path=new URL(request.url).pathname;calls.push({path,method:request.method,at:Date.now()});
  if(failKick&&path.endsWith('/kick-all'))return Response.json({success:false},{status:500});
  if(path.endsWith('/meetings'))return Response.json({success:true,data:{id:'fixture-meeting-'+(++serial)}});
  if(path.endsWith('/participants')&&request.method==='POST'){const id='fixture-participant-'+(++serial);tokens.add(id);return Response.json({success:true,data:{id,token:'nonbillable-fixture-token'}})}
@@ -91,13 +91,21 @@ try{
  await fetch(endpoint('/__voice/place'));
  rooms[0].send('control',{type:'voice_on'});
  rooms[0].send('control',{type:'voice_talk',talking:true});
- await sleep(100);if(calls.length)throw new Error('Alone voice allocated provider resources');
+ await until(async()=>{const seen=await observe();return seen.resources.intents===1&&seen.trace.some(e=>e.id===0&&e.message.type==='voice_talk'&&e.message.talking===true)},'server acknowledged alone speech');
+ if(calls.length)throw new Error('Alone voice allocated provider resources '+JSON.stringify({calls,observed:await observe()}));
  rooms[0].send('control',{type:'voice_talk',talking:false});
+ await until(async()=>{const seen=await observe();return seen.resources.intents===0&&seen.trace.some(e=>e.id===0&&e.message.type==='voice_talk'&&e.message.talking===false&&e.phase==='release-processed')},'server processed release before enabling audience');
  rooms[1].send('control',{type:'voice_on'});
 
  await until(()=>controls.every(list=>list.some(m=>m.type==='voice_status'&&m.listeners===1)),'unsolicited status');
- if(calls.length)throw new Error('Idle audience joined RTK');
+ if(calls.length)throw new Error('Idle audience joined RTK '+JSON.stringify({calls,observed:await observe(),controls}));
+ const idle=await observe();
+ rooms[1].send('control',{type:'voice_off'});
+ await until(async()=> (await observe()).resources.interests===1,'listener off before positive late arrival');
  rooms[0].send('control',{type:'voice_talk',talking:true});
+ await until(async()=> (await observe()).resources.intents===1,'known server speech before new listener');
+ if(calls.length)throw new Error('Known speaking but alone allocated provider resources');
+ rooms[1].send('control',{type:'voice_on'});
  await until(()=>controls.every(list=>list.some(m=>m.type==='voice_ready'&&Number.isInteger(m.generation))),'two unsolicited credentials');
  if(tokens.size!==2)throw new Error('Two actual humans were not admitted');
  rooms[0].send('control',{type:'voice_talk',talking:false});
@@ -129,7 +137,7 @@ try{
  if(reserved.amount!==ceiling)throw new Error('Reservation aggregate exceeded cap');
  const expired=await(await fetch(base+'/__voice/budget?count=1&now='+Date.parse('2027-01-03T00:00:00.000Z'))).json();
  if(!expired.allowed)throw new Error('Old conservative reservations never expired');
- console.log('RESULT:'+JSON.stringify({controls:controls.map(list=>list.filter(m=>m.type.startsWith('voice_')).map(m=>m.type)),calls:calls.length,cold,settled,tokens:tokens.size,duel:closed.keys,budget:{claims:claims.filter(c=>c.allowed).length,reserved:reserved.amount,expired:expired.allowed}}));
+ console.log('RESULT:'+JSON.stringify({controls:controls.map(list=>list.filter(m=>m.type.startsWith('voice_')).map(m=>m.type)),calls:calls.length,idle:{providerCalls:0,resources:idle.resources},timeline:{provider:calls,controls:warm.trace},cold,settled,tokens:tokens.size,duel:closed.keys,budget:{claims:claims.filter(c=>c.allowed).length,reserved:reserved.amount,expired:expired.allowed}}));
 }finally{await Promise.all(rooms.map(room=>room.leave(false).catch(()=>{})));await mf.dispose()}
 `
     const runner = join(directory, 'voice-runtime.mjs')

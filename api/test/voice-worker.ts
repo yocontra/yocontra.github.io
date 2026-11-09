@@ -7,9 +7,59 @@ import type { VoiceCoordinator, VoiceStorage } from '../src/voice/coordinator.ts
 import fixture, { Lobby as ProductionLobby } from './production-worker.ts'
 
 export class Lobby extends ProductionLobby {
+  private readonly voiceTrace: object[] = []
+  constructor(ctx: DurableObjectState, env: Env) {
+    super(ctx, env)
+    const voice = Reflect.get(this, 'voice') as VoiceCoordinator
+    const handle = voice.handle.bind(voice)
+    voice.handle = (id, message) => {
+      if (
+        message &&
+        typeof message === 'object' &&
+        Reflect.get(message, 'type') === 'voice_talk' &&
+        Reflect.get(message, 'talking') === false
+      ) {
+        const delay = Number(Reflect.get(env, 'VOICE_RELEASE_DELAY_MS')) || 0
+        if (delay > 0) {
+          this.voiceTrace.push({
+            at: Date.now(),
+            id,
+            message,
+            phase: 'release-in-transit',
+            resources: voice.resources,
+          })
+          setTimeout(() => {
+            handle(id, message)
+            this.voiceTrace.push({
+              at: Date.now(),
+              id,
+              message,
+              phase: 'release-processed',
+              resources: voice.resources,
+            })
+          }, delay)
+          return true
+        }
+      }
+      const result = handle(id, message)
+      this.voiceTrace.push({
+        at: Date.now(),
+        id,
+        message,
+        phase: 'control-processed',
+        resources: voice.resources,
+      })
+      return result
+    }
+  }
   voiceObservation() {
     const voice = Reflect.get(this, 'voice') as VoiceCoordinator
-    return { resources: voice.resources, retryAt: voice.nextRetry, state: voice.snapshot() }
+    return {
+      resources: voice.resources,
+      retryAt: voice.nextRetry,
+      state: voice.snapshot(),
+      trace: this.voiceTrace,
+    }
   }
   placeVoicePeers() {
     const core = Reflect.get(this, 'core') as import('../src/town/core.ts').LobbyCore | null
