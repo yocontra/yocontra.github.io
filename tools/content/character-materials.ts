@@ -158,6 +158,14 @@ export function dequantizeRigidEquipment(doc: Document): boolean {
   return changed
 }
 function cleanAuthoring(doc: Document, id: string): void {
+  if (id === 'held-rifle') {
+    for (const node of doc.getRoot().listNodes()) {
+      if (node.getExtras().lod === true) {
+        // The canonical alternate mesh is not a second visible rifle surface.
+        node.setMesh(null)
+      }
+    }
+  }
   for (const mesh of doc.getRoot().listMeshes()) {
     for (const primitive of mesh.listPrimitives()) {
       for (const semantic of primitive.listSemantics()) {
