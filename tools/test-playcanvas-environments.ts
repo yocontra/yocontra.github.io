@@ -10,6 +10,10 @@ function requireScene(condition: unknown, message: string): asserts condition {
 
 const origin = process.argv[2] ?? 'http://127.0.0.1:4390'
 const output = process.env.OW_ENV_OUTPUT ?? '/tmp/out-west-environment-campaign'
+const dressingOnly = process.env.OW_ENV_DRESSING_ONLY === '1'
+const baseline = process.env.OW_ENV_BASELINE === '1'
+const levels = dressingOnly ? [0, 6, 10, 13, 0] : Array.from({ length: 17 }, (_, i) => i)
+const ownSignsByArena: Record<string, number> = { depot: 2, mission: 1 }
 const browser = await chromium.launch({ channel: 'chrome', headless: true })
 const page = await browser.newPage({ viewport: { width: 1280, height: 800 } })
 const errors: string[] = []
@@ -63,7 +67,17 @@ try {
         allocation.peak = Math.max(allocation.peak, value)
       },
     })
-    await game.instantiate(ASSETS.duel.url, 'duel-street')
+    const streetRoot = await game.instantiate(ASSETS.duel.url, 'duel-street')
+    const street = streetRoot.findByName('street')
+    const backgroundKinds = ['ground-', 'environment-', 'flora-']
+    const sharedBackground = streetRoot.find(
+      (node: import('playcanvas').GraphNode) =>
+        backgroundKinds.some((prefix) => node.name.startsWith(prefix)) &&
+        !(street && node.isDescendantOf(street)),
+    )
+    if (!street || sharedBackground.length === 0) {
+      throw new Error('Missing street or shared background fixture')
+    }
     const arenas = new NativeArenas(game)
     game.camera.setPosition(0, 4, -12)
     game.camera.lookAt(0, 5, 22)
@@ -73,6 +87,8 @@ try {
       arenaForSlot,
       OUTLAWS,
       allocation,
+      streetRoot,
+      sharedBackground,
     })
     return { engine: 'PlayCanvas', content: ASSETS.duel.hash }
   })
@@ -82,14 +98,37 @@ try {
     textureBytes: number
     textureAssets: number
     drawCalls: number
+    visibility: {
+      root: string
+      street: boolean
+      streetSigns: number
+      background: number
+      ownProps: number
+      ownSigns: number
+    }
   }[] = []
-  for (let level = 0; level < 17; level++) {
+  for (const level of levels) {
     const sample = await page.evaluate(async (index) => {
-      const { game, arenas, arenaForSlot, OUTLAWS } = Reflect.get(globalThis, '__environmentProbe')
+      const { game, arenas, arenaForSlot, OUTLAWS, streetRoot, sharedBackground } = Reflect.get(
+        globalThis,
+        '__environmentProbe',
+      )
       await arenas.show(arenaForSlot(index))
       await arenas.lighting(OUTLAWS[index].day, index)
       for (let frame = 0; frame < 8; frame++) {
         await new Promise(requestAnimationFrame)
+      }
+      const street = streetRoot.findByName('street')
+      const dressing = streetRoot.findByName('ambiance.dressing')
+      const ownRoot = game.stage.findByName(`arena-${arenas.id}`)
+      const ownDressing = ownRoot?.findByName('ambiance.dressing')
+      const signs = (root: import('playcanvas').GraphNode | null | undefined) =>
+        root?.find((node) => node.name.startsWith('ambiance.sign.') && node.enabled).length ?? 0
+      if (
+        !streetRoot.enabled ||
+        sharedBackground.some((node: import('playcanvas').GraphNode) => !node.enabled)
+      ) {
+        throw new Error('Arena switch hid shared ground or outskirts')
       }
       return {
         level: index + 1,
@@ -99,10 +138,44 @@ try {
           .list()
           .filter((asset: { type: string }) => asset.type === 'texture').length,
         drawCalls: game.app.stats.drawCalls.total,
+        visibility: {
+          root: streetRoot.getGuid(),
+          street: street.enabled,
+          streetSigns: signs(dressing),
+          background: sharedBackground.length,
+          ownProps:
+            ownDressing
+              ?.findComponents('render')
+              .filter((render: import('playcanvas').RenderComponent) => render.entity.enabled)
+              .length ?? 0,
+          ownSigns: signs(ownDressing),
+        },
       }
     }, level)
     results.push(sample)
     await page.screenshot({ path: `${output}/act-${String(level + 1).padStart(2, '0')}.png` })
+    requireScene(
+      sample.visibility.root === results[0]?.visibility.root,
+      'Shared street root was replaced',
+    )
+    requireScene(
+      sample.visibility.street === (sample.arena === 'street'),
+      'Street geometry visibility changed incorrectly',
+    )
+    if (!baseline) {
+      requireScene(
+        sample.visibility.streetSigns === (sample.arena === 'street' ? 6 : 0),
+        'Street-only painted signs leaked across arenas',
+      )
+    }
+    requireScene(
+      sample.arena === 'street' || sample.visibility.ownProps > 0,
+      'Arena-owned dressing was hidden',
+    )
+    requireScene(
+      sample.visibility.ownSigns === (ownSignsByArena[sample.arena] ?? 0),
+      'Arena-owned signs changed',
+    )
   }
   const clock = await page.evaluate(async () => {
     const { game, arenas } = Reflect.get(globalThis, '__environmentProbe')
@@ -165,7 +238,7 @@ try {
         ).length,
     }
   })
-  requireScene(first && results.length === 17, 'Campaign did not render all17 acts')
+  requireScene(first && results.length === levels.length, 'Requested campaign views did not render')
   requireScene(
     returned.textureBytes <= first.textureBytes + 2 * 1024 * 1024,
     'Inactive arena GPU textures accumulated across the campaign',

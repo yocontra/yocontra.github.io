@@ -86,12 +86,15 @@ export class NativeArenas {
     }
     this.id = id
     this.environment.street(id === 'street')
-    const street = this.game.stage.findByName('street')
-    if (street) {
-      street.enabled = id === 'street'
+    const streetRoot = this.game.stage.findByName('duel-street')
+    for (const name of ['street', 'ambiance.dressing']) {
+      const node = streetRoot?.findByName(name)
+      if (node) {
+        node.enabled = id === 'street'
+      }
     }
     this.life = id === 'street' ? STREET : campaignSeats(ARENAS[id].life)
-    const root = next ?? this.game.stage.findByName('duel-street')
+    const root = next ?? streetRoot
     if (root instanceof Entity) {
       const asset = await this.game.loadContainer(ASSETS[id === 'street' ? 'duel' : id].url)
       if (epoch !== this.epoch) {
