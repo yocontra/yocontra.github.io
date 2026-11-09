@@ -7,8 +7,16 @@
  * single source of truth: the server and the client build the same grid from it here, and the
  * Blender build and the client scene read the same file.
  */
+import type { ArenaLife } from '../../contract/ambient.ts'
 import townJson from '../town.layout.json' with { type: 'json' }
-import { type GlassPlane, townWindows, type WindowOpening, windowPane } from './building-rules.ts'
+import {
+  doorTop,
+  type GlassPlane,
+  buildingSideRect as sideWallRect,
+  townWindows,
+  type WindowOpening,
+  windowPane,
+} from './building-rules.ts'
 import { type ShapedCover, shapedCover } from './cover-shape.ts'
 import {
   frontOf,
@@ -60,6 +68,7 @@ export const COVER_KINDS = [
   'bars',
   'bed',
   'bench',
+  'bucket',
   'boxcar',
   'bridge_rail',
   'buffer',
@@ -75,6 +84,7 @@ export const COVER_KINDS = [
   'headstone',
   'hitch_rail',
   'lumber',
+  'lantern',
   'piano',
   'pole',
   'post',
@@ -99,6 +109,10 @@ export interface Door {
   /** Offset of the gap from the wall's west (n/s) or north (e/w) end, in metres. */
   at: number
   width: number
+  /** Height of an upper-storey doorway's threshold; ground doors default to zero. */
+  y0?: number
+  /** Opening top; defaults to its threshold plus the shared door height. */
+  y1?: number
 }
 export interface Wall extends Rect {
   /** Bottom of the wall span, metres (default 0: a ground-floor partition). */
@@ -165,6 +179,9 @@ export interface Cover extends Rect {
   y0?: number
 }
 export interface Zone {
+  /** Authored service floor; old ground-only layouts default to zero. */
+  y?: number
+
   id: string
   kind: ZoneKind
   x: number
@@ -179,12 +196,17 @@ export interface SpawnPoint {
 export interface Spot {
   id: string
   x: number
+  /** Authored floor height. Absent on older ground-only layouts. */
+  y?: number
   z: number
 }
 export interface PickupSpot extends Spot {
   kind: 'rifle' | 'shotgun' | 'dynamite'
 }
 export interface TownLayout {
+  /** Cosmetic native town life, authored with the same map coordinates and supports. */
+  ambient?: ArenaLife
+
   version: number
   name: string
   size: number
@@ -299,75 +321,66 @@ export interface WallBox extends Rect {
   y1: number
 }
 
-/** The wall rect for one run along a side, metres from its west/north end. */
-function sideWallRect(b: Building, side: Side, a0: number, a1: number): Rect {
-  const horizontal = side === 'n' || side === 's'
-  if (horizontal) {
-    const zz = side === 'n' ? b.z : b.z + b.d - WALL_THICKNESS
-    return { x: b.x + a0, z: zz, w: a1 - a0, d: WALL_THICKNESS }
-  }
-  const xx = side === 'w' ? b.x : b.x + b.w - WALL_THICKNESS
-  return { x: xx, z: b.z + a0, w: WALL_THICKNESS, d: a1 - a0 }
-}
-
-/**
- * Split one exterior side into real wall boxes: full height between openings, and below/above
- * every window. Door gaps stay empty to the floor; window middles are the actual holes the scene
- * cuts and the sim looks through.
- */
+/** Visible walls and native collision use the same full three-dimensional opening subtraction. */
 export function buildingSideBoxes(b: Building, side: Side): WallBox[] {
   const horizontal = side === 'n' || side === 's'
-  const len = horizontal ? b.w : b.d
-  const gaps = b.doors
-    .filter((d) => d.side === side)
-    .map((d) => [d.at, d.at + d.width] as const)
-    .toSorted((p, q) => p[0] - q[0])
-  const windows = (b.windows ?? [])
-    .filter((w) => w.side === side)
-    .map((w) => [w.at, w.at + w.width, w.sill, w.top] as const)
-    .toSorted((p, q) => p[0] - q[0])
-  const pieces: [number, number][] = []
-  let start = 0
-  for (const [g0, g1] of gaps) {
-    if (g0 > start) {
-      pieces.push([start, g0])
+  const length = horizontal ? b.w : b.d
+  const openings = [
+    ...b.doors
+      .filter((door) => door.side === side)
+      .map((door) => ({
+        from: door.at,
+        to: door.at + door.width,
+        bottom: door.y0 ?? 0,
+        top: door.y1 ?? (door.y0 ?? 0) + doorTop(door.width),
+      })),
+    ...(b.windows ?? [])
+      .filter((window) => window.side === side)
+      .map((window) => ({
+        from: window.at,
+        to: window.at + window.width,
+        bottom: window.sill,
+        top: window.top,
+      })),
+  ]
+  const cuts = [
+    ...new Set([
+      0,
+      length,
+      ...openings.flatMap((opening) => [
+        Math.max(0, Math.min(length, opening.from)),
+        Math.max(0, Math.min(length, opening.to)),
+      ]),
+    ]),
+  ].sort((a, c) => a - c)
+  const walls: WallBox[] = []
+  const append = (from: number, to: number, bottom: number, top: number) => {
+    if (top - bottom <= 1e-6) {
+      return
     }
-    start = Math.max(start, g1)
+    walls.push({ ...sideWallRect(b, side, from, to), y0: bottom, y1: top })
   }
-  if (start < len) {
-    pieces.push([start, len])
-  }
-  const out: WallBox[] = []
-  for (const [a0, a1] of pieces) {
-    const cuts = new Set<number>([a0, a1])
-    for (const [w0, w1] of windows) {
-      if (w1 > a0 && w0 < a1) {
-        cuts.add(Math.max(a0, w0))
-        cuts.add(Math.min(a1, w1))
-      }
+  for (let i = 0; i < cuts.length - 1; i++) {
+    const from = cuts[i]
+    const to = cuts[i + 1]
+    if (from === undefined || to === undefined || to - from <= 1e-6) {
+      continue
     }
-    const xs = [...cuts].sort((p, q) => p - q)
-    for (let i = 0; i < xs.length - 1; i++) {
-      const x0 = xs[i] ?? a0
-      const x1 = xs[i + 1] ?? a1
-      if (x1 - x0 < 1e-6) {
-        continue
+    const vertical = openings
+      .filter((opening) => opening.from < to - 1e-6 && opening.to > from + 1e-6)
+      .sort((a, c) => a.bottom - c.bottom)
+    let bottom = 0
+    for (const opening of vertical) {
+      const low = Math.max(0, Math.min(b.height, opening.bottom))
+      const high = Math.max(low, Math.min(b.height, opening.top))
+      if (low > bottom) {
+        append(from, to, bottom, low)
       }
-      const win = windows.find(([w0, w1]) => x0 >= w0 - 1e-6 && x1 <= w1 + 1e-6)
-      if (win && b.hollow) {
-        const [, , sill, top] = win
-        if (sill > 0.01) {
-          out.push({ ...sideWallRect(b, side, x0, x1), y0: 0, y1: sill })
-        }
-        if (top < b.height - 0.01) {
-          out.push({ ...sideWallRect(b, side, x0, x1), y0: top, y1: b.height })
-        }
-      } else {
-        out.push({ ...sideWallRect(b, side, x0, x1), y0: 0, y1: b.height })
-      }
+      bottom = Math.max(bottom, high)
     }
+    append(from, to, bottom, b.height)
   }
-  return out
+  return walls
 }
 
 /** Split one wall segment around its door gaps. `along` is x for n/s walls, z for e/w walls. */
@@ -375,7 +388,7 @@ function wallWithGaps(b: Building, side: Side): Rect[] {
   const horizontal = side === 'n' || side === 's'
   const length = horizontal ? b.w : b.d
   const gaps = b.doors
-    .filter((d) => d.side === side)
+    .filter((d) => d.side === side && (d.y0 ?? 0) <= 0.01)
     .map((d) => [d.at, d.at + d.width] as const)
     .toSorted((p, q) => p[0] - q[0])
   const pieces: [number, number][] = []
@@ -882,9 +895,12 @@ export function hasLineOfSight(
   return rayGrid(grid, { ox: ax, oz: az, dx: dx / d, dz: dz / d, maxDist: d }, BLOCK_SIGHT) >= d
 }
 
-export function zoneAt(layout: TownLayout, x: number, z: number): Zone | null {
+export function zoneAt(layout: TownLayout, x: number, z: number, y = 0): Zone | null {
   for (const zone of layout.zones) {
-    if ((x - zone.x) ** 2 + (z - zone.z) ** 2 <= zone.r * zone.r) {
+    if (
+      Math.abs(y - (zone.y ?? 0)) <= 1.2 &&
+      (x - zone.x) ** 2 + (z - zone.z) ** 2 <= zone.r * zone.r
+    ) {
       return zone
     }
   }

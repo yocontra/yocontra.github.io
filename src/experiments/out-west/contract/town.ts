@@ -4,7 +4,9 @@
  * runtime/packets.ts batches two unmodified SDK inputs per outgoing WebSocket message.
  * ClientControl/ServerControl remain game-specific messages inside Colyseus ROOM_DATA.
  */
+
 import { reopensOn } from '../data/sinks.ts'
+import type { VoiceClientControl, VoiceServerControl } from './voice.ts'
 
 /** Public product contract version. Colyseus handles binary schema evolution. */
 export const CONTRACT_VERSION = 10
@@ -147,18 +149,14 @@ export type ServerControl =
   | { type: 'showdown_call'; showdownId: number }
   | { type: 'notice'; text: string }
   | { type: 'error'; message: string; fatal: boolean }
-  /** A Cloudflare RealtimeKit voice meeting the player may join. */
-  | { type: 'voice_ready'; meetingId: string; token: string }
-  | { type: 'voice_error'; message: string }
+  | VoiceServerControl
 
 export type ClientControl =
   /** Showdown draw. `localMs` is the reaction measured on the client from the call it heard. */
   | { type: 'showdown_shot'; showdownId: number; localMs: number | null }
   /** Graceful leave without the 5 s channel (counts as a disconnect: carry drops). */
   | { type: 'bye' }
-  /** Ask for a RealtimeKit participant token (proximity voice). */
-  | { type: 'voice_on' }
-  | { type: 'voice_off' }
+  | VoiceClientControl
 
 // --- Binary message types -----------------------------------------------------------------------
 

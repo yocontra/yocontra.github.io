@@ -74,10 +74,10 @@ function take(p: Player, kind: string): boolean {
 function claim(
   w: World,
   index: number,
-  { x, z, kind }: { x: number; z: number; kind: string },
+  { x, y = 0, z, kind }: { x: number; y?: number; z: number; kind: string },
 ): number {
   for (const p of activePlayers(w)) {
-    const free = p.alive && p.lingerUntil < 0 && p.showdown < 0 && p.roof === 0
+    const free = p.alive && p.lingerUntil < 0 && p.showdown < 0 && Math.abs(p.y - y) <= 1.2
     if (free && dist2(p.x, p.z, x, z) <= PICKUP_RADIUS ** 2 && take(p, kind)) {
       w.events.push({ type: 'pickup_taken', spot: index, player: p.id })
       return p.id

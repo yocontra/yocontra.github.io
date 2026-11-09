@@ -1,10 +1,15 @@
 /** Author independently addressable panes once; the runtime toggles native entities. */
+import { readFile } from 'node:fs/promises'
 import { NodeIO } from '@gltf-transform/core'
 import { ALL_EXTENSIONS } from '@gltf-transform/extensions'
 import { prune } from '@gltf-transform/functions'
-import { buildGrid, TOWN } from '../../src/experiments/out-west/ffa/sim/layout.ts'
+import { buildGrid, TOWN, type TownLayout } from '../../src/experiments/out-west/ffa/sim/layout.ts'
 
-const path = 'public/experiments/out-west/3d/native-v2/baked/frontier.glb'
+const path = process.argv[2] ?? 'public/experiments/out-west/3d/native-v2/baked/frontier.glb'
+const configuration = process.argv[3]
+  ? JSON.parse(await readFile(process.argv[3], 'utf8'))
+  : undefined
+const layout: TownLayout = configuration?.layout ?? configuration ?? TOWN
 const io = new NodeIO().registerExtensions(ALL_EXTENSIONS)
 const document = await io.read(path)
 const root = document.getRoot()
@@ -12,7 +17,7 @@ const town = root.listNodes().find((node) => node.getName() === 'town')
 if (!town) {
   throw new Error('Missing authored town')
 }
-const panes = buildGrid(TOWN).glass
+const panes = buildGrid(layout).glass
 const authored = root.listNodes().filter((node) =>
   node
     .getMesh()

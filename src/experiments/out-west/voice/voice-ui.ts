@@ -8,6 +8,8 @@
 import './voice.css'
 
 export interface VoiceUiOpts {
+  /** Connect, or retry after a permission or service failure. */
+  connect: () => void
   /** Push-to-talk down/up, or open-mic mute toggle. */
   talk: (down: boolean) => void
   /** Open mic: the button toggles local mute. */
@@ -15,7 +17,7 @@ export interface VoiceUiOpts {
   settings: () => { voiceChat: boolean; voicePushToTalk: boolean }
 }
 
-export type VoiceUiState = 'off' | 'connecting' | 'live' | 'error'
+export type VoiceUiState = 'off' | 'connecting' | 'standby' | 'live' | 'error'
 
 export class VoiceControls {
   readonly root: HTMLElement
@@ -23,6 +25,7 @@ export class VoiceControls {
   private readonly status: HTMLElement
   private readonly o: VoiceUiOpts
   private state: VoiceUiState = 'off'
+  private message = ''
   private silenced = false
   private muted = false
   private talking = false
@@ -40,21 +43,39 @@ export class VoiceControls {
     this.button.setAttribute('aria-label', 'Talk')
     this.status = document.createElement('span')
     this.status.className = 'ow-voice-status'
+    this.status.setAttribute('role', 'status')
+    this.status.setAttribute('aria-live', 'polite')
     this.root.append(this.button, this.status)
     document.body.append(this.root)
 
     this.button.addEventListener('pointerdown', (e) => {
-      if (this.state !== 'live' || this.silenced || this.blocked) {
+      if (this.silenced || this.blocked) {
+        return
+      }
+      e.stopPropagation()
+      if (this.state === 'off' || this.state === 'error') {
         return
       }
       e.preventDefault()
-      e.stopPropagation()
       if (this.o.settings().voicePushToTalk) {
         this.activePointer = e.pointerId
         this.talking = true
         this.o.talk(true)
         this.render()
       } else {
+        this.muted = !this.muted
+        this.o.mute(this.muted)
+        this.render()
+      }
+    })
+    this.button.addEventListener('click', (event) => {
+      event.stopPropagation()
+      if (this.blocked || this.silenced) {
+        return
+      }
+      if (this.state === 'off' || this.state === 'error') {
+        this.o.connect()
+      } else if (!this.o.settings().voicePushToTalk && event.detail === 0) {
         this.muted = !this.muted
         this.o.mute(this.muted)
         this.render()
@@ -81,13 +102,17 @@ export class VoiceControls {
         e.ctrlKey ||
         e.altKey ||
         this.blocked ||
-        this.silenced ||
-        this.state !== 'live'
+        this.silenced
       ) {
         return
       }
       const target = e.target as HTMLElement | null
       if (target?.closest('input, textarea, select, [contenteditable="true"]')) {
+        return
+      }
+      if (this.state === 'off' || this.state === 'error') {
+        e.preventDefault()
+        this.o.connect()
         return
       }
       if (this.o.settings().voicePushToTalk) {
@@ -106,9 +131,19 @@ export class VoiceControls {
     }
     globalThis.addEventListener('keydown', key)
     globalThis.addEventListener('keyup', keyUp)
+    const blur = () => this.quiet()
+    const visibility = () => {
+      if (document.hidden) {
+        this.quiet()
+      }
+    }
+    globalThis.addEventListener('blur', blur)
+    document.addEventListener('visibilitychange', visibility)
     this.offKey = () => {
       globalThis.removeEventListener('keydown', key)
       globalThis.removeEventListener('keyup', keyUp)
+      globalThis.removeEventListener('blur', blur)
+      document.removeEventListener('visibilitychange', visibility)
     }
     this.refresh()
   }
@@ -125,10 +160,10 @@ export class VoiceControls {
 
   setState(state: VoiceUiState, message?: string): void {
     this.state = state
-    if (state !== 'live') {
+    if (state === 'off' || state === 'error') {
       this.quiet()
     }
-    this.status.textContent = message ?? ''
+    this.message = message ?? ''
     this.render()
   }
 
@@ -156,6 +191,7 @@ export class VoiceControls {
 
   /** Stop transmitting (a setting change, a modal, or the match ending). */
   private quiet(): void {
+    this.activePointer = -1
     if (!this.talking) {
       return
     }
@@ -173,32 +209,46 @@ export class VoiceControls {
     this.root.remove()
   }
 
+  private renderUnavailable(): void {
+    this.button.textContent = this.state === 'error' ? 'RETRY VOICE' : 'CONNECT VOICE'
+    this.button.setAttribute(
+      'aria-label',
+      this.state === 'error' ? 'Retry voice chat' : 'Connect voice chat',
+    )
+    this.button.disabled = this.blocked || this.silenced
+    this.status.textContent = this.message || 'Connect your microphone to nearby players.'
+    this.status.className = 'ow-voice-status bad'
+  }
+
   private render(): void {
     const s = this.o.settings()
     const ptt = s.voicePushToTalk
-    if (this.state === 'error') {
-      this.button.textContent = 'VOICE'
-      this.button.disabled = true
-      this.status.textContent = 'unavailable'
-      this.status.className = 'ow-voice-status bad'
+    this.button.classList.toggle('talking', this.talking && !this.silenced)
+    this.button.setAttribute(
+      'aria-pressed',
+      String(
+        (this.state === 'live' || this.state === 'standby' || this.state === 'connecting') &&
+          (ptt ? this.talking : !this.muted),
+      ),
+    )
+    if (this.state === 'error' || this.state === 'off') {
+      this.renderUnavailable()
       return
     }
-    if (this.state === 'connecting') {
-      this.button.textContent = 'VOICE'
-      this.button.disabled = true
-      this.status.textContent = 'connecting…'
-      this.status.className = 'ow-voice-status'
-      return
-    }
-    this.button.disabled = false
+    this.button.disabled = this.blocked || this.silenced
     let label = this.silenced || this.muted ? 'MUTED' : 'MIC ON'
     if (!this.silenced && ptt) {
       label = this.talking ? 'TALKING' : 'TALK'
     }
     this.button.textContent = label
-    this.button.classList.toggle('talking', this.talking && !this.silenced)
+    const micLabel = this.muted ? 'Unmute microphone' : 'Mute microphone'
+    this.button.setAttribute('aria-label', ptt ? 'Hold to talk' : micLabel)
     if (this.silenced) {
       this.status.textContent = 'muted for the draw'
+    } else if (this.state === 'connecting') {
+      this.status.textContent = this.message || 'connecting…'
+    } else if (this.state === 'standby') {
+      this.status.textContent = this.message || 'Ready · hold T to talk'
     } else if (ptt) {
       this.status.textContent = 'hold T'
     } else {

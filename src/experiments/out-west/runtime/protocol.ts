@@ -28,6 +28,8 @@ export interface PlayerInput {
 }
 export interface PlayerState {
   motion?: MoveState
+  /** Button state at this pose, restored together with authority before input replay. */
+  lastButtons?: number
 
   id: string
   x: number

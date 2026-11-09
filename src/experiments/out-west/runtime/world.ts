@@ -2,6 +2,8 @@ import {
   AmmoPhysicsWorld,
   AppBase,
   AppOptions,
+  BODYGROUP_TRIGGER,
+  BODYMASK_ALL,
   CollisionComponentSystem,
   Entity,
   GraphNode,
@@ -58,7 +60,6 @@ export function createSimulation(options: SimulationOptions) {
   physics.gravity.set(0, -18, 0)
   const players = new Map<string, PlayerState>()
   const entities = new Map<string, Entity>()
-  const lastButtons = new Map<string, number>()
   let disposed = false
   const colliders = addColliders(app, options.collision)
   function addPlayer(
@@ -102,6 +103,7 @@ export function createSimulation(options: SimulationOptions) {
       hp: 100,
       ammo: 6,
       seq: 0,
+      lastButtons: 0,
     }
     players.set(id, state)
     entities.set(id, entity)
@@ -111,7 +113,6 @@ export function createSimulation(options: SimulationOptions) {
     entities.get(id)?.destroy()
     entities.delete(id)
     players.delete(id)
-    lastButtons.delete(id)
   }
   function prepare(id: string, state: PlayerState, input: PlayerInput) {
     const entity = entities.get(id)
@@ -129,11 +130,12 @@ export function createSimulation(options: SimulationOptions) {
     motion.vy = body.linearVelocity.y
     const cast = (from: readonly [number, number, number], to: readonly [number, number, number]) =>
       physics.raycastFirst(new Vec3(...from), new Vec3(...to), {
+        filterCollisionMask: BODYMASK_ALL ^ BODYGROUP_TRIGGER,
         filterCallback: (target: Entity) => target !== entity,
       })
     const hit = cast([motion.x, motion.y + 0.08, motion.z], [motion.x, motion.y - 0.15, motion.z])
     motion.grounded = hit !== null && hit.normal.y > 0.65
-    const motor = motorFrame(motion, input, lastButtons.get(id) ?? 0, cast)
+    const motor = motorFrame(motion, input, state.lastButtons ?? 0, cast)
     let height = motor.height
     if (
       height > oldHeight &&
@@ -155,7 +157,7 @@ export function createSimulation(options: SimulationOptions) {
     state.yaw = input.yaw
     state.pitch = input.pitch
     state.seq = input.seq
-    lastButtons.set(id, input.buttons)
+    state.lastButtons = input.buttons
   }
   function step(inputs: ReadonlyMap<string, PlayerInput>) {
     if (disposed) {
@@ -187,7 +189,7 @@ export function createSimulation(options: SimulationOptions) {
   }
   function adopt(id: string, state: PlayerState) {
     if (restoreCapsule(entities.get(id), state)) {
-      Object.assign(players.get(id) ?? {}, state)
+      Object.assign(players.get(id) ?? {}, state, { lastButtons: state.lastButtons ?? 0 })
     }
   }
   function dispose() {
@@ -202,7 +204,6 @@ export function createSimulation(options: SimulationOptions) {
     }
     players.clear()
     entities.clear()
-    lastButtons.clear()
   }
   const castWorld = (ray: import('../ffa/sim/combat.ts').ShotRay) => castStatic(physics, ray)
   return { app, players, addPlayer, removePlayer, step, adopt, castWorld, dispose }

@@ -2,7 +2,7 @@
  * Shared building rules: door and window dimensions the scene builder, the layout generator, the
  * collision grid and the building audit all read. Pure constants and arithmetic, no renderer.
  */
-import type { Building, BuildingKind, Side, TownLayout } from './layout.ts'
+import type { Building, BuildingKind, Rect, Side, TownLayout } from './layout.ts'
 
 /** Wall thickness, metres (matches the collision grid). */
 export const WALL_T = 0.5
@@ -17,6 +17,13 @@ export const DOOR_FRAME_DEPTH = WALL_T + 0.12
 
 /** Top of a doorway: wide barn/forge openings get a taller lintel. */
 export const doorTop = (width: number): number => DOOR_TOP + (width > WIDE_DOOR ? 0.5 : 0)
+
+export function buildingSideRect(b: Building, side: Side, from: number, to: number): Rect {
+  if (side === 'n' || side === 's') {
+    return { x: b.x + from, z: side === 'n' ? b.z : b.z + b.d - WALL_T, w: to - from, d: WALL_T }
+  }
+  return { x: side === 'w' ? b.x : b.x + b.w - WALL_T, z: b.z + from, w: WALL_T, d: to - from }
+}
 
 /** Window geometry, shared by the kit placement and the interior duplicates. */
 export const WINDOW_SILL = 0.85
@@ -173,6 +180,9 @@ export function townWindows(
 /** Every window slot on a building's four sides, exactly where the scene draws them. */
 export function windowSlots(b: Building, front: Side): WindowOpening[] {
   const out: WindowOpening[] = []
+  if (!b.hollow) {
+    return out
+  }
   for (const side of ['n', 's', 'e', 'w'] as const) {
     const len = side === 'n' || side === 's' ? b.w : b.d
     const doors = b.doors.filter((d) => d.side === side)
@@ -182,8 +192,18 @@ export function windowSlots(b: Building, front: Side): WindowOpening[] {
       const step = shop ? 3.8 : 3
       const span = shop ? 2 : 1.3
       const scale = shop ? SHOP_WINDOW_SCALE : WINDOW_SCALE
+      const bottom = windowBottom(sill, scale)
+      const top = windowTop(sill, scale)
       for (let a = 1.2; a + span < len - 0.7; a += step) {
-        if (f === 0 && doors.some((d) => a + span > d.at - 0.7 && a < d.at + d.width + 0.7)) {
+        if (
+          doors.some(
+            (d) =>
+              a + span > d.at - 0.7 &&
+              a < d.at + d.width + 0.7 &&
+              top > (d.y0 ?? 0) &&
+              bottom < (d.y1 ?? (d.y0 ?? 0) + doorTop(d.width)),
+          )
+        ) {
           continue
         }
         out.push({
@@ -191,8 +211,8 @@ export function windowSlots(b: Building, front: Side): WindowOpening[] {
           side,
           at: a,
           width: span,
-          sill: windowBottom(sill, scale),
-          top: windowTop(sill, scale),
+          sill: bottom,
+          top,
           floor: f,
           scale,
           shop,

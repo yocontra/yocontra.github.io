@@ -41,9 +41,10 @@ function gait(player: PlayerState, domain: Player | undefined, speed: number): s
 }
 const GAITS = new Set(['Walk', 'Run', 'Sprint', 'Crouch_Walk'])
 const GAIT_SPEED = new Map([
-  ['Run', 3.8],
-  ['Sprint', 6.5],
-  ['Crouch_Walk', 1.6],
+  ['Walk', 0.94],
+  ['Run', 5.66],
+  ['Sprint', 8.42],
+  ['Crouch_Walk', 0.69],
 ])
 function directionClip(actor: DuelActor, player: PlayerState, name: string): string {
   if (!GAITS.has(name)) {

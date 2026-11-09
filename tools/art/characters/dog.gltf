@@ -50,6 +50,13 @@
       "byteOffset": 48
     },
     {
+      "type": "VEC2",
+      "componentType": 5126,
+      "count": 1203,
+      "bufferView": 0,
+      "byteOffset": 60
+    },
+    {
       "type": "SCALAR",
       "componentType": 5123,
       "count": 5850,
@@ -1848,41 +1855,88 @@
     {
       "buffer": 0,
       "byteOffset": 0,
-      "byteLength": 72180,
-      "byteStride": 60,
+      "byteLength": 81804,
+      "byteStride": 68,
       "target": 34962
     },
     {
       "buffer": 0,
-      "byteOffset": 72180,
+      "byteOffset": 81804,
       "byteLength": 11700,
       "target": 34963
     },
     {
       "buffer": 0,
-      "byteOffset": 83880,
+      "byteOffset": 93504,
       "byteLength": 2944
     },
     {
       "buffer": 0,
-      "byteOffset": 86824,
+      "byteOffset": 96448,
       "byteLength": 39368
+    }
+  ],
+  "samplers": [
+    {
+      "wrapS": 10497,
+      "wrapT": 10497
+    }
+  ],
+  "textures": [
+    {
+      "source": 1,
+      "sampler": 0
+    },
+    {
+      "source": 2,
+      "sampler": 0
+    },
+    {
+      "source": 0,
+      "sampler": 0
+    }
+  ],
+  "images": [
+    {
+      "name": "fur arm",
+      "mimeType": "image/png",
+      "uri": "animal-textures/dog-fur-arm.png"
+    },
+    {
+      "name": "fur albedo",
+      "mimeType": "image/png",
+      "uri": "animal-textures/dog-fur-albedo.png"
+    },
+    {
+      "name": "fur normal",
+      "mimeType": "image/png",
+      "uri": "animal-textures/dog-fur-normal.png"
     }
   ],
   "buffers": [
     {
       "uri": "dog.bin",
-      "byteLength": 126192
+      "byteLength": 135816
     }
   ],
   "materials": [
     {
-      "extras": {
-        "procedural": true
-      },
+      "name": "dog directional coat",
       "pbrMetallicRoughness": {
-        "roughnessFactor": 0.82,
-        "metallicFactor": 0
+        "metallicFactor": 0,
+        "baseColorTexture": {
+          "index": 0
+        },
+        "metallicRoughnessTexture": {
+          "index": 2
+        }
+      },
+      "normalTexture": {
+        "index": 1,
+        "scale": 0.6
+      },
+      "occlusionTexture": {
+        "index": 2
       }
     }
   ],
@@ -1895,11 +1949,12 @@
             "JOINTS_0": 1,
             "WEIGHTS_0": 2,
             "COLOR_0": 3,
-            "NORMAL": 4
+            "NORMAL": 4,
+            "TEXCOORD_0": 5
           },
           "mode": 4,
           "material": 0,
-          "indices": 5
+          "indices": 6
         }
       ]
     }
@@ -2850,7 +2905,7 @@
   ],
   "skins": [
     {
-      "inverseBindMatrices": 6,
+      "inverseBindMatrices": 7,
       "skeleton": 3,
       "joints": [
         3,
@@ -2907,138 +2962,138 @@
       "name": "Attack",
       "samplers": [
         {
-          "input": 7,
-          "output": 8,
+          "input": 8,
+          "output": 9,
           "interpolation": "LINEAR"
         },
         {
-          "input": 9,
-          "output": 10,
+          "input": 10,
+          "output": 11,
           "interpolation": "LINEAR"
         },
         {
-          "input": 11,
-          "output": 12,
+          "input": 12,
+          "output": 13,
           "interpolation": "LINEAR"
         },
         {
-          "input": 13,
-          "output": 14,
+          "input": 14,
+          "output": 15,
           "interpolation": "LINEAR"
         },
         {
-          "input": 15,
-          "output": 16,
+          "input": 16,
+          "output": 17,
           "interpolation": "LINEAR"
         },
         {
-          "input": 17,
-          "output": 18,
+          "input": 18,
+          "output": 19,
           "interpolation": "LINEAR"
         },
         {
-          "input": 19,
-          "output": 20,
+          "input": 20,
+          "output": 21,
           "interpolation": "LINEAR"
         },
         {
-          "input": 21,
-          "output": 22,
+          "input": 22,
+          "output": 23,
           "interpolation": "LINEAR"
         },
         {
-          "input": 23,
-          "output": 24,
+          "input": 24,
+          "output": 25,
           "interpolation": "LINEAR"
         },
         {
-          "input": 25,
-          "output": 26,
+          "input": 26,
+          "output": 27,
           "interpolation": "LINEAR"
         },
         {
-          "input": 27,
-          "output": 28,
+          "input": 28,
+          "output": 29,
           "interpolation": "LINEAR"
         },
         {
-          "input": 29,
-          "output": 30,
+          "input": 30,
+          "output": 31,
           "interpolation": "LINEAR"
         },
         {
-          "input": 31,
-          "output": 32,
+          "input": 32,
+          "output": 33,
           "interpolation": "LINEAR"
         },
         {
-          "input": 33,
-          "output": 34,
+          "input": 34,
+          "output": 35,
           "interpolation": "LINEAR"
         },
         {
-          "input": 35,
-          "output": 36,
+          "input": 36,
+          "output": 37,
           "interpolation": "LINEAR"
         },
         {
-          "input": 37,
-          "output": 38,
+          "input": 38,
+          "output": 39,
           "interpolation": "LINEAR"
         },
         {
-          "input": 39,
-          "output": 40,
+          "input": 40,
+          "output": 41,
           "interpolation": "LINEAR"
         },
         {
-          "input": 41,
-          "output": 42,
+          "input": 42,
+          "output": 43,
           "interpolation": "LINEAR"
         },
         {
-          "input": 43,
-          "output": 44,
+          "input": 44,
+          "output": 45,
           "interpolation": "LINEAR"
         },
         {
-          "input": 45,
-          "output": 46,
+          "input": 46,
+          "output": 47,
           "interpolation": "LINEAR"
         },
         {
-          "input": 47,
-          "output": 48,
+          "input": 48,
+          "output": 49,
           "interpolation": "LINEAR"
         },
         {
-          "input": 49,
-          "output": 50,
+          "input": 50,
+          "output": 51,
           "interpolation": "LINEAR"
         },
         {
-          "input": 51,
-          "output": 52,
+          "input": 52,
+          "output": 53,
           "interpolation": "LINEAR"
         },
         {
-          "input": 53,
-          "output": 54,
+          "input": 54,
+          "output": 55,
           "interpolation": "LINEAR"
         },
         {
-          "input": 55,
-          "output": 56,
+          "input": 56,
+          "output": 57,
           "interpolation": "LINEAR"
         },
         {
-          "input": 57,
-          "output": 58,
+          "input": 58,
+          "output": 59,
           "interpolation": "LINEAR"
         },
         {
-          "input": 59,
-          "output": 60,
+          "input": 60,
+          "output": 61,
           "interpolation": "LINEAR"
         }
       ],
@@ -3238,108 +3293,108 @@
       "name": "Eating",
       "samplers": [
         {
-          "input": 61,
-          "output": 62,
+          "input": 62,
+          "output": 63,
           "interpolation": "LINEAR"
         },
         {
-          "input": 63,
-          "output": 64,
+          "input": 64,
+          "output": 65,
           "interpolation": "LINEAR"
         },
         {
-          "input": 65,
-          "output": 66,
+          "input": 66,
+          "output": 67,
           "interpolation": "LINEAR"
         },
         {
-          "input": 67,
-          "output": 68,
+          "input": 68,
+          "output": 69,
           "interpolation": "LINEAR"
         },
         {
-          "input": 69,
-          "output": 70,
+          "input": 70,
+          "output": 71,
           "interpolation": "LINEAR"
         },
         {
-          "input": 71,
-          "output": 72,
+          "input": 72,
+          "output": 73,
           "interpolation": "LINEAR"
         },
         {
-          "input": 73,
-          "output": 74,
+          "input": 74,
+          "output": 75,
           "interpolation": "LINEAR"
         },
         {
-          "input": 75,
-          "output": 76,
+          "input": 76,
+          "output": 77,
           "interpolation": "LINEAR"
         },
         {
-          "input": 77,
-          "output": 78,
+          "input": 78,
+          "output": 79,
           "interpolation": "LINEAR"
         },
         {
-          "input": 79,
-          "output": 80,
+          "input": 80,
+          "output": 81,
           "interpolation": "LINEAR"
         },
         {
-          "input": 81,
-          "output": 82,
+          "input": 82,
+          "output": 83,
           "interpolation": "LINEAR"
         },
         {
-          "input": 83,
-          "output": 84,
+          "input": 84,
+          "output": 85,
           "interpolation": "LINEAR"
         },
         {
-          "input": 85,
-          "output": 86,
+          "input": 86,
+          "output": 87,
           "interpolation": "LINEAR"
         },
         {
-          "input": 87,
-          "output": 88,
+          "input": 88,
+          "output": 89,
           "interpolation": "LINEAR"
         },
         {
-          "input": 89,
-          "output": 90,
+          "input": 90,
+          "output": 91,
           "interpolation": "LINEAR"
         },
         {
-          "input": 91,
-          "output": 92,
+          "input": 92,
+          "output": 93,
           "interpolation": "LINEAR"
         },
         {
-          "input": 93,
-          "output": 94,
+          "input": 94,
+          "output": 95,
           "interpolation": "LINEAR"
         },
         {
-          "input": 95,
-          "output": 96,
+          "input": 96,
+          "output": 97,
           "interpolation": "LINEAR"
         },
         {
-          "input": 97,
-          "output": 98,
+          "input": 98,
+          "output": 99,
           "interpolation": "LINEAR"
         },
         {
-          "input": 99,
-          "output": 100,
+          "input": 100,
+          "output": 101,
           "interpolation": "LINEAR"
         },
         {
-          "input": 101,
-          "output": 102,
+          "input": 102,
+          "output": 103,
           "interpolation": "LINEAR"
         }
       ],
@@ -3497,108 +3552,108 @@
       "name": "Idle_2_HeadLow",
       "samplers": [
         {
-          "input": 103,
-          "output": 104,
+          "input": 104,
+          "output": 105,
           "interpolation": "LINEAR"
         },
         {
-          "input": 105,
-          "output": 106,
+          "input": 106,
+          "output": 107,
           "interpolation": "LINEAR"
         },
         {
-          "input": 107,
-          "output": 108,
+          "input": 108,
+          "output": 109,
           "interpolation": "LINEAR"
         },
         {
-          "input": 109,
-          "output": 110,
+          "input": 110,
+          "output": 111,
           "interpolation": "LINEAR"
         },
         {
-          "input": 111,
-          "output": 112,
+          "input": 112,
+          "output": 113,
           "interpolation": "LINEAR"
         },
         {
-          "input": 113,
-          "output": 114,
+          "input": 114,
+          "output": 115,
           "interpolation": "LINEAR"
         },
         {
-          "input": 115,
-          "output": 116,
+          "input": 116,
+          "output": 117,
           "interpolation": "LINEAR"
         },
         {
-          "input": 117,
-          "output": 118,
+          "input": 118,
+          "output": 119,
           "interpolation": "LINEAR"
         },
         {
-          "input": 119,
-          "output": 120,
+          "input": 120,
+          "output": 121,
           "interpolation": "LINEAR"
         },
         {
-          "input": 121,
-          "output": 122,
+          "input": 122,
+          "output": 123,
           "interpolation": "LINEAR"
         },
         {
-          "input": 123,
-          "output": 124,
+          "input": 124,
+          "output": 125,
           "interpolation": "LINEAR"
         },
         {
-          "input": 125,
-          "output": 126,
+          "input": 126,
+          "output": 127,
           "interpolation": "LINEAR"
         },
         {
-          "input": 127,
-          "output": 128,
+          "input": 128,
+          "output": 129,
           "interpolation": "LINEAR"
         },
         {
-          "input": 129,
-          "output": 130,
+          "input": 130,
+          "output": 131,
           "interpolation": "LINEAR"
         },
         {
-          "input": 131,
-          "output": 132,
+          "input": 132,
+          "output": 133,
           "interpolation": "LINEAR"
         },
         {
-          "input": 133,
-          "output": 134,
+          "input": 134,
+          "output": 135,
           "interpolation": "LINEAR"
         },
         {
-          "input": 135,
-          "output": 136,
+          "input": 136,
+          "output": 137,
           "interpolation": "LINEAR"
         },
         {
-          "input": 137,
-          "output": 138,
+          "input": 138,
+          "output": 139,
           "interpolation": "LINEAR"
         },
         {
-          "input": 139,
-          "output": 140,
+          "input": 140,
+          "output": 141,
           "interpolation": "LINEAR"
         },
         {
-          "input": 141,
-          "output": 142,
+          "input": 142,
+          "output": 143,
           "interpolation": "LINEAR"
         },
         {
-          "input": 143,
-          "output": 144,
+          "input": 144,
+          "output": 145,
           "interpolation": "LINEAR"
         }
       ],
@@ -3756,103 +3811,103 @@
       "name": "Idle",
       "samplers": [
         {
-          "input": 145,
-          "output": 146,
+          "input": 146,
+          "output": 147,
           "interpolation": "LINEAR"
         },
         {
-          "input": 147,
-          "output": 148,
+          "input": 148,
+          "output": 149,
           "interpolation": "LINEAR"
         },
         {
-          "input": 149,
-          "output": 150,
+          "input": 150,
+          "output": 151,
           "interpolation": "LINEAR"
         },
         {
-          "input": 151,
-          "output": 152,
+          "input": 152,
+          "output": 153,
           "interpolation": "LINEAR"
         },
         {
-          "input": 153,
-          "output": 154,
+          "input": 154,
+          "output": 155,
           "interpolation": "LINEAR"
         },
         {
-          "input": 155,
-          "output": 156,
+          "input": 156,
+          "output": 157,
           "interpolation": "LINEAR"
         },
         {
-          "input": 157,
-          "output": 158,
+          "input": 158,
+          "output": 159,
           "interpolation": "LINEAR"
         },
         {
-          "input": 159,
-          "output": 160,
+          "input": 160,
+          "output": 161,
           "interpolation": "LINEAR"
         },
         {
-          "input": 161,
-          "output": 162,
+          "input": 162,
+          "output": 163,
           "interpolation": "LINEAR"
         },
         {
-          "input": 163,
-          "output": 164,
+          "input": 164,
+          "output": 165,
           "interpolation": "LINEAR"
         },
         {
-          "input": 165,
-          "output": 166,
+          "input": 166,
+          "output": 167,
           "interpolation": "LINEAR"
         },
         {
-          "input": 167,
-          "output": 168,
+          "input": 168,
+          "output": 169,
           "interpolation": "LINEAR"
         },
         {
-          "input": 169,
-          "output": 170,
+          "input": 170,
+          "output": 171,
           "interpolation": "LINEAR"
         },
         {
-          "input": 171,
-          "output": 172,
+          "input": 172,
+          "output": 173,
           "interpolation": "LINEAR"
         },
         {
-          "input": 173,
-          "output": 174,
+          "input": 174,
+          "output": 175,
           "interpolation": "LINEAR"
         },
         {
-          "input": 175,
-          "output": 176,
+          "input": 176,
+          "output": 177,
           "interpolation": "LINEAR"
         },
         {
-          "input": 177,
-          "output": 178,
+          "input": 178,
+          "output": 179,
           "interpolation": "LINEAR"
         },
         {
-          "input": 179,
-          "output": 180,
+          "input": 180,
+          "output": 181,
           "interpolation": "LINEAR"
         },
         {
-          "input": 181,
-          "output": 182,
+          "input": 182,
+          "output": 183,
           "interpolation": "LINEAR"
         },
         {
-          "input": 183,
-          "output": 184,
+          "input": 184,
+          "output": 185,
           "interpolation": "LINEAR"
         }
       ],

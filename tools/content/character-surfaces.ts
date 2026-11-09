@@ -144,7 +144,7 @@ async function addColored(
         albedo: images.albedo,
       })
       const target =
-        patch.range.swatch === 'linen' && !patch.range.slot && !patch.range.name
+        dyeable && patch.range.swatch === 'linen' && !patch.range.slot && !patch.range.name
           ? neckerchief
           : indices
       target.push(...patch.indices)

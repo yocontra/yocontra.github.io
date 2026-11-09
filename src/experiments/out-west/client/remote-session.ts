@@ -7,7 +7,6 @@ import { normalizeLoadout } from '../data/catalog.ts'
 import type { Dyes } from '../data/dye.ts'
 import { createWorld } from '../ffa/sim/state.ts'
 import type { SimEvent } from '../ffa/sim/types.ts'
-import { makeMoveState } from '../ffa/sim/types.ts'
 import { API_URL, getAccessToken } from '../net/auth.ts'
 import { pageTurnstile } from '../net/turnstile.ts'
 import { loadAmmo } from '../runtime/ammo.ts'
@@ -22,7 +21,13 @@ import { FrontierState, MoveInput, type PlayerRecord } from '../runtime/schema.t
 import { createSimulation } from '../runtime/world.ts'
 import type { Appearance } from './actors.ts'
 import type { FrontierSession } from './frontier-session.ts'
-import { predictionInput, RenderedVelocity, snapshotPresentation } from './player-pose.ts'
+import {
+  authoritativePlayerState,
+  predictionInput,
+  RenderedVelocity,
+  snapshotPresentation,
+} from './player-pose.ts'
+import { playerLifetimeSync, REMOTE_POSE } from './prediction-lifecycle.ts'
 import { reconnectableSession } from './reconnect-session.ts'
 import { ShowdownInput } from './showdown-input.ts'
 import { applyFrontierState } from './state.ts'
@@ -200,7 +205,7 @@ function connectSession(
   let lastButtons = 0
   physics.addPlayer(selfId, [self.x, self.y + 0.9, self.z])
   const predict = Predict.get(room, { mode: 'lerp', delay: 100 })
-  predict.attachAll('players', { mode: 'lerp', fields: ['x', 'y', 'z'] })
+  predict.attachAll('players', REMOTE_POSE)
   const input = room.input({ type: MoveInput, mode: 'reliable' })
   const showdownInput = new ShowdownInput({
     world,
@@ -215,31 +220,7 @@ function connectSession(
     adopt: (local) => {
       const previous = local.physics.players.get(selfId)
       if (previous) {
-        local.physics.adopt(selfId, {
-          ...previous,
-          x: self.x,
-          y: self.y + 0.9,
-          z: self.z,
-          vx: self.vx,
-          vy: self.vy,
-          vz: self.vz,
-          yaw: self.yaw,
-          pitch: ((self.pitch / 127) * Math.PI) / 2,
-          seq: self.seq,
-          grounded: self.grounded,
-          crouched: self.crouched,
-          hp: self.hp,
-          ammo: self.ammo,
-          motion: {
-            ...makeMoveState(self.x, self.z),
-            ...self.motion.toJSON(),
-            x: self.x,
-            y: self.y,
-            z: self.z,
-            vy: self.vy,
-            grounded: self.grounded,
-          },
-        })
+        local.physics.adopt(selfId, authoritativePlayerState(self, previous))
       }
     },
     pose: (local) => {
@@ -251,8 +232,13 @@ function connectSession(
       }
     },
     smoothMs: 90,
+    snap: 2,
   })
-  const sync = (): void => applyFrontierState(room.state, world, poses, appearances)
+  const syncLives = playerLifetimeSync(selfId, predict, mine, (id) => renderedVelocity.reset(id))
+  const sync = (): void => {
+    syncLives(room.state.players.values())
+    applyFrontierState(room.state, world, poses, appearances)
+  }
   room.onStateChange(sync)
   sync()
   room.onMessage<{ tick: number; events: SimEvent[] }>('events', (message) => {

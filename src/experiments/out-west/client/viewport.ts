@@ -1,4 +1,5 @@
 import { type Entity, PROJECTION_ORTHOGRAPHIC, PROJECTION_PERSPECTIVE, Vec3 } from 'playcanvas'
+import { NativeAtmosphere } from '../duel/native-atmosphere.ts'
 import { type FrontierSettings, loadSettings } from '../ffa/client/settings.ts'
 import { BankGuide } from '../ffa/client/wayfinding.ts'
 import { canFire } from '../ffa/sim/combat.ts'
@@ -43,6 +44,8 @@ export interface ViewportOptions {
   onError?: (error: unknown) => void
 }
 export interface GameViewport {
+  /** The engine owns the context and camera listener, including manual suspension. */
+  audioContext: () => AudioContext | null
   ready: Promise<void>
   destroy: () => void
   firstPerson: (value: boolean) => void
@@ -219,7 +222,7 @@ function updateGuide(
       domain.z,
       domain.carried,
       domain.alive,
-      Boolean(zoneAt(session.world.layout, domain.x, domain.z)),
+      Boolean(zoneAt(session.world.layout, domain.x, domain.z, domain.y)),
       dt,
     )
   }
@@ -235,6 +238,45 @@ async function loadTown(application: GameApplication, url: string) {
   } catch (error) {
     environment.destroy()
     throw error
+  }
+}
+
+async function prepareAtmosphere(
+  application: GameApplication,
+  signal: AbortSignal,
+): Promise<NativeAtmosphere | undefined> {
+  if (!TOWN.ambient || signal.aborted) {
+    return undefined
+  }
+  const atmosphere = new NativeAtmosphere(application)
+  const abort = () => atmosphere.destroy()
+  signal.addEventListener('abort', abort, { once: true })
+  try {
+    await atmosphere.load(TOWN.ambient)
+    if (signal.aborted) {
+      return undefined
+    }
+    atmosphere.arrange(TOWN.ambient)
+    return atmosphere
+  } catch (error) {
+    atmosphere.destroy()
+    throw error
+  } finally {
+    signal.removeEventListener('abort', abort)
+  }
+}
+async function warmFrontierCharacters(
+  application: GameApplication,
+  prepared: PreparedCharacters,
+  atmosphere: NativeAtmosphere | undefined,
+  signal: AbortSignal,
+): Promise<void> {
+  const spawn = TOWN.spawns[0]
+  const restore = spawn ? atmosphere?.warm(spawn.x, 0, spawn.z) : undefined
+  try {
+    await warmCharacter(application, prepared, signal)
+  } finally {
+    restore?.()
   }
 }
 
@@ -262,6 +304,39 @@ function createCanvas(root: HTMLElement): HTMLCanvasElement {
   return canvas
 }
 
+function nativeAudioContext(
+  application: GameApplication | undefined,
+  signal: AbortSignal,
+): AudioContext | null {
+  const manager = application?.app.soundManager
+  return !signal.aborted && manager && !manager.suspended ? manager.context : null
+}
+
+function viewportDebug({
+  application,
+  session,
+  windows,
+  actors,
+  ragdolls,
+}: {
+  application: GameApplication | undefined
+  session: GameSession | undefined
+  windows: BreakableWindows | undefined
+  actors: Actors | undefined
+  ragdolls: NativeRagdolls | undefined
+}): ReturnType<GameViewport['debug']> {
+  return {
+    fps: application?.quality.fps ?? 0,
+    worstFps: application?.quality.worstFps ?? 0,
+    pixelRatio: application?.quality.pixelRatio ?? 0,
+    players: session?.players.size ?? 0,
+    windows: windows?.stats() ?? { total: 0, intact: 0 },
+    actors: actors?.stats() ?? { loaded: 0, loading: 0, failed: 0, fallbacks: 0, visible: 0 },
+    drawCalls: application?.app.stats.drawCalls.total ?? 0,
+    ragdolls: ragdolls?.stats() ?? { active: 0, frozen: 0, bodies: 0 },
+  }
+}
+
 /** The viewport consumes either a Colyseus session or a local native-physics session. */
 export function mountGameViewport(root: HTMLElement, options: ViewportOptions): GameViewport {
   const canvas = createCanvas(root)
@@ -275,6 +350,7 @@ export function mountGameViewport(root: HTMLElement, options: ViewportOptions): 
   let guide: BankGuide | undefined
   let windows: BreakableWindows | undefined
   let environment: NativeEnvironment | undefined
+  let atmosphere: NativeAtmosphere | undefined
   let prepared: PreparedCharacters | undefined
   const lifecycle = new AbortController()
   let settings = loadSettings()
@@ -301,6 +377,7 @@ export function mountGameViewport(root: HTMLElement, options: ViewportOptions): 
       session.update(Math.min(dt, 0.1), intent)
     }
     actors?.update(session.players, dt, first ? session.selfId : undefined)
+    atmosphere?.update(dt)
     items?.update(session.world)
     windows?.update(session.world?.glass)
     const player = session.players.get(session.selfId)
@@ -341,7 +418,8 @@ export function mountGameViewport(root: HTMLElement, options: ViewportOptions): 
       prepared = await Actors.prepare(created, await options.prepareAppearance?.())
       await GameEffects.preloadAudio(created)
       items = await FrontierItems.create(created)
-      await warmCharacter(created, prepared, lifecycle.signal)
+      atmosphere = await prepareAtmosphere(created, lifecycle.signal)
+      await warmFrontierCharacters(created, prepared, atmosphere, lifecycle.signal)
       if (lifecycle.signal.aborted) {
         return
       }
@@ -395,6 +473,7 @@ export function mountGameViewport(root: HTMLElement, options: ViewportOptions): 
     input?.destroy()
     items?.destroy()
     environment?.destroy()
+    atmosphere?.destroy()
     guide?.destroy()
     effects?.destroy()
     actors?.destroy()
@@ -405,6 +484,7 @@ export function mountGameViewport(root: HTMLElement, options: ViewportOptions): 
     canvas.remove()
   }
   return {
+    audioContext: () => nativeAudioContext(application, lifecycle.signal),
     ready,
     destroy,
     event: (event) => effects?.event(event),
@@ -425,15 +505,6 @@ export function mountGameViewport(root: HTMLElement, options: ViewportOptions): 
       y: settings.view === 'top' ? (input?.cursor.y ?? innerHeight / 2) : innerHeight / 2,
       shooter: settings.view !== 'top',
     }),
-    debug: () => ({
-      fps: application?.quality.fps ?? 0,
-      worstFps: application?.quality.worstFps ?? 0,
-      pixelRatio: application?.quality.pixelRatio ?? 0,
-      players: session?.players.size ?? 0,
-      windows: windows?.stats() ?? { total: 0, intact: 0 },
-      actors: actors?.stats() ?? { loaded: 0, loading: 0, failed: 0, fallbacks: 0, visible: 0 },
-      drawCalls: application?.app.stats.drawCalls.total ?? 0,
-      ragdolls: ragdolls?.stats() ?? { active: 0, frozen: 0, bodies: 0 },
-    }),
+    debug: () => viewportDebug({ application, session, windows, actors, ragdolls }),
   }
 }

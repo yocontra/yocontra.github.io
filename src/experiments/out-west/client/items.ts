@@ -1,6 +1,7 @@
-import { Color, type ContainerResource, Entity, StandardMaterial } from 'playcanvas'
+import { BLEND_NORMAL, Color, type ContainerResource, Entity, StandardMaterial } from 'playcanvas'
 import { DYNAMIC_ASSETS } from '../content/manifest.ts'
 import type { World } from '../ffa/sim/state.ts'
+import { prepareNativeMaterials } from '../scene/native-materials.ts'
 import type { GameApplication } from './application.ts'
 
 const ITEM_KINDS = [
@@ -21,11 +22,16 @@ export class FrontierItems {
   private readonly items = new Map<string, Entity>()
   private readonly marker = new StandardMaterial()
   private tick = -1
+  private disposed = false as boolean
+  private readonly materialReleases: (() => void)[] = []
   private constructor(game: GameApplication) {
     this.game = game
-    this.marker.diffuse = new Color(0.9, 0.66, 0.2)
-    this.marker.emissive = new Color(0.2, 0.12, 0.02)
-    this.marker.metalness = 0.5
+    this.marker.diffuse = new Color(0.65, 0.47, 0.19)
+    this.marker.emissive = new Color(0.22, 0.13, 0.035)
+    this.marker.metalness = 0
+    this.marker.opacity = 0.2
+    this.marker.blendType = BLEND_NORMAL
+    this.marker.depthWrite = false
     this.marker.useMetalness = true
     this.marker.update()
   }
@@ -35,9 +41,28 @@ export class FrontierItems {
       await Promise.all(
         ITEM_KINDS.map(async (key) => {
           const asset = await game.loadContainer(DYNAMIC_ASSETS[key].url)
-          result.models.set(key, asset.resource as ContainerResource)
+          if (result.disposed) {
+            game.releaseContainer(DYNAMIC_ASSETS[key].url)
+            throw new DOMException('Pickups were closed', 'AbortError')
+          }
+          const resource = asset.resource as ContainerResource
+          try {
+            const release = await prepareNativeMaterials(game, resource)
+            if (result.disposed) {
+              release()
+              throw new DOMException('Pickups were closed', 'AbortError')
+            }
+            result.materialReleases.push(release)
+            result.models.set(key, resource)
+          } catch (error) {
+            game.releaseContainer(DYNAMIC_ASSETS[key].url)
+            throw error
+          }
         }),
       )
+      if (!game.stage.parent) {
+        throw new DOMException('Pickups were closed', 'AbortError')
+      }
       return result
     } catch (error) {
       result.destroy()
@@ -45,7 +70,7 @@ export class FrontierItems {
     }
   }
   update(world: World | undefined): void {
-    if (!world) {
+    if (this.disposed || !world) {
       return
     }
     if (world.tick === this.tick) {
@@ -60,7 +85,12 @@ export class FrontierItems {
     for (const pickup of world.pickups) {
       const spot = world.layout.pickups[pickup.spot]
       if (spot && pickup.availableAt <= world.tick) {
-        this.place(`pickup:${pickup.spot}`, spot.kind, { x: spot.x, y: 0.15, z: spot.z }, keep)
+        this.place(
+          `pickup:${pickup.spot}`,
+          spot.kind,
+          { x: spot.x, y: (spot.y ?? 0) + 0.15, z: spot.z, floorY: spot.y ?? 0 },
+          keep,
+        )
       }
     }
     if (world.strongbox) {
@@ -69,7 +99,7 @@ export class FrontierItems {
         this.place(
           `strongbox:${world.strongbox.spot}`,
           'strongbox',
-          { x: spot.x, y: 0, z: spot.z },
+          { x: spot.x, y: spot.y ?? 0, z: spot.z },
           keep,
         )
       }
@@ -78,7 +108,7 @@ export class FrontierItems {
       this.place(
         `fuse:${fuse.by}:${fuse.explodeAt}`,
         'dynamite',
-        { x: fuse.x, y: 0.05, z: fuse.z },
+        { x: fuse.x, y: 0.05, z: fuse.z, floorY: 0 },
         keep,
       )
     }
@@ -92,7 +122,7 @@ export class FrontierItems {
   private place(
     key: string,
     kind: keyof typeof DYNAMIC_ASSETS,
-    at: { x: number; y: number; z: number },
+    at: { x: number; y: number; z: number; floorY?: number },
     keep: Set<string>,
   ): void {
     keep.add(key)
@@ -114,16 +144,27 @@ export class FrontierItems {
       castShadows: false,
       receiveShadows: false,
     })
-    marker.setLocalScale(0.7, 0.015, 0.7)
-    marker.setLocalPosition(0, 0.02, 0)
+    marker.setLocalScale(0.48, 0.004, 0.48)
+    marker.setLocalPosition(0, (at.floorY ?? at.y) - at.y + 0.012, 0)
     item.addChild(marker)
     this.items.set(key, item)
   }
   destroy(): void {
+    if (this.disposed) {
+      return
+    }
+    this.disposed = true
     for (const item of this.items.values()) {
       item.destroy()
     }
     this.items.clear()
+    for (const release of this.materialReleases) {
+      release()
+    }
+    this.materialReleases.length = 0
+    for (const key of this.models.keys()) {
+      this.game.releaseContainer(DYNAMIC_ASSETS[key].url)
+    }
     this.models.clear()
     this.marker.destroy()
   }

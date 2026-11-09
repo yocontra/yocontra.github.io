@@ -7,6 +7,8 @@
   display: none;
   align-items: center;
   gap: 8px;
+  width: max-content;
+  max-width: calc(100vw - 24px);
   transform: translateX(-50%);
   pointer-events: none;
   user-select: none;
@@ -19,6 +21,7 @@
   display: none;
 }
 .ow-voice-btn {
+  flex-shrink: 0;
   pointer-events: auto;
   touch-action: none;
   min-width: 64px;
@@ -55,7 +58,9 @@
   font-size: 11px;
   font-style: italic;
   text-shadow: 0 1px 4px rgb(0 0 0 / 0.8);
-  white-space: nowrap;
+  min-width: 0;
+  max-width: 48ch;
+  white-space: normal;
 }
 .ow-voice-status.bad {
   color: #e58a72;

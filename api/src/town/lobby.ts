@@ -21,12 +21,7 @@ import { createNativeRoom, type NativeFrontierRoom, reserveNativeRoom } from '..
 import { NativeSeats } from '../game/seats.ts'
 import { CloudflareClient } from '../game/socket.ts'
 import { FLAG_BADLANDS, flagStatements, isShadowed, standing } from '../moderation/flags.ts'
-import {
-  addVoiceParticipant,
-  createVoiceMeeting,
-  refreshVoiceToken,
-  removeVoiceParticipant,
-} from '../voice/realtime.ts'
+import { VoiceCoordinator, type VoiceStorage } from '../voice/coordinator.ts'
 import {
   type Departure,
   FLAG_AIMBOT,
@@ -282,6 +277,7 @@ export class Lobby extends DurableObject<Env> {
   }
   private afterNativeStep(core: LobbyCore) {
     const now = Date.now()
+    this.voice.update()
     this.peakHumans = Math.max(this.peakHumans, core.humans())
     if (core.world.tick % 40 === 0) {
       void this.flushDeposits()
@@ -317,16 +313,39 @@ export class Lobby extends DurableObject<Env> {
   private readonly departed: string[] = []
   private lastDirectoryReport = 0
   private readonly tickDurations: number[] = []
-  /** RealtimeKit meeting for this lobby, and each player's participant id. */
-  private voiceMeetingId = ''
-  private readonly voiceParticipants = new Map<number, string>()
-  private readonly voiceBusy = new Set<number>()
-  private readonly voiceAt = new Map<number, number>()
-  /** Serialize meeting creation and participant changes across sockets. */
-  private voiceChain: Promise<void> = Promise.resolve()
+  private readonly voice: VoiceCoordinator
 
   constructor(ctx: DurableObjectState, env: Env) {
     super(ctx, env)
+    this.voice = new VoiceCoordinator({
+      env,
+      title: () => `frontier-${this.lobbyId || 'lobby'}`,
+      peers: () =>
+        (this.core?.world.players ?? []).flatMap((player) =>
+          player
+            ? [
+                {
+                  id: player.id,
+                  name: player.name,
+                  x: player.x,
+                  z: player.z,
+                  human: !player.bot,
+                  connected: Boolean(this.core?.sessionOf(player.id)?.peer),
+                  available: player.alive && player.showdown < 0,
+                },
+              ]
+            : [],
+        ),
+      send: (id, message) => {
+        const peer = this.core?.sessionOf(id)?.peer
+        if (peer) {
+          this.sendVoice(peer, message)
+        }
+      },
+      save: (state) => ctx.storage.put('voice', state),
+      reschedule: () => this.scheduleSettlementRetry(false),
+      waitUntil: (work) => ctx.waitUntil(work),
+    })
     this.seats = new NativeSeats(ctx.storage)
     this.flushing = false
     const restored = ctx.blockConcurrencyWhile(async () => {
@@ -346,16 +365,7 @@ export class Lobby extends DurableObject<Env> {
         this.pending.set(key.slice(4), d)
         this.lobbyId ||= d.lobbyId
       }
-      const voice = await ctx.storage.get<{
-        meetingId: string
-        participants: Record<string, string>
-      }>('voice')
-      if (voice) {
-        this.voiceMeetingId = voice.meetingId
-        for (const [id, participant] of Object.entries(voice.participants)) {
-          this.voiceParticipants.set(Number(id), participant)
-        }
-      }
+      await this.voice.restore(await ctx.storage.get<VoiceStorage>('voice'))
       return [...(await ctx.storage.list<NativeVisit>({ prefix: 'visit:' })).values()]
     })
     // Native worlds are transient; seats are durable. Close only this DO's recorded visits after a restart.
@@ -364,7 +374,7 @@ export class Lobby extends DurableObject<Env> {
         for (const visit of visits) {
           this.staleVisits.set(visit.sessionId, visit)
         }
-        return this.recoverPersistedState()
+        return Promise.all([this.recoverPersistedState(), this.voice.retry()])
       }),
     )
   }
@@ -430,7 +440,7 @@ export class Lobby extends DurableObject<Env> {
    * evict the object before the linger finishes, and stats or usage must not be lost with it.
    */
   private onDisconnect(core: LobbyCore, playerId: number): void {
-    void this.voiceOff(playerId)
+    this.voice.drop(playerId)
     const s = core.sessionOf(playerId)
     const p = core.world.players[playerId]
     if (s && p) {
@@ -523,135 +533,19 @@ export class Lobby extends DurableObject<Env> {
       native.stopGameplay()
       this.ctx.waitUntil(native.disconnect().then(() => undefined))
     }
-    this.ctx.waitUntil(this.voiceClose())
+    this.ctx.waitUntil(this.voice.close())
   }
 
-  /** Voice control messages never reach the sim: they only mint RealtimeKit tokens. */
+  /** Authenticated game controls carry preferences and short speaking leases, never media. */
   private voiceText(core: LobbyCore, playerId: number, text: string): boolean {
-    if (!text.includes('voice_')) {
+    if (core !== this.core || !text.includes('voice_')) {
       return false
     }
-    let msg: unknown
     try {
-      msg = JSON.parse(text)
+      return this.voice.handle(playerId, JSON.parse(text))
     } catch {
       return false
     }
-    if (typeof msg !== 'object' || msg === null) {
-      return false
-    }
-    const type = Reflect.get(msg, 'type')
-    if (type === 'voice_on') {
-      this.ctx.waitUntil(this.voiceOn(core, playerId))
-      return true
-    }
-    if (type === 'voice_off') {
-      this.ctx.waitUntil(this.voiceOff(playerId))
-      return true
-    }
-    return false
-  }
-
-  private voiceOn(core: LobbyCore, playerId: number): Promise<void> {
-    const next = this.voiceChain.then(() => this.voiceOnNow(core, playerId))
-    this.voiceChain = next.catch(() => undefined)
-    return next
-  }
-
-  private async voiceOnNow(core: LobbyCore, playerId: number): Promise<void> {
-    const now = Date.now()
-    if (this.voiceBusy.has(playerId) || (this.voiceAt.get(playerId) ?? 0) + 2000 > now) {
-      return
-    }
-    this.voiceAt.set(playerId, now)
-    const session = core.sessionOf(playerId)
-    const player = core.world.players[playerId]
-    if (!(session?.peer && player)) {
-      return
-    }
-    this.voiceBusy.add(playerId)
-    try {
-      if (!this.voiceMeetingId) {
-        this.voiceMeetingId = await createVoiceMeeting(
-          this.env,
-          `frontier-${this.lobbyId || 'lobby'}`,
-        )
-      }
-      const participant = this.voiceParticipants.get(playerId)
-      let token: string
-      if (participant) {
-        token = await refreshVoiceToken(this.env, this.voiceMeetingId, participant)
-      } else {
-        const added = await addVoiceParticipant(
-          this.env,
-          this.voiceMeetingId,
-          player.name,
-          String(playerId),
-        )
-        this.voiceParticipants.set(playerId, added.id)
-        await this.saveVoice()
-        token = added.token
-      }
-      this.sendVoice(session.peer, {
-        type: 'voice_ready',
-        meetingId: this.voiceMeetingId,
-        token,
-      })
-    } catch (err) {
-      console.error('frontier voice token failed', err)
-      this.sendVoice(session.peer, { type: 'voice_error', message: 'Voice is unavailable.' })
-    } finally {
-      this.voiceBusy.delete(playerId)
-    }
-  }
-
-  private voiceOff(playerId: number): Promise<void> {
-    const next = this.voiceChain.then(() => this.voiceOffNow(playerId))
-    this.voiceChain = next.catch(() => undefined)
-    return next
-  }
-
-  private async voiceOffNow(playerId: number): Promise<void> {
-    const participant = this.voiceParticipants.get(playerId)
-    if (!participant) {
-      return
-    }
-    this.voiceParticipants.delete(playerId)
-    await this.saveVoice()
-    if (this.voiceMeetingId) {
-      await removeVoiceParticipant(this.env, this.voiceMeetingId, participant).catch(
-        () => undefined,
-      )
-    }
-  }
-
-  private async voiceClose(): Promise<void> {
-    // RealtimeKit has no delete-meeting API; an idle meeting costs nothing. Keep the meeting id
-    // so the next session in this lobby reuses it, and remove the participants' live tokens.
-    const meetingId = this.voiceMeetingId
-    const participants = [...this.voiceParticipants.values()]
-    this.voiceParticipants.clear()
-    await this.saveVoice()
-    if (meetingId) {
-      await Promise.all(
-        participants.map((p) =>
-          removeVoiceParticipant(this.env, meetingId, p).catch(() => undefined),
-        ),
-      )
-    }
-  }
-
-  private async saveVoice(): Promise<void> {
-    if (!this.voiceMeetingId) {
-      await this.ctx.storage.delete('voice')
-      return
-    }
-    await this.ctx.storage.put('voice', {
-      meetingId: this.voiceMeetingId,
-      participants: Object.fromEntries(
-        [...this.voiceParticipants].map(([id, participant]) => [String(id), participant]),
-      ),
-    })
   }
 
   // biome-ignore lint/style/useThisInClassMethods: a tiny send helper
@@ -695,10 +589,16 @@ export class Lobby extends DurableObject<Env> {
   private async scheduleSettlementRetry(advanceBackoff = false) {
     const settlement = this.pending.size > 0 || this.staleVisits.size > 0
     const seat = this.seats.nextExpiry()
-    const hasWork = settlement || seat !== undefined
+    const voice = this.voice.nextRetry
+    const hasWork = settlement || seat !== undefined || voice !== undefined
     const retry = settlement ? Date.now() + this.settlementRetryMs : Number.POSITIVE_INFINITY
     const next = hasWork
-      ? Math.min(seat ?? Number.POSITIVE_INFINITY, retry, this.alarmAt ?? Number.POSITIVE_INFINITY)
+      ? Math.min(
+          seat ?? Number.POSITIVE_INFINITY,
+          retry,
+          voice ?? Number.POSITIVE_INFINITY,
+          this.alarmAt ?? Number.POSITIVE_INFINITY,
+        )
       : Number.POSITIVE_INFINITY
     // Publish the deadline before the first await: concurrent seats cannot postpone economic recovery.
     this.alarmAt = Number.isFinite(next) ? next : undefined
@@ -751,6 +651,7 @@ export class Lobby extends DurableObject<Env> {
   override async alarm() {
     this.alarmAt = undefined
     this.seats.expire()
+    await this.voice.retry()
     await this.recoverPersistedState()
     await this.scheduleSettlementRetry(false)
   }

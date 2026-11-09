@@ -1,5 +1,6 @@
 /** Authored prop motion uses native Anim alongside the masked skeletal controller. */
 import { type AnimTrack, type ContainerResource, Entity } from 'playcanvas'
+import { nativeActionSpeed } from './native-animation-timing.ts'
 import type { WeaponMount } from './native-mounts.ts'
 export function animateWeaponMount(mount: Entity, resource: ContainerResource, key: string): void {
   const clips = resource.animations
@@ -18,7 +19,11 @@ export function animateWeaponMount(mount: Entity, resource: ContainerResource, k
         name: 'Weapon',
         states: [
           { name: 'START' },
-          ...clips.map((clip) => ({ name: clip.name, speed: 1, loop: clip === idle })),
+          ...clips.map((clip) => ({
+            name: clip.name,
+            speed: nativeActionSpeed(clip),
+            loop: clip === idle,
+          })),
         ],
         transitions: [{ from: 'START', to: initial }],
       },

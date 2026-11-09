@@ -6,22 +6,11 @@ import depot from '../content/depot.json' with { type: 'json' }
 import { ASSETS } from '../content/manifest.ts'
 import mission from '../content/mission.json' with { type: 'json' }
 import streetLife from '../content/street-life.json' with { type: 'json' }
+import type { ArenaLife } from '../contract/ambient.ts'
 
 export type ArenaId = 'street' | 'depot' | 'mission' | 'bank'
-export interface Stand {
-  x: number
-  y: number
-  z: number
-  yaw: number
-}
-export interface ArenaLife {
-  dog: Stand
-  horses: readonly Stand[]
-  crows: { x: number; y: number; z: number; face: number; along?: string }
-  door: Stand
-  folk: readonly (Stand & { habit?: string; door?: readonly number[] | null; base?: string })[]
-  hens?: { x: number; z: number } | null
-}
+export type { ArenaLife, Stand } from '../contract/ambient.ts'
+
 const STREET: ArenaLife = streetLife
 const ARENAS = { depot, mission, bank }
 export function arenaForSlot(slot: number): ArenaId {
@@ -43,6 +32,8 @@ export class NativeArenas {
   private currentUrl = '' as string
   private requestedUrl = '' as string
   private readonly lights: Entity[] = []
+  private dailyDenseFog = false as boolean
+  private lightingEpoch = 0
   private readonly game: GameApplication
   private readonly environment: NativeEnvironment
   id: ArenaId = 'street'
@@ -122,18 +113,27 @@ export class NativeArenas {
     }
   }
   async lighting(day: number, index = 0): Promise<void> {
+    const epoch = ++this.lightingEpoch
     this.night(day)
     this.environment.poster(index)
     await this.environment.setTime(day)
+    if (epoch !== this.lightingEpoch) {
+      return
+    }
+    // Native PBR uses the environment atlas; lift moonlit surfaces without adding a light.
+    const night = this.dailyDenseFog ? 0 : Math.max(0, Math.min(1, (day - 0.72) / 0.28))
+    this.game.app.scene.skyboxIntensity = 0.7 * (1 + night)
     this.environment.clock(day, index === 16)
   }
   toll(): void {
     this.environment.toll()
   }
   dailyFog(enabled: boolean): void {
+    this.dailyDenseFog = enabled
     this.environment.dailyFog(enabled)
   }
   destroy(): void {
+    this.lightingEpoch++
     this.epoch++
     this.environment.destroy()
     this.current?.destroy()

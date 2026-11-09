@@ -1,5 +1,5 @@
 /** Reproduce fitted native character assets from preserved authoring sources. */
-import { mkdir, readdir } from 'node:fs/promises'
+import { mkdir, readdir, readFile, writeFile } from 'node:fs/promises'
 import { basename, resolve } from 'node:path'
 import { type Document, NodeIO, type Primitive } from '@gltf-transform/core'
 import { ALL_EXTENSIONS } from '@gltf-transform/extensions'
@@ -14,7 +14,10 @@ import {
 } from '@gltf-transform/functions'
 import { cache, type Range } from './character-atlas.ts'
 import { appendClips } from './character-clips.ts'
+import { prepareSpurSurface } from './character-metal.ts'
 import { convertCharacterSurface } from './character-surfaces.ts'
+import { integrateGarmentParts } from './garment-parts.ts'
+import { labelActorHatGlb } from './label-actor-hats.ts'
 import { completeCharacterClips } from './normalize-character-clips.ts'
 import { normalizeSkinnedAsset } from './normalize-skinned-nodes.ts'
 import { consolidateRigidMaterials } from './rigid-materials.ts'
@@ -30,7 +33,8 @@ const io = new NodeIO().registerExtensions(ALL_EXTENSIONS)
 export async function bakeCharacter(path: string): Promise<void> {
   const doc = await io.read(path)
   const id = basename(path, '.gltf')
-  fitWaistcoats(doc)
+  await integrateGarmentParts(doc, id)
+  await fitWaistcoats(doc, id)
   const sockets = WEAPON_BEARER.test(id) ? captureWeaponSockets(doc) : []
   for (const node of [...doc.getRoot().listNodes()]) {
     if (node.getName() === 'socket.muzzle') {
@@ -54,17 +58,7 @@ export async function bakeCharacter(path: string): Promise<void> {
       animation.dispose()
     }
   }
-  const dyeable = DYEABLE.test(id) && id !== 'extra.tin-star'
-  for (const mesh of doc.getRoot().listMeshes()) {
-    const node = doc
-      .getRoot()
-      .listNodes()
-      .find((candidate) => candidate.getMesh() === mesh)
-    const ranges = (node?.getExtras().pieceRanges ?? []) as Range[]
-    for (const primitive of [...mesh.listPrimitives()]) {
-      await convertCharacterSurface(doc, mesh, primitive, { ranges, dyeable })
-    }
-  }
+  await convertSurfaces(doc, id)
   cleanAuthoring(doc, id)
   if (id.startsWith('held-')) {
     const kind = id.slice(5)
@@ -99,9 +93,31 @@ export async function bakeCharacter(path: string): Promise<void> {
   }
   const target = resolve(output, category, `${id}.glb`)
   await io.write(target, doc)
+  if (category === 'baked') {
+    await writeFile(target, labelActorHatGlb(await readFile(target)).bytes)
+  }
   await normalizeSkinnedAsset(target)
   cache.clear()
   console.log(`baked native PBR ${id}`)
+}
+async function convertSurfaces(doc: Document, id: string): Promise<void> {
+  const dyeable = DYEABLE.test(id) && id !== 'extra.tin-star'
+  for (const mesh of doc.getRoot().listMeshes()) {
+    const node = doc
+      .getRoot()
+      .listNodes()
+      .find((candidate) => candidate.getMesh() === mesh)
+    const ranges = (node?.getExtras().pieceRanges ?? []) as Range[]
+    for (const primitive of [...mesh.listPrimitives()]) {
+      if (id.startsWith('spurs.')) {
+        await prepareSpurSurface(primitive)
+      }
+      await convertCharacterSurface(doc, mesh, primitive, {
+        ranges: (primitive.getExtras().pieceRanges as Range[] | undefined) ?? ranges,
+        dyeable,
+      })
+    }
+  }
 }
 export async function appendGunMechanisms(doc: Document, id: string): Promise<void> {
   if (!(id === 'player' || id.startsWith('gun.') || id.startsWith('outlaw-'))) {

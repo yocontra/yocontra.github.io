@@ -1,6 +1,7 @@
 /** Disjoint native controllers give gait rate and upper-body action timing separate clocks. */
 import { type AnimComponentLayer, Entity } from 'playcanvas'
 import type { DuelActor } from '../duel/native-actor.ts'
+import { nativeActionSpeed } from '../scene/native-animation-timing.ts'
 import type { GameApplication } from './application.ts'
 
 const WEAPON =
@@ -31,7 +32,7 @@ export function createRiderPose(game: GameApplication, actor: DuelActor): RiderP
           { name: 'START' },
           ...tracks.map((track) => ({
             name: track.name,
-            speed: 1,
+            speed: nativeActionSpeed(track),
             loop: !ACTION.test(track.name),
           })),
         ],

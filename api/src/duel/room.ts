@@ -18,6 +18,7 @@ import type {
   RoomServerMessage,
   Settlement,
 } from '../../../src/experiments/out-west/contract/duel.ts'
+import type { VoiceClientControl } from '../../../src/experiments/out-west/contract/voice.ts'
 import { pairFactor } from '../../../src/experiments/out-west/data/progression.ts'
 import { recordUsage } from '../budget.ts'
 import type { Env } from '../env.ts'
@@ -25,12 +26,7 @@ import { rttStats } from '../judge.ts'
 import { accountFlags, isShadowed } from '../moderation/flags.ts'
 import { reviewTiming } from '../moderation/timing.ts'
 import { PING_INTERVAL_MS, RTT_SAMPLES } from '../net/constants.ts'
-import {
-  addVoiceParticipant,
-  createVoiceMeeting,
-  refreshVoiceToken,
-  removeVoiceParticipant,
-} from '../voice/realtime.ts'
+import { VoiceCoordinator, type VoiceStorage } from '../voice/coordinator.ts'
 import { getProfile, isConstraintError } from './external.ts'
 import { loadGhostTraits } from './ghost.ts'
 import { type Pair, type PvpLink, rttCapped, type Seat } from './judge-pvp.ts'
@@ -74,6 +70,7 @@ interface Stored {
 interface Attachment {
   seat: Seat
   accountId: string
+  voice?: Extract<VoiceClientControl, { type: 'voice_on' }>
 }
 
 function parse(data: string | ArrayBuffer): RoomClientMessage | null {
@@ -100,15 +97,56 @@ export class DuelRoom extends DurableObject<Env> {
   private pingSeq = 0
   private pingTimer: ReturnType<typeof setInterval> | undefined
   private startedOnce: boolean
-  private readonly voiceBusy: [boolean, boolean] = [false, false]
-  private readonly voiceAt: [number, number] = [0, 0]
-  /** One voice request at a time: two seats can ask for the same lazily-created meeting. */
-  private voiceChain: Promise<void> = Promise.resolve()
+  private readonly voice: VoiceCoordinator
+  private gameAlarmAt: number | undefined
 
   constructor(ctx: DurableObjectState, env: Env) {
     super(ctx, env)
     this.closed = false
     this.startedOnce = false
+    this.voice = new VoiceCoordinator({
+      env,
+      title: () => `bounty-${this.stored?.init.roomId ?? ctx.id.toString()}`,
+      peers: () =>
+        ([0, 1] as const).map((seat) => ({
+          id: seat,
+          name: this.stored?.init.posters[seat].name ?? '',
+          x: seat,
+          z: 0,
+          human: this.stored?.init.mode === 'pvp' && Boolean(this.stored.init.accounts[seat]),
+          connected: ctx.getWebSockets(`seat:${seat}`).length > 0,
+          available: !this.closed && (this.flow?.beat === 'intro' || this.flow?.beat === 'result'),
+        })),
+      send: (id, message) => {
+        for (const ws of ctx.getWebSockets(`seat:${id}`)) {
+          sendRoomMessage(ws, message)
+        }
+      },
+      save: (state) => ctx.storage.put('voice', state),
+      reschedule: () => this.scheduleAlarm(),
+      waitUntil: (work) => ctx.waitUntil(work),
+    })
+    const restored = ctx.blockConcurrencyWhile(async () => {
+      this.closed = (await ctx.storage.get<boolean>('closed')) ?? false
+      this.gameAlarmAt = await ctx.storage.get<number>('gameAlarmAt')
+      if (!this.closed && this.gameAlarmAt === undefined) {
+        this.gameAlarmAt = (await ctx.storage.getAlarm()) ?? undefined
+      }
+      let voice = await ctx.storage.get<VoiceStorage>('voice')
+      const stored = await ctx.storage.get<Stored>('stored')
+      if (stored?.voice) {
+        voice ??= {
+          meetingId: stored.voice.meetingId,
+          participants: Object.fromEntries(
+            stored.voice.participants.flatMap((id, seat) => (id ? [[String(seat), id]] : [])),
+          ),
+        }
+        await ctx.storage.put('voice', voice)
+        await ctx.storage.put('stored', { init: stored.init, traits: stored.traits })
+      }
+      await this.voice.restore(voice)
+    })
+    ctx.waitUntil(restored.then(() => this.voice.retry()))
   }
 
   // --- RPC from the matchmaker -----------------------------------------------------------------
@@ -117,7 +155,9 @@ export class DuelRoom extends DurableObject<Env> {
     const traits = init.ghost?.ownerId ? await loadGhostTraits(this.env, init.ghost.ownerId) : null
     this.stored = { init, traits }
     await this.ctx.storage.put('stored', this.stored)
-    await this.ctx.storage.setAlarm(Date.now() + CONNECT_TIMEOUT_MS)
+    this.gameAlarmAt = Date.now() + CONNECT_TIMEOUT_MS
+    await this.ctx.storage.put('gameAlarmAt', this.gameAlarmAt)
+    await this.scheduleAlarm()
   }
 
   // --- sockets ---------------------------------------------------------------------------------
@@ -171,8 +211,15 @@ export class DuelRoom extends DurableObject<Env> {
       this.onPong(attachment.seat, message.n)
       return
     }
-    if (message.type === 'voice_on' || message.type === 'voice_off') {
-      await this.voiceMessage(stored, attachment.seat, message.type === 'voice_on')
+    if (this.voice.handle(attachment.seat, message)) {
+      if (message.type === 'voice_on' || message.type === 'voice_off') {
+        const preference = this.voice.preference(attachment.seat)
+        ws.serializeAttachment({
+          seat: attachment.seat,
+          accountId: attachment.accountId,
+          ...(preference ? { voice: preference } : {}),
+        } satisfies Attachment)
+      }
       return
     }
     const flow = this.ensureFlow(stored)
@@ -199,20 +246,41 @@ export class DuelRoom extends DurableObject<Env> {
     // A replaced socket closing is not a drop.
     const live = this.ctx.getWebSockets(`seat:${attachment.seat}`).filter((s) => s !== ws)
     if (live.length === 0) {
+      this.voice.drop(attachment.seat)
       this.ensureFlow(stored).disconnect(attachment.seat)
     }
   }
 
   override async alarm(): Promise<void> {
-    const stored = await this.load()
-    if (!stored) {
+    await this.voice.retry()
+    // An earlier voice cleanup alarm must not expire the duel's independent deadline.
+    if (this.closed || this.gameAlarmAt === undefined || Date.now() < this.gameAlarmAt) {
+      await this.scheduleAlarm()
       return
     }
-    const flow = this.ensureFlow(stored)
-    if (flow.beat === 'result') {
-      flow.rematchExpired()
-    } else if (!this.startedOnce && flow.draw === 0) {
-      this.finishRoom()
+    this.gameAlarmAt = undefined
+    await this.ctx.storage.delete('gameAlarmAt')
+    const stored = await this.load()
+    if (stored && !this.closed) {
+      const flow = this.ensureFlow(stored)
+      if (flow.beat === 'result') {
+        flow.rematchExpired()
+      } else if (!this.startedOnce && flow.draw === 0) {
+        this.finishRoom()
+      }
+    }
+    await this.scheduleAlarm()
+  }
+
+  private async scheduleAlarm(): Promise<void> {
+    const deadline = Math.min(
+      this.gameAlarmAt ?? Number.POSITIVE_INFINITY,
+      this.voice.nextRetry ?? Number.POSITIVE_INFINITY,
+    )
+    if (Number.isFinite(deadline)) {
+      await this.ctx.storage.setAlarm(deadline)
+    } else {
+      await this.ctx.storage.deleteAlarm()
     }
   }
 
@@ -232,6 +300,14 @@ export class DuelRoom extends DurableObject<Env> {
       flow.restore(rest, [connected[0] ?? false, connected[1] ?? false])
       this.startedOnce = true
     }
+    if (!this.closed) {
+      for (const ws of this.ctx.getWebSockets()) {
+        const attachment = ws.deserializeAttachment() as Attachment | null
+        if (attachment?.voice) {
+          this.voice.handle(attachment.seat, attachment.voice)
+        }
+      }
+    }
     return this.stored
   }
 
@@ -245,6 +321,7 @@ export class DuelRoom extends DurableObject<Env> {
       clock: realClock,
       io: {
         send: (seat, message) => {
+          this.voice.update(true, true)
           for (const ws of this.ctx.getWebSockets(`seat:${seat}`)) {
             sendRoomMessage(ws, message)
           }
@@ -260,7 +337,10 @@ export class DuelRoom extends DurableObject<Env> {
               sendRoomMessage(ws, helloMessage(stored, seat, rematch))
             }
           }
-          this.ctx.waitUntil(this.ctx.storage.delete('rest'))
+          this.gameAlarmAt = undefined
+          this.ctx.waitUntil(
+            this.ctx.storage.delete(['rest', 'gameAlarmAt']).then(() => this.scheduleAlarm()),
+          )
           this.startPings()
         },
       },
@@ -322,9 +402,10 @@ export class DuelRoom extends DurableObject<Env> {
   private idle(deadline: number): void {
     this.stopPings()
     const rest = this.flow?.rest()
+    this.gameAlarmAt = deadline
     if (rest) {
       this.ctx.waitUntil(
-        this.ctx.storage.put('rest', rest).then(() => this.ctx.storage.setAlarm(deadline)),
+        this.ctx.storage.put({ rest, gameAlarmAt: deadline }).then(() => this.scheduleAlarm()),
       )
     }
   }
@@ -343,91 +424,20 @@ export class DuelRoom extends DurableObject<Env> {
       }
     }
     const accounts = this.stored?.init.accounts.filter((a): a is string => a !== null) ?? []
-    const voice = this.stored?.voice
-    const voiceCleanup =
-      voice === undefined
-        ? []
-        : voice.participants
-            .filter((p): p is string => p !== null)
-            .map((p) => removeVoiceParticipant(this.env, voice.meetingId, p).catch(() => undefined))
+    this.gameAlarmAt = undefined
+    this.stored = null
     this.ctx.waitUntil(
       Promise.all([
-        this.ctx.storage.deleteAll().then(() => this.ctx.storage.put('closed', true)),
+        // Keep the durable voice retry ledger even after all gameplay state is retired.
+        this.ctx.storage
+          .put('closed', true)
+          .then(() => this.ctx.storage.delete(['stored', 'rest', 'gameAlarmAt'])),
         this.env.MATCHMAKER.get(this.env.MATCHMAKER.idFromName('mm:global'))
           .release(accounts)
           .catch(() => undefined),
-        ...voiceCleanup,
-      ]),
+        this.voice.close(),
+      ]).then(() => this.scheduleAlarm()),
     )
-  }
-
-  /** Mint or revoke this seat's RealtimeKit participant token. Never reaches the duel flow. */
-  private voiceMessage(stored: Stored, seat: Seat, on: boolean): Promise<void> {
-    const next = this.voiceChain.then(() => this.voiceMessageNow(stored, seat, on))
-    this.voiceChain = next.catch(() => undefined)
-    return next
-  }
-
-  private async voiceMessageNow(stored: Stored, seat: Seat, on: boolean): Promise<void> {
-    if (on) {
-      const now = Date.now()
-      if (this.voiceBusy[seat] || this.voiceAt[seat] + 2000 > now) {
-        return
-      }
-      this.voiceAt[seat] = now
-    } else if (this.voiceBusy[seat]) {
-      return
-    }
-    const sockets = this.ctx.getWebSockets(`seat:${seat}`)
-    const socket = sockets.at(-1)
-    if (!socket) {
-      return
-    }
-    if (!on) {
-      const voice = stored.voice
-      const participant = voice?.participants[seat]
-      if (voice && participant) {
-        voice.participants[seat] = null
-        await this.ctx.storage.put('stored', stored)
-        await removeVoiceParticipant(this.env, voice.meetingId, participant).catch(() => undefined)
-      }
-      return
-    }
-    if (stored.init.mode !== 'pvp' || stored.init.accounts[seat === 0 ? 1 : 0] === null) {
-      socket.send(JSON.stringify({ type: 'voice_error', message: 'Voice is for human duels.' }))
-      return
-    }
-    this.voiceBusy[seat] = true
-    try {
-      if (!stored.voice) {
-        stored.voice = {
-          meetingId: await createVoiceMeeting(this.env, `bounty-${stored.init.roomId}`),
-          participants: [null, null],
-        }
-      }
-      const voice = stored.voice
-      const existing = voice.participants[seat]
-      let token: string
-      if (existing) {
-        token = await refreshVoiceToken(this.env, voice.meetingId, existing)
-      } else {
-        const added = await addVoiceParticipant(
-          this.env,
-          voice.meetingId,
-          stored.init.posters[seat].name,
-          String(seat),
-        )
-        voice.participants[seat] = added.id
-        token = added.token
-      }
-      await this.ctx.storage.put('stored', stored)
-      socket.send(JSON.stringify({ type: 'voice_ready', meetingId: voice.meetingId, token }))
-    } catch (err) {
-      console.error('duel voice token failed', err)
-      socket.send(JSON.stringify({ type: 'voice_error', message: 'Voice is unavailable.' }))
-    } finally {
-      this.voiceBusy[seat] = false
-    }
   }
 
   private requeue(stored: Stored, seat: Seat): void {

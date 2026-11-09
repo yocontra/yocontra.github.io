@@ -131,10 +131,10 @@ export class GameEffects {
       }
     })
     game.app.on('update', this.update)
-    globalThis.addEventListener('pointerup', () => void game.app.soundManager.resume(), {
+    globalThis.addEventListener('pointerup', this.resumeAudio, {
       signal: this.abort.signal,
     })
-    globalThis.addEventListener('keydown', () => void game.app.soundManager.resume(), {
+    globalThis.addEventListener('keydown', this.resumeAudio, {
       signal: this.abort.signal,
     })
   }
@@ -255,9 +255,28 @@ export class GameEffects {
     this.play(id, sound, at)
     this.play(id, 'tail', at)
   }
+  private readonly resumeAudio = (event: Event): void => {
+    if (!event.isTrusted) {
+      return
+    }
+    const manager = this.game.app.soundManager
+    if (manager.suspended) {
+      return
+    }
+    // Browser interruption/autoplay state is distinct from native manual suspension.
+    const context = manager.context
+    if (context?.state !== 'running') {
+      void context?.resume().catch(() => undefined)
+    }
+  }
   private play(id: number, name: string, position: Point): void {
     const asset = this.soundAssets.get(name)
     if (!asset) {
+      return
+    }
+    // Suspended/interrupted contexts do not finish sources, so overlapping one-shots would queue.
+    const manager = this.game.app.soundManager
+    if (manager.suspended || manager.context?.state !== 'running') {
       return
     }
     let entity = this.emitters.get(id)

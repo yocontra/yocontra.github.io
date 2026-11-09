@@ -64,18 +64,50 @@ interface SpawnScore {
 
 function scoreSpawn(w: World, sp: SpawnPoint, index: number, self: Player): SpawnScore {
   let nearest = Number.POSITIVE_INFINITY
-  let seen = false
   for (const q of activePlayers(w)) {
-    if (q === self || !q.alive) {
-      continue
-    }
-    const d = Math.sqrt(dist2(sp.x, sp.z, q.x, q.z))
-    nearest = Math.min(nearest, d)
-    if (!seen && d <= SPAWN_LOS_DIST && hasLineOfSight(w.grid, sp, q)) {
-      seen = true
+    if (q !== self && q.alive) {
+      nearest = Math.min(nearest, Math.sqrt(dist2(sp.x, sp.z, q.x, q.z)))
     }
   }
-  return { index, nearest, seen }
+  return { index, nearest, seen: false }
+}
+
+/** At most eight native rays per shortlisted spawn; excess nearby threats are conservative. */
+function spawnSeen(w: World, sp: SpawnPoint, self: Player): boolean {
+  const threats = [...activePlayers(w)]
+    .filter((q) => q !== self && q.alive && dist2(sp.x, sp.z, q.x, q.z) <= SPAWN_LOS_DIST ** 2)
+    .toSorted((a, b) => dist2(sp.x, sp.z, a.x, a.z) - dist2(sp.x, sp.z, b.x, b.z))
+  if (threats.length > 8) {
+    return true
+  }
+  for (const q of threats) {
+    if (!w.castWorld) {
+      if (hasLineOfSight(w.grid, sp, q)) {
+        return true
+      }
+      continue
+    }
+    const dx = q.x - sp.x
+    const dy = q.y
+    const dz = q.z - sp.z
+    const distance = Math.hypot(dx, dy, dz)
+    if (distance < 0.01) {
+      return true
+    }
+    const hit = w.castWorld({
+      ox: sp.x,
+      oy: 1.62,
+      oz: sp.z,
+      dx: dx / distance,
+      dy: dy / distance,
+      dz: dz / distance,
+      maxT: distance,
+    })
+    if (hit === null || hit >= distance - 0.05) {
+      return true
+    }
+  }
+  return false
 }
 
 /** Never spawn this close (m) to a living rider: two riders on one point lock up. */
@@ -90,13 +122,21 @@ export function chooseSpawn(w: World, self: Player): SpawnPoint {
   const spawns = w.layout.spawns
   const all = spawns.map((sp, i) => scoreSpawn(w, sp, i, self))
   const clear = all.filter((s) => s.nearest >= SPAWN_CLEAR_M)
-  const scored = clear.length > 0 ? clear : all
+  const scored = (clear.length > 0 ? clear : all)
+    .toSorted((a, b) => b.nearest - a.nearest || a.index - b.index)
+    .slice(0, 12)
+  for (const candidate of scored) {
+    const spawn = spawns[candidate.index]
+    if (spawn) {
+      candidate.seen = spawnSeen(w, spawn, self)
+    }
+  }
   const safe = scored.filter((s) => s.nearest >= SPAWN_MIN_ENEMY_DIST && !s.seen)
   const pool = (safe.length > 0 ? safe : scored).toSorted(
     (a, b) => b.nearest - a.nearest || a.index - b.index,
   )
   const pick = pool[w.rng.int(0, Math.min(3, pool.length) - 1)] ?? pool[0]
-  return spawns[pick?.index ?? 0] ?? { x: 72, z: 64, interior: false }
+  return spawns[pick?.index ?? 0] ?? { x: w.layout.size / 2, z: w.layout.size / 2, interior: false }
 }
 
 export function spawnPlayer(w: World, p: Player): void {

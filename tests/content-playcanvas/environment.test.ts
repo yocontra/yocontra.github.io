@@ -44,11 +44,18 @@ it('environment PBR maps use native Basis images and preserve the complete veget
   ).toBeGreaterThan(0)
   expect(frontier?.listAnimations().map((animation) => animation.getName())).toContain('Wind')
   const authored = JSON.parse(await readFile('tools/art/environments/frontier.json', 'utf8')) as {
-    plants: number
-    species: string[]
+    panes: number
+    arrival: number[]
+    life: { folk: unknown[]; horses: unknown[]; crowPerches: unknown[] }
   }
-  expect(authored.plants).toBe(793)
-  expect(new Set(authored.species).size).toBe(11)
+  expect(frontier?.listNodes().filter((node) => node.getName().startsWith('flora-'))).toHaveLength(
+    19,
+  )
+  expect(authored.panes).toBe(241)
+  expect(authored.arrival).toEqual([52, 0, 52])
+  expect(authored.life.folk).toHaveLength(2)
+  expect(authored.life.horses).toHaveLength(1)
+  expect(authored.life.crowPerches).toHaveLength(3)
   expect(streetLife.folk).toHaveLength(9)
   expect(streetLife.horses).toHaveLength(2)
 }, 30_000)

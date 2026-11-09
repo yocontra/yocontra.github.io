@@ -1,101 +1,131 @@
-/** Explicit finite waistcoat authoring repair; the runtime only consumes native skinned geometry. */
-import type { Document, Primitive } from '@gltf-transform/core'
-import { Vec3 } from 'playcanvas'
+/** Replace obsolete apron geometry with a Blender-authored, natively skinned garment. */
+import { resolve } from 'node:path'
+import { type Document, NodeIO, type Primitive } from '@gltf-transform/core'
+import { copyToDocument } from '@gltf-transform/functions'
+import type { Range } from './character-atlas.ts'
+import { appendAuthoredSurface, bindAuthoredSurface } from './garment-geometry.ts'
+import pattern from './waistcoat-pattern.json' with { type: 'json' }
 
-interface Range {
-  start: number
-  count: number
-}
-interface WaistcoatFit {
-  ranges: Range[]
-  bone: string
-  rearLimit: number
-  hemBone: string
-  hemStart: number
-  hemBlend: number
-}
-export function fitWaistcoats(doc: Document): void {
+const io = new NodeIO()
+export async function fitWaistcoats(doc: Document, id: string): Promise<void> {
   for (const node of doc.getRoot().listNodes()) {
     const mesh = node.getMesh()
     const skin = node.getSkin()
     if (!(mesh && skin)) {
       continue
     }
-    for (const primitive of mesh.listPrimitives()) {
-      const fit = primitive.getExtras().waistcoatFit as WaistcoatFit | undefined
-      if (!fit) {
+    const ranges = (node.getExtras().pieceRanges ?? []) as Range[]
+    for (const original of [...mesh.listPrimitives()]) {
+      const fit = original.getExtras().waistcoatFit as { ranges: Range[] } | undefined
+      const wool = fit?.ranges[0]
+      if (!(fit && wool)) {
         continue
       }
-      const bone = skin.listJoints().findIndex((joint) => joint.getName() === fit.bone)
-      if (bone < 0) {
-        throw new Error(`Missing authored waistcoat bone ${fit.bone}`)
+      const authored = await io.read(resolve('tools/art/characters/waistcoats', `${id}.glb`))
+      if (
+        JSON.stringify(authored.getRoot().getExtras().jointNames) !==
+        JSON.stringify(skin.listJoints().map((joint) => joint.getName()))
+      ) {
+        throw new Error(`Waistcoat ${id} has a different canonical skin`)
       }
-      const hem = skin.listJoints().findIndex((joint) => joint.getName() === fit.hemBone)
-      if (hem < 0) {
-        throw new Error(`Missing authored waistcoat hem bone ${fit.hemBone}`)
+      const source = authored.getRoot().listMeshes()[0]?.listPrimitives()[0]
+      if (!source) {
+        throw new Error(`Missing authored waistcoat ${id}`)
       }
-      fitPrimitive(primitive, fit, bone, hem)
+      const garment = copyToDocument(doc, authored, [source]).get(source) as Primitive
+      bindAuthoredSurface(garment, original, wool.start)
+      stripCoveredShirt(original, ranges, fit.ranges)
+      appendAuthoredSurface(
+        original,
+        garment,
+        (original.getExtras().pieceRanges as Range[] | undefined) ?? ranges,
+      )
+      original.setExtras({ ...original.getExtras(), waistcoatFit: undefined })
+      garment.dispose()
     }
   }
 }
-function fitPrimitive(primitive: Primitive, fit: WaistcoatFit, bone: number, hem: number): void {
-  const positions = primitive.getAttribute('POSITION')
-  const joints = primitive.getAttribute('JOINTS_0')
-  const weights = primitive.getAttribute('WEIGHTS_0')
-  if (!(positions && joints && weights)) {
-    throw new Error('Waistcoat requires a complete native skin')
-  }
-  const vertices = new Set<number>()
-  for (const range of fit.ranges) {
-    for (let vertex = range.start; vertex < range.start + range.count; vertex++) {
-      const point = positions.getElement(vertex, [] as number[])
-      positions.setElement(vertex, [
-        point[0] ?? 0,
-        point[1] ?? 0,
-        Math.max(fit.rearLimit, point[2] ?? 0),
-      ])
-      const torsoWeight = Math.max(0, Math.min(1, ((point[1] ?? 0) - fit.hemStart) / fit.hemBlend))
-      joints.setElement(vertex, [hem, bone, 0, 0])
-      weights.setElement(vertex, [1 - torsoWeight, torsoWeight, 0, 0])
-      vertices.add(vertex)
-    }
-  }
-  fitNormals(primitive, vertices)
+function patternDistance([u = 0, v = 0]: number[]): number {
+  const front = Math.min(u, 1 - u)
+  const back = Math.abs(u - 0.5)
+  return Math.min(
+    front < pattern.frontWidth ? pattern.frontDepth + pattern.frontSlope * front - v : 10,
+    back < pattern.backWidth ? pattern.backDepth + pattern.backSlope * back - v : 10,
+    ...pattern.armCenters.map(
+      (center) =>
+        0.1 *
+        (((u - center) / pattern.armWidth) ** 2 +
+          ((v - pattern.armLevel) / pattern.armHeight) ** 2 -
+          1),
+    ),
+    v - pattern.hem,
+  )
 }
-function fitNormals(primitive: Primitive, vertices: ReadonlySet<number>): void {
-  const positions = primitive.getAttribute('POSITION')
-  const normals = primitive.getAttribute('NORMAL')
+function stripCoveredShirt(primitive: Primitive, ranges: Range[], obsolete: Range[]): void {
+  const position = primitive.getAttribute('POSITION')
+  const uv = primitive.getAttribute('TEXCOORD_0')
   const indices = primitive.getIndices()
-  if (!(positions && normals && indices)) {
-    throw new Error('Waistcoat requires indexed surface normals')
+  const shirt = ranges.find((range) => range.name === 'WesternShirt')
+  if (!(position && uv && indices && shirt)) {
+    throw new Error('A fitted waistcoat requires the canonical shirt substrate')
   }
-  const sums = new Map<number, Vec3>()
-  const a = new Vec3()
-  const b = new Vec3()
-  const c = new Vec3()
-  const normal = new Vec3()
-  for (let index = 0; index < indices.getCount(); index += 3) {
-    const tri = [
-      indices.getScalar(index),
-      indices.getScalar(index + 1),
-      indices.getScalar(index + 2),
-    ]
-    if (!tri.every((vertex) => vertices.has(vertex))) {
-      continue
+  const inside = (index: number, range: Range) =>
+    index >= range.start && index < range.start + range.count
+  const points = Array.from({ length: shirt.count }, (_, i) => ({
+    point: position.getElement(shirt.start + i, []),
+    uv: uv.getElement(shirt.start + i, []),
+  }))
+  const lo = [0, 1].map((c) => Math.min(...points.map((p) => p.uv[c] ?? 0)))
+  const hi = [0, 1].map((c) => Math.max(...points.map((p) => p.uv[c] ?? 0)))
+  const under = ranges.filter((range) =>
+    ['WesternShirt', 'ShirtTailoring', 'ShirtButtons'].includes(range.name ?? ''),
+  )
+  const decorative = under.filter((range) => range.name !== 'WesternShirt')
+  const covered = new Map<number, boolean>()
+  const test = (index: number): boolean => {
+    if (!under.some((range) => inside(index, range))) {
+      return false
     }
-    a.fromArray(positions.getElement(tri[0] ?? 0, []))
-    b.fromArray(positions.getElement(tri[1] ?? 0, [])).sub(a)
-    c.fromArray(positions.getElement(tri[2] ?? 0, [])).sub(a)
-    normal.cross(b, c)
-    for (const vertex of tri) {
-      const sum = sums.get(vertex) ?? new Vec3()
-      sum.add(normal)
-      sums.set(vertex, sum)
+    const known = covered.get(index)
+    if (known !== undefined) {
+      return known
+    }
+    const point = position.getElement(index, [])
+    let nearest = points[0]
+    let distance = Number.POSITIVE_INFINITY
+    for (const candidate of points) {
+      const next = candidate.point.reduce(
+        (sum, value, c) => sum + (value - (point[c] ?? 0)) ** 2,
+        0,
+      )
+      if (next < distance) {
+        nearest = candidate
+        distance = next
+      }
+    }
+    const result = Boolean(
+      nearest &&
+        distance < 0.0009 &&
+        patternDistance(
+          nearest.uv.map((v, c) => (v - (lo[c] ?? 0)) / ((hi[c] ?? 1) - (lo[c] ?? 0))),
+        ) > 0.035,
+    )
+    covered.set(index, result)
+    return result
+  }
+  const keep: number[] = []
+  for (let i = 0; i < indices.getCount(); i += 3) {
+    const triangle = [indices.getScalar(i), indices.getScalar(i + 1), indices.getScalar(i + 2)]
+    if (
+      !(
+        triangle.every((vertex) => obsolete.some((range) => inside(vertex, range))) ||
+        triangle.every(test) ||
+        (triangle.every((vertex) => decorative.some((range) => inside(vertex, range))) &&
+          triangle.some(test))
+      )
+    ) {
+      keep.push(...triangle)
     }
   }
-  for (const [vertex, sum] of sums) {
-    if (sum.lengthSq() > 1e-18) {
-      normals.setElement(vertex, sum.normalize().toArray())
-    }
-  }
+  indices.setArray(Uint32Array.from(keep))
 }

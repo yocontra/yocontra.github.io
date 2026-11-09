@@ -1,3 +1,4 @@
+import { Entity } from 'playcanvas'
 import type { GameApplication } from '../client/application.ts'
 import { NativeWilds } from '../client/wilds.ts'
 import { AMBIENT_ASSETS } from '../content/ambient.ts'
@@ -10,7 +11,7 @@ import type { ArenaLife, Stand } from './native-arenas.ts'
 type CueProp = 'coin' | 'card' | 'crow' | 'tumbleweed' | 'door' | 'dog' | 'horse'
 interface Spectator {
   actor: DuelActor
-  home: Stand & { habit?: string; door?: readonly number[] | null; floor?: number }
+  home: Stand & { habit?: string; door?: readonly number[] | null; floor?: number; seatY?: number }
   hipsHeight: number
   running: boolean
 }
@@ -27,6 +28,31 @@ function habit(spectator: Spectator): void {
     lean: 'Town_Lean',
   }
   clip(spectator.actor, habits[spectator.home.habit ?? 'stand'] ?? 'Idle')
+}
+
+function placeSpectator(spectator: Spectator, home: Spectator['home']) {
+  spectator.home = home
+  spectator.running = false
+  const seated = home.habit === 'sit' || home.habit === 'whittle'
+  const height = home.y - (seated ? spectator.hipsHeight - 0.1 : 0)
+  spectator.actor.place(home.x, height, home.z)
+  spectator.actor.face((home.yaw * 180) / Math.PI)
+  if (seated && home.seatY !== undefined) {
+    spectator.actor.play('Town_Sit', 0)
+    spectator.actor.model.anim?.update(0)
+    const hips = spectator.actor.model.findByName('Hips')
+    if (hips) {
+      const localHips = hips.getPosition().y - spectator.actor.root.getPosition().y
+      spectator.actor.place(home.x, home.seatY + 0.06 - localHips, home.z)
+    }
+  } else {
+    habit(spectator)
+  }
+}
+
+function runRate(actor: DuelActor, speed: number): number {
+  const authored = actor.gaitSpeeds.Run || 5.66
+  return speed / (authored > 0 ? authored : 5.66)
 }
 
 /** Native authored life shared by every act: nine spectators, two horses, a dog and birds. */
@@ -47,7 +73,9 @@ export class NativeAtmosphere {
   constructor(game: GameApplication) {
     this.game = game
   }
-  async load(): Promise<void> {
+  async load(authored: ArenaLife = streetLife): Promise<void> {
+    const allocation = authored.allocation
+    const fakeouts = allocation?.fakeouts !== false
     const create = async (url: string, name: string): Promise<DuelActor> => {
       const actor = await DuelActor.create(this.game, url, name)
       if (this.disposed) {
@@ -58,47 +86,65 @@ export class NativeAtmosphere {
       return actor
     }
     await Promise.all([
-      ...(['coin', 'card', 'tumbleweed', 'door', 'dog'] as const).map(async (name) => {
-        this.props.set(name, await create(DYNAMIC_ASSETS[name].url, `fakeout-${name}`))
-      }),
-      ...Array.from({ length: 2 }, async (_, index) => {
+      ...(['coin', 'card', 'tumbleweed', 'door', 'dog'] as const)
+        .filter((name) => (name === 'dog' ? allocation?.dog !== false : fakeouts))
+        .map(async (name) => {
+          this.props.set(name, await create(DYNAMIC_ASSETS[name].url, `fakeout-${name}`))
+        }),
+      ...Array.from({ length: allocation?.horses ?? 2 }, async (_, index) => {
         const horse = await create(DYNAMIC_ASSETS.horse.url, `town-horse-${index}`)
         this.horses[index] = horse
         if (index === 0) {
           this.props.set('horse', horse)
         }
       }),
-      ...Array.from({ length: 7 }, async (_, index) => {
+      ...Array.from({ length: allocation?.crows ?? 7 }, async (_, index) => {
         const crow = await create(AMBIENT_ASSETS.crow.url, `town-crow-${index}`)
         this.crows[index] = crow
         if (index === 0) {
           this.props.set('crow', crow)
         }
       }),
-      ...Array.from({ length: 3 }, async (_, index) => {
+      ...Array.from({ length: allocation?.hens ?? 3 }, async (_, index) => {
         this.hens[index] = await create(AMBIENT_ASSETS.hen.url, `town-hen-${index}`)
       }),
-      ...streetLife.folk.map(async (spot, index) => {
-        const variant = Math.max(
-          0,
-          OUTLAWS.findIndex((outlaw) => outlaw.look.base === spot.base),
-        )
-        const source = ASSETS[`outlaw-${variant}` as keyof typeof ASSETS]
-        const actor = await create(source.url, `townsfolk-${index}`)
-        const hips = actor.model.findByName('Hips')
-        const hipsHeight = hips ? hips.getPosition().y - actor.root.getPosition().y : 0.95
-        this.folk[index] = { actor, home: spot, hipsHeight, running: false }
-      }),
+      ...authored.folk
+        .slice(0, allocation?.folk ?? authored.folk.length)
+        .map(async (spot, index) => {
+          const variant = Math.max(
+            0,
+            OUTLAWS.findIndex((outlaw) => outlaw.look.base === spot.base),
+          )
+          const source = ASSETS[`outlaw-${variant}` as keyof typeof ASSETS]
+          const actor = await create(source.url, `townsfolk-${index}`)
+          const hips = actor.model.findByName('Hips')
+          const hipsHeight = hips ? hips.getPosition().y - actor.root.getPosition().y : 0.95
+          // Town spectators are civilians. Hide only mounted weapon renderers, preserving clothing.
+          for (const mount of actor.weaponMounts) {
+            if (!(mount.node instanceof Entity)) {
+              continue
+            }
+            for (const render of mount.node.findComponents('render')) {
+              Reflect.set(render, 'enabled', false)
+            }
+          }
+          this.folk[index] = { actor, home: spot, hipsHeight, running: false }
+        }),
       (async () => {
+        if (!fakeouts) {
+          return
+        }
         this.signs = await create(AMBIENT_ASSETS.shingles.url, 'town-shingles')
       })(),
-      NativeWilds.create(this.game, 'duel').then((wilds) => {
-        if (this.disposed) {
-          wilds.destroy()
-        } else {
-          this.wilds = wilds
-        }
-      }),
+      (fakeouts ? NativeWilds.create(this.game, 'duel') : Promise.resolve(undefined)).then(
+        (wilds) => {
+          if (this.disposed) {
+            wilds?.destroy()
+          } else {
+            this.wilds = wilds
+          }
+        },
+      ),
     ])
   }
   arrange(life: ArenaLife): void {
@@ -110,13 +156,7 @@ export class NativeAtmosphere {
       if (!home) {
         continue
       }
-      spectator.home = home
-      spectator.running = false
-      const seated = home.habit === 'sit' || home.habit === 'whittle'
-      const height = home.y - (seated ? spectator.hipsHeight - 0.1 : 0)
-      spectator.actor.place(home.x, height, home.z)
-      spectator.actor.face((home.yaw * 180) / Math.PI)
-      habit(spectator)
+      placeSpectator(spectator, home)
     }
     for (const [index, horse] of this.horses.entries()) {
       const stand = life.horses[index]
@@ -129,11 +169,12 @@ export class NativeAtmosphere {
     }
     for (const [index, crow] of this.crows.entries()) {
       const offset = -1.5 + (index / 6) * 3
-      crow.root.enabled = true
+      const perch = life.crowPerches?.[index]
+      crow.root.enabled = !life.crowPerches || Boolean(perch)
       crow.place(
-        life.crows.x + (life.crows.along === 'x' ? offset : 0),
-        life.crows.y,
-        life.crows.z + (life.crows.along === 'x' ? 0 : offset),
+        perch?.x ?? life.crows.x + (life.crows.along === 'x' ? offset : 0),
+        perch?.y ?? life.crows.y,
+        perch?.z ?? life.crows.z + (life.crows.along === 'x' ? 0 : offset),
       )
       crow.face((life.crows.face * 180) / Math.PI + index * 7)
       clip(crow, 'Idle')
@@ -229,6 +270,9 @@ export class NativeAtmosphere {
         for (const spectator of this.folk) {
           spectator.running = Boolean(spectator.home.door)
           clip(spectator.actor, spectator.running ? 'Run' : 'Town_Duck')
+          if (spectator.running) {
+            spectator.actor.speed(runRate(spectator.actor, 2.1))
+          }
         }
         for (const horse of this.horses) {
           clip(horse, 'Idle_HitReact_Left')
@@ -272,6 +316,7 @@ export class NativeAtmosphere {
         spectator.running = false
       } else {
         const move = Math.min(distance, step * 2.1)
+        spectator.actor.speed(runRate(spectator.actor, step > 0 ? move / step : 0))
         spectator.actor.root.translate((dx / distance) * move, 0, (dz / distance) * move)
         spectator.actor.face((Math.atan2(dx, dz) * 180) / Math.PI)
       }
@@ -297,6 +342,33 @@ export class NativeAtmosphere {
     this.moveFolk(step)
     this.finishCues()
   }
+  /** Compile the native material variants behind loading before admitting an online player. */
+  warm(x: number, y: number, z: number): () => void {
+    const actors = new Set([
+      ...this.props.values(),
+      ...this.folk.map((p) => p.actor),
+      ...this.horses,
+      ...this.crows,
+      ...this.hens,
+    ])
+    const original = [...actors].map((actor) => ({
+      actor,
+      position: actor.root.getLocalPosition().clone(),
+      enabled: actor.root.enabled,
+    }))
+    for (const [index, { actor }] of original.entries()) {
+      actor.root.enabled = true
+      actor.place(x + (index % 3) * 0.4, y, z + Math.floor(index / 3) * 0.4)
+    }
+    return () => {
+      for (const { actor, position, enabled } of original) {
+        if (actor.root.parent) {
+          actor.root.setLocalPosition(position)
+          actor.root.enabled = enabled
+        }
+      }
+    }
+  }
   get stats() {
     return {
       folk: this.folk.length,
@@ -306,6 +378,9 @@ export class NativeAtmosphere {
     }
   }
   destroy(): void {
+    if (this.disposed) {
+      return
+    }
     this.disposed = true
     this.wilds?.destroy()
     const actors = new Set([

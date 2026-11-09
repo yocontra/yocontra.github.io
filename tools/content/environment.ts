@@ -4,18 +4,31 @@ import { copyFile, mkdir, readFile, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { NodeIO } from '@gltf-transform/core'
 import { ALL_EXTENSIONS } from '@gltf-transform/extensions'
-import { dequantize } from '@gltf-transform/functions'
+import { dedup, dequantize, prune, weld } from '@gltf-transform/functions'
 import { compressedCharacterTexture } from './character-textures.ts'
 import { compressEnvironmentTextures } from './environment-textures.ts'
 import { formatContent } from './format-content.ts'
 import { optimizeAsset } from './optimize.ts'
 
-const source = 'tools/art/environments'
-const output = 'public/experiments/out-west/3d/native-v2/baked'
+const argument = (name: string, fallback: string) =>
+  process.argv[process.argv.indexOf(name) + 1] ?? fallback
+const source = process.argv.includes('--source')
+  ? argument('--source', 'tools/art/environments')
+  : 'tools/art/environments'
+const output = process.argv.includes('--output')
+  ? argument('--output', 'public/experiments/out-west/3d/native-v2/baked')
+  : 'public/experiments/out-west/3d/native-v2/baked'
 const names = ['frontier', 'duel', 'depot', 'mission', 'bank'] as const
 const io = new NodeIO().registerExtensions(ALL_EXTENSIONS)
+const onlyIndex = process.argv.indexOf('--only')
+const only = onlyIndex < 0 ? undefined : process.argv[onlyIndex + 1]
+if (only && !names.some((name) => name === only)) {
+  throw new Error(`Unknown environment ${only}`)
+}
+const preserveTextures = process.argv.includes('--preserve-textures')
+
 await mkdir(output, { recursive: true })
-for (const name of names) {
+for (const name of names.filter((candidate) => !only || candidate === only)) {
   const path = join(output, `${name}.glb`)
   await copyFile(join(source, `${name}.glb`), path)
   if (name === 'frontier') {
@@ -49,12 +62,26 @@ for (const name of names) {
   if ((await flatten.exited) !== 0) {
     throw new Error(`Could not flatten ${name} masonry`)
   }
-  await optimizeAsset(path)
+  if (name === 'frontier' || preserveTextures) {
+    const geometry = await io.read(path)
+    await geometry.transform(dedup(), weld(), prune(), dequantize())
+    await io.write(path, geometry)
+  } else {
+    await optimizeAsset(path)
+  }
   const document = await io.read(path)
   // Native static batching transforms vertex data on the CPU: author float position/normal streams.
   await document.transform(dequantize())
   // A second native UV channel keeps moving cloud shade continuous across separate buildings.
   for (const node of document.getRoot().listNodes()) {
+    const original = node.getMesh()
+    if (original && name === 'frontier') {
+      const unique = document.createMesh(original.getName()).setWeights(original.getWeights())
+      for (const primitive of original.listPrimitives()) {
+        unique.addPrimitive(primitive.clone())
+      }
+      node.setMesh(unique)
+    }
     const matrix = node.getWorldMatrix()
     for (const primitive of node.getMesh()?.listPrimitives() ?? []) {
       const position = primitive.getAttribute('POSITION')
@@ -81,12 +108,21 @@ for (const name of names) {
   await io.write(path, document)
   const root = document.getRoot()
   if (name === 'frontier') {
+    root.setExtras({
+      ...root.getExtras(),
+      frontierSourceHash: createHash('sha256')
+        .update(await readFile(join(source, 'frontier.glb')))
+        .digest('hex'),
+    })
     root.listScenes()[0]?.listChildren()[0]?.setName('town')
     await io.write(path, document)
-    const panes = Bun.spawn(['bun', 'tools/content/window-panes.ts'], {
-      stdout: 'inherit',
-      stderr: 'inherit',
-    })
+    const panes = Bun.spawn(
+      ['bun', 'tools/content/window-panes.ts', path, 'tools/art/environments/frontier.plan.json'],
+      {
+        stdout: 'inherit',
+        stderr: 'inherit',
+      },
+    )
     if ((await panes.exited) !== 0) {
       throw new Error('Could not author independently breakable windows')
     }
@@ -99,6 +135,24 @@ for (const name of names) {
     `${name}: ${root.listMeshes().length} meshes, ${root.listTextures().length} PBR textures, ${foliage.length} foliage chunks`,
   )
   await compressEnvironmentTextures(path)
+}
+if (only) {
+  if (only === 'frontier' && output === 'public/experiments/out-west/3d/native-v2/baked') {
+    const path = 'public/experiments/out-west/3d/native-v2/ambient/frontier-tumbleweeds.glb'
+    await mkdir('public/experiments/out-west/3d/native-v2/ambient', { recursive: true })
+    await copyFile(join(source, 'frontier-tumbleweeds.glb'), path)
+    await optimizeAsset(path)
+    const bytes = await readFile(path)
+    console.log(
+      JSON.stringify({
+        ambient: 'frontier-tumbleweeds',
+        url: path.slice(6),
+        bytes: bytes.length,
+        hash: createHash('sha256').update(bytes).digest('hex'),
+      }),
+    )
+  }
+  process.exit(0)
 }
 await writeFile(
   'src/experiments/out-west/content/lighting.json',
@@ -145,13 +199,15 @@ for (const name of [
   'frontier-tumbleweeds',
   'duel-tumbleweeds',
 ] as const) {
-  const path = `public/experiments/out-west/3d/ambient/${name}.glb`
+  const directory = name === 'shingles' ? 'ambient' : 'native-v2/ambient'
+  await mkdir(`public/experiments/out-west/3d/${directory}`, { recursive: true })
+  const path = `public/experiments/out-west/3d/${directory}/${name}.glb`
   await copyFile(join(source, `${name}.glb`), path)
   await optimizeAsset(path)
   const bytes = await readFile(path)
   const hash = createHash('sha256').update(bytes).digest('hex')
   ambient[name] = {
-    url: `/experiments/out-west/3d/ambient/${name}.glb?v=${hash.slice(0, 16)}`,
+    url: `/experiments/out-west/3d/${directory}/${name}.glb?v=${hash.slice(0, 16)}`,
     bytes: bytes.length,
     hash,
   }

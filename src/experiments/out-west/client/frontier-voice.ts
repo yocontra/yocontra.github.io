@@ -1,7 +1,8 @@
 import type { AudioEngine } from '../audio/audio.ts'
 import { blockedNames } from '../net/social.ts'
 import { getSettings, onSettings } from '../settings.ts'
-import { VoiceChat, type VoiceCredentials } from '../voice/voice-chat.ts'
+import { NativeVoiceAudio } from '../voice/native-audio.ts'
+import { VoiceChat } from '../voice/voice-chat.ts'
 import { VoiceControls } from '../voice/voice-ui.ts'
 import type { FrontierSession } from './frontier-session.ts'
 
@@ -12,56 +13,57 @@ export class FrontierVoice {
   private readonly controls: VoiceControls
   private readonly unsubscribe: () => void
   private readonly unsubscribeSettings: () => void
-  private pending:
-    | { finish: (value: VoiceCredentials | null) => void; timeout: ReturnType<typeof setTimeout> }
-    | undefined
+  private readonly nativeAudio: NativeVoiceAudio
   private blocked = new Set<string>()
-  constructor(root: HTMLElement, session: FrontierSession, audio: AudioEngine | null) {
+  constructor(
+    root: HTMLElement,
+    session: FrontierSession,
+    audio: AudioEngine | null,
+    context: () => AudioContext | null,
+  ) {
     this.session = session
+    this.nativeAudio = new NativeVoiceAudio(context, () => getSettings().voiceChatVolume)
     this.controls = new VoiceControls({
+      connect: () => this.chat.retry(),
       settings: getSettings,
       talk: (on) => this.chat.setTalking(on),
       mute: (on) => this.chat.setMicMuted(on),
     })
     root.append(this.controls.root)
     this.chat = new VoiceChat({
-      audio,
+      audio: audio ?? this.nativeAudio,
+      activity: (track, interrupted) => this.nativeAudio.analyse(track, interrupted),
+      audioRunning: () => this.nativeAudio.running,
       settings: getSettings,
-      sendOff: () => session.control(JSON.stringify({ type: 'voice_off' })),
-      requestToken: () =>
-        new Promise((finish) => {
-          this.finish(null)
-          this.pending = { finish, timeout: setTimeout(() => this.finish(null), 10_000) }
-          session.control(JSON.stringify({ type: 'voice_on' }))
-        }),
+      listening: () => getSettings().voiceChatVolume > 0,
+      send: (control) => session.control(JSON.stringify(control)),
       muted: (id) => this.blocked.has(session.world.players[id]?.name.toLowerCase() ?? ''),
       onState: (state, message) => this.controls.setState(state, message),
     })
     this.unsubscribe = session.subscribeControl((message) => {
-      if (message.type === 'voice_ready') {
-        this.finish(message)
-      }
-      if (message.type === 'voice_error') {
-        this.finish(null)
+      if (
+        message.type === 'voice_ready' ||
+        message.type === 'voice_error' ||
+        message.type === 'voice_standby' ||
+        message.type === 'voice_status'
+      ) {
+        this.chat.receive(message)
       }
     })
     this.unsubscribeSettings = onSettings(() => this.configure())
     this.configure()
   }
-  private finish(value: VoiceCredentials | null): void {
-    if (this.pending) {
-      clearTimeout(this.pending.timeout)
-      this.pending.finish(value)
-      this.pending = undefined
-    }
+  setLinked(on: boolean): void {
+    this.chat.setLinked(on)
   }
   private configure(): void {
-    if (getSettings().voiceChat && !this.session.practice) {
+    const enabled = getSettings().voiceChat && !this.session.practice
+    if (enabled) {
       void blockedNames().then((names) => {
         this.blocked = names
       })
     }
-    this.chat.setEnabled(getSettings().voiceChat && !this.session.practice)
+    this.chat.setEnabled(enabled)
     this.controls.refresh()
   }
   update(): void {
@@ -78,10 +80,10 @@ export class FrontierVoice {
     )
   }
   destroy(): void {
-    this.finish(null)
     this.unsubscribe()
     this.unsubscribeSettings()
     this.controls.dispose()
     void this.chat.dispose()
+    this.nativeAudio.dispose()
   }
 }

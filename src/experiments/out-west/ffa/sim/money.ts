@@ -62,7 +62,10 @@ function strongboxDistance(w: World, p: Player): boolean {
   const box = w.strongbox
   const spot = box ? w.layout.strongboxes[box.spot] : undefined
   return (
-    box !== null && spot !== undefined && dist2(p.x, p.z, spot.x, spot.z) <= STRONGBOX_RADIUS ** 2
+    box !== null &&
+    spot !== undefined &&
+    Math.abs(p.y - (spot.y ?? 0)) <= 1.2 &&
+    dist2(p.x, p.z, spot.x, spot.z) <= STRONGBOX_RADIUS ** 2
   )
 }
 
@@ -87,7 +90,7 @@ export function startChannel(w: World, p: Player, buttons: number): void {
   if (p.moving) {
     return
   }
-  const zone = zoneAt(w.layout, p.x, p.z)
+  const zone = zoneAt(w.layout, p.x, p.z, p.y)
   if (zone && p.carried > 0) {
     const bank = zone.kind === 'bank'
     p.channel = {
@@ -143,7 +146,7 @@ export function progressChannel(w: World, p: Player): void {
   let cancel = p.lastDamageTick === w.tick || !p.alive
   if (!cancel) {
     if (ch.kind === CHANNEL_BANK || ch.kind === CHANNEL_STAGE) {
-      const zone = zoneAt(w.layout, p.x, p.z)
+      const zone = zoneAt(w.layout, p.x, p.z, p.y)
       const want = ch.kind === CHANNEL_BANK ? 'bank' : 'stage'
       cancel = !zone || zone.kind !== want || (ch.zoneId !== undefined && zone.id !== ch.zoneId)
     } else if (ch.kind === CHANNEL_STRONGBOX) {

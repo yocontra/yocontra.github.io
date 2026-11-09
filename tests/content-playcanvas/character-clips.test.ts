@@ -243,7 +243,7 @@ it('finite crouch weapon clips preserve the authored upper world frame without m
   }
 })
 
-it('explicit waistcoat fitting preserves all UVs and body vertices while repairing only authored garment weights', async () => {
+it('authored waistcoats replace the apron with full shoulder coverage and retain the canonical body and skin', async () => {
   const { fitWaistcoats } = await import('../../tools/content/waistcoat-fit.ts')
   const doc = await io.read('tools/art/characters/outfit.trail-duds.gltf')
   const node = doc
@@ -255,64 +255,56 @@ it('explicit waistcoat fitting preserves all UVs and body vertices while repairi
         ?.listPrimitives()
         .some((surface) => Boolean(surface.getExtras().waistcoatFit)),
     )
-  const primitive = node
-    ?.getMesh()
-    ?.listPrimitives()
-    .find((entry) => Boolean(entry.getExtras().waistcoatFit))
-  const positions = primitive?.getAttribute('POSITION')
-  const uv = primitive?.getAttribute('TEXCOORD_0')
-  const joints = primitive?.getAttribute('JOINTS_0')
-  const weights = primitive?.getAttribute('WEIGHTS_0')
-  if (!(primitive && positions && uv && joints && weights)) {
+  const mesh = node?.getMesh()
+  const original = mesh?.listPrimitives().find((entry) => Boolean(entry.getExtras().waistcoatFit))
+  const positions = original?.getAttribute('POSITION')
+  const uv = original?.getAttribute('TEXCOORD_0')
+  if (!(original && positions && uv && mesh)) {
     throw new Error('Missing preserved waistcoat source')
   }
-  const fit = primitive.getExtras().waistcoatFit as {
-    ranges: { start: number; count: number }[]
-    restoredShoulderTriangles: number
-    rearLimit: number
-  }
-  const garment = new Set(
-    fit.ranges.flatMap((range) =>
-      Array.from({ length: range.count }, (_, index) => range.start + index),
-    ),
+  const fit = original.getExtras().waistcoatFit as { ranges: { start: number; count: number }[] }
+  const obsolete = new Set(
+    fit.ranges.flatMap((range) => Array.from({ length: range.count }, (_, i) => range.start + i)),
   )
   const before = Array.from(positions.getArray() ?? [])
   const originalUV = Array.from(uv.getArray() ?? [])
-  const torso = node
-    ?.getSkin()
-    ?.listJoints()
-    .findIndex((joint) => joint.getName() === 'Torso')
-  expect(fit.restoredShoulderTriangles).toBeGreaterThan(50)
-  fitWaistcoats(doc)
-  const hips = node
-    ?.getSkin()
-    ?.listJoints()
-    .findIndex((joint) => joint.getName() === 'Hips')
-  for (const vertex of garment) {
-    expect(joints.getElement(vertex, [] as number[])).toEqual([hips ?? -1, torso ?? -1, 0, 0])
-    const values = weights.getElement(vertex, [] as number[])
-    expect(values.reduce((sum, value) => sum + value, 0)).toBeCloseTo(1)
-    expect(Math.min(...values)).toBeGreaterThanOrEqual(0)
-    expect(positions.getElement(vertex, [])[2]).toBeGreaterThanOrEqual(fit.rearLimit - 1e-6)
-  }
-  const body = Array.from({ length: positions.getCount() }, (_, index) => index).filter(
-    (vertex) => !garment.has(vertex),
-  )
-  for (const vertex of body) {
-    expect(positions.getElement(vertex, [] as number[])).toEqual(
-      before.slice(vertex * 3, vertex * 3 + 3),
-    )
-  }
-  const ordered = [...garment].sort(
-    (left, right) =>
-      (positions.getElement(left, [])[1] ?? 0) - (positions.getElement(right, [])[1] ?? 0),
-  )
-  expect(weights.getElement(ordered[0] ?? 0, [] as number[])).toEqual([1, 0, 0, 0])
-  expect(weights.getElement(ordered.at(-1) ?? 0, [] as number[])).toEqual([0, 1, 0, 0])
+  await fitWaistcoats(doc, 'outfit.trail-duds')
+  expect(Array.from(positions.getArray() ?? [])).toEqual(before)
   expect(Array.from(uv.getArray() ?? [])).toEqual(originalUV)
-  const fitted = Array.from(positions.getArray() ?? [])
-  fitWaistcoats(doc)
-  expect(Array.from(positions.getArray() ?? [])).toEqual(fitted)
+  const indices = original.getIndices()
+  if (!indices) {
+    throw new Error('Missing fitted body indices')
+  }
+  for (let i = 0; i < indices.getCount(); i += 3) {
+    expect([0, 1, 2].every((corner) => obsolete.has(indices.getScalar(i + corner)))).toBe(false)
+  }
+  const garment = mesh.listPrimitives().find((entry) => Boolean(entry.getExtras().pieceRanges))
+  const cloth = garment?.getAttribute('POSITION')
+  const joints = garment?.getAttribute('JOINTS_0')
+  const weights = garment?.getAttribute('WEIGHTS_0')
+  if (!(garment && cloth && joints && weights)) {
+    throw new Error('Missing authored native garment')
+  }
+  const clothRange = (
+    garment.getExtras().pieceRanges as { start: number; count: number; name?: string }[]
+  ).find((range) => range.name === 'Waistcoat')
+  if (!clothRange) {
+    throw new Error('Missing tailored cloth range')
+  }
+  const heights = Array.from(
+    { length: clothRange.count },
+    (_, i) => cloth.getElement(clothRange.start + i, [])[1] ?? 0,
+  )
+  expect(Math.max(...heights)).toBeGreaterThan(1.4)
+  expect(Math.min(...heights)).toBeLessThan(1)
+  const jointCount = node?.getSkin()?.listJoints().length ?? 0
+  for (let i = 0; i < cloth.getCount(); i++) {
+    expect(weights.getElement(i, []).reduce((sum, w) => sum + w, 0)).toBeCloseTo(1, 5)
+    expect(joints.getElement(i, []).every((joint) => joint >= 0 && joint < jointCount)).toBe(true)
+  }
+  const count = mesh.listPrimitives().length
+  await fitWaistcoats(doc, 'outfit.trail-duds')
+  expect(mesh.listPrimitives()).toHaveLength(count)
 })
 
 it('all baked opponent hats retain one explicit Head-local native detachable mount', async () => {

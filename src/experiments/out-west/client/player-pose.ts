@@ -1,6 +1,8 @@
 import { eyeHeight } from '../ffa/sim/combat.ts'
 import { BODY_HEIGHT } from '../ffa/sim/constants.ts'
+import { makeMoveState } from '../ffa/sim/types.ts'
 import type { PlayerInput, PlayerState } from '../runtime/protocol.ts'
+import type { PlayerRecord } from '../runtime/schema.ts'
 
 /** Native poses store a standing-centre reference even while their capsule is shortened. */
 export function poseEye(pose: PlayerState): { x: number; y: number; z: number } {
@@ -87,6 +89,9 @@ interface RenderedSample {
 /** Animation follows exactly the SDK-displayed motion; this never filters or changes positions. */
 export class RenderedVelocity {
   private readonly previous = new Map<string, RenderedSample>()
+  reset(id: string): void {
+    this.previous.delete(id)
+  }
   sample(pose: PlayerState, spawnTick: number, at: number): PlayerState {
     const before = this.previous.get(pose.id)
     this.previous.set(pose.id, { x: pose.x, y: pose.y, z: pose.z, at, spawnTick })
@@ -113,5 +118,35 @@ export class RenderedVelocity {
         this.previous.delete(id)
       }
     }
+  }
+}
+
+/** Restore all native motor state from the same acknowledged server pose. */
+export function authoritativePlayerState(record: PlayerRecord, previous: PlayerState): PlayerState {
+  return {
+    ...previous,
+    x: record.x,
+    y: record.y + BODY_HEIGHT / 2,
+    z: record.z,
+    vx: record.vx,
+    vy: record.vy,
+    vz: record.vz,
+    yaw: record.yaw,
+    pitch: ((record.pitch / 127) * Math.PI) / 2,
+    seq: record.seq,
+    grounded: record.grounded,
+    crouched: record.crouched,
+    hp: record.hp,
+    ammo: record.ammo,
+    lastButtons: record.lastButtons,
+    motion: {
+      ...makeMoveState(record.x, record.z),
+      ...record.motion.toJSON(),
+      x: record.x,
+      y: record.y,
+      z: record.z,
+      vy: record.vy,
+      grounded: record.grounded,
+    },
   }
 }

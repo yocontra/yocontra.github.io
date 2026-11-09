@@ -1,0 +1,17 @@
+{
+  "frontDepth": 0.47,
+  "frontSlope": 3.5,
+  "frontWidth": 0.16,
+  "backDepth": 0.93,
+  "backSlope": 2,
+  "backWidth": 0.1,
+  "armCenters": [
+    0.25,
+    0.75
+  ],
+  "armWidth": 0.07,
+  "armHeight": 0.14,
+  "armLevel": 0.76,
+  "hem": 0.075,
+  "clearance": 0.012
+}

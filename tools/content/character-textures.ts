@@ -85,6 +85,8 @@ export async function compressCharacterAssets(): Promise<void> {
           .filter(
             (file) =>
               file.endsWith('.glb') &&
+              (!process.env.OUT_WEST_CHARACTERS ||
+                process.env.OUT_WEST_CHARACTERS.split(',').includes(basename(file, '.glb'))) &&
               (category === 'equipment' ||
                 (category === 'baked' && BAKED.test(file)) ||
                 (category === 'dynamic' && DYNAMIC.test(file))),

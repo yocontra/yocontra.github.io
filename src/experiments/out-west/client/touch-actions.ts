@@ -13,12 +13,13 @@ export function touchActions(world: World, player: Player) {
     box &&
       box.openedBy < 0 &&
       spot &&
+      Math.abs(player.y - (spot.y ?? 0)) <= 1.2 &&
       Math.hypot(player.x - spot.x, player.z - spot.z) <= STRONGBOX_RADIUS,
   )
   return {
     use: Boolean(
       player.channel ||
-        (player.carried > 0 && zoneAt(world.layout, player.x, player.z)) ||
+        (player.carried > 0 && zoneAt(world.layout, player.x, player.z, player.y)) ||
         strongbox ||
         ladderAt(player.x, player.z, player.y, player.roof),
     ),

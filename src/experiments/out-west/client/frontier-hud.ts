@@ -221,7 +221,7 @@ export class FrontierHud {
       },
       performance.now() / 1000,
     )
-    const zone = zoneAt(world.layout, player.x, player.z)
+    const zone = zoneAt(world.layout, player.x, player.z, player.y)
     const duel = world.showdowns.get(player.showdown)
     const cue = duel?.phase === 'called' ? 'DRAW!' : 'Wait for the bell…'
     this.hud.banner(duel ? cue : null)

@@ -1,16 +1,131 @@
 {
-  "plants": 793,
-  "species": [
-    "saguaro",
-    "joshua",
-    "ocotillo",
-    "grass",
-    "creosote",
-    "pear",
-    "sage",
-    "barrel",
-    "boulder",
-    "cholla",
-    "snag"
-  ]
+  "schema": 1,
+  "sourceHash": "6b70abdaf5bd24b1af5a5e1e4993064227e1bf92b14c5212e7e8ca734e65ed1b",
+  "collisionVersion": "0f63f86d9b7ddf1efe507faa734294f6d337b398aa9401c69462dfeb9823d898",
+  "arrival": [
+    52,
+    0,
+    52
+  ],
+  "life": {
+    "folk": [
+      {
+        "name": "Walt Greer",
+        "base": "worker",
+        "x": 26.5,
+        "y": 0.06,
+        "z": 44.25,
+        "yaw": 0,
+        "habit": "sit",
+        "seatY": 0.68,
+        "support": {
+          "kind": "cover",
+          "index": 170,
+          "floorY": 0.06
+        }
+      },
+      {
+        "name": "Ned Calloway",
+        "base": "rugged",
+        "x": 16.25,
+        "y": 0.06,
+        "z": 94.75,
+        "yaw": 0,
+        "habit": "whittle",
+        "seatY": 0.61,
+        "support": {
+          "kind": "cover",
+          "index": 175,
+          "floorY": 0.06
+        }
+      }
+    ],
+    "horses": [
+      {
+        "x": 17.6,
+        "y": 0.03,
+        "z": 30,
+        "yaw": 1.5707963267948966
+      }
+    ],
+    "crows": {
+      "x": 12.1,
+      "y": 2.9,
+      "z": 0.25,
+      "face": 3.141592653589793,
+      "along": "x"
+    },
+    "crowPerches": [
+      {
+        "x": 8.1,
+        "y": 2.9,
+        "z": 0.25
+      },
+      {
+        "x": 12.1,
+        "y": 2.9,
+        "z": 0.25
+      },
+      {
+        "x": 16.1,
+        "y": 2.9,
+        "z": 0.25
+      }
+    ],
+    "dog": {
+      "x": 8,
+      "y": 0.03,
+      "z": 36,
+      "yaw": 0
+    },
+    "door": {
+      "x": 32,
+      "y": 0.03,
+      "z": 44,
+      "yaw": 0
+    },
+    "hens": null,
+    "allocation": {
+      "folk": 2,
+      "horses": 1,
+      "crows": 3,
+      "hens": 0,
+      "dog": false,
+      "fakeouts": false
+    },
+    "routes": []
+  },
+  "tumbleweedPaths": [
+    {
+      "center": [
+        12,
+        54
+      ],
+      "radius": [
+        5,
+        1
+      ]
+    },
+    {
+      "center": [
+        39,
+        54
+      ],
+      "radius": [
+        2.5,
+        0.7
+      ]
+    },
+    {
+      "center": [
+        76,
+        54
+      ],
+      "radius": [
+        5,
+        1
+      ]
+    }
+  ],
+  "panes": 241
 }

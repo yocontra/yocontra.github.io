@@ -1,6 +1,7 @@
 import { type AnimTrack, type ContainerResource, Entity, Vec3 } from 'playcanvas'
 import type { GameApplication } from '../client/application.ts'
 import { ASSETS } from '../content/manifest.ts'
+import { nativeActionSpeed } from '../scene/native-animation-timing.ts'
 import { type DetachedAttachment, detachAttachment } from '../scene/native-attachments.ts'
 import { prepareNativeMaterials } from '../scene/native-materials.ts'
 import { authoredMounts, type WeaponMount } from '../scene/native-mounts.ts'
@@ -96,7 +97,7 @@ export class DuelActor {
                 { name: 'START' },
                 ...tracks.map((track) => ({
                   name: track.name,
-                  speed: 1,
+                  speed: HUMANOID.test(url) ? nativeActionSpeed(track) : 1,
                   loop: !ONE_SHOT.test(track.name),
                 })),
               ],

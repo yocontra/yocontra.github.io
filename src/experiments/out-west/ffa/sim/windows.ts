@@ -9,6 +9,15 @@ const MIN_GLASS_CROSS = 0.05
 /** A ray this close to parallel with a pane never hits it. */
 const GLASS_PARALLEL = 1e-6
 
+/** Shots and native capsule contacts share one authoritative state/event transition. */
+export function breakGlass(w: World, index: number): void {
+  if (w.glass[index] !== 0) {
+    return
+  }
+  w.glass[index] = 1
+  w.events.push({ type: 'glass_break', window: index })
+}
+
 /**
  * Shatter every intact pane whose plane this ray crosses before `maxDist`, emitting one
  * `glass_break` per pane. The caller's bullet trace continues unchanged.
@@ -44,7 +53,6 @@ export function shatterGlass(
     if (y < p.y0 || y > p.y1) {
       continue
     }
-    w.glass[p.index] = 1
-    w.events.push({ type: 'glass_break', window: p.index })
+    breakGlass(w, p.index)
   }
 }

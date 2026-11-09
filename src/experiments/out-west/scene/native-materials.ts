@@ -8,6 +8,10 @@ interface Surface {
   normal?: string
   arm?: string
   armUv?: number
+  /** Explicit: original character ARM.r can be a dye mask instead of occlusion. */
+  ao?: boolean
+  aoUv?: number
+  aoStrength?: number
   roughnessVertexScale?: number
   dyes?: Partial<Record<DyeId, string>>
 }
@@ -55,6 +59,22 @@ function release(game: GameApplication, url: string): void {
   game.releaseTexture(url)
 }
 
+function bindOcclusion(
+  material: StandardMaterial,
+  source: Surface,
+  arm: Texture,
+  owned: Set<StandardMaterial>,
+): void {
+  if (!source.ao || material.aoMap) {
+    return
+  }
+  material.aoMap = arm
+  material.aoMapChannel = 'r'
+  material.aoMapUv = source.aoUv ?? source.armUv ?? 0
+  material.aoIntensity = source.aoStrength ?? material.aoIntensity
+  owned.add(material)
+}
+
 /** Each instantiated model owns one lease; the underlying engine Texture is shared by URL. */
 export async function prepareNativeMaterials(
   game: GameApplication,
@@ -64,6 +84,7 @@ export async function prepareNativeMaterials(
   if (!lease) {
     const urls: string[] = []
     const materials: StandardMaterial[] = []
+    const occlusion = new Set<StandardMaterial>()
     const ready = Promise.allSettled(
       resource.materials.map(async (asset, index) => {
         const source = (resource as ContainerResource & { data: NativeContainer }).data.gltf
@@ -95,6 +116,7 @@ export async function prepareNativeMaterials(
           material.glossInvert = true
           material.glossMapUv = source.armUv ?? 0
           material.metalnessMapUv = source.armUv ?? 0
+          bindOcclusion(material, source, arm, occlusion)
         }
         if (source.roughnessVertexScale) {
           material.glossVertexColor = true
@@ -120,6 +142,9 @@ export async function prepareNativeMaterials(
           material.normalMap = null
           material.metalnessMap = null
           material.glossMap = null
+          if (occlusion.has(material)) {
+            material.aoMap = null
+          }
           material.update()
         }
         for (const url of urls) {

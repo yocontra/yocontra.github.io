@@ -41,13 +41,37 @@ bind-pose mirror correction and expressed relative to the actual support wrist.
 Frontier draws the right revolver and keeps a paired loadout's spare left revolver
 in its holster; the two-gun action clips remain specific to Duel.
 
-Nine waistcoat sources carry explicit `waistcoatFit` metadata. Their shoulder shirt
-faces are preserved in the canonical indices; the offline fitter keeps the original
-UVs and PBR texels, binds the upper shell and straps to Torso, trims the excess rear
-shell, and blends the lower 12 cm back to Hips so the hem follows the belt through
-crouch and upward aim. No garment solver runs in the game. The source is the editable
-authoring record; `character-materials.ts` reapplies the fit deterministically.
+Nine waistcoat sources identify the obsolete apron pieces with `waistcoatFit`
+metadata. Their replacement garments are authored by Blender from the actual
+shirt tailoring surface, including a V neckline, continuous shoulders, armholes,
+and folded edges. Blender transfers the original joint weights through its native
+mesh modifiers, preserves UV seams, and bounds each garment to about 2,200 triangles including buttons and welt pockets.
+The portable authoring GLBs in `waistcoats/` store those skin IDs and the original
+wool UV swatch. The native baker copies that geometry and removes shirt details
+covered by the new cloth. No garment fitting or cloth solver runs in the game.
+
+To regenerate these editable garment sources with Blender on PATH:
+
+```
+bun tools/content/waistcoat-authoring.ts
+```
+
+Every character command accepts `OUT_WEST_CHARACTERS` as a comma-separated list of
+source IDs. This also scopes texture promotion, so human and animal authoring can
+run without rewriting one another's containers. For example:
+
+```
+OUT_WEST_CHARACTERS=outfit.shirt-vest bun tools/content/character-materials.ts
+OUT_WEST_CHARACTERS=outfit.shirt-vest bun tools/content/character-textures.ts
+```
 
 The texture promotion step rewrites only containers whose material URLs change.
 Already compressed containers retain their exact bytes, and encoding provenance is
 merged with the existing source-image record rather than replacing earlier entries.
+
+The four spurs share three small Blender-authored worn-metal source maps. Rebuild
+them with `blender --background --factory-startup --python tools/content/metal-authoring.py`.
+Their native materials retain each variant's iron, silver, brass or blued finish,
+with linear roughness/metalness and fine surface normals compressed to shared KTX2.
+Linen and worn leather receive semantic roughness adjustment during the atlas bake;
+the replacement waistcoat attenuates the old apron normal map's exaggerated folds.

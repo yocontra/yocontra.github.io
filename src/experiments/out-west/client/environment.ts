@@ -211,8 +211,8 @@ export class NativeEnvironment {
     fill.mulScalar(preset.hemiIntensity * 0.2)
     scene.ambientLight.copy(fill)
     this.fogColor.copy(color(preset.fog))
-    this.fogStart = this.frontier ? 120 : preset.fogNear
-    this.fogEnd = this.frontier ? 260 : preset.fogFar
+    this.fogStart = this.frontier ? 50 : preset.fogNear
+    this.fogEnd = this.frontier ? 130 : preset.fogFar
     this.applyFog()
     for (const material of this.windows) {
       material.emissive.copy(color([1, 0.32, 0.06]))

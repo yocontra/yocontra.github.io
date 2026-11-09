@@ -209,7 +209,7 @@ export function renderPatch(
   const dyeFactor = primitive.getAttribute('_DYE')
   const used = [...new Set(p.indices)]
   const color = element(colors, used[0] ?? 0, 3, 1)
-  const rough = element(style, used[0] ?? 0, 2, 1)[0] ?? 1
+  const rough = fabricRoughness(p.range, element(style, used[0] ?? 0, 2, 1)[0] ?? 1)
   const target = dye
     ? [
         linear(Number.parseInt(dye.slice(1, 3), 16) / 255),
@@ -222,7 +222,7 @@ export function renderPatch(
     const su = (p.left + x + 0.5) / images.albedo.width
     const sv = (p.top + y + 0.5) / images.albedo.height
     const base = sample(images.albedo, su, sv)
-    const normal = sample(images.normal, su, sv)
+    const normal = fabricNormal(p.range, sample(images.normal, su, sv))
     const arm = sample(images.arm, su, sv)
     const rgb = base.slice(0, 3).map((value) => linear(value / 255))
     const luminance = (rgb[0] ?? 0) * 0.2126 + (rgb[1] ?? 0) * 0.7152 + (rgb[2] ?? 0) * 0.0722
@@ -292,7 +292,7 @@ function rasterTriangle({ p, primitive, albedo, target, put }: Raster, indices: 
       ? factor.map((value, k) => value * (target[k] ?? 1))
       : element(colors, index, 3, 1)
   })
-  const rs = indices.map((index) => element(style, index, 2, 1)[0] ?? 1)
+  const rs = indices.map((index) => fabricRoughness(p.range, element(style, index, 2, 1)[0] ?? 1))
   const minX = Math.max(0, Math.floor(Math.min(...points.map((point) => point[0]))) - 1)
   const maxX = Math.min(p.width - 1, Math.ceil(Math.max(...points.map((point) => point[0]))) + 1)
   const minY = Math.max(0, Math.floor(Math.min(...points.map((point) => point[1]))) - 1)
@@ -313,4 +313,23 @@ function rasterTriangle({ p, primitive, albedo, target, put }: Raster, indices: 
       )
     }
   }
+}
+
+/** Linen stays diffuse and worn leather keeps a broad highlight instead of plastic gloss. */
+function fabricRoughness(range: Range, roughness: number): number {
+  const scale = range.swatch === 'linen' ? 1.32 : 1
+  const leather = range.swatch === 'leather' ? 1.15 : 1
+  return roughness * scale * leather
+}
+
+/** Old wool normals carried deep apron folds; the fitted cloth keeps a gentler relief. */
+function fabricNormal(range: Range, normal: number[]): number[] {
+  if (range.name !== 'Waistcoat') {
+    return normal
+  }
+  const x = ((normal[0] ?? 128) / 127.5 - 1) * 0.35
+  const y = ((normal[1] ?? 128) / 127.5 - 1) * 0.35
+  const z = (normal[2] ?? 255) / 127.5 - 1
+  const length = Math.hypot(x, y, z) || 1
+  return [x, y, z].map((value) => Math.round((value / length + 1) * 127.5))
 }

@@ -90,6 +90,7 @@ export function mountNativeFrontier(
               ...(options.getToken ? { getToken: options.getToken } : {}),
               onState(state, detail) {
                 if (state === 'retrying') {
+                  voice?.setLinked(false)
                   game.resetFeedback()
                   status.hidden = false
                   root.append(status)
@@ -98,12 +99,16 @@ export function mountNativeFrontier(
                   root.classList.add('pc-loading')
                   game.inputEnabled(false)
                 }
+                if (state === 'open') {
+                  voice?.setLinked(true)
+                }
                 if (state === 'open' && started) {
                   status.remove()
                   root.classList.remove('pc-loading')
                   game.inputEnabled(true)
                 }
                 if (state === 'closed') {
+                  voice?.setLinked(false)
                   message.textContent = detail ?? 'Connection lost.'
                   status.hidden = false
                   root.classList.add('pc-loading')
@@ -119,7 +124,7 @@ export function mountNativeFrontier(
       session.subscribe((event) => game.event(event))
       presentation = new FrontierHud(root, session, game, () => exit('quit'))
       if (!session.practice) {
-        voice = new FrontierVoice(root, session, options.audio ?? null)
+        voice = new FrontierVoice(root, session, options.audio ?? null, game.audioContext)
       }
       session.subscribe((event) => {
         if (event.type === 'left' && event.player === session.selfSlot) {

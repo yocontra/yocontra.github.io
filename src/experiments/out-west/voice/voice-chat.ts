@@ -1,446 +1,337 @@
-// biome-ignore-all lint/suspicious/noUnnecessaryConditions: live voice state changes between async callbacks and frames
-/**
- * Proximity voice, client side. Cloudflare RealtimeKit owns the session, microphone, TURN/SFU,
- * reconnects and participant/track plumbing; this module only decides which nearby players to
- * subscribe to and routes their tracks through the game's positional audio.
- *
- * RealtimeKit is imported only when voice is turned on, so the normal game bundle and boot path
- * are unchanged.
- */
-import type Client from '@cloudflare/realtimekit'
-import type { RTKParticipant } from '@cloudflare/realtimekit'
-import type { AudioEngine, VoiceChatNode } from '../audio/audio.ts'
-import { rankVoicePeers, type VoicePeer } from './rank.ts'
+/** Local microphone standby and short game-server speaking leases; RTK is strictly on demand. */
+import {
+  VOICE_HEARTBEAT_MS,
+  type VoiceClientControl,
+  type VoiceServerControl,
+} from '../contract/voice.ts'
+import { captureMicrophone } from './meeting.ts'
+import type { MicrophoneActivity, VoiceAudio } from './native-audio.ts'
+import type { VoicePeer } from './rank.ts'
+import { VoiceTransport } from './transport.ts'
 
-export type VoiceState = 'off' | 'connecting' | 'live' | 'error'
-
-export interface VoiceCredentials {
-  meetingId: string
-  token: string
-}
-
+export type { VoiceCredentials } from './meeting.ts'
+export type VoiceState = 'off' | 'connecting' | 'standby' | 'live' | 'error'
 export interface VoiceSettings {
   voiceChat: boolean
   voicePushToTalk: boolean
 }
-
 export interface VoiceChatOptions {
-  audio: AudioEngine | null
-  /** Ask the game server for a RealtimeKit participant token. */
-  requestToken: () => Promise<VoiceCredentials | null>
-  /** Tell the game server the participant is gone (its token is deleted). */
-  sendOff: () => void
+  audio: VoiceAudio | null
+  activity: (track: MediaStreamTrack, interrupted: () => void) => MicrophoneActivity | null
+  audioRunning: () => boolean
+  send: (control: VoiceClientControl) => void
   settings: () => VoiceSettings
-  /** Players whose voice is locally muted. */
+  listening: () => boolean
   muted?: (id: number) => boolean
   onState?: (state: VoiceState, message?: string) => void
-  /** Frontier uses four; a duel passes one. */
-  maxPeers?: number
-  /** Audible radius and the slightly wider drop radius (hysteresis). */
-  inRange?: number
-  outRange?: number
-  keepMs?: number
 }
-
-const GAME_ID = /^\d+$/u
-const TOKEN_TIMEOUT_MS = 10_000
-const RECONCILE_MS = 500
-const DEFAULT_KEEP_MS = 2000
-
 export class VoiceChat {
-  private readonly o: VoiceChatOptions
-  private state: VoiceState = 'off'
-  private enabled = false
-  private meeting: Client | null = null
-  private mic: MediaStreamTrack | null = null
-  private starting = false
-  private startSeq = 0
-  private tokenRequested = false
-  private talking = false
-  private silenced = false
-  private micMuted = false
-  private lastReconcile = 0
-  private reconciling = false
-  private readonly peers = new Map<number, VoicePeer>()
-  private own = { x: 0, z: 0 }
-  private readonly participants = new Map<number, RTKParticipant>()
-  private readonly audioListeners = new Map<number, (p: { audioTrack: MediaStreamTrack }) => void>()
-  private readonly nodes = new Map<number, VoiceChatNode>()
-  private readonly wanted = new Set<number>()
-  private readonly keepUntil = new Map<number, number>()
-  private readonly localMuted = new Set<number>()
-
-  constructor(o: VoiceChatOptions) {
-    this.o = o
+  private readonly live: {
+    enabled: boolean
+    linked: boolean
+    foreground: boolean
+    sequence: number
+    capturing: boolean
+    talking: boolean
+    intent: boolean
+    silenced: boolean
+    micMuted: boolean
+    requested: boolean
+    listeners: number
+    generation: number
+    heartbeatAt: number
+    sampleAt: number
+  } = {
+    enabled: false,
+    linked: true,
+    foreground: !document.hidden,
+    sequence: 0,
+    capturing: false,
+    talking: false,
+    intent: false,
+    silenced: false,
+    micMuted: false,
+    requested: false,
+    listeners: 0,
+    generation: -1,
+    heartbeatAt: 0,
+    sampleAt: 0,
   }
-
+  private readonly o: VoiceChatOptions
+  private readonly transport: VoiceTransport
+  private state: VoiceState = 'off'
+  private microphone: MediaStreamTrack | null = null
+  private activity: MicrophoneActivity | null = null
+  private readonly localMuted = new Set<number>()
+  private peers: readonly VoicePeer[] = []
+  private preference = ''
+  private readonly unbind: () => void
+  constructor(options: VoiceChatOptions) {
+    this.o = options
+    this.transport = new VoiceTransport({
+      audio: options.audio,
+      muted: (id) => this.localMuted.has(id) || options.muted?.(id) === true,
+      onState: (state, message) => {
+        if (state === 'error') {
+          this.fail(message ?? 'Voice connection lost. Retry voice.')
+        } else if (this.live.enabled && this.live.requested) {
+          this.setState('live')
+        }
+      },
+    })
+    const blur = () => {
+      this.live.foreground = false
+      this.quiet()
+    }
+    const focus = () => {
+      this.live.foreground = !document.hidden
+    }
+    const visibility = () => (document.hidden ? blur() : focus())
+    globalThis.addEventListener('blur', blur)
+    globalThis.addEventListener('focus', focus)
+    document.addEventListener('visibilitychange', visibility)
+    this.unbind = () => {
+      globalThis.removeEventListener('blur', blur)
+      globalThis.removeEventListener('focus', focus)
+      document.removeEventListener('visibilitychange', visibility)
+    }
+  }
   get current(): VoiceState {
     return this.state
   }
-
   get isLive(): boolean {
     return this.state === 'live'
   }
-
-  /** Follow the Settings toggle. */
+  get micMutedState(): boolean {
+    return this.live.micMuted
+  }
   setEnabled(on: boolean): void {
-    if (this.enabled === on) {
-      this.applyMic()
+    if (this.live.enabled === on) {
+      this.refreshInterest()
       return
     }
-    this.enabled = on
+    this.live.enabled = on
     if (on) {
-      void this.start()
+      this.retry()
     } else {
-      void this.stop()
+      this.stopCapture()
+      this.setState('off')
     }
   }
-
-  /** Hold/put down the talk control. No-op in open-mic mode. */
+  retry(): void {
+    if (!this.live.enabled || this.live.capturing) {
+      return
+    }
+    this.o.audio?.resume?.()
+    if (this.microphone?.readyState === 'live') {
+      this.refreshInterest(true)
+      this.setState('standby')
+    } else {
+      void this.capture()
+    }
+  }
+  setLinked(on: boolean): void {
+    if (on === this.live.linked) {
+      return
+    }
+    this.live.linked = on
+    this.quiet()
+    this.live.requested = false
+    this.preference = ''
+    void this.transport.stop()
+    if (this.live.enabled && this.microphone) {
+      if (on) {
+        this.refreshInterest(true)
+        this.setState('standby')
+      } else {
+        this.setState('standby', 'Waiting for the game connection…')
+      }
+    }
+  }
   setTalking(on: boolean): void {
-    this.talking = on
-    this.applyMic()
+    this.live.talking = on
+    if (on) {
+      this.o.audio?.resume?.()
+    }
+    this.sample(true)
   }
-
-  /** Open-mic mode's local mute. */
   setMicMuted(on: boolean): void {
-    this.micMuted = on
-    this.applyMic()
+    this.live.micMuted = on
+    this.sample(true)
   }
-
-  get micMutedState(): boolean {
-    return this.micMuted
-  }
-
-  /** Duel's standoff: neither side can send or hear until the result. */
   setSilenced(on: boolean): void {
-    this.silenced = on
-    this.applyMic()
-    this.applyGains()
+    if (this.live.silenced === on) {
+      return
+    }
+    this.live.silenced = on
+    if (on) {
+      this.quiet()
+    }
+    this.refreshInterest()
   }
-
   setMuted(id: number, on: boolean): void {
     if (on) {
       this.localMuted.add(id)
     } else {
       this.localMuted.delete(id)
     }
-    this.applyGains()
+    this.refreshInterest()
   }
-
-  /** Call once per frame with the game's current positions and the listener's ground position. */
+  receive(control: VoiceServerControl): void {
+    if (!(this.live.enabled && this.live.requested)) {
+      return
+    }
+    if (control.type === 'voice_error') {
+      this.fail(control.message)
+      return
+    }
+    if (control.type === 'voice_status') {
+      this.live.listeners = control.listeners
+      this.transport.setSpeakers(control.speakers)
+      this.setState(this.state)
+    } else if (control.type === 'voice_standby') {
+      this.live.generation = -1
+      void this.transport.stop()
+      this.setState('standby')
+    } else if (this.microphone && control.generation !== this.live.generation) {
+      this.live.generation = control.generation
+      this.setState('connecting', 'Connecting to nearby players…')
+      void this.transport.connect(control, this.microphone)
+    }
+  }
   update(peers: readonly VoicePeer[], own?: { x: number; z: number }): void {
-    if (own) {
-      this.own = own
+    if (!this.live.enabled) {
+      return
     }
-    this.peers.clear()
-    for (const p of peers) {
-      this.peers.set(p.id, p)
+    this.peers = peers
+    this.sample(false)
+    this.refreshInterest()
+    if (this.state === 'live') {
+      this.transport.update(peers, own, this.live.silenced)
     }
-    for (const [id, peer] of this.peers) {
-      this.nodes.get(id)?.setPose(peer.x, peer.y + 1.25, peer.z)
-    }
-    this.applyGains()
-    if (this.meeting) {
-      this.reconcile(false)
-    }
-    this.applyMic()
   }
-
   async dispose(): Promise<void> {
-    this.enabled = false
-    await this.stop()
-  }
-
-  private async start(): Promise<void> {
-    if (this.starting || this.meeting) {
-      return
-    }
-    this.starting = true
-    const seq = ++this.startSeq
-    this.setState('connecting')
-    try {
-      const credentials = await this.withTimeout(this.o.requestToken())
-      if (!this.enabled || seq !== this.startSeq) {
-        return
-      }
-      if (!credentials) {
-        this.setState('error', 'Voice is unavailable.')
-        this.o.sendOff()
-        return
-      }
-      this.tokenRequested = true
-      const sdk = await import('@cloudflare/realtimekit')
-      const meeting = await sdk.default.init({
-        authToken: credentials.token,
-        defaults: {
-          audio: true,
-          video: false,
-          mediaConfiguration: {
-            audio: {
-              echoCancellation: true,
-              noiseSupression: true,
-              autoGainControl: true,
-              enableStereo: false,
-            },
-          },
-        },
-        // RealtimeKit's SFU already hides peer addresses; force TURN when a direct path is not
-        // available rather than leaking a host candidate.
-        overrides: { forceRelay: true },
-        // Core SDK is headless: do not let it play remote tracks behind our panners.
-        modules: { experimentalAudioPlayback: false },
-      })
-      await meeting.join()
-      // Only nearby players should be subscribed: RealtimeKit's manual mode is the switch that
-      // makes subscribe/unsubscribe authoritative.
-      await meeting.participants.setViewMode('MANUAL')
-      if (!this.enabled || seq !== this.startSeq) {
-        await meeting.leave().catch(() => undefined)
-        return
-      }
-      this.meeting = meeting
-      this.bindMeeting(meeting)
-      this.mic = meeting.self.audioTrack ?? null
-      this.setState('live')
-      this.applyMic()
-      this.reconcile(true)
-    } catch (err) {
-      console.error('proximity voice failed', err)
-      this.setState('error', err instanceof Error ? err.message : 'Voice is unavailable.')
-      this.o.sendOff()
-      this.tokenRequested = false
-    } finally {
-      this.starting = false
-    }
-  }
-
-  private bindMeeting(meeting: Client): void {
-    const joined = meeting.participants.joined
-    joined.on('participantJoined', (p) => this.addParticipant(p))
-    joined.on('participantLeft', (p) => this.dropParticipant(p))
-    joined.on('participantsUpdate', () => this.reconcile(true))
-    for (const p of joined.values()) {
-      this.addParticipant(p)
-    }
-    meeting.self.on('audioUpdate', ({ audioTrack }) => {
-      this.mic = audioTrack ?? null
-      this.applyMic()
-    })
-    meeting.self.on('roomLeft', () => {
-      if (this.enabled) {
-        this.setState('error', 'Voice connection lost.')
-      }
-    })
-  }
-
-  private addParticipant(p: RTKParticipant): void {
-    const id = gameId(p.customParticipantId)
-    if (id === null) {
-      return
-    }
-    this.participants.set(id, p)
-    const onAudio = ({ audioTrack }: { audioTrack: MediaStreamTrack }) => {
-      this.attach(id, audioTrack)
-    }
-    this.audioListeners.set(id, onAudio)
-    p.on('audioUpdate', onAudio)
-    this.attach(id, safeTrack(p))
-  }
-
-  private dropParticipant(p: RTKParticipant): void {
-    const id = gameId(p.customParticipantId)
-    if (id === null) {
-      return
-    }
-    const listener = this.audioListeners.get(id)
-    if (listener) {
-      p.off('audioUpdate', listener)
-      this.audioListeners.delete(id)
-    }
-    this.participants.delete(id)
-    this.detach(id)
-    this.wanted.delete(id)
-  }
-
-  private attach(id: number, track: MediaStreamTrack | null): void {
-    if (!track || track.readyState === 'ended') {
-      this.detach(id)
-      return
-    }
-    const existing = this.nodes.get(id)
-    if (existing) {
-      return
-    }
-    const node = this.o.audio?.attachVoiceChat(id, track)
-    if (!node) {
-      return
-    }
-    this.nodes.set(id, node)
-    this.applyGains()
-  }
-
-  private detach(id: number): void {
-    const node = this.nodes.get(id)
-    if (node) {
-      node.dispose()
-      this.nodes.delete(id)
-    }
-  }
-
-  private async stop(): Promise<void> {
-    const meeting = this.meeting
-    this.meeting = null
-    this.startSeq++
-    this.mic = null
-    for (const id of [...this.nodes.keys()]) {
-      this.detach(id)
-    }
-    this.participants.clear()
-    this.audioListeners.clear()
-    this.wanted.clear()
-    this.keepUntil.clear()
+    this.live.enabled = false
+    this.stopCapture()
+    this.unbind()
+    await this.transport.stop()
     this.setState('off')
-    if (meeting) {
-      await meeting.leave().catch(() => undefined)
-    }
-    if (this.tokenRequested) {
-      this.tokenRequested = false
-      this.o.sendOff()
-    }
   }
-
-  private reconcile(force: boolean): void {
-    const meeting = this.meeting
-    if (!meeting) {
-      return
-    }
-    const now = performance.now()
-    if (!force && (this.reconciling || now - this.lastReconcile < RECONCILE_MS)) {
-      return
-    }
-    this.lastReconcile = now
-    const inRange = this.o.inRange ?? 24
-    const outRange = this.o.outRange ?? 28
-    const keepMs = this.o.keepMs ?? DEFAULT_KEEP_MS
-    const max = Math.max(1, this.o.maxPeers ?? 4)
-
-    const muted = new Set<number>()
-    for (const id of this.participants.keys()) {
-      if (this.o.muted?.(id) || this.localMuted.has(id)) {
-        muted.add(id)
-      }
-    }
-    this.wanted.clear()
-    for (const id of rankVoicePeers(this.peers, this.own, {
-      max,
-      inRange,
-      outRange,
-      keepMs,
-      now,
-      muted,
-      keepUntil: this.keepUntil,
-    })) {
-      this.wanted.add(id)
-    }
-
-    const subscribed = new Set<number>()
-    for (const peerId of meeting.participants.audioSubscribed.keys()) {
-      const p = meeting.participants.joined.get(peerId)
-      const id = p ? gameId(p.customParticipantId) : null
-      if (id !== null) {
-        subscribed.add(id)
-      }
-    }
-    const peerIds = new Map<number, string>()
-    for (const [id, p] of this.participants) {
-      peerIds.set(id, p.id)
-    }
-    this.reconciling = true
-    void (async () => {
-      try {
-        for (const id of subscribed) {
-          const peerId = peerIds.get(id)
-          if (!this.wanted.has(id) && peerId) {
-            // biome-ignore lint/performance/noAwaitInLoops: RealtimeKit serializes subscription changes
-            await meeting.participants.unsubscribe([peerId], ['audio']).catch(() => undefined)
-            this.detach(id)
-          }
-        }
-        for (const id of this.wanted) {
-          const peerId = peerIds.get(id)
-          if (peerId && !subscribed.has(id)) {
-            // biome-ignore lint/performance/noAwaitInLoops: one subscription request per nearby peer
-            await meeting.participants.subscribe([peerId], ['audio']).catch(() => undefined)
-          }
-          const p = this.participants.get(id)
-          this.attach(id, p ? safeTrack(p) : null)
-        }
-      } finally {
-        this.reconciling = false
-      }
-    })()
-  }
-
-  private applyMic(): void {
-    if (!this.mic) {
-      return
-    }
-    const s = this.o.settings()
-    const open = !s.voicePushToTalk
-    const send =
-      this.enabled && this.isLive && !this.silenced && !this.micMuted && (open || this.talking)
-    if (this.mic.enabled !== send) {
-      this.mic.enabled = send
-    }
-  }
-
-  private applyGains(): void {
-    for (const [id, node] of this.nodes) {
-      const quiet = this.silenced || this.localMuted.has(id) || this.o.muted?.(id) === true
-      node.setGain(quiet ? 0 : 1)
-    }
-  }
-
-  private setState(state: VoiceState, message?: string): void {
-    if (this.state === state && !message) {
-      return
-    }
-    this.state = state
-    this.o.onState?.(state, message)
-  }
-
-  // biome-ignore lint/style/useThisInClassMethods: a free helper keeps the async race readable
-  private async withTimeout<T>(p: Promise<T>): Promise<T | null> {
-    let timer: ReturnType<typeof setTimeout> | null = null
+  private async capture(): Promise<void> {
+    this.live.capturing = true
+    const sequence = ++this.live.sequence
+    this.setState('connecting', 'Allow microphone access to enable voice.')
     try {
-      return await Promise.race([
-        p,
-        new Promise<null>((resolve) => {
-          timer = setTimeout(() => resolve(null), TOKEN_TIMEOUT_MS)
-        }),
-      ])
+      const track = await captureMicrophone()
+      if (!this.live.enabled || sequence !== this.live.sequence) {
+        track.stop()
+        return
+      }
+      this.microphone = track
+      track.addEventListener('ended', this.microphoneEnded)
+      this.activity = this.o.activity(track, () => this.quiet())
+      this.refreshInterest(true)
+      this.setState('standby')
+      this.sample(true)
+    } catch (error) {
+      if (sequence === this.live.sequence && this.live.enabled) {
+        this.fail(
+          error instanceof Error ? error.message : 'Microphone could not start. Retry voice.',
+        )
+      }
     } finally {
-      if (timer) {
-        clearTimeout(timer)
+      this.live.capturing = false
+      if (this.live.enabled && sequence !== this.live.sequence && this.state !== 'error') {
+        this.retry()
       }
     }
   }
-}
-
-/** The game id carried in `customParticipantId`; 0 is a real Frontier player and Duel seat. */
-function gameId(custom: string | undefined): number | null {
-  if (typeof custom !== 'string' || !GAME_ID.test(custom)) {
-    return null
+  private readonly microphoneEnded = () => this.fail('Microphone disconnected. Retry voice.')
+  private fail(message: string): void {
+    this.stopCapture()
+    this.setState('error', message)
   }
-  const id = Number(custom)
-  return Number.isSafeInteger(id) ? id : null
-}
-
-function safeTrack(p: RTKParticipant): MediaStreamTrack | null {
-  try {
-    return p.audioTrack ?? null
-  } catch {
-    return null
+  private stopCapture(): void {
+    this.live.sequence++
+    this.quiet()
+    if (this.live.requested && this.live.linked) {
+      this.o.send({ type: 'voice_off' })
+    }
+    this.live.requested = false
+    this.preference = ''
+    this.live.generation = -1
+    this.activity?.dispose()
+    this.activity = null
+    this.microphone?.removeEventListener('ended', this.microphoneEnded)
+    this.microphone?.stop()
+    this.microphone = null
+    void this.transport.stop()
+  }
+  private quiet(): void {
+    this.live.talking = false
+    if (this.microphone) {
+      this.microphone.enabled = false
+    }
+    this.sendIntent(false)
+  }
+  private sample(force: boolean): void {
+    const now = performance.now()
+    if (!force && now < this.live.sampleAt) {
+      return
+    }
+    this.live.sampleAt = now + 100
+    const permitted =
+      this.live.enabled &&
+      this.live.linked &&
+      this.live.foreground &&
+      !this.live.silenced &&
+      !this.live.micMuted &&
+      this.o.audioRunning()
+    const ptt = this.o.settings().voicePushToTalk
+    if (this.microphone) {
+      this.microphone.enabled = permitted && (!ptt || this.live.talking)
+    }
+    const speaking = permitted && (ptt ? this.live.talking : this.activity?.speaking() === true)
+    this.sendIntent(speaking && this.microphone?.readyState === 'live')
+  }
+  private sendIntent(on: boolean): void {
+    const now = performance.now()
+    this.transport.setSending(on)
+    if (
+      this.live.requested &&
+      this.live.linked &&
+      (on !== this.live.intent || (on && now >= this.live.heartbeatAt))
+    ) {
+      this.o.send({ type: 'voice_talk', talking: on })
+      this.live.heartbeatAt = now + VOICE_HEARTBEAT_MS
+    }
+    this.live.intent = on
+  }
+  private refreshInterest(force = false): void {
+    if (!(this.live.enabled && this.live.linked && this.microphone)) {
+      return
+    }
+    const muted = this.peers
+      .filter((peer) => this.localMuted.has(peer.id) || this.o.muted?.(peer.id))
+      .map((peer) => peer.id)
+    const control = {
+      type: 'voice_on' as const,
+      listening: !this.live.silenced && this.o.listening(),
+      muted,
+    }
+    const preference = JSON.stringify(control)
+    if (force || preference !== this.preference) {
+      this.preference = preference
+      this.live.requested = true
+      this.o.send(control)
+    }
+  }
+  private setState(state: VoiceState, message?: string): void {
+    this.state = state
+    let status = message
+    if (!status && state === 'standby') {
+      status = this.live.listeners > 0 ? 'Ready · nearby listeners' : 'Ready · no nearby listeners'
+    }
+    this.o.onState?.(state, status)
   }
 }

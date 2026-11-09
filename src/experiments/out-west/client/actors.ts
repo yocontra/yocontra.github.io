@@ -14,6 +14,7 @@ import { eyeHeight } from '../ffa/sim/combat.ts'
 import type { World } from '../ffa/sim/state.ts'
 import type { Player } from '../ffa/sim/types.ts'
 import type { PlayerState } from '../runtime/protocol.ts'
+import { RECOIL_SECONDS } from '../scene/native-animation-timing.ts'
 import { attachHeldWeapon, equippedActor } from '../scene/native-equipment.ts'
 import { prepareNativeMaterials } from '../scene/native-materials.ts'
 import { animateRider, heldWeapon } from './actor-animation.ts'
@@ -443,7 +444,7 @@ export class Actors {
   fire(id: string): void {
     const rider = this.actors.get(id)
     if (rider) {
-      rider.firingUntil = performance.now() + 200
+      rider.firingUntil = performance.now() + RECOIL_SECONDS * 1000
       rider.actor.fireWeapon()
       const clip = rider.actor.shotClip(this.players.get(id)?.crouched ?? false)
       if (rider.weaponLayer?.states.includes(clip)) {
