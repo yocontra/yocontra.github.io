@@ -12,7 +12,6 @@ interface Spectator {
   actor: DuelActor
   home: Stand & { habit?: string; door?: readonly number[] | null; floor?: number; seatY?: number }
   hipsHeight: number
-  running: boolean
 }
 function clip(actor: DuelActor, requested: string, fallback = 'Idle'): void {
   const name = actor.model.anim?.baseLayer?.states.includes(requested) ? requested : fallback
@@ -31,7 +30,6 @@ function habit(spectator: Spectator): void {
 
 function placeSpectator(spectator: Spectator, home: Spectator['home']) {
   spectator.home = home
-  spectator.running = false
   const seated = home.habit === 'sit' || home.habit === 'whittle'
   const height = home.y - (seated ? spectator.hipsHeight - 0.1 : 0)
   spectator.actor.place(home.x, height, home.z)
@@ -51,11 +49,6 @@ function placeSpectator(spectator: Spectator, home: Spectator['home']) {
   } else {
     habit(spectator)
   }
-}
-
-function runRate(actor: DuelActor, speed: number): number {
-  const authored = actor.gaitSpeeds.Run || 5.66
-  return speed / (authored > 0 ? authored : 5.66)
 }
 
 /** Native authored life shared by every act: nine spectators, two horses, a dog and birds. */
@@ -123,7 +116,7 @@ export class NativeAtmosphere {
           const hips = actor.model.findByName('Hips')
           const hipsHeight = hips ? hips.getPosition().y - actor.root.getPosition().y : 0.95
           actor.weaponsVisible(false)
-          this.folk[index] = { actor, home: spot, hipsHeight, running: false }
+          this.folk[index] = { actor, home: spot, hipsHeight }
         }),
       (async () => {
         if (!fakeouts) {
@@ -246,29 +239,12 @@ export class NativeAtmosphere {
     const clips: Partial<Record<CueProp, string>> = { dog: 'Attack', horse: 'Idle_HitReact_Left' }
     clip(actor, clips[kind] ?? 'Gun_Shoot')
     this.transients.add(actor)
-    for (const spectator of this.folk) {
-      if (spectator.actor.root.enabled) {
-        clip(spectator.actor, 'Town_Flinch')
-      }
-    }
   }
   private changePhase(phase: string): void {
     if (phase && phase !== this.phase) {
       this.phase = phase
-      if (phase === 'call') {
-        for (const spectator of this.folk) {
-          clip(spectator.actor, 'Town_Flinch')
-        }
-      }
       if (phase === 'win' || phase === 'lose' || phase === 'coward') {
         this.takeOff()
-        for (const spectator of this.folk) {
-          spectator.running = Boolean(spectator.home.door)
-          clip(spectator.actor, spectator.running ? 'Run' : 'Town_Duck')
-          if (spectator.running) {
-            spectator.actor.speed(runRate(spectator.actor, 2.1))
-          }
-        }
         for (const horse of this.horses) {
           clip(horse, 'Idle_HitReact_Left')
           this.transients.add(horse)
@@ -295,28 +271,6 @@ export class NativeAtmosphere {
       }
     }
   }
-  private moveFolk(step: number): void {
-    for (const spectator of this.folk) {
-      const door = spectator.home.door
-      if (!(spectator.running && door)) {
-        continue
-      }
-      const position = spectator.actor.root.getPosition()
-      spectator.actor.root.setPosition(position.x, spectator.home.floor ?? 0.34, position.z)
-      const dx = (door[0] ?? position.x) - position.x
-      const dz = (door[1] ?? position.z) - position.z
-      const distance = Math.hypot(dx, dz)
-      if (distance < 0.12) {
-        spectator.actor.root.enabled = false
-        spectator.running = false
-      } else {
-        const move = Math.min(distance, step * 2.1)
-        spectator.actor.speed(runRate(spectator.actor, step > 0 ? move / step : 0))
-        spectator.actor.root.translate((dx / distance) * move, 0, (dz / distance) * move)
-        spectator.actor.face((Math.atan2(dx, dz) * 180) / Math.PI)
-      }
-    }
-  }
   private finishCues(): void {
     for (const actor of this.transients) {
       if ((actor.model.anim?.baseLayer?.activeStateProgress ?? 0) < 0.98) {
@@ -334,7 +288,6 @@ export class NativeAtmosphere {
     this.changePhase(phase)
     const step = Math.max(0, Math.min(0.1, dt))
     this.moveBirds(step)
-    this.moveFolk(step)
     this.finishCues()
   }
   /** Compile the native material variants behind loading before admitting an online player. */
