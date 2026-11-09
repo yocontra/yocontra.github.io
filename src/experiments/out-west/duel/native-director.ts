@@ -1,22 +1,21 @@
 import type { AudioEngine } from '../audio/audio.ts'
 import type { GameApplication } from '../client/application.ts'
-import { ASSETS, DYNAMIC_ASSETS } from '../content/manifest.ts'
 import { DEFAULT_LOADOUT, type Loadout } from '../data/catalog.ts'
 import type { Dyes } from '../data/dye.ts'
-import { type DuelOutcome, money } from '../data/economy.ts'
+import type { DuelOutcome } from '../data/economy.ts'
 import { OUTLAWS } from '../data/outlaws.ts'
 import type { Input, Press } from '../engine/input.ts'
 import type { Result } from '../net/leaderboard.ts'
 import type { RankedSession } from '../net/ranked.ts'
 import { type SaveData, save } from '../save.ts'
 import { NativeDebris } from '../scene/native-debris.ts'
-import { attachHeldWeapon, equippedActor } from '../scene/native-equipment.ts'
+import { equippedActor } from '../scene/native-equipment.ts'
 import { Board } from '../ui/board.ts'
 import type { Hud } from '../ui/hud.ts'
 import { type ClockEvents, type DuelClock, LocalDuelClock, type Verdict } from './clock.ts'
 import type { DrawPlan } from './judge.ts'
-import { DuelActor } from './native-actor.ts'
-import { arenaForSlot, NativeArenas } from './native-arenas.ts'
+import type { DuelActor } from './native-actor.ts'
+import { NativeArenas } from './native-arenas.ts'
 import { NativeAtmosphere } from './native-atmosphere.ts'
 import {
   call,
@@ -33,8 +32,10 @@ import {
   dailyDuel,
   finishRun,
   leaveSpecial,
+  loadLevelActors,
   openBoard,
   pauseIfPlaying,
+  presentLevel,
   restartRun,
   resume,
   retry as retryLevel,
@@ -47,6 +48,7 @@ import { RankedDuelClock } from './ranked-clock.ts'
 export type NativeRankedConnect = () => Promise<Result<RankedSession>>
 export type NativePhase =
   | 'title'
+  | 'loading'
   | 'intro'
   | 'poster'
   | 'cock'
@@ -118,6 +120,9 @@ export class NativeDirector {
   readonly game: GameApplication
   readonly c: NativeContext
   readonly connectRanked: NativeRankedConnect | null
+  private loading: { stage: boolean; input: boolean } | null = null
+  loadFailed = false as boolean
+  private retryLoading = false as boolean
   constructor(game: GameApplication, c: NativeContext, connectRanked: NativeRankedConnect | null) {
     this.game = game
     this.arenas = new NativeArenas(game)
@@ -164,6 +169,7 @@ export class NativeDirector {
     }
     this.lifecycle.abort()
     this.epoch++
+    this.cancelLoading()
     this.equipmentEpoch++
     this.game.app.off('update', this.tick)
     this.remote?.close()
@@ -246,7 +252,7 @@ export class NativeDirector {
     save(this.c.save)
     const levelEpoch = this.epoch + 1
     await this.startLevel(this.level)
-    if (levelEpoch !== this.epoch || this.lifecycle.signal.aborted) {
+    if (levelEpoch !== this.epoch || this.lifecycle.signal.aborted || this.loading) {
       return
     }
     if (!skipIntro) {
@@ -262,7 +268,24 @@ export class NativeDirector {
     }
   }
   async startLevel(index: number, retry = false): Promise<void> {
+    if (this.lifecycle.signal.aborted) {
+      return
+    }
     const epoch = ++this.epoch
+    this.loading ??= { stage: this.game.stage.enabled, input: this.c.input.enabled }
+    this.retryLoading = retry
+    this.loadFailed = false
+    this.enter('loading')
+    this.clock.cancel()
+    this.game.stage.enabled = false
+    this.c.input.enabled = false
+    this.c.hud.showCard({
+      kind: 'info',
+      title: 'LOADING',
+      big: 'Next duel',
+      sub: 'Preparing the scene and riders.',
+      hint: '',
+    })
     this.debris.reset()
     this.level = Math.max(0, Math.min(OUTLAWS.length - 1, index))
     this.duel = -1
@@ -270,94 +293,59 @@ export class NativeDirector {
     this.rifleman?.destroy()
     this.enemy = null
     this.rifleman = null
-    const asset = ASSETS[`outlaw-${this.level}` as keyof typeof ASSETS]
-    const [enemy] = await Promise.all([
-      DuelActor.create(this.game, asset.url, 'outlaw'),
-      this.arenas.show(arenaForSlot(this.level)),
-    ])
-    if (epoch !== this.epoch) {
-      enemy.destroy()
-      return
-    }
-    this.enemy = enemy
-    this.atmosphere.arrange(this.arenas.life)
-    this.enemyAlive = true
-    this.riflemanAlive = this.outlaw.gimmick === 'underboss'
-    if (this.riflemanAlive) {
-      const rifleman = await DuelActor.create(this.game, ASSETS.player.url, 'rifleman')
-      if (epoch !== this.epoch) {
-        rifleman.destroy()
+    const pending: DuelActor[] = []
+    try {
+      const actors = await loadLevelActors(this, epoch, pending)
+      if (!actors) {
         return
       }
-      this.rifleman = rifleman
-      rifleman.place(11, 4, 8)
-      this.rifleman.face(180)
-      try {
-        const rifle = await attachHeldWeapon(
-          this.game,
-          rifleman,
-          'rifle',
-          DYNAMIC_ASSETS['held-rifle'].url,
-        )
-        if (epoch !== this.epoch) {
-          rifle.destroy()
-          return
-        }
-        rifleman.hold('rifle', true)
-        rifleman.idle('Hold_rifle')
-        rifleman.play('Hold_rifle', 0)
-      } catch (error) {
-        if (epoch !== this.epoch || this.lifecycle.signal.aborted) {
-          return
-        }
-        throw error
+      this.enemy = actors.enemy
+      this.rifleman = actors.rifleman
+      this.atmosphere.arrange(this.arenas.life)
+      this.enemyAlive = true
+      this.riflemanAlive = Boolean(this.rifleman)
+      presentLevel(this, retry)
+      this.enemy.root.enabled = true
+      if (this.rifleman) {
+        this.rifleman.root.enabled = true
       }
-    }
-    this.player?.root.setLocalScale(1, 1, 1)
-    if (this.player) {
-      this.player.root.enabled = true
-    }
-    this.player?.place(0, 0, -0.4)
-    this.player?.face(180)
-    this.player?.play('Idle')
-    enemy.place(0, 0, 0.4)
-    enemy.face(0)
-    this.bossPhase = 1
-    const night = this.outlaw.day
-    await this.arenas.lighting(night, this.level)
-    this.c.audio.playSong('intro')
-    this.walkLines = 0
-    this.walked = 0
-    this.stalled = 0
-    this.targetPaces =
-      this.outlaw.paces[0] +
-      Math.floor(Math.random() * (this.outlaw.paces[1] - this.outlaw.paces[0] + 1))
-    this.c.save.attempts[this.level] = (this.c.save.attempts[this.level] ?? 0) + 1
-    this.c.hud.setCounter(this.level, OUTLAWS.length, this.c.save.legend)
-    this.c.hud.setPurse(this.c.save.run.total, false)
-    this.c.hud.hideCard()
-    this.c.hud.clearCall()
-    this.c.hud.setPips(0, false)
-    this.c.hud.show(true)
-    this.enter(retry ? 'cock' : 'poster')
-    if (!retry) {
-      this.c.hud.showCard({
-        kind: 'info',
-        title: 'WANTED',
-        big: this.outlaw?.name ?? '',
-        sub: `${money(this.outlaw?.bounty ?? 0)} bounty`,
-        hint: 'Hold to walk · Draw only after the call',
-      })
-      if (!this.c.save.seenPosters.includes(this.level)) {
-        this.c.save.seenPosters.push(this.level)
+      pending.length = 0
+      this.cancelLoading()
+    } catch (error) {
+      if (epoch === this.epoch && !this.lifecycle.signal.aborted) {
+        this.enemy = null
+        this.rifleman = null
+        this.loadFailed = true
+        this.c.input.enabled = (this.loading?.input ?? false) && !this.paused
+        this.c.hud.showCard({
+          kind: 'info',
+          title: 'COULD NOT LOAD DUEL',
+          big: 'Try again',
+          sub: error instanceof Error ? error.message : 'The scene could not be prepared.',
+          hint: 'Tap to retry',
+        })
       }
-    }
-    if (!(this.daily || this.remote)) {
-      save(this.c.save)
+    } finally {
+      for (const actor of pending) {
+        actor.destroy()
+      }
     }
   }
+  /** Release only this director's stage/input gate on commit, saloon return or disposal. */
+  cancelLoading(): void {
+    const loading = this.loading
+    if (!loading) {
+      return
+    }
+    this.loading = null
+    this.loadFailed = false
+    this.game.stage.enabled = loading.stage
+    this.c.input.enabled = loading.input && !this.paused
+  }
   wait(): void {
-    wait(this)
+    if (this.phase !== 'loading') {
+      wait(this)
+    }
   }
   call(): void {
     call(this)
@@ -366,6 +354,12 @@ export class NativeDirector {
     nativeCue(this, cue)
   }
   press(press: Press): void {
+    if (this.phase === 'loading' && press.action !== 'pause') {
+      if (this.loadFailed && !this.c.hud.menuOpen) {
+        void this.startLevel(this.level, this.retryLoading)
+      }
+      return
+    }
     nativePress(this, press)
   }
   shoot(press: Press): void {

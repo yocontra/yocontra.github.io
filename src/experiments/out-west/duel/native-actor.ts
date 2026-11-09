@@ -89,7 +89,12 @@ export class DuelActor {
     return this.animations.get(name)
   }
 
-  static async create(game: GameApplication, url: string, name: string): Promise<DuelActor> {
+  static async create(
+    game: GameApplication,
+    url: string,
+    name: string,
+    options: { enabled: boolean } = { enabled: true },
+  ): Promise<DuelActor> {
     const asset = await game.loadContainer(url)
     const resource = asset.resource as ContainerResource
     const tracks = resource.animations
@@ -115,6 +120,7 @@ export class DuelActor {
     try {
       const model = resource.instantiateRenderEntity({ castShadows: true, receiveShadows: true })
       const root = new Entity(name, game.app)
+      root.enabled = options.enabled
       created = root
       root.addChild(model)
       root.once('destroy', releaseMaterials)

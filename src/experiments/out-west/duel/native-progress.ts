@@ -1,11 +1,100 @@
+import { ASSETS, DYNAMIC_ASSETS } from '../content/manifest.ts'
+import { money } from '../data/economy.ts'
 import { OUTLAWS } from '../data/outlaws.ts'
 import { interlude } from '../meta/events.ts'
 import type { RankedSession } from '../net/ranked.ts'
 import { resetRun, save } from '../save.ts'
+import { attachHeldWeapon } from '../scene/native-equipment.ts'
 import { LocalDuelClock, type Verdict } from './clock.ts'
 import { offerLicensedMode } from './licence-road.ts'
+import { DuelActor } from './native-actor.ts'
+import { arenaForSlot } from './native-arenas.ts'
 import type { NativeDirector } from './native-director.ts'
 import { RankedDuelClock } from './ranked-clock.ts'
+
+/** Prepare disabled actors behind the director's stage gate; the caller owns every candidate. */
+export async function loadLevelActors(d: NativeDirector, epoch: number, pending: DuelActor[]) {
+  const level = d.level
+  const current = () => epoch === d.epoch && !d.lifecycle.signal.aborted
+  const asset = ASSETS[`outlaw-${level}` as keyof typeof ASSETS]
+  const [enemy, arena] = await Promise.allSettled([
+    DuelActor.create(d.game, asset.url, 'outlaw', { enabled: false }).then((actor) => {
+      pending.push(actor)
+      return actor
+    }),
+    d.arenas.show(arenaForSlot(level)),
+  ])
+  if (!current()) {
+    return null
+  }
+  if (enemy.status === 'rejected') {
+    throw enemy.reason
+  }
+  if (arena.status === 'rejected') {
+    throw arena.reason
+  }
+  let rifleman: DuelActor | null = null
+  if (d.outlaw.gimmick === 'underboss') {
+    rifleman = await DuelActor.create(d.game, ASSETS.player.url, 'rifleman', { enabled: false })
+    pending.push(rifleman)
+    if (!current()) {
+      return null
+    }
+    rifleman.place(11, 4, 8)
+    rifleman.face(180)
+    await attachHeldWeapon(d.game, rifleman, 'rifle', DYNAMIC_ASSETS['held-rifle'].url)
+    if (!current()) {
+      return null
+    }
+    rifleman.hold('rifle', true)
+    rifleman.idle('Hold_rifle')
+    rifleman.play('Hold_rifle', 0)
+  }
+  await d.arenas.lighting(d.outlaw.day, level)
+  return current() ? { enemy: enemy.value, rifleman } : null
+}
+
+export function presentLevel(d: NativeDirector, isRetry: boolean): void {
+  d.player?.root.setLocalScale(1, 1, 1)
+  if (d.player) {
+    d.player.root.enabled = true
+  }
+  d.player?.place(0, 0, -0.4)
+  d.player?.face(180)
+  d.player?.play('Idle')
+  d.enemy?.place(0, 0, 0.4)
+  d.enemy?.face(0)
+  d.bossPhase = 1
+  d.c.audio.playSong('intro')
+  d.walkLines = 0
+  d.walked = 0
+  d.stalled = 0
+  d.targetPaces =
+    d.outlaw.paces[0] + Math.floor(Math.random() * (d.outlaw.paces[1] - d.outlaw.paces[0] + 1))
+  d.c.save.attempts[d.level] = (d.c.save.attempts[d.level] ?? 0) + 1
+  d.c.hud.setCounter(d.level, OUTLAWS.length, d.c.save.legend)
+  d.c.hud.setPurse(d.c.save.run.total, false)
+  d.c.hud.hideCard()
+  d.c.hud.clearCall()
+  d.c.hud.setPips(0, false)
+  d.c.hud.show(true)
+  d.enter(isRetry ? 'cock' : 'poster')
+  if (!isRetry) {
+    d.c.hud.showCard({
+      kind: 'info',
+      title: 'WANTED',
+      big: d.outlaw?.name ?? '',
+      sub: `${money(d.outlaw?.bounty ?? 0)} bounty`,
+      hint: 'Hold to walk · Draw only after the call',
+    })
+    if (!d.c.save.seenPosters.includes(d.level)) {
+      d.c.save.seenPosters.push(d.level)
+    }
+  }
+  if (!(d.daily || d.remote)) {
+    save(d.c.save)
+  }
+}
 
 export function advance(d: NativeDirector): void {
   if (d.daily) {
@@ -134,7 +223,7 @@ export function pauseIfPlaying(d: NativeDirector): void {
 
 export function resume(d: NativeDirector): void {
   d.paused = false
-  d.c.input.enabled = true
+  d.c.input.enabled = d.phase !== 'loading' || d.loadFailed
   d.c.hud.closeMenu()
   if (!d.ranked && d.phase === 'wait') {
     d.wait()
@@ -148,6 +237,7 @@ export function saloon(d: NativeDirector): void {
   d.leaveSpecial()
   d.clock.cancel()
   d.paused = false
+  d.cancelLoading()
   d.c.input.enabled = true
   d.c.hud.closeMenu()
   d.c.hud.hideCard()
