@@ -1,6 +1,6 @@
 # Out West remaining work
 
-Last verified site release: `8e6c916` (2026-11-09; public client revision checked). It includes the earlier map/model/voice repairs plus Frontier haze, Live town/voice controls, spectator isolation and restored special-duel rules. Later completed tasks below may still be deploying. This list tracks unfinished work; it is not a claim that final visual or performance QA is complete.
+Last verified site release: `b1c898a` (2026-11-09; public client revision and repaired depot bytes checked). It includes the earlier repairs plus Frontier haze, Live town/voice controls, spectator isolation, restored special-duel rules, arena dressing, atomic loading and the station roof. Later completed tasks below may still be deploying. This list tracks unfinished work; it is not a claim that final visual or performance QA is complete.
 
 ## Current playtest feedback (2026-11-09)
 
@@ -15,7 +15,8 @@ Complete and push these in small working tasks, with native visual/audio evidenc
 - [x] Present the next map and opponent atomically with a loading state until the scene, actors, attachments and lighting are ready. New actors enter disabled; thirteen deferred lifecycle tests and three mounted native slow-load/cancellation cases cover stale completion, partial failure, retry and disposal.
 - [x] Isolate duel spectators from combat transitions. Remove synchronized human flinch/duck/run overrides; nine native spectators retain their own clips, poses and positions through DRAW, shooting and outcomes while the opponent and animal/bird reactions continue. Native checks confirm independent skeleton/controller ownership with shared meshes.
 - [ ] Make moving tumbleweeds roll with their travel direction/distance and actual radius, preserving ground contact and ambient-path timing.
-- [ ] Correct plastic-looking character materials: skin, cloth and fabric need appropriate roughness, metalness and specular response. Check every outfit and crowd material under actual game lighting.
+- [x] Restore the native PBR specular model: use built-in GGX instead of legacy Blinn-Phong for native PBR materials. Matched day/night skin, cloth and metallic-gun renders remove broad plastic glare without changing authored roughness, metalness, maps, draw counts or texture memory; cached leases and cleanup pass.
+- [ ] Finish material visual coverage across every outfit and crowd model under actual game lighting. Preserve appropriate skin/cloth/fabric response and review remaining art issues separately from the corrected shader model.
 - [ ] Repair missing rear-neck geometry/seams and forward-hunched head/neck posture on player, opponents and crowds. Compare bind pose and animated poses before changing the rig.
 - [x] Remove the shared idle-loop arms-forward pop: correct 126 stray first-quaternion keys across three idle clips. Native loop captures reduce the right-arm jump from about 131° to 1.16°; the real title clock runs at rate one, and the other 69 clips are unchanged.
 - [ ] Smooth the smaller authored `Idle_Drunk` torso seam (about 12.4° at the next interval), separately from the corrected gun-pose keys. Preserve the intentional sway and clip timing.

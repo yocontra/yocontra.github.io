@@ -1,7 +1,17 @@
 import { expect, test as it } from 'bun:test'
-import { type ContainerResource, NullGraphicsDevice, StandardMaterial, Texture } from 'playcanvas'
+import {
+  Asset,
+  type ContainerResource,
+  NullGraphicsDevice,
+  StandardMaterial,
+  Texture,
+} from 'playcanvas'
 import type { GameApplication } from '../../src/experiments/out-west/client/application.ts'
-import { prepareNativeMaterials } from '../../src/experiments/out-west/scene/native-materials.ts'
+import {
+  destroyDyedMaterial,
+  dyedNativeMaterial,
+  prepareNativeMaterials,
+} from '../../src/experiments/out-west/scene/native-materials.ts'
 
 function fixture() {
   const device = new NullGraphicsDevice()
@@ -29,6 +39,72 @@ function fixture() {
     }) as unknown as ContainerResource
   return { device, maps, game, container, releases }
 }
+
+it('native GGX keeps authored cloth/metal factors, packed maps, dyed clones and shared leases', async () => {
+  const f = fixture()
+  const cloth = new StandardMaterial()
+  const metal = new StandardMaterial()
+  const untouched = new StandardMaterial()
+  cloth.gloss = 0.9
+  cloth.glossInvert = true
+  cloth.metalness = 0.02
+  metal.gloss = 0.35
+  metal.glossInvert = true
+  metal.metalness = 0.85
+  const surface = { albedo: 'cloth', normal: 'normal', arm: 'arm', dyes: { coal: 'dyed' } }
+  const container = f.container(cloth, surface)
+  const original = new Asset('untouched', 'material')
+  original.resource = untouched
+  container.materials.push(original)
+  const first = await prepareNativeMaterials(f.game, container)
+  const shared = await prepareNativeMaterials(f.game, container)
+  const second = await prepareNativeMaterials(
+    f.game,
+    f.container(metal, { ...surface, albedo: 'metal' }),
+  )
+  expect([cloth.enableGGXSpecular, metal.enableGGXSpecular, untouched.enableGGXSpecular]).toEqual([
+    true,
+    true,
+    false,
+  ])
+  expect([cloth.gloss, cloth.metalness, metal.gloss, metal.metalness]).toEqual([
+    0.9, 0.02, 0.35, 0.85,
+  ])
+  expect([cloth.glossInvert, metal.glossInvert]).toEqual([true, true])
+  expect([cloth.glossMapChannel, cloth.metalnessMapChannel, cloth.bumpiness]).toEqual([
+    'g',
+    'b',
+    1.4,
+  ])
+  expect(cloth.glossMap).toBe(metal.glossMap)
+  expect(cloth.normalMap).toBe(metal.normalMap)
+  const dyed = await dyedNativeMaterial(f.game, cloth, 'coal')
+  expect(dyed?.enableGGXSpecular).toBe(true)
+  expect([dyed?.gloss, dyed?.metalness, dyed?.bumpiness]).toEqual([0.9, 0.02, 1.4])
+  expect(dyed?.glossMap).toBe(cloth.glossMap)
+  if (!dyed) {
+    throw new Error('Missing actual dyed material clone')
+  }
+  destroyDyedMaterial(dyed)
+  first()
+  expect(cloth.diffuseMap).toBe(f.maps.get('cloth') ?? null)
+  shared()
+  expect(cloth.diffuseMap).toBeNull()
+  expect(metal.glossMap).toBe(f.maps.get('arm') ?? null)
+  second()
+  expect(f.maps.size).toBe(0)
+  expect(f.releases.toSorted((a, b) => a.localeCompare(b))).toEqual([
+    'arm',
+    'cloth',
+    'dyed',
+    'metal',
+    'normal',
+  ])
+  cloth.destroy()
+  metal.destroy()
+  untouched.destroy()
+  f.device.destroy()
+})
 
 it('real AO requires explicit semantics and shares the existing ARM lease', async () => {
   const f = fixture()

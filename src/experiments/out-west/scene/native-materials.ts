@@ -103,6 +103,8 @@ export async function prepareNativeMaterials(
           source.normal ? load(source.normal, false) : null,
           source.arm ? load(source.arm, false) : null,
         ])
+        // glTF roughness is authored for GGX; the native default is Blinn-Phong.
+        material.enableGGXSpecular = true
         material.diffuseMap = albedo
         if (normal) {
           material.normalMap = normal
