@@ -98,11 +98,12 @@ export function call(d: NativeDirector): void {
   }
   const baseDraw = d.bossPhase === 2 ? BOSS_PHASE2.draw : outlaw.draw
   const draw = d.c.save.legend ? legendDraw(d.level) : baseDraw
+  const baseJitter = d.bossPhase === 2 ? BOSS_PHASE2.jitter : outlaw.jitter
   d.plan = planShots(
     d.callTime,
     {
       draw,
-      jitter: outlaw.jitter,
+      jitter: d.c.save.legend ? 0 : baseJitter,
       accuracy: outlaw.accuracy,
       assist:
         (d.c.save.settings.assist ? ASSIST_MS : 0) + (d.c.input.touch ? TOUCH_ALLOWANCE_MS : 0),
@@ -231,29 +232,9 @@ function screen(d: NativeDirector, point: Vec3): Vec3 | null {
   projected.y = rect.top + (projected.y * rect.height) / canvas.height
   return projected
 }
-function shotTarget(d: NativeDirector, press: Press): number {
-  if (!(d.riflemanAlive && d.enemyAlive && press.source === 'pointer' && d.rifleman && d.enemy)) {
-    return 0
-  }
-  const a = screen(
-    d,
-    d.rifleman.root
-      .getPosition()
-      .clone()
-      .add(new Vec3(0, 1.5, 0)),
-  )
-  const b = screen(
-    d,
-    d.enemy.root
-      .getPosition()
-      .clone()
-      .add(new Vec3(0, 1.5, 0)),
-  )
-  return a &&
-    b &&
-    Math.hypot(b.x - press.x, b.y - press.y) < Math.hypot(a.x - press.x, a.y - press.y)
-    ? 1
-    : 0
+function shotTarget(d: NativeDirector): number {
+  // Wire target 0 is the rifleman, then 1 is Curly, on every input modality.
+  return d.outlaw.gimmick === 'underboss' ? Math.min(d.shots, 1) : 0
 }
 function trickShot(d: NativeDirector, press: Press, target: number): void {
   if (press.source !== 'pointer' || !d.enemy || (d.riflemanAlive && target === 0)) {
@@ -280,21 +261,9 @@ function trickShot(d: NativeDirector, press: Press, target: number): void {
   )
 }
 
-export function shoot(d: NativeDirector, press: Press): void {
-  d.shots++
-  const ms = press.t - d.callTime
-  d.reactionMs ??= ms
-  d.c.audio.play('fire', { gain: 0.8 })
-  const target = shotTarget(d, press)
-  const victim = d.riflemanAlive && (target === 0 || !d.enemyAlive) ? d.rifleman : d.enemy
-  duelShot(d, d.player, victim)
-  trickShot(d, press, target)
-  d.clock.shot(target, ms)
-  if (d.ranked || d.remote) {
-    return
-  }
+function acceptLocalShot(d: NativeDirector, press: Press): boolean {
   if (!d.plan) {
-    return
+    return false
   }
   for (const shot of shotsBefore(d.plan, press.t, FEEL.tieMs, (who) =>
     who === 0 ? d.enemyAlive : d.riflemanAlive,
@@ -302,9 +271,36 @@ export function shoot(d: NativeDirector, press: Press): void {
     shot.done = true
     plannedShot(d, shot)
     if (shot.hit) {
-      d.resolve('loss', ms)
-      return
+      d.resolve('loss', press.t - d.callTime)
+      return false
     }
+  }
+  return !(
+    d.outlaw.gimmick === 'underboss' &&
+    d.shots > 0 &&
+    press.t - d.callTime - (d.reactionMs ?? 0) < FEEL.twoTargetGapMs
+  )
+}
+
+export function shoot(d: NativeDirector, press: Press): void {
+  const ms = press.t - d.callTime
+  const underboss = d.outlaw.gimmick === 'underboss'
+  if (d.ranked && d.shots >= (underboss ? 2 : 1)) {
+    return
+  }
+  if (!(d.ranked || d.remote || acceptLocalShot(d, press))) {
+    return
+  }
+  const target = shotTarget(d)
+  d.shots++
+  d.reactionMs ??= ms
+  d.c.audio.play('fire', { gain: 0.8 })
+  const victim = d.riflemanAlive && (target === 0 || !d.enemyAlive) ? d.rifleman : d.enemy
+  duelShot(d, d.player, victim)
+  trickShot(d, press, target)
+  d.clock.shot(target, ms)
+  if (d.ranked || d.remote) {
+    return
   }
   if (d.riflemanAlive && (target === 0 || !d.enemyAlive)) {
     d.riflemanAlive = false
