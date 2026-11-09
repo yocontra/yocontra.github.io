@@ -34,7 +34,7 @@ Last verified game release: `c3db37d` (2026-11-09). Map grounding, terrain cliff
 
 ## Loading and voice QA
 
-- [ ] Review and ship the native `app.loader.enableRetry(3)` change preserved in WIP. Verify a real KTX 503→success path and terminal-failure cleanup; one live texture fetch transiently returned 503 before retrying to the correct bytes. Use the engine retry facility, not a custom retry loop.
+- [x] Verify existing native asset retries: PlayCanvas `AppBase.init` already enables five retries, so no override is needed. `bun tools/content/asset-retry.ts` verifies real WebGL/KTX2 recovery after five HTTP 503s, terminal failure after six attempts, failed-load eviction and re-acquisition, texture/application cleanup, and a disabled-retry control.
 - [ ] Finish simulator Safari voice permission/retry, receive/deafen and background/resume checks. Desktop actual SDK/SFU two-way decoding and complete provider cleanup passed before voice enablement.
 - [ ] Preserve zero RTK allocation while voice is off, idle, alone or bot-only. Keep the rolling reservation guard and durable cleanup. The 9,000-minute reservation allowance is an operational guard, not a provider-enforced hard billing cap.
 
