@@ -42,7 +42,7 @@
     { "name": "DAILY_GUEST_LIMIT", "namespace_id": "1001", "simple": { "limit": 4, "period": 60 } }
   ],
   "vars": {
-    "DISABLE_VOICE": "true",
+    "DISABLE_VOICE": "false",
     "ALLOWED_ORIGINS": "https://contra.io",
     "RP_ID": "contra.io",
     "RP_ORIGINS": "https://contra.io",

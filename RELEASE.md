@@ -62,9 +62,23 @@ The `Check` workflow gives a second, clean-runner result on every push.
 
 ## Proximity voice (Cloudflare RealtimeKit)
 
-`DISABLE_VOICE=true` in the production configuration keeps this service off under the $0 hosting
-requirement. Existing voice controls remain compatible, but no provider session is created. Enabling
-voice requires an explicitly approved change to the hosting policy and verified provider limits.
+Production enables proximity voice with `DISABLE_VOICE=false`; players still opt in, with
+push-to-talk by default. Enabling the microphone starts local standby. Idle players, a player alone,
+and bots create no RealtimeKit session. The SDK and provider session start only when actual speech
+or push-to-talk needs a distinct nearby human listener. Silence, audience departure and room
+retirement end the session and revoke its participants; failed cleanup retries without starting
+the game world.
+
+The existing D1 guard reserves participant time against a rolling 32-day allowance of 9,000 minutes,
+below RealtimeKit's [10,000 included audio participant minutes](https://developers.cloudflare.com/realtime/realtimekit/platform/pricing/).
+Reservations are conservative, are not refunded, and must succeed before admission or lease renewal.
+Budget exhaustion or a failed budget check pauses voice. This is an application guard, not a provider
+billing cap or a guarantee of $0 usage: token duplication, provider cleanup outages and unrelated
+account usage can exceed its estimates.
+
+To stop voice, set `DISABLE_VOICE=true` and deploy through the normal API release workflow. Verify
+provider sessions have ended and no new sessions appear; do not clear usage reservations to bypass
+the guard. No billing subscription or account setting needs to change.
 
 The opt-in voice chat in Frontier and Bounty Hunt uses a RealtimeKit app named `out-west` and the
 audio-only preset `out-west-voice` (video, screenshare and chat disabled). The account, app and
@@ -72,8 +86,8 @@ preset ids are `vars` in `api/wrangler.jsonc`; `REALTIMEKIT_API_TOKEN` is a Work
 **Realtime** permission and is never sent to the browser. `api/.dev.vars.example` lists the local
 equivalents.
 
-The client fetches the RealtimeKit Core SDK only after a player turns voice on; it stays off by
-default, push-to-talk. On a real iPhone 13 mini check the microphone prompt, echo with the speaker
+The client fetches the RealtimeKit Core SDK only when speech and an eligible listener need it.
+On an iPhone 13 mini check the microphone prompt, echo with the speaker
 (not headphones), the switch to a Bluetooth headset, and the Ring/Silent audio session while a
 Frontier round is running.
 

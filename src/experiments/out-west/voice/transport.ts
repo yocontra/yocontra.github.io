@@ -12,6 +12,7 @@ import {
 } from './meeting.ts'
 import type { VoiceAudio } from './native-audio.ts'
 import { rankVoicePeers, type VoicePeer } from './rank.ts'
+import { RemotePlayout } from './remote-playout.ts'
 
 interface Options {
   audio: VoiceAudio | null
@@ -48,6 +49,7 @@ export class VoiceTransport {
   private readonly tracks = new Map<number, MediaStreamTrack>()
   private speakers = new Set<number>()
   private readonly nodes = new Map<number, VoiceChatNode>()
+  private readonly playouts = new Map<number, RemotePlayout>()
   private readonly wanted = new Set<number>()
   private readonly keepUntil = new Map<number, number>()
   constructor(options: Options) {
@@ -112,6 +114,11 @@ export class VoiceTransport {
     this.live.sending = on
     if (this.mic) {
       this.mic.enabled = on
+    }
+  }
+  resumeReceive(): void {
+    for (const playout of this.playouts.values()) {
+      playout.resume()
     }
   }
   setSpeakers(ids: readonly number[]): void {
@@ -210,17 +217,52 @@ export class VoiceTransport {
     if (!node) {
       return
     }
+    let playout: RemotePlayout
+    try {
+      playout = new RemotePlayout(track, (state) => {
+        if (this.playouts.get(id) !== playout) {
+          return
+        }
+        if (state === 'ended') {
+          this.detach(id)
+        } else if (state === 'error') {
+          this.o.onState('error', 'Voice playback could not start. Retry voice.')
+        } else {
+          this.receiveState()
+        }
+      })
+    } catch {
+      node.dispose()
+      this.o.onState('error', 'Silent voice playback is unavailable in this browser.')
+      return
+    }
     this.nodes.set(id, node)
     this.tracks.set(id, track)
+    this.playouts.set(id, playout)
     this.applyGains()
+    playout.resume()
   }
 
   private detach(id: number): void {
+    this.playouts.get(id)?.dispose()
+    this.playouts.delete(id)
     const node = this.nodes.get(id)
     if (node) {
       node.dispose()
       this.nodes.delete(id)
       this.tracks.delete(id)
+    }
+    this.receiveState()
+  }
+
+  private receiveState(): void {
+    if (this.meeting) {
+      this.o.onState(
+        'live',
+        [...this.playouts.values()].some((playout) => playout.state === 'blocked')
+          ? 'Tap the voice button to hear nearby players.'
+          : undefined,
+      )
     }
   }
 
@@ -300,6 +342,13 @@ export class VoiceTransport {
       this.wanted.add(id)
     }
 
+    // Free local receive slots before asynchronous SDK unsubscribe work. Late audio events for
+    // newly wanted peers must never overlap the previous four decoding elements/nodes.
+    for (const id of [...this.nodes.keys()]) {
+      if (!this.wanted.has(id)) {
+        this.detach(id)
+      }
+    }
     this.applyGains()
     const subscribed = new Set<number>()
     for (const peerId of meeting.participants.audioSubscribed.keys()) {

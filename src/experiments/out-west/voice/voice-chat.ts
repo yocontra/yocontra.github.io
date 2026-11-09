@@ -60,6 +60,7 @@ export class VoiceChat {
   private readonly o: VoiceChatOptions
   private readonly transport: VoiceTransport
   private state: VoiceState = 'off'
+  private playbackMessage: string | undefined
   private microphone: MediaStreamTrack | null = null
   private activity: MicrophoneActivity | null = null
   private readonly localMuted = new Set<number>()
@@ -75,7 +76,8 @@ export class VoiceChat {
         if (state === 'error') {
           this.fail(message ?? 'Voice connection lost. Retry voice.')
         } else if (this.live.enabled && this.live.requested) {
-          this.setState('live')
+          this.playbackMessage = message
+          this.setState('live', message)
         }
       },
     })
@@ -123,6 +125,7 @@ export class VoiceChat {
       return
     }
     this.o.audio?.resume?.()
+    this.transport.resumeReceive()
     if (this.microphone?.readyState === 'live') {
       this.refreshInterest(true)
       this.setState('standby')
@@ -152,10 +155,12 @@ export class VoiceChat {
     this.live.talking = on
     if (on) {
       this.o.audio?.resume?.()
+      this.transport.resumeReceive()
     }
     this.sample(true)
   }
   setMicMuted(on: boolean): void {
+    this.transport.resumeReceive()
     this.live.micMuted = on
     this.sample(true)
   }
@@ -328,7 +333,10 @@ export class VoiceChat {
   }
   private setState(state: VoiceState, message?: string): void {
     this.state = state
-    let status = message
+    if (state !== 'live') {
+      this.playbackMessage = undefined
+    }
+    let status = message ?? (state === 'live' ? this.playbackMessage : undefined)
     if (!status && state === 'standby') {
       status = this.live.listeners > 0 ? 'Ready · nearby listeners' : 'Ready · no nearby listeners'
     }
