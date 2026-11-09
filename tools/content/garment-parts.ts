@@ -39,7 +39,7 @@ async function artifacts(doc: Document, id: string): Promise<Artifact[]> {
     digest.update(new Uint8Array(buffer))
   }
   const hash = digest.digest('hex')
-  for (const category of ['coat-sleeves', 'boot-bridges', 'coat-collars']) {
+  for (const category of ['coat-sleeves', 'boot-bridges', 'coat-collars', 'shirt-fronts']) {
     const path = resolve('tools/art/characters', category, `${id}.glb`)
     if (!(await Bun.file(path).exists())) {
       continue
