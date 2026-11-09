@@ -69,6 +69,11 @@
 .ow-voice.open .ow-voice-status {
   color: #cfb274;
 }
+@media (pointer: fine) {
+  .ow-voice.ptt .ow-voice-btn {
+    display: none;
+  }
+}
 @media (pointer: coarse) {
   .ow-voice {
     bottom: max(84px, calc(env(safe-area-inset-bottom) + 64px));

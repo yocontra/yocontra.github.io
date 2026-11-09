@@ -23,9 +23,9 @@ Complete and push these in small working tasks, with native visual/audio evidenc
 - [ ] Make the wanted poster respond to actual scene lighting and shadows as printed paper; remove any unintended unlit/emissive treatment while preserving readable artwork and UVs.
 - [ ] Correct squashed barrels, cacti and other distorted props at their source/placement transforms. Preserve natural proportions and matching gameplay collision.
 - [ ] Improve cactus and environment model/texture fidelity; replace shiny generic gradients with appropriate authored surface detail. Use detailed source meshes and native LOD where useful, measuring the 30 FPS simulator / approximately 60 FPS Chrome budget before promoting assets.
-- [ ] Change the Frontier entry CTA to **Live town** (currently **Practice town**).
+- [x] Make **Live town** the first and primary Frontier CTA, retaining sign-in/licence handling and secondary practice access.
 - [ ] Fix Perdition reloading/navigating when microphone permission is granted. Add a usable microphone selector after permission where browser device enumeration supports it, and handle default-device changes.
-- [ ] Hide the desktop **TALK** button and preserve keyboard push-to-talk; keep a usable touch control on mobile.
+- [x] Hide desktop **TALK** while retaining keyboard push-to-talk, connection/retry and open-mic mute controls. Keep mobile touch TALK with correct modality hints and active talking status; actual component browser checks cover both inputs.
 - [ ] Make broken glass visibly fragment and fall away, with a glass shatter sound. Bound native debris lifetime/count and verify collision/cleanup and performance.
 - [ ] Add distinct positional bullet-hit sounds for people, wood, masonry/concrete, metal, glass and other authored surfaces. Match actual hit material and avoid duplicate local/authoritative playback.
 - [ ] Correct floaty jumping toward the requested Call of Duty Mobile feel. Tune native gravity/impulse together, retain one jump edge, and verify local/server trajectories and traversal routes.

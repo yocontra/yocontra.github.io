@@ -1,9 +1,9 @@
 // biome-ignore-all lint/suspicious/noUnnecessaryConditions: live voice state changes between async callbacks and frames
 // biome-ignore-all lint/security/noSecrets: voice setting keys and key names are not credentials
 /**
- * The one voice control shared by Frontier and Bounty Hunt: a TALK / MIC button at the bottom of
- * the screen, plus a small state line. It sits outside the game HUD so it cannot collide with the
- * touch clusters, and it only appears after the player turns proximity voice on.
+ * Voice controls shared by Frontier and Bounty Hunt: touch TALK, desktop T, open-mic mute and
+ * connection/retry controls, plus a small state line. They sit outside the game HUD and only
+ * appear after the player turns proximity voice on.
  */
 import './voice.css'
 
@@ -223,6 +223,7 @@ export class VoiceControls {
   private render(): void {
     const s = this.o.settings()
     const ptt = s.voicePushToTalk
+    this.root.classList.toggle('ptt', ptt && this.state !== 'off' && this.state !== 'error')
     this.button.classList.toggle('talking', this.talking && !this.silenced)
     this.button.setAttribute(
       'aria-pressed',
@@ -243,17 +244,30 @@ export class VoiceControls {
     this.button.textContent = label
     const micLabel = this.muted ? 'Unmute microphone' : 'Mute microphone'
     this.button.setAttribute('aria-label', ptt ? 'Hold to talk' : micLabel)
-    if (this.silenced) {
-      this.status.textContent = 'muted for the draw'
-    } else if (this.state === 'connecting') {
-      this.status.textContent = this.message || 'connecting…'
-    } else if (this.state === 'standby') {
-      this.status.textContent = this.message || 'Ready · hold T to talk'
-    } else if (ptt) {
-      this.status.textContent = 'hold T'
-    } else {
-      this.status.textContent = 'open mic'
-    }
+    this.status.textContent = this.statusText(ptt)
     this.status.className = 'ow-voice-status'
+  }
+
+  private statusText(ptt: boolean): string {
+    if (this.silenced) {
+      return 'muted for the draw'
+    }
+    if (this.state === 'connecting') {
+      return this.message || 'connecting…'
+    }
+    if (this.muted) {
+      return 'microphone muted'
+    }
+    if (ptt && this.talking) {
+      return 'Talking'
+    }
+    if (!ptt) {
+      return 'open mic'
+    }
+    const hint = matchMedia('(pointer: coarse)').matches ? 'hold TALK to talk' : 'hold T to talk'
+    if (this.state === 'standby') {
+      return this.message || `Ready · ${hint}`
+    }
+    return hint
   }
 }

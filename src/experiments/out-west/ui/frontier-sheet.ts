@@ -18,16 +18,16 @@ export function frontierSheet(parent: HTMLElement, signedIn: boolean, live: () =
   const row = el('div', 'ow-hub-row', s.body)
   button(
     row,
-    'Practice town',
+    signedIn ? 'Live town' : 'Live town: sign in',
     () => {
       s.close()
-      location.assign(PRACTICE_TOWN_URL)
+      live()
     },
     true,
   )
-  button(row, signedIn ? 'Live town' : 'Live town: sign in', () => {
+  button(row, 'Practice town', () => {
     s.close()
-    live()
+    location.assign(PRACTICE_TOWN_URL)
   })
   el(
     'p',
