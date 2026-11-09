@@ -7,12 +7,18 @@ Last verified game release: `c3db37d` (2026-11-09). Map grounding, terrain cliff
 Complete and push these in small working tasks, with native visual/audio evidence for each affected path.
 
 - [ ] Run a side-by-side duel-mode parity audit against the original engine version. Capture matching campaign scenes, introductions/dialogue, idle/draw/shoot/death animations, timing, gameplay cues, transitions, UI feedback and microinteractions. Record each missing or degraded detail as an actionable fix with before/after visual evidence; do not treat a render-only comparison as gameplay parity.
+- [ ] Fix train-station duel scenery: misplaced Livery/Feed and Mercantile/Supply signs currently float above trains, and roof panels are missing. Compare the original station composition and native geometry/material visibility.
+- [ ] Audit misplaced commercial signs across every mission scene, including the otherwise good-looking mission map; retain only signs that belong to the actual building and location.
+- [ ] Make Tap to Continue transitions present the next map and opponent atomically. Keep a coherent loading state while either is pending; never place the next opponent on the old map. Cover slow map/actor loads, cancellation, failure and late completion.
+- [ ] Isolate duel spectators from combatant state: the crowd currently draws guns at DRAW and ragdolls when the opponent is shot. Verify independent animation, skeleton/skin and ragdoll ownership through draw, shooting, death and round reset; only the actual opponent receives combat transitions.
+- [ ] Make moving tumbleweeds roll with their travel direction/distance and actual radius, preserving ground contact and ambient-path timing.
 - [ ] Correct plastic-looking character materials: skin, cloth and fabric need appropriate roughness, metalness and specular response. Check every outfit and crowd material under actual game lighting.
 - [ ] Repair missing rear-neck geometry/seams and forward-hunched head/neck posture on player, opponents and crowds. Compare bind pose and animated poses before changing the rig.
 - [ ] Fix the main-screen idle glitch: approximately every four seconds, a roughly 200 ms arms-forward pose interrupts idle. Verify a continuous animation capture across several loops.
 - [ ] Restore the horse's textures and validate its actual native render, not only material metadata.
 - [ ] Replace thick, clog-like boot soles and knee-high generic shapes with properly proportioned cowboy boots. Preserve fitted garment boundaries and review all affected fits.
 - [ ] Add distance fog/dust that obscures far hills and foliage while retaining nearby combat readability and scene definition.
+- [ ] Make the wanted poster respond to actual scene lighting and shadows as printed paper; remove any unintended unlit/emissive treatment while preserving readable artwork and UVs.
 - [ ] Correct squashed barrels, cacti and other distorted props at their source/placement transforms. Preserve natural proportions and matching gameplay collision.
 - [ ] Improve cactus and environment model/texture fidelity; replace shiny generic gradients with appropriate authored surface detail. Use detailed source meshes and native LOD where useful, measuring the 30 FPS simulator / approximately 60 FPS Chrome budget before promoting assets.
 - [ ] Change the Frontier entry CTA to **Live town** (currently **Practice town**).
