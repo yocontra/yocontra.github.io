@@ -11,8 +11,12 @@ function requireScene(condition: unknown, message: string): asserts condition {
 const origin = process.argv[2] ?? 'http://127.0.0.1:4390'
 const output = process.env.OW_ENV_OUTPUT ?? '/tmp/out-west-environment-campaign'
 const dressingOnly = process.env.OW_ENV_DRESSING_ONLY === '1'
+const roofOnly = process.env.OW_ENV_DEPOT_ROOF === '1'
 const baseline = process.env.OW_ENV_BASELINE === '1'
-const levels = dressingOnly ? [0, 6, 10, 13, 0] : Array.from({ length: 17 }, (_, i) => i)
+const levels = roofOnly ? [6] : Array.from({ length: 17 }, (_, i) => i)
+if (dressingOnly) {
+  levels.splice(0, levels.length, 0, 6, 10, 13, 0)
+}
 const ownSignsByArena: Record<string, number> = { depot: 2, mission: 1 }
 const browser = await chromium.launch({ channel: 'chrome', headless: true })
 const page = await browser.newPage({ viewport: { width: 1280, height: 800 } })
@@ -107,6 +111,7 @@ try {
       ownSigns: number
     }
   }[] = []
+  const roofViews: unknown[] = []
   for (const level of levels) {
     const sample = await page.evaluate(async (index) => {
       const { game, arenas, arenaForSlot, OUTLAWS, streetRoot, sharedBackground } = Reflect.get(
@@ -176,9 +181,34 @@ try {
       sample.visibility.ownSigns === (ownSignsByArena[sample.arena] ?? 0),
       'Arena-owned signs changed',
     )
+    if (roofOnly) {
+      for (const view of [
+        { name: 'roof-above', eye: [7, 9, 2], target: [16, 4.8, 12] },
+        { name: 'soffit-below', eye: [10.3, 1.6, 12], target: [11.2, 3.9, 12] },
+      ]) {
+        const state = await page.evaluate(async ({ eye, target }) => {
+          const { game } = Reflect.get(globalThis, '__environmentProbe')
+          game.camera.setPosition(...eye)
+          game.camera.lookAt(...target)
+          for (let frame = 0; frame < 3; frame++) {
+            await new Promise(requestAnimationFrame)
+          }
+          return {
+            camera: game.camera.getPosition().toArray(),
+            rotation: game.camera.getEulerAngles().toArray(),
+            renderComponents: game.stage.findComponents('render').length,
+          }
+        }, view)
+        roofViews.push({ ...view, ...state })
+        await page.screenshot({ path: `${output}/${view.name}.png` })
+      }
+    }
   }
   const clock = await page.evaluate(async () => {
     const { game, arenas } = Reflect.get(globalThis, '__environmentProbe')
+    if (arenas.id !== 'street') {
+      await arenas.show('street')
+    }
     const root = game.stage.findByName('town-clock-bell')
     const bone = root?.findByName('clock-3-8')
     if (!bone) {
@@ -266,6 +296,7 @@ try {
         ...setup,
         scope: 'Environment and native clock only; no riders or physical-device FPS claim',
         results,
+        roofViews,
         returned,
         clock,
         dailyFog,
