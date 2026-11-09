@@ -1,8 +1,9 @@
-/** Integrate portable Blender sleeve/ankle artifacts before any canonical triangle filtering. */
+/** Integrate portable Blender garment patches before canonical triangle filtering. */
 import { createHash } from 'node:crypto'
 import { resolve } from 'node:path'
 import { type Document, type Node, NodeIO, type Primitive } from '@gltf-transform/core'
 import { copyToDocument } from '@gltf-transform/functions'
+import { validateAuthoringInputs } from './authoring-inputs.ts'
 import type { Range } from './character-atlas.ts'
 import { appendAuthoredSurface, bindAuthoredSurface } from './garment-geometry.ts'
 
@@ -38,12 +39,15 @@ async function artifacts(doc: Document, id: string): Promise<Artifact[]> {
     digest.update(new Uint8Array(buffer))
   }
   const hash = digest.digest('hex')
-  for (const category of ['coat-sleeves', 'boot-bridges']) {
+  for (const category of ['coat-sleeves', 'boot-bridges', 'coat-collars']) {
     const path = resolve('tools/art/characters', category, `${id}.glb`)
     if (!(await Bun.file(path).exists())) {
       continue
     }
     const source = await io.read(path)
+    if (source.getRoot().getExtras().sourceInputs) {
+      await validateAuthoringInputs(source)
+    }
     const metadata = source.getRoot().getExtras() as unknown as Metadata
     const node = doc.getRoot().listNodes()[metadata.sourcePrimitive.nodeIndex]
     const mesh = node?.getMesh()

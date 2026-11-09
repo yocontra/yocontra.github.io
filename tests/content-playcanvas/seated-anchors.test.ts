@@ -7,6 +7,7 @@ import bank from '../../src/experiments/out-west/content/bank.json' with { type:
 import depot from '../../src/experiments/out-west/content/depot.json' with { type: 'json' }
 import mission from '../../src/experiments/out-west/content/mission.json' with { type: 'json' }
 import street from '../../src/experiments/out-west/content/street-life.json' with { type: 'json' }
+import { OUTLAWS } from '../../src/experiments/out-west/data/outlaws.ts'
 import { campaignSeats } from '../../src/experiments/out-west/duel/native-arenas.ts'
 
 type Triangle = [Vec3, Vec3, Vec3]
@@ -71,7 +72,7 @@ it('all twelve campaign seated anchors match actual native bench wood and floor 
     ['mission', mission.life],
     ['bank', bank.life],
   ] as const) {
-    const life = campaignSeats(source)
+    const life = campaignSeats(source, id === 'duel')
     const doc = await io.read(`public/experiments/out-west/3d/native-v2/baked/${id}.glb`)
     const surfaces = horizontalSurfaces(doc)
     for (const [index, home] of life.folk.entries()) {
@@ -85,17 +86,29 @@ it('all twelve campaign seated anchors match actual native bench wood and floor 
         continue
       }
       count++
-      const heights = heightsAt(surfaces, home.x, home.z)
+      const body = Math.max(
+        0,
+        OUTLAWS.findIndex((outlaw) => outlaw.look.base === home.base),
+      )
+      const pose = await io.read(`tools/art/characters/seated-poses/outlaw-${body}.glb`)
+      const contact = pose.getRoot().getExtras().measuredContacts as { hips: number[] }
+      const [hipX = 0, , hipZ = 0] = contact.hips
+      // The seated hips sit behind the actor origin; test wood under the actual pelvis.
+      const x = home.x + hipX * Math.cos(home.yaw) + hipZ * Math.sin(home.yaw)
+      const z = home.z - hipX * Math.sin(home.yaw) + hipZ * Math.cos(home.yaw)
+      const heights = heightsAt(surfaces, x, z)
       expect(heights.some((y) => Math.abs(y - (home.seatY ?? -99)) < 0.003)).toBe(true)
-      const floorSurfaces = [...heights, ...heightsAt(shared, home.x, home.z)]
+      const floorSurfaces = [
+        ...heightsAt(surfaces, home.x, home.z),
+        ...heightsAt(shared, home.x, home.z),
+      ]
       expect(floorSurfaces.some((y) => Math.abs(y - (home.floor ?? -99)) < 0.003)).toBe(true)
       expect((home.seatY ?? 0) - (home.floor ?? 0)).toBeCloseTo(0.496_151, 6)
-      expect([home.x, home.y, home.z, home.yaw]).toEqual([
-        original.x,
-        original.y,
-        original.z,
-        original.yaw,
-      ])
+      expect([home.y, home.yaw]).toEqual([original.y, original.yaw])
+      const forward =
+        id === 'duel' ? (({ 4: 0.25, 6: 0.265, 8: 0.21 } as Record<number, number>)[index] ?? 0) : 0
+      expect(home.x).toBeCloseTo(original.x + Math.sin(original.yaw) * forward, 8)
+      expect(home.z).toBeCloseTo(original.z + Math.cos(original.yaw) * forward, 8)
     }
   }
   expect(count).toBe(12)

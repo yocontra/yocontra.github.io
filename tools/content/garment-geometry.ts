@@ -1,5 +1,5 @@
 /** Portable authored geometry stays in the original native skin/material/atlas batch. */
-import { ComponentTypeToTypedArray, type Primitive } from '@gltf-transform/core'
+import { type Accessor, ComponentTypeToTypedArray, type Primitive } from '@gltf-transform/core'
 import type { Range } from './character-atlas.ts'
 
 interface Piece extends Range {
@@ -26,6 +26,9 @@ export function bindAuthoredSurface(
     if (!attribute) {
       throw new Error(`Missing canonical garment attribute ${semantic}`)
     }
+    if (bindAuthoredAttribute(garment, attribute, semantic, count)) {
+      continue
+    }
     const width = attribute.getElementSize()
     const values = new Float32Array(count * width)
     for (const piece of pieces) {
@@ -38,6 +41,30 @@ export function bindAuthoredSurface(
     }
     garment.setAttribute(semantic, attribute.clone().setArray(values))
   }
+}
+function bindAuthoredAttribute(
+  garment: Primitive,
+  attribute: Accessor,
+  semantic: string,
+  count: number,
+): boolean {
+  const authoredSemantic = `_AUTHOR${semantic.startsWith('_') ? semantic : `_${semantic}`}`
+  const authored = garment.getAttribute(authoredSemantic)
+  if (!authored) {
+    return false
+  }
+  const values = authored.getArray()
+  if (
+    !values ||
+    authored.getCount() !== count ||
+    authored.getElementSize() !== attribute.getElementSize() ||
+    Array.from(values).some((value) => !Number.isFinite(value))
+  ) {
+    throw new Error(`Invalid authored garment attribute ${authoredSemantic}`)
+  }
+  garment.setAttribute(semantic, attribute.clone().setArray(values.slice()))
+  garment.setAttribute(authoredSemantic, null)
+  return true
 }
 function styleValue(semantic: string, channel: number, value: number, piece: Piece): number {
   if (semantic === 'COLOR_0') {

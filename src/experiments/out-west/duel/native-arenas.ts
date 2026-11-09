@@ -12,19 +12,29 @@ export type ArenaId = 'street' | 'depot' | 'mission' | 'bank'
 export type { ArenaLife, Stand } from '../contract/ambient.ts'
 
 /** Kit bench wood tops sit 0.496151m above their authored floor. */
-export function campaignSeats(life: ArenaLife): ArenaLife {
+export function campaignSeats(life: ArenaLife, streetClearance = false): ArenaLife {
+  const clearance: Readonly<Record<number, number>> = streetClearance
+    ? { 4: 0.25, 6: 0.265, 8: 0.21 }
+    : {}
   return {
     ...life,
-    folk: life.folk.map((spot) => {
+    folk: life.folk.map((spot, index) => {
       if (spot.habit !== 'sit' && spot.habit !== 'whittle') {
         return spot
       }
       const floor = spot.floor ?? 0.34
-      return { ...spot, floor, seatY: floor + 0.496_151 }
+      const forward = clearance[index] ?? 0
+      return {
+        ...spot,
+        x: spot.x + Math.sin(spot.yaw) * forward,
+        z: spot.z + Math.cos(spot.yaw) * forward,
+        floor,
+        seatY: floor + 0.496_151,
+      }
     }),
   }
 }
-const STREET: ArenaLife = campaignSeats(streetLife)
+const STREET: ArenaLife = campaignSeats(streetLife, true)
 const ARENAS = { depot, mission, bank }
 export function arenaForSlot(slot: number): ArenaId {
   if (slot >= 6 && slot <= 9) {

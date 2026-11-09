@@ -9,6 +9,7 @@ OUT_WEST_GARMENT_OUTPUT stages prototypes without changing primary artifacts.
 """
 
 import importlib.util
+import hashlib
 import os
 from pathlib import Path
 
@@ -419,7 +420,13 @@ def bridges(source, body):
         cuff_count += cuff_lining(body, boot, pants_loops, output)
     if not removed:
         return None
-    return output, {"replaceRanges": [], "removeTriangles": sorted(removed), "cuffLinings": cuff_count, "pantsCuffRepair": cuff_repair}
+    inputs = [source.path, *(source.path.parent / entry["uri"] for entry in source.doc["buffers"])]
+    pose_input = cuff_repair.get("poseSpaceFit", {}).get("posePath")
+    if pose_input:
+        reference = common.Source(common.SOURCES / "outlaw-2.gltf")
+        inputs.extend([reference.path, *(reference.path.parent / entry["uri"] for entry in reference.doc["buffers"]), common.ROOT / pose_input])
+    provenance = [{"path": str(path.relative_to(common.ROOT)), "sha256": hashlib.sha256(path.read_bytes()).hexdigest()} for path in dict.fromkeys(inputs)]
+    return output, {"replaceRanges": [], "removeTriangles": sorted(removed), "cuffLinings": cuff_count, "pantsCuffRepair": cuff_repair, "sourceInputs": provenance}
 
 
 if __name__ == "__main__":
