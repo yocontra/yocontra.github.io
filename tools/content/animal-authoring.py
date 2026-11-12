@@ -152,7 +152,7 @@ class Body:
         me.from_pydata(self.posed, [], self.faces)
         me.shade_smooth()
         me.normals_split_custom_set_from_vertices(normals)
-        for name in ("muzzle", "eyering", "blaze"):
+        for name in spec.get("masks", ("muzzle", "eyering", "blaze")):
             layer = me.attributes.new(name, "FLOAT", "POINT")
             touched = {v for f, r in zip(self.faces, self.face_region) if r == name for v in f}
             for v in touched:
@@ -819,6 +819,27 @@ def coat_graph(g, coat):
     g.finish(base, rough, 0.0, height, 0.32)
 
 
+def shiba_graph(g, coat):
+    """Red sesame over cream urajiro; the cream mask is a per-vertex blend so the border feathers."""
+    p = g.p
+    q = g.xyz(p)
+    flow = g.xyz(g.noise(g.stretch((240, 24, 240)), 1.0, 3.0, 0.55))[0]
+    tone = g.noise(p, 7.0, 4.0, 0.6)
+    base = g.mix(g.smooth(0.3, 0.7, tone), coat["dark"], coat["light"])
+    sesame = g.math("MULTIPLY", g.smooth(0.38, 0.5, q[2]), g.math("SUBTRACT", 1.0, g.smooth(0.02, 0.07, g.math("ABSOLUTE", q[0]))))
+    tips = g.smooth(0.55, 0.75, g.noise(g.stretch((300, 40, 300)), 1.0, 2.0))
+    base = g.mix(g.math("MULTIPLY", sesame, g.math("ADD", 0.35, g.math("MULTIPLY", 0.45, tips))), base, coat["sesame"])
+    jitter = g.math("MULTIPLY", g.math("SUBTRACT", g.noise(p, 40.0, 3.0), 0.5), 0.5)
+    cream = g.smooth(0.25, 0.75, g.math("ADD", g.attr("cream"), jitter))
+    cream_tone = g.mix(g.smooth(0.3, 0.7, tone), coat["cream"], coat["cream_light"])
+    base = g.mix(cream, base, cream_tone)
+    base = g.scale(base, g.math("ADD", 0.88, g.math("MULTIPLY", 0.24, flow)))
+    rough = g.math("ADD", g.math("ADD", 0.62, g.math("MULTIPLY", 0.1, cream)), g.math("MULTIPLY", 0.12, flow))
+    fine = g.noise(p, 1200.0, 1.0)
+    height = g.math("ADD", flow, g.math("MULTIPLY", fine, 0.25))
+    g.finish(base, rough, 0.0, height, 0.3)
+
+
 def coat_sock(g, p, jitter):
     q = g.xyz(p)
     hind_left = g.math("MULTIPLY", g.smooth(0.0, 0.03, q[0]), g.smooth(0.45, 0.55, q[1]))
@@ -832,7 +853,11 @@ def surface_graph(material, kind, coat):
     tack = g.attr("tack", "Vector")
     t = g.xyz(tack)
     if kind == "coat":
-        coat_graph(g, coat)
+        (shiba_graph if "sesame" in coat else coat_graph)(g, coat)
+    elif kind == "nose":
+        cells = g.voronoi(p, 900.0, "SMOOTH_F1")
+        color = g.scale((0.012, 0.009, 0.008), g.math("ADD", 0.8, g.math("MULTIPLY", 0.4, cells)))
+        g.finish(color, g.math("ADD", 0.16, g.math("MULTIPLY", 0.2, cells)), 0.0, cells, 0.5)
     elif kind == "mane":
         strands = g.noise(g.stretch((110, 110, 5)), 1.0, 3.0, 0.6)
         color = g.scale(coat["hair"], g.math("ADD", 0.65, g.math("MULTIPLY", 0.8, strands)))
@@ -942,7 +967,7 @@ def save_png(rgba, path):
     bpy.data.images.remove(out)
 
 
-def bake(objects, graphs, size, samples):
+def bake(objects, graphs, size, samples, reach):
     scene = bpy.context.scene
     scene.render.engine = "CYCLES"
     scene.cycles.device = "CPU"
@@ -950,7 +975,7 @@ def bake(objects, graphs, size, samples):
     scene.render.bake.margin_type = "EXTEND"
     if scene.world is None:
         scene.world = bpy.data.worlds.new("World")
-    scene.world.light_settings.distance = 0.4
+    scene.world.light_settings.distance = reach
     for ob in bpy.context.scene.objects:
         ob.select_set(ob in objects)
         ob.hide_render = ob not in objects
@@ -1159,7 +1184,30 @@ SPECS = {
             "star": (0.0, -1.43, 1.99),
         },
         "size": 1024,
+        "occlusion": 0.4,
         "hair": (1024, 256, 8),
+    },
+    "dog": {
+        "regions": {
+            (0.254, 0.102, 0.027): "coat",
+            (0.292, 0.301, 0.266): "cream",
+            (0.022, 0.022, 0.022): "nose",
+            (0.025, 0.014, 0.006): "eye",
+            (0.005, 0.005, 0.005): "eye",
+            (0.694, 0.694, 0.694): "eye",
+        },
+        "surface": {"coat": "coat", "cream": "coat", "nose": "nose", "eye": "eye"},
+        "slots": ["coat", "nose", "eye"],
+        "masks": ("cream",),
+        "coat": {
+            "dark": (0.2, 0.062, 0.016),
+            "light": (0.36, 0.13, 0.04),
+            "sesame": (0.07, 0.03, 0.012),
+            "cream": (0.26, 0.19, 0.12),
+            "cream_light": (0.36, 0.28, 0.18),
+        },
+        "size": 512,
+        "occlusion": 0.12,
     },
 }
 
@@ -1177,7 +1225,7 @@ def skin_trees(body):
 def build(spec):
     reset()
     materials = {}
-    for kind in ("coat", "mane", "hoof", "eye", "leather", "darkleather", "wool", "cinch", "bedroll", "brass", "iron", "hair"):
+    for kind in ("coat", "mane", "hoof", "eye", "nose", "leather", "darkleather", "wool", "cinch", "bedroll", "brass", "iron", "hair"):
         materials[kind] = bpy.data.materials.new(f"{ANIMAL} {kind}")
     body = Body(spec)
     ob = bpy.data.objects.new("Body", body.mesh)
@@ -1226,7 +1274,7 @@ def author():
     for kind, material in materials.items():
         if kind != "hair" and material.users:
             graphs.append(surface_graph(material, kind, spec["coat"]))
-    maps = bake(objects, graphs, spec["size"], 48)
+    maps = bake(objects, graphs, spec["size"], 48, spec["occlusion"])
     textures = ART / "animal-textures"
     albedo = maps["albedo"].copy()
     albedo[..., :3] = linear_to_srgb(albedo[..., :3])

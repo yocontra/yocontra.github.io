@@ -8,6 +8,10 @@ import { DuelActor } from './native-actor.ts'
 import type { ArenaLife, Stand } from './native-arenas.ts'
 
 type CueProp = 'coin' | 'card' | 'crow' | 'tumbleweed' | 'door' | 'dog' | 'horse'
+/** Settled animals drift between their authored idles; plain Idle recurs so the swaps stay rare. */
+const IDLE_VARIANTS = ['Idle', 'Idle_2', 'Idle', 'Idle_Headlow', 'Idle', 'Eating', 'Idle_2_HeadLow']
+const IDLE_SPELL = 9
+const HEN_RUN = [-1.6, 0.6] as const
 interface Spectator {
   actor: DuelActor
   home: Stand & { habit?: string; door?: readonly number[] | null; floor?: number; seatY?: number }
@@ -59,6 +63,11 @@ export class NativeAtmosphere {
   private readonly horses: DuelActor[] = []
   private readonly crows: DuelActor[] = []
   private readonly hens: DuelActor[] = []
+  private readonly idlers = new Map<
+    DuelActor,
+    { variants: string[]; offset: number; turn: number }
+  >()
+  private idleTime = 0
   private signs: DuelActor | undefined
   private wilds: NativeWilds | undefined
   private readonly game: GameApplication
@@ -152,7 +161,7 @@ export class NativeAtmosphere {
       if (stand) {
         horse.place(stand.x, stand.y, stand.z)
         horse.face((stand.yaw * 180) / Math.PI)
-        clip(horse, 'Idle')
+        this.settle(horse, index * 4.3)
       }
     }
     for (const [index, crow] of this.crows.entries()) {
@@ -180,7 +189,7 @@ export class NativeAtmosphere {
     dog?.face((life.dog.yaw * 180) / Math.PI)
     if (dog) {
       dog.root.enabled = true
-      clip(dog, 'Idle')
+      this.settle(dog, 2.1)
     }
     const door = this.props.get('door')
     door?.place(life.door.x, life.door.y, life.door.z)
@@ -197,13 +206,37 @@ export class NativeAtmosphere {
       }
     }
   }
+  private settle(actor: DuelActor, offset: number): void {
+    const variants = IDLE_VARIANTS.filter((name) => actor.hasAnimation(name))
+    const turn = Math.floor((this.idleTime + offset) / IDLE_SPELL)
+    this.idlers.set(actor, { variants, offset, turn })
+    actor.idle(variants[turn % variants.length] ?? 'Idle')
+    clip(actor, 'Idle')
+  }
+  private driftIdles(step: number): void {
+    this.idleTime += step
+    for (const [actor, idler] of this.idlers) {
+      const turn = Math.floor((this.idleTime + idler.offset) / IDLE_SPELL)
+      if (turn === idler.turn) {
+        continue
+      }
+      idler.turn = turn
+      actor.idle(idler.variants[turn % idler.variants.length] ?? 'Idle')
+      if (actor.root.enabled && !this.transients.has(actor)) {
+        actor.play('Idle', 0.6)
+      }
+    }
+  }
   private takeOff(): void {
     this.flight = 0
     this.scatter = 0
-    for (const crow of this.crows) {
+    // Birds are modelled facing +Z; turn each one onto the path it is about to travel.
+    for (const [index, crow] of this.crows.entries()) {
+      crow.face((Math.atan2(3.4, 0.4 + index * 0.12) * 180) / Math.PI)
       clip(crow, 'Fly')
     }
-    for (const hen of this.hens) {
+    for (const [index, hen] of this.hens.entries()) {
+      hen.face((Math.atan2(HEN_RUN[0], HEN_RUN[1]) * 180) / Math.PI + (index - 1) * 12)
       clip(hen, 'Scatter')
     }
   }
@@ -266,7 +299,7 @@ export class NativeAtmosphere {
       this.scatter += step
       for (const hen of this.hens) {
         if (hen.root.enabled && this.scatter < 2) {
-          hen.root.translate(-step * 1.6, 0, step * 0.6)
+          hen.root.translate(step * HEN_RUN[0], 0, step * HEN_RUN[1])
         }
       }
     }
@@ -288,6 +321,7 @@ export class NativeAtmosphere {
     this.changePhase(phase)
     const step = Math.max(0, Math.min(0.1, dt))
     this.moveBirds(step)
+    this.driftIdles(step)
     this.finishCues()
   }
   /** Compile the native material variants behind loading before admitting an online player. */
@@ -350,5 +384,6 @@ export class NativeAtmosphere {
     this.horses.length = 0
     this.crows.length = 0
     this.hens.length = 0
+    this.idlers.clear()
   }
 }

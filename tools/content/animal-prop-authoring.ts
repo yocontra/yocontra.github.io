@@ -215,32 +215,9 @@ async function authoredAnimal(name: string): Promise<boolean> {
 }
 async function coatAnimals() {
   for (const name of ['dog', 'horse']) {
-    if (await authoredAnimal(name)) {
-      continue
+    if (!(await authoredAnimal(name))) {
+      throw new Error(`Missing ${name} Blender parts; run tools/content/animal-authoring.py`)
     }
-    const path = `tools/art/characters/${name}.gltf`
-    const doc = await io.read(path)
-    const material = await surfaceMaterial(doc, 'fur', `${name} directional coat`)
-    for (const texture of doc.getRoot().listTextures()) {
-      if (texture.getName().startsWith('fur ')) {
-        texture.setURI(`animal-textures/${name}-${texture.getName().replaceAll(' ', '-')}.png`)
-      }
-    }
-    for (const mesh of doc.getRoot().listMeshes()) {
-      for (const p of mesh.listPrimitives()) {
-        projectedUv(doc, p, name === 'dog' ? 12 : 17)
-        p.setMaterial(material)
-      }
-    }
-    await doc.transform(prune({ keepLeaves: true, keepAttributes: true }), unpartition())
-    await io.write(path, doc)
-    await bakeCharacter(path)
-    const output = `${native}/dynamic/${name}.glb`
-    const baked = await io.read(output)
-    await externalize(baked)
-    await io.write(output, baked)
-    await normalizeSkinnedAsset(output)
-    console.log(`authored source and native ${name}`)
   }
 }
 function crowFeathers(doc: Document, surface: import('@gltf-transform/core').Material) {
