@@ -1,0 +1,310 @@
+/**
+ * Frontier's mix: every native sound instance lands on one category bus, each with its own level
+ * and EQ carve, and the buses meet in a master limiter and soft clip. Gunfire (your own report,
+ * other riders' reports and the town's tails) is glued by its own compressor, so a volley is held
+ * together without pumping the footsteps, the impacts, the feedback or the town. Footsteps keep a
+ * presence lift in the band the gun tails are carved out of: a rider closing in stays audible
+ * through a firefight, as in any competitive shooter.
+ *
+ * Ducking is driven from the game, not a detector: your own shot dips the other riders' reports,
+ * the tails and the town for a moment; sustained gunfire leans the town back, and it swells again
+ * between bursts.
+ */
+import { db, softClipCurve } from '../audio/math.ts'
+
+export type MixCategory =
+  | 'own'
+  | 'gun'
+  | 'tail'
+  | 'impact'
+  | 'feet'
+  | 'foley'
+  | 'crack'
+  | 'ui'
+  | 'amb'
+  | 'cue'
+
+interface Carve {
+  type: BiquadFilterType
+  hz: number
+  q?: number
+  gain?: number
+}
+
+interface CategorySpec {
+  /** Bus level, dB: the category's loudness target relative to the others. */
+  level: number
+  /** EQ that keeps the category out of the others' way. */
+  carve: readonly Carve[]
+  /** Glued with the gunfire (`weapons`) or straight into the master limiter. */
+  into: 'weapons' | 'master'
+}
+
+/**
+ * Levels and carves per category. The 2.5–4 kHz band is where a boot's heel click and a hit
+ * marker's tick live: the reports and tails give some of it up, the feet are lifted there, and the
+ * tails also lose the top end that would smear every transient after them.
+ */
+export const CATEGORIES: Readonly<Record<MixCategory, CategorySpec>> = {
+  own: {
+    level: 0,
+    carve: [{ type: 'highpass', hz: 35 }],
+    into: 'master',
+  },
+  gun: {
+    level: -2,
+    carve: [
+      { type: 'highpass', hz: 45 },
+      { type: 'peaking', hz: 3000, q: 1.1, gain: -3.5 },
+    ],
+    into: 'weapons',
+  },
+  tail: {
+    level: -3,
+    carve: [
+      { type: 'highpass', hz: 70 },
+      { type: 'peaking', hz: 2800, q: 0.9, gain: -5 },
+      { type: 'highshelf', hz: 6500, gain: -6 },
+    ],
+    into: 'weapons',
+  },
+  impact: {
+    level: -1,
+    carve: [
+      { type: 'highpass', hz: 60 },
+      { type: 'peaking', hz: 300, q: 1, gain: -2 },
+    ],
+    into: 'master',
+  },
+  feet: {
+    level: 2,
+    carve: [
+      { type: 'highpass', hz: 90 },
+      { type: 'peaking', hz: 3200, q: 1.2, gain: 4 },
+    ],
+    into: 'master',
+  },
+  foley: { level: -1, carve: [{ type: 'highpass', hz: 120 }], into: 'master' },
+  crack: { level: 0, carve: [{ type: 'highpass', hz: 300 }], into: 'master' },
+  ui: { level: 0, carve: [], into: 'master' },
+  amb: {
+    level: -2,
+    carve: [
+      { type: 'highpass', hz: 60 },
+      { type: 'peaking', hz: 3000, q: 0.8, gain: -3 },
+    ],
+    into: 'master',
+  },
+  cue: { level: 0, carve: [], into: 'master' },
+}
+
+/** A dip: how deep (dB) and how fast it lets go (s). */
+interface Dip {
+  depth: number
+  release: number
+}
+/** Your own shot pushes these back for a moment. */
+const OWN_SHOT: Partial<Record<MixCategory, Dip>> = {
+  gun: { depth: -3, release: 0.18 },
+  tail: { depth: -4, release: 0.25 },
+  amb: { depth: -5, release: 0.4 },
+  feet: { depth: -1.5, release: 0.12 },
+}
+/** A showdown leans the town and the far fight back. */
+const SHOWDOWN: Partial<Record<MixCategory, number>> = { amb: -9, tail: -4, gun: -3 }
+/** The most each category leans back under sustained gunfire, dB, and how fast it returns, s. */
+const FIGHT: Partial<Record<MixCategory, number>> = { amb: -7 }
+const FIGHT_RELEASE = 0.9
+
+function glue(ctx: AudioContext): DynamicsCompressorNode {
+  const c = ctx.createDynamicsCompressor()
+  c.threshold.value = -20
+  c.knee.value = 8
+  c.ratio.value = 3.5
+  c.attack.value = 0.003
+  c.release.value = 0.12
+  return c
+}
+
+/** Brickwall limiter into a soft clipper: a firefight cannot reach the DAC clipped. */
+function limiter(ctx: AudioContext): { input: GainNode; output: AudioNode } {
+  const input = ctx.createGain()
+  input.gain.value = db(-3)
+  const lim = ctx.createDynamicsCompressor()
+  lim.threshold.value = -2
+  lim.knee.value = 0
+  lim.ratio.value = 20
+  lim.attack.value = 0.001
+  lim.release.value = 0.09
+  const clip = ctx.createWaveShaper()
+  clip.curve = softClipCurve()
+  clip.oversample = '2x'
+  input.connect(lim).connect(clip)
+  return { input, output: clip }
+}
+
+interface Bus {
+  /** Where instances connect. */
+  input: GainNode
+  /** Game-driven ducking (separate from the level so they never fight). */
+  duck: GainNode
+  meter: AnalyserNode | null
+  peak: number
+  sum: number
+  frames: number
+}
+
+export interface MixStats {
+  /** Per category: loudest and mean short-window RMS seen, dBFS (dev meters). */
+  rms: Partial<Record<MixCategory, { peak: number; mean: number }>>
+  /** Sounds each budget let through and turned away (`frontier-budget.ts`). */
+  budget: Record<string, { played: number; dropped: number }>
+}
+
+export class FrontierMix {
+  readonly ctx: AudioContext
+  /** Feeds the speakers in place of PlayCanvas's own last node (silent: see `chain`). */
+  readonly mute: GainNode
+  private readonly buses = new Map<MixCategory, Bus>()
+  private readonly out: AudioNode
+  private fight = 0
+  private showdown = false as boolean
+  private readonly frame: Float32Array<ArrayBuffer> | null
+  private meterDue = 0
+
+  constructor(ctx: AudioContext, meters = false) {
+    this.ctx = ctx
+    this.mute = ctx.createGain()
+    this.mute.gain.value = 0
+    const master = limiter(ctx)
+    master.output.connect(ctx.destination)
+    this.out = master.output
+    const weapons = glue(ctx)
+    weapons.connect(master.input)
+    this.frame = meters ? new Float32Array(1024) : null
+    for (const [name, spec] of Object.entries(CATEGORIES) as [MixCategory, CategorySpec][]) {
+      const input = ctx.createGain()
+      input.gain.value = db(spec.level)
+      let node: AudioNode = input
+      for (const c of spec.carve) {
+        const f = ctx.createBiquadFilter()
+        f.type = c.type
+        f.frequency.value = c.hz
+        if (c.q !== undefined) {
+          f.Q.value = c.q
+        }
+        if (c.gain !== undefined) {
+          f.gain.value = c.gain
+        }
+        node.connect(f)
+        node = f
+      }
+      const duck = ctx.createGain()
+      node.connect(duck)
+      duck.connect(spec.into === 'weapons' ? weapons : master.input)
+      let meter: AnalyserNode | null = null
+      if (meters) {
+        meter = ctx.createAnalyser()
+        meter.fftSize = 1024
+        duck.connect(meter)
+      }
+      this.buses.set(name, { input, duck, meter, peak: -120, sum: 0, frames: 0 })
+    }
+  }
+
+  /** The node a category's sounds connect to. */
+  input(category: MixCategory): GainNode {
+    return (this.buses.get(category) as Bus).input
+  }
+
+  /** Your own shot: the other riders' reports, the tails and the town step back for a moment. */
+  ownShot(): void {
+    const t = this.ctx.currentTime
+    for (const [name, dip] of Object.entries(OWN_SHOT) as [MixCategory, Dip][]) {
+      const g = (this.buses.get(name) as Bus).duck.gain
+      g.cancelScheduledValues(t)
+      g.setTargetAtTime(this.rest(name) * db(dip.depth), t, 0.004)
+      g.setTargetAtTime(this.rest(name), t + 0.03, dip.release / 3)
+    }
+  }
+
+  /** How much gunfire has just reached the ear (0 quiet … 1 a full close volley). */
+  setFight(load: number): void {
+    const next = Math.min(1, Math.max(0, load))
+    if (Math.abs(next - this.fight) < 0.02) {
+      return
+    }
+    const rising = next > this.fight
+    this.fight = next
+    const g = (this.buses.get('amb') as Bus).duck.gain
+    g.setTargetAtTime(this.rest('amb'), this.ctx.currentTime, rising ? 0.05 : FIGHT_RELEASE / 3)
+  }
+
+  setShowdown(on: boolean): void {
+    if (this.showdown === on) {
+      return
+    }
+    this.showdown = on
+    for (const name of Object.keys(SHOWDOWN) as MixCategory[]) {
+      ;(this.buses.get(name) as Bus).duck.gain.setTargetAtTime(
+        this.rest(name),
+        this.ctx.currentTime,
+        0.4,
+      )
+    }
+  }
+
+  /** A category's duck level with nothing transient on it. */
+  private rest(name: MixCategory): number {
+    const showdown = this.showdown ? (SHOWDOWN[name] ?? 0) : 0
+    return db(showdown + (FIGHT[name] ?? 0) * this.fight)
+  }
+
+  /** Dev meters: short-window RMS per category, sampled a few times a second. */
+  meter(clock: number): void {
+    const frame = this.frame
+    if (!frame || clock < this.meterDue) {
+      return
+    }
+    this.meterDue = clock + 0.1
+    for (const bus of this.buses.values()) {
+      if (!bus.meter) {
+        continue
+      }
+      bus.meter.getFloatTimeDomainData(frame)
+      let sum = 0
+      for (const v of frame) {
+        sum += v * v
+      }
+      const rms = 10 * Math.log10(sum / frame.length + 1e-12)
+      if (rms > -90) {
+        bus.peak = Math.max(bus.peak, rms)
+        bus.sum += rms
+        bus.frames++
+      }
+    }
+  }
+
+  stats(): MixStats['rms'] {
+    const out: MixStats['rms'] = {}
+    for (const [name, bus] of this.buses) {
+      if (bus.frames > 0) {
+        out[name] = {
+          peak: Math.round(bus.peak * 10) / 10,
+          mean: Math.round((bus.sum / bus.frames) * 10) / 10,
+        }
+      }
+    }
+    return out
+  }
+
+  dispose(): void {
+    for (const bus of this.buses.values()) {
+      bus.input.disconnect()
+      bus.duck.disconnect()
+      bus.meter?.disconnect()
+    }
+    this.out.disconnect()
+    this.mute.disconnect()
+  }
+}

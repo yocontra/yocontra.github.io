@@ -3,7 +3,13 @@ import {
   impactMaterial,
   stepSurface,
 } from '../../src/experiments/out-west/client/audio-surfaces.ts'
-import { STEP_SOUND, stepRate } from '../../src/experiments/out-west/client/frontier-sounds.ts'
+import { VoiceBudget, variantDeck } from '../../src/experiments/out-west/client/frontier-budget.ts'
+import {
+  SOUND_CATEGORY,
+  SOUNDS,
+  STEP_SOUND,
+  stepRate,
+} from '../../src/experiments/out-west/client/frontier-sounds.ts'
 import { spaceAt } from '../../src/experiments/out-west/client/frontier-space.ts'
 import {
   CROUCH_SPEED,
@@ -87,5 +93,36 @@ describe('Frontier acoustic spaces', () => {
       (b) => spaceAt({ x: b.x + b.w / 2, y: 0, z: b.z + b.d + 4 }).kind === 'street',
     )
     expect(street).toBe(true)
+  })
+})
+
+describe('Frontier firefight budgets', () => {
+  it('let the nearest reports through and turn the far ones away', () => {
+    const budget = new VoiceBudget(3, 0.3)
+    expect([0.5, 0.4, 0.3].map((level) => budget.admit(0, level))).toEqual([true, true, true])
+    expect(budget.admit(0.1, 0.2)).toBe(false)
+    expect(budget.admit(0.1, 0.9)).toBe(true)
+    expect(budget.live).toBe(3)
+    expect(budget.admit(0.5, 0.01)).toBe(true)
+    expect(budget.dropped).toBe(1)
+  })
+  it('play every variant once before any repeats, never twice in a row', () => {
+    const next = variantDeck()
+    let last = -1
+    for (let round = 0; round < 20; round++) {
+      const seen = new Set<number>()
+      for (let i = 0; i < 8; i++) {
+        const v = next('shot', 8)
+        expect(v).not.toBe(last)
+        last = v
+        seen.add(v)
+      }
+      expect(seen.size).toBe(8)
+    }
+  })
+  it('mix every sound on a bus', () => {
+    for (const name of Object.keys(SOUNDS)) {
+      expect(SOUND_CATEGORY[name as keyof typeof SOUNDS]).toBeDefined()
+    }
   })
 })

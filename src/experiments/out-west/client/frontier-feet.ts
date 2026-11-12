@@ -31,6 +31,10 @@ interface Feet {
   air: number
   grounded: boolean
   spurs: 'jingle' | 'rattle' | null
+  /** This rider's own weight and boots: a fixed pitch offset, so two riders never step alike. */
+  timbre: number
+  /** Your own spurs ring on every other step (a pair of boots, one jingle per stride). */
+  stride: number
   seen: number
   /** Among the nearest few this frame (always, for your own feet). */
   voiced: boolean
@@ -46,7 +50,7 @@ const LANDING_AIR = 0.22
 const TELEPORT = 4
 const OCCLUDED = { hz: 800, gain: 0.5 }
 /** Only the nearest few riders' feet are voiced (and always your own): steps stay discrete. */
-const VOICES = 4
+const VOICES = 3
 
 /** How loud a footfall is for a gait (your own sit lower than the riders you listen for). */
 function stepLevel(speed: number, crouched: boolean, self: boolean): number {
@@ -58,7 +62,8 @@ function stepLevel(speed: number, crouched: boolean, self: boolean): number {
   } else if (speed > 4) {
     level = 0.85
   }
-  return level * (self ? 0.55 : 1)
+  // your own steps sit well under the riders you listen for, as in any competitive shooter
+  return level * (self ? 0.4 : 1)
 }
 
 const surfaceOf = (f: Feet): StepSurface => stepSurface(f.x, f.y, f.z)
@@ -116,6 +121,8 @@ export class FrontierFeet {
       air: 0,
       grounded: pose.grounded,
       spurs: spurTimbre(spurs),
+      timbre: 0.9 + Math.random() * 0.2,
+      stride: 0,
       seen: this.audio.clock,
       voiced: false,
     }
@@ -173,10 +180,18 @@ export class FrontierFeet {
     f.next = clock + (1 / stepRate(Math.min(f.speed, 8))) * (0.94 + Math.random() * 0.12)
     const crouched = Boolean(pose.crouched)
     const volume = stepLevel(f.speed, crouched, self)
-    this.sound(f, STEP_SOUND[surfaceOf(f)], volume, 0.94 + Math.random() * 0.12)
-    if (f.spurs && !crouched) {
+    this.sound(f, STEP_SOUND[surfaceOf(f)], volume, f.timbre * (0.96 + Math.random() * 0.08))
+    if (!crouched) {
+      this.spurs(f, volume, self)
+    }
+  }
+
+  private spurs(f: Feet, volume: number, self: boolean): void {
+    f.stride++
+    if (f.spurs && (!self || f.stride % 2 === 0)) {
       const jingle = f.spurs === 'jingle'
-      this.sound(f, 'spurs', volume * (jingle ? 0.9 : 0.6), jingle ? 1.08 : 0.92)
+      const ring = (jingle ? 0.9 : 0.6) * (self ? 0.6 : 1)
+      this.sound(f, 'spurs', volume * ring, (jingle ? 1.08 : 0.92) * (0.97 + Math.random() * 0.06))
     }
   }
 

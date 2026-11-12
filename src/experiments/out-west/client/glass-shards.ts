@@ -1,5 +1,4 @@
 import {
-  type Asset,
   BLEND_NORMAL,
   BODYGROUP_STATIC,
   BODYGROUP_USER_2,
@@ -15,8 +14,8 @@ import {
 import type { GlassPlane } from '../ffa/sim/building-rules.ts'
 import type { SimEvent } from '../ffa/sim/types.ts'
 import type { Simulation } from '../runtime/world.ts'
-import { getSettings } from '../settings.ts'
 import type { GameApplication } from './application.ts'
+import { FrontierAudio } from './frontier-audio.ts'
 import type { NativeRagdolls } from './ragdolls.ts'
 
 /** Whole-town ceiling on live shard bodies: a shotgun through a shopfront stays cheap on phones. */
@@ -25,10 +24,6 @@ const RAYS = 7
 const RINGS = [0.22, 0.55] as const
 const FALL_SECONDS = 2.4
 const FADE_SECONDS = 0.45
-/** `glass_shatter.m4a` holds two takes on a 2.5 s grid. */
-const TAKES = 2
-const TAKE_STEP = 2.5
-const TAKE_SECONDS = 2.2
 
 type Point2 = readonly [number, number]
 interface Shard {
@@ -178,35 +173,11 @@ export class GlassShards {
   private readonly bursts: Burst[] = []
   private readonly strikes: Strike[] = []
   private readonly breaks: number[] = []
-  private readonly speaker: Entity
-  private sound: Asset | undefined
   private seed = 1
   constructor(game: GameApplication, ragdolls: NativeRagdolls, panes: PaneSource) {
     this.game = game
     this.simulation = ragdolls.share(() => this.active)
     this.panes = panes
-    this.speaker = new Entity('glass-shatter', game.app)
-    this.speaker.addComponent('sound', { positional: true, refDistance: 4, maxDistance: 55 })
-    for (let take = 0; take < TAKES; take++) {
-      this.speaker.sound?.addSlot(`take${take}`, {
-        overlap: true,
-        startTime: take * TAKE_STEP,
-        duration: TAKE_SECONDS,
-      })
-    }
-    game.stage.addChild(this.speaker)
-    game
-      .loadAudio('/experiments/out-west/3d/sfx/glass_shatter.m4a')
-      .then((asset) => {
-        this.sound = asset
-        for (let take = 0; take < TAKES; take++) {
-          const slot = this.speaker.sound?.slot(`take${take}`)
-          if (slot) {
-            slot.asset = asset.id
-          }
-        }
-      })
-      .catch(() => undefined)
     game.app.on('update', this.update)
     game.app.on('prerender', this.pose)
   }
@@ -396,20 +367,9 @@ export class GlassShards {
     this.materials.set(key, material)
     return material
   }
+  /** The shatter, through the town's world audio (its mix, limiter, walls and space). */
   private play(at: Vec3): void {
-    const manager = this.game.app.soundManager
-    const sound = this.speaker.sound
-    if (!(this.sound && sound) || manager.suspended || manager.context?.state !== 'running') {
-      return
-    }
-    this.speaker.setPosition(at)
-    const name = `take${Math.floor(Math.random() * TAKES)}`
-    const slot = sound.slot(name)
-    if (slot) {
-      slot.volume = getSettings().sfx * 0.85
-      slot.pitch = 0.94 + Math.random() * 0.12
-    }
-    sound.play(name)
+    FrontierAudio.of(this.game.app)?.glass(at)
   }
   private readonly pose = (): void => {
     for (const burst of this.bursts) {
@@ -438,7 +398,6 @@ export class GlassShards {
     this.game.app.off('update', this.update)
     this.game.app.off('prerender', this.pose)
     this.reset()
-    this.speaker.destroy()
     for (const material of this.materials.values()) {
       material.destroy()
     }

@@ -2,20 +2,36 @@
  * Frontier's world audio on PlayCanvas's native sound system: every sound is a slot on a
  * positional `SoundComponent`, heard by the camera's `AudioListener`. The only extra graph rides on
  * native sound instances through `setExternalNodes`: a low-pass when scenery stands between the
- * listener and the source (or the air has taken the top off a far shot), and the send that puts a
- * gunshot into the street's slap or a room's tail (`frontier-space.ts`).
+ * listener and the source (or the air has taken the top off a far shot), the send that puts a
+ * gunshot into the street's slap or a room's tail (`frontier-space.ts`), and the category bus it
+ * is mixed on (`frontier-mix.ts`). Everything that sounds in the town, the window glass included,
+ * plays through here and so through the one master limiter.
+ *
+ * - A firefight is budgeted (`frontier-budget.ts`): the nearest reports keep their close crack;
+ *   the rest, and every report past `FAR_SHOT`, collapse into a dull distant boom and the tail.
+ * - Frequently heard sounds rotate through their variants (round robin) with pitch and level
+ *   jitter, so a volley or a run of steps never repeats a take back to back.
  *
  * - Bullet impacts match the material at the authoritative shot end (`audio-surfaces.ts`).
  * - Every rider within earshot has footsteps on what they stand on (`frontier-feet.ts`).
  * - Shots are the close report and the town's tail; near misses crack past your head.
  * - The town has its beds and its life (`frontier-ambience.ts`), and leans back for a showdown.
  */
-import { type Asset, Entity, type SoundComponent, type SoundInstance, Vec3 } from 'playcanvas'
+import {
+  type AppBase,
+  type Asset,
+  Entity,
+  type SoundComponent,
+  type SoundInstance,
+  Vec3,
+} from 'playcanvas'
 import type { Grid } from '../ffa/sim/layout.ts'
 import type { GameApplication } from './application.ts'
 import { type ImpactMaterial, impactMaterial } from './audio-surfaces.ts'
 import { FrontierAmbience } from './frontier-ambience.ts'
+import { VoiceBudget, variantDeck } from './frontier-budget.ts'
 import { FrontierFeet, type RiderPose } from './frontier-feet.ts'
+import { FrontierMix, type MixCategory, type MixStats } from './frontier-mix.ts'
 import {
   clamp01,
   db,
@@ -23,6 +39,7 @@ import {
   RANGES,
   type Range,
   type RangeName,
+  SOUND_CATEGORY,
   SOUNDS,
   type SoundDef,
   slider,
@@ -43,6 +60,10 @@ export interface PlayOptions {
   space?: number
   /** Air absorption: a low-pass that falls with distance. */
   air?: boolean
+  /** A fixed low-pass, Hz (a distant report's boom). */
+  lowpass?: number
+  /** The mix bus, when not the sound's own (`SOUND_CATEGORY`). */
+  category?: MixCategory
 }
 
 export interface Point {
@@ -64,14 +85,20 @@ export interface FrontierAudioHooks {
   grid?: () => Grid | undefined
 }
 
-const POOL = 28
+const POOL = 32
 const NO_FILTER = 19_000
-/** Gunfire's HDR window: how fast it clears, s, and how hard a full-level report pushes others down. */
-const LOAD_DECAY = 0.6
-const LOAD_GIVE = 1.2
+/** How fast the fight's load clears, s (it leans the town back while it lasts). */
+const LOAD_DECAY = 0.8
 /** Other riders' reports sit under your own gun, as in any shooter's mix. */
-const OTHERS = 0.7
+const OTHERS = 0.8
 const CRACK_GAP = 0.2
+/** Past this a report has no close crack left, only the boom and the town's answer, m. */
+const FAR_SHOT = 45
+/** Variant level jitter (± dB) and, where the call site sets no pitch, pitch jitter (±). */
+const GAIN_JITTER = 1.2
+const PITCH_JITTER = 0.035
+/** Every live `FrontierAudio`, by app: the window glass plays through its town's mix. */
+const LIVE = new WeakMap<AppBase, FrontierAudio>()
 
 /** A positional sound's gain at the ear for `range`'s inverse model (1 inside its ref distance). */
 const arriving = (d: number, range: Range) =>
@@ -91,6 +118,8 @@ export interface PlayedSound {
   occluded: boolean
   lowpass: number
   send: number
+  category: MixCategory
+  variant: number
 }
 
 export class FrontierAudio {
@@ -112,10 +141,18 @@ export class FrontierAudio {
   private readonly from = new Vec3()
   private readonly to = new Vec3()
   private returns: SpaceReturns | null = null
+  private mix: FrontierMix | null = null
+  private readonly variant = variantDeck()
+  /** The nearest few reports keep their crack; tails and strikes are capped the same way. */
+  private readonly budgets = {
+    report: new VoiceBudget(3, 0.3),
+    tail: new VoiceBudget(3, 0.7),
+    impact: new VoiceBudget(5, 0.25),
+  }
   private spaceDue = 0
   private duckTarget = 1
   private heartDue = Number.POSITIVE_INFINITY
-  /** How much gunfire has just reached the ear (decays in `LOAD_DECAY` s): the HDR window. */
+  /** How much gunfire has just reached the ear (decays in `LOAD_DECAY` s). */
   private firing = 0
   /** No second crack before this: a volley reads as one snap past the head, not a rattle. */
   private crackDue = 0
@@ -128,6 +165,12 @@ export class FrontierAudio {
     this.feet = new FrontierFeet(this)
     this.ambience = new FrontierAmbience(this)
     this.ready = this.load()
+    LIVE.set(game.app, this)
+  }
+
+  /** The town's world audio for `app`, while it lives. */
+  static of(app: AppBase): FrontierAudio | undefined {
+    return LIVE.get(app)
   }
 
   private async load(): Promise<void> {
@@ -224,16 +267,21 @@ export class FrontierAudio {
     const occluded = Boolean(positional && o.occlude && this.occluded(at))
     const def: SoundDef = SOUNDS[name]
     const wall = occluded && o.occlude ? o.occlude : { hz: NO_FILTER, gain: 1 }
-    const volume = clamp01((o.volume ?? 1) * db(def.trim) * slider(name) * wall.gain)
-    const instance = this.start(emitter, name, asset, { ...o, volume })
+    const grid = 'grid' in def ? def.grid : undefined
+    const variant = grid ? (o.variant ?? this.variant(name, grid.count)) % grid.count : 0
+    const jitter = grid ? db((Math.random() * 2 - 1) * GAIN_JITTER) : 1
+    const pitch = o.pitch ?? (grid ? 1 + (Math.random() * 2 - 1) * PITCH_JITTER : 1)
+    const volume = clamp01((o.volume ?? 1) * db(def.trim) * slider(name) * wall.gain * jitter)
+    const instance = this.start(emitter, name, asset, { ...o, volume, variant, pitch })
     if (!instance) {
       return null
     }
     const d = positional ? this.distance(at) : 0
     const air = o.air && d > 30 ? Math.max(1600, 18_000 * (30 / d) ** 1.3) : NO_FILTER
     const send = o.space ? o.space * Math.min(1, 24 / (d + 12)) : 0
-    const lowpass = Math.min(wall.hz, air)
-    this.chain(ctx, instance, lowpass, send)
+    const lowpass = Math.min(wall.hz, air, o.lowpass ?? NO_FILTER)
+    const category = o.category ?? SOUND_CATEGORY[name]
+    this.chain(ctx, instance, { lowpass, send, category })
     if (import.meta.env.DEV) {
       const where = positional ? { x: at.x, y: at.y, z: at.z } : null
       const source = emitter.entity.name
@@ -247,6 +295,8 @@ export class FrontierAudio {
         occluded,
         lowpass,
         send,
+        category,
+        variant,
       })
       this.log.splice(0, Math.max(0, this.log.length - 4000))
     }
@@ -257,7 +307,7 @@ export class FrontierAudio {
     emitter: Emitter,
     name: FrontierSound,
     asset: Asset,
-    o: PlayOptions & { volume: number },
+    o: PlayOptions & { volume: number; variant: number },
   ): SoundInstance | null {
     const sound = emitter.sound
     const slot = sound.slot(name) ?? sound.addSlot(name, { asset: asset.id, overlap: true })
@@ -266,8 +316,7 @@ export class FrontierAudio {
     }
     const def: SoundDef = SOUNDS[name]
     const grid = def.grid
-    const variant = grid ? (o.variant ?? Math.floor(Math.random() * grid.count)) % grid.count : 0
-    slot.startTime = grid ? variant * grid.step : 0
+    slot.startTime = grid ? o.variant * grid.step : 0
     // 0 clears it: the whole file
     slot.duration = grid ? grid.len : 0
     slot.volume = o.volume
@@ -281,13 +330,25 @@ export class FrontierAudio {
     return instance
   }
 
+  /** The mix and its shared returns on this context, made on first use. */
+  private buses(ctx: AudioContext): { mix: FrontierMix; returns: SpaceReturns } {
+    const mix = this.mix ?? new FrontierMix(ctx, Boolean(import.meta.env.DEV))
+    this.mix = mix
+    const returns = this.returns ?? new SpaceReturns(ctx, this.space, mix.input('tail'))
+    this.returns = returns
+    return { mix, returns }
+  }
+
   /**
-   * The instance's native external nodes, into the master bus: an optional low-pass and the space
-   * send. Released shortly after the instance ends so finished sounds leave no nodes behind.
+   * The instance's native external nodes, into its category's bus: an optional low-pass and the
+   * space send. Released shortly after the instance ends so finished sounds leave no nodes behind.
    */
-  chain(ctx: AudioContext, instance: SoundInstance, lowpass = NO_FILTER, send = 0): void {
-    const bus = this.returns ?? new SpaceReturns(ctx, this.space)
-    this.returns = bus
+  chain(
+    ctx: AudioContext,
+    instance: SoundInstance,
+    { lowpass = NO_FILTER, send = 0, category = 'amb' as MixCategory } = {},
+  ): void {
+    const { mix, returns: bus } = this.buses(ctx)
     const input = ctx.createGain()
     let dry: AudioNode = input
     if (lowpass < NO_FILTER) {
@@ -298,7 +359,7 @@ export class FrontierAudio {
       input.connect(f)
       dry = f
     }
-    dry.connect(bus.master)
+    dry.connect(mix.input(category))
     const s = send > 0.001 ? ctx.createGain() : null
     if (s) {
       s.gain.value = send * instance.volume
@@ -314,7 +375,7 @@ export class FrontierAudio {
       }, 2500)
     instance.once('end', release)
     instance.once('stop', release)
-    instance.setExternalNodes(input, bus.mute)
+    instance.setExternalNodes(input, mix.mute)
   }
 
   /** Whether scenery stands between the listener and `at` (a hit well short of the source). */
@@ -333,32 +394,55 @@ export class FrontierAudio {
     return Boolean(hit && this.from.distance(hit) < total - 0.9)
   }
 
-  /** The shooter's report: the close crack, then the town's tail, both into this space. */
+  /**
+   * The shooter's report. Yours is the close crack (with the town stepping back for it) and the
+   * tail. Another rider's keeps its crack while it is among the nearest few in the air and inside
+   * `FAR_SHOT`; otherwise it collapses into a dull boom under the tail, as distant fire does.
+   */
   gunshot(kind: 'revolver' | 'rifle' | 'shotgun', at: Point, self: boolean): void {
     const close = { revolver: 'shot', rifle: 'rifle', shotgun: 'shotgun' } as const
     const tailPitch = { revolver: 1, rifle: 0.96, shotgun: 0.86 } as const
-    const tailLevel = { interior: 0.6, street: 0.85, open: 0.45 } as const
+    const tailLevel = { interior: 0.6, street: 0.85, open: 0.5 } as const
     const jitter = 0.97 + Math.random() * 0.06
-    // HDR-style: a report arriving on top of others gives way, so a firefight cannot pile up past
-    // full scale (the native path has no master limiter); your own gun always speaks at full level
-    const heard = arriving(this.distance(at), RANGES.gun)
-    const give = self ? 1 : OTHERS / (1 + LOAD_GIVE * this.firing)
-    this.firing += heard
-    this.play(close[kind], at, {
-      range: 'gun',
-      pitch: jitter,
-      volume: self ? 1 : give,
-      occlude: { hz: 1800, gain: 0.7 },
-      air: true,
-      space: self ? 0.5 : 0.8,
-    })
-    this.play('tail', at, {
-      range: 'tail',
-      pitch: tailPitch[kind] * jitter * (this.space.kind === 'interior' ? 0.9 : 1),
-      volume: tailLevel[this.space.kind] * give,
-      air: true,
-      space: 0.25,
-    })
+    const d = this.distance(at)
+    const heard = arriving(d, RANGES.gun)
+    this.firing += self ? 0.35 : heard
+    if (self) {
+      this.mix?.ownShot()
+    }
+    const crack =
+      self ||
+      (d < FAR_SHOT && this.budgets.report.admit(this.clock, heard * (1 + Math.random() * 0.1)))
+    const tail = self || this.budgets.tail.admit(this.clock, heard)
+    if (crack) {
+      this.play(close[kind], at, {
+        range: 'gun',
+        pitch: jitter,
+        volume: self ? 1 : OTHERS,
+        occlude: { hz: 1800, gain: 0.7 },
+        air: true,
+        space: self ? 0.5 : 0.8,
+        category: self ? 'own' : 'gun',
+      })
+    } else if (tail) {
+      // the boom: the report's body with its crack gone, a touch lower
+      this.play(close[kind], at, {
+        range: 'tail',
+        pitch: jitter * 0.86,
+        volume: 0.55,
+        lowpass: 700 + 900 * Math.min(1, 30 / Math.max(30, d)),
+        category: 'tail',
+      })
+    }
+    if (tail) {
+      this.play('tail', at, {
+        range: 'tail',
+        pitch: tailPitch[kind] * jitter * (this.space.kind === 'interior' ? 0.9 : 1),
+        volume: tailLevel[this.space.kind] * (self ? 1 : 0.8),
+        air: true,
+        space: 0.25,
+      })
+    }
     if (kind === 'rifle') {
       // the lever cycling the next round
       setTimeout(() => this.play('lever', at, { range: 'foley', volume: self ? 0.8 : 0.6 }), 380)
@@ -368,6 +452,10 @@ export class FrontierAudio {
   /** A confirmed bullet strike on scenery or a rider. Glass is the shatter's (`glass_break`). */
   impact(material: ImpactMaterial, at: Point, volume = 1): void {
     if (material === 'glass') {
+      return
+    }
+    const heard = arriving(this.distance(at), RANGES.impact) * volume
+    if (!this.budgets.impact.admit(this.clock, material === 'body' ? heard * 2 : heard)) {
       return
     }
     this.play(material, at, {
@@ -437,8 +525,14 @@ export class FrontierAudio {
     })
   }
 
+  /** A pane bursting where the bullet crossed it (`glass-shards.ts`). */
+  glass(at: Point): void {
+    this.play('glass', at, { range: 'impact', occlude: { hz: 2200, gain: 0.6 }, space: 0.3 })
+  }
+
   /** Lean the town back for a showdown, with your heart under it when it is yours. */
   tension(on: boolean, mine: boolean): void {
+    this.mix?.setShowdown(on)
     this.duckTarget = on ? SHOWDOWN_DUCK : 1
     this.heartDue = on && mine ? this.clock + 0.2 : Number.POSITIVE_INFINITY
   }
@@ -464,6 +558,8 @@ export class FrontierAudio {
       }
     }
     this.duck += (this.duckTarget - this.duck) * Math.min(1, dt * 3)
+    this.mix?.setFight(this.firing / 2.5)
+    this.mix?.meter(this.clock)
     this.ambience.update()
     if (this.clock >= this.heartDue) {
       this.play('heart', null, { volume: 0.8 })
@@ -473,8 +569,20 @@ export class FrontierAudio {
     this.feet.update(dt, riders, self, spursOf)
   }
 
+  /** Dev meters: per-category levels and what each budget let through. */
+  mixStats(): MixStats {
+    const budget: MixStats['budget'] = {}
+    for (const [name, b] of Object.entries(this.budgets)) {
+      budget[name] = { played: b.played, dropped: b.dropped }
+    }
+    return { rms: this.mix?.stats() ?? {}, budget }
+  }
+
   destroy(): void {
     this.destroyed = true
+    if (LIVE.get(this.game.app) === this) {
+      LIVE.delete(this.game.app)
+    }
     for (const e of [...this.pool, this.flat]) {
       e.entity.destroy()
     }
@@ -482,5 +590,6 @@ export class FrontierAudio {
     this.feet.destroy()
     this.ambience.destroy()
     this.returns?.dispose()
+    this.mix?.dispose()
   }
 }

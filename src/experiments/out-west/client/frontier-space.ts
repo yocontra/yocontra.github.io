@@ -1,11 +1,9 @@
 /**
- * The world audio's master bus (glue, limiter and a soft-clip backstop, as on the duel's master),
- * the listener's acoustic surroundings and the two shared returns a gunshot is sent into: the
+ * The listener's acoustic surroundings and the two shared returns a gunshot is sent into: the
  * street's slapback (the far facade there and back, with one weaker second bounce) and a short,
  * dark room tail. Inside a building the room speaks; between facades the slap does; out in the
  * open there is only a late, faint echo off the far buildings.
  */
-import { softClipCurve } from '../audio/math.ts'
 import { type Building, TOWN } from '../ffa/sim/layout.ts'
 
 export type SpaceKind = 'interior' | 'street' | 'open'
@@ -89,54 +87,25 @@ function roomImpulse(ctx: AudioContext, seconds: number): AudioBuffer {
   return ir
 }
 
-/** Glue into a brickwall limiter into a soft clipper: a firefight cannot reach the DAC clipped. */
-function masterBus(ctx: AudioContext): GainNode {
-  const glue = ctx.createDynamicsCompressor()
-  glue.threshold.value = -12
-  glue.knee.value = 10
-  glue.ratio.value = 2
-  glue.attack.value = 0.005
-  glue.release.value = 0.2
-  const limiter = ctx.createDynamicsCompressor()
-  limiter.threshold.value = -2
-  limiter.knee.value = 0
-  limiter.ratio.value = 20
-  limiter.attack.value = 0.001
-  limiter.release.value = 0.08
-  const clip = ctx.createWaveShaper()
-  clip.curve = softClipCurve()
-  clip.oversample = '2x'
-  const master = ctx.createGain()
-  master.gain.value = 10 ** (-3 / 20)
-  master.connect(glue).connect(limiter).connect(clip).connect(ctx.destination)
-  return master
-}
-
 /**
- * The master bus and shared returns on the native sound manager's context, retuned as the
- * listener moves. Native instances reach the master through their external nodes; `mute` is the
- * silent last node PlayCanvas wires to the speakers in their place.
+ * The shared returns on the native sound manager's context, retuned as the listener moves. They
+ * answer on the mix's tail bus (`frontier-mix.ts`), carved and glued with the gunfire.
  */
 export class SpaceReturns {
-  readonly master: GainNode
-  readonly mute: GainNode
   readonly room: GainNode
   readonly slap: DelayNode
   private readonly roomOut: GainNode
   private readonly slapOut: GainNode
   private readonly ctx: AudioContext
 
-  constructor(ctx: AudioContext, space: Space) {
+  constructor(ctx: AudioContext, space: Space, out: AudioNode) {
     this.ctx = ctx
-    this.master = masterBus(ctx)
-    this.mute = ctx.createGain()
-    this.mute.gain.value = 0
     const convolver = ctx.createConvolver()
     convolver.buffer = roomImpulse(ctx, 1.3)
     this.room = ctx.createGain()
     this.roomOut = ctx.createGain()
     this.roomOut.gain.value = 0
-    this.room.connect(convolver).connect(this.roomOut).connect(this.master)
+    this.room.connect(convolver).connect(this.roomOut).connect(out)
     this.slap = ctx.createDelay(0.6)
     const band = ctx.createBiquadFilter()
     band.type = 'bandpass'
@@ -146,7 +115,7 @@ export class SpaceReturns {
     this.slapOut.gain.value = 0
     const bounce = ctx.createGain()
     bounce.gain.value = 0.28
-    this.slap.connect(band).connect(this.slapOut).connect(this.master)
+    this.slap.connect(band).connect(this.slapOut).connect(out)
     band.connect(bounce).connect(this.slap)
     this.apply(space)
   }
@@ -164,7 +133,5 @@ export class SpaceReturns {
     this.roomOut.disconnect()
     this.slap.disconnect()
     this.slapOut.disconnect()
-    this.master.disconnect()
-    this.mute.disconnect()
   }
 }

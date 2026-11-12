@@ -8,6 +8,7 @@ import { itemById } from '../data/catalog.ts'
 import { getSettings } from '../settings.ts'
 import type { GameApplication } from './application.ts'
 import type { StepSurface } from './audio-surfaces.ts'
+import type { MixCategory } from './frontier-mix.ts'
 
 export const SFX_DIR = '/experiments/out-west/3d/sfx'
 
@@ -55,6 +56,7 @@ export const SOUNDS = {
   crack: { file: 'crack', trim: -2, grid: g(3, 0.5, 0.42) },
   flyby: { file: 'flyby', trim: -4 },
   fall: { file: 'bodyfall', trim: -3 },
+  glass: { file: 'glass_shatter', trim: -3, grid: g(2, 2.5, 2.2) },
   deposit: { file: 'deposit', trim: -2 },
   bell: { file: 'bell', trim: 0 },
   fake0: { file: 'crow', trim: -2 },
@@ -75,6 +77,57 @@ export const SOUNDS = {
 } as const satisfies Record<string, SoundDef>
 
 export type FrontierSound = keyof typeof SOUNDS
+
+/** The mix bus each sound plays on (`frontier-mix.ts`); a report is `own` when it is yours. */
+export const SOUND_CATEGORY: Readonly<Record<FrontierSound, MixCategory>> = {
+  shot: 'gun',
+  tail: 'tail',
+  rifle: 'gun',
+  shotgun: 'gun',
+  lever: 'foley',
+  shell: 'foley',
+  reload: 'foley',
+  holster: 'foley',
+  cock: 'foley',
+  body: 'impact',
+  stone: 'impact',
+  metal: 'impact',
+  water: 'impact',
+  soft: 'impact',
+  wood: 'impact',
+  dirt: 'impact',
+  glass: 'impact',
+  stepDirt: 'feet',
+  stepWood: 'feet',
+  stepStone: 'feet',
+  stepStraw: 'feet',
+  stepMetal: 'feet',
+  stepWater: 'feet',
+  spurs: 'feet',
+  cloth: 'feet',
+  hitMarker: 'ui',
+  kill: 'ui',
+  crack: 'crack',
+  flyby: 'crack',
+  fall: 'impact',
+  deposit: 'cue',
+  bell: 'cue',
+  fake0: 'cue',
+  fake1: 'cue',
+  fake2: 'cue',
+  explosion: 'gun',
+  respawn: 'cue',
+  heart: 'cue',
+  crow: 'amb',
+  dog: 'amb',
+  horse: 'amb',
+  hawk: 'amb',
+  creak: 'amb',
+  whistle: 'amb',
+  loco: 'amb',
+  wind: 'amb',
+  murmur: 'amb',
+}
 
 /** How a family falls off with distance: PlayCanvas positional settings, plus a hard cull. */
 export interface Range {
