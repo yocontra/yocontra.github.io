@@ -94,8 +94,39 @@
   font-size: 0.85em;
   opacity: 0.8;
 }
+/* Thumbs own both bottom corners: stack the button over its status and keep clear of them. */
 @media (pointer: coarse) {
   .ow-voice {
-    bottom: max(84px, calc(env(safe-area-inset-bottom) + 64px));
+    flex-direction: column;
+    gap: 4px;
+    bottom: calc(
+      max(18px, env(safe-area-inset-bottom)) +
+      48px *
+      max(1, var(--control-scale, 1)) +
+      18px
+    );
+    max-width: max(180px, min(320px, calc(100vw - 480px)));
+    text-align: center;
+  }
+  .ow-voice-status {
+    max-width: 100%;
+    font-size: 12px;
+  }
+}
+/* Portrait fills the bottom with thumbs and the USE/CALL row: sit above that row, stick side. */
+@media (pointer: coarse) and (orientation: portrait) {
+  .ow-voice {
+    left: max(16px, env(safe-area-inset-left));
+    bottom: calc(max(18px, env(safe-area-inset-bottom)) + 258px * var(--control-scale, 1) + 12px);
+    align-items: flex-start;
+    max-width: min(46vw, 200px);
+    transform: none;
+    text-align: start;
+  }
+  :has(> .pc-touch-controls.left-handed) .ow-voice {
+    left: auto;
+    right: max(16px, env(safe-area-inset-right));
+    align-items: flex-end;
+    text-align: end;
   }
 }

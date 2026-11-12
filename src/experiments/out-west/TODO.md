@@ -70,8 +70,10 @@ Complete and push these in small working tasks, with native visual/audio evidenc
 ## Loading and voice QA
 
 - [x] Verify existing native asset retries: PlayCanvas `AppBase.init` already enables five retries, so no override is needed. `bun tools/content/asset-retry.ts` verifies real WebGL/KTX2 recovery after five HTTP 503s, terminal failure after six attempts, failed-load eviction and re-acquisition, texture/application cleanup, and a disabled-retry control.
-- [ ] Finish simulator Safari voice permission/retry, receive/deafen and background/resume checks. Desktop actual SDK/SFU two-way decoding and complete provider cleanup passed before voice enablement.
-- [ ] Preserve zero RTK allocation while voice is off, idle, alone or bot-only. Keep the rolling reservation guard and durable cleanup. The 9,000-minute reservation allowance is an operational guard, not a provider-enforced hard billing cap.
+- [x] Finish simulator Safari voice permission/retry, receive/deafen and background/resume checks. Simulator Safari: Cancel shows "Microphone blocked" with RETRY VOICE, retry re-prompts, Allow reaches standby; Home and back keeps the page and voice control without a reload; native receive builds the shared-context panner at the speaker's position with volume gain. Deafen (`listening: false`) allocates nothing in the coordinator tests. Desktop actual SDK/SFU two-way decoding and complete provider cleanup passed before voice enablement.
+- [ ] Let players hear nearby voice without a working microphone. Interest is only sent after capture succeeds, so a blocked or ended microphone also mutes everyone else. The simulator ends every capture track within about 1.5 s, so two-way speech can only be proven on desktop or a device.
+- [x] Preserve zero RTK allocation while voice is off, idle, alone or bot-only. Keep the rolling reservation guard and durable cleanup. The 9,000-minute reservation allowance is an operational guard, not a provider-enforced hard billing cap. Rechecked after the picker and socket changes: the workerd voice test makes no provider calls alone or idle, revokes expired late allocations, cleans up on cold alarms and expires old reservations; the input proof keeps standby allocations at zero.
+- [x] Keep the touch voice control clear of the thumbs: portrait stacks it above the USE/CALL row on the stick side (mirrored when left-handed, scaled with the controls), landscape centres it above CALL. Mobile Chrome captures at default and largest control sizes show no overlap.
 
 ## Final delivery
 

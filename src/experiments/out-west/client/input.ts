@@ -35,8 +35,10 @@ export class GameInput {
   configure(settings: FrontierSettings): void {
     this.settings = settings
     this.controls.classList.toggle('left-handed', settings.leftHanded)
-    this.controls.style.setProperty('--control-scale', String(settings.controlScale))
-    this.controls.style.setProperty('--stick-scale', String(settings.joyScale))
+    // On the shared root so overlays such as the voice control can clear the thumbs.
+    const host = this.controls.parentElement ?? this.controls
+    host.style.setProperty('--control-scale', String(settings.controlScale))
+    host.style.setProperty('--stick-scale', String(settings.joyScale))
   }
   readonly cursor = { x: 0, y: 0 }
   cursorAim = true as boolean
