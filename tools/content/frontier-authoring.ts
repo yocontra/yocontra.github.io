@@ -2,6 +2,7 @@
 import { createHash } from 'node:crypto'
 import { copyFile, mkdir, readFile, rename, writeFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
+import type { Document } from '@gltf-transform/core'
 import { dedup, prune, unpartition, weld } from '@gltf-transform/functions'
 import { Quat, Vec3 } from 'playcanvas'
 import { townWindows } from '../../src/experiments/out-west/ffa/sim/building-rules.ts'
@@ -239,7 +240,7 @@ async function authorTumbleweeds(plan: FrontierPlan, output: string) {
   for (const animation of doc.getRoot().listAnimations()) {
     for (const channel of animation.listChannels()) {
       const path = channel.getTargetPath()
-      if (path !== 'translation' && path !== 'rotation') {
+      if (path !== 'translation') {
         continue
       }
       const index = Number(channel.getTargetNode()?.getName().split('-').at(-1))
@@ -253,19 +254,95 @@ async function authorTumbleweeds(plan: FrontierPlan, output: string) {
       const duration = input.getScalar(input.getCount() - 1)
       for (let frame = 0; frame < input.getCount(); frame++) {
         const angle = (input.getScalar(frame) / duration) * Math.PI * 2
-        const x = route.center[0] + Math.cos(angle) * route.radius[0]
         const radius = 0.35 + index * 0.06
-        if (path === 'translation') {
-          values.setElement(frame, [x, radius, route.center[1] + Math.sin(angle) * route.radius[1]])
-        } else {
-          const turn = ((-(x - route.center[0] - route.radius[0]) / radius) * 180) / Math.PI
-          const q = new Quat().setFromAxisAngle(new Vec3(0, 0, 1), turn)
-          values.setElement(frame, [q.x, q.y, q.z, q.w])
-        }
+        values.setElement(frame, [
+          route.center[0] + Math.cos(angle) * route.radius[0],
+          radius,
+          route.center[1] + Math.sin(angle) * route.radius[1],
+        ])
       }
     }
   }
+  authorTumbleweedRolling(doc)
   await frontierIO.write(join(output, 'frontier-tumbleweeds.glb'), doc)
+}
+
+/** Bake rolling along the authored XZ path; the native clip retains its route and clock. */
+export function authorTumbleweedRolling(doc: Document): void {
+  for (const animation of doc.getRoot().listAnimations()) {
+    for (const channel of animation.listChannels()) {
+      if (channel.getTargetPath() !== 'rotation') {
+        continue
+      }
+      const node = channel.getTargetNode()
+      const movement = animation
+        .listChannels()
+        .find(
+          (candidate) =>
+            candidate.getTargetNode() === node && candidate.getTargetPath() === 'translation',
+        )
+      const positions = movement?.getSampler()?.getOutput()
+      const rotations = channel.getSampler()?.getOutput()
+      const radius = 0.35 + Number(node?.getName().split('-').at(-1)) * 0.06
+      if (
+        !(positions && rotations && radius > 0) ||
+        positions.getCount() !== rotations.getCount() ||
+        positions.getCount() < 2
+      ) {
+        throw new Error('Missing matching tumbleweed motion')
+      }
+      const points = Array.from({ length: positions.getCount() }, (_, frame) =>
+        positions.getElement(frame, []),
+      )
+      const frames = rollingFrames(points, radius)
+      for (const [frame, rotation] of frames.entries()) {
+        rotations.setElement(frame, [rotation.x, rotation.y, rotation.z, rotation.w])
+      }
+    }
+  }
+}
+
+function rollingFrames(points: readonly (readonly number[])[], radius: number): Quat[] {
+  let previous = points[0]
+  if (!previous) {
+    throw new Error('Missing tumbleweed path')
+  }
+  let rotation = new Quat()
+  let travel = 0
+  const physical = [{ rotation: rotation.clone(), distance: travel }]
+  for (const point of points.slice(1)) {
+    const dx = (point[0] ?? 0) - (previous[0] ?? 0)
+    const dz = (point[2] ?? 0) - (previous[2] ?? 0)
+    const distance = Math.hypot(dx, dz)
+    if (distance > 0) {
+      const step = new Quat().setFromAxisAngle(
+        new Vec3(dz / distance, 0, -dx / distance),
+        (distance / radius) * (180 / Math.PI),
+      )
+      rotation = new Quat().mul2(step, rotation).normalize()
+    }
+    travel += distance
+    physical.push({ rotation: rotation.clone(), distance: travel })
+    previous = point
+  }
+  const closure = rotation.clone().invert()
+  // Spread the small slip around the full path. Right composition preserves world-space rolling.
+  const closed = physical.map((frame) =>
+    new Quat()
+      .mul2(
+        frame.rotation,
+        new Quat().slerp(Quat.IDENTITY, closure, travel ? frame.distance / travel : 0),
+      )
+      .normalize(),
+  )
+  let last: Quat | undefined
+  for (const frame of closed) {
+    if (last && last.x * frame.x + last.y * frame.y + last.z * frame.z + last.w * frame.w < 0) {
+      frame.set(-frame.x, -frame.y, -frame.z, -frame.w)
+    }
+    last = frame
+  }
+  return closed
 }
 
 async function dressTumbleweeds(doc: import('@gltf-transform/core').Document) {

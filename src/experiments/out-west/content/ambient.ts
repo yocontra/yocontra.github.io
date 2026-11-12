@@ -21,9 +21,9 @@ export const AMBIENT_ASSETS = {
     hash: '5255cc9da376aad18fc1ef6d8ef6fbe6b63ddc80333b24fb86094e99f91a5ac9',
   },
   'frontier-tumbleweeds': {
-    url: '/experiments/out-west/3d/native-v2/ambient/frontier-tumbleweeds.glb?v=6411d426cc5f3ce7',
+    url: '/experiments/out-west/3d/native-v2/ambient/frontier-tumbleweeds.glb?v=a699e97a99165438',
     bytes: 335544,
-    hash: '6411d426cc5f3ce7c1d371f24927cc20563002a247ca7aa8a4e1692188386d10',
+    hash: 'a699e97a99165438a14d6df4e6a0108232ffdd97588ece8f605426f7b05c3537',
   },
   'duel-tumbleweeds': {
     url: '/experiments/out-west/3d/native-v2/ambient/duel-tumbleweeds.glb?v=06afcd6221000f86',
