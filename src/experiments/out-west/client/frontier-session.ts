@@ -57,28 +57,64 @@ function syncPoses(simulation: ReturnType<typeof createFrontierSimulation>): voi
   }
 }
 
-function syncPresentation(
-  poses: Map<string, import('../runtime/protocol.ts').PlayerState>,
-  bodies: ReadonlyMap<string, import('../runtime/protocol.ts').PlayerState>,
-  selfId: string,
-  input: PlayerInput,
-): void {
-  poses.clear()
-  for (const [id, body] of bodies) {
-    poses.set(id, id === selfId ? ownPresentation(body, input) : body)
+type PlayerState = import('../runtime/protocol.ts').PlayerState
+/**
+ * Present every rider between the previous and current fixed step, as the online SDK reconciler
+ * does: 20 Hz authority must not draw as 20 Hz stair steps. Respawns and teleports cut.
+ */
+class TickPresentation {
+  readonly poses: Map<string, PlayerState>
+  private readonly origins = new Map<string, { x: number; y: number; z: number; life: number }>()
+  private readonly bodies: ReadonlyMap<string, PlayerState>
+  private readonly world: World
+  private readonly selfId: string
+  constructor(bodies: ReadonlyMap<string, PlayerState>, world: World, selfId: string) {
+    this.bodies = bodies
+    this.world = world
+    this.selfId = selfId
+    this.poses = new Map(bodies)
   }
+  private life(id: string): number {
+    return this.world.players[Number(id)]?.spawnTick ?? -1
+  }
+  /** Call before each fixed step. */
+  capture(): void {
+    this.origins.clear()
+    for (const [id, body] of this.bodies) {
+      this.origins.set(id, { x: body.x, y: body.y, z: body.z, life: this.life(id) })
+    }
+  }
+  present(alpha: number, input: PlayerInput): void {
+    this.poses.clear()
+    for (const [id, body] of this.bodies) {
+      const from = this.origins.get(id)
+      const pose = { ...body }
+      if (
+        from &&
+        from.life === this.life(id) &&
+        Math.hypot(body.x - from.x, body.y - from.y, body.z - from.z) < 2
+      ) {
+        pose.x = from.x + (body.x - from.x) * alpha
+        pose.y = from.y + (body.y - from.y) * alpha
+        pose.z = from.z + (body.z - from.z) * alpha
+      }
+      this.poses.set(id, id === this.selfId ? ownPresentation(pose, input) : pose)
+    }
+  }
+}
+
+interface LocalSessionOptions {
+  bots?: number
+  seed?: number
+  cluster?: boolean
+  spawn?: { x: number; z: number }
+  name?: string
 }
 
 /** Full Frontier domain rules and bots use the same native motor as online matches. */
 export async function createLocalFrontierSession(
   collision: CollisionData,
-  options: {
-    bots?: number
-    seed?: number
-    cluster?: boolean
-    spawn?: { x: number; z: number }
-    name?: string
-  } = {},
+  options: LocalSessionOptions = {},
 ): Promise<FrontierSession> {
   const simulation = createFrontierSimulation({
     ammo: await loadAmmo(),
@@ -115,8 +151,7 @@ export async function createLocalFrontierSession(
   }
   const self = world.players[selfSlot]
   if (self && options.spawn) {
-    self.x = options.spawn.x
-    self.z = options.spawn.z
+    Object.assign(self, { x: options.spawn.x, z: options.spawn.z })
   }
   if (stress && options.cluster) {
     bots.rally = selfSlot
@@ -196,7 +231,7 @@ export async function createLocalFrontierSession(
   }
   simulation.step([])
   syncPoses(simulation)
-  const poses = new Map(simulation.physics.players)
+  const presentation = new TickPresentation(simulation.physics.players, world, selfId)
   return {
     selfId,
     selfSlot,
@@ -225,7 +260,7 @@ export async function createLocalFrontierSession(
       }
     },
     world,
-    players: poses,
+    players: presentation.poses,
     appearance: (id) =>
       id === selfId ? { loadout: DEFAULT_LOADOUT, dyes: {}, key: 'local-player' } : undefined,
     get banked() {
@@ -242,6 +277,7 @@ export async function createLocalFrontierSession(
       showdownInput.sample(input)
       elapsed = Math.min(0.2, elapsed + dt)
       while (elapsed >= 1 / SIMULATION_HZ) {
+        presentation.capture()
         frames.fill(null)
         frames[selfSlot] = domainInput(input, seq++, world.tick)
         bots.frames(world, frames)
@@ -253,7 +289,7 @@ export async function createLocalFrontierSession(
         settleDeposits()
         elapsed -= 1 / SIMULATION_HZ
       }
-      syncPresentation(poses, simulation.physics.players, selfId, input)
+      presentation.present(elapsed * SIMULATION_HZ, input)
     },
     cameraTrace(from, to) {
       const hit = simulation.physics.app.systems.rigidbody?.raycastFirst(from, to, {
