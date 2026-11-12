@@ -35,6 +35,9 @@ KTX_ENCODER=/path/to/toktx bun tools/content/environment.ts
 bun tools/content/manifest.ts
 ```
 
+`street-lamp.glb` is authored by `tools/content/street-lamp-authoring.py` in Blender 4.5; the
+bank build swaps its gallows lanterns and step-lamp heads for it.
+
 `clockwork.glb` contains nine authored joints in two native skinned meshes, with
 campaign hour poses, the boss's 11:59 pose, and a damped bell-swing clip. Those
 moving faces are absent from the static street source. The wanted-paper default

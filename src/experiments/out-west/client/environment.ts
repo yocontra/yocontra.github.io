@@ -28,6 +28,8 @@ import { NativeClockwork } from './clockwork.ts'
 import { NativeWilds } from './wilds.ts'
 
 const UP = new Vec3(0, 1, 0)
+/** Lantern glass emission at full night, before exposure and tonemapping. */
+const LAMP_GLOW = 6
 const FRONTIER_SUN = new Vec3(-0.55, 0.62, 0.56).normalize()
 function color(rgb: readonly number[]): Color {
   return new Color(rgb[0] ?? 0, rgb[1] ?? 0, rgb[2] ?? 0).gamma()
@@ -72,6 +74,8 @@ export class NativeEnvironment {
   private readonly groups = new Map<Entity, number[]>()
   private readonly materials = new Set<StandardMaterial>()
   private readonly windows = new Set<StandardMaterial>()
+  private readonly lampGlass = new Set<StandardMaterial>()
+  private lanterns = 0
   private readonly posterMaterials = new Set<StandardMaterial>()
   private readonly posterLights = new Set<Entity>()
   private readonly posterNodes = new Set<Entity>()
@@ -205,6 +209,16 @@ export class NativeEnvironment {
       material.diffuseDetailMapOffset = this.cloudOffset
       material.update()
     }
+    if (this.lanterns > 0) {
+      const t = this.cloudTime
+      this.applyLampGlass(1 + Math.sin(t * 6.1) * 0.03 + Math.sin(t * 11.7) * 0.02)
+    }
+  }
+  private applyLampGlass(flicker = 1): void {
+    for (const material of this.lampGlass) {
+      material.emissiveIntensity = this.lanterns * LAMP_GLOW * flicker
+      material.update()
+    }
   }
   private applyClouds(material: StandardMaterial): void {
     material.diffuseDetailMap = this.cloudTexture ?? null
@@ -260,6 +274,8 @@ export class NativeEnvironment {
       material.emissiveIntensity = preset.windows * 1.6
       material.update()
     }
+    this.lanterns = preset.lanterns
+    this.applyLampGlass()
     this.posterLightIntensity = Math.max(0, Math.min(1, (day - 0.6) / 0.2)) * 1.2
     this.updatePosterLights()
     const sky = Object.values(SKIES).reduce((nearest, candidate) =>
@@ -346,6 +362,11 @@ export class NativeEnvironment {
     if (material.name === 'WantedPaper') {
       this.posterMaterials.add(material)
     }
+    if (material.name === 'LampGlass') {
+      this.lampGlass.add(material)
+      material.emissiveIntensity = this.lanterns * LAMP_GLOW
+      material.update()
+    }
     if (nodeName.startsWith('windows-') || material.name === 'Dial') {
       this.windows.add(material)
     }
@@ -427,6 +448,7 @@ export class NativeEnvironment {
       this.groups.delete(root)
       for (const material of clones.values()) {
         this.windows.delete(material)
+        this.lampGlass.delete(material)
         this.posterMaterials.delete(material)
         this.cloudMaterials.delete(material)
         this.groundMaterials.delete(material)
@@ -454,6 +476,7 @@ export class NativeEnvironment {
     }
     this.materials.clear()
     this.windows.clear()
+    this.lampGlass.clear()
     this.posterMaterials.clear()
     for (const fixture of this.posterLights) {
       fixture.removeComponent('light')

@@ -1,8 +1,9 @@
-import { Color, Entity } from 'playcanvas'
+import { Color, Entity, LIGHTFALLOFF_INVERSESQUARED } from 'playcanvas'
 import type { GameApplication } from '../client/application.ts'
 import { NativeEnvironment } from '../client/environment.ts'
 import bank from '../content/bank.json' with { type: 'json' }
 import depot from '../content/depot.json' with { type: 'json' }
+import lightingPresets from '../content/lighting.json' with { type: 'json' }
 import { ASSETS } from '../content/manifest.ts'
 import mission from '../content/mission.json' with { type: 'json' }
 import streetLife from '../content/street-life.json' with { type: 'json' }
@@ -34,6 +35,8 @@ export function campaignSeats(life: ArenaLife, streetClearance = false): ArenaLi
     }),
   }
 }
+/** Inverse-square candela-ish scale for one kerosene street lantern at full night. */
+const LAMP_INTENSITY = 4
 const STREET: ArenaLife = campaignSeats(streetLife, true)
 const ARENAS = { depot, mission, bank }
 export function arenaForSlot(slot: number): ArenaId {
@@ -55,6 +58,10 @@ export class NativeArenas {
   private currentUrl = '' as string
   private requestedUrl = '' as string
   private readonly lights: Entity[] = []
+  /** Lamps beside pale masonry are dimmer than street lanterns. */
+  private readonly lightScales: number[] = []
+  private lampIntensity = 0
+  private flickerTime = 0
   private dailyDenseFog = false as boolean
   private lightingEpoch = 0
   private readonly game: GameApplication
@@ -64,6 +71,24 @@ export class NativeArenas {
   constructor(game: GameApplication) {
     this.game = game
     this.environment = new NativeEnvironment(game)
+    game.app.on('update', this.flicker)
+  }
+  /** Kerosene flames breathe independently; daylight lamps are disabled, not merely dark. */
+  private readonly flicker = (dt: number): void => {
+    if (this.lampIntensity <= 0) {
+      return
+    }
+    this.flickerTime = (this.flickerTime + dt) % 600
+    const t = this.flickerTime
+    for (const [index, light] of this.lights.entries()) {
+      if (light.light) {
+        const phase = index * 1.37
+        const breath = Math.sin(t * 7.3 + phase) * 0.035 + Math.sin(t * 13.1 + phase * 2.3) * 0.025
+        const gutter = Math.max(0, Math.sin(t * 2.1 + phase * 3.1) - 0.93) * 0.9
+        light.light.intensity =
+          this.lampIntensity * (this.lightScales[index] ?? 1) * (1 + breath - gutter)
+      }
+    }
   }
   async show(id: ArenaId): Promise<void> {
     const epoch = ++this.epoch
@@ -106,11 +131,15 @@ export class NativeArenas {
     if (epoch !== this.epoch) {
       return
     }
+    this.placeLamps(id)
+  }
+  private placeLamps(id: ArenaId): void {
     for (const light of this.lights) {
       light.destroy()
     }
     this.lights.length = 0
-    const lamps =
+    this.lightScales.length = 0
+    const lamps: readonly (readonly number[])[] =
       id === 'street'
         ? [
             [10.2, 2.9, 2],
@@ -121,20 +150,32 @@ export class NativeArenas {
       const light = new Entity(`arena-lamp-${index}`, this.game.app)
       light.addComponent('light', {
         type: 'omni',
-        color: new Color(1, 0.62, 0.27),
-        range: 10,
+        color: new Color(1, 0.66, 0.34),
+        range: 9,
         intensity: 0,
+        falloffMode: LIGHTFALLOFF_INVERSESQUARED,
         castShadows: false,
+        enabled: false,
       })
       light.setPosition(position[0] ?? 0, position[1] ?? 0, position[2] ?? 0)
       this.game.stage.addChild(light)
       this.lights.push(light)
+      this.lightScales.push(position[3] ?? 1)
     }
+    this.applyLamps()
   }
-  night(amount: number): void {
-    for (const light of this.lights) {
+  /** Follows the authored lantern curve: dark through the afternoon, full from dusk. */
+  night(day: number): void {
+    const preset =
+      lightingPresets[Math.max(0, Math.min(lightingPresets.length - 1, Math.round(day * 20)))]
+    this.lampIntensity = (preset?.lanterns ?? 0) * LAMP_INTENSITY
+    this.applyLamps()
+  }
+  private applyLamps(): void {
+    for (const [index, light] of this.lights.entries()) {
       if (light.light) {
-        light.light.intensity = Math.max(0, amount - 0.25) * 4
+        light.light.intensity = this.lampIntensity * (this.lightScales[index] ?? 1)
+        light.light.enabled = this.lampIntensity > 0
       }
     }
   }
@@ -174,6 +215,7 @@ export class NativeArenas {
     this.environment.dailyFog(enabled)
   }
   destroy(): void {
+    this.game.app.off('update', this.flicker)
     this.lightingEpoch++
     this.epoch++
     this.environment.destroy()

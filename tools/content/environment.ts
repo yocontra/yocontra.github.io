@@ -10,6 +10,7 @@ import { compressEnvironmentTextures } from './environment-textures.ts'
 import { formatContent } from './format-content.ts'
 import { packFrontierVertices } from './frontier-vertex-packing.ts'
 import { optimizeAsset } from './optimize.ts'
+import { dressStreetLamps, lampLights } from './street-lamps.ts'
 
 const argument = (name: string, fallback: string) =>
   process.argv[process.argv.indexOf(name) + 1] ?? fallback
@@ -58,6 +59,12 @@ for (const name of names.filter((candidate) => !only || candidate === only)) {
       }
     }
     await io.write(path, authored)
+  }
+  if (name === 'bank') {
+    const authored = await io.read(path)
+    const placements = await dressStreetLamps(authored, join(source, 'street-lamp.glb'))
+    await io.write(path, authored)
+    console.log('bank lamp lights', JSON.stringify(lampLights(placements)))
   }
   // Atlas selection was an old shader concern. Native materials carry ordinary tiled UVs.
   const flatten = Bun.spawn(['bun', 'tools/content/flatten-civic.ts', path], {

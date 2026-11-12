@@ -91,7 +91,7 @@ export const ENVIRONMENT = {
   hash: '206c67e3a1b992282821cf06662bdd69bbb4915c1c4444a66338a40d6a7d4e34',
   bytes: 1173154,
 } as const
-export const CONTENT_VERSION = 'a583c919d267a198167effded73194f1eb9ec5a8499f58c844c1f210449cf2ef'
+export const CONTENT_VERSION = 'beb6763b6c19581f6c18eb181b56a6bd9e212faf107a272d51984eba23d19bfe'
 export const COLLISION_VERSION = 'da29516af2ad4f42cc678a1d3dd1ab1b36b74ba5c950c81f5d3d6a5864aae3aa'
 export const ASSETS = {
   frontier: {
@@ -115,9 +115,9 @@ export const ASSETS = {
     bytes: 18037244,
   },
   bank: {
-    url: '/experiments/out-west/3d/native-v2/baked/bank.glb?v=69d70ec11389fcf7',
-    hash: '69d70ec11389fcf7fb57ef33d417bba456dc7315bfa494eb9f77c28348a6e7c0',
-    bytes: 21383312,
+    url: '/experiments/out-west/3d/native-v2/baked/bank.glb?v=760de3c27eb3edc1',
+    hash: '760de3c27eb3edc12ffb1609bbbefd8e14a2cf62b2bb6e2193e2647d72f74223',
+    bytes: 22218164,
   },
   player: {
     url: '/experiments/out-west/3d/native-v2/baked/player.glb?v=9eabf4c015bde234',
