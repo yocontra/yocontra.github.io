@@ -166,6 +166,9 @@ export class NativeArenas {
   stampPoster(index: number, stamp: 'coward' | 'dead' | null): void {
     this.environment.poster(index, stamp)
   }
+  posterPortrait(index: number, print: HTMLCanvasElement): void {
+    this.environment.portrait(index, print)
+  }
   dailyFog(enabled: boolean): void {
     this.dailyDenseFog = enabled
     this.environment.dailyFog(enabled)

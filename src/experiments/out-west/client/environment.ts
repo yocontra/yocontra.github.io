@@ -84,6 +84,8 @@ export class NativeEnvironment {
   private readonly cloudOffset = new Vec2()
   private posterTexture: Texture | undefined
   private posterCanvas: HTMLCanvasElement | undefined
+  private readonly portraits = new Map<number, HTMLCanvasElement>()
+  private printed: { index: number; stamp: 'coward' | 'dead' | null } | null = null
   private sky = ''
   private disposed = false as boolean
   private wilds: NativeWilds | undefined
@@ -164,6 +166,13 @@ export class NativeEnvironment {
   /** The visible clock face's centre, for the duel's clock inserts. */
   clockFace(): Vec3 | null {
     return this.streetVisible ? (this.clockwork?.face() ?? null) : null
+  }
+  /** His mugshot for poster `index`; reprinted at once if that poster is up. */
+  portrait(index: number, print: HTMLCanvasElement): void {
+    this.portraits.set(index, print)
+    if (this.printed?.index === index) {
+      this.poster(index, this.printed.stamp)
+    }
   }
   /** The poster as currently printed (stamps included), for the result card. */
   posterImage(): string | null {
@@ -296,7 +305,12 @@ export class NativeEnvironment {
       return
     }
     this.posterCanvas ??= document.createElement('canvas')
-    drawPoster(this.posterCanvas, outlaw, { index, stamp })
+    this.printed = { index, stamp }
+    drawPoster(this.posterCanvas, outlaw, {
+      index,
+      stamp,
+      portrait: this.portraits.get(index) ?? null,
+    })
     this.posterTexture ??= new Texture(this.game.app.graphicsDevice, {
       name: 'campaign-wanted-poster',
       format: PIXELFORMAT_RGBA8,

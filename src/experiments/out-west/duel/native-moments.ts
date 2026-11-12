@@ -53,6 +53,8 @@ export class Moments {
   faller: { actor: DuelActor; v: Vec3 } | null = null
   turns: Turn[] = []
   glintFired = false as boolean
+  /** The level whose poster carries his mugshot. */
+  printed = -1
   /** Colour: where the grade is heading (1 = full) and where it is. */
   satTarget = 1
   sat = 1

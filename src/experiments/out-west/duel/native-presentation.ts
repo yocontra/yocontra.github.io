@@ -11,6 +11,7 @@ import { tickBossWound, tickCoward, tickLose, tickWin } from './native-outcome.t
 import {
   enterCock,
   enterPoster,
+  printPortrait,
   tickCall,
   tickCock,
   tickWait,
@@ -233,11 +234,13 @@ export function update(d: NativeDirector, frameDt: number): void {
       frameHub(d)
       return
     case 'intro':
+      printPortrait(d)
       if (d.phaseT >= 2) {
         enterPoster(d)
       }
       break
     case 'poster':
+      printPortrait(d)
       if (d.phaseT >= FEEL.posterDuration) {
         enterCock(d)
       }

@@ -123,6 +123,21 @@ export function enterPoster(d: NativeDirector): void {
     })
   }
   posterShot(d)
+  printPortrait(d)
+}
+
+/** His mugshot onto the poster, as soon as his model stands on the stage (once per level). */
+export function printPortrait(d: NativeDirector): void {
+  const level = d.level
+  if (d.m.printed === level) {
+    return
+  }
+  void d.portraits.print(level, d.enemy).then((print) => {
+    if (print && d.m.printed !== level) {
+      d.m.printed = level
+      d.arenas.posterPortrait(level, print)
+    }
+  })
 }
 
 /** Both men cock their guns; the walk (or the boss's clock) follows. */

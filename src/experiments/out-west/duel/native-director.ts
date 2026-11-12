@@ -30,6 +30,7 @@ import {
 } from './native-combat.ts'
 import { NativeDust } from './native-dust.ts'
 import { clearMoments, Moments } from './native-moments.ts'
+import { NativePortraits } from './native-portrait.ts'
 import { hubShot, lineup, posters, remotePace, update } from './native-presentation.ts'
 import {
   advance,
@@ -136,6 +137,7 @@ export class NativeDirector {
   readonly atmosphere: NativeAtmosphere
   readonly rig: CameraRig
   readonly dust: NativeDust
+  readonly portraits: NativePortraits
   /** Per-attempt presentation (camera beats, slow-mo, cards); see native-moments.ts. */
   m = new Moments()
   pushing = false as boolean
@@ -156,6 +158,7 @@ export class NativeDirector {
     this.atmosphere = new NativeAtmosphere(game)
     this.rig = new CameraRig(game.camera)
     this.dust = new NativeDust(game)
+    this.portraits = new NativePortraits(game)
     this.c = c
     this.connectRanked = connectRanked
     this.board = new Board(c.hud.root)
