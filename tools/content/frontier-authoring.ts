@@ -144,7 +144,7 @@ export async function authorFrontier(output: string): Promise<void> {
       plan.style.buildingPaint[b.id] ??
       (role === 'stone' ? plan.style.stoneTint : plan.style.woodTint)
     for (const wall of structuralWalls({ ...layout, buildings: [b] })) {
-      g.box(root, role, { ...wall, top: wall.y1 }, tint)
+      g.box(root, role, { ...wall, top: wall.y1, grime: 0.32 }, tint)
     }
     buildingDetails(g, plan, b, root)
   }

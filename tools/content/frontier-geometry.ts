@@ -39,6 +39,7 @@ interface Geometry {
 export const frontierIO = new NodeIO().registerExtensions(ALL_EXTENSIONS)
 const textureRoot = 'public/experiments/out-west/3d/tex'
 const libraryPath = 'tools/art/environments/frontier-library.glb'
+const GRIME_BAND = 0.7
 
 async function texture(doc: Document, name: string) {
   return doc
@@ -305,7 +306,12 @@ export class FrontierGeometry {
     root: Node,
     role: string,
     points: readonly (readonly number[])[],
-    appearance: { tint?: Rgb; tile?: number; uvs?: readonly (readonly number[])[] } = {},
+    appearance: {
+      tint?: Rgb
+      tints?: readonly Rgb[]
+      tile?: number
+      uvs?: readonly (readonly number[])[]
+    } = {},
   ): void {
     const { tint = [1, 1, 1], tile = 1.8 } = appearance
     const data = this.geometry(root, role)
@@ -325,31 +331,75 @@ export class FrontierGeometry {
       data.uvs.push(
         ...(appearance.uvs?.[index] ?? [(alongZ ? z : x) / tile, (horizontal ? z : y) / tile]),
       )
-      data.colors.push(...tint, 1)
+      data.colors.push(...(appearance.tints?.[index] ?? tint), 1)
     }
     data.indices.push(start, start + 1, start + 2, start, start + 2, start + 3)
   }
-  box(root: Node, role: string, area: Placement, tint: Rgb = [1, 1, 1]): void {
-    const { x, z, w, d, top } = area
+  /** An axis-aligned solid; `grime` darkens a ground-contact band where dirt splashes walls. */
+  box(root: Node, role: string, area: Placement & { grime?: number }, tint: Rgb = [1, 1, 1]): void {
+    const { x, z, w, d, top, grime = 0 } = area
     const y = area.y0 ?? 0
-    const a = [x, y, z]
-    const b = [x + w, y, z]
-    const c = [x + w, y, z + d]
-    const e = [x, y, z + d]
-    const aa = [x, top, z]
-    const bb = [x + w, top, z]
-    const cc = [x + w, top, z + d]
-    const ee = [x, top, z + d]
-    for (const face of [
-      [a, aa, bb, b],
-      [b, bb, cc, c],
-      [c, cc, ee, e],
-      [e, ee, aa, a],
-      [aa, ee, cc, bb],
-      [a, b, c, e],
-    ]) {
-      this.quad(root, role, face, { tint })
+    const band = grime > 0 && y === 0 ? Math.min(GRIME_BAND, top) : y
+    const clean = 1 - grime
+    const dirty: Rgb = [tint[0] * clean, tint[1] * clean, tint[2] * clean]
+    const corners = [
+      [x, z],
+      [x + w, z],
+      [x + w, z + d],
+      [x, z + d],
+    ] as const
+    for (const [index, [ax, az]] of corners.entries()) {
+      const [bx, bz] = corners[(index + 1) % 4] ?? corners[0]
+      if (band > y) {
+        this.quad(
+          root,
+          role,
+          [
+            [ax, y, az],
+            [ax, band, az],
+            [bx, band, bz],
+            [bx, y, bz],
+          ],
+          { tints: [dirty, tint, tint, dirty] },
+        )
+      }
+      if (top > band) {
+        this.quad(
+          root,
+          role,
+          [
+            [ax, band, az],
+            [ax, top, az],
+            [bx, top, bz],
+            [bx, band, bz],
+          ],
+          { tint },
+        )
+      }
     }
+    const [a, b, c, e] = corners
+    this.quad(
+      root,
+      role,
+      [
+        [a[0], top, a[1]],
+        [e[0], top, e[1]],
+        [c[0], top, c[1]],
+        [b[0], top, b[1]],
+      ],
+      { tint },
+    )
+    this.quad(
+      root,
+      role,
+      [
+        [a[0], y, a[1]],
+        [b[0], y, b[1]],
+        [c[0], y, c[1]],
+        [e[0], y, e[1]],
+      ],
+      { tint },
+    )
   }
   surface(
     root: Node,
