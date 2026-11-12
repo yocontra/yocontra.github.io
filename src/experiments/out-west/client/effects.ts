@@ -52,10 +52,10 @@ const REVOLVER = {
   sound: 'revolver',
   interval: REVOLVER_FIRE_MS,
   kick: 0.012,
-  flash: 0.09,
+  flash: 0.26,
 } as const
-const RIFLE = { sound: 'rifle', interval: RIFLE_FIRE_MS, kick: 0.016, flash: 0.09 } as const
-const SHOTGUN = { sound: 'shotgun', interval: SHOTGUN_FIRE_MS, kick: 0.022, flash: 0.14 } as const
+const RIFLE = { sound: 'rifle', interval: RIFLE_FIRE_MS, kick: 0.016, flash: 0.3 } as const
+const SHOTGUN = { sound: 'shotgun', interval: SHOTGUN_FIRE_MS, kick: 0.022, flash: 0.42 } as const
 type Report = typeof REVOLVER | typeof RIFLE | typeof SHOTGUN
 const WEAPON_REPORTS = new Map<number, Report>([
   [WEAPON_RIFLE, RIFLE],
@@ -247,7 +247,7 @@ export class GameEffects {
       }
     }
     if (!pending) {
-      this.visuals.muzzle(origin)
+      this.visuals.muzzle(origin, reportForFlags(event.flags).flash)
       this.report(event.shooter, reportForFlags(event.flags).sound, origin)
     }
     if (event.flags & (SHOT_HIT | SHOT_WALL)) {

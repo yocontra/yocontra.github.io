@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="-64 -64 128 128">
+  <title>Bullet impact spark burst</title>
+  <defs>
+    <radialGradient id="core">
+      <stop stop-color="#fffef4" />
+      <stop offset=".3" stop-color="#ffe7a8" />
+      <stop offset="1" stop-color="#ff9a3c" stop-opacity="0" />
+    </radialGradient>
+    <linearGradient id="ray" x1="0" y1="0" x2="1" y2="0">
+      <stop stop-color="#fff6d8" />
+      <stop offset="1" stop-color="#ffb050" stop-opacity="0" />
+    </linearGradient>
+  </defs>
+  <circle r="16" fill="url(#core)" />
+  <g fill="url(#ray)">
+    <path d="M0-2.2 58-0.6 58 0.6 0 2.2Z" transform="rotate(-8)" />
+    <path d="M0-1.8 46-0.5 46 0.5 0 1.8Z" transform="rotate(38)" />
+    <path d="M0-2 52-0.5 52 0.5 0 2Z" transform="rotate(81)" />
+    <path d="M0-1.6 40-0.4 40 0.4 0 1.6Z" transform="rotate(127)" />
+    <path d="M0-2 55-0.5 55 0.5 0 2Z" transform="rotate(166)" />
+    <path d="M0-1.7 44-0.4 44 0.4 0 1.7Z" transform="rotate(212)" />
+    <path d="M0-2.1 50-0.5 50 0.5 0 2.1Z" transform="rotate(259)" />
+    <path d="M0-1.6 38-0.4 38 0.4 0 1.6Z" transform="rotate(304)" />
+  </g>
+</svg>

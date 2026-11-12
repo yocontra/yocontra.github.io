@@ -12,9 +12,12 @@ import {
 } from 'playcanvas'
 import { AMBIENT_ASSETS } from '../content/ambient.ts'
 import type { GameApplication } from './application.ts'
+import { DUEL_STYLE, FRONTIER_STYLE, type ShotStyle } from './shot-style.ts'
 
 const flashTextureUrl = new URL('./muzzle-flash.png', import.meta.url).href
 const streakTextureUrl = new URL('./shot-streak.png', import.meta.url).href
+const puffTextureUrl = new URL('./impact-puff.png', import.meta.url).href
+const sparkTextureUrl = new URL('./impact-spark.png', import.meta.url).href
 
 export interface ShotPoint {
   x: number
@@ -43,13 +46,13 @@ interface Burst {
   duration: number
   size: number
   fresh: boolean
+  flash: boolean
 }
 interface Smoke {
   entity: Entity
   age: number
 }
 const BULLET_SPEED = 260
-const TRACE_LENGTH = 0.45
 const applications = new WeakMap<GameApplication, ShotVisuals>()
 
 /** One application-owned native visual pool serves both Frontier and cinematic Duel shots. */
@@ -68,11 +71,13 @@ export class ShotVisuals {
   private readonly surfaceMaterial = new StandardMaterial()
   private readonly hitMaterial = new StandardMaterial()
   private readonly flashMaterial = new StandardMaterial()
+  private readonly sparkMaterial = new StandardMaterial()
   private readonly tracers: Tracer[] = []
   private readonly bursts: Burst[] = []
   private readonly smoke: Smoke[] = []
   private readonly light: Entity | undefined
   private readonly facing = new Vec3()
+  private readonly style: ShotStyle
   private smokeTexture: Texture | undefined
   private lightFresh = false as boolean
   private closed = false as boolean
@@ -80,34 +85,38 @@ export class ShotVisuals {
   readonly ready: Promise<void>
   constructor(game: GameApplication, cinematic: boolean) {
     this.game = game
+    this.style = cinematic ? DUEL_STYLE : FRONTIER_STYLE
     this.material.diffuse = Color.BLACK
     this.material.emissive = new Color(1, 0.91, 0.72)
+    this.material.emissiveIntensity = cinematic ? 1 : 2.2
     this.material.useLighting = false
     this.material.blendType = BLEND_ADDITIVEALPHA
     this.material.opacityMapChannel = 'a'
-    this.material.opacity = 0.7
+    this.material.opacity = this.style.opacity
     this.material.depthWrite = false
     this.material.cull = CULLFACE_NONE
     this.material.update()
-    this.surfaceMaterial.diffuse = new Color(0.62, 0.54, 0.42)
+    this.surfaceMaterial.diffuse = new Color(...this.style.dustColor)
     this.hitMaterial.diffuse = new Color(0.35, 0.08, 0.05)
     for (const material of [this.surfaceMaterial, this.hitMaterial]) {
       material.useLighting = false
       material.blendType = BLEND_NORMAL
       material.opacityMapChannel = 'a'
-      material.opacity = 0.8
+      material.opacity = this.style.puffOpacity
       material.depthWrite = false
       material.cull = CULLFACE_NONE
       material.update()
     }
-    this.flashMaterial.diffuse = Color.BLACK
-    this.flashMaterial.emissive = Color.WHITE
-    this.flashMaterial.emissiveIntensity = 2
-    this.flashMaterial.useLighting = false
-    this.flashMaterial.blendType = BLEND_ADDITIVEALPHA
-    this.flashMaterial.opacityMapChannel = 'a'
-    this.flashMaterial.depthWrite = false
-    this.flashMaterial.cull = CULLFACE_NONE
+    for (const material of [this.flashMaterial, this.sparkMaterial]) {
+      material.diffuse = Color.BLACK
+      material.emissive = Color.WHITE
+      material.emissiveIntensity = 2
+      material.useLighting = false
+      material.blendType = BLEND_ADDITIVEALPHA
+      material.opacityMapChannel = 'a'
+      material.depthWrite = false
+      material.cull = CULLFACE_NONE
+    }
     if (cinematic) {
       this.light = new Entity('gun-flash-light', game.app)
       this.light.addComponent('light', {
@@ -127,7 +136,10 @@ export class ShotVisuals {
       }
     })
     const dust = game
-      .loadTexture(AMBIENT_ASSETS.dust.url, { srgb: true, flipY: false })
+      .loadTexture(this.style.sprites ? puffTextureUrl : AMBIENT_ASSETS.dust.url, {
+        srgb: true,
+        flipY: false,
+      })
       .then((asset) => {
         if (!this.closed) {
           const texture = asset.resource as Texture
@@ -140,6 +152,15 @@ export class ShotVisuals {
           }
         }
       })
+    const spark = this.style.sprites
+      ? game.loadTexture(sparkTextureUrl, { srgb: true, flipY: false }).then((asset) => {
+          if (!this.closed) {
+            this.sparkMaterial.emissiveMap = asset.resource as Texture
+            this.sparkMaterial.opacityMap = asset.resource as Texture
+            this.sparkMaterial.update()
+          }
+        })
+      : undefined
     const streak = game
       .loadTexture(streakTextureUrl, { srgb: true, flipY: false })
       .then((asset) => {
@@ -148,7 +169,7 @@ export class ShotVisuals {
           this.material.update()
         }
       })
-    this.ready = Promise.all([flash, dust, streak]).then(() => undefined)
+    this.ready = Promise.all([flash, dust, streak, spark]).then(() => undefined)
     game.app.on('update', this.update)
     game.app.on('postrender', this.rendered)
     game.app.once('destroy', () => this.destroy())
@@ -210,7 +231,7 @@ export class ShotVisuals {
     if (this.closed) {
       return
     }
-    this.burst('muzzle-flash', at, 0.035, size)
+    this.burst('muzzle-flash', at, this.style.flashSeconds, size)
     if (this.light?.light) {
       this.light.setPosition(
         at.x + (direction?.x ?? 0) * 0.75,
@@ -225,7 +246,22 @@ export class ShotVisuals {
     }
   }
   impact(at: ShotPoint, hit: boolean): void {
-    this.burst(hit ? 'bullet-hit' : 'bullet-impact', at, 0.16, hit ? 0.09 : 0.12)
+    const { blood, dust, dustSeconds, spark, standoff } = this.style
+    // Billboards sit a little towards the camera so the surface they hit does not clip them in half.
+    this.facing.set(at.x, at.y, at.z).sub(this.game.camera.getPosition())
+    // Past ~10 m the puffs keep a constant screen size instead of shrinking under the crosshair.
+    const reach = Math.max(1, this.facing.length() / 10)
+    this.facing.normalize()
+    const point = {
+      x: at.x - this.facing.x * standoff,
+      y: at.y - this.facing.y * standoff,
+      z: at.z - this.facing.z * standoff,
+    }
+    const puff = (hit ? blood : dust) * (spark > 0 ? reach : 1)
+    this.burst(hit ? 'bullet-hit' : 'bullet-impact', point, dustSeconds, puff)
+    if (spark > 0 && !hit) {
+      this.burst('impact-spark', point, 0.07, spark * reach)
+    }
   }
   private emitSmoke(at: ShotPoint, texture: Texture): void {
     let smoke = this.smoke.find((entry) => entry.age >= 1)
@@ -272,8 +308,9 @@ export class ShotVisuals {
     tracer.entity.lookAt(tracer.to)
   }
   private move(tracer: Tracer): void {
-    const head = Math.min(tracer.distance, 0.12 + tracer.age * BULLET_SPEED)
-    const tail = Math.max(0, head - TRACE_LENGTH)
+    const { lead, length, width, minWidth, maxWidth, opacity } = this.style
+    const head = Math.min(tracer.distance, lead + tracer.age * BULLET_SPEED)
+    const tail = Math.max(0, head - length)
     const center = (head + tail) / 2
     tracer.entity.setPosition(
       tracer.from.x + tracer.direction.x * center,
@@ -282,10 +319,11 @@ export class ShotVisuals {
     )
     this.facing.sub2(this.game.camera.getPosition(), tracer.entity.getPosition())
     tracer.entity.lookAt(tracer.to, this.facing)
-    tracer.entity.setLocalScale(0.0045, 1, Math.max(0.001, head - tail))
+    const thickness = Math.min(maxWidth, Math.max(minWidth, this.facing.length() * width))
+    tracer.entity.setLocalScale(thickness, 1, Math.max(0.001, head - tail))
     const fade = Math.max(0, 1 - tracer.age / Math.max(0.025, tracer.distance / BULLET_SPEED))
     for (const mesh of tracer.entity.render?.meshInstances ?? []) {
-      mesh.setParameter('material_opacity', 0.7 * fade)
+      mesh.setParameter('material_opacity', opacity * fade)
     }
   }
   private burst(name: string, at: ShotPoint, duration: number, size: number): void {
@@ -300,10 +338,10 @@ export class ShotVisuals {
         return
       }
       const entity = new Entity(name, this.game.app)
-      const flash = name === 'muzzle-flash'
+      const flash = name === 'muzzle-flash' || name === 'impact-spark'
       let material = name === 'bullet-hit' ? this.hitMaterial : this.surfaceMaterial
       if (flash) {
-        material = this.flashMaterial
+        material = name === 'impact-spark' ? this.sparkMaterial : this.flashMaterial
       }
       const mesh = new Entity(flash ? 'flash-star' : 'impact-puff', this.game.app)
       entity.addChild(mesh)
@@ -318,14 +356,17 @@ export class ShotVisuals {
         receiveShadows: false,
       })
       this.game.stage.addChild(entity)
-      effect = { entity, mesh, age: 0, duration, size, fresh: true }
+      effect = { entity, mesh, age: 0, duration, size, fresh: true, flash }
       this.bursts.push(effect)
     }
     effect.entity.enabled = true
     effect.entity.setPosition(at.x, at.y, at.z)
     effect.entity.lookAt(this.game.camera.getPosition())
+    if (effect.flash && this.style.spark > 0) {
+      effect.entity.rotateLocal(0, 0, Math.random() * 360)
+    }
     for (const mesh of effect.mesh.render?.meshInstances ?? []) {
-      mesh.setParameter('material_opacity', name === 'muzzle-flash' ? 1 : 0.8)
+      mesh.setParameter('material_opacity', effect.flash ? 1 : this.style.puffOpacity)
     }
     effect.entity.setLocalScale(size, size, size)
     effect.age = 0
@@ -342,7 +383,7 @@ export class ShotVisuals {
         continue
       }
       tracer.age += dt
-      if (tracer.age * BULLET_SPEED > tracer.distance + TRACE_LENGTH) {
+      if (this.style.lead + tracer.age * BULLET_SPEED > tracer.distance + this.style.length) {
         tracer.active = false
         tracer.entity.enabled = false
       } else {
@@ -355,13 +396,16 @@ export class ShotVisuals {
       }
       effect.age += dt
       effect.entity.enabled = effect.age < effect.duration
-      const growth = effect.entity.name === 'muzzle-flash' ? -0.35 : 1
+      const growth = effect.flash ? -0.35 : this.style.dustGrowth
       const size = effect.size * (1 + (growth * effect.age) / effect.duration)
       effect.entity.setLocalScale(size, size, size)
-      if (effect.entity.name !== 'muzzle-flash') {
+      if (!effect.flash) {
         effect.entity.lookAt(this.game.camera.getPosition())
         for (const mesh of effect.mesh.render?.meshInstances ?? []) {
-          mesh.setParameter('material_opacity', 0.8 * Math.max(0, 1 - effect.age / effect.duration))
+          mesh.setParameter(
+            'material_opacity',
+            this.style.puffOpacity * Math.max(0, 1 - effect.age / effect.duration),
+          )
         }
       }
     }
@@ -455,5 +499,6 @@ export class ShotVisuals {
     this.surfaceMaterial.destroy()
     this.hitMaterial.destroy()
     this.flashMaterial.destroy()
+    this.sparkMaterial.destroy()
   }
 }
