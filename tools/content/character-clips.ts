@@ -6,6 +6,7 @@ import { ALL_EXTENSIONS } from '@gltf-transform/extensions'
 import { dedup, mergeDocuments, prune, resample, unpartition } from '@gltf-transform/functions'
 import { validateAuthoringInputs } from './authoring-inputs.ts'
 import { appendCrouchClips } from './crouch-character-clips.ts'
+import { closeIdleSeams } from './idle-seams.ts'
 import { completeCharacterClips } from './normalize-character-clips.ts'
 import { normalizeSkinnedAsset } from './normalize-skinned-nodes.ts'
 import { uprightPosture } from './upright-posture.ts'
@@ -98,6 +99,7 @@ export async function bakeCharacterClips(): Promise<void> {
     new Set(['Idle_Gun_Pointing', 'Gun_Shoot']),
   )
   completeCharacterClips(target)
+  closeIdleSeams(target)
   uprightPosture(target)
   appendCrouchClips(target)
   await target.transform(resample(), dedup(), prune({ keepLeaves: true }), unpartition())

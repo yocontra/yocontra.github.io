@@ -159,7 +159,7 @@ it('native idle loops close while other clips, times and geometry remain authore
   )
   expect(document.getRoot().listAnimations()).toHaveLength(72)
   expect(retained(document)).toBe(
-    '95c651025739dec65f23c3eab2acd6c20991ddc2ee571cde650abe6d171321b0',
+    'b73de9b460b228143900d0725b1daaf7aa56461ad68507613e59b03607975750',
   )
   expect(geometry(document)).toBe(
     '7c5107d243019cf1378ad72cd244a9bbe3917322a576cdb8555ae78ae257f498',
