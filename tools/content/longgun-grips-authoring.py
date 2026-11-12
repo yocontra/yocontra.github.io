@@ -24,7 +24,7 @@ ROOT = Path(__file__).resolve().parents[2]
 SOURCE = ROOT / "tools/art/characters"
 OUTPUT = SOURCE / "longgun-grips"
 DIGITS = ("Index", "Middle", "Ring", "Pinky", "Thumb")
-ARM = ["ShoulderL", "UpperArmL", "LowerArmL", "WristL"]
+ARM = ("Shoulder", "UpperArm", "LowerArm", "Wrist")
 COMPONENTS = {5126: np.float32, 5123: np.uint16, 5125: np.uint32, 5121: np.uint8, 5122: np.int16}
 WIDTHS = {"SCALAR": 1, "VEC2": 2, "VEC3": 3, "VEC4": 4, "MAT4": 16}
 
@@ -32,24 +32,38 @@ WIDTHS = {"SCALAR": 1, "VEC2": 2, "VEC3": 3, "VEC4": 4, "MAT4": 16}
 # hand: direction from wrist to middle knuckle (yaw toward +z, pitch toward +y); roll turns the palm
 # about that direction (0 = palm as close to +y as possible). knuckle: middle knuckle joint start point,
 # then the palm slides along its normal until skin contact. protract: clavicle swing toward the muzzle.
-# elbowDrop: swing of the elbow pole from the source pose toward gun-down.
-# spread: knuckle splay about bone-local Z. sight: flesh within z of the bore axis must stay below y so the
-# wrap never rises into the sight line (fingers beside the barrel are free).
+# elbowDrop: swing of the elbow pole from the source pose toward gun-down. spread: knuckle splay about
+# bone-local Z. sight: flesh within z of the bore axis must stay below y so the wrap never rises into the
+# sight line (fingers beside the barrel are free). trigger: the index pad rests here instead of wrapping.
 GRIPS = {
     "rifle": {
-        "knuckle": (0.215, -0.05, 0.025),
-        "protract": 26,
-        "elbowDrop": 45,
-        "hand": {"yaw": 60, "pitch": 5, "roll": -15},
-        "sight": {"y": 0.012, "z": 0.014},
-        "spread": {"Index": 0, "Middle": 0, "Ring": 0, "Pinky": 0},
+        "L": {
+            "knuckle": (0.215, -0.05, 0.025),
+            "protract": 26,
+            "elbowDrop": 45,
+            "hand": {"yaw": 60, "pitch": 5, "roll": -15},
+            "sight": {"y": 0.012, "z": 0.014},
+            "spread": {"Index": 0, "Middle": 0, "Ring": 0, "Pinky": 0},
+        },
     },
     "shotgun": {
-        "knuckle": (0.13, -0.04, -0.04),
-        "protract": 12,
-        "hand": {"yaw": 60, "pitch": 10, "roll": 45},
-        "sight": {"y": 0.045, "z": 0.02},
-        "spread": {"Index": 0, "Middle": 0, "Ring": 0, "Pinky": 0},
+        "L": {
+            "knuckle": (0.13, -0.025, 0.035),
+            "protract": 34,
+            "elbowDrop": 45,
+            "hand": {"yaw": 60, "pitch": 5, "roll": -30},
+            "sight": {"y": 0.045, "z": 0.02},
+            "spread": {"Index": 0, "Middle": 0, "Ring": 0, "Pinky": 0},
+        },
+        "R": {
+            "knuckle": (-0.05, -0.012, 0.035),
+            "protract": 0,
+            "elbowDrop": -135,
+            "hand": {"yaw": -15, "pitch": -35, "roll": -70},
+            "sight": {"y": 0.06, "z": 0.02},
+            "trigger": (0.025, -0.015, 0.0),
+            "spread": {"Index": 0, "Middle": 0, "Ring": 0, "Pinky": 0},
+        },
     },
 }
 PALM_CONTACT = 0.0005
@@ -307,32 +321,33 @@ def twist_angle(q, axis):
 
 
 class Authoring:
-    def __init__(self, kind):
+    def __init__(self, kind, side="L"):
         self.kind = kind
+        self.side = side
         self.player = Doc(SOURCE / "player.gltf")
         self.skeleton = Skeleton(self.player)
         self.skin = Skin(self.player)
         self.actions = Doc(SOURCE / f"held-actions-{kind}.glb")
         self.clips = Clips(self.actions)
         self.gun = Gun(kind)
-        self.grip = GRIPS[kind]
+        self.grip = GRIPS[kind][side]
         sample = self.clips.sample(f"Hold_{kind}", 0)
-        self.hand = Hand(self.skeleton, self.skin, sample, "L")
-        self.lengths = {b: Vector(self.hand.local[b].get("translation", [0, 0, 0])).length if b in self.hand.local else None for b in ARM}
-        for b in ("LowerArmL", "WristL"):
-            node = dict(self.skeleton.nodes[self.skeleton.doc.names[b]])
-            node.update(sample.get(b, {}))
+        self.hand = Hand(self.skeleton, self.skin, sample, side)
+        self.lengths = {}
+        for b in ("LowerArm", "Wrist"):
+            node = dict(self.skeleton.nodes[self.skeleton.doc.names[b + side]])
+            node.update(sample.get(b + side, {}))
             self.lengths[b] = Vector(node["translation"]).length
         self.world0 = self.skeleton.world(sample)
         self.G0 = self.gun_world(f"Hold_{kind}", 0, self.world0)
         self.Gi0 = np.array(self.G0.inverted())
-        self.scale = self.world0["WristL"].to_scale()[0]
+        self.scale = self.world0["Wrist" + side].to_scale()[0]
         self.local_direction, self.local_normal = self.palm_frame(self.world0)
-        self.knuckle_local = self.world0["WristL"].inverted() @ self.world0["Middle1L"].translation * self.scale
+        self.knuckle_local = self.world0["Wrist" + side].inverted() @ self.world0["Middle1" + side].translation * self.scale
         hand = self.hand
-        roots = np.isin(hand.dominant, [f"{d}1L" for d in DIGITS[:4]]) & hand.palmar & (hand.bind[:, 1] < 0.015)
-        self.contact = ((hand.dominant == "WristL") & (hand.bind @ np.array(self.local_normal) > 0.005)) | roots
-        self.relaxed = {f"{d}{i}L": hand.rotation(d, i, 30) for d in DIGITS[:4] for i in (1, 2, 3)}
+        roots = np.isin(hand.dominant, [f"{d}1{side}" for d in DIGITS[:4]]) & hand.palmar & (hand.bind[:, 1] < 0.015)
+        self.contact = ((hand.dominant == "Wrist" + side) & (hand.bind @ np.array(self.local_normal) > 0.005)) | roots
+        self.relaxed = {f"{d}{i}{side}": hand.rotation(d, i, 30) for d in DIGITS[:4] for i in (1, 2, 3)}
 
     def gun_world(self, clip, time, world):
         mechanism = ("Weapon_Shoot_" if clip.startswith("Shoot") else "Weapon_Idle_") + self.kind
@@ -340,12 +355,13 @@ class Authoring:
         return world["Chest"] @ mount @ self.gun.frame
 
     def palm_frame(self, world):
-        """Hand direction and palm normal in WristL-local axes, measured from the rig."""
-        wrist = world["WristL"]
+        """Hand direction and palm normal in wrist-local axes, measured from the rig."""
+        s = self.side
+        wrist = world["Wrist" + s]
         inverse = wrist.inverted()
-        direction = (inverse @ world["Middle1L"].translation).normalized()
-        straight = self.hand.world(wrist, {"Middle1L": self.hand.rotation("Middle", 1, 0)})["Middle2L"].translation
-        bent = self.hand.world(wrist, {"Middle1L": self.hand.rotation("Middle", 1, 30)})["Middle2L"].translation
+        direction = (inverse @ world["Middle1" + s].translation).normalized()
+        straight = self.hand.world(wrist, {"Middle1" + s: self.hand.rotation("Middle", 1, 0)})["Middle2" + s].translation
+        bent = self.hand.world(wrist, {"Middle1" + s: self.hand.rotation("Middle", 1, 30)})["Middle2" + s].translation
         normal = (inverse.to_3x3() @ (bent - straight))
         normal = (normal - normal.project(direction)).normalized()
         return direction, normal
@@ -392,13 +408,15 @@ class Authoring:
         members = self.hand.mask(digit)
         pads = [self.hand.mask(digit, (i,), True)[members] for i in (1, 2, 3)]
         thumb = digit == "Thumb"
+        side = self.side
+        trigger = Vector(grip["trigger"]) if digit == "Index" and grip.get("trigger") else None
 
         def pose(c):
             if thumb:
                 a, s, b, e = c
-                return {"Thumb1L": self.hand.rotation("Thumb", 1, a, s), "Thumb2L": self.hand.rotation("Thumb", 2, b), "Thumb3L": self.hand.rotation("Thumb", 3, e)}
-            a, b = c
-            return {f"{digit}1L": self.hand.rotation(digit, 1, a, grip["spread"][digit]), f"{digit}2L": self.hand.rotation(digit, 2, b), f"{digit}3L": self.hand.rotation(digit, 3, 0.7 * b)}
+                return {"Thumb1" + side: self.hand.rotation("Thumb", 1, a, s), "Thumb2" + side: self.hand.rotation("Thumb", 2, b), "Thumb3" + side: self.hand.rotation("Thumb", 3, e)}
+            a, b, s = c if len(c) == 3 else (*c, grip["spread"][digit])
+            return {f"{digit}1{side}": self.hand.rotation(digit, 1, a, s), f"{digit}2{side}": self.hand.rotation(digit, 2, b), f"{digit}3{side}": self.hand.rotation(digit, 3, 0.7 * b)}
 
         def score(c):
             trial = dict(rotations)
@@ -410,13 +428,17 @@ class Authoring:
             depth = max(0.0, -d.min() - FLESH_LIMIT)
             loft = max(0.0, flesh[:, 1].max() - grip["sight"]["y"] - 0.01)
             cost = gaps[0] * 0.5 + gaps[1] + gaps[2] * 1.5 + 4 * over + 2 * loft + 20 * depth + 0.00002 * sum(abs(v) for v in c)
+            if trigger is not None:
+                # The firing pad rests on the trigger blade instead of wrapping the wood.
+                reach = float(np.linalg.norm(flesh[pads[2]] - np.array(trigger), axis=1).min())
+                cost += 3 * reach - gaps[0] * 0.5 - gaps[1] - gaps[2] * 1.5
             if not thumb:
                 # Natural flexion synergy: knuckle and middle joint bend together, no hooked fingers.
                 cost += SYNERGY * max(0.0, abs(c[1] - c[0]) - 35)
             if thumb:
                 joints = self.hand.world(wrist, trial)
-                tip = self.G0.inverted() @ joints["Thumb4L"].translation
-                base = self.G0.inverted() @ joints["Thumb2L"].translation
+                tip = self.G0.inverted() @ joints["Thumb4" + side].translation
+                base = self.G0.inverted() @ joints["Thumb2" + side].translation
                 cost += 0.02 * max(0.0, 0.5 - (tip - base).normalized().x)
             return cost, gaps, -d.min(), over
 
@@ -426,6 +448,11 @@ class Authoring:
             for _ in range(2):
                 around = [tuple(v + (k - 1) * 5 for v, k in zip(best[1], ks)) for ks in np.ndindex(3, 3, 3, 3)]
                 best = min([best] + [(score(c), c) for c in around], key=lambda r: r[0][0])
+        elif trigger is not None:
+            grid = [(a, b, s) for a in range(-10, 91, 5) for b in range(0, 106, 5) for s in range(-20, 21, 10)]
+            best = min(((score(c), c) for c in grid), key=lambda r: r[0][0])
+            around = [tuple(v + (k - 1) * st for v, k, st in zip(best[1], ks, (2, 2, 3))) for ks in np.ndindex(3, 3, 3)]
+            best = min([best] + [(score(c), c) for c in around], key=lambda r: r[0][0])
         else:
             best = min(((score(c), c) for c in ((a, b) for a in range(-10, 91, 5) for b in range(0, 106, 5))), key=lambda r: r[0][0])
             best = min([best] + [(score((best[1][0] + i, best[1][1] + j)), (best[1][0] + i, best[1][1] + j)) for i in range(-4, 5) for j in range(-4, 5)], key=lambda r: r[0][0])
@@ -440,7 +467,7 @@ class Authoring:
 
     def comfort(self):
         """Wrist extension and deviation (degrees) between forearm and hand axes at the source Hold pose."""
-        wrist = self.arm(f"Hold_{self.kind}", 0)["WristL"].to_matrix()
+        wrist = self.arm(f"Hold_{self.kind}", 0)["Wrist" + self.side].to_matrix()
         direction, normal = wrist @ self.local_direction, wrist @ self.local_normal
         forearm = Vector((0, 1, 0))
         along = forearm.dot(direction)
@@ -469,23 +496,24 @@ class Authoring:
         return report
 
     def arm(self, clip, time):
-        """Left-arm and digit local rotations for one source sample."""
+        """Arm and digit local rotations for one source sample."""
+        shoulder_, upper_, lower_, wrist_ = (b + self.side for b in ARM)
         sample = self.clips.sample(clip, time)
         world = self.skeleton.world(sample)
         G = self.gun_world(clip, time, world)
         # Bounded clavicle protraction: swing the shoulder joint toward the muzzle.
-        clavicle = world["UpperArmL"].translation - world["ShoulderL"].translation
+        clavicle = world[upper_].translation - world[shoulder_].translation
         axis = clavicle.cross(G.to_3x3() @ Vector((1, 0, 0))).normalized()
-        shoulder = Matrix.Rotation(math.radians(self.grip.get("protract", 0)), 3, axis) @ world["ShoulderL"].to_3x3().normalized()
+        shoulder = Matrix.Rotation(math.radians(self.grip.get("protract", 0)), 3, axis) @ world[shoulder_].to_3x3().normalized()
         clavicle_local = (world["Chest"].to_3x3().normalized().inverted() @ shoulder).to_quaternion().normalized()
-        sample.setdefault("ShoulderL", {})["rotation"] = xyzw(clavicle_local)
+        sample.setdefault(shoulder_, {})["rotation"] = xyzw(clavicle_local)
         world = self.skeleton.world(sample)
-        scale = world["WristL"].to_scale()[0]
+        scale = world[wrist_].to_scale()[0]
         target = Matrix.LocRotScale(G @ self.wrist_local, (G.to_3x3().normalized() @ self.wrist_rotation).to_quaternion(), Vector((scale,) * 3))
-        shoulder = world["UpperArmL"].translation
-        elbow0 = world["LowerArmL"].translation
-        a = self.lengths["LowerArmL"] * scale
-        b = self.lengths["WristL"] * scale
+        shoulder = world[upper_].translation
+        elbow0 = world[lower_].translation
+        a = self.lengths["LowerArm"] * scale
+        b = self.lengths["Wrist"] * scale
         goal = target.translation
         axis = goal - shoulder
         distance = axis.length
@@ -495,26 +523,28 @@ class Authoring:
         cos = (a * a + distance * distance - b * b) / (2 * a * distance)
         pole = elbow0 - shoulder
         pole = (pole - pole.project(axis)).normalized()
-        down = G.to_3x3() @ Vector((0, -1, 0))
+        # Positive elbowDrop swings the elbow toward gun-down, negative raises it.
+        drop = math.radians(self.grip.get("elbowDrop", 0))
+        down = G.to_3x3() @ Vector((0, -1 if drop >= 0 else 1, 0))
         down = (down - down.project(axis)).normalized()
-        drop = min(math.radians(self.grip.get("elbowDrop", 0)), pole.angle(down))
+        drop = min(abs(drop), pole.angle(down))
         pole = Matrix.Rotation(drop, 3, pole.cross(down).normalized()) @ pole if drop > 0 else pole
         elbow = shoulder + axis * a * cos + pole * a * math.sqrt(max(0.0, 1 - cos * cos))
-        upper0 = world["UpperArmL"].to_3x3().normalized()
-        lower0 = world["LowerArmL"].to_3x3().normalized()
+        upper0 = world[upper_].to_3x3().normalized()
+        lower0 = world[lower_].to_3x3().normalized()
         upper = swing(upper0.col[1], elbow - shoulder) @ upper0
         lower = upper @ upper0.inverted() @ lower0
         lower = swing(lower.col[1], goal - elbow) @ lower
         hand = target.to_3x3().normalized()
-        rest_twist = twist_angle(self.skeleton.rest["WristL"], Vector((0, 1, 0)))
+        rest_twist = twist_angle(self.skeleton.rest[wrist_], Vector((0, 1, 0)))
         relative = (lower.inverted() @ hand).to_quaternion()
         lower = lower @ Matrix.Rotation(twist_angle(relative, Vector((0, 1, 0))) - rest_twist, 3, "Y")
-        parent = world["ShoulderL"].to_3x3().normalized()
+        parent = world[shoulder_].to_3x3().normalized()
         out = {
-            "ShoulderL": clavicle_local,
-            "UpperArmL": (parent.inverted() @ upper).to_quaternion().normalized(),
-            "LowerArmL": (upper.inverted() @ lower).to_quaternion().normalized(),
-            "WristL": (lower.inverted() @ hand).to_quaternion().normalized(),
+            shoulder_: clavicle_local,
+            upper_: (parent.inverted() @ upper).to_quaternion().normalized(),
+            lower_: (upper.inverted() @ lower).to_quaternion().normalized(),
+            wrist_: (lower.inverted() @ hand).to_quaternion().normalized(),
         }
         out.update(getattr(self, "finger_rotations", {}))
         return out
@@ -528,10 +558,10 @@ def hash_values(values):
     return hashlib.sha256(struct.pack("<" + "f" * len(flat), *flat)).hexdigest()
 
 
-def write(kind, authoring):
-    source = authoring.actions
+def write(kind, authorings):
+    source = authorings[0].actions
     clips = [f"Hold_{kind}", f"Shoot_{kind}"]
-    changed = set(ARM) | set(authoring.finger_rotations)
+    changed = {b + a.side for a in authorings for b in ARM} | {b for a in authorings for b in a.finger_rotations}
     document = {
         "asset": {"version": "2.0", "generator": "Blender offline long-gun grip authoring"},
         "nodes": [{k: copy.deepcopy(v) for k, v in n.items() if k in ("name", "children", "translation", "rotation", "scale", "matrix")} for n in source.doc["nodes"]],
@@ -557,7 +587,7 @@ def write(kind, authoring):
                 previous = None
                 for (t,) in times:
                     if t not in cache:
-                        cache[t] = authoring.arm(clip["name"], float(t))
+                        cache[t] = {b: q for a in authorings for b, q in a.arm(clip["name"], float(t)).items()}
                     q = cache[t][bone].copy()
                     if previous is not None and q.dot(previous) < 0:
                         q.negate()
@@ -574,9 +604,9 @@ def write(kind, authoring):
             out["samplers"].append({"input": index, "output": index + 1, "interpolation": sampler.get("interpolation", "LINEAR")})
         document["animations"].append(out)
     inputs = []
-    for doc in (source, authoring.gun.doc, authoring.player):
+    for doc in (source, authorings[0].gun.doc, authorings[0].player):
         inputs.extend({"path": str(f.relative_to(ROOT)), "sha256": hashlib.sha256(f.read_bytes()).hexdigest()} for f in doc.files)
-    document["extras"] = {"sourceInputs": inputs, "changedBones": sorted(changed), "authoring": "Offline analytic two-bone left-arm retarget to a gun-fixed palm frame; native hinge-only digit flexion solved against skinned flesh; no runtime IK", "grip": GRIPS[kind], "report": authoring.report, "preservationReceipt": receipts}
+    document["extras"] = {"sourceInputs": inputs, "changedBones": sorted(changed), "authoring": "Offline analytic two-bone arm retarget to a gun-fixed palm frame; native hinge-only digit flexion solved against skinned flesh; no runtime IK", "grip": {a.side: GRIPS[kind][a.side] for a in authorings}, "report": {a.side: a.report for a in authorings}, "preservationReceipt": receipts}
     blob = bytearray()
     document["accessors"], document["bufferViews"] = [], []
     for array, width in arrays:
@@ -600,28 +630,36 @@ def write(kind, authoring):
 
 
 def validate(kind, authoring, path, rate=120):
-    """Sample the baked clips between keys: hand drift against the gun, flesh depth and palm contact."""
+    """Sample the baked clips between keys: hand drift against the gun, flesh depth, palm contact and sight line."""
     baked = Clips(Doc(path))
     hand = authoring.hand
     palm = authoring.contact
+    wrist = "Wrist" + authoring.side
+    trigger = authoring.grip.get("trigger")
+    pad = authoring.hand.mask("Index", (3,), True)
     out = {}
     for clip in (f"Hold_{kind}", f"Shoot_{kind}"):
         end = max(baked.times(clip))
-        worst = {"driftMm": 0.0, "turnDegrees": 0.0, "fleshDepthMm": 0.0, "palmGapMm": 0.0}
+        worst = {"driftMm": 0.0, "turnDegrees": 0.0, "fleshDepthMm": 0.0, "palmGapMm": 0.0, "sightIntrusionMm": 0.0}
+        if trigger:
+            worst["triggerGapMm"] = 0.0
         for t in np.linspace(0, end, int(round(end * rate)) + 1):
             world = authoring.skeleton.world(baked.sample(clip, float(t)))
             G = authoring.gun_world(clip, float(t), world)
             target = G @ authoring.wrist_local
-            turn = (G.to_3x3().normalized() @ authoring.wrist_rotation).to_quaternion().rotation_difference(world["WristL"].to_quaternion())
+            turn = (G.to_3x3().normalized() @ authoring.wrist_rotation).to_quaternion().rotation_difference(world[wrist].to_quaternion())
             mats = authoring.skin.matrices(world)
             flesh = authoring.skin.deform(mats, hand.subset)
             inverse = np.array(G.inverted())
             local = flesh @ inverse[:3, :3].T + inverse[:3, 3]
+            worst["sightIntrusionMm"] = max(worst["sightIntrusionMm"], authoring.intrusion(local, authoring.grip) * 1000)
             d = authoring.gun.signed(local)
-            worst["driftMm"] = max(worst["driftMm"], (target - world["WristL"].translation).length / G.to_scale()[0] * 1000)
+            worst["driftMm"] = max(worst["driftMm"], (target - world[wrist].translation).length / G.to_scale()[0] * 1000)
             worst["turnDegrees"] = max(worst["turnDegrees"], math.degrees(abs(turn.angle if turn.angle <= math.pi else 2 * math.pi - turn.angle)))
             worst["fleshDepthMm"] = max(worst["fleshDepthMm"], -d.min() * 1000)
             worst["palmGapMm"] = max(worst["palmGapMm"], max(0.0, d[palm].min()) * 1000)
+            if trigger:
+                worst["triggerGapMm"] = max(worst["triggerGapMm"], float(np.linalg.norm(local[pad] - np.array(trigger), axis=1).min()) * 1000)
         out[clip] = {k: round(v, 2) for k, v in worst.items()}
     return out
 
@@ -629,12 +667,14 @@ def validate(kind, authoring, path, rate=120):
 def main():
     kinds = sys.argv[sys.argv.index("--") + 1:] if "--" in sys.argv else list(GRIPS)
     for kind in kinds:
-        authoring = Authoring(kind)
-        authoring.solve()
-        path = write(kind, authoring)
-        authoring.report["validation"] = validate(kind, authoring, path)
-        print("VALIDATION", json.dumps(authoring.report["validation"]))
-        write(kind, authoring)
+        authorings = [Authoring(kind, side) for side in GRIPS[kind]]
+        for authoring in authorings:
+            authoring.solve()
+        path = write(kind, authorings)
+        for authoring in authorings:
+            authoring.report["validation"] = validate(kind, authoring, path)
+            print("VALIDATION", authoring.side, json.dumps(authoring.report["validation"]))
+        write(kind, authorings)
 
 
 if __name__ == "__main__":

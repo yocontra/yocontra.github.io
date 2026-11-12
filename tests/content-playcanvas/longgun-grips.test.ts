@@ -32,17 +32,37 @@ it('long-gun grips are current, gun-locked between keys and preserve every unown
     await validateAuthoringInputs(grip)
     const extras = grip.getRoot().getExtras() as {
       changedBones: string[]
-      report: {
-        wristDeviationDegrees: number
-        validation: Record<string, { driftMm: number; fleshDepthMm: number; palmGapMm: number }>
+      report: Record<
+        string,
+        {
+          wristDeviationDegrees: number
+          validation: Record<
+            string,
+            {
+              driftMm: number
+              fleshDepthMm: number
+              palmGapMm: number
+              sightIntrusionMm: number
+              triggerGapMm?: number
+            }
+          >
+        }
+      >
+    }
+    expect(Object.keys(extras.report)).toContain('L')
+    for (const side of Object.values(extras.report)) {
+      expect(Math.abs(side.wristDeviationDegrees)).toBeLessThanOrEqual(45)
+      for (const metrics of Object.values(side.validation)) {
+        expect(metrics.driftMm).toBeLessThan(0.5)
+        expect(metrics.fleshDepthMm).toBeLessThan(1.5)
+        expect(metrics.palmGapMm).toBeLessThan(1.5)
+        expect(metrics.sightIntrusionMm).toBe(0)
+        expect(metrics.triggerGapMm ?? 0).toBeLessThan(2)
       }
     }
-    expect(Math.abs(extras.report.wristDeviationDegrees)).toBeLessThanOrEqual(45)
-    for (const metrics of Object.values(extras.report.validation)) {
-      expect(metrics.driftMm).toBeLessThan(0.5)
-      expect(metrics.fleshDepthMm).toBeLessThan(1.5)
-      expect(metrics.palmGapMm).toBeLessThan(1)
-    }
+    const probes = Object.keys(extras.report).flatMap((side) =>
+      ['UpperArm', 'Index2', 'Thumb1'].map((bone) => bone + side),
+    )
     const actions = await io.read(`${source}/held-actions-${kind}.glb`)
     for (const name of [`Hold_${kind}`, `Shoot_${kind}`]) {
       const find = (doc: typeof grip) =>
@@ -67,7 +87,7 @@ it('long-gun grips are current, gun-locked between keys and preserve every unown
       }
       for (const clip of [name, `Crouch_${name}`]) {
         const runtime = tracks(baked(clip))
-        for (const bone of ['UpperArmL', 'Index2L', 'Thumb1L']) {
+        for (const bone of probes) {
           const expected = authored.get(`${bone}.rotation`)?.slice(0, 4) ?? []
           const actual = runtime.get(`${bone}.rotation`)?.slice(0, 4) ?? []
           expect(
