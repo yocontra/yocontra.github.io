@@ -1,19 +1,28 @@
-import { type Asset, Entity, Vec3 } from 'playcanvas'
+import { Vec3 } from 'playcanvas'
 import {
   SHOT_HIT,
   SHOT_RIFLE,
   SHOT_SHOTGUN,
   SHOT_WALL,
+  WEAPON_REVOLVER,
   WEAPON_RIFLE,
   WEAPON_SHOTGUN,
 } from '../contract/town.ts'
 import { canFire, pressed } from '../ffa/sim/combat.ts'
-import { REVOLVER_FIRE_MS, RIFLE_FIRE_MS, SHOTGUN_FIRE_MS } from '../ffa/sim/constants.ts'
+import {
+  BODY_HEIGHT,
+  REVOLVER_FIRE_MS,
+  RIFLE_FIRE_MS,
+  SHOTGUN_FIRE_MS,
+} from '../ffa/sim/constants.ts'
+import type { Grid } from '../ffa/sim/layout.ts'
 import type { Player, SimEvent } from '../ffa/sim/types.ts'
 import { haptic } from '../platform/haptics.ts'
 import { Buttons, type PlayerInput, type PlayerState } from '../runtime/protocol.ts'
 import { getSettings, reducedMotion } from '../settings.ts'
 import type { GameApplication } from './application.ts'
+import { FrontierAudio } from './frontier-audio.ts'
+import { type FrontierSound, preloadFrontierAudio } from './frontier-sounds.ts'
 import { poseEye } from './player-pose.ts'
 import { ShotFeedback } from './shot-feedback.ts'
 import {
@@ -28,57 +37,35 @@ interface EffectHooks {
   fire?: (id: string) => void
   muzzle?: (id: string) => { position: Vec3; direction: Vec3 } | null
   trace?: (from: Vec3, to: Vec3) => Vec3 | null | undefined
+  /** The presented riders, the local rider's id, combat state and loadouts, for world audio. */
+  riders?: () => ReadonlyMap<string, PlayerState>
+  selfId?: () => string
+  world?: () => { readonly players: readonly (Player | null)[]; readonly grid: Grid } | undefined
+  spurs?: (id: string) => string | undefined
 }
 interface PendingShot {
   trace: ShotTrace | undefined
   end?: Point
   pellets?: readonly Point[]
 }
-const REVOLVER = { sound: 'shot', interval: REVOLVER_FIRE_MS, kick: 0.012, flash: 0.09 }
-const RIFLE = { sound: 'rifle', interval: RIFLE_FIRE_MS, kick: 0.016, flash: 0.09 }
-const SHOTGUN = { sound: 'shotgun', interval: SHOTGUN_FIRE_MS, kick: 0.022, flash: 0.14 }
-const WEAPON_REPORTS = new Map([
+const REVOLVER = {
+  sound: 'revolver',
+  interval: REVOLVER_FIRE_MS,
+  kick: 0.012,
+  flash: 0.09,
+} as const
+const RIFLE = { sound: 'rifle', interval: RIFLE_FIRE_MS, kick: 0.016, flash: 0.09 } as const
+const SHOTGUN = { sound: 'shotgun', interval: SHOTGUN_FIRE_MS, kick: 0.022, flash: 0.14 } as const
+type Report = typeof REVOLVER | typeof RIFLE | typeof SHOTGUN
+const WEAPON_REPORTS = new Map<number, Report>([
   [WEAPON_RIFLE, RIFLE],
   [WEAPON_SHOTGUN, SHOTGUN],
 ])
-const sounds = new WeakMap<GameApplication, Promise<Map<string, Asset>>>()
-function loadSounds(game: GameApplication): Promise<Map<string, Asset>> {
-  const previous = sounds.get(game)
-  if (previous) {
-    return previous
-  }
-  const assets = new Map<string, Asset>()
-  const ready = Promise.all(
-    [
-      ['shot', 'rev_close'],
-      ['tail', 'rev_tail'],
-      ['rifle', 'rifle'],
-      ['shotgun', 'shotgun'],
-      ['reload', 'shotgun_load'],
-      ['hit', 'bodyfall'],
-      ['coin', 'coin'],
-      ['deposit', 'deposit'],
-      ['bell', 'bell'],
-      ['fake0', 'crow'],
-      ['fake1', 'cock'],
-      ['fake2', 'door'],
-      ['explosion', 'explosion'],
-      ['respawn', 'respawn'],
-    ].map(async ([name, file]) => {
-      try {
-        const asset = await game.loadAudio(`/experiments/out-west/3d/sfx/${file}.m4a`)
-        if (name) {
-          assets.set(name, asset)
-        }
-      } catch {
-        // A missing optional report must not prevent joining the town.
-      }
-    }),
-  ).then(() => assets)
-  sounds.set(game, ready)
-  return ready
-}
-function reportForFlags(flags: number) {
+/** Pellet strikes heard per shotgun blast (the rest land under them). */
+const PELLET_SOUNDS = 3
+/** Poses carry the standing capsule's centre; the boots are half a body below it. */
+const sole = (pose: PlayerState): number => pose.y - BODY_HEIGHT / 2
+function reportForFlags(flags: number): Report {
   if (flags & SHOT_RIFLE) {
     return RIFLE
   }
@@ -93,8 +80,9 @@ export class GameEffects {
   private readonly game: GameApplication
   private readonly hooks: EffectHooks
   private readonly visuals: ShotVisuals
-  private readonly emitters = new Map<number, Entity>()
-  private readonly soundAssets = new Map<string, Asset>()
+  private readonly audio: FrontierAudio
+  /** Each rider's reload and weapon last frame, for the foley edges. */
+  private readonly hands = new Map<number, { reload: number; weapon: number }>()
   private readonly abort = new AbortController()
   private readonly start = new Vec3()
   private readonly end = new Vec3()
@@ -108,7 +96,7 @@ export class GameEffects {
         pending: PendingShot
         player: Player
         weapon: number
-        report: typeof REVOLVER
+        report: Report
         muzzle: ReturnType<NonNullable<EffectHooks['muzzle']>>
         input: PlayerInput
       }
@@ -117,20 +105,21 @@ export class GameEffects {
     return this.kick
   }
   static preloadAudio(game: GameApplication): Promise<void> {
-    return loadSounds(game).then(() => undefined)
+    return preloadFrontierAudio(game)
   }
   constructor(game: GameApplication, hooks: EffectHooks = {}) {
     this.game = game
     this.hooks = hooks
     this.visuals = shotVisuals(game)
     game.camera.addComponent('audiolistener')
-    this.ready = loadSounds(game).then((assets) => {
-      if (!this.abort.signal.aborted) {
-        for (const [name, asset] of assets) {
-          this.soundAssets.set(name, asset)
-        }
-      }
+    this.audio = new FrontierAudio(game, {
+      ...(hooks.trace ? { trace: hooks.trace } : {}),
+      ...(hooks.world ? { grid: () => hooks.world?.()?.grid } : {}),
     })
+    this.ready = this.audio.ready
+    if (import.meta.env.DEV) {
+      Reflect.set(globalThis, '__frontierAudio', this.audio)
+    }
     game.app.on('update', this.update)
     globalThis.addEventListener('pointerup', this.resumeAudio, {
       signal: this.abort.signal,
@@ -144,18 +133,89 @@ export class GameEffects {
     if (event.type === 'shot') {
       this.confirmShot(event)
     } else if (event.type === 'showdown_call') {
-      this.play(-1, 'bell', this.game.camera.getPosition())
+      this.audio.play('bell', null)
     } else if (event.type === 'showdown_fake') {
-      this.play(-1, `fake${event.cue % 3}`, this.game.camera.getPosition())
+      this.audio.play(`fake${event.cue % 3}` as FrontierSound, null)
     } else if (event.type === 'explosion') {
-      this.play(event.by, 'explosion', { x: event.x, y: 0.5, z: event.z })
+      this.audio.play(
+        'explosion',
+        { x: event.x, y: 0.5, z: event.z },
+        { range: 'gun', air: true, space: 0.9 },
+      )
+    } else if (event.type === 'damage') {
+      if (event.attacker === this.self()) {
+        this.audio.hitMarker(false)
+      }
     } else if (event.type === 'kill') {
-      this.play(-1, 'hit', this.game.camera.getPosition())
+      this.killed(event.victim, event.killer)
     } else if (event.type === 'deposit') {
-      this.play(event.player, 'deposit', this.game.camera.getPosition())
+      this.audio.play('deposit', event.player === this.self() ? null : this.riderAt(event.player), {
+        range: 'foley',
+      })
     } else if (event.type === 'respawn') {
-      this.play(event.player, 'respawn', this.game.camera.getPosition())
+      if (event.player === this.self()) {
+        this.audio.play('respawn', null)
+      }
+    } else if (event.type === 'showdown_start') {
+      const mine = [event.showdown.a, event.showdown.b].includes(this.self())
+      this.audio.tension(true, mine)
+    } else if (event.type === 'showdown_end') {
+      this.audio.tension(false, false)
     }
+  }
+  private self(): number {
+    return Number(this.hooks.selfId?.() ?? -1)
+  }
+  private riderAt(slot: number): Point | null {
+    const pose = this.hooks.riders?.().get(String(slot))
+    return pose ? { x: pose.x, y: sole(pose) + 1, z: pose.z } : null
+  }
+  private killed(victim: number, killer: number): void {
+    if (killer === this.self() && victim !== killer) {
+      this.audio.hitMarker(true)
+    }
+    const at = this.riderAt(victim)
+    if (at) {
+      this.audio.play('fall', { ...at, y: at.y - 0.8 }, { range: 'impact', volume: 0.8 })
+    }
+  }
+  /** Bullet strikes for an authoritative shot: the main end, and a few of a blast's pellets. */
+  private strikes(event: Extract<SimEvent, { type: 'shot' }>): void {
+    if (event.flags & SHOT_HIT) {
+      this.audio.impact('body', event.end)
+    } else if (event.flags & SHOT_WALL && !this.audio.impactAt(event.end)) {
+      this.audio.impact('wood', event.end)
+    }
+    let heard = 0
+    for (const p of event.pellets) {
+      if (heard >= PELLET_SOUNDS) {
+        break
+      }
+      if (this.onRider(p)) {
+        this.audio.impact('body', p, 0.7)
+        heard++
+      } else if (this.audio.impactAt(p, 0.6)) {
+        heard++
+      }
+    }
+    if (event.shooter !== this.self()) {
+      const loud = Boolean(event.flags & SHOT_RIFLE)
+      for (const end of [event.end, ...event.pellets.slice(0, 2)]) {
+        this.audio.nearMiss(event.origin, end, loud)
+      }
+    }
+  }
+  private onRider(p: Point): boolean {
+    for (const pose of this.hooks.riders?.().values() ?? []) {
+      if (
+        Math.hypot(p.x - pose.x, p.z - pose.z) < 0.5 &&
+        p.y > sole(pose) - 0.1 &&
+        p.y < sole(pose) + BODY_HEIGHT + 0.1
+      ) {
+        return true
+      }
+    }
+    return false
   }
   private confirmShot(event: Extract<SimEvent, { type: 'shot' }>): void {
     const feedback = this.predicted.confirm(
@@ -193,6 +253,7 @@ export class GameEffects {
     if (event.flags & (SHOT_HIT | SHOT_WALL)) {
       this.visuals.impact(event.end, Boolean(event.flags & SHOT_HIT))
     }
+    this.strikes(event)
   }
   predictShot(player: Player | null | undefined, input: PlayerInput): boolean {
     const pulled =
@@ -253,9 +314,8 @@ export class GameEffects {
     this.visuals.muzzle(origin, report.flash)
     this.report(player.id, report.sound, origin)
   }
-  private report(id: number, sound: string, at: Point): void {
-    this.play(id, sound, at)
-    this.play(id, 'tail', at)
+  private report(id: number, sound: Report['sound'], at: Point): void {
+    this.audio.gunshot(sound, at, id === this.self())
   }
   private readonly resumeAudio = (event: Event): void => {
     if (!event.isTrusted) {
@@ -271,39 +331,42 @@ export class GameEffects {
       void context?.resume().catch(() => undefined)
     }
   }
-  private play(id: number, name: string, position: Point): void {
-    const asset = this.soundAssets.get(name)
-    if (!asset) {
-      return
-    }
-    // Suspended/interrupted contexts do not finish sources, so overlapping one-shots would queue.
-    const manager = this.game.app.soundManager
-    if (manager.suspended || manager.context?.state !== 'running') {
-      return
-    }
-    let entity = this.emitters.get(id)
-    if (!entity) {
-      entity = new Entity(`sound-${id}`, this.game.app)
-      entity.addComponent('sound', { positional: true, refDistance: 5, maxDistance: 65 })
-      this.game.stage.addChild(entity)
-      this.emitters.set(id, entity)
-    }
-    entity.setPosition(position.x, position.y, position.z)
-    const sound = entity.sound
-    if (!sound) {
-      return
-    }
-    if (!sound.slot(name)) {
-      sound.addSlot(name, { asset: asset.id, overlap: true, volume: 0.7 })
-    }
-    const slot = sound.slot(name)
-    if (slot) {
-      slot.volume = name === 'bell' ? 1 : getSettings().sfx * (name === 'tail' ? 0.25 : 0.7)
-    }
-    sound.play(name)
-  }
   private readonly update = (dt: number): void => {
     this.kick = Math.max(0, this.kick - dt * 0.2)
+    const riders = this.hooks.riders?.()
+    if (!riders) {
+      return
+    }
+    const self = this.hooks.selfId?.() ?? ''
+    this.audio.update(dt, riders, self, (id) => this.hooks.spurs?.(id))
+    this.handFoley(riders, Number(self))
+  }
+  /** Reload and weapon-change foley at each rider who just started one. */
+  private handFoley(riders: ReadonlyMap<string, PlayerState>, self: number): void {
+    for (const p of this.hooks.world?.()?.players ?? []) {
+      if (!p) {
+        continue
+      }
+      const was = this.hands.get(p.id)
+      this.hands.set(p.id, { reload: p.reloadTicks, weapon: p.weapon })
+      if (!(was && p.alive)) {
+        continue
+      }
+      const pose = riders.get(String(p.id))
+      if (!pose) {
+        continue
+      }
+      const at = { x: pose.x, y: sole(pose) + 1.1, z: pose.z }
+      if (p.weapon !== was.weapon) {
+        this.audio.foley('holster', at, p.id === self)
+      } else if (p.reloadTicks > 0 && was.reload <= 0) {
+        this.audio.foley(
+          p.weapon === WEAPON_REVOLVER ? 'reload-revolver' : 'reload-shell',
+          at,
+          p.id === self,
+        )
+      }
+    }
   }
   reset(): void {
     this.queued = undefined
@@ -317,11 +380,12 @@ export class GameEffects {
     this.queued = undefined
     this.abort.abort()
     this.game.app.off('update', this.update)
-    for (const emitter of this.emitters.values()) {
-      emitter.destroy()
+    this.audio.destroy()
+    if (import.meta.env.DEV) {
+      Reflect.deleteProperty(globalThis, '__frontierAudio')
     }
+    this.hands.clear()
     this.predicted.clear()
-    this.emitters.clear()
     this.visuals.destroy()
   }
 }

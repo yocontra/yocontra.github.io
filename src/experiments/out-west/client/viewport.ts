@@ -172,6 +172,10 @@ function createEffects(
     fire: (id) => actors.fire(id),
     muzzle: (id) => actors.muzzle(id),
     trace: (from, to) => session.cameraTrace?.(from, to),
+    riders: () => session.players,
+    selfId: () => session.selfId,
+    world: () => session.world,
+    spurs: (id) => session.appearance?.(id)?.loadout.spurs,
   })
 }
 
