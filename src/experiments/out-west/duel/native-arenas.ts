@@ -154,6 +154,18 @@ export class NativeArenas {
   toll(): void {
     this.environment.toll()
   }
+  clockFace() {
+    return this.environment.clockFace()
+  }
+  posterAnchor() {
+    return this.environment.posterAnchor()
+  }
+  posterImage() {
+    return this.environment.posterImage()
+  }
+  stampPoster(index: number, stamp: 'coward' | 'dead' | null): void {
+    this.environment.poster(index, stamp)
+  }
   dailyFog(enabled: boolean): void {
     this.dailyDenseFog = enabled
     this.environment.dailyFog(enabled)

@@ -43,7 +43,8 @@ it('heckles a stalled walk at six seconds and shoots him in the back after twelv
     frames(sim, FEEL.stallHeckle + 0.1)
     expect(sim.d.stallHeckled).toBe(true)
     expect(sim.d.phase).toBe('walk')
-    frames(sim, FEEL.stallBackShot - FEEL.stallHeckle)
+    // he turns and fires; the shot lands a third of a second later, as in the original
+    frames(sim, FEEL.stallBackShot - FEEL.stallHeckle + 0.4)
     expect(sim.d.phase).toBe('lose')
     expect(sim.d.c.save.run.duels.at(-1)).toEqual({ level: 0, outcome: 'loss', reactionMs: null })
   } finally {

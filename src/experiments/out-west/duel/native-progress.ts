@@ -1,5 +1,4 @@
 import { ASSETS, DYNAMIC_ASSETS } from '../content/manifest.ts'
-import { money } from '../data/economy.ts'
 import { OUTLAWS } from '../data/outlaws.ts'
 import { interlude } from '../meta/events.ts'
 import type { RankedSession } from '../net/ranked.ts'
@@ -11,6 +10,8 @@ import { DuelActor } from './native-actor.ts'
 import { arenaForSlot } from './native-arenas.ts'
 import { resetAttempt, STEADY_MS } from './native-combat.ts'
 import type { NativeDirector } from './native-director.ts'
+import { endShot } from './native-framing.ts'
+import { enterCock, enterPoster, setStage } from './native-standoff.ts'
 import { RankedDuelClock } from './ranked-clock.ts'
 
 /** Prepare disabled actors behind the director's stage gate; the caller owns every candidate. */
@@ -57,16 +58,8 @@ export async function loadLevelActors(d: NativeDirector, epoch: number, pending:
 
 export function presentLevel(d: NativeDirector, isRetry: boolean): void {
   d.player?.root.setLocalScale(1, 1, 1)
-  if (d.player) {
-    d.player.root.enabled = true
-  }
-  d.player?.place(0, 0, -0.4)
-  d.player?.face(180)
-  d.player?.play('Idle')
-  d.enemy?.place(0, 0, 0.4)
-  d.enemy?.face(0)
   d.bossPhase = 1
-  d.c.audio.playSong('intro')
+  setStage(d)
   d.walkLines = 0
   d.walked = 0
   resetAttempt(d)
@@ -81,17 +74,13 @@ export function presentLevel(d: NativeDirector, isRetry: boolean): void {
   d.c.hud.setPurse(d.c.save.run.total, false)
   d.c.hud.hideCard()
   d.c.hud.clearCall()
+  d.c.hud.clearCaptions()
   d.c.hud.setPips(0, false)
   d.c.hud.show(true)
-  d.enter(isRetry ? 'cock' : 'poster')
-  if (!isRetry) {
-    d.c.hud.showCard({
-      kind: 'info',
-      title: 'WANTED',
-      big: d.outlaw?.name ?? '',
-      sub: `${money(d.outlaw?.bounty ?? 0)} bounty`,
-      hint: 'Hold to walk · Draw only after the call',
-    })
+  if (isRetry) {
+    enterCock(d)
+  } else {
+    enterPoster(d)
     if (!d.c.save.seenPosters.includes(d.level)) {
       d.c.save.seenPosters.push(d.level)
     }
@@ -174,6 +163,7 @@ export function finishRun(d: NativeDirector): void {
   save(data)
   d.c.hud.hideCard()
   d.c.hud.show(false)
+  endShot(d)
   const rows = OUTLAWS.map((outlaw, level) => ({
     name: outlaw.name,
     ms: data.best[level]?.ms ?? null,

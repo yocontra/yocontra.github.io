@@ -74,6 +74,7 @@ export class NativeEnvironment {
   private readonly windows = new Set<StandardMaterial>()
   private readonly posterMaterials = new Set<StandardMaterial>()
   private readonly posterLights = new Set<Entity>()
+  private readonly posterNodes = new Set<Entity>()
   private posterLightIntensity = 0
   private readonly cloudMaterials = new Set<StandardMaterial>()
   private readonly groundMaterials = new Set<StandardMaterial>()
@@ -159,6 +160,34 @@ export class NativeEnvironment {
   }
   toll(): void {
     this.clockwork?.toll()
+  }
+  /** The visible clock face's centre, for the duel's clock inserts. */
+  clockFace(): Vec3 | null {
+    return this.streetVisible ? (this.clockwork?.face() ?? null) : null
+  }
+  /** The poster as currently printed (stamps included), for the result card. */
+  posterImage(): string | null {
+    return this.posterCanvas?.toDataURL('image/jpeg', 0.8) ?? null
+  }
+  /** The visible wanted paper's centre and the way it faces, for the poster shot. */
+  posterAnchor(): { center: Vec3; normal: Vec3 } | null {
+    for (const node of this.posterNodes) {
+      if (!(node.enabled && node.parent?.enabled && node.render)) {
+        continue
+      }
+      const box = node.render.meshInstances[0]?.aabb
+      if (!box) {
+        continue
+      }
+      const center = box.center.clone()
+      const h = box.halfExtents
+      const normal =
+        h.x < h.z
+          ? new Vec3(-Math.sign(center.x) || 1, 0, 0)
+          : new Vec3(0, 0, -Math.sign(center.z) || 1)
+      return { center, normal }
+    }
+    return null
   }
   private readonly updateClouds = (dt: number): void => {
     this.cloudTime = (this.cloudTime + dt) % 3600
@@ -261,13 +290,13 @@ export class NativeEnvironment {
     fog.start = this.fogStart
     fog.end = this.fogEnd
   }
-  poster(index: number): void {
+  poster(index: number, stamp: 'coward' | 'dead' | null = null): void {
     const outlaw = OUTLAWS[index]
     if (!outlaw || this.disposed) {
       return
     }
     this.posterCanvas ??= document.createElement('canvas')
-    drawPoster(this.posterCanvas, outlaw, { index, stamp: null })
+    drawPoster(this.posterCanvas, outlaw, { index, stamp })
     this.posterTexture ??= new Texture(this.game.app.graphicsDevice, {
       name: 'campaign-wanted-poster',
       format: PIXELFORMAT_RGBA8,
@@ -288,8 +317,12 @@ export class NativeEnvironment {
   private ownMaterial(
     original: StandardMaterial,
     clones: Map<StandardMaterial, StandardMaterial>,
-    nodeName: string,
+    node: Entity,
   ): StandardMaterial {
+    const nodeName = node.name
+    if (original.name === 'WantedPaper') {
+      this.posterNodes.add(node)
+    }
     let material = clones.get(original)
     if (!material) {
       material = original.clone()
@@ -330,7 +363,7 @@ export class NativeEnvironment {
         if (!(original instanceof StandardMaterial)) {
           continue
         }
-        instance.material = this.ownMaterial(original, clones, component.entity.name)
+        instance.material = this.ownMaterial(original, clones, component.entity)
         if (
           component.entity.name.startsWith('flora-') ||
           component.entity.name.startsWith('impostors-')
@@ -368,6 +401,11 @@ export class NativeEnvironment {
     root.once('destroy', () => {
       if (posterLight instanceof Entity) {
         this.posterLights.delete(posterLight)
+      }
+      for (const node of this.posterNodes) {
+        if (node === root || node.isDescendantOf(root)) {
+          this.posterNodes.delete(node)
+        }
       }
       for (const id of this.groups.get(root) ?? []) {
         this.game.app.batcher?.removeGroup(id)

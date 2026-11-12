@@ -1,3 +1,4 @@
+import { BoundingBox, type RenderComponent, type Vec3 } from 'playcanvas'
 import { AMBIENT_ASSETS } from '../content/ambient.ts'
 import { DuelActor } from '../duel/native-actor.ts'
 import type { GameApplication } from './application.ts'
@@ -40,6 +41,22 @@ export class NativeClockwork {
     this.boss = boss
     const hour = day < 0.5 ? 12 + Math.round(day * 12) : Math.round(day * 12)
     this.hands.play(boss ? 'Clock_11_59' : `Clock_${hour % 12}`, 0.12)
+  }
+  /** The centre of the hands, i.e. the clock face. */
+  face(): Vec3 | null {
+    const box = new BoundingBox()
+    let found = false
+    for (const component of this.hands.root.findComponents('render')) {
+      for (const mesh of (component as RenderComponent).meshInstances) {
+        if (found) {
+          box.add(mesh.aabb)
+        } else {
+          box.copy(mesh.aabb)
+          found = true
+        }
+      }
+    }
+    return found ? box.center.clone() : null
   }
   toll(): void {
     if (this.boss) {

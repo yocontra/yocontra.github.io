@@ -3,6 +3,7 @@ import type { GameApplication } from '../client/application.ts'
 import { DEFAULT_LOADOUT, type Loadout } from '../data/catalog.ts'
 import type { Dyes } from '../data/dye.ts'
 import type { DuelOutcome } from '../data/economy.ts'
+import { FEEL } from '../data/feel.ts'
 import { OUTLAWS } from '../data/outlaws.ts'
 import type { Input, Press } from '../engine/input.ts'
 import type { Result } from '../net/leaderboard.ts'
@@ -17,6 +18,7 @@ import type { DrawPlan } from './judge.ts'
 import type { DuelActor } from './native-actor.ts'
 import { NativeArenas } from './native-arenas.ts'
 import { NativeAtmosphere } from './native-atmosphere.ts'
+import { CameraRig } from './native-camera.ts'
 import {
   call,
   playCue as nativeCue,
@@ -26,6 +28,8 @@ import {
   shoot,
   wait,
 } from './native-combat.ts'
+import { NativeDust } from './native-dust.ts'
+import { clearMoments, Moments } from './native-moments.ts'
 import { hubShot, lineup, posters, remotePace, update } from './native-presentation.ts'
 import {
   advance,
@@ -130,6 +134,16 @@ export class NativeDirector {
   readonly arenas: NativeArenas
   readonly debris = new NativeDebris()
   readonly atmosphere: NativeAtmosphere
+  readonly rig: CameraRig
+  readonly dust: NativeDust
+  /** Per-attempt presentation (camera beats, slow-mo, cards); see native-moments.ts. */
+  m = new Moments()
+  pushing = false as boolean
+  pushStart = 0
+  killOrbit = 0
+  killDur: number = FEEL.killCamSeconds
+  clockInsertUntil = 0
+  lastFrame = 0
   readonly game: GameApplication
   readonly c: NativeContext
   readonly connectRanked: NativeRankedConnect | null
@@ -140,6 +154,8 @@ export class NativeDirector {
     this.game = game
     this.arenas = new NativeArenas(game)
     this.atmosphere = new NativeAtmosphere(game)
+    this.rig = new CameraRig(game.camera)
+    this.dust = new NativeDust(game)
     this.c = c
     this.connectRanked = connectRanked
     this.board = new Board(c.hud.root)
@@ -190,7 +206,9 @@ export class NativeDirector {
     this.clock.dispose()
     this.c.input.dispose()
     this.board.close()
+    clearMoments(this)
     this.debris.destroy()
+    this.dust.destroy()
     this.arenas.destroy()
     this.atmosphere.destroy()
     this.player?.destroy()
@@ -216,6 +234,7 @@ export class NativeDirector {
       equippedActor(this.game, DEFAULT_LOADOUT),
       this.atmosphere.load(),
       this.debris.ready,
+      this.dust.ready,
     ])
     this.player = player
     this.player.root.enabled = false

@@ -17,7 +17,23 @@ import { save } from '../save.ts'
 import type { Verdict } from './clock.ts'
 import { type EnemyShot, planShots, shotsBefore } from './judge.ts'
 import type { NativeDirector } from './native-director.ts'
+import type { PendingCard } from './native-moments.ts'
+import {
+  beginBossWound,
+  beginCoward,
+  beginLose,
+  beginWin,
+  focusRemaining,
+  killEnemyAnim,
+  killRifleman,
+  lateDraw,
+  medalNote,
+  missFx,
+  playerFireFx,
+  trickStamp,
+} from './native-outcome.ts'
 import { dropEnemyProps, duelShot, plannedShot } from './native-shot.ts'
+import { callMoment, enterWait, strike } from './native-standoff.ts'
 import { practicePurse } from './purse.ts'
 
 /** As the wait opens (and after a retry), presses are held this long ("steady…"), never fined. */
@@ -84,8 +100,7 @@ export function wait(d: NativeDirector): void {
   if (outlaw.gimmick === 'windy') {
     d.atmosphere.cue('gust', d.enemy)
   }
-  d.c.audio.musicLevel(FEEL.waitDuckDb, 0.5)
-  d.c.audio.musicLowpass(FEEL.waitLowpass, 0.5)
+  enterWait(d)
 }
 
 export function call(d: NativeDirector): void {
@@ -97,8 +112,6 @@ export function call(d: NativeDirector): void {
   // reactions count from the instant the bell is heard
   d.callTime = d.bellScheduled ? d.bellAt : now
   d.enter('call')
-  d.player?.face(0)
-  d.enemy?.face(180)
   d.player?.play('Draw', 0.03)
   d.enemy?.play('Draw', 0.03)
   if (!d.dailyModifiers.includes('no-bell')) {
@@ -109,13 +122,14 @@ export function call(d: NativeDirector): void {
     d.c.hud.call('DRAW!', FEEL.callHoldMs)
   }
   d.c.audio.heartbeat(0)
-  if (d.ranked || d.remote) {
-    return
+  if (!(d.ranked || d.remote)) {
+    planLocal(d, now)
   }
+  callMoment(d)
+}
+
+function planLocal(d: NativeDirector, now: number): void {
   const outlaw = d.outlaw
-  if (!outlaw) {
-    return
-  }
   const baseDraw = d.bossPhase === 2 ? BOSS_PHASE2.draw : outlaw.draw
   const draw = d.c.save.legend ? legendDraw(d.level) : baseDraw
   const baseJitter = d.bossPhase === 2 ? BOSS_PHASE2.jitter : outlaw.jitter
@@ -143,9 +157,11 @@ export function playCue(d: NativeDirector, cue: string): void {
   if (d.phase !== 'wait' && !d.remote) {
     return
   }
-  if (!cue.startsWith('strike:')) {
-    d.fakes++
+  if (cue.startsWith('strike:')) {
+    strike(d, Number(cue.slice('strike:'.length)) || 6)
+    return
   }
+  d.fakes++
   d.atmosphere.cue(cue, d.enemy)
   d.c.hud.fake(`[${cue.replaceAll('-', ' ')}]`, 1500)
   const sounds: Readonly<Record<string, SfxName>> = {
@@ -165,7 +181,7 @@ export function playCue(d: NativeDirector, cue: string): void {
     twitch: 'holster',
     miscount: 'bell',
   }
-  const sound = cue.startsWith('strike:') ? 'bell' : sounds[cue]
+  const sound = sounds[cue]
   if (sound) {
     d.c.audio.play(sound, { gain: 0.5 })
   }
@@ -176,7 +192,7 @@ export function playCue(d: NativeDirector, cue: string): void {
 
 function earlyShot(d: NativeDirector, input: Press): void {
   if (input.t < d.steadyUntil) {
-    d.c.hud.fake('steady…')
+    d.c.hud.fake('steady…', Math.max(300, d.steadyUntil - input.t))
     return
   }
   // how early, as negative ms before the call (-1 when no call was set yet)
@@ -186,6 +202,7 @@ function earlyShot(d: NativeDirector, input: Press): void {
   if (d.duel < 0) {
     d.wait()
   }
+  d.m.cowardEarlyMs = early < -1 ? -early : null
   d.clock.shot(0, null)
   if (!d.ranked) {
     d.resolve('coward', early)
@@ -221,6 +238,9 @@ export function handlePress(d: NativeDirector, input: Press): void {
     case 'coward':
       if (d.phaseT > FEEL.loseRetryPress) {
         d.retry()
+      } else if (d.phase === 'lose' && input.action === 'fire') {
+        // the press that came just too late goes on the lose card
+        lateDraw(d, input.t)
       }
       return
     case 'wait':
@@ -230,7 +250,7 @@ export function handlePress(d: NativeDirector, input: Press): void {
       return
     case 'walk':
       // pointer presses during the walk are walking; a fire key is a back-shot
-      if (input.action === 'fire' && input.source === 'key') {
+      if (input.action === 'fire' && input.source === 'key' && d.m.backShotAt === 0) {
         earlyShot(d, input)
       }
       return
@@ -322,7 +342,7 @@ export function shoot(d: NativeDirector, press: Press): void {
   const target = shotTarget(d)
   d.shots++
   d.reactionMs ??= ms
-  d.c.audio.play('fire', { gain: 0.8 })
+  playerFireFx(d)
   const victim = d.riflemanAlive && (target === 0 || !d.enemyAlive) ? d.rifleman : d.enemy
   duelShot(d, d.player, victim)
   trickShot(d, press, target)
@@ -334,12 +354,20 @@ export function shoot(d: NativeDirector, press: Press): void {
     d.riflemanAlive = false
     dropEnemyProps(d, d.rifleman)
     d.rifleman?.play('Death', 0)
+    killRifleman(d)
+    if (d.enemyAlive) {
+      focusRemaining(d, 0)
+    }
   } else {
     d.enemyAlive = false
-    if (d.outlaw.gimmick !== 'boss' || d.bossPhase !== 1) {
+    const wound = d.outlaw.gimmick === 'boss' && d.bossPhase === 1
+    if (!wound) {
       dropEnemyProps(d, d.enemy)
+      killEnemyAnim(d, d.enemy)
     }
-    d.enemy?.play('Death', 0)
+    if (d.riflemanAlive) {
+      focusRemaining(d, 1)
+    }
   }
   if (!(d.enemyAlive || d.riflemanAlive)) {
     // the ledger's number is the first press, also when two targets fall
@@ -352,9 +380,12 @@ export function enemyFires(d: NativeDirector, shot: EnemyShot): void {
   shot.done = true
   plannedShot(d, shot)
   if (shot.hit) {
+    d.m.hisMs = shot.t - d.callTime
+    d.m.loseReason = shot.who === 1 ? 'The rifleman got you.' : ''
     d.resolve('loss', d.reactionMs)
   } else {
     d.secondChance = true
+    missFx(d)
   }
 }
 
@@ -363,6 +394,7 @@ export function applyVerdict(d: NativeDirector, verdict: Verdict): void {
     return
   }
   if (verdict.outcome === 'loss' && verdict.enemyMs !== null && d.phase !== 'lose') {
+    d.m.hisMs = verdict.enemyMs
     duelShot(d, d.enemy, d.player)
     d.c.audio.play('fireBig', {
       gain: 1.1,
@@ -392,21 +424,31 @@ export function resolve(
     d.bossPhase = 2
     d.enemyAlive = true
     d.secondChance = false
-    d.enemy?.play('HitRecieve', 0)
     d.enter('bossWound')
+    beginBossWound(d)
     return
   }
   d.enter(outcome === 'loss' ? 'lose' : outcome)
   if (outcome === 'win') {
     dropEnemyProps(d, d.enemy)
-    d.enemy?.play('Death', 0)
     dropEnemyProps(d, d.rifleman)
     d.rifleman?.play('Death', 0)
-  } else {
-    d.player?.play('Death', 0)
+  } else if (outcome === 'coward') {
+    dropEnemyProps(d, d.enemy)
   }
   const before = bookResult(d, outcome, ms, verdict)
-  showResult(d, { outcome, ms, verdict, before })
+  const card: PendingCard = {
+    outcome,
+    ms,
+    show: () => showResult(d, { outcome, ms, verdict, before }),
+  }
+  if (outcome === 'win') {
+    beginWin(d, card)
+  } else if (outcome === 'loss') {
+    beginLose(d, card)
+  } else {
+    beginCoward(d, card)
+  }
 }
 
 function bookResult(
@@ -469,16 +511,42 @@ function showResult(
       daily: d.daily,
     })
   }
-  const sub = outcome === 'coward' ? 'Wait for the call.' : `${d.outlaw.name} drew first.`
-  const hint = outcome === 'win' ? 'Tap to continue' : 'Tap to retry'
-  const titles = { win: 'BOUNTY COLLECTED', loss: 'TOO SLOW', coward: 'BACK-SHOT' }
+  const hint = outcome === 'win' ? 'press to continue' : 'press to try again'
+  const name = d.outlaw.name
+  const cowardSub = `You drew before the bell. No bounty. (Early draws: ${data.cowardice})`
+  const cards = {
+    win: { title: `${name.toUpperCase()} IS DEAD`, sub: gradeFor(ms ?? 0, d.secondChance) },
+    loss: {
+      title: 'YOU LOSE',
+      sub: d.m.loseReason === '' ? `${name} was quicker.` : d.m.loseReason,
+    },
+    coward: { title: 'COWARD.', sub: cowardSub },
+  }
   d.c.hud.showCard({
     kind: outcome === 'loss' ? 'lose' : outcome,
-    title: titles[outcome],
-    big: ms === null ? '—' : `${Math.max(0, Math.round(ms))} ms`,
-    sub: outcome === 'win' ? gradeFor(ms ?? 0, d.secondChance) : sub,
-    hint: d.daily ? 'Tap to return to the saloon' : hint,
+    title: cards[outcome].title,
+    big: outcome === 'win' && ms !== null ? `${Math.max(0, Math.round(ms))} ms` : '',
+    sub: cards[outcome].sub,
+    hint: d.daily ? 'press to return to the saloon' : hint,
   })
+  if (outcome === 'win' && ms !== null) {
+    d.c.hud.cardTimes({ you: ms, him: d.m.hisMs, note: medalNote(d, ms), himOnly: true })
+    d.c.hud.cardStamp(trickStamp(d))
+  } else if (outcome === 'coward') {
+    const poster = d.arenas.posterImage()
+    if (poster) {
+      d.c.hud.cardPoster(poster)
+    }
+    const early = d.m.cowardEarlyMs
+    d.c.hud.cardTimes({
+      you: null,
+      him: null,
+      note:
+        early === null
+          ? 'You drew before the bell.'
+          : `You drew ${Math.round(early)} ms before the bell.`,
+    })
+  }
   const delta = verdict?.payout ?? data.run.total - before
   d.c.hud.cardPayout(delta ? `${delta > 0 ? '+' : ''}${money(delta)}` : '')
   d.c.hud.setPurse(verdict?.purse ?? data.run.total, true)

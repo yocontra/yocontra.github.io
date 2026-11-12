@@ -27,6 +27,9 @@ export class DuelActor {
   private carryDrawn = false as boolean
   seatedHipOffset = 0.06
   walkSpeed = 1.13
+  /** Authored stride: metres per pace and seconds per full walk cycle. */
+  paceLength = 0.7
+  walkDuration = 1.24
   gaitSpeeds: Record<string, number> = {}
   private playbackRate = 1
   readonly root: Entity
@@ -187,6 +190,8 @@ export class DuelActor {
       ).data.gltf?.nodes?.find((node) => node.extras?.paceLength)?.extras
       if (metadata?.paceLength && metadata.walkDuration) {
         actor.walkSpeed = (metadata.paceLength * 2) / metadata.walkDuration
+        actor.paceLength = metadata.paceLength
+        actor.walkDuration = metadata.walkDuration
       }
       for (const { node, point } of authoredMounts(model)) {
         if (point.mode === 'drawn' || point.mode === 'holstered') {

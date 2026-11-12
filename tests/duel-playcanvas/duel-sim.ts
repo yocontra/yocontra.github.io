@@ -1,4 +1,5 @@
 import { spyOn } from 'bun:test'
+import * as shots from '../../src/experiments/out-west/client/shot-visuals.ts'
 import { OUTLAWS } from '../../src/experiments/out-west/data/outlaws.ts'
 import { LocalDuelClock } from '../../src/experiments/out-west/duel/clock.ts'
 import {
@@ -10,6 +11,7 @@ import {
   wait,
 } from '../../src/experiments/out-west/duel/native-combat.ts'
 import type { NativeDirector } from '../../src/experiments/out-west/duel/native-director.ts'
+import { Moments } from '../../src/experiments/out-west/duel/native-moments.ts'
 import { update } from '../../src/experiments/out-west/duel/native-presentation.ts'
 import { load } from '../../src/experiments/out-west/save.ts'
 
@@ -53,6 +55,7 @@ export function simulate(o: SimOptions) {
   let now = 10_000 + (o.phase0 ?? 0)
   const clockSpy = spyOn(performance, 'now').mockImplementation(() => now)
   const randomSpy = spyOn(Math, 'random').mockReturnValue(o.random)
+  const visualsSpy = spyOn(shots, 'shotVisuals').mockReturnValue(inert as shots.ShotVisuals)
   const outlaw = OUTLAWS[o.level]
   if (!outlaw) {
     throw new Error(`No outlaw ${o.level}`)
@@ -68,6 +71,8 @@ export function simulate(o: SimOptions) {
   const state = {
     phase: 'wait',
     phaseT: 0,
+    m: new Moments(),
+    lastFrame: 0,
     level: o.level,
     outlaw,
     ranked: false,
@@ -175,6 +180,7 @@ export function simulate(o: SimOptions) {
     restore(): void {
       clockSpy.mockRestore()
       randomSpy.mockRestore()
+      visualsSpy.mockRestore()
     },
   }
 }
