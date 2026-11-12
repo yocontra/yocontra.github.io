@@ -11,6 +11,9 @@ export interface Range {
   name?: string
   slot?: string
   swatch?: string
+  /** Authored surface with its own shared PBR maps (`tools/art/characters/textures`). */
+  surface?: string
+  variant?: string
 }
 export interface Pixels {
   data: Buffer

@@ -1,5 +1,7 @@
 /** Material boundaries and native PBR channel conversion for authored character surfaces. */
+import { resolve } from 'node:path'
 import type { Document, Mesh, Primitive } from '@gltf-transform/core'
+import sharp from 'sharp'
 import { DYES } from '../../src/experiments/out-west/data/dye.ts'
 import {
   appendPrimitive,
@@ -215,9 +217,16 @@ export async function convertCharacterSurface(
     normal: await pixels(normal),
     arm: await pixels(arm),
   }
-  const actual = ranges.length > 0 ? ranges : [{ start: 0, count: lum.getCount() }]
+  const all = ranges.length > 0 ? ranges : [{ start: 0, count: lum.getCount() }]
+  const actual = all.filter((range) => !range.surface)
   const colored = actual.filter((range) => lum.getScalar(range.start) > 0)
   const plain = actual.filter((range) => !(lum.getScalar(range.start) > 0))
+  await addSurfaced(
+    doc,
+    mesh,
+    primitive,
+    all.filter((range) => range.surface),
+  )
   const [normalUrl, armUrl, baseUrl] = await Promise.all([
     originalFile(normal, false),
     originalFile(arm, false),
@@ -227,6 +236,62 @@ export async function convertCharacterSurface(
   await addColored(doc, mesh, primitive, { colored, images, dyeable })
   mesh.removePrimitive(primitive)
   primitive.dispose()
+}
+
+async function surfaceFile(name: string, color: boolean): Promise<string> {
+  const image = await sharp(resolve('tools/art/characters/textures', name))
+    .ensureAlpha()
+    .raw()
+    .toBuffer({ resolveWithObject: true })
+  return imageFile(image.data, image.info.width, image.info.height, color)
+}
+/** Authored surfaces share one material and texture set per variant across every actor. */
+async function addSurfaced(
+  doc: Document,
+  mesh: Mesh,
+  primitive: Primitive,
+  surfaced: Range[],
+): Promise<void> {
+  const original = primitive.getMaterial()
+  const inputColor = primitive.getAttribute('COLOR_0')
+  if (surfaced.length === 0 || !(original && inputColor)) {
+    return
+  }
+  const groups = new Map<string, Range[]>()
+  for (const range of surfaced) {
+    const key = `${range.surface}.${range.variant ?? 'default'}`
+    groups.set(key, [...(groups.get(key) ?? []), range])
+  }
+  for (const [key, group] of groups) {
+    const [surface] = key.split('.')
+    const color = inputColor.clone()
+    for (const range of group) {
+      for (let index = range.start; index < range.start + range.count; index++) {
+        color.setElement(index, [1, 1, 1, 1].slice(0, color.getElementSize()))
+      }
+    }
+    const material = original
+      .clone()
+      .setName(surface === 'cowboy-boot' ? 'Boots' : (surface ?? 'Surface'))
+      .setBaseColorFactor([1, 1, 1, 1])
+      .setRoughnessFactor(1)
+      .setMetallicFactor(1)
+      .setExtras({
+        nativePbr: {
+          albedo: await surfaceFile(`${key}.albedo.png`, true),
+          normal: await surfaceFile(`${surface}.normal.png`, false),
+          arm: await surfaceFile(`${surface}.arm.png`, false),
+          ao: true,
+        },
+      })
+    material.setBaseColorTexture(null).setNormalTexture(null).setMetallicRoughnessTexture(null)
+    const indices = group.flatMap((range) => rangeIndices(primitive, range))
+    if (indices.length > 0) {
+      mesh.addPrimitive(
+        appendPrimitive(doc, primitive, indices, material).setAttribute('COLOR_0', color),
+      )
+    }
+  }
 }
 
 function mapPatchUV(

@@ -75,8 +75,14 @@ with linear roughness/metalness and fine surface normals compressed to shared KT
 Linen and worn leather receive semantic roughness adjustment during the atlas bake;
 the replacement waistcoat attenuates the old apron normal map's exaggerated folds.
 
-The continuous coat sleeves and boot transition sources are portable native-skin
-geometry in `coat-sleeves/` and `boot-bridges/`. Rebuild with Blender:
+The continuous coat sleeves are portable native-skin geometry in `coat-sleeves/`.
+`boot-bridges/` replaces every `RidingBoot` range with one canonical 1880s riding
+boot from `tools/content/cowboy-boot-model.py` (13 in scalloped shaft with pull
+loops, welted sole, underslung 1.7 in heel), placed from each body's ankle, knee
+and foot joints, and refits the trouser legs to fall over and tuck inside the rim.
+The same run paints the shared `textures/cowboy-boot.*` leather maps (chocolate,
+black and russet albedo plus one normal and one occlusion/roughness map); these
+bake to a separate `Boots` material shared by every actor. Rebuild with Blender:
 
 ```
 blender --background --factory-startup --python tools/content/coat-sleeves-authoring.py
