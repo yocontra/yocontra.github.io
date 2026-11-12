@@ -15,6 +15,7 @@ import {
   setRunFlag,
   setSetting,
 } from '../settings.ts'
+import { microphonePicker } from '../voice/input-picker.ts'
 import { button, el, panelSheet } from './sheet.ts'
 
 let uid = 0
@@ -115,7 +116,15 @@ function graphics(parent: HTMLElement): void {
 
 /** Open the Settings sheet over `root`. */
 export function openSettings(root: HTMLElement, onClose?: () => void): void {
-  const s = panelSheet(root, { title: 'Settings', cls: 'ow-set', ...(onClose ? { onClose } : {}) })
+  const lifetime = new AbortController()
+  const s = panelSheet(root, {
+    title: 'Settings',
+    cls: 'ow-set',
+    onClose: () => {
+      lifetime.abort()
+      onClose?.()
+    },
+  })
   const sound = el('section', 'ow-set-group', s.body)
   el('h3', 'ow-set-h', sound, 'Sound')
   slider(sound, 'Music', 'music')
@@ -157,6 +166,7 @@ export function openSettings(root: HTMLElement, onClose?: () => void): void {
     change: (on) => setSetting('voicePushToTalk', on),
   })
   slider(chat, 'Chat volume', 'voiceChatVolume')
+  microphonePicker(chat, lifetime.signal)
   el('p', 'ow-hub-note', chat, 'Headphones recommended: open speakers can echo into your mic.')
 
   const feel = el('section', 'ow-set-group', s.body)

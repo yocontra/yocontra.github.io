@@ -7,6 +7,7 @@
  * Every change applies at once and is saved per device.
  */
 import { getSettings, setSetting } from '../../settings.ts'
+import { microphonePicker } from '../../voice/input-picker.ts'
 import {
   ADS_SENS_RANGE,
   CONTROL_RANGE,
@@ -35,6 +36,7 @@ export class SettingsPanel {
   readonly el: HTMLElement
   private readonly hooks: PanelHooks
   private readonly touch: boolean
+  private readonly signal: AbortSignal
   private readonly viewBtns = new Map<ViewMode, HTMLButtonElement>()
   private readonly fov: HTMLInputElement
   private readonly fovOut: HTMLOutputElement
@@ -62,9 +64,10 @@ export class SettingsPanel {
   private voiceVol: HTMLInputElement | null = null
   private voiceVolOut: HTMLOutputElement | null = null
 
-  constructor(hooks: PanelHooks, touch: boolean) {
+  constructor(hooks: PanelHooks, touch: boolean, signal: AbortSignal) {
     this.hooks = hooks
     this.touch = touch
+    this.signal = signal
     this.el = document.createElement('div')
     this.el.className = 'fr-settings'
     const views = document.createElement('div')
@@ -253,6 +256,7 @@ export class SettingsPanel {
     })
     this.voiceVol = vol
     this.voiceVolOut = out
+    microphonePicker(this.el, this.signal)
   }
 
   /** A labelled checkbox row. */

@@ -74,6 +74,26 @@
     display: none;
   }
 }
+.ow-voice-input {
+  display: grid;
+  gap: 8px;
+  margin-block: 12px;
+  font: inherit;
+}
+.ow-voice-input select {
+  width: 100%;
+  min-height: 44px;
+  padding: 8px;
+  border: 1px solid var(--ow-rule, #746145);
+  border-radius: 4px;
+  color: var(--ow-bone, #efe4cc);
+  background: var(--ow-night, #18110b);
+  font: inherit;
+}
+.ow-voice-input [role="status"] {
+  font-size: 0.85em;
+  opacity: 0.8;
+}
 @media (pointer: coarse) {
   .ow-voice {
     bottom: max(84px, calc(env(safe-area-inset-bottom) + 64px));

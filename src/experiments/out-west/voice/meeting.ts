@@ -1,5 +1,6 @@
 import type Client from '@cloudflare/realtimekit'
 import type { RTKParticipant } from '@cloudflare/realtimekit'
+import { reportMicrophoneAccess } from './input-device.ts'
 
 const GAME_ID = /^\d+$/u
 
@@ -10,13 +11,18 @@ export interface VoiceCredentials {
 }
 
 /** Standby capture is local and needs no SDK import, meeting, token, or provider connection. */
-export async function captureMicrophone(): Promise<MediaStreamTrack> {
+export async function captureMicrophone(deviceId = ''): Promise<MediaStreamTrack> {
   if (!(globalThis.isSecureContext && navigator.mediaDevices?.getUserMedia)) {
     throw new Error('Microphone access requires HTTPS and a browser with voice support.')
   }
   try {
     const stream = await navigator.mediaDevices.getUserMedia({
-      audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
+      audio: {
+        echoCancellation: true,
+        noiseSuppression: true,
+        autoGainControl: true,
+        ...(deviceId ? { deviceId: { exact: deviceId } } : {}),
+      },
       video: false,
     })
     const track = stream.getAudioTracks()[0]
@@ -28,6 +34,7 @@ export async function captureMicrophone(): Promise<MediaStreamTrack> {
     if (!track) {
       throw new Error(microphoneFailure(undefined))
     }
+    reportMicrophoneAccess()
     return track
   } catch (error) {
     if (error instanceof DOMException) {

@@ -4,10 +4,19 @@ import {
   type VoiceClientControl,
   type VoiceServerControl,
 } from '../contract/voice.ts'
+import {
+  availableMicrophones,
+  getMicrophoneInput,
+  onMicrophoneInput,
+  setMicrophoneInput,
+  systemDefaultMoved,
+} from './input-device.ts'
 import { captureMicrophone } from './meeting.ts'
 import type { MicrophoneActivity, VoiceAudio } from './native-audio.ts'
 import type { VoicePeer } from './rank.ts'
 import { VoiceTransport } from './transport.ts'
+
+const RESTART_WINDOW_MS = 5000
 
 export type { VoiceCredentials } from './meeting.ts'
 export type VoiceState = 'off' | 'connecting' | 'standby' | 'live' | 'error'
@@ -41,6 +50,7 @@ export class VoiceChat {
     generation: number
     heartbeatAt: number
     sampleAt: number
+    restartedAt: number
   } = {
     enabled: false,
     linked: true,
@@ -56,6 +66,7 @@ export class VoiceChat {
     generation: -1,
     heartbeatAt: 0,
     sampleAt: 0,
+    restartedAt: Number.NEGATIVE_INFINITY,
   }
   private readonly o: VoiceChatOptions
   private readonly transport: VoiceTransport
@@ -92,10 +103,17 @@ export class VoiceChat {
     globalThis.addEventListener('blur', blur)
     globalThis.addEventListener('focus', focus)
     document.addEventListener('visibilitychange', visibility)
+    const offInput = onMicrophoneInput(() => this.restartCapture())
+    const devices = () => {
+      void this.followDevices().catch(() => undefined)
+    }
+    navigator.mediaDevices?.addEventListener('devicechange', devices)
     this.unbind = () => {
       globalThis.removeEventListener('blur', blur)
       globalThis.removeEventListener('focus', focus)
       document.removeEventListener('visibilitychange', visibility)
+      navigator.mediaDevices?.removeEventListener('devicechange', devices)
+      offInput()
     }
   }
   get current(): VoiceState {
@@ -225,33 +243,98 @@ export class VoiceChat {
   private async capture(): Promise<void> {
     this.live.capturing = true
     const sequence = ++this.live.sequence
+    const deviceId = getMicrophoneInput()
+    const active = () => this.live.enabled && sequence === this.live.sequence
+    let candidate: MediaStreamTrack | undefined
     this.setState('connecting', 'Allow microphone access to enable voice.')
     try {
-      const track = await captureMicrophone()
-      if (!this.live.enabled || sequence !== this.live.sequence) {
-        track.stop()
+      candidate = await captureMicrophone(deviceId)
+      candidate.enabled = false
+      if (!active()) {
         return
       }
+      const reused = await this.transport.replaceMicrophone(candidate, active)
+      if (!active()) {
+        return
+      }
+      if (this.live.requested && !reused) {
+        if (this.live.linked) {
+          this.o.send({ type: 'voice_off' })
+        }
+        this.live.requested = false
+        this.live.generation = -1
+        this.preference = ''
+      }
+      const track = candidate
+      candidate = undefined
       this.microphone = track
       track.addEventListener('ended', this.microphoneEnded)
+      // Safari can end the track while the transport swap is pending; its event is already gone.
+      if (track.readyState === 'ended') {
+        this.microphoneEnded()
+        return
+      }
       this.activity = this.o.activity(track, () => this.quiet())
       this.refreshInterest(true)
-      this.setState('standby')
+      this.setState(reused ? 'live' : 'standby')
       this.sample(true)
     } catch (error) {
-      if (sequence === this.live.sequence && this.live.enabled) {
+      if (active()) {
+        if (
+          deviceId &&
+          error instanceof Error &&
+          error.cause instanceof DOMException &&
+          ['NotFoundError', 'OverconstrainedError'].includes(error.cause.name)
+        ) {
+          setMicrophoneInput('')
+          return
+        }
         this.fail(
           error instanceof Error ? error.message : 'Microphone could not start. Retry voice.',
         )
       }
     } finally {
+      candidate?.stop()
       this.live.capturing = false
       if (this.live.enabled && sequence !== this.live.sequence && this.state !== 'error') {
         this.retry()
       }
     }
   }
-  private readonly microphoneEnded = () => this.fail('Microphone disconnected. Retry voice.')
+  private readonly microphoneEnded = () => {
+    if (getMicrophoneInput()) {
+      setMicrophoneInput('')
+      return
+    }
+    // iOS ends a fresh track when capture cannot hold the device; reopening it at once can loop.
+    const now = performance.now()
+    if (now - this.live.restartedAt < RESTART_WINDOW_MS) {
+      this.fail('Microphone disconnected. Retry voice.')
+      return
+    }
+    this.live.restartedAt = now
+    this.restartCapture()
+  }
+  private async followDevices(): Promise<void> {
+    const inputs = await availableMicrophones()
+    const track = this.microphone
+    if (!(inputs && track?.readyState === 'live') || getMicrophoneInput() || this.live.capturing) {
+      return
+    }
+    const devices = await navigator.mediaDevices.enumerateDevices()
+    if (track === this.microphone && systemDefaultMoved(track.getSettings(), devices)) {
+      this.restartCapture()
+    }
+  }
+  private restartCapture(): void {
+    if (!this.live.enabled) {
+      return
+    }
+    this.live.sequence++
+    this.quiet()
+    this.releaseMicrophone()
+    this.retry()
+  }
   private fail(message: string): void {
     this.stopCapture()
     this.setState('error', message)
@@ -265,12 +348,15 @@ export class VoiceChat {
     this.live.requested = false
     this.preference = ''
     this.live.generation = -1
+    this.releaseMicrophone()
+    void this.transport.stop()
+  }
+  private releaseMicrophone(): void {
     this.activity?.dispose()
     this.activity = null
     this.microphone?.removeEventListener('ended', this.microphoneEnded)
     this.microphone?.stop()
     this.microphone = null
-    void this.transport.stop()
   }
   private quiet(): void {
     this.live.talking = false

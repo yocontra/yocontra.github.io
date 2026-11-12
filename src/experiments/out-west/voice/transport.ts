@@ -42,6 +42,7 @@ export class VoiceTransport {
   private joining: Client | null = null
   private unbindMeeting: (() => void) | undefined
   private mic: MediaStreamTrack | null = null
+  private microphoneSwitch: Promise<unknown> = Promise.resolve()
   private readonly peers = new Map<number, VoicePeer>()
   private own = { x: 0, z: 0 }
   private readonly participants = new Map<number, RTKParticipant>()
@@ -116,6 +117,44 @@ export class VoiceTransport {
       this.mic.enabled = on
     }
   }
+  /** Serialize native producer changes on the current meeting; never touch a replacement meeting. */
+  async replaceMicrophone(microphone: MediaStreamTrack, active: () => boolean): Promise<boolean> {
+    if (!active()) {
+      return false
+    }
+    const meeting = this.meeting
+    if (!meeting) {
+      await this.stop()
+      return false
+    }
+    const sequence = this.live.sequence
+    const current = () => active() && this.meeting === meeting && this.live.sequence === sequence
+    const change = this.microphoneSwitch.then(async () => {
+      if (!current()) {
+        return false
+      }
+      const previous = this.mic
+      this.mic = null
+      this.setSending(false)
+      try {
+        await meeting.self.disableAudio()
+      } finally {
+        previous?.stop()
+      }
+      if (!current()) {
+        return false
+      }
+      const clone = await publishVoiceMicrophone(meeting, microphone, current)
+      if (!(clone && current())) {
+        return false
+      }
+      this.mic = clone
+      this.setSending(this.live.sending)
+      return true
+    })
+    this.microphoneSwitch = change.catch(() => undefined)
+    return change
+  }
   resumeReceive(): void {
     for (const playout of this.playouts.values()) {
       playout.resume()
@@ -155,12 +194,21 @@ export class VoiceTransport {
       this.addParticipant(p)
     }
     const audio = ({ audioTrack }: { audioTrack: MediaStreamTrack }) => {
+      if (this.meeting !== meeting) {
+        return
+      }
       this.mic = audioTrack ?? null
       this.setSending(this.live.sending)
     }
     const left = () => {
       if (this.meeting === meeting) {
-        void this.stop().then(() => this.o.onState('error', 'Voice connection lost. Retry voice.'))
+        const stopped = this.stop()
+        const sequence = this.live.sequence
+        void stopped.then(() => {
+          if (sequence === this.live.sequence) {
+            this.o.onState('error', 'Voice connection lost. Retry voice.')
+          }
+        })
       }
     }
     meeting.self.on('audioUpdate', audio)

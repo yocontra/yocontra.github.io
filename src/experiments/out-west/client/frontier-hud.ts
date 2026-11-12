@@ -127,6 +127,7 @@ export class FrontierHud {
         },
       },
       matchMedia('(pointer:coarse)').matches,
+      this.abort.signal,
     )
     this.hud.menuSettings.append(panel.el)
     viewport.configure(settings)

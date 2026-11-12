@@ -1,8 +1,24 @@
+import { loadSettings } from '../../src/experiments/out-west/ffa/client/settings.ts'
+import { SettingsPanel } from '../../src/experiments/out-west/ffa/client/settings-panel.ts'
+import { openSettings } from '../../src/experiments/out-west/ui/settings-sheet.ts'
+import {
+  getMicrophoneInput,
+  setMicrophoneInput,
+} from '../../src/experiments/out-west/voice/input-device.ts'
 import { NativeVoiceAudio } from '../../src/experiments/out-west/voice/native-audio.ts'
 import { VoiceChat } from '../../src/experiments/out-west/voice/voice-chat.ts'
 import { VoiceControls } from '../../src/experiments/out-west/voice/voice-ui.ts'
-import { disconnectVoice, finishJoin, fixtureState, holdJoin } from './voice-meeting-fixture.ts'
-export const transport = { disconnectVoice, finishJoin, holdJoin }
+import {
+  disconnectVoice,
+  finishJoin,
+  finishLeave,
+  finishMicrophone,
+  fixtureState,
+  holdJoin,
+  holdLeave,
+  holdMicrophone,
+} from './voice-meeting-fixture.ts'
+export const transport = { disconnectVoice, finishJoin, holdJoin, holdMicrophone, finishMicrophone }
 
 let chat: VoiceChat | undefined
 let controls: VoiceControls | undefined
@@ -15,9 +31,12 @@ let fail = false
 let audience = 0
 let generation = 0
 let speech = false
+let preserveMeeting = false
 let original: MediaStreamTrack | undefined
 let timer: ReturnType<typeof setTimeout> | undefined
 let frame: number | undefined
+let pickerLifetime: AbortController | undefined
+let pickerPanel: HTMLElement | undefined
 const commands: { type: string; talking?: boolean }[] = []
 export function beginVoice() {
   context = new AudioContext()
@@ -59,7 +78,7 @@ export function beginVoice() {
         if (speech && audience > 0 && chat?.current === 'standby') {
           invite()
         }
-        if (!speech) {
+        if (!(speech || preserveMeeting)) {
           timer = setTimeout(() => chat?.receive({ type: 'voice_standby' }), 1000)
         }
       }
@@ -89,6 +108,12 @@ function invite() {
     token: 'nonbillable-test-only',
   })
 }
+export function keepFixtureMeeting(on: boolean): void {
+  preserveMeeting = on
+  if (on) {
+    clearTimeout(timer)
+  }
+}
 export function setAudience(count: number): void {
   audience = count
   chat?.receive({ type: 'voice_status', listeners: count, speakers: speech ? [0] : [] })
@@ -107,8 +132,36 @@ export function voiceSnapshot() {
     control: controls?.root.textContent,
     original: original?.readyState,
     originalEnabled: original?.enabled,
+    input: getMicrophoneInput(),
+    inputDevice: original?.getSettings().deviceId,
+    inputLabel: original?.label,
     commands,
     ...fixtureState(),
+  }
+}
+export function selectMicrophone(id: string): void {
+  setMicrophoneInput(id)
+}
+export function showInputSettings(frontier: boolean): void {
+  for (const button of Array.from(
+    document.querySelectorAll<HTMLButtonElement>('.ow-sheet-close'),
+  )) {
+    button.click()
+  }
+  pickerLifetime?.abort()
+  pickerPanel?.remove()
+  pickerLifetime = new AbortController()
+  if (frontier) {
+    const settings = loadSettings()
+    const panel = new SettingsPanel(
+      { settings: () => settings, onChange: () => undefined },
+      matchMedia('(pointer: coarse)').matches,
+      pickerLifetime.signal,
+    )
+    pickerPanel = panel.el
+    document.body.append(panel.el)
+  } else {
+    openSettings(document.body)
   }
 }
 export function disableService(value: boolean): void {
@@ -134,6 +187,13 @@ export function link(on: boolean): void {
   chat?.setLinked(on)
 }
 export async function disposeVoice() {
+  pickerLifetime?.abort()
+  pickerPanel?.remove()
+  for (const button of Array.from(
+    document.querySelectorAll<HTMLButtonElement>('.ow-sheet-close'),
+  )) {
+    button.click()
+  }
   if (frame !== undefined) {
     cancelAnimationFrame(frame)
   }
@@ -234,4 +294,87 @@ export async function nativeVadProof() {
     interrupted,
     disposed: cleared && track.readyState === 'ended',
   }
+}
+
+/** Actual VoiceChat callbacks when a native meeting's leave settles after a newer lifecycle. */
+export async function deferredLeaveProof() {
+  const results: {
+    mode: string
+    state: string
+    lateStates: string[]
+    track: ReturnType<typeof fixtureState>['track']
+  }[] = []
+  for (const mode of ['dispose', 'replace', 'current'] as const) {
+    const states: string[] = []
+    let ready = false
+    const voice = new VoiceChat({
+      audio: null,
+      activity: () => null,
+      audioRunning: () => true,
+      listening: () => true,
+      settings: () => ({ voiceChat: true, voicePushToTalk: true }),
+      send: (control) => {
+        if (control.type === 'voice_on') {
+          queueMicrotask(() => voice.receive({ type: 'voice_status', listeners: 1, speakers: [] }))
+        }
+        if (control.type === 'voice_talk' && control.talking && !ready) {
+          ready = true
+          queueMicrotask(() =>
+            voice.receive({
+              type: 'voice_ready',
+              generation: 1,
+              meetingId: 'fixture',
+              token: 'nonbillable-test-only',
+            }),
+          )
+        }
+      },
+      onState: (state) => states.push(state),
+    })
+    const until = async (state: string) => {
+      const deadline = performance.now() + 2000
+      while (voice.current !== state) {
+        if (performance.now() > deadline) {
+          throw new Error(`Deferred leave setup: expected ${state}, got ${voice.current}`)
+        }
+        await new Promise((resolve) => setTimeout(resolve, 0))
+      }
+    }
+    try {
+      voice.setEnabled(true)
+      await until('standby')
+      voice.setTalking(true)
+      await until('live')
+      voice.setTalking(false)
+      holdLeave(true)
+      disconnectVoice()
+      if (fixtureState().leaving !== 1) {
+        throw new Error('Old meeting leave was not deferred')
+      }
+      if (mode === 'dispose') {
+        await voice.dispose()
+      } else if (mode === 'replace') {
+        voice.receive({
+          type: 'voice_ready',
+          generation: 2,
+          meetingId: 'replacement',
+          token: 'nonbillable-test-only',
+        })
+        await until('live')
+      }
+      const baseline = states.length
+      finishLeave()
+      await new Promise((resolve) => setTimeout(resolve, 0))
+      results.push({
+        mode,
+        state: voice.current,
+        lateStates: states.slice(baseline),
+        track: fixtureState().track,
+      })
+    } finally {
+      finishLeave()
+      await voice.dispose()
+    }
+  }
+  return results
 }
