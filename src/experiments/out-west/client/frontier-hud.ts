@@ -16,7 +16,7 @@ import { Rounds } from '../ffa/client/round.ts'
 import { Scoreboard } from '../ffa/client/scoreboard.ts'
 import { loadSettings, saveSettings } from '../ffa/client/settings.ts'
 import { SettingsPanel } from '../ffa/client/settings-panel.ts'
-import { deadEyeReady } from '../ffa/sim/combat.ts'
+import { deadEyeReady, spreadFor } from '../ffa/sim/combat.ts'
 import {
   DEAD_EYE_CLOSE_TICKS,
   RELOAD_TICKS,
@@ -25,7 +25,7 @@ import {
   TICK_HZ,
 } from '../ffa/sim/constants.ts'
 import { zoneAt } from '../ffa/sim/layout.ts'
-import type { SimEvent } from '../ffa/sim/types.ts'
+import type { Player, SimEvent } from '../ffa/sim/types.ts'
 import { Buttons } from '../runtime/protocol.ts'
 import type { FrontierSession } from './frontier-session.ts'
 import type { GameViewport } from './viewport.ts'
@@ -60,6 +60,7 @@ export class FrontierHud {
   private readonly abort = new AbortController()
   private killer: string | null = null
   private readonly viewport: GameViewport
+  private fov = 72
   constructor(
     root: HTMLElement,
     session: FrontierSession,
@@ -117,11 +118,13 @@ export class FrontierHud {
     )
     this.hud.mapSlot.append(this.minimap.el)
     let settings = loadSettings()
+    this.fov = settings.view === 'first' ? settings.fovFirst : settings.fovThird
     const panel = new SettingsPanel(
       {
         settings: () => settings,
         onChange: (value) => {
           settings = value
+          this.fov = value.view === 'first' ? value.fovFirst : value.fovThird
           saveSettings(value)
           viewport.configure(value)
         },
@@ -264,7 +267,7 @@ export class FrontierHud {
         : null,
       deadEyeReady(world, player),
     )
-    this.hud.setCrosshair(aim.shooter, 4 + player.bloom, false)
+    this.hud.setCrosshair(aim.shooter, this.spreadPixels(player), false)
     if (player.alive) {
       this.hud.alive()
     } else {
@@ -274,6 +277,12 @@ export class FrontierHud {
         Math.max(0, (player.respawnTick - world.tick) / TICK_HZ),
       )
     }
+  }
+  /** The ticks sit on the actual cone the next shot may stray within, converted through the lens. */
+  private spreadPixels(player: Player): number {
+    const half = player.weapon === WEAPON_SHOTGUN ? 0.5 : 1
+    const spread = Math.tan((spreadFor(player) * half * Math.PI) / 180)
+    return Math.max(4, (spread / Math.tan((this.fov * Math.PI) / 360)) * (innerHeight / 2))
   }
   private event(event: SimEvent): void {
     const { selfSlot, world } = this.session

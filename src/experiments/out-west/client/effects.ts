@@ -51,11 +51,12 @@ interface PendingShot {
 const REVOLVER = {
   sound: 'revolver',
   interval: REVOLVER_FIRE_MS,
-  kick: 0.012,
+  kick: 0.02,
   flash: 0.26,
 } as const
-const RIFLE = { sound: 'rifle', interval: RIFLE_FIRE_MS, kick: 0.016, flash: 0.3 } as const
-const SHOTGUN = { sound: 'shotgun', interval: SHOTGUN_FIRE_MS, kick: 0.022, flash: 0.42 } as const
+const RIFLE = { sound: 'rifle', interval: RIFLE_FIRE_MS, kick: 0.03, flash: 0.3 } as const
+const SHOTGUN = { sound: 'shotgun', interval: SHOTGUN_FIRE_MS, kick: 0.045, flash: 0.42 } as const
+const RECOIL_SETTLE_SECONDS = 0.08
 type Report = typeof REVOLVER | typeof RIFLE | typeof SHOTGUN
 const WEAPON_REPORTS = new Map<number, Report>([
   [WEAPON_RIFLE, RIFLE],
@@ -332,7 +333,8 @@ export class GameEffects {
     }
   }
   private readonly update = (dt: number): void => {
-    this.kick = Math.max(0, this.kick - dt * 0.2)
+    // Camera-only kick (shots keep the input pitch): a sharp rise that settles over ~0.25 s.
+    this.kick *= Math.exp(-dt / RECOIL_SETTLE_SECONDS)
     const riders = this.hooks.riders?.()
     if (!riders) {
       return
