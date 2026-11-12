@@ -9,6 +9,7 @@ import { LocalDuelClock, type Verdict } from './clock.ts'
 import { offerLicensedMode } from './licence-road.ts'
 import { DuelActor } from './native-actor.ts'
 import { arenaForSlot } from './native-arenas.ts'
+import { resetAttempt, STEADY_MS } from './native-combat.ts'
 import type { NativeDirector } from './native-director.ts'
 import { RankedDuelClock } from './ranked-clock.ts'
 
@@ -68,9 +69,13 @@ export function presentLevel(d: NativeDirector, isRetry: boolean): void {
   d.c.audio.playSong('intro')
   d.walkLines = 0
   d.walked = 0
-  d.stalled = 0
-  d.targetPaces =
-    d.outlaw.paces[0] + Math.floor(Math.random() * (d.outlaw.paces[1] - d.outlaw.paces[0] + 1))
+  resetAttempt(d)
+  d.c.input.resetToggle()
+  const [lo, hi] = d.outlaw.paces
+  d.targetPaces = Math.max(
+    lo,
+    Math.min(hi, Math.round(lo + (hi + 0.999 - lo) * Math.random() - 0.5)),
+  )
   d.c.save.attempts[d.level] = (d.c.save.attempts[d.level] ?? 0) + 1
   d.c.hud.setCounter(d.level, OUTLAWS.length, d.c.save.legend)
   d.c.hud.setPurse(d.c.save.run.total, false)
@@ -101,14 +106,13 @@ export function advance(d: NativeDirector): void {
     d.leaveSpecial()
     return
   }
-  const next = d.level + 1
-  d.c.save.level = next
-  save(d.c.save)
-  if (next >= OUTLAWS.length && !d.c.save.legend) {
+  if (d.level + 1 >= OUTLAWS.length) {
     d.finishRun()
     return
   }
-  const nextLevel = d.c.save.legend ? next % OUTLAWS.length : next
+  const nextLevel = d.level + 1
+  d.c.save.level = nextLevel
+  save(d.c.save)
   d.interluding = true
   void (async () => {
     if (await offerLicensedMode(d, nextLevel)) {
@@ -130,7 +134,30 @@ export function retry(d: NativeDirector): void {
     d.leaveSpecial()
     return
   }
+  // the press that retried (and a second tap right behind it) can't be a back-shot
+  d.steadyUntil = performance.now() + STEADY_MS
+  if (retriesPhaseTwo(d)) {
+    retryPhaseTwo(d)
+    return
+  }
   void d.startLevel(d.level, true)
+}
+
+/** The boss's second phase restarts on its own after a loss (ranked: after a back-shot too). */
+function retriesPhaseTwo(d: NativeDirector): boolean {
+  if (d.outlaw.gimmick !== 'boss' || d.bossPhase !== 2) {
+    return false
+  }
+  return d.phase === 'lose' || (d.ranked && d.phase === 'coward')
+}
+
+function retryPhaseTwo(d: NativeDirector): void {
+  d.c.hud.hideCard()
+  d.debris.reset()
+  d.enemyAlive = true
+  d.c.save.attempts[d.level] = (d.c.save.attempts[d.level] ?? 0) + 1
+  resetAttempt(d)
+  d.wait()
 }
 
 export function restartRun(d: NativeDirector, legend: boolean): void {
@@ -225,7 +252,8 @@ export function resume(d: NativeDirector): void {
   d.paused = false
   d.c.input.enabled = d.phase !== 'loading' || d.loadFailed
   d.c.hud.closeMenu()
-  if (!d.ranked && d.phase === 'wait') {
+  // practice: pausing voids the standoff (a fresh wait on resume, no scumming); ranked stands
+  if (!d.ranked && (d.phase === 'wait' || d.phase === 'call' || d.phase === 'turn')) {
     d.wait()
   }
 }

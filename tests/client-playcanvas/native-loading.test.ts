@@ -62,7 +62,7 @@ function fixture() {
     return done.promise as unknown as ReturnType<typeof equipment.attachHeldWeapon>
   })
   const noop = () => undefined
-  const input = { enabled: true, dispose: noop }
+  const input = { enabled: true, dispose: noop, resetToggle: noop }
   const stage = { enabled: true }
   // The real director methods run without creating a DOM, graphics device or network connection.
   const d = Object.assign(Object.create(NativeDirector.prototype), {

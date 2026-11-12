@@ -5,8 +5,8 @@ import { OUTLAWS } from '../data/outlaws.ts'
 import { say } from './chatter.ts'
 import { dueShot } from './judge.ts'
 import { DuelActor } from './native-actor.ts'
+import { enemyFires } from './native-combat.ts'
 import type { NativeDirector } from './native-director.ts'
-import { plannedShot } from './native-shot.ts'
 
 const hubViews = new WeakMap<NativeDirector, { shot: string; layout: string }>()
 
@@ -148,37 +148,90 @@ function camera(d: NativeDirector): void {
     d.game.camera.camera.fov = d.phase === 'call' ? FEEL.fovCall : 42
   }
 }
+const STALL_LINES = [
+  'You plannin’ on walkin’ today?',
+  'I ain’t got all day, friend.',
+  'My grandma walks faster.',
+  'Scared?',
+]
+/** Scheduling margin on top of the output latency, ms (a frame or two of main-thread slack). */
+const BELL_MARGIN_MS = 50
+/** The boss is shot through the shoulder; his second standoff opens after this, seconds. */
+const BOSS_WOUND_S = 2.4
+/** The boss stands face to face under the clock, this far apart (m); nobody walks. */
+const BOSS_GAP_M = 9
+
+/** Both men cock their guns; the walk (or the boss's clock) follows on its own. */
+function cocked(d: NativeDirector): void {
+  if (d.phaseT < FEEL.inputEnableDelay) {
+    return
+  }
+  if (d.outlaw.gimmick === 'boss') {
+    d.walked = (BOSS_GAP_M - 0.8) / 1.4
+    const distance = d.walked * 0.7
+    d.player?.place(0, 0, -0.4 - distance)
+    d.enemy?.place(0, 0, 0.4 + distance)
+    d.player?.face(0)
+    d.enemy?.face(180)
+    d.wait()
+    return
+  }
+  d.enter('walk')
+}
 function walk(d: NativeDirector, dt: number): void {
   if (d.walkLines === 0 && d.outlaw.lines[0]) {
     say(d, d.outlaw.name, d.outlaw.lines[0])
     d.walkLines++
   }
   const oldPace = Math.floor(d.walked)
-  if (d.c.input.walking) {
-    d.walked += dt / FEEL.paceSeconds
-    d.stalled = 0
-  } else {
-    d.stalled += dt
-  }
+  // the walk eases in and out over `walkRamp`; a stall is the time spent (nearly) stopped
+  const rate = dt / FEEL.walkRamp
+  d.speed = d.c.input.walking ? Math.min(1, d.speed + rate) : Math.max(0, d.speed - rate)
+  d.walked += (d.speed * dt) / FEEL.paceSeconds
+  d.stalled = d.speed < 0.05 ? d.stalled + dt : 0
   const distance = Math.min(d.walked, d.targetPaces) * 0.7
   d.player?.place(0, 0, -0.4 - distance)
   d.enemy?.place(0, 0, 0.4 + distance)
-  d.player?.play(d.c.input.walking ? 'Walk' : 'Idle_Gun')
-  d.enemy?.play(d.c.input.walking ? 'Walk' : 'Idle_Gun')
+  d.player?.play(d.speed > 0.05 ? 'Walk' : 'Idle_Gun')
+  d.enemy?.play(d.speed > 0.05 ? 'Walk' : 'Idle_Gun')
   d.c.hud.setPips(Math.floor(d.walked), true)
   if (Math.floor(d.walked) > oldPace) {
     d.c.audio.play('dirtsteps', { gain: 0.6 })
     d.c.audio.play('spursteps', { gain: 0.3 })
   }
   if (d.walked >= d.targetPaces) {
+    d.speed = 0
     d.enter('turn')
     d.player?.play('Idle_Gun')
     d.enemy?.play('Idle_Gun')
-  } else if (d.stalled >= FEEL.stallBackShot) {
+    return
+  }
+  if (d.stalled > FEEL.stallHeckle && !d.stallHeckled) {
+    d.stallHeckled = true
+    const line = STALL_LINES[Math.floor(Math.random() * STALL_LINES.length)] ?? 'Walk.'
+    say(d, d.outlaw.name, line)
+  }
+  if (d.stalled > FEEL.stallBackShot) {
     d.resolve('loss', null)
   }
 }
-function wait(d: NativeDirector, now: number): void {
+/**
+ * The bell on the audio clock, scheduled ahead so its strike reaches the ear on the call frame.
+ * It runs before the clock's tick, so a call that came late rings (and is timed) from now.
+ */
+export function scheduleBell(d: NativeDirector, now: number): void {
+  const due = d.clock.callAt()
+  const lookahead = Math.max(FEEL.bellLookaheadMs, d.c.audio.outputLatencyMs + BELL_MARGIN_MS)
+  if (d.bellScheduled || due === null || now < due - lookahead) {
+    return
+  }
+  d.bellScheduled = true
+  d.bellAt = Math.max(due, now)
+  if (!d.dailyModifiers.includes('no-bell')) {
+    d.c.audio.call(d.c.audio.perfToCtx(d.bellAt))
+  }
+}
+function wait(d: NativeDirector): void {
   const animation = d.enemy?.model.anim?.baseLayer
   if (
     animation &&
@@ -187,34 +240,22 @@ function wait(d: NativeDirector, now: number): void {
   ) {
     d.enemy?.play('Idle_Gun', 0.1)
   }
-  const due = d.clock.callAt()
-  if (
-    !d.bellScheduled &&
-    due !== null &&
-    due - now <= Math.max(120, d.c.audio.outputLatencyMs + 50)
-  ) {
-    d.bellScheduled = true
-    if (!d.dailyModifiers.includes('no-bell')) {
-      d.c.audio.call(d.c.audio.perfToCtx(Math.max(due, now)))
-    }
-  }
   d.c.audio.heartbeat(Math.min(130, 70 + d.phaseT * 8))
 }
-function called(d: NativeDirector, now: number): void {
+export function called(d: NativeDirector, now: number): void {
   if (!d.plan) {
     return
   }
   const shot = dueShot(d.plan, now, FEEL.tieMs, (who) =>
     who === 0 ? d.enemyAlive : d.riflemanAlive,
   )
-  if (!shot) {
-    return
+  if (shot) {
+    enemyFires(d, shot)
   }
-  shot.done = true
-  plannedShot(d, shot)
-  if (shot.hit) {
-    d.resolve('loss', d.reactionMs)
-  }
+}
+/** The rAF timestamp of this frame: the original engine judged the clock and his shots on it. */
+function frameTime(d: NativeDirector): number {
+  return d.game.app._time || performance.now()
 }
 function won(d: NativeDirector, dt: number): void {
   if (d.phaseT >= 1.35 && d.phaseT - dt < 1.35) {
@@ -231,8 +272,10 @@ function won(d: NativeDirector, dt: number): void {
   }
 }
 
-export function update(d: NativeDirector, dt: number): void {
-  const now = performance.now()
+export function update(d: NativeDirector, frameDt: number): void {
+  const now = frameTime(d)
+  // the duel's timers step at most 50 ms a frame, as they always have
+  const dt = Math.min(0.05, frameDt)
   const lens = d.game.camera.camera
   if (
     d.phase !== 'title' &&
@@ -241,17 +284,20 @@ export function update(d: NativeDirector, dt: number): void {
   ) {
     lens.projectionOffset = Vec2.ZERO
   }
-  d.atmosphere.update(dt, d.phase)
-  d.c.hud.update(dt * 1000)
+  d.atmosphere.update(frameDt, d.phase)
+  d.c.hud.update(frameDt * 1000)
   d.c.audio.update()
   const position = d.game.camera.getPosition()
   const forward = d.game.camera.forward
   d.c.audio.setListener(position.x, position.y, position.z, forward.x, forward.y, forward.z)
+  if (d.phase === 'wait' && !(d.paused || d.interluding || d.remote)) {
+    scheduleBell(d, now)
+  }
   if (d.ranked || !d.paused) {
     d.clock.tick(now)
   }
   if (!d.paused) {
-    d.debris.update(dt)
+    d.debris.update(frameDt)
   }
   d.remote?.tick(now, dt)
   if (d.paused || d.interluding || d.remote) {
@@ -273,9 +319,7 @@ export function update(d: NativeDirector, dt: number): void {
       }
       break
     case 'cock':
-      if (d.phaseT >= FEEL.inputEnableDelay && d.c.input.walking) {
-        d.enter('walk')
-      }
+      cocked(d)
       break
     case 'walk':
       walk(d, dt)
@@ -286,13 +330,13 @@ export function update(d: NativeDirector, dt: number): void {
       }
       break
     case 'wait':
-      wait(d, now)
+      wait(d)
       break
     case 'call':
       called(d, now)
       break
     case 'bossWound':
-      if (d.phaseT >= 1) {
+      if (d.phaseT > BOSS_WOUND_S) {
         d.wait()
       }
       break

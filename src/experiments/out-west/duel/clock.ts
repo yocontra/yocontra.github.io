@@ -2,7 +2,7 @@ import type { DuelOutcome } from '../data/economy.ts'
 import { planFakes } from './judge.ts'
 import { CALL_FRAME_SLACK_MS } from './pending-call.ts'
 
-const rng = Math.random
+const rng = (): number => Math.random()
 const between = (a: number, b: number): number => a + (b - a) * rng()
 
 /**

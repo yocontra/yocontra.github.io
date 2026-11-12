@@ -89,10 +89,16 @@ export class NativeDirector {
   duel = -1
   targetPaces = 6
   walked = 0
+  speed = 0
   stalled = 0
+  stallHeckled = false as boolean
   callTime = 0
   bellScheduled = false as boolean
+  /** The perf time the scheduled bell reaches the ear; reactions count from it. */
+  bellAt = 0
   steadyUntil = 0
+  /** performance.now() as this frame began, before the engine's systems ran; null between frames. */
+  frameStart: number | null = null
   plan: DrawPlan | null = null
   enemyAlive = true as boolean
   riflemanAlive = false as boolean
@@ -101,7 +107,11 @@ export class NativeDirector {
   handShot = false as boolean
   shots = 0
   fakes = 0
+  /** He fired and missed this attempt (the grade's second chance). */
+  secondChance = false as boolean
   reactionMs: number | null = null
+  /** A press that came just after his hit, for the lose card only. */
+  lateMs: number | null = null
   exitDuel: ((verdict: Verdict | null, ms: number | null) => void) | null = null
   dailyModifiers: readonly string[] = []
   dailyVerdict: Verdict | null = null
@@ -114,6 +124,9 @@ export class NativeDirector {
   } | null = null
   readonly lifecycle = new AbortController()
   readonly tick = (dt: number): void => this.update(dt)
+  private readonly frameBegan = (): void => {
+    this.frameStart = performance.now()
+  }
   readonly arenas: NativeArenas
   readonly debris = new NativeDebris()
   readonly atmosphere: NativeAtmosphere
@@ -172,6 +185,7 @@ export class NativeDirector {
     this.cancelLoading()
     this.equipmentEpoch++
     this.game.app.off('update', this.tick)
+    this.game.app.off('frameupdate', this.frameBegan)
     this.remote?.close()
     this.clock.dispose()
     this.c.input.dispose()
@@ -207,6 +221,7 @@ export class NativeDirector {
     this.player.root.enabled = false
     this.hubShot('hub')
     await prepareDuelShotVisuals(this)
+    this.game.app.on('frameupdate', this.frameBegan)
     this.game.app.on('update', this.tick)
   }
   applySettings(): void {
@@ -432,6 +447,7 @@ export class NativeDirector {
   }
   update(dt: number): void {
     update(this, dt)
+    this.frameStart = null
   }
   dailyDuel(
     spec: { outlaw: number; modifiers: readonly string[] },
