@@ -6,9 +6,9 @@ export const AMBIENT_ASSETS = {
     hash: '6aaca3d7d4f83b89482f04c61692be9aabe33c09bf92ef76342dee222ecc17d8',
   },
   hen: {
-    url: '/experiments/out-west/3d/native-v2/ambient/hen.glb?v=1fce01b59a16ec84',
-    bytes: 53096,
-    hash: '1fce01b59a16ec846916a2058d9bab300ebaa464587e9fcd444ddf3697345c47',
+    url: '/experiments/out-west/3d/native-v2/ambient/hen.glb?v=5ec8c2d248f66910',
+    bytes: 496040,
+    hash: '5ec8c2d248f6691050c114504cf20df0f18cffe2ef075daeef5d0a39ca45ae39',
   },
   shingles: {
     url: '/experiments/out-west/3d/ambient/shingles.glb?v=3df81c62a3f71e7d',

@@ -1242,7 +1242,9 @@ def build(spec):
     return body, materials, objects, cards
 
 
-def unwrap(objects):
+def unwrap(objects, density=None):
+    """Smart-project and pack; density scales islands per material suffix before packing."""
+    density = density or {"eye": 4.0}
     bpy.ops.object.select_all(action="DESELECT")
     for ob in objects:
         ob.select_set(True)
@@ -1252,15 +1254,17 @@ def unwrap(objects):
     bpy.ops.uv.smart_project(angle_limit=math.radians(60), island_margin=0.004, area_weight=0.0, scale_to_bounds=False)
     bpy.ops.object.mode_set(mode="OBJECT")
     # Eyes get extra texels so their wet roughness survives the half-resolution ARM map.
-    me = objects[0].data
-    eye = [s for s, m in enumerate(me.materials) if m.name.endswith(" eye")]
-    uv = me.uv_layers.active.data
-    for poly in me.polygons:
-        if poly.material_index in eye:
-            loops = list(poly.loop_indices)
-            centre = sum((uv[i].uv for i in loops), Vector((0, 0))) / len(loops)
-            for i in loops:
-                uv[i].uv = centre + (uv[i].uv - centre) * 4
+    for ob in objects:
+        me = ob.data
+        factors = {s: density.get(m.name.rsplit(" ", 1)[-1], 1.0) for s, m in enumerate(me.materials)}
+        uv = me.uv_layers.active.data
+        for poly in me.polygons:
+            k = factors.get(poly.material_index, 1.0)
+            if k != 1.0:
+                loops = list(poly.loop_indices)
+                centre = sum((uv[i].uv for i in loops), Vector((0, 0))) / len(loops)
+                for i in loops:
+                    uv[i].uv = centre + (uv[i].uv - centre) * k
     bpy.ops.object.mode_set(mode="EDIT")
     bpy.ops.uv.pack_islands(margin=0.004, rotate=True)
     bpy.ops.object.mode_set(mode="OBJECT")
@@ -1297,5 +1301,380 @@ def author():
     export(body, groups, skin_trees(body), ART / f"{ANIMAL}-parts.glb")
 
 
+# ---------------------------------------------------------------- rigid birds
+# Birds keep their hinge rigs. Every part is authored in the root's rest space (each part's mesh node
+# cancels its hinge offset) and swapped onto the mesh under its hinge, so Idle/Scatter/Fly still drive it.
+
+BIRD_ART = ROOT / "tools/art/environments"
+
+
+def organic(name, blobs, voxel, faces, material, part, smooth=6):
+    """A union of ellipsoids (centre, radii, pitch degrees) remeshed into one smooth shell."""
+    bm = bmesh.new()
+    for centre, radii, pitch in blobs:
+        geom = bmesh.ops.create_uvsphere(bm, u_segments=24, v_segments=14, radius=1.0)
+        m = Matrix.Translation(Vector(centre)) @ Matrix.Rotation(math.radians(pitch), 4, "X") @ Matrix.Diagonal((*radii, 1))
+        bmesh.ops.transform(bm, matrix=m, verts=geom["verts"])
+    me = bpy.data.meshes.new(name)
+    bm.to_mesh(me)
+    bm.free()
+    ob = bpy.data.objects.new(name, me)
+    bpy.context.scene.collection.objects.link(ob)
+    remesh = ob.modifiers.new("remesh", "REMESH")
+    remesh.mode = "VOXEL"
+    remesh.voxel_size = voxel
+    soften = ob.modifiers.new("soften", "SMOOTH")
+    soften.factor = 0.7
+    soften.iterations = smooth
+    bpy.context.view_layer.update()
+    dense = sum(len(poly.vertices) - 2 for poly in ob.evaluated_get(bpy.context.evaluated_depsgraph_get()).data.polygons)
+    ob.modifiers.new("decimate", "DECIMATE").ratio = min(1.0, faces / max(1, dense))
+    bpy.context.view_layer.update()
+    baked = bpy.data.meshes.new_from_object(ob.evaluated_get(bpy.context.evaluated_depsgraph_get()))
+    ob.modifiers.clear()
+    dense_mesh, ob.data = ob.data, baked
+    bpy.data.meshes.remove(dense_mesh)
+    baked.shade_smooth()
+    baked.materials.append(material)
+    ob["part"] = part
+    return ob
+
+
+def part(name, builder, material, part_name):
+    ob = link(name, builder.mesh(name), material, "")
+    ob["part"] = part_name
+    return ob
+
+
+def blade(builder, base, along, across, length, width, thickness, curl, samples=8):
+    """A tapered, curled feather blade: a closed slab so both faces shade."""
+    along, across = Vector(along).normalized(), Vector(across).normalized()
+    face = along.cross(across).normalized()
+    outer, inner, params = [], [], []
+    for i in range(samples + 1):
+        t = i / samples
+        spine = Vector(base) + along * length * t + face * curl * t * t
+        half = width * (0.5 + 0.5 * t) * math.sqrt(max(0.0, 1 - t**3)) / 2 + 0.0008
+        o_row, i_row, p_row = [], [], []
+        for j in range(3):
+            s = (j - 1) * half
+            o_row.append(spine + across * s + face * thickness / 2)
+            i_row.append(spine + across * s - face * thickness / 2)
+            p_row.append((t, j / 2, 1.0))
+        outer.append(o_row)
+        inner.append(i_row)
+        params.append(p_row)
+    builder.slab(outer, inner, params)
+
+
+def surface_ray(ob, origin, direction):
+    tree = BVHTree.FromPolygons([v.co for v in ob.data.vertices], [p.vertices for p in ob.data.polygons])
+    hit, normal, _, _ = tree.ray_cast(Vector(origin), Vector(direction).normalized())
+    return hit, normal
+
+
+def hen_build(m):
+    objects = []
+    body = organic(
+        "HenBody",
+        [
+            ((0, 0.025, 0.215), (0.08, 0.13, 0.085), -14),
+            ((0, -0.045, 0.2), (0.072, 0.08, 0.08), -5),
+            ((0, 0.03, 0.165), (0.07, 0.09, 0.06), 0),
+            ((0, 0.1, 0.262), (0.05, 0.06, 0.07), -40),
+            ((0, -0.06, 0.262), (0.05, 0.05, 0.06), 35),
+            ((0, -0.075, 0.3), (0.04, 0.04, 0.05), 25),
+            ((0.03, 0.035, 0.145), (0.03, 0.04, 0.04), 0),
+            ((-0.03, 0.035, 0.145), (0.03, 0.04, 0.04), 0),
+        ],
+        0.005,
+        1100,
+        m["plumage"],
+        "body",
+    )
+    objects.append(body)
+    for s in (-1, 1):
+        objects.append(
+            organic(
+                f"HenWing{s}",
+                [((s * 0.064, 0.035, 0.226), (0.018, 0.1, 0.056), -14), ((s * 0.058, 0.11, 0.252), (0.014, 0.05, 0.03), -30)],
+                0.004,
+                300,
+                m["wing"],
+                "body",
+            )
+        )
+    tail = Builder()
+    for k in range(14):
+        side = 1 if k % 2 else -1
+        rise = math.radians(28 + 52 * (k // 2) / 6)
+        along = Vector((side * 0.12, math.cos(rise), math.sin(rise)))
+        across = along.cross(Vector((1, 0, 0))).normalized()
+        base = Vector((side * (0.006 + 0.003 * (k // 2)), 0.1, 0.27))
+        blade(tail, base, along, across, 0.11 + 0.035 * math.sin(math.pi * (k // 2) / 6), 0.04, 0.003, -0.02)
+    objects.append(part("HenTail", tail, m["tail"], "body"))
+    horn = Builder()
+    for s in (-1, 1):
+        hip, foot = Vector((s * 0.03, 0.03, 0.135)), Vector((s * 0.033, 0.02, 0.012))
+        cylinder(horn, hip, foot, 0.0095, segments=10, radius_end=0.0075)
+        for angle, length in ((-28, 0.048), (0, 0.056), (28, 0.046), (180, 0.026)):
+            d = Matrix.Rotation(math.radians(angle + s * 4), 3, "Z") @ Vector((0, -1, 0))
+            tip = foot + d * length + Vector((0, 0, -0.008))
+            cylinder(horn, foot + d * 0.004, tip, 0.0058, segments=8, radius_end=0.0028)
+    objects.append(part("HenLegs", horn, m["horn"], "body"))
+
+    head = organic(
+        "HenHead",
+        [
+            ((0, -0.075, 0.3), (0.042, 0.043, 0.052), 25),
+            ((0, -0.092, 0.345), (0.034, 0.036, 0.05), 20),
+            ((0, -0.112, 0.388), (0.029, 0.04, 0.031), -10),
+        ],
+        0.0035,
+        600,
+        m["plumage"],
+        "head",
+        smooth=12,
+    )
+    objects.append(head)
+    beak = Builder()
+    cylinder(beak, (0, -0.142, 0.39), (0, -0.172, 0.381), 0.0095, segments=12, radius_end=0.0014)
+    cylinder(beak, (0, -0.14, 0.381), (0, -0.163, 0.376), 0.007, segments=12, radius_end=0.0014)
+    objects.append(part("HenBeak", beak, m["horn"], "head"))
+    comb = Builder()
+    outer, inner, params = [], [], []
+    columns = 14
+    for i in range(3):
+        o_row, i_row, p_row = [], [], []
+        for j in range(columns + 1):
+            u = j / columns
+            y = -0.14 + 0.066 * u
+            hit, _ = surface_ray(head, (0, y, 0.5), (0, 0, -1))
+            bottom = (hit.z if hit else 0.41) - 0.006
+            spikes = 0.5 + 0.5 * math.cos(u * 5 * 2 * math.pi)
+            height = (0.012 + 0.016 * spikes) * math.sin(math.pi * (0.15 + 0.7 * u))
+            z = bottom + height * i / 2
+            o_row.append(Vector((0.0035, y, z)))
+            i_row.append(Vector((-0.0035, y, z)))
+            p_row.append((u, i / 2, 1.0))
+        outer.append(o_row)
+        inner.append(i_row)
+        params.append(p_row)
+    comb.slab(outer, inner, params)
+    objects.append(part("HenComb", comb, m["skin"], "head"))
+    objects.append(
+        organic(
+            "HenWattles",
+            [((s * 0.0055, -0.136, 0.36), (0.005, 0.008, 0.013), 10) for s in (-1, 1)],
+            0.0015,
+            220,
+            m["skin"],
+            "head",
+            smooth=3,
+        )
+    )
+    eyes = Builder()
+    for s in (-1, 1):
+        hit, normal = surface_ray(head, (s * 0.2, -0.122, 0.398), (-s, 0, 0))
+        centre = hit - Vector((s * 0.003, 0, 0))
+        eyeball(eyes, centre, s, 0.0072)
+    objects.append(part("HenEyes", eyes, m["eye"], "head"))
+    return objects
+
+
+def eyeball(builder, centre, side, radius, rings=6, segments=10):
+    """A small sphere whose +side pole faces outward, so pupil and iris can be read from x."""
+    ids = []
+    for i in range(rings + 1):
+        a = math.pi * i / rings
+        row = []
+        for j in range(segments):
+            b = 2 * math.pi * j / segments
+            d = Vector((math.cos(a) * side, math.sin(a) * math.cos(b), math.sin(a) * math.sin(b)))
+            row.append(builder.add(Vector(centre) + d * radius, (i / rings, j / segments, 1.0)))
+        ids.append(row)
+    for i in range(rings):
+        for j in range(segments):
+            quad = [ids[i][j], ids[i][(j + 1) % segments], ids[i + 1][(j + 1) % segments], ids[i + 1][j]]
+            builder.faces.append(quad if side > 0 else quad[::-1])
+
+
+def plumage_graph(g, palette, kind):
+    p = g.p
+    q = g.xyz(p)
+    stretch = g.vec("MULTIPLY", p, palette["cells"])
+    cells = g.n("ShaderNodeTexVoronoi", feature="F1")
+    g.put(cells.inputs["Vector"], stretch)
+    g.put(cells.inputs["Scale"], palette["feather"])
+    # Shingled feathers: each cell brightens toward its trailing (tailward, downward) edge.
+    offset = g.vec("MULTIPLY", g.vec("SUBTRACT", stretch, cells.outputs["Position"]), (palette["feather"],) * 3)
+    trail = g.smooth(-0.45, 0.45, g.vec("DOT_PRODUCT", offset, (0.0, 0.8, -0.6)))
+    edge = g.math("MULTIPLY", g.smooth(0.28, 0.42, cells.outputs["Distance"]), g.smooth(0.45, 0.8, trail))
+    tint = g.math("ADD", 0.85, g.math("MULTIPLY", 0.3, g.xyz(cells.outputs["Color"])[0]))
+    barbs = g.noise(g.vec("MULTIPLY", p, palette["barbs"]), 1.0, 2.0)
+    tone = g.noise(p, 14.0, 3.0)
+    color = g.mix(g.smooth(0.3, 0.7, tone), palette["dark"], palette["light"])
+    if "hackle" in palette:
+        hackle = g.smooth(palette["hackle_z"], palette["hackle_z"] + 0.04, q[2])
+        streak = g.smooth(0.55, 0.75, barbs)
+        hackle_color = g.mix(streak, palette["hackle"], palette["dark"])
+        color = g.mix(hackle, color, hackle_color)
+    if "under" in palette:
+        color = g.mix(g.math("SUBTRACT", 1.0, g.smooth(0.12, 0.18, q[2])), color, palette["under"])
+    if kind == "wing":
+        primaries = g.smooth(0.07, 0.11, q[1])
+        bars = g.smooth(0.4, 0.6, g.math("PINGPONG", q[2], 0.012))
+        color = g.mix(g.math("MULTIPLY", primaries, g.math("ADD", 0.55, g.math("MULTIPLY", 0.45, bars))), color, palette["primary"])
+    if kind == "tail":
+        color = g.scale(palette["tail"], g.math("ADD", 0.8, g.math("MULTIPLY", 0.4, barbs)))
+    shade = g.math("SUBTRACT", g.math("ADD", 0.7, g.math("MULTIPLY", trail, 0.35)), g.math("MULTIPLY", edge, 0.45))
+    color = g.scale(g.scale(color, tint), shade)
+    color = g.scale(color, g.math("ADD", 0.85, g.math("MULTIPLY", 0.3, barbs)))
+    gloss = palette["tail_rough"] if kind == "tail" else palette["rough"]
+    rough = g.math("ADD", gloss, g.math("MULTIPLY", 0.12, barbs))
+    height = g.math("ADD", trail, g.math("MULTIPLY", barbs, 0.5))
+    g.finish(color, rough, 0.0, height, 0.3)
+
+
+def bird_graph(material, kind, palette):
+    g = Graph(material)
+    p = g.p
+    if kind in ("plumage", "wing", "tail"):
+        plumage_graph(g, palette, kind)
+    elif kind == "skin":
+        bumps = g.noise(p, 300.0, 3.0)
+        color = g.scale(palette["skin"], g.math("ADD", 0.75, g.math("MULTIPLY", 0.5, bumps)))
+        g.finish(color, g.math("ADD", 0.38, g.math("MULTIPLY", 0.15, bumps)), 0.0, bumps, 0.5)
+    elif kind == "horn":
+        scales = g.voronoi(g.vec("MULTIPLY", p, (1, 1, 1.6)), 260.0, "F1")
+        ridge = g.smooth(0.1, 0.45, scales)
+        color = g.scale(palette["horn"], g.math("ADD", 0.7, g.math("MULTIPLY", 0.35, g.math("SUBTRACT", 1.0, ridge))))
+        g.finish(color, g.math("ADD", 0.36, g.math("MULTIPLY", 0.18, ridge)), 0.0, g.math("SUBTRACT", 1.0, ridge), 0.4)
+    elif kind == "eye":
+        x = g.math("ABSOLUTE", g.xyz(p)[0])
+        rim = palette["eye_x"]
+        iris = g.smooth(rim + 0.0005, rim + 0.0025, x)
+        pupil = g.smooth(rim + 0.0048, rim + 0.0058, x)
+        color = g.mix(pupil, g.mix(iris, (0.02, 0.012, 0.008), palette["iris"]), (0.004, 0.004, 0.004))
+        g.finish(color, 0.05, 0.0, 0.0, 0.0)
+    return g
+
+
+def export_parts(groups, path, extras):
+    blob = bytearray()
+    doc = {"asset": {"version": "2.0", "generator": "Out West animal authoring"}, "accessors": [], "bufferViews": [], "buffers": [], "meshes": [], "nodes": [], "scenes": [{"nodes": []}], "scene": 0, "extras": extras}
+
+    def accessor(rows, fmt, component, kind):
+        while len(blob) % 4:
+            blob.append(0)
+        offset = len(blob)
+        flat = [v for row in rows for v in row]
+        blob.extend(struct.pack("<" + fmt * len(flat), *flat))
+        doc["bufferViews"].append({"buffer": 0, "byteOffset": offset, "byteLength": len(blob) - offset})
+        a = {"bufferView": len(doc["bufferViews"]) - 1, "componentType": component, "count": len(rows), "type": kind}
+        if kind == "VEC3" and fmt == "f":
+            a["min"] = [min(r[k] for r in rows) for k in range(3)]
+            a["max"] = [max(r[k] for r in rows) for k in range(3)]
+        doc["accessors"].append(a)
+        return len(doc["accessors"]) - 1
+
+    for name, objects in groups.items():
+        keys, rows, indices = {}, [], []
+        for ob in objects:
+            me = ob.data
+            me.calc_tangents(uvmap="UVMap")
+            uv_layer = me.uv_layers.get("UVMap")
+            for poly in me.polygons:
+                loops = list(poly.loop_indices)
+                for k in range(1, len(loops) - 1):
+                    for li in (loops[0], loops[k], loops[k + 1]):
+                        loop = me.loops[li]
+                        uv = uv_layer.data[li].uv
+                        row = (
+                            tuple(round(c, 6) for c in to_gl(me.vertices[loop.vertex_index].co)),
+                            tuple(round(c, 5) for c in to_gl(loop.normal)),
+                            (round(uv[0], 6), round(1 - uv[1], 6)),
+                            tuple(round(c, 5) for c in to_gl(loop.tangent)) + (loop.bitangent_sign,),
+                        )
+                        if row not in keys:
+                            keys[row] = len(rows)
+                            rows.append(row)
+                        indices.append(keys[row])
+            me.free_tangents()
+        attributes = {
+            "POSITION": accessor([r[0] for r in rows], "f", 5126, "VEC3"),
+            "NORMAL": accessor([r[1] for r in rows], "f", 5126, "VEC3"),
+            "TEXCOORD_0": accessor([r[2] for r in rows], "f", 5126, "VEC2"),
+            "TANGENT": accessor([r[3] for r in rows], "f", 5126, "VEC4"),
+        }
+        primitive = {"attributes": attributes, "indices": accessor([[i] for i in indices], "I", 5125, "SCALAR")}
+        doc["meshes"].append({"name": name, "primitives": [primitive]})
+        doc["nodes"].append({"name": f"{ANIMAL}.{name}", "mesh": len(doc["meshes"]) - 1})
+        doc["scenes"][0]["nodes"].append(len(doc["nodes"]) - 1)
+        print(f"{ANIMAL} {name}: {len(rows)} vertices, {len(indices) // 3} triangles")
+    doc["buffers"] = [{"byteLength": len(blob)}]
+    encoded = json.dumps(doc, separators=(",", ":")).encode()
+    encoded += b" " * (-len(encoded) % 4)
+    blob.extend(b"\x00" * (-len(blob) % 4))
+    path.write_bytes(struct.pack("<III", 0x46546C67, 2, 12 + 8 + len(encoded) + 8 + len(blob)) + struct.pack("<II", len(encoded), 0x4E4F534A) + encoded + struct.pack("<II", len(blob), 0x004E4942) + blob)
+
+
+BIRDS = {
+    "hen": {
+        "build": hen_build,
+        "kinds": ("plumage", "wing", "tail", "skin", "horn", "eye"),
+        "parents": {"hen": "body", "hinge-1": "head"},
+        "density": {"eye": 4.0, "tail": 0.55, "horn": 0.5, "skin": 0.8},
+        "size": 512,
+        "occlusion": 0.05,
+        "palette": {
+            "cells": (1.0, 0.55, 0.8),
+            "feather": 60.0,
+            "barbs": (700.0, 50.0, 700.0),
+            "dark": (0.085, 0.024, 0.008),
+            "light": (0.18, 0.055, 0.016),
+            "hackle": (0.26, 0.1, 0.026),
+            "hackle_z": 0.29,
+            "under": (0.15, 0.055, 0.02),
+            "primary": (0.035, 0.016, 0.008),
+            "tail": (0.012, 0.015, 0.01),
+            "rough": 0.6,
+            "tail_rough": 0.36,
+            "skin": (0.3, 0.014, 0.012),
+            "horn": (0.42, 0.22, 0.035),
+            "iris": (0.36, 0.12, 0.015),
+            "eye_x": 0.0,
+        },
+    },
+}
+
+
+def author_bird():
+    spec = BIRDS[ANIMAL]
+    reset()
+    materials = {kind: bpy.data.materials.new(f"{ANIMAL} {kind}") for kind in spec["kinds"]}
+    objects = spec["build"](materials)
+    eyes = next(ob for ob in objects if ob.data.materials[0] is materials["eye"])
+    spec["palette"]["eye_x"] = min(abs(v.co.x) for v in eyes.data.vertices) + 0.0072
+    unwrap(objects, spec["density"])
+    graphs = [bird_graph(materials[kind], kind, spec["palette"]) for kind in spec["kinds"]]
+    maps = bake(objects, graphs, spec["size"], 48, spec["occlusion"])
+    textures = BIRD_ART / "bird-textures"
+    albedo = maps["albedo"].copy()
+    albedo[..., :3] = linear_to_srgb(albedo[..., :3])
+    albedo[..., 3] = 1
+    arm = np.dstack([maps["ao"][..., 0], maps["rough"][..., 0], maps["metal"][..., 0], np.ones(maps["ao"].shape[:2], np.float32)])
+    arm = arm.reshape(arm.shape[0] // 2, 2, arm.shape[1] // 2, 2, 4).mean(axis=(1, 3))
+    normal = maps["normal"].copy()
+    normal[..., 3] = 1
+    save_png(albedo, textures / f"{ANIMAL}-albedo.png")
+    save_png(normal, textures / f"{ANIMAL}-normal.png")
+    save_png(arm, textures / f"{ANIMAL}-arm.png")
+    groups = {}
+    for ob in objects:
+        groups.setdefault(ob["part"], []).append(ob)
+    export_parts(groups, BIRD_ART / f"{ANIMAL}-parts.glb", {"bird": ANIMAL, "parents": spec["parents"]})
+
+
 if __name__ == "__main__" and not globals().get("STAGE"):
-    author()
+    author_bird() if ANIMAL in BIRDS else author()

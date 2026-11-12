@@ -298,8 +298,90 @@ function textureUnmapped(
     }
   }
 }
+/** Blender-authored bird parts (animal-authoring.py) swapped onto the meshes under each hinge. */
+async function authoredBird(name: string): Promise<boolean> {
+  const partsPath = `tools/art/environments/${name}-parts.glb`
+  if (!(await Bun.file(partsPath).exists())) {
+    return false
+  }
+  const doc = await io.read(`tools/art/environments/${name}.glb`)
+  const parts = await io.read(partsPath)
+  const parents = parts.getRoot().getExtras().parents as Record<string, string>
+  const buffer = doc.getRoot().listBuffers()[0] ?? doc.createBuffer()
+  const texture = async (role: string) =>
+    doc
+      .createTexture(`${name} ${role}`)
+      .setImage(await readFile(`tools/art/environments/bird-textures/${name}-${role}.png`))
+      .setMimeType('image/png')
+  const arm = await texture('arm')
+  const material = doc
+    .createMaterial(`${name} plumage`)
+    .setBaseColorTexture(await texture('albedo'))
+    .setNormalTexture(await texture('normal'))
+    .setMetallicRoughnessTexture(arm)
+    .setOcclusionTexture(arm)
+    .setRoughnessFactor(1)
+    .setMetallicFactor(0)
+  const copy = (accessor: import('@gltf-transform/core').Accessor | null) => {
+    const array = accessor?.getArray()
+    if (!(accessor && array)) {
+      throw new Error(`Missing ${name} part data`)
+    }
+    return doc.createAccessor().setType(accessor.getType()).setArray(array.slice()).setBuffer(buffer)
+  }
+  for (const node of doc.getRoot().listNodes()) {
+    const mesh = node.getMesh()
+    const parent = doc
+      .getRoot()
+      .listNodes()
+      .find((candidate) => candidate.listChildren().includes(node))
+    const partName = parent ? parents[parent.getName()] : undefined
+    const source = parts
+      .getRoot()
+      .listMeshes()
+      .find((m) => m.getName() === partName)
+      ?.listPrimitives()[0]
+    if (!(mesh && source)) {
+      continue
+    }
+    for (const primitive of mesh.listPrimitives()) {
+      mesh.removePrimitive(primitive)
+      primitive.dispose()
+    }
+    const primitive = doc.createPrimitive().setMaterial(material).setIndices(copy(source.getIndices()))
+    for (const semantic of source.listSemantics()) {
+      primitive.setAttribute(semantic, copy(source.getAttribute(semantic)))
+    }
+    const count = source.getAttribute('POSITION')?.getCount() ?? 0
+    // Native materials always multiply albedo by COLOR_0; the baked atlas carries every colour.
+    primitive.setAttribute(
+      'COLOR_0',
+      doc
+        .createAccessor()
+        .setType('VEC3')
+        .setArray(new Float32Array(count * 3).fill(1))
+        .setBuffer(buffer),
+    )
+    mesh.addPrimitive(primitive)
+  }
+  await doc.transform(
+    dedup(),
+    prune({ keepLeaves: true, keepAttributes: true }),
+    unpartition(),
+    dequantize(),
+  )
+  const output = `${native}/ambient/${name}.glb`
+  await externalize(doc)
+  await io.write(output, doc)
+  await normalizeSkinnedAsset(output)
+  console.log(`authored ${output} from Blender parts`)
+  return true
+}
 async function ambientAnimals() {
   for (const name of ['crow', 'hen', 'clockwork']) {
+    if (await authoredBird(name)) {
+      continue
+    }
     const source = `tools/art/environments/${name}.glb`
     const doc = await io.read(source)
     const surface = await surfaceMaterial(
