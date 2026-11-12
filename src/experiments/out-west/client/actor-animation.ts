@@ -2,6 +2,7 @@
 import type { AnimComponentLayer } from 'playcanvas'
 import { WEAPON_RIFLE, WEAPON_SHOTGUN } from '../contract/town.ts'
 import type { DuelActor } from '../duel/native-actor.ts'
+import { CROUCH_SPEED, SPRINT_SPEED } from '../ffa/sim/constants.ts'
 import type { Player } from '../ffa/sim/types.ts'
 import type { PlayerState } from '../runtime/protocol.ts'
 
@@ -21,20 +22,30 @@ export function heldWeapon(domain: Player | undefined): 'rifle' | 'shotgun' | 'r
   }
   return 'revolver'
 }
-function gait(player: PlayerState, domain: Player | undefined, speed: number): string {
+/** Near the geometric mean of the authored walk and run strides, so neither clip plays far off its cadence. */
+const WALK_TO_RUN = 2.2
+/** Remote poses carry no motor ticks; only slides and rolls exceed these speeds. */
+const SLIDE_GAIT = CROUCH_SPEED * 1.3
+const ROLL_GAIT = SPRINT_SPEED * 1.2
+export function gait(player: PlayerState, domain: Player | undefined, speed: number): string {
   if (player.hp <= 0) {
     return 'Death'
   }
   if (!player.grounded) {
     return 'Jump_Loop'
   }
-  if ((player.crouched ?? domain?.crouched) || (player.motion?.slideTicks ?? 0) > 0) {
+  const crouched = player.crouched ?? domain?.crouched ?? false
+  const committed = (player.motion?.slideTicks ?? 0) > 0 || (player.motion?.rollTicks ?? 0) > 0
+  if (committed || speed > ROLL_GAIT || (crouched && speed > SLIDE_GAIT)) {
+    return 'Crouch_Idle'
+  }
+  if (crouched) {
     return speed > 0.1 ? 'Crouch_Walk' : 'Crouch_Idle'
   }
   if (speed > 6) {
     return 'Sprint'
   }
-  if (speed > 3) {
+  if (speed > WALK_TO_RUN) {
     return 'Run'
   }
   return speed > 0.1 ? 'Walk' : 'Idle'
