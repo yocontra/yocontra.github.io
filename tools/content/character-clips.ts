@@ -8,6 +8,7 @@ import { validateAuthoringInputs } from './authoring-inputs.ts'
 import { appendCrouchClips } from './crouch-character-clips.ts'
 import { completeCharacterClips } from './normalize-character-clips.ts'
 import { normalizeSkinnedAsset } from './normalize-skinned-nodes.ts'
+import { uprightPosture } from './upright-posture.ts'
 
 const root = resolve('tools/art/characters')
 const io = new NodeIO().registerExtensions(ALL_EXTENSIONS)
@@ -97,6 +98,7 @@ export async function bakeCharacterClips(): Promise<void> {
     new Set(['Idle_Gun_Pointing', 'Gun_Shoot']),
   )
   completeCharacterClips(target)
+  uprightPosture(target)
   appendCrouchClips(target)
   await target.transform(resample(), dedup(), prune({ keepLeaves: true }), unpartition())
   await io.write(path, target)

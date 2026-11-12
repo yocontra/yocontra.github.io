@@ -18,15 +18,18 @@ import { appendClips } from './character-clips.ts'
 import { gunSurfaceDetail, prepareSpurSurface } from './character-metal.ts'
 import { convertCharacterSurface } from './character-surfaces.ts'
 import { integrateGarmentParts } from './garment-parts.ts'
+import { repairHeadNape } from './head-nape.ts'
 import { labelActorHatGlb } from './label-actor-hats.ts'
 import { completeCharacterClips } from './normalize-character-clips.ts'
 import { normalizeSkinnedAsset } from './normalize-skinned-nodes.ts'
 import { consolidateRigidMaterials } from './rigid-materials.ts'
+import { uprightPosture } from './upright-posture.ts'
 import { fitWaistcoats } from './waistcoat-fit.ts'
 import { captureWeaponSockets, restoreWeaponSockets } from './weapon-sockets.ts'
 
 const DYEABLE = /^(?:outfit|hat|holster|extra)\./u
 const RIGID = /^(?:hat|spurs)\./u
+const HUMAN = /^(?:outfit\.|outlaw-|player$)/u
 const WEAPON_BEARER = /^(?:gun\.|outlaw-|held-|player$)/u
 const source = resolve('tools/art/characters')
 const output = resolve('public/experiments/out-west/3d/native-v2')
@@ -36,6 +39,7 @@ export async function bakeCharacter(path: string): Promise<void> {
   const id = basename(path, '.gltf')
   await integrateGarmentParts(doc, id)
   await fitWaistcoats(doc, id)
+  await repairHeadNape(doc)
   const sockets = WEAPON_BEARER.test(id) ? captureWeaponSockets(doc) : []
   for (const node of [...doc.getRoot().listNodes()]) {
     if (node.getName() === 'socket.muzzle') {
@@ -79,6 +83,9 @@ export async function bakeCharacter(path: string): Promise<void> {
     WEAPON_BEARER.test(id) ? (await gunSurfaceDetail()).wear : undefined,
   )
   completeCharacterClips(doc)
+  if (HUMAN.test(id)) {
+    uprightPosture(doc)
+  }
   await appendGunMechanisms(doc, id)
   await doc.transform(dedup())
   joinMaterials(doc)

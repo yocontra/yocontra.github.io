@@ -4,6 +4,7 @@ import { writeFile } from 'node:fs/promises'
 import { resolve } from 'node:path'
 import type { Accessor, Document, Primitive, Texture } from '@gltf-transform/core'
 import sharp from 'sharp'
+import { patchSkinAtlas } from './head-nape.ts'
 export interface Range {
   start: number
   count: number
@@ -50,7 +51,11 @@ export function pixels(texture: Texture): Promise<Pixels> {
       .ensureAlpha()
       .raw()
       .toBuffer({ resolveWithObject: true })
-      .then(({ data, info }) => ({ data, width: info.width, height: info.height }))
+      .then(async ({ data, info }) => {
+        const result = { data, width: info.width, height: info.height }
+        await patchSkinAtlas(image, result)
+        return result
+      })
     cache.set(texture, promise)
   }
   return promise
