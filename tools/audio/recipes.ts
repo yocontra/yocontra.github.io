@@ -289,6 +289,23 @@ export const RECIPES: Record<string, Recipe> = {
     credit: GEN,
     make: () => shot(load(raw('hit_dirt'), 1), 0.5, 0.2),
   },
+  glass_shatter: {
+    out: 'sfx/glass_shatter.m4a',
+    lufs: -18,
+    maxGR: 6,
+    credit:
+      'CC0: Kneeling, "break-window.mp3" (https://freesound.org/s/448004/); ElevatorFan2020, "Hard Glass Break 2" (https://freesound.org/s/861043/)',
+    // Two takes on a 2.5 s grid (call sites pick `offset: 0..1`, 2.2 s each): the burst of a
+    // pane and its shards settling on the boards, so neighbouring windows never repeat.
+    make: () =>
+      [`${HERE}/cc0/freesound-448004.mp3`, `${HERE}/cc0/freesound-861043.mp3`].reduce(
+        (out, file, i) => {
+          const take = shot(load(file, 1), 2.2, 0.9, -12)
+          return mixInto(out, gain(take, -20 - loudness(take).lufs), i * 2.5)
+        },
+        silence(5, 1),
+      ),
+  },
   ricochet: {
     out: 'sfx/ricochet.m4a',
     lufs: -16,

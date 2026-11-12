@@ -24,6 +24,7 @@ import {
 } from './shot-visuals.ts'
 
 interface EffectHooks {
+  event?: (event: SimEvent) => void
   fire?: (id: string) => void
   muzzle?: (id: string) => { position: Vec3; direction: Vec3 } | null
   trace?: (from: Vec3, to: Vec3) => Vec3 | null | undefined
@@ -139,6 +140,7 @@ export class GameEffects {
     })
   }
   event(event: SimEvent): void {
+    this.hooks.event?.(event)
     if (event.type === 'shot') {
       this.confirmShot(event)
     } else if (event.type === 'showdown_call') {

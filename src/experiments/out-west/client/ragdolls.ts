@@ -50,6 +50,7 @@ export class NativeRagdolls {
   private readonly matrix = new Mat4()
   private readonly position = new Vec3()
   private readonly rotation = new Quat()
+  private readonly sharers = new Set<() => boolean>()
   private elapsed = 0
   private constructor(game: GameApplication, physics: Simulation) {
     this.game = game
@@ -62,6 +63,22 @@ export class NativeRagdolls {
       game,
       createSimulation({ ammo: await loadAmmo(), collision, joints: true, gravity: 18 }),
     )
+  }
+  /** Other client-only debris joins this town world; it steps while any user has live bodies. */
+  share(active: () => boolean): Simulation {
+    this.sharers.add(active)
+    return this.physics
+  }
+  private stepping(): boolean {
+    if (this.corpses.size > 0) {
+      return true
+    }
+    for (const active of this.sharers) {
+      if (active()) {
+        return true
+      }
+    }
+    return false
   }
   capture(id: string, actor: DuelActor, velocity: Vec3): void {
     if (this.corpses.has(id) || this.frozen.has(id)) {
@@ -182,7 +199,7 @@ export class NativeRagdolls {
     if (document.hidden) {
       return
     }
-    if (this.corpses.size > 0) {
+    if (this.stepping()) {
       this.elapsed = Math.min(0.1, this.elapsed + dt)
       while (this.elapsed >= 1 / 60) {
         this.physics.app.systems.rigidbody?.step(1 / 60)
@@ -223,6 +240,7 @@ export class NativeRagdolls {
     }
   }
   destroy(): void {
+    this.sharers.clear()
     this.game.app.off('update', this.update)
     this.game.app.off('prerender', this.pose)
     for (const id of [...this.corpses.keys(), ...this.frozen.keys()]) {

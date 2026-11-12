@@ -61,7 +61,7 @@ export interface GameViewport {
     pixelRatio: number
     players: number
     drawCalls: number
-    windows: { total: number; intact: number }
+    windows: { total: number; intact: number; shards: number }
     ragdolls: { active: number; frozen: number; bodies: number }
     actors: { loaded: number; loading: number; failed: number; fallbacks: number; visible: number }
   }
@@ -165,8 +165,10 @@ function createEffects(
   application: GameApplication,
   actors: Actors,
   session: GameSession,
+  windows: BreakableWindows,
 ): GameEffects {
   return new GameEffects(application, {
+    event: (event) => windows.event(event),
     fire: (id) => actors.fire(id),
     muzzle: (id) => actors.muzzle(id),
     trace: (from, to) => session.cameraTrace?.(from, to),
@@ -330,7 +332,7 @@ function viewportDebug({
     worstFps: application?.quality.worstFps ?? 0,
     pixelRatio: application?.quality.pixelRatio ?? 0,
     players: session?.players.size ?? 0,
-    windows: windows?.stats() ?? { total: 0, intact: 0 },
+    windows: windows?.stats() ?? { total: 0, intact: 0, shards: 0 },
     actors: actors?.stats() ?? { loaded: 0, loading: 0, failed: 0, fallbacks: 0, visible: 0 },
     drawCalls: application?.app.stats.drawCalls.total ?? 0,
     ragdolls: ragdolls?.stats() ?? { active: 0, frozen: 0, bodies: 0 },
@@ -379,7 +381,7 @@ export function mountGameViewport(root: HTMLElement, options: ViewportOptions): 
     actors?.update(session.players, dt, first ? session.selfId : undefined)
     atmosphere?.update(dt)
     items?.update(session.world)
-    windows?.update(session.world?.glass)
+    windows?.update(session.world?.glass, session.world?.grid.glass)
     const player = session.players.get(session.selfId)
     if (!player) {
       return
@@ -414,6 +416,7 @@ export function mountGameViewport(root: HTMLElement, options: ViewportOptions): 
         return
       }
       ragdolls = await NativeRagdolls.create(created, options.collision)
+      windows.shatterInto(created, ragdolls)
       options.onStage?.('Getting your rider and gear ready…')
       prepared = await Actors.prepare(created, await options.prepareAppearance?.())
       await GameEffects.preloadAudio(created)
@@ -439,7 +442,7 @@ export function mountGameViewport(root: HTMLElement, options: ViewportOptions): 
       await actors.initialize(session.players, session.selfId, prepared)
       prepared = undefined
       input = createInput(canvas, root, settings, session.players.get(session.selfId))
-      effects = createEffects(created, actors, createdSession)
+      effects = createEffects(created, actors, createdSession, windows)
       await effects.ready
       if (session.world) {
         guide = new BankGuide(root, session.world.grid)
@@ -476,6 +479,7 @@ export function mountGameViewport(root: HTMLElement, options: ViewportOptions): 
     atmosphere?.destroy()
     guide?.destroy()
     effects?.destroy()
+    windows?.destroy()
     actors?.destroy()
     prepared?.dispose()
     ragdolls?.destroy()
