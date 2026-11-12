@@ -2,7 +2,7 @@
 import { createHash } from 'node:crypto'
 import { copyFile, mkdir, readFile, rename, writeFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
-import type { Document } from '@gltf-transform/core'
+import type { Document, Node } from '@gltf-transform/core'
 import { dedup, prune, unpartition, weld } from '@gltf-transform/functions'
 import { Quat, Vec3 } from 'playcanvas'
 import { townWindows } from '../../src/experiments/out-west/ffa/sim/building-rules.ts'
@@ -13,6 +13,7 @@ import { bankServiceSigns, buildingDetails, surround } from './frontier-architec
 import { compileFrontierCollision, perimeterSpans, structuralWalls } from './frontier-collision.ts'
 import { FrontierGeometry, frontierIO, type Rgb } from './frontier-geometry.ts'
 import { frontierFlatGround, frontierGround, frontierGroundTransform } from './frontier-ground.ts'
+import { townGround } from './frontier-ground-detail.ts'
 import { authoredMaterials } from './frontier-materials.ts'
 import { coverModel, desertPlants } from './frontier-props.ts'
 import { optimizeAsset } from './optimize.ts'
@@ -57,6 +58,59 @@ function canyonBoundary(g: FrontierGeometry, layout: TownLayout) {
   }
 }
 
+/** The flat slab: rutted, tinted town dirt framed by a plain apron and its edge skirt. */
+function flatGround(g: FrontierGeometry, ground: Node, layout: TownLayout) {
+  const soil: Rgb = [0.92, 0.85, 0.7]
+  const slab = frontierFlatGround(layout.size)
+  const [x0, z0, x1, z1, y0, s] = [
+    slab.x,
+    slab.z,
+    slab.x + slab.w,
+    slab.z + slab.d,
+    slab.y0,
+    layout.size,
+  ]
+  for (const [ax, az, bx, bz] of [
+    [x0, z0, x1, 0],
+    [x0, s, x1, z1],
+    [x0, 0, 0, s],
+    [s, 0, x1, s],
+  ] as const) {
+    g.quad(
+      ground,
+      'ground',
+      [
+        [ax, 0, az],
+        [ax, 0, bz],
+        [bx, 0, bz],
+        [bx, 0, az],
+      ],
+      { tint: soil },
+    )
+  }
+  const corners = [
+    [x0, z0],
+    [x1, z0],
+    [x1, z1],
+    [x0, z1],
+  ] as const
+  for (const [index, [ax, az]] of corners.entries()) {
+    const [bx, bz] = corners[(index + 1) % 4] ?? corners[0]
+    g.quad(
+      ground,
+      'ground',
+      [
+        [ax, y0, az],
+        [ax, 0, az],
+        [bx, 0, bz],
+        [bx, y0, bz],
+      ],
+      { tint: soil },
+    )
+  }
+  g.surface(ground, 'ground', townGround(layout))
+}
+
 export async function authorFrontier(output: string): Promise<void> {
   const plan = JSON.parse(
     await readFile(join(SOURCE, 'frontier.plan.json'), 'utf8'),
@@ -66,7 +120,7 @@ export async function authorFrontier(output: string): Promise<void> {
   const g = await FrontierGeometry.create(layout.size)
   await authoredMaterials(g)
   const ground = g.group('ground-Perdition')
-  g.box(ground, 'ground', frontierFlatGround(layout.size), [0.92, 0.85, 0.7])
+  flatGround(g, ground, layout)
   for (const mesh of frontierGround(layout.size)) {
     g.surface(
       ground,

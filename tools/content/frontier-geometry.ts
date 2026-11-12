@@ -351,7 +351,7 @@ export class FrontierGeometry {
   surface(
     root: Node,
     role: string,
-    mesh: CollisionMesh & { uvs?: number[] },
+    mesh: CollisionMesh & { uvs?: number[]; colors?: number[] },
     tint: Rgb = [1, 1, 1],
   ): void {
     const data = this.geometry(root, role)
@@ -369,7 +369,7 @@ export class FrontierGeometry {
         mesh.uvs?.[(i / 3) * 2] ?? (mesh.positions[i + (alongZ ? 2 : 0)] ?? 0) / 1.8,
         mesh.uvs?.[(i / 3) * 2 + 1] ?? (mesh.positions[i + (horizontal ? 2 : 1)] ?? 0) / 1.8,
       )
-      data.colors.push(...tint, 1)
+      data.colors.push(...(mesh.colors?.slice((i / 3) * 4, (i / 3) * 4 + 4) ?? [...tint, 1]))
     }
   }
   /** Authored bounding size of a library prop, in metres. */
