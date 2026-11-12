@@ -42,6 +42,44 @@ describe('engine physics', () => {
       simulation.dispose()
     }
   })
+  it('a held jump is one tight hop that lands flush, and a mid-air replay retraces it', () => {
+    const authority = createSimulation({ ammo, collision: floor })
+    const replay = createSimulation({ ammo, collision: floor })
+    try {
+      const player = authority.addPlayer('a', [0, 0.9, 0])
+      const predicted = replay.addPlayer('a', [0, 0.9, 0])
+      for (let i = 0; i < 30; i++) {
+        authority.step(new Map())
+      }
+      const held = new Map([['a', { ...neutralInput(), seq: 1, moveZ: -1, buttons: Buttons.jump }]])
+      const heights: number[] = []
+      const drift: number[] = []
+      let takeoffs = 0
+      let grounded = true
+      for (let tick = 0; tick < 30; tick++) {
+        authority.step(held)
+        if (tick === 4) {
+          replay.adopt('a', structuredClone(player))
+        } else if (tick > 4) {
+          replay.step(held)
+          drift.push(Math.hypot(predicted.y - player.y, predicted.z - player.z))
+        }
+        takeoffs += grounded && !player.grounded ? 1 : 0
+        grounded = player.grounded
+        heights.push(player.y - 0.9)
+      }
+      expect(Math.max(...drift)).toBeLessThan(1e-5)
+      expect(takeoffs).toBe(1)
+      expect(Math.max(...heights)).toBeGreaterThan(0.9)
+      expect(Math.max(...heights)).toBeLessThan(1.1)
+      const landed = heights.findIndex((y, tick) => tick > 2 && y < 0.01)
+      expect(landed).toBeLessThanOrEqual(10)
+      expect(Math.min(...heights)).toBeGreaterThan(-0.02)
+    } finally {
+      authority.dispose()
+      replay.dispose()
+    }
+  })
   it('worlds are isolated, disposal does not invalidate another world, and player caps are enforced', () => {
     const first = createSimulation({ ammo, collision: floor })
     const second = createSimulation({ ammo, collision: floor })

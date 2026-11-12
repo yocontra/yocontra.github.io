@@ -1,6 +1,6 @@
 /** Out West movement rules. Collision/support queries are provided by PlayCanvas. */
 import { ANGLE_SCALE } from '../contract/town.ts'
-import { AIR_CONTROL } from '../ffa/sim/constants.ts'
+import { AIR_CONTROL, JUMP_SPEED, JUMP_TICKS } from '../ffa/sim/constants.ts'
 import { CLIMB_TICKS, climbAt, ladderAt } from '../ffa/sim/roofwalks.ts'
 import { type MoveState, makeMoveState } from '../ffa/sim/types.ts'
 import { Buttons, type PlayerInput } from './protocol.ts'
@@ -258,9 +258,9 @@ export function motorFrame(
     if (startTraversal(m, input, cast)) {
       return traversal(m) ?? frame
     }
-    frame.vy = Math.sqrt(2 * 18 * 1.35)
-    m.jumpCooldown = 14
-    m.jumpTicks = 11
+    frame.vy = JUMP_SPEED
+    m.jumpCooldown = JUMP_TICKS + 2
+    m.jumpTicks = JUMP_TICKS
     m.grounded = false
   }
   if (m.jumpTicks > 0) {

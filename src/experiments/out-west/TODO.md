@@ -32,7 +32,7 @@ Complete and push these in small working tasks, with native visual/audio evidenc
 - [x] Hide desktop **TALK** while retaining keyboard push-to-talk, connection/retry and open-mic mute controls. Keep mobile touch TALK with correct modality hints and active talking status; actual component browser checks cover both inputs.
 - [ ] Make broken glass visibly fragment and fall away, with a glass shatter sound. Bound native debris lifetime/count and verify collision/cleanup and performance.
 - [ ] Add distinct positional bullet-hit sounds for people, wood, masonry/concrete, metal, glass and other authored surfaces. Match actual hit material and avoid duplicate local/authoritative playback.
-- [ ] Correct floaty jumping toward the requested Call of Duty Mobile feel. Tune native gravity/impulse together, retain one jump edge, and verify local/server trajectories and traversal routes.
+- [x] Correct floaty jumping toward the requested Call of Duty Mobile feel. Native gravity 26 m/s² (1.3× on the fall) with a matched impulse: a 1.0 m hop lands in 0.50 s instead of 1.29 m in 0.70 s, and a native support probe lands flush instead of sinking 0.25 m into the floor. Two taps in Chrome give exactly two take-offs; a mid-air rollback replay retraces the authority within 1e-5 m, and the traversal audit reports no issues.
 - [ ] Add positional footsteps for every nearby player using the actual supporting surface, including stairs and vertical separation. Validate proximity, obstruction, cadence and cleanup so approaching players are audible without hearing the whole map.
 
 ## Resume points

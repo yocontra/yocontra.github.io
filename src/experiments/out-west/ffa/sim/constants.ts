@@ -30,10 +30,18 @@ export const STEP_UP = 0.35
 export const STEP_DOWN = 0.45
 /** The steepest roof a rider can walk up (rise/run). */
 export const MAX_WALK_SLOPE = 0.8
-/** Gravity and the CoD-style jump/mantle. */
-export const GRAVITY = 18
-export const JUMP_APEX = 1.35
+/**
+ * Gravity and the CoD-style jump/mantle: a 1 m hop that lands in about half a second (Bullet integration peaks just under `JUMP_APEX`). The native
+ * body falls `FALL_GRAVITY_SCALE` times harder than it rises, so the apex does not hang.
+ */
+export const GRAVITY = 26
+export const FALL_GRAVITY_SCALE = 1.3
+export const JUMP_APEX = 1.05
 export const JUMP_SPEED = Math.sqrt(2 * GRAVITY * JUMP_APEX)
+/** Rise plus fall back to the take-off height, in ticks. */
+export const JUMP_TICKS = Math.ceil(
+  (JUMP_SPEED / GRAVITY + Math.sqrt((2 * JUMP_APEX) / (GRAVITY * FALL_GRAVITY_SCALE))) * TICK_HZ,
+)
 export const MANTLE_REACH = 2.4
 export const MANTLE_TICKS = s(0.3)
 export const MANTLE_MAX_PROBE = 1.2

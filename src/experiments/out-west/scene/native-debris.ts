@@ -25,6 +25,7 @@ export class NativeDebris {
       }
       this.physics = createSimulation({
         ammo,
+        gravity: 18,
         collision: {
           version: 'duel-prop-floor',
           boxes: [{ center: [0, -0.05, 0], halfExtents: [128, 0.05, 128] }],

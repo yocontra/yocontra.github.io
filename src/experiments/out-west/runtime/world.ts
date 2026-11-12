@@ -16,7 +16,7 @@ import {
   StandardMaterial,
   Vec3,
 } from 'playcanvas'
-import { BODY_HEIGHT, CROUCH_HEIGHT } from '../ffa/sim/constants.ts'
+import { BODY_HEIGHT, CROUCH_HEIGHT, FALL_GRAVITY_SCALE, GRAVITY } from '../ffa/sim/constants.ts'
 import { roofWalkAt } from '../ffa/sim/roofwalks.ts'
 import { motorFrame, newMotion } from './abilities.ts'
 import {
@@ -31,6 +31,8 @@ import {
 
 export interface SimulationOptions {
   joints?: boolean
+  /** Downward acceleration in m/s²; player movement uses the shared jump gravity. */
+  gravity?: number
 
   ammo: unknown
   collision: CollisionData
@@ -57,7 +59,7 @@ export function createSimulation(options: SimulationOptions) {
   physics.timeScale = 0
   // The shared runtime supplies exact 60 Hz substeps; disable Bullet's second accumulator.
   physics.maxSubSteps = 0
-  physics.gravity.set(0, -18, 0)
+  physics.gravity.set(0, -(options.gravity ?? GRAVITY), 0)
   const players = new Map<string, PlayerState>()
   const entities = new Map<string, Entity>()
   let disposed = false
@@ -151,8 +153,12 @@ export function createSimulation(options: SimulationOptions) {
     if (motor.position) {
       body.teleport(motor.position[0], motor.position[1] + height / 2, motor.position[2])
     }
-    body.gravityScale = motor.gravity ? 1 : 0
+    const fall = motor.vy > 0 ? 1 : FALL_GRAVITY_SCALE
+    body.gravityScale = motor.gravity ? fall : 0
     stepRiser({ body, position, motion, motor, height, cast })
+    if (motor.gravity && !motion.grounded && !motor.position) {
+      landOnSupport({ body, motion, motor, cast, gravity: physics.gravity.y })
+    }
     body.linearVelocity = new Vec3(motor.vx, motor.vy, motor.vz)
     state.yaw = input.yaw
     state.pitch = input.pitch
@@ -261,6 +267,38 @@ function stepRiser({
       }
     }
   }
+}
+
+/**
+ * Bullet detects contacts before integrating, so a fast fall sinks a substep into the floor and
+ * pops back out. Arrive on the support this tick instead.
+ */
+function landOnSupport({
+  body,
+  motion,
+  motor,
+  cast,
+  gravity,
+}: {
+  body: import('playcanvas').RigidBodyComponent
+  motion: import('../ffa/sim/types.ts').MoveState
+  motor: import('./abilities.ts').MotorFrame
+  cast: import('./abilities.ts').Cast
+  gravity: number
+}) {
+  const dt = 1 / SIMULATION_HZ
+  const drop = -(motor.vy * dt + 0.5 * gravity * body.gravityScale * dt * dt)
+  if (drop <= 0) {
+    return
+  }
+  const x = motion.x + motor.vx * dt
+  const z = motion.z + motor.vz * dt
+  const hit = cast([x, motion.y + 0.05, z], [x, motion.y - drop - 0.05, z])
+  if (!hit || hit.normal.y <= 0.65 || hit.point.y > motion.y) {
+    return
+  }
+  body.gravityScale = 0
+  motor.vy = (hit.point.y - motion.y) / dt
 }
 
 function updateMotion(

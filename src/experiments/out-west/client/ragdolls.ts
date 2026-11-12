@@ -60,7 +60,7 @@ export class NativeRagdolls {
   static async create(game: GameApplication, collision: CollisionData): Promise<NativeRagdolls> {
     return new NativeRagdolls(
       game,
-      createSimulation({ ammo: await loadAmmo(), collision, joints: true }),
+      createSimulation({ ammo: await loadAmmo(), collision, joints: true, gravity: 18 }),
     )
   }
   capture(id: string, actor: DuelActor, velocity: Vec3): void {
