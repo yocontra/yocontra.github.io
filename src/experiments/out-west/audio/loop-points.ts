@@ -6,6 +6,9 @@
 export const LOOP_POINTS = {
   amb_crickets: { start: 2, end: 17 },
   amb_fire: { start: 2, end: 10.5 },
+  amb_frontier_wind: { start: 0.25, end: 19.268_67 },
+  amb_loco: { start: 0.25, end: 6.200_96 },
+  amb_murmur: { start: 0.25, end: 16.25 },
   amb_piano: { start: 2, end: 23.5 },
   amb_saloon: { start: 2, end: 21 },
   amb_wind_day: { start: 2, end: 21 },

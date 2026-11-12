@@ -34,6 +34,7 @@ import {
   thump,
   tick,
 } from './dsp.ts'
+import { FRONTIER_RECIPES } from './frontier-recipes.ts'
 import { findLoop, findLoopAmong } from './loops.ts'
 
 const HERE = import.meta.dir
@@ -709,4 +710,5 @@ export const RECIPES: Record<string, Recipe> = {
     credit: LYRIA,
     make: () => shot(load(lyriaTake('l_lucky_b', 3), 2), 5, 1.2, -40),
   },
+  ...FRONTIER_RECIPES,
 }
