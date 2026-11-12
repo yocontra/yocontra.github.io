@@ -19,6 +19,9 @@ old masonry atlas into ordinary native PBR materials and repeating UVs. It check
 that Perdition retains its vegetation. `lighting.json` retains the original campaign
 daylight, dusk and night art direction as sampled authored parameters.
 
+`textures/` holds CC0 Poly Haven scans (diffuse, OpenGL normal, AO/roughness/metal) used
+by Perdition's authored surfaces; each keeps its Poly Haven asset id as the file prefix.
+
 The supported output is `/3d/native-v2/baked/`; prior public GLBs remain compatible
 with already open v1 tabs. Environment maps use native `KHR_texture_basisu` with
 UASTC KTX2, preserving the optimized image dimensions. The builder shares the

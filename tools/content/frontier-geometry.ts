@@ -14,9 +14,12 @@ import { calculateNormals, calculateTangents } from 'playcanvas'
 import sharp from 'sharp'
 import { projectedUv, surfaceMaterial } from './animal-prop-surfaces.ts'
 import type { CollisionMesh } from './frontier-collision.ts'
+import { fitCells, fitPrefab, hash01, type PrefabFit } from './frontier-fit.ts'
 import { frontierGroundTransform } from './frontier-ground.ts'
+import { scanMaterial } from './frontier-surfaces.ts'
 import { repairFrontierWinding } from './frontier-winding.ts'
 
+export type { PrefabFit } from './frontier-fit.ts'
 export type Rgb = readonly [number, number, number]
 export interface Placement {
   x: number
@@ -204,7 +207,17 @@ export class FrontierGeometry {
       }
     }
     result.materials.set('straw', await surfaceMaterial(result.doc, 'straw', 'Hay'))
-    result.materials.set('iron', await surfaceMaterial(result.doc, 'iron'))
+    result.materials.set(
+      'iron',
+      await scanMaterial(result.doc, 'Perdition iron', 'rusty_metal_02', {
+        metallic: 1,
+        size: 512,
+      }),
+    )
+    result.materials.set(
+      'masonry',
+      await scanMaterial(result.doc, 'Perdition dressed stone', 'sandstone_cracks', { size: 512 }),
+    )
     for (const [role, prefix] of [
       ['wood', 'vplanks'],
       ['floor', 'planks'],
@@ -348,7 +361,12 @@ export class FrontierGeometry {
       data.colors.push(...tint, 1)
     }
   }
-  prefab(root: Node, name: string, area: Placement): Node {
+  /**
+   * Place a library prop inside a cover volume without distorting it. Tiled props repeat at
+   * near-authored size to fill the volume; any axis departs from uniform scale by at most
+   * `anisotropy`, so the visible solid stays inside, and close to, the gameplay collision.
+   */
+  prefab(root: Node, name: string, area: Placement, fit: PrefabFit = {}): Node {
     const source = this.prototypes.get(name)
     if (!source) {
       throw new Error(`Missing authored prop ${name}`)
@@ -361,29 +379,32 @@ export class FrontierGeometry {
       throw new Error(`Invalid prefab bounds ${name}`)
     }
     const swap = sx >= sz !== area.w >= area.d
-    const fit = this.doc
-      .createNode(`${name}-placement`)
-      .setTranslation([area.x + area.w / 2, area.y0 ?? 0, area.z + area.d / 2])
-      .setScale([
-        area.w / (swap ? sz : sx),
-        (area.top - (area.y0 ?? 0)) / sy,
-        area.d / (swap ? sx : sz),
-      ])
-    const orientation = this.doc
-      .createNode('orientation')
-      .setRotation(swap ? [0, Math.SQRT1_2, 0, Math.SQRT1_2] : [0, 0, 0, 1])
-    const center = this.doc
-      .createNode('source-pivot')
-      .setTranslation([
-        -(bounds.min[0] + bounds.max[0]) / 2,
-        -bounds.min[1],
-        -(bounds.min[2] + bounds.max[2]) / 2,
-      ])
-    fit.addChild(orientation)
-    orientation.addChild(center)
-    center.addChild(cloneTree(this.doc, source))
-    root.addChild(fit)
-    return fit
+    const natural = swap ? [sz, sy, sx] : [sx, sy, sz]
+    const bottom = area.y0 ?? 0
+    const size = [area.w, area.top - bottom, area.d]
+    const { counts, scale } = fitPrefab(natural, size, fit)
+    const group = this.doc.createNode(`${name}-placement`)
+    const pivot: [number, number, number] = [
+      -(bounds.min[0] + bounds.max[0]) / 2,
+      -bounds.min[1],
+      -(bounds.min[2] + bounds.max[2]) / 2,
+    ]
+    for (const [x, y, z] of fitCells(area, counts, fit.hollow)) {
+      const yaw = (fit.jitter ?? 0) * (2 * hash01(x, y, z) - 1) + (swap ? Math.PI / 2 : 0)
+      const [wx = 1, wy = 1, wz = 1] = scale
+      const center = this.doc.createNode('source-pivot').setTranslation(pivot)
+      center.addChild(cloneTree(this.doc, source))
+      group.addChild(
+        this.doc
+          .createNode(`${name}-instance`)
+          .setTranslation([x, y, z])
+          .setRotation([0, Math.sin(yaw / 2), 0, Math.cos(yaw / 2)])
+          .setScale(swap ? [wz, wy, wx] : [wx, wy, wz])
+          .addChild(center),
+      )
+    }
+    root.addChild(group)
+    return group
   }
   finish(): void {
     for (const [name, entry] of this.buffers) {

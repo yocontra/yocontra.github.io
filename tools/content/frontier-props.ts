@@ -1,21 +1,50 @@
 import type { Node } from '@gltf-transform/core'
+import {
+  CANOPY_SEGMENTS,
+  WAGON_BED,
+  WAGON_WHEEL,
+} from '../../src/experiments/out-west/ffa/sim/cover-shape.ts'
 import type { Cover } from '../../src/experiments/out-west/ffa/sim/layout.ts'
+import { frame, tube, wagonGear } from './frontier-carpentry.ts'
 import { fenceSpans, wagonCanopy } from './frontier-collision.ts'
+import type { PrefabFit } from './frontier-fit.ts'
+import {
+  anvil,
+  bench,
+  boxcar,
+  DARK_WOOD,
+  headstone,
+  IRON,
+  lumber,
+  safe,
+  stove,
+  table,
+  trough,
+} from './frontier-furniture.ts'
 import type { FrontierGeometry, Placement, Rgb } from './frontier-geometry.ts'
 
-const KIT_PROPS: Partial<Record<Cover['kind'], string>> = {
-  anvil: 'k_anvil',
-  barrel_rack: 'k_barrel_rack',
-  barrels: 'barrel',
-  bucket: 'k_bucket',
-  lantern: 'k_lantern',
-  bench: 'k_bench',
-  coffins: 'coffin',
-  crates: 'k_crate_big',
-  workbench: 'k_workbench',
-  table: 'k_table',
-  safe: 'k_chest',
-  headstone: 'coffin',
+/** Library props whose authored proportions can fill their cover volume by repetition. */
+const KIT_PROPS: Partial<Record<Cover['kind'], [string, PrefabFit]>> = {
+  barrel_rack: ['k_barrel_rack', { tile: true, copyCost: 0.12 }],
+  barrels: ['barrel', { tile: true, jitter: Math.PI }],
+  bucket: ['k_bucket', { jitter: 0.6 }],
+  lantern: ['lantern', {}],
+  coffins: ['coffin', { anisotropy: 1.15 }],
+  crates: ['k_crate_big', { tile: true, jitter: 0.06 }],
+  workbench: ['k_workbench', { tile: true, anisotropy: 1.15 }],
+}
+const JOINERY: Partial<
+  Record<Cover['kind'], (g: FrontierGeometry, root: Node, c: Placement) => void>
+> = {
+  anvil,
+  bench,
+  boxcar,
+  headstone,
+  lumber,
+  safe,
+  stove,
+  table,
+  trough,
 }
 
 export function coverModel(g: FrontierGeometry, root: Node, c: Cover) {
@@ -27,7 +56,12 @@ export function coverModel(g: FrontierGeometry, root: Node, c: Cover) {
   }
   const prefab = KIT_PROPS[c.kind]
   if (prefab) {
-    g.prefab(root, prefab, area)
+    g.prefab(root, prefab[0], area, prefab[1])
+    return
+  }
+  const joinery = JOINERY[c.kind]
+  if (joinery) {
+    joinery(g, root, area)
     return
   }
   if (c.kind === 'counter') {
@@ -59,14 +93,8 @@ export function coverModel(g: FrontierGeometry, root: Node, c: Cover) {
     g.box(root, 'cloth', { ...area, y0: (c.y0 ?? 0) + 0.25, top }, [0.76, 0.66, 0.47])
     return
   }
-  // Shop fixtures have intentional broad collision faces; open furniture uses the original Kit.
-  const tint: Rgb = c.kind === 'boxcar' ? [0.38, 0.32, 0.25] : [0.57, 0.43, 0.29]
-  g.box(root, c.kind === 'forge' || c.kind === 'headstone' ? 'stone' : 'wood', area, tint)
-  if (c.kind === 'boxcar') {
-    for (const z of [c.z + 0.1, c.z + c.d - 0.1]) {
-      g.box(root, 'wood', { x: c.x, z, w: c.w, d: 0.13, y0: 0.3, top: 0.52 }, [0.19, 0.17, 0.15])
-    }
-  }
+  // Shop fixtures have intentional broad collision faces.
+  g.box(root, c.kind === 'forge' ? 'stone' : 'wood', area, [0.57, 0.43, 0.29])
 }
 
 /** Tied straw bales fill the authored cover volume; the old cinched spool read as a placeholder. */
@@ -112,36 +140,107 @@ function hayBales(g: FrontierGeometry, root: Node, area: Placement) {
   }
 }
 
+/** Stacked freight crates at their authored size; the stack fills its collision volume. */
 function crateStack(g: FrontierGeometry, root: Node, c: Placement) {
-  const top = c.top
-  {
-    const rows = Math.max(1, Math.ceil((top - (c.y0 ?? 0)) / 1.4))
-    const columns = Math.max(1, Math.ceil(c.w / 2))
-    const depth = Math.max(1, Math.ceil(c.d / 2))
-    for (let level = 0; level < rows; level++) {
-      for (let col = 0; col < columns; col++) {
-        for (let row = 0; row < depth; row++) {
-          const y = (c.y0 ?? 0) + ((top - (c.y0 ?? 0)) * level) / rows
-          g.prefab(root, 'k_crate_big', {
-            x: c.x + (c.w * col) / columns,
-            z: c.z + (c.d * row) / depth,
-            w: c.w / columns,
-            d: c.d / depth,
-            y0: y,
-            top: y + (top - (c.y0 ?? 0)) / rows,
-          })
-        }
-      }
-    }
-  }
+  g.prefab(root, 'k_crate_big', c, { tile: true, jitter: 0.05, hollow: true, copyCost: 0.08 })
 }
 
+/**
+ * Wagons are built to their collision: the covered wagon follows the shared bed, wheel,
+ * tongue and canopy profile; box-collided wagons keep wheels and sideboards inside the box.
+ */
 function wagonModel(g: FrontierGeometry, root: Node, c: Cover) {
-  const top = c.top ?? 1
-  const area: Placement = { ...c, top }
-  g.prefab(root, 'cart', { ...area, top: c.kind === 'covered_wagon' ? 1.25 : top })
+  const f = frame(c)
+  const top = (c.top ?? 1) - f.base
   if (c.kind === 'covered_wagon') {
+    wagonGear(g, root, c, {
+      bedCenter: 0.45,
+      bedLength: f.length - 1.1,
+      bedWidth: f.width - 0.5,
+      bedTop: WAGON_BED + 0.12,
+      sideRise: 0.4,
+      wheelRadius: WAGON_WHEEL,
+      wheelInset: 0.08,
+    })
     g.surface(root, 'cloth', wagonCanopy(c))
+    for (let i = 1; i < 5; i++) {
+      const a = 0.45 + (i / 5 - 0.5) * (f.length - 1.35)
+      const bows = Array.from({ length: CANOPY_SEGMENTS + 1 }, (_, j) => j / CANOPY_SEGMENTS)
+      for (let j = 0; j < bows.length - 1; j++) {
+        const at = (t: number) => {
+          const theta = t * Math.PI
+          const radius = Math.max(0.45, (f.width - 0.5) / 2) - 0.04
+          const eave = WAGON_BED + 0.12 + 0.38
+          return f.point(a, Math.cos(theta) * radius, eave + Math.sin(theta) * (top - eave - 0.06))
+        }
+        tube(g, root, {
+          role: 'wood',
+          tint: DARK_WOOD,
+          from: at(bows[j] ?? 0),
+          to: at(bows[j + 1] ?? 0),
+          radius: 0.025,
+          segments: 5,
+        })
+      }
+    }
+    return
+  }
+  const wheelRadius = Math.min(0.55, (top - 0.1) / 2)
+  const bedTop = Math.min(top - 0.35, wheelRadius * 2 - 0.15)
+  wagonGear(g, root, c, {
+    bedCenter: 0.45,
+    bedLength: f.length - 1.1,
+    bedWidth: f.width - 0.4,
+    bedTop,
+    sideRise: c.kind === 'stagecoach' ? 0 : top - bedTop,
+    wheelRadius,
+    wheelInset: 0.08,
+  })
+  if (c.kind === 'stagecoach') {
+    const a0 = -0.35
+    const a1 = f.length / 2 - 0.25
+    const half = f.width / 2 - 0.3
+    const roof = top - 0.22
+    const paint: Rgb = [0.46, 0.14, 0.09]
+    g.box(root, 'wood', f.block([a0, a1], [-half, half], [bedTop, roof]), paint)
+    g.box(
+      root,
+      'wood',
+      f.block([a0 - 0.1, a1 + 0.1], [-half - 0.08, half + 0.08], [roof, roof + 0.06]),
+      [0.2, 0.15, 0.11],
+    )
+    for (const b of [-half - 0.01, half - 0.02]) {
+      for (const a of [a0 + 0.25, a1 - 0.85]) {
+        g.box(
+          root,
+          'wood',
+          f.block([a, a + 0.6], [b, b + 0.03], [bedTop + 0.65, roof - 0.2]),
+          [0.07, 0.06, 0.05],
+        )
+      }
+      g.box(
+        root,
+        'wood',
+        f.block([a0, a1], [b - 0.01, b + 0.04], [bedTop + 0.55, bedTop + 0.6]),
+        [0.72, 0.55, 0.22],
+      )
+    }
+    for (const b of [-half, half - 0.05]) {
+      g.box(root, 'iron', f.block([a0, a1], [b, b + 0.05], [roof + 0.06, top - 0.04]), IRON)
+    }
+    g.box(root, 'iron', f.block([a0, a1], [-half, half], [top - 0.04, top]), IRON)
+    g.box(
+      root,
+      'wood',
+      f.block([a0 - 0.9, a0], [-half + 0.1, half - 0.1], [bedTop, bedTop + 0.5]),
+      paint,
+    )
+    g.box(
+      root,
+      'floor',
+      f.block([a0 - 0.8, a0 - 0.2], [-half + 0.1, half - 0.1], [bedTop + 0.5, bedTop + 0.58]),
+      [0.3, 0.2, 0.13],
+    )
   }
 }
 
