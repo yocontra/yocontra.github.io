@@ -43,6 +43,7 @@ export async function createGame(opts: GameOpts): Promise<Game> {
     canvas: opts.canvas,
     viewport: opts.root,
     pixelRatio: opts.tier === 'low' ? 1 : Math.min(devicePixelRatio, 1.5),
+    tier: opts.tier,
   })
   const lifecycle = new AbortController()
   let disposeDirector = (): void => undefined

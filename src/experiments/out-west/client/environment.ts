@@ -274,6 +274,7 @@ export class NativeEnvironment {
     this.fogEnd = this.frontier ? 110 : preset.fogFar
     this.haze = preset.haze * CAMPAIGN_HAZE
     this.applyFog()
+    this.game.post?.grade(preset, this.frontier)
     for (const material of this.windows) {
       material.emissive.copy(color([1, 0.32, 0.06]))
       material.emissiveIntensity = preset.windows * 1.6
@@ -307,6 +308,7 @@ export class NativeEnvironment {
     }
     this.denseFog = enabled
     this.applyFog()
+    this.game.post?.dailyFog(enabled)
   }
   private applyFog(): void {
     const fog = this.game.app.scene.fog

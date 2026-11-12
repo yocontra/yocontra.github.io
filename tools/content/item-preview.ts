@@ -14,7 +14,13 @@ export async function previewItem(id: keyof typeof EQUIPMENT): Promise<void> {
     document.body.style.margin = '0'
     const canvas = document.createElement('canvas')
     document.body.append(canvas)
-    game = await GameApplication.create({ canvas, viewport: document.body, pixelRatio: 1 })
+    // Product shots stay the plain forward render: no vignette, dust or grade.
+    game = await GameApplication.create({
+      canvas,
+      viewport: document.body,
+      pixelRatio: 1,
+      tier: 'low',
+    })
     game.camera.camera?.clearColor.set(0.24, 0.2, 0.16)
     const skybox = game.app.scene.layers?.getLayerByName('Skybox')
     if (skybox) {

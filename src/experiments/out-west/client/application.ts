@@ -20,6 +20,7 @@ import {
   ParticleSystemComponentSystem,
   RESOLUTION_AUTO,
   RenderComponentSystem,
+  SHADOW_PCF5_32F,
   SoundComponentSystem,
   SoundManager,
   type Texture,
@@ -28,13 +29,17 @@ import {
 } from 'playcanvas'
 import { SKIES } from '../content/skies.ts'
 import { assetUrl } from '../platform/asset-url.ts'
+import { pickTier, type RenderTier } from '../platform/render-tier.ts'
 import { FrameBudget } from './frame-budget.ts'
+import { NativePost } from './post.ts'
 
 export interface ApplicationOptions {
   canvas: HTMLCanvasElement
   /** The DOM viewport can be a hub panel or the full screen. */
   viewport: HTMLElement
   pixelRatio?: number
+  /** Defaults to the device and settings rule (`#tier=` overrides). */
+  tier?: RenderTier
 }
 
 /** Owns every engine resource and listener created by one mounted game. */
@@ -42,6 +47,9 @@ export class GameApplication {
   readonly camera: Entity
   readonly stage: Entity
   readonly quality: FrameBudget
+  readonly tier: RenderTier
+  /** High tier only: the native post stack the environment grades per lighting preset. */
+  post: NativePost | undefined
   private readonly controller = new AbortController()
   private readonly resizeObserver: ResizeObserver
   private readonly loads = new Map<string, Promise<Asset>>()
@@ -56,6 +64,7 @@ export class GameApplication {
     this.camera = new Entity('camera', app)
     this.stage = new Entity('stage', app)
     this.options = options
+    this.tier = options.tier ?? pickTier()
     this.quality = new FrameBudget(options.pixelRatio ?? Math.min(devicePixelRatio, 1.5))
     app.scene.ambientLight = new Color(0.42, 0.37, 0.29)
     app.scene.exposure = 1.1
@@ -74,7 +83,16 @@ export class GameApplication {
       intensity: 2.3,
       castShadows: true,
       shadowDistance: 45,
-      shadowResolution: 1024,
+      ...(this.tier === 'high'
+        ? {
+            // Two cascades keep the duelists' contact shadows crisp while the far street stays shadowed.
+            numCascades: 2,
+            cascadeDistribution: 0.6,
+            cascadeBlend: 0.1,
+            shadowResolution: 2048,
+            shadowType: SHADOW_PCF5_32F,
+          }
+        : { shadowResolution: 1024 }),
       shadowBias: 0.2,
       normalOffsetBias: 0.05,
     })
@@ -129,6 +147,14 @@ export class GameApplication {
       if (result.camera.camera) {
         result.camera.camera.toneMapping = TONEMAP_ACES
         result.camera.camera.gammaCorrection = GAMMA_SRGB
+        if (result.tier === 'high') {
+          const sun = app.root.findByName('sun')
+          result.post = new NativePost(
+            app,
+            result.camera.camera,
+            sun instanceof Entity ? (sun.light ?? null) : null,
+          )
+        }
       }
       app.start()
       await result.environment()
@@ -328,6 +354,8 @@ export class GameApplication {
     this.controller.abort()
     this.resizeObserver.disconnect()
     this.app.off('update', this.update)
+    this.post?.destroy()
+    this.post = undefined
     this.app.scene.envAtlas = null
     this.app.scene.skybox = null
     for (const texture of this.environmentTextures) {

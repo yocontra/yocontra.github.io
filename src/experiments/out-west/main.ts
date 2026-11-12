@@ -9,9 +9,10 @@ import { restoreSession } from './net/auth.ts'
 import { RankedSession } from './net/ranked.ts'
 import { Turnstile } from './net/turnstile.ts'
 import { setAudioSessionMode, unlockAudio } from './platform/audio.ts'
-import { installDevice, readDevice } from './platform/device.ts'
+import { installDevice } from './platform/device.ts'
 import { installGamepad } from './platform/gamepad.ts'
 import { setHapticsEnabled } from './platform/haptics.ts'
+import { pickTier } from './platform/render-tier.ts'
 import { registerServiceWorker } from './platform/sw.ts'
 import { installViewportVars } from './platform/viewport.ts'
 import { load, type SaveData, save } from './save.ts'
@@ -26,23 +27,8 @@ import { installUiSounds } from './ui/sfx.ts'
 import { installTitleInput } from './ui/title-input.ts'
 import { Toaster } from './ui/toast.ts'
 
-type Tier = 'low' | 'high'
-
 /** Hashes that jump into a debug view or a non-default run: never ranked. */
 const UNRANKED_HASHES = ['level', 'legend', 'lineup', 'posters']
-
-function pickTier(param: string | null): Tier {
-  if (param === 'low' || param === 'high') {
-    return param
-  }
-  const chosen = getSettings().graphics
-  if (chosen !== 'auto') {
-    return chosen
-  }
-  // phones start at the floor; iPads, foldables and desktops take the device prior (tiers.ts's
-  // devicePrior; Frontier asks tierHint, the same rule)
-  return readDevice().form === 'phone' ? 'low' : 'high'
-}
 
 /** `#level=N` jumps straight to outlaw N; returns true when it did. */
 function applyLevelJump(data: SaveData, param: string | null): boolean {
