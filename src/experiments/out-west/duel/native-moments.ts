@@ -116,7 +116,8 @@ export let killFrameEl: HTMLDivElement | null = null
 
 /** The red silhouette frame: black figures on hot red for two frames as the shot lands. */
 export function killFrame(d: NativeDirector, on: boolean): void {
-  if (!(killFrameEl || on)) {
+  if (!on) {
+    killFrameEl?.classList.remove('on')
     return
   }
   if (!killFrameEl) {
@@ -135,7 +136,7 @@ export function killFrame(d: NativeDirector, on: boolean): void {
   if (killFrameEl.parentElement !== d.c.hud.root) {
     d.c.hud.root.append(killFrameEl)
   }
-  killFrameEl.classList.toggle('on', on)
+  killFrameEl.classList.add('on')
 }
 
 export function flash(d: NativeDirector, amount: number): void {
@@ -153,7 +154,10 @@ let canvasFilter = ''
 
 /** The standoff's tightening vignette, `k` 0..1 of the way from rest to the wait's darkest. */
 function vignette(d: NativeDirector, k: number): void {
-  if (!(lensEl || k >= 0.005)) {
+  if (k < 0.005) {
+    if (lensEl && lensEl.style.opacity !== '0') {
+      lensEl.style.opacity = '0'
+    }
     return
   }
   if (!lensEl) {
@@ -167,7 +171,7 @@ function vignette(d: NativeDirector, k: number): void {
   if (lensEl.parentElement !== d.c.hud.root) {
     d.c.hud.root.append(lensEl)
   }
-  const o = k < 0.005 ? '0' : k.toFixed(3)
+  const o = k.toFixed(3)
   if (lensEl.style.opacity !== o) {
     lensEl.style.opacity = o
   }

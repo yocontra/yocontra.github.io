@@ -229,10 +229,51 @@ export function update(d: NativeDirector, frameDt: number): void {
   d.realTime += realDt
   d.rig.reduced = d.c.save.settings.reducedMotion
   tickMoments(d, realDt, frameDt)
+  if (d.phase === 'title') {
+    frameHub(d)
+    return
+  }
+  tickPhase(d, now, realDt)
+  d.rig.update(realDt)
+}
+
+export function remotePace(d: NativeDirector, paces: number): void {
+  d.walked = paces
+  d.player?.place(0, 0, -0.4 - paces * 0.7)
+  d.enemy?.place(0, 0, 0.4 + paces * 0.7)
+  d.player?.play('Walk')
+  d.enemy?.play('Walk')
+  d.c.hud.setPips(paces, true)
+}
+
+export async function lineup(d: NativeDirector, _day = 0.3): Promise<void> {
+  d.enter('title')
+  if (d.player) {
+    d.player.root.enabled = false
+  }
+  const actors = await Promise.all(
+    OUTLAWS.map((_outlaw, index) =>
+      DuelActor.create(
+        d.game,
+        ASSETS[`outlaw-${index}` as keyof typeof ASSETS].url,
+        `outlaw-${index}`,
+      ),
+    ),
+  )
+  for (const [index, actor] of actors.entries()) {
+    actor.place((index - 8) * 1.6, 0, 0)
+    actor.face(0)
+  }
+  d.game.camera.setPosition(0, 5, 25)
+  d.game.camera.lookAt(new Vec3(0, 1, 0))
+}
+
+export function posters(d: NativeDirector): Promise<void> {
+  return d.lineup()
+}
+
+function tickPhase(d: NativeDirector, now: number, realDt: number): void {
   switch (d.phase) {
-    case 'title':
-      frameHub(d)
-      return
     case 'intro':
       printPortrait(d)
       if (d.phaseT >= 2) {
@@ -283,40 +324,4 @@ export function update(d: NativeDirector, frameDt: number): void {
     default:
       break
   }
-  d.rig.update(realDt)
-}
-
-export function remotePace(d: NativeDirector, paces: number): void {
-  d.walked = paces
-  d.player?.place(0, 0, -0.4 - paces * 0.7)
-  d.enemy?.place(0, 0, 0.4 + paces * 0.7)
-  d.player?.play('Walk')
-  d.enemy?.play('Walk')
-  d.c.hud.setPips(paces, true)
-}
-
-export async function lineup(d: NativeDirector, _day = 0.3): Promise<void> {
-  d.enter('title')
-  if (d.player) {
-    d.player.root.enabled = false
-  }
-  const actors = await Promise.all(
-    OUTLAWS.map((_outlaw, index) =>
-      DuelActor.create(
-        d.game,
-        ASSETS[`outlaw-${index}` as keyof typeof ASSETS].url,
-        `outlaw-${index}`,
-      ),
-    ),
-  )
-  for (const [index, actor] of actors.entries()) {
-    actor.place((index - 8) * 1.6, 0, 0)
-    actor.face(0)
-  }
-  d.game.camera.setPosition(0, 5, 25)
-  d.game.camera.lookAt(new Vec3(0, 1, 0))
-}
-
-export function posters(d: NativeDirector): Promise<void> {
-  return d.lineup()
 }
