@@ -17,6 +17,7 @@ import type { CollisionMesh } from './frontier-collision.ts'
 import { fitCells, fitPrefab, hash01, type PrefabFit } from './frontier-fit.ts'
 import { frontierGroundTransform } from './frontier-ground.ts'
 import { scanMaterial } from './frontier-surfaces.ts'
+import { addCactusPrefabs, type Saguaro, splitVegetation } from './frontier-vegetation.ts'
 import { repairFrontierWinding } from './frontier-winding.ts'
 
 export type { PrefabFit } from './frontier-fit.ts'
@@ -158,6 +159,8 @@ export class FrontierGeometry {
   readonly doc: Document
   readonly root: Node
   readonly materials = new Map<string, Material>()
+  /** Outskirts saguaro sites lifted from the legacy vegetation, re-authored on the terrain. */
+  readonly saguaros: Saguaro[] = []
   private readonly prototypes = new Map<string, Node>()
   private readonly buffers = new Map<string, { root: Node; material: Material; data: Geometry }>()
   private readonly buffer
@@ -189,8 +192,16 @@ export class FrontierGeometry {
   static async create(size = 104): Promise<FrontierGeometry> {
     const result = new FrontierGeometry(await frontierIO.read(libraryPath), size)
     console.log('Authored winding repairs', repairFrontierWinding(result.doc))
+    const vegetation = await splitVegetation(result.doc, frontierGroundTransform(size))
+    console.log('Vegetation tissues', vegetation.counts, 'saguaros', vegetation.saguaros.length)
+    result.saguaros.push(...vegetation.saguaros)
+    for (const [name, prefab] of await addCactusPrefabs(
+      result.doc,
+      await frontierIO.read('tools/art/environments/frontier-cacti.glb'),
+    )) {
+      result.prototypes.set(name, prefab)
+    }
     for (const [name, kind] of [
-      ['flora', 'bark'],
       ['Hay', 'straw'],
       ['Green', 'cactus'],
     ] as const) {
@@ -201,7 +212,7 @@ export class FrontierGeometry {
       for (const mesh of result.doc.getRoot().listMeshes()) {
         for (const primitive of mesh.listPrimitives()) {
           if (primitive.getMaterial() === material) {
-            projectedUv(result.doc, primitive, name === 'flora' ? 32 : 6)
+            projectedUv(result.doc, primitive, 6)
           }
         }
       }
@@ -360,6 +371,15 @@ export class FrontierGeometry {
       )
       data.colors.push(...tint, 1)
     }
+  }
+  /** Authored bounding size of a library prop, in metres. */
+  naturalSize(name: string): [number, number, number] {
+    const source = this.prototypes.get(name)
+    if (!source) {
+      throw new Error(`Missing authored prop ${name}`)
+    }
+    const { min, max } = getBounds(source)
+    return [max[0] - min[0], max[1] - min[1], max[2] - min[2]]
   }
   /**
    * Place a library prop inside a cover volume without distorting it. Tiled props repeat at

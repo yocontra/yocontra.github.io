@@ -14,7 +14,7 @@ import { compileFrontierCollision, perimeterSpans, structuralWalls } from './fro
 import { FrontierGeometry, frontierIO, type Rgb } from './frontier-geometry.ts'
 import { frontierFlatGround, frontierGround, frontierGroundTransform } from './frontier-ground.ts'
 import { authoredMaterials } from './frontier-materials.ts'
-import { coverModel } from './frontier-props.ts'
+import { coverModel, desertPlants } from './frontier-props.ts'
 import { optimizeAsset } from './optimize.ts'
 
 export interface FrontierPlan {
@@ -122,10 +122,7 @@ export async function authorFrontier(output: string): Promise<void> {
     coverModel(g, props, c)
   }
   bankServiceSigns(g, props, layout)
-  const plants = g.group('Perdition creek and yard cactus beds')
-  for (const plant of plan.vegetation) {
-    g.prefab(plants, 'cactus', plant)
-  }
+  desertPlants(g, plan.vegetation, layout.size)
   const panes = authorPanes(g, layout, groups)
   g.finish()
   await g.doc.transform(dedup(), weld(), prune(), unpartition())

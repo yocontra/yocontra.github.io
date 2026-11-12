@@ -21,6 +21,9 @@ daylight, dusk and night art direction as sampled authored parameters.
 
 `textures/` holds CC0 Poly Haven scans (diffuse, OpenGL normal, AO/roughness/metal) used
 by Perdition's authored surfaces; each keeps its Poly Haven asset id as the file prefix.
+`saguaro_skin`, `prickly_pear` and `sagebrush` are tileable Blender bakes in the same
+layout. `frontier-cacti.glb` holds the Blender-authored saguaros (near and far
+variants) and prickly pear, tinted by vertex colour over those maps.
 
 The supported output is `/3d/native-v2/baked/`; prior public GLBs remain compatible
 with already open v1 tabs. Environment maps use native `KHR_texture_basisu` with

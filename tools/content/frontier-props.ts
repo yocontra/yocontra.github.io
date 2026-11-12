@@ -22,6 +22,7 @@ import {
   trough,
 } from './frontier-furniture.ts'
 import type { FrontierGeometry, Placement, Rgb } from './frontier-geometry.ts'
+import { frontierTerrainHeight } from './frontier-ground.ts'
 
 /** Library props whose authored proportions can fill their cover volume by repetition. */
 const KIT_PROPS: Partial<Record<Cover['kind'], [string, PrefabFit]>> = {
@@ -327,6 +328,41 @@ function counterModel(g: FrontierGeometry, root: Node, c: Placement) {
         top: c.top - 0.15,
       },
       [0.83, 0.65, 0.39],
+    )
+  }
+}
+
+/** Yard cactus beds and outskirts saguaros, every base seated on the rendered ground. */
+export function desertPlants(g: FrontierGeometry, beds: readonly Placement[], size: number) {
+  const yards = g.group('Perdition creek and yard cactus beds')
+  for (const [index, plant] of beds.entries()) {
+    const saguaro = index % 2 === 0 ? 'saguaro_two_arm' : 'saguaro_one_arm'
+    g.prefab(yards, plant.top <= 1.3 ? 'prickly_pear' : saguaro, plant, { jitter: Math.PI })
+  }
+  const ground = frontierTerrainHeight(size)
+  const outskirts = g.group('Perdition outskirts saguaros')
+  for (const { x, z, top, spread } of g.saguaros) {
+    const reach = 0.2
+    const base =
+      Math.min(
+        ...[
+          [0, 0],
+          [reach, 0],
+          [-reach, 0],
+          [0, reach],
+          [0, -reach],
+        ].map(([dx = 0, dz = 0]) => ground(x + dx, z + dz)),
+      ) - 0.05
+    const height = top - base
+    const name = spread > height * 0.3 ? 'saguaro_far_two_arm' : 'saguaro_far_one_arm'
+    const [w, h, d] = g.naturalSize(name)
+    // Saguaros grow taller far faster than they thicken.
+    const girth = Math.sqrt(height / h)
+    g.prefab(
+      outskirts,
+      name,
+      { x: x - (w * girth) / 2, z: z - (d * girth) / 2, w: w * girth, d: d * girth, y0: base, top },
+      { anisotropy: Number.POSITIVE_INFINITY, jitter: Math.PI },
     )
   }
 }
