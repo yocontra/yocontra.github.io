@@ -215,6 +215,7 @@ export async function externalize(doc: Document) {
         ao: Boolean(arm && material.getOcclusionTexture() === arm),
         aoUv: material.getOcclusionTextureInfo()?.getTexCoord() ?? 0,
         aoStrength: material.getOcclusionStrength(),
+        ...(material.getAlphaMode() === 'MASK' ? { alphaTest: material.getAlphaCutoff() } : {}),
       },
     })
     material

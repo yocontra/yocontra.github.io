@@ -71,9 +71,9 @@ export const DYNAMIC_ASSETS = {
     bytes: 159984,
   },
   horse: {
-    url: '/experiments/out-west/3d/native-v2/dynamic/horse.glb?v=2c2ff6819d84694d',
-    hash: '2c2ff6819d84694dc9e04afa598bad2a118742a79a0766ba5dfe8a786387cb27',
-    bytes: 255192,
+    url: '/experiments/out-west/3d/native-v2/dynamic/horse.glb?v=adfd6a2d399676e6',
+    hash: 'adfd6a2d399676e6d468ad71d2ce008c68e82f8435f57ac1404f35dc01169874',
+    bytes: 707136,
   },
   'held-rifle': {
     url: '/experiments/out-west/3d/native-v2/dynamic/held-rifle.glb?v=958569269de00bbb',
@@ -91,7 +91,7 @@ export const ENVIRONMENT = {
   hash: '206c67e3a1b992282821cf06662bdd69bbb4915c1c4444a66338a40d6a7d4e34',
   bytes: 1173154,
 } as const
-export const CONTENT_VERSION = '97b818352028625d0cd0a39838eabcf9f967d72140e6dafb7aff5b1d6a5be6e5'
+export const CONTENT_VERSION = 'a9502cc55a372077c2cadfc0bf507995fb09574edef9ecfa819a7d684be4971b'
 export const COLLISION_VERSION = 'da29516af2ad4f42cc678a1d3dd1ab1b36b74ba5c950c81f5d3d6a5864aae3aa'
 export const ASSETS = {
   frontier: {

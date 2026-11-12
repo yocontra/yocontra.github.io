@@ -1,5 +1,7 @@
 /** Repeatable native glTF authoring. Legacy public assets are read-only compatibility inputs. */
-import { copyFile, mkdir, writeFile } from 'node:fs/promises'
+import { copyFile, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { type Document, getBounds, NodeIO } from '@gltf-transform/core'
 import { ALL_EXTENSIONS } from '@gltf-transform/extensions'
 import { dedup, dequantize, prune, unpartition, weld } from '@gltf-transform/functions'
@@ -114,8 +116,108 @@ function birdDetails(
   }
   doc.getRoot().setExtras({ ...doc.getRoot().getExtras(), birdDetails: true })
 }
+/** Blender-authored body, tack and hair cards (animal-authoring.py) spliced onto the canonical rig. */
+async function authoredAnimal(name: string): Promise<boolean> {
+  const partsPath = `tools/art/characters/${name}-parts.glb`
+  if (!(await Bun.file(partsPath).exists())) {
+    return false
+  }
+  const doc = await io.read(`tools/art/characters/${name}.gltf`)
+  const parts = await io.read(partsPath)
+  const skinned = doc
+    .getRoot()
+    .listNodes()
+    .find((node) => node.getMesh() && node.getSkin())
+  const mesh = skinned?.getMesh()
+  const joints = skinned?.getSkin()?.listJoints()
+  if (!(mesh && joints)) {
+    throw new Error(`Missing ${name} skinned body`)
+  }
+  const expected = parts.getRoot().getExtras().jointNames
+  if (JSON.stringify(joints.map((joint) => joint.getName())) !== JSON.stringify(expected)) {
+    throw new Error(`${name} parts were authored against a different skeleton`)
+  }
+  for (const primitive of mesh.listPrimitives()) {
+    mesh.removePrimitive(primitive)
+    primitive.dispose()
+  }
+  const buffer = doc.getRoot().listBuffers()[0] ?? doc.createBuffer()
+  const texture = async (surface: string, role: string) =>
+    doc
+      .createTexture(`${name} ${surface} ${role}`)
+      .setImage(
+        await readFile(`tools/art/characters/animal-textures/${name}-${surface}-${role}.png`),
+      )
+      .setMimeType('image/png')
+  for (const source of parts
+    .getRoot()
+    .listMeshes()
+    .flatMap((m) => m.listPrimitives())) {
+    const surface = String(source.getExtras().surface)
+    const arm = await texture(surface, 'arm')
+    const material = doc
+      .createMaterial(`${name} ${surface}`)
+      .setBaseColorTexture(await texture(surface, 'albedo'))
+      .setNormalTexture(await texture(surface, 'normal'))
+      .setMetallicRoughnessTexture(arm)
+      .setOcclusionTexture(arm)
+      .setRoughnessFactor(1)
+      .setMetallicFactor(1)
+    if (surface === 'hair') {
+      material.setAlphaMode('MASK').setAlphaCutoff(0.42).setDoubleSided(true)
+    }
+    const primitive = doc.createPrimitive().setMaterial(material)
+    for (const semantic of source.listSemantics()) {
+      const attribute = source.getAttribute(semantic)
+      const array = attribute?.getArray()
+      if (!(attribute && array)) {
+        throw new Error(`Missing ${name} ${semantic}`)
+      }
+      primitive.setAttribute(
+        semantic,
+        doc.createAccessor().setType(attribute.getType()).setArray(array.slice()).setBuffer(buffer),
+      )
+    }
+    const count = source.getAttribute('POSITION')?.getCount() ?? 0
+    // Native materials always multiply albedo by COLOR_0; authored maps carry every colour.
+    primitive.setAttribute(
+      'COLOR_0',
+      doc
+        .createAccessor()
+        .setType('VEC3')
+        .setArray(new Float32Array(count * 3).fill(1))
+        .setBuffer(buffer),
+    )
+    const indices = source.getIndices()?.getArray()
+    if (!indices) {
+      throw new Error(`Missing ${name} indices`)
+    }
+    primitive.setIndices(
+      doc.createAccessor().setType('SCALAR').setArray(indices.slice()).setBuffer(buffer),
+    )
+    mesh.addPrimitive(primitive)
+  }
+  await doc.transform(prune({ keepLeaves: true, keepAttributes: true }))
+  const staging = await mkdtemp(join(tmpdir(), `out-west-${name}-`))
+  try {
+    await io.write(join(staging, `${name}.gltf`), doc)
+    await bakeCharacter(join(staging, `${name}.gltf`))
+  } finally {
+    await rm(staging, { recursive: true, force: true })
+  }
+  const output = `${native}/dynamic/${name}.glb`
+  const baked = await io.read(output)
+  await externalize(baked)
+  await io.write(output, baked)
+  await normalizeSkinnedAsset(output)
+  console.log(`authored native ${name} from Blender parts`)
+  return true
+}
 async function coatAnimals() {
   for (const name of ['dog', 'horse']) {
+    if (await authoredAnimal(name)) {
+      continue
+    }
     const path = `tools/art/characters/${name}.gltf`
     const doc = await io.read(path)
     const material = await surfaceMaterial(doc, 'fur', `${name} directional coat`)

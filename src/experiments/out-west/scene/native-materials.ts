@@ -12,6 +12,8 @@ interface Surface {
   ao?: boolean
   aoUv?: number
   aoStrength?: number
+  /** Cutout cards (hair) read coverage from the albedo alpha channel. */
+  alphaTest?: number
   roughnessVertexScale?: number
   dyes?: Partial<Record<DyeId, string>>
 }
@@ -106,6 +108,11 @@ export async function prepareNativeMaterials(
         // glTF roughness is authored for GGX; the native default is Blinn-Phong.
         material.enableGGXSpecular = true
         material.diffuseMap = albedo
+        if (source.alphaTest !== undefined) {
+          material.opacityMap = albedo
+          material.opacityMapChannel = 'a'
+          material.alphaTest = source.alphaTest
+        }
         if (normal) {
           material.normalMap = normal
           material.bumpiness = 1.4
@@ -141,6 +148,7 @@ export async function prepareNativeMaterials(
       release: () => {
         for (const material of materials) {
           material.diffuseMap = null
+          material.opacityMap = null
           material.normalMap = null
           material.metalnessMap = null
           material.glossMap = null
