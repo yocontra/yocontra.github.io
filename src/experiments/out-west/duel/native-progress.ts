@@ -11,7 +11,7 @@ import { arenaForSlot } from './native-arenas.ts'
 import { resetAttempt, STEADY_MS } from './native-combat.ts'
 import type { NativeDirector } from './native-director.ts'
 import { endShot } from './native-framing.ts'
-import { enterCock, enterPoster, setStage } from './native-standoff.ts'
+import { enterCock, enterPoster, setStage, standBackUp } from './native-standoff.ts'
 import { RankedDuelClock } from './ranked-clock.ts'
 
 /** Prepare disabled actors behind the director's stage gate; the caller owns every candidate. */
@@ -129,6 +129,10 @@ export function retry(d: NativeDirector): void {
     retryPhaseTwo(d)
     return
   }
+  if (d.enemy && d.phase !== 'loading' && !d.loadFailed) {
+    respawn(d, d.enemy)
+    return
+  }
   void d.startLevel(d.level, true)
 }
 
@@ -146,7 +150,25 @@ function retryPhaseTwo(d: NativeDirector): void {
   d.enemyAlive = true
   d.c.save.attempts[d.level] = (d.c.save.attempts[d.level] ?? 0) + 1
   resetAttempt(d)
+  standBackUp(d)
   d.wait()
+}
+
+/** Try again on the same stage: the men stand back up where they are, no reload, no card. */
+function respawn(d: NativeDirector, enemy: DuelActor): void {
+  d.clock.cancel()
+  d.debris.reset()
+  d.duel = -1
+  d.enemyAlive = true
+  d.riflemanAlive = Boolean(d.rifleman)
+  enemy.root.enabled = true
+  enemy.play('Idle', 0)
+  if (d.rifleman) {
+    d.rifleman.place(11, 4, 8)
+    d.rifleman.face(180)
+    d.rifleman.play('Hold_rifle', 0)
+  }
+  presentLevel(d, true)
 }
 
 export function restartRun(d: NativeDirector, legend: boolean): void {

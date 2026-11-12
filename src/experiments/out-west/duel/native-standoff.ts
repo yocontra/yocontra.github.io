@@ -105,6 +105,17 @@ function restage(d: NativeDirector): void {
   }
 }
 
+/** The boss's second phase again after a loss: both men back on their feet where they stand. */
+export function standBackUp(d: NativeDirector): void {
+  if (d.phase === 'coward') {
+    d.arenas.stampPoster(d.level, null)
+  }
+  restage(d)
+  d.m.satTarget = 1
+  d.player?.play('Idle', 0.1)
+  d.enemy?.play('Idle', 0.1)
+}
+
 /** The poster beat that opens a new outlaw. */
 export function enterPoster(d: NativeDirector): void {
   restage(d)
