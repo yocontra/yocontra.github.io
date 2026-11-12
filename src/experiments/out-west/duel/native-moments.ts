@@ -116,6 +116,9 @@ export let killFrameEl: HTMLDivElement | null = null
 
 /** The red silhouette frame: black figures on hot red for two frames as the shot lands. */
 export function killFrame(d: NativeDirector, on: boolean): void {
+  if (!(killFrameEl || on)) {
+    return
+  }
   if (!killFrameEl) {
     const doc = d.c.hud.root.ownerDocument
     killFrameEl = doc.createElement('div')
@@ -146,9 +149,13 @@ export function flash(d: NativeDirector, amount: number): void {
 }
 
 let lensEl: HTMLDivElement | null = null
+let canvasFilter = ''
 
 /** The standoff's tightening vignette, `k` 0..1 of the way from rest to the wait's darkest. */
 function vignette(d: NativeDirector, k: number): void {
+  if (!(lensEl || k >= 0.005)) {
+    return
+  }
   if (!lensEl) {
     lensEl = d.c.hud.root.ownerDocument.createElement('div')
     lensEl.className = 'ow-lens'
@@ -170,10 +177,10 @@ export function tickGrade(d: NativeDirector, realDt: number): void {
   const m = d.m
   // the colour drains out of the street when you're shot (and comes back for the retry)
   m.sat += (m.satTarget - m.sat) * Math.min(1, realDt * 3)
-  const canvas = d.game.app.graphicsDevice.canvas as HTMLCanvasElement
   const filter = m.sat < 0.99 ? `saturate(${m.sat.toFixed(2)})` : ''
-  if (canvas.style.filter !== filter) {
-    canvas.style.filter = filter
+  if (filter !== canvasFilter) {
+    canvasFilter = filter
+    ;(d.game.app.graphicsDevice.canvas as HTMLCanvasElement).style.filter = filter
   }
   if (d.phase !== 'wait') {
     m.vignette -= m.vignette * Math.min(1, realDt * 2)
@@ -324,7 +331,10 @@ export function clearMoments(d: NativeDirector): void {
   d.m = new Moments()
   killFrame(d, false)
   vignette(d, 0)
-  ;(d.game.app.graphicsDevice.canvas as HTMLCanvasElement).style.filter = ''
+  if (canvasFilter) {
+    canvasFilter = ''
+    ;(d.game.app.graphicsDevice.canvas as HTMLCanvasElement).style.filter = ''
+  }
   d.c.hud.letterbox(false)
   d.c.hud.marker(null, null)
   d.c.audio.stopAmbience()

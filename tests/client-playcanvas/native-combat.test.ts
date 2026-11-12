@@ -12,6 +12,13 @@ import type { DuelActor } from '../../src/experiments/out-west/duel/native-actor
 import { call, shoot } from '../../src/experiments/out-west/duel/native-combat.ts'
 import type { NativeDirector } from '../../src/experiments/out-west/duel/native-director.ts'
 import type { Press } from '../../src/experiments/out-west/engine/input.ts'
+import { inertPresentation, quiet } from './duel-presentation.ts'
+
+const visuals = await import('../../src/experiments/out-west/client/shot-visuals.ts')
+// muzzle flashes and hit sprites need a live PlayCanvas app; the judgement doesn't
+spyOn(visuals, 'shotVisuals').mockImplementation(
+  () => quiet({}) as unknown as ReturnType<typeof visuals.shotVisuals>,
+)
 
 function fixture(level: number, ranked = false) {
   const outlaw = OUTLAWS[level]
@@ -42,12 +49,14 @@ function fixture(level: number, ranked = false) {
       shot: (target: number, ms: number | null) => shots.push({ target, ms }),
     },
     arenas: { toll: () => undefined },
+    game: { app: { scene: { exposure: 1 } } },
     c: {
       save: { legend: false, settings: { assist: false } },
       input: { touch: false },
-      hud: { call: () => undefined },
-      audio: { play: () => undefined, call: () => undefined, heartbeat: () => undefined },
+      hud: quiet({ call: () => undefined }),
+      audio: quiet({ play: () => undefined, call: () => undefined, heartbeat: () => undefined }),
     },
+    ...inertPresentation(),
     enter: (phase: string) => {
       state.phase = phase
     },
@@ -76,6 +85,7 @@ function aimAtCurly(director: NativeDirector): void {
     game: {
       camera: { camera: { worldToScreen: (point: Vec3) => point.clone() } },
       app: {
+        scene: { exposure: 1 },
         graphicsDevice: {
           canvas: {
             width: 1000,

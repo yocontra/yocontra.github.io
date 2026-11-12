@@ -3,6 +3,7 @@ import { Vec2, Vec3 } from 'playcanvas'
 import { OUTLAWS } from '../../src/experiments/out-west/data/outlaws.ts'
 import { DuelActor } from '../../src/experiments/out-west/duel/native-actor.ts'
 import { NativeDirector } from '../../src/experiments/out-west/duel/native-director.ts'
+import { inertPresentation, quiet } from './duel-presentation.ts'
 
 const equipment = await import('../../src/experiments/out-west/scene/native-equipment.ts')
 
@@ -99,7 +100,7 @@ function fixture() {
         lookAt: noop,
       },
     },
-    arenas: {
+    arenas: quiet({
       life: {},
       show: () => {
         const done = deferred<void>()
@@ -112,12 +113,25 @@ function fixture() {
         return done.promise
       },
       destroy: noop,
-    },
+    }),
     c: {
       input,
-      save: { legend: false, attempts: [], seenPosters: [], run: { total: 0 } },
-      audio: { hushUi: noop, playSong: noop, heartbeat: noop, update: noop, setListener: noop },
-      hud: {
+      save: {
+        legend: false,
+        attempts: [],
+        seenPosters: [],
+        best: [],
+        run: { total: 0 },
+        settings: { reducedMotion: false },
+      },
+      audio: quiet({
+        hushUi: noop,
+        playSong: noop,
+        heartbeat: noop,
+        update: noop,
+        setListener: noop,
+      }),
+      hud: quiet({
         menuOpen: false,
         phase: noop,
         showCard: (card: { title: string }) => cards.push(card.title),
@@ -130,9 +144,10 @@ function fixture() {
         closeMenu: noop,
         hideEnd: noop,
         update: noop,
-      },
+      }),
     },
     hubShot: noop,
+    ...inertPresentation(),
   }) as NativeDirector
   const finishActor = (index: number) => {
     const pending = actors[index]
