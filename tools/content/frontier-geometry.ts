@@ -217,7 +217,10 @@ export class FrontierGeometry {
         }
       }
     }
-    result.materials.set('straw', await surfaceMaterial(result.doc, 'straw', 'Hay'))
+    const straw = await scanMaterial(result.doc, 'Perdition baled straw', 'thatch_roof_angled', {
+      size: 512,
+    })
+    result.materials.set('straw', straw.setBaseColorFactor([0.86, 0.8, 0.72, 1]))
     result.materials.set(
       'iron',
       await scanMaterial(result.doc, 'Perdition iron', 'rusty_metal_02', {

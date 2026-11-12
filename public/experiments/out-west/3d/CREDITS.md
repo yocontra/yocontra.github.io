@@ -93,6 +93,11 @@ fetched and converted to WebP with `tools/polyhaven.ts`.
 | civic atlas: dressed stone | "Sandstone Blocks 08" — https://polyhaven.com/a/sandstone_blocks_08 | CC0 1.0 |
 | civic atlas: cedar shingles | "Roof Slates 02" — https://polyhaven.com/a/roof_slates_02 | CC0 1.0 |
 | civic atlas: sheet tin | "Rusty Metal Sheet" — https://polyhaven.com/a/rusty_metal_sheet | CC0 1.0 |
+| Frontier: iron | "Rusty Metal 02" — https://polyhaven.com/a/rusty_metal_02 | CC0 1.0 |
+| Frontier: dressed stone | "Sandstone Cracks" — https://polyhaven.com/a/sandstone_cracks | CC0 1.0 |
+| Frontier: dead wood | "Bark Brown 02" — https://polyhaven.com/a/bark_brown_02 | CC0 1.0 |
+| Frontier: desert rock | "Rock Boulder Dry" — https://polyhaven.com/a/rock_boulder_dry | CC0 1.0 |
+| Frontier: hay bales | "Thatch Roof Angled" — https://polyhaven.com/a/thatch_roof_angled | CC0 1.0 |
 
 The civic atlas packs those four sets 2x2 with wrapped gutters (`tools/build-civic-atlas.ts`):
 diffuse 1024², normal and ARM 512². The clock dial is painted at runtime on a canvas.
