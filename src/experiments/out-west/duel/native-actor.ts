@@ -19,6 +19,28 @@ const HUMANOID = /\/(?:baked\/(?:outlaw-|player)|equipment\/outfit\.|viewmodels\
 const GAIT = /^(?:Stride_|Walk$|Run$|Sprint$|Crouch_Walk$)/u
 const DRAWN = /Pointing|Shoot|Death|Hit|Draw|Spin|Flinch/u
 
+interface ClipMotionExtras {
+  speed?: number
+  turnRate?: number
+  turnPivot?: [number, number, number]
+}
+/** Locomotion extras on authored clips: travel speed for gaits, yaw rate and pivot for turns in place. */
+function readClipMotion(actor: DuelActor, resource: ContainerResource): void {
+  const clips = (
+    resource as ContainerResource & {
+      data: { gltf?: { animations?: { name?: string; extras?: ClipMotionExtras }[] } }
+    }
+  ).data.gltf?.animations
+  for (const { name, extras } of clips ?? []) {
+    if (name && extras?.speed && !(name in actor.gaitSpeeds)) {
+      actor.gaitSpeeds[name] = extras.speed
+    }
+    if (name && extras?.turnRate) {
+      actor.turns[name] = { rate: extras.turnRate, pivot: extras.turnPivot ?? [0, 0, 0] }
+    }
+  }
+}
+
 /** The engine owns skeletal playback; duel logic requests named authored clips. */
 export class DuelActor {
   private current = ''
@@ -42,6 +64,8 @@ export class DuelActor {
   paceLength = 0.7
   walkDuration = 1.24
   gaitSpeeds: Record<string, number> = {}
+  /** Authored turn-in-place clips: the root yaw rate (degrees/s) and model-space pivot that keep the hooves planted. */
+  turns: Record<string, { rate: number; pivot: readonly [number, number, number] }> = {}
   private playbackRate = 1
   readonly root: Entity
   readonly model: Entity
@@ -194,6 +218,7 @@ export class DuelActor {
       if (authoredSeat !== undefined && Number.isFinite(authoredSeat) && authoredSeat > 0) {
         actor.seatedHipOffset = authoredSeat
       }
+      readClipMotion(actor, resource)
       const metadata = (
         resource as ContainerResource & {
           data: { gltf?: { nodes?: { extras?: { paceLength?: number; walkDuration?: number } }[] } }

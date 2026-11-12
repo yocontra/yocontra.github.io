@@ -6415,7 +6415,12 @@
     }
    ],
    "extras": {
-    "turnRate": 22.0
+    "turnRate": 22.0,
+    "turnPivot": [
+     0.0,
+     0.0,
+     -0.72
+    ]
    }
   },
   {
@@ -6953,7 +6958,12 @@
     }
    ],
    "extras": {
-    "turnRate": -22.0
+    "turnRate": -22.0,
+    "turnPivot": [
+     0.0,
+     0.0,
+     -0.72
+    ]
    }
   },
   {

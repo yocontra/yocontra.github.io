@@ -898,6 +898,14 @@ class Clip:
         return {key: ("stance", leg.toe.copy(), 0.0, 2.0) for key, leg in rig.legs.items()}
 
 
+# Turns in place swing the forehand around the hindquarters.
+TURN_PIVOT = Vector((0, 0.72, 0))
+
+
+def to_gltf(v):
+    return (v[0], v[2], -v[1])
+
+
 class Gait(Clip):
     """A footfall-timed gait: stance hooves stay planted while the body travels at `speed`."""
 
@@ -917,7 +925,7 @@ class Gait(Clip):
         toe = leg.toe.copy()
         toe.y += self.reach.get(key[1], 0.0) - travel / 2 + travel * u
         if self.turn_rate:
-            pivot = Vector((0, 0.72, 0))
+            pivot = TURN_PIVOT
             angle = math.radians(self.turn_rate * self.duration * self.duty * (u - 0.5))
             toe = pivot + Matrix.Rotation(-angle, 3, "Z") @ (toe - pivot)
         return toe
@@ -1312,6 +1320,8 @@ def author(out=None, triangles=8000, h=0.008):
         clip = meta.get(animation["name"])
         if clip and (clip.speed or clip.turn_rate):
             animation["extras"] = {k: v for k, v in (("speed", clip.speed), ("turnRate", clip.turn_rate)) if v}
+        if clip and clip.turn_rate:
+            animation["extras"]["turnPivot"] = [round(c, 4) + 0.0 for c in to_gltf(TURN_PIVOT)]
     reduce_keys(doc, Path(out))
     Path(out).write_text(json.dumps(doc, indent=1))
     print("wrote", out)
