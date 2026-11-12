@@ -28,7 +28,7 @@ it('every three-dimensional catalogue item has a verified native-compatible asse
         .some((extension) => extension.extensionName === 'EXT_meshopt_compression'),
     ).toBe(false)
   }
-}, 30_000)
+})
 
 it('outfits carry a standardized animated rig and distinct dyeable cloth material', async () => {
   const outfits = CATALOG.filter((item) => item.slot === 'outfit')

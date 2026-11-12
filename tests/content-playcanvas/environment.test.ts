@@ -59,7 +59,7 @@ it('environment PBR maps use native Basis images and preserve the complete veget
   expect(authored.life.crowPerches).toHaveLength(3)
   expect(streetLife.folk).toHaveLength(9)
   expect(streetLife.horses).toHaveLength(2)
-}, 30_000)
+})
 
 it('the wanted paper retains UVs and its original placement rather than appearing at the duel origin', async () => {
   const document = await io.read(`public${ASSETS.duel.url.split('?')[0]}`)

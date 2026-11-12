@@ -39,7 +39,7 @@ it('every published asset matches its content-addressed manifest and uses native
     )
     expect(clips.includes('Death')).toBe(character)
   }
-}, 30_000)
+})
 
 it('static collision version covers complete finite geometry with upward surface winding', () => {
   expect(COLLISION_VERSION).toBe(collision.version)

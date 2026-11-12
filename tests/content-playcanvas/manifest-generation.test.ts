@@ -102,4 +102,4 @@ it('ambient byte changes refresh descriptors and content version without changin
   } finally {
     await rm(fixture, { recursive: true, force: true })
   }
-}, 30_000)
+})

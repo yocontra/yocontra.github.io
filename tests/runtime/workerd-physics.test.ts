@@ -59,4 +59,4 @@ it('real workerd initializes native Ammo and steps independently owned worlds', 
   expect(state.two.grounded).toBe(true)
   expect(state.one.x).toBeCloseTo(0, 2)
   expect(state.two.x).toBeCloseTo(4, 2)
-}, 30_000)
+})
