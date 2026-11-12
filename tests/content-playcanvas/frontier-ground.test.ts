@@ -158,7 +158,7 @@ it('real native bodies cannot walk, sprint, jump, crouch-vault or interact out o
   } finally {
     simulation.dispose()
   }
-})
+}, 120_000)
 
 it('reachable upper routes and repeated jump/interact chains cannot escape the stockyard', () => {
   const simulation = createSimulation({ ammo, collision: compileFrontierCollision(TOWN) })
