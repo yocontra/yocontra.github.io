@@ -64,7 +64,7 @@ Complete and push these in small working tasks, with native visual/audio evidenc
 - [ ] Replace the poor support-hand pose using the canonical weapon-specific donor or a bounded offline native Blender arm/hand pose. The original `held-actions` finger planes run along the barrel, so small curl changes alone cannot produce a natural wrap.
 - [ ] Start with `tools/art/characters/held-rifle.gltf` as a donor reference. Its support-hand placement is about 108 mm different from the current action pose and has much better finger contact. Retarget deliberately; preserve right/body/gun channels and original clip timing wherever possible.
 - [ ] Validate actual skinned pads, axial twist, self-folding and comfortable silhouette across Hold/Shoot/crouch, including the full 200 ms action. Rejected prototypes achieved good fingertip distances or shallow penetration while still producing visibly twisted fingers. None were promoted.
-- [ ] Finish rifle first, then shotgun support hand and the separate shotgun trigger-index correction. Keep runtime IK/solvers out of the game; bake authored poses and reuse native animation.
+- [ ] Finish rifle first, then shotgun support hand and the separate shotgun trigger-index correction. Keep runtime IK/solvers out of the game; bake authored poses and reuse native animation. Rifle baked: `tools/content/longgun-grips-authoring.py` writes `longgun-grips/rifle.glb` (palm under the far edge, fingers wrapped up the far side below the 26 mm sight line, thumb along the near side; wrist 33° extension / 40° deviation; 120 Hz Hold/Shoot drift ≤0.05 mm, flesh ≤1.2 mm, every unowned channel bit-identical). Shotgun pending.
 
 ## Loading and voice QA
 

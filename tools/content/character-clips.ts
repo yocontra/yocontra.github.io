@@ -84,6 +84,12 @@ export async function bakeCharacterClips(): Promise<void> {
       await io.read(resolve(root, `held-actions-${kind}.glb`)),
       new Set([`Hold_${kind}`, `Shoot_${kind}`]),
     )
+    const grip = resolve(root, `longgun-grips/${kind}.glb`)
+    if (await Bun.file(grip).exists()) {
+      const grips = await io.read(grip)
+      await validateAuthoringInputs(grips)
+      appendClips(target, grips)
+    }
   }
   appendClips(
     target,
