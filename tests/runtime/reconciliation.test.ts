@@ -5,6 +5,7 @@ import { file } from 'bun'
 import {
   playerLifetimeSync,
   REMOTE_POSE,
+  REMOTE_YAW,
 } from '../../src/experiments/out-west/client/prediction-lifecycle.ts'
 import { initializeAmmo } from '../../src/experiments/out-west/runtime/ammo.ts'
 import { Buttons, neutralInput } from '../../src/experiments/out-west/runtime/protocol.ts'
@@ -84,6 +85,7 @@ it('decoded native SDK players cut to every new life without carrying interpolat
   }
   const predict = Predict.get(room, { mode: 'lerp', delay: 100 })
   predict.attachAll('players', REMOTE_POSE)
+  predict.attachAll('players', REMOTE_YAW)
   const input = room.input({ type: MoveInput, mode: 'reliable' })
   const scratch = { x: self.x, y: self.y, z: self.z }
   const mine = predict.sim({
@@ -104,14 +106,16 @@ it('decoded native SDK players cut to every new life without carrying interpolat
     expect(predict.value(other, 'x')).toBe(0)
     for (let life = 2; life <= 12; life++) {
       const x = life % 2 ? 0 : 1.5 // Below the teleport threshold: the life marker must reset it.
+      const yaw = life % 2 ? 3.1 : -3.1 // Across the seam: the short arc, then a cut at the new life.
       for (const record of state.players.values()) {
-        Object.assign(record, { x, spawnTick: life })
+        Object.assign(record, { x, yaw, spawnTick: life })
       }
       room.serializer.patch(encoder.encode())
       encoder.discardChanges()
       sync(room.state.players.values())
       expect(mine.value('x')).toBe(x)
       expect(predict.value(other, 'x')).toBe(x)
+      expect(Math.cos(predict.value(other, 'yaw') - yaw)).toBeCloseTo(1, 5)
       expect(resets.length).toBe((life - 1) * 2)
       sync(room.state.players.values())
       expect(resets.length).toBe((life - 1) * 2)

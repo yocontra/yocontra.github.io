@@ -27,7 +27,7 @@ import {
   RenderedVelocity,
   snapshotPresentation,
 } from './player-pose.ts'
-import { playerLifetimeSync, REMOTE_POSE } from './prediction-lifecycle.ts'
+import { playerLifetimeSync, REMOTE_POSE, REMOTE_YAW } from './prediction-lifecycle.ts'
 import { reconnectableSession } from './reconnect-session.ts'
 import { ShowdownInput } from './showdown-input.ts'
 import { applyFrontierState } from './state.ts'
@@ -206,6 +206,7 @@ function connectSession(
   physics.addPlayer(selfId, [self.x, self.y + 0.9, self.z])
   const predict = Predict.get(room, { mode: 'lerp', delay: 100 })
   predict.attachAll('players', REMOTE_POSE)
+  predict.attachAll('players', REMOTE_YAW)
   const input = room.input({ type: MoveInput, mode: 'reliable' })
   const showdownInput = new ShowdownInput({
     world,
@@ -284,7 +285,7 @@ function connectSession(
           y: predict.value(record, 'y') + 0.9,
           z: predict.value(record, 'z'),
         },
-        { predicted: undefined, intent: undefined, yaw: record.yaw },
+        { predicted: undefined, intent: undefined, yaw: predict.value(record, 'yaw') },
       ),
       record.spawnTick,
       performance.now(),

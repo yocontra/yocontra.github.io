@@ -8,6 +8,12 @@ export const REMOTE_POSE = {
   fields: ['x', 'y', 'z'] as const,
   snap: 2,
 }
+/** Facing lerps on the same 100 ms delay as position, so a remote body never turns before it moves. */
+export const REMOTE_YAW = {
+  mode: 'lerp' as const,
+  fields: ['yaw'] as const,
+  angle: true,
+}
 
 export function playerLifetimeSync(
   selfId: string,
@@ -31,6 +37,7 @@ export function playerLifetimeSync(
       } else {
         predict.detach(player)
         predict.attach(player, REMOTE_POSE)
+        predict.attach(player, REMOTE_YAW)
       }
       onReset(player.id)
     }
