@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, test as it } from 'bun:test'
+import { afterEach, describe, expect, test as it, jest } from 'bun:test'
 import {
   RemotePlayout,
   type RemotePlayoutState,
@@ -395,8 +395,17 @@ describe('silent remote decoding activation', () => {
       new Promise((_resolve, reject) => {
         failOld = reject
       })
-    f.playout.resume()
-    await new Promise((resolve) => setTimeout(resolve, 4050))
+    jest.useFakeTimers()
+    try {
+      f.playout.resume()
+      jest.advanceTimersByTime(3999)
+      await flush()
+      expect(f.states).toEqual([])
+      jest.advanceTimersByTime(1)
+      await flush()
+    } finally {
+      jest.useRealTimers()
+    }
     expect(f.states).toEqual(['blocked'])
     f.element.playback = () => Promise.resolve()
     f.playout.resume()
