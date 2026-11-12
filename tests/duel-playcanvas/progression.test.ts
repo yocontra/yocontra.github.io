@@ -7,6 +7,7 @@ import { dailyDuel, leaveSpecial } from '../../src/experiments/out-west/duel/nat
 import { onDuelReport } from '../../src/experiments/out-west/meta/events.ts'
 import type { RankedSession } from '../../src/experiments/out-west/net/ranked.ts'
 import { load } from '../../src/experiments/out-west/save.ts'
+import { inertPresentation, quiet } from '../client-playcanvas/duel-presentation.ts'
 
 const noop = (): void => undefined
 function fixture(level = 0): NativeDirector {
@@ -29,12 +30,13 @@ function fixture(level = 0): NativeDirector {
     dailyVerdict: null,
     events: {},
     clock: { cancel: noop, dispose: noop },
-    arenas: { dailyFog: noop },
+    arenas: quiet({ dailyFog: noop }),
+    game: { app: { scene: { exposure: 1 } } },
     c: {
       save: load(),
       input: { touch: false },
-      audio: { heartbeat: noop },
-      hud: {
+      audio: quiet({ heartbeat: noop }),
+      hud: quiet({
         showCard: noop,
         cardPayout: noop,
         setPurse: noop,
@@ -42,9 +44,10 @@ function fixture(level = 0): NativeDirector {
         setDaily: noop,
         hideCard: noop,
         show: noop,
-      },
+      }),
     },
     hubShot: noop,
+    ...inertPresentation(),
   } as unknown as NativeDirector
   d.c.save.attempts[level] = 1
   d.leaveSpecial = () => leaveSpecial(d)

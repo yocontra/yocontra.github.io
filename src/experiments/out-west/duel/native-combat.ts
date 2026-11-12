@@ -474,6 +474,22 @@ function bookResult(
     }
     save(data)
   }
+  if (!d.remote) {
+    reportDuel({
+      level: d.level,
+      legend: data.legend,
+      ranked: d.ranked,
+      outcome,
+      reactionMs: outcome === 'coward' ? null : ms,
+      // ranked medals are the server's, judged without the touch allowance
+      touch: d.c.input.touch && !d.ranked,
+      secondChance: d.secondChance,
+      hatShot: d.hatShot,
+      fakesSeen: d.fakes,
+      firstTry: (data.attempts[d.level] ?? 1) <= 1,
+      daily: d.daily,
+    })
+  }
   return before
 }
 function recordBest(d: NativeDirector, ms: number): void {
@@ -495,22 +511,6 @@ function showResult(
 ): void {
   const { outcome, ms, verdict, before } = result
   const data = d.c.save
-  if (!d.remote) {
-    reportDuel({
-      level: d.level,
-      legend: data.legend,
-      ranked: d.ranked,
-      outcome,
-      reactionMs: outcome === 'coward' ? null : ms,
-      // ranked medals are the server's, judged without the touch allowance
-      touch: d.c.input.touch && !d.ranked,
-      secondChance: d.secondChance,
-      hatShot: d.hatShot,
-      fakesSeen: d.fakes,
-      firstTry: (data.attempts[d.level] ?? 1) <= 1,
-      daily: d.daily,
-    })
-  }
   const hint = outcome === 'win' ? 'press to continue' : 'press to try again'
   const name = d.outlaw.name
   const cowardSub = `You drew before the bell. No bounty. (Early draws: ${data.cowardice})`
