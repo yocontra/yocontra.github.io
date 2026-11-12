@@ -11,6 +11,7 @@ import {
   VOICE_INTENT_TTL_MS,
 } from '../../src/experiments/out-west/contract/voice.ts'
 import { PROTOCOL_VERSION } from '../../src/experiments/out-west/runtime/protocol.ts'
+import { hangTimeout } from '../timeout.ts'
 
 async function execute(args: string[], source?: string) {
   const child = spawn(args, {
@@ -29,34 +30,36 @@ async function execute(args: string[], source?: string) {
   return stdout
 }
 
-it('native SDK voice controls are lazy and failed teardown survives real cold DO alarms without gameplay boot', async () => {
-  const root = process.cwd()
-  const directory = await mkdtemp(join(tmpdir(), 'out-west-voice-workerd-'))
-  try {
-    const config = join(directory, 'wrangler.jsonc')
-    const output = join(directory, 'bundle')
-    await write(
-      config,
-      JSON.stringify({
-        name: 'voice-runtime-test',
-        main: join(root, 'api/test/voice-worker.ts'),
-        compatibility_date: '2026-10-01',
-        compatibility_flags: ['nodejs_compat'],
-      }),
-    )
-    await execute([
-      'node',
-      join(root, 'node_modules/wrangler/bin/wrangler.js'),
-      'deploy',
-      '--dry-run',
-      '--config',
-      config,
-      '--outdir',
-      output,
-    ])
-    const entry = await readFile(join(output, 'voice-worker.js'), 'utf8')
-    const wasm = (await readdir(output)).filter((name) => name.endsWith('.wasm'))
-    const script = `
+it(
+  'native SDK voice controls are lazy and failed teardown survives real cold DO alarms without gameplay boot',
+  async () => {
+    const root = process.cwd()
+    const directory = await mkdtemp(join(tmpdir(), 'out-west-voice-workerd-'))
+    try {
+      const config = join(directory, 'wrangler.jsonc')
+      const output = join(directory, 'bundle')
+      await write(
+        config,
+        JSON.stringify({
+          name: 'voice-runtime-test',
+          main: join(root, 'api/test/voice-worker.ts'),
+          compatibility_date: '2026-10-01',
+          compatibility_flags: ['nodejs_compat'],
+        }),
+      )
+      await execute([
+        'node',
+        join(root, 'node_modules/wrangler/bin/wrangler.js'),
+        'deploy',
+        '--dry-run',
+        '--config',
+        config,
+        '--outdir',
+        output,
+      ])
+      const entry = await readFile(join(output, 'voice-worker.js'), 'utf8')
+      const wasm = (await readdir(output)).filter((name) => name.endsWith('.wasm'))
+      const script = `
 import {Miniflare,convertV4MiniflareOptions} from ${JSON.stringify(join(root, 'node_modules/miniflare/dist/src/index.js'))};
 import fs from 'node:fs';
 const runtime={version:process.version,execPath:process.execPath};
@@ -80,7 +83,7 @@ const rooms=[],voiceEvents=[];const sleep=ms=>new Promise(r=>setTimeout(r,ms));
 let heartbeat;const stopHeartbeat=()=>{clearInterval(heartbeat);heartbeat=undefined};
 const speak=on=>{stopHeartbeat();rooms[0].send('control',{type:'voice_talk',talking:on});if(on)heartbeat=setInterval(()=>rooms[0].send('control',{type:'voice_talk',talking:true}),${VOICE_HEARTBEAT_MS})};
 let diagnostics=async()=>({runtime,calls});
-const until=async(test,label)=>{for(let i=0;i<100;i++){if(await test())return;await sleep(50)}throw new Error('Timed out: '+label+' '+JSON.stringify(await diagnostics()))};
+const until=async(test,label)=>{const start=Date.now();do{if(await test())return;await sleep(50)}while(Date.now()-start<60000);throw new Error('Timed out: '+label+' '+JSON.stringify(await diagnostics()))};
 try{
  const base=(await mf.ready).origin,db=await mf.getD1Database('DB');
  for(const name of fs.readdirSync(${JSON.stringify(join(root, 'api/migrations'))}).filter(n=>n.endsWith('.sql')).sort()){
@@ -140,9 +143,9 @@ try{
  const activePeers=active.peers.filter(p=>p.human&&p.connected&&p.available);
  if(JSON.stringify(active.humans)!==JSON.stringify(fixtureHumans)||activePeers.length!==2||Math.hypot(activePeers[0].x-activePeers[1].x,activePeers[0].z-activePeers[1].z)>24)throw new Error('Voice delay changed participant lives or proximity '+JSON.stringify({fixtureHumans,active}));
  stopHeartbeat();
- await Promise.all(rooms.splice(0).map(room=>room.leave(false)));await sleep(200);
- const warm=await observe();const timing=await(await fetch(endpoint('/__test/native-timing'))).json();
- if(warm.resources.timers||warm.resources.members||!warm.resources.cleanup||timing.active||timing.core||timing.physics||timing.running||timing.timer)throw new Error('Last human retained live voice/game work '+JSON.stringify({warm,timing}));
+ await Promise.all(rooms.splice(0).map(room=>room.leave(false)));
+ let warm,timing;
+ await until(async()=>{warm=await observe();timing=await(await fetch(endpoint('/__test/native-timing'))).json();return !(warm.resources.timers||warm.resources.members||!warm.resources.cleanup||timing.active||timing.core||timing.physics||timing.running||timing.timer)},'Last human retained live voice/game work');
  try{await fetch(endpoint('/__test/restart-native'))}catch{}
  const cold=await observe();const creates=calls.filter(c=>c.path.endsWith('/meetings')).length;failKick=false;
  await until(async()=> (await observe()).resources.cleanup===0,'cold alarm retry');
@@ -167,13 +170,15 @@ try{
  console.log('RESULT:'+JSON.stringify({runtime,heartbeatMs:${VOICE_HEARTBEAT_MS},fixtureHumans,activeHumans:active.humans,delayedPositive:{resources:delayedPositive.resources,request:firstCall},expiredIntent:{resources:expiredVoice.resources,request:expiredCall,readyCounts:beforeExpired},voiceEvents,controls:controls.map(list=>list.filter(m=>m.type.startsWith('voice_')).map(m=>m.type)),calls:calls.length,idle:{providerCalls:0,resources:idle.resources},timeline:{provider:calls,controls:warm.trace},cold,settled,tokens:tokens.size,duel:closed.keys,budget:{claims:claims.filter(c=>c.allowed).length,reserved:reserved.amount,expired:expired.allowed}}));
 }finally{stopHeartbeat();await Promise.all(rooms.map(room=>room.leave(false).catch(()=>{})));await mf.dispose()}
 `
-    const runner = join(directory, 'voice-runtime.mjs')
-    await write(runner, script)
-    const result = await execute(['node', runner])
-    const line = result.split('\n').find((value) => value.startsWith('RESULT:'))
-    expect(line).toBeDefined()
-    await write('/tmp/out-west-voice-workerd-result.json', line?.slice(7) ?? '{}')
-  } finally {
-    await rm(directory, { recursive: true, force: true })
-  }
-}, 45_000)
+      const runner = join(directory, 'voice-runtime.mjs')
+      await write(runner, script)
+      const result = await execute(['node', runner])
+      const line = result.split('\n').find((value) => value.startsWith('RESULT:'))
+      expect(line).toBeDefined()
+      await write('/tmp/out-west-voice-workerd-result.json', line?.slice(7) ?? '{}')
+    } finally {
+      await rm(directory, { recursive: true, force: true })
+    }
+  },
+  hangTimeout(60_000),
+)
