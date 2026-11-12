@@ -66,13 +66,13 @@ export const DYNAMIC_ASSETS = {
     bytes: 96064,
   },
   dog: {
-    url: '/experiments/out-west/3d/native-v2/dynamic/dog.glb?v=b295c4439a81db9f',
-    hash: 'b295c4439a81db9ff3b6f4b882821a3a2597af7267b6c6117777da33544d633e',
+    url: '/experiments/out-west/3d/native-v2/dynamic/dog.glb?v=06c3b48c5f1b554a',
+    hash: '06c3b48c5f1b554a2c53f0c56f89894b99fb8c0173b8094cf7974f87681b4197',
     bytes: 200100,
   },
   horse: {
-    url: '/experiments/out-west/3d/native-v2/dynamic/horse.glb?v=adfd6a2d399676e6',
-    hash: 'adfd6a2d399676e6d468ad71d2ce008c68e82f8435f57ac1404f35dc01169874',
+    url: '/experiments/out-west/3d/native-v2/dynamic/horse.glb?v=587ac7fe5b10371d',
+    hash: '587ac7fe5b10371d314cb024616387fe567ccd33e7baa497cc7e3493647f7428',
     bytes: 707136,
   },
   'held-rifle': {
@@ -91,7 +91,7 @@ export const ENVIRONMENT = {
   hash: '206c67e3a1b992282821cf06662bdd69bbb4915c1c4444a66338a40d6a7d4e34',
   bytes: 1173154,
 } as const
-export const CONTENT_VERSION = '665c60ad57d93ac1dccd50ddecf8a61041a936c2e0294b2d325974e79b3c10f0'
+export const CONTENT_VERSION = '3832fc6b3f853d8cfc590b7e282ecce7c7a6a4e12ae1c284f701947c26537287'
 export const COLLISION_VERSION = 'da29516af2ad4f42cc678a1d3dd1ab1b36b74ba5c950c81f5d3d6a5864aae3aa'
 export const ASSETS = {
   frontier: {

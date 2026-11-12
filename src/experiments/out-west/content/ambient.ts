@@ -1,14 +1,14 @@
 // Authored native ambient assets, versioned by tools/content/manifest.ts.
 export const AMBIENT_ASSETS = {
   crow: {
-    url: '/experiments/out-west/3d/native-v2/ambient/crow.glb?v=6aaca3d7d4f83b89',
-    bytes: 37668,
-    hash: '6aaca3d7d4f83b89482f04c61692be9aabe33c09bf92ef76342dee222ecc17d8',
+    url: '/experiments/out-west/3d/native-v2/ambient/crow.glb?v=23171ae60e5341ca',
+    bytes: 380608,
+    hash: '23171ae60e5341ca4857ad779286ee7b51d0966835ea6740c6db56846f4d275c',
   },
   hen: {
-    url: '/experiments/out-west/3d/native-v2/ambient/hen.glb?v=5ec8c2d248f66910',
-    bytes: 496040,
-    hash: '5ec8c2d248f6691050c114504cf20df0f18cffe2ef075daeef5d0a39ca45ae39',
+    url: '/experiments/out-west/3d/native-v2/ambient/hen.glb?v=52d28743e1ff96f5',
+    bytes: 416552,
+    hash: '52d28743e1ff96f5d975f8d5bef191927595db92431d78cd3ff49c4048d0da48',
   },
   shingles: {
     url: '/experiments/out-west/3d/ambient/shingles.glb?v=3df81c62a3f71e7d',

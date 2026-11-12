@@ -777,6 +777,8 @@ class Graph:
         if role in ("normal", "ao", "shaded"):
             self.nt.links.new(self.bsdf.outputs[0], self.out.inputs["Surface"])
         else:
+            for old in list(self.emit.inputs["Color"].links):
+                self.nt.links.remove(old)
             self.put(self.emit.inputs["Color"], self.sockets[role])
             self.nt.links.new(self.emit.outputs[0], self.out.inputs["Surface"])
 
@@ -1388,7 +1390,7 @@ def hen_build(m):
             ((-0.03, 0.035, 0.145), (0.03, 0.04, 0.04), 0),
         ],
         0.005,
-        1100,
+        900,
         m["plumage"],
         "body",
     )
@@ -1411,7 +1413,7 @@ def hen_build(m):
         along = Vector((side * 0.12, math.cos(rise), math.sin(rise)))
         across = along.cross(Vector((1, 0, 0))).normalized()
         base = Vector((side * (0.006 + 0.003 * (k // 2)), 0.1, 0.27))
-        blade(tail, base, along, across, 0.11 + 0.035 * math.sin(math.pi * (k // 2) / 6), 0.04, 0.003, -0.02)
+        blade(tail, base, along, across, 0.11 + 0.035 * math.sin(math.pi * (k // 2) / 6), 0.04, 0.003, -0.02, samples=5)
     objects.append(part("HenTail", tail, m["tail"], "body"))
     horn = Builder()
     for s in (-1, 1):
@@ -1482,6 +1484,98 @@ def hen_build(m):
     return objects
 
 
+def crow_build(m):
+    objects = [
+        organic(
+            "CrowBody",
+            [
+                ((0, 0.0, 0.08), (0.044, 0.085, 0.046), 18),
+                ((0, -0.05, 0.09), (0.04, 0.045, 0.045), 0),
+                ((0, -0.065, 0.115), (0.032, 0.035, 0.035), 30),
+                ((0, 0.06, 0.068), (0.03, 0.05, 0.03), 20),
+            ],
+            0.004,
+            650,
+            m["plumage"],
+            "body",
+        )
+    ]
+    tail = Builder()
+    for k in range(10):
+        side = 1 if k % 2 else -1
+        spread = math.radians(side * (k // 2) * 4)
+        along = Vector((math.sin(spread), math.cos(spread), -0.22))
+        across = Vector((0, 0, 1)).cross(along).normalized()
+        blade(tail, (side * 0.004 * (k // 2), 0.06, 0.072 + 0.002 * (k % 3)), along, across, 0.15 - 0.006 * (k // 2), 0.03, 0.0025, 0.004, samples=4)
+    objects.append(part("CrowTail", tail, m["tail"], "body"))
+    legs = Builder()
+    for s in (-1, 1):
+        hip, foot = Vector((s * 0.016, -0.005, 0.045)), Vector((s * 0.017, -0.01, 0.004))
+        cylinder(legs, hip, foot, 0.0045, segments=8, radius_end=0.0038)
+        for angle, length in ((-25, 0.03), (0, 0.035), (25, 0.028), (180, 0.024)):
+            d = Matrix.Rotation(math.radians(angle), 3, "Z") @ Vector((0, -1, 0))
+            cylinder(legs, foot, foot + d * length + Vector((0, 0, -0.003)), 0.003, segments=6, radius_end=0.0016)
+    objects.append(part("CrowLegs", legs, m["horn"], "body"))
+
+    head = organic(
+        "CrowHead",
+        [((0, -0.07, 0.115), (0.034, 0.036, 0.04), 30), ((0, -0.1, 0.152), (0.03, 0.04, 0.031), -5)],
+        0.003,
+        420,
+        m["plumage"],
+        "head",
+        smooth=10,
+    )
+    objects.append(head)
+    beak = Builder()
+    cylinder(beak, (0, -0.128, 0.156), (0, -0.182, 0.143), 0.0105, segments=12, radius_end=0.0015)
+    cylinder(beak, (0, -0.126, 0.146), (0, -0.172, 0.139), 0.0075, segments=12, radius_end=0.0015)
+    objects.append(part("CrowBeak", beak, m["horn"], "head"))
+    eyes = Builder()
+    for s in (-1, 1):
+        hit, _ = surface_ray(head, (s * 0.2, -0.119, 0.16), (-s, 0, 0))
+        eyeball(eyes, hit - Vector((s * 0.002, 0, 0)), s, 0.0055)
+    objects.append(part("CrowEyes", eyes, m["eye"], "head"))
+
+    for s, name in ((1, "wing-r"), (-1, "wing-l")):
+        wing = Builder()
+        # Idle folds each wing 93 degrees about the vertical, laying its chord across the back:
+        # keep the chord short so the folded wing stays over the body, and primaries near the span.
+        lead, trail_y = -0.04, 0.09
+        rows, inner, params = [], [], []
+        for i in range(5):
+            u = i / 4
+            x = s * (0.04 + 0.15 * u)
+            r_row, i_row, p_row = [], [], []
+            for j in range(5):
+                c = j / 4
+                y = lead + (trail_y - 0.03 * u - lead) * c
+                z = 0.12 - 0.03 * (2 * c - 1) ** 2 + 0.006
+                r_row.append(Vector((x, y, z + 0.003)))
+                i_row.append(Vector((x, y, z - 0.003)))
+                p_row.append((u, c, 1.0))
+            rows.append(r_row)
+            inner.append(i_row)
+            params.append(p_row)
+        if s < 0:
+            rows, inner, params = ([row[::-1] for row in grid] for grid in (rows, inner, params))
+        wing.slab(rows, inner, params)
+        for k in range(8):
+            u = (k + 0.5) / 8
+            x = s * (0.045 + 0.13 * u)
+            along = Vector((s * 0.35, 1, -0.05)).normalized()
+            across = Vector((0, 0, 1)).cross(along).normalized() * s
+            blade(wing, (x, 0.02, 0.118 - 0.004 * (k % 2)), along, across, 0.06, 0.03, 0.0025, -0.005, samples=3)
+        for k in range(7):
+            fan = math.radians(3 + 4 * k)
+            along = Vector((s * math.cos(fan), math.sin(fan), -0.04)).normalized()
+            across = Vector((0, 0, 1)).cross(along).normalized() * s
+            base = Vector((s * 0.16, -0.03 + 0.012 * k, 0.12 - 0.003 * (k % 2)))
+            blade(wing, base, along, across, 0.11 + 0.008 * min(k, 3), 0.024, 0.0025, -0.006, samples=4)
+        objects.append(part(f"CrowWing{s}", wing, m["wing"], name))
+    return objects
+
+
 def eyeball(builder, centre, side, radius, rings=6, segments=10):
     """A small sphere whose +side pole faces outward, so pupil and iris can be read from x."""
     ids = []
@@ -1522,7 +1616,8 @@ def plumage_graph(g, palette, kind):
     if "under" in palette:
         color = g.mix(g.math("SUBTRACT", 1.0, g.smooth(0.12, 0.18, q[2])), color, palette["under"])
     if kind == "wing":
-        primaries = g.smooth(0.07, 0.11, q[1])
+        axis = palette.get("primary_axis", 1)
+        primaries = g.smooth(palette["primary_from"], palette["primary_from"] + 0.04, g.math("ABSOLUTE", q[axis]))
         bars = g.smooth(0.4, 0.6, g.math("PINGPONG", q[2], 0.012))
         color = g.mix(g.math("MULTIPLY", primaries, g.math("ADD", 0.55, g.math("MULTIPLY", 0.45, bars))), color, palette["primary"])
     if kind == "tail":
@@ -1637,6 +1732,7 @@ BIRDS = {
             "hackle_z": 0.29,
             "under": (0.15, 0.055, 0.02),
             "primary": (0.035, 0.016, 0.008),
+            "primary_from": 0.07,
             "tail": (0.012, 0.015, 0.01),
             "rough": 0.6,
             "tail_rough": 0.36,
@@ -1649,13 +1745,39 @@ BIRDS = {
 }
 
 
+BIRDS["crow"] = {
+    "build": crow_build,
+    "kinds": ("plumage", "wing", "tail", "horn", "eye"),
+    "parents": {"crow": "body", "hinge-0": "head", "hinge-1": "wing-r", "hinge-2": "wing-l"},
+    "density": {"eye": 4.0, "tail": 0.7, "horn": 0.6},
+    "size": 512,
+    "occlusion": 0.04,
+    "palette": {
+        "cells": (1.0, 0.55, 0.8),
+        "feather": 80.0,
+        "barbs": (900.0, 60.0, 900.0),
+        "dark": (0.005, 0.005, 0.007),
+        "light": (0.011, 0.011, 0.017),
+        "primary": (0.005, 0.005, 0.007),
+        "primary_axis": 0,
+        "primary_from": 0.16,
+        "tail": (0.007, 0.007, 0.01),
+        "rough": 0.3,
+        "tail_rough": 0.28,
+        "horn": (0.012, 0.012, 0.013),
+        "iris": (0.02, 0.014, 0.01),
+        "eye_x": 0.0,
+    },
+}
+
+
 def author_bird():
     spec = BIRDS[ANIMAL]
     reset()
     materials = {kind: bpy.data.materials.new(f"{ANIMAL} {kind}") for kind in spec["kinds"]}
     objects = spec["build"](materials)
     eyes = next(ob for ob in objects if ob.data.materials[0] is materials["eye"])
-    spec["palette"]["eye_x"] = min(abs(v.co.x) for v in eyes.data.vertices) + 0.0072
+    spec["palette"]["eye_x"] = sum(abs(v.co.x) for v in eyes.data.vertices) / len(eyes.data.vertices)
     unwrap(objects, spec["density"])
     graphs = [bird_graph(materials[kind], kind, spec["palette"]) for kind in spec["kinds"]]
     maps = bake(objects, graphs, spec["size"], 48, spec["occlusion"])
