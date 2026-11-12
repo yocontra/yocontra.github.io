@@ -6,7 +6,6 @@ import { type Document, getBounds, NodeIO } from '@gltf-transform/core'
 import { ALL_EXTENSIONS } from '@gltf-transform/extensions'
 import { dedup, dequantize, prune, unpartition, weld } from '@gltf-transform/functions'
 import { MeshoptDecoder } from 'meshoptimizer'
-import { SphereGeometry } from 'playcanvas'
 import sharp from 'sharp'
 import { externalize, kitMaterial, projectedUv, surfaceMaterial } from './animal-prop-surfaces.ts'
 import { bakeCharacter } from './character-materials.ts'
@@ -44,77 +43,6 @@ async function exportNative(doc: Document, source: string, output: string) {
   await io.write(output, doc)
   await normalizeSkinnedAsset(output)
   console.log(`authored ${output}`)
-}
-function oval(
-  doc: Document,
-  mesh: import('@gltf-transform/core').Mesh,
-  material: import('@gltf-transform/core').Material,
-  { center, scale, color }: { center: number[]; scale: number[]; color: number[] },
-) {
-  const g = new SphereGeometry({ radius: 1, latitudeBands: 6, longitudeBands: 10 })
-  if (!(g.positions && g.normals && g.uvs && g.indices)) {
-    throw new Error('Missing sphere geometry')
-  }
-  const positions = g.positions.map((v, i) => v * (scale[i % 3] ?? 1) + (center[i % 3] ?? 0))
-  const buffer = doc.getRoot().listBuffers()[0] ?? doc.createBuffer()
-  const a = (type: 'VEC2' | 'VEC3', values: number[]) =>
-    doc.createAccessor().setType(type).setArray(new Float32Array(values)).setBuffer(buffer)
-  const colors = Array.from({ length: positions.length / 3 }, () => color).flat()
-  mesh.addPrimitive(
-    doc
-      .createPrimitive()
-      .setMaterial(material)
-      .setAttribute('POSITION', a('VEC3', positions))
-      .setAttribute('NORMAL', a('VEC3', g.normals))
-      .setAttribute('COLOR_0', a('VEC3', colors))
-      .setAttribute('TEXCOORD_0', a('VEC2', g.uvs))
-      .setIndices(
-        doc
-          .createAccessor()
-          .setType('SCALAR')
-          .setArray(new Uint16Array(g.indices))
-          .setBuffer(buffer),
-      ),
-  )
-}
-function birdDetails(
-  doc: Document,
-  name: string,
-  material: import('@gltf-transform/core').Material,
-) {
-  if (doc.getRoot().getExtras().birdDetails) {
-    return
-  }
-  const meshes = doc.getRoot().listMeshes()
-  const head = meshes[1]
-  const body = meshes[0]
-  if (!(head && body)) {
-    return
-  }
-  for (const side of [-1, 1]) {
-    oval(doc, head, material, {
-      center: name === 'hen' ? [side * 0.05, 0.392, 0.109] : [side * 0.035, 0.16, 0.119],
-      scale: name === 'hen' ? [0.007, 0.008, 0.009] : [0.0045, 0.005, 0.005],
-      color: [0.004, 0.003, 0.002],
-    })
-    if (name === 'hen') {
-      oval(doc, body, material, {
-        center: [side * 0.077, 0.224, -0.012],
-        scale: [0.025, 0.094, 0.08],
-        color: [0.52, 0.4, 0.25],
-      })
-    }
-  }
-  if (name === 'hen') {
-    for (let i = 0; i < 4; i++) {
-      oval(doc, body, material, {
-        center: [(i - 1.5) * 0.019, 0.3 + i * 0.008, -0.136],
-        scale: [0.014, 0.068, 0.037],
-        color: [0.19 + i * 0.04, 0.12 + i * 0.03, 0.055 + i * 0.02],
-      })
-    }
-  }
-  doc.getRoot().setExtras({ ...doc.getRoot().getExtras(), birdDetails: true })
 }
 /** Blender-authored body, tack and hair cards (animal-authoring.py) spliced onto the canonical rig. */
 async function authoredAnimal(name: string): Promise<boolean> {
@@ -220,61 +148,6 @@ async function coatAnimals() {
     }
   }
 }
-function crowFeathers(doc: Document, surface: import('@gltf-transform/core').Material) {
-  // Wing tips become a readable fan of feathers without changing any animation joint.
-  if (!doc.getRoot().getExtras().featherFan) {
-    for (const node of doc.getRoot().listNodes()) {
-      const mesh = node.getMesh()
-      const primitive = mesh?.listPrimitives()[0]
-      const positions = primitive?.getAttribute('POSITION')
-      if (!(mesh && primitive && positions && positions.getCount() === 12)) {
-        continue
-      }
-      const max = positions.getMax([])
-      const side = (max[0] ?? 0) > 0 ? 1 : -1
-      const points: number[] = []
-      const indices: number[] = []
-      const uv: number[] = []
-      const normals: number[] = []
-      const colors: number[] = []
-      for (let i = 0; i < 7; i++) {
-        const x0 = side * (0.04 + i * 0.027)
-        const x1 = side * (0.082 + i * 0.031)
-        const z0 = 0.047 - i * 0.012
-        const z1 = -0.052 - i * 0.013
-        const offset = points.length / 3
-        points.push(x0, 0.12, z0, x1, 0.12, z0 - 0.022, x1, 0.12, z1, x0, 0.12, z1 + 0.008)
-        uv.push(0, 0, 1, 0, 1, 1, 0, 1)
-        for (let j = 0; j < 4; j++) {
-          normals.push(0, 1, 0)
-          colors.push(0.019, 0.017, 0.025)
-        }
-        indices.push(offset, offset + 1, offset + 2, offset, offset + 2, offset + 3)
-      }
-      const buffer = positions.getBuffer()
-      const accessor = (type: 'VEC2' | 'VEC3', array: Float32Array<ArrayBuffer>) =>
-        doc.createAccessor().setType(type).setArray(array).setBuffer(buffer)
-      const fan = doc
-        .createPrimitive()
-        .setAttribute('POSITION', accessor('VEC3', new Float32Array(points)))
-        .setAttribute('NORMAL', accessor('VEC3', new Float32Array(normals)))
-        .setAttribute('COLOR_0', accessor('VEC3', new Float32Array(colors)))
-        .setAttribute('TEXCOORD_0', accessor('VEC2', new Float32Array(uv)))
-        .setIndices(
-          doc
-            .createAccessor()
-            .setType('SCALAR')
-            .setArray(new Uint16Array(indices))
-            .setBuffer(buffer),
-        )
-        .setMaterial(surface.clone().setDoubleSided(true))
-      mesh.removePrimitive(primitive)
-      primitive.dispose()
-      mesh.addPrimitive(fan)
-    }
-    doc.getRoot().setExtras({ ...doc.getRoot().getExtras(), featherFan: true })
-  }
-}
 function textureUnmapped(
   doc: Document,
   name: string,
@@ -294,7 +167,7 @@ function textureUnmapped(
         material.setMetallicFactor(original.getMetallicFactor())
       }
       p.setMaterial(material)
-      projectedUv(doc, p, name === 'clockwork' ? 6 : 3)
+      projectedUv(doc, p, 6)
     }
   }
 }
@@ -327,7 +200,11 @@ async function authoredBird(name: string): Promise<boolean> {
     if (!(accessor && array)) {
       throw new Error(`Missing ${name} part data`)
     }
-    return doc.createAccessor().setType(accessor.getType()).setArray(array.slice()).setBuffer(buffer)
+    return doc
+      .createAccessor()
+      .setType(accessor.getType())
+      .setArray(array.slice())
+      .setBuffer(buffer)
   }
   for (const node of doc.getRoot().listNodes()) {
     const mesh = node.getMesh()
@@ -348,7 +225,10 @@ async function authoredBird(name: string): Promise<boolean> {
       mesh.removePrimitive(primitive)
       primitive.dispose()
     }
-    const primitive = doc.createPrimitive().setMaterial(material).setIndices(copy(source.getIndices()))
+    const primitive = doc
+      .createPrimitive()
+      .setMaterial(material)
+      .setIndices(copy(source.getIndices()))
     for (const semantic of source.listSemantics()) {
       primitive.setAttribute(semantic, copy(source.getAttribute(semantic)))
     }
@@ -378,26 +258,15 @@ async function authoredBird(name: string): Promise<boolean> {
   return true
 }
 async function ambientAnimals() {
-  for (const name of ['crow', 'hen', 'clockwork']) {
-    if (await authoredBird(name)) {
-      continue
+  for (const name of ['crow', 'hen']) {
+    if (!(await authoredBird(name))) {
+      throw new Error(`Missing ${name} Blender parts; run tools/content/animal-authoring.py`)
     }
-    const source = `tools/art/environments/${name}.glb`
-    const doc = await io.read(source)
-    const surface = await surfaceMaterial(
-      doc,
-      name === 'clockwork' ? 'iron' : 'feather',
-      `${name} surface detail`,
-    )
-    textureUnmapped(doc, name, surface)
-    if (name === 'crow') {
-      crowFeathers(doc, surface)
-    }
-    if (name !== 'clockwork') {
-      birdDetails(doc, name, surface)
-    }
-    await exportNative(doc, source, `${native}/ambient/${name}.glb`)
   }
+  const source = 'tools/art/environments/clockwork.glb'
+  const doc = await io.read(source)
+  textureUnmapped(doc, 'clockwork', await surfaceMaterial(doc, 'iron', 'clockwork surface detail'))
+  await exportNative(doc, source, `${native}/ambient/clockwork.glb`)
 }
 async function kitProp(name: string, template: string) {
   const doc = await io.read('public/experiments/out-west/3d/models/props.glb')
