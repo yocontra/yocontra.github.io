@@ -58,6 +58,9 @@ it('a natural respawn adopts its exact native pose even within two metres of the
     }
     expect(game.world.tick - deathAt).toBeGreaterThanOrEqual(60)
     expect(player.x).toBe(72)
+    // The revived body never shows at the death spot for a tick before it moves.
+    expect(game.physics.players.get(String(id))?.x).toBeCloseTo(72, 4)
+    expect(game.physics.players.get(String(id))?.hp).toBe(player.hp)
     game.step([])
     expect(player.x).toBeCloseTo(72, 4)
     expect(game.physics.players.get(String(id))?.x).toBeCloseTo(72, 4)

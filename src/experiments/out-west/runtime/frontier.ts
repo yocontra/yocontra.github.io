@@ -53,7 +53,17 @@ export function createFrontierSimulation(
   return {
     world,
     physics,
-    step: (frames: readonly (InputFrame | null | undefined)[]) => stepDomain(world, frames),
+    step: (frames: readonly (InputFrame | null | undefined)[]) => {
+      stepDomain(world, frames)
+      // A respawn lands after this tick's movement; move its body now, not a tick later.
+      for (const player of activePlayers(world)) {
+        const id = String(player.id)
+        if (generations.has(id) && generations.get(id) !== player.spawnTick) {
+          syncBody(physics, player, true)
+          generations.set(id, player.spawnTick)
+        }
+      }
+    },
     dispose: () => {
       windowEligible.clear()
       releaseWindows()
