@@ -8,7 +8,7 @@ import type { World } from '../ffa/sim/state.ts'
 import type { SimEvent } from '../ffa/sim/types.ts'
 import type { CollisionData, PlayerInput, PlayerState } from '../runtime/protocol.ts'
 import { Buttons } from '../runtime/protocol.ts'
-import { Actors, type Appearance, type PreparedCharacters } from './actors.ts'
+import { Actors, type Appearance, IDLE_ACTORS, type PreparedCharacters } from './actors.ts'
 import { GameApplication } from './application.ts'
 import { GameEffects } from './effects.ts'
 import { NativeEnvironment } from './environment.ts'
@@ -55,16 +55,7 @@ export interface GameViewport {
   tap: (bit: number) => void
   event: (event: SimEvent) => void
   aimPoint: () => { x: number; y: number; shooter: boolean }
-  debug: () => {
-    fps: number
-    worstFps: number
-    pixelRatio: number
-    players: number
-    drawCalls: number
-    windows: { total: number; intact: number; shards: number }
-    ragdolls: { active: number; frozen: number; bodies: number }
-    actors: { loaded: number; loading: number; failed: number; fallbacks: number; visible: number }
-  }
+  debug: () => ReturnType<typeof viewportDebug>
 }
 
 const head = new Vec3()
@@ -330,14 +321,14 @@ function viewportDebug({
   windows: BreakableWindows | undefined
   actors: Actors | undefined
   ragdolls: NativeRagdolls | undefined
-}): ReturnType<GameViewport['debug']> {
+}) {
   return {
     fps: application?.quality.fps ?? 0,
     worstFps: application?.quality.worstFps ?? 0,
     pixelRatio: application?.quality.pixelRatio ?? 0,
     players: session?.players.size ?? 0,
     windows: windows?.stats() ?? { total: 0, intact: 0, shards: 0 },
-    actors: actors?.stats() ?? { loaded: 0, loading: 0, failed: 0, fallbacks: 0, visible: 0 },
+    actors: actors?.stats() ?? IDLE_ACTORS,
     drawCalls: application?.app.stats.drawCalls.total ?? 0,
     ragdolls: ragdolls?.stats() ?? { active: 0, frozen: 0, bodies: 0 },
   }
@@ -383,6 +374,7 @@ export function mountGameViewport(root: HTMLElement, options: ViewportOptions): 
       session.update(Math.min(dt, 0.1), intent)
     }
     actors?.update(session.players, dt, first ? session.selfId : undefined)
+    actors?.aim(intent, playing && first && input.enabled, dt)
     atmosphere?.update(dt)
     items?.update(session.world)
     windows?.update(session.world?.glass, session.world?.grid.glass)
@@ -400,6 +392,7 @@ export function mountGameViewport(root: HTMLElement, options: ViewportOptions): 
       recoil: effects?.recoilPitch ?? 0,
       trace: session.cameraTrace,
     })
+    actors?.presentFirstPerson(application.camera, dt)
     updateGuide(guide, application.camera, session, dt)
     options.onState?.(player, session.players.size)
   }

@@ -13,6 +13,7 @@ import {
 import { ALL_EXTENSIONS } from '@gltf-transform/extensions'
 import { compactPrimitive, prune } from '@gltf-transform/functions'
 import { Mat4, Vec3 } from 'playcanvas'
+import { CATALOG } from '../../src/experiments/out-west/data/catalog.ts'
 import type { Range } from './character-atlas.ts'
 import { integrateGarmentParts } from './garment-parts.ts'
 import { fitWaistcoats } from './waistcoat-fit.ts'
@@ -389,22 +390,38 @@ export async function extractFirstPersonArms(id: string) {
     },
   }
 }
+export const VIEWMODEL_DIRECTORY = 'public/experiments/out-west/3d/native-v2/viewmodels'
+/** Every selectable outfit has its own single and paired fit; no generic sleeve stands in. */
+export const VIEWMODEL_FITS: readonly string[] = CATALOG.filter(
+  (item) => item.slot === 'outfit',
+).flatMap((item) => [item.id, `${item.id}.pair`])
+
 if (import.meta.main) {
-  const output = process.argv[process.argv.indexOf('--out') + 1]
-  if (!(process.argv.includes('--out') && output)) {
-    throw new Error('Supply --out staging-directory')
+  const publish = process.argv.includes('--publish')
+  const output = publish ? VIEWMODEL_DIRECTORY : process.argv[process.argv.indexOf('--out') + 1]
+  if (!(publish || (process.argv.includes('--out') && output))) {
+    throw new Error('Supply --publish or --out staging-directory')
+  }
+  if (!output) {
+    throw new Error('Missing output directory')
   }
   await mkdir(output, { recursive: true })
-  const ids = process.env.OUT_WEST_CHARACTERS?.split(',') ?? [
-    'outfit.trail-duds',
-    'outfit.wool-duster',
-  ]
+  const ids = process.env.OUT_WEST_CHARACTERS?.split(',') ?? VIEWMODEL_FITS
   const reports: Awaited<ReturnType<typeof extractFirstPersonArms>>['report'][] = []
   for (const id of ids) {
     const { bytes, report } = await extractFirstPersonArms(id)
     await writeFile(resolve(output, `${basename(id)}.glb`), bytes)
     reports.push(report)
-    console.log(JSON.stringify(report))
+    console.log(
+      JSON.stringify({
+        fit: id,
+        faces: report.retainedFaces,
+        bytes: report.bytes,
+        hash: report.hash,
+      }),
+    )
   }
-  await writeFile(resolve(output, 'inventory.json'), `${JSON.stringify(reports, null, 2)}\n`)
+  if (!publish) {
+    await writeFile(resolve(output, 'inventory.json'), `${JSON.stringify(reports, null, 2)}\n`)
+  }
 }

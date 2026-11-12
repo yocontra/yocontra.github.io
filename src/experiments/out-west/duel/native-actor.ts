@@ -1,4 +1,11 @@
-import { type AnimTrack, type Component, type ContainerResource, Entity, Vec3 } from 'playcanvas'
+import {
+  type AnimTrack,
+  type Component,
+  type ContainerResource,
+  Entity,
+  type GraphNode,
+  Vec3,
+} from 'playcanvas'
 import type { GameApplication } from '../client/application.ts'
 import { ASSETS } from '../content/manifest.ts'
 import { nativeActionSpeed } from '../scene/native-animation-timing.ts'
@@ -8,7 +15,7 @@ import { authoredMounts, type WeaponMount } from '../scene/native-mounts.ts'
 import { animateRevolvers, playWeaponMount } from '../scene/native-weapon-animation.ts'
 
 const ONE_SHOT = /Death|Shoot|Hit|Attack|React|Draw|Flinch|Spin/u
-const HUMANOID = /\/(?:baked\/(?:outlaw-|player)|equipment\/outfit\.)/u
+const HUMANOID = /\/(?:baked\/(?:outlaw-|player)|equipment\/outfit\.|viewmodels\/)/u
 const GAIT = /^(?:Stride_|Walk$|Run$|Sprint$|Crouch_Walk$)/u
 const DRAWN = /Pointing|Shoot|Death|Hit|Draw|Spin|Flinch/u
 
@@ -18,6 +25,10 @@ export class DuelActor {
   private readonly hiddenWeaponComponents = new Map<Component, boolean>()
   private idleClip = 'Idle_Character'
   paired = false as boolean
+  /** Local presentations show both drawn revolvers of a pair; Frontier's world carry draws one. */
+  pairedDrawn = false as boolean
+  /** Shared rigid batches drop per-instance pass masks and layers; local actors opt out. */
+  batchRigid = true as boolean
   readonly weaponMounts: WeaponMount[] = []
   readonly tracks: readonly AnimTrack[]
   private readonly animations: ReadonlyMap<string, AnimTrack>
@@ -285,7 +296,9 @@ export class DuelActor {
   }
   animation(name: string): string {
     const pair = `${name}_Pair`
-    return this.paired && !this.carryDrawn && this.hasAnimation(pair) ? pair : name
+    return this.paired && (!this.carryDrawn || this.pairedDrawn) && this.hasAnimation(pair)
+      ? pair
+      : name
   }
   idle(clip: string): void {
     this.idleClip = clip
@@ -320,7 +333,7 @@ export class DuelActor {
         continue
       }
       // Frontier carries only the right-hand revolver; Duel's authored paired draw uses both.
-      const spare = this.carryDrawn && mount.hand === 'L'
+      const spare = this.carryDrawn && !this.pairedDrawn && mount.hand === 'L'
       const showDrawn = this.held === 'revolver' && drawn && !spare
       mount.node.enabled = mount.drawn === showDrawn
     }
@@ -336,7 +349,8 @@ export class DuelActor {
     this.playbackRate = rate
   }
 
-  muzzle(): { position: Vec3; direction: Vec3 } | null {
+  /** The held weapon's authored muzzle socket: +X along the bore, +Y up. */
+  muzzleSocket(): GraphNode | null {
     const mounts = this.weaponMounts.filter(
       (mount) =>
         mount.node.enabled &&
@@ -348,7 +362,11 @@ export class DuelActor {
       mounts.find((mount) => mount.hand === 'R') ??
       mounts[0]
     const socket = active?.node.findByName('socket.muzzle')
-    if (!socket?.enabled) {
+    return socket?.enabled ? socket : null
+  }
+  muzzle(): { position: Vec3; direction: Vec3 } | null {
+    const socket = this.muzzleSocket()
+    if (!socket) {
       return null
     }
     // Revolvers are authored along +X. The socket follows the actual gun and wrist animation.

@@ -3,7 +3,11 @@ import { createHash } from 'node:crypto'
 import { readFile } from 'node:fs/promises'
 import { type Document, NodeIO, type Primitive } from '@gltf-transform/core'
 import { ALL_EXTENSIONS } from '@gltf-transform/extensions'
-import { extractFirstPersonArms } from '../../tools/content/first-person-arms.ts'
+import {
+  extractFirstPersonArms,
+  VIEWMODEL_DIRECTORY,
+  VIEWMODEL_FITS,
+} from '../../tools/content/first-person-arms.ts'
 
 const io = new NodeIO().registerExtensions(ALL_EXTENSIONS)
 const ATTACHMENT = /^(?:mount\.|socket\.)/u
@@ -179,3 +183,27 @@ for (const [id, faces, vertices] of [
     expect(actual).toBe(faces)
   })
 }
+
+it('publishes one current arms derivative and descriptor for every single and paired outfit fit', async () => {
+  const { VIEWMODELS } = await import('../../src/experiments/out-west/content/viewmodels.ts')
+  expect(new Set(Object.keys(VIEWMODELS))).toEqual(new Set(VIEWMODEL_FITS))
+  for (const id of VIEWMODEL_FITS) {
+    const descriptor = VIEWMODELS[id]
+    const published = await readFile(`${VIEWMODEL_DIRECTORY}/${id}.glb`)
+    const hash = createHash('sha256').update(published).digest('hex')
+    expect(descriptor).toEqual({
+      url: `/experiments/out-west/3d/native-v2/viewmodels/${id}.glb?v=${hash.slice(0, 16)}`,
+      hash,
+      bytes: published.byteLength,
+    })
+    const { bytes, report } = await extractFirstPersonArms(id)
+    expect(Buffer.from(bytes).equals(published)).toBe(true)
+    expect(report.retainedFaces).toBe(report.sourceFaces)
+    const json = (await io.binaryToJSON(bytes)).json
+    expect((json.nodes ?? []).some((node) => ATTACHMENT.test(node.name ?? ''))).toBe(false)
+    expect((json.materials ?? []).map((material) => material.name).toSorted()).toEqual([
+      'Character',
+      'Dyeable',
+    ])
+  }
+}, 120_000)
