@@ -15,6 +15,11 @@ import {
   Protocol,
 } from '@colyseus/core'
 import { unpackPackets } from '../../../src/experiments/out-west/runtime/packets.ts'
+
+/** Sustained frames per second, each carrying at most two SDK packets. */
+const FRAME_RATE = 20
+/** A stalled tab or radio delivers its queued frames at once; three seconds of backlog is play. */
+const FRAME_BURST = FRAME_RATE * 3
 export class CloudflareClient extends EventEmitter implements Client, ClientPrivate {
   declare '~messages': Record<string | number, unknown>
   readonly ref = this
@@ -24,8 +29,8 @@ export class CloudflareClient extends EventEmitter implements Client, ClientPriv
   reconnectionToken = ''
   _enqueuedMessages: Uint8Array[] = []
   _joinedAt = 0
-  private windowAt = Date.now()
-  private windowMessages = 0
+  private frameTokens = FRAME_BURST
+  private refilledAt = Date.now()
   private readonly delivered: (bytes: number) => void
   constructor(
     sessionId: string,
@@ -73,14 +78,16 @@ export class CloudflareClient extends EventEmitter implements Client, ClientPriv
   }
   dispatch(data: ArrayBuffer | string) {
     const now = Date.now()
-    if (now - this.windowAt >= 1000) {
-      this.windowAt = now
-      this.windowMessages = 0
-    }
-    if (++this.windowMessages > 20) {
+    this.frameTokens = Math.min(
+      FRAME_BURST,
+      this.frameTokens + (Math.max(0, now - this.refilledAt) * FRAME_RATE) / 1000,
+    )
+    this.refilledAt = now
+    if (this.frameTokens < 1) {
       this.leave(1008, 'Message rate exceeded')
       return
     }
+    this.frameTokens--
     if (typeof data === 'string') {
       this.leave(1003, 'Binary frames required')
       return

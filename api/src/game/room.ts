@@ -83,7 +83,8 @@ export class NativeFrontierRoom extends Room<{ state: FrontierState; input: Move
     this.setPatchRate(null)
     this.setTimestep()
     this.clock.stop()
-    this.maxMessagesPerSecond = 30
+    // No Colyseus maxMessagesPerSecond: it windows on this tick-driven clock, so a stall replays a
+    // queued backlog into one "second" and drops healthy players. CloudflareClient limits frames.
     this.core = options.core
     this.onTick = options.onTick
     this.state.content = collision.version

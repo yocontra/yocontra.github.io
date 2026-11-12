@@ -1,4 +1,4 @@
-import { expect, test as it } from 'bun:test'
+import { expect, test as it, setSystemTime } from 'bun:test'
 import { CloudflareClient } from '../../api/src/game/socket.ts'
 import {
   batchInputs,
@@ -43,24 +43,40 @@ it('copies SDK input bytes before buffer reuse, sends two at once and bypasses c
   connection.send(input)
   expect(sent[2]).toEqual(input)
 })
-it('limits outer WebSocket messages independently of two SDK inputs per message', () => {
-  const closes: { code: number; reason: string }[] = []
-  const socket = {
-    readyState: 1,
-    close: (code: number, reason: string) => closes.push({ code, reason }),
-  } as unknown as WebSocket
-  const client = new CloudflareClient('a', socket)
-  let messages = 0
-  client.on('message', () => {
-    messages++
-  })
-  const packet = Uint8Array.from(packPackets([new Uint8Array([19]), new Uint8Array([19])])).buffer
-  for (let i = 0; i < 20; i++) {
-    client.dispatch(packet)
+it('limits outer WebSocket messages on wall time, tolerating a stalled backlog', () => {
+  setSystemTime(new Date(1_000_000))
+  try {
+    const closes: { code: number; reason: string }[] = []
+    const socket = {
+      readyState: 1,
+      close: (code: number, reason: string) => closes.push({ code, reason }),
+    } as unknown as WebSocket
+    const client = new CloudflareClient('a', socket)
+    let messages = 0
+    client.on('message', () => {
+      messages++
+    })
+    const packet = Uint8Array.from(packPackets([new Uint8Array([19]), new Uint8Array([19])])).buffer
+    // three seconds of 20 Hz input pairs arriving at once after a hitch
+    for (let i = 0; i < 60; i++) {
+      client.dispatch(packet)
+    }
+    expect(messages).toBe(120)
+    expect(closes).toEqual([])
+    // sustained play at the normal rate keeps refilling
+    for (let second = 1; second <= 10; second++) {
+      setSystemTime(new Date(1_000_000 + second * 1000))
+      for (let i = 0; i < 10; i++) {
+        client.dispatch(packet)
+      }
+    }
+    expect(closes).toEqual([])
+    // a flood beyond the sustained rate still closes
+    for (let i = 0; i < 80 && closes.length === 0; i++) {
+      client.dispatch(packet)
+    }
+    expect(closes[0]?.code).toBe(1008)
+  } finally {
+    setSystemTime()
   }
-  expect(messages).toBe(40)
-  expect(closes).toEqual([])
-  client.dispatch(packet)
-  expect(messages).toBe(40)
-  expect(closes[0]?.code).toBe(1008)
 })
