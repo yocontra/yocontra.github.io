@@ -6,6 +6,7 @@ import {
   type ContainerResource,
   DETAILMODE_MUL,
   Entity,
+  FOG_EXP,
   FOG_EXP2,
   FOG_LINEAR,
   PIXELFORMAT_RGBA8,
@@ -28,6 +29,8 @@ import { NativeClockwork } from './clockwork.ts'
 import { NativeWilds } from './wilds.ts'
 
 const UP = new Vec3(0, 1, 0)
+/** Per-metre haze relative to the authored presets; distant hills soften, duelists stay crisp. */
+const CAMPAIGN_HAZE = 0.9
 /** Lantern glass emission at full night, before exposure and tonemapping. */
 const LAMP_GLOW = 6
 const FRONTIER_SUN = new Vec3(-0.55, 0.62, 0.56).normalize()
@@ -99,6 +102,7 @@ export class NativeEnvironment {
   private readonly fogColor = new Color()
   private fogStart = 0
   private fogEnd = 0
+  private haze = 0
   ready: Promise<void> = Promise.resolve()
   constructor(game: GameApplication, frontier = false) {
     this.game = game
@@ -268,6 +272,7 @@ export class NativeEnvironment {
     // Leave nearby combat clear while the town's distant foliage and hills fade into dust.
     this.fogStart = this.frontier ? 25 : preset.fogNear
     this.fogEnd = this.frontier ? 110 : preset.fogFar
+    this.haze = preset.haze * CAMPAIGN_HAZE
     this.applyFog()
     for (const material of this.windows) {
       material.emissive.copy(color([1, 0.32, 0.06]))
@@ -305,15 +310,18 @@ export class NativeEnvironment {
   }
   private applyFog(): void {
     const fog = this.game.app.scene.fog
-    fog.type = this.denseFog ? FOG_EXP2 : FOG_LINEAR
-    if (this.denseFog) {
-      fog.color.set(0.6, 0.58, 0.53)
-    } else {
-      fog.color.copy(this.fogColor)
-    }
-    fog.density = this.denseFog ? 0.07 : 0
     fog.start = this.fogStart
     fog.end = this.fogEnd
+    if (this.denseFog) {
+      fog.type = FOG_EXP2
+      fog.color.set(0.6, 0.58, 0.53)
+      fog.density = 0.07
+      return
+    }
+    fog.color.copy(this.fogColor)
+    // Campaign arenas restore the original aerial perspective: exponential haze in the horizon colour.
+    fog.type = this.frontier ? FOG_LINEAR : FOG_EXP
+    fog.density = this.frontier ? 0 : this.haze
   }
   poster(index: number, stamp: 'coward' | 'dead' | null = null): void {
     const outlaw = OUTLAWS[index]
