@@ -6,6 +6,7 @@ import type { GameViewport } from '../src/experiments/out-west/client/viewport.t
 
 const origin = process.env.OUT_WEST_URL ?? 'http://127.0.0.1:4390'
 const output = process.env.OUT_WEST_OUTPUT ?? '/tmp/out-west-character-first-person-final'
+const portrait = process.env.OUT_WEST_ORIENTATION === 'portrait'
 const probePath = '/tools/content/actor-lifecycle-probe.ts'
 const sightsPath = '/src/experiments/out-west/client/first-person-sights.ts'
 const posePath = '/src/experiments/out-west/client/player-pose.ts'
@@ -148,7 +149,8 @@ async function shoot(page: Page, label: string): Promise<Record<string, unknown>
 }
 
 try {
-  const page = await browser.newPage({ viewport: { width: 1280, height: 720 } })
+  const viewport = portrait ? { width: 375, height: 812 } : { width: 1280, height: 720 }
+  const page = await browser.newPage({ viewport })
   page.on('pageerror', (error) => errors.push(error.message))
   await page.goto(
     `${origin}/experiments/out-west/frontier/?server=loopback&bots=0&seed=7&spawn=72,66`,
@@ -203,7 +205,7 @@ try {
   )
   await frames(page, 20)
   presented(await view(page), 'respawned')
-  await page.mouse.move(640, 360)
+  await page.mouse.move(viewport.width / 2, viewport.height / 2)
   for (const [name, kind] of [
     ['revolver', 0],
     ['shotgun', 1],
