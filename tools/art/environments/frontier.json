@@ -1,8 +1,12 @@
 {
   "schema": 1,
-  "sourceHash": "a2fc701a857b330522c3d12719c991eff15a09070eea41bb4ce066bb0cd4ed7a",
+  "sourceHash": "6dd76c2af54abecf4410b9dcfc0fc101dc01de87ace57fbeaf47b7d7c4150443",
   "collisionVersion": "a8e983011c7998d9dc9bd9e68b0e4ef4519f0aaf1f7911f7633625d182e1462e",
-  "arrival": [52, 0, 52],
+  "arrival": [
+    52,
+    0,
+    52
+  ],
   "life": {
     "folk": [
       {
@@ -93,21 +97,43 @@
   },
   "terrain": {
     "scale": 0.8888888888888888,
-    "translation": [-12, -0.005, -12],
+    "translation": [
+      -12,
+      -0.005,
+      -12
+    ],
     "referenceHash": "9b291efa8904c6189ded131155a6583402e17e8e67821f05e62e55c2f7af9a26"
   },
   "tumbleweedPaths": [
     {
-      "center": [12, 54],
-      "radius": [5, 1]
+      "center": [
+        12,
+        54
+      ],
+      "radius": [
+        5,
+        1
+      ]
     },
     {
-      "center": [39, 54],
-      "radius": [2.5, 0.7]
+      "center": [
+        39,
+        54
+      ],
+      "radius": [
+        2.5,
+        0.7
+      ]
     },
     {
-      "center": [76, 54],
-      "radius": [5, 1]
+      "center": [
+        76,
+        54
+      ],
+      "radius": [
+        5,
+        1
+      ]
     }
   ],
   "panes": 241
