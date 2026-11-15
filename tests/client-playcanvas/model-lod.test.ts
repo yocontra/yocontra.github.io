@@ -11,7 +11,7 @@ import {
 } from 'playcanvas'
 import { NativeModelLods } from '../../src/experiments/out-west/client/model-lod.ts'
 
-function fixture(name = 'model-lod:28:4') {
+function fixture(name = 'model-lod:28:4:fixture') {
   const device = new NullGraphicsDevice({ width: 1, height: 1 })
   const app = new AppBase(device.canvas)
   const options = new AppOptions()
@@ -23,8 +23,8 @@ function fixture(name = 'model-lod:28:4') {
   app.root.addChild(root)
   const group = new Entity(name, app)
   root.addChild(group)
-  const near = new Entity('lod-near', app)
-  const far = new Entity('lod-far', app)
+  const near = new Entity('lod-near:', app)
+  const far = new Entity('lod-far:', app)
   group.addChild(near)
   group.addChild(far)
   near.addComponent('render', { type: 'box' })

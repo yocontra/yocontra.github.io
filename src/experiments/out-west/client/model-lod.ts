@@ -31,8 +31,8 @@ export class NativeModelLods {
       ) {
         throw new Error(`Invalid authored detail group ${node.name}`)
       }
-      const near = node.children.find((child) => child.name === 'lod-near')
-      const far = node.children.find((child) => child.name === 'lod-far')
+      const near = node.children.find((child) => child.name.startsWith('lod-near:'))
+      const far = node.children.find((child) => child.name.startsWith('lod-far:'))
       if (!(near instanceof Entity && far instanceof Entity)) {
         throw new Error(`Incomplete authored detail group ${node.name}`)
       }

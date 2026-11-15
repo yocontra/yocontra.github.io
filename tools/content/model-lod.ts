@@ -34,12 +34,15 @@ export function lodPrefab(
     ((area.y0 ?? 0) + area.top) / 2,
     area.z + area.d / 2,
   ]
+  // A delimiter protects numeric metadata from native importer uniqueness suffixes.
   const group = g.doc
-    .createNode(`${MODEL_LOD_PREFIX}${lod.distance}:${lod.hysteresis}`)
+    .createNode(
+      `${MODEL_LOD_PREFIX}${lod.distance}:${lod.hysteresis}:${g.doc.getRoot().listNodes().length}`,
+    )
     .setTranslation(center)
   root.addChild(group)
   const offset: [number, number, number] = [-center[0], -center[1], -center[2]]
-  g.prefab(group, near, area, fit).setName('lod-near').setTranslation(offset)
-  g.prefab(group, far, area, fit).setName('lod-far').setTranslation(offset)
+  g.prefab(group, near, area, fit).setName('lod-near:').setTranslation(offset)
+  g.prefab(group, far, area, fit).setName('lod-far:').setTranslation(offset)
   return group
 }

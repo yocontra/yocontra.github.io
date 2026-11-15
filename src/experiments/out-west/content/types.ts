@@ -11,7 +11,7 @@ export interface ContentAsset {
   bytes: number
 }
 
-/** Same-container static detail groups; children are named lod-near and lod-far. */
+/** Same-container static detail groups; child names start with lod-near: and lod-far:. */
 export interface StaticModelLod {
   distance: number
   hysteresis: number

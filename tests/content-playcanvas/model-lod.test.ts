@@ -30,10 +30,10 @@ it('authored cactus LODs reuse canonical meshes and preserve both variants world
   const farReference = getBounds(g.prefab(root, far, area, fit))
   const meshes = doc.getRoot().listMeshes().length
   const group = lodPrefab(g, root, area, { near, far, fit })
-  expect(group.getName()).toBe('model-lod:28:4')
+  expect(group.getName().startsWith('model-lod:28:4:')).toBe(true)
   expect(group.getTranslation()).toEqual([48, 3, 63])
-  const high = group.listChildren().find((node) => node.getName() === 'lod-near')
-  const low = group.listChildren().find((node) => node.getName() === 'lod-far')
+  const high = group.listChildren().find((node) => node.getName().startsWith('lod-near:'))
+  const low = group.listChildren().find((node) => node.getName().startsWith('lod-far:'))
   if (!(high && low)) {
     throw new Error('Missing cactus detail variants')
   }
@@ -49,6 +49,7 @@ it('authored cactus LODs reuse canonical meshes and preserve both variants world
     })
     return total
   }
+  expect(lodPrefab(g, root, area, { near, far, fit }).getName()).not.toBe(group.getName())
   expect(triangles(low)).toBeGreaterThan(0)
   expect(triangles(low)).toBeLessThan(triangles(high))
   expect(() =>
