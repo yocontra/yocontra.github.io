@@ -23,6 +23,7 @@ import {
   SHADOW_PCF5_32F,
   SoundComponentSystem,
   SoundManager,
+  StandardMaterial,
   type Texture,
   TextureHandler,
   TONEMAP_ACES,
@@ -288,6 +289,15 @@ export class GameApplication {
         // Container HTTP requests outlive unload(). Native glTF hooks stop late parsing before
         // it can register textures or create GPU resources on a disposed application.
         asset.options = {
+          material: {
+            postprocess: (_source: unknown, material: StandardMaterial) => {
+              // Embedded glTF roughness uses GGX too; unlit materials keep their native path.
+              if (material instanceof StandardMaterial && material.useLighting) {
+                material.enableGGXSpecular = true
+                material.update()
+              }
+            },
+          },
           global: {
             preprocess: () => {
               if (this.controller.signal.aborted) {
