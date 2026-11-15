@@ -4,6 +4,7 @@ import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { arch, cpus, platform, release, tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { chromium } from 'playwright'
+import { foregroundCoverage } from './content/foreground-coverage.ts'
 import { installFrameRecorder } from './content/frame-recorder.ts'
 import { frameTarget } from './content/frame-target.ts'
 import { frameTiming } from './content/frame-timing.ts'
@@ -247,9 +248,12 @@ try {
   const foreground = host.filter(
     (sample) => sample.wall >= first - 1000 && sample.wall <= last + 1000,
   )
-  const gaps = foreground
-    .slice(1)
-    .map((sample, index) => sample.wall - (foreground[index]?.wall ?? sample.wall))
+  const coverage = foregroundCoverage(foreground, {
+    start: first,
+    end: last,
+    bundle: 'com.google.Chrome',
+    pid: browserPid,
+  })
   const problems: string[] = []
   if (headless) {
     problems.push('Headless rendering is diagnostic only')
@@ -287,18 +291,7 @@ try {
   ) {
     problems.push('Native graphics context unavailable')
   }
-  if (
-    foreground.length < Math.floor(seconds) ||
-    foreground.some(
-      (sample) =>
-        sample.bundle !== 'com.google.Chrome' ||
-        sample.pid !== browserPid ||
-        sample.onScreenWindows < 1,
-    ) ||
-    gaps.some((gap) => gap > 1750) ||
-    (foreground[0]?.wall ?? Number.POSITIVE_INFINITY) > first + 1000 ||
-    (foreground.at(-1)?.wall ?? 0) < last - 1000
-  ) {
+  if (!coverage.passed) {
     problems.push('Host foreground evidence incomplete or Chrome was not frontmost')
   }
   if (
@@ -357,6 +350,7 @@ try {
     timing,
     scriptHashes,
     foreground,
+    foregroundCoverage: coverage,
     recording: data,
   }
   await writeFile(join(output, 'receipt.json'), `${JSON.stringify(report, null, 2)}\n`)

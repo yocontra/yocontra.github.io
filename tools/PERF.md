@@ -43,6 +43,17 @@ Wait for the production fixture URL, then use a separate terminal. Do not run ov
 builds in the same checkout: they share a prerender cache. Keep Chrome's actual recording window
 frontmost for the entire run. The runner records its browser PID and requires the same process
 in the macOS foreground trace, as well as visible/focused page state.
+Host coverage must reach within one second of both recording boundaries, contain no gap over
+1.75 seconds, and retain the same visible process throughout. Sampling overhead can produce
+59 well-covered samples in a minute. It does not justify discarding a gap or foreground switch.
+An older receipt rejected only by its sample-count gate can be reviewed without rewriting it:
+
+```sh
+bun tools/review-frame-foreground.ts /tmp/out-west-ordinary/receipt.json
+```
+
+The separate `.foreground-review.json` hashes and links the original receipt, identifies the
+review code revision, and preserves every other qualification gate.
 
 ```sh
 bun tools/record-production-frames.ts --url=http://127.0.0.1:4398 --api=http://127.0.0.1:8798 --population=ordinary --out=/tmp/out-west-ordinary
