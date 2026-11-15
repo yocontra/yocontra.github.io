@@ -309,7 +309,7 @@ export class FirstPersonModel {
     }
     arms.actor.hold(heldWeapon(request.domain), true)
     animateRider(arms, request.player, { first: true, domain: request.domain })
-    if (!arms.actor.muzzleSocket()) {
+    if (!arms.actor.muzzleSocket(true)) {
       this.hide()
     }
   }
@@ -335,7 +335,7 @@ export class FirstPersonModel {
       !request ||
       request.player.hp <= 0 ||
       arms.key !== armsKey(request) ||
-      !arms.actor.muzzleSocket()
+      !arms.actor.muzzleSocket(true)
     ) {
       this.hide()
       return
@@ -388,7 +388,7 @@ export class FirstPersonModel {
   /** Sight landmarks on the view axis; held through each shot so the authored kick reads. */
   private align(arms: Arms, held: HeldWeapon, sight: number, dt: number): void {
     const profile = SIGHTS.get(held)
-    const socket = arms.actor.muzzleSocket()
+    const socket = arms.actor.muzzleSocket(true)
     if (!(profile && socket) || sight <= 0) {
       this.sighted = false
       return

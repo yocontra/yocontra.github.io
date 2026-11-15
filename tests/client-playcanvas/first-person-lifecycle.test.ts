@@ -6,7 +6,7 @@ import {
 } from '../../src/experiments/out-west/client/first-person-model.ts'
 import { RESTING_SIGHT } from '../../src/experiments/out-west/client/first-person-sights.ts'
 import { DEFAULT_LOADOUT } from '../../src/experiments/out-west/data/catalog.ts'
-import type { DuelActor } from '../../src/experiments/out-west/duel/native-actor.ts'
+import { DuelActor } from '../../src/experiments/out-west/duel/native-actor.ts'
 import { newMotion } from '../../src/experiments/out-west/runtime/abilities.ts'
 import { fitId } from '../../src/experiments/out-west/scene/native-equipment.ts'
 
@@ -27,14 +27,19 @@ function fixture() {
   const head = new Entity('Head')
   head.setLocalPosition(0, 1.6, 0)
   skeleton.addChild(head)
+  const gun = new Entity('drawn gun')
+  skeleton.addChild(gun)
   const socket = new Entity('socket.muzzle')
-  skeleton.addChild(socket)
-  const actor = {
+  gun.addChild(socket)
+  const actor = Object.create(DuelActor.prototype) as DuelActor
+  for (const [name, value] of Object.entries({
     root,
     model: skeleton,
-    muzzleSocket: () => socket,
-    muzzle: () => ({ x: 1, y: 2, z: 3 }),
-    destroy: () => root.destroy(),
+    held: 'revolver',
+    detached: new Map(),
+    weaponMounts: [{ node: gun, drawn: true, hand: 'R' }],
+  })) {
+    Reflect.set(actor, name, value)
   }
   const request: FirstPersonRequest = {
     id: '0',

@@ -382,20 +382,22 @@ export class DuelActor {
     this.playbackRate = rate
   }
 
-  /** The held weapon's authored muzzle socket: +X along the bore, +Y up. */
-  muzzleSocket(): GraphNode | null {
+  /** Held socket (+X bore, +Y up); offline-pose placement may inspect a disabled candidate. */
+  muzzleSocket(includeDisabled = false): GraphNode | null {
     const mounts = this.weaponMounts.filter(
       (mount) =>
-        mount.node.enabled &&
+        (includeDisabled || mount.node.enabled) &&
         !(mount.node instanceof Entity && this.detached.has(mount.node)) &&
-        (mount.weapon ? mount.weapon === this.held : mount.drawn),
+        (mount.weapon
+          ? mount.weapon === this.held
+          : mount.drawn && (!includeDisabled || this.held === 'revolver')),
     )
     const active =
       mounts.find((mount) => mount.weapon === this.held) ??
       mounts.find((mount) => mount.hand === 'R') ??
       mounts[0]
     const socket = active?.node.findByName('socket.muzzle')
-    return socket?.enabled ? socket : null
+    return socket && (includeDisabled || socket.enabled) ? socket : null
   }
   muzzle(): { position: Vec3; direction: Vec3 } | null {
     const socket = this.muzzleSocket()
