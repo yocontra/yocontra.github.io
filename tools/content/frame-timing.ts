@@ -19,7 +19,9 @@ export function frameTiming(timestamps: readonly number[]) {
     // Bins are (start, end], so a frame at exactly one second closes the first bin.
     const index = Math.ceil((timestamp - start) / 1000) - 1
     const bin = bins[index]
-    if (bin) bin.frames++
+    if (bin) {
+      bin.frames++
+    }
   }
   const sorted = [...intervals].sort((a, b) => a - b)
   const percentile = (p: number) => sorted[Math.ceil(sorted.length * p) - 1] as number

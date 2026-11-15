@@ -10,20 +10,20 @@ Photoreal overhaul of existing browser/mobile modes. Free/CC0 assets and origina
 
 ## Work and evidence
 
-| Package | Owner | Status / remaining gate |
-| --- | --- | --- |
-| Recover all worktrees | Integrator | Archived 31 missing worktree metadata sets, reflogs and original plans; master current. Seven distinct candidate heads remain subject to selective review. |
-| First-person pipeline | Integrator | Recovered `fc6d49b` as `0c1b93a`; regenerated current derivatives in `8b5f64c`. 3 extraction tests pass, 5472 assertions. Native shotgun ADS screenshot fails sleeve/framing review; not accepted. |
-| Receive-only voice | Voice worker | Integrated `1cb04d35`; 37 pinned voice/server tests pass. Browser fixtures cover denied/missing/ended mic and same-meeting recovery; new live SFU validation still outstanding. |
-| Texture quality profiles | Art worker | Integrated `5aaad0f`; explicit preservation/high/low profiles, four tests pass. Hero authoring quality still open. |
-| Duel parity | Duel worker | Integrated `a2cb5046`, offline TipHat `3d5ff13b`; 240 integrated tests pass. Native Underboss/Boss probe passed in worker; final TipHat review and original side-by-side remain. |
-| Characters/material coverage | Queued | All outfits, paired fits, 17 outlaws, crowds and actual lighting coverage required. |
-| Animals | Integrator | Recovered horse candidates in `906df7ff`/`9fc1b6a1`; retained prior texture bytes. Native review open; crow fold still open. |
-| Environment | Queued | Siding, adobe, crates, terrain, flora, structure and interiors; preserve collision or version coordinated changes. |
-| Lighting/effects | Queued | Calibrated materials, native tiers and full scene/day-night review. QA camera candidate `958f6b9` is not a lighting upgrade. |
-| Audio | Integrator | Recovered candidates; `5e1fe2a6` adds post-limiter headroom. Ordinary/cluster peaks -2.6/-2.5 dBFS. Dense-firefight automated listening median 3/10: unaccepted. Reverted a mix experiment with no improvement. |
-| Performance | Queued | Visible release-engine simulator/Chrome recorder; 60-second active runs, both orientations, ordinary and 32-player stress; retain every slow frame. |
-| Delivery | Queued | Full check/build/native probes, immutable old assets, current hashes/previews, exact Worker then Pages revision verification. |
+| Package                      | Owner        | Status / remaining gate                                                                                                                                                                                         |
+| ---------------------------- | ------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Recover all worktrees        | Integrator   | Archived 31 missing worktree metadata sets, reflogs and original plans; master current. Seven distinct candidate heads remain subject to selective review.                                                      |
+| First-person pipeline        | Integrator   | Recovered `fc6d49b` as `0c1b93a`; regenerated current derivatives in `8b5f64c`. 3 extraction tests pass, 5472 assertions. Native shotgun ADS screenshot fails sleeve/framing review; not accepted.              |
+| Receive-only voice           | Voice worker | Integrated `1cb04d35`; 37 pinned voice/server tests pass. Browser fixtures cover denied/missing/ended mic and same-meeting recovery; new live SFU validation still outstanding.                                 |
+| Texture quality profiles     | Art worker   | Integrated `5aaad0f`; explicit preservation/high/low profiles, four tests pass. Hero authoring quality still open.                                                                                              |
+| Duel parity                  | Duel worker  | Integrated `a2cb5046`, offline TipHat `3d5ff13b`; 240 integrated tests pass. Native Underboss/Boss probe passed in worker; final TipHat review and original side-by-side remain.                                |
+| Characters/material coverage | Queued       | All outfits, paired fits, 17 outlaws, crowds and actual lighting coverage required.                                                                                                                             |
+| Animals                      | Integrator   | Recovered horse candidates in `906df7ff`/`9fc1b6a1`; retained prior texture bytes. Native review open; crow fold still open.                                                                                    |
+| Environment                  | Queued       | Siding, adobe, crates, terrain, flora, structure and interiors; preserve collision or version coordinated changes.                                                                                              |
+| Lighting/effects             | Queued       | Calibrated materials, native tiers and full scene/day-night review. QA camera candidate `958f6b9` is not a lighting upgrade.                                                                                    |
+| Audio                        | Integrator   | Recovered candidates; `5e1fe2a6` adds post-limiter headroom. Ordinary/cluster peaks -2.6/-2.5 dBFS. Dense-firefight automated listening median 3/10: unaccepted. Reverted a mix experiment with no improvement. |
+| Performance                  | Queued       | Visible release-engine simulator/Chrome recorder; 60-second active runs, both orientations, ordinary and 32-player stress; retain every slow frame.                                                             |
+| Delivery                     | Queued       | Full check/build/native probes, immutable old assets, current hashes/previews, exact Worker then Pages revision verification.                                                                                   |
 
 ## Swarm rules
 
