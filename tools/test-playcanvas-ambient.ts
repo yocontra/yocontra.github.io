@@ -97,8 +97,8 @@ export const removeStyle = () => {};`,
   const anchored = await page.evaluate(() => {
     const d: NativeDirector = Reflect.get(globalThis, '__ow').director
     const folk: {
-      actor: { root: Entity; model: Entity }
-      home: { habit?: string; y: number; floor?: number; door?: readonly number[] }
+      actor: { root: Entity; model: Entity; seatedHipOffset: number }
+      home: { habit?: string; y: number; seatY?: number; floor?: number; door?: readonly number[] }
       hipsHeight: number
     }[] = Reflect.get(d.atmosphere, 'folk')
     return folk
@@ -106,16 +106,21 @@ export const removeStyle = () => {};`,
       .map((f) => ({
         habit: f.home.habit,
         rootY: f.actor.root.getPosition().y,
-        expectedRootY: f.home.y - (f.hipsHeight - 0.1),
+        expectedHipsY: (f.home.seatY ?? f.home.y) + f.actor.seatedHipOffset,
         hipsY: f.actor.model.findByName('Hips')?.getPosition().y,
-        seatY: f.home.y,
+        seatY: f.home.seatY ?? f.home.y,
         clip: f.actor.model.anim?.baseLayer?.activeState,
       }))
   })
   if (
     !crowdOnly &&
     (anchored.length !== 3 ||
-      anchored.some((f) => Math.abs(f.rootY - f.expectedRootY) > 0.001 || f.clip !== 'Town_Sit'))
+      anchored.some(
+        (f) =>
+          f.hipsY === undefined ||
+          Math.abs(f.hipsY - f.expectedHipsY) > 0.001 ||
+          f.clip !== 'Town_Sit',
+      ))
   ) {
     throw new Error(`Spectator seat anchoring regressed: ${JSON.stringify(anchored)}`)
   }
