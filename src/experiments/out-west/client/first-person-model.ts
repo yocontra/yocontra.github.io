@@ -400,6 +400,10 @@ export class FirstPersonModel {
     }
     hipRotation.copy(facing)
     hipRotation.transformVector(eye, hipPosition).mulScalar(-1).add(HIP[held])
+    // Crop the near shoulder geometry in portrait; the sight blend removes this hip offset.
+    if (shape === 'portrait' && held !== 'revolver') {
+      hipPosition.y -= 0.085
+    }
     this.align(arms, held, sight, step)
     targetRotation.slerp(hipRotation, this.sightRotation, sight)
     targetPosition.lerp(hipPosition, this.sightPosition, sight)
