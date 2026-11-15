@@ -1,9 +1,18 @@
 /** Actual native game-page first-person arms: physical eye, sights, shots, shadows and lifecycle. */
 import { mkdir, writeFile } from 'node:fs/promises'
 import { chromium, type Page } from 'playwright'
+import type { FirstPersonModel } from '../src/experiments/out-west/client/first-person-model.ts'
 import type { FrontierSession } from '../src/experiments/out-west/client/frontier-session.ts'
 import type { GameViewport } from '../src/experiments/out-west/client/viewport.ts'
+import type { ShotRay } from '../src/experiments/out-west/ffa/sim/combat.ts'
 import { HOLSTER_TICKS } from '../src/experiments/out-west/ffa/sim/constants.ts'
+import {
+  delayedNativeLifecycle,
+  nativeActions,
+  rejectParkedShadow,
+  shadowShooting,
+  unchangedBaseRay,
+} from './character-quality/first-person-lifecycle.ts'
 
 const origin = process.env.OUT_WEST_URL ?? 'http://127.0.0.1:4390'
 const output = process.env.OUT_WEST_OUTPUT ?? '/tmp/out-west-character-first-person-final'
@@ -18,14 +27,17 @@ const errors: string[] = []
 const results: Record<string, unknown>[] = []
 
 interface View {
+  sampledAt: number
+  baseRay: ShotRay
   eye: { x: number; y: number; z: number }
   physicalEye: { x: number; y: number; z: number }
   fov: number
+  input: { yaw: number; pitch: number }
   world: {
     instances: number
     forwardHidden: number
     castShadows: number
-    controllers: { state?: string; time?: number }[]
+    controllers: { node: string; state?: string; time?: number }[]
   }
   arms: {
     total: number
@@ -65,6 +77,7 @@ async function view(page: Page, weapon?: string): Promise<View> {
       const probe = await import(paths.probe)
       const { SIGHTS } = await import(paths.sights)
       const pose = await import(paths.pose)
+      const { shotRay } = await import(paths.combat)
       const session = Reflect.get(globalThis, '__nativeFrontierSession') as FrontierSession
       const profile = paths.weapon ? SIGHTS.get(paths.weapon) : undefined
       const result = probe.firstPersonView(
@@ -72,13 +85,23 @@ async function view(page: Page, weapon?: string): Promise<View> {
         profile ? { front: profile.front.toArray(), rear: profile.rear.toArray() } : undefined,
       )
       const self = session.players.get(session.selfId)
+      const domain = session.world.players[session.selfSlot]
       return {
         ...result,
+        sampledAt: performance.now(),
+        baseRay: domain ? shotRay(domain, domain.aim) : null,
+        input: { yaw: self?.yaw ?? 0, pitch: self?.pitch ?? 0 },
         physicalEye: self ? pose.poseEye(self) : null,
         center: { x: innerWidth / 2, y: innerHeight / 2 },
       }
     },
-    { probe: probePath, sights: sightsPath, pose: posePath, weapon },
+    {
+      probe: probePath,
+      sights: sightsPath,
+      pose: posePath,
+      combat: '/src/experiments/out-west/ffa/sim/combat.ts',
+      weapon,
+    },
   )) as View
 }
 
@@ -112,30 +135,73 @@ async function equip(page: Page, kind: number): Promise<void> {
   }, kind)
 }
 
-async function shoot(page: Page, label: string): Promise<Record<string, unknown>> {
+async function shoot(page: Page, label: string, guns = 1): Promise<Record<string, unknown>> {
   await page.waitForFunction(() => {
     const session = Reflect.get(globalThis, '__nativeFrontierSession') as FrontierSession
     const self = session.world.players[session.selfSlot]
     return self && self.fireCooldownMs <= 0 && self.reloadTicks === 0
   })
-  const before = await page.evaluate(() => {
+  const before = await page.evaluate(async () => {
+    const path = '/src/experiments/out-west/ffa/sim/combat.ts'
+    const { shotRay } = await import(path)
+    const modelPath = '/src/experiments/out-west/client/first-person-model.ts'
+    const { FirstPersonModel: NativeModel } = await import(modelPath)
+    const fire: FirstPersonModel['fire'] = NativeModel.prototype.fire
+    Reflect.set(globalThis, '__fpShotStart', undefined)
+    NativeModel.prototype.fire = function (this: FirstPersonModel, id: string, crouched: boolean) {
+      if (this.ready) {
+        Reflect.set(globalThis, '__fpShotStart', performance.now())
+        NativeModel.prototype.fire = fire
+      }
+      fire.call(this, id, crouched)
+    }
     const session = Reflect.get(globalThis, '__nativeFrontierSession') as FrontierSession
     const tick = session.world.players[session.selfSlot]?.lastFireTick ?? -1
+    Reflect.set(globalThis, '__fpShotRay', undefined)
+    const unsubscribe = session.subscribe((event) => {
+      const self = session.world.players[session.selfSlot]
+      if (event.type !== 'shot' || event.shooter !== session.selfSlot || !self) {
+        return
+      }
+      const physical = shotRay(self, event.aim)
+      Reflect.set(globalThis, '__fpShotRay', {
+        firedAt: performance.now(),
+        origin: event.origin,
+        end: event.end,
+        originError: Math.hypot(
+          event.origin.x - physical.ox,
+          event.origin.y - physical.oy,
+          event.origin.z - physical.oz,
+        ),
+      })
+      unsubscribe()
+    })
     ;(Reflect.get(globalThis, '__playcanvasFrontier') as GameViewport).tap(1)
     return tick
   })
   let longest = 0
   let started = false
   let worstEye = 0
+  let mechanisms = 0
+  let endedAt = 0
+  let shadowAction = false
   for (let frame = 0; frame < 40; frame++) {
     await frames(page, 1)
     const v = await view(page)
     worstEye = Math.max(worstEye, eyeError(v))
-    const arms = v.arms.controllers.find((c) => c.state?.includes('Shoot'))
+    mechanisms = Math.max(
+      mechanisms,
+      v.arms.controllers.filter((c) => c.state?.startsWith('Weapon_Shoot')).length,
+    )
+    shadowAction ||= shadowShooting(v.world)
+    const arms = v.arms.controllers.find(
+      (c) => c.node === 'upper-body-pose' && c.state?.includes('Shoot'),
+    )
     if (arms) {
       started = true
       longest = Math.max(longest, arms.time ?? 0)
     } else if (started) {
+      endedAt = v.sampledAt
       break
     }
   }
@@ -146,7 +212,37 @@ async function shoot(page: Page, label: string): Promise<Record<string, unknown>
   check(fired && started, `${label} did not produce a real shot on the arms`, { fired, started })
   check(longest >= 0.18, `${label} arms shot clock was cut short`, longest)
   check(worstEye <= 1e-6, `${label} physical eye moved while firing`, worstEye)
-  return { longest, worstEye }
+  const ray = await page.evaluate(
+    () => Reflect.get(globalThis, '__fpShotRay') as { originError: number } | undefined,
+  )
+  check(
+    Boolean(ray) && (ray?.originError ?? 1) <= 1e-6,
+    `${label} authoritative shot origin moved`,
+    ray,
+  )
+  check(mechanisms >= guns, `${label} missing native weapon mechanism playback`, {
+    mechanisms,
+    guns,
+  })
+  const startedAt = await page.evaluate(
+    () => Reflect.get(globalThis, '__fpShotStart') as number | undefined,
+  )
+  const shotMilliseconds = endedAt - (startedAt ?? endedAt)
+  check(shotMilliseconds >= 199, `${label} firing state left before the full 200ms`, {
+    shotMilliseconds,
+    longest,
+  })
+  check(shadowAction, `${label} physical shadow actor never played the shot`, shadowAction)
+  const parkedMechanismRejected = await rejectParkedShadow(page, () => view(page), label)
+  return {
+    longest,
+    shotMilliseconds,
+    worstEye,
+    mechanisms,
+    shadowAction,
+    parkedMechanismRejected,
+    ray,
+  }
 }
 
 async function deadEyeFeedback(page: Page): Promise<void> {
@@ -256,7 +352,7 @@ try {
         return session.world.players[session.selfSlot]?.crouched === expected
       }, crouched)
       await frames(page, 30)
-      const hip = await view(page)
+      const hip = await view(page, name)
       presented(hip, `${label} hip`)
       await page.screenshot({ path: `${output}/${label}-hip.png` })
       await page.mouse.down({ button: 'right' })
@@ -281,10 +377,29 @@ try {
       await page.screenshot({ path: `${output}/${label}-sights-shot.png` })
       await page.mouse.up({ button: 'right' })
       await frames(page, 20)
+      const exited = await view(page)
+      presented(exited, `${label} exited sights`)
+      check(Math.abs(exited.fov - hip.fov) < 1e-6, `${label} ADS exit retained zoom`, exited)
+      check(
+        exited.input.yaw === hip.input.yaw && exited.input.pitch === hip.input.pitch,
+        `${label} ADS changed authoritative aim`,
+        { hip: hip.input, aimed: aimed.input, exited: exited.input },
+      )
+      const baseRayUnchanged = {
+        enter: unchangedBaseRay(hip.baseRay, aimed.baseRay),
+        exit: unchangedBaseRay(hip.baseRay, exited.baseRay),
+      }
+      check(
+        baseRayUnchanged.enter && baseRayUnchanged.exit,
+        `${label} ADS changed authoritative base ray direction/range`,
+        { hip: hip.baseRay, aimed: aimed.baseRay, exited: exited.baseRay },
+      )
       const hipShot = await shoot(page, `${label} hip`)
       results.push({
         label,
         hipFov: hip.fov,
+        baseRayUnchanged,
+        baseRays: [hip.baseRay, aimed.baseRay, exited.baseRay],
         sightFov: aimed.fov,
         front: aimed.arms.front,
         rear: aimed.arms.rear,
@@ -363,6 +478,9 @@ try {
       presented(await view(page), `swap ${outfit}`)
       if (cycle === 0) {
         await page.screenshot({ path: `${output}/swap-${outfit}.png` })
+        if (drawn === 2) {
+          results.push({ pairedShot: await shoot(page, 'paired both hands', 2) })
+        }
       }
     }
     const settled = await view(page)
@@ -380,11 +498,21 @@ try {
   )
   results.push({ swapCounts: counts })
 
+  await equip(page, 0)
+  results.push(await nativeActions(page, output, () => view(page), presented))
+  results.push({ nativeLifecycle: await delayedNativeLifecycle(page, output) })
+
   if (errors.length > 0) {
     throw new Error(errors.join(';'))
   }
   await writeFile(`${output}/results.json`, JSON.stringify({ results, errors }, null, 2))
   console.log('PASS native first-person arms', JSON.stringify(results))
+} catch (error) {
+  await writeFile(
+    `${output}/failure.json`,
+    JSON.stringify({ results, errors, failure: String(error) }, null, 2),
+  )
+  throw error
 } finally {
   await browser.close()
 }
