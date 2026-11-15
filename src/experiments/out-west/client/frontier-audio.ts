@@ -146,7 +146,7 @@ export class FrontierAudio {
   /** The nearest few reports keep their crack; tails and strikes are capped the same way. */
   private readonly budgets = {
     report: new VoiceBudget(3, 0.45),
-    tail: new VoiceBudget(2, 0.8),
+    tail: new VoiceBudget(2, 1.3),
     impact: new VoiceBudget(5, 0.3),
   }
   private spaceDue = 0
@@ -416,7 +416,9 @@ export class FrontierAudio {
     const crack =
       self ||
       (d < FAR_SHOT && this.budgets.report.admit(this.clock, heard * (1 + Math.random() * 0.1)))
-    const tail = self || this.budgets.tail.admit(this.clock, heard)
+    // The dry report always preserves your cue. Tails share a bound and one voice per shooter;
+    // repeated shots from the same revolver do not fill the entire return bus.
+    const tail = this.budgets.tail.admit(this.clock, self ? 2 : heard, shooter)
     if (crack) {
       this.play(close[kind], at, {
         range: 'gun',

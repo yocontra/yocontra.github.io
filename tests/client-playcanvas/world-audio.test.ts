@@ -106,6 +106,18 @@ describe('Frontier firefight budgets', () => {
     expect(budget.admit(0.5, 0.01)).toBe(true)
     expect(budget.dropped).toBe(1)
   })
+  it('keep each shooter quiet until their tail clears, including evicted admissions', () => {
+    const tails = new VoiceBudget(2, 1.3)
+    expect(tails.admit(0, 1, 'far')).toBe(true)
+    expect(tails.admit(0.1, 1, 'other')).toBe(true)
+    expect(tails.admit(0.2, 2, 'far')).toBe(false)
+    expect(tails.admit(0.3, 2, 'near')).toBe(true)
+    // The nearer arrival displaced `far`, but its previous audio still decays.
+    expect(tails.admit(0.4, 4, 'far')).toBe(false)
+    expect(tails.admit(0.5, 0.1, 'distant')).toBe(false)
+    expect(tails.live).toBe(2)
+    expect(tails.admit(1.5, 1, 'far')).toBe(true)
+  })
   it('play every variant once before any repeats, never twice in a row', () => {
     const next = variantDeck()
     let last = -1

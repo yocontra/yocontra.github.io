@@ -27,8 +27,8 @@ export interface SoundDef {
 const g = (count: number, step: number, len: number): SoundGrid => ({ count, step, len })
 
 export const SOUNDS = {
-  shot: { file: 'shots_revolver', trim: -3, grid: g(8, 0.8, 0.75) },
-  tail: { file: 'tails_street', trim: -7, grid: g(6, 2.4, 2.3) },
+  shot: { file: 'shots_revolver_recorded', trim: -3, grid: g(5, 0.6, 0.22) },
+  tail: { file: 'tails_revolver_recorded', trim: -7, grid: g(5, 1, 0.6) },
   rifle: { file: 'rifle', trim: -3 },
   shotgun: { file: 'shotgun', trim: -3 },
   lever: { file: 'rifle_lever', trim: -6 },
@@ -41,10 +41,10 @@ export const SOUNDS = {
   metal: { file: 'hit_metal', trim: -3, grid: g(8, 0.9, 0.85) },
   water: { file: 'hit_water', trim: -3, grid: g(8, 0.7, 0.6) },
   soft: { file: 'hit_soft', trim: -4, grid: g(8, 0.5, 0.4) },
-  wood: { file: 'hit_timber', trim: -2, grid: g(8, 0.6, 0.5) },
+  wood: { file: 'hit_timber_recorded', trim: -2, grid: g(4, 0.4, 0.22) },
   dirt: { file: 'hit_ground', trim: -3, grid: g(8, 0.6, 0.5) },
   stepDirt: { file: 'steps_dirt', trim: 0, grid: g(8, 0.6, 0.5) },
-  stepWood: { file: 'steps_boards', trim: -2, grid: g(10, 0.5, 0.42) },
+  stepWood: { file: 'steps_cowboy_boards', trim: -2, grid: g(10, 0.5, 0.34) },
   stepStone: { file: 'steps_stone', trim: 0, grid: g(8, 0.5, 0.4) },
   stepStraw: { file: 'steps_straw', trim: -1, grid: g(8, 0.5, 0.4) },
   stepMetal: { file: 'steps_metal', trim: -6, grid: g(6, 0.7, 0.6) },

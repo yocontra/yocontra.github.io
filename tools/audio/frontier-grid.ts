@@ -23,6 +23,10 @@ const PUB = resolve(import.meta.dir, '../../public/experiments/out-west/3d/sfx')
 export const shipped = (name: string) => `${PUB}/${name}.m4a`
 
 export const FRONTIER_GRIDS = {
+  hit_timber_recorded: { count: 4, step: 0.4, len: 0.22 },
+  shots_revolver_recorded: { count: 5, step: 0.6, len: 0.22 },
+  tails_revolver_recorded: { count: 5, step: 1, len: 0.6 },
+  steps_cowboy_boards: { count: 10, step: 0.5, len: 0.34 },
   hit_flesh: { count: 8, step: 0.5, len: 0.42 },
   hit_stone: { count: 8, step: 0.6, len: 0.55 },
   hit_metal: { count: 8, step: 0.9, len: 0.85 },

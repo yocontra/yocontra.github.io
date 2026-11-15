@@ -12,6 +12,9 @@ export interface Cc0Source {
   author: string
   url: string
   license: string
+  /** Downloaded bytes, retained unchanged for reproducible source provenance. */
+  sha256?: string
+  downloadUrl?: string
 }
 
 const freesound = (id: number, title: string, author: string): Cc0Source => ({
@@ -35,6 +38,48 @@ const kenney = (name: string, pack: 'Impact Sounds' | 'RPG Audio'): Cc0Source =>
 })
 
 export const FREESOUND = {
+  magnumExterior: {
+    ...freesound(232_750, '357 Magnum Ext.wav', 'klangfabrik'),
+    downloadUrl: 'https://cdn.freesound.org/previews/232/232750_181941-hq.mp3',
+    // biome-ignore lint/security/noSecrets: public source recording checksum, not a credential.
+    sha256: '31a848a4256bb5c876771e82f1106689bb16a4866af18a50a9b5e12896738a43',
+  },
+  timber319223: {
+    ...freesound(319_223, 'Single Rock Hitting wood 3.wav', 'worthahep88'),
+    downloadUrl: 'https://cdn.freesound.org/previews/319/319223_3443504-hq.mp3',
+    // biome-ignore lint/security/noSecrets: public source recording checksum, not a credential.
+    sha256: 'ef856eb9bacf28f846e8cbeebb7f7c908e53a4c37714561000dbccb87d45fd4f',
+  },
+  timber319226: {
+    ...freesound(319_226, 'Single rock hitting wood.wav', 'worthahep88'),
+    downloadUrl: 'https://cdn.freesound.org/previews/319/319226_3443504-hq.mp3',
+    // biome-ignore lint/security/noSecrets: public source recording checksum, not a credential.
+    sha256: '11644f060e7587435e97b29681170999c532f719fc2bbe8d18148909d88a8d5d',
+  },
+  timber319227: {
+    ...freesound(319_227, 'Single Rock hitting wood 4.wav', 'worthahep88'),
+    downloadUrl: 'https://cdn.freesound.org/previews/319/319227_3443504-hq.mp3',
+    // biome-ignore lint/security/noSecrets: public source recording checksum, not a credential.
+    sha256: '5edd67c89260afd952ac06daf093393870e3132d2b4b1be07c58d456a1eff71a',
+  },
+  timber319228: {
+    ...freesound(319_228, 'Single Rock hitting wood 2.wav', 'worthahep88'),
+    downloadUrl: 'https://cdn.freesound.org/previews/319/319228_3443504-hq.mp3',
+    // biome-ignore lint/security/noSecrets: public source recording checksum, not a credential.
+    sha256: '5185497818496fdbcb4c64bfd4eff7d809e06024adda4efac4fbcc4fcc16d4ff',
+  },
+  cowboyBoards: {
+    ...freesound(852_320, 'FL-Footsteps,Boot,Cowboy,Wood,Plank', 'soundandmelodies'),
+    downloadUrl: 'https://cdn.freesound.org/previews/852/852320_10924423-hq.mp3',
+    // biome-ignore lint/security/noSecrets: public source recording checksum, not a credential.
+    sha256: '679d741fa033f392a3d5de8b74a7cb28de4a7cdc3294e08426316699b3b63d7d',
+  },
+  revolver38Session: {
+    ...freesound(835_200, 'Revolver Gunshots (.38 special)', 'C-V'),
+    downloadUrl: 'https://cdn.freesound.org/previews/835/835200_8956746-hq.mp3',
+    // biome-ignore lint/security/noSecrets: public source recording checksum, not a credential.
+    sha256: '7c6aba8e632d457a158a02d1a93f0527e6727add2e83616806b6453fb642e0cc',
+  },
   headshot: freesound(511_194, 'Headshot.wav', 'Pablobd'),
   concrete: freesound(321_478, 'Concrete Hit 2', 'dslrguide'),
   impacts: freesound(265_580, 'Impacts 01', 'aglinder'),

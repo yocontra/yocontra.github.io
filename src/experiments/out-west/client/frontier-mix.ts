@@ -48,7 +48,7 @@ interface CategorySpec {
  */
 export const CATEGORIES: Readonly<Record<MixCategory, CategorySpec>> = {
   own: {
-    level: -4,
+    level: 0,
     carve: [
       { type: 'highpass', hz: 35 },
       { type: 'peaking', hz: 3500, q: 0.9, gain: -3 },
@@ -73,7 +73,7 @@ export const CATEGORIES: Readonly<Record<MixCategory, CategorySpec>> = {
     into: 'weapons',
   },
   impact: {
-    level: 0,
+    level: -3,
     carve: [
       { type: 'highpass', hz: 60 },
       { type: 'peaking', hz: 300, q: 1, gain: -2 },
@@ -82,7 +82,7 @@ export const CATEGORIES: Readonly<Record<MixCategory, CategorySpec>> = {
     into: 'master',
   },
   feet: {
-    level: 4,
+    level: 0,
     carve: [
       { type: 'highpass', hz: 90 },
       { type: 'peaking', hz: 3200, q: 1.2, gain: 4 },
@@ -115,8 +115,8 @@ const OWN_SHOT: Partial<Record<MixCategory, Dip>> = {
 }
 /** A showdown leans the town and the far fight back. */
 const SHOWDOWN: Partial<Record<MixCategory, number>> = { amb: -9, tail: -4, gun: -3 }
-/** The most each category leans back under sustained gunfire, dB, and how fast it returns, s. */
-const FIGHT: Partial<Record<MixCategory, number>> = { amb: -1.5, tail: -8, gun: -2 }
+/** Level changes under sustained fire: foreground priority only when the fight needs it. */
+const FIGHT: Partial<Record<MixCategory, number>> = { own: 4, amb: -1.5, tail: -8, gun: -2 }
 const FIGHT_RELEASE = 0.9
 
 function glue(ctx: AudioContext): DynamicsCompressorNode {

@@ -10,6 +10,7 @@ export class VoiceBudget {
   played = 0
   dropped = 0
   private readonly recent: { t: number; level: number }[] = []
+  private readonly sources = new Map<number | string, number>()
 
   constructor(max: number, window: number) {
     this.max = max
@@ -17,13 +18,26 @@ export class VoiceBudget {
   }
 
   /** Whether a sound arriving at `level` (linear gain at the ear) may start at `clock`. */
-  admit(clock: number, level: number): boolean {
+  admit(clock: number, level: number, source?: number | string): boolean {
     const recent = this.recent
     while (recent.length > 0 && clock - (recent[0] as { t: number }).t > this.window) {
       recent.shift()
     }
+    for (const [key, time] of this.sources) {
+      if (clock - time > this.window) {
+        this.sources.delete(key)
+      }
+    }
+    // Keep the source cooldown even when a nearer sound replaces its admission slot.
+    if (source !== undefined && this.sources.has(source)) {
+      this.dropped++
+      return false
+    }
     if (recent.length < this.max) {
       recent.push({ t: clock, level })
+      if (source !== undefined) {
+        this.sources.set(source, clock)
+      }
       this.played++
       return true
     }
@@ -36,6 +50,9 @@ export class VoiceBudget {
     if (level > (recent[quietest] as { level: number }).level * 1.4) {
       recent.splice(quietest, 1)
       recent.push({ t: clock, level })
+      if (source !== undefined) {
+        this.sources.set(source, clock)
+      }
       this.played++
       return true
     }

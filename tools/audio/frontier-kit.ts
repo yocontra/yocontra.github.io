@@ -9,6 +9,7 @@ import { credit, FREESOUND as FS, KENNEY as K } from './cc0.ts'
 import { type Ch, fade, filt, load, mixInto, onset, silence, slice, thump } from './dsp.ts'
 import { cut, gridOf, norm, rate, shipped, swish, ungrid } from './frontier-grid.ts'
 import type { Recipe } from './recipes.ts'
+import { RECORDED_FRONTIER } from './recorded-frontier.ts'
 
 const ogg = (s: { file: string }, filter?: string) => load(s.file, 1, filter)
 const mp3 = (s: { file: string }, filter?: string) => load(s.file, 1, filter)
@@ -191,6 +192,7 @@ function foleyReload(): Ch {
 }
 
 export const FRONTIER_KIT: Record<string, Recipe> = {
+  ...RECORDED_FRONTIER,
   shots_revolver: {
     out: 'sfx/shots_revolver.m4a',
     lufs: -14,
