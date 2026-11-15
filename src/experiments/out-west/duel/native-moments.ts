@@ -1,4 +1,14 @@
-import { math, Vec3 } from 'playcanvas'
+import {
+  Color,
+  type GraphNode,
+  LAYERID_SKYBOX,
+  type LightComponent,
+  type MeshInstance,
+  math,
+  type ParticleSystemComponent,
+  type RenderComponent,
+  Vec3,
+} from 'playcanvas'
 import { FEEL } from '../data/feel.ts'
 import type { DuelActor } from './native-actor.ts'
 import { clamp01, V } from './native-camera.ts'
@@ -112,31 +122,126 @@ export function tickAmbience(d: NativeDirector, dt: number): void {
 
 // ---------------------------------------------------------------------------- the kill frame
 
-export let killFrameEl: HTMLDivElement | null = null
+const KILL_RED = new Color(1, 0, 0, 1)
+/** Kept off the red frame (as the original did): the dirt, the town's life, dust and gunfire. */
+const OFF_THE_RED =
+  /^(?:ground-|shaft-|townsfolk-|town-|fakeout-|duel-dust|muzzle-flash|bullet-|impact-spark|gun-smoke)/u
+interface KillFrameState {
+  clear: Color
+  layers: number[]
+  hidden: MeshInstance[]
+  particles: ParticleSystemComponent[]
+  lights: [LightComponent, number][]
+  ambient: Color
+  fog: Color
+  sky: number
+}
+const killFrames = new WeakMap<NativeDirector, KillFrameState>()
 
-/** The red silhouette frame: black figures on hot red for two frames as the shot lands. */
+function offTheRed(d: NativeDirector): MeshInstance[] {
+  const root = d.game.app.root
+  const off = (from: GraphNode): boolean => {
+    let node: GraphNode | null = from
+    while (node && node !== root) {
+      if (OFF_THE_RED.test(node.name)) {
+        return true
+      }
+      node = node.parent
+    }
+    return false
+  }
+  const instances: MeshInstance[] = []
+  const renders = root.findComponents('render') as RenderComponent[]
+  for (const render of renders) {
+    if (render.entity.enabled && off(render.entity)) {
+      instances.push(...render.meshInstances)
+    }
+  }
+  // Static dirt is drawn from native batches; their materials retain the source material identity.
+  // Read the public scene layers, without relying on BatchManager's private batch records.
+  const dirtMaterials = new Set(
+    renders
+      .filter((render) => render.entity.name.startsWith('ground-'))
+      .flatMap((render) => render.meshInstances.map((mesh) => mesh.material)),
+  )
+  for (const layer of d.game.app.scene.layers.layerList) {
+    for (const mesh of layer.meshInstances) {
+      if (mesh.batching && dirtMaterials.has(mesh.material)) {
+        instances.push(mesh)
+      }
+    }
+  }
+  const hidden = [...new Set(instances)].filter((instance) => instance.visible)
+  for (const instance of hidden) {
+    instance.visible = false
+  }
+  return hidden
+}
+
+/**
+ * The red silhouette frame: the street drawn black against pure #F00 for two frames as the shot
+ * lands. Every light, the ambient and sky lighting and the haze go dark (exposure stays, so the
+ * HDR post stack still passes the red); the sky layer and the dirt are dropped so the camera's
+ * red clear shows behind and under the men.
+ */
 export function killFrame(d: NativeDirector, on: boolean): void {
+  const lens = d.game.camera.camera
+  const scene = d.game.app.scene
+  const was = killFrames.get(d)
   if (!on) {
-    killFrameEl?.classList.remove('on')
+    if (was && lens) {
+      lens.clearColor = was.clear
+      lens.layers = was.layers
+      for (const instance of was.hidden) {
+        instance.visible = true
+      }
+      for (const particle of was.particles) {
+        particle.enabled = true
+      }
+      for (const [light, intensity] of was.lights) {
+        light.intensity = intensity
+      }
+      scene.ambientLight.copy(was.ambient)
+      scene.fog.color.copy(was.fog)
+      scene.skyboxIntensity = was.sky
+    }
+    killFrames.delete(d)
     return
   }
-  if (!killFrameEl) {
-    const doc = d.c.hud.root.ownerDocument
-    killFrameEl = doc.createElement('div')
-    killFrameEl.className = 'ow-killframe'
-    killFrameEl.setAttribute('aria-hidden', 'true')
-    killFrameEl.innerHTML = '<div></div>'
-    const style = doc.createElement('style')
-    style.textContent =
-      '.ow-killframe{position:absolute;inset:0;pointer-events:none;z-index:3;display:none;backdrop-filter:grayscale(1) contrast(9) brightness(1.5)}' +
-      '.ow-killframe>div{position:absolute;inset:0;background:#f00;mix-blend-mode:multiply}' +
-      '.ow-killframe.on{display:block}'
-    killFrameEl.append(style)
+  if (was || !lens) {
+    return
   }
-  if (killFrameEl.parentElement !== d.c.hud.root) {
-    d.c.hud.root.append(killFrameEl)
+  if (d.m.flash > 0) {
+    d.m.flash = 0
+    scene.exposure = d.m.baseExposure
   }
-  killFrameEl.classList.add('on')
+  const lights = (d.game.app.root.findComponents('light') as LightComponent[]).map(
+    (light): [LightComponent, number] => [light, light.intensity],
+  )
+  const particles = (
+    d.game.app.root.findComponents('particlesystem') as ParticleSystemComponent[]
+  ).filter((component) => component.enabled && component.entity.enabled)
+  for (const particle of particles) {
+    particle.enabled = false
+  }
+  killFrames.set(d, {
+    clear: lens.clearColor.clone(),
+    layers: [...lens.layers],
+    hidden: offTheRed(d),
+    particles,
+    lights,
+    ambient: scene.ambientLight.clone(),
+    fog: scene.fog.color.clone(),
+    sky: scene.skyboxIntensity,
+  })
+  for (const [light] of lights) {
+    light.intensity = 0
+  }
+  scene.ambientLight.set(0, 0, 0)
+  scene.fog.color.set(0, 0, 0)
+  scene.skyboxIntensity = 0
+  lens.clearColor = KILL_RED
+  lens.layers = lens.layers.filter((id) => id !== LAYERID_SKYBOX)
 }
 
 export function flash(d: NativeDirector, amount: number): void {
@@ -217,6 +322,15 @@ export function turnTo(d: NativeDirector, actor: DuelActor | null, to: number, s
   }
   d.m.turns = d.m.turns.filter((turn) => turn.actor !== actor)
   d.m.turns.push({ actor, from, to: from + delta, t: 0, secs })
+}
+
+/** He fires: whatever his turn had got to, he is square on his man this frame. */
+export function settleTurn(d: NativeDirector, actor: DuelActor): void {
+  const turn = d.m.turns.find((entry) => entry.actor === actor)
+  if (turn) {
+    actor.face(turn.to)
+    d.m.turns = d.m.turns.filter((entry) => entry !== turn)
+  }
 }
 
 export function tickTurns(d: NativeDirector, dt: number): void {

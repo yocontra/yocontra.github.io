@@ -34,11 +34,16 @@ export class NativeDebris {
       })
     })
   }
-  drop(actor: DuelActor, kind: 'hat' | 'gun', away: Vec3, big = false): void {
+  drop(
+    actor: DuelActor,
+    kind: 'hat' | 'gun',
+    away: Vec3,
+    { big = false, hand = 'R' }: { big?: boolean; hand?: 'L' | 'R' } = {},
+  ): void {
     if (!this.physics || this.closed || this.pieces.length >= 8) {
       return
     }
-    const visual = actor.detach(kind)
+    const visual = actor.detach(kind, hand)
     if (!visual) {
       return
     }

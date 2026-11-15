@@ -14,7 +14,7 @@ import { prepareNativeMaterials } from '../scene/native-materials.ts'
 import { authoredMounts, type WeaponMount } from '../scene/native-mounts.ts'
 import { animateRevolvers, playWeaponMount } from '../scene/native-weapon-animation.ts'
 
-const ONE_SHOT = /Death|Shoot|Hit|Attack|React|Draw|Flinch|Spin/u
+const ONE_SHOT = /Death|Shoot|Hit|Attack|React|Draw|Flinch|Spin|TipHat/u
 const HUMANOID = /\/(?:baked\/(?:outlaw-|player)|equipment\/outfit\.|viewmodels\/)/u
 const GAIT = /^(?:Stride_|Walk$|Run$|Sprint$|Crouch_Walk$)/u
 const DRAWN = /Pointing|Shoot|Death|Hit|Draw|Spin|Flinch/u
@@ -353,6 +353,14 @@ export class DuelActor {
       if (mount.node instanceof Entity && this.detached.has(mount.node)) {
         continue
       }
+      const missingHand = this.weaponMounts.some(
+        ({ node, drawn: held, hand }) =>
+          held && hand === mount.hand && node instanceof Entity && this.detached.has(node),
+      )
+      if (missingHand) {
+        mount.node.enabled = false
+        continue
+      }
       if (mount.weapon) {
         mount.node.enabled = mount.weapon === this.held
         continue
@@ -404,7 +412,7 @@ export class DuelActor {
   place(x: number, y: number, z: number): void {
     this.root.setPosition(x, y, z)
   }
-  detach(kind: 'hat' | 'gun'): Entity | null {
+  detach(kind: 'hat' | 'gun', hand: 'L' | 'R' = 'R'): Entity | null {
     const stage = this.root.parent
     if (!(stage instanceof Entity)) {
       return null
@@ -416,8 +424,10 @@ export class DuelActor {
               point.bone === 'Head' && point.mode === 'accessory' && node.enabled,
           )?.node
         : this.weaponMounts.find(
-            ({ node, weapon, drawn, hand }) =>
-              node.enabled && (weapon ? weapon === this.held : drawn && hand !== 'L'),
+            ({ node, weapon, drawn, hand: side }) =>
+              node.enabled &&
+              !(node instanceof Entity && this.detached.has(node)) &&
+              (weapon ? hand === 'R' && weapon === this.held : drawn && (side ?? 'R') === hand),
           )?.node
     if (!(mount instanceof Entity) || this.detached.has(mount)) {
       return null

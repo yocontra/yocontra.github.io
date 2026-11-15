@@ -3,6 +3,7 @@ import { shotVisuals } from '../client/shot-visuals.ts'
 import type { EnemyShot } from './judge.ts'
 import type { DuelActor } from './native-actor.ts'
 import type { NativeDirector } from './native-director.ts'
+import { settleTurn } from './native-moments.ts'
 
 /** Cosmetic only: the existing clock/domain continues to judge every shot. */
 export function duelShot(
@@ -13,6 +14,7 @@ export function duelShot(
   if (!actor) {
     return
   }
+  settleTurn(director, actor)
   actor.shoot()
   const muzzle = actor.muzzle()
   if (!muzzle) {
@@ -58,7 +60,7 @@ export function dropEnemyProps(director: NativeDirector, actor: DuelActor | null
   if (away.lengthSq() > 0) {
     away.normalize()
   }
-  director.debris.drop(actor, 'hat', away, director.hatShot)
+  director.debris.drop(actor, 'hat', away, { big: director.hatShot })
   if (director.handShot) {
     director.debris.drop(actor, 'gun', away)
   }
