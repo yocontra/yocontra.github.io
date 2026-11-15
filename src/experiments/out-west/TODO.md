@@ -55,7 +55,7 @@ Complete and push these in small working tasks, with native visual/audio evidenc
 - [ ] Finish visible iPhone 13 mini **simulator** and real Chrome measurements. The Mac was locked at the last check; no final FPS result was accepted. A physical phone is not required.
 - [ ] Refresh the performance harness against the final immutable commit. Run at least 60 seconds of active movement, aiming, firing, glass hits, death and respawn with audio running. Cover normal portrait/landscape, an ordinary lobby and 32-player stress; target minimum 30 FPS in the simulator and approximately 60 FPS in Chrome.
 - [ ] Record every one-second FPS bin, frame-time percentiles/max, loaded model/resource counts and foreground evidence throughout. Exclude respawn teleports from walking-distance evidence, not slow frames from timing.
-- [ ] Optimize measured bottlenecks using native batching/material/cache/render features. Preserve foliage, scene definition and PBR. The earlier 34.1 FPS result at a small 812×265 viewport was an intermediate diagnostic, not final qualification.
+- [x] Optimize the measured native animation-binding bottleneck by sharing authored keyframe buffers with exact layer-specific curve subsets. Active-playback equivalence covers all 73 clips, three masks and transitions; the full headless 32-rider lifecycle passes. Mask-binding self CPU fell from 13.69% to 0.06% without animation-rate, geometry, foliage or material reductions. Headless stability is 59.64 FPS at a 60 Hz cadence (p99 16.8 ms), not foreground/simulator qualification. The earlier 34.1 FPS small-viewport result remains an intermediate diagnostic.
 
 ## First-person models and aiming
 
