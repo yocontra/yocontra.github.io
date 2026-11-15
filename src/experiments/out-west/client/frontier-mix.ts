@@ -129,7 +129,7 @@ function glue(ctx: AudioContext): DynamicsCompressorNode {
   return c
 }
 
-/** Brickwall limiter into a soft clipper: a firefight cannot reach the DAC clipped. */
+/** Bound transients and leave output headroom for reconstruction and the separate music bus. */
 function limiter(ctx: AudioContext): {
   input: GainNode
   lim: DynamicsCompressorNode
@@ -146,8 +146,10 @@ function limiter(ctx: AudioContext): {
   const clip = ctx.createWaveShaper()
   clip.curve = softClipCurve()
   clip.oversample = '2x'
-  input.connect(lim).connect(clip)
-  return { input, lim, output: clip }
+  const output = ctx.createGain()
+  output.gain.value = db(-2)
+  input.connect(lim).connect(clip).connect(output)
+  return { input, lim, output }
 }
 
 interface Bus {
