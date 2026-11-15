@@ -33,6 +33,7 @@ import { VoiceBudget, variantDeck } from './frontier-budget.ts'
 import { FrontierFeet, type RiderPose } from './frontier-feet.ts'
 import { FrontierMix, type MixCategory, type MixStats } from './frontier-mix.ts'
 import {
+  arriving,
   clamp01,
   db,
   type FrontierSound,
@@ -46,6 +47,7 @@ import {
   soundUrl,
 } from './frontier-sounds.ts'
 import { type Space, SpaceReturns, spaceAt } from './frontier-space.ts'
+import { FootstepSpatializer } from './frontier-spatial.ts'
 
 export interface PlayOptions {
   /** Linear gain on top of the trim and the SFX slider. */
@@ -64,6 +66,8 @@ export interface PlayOptions {
   lowpass?: number
   /** The mix bus, when not the sound's own (`SOUND_CATEGORY`). */
   category?: MixCategory
+  /** Headphone front/back cues for nearby enemy footfalls; capped separately from other sounds. */
+  binaural?: boolean
 }
 
 export interface Point {
@@ -100,9 +104,6 @@ const PITCH_JITTER = 0.035
 /** Every live `FrontierAudio`, by app: the window glass plays through its town's mix. */
 const LIVE = new WeakMap<AppBase, FrontierAudio>()
 
-/** A positional sound's gain at the ear for `range`'s inverse model (1 inside its ref distance). */
-const arriving = (d: number, range: Range) =>
-  range.ref / (range.ref + range.rolloff * (Math.max(d, range.ref) - range.ref))
 /** Ambience and the beds sit this far under a showdown (linear). */
 const SHOWDOWN_DUCK = 0.3
 
@@ -120,9 +121,11 @@ export interface PlayedSound {
   send: number
   category: MixCategory
   variant: number
+  binaural: boolean
 }
 
 export class FrontierAudio {
+  private readonly spatial = new FootstepSpatializer()
   readonly ready: Promise<void>
   /** Dev builds only: the most recent plays. */
   readonly log: PlayedSound[] = []
@@ -276,6 +279,7 @@ export class FrontierAudio {
     if (!instance) {
       return null
     }
+    const binaural = Boolean(o.binaural && this.spatial.apply(instance))
     const d = positional ? this.distance(at) : 0
     const air = o.air && d > 30 ? Math.max(1600, 18_000 * (30 / d) ** 1.3) : NO_FILTER
     const send = o.space ? o.space * Math.min(1, 24 / (d + 12)) : 0
@@ -297,6 +301,7 @@ export class FrontierAudio {
         send,
         category,
         variant,
+        binaural,
       })
       this.log.splice(0, Math.max(0, this.log.length - 4000))
     }
@@ -373,8 +378,7 @@ export class FrontierAudio {
         dry.disconnect()
         s?.disconnect()
       }, 2500)
-    instance.once('end', release)
-    instance.once('stop', release)
+    instance.once('end', release).once('stop', release)
     instance.setExternalNodes(input, mix.mute)
   }
 
@@ -591,12 +595,13 @@ export class FrontierAudio {
   }
 
   destroy(): void {
+    this.spatial.destroy()
     this.destroyed = true
     if (LIVE.get(this.game.app) === this) {
       LIVE.delete(this.game.app)
     }
-    for (const e of [...this.pool, this.flat]) {
-      e.entity.destroy()
+    for (const emitter of [...this.pool, this.flat]) {
+      emitter.entity.destroy()
     }
     this.pool.length = 0
     this.feet.destroy()

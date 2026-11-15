@@ -38,6 +38,7 @@ interface Feet {
   seen: number
   /** Among the nearest few this frame (always, for your own feet). */
   voiced: boolean
+  self: boolean
 }
 
 /** Slower than this is standing still; crouched and faster than this is a slide (no footfalls). */
@@ -100,8 +101,9 @@ export class FrontierFeet {
     for (const [id, pose] of riders) {
       const f = this.feet.get(id)
       if (f) {
-        f.voiced = id === self || voiced.has(id)
-        this.step(f, pose, id === self, dt)
+        f.self = id === self
+        f.voiced = f.self || voiced.has(id)
+        this.step(f, pose, f.self, dt)
       }
     }
     for (const [id, f] of this.feet) {
@@ -127,6 +129,7 @@ export class FrontierFeet {
       stride: 0,
       seen: this.audio.clock,
       voiced: false,
+      self: false,
     }
     this.feet.set(id, f)
     return f
@@ -198,7 +201,13 @@ export class FrontierFeet {
   }
 
   private sound(f: Feet, name: FrontierSound, volume: number, pitch: number): void {
-    this.audio.playOn(f.emitter, name, { range: 'step', volume, pitch, occlude: OCCLUDED })
+    this.audio.playOn(f.emitter, name, {
+      range: 'step',
+      volume,
+      pitch,
+      occlude: OCCLUDED,
+      binaural: !f.self && name.startsWith('step'),
+    })
   }
 
   destroy(): void {

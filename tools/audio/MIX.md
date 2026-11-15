@@ -111,3 +111,42 @@ The music, SFX and voice sliders scale their bus with a squared taper (0.5 â‰ˆ â
 - Ambience follows SFX.
 - The voice room returns sit on the voice bus, so they follow the voice slider.
 - The bell answers to no slider.
+
+## Recorded Frontier sources and directional cues
+
+`recorded-frontier.ts` builds the revolver report and its separate late tail, ten cowboy boot
+contacts on boards, and four small projectile strikes on timber. The source registry in `cc0.ts`
+records each author's CC0 license, exact download URL and SHA-256. These are recorded performances;
+the revolver's low body is a second real outdoor revolver recording. Existing published filenames
+remain available to older clients.
+
+`verify-recorded.ts` verifies all seven source hashes, the runtime atlas grids, 24 nonempty variants
+and silent guard intervals. The four new atlases occupy 184,484 bytes versus 379,224 bytes for the
+previous files; their authored duration is 14.6 seconds versus 30.6 seconds. Preserve their short
+close reports separately from tails when changing levels or concurrency.
+
+Nearby enemy footfalls use native `SoundInstance3d.panner` HRTF, capped at six active instances.
+Own boots, clothing, spurs and gunfire keep their existing panning. The nearest-three moving-rider
+budget still controls which enemy footsteps may start. A saturated HRTF budget keeps the cue with
+ordinary panning; ending, stopping and disposing voices release the directional slots.
+
+Reproduce the native directional and crowded-fight checks against a running dev server:
+
+```sh
+OW_ORIGIN=http://127.0.0.1:4400 bunx bun@1.3.14 tools/audio/verify-recorded.ts
+OW_ORIGIN=http://127.0.0.1:4400 bunx bun@1.3.14 tools/audio/footstep-spatial.ts
+OW_ORIGIN=http://127.0.0.1:4400 bunx bun@1.3.14 tools/audio/frontier-firefight.ts hrtf32 31 30 --cluster --stems --listen --spatial-check
+OW_ORIGIN=http://127.0.0.1:4400 bunx bun@1.3.14 tools/audio/frontier-firefight.ts equalpower32 31 30 --cluster --stems --listen --equalpower
+```
+
+`--equalpower` changes the public play options in the probe, without a product feature flag.
+The isolated directional probe demonstrates identical front/back output with default panning and
+different cues with HRTF, then measures up to six actual native voices. Its desktop audio-thread
+cost does not qualify mobile performance. The combined footstep stem includes the player's boots
+and gear; its band-energy masking proxy is not proof of enemy audibility or localization.
+
+Dense 32-player enemy-footstep readability remains unaccepted. The initial HRTF capture preserved
+own-gun recognition in all three listening reviews but none accepted enemy-footstep readability.
+Objective directional cues, unclipped output and source provenance are separate from that open
+listening gate. Repeat normal and clustered captures, headphones and target phone speakers before
+calling the mix finished.

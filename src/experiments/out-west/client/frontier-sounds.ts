@@ -138,6 +138,11 @@ export interface Range {
   /** Not played at all beyond this many metres. */
   cull: number
 }
+
+/** A positional sound's inverse-distance gain at the ear (1 inside its reference distance). */
+export function arriving(distance: number, range: Range): number {
+  return range.ref / (range.ref + range.rolloff * (Math.max(distance, range.ref) - range.ref))
+}
 export const RANGES = {
   /** The close report: carries across the whole town. */
   gun: { model: 'inverse', ref: 6, max: 400, rolloff: 0.9, cull: 500 },
