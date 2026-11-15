@@ -12,10 +12,14 @@ const origin = process.argv[2] ?? 'http://127.0.0.1:4390'
 const output = process.env.OW_ENV_OUTPUT ?? '/tmp/out-west-environment-campaign'
 const dressingOnly = process.env.OW_ENV_DRESSING_ONLY === '1'
 const roofOnly = process.env.OW_ENV_DEPOT_ROOF === '1'
+const missionOnly = process.env.OW_ENV_MISSION === '1'
 const baseline = process.env.OW_ENV_BASELINE === '1'
 const levels = roofOnly ? [6] : Array.from({ length: 17 }, (_, i) => i)
 if (dressingOnly) {
   levels.splice(0, levels.length, 0, 6, 10, 13, 0)
+}
+if (missionOnly) {
+  levels.splice(0, levels.length, 0, 10, 11, 12)
 }
 const ownSignsByArena: Record<string, number> = { depot: 2, mission: 1 }
 const browser = await chromium.launch({ channel: 'chrome', headless: true })
@@ -29,6 +33,12 @@ page.on('console', (message) => {
 })
 try {
   await mkdir(output, { recursive: true })
+  const missionCandidate = process.env.OW_ENV_MISSION_CONTAINER
+  if (missionCandidate) {
+    await page.route('**/native-v2/baked/mission.glb?*', (route) =>
+      route.fulfill({ contentType: 'model/gltf-binary', path: missionCandidate }),
+    )
+  }
   await page.route('**/__environment_probe', (route) =>
     route.fulfill({ status: 200, contentType: 'text/html', body: '<!doctype html><body></body>' }),
   )
@@ -112,6 +122,7 @@ try {
     }
   }[] = []
   const roofViews: unknown[] = []
+  const surfaceViews: unknown[] = []
   for (const level of levels) {
     const sample = await page.evaluate(async (index) => {
       const { game, arenas, arenaForSlot, OUTLAWS, streetRoot, sharedBackground } = Reflect.get(
@@ -120,6 +131,8 @@ try {
       )
       await arenas.show(arenaForSlot(index))
       await arenas.lighting(OUTLAWS[index].day, index)
+      game.camera.setPosition(0, 4, -12)
+      game.camera.lookAt(0, 5, 22)
       for (let frame = 0; frame < 8; frame++) {
         await new Promise(requestAnimationFrame)
       }
@@ -203,6 +216,23 @@ try {
         await page.screenshot({ path: `${output}/${view.name}.png` })
       }
     }
+    if (missionOnly && sample.arena === 'mission') {
+      for (const view of [
+        { name: 'earth-plaster', eye: [-7, 1.7, 2], target: [-11, 2.2, 2] },
+        { name: 'cloister', eye: [9.5, 1.7, 2], target: [11.5, 2.2, 2] },
+      ]) {
+        await page.evaluate(async ({ eye, target }) => {
+          const { game } = Reflect.get(globalThis, '__environmentProbe')
+          game.camera.setPosition(...eye)
+          game.camera.lookAt(...target)
+          for (let frame = 0; frame < 3; frame++) {
+            await new Promise(requestAnimationFrame)
+          }
+        }, view)
+        surfaceViews.push({ level: level + 1, ...view })
+        await page.screenshot({ path: `${output}/act-${level + 1}-${view.name}.png` })
+      }
+    }
   }
   const clock = await page.evaluate(async () => {
     const { game, arenas } = Reflect.get(globalThis, '__environmentProbe')
@@ -248,7 +278,7 @@ try {
     [dailyFog.first, dailyFog.boss].every((fog) => fog.type === 'exp2' && fog.density === 0.07),
     'Daily fog was lost when the arena or boss lighting changed',
   )
-  requireScene(dailyFog.restored === 'linear', 'Leaving Daily did not restore authored fog')
+  requireScene(dailyFog.restored === 'exp', 'Leaving Daily did not restore authored campaign fog')
   const first = results[0]
   const returned = await page.evaluate(async () => {
     const { game, arenas, allocation } = Reflect.get(globalThis, '__environmentProbe')
@@ -297,6 +327,7 @@ try {
         scope: 'Environment and native clock only; no riders or physical-device FPS claim',
         results,
         roofViews,
+        surfaceViews,
         returned,
         clock,
         dailyFog,

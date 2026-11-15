@@ -13,19 +13,19 @@ export async function scanMaterial(
   doc: Document,
   role: string,
   id: string,
-  options: { metallic?: number; size?: number; albedoMean?: number } = {},
+  options: { metallic?: number; size?: number; albedoMean?: number | null } = {},
 ) {
   const { metallic = 0, size = 1024, albedoMean = 0.82 } = options
   const albedo = await readFile(`${scanRoot}/${id}_diff.webp`)
   const { channels } = await sharp(albedo).stats()
   const gain = channels
     .slice(0, 3)
-    .map((channel) => albedoMean / Math.max(channel.mean / 255, 0.05))
+    .map((channel) => (albedoMean ?? 1) / Math.max(channel.mean / 255, 0.05))
   const image = async (kind: string) => {
     let pipeline = sharp(await readFile(`${scanRoot}/${id}_${kind}.webp`))
       .removeAlpha()
       .resize(size, size)
-    if (kind === 'diff') {
+    if (kind === 'diff' && albedoMean !== null) {
       pipeline = pipeline.linear(gain, [0, 0, 0])
     }
     return doc

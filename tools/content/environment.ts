@@ -78,7 +78,8 @@ for (const name of names.filter((candidate) => !only || candidate === only)) {
   if ((await flatten.exited) !== 0) {
     throw new Error(`Could not flatten ${name} masonry`)
   }
-  if (name === 'frontier' || preserveTextures) {
+  // The town and mission carry 2K surface scans; retain their authored texel density.
+  if (name === 'frontier' || name === 'mission' || preserveTextures) {
     const geometry = await io.read(path)
     await geometry.transform(dedup(), weld(), prune(), dequantize())
     await io.write(path, geometry)

@@ -99,6 +99,7 @@ fetched and converted to WebP with `tools/polyhaven.ts`.
 | Frontier: desert rock | "Rock Boulder Dry" — https://polyhaven.com/a/rock_boulder_dry | CC0 1.0 |
 | Frontier: hay bales | "Thatch Roof Angled" — https://polyhaven.com/a/thatch_roof_angled | CC0 1.0 |
 | Frontier: weathered painted siding | "Distressed Painted Planks" — https://polyhaven.com/a/distressed_painted_planks | CC0 1.0 |
+| Mission: earth plaster | "Clay Plaster" by Amal Kumar — https://polyhaven.com/a/clay_plaster | CC0 1.0 |
 
 The civic atlas packs those four sets 2x2 with wrapped gutters (`tools/build-civic-atlas.ts`):
 diffuse 1024², normal and ARM 512². The clock dial is painted at runtime on a canvas.
