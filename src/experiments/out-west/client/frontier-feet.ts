@@ -89,7 +89,9 @@ export class FrontierFeet {
       const f = this.feet.get(id) ?? this.add(id, pose, spursOf(id))
       this.track(f, pose, dt)
       const d = this.audio.distance(f)
-      if (id !== self && d <= RANGES.step.cull) {
+      const moving = f.speed >= STILL && !(pose.crouched && f.speed > SLIDING)
+      // Silent riders must not steal slots from approaching feet or a nearby jump/landing.
+      if (id !== self && d <= RANGES.step.cull && (moving || !pose.grounded || !f.grounded)) {
         near.push([id, d])
       }
     }
