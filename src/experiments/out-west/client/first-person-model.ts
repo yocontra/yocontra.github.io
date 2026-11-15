@@ -3,7 +3,6 @@ import {
   type AnimComponentLayer,
   Entity,
   type GraphNode,
-  Layer,
   Mat4,
   type MeshInstance,
   math,
@@ -23,6 +22,7 @@ import { animateRider, heldWeapon } from './actor-animation.ts'
 import { createRiderPose, type RiderPose } from './actor-pose.ts'
 import type { Appearance } from './actors.ts'
 import type { GameApplication } from './application.ts'
+import { viewmodelLayer } from './first-person-layer.ts'
 import { ViewmodelMotion } from './first-person-motion.ts'
 import {
   advanceSights,
@@ -82,40 +82,8 @@ function armsKey(request: FirstPersonRequest): string {
   return `${fitId(loadout)}:${request.appearance?.key ?? 'default'}`
 }
 
-/** The viewmodel layer clears depth so arms never clip into nearby walls; it shares the lights. */
-function viewmodelLayer(game: GameApplication): { layer: Layer; dispose: () => void } {
-  const layers = game.app.scene.layers
-  const world = layers.getLayerByName('World')
-  if (!world) {
-    throw new Error('Missing native World layer')
-  }
-  const layer = new Layer({ name: 'Viewmodel', clearDepthBuffer: true })
-  const index = layers.getTransparentIndex(world)
-  layers.insertOpaque(layer, index + 1)
-  layers.insertTransparent(layer, index + 2)
-  const camera = game.camera.camera
-  if (camera) {
-    camera.layers = [...camera.layers, layer.id]
-  }
-  const lights = game.app.root
-    .findComponents('light')
-    .filter((light) => light.layers.includes(world.id))
-  for (const light of lights) {
-    light.layers = [...light.layers, layer.id]
-  }
-  return {
-    layer,
-    dispose() {
-      for (const light of lights) {
-        light.layers = light.layers.filter((id) => id !== layer.id)
-      }
-      if (camera) {
-        camera.layers = camera.layers.filter((id) => id !== layer.id)
-      }
-      layers.removeOpaque(layer)
-      layers.removeTransparent(layer)
-    },
-  }
+function requestIdentity(request: FirstPersonRequest): string {
+  return `${request.id}:${request.domain?.spawnTick ?? 'none'}:${armsKey(request)}`
 }
 
 export class FirstPersonModel {
@@ -125,6 +93,8 @@ export class FirstPersonModel {
   private current: Arms | undefined
   private desired: FirstPersonRequest | undefined
   private pending: Promise<void> | undefined
+  private pendingRoot: Entity | undefined
+  private pendingIdentity: string | undefined
   private closed = false as boolean
   private failure: string | undefined
   private readonly urls = new Map<string, number>()
@@ -160,8 +130,32 @@ export class FirstPersonModel {
     this.failure = undefined
   }
   async prepare(request: FirstPersonRequest): Promise<void> {
+    this.want(request)
+    const identity = requestIdentity(request)
+    while (!this.closed && this.desired && requestIdentity(this.desired) === identity) {
+      const pending = this.load(this.desired)
+      if (!pending) {
+        return
+      }
+      // Keep exactly one build in flight while coalescing superseding requests.
+      await pending
+    }
+  }
+  private want(request: FirstPersonRequest | undefined): void {
+    if (this.closed) {
+      return
+    }
     this.desired = request
-    await this.load(request)
+    if (
+      !request ||
+      request.player.hp <= 0 ||
+      (this.current && this.current.key !== armsKey(request))
+    ) {
+      this.hide()
+    }
+    if (!request || request.player.hp <= 0 || requestIdentity(request) !== this.pendingIdentity) {
+      this.pendingRoot?.destroy()
+    }
   }
   private lease(url: string, delta: number): void {
     const users = (this.urls.get(url) ?? 0) + delta
@@ -178,7 +172,15 @@ export class FirstPersonModel {
   }
   private load(request: FirstPersonRequest): Promise<void> | undefined {
     const key = armsKey(request)
-    if (this.closed || this.pending || this.current?.key === key || this.failure === key) {
+    if (
+      this.closed ||
+      request.player.hp <= 0 ||
+      this.current?.key === key ||
+      this.failure === key
+    ) {
+      return undefined
+    }
+    if (this.pending) {
       return this.pending
     }
     const asset = VIEWMODELS[fitId(request.appearance?.loadout ?? DEFAULT_LOADOUT)]
@@ -186,21 +188,37 @@ export class FirstPersonModel {
       this.failure = key
       return undefined
     }
+    const staging = new Entity('viewmodel-pending', this.game.app)
+    staging.enabled = false
+    this.rig.addChild(staging)
+    this.pendingRoot = staging
+    const identity = requestIdentity(request)
+    this.pendingIdentity = identity
     this.lease(asset.url, 1)
-    this.pending = this.build(request, key, asset.url).finally(() => {
+    this.pending = this.build(request, asset.url, { key, identity, staging }).finally(() => {
+      staging.destroy()
+      this.pendingRoot = undefined
+      this.pendingIdentity = undefined
       this.pending = undefined
     })
     return this.pending
   }
-  private async build(request: FirstPersonRequest, key: string, url: string): Promise<void> {
+  private async build(
+    request: FirstPersonRequest,
+    url: string,
+    { key, identity, staging }: { key: string; identity: string; staging: Entity },
+  ): Promise<void> {
     let actor: DuelActor | undefined
     try {
       actor = await equippedActor(
         this.game,
         request.appearance?.loadout ?? DEFAULT_LOADOUT,
         request.appearance?.dyes ?? {},
-        { viewmodel: { url } },
+        { viewmodel: { url, parent: staging } },
       )
+      if (!staging.parent) {
+        throw new DOMException('Viewmodel request was removed', 'AbortError')
+      }
       const created = actor
       await Promise.all(
         (['rifle', 'shotgun'] as const).map((weapon) =>
@@ -212,6 +230,12 @@ export class FirstPersonModel {
           ),
         ),
       )
+      const desired = this.desired
+      if (this.closed || !staging.parent || !desired || requestIdentity(desired) !== identity) {
+        actor.destroy()
+        this.lease(url, -1)
+        return
+      }
       const pose = createRiderPose(this.game, actor)
       const arms: Arms = {
         key,
@@ -229,11 +253,6 @@ export class FirstPersonModel {
       for (const render of actor.root.findComponents('render')) {
         render.castShadows = false
         render.layers = [this.layer.layer.id]
-      }
-      const desired = this.desired
-      if (this.closed || !desired || armsKey(desired) !== key) {
-        this.release(arms)
-        return
       }
       // Settle the candidate's native pose before it can replace working arms.
       actor.hold(heldWeapon(desired.domain), true)
@@ -253,7 +272,12 @@ export class FirstPersonModel {
     } catch {
       actor?.destroy()
       this.lease(url, -1)
-      if (this.desired && armsKey(this.desired) === key) {
+      if (
+        !this.closed &&
+        staging.parent &&
+        this.desired &&
+        requestIdentity(this.desired) === identity
+      ) {
         this.failure = key
       }
     }
@@ -289,7 +313,7 @@ export class FirstPersonModel {
   }
   /** Selects native clips and load state; `present` places the arms after the camera. */
   update(request: FirstPersonRequest | undefined): void {
-    this.desired = request
+    this.want(request)
     if (!request || request.player.hp <= 0) {
       this.hide()
       return
@@ -453,6 +477,9 @@ export class FirstPersonModel {
     }
   }
   destroy(): void {
+    if (this.closed) {
+      return
+    }
     this.closed = true
     this.desired = undefined
     this.restoreWorld()

@@ -25,7 +25,7 @@ interface EquipmentSource {
 /** The local rider keeps per-instance pass masks; its arms load only the fit and drawn gun. */
 export interface ActorPresentation {
   local?: boolean
-  viewmodel?: { url: string }
+  viewmodel?: { url: string; parent?: Entity }
 }
 const batchGroups = new WeakMap<GameApplication, number>()
 function rigidBatch(game: GameApplication, components: RenderComponent[]): void {
@@ -245,6 +245,12 @@ export async function equippedActor(
   actor.pairedDrawn = Boolean(viewmodel)
   actor.root.enabled = false
   try {
+    if (viewmodel?.parent) {
+      if (!viewmodel.parent.parent) {
+        throw new DOMException('Viewmodel request was removed', 'AbortError')
+      }
+      actor.root.reparent(viewmodel.parent)
+    }
     await applyDye(game, actor.model, dyes[loadout.outfit])
     if (loadout.extra?.includes('bandana')) {
       for (const render of actor.model.findComponents('render')) {
