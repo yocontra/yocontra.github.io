@@ -31,7 +31,71 @@ and adaptive-resolution policy. Preserve all stalls and report frame percentiles
 rolling one-second rate. Include at least 60 active seconds of movement, firing, death/respawn and
 window break/reset before longer lifecycle runs.
 
-Use these desktop/DEV-hook regression tools against a development server:
+For new foreground qualification, build and serve a frozen candidate with the local Worker:
+
+```sh
+bunx wrangler d1 migrations apply out-west-native-test --local --config api/test/wrangler.native-test.jsonc
+bunx wrangler dev --local --config api/test/wrangler.native-test.jsonc --port 8798 --inspector-port 9258 --var 'ALLOWED_ORIGINS:http://127.0.0.1:4398'
+bun tools/serve-production-recording.ts --port=4398 --api=http://127.0.0.1:8798
+```
+
+Wait for the production fixture URL, then use a separate terminal. Do not run overlapping Astro
+builds in the same checkout: they share a prerender cache. Keep Chrome's actual recording window
+frontmost for the entire run. The runner records its browser PID and requires the same process
+in the macOS foreground trace, as well as visible/focused page state.
+
+```sh
+bun tools/record-production-frames.ts --url=http://127.0.0.1:4398 --api=http://127.0.0.1:8798 --population=ordinary --out=/tmp/out-west-ordinary
+bun tools/record-production-frames.ts --url=http://127.0.0.1:4398 --api=http://127.0.0.1:8798 --population=stress --out=/tmp/out-west-stress
+```
+
+The default is visible Chrome and 60 seconds. `--manual` replaces automated movement/aim/fire
+with real operator input. `--headless` and recordings shorter than 60 seconds are always
+diagnostics. The ordinary case requires one authenticated human and four bots; stress requires
+one human and 31 explicitly synthetic server bots. Both require all corresponding native models
+loaded without fallbacks. The unshipped Worker stages a glass break at 10 seconds, environmental
+death at 20 seconds and pane reset at 35 seconds. Natural room ticks, normal respawn and actual
+movement/firing continue. The receipt labels these staged transitions and compares authority
+with client-delivered events and native pane state. This fixture does not establish 32-human
+network behavior or natural combat quality.
+
+The builder records Git and content-manifest hashes, hashes the served scripts and inspects
+hidden source maps to prove release-engine resolution. `PUBLIC_OW_PERF_HARNESS=1` adds only a
+read-only native snapshot; mutable DEV globals must be absent. Local QA uses Cloudflare's test
+sitekey and an ephemeral fixture account injected before boot, consumed from session storage.
+URL token authentication remains disabled in production. Verify deployment stripping separately:
+
+```sh
+bun tools/serve-production-recording.ts --public --build-only --out=/tmp/out-west-public-check
+```
+
+Receipts include every frame interval, empty one-second bins, partial final bins, frame
+percentiles, trusted input events, audio state, WebGL context and buffer dimensions, DPR, MSAA,
+GPU renderer, explicit graphics allocations/deletions, foreground samples and before/after
+screenshots. Allocation counters measure explicit calls, not live VRAM or GC reclamation.
+Native/context snapshots run once per second; this instrumentation overhead is part of the
+measurement. A recording can finish with `qualification: incomplete`; its outstanding evidence
+must be resolved before its FPS can serve as acceptance evidence. A qualified desktop trace
+still does not meet the iPhone simulator target.
+
+The same local server injects the recorder before game boot for Simulator Safari. Open
+`http://127.0.0.1:4398/__qa/start` for ordinary play, or append `?population=stress`. Tap the
+game to enable audio, then the recording button; play actively for the full minute. The button
+disappears during measurement and the complete receipt is saved in the fixture output directory.
+Run the host sidecar for at least 90 seconds in parallel, keep the specific device window visible
+and frontmost, and capture its window before and after the run:
+
+```sh
+swiftc tools/content/foreground.swift -o /tmp/out-west-foreground
+/tmp/out-west-foreground 90 > /tmp/out-west-simulator-foreground.jsonl
+```
+
+The saved simulator receipt deliberately remains incomplete until joined with the matching host
+trace, simulator UDID/runtime, window screenshots and visual review. This path provides no
+physical-device, thermal, A15 or memory-pressure certification. Leave unrelated running
+simulators untouched; use a dedicated Out West QA device.
+
+The older DEV-hook regression commands remain useful separately:
 
 ```sh
 bun tools/test-playcanvas-duel.ts http://localhost:4389

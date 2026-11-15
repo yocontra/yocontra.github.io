@@ -14,12 +14,28 @@ import type { NativeFrontierRoom } from '../src/game/room.ts'
 import worker from '../src/index.ts'
 import type { LobbyCore } from '../src/town/core.ts'
 import { Lobby as ProductionLobby } from '../src/town/lobby.ts'
+import { PerformanceProbe } from './performance-probe.ts'
 import type { SettlementProbe } from './settlement-worker.ts'
 import { staleBudgetProbe } from './stale-budget-probe.ts'
 import { observeTimers, ownedTimers } from './timers.ts'
 
 /** Read-only lifecycle observation; this subclass is absent from the production entrypoint. */
 export class Lobby extends ProductionLobby {
+  private performanceProbe: PerformanceProbe | undefined
+  testPerformance(accountId: string, start: boolean) {
+    const core = Reflect.get(this, 'core') as LobbyCore | undefined
+    const session = [...(core?.sessions.values() ?? [])].find(
+      (candidate) => candidate.accountId === accountId && candidate.peer,
+    )
+    if (!(core && session)) {
+      return { ok: false, error: 'Join the fixture before recording.' }
+    }
+    if (start) {
+      this.performanceProbe?.stop()
+      this.performanceProbe = new PerformanceProbe(core, session.playerId)
+    }
+    return { ok: Boolean(this.performanceProbe), receipt: this.performanceProbe?.snapshot() }
+  }
   override reserveNative(...args: Parameters<ProductionLobby['reserveNative']>) {
     return observeTimers(this.ctx.id.toString(), () => super.reserveNative(...args))
   }
@@ -142,6 +158,22 @@ export default {
     ctx: ExecutionContext,
   ) {
     const pathname = new URL(request.url).pathname
+    if (pathname === '/__test/performance' && request.method === 'POST') {
+      const value = (await request.json()) as {
+        lobbyId?: unknown
+        accountId?: unknown
+        start?: unknown
+      }
+      if (typeof value.lobbyId !== 'string' || typeof value.accountId !== 'string') {
+        return Response.json({ error: 'Expected fixture lobbyId and accountId.' }, { status: 400 })
+      }
+      const lobby = env.LOBBIES.get(env.LOBBIES.idFromName(value.lobbyId))
+      const result = await Reflect.apply(Reflect.get(lobby, 'testPerformance'), lobby, [
+        value.accountId,
+        value.start === true,
+      ])
+      return Response.json(result)
+    }
     if (pathname === '/__test/stale-native-budget') {
       const lobby = env.LOBBIES.get(env.LOBBIES.idFromName('stale-budget-probe'))
       return Response.json(await Reflect.apply(Reflect.get(lobby, 'testStaleBudget'), lobby, []))
