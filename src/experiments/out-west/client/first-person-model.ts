@@ -244,8 +244,10 @@ export class FirstPersonModel {
       this.current = arms
       this.failure = undefined
       this.sighted = false
+      // A resolved load can arrive between frames. Keep its root disabled until present()
+      // has applied the current camera transform; otherwise replacement flashes at the origin.
+      this.restoreWorld()
       if (previous) {
-        actor.root.enabled = previous.actor.root.enabled
         this.release(previous)
       }
     } catch {
@@ -293,9 +295,9 @@ export class FirstPersonModel {
       return
     }
     void this.load(request)
-    this.maskWorld(request.world.root)
     const arms = this.current
-    if (!arms) {
+    if (!arms || arms.key !== armsKey(request)) {
+      this.hide()
       return
     }
     const life = request.domain?.spawnTick
@@ -305,9 +307,11 @@ export class FirstPersonModel {
       this.motion.reset()
       this.sighted = false
     }
-    arms.actor.root.enabled = true
     arms.actor.hold(heldWeapon(request.domain), true)
     animateRider(arms, request.player, { first: true, domain: request.domain })
+    if (!arms.actor.muzzleSocket()) {
+      this.hide()
+    }
   }
   /** Steps the eased sight amount; zero until the arms show the held weapon's landmarks. */
   aim(intent: Pick<PlayerInput, 'buttons'>, active: boolean, dt: number): void {
@@ -325,8 +329,23 @@ export class FirstPersonModel {
     const sight = this.sight.amount
     const arms = this.current
     const request = this.desired
-    if (!(arms?.actor.root.enabled && request) || dt <= 0) {
+    if (
+      this.closed ||
+      !arms ||
+      !request ||
+      request.player.hp <= 0 ||
+      arms.key !== armsKey(request) ||
+      !arms.actor.muzzleSocket()
+    ) {
+      this.hide()
       return
+    }
+    if (dt <= 0) {
+      return
+    }
+    if (!arms.actor.root.enabled) {
+      arms.actor.model.anim?.update(0)
+      arms.pose.root.anim?.update(0)
     }
     const step = Math.min(dt, 0.1)
     const { player, domain } = request
@@ -363,6 +382,8 @@ export class FirstPersonModel {
     this.motion.apply({ player, domain, held, sight, dt: step }, targetPosition, targetRotation)
     root.setLocalPosition(targetPosition)
     root.setLocalRotation(targetRotation)
+    root.enabled = true
+    this.maskWorld(request.world.root)
   }
   /** Sight landmarks on the view axis; held through each shot so the authored kick reads. */
   private align(arms: Arms, held: HeldWeapon, sight: number, dt: number): void {
@@ -408,13 +429,11 @@ export class FirstPersonModel {
     }
   }
   muzzle(id: string): ReturnType<DuelActor['muzzle']> {
-    return this.current?.actor.root.enabled && this.desired?.id === id
-      ? this.current.actor.muzzle()
-      : null
+    return this.ready && this.desired?.id === id ? (this.current?.actor.muzzle() ?? null) : null
   }
   fire(id: string, crouched: boolean): void {
     const arms = this.current
-    if (!arms?.actor.root.enabled || this.desired?.id !== id) {
+    if (!(arms && this.ready) || this.desired?.id !== id) {
       return
     }
     arms.firingUntil = performance.now() + RECOIL_SECONDS * 1000
