@@ -1,6 +1,7 @@
 /** Repeatable phone-size CPU proxy; this does not certify physical iPhone GPU or thermals. */
 import { writeFile } from 'node:fs/promises'
 import { chromium } from 'playwright'
+import { frameTiming } from './content/frame-timing.ts'
 
 const base = process.argv.find((arg) => arg.startsWith('http')) ?? 'http://localhost:4389'
 const option = (name: string, fallback: number) =>
@@ -31,9 +32,11 @@ try {
     const intervals: number[] = []
     const samples: unknown[] = []
     const start = performance.now()
+    const timestamps = [start]
     let previous = start
     await new Promise<void>((resolve) => {
       const tick = (now: number) => {
+        timestamps.push(now)
         intervals.push(now - previous)
         previous = now
         if (intervals.length % 60 === 0) {
@@ -50,6 +53,7 @@ try {
     intervals.sort((a, b) => a - b)
     const percentile = (p: number) => intervals[Math.floor((intervals.length - 1) * p)] ?? 0
     return {
+      timestamps,
       frames: intervals.length,
       frameMs: { p50: percentile(0.5), p95: percentile(0.95), p99: percentile(0.99) },
       samples,
@@ -63,6 +67,7 @@ try {
     seconds,
     physicalDevice: false,
     ...result,
+    timing: frameTiming(result.timestamps),
     errors,
   }
   await writeFile('/tmp/out-west-native-performance.json', JSON.stringify(report, null, 2))
