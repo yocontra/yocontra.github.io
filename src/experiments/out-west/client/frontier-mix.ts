@@ -43,41 +43,46 @@ interface CategorySpec {
 /**
  * Levels and carves per category. The 2.5–4 kHz band is where a boot's heel click and a hit
  * marker's tick live: the reports and tails give some of it up, the feet are lifted there, and the
- * tails also lose the top end that would smear every transient after them.
+ * tails also lose the top end that would smear every transient after them. Only your own report
+ * keeps its sub: the others' and the tails' low end would stack into a wall in a volley.
  */
 export const CATEGORIES: Readonly<Record<MixCategory, CategorySpec>> = {
   own: {
-    level: 0,
-    carve: [{ type: 'highpass', hz: 35 }],
+    level: -4,
+    carve: [
+      { type: 'highpass', hz: 35 },
+      { type: 'peaking', hz: 3500, q: 0.9, gain: -3 },
+    ],
     into: 'master',
   },
   gun: {
-    level: -2,
+    level: -6,
     carve: [
-      { type: 'highpass', hz: 45 },
-      { type: 'peaking', hz: 3000, q: 1.1, gain: -3.5 },
+      { type: 'highpass', hz: 90 },
+      { type: 'peaking', hz: 3000, q: 0.7, gain: -6 },
     ],
     into: 'weapons',
   },
   tail: {
-    level: -3,
+    level: -11,
     carve: [
-      { type: 'highpass', hz: 70 },
-      { type: 'peaking', hz: 2800, q: 0.9, gain: -5 },
+      { type: 'highpass', hz: 150 },
+      { type: 'peaking', hz: 3000, q: 0.6, gain: -9 },
       { type: 'highshelf', hz: 6500, gain: -6 },
     ],
     into: 'weapons',
   },
   impact: {
-    level: -1,
+    level: 0,
     carve: [
       { type: 'highpass', hz: 60 },
       { type: 'peaking', hz: 300, q: 1, gain: -2 },
+      { type: 'peaking', hz: 3200, q: 1.2, gain: -4 },
     ],
     into: 'master',
   },
   feet: {
-    level: 2,
+    level: 4,
     carve: [
       { type: 'highpass', hz: 90 },
       { type: 'peaking', hz: 3200, q: 1.2, gain: 4 },
@@ -88,7 +93,7 @@ export const CATEGORIES: Readonly<Record<MixCategory, CategorySpec>> = {
   crack: { level: 0, carve: [{ type: 'highpass', hz: 300 }], into: 'master' },
   ui: { level: 0, carve: [], into: 'master' },
   amb: {
-    level: -2,
+    level: 6,
     carve: [
       { type: 'highpass', hz: 60 },
       { type: 'peaking', hz: 3000, q: 0.8, gain: -3 },
@@ -105,29 +110,31 @@ interface Dip {
 }
 /** Your own shot pushes these back for a moment. */
 const OWN_SHOT: Partial<Record<MixCategory, Dip>> = {
-  gun: { depth: -3, release: 0.18 },
-  tail: { depth: -4, release: 0.25 },
-  amb: { depth: -5, release: 0.4 },
-  feet: { depth: -1.5, release: 0.12 },
+  gun: { depth: -1.5, release: 0.12 },
+  tail: { depth: -2, release: 0.2 },
 }
 /** A showdown leans the town and the far fight back. */
 const SHOWDOWN: Partial<Record<MixCategory, number>> = { amb: -9, tail: -4, gun: -3 }
 /** The most each category leans back under sustained gunfire, dB, and how fast it returns, s. */
-const FIGHT: Partial<Record<MixCategory, number>> = { amb: -7 }
+const FIGHT: Partial<Record<MixCategory, number>> = { amb: -1.5, tail: -8, gun: -2 }
 const FIGHT_RELEASE = 0.9
 
 function glue(ctx: AudioContext): DynamicsCompressorNode {
   const c = ctx.createDynamicsCompressor()
-  c.threshold.value = -20
+  c.threshold.value = -18
   c.knee.value = 8
-  c.ratio.value = 3.5
-  c.attack.value = 0.003
-  c.release.value = 0.12
+  c.ratio.value = 2
+  c.attack.value = 0.012
+  c.release.value = 0.25
   return c
 }
 
 /** Brickwall limiter into a soft clipper: a firefight cannot reach the DAC clipped. */
-function limiter(ctx: AudioContext): { input: GainNode; output: AudioNode } {
+function limiter(ctx: AudioContext): {
+  input: GainNode
+  lim: DynamicsCompressorNode
+  output: AudioNode
+} {
   const input = ctx.createGain()
   input.gain.value = db(-3)
   const lim = ctx.createDynamicsCompressor()
@@ -140,7 +147,7 @@ function limiter(ctx: AudioContext): { input: GainNode; output: AudioNode } {
   clip.curve = softClipCurve()
   clip.oversample = '2x'
   input.connect(lim).connect(clip)
-  return { input, output: clip }
+  return { input, lim, output: clip }
 }
 
 interface Bus {
@@ -159,6 +166,7 @@ export interface MixStats {
   rms: Partial<Record<MixCategory, { peak: number; mean: number }>>
   /** Sounds each budget let through and turned away (`frontier-budget.ts`). */
   budget: Record<string, { played: number; dropped: number }>
+  reduction: Record<'limiter' | 'glue', { max: number; mean: number }>
 }
 
 export class FrontierMix {
@@ -167,6 +175,12 @@ export class FrontierMix {
   readonly mute: GainNode
   private readonly buses = new Map<MixCategory, Bus>()
   private readonly out: AudioNode
+  /** The gain-reduction meters: master limiter and weapons glue, dB (dev). */
+  private readonly reducers: Record<'limiter' | 'glue', DynamicsCompressorNode>
+  private readonly reduction = {
+    limiter: { max: 0, sum: 0, frames: 0 },
+    glue: { max: 0, sum: 0, frames: 0 },
+  }
   private fight = 0
   private showdown = false as boolean
   private readonly frame: Float32Array<ArrayBuffer> | null
@@ -181,6 +195,7 @@ export class FrontierMix {
     this.out = master.output
     const weapons = glue(ctx)
     weapons.connect(master.input)
+    this.reducers = { limiter: master.lim, glue: weapons }
     this.frame = meters ? new Float32Array(1024) : null
     for (const [name, spec] of Object.entries(CATEGORIES) as [MixCategory, CategorySpec][]) {
       const input = ctx.createGain()
@@ -217,6 +232,11 @@ export class FrontierMix {
     return (this.buses.get(category) as Bus).input
   }
 
+  /** A category's processed output, for recording it as a stem (dev tools). */
+  stem(category: MixCategory): AudioNode {
+    return (this.buses.get(category) as Bus).duck
+  }
+
   /** Your own shot: the other riders' reports, the tails and the town step back for a moment. */
   ownShot(): void {
     const t = this.ctx.currentTime
@@ -236,8 +256,13 @@ export class FrontierMix {
     }
     const rising = next > this.fight
     this.fight = next
-    const g = (this.buses.get('amb') as Bus).duck.gain
-    g.setTargetAtTime(this.rest('amb'), this.ctx.currentTime, rising ? 0.05 : FIGHT_RELEASE / 3)
+    for (const name of Object.keys(FIGHT) as MixCategory[]) {
+      ;(this.buses.get(name) as Bus).duck.gain.setTargetAtTime(
+        this.rest(name),
+        this.ctx.currentTime,
+        rising ? 0.05 : FIGHT_RELEASE / 3,
+      )
+    }
   }
 
   setShowdown(on: boolean): void {
@@ -267,6 +292,13 @@ export class FrontierMix {
       return
     }
     this.meterDue = clock + 0.1
+    // Chrome's compressors report a phantom ~18 dB reduction on silence for their first second.
+    for (const key of clock < 2 ? [] : (['limiter', 'glue'] as const)) {
+      const r = -this.reducers[key].reduction
+      this.reduction[key].max = Math.max(this.reduction[key].max, r)
+      this.reduction[key].sum += r
+      this.reduction[key].frames++
+    }
     for (const bus of this.buses.values()) {
       if (!bus.meter) {
         continue
@@ -283,6 +315,17 @@ export class FrontierMix {
         bus.frames++
       }
     }
+  }
+
+  /** Gain reduction seen on the master limiter and the weapons glue: worst and mean, dB. */
+  reductionStats(): MixStats['reduction'] {
+    const r = this.reduction
+    const round = (v: number) => Math.round(v * 10) / 10
+    const of = (k: 'limiter' | 'glue') => ({
+      max: round(r[k].max),
+      mean: round(r[k].sum / Math.max(1, r[k].frames)),
+    })
+    return { limiter: of('limiter'), glue: of('glue') }
   }
 
   stats(): MixStats['rms'] {

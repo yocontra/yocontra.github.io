@@ -145,9 +145,9 @@ export class FrontierAudio {
   private readonly variant = variantDeck()
   /** The nearest few reports keep their crack; tails and strikes are capped the same way. */
   private readonly budgets = {
-    report: new VoiceBudget(3, 0.3),
-    tail: new VoiceBudget(3, 0.7),
-    impact: new VoiceBudget(5, 0.25),
+    report: new VoiceBudget(3, 0.45),
+    tail: new VoiceBudget(2, 0.8),
+    impact: new VoiceBudget(5, 0.3),
   }
   private spaceDue = 0
   private duckTarget = 1
@@ -399,11 +399,14 @@ export class FrontierAudio {
    * tail. Another rider's keeps its crack while it is among the nearest few in the air and inside
    * `FAR_SHOT`; otherwise it collapses into a dull boom under the tail, as distant fire does.
    */
-  gunshot(kind: 'revolver' | 'rifle' | 'shotgun', at: Point, self: boolean): void {
+  gunshot(kind: 'revolver' | 'rifle' | 'shotgun', at: Point, self: boolean, shooter = 0): void {
     const close = { revolver: 'shot', rifle: 'rifle', shotgun: 'shotgun' } as const
     const tailPitch = { revolver: 1, rifle: 0.96, shotgun: 0.86 } as const
     const tailLevel = { interior: 0.6, street: 0.85, open: 0.5 } as const
-    const jitter = 0.97 + Math.random() * 0.06
+    // Yours, heard every half second, wanders further; every other rider's gun keeps a voice of
+    // its own (±6%), so sixteen riders are not one sample retriggered.
+    const voice = 0.94 + ((shooter * 0.618_034) % 1) * 0.12
+    const jitter = self ? 0.95 + Math.random() * 0.1 : voice * (0.98 + Math.random() * 0.04)
     const d = this.distance(at)
     const heard = arriving(d, RANGES.gun)
     this.firing += self ? 0.35 : heard
@@ -438,7 +441,7 @@ export class FrontierAudio {
       this.play('tail', at, {
         range: 'tail',
         pitch: tailPitch[kind] * jitter * (this.space.kind === 'interior' ? 0.9 : 1),
-        volume: tailLevel[this.space.kind] * (self ? 1 : 0.8),
+        volume: tailLevel[this.space.kind] * (self ? 0.75 : 0.8),
         air: true,
         space: 0.25,
       })
@@ -570,12 +573,19 @@ export class FrontierAudio {
   }
 
   /** Dev meters: per-category levels and what each budget let through. */
+  /** A mix category's processed output (dev tools record it as a stem). */
+  stem(category: MixCategory): AudioNode | null {
+    return this.mix?.stem(category) ?? null
+  }
+
   mixStats(): MixStats {
     const budget: MixStats['budget'] = {}
     for (const [name, b] of Object.entries(this.budgets)) {
       budget[name] = { played: b.played, dropped: b.dropped }
     }
-    return { rms: this.mix?.stats() ?? {}, budget }
+    const none = { max: 0, mean: 0 }
+    const reduction = this.mix?.reductionStats() ?? { limiter: none, glue: none }
+    return { rms: this.mix?.stats() ?? {}, budget, reduction }
   }
 
   destroy(): void {

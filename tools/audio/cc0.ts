@@ -54,21 +54,38 @@ export const FREESOUND = {
   metalSteps: freesound(148_462, 'FOLEY_Footsteps_Metal_001.wav (first 12 s)', 'conleec'),
   sign: freesound(820_118, 'Old-Timey Saloon Sign (first 20 s)', 'SoundsCoolio'),
   whistle: freesound(71_778, 'Steam Whistle.mp3', 'Bidone'),
+  pistol: freesound(392_229, 'Single Pistol Gunshot 3.3.wav', 'morganpurkis'),
+  revolver38: freesound(346_905, 'Revolver calibre 38 - dois disparos', 'reishugo'),
+  magnum: freesound(683_186, '357 Magnum Revolver Gunshot', 'Shark_Anthony'),
+  magnumTail: freesound(683_175, '357 Magnum Revolver Gunshot with Tail', 'Shark_Anthony'),
+  fallBoards: freesound(395_331, 'Body falling on the ground 1', 'ihitokage'),
+  fallThud: freesound(346_695, 'Body fall_01.wav', 'deleted_user_2104797'),
 } as const
 
 const range = (stem: string, n: number) => Array.from({ length: n }, (_, i) => `${stem}_00${i}`)
+const impact = (stem: string, n: number) => range(stem, n).map((x) => kenney(x, 'Impact Sounds'))
+const rpg = (...names: string[]) => names.map((n) => kenney(n, 'RPG Audio'))
 
 export const KENNEY = {
-  concrete: range('footstep_concrete', 5).map((n) => kenney(n, 'Impact Sounds')),
-  grass: range('footstep_grass', 5).map((n) => kenney(n, 'Impact Sounds')),
-  metalMedium: range('impactMetal_medium', 3).map((n) => kenney(n, 'Impact Sounds')),
-  metalHeavy: range('impactMetal_heavy', 3).map((n) => kenney(n, 'Impact Sounds')),
-  softMedium: range('impactSoft_medium', 3).map((n) => kenney(n, 'Impact Sounds')),
-  softHeavy: range('impactSoft_heavy', 3).map((n) => kenney(n, 'Impact Sounds')),
-  woodHeavy: range('impactWood_heavy', 3).map((n) => kenney(n, 'Impact Sounds')),
-  plank: range('impactPlank_medium', 3).map((n) => kenney(n, 'Impact Sounds')),
-  cloth: ['cloth1', 'cloth2', 'cloth3', 'cloth4'].map((n) => kenney(n, 'RPG Audio')),
-  creak: ['creak1', 'creak2', 'creak3'].map((n) => kenney(n, 'RPG Audio')),
+  concrete: impact('footstep_concrete', 5),
+  grass: impact('footstep_grass', 5),
+  snow: impact('footstep_snow', 5),
+  metalMedium: impact('impactMetal_medium', 5),
+  metalHeavy: impact('impactMetal_heavy', 5),
+  metalLight: impact('impactMetal_light', 5),
+  mining: impact('impactMining', 5),
+  softMedium: impact('impactSoft_medium', 5),
+  softHeavy: impact('impactSoft_heavy', 5),
+  woodHeavy: impact('impactWood_heavy', 3),
+  woodMedium: impact('impactWood_medium', 5),
+  plank: impact('impactPlank_medium', 5),
+  punch: impact('impactPunch_heavy', 5),
+  cloth: rpg('cloth1', 'cloth2', 'cloth3', 'cloth4'),
+  clothBelt: rpg('clothBelt', 'clothBelt2'),
+  leather: rpg('beltHandle1', 'beltHandle2', 'handleSmallLeather', 'handleSmallLeather2'),
+  dropLeather: kenney('dropLeather', 'RPG Audio'),
+  boots: rpg(...Array.from({ length: 10 }, (_, i) => `footstep0${i}`)),
+  creak: rpg('creak1', 'creak2', 'creak3'),
   metalClick: kenney('metalClick', 'RPG Audio'),
   metalLatch: kenney('metalLatch', 'RPG Audio'),
 } as const

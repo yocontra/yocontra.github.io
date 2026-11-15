@@ -160,21 +160,26 @@ Prompts are in `tools/audio/manifest.ts` (music) and `tools/audio/voices.ts` (vo
 | `sfx/hawk.m4a` | "Hawk,Cry,Bird,Ext.wav" by Framing_Noise — https://freesound.org/s/319619/ | CC0 1.0 |
 | `sfx/amb_fire.m4a` | "Fire Crackle and Flames 002" by TheWoodlandNomad — https://freesound.org/s/363092/ (looped) | CC0 1.0 |
 
-### Frontier world audio (`tools/audio/frontier-recipes.ts`, sources vendored in `tools/audio/cc0/`)
+### Frontier world audio (`tools/audio/frontier-recipes.ts`, `tools/audio/frontier-kit.ts`, sources vendored in `tools/audio/cc0/`)
 
 | File | Source | Licence |
 |---|---|---|
-| `sfx/hit_flesh.m4a` | "Headshot.wav" by Pablobd — https://freesound.org/s/511194/ ; layered with the shipped `hit_body` | CC0 1.0 |
-| `sfx/hit_stone.m4a` | "Concrete Hit 2" by dslrguide — https://freesound.org/s/321478/ ; "Impacts 01" by aglinder — https://freesound.org/s/265580/ | CC0 1.0 |
-| `sfx/hit_metal.m4a` | "S31-15 Shooting gallery; hitting metal targets.wav" by craigsmith — https://freesound.org/s/675951/ ; layered with the shipped `ricochet` | CC0 1.0 |
+| `sfx/hit_flesh.m4a` | "Headshot.wav" by Pablobd — https://freesound.org/s/511194/ ; Kenney Impact Sounds (`impactPunch_heavy_*`) — https://kenney.nl/assets/impact-sounds ; layered with the shipped `hit_body` | CC0 1.0 |
+| `sfx/hit_stone.m4a` | "Concrete Hit 2" by dslrguide — https://freesound.org/s/321478/ ; "Impacts 01" by aglinder — https://freesound.org/s/265580/ ; Kenney Impact Sounds (`impactMining_*`) | CC0 1.0 |
+| `sfx/hit_metal.m4a` | "S31-15 Shooting gallery; hitting metal targets.wav" by craigsmith — https://freesound.org/s/675951/ ; Kenney Impact Sounds (`impactMetal_light_*`, `impactMetal_medium_*`, `impactMetal_heavy_*`); layered with the shipped `ricochet` | CC0 1.0 |
 | `sfx/hit_water.m4a` | "Water Bullet 2.wav" by Teaganbear — https://freesound.org/s/672574/ ; "Splashing Footsteps Shallow Water" by ChristopherJngs — https://freesound.org/s/861369/ | CC0 1.0 |
 | `sfx/hit_ground.m4a` | "Impacts 01" by aglinder — https://freesound.org/s/265580/ ; layered with the shipped `hit_dirt` | CC0 1.0 |
-| `sfx/hit_soft.m4a`, `sfx/hit_timber.m4a` | Kenney Impact Sounds (`impactSoft_*`, `impactWood_heavy_*`) — https://kenney.nl/assets/impact-sounds ; timber layered with the shipped `hit_wood` | CC0 1.0 |
-| `sfx/steps_stone.m4a`, `sfx/steps_straw.m4a` | Kenney Impact Sounds (`footstep_concrete_*`, `footstep_grass_*`) — https://kenney.nl/assets/impact-sounds ; straw with a synthesised thump | CC0 1.0 |
+| `sfx/hit_soft.m4a`, `sfx/hit_timber.m4a` | Kenney Impact Sounds (`impactSoft_medium_*`, `impactSoft_heavy_*`, `impactWood_heavy_*`, `impactWood_medium_*`, `impactPlank_*`) — https://kenney.nl/assets/impact-sounds ; timber layered with the shipped `hit_wood` | CC0 1.0 |
+| `sfx/steps_stone.m4a`, `sfx/steps_straw.m4a` | Kenney Impact Sounds (`footstep_concrete_*`, `footstep_grass_*`, `footstep_snow_*`) — https://kenney.nl/assets/impact-sounds ; straw with a synthesised thump | CC0 1.0 |
 | `sfx/steps_metal.m4a` | "FOLEY_Footsteps_Metal_001.wav" by conleec — https://freesound.org/s/148462/ | CC0 1.0 |
 | `sfx/steps_water.m4a` | "Splashing Footsteps Shallow Water" by ChristopherJngs — https://freesound.org/s/861369/ | CC0 1.0 |
-| `sfx/foley_cloth.m4a`, `sfx/foley_reload.m4a` | Kenney RPG Audio (`cloth1-4`, `metalClick`, `metalLatch`) — https://kenney.nl/assets/rpg-audio ; cloth layered with synthesised swishes | CC0 1.0 |
-| `sfx/crack.m4a` | "Bullet Crack.wav" by morganpurkis — https://freesound.org/s/386854/ | CC0 1.0 |
+| `sfx/foley_cloth.m4a`, `sfx/foley_reload.m4a` | Kenney RPG Audio (`cloth1-4`, `clothBelt*`, `metalClick`, `metalLatch`, `handleSmallLeather*`) — https://kenney.nl/assets/rpg-audio ; cloth layered with synthesised swishes | CC0 1.0 |
+| `sfx/crack.m4a` | "Bullet Crack.wav" by morganpurkis — https://freesound.org/s/386854/ ; with synthesised N-wave cracks | CC0 1.0 |
+| `sfx/shots_revolver.m4a` | "Single Pistol Gunshot 3.3.wav" by morganpurkis — https://freesound.org/s/392229/ ; "Revolver calibre 38 - dois disparos" by reishugo — https://freesound.org/s/346905/ ; "357 Magnum Revolver Gunshot" and "357 Magnum Revolver Gunshot with Tail" by Shark_Anthony — https://freesound.org/s/683186/ , https://freesound.org/s/683175/ ; with the shipped `rev_close` | CC0 1.0 |
+| `sfx/tails_street.m4a` | The magnum and .38 recordings above (their decays); with the shipped `rev_tail` and `rifle` | CC0 1.0 |
+| `sfx/steps_boards.m4a` | Kenney RPG Audio (`footstep00-09`) — https://kenney.nl/assets/rpg-audio | CC0 1.0 |
+| `sfx/steps_dirt.m4a` | The shipped `dirtsteps`; Kenney Impact Sounds (`footstep_grass_*`) | CC0 1.0 |
+| `sfx/bodyfalls.m4a` | "Body falling on the ground 1" by ihitokage — https://freesound.org/s/395331/ ; "Body fall_01.wav" (deleted user) — https://freesound.org/s/346695/ ; Kenney RPG Audio (`dropLeather`, `handleSmallLeather*`); with the shipped `bodyfall` | CC0 1.0 |
 | `sfx/sign_creak.m4a` | "Old-Timey Saloon Sign" by SoundsCoolio — https://freesound.org/s/820118/ | CC0 1.0 |
 | `sfx/whistle.m4a` | "Steam Whistle.mp3" by Bidone — https://freesound.org/s/71778/ | CC0 1.0 |
 | `sfx/amb_loco.m4a` | "S24-07 Old steam engine train idling and pumping steam" by craigsmith — https://freesound.org/s/675308/ | CC0 1.0 |

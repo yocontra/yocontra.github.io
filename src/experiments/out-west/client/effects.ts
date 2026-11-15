@@ -316,7 +316,7 @@ export class GameEffects {
     this.report(player.id, report.sound, origin)
   }
   private report(id: number, sound: Report['sound'], at: Point): void {
-    this.audio.gunshot(sound, at, id === this.self())
+    this.audio.gunshot(sound, at, id === this.self(), id)
   }
   private readonly resumeAudio = (event: Event): void => {
     if (!event.isTrusted) {
