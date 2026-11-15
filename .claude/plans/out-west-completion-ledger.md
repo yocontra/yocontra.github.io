@@ -31,7 +31,7 @@ One integrator plus three workers, exclusive file ownership and isolated durable
 
 ## Outstanding qualification
 
-Thirteen TODO items remain unchecked after verified arm pipeline, masks, Dead-Eye and receive-only voice updates. The live SFU caveat remains explicit. Complete arm runtime lifecycle, masks, shadows, framing, action timing and Dead-Eye; material/animal/environment/parity work; receive-only voice; all four performance requirements; final source/content review and verified release. Reassess checked art/audio work against the photoreal direction.
+Eleven TODO items remain unchecked after verified arm pipeline, masks, Dead-Eye and receive-only voice updates. The live SFU caveat remains explicit. Complete arm runtime lifecycle, masks, shadows, framing, action timing and Dead-Eye; material/animal/environment/parity work; receive-only voice; all four performance requirements; final source/content review and verified release. Reassess checked art/audio work against the photoreal direction.
 
 Current diagnostics live under `/tmp/out-west-*`; archive accepted evidence durably before release. The first-person probe was initially invalidated by concurrent asset regeneration/HMR and is being rerun on stable files. Simulator results do not establish physical-phone performance.
 
@@ -62,3 +62,13 @@ Pinned Bun 1.3.14 broad candidate suite: 369 pass, zero failures. Host Bun 1.4.4
 - `304ac400` combines tracer changes with aim assistance; no blanket merge. Any visual-only extraction needs an independent native review.
 - `bb08e308` adds bullet decals, surface lookup and a wire-protocol revision. Deferred from current integration until contract, rendering and performance review; coordinated Worker-first delivery is required if accepted.
 - Missing worktree metadata and reflog-only commits remain archived. Nothing has been pruned.
+
+## Latest integrated work
+
+- `e7cde11e` replaces mission dirt-textured adobe with calibrated 2 m earth plaster, retaining all non-UV geometry. Native wall/cloister captures cover three acts; the container grows 18.0 to 28.8 MB. Final performance gate remains open.
+- `ad673dc6` verifies Underboss two-shot timing and Boss second phase against original engine `18e39f5`. Paused transient effects are settled using the mounted Vite module instance. Comparison images/receipts are durably archived; the parity TODO is closed.
+- `3c72b205`/`4d2e7b38` integrate coherent recorded CC0 reports/boots/timber and bounded native HRTF for enemy footsteps. Normal listening matches the baseline, while dense enemy-footstep readability remains unaccepted. Combined audio/foreground focused checks: 15 pass, 283 assertions. `8f4ee4e7` preserves the lint-debt budget.
+- `f952504a`/`98a36959` reuse exact authored keyframes with layer-specific track curves. The corrected test explicitly starts native playback and requires non-rest poses; all 73 clips/masks/transitions agree. Full headless 32-rider lifecycle passes. Headless stability: 59.64 FPS at 60 Hz, p99 16.8 ms, max 33.4 ms, zero errors. No geometry/material/rate reductions.
+- `57d1e5fb`/`9d0c7c16` record the headless-only user constraint, make performance tools headless by default and remove automatic app activation. Automation-owned visible browsers were closed; user browser windows were untouched. No further visible or simulator activation runs are authorized in this session.
+- `7f8e0a11`/`06040f0c` preserve isolated hero source authoring and route unaccepted preview content from `/tmp`. Clothing/head fit and weapon grips remain below acceptance; no production hero replacement.
+- `0799ff83` honors explicit external-PBR normal strength while preserving the 1.4 historical fallback. Native candidate receipts verify the authored 0.4 value. Crow articulated fold/feather corrections remain staged pending final geometry/transition review.
