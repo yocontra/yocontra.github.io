@@ -32,10 +32,45 @@ non-HTML assets, including the decoder and KTX2 files, while keeping the new she
 Run `bun run check` before pushing, or enable the hook (`git config core.hooksPath .githooks`).
 The `Check` workflow gives a second, clean-runner result on every push.
 
+## Five scene containers on R2
+
+The Pages build removes only the current native `frontier-detail.glb`, `duel.glb`,
+`mission.glb`, `depot.glb` and `bank.glb` from generated `dist`, after verifying each
+file against the content manifest. The remaining artifact must be strictly below
+1,000,000,000 bytes. Source `public/`, all historical GLBs and every texture stay intact.
+Local `bun run build` remains complete; CI runs `bun scripts/scene-assets.ts prepare-pages`
+before uploading the Pages artifact.
+
+The same five public `https://contra.io/experiments/out-west/3d/native-v2/baked/` URLs
+are served by the API Worker through its `SCENES` R2 binding. The filename route patterns
+end in `*` because Cloudflare includes query strings when matching routes; the handler
+accepts only the five exact pathnames. It never forwards arbitrary object keys or URLs.
+Versioned keys are `<basename>/<16-character-manifest-hash>`. Old keys are retained.
+Known older versions remain readable; a missing older version falls back to the current
+container, matching Pages' former query-independent file selection. Unversioned and
+fallback responses cache for five minutes; found explicit versions are immutable.
+
+Before the first deployment, the owner must enable R2 and create the private
+`contra-out-west-scenes` bucket, confirm that the existing CI token can read/write its
+objects and deploy Workers/routes, and confirm the apex `contra.io` DNS record is
+proxied through Cloudflare. Route invocation requires proxied DNS; the historical
+DNS-only Pages setup below is insufficient for these five routes. No public R2 domain,
+new application secret or automatic account/product activation is used.
+
+The reusable API job uploads all five current objects with official Wrangler commands
+and downloads each to verify exact byte count and SHA-256 **before** migrations and
+Worker deployment. Pages is published only after that job succeeds. Missing storage,
+failed readback or an oversized artifact stops publication. Never delete old keys or
+apply a lifecycle policy to this bucket. A rollback must restore both the Worker and
+Pages revision together; preserve the scene objects for older clients.
+
+See [Cloudflare route matching and DNS requirements](https://developers.cloudflare.com/workers/configuration/routing/routes/)
+and [the R2 Workers API](https://developers.cloudflare.com/r2/api/workers/workers-api-reference/).
+
 ## One-time setup (done)
 
 1. **Move contra.io DNS to Cloudflare.** Add the zone, then switch the registrar's nameservers.
-   Recreate the GitHub Pages records (`A`/`AAAA` for the apex, or `CNAME`), DNS-only (grey cloud).
+   Recreate the GitHub Pages records (`A`/`AAAA` for the apex, or `CNAME`), proxied through Cloudflare (orange cloud), as required by the five scene routes.
 2. **Create a Turnstile widget** for `contra.io` in the Cloudflare dashboard. Keep the site key and
    the secret key.
 3. **Log in and run the one-time setup:**

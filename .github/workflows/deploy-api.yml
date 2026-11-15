@@ -39,6 +39,8 @@ jobs:
         run: |
           ! grep -q '"database_id": "00000000-0000-0000-0000-000000000000"' api/wrangler.jsonc || {
             echo "Run 'bun scripts/release.ts' once to create the production D1 database"; exit 1; }
+      - name: Upload and read back the five offloaded scenes
+        run: bun scripts/scene-assets.ts upload
       - name: Apply D1 migrations
         run: bunx wrangler d1 migrations apply contra-leaderboard --config api/wrangler.jsonc --remote
       - name: Deploy the Worker

@@ -86,5 +86,6 @@ Complete and push these in small working tasks, with native visual/audio evidenc
 
 ## Final delivery
 
+- [ ] Enable Cloudflare R2, create the private scene bucket and verify remote uploads/routes before publishing. The reviewed five-scene offload preserves public paths and every source asset; the local production artifact is 971,613,699 bytes. Source/budget/security/range/cache tests pass. Cloudflare currently refuses R2 calls until account activation (10042); no new release is deployed.
 - [ ] Review the finished source, then regenerate asset descriptors and native shop previews. Keep all 94 historical GLBs immutable and verify every new asset URL/hash.
 - [ ] Run `bun run check` and the relevant native visual/lifecycle probes. Push and verify the actual Worker and site deployment; distinguish simulator results from untested hardware behavior.

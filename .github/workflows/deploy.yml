@@ -44,6 +44,8 @@ jobs:
           PUBLIC_TURNSTILE_SITEKEY: ${{ vars.TURNSTILE_SITEKEY }}
           PUBLIC_OW_PERF_HARNESS: ""
           PUBLIC_OW_ASSET_REVISION: ${{ github.sha }}
+      - name: Verify scene hashes and enforce the Pages artifact budget
+        run: bun scripts/scene-assets.ts prepare-pages
       - uses: actions/upload-pages-artifact@v4
         with:
           path: dist

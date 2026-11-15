@@ -14,6 +14,7 @@ import { leaderboardRoutes } from './routes/leaderboard.ts'
 import { meRoutes } from './routes/me.ts'
 import { progressRoutes } from './routes/progress.ts'
 import { rankedRoutes } from './routes/ranked.ts'
+import { sceneRoutes } from './routes/scenes.ts'
 import { socialRoutes } from './routes/social.ts'
 import { storeRoutes } from './routes/store.ts'
 import { townRoutes } from './routes/town.ts'
@@ -42,10 +43,14 @@ const ROUTES: readonly RouteHandler[] = [
 
 export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
+    const url = new URL(request.url)
+    const scene = await sceneRoutes(request, env, url, ctx)
+    if (scene) {
+      return scene
+    }
     if (request.method === 'OPTIONS') {
       return new Response(null, { status: 204, headers: corsHeaders(request, env) })
     }
-    const url = new URL(request.url)
     try {
       for (const route of ROUTES) {
         // Routes are tried in order; the first to claim the request wins.

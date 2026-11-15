@@ -8,6 +8,9 @@ import type { LobbyDirectory } from './town/directory.ts'
 import type { Lobby } from './town/lobby.ts'
 
 export interface Env {
+  /** Public scene storage; absent locally or before the one-time R2 setup. */
+  SCENES?: R2Bucket
+
   /** Disable metered media in the zero-cost deployment. */
   DISABLE_VOICE?: string
 
