@@ -10,6 +10,9 @@ middle-aged male diffuse skin is by jartur69, published as CC0 in the MakeHuman
 records exact URLs, archive entries, byte counts, hashes and licenses. The pack's
 original metadata and upstream license text are retained. No addon program code
 is included. See the [MakeHuman asset license](https://static.makehumancommunity.org/about/license.html).
+The three upstream JSON files and upstream license are individually excluded from
+Biome so their pinned bytes remain intact, including the larger skin-weight table. Our provenance and
+generated receipt remain checked; the receipt uses expanded JSON formatting.
 
 `hero-reference.blend` keeps the fitted topology, UVs, editable native joint
 groups, eye/brow construction, fitted felt hat, turned collar, shirt body/yoke, full sleeves,
@@ -26,6 +29,7 @@ Rebuild from the repository root:
 
 ```sh
 blender --background --factory-startup --python tools/content/hero-foundation-authoring.py
+bunx biome format --write tools/art/characters/hero/reference-receipt.json
 KTX_ENCODER=/path/to/toktx bun tools/content/hero-reference.ts
 OUT_WEST_URL=http://127.0.0.1:4397 bun tools/test-playcanvas-hero-reference.ts
 ```

@@ -14,7 +14,11 @@
       "!public",
       "!node_modules",
       "!bun.lock",
-      "!src/experiments/out-west/runtime/vendor"
+      "!src/experiments/out-west/runtime/vendor",
+      "!tools/art/characters/hero/cc0/rig.game_engine.json",
+      "!tools/art/characters/hero/cc0/weights.game_engine.json",
+      "!tools/art/characters/hero/cc0/skins02.json",
+      "!tools/art/characters/hero/cc0/LICENSE.md"
     ]
   },
   "formatter": {
@@ -164,6 +168,14 @@
     }
   },
   "overrides": [
+    {
+      "includes": ["tools/art/characters/hero/reference-receipt.json"],
+      "json": {
+        "formatter": {
+          "expand": "always"
+        }
+      }
+    },
     {
       "includes": ["src/experiments/out-west/content/collision.json"],
       "formatter": {
