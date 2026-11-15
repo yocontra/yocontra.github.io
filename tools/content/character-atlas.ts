@@ -1,9 +1,9 @@
 /** Preserve original texel density and masked linear-light colors in native PBR images. */
 import { createHash } from 'node:crypto'
-import { writeFile } from 'node:fs/promises'
-import { resolve } from 'node:path'
+import { mkdir, writeFile } from 'node:fs/promises'
 import type { Accessor, Document, Primitive, Texture } from '@gltf-transform/core'
 import sharp from 'sharp'
+import { contentOutput } from './content-output.ts'
 import { patchSkinAtlas } from './head-nape.ts'
 export interface Range {
   start: number
@@ -31,7 +31,6 @@ export interface Patch {
   top: number
   lum: number
 }
-const output = resolve('public/experiments/out-west/3d/native-v2')
 const linear = (value: number): number =>
   value <= 0.040_45 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4
 const gamma = (value: number): number =>
@@ -73,7 +72,8 @@ export async function imageFile(
     .webp({ quality: 95, lossless: !color })
     .toBuffer()
   const name = `${createHash('sha256').update(encoded).digest('hex').slice(0, 24)}.${color ? 'color' : 'data'}.webp`
-  await writeFile(resolve(output, 'characters', name), encoded)
+  await mkdir(contentOutput('characters'), { recursive: true })
+  await writeFile(contentOutput('characters', name), encoded)
   return `/experiments/out-west/3d/native-v2/characters/${name}`
 }
 export async function originalFile(texture: Texture, color: boolean): Promise<string> {

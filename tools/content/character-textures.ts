@@ -6,11 +6,11 @@ import { basename, join, resolve } from 'node:path'
 import { type Document, NodeIO } from '@gltf-transform/core'
 import { ALL_EXTENSIONS } from '@gltf-transform/extensions'
 import sharp from 'sharp'
+import { contentOutput } from './content-output.ts'
 import { normalizeSkinnedAsset } from './normalize-skinned-nodes.ts'
 
 const BAKED = /^(?:player|moves|outlaw-\d+)\.glb$/u
 const DYNAMIC = /^(?:dog|horse|held-rifle|held-shotgun)\.glb$/u
-const directory = resolve('public/experiments/out-west/3d/native-v2/characters')
 const settings = [
   '--t2',
   '--encode',
@@ -42,9 +42,7 @@ export async function compressedCharacterTexture(
     .slice(0, 24)
   const file = `${hash}.${color ? 'color' : 'data'}.ktx2`
   const target =
-    scope === 'characters'
-      ? directory
-      : resolve('public/experiments/out-west/3d/native-v2/environments/textures')
+    scope === 'characters' ? contentOutput('characters') : contentOutput('environments', 'textures')
   await mkdir(target, { recursive: true })
   const path = resolve(target, file)
   if (!(await Bun.file(path).exists())) {
