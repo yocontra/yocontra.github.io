@@ -1,6 +1,7 @@
 import { readFile } from 'node:fs/promises'
 import sharp from 'sharp'
 import type { FrontierGeometry } from './frontier-geometry.ts'
+import { scanMaterial } from './frontier-surfaces.ts'
 export const LABELS: Record<string, string> = {
   saloon: 'PERDITION SALOON',
   hotel: 'GRAND HOTEL',
@@ -38,6 +39,14 @@ export const SIGN_ROWS = [
   'SAVINGS',
 ]
 export async function authoredMaterials(g: FrontierGeometry) {
+  g.materials.set(
+    'siding',
+    await scanMaterial(g.doc, 'Perdition weathered painted siding', 'distressed_painted_planks', {
+      size: 2048,
+      // Weathered paint retains diffuse contrast; the pale stone/straw normalization washes it out.
+      albedoMean: 0.42,
+    }),
+  )
   const clothSvg = `<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128"><defs><pattern id="weave" width="4" height="4" patternUnits="userSpaceOnUse"><rect width="4" height="4" fill="#c7ac7b"/><path d="M0 0H4" stroke="#7b6548" stroke-opacity=".28"/><path d="M0 0V4" stroke="#f3ddae" stroke-opacity=".32"/></pattern></defs><rect width="128" height="128" fill="url(#weave)"/></svg>`
   const cloth = g.doc
     .createTexture('Weathered canvas weave')

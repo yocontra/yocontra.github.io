@@ -9,6 +9,7 @@ import { townWindows } from '../../src/experiments/out-west/ffa/sim/building-rul
 import { buildGrid, type TownLayout } from '../../src/experiments/out-west/ffa/sim/layout.ts'
 import { projectedUv, surfaceMaterial } from './animal-prop-surfaces.ts'
 import { compressEnvironmentTextures } from './environment-textures.ts'
+import { formatContent } from './format-content.ts'
 import { bankServiceSigns, buildingDetails, surround } from './frontier-architecture.ts'
 import { compileFrontierCollision, perimeterSpans, structuralWalls } from './frontier-collision.ts'
 import { FrontierGeometry, frontierIO, type Rgb } from './frontier-geometry.ts'
@@ -139,7 +140,7 @@ export async function authorFrontier(output: string): Promise<void> {
     if (!root) {
       throw new Error(`Missing ${b.id}`)
     }
-    const role = ['bank', 'jail', 'church', 'tower'].includes(b.kind) ? 'stone' : 'wood'
+    const role = ['bank', 'jail', 'church', 'tower'].includes(b.kind) ? 'stone' : 'siding'
     const tint =
       plan.style.buildingPaint[b.id] ??
       (role === 'stone' ? plan.style.stoneTint : plan.style.woodTint)
@@ -464,6 +465,7 @@ export async function publishFrontier(directory: string): Promise<void> {
   for (const [, to] of files) {
     await rename(`${to}.frontier-next`, to)
   }
+  await formatContent(files.flatMap(([, to]) => (to.endsWith('.json') ? [to] : [])))
   console.log(
     'Published coherent Frontier map artifacts; regenerate shared content manifest before build/deploy.',
   )

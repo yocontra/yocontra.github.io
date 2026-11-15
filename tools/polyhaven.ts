@@ -2,12 +2,12 @@
 /**
  * Fetch a Poly Haven (CC0) PBR texture set and write web-ready WebP maps.
  *
- *   bun tools/polyhaven.ts <asset_id> <out_dir> [--res 1k] [--maps diff,nor_gl,arm] [--name ground] [--q 82]
+ *   bun tools/polyhaven.ts <asset_id> <out_dir> [--res 1k] [--maps diff,nor_gl,arm] [--name ground] [--q 82] [--lossless]
  *
  * Writes `<name>_<map>.webp` (map = diff | nor | arm | rough | ao | disp).
- * `arm` packs AO (R), roughness (G) and metalness (B): three.js reads it as
- * `aoMap` (R) plus `roughnessMap`/`metalnessMap` (G/B) from one texture.
- * Normal maps are the OpenGL (+Y) flavour that three.js expects.
+ * `arm` packs AO (R), roughness (G) and metalness (B) for native glTF PBR.
+ * Normal maps use the glTF OpenGL (+Y) convention. Use --lossless for authoring
+ * sources; generate runtime compression separately from these retained texels.
  * Requires `cwebp` (brew install webp). Add the asset to CREDITS.md (CC0).
  */
 import { spawnSync } from 'node:child_process'
@@ -21,6 +21,7 @@ interface Args {
   maps: string[]
   name: string
   quality: number
+  lossless: boolean
 }
 
 function parse(argv: string[]): Args {
@@ -41,6 +42,7 @@ function parse(argv: string[]): Args {
     maps: flag('--maps', 'diff,nor_gl,arm').split(','),
     name: flag('--name', id),
     quality: Number(flag('--q', '82')),
+    lossless: argv.includes('--lossless'),
   }
 }
 
@@ -70,7 +72,8 @@ async function fetchMap(a: Args, files: Files, m: string): Promise<void> {
   const dest = join(a.out, `${a.name}_${short}.webp`)
   // data maps (normal, ARM) get a higher quality than colour
   const q = m === 'diff' ? a.quality : Math.min(100, a.quality + 8)
-  const p = spawnSync('cwebp', ['-quiet', '-q', String(q), '-m', '6', tmp, '-o', dest])
+  const encoding = a.lossless ? ['-lossless'] : ['-q', String(q)]
+  const p = spawnSync('cwebp', ['-quiet', ...encoding, '-m', '6', tmp, '-o', dest])
   await rm(tmp)
   if (p.status !== 0) {
     throw new Error(`cwebp failed for ${m}: ${p.stderr.toString()}`)
