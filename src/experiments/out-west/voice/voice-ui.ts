@@ -17,7 +17,7 @@ export interface VoiceUiOpts {
   settings: () => { voiceChat: boolean; voicePushToTalk: boolean }
 }
 
-export type VoiceUiState = 'off' | 'connecting' | 'standby' | 'live' | 'error'
+export type VoiceUiState = 'off' | 'connecting' | 'standby' | 'live' | 'listening' | 'error'
 
 export class VoiceControls {
   readonly root: HTMLElement
@@ -53,7 +53,7 @@ export class VoiceControls {
         return
       }
       e.stopPropagation()
-      if (this.state === 'off' || this.state === 'error') {
+      if (this.state === 'off' || this.state === 'error' || this.state === 'listening') {
         return
       }
       e.preventDefault()
@@ -73,7 +73,7 @@ export class VoiceControls {
       if (this.blocked || this.silenced) {
         return
       }
-      if (this.state === 'off' || this.state === 'error') {
+      if (this.state === 'off' || this.state === 'error' || this.state === 'listening') {
         this.o.connect()
       } else if (!this.o.settings().voicePushToTalk && event.detail === 0) {
         this.muted = !this.muted
@@ -110,7 +110,7 @@ export class VoiceControls {
       if (target?.closest('input, textarea, select, [contenteditable="true"]')) {
         return
       }
-      if (this.state === 'off' || this.state === 'error') {
+      if (this.state === 'off' || this.state === 'error' || this.state === 'listening') {
         e.preventDefault()
         this.o.connect()
         return
@@ -210,20 +210,26 @@ export class VoiceControls {
   }
 
   private renderUnavailable(): void {
-    this.button.textContent = this.state === 'error' ? 'RETRY VOICE' : 'CONNECT VOICE'
-    this.button.setAttribute(
-      'aria-label',
-      this.state === 'error' ? 'Retry voice chat' : 'Connect voice chat',
-    )
+    const retry = this.state === 'error'
+    this.button.textContent = retry ? 'RETRY VOICE' : 'CONNECT VOICE'
+    let label = retry ? 'Retry voice chat' : 'Connect voice chat'
+    if (this.state === 'listening') {
+      this.button.textContent = 'RETRY MICROPHONE'
+      label = 'Retry microphone'
+    }
+    this.button.setAttribute('aria-label', label)
     this.button.disabled = this.blocked || this.silenced
     this.status.textContent = this.message || 'Connect your microphone to nearby players.'
-    this.status.className = 'ow-voice-status bad'
+    this.status.className = this.state === 'listening' ? 'ow-voice-status' : 'ow-voice-status bad'
   }
 
   private render(): void {
     const s = this.o.settings()
     const ptt = s.voicePushToTalk
-    this.root.classList.toggle('ptt', ptt && this.state !== 'off' && this.state !== 'error')
+    this.root.classList.toggle(
+      'ptt',
+      ptt && this.state !== 'off' && this.state !== 'error' && this.state !== 'listening',
+    )
     this.button.classList.toggle('talking', this.talking && !this.silenced)
     this.button.setAttribute(
       'aria-pressed',
@@ -232,7 +238,7 @@ export class VoiceControls {
           (ptt ? this.talking : !this.muted),
       ),
     )
-    if (this.state === 'error' || this.state === 'off') {
+    if (this.state === 'error' || this.state === 'off' || this.state === 'listening') {
       this.renderUnavailable()
       return
     }

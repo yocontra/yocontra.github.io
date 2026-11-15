@@ -43,6 +43,8 @@ export class VoiceTransport {
   private unbindMeeting: (() => void) | undefined
   private mic: MediaStreamTrack | null = null
   private microphoneSwitch: Promise<unknown> = Promise.resolve()
+  private connection: Promise<void> = Promise.resolve()
+  private sourceMicrophone: MediaStreamTrack | null = null
   private readonly peers = new Map<number, VoicePeer>()
   private own = { x: 0, z: 0 }
   private readonly participants = new Map<number, RTKParticipant>()
@@ -57,7 +59,14 @@ export class VoiceTransport {
     this.o = options
   }
 
-  async connect(credentials: VoiceCredentials, microphone: MediaStreamTrack): Promise<void> {
+  connect(credentials: VoiceCredentials, microphone: MediaStreamTrack | null): Promise<void> {
+    this.connection = this.join(credentials, microphone)
+    return this.connection
+  }
+  private async join(
+    credentials: VoiceCredentials,
+    microphone: MediaStreamTrack | null,
+  ): Promise<void> {
     const previous = this.stop()
     const sequence = this.live.sequence
     await previous
@@ -79,12 +88,11 @@ export class VoiceTransport {
       if (sequence !== this.live.sequence) {
         return
       }
-      const track = await publishVoiceMicrophone(
-        candidate,
-        microphone,
-        () => this.live.sequence === sequence,
-      )
-      if (!track || sequence !== this.live.sequence) {
+      if (microphone?.readyState === 'live') {
+        await publishVoiceMicrophone(candidate, microphone, () => this.live.sequence === sequence)
+        this.sourceMicrophone = microphone
+      }
+      if (sequence !== this.live.sequence) {
         return
       }
       this.meeting = candidate
@@ -118,13 +126,16 @@ export class VoiceTransport {
     }
   }
   /** Serialize native producer changes on the current meeting; never touch a replacement meeting. */
-  async replaceMicrophone(microphone: MediaStreamTrack, active: () => boolean): Promise<boolean> {
+  async replaceMicrophone(
+    microphone: MediaStreamTrack | null,
+    active: () => boolean,
+  ): Promise<boolean> {
+    await this.connection
     if (!active()) {
       return false
     }
     const meeting = this.meeting
     if (!meeting) {
-      await this.stop()
       return false
     }
     const sequence = this.live.sequence
@@ -133,9 +144,18 @@ export class VoiceTransport {
       if (!current()) {
         return false
       }
+      if (
+        microphone === this.sourceMicrophone &&
+        (!microphone || this.mic?.readyState === 'live')
+      ) {
+        return true
+      }
       const previous = this.mic
       this.mic = null
-      this.setSending(false)
+      this.sourceMicrophone = null
+      if (previous) {
+        previous.enabled = false
+      }
       try {
         await meeting.self.disableAudio()
       } finally {
@@ -144,11 +164,15 @@ export class VoiceTransport {
       if (!current()) {
         return false
       }
+      if (microphone?.readyState !== 'live') {
+        return true
+      }
       const clone = await publishVoiceMicrophone(meeting, microphone, current)
       if (!(clone && current())) {
         return false
       }
       this.mic = clone
+      this.sourceMicrophone = microphone
       this.setSending(this.live.sending)
       return true
     })
@@ -321,6 +345,7 @@ export class VoiceTransport {
     this.live.sequence++
     this.mic?.stop()
     this.mic = null
+    this.sourceMicrophone = null
     this.unbindMeeting?.()
     this.unbindMeeting = undefined
     for (const id of [...this.nodes.keys()]) {

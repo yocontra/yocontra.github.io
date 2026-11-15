@@ -5,6 +5,7 @@ import { basename, dirname, join } from 'node:path'
 import type { BrowserContext, Page } from 'playwright'
 import { chromium } from 'playwright'
 import type * as Probe from './content/voice-lifecycle.ts'
+import { receiveOnlyProof } from './content/voice-listening-proof.ts'
 
 function check(condition: unknown, message: string): asserts condition {
   if (!condition) {
@@ -108,12 +109,16 @@ async function setup(context: BrowserContext) {
       held: false as boolean,
       release: [] as (() => void)[],
       missing: '',
+      failure: '' as string,
       enumerations: 0,
       identity: crypto.randomUUID(),
     }
     Reflect.set(globalThis, '__captureProof', state)
     media.getUserMedia = async (constraints) => {
       state.requests.push(constraints ?? {})
+      if (state.failure) {
+        throw new DOMException('No microphone available', state.failure)
+      }
       const stream = await nativeCapture(constraints)
       state.tracks.push(...stream.getTracks())
       if (state.held) {
@@ -163,6 +168,7 @@ async function selected(page: Page, inputId: string, wantedState: 'live' | 'stan
 }
 const records: unknown[] = []
 try {
+  records.push(await receiveOnlyProof(browser, setup))
   const context = await browser.newContext({ viewport: { width: 1280, height: 900 } })
   try {
     const f = await setup(context)
@@ -244,11 +250,11 @@ try {
     await f.permission('denied')
     await f.command('selectMicrophone', a)
     await page.waitForFunction(
-      () => Reflect.get(globalThis, '__voiceProbe').voiceSnapshot().state === 'error',
+      () => Reflect.get(globalThis, '__voiceProbe').voiceSnapshot().state === 'listening',
     )
     check((await f.snapshot()).requests === 0, 'Permission denial allocated a meeting')
     await f.permission('granted')
-    await page.getByRole('button', { name: 'Retry voice chat', exact: true }).press('Enter')
+    await page.getByRole('button', { name: 'Retry microphone', exact: true }).press('Enter')
     await selected(page, a)
     await f.command('selectMicrophone', 'missing-fixture-input')
     await selected(page, 'default')

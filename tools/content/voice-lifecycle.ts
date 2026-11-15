@@ -9,6 +9,7 @@ import { NativeVoiceAudio } from '../../src/experiments/out-west/voice/native-au
 import { VoiceChat } from '../../src/experiments/out-west/voice/voice-chat.ts'
 import { VoiceControls } from '../../src/experiments/out-west/voice/voice-ui.ts'
 import {
+  addSpeaker,
   disconnectVoice,
   finishJoin,
   finishLeave,
@@ -32,6 +33,11 @@ let audience = 0
 let generation = 0
 let speech = false
 let preserveMeeting = false
+let remoteStream: MediaStreamAudioDestinationNode | undefined
+let remoteOscillator: OscillatorNode | undefined
+let receiveNodes = 0
+let receiveGain = 0
+let remotePeer = false
 let original: MediaStreamTrack | undefined
 let timer: ReturnType<typeof setTimeout> | undefined
 let frame: number | undefined
@@ -45,7 +51,27 @@ export function beginVoice() {
     () => 0.5,
   )
   chat = new VoiceChat({
-    audio,
+    audio: {
+      resume: () => audio.resume(),
+      attachVoiceChat: (id, track) => {
+        const node = audio.attachVoiceChat(id, track)
+        if (!node) {
+          return null
+        }
+        receiveNodes++
+        return {
+          setPose: (x, y, z) => node.setPose(x, y, z),
+          setGain: (value) => {
+            receiveGain = value
+            node.setGain(value)
+          },
+          dispose: () => {
+            receiveNodes--
+            node.dispose()
+          },
+        }
+      },
+    },
     activity: (track, interrupted) => {
       original = track
       return audio.analyse(track, interrupted)
@@ -68,7 +94,11 @@ export function beginVoice() {
           )
         } else {
           queueMicrotask(() =>
-            chat?.receive({ type: 'voice_status', listeners: audience, speakers: [] }),
+            chat?.receive({
+              type: 'voice_status',
+              listeners: audience,
+              speakers: remotePeer ? [7] : [],
+            }),
           )
         }
       }
@@ -92,7 +122,10 @@ export function beginVoice() {
     mute: (on) => chat?.setMicMuted(on),
   })
   const update = () => {
-    chat?.update([])
+    chat?.update(remotePeer ? [{ id: 7, name: 'Nearby speaker', x: 2, y: 0, z: 0 }] : [], {
+      x: 0,
+      z: 0,
+    })
     frame = requestAnimationFrame(update)
   }
   update()
@@ -127,6 +160,9 @@ export function setAudience(count: number): void {
 export function voiceSnapshot() {
   return {
     state: chat?.current,
+    connected: chat?.isLive,
+    receiveNodes,
+    receiveGain,
     requests,
     offs,
     control: controls?.root.textContent,
@@ -200,6 +236,13 @@ export async function disposeVoice() {
   clearTimeout(timer)
   controls?.dispose()
   await chat?.dispose()
+  remoteOscillator?.stop()
+  remoteOscillator?.disconnect()
+  for (const track of remoteStream?.stream.getTracks() ?? []) {
+    track.stop()
+  }
+  remoteStream?.disconnect()
+  remotePeer = false
   await context?.close()
   return {
     ...voiceSnapshot(),
@@ -377,4 +420,35 @@ export async function deferredLeaveProof() {
     }
   }
   return results
+}
+
+/** A server invitation caused by another nearby human, independent of this client's microphone. */
+export function inviteListener(): void {
+  keepFixtureMeeting(true)
+  invite()
+}
+export function startFixtureSpeaker(): void {
+  if (!context) {
+    throw new Error('Missing fixture context')
+  }
+  remoteStream = context.createMediaStreamDestination()
+  remoteOscillator = context.createOscillator()
+  remoteOscillator.frequency.value = 440
+  remoteOscillator.connect(remoteStream)
+  remoteOscillator.start()
+  const track = remoteStream.stream.getAudioTracks()[0]
+  if (!track) {
+    throw new Error('Missing remote track')
+  }
+  remotePeer = true
+  addSpeaker(track)
+  chat?.update([{ id: 7, name: 'Nearby speaker', x: 2, y: 0, z: 0 }], { x: 0, z: 0 })
+  chat?.receive({ type: 'voice_status', listeners: 1, speakers: [7] })
+}
+export function deafen(on: boolean): void {
+  chat?.setSilenced(on)
+}
+export function endMicrophone(): void {
+  original?.stop()
+  original?.dispatchEvent(new Event('ended'))
 }
