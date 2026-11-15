@@ -1,4 +1,4 @@
-import { NodeIO } from '@gltf-transform/core'
+import { type Document, NodeIO } from '@gltf-transform/core'
 import { ALL_EXTENSIONS } from '@gltf-transform/extensions'
 import { dedup, prune, quantize, textureCompress, weld } from '@gltf-transform/functions'
 import { MeshoptDecoder } from 'meshoptimizer'
@@ -44,6 +44,11 @@ export function parseTextureQuality(value = 'preserve'): TextureQuality {
     return value
   }
   throw new Error(`Unknown texture quality: ${value}; use preserve, high, low or legacy`)
+}
+
+/** Apply only the selected texture derivative policy, retaining the authored scene graph. */
+export async function applyTextureQuality(doc: Document, quality: TextureQuality): Promise<void> {
+  await doc.transform(...textureProfile(quality))
 }
 
 /** Standard glTF output: PlayCanvas does not decode the old Three meshopt extension. */

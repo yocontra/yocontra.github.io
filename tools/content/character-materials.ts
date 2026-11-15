@@ -1,6 +1,6 @@
 /** Reproduce fitted native character assets from preserved authoring sources. */
 import { mkdir, readdir, readFile, writeFile } from 'node:fs/promises'
-import { basename, resolve } from 'node:path'
+import { basename, dirname, resolve } from 'node:path'
 import { type Document, NodeIO, type Primitive } from '@gltf-transform/core'
 import { ALL_EXTENSIONS } from '@gltf-transform/extensions'
 import {
@@ -34,12 +34,16 @@ const WEAPON_BEARER = /^(?:gun\.|outlaw-|held-|player$)/u
 const source = resolve('tools/art/characters')
 const output = resolve('public/experiments/out-west/3d/native-v2')
 const io = new NodeIO().registerExtensions(ALL_EXTENSIONS)
-export async function bakeCharacter(path: string): Promise<void> {
+export async function bakeCharacter(
+  path: string,
+  options: { prepare?: (doc: Document) => Promise<void>; target?: string } = {},
+): Promise<void> {
   const doc = await io.read(path)
   const id = basename(path, '.gltf')
   await integrateGarmentParts(doc, id)
   await fitWaistcoats(doc, id)
   await repairHeadNape(doc)
+  await options.prepare?.(doc)
   const sockets = WEAPON_BEARER.test(id) ? captureWeaponSockets(doc) : []
   for (const node of [...doc.getRoot().listNodes()]) {
     if (node.getName() === 'socket.muzzle') {
@@ -104,7 +108,8 @@ export async function bakeCharacter(path: string): Promise<void> {
   } else if (id === 'player' || id.startsWith('outlaw-')) {
     category = 'baked'
   }
-  const target = resolve(output, category, `${id}.glb`)
+  const target = options.target ?? resolve(output, category, `${id}.glb`)
+  await mkdir(dirname(target), { recursive: true })
   await io.write(target, doc)
   if (category === 'baked') {
     await writeFile(target, labelActorHatGlb(await readFile(target)).bytes)

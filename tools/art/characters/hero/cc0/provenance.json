@@ -1,0 +1,82 @@
+{
+  "repositoryRevision": "9de0707fdc88438d7c53a1a2ac7937d9221e2431",
+  "assetLicense": "https://static.makehumancommunity.org/about/license.html",
+  "files": [
+    {
+      "path": "tools/art/characters/hero/cc0/base.obj",
+      "source": "https://raw.githubusercontent.com/makehumancommunity/mpfb2/9de0707fdc88438d7c53a1a2ac7937d9221e2431/src/mpfb/data/3dobjs/base.obj",
+      "sha256": "8e761e6624b8f54536409135d1636da63b32486a90d4897f84e121d144f6fb4c",
+      "bytes": 1749303,
+      "license": "CC0-1.0"
+    },
+    {
+      "path": "tools/art/characters/hero/cc0/caucasian-male-young.target.gz",
+      "source": "https://raw.githubusercontent.com/makehumancommunity/mpfb2/9de0707fdc88438d7c53a1a2ac7937d9221e2431/src/mpfb/data/targets/macrodetails/caucasian-male-young.target.gz",
+      "sha256": "ffe69537e53148edff2776204ba48cf3bf1f3cbc72966592c8a562ab80b07333",
+      "bytes": 127922,
+      "license": "CC0-1.0"
+    },
+    {
+      "path": "tools/art/characters/hero/cc0/caucasian-male-old.target.gz",
+      "source": "https://raw.githubusercontent.com/makehumancommunity/mpfb2/9de0707fdc88438d7c53a1a2ac7937d9221e2431/src/mpfb/data/targets/macrodetails/caucasian-male-old.target.gz",
+      "sha256": "123cb7758c86aa2aa71d80ea0c8f5f4b3e96f394180edc1682e34720c4949df6",
+      "bytes": 112944,
+      "license": "CC0-1.0"
+    },
+    {
+      "path": "tools/art/characters/hero/cc0/universal-male-young-maxmuscle-averageweight.target.gz",
+      "source": "https://raw.githubusercontent.com/makehumancommunity/mpfb2/9de0707fdc88438d7c53a1a2ac7937d9221e2431/src/mpfb/data/targets/macrodetails/universal-male-young-maxmuscle-averageweight.target.gz",
+      "sha256": "833caafc302bd9306de494f32ee1bc51d3a2e6641183329b031ac06ef0f4277e",
+      "bytes": 45597,
+      "license": "CC0-1.0"
+    },
+    {
+      "path": "tools/art/characters/hero/cc0/LICENSE.md",
+      "source": "https://raw.githubusercontent.com/makehumancommunity/mpfb2/9de0707fdc88438d7c53a1a2ac7937d9221e2431/LICENSE.md",
+      "sha256": "5cefb60680cb9efd4550a2e65d719021cfbec9dad3658481d11d48ae863ce04d",
+      "bytes": 3188,
+      "license": "upstream license text"
+    },
+    {
+      "path": "tools/art/characters/hero/cc0/Jartur_mid_old_Slavic_Male_with_Genitals_and_Beard_lsdif_lighter.png",
+      "source": "https://files2.makehumancommunity.org/asset_packs/skins02/skins02_cc0.zip",
+      "archiveEntry": "skins/jartur69_middleage_slavic_male_with_genitals_and_beard/Jartur_mid_old_Slavic_Male_with_Genitals_and_Beard_lsdif_lighter.png",
+      "sha256": "0f1a86d78af8bc1e55ae21cfaca0e7308384f789796adc77a78e4d22ccaf419c",
+      "bytes": 5615645,
+      "license": "CC0-1.0",
+      "author": "jartur69"
+    },
+    {
+      "path": "tools/art/characters/hero/cc0/skins02.json",
+      "source": "https://files2.makehumancommunity.org/asset_packs/skins02/skins02_cc0.zip",
+      "archiveEntry": "packs/skins02.json",
+      "sha256": "35c4e7d05d882537b6312cbbc95830347eb547941248dbdb5f5595e6d9e1e705",
+      "bytes": 7907,
+      "license": "CC0-1.0",
+      "author": "MakeHuman Community"
+    },
+    {
+      "path": "tools/art/characters/hero/cc0/jartur69_middleage_slavic_male_with_genitals_and_beard.mhmat",
+      "source": "https://files2.makehumancommunity.org/asset_packs/skins02/skins02_cc0.zip",
+      "archiveEntry": "skins/jartur69_middleage_slavic_male_with_genitals_and_beard/jartur69_middleage_slavic_male_with_genitals_and_beard.mhmat",
+      "sha256": "803a8be0a00ae27db9b9c94778b441e77de8ccacb808d48a3ea25877ae94b69a",
+      "bytes": 1093,
+      "license": "CC0-1.0",
+      "author": "jartur69"
+    },
+    {
+      "path": "tools/art/characters/hero/cc0/rig.game_engine.json",
+      "source": "https://raw.githubusercontent.com/makehumancommunity/mpfb2/9de0707fdc88438d7c53a1a2ac7937d9221e2431/src/mpfb/data/rigs/standard/rig.game_engine.json",
+      "sha256": "b324ddb4b707721c19630bfadb87c3e3b38eed3b6e4590bb3cead43ea918f799",
+      "bytes": 40936,
+      "license": "CC0-1.0"
+    },
+    {
+      "path": "tools/art/characters/hero/cc0/weights.game_engine.json",
+      "source": "https://raw.githubusercontent.com/makehumancommunity/mpfb2/9de0707fdc88438d7c53a1a2ac7937d9221e2431/src/mpfb/data/rigs/standard/weights.game_engine.json",
+      "sha256": "9f4a773e74ce5ba08415b4f30070338e9f75bae5971b5075b10cd6b9caa58473",
+      "bytes": 3026778,
+      "license": "CC0-1.0"
+    }
+  ]
+}

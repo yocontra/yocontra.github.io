@@ -6,7 +6,7 @@ import { Document, NodeIO } from '@gltf-transform/core'
 import { ALL_EXTENSIONS } from '@gltf-transform/extensions'
 import { spawn } from 'bun'
 import sharp from 'sharp'
-import { optimizeAsset, type TextureQuality } from '../../tools/content/optimize.ts'
+import { optimizeAsset } from '../../tools/content/optimize.ts'
 
 const io = new NodeIO().registerExtensions(ALL_EXTENSIONS)
 
@@ -146,12 +146,11 @@ it('high profile preserves all albedo, alpha, normal and ARM texels below its si
   }
 })
 
-it.each([
+for (const [quality, width, height] of [
   ['high', 4096, 512],
   ['low', 1024, 128],
-] as const)(
-  '%s derivative caps dimensions without stretching or changing the source',
-  async (quality: TextureQuality, width, height) => {
+] as const) {
+  it(`${quality} derivative caps dimensions without stretching or changing the source`, async () => {
     const dir = await mkdtemp(join(tmpdir(), 'out-west-textures-'))
     try {
       const source = join(dir, 'master.glb')
@@ -173,5 +172,5 @@ it.each([
     } finally {
       await rm(dir, { recursive: true, force: true })
     }
-  },
-)
+  })
+}
