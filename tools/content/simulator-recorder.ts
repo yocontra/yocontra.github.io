@@ -6,6 +6,18 @@ export async function installSimulatorRecorder(): Promise<void> {
   }
   sessionStorage.removeItem('__owQaRecording')
   const { id, stress } = JSON.parse(saved) as { id: string; stress: boolean }
+  // Only this unshipped localhost bootstrap supplies Cloudflare's documented dummy token.
+  // The real Worker still verifies it with its test secret; production secrets reject it.
+  let tokenCallback: ((token: string) => void) | undefined
+  const deliverTestToken = () => queueMicrotask(() => tokenCallback?.('XXXX.DUMMY.TOKEN.XXXX'))
+  Reflect.set(globalThis, 'turnstile', {
+    render(_element: HTMLElement, options: { callback: (token: string) => void }) {
+      tokenCallback = options.callback
+      deliverTestToken()
+      return 'local-qa-provider'
+    },
+    reset: deliverTestToken,
+  })
   if (document.readyState === 'loading') {
     await new Promise<void>((resolve) =>
       document.addEventListener('DOMContentLoaded', () => resolve(), { once: true }),
@@ -111,6 +123,7 @@ export async function installSimulatorRecorder(): Promise<void> {
           headers: { 'content-type': 'application/json' },
           body: JSON.stringify({
             surface: 'simulator-safari',
+            turnstile: 'local-dummy-token-with-server-verification',
             userAgent: navigator.userAgent,
             stress,
             scriptHashes: hashes,
