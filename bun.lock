@@ -37,6 +37,9 @@
       }
     }
   },
+  "patchedDependencies": {
+    "playcanvas@2.23.3": "patches/playcanvas@2.23.3.patch"
+  },
   "packages": {
     "@astrojs/astro2tsx": [
       "@astrojs/astro2tsx@0.1.3",

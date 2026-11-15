@@ -49,5 +49,8 @@
     "typescript": "^6.0.3",
     "wrangler": "4.158.0"
   },
-  "packageManager": "bun@1.3.14"
+  "packageManager": "bun@1.3.14",
+  "patchedDependencies": {
+    "playcanvas@2.23.3": "patches/playcanvas@2.23.3.patch"
+  }
 }
