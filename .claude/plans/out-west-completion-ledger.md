@@ -6,7 +6,7 @@ Recovery archive: `/Users/contra/Projects/out-west-recovery/20261114` (complete 
 
 ## Accepted direction
 
-Photoreal overhaul of existing browser/mobile modes. Free/CC0 assets and original Blender authoring; headless Blender preferred. Horse clips, not new riding gameplay. Gated releases. Preserve balance, independent spectators and all 94 historical GLBs. No asset or feature is accepted solely because its tests pass.
+Photoreal overhaul of existing browser/mobile modes. Free/CC0 assets and original Blender authoring; headless Blender preferred. Horse clips, not new riding gameplay. Gated releases. Latest user constraint: headless-only automation; do not open visible browsers, capture the host cursor, activate applications or force foreground. Foreground qualification remains pending under this constraint. Preserve balance, independent spectators and all 94 historical GLBs. No asset or feature is accepted solely because its tests pass.
 
 ## Work and evidence
 
