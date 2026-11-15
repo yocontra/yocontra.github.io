@@ -14,14 +14,14 @@ Photoreal overhaul of existing browser/mobile modes. Free/CC0 assets and origina
 | --- | --- | --- |
 | Recover all worktrees | Integrator | Archived 31 missing worktree metadata sets, reflogs and original plans; master current. Seven distinct candidate heads remain subject to selective review. |
 | First-person pipeline | Integrator | Recovered `fc6d49b` as `0c1b93a`; regenerated current derivatives in `8b5f64c`. 3 extraction tests pass, 5472 assertions. Native shotgun ADS screenshot fails sleeve/framing review; not accepted. |
-| Receive-only voice | Voice worker | Isolated `finish/receive-only-voice`; implementation and lifecycle tests underway. |
-| Texture quality profiles | Art worker | Isolated `finish/art-pipeline`; explicit preservation/high/low profiles and tests underway. |
-| Duel parity | Duel worker | Isolated `finish/duel-presentation`; restore missing beats without spectator reaction regression. Offline TipHat clip coordinated with art worker. |
+| Receive-only voice | Voice worker | Integrated `1cb04d35`; 37 pinned voice/server tests pass. Browser fixtures cover denied/missing/ended mic and same-meeting recovery; new live SFU validation still outstanding. |
+| Texture quality profiles | Art worker | Integrated `5aaad0f`; explicit preservation/high/low profiles, four tests pass. Hero authoring quality still open. |
+| Duel parity | Duel worker | Integrated `a2cb5046`, offline TipHat `3d5ff13b`; 240 integrated tests pass. Native Underboss/Boss probe passed in worker; final TipHat review and original side-by-side remain. |
 | Characters/material coverage | Queued | All outfits, paired fits, 17 outlaws, crowds and actual lighting coverage required. |
-| Animals | Queued | Review `69f444a` horse candidate; finish riding clips and crow wing fold. |
+| Animals | Integrator | Recovered horse candidates in `906df7ff`/`9fc1b6a1`; retained prior texture bytes. Native review open; crow fold still open. |
 | Environment | Queued | Siding, adobe, crates, terrain, flora, structure and interiors; preserve collision or version coordinated changes. |
 | Lighting/effects | Queued | Calibrated materials, native tiers and full scene/day-night review. QA camera candidate `958f6b9` is not a lighting upgrade. |
-| Audio | Queued | Recover `c9143f4` tools/budgets selectively; dense-firefight sound remains unaccepted. |
+| Audio | Integrator | Recovered candidates; `5e1fe2a6` adds post-limiter headroom. Ordinary/cluster peaks -2.6/-2.5 dBFS. Dense-firefight automated listening median 3/10: unaccepted. Reverted a mix experiment with no improvement. |
 | Performance | Queued | Visible release-engine simulator/Chrome recorder; 60-second active runs, both orientations, ordinary and 32-player stress; retain every slow frame. |
 | Delivery | Queued | Full check/build/native probes, immutable old assets, current hashes/previews, exact Worker then Pages revision verification. |
 
@@ -34,3 +34,5 @@ One integrator plus three workers, exclusive file ownership and isolated durable
 All 18 originally unchecked TODO items retain their acceptance requirements. Complete arm runtime lifecycle, masks, shadows, framing, action timing and Dead-Eye; material/animal/environment/parity work; receive-only voice; all four performance requirements; final source/content review and verified release. Reassess checked art/audio work against the photoreal direction.
 
 Current diagnostics live under `/tmp/out-west-*`; archive accepted evidence durably before release. The first-person probe was initially invalidated by concurrent asset regeneration/HMR and is being rerun on stable files. Simulator results do not establish physical-phone performance.
+
+Pinned Bun 1.3.14 broad candidate suite: 369 pass, zero failures. Host Bun 1.4.4 produced default-timeout failures and is not the qualification runtime. First-person portrait and landscape probes passed the initial candidate but visual framing failed. Follow-up lifecycle fix `7732e72f` needs the worker's disabled-socket readiness correction and native rerun before acceptance. Asset author is creating FP-only hand-contact-preserving pose variants with headless Blender. Duel worker is repairing the stale seated-anchor probe (actual seated pose/seatY contract) before performance recorder work. `c1830ca` adds tested timing summaries retaining empty seconds and stalls; it does not complete visible simulator/Chrome qualification.
