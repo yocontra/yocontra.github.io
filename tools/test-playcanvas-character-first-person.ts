@@ -3,6 +3,7 @@ import { mkdir, writeFile } from 'node:fs/promises'
 import { chromium, type Page } from 'playwright'
 import type { FrontierSession } from '../src/experiments/out-west/client/frontier-session.ts'
 import type { GameViewport } from '../src/experiments/out-west/client/viewport.ts'
+import { HOLSTER_TICKS } from '../src/experiments/out-west/ffa/sim/constants.ts'
 
 const origin = process.env.OUT_WEST_URL ?? 'http://127.0.0.1:4390'
 const output = process.env.OUT_WEST_OUTPUT ?? '/tmp/out-west-character-first-person-final'
@@ -148,6 +149,37 @@ async function shoot(page: Page, label: string): Promise<Record<string, unknown>
   return { longest, worstEye }
 }
 
+async function deadEyeFeedback(page: Page): Promise<void> {
+  await page.waitForFunction((holsterTicks) => {
+    const session = Reflect.get(globalThis, '__nativeFrontierSession') as FrontierSession
+    const self = session.world.players[session.selfSlot]
+    return self && self.reloadTicks === 0 && session.world.tick - self.lastFireTick >= holsterTicks
+  }, HOLSTER_TICKS)
+  await page.mouse.down({ button: 'right' })
+  const feedback = await page.evaluate(async () => {
+    let charging = false
+    let ready = false
+    const start = performance.now()
+    while (performance.now() - start < 1000) {
+      await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()))
+      const reticle = document.querySelector<HTMLElement>('.fr-reticle')
+      const close = Number(reticle?.style.getPropertyValue('--close'))
+      charging ||= Boolean(reticle?.classList.contains('dead-eye') && close > 0 && close < 1)
+      ready ||= Boolean(reticle?.classList.contains('ready') && close === 1)
+    }
+    return { charging, ready }
+  })
+  check(feedback.charging && feedback.ready, 'Dead-Eye charge and ready ring survive ADS', feedback)
+  await page.screenshot({ path: `${output}/dead-eye-aimed.png` })
+  await page.mouse.up({ button: 'right' })
+  await frames(page, 5)
+  check(
+    (await page.locator('.fr-reticle.dead-eye').count()) === 0,
+    'Dead-Eye ring clears when aim is released',
+  )
+  results.push({ deadEye: feedback })
+}
+
 try {
   const viewport = portrait ? { width: 375, height: 812 } : { width: 1280, height: 720 }
   const page = await browser.newPage({ viewport })
@@ -264,6 +296,7 @@ try {
   await page.keyboard.up('KeyC')
   await equip(page, 0)
   await frames(page, 20)
+  await deadEyeFeedback(page)
 
   // Third person restores the exact world color pass; returning masks it again.
   await page.evaluate(() =>
