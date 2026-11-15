@@ -98,6 +98,9 @@ export async function bakeCharacterClips(): Promise<void> {
     await io.read(resolve(root, 'player.gltf')),
     new Set(['Idle_Gun_Pointing', 'Gun_Shoot']),
   )
+  const tipHat = await io.read(resolve(root, 'gestures/tip-hat.glb'))
+  await validateAuthoringInputs(tipHat)
+  appendClips(target, tipHat)
   completeCharacterClips(target)
   closeIdleSeams(target)
   uprightPosture(target)

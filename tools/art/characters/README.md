@@ -17,6 +17,14 @@ KTX_ENCODER=/path/to/KTX-Software-4.4.2/bin/toktx bun tools/content/human-assets
 bun tools/content/character-clips.ts
 ```
 
+The victory `TipHat` clip is authored offline from the canonical player idle, with
+planted feet and a 1.5-second reach/nod/return. Rebuild its portable source before
+the shared clips if its source fingerprint changes:
+
+```
+blender --background --factory-startup --python tools/content/tip-hat-authoring.py
+```
+
 `character-materials.ts` evaluates the original masked recolor operation in linear
 light into cropped PBR albedos, retains source texel density, bakes fabric roughness,
 and emits lazy finite dye albedos. Skin, hair, eyes and uncolored details share the
