@@ -79,7 +79,7 @@ for (const name of names.filter((candidate) => !only || candidate === only)) {
     await geometry.transform(dedup(), weld(), prune(), dequantize())
     await io.write(path, geometry)
   } else {
-    await optimizeAsset(path)
+    await optimizeAsset(path, 'legacy')
   }
   const document = await io.read(path)
   // Native static batching transforms vertex data on the CPU: author float position/normal streams.
@@ -158,7 +158,7 @@ if (only) {
     const path = 'public/experiments/out-west/3d/native-v2/ambient/frontier-tumbleweeds.glb'
     await mkdir('public/experiments/out-west/3d/native-v2/ambient', { recursive: true })
     await copyFile(join(source, 'frontier-tumbleweeds.glb'), path)
-    await optimizeAsset(path)
+    await optimizeAsset(path, preserveTextures ? 'preserve' : 'legacy')
     const bytes = await readFile(path)
     console.log(
       JSON.stringify({
@@ -220,7 +220,7 @@ for (const name of [
   await mkdir(`public/experiments/out-west/3d/${directory}`, { recursive: true })
   const path = `public/experiments/out-west/3d/${directory}/${name}.glb`
   await copyFile(join(source, `${name}.glb`), path)
-  await optimizeAsset(path)
+  await optimizeAsset(path, preserveTextures ? 'preserve' : 'legacy')
   const bytes = await readFile(path)
   const hash = createHash('sha256').update(bytes).digest('hex')
   ambient[name] = {

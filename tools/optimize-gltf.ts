@@ -1,13 +1,15 @@
 #!/usr/bin/env bun
 /** Compatibility entrypoint for the canonical native-supported GLB optimizer. */
 import { copyFile } from 'node:fs/promises'
-import { optimizeAsset } from './content/optimize.ts'
+import { optimizeAsset, parseTextureQuality } from './content/optimize.ts'
 
-const [input, output = input] = process.argv.slice(2)
+const args = process.argv.slice(2)
+const quality = parseTextureQuality(args.find((arg) => arg.startsWith('--textures='))?.slice(11))
+const [input, output = input] = args.filter((arg) => !arg.startsWith('--textures='))
 if (!(input && output)) {
-  throw new Error('usage: bun tools/optimize-gltf.ts <input.glb> [output.glb]')
+  throw new Error('usage: bun tools/optimize-gltf.ts <input.glb> [output.glb] [--textures=profile]')
 }
 if (input !== output) {
   await copyFile(input, output)
 }
-await optimizeAsset(output)
+await optimizeAsset(output, quality)

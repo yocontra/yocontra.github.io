@@ -443,7 +443,7 @@ export async function publishFrontier(directory: string): Promise<void> {
   }
   const ambient = join(directory, 'native-frontier-tumbleweeds.glb')
   await copyFile(join(directory, 'frontier-tumbleweeds.glb'), ambient)
-  await optimizeAsset(ambient)
+  await optimizeAsset(ambient, 'legacy')
   await compressEnvironmentTextures(ambient)
   const files = [
     [join(directory, 'frontier.glb'), join(SOURCE, 'frontier.glb')],
