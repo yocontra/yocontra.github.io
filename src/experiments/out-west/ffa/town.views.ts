@@ -1,12 +1,16 @@
 /**
- * Camera views of Perdition for `tools/frontier-shots.ts` (dev screenshots only; the game never
- * imports this): eye-level walks down every street and alley, and overviews. Layout metres, y up.
+ * Camera views of Perdition for visual QA captures (dev screenshots only; the game never imports
+ * this): eye-level walks down every street and alley, interiors and overviews. Layout
+ * metres from `town.layout.json`, y up; `tests/content-playcanvas/frontier-views.test.ts` keeps
+ * every street eye out of the buildings and every interior eye inside its building.
  */
 export interface TownView {
   name: string
   from: [number, number, number]
   to: [number, number, number]
   fov?: number
+  /** The hollow building this view stands in; street views stand outside every building. */
+  inside?: string
 }
 
 /** A third-person camera's height over the ground (a rider's eyes are ~1.6 m). */
@@ -18,67 +22,73 @@ const eye = (name: string, x0: number, z0: number, x1: number, z1: number): Town
   from: [x0, EYE, z0],
   to: [x1, EYE * 0.85, z1],
 })
+// biome-ignore lint/complexity/useMaxParams: as `eye`, plus the building it stands in
+const room = (name: string, inside: string, x0: number, z0: number, x1: number, z1: number) => ({
+  ...eye(name, x0, z0, x1, z1),
+  inside,
+})
 
 export const FRONTIER_VIEWS: TownView[] = [
-  { name: 'over-top', from: [72, 150, 73], to: [72, 0, 72], fov: 55 },
-  { name: 'over-nw', from: [-20, 70, -10], to: [72, 0, 72], fov: 55 },
-  { name: 'over-se', from: [164, 70, 160], to: [72, 0, 72], fov: 55 },
-  { name: 'over-bank', from: [72, 30, 40], to: [72, 0, 84], fov: 55 },
+  { name: 'over-top', from: [52, 48, 53], to: [52, 0, 52], fov: 55 },
+  { name: 'over-nw', from: [8, 30, 8], to: [52, 0, 52], fov: 55 },
+  { name: 'over-se', from: [96, 30, 96], to: [52, 0, 52], fov: 55 },
+  { name: 'over-bank', from: [46, 22, 36], to: [46, 0, 68], fov: 55 },
   // main street, both ways and down each boardwalk
-  eye('main-west-east', 5, 64, 60, 64),
-  eye('main-east-west', 139, 64, 80, 64),
-  eye('main-north-boardwalk', 20, 55, 70, 55),
-  eye('main-south-boardwalk', 120, 73, 70, 73),
-  eye('main-crossroads', 72, 66, 72, 80),
-  // north road and the creek
-  eye('north-road-south', 72, 14, 72, 56),
-  eye('north-road-north', 72, 54, 72, 10),
-  eye('bridge', 72, 18, 72, 2),
-  eye('creek-west', 66, 8, 20, 8),
-  eye('creek-east', 78, 8, 130, 8),
-  // cross street and the railroad
-  eye('cross-south', 72, 94, 72, 139),
-  eye('cross-north', 72, 139, 72, 92),
-  eye('depot-platform', 15, 121, 42, 121),
-  eye('track-east', 60, 128, 136, 125),
-  eye('stock-pens', 80, 128, 108, 138),
+  eye('main-west-east', 4, 52, 60, 52),
+  eye('main-east-west', 100, 52, 44, 52),
+  eye('main-north-boardwalk', 6, 45, 60, 45),
+  eye('main-south-boardwalk', 98, 59, 50, 59),
+  eye('main-arrival', 52, 52, 20, 47),
+  // the backlot road, the church gap and the creek
+  eye('backlot-west-east', 4, 21, 100, 21),
+  eye('backlot-east-west', 100, 21, 4, 21),
+  eye('church-gap-north', 63, 50, 63, 6),
+  eye('church-gap-south', 63, 8, 63, 52),
+  eye('bridge', 52, 10, 52, -6),
+  eye('creek-west', 48, 4.5, 22, 3),
+  eye('creek-east', 56, 4.5, 100, 3),
+  // the rail service road and the yard
+  eye('rail-west-east', 4, 80.5, 100, 80.5),
+  eye('rail-east-west', 98, 79, 4, 80.5),
+  eye('depot-platform', 13, 94.5, 34, 94.5),
+  eye('track-east', 46, 96.5, 90, 99),
+  eye('stock-shed', 88, 92, 95, 98),
   // the bank from every side
-  eye('bank-north', 72, 64, 72, 76),
-  eye('bank-lobby', 72, 76, 72, 83),
-  eye('bank-west-alley', 60, 96, 60, 72),
-  eye('bank-east-alley', 83.5, 94, 83.5, 72),
-  eye('bank-south', 72, 104, 72, 91),
+  eye('bank-north', 48, 52, 46, 62),
+  room('bank-lobby', 'bank', 46, 61.5, 46, 75),
+  eye('bank-west-alley', 34.5, 79, 34.5, 57),
+  eye('bank-east-alley', 57.5, 79, 57.5, 57),
+  eye('bank-south', 46, 80.5, 46, 74),
   // back lots and alleys
-  eye('corral', 23, 50, 12, 24),
-  eye('livery-saloon-alley', 43.5, 30, 43.5, 58),
-  eye('saloon-back', 48, 24, 66, 30),
-  eye('hotel-back', 76, 30, 108, 28),
-  eye('cemetery', 112, 26, 132, 16),
-  eye('south-back-west', 4, 94, 56, 96),
-  eye('south-back-east', 80, 98, 136, 98),
-  eye('jail-yard', 108, 92, 122, 104),
-  eye('water-tower', 104, 112, 120, 115),
-  eye('east-lot', 140, 74, 124, 90),
+  eye('corral', 23, 11, 8, 12),
+  eye('livery-saloon-alley', 21.5, 21, 21.5, 50),
+  eye('saloon-back', 27, 20, 44, 21),
+  eye('hotel-back', 43.5, 21, 64, 23),
+  eye('cemetery', 80, 17, 68, 10),
+  eye('jail-yard', 88, 79, 97, 75),
+  eye('water-tower', 88, 80, 92, 88),
+  eye('east-lot', 101, 44, 90, 30),
   // facades and close-ups
-  eye('facade-saloon', 50, 63, 58, 52),
-  eye('facade-store', 52, 69, 48, 76),
-  eye('trough-corral', 15, 47, 12.5, 44.5),
-  { name: 'bank-deposits', from: [72, 1.7, 76], to: [72, 2.2, 83] },
-  eye('coach-close', 27, 58.5, 33, 61),
-  eye('wreck-close', 124, 60, 131, 64),
-  eye('telegraph', 50, 132, 96, 126),
-  eye('ads-alley', 43.5, 64, 43.5, 40),
-  { name: 'ad-livery', from: [45, 2.5, 48], to: [40, 3.4, 44] },
-  { name: 'ad-store', from: [37.5, 2.5, 80], to: [40, 3.3, 82] },
+  eye('facade-saloon', 36, 52, 30, 44),
+  eye('facade-store', 64, 52, 69, 60),
+  eye('trough-corral', 11, 10, 7.5, 13.5),
+  { name: 'bank-deposits', from: [46, 1.7, 64], to: [46, 2.2, 70], inside: 'bank' },
+  eye('coach-close', 70, 88, 78, 87.5),
+  eye('wagon-close', 17, 18, 9.5, 15),
+  eye('ads-alley', 21.5, 50, 21.5, 26),
+  { name: 'sign-saloon', from: [32, 2.5, 49], to: [32, 4.5, 44] },
+  { name: 'sign-store', from: [68, 2.5, 55], to: [68, 4.2, 60] },
   // interiors
-  eye('saloon-bar', 64, 52, 50, 40),
-  eye('store-inside', 56, 76, 42, 86),
-  eye('smithy-inside', 34, 75, 25, 84),
-  eye('saloon-room', 61, 52, 49, 44),
-  eye('hotel-lobby', 86, 53, 82, 44),
-  eye('church-nave', 117, 51, 117, 31),
-  eye('jail-inside', 111, 76, 106, 86),
-  eye('bank-vault', 72, 84, 64, 90),
-  eye('depot-inside', 28, 118, 18, 111),
-  eye('livery-stalls', 30, 52, 38, 38),
+  room('saloon-bar', 'saloon', 30, 41, 38, 30),
+  { name: 'saloon-room', from: [26, 5, 27], to: [36, 4.6, 36], inside: 'saloon' },
+  room('store-inside', 'general_store', 62, 62, 74, 72),
+  room('smithy-inside', 'smithy', 30, 62, 22, 70),
+  room('hotel-lobby', 'hotel', 52, 42, 50, 30),
+  room('church-nave', 'church', 72, 42, 72, 25),
+  room('jail-inside', 'jail', 90, 62, 82, 71),
+  room('bank-vault', 'bank', 46, 72, 53, 77),
+  room('depot-inside', 'depot', 28, 85, 12, 91),
+  room('livery-stalls', 'livery', 17, 42, 7, 27),
+  room('undertaker-inside', 'undertaker', 48, 84, 38, 92),
+  room('barn-inside', 'hay_barn', 56, 84, 66, 90),
 ]
