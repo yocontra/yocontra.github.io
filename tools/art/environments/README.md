@@ -36,6 +36,16 @@ KTX_ENCODER=/path/to/toktx bun tools/content/environment.ts
 bun tools/content/manifest.ts
 ```
 
+For an isolated candidate bake, pass an output directory outside the published tree:
+
+```sh
+KTX_ENCODER=/path/to/toktx bun tools/content/environment.ts --only frontier --source /path/to/source --output /path/to/stage/baked
+```
+
+The staged GLB embeds its maps; intermediate KTX2 files stay under that output's
+`resources/` directory. Staging does not publish ambient assets or shared metadata.
+`compressEnvironmentTextures` also honours an existing `withContentOutput` scope.
+
 `street-lamp.glb` is authored by `tools/content/street-lamp-authoring.py` in Blender 4.5; the
 bank build swaps its gallows lanterns and step-lamp heads for it.
 
