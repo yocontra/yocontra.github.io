@@ -45,11 +45,7 @@ export async function startProfile(cdp: CDPSession): Promise<void> {
  * Stop the profiler and print where the main thread's time went: self and inclusive time by
  * function (production frames resolve through the perf build's hidden source maps).
  */
-export async function stopProfile(
-  cdp: CDPSession,
-  sourceMaps: boolean,
-  burstMs = 0,
-): Promise<void> {
+export async function stopProfile(cdp: CDPSession, sourceMaps: boolean, burstMs = 0) {
   const { profile } = (await cdp.send('Profiler.stop')) as {
     profile: {
       nodes: {
@@ -145,6 +141,7 @@ export async function stopProfile(
   for (const [k, us] of [...incl].sort((x, y) => y[1] - x[1]).slice(0, 45)) {
     console.log(`    ${perFrame(us).padStart(5)}  ${k}`)
   }
+  return profile
 }
 
 /** Each long run of main-thread work, by inclusive ms per function. */
