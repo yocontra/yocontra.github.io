@@ -26,6 +26,7 @@ import { OUTLAWS } from '../data/outlaws.ts'
 import { drawPoster } from '../ui/poster.ts'
 import type { GameApplication } from './application.ts'
 import { NativeClockwork } from './clockwork.ts'
+import { NativeModelLods } from './model-lod.ts'
 import { NativeWilds } from './wilds.ts'
 
 const UP = new Vec3(0, 1, 0)
@@ -75,6 +76,7 @@ export class NativeEnvironment {
   private readonly game: GameApplication
   private readonly frontier: boolean
   private readonly groups = new Map<Entity, number[]>()
+  private readonly lods = new Map<Entity, NativeModelLods>()
   private readonly materials = new Set<StandardMaterial>()
   private readonly windows = new Set<StandardMaterial>()
   private readonly lampGlass = new Set<StandardMaterial>()
@@ -207,6 +209,10 @@ export class NativeEnvironment {
     return null
   }
   private readonly updateClouds = (dt: number): void => {
+    const camera = this.game.camera.getPosition()
+    for (const lod of this.lods.values()) {
+      lod.update(camera)
+    }
     this.cloudTime = (this.cloudTime + dt) % 3600
     this.cloudOffset.set((-this.cloudTime * 7.5) / 1024, (-this.cloudTime * 2.5) / 1024)
     for (const material of this.cloudMaterials) {
@@ -394,9 +400,13 @@ export class NativeEnvironment {
       return
     }
     animateWind(root, asset)
+    const lod = new NativeModelLods(root)
+    this.lods.set(root, lod)
+    lod.update(this.game.camera.getPosition())
     const group = this.game.app.batcher?.addGroup('environment', false, 32)
     // Native RenderComponent enable/disable dirties only this group when a pane breaks or resets.
     const panes = this.game.app.batcher?.addGroup('environment-panes', false, 32)
+    const details = this.game.app.batcher?.addGroup('environment-detail', false, 32)
     const clones = new Map<StandardMaterial, StandardMaterial>()
     for (const component of root.findComponents('render')) {
       // Authored additive light shafts are illumination, never opaque shadow casters.
@@ -420,12 +430,13 @@ export class NativeEnvironment {
       if (pane) {
         component.castShadows = false
       }
-      const target = pane ? panes : group
+      const ordinary = pane ? panes : group
+      const target = lod.owns(component) ? details : ordinary
       if (target && canBatch(component)) {
         component.batchGroupId = target.id
       }
     }
-    const ids = [group, panes].flatMap((entry) => (entry ? [entry.id] : []))
+    const ids = [group, panes, details].flatMap((entry) => (entry ? [entry.id] : []))
     this.groups.set(root, ids)
     const posterLight = root.findByName('poster-lantern-light')
     if (posterLight instanceof Entity) {
@@ -444,6 +455,8 @@ export class NativeEnvironment {
       this.poster(0)
     }
     root.once('destroy', () => {
+      lod.destroy()
+      this.lods.delete(root)
       if (posterLight instanceof Entity) {
         this.posterLights.delete(posterLight)
       }
@@ -481,6 +494,10 @@ export class NativeEnvironment {
       }
     }
     this.groups.clear()
+    for (const lod of this.lods.values()) {
+      lod.destroy()
+    }
+    this.lods.clear()
     for (const material of this.materials) {
       material.destroy()
     }

@@ -23,6 +23,7 @@ import {
 } from './frontier-furniture.ts'
 import type { FrontierGeometry, Placement, Rgb } from './frontier-geometry.ts'
 import { frontierTerrainHeight } from './frontier-ground.ts'
+import { lodPrefab } from './model-lod.ts'
 
 /** Library props whose authored proportions can fill their cover volume by repetition. */
 const KIT_PROPS: Partial<Record<Cover['kind'], [string, PrefabFit]>> = {
@@ -337,7 +338,15 @@ export function desertPlants(g: FrontierGeometry, beds: readonly Placement[], si
   const yards = g.group('Perdition creek and yard cactus beds')
   for (const [index, plant] of beds.entries()) {
     const saguaro = index % 2 === 0 ? 'saguaro_two_arm' : 'saguaro_one_arm'
-    g.prefab(yards, plant.top <= 1.3 ? 'prickly_pear' : saguaro, plant, { jitter: Math.PI })
+    if (plant.top <= 1.3) {
+      g.prefab(yards, 'prickly_pear', plant, { jitter: Math.PI })
+    } else {
+      lodPrefab(g, yards, plant, {
+        near: saguaro,
+        far: saguaro.replace('saguaro_', 'saguaro_far_'),
+        fit: { jitter: Math.PI },
+      })
+    }
   }
   const ground = frontierTerrainHeight(size)
   const outskirts = g.group('Perdition outskirts saguaros')
@@ -358,11 +367,15 @@ export function desertPlants(g: FrontierGeometry, beds: readonly Placement[], si
     const [w, h, d] = g.naturalSize(name)
     // Saguaros grow taller far faster than they thicken.
     const girth = Math.sqrt(height / h)
-    g.prefab(
+    lodPrefab(
+      g,
       outskirts,
-      name,
       { x: x - (w * girth) / 2, z: z - (d * girth) / 2, w: w * girth, d: d * girth, y0: base, top },
-      { anisotropy: Number.POSITIVE_INFINITY, jitter: Math.PI },
+      {
+        near: name.replace('saguaro_far_', 'saguaro_'),
+        far: name,
+        fit: { anisotropy: Number.POSITIVE_INFINITY, jitter: Math.PI },
+      },
     )
   }
 }

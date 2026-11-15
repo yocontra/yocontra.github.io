@@ -10,3 +10,10 @@ export interface ContentAsset {
   hash: string
   bytes: number
 }
+
+/** Same-container static detail groups; children are named lod-near and lod-far. */
+export interface StaticModelLod {
+  distance: number
+  hysteresis: number
+}
+export const MODEL_LOD_PREFIX = 'model-lod:'
