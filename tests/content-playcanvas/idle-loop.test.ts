@@ -21,6 +21,8 @@ function retained(document: Document) {
     document
       .getRoot()
       .listAnimations()
+      // The separately tested victory gesture is new; retain the historical 72-clip fingerprint.
+      .filter((clip) => clip.getName() !== 'TipHat')
       .flatMap((clip) =>
         clip.listChannels().flatMap((channel) => {
           const bone = channel.getTargetNode()?.getName() ?? ''
@@ -157,7 +159,13 @@ it('native idle loops close while other clips, times and geometry remain authore
   const document = await io.read(
     process.env.OW_IDLE_MOVES ?? 'public/experiments/out-west/3d/native-v2/baked/moves.glb',
   )
-  expect(document.getRoot().listAnimations()).toHaveLength(72)
+  expect(document.getRoot().listAnimations()).toHaveLength(73)
+  expect(
+    document
+      .getRoot()
+      .listAnimations()
+      .filter((clip) => clip.getName() === 'TipHat'),
+  ).toHaveLength(1)
   expect(retained(document)).toBe(
     'b73de9b460b228143900d0725b1daaf7aa56461ad68507613e59b03607975750',
   )
