@@ -2,6 +2,7 @@ import { expect, test as it } from 'bun:test'
 import { readFile } from 'node:fs/promises'
 import { type Document, NodeIO } from '@gltf-transform/core'
 import { ALL_EXTENSIONS } from '@gltf-transform/extensions'
+import sharp from 'sharp'
 import { validateAuthoringInputs } from '../../tools/content/authoring-inputs.ts'
 import { prepareHeroReference } from '../../tools/content/hero-reference.ts'
 
@@ -26,12 +27,15 @@ function animationData(doc: Document) {
 }
 
 it('human source is reproducible from pinned CC0 graphics and keeps the native joint contract', async () => {
-  const [source, anatomy, eyes] = await Promise.all([
+  const [source, anatomy, eyes, hat, collar, sleeves] = await Promise.all([
     io.read('tools/art/characters/player.gltf'),
     io.read(`${directory}/hero-skin-reference.glb`),
     io.read(`${directory}/hero-eyes-reference.glb`),
+    io.read(`${directory}/hero-hat-reference.glb`),
+    io.read(`${directory}/hero-collar-reference.glb`),
+    io.read(`${directory}/hero-sleeves-reference.glb`),
   ])
-  await Promise.all([validateAuthoringInputs(anatomy), validateAuthoringInputs(eyes)])
+  await Promise.all([anatomy, eyes, hat, collar, sleeves].map(validateAuthoringInputs))
   const provenance = JSON.parse(await readFile(`${directory}/cc0/provenance.json`, 'utf8'))
   expect(provenance.repositoryRevision).toMatch(REVISION)
   for (const file of provenance.files) {
@@ -47,6 +51,82 @@ it('human source is reproducible from pinned CC0 graphics and keeps the native j
   const image = anatomy.getRoot().listTextures()[0]
   expect(image?.getSize()).toEqual([2048, 2048])
   expect(eyes.getRoot().listMeshes().length).toBeGreaterThanOrEqual(2)
+  expect(hat.getRoot().getExtras().coordinateSpace).toBe('Head local')
+  const hatPositions = hat
+    .getRoot()
+    .listMeshes()
+    .flatMap((mesh) => mesh.listPrimitives())
+    .map((primitive) => primitive.getAttribute('POSITION'))
+  expect(Math.min(...hatPositions.map((position) => position?.getMin([])[1] ?? 0))).toBeGreaterThan(
+    0.065,
+  )
+  expect(Math.max(...hatPositions.map((position) => position?.getMax([])[1] ?? 0))).toBeLessThan(
+    0.25,
+  )
+  const irises = eyes
+    .getRoot()
+    .listMeshes()
+    .flatMap((mesh) => mesh.listPrimitives())
+    .filter((primitive) => primitive.getMaterial()?.getName() === 'Brown iris reference')
+  expect(irises).toHaveLength(2)
+  for (const iris of irises) {
+    const normal = iris.getAttribute('NORMAL')
+    if (!normal) {
+      throw new Error('Iris surface has no authored normals')
+    }
+    let forward = 0
+    for (let i = 0; i < normal.getCount(); i++) {
+      forward += normal.getElement(i, [])[2] ?? 0
+    }
+    expect(forward / normal.getCount()).toBeGreaterThan(0.8)
+  }
+})
+
+it('shirt construction keeps a physical weave repeat and independent cotton PBR channels', async () => {
+  const doc = await io.read(`${directory}/hero-sleeves-reference.glb`)
+  const primitive = doc.getRoot().listMeshes()[0]?.listPrimitives()[0]
+  const surface = primitive?.getMaterial()
+  const uv = primitive?.getAttribute('TEXCOORD_0')
+  const weights = primitive?.getAttribute('_AUTHOR_WEIGHTS')
+  if (!(surface && uv && weights)) {
+    throw new Error('Missing authored shirt surface or joint streams')
+  }
+  expect(uv.getMax([])[0]).toBeGreaterThan(40)
+  expect(uv.getMax([])[1]).toBeGreaterThan(50)
+  expect(surface.getMetallicFactor()).toBe(0)
+  expect(surface.getNormalScale()).toBe(0.6)
+  expect(surface.getMetallicRoughnessTexture()).toBe(surface.getOcclusionTexture())
+  for (const texture of [
+    surface.getBaseColorTexture(),
+    surface.getNormalTexture(),
+    surface.getMetallicRoughnessTexture(),
+  ]) {
+    expect(texture?.getSize()).toEqual([512, 512])
+  }
+  const arm = surface.getMetallicRoughnessTexture()?.getImage()
+  if (!arm) {
+    throw new Error('Missing independently packed fabric channels')
+  }
+  const { data, info } = await sharp(arm).raw().toBuffer({ resolveWithObject: true })
+  let minimumRoughness = 255
+  let maximumRoughness = 0
+  let maximumMetalness = 0
+  for (let index = 0; index < data.length; index += info.channels) {
+    minimumRoughness = Math.min(minimumRoughness, data[index + 1] ?? 0)
+    maximumRoughness = Math.max(maximumRoughness, data[index + 1] ?? 0)
+    maximumMetalness = Math.max(maximumMetalness, data[index + 2] ?? 0)
+  }
+  expect(minimumRoughness).toBeGreaterThan(190)
+  expect(maximumRoughness).toBeGreaterThan(minimumRoughness)
+  expect(maximumMetalness).toBe(0)
+  let maximumWeightError = 0
+  for (let index = 0; index < weights.getCount(); index++) {
+    maximumWeightError = Math.max(
+      maximumWeightError,
+      Math.abs(weights.getElement(index, []).reduce((sum, value) => sum + value, 0) - 1),
+    )
+  }
+  expect(maximumWeightError).toBeLessThan(0.000_01)
 })
 
 it('anatomical surfaces have finite smooth normals and bounded normalized native weights', async () => {

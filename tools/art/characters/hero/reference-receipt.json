@@ -47,11 +47,19 @@
     },
     {
       "path": "tools/content/hero-foundation-authoring.py",
-      "sha256": "e4542e11d58b4eda10e6cb328c303c2ebb504c9956245d51323890b62d4608d4"
+      "sha256": "0f5624bd1a194330477a8d37bdcea3d7f6954b10eae7b8580d9dea32232c6337"
     },
     {
       "path": "tools/content/coat-sleeves-authoring.py",
       "sha256": "f4bbf646cdfb534ea17fc725ff75f592bb859cc649d49209ec33943cb3c28527"
+    },
+    {
+      "path": "tools/content/hero-wardrobe-authoring.py",
+      "sha256": "9af6b1cae22946d74d5fb17aec996e4377b74bd0409a03f41102977aae0f82ea"
+    },
+    {
+      "path": "tools/content/hero-groom-authoring.py",
+      "sha256": "7f83a2bdeb805e3614c4111436394d93e293f2d301701178acd211d81570894a"
     },
     {
       "path": "tools/art/characters/player.gltf",
@@ -799,15 +807,15 @@
       "scale": 0.9692286570405254
     }
   },
-  "triangles": 39128,
+  "anatomyTriangles": 40824,
   "textureDimensions": [
     2048,
     2048
   ],
   "limitations": [
-    "Eye geometry, eyelids and hair require authored integration",
-    "Hands require native grip and finger silhouette review",
+    "Eyes, eyelids and hair require complete native close-up acceptance",
+    "Hands require authored weapon contact poses and finger silhouette review",
     "Diffuse reference lacks dedicated scanned roughness/normal maps",
-    "Wardrobe still uses historical geometry; no AAA acceptance"
+    "Vest, trousers and boots still use historical construction; new shirt requires native acceptance"
   ]
 }

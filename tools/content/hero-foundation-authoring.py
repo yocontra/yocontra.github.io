@@ -23,6 +23,12 @@ CC0 = DIRECTORY / "cc0"
 spec = importlib.util.spec_from_file_location("garments", Path(__file__).with_name("coat-sleeves-authoring.py"))
 common = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(common)
+wardrobe_spec = importlib.util.spec_from_file_location("hero_wardrobe", Path(__file__).with_name("hero-wardrobe-authoring.py"))
+wardrobe = importlib.util.module_from_spec(wardrobe_spec)
+wardrobe_spec.loader.exec_module(wardrobe)
+groom_spec = importlib.util.spec_from_file_location("hero_groom", Path(__file__).with_name("hero-groom-authoring.py"))
+groom = importlib.util.module_from_spec(groom_spec)
+groom_spec.loader.exec_module(groom)
 MORPHS = {
     "caucasian-male-young.target.gz": 0.78,
     "caucasian-male-old.target.gz": 0.22,
@@ -55,7 +61,7 @@ def inputs():
         if digest != entry["sha256"]:
             raise ValueError(f"CC0 source changed: {path}")
         result.append({"path": entry["path"], "sha256": digest})
-    for path in [CC0 / "provenance.json", Path(__file__), Path(common.__file__), DIRECTORY.parent / "player.gltf", DIRECTORY.parent / "player.bin"]:
+    for path in [CC0 / "provenance.json", Path(__file__), Path(common.__file__), Path(wardrobe.__file__), Path(groom.__file__), DIRECTORY.parent / "player.gltf", DIRECTORY.parent / "player.bin"]:
         result.append({"path": str(path.relative_to(ROOT)), "sha256": hashlib.sha256(path.read_bytes()).hexdigest()})
     return result
 
@@ -209,7 +215,16 @@ def fit(positions, groups, source):
     head, anchor, rotation, scale = transforms["head"]
     for i, point in enumerate(positions):
         if point.y > 0.65:
-            output[i] = anchor + rotation @ (point - head) * scale
+            fitted = point.copy()
+            if point.y < 0.74:
+                blend = max(0, min(1, (0.74 - point.y) / 0.06))
+                blend = blend * blend * (3 - 2 * blend)
+                center_z = head.z + (point.y - head.y) * 0.1
+                radius = math.hypot(point.x / 0.05, (point.z - center_z) / 0.046)
+                if radius > 1:
+                    fitted.x *= 1 - blend + blend / radius
+                    fitted.z = center_z + (point.z - center_z) * (1 - blend + blend / radius)
+            output[i] = anchor + rotation @ (fitted - head) * scale
     return output, joint_rows, weight_rows, names, landmarks, weights, bind, transforms
 
 
@@ -265,11 +280,13 @@ def add_eyes(original, groups, transform):
     color.layer_name = "Iris pigment"
     iris.node_tree.links.new(color.outputs["Color"], iris.node_tree.nodes.get("Principled BSDF").inputs["Base Color"])
     objects = []
+    radius = 0.0128
     for side in ["l", "r"]:
         center = sum((original[i] for i in groups["joint-" + side + "-eye"]), Vector()) / len(groups["joint-" + side + "-eye"])
+        center.z += 0.0007
         def fitted(point):
             return TO_BLENDER @ (anchor + rotation @ (point - head) * scale)
-        bpy.ops.mesh.primitive_uv_sphere_add(segments=48, ring_count=24, radius=0.012, location=fitted(center))
+        bpy.ops.mesh.primitive_uv_sphere_add(segments=48, ring_count=24, radius=radius, location=fitted(center))
         eye = bpy.context.object
         eye.name = "Reference sclera " + side
         eye.scale = (scale, scale, scale)
@@ -277,18 +294,24 @@ def add_eyes(original, groups, transform):
         for polygon in eye.data.polygons:
             polygon.use_smooth = True
         vertices, faces, colors = [], [], []
-        rings = [(0, 0.001), (0.0017, 0.001), (0.0021, 0.032), (0.0051, 0.08), (0.0058, 0.012)]
-        for radius, value in rings:
+        # Dense concentric rings stay outside the sclera between vertices; the old
+        # five-ring disc intersected the sphere and produced white iris artifacts.
+        rings = []
+        for ring in range(25):
+            iris_radius = 0.0058 * ring / 24
+            value = 0.001 if iris_radius < 0.0019 else (0.012 if iris_radius > 0.0053 else 0.065)
+            rings.append((iris_radius, value))
+        for iris_radius, value in rings:
             for segment in range(96):
                 angle = segment * math.tau / 96
-                z = math.sqrt(0.012 ** 2 - radius ** 2) + 0.00003
-                vertices.append(fitted(center + Vector((math.cos(angle) * radius, math.sin(angle) * radius, z))))
+                z = math.sqrt(radius ** 2 - iris_radius ** 2) + 0.00012
+                vertices.append(fitted(center + Vector((math.cos(angle) * iris_radius, math.sin(angle) * iris_radius, z))))
                 pigment = value * (0.8 + 0.2 * math.sin(segment * 13))
                 colors.append((pigment, pigment * 0.63, pigment * 0.31, 1))
         for ring in range(len(rings) - 1):
             for segment in range(96):
                 a, b = ring * 96 + segment, ring * 96 + (segment + 1) % 96
-                faces.append((a, b, b + 96, a + 96))
+                faces.append((a, a + 96, b + 96, b))
         mesh = bpy.data.meshes.new("Reference iris " + side)
         mesh.from_pydata(vertices, [], faces); mesh.update()
         obj = bpy.data.objects.new(mesh.name, mesh)
@@ -332,7 +355,7 @@ def native_rig(source, bind, names, objects):
     return arm
 
 
-def glb_metadata(path, report, skin_texture=None):
+def glb_metadata(path, report, skin_texture=None, surface=None, fabric=False):
     data = path.read_bytes()
     size = struct.unpack_from("<I", data, 12)[0]
     document = json.loads(data[20:20 + size])
@@ -341,6 +364,14 @@ def glb_metadata(path, report, skin_texture=None):
         document["images"] = [{"uri": "cc0/" + skin_texture.name}]
         document["textures"] = [{"source": 0}]
         document["materials"] = [{"name": "Hero anatomical skin reference", "pbrMetallicRoughness": {"baseColorTexture": {"index": 0}, "metallicFactor": 0, "roughnessFactor": 0.48}}]
+        document["meshes"][0]["primitives"][0]["material"] = 0
+    elif fabric:
+        document["images"] = [{"uri": "fabric/shirt-twill." + kind + ".png"} for kind in ["color", "normal", "arm"]]
+        document["textures"] = [{"source": i} for i in range(3)]
+        document["materials"] = [{"name": "Hero woven blue shirt", "pbrMetallicRoughness": {"baseColorTexture": {"index": 0}, "metallicFactor": 0, "roughnessFactor": 1, "metallicRoughnessTexture": {"index": 2}}, "normalTexture": {"index": 1, "scale": 0.6}, "occlusionTexture": {"index": 2}}]
+        document["meshes"][0]["primitives"][0]["material"] = 0
+    elif surface:
+        document["materials"] = [surface]
         document["meshes"][0]["primitives"][0]["material"] = 0
     encoded = json.dumps(document, separators=(",", ":")).encode()
     encoded += b" " * (-len(encoded) % 4)
@@ -385,7 +416,7 @@ def main():
     source = common.Source(DIRECTORY.parent / "player.gltf")
     original, uvs, faces, groups = source_mesh()
     positions, joints, weights, names, landmarks, raw_weights, bind, transforms = fit(original, groups, source)
-    head = {i for i, p in enumerate(original) if p.y > 0.705}
+    head = {i for i, p in enumerate(original) if p.y > 0.665}
     hands = {i for i, row in enumerate(raw_weights) if sum(w for bone, _, w in row if bone.startswith(("hand", "thumb", "index", "middle", "ring", "pinky"))) > 0.02}
     # Extend through the shirt cuff without importing the hidden body/helper cages.
     for side in ["l", "r"]:
@@ -405,28 +436,66 @@ def main():
         common.extract(duplicate, output, {"name": obj.name, "swatch": "skin"})
     # Blender/OBJ UV origin is bottom-left; glTF image coordinates are top-left.
     output["TEXCOORD_0"] = [[u, 1 - v] for u, v in output["TEXCOORD_0"]]
-    report = {"status": "reference candidate; not production accepted", "sourceInputs": receipts, "jointNames": names, "sourceId": "player", "sourceSHA256": source.digest(), "morphs": MORPHS, "landmarks": landmarks, "triangles": len(output["indices"]) // 3, "textureDimensions": list(skin.node_tree.nodes.get("Image Texture").image.size), "limitations": ["Eye geometry, eyelids and hair require authored integration", "Hands require native grip and finger silhouette review", "Diffuse reference lacks dedicated scanned roughness/normal maps", "Wardrobe still uses historical geometry; no AAA acceptance"]}
+    report = {"status": "reference candidate; not production accepted", "sourceInputs": receipts, "jointNames": names, "sourceId": "player", "sourceSHA256": source.digest(), "morphs": MORPHS, "landmarks": landmarks, "anatomyTriangles": len(output["indices"]) // 3, "textureDimensions": list(skin.node_tree.nodes.get("Image Texture").image.size), "limitations": ["Eyes, eyelids and hair require complete native close-up acceptance", "Hands require authored weapon contact poses and finger silhouette review", "Diffuse reference lacks dedicated scanned roughness/normal maps", "Vest, trousers and boots still use historical construction; new shirt requires native acceptance"]}
     common.write_glb(DIRECTORY / "hero-skin-reference.glb", output, report)
     glb_metadata(DIRECTORY / "hero-skin-reference.glb", report, next(CC0.glob("*.png")))
     (DIRECTORY / "reference-receipt.json").write_text(json.dumps(report, indent=2) + "\n")
     eyes = add_eyes(original, groups, transforms["head"])
+    eyes.extend(groom.eyebrows(original, faces, groups, transforms["head"]))
     bpy.ops.object.select_all(action="DESELECT")
     for obj in eyes:
         obj.select_set(True)
     eye_path = DIRECTORY / "hero-eyes-reference.glb"
     bpy.ops.export_scene.gltf(filepath=str(eye_path), export_format="GLB", use_selection=True, export_animations=False, export_cameras=False, export_lights=False, export_yup=True)
     glb_metadata(eye_path, report)
-    native_rig(source, bind, names, [head_object, hand_object, *eyes])
-    reference_scene([head_object, hand_object, *eyes])
+    cloth = wardrobe.fabric(DIRECTORY / "fabric")
+    collar = wardrobe.collar(bind["Neck"], names, common, cloth)
+    collar_output = common.output_arrays()
+    duplicate = collar.copy(); duplicate.data = collar.data.copy()
+    bpy.context.collection.objects.link(duplicate)
+    common.extract(duplicate, collar_output, {"name": "Folded Western shirt collar", "swatch": "linen"})
+    collar_path = DIRECTORY / "hero-collar-reference.glb"
+    original_body = next(source.bodies())
+    obsolete = [piece for piece in original_body["ranges"] if piece.get("swatch") == "linen" and not piece.get("name") and max(p[1] for p in original_body["attrs"]["POSITION"][piece["start"]:piece["start"] + piece["count"]]) > 1.43]
+    collar_report = {**report, "replaceRanges": obsolete, "trimTailoringAboveY": 1.4}
+    common.write_glb(collar_path, collar_output, collar_report)
+    glb_metadata(collar_path, collar_report, fabric=True)
+    sleeves = wardrobe.sleeves(bind, names, common, cloth)
+    sleeves.append(wardrobe.shirt(bind, names, common, cloth))
+    sleeve_output = common.output_arrays()
+    for obj in sleeves:
+        duplicate = obj.copy(); duplicate.data = obj.data.copy()
+        bpy.context.collection.objects.link(duplicate)
+        common.extract(duplicate, sleeve_output, {"name": obj.name, "swatch": "linen"})
+    sleeve_path = DIRECTORY / "hero-sleeves-reference.glb"
+    common.write_glb(sleeve_path, sleeve_output, report)
+    glb_metadata(sleeve_path, report, fabric=True)
+    hats = wardrobe.hat(bind["Head"])
+    bpy.ops.object.select_all(action="DESELECT")
+    hat_copies = []
+    transform = TO_BLENDER.to_4x4() @ bind["Head"].inverted() @ TO_BLENDER.transposed().to_4x4()
+    for obj in hats:
+        duplicate = obj.copy(); duplicate.data = obj.data.copy()
+        duplicate.data.transform(transform)
+        bpy.context.collection.objects.link(duplicate)
+        duplicate.select_set(True)
+        hat_copies.append(duplicate)
+    hat_path = DIRECTORY / "hero-hat-reference.glb"
+    bpy.ops.export_scene.gltf(filepath=str(hat_path), export_format="GLB", use_selection=True, export_animations=False, export_cameras=False, export_lights=False, export_yup=True)
+    glb_metadata(hat_path, {**report, "coordinateSpace": "Head local"})
+    for duplicate in hat_copies:
+        bpy.data.objects.remove(duplicate, do_unlink=True)
+    native_rig(source, bind, names, [head_object, hand_object, collar, *sleeves, *eyes, *hats])
+    reference_scene([head_object, hand_object, collar, *sleeves, *eyes, *hats])
     for image in bpy.data.images:
         if image.source == "FILE":
-            image.filepath = "//cc0/" + Path(image.filepath).name
+            image.filepath = "//" + str(Path(image.filepath).relative_to(DIRECTORY))
     bpy.context.preferences.filepaths.save_version = 0
     bpy.ops.wm.save_as_mainfile(filepath=str(DIRECTORY / "hero-reference.blend"), relative_remap=True)
     scene = bpy.context.scene
     scene.render.filepath = "/tmp/out-west-hero-foundation-head.png"
     bpy.ops.render.render(write_still=True)
-    print("HERO_REFERENCE", json.dumps({k: report[k] for k in ["triangles", "textureDimensions", "status"]}))
+    print("HERO_REFERENCE", json.dumps({k: report[k] for k in ["anatomyTriangles", "textureDimensions", "status"]}))
 
 
 if __name__ == "__main__":
