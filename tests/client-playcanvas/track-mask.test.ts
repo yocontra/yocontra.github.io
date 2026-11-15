@@ -35,7 +35,8 @@ it('retains animation events and a curve targeting both selected and excluded bo
   )
   const result = maskedTrack(track, { 'Armature/Root/Hips': { children: false } })
   expect(result.curves[0]?.paths).toEqual([selected])
-  expect(result.events).toEqual([{ time: 0.4, name: 'footstep', side: 'left' }])
+  const events = Array.isArray(result.events) ? result.events : result.events.events
+  expect(events).toEqual([{ time: 0.4, name: 'footstep', side: 'left' }])
   expect(shared.paths).toHaveLength(2)
   expect(result.inputs).toBe(track.inputs)
   expect(result.outputs).toBe(track.outputs)
