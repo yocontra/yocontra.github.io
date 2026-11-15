@@ -31,7 +31,7 @@ One integrator plus three workers, exclusive file ownership and isolated durable
 
 ## Outstanding qualification
 
-All 18 originally unchecked TODO items retain their acceptance requirements. Complete arm runtime lifecycle, masks, shadows, framing, action timing and Dead-Eye; material/animal/environment/parity work; receive-only voice; all four performance requirements; final source/content review and verified release. Reassess checked art/audio work against the photoreal direction.
+Thirteen TODO items remain unchecked after verified arm pipeline, masks, Dead-Eye and receive-only voice updates. The live SFU caveat remains explicit. Complete arm runtime lifecycle, masks, shadows, framing, action timing and Dead-Eye; material/animal/environment/parity work; receive-only voice; all four performance requirements; final source/content review and verified release. Reassess checked art/audio work against the photoreal direction.
 
 Current diagnostics live under `/tmp/out-west-*`; archive accepted evidence durably before release. The first-person probe was initially invalidated by concurrent asset regeneration/HMR and is being rerun on stable files. Simulator results do not establish physical-phone performance.
 
@@ -41,7 +41,24 @@ Pinned Bun 1.3.14 broad candidate suite: 369 pass, zero failures. Host Bun 1.4.4
 
 - Native LOD import regression `6b29d0c7` fixes PlayCanvas unique-name suffixes corrupting hysteresis. `39c09372` publishes `frontier-detail.glb` while retaining the old Frontier container exactly. Real native 32-player/gameplay probe passes with zero browser errors; compatibility/import tests pass. This is functional evidence, not final performance qualification.
 - `f89614ef` preserves the public lobby ID from admission rather than leaking Colyseus internal room identity. Real Worker fixture verification is assigned to QA.
-- Scanned siding is staged only. First candidate rejected as washed-out orange; calibrated revision pending native day/dusk/night review. No collision changes.
-- Hero head/hands candidate uses pinned CC0 anatomical sources and the canonical rig; native preview caught a UV convention error and remains unaccepted.
+- Calibrated scanned siding is integrated in `1bb78bb7` after native day/dusk/night review; the first washed-out candidate was rejected. Frontier is now about 46 MiB and still needs final performance qualification. Earth-plaster mission surfaces remain staged; close-up review and physical-scale calibration are in progress. No collision changes.
+- Hero authoring checkpoint `986c6ba3` retains CC0 anatomical sources, editable Blender scene and native preview tooling. Production character assets remain unchanged. Native close-ups caught collar, hat, eye and weapon-grip defects; full clothing/material/animation acceptance remains open. Headless Blender is the preferred authoring path.
 - Audio source candidates are being blindly compared. First black-powder report candidate was rejected; no poor candidate was promoted.
 - Full suite passed on pinned Bun before the latest LOD changes; final combined check/build still required. Source/tools typechecks pass after lobby identity repair.
+
+## Current qualification receipts
+
+- First-person native portrait/landscape feedback passes all three weapons, standing/crouched hip/sights, physical eye alignment and Dead-Eye charging/ready/release. Outfit swap allocation counts remain stable. Final hip framing and complete action/cancellation coverage remain open.
+- Footstep slot selection now filters stationary/sliding riders before limiting moving enemies (`6584272e`, CI regression `883ff2cc`). New dense-firefight audio remains unaccepted; ordinary and clustered comparisons must use matching review prompts and event loads.
+- Full pinned-Bun suite passed in 153.6 seconds; remaining formatting failures were corrected and Biome passed. Final combined check is still required after current changes.
+- The first 60-second Chrome diagnostic measured 99.40 mean FPS and 83 minimum full-second FPS, but its foreground observer could miss app switches. Continuous-foreground qualification was withdrawn. `f85e710e` fixes the observer; a new run is required. Desktop qualification now requires mean >=58 FPS and every full second >=55, separately from simulator >=30.
+- Dedicated iPhone 13 mini simulator reaches the authenticated game through an unshipped local Turnstile test fixture. No accepted simulator frame receipt yet; host foreground verification remains unresolved. Simulator evidence will not establish physical-device performance.
+- All 94 historical non-native GLBs remain byte-identical to `62b0e5e`. Evidence copies are retained under `/Users/contra/Projects/out-west-evidence/20261114`.
+
+## Remaining recovered-branch dispositions
+
+- `swarm/character` contains optional source material ideas and 588 stale generated files; do not merge its generated output. New hero authoring uses the current canonical rig.
+- `swarm/combat-feel-2` changes touch aim assistance; rejected under the approved balance-preservation boundary.
+- `304ac400` combines tracer changes with aim assistance; no blanket merge. Any visual-only extraction needs an independent native review.
+- `bb08e308` adds bullet decals, surface lookup and a wire-protocol revision. Deferred from current integration until contract, rendering and performance review; coordinated Worker-first delivery is required if accepted.
+- Missing worktree metadata and reflog-only commits remain archived. Nothing has been pruned.
