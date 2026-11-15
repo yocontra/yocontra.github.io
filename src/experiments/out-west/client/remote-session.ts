@@ -176,6 +176,7 @@ async function connectOnce(
     prediction = createSimulation({ ammo: await loadAmmo(), collision })
     return connectSession(room, self, prediction, {
       ...options,
+      lobbyId: reservation.lobbyId,
       initialBanked: reservation.banked,
     })
   } catch (error) {
@@ -189,7 +190,7 @@ function connectSession(
   room: Room<unknown, FrontierState>,
   self: PlayerRecord,
   physics: ReturnType<typeof createSimulation>,
-  options: RemoteSessionOptions & { initialBanked: number },
+  options: RemoteSessionOptions & { initialBanked: number; lobbyId: string },
 ): FrontierSession {
   const world = createWorld()
   const selfId = self.id
@@ -295,7 +296,7 @@ function connectSession(
     selfId,
     selfSlot,
     practice: false,
-    lobbyId: room.roomId,
+    lobbyId: options.lobbyId,
     control: (text) => room.send('control', JSON.parse(text)),
     subscribeControl(listener) {
       controls.add(listener)
