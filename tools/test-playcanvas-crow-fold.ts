@@ -55,7 +55,7 @@ try {
             anim.baseLayer.activeStateCurrentTime = at
             anim.update(0)
             anim.playing = false
-            game.camera.setPosition(...(angle === 'side' ? [0.65, 0.27, 0.38] : [0.08, 0.9, 0.08]))
+            game.camera.setPosition(...(angle === 'side' ? [0.9, 0.35, 0.5] : [0.08, 1.3, 0.08]))
             game.camera.lookAt(0, 0.1, 0)
             game.camera.camera.fov = 35
             game.camera.camera.nearClip = 0.01
@@ -111,7 +111,7 @@ try {
             anim.update(0.075)
           }
           anim.playing = false
-          game.camera.setPosition(0.08, 0.9, 0.08)
+          game.camera.setPosition(0.08, 1.3, 0.08)
           game.camera.lookAt(0, 0.1, 0)
           for (let i = 0; i < 3; i++) {
             await new Promise(requestAnimationFrame)
