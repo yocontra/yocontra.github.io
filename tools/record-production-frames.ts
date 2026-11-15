@@ -5,6 +5,7 @@ import { arch, cpus, platform, release, tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { chromium } from 'playwright'
 import { installFrameRecorder } from './content/frame-recorder.ts'
+import { frameTarget } from './content/frame-target.ts'
 import { frameTiming } from './content/frame-timing.ts'
 import {
   type BuildReceipt,
@@ -326,13 +327,10 @@ try {
     end: last,
   })
   const qualified = problems.length === 0 && fixtureProblems.length === 0
+  const target = timing ? frameTarget(timing, 'desktop') : null
   let performanceTarget = 'unqualified'
-  if (qualified && timing) {
-    performanceTarget =
-      timing.fps >= 30 &&
-      timing.bins.filter((bin) => bin.durationMs === 1000).every((bin) => bin.fps >= 30)
-        ? 'pass'
-        : 'fail'
+  if (qualified && target) {
+    performanceTarget = target.passed ? 'pass' : 'fail'
   }
   const report = {
     source,
@@ -349,6 +347,7 @@ try {
     recordingClass: problems.length === 0 ? 'foreground-production-recording' : 'diagnostic',
     qualification: qualified ? 'complete' : 'incomplete',
     performanceTarget,
+    target,
     outstandingEvidence: fixtureProblems,
     build,
     authority,
