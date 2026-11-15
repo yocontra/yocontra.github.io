@@ -110,7 +110,7 @@ try {
   const townRelease = deferred()
   const gunRequested = deferred()
   const gunRelease = deferred()
-  await target.route('**/3d/**/frontier.glb?*', async (route) => {
+  await target.route('**/3d/**/frontier*.glb?*', async (route) => {
     townRequested.resolve()
     await townRelease.promise
     await route.continue().catch(() => undefined)

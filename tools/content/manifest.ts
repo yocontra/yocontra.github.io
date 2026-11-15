@@ -63,7 +63,9 @@ export async function buildManifest(): Promise<void> {
     ...Array.from({ length: 17 }, (_, i) => `outlaw-${i}`),
   ]
   for (const name of names) {
-    const url = `/experiments/out-west/3d/native-v2/baked/${name}.glb`
+    // Earlier clients do not select LOD variants and must retain their single-detail container.
+    const filename = name === 'frontier' ? 'frontier-detail' : name
+    const url = `/experiments/out-west/3d/native-v2/baked/${filename}.glb`
     const bytes = await readFile(`public${url}`)
     const hash = createHash('sha256').update(bytes).digest('hex')
     assets[name] = { url: `${url}?v=${hash.slice(0, 16)}`, hash, bytes: bytes.byteLength }

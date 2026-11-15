@@ -453,7 +453,7 @@ export async function publishFrontier(directory: string): Promise<void> {
     [join(directory, 'collision.json'), 'src/experiments/out-west/content/collision.json'],
     [
       join(directory, 'baked/frontier.glb'),
-      'public/experiments/out-west/3d/native-v2/baked/frontier.glb',
+      'public/experiments/out-west/3d/native-v2/baked/frontier-detail.glb',
     ],
     [ambient, 'public/experiments/out-west/3d/native-v2/ambient/frontier-tumbleweeds.glb'],
   ] as const

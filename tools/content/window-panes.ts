@@ -5,7 +5,7 @@ import { ALL_EXTENSIONS } from '@gltf-transform/extensions'
 import { prune } from '@gltf-transform/functions'
 import { buildGrid, TOWN, type TownLayout } from '../../src/experiments/out-west/ffa/sim/layout.ts'
 
-const path = process.argv[2] ?? 'public/experiments/out-west/3d/native-v2/baked/frontier.glb'
+const path = process.argv[2] ?? 'public/experiments/out-west/3d/native-v2/baked/frontier-detail.glb'
 const configuration = process.argv[3]
   ? JSON.parse(await readFile(process.argv[3], 'utf8'))
   : undefined

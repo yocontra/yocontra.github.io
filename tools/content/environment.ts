@@ -31,7 +31,11 @@ const preserveTextures = process.argv.includes('--preserve-textures')
 
 await mkdir(output, { recursive: true })
 for (const name of names.filter((candidate) => !only || candidate === only)) {
-  const path = join(output, `${name}.glb`)
+  const filename =
+    name === 'frontier' && output === 'public/experiments/out-west/3d/native-v2/baked'
+      ? 'frontier-detail'
+      : name
+  const path = join(output, `${filename}.glb`)
   await copyFile(join(source, `${name}.glb`), path)
   if (name === 'frontier') {
     const authored = await io.read(path)
