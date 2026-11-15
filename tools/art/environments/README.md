@@ -64,3 +64,26 @@ Their visible native cubemaps
 use 1024px faces; daytime faces remain 256px. Lighting convolution stays at 128px
 with a 256px atlas. Source HDR textures are released after convolution, and only
 the current sky and lighting outputs remain allocated.
+
+## Crow fold authoring candidate
+
+`crow-articulated-base.glb` freezes the current native bird as an offline input,
+including its existing external texture URLs. `crow-fold-authoring.py` runs in
+headless Blender, replaces the rectangular wing plates with layered coverts, adds
+shoulder/elbow/wrist skinning, and bakes a corrective shape to close the feather fan.
+The native two-second Idle/Fly/Gun_Shoot clips remain separate from the campaign
+crow cue's three-second Gun_Shoot contract. Historical public GLBs are unchanged.
+
+```sh
+blender --background --factory-startup --python tools/content/crow-fold-authoring.py
+OW_ORIGIN=http://127.0.0.1:4389 bun tools/test-playcanvas-crow-fold.ts
+```
+
+The output defaults to `/tmp/out-west-crow-fold/crow.glb`; the browser probe is
+headless and route-fulfills that candidate without overwriting production content.
+Its poses, native skin bindings, fold transitions and corrective endpoints need
+review before promotion. Earlier candidates were rejected for stretched plates,
+open feather fans and atlas sampling outside the intended feather island. The
+latest leading-edge overlap and transition captures remain pending. This is not
+AAA art acceptance: body plumage, flight shape and complete scene coverage still
+need review. No reference photographs are embedded in the asset.
