@@ -1,4 +1,3 @@
-// biome-ignore-all lint/suspicious/noMisplacedAssertion: this CLI verifies native browser audio, outside Bun's DOM-free test runner.
 /**
  * Measure front/back footstep cues and the audio-thread cost of six native positional voices.
  * Uses public SoundInstance3d.panner and standard Web Audio; no renderer internals.
@@ -8,7 +7,6 @@
  * The isolated audio graph does not establish a mobile budget: repeat the full game on target
  * devices before accepting its performance. CDP renderCapacity values are reported unchanged.
  */
-import assert from 'node:assert/strict'
 import { mkdir, writeFile } from 'node:fs/promises'
 import type { SoundInstance3d, SoundManager } from 'playcanvas'
 import { chromium } from 'playwright'
@@ -17,6 +15,12 @@ interface Probe {
   manager: SoundManager
   voices: SoundInstance3d[]
   set: (model: PanningModelType, count: number) => void
+}
+
+function check(condition: boolean, message: string): void {
+  if (!condition) {
+    throw new Error(message)
+  }
 }
 
 const origin = process.env.OW_ORIGIN ?? 'http://127.0.0.1:4400'
@@ -123,11 +127,14 @@ try {
     } satisfies Probe)
     return { nativeDefault, results }
   })
-  assert.equal(cues.nativeDefault, 'equalpower')
-  assert.ok((cues.results.equalpower?.frontBackDifference ?? 1) < 1e-12)
-  assert.ok((cues.results.HRTF?.frontBackDifference ?? 0) > 0.05)
-  assert.ok((cues.results.HRTF?.leftEarDb ?? 0) > 1)
-  assert.ok((cues.results.HRTF?.rightEarDb ?? 0) < -1)
+  check(cues.nativeDefault === 'equalpower', 'Native panning default changed')
+  check(
+    (cues.results.equalpower?.frontBackDifference ?? 1) < 1e-12,
+    'Equalpower front/back control differs',
+  )
+  check((cues.results.HRTF?.frontBackDifference ?? 0) > 0.05, 'HRTF front/back cue missing')
+  check((cues.results.HRTF?.leftEarDb ?? 0) > 1, 'HRTF left cue missing')
+  check((cues.results.HRTF?.rightEarDb ?? 0) < -1, 'HRTF right cue missing')
   const cost: { voices: number; model: PanningModelType; mean: number; max: number }[] = []
   for (const count of [0, 3, 6]) {
     for (const model of ['equalpower', 'HRTF'] as const) {
