@@ -1,4 +1,5 @@
 import { spyOn } from 'bun:test'
+// biome-ignore lint/performance/noNamespaceImport: spyOn must replace the live production export; this fixture is never bundled.
 import * as shots from '../../src/experiments/out-west/client/shot-visuals.ts'
 import { OUTLAWS } from '../../src/experiments/out-west/data/outlaws.ts'
 import { LocalDuelClock } from '../../src/experiments/out-west/duel/clock.ts'
