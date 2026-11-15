@@ -4,11 +4,6 @@ import CoreGraphics
 import Foundation
 
 let seconds = Double(CommandLine.arguments.dropFirst().first ?? "65") ?? 65
-if let activation = CommandLine.arguments.first(where: { $0.hasPrefix("--activate-bundle=") }) {
-    let bundle = String(activation.dropFirst("--activate-bundle=".count))
-    NSRunningApplication.runningApplications(withBundleIdentifier: bundle).first?.activate(options: [.activateAllWindows])
-    RunLoop.current.run(until: Date().addingTimeInterval(0.25))
-}
 let started = Date()
 repeat {
     let front = NSWorkspace.shared.frontmostApplication

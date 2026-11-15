@@ -19,7 +19,11 @@ const argument = (name: string, fallback = '') =>
   process.argv.find((value) => value.startsWith(`--${name}=`))?.slice(name.length + 3) ?? fallback
 const url = argument('url')
 const seconds = Number(argument('seconds', '60'))
-const headless = process.argv.includes('--headless')
+const visible = process.argv.includes('--visible')
+const headless = !visible
+if (visible && process.argv.includes('--headless')) {
+  throw new Error('Choose either --visible or --headless')
+}
 const manual = process.argv.includes('--manual')
 const output = argument('out', join(tmpdir(), `out-west-frames-${Date.now()}`))
 const population = argument('population', 'ordinary')
@@ -100,7 +104,7 @@ try {
   const processes = await browserProtocol.send('SystemInfo.getProcessInfo')
   const browserPid = processes.processInfo.find((process) => process.type === 'browser')?.id
   const browserVersion = await browserProtocol.send('Browser.getVersion')
-  const page = await browser.newPage({ viewport: headless ? { width: 1280, height: 800 } : null })
+  const page = await browser.newPage({ viewport: headless ? { width: 1280, height: 713 } : null })
   page.on('pageerror', (error) => errors.push(error.message))
   page.on('response', (response) => {
     const path = new URL(response.url()).pathname
@@ -159,7 +163,9 @@ try {
     null,
     { timeout: 120_000 },
   )
-  await page.bringToFront()
+  if (visible) {
+    await page.bringToFront()
+  }
   const canvas = page.locator('canvas').first()
   await canvas.click()
   await page.waitForFunction(

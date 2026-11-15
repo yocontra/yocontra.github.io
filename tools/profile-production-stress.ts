@@ -12,14 +12,17 @@ const origin = option('url', 'http://127.0.0.1:4398')
 const api = option('api', 'http://127.0.0.1:8798')
 const output = option('out', '/tmp/out-west-production-stress-profile')
 const seconds = Number(option('seconds', '30'))
+const visible = process.argv.includes('--visible')
 await mkdir(output, { recursive: true })
-const browser = await chromium.launch({ channel: 'chrome', headless: false })
+const browser = await chromium.launch({ channel: 'chrome', headless: !visible })
 const errors: string[] = []
 try {
   const page = await browser.newPage({ viewport: { width: 1280, height: 713 } })
   page.on('pageerror', (error) => errors.push(error.message))
   const fixture = await prepareProductionFixture(page, origin, api, true)
-  await page.bringToFront()
+  if (visible) {
+    await page.bringToFront()
+  }
   await page.locator('canvas').first().click()
   await page.screenshot({ path: join(output, 'before.png') })
   const cdp = await page.context().newCDPSession(page)
@@ -63,6 +66,7 @@ try {
   const build = await (await fetch(new URL('/recording-build.json', origin))).json()
   const report = {
     classification: 'diagnostic-production-profile',
+    surface: visible ? 'visible-chrome' : 'headless-chrome',
     samplingIntervalMicroseconds: 200,
     overhead:
       'Chrome sampling profiler active throughout; these timings are not acceptance evidence',

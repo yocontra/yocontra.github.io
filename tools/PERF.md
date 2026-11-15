@@ -60,8 +60,11 @@ bun tools/record-production-frames.ts --url=http://127.0.0.1:4398 --api=http://1
 bun tools/record-production-frames.ts --url=http://127.0.0.1:4398 --api=http://127.0.0.1:8798 --population=stress --out=/tmp/out-west-stress
 ```
 
-The default is visible Chrome and 60 seconds. `--manual` replaces automated movement/aim/fire
-with real operator input. `--headless` and recordings shorter than 60 seconds are always
+The default is headless Chrome and 60 seconds. It cannot control the desktop pointer or activate
+an application. `--visible` is a deliberate opt-in for a separately scheduled foreground session;
+do not use it during ongoing desktop use. Current work remains headless-only, with foreground
+and simulator acceptance pending. `--manual` replaces automated movement/aim/fire with real
+operator input. Headless runs and recordings shorter than 60 seconds are always
 diagnostics. The ordinary case requires one authenticated human and four bots; stress requires
 one human and 31 explicitly synthetic server bots. Both require all corresponding native models
 loaded without fallbacks. The unshipped Worker stages a glass break at 10 seconds, environmental
@@ -105,6 +108,12 @@ The saved simulator receipt deliberately remains incomplete until joined with th
 trace, simulator UDID/runtime, window screenshots and visual review. This path provides no
 physical-device, thermal, A15 or memory-pressure certification. Leave unrelated running
 simulators untouched; use a dedicated Out West QA device.
+
+The foreground observer runs the main run loop so NSWorkspace can deliver app changes.
+It only observes; it never activates an application.
+A PID of -1 or zero on-screen windows is invalid foreground evidence. CUA background windows can be visible in tool captures while absent from
+the host's on-screen window list; retain those runs as diagnostics. Host load averages and logical
+processor count accompany each sample to expose contention without attributing it to the game.
 
 The older DEV-hook regression commands remain useful separately:
 
