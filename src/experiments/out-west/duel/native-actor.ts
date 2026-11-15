@@ -268,7 +268,10 @@ export class DuelActor {
     }
     if (name === this.current) {
       if (ONE_SHOT.test(name)) {
-        this.model.anim?.baseLayer?.play(name)
+        // Keep the controller's blend history intact. play(name) discards its
+        // clips while an interrupted blend can still reference those clips.
+        this.model.anim.baseLayer.transition(name, 0)
+        this.model.anim.update(0)
       }
       return
     }
