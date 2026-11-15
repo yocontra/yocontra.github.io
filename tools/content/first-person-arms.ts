@@ -11,10 +11,12 @@ import {
   type Skin,
 } from '@gltf-transform/core'
 import { ALL_EXTENSIONS } from '@gltf-transform/extensions'
-import { compactPrimitive, prune } from '@gltf-transform/functions'
+import { compactPrimitive, prune, unpartition } from '@gltf-transform/functions'
 import { Mat4, Vec3 } from 'playcanvas'
 import { CATALOG } from '../../src/experiments/out-west/data/catalog.ts'
+import { validateAuthoringInputs } from './authoring-inputs.ts'
 import type { Range } from './character-atlas.ts'
+import { appendClips } from './character-clips.ts'
 import { integrateGarmentParts } from './garment-parts.ts'
 import { fitWaistcoats } from './waistcoat-fit.ts'
 
@@ -343,12 +345,18 @@ export async function extractFirstPersonArms(id: string) {
       node.dispose()
     }
   }
+  // Container-local clips take precedence over shared moves only for this isolated arms actor.
+  const posesPath = resolve('tools/art/characters/first-person-poses.glb')
+  const poses = await io.read(posesPath)
+  await validateAuthoringInputs(poses)
+  appendClips(doc, poses)
   const sourceBuffers = await Promise.all(sourceBufferPaths.map((path) => readFile(path)))
   const sourceInputs = await Promise.all(
     [
       sourcePath,
       ...sourceBufferPaths,
       nativePath,
+      posesPath,
       ...authoredInputs,
       import.meta.path,
       ...[
@@ -357,6 +365,7 @@ export async function extractFirstPersonArms(id: string) {
         'waistcoat-fit.ts',
         'waistcoat-pattern.json',
         'authoring-inputs.ts',
+        'character-clips.ts',
       ].map((helper) => resolve(import.meta.dir, helper)),
     ]
       .toSorted((a, b) => a.localeCompare(b))
@@ -378,7 +387,7 @@ export async function extractFirstPersonArms(id: string) {
     surfaces,
   }
   doc.getRoot().setExtras({ ...doc.getRoot().getExtras(), firstPersonArms: provenance })
-  await doc.transform(prune({ keepAttributes: true, keepLeaves: true }))
+  await doc.transform(prune({ keepAttributes: true, keepLeaves: true }), unpartition())
   const bytes = await io.writeBinary(doc)
   return {
     bytes,

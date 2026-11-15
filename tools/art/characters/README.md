@@ -25,6 +25,17 @@ the shared clips if its source fingerprint changes:
 blender --background --factory-startup --python tools/content/tip-hat-authoring.py
 ```
 
+First-person long guns use separate elbow poses baked from the completed shared
+moves. Their wrists, fingers, gun and body channels retain the world poses and
+full recoil clocks; only the viewmodel containers embed these clip overrides.
+Regenerate in this order after changing the shared moves:
+
+```
+blender --background --factory-startup --python tools/content/first-person-poses-authoring.py
+bun tools/content/first-person-arms.ts --publish
+bun tools/content/manifest.ts
+```
+
 `character-materials.ts` evaluates the original masked recolor operation in linear
 light into cropped PBR albedos, retains source texel density, bakes fabric roughness,
 and emits lazy finite dye albedos. Skin, hair, eyes and uncolored details share the

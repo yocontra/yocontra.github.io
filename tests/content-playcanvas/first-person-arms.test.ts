@@ -37,12 +37,14 @@ function triangles(primitive: Primitive): string[] {
     JSON.stringify([0, 1, 2].map((c) => vertex(primitive, indices.getScalar(face * 3 + c)))),
   )
 }
-function clips(doc: Document): string {
+function clips(doc: Document, names?: ReadonlySet<string>): string {
   return JSON.stringify(
     doc
       .getRoot()
       .listAnimations()
-      .filter((clip) => !clip.getName().startsWith('Weapon_'))
+      .filter(
+        (clip) => !clip.getName().startsWith('Weapon_') && (!names || names.has(clip.getName())),
+      )
       .map((clip) => ({
         name: clip.getName(),
         extras: clip.getExtras(),
@@ -73,6 +75,7 @@ for (const [id, faces, vertices] of [
         : ['coat-sleeves', 'boot-bridges', 'coat-collars', 'shirt-fronts']
     const expectedInputs = [
       nativePath,
+      'tools/art/characters/first-person-poses.glb',
       `tools/art/characters/${id}.gltf`,
       `tools/art/characters/${id}.bin`,
       ...categories.map((category) => `tools/art/characters/${category}/${id}.glb`),
@@ -83,6 +86,7 @@ for (const [id, faces, vertices] of [
         'waistcoat-fit.ts',
         'waistcoat-pattern.json',
         'authoring-inputs.ts',
+        'character-clips.ts',
       ].map((helper) => `tools/content/${helper}`),
     ]
     expect(inputs.map((entry) => entry.path)).toEqual(
@@ -112,7 +116,19 @@ for (const [id, faces, vertices] of [
       }
       expect(material).toEqual(original)
     }
-    expect(clips(output)).toBe(clips(input))
+    const originalClips = new Set(
+      input
+        .getRoot()
+        .listAnimations()
+        .map((clip) => clip.getName()),
+    )
+    expect(clips(output, originalClips)).toBe(clips(input))
+    expect(
+      output
+        .getRoot()
+        .listAnimations()
+        .filter((clip) => clip.getExtras().firstPersonPose),
+    ).toHaveLength(8)
     expect(
       output
         .getRoot()
