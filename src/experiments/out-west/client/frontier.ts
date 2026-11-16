@@ -58,6 +58,7 @@ export function mountNativeFrontier(
   status.append(art, title, message)
   let presentation: FrontierHud | undefined
   let voice: FrontierVoice | undefined
+  let removePerformanceSnapshot: (() => void) | undefined
   let started = false
   const exit = (reason: 'left' | 'quit' | 'lost' | 'refused', detail?: string): void => {
     destroy()
@@ -134,6 +135,12 @@ export function mountNativeFrontier(
       if (import.meta.env.DEV) {
         Reflect.set(globalThis, '__nativeFrontierSession', session)
       }
+      if (import.meta.env.PUBLIC_OW_PERF_HARNESS === '1') {
+        const { performanceSnapshot } = await import('./performance-snapshot.ts')
+        if (!lifecycle.signal.aborted) {
+          removePerformanceSnapshot = performanceSnapshot(session, game)
+        }
+      }
       return session
     },
     onStage(text) {
@@ -179,6 +186,7 @@ export function mountNativeFrontier(
       return
     }
     lifecycle.abort()
+    removePerformanceSnapshot?.()
     presentation?.destroy()
     voice?.destroy()
     game.destroy()

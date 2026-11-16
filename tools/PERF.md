@@ -1,37 +1,96 @@
 # Out West native performance evidence
 
-The target is at least 30 FPS sustained on an iPhone 13 mini, including a full 32-player town.
-Use the iPhone 13 mini simulator and Safari as the requested acceptance and regression surface.
-Record its host GPU and simulator/iOS versions: simulator results describe that environment,
-not guaranteed A15 performance, memory pressure or thermal behavior. Desktop Chromium with
-CPU throttling remains a separate regression proxy.
+Current runs are headless only. They must not open or activate Simulator.app, DeviceHub or a
+Mac browser window, take the host cursor, use a real microphone, or contact voice providers.
+The simulator target is sustained 30 FPS on the dedicated iPhone 13 mini QA simulator; a
+separate desktop target is 58 average FPS with every complete one-second bin at least 55 FPS.
+Neither a headless Chrome diagnostic nor a two-second capability preflight completes those
+qualifications. Simulator GPU, iOS runtime and host load also differ from a physical A15 phone.
 
-The 2026-11-08 interim production-mode Safari checkpoint used the release engine on the simulator's
-Apple GPU at an 812×265 canvas and resolution scale 1. Ordinary remote play (one human and four bots)
-measured a median 22.98 FPS and 299 draws; the explicitly synthetic 32-rider fixture measured 15.37 FPS
-and 430 draws. Turning its HUD off did not improve performance. Host foreground/presentation state
-was not verified, so these are diagnostics, not acceptance evidence. They preceded the final
-vest/mount artifact refresh; retain their source/content hashes before comparing another build.
-Development builds resolve PlayCanvas's debug engine and are diagnostic evidence, so acceptance
-measurements must use a production build with the release engine.
+Use the actual local D1/DO fixture and release-engine build, on a committed, clean revision:
 
-A later minimal recorder measured 15.94 rAF/s over 30 seconds in the release-engine 32-rider scene
-(p95 80 ms, p99 87 ms), versus 59.97 rAF/s in an empty DOM control. Safari reported visible/focused,
-but the host's frontmost application was loginwindow. Separate WebGL clear and empty native-engine
-controls reached about 60 rAF/s with different settled buffer dimensions. These observations do not
-establish foreground acceptance or isolate a rendering bottleneck. The 30 FPS target remains open.
+```sh
+bunx wrangler d1 migrations apply out-west-native-test --local --config api/test/wrangler.native-test.jsonc
+bunx wrangler dev --local --config api/test/wrangler.native-test.jsonc --port 8798 --inspector-port 9258 --var 'ALLOWED_ORIGINS:http://127.0.0.1:4398'
+bun tools/serve-production-recording.ts --port=4398 --api=http://127.0.0.1:8798
+```
 
-For acceptance, verify the actual device window and host foreground state before and after the run.
-Xcode 27 uses DeviceHub; absence of the older Simulator.app process does not establish headless operation.
-Record frozen source/content hashes, release-engine resolution, renderer, CSS and drawing-buffer
-dimensions, DPR, resolution scale and native MSAA samples. Close competing jobs and inspector,
-profiler, recorder and interaction-observer sessions. Use a minimal timestamp recorder during the
-measurement; collect expensive counters separately. Compare the same camera, population, scene state
-and adaptive-resolution policy. Preserve all stalls and report frame percentiles and the lowest
-rolling one-second rate. Include at least 60 active seconds of movement, firing, death/respawn and
-window break/reset before longer lifecycle runs.
+The Worker configuration must explicitly report fixture=true and voiceDisabled=true. Both QA
+browser bootstraps force voiceChat off before game initialization, reject every getUserMedia
+call without invoking native capture, and record the call count. They preserve and restore the
+exact prior origin settings, including a retained Safari setting; other gameplay audio runs.
+No global privacy settings are changed. QA auth is an ephemeral signed local account consumed
+from session storage, and Turnstile uses the documented test key/token with server verification.
+No account token or WebSocket ticket is printed in receipts.
 
-Use these desktop/DEV-hook regression tools against a development server:
+The builder hashes served JavaScript and the content manifest, records the source revision and
+clean/dirty state, and verifies the release engine using hidden source maps. Explicit
+PUBLIC_OW_PERF_HARNESS=1 adds only a read-only native snapshot; mutable DEV globals remain absent.
+Check the ordinary build separately; it must strip the snapshot and QA credential entry point:
+
+```sh
+bun tools/serve-production-recording.ts --public --build-only --out=/tmp/out-west-public-check
+```
+
+Run the two cases sequentially, without competing builds, native probes or CPU producers:
+
+```sh
+bun tools/record-production-frames.ts --url=http://127.0.0.1:4398 --api=http://127.0.0.1:8798 --population=ordinary --out=/tmp/out-west-ordinary
+bun tools/record-production-frames.ts --url=http://127.0.0.1:4398 --api=http://127.0.0.1:8798 --population=stress --out=/tmp/out-west-stress
+```
+
+The default is headless Chrome for 60 seconds; automated trusted browser input moves, aims down
+sights and fires. The normal lobby keeps one authenticated human plus four bots. The stress
+fixture deliberately raises only its test Worker room to 31 synthetic bots plus one human;
+it does not establish 32-human network behavior. Starts are selected with the actual town grid,
+player radius and pairwise clearance checks. Normal production and practice bot limits stay four.
+All 5 or 32 native models must be loaded without fallback before recording starts.
+
+The test Worker stages glass break at 10 seconds, environmental death at 20 seconds and pane
+reset at 35 seconds. Natural room ticks, respawn and real movement/firing continue. Receipts
+compare authority with delivered lifecycle events/native pane state and require authoritative
+ADS input, so scripted interventions cannot be mistaken for natural combat coverage.
+
+Every frame interval is retained, including long stalls, empty one-second bins and the partial
+last bin. Receipts include percentiles, trusted input, once-per-second game/audio/WebGL state,
+DPR, drawing-buffer size, MSAA, renderer, exact scripts/build provenance and before/after images.
+Explicit graphics create/delete counters are not live VRAM or GC measurements. This observer's
+cost is part of the measurement. Mac foreground sampling is read-only and remains diagnostic
+in headless runs; no Mac foreground claim is manufactured from visible/focused page state.
+The optional --visible mode is for a separately authorized foreground session, not current work.
+
+First establish whether Safari can run and receive trusted guest touches without opening any
+host simulator UI. The bounded orchestrator refuses existing or unrelated simulator sessions:
+
+```sh
+bun tools/record-simulator-frames.ts --preflight --url=http://127.0.0.1:4398 --out=/tmp/out-west-simulator-preflight
+```
+
+It selects only the shutdown Out West QA device, boots via simctl, starts its own headless
+idb_companion on a free port, verifies the actual iPhone-13-mini device type, allows up to180s
+for cold boot, opens the local URL in guest Safari and reads raw guest AX/process
+state. Touches use guest HID coordinates derived from native WebArea/button frames and the
+browser viewport; unsupported schemas stop without guessed coordinates. It saves two seconds
+of rAF, visibility/focus/URL, audio and GL state plus trusted input, native app identity/PID and
+guest screenshots. RUNNING alone is not foreground evidence. Missing native identity or any
+other capability is an explicit diagnostic, even if browser timing succeeds. It restores this
+origin's settings with a guest acknowledgement, stops only its own companion and shuts down
+only the device it booted. Raw calls and failures are retained; earlier outputs are not replaced.
+
+This preflight never automatically starts a 60-second simulator qualification. After reviewing
+its native evidence, the same local server offers a 60-second Safari recorder at /__qa/start
+(or ?population=stress), with real guest gameplay touches required throughout. Its receipt
+remains incomplete until independently joined with matching native guest visibility/identity,
+UDID/runtime, source/content and input coverage. Mac foreground and physical-device acceptance
+are separate, unfinished qualifications.
+
+Historical November 8 simulator traces (ordinary median22.98FPS, packed15.37FPS; later minimal
+recorder15.94rAF/s) lacked verified presentation/foreground and preceded later asset changes.
+They remain diagnostics. Historical foreground receipts require coverage of both measurement
+boundaries with no gap over1.75seconds and the same process; an old sample-count threshold does
+not justify discarding gaps. No current performance outcome is inferred from those receipts.
+
+The older DEV-hook regression commands remain useful separately:
 
 ```sh
 bun tools/test-playcanvas-duel.ts http://localhost:4389

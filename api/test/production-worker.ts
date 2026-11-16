@@ -14,12 +14,32 @@ import type { NativeFrontierRoom } from '../src/game/room.ts'
 import worker from '../src/index.ts'
 import type { LobbyCore } from '../src/town/core.ts'
 import { Lobby as ProductionLobby } from '../src/town/lobby.ts'
+import { PerformanceProbe, packedFixturePositions } from './performance-probe.ts'
 import type { SettlementProbe } from './settlement-worker.ts'
 import { staleBudgetProbe } from './stale-budget-probe.ts'
 import { observeTimers, ownedTimers } from './timers.ts'
 
 /** Read-only lifecycle observation; this subclass is absent from the production entrypoint. */
 export class Lobby extends ProductionLobby {
+  private performanceProbe: PerformanceProbe | undefined
+  testPerformance(accountId: string, start: boolean) {
+    const core = Reflect.get(this, 'core') as LobbyCore | undefined
+    const session = [...(core?.sessions.values() ?? [])].find(
+      (candidate) => candidate.accountId === accountId && candidate.peer,
+    )
+    if (!(core && session)) {
+      return { ok: false, error: 'Join the fixture before recording.' }
+    }
+    if (start) {
+      this.performanceProbe?.stop()
+      this.performanceProbe = new PerformanceProbe(core, session.playerId)
+    }
+    const receipt = this.performanceProbe?.snapshot()
+    if (!start) {
+      this.performanceProbe?.stop()
+    }
+    return { ok: Boolean(receipt), receipt }
+  }
   override reserveNative(...args: Parameters<ProductionLobby['reserveNative']>) {
     return observeTimers(this.ctx.id.toString(), () => super.reserveNative(...args))
   }
@@ -78,6 +98,16 @@ export class Lobby extends ProductionLobby {
     if (!self) {
       return { ok: false as const, error: 'The fixture rider has left.' }
     }
+    let positions: ReturnType<typeof packedFixturePositions>
+    try {
+      positions = packedFixturePositions(core.world.grid, { x: 72, z: 66 })
+    } catch (error) {
+      return { ok: false as const, error: String(error) }
+    }
+    const origin = positions[0]
+    if (!origin) {
+      return { ok: false as const, error: 'Packed origin missing' }
+    }
     // Deliberate synthetic stress only; the production constructor remains capped at four.
     Reflect.set(core, 'maxBots', 31)
     core.botTarget = 31
@@ -98,14 +128,17 @@ export class Lobby extends ProductionLobby {
     ) {
       return { ok: false as const, error: 'The native room did not reach one human and31 bots.' }
     }
-    self.x = 72
-    self.z = 66
+    self.x = origin.x
+    self.z = origin.z
+    let slot = 1
     for (const player of activePlayers(core.world)) {
       if (player.bot) {
-        const angle = player.id * 2.399_963
-        const radius = 4 + (player.id % 6)
-        player.x = self.x + Math.cos(angle) * radius
-        player.z = self.z + Math.sin(angle) * radius
+        const position = positions[slot++]
+        if (!position) {
+          throw new Error('Packed player/position count diverged')
+        }
+        player.x = position.x
+        player.z = position.z
       }
       player.y = 0
       // The existing spawn-generation path restores each native capsule at its exact new pose.
@@ -122,6 +155,8 @@ export class Lobby extends ProductionLobby {
       humans: core.connectedHumans(),
       selfSlot: self.id,
       spawn: { x: self.x, y: self.y, z: self.z },
+      fixturePositions: positions,
+      settled: players.map((player) => ({ id: player.id, x: player.x, y: player.y, z: player.z })),
     }
   }
 }
@@ -135,6 +170,27 @@ export {
 } from '../src/index.ts'
 export { LobbyDirectory } from './directory-probe.ts'
 export { SettlementProbe } from './settlement-worker.ts'
+
+async function performanceRequest(request: Request, env: Env) {
+  if (request.method !== 'POST') {
+    return new Response('POST required', { status: 405 })
+  }
+  const value = (await request.json()) as {
+    lobbyId?: unknown
+    accountId?: unknown
+    start?: unknown
+  }
+  if (typeof value.lobbyId !== 'string' || typeof value.accountId !== 'string') {
+    return Response.json({ error: 'Expected fixture lobbyId and accountId.' }, { status: 400 })
+  }
+  const lobby = env.LOBBIES.get(env.LOBBIES.idFromName(value.lobbyId))
+  const result = await Reflect.apply(Reflect.get(lobby, 'testPerformance'), lobby, [
+    value.accountId,
+    value.start === true,
+  ])
+  return Response.json(result)
+}
+
 export default {
   async fetch(
     request: Request,
@@ -142,6 +198,12 @@ export default {
     ctx: ExecutionContext,
   ) {
     const pathname = new URL(request.url).pathname
+    if (pathname === '/__test/performance-config') {
+      return Response.json({ fixture: true, voiceDisabled: env.DISABLE_VOICE === 'true' })
+    }
+    if (pathname === '/__test/performance') {
+      return performanceRequest(request, env)
+    }
     if (pathname === '/__test/stale-native-budget') {
       const lobby = env.LOBBIES.get(env.LOBBIES.idFromName('stale-budget-probe'))
       return Response.json(await Reflect.apply(Reflect.get(lobby, 'testStaleBudget'), lobby, []))
