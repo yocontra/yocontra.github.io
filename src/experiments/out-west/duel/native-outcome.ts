@@ -24,6 +24,7 @@ import {
 } from './native-moments.ts'
 
 const SPIN_AT = 1.35
+const TAUNT_AT = 2.55
 const LOSE_CARD_S = 0.45
 const BACKSHOT_TURN_S = 0.32
 const BACKSHOT_HIT_S = 0.34
@@ -168,18 +169,18 @@ export function beginWin(d: NativeDirector, card: PendingCard): void {
 
 export function startKillCam(d: NativeDirector): void {
   d.m.killCamStarted = true
-  if (reduced(d)) {
-    flash(d, 0.25)
-  } else {
-    d.m.killFrames = FEEL.redFrames + 1
-    killFrame(d, true)
-  }
   killShot(d)
   if (d.player) {
     const muzzle = d.player.muzzle()
     if (muzzle) {
       shotVisuals(d.game, true).muzzle(muzzle.position, 0.11, muzzle.direction)
     }
+  }
+  if (reduced(d)) {
+    flash(d, 0.25)
+  } else {
+    d.m.killFrames = FEEL.redFrames + 1
+    killFrame(d, true)
   }
 }
 
@@ -210,8 +211,15 @@ export function tickWin(d: NativeDirector, realDt: number): void {
   if (t >= SPIN_AT && t - realDt < SPIN_AT) {
     d.player?.play('Spin', 0.08)
   }
+  if (t >= TAUNT_AT && t - realDt < TAUNT_AT && d.player?.hasAnimation('TipHat')) {
+    d.player.play('TipHat', 0.15)
+  }
   const layer = d.player?.model.anim?.baseLayer
-  if (layer?.activeState.startsWith('Spin') && layer.activeStateProgress >= 0.98) {
+  if (
+    layer &&
+    (layer.activeState.startsWith('Spin') || layer.activeState === 'TipHat') &&
+    layer.activeStateProgress >= 0.98
+  ) {
     d.player?.play('Idle', 0.3)
   }
   let done = t >= FEEL.resultAt + FEEL.resultFor
@@ -426,6 +434,9 @@ export function tickBossWound(d: NativeDirector): void {
     m.swelled = true
     m.timeScale = 0.3
     d.enemy?.play('HitRecieve', 0.05)
+    if (d.enemy) {
+      d.debris.drop(d.enemy, 'gun', V(0.6, 0, -0.5), { hand: 'L' })
+    }
     say(d, d.outlaw.name, 'That… that’s just a scratch.', { ms: 2200, force: true })
     d.c.audio.play('shout', { gain: 0.7, rate: 0.6, pos: pos(d.enemy) })
   }

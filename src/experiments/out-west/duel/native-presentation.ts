@@ -6,6 +6,7 @@ import { dueShot } from './judge.ts'
 import { DuelActor } from './native-actor.ts'
 import { enemyFires } from './native-combat.ts'
 import type { NativeDirector } from './native-director.ts'
+import { titleShot } from './native-framing.ts'
 import { clearMoments, tickMoments } from './native-moments.ts'
 import { tickBossWound, tickCoward, tickLose, tickWin } from './native-outcome.ts'
 import {
@@ -140,7 +141,15 @@ export function hubShot(d: NativeDirector, shot: string): void {
   d.player?.face(shot === 'store' ? 25 : -20)
   d.player?.play('Idle')
   hubViews.set(d, { shot, layout: '' })
-  frameHub(d)
+  if (shot === 'store') {
+    frameHub(d)
+  } else {
+    if (d.game.camera.camera) {
+      d.game.camera.camera.projectionOffset = Vec2.ZERO
+    }
+    titleShot(d)
+    d.rig.update(0)
+  }
 }
 
 /** Scheduling margin on top of the output latency, ms (a frame or two of main-thread slack). */
@@ -230,7 +239,11 @@ export function update(d: NativeDirector, frameDt: number): void {
   d.rig.reduced = d.c.save.settings.reducedMotion
   tickMoments(d, realDt, frameDt)
   if (d.phase === 'title') {
-    frameHub(d)
+    if (hubViews.get(d)?.shot === 'store') {
+      frameHub(d)
+    } else {
+      d.rig.update(realDt)
+    }
     return
   }
   tickPhase(d, now, realDt)

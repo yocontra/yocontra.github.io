@@ -1,5 +1,4 @@
 import { Vec3 } from 'playcanvas'
-import type { SfxName } from '../audio/audio.ts'
 import type { DuelOutcome } from '../data/economy.ts'
 import { FEEL } from '../data/feel.ts'
 import {
@@ -14,6 +13,7 @@ import type { Press } from '../engine/input.ts'
 import { save } from '../save.ts'
 import type { Verdict } from './clock.ts'
 import { type EnemyShot, planShots, shotsBefore } from './judge.ts'
+import { fakeOut } from './native-cues.ts'
 import type { NativeDirector } from './native-director.ts'
 import type { PendingCard } from './native-moments.ts'
 import {
@@ -158,32 +158,7 @@ export function playCue(d: NativeDirector, cue: string): void {
     return
   }
   d.fakes++
-  d.atmosphere.cue(cue, d.enemy)
-  d.c.hud.fake(`[${cue.replaceAll('-', ' ')}]`, 1500)
-  const sounds: Readonly<Record<string, SfxName>> = {
-    crow: 'crow',
-    dog: 'dog',
-    horse: 'horse',
-    door: 'door',
-    creak: 'door',
-    coin: 'coin',
-    bottle: 'bottle',
-    gunshot: 'fireBig',
-    heckle: 'shout',
-    hiccup: 'shout',
-    whistle: 'hawk',
-    piano: 'piano',
-    'piano-stop': 'piano',
-    twitch: 'holster',
-    miscount: 'bell',
-  }
-  const sound = sounds[cue]
-  if (sound) {
-    d.c.audio.play(sound, { gain: 0.5 })
-  }
-  if (cue === 'twitch' || cue === 'hiccup') {
-    d.enemy?.play(cue === 'hiccup' ? 'Idle_Drunk' : 'Flinch', 0.04)
-  }
+  fakeOut(d, cue)
 }
 
 function earlyShot(d: NativeDirector, input: Press): void {

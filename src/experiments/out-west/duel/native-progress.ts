@@ -146,7 +146,7 @@ function retriesPhaseTwo(d: NativeDirector): boolean {
 
 function retryPhaseTwo(d: NativeDirector): void {
   d.c.hud.hideCard()
-  d.debris.reset()
+  // His off-hand gun stays in the dirt throughout phase two, including its retries.
   d.enemyAlive = true
   d.c.save.attempts[d.level] = (d.c.save.attempts[d.level] ?? 0) + 1
   resetAttempt(d)

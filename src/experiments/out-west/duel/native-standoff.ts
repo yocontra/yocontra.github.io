@@ -422,7 +422,7 @@ export function callMoment(d: NativeDirector): void {
     const away = pos(d.enemy).sub(pos(d.player))
     away.y = 0
     away.normalize()
-    d.debris.drop(d.enemy, 'hat', away, false)
+    d.debris.drop(d.enemy, 'hat', away)
   }
   callShot(d)
 }
