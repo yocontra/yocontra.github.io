@@ -1,4 +1,4 @@
-/** Apply the Blender-authored occiput lattice and neck skin texels to fitted bodies. */
+/** Apply the Blender-authored neck taper and skin texels to fitted bodies. */
 import { createHash } from 'node:crypto'
 import { readFile } from 'node:fs/promises'
 import { resolve } from 'node:path'
