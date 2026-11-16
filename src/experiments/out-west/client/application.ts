@@ -43,6 +43,8 @@ export interface ApplicationOptions {
   tier?: RenderTier
 }
 
+type TextureAssetOptions = { srgb?: boolean; flipY?: boolean; mipmaps?: boolean }
+
 /** Owns every engine resource and listener created by one mounted game. */
 export class GameApplication {
   readonly camera: Entity
@@ -192,7 +194,7 @@ export class GameApplication {
   loadAudio(url: string): Promise<Asset> {
     return this.loadAsset(url, 'audio')
   }
-  loadTexture(url: string, options?: { srgb?: boolean; flipY?: boolean }): Promise<Asset> {
+  loadTexture(url: string, options?: TextureAssetOptions): Promise<Asset> {
     return this.loadAsset(url, 'texture', options)
   }
   releaseTexture(url: string): void {
@@ -274,7 +276,7 @@ export class GameApplication {
   private loadAsset(
     url: string,
     type: 'container' | 'audio' | 'texture',
-    textureOptions?: { srgb?: boolean; flipY?: boolean },
+    textureOptions?: TextureAssetOptions,
   ): Promise<Asset> {
     if (this.controller.signal.aborted) {
       return Promise.reject(new Error('Game has been disposed'))

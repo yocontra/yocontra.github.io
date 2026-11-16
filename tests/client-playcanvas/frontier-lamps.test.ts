@@ -40,7 +40,12 @@ function fixture({ pending = false, frontier = true } = {}) {
   const camera = new Entity('camera', app)
   app.root.addChild(camera)
   const cloud = new Texture(device, { width: 1, height: 1, format: PIXELFORMAT_RGBA8 })
-  const mask = new Texture(device, { width: 1, height: 1, format: PIXELFORMAT_RGBA8 })
+  const mask = new Texture(device, {
+    width: 1,
+    height: 1,
+    format: PIXELFORMAT_RGBA8,
+    mipmaps: false,
+  })
   const source = new StandardMaterial()
   source.name = 'HalloweenBits'
   source.diffuse.set(0.4, 0.5, 0.6)
@@ -173,6 +178,7 @@ it('actual attach shares only lantern clone and native batches preserve source P
     expect(f.loads.find((row) => row.url === AMBIENT_ASSETS['lantern-glow'].url)?.options).toEqual({
       srgb: false,
       flipY: false,
+      mipmaps: false,
     })
     expect([
       f.mask.addressU,

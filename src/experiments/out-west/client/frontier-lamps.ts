@@ -35,7 +35,11 @@ export class FrontierLamps {
   constructor(game: GameApplication) {
     this.game = game
     this.ready = game
-      .loadTexture(AMBIENT_ASSETS['lantern-glow'].url, { srgb: false, flipY: false })
+      .loadTexture(AMBIENT_ASSETS['lantern-glow'].url, {
+        srgb: false,
+        flipY: false,
+        mipmaps: false,
+      })
       .then((asset) => {
         if (this.disposed) {
           return
@@ -46,7 +50,6 @@ export class FrontierLamps {
         texture.minFilter = FILTER_LINEAR
         texture.magFilter = FILTER_LINEAR
         texture.anisotropy = 1
-        texture.mipmaps = false
         this.texture = texture
         for (const material of this.materials) {
           this.prepare(material)
