@@ -1,4 +1,11 @@
-import { type AnimTrack, type Component, type ContainerResource, Entity, Vec3 } from 'playcanvas'
+import {
+  type AnimTrack,
+  type Component,
+  type ContainerResource,
+  Entity,
+  type GraphNode,
+  Vec3,
+} from 'playcanvas'
 import type { GameApplication } from '../client/application.ts'
 import { ASSETS } from '../content/manifest.ts'
 import { nativeActionSpeed } from '../scene/native-animation-timing.ts'
@@ -12,12 +19,45 @@ const HUMANOID = /\/(?:baked\/(?:outlaw-|player)|equipment\/outfit\.)/u
 const GAIT = /^(?:Stride_|Walk$|Run$|Sprint$|Crouch_Walk$)/u
 const DRAWN = /Pointing|Shoot|Death|Hit|Draw|Spin|Flinch/u
 
+interface ActorOptions {
+  enabled: boolean
+  /** Complete merged tracks from the physical actor; no shared clip can override this set. */
+  tracks?: readonly AnimTrack[]
+  humanoid?: boolean
+}
+async function actorTracks(
+  game: GameApplication,
+  resource: ContainerResource,
+  options: ActorOptions,
+  humanoid: boolean,
+) {
+  const tracks = [
+    ...(options.tracks ?? resource.animations.map((clip) => clip.resource as AnimTrack)),
+  ].filter((track) => track && !track.name.startsWith('Weapon_'))
+  const indexed = new Map(tracks.map((track) => [track.name, track]))
+  if (humanoid && options.tracks === undefined) {
+    const moves = (await game.loadContainer(ASSETS.moves.url)).resource as ContainerResource
+    for (const clip of moves.animations) {
+      const track = clip.resource as AnimTrack
+      if (track && !indexed.has(track.name)) {
+        tracks.push(track)
+        indexed.set(track.name, track)
+      }
+    }
+  }
+  return { tracks, indexed }
+}
+
 /** The engine owns skeletal playback; duel logic requests named authored clips. */
 export class DuelActor {
   private current = ''
   private readonly hiddenWeaponComponents = new Map<Component, boolean>()
   private idleClip = 'Idle_Character'
   paired = false as boolean
+  /** Local presentations draw both revolvers; world carry keeps the left spare holstered. */
+  pairedDrawn = false as boolean
+  /** Per-instance presentation masks/layers require local rigid equipment outside shared batches. */
+  batchRigid = true as boolean
   readonly weaponMounts: WeaponMount[] = []
   readonly tracks: readonly AnimTrack[]
   private readonly animations: ReadonlyMap<string, AnimTrack>
@@ -96,24 +136,12 @@ export class DuelActor {
     game: GameApplication,
     url: string,
     name: string,
-    options: { enabled: boolean } = { enabled: true },
+    options: ActorOptions = { enabled: true },
   ): Promise<DuelActor> {
     const asset = await game.loadContainer(url)
     const resource = asset.resource as ContainerResource
-    const tracks = resource.animations
-      .map((clip) => clip.resource as AnimTrack)
-      .filter((track) => track && !track.name.startsWith('Weapon_'))
-    const indexed = new Map(tracks.map((track) => [track.name, track]))
-    if (HUMANOID.test(url)) {
-      const moves = (await game.loadContainer(ASSETS.moves.url)).resource as ContainerResource
-      for (const clip of moves.animations) {
-        const track = clip.resource as AnimTrack
-        if (track && !indexed.has(track.name)) {
-          tracks.push(track)
-          indexed.set(track.name, track)
-        }
-      }
-    }
+    const humanoid = options.humanoid ?? HUMANOID.test(url)
+    const { tracks, indexed } = await actorTracks(game, resource, options, humanoid)
     const releaseMaterials = await prepareNativeMaterials(game, resource)
     if (!game.stage.parent) {
       releaseMaterials()
@@ -139,7 +167,7 @@ export class DuelActor {
                 { name: 'START' },
                 ...tracks.map((track) => ({
                   name: track.name,
-                  speed: HUMANOID.test(url) ? nativeActionSpeed(track) : 1,
+                  speed: humanoid ? nativeActionSpeed(track) : 1,
                   loop: !ONE_SHOT.test(track.name),
                 })),
               ],
@@ -158,7 +186,7 @@ export class DuelActor {
         }
       }
       const actor = new DuelActor(root, model, indexed)
-      if (HUMANOID.test(url)) {
+      if (humanoid) {
         const moves = (await game.loadContainer(ASSETS.moves.url)).resource as ContainerResource
         actor.gaitSpeeds =
           (
@@ -287,7 +315,9 @@ export class DuelActor {
   }
   animation(name: string): string {
     const pair = `${name}_Pair`
-    return this.paired && !this.carryDrawn && this.hasAnimation(pair) ? pair : name
+    return this.paired && (!this.carryDrawn || this.pairedDrawn) && this.hasAnimation(pair)
+      ? pair
+      : name
   }
   idle(clip: string): void {
     this.idleClip = clip
@@ -330,7 +360,7 @@ export class DuelActor {
         continue
       }
       // Frontier carries only the right-hand revolver; Duel's authored paired draw uses both.
-      const spare = this.carryDrawn && mount.hand === 'L'
+      const spare = this.carryDrawn && !this.pairedDrawn && mount.hand === 'L'
       const showDrawn = this.held === 'revolver' && drawn && !spare
       mount.node.enabled = mount.drawn === showDrawn
     }
@@ -346,19 +376,26 @@ export class DuelActor {
     this.playbackRate = rate
   }
 
-  muzzle(): { position: Vec3; direction: Vec3 } | null {
+  /** A disabled staged presentation can expose its authored bore without being revealed. */
+  muzzleSocket(includeDisabled = false): GraphNode | null {
     const mounts = this.weaponMounts.filter(
       (mount) =>
-        mount.node.enabled &&
+        (includeDisabled || mount.node.enabled) &&
         !(mount.node instanceof Entity && this.detached.has(mount.node)) &&
-        (mount.weapon ? mount.weapon === this.held : mount.drawn),
+        (mount.weapon
+          ? mount.weapon === this.held
+          : mount.drawn && (!includeDisabled || this.held === 'revolver')),
     )
     const active =
       mounts.find((mount) => mount.weapon === this.held) ??
       mounts.find((mount) => mount.hand === 'R') ??
       mounts[0]
     const socket = active?.node.findByName('socket.muzzle')
-    if (!socket?.enabled) {
+    return socket && (includeDisabled || socket.enabled) ? socket : null
+  }
+  muzzle(): { position: Vec3; direction: Vec3 } | null {
+    const socket = this.muzzleSocket()
+    if (!socket) {
       return null
     }
     // Revolvers are authored along +X. The socket follows the actual gun and wrist animation.
