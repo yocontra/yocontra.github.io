@@ -1,11 +1,17 @@
 /** Rebuild native environments from the preserved, fully dressed authoring GLBs. */
 import { createHash } from 'node:crypto'
 import { copyFile, mkdir, readFile, writeFile } from 'node:fs/promises'
-import { join } from 'node:path'
+import { join, resolve } from 'node:path'
 import { NodeIO } from '@gltf-transform/core'
 import { ALL_EXTENSIONS } from '@gltf-transform/extensions'
 import { dedup, dequantize, prune, weld } from '@gltf-transform/functions'
 import { compressedCharacterTexture } from './character-textures.ts'
+import { withContentOutput } from './content-output.ts'
+import {
+  authorEnvironmentCloudUvs,
+  restoreFreightUv1Usage,
+  retainFreightUv1,
+} from './environment-cloud-uvs.ts'
 import { compressEnvironmentTextures } from './environment-textures.ts'
 import { formatContent } from './format-content.ts'
 import { packFrontierVertices } from './frontier-vertex-packing.ts'
@@ -17,9 +23,11 @@ const argument = (name: string, fallback: string) =>
 const source = process.argv.includes('--source')
   ? argument('--source', 'tools/art/environments')
   : 'tools/art/environments'
+const publishedOutput = 'public/experiments/out-west/3d/native-v2/baked'
 const output = process.argv.includes('--output')
-  ? argument('--output', 'public/experiments/out-west/3d/native-v2/baked')
-  : 'public/experiments/out-west/3d/native-v2/baked'
+  ? argument('--output', publishedOutput)
+  : publishedOutput
+const publishing = resolve(output) === resolve(publishedOutput)
 const names = ['frontier', 'duel', 'depot', 'mission', 'bank'] as const
 const io = new NodeIO().registerExtensions(ALL_EXTENSIONS)
 const onlyIndex = process.argv.indexOf('--only')
@@ -35,6 +43,8 @@ for (const name of names.filter((candidate) => !only || candidate === only)) {
   await copyFile(join(source, `${name}.glb`), path)
   if (name === 'frontier') {
     const authored = await io.read(path)
+    // Mark only this staged copy; failure aborts before final native output.
+    retainFreightUv1(authored)
     // Full-detail props are present. Old far stand-ins required a shader fold mask to avoid duplication.
     for (const node of authored.getRoot().listNodes()) {
       if (node.getName().startsWith('far-')) {
@@ -84,39 +94,10 @@ for (const name of names.filter((candidate) => !only || candidate === only)) {
   const document = await io.read(path)
   // Native static batching transforms vertex data on the CPU: author float position/normal streams.
   await document.transform(dequantize())
-  // A second native UV channel keeps moving cloud shade continuous across separate buildings.
-  for (const node of document.getRoot().listNodes()) {
-    const original = node.getMesh()
-    if (original && name === 'frontier') {
-      const unique = document.createMesh(original.getName()).setWeights(original.getWeights())
-      for (const primitive of original.listPrimitives()) {
-        unique.addPrimitive(primitive.clone())
-      }
-      node.setMesh(unique)
-    }
-    const matrix = node.getWorldMatrix()
-    for (const primitive of node.getMesh()?.listPrimitives() ?? []) {
-      const position = primitive.getAttribute('POSITION')
-      if (!position) {
-        continue
-      }
-      const values = new Float32Array(position.getCount() * 2)
-      for (let i = 0; i < position.getCount(); i++) {
-        const [x = 0, y = 0, z = 0] = position.getElement(i, [])
-        const wx =
-          (matrix[0] ?? 0) * x + (matrix[4] ?? 0) * y + (matrix[8] ?? 0) * z + (matrix[12] ?? 0)
-        const wz =
-          (matrix[2] ?? 0) * x + (matrix[6] ?? 0) * y + (matrix[10] ?? 0) * z + (matrix[14] ?? 0)
-        const ground = name === 'duel' && node.getName().startsWith('ground-')
-        values[i * 2] = ground ? (wx + 16) / 32 : wx / 1024
-        values[i * 2 + 1] = ground ? (wz + 70) / 128 : wz / 1024
-      }
-      primitive.setAttribute(
-        'TEXCOORD_1',
-        document.createAccessor().setType('VEC2').setArray(values).setBuffer(position.getBuffer()),
-      )
-    }
+  if (name === 'frontier') {
+    restoreFreightUv1Usage(document)
   }
+  authorEnvironmentCloudUvs(document, name)
   await io.write(path, document)
   const root = document.getRoot()
   if (name === 'frontier') {
@@ -151,10 +132,12 @@ for (const name of names.filter((candidate) => !only || candidate === only)) {
     console.log('Frontier vertex packing', await packFrontierVertices(packed))
     await io.write(path, packed)
   }
-  await compressEnvironmentTextures(path)
+  await withContentOutput(publishing ? resolve(output, '..') : resolve(output, 'resources'), () =>
+    compressEnvironmentTextures(path),
+  )
 }
-if (only) {
-  if (only === 'frontier' && output === 'public/experiments/out-west/3d/native-v2/baked') {
+if (only || !publishing) {
+  if (only === 'frontier' && publishing) {
     const path = 'public/experiments/out-west/3d/native-v2/ambient/frontier-tumbleweeds.glb'
     await mkdir('public/experiments/out-west/3d/native-v2/ambient', { recursive: true })
     await copyFile(join(source, 'frontier-tumbleweeds.glb'), path)

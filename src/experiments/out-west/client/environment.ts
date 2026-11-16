@@ -1,6 +1,5 @@
 import {
   ADDRESS_CLAMP_TO_EDGE,
-  AnimTrack,
   type Asset,
   Color,
   type ContainerResource,
@@ -26,6 +25,7 @@ import { OUTLAWS } from '../data/outlaws.ts'
 import { drawPoster } from '../ui/poster.ts'
 import type { GameApplication } from './application.ts'
 import { NativeClockwork } from './clockwork.ts'
+import { animateWind, prepareFreightClouds, worldCloudMaterials } from './environment-assets.ts'
 import { NativeModelLods } from './model-lod.ts'
 import { NativeWilds } from './wilds.ts'
 
@@ -39,38 +39,18 @@ function color(rgb: readonly number[]): Color {
   return new Color(rgb[0] ?? 0, rgb[1] ?? 0, rgb[2] ?? 0).gamma()
 }
 
-function animateWind(root: Entity, asset: Asset): void {
-  const resource = asset.resource as ContainerResource
-  const wind = resource.animations.find(
-    (clip) => clip.name === 'Wind' || clip.resource?.name === 'Wind',
-  )?.resource
-  if (wind instanceof AnimTrack) {
-    root.addComponent('anim', { activate: true })
-    root.anim?.loadStateGraph({
-      layers: [
-        {
-          name: 'Environment',
-          states: [{ name: 'START' }, { name: 'Wind', speed: 1, loop: true }],
-          transitions: [{ from: 'START', to: 'Wind' }],
-        },
-      ],
-      parameters: {},
-    })
-    root.anim?.baseLayer?.assignAnimation('Wind', wind)
-  }
-}
-
 function canBatch(component: RenderComponent, detailed: boolean): boolean {
   if (detailed && !component.enabled) {
     return false
   }
-  return component.meshInstances.every(
+  const batchable = component.meshInstances.every(
     (instance) =>
       !(instance.skinInstance || instance.morphInstance) &&
       instance.mesh?.vertexBuffer.format.elements.find(
         (element) => element.name === SEMANTIC_POSITION,
       )?.dataType === TYPE_FLOAT32,
   )
+  return batchable
 }
 
 /** Authored light/sky presets, native wind clips and spatial static batches for one scene. */
@@ -366,6 +346,7 @@ export class NativeEnvironment {
     original: StandardMaterial,
     clones: Map<StandardMaterial, StandardMaterial>,
     node: Entity,
+    worldClouds = false,
   ): StandardMaterial {
     if (original.name === 'WantedPaper') {
       this.posterNodes.add(node)
@@ -373,6 +354,7 @@ export class NativeEnvironment {
     let material = clones.get(original)
     if (!material) {
       material = original.clone()
+      prepareFreightClouds(material, worldClouds)
       clones.set(original, material)
       this.materials.add(material)
     }
@@ -408,6 +390,7 @@ export class NativeEnvironment {
     const panes = this.game.app.batcher?.addGroup('environment-panes', false, 32)
     const details = this.game.app.batcher?.addGroup('environment-detail', false, 32)
     const clones = new Map<StandardMaterial, StandardMaterial>()
+    const worldClouds = worldCloudMaterials(asset.resource as ContainerResource)
     for (const component of root.findComponents('render')) {
       // Authored additive light shafts are illumination, never opaque shadow casters.
       if (component.entity.name.startsWith('shaft-')) {
@@ -418,7 +401,12 @@ export class NativeEnvironment {
         if (!(original instanceof StandardMaterial)) {
           continue
         }
-        instance.material = this.ownMaterial(original, clones, component.entity)
+        instance.material = this.ownMaterial(
+          original,
+          clones,
+          component.entity,
+          worldClouds.has(original),
+        )
         if (
           component.entity.name.startsWith('flora-') ||
           component.entity.name.startsWith('impostors-')
@@ -431,8 +419,9 @@ export class NativeEnvironment {
         component.castShadows = false
       }
       const ordinary = pane ? panes : group
-      const target = lod.owns(component) ? details : ordinary
-      if (target && canBatch(component, target === details)) {
+      const detailed = lod.owns(component)
+      const target = detailed ? details : ordinary
+      if (target && canBatch(component, detailed)) {
         component.batchGroupId = target.id
       }
     }

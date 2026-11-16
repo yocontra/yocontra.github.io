@@ -9,6 +9,8 @@ import { townWindows } from '../../src/experiments/out-west/ffa/sim/building-rul
 import { buildGrid, type TownLayout } from '../../src/experiments/out-west/ffa/sim/layout.ts'
 import { projectedUv, surfaceMaterial } from './animal-prop-surfaces.ts'
 import { compressEnvironmentTextures } from './environment-textures.ts'
+import { packFreight } from './freight-crates-contract.ts'
+import { installFreightCrates, readFreightPrefabs } from './freight-crates-install.ts'
 import { bankServiceSigns, buildingDetails, surround } from './frontier-architecture.ts'
 import { replaceCactusPrototype } from './frontier-cactus-candidate.ts'
 import { compileFrontierCollision, perimeterSpans, structuralWalls } from './frontier-collision.ts'
@@ -181,6 +183,11 @@ export async function authorFrontier(output: string): Promise<void> {
   const panes = authorPanes(g, layout, groups)
   g.finish()
   await g.doc.transform(dedup(), weld(), prune(), unpartition())
+  installFreightCrates(
+    g.doc,
+    await readFreightPrefabs(join(SOURCE, 'freight-crates')),
+    packFreight(plan.layout.cover),
+  )
   replaceCactusPrototype(
     g.doc,
     await frontierIO.read(join(SOURCE, 'cactus-near/frontier-cactus-near.glb')),

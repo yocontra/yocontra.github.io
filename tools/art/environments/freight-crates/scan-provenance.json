@@ -1,0 +1,77 @@
+{
+  "status": "licensed source inputs only; no art accepted",
+  "asset": "weathered_planks",
+  "sourceURL": "https://polyhaven.com/a/weathered_planks",
+  "licenseURL": "https://polyhaven.com/license",
+  "license": "CC0",
+  "authors": {
+    "Dario Barresi": "Processing",
+    "Dimitrios Savva": "Photography"
+  },
+  "physicalWidthMetres": 2,
+  "resolution": 2048,
+  "files": [
+    {
+      "file": "wood-albedo.png",
+      "url": "https://dl.polyhaven.org/file/ph-assets/Textures/png/2k/weathered_planks/weathered_planks_diff_2k.png",
+      "bytes": 20990419,
+      "md5": "be9a6262d4a3b4e1f355979e2a8af375",
+      "sha256": "36761823f0014cc7d7a4f5ae4976272eabb0aa72aee33991a1340e77021e0e23"
+    },
+    {
+      "file": "wood-normal.png",
+      "url": "https://dl.polyhaven.org/file/ph-assets/Textures/png/2k/weathered_planks/weathered_planks_nor_gl_2k.png",
+      "bytes": 22124504,
+      "md5": "5b4ae946415acdc63c523311a1dbe2a4",
+      "sha256": "8ae4f3c4f250464b43f0d446790bcc3b97e8edf4ee43a6c7f7c0613710da3721"
+    },
+    {
+      "file": "wood-arm.png",
+      "url": "https://dl.polyhaven.org/file/ph-assets/Textures/png/2k/weathered_planks/weathered_planks_arm_2k.png",
+      "bytes": 15823170,
+      "md5": "87f34b7820c2da902c1a1515ef8602cc",
+      "sha256": "565f1bbf70f462bebd777619263cb9edb001dbbf2786fc4225b2446486ea1f4c"
+    },
+    {
+      "file": "rusty_metal_02_diff.webp",
+      "sourceFile": "/Users/contra/Projects/out-west-worktrees/validation-20261115/tools/art/environments/textures/rusty_metal_02_diff.webp",
+      "url": "https://polyhaven.com/a/rusty_metal_02",
+      "bytes": 260796,
+      "sha256": "beeed1c52c41413eb54ac69675f620a9ed4c0a9bb5e202549ba8a36014a9a9bd"
+    },
+    {
+      "file": "rusty_metal_02_nor.webp",
+      "sourceFile": "/Users/contra/Projects/out-west-worktrees/validation-20261115/tools/art/environments/textures/rusty_metal_02_nor.webp",
+      "url": "https://polyhaven.com/a/rusty_metal_02",
+      "bytes": 244238,
+      "sha256": "a12fae212940e02cce781b925f992c88dbd680d171678636ee90a6ee4dc5454a"
+    },
+    {
+      "file": "rusty_metal_02_arm.webp",
+      "sourceFile": "/Users/contra/Projects/out-west-worktrees/validation-20261115/tools/art/environments/textures/rusty_metal_02_arm.webp",
+      "url": "https://polyhaven.com/a/rusty_metal_02",
+      "bytes": 204178,
+      "sha256": "125041ae4d3c83b01f810fc979513e62c4d3329e68e82d998c1f77ba74e91a35"
+    }
+  ],
+  "metadata": [
+    {
+      "file": "weathered_planks-info.json",
+      "sha256": "e51854ec292dde4a1f9281a2fc1c09561a75cf73b075d7abcd8e48d204101bc5"
+    },
+    {
+      "file": "weathered_planks-files.json",
+      "sha256": "efd24b4b2b58fd54ba24a0010873a12cb1b16453277d20ac3639f10c0c8ee5a9"
+    },
+    {
+      "file": "polyhaven-license.html",
+      "sha256": "d6eb4c64b847ee38970cc6ae43923ef39449bd320d69ef647550a2d1c8398db7"
+    },
+    {
+      "file": "wood-albedo-preview.jpg",
+      "url": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/2k/weathered_planks/weathered_planks_diff_2k.jpg",
+      "sha256": "e763f1257acdfdbb31764c9ec9d480fd4efa5cc008f8b63d73a916d53d938942",
+      "md5": "dd5f91445812117d216ed962c2607b7d"
+    }
+  ]
+}
