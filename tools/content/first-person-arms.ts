@@ -282,7 +282,23 @@ function filterNative(doc: Document, selection: Selection) {
   }
   return { retained, surfaces }
 }
-export async function extractFirstPersonArms(id: string) {
+function removeArmAnimations(doc: Document, geometryOnly: boolean): void {
+  for (const animation of [...doc.getRoot().listAnimations()]) {
+    if (geometryOnly || animation.getName().startsWith('Weapon_')) {
+      if (geometryOnly) {
+        // Release channel/sampler references before prune removes their unused keyframe accessors.
+        for (const channel of animation.listChannels()) {
+          channel.dispose()
+        }
+        for (const sampler of animation.listSamplers()) {
+          sampler.dispose()
+        }
+      }
+      animation.dispose()
+    }
+  }
+}
+export async function extractFirstPersonArms(id: string, options: { geometryOnly?: boolean } = {}) {
   if (!FIT.test(id)) {
     throw new Error(`Invalid humanoid fit ${id}`)
   }
@@ -332,11 +348,7 @@ export async function extractFirstPersonArms(id: string) {
       `Missing ${missing.length}/${wanted.length} source arm faces for ${id}: ${JSON.stringify(examples)}`,
     )
   }
-  for (const animation of [...doc.getRoot().listAnimations()]) {
-    if (animation.getName().startsWith('Weapon_')) {
-      animation.dispose()
-    }
-  }
+  removeArmAnimations(doc, options.geometryOnly ?? false)
   for (const node of [...doc.getRoot().listNodes()]) {
     if (ATTACHMENT.test(node.getName())) {
       node.dispose()
@@ -367,6 +379,7 @@ export async function extractFirstPersonArms(id: string) {
   const nativeHash = hash(nativeBytes)
   const provenance = {
     fit: id,
+    animationMode: options.geometryOnly ? 'geometry-only' : 'local-clips',
     nativePath: relative(process.cwd(), nativePath),
     nativeSHA256: nativeHash,
     canonicalSHA256: hash(Buffer.concat([sourceBytes, ...sourceBuffers])),
@@ -401,7 +414,9 @@ if (import.meta.main) {
   ]
   const reports: Awaited<ReturnType<typeof extractFirstPersonArms>>['report'][] = []
   for (const id of ids) {
-    const { bytes, report } = await extractFirstPersonArms(id)
+    const { bytes, report } = await extractFirstPersonArms(id, {
+      geometryOnly: process.argv.includes('--geometry-only'),
+    })
     await writeFile(resolve(output, `${basename(id)}.glb`), bytes)
     reports.push(report)
     console.log(JSON.stringify(report))

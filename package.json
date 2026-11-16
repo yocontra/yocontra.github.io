@@ -52,6 +52,7 @@
   },
   "packageManager": "bun@1.3.14",
   "patchedDependencies": {
-    "playcanvas@2.23.3": "patches/playcanvas@2.23.3.patch"
+    "playcanvas@2.23.3": "patches/playcanvas@2.23.3.patch",
+    "astro@7.4.7": "patches/astro@7.4.7.patch"
   }
 }
