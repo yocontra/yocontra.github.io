@@ -1,4 +1,5 @@
-import { expect, test as it } from 'bun:test'
+import { expect, test as it, spyOn } from 'bun:test'
+import type { Page } from 'playwright'
 import {
   fixturePopulation,
   OUTDOOR_FIXTURE_CENTER,
@@ -14,6 +15,8 @@ import {
 import {
   localFixtureURL,
   type NativeSample,
+  nativeRendererCaptured,
+  prepareProductionFixture,
   qualifyProductionFixture,
   requireLocalPerformanceFixture,
 } from '../tools/content/production-fixture.ts'
@@ -33,7 +36,11 @@ function fixture(): Parameters<typeof qualifyProductionFixture>[0] {
     selfSlot: 0,
     self: { x: 1, z: 1, alive: true, shots: 2 },
     brokenWindows: [],
-    scene: { players: 5, actors: { loaded: 5, loading: 0, failed: 0, fallbacks: 0 } },
+    scene: {
+      players: 5,
+      actors: { loaded: 5, loading: 0, failed: 0, fallbacks: 0 },
+      renderer: { tier: 'low', nativePost: null },
+    },
   }
   const events = ['glass_break', 'kill', 'respawn'].map((type, index) => ({
     type,
@@ -56,6 +63,18 @@ function fixture(): Parameters<typeof qualifyProductionFixture>[0] {
     samples: serverSamples.map(({ wall }, index) => ({
       wall,
       game: { ...native, brokenWindows: index === 10 ? [0] : [] },
+      privacy: {
+        captureCalls: 0,
+        captureBlocked: true,
+        voiceChatForcedOff: true,
+        graphics: {
+          original: 'high',
+          originalSettingsState: 'object',
+          applied: 'auto',
+          tierOverride: null,
+          tierOverrideRaw: null,
+        },
+      },
     })),
     history: { ...native, events },
     server: {
@@ -86,6 +105,68 @@ function fixture(): Parameters<typeof qualifyProductionFixture>[0] {
 }
 it('requires matching release build, native readiness, authority and delivered lifecycle evidence', () => {
   expect(qualifyProductionFixture(fixture())).toEqual([])
+})
+it('captures actual low/high renderer configuration and rejects missing or contradictory records', () => {
+  expect(nativeRendererCaptured({ tier: 'low', nativePost: null })).toBe(true)
+  expect(
+    nativeRendererCaptured({
+      tier: 'high',
+      nativePost: { enabled: true, msaaSamples: 2, ssaoType: 'none', ssaoSamples: 3 },
+    }),
+  ).toBe(true)
+  expect(nativeRendererCaptured({ tier: 'high', nativePost: null })).toBe(false)
+  const value = fixture()
+  const first = required(value.samples[0])
+  Reflect.deleteProperty(required(first.game).scene, 'renderer')
+  expect(qualifyProductionFixture(value)).toContain(
+    'Actual native renderer tier/post configuration was not captured',
+  )
+  required(first.privacy).graphics.tierOverride = 'high'
+  expect(qualifyProductionFixture(value)).toContain(
+    'Actual native renderer tier differs from the explicit override',
+  )
+})
+it('preserves an explicit graphics tier through the actual Chrome fixture navigation', async () => {
+  let navigated = ''
+  const page = {
+    addInitScript: async () => undefined,
+    waitForResponse: async () => ({
+      json: async () => ({ lobbyId: 'canonical', reservation: { roomId: 'wire' } }),
+    }),
+    goto: (url: string) => {
+      navigated = url
+      return Promise.resolve(undefined)
+    },
+    waitForFunction: async () => undefined,
+    evaluate: async () => ({ lobbyId: 'canonical' }),
+  } as unknown as Page
+  const mocked = spyOn(globalThis, 'fetch').mockImplementation(
+    Object.assign(
+      (input: Parameters<typeof fetch>[0]) => {
+        if (String(input).endsWith('performance-config')) {
+          return Promise.resolve(Response.json({ fixture: true, voiceDisabled: true }))
+        }
+        if (String(input).endsWith('seed')) {
+          return Promise.resolve(Response.json({ accountId: 'fixture', token: 'synthetic' }))
+        }
+        return Promise.resolve(Response.json({ ok: true, players: 5, bots: 4 }))
+      },
+      { preconnect: fetch.preconnect },
+    ),
+  )
+  try {
+    await prepareProductionFixture(
+      page,
+      'http://localhost:4398/#tier=high',
+      'http://localhost:8798',
+      false,
+    )
+    expect(navigated).toBe(
+      'http://localhost:4398/experiments/out-west/frontier/?server=remote#tier=high',
+    )
+  } finally {
+    mocked.mockRestore()
+  }
 })
 it('rejects stress labels without 32 actual loaded and authoritative riders', () => {
   const value = fixture()

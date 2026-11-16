@@ -1,6 +1,8 @@
 /** Authenticated local Worker coordination; no mutable client debug hooks. */
 import type { Page } from 'playwright'
 import type { PerformanceProbe } from '../../api/test/performance-probe.ts'
+import type { GameViewport } from '../../src/experiments/out-west/client/viewport.ts'
+import type { QARecorderPrivacySample } from './frame-recorder.ts'
 
 export interface NativeSample {
   development: boolean
@@ -12,8 +14,28 @@ export interface NativeSample {
   scene: {
     players: number
     actors: { loaded: number; loading: number; failed: number; fallbacks: number }
+    renderer?: ReturnType<GameViewport['debug']>['renderer']
   }
   events?: { type: string; tick: number; at: number; wall: number; self: boolean }[]
+}
+export function nativeRendererCaptured(renderer: NativeSample['scene']['renderer']): boolean {
+  if (!renderer) {
+    return false
+  }
+  const post = renderer.nativePost
+  return post === null
+    ? renderer.tier === 'low'
+    : Boolean(
+        post &&
+          renderer.tier === 'high' &&
+          typeof post.enabled === 'boolean' &&
+          Number.isInteger(post.msaaSamples) &&
+          post.msaaSamples > 0 &&
+          typeof post.ssaoType === 'string' &&
+          post.ssaoType.length > 0 &&
+          Number.isInteger(post.ssaoSamples) &&
+          post.ssaoSamples > 0,
+      )
 }
 export interface BuildReceipt {
   source: string
@@ -73,6 +95,7 @@ export async function prepareProductionFixture(
   const account = (await seed.json()) as { token: string; accountId: string }
   const url = new URL('/experiments/out-west/frontier/', origin)
   url.search = new URLSearchParams({ server: 'remote' }).toString()
+  url.hash = new URL(origin).hash
   await page.addInitScript(
     (credentials) => sessionStorage.setItem('__owQaAccount', JSON.stringify(credentials)),
     { api, token: account.token },
@@ -144,7 +167,7 @@ export async function prepareProductionFixture(
 }
 
 export function qualifyProductionFixture(options: {
-  samples: { wall: number; game?: NativeSample }[]
+  samples: { wall: number; game?: NativeSample; privacy?: QARecorderPrivacySample }[]
   history?: NativeSample
   server?: ReturnType<PerformanceProbe['snapshot']>
   build?: BuildReceipt
@@ -158,6 +181,21 @@ export function qualifyProductionFixture(options: {
   const { samples, server, build, history, source, scripts, stress, start, end } = options
   const problems: string[] = []
   const count = stress ? 32 : 5
+  if (samples.some(({ game }) => !nativeRendererCaptured(game?.scene.renderer))) {
+    problems.push('Actual native renderer tier/post configuration was not captured')
+  }
+  if (samples.some(({ privacy }) => privacy?.graphics?.applied !== 'auto')) {
+    problems.push('Temporary QA graphics selection was not auto')
+  }
+  if (
+    samples.some(
+      ({ game, privacy }) =>
+        privacy?.graphics?.tierOverride &&
+        privacy.graphics.tierOverride !== game?.scene.renderer?.tier,
+    )
+  ) {
+    problems.push('Actual native renderer tier differs from the explicit override')
+  }
   if (
     !(
       build?.qaFlag &&

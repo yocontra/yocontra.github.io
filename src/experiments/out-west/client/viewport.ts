@@ -55,16 +55,7 @@ export interface GameViewport {
   tap: (bit: number) => void
   event: (event: SimEvent) => void
   aimPoint: () => { x: number; y: number; shooter: boolean }
-  debug: () => {
-    fps: number
-    worstFps: number
-    pixelRatio: number
-    players: number
-    drawCalls: number
-    windows: { total: number; intact: number; shards: number }
-    ragdolls: { active: number; frozen: number; bodies: number }
-    actors: { loaded: number; loading: number; failed: number; fallbacks: number; visible: number }
-  }
+  debug: () => ReturnType<typeof viewportDebug>
 }
 
 const head = new Vec3()
@@ -330,7 +321,7 @@ function viewportDebug({
   windows: BreakableWindows | undefined
   actors: Actors | undefined
   ragdolls: NativeRagdolls | undefined
-}): ReturnType<GameViewport['debug']> {
+}) {
   return {
     fps: application?.quality.fps ?? 0,
     worstFps: application?.quality.worstFps ?? 0,
@@ -340,6 +331,13 @@ function viewportDebug({
     actors: actors?.stats() ?? { loaded: 0, loading: 0, failed: 0, fallbacks: 0, visible: 0 },
     drawCalls: application?.app.stats.drawCalls.total ?? 0,
     ragdolls: ragdolls?.stats() ?? { active: 0, frozen: 0, bodies: 0 },
+    ...(import.meta.env.PUBLIC_OW_PERF_HARNESS === '1'
+      ? {
+          renderer: application
+            ? { tier: application.tier, nativePost: application.post?.diagnostics() ?? null }
+            : null,
+        }
+      : {}),
   }
 }
 

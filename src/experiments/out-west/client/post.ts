@@ -113,6 +113,15 @@ export class NativePost {
     this.frame = frame
     frame.update()
   }
+  /** Read the current native configuration without changing or rebuilding the render passes. */
+  diagnostics() {
+    return {
+      enabled: this.frame.enabled,
+      msaaSamples: this.frame.rendering.samples,
+      ssaoType: this.frame.ssao.type,
+      ssaoSamples: this.frame.ssao.samples,
+    }
+  }
   /** Re-grades for a lighting preset; `frontier` keeps the open town's wider, thinner dust. */
   grade(preset: GradePreset, frontier: boolean): void {
     this.frontier = frontier

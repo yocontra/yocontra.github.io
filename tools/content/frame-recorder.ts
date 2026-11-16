@@ -1,4 +1,17 @@
 /** Browser-only recording, reusable through addInitScript or the simulator's Web Inspector. */
+export interface QARecorderPrivacySample {
+  captureCalls: number
+  captureBlocked: boolean
+  voiceChatForcedOff: boolean
+  graphics: {
+    original: unknown
+    originalSettingsState: 'absent' | 'malformed' | 'object' | 'non-object'
+    applied: 'auto'
+    tierOverride: 'low' | 'high' | null
+    tierOverrideRaw: string | null
+  }
+}
+
 export function installQARecorderPrivacy(): void {
   if (Reflect.has(globalThis, '__owQaPrivacy')) {
     return
@@ -26,13 +39,33 @@ export function installQARecorderPrivacy(): void {
   if (!existing) {
     localStorage.setItem(backupKey, JSON.stringify({ value: localStorage.getItem(key) }))
   }
+  const original = (
+    JSON.parse(localStorage.getItem(backupKey) ?? '{}') as {
+      value: string | null
+    }
+  ).value
+  let originalGraphics: unknown = null
+  let originalSettingsState: QARecorderPrivacySample['graphics']['originalSettingsState'] =
+    original === null ? 'absent' : 'malformed'
+  if (original !== null) {
+    try {
+      const parsed: unknown = JSON.parse(original)
+      originalSettingsState = parsed && typeof parsed === 'object' ? 'object' : 'non-object'
+      if (parsed && typeof parsed === 'object' && 'graphics' in parsed) {
+        originalGraphics = parsed.graphics
+      }
+    } catch {
+      /* The exact malformed value remains in the restore backup. */
+    }
+  }
+  const override = new URLSearchParams(globalThis.location?.hash.slice(1) ?? '').get('tier')
   let settings: Record<string, unknown> = {}
   try {
     settings = JSON.parse(localStorage.getItem(key) ?? '{}') ?? {}
   } catch {
     /* Preserve malformed originals too. */
   }
-  localStorage.setItem(key, JSON.stringify({ ...settings, voiceChat: false }))
+  localStorage.setItem(key, JSON.stringify({ ...settings, voiceChat: false, graphics: 'auto' }))
   const restoreSettings = () => {
     const saved = localStorage.getItem(backupKey)
     if (!saved) {
@@ -48,7 +81,18 @@ export function installQARecorderPrivacy(): void {
   }
   globalThis.addEventListener('pagehide', restoreSettings, { once: true })
   Reflect.set(globalThis, '__owQaPrivacy', {
-    inspect: () => ({ captureCalls, captureBlocked: true, voiceChatForcedOff: true }),
+    inspect: () => ({
+      captureCalls,
+      captureBlocked: true,
+      voiceChatForcedOff: true,
+      graphics: {
+        original: originalGraphics,
+        originalSettingsState,
+        applied: 'auto',
+        tierOverride: override === 'low' || override === 'high' ? override : null,
+        tierOverrideRaw: override,
+      },
+    }),
     restoreSettings,
   })
 }

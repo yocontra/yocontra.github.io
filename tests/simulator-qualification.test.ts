@@ -1,6 +1,10 @@
 import { expect, test as it, spyOn } from 'bun:test'
 import { runInNewContext } from 'node:vm'
-import { installQARecorderPrivacy } from '../tools/content/frame-recorder.ts'
+import { NativePost } from '../src/experiments/out-west/client/post.ts'
+import {
+  installQARecorderPrivacy,
+  type QARecorderPrivacySample,
+} from '../tools/content/frame-recorder.ts'
 import { recordingAcknowledged, simulatorHost } from '../tools/content/simulator-host.ts'
 import {
   commandPlan,
@@ -34,7 +38,19 @@ function evidence() {
             url,
             visible: 'visible',
             focused: true,
-            privacy: { captureBlocked: true, voiceChatForcedOff: true, captureCalls: 0 },
+            privacy: {
+              captureBlocked: true,
+              voiceChatForcedOff: true,
+              captureCalls: 0,
+              graphics: {
+                original: null,
+                originalSettingsState: 'absent',
+                applied: 'auto' as const,
+                tierOverride: null,
+                tierOverrideRaw: null,
+              },
+            },
+            game: { scene: { renderer: { tier: 'low' as const, nativePost: null } } },
             audio: [{ state: 'running' }],
             contexts: [{ lost: false, buffer: { width: 812, height: 375 } }],
           },
@@ -128,7 +144,7 @@ it('rejects hidden or stale pages, lost graphics, short traces and capture attem
   expect(issues).toContain('Two-second native frame capability not established')
   expect(issues).toContain('Capture prevention missing or microphone capture attempted')
 })
-function privacyFixture(original: string | null, backup?: string) {
+function privacyFixture(original: string | null, backup?: string, hash = '') {
   const storage = new Map<string, string>()
   if (original !== null) {
     storage.set('ow.settings.v1', original)
@@ -155,21 +171,24 @@ function privacyFixture(original: string | null, backup?: string) {
     },
     addEventListener: (event: string, action: () => void) => handlers.set(event, action),
     DOMException,
+    URLSearchParams,
+    location: { hash },
   }
   runInNewContext(`(${installQARecorderPrivacy.toString()})()`, context)
   const guard = Reflect.get(context, '__owQaPrivacy') as {
-    inspect: () => { captureCalls: number; captureBlocked: boolean; voiceChatForcedOff: boolean }
+    inspect: () => QARecorderPrivacySample
     restoreSettings: () => void
   }
   return { context, storage, handlers, guard, nativeCalls: () => nativeCalls }
 }
-it('blocks microphone before boot while preserving all other settings and exact restoration', async () => {
-  const original = '{"voiceChat":true,"musicVolume":0.25,"effectsVolume":0.7}'
+it('blocks microphone and temporarily selects auto graphics while preserving exact restoration', async () => {
+  const original = '{"voiceChat":true,"graphics":"high","musicVolume":0.25,"effectsVolume":0.7}'
   const value = privacyFixture(original)
   expect(JSON.parse(value.storage.get('ow.settings.v1') ?? '{}')).toEqual({
     voiceChat: false,
     musicVolume: 0.25,
     effectsVolume: 0.7,
+    graphics: 'auto',
   })
   await expect(value.context.navigator.mediaDevices.getUserMedia()).rejects.toThrow(
     'Microphone capture disabled',
@@ -179,6 +198,13 @@ it('blocks microphone before boot while preserving all other settings and exact 
     captureCalls: 1,
     captureBlocked: true,
     voiceChatForcedOff: true,
+    graphics: {
+      original: 'high',
+      originalSettingsState: 'object',
+      applied: 'auto',
+      tierOverride: null,
+      tierOverrideRaw: null,
+    },
   })
   value.guard.restoreSettings()
   expect(value.storage.get('ow.settings.v1')).toBe(original)
@@ -188,6 +214,11 @@ it('blocks microphone before boot while preserving all other settings and exact 
 it('restores absent/malformed settings and preserves a crash backup instead of overwriting it', () => {
   for (const original of [null, '{malformed']) {
     const value = privacyFixture(original)
+    expect(value.guard.inspect().graphics).toMatchObject({
+      original: null,
+      applied: 'auto',
+      originalSettingsState: original === null ? 'absent' : 'malformed',
+    })
     value.handlers.get('pagehide')?.()
     expect(value.storage.get('ow.settings.v1') ?? null).toBe(original)
   }
@@ -197,6 +228,78 @@ it('restores absent/malformed settings and preserves a crash backup instead of o
   )
   value.guard.restoreSettings()
   expect(value.storage.get('ow.settings.v1')).toBe('{"voiceChat":true,"old":1}')
+})
+
+it('labels explicit tier overrides without changing them or replacing the original crash backup', () => {
+  for (const tier of ['low', 'high', 'invalid'] as const) {
+    const value = privacyFixture(
+      '{"graphics":"auto"}',
+      JSON.stringify({ value: '{"graphics":"high","voiceChat":true}' }),
+      `#tier=${tier}`,
+    )
+    const graphics = value.guard.inspect().graphics
+    expect(graphics.original).toBe('high')
+    expect(graphics.applied).toBe('auto')
+    expect(graphics.tierOverrideRaw).toBe(tier)
+    expect(graphics.tierOverride).toBe(tier === 'invalid' ? null : tier)
+    expect(value.context.location.hash).toBe(`#tier=${tier}`)
+    value.guard.restoreSettings()
+    expect(value.storage.get('ow.settings.v1')).toBe('{"graphics":"high","voiceChat":true}')
+  }
+  for (const original of ['null', '[]', '42', '{"graphics":"unexpected"}']) {
+    const value = privacyFixture(original)
+    expect(JSON.parse(value.storage.get('ow.settings.v1') ?? '{}').graphics).toBe('auto')
+    value.guard.restoreSettings()
+    expect(value.storage.get('ow.settings.v1')).toBe(original)
+  }
+})
+
+it('reads current NativePost configuration without inferring it from GL samples or changing it', () => {
+  const post = Object.create(NativePost.prototype) as NativePost
+  const first = Object.freeze({
+    enabled: false,
+    rendering: Object.freeze({ samples: 2 }),
+    ssao: Object.freeze({ type: 'none', samples: 3 }),
+  })
+  Reflect.set(post, 'frame', first)
+  const before = post.diagnostics()
+  expect(before).toEqual({ enabled: false, msaaSamples: 2, ssaoType: 'none', ssaoSamples: 3 })
+  Reflect.set(
+    post,
+    'frame',
+    Object.freeze({
+      enabled: true,
+      rendering: Object.freeze({ samples: 8 }),
+      ssao: Object.freeze({ type: 'lighting', samples: 6 }),
+    }),
+  )
+  expect(post.diagnostics()).toEqual({
+    enabled: true,
+    msaaSamples: 8,
+    ssaoType: 'lighting',
+    ssaoSamples: 6,
+  })
+  expect(before.msaaSamples).toBe(2)
+  expect(first.rendering.samples).toBe(2)
+})
+
+it('retains tier overrides through the local simulator bootstrap URL', () => {
+  expect(new URL(preflightURL('http://localhost:4398/#tier=high', 'fixture')).hash).toBe(
+    '#tier=high',
+  )
+})
+
+it('requires actual per-sample tier/post and temporary graphics metadata', () => {
+  const value = evidence()
+  const sample = value.receipt.recording.samples[0]
+  if (!sample) {
+    throw new Error('Missing qualification fixture sample')
+  }
+  Reflect.deleteProperty(sample.game.scene, 'renderer')
+  Reflect.deleteProperty(sample.privacy, 'graphics')
+  const issues = preflightIssues(value)
+  expect(issues).toContain('Actual native renderer tier/post configuration was not captured')
+  expect(issues).toContain('Temporary QA graphics selection was not auto')
 })
 
 it('does not acknowledge Start/authority readiness as native recording readiness', async () => {
@@ -230,7 +333,23 @@ it('does not acknowledge Start/authority readiness as native recording readiness
       }),
     )
   try {
-    expect((await fixture(new Request(`http://localhost/__qa/start?id=${id}`)))?.status).toBe(200)
+    const started = await fixture(new Request(`http://localhost/__qa/start?id=${id}`))
+    expect(started?.status).toBe(200)
+    const script = (await started?.text())?.split('<script>')[1]?.split('</script>')[0]
+    if (!script) {
+      throw new Error('Missing local simulator bootstrap script')
+    }
+    let redirected = ''
+    runInNewContext(script, {
+      sessionStorage: { setItem: () => undefined },
+      location: {
+        hash: '#tier=high',
+        replace: (value: string) => {
+          redirected = value
+        },
+      },
+    })
+    expect(redirected).toBe('/experiments/out-west/frontier/?server=remote#tier=high')
     await session({ action: 'ready', page: {} })
     expect(
       recordingAcknowledged(

@@ -3,7 +3,8 @@
 import { mkdir, writeFile } from 'node:fs/promises'
 import { createServer } from 'node:net'
 import { join, resolve } from 'node:path'
-import type { BuildReceipt } from './content/production-fixture.ts'
+import type { QARecorderPrivacySample } from './content/frame-recorder.ts'
+import { type BuildReceipt, nativeRendererCaptured } from './content/production-fixture.ts'
 import { recordingAcknowledged } from './content/simulator-host.ts'
 
 const deviceId = /^[0-9A-F-]{36}$/iu
@@ -79,7 +80,6 @@ export function preflightURL(origin: string, id: string) {
   }
   url.pathname = '/__qa/start'
   url.search = new URLSearchParams({ id, preflight: '1' }).toString()
-  url.hash = ''
   return url.href
 }
 function nodes(value: unknown): AXNode[] {
@@ -145,7 +145,8 @@ export function preflightIssues(options: {
       inputs?: { type: string }[]
       timestamps?: number[]
       samples?: {
-        privacy?: { captureBlocked: boolean; voiceChatForcedOff: boolean; captureCalls: number }
+        privacy?: QARecorderPrivacySample
+        game?: { scene: { renderer?: Parameters<typeof nativeRendererCaptured>[0] } }
         url?: string
         visible: string
         focused: boolean
@@ -155,6 +156,12 @@ export function preflightIssues(options: {
     }
   }
   const recording = receipt.recording
+  if (recording?.samples?.some((sample) => !nativeRendererCaptured(sample.game?.scene.renderer))) {
+    issues.push('Actual native renderer tier/post configuration was not captured')
+  }
+  if (recording?.samples?.some((sample) => sample.privacy?.graphics?.applied !== 'auto')) {
+    issues.push('Temporary QA graphics selection was not auto')
+  }
   if (!(receipt.preflight && recording?.completed && (recording.timestamps?.length ?? 0) >= 30)) {
     issues.push('Two-second native frame capability not established')
   }

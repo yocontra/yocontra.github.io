@@ -5,7 +5,11 @@ import { arch, cpus, platform, release, tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { chromium } from 'playwright'
 import { foregroundCoverage } from './content/foreground-coverage.ts'
-import { installFrameRecorder, installQARecorderPrivacy } from './content/frame-recorder.ts'
+import {
+  installFrameRecorder,
+  installQARecorderPrivacy,
+  type QARecorderPrivacySample,
+} from './content/frame-recorder.ts'
 import { frameTarget } from './content/frame-target.ts'
 import { frameTiming } from './content/frame-timing.ts'
 import {
@@ -72,7 +76,7 @@ interface Sample {
   audio: { state: string }[]
   contexts: { lost: boolean; buffer: { width: number; height: number } }[]
   game?: NativeSample
-  privacy?: { captureCalls: number; captureBlocked: boolean; voiceChatForcedOff: boolean }
+  privacy?: QARecorderPrivacySample
 }
 interface Recording {
   timestamps: number[]

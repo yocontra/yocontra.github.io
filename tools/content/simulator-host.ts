@@ -74,7 +74,7 @@ export function simulatorHost(api: string, directory: string, build: BuildReceip
       preflight: url.searchParams.get('preflight') === '1',
     })
     return new Response(
-      `<html><head><script>sessionStorage.setItem('__owQaAccount',JSON.stringify(${credentials}));sessionStorage.setItem('__owQaRecording',JSON.stringify(${setup}));location.replace('/experiments/out-west/frontier/?server=remote')</script></head><body>Preparing local qualification scene…</body></html>`,
+      `<html><head><script>sessionStorage.setItem('__owQaAccount',JSON.stringify(${credentials}));sessionStorage.setItem('__owQaRecording',JSON.stringify(${setup}));location.replace('/experiments/out-west/frontier/?server=remote'+location.hash)</script></head><body>Preparing local qualification scene…</body></html>`,
       { headers: { 'content-type': 'text/html' } },
     )
   }
