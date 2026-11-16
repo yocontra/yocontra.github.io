@@ -12,6 +12,7 @@ import {
   restoreFreightUv1Usage,
   retainFreightUv1,
 } from './environment-cloud-uvs.ts'
+import { pruneNativeEnvironment } from './environment-prune.ts'
 import { compressEnvironmentTextures } from './environment-textures.ts'
 import { formatContent } from './format-content.ts'
 import { packFrontierVertices } from './frontier-vertex-packing.ts'
@@ -135,6 +136,11 @@ for (const name of names.filter((candidate) => !only || candidate === only)) {
   await withContentOutput(publishing ? resolve(output, '..') : resolve(output, 'resources'), () =>
     compressEnvironmentTextures(path),
   )
+  if (name === 'frontier') {
+    const final = await io.read(path)
+    await pruneNativeEnvironment(final)
+    await io.write(path, final)
+  }
 }
 if (only || !publishing) {
   if (only === 'frontier' && publishing) {

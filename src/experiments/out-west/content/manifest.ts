@@ -91,13 +91,13 @@ export const ENVIRONMENT = {
   hash: '206c67e3a1b992282821cf06662bdd69bbb4915c1c4444a66338a40d6a7d4e34',
   bytes: 1173154,
 } as const
-export const CONTENT_VERSION = '39e9998a5d0333c981f7d67a39719734287a02a7a878c99041e6ac3c2dd7dc6b'
+export const CONTENT_VERSION = '3982a2dff8cafdd276dd212a563a8515305fbdba06c582ce59fff71dde2f12ce'
 export const COLLISION_VERSION = 'a8e983011c7998d9dc9bd9e68b0e4ef4519f0aaf1f7911f7633625d182e1462e'
 export const ASSETS = {
   frontier: {
-    url: '/experiments/out-west/3d/native-v2/baked/frontier.glb?v=c6d958be6a03d3c6',
-    hash: 'c6d958be6a03d3c6eedabd37e7ac41bb2eb8cb6b05fc3cdf9d6d501659dfa62f',
-    bytes: 60373452,
+    url: '/experiments/out-west/3d/native-v2/baked/frontier.glb?v=aeb63a2d3704916a',
+    hash: 'aeb63a2d3704916a71bfc60f43360d6ae72fd36a99fef045dae572e2c5294324',
+    bytes: 58467768,
   },
   duel: {
     url: '/experiments/out-west/3d/native-v2/baked/duel.glb?v=6845fb73cd9e1a74',
