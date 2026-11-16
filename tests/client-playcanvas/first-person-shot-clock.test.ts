@@ -11,7 +11,12 @@ it('finishes the native shot endpoint when the wall deadline precedes the animat
   const f = firstPersonFixture()
   try {
     const url = 'fixture://viewmodels/outfit.trail-duds.glb'
-    const load = equippedActor(f.game, DEFAULT_LOADOUT, {}, { viewmodel: { url, tracks: f.request.world.tracks } })
+    const load = equippedActor(
+      f.game,
+      DEFAULT_LOADOUT,
+      {},
+      { viewmodel: { url, tracks: f.request.world.tracks } },
+    )
     f.requests[0]?.finish()
     await flush()
     const actor = await load

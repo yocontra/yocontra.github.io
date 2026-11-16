@@ -218,7 +218,9 @@ export function firstPersonFixture() {
     id: 'self',
     world: {
       root: world,
-      tracks: CLIPS.map((name) => new AnimTrack(name, name.includes('Shoot') ? 0.2 : 1, [], [], [])),
+      tracks: CLIPS.map(
+        (name) => new AnimTrack(name, name.includes('Shoot') ? 0.2 : 1, [], [], []),
+      ),
     } as unknown as DuelActor,
     domain: undefined,
     appearance: undefined,

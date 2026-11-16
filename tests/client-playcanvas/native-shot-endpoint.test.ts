@@ -69,6 +69,7 @@ it('finishes the native 200 ms first-person shot and cancels it on a life or vie
     const host = {
       actors: new Map([['self', rider]]),
       players: new Map([['self', player]]),
+      firstPerson: { fire: () => {} },
     } as unknown as Actors
     const fire = () => Actors.prototype.fire.call(host, 'self')
     fire()
