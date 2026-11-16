@@ -1,13 +1,13 @@
-"""Author the shared head's occiput volume and its neck skin texels.
+"""Author the shared neck contour and its skin texels.
 
 Blender --background --factory-startup --python this-file
 
-The Quaternius head keeps a flat skull back that drops straight into the nape, and its
-neck UV island lies on unrelated hand/shoulder texels of the shared skin atlas. Blender
+The shared head has a lower-skull ledge and closely fitted hair. Its neck UV island
+lies on unrelated hand/shoulder texels of the shared skin atlas. Blender
 authors two portable artifacts from the canonical player head, read only:
 
-* `lattice.json`, a native linear Lattice (in glTF axes around the Head origin) that rounds
-  the occiput and tapers its underside into the neck. The content baker deforms every fitted body.
+* `lattice.json`, a native linear Lattice (in glTF axes around the Head origin) that tapers
+  the lower skull into the neck while preserving the fitted hair cap. The baker deforms every body.
 * `neck-*.png`, atlas-space replacement texels for the neck island: albedo filled
   harmonically from the colors across its UV seams with Cycles-baked skin mottling,
   a Cycles-baked fine skin normal, and the face's own ARM response.
@@ -30,7 +30,6 @@ REFERENCE = SOURCES / "player.gltf"
 # Head-joint-relative glTF bounds of the lattice (meters at the player's head scale).
 BOUNDS = ((-0.13, -0.09, -0.14), (0.13, 0.23, 0.1))
 RESOLUTION = (9, 11, 9)
-OCCIPUT_DEPTH = 0.12
 COMPONENTS = {5126: np.float32, 5125: np.uint32, 5123: np.uint16, 5121: np.uint8}
 WIDTHS = {"SCALAR": 1, "VEC2": 2, "VEC3": 3, "VEC4": 4, "MAT4": 16}
 
@@ -86,16 +85,14 @@ def smoothstep(edge0, edge1, x):
 def occiput(local):
     """Taper the posterior skull into the neck, preserving the ears, face and neck shaft."""
     x, y, z = local[..., 0], local[..., 1], local[..., 2]
-    skull = smoothstep(0.065, 0.11, y) * (1 - smoothstep(0.14, 0.20, y))
-    behind = np.minimum(z, 0) * smoothstep(0.0, -0.035, z)
     width = 1 - smoothstep(0.045, 0.06, np.abs(x + 0.002))
     offset = np.zeros_like(local)
     # The source has a posterior ledge just above the Head pivot. Remove its excess
     # depth without shrinking the neck shaft or moving the lateral ear attachment.
     underside = smoothstep(0.008, 0.028, y) * (1 - smoothstep(0.055, 0.10, y))
     taper = np.maximum(-0.044 - 0.16 * y - z, 0)
-    center = width
-    offset[..., 2] = OCCIPUT_DEPTH * skull * behind * width + 0.9 * underside * taper * center
+    # The fitted hair already defines the upper skull: expanding it causes scalp poke-through.
+    offset[..., 2] = 0.9 * underside * taper * width
     return offset
 
 

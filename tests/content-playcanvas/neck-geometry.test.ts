@@ -82,6 +82,20 @@ for (const id of ['player', 'outfit.trail-duds', 'outfit.wool-duster', 'outlaw-0
     const ears = rows.filter(({ old }) => Math.abs((old[0] ?? 0) - headX) > 0.075)
     expect(ears.length).toBeGreaterThan(0)
     expect(ears.map(({ next }) => next)).toEqual(ears.map(({ old }) => old))
+    const hairRange = (
+      (node?.getExtras().pieceRanges ?? []) as { start: number; count: number; slot: string }[]
+    ).find((part) => part.slot === 'hair')
+    if (!hairRange) {
+      throw new Error('Missing fitted hair fixture')
+    }
+    const hairBack = Array.from({ length: hairRange.count }, (_, i) =>
+      allBefore.slice((hairRange.start + i) * 3, (hairRange.start + i + 1) * 3),
+    ).filter((p) => (p[2] ?? 0) < headZ - 0.025 && Math.abs((p[0] ?? 0) - headX) < 0.06)
+    const coveredFrom = Math.min(...hairBack.map((p) => p[1] ?? 0)) + 0.025
+    const coveredScalp = rows.filter(({ old }) => (old[1] ?? 0) >= coveredFrom)
+    expect(coveredScalp.length).toBeGreaterThan(20)
+    // The fitted hair is immutable: expanding the upper skull through it creates bald patches.
+    expect(coveredScalp.map(({ next }) => next)).toEqual(coveredScalp.map(({ old }) => old))
     const dz = rows.map(({ old, next }) => (next[2] ?? 0) - (old[2] ?? 0))
     expect(Math.max(...dz)).toBeGreaterThan(0.004)
     const posterior = rows.filter(({ old }) => (old[2] ?? 0) < headZ - 0.035)
