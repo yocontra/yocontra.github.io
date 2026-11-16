@@ -17,6 +17,7 @@ import { cache, type Range } from './character-atlas.ts'
 import { appendClips } from './character-clips.ts'
 import { gunSurfaceDetail, prepareSpurSurface } from './character-metal.ts'
 import { convertCharacterSurface } from './character-surfaces.ts'
+import { contentOutput } from './content-output.ts'
 import { integrateGarmentParts } from './garment-parts.ts'
 import { repairHeadNape } from './head-nape.ts'
 import { labelActorHatGlb } from './label-actor-hats.ts'
@@ -32,7 +33,6 @@ const RIGID = /^(?:hat|spurs)\./u
 const HUMAN = /^(?:outfit\.|outlaw-|player$)/u
 const WEAPON_BEARER = /^(?:gun\.|outlaw-|held-|player$)/u
 const source = resolve('tools/art/characters')
-const output = resolve('public/experiments/out-west/3d/native-v2')
 const io = new NodeIO().registerExtensions(ALL_EXTENSIONS)
 export async function bakeCharacter(path: string): Promise<void> {
   const doc = await io.read(path)
@@ -104,7 +104,7 @@ export async function bakeCharacter(path: string): Promise<void> {
   } else if (id === 'player' || id.startsWith('outlaw-')) {
     category = 'baked'
   }
-  const target = resolve(output, category, `${id}.glb`)
+  const target = contentOutput(category, `${id}.glb`)
   await io.write(target, doc)
   if (category === 'baked') {
     await writeFile(target, labelActorHatGlb(await readFile(target)).bytes)
@@ -241,7 +241,7 @@ function joinMaterials(doc: Document): void {
   }
 }
 if (import.meta.main) {
-  await mkdir(resolve(output, 'characters'), { recursive: true })
+  await mkdir(contentOutput('characters'), { recursive: true })
   for (const file of (await readdir(source)).filter(
     (candidate) =>
       candidate.endsWith('.gltf') &&
