@@ -91,7 +91,7 @@ export const ENVIRONMENT = {
   hash: '206c67e3a1b992282821cf06662bdd69bbb4915c1c4444a66338a40d6a7d4e34',
   bytes: 1173154,
 } as const
-export const CONTENT_VERSION = '35dcfa550499aed4accaf36c3931cebabf29d6155e73f57aec57fd7593912f11'
+export const CONTENT_VERSION = 'c08de55de5cf6bacb81b72de65cecd0731e6ea50e88031d63bf59bad47566bd3'
 export const COLLISION_VERSION = '03b11033428780f67158b47e3fc2b37d761185acea4d5b323301449671b65def'
 export const ASSETS = {
   frontier: {
@@ -120,8 +120,8 @@ export const ASSETS = {
     bytes: 18508708,
   },
   player: {
-    url: '/experiments/out-west/3d/native-v2/baked/player.glb?v=992f7ce2c56c4e1d',
-    hash: '992f7ce2c56c4e1d560d0423cfcc3abc24be290fc2e74664fcdcc20194527b5f',
+    url: '/experiments/out-west/3d/native-v2/baked/player.glb?v=2f205ca7fc737c2d',
+    hash: '2f205ca7fc737c2daef67e430afd93cdc9c90134f8d2fedbb3a7518a2cd4e146',
     bytes: 1581680,
   },
   moves: {
@@ -130,88 +130,88 @@ export const ASSETS = {
     bytes: 4309352,
   },
   'outlaw-0': {
-    url: '/experiments/out-west/3d/native-v2/baked/outlaw-0.glb?v=b622c2892448d597',
-    hash: 'b622c2892448d59722519ac2ef20d13184bea1e353b2350f613ef4ef655eaee8',
+    url: '/experiments/out-west/3d/native-v2/baked/outlaw-0.glb?v=f8afa2ceaca438a7',
+    hash: 'f8afa2ceaca438a78aa13f1c006beef32de682fbfb5ec7b38abfc1c1c818c784',
     bytes: 2020892,
   },
   'outlaw-1': {
-    url: '/experiments/out-west/3d/native-v2/baked/outlaw-1.glb?v=add2d4be243b89a6',
-    hash: 'add2d4be243b89a6e136b8c4828e4b868c95ad3d4dbf08e29429f6ade3d29902',
+    url: '/experiments/out-west/3d/native-v2/baked/outlaw-1.glb?v=80dbbd0991ffc3b5',
+    hash: '80dbbd0991ffc3b566a2b59a8ec76d94af735d06d4fc0f977764e7c9919e1e28',
     bytes: 2052604,
   },
   'outlaw-2': {
-    url: '/experiments/out-west/3d/native-v2/baked/outlaw-2.glb?v=55f5066c1c81e08e',
-    hash: '55f5066c1c81e08e037f5eea5c30a0267102cd1641785aa7f3bf4e3882954b00',
+    url: '/experiments/out-west/3d/native-v2/baked/outlaw-2.glb?v=437a6f2c97f2a3bb',
+    hash: '437a6f2c97f2a3bbbcfb9063918cea7633924da3043c1f52fe8eca7ce079d308',
     bytes: 2006312,
   },
   'outlaw-3': {
-    url: '/experiments/out-west/3d/native-v2/baked/outlaw-3.glb?v=f283535a6c4699ee',
-    hash: 'f283535a6c4699ee81479607c73fdf9633f53826820ca50f885995d6afa1365c',
+    url: '/experiments/out-west/3d/native-v2/baked/outlaw-3.glb?v=c2502f942cfa8457',
+    hash: 'c2502f942cfa8457b225a53e1f21d011b7b99bf064494ca4d160a28e7612c6b5',
     bytes: 2091088,
   },
   'outlaw-4': {
-    url: '/experiments/out-west/3d/native-v2/baked/outlaw-4.glb?v=067b475a9e92addd',
-    hash: '067b475a9e92adddb44f3df8ab455ddbba158a8ec878da882d40ca11bae41e6c',
+    url: '/experiments/out-west/3d/native-v2/baked/outlaw-4.glb?v=50aaefbb36fcf3e3',
+    hash: '50aaefbb36fcf3e336d17b7ef685dc51d324d3f7cb23b9b24304526a1e7255bd',
     bytes: 2043428,
   },
   'outlaw-5': {
-    url: '/experiments/out-west/3d/native-v2/baked/outlaw-5.glb?v=42888397c209a758',
-    hash: '42888397c209a758ebb8a8769632bf4a6444763ee00059fc05b10195ccc865e1',
+    url: '/experiments/out-west/3d/native-v2/baked/outlaw-5.glb?v=decacced149b5412',
+    hash: 'decacced149b541299e3d025e7e019f60ad86af49d6ad07b7bace8a935275292',
     bytes: 2037520,
   },
   'outlaw-6': {
-    url: '/experiments/out-west/3d/native-v2/baked/outlaw-6.glb?v=1738fa35b009e2d1',
-    hash: '1738fa35b009e2d1c0d394d383ebcaac161cd1b5a13f4a8490d1d32a1885587f',
+    url: '/experiments/out-west/3d/native-v2/baked/outlaw-6.glb?v=fa2e176870b78980',
+    hash: 'fa2e176870b78980c93cfdda95fd70474893c1a816e7d68a51ac9551d61c93e5',
     bytes: 1983016,
   },
   'outlaw-7': {
-    url: '/experiments/out-west/3d/native-v2/baked/outlaw-7.glb?v=7f2969b335890d37',
-    hash: '7f2969b335890d37cf26ccc5114a00daa2faa77f469e3e8b6438269bc801c4bf',
+    url: '/experiments/out-west/3d/native-v2/baked/outlaw-7.glb?v=d2298962c3b587f8',
+    hash: 'd2298962c3b587f85b8c9ff4bc3fcb7a3b7665e7214b504fe11ef15a87886f8e',
     bytes: 2050888,
   },
   'outlaw-8': {
-    url: '/experiments/out-west/3d/native-v2/baked/outlaw-8.glb?v=5dac27ada2a3315c',
-    hash: '5dac27ada2a3315c8520c9e3b9e81a23f2c7ff1d53371d9426d62fbd411238ff',
+    url: '/experiments/out-west/3d/native-v2/baked/outlaw-8.glb?v=296125b0c71c7d4f',
+    hash: '296125b0c71c7d4ff57933871fe0597d7e54d4430b285b1350cf102f3daaa34e',
     bytes: 2088824,
   },
   'outlaw-9': {
-    url: '/experiments/out-west/3d/native-v2/baked/outlaw-9.glb?v=8685dde7785075ae',
-    hash: '8685dde7785075ae3b969819fb605afd1f0c9fe9e5793637cd5f635b622c9207',
+    url: '/experiments/out-west/3d/native-v2/baked/outlaw-9.glb?v=25ca450ad3b836f0',
+    hash: '25ca450ad3b836f0b4dc6e7430e4949f41130907976c4220061909fd899c53a1',
     bytes: 2042384,
   },
   'outlaw-10': {
-    url: '/experiments/out-west/3d/native-v2/baked/outlaw-10.glb?v=1ca72c9cd272612f',
-    hash: '1ca72c9cd272612f58318567babb5f8a5523dfdd0e8d550bf214a9039338302f',
+    url: '/experiments/out-west/3d/native-v2/baked/outlaw-10.glb?v=498aff520b709bb6',
+    hash: '498aff520b709bb6fbc433b1dab07043a2f98fbb930a3c9067d6ba93ae146612',
     bytes: 2093208,
   },
   'outlaw-11': {
-    url: '/experiments/out-west/3d/native-v2/baked/outlaw-11.glb?v=4ed3af421b708d0c',
-    hash: '4ed3af421b708d0c23719a535816b2423c63857a377d03ee158d7c6491363cc4',
+    url: '/experiments/out-west/3d/native-v2/baked/outlaw-11.glb?v=cec7a857c24022e1',
+    hash: 'cec7a857c24022e11f243e85fa9061c0e2b66a097e2e282cabbcf7e17963b411',
     bytes: 2062284,
   },
   'outlaw-12': {
-    url: '/experiments/out-west/3d/native-v2/baked/outlaw-12.glb?v=fffe2911123208d5',
-    hash: 'fffe2911123208d529379c74e4adc908a295a4cb6a4f5279bde2dde6450ea141',
+    url: '/experiments/out-west/3d/native-v2/baked/outlaw-12.glb?v=066eefcdd8041277',
+    hash: '066eefcdd804127732855acd8ce2402aba2a2ead9dd178363f1dbb7a449870ee',
     bytes: 2051136,
   },
   'outlaw-13': {
-    url: '/experiments/out-west/3d/native-v2/baked/outlaw-13.glb?v=8d4db9a0d2f812c3',
-    hash: '8d4db9a0d2f812c3e26811fe30b93870f7d2cdd125d174264d215057a3a9e563',
+    url: '/experiments/out-west/3d/native-v2/baked/outlaw-13.glb?v=931811047db75087',
+    hash: '931811047db75087a61f0509d5960bef55709cd56b486bbc14bbee7084d8ee59',
     bytes: 2074492,
   },
   'outlaw-14': {
-    url: '/experiments/out-west/3d/native-v2/baked/outlaw-14.glb?v=56cdb885295525c1',
-    hash: '56cdb885295525c10e352f9f5c122d83bb542e80cc9817020af884039cc9012b',
+    url: '/experiments/out-west/3d/native-v2/baked/outlaw-14.glb?v=65c677934a4be04e',
+    hash: '65c677934a4be04ecf31ab72f687f89c39a86b49fd29d08d72e1a9cce1579af5',
     bytes: 2078328,
   },
   'outlaw-15': {
-    url: '/experiments/out-west/3d/native-v2/baked/outlaw-15.glb?v=4b45148403bb7b34',
-    hash: '4b45148403bb7b343cfe133a3ee1ccad428e7e9645d040e770a3580d712b51ff',
+    url: '/experiments/out-west/3d/native-v2/baked/outlaw-15.glb?v=06b6644086308992',
+    hash: '06b6644086308992446447c76cd5b53e981546d5a77281a428d4d669a12589e1',
     bytes: 2031088,
   },
   'outlaw-16': {
-    url: '/experiments/out-west/3d/native-v2/baked/outlaw-16.glb?v=b3fd7d8e6b6d6f8e',
-    hash: 'b3fd7d8e6b6d6f8e4af4cbd23baf860912ea578cf78bbd636dd62d7610463ebf',
+    url: '/experiments/out-west/3d/native-v2/baked/outlaw-16.glb?v=c5e0e9ef74c3a0c3',
+    hash: 'c5e0e9ef74c3a0c3301660be79b6557a7649c38fabd88cf88f5dd473e369a576',
     bytes: 2066336,
   },
 } as const
