@@ -12,7 +12,7 @@ interface Group {
 
 export class NativeModelLods {
   private readonly groups: Group[] = []
-  private readonly components = new Map<RenderComponent, boolean>()
+  private readonly components = new Map<RenderComponent, { enabled: boolean; owner: Entity }>()
   constructor(root: Entity) {
     for (const node of root.find((candidate) => candidate.name.startsWith(MODEL_LOD_PREFIX))) {
       if (!(node instanceof Entity)) {
@@ -47,7 +47,7 @@ export class NativeModelLods {
         throw new Error(`Empty authored detail group ${node.name}`)
       }
       for (const component of [...group.near, ...group.far]) {
-        this.components.set(component, component.enabled)
+        this.components.set(component, { enabled: component.enabled, owner: node })
       }
       this.groups.push(group)
     }
@@ -55,6 +55,10 @@ export class NativeModelLods {
   /** Use a separate native batch group: detail changes should not rebuild buildings or panes. */
   owns(component: RenderComponent): boolean {
     return this.components.has(component)
+  }
+  /** Near/far components share their authored root, including its world-space location. */
+  owner(component: RenderComponent): Entity | undefined {
+    return this.components.get(component)?.owner
   }
   update(camera: Vec3): void {
     for (const group of this.groups) {
@@ -76,10 +80,10 @@ export class NativeModelLods {
       }
       group.distant = distant
       for (const component of group.near) {
-        component.enabled = !distant && this.components.get(component) === true
+        component.enabled = !distant && this.components.get(component)?.enabled === true
       }
       for (const component of group.far) {
-        component.enabled = distant && this.components.get(component) === true
+        component.enabled = distant && this.components.get(component)?.enabled === true
       }
     }
   }

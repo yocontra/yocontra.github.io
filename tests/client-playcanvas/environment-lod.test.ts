@@ -16,7 +16,23 @@ import type { GameApplication } from '../../src/experiments/out-west/client/appl
 import { NativeEnvironment } from '../../src/experiments/out-west/client/environment.ts'
 import { NativeWilds } from '../../src/experiments/out-west/client/wilds.ts'
 
-async function fixture(distance: number, disabledNear = false) {
+function addLod(app: AppBase, root: Entity, name: string, x: number) {
+  const group = new Entity(`model-lod:10:2:${name}`, app)
+  const near = new Entity(`lod-near:${name}`, app)
+  const far = new Entity(`lod-far:${name}`, app)
+  root.addChild(group)
+  group.setLocalPosition(x, 0, 0)
+  group.addChild(near)
+  group.addChild(far)
+  near.addComponent('render', { type: 'box' })
+  far.addComponent('render', { type: 'sphere' })
+  return { group, near, far }
+}
+
+async function fixture(
+  distance: number,
+  { disabledNear = false, disabledFar = false, multipleRegions = false, worldOffset = 0 } = {},
+) {
   const device = new NullGraphicsDevice({ width: 1, height: 1 })
   const app = new AppBase(device.canvas)
   const options = new AppOptions()
@@ -27,6 +43,7 @@ async function fixture(distance: number, disabledNear = false) {
   const root = new Entity('town', app)
   const camera = new Entity('camera', app)
   app.root.addChild(root)
+  root.setLocalPosition(worldOffset, 0, 0)
   app.root.addChild(camera)
   camera.setPosition(distance, 0, 0)
   const group = new Entity('model-lod:10:2:fixture', app)
@@ -36,7 +53,22 @@ async function fixture(distance: number, disabledNear = false) {
   group.addChild(near)
   group.addChild(far)
   near.addComponent('render', { type: 'box', enabled: !disabledNear })
-  far.addComponent('render', { type: 'sphere' })
+  far.addComponent('render', { type: 'sphere', enabled: !disabledFar })
+  const neighbours = multipleRegions
+    ? [
+        addLod(app, root, 'same-cell', 4),
+        addLod(app, root, 'east', 64),
+        addLod(app, root, 'west', -40),
+      ]
+    : []
+  const ordinary = new Entity('wall-fixture', app)
+  const pane = new Entity('glass-fixture', app)
+  if (multipleRegions) {
+    root.addChild(ordinary)
+    root.addChild(pane)
+    ordinary.addComponent('render', { type: 'box' })
+    pane.addComponent('render', { type: 'box' })
+  }
   const cloud = new Texture(device, { width: 1, height: 1, format: PIXELFORMAT_RGBA8 })
   const textureAsset = new Asset('cloud', 'texture')
   textureAsset.resource = cloud
@@ -64,14 +96,19 @@ async function fixture(distance: number, disabledNear = false) {
     data: { gltf: { materials: [] } },
   } as unknown as ContainerResource
   environment.attach(root, asset)
-  const batchGroup = app.batcher?.getGroupByName('environment-detail')
-  if (!(batchGroup && near.render && far.render)) {
+  const batchGroup = app.batcher?.getGroupById(far.render?.batchGroupId ?? -1)
+  if (!(near.render && far.render)) {
     throw new Error('Missing actual native fixture')
   }
   const snapshot = () => {
     app.batcher?.updateAll()
-    const members = (Reflect.get(batchGroup, '_obj') as { render: Entity[] }).render
-    const batches = Reflect.get(app.batcher, 'getBatches').call(app.batcher, batchGroup.id) as {
+    const members = batchGroup
+      ? (Reflect.get(batchGroup, '_obj') as { render: Entity[] }).render
+      : []
+    const batches = Reflect.get(app.batcher, 'getBatches').call(
+      app.batcher,
+      batchGroup?.id ?? -1,
+    ) as {
       origMeshInstances: { node: Entity }[]
     }[]
     return {
@@ -85,6 +122,12 @@ async function fixture(distance: number, disabledNear = false) {
     }
   }
   return {
+    app,
+    root,
+    environment,
+    neighbours,
+    ordinary,
+    pane,
     near,
     far,
     snapshot,
@@ -136,13 +179,100 @@ for (const initial of [0, 13]) {
 }
 
 it('pre-disabled source components stay out of native batches through LOD changes', async () => {
-  const f = await fixture(0, true)
+  const f = await fixture(0, { disabledNear: true })
   try {
     expect(f.near.render?.enabled).toBe(false)
     expect(f.snapshot()).toEqual({ members: [], sources: [], drawn: [] })
     f.move(13)
     expect(f.snapshot().sources).toEqual([f.far.name])
     f.move(7)
+    expect(f.snapshot()).toEqual({ members: [], sources: [], drawn: [] })
+  } finally {
+    expect(f.destroy()).toEqual({ buffers: 0, textures: 0 })
+  }
+})
+
+it('native detail regeneration stays in its owner region and retains other batches', async () => {
+  const f = await fixture(0, { multipleRegions: true })
+  const batcher = f.app.batcher
+  if (!batcher) {
+    throw new Error('Missing native batch manager')
+  }
+  const batches = (id: number) => Reflect.get(batcher, 'getBatches').call(batcher, id) as object[]
+  const ids = f.neighbours.map(({ near, far }) => {
+    expect(near.render?.batchGroupId).toBe(far.render?.batchGroupId)
+    return far.render?.batchGroupId ?? -1
+  })
+  const local = f.far.render?.batchGroupId ?? -1
+  const ordinary = f.ordinary.render?.batchGroupId ?? -1
+  const pane = f.pane.render?.batchGroupId ?? -1
+  try {
+    expect(ids[0]).toBe(local)
+    const retained = [ids[1], ids[2], ordinary, pane].map((id) => batches(id ?? -1)[0])
+    expect(retained.every(Boolean)).toBe(true)
+    const oldLocal = batches(local)[0]
+    const regenerate = batcher.generate.bind(batcher)
+    const regenerated: number[][] = []
+    const generate = spyOn(batcher, 'generate').mockImplementation((groups) => {
+      regenerated.push([...(groups ?? [])])
+      regenerate(groups)
+    })
+    try {
+      f.move(13)
+      f.snapshot()
+      expect(generate).toHaveBeenCalledTimes(1)
+      expect(regenerated).toEqual([[local]])
+      expect(f.near.render?.enabled).toBe(false)
+      expect(f.far.render?.enabled).toBe(true)
+      expect(batches(local)[0]).not.toBe(oldLocal)
+      for (const [index, id] of [ids[1], ids[2], ordinary, pane].entries()) {
+        expect(batches(id ?? -1)[0] === retained[index]).toBe(true)
+      }
+      expect(new Set([local, ids[1], ids[2], ordinary, pane]).size).toBe(5)
+      expect(batcher.getGroupById(ids[2] ?? -1)?.name).toBe('environment-detail:-2:0')
+      // Inside the hysteresis band there is no additional native regeneration.
+      f.move(11)
+      f.snapshot()
+      expect(generate).toHaveBeenCalledTimes(1)
+      // Vertical separation still participates in the unchanged LOD threshold.
+      f.app.root.findByName('camera')?.setPosition(0, 13, 0)
+      f.app.fire('update', 0)
+      f.snapshot()
+      expect(f.far.render?.enabled).toBe(true)
+    } finally {
+      generate.mockRestore()
+    }
+    f.root.destroy()
+    for (const id of [local, ...ids, ordinary, pane]) {
+      expect(batcher.getGroupById(id)).toBeNull()
+    }
+  } finally {
+    expect(f.destroy()).toEqual({ buffers: 0, textures: 0 })
+  }
+})
+
+it('region ownership uses the authored root world transform rather than local coordinates', async () => {
+  const f = await fixture(96, { worldOffset: 96 })
+  try {
+    const id = f.far.render?.batchGroupId ?? -1
+    expect(f.app.batcher?.getGroupById(id)?.name).toBe('environment-detail:3:0')
+    expect(f.near.render?.batchGroupId).toBe(id)
+    expect(f.snapshot().sources).toEqual([f.near.name])
+    f.move(109)
+    expect(f.snapshot().sources).toEqual([f.far.name])
+  } finally {
+    expect(f.destroy()).toEqual({ buffers: 0, textures: 0 })
+  }
+})
+
+it('fully authored-disabled LODs allocate no empty detail batch group', async () => {
+  const f = await fixture(0, { disabledNear: true, disabledFar: true })
+  try {
+    expect(f.app.batcher?.getGroupByName('environment-detail:0:0')).toBeNull()
+    expect(f.app.batcher?.getGroupByName('environment-detail')).toBeNull()
+    expect(f.near.render?.batchGroupId).toBe(-1)
+    expect(f.far.render?.batchGroupId).toBe(-1)
+    f.move(13)
     expect(f.snapshot()).toEqual({ members: [], sources: [], drawn: [] })
   } finally {
     expect(f.destroy()).toEqual({ buffers: 0, textures: 0 })

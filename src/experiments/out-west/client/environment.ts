@@ -1,6 +1,7 @@
 import {
   ADDRESS_CLAMP_TO_EDGE,
   type Asset,
+  type BatchGroup,
   Color,
   type ContainerResource,
   DETAILMODE_MUL,
@@ -10,11 +11,8 @@ import {
   FOG_LINEAR,
   PIXELFORMAT_RGBA8,
   Quat,
-  type RenderComponent,
-  SEMANTIC_POSITION,
   StandardMaterial,
   Texture,
-  TYPE_FLOAT32,
   Vec2,
   Vec3,
 } from 'playcanvas'
@@ -26,6 +24,7 @@ import { drawPoster } from '../ui/poster.ts'
 import type { GameApplication } from './application.ts'
 import { NativeClockwork } from './clockwork.ts'
 import { animateWind, prepareFreightClouds, worldCloudMaterials } from './environment-assets.ts'
+import { assignEnvironmentBatch } from './environment-detail-batches.ts'
 import { NativeModelLods } from './model-lod.ts'
 import { NativeWilds } from './wilds.ts'
 
@@ -37,20 +36,6 @@ const LAMP_GLOW = 6
 const FRONTIER_SUN = new Vec3(-0.55, 0.62, 0.56).normalize()
 function color(rgb: readonly number[]): Color {
   return new Color(rgb[0] ?? 0, rgb[1] ?? 0, rgb[2] ?? 0).gamma()
-}
-
-function canBatch(component: RenderComponent, detailed: boolean): boolean {
-  if (detailed && !component.enabled) {
-    return false
-  }
-  const batchable = component.meshInstances.every(
-    (instance) =>
-      !(instance.skinInstance || instance.morphInstance) &&
-      instance.mesh?.vertexBuffer.format.elements.find(
-        (element) => element.name === SEMANTIC_POSITION,
-      )?.dataType === TYPE_FLOAT32,
-  )
-  return batchable
 }
 
 /** Authored light/sky presets, native wind clips and spatial static batches for one scene. */
@@ -388,7 +373,7 @@ export class NativeEnvironment {
     const group = this.game.app.batcher?.addGroup('environment', false, 32)
     // Native RenderComponent enable/disable dirties only this group when a pane breaks or resets.
     const panes = this.game.app.batcher?.addGroup('environment-panes', false, 32)
-    const details = this.game.app.batcher?.addGroup('environment-detail', false, 32)
+    const details = new Map<string, BatchGroup>()
     const clones = new Map<StandardMaterial, StandardMaterial>()
     const worldClouds = worldCloudMaterials(asset.resource as ContainerResource)
     for (const component of root.findComponents('render')) {
@@ -418,15 +403,15 @@ export class NativeEnvironment {
       if (pane) {
         component.castShadows = false
       }
-      const ordinary = pane ? panes : group
-      const detailed = lod.owns(component)
-      const target = detailed ? details : ordinary
-      if (target && canBatch(component, detailed)) {
-        component.batchGroupId = target.id
-      }
+      assignEnvironmentBatch(component, {
+        ordinary: pane ? panes : group,
+        owner: lod.owner(component),
+        regions: details,
+        batcher: this.game.app.batcher,
+      })
     }
     lod.update(this.game.camera.getPosition())
-    const ids = [group, panes, details].flatMap((entry) => (entry ? [entry.id] : []))
+    const ids = [group, panes, ...details.values()].flatMap((entry) => (entry ? [entry.id] : []))
     this.groups.set(root, ids)
     const posterLight = root.findByName('poster-lantern-light')
     if (posterLight instanceof Entity) {
