@@ -25,13 +25,13 @@ import type { GameApplication } from './application.ts'
 import { NativeClockwork } from './clockwork.ts'
 import { animateWind, prepareFreightClouds, worldCloudMaterials } from './environment-assets.ts'
 import { assignEnvironmentBatch } from './environment-detail-batches.ts'
+import { FrontierLamps } from './frontier-lamps.ts'
 import { NativeModelLods } from './model-lod.ts'
 import { NativeWilds } from './wilds.ts'
 
 const UP = new Vec3(0, 1, 0)
 /** Per-metre haze relative to the authored presets; distant hills soften, duelists stay crisp. */
 const CAMPAIGN_HAZE = 0.9
-/** Lantern glass emission at full night, before exposure and tonemapping. */
 const LAMP_GLOW = 6
 const FRONTIER_SUN = new Vec3(-0.55, 0.62, 0.56).normalize()
 function color(rgb: readonly number[]): Color {
@@ -42,6 +42,7 @@ function color(rgb: readonly number[]): Color {
 export class NativeEnvironment {
   private readonly game: GameApplication
   private readonly frontier: boolean
+  private readonly frontierLamps: FrontierLamps | undefined
   private readonly groups = new Map<Entity, number[]>()
   private readonly lods = new Map<Entity, NativeModelLods>()
   private readonly materials = new Set<StandardMaterial>()
@@ -76,7 +77,9 @@ export class NativeEnvironment {
   constructor(game: GameApplication, frontier = false) {
     this.game = game
     this.frontier = frontier
+    this.frontierLamps = frontier ? new FrontierLamps(game) : undefined
     this.ready = Promise.all([
+      this.frontierLamps?.ready,
       this.setTime(frontier ? 0.3 : 0),
       game
         .loadTexture(AMBIENT_ASSETS['cloud-shadow'].url, { srgb: true, flipY: false })
@@ -103,30 +106,25 @@ export class NativeEnvironment {
               }
             }),
     ]).then(() => undefined)
-    if (frontier) {
-      this.ready = Promise.all([
-        this.ready,
-        NativeWilds.create(game, 'frontier').then((wilds) => {
-          if (this.disposed) {
-            wilds.destroy()
-          } else {
-            this.wilds = wilds
-          }
-        }),
-      ]).then(() => undefined)
-    } else {
-      this.ready = Promise.all([
-        this.ready,
-        NativeClockwork.create(game).then((clockwork) => {
-          if (this.disposed) {
-            clockwork.destroy()
-          } else {
-            clockwork.visible(this.streetVisible)
-            this.clockwork = clockwork
-          }
-        }),
-      ]).then(() => undefined)
-    }
+    this.ready = Promise.all([
+      this.ready,
+      frontier
+        ? NativeWilds.create(game, 'frontier').then((wilds) => {
+            if (this.disposed) {
+              wilds.destroy()
+            } else {
+              this.wilds = wilds
+            }
+          })
+        : NativeClockwork.create(game).then((clockwork) => {
+            if (this.disposed) {
+              clockwork.destroy()
+            } else {
+              clockwork.visible(this.streetVisible)
+              this.clockwork = clockwork
+            }
+          }),
+    ]).then(() => undefined)
     game.app.once('destroy', () => this.destroy())
     game.app.on('update', this.updateClouds)
   }
@@ -192,6 +190,7 @@ export class NativeEnvironment {
     }
   }
   private applyLampGlass(flicker = 1): void {
+    this.frontierLamps?.glow(this.lanterns, flicker)
     for (const material of this.lampGlass) {
       material.emissiveIntensity = this.lanterns * LAMP_GLOW * flicker
       material.update()
@@ -254,6 +253,7 @@ export class NativeEnvironment {
       material.update()
     }
     this.lanterns = preset.lanterns
+    this.frontierLamps?.time(this.lanterns)
     this.applyLampGlass()
     this.posterLightIntensity = Math.max(0, Math.min(1, (day - 0.6) / 0.2)) * 1.2
     this.updatePosterLights()
@@ -264,6 +264,7 @@ export class NativeEnvironment {
       this.sky = sky.url
       this.ready = this.game.environment(sky.url, 0.7, sky.day >= 0.75 ? 1024 : 256)
     }
+    this.ready = this.frontierLamps?.readyWith(this.ready) ?? this.ready
     return this.ready
   }
   private updatePosterLights(): void {
@@ -338,7 +339,7 @@ export class NativeEnvironment {
     }
     let material = clones.get(original)
     if (!material) {
-      material = original.clone()
+      material = this.frontierLamps?.owns(original) ? original : original.clone()
       prepareFreightClouds(material, worldClouds)
       clones.set(original, material)
       this.materials.add(material)
@@ -357,7 +358,11 @@ export class NativeEnvironment {
     if (!this.frontier && node.name.startsWith('ground-')) {
       this.groundMaterials.add(material)
       this.applyGround(material)
-    } else if (material.opacity === 1 && !material.emissiveMap && material.name !== 'WantedPaper') {
+    } else if (
+      material.opacity === 1 &&
+      (!material.emissiveMap || this.frontierLamps?.owns(material)) &&
+      material.name !== 'WantedPaper'
+    ) {
       this.cloudMaterials.add(material)
       this.applyClouds(material)
     }
@@ -368,6 +373,7 @@ export class NativeEnvironment {
       return
     }
     animateWind(root, asset)
+    this.frontierLamps?.attach(root)
     const lod = new NativeModelLods(root)
     this.lods.set(root, lod)
     const group = this.game.app.batcher?.addGroup('environment', false, 32)
@@ -444,6 +450,7 @@ export class NativeEnvironment {
         this.game.app.batcher?.removeGroup(id)
       }
       this.groups.delete(root)
+      this.frontierLamps?.release(root)
       for (const material of clones.values()) {
         this.windows.delete(material)
         this.lampGlass.delete(material)
@@ -469,6 +476,7 @@ export class NativeEnvironment {
       }
     }
     this.groups.clear()
+    this.frontierLamps?.destroy()
     for (const lod of this.lods.values()) {
       lod.destroy()
     }
