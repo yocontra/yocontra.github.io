@@ -1,9 +1,16 @@
-/** Offline lettering: pinned outlines, physical fit, then atlas storage stretch. */
+/** Offline lettering: pinned outlines and balanced physical texel density in one atlas. */
 import { createHash } from 'node:crypto'
 import { readFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { create, type Font } from 'fontkitten'
 import sharp from 'sharp'
+import {
+  SIGN_ATLAS_HEIGHT,
+  SIGN_ATLAS_WIDTH,
+  SIGN_GUTTER,
+  SIGN_SHORT_BAND,
+  signRect,
+} from './frontier-sign-layout.ts'
 
 export const SIGN_FONT_SHA = 'e0d7f0dfde5f713d46ea9e184ec60eb9e161455ce25d1710fe94f651261165d1'
 export const SIGN_LOGICAL_WIDTH = (128 * 1.5) / 0.7
@@ -51,7 +58,7 @@ export function shortSignOutline(font: Font, text: string) {
   const height = maxY - minY
   // Equal world-space scale on both axes; at least 8cm side / 12cm top-bottom margins.
   const scale = Math.min((SIGN_LOGICAL_WIDTH - 2 * 16) / width, 84 / height)
-  const svg = `<g transform="scale(${2048 / SIGN_LOGICAL_WIDTH} 1)"><g fill="#2d211b" transform="translate(${SIGN_LOGICAL_WIDTH / 2} 64) scale(${scale} ${-scale}) translate(${-(minX + maxX) / 2} ${-(minY + maxY) / 2})">${paths.join('')}</g></g>`
+  const svg = `<g fill="#2d211b" transform="translate(${SIGN_LOGICAL_WIDTH / 2} 64) scale(${scale} ${-scale}) translate(${-(minX + maxX) / 2} ${-(minY + maxY) / 2})">${paths.join('')}</g>`
   return { svg, width, height, scale, logicalWidth: width * scale, logicalHeight: height * scale }
 }
 
@@ -70,10 +77,23 @@ export async function shortSignAtlas(
     throw new Error('Sign baseline bytes or row labels/order changed')
   }
   const metadata = await sharp(baseline).metadata()
-  if (metadata.width !== 2048 || metadata.height !== labels.length * 128) {
+  if (metadata.width !== SIGN_ATLAS_WIDTH || metadata.height !== SIGN_ATLAS_HEIGHT) {
     throw new Error('Unexpected sign atlas dimensions')
   }
+  if (shortLabels.length !== 12 || labels.length !== 28) {
+    throw new Error('Expected 12 short / 28 total rows')
+  }
   const font = await signFont()
+  const clearedBand = await sharp({
+    create: {
+      width: SIGN_SHORT_BAND.width,
+      height: SIGN_SHORT_BAND.height,
+      channels: 4,
+      background: '#36261b',
+    },
+  })
+    .png()
+    .toBuffer()
   const overlays = await Promise.all(
     shortLabels.map(async (text, index) => {
       const row = 12 + index
@@ -81,12 +101,27 @@ export async function shortSignAtlas(
         throw new Error('Short-sign row contract changed')
       }
       const { svg } = shortSignOutline(font, text)
-      const image = `<svg xmlns="http://www.w3.org/2000/svg" width="2048" height="128"><rect width="2048" height="128" fill="#36261b"/><rect x="8" y="8" width="2032" height="112" fill="#bd9b66" stroke="#25190f" stroke-width="6"/>${svg}</svg>`
-      return { input: await sharp(Buffer.from(image)).png().toBuffer(), left: 0, top: row * 128 }
+      const rect = signRect(row)
+      // Six-pixel paint stroke has the same 15mm physical width on both axes.
+      const image = `<svg xmlns="http://www.w3.org/2000/svg" width="${rect.width}" height="${rect.height}"><rect width="${rect.width}" height="${rect.height}" fill="#36261b"/><rect x="8" y="8" width="${rect.width - 16}" height="${rect.height - 16}" fill="#bd9b66" stroke="#25190f" stroke-width="6"/><g transform="scale(${rect.width / SIGN_LOGICAL_WIDTH})">${svg}</g></svg>`
+      const input = await sharp(Buffer.from(image))
+        .extend({
+          top: SIGN_GUTTER,
+          bottom: SIGN_GUTTER,
+          left: SIGN_GUTTER,
+          right: SIGN_GUTTER,
+          extendWith: 'copy',
+        })
+        .png()
+        .toBuffer()
+      return { input, left: rect.left - SIGN_GUTTER, top: rect.top - SIGN_GUTTER }
     }),
   )
-  if (shortLabels.length !== 12 || labels.length !== 28) {
-    throw new Error('Expected 12 short / 28 total rows')
-  }
-  return sharp(baseline).composite(overlays).png().toBuffer()
+  return sharp(baseline)
+    .composite([
+      { input: clearedBand, left: SIGN_SHORT_BAND.left, top: SIGN_SHORT_BAND.top },
+      ...overlays,
+    ])
+    .png()
+    .toBuffer()
 }

@@ -9,6 +9,7 @@ import {
 import type { FrontierPlan } from './frontier-authoring.ts'
 import type { FrontierGeometry, Rgb } from './frontier-geometry.ts'
 import { LABELS, SHORT_LABELS, SIGN_ROWS } from './frontier-materials.ts'
+import { signUvRect } from './frontier-sign-layout.ts'
 /** Add detail outside an opening; no opaque quads cross its line of fire. */
 export function surround(
   g: FrontierGeometry,
@@ -178,14 +179,13 @@ function buildingDoors(g: FrontierGeometry, root: Node, building: Building) {
 }
 
 export function signQuad(g: FrontierGeometry, root: Node, index: number, points: number[][]): void {
-  const v0 = index / SIGN_ROWS.length
-  const v1 = (index + 1) / SIGN_ROWS.length
+  const { u0, u1, v0, v1 } = signUvRect(index)
   g.quad(root, 'sign', points, {
     uvs: [
-      [0, v1],
-      [1, v1],
-      [1, v0],
-      [0, v0],
+      [u0, v1],
+      [u1, v1],
+      [u1, v0],
+      [u0, v0],
     ],
   })
 }

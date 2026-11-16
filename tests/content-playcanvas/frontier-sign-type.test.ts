@@ -6,6 +6,14 @@ import { join } from 'node:path'
 import sharp from 'sharp'
 import { SHORT_LABELS, SIGN_ROWS } from '../../tools/content/frontier-materials.ts'
 import {
+  SIGN_ATLAS_HEIGHT,
+  SIGN_ATLAS_WIDTH,
+  SIGN_GUTTER,
+  SIGN_SHORT_BAND,
+  signRect,
+  signUvRect,
+} from '../../tools/content/frontier-sign-layout.ts'
+import {
   SIGN_LOGICAL_WIDTH,
   shortSignAtlas,
   shortSignOutline,
@@ -22,7 +30,7 @@ it('all twelve labels retain pinned outline proportions after physical world map
       const outline = shortSignOutline(font, label)
       const { data, info } = await sharp(
         Buffer.from(
-          `<svg xmlns="http://www.w3.org/2000/svg" width="2048" height="128">${outline.svg}</svg>`,
+          `<svg xmlns="http://www.w3.org/2000/svg" width="600" height="280" viewBox="0 0 ${SIGN_LOGICAL_WIDTH} 128">${outline.svg}</svg>`,
         ),
       )
         .ensureAlpha()
@@ -43,13 +51,13 @@ it('all twelve labels retain pinned outline proportions after physical world map
         }
       }
       expect(
-        Math.abs(maxX - minX + 1 - (outline.logicalWidth * 2048) / SIGN_LOGICAL_WIDTH),
+        Math.abs(maxX - minX + 1 - (outline.logicalWidth * 600) / SIGN_LOGICAL_WIDTH),
       ).toBeLessThan(2)
-      expect(Math.abs(maxY - minY + 1 - outline.logicalHeight)).toBeLessThan(2)
+      expect(Math.abs(maxY - minY + 1 - (outline.logicalHeight * 280) / 128)).toBeLessThan(2)
       const worldWidth = (outline.logicalWidth * 1.5) / SIGN_LOGICAL_WIDTH
       const worldHeight = (outline.logicalHeight * 0.7) / 128
       expect(worldWidth / worldHeight).toBeCloseTo(outline.width / outline.height, 10)
-      expect(minX).toBeGreaterThan(100)
+      expect(minX).toBeGreaterThan(30)
       expect(minY).toBeGreaterThanOrEqual(21)
     }),
   )
@@ -80,6 +88,33 @@ it('compositing preserves every unowned row and rejects stale baseline bytes or 
         .equals(after.subarray(offset, offset + 128 * 2048 * 4))
       expect(equal).toBe(row < 12 || row >= 24)
     }
+    for (let row = 12; row < 24; row++) {
+      const rect = signRect(row)
+      let mismatches = 0
+      for (let y = -SIGN_GUTTER; y < rect.height + SIGN_GUTTER; y++) {
+        for (let x = -SIGN_GUTTER; x < rect.width + SIGN_GUTTER; x++) {
+          if (x >= 0 && x < rect.width && y >= 0 && y < rect.height) {
+            continue
+          }
+          const actual = ((rect.top + y) * SIGN_ATLAS_WIDTH + rect.left + x) * 4
+          const expected =
+            ((rect.top + Math.max(0, Math.min(rect.height - 1, y))) * SIGN_ATLAS_WIDTH +
+              rect.left +
+              Math.max(0, Math.min(rect.width - 1, x))) *
+            4
+          if (!after.subarray(actual, actual + 4).equals(after.subarray(expected, expected + 4))) {
+            mismatches++
+          }
+        }
+      }
+      expect(mismatches).toBe(0)
+      const strokeAt = (x: number, y: number) => {
+        const p = ((rect.top + y) * SIGN_ATLAS_WIDTH + rect.left + x) * 4
+        return after[p] === 37 && after[p + 1] === 25 && after[p + 2] === 15
+      }
+      expect(Array.from({ length: 16 }, (_, x) => strokeAt(x, 140)).filter(Boolean).length).toBe(6)
+      expect(Array.from({ length: 16 }, (_, y) => strokeAt(300, y)).filter(Boolean).length).toBe(6)
+    }
     await expect(
       shortSignAtlas([...SIGN_ROWS].reverse(), Object.values(SHORT_LABELS), directory),
     ).rejects.toThrow('labels/order')
@@ -93,4 +128,44 @@ it('compositing preserves every unowned row and rejects stale baseline bytes or 
   } finally {
     await rm(directory, { recursive: true, force: true })
   }
+})
+
+it('uses balanced physical UV rectangles with guarded gutters, preserving sixteen legacy rows exactly', () => {
+  const legacyRows = [...Array.from({ length: 12 }, (_, i) => i), 24, 25, 26, 27]
+  for (const row of legacyRows) {
+    expect(signUvRect(row)).toEqual({ u0: 0, u1: 1, v0: row / 28, v1: (row + 1) / 28 })
+  }
+  for (let row = 12; row < 24; row++) {
+    const rect = signRect(row)
+    const uv = signUvRect(row)
+    expect(rect.width / 1.5).toBe(400)
+    expect(rect.height / 0.7).toBe(400)
+    expect(rect.left - SIGN_GUTTER).toBeGreaterThanOrEqual(0)
+    expect(rect.left + rect.width + SIGN_GUTTER).toBeLessThanOrEqual(SIGN_ATLAS_WIDTH)
+    expect(rect.top - SIGN_GUTTER).toBeGreaterThanOrEqual(SIGN_SHORT_BAND.top)
+    expect(rect.top + rect.height + SIGN_GUTTER).toBeLessThanOrEqual(
+      SIGN_SHORT_BAND.top + SIGN_SHORT_BAND.height,
+    )
+    const packed = new Float32Array([uv.u0, uv.u1, uv.v0, uv.v1])
+    expect(
+      Math.max(
+        Math.abs((packed[0] ?? 0) - uv.u0) * SIGN_ATLAS_WIDTH,
+        Math.abs((packed[1] ?? 0) - uv.u1) * SIGN_ATLAS_WIDTH,
+        Math.abs((packed[2] ?? 0) - uv.v0) * SIGN_ATLAS_HEIGHT,
+        Math.abs((packed[3] ?? 0) - uv.v1) * SIGN_ATLAS_HEIGHT,
+      ),
+    ).toBeLessThan(0.000_25)
+    for (let other = row + 1; other < 24; other++) {
+      const next = signRect(other)
+      expect(
+        rect.left + rect.width + SIGN_GUTTER <= next.left - SIGN_GUTTER ||
+          next.left + next.width + SIGN_GUTTER <= rect.left - SIGN_GUTTER ||
+          rect.top + rect.height + SIGN_GUTTER <= next.top - SIGN_GUTTER ||
+          next.top + next.height + SIGN_GUTTER <= rect.top - SIGN_GUTTER,
+      ).toBe(true)
+    }
+  }
+  expect(() => signRect(-1)).toThrow('0..27')
+  expect(() => signRect(28)).toThrow('0..27')
+  expect(() => signRect(12.5)).toThrow('0..27')
 })
