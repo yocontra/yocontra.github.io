@@ -139,10 +139,11 @@ for (const [label, path, expected] of [
     'native',
     'public/experiments/out-west/3d/native-v2/baked/depot.glb',
     {
-      metadata: '8d44c242a15dc3fcac6716007b8a8907e5618659f4696553661a628911941a64',
+      // Identical image aliases now share storage; original geometry digests below are unchanged.
+      metadata: 'f70594ce3863f128752f613a56821ca716348260c21977c89d49548a54d42ea2',
       untouched: '61a1c7005d46511542976cb4cfc38822afd8b7b59e8c856ac2502fbc0438b1cd',
       retained: '5f51d9da519fde2a7ada2f9892b9189f7a23829e8d1fb0775a85a6009f621b39',
-      textures: '491aa699bd3708d03ba0af6455013125e0d8513f7b7f5f2e13875899d9e69a16',
+      textures: '005bd4e9c834475ff565234aaf9a8bc968212d4ca00ba740166d51b82d24e4be',
     },
   ],
 ] as const) {

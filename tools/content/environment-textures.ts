@@ -1,8 +1,14 @@
 /** Preserve native PBR image dimensions while encoding glTF's supported KHR_texture_basisu maps. */
 import { readFile } from 'node:fs/promises'
-import { NodeIO } from '@gltf-transform/core'
+import { type Document, NodeIO, PropertyType } from '@gltf-transform/core'
 import { ALL_EXTENSIONS, KHRTextureBasisu } from '@gltf-transform/extensions'
+import { dedup } from '@gltf-transform/functions'
 import { compressedCharacterTexture } from './character-textures.ts'
+
+/** Share identical images while preserving each material's sampler, UVs and PBR settings. */
+export async function deduplicateEnvironmentImages(document: Document): Promise<void> {
+  await document.transform(dedup({ propertyTypes: [PropertyType.TEXTURE] }))
+}
 
 export async function compressEnvironmentTextures(path: string): Promise<void> {
   const io = new NodeIO().registerExtensions(ALL_EXTENSIONS)
@@ -27,5 +33,6 @@ export async function compressEnvironmentTextures(path: string): Promise<void> {
   }
   await Promise.all([worker(0), worker(1)])
   document.createExtension(KHRTextureBasisu).setRequired(true)
+  await deduplicateEnvironmentImages(document)
   await io.write(path, document)
 }

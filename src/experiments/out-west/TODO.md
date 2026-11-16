@@ -54,6 +54,8 @@ Complete and push these in small working tasks, with native visual/audio evidenc
 
 ## Performance
 
+- [x] Share identical embedded texture images in the four duel scenes through the native glTF asset pipeline. This removes 14.8 MB of duplicate downloads; all 132 matched headless frames remain byte-identical, draw/buffer counts stay unchanged, and depot/mission/bank captures use about 6.2 MB less texture memory each. All 94 historical GLBs are untouched.
+
 - [x] Release engine-owned material clones when dynamic equipment batches retire. Production/debug/profiler lifecycle tests cover repeated regeneration and shared-source preservation; actual scene teardown reaches zero textures and buffers.
 
 - [ ] Finish visible iPhone 13 mini **simulator** and real Chrome measurements. The Mac was locked at the last check; no final FPS result was accepted. A physical phone is not required.
