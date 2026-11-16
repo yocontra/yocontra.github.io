@@ -1,6 +1,7 @@
 import { readFile } from 'node:fs/promises'
 import sharp from 'sharp'
 import type { FrontierGeometry } from './frontier-geometry.ts'
+import { shortSignAtlas } from './frontier-sign-type.ts'
 export const LABELS: Record<string, string> = {
   saloon: 'PERDITION SALOON',
   hotel: 'GRAND HOTEL',
@@ -66,13 +67,15 @@ export async function authoredMaterials(g: FrontierGeometry) {
       .setMetallicFactor(0.25)
       .setDoubleSided(true),
   )
-  const labels = SIGN_ROWS
-  const width = 2048
-  const cell = 128
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${cell * labels.length}">${labels.map((text, index) => `<g transform="translate(0 ${index * cell})"><rect width="2048" height="128" fill="#36261b"/><rect x="8" y="8" width="2032" height="112" fill="#bd9b66" stroke="#25190f" stroke-width="6"/><text x="1024" y="90" fill="#2d211b" font-family="Georgia" font-size="83" font-weight="bold" text-anchor="middle" textLength="1900" lengthAdjust="spacingAndGlyphs">${text.replaceAll('&', '&amp;')}</text></g>`).join('')}</svg>`
   const sign = g.doc
     .createTexture('Perdition shop signs')
-    .setImage(await sharp(Buffer.from(svg)).png().toBuffer())
+    .setImage(
+      await shortSignAtlas(
+        SIGN_ROWS,
+        Object.values(SHORT_LABELS),
+        'tools/art/environments/frontier-signs',
+      ),
+    )
     .setMimeType('image/png')
   g.materials.set(
     'sign',
