@@ -1,4 +1,5 @@
 import process from 'node:process'
+import { fileURLToPath } from 'node:url'
 import sitemap from '@astrojs/sitemap'
 import { defineConfig } from 'astro/config'
 
@@ -12,6 +13,7 @@ export default defineConfig({
   // The perf harness's build (tools/frontier-perf.ts --prod) keeps hidden source maps so its
   // profile names real functions; the deploy never sets PUBLIC_OW_PERF_HARNESS.
   vite: {
+    tsconfig: fileURLToPath(new URL('./tsconfig.json', import.meta.url)),
     build: { sourcemap: process.env.PUBLIC_OW_PERF_HARNESS === '1' ? 'hidden' : false },
   },
   prefetch: {
