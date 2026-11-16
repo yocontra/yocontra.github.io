@@ -17,9 +17,11 @@ import {
   Vec3,
 } from 'playcanvas'
 import { validateAuthoringInputs } from '../../tools/content/authoring-inputs.ts'
+import { resampleNative } from '../../tools/content/native-resample.ts'
 
 const io = new NodeIO().registerExtensions(ALL_EXTENSIONS)
 const root = 'tools/art/characters'
+const CONTACT = /^Weapon_(?:Draw|Flinch)_[LR]$/u
 const find = (doc: Document, name: string) => {
   const clip = doc
     .getRoot()
@@ -119,8 +121,10 @@ it('paired grip authoring retains the rig, action times and every unowned track'
   const original = await io.read(`${root}/paired-poses/left-arm.glb`)
   const authored = await io.read(`${root}/paired-grips/body.glb`)
   await validateAuthoringInputs(authored)
+  const inputs = authored.getRoot().getExtras().sourceInputs as { path: string }[]
+  expect(inputs.some((input) => input.path === `${root}/gun-actions.pair.glb`)).toBe(true)
   const owned = authored.getRoot().getExtras().changedBones as string[]
-  expect(owned).toHaveLength(36)
+  expect(owned).toHaveLength(38)
   expect(
     authored
       .getRoot()
@@ -152,7 +156,7 @@ it('paired grip authoring retains the rig, action times and every unowned track'
     const ownedKeys = new Set(owned.map((bone) => `${bone}.rotation`))
     const changed = [...old].filter(([key]) => ownedKeys.has(key))
     const unchanged = [...old].filter(([key]) => !ownedKeys.has(key))
-    expect(changed).toHaveLength(36)
+    expect(changed).toHaveLength(38)
     expect(unchanged.length).toBeGreaterThan(0)
     for (const [key, channel] of old) {
       expect(next.get(key)?.getSampler()?.getInterpolation()).toBe(
@@ -187,13 +191,15 @@ it('paired grip authoring retains the rig, action times and every unowned track'
   }
 }, 30_000)
 
-it('paired weapon compensation preserves barrel and grip paths between authored keys', async () => {
+it('optimized paired weapon compensation preserves barrel and grip paths between authored keys', async () => {
   const skeleton = await io.read(`${root}/player.gltf`)
   const original = await io.read(`${root}/paired-poses/left-arm.glb`)
   const authored = await io.read(`${root}/paired-grips/body.glb`)
   const sourceWeapons = await io.read(`${root}/gun-actions.pair.glb`)
   const weapons = await io.read(`${root}/paired-grips/mechanisms.glb`)
   await validateAuthoringInputs(weapons)
+  await authored.transform(resampleNative())
+  await weapons.transform(resampleNative())
   const frames = authored.getRoot().getExtras().gunFrames as Record<
     string,
     { old: number[][]; new: number[][] }
@@ -246,7 +252,7 @@ it('paired weapon compensation preserves barrel and grip paths between authored 
   expect(maximum).toBeLessThan(0.0003)
 }, 30_000)
 
-it('real native graphs retain the paired gun paths at keys and between keys', async () => {
+it('optimized real native graphs retain the paired gun paths at keys and between keys', async () => {
   const device = new NullGraphicsDevice({ width: 1, height: 1 })
   const app = new AppBase(device.canvas)
   const options = new AppOptions()
@@ -257,9 +263,15 @@ it('real native graphs retain the paired gun paths at keys and between keys', as
   const loaded: Asset[] = []
   try {
     const load = async (path: string) => {
+      let contents = new Uint8Array(await readFile(path))
+      if (path.includes('/paired-grips/')) {
+        const doc = await io.readBinary(contents)
+        await doc.transform(resampleNative())
+        contents = await io.writeBinary(doc)
+      }
       const asset = new Asset(path, 'container', {
         url: path,
-        contents: new Uint8Array(await readFile(path)).buffer,
+        contents: new Uint8Array(contents).buffer,
       })
       app.assets.add(asset)
       loaded.push(asset)
@@ -369,3 +381,34 @@ it('real native graphs retain the paired gun paths at keys and between keys', as
   expect(device.textures.size).toBe(0)
   expect(device.buffers.size).toBe(0)
 }, 30_000)
+
+it('draw and false-draw retain a fixed hand grip with bounded clavicle motion', async () => {
+  const body = await io.read(`${root}/paired-grips/body.glb`)
+  const weapons = await io.read(`${root}/paired-grips/mechanisms.glb`)
+  const swings = body.getRoot().getExtras().maximumClavicleSwingDegrees as Record<string, number>
+  expect(swings.L).toBeGreaterThan(15)
+  expect(Math.max(...Object.values(swings))).toBeLessThanOrEqual(25)
+  let maximumPosition = 0
+  let maximumRotation = 0
+  let maximumScale = 0
+  for (const clip of weapons
+    .getRoot()
+    .listAnimations()
+    .filter((c) => CONTACT.test(c.getName()))) {
+    const keys = times(clip)
+    for (const time of [...keys, ...keys.slice(1).map((t, i) => (t + (keys[i] ?? 0)) / 2)]) {
+      const pose = sample(clip, time)
+      const side = clip.getName().at(-1)
+      const name = `mount.Wrist${side}.drawn`
+      const p = pose.get(`${name}.translation`) ?? []
+      const q = pose.get(`${name}.rotation`) ?? []
+      const s = pose.get(`${name}.scale`) ?? []
+      maximumPosition = Math.max(maximumPosition, Math.hypot(...p))
+      maximumRotation = Math.max(maximumRotation, Math.hypot(...q.slice(0, 3)))
+      maximumScale = Math.max(maximumScale, ...s.map((v) => Math.abs(v - 1)))
+    }
+  }
+  expect(maximumPosition).toBeLessThan(0.0003)
+  expect(maximumRotation).toBeLessThan(0.001)
+  expect(maximumScale).toBeLessThan(0.0001)
+})

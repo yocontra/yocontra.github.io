@@ -106,8 +106,45 @@ def surface(gun):
     return bm, signed
 
 
+class ContactArm(g.Authoring):
+    """Keep draw/false-draw grips on the authored prop without stretching the arm."""
+
+    def arm(self, clip, time):
+        if clip not in ('Draw_Pair', 'Flinch_Pair'):
+            return super().arm(clip, time)
+        source_clips, source_gun, source_fingers = self.clips, self.gun_world, self.finger_rotations
+        sample = source_clips.sample(clip, time)
+        world = self.skeleton.world(sample)
+        side = self.side
+        mechanism = self.mechanisms.sample('Weapon_' + clip.replace('_Pair', '') + '_' + side, time)
+        gun = world['Wrist' + side] @ g.trs(mechanism['mount.Wrist' + side + '.drawn']) @ self.old_child
+        target = (gun @ self.new_child.inverted()).translation
+        pivot = world['Shoulder' + side].translation
+        clavicle = world['UpperArm' + side].translation - pivot
+        axis = target - pivot
+        reach = sum(self.lengths.values()) * world['Wrist' + side].to_scale()[0] - .0005
+        if (target - world['UpperArm' + side].translation).length > reach:
+            cosine = (axis.length_squared + clavicle.length_squared - reach * reach) / (2 * axis.length * clavicle.length)
+            if cosine > 1:
+                raise ValueError('Authored paired draw is outside clavicle and arm reach')
+            angle = max(0, clavicle.angle(axis) - math.acos(max(-1, cosine)))
+            if angle > math.radians(25):
+                raise ValueError('Paired draw requires more than25degrees of clavicle movement')
+            rotation = Quaternion(clavicle.cross(axis).normalized(), angle) @ world['Shoulder' + side].to_quaternion()
+            local = (world['Chest'].to_quaternion().inverted() @ rotation).normalized()
+            sample['Shoulder' + side]['rotation'] = g.xyzw(local)
+            self.maximum_clavicle_swing = max(self.maximum_clavicle_swing, math.degrees(angle))
+        self.clips = SimpleNamespace(sample=lambda _clip, _time: sample)
+        self.gun_world = lambda _clip, _time, _world: gun
+        self.finger_rotations = self.closed_pose
+        try:
+            return super().arm(clip, time)
+        finally:
+            self.clips, self.gun_world, self.finger_rotations = source_clips, source_gun, source_fingers
+
+
 def authoring(player, actions, skeleton, skin, gun, signed, side):
-    a = object.__new__(g.Authoring)
+    a = object.__new__(ContactArm)
     a.side, a.skeleton, a.skin, a.clips = side, skeleton, skin, actions
     sample = actions.sample('Idle_Gun_Pointing_Pair', 0)
     a.world0 = world = skeleton.world(sample)
@@ -157,7 +194,11 @@ def authoring(player, actions, skeleton, skin, gun, signed, side):
             target.translation = shoulder + axis.normalized() * reach
         return target @ new
     a.gun_world = reach_safe_frame
+    a.old_child, a.new_child = old, new
+    a.mechanisms = NativeClips(g.Doc(SOURCE / 'gun-actions.pair.glb'))
+    a.maximum_clavicle_swing = 0
     pose = finger_pose(sample, side)
+    a.closed_pose = pose
     offsets = {bone: g.trs({'rotation': sample[bone]['rotation']}).to_quaternion().inverted() @ q for bone, q in pose.items()}
     return a, old, new, offsets
 
@@ -177,7 +218,7 @@ def metadata(files):
 
 
 def bake_body(source, actions, authors, inputs):
-    owned = {n + side for side in authors for n in ('UpperArm', 'LowerArm', 'Wrist')}
+    owned = {n + side for side in authors for n in ('Shoulder', 'UpperArm', 'LowerArm', 'Wrist')}
     owned.update(bone for _, _, _, offsets in authors.values() for bone in offsets)
     doc = {k: copy.deepcopy(source.doc[k]) for k in ('asset', 'nodes', 'scenes', 'scene') if k in source.doc}
     doc['asset']['generator'] = 'Blender offline paired revolver grips'
@@ -185,7 +226,7 @@ def bake_body(source, actions, authors, inputs):
     for clip in source.doc['animations']:
         name = clip['name']
         duration = max(float(source.accessor(s['input'])[-1, 0]) for s in clip['samplers'])
-        rate = 960 if name in ('Draw_Pair', 'Spin_Pair') else 240
+        rate = 960 if name in ('Draw_Pair', 'Spin_Pair', 'Flinch_Pair') else 240
         times = sorted({float(t) for s in clip['samplers'] for t in source.accessor(s['input'])[:, 0]} |
                        {struct.unpack('<f', struct.pack('<f', i / rate))[0] for i in range(math.floor(duration * rate) + 1)})
         samples = {}
@@ -218,7 +259,7 @@ def bake_body(source, actions, authors, inputs):
         clips.append(out)
         print('BAKED', name, len(times), flush=True)
     doc['animations'] = clips
-    doc['extras'] = {'sourceInputs': inputs, 'changedBones': sorted(owned), 'preservationReceipt': receipts,
+    doc['extras'] = {'sourceInputs': inputs, 'changedBones': sorted(owned), 'preservationReceipt': receipts, 'maximumClavicleSwingDegrees': {side: a.maximum_clavicle_swing for side, (a, _, _, _) in authors.items()},
                      'gunFrames': {side: {'old': [list(row) for row in old], 'new': [list(row) for row in new]} for side, (_, old, new, _) in authors.items()}}
     pack(doc, arrays, OUTPUT / 'body.glb')
 
@@ -233,7 +274,7 @@ def bake_mechanisms(source, original, final, skeleton, authors, inputs):
         _, action, side = name.split('_')
         body = {'Idle': 'Idle_Gun_Pointing', 'Shoot': 'Gun_Shoot'}.get(action, action) + '_Pair'
         duration = max(float(source.accessor(s['input'])[-1, 0]) for s in clip['samplers'])
-        rate = 960 if action in ('Draw', 'Spin') else 240
+        rate = 960 if action in ('Draw', 'Spin', 'Flinch') else 240
         times = sorted({float(t) for s in clip['samplers'] for t in source.accessor(s['input'])[:, 0]} |
                        {struct.unpack('<f', struct.pack('<f', i / rate))[0] for i in range(math.floor(duration * rate) + 1)})
         old, new = frames[side]
@@ -269,13 +310,13 @@ def main():
     player = g.Doc(SOURCE / 'player.gltf')
     source = g.Doc(SOURCE / 'paired-poses/left-arm.glb')
     gun = g.Doc(SOURCE / 'gun.hardins-pair.gltf')
+    mechanisms = g.Doc(SOURCE / 'gun-actions.pair.glb')
     actions, skeleton, skin = NativeClips(source), g.Skeleton(player), g.Skin(player)
     bm, signed = surface(gun)
     try:
         authors = {side: authoring(player, actions, skeleton, skin, gun, signed, side) for side in ('L', 'R')}
-        files = player.files + source.files + gun.files + [Path(__file__).resolve(), Path(g.__file__).resolve(), Path(writer.__file__).resolve()]
+        files = player.files + source.files + gun.files + mechanisms.files + [Path(__file__).resolve(), Path(g.__file__).resolve(), Path(writer.__file__).resolve()]
         bake_body(source, actions, authors, metadata(files))
-        mechanisms = g.Doc(SOURCE / 'gun-actions.pair.glb')
         final = g.Doc(OUTPUT / 'body.glb')
         bake_mechanisms(mechanisms, actions, NativeClips(final), skeleton, authors,
                         metadata(files + mechanisms.files + final.files))
