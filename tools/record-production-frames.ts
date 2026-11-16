@@ -371,6 +371,7 @@ try {
     foreground,
     foregroundCoverage: coverage,
     recording: data,
+    preparation: fixture?.preparation,
   }
   await writeFile(join(output, 'receipt.json'), `${JSON.stringify(report, null, 2)}\n`)
   console.log(

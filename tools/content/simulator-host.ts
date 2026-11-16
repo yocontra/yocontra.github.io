@@ -85,6 +85,7 @@ export function simulatorHost(api: string, directory: string, build: BuildReceip
       lobbyId: string
       page?: unknown
       recording?: unknown
+      players?: unknown
     }
     if (body.action === 'ready') {
       status.set(id, { stage: 'ready', page: body.page })
@@ -110,7 +111,12 @@ export function simulatorHost(api: string, directory: string, build: BuildReceip
       {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ accountId, lobbyId: body.lobbyId, start: body.action === 'start' }),
+        body: JSON.stringify({
+          accountId,
+          lobbyId: body.lobbyId,
+          start: body.action === 'start',
+          ...(body.action === 'pack' ? { players: body.players } : {}),
+        }),
       },
     )
     return new Response(await response.text(), {

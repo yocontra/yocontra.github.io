@@ -1,5 +1,9 @@
 import { expect, test as it } from 'bun:test'
-import { packedFixturePositions } from '../api/test/performance-probe.ts'
+import {
+  fixturePopulation,
+  OUTDOOR_FIXTURE_CENTER,
+  packedFixturePositions,
+} from '../api/test/performance-probe.ts'
 import { PLAYER_RADIUS } from '../src/experiments/out-west/ffa/sim/constants.ts'
 import {
   BLOCK_MOVE,
@@ -142,10 +146,19 @@ it('refuses external, credentialed, or provider-enabled performance fixtures', (
 })
 it('packs exactly 32 nonoverlapping capsules on the actual town grid', () => {
   const grid = buildGrid(TOWN)
-  const points = packedFixturePositions(grid, { x: 72, z: 66 })
+  const points = packedFixturePositions(grid, OUTDOOR_FIXTURE_CENTER)
   expect(points).toHaveLength(32)
   for (const [index, point] of points.entries()) {
     expect(circleBlocked(grid, { ...point, r: PLAYER_RADIUS }, BLOCK_MOVE)).toBe(false)
+    expect(
+      TOWN.buildings.every(
+        (b) =>
+          point.x + PLAYER_RADIUS <= b.x ||
+          point.x - PLAYER_RADIUS >= b.x + b.w ||
+          point.z + PLAYER_RADIUS <= b.z ||
+          point.z - PLAYER_RADIUS >= b.z + b.d,
+      ),
+    ).toBe(true)
     expect(point.x).toBeGreaterThanOrEqual(PLAYER_RADIUS)
     expect(point.z).toBeGreaterThanOrEqual(PLAYER_RADIUS)
     expect(point.x).toBeLessThanOrEqual(grid.size - PLAYER_RADIUS)
@@ -173,4 +186,16 @@ it('rejects missing native samples even when authoritative fixture data is prese
   expect(qualifyProductionFixture(value)).toContain(
     'Native loaded rider count or readiness was not stable',
   )
+})
+
+it('prepares five ordinary riders without raising the four-bot cap and rejects invalid populations', () => {
+  expect(fixturePopulation(undefined)).toBe(32)
+  expect(fixturePopulation(5)).toBe(5)
+  expect(fixturePopulation(32)).toBe(32)
+  for (const value of [0, 4, 31, 33, '5', null, Number.NaN]) {
+    expect(() => fixturePopulation(value)).toThrow()
+  }
+  const points = packedFixturePositions(buildGrid(TOWN), OUTDOOR_FIXTURE_CENTER, 5)
+  expect(points).toHaveLength(5)
+  expect(points[0]).toEqual({ x: 52, z: 52 })
 })

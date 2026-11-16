@@ -44,6 +44,9 @@ sights and fires. The normal lobby keeps one authenticated human plus four bots.
 fixture deliberately raises only its test Worker room to 31 synthetic bots plus one human;
 it does not establish 32-human network behavior. Starts are selected with the actual town grid,
 player radius and pairwise clearance checks. Normal production and practice bot limits stay four.
+Before timing, both cases use the same unshipped native spawn-generation path to prepare
+validated capsules around the current104m town's open main street at (52, 52). This is initial fixture
+setup, after which movement/combat remain trusted native inputs and ordinary still has four bots.
 All 5 or 32 native models must be loaded without fallback before recording starts.
 
 The test Worker stages glass break at 10 seconds, environmental death at 20 seconds and pane

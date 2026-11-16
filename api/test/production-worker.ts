@@ -14,7 +14,12 @@ import type { NativeFrontierRoom } from '../src/game/room.ts'
 import worker from '../src/index.ts'
 import type { LobbyCore } from '../src/town/core.ts'
 import { Lobby as ProductionLobby } from '../src/town/lobby.ts'
-import { PerformanceProbe, packedFixturePositions } from './performance-probe.ts'
+import {
+  fixturePopulation,
+  OUTDOOR_FIXTURE_CENTER,
+  PerformanceProbe,
+  packedFixturePositions,
+} from './performance-probe.ts'
 import type { SettlementProbe } from './settlement-worker.ts'
 import { staleBudgetProbe } from './stale-budget-probe.ts'
 import { observeTimers, ownedTimers } from './timers.ts'
@@ -86,7 +91,7 @@ export class Lobby extends ProductionLobby {
     }
   }
   /** Same packed scene as loopback; AI and native movement remain on the actual room timer. */
-  async testPackedTown(accountId: string) {
+  async testPackedTown(accountId: string, count: 5 | 32 = 32) {
     const core = Reflect.get(this, 'core') as LobbyCore | undefined
     const session = [...(core?.sessions.values() ?? [])].find(
       (candidate) => candidate.accountId === accountId && candidate.peer,
@@ -100,7 +105,7 @@ export class Lobby extends ProductionLobby {
     }
     let positions: ReturnType<typeof packedFixturePositions>
     try {
-      positions = packedFixturePositions(core.world.grid, { x: 72, z: 66 })
+      positions = packedFixturePositions(core.world.grid, OUTDOOR_FIXTURE_CENTER, count)
     } catch (error) {
       return { ok: false as const, error: String(error) }
     }
@@ -108,14 +113,15 @@ export class Lobby extends ProductionLobby {
     if (!origin) {
       return { ok: false as const, error: 'Packed origin missing' }
     }
-    // Deliberate synthetic stress only; the production constructor remains capped at four.
-    Reflect.set(core, 'maxBots', 31)
-    core.botTarget = 31
-    core.ambientPopulation = 32
+    // Only this local subclass changes the cap; ordinary remains four bots, stress is synthetic.
+    Reflect.set(core, 'maxBots', count - 1)
+    core.botTarget = count - 1
+    core.ambientPopulation = count
     core.bots.rally = self.id
     for (
       let attempt = 0;
-      attempt < 240 && [...activePlayers(core.world)].filter((player) => player.bot).length < 31;
+      attempt < 240 &&
+      [...activePlayers(core.world)].filter((player) => player.bot).length !== count - 1;
       attempt++
     ) {
       await new Promise((resolve) => setTimeout(resolve, 50))
@@ -123,10 +129,13 @@ export class Lobby extends ProductionLobby {
     const population = [...activePlayers(core.world)]
     if (
       core.connectedHumans() !== 1 ||
-      population.length !== 32 ||
-      population.filter((player) => player.bot).length !== 31
+      population.length !== count ||
+      population.filter((player) => player.bot).length !== count - 1
     ) {
-      return { ok: false as const, error: 'The native room did not reach one human and31 bots.' }
+      return {
+        ok: false as const,
+        error: `The native room did not reach one human and ${count - 1} bots.`,
+      }
     }
     self.x = origin.x
     self.z = origin.z
@@ -191,6 +200,29 @@ async function performanceRequest(request: Request, env: Env) {
   return Response.json(result)
 }
 
+async function packedRequest(request: Request, env: Env) {
+  const value = (await request.json()) as {
+    lobbyId?: unknown
+    accountId?: unknown
+    players?: unknown
+  }
+  if (typeof value.lobbyId !== 'string' || typeof value.accountId !== 'string') {
+    return Response.json({ error: 'Expected fixture lobbyId and accountId.' }, { status: 400 })
+  }
+  let count: 5 | 32
+  try {
+    count = fixturePopulation(value.players)
+  } catch (error) {
+    return Response.json({ error: String(error) }, { status: 400 })
+  }
+  const lobby = env.LOBBIES.get(env.LOBBIES.idFromName(value.lobbyId))
+  const result = (await Reflect.apply(Reflect.get(lobby, 'testPackedTown'), lobby, [
+    value.accountId,
+    count,
+  ])) as Awaited<ReturnType<Lobby['testPackedTown']>>
+  return Response.json(result, { status: result.ok ? 200 : 409 })
+}
+
 export default {
   async fetch(
     request: Request,
@@ -217,15 +249,7 @@ export default {
       return Response.json(await Reflect.apply(Reflect.get(directory, 'testLeases'), directory, []))
     }
     if (pathname === '/__test/packed-town' && request.method === 'POST') {
-      const value = (await request.json()) as { lobbyId?: unknown; accountId?: unknown }
-      if (typeof value.lobbyId !== 'string' || typeof value.accountId !== 'string') {
-        return Response.json({ error: 'Expected fixture lobbyId and accountId.' }, { status: 400 })
-      }
-      const lobby = env.LOBBIES.get(env.LOBBIES.idFromName(value.lobbyId))
-      const result = (await Reflect.apply(Reflect.get(lobby, 'testPackedTown'), lobby, [
-        value.accountId,
-      ])) as Awaited<ReturnType<Lobby['testPackedTown']>>
-      return Response.json(result, { status: result.ok ? 200 : 409 })
+      return packedRequest(request, env)
     }
     if (pathname === '/__test/restart-native') {
       const id = new URL(request.url).searchParams.get('lobbyId') ?? ''

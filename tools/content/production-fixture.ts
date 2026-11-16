@@ -102,13 +102,11 @@ export async function prepareProductionFixture(
     throw new Error('Native session did not preserve the authoritative lobby identity')
   }
   const identity = { lobbyId: native.lobbyId, accountId: account.accountId }
-  if (stress) {
-    const packed = await post(api, 'packed-town', identity)
-    if (!(packed.ok && packed.players === 32 && packed.bots === 31)) {
-      throw new Error('Packed Worker did not reach 32 riders')
-    }
-  }
   const count = stress ? 32 : 5
+  const preparation = await post(api, 'packed-town', { ...identity, players: count })
+  if (!(preparation.ok && preparation.players === count && preparation.bots === count - 1)) {
+    throw new Error(`Outdoor Worker did not reach ${count} riders`)
+  }
   await page.waitForFunction(
     (players) => {
       const snapshot: NativeSample = Reflect.get(globalThis, '__owPerformanceSnapshot')()
@@ -126,6 +124,7 @@ export async function prepareProductionFixture(
     { timeout: 120_000 },
   )
   return {
+    preparation,
     start: async () => {
       const result = await post(api, 'performance', { ...identity, start: true })
       if (!result.ok) {

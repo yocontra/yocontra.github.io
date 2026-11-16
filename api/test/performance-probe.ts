@@ -12,6 +12,17 @@ import { breakGlass } from '../../src/experiments/out-west/ffa/sim/windows.ts'
 import { Buttons } from '../../src/experiments/out-west/runtime/protocol.ts'
 import type { LobbyCore } from '../src/town/core.ts'
 
+export const OUTDOOR_FIXTURE_CENTER = { x: 52, z: 52 } as const
+export function fixturePopulation(value: unknown): 5 | 32 {
+  if (value === undefined) {
+    return 32 // Existing packed callers retain their population.
+  }
+  if (value === 5 || value === 32) {
+    return value
+  }
+  throw new Error('Expected 5 or 32 fixture players')
+}
+
 /** Test-only dense placement: real grid/capsule checks, no blocked or overlapping starts. */
 export function packedFixturePositions(grid: Grid, center: { x: number; z: number }, count = 32) {
   if (!Number.isInteger(count) || count < 1 || count > MAX_PLAYERS) {

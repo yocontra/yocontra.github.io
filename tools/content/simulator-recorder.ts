@@ -24,8 +24,7 @@ export async function installSimulatorRecorder(): Promise<void> {
       canvas: rect ? { x: rect.x, y: rect.y, width: rect.width, height: rect.height } : null,
     }
   }
-  // Only this unshipped localhost bootstrap supplies Cloudflare's documented dummy token.
-  // The real Worker still verifies it with its test secret; production secrets reject it.
+  // Local QA alone supplies this dummy token, still verified by the Worker test secret.
   let tokenCallback: ((token: string) => void) | undefined
   const deliverTestToken = () => queueMicrotask(() => tokenCallback?.('XXXX.DUMMY.TOKEN.XXXX'))
   Reflect.set(globalThis, 'turnstile', {
@@ -75,6 +74,7 @@ export async function installSimulatorRecorder(): Promise<void> {
         ...(error ? { error } : {}),
         ...(['ready', 'failed'].includes(action) ? { page: pageState() } : {}),
         recording: recorder?.status(),
+        players: stress ? 32 : 5,
       }),
     })
     const result = await response.json()
@@ -84,15 +84,12 @@ export async function installSimulatorRecorder(): Promise<void> {
     return result
   }
   const failure = async (error: unknown) => {
-    const detail = error instanceof Error ? error.message : 'Recording failed'
-    button.textContent = detail
-    await fixture('failed', detail).catch(() => undefined)
+    button.textContent = error instanceof Error ? error.message : 'Recording failed'
+    await fixture('failed', button.textContent).catch(() => undefined)
   }
   try {
     await wait(() => Boolean(snapshot()?.scene.actors.loaded))
-    if (stress) {
-      await fixture('pack')
-    }
+    const preparation = await fixture('pack')
     const count = stress ? 32 : 5
     await wait(() => {
       const scene = snapshot()?.scene
@@ -163,6 +160,7 @@ export async function installSimulatorRecorder(): Promise<void> {
             page: pageState(),
             scriptHashes: hashes,
             authority: authority.receipt,
+            preparation,
             history: snapshot(true),
             recording: data,
           }),
