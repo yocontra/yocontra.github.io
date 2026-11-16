@@ -35,7 +35,8 @@ it('retains animation events and a curve targeting both selected and excluded bo
   )
   const result = maskedTrack(track, { 'Armature/Root/Hips': { children: false } })
   expect(result.curves[0]?.paths).toEqual([selected])
-  expect(result.events).toEqual([{ time: 0.4, name: 'footstep', side: 'left' }])
+  const events = Array.isArray(result.events) ? result.events : result.events.events
+  expect(events).toEqual([{ time: 0.4, name: 'footstep', side: 'left' }])
   expect(shared.paths).toHaveLength(2)
   expect(result.inputs).toBe(track.inputs)
   expect(result.outputs).toBe(track.outputs)
@@ -104,13 +105,16 @@ it('native masked playback preserves every authored pose and shared keyframe buf
         }
         anim.activate = true
         anim.playing = true
+        layer.play('Idle')
         return { root, anim, layer }
       }
       const reference = create(false)
       const candidate = create(true)
       const transforms = (root: Entity) =>
         root.find(() => true).map((node) => Array.from(node.getLocalTransform().data))
+      const rest = JSON.stringify(transforms(reference.root))
       let removed = 0
+      let moving = 0
       for (const track of tracks) {
         const trimmed = maskedTrack(track, selected)
         expect(trimmed.inputs).toBe(track.inputs)
@@ -125,9 +129,13 @@ it('native masked playback preserves every authored pose and shared keyframe buf
           reference.anim.update(dt)
           candidate.anim.update(dt)
           expect(transforms(candidate.root)).toEqual(transforms(reference.root))
+          if (JSON.stringify(transforms(reference.root)) !== rest) {
+            moving++
+          }
         }
       }
       expect(removed).toBeGreaterThan(tracks.length * 20)
+      expect(moving).toBeGreaterThan(tracks.length)
       reference.root.destroy()
       candidate.root.destroy()
     }
