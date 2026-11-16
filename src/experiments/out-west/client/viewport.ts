@@ -1,4 +1,4 @@
-import { Vec3 } from 'playcanvas'
+import { type Entity, Vec3 } from 'playcanvas'
 import { NativeAtmosphere } from '../duel/native-atmosphere.ts'
 import { type FrontierSettings, loadSettings } from '../ffa/client/settings.ts'
 import { BankGuide } from '../ffa/client/wayfinding.ts'
