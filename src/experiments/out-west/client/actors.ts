@@ -445,7 +445,7 @@ export class Actors {
       rider.actor.fireWeapon()
       const clip = rider.actor.shotClip(this.players.get(id)?.crouched ?? false)
       if (rider.weaponLayer?.states.includes(clip)) {
-        rider.weaponLayer.play(clip)
+        rider.weaponLayer.transition(clip, 0)
         rider.pose.root.anim?.update(0)
       }
     }

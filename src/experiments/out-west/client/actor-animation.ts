@@ -67,9 +67,23 @@ function directionClip(actor: DuelActor, player: PlayerState, name: string): str
   const stride = `Stride_${name}_${direction}`
   return actor.hasAnimation(stride) ? stride : name
 }
-function upperClip(rider: AnimatedRider, domain: Player | undefined, crouched: boolean): string {
-  if (performance.now() < rider.firingUntil) {
-    return rider.actor.shotClip(crouched)
+function upperClip(
+  rider: AnimatedRider,
+  domain: Player | undefined,
+  crouched: boolean,
+  first: boolean,
+): string {
+  const shot = rider.actor.shotClip(crouched)
+  const layer = rider.weaponLayer
+  // The wall deadline can lead the native clock by a fraction of a frame. Preserve the
+  // final authored pose before selecting Hold; a life reset clears firingUntil to cancel it.
+  const finishing =
+    first &&
+    rider.firingUntil > 0 &&
+    layer?.activeState === shot &&
+    layer.activeStateCurrentTime < layer.activeStateDuration
+  if (performance.now() < rider.firingUntil || finishing) {
+    return shot
   }
   const weapon = heldWeapon(domain)
   if (weapon !== 'revolver') {
@@ -89,6 +103,9 @@ export function animateRider(
   player: PlayerState,
   options: { first: boolean; domain: Player | undefined },
 ): void {
+  if (player.hp <= 0) {
+    rider.firingUntil = 0
+  }
   const { actor } = rider
   const speed = Math.hypot(player.vx, player.vz)
   if (rider.aim) {
@@ -108,6 +125,7 @@ export function animateRider(
       rider,
       options.domain,
       player.crouched ?? options.domain?.crouched ?? false,
+      options.first,
     )
     const weight = player.hp > 0 ? 1 : 0
     if (rider.weaponLayer.weight !== weight) {
