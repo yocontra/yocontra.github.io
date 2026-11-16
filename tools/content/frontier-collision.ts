@@ -20,6 +20,7 @@ import {
 import { roofHeightAt } from '../../src/experiments/out-west/ffa/sim/roofshape.ts'
 import type { CollisionData } from '../../src/experiments/out-west/runtime/protocol.ts'
 import { frontierFlatGround, frontierGround } from './frontier-ground.ts'
+import { frontierMounts, groupFrontierMounts } from './frontier-mounts.ts'
 
 export type CollisionBox = CollisionData['boxes'][number] & { id: string }
 export type CollisionMesh = CollisionData['meshes'][number] & { id: string }
@@ -318,6 +319,13 @@ export function compileFrontierCollision(layout: TownLayout): {
       boxes.push(box(`cover:${index}`, cover, cover.y0 ?? 0, cover.top ?? 1))
     }
   }
+  meshes.push(
+    ...groupFrontierMounts(frontierMounts(layout)).map(({ id, positions, indices }) => ({
+      id,
+      positions,
+      indices,
+    })),
+  )
   const version = createHash('sha256').update(JSON.stringify({ boxes, meshes })).digest('hex')
   return { version, boxes, meshes }
 }

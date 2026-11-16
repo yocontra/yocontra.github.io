@@ -16,7 +16,7 @@ import { projectedUv, surfaceMaterial } from './animal-prop-surfaces.ts'
 import type { CollisionMesh } from './frontier-collision.ts'
 import { fitCells, fitPrefab, hash01, type PrefabFit } from './frontier-fit.ts'
 import { frontierGroundTransform } from './frontier-ground.ts'
-import { scanMaterial } from './frontier-surfaces.ts'
+import { FRONTIER_IRON, scanMaterial } from './frontier-surfaces.ts'
 import { addCactusPrefabs, type Saguaro, splitVegetation } from './frontier-vegetation.ts'
 import { repairFrontierWinding } from './frontier-winding.ts'
 
@@ -222,13 +222,11 @@ export class FrontierGeometry {
       size: 512,
     })
     result.materials.set('straw', straw.setBaseColorFactor([0.86, 0.8, 0.72, 1]))
-    result.materials.set(
-      'iron',
-      await scanMaterial(result.doc, 'Perdition iron', 'rusty_metal_02', {
-        metallic: 1,
-        size: 512,
-      }),
-    )
+    const iron = await scanMaterial(result.doc, 'Perdition iron', 'rusty_metal_02', {
+      metallic: FRONTIER_IRON.metallic,
+      size: 512,
+    })
+    result.materials.set('iron', iron.setBaseColorFactor(FRONTIER_IRON.baseColor))
     result.materials.set(
       'masonry',
       await scanMaterial(result.doc, 'Perdition dressed stone', 'sandstone_cracks', { size: 512 }),

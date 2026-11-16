@@ -18,6 +18,7 @@ import { FrontierGeometry, frontierIO, type Rgb } from './frontier-geometry.ts'
 import { frontierFlatGround, frontierGround, frontierGroundTransform } from './frontier-ground.ts'
 import { townGround } from './frontier-ground-detail.ts'
 import { authoredMaterials } from './frontier-materials.ts'
+import { frontierMounts, groupFrontierMounts, MOUNT_IRON_TINT } from './frontier-mounts.ts'
 import { coverModel, desertPlants } from './frontier-props.ts'
 import { optimizeAsset } from './optimize.ts'
 
@@ -180,6 +181,10 @@ export async function authorFrontier(output: string): Promise<void> {
   }
   bankServiceSigns(g, props, layout)
   desertPlants(g, plan.vegetation, layout.size)
+  for (const mount of groupFrontierMounts(frontierMounts(layout))) {
+    const root = g.group(`Perdition structural iron:${mount.owner}`)
+    g.surface(root, 'iron', mount, MOUNT_IRON_TINT)
+  }
   const panes = authorPanes(g, layout, groups)
   g.finish()
   await g.doc.transform(dedup(), weld(), prune(), unpartition())

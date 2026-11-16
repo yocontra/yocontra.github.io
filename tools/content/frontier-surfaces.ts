@@ -3,6 +3,12 @@ import { readFile } from 'node:fs/promises'
 import type { Document } from '@gltf-transform/core'
 import sharp from 'sharp'
 
+/** Dark oxidized wrought iron; all existing scan maps and roughness remain authored. */
+export const FRONTIER_IRON: { baseColor: [number, number, number, number]; metallic: number } = {
+  baseColor: [0.22, 0.2, 0.18, 1],
+  metallic: 0.35,
+}
+
 const scanRoot = 'tools/art/environments/textures'
 
 /**
