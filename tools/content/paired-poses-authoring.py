@@ -171,7 +171,7 @@ class NativeArm:
         return {name: [q.x, q.y, q.z, q.w] for name, q in zip(CHANGED, quats)}, error
 
 
-def pack(document, arrays):
+def pack(document, arrays, output_path=OUTPUT):
     blob = bytearray()
     document["accessors"] = []
     document["bufferViews"] = []
@@ -188,8 +188,8 @@ def pack(document, arrays):
     raw = json.dumps(document, separators=(",", ":")).encode()
     raw += b" " * (-len(raw) % 4)
     blob.extend(b"\x00" * (-len(blob) % 4))
-    OUTPUT.parent.mkdir(parents=True, exist_ok=True)
-    OUTPUT.write_bytes(struct.pack("<III", 0x46546C67, 2, 28 + len(raw) + len(blob)) + struct.pack("<II", len(raw), 0x4E4F534A) + raw + struct.pack("<II", len(blob), 0x004E4942) + blob)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    output_path.write_bytes(struct.pack("<III", 0x46546C67, 2, 28 + len(raw) + len(blob)) + struct.pack("<II", len(raw), 0x4E4F534A) + raw + struct.pack("<II", len(blob), 0x004E4942) + blob)
 
 
 def hash_values(values):
