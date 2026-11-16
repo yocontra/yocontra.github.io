@@ -232,7 +232,9 @@ export class DuelActor {
     }
     if (name === this.current) {
       if (ONE_SHOT.test(name)) {
-        this.model.anim?.baseLayer?.play(name)
+        // Keep interrupted blend clips available to the native controller.
+        this.model.anim.baseLayer.transition(name, 0)
+        this.model.anim.update(0)
       }
       return
     }
