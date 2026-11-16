@@ -22,6 +22,7 @@ from mathutils.bvhtree import BVHTree
 ROOT = Path(__file__).resolve().parents[2]
 SOURCE = ROOT / 'tools/art/characters'
 OUTPUT = SOURCE / 'paired-grips'
+SPIN_PIVOT_END = .6
 
 
 def module(name, file):
@@ -107,17 +108,54 @@ def surface(gun):
 
 
 class ContactArm(g.Authoring):
-    """Keep draw/false-draw grips on the authored prop without stretching the arm."""
+    """Author contact, twirl release and regrasp without stretching the arm."""
 
     def arm(self, clip, time):
-        if clip not in ('Draw_Pair', 'Flinch_Pair'):
+        if clip in ('Draw_Pair', 'Flinch_Pair'):
+            return self.contact_arm(clip, time)
+        if clip != 'Spin_Pair':
             return super().arm(clip, time)
+        original_fingers = self.finger_rotations
+        twirl = ease(.015, .07, time) * (1 - ease(.47, .62, time))
+        release = ease(.92, 1.1, time)
+        self.finger_rotations = {
+            bone: q.slerp(self.spin_pose[bone], twirl)
+            for bone, q in self.closed_pose.items()
+        }
+        try:
+            ordinary = super().arm(clip, time)
+        finally:
+            self.finger_rotations = original_fingers
+        contact = ease(.5, .64, time)
+        if contact > 0 and release < 1:
+            held = self.contact_arm(clip, time)
+            ordinary = {bone: q.slerp(held[bone], contact) for bone, q in ordinary.items()}
+        if release > 0:
+            source = self.clips.sample(clip, time)
+            ordinary = {
+                bone: q.slerp(Quaternion((source[bone]['rotation'][3], *source[bone]['rotation'][:3])), release)
+                for bone, q in ordinary.items()
+            }
+        return ordinary
+
+    def source_mount(self, clip, time):
+        action = clip.removesuffix('_Pair')
+        action = {'Idle_Gun_Pointing': 'Idle', 'Gun_Shoot': 'Shoot'}.get(action, action)
+        mount = 'mount.Wrist' + self.side + '.drawn'
+        mechanism = g.trs(self.mechanisms.sample('Weapon_' + action + '_' + self.side, time)[mount])
+        if action == 'Spin' and time <= SPIN_PIVOT_END:
+            # Translation lerp otherwise moves the index pivot during each rotation interval.
+            relative = self.old_child.inverted() @ mechanism @ self.old_child
+            relative.translation = self.spin_pivot - relative.to_3x3() @ self.spin_pivot
+            mechanism = self.old_child @ relative @ self.old_child.inverted()
+        return mechanism
+
+    def contact_arm(self, clip, time):
         source_clips, source_gun, source_fingers = self.clips, self.gun_world, self.finger_rotations
         sample = source_clips.sample(clip, time)
         world = self.skeleton.world(sample)
         side = self.side
-        mechanism = self.mechanisms.sample('Weapon_' + clip.replace('_Pair', '') + '_' + side, time)
-        gun = world['Wrist' + side] @ g.trs(mechanism['mount.Wrist' + side + '.drawn']) @ self.old_child
+        gun = world['Wrist' + side] @ self.source_mount(clip, time) @ self.old_child
         target = (gun @ self.new_child.inverted()).translation
         pivot = world['Shoulder' + side].translation
         clavicle = world['UpperArm' + side].translation - pivot
@@ -129,7 +167,7 @@ class ContactArm(g.Authoring):
                 raise ValueError('Authored paired draw is outside clavicle and arm reach')
             angle = max(0, clavicle.angle(axis) - math.acos(max(-1, cosine)))
             if angle > math.radians(25):
-                raise ValueError('Paired draw requires more than25degrees of clavicle movement')
+                raise ValueError('Paired grip requires more than 25 degrees of clavicle movement')
             rotation = Quaternion(clavicle.cross(axis).normalized(), angle) @ world['Shoulder' + side].to_quaternion()
             local = (world['Chest'].to_quaternion().inverted() @ rotation).normalized()
             sample['Shoulder' + side]['rotation'] = g.xyzw(local)
@@ -141,6 +179,11 @@ class ContactArm(g.Authoring):
             return super().arm(clip, time)
         finally:
             self.clips, self.gun_world, self.finger_rotations = source_clips, source_gun, source_fingers
+
+
+def ease(start, end, time):
+    t = min(1, max(0, (time - start) / (end - start)))
+    return t * t * (3 - 2 * t)
 
 
 def authoring(player, actions, skeleton, skin, gun, signed, side):
@@ -199,6 +242,24 @@ def authoring(player, actions, skeleton, skin, gun, signed, side):
     a.maximum_clavicle_swing = 0
     pose = finger_pose(sample, side)
     a.closed_pose = pose
+    a.spin_pose = dict(pose)
+    for digit in ('Middle', 'Ring', 'Pinky'):
+        for joint, flex in enumerate((10, 10, 5), 1):
+            a.spin_pose[f'{digit}{joint}{side}'] = hand.rotation(digit, joint, flex)
+    for joint, flex in enumerate((63, 59, 0), 1):
+        a.spin_pose[f'Index{joint}{side}'] = hand.rotation('Index', joint, flex, (-22 if side == 'L' else 22) if joint == 1 else 0)
+    a.spin_pose['Thumb1' + side] = pose['Thumb1' + side] @ Quaternion((1, 0, 0), math.radians(-20))
+    mount = 'mount.Wrist' + side + '.drawn'
+    # Infer the original pivot from a source key with a well-conditioned rotation.
+    spin = a.mechanisms.tracks['Weapon_Spin_' + side]
+    for time in spin[(mount, 'rotation')][0]:
+        relative = old.inverted() @ g.trs(a.mechanisms.sample('Weapon_Spin_' + side, float(time))[mount]) @ old
+        matrix = np.array(relative)
+        if time <= SPIN_PIVOT_END and abs(matrix[0, 0] - 1) > .2:
+            a.spin_pivot = Vector((*np.linalg.solve(np.eye(2) - matrix[:2, :2], matrix[:2, 3]), 0))
+            break
+    else:
+        raise ValueError('Paired spin has no stable source pivot')
     offsets = {bone: g.trs({'rotation': sample[bone]['rotation']}).to_quaternion().inverted() @ q for bone, q in pose.items()}
     return a, old, new, offsets
 
@@ -260,13 +321,13 @@ def bake_body(source, actions, authors, inputs):
         print('BAKED', name, len(times), flush=True)
     doc['animations'] = clips
     doc['extras'] = {'sourceInputs': inputs, 'changedBones': sorted(owned), 'preservationReceipt': receipts, 'maximumClavicleSwingDegrees': {side: a.maximum_clavicle_swing for side, (a, _, _, _) in authors.items()},
+                     'spin': {'pivotEndTime': SPIN_PIVOT_END, 'pivots': {side: list(a.spin_pivot) for side, (a, _, _, _) in authors.items()}},
                      'gunFrames': {side: {'old': [list(row) for row in old], 'new': [list(row) for row in new]} for side, (_, old, new, _) in authors.items()}}
     pack(doc, arrays, OUTPUT / 'body.glb')
 
 
 def bake_mechanisms(source, original, final, skeleton, authors, inputs):
     doc = {k: copy.deepcopy(source.doc[k]) for k in ('asset', 'nodes', 'scenes', 'scene') if k in source.doc}
-    actions = NativeClips(source)
     arrays, clips = [], []
     frames = {side: (old, new) for side, (_, old, new, _) in authors.items()}
     for clip in source.doc['animations']:
@@ -281,9 +342,9 @@ def bake_mechanisms(source, original, final, skeleton, authors, inputs):
         mount = 'mount.Wrist' + side + '.drawn'
         values = {'translation': [], 'rotation': [], 'scale': []}
         for t in times:
-            was = skeleton.world(original.sample(body, t))['Wrist' + side]
+            world = skeleton.world(original.sample(body, t))
             now = skeleton.world(final.sample(body, t))['Wrist' + side]
-            matrix = now.inverted() @ was @ g.trs(actions.sample(name, t)[mount]) @ old @ new.inverted()
+            matrix = now.inverted() @ world['Wrist' + side] @ authors[side][0].source_mount(body, t) @ old @ new.inverted()
             position, rotation, scale = matrix.decompose()
             q = g.xyzw(rotation.normalized())
             if values['rotation'] and sum(a * b for a, b in zip(values['rotation'][-1], q)) < 0:

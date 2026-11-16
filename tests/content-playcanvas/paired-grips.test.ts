@@ -1,7 +1,6 @@
 import { expect, test as it } from 'bun:test'
 import { readFile } from 'node:fs/promises'
-import { type Animation, type Document, NodeIO } from '@gltf-transform/core'
-import { ALL_EXTENSIONS } from '@gltf-transform/extensions'
+import type { Animation } from '@gltf-transform/core'
 import {
   AnimComponentSystem,
   type AnimTrack,
@@ -12,110 +11,26 @@ import {
   type ContainerResource,
   Mat4,
   NullGraphicsDevice,
-  Quat,
   RenderComponentSystem,
   Vec3,
 } from 'playcanvas'
 import { validateAuthoringInputs } from '../../tools/content/authoring-inputs.ts'
 import { resampleNative } from '../../tools/content/native-resample.ts'
+import {
+  channels,
+  find,
+  frame,
+  io,
+  local,
+  root,
+  type Spin,
+  sample,
+  sourceMount,
+  times,
+  world,
+} from './paired-grip-test-helpers.ts'
 
-const io = new NodeIO().registerExtensions(ALL_EXTENSIONS)
-const root = 'tools/art/characters'
 const CONTACT = /^Weapon_(?:Draw|Flinch)_[LR]$/u
-const find = (doc: Document, name: string) => {
-  const clip = doc
-    .getRoot()
-    .listAnimations()
-    .find((a) => a.getName() === name)
-  if (!clip) {
-    throw new Error(`Missing ${name}`)
-  }
-  return clip
-}
-function channels(clip: Animation) {
-  return new Map(
-    clip.listChannels().map((c) => [`${c.getTargetNode()?.getName()}.${c.getTargetPath()}`, c]),
-  )
-}
-function times(clip: Animation): number[] {
-  return [
-    ...new Set(clip.listSamplers().flatMap((s) => Array.from(s.getInput()?.getArray() ?? []))),
-  ].sort((a, b) => a - b)
-}
-function sample(clip: Animation, time: number) {
-  return new Map(
-    clip.listChannels().map((c) => {
-      const sampler = c.getSampler()
-      const input = sampler?.getInput()
-      const output = sampler?.getOutput()
-      if (!(sampler && input && output)) {
-        throw new Error('Missing animation data')
-      }
-      let index = 0
-      while (index + 1 < input.getCount() && input.getScalar(index + 1) <= time) {
-        index++
-      }
-      const a = output.getElement(index, [] as number[])
-      if (index + 1 < input.getCount() && sampler.getInterpolation() !== 'STEP') {
-        const b = output.getElement(index + 1, [] as number[])
-        const alpha =
-          (time - input.getScalar(index)) / (input.getScalar(index + 1) - input.getScalar(index))
-        if (c.getTargetPath() === 'rotation') {
-          const sign = a.reduce((sum, v, i) => sum + v * (b[i] ?? 0), 0) < 0 ? -1 : 1
-          const q = new Quat(
-            ...(a.map((v, i) => v * (1 - alpha) + (b[i] ?? 0) * sign * alpha) as [
-              number,
-              number,
-              number,
-              number,
-            ]),
-          ).normalize()
-          return [`${c.getTargetNode()?.getName()}.${c.getTargetPath()}`, [q.x, q.y, q.z, q.w]]
-        }
-        return [
-          `${c.getTargetNode()?.getName()}.${c.getTargetPath()}`,
-          a.map((v, i) => v + ((b[i] ?? 0) - v) * alpha),
-        ]
-      }
-      return [`${c.getTargetNode()?.getName()}.${c.getTargetPath()}`, a]
-    }),
-  )
-}
-function local(p: number[], q: number[], s: number[]) {
-  return new Mat4().setTRS(
-    new Vec3(p[0], p[1], p[2]),
-    new Quat(q[0], q[1], q[2], q[3]).normalize(),
-    new Vec3(s[0], s[1], s[2]),
-  )
-}
-function world(skeleton: Document, clip: Animation, time: number, bone: string): Mat4 {
-  const values = sample(clip, time)
-  const node = skeleton
-    .getRoot()
-    .listNodes()
-    .find((n) => n.getName() === bone)
-  if (!node) {
-    throw new Error(`Missing ${bone}`)
-  }
-  const chain: (typeof node)[] = []
-  for (let n: typeof node | null = node; n; n = n.getParentNode()) {
-    chain.unshift(n)
-  }
-  const result = new Mat4()
-  for (const n of chain) {
-    result.mul(
-      local(
-        values.get(`${n.getName()}.translation`) ?? n.getTranslation(),
-        values.get(`${n.getName()}.rotation`) ?? n.getRotation(),
-        values.get(`${n.getName()}.scale`) ?? n.getScale(),
-      ),
-    )
-  }
-  return result
-}
-function frame(rows: number[][]) {
-  return new Mat4().set(Array.from({ length: 16 }, (_, i) => rows[i % 4]?.[Math.floor(i / 4)] ?? 0))
-}
 
 it('paired grip authoring retains the rig, action times and every unowned track', async () => {
   const original = await io.read(`${root}/paired-poses/left-arm.glb`)
@@ -191,7 +106,7 @@ it('paired grip authoring retains the rig, action times and every unowned track'
   }
 }, 30_000)
 
-it('optimized paired weapon compensation preserves barrel and grip paths between authored keys', async () => {
+it('optimized paired compensation preserves source gun paths and the corrected spin pivot', async () => {
   const skeleton = await io.read(`${root}/player.gltf`)
   const original = await io.read(`${root}/paired-poses/left-arm.glb`)
   const authored = await io.read(`${root}/paired-grips/body.glb`)
@@ -204,6 +119,7 @@ it('optimized paired weapon compensation preserves barrel and grip paths between
     string,
     { old: number[][]; new: number[][] }
   >
+  const spin = authored.getRoot().getExtras().spin as Spin
   const anchors = [new Vec3(0, 0, 0), new Vec3(0.3, 0.12, 0), new Vec3(-0.16, 0, 0)]
   let maximum = 0
   for (const clip of original.getRoot().listAnimations()) {
@@ -226,19 +142,19 @@ it('optimized paired weapon compensation preserves barrel and grip paths between
         throw new Error('Missing authored gun seat')
       }
       for (const t of probes) {
-        const gun = (body: Animation, mechanism: Animation, child: number[][]) => {
+        const gun = (body: Animation, mechanism: Animation, child: number[][], correct = false) => {
           const pose = sample(mechanism, t)
-          return world(skeleton, body, t, `Wrist${side}`)
-            .mul(
-              local(
-                pose.get(`${mount}.translation`) ?? [0, 0, 0],
-                pose.get(`${mount}.rotation`) ?? [0, 0, 0, 1],
-                pose.get(`${mount}.scale`) ?? [1, 1, 1],
-              ),
-            )
-            .mul(frame(child))
+          let transform = local(
+            pose.get(`${mount}.translation`) ?? [0, 0, 0],
+            pose.get(`${mount}.rotation`) ?? [0, 0, 0, 1],
+            pose.get(`${mount}.scale`) ?? [1, 1, 1],
+          )
+          if (correct && action === 'Spin') {
+            transform = sourceMount(transform, child, spin, { side, time: t })
+          }
+          return world(skeleton, body, t, `Wrist${side}`).mul(transform).mul(frame(child))
         }
-        const was = gun(clip, oldWeapon, seat.old)
+        const was = gun(clip, oldWeapon, seat.old, true)
         const now = gun(final, newWeapon, seat.new)
         for (const point of anchors) {
           const distance = was.transformPoint(point).distance(now.transformPoint(point))
@@ -321,6 +237,7 @@ it('optimized real native graphs retain the paired gun paths at keys and between
       string,
       { old: number[][]; new: number[][] }
     >
+    const spin = authored.getRoot().getExtras().spin as Spin
     const actions = new Map([
       ['Idle_Gun_Pointing_Pair', 'Idle'],
       ['Gun_Shoot_Pair', 'Shoot'],
@@ -352,9 +269,13 @@ it('optimized real native graphs retain the paired gun paths at keys and between
           newBody.anim?.update(time)
           oldWeapon.anim?.update(time)
           newWeapon.anim?.update(time)
+          const mount =
+            action === 'Spin'
+              ? sourceMount(mountOld.getLocalTransform().clone(), seat.old, spin, { side, time })
+              : mountOld.getLocalTransform()
           const was = new Mat4()
             .copy(bodyNodeOld.getWorldTransform())
-            .mul(mountOld.getLocalTransform())
+            .mul(mount)
             .mul(frame(seat.old))
           const now = new Mat4()
             .copy(bodyNodeNew.getWorldTransform())
