@@ -4,6 +4,8 @@ import { AppBase, AppOptions, NullGraphicsDevice } from 'playcanvas'
 import { nativeFrameStats } from '../../src/experiments/out-west/client/native-frame-stats.ts'
 
 const relativeImport = /^\.\.?\//u
+// NullGraphicsDevice leaves this optional platform service unset.
+type OptionalGpuProfiler = NullGraphicsDevice['gpuProfiler'] | undefined
 
 it('samples live native frame counters without enabling profiling or retaining mutable stats', () => {
   const device = new NullGraphicsDevice({ width: 1, height: 1 })
@@ -11,7 +13,7 @@ it('samples live native frame counters without enabling profiling or retaining m
   const options = new AppOptions()
   options.graphicsDevice = device
   app.init(options)
-  const profiling = device.gpuProfiler?.enabled
+  const profiling = (device.gpuProfiler as OptionalGpuProfiler)?.enabled
   try {
     const initial = nativeFrameStats(app)
     expect(initial?.frameId).toBe(0)
@@ -31,7 +33,7 @@ it('samples live native frame counters without enabling profiling or retaining m
     expect(nativeFrameStats(app)?.frameId).toBe(2)
     expect(first?.frameId).toBe(1)
     expect(initial?.frame.updateStartMs).toBe(0)
-    expect(device.gpuProfiler?.enabled).toBe(profiling)
+    expect((device.gpuProfiler as OptionalGpuProfiler)?.enabled).toBe(profiling)
     expect(nativeFrameStats(undefined)).toBeNull()
   } finally {
     app.destroy()

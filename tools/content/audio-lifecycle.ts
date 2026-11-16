@@ -158,5 +158,7 @@ export async function disposeAudioLifecycle() {
     await context.close()
   }
   probe = undefined
-  return { context: context.state, remainingSounds: app.root?.findComponents('sound').length ?? 0 }
+  // Native destroy clears the root despite its non-null SDK declaration.
+  const root = app.root as Entity | null
+  return { context: context.state, remainingSounds: root?.findComponents('sound').length ?? 0 }
 }

@@ -211,13 +211,15 @@ export function captureUvState() {
     instances: Pc.MeshInstance[]
     streams: { uv: number[] }[]
   }
+  const parameter = material.getParameter('texture_diffuseDetailMap') as
+    | { data: unknown }
+    | undefined
   return {
     material: {
       id: material.id,
       uv: material.diffuseDetailMapUv,
       texture: Reflect.get(texture, 'id'),
-      activeTexture:
-        Reflect.get(material.getParameter('texture_diffuseDetailMap') ?? {}, 'data') === texture,
+      activeTexture: parameter?.data === texture,
       chunk: material.getShaderChunks('glsl').get('uv1VS'),
     },
     instances: instances.map((mi) => ({
