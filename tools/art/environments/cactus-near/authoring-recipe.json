@@ -1,0 +1,74 @@
+{
+  "donor": "tools/art/environments/frontier-cacti.glb",
+  "budget": 20000,
+  "inputs": [
+    {
+      "path": "tools/art/environments/frontier-cacti.glb",
+      "sha256": "d16c9fb4c4f1417feb0795278d8b4603f82a932af60e704fb47e31e01575cc8a"
+    },
+    {
+      "path": "tools/art/environments/cactus-near/near-albedo.png",
+      "sha256": "2994f6561089f85d6505e0489667cdfd3aad7f566e2a63e079bade373042ab1c"
+    },
+    {
+      "path": "tools/art/environments/cactus-near/near-normal.png",
+      "sha256": "7ffba9bb4459e2378aee2c6b6a53bc7591e2451088a22f6401cf49755e9941e6"
+    },
+    {
+      "path": "tools/art/environments/cactus-near/near-arm.png",
+      "sha256": "8c1e960b033fce0a5a4921a3b945c66a1ca7f9f7877a6efc2c9d2bb6a3961d7c"
+    },
+    {
+      "path": "tools/art/environments/cactus-near/tile-source.blend",
+      "sha256": "a6fdb93d22f19cd53ea9b21f309f7286fd7b957423113cfbab0df7c9f0e19a47"
+    }
+  ],
+  "scripts": [
+    {
+      "path": "tools/content/frontier-cactus-authoring.py",
+      "sha256": "c14648b7b222dc89b6f75929186cff671b4dc8652d75e30eb09647971c3cce07"
+    },
+    {
+      "path": "tools/content/frontier-cactus-candidate.ts",
+      "sha256": "4ff89c6c77bac4c3edac463fc662e99f39cb4a46ca6fc9f63c4d8d22fa386a3f"
+    },
+    {
+      "path": "tools/test-playcanvas-frontier-cactus.ts",
+      "sha256": "4558e345b85156188d72e909315b065b28fe1b9a09e66366b898fe87612e9d47"
+    },
+    {
+      "path": "tests/content-playcanvas/frontier-cactus-candidate.test.ts",
+      "sha256": "7411457d2089595b597440dbf88b8a05b3b63f7cc4c8570fb1078fe61eadcc0e"
+    },
+    {
+      "path": "tools/content/content-output.ts",
+      "sha256": "fcd4638329852fa5698875cd078503983a25d9188b5ffb23de383db43d536b39"
+    },
+    {
+      "path": "tools/content/environment-textures.ts",
+      "sha256": "c3c60638383d66fb993b0f4a290ce1b41968756db931399f99014c7653e479cc"
+    },
+    {
+      "path": "tools/content/character-textures.ts",
+      "sha256": "d7d2cc34fd8960198e349dc8cccd268f06a5bbc1ddf065ac3dfc9b796f960d91"
+    }
+  ],
+  "reusedMaps": [
+    {
+      "path": "tools/art/environments/cactus-near/near-albedo.png",
+      "sha256": "2994f6561089f85d6505e0489667cdfd3aad7f566e2a63e079bade373042ab1c"
+    },
+    {
+      "path": "tools/art/environments/cactus-near/near-normal.png",
+      "sha256": "7ffba9bb4459e2378aee2c6b6a53bc7591e2451088a22f6401cf49755e9941e6"
+    },
+    {
+      "path": "tools/art/environments/cactus-near/near-arm.png",
+      "sha256": "8c1e960b033fce0a5a4921a3b945c66a1ca7f9f7877a6efc2c9d2bb6a3961d7c"
+    },
+    {
+      "path": "tools/art/environments/cactus-near/tile-source.blend",
+      "sha256": "a6fdb93d22f19cd53ea9b21f309f7286fd7b957423113cfbab0df7c9f0e19a47"
+    }
+  ]
+}

@@ -10,6 +10,7 @@ import { buildGrid, type TownLayout } from '../../src/experiments/out-west/ffa/s
 import { projectedUv, surfaceMaterial } from './animal-prop-surfaces.ts'
 import { compressEnvironmentTextures } from './environment-textures.ts'
 import { bankServiceSigns, buildingDetails, surround } from './frontier-architecture.ts'
+import { replaceCactusPrototype } from './frontier-cactus-candidate.ts'
 import { compileFrontierCollision, perimeterSpans, structuralWalls } from './frontier-collision.ts'
 import { FrontierGeometry, frontierIO, type Rgb } from './frontier-geometry.ts'
 import { frontierFlatGround, frontierGround, frontierGroundTransform } from './frontier-ground.ts'
@@ -180,6 +181,11 @@ export async function authorFrontier(output: string): Promise<void> {
   const panes = authorPanes(g, layout, groups)
   g.finish()
   await g.doc.transform(dedup(), weld(), prune(), unpartition())
+  replaceCactusPrototype(
+    g.doc,
+    await frontierIO.read(join(SOURCE, 'cactus-near/frontier-cactus-near.glb')),
+    await frontierIO.read(join(SOURCE, 'frontier-cacti.glb')),
+  )
   await mkdir(output, { recursive: true })
   await authorTumbleweeds(plan, output)
   await frontierIO.write(join(output, 'frontier.glb'), g.doc)
