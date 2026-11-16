@@ -25,7 +25,6 @@ function fixture() {
   const accessor = (type: 'VEC2' | 'VEC3' | 'SCALAR', array: Float32Array | Uint16Array) =>
     doc.createAccessor().setType(type).setArray(array.slice()).setBuffer(buffer)
   const pixels = Buffer.from(
-    // biome-ignore lint/security/noSecrets: One-pixel PNG fixture bytes, not a credential.
     'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jC6kAAAAASUVORK5CYII=',
     'base64',
   )

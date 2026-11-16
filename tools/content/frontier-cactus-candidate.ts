@@ -11,7 +11,6 @@ import { compressEnvironmentTextures } from './environment-textures.ts'
 const io = new NodeIO().registerExtensions(ALL_EXTENSIONS)
 export const CACTUS_MESH = 'cactus.saguaro_one_arm'
 export const CACTUS_MATERIAL = 'Cactus near prototype skin'
-// biome-ignore lint/security/noSecrets: Public main asset SHA256, not a credential.
 const SOURCE_GEOMETRY_HASH = 'c8c38f18c605efd4f1b2ef2114ffabf9b0e9ca9d166ed25a93c385bfc03bcdc1'
 export const cactusHash = (bytes: Uint8Array | string): string =>
   createHash('sha256').update(bytes).digest('hex')

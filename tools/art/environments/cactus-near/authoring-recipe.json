@@ -30,7 +30,7 @@
     },
     {
       "path": "tools/content/frontier-cactus-candidate.ts",
-      "sha256": "4ff89c6c77bac4c3edac463fc662e99f39cb4a46ca6fc9f63c4d8d22fa386a3f"
+      "sha256": "e453e631953bae026b295e99c4707890dd8aab066ab4173bdb9ed4acac1e4e2c"
     },
     {
       "path": "tools/test-playcanvas-frontier-cactus.ts",
@@ -38,7 +38,7 @@
     },
     {
       "path": "tests/content-playcanvas/frontier-cactus-candidate.test.ts",
-      "sha256": "7411457d2089595b597440dbf88b8a05b3b63f7cc4c8570fb1078fe61eadcc0e"
+      "sha256": "44131f19d795268dddd8796f8897947b662b1e039e043a5462fa9d5829f4e4ce"
     },
     {
       "path": "tools/content/content-output.ts",
