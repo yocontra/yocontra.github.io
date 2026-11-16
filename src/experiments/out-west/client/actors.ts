@@ -6,7 +6,7 @@ import type {
   GraphNode,
 } from 'playcanvas'
 import { Mat4, Quat, Vec3 } from 'playcanvas'
-import { ASSETS, CONTENT_VERSION } from '../content/manifest.ts'
+import { ASSETS, DYNAMIC_ASSETS } from '../content/manifest.ts'
 import { DEFAULT_LOADOUT, type Loadout } from '../data/catalog.ts'
 import type { Dyes } from '../data/dye.ts'
 import { DuelActor } from '../duel/native-actor.ts'
@@ -36,8 +36,8 @@ async function commonCharacters(game: GameApplication): Promise<() => void> {
   const [, fallback] = await Promise.all([
     game.loadContainer(ASSETS.moves.url),
     game.loadContainer(ASSETS['outlaw-0'].url),
-    game.loadContainer(heldUrl('rifle')),
-    game.loadContainer(heldUrl('shotgun')),
+    game.loadContainer(DYNAMIC_ASSETS['held-rifle'].url),
+    game.loadContainer(DYNAMIC_ASSETS['held-shotgun'].url),
   ])
   return prepareNativeMaterials(game, fallback.resource as ContainerResource)
 }
@@ -55,9 +55,6 @@ interface Rider {
   heldPending: Set<string>
   heldFailures: Set<string>
 }
-
-const heldUrl = (weapon: 'rifle' | 'shotgun'): string =>
-  `/experiments/out-west/3d/native-v2/dynamic/held-${weapon}.glb?v=${CONTENT_VERSION}`
 
 const rigInverse = new Mat4()
 const viewRotation = new Quat()
@@ -386,7 +383,7 @@ export class Actors {
       return
     }
     rider.heldPending.add(weapon)
-    void attachHeldWeapon(this.game, rider.actor, weapon, heldUrl(weapon))
+    void attachHeldWeapon(this.game, rider.actor, weapon, DYNAMIC_ASSETS[`held-${weapon}`].url)
       .then((model) => {
         if (this.lifecycle.signal.aborted || !rider.actor.root.parent) {
           model.destroy()
