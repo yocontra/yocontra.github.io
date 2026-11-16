@@ -34,8 +34,8 @@ function invariant(doc: Document, primitive: Primitive, skin: Skin): string {
       ]),
   })
 }
-for (const id of ['player', 'outfit.trail-duds', 'outfit.wool-duster', 'outlaw-0']) {
-  it(`${id} retains the source neck cross-section and length while tapering the lower skull into the occiput`, async () => {
+for (const id of ['player', 'outfit.trail-duds', 'outfit.wool-duster', 'outlaw-0', 'outlaw-8']) {
+  it(`${id} preserves neck length and collar attachment while joining the nape continuously to the skull`, async () => {
     const doc = await io.read(`tools/art/characters/${id}.gltf`)
     const node = doc
       .getRoot()
@@ -74,9 +74,21 @@ for (const id of ['player', 'outfit.trail-duds', 'outfit.wool-duster', 'outlaw-0
     )
     const rows = before.map((old, i) => ({ old, next: position.getElement(range.start + i, []) }))
     expect(rows.map(({ next }) => next.slice(0, 2))).toEqual(before.map((old) => old.slice(0, 2)))
-    const neck = rows.filter(({ old }) => (old[1] ?? 0) >= headY - 0.1 && (old[1] ?? 0) <= headY)
-    expect(neck.length).toBeGreaterThan(20)
-    expect(neck.map(({ next }) => next)).toEqual(neck.map(({ old }) => old))
+    const collar = rows.filter(
+      ({ old }) => (old[1] ?? 0) >= headY - 0.14 && (old[1] ?? 0) <= headY - 0.06,
+    )
+    expect(collar.length).toBeGreaterThan(20)
+    expect(collar.map(({ next }) => next)).toEqual(collar.map(({ old }) => old))
+    const nape = rows.filter(
+      ({ old }) =>
+        (old[1] ?? 0) > headY - 0.04 &&
+        (old[1] ?? 0) <= headY + 0.006 &&
+        (old[2] ?? 0) < headZ - 0.025,
+    )
+    expect(nape.length).toBeGreaterThan(20)
+    expect(Math.min(...nape.map(({ old, next }) => (next[2] ?? 0) - (old[2] ?? 0)))).toBeLessThan(
+      -0.002,
+    )
     const front = rows.filter(({ old }) => (old[2] ?? 0) >= headZ + 0.01)
     expect(front.map(({ next }) => next)).toEqual(front.map(({ old }) => old))
     const ears = rows.filter(({ old }) => Math.abs((old[0] ?? 0) - headX) > 0.075)
@@ -91,7 +103,12 @@ for (const id of ['player', 'outfit.trail-duds', 'outfit.wool-duster', 'outlaw-0
     const hairBack = Array.from({ length: hairRange.count }, (_, i) =>
       allBefore.slice((hairRange.start + i) * 3, (hairRange.start + i + 1) * 3),
     ).filter((p) => (p[2] ?? 0) < headZ - 0.025 && Math.abs((p[0] ?? 0) - headX) < 0.06)
-    const coveredFrom = Math.min(...hairBack.map((p) => p[1] ?? 0)) + 0.025
+    // Longer hairstyles reach the neck; protect the scalp cap rather than the whole hair length.
+    const crown = Math.max(...before.map((p) => p[1] ?? 0)) - headY
+    const coveredFrom = Math.max(
+      headY + crown * 0.45,
+      Math.min(...hairBack.map((p) => p[1] ?? 0)) + 0.025,
+    )
     const coveredScalp = rows.filter(({ old }) => (old[1] ?? 0) >= coveredFrom)
     expect(coveredScalp.length).toBeGreaterThan(20)
     // The fitted hair is immutable: expanding the upper skull through it creates bald patches.
