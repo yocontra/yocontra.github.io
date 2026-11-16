@@ -19,7 +19,7 @@ import { VoiceTransport } from './transport.ts'
 const RESTART_WINDOW_MS = 5000
 
 export type { VoiceCredentials } from './meeting.ts'
-export type VoiceState = 'off' | 'connecting' | 'standby' | 'live' | 'error'
+export type VoiceState = 'off' | 'connecting' | 'standby' | 'live' | 'listening' | 'error'
 export interface VoiceSettings {
   voiceChat: boolean
   voicePushToTalk: boolean
@@ -37,6 +37,7 @@ export interface VoiceChatOptions {
 export class VoiceChat {
   private readonly live: {
     enabled: boolean
+    connected: boolean
     linked: boolean
     foreground: boolean
     sequence: number
@@ -53,6 +54,7 @@ export class VoiceChat {
     restartedAt: number
   } = {
     enabled: false,
+    connected: false,
     linked: true,
     foreground: !document.hidden,
     sequence: 0,
@@ -72,7 +74,9 @@ export class VoiceChat {
   private readonly transport: VoiceTransport
   private state: VoiceState = 'off'
   private playbackMessage: string | undefined
+  private microphoneMessage: string | undefined
   private microphone: MediaStreamTrack | null = null
+  private pendingMicrophone: MediaStreamTrack | null = null
   private activity: MicrophoneActivity | null = null
   private readonly localMuted = new Set<number>()
   private peers: readonly VoicePeer[] = []
@@ -87,8 +91,28 @@ export class VoiceChat {
         if (state === 'error') {
           this.fail(message ?? 'Voice connection lost. Retry voice.')
         } else if (this.live.enabled && this.live.requested) {
+          this.live.connected = true
           this.playbackMessage = message
-          this.setState('live', message)
+          if (this.microphone) {
+            const sequence = this.live.sequence
+            void this.transport
+              .replaceMicrophone(
+                this.microphone,
+                () => this.live.enabled && sequence === this.live.sequence,
+              )
+              .then(() => {
+                if (this.live.enabled && sequence === this.live.sequence && this.live.connected) {
+                  this.setState('live', message)
+                }
+              })
+              .catch((error: unknown) => {
+                if (this.live.enabled && sequence === this.live.sequence) {
+                  this.captureFailed(error)
+                }
+              })
+          } else {
+            this.setState('live', message)
+          }
         }
       },
     })
@@ -120,7 +144,7 @@ export class VoiceChat {
     return this.state
   }
   get isLive(): boolean {
-    return this.state === 'live'
+    return this.live.connected
   }
   get micMutedState(): boolean {
     return this.live.micMuted
@@ -144,10 +168,10 @@ export class VoiceChat {
     }
     this.o.audio?.resume?.()
     this.transport.resumeReceive()
-    if (this.microphone?.readyState === 'live') {
-      this.refreshInterest(true)
-      this.setState('standby')
-    } else {
+    this.microphoneMessage = undefined
+    this.setState(this.live.connected ? 'live' : 'standby')
+    this.refreshInterest(true)
+    if (this.microphone?.readyState !== 'live') {
       void this.capture()
     }
   }
@@ -159,8 +183,10 @@ export class VoiceChat {
     this.quiet()
     this.live.requested = false
     this.preference = ''
+    this.live.connected = false
+    this.live.generation = -1
     void this.transport.stop()
-    if (this.live.enabled && this.microphone) {
+    if (this.live.enabled) {
       if (on) {
         this.refreshInterest(true)
         this.setState('standby')
@@ -214,12 +240,13 @@ export class VoiceChat {
       this.setState(this.state)
     } else if (control.type === 'voice_standby') {
       this.live.generation = -1
+      this.live.connected = false
       void this.transport.stop()
       this.setState('standby')
-    } else if (this.microphone && control.generation !== this.live.generation) {
+    } else if (control.generation !== this.live.generation) {
       this.live.generation = control.generation
       this.setState('connecting', 'Connecting to nearby players…')
-      void this.transport.connect(control, this.microphone)
+      void this.transport.connect(control, null)
     }
   }
   update(peers: readonly VoicePeer[], own?: { x: number; z: number }): void {
@@ -229,7 +256,7 @@ export class VoiceChat {
     this.peers = peers
     this.sample(false)
     this.refreshInterest()
-    if (this.state === 'live') {
+    if (this.live.connected) {
       this.transport.update(peers, own, this.live.silenced)
     }
   }
@@ -246,26 +273,25 @@ export class VoiceChat {
     const deviceId = getMicrophoneInput()
     const active = () => this.live.enabled && sequence === this.live.sequence
     let candidate: MediaStreamTrack | undefined
-    this.setState('connecting', 'Allow microphone access to enable voice.')
+    if (!this.live.connected) {
+      this.setState(
+        'connecting',
+        'Allow microphone access to talk. Nearby voice remains available.',
+      )
+    }
     try {
       candidate = await captureMicrophone(deviceId)
       candidate.enabled = false
       if (!active()) {
         return
       }
+      this.pendingMicrophone = candidate
       const reused = await this.transport.replaceMicrophone(candidate, active)
       if (!active()) {
         return
       }
-      if (this.live.requested && !reused) {
-        if (this.live.linked) {
-          this.o.send({ type: 'voice_off' })
-        }
-        this.live.requested = false
-        this.live.generation = -1
-        this.preference = ''
-      }
       const track = candidate
+      this.pendingMicrophone = null
       candidate = undefined
       this.microphone = track
       track.addEventListener('ended', this.microphoneEnded)
@@ -276,7 +302,8 @@ export class VoiceChat {
       }
       this.activity = this.o.activity(track, () => this.quiet())
       this.refreshInterest(true)
-      this.setState(reused ? 'live' : 'standby')
+      this.microphoneMessage = undefined
+      this.setState(reused || this.live.connected ? 'live' : 'standby')
       this.sample(true)
     } catch (error) {
       if (active()) {
@@ -289,11 +316,12 @@ export class VoiceChat {
           setMicrophoneInput('')
           return
         }
-        this.fail(
-          error instanceof Error ? error.message : 'Microphone could not start. Retry voice.',
-        )
+        this.captureFailed(error)
       }
     } finally {
+      if (this.pendingMicrophone === candidate) {
+        this.pendingMicrophone = null
+      }
       candidate?.stop()
       this.live.capturing = false
       if (this.live.enabled && sequence !== this.live.sequence && this.state !== 'error') {
@@ -309,7 +337,7 @@ export class VoiceChat {
     // iOS ends a fresh track when capture cannot hold the device; reopening it at once can loop.
     const now = performance.now()
     if (now - this.live.restartedAt < RESTART_WINDOW_MS) {
-      this.fail('Microphone disconnected. Retry voice.')
+      this.captureFailed(new Error('Microphone disconnected. Retry microphone.'))
       return
     }
     this.live.restartedAt = now
@@ -335,6 +363,16 @@ export class VoiceChat {
     this.releaseMicrophone()
     this.retry()
   }
+  private captureFailed(error: unknown): void {
+    if (!this.live.enabled) {
+      return
+    }
+    this.quiet()
+    this.releaseMicrophone()
+    this.microphoneMessage = error instanceof Error ? error.message : 'Microphone could not start.'
+    this.refreshInterest()
+    this.setState(this.live.connected ? 'live' : 'standby')
+  }
   private fail(message: string): void {
     this.stopCapture()
     this.setState('error', message)
@@ -348,15 +386,23 @@ export class VoiceChat {
     this.live.requested = false
     this.preference = ''
     this.live.generation = -1
+    this.live.connected = false
+    this.microphoneMessage = undefined
     this.releaseMicrophone()
     void this.transport.stop()
   }
   private releaseMicrophone(): void {
+    this.pendingMicrophone?.stop()
+    this.pendingMicrophone = null
     this.activity?.dispose()
     this.activity = null
     this.microphone?.removeEventListener('ended', this.microphoneEnded)
     this.microphone?.stop()
     this.microphone = null
+    const sequence = this.live.sequence
+    void this.transport
+      .replaceMicrophone(null, () => this.live.enabled && sequence === this.live.sequence)
+      .catch(() => undefined)
   }
   private quiet(): void {
     this.live.talking = false
@@ -399,7 +445,7 @@ export class VoiceChat {
     this.live.intent = on
   }
   private refreshInterest(force = false): void {
-    if (!(this.live.enabled && this.live.linked && this.microphone)) {
+    if (!(this.live.enabled && this.live.linked) || this.state === 'error') {
       return
     }
     const muted = this.peers
@@ -417,13 +463,18 @@ export class VoiceChat {
       this.o.send(control)
     }
   }
-  private setState(state: VoiceState, message?: string): void {
+  private setState(next: VoiceState, message?: string): void {
+    const receiveOnly =
+      (next === 'standby' || next === 'live' || next === 'listening') && this.microphoneMessage
+    const state = receiveOnly ? 'listening' : next
     this.state = state
     if (state !== 'live') {
       this.playbackMessage = undefined
     }
     let status = message ?? (state === 'live' ? this.playbackMessage : undefined)
-    if (!status && state === 'standby') {
+    if (receiveOnly) {
+      status = `Listening only. ${this.microphoneMessage}`
+    } else if (!status && state === 'standby') {
       status = this.live.listeners > 0 ? 'Ready · nearby listeners' : 'Ready · no nearby listeners'
     }
     this.o.onState?.(state, status)

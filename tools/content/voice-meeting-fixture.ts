@@ -40,7 +40,31 @@ let resolveDisable: (() => void) | undefined
 let resolveEnable: (() => void) | undefined
 const clones: MediaStreamTrack[] = []
 
+type Speaker = Events & { id: string; customParticipantId: string; audioTrack: MediaStreamTrack }
 function createMeeting() {
+  const joined = Object.assign(new Map<string, Speaker>(), new Events())
+  // Map and the SDK event collection expose both interfaces.
+  const events = new Events()
+  const participants = {
+    joined: Object.assign(joined, { on: events.on.bind(events), off: events.off.bind(events) }),
+    audioSubscribed: new Map<string, Speaker>(),
+    setViewMode: () => Promise.resolve(),
+    subscribe: (ids: string[]) => {
+      for (const id of ids) {
+        const speaker = joined.get(id)
+        if (speaker) {
+          participants.audioSubscribed.set(id, speaker)
+        }
+      }
+      return Promise.resolve()
+    },
+    unsubscribe: (ids: string[]) => {
+      for (const id of ids) {
+        participants.audioSubscribed.delete(id)
+      }
+      return Promise.resolve()
+    },
+  }
   const self = Object.assign(new Events(), {
     audioTrack: undefined as MediaStreamTrack | undefined,
     cleanUpTracks: () => self.audioTrack?.stop(),
@@ -58,16 +82,8 @@ function createMeeting() {
   })
   return {
     self,
-    participants: {
-      joined: Object.assign(new Map<string, never>(), {
-        on: () => undefined,
-        off: () => undefined,
-      }),
-      audioSubscribed: new Map(),
-      setViewMode: () => Promise.resolve(),
-      subscribe: () => Promise.resolve(),
-      unsubscribe: () => Promise.resolve(),
-    },
+    participants,
+    events,
     join: () =>
       held
         ? new Promise<void>((resolve) => {
@@ -179,4 +195,17 @@ export function finishLeave(): void {
   for (const resolve of pendingLeaves.splice(0)) {
     resolve()
   }
+}
+
+export function addSpeaker(track: MediaStreamTrack): void {
+  if (!latest) {
+    throw new Error('No receive meeting')
+  }
+  const participant = Object.assign(new Events(), {
+    id: '7',
+    customParticipantId: '7',
+    audioTrack: track,
+  })
+  latest.participants.joined.set('7', participant)
+  latest.events.emit('participantJoined', participant)
 }

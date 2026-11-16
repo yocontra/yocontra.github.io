@@ -64,7 +64,7 @@ try {
     setting: 'granted',
     origin,
   })
-  await page.getByRole('button', { name: 'Retry voice chat' }).press('Enter')
+  await page.getByRole('button', { name: 'Retry microphone' }).press('Enter')
   await state('standby')
   const standby = await value()
   if (standby.requests !== 0 || standby.original !== 'live' || standby.originalEnabled) {
