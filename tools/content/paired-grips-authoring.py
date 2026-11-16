@@ -162,6 +162,16 @@ def authoring(player, actions, skeleton, skin, gun, signed, side):
     return a, old, new, offsets
 
 
+def pack(document, arrays, path):
+    # The existing writer has one module-local output path; this offline run is serial.
+    previous = writer.OUTPUT
+    try:
+        writer.OUTPUT = path
+        writer.pack(document, arrays)
+    finally:
+        writer.OUTPUT = previous
+
+
 def metadata(files):
     return [{'path': str(p.relative_to(ROOT)), 'sha256': hashlib.sha256(p.read_bytes()).hexdigest()} for p in sorted(set(files))]
 
@@ -210,7 +220,7 @@ def bake_body(source, actions, authors, inputs):
     doc['animations'] = clips
     doc['extras'] = {'sourceInputs': inputs, 'changedBones': sorted(owned), 'preservationReceipt': receipts,
                      'gunFrames': {side: {'old': [list(row) for row in old], 'new': [list(row) for row in new]} for side, (_, old, new, _) in authors.items()}}
-    writer.pack(doc, arrays, OUTPUT / 'body.glb')
+    pack(doc, arrays, OUTPUT / 'body.glb')
 
 
 def bake_mechanisms(source, original, final, skeleton, authors, inputs):
@@ -252,7 +262,7 @@ def bake_mechanisms(source, original, final, skeleton, authors, inputs):
         clips.append(out)
     doc['animations'] = clips
     doc['extras'] = {'sourceInputs': inputs, 'gunFrames': {side: {'old': [list(row) for row in old], 'new': [list(row) for row in new]} for side, (old, new) in frames.items()}}
-    writer.pack(doc, arrays, OUTPUT / 'mechanisms.glb')
+    pack(doc, arrays, OUTPUT / 'mechanisms.glb')
 
 
 def main():
