@@ -14,6 +14,7 @@ import { GameEffects } from './effects.ts'
 import { NativeEnvironment } from './environment.ts'
 import { GameInput } from './input.ts'
 import { FrontierItems } from './items.ts'
+import { nativeFrameStats } from './native-frame-stats.ts'
 import { poseEye } from './player-pose.ts'
 import { NativeRagdolls } from './ragdolls.ts'
 import { shotVisuals } from './shot-visuals.ts'
@@ -333,6 +334,7 @@ function viewportDebug({
     ragdolls: ragdolls?.stats() ?? { active: 0, frozen: 0, bodies: 0 },
     ...(import.meta.env.PUBLIC_OW_PERF_HARNESS === '1'
       ? {
+          nativeAppStats: nativeFrameStats(application?.app),
           renderer: application
             ? { tier: application.tier, nativePost: application.post?.diagnostics() ?? null }
             : null,

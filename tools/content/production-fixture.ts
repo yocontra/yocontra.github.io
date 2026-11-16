@@ -15,6 +15,7 @@ export interface NativeSample {
     players: number
     actors: { loaded: number; loading: number; failed: number; fallbacks: number }
     renderer?: ReturnType<GameViewport['debug']>['renderer']
+    nativeAppStats?: ReturnType<GameViewport['debug']>['nativeAppStats']
   }
   events?: { type: string; tick: number; at: number; wall: number; self: boolean }[]
 }
