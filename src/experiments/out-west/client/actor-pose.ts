@@ -2,6 +2,7 @@
 import { type AnimComponentLayer, Entity } from 'playcanvas'
 import type { DuelActor } from '../duel/native-actor.ts'
 import { nativeActionSpeed } from '../scene/native-animation-timing.ts'
+import { maskedTrack } from '../scene/native-track-mask.ts'
 import type { GameApplication } from './application.ts'
 
 const WEAPON =
@@ -45,19 +46,21 @@ export function createRiderPose(game: GameApplication, actor: DuelActor): RiderP
   if (!weapon) {
     throw new Error('Native upper-body layer unavailable')
   }
-  weapon.mask = actor.upperBodyMask()
+  const upper = actor.upperBodyMask()
+  weapon.mask = upper
   for (const track of tracks) {
-    weapon.assignAnimation(track.name, track)
+    weapon.assignAnimation(track.name, maskedTrack(track, upper))
   }
   weapon.play(initial)
   const aim = anim.addLayer('Aim pitch', 0)
-  aim.mask = {
+  const aiming = {
     ...actor.upperBodyMask(false),
     ...actor.upperBodyMask(false, 'Torso'),
     ...actor.upperBodyMask(false, 'Chest'),
   }
+  aim.mask = aiming
   for (const track of actor.tracks.filter((clip) => AIM.test(clip.name))) {
-    aim.assignAnimation(track.name, track, 1, true)
+    aim.assignAnimation(track.name, maskedTrack(track, aiming), 1, true)
   }
   anim.normalizeWeights = false
   anim.activate = true
@@ -71,6 +74,12 @@ export function createRiderPose(game: GameApplication, actor: DuelActor): RiderP
   const full = actor.upperBodyMask(true, 'Root')
   if (actor.model.anim?.baseLayer) {
     actor.model.anim.baseLayer.mask = lower
+    for (const track of actor.tracks) {
+      // Death switches this controller back to a full-body mask before playback.
+      if (!track.name.startsWith('Death')) {
+        actor.model.anim.baseLayer.assignAnimation(track.name, maskedTrack(track, lower))
+      }
+    }
   }
   let enabled = true
   return {

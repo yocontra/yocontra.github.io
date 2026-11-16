@@ -54,6 +54,8 @@ Complete and push these in small working tasks, with native visual/audio evidenc
 
 ## Performance
 
+- [x] Reuse authored animation buffers for native layer-specific tracks, omitting channels those layers already mask out. Exact pose/event/buffer-sharing tests cover the authored library; native 30/60/100 Hz gait clocks and complete 200 ms recoil remain correct. Full-game frame qualification remains open.
+
 - [x] Support authored near/far detail through native render-component visibility and a separate native batch group. Hysteresis, world/vertical distance, imported name suffixes, regeneration and teardown tests pass; existing scene captures stay byte-identical. This enables upcoming prop detail, and does not claim its FPS budget is qualified.
 
 - [x] Share identical embedded texture images in the four duel scenes through the native glTF asset pipeline. This removes 14.8 MB of duplicate downloads; all 132 matched headless frames remain byte-identical, draw/buffer counts stay unchanged, and depot/mission/bank captures use about 6.2 MB less texture memory each. All 94 historical GLBs are untouched.
