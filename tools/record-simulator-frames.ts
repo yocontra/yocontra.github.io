@@ -200,6 +200,22 @@ export function preflightIssues(options: {
   }
   return issues
 }
+/** idb treats decimal coordinate tokens as markers; HID targets must be integer points. */
+export function hidTapArguments(x: number, y: number) {
+  if (![x, y].every((value) => Number.isFinite(value) && value >= 0)) {
+    throw new Error('Invalid guest HID point')
+  }
+  return [
+    'ui',
+    'tap',
+    String(Math.round(x)),
+    String(Math.round(y)),
+    '--api',
+    'hid',
+    '--duration',
+    '0.15',
+  ]
+}
 export function commandPlan(udid: string, url: string, port: number) {
   if (!(deviceId.test(udid) && Number.isInteger(port)) || port < 1024 || port > 65_535) {
     throw new Error('Invalid simulator target/port')
@@ -349,8 +365,7 @@ export async function runPreflight(options: {
     if (!(scale > 0 && Math.abs(web.height - ready.page.height * scale) < 4)) {
       throw new Error('Guest CSS/AX viewport transform unproved')
     }
-    const tap = async (x: number, y: number) =>
-      run(idb('ui', 'tap', String(x), String(y), '--api', 'hid', '--duration', '0.15'))
+    const tap = (x: number, y: number) => run(idb(...hidTapArguments(x, y)))
     const canvas = ready.page.canvas
     await tap(
       web.x + (canvas.x + canvas.width * 0.7) * scale,

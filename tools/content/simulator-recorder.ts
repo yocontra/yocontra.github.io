@@ -10,6 +10,7 @@ export async function installSimulatorRecorder(): Promise<void> {
     stress,
     preflight = false,
   } = JSON.parse(saved) as { id: string; stress: boolean; preflight?: boolean }
+  const recorder = Reflect.get(globalThis, '__owFrameRecorder')
   const pageState = () => {
     const rect = document.querySelector('canvas')?.getBoundingClientRect()
     return {
@@ -19,6 +20,7 @@ export async function installSimulatorRecorder(): Promise<void> {
       width: innerWidth,
       height: innerHeight,
       dpr: devicePixelRatio,
+      recorder: recorder?.inspect(),
       canvas: rect ? { x: rect.x, y: rect.y, width: rect.width, height: rect.height } : null,
     }
   }
@@ -63,17 +65,16 @@ export async function installSimulatorRecorder(): Promise<void> {
       await new Promise((resolve) => setTimeout(resolve, 150))
     }
   }
-  const fixture = async (action: string) => {
+  const fixture = async (action: string, error?: string) => {
     const response = await fetch(`/__qa/session/${id}`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({
         action,
-        lobbyId: snapshot().lobbyId,
-        ...(action === 'ready' ? { page: pageState() } : {}),
-        ...(action === 'recording'
-          ? { recording: Reflect.get(globalThis, '__owFrameRecorder').status() }
-          : {}),
+        lobbyId: snapshot()?.lobbyId ?? '',
+        ...(error ? { error } : {}),
+        ...(['ready', 'failed'].includes(action) ? { page: pageState() } : {}),
+        recording: recorder?.status(),
       }),
     })
     const result = await response.json()
@@ -81,6 +82,11 @@ export async function installSimulatorRecorder(): Promise<void> {
       throw new Error('Local Worker qualification fixture failed')
     }
     return result
+  }
+  const failure = async (error: unknown) => {
+    const detail = error instanceof Error ? error.message : 'Recording failed'
+    button.textContent = detail
+    await fixture('failed', detail).catch(() => undefined)
   }
   try {
     await wait(() => Boolean(snapshot()?.scene.actors.loaded))
@@ -107,7 +113,6 @@ export async function installSimulatorRecorder(): Promise<void> {
     button.addEventListener('click', async () => {
       button.disabled = true
       try {
-        const recorder = Reflect.get(globalThis, '__owFrameRecorder')
         if (
           !recorder
             .inspect()
@@ -167,7 +172,7 @@ export async function installSimulatorRecorder(): Promise<void> {
         }
         button.textContent = 'Recording saved on host'
       } catch (error) {
-        button.textContent = error instanceof Error ? error.message : 'Recording failed'
+        await failure(error)
         button.disabled = false
       } finally {
         Reflect.get(globalThis, '__owQaPrivacy')?.restoreSettings()
@@ -176,6 +181,6 @@ export async function installSimulatorRecorder(): Promise<void> {
     })
   } catch (error) {
     Reflect.get(globalThis, '__owQaPrivacy')?.restoreSettings()
-    button.textContent = error instanceof Error ? error.message : 'Recording failed'
+    await failure(error)
   }
 }

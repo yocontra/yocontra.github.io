@@ -5,6 +5,7 @@ import { recordingAcknowledged, simulatorHost } from '../tools/content/simulator
 import {
   commandPlan,
   frameForAX,
+  hidTapArguments,
   nativeSafari,
   parseIDBApps,
   preflightIssues,
@@ -253,6 +254,18 @@ it('does not acknowledge Start/authority readiness as native recording readiness
         await (await fixture(new Request(`http://localhost/__qa/status/${id}`)))?.json(),
       ),
     ).toBe(true)
+    await session({
+      action: 'failed',
+      error: 'Tap the game first to enable audio',
+      page: { recorder: { audio: [{ state: 'suspended' }] } },
+    })
+    expect(
+      await (await fixture(new Request(`http://localhost/__qa/status/${id}`)))?.json(),
+    ).toMatchObject({
+      stage: 'failed',
+      error: 'Tap the game first to enable audio',
+      page: { recorder: { audio: [{ state: 'suspended' }] } },
+    })
     expect(
       recordingAcknowledged({
         stage: 'saved',
@@ -273,4 +286,19 @@ it('decodes actual idb list-apps JSONL without accepting malformed app evidence'
   expect(parseIDBApps('\n')).toEqual([])
   expect(() => parseIDBApps('{broken}\n')).toThrow()
   expect(nativeSafari(parseIDBApps(`${JSON.stringify(app)}\n`))).toBeUndefined()
+})
+
+it('sends integer native HID coordinates rather than idb marker tokens', () => {
+  expect(hidTapArguments(280.5, 118.1)).toEqual([
+    'ui',
+    'tap',
+    '281',
+    '118',
+    '--api',
+    'hid',
+    '--duration',
+    '0.15',
+  ])
+  expect(() => hidTapArguments(Number.NaN, 20)).toThrow()
+  expect(() => hidTapArguments(20, -1)).toThrow()
 })

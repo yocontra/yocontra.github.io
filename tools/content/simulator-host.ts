@@ -81,12 +81,17 @@ export function simulatorHost(api: string, directory: string, build: BuildReceip
   const session = async (request: Request, id: string, accountId: string) => {
     const body = (await request.json()) as {
       action: string
+      error?: string
       lobbyId: string
       page?: unknown
       recording?: unknown
     }
     if (body.action === 'ready') {
       status.set(id, { stage: 'ready', page: body.page })
+      return Response.json({ ok: true })
+    }
+    if (body.action === 'failed') {
+      status.set(id, { stage: 'failed', error: body.error, page: body.page })
       return Response.json({ ok: true })
     }
     if (body.action === 'recording') {
