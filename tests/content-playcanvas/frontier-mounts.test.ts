@@ -124,9 +124,13 @@ const floor = sceneFaces(`${propPrefix}floor-mesh`)
 it('shares all new collision triangles and retains every original collider unchanged', () => {
   const collision = compileFrontierCollision(TOWN)
   expect(JSON.stringify(collision.boxes)).toBe(JSON.stringify(published.boxes))
-  expect(collision.meshes.filter((m) => !m.id.startsWith('mount:'))).toEqual(
-    published.meshes.filter((m) => !m.id.startsWith('mount:')),
-  )
+  // Mesh.setPositions stores Float32 positions before Ammo reads them. Compare those exact
+  // native values: platform libm implementations can differ in the last double-precision bit.
+  const originalMeshes = (meshes: typeof collision.meshes) =>
+    meshes
+      .filter((m) => !m.id.startsWith('mount:'))
+      .map((m) => ({ ...m, positions: new Float32Array(m.positions) }))
+  expect(originalMeshes(collision.meshes)).toEqual(originalMeshes(published.meshes))
   expect(collision.meshes.filter((m) => m.id.startsWith('mount:'))).toEqual(
     groupFrontierMounts(members).map(({ id, positions, indices }) => ({ id, positions, indices })),
   )
