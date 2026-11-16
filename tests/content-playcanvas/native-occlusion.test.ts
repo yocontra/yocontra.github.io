@@ -60,7 +60,7 @@ it('native GGX keeps authored cloth/metal factors, packed maps, dyed clones and 
   const shared = await prepareNativeMaterials(f.game, container)
   const second = await prepareNativeMaterials(
     f.game,
-    f.container(metal, { ...surface, albedo: 'metal' }),
+    f.container(metal, { ...surface, albedo: 'metal', normalScale: 0.37 }),
   )
   expect([cloth.enableGGXSpecular, metal.enableGGXSpecular, untouched.enableGGXSpecular]).toEqual([
     true,
@@ -78,6 +78,7 @@ it('native GGX keeps authored cloth/metal factors, packed maps, dyed clones and 
   ])
   expect(cloth.glossMap).toBe(metal.glossMap)
   expect(cloth.normalMap).toBe(metal.normalMap)
+  expect(metal.bumpiness).toBe(0.37)
   const dyed = await dyedNativeMaterial(f.game, cloth, 'coal')
   expect(dyed?.enableGGXSpecular).toBe(true)
   expect([dyed?.gloss, dyed?.metalness, dyed?.bumpiness]).toEqual([0.9, 0.02, 1.4])

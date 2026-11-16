@@ -211,6 +211,7 @@ export async function externalize(doc: Document) {
       nativePbr: {
         albedo: await encode(base, true),
         normal: await encode(normal, false),
+        ...(normal ? { normalScale: material.getNormalScale() } : {}),
         arm: await encode(arm, false),
         ao: Boolean(arm && material.getOcclusionTexture() === arm),
         aoUv: material.getOcclusionTextureInfo()?.getTexCoord() ?? 0,

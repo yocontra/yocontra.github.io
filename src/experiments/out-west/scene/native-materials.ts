@@ -6,6 +6,8 @@ import type { DyeId } from '../data/dye.ts'
 interface Surface {
   albedo: string
   normal?: string
+  /** Explicit authoring strength; absent on historical external texture descriptors. */
+  normalScale?: number
   arm?: string
   armUv?: number
   /** Explicit: original character ARM.r can be a dye mask instead of occlusion. */
@@ -115,7 +117,7 @@ export async function prepareNativeMaterials(
         }
         if (normal) {
           material.normalMap = normal
-          material.bumpiness = 1.4
+          material.bumpiness = source.normalScale ?? 1.4
         }
         if (arm) {
           material.metalnessMap = arm
