@@ -84,135 +84,6 @@ function headRange(primitive: Primitive, ranges: Range[], origin: Vec3): Range |
   })
 }
 
-interface Welded {
-  group: Map<number, number>
-  points: Vec3[]
-}
-
-/** Vertices split by UV seams share one welded position. */
-function weld(primitive: Primitive, range: Range): Welded {
-  const position = primitive.getAttribute('POSITION')
-  const ids = new Map<string, number>()
-  const group = new Map<number, number>()
-  const points: Vec3[] = []
-  for (let i = range.start; i < range.start + range.count; i++) {
-    const p = (position?.getElement(i, []) ?? [0, 0, 0]) as Vec3
-    const key = p.map((v) => Math.round(v * 1e5)).join(',')
-    const id = ids.get(key) ?? points.length
-    if (id === points.length) {
-      ids.set(key, id)
-      points.push(p)
-    }
-    group.set(i, id)
-  }
-  return { group, points }
-}
-
-function triangles(primitive: Primitive, { group }: Welded): number[][] {
-  const indices = primitive.getIndices()
-  const result: number[][] = []
-  for (let i = 0; i < (indices?.getCount() ?? 0); i += 3) {
-    const tri = [0, 1, 2].map((k) => group.get(indices?.getScalar(i + k) ?? -1) ?? -1)
-    if (tri.every((v) => v >= 0)) {
-      result.push(tri)
-    }
-  }
-  return result
-}
-
-function adjacency(faces: number[][], count: number): { near: number[][]; open: Set<number> } {
-  const edges = new Map<string, number>()
-  const near = Array.from({ length: count }, () => new Set<number>())
-  for (const [a = 0, b = 0, c = 0] of faces) {
-    for (const [u, v] of [
-      [a, b],
-      [b, c],
-      [c, a],
-    ] as const) {
-      near[u]?.add(v)
-      near[v]?.add(u)
-      const key = u < v ? `${u},${v}` : `${v},${u}`
-      edges.set(key, (edges.get(key) ?? 0) + 1)
-    }
-  }
-  const open = new Set(
-    [...edges].filter(([, uses]) => uses === 1).flatMap(([key]) => key.split(',').map(Number)),
-  )
-  return { near: near.map((set) => [...set]), open }
-}
-
-/** Taubin smoothing removes sculpted relief without shrinking the neck. */
-function taubin(points: Vec3[], near: number[][], weight: number[]): Vec3[] {
-  let current = points.map((p) => [...p] as Vec3)
-  for (let pass = 0; pass < 24; pass++) {
-    const factor = pass % 2 === 0 ? 0.5 : -0.53
-    const previous = current
-    current = previous.map((p, id) => {
-      const ring = near[id] ?? []
-      const w = (weight[id] ?? 0) * factor
-      if (w === 0 || ring.length === 0) {
-        return p
-      }
-      return p.map(
-        (v, k) =>
-          v + w * (ring.reduce((sum, n) => sum + (previous[n]?.[k] ?? 0), 0) / ring.length - v),
-      ) as Vec3
-    })
-  }
-  return current
-}
-
-function cross(a: Vec3, b: Vec3, c: Vec3): Vec3 {
-  const e = [b[0] - a[0], b[1] - a[1], b[2] - a[2]]
-  const f = [c[0] - a[0], c[1] - a[1], c[2] - a[2]]
-  const [ex = 0, ey = 0, ez = 0] = e
-  const [fx = 0, fy = 0, fz = 0] = f
-  return [ey * fz - ez * fy, ez * fx - ex * fz, ex * fy - ey * fx]
-}
-
-/**
- * Relax the sculpted Superhero neck muscles behind and beside the throat. Vertices split by
- * UV seams move together; the open collar edge stays put.
- */
-function relaxNeck(primitive: Primitive, range: Range, origin: Vec3, scale: number): void {
-  const position = primitive.getAttribute('POSITION')
-  const normal = primitive.getAttribute('NORMAL')
-  if (!(position && normal)) {
-    return
-  }
-  const welded = weld(primitive, range)
-  const faces = triangles(primitive, welded)
-  const { near, open } = adjacency(faces, welded.points.length)
-  const weight = welded.points.map((p, id) => {
-    const y = (p[1] - origin[1]) / scale
-    const z = (p[2] - origin[2]) / scale
-    const height = smoothstep(-0.085, -0.06, y) * (1 - smoothstep(0.0, 0.035, y))
-    return open.has(id) ? 0 : height * smoothstep(0.045, 0.0, z)
-  })
-  const relaxed = taubin(welded.points, near, weight)
-  const sums = relaxed.map((): Vec3 => [0, 0, 0])
-  for (const face of faces) {
-    const [a = 0, b = 0, c = 0] = face
-    const n = cross(relaxed[a] ?? [0, 0, 0], relaxed[b] ?? [0, 0, 0], relaxed[c] ?? [0, 0, 0])
-    for (const v of face) {
-      sums[v] = (sums[v] ?? [0, 0, 0]).map((value, k) => value + (n[k] ?? 0)) as Vec3
-    }
-  }
-  for (const [index, id] of welded.group) {
-    const w = weight[id] ?? 0
-    if (w > 0) {
-      position.setElement(index, relaxed[id] ?? [0, 0, 0])
-      const original = normal.getElement(index, [])
-      const sum = sums[id] ?? [0, 0, 1]
-      const length = Math.hypot(...sum) || 1
-      const mixed = sum.map((v, k) => (original[k] ?? 0) * (1 - w) + (v / length) * w)
-      const norm = Math.hypot(...mixed) || 1
-      normal.setElement(index, [...mixed.map((v) => v / norm), ...original.slice(3)])
-    }
-  }
-}
-
-/** The short crop hugs the skull within a millimetre; keep it clear of the rounder occiput. */
 /** World height of the authored hat's crown opening behind the head, if the head wears one. */
 function hatRim(head: Node, origin: Vec3): number | null {
   let rim: number | null = null
@@ -237,30 +108,6 @@ function hatRim(head: Node, origin: Vec3): number | null {
     }
   })
   return rim
-}
-
-function liftHair(
-  primitive: Primitive,
-  ranges: Range[],
-  { origin, scale, under }: { origin: Vec3; scale: number; under: (y: number) => number },
-): void {
-  const position = primitive.getAttribute('POSITION')
-  const normal = primitive.getAttribute('NORMAL')
-  if (!(position && normal)) {
-    return
-  }
-  for (const range of ranges.filter((candidate) => candidate.name === 'Hair')) {
-    for (let i = range.start; i < range.start + range.count; i++) {
-      const p = position.getElement(i, [])
-      const n = normal.getElement(i, [])
-      const behind = smoothstep(0.02, -0.03, ((p[2] ?? 0) - origin[2]) / scale)
-      const lift = 0.0025 * scale * behind * under(p[1] ?? 0)
-      position.setElement(
-        i,
-        p.map((v, k) => v + (n[k] ?? 0) * lift),
-      )
-    }
-  }
 }
 
 /** Normals follow the lattice's deformation gradient F = I + J, as cof(F) n. */
@@ -290,11 +137,16 @@ function deformedNormal(
   return [...out.map((v) => v / length), ...n.slice(3)]
 }
 
-function applyLattice(primitive: Primitive, field: (p: Vec3) => Vec3 | null, h: number): boolean {
+function applyLattice(
+  primitive: Primitive,
+  range: Range,
+  field: (p: Vec3) => Vec3 | null,
+  h: number,
+): boolean {
   const position = primitive.getAttribute('POSITION')
   const normal = primitive.getAttribute('NORMAL')
   let changed = false
-  for (let index = 0; index < (position?.getCount() ?? 0); index++) {
+  for (let index = range.start; index < range.start + range.count; index++) {
     const p = position?.getElement(index, [0, 0, 0]) as Vec3
     const offset = field(p)
     if (!offset || offset.every((v) => Math.abs(v) < 1e-7)) {
@@ -344,13 +196,11 @@ export async function repairHeadNape(doc: Document): Promise<boolean> {
       const rim = hatRim(head, origin)
       const under = (y: number): number =>
         rim === null ? 1 : 1 - smoothstep(rim - 0.03, rim - 0.005, y)
-      relaxNeck(primitive, skull, origin, scale)
-      liftHair(primitive, ranges, { origin, scale, under })
       const field = (p: Vec3): Vec3 | null =>
         trilinear(nape, p.map((v, k) => (v - (origin[k] ?? 0)) / scale) as Vec3)?.map(
           (v) => v * scale * under(p[1]),
         ) as Vec3 | null
-      changed = applyLattice(primitive, field, 0.002 * scale) || changed
+      changed = applyLattice(primitive, skull, field, 0.002 * scale) || changed
     }
   }
   return changed
