@@ -54,6 +54,8 @@ Complete and push these in small working tasks, with native visual/audio evidenc
 
 ## Performance
 
+- [x] Support authored near/far detail through native render-component visibility and a separate native batch group. Hysteresis, world/vertical distance, imported name suffixes, regeneration and teardown tests pass; existing scene captures stay byte-identical. This enables upcoming prop detail, and does not claim its FPS budget is qualified.
+
 - [x] Share identical embedded texture images in the four duel scenes through the native glTF asset pipeline. This removes 14.8 MB of duplicate downloads; all 132 matched headless frames remain byte-identical, draw/buffer counts stay unchanged, and depot/mission/bank captures use about 6.2 MB less texture memory each. All 94 historical GLBs are untouched.
 
 - [x] Release engine-owned material clones when dynamic equipment batches retire. Production/debug/profiler lifecycle tests cover repeated regeneration and shared-source preservation; actual scene teardown reaches zero textures and buffers.
