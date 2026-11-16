@@ -1,6 +1,15 @@
 /** GPU compression through Khronos toktx and PlayCanvas' native Basis transcoder. */
 import { createHash } from 'node:crypto'
-import { mkdir, mkdtemp, readdir, readFile, rename, rm, writeFile } from 'node:fs/promises'
+import {
+  copyFile,
+  mkdir,
+  mkdtemp,
+  readdir,
+  readFile,
+  rename,
+  rm,
+  writeFile,
+} from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { basename, join, resolve } from 'node:path'
 import { type Document, NodeIO } from '@gltf-transform/core'
@@ -29,10 +38,6 @@ export async function compressedCharacterTexture(
   color: boolean,
   scope: 'characters' | 'environments' = 'characters',
 ): Promise<string> {
-  const encoder = process.env.KTX_ENCODER ?? Bun.which('toktx')
-  if (!encoder) {
-    throw new Error('Set KTX_ENCODER to Khronos toktx 4.4.2 (UASTC/KTX2), or install it on PATH')
-  }
   const hash = createHash('sha256')
     .update(bytes)
     .update(JSON.stringify(settings))
@@ -45,7 +50,26 @@ export async function compressedCharacterTexture(
     scope === 'characters' ? contentOutput('characters') : contentOutput('environments', 'textures')
   await mkdir(target, { recursive: true })
   const path = resolve(target, file)
+  const cached = resolve(
+    'public/experiments/out-west/3d/native-v2',
+    scope === 'characters' ? 'characters' : 'environments/textures',
+    file,
+  )
+  if (path !== cached && !(await Bun.file(path).exists()) && (await Bun.file(cached).exists())) {
+    const cachedBytes = await readFile(cached)
+    const magic = Buffer.from([
+      0xab, 0x4b, 0x54, 0x58, 0x20, 0x32, 0x30, 0xbb, 0x0d, 0x0a, 0x1a, 0x0a,
+    ])
+    if (cachedBytes.length < 80 || !cachedBytes.subarray(0, 12).equals(magic)) {
+      throw new Error(`Invalid cached KTX2 texture: ${cached}`)
+    }
+    await copyFile(cached, path)
+  }
   if (!(await Bun.file(path).exists())) {
+    const encoder = process.env.KTX_ENCODER ?? Bun.which('toktx')
+    if (!encoder) {
+      throw new Error('Set KTX_ENCODER to Khronos toktx 4.4.2 (UASTC/KTX2), or install it on PATH')
+    }
     const temporary = await mkdtemp(join(tmpdir(), 'out-west-ktx-'))
     try {
       const input = join(temporary, 'source.png')
