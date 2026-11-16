@@ -60,15 +60,17 @@ function animateWind(root: Entity, asset: Asset): void {
   }
 }
 
-function canBatch(component: RenderComponent): boolean {
-  const batchable = component.meshInstances.every(
+function canBatch(component: RenderComponent, detailed: boolean): boolean {
+  if (detailed && !component.enabled) {
+    return false
+  }
+  return component.meshInstances.every(
     (instance) =>
       !(instance.skinInstance || instance.morphInstance) &&
       instance.mesh?.vertexBuffer.format.elements.find(
         (element) => element.name === SEMANTIC_POSITION,
       )?.dataType === TYPE_FLOAT32,
   )
-  return batchable
 }
 
 /** Authored light/sky presets, native wind clips and spatial static batches for one scene. */
@@ -365,7 +367,6 @@ export class NativeEnvironment {
     clones: Map<StandardMaterial, StandardMaterial>,
     node: Entity,
   ): StandardMaterial {
-    const nodeName = node.name
     if (original.name === 'WantedPaper') {
       this.posterNodes.add(node)
     }
@@ -383,10 +384,10 @@ export class NativeEnvironment {
       material.emissiveIntensity = this.lanterns * LAMP_GLOW
       material.update()
     }
-    if (nodeName.startsWith('windows-') || material.name === 'Dial') {
+    if (node.name.startsWith('windows-') || material.name === 'Dial') {
       this.windows.add(material)
     }
-    if (!this.frontier && nodeName.startsWith('ground-')) {
+    if (!this.frontier && node.name.startsWith('ground-')) {
       this.groundMaterials.add(material)
       this.applyGround(material)
     } else if (material.opacity === 1 && !material.emissiveMap && material.name !== 'WantedPaper') {
@@ -402,7 +403,6 @@ export class NativeEnvironment {
     animateWind(root, asset)
     const lod = new NativeModelLods(root)
     this.lods.set(root, lod)
-    lod.update(this.game.camera.getPosition())
     const group = this.game.app.batcher?.addGroup('environment', false, 32)
     // Native RenderComponent enable/disable dirties only this group when a pane breaks or resets.
     const panes = this.game.app.batcher?.addGroup('environment-panes', false, 32)
@@ -432,10 +432,11 @@ export class NativeEnvironment {
       }
       const ordinary = pane ? panes : group
       const target = lod.owns(component) ? details : ordinary
-      if (target && canBatch(component)) {
+      if (target && canBatch(component, target === details)) {
         component.batchGroupId = target.id
       }
     }
+    lod.update(this.game.camera.getPosition())
     const ids = [group, panes, details].flatMap((entry) => (entry ? [entry.id] : []))
     this.groups.set(root, ids)
     const posterLight = root.findByName('poster-lantern-light')
