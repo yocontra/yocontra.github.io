@@ -1,4 +1,4 @@
-import type { AnimComponentLayer, AnimTrack, ContainerResource, Entity, GraphNode } from 'playcanvas'
+import type { AnimComponentLayer, AnimTrack, Entity, GraphNode } from 'playcanvas'
 import { Vec3 } from 'playcanvas'
 import { ASSETS, DYNAMIC_ASSETS } from '../content/manifest.ts'
 import { DEFAULT_LOADOUT, type Loadout } from '../data/catalog.ts'
@@ -9,7 +9,7 @@ import type { PlayerInput, PlayerState } from '../runtime/protocol.ts'
 import { RECOIL_SECONDS } from '../scene/native-animation-timing.ts'
 import { attachHeldWeapon, equippedActor } from '../scene/native-equipment.ts'
 import { animateRider, beginDynamiteThrow, heldWeapon } from './actor-animation.ts'
-import { commonCharacters } from './actor-assets.ts'
+import { commonCharacters, loadCharacterTracks } from './actor-assets.ts'
 import { createRiderPose, type RiderPose } from './actor-pose.ts'
 import type { GameApplication } from './application.ts'
 import { FirstPersonModel } from './first-person-model.ts'
@@ -166,10 +166,7 @@ export class Actors {
     const own = ownId ?? players.keys().next().value
     this.ownId = own
     try {
-      const moves = await this.game.loadContainer(ASSETS.moves.url)
-      this.tracks = (moves.resource as ContainerResource).animations.map(
-        (clip) => clip.resource as AnimTrack,
-      )
+      this.tracks = await loadCharacterTracks(this.game)
       if (!(own && players.has(own))) {
         throw new Error('The own rider is not present')
       }
