@@ -27,6 +27,8 @@ import {
   type PlayerInput,
   type PlayerState,
   SIMULATION_HZ,
+  type StaticColliderSource,
+  type StaticWorldHit,
 } from './protocol.ts'
 
 export interface SimulationOptions {
@@ -210,9 +212,10 @@ export function createSimulation(options: SimulationOptions) {
     }
     players.clear()
     entities.clear()
+    colliders.sources.clear()
   }
-  const castWorld = (ray: import('../ffa/sim/combat.ts').ShotRay) => castStatic(physics, ray)
-  return { app, players, addPlayer, removePlayer, step, adopt, castWorld, dispose }
+  const { castWorld, castWorldHit } = staticQueries(physics, colliders.sources)
+  return { app, players, addPlayer, removePlayer, step, adopt, castWorld, castWorldHit, dispose }
 }
 export type Simulation = ReturnType<typeof createSimulation>
 
@@ -344,7 +347,8 @@ function updateMotion(
 function addColliders(app: AppBase, collision: CollisionData) {
   const material = new StandardMaterial()
   const meshes: Mesh[] = []
-  for (const box of collision.boxes) {
+  const sources = new Map<Entity, StaticColliderSource>()
+  for (const [index, box] of collision.boxes.entries()) {
     const entity = new Entity('collision', app)
     entity.setPosition(...box.center)
     if (box.rotation) {
@@ -353,8 +357,9 @@ function addColliders(app: AppBase, collision: CollisionData) {
     entity.addComponent('collision', { type: 'box', halfExtents: new Vec3(...box.halfExtents) })
     entity.addComponent('rigidbody', { type: 'static', friction: 0.8 })
     app.root.addChild(entity)
+    sources.set(entity, { kind: 'box', index, id: box.id ?? null })
   }
-  for (const source of collision.meshes) {
+  for (const [index, source] of collision.meshes.entries()) {
     const mesh = new Mesh(app.graphicsDevice)
     mesh.setPositions([...source.positions])
     mesh.setIndices([...source.indices])
@@ -367,23 +372,50 @@ function addColliders(app: AppBase, collision: CollisionData) {
     entity.addComponent('collision', { type: 'mesh', model })
     entity.addComponent('rigidbody', { type: 'static', friction: 0.8 })
     app.root.addChild(entity)
+    sources.set(entity, { kind: 'mesh', index, id: source.id ?? null })
   }
 
-  return { meshes, material }
+  return { meshes, material, sources }
 }
 
 function castStatic(
   physics: import('playcanvas').RigidBodyComponentSystem,
+  sources: ReadonlyMap<Entity, StaticColliderSource>,
   ray: import('../ffa/sim/combat.ts').ShotRay,
+  from: Vec3,
 ) {
-  const from = new Vec3(ray.ox, ray.oy, ray.oz)
   const to = new Vec3(
     ray.ox + ray.dx * ray.maxT,
     ray.oy + ray.dy * ray.maxT,
     ray.oz + ray.dz * ray.maxT,
   )
-  const hit = physics.raycastFirst(from, to, {
-    filterCallback: (target: Entity) => target.name === 'collision',
+  return physics.raycastFirst(from, to, {
+    filterCallback: (target: Entity) => sources.has(target),
   })
-  return hit ? hit.point.distance(from) : null
+}
+
+/** Both APIs use the same native query and world-owned source registry. */
+function staticQueries(
+  physics: import('playcanvas').RigidBodyComponentSystem,
+  sources: ReadonlyMap<Entity, StaticColliderSource>,
+) {
+  const castWorld = (ray: import('../ffa/sim/combat.ts').ShotRay) => {
+    const from = new Vec3(ray.ox, ray.oy, ray.oz)
+    const hit = castStatic(physics, sources, ray, from)
+    return hit ? hit.point.distance(from) : null
+  }
+  const castWorldHit = (ray: import('../ffa/sim/combat.ts').ShotRay): StaticWorldHit | null => {
+    const from = new Vec3(ray.ox, ray.oy, ray.oz)
+    const hit = castStatic(physics, sources, ray, from)
+    const collider = hit && sources.get(hit.entity)
+    return hit && collider
+      ? {
+          collider,
+          distance: hit.point.distance(from),
+          point: { x: hit.point.x, y: hit.point.y, z: hit.point.z },
+          normal: { x: hit.normal.x, y: hit.normal.y, z: hit.normal.z },
+        }
+      : null
+  }
+  return { castWorld, castWorldHit }
 }
