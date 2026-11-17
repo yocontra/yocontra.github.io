@@ -50,11 +50,25 @@ export interface PlayerState {
 export interface CollisionData {
   version: string
   boxes: readonly {
+    /** Authored domain ID; absent on legacy or temporary physics fixtures. */
+    id?: string
     center: readonly [number, number, number]
     halfExtents: readonly [number, number, number]
     rotation?: readonly [number, number, number]
   }[]
-  meshes: readonly { positions: readonly number[]; indices: readonly number[] }[]
+  meshes: readonly { id?: string; positions: readonly number[]; indices: readonly number[] }[]
+}
+/** Identity belongs to one physics world; indices refer to its original collision input. */
+export interface StaticColliderSource {
+  readonly kind: 'box' | 'mesh'
+  readonly index: number
+  readonly id: string | null
+}
+export interface StaticWorldHit {
+  readonly collider: StaticColliderSource
+  readonly distance: number
+  readonly point: Readonly<{ x: number; y: number; z: number }>
+  readonly normal: Readonly<{ x: number; y: number; z: number }>
 }
 export const neutralInput = (): PlayerInput => ({
   seq: 0,
