@@ -81,7 +81,7 @@ function fixture() {
       releaseContainer: () => undefined,
     },
     rig,
-    layer: { dispose: () => undefined },
+    layer: { setVisible: () => undefined, dispose: () => undefined },
     current,
     desired: request,
     closed: false,

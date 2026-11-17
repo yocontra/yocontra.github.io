@@ -11,6 +11,8 @@ it('builds native arms and mounted weapons disabled, then presents atomically an
   const f = firstPersonFixture()
   try {
     const before = f.world.render?.meshInstances[0]?.shaderPassMask
+    const layer = f.app.scene.layers.getLayerByName('Viewmodel')
+    expect(layer?.enabled).toBe(false)
     const done = f.model.prepare(f.request)
     expect(f.requests).toHaveLength(1)
     expect(f.model.stats().pending).toBe(1)
@@ -28,8 +30,10 @@ it('builds native arms and mounted weapons disabled, then presents atomically an
     expect(f.model.stats()).toEqual({ arms: 1, pending: 0, masked: 0 })
     expect(f.model.ready).toBe(false)
     expect(f.actors().every((actor) => !actor.enabled)).toBe(true)
+    expect(layer?.enabled).toBe(false)
     f.model.present(f.camera, 1 / 60)
     expect(f.model.ready).toBe(true)
+    expect(layer?.enabled).toBe(true)
     expect(f.world.render?.meshInstances[0]?.shaderPassMask).toBe(
       (before ?? 0) & ~((1 << SHADER_FORWARD) | (1 << SHADER_PREPASS)),
     )
@@ -41,7 +45,14 @@ it('builds native arms and mounted weapons disabled, then presents atomically an
     ).toBe(true)
     expect(f.textureLoads).toEqual(['fixture://shared-albedo'])
     expect(f.textureReleases).toEqual([])
+    f.model.update(undefined)
+    expect(layer?.enabled).toBe(false)
+    expect(f.world.render?.meshInstances[0]?.shaderPassMask).toBe(before)
+    f.model.update(f.request)
+    f.model.present(f.camera, 1 / 60)
+    expect(layer?.enabled).toBe(true)
     f.model.destroy()
+    expect(f.app.scene.layers.getLayerByName('Viewmodel')).toBeNull()
     expect(f.actors()).toHaveLength(0)
     expect(f.world.render?.meshInstances[0]?.shaderPassMask).toBe(before)
     expect(f.textures.size).toBe(0)
