@@ -392,9 +392,10 @@ export class NativeEnvironment {
     this.lods.set(root, lod)
     // Low-tier Frontier benefits from fewer static submissions in wide street views.
     const staticBatchSize = this.frontier && this.game.tier === 'low' ? 64 : 32
-    const group = this.game.app.batcher?.addGroup('environment', false, staticBatchSize)
-    // Native RenderComponent enable/disable dirties only this group when a pane breaks or resets.
-    const panes = this.game.app.batcher?.addGroup('environment-panes', false, 32)
+    const { batcher } = this.game.app
+    const group = batcher?.addGroup('environment', false, staticBatchSize)
+    // Disabling an intact pane dirties only its street cell, including on Low quality.
+    const panes = new Map<string, BatchGroup>()
     const details = new Map<string, BatchGroup>()
     const clones = new Map<StandardMaterial, StandardMaterial>()
     const worldClouds = worldCloudMaterials(asset.resource as ContainerResource)
@@ -421,19 +422,19 @@ export class NativeEnvironment {
           instance.castShadow = false
         }
       }
-      const pane = component.entity.name.startsWith('glass-')
-      if (pane) {
-        component.castShadows = false
-      }
       assignEnvironmentBatch(component, {
-        ordinary: pane ? panes : group,
+        ordinary: group,
         owner: lod.owner(component),
+        panes,
         regions: details,
-        batcher: this.game.app.batcher,
+        batcher,
       })
     }
     lod.update(this.game.camera.getPosition())
-    const ids = [group, panes, ...details.values()].flatMap((entry) => (entry ? [entry.id] : []))
+    const ids = [...panes.values(), ...details.values()].map((entry) => entry.id)
+    if (group) {
+      ids.unshift(group.id)
+    }
     this.groups.set(root, ids)
     const posterLight = root.findByName('poster-lantern-light')
     if (posterLight instanceof Entity) {

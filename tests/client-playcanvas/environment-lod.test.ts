@@ -15,6 +15,7 @@ import {
 import type { GameApplication } from '../../src/experiments/out-west/client/application.ts'
 import { NativeEnvironment } from '../../src/experiments/out-west/client/environment.ts'
 import { NativeWilds } from '../../src/experiments/out-west/client/wilds.ts'
+import { BreakableWindows } from '../../src/experiments/out-west/client/windows.ts'
 
 function addLod(app: AppBase, root: Entity, name: string, x: number) {
   const group = new Entity(`model-lod:10:2:${name}`, app)
@@ -62,12 +63,16 @@ async function fixture(
       ]
     : []
   const ordinary = new Entity('wall-fixture', app)
-  const pane = new Entity('glass-fixture', app)
+  const pane = new Entity('glass-0', app)
+  const distantPane = new Entity('glass-1', app)
   if (multipleRegions) {
     root.addChild(ordinary)
     root.addChild(pane)
     ordinary.addComponent('render', { type: 'box' })
     pane.addComponent('render', { type: 'box' })
+    root.addChild(distantPane)
+    distantPane.setLocalPosition(64, 0, 0)
+    distantPane.addComponent('render', { type: 'box' })
   }
   const cloud = new Texture(device, { width: 1, height: 1, format: PIXELFORMAT_RGBA8 })
   const textureAsset = new Asset('cloud', 'texture')
@@ -128,6 +133,7 @@ async function fixture(
     neighbours,
     ordinary,
     pane,
+    distantPane,
     near,
     far,
     snapshot,
@@ -274,6 +280,38 @@ it('fully authored-disabled LODs allocate no empty detail batch group', async ()
     expect(f.far.render?.batchGroupId).toBe(-1)
     f.move(13)
     expect(f.snapshot()).toEqual({ members: [], sources: [], drawn: [] })
+  } finally {
+    expect(f.destroy()).toEqual({ buffers: 0, textures: 0 })
+  }
+})
+
+it('breaking and restoring a pane replaces only its own street batch', async () => {
+  const f = await fixture(0, { multipleRegions: true })
+  try {
+    const batcher = f.app.batcher
+    if (!(batcher && f.pane.render && f.distantPane.render)) {
+      throw new Error('Missing native glass fixture')
+    }
+    const local = f.pane.render.batchGroupId
+    const distant = f.distantPane.render.batchGroupId
+    const batches = (id: number) => Reflect.get(batcher, 'getBatches').call(batcher, id) as object[]
+    expect(local).not.toBe(distant)
+    const original = batches(local)[0]
+    const retained = batches(distant)[0]
+    expect(original).toBeDefined()
+    expect(retained).toBeDefined()
+
+    const panes = new BreakableWindows(f.root)
+    panes.update(Uint8Array.of(1, 0))
+    batcher.updateAll()
+    expect(batches(local)).toEqual([])
+    expect(batches(distant)[0] === retained).toBe(true)
+
+    panes.update(Uint8Array.of(0, 0))
+    batcher.updateAll()
+    expect(batches(local)).toHaveLength(1)
+    expect(batches(local)[0] === original).toBe(false)
+    expect(batches(distant)[0] === retained).toBe(true)
   } finally {
     expect(f.destroy()).toEqual({ buffers: 0, textures: 0 })
   }
