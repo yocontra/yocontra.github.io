@@ -59,20 +59,20 @@ describe('kill bounty and death drop', () => {
     expect(w.bags[0]?.exclusiveUntil).toBeLessThanOrEqual(w.tick + BAG_EXCLUSIVE_TICKS)
   })
 
-  it("the bag preserves the victim's saddlebag style", () => {
+  it.each(BAG_STYLES)("the bag preserves the victim's %s style", (style) => {
     const w = testWorld()
     const a = place(w, 20, 64)
     const b = place(w, 30, 64, { carried: 1000 })
-    b.saddlebag = bagStyleIndex('bag.gold-thread')
+    b.saddlebag = bagStyleIndex(style)
     run(w, 1)
     runCollect(w, 40, { [a.id]: spam(aimAt(a, b)) }, 'kill')
-    expect(w.bags[0]).toMatchObject({ amount: 700, style: 2 })
+    expect(w.bags[0]).toMatchObject({ amount: 700, style: bagStyleIndex(style) })
     const bag = w.bags[0]
     if (!bag) {
       throw new Error('no bag')
     }
     // Cosmetic only: a styled bag is claimed exactly like a plain one.
-    expect(BAG_STYLES[bag.style]).toBe('bag.gold-thread')
+    expect(BAG_STYLES[bag.style]).toBe(style)
     expect(bagStyleIndex('hat.sombrero')).toBe(0)
   })
 

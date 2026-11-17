@@ -15,6 +15,7 @@ export function itemArtInputs(): string[] {
     'src/experiments/out-west/content/equipment.ts',
     'src/experiments/out-west/content/skies.ts',
     'tools/content/item-preview.ts',
+    'tools/content/item-product-pose.ts',
     'tools/item-thumbs.ts',
     'tools/item-art.ts',
     ...readdirSync(`${ART}/native-v2/equipment`)

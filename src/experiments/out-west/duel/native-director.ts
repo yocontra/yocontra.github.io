@@ -30,6 +30,7 @@ import {
 } from './native-combat.ts'
 import { NativeDust } from './native-dust.ts'
 import { clearMoments, Moments } from './native-moments.ts'
+import { dressForHub } from './native-outfitter.ts'
 import { NativePortraits } from './native-portrait.ts'
 import { hubShot, lineup, posters, remotePace, update } from './native-presentation.ts'
 import {
@@ -444,28 +445,7 @@ export class NativeDirector {
   }
   equipmentEpoch = 0
   dress(loadout: Loadout, dyes: Dyes = {}): void {
-    const epoch = ++this.equipmentEpoch
-    void equippedActor(this.game, loadout, dyes)
-      .then((next) => {
-        if (epoch !== this.equipmentEpoch) {
-          next.destroy()
-          return
-        }
-        const old = this.player
-        if (old) {
-          next.root.setPosition(old.root.getPosition())
-          next.root.setRotation(old.root.getRotation())
-          next.root.enabled = old.root.enabled
-        }
-        this.player = next
-        old?.destroy()
-      })
-      .catch((error: unknown) =>
-        this.c.hud.fake(
-          error instanceof Error ? error.message : 'Could not load this outfit.',
-          4000,
-        ),
-      )
+    dressForHub(this, loadout, dyes)
   }
   update(dt: number): void {
     update(this, dt)

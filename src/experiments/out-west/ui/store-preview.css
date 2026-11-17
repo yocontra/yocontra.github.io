@@ -1,0 +1,75 @@
+/* One dialog owns the shelf and preview keyboard controls. */
+.ow-store-dialog {
+  position: absolute;
+  inset: 0;
+  z-index: 30;
+  pointer-events: none;
+}
+.ow-store-dialog > .ow-sheet {
+  pointer-events: auto;
+}
+.ow-store-dialog > .ow-store {
+  pointer-events: auto;
+}
+/* The turntable occupies only the scene left clear by the scrolling shelf. */
+.ow-store-preview {
+  position: absolute;
+  z-index: 29;
+  inset: 0 min(30rem, 46vw) 0 0;
+  pointer-events: none;
+}
+.ow-store-turntable {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  border: 0;
+  color: var(--ow-bone);
+  background: transparent;
+  cursor: grab;
+  touch-action: none;
+  pointer-events: auto;
+}
+.ow-store-turntable:active {
+  cursor: grabbing;
+}
+.ow-store-turntable[hidden] {
+  display: none;
+}
+.ow-store-preview-hint {
+  position: absolute;
+  bottom: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 6px 12px;
+  border-radius: var(--ow-radius);
+  background: rgb(20 12 8 / 0.75);
+}
+.ow-store-preview-content {
+  display: grid;
+  place-items: center;
+  width: 100%;
+  height: 100%;
+  padding: max(16px, var(--ow-sai-t)) 16px 16px;
+  overflow: auto;
+}
+.ow-store-preview-content > * {
+  pointer-events: auto;
+}
+.ow-store-preview-content .ow-wanted {
+  max-width: min(22rem, 100%);
+}
+.ow-store-sound {
+  padding: 24px;
+  color: var(--ow-bone);
+  background: var(--ow-ink);
+  border: 1px solid var(--ow-brass);
+}
+@media (max-aspect-ratio: 1 / 1) {
+  .ow-store-preview {
+    inset: 0 0 58dvh;
+  }
+  .ow-store-preview-content .ow-wanted {
+    max-height: 100%;
+    overflow: auto;
+  }
+}

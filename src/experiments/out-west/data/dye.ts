@@ -4,8 +4,9 @@
  * shared by the client (preview, prices) and the Worker (`POST /store/dye`). Owned by stream C.
  *
  * Rules:
- * - Only cloth and leather slots take dye (hat, outfit, holster, saddlebag, extra). Guns, spurs,
- *   frames and draw sounds don't.
+ * - Only rendered cloth and leather kit takes dye (hat, outfit, holster, extra). Guns, spurs,
+ *   frames, draw sounds and dropped saddlebags don't. Bag drops do not yet carry a dye.
+ *   Extras require effective authored dye maps; the Handlebar and Tin Star do not have them.
  * - The price is 40% of the item's store price, rounded to $50, never under $100 or over $2,000.
  *   Starter and reward items (price $0) cost the minimum.
  * - `natural` washes a dye out. It is free.
@@ -29,7 +30,7 @@ export type DyeId = (typeof DYES)[number]['id']
 export type Dyes = Partial<Record<ItemId, DyeId>>
 
 /** Slots that take dye. */
-export const DYEABLE_SLOTS: readonly Slot[] = ['hat', 'outfit', 'holster', 'saddlebag', 'extra']
+export const DYEABLE_SLOTS: readonly Slot[] = ['hat', 'outfit', 'holster', 'extra']
 
 /** A dye costs this share of the item's price, between the min and the max. */
 export const DYE_SHARE = 0.4
@@ -48,7 +49,12 @@ export function isDyeId(value: unknown): value is DyeId {
 }
 
 export function isDyeable(item: CatalogItem): boolean {
-  return DYEABLE_SLOTS.includes(item.slot)
+  // These original extras have no effective authored dye maps. Keep old account records intact.
+  return (
+    DYEABLE_SLOTS.includes(item.slot) &&
+    item.id !== 'extra.handlebar' &&
+    item.id !== 'extra.tin-star'
+  )
 }
 
 /** The price of dyeing `itemId` to `dye`: 0 to wash out, null if the item can't take dye. */

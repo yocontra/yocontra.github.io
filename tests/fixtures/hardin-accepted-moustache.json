@@ -1,0 +1,30 @@
+{
+  "baseline": "409bd6a7db956470bc03e52ae570df42977ca92d",
+  "sourcePortableSHA256": "d3490d8ab1b136aed1094ed88ff5159ff58262d70eb6d8ede257efd7b375dd64",
+  "models": [
+    {
+      "id": "outlaw-16",
+      "path": "public/experiments/out-west/3d/native-v2/baked/outlaw-16.glb",
+      "assetSHA256": "ee951c2e35e9f2eafad09440235f80ddea1b0f195dca949dff18bd95e178be13",
+      "moustacheTriangles": 3952,
+      "headLocalMinimumOwnedY": 0.026,
+      "rawTriangleCornerSHA256": "9c6147d38c709c44a6cf7e144d534c1ea4df0214990b00c9a2235d33dc16dc59"
+    },
+    {
+      "id": "outlaw-16.pair",
+      "path": "public/experiments/out-west/3d/native-v2/baked/outlaw-16.pair.glb",
+      "assetSHA256": "4b39d965590dbef8d61ea8d83549be225cbd4065b37306bf54109546fe3a1885",
+      "moustacheTriangles": 3952,
+      "headLocalMinimumOwnedY": 0.026,
+      "rawTriangleCornerSHA256": "9c6147d38c709c44a6cf7e144d534c1ea4df0214990b00c9a2235d33dc16dc59"
+    }
+  ],
+  "materialExtras": {
+    "nativePbr": {
+      "albedo": "/experiments/out-west/3d/native-v2/characters/92261002c928cf58d9cdee15.color.ktx2",
+      "normal": "/experiments/out-west/3d/native-v2/characters/c0010d2d5ba4a696afa602a7.data.ktx2",
+      "arm": "/experiments/out-west/3d/native-v2/characters/40de6121fab264849e47e660.data.ktx2",
+      "ao": true
+    }
+  }
+}
