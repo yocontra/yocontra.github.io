@@ -231,9 +231,9 @@ export const EQUIPMENT = {
     },
   },
   'extra.handlebar': {
-    url: '/experiments/out-west/3d/native-v2/equipment/extra.handlebar.glb?v=8b98c06a569c8ddf',
-    hash: '8b98c06a569c8ddffd35bc37c6cf3765f2e385183454f89e8de6c725b2bb89ee',
-    bytes: 800760,
+    url: '/experiments/out-west/3d/native-v2/equipment/extra.handlebar.glb?v=ef1473baee624dae',
+    hash: 'ef1473baee624dae933b0041868a71494c060a5409b68621bcc57fecf1e7d062',
+    bytes: 914376,
   },
   'extra.red-bandana': {
     url: '/experiments/out-west/3d/native-v2/equipment/extra.red-bandana.glb?v=8c39de244aaf7558',
