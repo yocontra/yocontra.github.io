@@ -1,0 +1,579 @@
+{
+  "provenance": {
+    "source": "approved tiny native coordinate-b186-v3; not actual game qualification",
+    "receiptSHA256": "077a9caa6972f7ff7aee343462db7875d58550f3484079ee9e0202e2b54013ed",
+    "adaptation": "UIKit ancestry pruned while retaining Application\u2192TabDocument\u2192document title\u2192real canvas/buttons; recorded DOM/touch fields mapped to QA coordinate envelope without changing numbers/identities. Envelope sequence denotes the settled sample."
+  },
+  "run": {
+    "run": "ff84e194-94e3-43d9-9627-086541e6dc57",
+    "url": "http://127.0.0.1:4398/__coordinate/ff84e194-94e3-43d9-9627-086541e6dc57",
+    "title": "OW coordinate document ff84e194-94e3-43d9-9627-086541e6dc57",
+    "canvasLabel": "OW coordinate canvas [run:ff84e194-94e3-43d9-9627-086541e6dc57]",
+    "startLabel": "OW coordinate Start [run:ff84e194-94e3-43d9-9627-086541e6dc57]"
+  },
+  "ax": {
+    "backend": "axbridge-exclusive",
+    "target": {
+      "kind": "frontmost",
+      "match_key": null,
+      "pid": null,
+      "value": null,
+      "x": null,
+      "y": null
+    },
+    "screen": {
+      "coordinate_space": "screen",
+      "display": {
+        "rotation": 0,
+        "scale": 3,
+        "unique_id": "74D80DD4-66A6-4697-B2A1-E4EF6117AE71"
+      },
+      "height": 812,
+      "width": 375
+    },
+    "elements": [
+      {
+        "type": "Application",
+        "pid": 50813,
+        "children": [
+          {
+            "focused": false,
+            "frame": {
+              "height": 812,
+              "width": 375,
+              "x": 0,
+              "y": 0
+            },
+            "hidden": false,
+            "identifier": "TabDocument?IsLoadedUsingDesktopUserAgent=false&InReaderMode=false&UUID=DE7FD0F8-F5AC-4AEA-A0F1-A0F957BED37A&IsPrivate=false&IsPageLoaded=true&WebViewProcessID=51175",
+            "interactable": {
+              "at": {
+                "x": 187.5,
+                "y": 406
+              },
+              "status": "actionable"
+            },
+            "label": null,
+            "pid": 50813,
+            "title": null,
+            "type": "TabDocumentView",
+            "value": null,
+            "children": [
+              {
+                "focused": false,
+                "frame": {
+                  "height": 664,
+                  "width": 375,
+                  "x": 0,
+                  "y": 50
+                },
+                "hidden": false,
+                "identifier": null,
+                "interactable": {
+                  "at": {
+                    "x": 188,
+                    "y": 382
+                  },
+                  "status": "actionable"
+                },
+                "label": "OW coordinate document ff84e194-94e3-43d9-9627-086541e6dc57",
+                "pid": 50813,
+                "title": null,
+                "type": "WebAccessibilityObjectWrapper",
+                "value": "",
+                "children": [
+                  {
+                    "focused": false,
+                    "frame": {
+                      "height": 664,
+                      "width": 375,
+                      "x": 0,
+                      "y": 50
+                    },
+                    "hidden": false,
+                    "identifier": null,
+                    "interactable": {
+                      "reasons": [
+                        {
+                          "kind": "not_hittable"
+                        }
+                      ],
+                      "status": "blocked"
+                    },
+                    "label": "OW coordinate canvas [run:ff84e194-94e3-43d9-9627-086541e6dc57]",
+                    "pid": 50813,
+                    "title": null,
+                    "type": "WebAccessibilityObjectWrapper",
+                    "value": "",
+                    "children": []
+                  },
+                  {
+                    "focused": false,
+                    "frame": {
+                      "height": 45,
+                      "width": 121,
+                      "x": 127,
+                      "y": 315
+                    },
+                    "hidden": false,
+                    "identifier": null,
+                    "interactable": {
+                      "at": {
+                        "x": 188,
+                        "y": 338
+                      },
+                      "status": "actionable"
+                    },
+                    "label": "OW coordinate focus [run:ff84e194-94e3-43d9-9627-086541e6dc57]",
+                    "pid": 50813,
+                    "title": null,
+                    "type": "Button",
+                    "value": "",
+                    "children": []
+                  },
+                  {
+                    "focused": false,
+                    "frame": {
+                      "height": 44,
+                      "width": 100,
+                      "x": 16,
+                      "y": 66
+                    },
+                    "hidden": false,
+                    "identifier": null,
+                    "interactable": {
+                      "at": {
+                        "x": 66,
+                        "y": 88
+                      },
+                      "status": "actionable"
+                    },
+                    "label": "OW coordinate north-west [run:ff84e194-94e3-43d9-9627-086541e6dc57]",
+                    "pid": 50813,
+                    "title": null,
+                    "type": "Button",
+                    "value": "",
+                    "children": []
+                  },
+                  {
+                    "focused": false,
+                    "frame": {
+                      "height": 40,
+                      "width": 166,
+                      "x": 198,
+                      "y": 98
+                    },
+                    "hidden": false,
+                    "identifier": null,
+                    "interactable": {
+                      "at": {
+                        "x": 281,
+                        "y": 118
+                      },
+                      "status": "actionable"
+                    },
+                    "label": "OW coordinate Start [run:ff84e194-94e3-43d9-9627-086541e6dc57]",
+                    "pid": 50813,
+                    "title": null,
+                    "type": "Button",
+                    "value": "",
+                    "children": []
+                  },
+                  {
+                    "focused": false,
+                    "frame": {
+                      "height": 44,
+                      "width": 100,
+                      "x": 16,
+                      "y": 654
+                    },
+                    "hidden": false,
+                    "identifier": null,
+                    "interactable": {
+                      "at": {
+                        "x": 66,
+                        "y": 676
+                      },
+                      "status": "actionable"
+                    },
+                    "label": "OW coordinate south-west [run:ff84e194-94e3-43d9-9627-086541e6dc57]",
+                    "pid": 50813,
+                    "title": null,
+                    "type": "Button",
+                    "value": "",
+                    "children": []
+                  },
+                  {
+                    "focused": false,
+                    "frame": {
+                      "height": 44,
+                      "width": 100,
+                      "x": 259,
+                      "y": 654
+                    },
+                    "hidden": false,
+                    "identifier": null,
+                    "interactable": {
+                      "at": {
+                        "x": 309,
+                        "y": 676
+                      },
+                      "status": "actionable"
+                    },
+                    "label": "OW coordinate south-east [run:ff84e194-94e3-43d9-9627-086541e6dc57]",
+                    "pid": 50813,
+                    "title": null,
+                    "type": "Button",
+                    "value": "",
+                    "children": []
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "focused": false,
+            "frame": {
+              "height": 20.33333333333337,
+              "width": 66,
+              "x": 154.66666666666669,
+              "y": 744
+            },
+            "hidden": false,
+            "identifier": "TabBarItemTitle",
+            "interactable": {
+              "at": {
+                "x": 187.66666666666669,
+                "y": 754.1666666666667
+              },
+              "status": "actionable"
+            },
+            "label": "Address",
+            "pid": 50813,
+            "title": null,
+            "type": "SFUnifiedTabBarItemTitleContainerView",
+            "value": "\u200e127.0.0.1",
+            "children": []
+          }
+        ]
+      }
+    ]
+  },
+  "apps": [
+    {
+      "bundle_id": "com.apple.NanoUniverse.AegirProxyApp",
+      "process_id": 0,
+      "process_state": "UNKNOWN"
+    },
+    {
+      "bundle_id": "com.apple.EmojiPoster",
+      "process_id": 0,
+      "process_state": "UNKNOWN"
+    },
+    {
+      "bundle_id": "com.apple.VoiceOverTouch",
+      "process_id": 0,
+      "process_state": "UNKNOWN"
+    },
+    {
+      "bundle_id": "com.apple.commandandcontrol",
+      "process_id": 0,
+      "process_state": "UNKNOWN"
+    },
+    {
+      "bundle_id": "com.apple.GradientPoster",
+      "process_id": 0,
+      "process_state": "UNKNOWN"
+    },
+    {
+      "bundle_id": "com.apple.CarPlayApp",
+      "process_id": 0,
+      "process_state": "UNKNOWN"
+    },
+    {
+      "bundle_id": "com.apple.PreviewShell",
+      "process_id": 0,
+      "process_state": "UNKNOWN"
+    },
+    {
+      "bundle_id": "com.apple.mobilecal",
+      "process_id": 0,
+      "process_state": "UNKNOWN"
+    },
+    {
+      "bundle_id": "com.apple.Health",
+      "process_id": 0,
+      "process_state": "UNKNOWN"
+    },
+    {
+      "bundle_id": "com.apple.news",
+      "process_id": 0,
+      "process_state": "UNKNOWN"
+    },
+    {
+      "bundle_id": "com.apple.TVRemoteApp",
+      "process_id": 0,
+      "process_state": "UNKNOWN"
+    },
+    {
+      "bundle_id": "com.apple.fullkeyboardaccess",
+      "process_id": 0,
+      "process_state": "UNKNOWN"
+    },
+    {
+      "bundle_id": "com.apple.PridePoster",
+      "process_id": 0,
+      "process_state": "UNKNOWN"
+    },
+    {
+      "bundle_id": "com.apple.SystemIntents",
+      "process_id": 0,
+      "process_state": "UNKNOWN"
+    },
+    {
+      "bundle_id": "com.apple.Passbook",
+      "process_id": 0,
+      "process_state": "UNKNOWN"
+    },
+    {
+      "bundle_id": "com.apple.Posters.WeatherPosterApp",
+      "process_id": 0,
+      "process_state": "UNKNOWN"
+    },
+    {
+      "bundle_id": "com.apple.Posters.UnityPosterApp",
+      "process_id": 0,
+      "process_state": "UNKNOWN"
+    },
+    {
+      "bundle_id": "com.apple.assistivetouchd",
+      "process_id": 0,
+      "process_state": "UNKNOWN"
+    },
+    {
+      "bundle_id": "com.apple.shortcuts",
+      "process_id": 0,
+      "process_state": "UNKNOWN"
+    },
+    {
+      "bundle_id": "com.apple.Bridge",
+      "process_id": 0,
+      "process_state": "UNKNOWN"
+    },
+    {
+      "bundle_id": "com.apple.livetranscriptionui",
+      "process_id": 0,
+      "process_state": "UNKNOWN"
+    },
+    {
+      "bundle_id": "com.apple.mobilesafari",
+      "process_id": 50813,
+      "process_state": "RUNNING"
+    },
+    {
+      "bundle_id": "com.apple.DocumentsApp",
+      "process_id": 0,
+      "process_state": "UNKNOWN"
+    },
+    {
+      "bundle_id": "com.apple.webapp",
+      "process_id": 0,
+      "process_state": "UNKNOWN"
+    },
+    {
+      "bundle_id": "com.apple.Posters.KaleidoscopePosterApp",
+      "process_id": 0,
+      "process_state": "UNKNOWN"
+    },
+    {
+      "bundle_id": "com.apple.Preview",
+      "process_id": 0,
+      "process_state": "UNKNOWN"
+    },
+    {
+      "bundle_id": "com.apple.Maps",
+      "process_id": 0,
+      "process_state": "UNKNOWN"
+    },
+    {
+      "bundle_id": "com.apple.EscrowSecurityAlert",
+      "process_id": 0,
+      "process_state": "UNKNOWN"
+    },
+    {
+      "bundle_id": "com.apple.Preferences",
+      "process_id": 0,
+      "process_state": "UNKNOWN"
+    },
+    {
+      "bundle_id": "com.apple.MobileSMS",
+      "process_id": 0,
+      "process_state": "UNKNOWN"
+    },
+    {
+      "bundle_id": "com.apple.MobileAddressBook",
+      "process_id": 0,
+      "process_state": "UNKNOWN"
+    },
+    {
+      "bundle_id": "com.apple.ShortcutsActions",
+      "process_id": 0,
+      "process_state": "UNKNOWN"
+    },
+    {
+      "bundle_id": "com.apple.mobileslideshow",
+      "process_id": 0,
+      "process_state": "UNKNOWN"
+    },
+    {
+      "bundle_id": "com.apple.springboard",
+      "process_id": 0,
+      "process_state": "UNKNOWN"
+    },
+    {
+      "bundle_id": "com.apple.SiriApp",
+      "process_id": 0,
+      "process_state": "UNKNOWN"
+    },
+    {
+      "bundle_id": "com.apple.Posters.ImagePlaygroundPosterApp",
+      "process_id": 0,
+      "process_state": "UNKNOWN"
+    },
+    {
+      "bundle_id": "com.apple.Fitness",
+      "process_id": 0,
+      "process_state": "UNKNOWN"
+    },
+    {
+      "bundle_id": "com.apple.reminders",
+      "process_id": 0,
+      "process_state": "UNKNOWN"
+    },
+    {
+      "bundle_id": "com.apple.Passwords",
+      "process_id": 0,
+      "process_state": "UNKNOWN"
+    }
+  ],
+  "page": {
+    "url": "http://127.0.0.1:4398/__coordinate/ff84e194-94e3-43d9-9627-086541e6dc57",
+    "visible": "visible",
+    "focused": true,
+    "width": 375,
+    "height": 664,
+    "canvas": {
+      "x": 0,
+      "y": 0,
+      "width": 375,
+      "height": 664
+    },
+    "qa": {
+      "id": "ff84e194-94e3-43d9-9627-086541e6dc57",
+      "documentTitle": "OW coordinate document ff84e194-94e3-43d9-9627-086541e6dc57",
+      "canvasLabel": "OW coordinate canvas [run:ff84e194-94e3-43d9-9627-086541e6dc57]",
+      "startLabel": "OW coordinate Start [run:ff84e194-94e3-43d9-9627-086541e6dc57]",
+      "sequence": 5,
+      "settledAfter": 4,
+      "at": 4842,
+      "wall": 1794919748870,
+      "inputs": [
+        {
+          "sequence": 3,
+          "type": "pointerdown",
+          "isTrusted": true,
+          "pointerType": "touch",
+          "pointerId": 1699924588,
+          "x": 188,
+          "y": 288,
+          "label": "OW coordinate focus [run:ff84e194-94e3-43d9-9627-086541e6dc57]",
+          "at": 4677,
+          "wall": 1794919748727
+        },
+        {
+          "sequence": 4,
+          "type": "pointerup",
+          "isTrusted": true,
+          "pointerType": "touch",
+          "pointerId": 1699924588,
+          "x": 188,
+          "y": 288,
+          "label": "OW coordinate focus [run:ff84e194-94e3-43d9-9627-086541e6dc57]",
+          "at": 4832,
+          "wall": 1794919748870
+        }
+      ],
+      "controls": {}
+    }
+  },
+  "receivedWall": 1794919748873,
+  "point": {
+    "x": 188,
+    "y": 338
+  },
+  "pointLabel": "OW coordinate focus [run:ff84e194-94e3-43d9-9627-086541e6dc57]",
+  "hit": {
+    "automation": null,
+    "backend": "axbridge-exclusive",
+    "coverage": null,
+    "elements": [
+      {
+        "children": [],
+        "focused": false,
+        "frame": {
+          "height": 45,
+          "width": 121,
+          "x": 127,
+          "y": 315
+        },
+        "hidden": false,
+        "identifier": null,
+        "interactable": {
+          "at": {
+            "x": 188,
+            "y": 338
+          },
+          "status": "actionable"
+        },
+        "label": "OW coordinate focus [run:ff84e194-94e3-43d9-9627-086541e6dc57]",
+        "pid": 51175,
+        "title": null,
+        "type": "Button",
+        "value": ""
+      }
+    ],
+    "frames": {
+      "framed": 1,
+      "total": 1,
+      "zero_frame": 0
+    },
+    "interaction": {
+      "actionable": 1,
+      "blocked": 0,
+      "unexplained": 0,
+      "unexplained_ratio": null
+    },
+    "modal": null,
+    "narrowing": null,
+    "profile": null,
+    "screen": {
+      "coordinate_space": "screen",
+      "display": {
+        "rotation": 0,
+        "scale": 3,
+        "unique_id": "74D80DD4-66A6-4697-B2A1-E4EF6117AE71"
+      },
+      "height": 812,
+      "width": 375
+    },
+    "target": {
+      "kind": "point",
+      "match_key": null,
+      "pid": null,
+      "value": null,
+      "x": 188,
+      "y": 338
+    },
+    "truncated": false
+  }
+}

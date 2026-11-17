@@ -1,30 +1,35 @@
+import type { createSimulatorCoordinates } from './simulator-page-coordinates.ts'
+
 interface SimulatorSetup {
   id: string
   stress: boolean
   preflight?: boolean
+  expectedURL: string
 }
 /** Local QA page controls. The recorder and read-only native snapshot are installed before boot. */
-export async function installSimulatorRecorder(): Promise<void> {
+export async function installSimulatorRecorder(
+  createCoordinates: typeof createSimulatorCoordinates,
+  hashScripts: typeof simulatorScriptHashes,
+): Promise<void> {
   const saved = sessionStorage.getItem('__owQaRecording')
   if (!saved) {
     return
   }
   sessionStorage.removeItem('__owQaRecording')
-  const { id, stress, preflight = false } = JSON.parse(saved) as SimulatorSetup
+  const { id, stress, preflight = false, expectedURL } = JSON.parse(saved) as SimulatorSetup
   const recorder = Reflect.get(globalThis, '__owFrameRecorder')
-  const pageState = () => {
-    const rect = document.querySelector('canvas')?.getBoundingClientRect()
-    return {
+  const startText = preflight
+    ? 'Start 2s headless preflight'
+    : `Start 60s ${stress ? '32 rider' : '5 rider'} recording`
+  let coordinates: ReturnType<typeof createSimulatorCoordinates> | undefined
+  const pageState = () => ({
+    ...(coordinates?.page() ?? {
       url: location.href,
       visible: document.visibilityState,
       focused: document.hasFocus(),
-      width: innerWidth,
-      height: innerHeight,
-      dpr: devicePixelRatio,
-      recorder: recorder?.inspect(),
-      canvas: rect ? { x: rect.x, y: rect.y, width: rect.width, height: rect.height } : null,
-    }
-  }
+    }),
+    recorder: recorder?.inspect(),
+  })
   // Local QA alone supplies this dummy token, still verified by the Worker test secret.
   let tokenCallback: ((token: string) => void) | undefined
   const deliverTestToken = () => queueMicrotask(() => tokenCallback?.('XXXX.DUMMY.TOKEN.XXXX'))
@@ -65,7 +70,11 @@ export async function installSimulatorRecorder(): Promise<void> {
       await new Promise((resolve) => setTimeout(resolve, 150))
     }
   }
-  const fixture = async (action: string, error?: string) => {
+  const fixture = async (
+    action: string,
+    error?: string,
+    coordinatePage?: ReturnType<typeof pageState>,
+  ) => {
     const response = await fetch(`/__qa/session/${id}`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
@@ -73,7 +82,9 @@ export async function installSimulatorRecorder(): Promise<void> {
         action,
         lobbyId: snapshot()?.lobbyId ?? '',
         ...(error ? { error } : {}),
-        ...(['ready', 'failed'].includes(action) ? { page: pageState() } : {}),
+        ...(coordinatePage || ['ready', 'failed'].includes(action)
+          ? { page: coordinatePage ?? pageState() }
+          : {}),
         recording: error
           ? (recorder.result() ?? recorder.partial())
           : { ...recorder?.status(), at: performance.now(), wall: Date.now() },
@@ -92,6 +103,9 @@ export async function installSimulatorRecorder(): Promise<void> {
     await fixture('failed', button.textContent).catch(() => undefined)
   }
   try {
+    if (location.href !== expectedURL || new URL(expectedURL).searchParams.get('qaRun') !== id) {
+      throw new Error('QA run URL mismatch')
+    }
     await wait(() => Boolean(snapshot()?.scene.actors.loaded))
     const preparation = await fixture('pack')
     const count = stress ? 32 : 5
@@ -106,14 +120,17 @@ export async function installSimulatorRecorder(): Promise<void> {
         !document.querySelector('.pc-loading')
       )
     })
-    button.textContent = preflight
-      ? 'Start 2s headless preflight'
-      : `Start 60s ${stress ? '32 rider' : '5 rider'} recording`
+    button.textContent = startText
     button.disabled = false
+    coordinates = createCoordinates(id, expectedURL, startText, async (page) => {
+      await fixture('coordinates', undefined, { ...page, recorder: recorder?.inspect() })
+    })
+    await coordinates.start(button)
     await fixture('ready')
     button.addEventListener('click', async () => {
       button.disabled = true
       try {
+        await coordinates?.stop()
         if (
           !recorder
             .inspect()
@@ -129,29 +146,7 @@ export async function installSimulatorRecorder(): Promise<void> {
         await wait(() => !recorder.status().running)
         const authority = await fixture('finish')
         const data = recorder.result()
-        const hashes: { path: string; local: boolean; sha256: string }[] = []
-        const scripts = [
-          ...new Set(performance.getEntriesByType('resource').map((resource) => resource.name)),
-        ]
-        for (const resource of scripts) {
-          const url = new URL(resource)
-          if (
-            url.origin !== location.origin ||
-            !url.pathname.endsWith('.js') ||
-            url.pathname.startsWith('/__qa/')
-          ) {
-            continue
-          }
-          const bytes = await (await fetch(resource)).arrayBuffer()
-          const hash = await crypto.subtle.digest('SHA-256', bytes)
-          hashes.push({
-            path: url.pathname,
-            local: true,
-            sha256: Array.from(new Uint8Array(hash), (byte) =>
-              byte.toString(16).padStart(2, '0'),
-            ).join(''),
-          })
-        }
+        const hashes = await hashScripts()
         const response = await fetch(`/__qa/receipt/${id}`, {
           method: 'POST',
           headers: { 'content-type': 'application/json' },
@@ -182,7 +177,36 @@ export async function installSimulatorRecorder(): Promise<void> {
       document.body.append(button)
     })
   } catch (error) {
+    await coordinates?.stop().catch(() => undefined)
     Reflect.get(globalThis, '__owQaPrivacy')?.restoreSettings()
     await failure(error)
   }
+}
+
+/** Real bytes fetched after recording; no hashing work runs in the measured interval. */
+export async function simulatorScriptHashes() {
+  const hashes: { path: string; local: boolean; sha256: string }[] = []
+  const scripts = [
+    ...new Set(performance.getEntriesByType('resource').map((resource) => resource.name)),
+  ]
+  for (const resource of scripts) {
+    const url = new URL(resource)
+    if (
+      url.origin !== location.origin ||
+      !url.pathname.endsWith('.js') ||
+      url.pathname.startsWith('/__qa/')
+    ) {
+      continue
+    }
+    const bytes = await (await fetch(resource)).arrayBuffer()
+    const hash = await crypto.subtle.digest('SHA-256', bytes)
+    hashes.push({
+      path: url.pathname,
+      local: true,
+      sha256: Array.from(new Uint8Array(hash), (byte) => byte.toString(16).padStart(2, '0')).join(
+        '',
+      ),
+    })
+  }
+  return hashes
 }

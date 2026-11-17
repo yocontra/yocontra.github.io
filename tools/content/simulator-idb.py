@@ -11,7 +11,7 @@ from pathlib import Path
 from simulator_schedule import tape_events, sample_events, release_held
 from idb.grpc.client import Client
 from idb.common.types import (
-    AccessibilityBackend, AccessibilityInfoOptions, AccessibilityOutputFormat,
+    AccessibilityBackend, AccessibilityInfoOptions, AccessibilityOutputFormat, AccessibilityPoint,
     HIDDirection, HIDOrientationType, HIDPress, HIDSwipe, HIDTouch, Point, TCPAddress,
 )
 
@@ -28,10 +28,10 @@ def api_metadata():
     }, "sources": {p: hashlib.sha256(Path(p).read_bytes()).hexdigest() for p in paths}}
 
 
-async def ax(client):
-    result = await client.accessibility_info(None, AccessibilityInfoOptions(
+async def ax(client, keys=None, target=None):
+    result = await client.accessibility_info(target, AccessibilityInfoOptions(
         backend=AccessibilityBackend.AXBRIDGE_PERSISTENT,
-        format=AccessibilityOutputFormat.COMPLETE,
+        format=AccessibilityOutputFormat.COMPLETE, keys=keys,
     ))
     return json.loads(result.json)
 
@@ -118,7 +118,10 @@ async def run(args):
                 if name == "get-orientation":
                     result = (await client.get_orientation()).name
                 elif name == "ax":
-                    result = await ax(client)
+                    result = await ax(client, keys=command.get("keys"))
+                elif name == "hit":
+                    result = await ax(client, keys=command.get("keys"),
+                                      target=AccessibilityPoint(x=command["x"], y=command["y"]))
                 elif name == "apps":
                     result = await native_apps(client)
                 elif name == "launch-safari":

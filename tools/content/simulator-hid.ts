@@ -47,7 +47,7 @@ export function gestureTape({
 }: {
   page: PageState
   web: Frame
-  buttons: Record<string, Frame>
+  buttons: Record<string, Frame & { point?: { x: number; y: number } }>
   clock: Clock
   orientation: string
 }): Gesture[] {
@@ -64,7 +64,7 @@ export function gestureTape({
     if (!b) {
       throw new Error(`Native AX button missing: ${name}`)
     }
-    const point = { x: Math.round(b.x + b.width / 2), y: Math.round(b.y + b.height / 2) }
+    const point = b.point ?? { x: Math.round(b.x + b.width / 2), y: Math.round(b.y + b.height / 2) }
     const css = transform.css(point)
     transform.point(css.x, css.y)
     return point

@@ -1,12 +1,17 @@
+import { COORDINATE_KEYS, recordingDocument } from './content/simulator-document.ts'
 /** Two-second guest-only capability preflight. No simulator/UI work occurs when imported. */
 
 import { mkdir, writeFile } from 'node:fs/promises'
 import { join, resolve } from 'node:path'
 import type { BuildReceipt } from './content/production-fixture.ts'
+import {
+  coordinateStatus,
+  prepareCoordinates,
+  startCoordinates,
+} from './content/simulator-coordinates.ts'
 import { recordingMode } from './content/simulator-hid.ts'
 import {
   commandPlan,
-  frameForAX,
   hidTapArguments,
   type PageState,
   parseIDBApps,
@@ -15,7 +20,6 @@ import {
   QA_DEVICE,
   safariLaunchArguments,
   targetForPreflight,
-  webFrame,
 } from './content/simulator-native.ts'
 import {
   bounded,
@@ -40,12 +44,20 @@ type PreflightRun = (
 async function nativeState(
   run: PreflightRun,
   idb: (...args: string[]) => string[],
-  timeoutMs = 30_000,
-  signal?: AbortSignal,
+  options: { timeoutMs?: number; signal?: AbortSignal; keys?: string[] } = {},
 ) {
+  const { timeoutMs = 30_000, signal, keys = [] } = options
   const deadline = Date.now() + timeoutMs
   const ax = await run(
-    idb('ui', 'describe-all', '--api', 'axbridge', '--format', 'complete'),
+    idb(
+      'ui',
+      'describe-all',
+      '--api',
+      'axbridge',
+      '--format',
+      'complete',
+      ...keys.flatMap((key) => ['--key', key]),
+    ),
     true,
     timeoutMs,
     signal,
@@ -93,6 +105,37 @@ function openPreflightPage(
     open: (remaining, signal) => run(open, false, remaining, signal),
     observe,
   })
+}
+function preflightCoordinates(
+  run: PreflightRun,
+  idb: (...args: string[]) => string[],
+  stateURL: URL,
+  evidence: Record<string, unknown>[],
+) {
+  return {
+    read: () => nativeState(run, idb, { keys: COORDINATE_KEYS }),
+    hit: (point: { x: number; y: number }) =>
+      run(
+        idb(
+          'ui',
+          'describe-point',
+          String(point.x),
+          String(point.y),
+          '--api',
+          'axbridge',
+          '--format',
+          'complete',
+          ...COORDINATE_KEYS.flatMap((key) => ['--key', key]),
+        ),
+        true,
+      ),
+    tap: (point: { x: number; y: number }) => run(idb(...hidTapArguments(point.x, point.y))),
+    status: (signal: AbortSignal) => coordinateStatus(stateURL, signal),
+    observe: (value: Record<string, unknown>) => {
+      evidence.push(value)
+      return Promise.resolve()
+    },
+  }
 }
 export async function runPreflight(options: {
   udid: string
@@ -181,34 +224,19 @@ export async function runPreflight(options: {
       const value = (await response.json()) as { stage: string; page: PageState }
       return value.stage === 'ready' ? value : undefined
     }, 120)
-    const { ax: beforeAX, apps: beforeApps } = await nativeState(run, idb)
-    const web = webFrame(beforeAX, ready.page)
-    const start = frameForAX(beforeAX, 'Start 2s headless preflight')
-    if (!(web && start && ready.page.canvas)) {
-      throw new Error('Native guest AX/canvas frames unavailable; no guessed coordinates')
-    }
-    const scale = web.width / ready.page.width
-    if (!(scale > 0 && Math.abs(web.height - ready.page.height * scale) < 4)) {
-      throw new Error('Guest CSS/AX viewport transform unproved')
-    }
-    const tap = (x: number, y: number) => run(idb(...hidTapArguments(x, y)))
-    const canvas = ready.page.canvas
-    await tap(
-      web.x + (canvas.x + canvas.width * 0.7) * scale,
-      web.y + (canvas.y + canvas.height * 0.5) * scale,
+    const coordinateEvidence: Record<string, unknown>[] = []
+    report.coordinateEvidence = coordinateEvidence
+    const coordinates = preflightCoordinates(run, idb, stateURL, coordinateEvidence)
+    const prepared = await prepareCoordinates(
+      coordinates,
+      recordingDocument(id, ready.page.url, 'Start 2s headless preflight'),
+      'portrait',
     )
+    const { ax: beforeAX, apps: beforeApps } = prepared
     await run(idb('screenshot', join(options.output, 'before.png')))
-    await tap(start.x + start.width / 2, start.y + start.height / 2)
+    await startCoordinates(coordinates, prepared)
     report.recordingAcknowledgement = await waitForRecording(stateURL)
-    const fire = frameForAX(beforeAX, 'FIRE')
-    if (fire) {
-      await tap(fire.x + fire.width / 2, fire.y + fire.height / 2)
-    } else {
-      await tap(
-        web.x + (canvas.x + canvas.width * 0.7) * scale,
-        web.y + (canvas.y + canvas.height * 0.5) * scale,
-      )
-    }
+    await coordinates.tap(prepared.buttons.FIRE.point)
     const saved = await until(async (signal) => {
       const value = (await statusJSON(stateURL, signal)) as { stage: string; receipt?: unknown }
       return value.stage === 'saved' && value.receipt ? value : undefined

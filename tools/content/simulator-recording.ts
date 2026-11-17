@@ -11,6 +11,8 @@ import {
 } from './production-fixture.ts'
 import { cleanupGuest } from './simulator-cleanup.ts'
 import { simulatorClient } from './simulator-client.ts'
+import { coordinateStatus, prepareCoordinates, startCoordinates } from './simulator-coordinates.ts'
+import { COORDINATE_KEYS, recordingDocument } from './simulator-document.ts'
 import {
   type Clock,
   finalRecordingVerdict,
@@ -19,7 +21,6 @@ import {
   joinGestures,
   type NativeForegroundSample,
   nativeForeground,
-  nativeTransform,
   recordingOptions,
   type TrustedInput,
   walkingEvidence,
@@ -27,12 +28,10 @@ import {
 import {
   commandPlan,
   type Frame,
-  frameForAX,
   type PageState,
   preflightIssues,
   preflightURL,
   targetForPreflight,
-  webFrame,
 } from './simulator-native.ts'
 import {
   bounded,
@@ -126,42 +125,40 @@ async function captureNative(context: {
       await checkpoint({ safariReadiness })
     },
   })
-  const ready = await until(async (signal) => {
+  let ready = await until(async (signal) => {
     const value = (await statusJSON(stateURL, signal)) as State
     if (value.stage === 'failed') {
       throw new Error(value.error)
     }
     return value.stage === 'ready' ? value : undefined
   }, 120)
-  const beforeAX = await native.call('ax')
-  const beforeApps = await native.call('apps')
-  const web = webFrame(beforeAX, ready.page)
-  const start = frameForAX(
-    beforeAX,
-    `Start 60s ${selected.population === 'ordinary' ? '5 rider' : '32 rider'} recording`,
-  )
-  const canvas = ready.page.canvas
-  if (!(web && start && canvas)) {
-    throw new Error('Fresh native AX/canvas/start frames missing')
+  const coordinateEvidence: Record<string, unknown>[] = []
+  const coordinates = {
+    read: async () => ({
+      ax: await native.call('ax', { keys: COORDINATE_KEYS }),
+      apps: await native.call('apps'),
+    }),
+    hit: (point: { x: number; y: number }) =>
+      native.call('hit', { ...point, keys: COORDINATE_KEYS }),
+    tap: (point: { x: number; y: number }) => native.call('tap', point),
+    status: (signal: AbortSignal) => coordinateStatus(stateURL, signal),
+    observe: (value: Record<string, unknown>) => {
+      coordinateEvidence.push(value)
+      return Promise.resolve()
+    },
   }
-  const transform = nativeTransform(web, ready.page, selected.orientation)
-  const buttons: Record<string, Frame> = {}
-  for (const name of ['FIRE', 'AIM', 'RELOAD']) {
-    const frame = frameForAX(beforeAX, name)
-    if (!frame) {
-      throw new Error(`Fresh AX control missing: ${name}`)
-    }
-    buttons[name] = frame
-  }
-  await native.call(
-    'tap',
-    transform.point(canvas.x + canvas.width * 0.7, canvas.y + canvas.height * 0.5),
+  const id = stateURL.pathname.split('/').at(-1) ?? ''
+  const startText = `Start 60s ${selected.population === 'ordinary' ? '5 rider' : '32 rider'} recording`
+  const prepared = await prepareCoordinates(
+    coordinates,
+    recordingDocument(id, ready.page.url, startText),
+    selected.orientation,
   )
+  const { ax: beforeAX, apps: beforeApps, web, buttons } = prepared
+  ready = { ...ready, page: prepared.page }
+  await checkpoint({ coordinateEvidence })
   await native.call('screenshot', { path: join(output, 'before.png') })
-  await native.call('tap', {
-    x: Math.round(start.x + start.width / 2),
-    y: Math.round(start.y + start.height / 2),
-  })
+  await startCoordinates(coordinates, prepared)
   const acknowledged = await waitForRecording(stateURL)
   const clock = acknowledged.recording as typeof acknowledged.recording & Clock
   if (!(Number.isFinite(clock.at) && Number.isFinite(clock.wall))) {
