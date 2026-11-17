@@ -22,6 +22,7 @@ const DEFAULT_WEAPON_POSES = [
   'Idle_Gun_Pointing',
   'Gun_Shoot',
   'Reload',
+  'Throw_Dynamite',
   'Hold_rifle',
   'Hold_shotgun',
   'Shoot_rifle',

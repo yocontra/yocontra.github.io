@@ -1,0 +1,28 @@
+{
+  "baseline": "b6a0534aa198df1a9c5a272ea56ed61963d6ece9",
+  "note": "First triangle decoded from the actual stale public GLBs. These three corners retain the real 1.043mm mismatch without storing either 810KB asset or requiring git/network in CI.",
+  "models": [
+    {
+      "id": "extra.red-bandana",
+      "sha256": "f565a4d0ca41f99e3a279b86b60f2fcd7a6ec4b71bd4531222cd66f44dea14a7",
+      "nodeSignature": "d6e2a9a75aa982ae566da5124b5bdd380d65f466703591234eb5963a998526f8",
+      "triangle": 0,
+      "decodedWorldCorners": [
+        [-0.014230097123481715, 1.4678490262967978, -0.053221117006201975],
+        [-0.030517107004030455, 1.4678490264438788, -0.051393195107728884],
+        [-0.013890194312235692, 1.4581863447225993, -0.053085155711208434]
+      ]
+    },
+    {
+      "id": "extra.black-bandana",
+      "sha256": "4f9f85f1b26f0cec149108567af008cbf4619a6795009fa2727635a16e2e0aa0",
+      "nodeSignature": "d6e2a9a75aa982ae566da5124b5bdd380d65f466703591234eb5963a998526f8",
+      "triangle": 0,
+      "decodedWorldCorners": [
+        [-0.014230097123481715, 1.4678490262967978, -0.053221117006201975],
+        [-0.030517107004030455, 1.4678490264438788, -0.051393195107728884],
+        [-0.013890194312235692, 1.4581863447225993, -0.053085155711208434]
+      ]
+    }
+  ]
+}

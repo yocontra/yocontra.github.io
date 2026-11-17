@@ -1,13 +1,15 @@
 /** Native asset studio used only by the offline catalogue image build. */
 
 import type { ContainerResource } from 'playcanvas'
-import { BoundingBox, Vec3 } from 'playcanvas'
+import { BoundingBox, Entity, Vec3 } from 'playcanvas'
 import { GameApplication } from '../../src/experiments/out-west/client/application.ts'
 import { EQUIPMENT } from '../../src/experiments/out-west/content/equipment.ts'
 import { prepareNativeMaterials } from '../../src/experiments/out-west/scene/native-materials.ts'
+import { orientGunProduct } from './item-product-pose.ts'
 
 let game: GameApplication | null = null
 let subject: Awaited<ReturnType<GameApplication['instantiate']>> | null = null
+let fill: Entity | null = null
 export async function previewItem(id: keyof typeof EQUIPMENT): Promise<void> {
   if (!game) {
     document.body.replaceChildren()
@@ -28,6 +30,9 @@ export async function previewItem(id: keyof typeof EQUIPMENT): Promise<void> {
     }
   }
   subject?.destroy()
+  fill?.destroy()
+  fill = null
+  const handlebar = id === 'extra.handlebar'
   const container = await game.loadContainer(EQUIPMENT[id].url)
   const release = await prepareNativeMaterials(game, container.resource as ContainerResource)
   try {
@@ -44,7 +49,16 @@ export async function previewItem(id: keyof typeof EQUIPMENT): Promise<void> {
       node.name === 'FootL'
     )
   }
-  subject.setEulerAngles(0, -25, id.startsWith('gun.') ? 90 : 0)
+  if (id.startsWith('gun.')) {
+    orientGunProduct(subject, id === 'gun.hardins-pair')
+  }
+  subject.setEulerAngles(0, handlebar ? 0 : -25, 0)
+  if (handlebar) {
+    fill = new Entity('Handlebar studio fill', game.app)
+    fill.addComponent('light', { type: 'directional', intensity: 0.8, castShadows: false })
+    fill.setEulerAngles(25, 0, 0)
+    game.app.root.addChild(fill)
+  }
   await new Promise<void>((resolve) =>
     requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
   )
@@ -67,9 +81,11 @@ export async function previewItem(id: keyof typeof EQUIPMENT): Promise<void> {
     throw new Error(`No visible native mesh for ${id}`)
   }
   const radius = bounds.halfExtents.length()
-  const distance = (radius / Math.sin((29 * Math.PI) / 180)) * 1.15
+  const distance = (radius / Math.sin((29 * Math.PI) / 180)) * (handlebar ? 0.94 : 1.15)
   game.camera.setPosition(
-    bounds.center.clone().add(new Vec3(distance * 0.35, distance * 0.12, distance)),
+    bounds.center
+      .clone()
+      .add(new Vec3(distance * (handlebar ? 0 : 0.35), distance * 0.12, distance)),
   )
   game.camera.lookAt(bounds.center)
   if (game.camera.camera) {

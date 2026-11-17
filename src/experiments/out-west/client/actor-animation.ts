@@ -5,6 +5,7 @@ import type { DuelActor } from '../duel/native-actor.ts'
 import { CROUCH_SPEED, SPRINT_SPEED } from '../ffa/sim/constants.ts'
 import type { Player } from '../ffa/sim/types.ts'
 import type { PlayerState } from '../runtime/protocol.ts'
+import { DYNAMITE_THROW_SECONDS } from '../scene/native-animation-timing.ts'
 
 interface AnimatedRider {
   actor: DuelActor
@@ -12,6 +13,7 @@ interface AnimatedRider {
   aim: AnimComponentLayer | undefined
   weaponLayer: AnimComponentLayer | undefined
   firingUntil: number
+  throwingUntil?: number
 }
 export function heldWeapon(domain: Player | undefined): 'rifle' | 'shotgun' | 'revolver' {
   if (domain?.weapon === WEAPON_RIFLE) {
@@ -73,6 +75,9 @@ function upperClip(
   crouched: boolean,
   first: boolean,
 ): string {
+  if (performance.now() < (rider.throwingUntil ?? 0)) {
+    return `${crouched ? 'Crouch_' : ''}Throw_Dynamite`
+  }
   const shot = rider.actor.shotClip(crouched)
   const layer = rider.weaponLayer
   // The wall deadline can lead the native clock by a fraction of a frame. Preserve the
@@ -98,6 +103,19 @@ function aimClip(player: PlayerState, domain: Player | undefined): string {
   const stance = (player.crouched ?? domain?.crouched ?? false) ? 'Crouch_' : ''
   return `${stance}${player.pitch >= 0 ? 'Aim_Up' : 'Aim_Down'}`
 }
+function transitionUpper(layer: AnimComponentLayer, upper: string): void {
+  if (layer.activeState === upper || !layer.states.includes(upper)) {
+    return
+  }
+  const throwTime =
+    upper.endsWith('Throw_Dynamite') && layer.activeState.endsWith('Throw_Dynamite')
+      ? layer.activeStateCurrentTime
+      : undefined
+  layer.transition(upper, 0.05)
+  if (throwTime !== undefined) {
+    layer.activeStateCurrentTime = throwTime
+  }
+}
 export function animateRider(
   rider: AnimatedRider,
   player: PlayerState,
@@ -105,6 +123,7 @@ export function animateRider(
 ): void {
   if (player.hp <= 0) {
     rider.firingUntil = 0
+    rider.throwingUntil = 0
   }
   const { actor } = rider
   const speed = Math.hypot(player.vx, player.vz)
@@ -113,7 +132,10 @@ export function animateRider(
     if (rider.aim.activeState !== pose) {
       rider.aim.play(pose)
     }
-    const weight = !options.first && player.hp > 0 ? Math.min(1, Math.abs(player.pitch) / 1.45) : 0
+    const weight =
+      !options.first && player.hp > 0 && performance.now() >= (rider.throwingUntil ?? 0)
+        ? Math.min(1, Math.abs(player.pitch) / 1.45)
+        : 0
     if (rider.aim.weight !== weight) {
       rider.aim.weight = weight
     }
@@ -131,9 +153,7 @@ export function animateRider(
     if (rider.weaponLayer.weight !== weight) {
       rider.weaponLayer.weight = weight
     }
-    if (rider.weaponLayer.activeState !== upper && rider.weaponLayer.states.includes(upper)) {
-      rider.weaponLayer.transition(upper, 0.05)
-    }
+    transitionUpper(rider.weaponLayer, upper)
   }
   if (clip !== rider.clip) {
     actor.play(clip, speed < 0.1 ? 0.04 : 0.1)
@@ -141,4 +161,45 @@ export function animateRider(
   }
   const authored = actor.gaitSpeeds[locomotion] ?? GAIT_SPEED.get(locomotion) ?? actor.walkSpeed
   actor.speed(GAITS.has(locomotion) ? speed / authored : 1)
+}
+
+/** Accepted events start one native toss; locomotion keeps its independent clock. */
+export function beginDynamiteThrow(
+  rider: AnimatedRider,
+  player: PlayerState,
+  until = performance.now() + DYNAMITE_THROW_SECONDS * 1000,
+): void {
+  if (player.hp <= 0) {
+    return
+  }
+  const clip = `${player.crouched ? 'Crouch_' : ''}Throw_Dynamite`
+  if (!rider.weaponLayer?.states.includes(clip)) {
+    return
+  }
+  rider.firingUntil = 0
+  rider.throwingUntil = until
+  rider.actor.weaponsVisible(false)
+  if (rider.aim) {
+    rider.aim.weight = 0
+  }
+  rider.weaponLayer.transition(clip, 0.035)
+}
+
+/** A local arms presentation follows the physical rider's accepted action deadline. */
+export function syncDynamiteThrow(rider: AnimatedRider, player: PlayerState, until: number): void {
+  const now = performance.now()
+  const deadline = player.hp > 0 && until > now ? until : 0
+  if (deadline !== (rider.throwingUntil ?? 0)) {
+    rider.throwingUntil = 0
+    if (deadline > 0) {
+      beginDynamiteThrow(rider, player, deadline)
+      if (rider.weaponLayer && rider.throwingUntil === deadline) {
+        rider.weaponLayer.activeStateCurrentTime = Math.max(
+          0,
+          DYNAMITE_THROW_SECONDS - (deadline - now) / 1000,
+        )
+      }
+    }
+  }
+  rider.actor.weaponsVisible(deadline === 0)
 }

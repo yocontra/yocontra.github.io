@@ -40,6 +40,7 @@ function fixture() {
     model: skeleton,
     held: 'revolver',
     detached: new Map(),
+    hiddenWeaponComponents: new Map(),
     weaponMounts: [{ node: gun, drawn: true, hand: 'R' }],
   })) {
     Reflect.set(actor, name, value)

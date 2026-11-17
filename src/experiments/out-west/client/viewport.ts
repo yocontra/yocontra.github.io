@@ -20,6 +20,7 @@ import { NativeRagdolls } from './ragdolls.ts'
 import { shotVisuals } from './shot-visuals.ts'
 import { aimedTarget } from './targeting.ts'
 import { touchActions } from './touch-actions.ts'
+import { createEffects } from './viewport-effects.ts'
 import { BreakableWindows } from './windows.ts'
 
 export interface GameSession {
@@ -103,24 +104,6 @@ function sampleInput(options: {
     intent.buttons |= Buttons.fire
   }
   return intent
-}
-
-function createEffects(
-  application: GameApplication,
-  actors: Actors,
-  session: GameSession,
-  windows: BreakableWindows,
-): GameEffects {
-  return new GameEffects(application, {
-    event: (event) => windows.event(event),
-    fire: (id) => actors.fire(id),
-    muzzle: (id) => actors.muzzle(id),
-    trace: (from, to) => session.cameraTrace?.(from, to),
-    riders: () => session.players,
-    selfId: () => session.selfId,
-    world: () => session.world,
-    spurs: (id) => session.appearance?.(id)?.loadout.spurs,
-  })
 }
 
 function createInput(
@@ -400,7 +383,7 @@ export function mountGameViewport(root: HTMLElement, options: ViewportOptions): 
       await actors.initialize(session.players, session.selfId, prepared)
       prepared = undefined
       input = createInput(canvas, root, settings, session.players.get(session.selfId))
-      effects = createEffects(created, actors, createdSession, windows)
+      effects = createEffects(created, actors, createdSession, { windows, items })
       await effects.ready
       if (session.world) {
         guide = new BankGuide(root, session.world.grid)

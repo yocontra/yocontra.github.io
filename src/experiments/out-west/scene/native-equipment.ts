@@ -50,11 +50,19 @@ function rigidBatch(game: GameApplication, components: RenderComponent[]): void 
   }
 }
 
+type DyeScope = 'outfit' | 'attachment'
+function supportsDye(material: unknown, scope: DyeScope): material is StandardMaterial {
+  return (
+    material instanceof StandardMaterial && (scope === 'attachment' || material.name === 'Dyeable')
+  )
+}
+
 /** Dye materials are immutable clones; disposal is installed before any asynchronous image work. */
-async function applyDye(
+export async function applyDye(
   game: GameApplication,
   model: Entity,
   dye: DyeId | undefined,
+  scope: DyeScope = 'outfit',
 ): Promise<void> {
   if (!dye || dye === 'natural') {
     return
@@ -71,7 +79,7 @@ async function applyDye(
   for (const component of model.findComponents('render')) {
     for (const instance of component.meshInstances) {
       const original = instance.material
-      if (!(original instanceof StandardMaterial) || original.name !== 'Dyeable') {
+      if (!supportsDye(original, scope)) {
         continue
       }
       let material = materials.get(original)
@@ -289,7 +297,7 @@ export async function equippedActor(
           throw new DOMException('Rider was removed', 'AbortError')
         }
         actor.root.addChild(model)
-        await applyDye(game, model, dyes[id])
+        await applyDye(game, model, dyes[id], 'attachment')
         if (id.startsWith('holster.') || id.startsWith('extra.')) {
           bindSkin(model, actor, id)
         } else {

@@ -29,9 +29,9 @@ import { openSettings } from './settings-sheet.ts'
 import { announceLevel } from './sfx.ts'
 import { button, el, panelSheet, setBar, signedMoney, swallow } from './sheet.ts'
 import { mountStanding } from './standing.ts'
-import { Outfitter } from './store.ts'
+import { Outfitter, type StoreDeps } from './store.ts'
 
-export interface HubDeps {
+export interface HubDeps extends Pick<StoreDeps, 'previewItem' | 'rotatePreview'> {
   /** True once the 3D game behind the hub has loaded. */
   ready: () => boolean
   /** Outlaw index a saved practice run would continue from. */
@@ -45,7 +45,7 @@ export interface HubDeps {
   /** The Outfitter's picture of one piece of kit (null until the game has loaded). */
   thumb: (id: ItemId) => HTMLCanvasElement | null
   /** Preview a piece's sound (the draw sounds) from the Outfitter. */
-  previewSound: (id: ItemId) => void
+  previewSound: (id: ItemId) => (() => void) | undefined
   playGauntlet: (c: GauntletChoice) => void
   bountyHunt: (m: QueueMatch, xpBefore: number | null) => void
   /** A fresh Turnstile token for the queue. */
@@ -437,23 +437,31 @@ export class Hub {
   }
 
   private openQueue(): void {
-    if (!this.deps.ready()) {
+    if (!this.deps.ready() || this.root.classList.contains('dim')) {
       return
     }
     if (this.licenceGate('bounty', 'Bounty Hunt', 'Bounty Hunt needs a licence.')) {
       return
     }
     this.root.classList.add('dim')
+    this.root.inert = true
     const q = new QueueSheet(this.parent, {
       token: () => this.deps.token(),
       matched: (match) => {
         this.root.classList.remove('dim')
+        this.root.inert = false
         this.hide()
         // read at the match, not the search: "Next duel" requeues while the last duel's XP is
         // still being fetched, and the receipt's bar should start from after that duel
         this.deps.bountyHunt(match, this.me?.xp ?? null)
       },
-      closed: () => this.root.classList.remove('dim'),
+      closed: () => {
+        this.root.classList.remove('dim')
+        this.root.inert = false
+        if (this.visible) {
+          this.root.querySelector<HTMLButtonElement>('.ow-tile-bounty')?.focus()
+        }
+      },
       rideRanked: () => {
         setLicenceWish('bounty')
         this.rideRanked()
@@ -469,20 +477,27 @@ export class Hub {
   }
 
   private openStore(): void {
-    if (!this.deps.ready()) {
+    if (!this.deps.ready() || this.root.classList.contains('shop')) {
       return
     }
     this.root.classList.add('shop')
+    this.root.inert = true
     this.deps.stage('store')
     const store = new Outfitter(this.parent, {
       me: () => this.me,
       preview: (l, dyes) => this.deps.dress(l, dyes ?? this.dyes),
       thumb: (id) => this.deps.thumb(id),
       previewSound: (id) => this.deps.previewSound(id),
+      previewItem: (id) => this.deps.previewItem?.(id),
+      rotatePreview: (degrees) => this.deps.rotatePreview?.(degrees),
       changed: (patch) => this.patch(patch),
       close: () => {
         this.root.classList.remove('shop')
+        this.root.inert = false
         this.deps.stage('hub')
+        if (this.visible) {
+          this.root.querySelector<HTMLButtonElement>('.ow-tile-store')?.focus()
+        }
       },
     })
     void store

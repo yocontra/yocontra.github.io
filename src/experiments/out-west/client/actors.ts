@@ -1,4 +1,4 @@
-import type { AnimComponentLayer, AnimTrack, ContainerResource, Entity } from 'playcanvas'
+import type { AnimComponentLayer, AnimTrack, ContainerResource, Entity, GraphNode } from 'playcanvas'
 import { Vec3 } from 'playcanvas'
 import { ASSETS, DYNAMIC_ASSETS } from '../content/manifest.ts'
 import { DEFAULT_LOADOUT, type Loadout } from '../data/catalog.ts'
@@ -8,8 +8,8 @@ import type { World } from '../ffa/sim/state.ts'
 import type { PlayerInput, PlayerState } from '../runtime/protocol.ts'
 import { RECOIL_SECONDS } from '../scene/native-animation-timing.ts'
 import { attachHeldWeapon, equippedActor } from '../scene/native-equipment.ts'
-import { prepareNativeMaterials } from '../scene/native-materials.ts'
-import { animateRider, heldWeapon } from './actor-animation.ts'
+import { animateRider, beginDynamiteThrow, heldWeapon } from './actor-animation.ts'
+import { commonCharacters } from './actor-assets.ts'
 import { createRiderPose, type RiderPose } from './actor-pose.ts'
 import type { GameApplication } from './application.ts'
 import { FirstPersonModel } from './first-person-model.ts'
@@ -41,20 +41,12 @@ export interface PreparedCharacters {
   dispose: () => void
   take: () => { actor: DuelActor; key: string; release: () => void }
 }
-async function commonCharacters(game: GameApplication): Promise<() => void> {
-  const [, fallback] = await Promise.all([
-    game.loadContainer(ASSETS.moves.url),
-    game.loadContainer(ASSETS['outlaw-0'].url),
-    game.loadContainer(heldUrl('rifle')),
-    game.loadContainer(heldUrl('shotgun')),
-  ])
-  return prepareNativeMaterials(game, fallback.resource as ContainerResource)
-}
 interface Rider {
   actor: DuelActor
   key: string
   clip: string
   firingUntil: number
+  throwingUntil: number
   dead: boolean
   aim: AnimComponentLayer | undefined
   weaponLayer: AnimComponentLayer | undefined
@@ -272,6 +264,7 @@ export class Actors {
       key,
       clip: '',
       firingUntil: 0,
+      throwingUntil: 0,
       dead: false,
       aim,
       weaponLayer,
@@ -384,6 +377,7 @@ export class Actors {
       }
       actor.hold(weapon, player.hp > 0)
       animateRider(rider, player, { first: false, domain })
+      actor.weaponsVisible(performance.now() >= rider.throwingUntil)
     }
     this.firstPerson.update(firstPersonId ? this.firstPersonRequest(firstPersonId) : undefined)
     this.removeDeparted(players)
@@ -405,6 +399,7 @@ export class Actors {
           player,
           domain: this.world()?.players[Number(id)] ?? undefined,
           appearance: this.appearance(id),
+          throwingUntil: rider.throwingUntil,
         }
       : undefined
   }
@@ -449,6 +444,8 @@ export class Actors {
   fire(id: string): void {
     const rider = this.actors.get(id)
     if (rider) {
+      rider.throwingUntil = 0
+      rider.actor.weaponsVisible(true)
       rider.firingUntil = performance.now() + RECOIL_SECONDS * 1000
       rider.actor.fireWeapon()
       this.firstPerson.fire(id, this.players.get(id)?.crouched ?? false)
@@ -457,6 +454,27 @@ export class Actors {
         rider.weaponLayer.transition(clip, 0)
         rider.pose.root.anim?.update(0)
       }
+    }
+  }
+  /** Accepted events start one native toss; rejected input cannot animate a throw. */
+  throwDynamite(id: string): () => GraphNode | null {
+    const rider = this.actors.get(id)
+    const player = this.players.get(id)
+    if (!(rider && player) || player.hp <= 0) {
+      return () => null
+    }
+    beginDynamiteThrow(rider, player)
+    const until = rider.throwingUntil
+    return () =>
+      this.actors.get(id) === rider && rider.throwingUntil === until && performance.now() < until
+        ? (this.firstPerson.wrist(id) ?? rider.actor.model.findByName('WristR'))
+        : null
+  }
+  cancelThrow(id: string): void {
+    const rider = this.actors.get(id)
+    if (rider) {
+      rider.throwingUntil = 0
+      rider.actor.weaponsVisible(true)
     }
   }
   muzzle(id: string): { position: Vec3; direction: Vec3 } | null {

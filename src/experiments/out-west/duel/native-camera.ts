@@ -25,6 +25,7 @@ const lerpVec = (a: Vec3, b: Vec3, k: number): Vec3 => new Vec3().lerp(a, b, k)
  */
 export class CameraRig {
   name = ''
+  owner: 'hub' | 'duel' | null = null
   trauma = 0
   decay = 1.5
   reduced = false as boolean
@@ -42,8 +43,9 @@ export class CameraRig {
   }
 
   /** Switch to a new shot; with `blend` > 0 ease from the current framing over that many seconds. */
-  cut(name: string, fn: ShotFn, blend = 0): void {
+  cut(name: string, fn: ShotFn, blend = 0, owner: 'hub' | 'duel' = 'duel'): void {
     this.name = name
+    this.owner = owner
     this.shot = fn
     this.t = 0
     this.blend = this.hasLast ? blend : 0
@@ -57,6 +59,7 @@ export class CameraRig {
   release(): void {
     this.shot = null
     this.name = ''
+    this.owner = null
     this.hasLast = false
     this.trauma = 0
   }

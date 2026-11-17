@@ -8,6 +8,7 @@ import streetLife from '../../src/experiments/out-west/content/street-life.json'
   type: 'json',
 }
 import type { ContentAsset } from '../../src/experiments/out-west/content/types.ts'
+import { VIEWMODELS } from '../../src/experiments/out-west/content/viewmodels.ts'
 import { CATALOG } from '../../src/experiments/out-west/data/catalog.ts'
 import { TOWN } from '../../src/experiments/out-west/ffa/sim/layout.ts'
 import { bakeCharacterClips } from './character-clips.ts'
@@ -154,6 +155,7 @@ export async function buildManifest(): Promise<void> {
     .update(JSON.stringify(dynamic))
     .update(JSON.stringify(arenaConfigs))
     .update(JSON.stringify(equipment))
+    .update(JSON.stringify(VIEWMODELS))
     .update(JSON.stringify(environment))
     .update(JSON.stringify(atmosphere))
     .update(JSON.stringify(TOWN))

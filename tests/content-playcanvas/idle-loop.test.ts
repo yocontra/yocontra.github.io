@@ -21,8 +21,10 @@ function retained(document: Document) {
     document
       .getRoot()
       .listAnimations()
-      // The separately verified victory gesture is newly authored, outside the idle repair.
-      .filter((clip) => clip.getName() !== 'TipHat')
+      // Separately tested gestures are outside the retained idle repair.
+      .filter(
+        (clip) => !['TipHat', 'Throw_Dynamite', 'Crouch_Throw_Dynamite'].includes(clip.getName()),
+      )
       .flatMap((clip) =>
         clip.listChannels().flatMap((channel) => {
           const bone = channel.getTargetNode()?.getName() ?? ''
@@ -159,7 +161,7 @@ it('native idle loops close while other clips, times and geometry remain authore
   const document = await io.read(
     process.env.OW_IDLE_MOVES ?? 'public/experiments/out-west/3d/native-v2/baked/moves.glb',
   )
-  expect(document.getRoot().listAnimations()).toHaveLength(75)
+  expect(document.getRoot().listAnimations()).toHaveLength(77)
   // Includes the seven Pair poses; paired-assets and paired-crouch tests separately pin
   // all68 unchanged legacy clips and verify the standing/crouched source curves.
   expect(retained(document)).toBe(

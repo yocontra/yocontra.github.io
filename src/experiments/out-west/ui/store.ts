@@ -29,6 +29,7 @@ import { button, closeButton, confirmSheet, el, swallow } from './sheet.ts'
 import { dyePanel } from './store-dye.ts'
 import { inReach, SETS, Shelf, setOf, wearSet } from './store-kit.ts'
 import { buyLabel, keptLoadout, recallOne, remember, TAB_KEY } from './store-memory.ts'
+import { StorePreview } from './store-preview.ts'
 import { BAKED_THUMBS } from './thumbs.ts'
 
 const SLOT_TABS: readonly { slot: Slot; label: string }[] = [
@@ -97,11 +98,14 @@ export interface StoreDeps {
   /** Render one item's thumbnail (null: nothing to see, or the game isn't loaded). */
   thumb?: (id: ItemId) => HTMLCanvasElement | null
   /** Play a draw sound's preview when its card is picked. */
-  previewSound?: (id: ItemId) => void
+  previewSound?: (id: ItemId) => (() => void) | undefined
+  previewItem?: (id: ItemId | null) => void
+  rotatePreview?: (degrees: number) => void
 }
 
 export class Outfitter {
   private readonly root: HTMLElement
+  private readonly dialog: HTMLElement
   private readonly list: HTMLElement
   private readonly purseEl: HTMLElement
   private readonly detail: HTMLElement
@@ -120,12 +124,23 @@ export class Outfitter {
   /** Cards waiting for their thumbnail, rendered one per frame. */
   private readonly waiting: { id: ItemId; art: HTMLElement }[] = []
   private drawing = false as boolean
+  private closed = false as boolean
+  private readonly lifecycle = new AbortController()
+  private readonly preview: StorePreview
 
   constructor(parent: HTMLElement, deps: StoreDeps) {
     this.deps = deps
-    this.root = el('div', 'ow-store', parent)
-    this.root.setAttribute('role', 'dialog')
-    this.root.setAttribute('aria-label', 'The Outfitter')
+    this.dialog = el('div', 'ow-store-dialog', parent)
+    this.dialog.setAttribute('role', 'dialog')
+    this.dialog.setAttribute('aria-label', 'The Outfitter')
+    swallow(this.dialog)
+    this.preview = new StorePreview(this.dialog, {
+      me: deps.me,
+      item: (id) => deps.previewItem?.(id),
+      rotate: (degrees) => deps.rotatePreview?.(degrees),
+      sound: (id) => deps.previewSound?.(id),
+    })
+    this.root = el('div', 'ow-store', this.dialog)
     swallow(this.root)
     const head = el('div', 'ow-store-head', this.root)
     el('h2', 'ow-hub-h', head, 'Outfitter')
@@ -138,6 +153,7 @@ export class Outfitter {
       b.type = 'button'
       b.append(icon(ic), label)
       b.setAttribute('role', 'tab')
+      b.dataset.slot = t
       b.addEventListener('click', (e) => {
         e.stopPropagation()
         this.show(t)
@@ -156,13 +172,18 @@ export class Outfitter {
       this.shelf = new Shelf(me.accountId, this.items, me.level, this.owned)
     }
     this.show('hat')
-    requestAnimationFrame(() => this.root.classList.add('on'))
+    this.tabs.get(this.tab)?.focus({ preventScroll: true })
+    requestAnimationFrame(() => {
+      if (!this.closed) {
+        this.root.classList.add('on')
+      }
+    })
     this.load().catch(() => undefined)
   }
 
   private async load(): Promise<void> {
     const r = await fetchStore()
-    if (!r.ok) {
+    if (!r.ok || this.closed) {
       return
     }
     if (r.value.items.length > 0) {
@@ -182,11 +203,25 @@ export class Outfitter {
   }
 
   private tryOn(l: Loadout, dyes?: Dyes): void {
+    if (this.closed) {
+      return
+    }
     this.wearing = l
+    this.preview.show(null, l)
     this.deps.preview(l, dyes)
   }
 
   private show(tab: Tab): void {
+    if (this.closed) {
+      return
+    }
+    const selected = this.picked?.slot === tab ? this.picked : null
+    const preview =
+      selected && ['frame', 'drawSound', 'saddlebag'].includes(selected.slot) ? selected : null
+    const loadout = preview
+      ? { ...this.equipped, [preview.slot]: preview.id }
+      : (this.wearing ?? this.equipped)
+    this.preview.show(preview, loadout)
     this.tab = tab
     remember(TAB_KEY, tab)
     const me = this.deps.me()
@@ -246,13 +281,16 @@ export class Outfitter {
 
   /** One thumbnail per frame, so a tab of new pieces never hitches the street behind. */
   private drawThumbs(): void {
+    if (this.closed) {
+      return
+    }
     if (this.drawing || !this.deps.thumb) {
       return
     }
     this.drawing = true
     const step = (): void => {
       const next = this.waiting.shift()
-      if (!(next && this.root.isConnected)) {
+      if (this.closed || !(next && this.root.isConnected)) {
         this.drawing = false
         return
       }
@@ -383,11 +421,17 @@ export class Outfitter {
   }
 
   private pick(item: CatalogItem): void {
+    if (this.closed) {
+      return
+    }
     this.picked = item
     this.tryDye = null
-    this.tryOn({ ...this.equipped, [item.slot]: item.id })
-    if (item.slot === 'drawSound') {
-      this.deps.previewSound?.(item.id)
+    const loadout = { ...this.equipped, [item.slot]: item.id }
+    if (['frame', 'drawSound', 'saddlebag'].includes(item.slot)) {
+      this.wearing = loadout
+      this.preview.show(item, loadout, true)
+    } else {
+      this.tryOn(loadout)
     }
     this.show(item.slot)
   }
@@ -465,11 +509,12 @@ export class Outfitter {
 
   private async dye(item: CatalogItem, dye: DyeId, price: number): Promise<void> {
     const me = this.deps.me()
-    if (!me || this.busy) {
+    if (this.closed || !me || this.busy) {
       return
     }
     const colour = DYES.find((d) => d.id === dye)?.name ?? dye
     const yes = await confirmSheet(this.root.parentElement ?? this.root, {
+      signal: this.lifecycle.signal,
       title: dye === 'natural' ? `Remove dye from ${item.name}?` : `Dye ${item.name} ${colour}?`,
       body:
         dye === 'natural'
@@ -477,7 +522,7 @@ export class Outfitter {
           : `Costs ${money(price)}. You have ${money(me.purse)}.`,
       yes: dye === 'natural' ? 'Remove dye' : `Dye · ${money(price)}`,
     })
-    if (!yes) {
+    if (!yes || this.closed) {
       return
     }
     this.busy = true
@@ -487,10 +532,13 @@ export class Outfitter {
       this.flash(r.error)
       return
     }
+    this.deps.changed({ purse: r.value.purse, dyes: r.value.dyes })
+    if (this.closed) {
+      return
+    }
     uiSound('uiBuy')
     this.tryDye = null
-    this.deps.changed({ purse: r.value.purse, dyes: r.value.dyes })
-    this.deps.preview(this.equipped, r.value.dyes)
+    this.tryOn({ ...this.equipped, [item.slot]: item.id }, r.value.dyes)
     this.show(this.tab)
   }
 
@@ -533,19 +581,20 @@ export class Outfitter {
 
   private async buy(item: CatalogItem): Promise<void> {
     const me = this.deps.me()
-    if (!me || this.busy) {
+    if (this.closed || !me || this.busy) {
       return
     }
     const extra = this.dyeExtra(item)
     const total = item.price + (extra?.price ?? 0)
     const yes = await confirmSheet(this.root.parentElement ?? this.root, {
+      signal: this.lifecycle.signal,
       title: `Buy ${item.name}?`,
       body: extra
         ? `${item.name} ${money(item.price)} + dye ${money(extra.price)} = ${money(total)}. You have ${money(me.purse)}. No refunds.`
         : `Costs ${money(item.price)}. You have ${money(me.purse)}. No refunds.`,
       yes: extra ? `Buy + dye · ${money(total)}` : `Buy · ${money(item.price)}`,
     })
-    if (!yes) {
+    if (!yes || this.closed) {
       return
     }
     this.busy = true
@@ -557,7 +606,7 @@ export class Outfitter {
     }
     this.owned = new Set(r.value.owned)
     this.deps.changed({ purse: r.value.purse, owned: r.value.owned })
-    if (extra) {
+    if (extra && !this.closed) {
       // the dye is the extra on the same purchase; the server owns the final price
       const d = await dyeItem(item.id, extra.dye)
       if (d.ok) {
@@ -568,12 +617,15 @@ export class Outfitter {
       }
     }
     this.busy = false
+    if (this.closed) {
+      return
+    }
     uiSound('uiBuy')
     await this.equip({ ...this.equipped, [item.slot]: item.id })
   }
 
-  private async equip(l: Loadout): Promise<void> {
-    if (!this.deps.me()) {
+  private async equip(l: Loadout, finalizing = false): Promise<void> {
+    if ((!finalizing && this.closed) || !this.deps.me()) {
       return
     }
     const r = await saveLoadout(l)
@@ -582,24 +634,36 @@ export class Outfitter {
       return
     }
     this.deps.changed({ loadout: r.value.loadout })
+    if (this.closed) {
+      return
+    }
     this.deps.preview(r.value.loadout)
     this.show(this.tab)
   }
 
   private flash(msg: string): void {
+    if (this.closed) {
+      return
+    }
     this.detail.replaceChildren()
     el('p', 'ow-hub-note ow-store-error', this.detail, msg)
   }
 
   /** Done: owned pieces you're trying on stay on (`keptLoadout`); the rest come off. */
   close(): void {
+    if (this.closed) {
+      return
+    }
+    this.closed = true
+    this.lifecycle.abort()
+    this.preview.destroy()
     const kept = keptLoadout(this.wearing, this.equipped, this.owned)
     if (kept) {
-      this.equip(kept).catch(() => undefined)
+      this.equip(kept, true).catch(() => undefined)
     }
     this.deps.preview(kept ?? this.equipped, this.dyes)
     this.root.classList.remove('on')
-    setTimeout(() => this.root.remove(), 250)
+    setTimeout(() => this.dialog.remove(), 250)
     this.deps.close()
   }
 }

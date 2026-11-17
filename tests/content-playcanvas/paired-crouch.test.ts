@@ -63,7 +63,7 @@ async function candidate(seed?: Document): Promise<Document> {
   return doc
 }
 
-it('the real isolated producer emits75 unique clips with68 golden legacy streams and final paired crouch curves', async () => {
+it('the real isolated producer emits77 unique clips with68 golden legacy streams and final paired crouch curves', async () => {
   const publicPath = 'public/experiments/out-west/3d/native-v2/baked/moves.glb'
   const originalPublic = await readFile(publicPath)
   const temporary = await mkdtemp(join(tmpdir(), 'out-west-crouch-'))
@@ -75,8 +75,8 @@ it('the real isolated producer emits75 unique clips with68 golden legacy streams
       .getRoot()
       .listAnimations()
       .map((clip) => clip.getName())
-    expect(names).toHaveLength(75)
-    expect(new Set(names).size).toBe(75)
+    expect(names).toHaveLength(77)
+    expect(new Set(names).size).toBe(77)
     const golden = JSON.parse(
       await readFile('tests/fixtures/paired-legacy-clips.json', 'utf8'),
     ) as { clips: Record<string, string> }
@@ -84,15 +84,18 @@ it('the real isolated producer emits75 unique clips with68 golden legacy streams
       doc
         .getRoot()
         .listAnimations()
-        .filter((clip) => !clip.getName().endsWith('_Pair'))
+        .filter(
+          (clip) =>
+            !(clip.getName().endsWith('_Pair') || clip.getName().endsWith('Throw_Dynamite')),
+        )
         .map((clip) => [clip.getName(), clipHash(clip)]),
     )
     expect(Object.keys(legacy)).toHaveLength(68)
     expect(legacy).toEqual(golden.clips)
     expect((await readFile(publicPath)).equals(originalPublic)).toBe(true)
-    // Rebuilding an already-generated75-clip seed must replace these two names.
+    // Rebuilding an already-generated77-clip seed must replace these two names.
     const expected = await candidate(await io.read(join(temporary, 'baked', 'moves.glb')))
-    expect(expected.getRoot().listAnimations()).toHaveLength(75)
+    expect(expected.getRoot().listAnimations()).toHaveLength(77)
     for (const name of PAIRED) {
       expect(clipHash(find(doc, `Crouch_${name}`))).toBe(clipHash(find(expected, `Crouch_${name}`)))
     }
@@ -106,7 +109,7 @@ it('paired crouch preserves legacy streams, rig and every corrected arm/finger c
   const legacy = before
     .getRoot()
     .listAnimations()
-    .filter((a) => !a.getName().endsWith('_Pair'))
+    .filter((a) => !(a.getName().endsWith('_Pair') || a.getName().endsWith('Throw_Dynamite')))
   expect(legacy).toHaveLength(68)
   const doc = await candidate()
   for (const clip of legacy) {

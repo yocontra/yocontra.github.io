@@ -147,9 +147,9 @@ function refreshNeckNormals(primitive: Primitive, range: Range, origin: Vec3, sc
       .map((v, k) => (v - (origin[k] ?? 0)) / scale)
     const weight =
       smoothstep(-0.06, -0.04, y) *
-      (1 - smoothstep(0.055, 0.09, y)) *
+      (1 - smoothstep(0.055, 0.085, y)) *
       smoothstep(-0.005, -0.025, z) *
-      (1 - smoothstep(0.055, 0.075, Math.abs(x)))
+      (1 - smoothstep(0.06, 0.075, Math.abs(x)))
     if (weight === 0) {
       continue
     }

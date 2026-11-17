@@ -49,6 +49,8 @@ const CLIPS = [
   'Crouch_Reload',
   'Crouch_Idle_Gun_Pointing',
   'Crouch_Gun_Shoot',
+  'Throw_Dynamite',
+  'Crouch_Throw_Dynamite',
   'Aim_Up',
   'Aim_Down',
   'Crouch_Aim_Up',
@@ -62,6 +64,13 @@ const CLIPS = [
   'Crouch_Shoot_rifle',
   'Crouch_Shoot_shotgun',
 ]
+
+function clipSeconds(name: string): number {
+  if (name.endsWith('Throw_Dynamite')) {
+    return 0.7
+  }
+  return name.includes('Shoot') ? 0.2 : 1
+}
 
 function fixtureAsset(
   app: AppBase,
@@ -86,7 +95,7 @@ function fixtureAsset(
         )
   const animations = clips.map((name) => {
     const asset = new Asset(name, 'animation')
-    asset.resource = new AnimTrack(name, name.includes('Shoot') ? 0.2 : 1, [], [], [])
+    asset.resource = new AnimTrack(name, clipSeconds(name), [], [], [])
     return asset
   })
   const value = {
@@ -218,9 +227,7 @@ export function firstPersonFixture() {
     id: 'self',
     world: {
       root: world,
-      tracks: CLIPS.map(
-        (name) => new AnimTrack(name, name.includes('Shoot') ? 0.2 : 1, [], [], []),
-      ),
+      tracks: CLIPS.map((name) => new AnimTrack(name, clipSeconds(name), [], [], [])),
     } as unknown as DuelActor,
     domain: undefined,
     appearance: undefined,

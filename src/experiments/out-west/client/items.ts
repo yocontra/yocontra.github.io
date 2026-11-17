@@ -1,8 +1,18 @@
-import { BLEND_NORMAL, Color, type ContainerResource, Entity, StandardMaterial } from 'playcanvas'
+import {
+  BLEND_NORMAL,
+  Color,
+  type ContainerResource,
+  Entity,
+  type GraphNode,
+  StandardMaterial,
+  Vec3,
+} from 'playcanvas'
 import { DYNAMIC_ASSETS } from '../content/manifest.ts'
 import type { World } from '../ffa/sim/state.ts'
+import type { SimEvent } from '../ffa/sim/types.ts'
 import { prepareNativeMaterials } from '../scene/native-materials.ts'
 import type { GameApplication } from './application.ts'
+import { DynamiteFlight } from './dynamite-flight.ts'
 
 const ITEM_KINDS = [
   'rifle',
@@ -20,6 +30,7 @@ export class FrontierItems {
   private readonly game: GameApplication
   private readonly models = new Map<keyof typeof DYNAMIC_ASSETS, ContainerResource>()
   private readonly items = new Map<string, Entity>()
+  private readonly flights = new Map<DynamiteFlight, Entity>()
   private readonly marker = new StandardMaterial()
   private tick = -1
   private disposed = false as boolean
@@ -73,6 +84,7 @@ export class FrontierItems {
     if (this.disposed || !world) {
       return
     }
+    this.animateThrows()
     if (world.tick === this.tick) {
       return
     }
@@ -105,6 +117,14 @@ export class FrontierItems {
       }
     }
     for (const fuse of world.fuses) {
+      if (
+        [...this.flights.keys()].some(
+          (flight) =>
+            flight.by === fuse.by && flight.target.x === fuse.x && flight.target.z === fuse.z,
+        )
+      ) {
+        continue
+      }
       this.place(
         `fuse:${fuse.by}:${fuse.explodeAt}`,
         'dynamite',
@@ -117,6 +137,43 @@ export class FrontierItems {
         entity.destroy()
         this.items.delete(key)
       }
+    }
+  }
+  throwDynamite(
+    event: Extract<SimEvent, { type: 'dynamite_thrown' }>,
+    origin: Vec3,
+    hand: () => GraphNode | null,
+  ): void {
+    const resource = this.models.get('dynamite')
+    if (this.disposed || !resource) {
+      return
+    }
+    const flight = new DynamiteFlight({
+      by: event.player,
+      target: new Vec3(event.x, 0.05, event.z),
+      started: performance.now(),
+      hand,
+      origin,
+    })
+    const item = resource.instantiateRenderEntity({ castShadows: false, receiveShadows: true })
+    item.setPosition(origin)
+    this.game.stage.addChild(item)
+    this.flights.set(flight, item)
+    // Reconcile the destination marker even when this event follows its snapshot.
+    this.tick = -1
+  }
+  private animateThrows(): void {
+    const now = performance.now()
+    for (const [flight, item] of this.flights) {
+      const sample = flight.sample(now)
+      if (sample.done) {
+        item.destroy()
+        this.flights.delete(flight)
+        this.tick = -1
+        continue
+      }
+      item.setPosition(flight.position)
+      item.setEulerAngles(sample.held ? 0 : sample.progress * 720, 0, 65)
     }
   }
   private place(
@@ -154,6 +211,10 @@ export class FrontierItems {
       return
     }
     this.disposed = true
+    for (const item of this.flights.values()) {
+      item.destroy()
+    }
+    this.flights.clear()
     for (const item of this.items.values()) {
       item.destroy()
     }

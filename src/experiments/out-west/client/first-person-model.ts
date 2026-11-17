@@ -20,7 +20,7 @@ import type { PlayerInput, PlayerState } from '../runtime/protocol.ts'
 import { RECOIL_SECONDS } from '../scene/native-animation-timing.ts'
 import { attachHeldWeapon, equippedActor, fitId } from '../scene/native-equipment.ts'
 import { playWeaponMount } from '../scene/native-weapon-animation.ts'
-import { animateRider, heldWeapon } from './actor-animation.ts'
+import { animateRider, heldWeapon, syncDynamiteThrow } from './actor-animation.ts'
 import { createRiderPose, type RiderPose } from './actor-pose.ts'
 import type { Appearance } from './actors.ts'
 import type { GameApplication } from './application.ts'
@@ -42,6 +42,7 @@ export interface FirstPersonRequest {
   player: PlayerState
   domain: Player | undefined
   appearance: Appearance | undefined
+  throwingUntil?: number
 }
 interface Arms {
   key: string
@@ -52,6 +53,7 @@ interface Arms {
   aim: AnimComponentLayer
   weaponLayer: AnimComponentLayer
   firingUntil: number
+  throwingUntil: number
   head: GraphNode | null
 }
 // Viewmodel projection on the screen's shorter axis, independent of the player's world FOV.
@@ -243,6 +245,7 @@ export class FirstPersonModel {
         aim: pose.aim,
         weaponLayer: pose.weapon,
         firingUntil: 0,
+        throwingUntil: 0,
         head: actor.model.findByName('Head'),
       }
       actor.root.tags.add(`viewmodel:${request.id}`)
@@ -253,6 +256,7 @@ export class FirstPersonModel {
       }
       // Settle the candidate's native pose before it can replace working arms.
       actor.hold(heldWeapon(desired.domain), true)
+      syncDynamiteThrow(arms, desired.player, desired.throwingUntil ?? 0)
       animateRider(arms, desired.player, { first: true, domain: desired.domain })
       actor.model.anim?.update(0)
       pose.root.anim?.update(0)
@@ -317,6 +321,8 @@ export class FirstPersonModel {
       }
       actor.root.enabled = false
       this.current.firingUntil = 0
+      this.current.throwingUntil = 0
+      actor.weaponsVisible(true)
     }
     this.motion.reset()
     this.sighted = false
@@ -342,6 +348,7 @@ export class FirstPersonModel {
       this.sighted = false
     }
     arms.actor.hold(heldWeapon(request.domain), true)
+    syncDynamiteThrow(arms, request.player, request.throwingUntil ?? 0)
     animateRider(arms, request.player, { first: true, domain: request.domain })
     if (!arms.actor.muzzleSocket(true)) {
       this.hide()
@@ -465,12 +472,19 @@ export class FirstPersonModel {
   muzzle(id: string): ReturnType<DuelActor['muzzle']> {
     return this.ready && this.desired?.id === id ? (this.current?.actor.muzzle() ?? null) : null
   }
+  wrist(id: string): GraphNode | null {
+    return this.ready && this.desired?.id === id
+      ? (this.current?.actor.model.findByName('WristR') ?? null)
+      : null
+  }
   fire(id: string, crouched: boolean): void {
     const arms = this.current
     if (!(arms && this.ready) || this.desired?.id !== id) {
       return
     }
     arms.firingUntil = performance.now() + RECOIL_SECONDS * 1000
+    arms.throwingUntil = 0
+    arms.actor.weaponsVisible(true)
     arms.actor.fireWeapon()
     const clip = arms.actor.shotClip(crouched)
     if (arms.weaponLayer.states.includes(clip)) {

@@ -14,7 +14,7 @@ import { prepareNativeMaterials } from '../scene/native-materials.ts'
 import { authoredMounts, type WeaponMount } from '../scene/native-mounts.ts'
 import { animateRevolvers, playWeaponMount } from '../scene/native-weapon-animation.ts'
 
-const ONE_SHOT = /Death|Shoot|Hit|Attack|React|Draw|Flinch|Spin|TipHat/u
+const ONE_SHOT = /Death|Shoot|Hit|Attack|React|Draw|Flinch|Spin|TipHat|Throw/u
 const HUMANOID = /\/(?:baked\/(?:outlaw-|player)|equipment\/outfit\.)/u
 const GAIT = /^(?:Stride_|Walk$|Run$|Sprint$|Crouch_Walk$)/u
 const DRAWN = /Pointing|Shoot|Death|Hit|Draw|Spin|Flinch/u

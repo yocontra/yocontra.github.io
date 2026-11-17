@@ -14,10 +14,16 @@ import {
   RenderComponentSystem,
   Texture,
 } from 'playcanvas'
+import {
+  animateRider,
+  beginDynamiteThrow,
+} from '../../src/experiments/out-west/client/actor-animation.ts'
+import { createRiderPose } from '../../src/experiments/out-west/client/actor-pose.ts'
 import type { GameApplication } from '../../src/experiments/out-west/client/application.ts'
 import { AMBIENT_ASSETS } from '../../src/experiments/out-west/content/ambient.ts'
 import { ASSETS } from '../../src/experiments/out-west/content/manifest.ts'
 import { DuelActor } from '../../src/experiments/out-west/duel/native-actor.ts'
+import type { PlayerState } from '../../src/experiments/out-west/runtime/protocol.ts'
 import { extractFirstPersonArms } from '../../tools/content/first-person-arms.ts'
 
 const FIT = 'outfit.trail-duds'
@@ -144,7 +150,7 @@ it('real clip-free arms reuse physical merged tracks before native graph/index/m
     physical = await DuelActor.create(f.game, PHYSICAL, 'physical')
     const native = await f.game.loadContainer(PHYSICAL)
     const moves = await f.game.loadContainer(ASSETS.moves.url)
-    expect(physical.tracks).toHaveLength(85)
+    expect(physical.tracks).toHaveLength(87)
     expect(physical.animationTrack('Gun_Shoot')).toBe(track(native, 'Gun_Shoot'))
     expect(physical.animationTrack('Gun_Shoot')).not.toBe(track(moves, 'Gun_Shoot'))
     const before = keyframes(physical.tracks)
@@ -156,7 +162,7 @@ it('real clip-free arms reuse physical merged tracks before native graph/index/m
     expect(resource(await f.game.loadContainer(ARMS)).animations).toHaveLength(0)
     expect(arms.root.enabled).toBe(false)
     expect(arms.tracks).not.toBe(physical.tracks)
-    expect(arms.tracks).toHaveLength(85)
+    expect(arms.tracks).toHaveLength(87)
     for (const [index, entry] of arms.tracks.entries()) {
       expect(physical.tracks[index]).toBe(entry)
       expect(arms.animationTrack(entry.name)).toBe(entry)
@@ -221,7 +227,7 @@ it('an explicit humanoid builds native shared animation on an empty-clip geometr
       enabled: true,
       humanoid: true,
     })
-    expect(actor.tracks).toHaveLength(75)
+    expect(actor.tracks).toHaveLength(77)
     expect(actor.hasAnimation('Idle_Character')).toBe(true)
     expect(actor.hasAnimation('Gun_Shoot')).toBe(true)
     actor.play('Gun_Shoot', 0)
@@ -337,6 +343,75 @@ it('paired local carry and disabled socket inspection use native authored mount 
     Reflect.deleteProperty(legacyRight, 'hand')
     expect(actor.detach('gun', 'R')).toBe(right.node)
     actor.restoreAttachments()
+  } finally {
+    actor?.destroy()
+    expect(await f.destroy()).toEqual({ textures: 0, buffers: 0 })
+  }
+})
+
+it('native dynamite upper-body timing survives gait and stance changes and clears on death', async () => {
+  const f = fixture()
+  let actor: DuelActor | undefined
+  try {
+    actor = await DuelActor.create(f.game, PHYSICAL, 'throwing rider')
+    const pose = createRiderPose(f.game, actor)
+    const rider = {
+      actor,
+      clip: '',
+      aim: pose.aim,
+      weaponLayer: pose.weapon,
+      firingUntil: 0,
+      throwingUntil: 0,
+    }
+    const player: PlayerState = {
+      id: '0',
+      x: 0,
+      y: 0.9,
+      z: 0,
+      vx: 0,
+      vy: 0,
+      vz: 0,
+      yaw: 0,
+      pitch: 0.7,
+      grounded: true,
+      crouched: false,
+      hp: 100,
+      ammo: 6,
+      seq: 0,
+    }
+    beginDynamiteThrow(rider, player)
+    pose.root.anim?.update(0.035)
+    expect(pose.weapon.activeState).toBe('Throw_Dynamite')
+    expect(pose.aim.weight).toBe(0)
+    rider.throwingUntil = performance.now() + 10_000
+    pose.weapon.activeStateCurrentTime = 0.15
+    player.vx = 5.5
+    animateRider(rider, player, { first: true, domain: undefined })
+    expect(rider.clip).toStartWith('Stride_Run')
+    expect(pose.root.anim?.speed).toBe(1)
+    pose.root.anim?.update(0.1)
+    expect(pose.weapon.activeStateCurrentTime).toBeCloseTo(0.25)
+    player.crouched = true
+    animateRider(rider, player, { first: true, domain: undefined })
+    expect(pose.weapon.activeState).toBe('Crouch_Throw_Dynamite')
+    expect(pose.weapon.activeStateCurrentTime).toBeCloseTo(0.25)
+    player.vx = 0
+    player.crouched = false
+    animateRider(rider, player, { first: false, domain: undefined })
+    expect(pose.weapon.activeStateCurrentTime).toBeCloseTo(0.25)
+    pose.root.anim?.update(1)
+    expect(pose.weapon.activeStateCurrentTime).toBeCloseTo(0.7, 6)
+    player.hp = 0
+    animateRider(rider, player, { first: true, domain: undefined })
+    expect(rider.throwingUntil).toBe(0)
+    expect(pose.weapon.weight).toBe(0)
+    player.hp = 100
+    animateRider(rider, player, { first: true, domain: undefined })
+    expect(pose.weapon.activeState).toBe('Idle_Gun_Pointing')
+    expect(pose.weapon.weight).toBe(1)
+    player.hp = 0
+    beginDynamiteThrow(rider, player)
+    expect(rider.throwingUntil).toBe(0)
   } finally {
     actor?.destroy()
     expect(await f.destroy()).toEqual({ textures: 0, buffers: 0 })

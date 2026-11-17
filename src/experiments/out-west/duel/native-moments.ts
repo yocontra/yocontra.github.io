@@ -441,7 +441,7 @@ export function dieInStyle(d: NativeDirector, victim: DuelActor, grade: string):
 }
 
 /** Leave the duel's presentation cleanly (the saloon, a special mode, disposal). */
-export function clearMoments(d: NativeDirector): void {
+export function clearMoments(d: NativeDirector, preserveCamera = false): void {
   d.game.app.timeScale = 1
   if (d.m.flash > 0) {
     d.game.app.scene.exposure = d.m.baseExposure
@@ -456,5 +456,7 @@ export function clearMoments(d: NativeDirector): void {
   d.c.hud.letterbox(false)
   d.c.hud.marker(null, null)
   d.c.audio.stopAmbience()
-  d.rig.release()
+  if (!preserveCamera) {
+    d.rig.release()
+  }
 }

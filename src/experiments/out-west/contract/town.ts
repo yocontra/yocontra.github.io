@@ -22,7 +22,12 @@ export const TOWN_WIRE_VERSION = 10
  * money, sits at the same spot, and has the same pickup radius, exclusivity and expiry. An unknown
  * index renders as the Plain Sack.
  */
-export const BAG_STYLES = ['bag.plain-sack', 'bag.branded-satchel', 'bag.gold-thread'] as const
+export const BAG_STYLES = [
+  'bag.plain-sack',
+  'bag.branded-satchel',
+  'bag.gold-thread',
+  'bag.medal-satchel',
+] as const
 export type BagStyle = (typeof BAG_STYLES)[number]
 
 /** The wire index of a saddlebag item id (0, the Plain Sack, for anything else). */

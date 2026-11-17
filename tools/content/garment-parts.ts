@@ -50,6 +50,8 @@ async function artifacts(
     'coat-collars',
     'shirt-fronts',
     'neckerchiefs',
+    'facial-hair',
+    'beards',
     ...(firstPersonSleeves ? ['first-person-sleeves'] : []),
   ]) {
     const path = resolve('tools/art/characters', category, `${id}.glb`)

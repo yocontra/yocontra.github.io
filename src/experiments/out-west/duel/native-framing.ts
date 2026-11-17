@@ -57,20 +57,22 @@ function muzzleOf(actor: DuelActor): Vec3 {
   )
 }
 
-/** The original 14-second title crane; reduced motion keeps the grounded street view. */
+/** Establish the street once, then hold it; reduced motion starts at the grounded view. */
 export function titleShot(d: NativeDirector): void {
-  d.rig.cut('title', (t) => {
-    const cycle = t % 14
-    const down = easeInOutCubic(clamp01(cycle / 6.5))
-    const back = easeInOutCubic(clamp01((cycle - 7) / 7))
-    const e = reduced(d) ? 1 : down * (1 - back)
-    return {
-      pos: V(math.lerp(0.5, 2.2, e), math.lerp(19, 2, e), math.lerp(56, 18, e)),
-      look: V(0, math.lerp(9, 1.6, e), math.lerp(0, -12, e)),
-      fov: math.lerp(38, 42, e),
-      handheld: 0.15,
-    }
-  })
+  d.rig.cut(
+    'title',
+    (t) => {
+      const e = reduced(d) ? 1 : easeInOutCubic(clamp01(t / 14))
+      return {
+        pos: V(math.lerp(0.5, 2.2, e), math.lerp(19, 2, e), math.lerp(56, 18, e)),
+        look: V(0, math.lerp(9, 1.6, e), math.lerp(0, -12, e)),
+        fov: math.lerp(38, 42, e),
+        handheld: 0.15,
+      }
+    },
+    0,
+    'hub',
+  )
 }
 
 /** The wanted poster on its post: a slam of the paper, then a slow push onto it. */
