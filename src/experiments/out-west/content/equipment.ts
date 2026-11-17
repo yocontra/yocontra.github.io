@@ -86,13 +86,13 @@ export const EQUIPMENT = {
     bytes: 118932,
   },
   'outfit.trail-duds': {
-    url: '/experiments/out-west/3d/native-v2/equipment/outfit.trail-duds.glb?v=6e6f7b69bc5b3eed',
-    hash: '6e6f7b69bc5b3eedc0b3d17bcd366767214b0ea3adcd0f38b843dd107a3cc3c2',
-    bytes: 1155888,
+    url: '/experiments/out-west/3d/native-v2/equipment/outfit.trail-duds.glb?v=359f2e9030be7121',
+    hash: '359f2e9030be7121f7ca1063f94f4d2eb516d49b7a6ae7a43fddb11e5c6a3ab6',
+    bytes: 1161576,
     pair: {
-      url: '/experiments/out-west/3d/native-v2/equipment/outfit.trail-duds.pair.glb?v=b93fb764778ecd9e',
-      hash: 'b93fb764778ecd9e47ba156bfa470da74105c552a8d8cb4b18d2cc8db33b5c86',
-      bytes: 1156364,
+      url: '/experiments/out-west/3d/native-v2/equipment/outfit.trail-duds.pair.glb?v=f933a9931558ca2d',
+      hash: 'f933a9931558ca2d9048e64423ed21c51d1e1831f030da37be368b0a3f0d1e7d',
+      bytes: 1162052,
     },
   },
   'outfit.shirt-vest': {
@@ -231,9 +231,9 @@ export const EQUIPMENT = {
     bytes: 800760,
   },
   'extra.red-bandana': {
-    url: '/experiments/out-west/3d/native-v2/equipment/extra.red-bandana.glb?v=b4eba26484d88a64',
-    hash: 'b4eba26484d88a64c0d80559132e4351ca8e9beb97266e2674a563e41893029b',
-    bytes: 804324,
+    url: '/experiments/out-west/3d/native-v2/equipment/extra.red-bandana.glb?v=f565a4d0ca41f99e',
+    hash: 'f565a4d0ca41f99e3a279b86b60f2fcd7a6ec4b71bd4531222cd66f44dea14a7',
+    bytes: 810012,
   },
   'extra.tin-star': {
     url: '/experiments/out-west/3d/native-v2/equipment/extra.tin-star.glb?v=237b3f2db24fe6e5',
@@ -241,8 +241,8 @@ export const EQUIPMENT = {
     bytes: 806916,
   },
   'extra.black-bandana': {
-    url: '/experiments/out-west/3d/native-v2/equipment/extra.black-bandana.glb?v=e854c1eaf8121de9',
-    hash: 'e854c1eaf8121de9cd0828d84a6c83185366c8ee2560b2d0c534759696bff413',
-    bytes: 804324,
+    url: '/experiments/out-west/3d/native-v2/equipment/extra.black-bandana.glb?v=4f9f85f1b26f0cec',
+    hash: '4f9f85f1b26f0cec149108567af008cbf4619a6795009fa2727635a16e2e0aa0',
+    bytes: 810012,
   },
 } as const

@@ -309,9 +309,13 @@ export async function extractFirstPersonArms(id: string, options: { geometryOnly
     resolve(dirname(sourcePath), buffer.uri),
   )
   const source = await io.read(sourcePath)
-  const authoredPaths = ['coat-sleeves', 'boot-bridges', 'coat-collars', 'shirt-fronts'].map(
-    (category) => resolve('tools/art/characters', category, `${id}.glb`),
-  )
+  const authoredPaths = [
+    'coat-sleeves',
+    'boot-bridges',
+    'coat-collars',
+    'shirt-fronts',
+    'neckerchiefs',
+  ].map((category) => resolve('tools/art/characters', category, `${id}.glb`))
   if (
     source
       .getRoot()

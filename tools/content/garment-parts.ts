@@ -14,6 +14,7 @@ interface Metadata {
   sourcePrimitive: { nodeIndex: number; meshIndex: number; primitiveIndex: number }
   replaceRanges: Range[]
   removeTriangles: number[]
+  preserveRangeOrder?: boolean
 }
 interface Artifact {
   source: Document
@@ -39,7 +40,13 @@ async function artifacts(doc: Document, id: string): Promise<Artifact[]> {
     digest.update(new Uint8Array(buffer))
   }
   const hash = digest.digest('hex')
-  for (const category of ['coat-sleeves', 'boot-bridges', 'coat-collars', 'shirt-fronts']) {
+  for (const category of [
+    'coat-sleeves',
+    'boot-bridges',
+    'coat-collars',
+    'shirt-fronts',
+    'neckerchiefs',
+  ]) {
     const path = resolve('tools/art/characters', category, `${id}.glb`)
     if (!(await Bun.file(path).exists())) {
       continue
@@ -110,7 +117,23 @@ export async function integrateGarmentParts(doc: Document, id: string): Promise<
         entry.node.getExtras().pieceRanges ??
         []) as Range[]
       bindAuthoredSurface(copied, target, 0)
+      const offset = target.getAttribute('POSITION')?.getCount() ?? 0
       appendAuthoredSurface(target, copied, ranges)
+      if (entry.metadata.preserveRangeOrder) {
+        if (entry.metadata.replaceRanges.length !== 1) {
+          throw new Error('Ordered garment requires one replacement range')
+        }
+        const replaced = entry.metadata.replaceRanges[0]
+        const authored = (copied.getExtras().pieceRanges ?? []) as Range[]
+        target.setExtras({
+          ...target.getExtras(),
+          pieceRanges: ranges.flatMap((range) =>
+            range.start === replaced?.start && range.count === replaced?.count
+              ? authored.map((piece) => ({ ...piece, start: offset + piece.start }))
+              : [range],
+          ),
+        })
+      }
       copied.dispose()
     }
   }
