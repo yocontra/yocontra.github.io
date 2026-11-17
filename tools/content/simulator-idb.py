@@ -5,6 +5,7 @@ import hashlib
 import inspect
 import json
 import logging
+import math
 import time
 from pathlib import Path
 
@@ -100,8 +101,21 @@ async def record(client, request, udid):
                                        sleep=asyncio.sleep, emit=emit, state=state):
             if event["kind"] == "swipe":
                 g = event["gesture"]
-                yield HIDSwipe(start=Point(**g["start"]), end=Point(**g["end"]),
-                               delta=5, duration=g["duration"] / 1000)
+                start = Point(**g["start"])
+                end = Point(**g["end"])
+                step = 5
+                correction = 0
+                distance = math.hypot(end.x - start.x, end.y - start.y)
+                # Measured with trusted Safari events for these two portrait paths.
+                # Leave other path sizes on the stock command until calibrated.
+                if g["role"] == "move" and 144 <= distance <= 148:
+                    step, correction = 18, 64
+                elif g["role"] == "look" and 36 <= distance <= 40:
+                    step, correction = 18, 24
+                duration = g["duration"] - correction
+                emit({"event": "native-swipe", "value": {"id": g["id"],
+                      "step": step, "distance": distance, "commandMilliseconds": duration}})
+                yield HIDSwipe(start=start, end=end, delta=step, duration=duration / 1000)
             else:
                 yield HIDPress(action=HIDTouch(point=Point(**event["point"])),
                                direction=HIDDirection.DOWN if event["kind"] == "down" else HIDDirection.UP)
