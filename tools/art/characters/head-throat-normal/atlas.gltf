@@ -1,0 +1,750 @@
+{
+  "asset": {
+    "version": "2.0",
+    "generator": "Blender native anterior skin normal bake"
+  },
+  "extras": {
+    "sourceInputs": [
+      {
+        "path": "tools/art/characters/textures/3d93278a952b78169896.webp",
+        "sha256": "3d93278a952b7816989681f0737a15238485d132e5d21592a4248cc951ced4ac"
+      },
+      {
+        "path": "tools/art/characters/head-throats/outfit.bandolier-rig.glb",
+        "sha256": "b5de325433b51c595e81f253e84e8a9136f3d8abba28fd24d89b38f0e5b7652e"
+      },
+      {
+        "path": "tools/art/characters/head-throats/outfit.bandolier-rig.pair.glb",
+        "sha256": "d287a6110a864596d6baa1c15206282e3afa2ee2b9d278dcb130568e12f6c1f4"
+      },
+      {
+        "path": "tools/art/characters/head-throats/outfit.gamblers-frock.glb",
+        "sha256": "9ba24b769201be3b4ad1794793cf64435071b07af2aae10194f39a2601813623"
+      },
+      {
+        "path": "tools/art/characters/head-throats/outfit.gamblers-frock.pair.glb",
+        "sha256": "e2efd686c88b5747e354edbbd8ec9f1a57ae7f6b4c619c0d538489e3ff4887f5"
+      },
+      {
+        "path": "tools/art/characters/head-throats/outfit.midnight-coat.glb",
+        "sha256": "1f5dfb37e99e3b03be5a8bc6e05d17828fde1a5b77cb71fc7bab08eaee67fa11"
+      },
+      {
+        "path": "tools/art/characters/head-throats/outfit.midnight-coat.pair.glb",
+        "sha256": "561f364fb4c0f17fd70457fa605fb6903784206413904f4e4930d2e5e612445f"
+      },
+      {
+        "path": "tools/art/characters/head-throats/outfit.shirt-vest.glb",
+        "sha256": "bd82b10313ddd9225e7e6e4429f8a746ccc85040778ce333821816800ed6dba5"
+      },
+      {
+        "path": "tools/art/characters/head-throats/outfit.shirt-vest.pair.glb",
+        "sha256": "84c211c1bee8c952b69d71c0bff3fe5bd322f3334e0333cd9922edeba36da04f"
+      },
+      {
+        "path": "tools/art/characters/head-throats/outfit.striped-poncho.glb",
+        "sha256": "caf25ce6a2042961fac83754d1c34a1cd037b7f16b3e14084bf29fcb9221ac10"
+      },
+      {
+        "path": "tools/art/characters/head-throats/outfit.striped-poncho.pair.glb",
+        "sha256": "3d9e033c8ff234ab6801752cc60aea14f487dcda2bf483761af7a8d7229ffcf7"
+      },
+      {
+        "path": "tools/art/characters/head-throats/outfit.trail-duds.glb",
+        "sha256": "9423bda815bf322c105c75f0990df98df0c128572a3fbdcddb06e1445bb50ef4"
+      },
+      {
+        "path": "tools/art/characters/head-throats/outfit.trail-duds.pair.glb",
+        "sha256": "179d19b69079d02dccadd9ebaa2adcd4c5b2b6d2d0db5aec597ec0e4263c31ae"
+      },
+      {
+        "path": "tools/art/characters/head-throats/outfit.undertakers-black.glb",
+        "sha256": "8d59d9789359fdf9e95b64702165259032812b1577453d1f66d0bde8a4b8c660"
+      },
+      {
+        "path": "tools/art/characters/head-throats/outfit.undertakers-black.pair.glb",
+        "sha256": "5271166e902c2fbe7ad55ea472cfec6f031941e6e3387f8c3bb6e200adcaf731"
+      },
+      {
+        "path": "tools/art/characters/head-throats/outfit.wool-duster.glb",
+        "sha256": "90e4592ec5f429866d06c43dea01ee6a276798136b8b8ea9f61a95128380aae7"
+      },
+      {
+        "path": "tools/art/characters/head-throats/outfit.wool-duster.pair.glb",
+        "sha256": "432f87d186939966ceb64d360d8eb4596520407efa90780fb225fe6931602a1b"
+      },
+      {
+        "path": "tools/art/characters/head-throats/outlaw-0.glb",
+        "sha256": "76e0c3bae6ec294a04a008e182043b336249a7c379d8f67462bf822c65d8dfd0"
+      },
+      {
+        "path": "tools/art/characters/head-throats/outlaw-1.glb",
+        "sha256": "b612114ccc91f4c5e9cf6f16f72ef1cfa8c8c8e6c037f2df86b25d5dcd2000c4"
+      },
+      {
+        "path": "tools/art/characters/head-throats/outlaw-11.glb",
+        "sha256": "f37ef1adab6b7294635c47cf1c318f4800e68e0f79064eda194b18efceeb7a5e"
+      },
+      {
+        "path": "tools/art/characters/head-throats/outlaw-12.glb",
+        "sha256": "037366e6ed922d849982c87877faecc4af5722a3471acf28505c1ea3566356c9"
+      },
+      {
+        "path": "tools/art/characters/head-throats/outlaw-13.glb",
+        "sha256": "94d12eac3cb059388b8aa239b869b5fba49a534b3ddfc42b91fd95035c9a15b6"
+      },
+      {
+        "path": "tools/art/characters/head-throats/outlaw-14.glb",
+        "sha256": "4a5f3eb38cc7c4afd21a6f4f34aa0dd403304918688f0285f577d15fea0572fe"
+      },
+      {
+        "path": "tools/art/characters/head-throats/outlaw-15.glb",
+        "sha256": "048eabf9c0f5e4caeedec0f3a4e1eddb266dcbc30967f1c892afd158c6e556a7"
+      },
+      {
+        "path": "tools/art/characters/head-throats/outlaw-16.glb",
+        "sha256": "c22055fed14eb9c435143506496797cd14046fa838c9e7f59ee45a27314ebb5f"
+      },
+      {
+        "path": "tools/art/characters/head-throats/outlaw-2.glb",
+        "sha256": "19b074d3b0faaba5f86e1a34932f4ce5429842cec0b8b46d6fb7869e0cd829b3"
+      },
+      {
+        "path": "tools/art/characters/head-throats/outlaw-3.glb",
+        "sha256": "740f49334bf171770951a9728e7fda5bc27bf858c2ba885e29b20ec9ff44ef88"
+      },
+      {
+        "path": "tools/art/characters/head-throats/outlaw-4.glb",
+        "sha256": "4c70c5568e6bf2980ed70ed07f25edefc41d7959a3d3c5a030374fb59cd44057"
+      },
+      {
+        "path": "tools/art/characters/head-throats/outlaw-5.glb",
+        "sha256": "f51f379945f4c4ccb5f76ff6219011ef7139a7686f56537f4a34569d67d0a4b0"
+      },
+      {
+        "path": "tools/art/characters/head-throats/outlaw-6.glb",
+        "sha256": "78be1f407caf2012471830b9ede7a67b88dbd05c8e447158484042e6b82c85ef"
+      },
+      {
+        "path": "tools/art/characters/head-throats/player.glb",
+        "sha256": "6fff50dbe6570dde221768e32a4938f3dfb5b121c65bbbda5111df5de1ea5bb8"
+      },
+      {
+        "path": "tools/art/characters/head-nape/lattice.json",
+        "sha256": "7e3f4db3d574583983381093b30d2c224ae5862bdbe1c751b0c6c71cf4a52eaf"
+      },
+      {
+        "path": "tools/art/characters/head-nape/neck-normal.png",
+        "sha256": "edd72e4fe724b2e1e3888d21fcd948041073bc9cdad188fd71ad3bec7a17d4a0"
+      },
+      {
+        "path": "tools/content/head-nape.ts",
+        "sha256": "12ad2b29775639520672401676b4e76ed0710d5886e265bc526ba71716d8b27f"
+      },
+      {
+        "path": "tools/content/head-nape-authoring.py",
+        "sha256": "d95b226702723612f596fd7661f8fd51ea0d88ca567e6d6bfe9cac252e4a7243"
+      },
+      {
+        "path": "tools/content/head-throat-normal.ts",
+        "sha256": "5d68ef498fc985923076e6884a8e0e539255b1ab63f2f40d6162242ad9faf95b"
+      },
+      {
+        "path": "tools/content/head-throat-plan.ts",
+        "sha256": "ee49f2800b125f200213a7f9a0f1d1f2cc906280b550b64992913c96b9c135cc"
+      },
+      {
+        "path": "tools/content/head-throat-family.json",
+        "sha256": "e0244eb4bbcdc7617d1876158faaa9a8e1d00a93c6c8845ac27bd146feb35583"
+      },
+      {
+        "path": "tools/content/head-throat-recipes.json",
+        "sha256": "b066ccd7e797c38a180a5f3670c3923cfcd492663251acb0eebd1136fc7e33a5"
+      },
+      {
+        "path": "tools/content/head-throat-normal-domain.ts",
+        "sha256": "63fa24684896d7d956b2f8a6402afa8614db873264f5744f8383952fdc3d6d7f"
+      },
+      {
+        "path": "tools/content/head-throat-normal-domain.json",
+        "sha256": "77e9679a4ffc518af192e76fb2dcf7c888971fe6729861af2c68d2752f25b2db"
+      },
+      {
+        "path": "tools/content/garment-parts.ts",
+        "sha256": "39d9c4bf603f86d9838cf6060df00496e3966836f1d0e288cb1fca2766e25071"
+      },
+      {
+        "path": "tools/content/garment-geometry.ts",
+        "sha256": "ecad6d788778340bbc4c32174c11bf4fd2034cc3a00685177433b6f55f05d96a"
+      },
+      {
+        "path": "tools/content/character-atlas.ts",
+        "sha256": "32343971a97cbce37cfb89fcb8cc7dd20ecfb29af6961f75f388ac8bf1a21c71"
+      },
+      {
+        "path": "tools/content/character-materials.ts",
+        "sha256": "7e8c016325142ecd977efb59ee1c7b02aad035c7432303bd45417c05836cb622"
+      },
+      {
+        "path": "tools/content/head-throat-normal-authoring.py",
+        "sha256": "2d47af006d58dc0ba02dde34f43ca21ea4ed709c3853565127d8dc7f67985818"
+      },
+      {
+        "path": "tools/content/head-throat-normal-authoring.ts",
+        "sha256": "c5d35a90a4d5d4f78444b8473ccaa98f2f73ea36107cfbc1426b6da877b5d768"
+      },
+      {
+        "path": "tools/art/characters/outfit.bandolier-rig.gltf",
+        "sha256": "e5e785a5913b2d5685ef4ff65bdb4c50092ac2dae7697e61b314f36e2b868ca9"
+      },
+      {
+        "path": "tools/art/characters/outfit.bandolier-rig.bin",
+        "sha256": "301024b73d2e98c2dfa07004430cf1f81ef5a63c68ee61c3a6a01b6151f759a4"
+      },
+      {
+        "path": "tools/art/characters/outfit.bandolier-rig.pair.gltf",
+        "sha256": "83f6072389649edf8723f562b4e5ea8c26cdd74eda862cb6e47b66b29d6697ce"
+      },
+      {
+        "path": "tools/art/characters/outfit.bandolier-rig.pair.bin",
+        "sha256": "379197c2d9ee19a4f3422bd4e7a93d662756bb58cac36dd0c5ba5896c7259af6"
+      },
+      {
+        "path": "tools/art/characters/outfit.gamblers-frock.gltf",
+        "sha256": "ad873e4b9625e27491575c9ba5fd26ca6c93b2a3bfa3979d5e1620eaadcbe8ce"
+      },
+      {
+        "path": "tools/art/characters/outfit.gamblers-frock.bin",
+        "sha256": "9ed350bdd070ea1a1b8a8fb1be20d1f288379a02f8d700e8374a44c4b4a07cc8"
+      },
+      {
+        "path": "tools/art/characters/outfit.gamblers-frock.pair.gltf",
+        "sha256": "b72cf575dffbf3061ad3d948320091d8fd0f0584421afb9049dad827c2b95800"
+      },
+      {
+        "path": "tools/art/characters/outfit.gamblers-frock.pair.bin",
+        "sha256": "dbe0bcf1e9f0be1aeb1657830152bc94e245f2d7b25cefcf3d4fd1ead0eb0bc1"
+      },
+      {
+        "path": "tools/art/characters/outfit.midnight-coat.gltf",
+        "sha256": "d1079b78a4a0398ff5f5e4886282857cba806880a8206551bff35b7782362775"
+      },
+      {
+        "path": "tools/art/characters/outfit.midnight-coat.bin",
+        "sha256": "a28f83675f7c8ba71e97ebbae8fceb03cc7020855b3ba931c9b6028213f94864"
+      },
+      {
+        "path": "tools/art/characters/outfit.midnight-coat.pair.gltf",
+        "sha256": "40b6841a59fe1cf1cf3334aa6832d9e9d5d83d66b591aa472b0fbac4e1e8aee2"
+      },
+      {
+        "path": "tools/art/characters/outfit.midnight-coat.pair.bin",
+        "sha256": "1e09b7c151e59aa294b2f4da9c023ff3614301eb63b96e63bd2492150b0b946a"
+      },
+      {
+        "path": "tools/art/characters/outfit.shirt-vest.gltf",
+        "sha256": "85980439e5fd1532b6d524b5b96be310a28a690b800f5d11546c6209a7c2d1fc"
+      },
+      {
+        "path": "tools/art/characters/outfit.shirt-vest.bin",
+        "sha256": "5218e59857f2c8d77ad2e7d6c2a53a662acdc33a222cfe2ad5832ed7ffa0f389"
+      },
+      {
+        "path": "tools/art/characters/outfit.shirt-vest.pair.gltf",
+        "sha256": "13a3fc3f5ff6a608ec9c3efb9fa060fcd6ef37c78ae126363b14e9adee4e8ef1"
+      },
+      {
+        "path": "tools/art/characters/outfit.shirt-vest.pair.bin",
+        "sha256": "56fb53526b88631b6d3ba0916686a1660eadc2e15bb296c6b94684a446663b72"
+      },
+      {
+        "path": "tools/art/characters/outfit.striped-poncho.gltf",
+        "sha256": "742ff416410e5975466de7a54326e75245b91cf48b70dfc89c855356a820619a"
+      },
+      {
+        "path": "tools/art/characters/outfit.striped-poncho.bin",
+        "sha256": "eee555580caa9f80907fc7731909d987279ff0c78f23f1525f7a3e0ab76f9894"
+      },
+      {
+        "path": "tools/art/characters/outfit.striped-poncho.pair.gltf",
+        "sha256": "69ccdd16adc624cd82ae02e89e1ad8e624f88c5e1e31a1d54d698be70bfd16e2"
+      },
+      {
+        "path": "tools/art/characters/outfit.striped-poncho.pair.bin",
+        "sha256": "b0e7928ff9e4dab13944533965d8a14e1b9037ffd9236634476df3fa5243daee"
+      },
+      {
+        "path": "tools/art/characters/outfit.trail-duds.gltf",
+        "sha256": "eadf65870206e40db163bd59f07b73d28b46259dfbdbc100ca6a52000c892696"
+      },
+      {
+        "path": "tools/art/characters/outfit.trail-duds.bin",
+        "sha256": "35e340cd038d45eff91262a53ef755c9f1996715580703d795312816edbeb014"
+      },
+      {
+        "path": "tools/art/characters/outfit.trail-duds.pair.gltf",
+        "sha256": "d903d7d04dbac0101afcc5f2bf316428e96f097601bede0c09eaba6c7a095883"
+      },
+      {
+        "path": "tools/art/characters/outfit.trail-duds.pair.bin",
+        "sha256": "8874779b70529560f6cb3b9d8b5297caa61650c8e9ec5c7f514c868d2bbaedef"
+      },
+      {
+        "path": "tools/art/characters/outfit.undertakers-black.gltf",
+        "sha256": "e34007d1a4cef7647033b40ee9a697724c6507ee2039335b4d41d326a59c7962"
+      },
+      {
+        "path": "tools/art/characters/outfit.undertakers-black.bin",
+        "sha256": "4eef024dd73b2c6049889559816b5342c3a91ad9610aca3d2795d77e8bfa6ca4"
+      },
+      {
+        "path": "tools/art/characters/outfit.undertakers-black.pair.gltf",
+        "sha256": "4d8d2fa411798c688e16e9f4f459c95c2e2537c775fc3733c1ff54f516892b81"
+      },
+      {
+        "path": "tools/art/characters/outfit.undertakers-black.pair.bin",
+        "sha256": "7f60306b0f0cda256f1f86d6c62e9533eda1c2cf9221d196b308ea2cff422789"
+      },
+      {
+        "path": "tools/art/characters/outfit.wool-duster.gltf",
+        "sha256": "c92cf6320a210a829e0d9302e6cf02e2dd14a8c477a8b111ac3d2205d2b97f26"
+      },
+      {
+        "path": "tools/art/characters/outfit.wool-duster.bin",
+        "sha256": "79f885518a6a75197b5c6d5fecaec59db6de5f4967440b219e5358e5fc8e11f1"
+      },
+      {
+        "path": "tools/art/characters/outfit.wool-duster.pair.gltf",
+        "sha256": "572c6974ecdd098b9aa13f093b6bdca8e09c6b487e162c5ac9189fa87749150c"
+      },
+      {
+        "path": "tools/art/characters/outfit.wool-duster.pair.bin",
+        "sha256": "a6c04f60cad35b40509e62689150f1849962785bb6f50af917f991412f638a76"
+      },
+      {
+        "path": "tools/art/characters/outlaw-0.gltf",
+        "sha256": "365dbdbb2342c4beceb2b9f2f6cb18cbf92a5af983e6562121e359436e21bca6"
+      },
+      {
+        "path": "tools/art/characters/outlaw-0.bin",
+        "sha256": "7fcee32cc9cb3d0dc63ea796ba1e3bcd8e8faa0544e1af9e25b963599a3c0e1e"
+      },
+      {
+        "path": "tools/art/characters/outlaw-1.gltf",
+        "sha256": "7e47dde3c40fc0908dfa73c9e67710b8cee0e82ef1202e1f3791cd6cee4b6d92"
+      },
+      {
+        "path": "tools/art/characters/outlaw-1.bin",
+        "sha256": "17709e5a6707fc55832f886094f2563c20db4161436edf322f7a628654efd4ed"
+      },
+      {
+        "path": "tools/art/characters/outlaw-11.gltf",
+        "sha256": "ca7cbfd7004c0727a7c1a231740e1a2d895352a5aaf08b06dbf859d6dbab95c1"
+      },
+      {
+        "path": "tools/art/characters/outlaw-11.bin",
+        "sha256": "11b2dbc9dc237950cc45d81f9485a39ec975c05659581374a3eafefdc6d97bca"
+      },
+      {
+        "path": "tools/art/characters/outlaw-12.gltf",
+        "sha256": "89ba4d22d8ebb5bc81a932c06f2dead53e25e2cfdc9a8b9d7d75176b2f8f8218"
+      },
+      {
+        "path": "tools/art/characters/outlaw-12.bin",
+        "sha256": "378263731cb881926699cebf4abf4c5c6e45b7a8245f03264515eb827bb74e79"
+      },
+      {
+        "path": "tools/art/characters/outlaw-13.gltf",
+        "sha256": "c5a0fbcd3441d759672526cb9ff6ae0bee5cc213058c3c486c805696222fea2d"
+      },
+      {
+        "path": "tools/art/characters/outlaw-13.bin",
+        "sha256": "c096ae76300c718b12a53682ed86a9f86768d0b1aee535f5c45517579383ef02"
+      },
+      {
+        "path": "tools/art/characters/outlaw-14.gltf",
+        "sha256": "0ec783b0cd1f365f2d65c04625210d3bd059b57016fa33ae3008f47911dae783"
+      },
+      {
+        "path": "tools/art/characters/outlaw-14.bin",
+        "sha256": "9ebcf0407b53632afe3dc094c82234162f1c559191e9046d1826b0e6210a842e"
+      },
+      {
+        "path": "tools/art/characters/outlaw-15.gltf",
+        "sha256": "947b403179a61a6af5e3a1d97f4612b64b70f64cb3eba3b2e3a0b04aef6a96a1"
+      },
+      {
+        "path": "tools/art/characters/outlaw-15.bin",
+        "sha256": "c6b0b8bc116a310a69135fce95edda5494928456388183efac2bf5f909537208"
+      },
+      {
+        "path": "tools/art/characters/outlaw-16.gltf",
+        "sha256": "6e2fc683ced9a9f7545d23009358a878110d300c131420b443fe8a7cabf497f6"
+      },
+      {
+        "path": "tools/art/characters/outlaw-16.bin",
+        "sha256": "2afa30ad4baa6da37dce244c7fcb850b988c13f835296533c737da41be2e011f"
+      },
+      {
+        "path": "tools/art/characters/outlaw-2.gltf",
+        "sha256": "ca5768b8eeed0d7934468800e16a06256813816ad0dab197a2383f0f3f23ce4f"
+      },
+      {
+        "path": "tools/art/characters/outlaw-2.bin",
+        "sha256": "c9194499f03e850d15d80130642982451d3f55224cf4be6a3183713a72eb2920"
+      },
+      {
+        "path": "tools/art/characters/outlaw-3.gltf",
+        "sha256": "b6e2608fd9950183e0f197681f0154183b5dd9a689b9b6c4a9a6813cb5411a28"
+      },
+      {
+        "path": "tools/art/characters/outlaw-3.bin",
+        "sha256": "36c9ede341a7f55407abbc616a872a955fcb06cbee8d4462362479638e079b57"
+      },
+      {
+        "path": "tools/art/characters/outlaw-4.gltf",
+        "sha256": "82860b81c15c7db20f97bd2179aa68387346ef4c095661bd374acefd29d6bc7b"
+      },
+      {
+        "path": "tools/art/characters/outlaw-4.bin",
+        "sha256": "6a29aeda175d51e3ccc1a02946f487926d1fb79dd9faec1501805f8e16926903"
+      },
+      {
+        "path": "tools/art/characters/outlaw-5.gltf",
+        "sha256": "aec3bab14290a390e0860cb89754b1f2a0dda656d25d451a95c639ead9b77028"
+      },
+      {
+        "path": "tools/art/characters/outlaw-5.bin",
+        "sha256": "8404d083c5c041c98c6afb6bebb28d672a1c7aff46b27695331a856090881df0"
+      },
+      {
+        "path": "tools/art/characters/outlaw-6.gltf",
+        "sha256": "8acd15997ae4dcd69ab2baa561736549439f126031e7dbb125d0734b3388af4e"
+      },
+      {
+        "path": "tools/art/characters/outlaw-6.bin",
+        "sha256": "7f803a87e8bc246461b0a87e833e6bc2642adb35e556b86f4ba8956d0a252131"
+      },
+      {
+        "path": "tools/art/characters/outlaw-7.gltf",
+        "sha256": "e5c956d9de68320fabb02cc813931e99dc8b4bf90c86bc18103493114d7dd455"
+      },
+      {
+        "path": "tools/art/characters/outlaw-7.bin",
+        "sha256": "34123ac6f3d5b58a19b945e7dab9fdeec0a8ea51a170b787259eecf99679292d"
+      },
+      {
+        "path": "tools/art/characters/outlaw-9.gltf",
+        "sha256": "d67c2b3a36c3d24e444ae3409bd21bd969ff6714bf2ce89491737902473b2cfa"
+      },
+      {
+        "path": "tools/art/characters/outlaw-9.bin",
+        "sha256": "f18bb2f6384c8fa9b5e9509169a1fd50bd541da2292a94d9ef0df6daa4e28c5f"
+      },
+      {
+        "path": "tools/art/characters/player.gltf",
+        "sha256": "bfbd0d016d12278dc160f1f447613b33ae262bdcc0e1a6cf7880b8e8cffbedb7"
+      },
+      {
+        "path": "tools/art/characters/player.bin",
+        "sha256": "057d4e839db559cb3b518e8db7dcb428d0584af068184f1a5dc2d0adb8282dd7"
+      }
+    ],
+    "normalPatch": {
+      "sourceIds": [
+        "outfit.bandolier-rig",
+        "outfit.bandolier-rig.pair",
+        "outfit.gamblers-frock",
+        "outfit.gamblers-frock.pair",
+        "outfit.midnight-coat",
+        "outfit.midnight-coat.pair",
+        "outfit.shirt-vest",
+        "outfit.shirt-vest.pair",
+        "outfit.striped-poncho",
+        "outfit.striped-poncho.pair",
+        "outfit.trail-duds",
+        "outfit.trail-duds.pair",
+        "outfit.undertakers-black",
+        "outfit.undertakers-black.pair",
+        "outfit.wool-duster",
+        "outfit.wool-duster.pair",
+        "outlaw-0",
+        "outlaw-1",
+        "outlaw-11",
+        "outlaw-12",
+        "outlaw-13",
+        "outlaw-14",
+        "outlaw-15",
+        "outlaw-16",
+        "outlaw-2",
+        "outlaw-3",
+        "outlaw-4",
+        "outlaw-5",
+        "outlaw-6",
+        "outlaw-7",
+        "outlaw-9",
+        "player"
+      ],
+      "sourceSHA256": "3d93278a952b7816989681f0737a15238485d132e5d21592a4248cc951ced4ac",
+      "image": "anterior-normal.png",
+      "imageSHA256": "d251aaf3c2e6193531b39884868037eed23b0c446cc97b4a27ec49ef9cb90757",
+      "x": 34,
+      "y": 570,
+      "width": 416,
+      "height": 121
+    },
+    "nativeNormalBake": {
+      "reference": "player",
+      "ownedTriangles": 2589,
+      "referencePatchTriangles": 86,
+      "ownedPixels": 3660,
+      "paddingPixels": 2,
+      "actualCyclesBakeMargin": 2,
+      "strictPixels": 3088,
+      "strictPixelSHA256": "5e54f38625e2fb9cd0a949bf3b2b7ff75c4d5ec4d4d9dd14498a40d177257b3c",
+      "maskPixelSHA256": "046d9e04830e8b9fbb47c165a98201f95fb4184731d589ff8f82ee7ed87bd6bf",
+      "sourceCoveredPadding": true,
+      "candidateConsumerOwnership": [
+        {
+          "id": "outfit.bandolier-rig",
+          "headPixels": 3672,
+          "forbiddenPixels": 4,
+          "unusedPixels": 436
+        },
+        {
+          "id": "outfit.bandolier-rig.pair",
+          "headPixels": 3672,
+          "forbiddenPixels": 4,
+          "unusedPixels": 436
+        },
+        {
+          "id": "outfit.gamblers-frock",
+          "headPixels": 3672,
+          "forbiddenPixels": 4,
+          "unusedPixels": 436
+        },
+        {
+          "id": "outfit.gamblers-frock.pair",
+          "headPixels": 3672,
+          "forbiddenPixels": 4,
+          "unusedPixels": 436
+        },
+        {
+          "id": "outfit.midnight-coat",
+          "headPixels": 3672,
+          "forbiddenPixels": 4,
+          "unusedPixels": 436
+        },
+        {
+          "id": "outfit.midnight-coat.pair",
+          "headPixels": 3672,
+          "forbiddenPixels": 4,
+          "unusedPixels": 436
+        },
+        {
+          "id": "outfit.shirt-vest",
+          "headPixels": 3672,
+          "forbiddenPixels": 4,
+          "unusedPixels": 436
+        },
+        {
+          "id": "outfit.shirt-vest.pair",
+          "headPixels": 3672,
+          "forbiddenPixels": 4,
+          "unusedPixels": 436
+        },
+        {
+          "id": "outfit.striped-poncho",
+          "headPixels": 3523,
+          "forbiddenPixels": 4,
+          "unusedPixels": 585
+        },
+        {
+          "id": "outfit.striped-poncho.pair",
+          "headPixels": 3523,
+          "forbiddenPixels": 4,
+          "unusedPixels": 585
+        },
+        {
+          "id": "outfit.trail-duds",
+          "headPixels": 3672,
+          "forbiddenPixels": 4,
+          "unusedPixels": 436
+        },
+        {
+          "id": "outfit.trail-duds.pair",
+          "headPixels": 3672,
+          "forbiddenPixels": 4,
+          "unusedPixels": 436
+        },
+        {
+          "id": "outfit.undertakers-black",
+          "headPixels": 3672,
+          "forbiddenPixels": 4,
+          "unusedPixels": 436
+        },
+        {
+          "id": "outfit.undertakers-black.pair",
+          "headPixels": 3672,
+          "forbiddenPixels": 4,
+          "unusedPixels": 436
+        },
+        {
+          "id": "outfit.wool-duster",
+          "headPixels": 3672,
+          "forbiddenPixels": 4,
+          "unusedPixels": 436
+        },
+        {
+          "id": "outfit.wool-duster.pair",
+          "headPixels": 3672,
+          "forbiddenPixels": 4,
+          "unusedPixels": 436
+        },
+        {
+          "id": "outlaw-0",
+          "headPixels": 3672,
+          "forbiddenPixels": 4,
+          "unusedPixels": 436
+        },
+        {
+          "id": "outlaw-1",
+          "headPixels": 3672,
+          "forbiddenPixels": 9,
+          "unusedPixels": 436
+        },
+        {
+          "id": "outlaw-11",
+          "headPixels": 3672,
+          "forbiddenPixels": 8,
+          "unusedPixels": 436
+        },
+        {
+          "id": "outlaw-12",
+          "headPixels": 3672,
+          "forbiddenPixels": 11,
+          "unusedPixels": 436
+        },
+        {
+          "id": "outlaw-13",
+          "headPixels": 3672,
+          "forbiddenPixels": 4,
+          "unusedPixels": 436
+        },
+        {
+          "id": "outlaw-14",
+          "headPixels": 3672,
+          "forbiddenPixels": 4,
+          "unusedPixels": 436
+        },
+        {
+          "id": "outlaw-15",
+          "headPixels": 3523,
+          "forbiddenPixels": 12,
+          "unusedPixels": 585
+        },
+        {
+          "id": "outlaw-16",
+          "headPixels": 3672,
+          "forbiddenPixels": 6,
+          "unusedPixels": 436
+        },
+        {
+          "id": "outlaw-2",
+          "headPixels": 3672,
+          "forbiddenPixels": 4,
+          "unusedPixels": 436
+        },
+        {
+          "id": "outlaw-3",
+          "headPixels": 3672,
+          "forbiddenPixels": 8,
+          "unusedPixels": 436
+        },
+        {
+          "id": "outlaw-4",
+          "headPixels": 3672,
+          "forbiddenPixels": 4,
+          "unusedPixels": 436
+        },
+        {
+          "id": "outlaw-5",
+          "headPixels": 3672,
+          "forbiddenPixels": 4,
+          "unusedPixels": 436
+        },
+        {
+          "id": "outlaw-6",
+          "headPixels": 3523,
+          "forbiddenPixels": 8,
+          "unusedPixels": 585
+        },
+        {
+          "id": "outlaw-7",
+          "headPixels": 3672,
+          "forbiddenPixels": 4,
+          "unusedPixels": 436
+        },
+        {
+          "id": "outlaw-9",
+          "headPixels": 3672,
+          "forbiddenPixels": 4,
+          "unusedPixels": 436
+        },
+        {
+          "id": "player",
+          "headPixels": 3672,
+          "forbiddenPixels": 4,
+          "unusedPixels": 436
+        }
+      ],
+      "strictProtectedPixels": 0,
+      "actualMaskForbiddenPixels": 0,
+      "processedItemIds": [
+        "outfit.bandolier-rig",
+        "outfit.bandolier-rig.pair",
+        "outfit.gamblers-frock",
+        "outfit.gamblers-frock.pair",
+        "outfit.midnight-coat",
+        "outfit.midnight-coat.pair",
+        "outfit.shirt-vest",
+        "outfit.shirt-vest.pair",
+        "outfit.striped-poncho",
+        "outfit.striped-poncho.pair",
+        "outfit.trail-duds",
+        "outfit.trail-duds.pair",
+        "outfit.undertakers-black",
+        "outfit.undertakers-black.pair",
+        "outfit.wool-duster",
+        "outfit.wool-duster.pair",
+        "outlaw-0",
+        "outlaw-1",
+        "outlaw-11",
+        "outlaw-12",
+        "outlaw-13",
+        "outlaw-14",
+        "outlaw-15",
+        "outlaw-16",
+        "outlaw-2",
+        "outlaw-3",
+        "outlaw-4",
+        "outlaw-5",
+        "outlaw-6",
+        "outlaw-7",
+        "outlaw-9",
+        "player"
+      ],
+      "lowerNeckStrictDistancePixels": 16,
+      "lowerNeckExcludedPixelsUnchanged": true,
+      "otherIslandPixelsProtected": true,
+      "outsideMaskPreservedByOverlay": true,
+      "clampOrPaint": false,
+      "minimumTangentZ": 0.9249294996261597,
+      "lengthBounds": [
+        1.0000159740447998,
+        1.0000272989273071
+      ],
+      "inputGeometrySHA256": "7bbaefaec60f11ad432b2c8fdece64d561f61460f40f7258f693ca4c3528056e"
+    }
+  }
+}

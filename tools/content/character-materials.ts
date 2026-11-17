@@ -20,6 +20,7 @@ import { convertCharacterSurface } from './character-surfaces.ts'
 import { contentOutput } from './content-output.ts'
 import { integrateGarmentParts } from './garment-parts.ts'
 import { repairHeadNape } from './head-nape.ts'
+import { withHeadThroatNormalSource } from './head-throat-normal.ts'
 import { labelActorHatGlb } from './label-actor-hats.ts'
 import { completeCharacterClips } from './normalize-character-clips.ts'
 import { normalizeSkinnedAsset } from './normalize-skinned-nodes.ts'
@@ -63,7 +64,7 @@ export async function bakeCharacter(path: string): Promise<void> {
       animation.dispose()
     }
   }
-  await convertSurfaces(doc, id)
+  await withHeadThroatNormalSource(id, () => convertSurfaces(doc, id))
   cleanAuthoring(doc, id)
   if (id.startsWith('held-')) {
     const kind = id.slice(5)

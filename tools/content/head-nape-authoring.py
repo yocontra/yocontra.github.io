@@ -449,4 +449,5 @@ def main():
     print(f"neck island {int(neck.sum())} triangles, {seams} seam vertices, albedo box {box}, face ARM {face_arm.round(3).tolist()}")
 
 
-main()
+if __name__ == "__main__":
+    main()

@@ -5,6 +5,7 @@ import type { Accessor, Document, Primitive, Texture } from '@gltf-transform/cor
 import sharp from 'sharp'
 import { contentOutput } from './content-output.ts'
 import { patchSkinAtlas } from './head-nape.ts'
+import { patchHeadThroatNormalAtlas } from './head-throat-normal.ts'
 export interface Range {
   start: number
   count: number
@@ -56,6 +57,7 @@ export function pixels(texture: Texture): Promise<Pixels> {
       .then(async ({ data, info }) => {
         const result = { data, width: info.width, height: info.height }
         await patchSkinAtlas(image, result)
+        await patchHeadThroatNormalAtlas(image, result)
         return result
       })
     cache.set(texture, promise)
