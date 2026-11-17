@@ -38,7 +38,7 @@ export class QueueSheet {
     const panel = el('div', 'ow-hub-panel ow-sheet-panel', this.root)
     const head = el('div', 'ow-hub-row ow-sheet-head', panel)
     el('h2', 'ow-hub-h', head).append(icon('bounty'), 'Bounty Hunt')
-    closeButton(head, () => this.cancel())
+    closeButton(head, () => this.cancel()).focus({ preventScroll: true })
     onSwipeDown(this.root, () => this.cancel())
     this.line = el('p', 'ow-queue-line', panel, 'Checking this device…')
     this.line.setAttribute('aria-live', 'polite')

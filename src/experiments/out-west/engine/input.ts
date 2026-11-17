@@ -209,7 +209,8 @@ function onMenuControl(e: KeyboardEvent): boolean {
   }
   return (
     t.closest(MENU) !== null &&
-    t.checkVisibility({ opacityProperty: true, visibilityProperty: true })
+    // A displayed menu still owns its keys during the first frame of its fade-in.
+    t.checkVisibility({ visibilityProperty: true })
   )
 }
 

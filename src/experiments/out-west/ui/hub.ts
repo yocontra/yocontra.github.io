@@ -437,23 +437,31 @@ export class Hub {
   }
 
   private openQueue(): void {
-    if (!this.deps.ready()) {
+    if (!this.deps.ready() || this.root.classList.contains('dim')) {
       return
     }
     if (this.licenceGate('bounty', 'Bounty Hunt', 'Bounty Hunt needs a licence.')) {
       return
     }
     this.root.classList.add('dim')
+    this.root.inert = true
     const q = new QueueSheet(this.parent, {
       token: () => this.deps.token(),
       matched: (match) => {
         this.root.classList.remove('dim')
+        this.root.inert = false
         this.hide()
         // read at the match, not the search: "Next duel" requeues while the last duel's XP is
         // still being fetched, and the receipt's bar should start from after that duel
         this.deps.bountyHunt(match, this.me?.xp ?? null)
       },
-      closed: () => this.root.classList.remove('dim'),
+      closed: () => {
+        this.root.classList.remove('dim')
+        this.root.inert = false
+        if (this.visible) {
+          this.root.querySelector<HTMLButtonElement>('.ow-tile-bounty')?.focus()
+        }
+      },
       rideRanked: () => {
         setLicenceWish('bounty')
         this.rideRanked()
@@ -469,10 +477,11 @@ export class Hub {
   }
 
   private openStore(): void {
-    if (!this.deps.ready()) {
+    if (!this.deps.ready() || this.root.classList.contains('shop')) {
       return
     }
     this.root.classList.add('shop')
+    this.root.inert = true
     this.deps.stage('store')
     const store = new Outfitter(this.parent, {
       me: () => this.me,
@@ -482,7 +491,11 @@ export class Hub {
       changed: (patch) => this.patch(patch),
       close: () => {
         this.root.classList.remove('shop')
+        this.root.inert = false
         this.deps.stage('hub')
+        if (this.visible) {
+          this.root.querySelector<HTMLButtonElement>('.ow-tile-store')?.focus()
+        }
       },
     })
     void store
