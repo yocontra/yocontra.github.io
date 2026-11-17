@@ -19,6 +19,7 @@ import {
 import { BODY_HEIGHT, CROUCH_HEIGHT, FALL_GRAVITY_SCALE, GRAVITY } from '../ffa/sim/constants.ts'
 import { roofWalkAt } from '../ffa/sim/roofwalks.ts'
 import { motorFrame, newMotion } from './abilities.ts'
+import { propColliders } from './environment-collision.ts'
 import {
   type CollisionData,
   MAX_PLAYERS,
@@ -39,8 +40,7 @@ export interface SimulationOptions {
   ammo: unknown
   collision: CollisionData
 }
-export function createSimulation(options: SimulationOptions) {
-  Object.assign(globalThis, { Ammo: options.ammo })
+function createPhysics(options: SimulationOptions) {
   const device = new NullGraphicsDevice({ width: 1, height: 1 })
   const app = new AppBase(device.canvas)
   const config = new AppOptions()
@@ -62,10 +62,16 @@ export function createSimulation(options: SimulationOptions) {
   // The shared runtime supplies exact 60 Hz substeps; disable Bullet's second accumulator.
   physics.maxSubSteps = 0
   physics.gravity.set(0, -(options.gravity ?? GRAVITY), 0)
+  return { app, physics }
+}
+export function createSimulation(options: SimulationOptions) {
+  Object.assign(globalThis, { Ammo: options.ammo })
+  const { app, physics } = createPhysics(options)
   const players = new Map<string, PlayerState>()
   const entities = new Map<string, Entity>()
   let disposed = false
   const colliders = addColliders(app, options.collision)
+  const props = propColliders(app, options.collision, colliders.sources)
   function addPlayer(
     id: string,
     position: readonly [number, number, number] = [0, 3, 0],
@@ -205,6 +211,7 @@ export function createSimulation(options: SimulationOptions) {
       return
     }
     disposed = true
+    props.destroy()
     colliders.material.destroy()
     app.destroy()
     for (const mesh of colliders.meshes) {
@@ -214,8 +221,19 @@ export function createSimulation(options: SimulationOptions) {
     entities.clear()
     colliders.sources.clear()
   }
-  const { castWorld, castWorldHit } = staticQueries(physics, colliders.sources)
-  return { app, players, addPlayer, removePlayer, step, adopt, castWorld, castWorldHit, dispose }
+  const queries = staticQueries(physics, colliders.sources)
+  return {
+    app,
+    players,
+    addPlayer,
+    removePlayer,
+    step,
+    adopt,
+    ...queries,
+    updateProps: props.update,
+    resetProps: props.reset,
+    dispose,
+  }
 }
 export type Simulation = ReturnType<typeof createSimulation>
 

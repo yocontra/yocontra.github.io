@@ -5,7 +5,6 @@
  * or sliding make no footfalls; a wall or floor between you muffles them.
  */
 import { BODY_HEIGHT, CROUCH_SPEED } from '../ffa/sim/constants.ts'
-import { type StepSurface, stepSurface } from './audio-surfaces.ts'
 import type { Emitter, FrontierAudio } from './frontier-audio.ts'
 import { type FrontierSound, RANGES, STEP_SOUND, spurTimbre, stepRate } from './frontier-sounds.ts'
 
@@ -61,7 +60,6 @@ function stepLevel(speed: number, crouched: boolean, self: boolean): number {
   return level * (self ? 0.55 : 1)
 }
 
-const surfaceOf = (f: Feet): StepSurface => stepSurface(f.x, f.y, f.z)
 /** Poses carry the standing capsule's centre; the boots are half a body below it. */
 const sole = (pose: RiderPose): number => pose.y - BODY_HEIGHT / 2
 
@@ -148,7 +146,7 @@ export class FrontierFeet {
     if (!pose.grounded) {
       if (f.grounded && pose.vy > JUMP_VY && heard) {
         this.sound(f, 'cloth', self ? 0.6 : 0.5, 1.05)
-        this.sound(f, STEP_SOUND[surfaceOf(f)], self ? 0.45 : 0.4, 1.1)
+        this.sound(f, STEP_SOUND[this.audio.surfaceAt(f)], self ? 0.45 : 0.4, 1.1)
       }
       f.air += dt
       f.grounded = false
@@ -157,7 +155,7 @@ export class FrontierFeet {
     if (!f.grounded) {
       if (f.air > LANDING_AIR && heard) {
         const hard = Math.min(1, 0.55 + f.air * 0.6)
-        this.sound(f, STEP_SOUND[surfaceOf(f)], hard, 0.86)
+        this.sound(f, STEP_SOUND[this.audio.surfaceAt(f)], hard, 0.86)
         this.sound(f, 'cloth', hard * 0.8, 0.9)
         f.next = clock + 0.3
       }
@@ -175,7 +173,7 @@ export class FrontierFeet {
     f.next = clock + (1 / stepRate(Math.min(f.speed, 8))) * (0.94 + Math.random() * 0.12)
     const crouched = Boolean(pose.crouched)
     const volume = stepLevel(f.speed, crouched, self)
-    this.sound(f, STEP_SOUND[surfaceOf(f)], volume, 0.94 + Math.random() * 0.12)
+    this.sound(f, STEP_SOUND[this.audio.surfaceAt(f)], volume, 0.94 + Math.random() * 0.12)
     if (f.spurs && !crouched) {
       const jingle = f.spurs === 'jingle'
       this.sound(f, 'spurs', volume * (jingle ? 0.9 : 0.6), jingle ? 1.08 : 0.92)

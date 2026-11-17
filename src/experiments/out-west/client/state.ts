@@ -1,4 +1,6 @@
+import { decodePropHealth } from '../content/environment-props.ts'
 import { COLLISION_VERSION } from '../content/manifest.ts'
+import { refreshPropGrid } from '../ffa/sim/environment-response.ts'
 import { newPlayer, type World } from '../ffa/sim/state.ts'
 import type { Channel, PlayerStats } from '../ffa/sim/types.ts'
 import { MAX_PLAYERS, type PlayerState, PROTOCOL_VERSION } from '../runtime/protocol.ts'
@@ -33,6 +35,20 @@ function gameData(value: string): Record<string, unknown> {
   }
   finiteJson(record)
   return record
+}
+function environmentState(game: Record<string, unknown>) {
+  const seed = game.seed
+  if (!Number.isInteger(seed) || typeof seed !== 'number' || seed < 0 || seed > 0xff_ff_ff_ff) {
+    throw new Error('Invalid town seed')
+  }
+  return { health: decodePropHealth(game.props), seed }
+}
+/** Prediction adopts static cover before replaying commands from this decoded snapshot. */
+export function environmentFromSnapshot(value: string) {
+  return environmentState(gameData(value))
+}
+export function propsFromSnapshot(value: string): Uint8Array {
+  return environmentFromSnapshot(value).health
 }
 export function applyFrontierState(
   state: FrontierState,
@@ -107,6 +123,8 @@ export function applyFrontierState(
       showdowns: [number, typeof world.showdowns extends Map<number, infer V> ? V : never][]
       mostWanted: number
       glass: number[]
+      props: number[]
+      seed: number
     }
     next.bags = game.bags
     next.strongbox = game.strongbox
@@ -115,8 +133,17 @@ export function applyFrontierState(
     next.showdowns = new Map(game.showdowns)
     next.mostWanted = game.mostWanted
     next.glass = new Uint8Array(game.glass)
+    if (!adoptEnvironment(next, world, environmentState(game))) {
+      return
+    }
   }
+  const reset = next.seed !== world.seed && next.tick < world.tick
+  const beforeGrid = world.grid
+  refreshPropGrid(next, world.props, reset)
   Object.assign(world, next)
+  if (beforeGrid !== world.grid) {
+    world.propsChanged?.(reset)
+  }
   poses.clear()
   appearances.clear()
   for (const [id, pose] of nextPoses) {
@@ -125,4 +152,28 @@ export function applyFrontierState(
   for (const [id, appearance] of nextAppearances) {
     appearances.set(id, appearance)
   }
+}
+
+function adoptEnvironment(
+  next: World,
+  world: World,
+  environment: ReturnType<typeof environmentState>,
+): boolean {
+  const first = world.tick === 0 && world.players.every((player) => player === null)
+  const reset = environment.seed !== world.seed && next.tick < world.tick
+  if (environment.seed === world.seed && next.tick < world.tick) {
+    return false
+  }
+  if (!(first || reset) && environment.seed !== world.seed) {
+    throw new Error('Invalid town epoch')
+  }
+  if (
+    !(first || reset) &&
+    environment.health.some((health, index) => health > (world.props[index] ?? 0))
+  ) {
+    throw new Error('Invalid town prop resurrection')
+  }
+  next.props = environment.health
+  next.seed = environment.seed
+  return true
 }

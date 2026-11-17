@@ -1,4 +1,5 @@
 /** Reproducible, offline PlayCanvas town authoring from one gameplay/geometry plan. */
+
 import { createHash } from 'node:crypto'
 import { copyFile, mkdir, readFile, rename, writeFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
@@ -8,6 +9,7 @@ import { Quat, Vec3 } from 'playcanvas'
 import { townWindows } from '../../src/experiments/out-west/ffa/sim/building-rules.ts'
 import { buildGrid, type TownLayout } from '../../src/experiments/out-west/ffa/sim/layout.ts'
 import { projectedUv, surfaceMaterial } from './animal-prop-surfaces.ts'
+import { installBarrelParts } from './barrel-install.ts'
 import { compressEnvironmentTextures } from './environment-textures.ts'
 import { packFreight } from './freight-crates-contract.ts'
 import { installFreightCrates, readFreightPrefabs } from './freight-crates-install.ts'
@@ -176,8 +178,8 @@ export async function authorFrontier(output: string): Promise<void> {
     }
   }
   const props = g.group('Perdition dressed interiors and purposeful cover')
-  for (const c of layout.cover) {
-    coverModel(g, props, c)
+  for (const [index, c] of layout.cover.entries()) {
+    coverModel(g, props, c, index)
   }
   bankServiceSigns(g, props, layout)
   desertPlants(g, plan.vegetation, layout.size)
@@ -187,6 +189,7 @@ export async function authorFrontier(output: string): Promise<void> {
   }
   const panes = authorPanes(g, layout, groups)
   g.finish()
+  await installBarrelParts(g.doc, await frontierIO.read(join(SOURCE, 'barrel-parts.glb')))
   await g.doc.transform(dedup(), weld(), prune(), unpartition())
   installFreightCrates(
     g.doc,

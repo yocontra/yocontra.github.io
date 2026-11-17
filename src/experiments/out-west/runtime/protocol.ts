@@ -1,6 +1,6 @@
 import type { MoveState } from '../ffa/sim/types.ts'
 /** Shared authoritative input contract; positions and rewards never come from clients. */
-export const PROTOCOL_VERSION = 2
+export const PROTOCOL_VERSION = 4
 export const SIMULATION_HZ = 20
 export const PHYSICS_HZ = 60
 export const INPUT_SEND_HZ = 10

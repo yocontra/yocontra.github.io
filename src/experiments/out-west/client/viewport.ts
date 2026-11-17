@@ -12,14 +12,15 @@ import { Actors, type Appearance, type PreparedCharacters } from './actors.ts'
 import { GameApplication } from './application.ts'
 import { GameEffects } from './effects.ts'
 import { NativeEnvironment } from './environment.ts'
+import { type BreakableProps, prepareProps } from './environment-response.ts'
 import { GameInput } from './input.ts'
 import { FrontierItems } from './items.ts'
-import { nativeFrameStats } from './native-frame-stats.ts'
 import { poseEye } from './player-pose.ts'
-import { NativeRagdolls } from './ragdolls.ts'
+import type { NativeRagdolls } from './ragdolls.ts'
 import { shotVisuals } from './shot-visuals.ts'
 import { aimedTarget } from './targeting.ts'
 import { touchActions } from './touch-actions.ts'
+import { viewportDebug } from './viewport-debug.ts'
 import { createEffects } from './viewport-effects.ts'
 import { BreakableWindows } from './windows.ts'
 
@@ -197,6 +198,7 @@ function updateGuide(
 ): void {
   const domain = session.world?.players[Number(session.selfId)]
   if (camera.camera && domain && session.world) {
+    guide?.setGrid(session.world.grid)
     guide?.update(
       camera.camera,
       domain.x,
@@ -293,39 +295,6 @@ function nativeAudioContext(
   return !signal.aborted && manager && !manager.suspended ? manager.context : null
 }
 
-function viewportDebug({
-  application,
-  session,
-  windows,
-  actors,
-  ragdolls,
-}: {
-  application: GameApplication | undefined
-  session: GameSession | undefined
-  windows: BreakableWindows | undefined
-  actors: Actors | undefined
-  ragdolls: NativeRagdolls | undefined
-}) {
-  return {
-    fps: application?.quality.fps ?? 0,
-    worstFps: application?.quality.worstFps ?? 0,
-    pixelRatio: application?.quality.pixelRatio ?? 0,
-    players: session?.players.size ?? 0,
-    windows: windows?.stats() ?? { total: 0, intact: 0, shards: 0 },
-    actors: actors?.stats() ?? { loaded: 0, loading: 0, failed: 0, fallbacks: 0, visible: 0 },
-    drawCalls: application?.app.stats.drawCalls.total ?? 0,
-    ragdolls: ragdolls?.stats() ?? { active: 0, frozen: 0, bodies: 0 },
-    ...(import.meta.env.PUBLIC_OW_PERF_HARNESS === '1'
-      ? {
-          nativeAppStats: nativeFrameStats(application?.app),
-          renderer: application
-            ? { tier: application.tier, nativePost: application.post?.diagnostics() ?? null }
-            : null,
-        }
-      : {}),
-  }
-}
-
 /** The viewport consumes either a Colyseus session or a local native-physics session. */
 export function mountGameViewport(root: HTMLElement, options: ViewportOptions): GameViewport {
   const canvas = createCanvas(root)
@@ -338,17 +307,19 @@ export function mountGameViewport(root: HTMLElement, options: ViewportOptions): 
   let items: FrontierItems | undefined
   let guide: BankGuide | undefined
   let windows: BreakableWindows | undefined
+  let props: BreakableProps | undefined
   let environment: NativeEnvironment | undefined
   let atmosphere: NativeAtmosphere | undefined
   let prepared: PreparedCharacters | undefined
   const lifecycle = new AbortController()
+  const signal = lifecycle.signal
   let settings = loadSettings()
   let first = options.firstPerson ?? settings.view === 'first'
   let sequence = 0
   const touch = matchMedia('(pointer: coarse)').matches
   let playing = false
   const update = (dt: number): void => {
-    if (lifecycle.signal.aborted || !session || !input || !application || document.hidden) {
+    if (signal.aborted || !session || !input || !application || document.hidden) {
       return
     }
     const intent = sampleInput({
@@ -369,6 +340,7 @@ export function mountGameViewport(root: HTMLElement, options: ViewportOptions): 
     atmosphere?.update(dt)
     items?.update(session.world)
     windows?.update(session.world?.glass, session.world?.grid.glass)
+    props?.update(session.world)
     const player = session.players.get(session.selfId)
     if (!player) {
       return
@@ -390,7 +362,7 @@ export function mountGameViewport(root: HTMLElement, options: ViewportOptions): 
     options.onStage?.('Preparing the trail…')
     const created = await GameApplication.create({ canvas, viewport: root })
     application = created
-    if (lifecycle.signal.aborted) {
+    if (signal.aborted) {
       created.destroy()
       return
     }
@@ -399,37 +371,39 @@ export function mountGameViewport(root: HTMLElement, options: ViewportOptions): 
       const loaded = await loadTown(created, options.townUrl)
       environment = loaded.environment
       windows = new BreakableWindows(loaded.town)
-      if (lifecycle.signal.aborted) {
+      if (signal.aborted) {
         return
       }
-      ragdolls = await NativeRagdolls.create(created, options.collision)
-      windows.shatterInto(created, ragdolls)
+      const propOptions = { windows, collision: options.collision, signal }
+      const scenery = await prepareProps(created, loaded.town, propOptions)
+      if (!scenery) {
+        return
+      }
+      ragdolls = scenery.ragdolls
+      props = scenery.props
       options.onStage?.('Getting your rider and gear ready…')
       prepared = await Actors.prepare(created, await options.prepareAppearance?.())
       await GameEffects.preloadAudio(created)
       items = await FrontierItems.create(created)
-      atmosphere = await prepareAtmosphere(created, lifecycle.signal)
-      await warmFrontierCharacters(created, prepared, atmosphere, lifecycle.signal)
-      if (lifecycle.signal.aborted) {
+      atmosphere = await prepareAtmosphere(created, signal)
+      await warmFrontierCharacters(created, prepared, atmosphere, signal)
+      if (signal.aborted) {
         return
       }
       options.onStage?.('Finding your place in town…')
       const createdSession = await options.createSession()
       session = createdSession
-      if (lifecycle.signal.aborted) {
+      props.update(createdSession.world)
+      if (signal.aborted) {
         createdSession.dispose()
         return
       }
-      actors = new Actors(
-        created,
-        ragdolls,
-        (id) => session?.appearance?.(id),
-        () => session?.world,
-      )
+      const appearance = (id: string) => session?.appearance?.(id)
+      actors = new Actors(created, ragdolls, appearance, () => session?.world)
       await actors.initialize(session.players, session.selfId, prepared)
       prepared = undefined
       input = createInput(canvas, root, settings, session.players.get(session.selfId))
-      effects = createEffects(created, actors, createdSession, { windows, items })
+      effects = createEffects(created, actors, createdSession, { windows, items, props })
       await effects.ready
       if (session.world) {
         guide = new BankGuide(root, session.world.grid)
@@ -438,8 +412,8 @@ export function mountGameViewport(root: HTMLElement, options: ViewportOptions): 
         items = undefined
       }
       created.app.on('update', update)
-      await firstFrame(created, lifecycle.signal)
-      if (lifecycle.signal.aborted) {
+      await firstFrame(created, signal)
+      if (signal.aborted) {
         return
       }
       created.quality.beginMeasurement()
@@ -453,29 +427,28 @@ export function mountGameViewport(root: HTMLElement, options: ViewportOptions): 
     }
   })()
   function destroy(): void {
-    if (lifecycle.signal.aborted) {
-      return
+    if (!signal.aborted) {
+      lifecycle.abort()
+      application?.app.off('update', update)
+      input?.destroy()
+      items?.destroy()
+      props?.destroy()
+      environment?.destroy()
+      atmosphere?.destroy()
+      guide?.destroy()
+      effects?.destroy()
+      windows?.destroy()
+      actors?.destroy()
+      prepared?.dispose()
+      ragdolls?.destroy()
+      session?.dispose()
+      application?.destroy()
+      canvas.remove()
     }
-    lifecycle.abort()
-    if (application) {
-      application.app.off('update', update)
-    }
-    input?.destroy()
-    items?.destroy()
-    environment?.destroy()
-    atmosphere?.destroy()
-    guide?.destroy()
-    effects?.destroy()
-    windows?.destroy()
-    actors?.destroy()
-    prepared?.dispose()
-    ragdolls?.destroy()
-    session?.dispose()
-    application?.destroy()
-    canvas.remove()
   }
+
   return {
-    audioContext: () => nativeAudioContext(application, lifecycle.signal),
+    audioContext: () => nativeAudioContext(application, signal),
     ready,
     destroy,
     event: (event) => effects?.event(event),
@@ -496,6 +469,6 @@ export function mountGameViewport(root: HTMLElement, options: ViewportOptions): 
       y: settings.view === 'top' ? (input?.cursor.y ?? innerHeight / 2) : innerHeight / 2,
       shooter: settings.view !== 'top',
     }),
-    debug: () => viewportDebug({ application, session, windows, actors, ragdolls }),
+    debug: () => viewportDebug({ application, session, windows, actors, ragdolls, props }),
   }
 }

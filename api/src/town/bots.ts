@@ -24,6 +24,7 @@ import {
   BTN_THROW,
   NONE,
 } from '../../../src/experiments/out-west/contract/town.ts'
+import type { Grid } from '../../../src/experiments/out-west/ffa/sim/layout.ts'
 import { aimRadians, radiansToAim } from '../../../src/experiments/out-west/ffa/sim/move.ts'
 import { Rng } from '../../../src/experiments/out-west/ffa/sim/rng.ts'
 import {
@@ -97,8 +98,8 @@ const BOT_NAMES: readonly string[] = Array.from(
   },
 )
 
-/** The town never changes at runtime, so every lobby in an isolate shares one nav grid. */
-let sharedNav: NavGrid | null = null
+/** Derived grids belong to rooms; weak keys do not retain closed worlds. */
+const navigation = new WeakMap<Grid, NavGrid>()
 
 interface BotBrain {
   skill: number
@@ -190,7 +191,7 @@ function pickTarget({ w, p, b, pack, grace, spare }: Scan): Player | null {
 export class BotDirector {
   private readonly brains = new Map<number, BotBrain>()
   private readonly rng: Rng
-  private nav: NavGrid | null = null
+  private grid: Grid | undefined
   /**
    * The practice town's base skill (see `practiceSkill`), or null in a live lobby (middling bots).
    * Brains made after it changes use it.
@@ -227,10 +228,12 @@ export class BotDirector {
   }
 
   private navFor(w: World): NavGrid {
-    // One per isolate: building it costs a few dozen ms, so new lobbies reuse it.
-    sharedNav ??= buildNav(w.grid)
-    this.nav ??= sharedNav
-    return this.nav
+    let nav = navigation.get(w.grid)
+    if (!nav) {
+      nav = buildNav(w.grid)
+      navigation.set(w.grid, nav)
+    }
+    return nav
   }
 
   private rollSkill(): number {
@@ -290,6 +293,13 @@ export class BotDirector {
 
   /** One input frame for every bot in the world this tick. */
   frames(w: World, out: (InputFrame | null)[]): void {
+    if (this.grid !== w.grid) {
+      this.grid = w.grid
+      for (const brain of this.brains.values()) {
+        brain.path = []
+        brain.replanAt = 0
+      }
+    }
     if (this.practiceSkill !== null) {
       this.readStreaks(w)
     }

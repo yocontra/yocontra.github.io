@@ -8,6 +8,8 @@ import {
   TYPE_FLOAT32,
 } from 'playcanvas'
 
+import { propOwner } from '../content/environment-props.ts'
+
 function canBatch(component: RenderComponent, detailed: boolean): boolean {
   if (detailed && !component.enabled) {
     return false
@@ -35,7 +37,7 @@ export function assignEnvironmentBatch(
     batcher: BatchManager | undefined
   },
 ): void {
-  if (!(batcher && canBatch(component, owner !== undefined))) {
+  if (propOwner(component.entity) || !(batcher && canBatch(component, owner !== undefined))) {
     return
   }
   let target = ordinary

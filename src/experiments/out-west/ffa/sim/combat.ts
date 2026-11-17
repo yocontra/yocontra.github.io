@@ -32,6 +32,7 @@ import {
   TICK_MS,
 } from './constants.ts'
 import { applyDamage } from './death.ts'
+import { applyPropStrikes, traceEnvironment } from './environment-response.ts'
 import { aimRadians, airborne, climbing, radiansToAim, sliding, vaulting } from './move.ts'
 import { hashSigned } from './rng.ts'
 import { bloomAfterShot, settleBloom, spreadDeg } from './spread.ts'
@@ -238,7 +239,8 @@ export function fire(w: World, p: Player, aim: number, viewTime: number): ShotRe
   p.bloom = bloomAfterShot(p.weapon, p.bloom)
   const jitter = hashSigned(w.seed, p.id, w.tick, p.stats.shots)
   const ray = shotRay(p, aim, jitter * spread * DEG, jitter * spread * DEG * 0.6)
-  const wall = w.castWorld?.({ ...ray, maxT: MAX_RANGE }) ?? MAX_RANGE
+  const scenery = traceEnvironment(w, ray)
+  const wall = scenery.range
   shatterGlass(w, ray.ox, ray.oy, ray.oz, ray.dx, ray.dy, ray.dz, wall)
   const time = rewindTime(w, viewTime)
   const hit = traceTargets(w, p, { ...ray, maxT: wall }, time)
@@ -258,6 +260,9 @@ export function fire(w: World, p: Player, aim: number, viewTime: number): ShotRe
     flags |= SHOT_WALL
   }
   recordShot(w, p, ray, { range, target: hit ? hit.id : NONE, flags })
+  if (!hit) {
+    applyPropStrikes(w, [{ hit: scenery.hit, ray, damage: damageAt(wall, deadEye) }])
+  }
 
   return { target: hit ? hit.id : NONE, range, deadEye, killed }
 }

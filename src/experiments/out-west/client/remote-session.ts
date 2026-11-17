@@ -30,7 +30,7 @@ import {
 import { playerLifetimeSync, REMOTE_POSE, REMOTE_YAW } from './prediction-lifecycle.ts'
 import { reconnectableSession } from './reconnect-session.ts'
 import { ShowdownInput } from './showdown-input.ts'
-import { applyFrontierState } from './state.ts'
+import { applyFrontierState, environmentFromSnapshot } from './state.ts'
 
 interface JoinResponse {
   reservation: SeatReservation
@@ -214,12 +214,31 @@ function connectSession(
     self: selfSlot,
     send: (text) => room.send('control', JSON.parse(text)),
   })
+  let propSeed: number | undefined
+  let propTick = -1
+  const syncPropCollision = () => {
+    const { seed, health } = environmentFromSnapshot(room.state.game)
+    if (seed === propSeed && room.state.tick < propTick) {
+      return
+    }
+    if (propSeed !== undefined && seed !== propSeed) {
+      if (room.state.tick >= propTick) {
+        throw new Error('Invalid town epoch')
+      }
+      physics.resetProps(health)
+    } else {
+      physics.updateProps(health)
+    }
+    propSeed = seed
+    propTick = room.state.tick
+  }
   const mine = predict.sim({
     input,
     world: { physics },
     step: (_context, local, command) =>
       local.physics.step(new Map([[selfId, predictionInput(command, self)]])),
     adopt: (local) => {
+      syncPropCollision()
       const previous = local.physics.players.get(selfId)
       if (previous) {
         local.physics.adopt(selfId, authoritativePlayerState(self, previous))
@@ -240,6 +259,7 @@ function connectSession(
   const sync = (): void => {
     syncLives(room.state.players.values())
     applyFrontierState(room.state, world, poses, appearances)
+    syncPropCollision()
   }
   room.onStateChange(sync)
   sync()

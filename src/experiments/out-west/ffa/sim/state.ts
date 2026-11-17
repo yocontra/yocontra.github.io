@@ -1,4 +1,5 @@
 /** The world record every sim module operates on, plus small shared helpers. */
+import { initialPropHealth } from '../../content/environment-props.ts'
 import { CHANNEL_NONE, NONE, WEAPON_REVOLVER } from '../../contract/town.ts'
 import { HISTORY_TICKS, MAX_PLAYERS, REVOLVER_ROUNDS } from './constants.ts'
 import { buildGrid, type Grid, TOWN, type TownLayout } from './layout.ts'
@@ -29,6 +30,10 @@ const HIST_STRIDE = 4
 export interface World {
   /** Static collision query supplied by the room-owned native physics world. */
   castWorld?: (ray: import('./combat.ts').ShotRay) => number | null
+  castWorldHit?: (
+    ray: import('./combat.ts').ShotRay,
+  ) => import('../../runtime/protocol.ts').StaticWorldHit | null
+  propsChanged?: (reset?: boolean) => void
   /** Engine movement phase supplied by PlayCanvas; called once before combat. */
   movePlayers?: (frames: readonly (import('./types.ts').InputFrame | null | undefined)[]) => void
 
@@ -59,6 +64,7 @@ export interface World {
   /** Ring buffer of positions for lag compensation: [tick % HISTORY][player][x, z, flags]. */
   history: Float64Array
   /** One byte per window opening: 0 intact, 1 broken (`grid.glass` holds the geometry). */
+  props: Uint8Array
   glass: Uint8Array
   /** Economy audit, in dollars since the world started. */
   minted: number
@@ -104,6 +110,7 @@ export function createWorld(options: WorldOptions = {}): World {
     events: [],
     deposits: [],
     history: new Float64Array(HISTORY_TICKS * MAX_PLAYERS * HIST_STRIDE),
+    props: initialPropHealth(layout),
     glass: new Uint8Array(grid.glass.length),
     minted: 0,
     burned: 0,

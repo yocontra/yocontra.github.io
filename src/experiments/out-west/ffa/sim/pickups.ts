@@ -44,6 +44,7 @@ import {
   TICK_MS,
 } from './constants.ts'
 import { applyDamage } from './death.ts'
+import { applyPropStrikes, type PropStrike, traceEnvironment } from './environment-response.ts'
 import { BLOCK_SIGHT, hasLineOfSight, rayGrid } from './layout.ts'
 import { aimRadians, inIframes, quantize, vaulting } from './move.ts'
 import { hashSigned } from './rng.ts'
@@ -127,8 +128,12 @@ function fireRifle(w: World, p: Player, aim: number, viewTime: number): void {
   const spread = spreadFor(p)
   p.bloom = bloomAfterShot(p.weapon, p.bloom)
   const jitter = hashSigned(w.seed, p.id, w.tick, p.stats.shots)
-  const ray = shotRay(p, aim, jitter * spread * DEG, jitter * spread * DEG * 0.6)
-  const wall = w.castWorld?.({ ...ray, maxT: RIFLE_RANGE }) ?? RIFLE_RANGE
+  const ray = {
+    ...shotRay(p, aim, jitter * spread * DEG, jitter * spread * DEG * 0.6),
+    maxT: RIFLE_RANGE,
+  }
+  const scenery = traceEnvironment(w, ray)
+  const wall = scenery.range
   shatterGlass(w, ray.ox, ray.oy, ray.oz, ray.dx, ray.dy, ray.dz, wall)
   const time = rewindTime(w, viewTime)
   const hit = traceTargets(w, p, { ...ray, maxT: wall }, time)
@@ -140,12 +145,16 @@ function fireRifle(w: World, p: Player, aim: number, viewTime: number): void {
     flags |= SHOT_WALL
   }
   recordShot(w, p, ray, { range: hit ? hit.t : wall, target: hit ? hit.id : NONE, flags })
+  if (!hit) {
+    applyPropStrikes(w, [{ hit: scenery.hit, ray, damage: RIFLE_DAMAGE }])
+  }
 }
 
 function fireShotgun(w: World, p: Player, aim: number, viewTime: number): void {
   spend(w, p, SHOTGUN_FIRE_MS)
   const time = rewindTime(w, viewTime)
   const damage = new Map<number, number>()
+  const propStrikes: PropStrike[] = []
   const traces: { ray: ShotRay; range: number; target: number; wall: boolean }[] = []
   // the cone: tighter on the sights (spread.ts)
   const cone = spreadFor(p)
@@ -153,12 +162,19 @@ function fireShotgun(w: World, p: Player, aim: number, viewTime: number): void {
     // An even fan with a little jitter, so the pattern is fair but not a fixed comb.
     const lane = (i / (SHOTGUN_PELLETS - 1) - 0.5) * cone
     const jitter = hashSigned(w.seed, p.id, w.tick, i) * (cone / SHOTGUN_PELLETS / 2)
-    const ray = shotRay(p, aim, (lane + jitter) * DEG, jitter * DEG * 0.4)
-    const wall = w.castWorld?.({ ...ray, maxT: SHOTGUN_RANGE }) ?? SHOTGUN_RANGE
+    const ray = {
+      ...shotRay(p, aim, (lane + jitter) * DEG, jitter * DEG * 0.4),
+      maxT: SHOTGUN_RANGE,
+    }
+    const scenery = traceEnvironment(w, ray)
+    const wall = scenery.range
     shatterGlass(w, ray.ox, ray.oy, ray.oz, ray.dx, ray.dy, ray.dz, wall)
     const hit = traceTargets(w, p, { ...ray, maxT: wall }, time)
     if (hit) {
       damage.set(hit.id, (damage.get(hit.id) ?? 0) + SHOTGUN_PELLET_DAMAGE)
+    }
+    if (!hit) {
+      propStrikes.push({ hit: scenery.hit, ray, damage: SHOTGUN_PELLET_DAMAGE })
     }
     traces.push({ ray, range: hit?.t ?? wall, target: hit?.id ?? NONE, wall: wall < SHOTGUN_RANGE })
   }
@@ -186,6 +202,7 @@ function fireShotgun(w: World, p: Player, aim: number, viewTime: number): void {
       pellets: traces.map((t) => rayEnd(t.ray, t.range)),
     })
   }
+  applyPropStrikes(w, propStrikes)
 }
 
 /** Fire the pickup weapon in hand. Assumes `canFire` passed and `p.weapon` isn't the revolver. */

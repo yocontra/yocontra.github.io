@@ -22,6 +22,8 @@ function game() {
     showdowns: [],
     mostWanted: 255,
     glass: [1, 0, 1],
+    seed: 1,
+    props: [68, 68, 68, 68, 68, 68, 68, 68],
   }
 }
 function decode(source: FrontierState): FrontierState {
