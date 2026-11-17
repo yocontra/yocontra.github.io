@@ -143,7 +143,7 @@ function frameHub(d: NativeDirector): void {
 
 export function hubShot(d: NativeDirector, shot: string): void {
   const previous = hubViews.get(d)
-  const preserveCamera = previous !== undefined && d.rig.name === 'title'
+  const preserveCamera = previous !== undefined && d.rig.owner === 'hub'
   clearMoments(d, preserveCamera)
   d.debris.reset()
   d.game.app.scene.exposure = 1.1

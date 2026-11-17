@@ -83,6 +83,7 @@ it('returning from Outfitter retains the settled native title shot instead of re
   })
   try {
     hubShot(sim.d, 'hub')
+    expect(rig.owner).toBe('hub')
     rig.update(20)
     const time = rig.shotTime
     const settled = rig.pose()
@@ -92,6 +93,14 @@ it('returning from Outfitter retains the settled native title shot instead of re
     expect(rig.shotTime).toBe(time)
     expect(rig.pose().pos.equals(settled.pos)).toBe(true)
     expect(rig.pose().look.equals(settled.look)).toBe(true)
+    // A duel cut can reuse a display label; ownership, rather than that label, controls reuse.
+    rig.cut('title', () => settled)
+    expect(rig.owner).toBe('duel')
+    hubShot(sim.d, 'hub')
+    expect(rig.owner).toBe('hub')
+    expect(rig.shotTime).toBe(0)
+    rig.release()
+    expect(rig.owner).toBeNull()
   } finally {
     camera.destroy()
     sim.restore()
