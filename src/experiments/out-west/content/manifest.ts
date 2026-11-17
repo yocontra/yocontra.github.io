@@ -85,19 +85,24 @@ export const DYNAMIC_ASSETS = {
     hash: 'd3436604772c8bb1855c8ce3709e4322c61ab0211d84bb5b40d7b10b146f2b5b',
     bytes: 289508,
   },
+  'barrel-fragments': {
+    url: '/experiments/out-west/3d/native-v2/dynamic/barrel-fragments.glb?v=2bad2c50c489c0eb',
+    hash: '2bad2c50c489c0eb66dcb33a0f698046934aa997a944b60f5b6687b10d621f04',
+    bytes: 776524,
+  },
 } as const
 export const ENVIRONMENT = {
   url: '/experiments/out-west/3d/env/kloppenheim_06_puresky_1k.hdr?v=206c67e3a1b99228',
   hash: '206c67e3a1b992282821cf06662bdd69bbb4915c1c4444a66338a40d6a7d4e34',
   bytes: 1173154,
 } as const
-export const CONTENT_VERSION = '53d25c78763794debd8493fa54b20432144e2e64b6c0cc4b7ec201993a319810'
+export const CONTENT_VERSION = '186a1b4771ded96a795b2ee8acd612fb9381254ea0afdc1f46dfa9d8d167c8a5'
 export const COLLISION_VERSION = '03b11033428780f67158b47e3fc2b37d761185acea4d5b323301449671b65def'
 export const ASSETS = {
   frontier: {
-    url: '/experiments/out-west/3d/native-v2/baked/frontier.glb?v=dab2fb122f92e14d',
-    hash: 'dab2fb122f92e14dd6e78daa95db9e2f959272020cff4daa5f5e50076c502ee9',
-    bytes: 59477132,
+    url: '/experiments/out-west/3d/native-v2/baked/frontier.glb?v=a296c09f6227588d',
+    hash: 'a296c09f6227588dda2d9e892a729440600c7302315d7202008b5b69e93da4e6',
+    bytes: 59888972,
   },
   duel: {
     url: '/experiments/out-west/3d/native-v2/baked/duel.glb?v=6845fb73cd9e1a74',
