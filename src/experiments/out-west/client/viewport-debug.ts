@@ -35,6 +35,14 @@ export function viewportDebug({
     ...(import.meta.env.PUBLIC_OW_PERF_HARNESS === '1'
       ? {
           nativeAppStats: nativeFrameStats(application?.app),
+          camera: application?.camera.camera
+            ? {
+                position: application.camera.getPosition().toArray(),
+                forward: application.camera.forward.toArray(),
+                fov: application.camera.camera.fov,
+                horizontalFov: application.camera.camera.horizontalFov,
+              }
+            : null,
           renderer: application
             ? { tier: application.tier, nativePost: application.post?.diagnostics() ?? null }
             : null,
