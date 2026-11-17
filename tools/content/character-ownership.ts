@@ -119,15 +119,20 @@ export async function probeCharacterOwnership(original: GameApplication) {
   }
   const otherDevice = other.app.graphicsDevice
   const batcher = other.app.batcher
-  const owned = batcher.getGroupByName('Rider equipment')
+  const equipment = batcher.getGroupByName('Rider equipment')
+  const weapons = batcher.getGroupByName('Rider weapons')
   const unrelated = batcher.addGroup('Unrelated regression group', false, 24)
-  if (!owned) {
-    throw new Error('Missing owned native gear group')
+  if (!(equipment && weapons)) {
+    throw new Error('Missing owned native equipment or weapons group')
   }
   otherActor.destroy()
   other.stage.destroy()
-  if (batcher.getGroupById(owned.id) || !batcher.getGroupById(unrelated.id)) {
-    throw new Error('Gear teardown failed to retire only its owned batch group')
+  if (
+    batcher.getGroupById(equipment.id) ||
+    batcher.getGroupById(weapons.id) ||
+    !batcher.getGroupById(unrelated.id)
+  ) {
+    throw new Error('Gear teardown failed to retire only its owned batch groups')
   }
   other.destroy()
   canvas.remove()
