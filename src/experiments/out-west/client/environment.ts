@@ -23,7 +23,12 @@ import { OUTLAWS } from '../data/outlaws.ts'
 import { drawPoster } from '../ui/poster.ts'
 import type { GameApplication } from './application.ts'
 import { NativeClockwork } from './clockwork.ts'
-import { animateWind, prepareFreightClouds, worldCloudMaterials } from './environment-assets.ts'
+import {
+  animateWind,
+  prepareFreightClouds,
+  sharedCloudMotion,
+  worldCloudMaterials,
+} from './environment-assets.ts'
 import { assignEnvironmentBatch } from './environment-detail-batches.ts'
 import { FrontierLamps } from './frontier-lamps.ts'
 import { NativeModelLods } from './model-lod.ts'
@@ -59,6 +64,7 @@ export class NativeEnvironment {
   private groundTexture: Texture | undefined
   private cloudTime = 0
   private readonly cloudOffset = new Vec2()
+  private readonly cloudMotion: ReturnType<typeof sharedCloudMotion>
   private posterTexture: Texture | undefined
   private posterCanvas: HTMLCanvasElement | undefined
   private readonly portraits = new Map<number, HTMLCanvasElement>()
@@ -78,6 +84,7 @@ export class NativeEnvironment {
     this.game = game
     this.frontier = frontier
     this.frontierLamps = frontier ? new FrontierLamps(game) : undefined
+    this.cloudMotion = frontier ? sharedCloudMotion(game.app.graphicsDevice) : undefined
     this.ready = Promise.all([
       this.frontierLamps?.ready,
       this.setTime(frontier ? 0.3 : 0),
@@ -180,9 +187,13 @@ export class NativeEnvironment {
     }
     this.cloudTime = (this.cloudTime + dt) % 3600
     this.cloudOffset.set((-this.cloudTime * 7.5) / 1024, (-this.cloudTime * 2.5) / 1024)
-    for (const material of this.cloudMaterials) {
-      material.diffuseDetailMapOffset = this.cloudOffset
-      material.update()
+    if (this.cloudMotion) {
+      this.cloudMotion.move(this.cloudOffset)
+    } else {
+      for (const material of this.cloudMaterials) {
+        material.diffuseDetailMapOffset = this.cloudOffset
+        material.update()
+      }
     }
     if (this.lanterns > 0) {
       const t = this.cloudTime
@@ -200,6 +211,7 @@ export class NativeEnvironment {
     material.diffuseDetailMap = this.cloudTexture ?? null
     material.diffuseDetailMapUv = 1
     material.diffuseDetailMode = DETAILMODE_MUL
+    this.cloudMotion?.prepare(material)
     material.update()
   }
   private applyGround(material: StandardMaterial): void {
