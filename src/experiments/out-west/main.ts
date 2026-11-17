@@ -194,14 +194,18 @@ function makeHub(
     stage: (shot) => game()?.hubShot(shot),
     dress: (l, dyes) => game()?.dress(l, dyes),
     thumb: (id) => game()?.itemThumb(id) ?? null,
+    previewItem: (id) => game()?.previewItem(id),
+    rotatePreview: (degrees) => game()?.rotatePreview(degrees),
     previewSound: (id) => {
       if (!id.startsWith('sound.')) {
         return
       }
       const s = DRAW_SOUNDS[id] ?? { rate: 1, gain: 0.7 }
-      audio.play('fireBig', { gain: s.gain, rate: s.rate, reverb: 0.8 })
-      if (s.hawk) {
-        audio.play('hawk', { gain: 0.5, when: audio.now + 0.35 })
+      const shot = audio.play('fireBig', { gain: s.gain, rate: s.rate, reverb: 0.8 })
+      const hawk = s.hawk ? audio.play('hawk', { gain: 0.5, when: audio.now + 0.35 }) : null
+      return () => {
+        shot?.stop()
+        hawk?.stop()
       }
     },
     playGauntlet: (c) => game()?.playGauntlet(c),

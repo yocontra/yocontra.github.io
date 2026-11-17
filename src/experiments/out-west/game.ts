@@ -4,6 +4,7 @@ import { ASSETS } from './content/manifest.ts'
 import type { ItemId, Loadout } from './data/catalog.ts'
 import type { Dyes } from './data/dye.ts'
 import { NativeDirector, type NativeRankedConnect } from './duel/native-director.ts'
+import { NativeOutfitter } from './duel/native-outfitter.ts'
 import { NativeRemoteDuel } from './duel/native-remote.ts'
 import type { DailyOpts, HubShot, PvpOpts } from './duel/options.ts'
 import { RankedDuelClock } from './duel/ranked-clock.ts'
@@ -20,6 +21,8 @@ export interface Game {
   playGauntlet: (choice: GauntletChoice) => void
   hubShot: (shot: HubShot) => void
   dress: (loadout: Loadout, dyes?: Dyes) => void
+  previewItem: (id: ItemId | null) => void
+  rotatePreview: (degrees: number) => void
   startPvp: (opts: PvpOpts) => void
   playDaily: (opts: DailyOpts) => void
   rankedRunId: () => string | null
@@ -58,7 +61,11 @@ export async function createGame(opts: GameOpts): Promise<Game> {
       { save: opts.save, input, hud, audio: opts.audio },
       opts.connectRanked,
     )
-    disposeDirector = () => director.dispose()
+    const outfitter = new NativeOutfitter(director)
+    disposeDirector = () => {
+      outfitter.destroy()
+      director.dispose()
+    }
     director.onSaloon = opts.onSaloon
     await director.initialize()
     opts.onProgress(1)
@@ -95,7 +102,16 @@ export async function createGame(opts: GameOpts): Promise<Game> {
         }
         begin(choice.resume || opts.save.seenIntro, choice.ranked && opts.connectRanked !== null)
       },
-      hubShot: (shot) => director.hubShot(shot),
+      hubShot: (shot) => {
+        if (shot === 'store') {
+          outfitter.enter()
+        } else {
+          outfitter.show(null)
+        }
+        director.hubShot(shot)
+      },
+      previewItem: (id) => outfitter.show(id),
+      rotatePreview: (degrees) => outfitter.rotate(degrees),
       dress: (loadout, dyes) => director.dress(loadout, dyes),
       startPvp: (pvp) => {
         remoteDuel?.close()
