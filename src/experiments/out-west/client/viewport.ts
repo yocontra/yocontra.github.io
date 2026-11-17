@@ -247,6 +247,15 @@ function nativeAudioContext(
   return !signal.aborted && manager && !manager.suspended ? manager.context : null
 }
 
+function screenAim(view: FrontierSettings['view'], input: GameInput | undefined) {
+  const cursor = view === 'top' ? input?.cursor : undefined
+  return {
+    x: cursor?.x ?? innerWidth / 2,
+    y: cursor?.y ?? innerHeight / 2,
+    shooter: view !== 'top',
+  }
+}
+
 /** The viewport consumes either a Colyseus session or a local native-physics session. */
 export function mountGameViewport(root: HTMLElement, options: ViewportOptions): GameViewport {
   const canvas = createCanvas(root)
@@ -418,11 +427,7 @@ export function mountGameViewport(root: HTMLElement, options: ViewportOptions): 
       first = value
       settings = { ...settings, view: value ? 'first' : 'third' }
     },
-    aimPoint: () => ({
-      x: settings.view === 'top' ? (input?.cursor.x ?? innerWidth / 2) : innerWidth / 2,
-      y: settings.view === 'top' ? (input?.cursor.y ?? innerHeight / 2) : innerHeight / 2,
-      shooter: settings.view !== 'top',
-    }),
+    aimPoint: () => screenAim(settings.view, input),
     debug: () => viewportDebug({ application, session, windows, actors, ragdolls, props }),
   }
 }

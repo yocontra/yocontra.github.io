@@ -5,6 +5,7 @@ import type { FrontierSession } from '../src/experiments/out-west/client/frontie
 import type { GameViewport } from '../src/experiments/out-west/client/viewport.ts'
 
 const origin = process.env.OUT_WEST_URL ?? 'http://127.0.0.1:4390'
+const websocketOrigin = origin.replace(/^http/u, 'ws')
 const output = '/tmp/out-west-character-first-person-final'
 await mkdir(output, { recursive: true })
 const browser = await chromium.launch({ channel: 'chrome', headless: true })
@@ -13,7 +14,7 @@ const results: unknown[] = []
 try {
   const page = await browser.newPage({ viewport: { width: 1280, height: 720 } })
   await page.routeWebSocket(
-    (url) => url.origin === origin.replace(/^http/u, 'ws'),
+    (url) => url.origin === websocketOrigin,
     () => undefined,
   )
   page.on('pageerror', (error) => errors.push(error.message))
