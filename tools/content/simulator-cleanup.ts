@@ -1,0 +1,128 @@
+/** Always attempt later owned cleanup after restore/RPC failure; no caller hosts are terminated. */
+import {
+  bounded,
+  type OwnedProcess,
+  requireFreePort,
+  statusJSON,
+  stopOwned,
+  until,
+} from './simulator-process.ts'
+
+interface Client {
+  pid: number
+  call: (op: string, args?: Record<string, unknown>, timeout?: number) => Promise<unknown>
+  close: () => Promise<unknown>
+  terminate: () => Promise<unknown>
+}
+interface CleanupContext {
+  booted: boolean
+  native: Client | undefined
+  companion: OwnedProcess | undefined
+  run: (args: string[], timeout?: number) => Promise<string>
+  options: { udid: string; port: number }
+  stateURL: URL
+  url: URL
+  initialOrientation: string | undefined
+  budgets?: { restore: number; rpc: number; close: number; shutdown: number }
+}
+export async function cleanupGuest(context: CleanupContext) {
+  const { booted, native, companion, run, options, stateURL, url, initialOrientation } = context
+  const budget = context.budgets ?? { restore: 5000, rpc: 2000, close: 6000, shutdown: 30_000 }
+  const cleanup: Record<string, unknown> = {}
+  if (booted) {
+    try {
+      // run() is the owned command() runner; await its bounded kill/drain completion too.
+      await run(
+        [
+          'xcrun',
+          'simctl',
+          'openurl',
+          options.udid,
+          new URL(`/__qa/restore?id=${url.searchParams.get('id')}`, url).href,
+        ],
+        budget.restore,
+      )
+      cleanup.settingsRestored = await until(
+        async (signal) =>
+          (await statusJSON<{ settingsRestored?: boolean }>(stateURL, signal)).settingsRestored
+            ? true
+            : undefined,
+        budget.restore / 1000,
+      )
+    } catch (error) {
+      cleanup.settingsRestoreFailure = String(error)
+    }
+  }
+  if (native) {
+    try {
+      if (!initialOrientation) {
+        throw new Error('Initial native orientation was not captured')
+      }
+      const current = await bounded(
+        () => native.call('get-orientation', {}, budget.rpc),
+        budget.rpc,
+      )
+      const restored =
+        current === initialOrientation
+          ? current
+          : await bounded(
+              () => native.call('orientation', { value: initialOrientation }, budget.rpc),
+              budget.rpc,
+            )
+      cleanup.initialOrientation = initialOrientation
+      cleanup.orientationRestored = restored === initialOrientation
+    } catch (error) {
+      cleanup.orientationRestoreFailure = String(error)
+    }
+    try {
+      cleanup.nativeClient = await bounded(() => native.close(), budget.close)
+    } catch (error) {
+      cleanup.nativeClientFailure = String(error)
+      try {
+        cleanup.nativeTermination = await bounded(() => native.terminate(), budget.close)
+      } catch (stopError) {
+        cleanup.nativeTerminationFailure = String(stopError)
+      }
+    }
+  }
+  try {
+    if (companion) {
+      cleanup.companion = await stopOwned(companion)
+    }
+  } catch (error) {
+    cleanup.companionCleanupFailure = String(error)
+  }
+  // This remains last even if either preceding cleanup failed or timed out.
+  if (booted) {
+    try {
+      await run(['xcrun', 'simctl', 'shutdown', options.udid], budget.shutdown)
+      const list = JSON.parse(
+        await run(['xcrun', 'simctl', 'list', 'devices', 'available', '--json'], budget.shutdown),
+      )
+      cleanup.deviceShutdown = Object.values(
+        list.devices as Record<string, { udid: string; state: string }[]>,
+      )
+        .flat()
+        .some((device) => device.udid === options.udid && device.state === 'Shutdown')
+    } catch (error) {
+      cleanup.shutdownFailure = String(error)
+    }
+  }
+  const ownedPids = [companion?.pid, native?.pid].filter((pid): pid is number => pid !== undefined)
+  cleanup.ownedPids = ownedPids
+  cleanup.ownedPidsAbsent = ownedPids.every((pid) => {
+    try {
+      process.kill(pid, 0)
+      return false
+    } catch {
+      return true
+    }
+  })
+  try {
+    await requireFreePort(options.port)
+    cleanup.nativePortFree = true
+  } catch {
+    cleanup.nativePortFree = false
+  }
+  return cleanup
+}

@@ -1,3 +1,8 @@
+interface SimulatorSetup {
+  id: string
+  stress: boolean
+  preflight?: boolean
+}
 /** Local QA page controls. The recorder and read-only native snapshot are installed before boot. */
 export async function installSimulatorRecorder(): Promise<void> {
   const saved = sessionStorage.getItem('__owQaRecording')
@@ -5,11 +10,7 @@ export async function installSimulatorRecorder(): Promise<void> {
     return
   }
   sessionStorage.removeItem('__owQaRecording')
-  const {
-    id,
-    stress,
-    preflight = false,
-  } = JSON.parse(saved) as { id: string; stress: boolean; preflight?: boolean }
+  const { id, stress, preflight = false } = JSON.parse(saved) as SimulatorSetup
   const recorder = Reflect.get(globalThis, '__owFrameRecorder')
   const pageState = () => {
     const rect = document.querySelector('canvas')?.getBoundingClientRect()
@@ -73,7 +74,10 @@ export async function installSimulatorRecorder(): Promise<void> {
         lobbyId: snapshot()?.lobbyId ?? '',
         ...(error ? { error } : {}),
         ...(['ready', 'failed'].includes(action) ? { page: pageState() } : {}),
-        recording: recorder?.status(),
+        recording: error
+          ? (recorder.result() ?? recorder.partial())
+          : { ...recorder?.status(), at: performance.now(), wall: Date.now() },
+        ...(error ? { failure: error, preflight, stress } : {}),
         players: stress ? 32 : 5,
       }),
     })

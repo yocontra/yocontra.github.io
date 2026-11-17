@@ -78,13 +78,31 @@ export function simulatorHost(api: string, directory: string, build: BuildReceip
       { headers: { 'content-type': 'text/html' } },
     )
   }
+  const store = async (id: string, body: { recording: { timestamps: number[] } }) => {
+    const receipt = {
+      ...body,
+      build,
+      physicalDevice: false,
+      qualification: 'incomplete',
+      outstandingEvidence: [
+        'Guest native foreground/visibility and headless simulator identity require independent joining; no Mac foreground claim',
+      ],
+      timing: body.recording.timestamps.length >= 2 ? frameTiming(body.recording.timestamps) : null,
+    }
+    const path = join(directory, `simulator-${id}.json`)
+    await writeFile(path, `${JSON.stringify(receipt, null, 2)}\n`)
+    status.set(id, { stage: 'saved', receipt })
+    sessions.delete(id)
+    console.log(`Simulator recording saved: ${path}`)
+    return Response.json({ saved: true })
+  }
   const session = async (request: Request, id: string, accountId: string) => {
     const body = (await request.json()) as {
       action: string
       error?: string
       lobbyId: string
       page?: unknown
-      recording?: unknown
+      recording?: { timestamps?: number[] }
       players?: unknown
     }
     if (body.action === 'ready') {
@@ -92,7 +110,18 @@ export function simulatorHost(api: string, directory: string, build: BuildReceip
       return Response.json({ ok: true })
     }
     if (body.action === 'failed') {
-      status.set(id, { stage: 'failed', error: body.error, page: body.page })
+      if (Array.isArray(body.recording?.timestamps)) {
+        await store(id, {
+          ...body,
+          recording: { ...body.recording, timestamps: body.recording.timestamps },
+        })
+      }
+      status.set(id, {
+        ...((status.get(id) as object | undefined) ?? {}),
+        stage: 'failed',
+        error: body.error,
+        page: body.page,
+      })
       return Response.json({ ok: true })
     }
     if (body.action === 'recording') {
@@ -124,25 +153,8 @@ export function simulatorHost(api: string, directory: string, build: BuildReceip
       headers: { 'content-type': 'application/json' },
     })
   }
-  const save = async (request: Request, id: string) => {
-    const body = (await request.json()) as { recording: { timestamps: number[] } }
-    const receipt = {
-      ...body,
-      build,
-      physicalDevice: false,
-      qualification: 'incomplete',
-      outstandingEvidence: [
-        'Guest native foreground/visibility and headless simulator identity require independent joining; no Mac foreground claim',
-      ],
-      timing: frameTiming(body.recording.timestamps),
-    }
-    const path = join(directory, `simulator-${id}.json`)
-    await writeFile(path, `${JSON.stringify(receipt, null, 2)}\n`)
-    status.set(id, { stage: 'saved', receipt })
-    sessions.delete(id)
-    console.log(`Simulator recording saved: ${path}`)
-    return Response.json({ saved: true })
-  }
+  const save = async (request: Request, id: string) =>
+    store(id, (await request.json()) as { recording: { timestamps: number[] } })
   const readStatus = (id: string) =>
     status.has(id) ? Response.json(status.get(id)) : new Response('Not ready', { status: 404 })
   return async (request: Request): Promise<Response | null> => {

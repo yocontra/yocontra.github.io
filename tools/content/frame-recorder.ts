@@ -1,4 +1,12 @@
 /** Browser-only recording, reusable through addInitScript or the simulator's Web Inspector. */
+export interface QARecorderInput {
+  at: number
+  type: string
+  key?: string
+  x?: number
+  y?: number
+  pointerId?: number
+}
 export interface QARecorderPrivacySample {
   captureCalls: number
   captureBlocked: boolean
@@ -164,7 +172,7 @@ export function installFrameRecorder(): void {
       },
     })
   }
-  const inputs: { at: number; type: string; key?: string; x?: number; y?: number }[] = []
+  const inputs: QARecorderInput[] = []
   const allowed = new Set(
     'KeyW KeyA KeyS KeyD KeyR KeyC Space ShiftLeft ArrowUp ArrowDown ArrowLeft ArrowRight'.split(
       ' ',
@@ -217,7 +225,8 @@ export function installFrameRecorder(): void {
     if (event instanceof KeyboardEvent && allowed.has(event.code)) {
       inputs.push({ at: performance.now(), type: event.type, key: event.code })
     } else if (event instanceof PointerEvent) {
-      inputs.push({ at: performance.now(), type: event.type, x: event.clientX, y: event.clientY })
+      const { clientX: x, clientY: y, pointerId } = event
+      inputs.push({ at: performance.now(), type: event.type, x, y, pointerId })
     }
   }
   for (const name of ['keydown', 'keyup', 'pointerdown', 'pointerup', 'pointermove']) {
