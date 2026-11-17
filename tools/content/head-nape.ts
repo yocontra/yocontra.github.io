@@ -3,6 +3,7 @@ import { createHash } from 'node:crypto'
 import { readFile } from 'node:fs/promises'
 import { resolve } from 'node:path'
 import type { Document, Node, Primitive } from '@gltf-transform/core'
+import { calculateNormals, Vec3 as NativeVec3 } from 'playcanvas'
 import sharp from 'sharp'
 import type { Range } from './character-atlas.ts'
 
@@ -110,41 +111,67 @@ function hatRim(head: Node, origin: Vec3): number | null {
   return rim
 }
 
-/** Normals follow the lattice's deformation gradient F = I + J, as cof(F) n. */
-function deformedNormal(
-  field: (p: Vec3) => Vec3 | null,
-  p: Vec3,
-  n: number[],
-  h: number,
-): number[] {
-  const jacobian = [0, 1, 2].map((axis) => {
-    const plus = [...p] as Vec3
-    const minus = [...p] as Vec3
-    plus[axis] = (plus[axis] ?? 0) + h
-    minus[axis] = (minus[axis] ?? 0) - h
-    const a = field(plus) ?? [0, 0, 0]
-    const b = field(minus) ?? [0, 0, 0]
-    return a.map((v, c) => (v - (b[c] ?? 0)) / (2 * h))
-  })
-  const f = [0, 1, 2].map((r) => [0, 1, 2].map((c) => (r === c ? 1 : 0) + (jacobian[c]?.[r] ?? 0)))
-  const at = (r: number, c: number): number => f[(r + 3) % 3]?.[(c + 3) % 3] ?? 0
-  const cofactor = (r: number, c: number): number =>
-    at(r + 1, c + 1) * at(r + 2, c + 2) - at(r + 1, c + 2) * at(r + 2, c + 1)
-  const out = [0, 1, 2].map((r) =>
-    [0, 1, 2].reduce((sum, c) => sum + cofactor(r, c) * (n[c] ?? 0), 0),
-  )
-  const length = Math.hypot(...out) || 1
-  return [...out.map((v) => v / length), ...n.slice(3)]
+/** Rebuild the actual deformed surface, sharing normals only across physical UV seams. */
+function refreshNeckNormals(primitive: Primitive, range: Range, origin: Vec3, scale: number): void {
+  const position = primitive.getAttribute('POSITION')
+  const normal = primitive.getAttribute('NORMAL')
+  const indices = primitive.getIndices()
+  if (!(position && normal && indices)) {
+    throw new Error('Head repair requires indexed skin normals')
+  }
+  const unique = new Map<string, number>()
+  const remap = new Map<number, number>()
+  const points: number[] = []
+  for (let i = range.start; i < range.start + range.count; i++) {
+    const point = position.getElement(i, [])
+    const key = point.join(',')
+    let vertex = unique.get(key)
+    if (vertex === undefined) {
+      vertex = unique.size
+      unique.set(key, vertex)
+      points.push(...point)
+    }
+    remap.set(i, vertex)
+  }
+  const triangles: number[] = []
+  for (let i = 0; i < indices.getCount(); i += 3) {
+    const face = [0, 1, 2].map((corner) => remap.get(indices.getScalar(i + corner)))
+    if (face.every((vertex) => vertex !== undefined)) {
+      triangles.push(...(face as number[]))
+    }
+  }
+  const geometric = calculateNormals(points, triangles)
+  for (const [i, vertex] of remap) {
+    const [x = 0, y = 0, z = 0] = position
+      .getElement(i, [])
+      .map((v, k) => (v - (origin[k] ?? 0)) / scale)
+    const weight =
+      smoothstep(-0.06, -0.04, y) *
+      (1 - smoothstep(0.055, 0.09, y)) *
+      smoothstep(-0.005, -0.025, z) *
+      (1 - smoothstep(0.055, 0.075, Math.abs(x)))
+    if (weight === 0) {
+      continue
+    }
+    const previous = normal.getElement(i, [])
+    const target = geometric.slice(vertex * 3, vertex * 3 + 3)
+    const n = new NativeVec3()
+      .lerp(
+        new NativeVec3(previous[0], previous[1], previous[2]),
+        new NativeVec3(target[0], target[1], target[2]),
+        weight,
+      )
+      .normalize()
+    normal.setElement(i, [n.x, n.y, n.z])
+  }
 }
 
 function applyLattice(
   primitive: Primitive,
   range: Range,
   field: (p: Vec3) => Vec3 | null,
-  h: number,
 ): boolean {
   const position = primitive.getAttribute('POSITION')
-  const normal = primitive.getAttribute('NORMAL')
   let changed = false
   for (let index = range.start; index < range.start + range.count; index++) {
     const p = position?.getElement(index, [0, 0, 0]) as Vec3
@@ -156,9 +183,6 @@ function applyLattice(
       index,
       p.map((v, k) => v + (offset[k] ?? 0)),
     )
-    if (normal) {
-      normal.setElement(index, deformedNormal(field, p, normal.getElement(index, []), h))
-    }
     changed = true
   }
   return changed
@@ -200,7 +224,11 @@ export async function repairHeadNape(doc: Document): Promise<boolean> {
         trilinear(nape, p.map((v, k) => (v - (origin[k] ?? 0)) / scale) as Vec3)?.map(
           (v) => v * scale * under(p[1]),
         ) as Vec3 | null
-      changed = applyLattice(primitive, skull, field, 0.002 * scale) || changed
+      const deformed = applyLattice(primitive, skull, field)
+      if (deformed) {
+        refreshNeckNormals(primitive, skull, origin, scale)
+      }
+      changed = deformed || changed
     }
   }
   return changed
