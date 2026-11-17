@@ -16,6 +16,7 @@ authors two portable artifacts from the canonical player head, read only:
 import hashlib
 import json
 import struct
+import subprocess
 import sys
 from pathlib import Path
 
@@ -367,6 +368,14 @@ def write(name, pixels, alpha, box):
     image.save()
 
 
+def write_lattice(data):
+    path = OUTPUT / "lattice.json"
+    path.write_text(json.dumps(data, indent=2) + "\n")
+    subprocess.run([
+        "bun", "node_modules/@biomejs/biome/bin/biome", "format", "--write", str(path)
+    ], cwd=ROOT, check=True, stdout=subprocess.DEVNULL)
+
+
 def main():
     for obj in list(bpy.data.objects):
         bpy.data.objects.remove(obj, do_unlink=True)
@@ -381,7 +390,7 @@ def main():
         data["bounds"] = BOUNDS
         data["resolution"] = RESOLUTION
         data["offsets"] = np.round(offsets, 6).reshape(-1, 3).tolist()
-        path.write_text(json.dumps(data, indent=1) + "\n")
+        write_lattice(data)
         print("Authored neck lattice; existing skin atlas patches preserved")
         return
     labels = islands(triangles, len(positions))
@@ -426,7 +435,7 @@ def main():
     write("neck-arm", arm_out, normal_alpha.astype(np.float32), nbox)
     digest = {p.name: hashlib.sha256(p.read_bytes()).hexdigest() for p in (albedo_path, normal_path, arm_path)}
     lo, hi = BOUNDS
-    (OUTPUT / "lattice.json").write_text(json.dumps({
+    write_lattice({
         "reference": {"head": head.round(6).tolist(), "crown": float(positions[np.unique(triangles), 1].max() - head[1])},
         "bounds": [list(lo), list(hi)],
         "resolution": list(RESOLUTION),
@@ -436,7 +445,7 @@ def main():
             "normal": {"sha256": digest[normal_path.name], "x": nbox[0], "y": nbox[1], "image": "neck-normal.png"},
             "arm": {"sha256": digest[arm_path.name], "x": nbox[0], "y": nbox[1], "image": "neck-arm.png"},
         },
-    }, indent=1) + "\n")
+    })
     print(f"neck island {int(neck.sum())} triangles, {seams} seam vertices, albedo box {box}, face ARM {face_arm.round(3).tolist()}")
 
 
