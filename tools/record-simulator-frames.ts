@@ -26,6 +26,14 @@ import {
   waitForRecording,
 } from './content/simulator-process.ts'
 
+async function nativeState(
+  run: (args: string[], json?: boolean) => Promise<unknown>,
+  idb: (...args: string[]) => string[],
+) {
+  const ax = await run(idb('ui', 'describe-all', '--api', 'axbridge', '--format', 'complete'), true)
+  const apps = parseIDBApps((await run(idb('list-apps', '--fetch-process-state'))) as string)
+  return { ax, apps }
+}
 export async function runPreflight(options: {
   udid: string
   origin: string
@@ -104,12 +112,8 @@ export async function runPreflight(options: {
       const value = (await response.json()) as { stage: string; page: PageState }
       return value.stage === 'ready' ? value : undefined
     }, 120)
-    const beforeAX = await run(
-      idb('ui', 'describe-all', '--api', 'axbridge', '--format', 'complete'),
-      true,
-    )
-    const apps = parseIDBApps((await run(idb('list-apps', '--fetch-process-state'))) as string)
-    const web = webFrame(beforeAX)
+    const { ax: beforeAX, apps: beforeApps } = await nativeState(run, idb)
+    const web = webFrame(beforeAX, ready.page)
     const start = frameForAX(beforeAX, 'Start 2s headless preflight')
     if (!(web && start && ready.page.canvas)) {
       throw new Error('Native guest AX/canvas frames unavailable; no guessed coordinates')
@@ -140,21 +144,21 @@ export async function runPreflight(options: {
       const value = (await statusJSON(stateURL, signal)) as { stage: string; receipt?: unknown }
       return value.stage === 'saved' && value.receipt ? value : undefined
     }, 15)
-    const afterAX = await run(
-      idb('ui', 'describe-all', '--api', 'axbridge', '--format', 'complete'),
-      true,
-    )
+    const { ax: afterAX, apps: afterApps } = await nativeState(run, idb)
     await run(idb('screenshot', join(options.output, 'after.png')))
     const issues = preflightIssues({
       beforeAX,
       afterAX,
+      beforeApps,
+      afterApps,
       expectedURL: ready.page.url,
       receipt: saved.receipt,
     })
     report = {
       ...report,
       device,
-      apps,
+      beforeApps,
+      afterApps,
       beforeAX,
       afterAX,
       browserReceipt: saved.receipt,

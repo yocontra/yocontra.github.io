@@ -17,6 +17,7 @@ import {
   type Gesture,
   gestureTape,
   joinGestures,
+  type NativeForegroundSample,
   nativeForeground,
   nativeTransform,
   recordingOptions,
@@ -78,6 +79,8 @@ type Run = (args: string[], timeout?: number) => Promise<string>
 interface Capture {
   beforeAX: unknown
   afterAX: unknown
+  beforeApps: unknown
+  afterApps: unknown
   ready: State
   receipt: Receipt
   tape: Gesture[]
@@ -111,7 +114,8 @@ async function captureNative(context: {
     return value.stage === 'ready' ? value : undefined
   }, 120)
   const beforeAX = await native.call('ax')
-  const web = webFrame(beforeAX)
+  const beforeApps = await native.call('apps')
+  const web = webFrame(beforeAX, ready.page)
   const start = frameForAX(
     beforeAX,
     `Start 60s ${selected.population === 'ordinary' ? '5 rider' : '32 rider'} recording`,
@@ -173,10 +177,13 @@ async function captureNative(context: {
     throw new Error('Native page receipt missing')
   }
   const afterAX = await native.call('ax')
+  const afterApps = await native.call('apps')
   await native.call('screenshot', { path: join(output, 'after.png') })
   return {
     beforeAX,
     afterAX,
+    beforeApps,
+    afterApps,
     ready,
     receipt: saved.receipt,
     tape,
@@ -233,25 +240,29 @@ async function qualifyNative(context: {
   build: BuildReceipt
   source: string
   selected: ReturnType<typeof recordingOptions>
+  udid: string
 }) {
-  const { data, native, build, source, selected } = context
+  const { data, native, build, source, selected, udid } = context
   const receipt = data.receipt
   const recording = receipt.recording
   const timing = recording.timestamps.length >= 2 ? frameTiming(recording.timestamps) : null
   const start = recording.samples[0]?.wall ?? 0
   const end = recording.samples.at(-1)?.wall ?? 0
-  const foreground = (
-    native.events as { event: string; value?: { wall: number; ax: unknown; orientation: string } }[]
-  ).flatMap((e) => (e.event === 'foreground' && e.value ? [e.value] : []))
+  const foreground = (native.events as { event: string; value?: NativeForegroundSample }[]).flatMap(
+    (e) => (e.event === 'foreground' && e.value ? [e.value] : []),
+  )
   const foregroundCoverage = nativeForeground(foreground, {
     start,
     end,
     orientation: data.orientation,
+    udid,
   })
   const gestures = joinGestures(data.tape, recording.inputs, data.web, data.ready.page)
   const issues = preflightIssues({
     beforeAX: data.beforeAX,
     afterAX: data.afterAX,
+    beforeApps: data.beforeApps,
+    afterApps: data.afterApps,
     expectedURL: data.ready.page.url,
     receipt,
     seconds: 60,
@@ -415,7 +426,9 @@ export async function runRecording(options: Options) {
       output: options.output,
       checkpoint,
     })
-    await checkpoint(await qualifyNative({ data, native, build, source, selected }))
+    await checkpoint(
+      await qualifyNative({ data, native, build, source, selected, udid: options.udid }),
+    )
   } catch (error) {
     report.failure = String(error)
   } finally {

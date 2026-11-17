@@ -2,6 +2,7 @@
 import type { QARecorderPrivacySample } from './frame-recorder.ts'
 import { nativeRendererCaptured } from './production-fixture.ts'
 
+const decimalPID = /^[1-9]\d*$/u
 const deviceId = /^[0-9A-F-]{36}$/iu
 export const QA_DEVICE = '59616A95-4749-4F6F-8E1D-1FAEA0263EFC'
 export interface Frame {
@@ -87,7 +88,9 @@ function nodes(value: unknown): AXNode[] {
   return [value as AXNode, ...Object.values(value).flatMap(nodes)]
 }
 export function frameForAX(value: unknown, label: string): Frame | undefined {
-  const node = nodes(value).find((entry) => entry.AXLabel === label || entry.title === label)
+  const node = nodes(value).find(
+    (entry) => entry.AXLabel === label || entry.title === label || entry.label === label,
+  )
   const frame = node?.frame ?? node?.AXFrame
   return validFrame(frame) ? frame : undefined
 }
@@ -100,37 +103,136 @@ function validFrame(value: unknown): value is Frame {
       frame.height > 0,
   )
 }
-export function webFrame(value: unknown): Frame | undefined {
-  const node = nodes(value).find((entry) =>
-    ['WebArea', 'AXWebArea'].includes(String(entry.role ?? entry.AXRole ?? entry.type)),
-  )
-  const frame = node?.frame ?? node?.AXFrame
-  return validFrame(frame) ? frame : undefined
-}
-export function nativeSafari(value: unknown): { bundle: string; pid: number } | undefined {
-  // Only native application records from the frontmost-app AX read count; labels/RUNNING do not.
-  for (const node of nodes(value)) {
-    if (!['Application', 'AXApplication'].includes(String(node.role ?? node.AXRole ?? node.type))) {
-      continue
-    }
-    const bundle = node.bundleIdentifier ?? node.bundle_id ?? node.bundleID
-    const pid = node.pid ?? node.processIdentifier ?? node.process_id
-    if (bundle === 'com.apple.mobilesafari' && typeof pid === 'number' && pid > 0) {
-      return { bundle, pid }
-    }
+export function webFrame(value: unknown, page?: PageState): Frame | undefined {
+  if (
+    page &&
+    !(
+      Number.isFinite(page.width) &&
+      Number.isFinite(page.height) &&
+      page.width > 0 &&
+      page.height > 0 &&
+      validFrame(page.canvas)
+    )
+  ) {
+    return undefined
   }
-  return undefined
+  const frames = nodes(value).flatMap((entry) => {
+    const frame = entry.frame ?? entry.AXFrame
+    if (!validFrame(frame)) {
+      return []
+    }
+    const legacy = ['WebArea', 'AXWebArea'].includes(
+      String(entry.role ?? entry.AXRole ?? entry.type),
+    )
+    if (legacy) {
+      return !page || Math.abs(frame.height - (page.height * frame.width) / page.width) < 4
+        ? [frame]
+        : []
+    }
+    const canvas = page?.canvas
+    if (
+      !(
+        page &&
+        canvas &&
+        entry.type === 'WebAccessibilityObjectWrapper' &&
+        entry.label === 'Out West game' &&
+        Array.isArray(entry.traits) &&
+        entry.traits.includes('WebContent') &&
+        canvas.x >= 0 &&
+        canvas.y >= 0 &&
+        canvas.x + canvas.width <= page.width &&
+        canvas.y + canvas.height <= page.height
+      )
+    ) {
+      return []
+    }
+    const scale = frame.width / canvas.width
+    if (Math.abs(frame.height - canvas.height * scale) >= 4) {
+      return []
+    }
+    // Measured native game-canvas bounds and actual CSS canvas define the viewport transform.
+    return [
+      {
+        x: frame.x - canvas.x * scale,
+        y: frame.y - canvas.y * scale,
+        width: page.width * scale,
+        height: page.height * scale,
+      },
+    ]
+  })
+  const unique = new Map(
+    frames.map((frame) => [[frame.x, frame.y, frame.width, frame.height].join(','), frame]),
+  )
+  return unique.size === 1 ? unique.values().next().value : undefined
+}
+function positivePID(value: unknown): number | undefined {
+  const pid = typeof value === 'string' && decimalPID.test(value) ? Number(value) : value
+  return typeof pid === 'number' && Number.isSafeInteger(pid) && pid > 0 ? pid : undefined
+}
+function nodePID(node: AXNode): number | undefined {
+  const values = [node.pid, node.processIdentifier, node.process_id].filter(
+    (v) => v !== null && v !== undefined,
+  )
+  const pids = values.map(positivePID)
+  return pids.length > 0 && pids[0] !== undefined && pids.every((pid) => pid === pids[0])
+    ? pids[0]
+    : undefined
+}
+export function nativeSafari(
+  value: unknown,
+  apps?: unknown,
+): { bundle: string; pid: number } | undefined {
+  const envelope = value as { target?: { kind?: unknown } } | null
+  if (envelope?.target !== undefined && envelope.target?.kind !== 'frontmost') {
+    return undefined
+  }
+  const records = nodes(value).filter((node) =>
+    ['Application', 'AXApplication'].includes(String(node.role ?? node.AXRole ?? node.type)),
+  )
+  const pid = records[0] && nodePID(records[0])
+  const bundle = 'com.apple.mobilesafari'
+  if (!pid || records.some((node) => nodePID(node) !== pid)) {
+    return undefined
+  }
+  const inline = records.map((node) => node.bundleIdentifier ?? node.bundle_id ?? node.bundleID)
+  if (inline.some((name) => name !== undefined && name !== bundle)) {
+    return undefined
+  }
+  if (apps === undefined && inline.every((name) => name === bundle)) {
+    return { bundle, pid } // Legacy native AX inline bundle contract.
+  }
+  if (envelope?.target?.kind !== 'frontmost' || !Array.isArray(apps)) {
+    return undefined
+  }
+  const mappings = apps.filter((app): app is AXNode => app !== null && typeof app === 'object')
+  const samePID = mappings.filter((app) =>
+    [app.pid, app.processIdentifier, app.process_id].some((v) => positivePID(v) === pid),
+  )
+  const safari = mappings.filter((app) => app.bundle_id === bundle)
+  const mapped = samePID[0]
+  if (
+    !mapped ||
+    samePID.length !== 1 ||
+    safari.length !== 1 ||
+    mapped !== safari[0] ||
+    nodePID(mapped) !== pid
+  ) {
+    return undefined
+  }
+  return { bundle, pid }
 }
 export function preflightIssues(options: {
   beforeAX: unknown
   afterAX: unknown
+  beforeApps?: unknown
+  afterApps?: unknown
   expectedURL: string
   receipt: unknown
   seconds?: 2 | 60
 }) {
   const issues: string[] = []
-  const first = nativeSafari(options.beforeAX)
-  const last = nativeSafari(options.afterAX)
+  const first = nativeSafari(options.beforeAX, options.beforeApps)
+  const last = nativeSafari(options.afterAX, options.afterApps)
   if (!(first && last) || first.pid !== last.pid) {
     issues.push('Native guest foreground Safari identity unavailable or changed')
   }

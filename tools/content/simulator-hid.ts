@@ -236,11 +236,18 @@ export function joinGestures(
       shapes.every((s) => s.passed),
   }
 }
+export interface NativeForegroundSample {
+  wall: number
+  ax: unknown
+  apps?: unknown
+  companionUDID?: string
+  orientation: string
+}
 export function nativeForeground(
-  samples: readonly { wall: number; ax: unknown; orientation: string }[],
-  expected: { start: number; end: number; orientation: string },
+  samples: readonly NativeForegroundSample[],
+  expected: { start: number; end: number; orientation: string; udid?: string },
 ) {
-  const identities = samples.map((s) => nativeSafari(s.ax))
+  const identities = samples.map((s) => nativeSafari(s.ax, s.apps))
   const pid = identities[0]?.pid
   const gaps = samples.slice(1).map((s, i) => s.wall - (samples[i]?.wall ?? 0))
   const maximumGapMs = Math.max(0, ...gaps)
@@ -260,6 +267,7 @@ export function nativeForeground(
         (s, i) =>
           identities[i]?.pid === pid &&
           s.orientation === expected.orientation &&
+          (!expected.udid || s.companionUDID === expected.udid) &&
           (i === 0 || s.wall > (samples[i - 1]?.wall ?? Number.POSITIVE_INFINITY)),
       ) &&
       Math.abs(startOffsetMs) <= 1000 &&

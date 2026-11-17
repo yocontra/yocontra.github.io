@@ -6,7 +6,6 @@ import inspect
 import json
 import logging
 import time
-from dataclasses import asdict
 from pathlib import Path
 
 from simulator_schedule import tape_events, sample_events, release_held
@@ -25,7 +24,7 @@ def api_metadata():
     paths = {inspect.getfile(Client), inspect.getfile(HIDPress)}
     return {"python": __import__("sys").version, "methods": {
         name: str(inspect.signature(getattr(Client, name)))
-        for name in ("build", "hid", "accessibility_info", "set_orientation", "get_orientation")
+        for name in ("build", "hid", "accessibility_info", "set_orientation", "get_orientation", "list_apps")
     }, "sources": {p: hashlib.sha256(Path(p).read_bytes()).hexdigest() for p in paths}}
 
 
@@ -47,7 +46,19 @@ def applications(value):
     return own + [item for child in value.values() for item in applications(child)]
 
 
-async def record(client, request):
+async def native_apps(client):
+    return [{"bundle_id": app.bundle_id, "process_id": app.process_id,
+             "process_state": app.process_state.name}
+            for app in await client.list_apps(fetch_process_state=True)]
+
+
+def foreground_ax(value):
+    # Keep native provenance; do not synthesize a bundle field in AX records.
+    return {"target": value.get("target"), "backend": value.get("backend"),
+            "elements": applications(value)}
+
+
+async def record(client, request, udid):
     """Both native tasks abort on the first missed schedule; raw plans/logs remain."""
     clock, tape = request["clock"], request["tape"]
     loop = asyncio.get_running_loop()
@@ -56,7 +67,8 @@ async def record(client, request):
 
     async def read_foreground():
         started = time.time() * 1000
-        return {"startedWall": started, "ax": applications(await ax(client)),
+        return {"startedWall": started, "ax": foreground_ax(await ax(client)),
+                "apps": await native_apps(client), "companionUDID": udid,
                 "orientation": (await client.get_orientation()).name,
                 "wall": time.time() * 1000}
 
@@ -107,6 +119,8 @@ async def run(args):
                     result = (await client.get_orientation()).name
                 elif name == "ax":
                     result = await ax(client)
+                elif name == "apps":
+                    result = await native_apps(client)
                 elif name == "orientation":
                     selected = HIDOrientationType[command["value"]]
                     await client.set_orientation(selected)
@@ -118,7 +132,7 @@ async def run(args):
                     Path(command["path"]).write_bytes(await client.screenshot())
                     result = True
                 elif name == "record":
-                    result = await record(client, command)
+                    result = await record(client, command, args.udid)
                 elif name == "close":
                     emit({"id": command["id"], "result": True})
                     break
