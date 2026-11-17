@@ -1,8 +1,9 @@
 import { expect, test as it } from 'bun:test'
-import { Entity, SHADER_FORWARD, SHADER_PREPASS } from 'playcanvas'
+import { AnimTrack, Entity, SHADER_FORWARD, SHADER_PREPASS } from 'playcanvas'
 import type { FirstPersonRequest } from '../../src/experiments/out-west/client/first-person-model.ts'
 import { WEAPON_RIFLE, WEAPON_SHOTGUN } from '../../src/experiments/out-west/contract/town.ts'
 import { DEFAULT_LOADOUT } from '../../src/experiments/out-west/data/catalog.ts'
+import type { DuelActor } from '../../src/experiments/out-west/duel/native-actor.ts'
 import { newPlayer } from '../../src/experiments/out-west/ffa/sim/state.ts'
 import { firstPersonFixture, flush } from './first-person-fixture.ts'
 
@@ -412,3 +413,74 @@ it('disposal removes a disabled actor immediately while its held weapons are sti
     f.dispose()
   }
 })
+
+for (const deferredBuild of [false, true]) {
+  it(`rebinds identical cosmetic requests to replacement physical tracks (${deferredBuild ? 'deferred old build' : 'installed arms'})`, async () => {
+    const f = firstPersonFixture()
+    const device = f.app.graphicsDevice
+    const root = f.world.clone()
+    f.game.stage.addChild(root)
+    const tracks = Object.freeze(
+      f.request.world.tracks.map(
+        (track) =>
+          new AnimTrack(track.name, track.duration, track.inputs, track.outputs, track.curves),
+      ),
+    )
+    const next = { ...f.request, world: { root, tracks } as DuelActor }
+    const initial = f.model.prepare(f.request)
+    try {
+      if (deferredBuild) {
+        f.requests[0]?.finish()
+        await flush()
+      } else {
+        await f.finish()
+        await initial
+        f.model.present(f.camera, 1 / 60)
+      }
+      expect(f.model.ready).toBe(!deferredBuild)
+      const previous = f.actors()[0]
+      expect(previous).toBeDefined()
+      const replacement = f.model.prepare(next)
+      expect(f.model.ready).toBe(false)
+      expect(f.actors()).toHaveLength(deferredBuild ? 0 : 1)
+      expect(f.actors().every((actor) => !actor.enabled)).toBe(true)
+      expect(f.requests).toHaveLength(deferredBuild ? 3 : 4)
+      if (deferredBuild) {
+        f.requests[1]?.finish()
+        f.requests[2]?.finish()
+        await initial
+        await flush()
+      }
+      expect(f.requests).toHaveLength(4)
+      expect(f.actors()).toHaveLength(deferredBuild ? 0 : 1)
+      await f.finish(3)
+      await replacement
+      expect(f.actors()).toHaveLength(1)
+      expect(f.actors()[0]).not.toBe(previous)
+      expect(f.actors()[0]?.enabled).toBe(false)
+      const installed = Reflect.get(f.model, 'current')?.actor as DuelActor | undefined
+      expect(installed).toBeDefined()
+      for (const [index, track] of tracks.entries()) {
+        expect(installed?.animationTrack(track.name)).toBe(track)
+        expect(installed?.animationTrack(track.name)).not.toBe(f.request.world.tracks[index])
+      }
+      f.model.present(f.camera, 1 / 60)
+      expect(f.model.ready).toBe(true)
+      expect(f.actors().filter((value) => value.enabled)).toHaveLength(1)
+      f.model.destroy()
+      expect(f.textureLoads).toEqual(f.textureReleases)
+      expect(f.textures.size).toBe(0)
+      expect(f.actors()).toHaveLength(0)
+    } finally {
+      f.model.destroy()
+      for (const pending of f.requests) {
+        pending.finish()
+      }
+      await initial
+      await flush()
+      f.dispose()
+      expect(device.textures.size).toBe(0)
+      expect(device.buffers.size).toBe(0)
+    }
+  })
+}

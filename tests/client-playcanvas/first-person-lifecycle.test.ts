@@ -18,6 +18,8 @@ function fixture() {
   // AppBase normally activates its root; this GPU-free fixture supplies that hierarchy state.
   Reflect.set(rig, '_enabledInHierarchy', true)
   const world = new Entity('physical rider')
+  // AppBase normally registers this cached identity; this fixture has no application.
+  Reflect.set(world, '_guid', 'physical-rider-fixture')
   const instances = [{ shaderPassMask: 0b1011, cull: true }]
   Reflect.set(world, 'findComponents', () => [{ meshInstances: instances }])
   const root = new Entity('arms')
@@ -65,7 +67,7 @@ function fixture() {
     },
   }
   const current = {
-    key: `${fitId(DEFAULT_LOADOUT)}:default`,
+    key: `${fitId(DEFAULT_LOADOUT)}:default:${world.getGuid()}`,
     url: 'arms.glb',
     actor,
     head,

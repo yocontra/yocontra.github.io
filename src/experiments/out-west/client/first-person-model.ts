@@ -81,7 +81,7 @@ const targetRotation = new Quat()
 
 function armsKey(request: FirstPersonRequest): string {
   const loadout = request.appearance?.loadout ?? DEFAULT_LOADOUT
-  return `${fitId(loadout)}:${request.appearance?.key ?? 'default'}`
+  return `${fitId(loadout)}:${request.appearance?.key ?? 'default'}:${request.world.root.getGuid()}`
 }
 
 function requestIdentity(request: FirstPersonRequest): string {
