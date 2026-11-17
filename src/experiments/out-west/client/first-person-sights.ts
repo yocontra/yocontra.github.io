@@ -10,6 +10,8 @@ export interface SightProfile {
   readonly rear: Vec3
   /** Eye-to-rear-landmark distance once the sights are aligned. */
   readonly relief: number
+  /** Viewmodel cant in degrees about the aligned sight line. */
+  readonly roll?: number
   /** World lens zoom while aimed; the viewmodel keeps its own projection. */
   readonly zoom: number
   readonly enter: number
@@ -45,7 +47,8 @@ export const SIGHTS: ReadonlyMap<HeldWeapon, SightProfile> = new Map([
     {
       front: new Vec3(-0.01, 0.0228, 0),
       rear: new Vec3(-0.67, 0.0292, 0),
-      relief: 0.46,
+      relief: 0.52,
+      roll: -8,
       zoom: 0.84,
       enter: 0.2,
       exit: 0.13,

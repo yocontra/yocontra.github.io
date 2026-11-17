@@ -80,6 +80,7 @@ const hipPosition = new Vec3()
 const hipRotation = new Quat()
 const targetPosition = new Vec3()
 const targetRotation = new Quat()
+const sightRoll = new Quat()
 
 function armsKey(request: FirstPersonRequest): string {
   const loadout = request.appearance?.loadout ?? DEFAULT_LOADOUT
@@ -447,6 +448,9 @@ export class FirstPersonModel {
     m[9] = -along.y
     m[10] = -along.z
     targetRotation.setFromMat4(basis).invert()
+    if (profile.roll) {
+      targetRotation.mul2(sightRoll.setFromEulerAngles(0, 0, profile.roll), targetRotation)
+    }
     targetRotation.transformVector(rear, targetPosition)
     targetPosition.set(-targetPosition.x, -targetPosition.y, -profile.relief - targetPosition.z)
     // Ease back onto the sight line only while recovering from a held shot pose.
