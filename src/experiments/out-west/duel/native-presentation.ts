@@ -8,6 +8,7 @@ import type { NativeDirector } from './native-director.ts'
 import { titleShot } from './native-framing.ts'
 import { clearMoments, tickMoments } from './native-moments.ts'
 import { tickBossWound, tickCoward, tickLose, tickWin } from './native-outcome.ts'
+import { storeSubject } from './native-outfitter.ts'
 import {
   enterCock,
   enterPoster,
@@ -49,8 +50,20 @@ function gunBounds(actor: DuelActor): BoundingBox | null {
 function hubFocus(d: NativeDirector, shot: string, root: HTMLElement | null) {
   const guns =
     shot === 'store' &&
-    root?.querySelector('.ow-store-tab[aria-selected="true"]')?.textContent?.trim() === 'Guns'
+    root?.querySelector<HTMLElement>('.ow-store-tab[aria-selected="true"]')?.dataset.slot === 'gun'
   d.player?.play(guns ? 'Idle_Gun_Pointing' : 'Idle')
+  const bag = shot === 'store' ? storeSubject(d) : null
+  if (bag) {
+    const size = Math.max(bag.halfExtents.x, bag.halfExtents.y, bag.halfExtents.z) * 2
+    return {
+      center: bag.center,
+      height: size * 1.5,
+      width: size * 1.5,
+      side: 0.3,
+      forward: 0.954,
+      guns: true,
+    }
+  }
   const center = new Vec3(2.4, 1.04, 7.5)
   const bounds = guns && d.player ? gunBounds(d.player) : null
   if (bounds) {
@@ -129,7 +142,9 @@ function frameHub(d: NativeDirector): void {
 }
 
 export function hubShot(d: NativeDirector, shot: string): void {
-  clearMoments(d)
+  const previous = hubViews.get(d)
+  const preserveCamera = previous !== undefined && d.rig.name === 'title'
+  clearMoments(d, preserveCamera)
   d.debris.reset()
   d.game.app.scene.exposure = 1.1
   void d.arenas.show('street').then(() => d.atmosphere.arrange(d.arenas.life))
@@ -146,7 +161,9 @@ export function hubShot(d: NativeDirector, shot: string): void {
     if (d.game.camera.camera) {
       d.game.camera.camera.projectionOffset = Vec2.ZERO
     }
-    titleShot(d)
+    if (!preserveCamera) {
+      titleShot(d)
+    }
     d.rig.update(0)
   }
 }

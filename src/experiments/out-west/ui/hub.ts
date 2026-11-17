@@ -29,9 +29,9 @@ import { openSettings } from './settings-sheet.ts'
 import { announceLevel } from './sfx.ts'
 import { button, el, panelSheet, setBar, signedMoney, swallow } from './sheet.ts'
 import { mountStanding } from './standing.ts'
-import { Outfitter } from './store.ts'
+import { Outfitter, type StoreDeps } from './store.ts'
 
-export interface HubDeps {
+export interface HubDeps extends Pick<StoreDeps, 'previewItem' | 'rotatePreview'> {
   /** True once the 3D game behind the hub has loaded. */
   ready: () => boolean
   /** Outlaw index a saved practice run would continue from. */
@@ -45,7 +45,7 @@ export interface HubDeps {
   /** The Outfitter's picture of one piece of kit (null until the game has loaded). */
   thumb: (id: ItemId) => HTMLCanvasElement | null
   /** Preview a piece's sound (the draw sounds) from the Outfitter. */
-  previewSound: (id: ItemId) => void
+  previewSound: (id: ItemId) => (() => void) | undefined
   playGauntlet: (c: GauntletChoice) => void
   bountyHunt: (m: QueueMatch, xpBefore: number | null) => void
   /** A fresh Turnstile token for the queue. */
@@ -488,6 +488,8 @@ export class Hub {
       preview: (l, dyes) => this.deps.dress(l, dyes ?? this.dyes),
       thumb: (id) => this.deps.thumb(id),
       previewSound: (id) => this.deps.previewSound(id),
+      previewItem: (id) => this.deps.previewItem?.(id),
+      rotatePreview: (degrees) => this.deps.rotatePreview?.(degrees),
       changed: (patch) => this.patch(patch),
       close: () => {
         this.root.classList.remove('shop')

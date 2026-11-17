@@ -15,8 +15,10 @@ import {
   STARTER_ITEMS,
 } from '../../../src/experiments/out-west/data/catalog.ts'
 import {
+  canDye,
   DYE_PRICE_MAX,
   DYE_PRICE_MIN,
+  DYES,
   dyeCost,
   dyePrice,
   isDyeable,
@@ -266,3 +268,51 @@ describe('dye prices', () => {
     expect(dyePrice('gun.blued-six', 'coal')).toBeNull()
   })
 })
+
+it('all four bags refuse unsupported new dye jobs without mutating existing account dye records', () => {
+  const bags = ITEMS.filter((item) => item.slot === 'saddlebag')
+  expect(bags).toHaveLength(4)
+  const owned = new Set(bags.map((item) => item.id))
+  const existing = Object.fromEntries(bags.map((item) => [item.id, 'coal' as const]))
+  const before = { ...existing }
+  for (const item of bags) {
+    expect(isDyeable(item)).toBe(false)
+    for (const dye of DYES) {
+      expect(dyePrice(item.id, dye.id)).toBeNull()
+      expect(
+        canDye({
+          itemId: item.id,
+          dye: dye.id,
+          owned,
+          current: existing[item.id] ?? null,
+          purse: 1_000_000,
+        }),
+      ).toBe('not_dyeable')
+    }
+  }
+  expect(existing).toEqual(before)
+  expect(isDyeable(itemById('outfit.wool-duster') as CatalogItem)).toBe(true)
+})
+
+it.each(['extra.handlebar', 'extra.tin-star'])(
+  '%s cannot sell a dye job without effective native maps',
+  (itemId) => {
+    const item = itemById(itemId)
+    if (!item) {
+      throw new Error(`Missing ${itemId}`)
+    }
+    expect(isDyeable(item)).toBe(false)
+    for (const dye of DYES) {
+      expect(dyePrice(itemId, dye.id)).toBeNull()
+      expect(
+        canDye({
+          itemId,
+          dye: dye.id,
+          owned: new Set([itemId]),
+          current: 'coal',
+          purse: 1_000_000,
+        }),
+      ).toBe('not_dyeable')
+    }
+  },
+)

@@ -5,6 +5,7 @@ import { BoundingBox, Vec3 } from 'playcanvas'
 import { GameApplication } from '../../src/experiments/out-west/client/application.ts'
 import { EQUIPMENT } from '../../src/experiments/out-west/content/equipment.ts'
 import { prepareNativeMaterials } from '../../src/experiments/out-west/scene/native-materials.ts'
+import { orientGunProduct } from './item-product-pose.ts'
 
 let game: GameApplication | null = null
 let subject: Awaited<ReturnType<GameApplication['instantiate']>> | null = null
@@ -44,7 +45,10 @@ export async function previewItem(id: keyof typeof EQUIPMENT): Promise<void> {
       node.name === 'FootL'
     )
   }
-  subject.setEulerAngles(0, -25, id.startsWith('gun.') ? 90 : 0)
+  if (id.startsWith('gun.')) {
+    orientGunProduct(subject, id === 'gun.hardins-pair')
+  }
+  subject.setEulerAngles(0, -25, 0)
   await new Promise<void>((resolve) =>
     requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
   )
