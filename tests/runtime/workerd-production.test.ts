@@ -10,40 +10,99 @@ import { COLLISION_VERSION } from '../../src/experiments/out-west/content/manife
 import { PROTOCOL_VERSION } from '../../src/experiments/out-west/runtime/protocol.ts'
 import { hangTimeout } from '../timeout.ts'
 
-async function execute(args: string[], source?: string) {
-  const child = spawn(args, {
-    stdin: source === undefined ? 'ignore' : new Blob([source]),
-    stdout: 'pipe',
-    stderr: 'pipe',
-  })
-  const [stdout, stderr, code] = await Promise.all([
-    new Response(child.stdout).text(),
-    new Response(child.stderr).text(),
-    child.exited,
-  ])
-  if (code !== 0) {
-    throw new Error(`${args.join(' ')}\n${stdout}\n${stderr}`)
+const testBudgetMs = hangTimeout(180_000)
+const cleanupReserveMs = 10_000
+
+/** Stream phase evidence while retaining bounded tails; stop only this detached fixture group. */
+async function execute(args: string[], phase: string, deadline: number) {
+  const child = spawn(args, { stdin: 'ignore', stdout: 'pipe', stderr: 'pipe', detached: true })
+  process.stderr.write(`[production ${phase} pid=${child.pid}] started\n`)
+  const stop = () => {
+    if (child.exitCode !== null) {
+      return
+    }
+    try {
+      process.kill(-child.pid, 'SIGKILL')
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'ESRCH') {
+        throw error
+      }
+    }
   }
-  return stdout
+  const readers = [child.stdout.getReader(), child.stderr.getReader()]
+  const tails = ['', '']
+  const read = async (index: number) => {
+    const reader = readers[index]
+    if (!reader) {
+      throw new Error('Missing fixture pipe')
+    }
+    const decoder = new TextDecoder()
+    try {
+      for (;;) {
+        const { value, done } = await reader.read()
+        if (done) {
+          return
+        }
+        const text = decoder.decode(value, { stream: true })
+        tails[index] = ((tails[index] ?? '') + text).slice(-256_000)
+        process.stderr.write(text)
+      }
+    } finally {
+      reader.releaseLock()
+    }
+  }
+  let timedOut = false
+  const watchdog = setTimeout(
+    () => {
+      timedOut = true
+      process.stderr.write(`[production ${phase}] fixture deadline reached; stopping owned group\n`)
+      stop()
+      for (const reader of readers) {
+        void reader.cancel().catch((error: unknown) => {
+          process.stderr.write(`[production ${phase}] pipe cancel: ${String(error)}\n`)
+        })
+      }
+    },
+    Math.max(1, deadline - Date.now()),
+  )
+  try {
+    const [, , code] = await Promise.all([read(0), read(1), child.exited])
+    if (timedOut || code !== 0) {
+      throw new Error(
+        `${phase}: ${timedOut ? 'fixture deadline' : `exit ${code}`}\n${tails.map((tail) => tail.slice(-16_000)).join('\n')}`,
+      )
+    }
+    return tails[0] ?? ''
+  } finally {
+    clearTimeout(watchdog)
+    stop()
+    // The process-group watchdog leaves ten seconds before Bun's unchanged outer hang limit.
+    await child.exited
+  }
 }
 
 it(
   'production auth joins and batched input work, then a quiet room closes when its global lease is denied',
   async () => {
+    const deadline = Date.now() + testBudgetMs - cleanupReserveMs
     const root = process.cwd()
     const directory = await mkdtemp(join(tmpdir(), 'out-west-production-'))
     try {
       const output = join(directory, 'bundle')
-      await execute([
-        'node',
-        join(root, 'node_modules/wrangler/bin/wrangler.js'),
-        'deploy',
-        '--dry-run',
-        '--config',
-        join(root, 'api/test/wrangler.native-test.jsonc'),
-        '--outdir',
-        output,
-      ])
+      await execute(
+        [
+          'node',
+          join(root, 'node_modules/wrangler/bin/wrangler.js'),
+          'deploy',
+          '--dry-run',
+          '--config',
+          join(root, 'api/test/wrangler.native-test.jsonc'),
+          '--outdir',
+          output,
+        ],
+        'wrangler-dry-run',
+        deadline,
+      )
       const entry = await readFile(join(output, 'production-worker.js'), 'utf8')
       const wasm = (await readdir(output)).filter((name) => name.endsWith('.wasm'))
       const packets = await build({
@@ -66,19 +125,21 @@ it(
    const durableObjects=Object.fromEntries(Object.entries({DUELS:'DuelSession',MATCHMAKER:'Matchmaker',DUEL_ROOMS:'DuelRoom',LOBBY_DIR:'LobbyDirectory',LOBBIES:'Lobby',DAILY_SESSIONS:'DailySession',SETTLEMENT:'SettlementProbe'}).map(([key,className])=>[key,{className,useSQLite:true}]));
    const mf=new Miniflare(convertV4MiniflareOptions({modules,compatibilityDate:'2026-10-01',compatibilityFlags:['nodejs_compat'],durableObjects,d1Databases:{DB:'native-production'},bindings:{AUTH_SECRET:'fixture-native-production-secret',ALLOWED_ORIGINS:'http://127.0.0.1:4390',RP_ID:'localhost',TURNSTILE_SECRET:'fixture-provider-key',DISABLE_VOICE:'true'},outboundService:async request=>request.url.startsWith('https://challenges.cloudflare.com/turnstile/')?Response.json({success:true}):fetch(request)}));
    let room,other;
-   const waitFor=async(read,done,label,limit=60000)=>{const start=Date.now();let value;do{value=await read();if(done(value))return value;await new Promise(resolve=>setTimeout(resolve,100))}while(Date.now()-start<limit);throw new Error(label+': '+JSON.stringify(value))};
+   const started=Date.now();let currentPhase='startup';
+   const phase=(name,state)=>{currentPhase=name;console.log('PHASE:'+JSON.stringify({name,elapsedMs:Date.now()-started,...(state===undefined?{}:{state})}))};
+   const waitFor=async(read,done,label,limit=60000)=>{phase(label,{limitMs:limit});const start=Date.now();let value,lastReport=0;do{value=await read();if(done(value)){phase(label+' complete',value);return value}if(Date.now()-lastReport>=5000){console.log('WAIT:'+JSON.stringify({phase:currentPhase,elapsedMs:Date.now()-start,value}));lastReport=Date.now()}await new Promise(resolve=>setTimeout(resolve,100))}while(Date.now()-start<limit);throw new Error(label+': '+JSON.stringify(value))};
    const json=async url=>await(await fetch(url)).json();
    try{
-    const base=(await mf.ready).origin;
+    phase('Miniflare ready');const base=(await mf.ready).origin;phase('database migrations');
     const db=await mf.getD1Database('DB');
     for(const name of fs.readdirSync(${JSON.stringify(join(root, 'api/migrations'))}).filter(name=>name.endsWith('.sql')).sort()){
      const sql=fs.readFileSync(${JSON.stringify(join(root, 'api/migrations'))}+'/'+name,'utf8').replace(/^\\s*--.*$/gmu,'');
      const statements=sql.split(/;\\s*$/mu).map(value=>value.trim()).filter(Boolean);
      await db.batch(statements.map(sql=>db.prepare(sql)));
     }
-    const staleBudget=await(await fetch(base+'/__test/stale-native-budget')).json();
+    phase('stale budget generation guard');const staleBudget=await(await fetch(base+'/__test/stale-native-budget')).json();
     if(!staleBudget.replacementPreserved)throw new Error('Stale budget continuation crossed room generation');
-    const account=await(await fetch(base+'/__test/seed')).json();
+    phase('first authenticated reservation');const account=await(await fetch(base+'/__test/seed')).json();
     const headers={Origin:'http://127.0.0.1:4390',Authorization:'Bearer '+account.token,'Content-Type':'application/json'};
     const abandonedResponse=await fetch(base+'/town/join',{method:'POST',headers,body:JSON.stringify({wire:10,protocol:${PROTOCOL_VERSION},collision:${JSON.stringify(COLLISION_VERSION)},turnstileToken:'fixture-provider-proof'})});
     const abandoned=await abandonedResponse.json();if(abandonedResponse.status!==201)throw new Error(JSON.stringify(abandoned));
@@ -87,7 +148,7 @@ it(
     if(waiting.timers.length||waiting.active||waiting.physics||waiting.core||waiting.tick!==0||waiting.timer||waiting.cleanup||waiting.lease||waiting.leaseTimer||waiting.seats!==1||!waiting.alarm||waiting.alarm>Date.now()+30000)throw new Error('Reserved seat retained native resources instead of durable metadata: '+JSON.stringify(waiting));
     // The seat's own 30 s expiry alarm must clear everything; poll for it instead of guessing when a loaded host fires it.
     await waitFor(()=>json(timingUrl),expired=>!(expired.timers.length||expired.active||expired.physics||expired.core||expired.timer||expired.running||expired.cleanup||expired.leaseTimer||expired.lease||expired.seats!==0||expired.alarm!==null),'Abandoned reservation retained room duration or lease',90000);
-    const closingResponse=await fetch(base+'/town/join',{method:'POST',headers,body:JSON.stringify({wire:10,protocol:${PROTOCOL_VERSION},collision:${JSON.stringify(COLLISION_VERSION)},turnstileToken:'fixture-provider-proof'})});
+    phase('close during delayed first lease');const closingResponse=await fetch(base+'/town/join',{method:'POST',headers,body:JSON.stringify({wire:10,protocol:${PROTOCOL_VERSION},collision:${JSON.stringify(COLLISION_VERSION)},turnstileToken:'fixture-provider-proof'})});
     const closingSeat=await closingResponse.json();
     await fetch(base+'/__test/delay-native-lease');
     const {WebSocket:RawSocket}=await import(${JSON.stringify(join(root, 'node_modules/ws/wrapper.mjs'))});
@@ -98,7 +159,7 @@ it(
     const early=await(await fetch(base+'/__test/native-timing?lobbyId='+encodeURIComponent(closingSeat.lobbyId))).json();
     const earlyLeases=await(await fetch(base+'/__test/native-leases')).json();
     if(early.active||early.physics||early.core||early.timer||early.lease||early.leaseTimer||early.humans||early.bots||earlyLeases.active)throw new Error('Close during delayed first lease resurrected native work: '+JSON.stringify({early,earlyLeases}));
-    const response=await fetch(base+'/town/join',{method:'POST',headers,body:JSON.stringify({wire:10,protocol:${PROTOCOL_VERSION},collision:${JSON.stringify(COLLISION_VERSION)},turnstileToken:'fixture-provider-proof'})});
+    phase('cold metadata seat restart');const response=await fetch(base+'/town/join',{method:'POST',headers,body:JSON.stringify({wire:10,protocol:${PROTOCOL_VERSION},collision:${JSON.stringify(COLLISION_VERSION)},turnstileToken:'fixture-provider-proof'})});
     const seat=await response.json();if(response.status!==201)throw new Error(JSON.stringify(seat));
     const warm=await(await fetch(base+'/__test/native-timing?lobbyId='+encodeURIComponent(seat.lobbyId))).json();
     try{await fetch(base+'/__test/restart-native?lobbyId='+encodeURIComponent(seat.lobbyId))}catch{}
@@ -106,7 +167,7 @@ it(
     if(cold.instance===warm.instance||cold.active||cold.physics||cold.core||cold.seats!==1||cold.lease)throw new Error('Cold metadata seat did not survive without native allocation: '+JSON.stringify({warm,cold}));
     await new Promise(resolve=>setTimeout(resolve,750));
     const client=new Client(base+'/town/'+seat.lobbyId+'?'+new URL(seat.wsUrl).searchParams.toString(),{headers:{Origin:headers.Origin}});
-    room=await client.consumeSeatReservation(seat.reservation);room.reconnection.enabled=false;
+    phase('first native SDK join');room=await client.consumeSeatReservation(seat.reservation);room.reconnection.enabled=false;
     room.onMessage('control',()=>{});room.onMessage('events',()=>{});room.onMessage('network-ping',message=>setTimeout(()=>room.send('network-pong',{nonce:message.nonce}),100));
     const visitRows=()=>db.prepare('SELECT id,left_at FROM ffa_sessions WHERE account_id=?').bind(account.accountId).all();
     const visit=await waitFor(visitRows,rows=>rows.results.length===1&&rows.results[0].left_at===null,'Native authenticated join did not persist an open session');
@@ -125,22 +186,22 @@ it(
     // Well inside the 10 s avatar linger: the loop must stop on the last leave, not when the linger ends.
     await waitFor(lobbyTiming,empty=>!(empty.timers.some(timer=>timer.kind==='interval'||timer.delay>1000)||empty.active||empty.physics||empty.core||empty.timer||empty.running||empty.cleanup||empty.leaseTimer||empty.lease||empty.bots||empty.humans),'Last online human left resident work',5000);
     await waitFor(lobbyTiming,flushed=>!(flushed.timers.length||flushed.active||flushed.physics||flushed.lease),'Final SDK flush retained recurring work',5000);
-    const rejoinResponse=await fetch(base+'/town/join',{method:'POST',headers,body:JSON.stringify({wire:10,protocol:${PROTOCOL_VERSION},collision:${JSON.stringify(COLLISION_VERSION)},turnstileToken:'fixture-provider-proof'})});
+    phase('fresh authenticated return');const rejoinResponse=await fetch(base+'/town/join',{method:'POST',headers,body:JSON.stringify({wire:10,protocol:${PROTOCOL_VERSION},collision:${JSON.stringify(COLLISION_VERSION)},turnstileToken:'fixture-provider-proof'})});
     const rejoinSeat=await rejoinResponse.json();if(rejoinResponse.status!==201)throw new Error(JSON.stringify(rejoinSeat));
-    room=await new Client(base+'/town/'+rejoinSeat.lobbyId+'?'+new URL(rejoinSeat.wsUrl).searchParams.toString(),{headers:{Origin:headers.Origin}}).consumeSeatReservation(rejoinSeat.reservation);room.reconnection.enabled=false;
+    phase('fresh native SDK join');room=await new Client(base+'/town/'+rejoinSeat.lobbyId+'?'+new URL(rejoinSeat.wsUrl).searchParams.toString(),{headers:{Origin:headers.Origin}}).consumeSeatReservation(rejoinSeat.reservation);room.reconnection.enabled=false;
     room.onMessage('control',()=>{});room.onMessage('events',()=>{});room.onMessage('network-ping',message=>setTimeout(()=>room.send('network-pong',{nonce:message.nonce}),100));
     await waitFor(visitRows,rows=>rows.results.length===2&&rows.results.some(value=>value.id===originalVisit&&value.left_at!==null)&&rows.results.filter(value=>value.left_at===null).length===1,'Fresh room return did not close and settle the zero-human visit');
     // Negative check: occupants must outlive every pending directory reservation.
-    await new Promise(resolve=>setTimeout(resolve,${PENDING_MS + 1000}));
+    phase('occupied pending reservation expiry',{waitMs:${PENDING_MS + 1000}});await new Promise(resolve=>setTimeout(resolve,${PENDING_MS + 1000}));
     const account2=await(await fetch(base+'/__test/seed')).json();
     const otherHeaders={...headers,Authorization:'Bearer '+account2.token};
     const otherResponse=await fetch(base+'/town/join',{method:'POST',headers:otherHeaders,body:JSON.stringify({wire:10,protocol:${PROTOCOL_VERSION},collision:${JSON.stringify(COLLISION_VERSION)},turnstileToken:'fixture-provider-proof'})});
     const otherSeat=await otherResponse.json();if(otherResponse.status!==201)throw new Error(JSON.stringify(otherSeat));
-    other=await new Client(base+'/town/'+otherSeat.lobbyId+'?'+new URL(otherSeat.wsUrl).searchParams.toString(),{headers:{Origin:headers.Origin}}).consumeSeatReservation(otherSeat.reservation);other.reconnection.enabled=false;
+    phase('second authenticated SDK join');other=await new Client(base+'/town/'+otherSeat.lobbyId+'?'+new URL(otherSeat.wsUrl).searchParams.toString(),{headers:{Origin:headers.Origin}}).consumeSeatReservation(otherSeat.reservation);other.reconnection.enabled=false;
     other.onMessage('control',()=>{});other.onMessage('events',()=>{});other.onMessage('network-ping',message=>other.send('network-pong',{nonce:message.nonce}));
     await waitFor(()=>json(base+'/town/lobbies'),directory=>directory.lobbies.find(value=>value.lobbyId===seat.lobbyId)?.players===2,'Directory lost authenticated occupants after reservation expiry',10000);
     let closed=false;room.onLeave(()=>{closed=true});
-    const exhaustedAt=Date.now();await fetch(base+'/__test/exhaust');
+    phase('lease exhaustion');const exhaustedAt=Date.now();await fetch(base+'/__test/exhaust');
     await waitFor(()=>closed,Boolean,'Quiet room never closed after its lease was denied',90000);
     const closedAt=Date.now();
     // Judge the close against the room's own lease grants, not the test's sleeps, so host stalls cannot shift it.
@@ -154,15 +215,15 @@ it(
     const deniedBody=await denied.json();
     const afterRefusal=await(await fetch(base+'/town/lobbies')).json();
     if(denied.status!==503||deniedBody.reason!=='over_budget'||JSON.stringify(beforeRefusal)!==JSON.stringify(afterRefusal))throw new Error('Lease denial did not gracefully release directory assignment: '+JSON.stringify({status:denied.status,deniedBody,beforeRefusal,afterRefusal}));
-    const settlement=await(await fetch(base+'/__test/settlement')).json();
+    phase('settlement recovery');const settlement=await(await fetch(base+'/__test/settlement')).json();
     try{await fetch(base+'/__test/restart-settlement')}catch{}
     const beforeRetry=await db.prepare('SELECT xp,purse FROM profiles WHERE account_id=?').bind(settlement.accountId).first();
     if(beforeRetry.xp!==75||beforeRetry.purse!==250)throw new Error('Expected failed recovery to retain pending deposit');
     await new Promise(resolve=>setTimeout(resolve,6500));
     await db.prepare('DROP TRIGGER reject_pending_deposit').run();
-    const retryStarted=Date.now();let restoredProfile;
+    phase('pending deposit retry');const retryStarted=Date.now();let restoredProfile;
     do{await new Promise(resolve=>setTimeout(resolve,250));restoredProfile=await db.prepare('SELECT xp,purse FROM profiles WHERE account_id=?').bind(settlement.accountId).first()}while(restoredProfile.purse!==269&&Date.now()-retryStarted<60000);
-    const orphanResponse=await mf.dispatchFetch('http://localhost/__test/orphan-socket',{headers:{Upgrade:'websocket'}});
+    phase('pending deposit retry complete',restoredProfile);phase('orphan socket rejection');const orphanResponse=await mf.dispatchFetch('http://localhost/__test/orphan-socket',{headers:{Upgrade:'websocket'}});
     const orphan=orphanResponse.webSocket;
     if(!orphan)throw new Error('Missing orphan socket');orphan.accept();
     const orphanClosed=new Promise((resolve,reject)=>{const timeout=setTimeout(()=>reject(new Error('Orphan socket silently ignored input')),30000);orphan.addEventListener('close',event=>{clearTimeout(timeout);resolve(event.code)})});
@@ -170,11 +231,21 @@ it(
     const restoredVisit=await waitFor(()=>db.prepare('SELECT left_at FROM ffa_sessions WHERE id=?').bind(settlement.visitId).first(),visit=>visit?.left_at!==null,'Recovered visit was never closed',30000).catch(()=>null);
     const ledger=await db.prepare('SELECT COALESCE(SUM(xp),0) AS xp FROM ledger WHERE account_id=?').bind(settlement.accountId).first();
     console.log('RESULT:'+JSON.stringify({status:response.status,applied,closed,leaseCycle,settlement,orphanCode,recoveredVisit:restoredVisit!==null,restoredProfile,ledgerXp:ledger.xp}));
-   }finally{if(room)await room.leave();if(other)await other.leave();await mf.dispose()}
+    phase('result emitted before cleanup');
+   }catch(error){console.error('FAILURE:'+JSON.stringify({phase:currentPhase,elapsedMs:Date.now()-started,error:String(error)}));throw error}finally{
+    const socketState=target=>target?{leaveCode:target.leaveCode??null,isOpen:target.connection?.isOpen??null,reconnecting:target.reconnection?.isReconnecting??null,leaving:target.leaving??null}:null;
+    phase('cleanup start',{room:socketState(room),other:socketState(other)});
+    const bounded=async(name,work)=>{let timer;phase(name);try{return await Promise.race([work,new Promise((_,reject)=>{timer=setTimeout(()=>reject(new Error(name+' exceeded 5000ms')),5000)})])}finally{clearTimeout(timer)}};
+    const closing=Promise.allSettled([room,other].filter(Boolean).map(async(target,index)=>{phase('SDK leave start',{index,...socketState(target)});const code=await target.leave();phase('SDK leave complete',{index,code,...socketState(target)});return code}));
+    try{await bounded('Miniflare dispose',mf.dispose())}finally{
+     const leaves=await bounded('SDK leaves settle',closing);phase('cleanup complete',{leaves,room:socketState(room),other:socketState(other)});
+     const failure=leaves.find(value=>value.status==='rejected');if(failure)throw failure.reason;
+    }
+   }
   `
       const scriptPath = join(directory, 'run.mjs')
       await write(scriptPath, script)
-      const stdout = await execute(['node', scriptPath])
+      const stdout = await execute(['node', scriptPath], 'native-production-scenarios', deadline)
       const line = stdout.split('\n').find((value) => value.startsWith('RESULT:'))
       if (!line) {
         throw new Error(stdout)
@@ -225,5 +296,5 @@ it(
       await rm(directory, { recursive: true, force: true })
     }
   },
-  hangTimeout(180_000),
+  testBudgetMs,
 )
