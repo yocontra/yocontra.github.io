@@ -3,9 +3,12 @@ import {
   type Asset,
   type ContainerResource,
   type Entity,
+  type GraphicsDevice,
   SHADERLANGUAGE_GLSL,
   SHADERLANGUAGE_WGSL,
+  ShaderChunks,
   StandardMaterial,
+  type Vec2,
 } from 'playcanvas'
 
 /** Authoring marks shared local meshes explicitly; material names are display labels. */
@@ -38,6 +41,36 @@ export function prepareFreightClouds(material: StandardMaterial, worldClouds: bo
     .getShaderChunks(SHADERLANGUAGE_WGSL)
     .set('uv1VS', 'fn getUv1() -> vec2f { return dPositionW.xz / 1024.0; }')
   material.update()
+}
+
+/** One device uniform moves all Frontier cloud shadows without updating every material. */
+export function sharedCloudMotion(device: GraphicsDevice) {
+  if (!device.isWebGL2) {
+    return
+  }
+  const uniformName = 'outWestCloudOffset'
+  const uv = '{STD_DIFFUSEDETAIL_TEXTURE_UV}'
+  const diffuse = ShaderChunks.get(device, SHADERLANGUAGE_GLSL).get('diffusePS')
+  if (!diffuse?.includes(uv)) {
+    return
+  }
+  // Shift the cloud detail sample only. Other textures can share its texcoord set.
+  const chunk = `uniform vec2 ${uniformName};\n${diffuse.replace(uv, `(${uv} + ${uniformName})`)}`
+  const uniform = device.scope.resolve(uniformName)
+  const offset = new Float32Array(2)
+  uniform.setValue(offset)
+  return {
+    move(value: Vec2) {
+      offset[0] = value.x
+      // PlayCanvas map offsets use the opposite vertical direction from shader UVs.
+      offset[1] = -value.y
+      uniform.setValue(offset)
+    },
+    prepare(material: StandardMaterial) {
+      material.shaderChunksVersion = '2.23'
+      material.getShaderChunks(SHADERLANGUAGE_GLSL).set('diffusePS', chunk)
+    },
+  }
 }
 
 export function animateWind(root: Entity, asset: Asset): void {
