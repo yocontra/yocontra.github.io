@@ -1,9 +1,8 @@
 import { BoundingBox, Entity, Vec2, Vec3 } from 'playcanvas'
-import { ASSETS } from '../content/manifest.ts'
 import { FEEL } from '../data/feel.ts'
 import { OUTLAWS } from '../data/outlaws.ts'
 import { dueShot } from './judge.ts'
-import { DuelActor } from './native-actor.ts'
+import { DuelActor, duelOpponentUrl } from './native-actor.ts'
 import { enemyFires } from './native-combat.ts'
 import type { NativeDirector } from './native-director.ts'
 import { titleShot } from './native-framing.ts'
@@ -266,11 +265,7 @@ export async function lineup(d: NativeDirector, _day = 0.3): Promise<void> {
   }
   const actors = await Promise.all(
     OUTLAWS.map((_outlaw, index) =>
-      DuelActor.create(
-        d.game,
-        ASSETS[`outlaw-${index}` as keyof typeof ASSETS].url,
-        `outlaw-${index}`,
-      ),
+      DuelActor.create(d.game, duelOpponentUrl(index), `outlaw-${index}`),
     ),
   )
   for (const [index, actor] of actors.entries()) {

@@ -7,6 +7,7 @@ import { dedup, mergeDocuments, prune, resample, unpartition } from '@gltf-trans
 import { validateAuthoringInputs } from './authoring-inputs.ts'
 import { appendCrouchClips } from './crouch-character-clips.ts'
 import { closeIdleSeams } from './idle-seams.ts'
+import { resampleNative } from './native-resample.ts'
 import { completeCharacterClips } from './normalize-character-clips.ts'
 import { normalizeSkinnedAsset } from './normalize-skinned-nodes.ts'
 import { uprightPosture } from './upright-posture.ts'
@@ -106,6 +107,14 @@ export async function bakeCharacterClips(): Promise<void> {
   uprightPosture(target)
   appendCrouchClips(target)
   await target.transform(resample(), dedup(), prune({ keepLeaves: true }), unpartition())
+  // Keep every legacy single-hand clip intact; paired seats require their matching body poses.
+  const grips = await io.read(resolve(root, 'paired-grips/body.glb'))
+  await validateAuthoringInputs(grips)
+  completeCharacterClips(grips)
+  uprightPosture(grips)
+  await grips.transform(resampleNative())
+  appendClips(target, grips)
+  await target.transform(dedup(), prune({ keepLeaves: true }), unpartition())
   await io.write(path, target)
   await normalizeSkinnedAsset(path)
   console.log(

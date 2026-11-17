@@ -19,6 +19,12 @@ const HUMANOID = /\/(?:baked\/(?:outlaw-|player)|equipment\/outfit\.)/u
 const GAIT = /^(?:Stride_|Walk$|Run$|Sprint$|Crouch_Walk$)/u
 const DRAWN = /Pointing|Shoot|Death|Hit|Draw|Spin|Flinch/u
 
+/** Duels use the authored two-gun fit; Frontier keeps the base rider asset. */
+export function duelOpponentUrl(index: number): string {
+  const source = ASSETS[`outlaw-${index}` as keyof typeof ASSETS]
+  return 'pair' in source ? source.pair.url : source.url
+}
+
 interface ActorOptions {
   enabled: boolean
   /** Complete merged tracks from the physical actor; no shared clip can override this set. */

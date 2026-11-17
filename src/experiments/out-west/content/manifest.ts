@@ -91,7 +91,7 @@ export const ENVIRONMENT = {
   hash: '206c67e3a1b992282821cf06662bdd69bbb4915c1c4444a66338a40d6a7d4e34',
   bytes: 1173154,
 } as const
-export const CONTENT_VERSION = '942f0c9e9a9775b2e0fabe756fe05512939d26bc6aaaff03e40670355843fdb0'
+export const CONTENT_VERSION = 'ab3e03abc5c9e0f519a73ee56455aa1986715fbbdd7052bcdf7ab57a31dcccb1'
 export const COLLISION_VERSION = '03b11033428780f67158b47e3fc2b37d761185acea4d5b323301449671b65def'
 export const ASSETS = {
   frontier: {
@@ -125,9 +125,9 @@ export const ASSETS = {
     bytes: 1587368,
   },
   moves: {
-    url: '/experiments/out-west/3d/native-v2/baked/moves.glb?v=795ecb09dcb4b6b6',
-    hash: '795ecb09dcb4b6b69e86a5e2f769f097eb19d289857bf0f7b48f1ce960f7a0ed',
-    bytes: 4309352,
+    url: '/experiments/out-west/3d/native-v2/baked/moves.glb?v=c1b4acf2cbb2130b',
+    hash: 'c1b4acf2cbb2130bf63a4e05a096175a3c4e88d7c5dc3eeecd6966eccdd0bb74',
+    bytes: 4808728,
   },
   'outlaw-0': {
     url: '/experiments/out-west/3d/native-v2/baked/outlaw-0.glb?v=28ed871706eef20c',
@@ -158,6 +158,11 @@ export const ASSETS = {
     url: '/experiments/out-west/3d/native-v2/baked/outlaw-5.glb?v=6a2b290735dc72c8',
     hash: '6a2b290735dc72c89e0c604b7b43198d7d24d2cceb39f0f87d2549da626768d1',
     bytes: 2043208,
+    pair: {
+      url: '/experiments/out-west/3d/native-v2/baked/outlaw-5.pair.glb?v=0ab57634d7d8d950',
+      hash: '0ab57634d7d8d9500ba61b36ef20802a3c3da315b2f3499967c9a2c7a5e6613c',
+      bytes: 2227856,
+    },
   },
   'outlaw-6': {
     url: '/experiments/out-west/3d/native-v2/baked/outlaw-6.glb?v=521f464839428967',
@@ -213,6 +218,11 @@ export const ASSETS = {
     url: '/experiments/out-west/3d/native-v2/baked/outlaw-16.glb?v=3d0cf6010492c596',
     hash: '3d0cf6010492c5964c95a859b97e8745ab455dfdbe5922366fbf8bc546ecfa5e',
     bytes: 2066336,
+    pair: {
+      url: '/experiments/out-west/3d/native-v2/baked/outlaw-16.pair.glb?v=32f00a374c65d6ea',
+      hash: '32f00a374c65d6ea89a5a916c6bad1aaf4c5a5b775ce11ae07a1fa0480167c7c',
+      bytes: 2250984,
+    },
   },
 } as const
 export const TOWN_BOUNDS = { minX: 0, minZ: 0, maxX: 104, maxZ: 104 } as const

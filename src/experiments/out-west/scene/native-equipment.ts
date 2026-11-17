@@ -22,6 +22,9 @@ interface EquipmentSource {
   url: string
   pair?: { url: string }
 }
+export interface ActorPresentation {
+  carryDrawn?: boolean
+}
 const batchGroups = new WeakMap<GameApplication, number>()
 function rigidBatch(game: GameApplication, components: RenderComponent[]): void {
   const batcher = game.app.batcher
@@ -202,6 +205,7 @@ export async function equippedActor(
   game: GameApplication,
   raw: Loadout,
   dyes: Dyes = {},
+  presentation: ActorPresentation = {},
 ): Promise<DuelActor> {
   const loadout = normalizeLoadout(raw)
   const paired = loadout.gun === 'gun.hardins-pair'
@@ -210,6 +214,7 @@ export async function equippedActor(
     EQUIPMENT[DEFAULT_LOADOUT.outfit as keyof typeof EQUIPMENT]
   const actor = await DuelActor.create(game, fittedUrl(outfit, paired), 'gunslinger')
   actor.paired = paired
+  actor.hold('revolver', presentation.carryDrawn ?? false)
   actor.root.enabled = false
   try {
     await applyDye(game, actor.model, dyes[loadout.outfit])
@@ -233,7 +238,11 @@ export async function equippedActor(
         }
         const { model, resource } = await gearModel(
           game,
-          fittedUrl(source, paired && id.startsWith('holster.')),
+          fittedUrl(
+            source,
+            paired &&
+              (id.startsWith('holster.') || (id.startsWith('gun.') && !presentation.carryDrawn)),
+          ),
           id,
         )
         if (!actor.root.parent) {

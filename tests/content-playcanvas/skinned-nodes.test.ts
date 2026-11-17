@@ -97,7 +97,8 @@ it('every published character skin has single-primitive native render ownership'
   const baked: string[] = [ASSETS.player.url, ASSETS.moves.url]
   for (let index = 0; index < 17; index++) {
     const key = `outlaw-${index}` as keyof typeof ASSETS
-    baked.push(ASSETS[key].url)
+    const asset = ASSETS[key]
+    baked.push(...('pair' in asset ? [asset.url, asset.pair.url] : [asset.url]))
   }
   const paths = [
     ...equipment,
@@ -107,7 +108,7 @@ it('every published character skin has single-primitive native render ownership'
     DYNAMIC_ASSETS['held-rifle'].url,
     DYNAMIC_ASSETS['held-shotgun'].url,
   ]
-  expect(paths).toHaveLength(72)
+  expect(paths).toHaveLength(75)
   for (const url of paths) {
     const bytes = await readFile(`public${url.split('?')[0]}`)
     const result = normalizeSkinnedGlb(bytes)

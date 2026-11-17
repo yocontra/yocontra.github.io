@@ -10,14 +10,18 @@ import streetLife from '../../src/experiments/out-west/content/street-life.json'
 import type { ContentAsset } from '../../src/experiments/out-west/content/types.ts'
 import { CATALOG } from '../../src/experiments/out-west/data/catalog.ts'
 import { TOWN } from '../../src/experiments/out-west/ffa/sim/layout.ts'
+import { bakeCharacterClips } from './character-clips.ts'
 import { formatContent } from './format-content.ts'
+import { bakePairedGripAssets } from './paired-grip-assets.ts'
 
 export async function buildManifest(): Promise<void> {
+  await bakeCharacterClips()
+  await bakePairedGripAssets()
   const published = JSON.parse(await readFile('tools/art/environments/frontier.json', 'utf8')) as {
     arrival?: readonly number[]
   }
   const arrival = published.arrival ?? previousArrival
-  const assets: Record<string, ContentAsset> = {}
+  const assets: Record<string, ContentAsset & { pair?: ContentAsset }> = {}
   const names = [
     'frontier',
     'duel',
@@ -33,6 +37,16 @@ export async function buildManifest(): Promise<void> {
     const bytes = await readFile(`public${url}`)
     const hash = createHash('sha256').update(bytes).digest('hex')
     assets[name] = { url: `${url}?v=${hash.slice(0, 16)}`, hash, bytes: bytes.byteLength }
+    if (name === 'outlaw-5' || name === 'outlaw-16') {
+      const pairUrl = `/experiments/out-west/3d/native-v2/baked/${name}.pair.glb`
+      const pairBytes = await readFile(`public${pairUrl}`)
+      const pairHash = createHash('sha256').update(pairBytes).digest('hex')
+      assets[name].pair = {
+        url: `${pairUrl}?v=${pairHash.slice(0, 16)}`,
+        hash: pairHash,
+        bytes: pairBytes.byteLength,
+      }
+    }
   }
   const dynamic: Record<string, ContentAsset> = {}
   for (const name of [
@@ -89,7 +103,7 @@ export async function buildManifest(): Promise<void> {
       bytes: bytes.byteLength,
     }
     equipment[item.id] = entry
-    if (item.slot === 'outfit' || item.slot === 'holster') {
+    if (item.slot === 'outfit' || item.slot === 'holster' || item.id === 'gun.hardins-pair') {
       const pairUrl = `/experiments/out-west/3d/native-v2/equipment/${item.id}.pair.glb`
       const pairBytes = await readFile(`public${pairUrl}`)
       const pairHash = createHash('sha256').update(pairBytes).digest('hex')

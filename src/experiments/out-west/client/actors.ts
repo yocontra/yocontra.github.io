@@ -120,7 +120,9 @@ export class Actors {
     appearance?: Appearance,
   ): Promise<PreparedCharacters> {
     const [own, common] = await Promise.allSettled([
-      equippedActor(game, appearance?.loadout ?? DEFAULT_LOADOUT, appearance?.dyes ?? {}),
+      equippedActor(game, appearance?.loadout ?? DEFAULT_LOADOUT, appearance?.dyes ?? {}, {
+        carryDrawn: true,
+      }),
       commonCharacters(game),
     ])
     if (own.status === 'rejected' || common.status === 'rejected') {
@@ -295,7 +297,7 @@ export class Actors {
         this.assign(id, fallback, 'loading')
       }
       const actor = appearance
-        ? await equippedActor(this.game, appearance.loadout, appearance.dyes)
+        ? await equippedActor(this.game, appearance.loadout, appearance.dyes, { carryDrawn: true })
         : await DuelActor.create(
             this.game,
             ASSETS[`outlaw-${Math.abs(Number(id)) % 17}` as keyof typeof ASSETS].url,

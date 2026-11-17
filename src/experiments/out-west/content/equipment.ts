@@ -34,6 +34,11 @@ export const EQUIPMENT = {
     url: '/experiments/out-west/3d/native-v2/equipment/gun.hardins-pair.glb?v=7f6cbef0af3c653d',
     hash: '7f6cbef0af3c653d4f5fd3b0ba1d22c7a0cb8355e430ae92ef7c94fcf455c7e9',
     bytes: 317224,
+    pair: {
+      url: '/experiments/out-west/3d/native-v2/equipment/gun.hardins-pair.pair.glb?v=60b2aa61863548b7',
+      hash: '60b2aa61863548b716e6889ccac4d4200ab5f2d1cf97858d7afafa268d2f233a',
+      bytes: 501876,
+    },
   },
   'gun.gold-medal': {
     url: '/experiments/out-west/3d/native-v2/equipment/gun.gold-medal.glb?v=6841504961f88613',
