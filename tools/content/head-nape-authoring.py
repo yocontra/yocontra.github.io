@@ -28,8 +28,8 @@ SOURCES = ROOT / "tools/art/characters"
 OUTPUT = SOURCES / "head-nape"
 REFERENCE = SOURCES / "player.gltf"
 # Head-joint-relative glTF bounds of the lattice (meters at the player's head scale).
-BOUNDS = ((-0.13, -0.09, -0.14), (0.13, 0.23, 0.1))
-RESOLUTION = (9, 21, 17)
+BOUNDS = ((-0.075, -0.06, -0.14), (0.075, 0.085, -0.005))
+RESOLUTION = (17, 33, 25)
 COMPONENTS = {5126: np.float32, 5125: np.uint32, 5123: np.uint16, 5121: np.uint8}
 WIDTHS = {"SCALAR": 1, "VEC2": 2, "VEC3": 3, "VEC4": 4, "MAT4": 16}
 
@@ -83,23 +83,23 @@ def smoothstep(edge0, edge1, x):
 
 
 def occiput(local):
-    """Taper the posterior skull into the neck, preserving the ears, face and collar footprint."""
+    """Join the posterior neck and lower skull with one continuous cervical cross-section."""
     x, y, z = local[..., 0], local[..., 1], local[..., 2]
-    width = 1 - smoothstep(0.045, 0.06, np.abs(x + 0.002))
+    # The source has a lower-skull shelf and a pinched upper neck. A single rounded
+    # loft replaces both contours; a depth-only correction leaves the lateral lobes.
+    width = 0.052 + 0.018 * smoothstep(-0.02, 0.09, y)
+    back = (-0.065 + 0.013 * smoothstep(-0.04, 0.04, y)
+            - 0.009 * smoothstep(0.05, 0.10, y))
+    center = -0.022 + 0.018 * smoothstep(-0.025, 0.09, y)
+    depth = center - back
+    radial = np.sqrt(np.square(x / width) + np.square((z - center) / depth))
+    inverse = 1 + 0.85 * (1 / np.maximum(radial, 0.001) - 1)
+    weight = (smoothstep(-0.06, -0.025, y) * (1 - smoothstep(0.055, 0.085, y))
+              * smoothstep(-0.005, -0.025, z)
+              * (1 - smoothstep(0.06, 0.075, np.abs(x))))
     offset = np.zeros_like(local)
-    # The source has a posterior ledge just above the Head pivot. Remove its excess
-    # depth without shrinking the neck shaft or moving the lateral ear attachment.
-    underside = smoothstep(0.008, 0.028, y) * (1 - smoothstep(0.055, 0.085, y))
-    taper = np.maximum(-0.044 - 0.16 * y - z, 0)
-    # The fitted hair already defines the upper skull: expanding it causes scalp poke-through.
-    offset[..., 2] = 0.9 * underside * taper * width
-    # The source pinches inward at the upper cervical shaft before the skull widens.
-    # Fill that posterior hollow; keep the anterior throat, ears and collar unchanged.
-    cervical = smoothstep(-0.060, -0.020, y) * (1 - smoothstep(0.004, 0.020, y))
-    posterior = smoothstep(-0.020, -0.040, z)
-    rounded_back = -0.057 + 0.12 * y + 0.024 * np.square((x + 0.002) / 0.062)
-    join = np.minimum(rounded_back - z, 0)
-    offset[..., 2] += 0.9 * cervical * posterior * join * width
+    offset[..., 0] = (x * inverse - x) * weight
+    offset[..., 2] = ((z - center) * inverse - (z - center)) * weight
     return offset
 
 
