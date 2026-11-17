@@ -248,12 +248,33 @@ async function prepareAtmosphere(
     signal.removeEventListener('abort', abort)
   }
 }
+async function warmFrontierView(
+  application: GameApplication,
+  signal: AbortSignal,
+  side: -1 | 1,
+): Promise<void> {
+  if (signal.aborted) {
+    return
+  }
+  const x = TOWN.size * (0.5 + side * 0.36)
+  const z = TOWN.size * (0.5 + side * 0.47)
+  application.camera.setPosition(x, 2.2, z)
+  application.camera.lookAt(x, 1.2, TOWN.size / 2)
+  await firstFrame(application, signal)
+}
+
 async function warmFrontierCharacters(
   application: GameApplication,
   prepared: PreparedCharacters,
   atmosphere: NativeAtmosphere | undefined,
   signal: AbortSignal,
 ): Promise<void> {
+  // The arrival view leaves most of the perimeter outside the camera frustum.
+  await warmFrontierView(application, signal, -1)
+  await warmFrontierView(application, signal, 1)
+  if (signal.aborted) {
+    return
+  }
   const spawn = TOWN.spawns[0]
   const restore = spawn ? atmosphere?.warm(spawn.x, 0, spawn.z) : undefined
   try {
