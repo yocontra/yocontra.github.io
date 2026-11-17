@@ -1,7 +1,7 @@
 import { readFile } from 'node:fs/promises'
 import sharp from 'sharp'
 import type { FrontierGeometry } from './frontier-geometry.ts'
-import { shortSignAtlas } from './frontier-sign-type.ts'
+import { paintedSignAtlas } from './frontier-sign-type.ts'
 export const LABELS: Record<string, string> = {
   saloon: 'PERDITION SALOON',
   hotel: 'GRAND HOTEL',
@@ -70,7 +70,7 @@ export async function authoredMaterials(g: FrontierGeometry) {
   const sign = g.doc
     .createTexture('Perdition shop signs')
     .setImage(
-      await shortSignAtlas(
+      await paintedSignAtlas(
         SIGN_ROWS,
         Object.values(SHORT_LABELS),
         'tools/art/environments/frontier-signs',

@@ -14,6 +14,7 @@ import {
   signUvRect,
 } from '../../tools/content/frontier-sign-layout.ts'
 import {
+  paintedSignAtlas,
   SIGN_LOGICAL_WIDTH,
   shortSignAtlas,
   shortSignOutline,
@@ -168,4 +169,40 @@ it('uses balanced physical UV rectangles with guarded gutters, preserving sixtee
   expect(() => signRect(-1)).toThrow('0..27')
   expect(() => signRect(28)).toThrow('0..27')
   expect(() => signRect(12.5)).toThrow('0..27')
+})
+
+it('weathering adds grain to every sign while keeping the pale paint distinct from ink', async () => {
+  const directory = 'tools/art/environments/frontier-signs'
+  const labels = Object.values(SHORT_LABELS)
+  const [paint, weathered] = await Promise.all([
+    shortSignAtlas(SIGN_ROWS, labels, directory),
+    paintedSignAtlas(SIGN_ROWS, labels, directory),
+  ])
+  const before = await sharp(paint).ensureAlpha().raw().toBuffer()
+  const after = await sharp(weathered).ensureAlpha().raw().toBuffer()
+  expect(after.length).toBe(SIGN_ATLAS_WIDTH * SIGN_ATLAS_HEIGHT * 4)
+  for (let row = 0; row < SIGN_ROWS.length; row++) {
+    const { left, top, width, height } = signRect(row)
+    let changed = 0
+    let lightestInk = 0
+    let darkestPaint = 255
+    for (let y = top; y < top + height; y++) {
+      for (let x = left; x < left + width; x++) {
+        const offset = (y * SIGN_ATLAS_WIDTH + x) * 4
+        const original = before[offset] ?? 0
+        const next = after[offset] ?? 0
+        if (Math.abs(original - next) >= 10) {
+          changed++
+        }
+        if (original < 60) {
+          lightestInk = Math.max(lightestInk, next)
+        }
+        if (original > 150) {
+          darkestPaint = Math.min(darkestPaint, next)
+        }
+      }
+    }
+    expect(changed).toBeGreaterThan((width * height) / 30)
+    expect(darkestPaint - lightestInk).toBeGreaterThan(35)
+  }
 })

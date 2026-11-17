@@ -32,15 +32,29 @@ const settings = [
   '--threads',
   '2',
 ]
+const paintSettings = [
+  '--t2',
+  '--encode',
+  'etc1s',
+  '--qlevel',
+  '220',
+  '--clevel',
+  '4',
+  '--genmipmap',
+  '--threads',
+  '2',
+]
 /** Encoding inputs and settings form an immutable file key; source dimensions are unchanged. */
 export async function compressedCharacterTexture(
   bytes: Uint8Array,
   color: boolean,
   scope: 'characters' | 'environments' = 'characters',
+  encoding: 'uastc' | 'etc1s' = 'uastc',
 ): Promise<string> {
+  const encoderSettings = encoding === 'etc1s' ? paintSettings : settings
   const hash = createHash('sha256')
     .update(bytes)
-    .update(JSON.stringify(settings))
+    .update(JSON.stringify(encoderSettings))
     .update(color ? 'srgb' : 'linear')
     .update('toktx-4.4.2')
     .digest('hex')
@@ -76,7 +90,7 @@ export async function compressedCharacterTexture(
       const encoded = join(temporary, 'encoded.ktx2')
       await sharp(bytes).png().toFile(input)
       const child = Bun.spawn(
-        [encoder, ...settings, '--assign_oetf', color ? 'srgb' : 'linear', encoded, input],
+        [encoder, ...encoderSettings, '--assign_oetf', color ? 'srgb' : 'linear', encoded, input],
         { stdout: 'pipe', stderr: 'pipe' },
       )
       const [code, stdout, stderr] = await Promise.all([

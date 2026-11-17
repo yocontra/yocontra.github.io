@@ -14,6 +14,10 @@ import {
 
 export const SIGN_FONT_SHA = 'e0d7f0dfde5f713d46ea9e184ec60eb9e161455ce25d1710fe94f651261165d1'
 export const SIGN_LOGICAL_WIDTH = (128 * 1.5) / 0.7
+const WOOD_SCAN = new URL(
+  '../../public/experiments/out-west/3d/tex/planks_diff.webp',
+  import.meta.url,
+)
 const SHORT_LABEL = /^[A-Z]+$/u
 const hash = (bytes: Uint8Array) => createHash('sha256').update(bytes).digest('hex')
 
@@ -124,4 +128,52 @@ export async function shortSignAtlas(
     ])
     .png()
     .toBuffer()
+}
+
+/** Let scanned wood grain show through the original paint and lettering. */
+export async function paintedSignAtlas(
+  labels: readonly string[],
+  shortLabels: readonly string[],
+  directory: string,
+) {
+  const lettering = await shortSignAtlas(labels, shortLabels, directory)
+  const scan = await readFile(WOOD_SCAN)
+  const overlays = await Promise.all(
+    labels.map(async (_, row) => {
+      const rect = signRect(row)
+      const short = row >= 12 && row < 24
+      const { width, height } = rect
+      const grain = await sharp(scan)
+        .extract({ left: 0, width: 1024, top: (row * 137) % 879, height: short ? 144 : 68 })
+        .resize(width, height, { fit: 'fill' })
+        .greyscale()
+        .raw()
+        .toBuffer()
+      const mean = grain.reduce((sum, sample) => sum + sample, 0) / grain.length
+      const paint = await sharp(lettering).extract(rect).ensureAlpha().raw().toBuffer()
+      for (let y = 0; y < height; y++) {
+        const edgeWear = Math.max(0, 1 - Math.min(y, height - 1 - y) / (height * 0.22))
+        for (let x = 0; x < width; x++) {
+          const pixel = y * width + x
+          const offset = pixel * 4
+          const tone = (grain[pixel] ?? mean) - mean
+          const red = paint[offset] ?? 0
+          // Dark letterforms retain their shape while edges and pale paint show more grain.
+          const contrast = red < 80 ? 0.36 : 0.95
+          const weather = Math.max(-42, Math.min(32, tone * contrast)) - edgeWear * 8
+          for (let channel = 0; channel < 3; channel++) {
+            const index = offset + channel
+            paint[index] = Math.min(255, Math.max(0, Math.round((paint[index] ?? 0) + weather)))
+          }
+        }
+      }
+      const gutter = short ? SIGN_GUTTER : 0
+      const input = await sharp(paint, { raw: { width, height, channels: 4 } })
+        .extend({ top: gutter, bottom: gutter, left: gutter, right: gutter, extendWith: 'copy' })
+        .png()
+        .toBuffer()
+      return { input, left: rect.left - gutter, top: rect.top - gutter }
+    }),
+  )
+  return sharp(lettering).composite(overlays).png().toBuffer()
 }

@@ -28,7 +28,8 @@ export async function compressEnvironmentTextures(path: string): Promise<void> {
         (material) =>
           material.getBaseColorTexture() === texture || material.getEmissiveTexture() === texture,
       )
-      const url = await compressedCharacterTexture(bytes, color, 'environments')
+      const encoding = texture.getName() === 'Perdition shop signs' ? 'etc1s' : 'uastc'
+      const url = await compressedCharacterTexture(bytes, color, 'environments', encoding)
       texture
         .setImage(await readFile(contentOutput('environments', 'textures', basename(url))))
         .setMimeType('image/ktx2')
