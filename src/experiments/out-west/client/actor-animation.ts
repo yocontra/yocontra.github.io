@@ -97,7 +97,7 @@ function upperClip(
   if ((domain?.reloadTicks ?? 0) > 0) {
     return crouched ? 'Crouch_Reload' : rider.actor.animation('Reload')
   }
-  return crouched ? 'Crouch_Idle_Gun_Pointing' : rider.actor.animation('Idle_Gun_Pointing')
+  return rider.actor.animation(crouched ? 'Crouch_Idle_Gun_Pointing' : 'Idle_Gun_Pointing')
 }
 function aimClip(player: PlayerState, domain: Player | undefined): string {
   const stance = (player.crouched ?? domain?.crouched ?? false) ? 'Crouch_' : ''
@@ -164,7 +164,11 @@ export function animateRider(
 }
 
 /** Accepted events start one native toss; locomotion keeps its independent clock. */
-export function beginDynamiteThrow(rider: AnimatedRider, player: PlayerState): void {
+export function beginDynamiteThrow(
+  rider: AnimatedRider,
+  player: PlayerState,
+  until = performance.now() + DYNAMITE_THROW_SECONDS * 1000,
+): void {
   if (player.hp <= 0) {
     return
   }
@@ -173,10 +177,29 @@ export function beginDynamiteThrow(rider: AnimatedRider, player: PlayerState): v
     return
   }
   rider.firingUntil = 0
-  rider.throwingUntil = performance.now() + DYNAMITE_THROW_SECONDS * 1000
+  rider.throwingUntil = until
   rider.actor.weaponsVisible(false)
   if (rider.aim) {
     rider.aim.weight = 0
   }
   rider.weaponLayer.transition(clip, 0.035)
+}
+
+/** A local arms presentation follows the physical rider's accepted action deadline. */
+export function syncDynamiteThrow(rider: AnimatedRider, player: PlayerState, until: number): void {
+  const now = performance.now()
+  const deadline = player.hp > 0 && until > now ? until : 0
+  if (deadline !== (rider.throwingUntil ?? 0)) {
+    rider.throwingUntil = 0
+    if (deadline > 0) {
+      beginDynamiteThrow(rider, player, deadline)
+      if (rider.weaponLayer && rider.throwingUntil === deadline) {
+        rider.weaponLayer.activeStateCurrentTime = Math.max(
+          0,
+          DYNAMITE_THROW_SECONDS - (deadline - now) / 1000,
+        )
+      }
+    }
+  }
+  rider.actor.weaponsVisible(deadline === 0)
 }

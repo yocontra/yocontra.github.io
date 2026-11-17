@@ -171,7 +171,7 @@
       },
       {
         "path": "tools/content/garment-parts.ts",
-        "sha256": "39d9c4bf603f86d9838cf6060df00496e3966836f1d0e288cb1fca2766e25071"
+        "sha256": "f33e2b6ccb30a3b25f4a7be9a767f97c1b5aa12077ffebbe8242a6310367423c"
       },
       {
         "path": "tools/content/garment-geometry.ts",
@@ -183,7 +183,7 @@
       },
       {
         "path": "tools/content/character-materials.ts",
-        "sha256": "7e8c016325142ecd977efb59ee1c7b02aad035c7432303bd45417c05836cb622"
+        "sha256": "ac67c230f41f7ba72af34a7414a3be31e646bd8eef78844ffef5e56afe8c2af8"
       },
       {
         "path": "tools/content/head-throat-normal-authoring.py",
@@ -744,7 +744,7 @@
         1.0000159740447998,
         1.0000272989273071
       ],
-      "inputGeometrySHA256": "7bbaefaec60f11ad432b2c8fdece64d561f61460f40f7258f693ca4c3528056e"
+      "inputGeometrySHA256": "ac1bf6fe26674ecfae8cd37593761e0b832df602644426f3b5a751000685db1f"
     }
   }
 }

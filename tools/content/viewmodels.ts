@@ -1,25 +1,86 @@
-import { mkdir, writeFile } from 'node:fs/promises'
+import { createHash } from 'node:crypto'
+import { constants } from 'node:fs'
+import { access, mkdir, readFile, writeFile } from 'node:fs/promises'
 import type { ContentAsset } from '../../src/experiments/out-west/content/types.ts'
 import { CATALOG } from '../../src/experiments/out-west/data/catalog.ts'
 import { extractFirstPersonArms } from './first-person-arms.ts'
 import { formatContent } from './format-content.ts'
 
+async function validateInputs(inputPins: Map<string, string>): Promise<void> {
+  await Promise.all(
+    [...inputPins].map(async ([path, expected]) => {
+      const actual = createHash('sha256')
+        .update(await readFile(path))
+        .digest('hex')
+      if (actual !== expected) {
+        throw new Error(`Art changed during viewmodel build: ${path}`)
+      }
+    }),
+  )
+}
+
+function addInputPins(inputs: Map<string, string>, pins: { path: string; sha256: string }[]): void {
+  for (const pin of pins) {
+    const previous = inputs.get(pin.path)
+    if (previous && previous !== pin.sha256) {
+      throw new Error(`Art changed between fitted sources: ${pin.path}`)
+    }
+    inputs.set(pin.path, pin.sha256)
+  }
+}
+
 /** Rebuild every fitted arms asset; animation tracks stay shared at runtime. */
 export async function buildViewmodels(): Promise<Record<string, ContentAsset>> {
+  const fits = CATALOG.filter((item) => item.slot === 'outfit').flatMap((item) => [
+    item.id,
+    `${item.id}.pair`,
+  ])
+  // Reject missing world inputs before spending time rebuilding any fitted presentation.
+  await Promise.all(
+    fits.map((id) =>
+      access(`public/experiments/out-west/3d/native-v2/equipment/${id}.glb`, constants.R_OK),
+    ),
+  )
   const assets: Record<string, ContentAsset> = {}
   const outputs: { path: string; bytes: Uint8Array }[] = []
-  for (const outfit of CATALOG.filter((item) => item.slot === 'outfit')) {
-    for (const suffix of ['', '.pair']) {
-      const id = `${outfit.id}${suffix}`
-      const path = `/experiments/out-west/3d/native-v2/viewmodels/${id}.glb`
-      const { bytes, report } = await extractFirstPersonArms(id, { geometryOnly: true })
-      const hash = report.hash
-      outputs.push({ path: `public${path}`, bytes })
-      assets[id] = { url: `${path}?v=${hash.slice(0, 16)}`, hash, bytes: bytes.length }
+  const textures = new Map<string, Uint8Array>()
+  const inputPins = new Map<string, string>()
+  for (const id of fits) {
+    const path = `/experiments/out-west/3d/native-v2/viewmodels/${id}.glb`
+    const {
+      bytes,
+      report,
+      textures: maps,
+    } = await extractFirstPersonArms(id, { geometryOnly: true })
+    for (const texture of maps) {
+      const previous = textures.get(texture.path)
+      if (previous && !Buffer.from(previous).equals(texture.bytes)) {
+        throw new Error(`Conflicting native texture ${texture.path}`)
+      }
+      textures.set(texture.path, texture.bytes)
+    }
+    addInputPins(inputPins, report.sourceInputs)
+    const hash = report.hash
+    outputs.push({ path: `public${path}`, bytes })
+    assets[id] = { url: `${path}?v=${hash.slice(0, 16)}`, hash, bytes: bytes.length }
+    console.log(`Staged viewmodel ${id}`)
+  }
+  await validateInputs(inputPins)
+  for (const [path, bytes] of textures) {
+    if (await Bun.file(path).exists()) {
+      if (!Buffer.from(await readFile(path)).equals(bytes)) {
+        throw new Error(`Native texture cache mismatch ${path}`)
+      }
+    } else {
+      outputs.push({ path, bytes })
     }
   }
   // Validate every fit before replacing any asset or its descriptor.
-  await mkdir('public/experiments/out-west/3d/native-v2/viewmodels', { recursive: true })
+  await Promise.all(
+    ['viewmodels', 'characters'].map((name) =>
+      mkdir(`public/experiments/out-west/3d/native-v2/${name}`, { recursive: true }),
+    ),
+  )
   await Promise.all(outputs.map(({ path, bytes }) => writeFile(path, bytes)))
   const descriptorPath = 'src/experiments/out-west/content/viewmodels.ts'
   await writeFile(

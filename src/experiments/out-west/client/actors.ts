@@ -1,25 +1,18 @@
-import type {
-  AnimComponentLayer,
-  AnimTrack,
-  ContainerResource,
-  Entity,
-  GraphNode,
-} from 'playcanvas'
-import { Mat4, Quat, Vec3 } from 'playcanvas'
+import type { AnimComponentLayer, AnimTrack, Entity, GraphNode } from 'playcanvas'
+import { Vec3 } from 'playcanvas'
 import { ASSETS, DYNAMIC_ASSETS } from '../content/manifest.ts'
 import { DEFAULT_LOADOUT, type Loadout } from '../data/catalog.ts'
 import type { Dyes } from '../data/dye.ts'
 import { DuelActor } from '../duel/native-actor.ts'
-import { eyeHeight } from '../ffa/sim/combat.ts'
 import type { World } from '../ffa/sim/state.ts'
-import type { Player } from '../ffa/sim/types.ts'
-import type { PlayerState } from '../runtime/protocol.ts'
+import type { PlayerInput, PlayerState } from '../runtime/protocol.ts'
 import { RECOIL_SECONDS } from '../scene/native-animation-timing.ts'
 import { attachHeldWeapon, equippedActor } from '../scene/native-equipment.ts'
-import { prepareNativeMaterials } from '../scene/native-materials.ts'
 import { animateRider, beginDynamiteThrow, heldWeapon } from './actor-animation.ts'
+import { commonCharacters, loadCharacterTracks } from './actor-assets.ts'
 import { createRiderPose, type RiderPose } from './actor-pose.ts'
 import type { GameApplication } from './application.ts'
+import { FirstPersonModel } from './first-person-model.ts'
 import type { NativeRagdolls } from './ragdolls.ts'
 
 export interface Appearance {
@@ -27,23 +20,29 @@ export interface Appearance {
   dyes: Dyes
   key: string
 }
+export interface ActorStats {
+  loaded: number
+  loading: number
+  failed: number
+  fallbacks: number
+  visible: number
+  viewmodel: ReturnType<FirstPersonModel['stats']>
+}
+export const IDLE_ACTORS: ActorStats = {
+  loaded: 0,
+  loading: 0,
+  failed: 0,
+  fallbacks: 0,
+  visible: 0,
+  viewmodel: { arms: 0, pending: 0, masked: 0 },
+}
 export interface PreparedCharacters {
   readonly root: Entity
   dispose: () => void
   take: () => { actor: DuelActor; key: string; release: () => void }
 }
-async function commonCharacters(game: GameApplication): Promise<() => void> {
-  const [, fallback] = await Promise.all([
-    game.loadContainer(ASSETS.moves.url),
-    game.loadContainer(ASSETS['outlaw-0'].url),
-    game.loadContainer(DYNAMIC_ASSETS['held-rifle'].url),
-    game.loadContainer(DYNAMIC_ASSETS['held-shotgun'].url),
-  ])
-  return prepareNativeMaterials(game, fallback.resource as ContainerResource)
-}
 interface Rider {
   actor: DuelActor
-  head: GraphNode | null
   key: string
   clip: string
   firingUntil: number
@@ -57,15 +56,13 @@ interface Rider {
   heldFailures: Set<string>
 }
 
-const rigInverse = new Mat4()
-const viewRotation = new Quat()
-const bodyRotation = new Quat()
-const bodyOffset = new Vec3()
-const facing = new Quat().setFromEulerAngles(0, 180, 0)
+const heldUrl = (weapon: 'rifle' | 'shotgun'): string => DYNAMIC_ASSETS[`held-${weapon}`].url
 
 /** Every mode uses the same authored rigs, native animation, equipment and dye pipeline. */
 export class Actors {
   private readonly game: GameApplication
+  private readonly firstPerson: FirstPersonModel
+  private ownId: string | undefined
   private readonly ragdolls: NativeRagdolls
   private readonly world: () => World | undefined
   private readonly appearance: (id: string) => Appearance | undefined
@@ -87,6 +84,7 @@ export class Actors {
     world: () => World | undefined = () => undefined,
   ) {
     this.game = game
+    this.firstPerson = new FirstPersonModel(game)
     this.ragdolls = ragdolls
     this.appearance = appearance
     this.world = world
@@ -103,6 +101,7 @@ export class Actors {
       'click',
       () => {
         this.failures.clear()
+        this.firstPerson.retry()
         for (const rider of this.actors.values()) {
           rider.heldFailures.clear()
         }
@@ -122,6 +121,7 @@ export class Actors {
   ): Promise<PreparedCharacters> {
     const [own, common] = await Promise.allSettled([
       equippedActor(game, appearance?.loadout ?? DEFAULT_LOADOUT, appearance?.dyes ?? {}, {
+        local: true,
         carryDrawn: true,
       }),
       commonCharacters(game),
@@ -164,11 +164,9 @@ export class Actors {
   ): Promise<void> {
     this.syncPlayers(players)
     const own = ownId ?? players.keys().next().value
+    this.ownId = own
     try {
-      const moves = await this.game.loadContainer(ASSETS.moves.url)
-      this.tracks = (moves.resource as ContainerResource).animations.map(
-        (clip) => clip.resource as AnimTrack,
-      )
+      this.tracks = await loadCharacterTracks(this.game)
       if (!(own && players.has(own))) {
         throw new Error('The own rider is not present')
       }
@@ -214,6 +212,10 @@ export class Actors {
           }),
       )
       this.update(players, 0)
+      const request = this.firstPersonRequest(own)
+      if (request) {
+        await this.firstPerson.prepare(request)
+      }
     } catch (cause) {
       prepared?.dispose()
       throw new Error('Could not load the riders. Check your connection and try again.', { cause })
@@ -239,6 +241,9 @@ export class Actors {
     return this.appearance(id)?.key ?? 'default'
   }
   private assign(id: string, actor: DuelActor, key: string): void {
+    if (id === this.ownId) {
+      actor.batchRigid = false
+    }
     actor.root.tags.add(`rider:${id}`)
     for (const track of this.tracks) {
       if (!actor.hasAnimation(track.name)) {
@@ -253,7 +258,6 @@ export class Actors {
     actor.root.enabled = false
     this.actors.set(id, {
       actor,
-      head: actor.model.findByName('Head'),
       key,
       clip: '',
       firingUntil: 0,
@@ -299,7 +303,10 @@ export class Actors {
         this.assign(id, fallback, 'loading')
       }
       const actor = appearance
-        ? await equippedActor(this.game, appearance.loadout, appearance.dyes, { carryDrawn: true })
+        ? await equippedActor(this.game, appearance.loadout, appearance.dyes, {
+            local: id === this.ownId,
+            carryDrawn: true,
+          })
         : await DuelActor.create(
             this.game,
             ASSETS[`outlaw-${Math.abs(Number(id)) % 17}` as keyof typeof ASSETS].url,
@@ -317,9 +324,7 @@ export class Actors {
       }
       this.assign(id, actor, key)
       this.failures.delete(id)
-      this.notice.hidden =
-        this.failures.size === 0 &&
-        ![...this.actors.values()].some((rider) => rider.heldFailures.size > 0)
+      this.notice.hidden = this.healthy()
     })()
       .catch(() => {
         if (this.lifecycle.signal.aborted || !this.present.has(id)) {
@@ -339,9 +344,7 @@ export class Actors {
         this.failures.delete(id)
       }
     }
-    this.notice.hidden =
-      this.failures.size === 0 &&
-      ![...this.actors.values()].some((rider) => rider.heldFailures.size > 0)
+    this.notice.hidden = this.healthy()
     for (const [id, player] of players) {
       void this.ensure(id)
       const rider = this.actors.get(id)
@@ -352,17 +355,12 @@ export class Actors {
       rider.pose.enabled(player.hp > 0)
       const domain = this.world()?.players[Number(id)] ?? undefined
       actor.root.enabled = id !== firstPersonId || player.hp > 0
-      // Use the same native animated body and weapon in first person. Collapsing the head bone
-      // also hides its mounted hat, while retaining authored arms, clothing and gun animation.
-      const scale = id === firstPersonId ? 0.0001 : 1
-      rider.head?.setLocalScale(scale, scale, scale)
+      // The physical rider keeps its gameplay pose (and shadow) in every view; only the
+      // separate local arms actor is placed relative to the first-person camera.
       // The SDK interpolates remote state; the local state already contains native prediction.
       // Another interpolation here delays the body behind its capsule and makes feet skate.
       actor.place(player.x, player.y - 0.9, player.z)
       actor.face((player.yaw * 180) / Math.PI + 180)
-      if (id === firstPersonId && player.hp > 0) {
-        Actors.placeFirstPerson(actor, player, rider.head, domain)
-      }
       if (player.hp <= 0 && !rider.dead) {
         this.ragdolls.capture(id, actor, new Vec3(player.vx, player.vy + 0.4, player.vz))
         rider.dead = true
@@ -375,20 +373,47 @@ export class Actors {
         this.ensureHeld(rider, weapon)
       }
       actor.hold(weapon, player.hp > 0)
-      animateRider(rider, player, {
-        first: id === firstPersonId,
-        domain,
-      })
+      animateRider(rider, player, { first: false, domain })
       actor.weaponsVisible(performance.now() >= rider.throwingUntil)
     }
+    this.firstPerson.update(firstPersonId ? this.firstPersonRequest(firstPersonId) : undefined)
     this.removeDeparted(players)
+  }
+  private healthy(): boolean {
+    return (
+      !this.firstPerson.failed &&
+      this.failures.size === 0 &&
+      ![...this.actors.values()].some((rider) => rider.heldFailures.size > 0)
+    )
+  }
+  private firstPersonRequest(id: string) {
+    const rider = this.actors.get(id)
+    const player = this.players.get(id)
+    return rider && player
+      ? {
+          id,
+          world: rider.actor,
+          player,
+          domain: this.world()?.players[Number(id)] ?? undefined,
+          appearance: this.appearance(id),
+          throwingUntil: rider.throwingUntil,
+        }
+      : undefined
+  }
+  /** Narrows the aimed lens and places the local arms; the shot ray never reads them. */
+  presentFirstPerson(camera: Entity, dt: number): void {
+    this.firstPerson.present(camera, dt)
+  }
+  /** Eased sights for the local arms; zero until they show the held weapon's landmarks. */
+  aim(intent: Pick<PlayerInput, 'buttons'>, active: boolean, dt: number): void {
+    this.firstPerson.aim(intent, active, dt)
   }
   private ensureHeld(rider: Rider, weapon: 'rifle' | 'shotgun'): void {
     if (rider.held.has(weapon) || rider.heldPending.has(weapon) || rider.heldFailures.has(weapon)) {
       return
     }
     rider.heldPending.add(weapon)
-    void attachHeldWeapon(this.game, rider.actor, weapon, DYNAMIC_ASSETS[`held-${weapon}`].url)
+    void attachHeldWeapon(this.game, rider.actor, weapon, heldUrl(weapon))
       .then((model) => {
         if (this.lifecycle.signal.aborted || !rider.actor.root.parent) {
           model.destroy()
@@ -413,36 +438,6 @@ export class Actors {
       }
     }
   }
-  private static placeFirstPerson(
-    actor: DuelActor,
-    player: PlayerState,
-    headBone: GraphNode | null,
-    domain: Player | undefined,
-  ): void {
-    // The world eye follows the shared gameplay height. The local rig reference follows
-    // its actual native standing/crouching pose, rather than pretending both are the same height.
-    const eye = eyeHeight({ crouched: player.crouched ?? domain?.crouched ?? false })
-    if (headBone) {
-      rigInverse
-        .copy(actor.root.getWorldTransform())
-        .invert()
-        .transformPoint(headBone.getPosition(), bodyOffset)
-      bodyOffset.y += 0.1 // Authored eyes sit ten centimetres above the Head joint.
-    } else {
-      bodyOffset.set(0, 1.62, 0)
-    }
-    bodyOffset.mulScalar(-1)
-    viewRotation.setFromEulerAngles((player.pitch * 180) / Math.PI, (player.yaw * 180) / Math.PI, 0)
-    bodyRotation.copy(viewRotation).mul(facing)
-    bodyRotation.transformVector(bodyOffset, bodyOffset)
-    actor.place(
-      player.x + bodyOffset.x,
-      player.y - 0.9 + eye + bodyOffset.y,
-      player.z + bodyOffset.z,
-    )
-    actor.root.setRotation(bodyRotation)
-  }
-
   fire(id: string): void {
     const rider = this.actors.get(id)
     if (rider) {
@@ -450,6 +445,7 @@ export class Actors {
       rider.actor.weaponsVisible(true)
       rider.firingUntil = performance.now() + RECOIL_SECONDS * 1000
       rider.actor.fireWeapon()
+      this.firstPerson.fire(id, this.players.get(id)?.crouched ?? false)
       const clip = rider.actor.shotClip(this.players.get(id)?.crouched ?? false)
       if (rider.weaponLayer?.states.includes(clip)) {
         rider.weaponLayer.transition(clip, 0)
@@ -468,7 +464,7 @@ export class Actors {
     const until = rider.throwingUntil
     return () =>
       this.actors.get(id) === rider && rider.throwingUntil === until && performance.now() < until
-        ? rider.actor.model.findByName('WristR')
+        ? (this.firstPerson.wrist(id) ?? rider.actor.model.findByName('WristR'))
         : null
   }
   cancelThrow(id: string): void {
@@ -479,11 +475,12 @@ export class Actors {
     }
   }
   muzzle(id: string): { position: Vec3; direction: Vec3 } | null {
-    return this.actors.get(id)?.actor.muzzle() ?? null
+    return this.firstPerson.muzzle(id) ?? this.actors.get(id)?.actor.muzzle() ?? null
   }
-  stats(): { loaded: number; loading: number; failed: number; fallbacks: number; visible: number } {
+  stats(): ActorStats {
     const riders = [...this.actors.values()]
     return {
+      viewmodel: this.firstPerson.stats(),
       loaded: riders.length,
       loading: this.pending.size,
       failed: this.failures.size,
@@ -493,6 +490,7 @@ export class Actors {
   }
   destroy(): void {
     this.lifecycle.abort()
+    this.firstPerson.destroy()
     this.present.clear()
     this.players = new Map()
     this.incarnations.clear()

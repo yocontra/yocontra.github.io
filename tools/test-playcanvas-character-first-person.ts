@@ -13,7 +13,7 @@ const results: unknown[] = []
 try {
   const page = await browser.newPage({ viewport: { width: 1280, height: 720 } })
   await page.routeWebSocket(
-    (url) => url.origin === 'ws://127.0.0.1:4390',
+    (url) => url.origin === origin.replace(/^http/u, 'ws'),
     () => undefined,
   )
   page.on('pageerror', (error) => errors.push(error.message))
@@ -62,7 +62,14 @@ try {
         for (let frame = 0; frame < 30; frame++) {
           await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()))
         }
-        return probe.riderView(session.selfId)
+        const player = session.players.get(session.selfId)
+        if (!player) {
+          throw new Error('Missing physical player for first-person camera check')
+        }
+        const posePath = '/src/experiments/out-west/client/player-pose.ts'
+        const { poseEye } = await import(posePath)
+        const view = probe.riderView(session.selfId) as Record<string, unknown>
+        return { ...view, rigEye: poseEye(player) }
       })
       const r = result as {
         eye: { x: number; y: number; z: number }
@@ -72,7 +79,7 @@ try {
         forward: { x: number; y: number; z: number }
       }
       const error = Math.hypot(r.eye.x - r.rigEye.x, r.eye.y - r.rigEye.y, r.eye.z - r.rigEye.z)
-      if (error > 0.03 || !r.muzzle) {
+      if (error > 0.000_001 || !r.muzzle) {
         throw new Error(`FP ${name} crouch${crouched} rig offset${error}:${JSON.stringify(result)}`)
       }
       const dot = r.muzzleForward

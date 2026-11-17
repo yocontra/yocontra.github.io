@@ -14,6 +14,8 @@ import { ALL_EXTENSIONS } from '@gltf-transform/extensions'
 import { compactPrimitive, prune } from '@gltf-transform/functions'
 import { Mat4, Vec3 } from 'playcanvas'
 import type { Range } from './character-atlas.ts'
+import { FIRST_PERSON_SLEEVE_DONORS } from './first-person-sleeves.ts'
+import { firstPersonNativeSource, type PresentationTexture } from './first-person-source.ts'
 import { integrateGarmentParts } from './garment-parts.ts'
 import { fitWaistcoats } from './waistcoat-fit.ts'
 
@@ -315,6 +317,7 @@ export async function extractFirstPersonArms(id: string, options: { geometryOnly
     'coat-collars',
     'shirt-fronts',
     'neckerchiefs',
+    ...(id in FIRST_PERSON_SLEEVE_DONORS ? ['first-person-sleeves'] : []),
   ].map((category) => resolve('tools/art/characters', category, `${id}.glb`))
   if (
     source
@@ -330,7 +333,8 @@ export async function extractFirstPersonArms(id: string, options: { geometryOnly
       authoredInputs.push(path)
     }
   }
-  await integrateGarmentParts(source, id)
+  const completeSleeves = id in FIRST_PERSON_SLEEVE_DONORS
+  await integrateGarmentParts(source, id, { firstPersonSleeves: completeSleeves })
   await fitWaistcoats(source, id)
   const selection = collectSource(source)
   const nativePath = resolve(
@@ -338,7 +342,13 @@ export async function extractFirstPersonArms(id: string, options: { geometryOnly
     id.startsWith('outfit.') ? 'equipment' : 'baked',
     `${id}.glb`,
   )
-  const nativeBytes = await readFile(nativePath)
+  const worldBytes = await readFile(nativePath)
+  const presentation = completeSleeves
+    ? await firstPersonNativeSource(id, (fitted) => {
+        filterNative(fitted, selection)
+      })
+    : undefined
+  const nativeBytes = presentation?.bytes ?? worldBytes
   const doc = await io.readBinary(nativeBytes)
   const { retained, surfaces } = filterNative(doc, selection)
   const wanted = selection.faces.flatMap((face, index) => (face.selected ? [index] : []))
@@ -361,31 +371,39 @@ export async function extractFirstPersonArms(id: string, options: { geometryOnly
   const sourceBuffers = await Promise.all(sourceBufferPaths.map((path) => readFile(path)))
   const sourceInputs = await Promise.all(
     [
-      sourcePath,
-      ...sourceBufferPaths,
-      nativePath,
-      ...authoredInputs,
-      import.meta.path,
-      ...[
-        'garment-parts.ts',
-        'garment-geometry.ts',
-        'waistcoat-fit.ts',
-        'waistcoat-pattern.json',
-        'authoring-inputs.ts',
-      ].map((helper) => resolve(import.meta.dir, helper)),
+      ...new Set([
+        sourcePath,
+        ...sourceBufferPaths,
+        ...(presentation?.inputPaths.map((path) => resolve(path)) ?? []),
+        nativePath,
+        ...authoredInputs,
+        import.meta.path,
+        ...[
+          'garment-parts.ts',
+          'garment-geometry.ts',
+          'waistcoat-fit.ts',
+          'waistcoat-pattern.json',
+          'authoring-inputs.ts',
+        ].map((helper) => resolve(import.meta.dir, helper)),
+      ]),
     ]
       .toSorted((a, b) => a.localeCompare(b))
       .map(async (path) => ({
         path: relative(process.cwd(), path),
-        sha256: hash(await readFile(path)),
+        sha256:
+          path === nativePath
+            ? hash(worldBytes)
+            : (presentation?.inputPins.find((pin) => pin.path === relative(process.cwd(), path))
+                ?.sha256 ?? hash(await readFile(path))),
       })),
   )
-  const nativeHash = hash(nativeBytes)
+  const nativeHash = hash(worldBytes)
   const provenance = {
     fit: id,
     animationMode: options.geometryOnly ? 'geometry-only' : 'local-clips',
     nativePath: relative(process.cwd(), nativePath),
     nativeSHA256: nativeHash,
+    ...(presentation ? { presentation: presentation.provenance } : {}),
     canonicalSHA256: hash(Buffer.concat([sourceBytes, ...sourceBuffers])),
     helperSHA256: hash(await readFile(import.meta.path)),
     sourceInputs,
@@ -398,6 +416,7 @@ export async function extractFirstPersonArms(id: string, options: { geometryOnly
   const bytes = await io.writeBinary(doc)
   return {
     bytes,
+    textures: presentation?.textures ?? ([] as PresentationTexture[]),
     report: {
       ...provenance,
       bytes: bytes.length,
@@ -418,10 +437,15 @@ if (import.meta.main) {
   ]
   const reports: Awaited<ReturnType<typeof extractFirstPersonArms>>['report'][] = []
   for (const id of ids) {
-    const { bytes, report } = await extractFirstPersonArms(id, {
+    const { bytes, report, textures } = await extractFirstPersonArms(id, {
       geometryOnly: process.argv.includes('--geometry-only'),
     })
     await writeFile(resolve(output, `${basename(id)}.glb`), bytes)
+    for (const texture of textures) {
+      const path = resolve(output, 'characters', basename(texture.path))
+      await mkdir(dirname(path), { recursive: true })
+      await writeFile(path, texture.bytes)
+    }
     reports.push(report)
     console.log(JSON.stringify(report))
   }

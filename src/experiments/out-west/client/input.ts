@@ -54,7 +54,7 @@ export class GameInput {
   private readonly edges = new Map<number, number>()
   private readonly controls: HTMLElement
   private readonly buttons = new Map<number, HTMLButtonElement>()
-  private get enabled(): boolean {
+  get enabled(): boolean {
     return !this.controls.inert
   }
   private readonly canvas: HTMLCanvasElement

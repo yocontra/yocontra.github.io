@@ -17,17 +17,25 @@ export function sameRider(id: string): boolean {
 }
 
 export function riderView(id: string): unknown {
-  const app = AppBase.getApplication()
+  // Frontier can own both the rendering application and a headless simulation.
+  const instances = Reflect.get(AppBase, '_applications') as Record<string, AppBase | null>
+  const app = Object.values(instances).find(
+    (candidate) =>
+      candidate?.root.findByName('camera') && candidate.root.findByTag(`rider:${id}`).length,
+  )
   const actor = app?.root.findByTag(`rider:${id}`)[0]
   const camera = app?.root.findByName('camera')
   const head = actor?.findByName('Head')
-  if (!(actor instanceof Entity && camera && head)) {
-    throw new Error('Missing native FP pose')
+  const arms = app?.root.findByTag(`viewmodel:${id}`).find((node) => node.enabled)
+  if (!(actor instanceof Entity && camera && head && arms instanceof Entity)) {
+    throw new Error(
+      `Missing native FP pose (world=${Boolean(actor)}, camera=${Boolean(camera)}, head=${Boolean(head)}, arms=${Boolean(arms)})`,
+    )
   }
   const point = head.getPosition().clone()
   const up = actor.getWorldTransform().transformVector(new Vec3(0, 0.1, 0), new Vec3())
   point.add(up)
-  const muzzle = actor.find((node) => node.name === 'socket.muzzle' && node.enabled)[0]
+  const muzzle = arms.find((node) => node.name === 'socket.muzzle' && node.enabled)[0]
   return {
     eye: camera.getPosition().clone(),
     rigEye: point,
@@ -36,7 +44,7 @@ export function riderView(id: string): unknown {
     muzzleForward: muzzle?.getWorldTransform().transformVector(Vec3.RIGHT, new Vec3()).normalize(),
     forward: camera.forward.clone(),
     root: actor.getPosition().clone(),
-    controllers: actor
+    controllers: arms
       .findComponents('anim')
       .filter((component) => component.enabled && component.entity.enabled)
       .map((component) => ({

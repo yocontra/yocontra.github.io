@@ -161,11 +161,11 @@ it('native idle loops close while other clips, times and geometry remain authore
   const document = await io.read(
     process.env.OW_IDLE_MOVES ?? 'public/experiments/out-west/3d/native-v2/baked/moves.glb',
   )
-  expect(document.getRoot().listAnimations()).toHaveLength(75)
-  // Includes the five reauthored Pair poses; paired-assets.test.ts separately pins
-  // all68 unchanged non-Pair clips and checks those five against their source curves.
+  expect(document.getRoot().listAnimations()).toHaveLength(77)
+  // Includes the seven Pair poses; paired-assets and paired-crouch tests separately pin
+  // all68 unchanged legacy clips and verify the standing/crouched source curves.
   expect(retained(document)).toBe(
-    '6a5c5a6f3d9c2c81715ad12d690be209a06965b63ecec3ffd76ce419103707e5',
+    'cdd2032e3caf380b0cfe8d90667880a27c167e5c0c488286541d68808599370c',
   )
   expect(geometry(document)).toBe(
     '7c5107d243019cf1378ad72cd244a9bbe3917322a576cdb8555ae78ae257f498',
