@@ -46,6 +46,7 @@ async function artifacts(doc: Document, id: string): Promise<Artifact[]> {
     'coat-collars',
     'shirt-fronts',
     'neckerchiefs',
+    'facial-hair',
   ]) {
     const path = resolve('tools/art/characters', category, `${id}.glb`)
     if (!(await Bun.file(path).exists())) {

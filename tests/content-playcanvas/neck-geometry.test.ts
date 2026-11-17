@@ -73,7 +73,10 @@ for (const id of ['player', 'outfit.trail-duds', 'outfit.wool-duster', 'outlaw-0
       allBefore.slice((range.start + range.count) * 3),
     )
     const rows = before.map((old, i) => ({ old, next: position.getElement(range.start + i, []) }))
-    expect(rows.map(({ next }) => next.slice(0, 2))).toEqual(before.map((old) => old.slice(0, 2)))
+    expect(rows.map(({ next }) => next[1])).toEqual(before.map((old) => old[1]))
+    const dx = rows.map(({ old, next }) => (next[0] ?? 0) - (old[0] ?? 0))
+    expect(Math.min(...dx)).toBeLessThan(-0.001)
+    expect(Math.max(...dx)).toBeGreaterThan(0.001)
     const collar = rows.filter(
       ({ old }) => (old[1] ?? 0) >= headY - 0.14 && (old[1] ?? 0) <= headY - 0.06,
     )

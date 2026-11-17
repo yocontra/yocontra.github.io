@@ -1,5 +1,5 @@
 {
-  "fingerprint": "352372c09c8050d20389b462f61dc087713369f6cbd5f3d781a98acafa22b1ee",
+  "fingerprint": "f4d03f87759a22991af31578f757c4d62c32f152eeb68e5ec280a1870f59428e",
   "images": {
     "gun.rusty-six": "0050d17208fc88d5fbce56598457a51183eb00155ec88c4e01d1a30a9bdc9b05",
     "gun.blued-six": "7cf6ccd83ceee0bd004083f5d4b94e8cc31e339000e899c262c3524e74d95440",
@@ -18,14 +18,14 @@
     "hat.yellow": "4c9ddb7d33875cb8c88e3bfd29357ba22d1f0d1d2879ebebc0417c053f1eca3c",
     "hat.bronze-band": "97e00baad9cd08578ea76da6baee9feb60f451b77d003d83f1634422b2743b9c",
     "hat.holed-stetson": "815d1edb69d43a84cc39474ebe1385332c121ffa5460e279e6d51e87e01597d8",
-    "outfit.trail-duds": "a46963352328d1801ce2528fe4c6172ce9e708d412d74139d3ee11c5c3cf0b56",
-    "outfit.shirt-vest": "ebf12e8c62cd4aa70fa25b7684daa5cf5677098f9a6fec9a432f62ee7b52a109",
-    "outfit.wool-duster": "f2ee479fb8dcf037d525d3c09be416347ecb88ff62d59fc5cf5f8bf7d5116e4c",
-    "outfit.striped-poncho": "7948a33acc0fb65f4725072e4ac8b322c18e5132e3b06beb300bbe5049916dd3",
-    "outfit.gamblers-frock": "5221a5d83d8a0b988168dceacbf20c5b73da865fb324cc2fc00e1347c10cc839",
-    "outfit.bandolier-rig": "9ef7789433d6485c3f6b66d91cd874723ae204e4835270a66a51ed40454b7505",
-    "outfit.undertakers-black": "1b244984e10dac3f447db6fdd9f6babc6aeced8397f018a141c37e6824340d22",
-    "outfit.midnight-coat": "767317ec74016e0fcf090f26a8e4b03ca8f414936f02c641a7d9814ea68a3412",
+    "outfit.trail-duds": "da5958acf6131e6771587b1afccbcff8c5b36c1802c2c1768c8d6b40965a57c5",
+    "outfit.shirt-vest": "f545224107119df6d5783fc389609618d9b9d2381434c943ac84dbb0369233ed",
+    "outfit.wool-duster": "bb764ebf533310302f28ecc89c33939e9a364c84584e1b0eb35a5997e4295aa9",
+    "outfit.striped-poncho": "6c0c8e53f7d8e6f304112426a9d85c5f4b79bfc03368bd0533d9bfd7e626e468",
+    "outfit.gamblers-frock": "0747f4e526b86b7e7cf3793adcc7a6c0eecdead8f6c92e70de0603e554df1668",
+    "outfit.bandolier-rig": "fd179870c519749805cbb88a66a1594ab902839b2ce67ae30fd5ab0aa9e3a7c7",
+    "outfit.undertakers-black": "b23ddaeef852bae116868d8a30dc9748a13b21808ee418fd0ff41b1aeac66078",
+    "outfit.midnight-coat": "dd8c95d54dea0f1188b2982ab67e5316580195c1f73420c931e963259e3317e6",
     "spurs.plain-rowels": "79249f0a289fbad647314d389907aacb8a240e4b04003f48328c25d675e557f4",
     "spurs.silver-jinglebobs": "5c9a6eecf434d64c88e6fcc8608132f054a5fcf5ceb7b92c4478e7da431cdc52",
     "spurs.star-rowels": "de05c825f663846717b4f33695c9481da48450f2bef3c5cabc3ad19e40e8a61d",
@@ -34,9 +34,9 @@
     "holster.tooled-floral": "b72dfb245d89fae451bbd3851545c3a4d501ecdf952002ce3839f59fda2b59fb",
     "holster.buscadero": "0f2bbe5b46a70f8701096fa9c909b112376068bdfe67d27cd377503ea07fb627",
     "holster.silver-conchos": "fb879421f71f467b02925a9571e596e8c00234891dbbc6d38845145e44c1572e",
-    "extra.handlebar": "18c8a6b6ff2bd2386d568d8a8a19160fdb2c3b4933d790c2eb043195f3e465a2",
-    "extra.red-bandana": "0dfdf39988bff949cf83eb95ec7d4d49d893fba3e8b7cfc5d4c538453cbdf5cc",
+    "extra.handlebar": "f73ccf2db954501c706c246dac325a3ec4902629d244a68b394aa8157e24c810",
+    "extra.red-bandana": "20b43eaf1e63eb9ba31e4d3339b26f9c156f8cc0d62be5ace1093ec0c162bf72",
     "extra.tin-star": "a9d65111b3cbb6801e57b7ccfd246fe8213cfcd6a26a71c7d4432aca98a5c887",
-    "extra.black-bandana": "c6ca14873ce0325904a10689b64766182dc9ce8efe2b71eab3faf5435515e9e0"
+    "extra.black-bandana": "a522915e3ba642c28e153f2c93587432781b985449f6dbd47a4e23b21e285c3b"
   }
 }

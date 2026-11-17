@@ -16,6 +16,7 @@ authors two portable artifacts from the canonical player head, read only:
 import hashlib
 import json
 import struct
+import subprocess
 import sys
 from pathlib import Path
 
@@ -28,8 +29,8 @@ SOURCES = ROOT / "tools/art/characters"
 OUTPUT = SOURCES / "head-nape"
 REFERENCE = SOURCES / "player.gltf"
 # Head-joint-relative glTF bounds of the lattice (meters at the player's head scale).
-BOUNDS = ((-0.13, -0.09, -0.14), (0.13, 0.23, 0.1))
-RESOLUTION = (9, 21, 17)
+BOUNDS = ((-0.075, -0.06, -0.14), (0.075, 0.085, -0.005))
+RESOLUTION = (17, 33, 25)
 COMPONENTS = {5126: np.float32, 5125: np.uint32, 5123: np.uint16, 5121: np.uint8}
 WIDTHS = {"SCALAR": 1, "VEC2": 2, "VEC3": 3, "VEC4": 4, "MAT4": 16}
 
@@ -83,23 +84,23 @@ def smoothstep(edge0, edge1, x):
 
 
 def occiput(local):
-    """Taper the posterior skull into the neck, preserving the ears, face and collar footprint."""
+    """Join the posterior neck and lower skull with one continuous cervical cross-section."""
     x, y, z = local[..., 0], local[..., 1], local[..., 2]
-    width = 1 - smoothstep(0.045, 0.06, np.abs(x + 0.002))
+    # The source has a lower-skull shelf and a pinched upper neck. A single rounded
+    # loft replaces both contours; a depth-only correction leaves the lateral lobes.
+    width = 0.052 + 0.018 * smoothstep(-0.02, 0.09, y)
+    back = (-0.065 + 0.013 * smoothstep(-0.04, 0.04, y)
+            - 0.009 * smoothstep(0.05, 0.10, y))
+    center = -0.022 + 0.018 * smoothstep(-0.025, 0.09, y)
+    depth = center - back
+    radial = np.sqrt(np.square(x / width) + np.square((z - center) / depth))
+    inverse = 1 + 0.85 * (1 / np.maximum(radial, 0.001) - 1)
+    weight = (smoothstep(-0.06, -0.025, y) * (1 - smoothstep(0.055, 0.085, y))
+              * smoothstep(-0.005, -0.025, z)
+              * (1 - smoothstep(0.06, 0.075, np.abs(x))))
     offset = np.zeros_like(local)
-    # The source has a posterior ledge just above the Head pivot. Remove its excess
-    # depth without shrinking the neck shaft or moving the lateral ear attachment.
-    underside = smoothstep(0.008, 0.028, y) * (1 - smoothstep(0.055, 0.085, y))
-    taper = np.maximum(-0.044 - 0.16 * y - z, 0)
-    # The fitted hair already defines the upper skull: expanding it causes scalp poke-through.
-    offset[..., 2] = 0.9 * underside * taper * width
-    # The source pinches inward at the upper cervical shaft before the skull widens.
-    # Fill that posterior hollow; keep the anterior throat, ears and collar unchanged.
-    cervical = smoothstep(-0.060, -0.020, y) * (1 - smoothstep(0.004, 0.020, y))
-    posterior = smoothstep(-0.020, -0.040, z)
-    rounded_back = -0.057 + 0.12 * y + 0.024 * np.square((x + 0.002) / 0.062)
-    join = np.minimum(rounded_back - z, 0)
-    offset[..., 2] += 0.9 * cervical * posterior * join * width
+    offset[..., 0] = (x * inverse - x) * weight
+    offset[..., 2] = ((z - center) * inverse - (z - center)) * weight
     return offset
 
 
@@ -367,6 +368,14 @@ def write(name, pixels, alpha, box):
     image.save()
 
 
+def write_lattice(data):
+    path = OUTPUT / "lattice.json"
+    path.write_text(json.dumps(data, indent=2) + "\n")
+    subprocess.run([
+        "bun", "node_modules/@biomejs/biome/bin/biome", "format", "--write", str(path)
+    ], cwd=ROOT, check=True, stdout=subprocess.DEVNULL)
+
+
 def main():
     for obj in list(bpy.data.objects):
         bpy.data.objects.remove(obj, do_unlink=True)
@@ -381,7 +390,7 @@ def main():
         data["bounds"] = BOUNDS
         data["resolution"] = RESOLUTION
         data["offsets"] = np.round(offsets, 6).reshape(-1, 3).tolist()
-        path.write_text(json.dumps(data, indent=1) + "\n")
+        write_lattice(data)
         print("Authored neck lattice; existing skin atlas patches preserved")
         return
     labels = islands(triangles, len(positions))
@@ -426,7 +435,7 @@ def main():
     write("neck-arm", arm_out, normal_alpha.astype(np.float32), nbox)
     digest = {p.name: hashlib.sha256(p.read_bytes()).hexdigest() for p in (albedo_path, normal_path, arm_path)}
     lo, hi = BOUNDS
-    (OUTPUT / "lattice.json").write_text(json.dumps({
+    write_lattice({
         "reference": {"head": head.round(6).tolist(), "crown": float(positions[np.unique(triangles), 1].max() - head[1])},
         "bounds": [list(lo), list(hi)],
         "resolution": list(RESOLUTION),
@@ -436,7 +445,7 @@ def main():
             "normal": {"sha256": digest[normal_path.name], "x": nbox[0], "y": nbox[1], "image": "neck-normal.png"},
             "arm": {"sha256": digest[arm_path.name], "x": nbox[0], "y": nbox[1], "image": "neck-arm.png"},
         },
-    }, indent=1) + "\n")
+    })
     print(f"neck island {int(neck.sum())} triangles, {seams} seam vertices, albedo box {box}, face ARM {face_arm.round(3).tolist()}")
 
 

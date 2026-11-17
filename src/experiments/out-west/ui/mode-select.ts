@@ -4,7 +4,7 @@
  * ask for a sign-in instead. A 2×2 grid in portrait, one row in landscape.
  */
 import { type IconName, icon } from './icons.ts'
-import { closeButton, el, onSwipeDown } from './sheet.ts'
+import { el, panelSheet } from './sheet.ts'
 
 export type Mode = 'gauntlet' | 'bounty' | 'frontier' | 'store'
 
@@ -147,26 +147,13 @@ export function gauntletSheet(
   done: (c: GauntletChoice | null) => void,
 ): void {
   const { rankedOk } = o
-  const back = el('div', 'ow-sheet on', root)
-  back.setAttribute('role', 'dialog')
-  back.setAttribute('aria-label', 'Quick Draw')
-  const panel = el('div', 'ow-hub-panel ow-sheet-panel', back)
-  const onKey = (e: KeyboardEvent): void => {
-    if (e.key === 'Escape') {
-      e.stopImmediatePropagation()
-      close(null)
-    }
+  let picked: GauntletChoice | null = null
+  const sheet = panelSheet(root, { title: 'Quick Draw', onClose: () => done(picked) })
+  const panel = sheet.body
+  const close = (selection: GauntletChoice | null): void => {
+    picked = selection
+    sheet.close()
   }
-  globalThis.addEventListener('keydown', onKey, true)
-  const close = (c: GauntletChoice | null): void => {
-    globalThis.removeEventListener('keydown', onKey, true)
-    back.remove()
-    done(c)
-  }
-  const head = el('div', 'ow-hub-row ow-sheet-head', panel)
-  el('h2', 'ow-hub-h', head, 'Quick Draw')
-  closeButton(head, () => close(null))
-  onSwipeDown(back, () => close(null))
   el(
     'p',
     'ow-hub-note',
@@ -183,7 +170,6 @@ export function gauntletSheet(
   ]
   const last = lastPick()
   const lead: QuickDrawPick = last && offered.includes(last) ? last : (offered[0] ?? 'practice')
-  let focus = null as HTMLButtonElement | null
   const choice = (title: string, sub: string, c: GauntletChoice, pick: QuickDrawPick): void => {
     const b = el('button', `ow-choice${pick === lead ? ' primary' : ''}`, list)
     b.type = 'button'
@@ -194,9 +180,6 @@ export function gauntletSheet(
       rememberPick(pick)
       close(c)
     })
-    if (pick === lead) {
-      focus = b
-    }
   }
   if (rankedOk) {
     choice(
@@ -215,7 +198,7 @@ export function gauntletSheet(
     )
   }
   choice('Practice', 'From outlaw 1 · not ranked', { ranked: false, resume: false }, 'practice')
-  requestAnimationFrame(() => focus?.focus())
+  list.querySelector<HTMLButtonElement>('.primary')?.focus()
   const { map } = o
   if (map) {
     const row = el('div', 'ow-hub-row', panel)
@@ -227,9 +210,4 @@ export function gauntletSheet(
       map()
     })
   }
-  back.addEventListener('click', (e) => {
-    if (e.target === back) {
-      close(null)
-    }
-  })
 }
