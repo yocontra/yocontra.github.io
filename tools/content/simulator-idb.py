@@ -17,6 +17,14 @@ from idb.common.types import (
 )
 
 
+# Command corrections in milliseconds from trusted portrait and landscape Safari samples.
+# The intervals are native screen points. Other path lengths retain the default swipe.
+SWIPE_CALIBRATION = {
+    "move": ((144, 148, 64), (57, 61, 35)),
+    "look": ((36, 40, 24), (79, 83, 42)),
+}
+
+
 def emit(value):
     print(json.dumps({**value, "hostWall": time.time() * 1000}, default=str), flush=True)
 
@@ -103,15 +111,13 @@ async def record(client, request, udid):
                 g = event["gesture"]
                 start = Point(**g["start"])
                 end = Point(**g["end"])
-                step = 5
-                correction = 0
                 distance = math.hypot(end.x - start.x, end.y - start.y)
-                # Measured with trusted Safari events for these two portrait paths.
-                # Leave other path sizes on the stock command until calibrated.
-                if g["role"] == "move" and 144 <= distance <= 148:
-                    step, correction = 18, 64
-                elif g["role"] == "look" and 36 <= distance <= 40:
-                    step, correction = 18, 24
+                correction = next(
+                    (ms for minimum, maximum, ms in SWIPE_CALIBRATION.get(g["role"], ())
+                     if minimum <= distance <= maximum),
+                    0,
+                )
+                step = 18 if correction else 5
                 duration = g["duration"] - correction
                 emit({"event": "native-swipe", "value": {"id": g["id"],
                       "step": step, "distance": distance, "commandMilliseconds": duration}})
