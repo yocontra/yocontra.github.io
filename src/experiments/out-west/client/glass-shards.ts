@@ -363,19 +363,10 @@ export class GlassShards {
     const positions = new Float32Array(vertices * 3)
     const normals = new Float32Array(vertices * 3)
     const mesh = new Mesh(this.game.app.graphicsDevice)
-    mesh.setPositions(positions)
-    mesh.setNormals(normals)
+    mesh.clear(true, false, vertices)
     mesh.setUvs(0, uvs)
-    mesh.update()
     const entity = new Entity(`glass-burst-${index}`, this.game.app)
-    entity.addComponent('render', {
-      meshInstances: [new MeshInstance(mesh, this.material(this.panes.material(index)))],
-      castShadows: false,
-    })
-    this.game.stage.addChild(entity)
-    const burst = { index, entity, mesh, shards, positions, normals, seconds: 0 }
-    bake(burst)
-    return burst
+    return { index, entity, mesh, shards, positions, normals, seconds: 0 }
   }
   /** The pane's own authored glass, a little denser so thin slivers still catch the light. */
   private material(source: Material | undefined): StandardMaterial {
@@ -414,6 +405,16 @@ export class GlassShards {
   private readonly pose = (): void => {
     for (const burst of this.bursts) {
       bake(burst)
+      if (!burst.entity.render) {
+        // The first bake uploads all vertex streams before the instance inspects the mesh format.
+        burst.entity.addComponent('render', {
+          meshInstances: [
+            new MeshInstance(burst.mesh, this.material(this.panes.material(burst.index))),
+          ],
+          castShadows: false,
+        })
+        this.game.stage.addChild(burst.entity)
+      }
     }
   }
   private retire(index: number): void {
