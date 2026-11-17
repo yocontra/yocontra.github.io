@@ -143,6 +143,34 @@ export async function until<T>(
 export async function statusJSON<T>(url: URL, signal: AbortSignal): Promise<T> {
   return (await (await fetch(url, { signal })).json()) as T
 }
+/** Restore navigation can finish before the page's separate ACK reaches the host. */
+export function waitForSettingsRestore(stateURL: URL, seconds: number) {
+  return until(async (signal) => {
+    const response = await fetch(stateURL, { signal })
+    if (response.status === 404) {
+      return
+    }
+    if (response.status !== 200) {
+      throw new Error(`Settings restore status HTTP ${response.status}`)
+    }
+    const value: unknown = await response.json()
+    if (value === null || typeof value !== 'object' || Array.isArray(value)) {
+      throw new Error('Malformed settings restore status')
+    }
+    const restored: unknown = Reflect.get(value, 'settingsRestored')
+    if (restored === true) {
+      return true
+    }
+    if (restored === undefined) {
+      return
+    }
+    throw new Error(
+      restored === false
+        ? 'Guest settings restoration reported failure'
+        : 'Malformed settings restore acknowledgement',
+    )
+  }, seconds)
+}
 export async function waitForRecording(stateURL: URL) {
   const recording = await until(async (signal) => {
     const value: unknown = await statusJSON(stateURL, signal)

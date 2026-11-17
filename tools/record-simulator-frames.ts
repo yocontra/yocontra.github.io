@@ -24,6 +24,7 @@ import {
   stopOwned,
   until,
   waitForRecording,
+  waitForSettingsRestore,
 } from './content/simulator-process.ts'
 
 async function nativeState(
@@ -183,13 +184,10 @@ export async function runPreflight(options: {
           options.udid,
           new URL(`/__qa/restore?id=${id}`, url).href,
         ])
-        report.settingsRestored = await until(async (signal) => {
-          const restored = await statusJSON<{ settingsRestored?: boolean }>(
-            new URL(`/__qa/status/${id}`, url),
-            signal,
-          )
-          return restored.settingsRestored ? true : undefined
-        }, 2)
+        report.settingsRestored = await waitForSettingsRestore(
+          new URL(`/__qa/status/${id}`, url),
+          2,
+        )
         if (!report.settingsRestored) {
           report.settingsRestoreFailure = 'Guest restore acknowledgement unavailable'
         }

@@ -3,9 +3,8 @@ import {
   bounded,
   type OwnedProcess,
   requireFreePort,
-  statusJSON,
   stopOwned,
-  until,
+  waitForSettingsRestore,
 } from './simulator-process.ts'
 
 interface Client {
@@ -42,13 +41,7 @@ export async function cleanupGuest(context: CleanupContext) {
         ],
         budget.restore,
       )
-      cleanup.settingsRestored = await until(
-        async (signal) =>
-          (await statusJSON<{ settingsRestored?: boolean }>(stateURL, signal)).settingsRestored
-            ? true
-            : undefined,
-        budget.restore / 1000,
-      )
+      cleanup.settingsRestored = await waitForSettingsRestore(stateURL, budget.restore / 1000)
     } catch (error) {
       cleanup.settingsRestoreFailure = String(error)
     }
