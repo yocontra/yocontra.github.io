@@ -29,24 +29,23 @@ export interface ActorPresentation {
   viewmodel?: { url: string; parent?: Entity; tracks: readonly AnimTrack[] }
   carryDrawn?: boolean
 }
-const batchGroups = new WeakMap<GameApplication, number>()
-function rigidBatch(game: GameApplication, components: RenderComponent[]): void {
+function rigidBatch(
+  game: GameApplication,
+  components: RenderComponent[],
+  name: 'Rider equipment' | 'Rider weapons',
+): void {
   const batcher = game.app.batcher
   if (!batcher) {
     return
   }
-  let id = batchGroups.get(game)
-  if (id === undefined) {
-    const group = batcher.addGroup('Rider equipment', true, 24)
-    id = group.id
-    batchGroups.set(game, id)
-    game.stage.once('destroy', () => {
-      batcher.removeGroup(group.id)
-      batchGroups.delete(game)
-    })
+  let group = batcher.getGroupByName(name)
+  if (!group) {
+    const created = batcher.addGroup(name, true, 24)
+    game.stage.once('destroy', () => batcher.removeGroup(created.id))
+    group = created
   }
   for (const component of components) {
-    component.batchGroupId = id
+    component.batchGroupId = group.id
   }
 }
 
@@ -303,11 +302,13 @@ export async function equippedActor(
         } else {
           const renders = model.findComponents('render')
           const mounts = mountRigid(model, actor, undefined, Boolean(viewmodel))
-          if (id.startsWith('gun.')) {
+          const gun = id.startsWith('gun.')
+          if (gun) {
             animateRevolvers(mounts, resource)
           }
           if (actor.batchRigid) {
-            rigidBatch(game, renders)
+            // Swapping guns can rebuild their batch without re-uploading hats or spurs.
+            rigidBatch(game, renders, gun ? 'Rider weapons' : 'Rider equipment')
           }
         }
       }),
@@ -352,7 +353,7 @@ export async function attachHeldWeapon(
       }
     }
     if (actor.batchRigid) {
-      rigidBatch(game, renders)
+      rigidBatch(game, renders, 'Rider weapons')
     }
     actor.model.anim?.rebind()
     return model
