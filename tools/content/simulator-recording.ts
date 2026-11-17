@@ -132,7 +132,15 @@ export async function captureNative(context: {
     },
   })
   let ready = await until(async (signal) => {
-    const value = (await statusJSON(stateURL, signal)) as State
+    const response = await fetch(stateURL, { signal })
+    // Safari can finish opening the URL before the fixture publishes its first status.
+    if (response.status === 404 && (await response.text()) === 'Not ready') {
+      return
+    }
+    if (response.status !== 200) {
+      throw new Error(`Simulator readiness status HTTP ${response.status}`)
+    }
+    const value = (await response.json()) as State
     if (value.stage === 'failed') {
       throw new Error(value.error)
     }

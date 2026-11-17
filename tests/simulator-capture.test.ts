@@ -159,13 +159,17 @@ function captureFixture() {
   }
 }
 
-it('runs the actual host capture through ACK/checkpoint and sends all54 gestures without a browser orientation global', async () => {
+it('waits for the actual host readiness and sends all 54 gestures without a browser orientation global', async () => {
   expect(Reflect.has(globalThis, 'orientation')).toBe(false)
   const fixture = captureFixture()
+  let statusReads = 0
   const server = serve({
     hostname: '127.0.0.1',
     port: 0,
-    fetch: () => Response.json(fixture.status()),
+    fetch: () =>
+      ++statusReads === 1
+        ? new Response('Not ready', { status: 404 })
+        : Response.json(fixture.status()),
   })
   fixture.page.url = new URL('/experiments/out-west/frontier/', server.url).href
   const checkpoints: Record<string, unknown>[] = []
@@ -195,6 +199,7 @@ it('runs the actual host capture through ACK/checkpoint and sends all54 gestures
     expect(acknowledged?.orientation).toBe('PORTRAIT')
     expect(result.orientation).toBe('PORTRAIT')
     expect(opens).toBe(1)
+    expect(statusReads).toBeGreaterThan(1)
     const records = fixture.calls.filter((call) => call.op === 'record')
     expect(records).toHaveLength(1)
     expect(records[0]?.timeout).toBe(75_000)
