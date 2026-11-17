@@ -14,7 +14,7 @@ import {
 import { simulatorHost } from '../tools/content/simulator-host.ts'
 import recorded from './fixtures/simulator-coordinate-v3.json' with { type: 'json' }
 
-const run = recorded.run as DocumentRun
+const run: DocumentRun = { ...recorded.run, focusLabel: recorded.pointLabel }
 function required<T>(value: T | undefined): T {
   if (value === undefined) {
     throw new Error('Missing recorded v3 fixture value')
@@ -26,7 +26,16 @@ const fixture = () => {
   const app = required(f.ax.elements[0])
   const doc = required(app.children[0])
   const title = required(doc.children[0])
-  return { ...f, app, doc, title }
+  // Test adapter only: actual v3 proved this real Focus button, not canvas hittability.
+  const page = {
+    ...f.page,
+    qa: {
+      ...f.page.qa,
+      focusLabel: f.pointLabel,
+      controls: { [f.pointLabel]: { x: 127.5, y: 265.593_75, width: 120, height: 44 } },
+    },
+  }
+  return { ...f, page, app, doc, title }
 }
 it('real v3 fields prove separate Safari/document ownership and a measured screen transform', () => {
   const f = fixture()
@@ -152,11 +161,17 @@ it('unknown native transport failure is fatal before focus/Start or coordinate f
 })
 
 /** Synthetic ordering around the retained real v3 owner; no native acceptance claim. */
-function coordinateIO(fault?: 'owner' | 'geometry' | 'hit' | 'start-down') {
+function coordinateIO(
+  fault?: 'owner' | 'geometry' | 'hit' | 'start-down' | 'focus-hit' | 'focus-dom',
+) {
   const f = fixture()
   const events: string[] = []
+  const observations: Record<string, unknown>[] = []
   const page = f.page as CoordinatePage
   page.qa = { ...page.qa, sequence: 1, settledAfter: 0, inputs: [], wall: Date.now() }
+  if (fault === 'focus-dom') {
+    page.qa.controls[run.focusLabel] = { x: 0, y: 0, width: 10, height: 10 }
+  }
   for (const [index, label] of ['FIRE', 'AIM', 'RELOAD'].entries()) {
     const control = structuredClone(required(f.title.children[2]))
     control.label = label
@@ -199,13 +214,19 @@ function coordinateIO(fault?: 'owner' | 'geometry' | 'hit' | 'start-down') {
       )
       return Promise.resolve({
         target: { kind: 'point', ...point },
-        elements: [{ label: anchor?.label ?? run.canvasLabel, pid: 51_175 }],
+        elements: [
+          {
+            label: fault === 'focus-hit' ? 'CALL' : anchor?.label,
+            pid: 51_175,
+            frame: anchor?.frame,
+          },
+        ],
       })
     },
     tap: (point: { x: number; y: number }) => {
       events.push('tap')
       taps++
-      const label = taps === 1 ? run.canvasLabel : run.startLabel
+      const label = taps === 1 ? run.focusLabel : run.startLabel
       const after = page.qa.inputs.at(-1)?.sequence ?? 0
       const wall = Date.now()
       page.qa.inputs.push(
@@ -240,9 +261,12 @@ function coordinateIO(fault?: 'owner' | 'geometry' | 'hit' | 'start-down') {
       }
       return Promise.resolve({ coordinates: { page: copy, receivedWall: Date.now() } })
     },
-    observe: () => Promise.resolve(),
+    observe: (value: Record<string, unknown>) => {
+      observations.push(value)
+      return Promise.resolve()
+    },
   }
-  return { io, events, taps: () => taps }
+  return { io, events, observations, taps: () => taps }
 }
 it('reads fresh native/settled DOM after focus and verifies Start at the new native point', async () => {
   const f = coordinateIO()
@@ -330,4 +354,40 @@ it('waits for the trusted Start pointerup publication rather than accepting the 
   const touch = await startCoordinates(f.io, prepared)
   expect(touch.up.type).toBe('pointerup')
   expect(f.taps()).toBe(2)
+})
+
+it('rejects the actual v1 CALL frame outside its requested point even with a proved owner PID', () => {
+  const f = fixture()
+  // Retained native preflight-coordinates-v1 call13. Only owner fixture is adapted to its real WebView PID.
+  const owner = {
+    ...documentOwner(f.ax, f.apps, f.page as CoordinatePage, run),
+    webViewPID: 68_749,
+  }
+  const hit = {
+    target: { kind: 'point', x: 263, y: 382 },
+    elements: [{ label: 'CALL', pid: 68_749, frame: { x: 139, y: 438, width: 49, height: 48 } }],
+  }
+  expect(() => ownedHit(hit, owner, 'CALL', { x: 263, y: 382 })).toThrow('frame does not contain')
+})
+it('retains initial page/owner/geometry and the raw invalid focus hit before stopping without HID', async () => {
+  const f = coordinateIO('focus-hit')
+  await expect(prepareCoordinates(f.io, run, 'portrait')).rejects.toThrow('hit target missing')
+  expect(f.taps()).toBe(0)
+  expect(f.observations).toHaveLength(2)
+  expect(f.observations[0]).toMatchObject({
+    phase: 'focus-query',
+    owner: { safariPID: 50_813, webViewPID: 51_175 },
+    page: { qa: { focusLabel: run.focusLabel } },
+    web: { y: 50 },
+    focus: { x: 188, y: 338 },
+  })
+  expect(f.observations[1]).toMatchObject({
+    phase: 'focus-hit',
+    focusHit: { elements: [{ label: 'CALL' }] },
+  })
+})
+it('requires the owned native focus point to lie in its actual DOM button rectangle before HID', async () => {
+  const f = coordinateIO('focus-dom')
+  await expect(prepareCoordinates(f.io, run, 'portrait')).rejects.toThrow('focus point disagrees')
+  expect(f.taps()).toBe(0)
 })

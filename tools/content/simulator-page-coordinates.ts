@@ -8,6 +8,8 @@ export function createSimulatorCoordinates(
 ) {
   const documentTitle = `Out West recording [run:${id}]`
   const canvasLabel = `Out West game [run:${id}]`
+  const focusLabel = `Focus recording [run:${id}]`
+  const focus = document.createElement('button')
   const startLabel = `${startText} [run:${id}]`
   let sequence = 0
   let inputSequence = 0
@@ -36,6 +38,7 @@ export function createSimulatorCoordinates(
         id,
         documentTitle: document.title,
         canvasLabel,
+        focusLabel,
         startLabel,
         sequence,
         settledAfter,
@@ -43,7 +46,7 @@ export function createSimulatorCoordinates(
         wall: Date.now(),
         inputs: [...inputs],
         controls: Object.fromEntries(
-          ['FIRE', 'AIM', 'RELOAD'].flatMap((label) => {
+          [focusLabel, 'FIRE', 'AIM', 'RELOAD'].flatMap((label) => {
             const element = document.querySelector(`[aria-label="${label}"]`)
             return element ? [[label, rect(element.getBoundingClientRect())]] : []
           }),
@@ -109,6 +112,19 @@ export function createSimulatorCoordinates(
       canvas.setAttribute('aria-label', canvasLabel)
       button.setAttribute('aria-label', startLabel)
       document.title = documentTitle
+      focus.type = 'button'
+      focus.textContent = 'Focus recording'
+      focus.setAttribute('aria-label', focusLabel)
+      Object.assign(focus.style, {
+        position: 'fixed',
+        top: '100px',
+        right: '12px',
+        zIndex: '10000',
+        padding: '12px',
+        background: '#fff',
+        color: '#111',
+      })
+      document.body.append(focus)
       active = true
       for (const type of ['pointerdown', 'pointerup', 'pointercancel']) {
         document.addEventListener(type, pointer, { capture: true, signal: abort.signal })
@@ -140,6 +156,7 @@ export function createSimulatorCoordinates(
     },
     async stop() {
       active = false
+      focus.remove()
       abort.abort()
       for (const frame of frames) {
         cancelAnimationFrame(frame)

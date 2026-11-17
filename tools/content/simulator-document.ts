@@ -35,6 +35,7 @@ export interface CoordinatePage extends PageState {
     id: string
     documentTitle: string
     canvasLabel: string
+    focusLabel: string
     startLabel: string
     sequence: number
     settledAfter: number
@@ -63,6 +64,7 @@ export interface DocumentRun {
   url: string
   title: string
   canvasLabel: string
+  focusLabel: string
   startLabel: string
 }
 export function recordingDocument(id: string, url: string, start: string): DocumentRun {
@@ -74,6 +76,7 @@ export function recordingDocument(id: string, url: string, start: string): Docum
     url,
     title: `Out West recording [run:${id}]`,
     canvasLabel: `Out West game [run:${id}]`,
+    focusLabel: `Focus recording [run:${id}]`,
     startLabel: `${start} [run:${id}]`,
   }
 }
@@ -96,6 +99,15 @@ export function coordinateFrame(value: unknown): value is Frame {
     f && [f.x, f.y, f.width, f.height].every(Number.isFinite) && f.width > 0 && f.height > 0,
   )
 }
+export function coordinateContains(frame: unknown, point: { x: number; y: number }) {
+  return (
+    coordinateFrame(frame) &&
+    point.x >= frame.x &&
+    point.x <= frame.x + frame.width &&
+    point.y >= frame.y &&
+    point.y <= frame.y + frame.height
+  )
+}
 export function publishedPage(
   value: unknown,
   run: DocumentRun,
@@ -112,6 +124,7 @@ export function publishedPage(
     page.url !== run.url ||
     qa.documentTitle !== run.title ||
     qa.canvasLabel !== run.canvasLabel ||
+    qa.focusLabel !== run.focusLabel ||
     qa.startLabel !== run.startLabel ||
     page.visible !== 'visible' ||
     !page.focused ||
@@ -183,7 +196,7 @@ export function documentOwner(ax: unknown, apps: unknown, page: CoordinatePage, 
   ) {
     throw new Error('Native current run document marker unavailable')
   }
-  for (const label of [run.canvasLabel, run.startLabel]) {
+  for (const label of [run.canvasLabel, run.focusLabel, run.startLabel]) {
     const path = single(
       all.filter(({ node }) => node.label === label),
       'Native run anchor missing or ambiguous',
@@ -294,6 +307,9 @@ export function ownedHit(
     )
   ) {
     throw new Error('Native hit target does not match the proved current document/anchor')
+  }
+  if (!coordinateContains(path.node.frame, point)) {
+    throw new Error('Native hit frame does not contain the requested screen point')
   }
   return path.node
 }

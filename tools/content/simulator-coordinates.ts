@@ -3,7 +3,7 @@
 import {
   actionablePoint,
   type CoordinatePage,
-  coordinateFrame,
+  coordinateContains,
   type DocumentOwner,
   type DocumentRun,
   documentOwner,
@@ -66,27 +66,26 @@ export async function prepareCoordinates(io: CoordinateIO, run: DocumentRun, ori
   const initialOwner = documentOwner(initial.ax, initial.apps, initialPage, run)
   const initialWeb = measuredViewport(initialOwner, initialPage)
   const transform = nativeTransform(initialWeb, initialPage, orientation)
-  const canvas = initialPage.canvas
-  if (!canvas) {
-    throw new Error('Actual focus canvas missing')
-  }
-  const focus = transform.point(canvas.x + canvas.width * 0.7, canvas.y + canvas.height * 0.5)
-  const focusHit = await io.hit(focus)
-  ownedHit(focusHit, initialOwner, run.canvasLabel, focus)
+  const focus = actionablePoint(initialOwner, run.focusLabel)
   await io.observe({
-    phase: 'before-focus',
+    phase: 'focus-query',
     ...initial,
     page: initialPage,
     owner: ownerReceipt(initialOwner),
     web: initialWeb,
     focus,
-    focusHit,
   })
+  const focusHit = await io.hit(focus)
+  await io.observe({ phase: 'focus-hit', focusHit })
+  ownedHit(focusHit, initialOwner, run.focusLabel, focus)
+  if (!coordinateContains(initialPage.qa.controls[run.focusLabel], transform.css(focus))) {
+    throw new Error('Native focus point disagrees with actual DOM geometry')
+  }
   await io.tap(focus)
   const page = await currentPage(io, run, initialPage.qa.sequence, 'settled')
   const focusTouch = verifiedTouch(page, {
     after: initialPage.qa.inputs.at(-1)?.sequence ?? 0,
-    label: run.canvasLabel,
+    label: run.focusLabel,
     point: focus,
     web: initialWeb,
   })
@@ -107,13 +106,7 @@ export async function prepareCoordinates(io: CoordinateIO, run: DocumentRun, ori
     ownedHit(hit, owner, label, point)
     const css = measured.css(point)
     const rect = page.qa.controls[label]
-    if (
-      !coordinateFrame(rect) ||
-      css.x < rect.x ||
-      css.x > rect.x + rect.width ||
-      css.y < rect.y ||
-      css.y > rect.y + rect.height
-    ) {
+    if (!coordinateContains(rect, css)) {
       throw new Error('Native HUD point disagrees with actual DOM geometry')
     }
     await io.observe({ phase: 'HUD-point', label, point, hit })
