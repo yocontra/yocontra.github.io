@@ -107,8 +107,10 @@ function buildingSign(g: FrontierGeometry, root: Node, building: Building, front
       Math.min((alongX ? w : d) - 1, Math.max(5, LABELS[building.id]?.length ?? 5) * 0.43)
     const cx = x + w / 2
     const cz = z + d / 2
-    const at = { s: z + d + 0.14, n: z - 0.14, e: x + w + 0.14, w: x - 0.14 }[front]
-    const bottom = Math.min(height - 1.15, 3.4)
+    const upperFascia = building.floors > 1
+    const depth = upperFascia ? 0.025 : 0.14
+    const at = { s: z + d + depth, n: z - depth, e: x + w + depth, w: x - depth }[front]
+    const bottom = upperFascia ? height - 1.18 : Math.min(height - 1.15, 3.4)
     const points = alongX
       ? [
           [cx - span / 2, bottom, at],
