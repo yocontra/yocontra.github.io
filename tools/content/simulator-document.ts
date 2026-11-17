@@ -222,11 +222,26 @@ export function documentOwner(ax: unknown, apps: unknown, page: CoordinatePage, 
   ) {
     throw new Error('Native document contains stale run markers')
   }
+  const addresses = all.filter(({ node }) => node.label === 'Address')
+  // Landscape Safari also reports the titles of inactive tabs as Address.
+  const selected = addresses.filter(
+    ({ node, ancestors }) =>
+      node.type === 'Button' &&
+      Array.isArray(node.traits) &&
+      node.traits.includes('Selected') &&
+      !node.traits.includes('TabButton') &&
+      ancestors.some((parent) => parent.type === 'UnifiedTabBar'),
+  )
   const addressPath = single(
-    all.filter(({ node }) => node.label === 'Address'),
+    selected.length > 0 ? selected : addresses,
     'Native address observation missing or ambiguous',
   )
-  if (addressPath.node.pid !== identity.pid || typeof addressPath.node.value !== 'string') {
+  if (
+    addressPath.node.pid !== identity.pid ||
+    typeof addressPath.node.value !== 'string' ||
+    addressPath.ancestors.includes(doc.node) ||
+    [...addressPath.ancestors, addressPath.node].some((node) => node.hidden === true)
+  ) {
     throw new Error('Native address observation unavailable')
   }
   const address = addressPath.node.value.replace(bidi, '')

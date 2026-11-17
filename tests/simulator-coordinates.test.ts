@@ -93,6 +93,35 @@ it('real v3 owner rejects stale or duplicate native document/run identities', ()
     expect(() => documentOwner(f.ax, f.apps, f.page as CoordinatePage, run)).toThrow()
   }
 })
+it('uses the selected Safari address control when landscape exposes inactive tab titles', () => {
+  const f = fixture()
+  const page = f.page as CoordinatePage
+  const tabTitle = {
+    type: 'SFUnifiedTabBarItemTitleContainerView',
+    label: 'Address',
+    value: '127.0.0.1',
+    pid: 50_813,
+  }
+  const address = {
+    type: 'Button',
+    label: 'Address',
+    value: '\u200e127.0.0.1',
+    pid: 50_813,
+    traits: ['Button', 'Selected', 'Scrollable'],
+    children: [tabTitle],
+  }
+  const bar = {
+    type: 'UnifiedTabBar',
+    children: [address, { ...tabTitle, value: '[run:stale]' }, tabTitle],
+  }
+  const ax = { ...f.ax, elements: [{ ...f.app, children: [f.doc, bar] }] }
+  expect(documentOwner(ax, f.apps, page, run).nativeAddress).toBe('127.0.0.1')
+
+  address.value = 'https://example.invalid'
+  expect(() => documentOwner(ax, f.apps, page, run)).toThrow('contradicts')
+  bar.children.push(address)
+  expect(() => documentOwner(ax, f.apps, page, run)).toThrow('ambiguous')
+})
 it('real v3 point PID, trusted events and actual canvas dimensions cannot be waived', () => {
   const f = fixture()
   const page = f.page as CoordinatePage
