@@ -378,7 +378,9 @@ export class NativeEnvironment {
     this.frontierLamps?.attach(root)
     const lod = new NativeModelLods(root)
     this.lods.set(root, lod)
-    const group = this.game.app.batcher?.addGroup('environment', false, 32)
+    // Low-tier Frontier benefits from fewer static submissions in wide street views.
+    const staticBatchSize = this.frontier && this.game.tier === 'low' ? 64 : 32
+    const group = this.game.app.batcher?.addGroup('environment', false, staticBatchSize)
     // Native RenderComponent enable/disable dirties only this group when a pane breaks or resets.
     const panes = this.game.app.batcher?.addGroup('environment-panes', false, 32)
     const details = new Map<string, BatchGroup>()
