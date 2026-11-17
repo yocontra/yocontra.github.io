@@ -9,7 +9,7 @@ import math
 import time
 from pathlib import Path
 
-from simulator_schedule import tape_events, sample_events, release_held
+from simulator_schedule import tape_events, observe_foreground, release_held
 from idb.grpc.client import Client
 from idb.common.types import (
     AccessibilityBackend, AccessibilityInfoOptions, AccessibilityOutputFormat, AccessibilityPoint,
@@ -68,7 +68,7 @@ def foreground_ax(value):
 
 
 async def record(client, request, udid):
-    """Both native tasks abort on the first missed schedule; raw plans/logs remain."""
+    """Keep failed foreground evidence separate from the HID schedule."""
     clock, tape = request["clock"], request["tape"]
     loop = asyncio.get_running_loop()
     base = loop.time() + (clock["wall"] - time.time() * 1000) / 1000
@@ -98,12 +98,6 @@ async def record(client, request, udid):
                 "orientation": orientation.result().name,
                 "rpcMilliseconds": elapsed, "wall": time.time() * 1000}
 
-    async def observe():
-        async for value in sample_events(read_foreground, start=loop.time(), stop=base + 60,
-                                         now=loop.time, sleep=asyncio.sleep, emit=emit):
-            foreground.append(value)
-            emit({"event": "foreground", "value": value})
-
     async def events():
         async for event in tape_events(tape, base=base, clock=clock, now=loop.time,
                                        sleep=asyncio.sleep, emit=emit, state=state):
@@ -126,10 +120,17 @@ async def record(client, request, udid):
                 yield HIDPress(action=HIDTouch(point=Point(**event["point"])),
                                direction=HIDDirection.DOWN if event["kind"] == "down" else HIDDirection.UP)
 
-    tasks = [asyncio.create_task(observe()), asyncio.create_task(client.hid(events()))]
+    tasks = [
+        asyncio.create_task(observe_foreground(
+            read_foreground, start=loop.time(), stop=base + 60, now=loop.time,
+            sleep=asyncio.sleep, emit=emit, samples=foreground,
+        )),
+        asyncio.create_task(client.hid(events())),
+    ]
     try:
-        await asyncio.gather(*tasks)
-        return {"foreground": foreground, "onePersistentClient": True}
+        foreground_failure, _ = await asyncio.gather(*tasks)
+        return {"foreground": foreground, "foregroundFailure": foreground_failure,
+                "onePersistentClient": True}
     finally:
         for task in tasks:
             task.cancel()

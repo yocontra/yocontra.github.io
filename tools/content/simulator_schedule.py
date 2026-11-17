@@ -62,6 +62,18 @@ async def sample_events(read, *, start, stop, now, sleep, emit):
             raise ScheduleMiss("Foreground deadline missed; no catch-up reads")
 
 
+async def observe_foreground(read, *, start, stop, now, sleep, emit, samples):
+    try:
+        async for value in sample_events(read, start=start, stop=stop, now=now,
+                                         sleep=sleep, emit=emit):
+            samples.append(value)
+            emit({"event": "foreground", "value": value})
+    except ScheduleMiss as error:
+        # A missed probe invalidates this evidence without canceling scheduled HID.
+        return str(error)
+    return None
+
+
 async def release_held(state, send, emit, wall_now):
     if state["held"] is not None:
         emit({"event": "cleanup-release", "value": {"point": state["held"],

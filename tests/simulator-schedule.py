@@ -4,7 +4,7 @@ import sys
 import unittest
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "tools" / "content"))
-from simulator_schedule import ScheduleMiss, tape_events, sample_events, release_held
+from simulator_schedule import ScheduleMiss, tape_events, sample_events, observe_foreground, release_held
 
 
 class Clock:
@@ -78,6 +78,28 @@ class ScheduleTests(unittest.IsolatedAsyncioTestCase):
             await anext(samples)
         self.assertEqual(reads, [0])
         self.assertEqual(logs[-1]["event"], "sample-deadline-miss")
+
+    async def test_stalled_foreground_is_reported_without_canceling_input(self):
+        clock, logs, samples = Clock(), [], []
+        allow_touch = asyncio.Event()
+
+        async def read():
+            clock.value = 1.2
+            allow_touch.set()
+            return {"wall": clock.now()}
+
+        async def send():
+            await allow_touch.wait()
+            return [event["kind"] async for event in self.sender(Clock(), [], {"held": None})]
+
+        failure, gestures = await asyncio.gather(
+            observe_foreground(read, start=0, stop=10, now=clock.now,
+                               sleep=clock.sleep, emit=logs.append, samples=samples),
+            send(),
+        )
+        self.assertIn("Foreground deadline missed", failure)
+        self.assertEqual(samples, [{"wall": 1.2}])
+        self.assertEqual(gestures, ["down", "up"] * 3)
 
 
 if __name__ == "__main__":
