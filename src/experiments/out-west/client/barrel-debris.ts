@@ -44,8 +44,8 @@ export class BarrelDebris {
   private readonly matrix = new Mat4()
   private readonly rotation = new Quat()
   private readonly position = new Vec3()
-  private acquired = false
-  private closed = false
+  private acquired = false as boolean
+  private closed = false as boolean
   constructor(game: GameApplication, ragdolls: NativeRagdolls, url: string) {
     this.game = game
     this.url = url

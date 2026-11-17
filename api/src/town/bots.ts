@@ -100,6 +100,14 @@ const BOT_NAMES: readonly string[] = Array.from(
 
 /** Derived grids belong to rooms; weak keys do not retain closed worlds. */
 const navigation = new WeakMap<Grid, NavGrid>()
+function navFor(w: World): NavGrid {
+  let nav = navigation.get(w.grid)
+  if (!nav) {
+    nav = buildNav(w.grid)
+    navigation.set(w.grid, nav)
+  }
+  return nav
+}
 
 interface BotBrain {
   skill: number
@@ -225,15 +233,6 @@ export class BotDirector {
   /** A bot's skill (tests and dev tools), or null for a player without a brain. */
   skillOf(id: number): number | null {
     return this.brains.get(id)?.skill ?? null
-  }
-
-  private navFor(w: World): NavGrid {
-    let nav = navigation.get(w.grid)
-    if (!nav) {
-      nav = buildNav(w.grid)
-      navigation.set(w.grid, nav)
-    }
-    return nav
   }
 
   private rollSkill(): number {
@@ -506,7 +505,7 @@ export class BotDirector {
     }
     if (w.tick >= b.replanAt || b.path.length === 0) {
       b.goal = this.pickGoal(w, p)
-      b.path = findPath(this.navFor(w), p, b.goal) ?? []
+      b.path = findPath(navFor(w), p, b.goal) ?? []
       b.replanAt = w.tick + REPLAN_TICKS + this.rng.int(0, 20)
     }
     const next = nextWaypoint(w.grid, b.path, p)

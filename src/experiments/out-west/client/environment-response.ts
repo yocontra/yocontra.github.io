@@ -29,7 +29,7 @@ export class BreakableProps {
   private lastTick = -1
   private initialTick: number | undefined
   private readonly initialBroken = new Set<number>()
-  private closed = false
+  private closed = false as boolean
   constructor(
     game: GameApplication,
     town: Entity,

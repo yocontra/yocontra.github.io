@@ -1,8 +1,11 @@
 import { expect, test as it } from 'bun:test'
+import { readFile } from 'node:fs/promises'
 import { Document, NodeIO } from '@gltf-transform/core'
 import { Mat4, Quat, Vec3 } from 'playcanvas'
 import { ENVIRONMENT_PROPS } from '../../src/experiments/out-west/content/environment-props.ts'
 import { appendBarrelVariants } from '../../tools/content/barrel-install.ts'
+import { buildBarrelParts } from '../../tools/content/barrel-parts.ts'
+import { frontierIO } from '../../tools/content/frontier-geometry.ts'
 import { readMountGlb } from '../../tools/content/frontier-mounts-install.ts'
 
 function required<T>(value: T | null | undefined): T {
@@ -91,22 +94,27 @@ it.each([false, true])(
       original.json.bufferViews,
     )
     const models: number[] = []
+    const normalizedNodes: typeof output.json.nodes = []
+    const expectedNodes: typeof original.json.nodes = []
     for (const [index, node] of original.json.nodes.entries()) {
       const changed = required(output.json.nodes[index])
+      let expected = node
+      let normalized = changed
       if (node.name === 'barrel-instance') {
         const prop = required(
           ENVIRONMENT_PROPS.find(
             (p) => JSON.stringify(p.binding.translation) === JSON.stringify(node.translation),
           ),
         )
-        expect(changed).toEqual({ ...node, name: prop.root, extras: { environmentProp: prop.id } })
+        expected = { ...node, name: prop.root, extras: { environmentProp: prop.id } }
       } else if (node.name === 'barrel_kit') {
-        expect({ ...changed, mesh: node.mesh }).toEqual({ ...node, mesh: node.mesh })
+        normalized = { ...changed, mesh: required(node.mesh) }
         models.push(required(changed.mesh))
-      } else {
-        expect(changed).toEqual(node)
       }
+      normalizedNodes.push(normalized)
+      expectedNodes.push(expected)
     }
+    expect(normalizedNodes).toEqual(expectedNodes)
     expect(models).toHaveLength(8)
     expect(new Set(models).size).toBe(native ? 8 : 1)
     expect(output.json.meshes[0]).toEqual(original.json.meshes[0])
@@ -190,4 +198,31 @@ it('rejects stale frames, ambiguous bindings and missing authored source instead
   required(library.getRoot().listNodes()[0]).setName('Missing barrel-tall')
   const missingBytes = await io.writeBinary(library)
   expect(() => appendBarrelVariants(f.source, missingBytes)).toThrow('Missing authored tall barrel')
+})
+
+it('the actual authored timber and fragment BIN streams remain identical to the accepted installed generation', async () => {
+  const donor = await frontierIO.read('tools/art/environments/frontier-library.glb')
+  const barrel = required(
+    donor
+      .getRoot()
+      .listNodes()
+      .find((node) => node.getName() === 'barrel_kit'),
+  )
+  const parts = buildBarrelParts(required(barrel.getMesh()?.listPrimitives()[0]))
+  const outputs = [
+    { doc: parts.library, path: 'tools/art/environments/barrel-parts.glb' },
+    {
+      doc: parts.fragments,
+      path: 'public/experiments/out-west/3d/native-v2/dynamic/barrel-fragments.glb',
+    },
+  ]
+  const comparisons = await Promise.all(
+    outputs.map(async ({ doc, path }) => {
+      const [actual, accepted] = await Promise.all([frontierIO.writeBinary(doc), readFile(path)])
+      return { actual: readMountGlb(actual).bin, accepted: readMountGlb(accepted).bin }
+    }),
+  )
+  for (const comparison of comparisons) {
+    expect(comparison.actual).toEqual(comparison.accepted)
+  }
 })

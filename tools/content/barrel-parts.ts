@@ -203,7 +203,14 @@ function boundary(tris: BarrelTriangle[]) {
     for (let i = 0; i < 3; i++) {
       const a = required(tri[i])
       const b = required(tri[(i + 1) % 3])
-      const id = [key(a.p), key(b.p)].sort().join('|')
+      const id = [key(a.p), key(b.p)]
+        .sort((left, right) => {
+          if (left < right) {
+            return -1
+          }
+          return left > right ? 1 : 0
+        })
+        .join('|')
       const edge = edges.get(id)
       if (edge) {
         edge.count++

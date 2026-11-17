@@ -7,6 +7,7 @@ import { validateAuthoringInputs } from './authoring-inputs.ts'
 import { readMountGlb } from './frontier-mounts-install.ts'
 
 type Glb = ReturnType<typeof readMountGlb>
+const sha256Digest = /^[a-f0-9]{64}$/u
 function required<T>(value: T | null | undefined): T {
   if (value === null || value === undefined) {
     throw new Error('Incomplete authored barrel data')
@@ -79,17 +80,17 @@ function barrelTargets(json: Glb['json']) {
     if (targets.length !== 1) {
       throw new Error('Changed authored barrel hierarchy')
     }
-    const node = required(targets[0])
-    const oldMesh = required(json.meshes[required(node.mesh)])
+    const target = required(targets[0])
+    const oldMesh = required(json.meshes[required(target.mesh)])
     const oldPrimitive = required(oldMesh.primitives[0])
     if (
       oldMesh.primitives.length !== 1 ||
       oldPrimitive.targets ||
       (oldPrimitive.mode !== undefined && oldPrimitive.mode !== 4) ||
-      node.matrix ||
-      node.translation ||
-      node.rotation ||
-      node.scale
+      target.matrix ||
+      target.translation ||
+      target.rotation ||
+      target.scale
     ) {
       throw new Error('Changed barrel donor decode frame')
     }
@@ -97,7 +98,7 @@ function barrelTargets(json: Glb['json']) {
     if (material === undefined || json.materials[material]?.name !== 'Kit') {
       throw new Error('Changed donor barrel PBR')
     }
-    return { owner, node, oldMesh, oldPrimitive, prop }
+    return { owner, node: target, oldMesh, oldPrimitive, prop }
   })
 }
 function cloudUv(library: Glb, pos: GLTF.IAccessor, transform: Mat4): Float32Array {
@@ -129,8 +130,7 @@ export function appendBarrelVariants(
   const native = nativeSourceHash !== undefined
   if (
     native &&
-    (!/^[a-f0-9]{64}$/u.test(nativeSourceHash) ||
-      typeof json.extras?.frontierSourceHash !== 'string')
+    (!sha256Digest.test(nativeSourceHash) || typeof json.extras?.frontierSourceHash !== 'string')
   ) {
     throw new Error('Missing native source link')
   }

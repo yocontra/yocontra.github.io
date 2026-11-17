@@ -73,8 +73,10 @@ export function propAtHit(hit: StaticWorldHit): number {
 export function propOwner(node: { name: string; parent?: { name: string } | null }): boolean {
   let current: typeof node | null | undefined = node
   while (current) {
-    if (ENVIRONMENT_PROPS.some((prop) => prop.root === current?.name)) {
-      return true
+    for (const prop of ENVIRONMENT_PROPS) {
+      if (prop.root === current.name) {
+        return true
+      }
     }
     current = current.parent
   }

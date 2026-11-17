@@ -35,8 +35,8 @@ function topology(primitive: Primitive) {
         .clone()
         .sub(origin)
         .dot(new Vec3().cross(b.clone().sub(origin), c.clone().sub(origin))) / 6
-    for (const [j, a] of tri.entries()) {
-      const left = key(a)
+    for (const [j, vertex] of tri.entries()) {
+      const left = key(vertex)
       const right = key(required(tri[(j + 1) % 3]))
       const order = [left, right].sort((x, y) => x.localeCompare(y))
       const id = order.join('|')

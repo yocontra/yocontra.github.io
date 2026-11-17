@@ -43,23 +43,23 @@ function edgeCuts(a: BarrelVertex, b: BarrelVertex, points: Iterable<V3>) {
       cuts.push({ p, t })
     }
   }
-  cuts.sort((a, b) => a.t - b.t)
+  cuts.sort((left, right) => left.t - right.t)
   return cuts
 }
 /** Two imported cap triangles are only roundoff-width. Contract their middle point onto the edge. */
 function collapseLineFaces(source: BarrelTriangle[]): BarrelTriangle[] {
   return source.filter((tri) => {
     const candidates = tri
-      .map((a, i) => {
+      .map((vertex, i) => {
         const b = tri[(i + 1) % 3]
         const c = tri[(i + 2) % 3]
         if (!(b && c)) {
           throw new Error('Invalid source face')
         }
-        const edge = new Vec3(...b.p).sub(new Vec3(...a.p))
-        return { a, b, c, edge, length: edge.lengthSq() }
+        const edge = new Vec3(...b.p).sub(new Vec3(...vertex.p))
+        return { a: vertex, b, c, edge, length: edge.lengthSq() }
       })
-      .sort((a, b) => b.length - a.length)
+      .sort((left, right) => right.length - left.length)
     const longest = candidates[0]
     if (!longest || longest.length < 1e-12) {
       throw new Error('Degenerate source feature')

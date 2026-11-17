@@ -74,7 +74,12 @@ it('actual attach leaves only authored owners unbatched; snapshot removal surviv
     expect(hidden.owner.enabled).toBe(false)
     expect(f.props.stats().pieces).toBe(0)
   } finally {
-    await f.destroy()
+    expect(await f.destroy()).toEqual({
+      renderBuffers: 0,
+      renderTextures: 0,
+      physicsBuffers: 0,
+      physicsTextures: 0,
+    })
   }
 })
 
@@ -121,7 +126,12 @@ it('actual native borrowed-PBR timber/iron bodies are bounded, duplicate-safe, s
     expect(f.props.stats().bodies).toBe(0)
     expect(f.leases()).toEqual({ requests: 1, releases: 1 })
   } finally {
-    await f.destroy()
+    expect(await f.destroy()).toEqual({
+      renderBuffers: 0,
+      renderTextures: 0,
+      physicsBuffers: 0,
+      physicsTextures: 0,
+    })
   }
 })
 
@@ -160,7 +170,12 @@ it('same-world stale health/events stay broken; fresh World or proven seed/tick 
     expect(f.physics.castWorldHit(ray)?.collider.id).toBe('cover:16')
     expect(f.props.event(event(0, 2, 78))).toBe(true)
   } finally {
-    await f.destroy()
+    expect(await f.destroy()).toEqual({
+      renderBuffers: 0,
+      renderTextures: 0,
+      physicsBuffers: 0,
+      physicsTextures: 0,
+    })
   }
 })
 
@@ -181,7 +196,12 @@ it('closing during an actual asynchronous parser lease releases the late asset w
     expect(f.leases()).toEqual({ requests: 1, releases: 1 })
   } finally {
     gate.resolve()
-    await f.destroy()
+    expect(await f.destroy()).toEqual({
+      renderBuffers: 0,
+      renderTextures: 0,
+      physicsBuffers: 0,
+      physicsTextures: 0,
+    })
   }
 })
 
@@ -190,7 +210,12 @@ it('asset failure rejects owned readiness and destroy leaves no native resources
   try {
     await expect(f.props.ready).rejects.toThrow('Injected fragment failure')
   } finally {
-    await f.destroy()
+    expect(await f.destroy()).toEqual({
+      renderBuffers: 0,
+      renderTextures: 0,
+      physicsBuffers: 0,
+      physicsTextures: 0,
+    })
   }
 })
 
@@ -224,6 +249,11 @@ it('the real effect dispatcher emits one material sound only for a fresh accepte
     expect(sounds).toHaveLength(2)
     expect(f.props.stats().pieces).toBe(6)
   } finally {
-    await f.destroy()
+    expect(await f.destroy()).toEqual({
+      renderBuffers: 0,
+      renderTextures: 0,
+      physicsBuffers: 0,
+      physicsTextures: 0,
+    })
   }
 })

@@ -1,5 +1,6 @@
 /** Actual parser/renderer/Ammo fixture; the tiny geometry is not an art-quality oracle. */
-import { expect, spyOn } from 'bun:test'
+
+import { spyOn } from 'bun:test'
 import { Document, NodeIO } from '@gltf-transform/core'
 import {
   AppBase,
@@ -65,7 +66,7 @@ async function fragmentBytes() {
       )
     }
   }
-  return new NodeIO().writeBinary(doc)
+  return await new NodeIO().writeBinary(doc)
 }
 export async function barrelFixture(control: { gate?: Promise<void>; reject?: boolean } = {}) {
   const device = new NullGraphicsDevice({ width: 1, height: 1 })
@@ -200,10 +201,12 @@ export async function barrelFixture(control: { gate?: Promise<void>; reject?: bo
       woodTexture.destroy()
       cloud.destroy()
       app.destroy()
-      expect(device.buffers.size).toBe(0)
-      expect(device.textures.size).toBe(0)
-      expect(physicsDevice.buffers.size).toBe(0)
-      expect(physicsDevice.textures.size).toBe(0)
+      return {
+        renderBuffers: device.buffers.size,
+        renderTextures: device.textures.size,
+        physicsBuffers: physicsDevice.buffers.size,
+        physicsTextures: physicsDevice.textures.size,
+      }
     },
   }
 }

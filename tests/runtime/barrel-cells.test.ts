@@ -48,7 +48,7 @@ it('eight authored cells exactly tile the two original boxes without creating in
     f.response.updateProps(new Uint8Array(8).fill(68))
     expect(f.response.app.root.findComponents('rigidbody')).toHaveLength(original.boxes.length)
     for (const cover of [16, 36]) {
-      const box = required(original.boxes.find((box) => box.id === `cover:${cover}`))
+      const box = required(original.boxes.find((entry) => entry.id === `cover:${cover}`))
       const parts = ENVIRONMENT_PROPS.filter((prop) => prop.cover === cover)
       expect(parts).toHaveLength(4)
       expect(
