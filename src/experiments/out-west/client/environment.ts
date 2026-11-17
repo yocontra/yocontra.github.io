@@ -234,7 +234,9 @@ export class NativeEnvironment {
       // Native's legacy intensity<1 branch gamma-converts intensity with color; keep energy linear.
       sun.light.color = color(preset.sunColor.map((channel) => channel * Math.min(1, irradiance)))
       sun.light.intensity = Math.max(1, irradiance)
-      sun.light.shadowDistance = this.frontier ? 55 : 65
+      // Tighten the low-tier sun frustum while keeping nearby cover and characters shadowed.
+      const frontierShadowDistance = this.game.tier === 'low' ? 44 : 55
+      sun.light.shadowDistance = this.frontier ? frontierShadowDistance : 65
     }
     scene.exposure = preset.exposure
     const fill = color(preset.hemiSky)
