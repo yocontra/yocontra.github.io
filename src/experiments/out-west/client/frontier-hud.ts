@@ -30,6 +30,10 @@ import { Buttons } from '../runtime/protocol.ts'
 import type { FrontierSession } from './frontier-session.ts'
 import type { GameViewport } from './viewport.ts'
 
+const MAP_IDLE_INTERVAL_MS = 100
+// Ignore floating-point contact jitter that is far smaller than a minimap pixel.
+const MAP_IDLE_POSITION_EPSILON = 0.001
+
 const CHANNELS = new Map([
   [CHANNEL_BANK, 'Banking…'],
   [CHANNEL_STAGE, 'Shipping…'],
@@ -61,6 +65,7 @@ export class FrontierHud {
   private killer: string | null = null
   private readonly viewport: GameViewport
   private fov = 72
+  private mapPaint: { at: number; x: number; z: number; aim: number; shooter: boolean } | undefined
   constructor(
     root: HTMLElement,
     session: FrontierSession,
@@ -206,25 +211,10 @@ export class FrontierHud {
     if (!player) {
       return
     }
-    const wanted = world.players[world.mostWanted]
     const aim = this.viewport.aimPoint()
-    const challenger = player.calledUntil > world.tick ? world.players[player.calledBy] : null
-    this.minimap.draw(
-      {
-        self: { x: player.x, z: player.z, aim: player.aim },
-        others: world.players.flatMap((person) =>
-          person && person.id !== selfSlot && person.alive ? [{ x: person.x, z: person.z }] : [],
-        ),
-        bags: world.bags,
-        strongbox: world.strongbox
-          ? (world.layout.strongboxes[world.strongbox.spot] ?? null)
-          : null,
-        mostWanted: wanted ? { x: wanted.x, z: wanted.z, you: wanted.id === selfSlot } : null,
-        callout: challenger ?? null,
-        heading: aim.shooter ? (player.aim / ANGLE_SCALE) * Math.PI * 2 : null,
-      },
-      performance.now() / 1000,
-    )
+    const challenger =
+      player.calledUntil > world.tick ? (world.players[player.calledBy] ?? null) : null
+    this.paintMinimap(player, aim.shooter, challenger)
     const zone = zoneAt(world.layout, player.x, player.z, player.y)
     const duel = world.showdowns.get(player.showdown)
     const cue = duel?.phase === 'called' ? 'DRAW!' : 'Wait for the bell…'
@@ -277,6 +267,40 @@ export class FrontierHud {
         Math.max(0, (player.respawnTick - world.tick) / TICK_HZ),
       )
     }
+  }
+  private paintMinimap(player: Player, shooter: boolean, challenger: Player | null): void {
+    const now = performance.now()
+    const last = this.mapPaint
+    // Keep panning and rotation responsive. While they are steady, paint the live markers at 10 Hz.
+    if (
+      last &&
+      now - last.at < MAP_IDLE_INTERVAL_MS &&
+      Math.abs(last.x - player.x) < MAP_IDLE_POSITION_EPSILON &&
+      Math.abs(last.z - player.z) < MAP_IDLE_POSITION_EPSILON &&
+      last.aim === player.aim &&
+      last.shooter === shooter
+    ) {
+      return
+    }
+    this.mapPaint = { at: now, x: player.x, z: player.z, aim: player.aim, shooter }
+    const { world, selfSlot } = this.session
+    const wanted = world.players[world.mostWanted]
+    this.minimap.draw(
+      {
+        self: { x: player.x, z: player.z, aim: player.aim },
+        others: world.players.flatMap((person) =>
+          person && person.id !== selfSlot && person.alive ? [{ x: person.x, z: person.z }] : [],
+        ),
+        bags: world.bags,
+        strongbox: world.strongbox
+          ? (world.layout.strongboxes[world.strongbox.spot] ?? null)
+          : null,
+        mostWanted: wanted ? { x: wanted.x, z: wanted.z, you: wanted.id === selfSlot } : null,
+        callout: challenger ?? null,
+        heading: shooter ? (player.aim / ANGLE_SCALE) * Math.PI * 2 : null,
+      },
+      now / 1000,
+    )
   }
   /** The ticks sit on the actual cone the next shot may stray within, converted through the lens. */
   private spreadPixels(player: Player): number {
