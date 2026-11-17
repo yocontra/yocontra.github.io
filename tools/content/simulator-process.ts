@@ -151,6 +151,54 @@ export interface SafariReadinessEvent {
   identity?: { bundle: string; pid: number } | null
   error?: string
 }
+const noFrontmostApplication =
+  'axbridge could not resolve the frontmost application using the window-server strategy: window-server frontmost returned no application object'
+const idbCommandFailure = /^idb --companion 127\.0\.0\.1:[1-9]\d{3,4} failed: /u
+function startupAXPending(error: unknown) {
+  if (!(error instanceof Error)) {
+    return false
+  }
+  // The CLI command adapter adds this exact prefix; the persistent client does not.
+  const message = error.message.trimEnd().replace(idbCommandFailure, '')
+  return message === noFrontmostApplication
+}
+/** Only readiness may wait for this observed guest startup state; both reads share its budget. */
+export async function readSafariReadiness(
+  reads: {
+    ax: (milliseconds: number, signal: AbortSignal) => Promise<unknown>
+    apps: (milliseconds: number, signal: AbortSignal) => Promise<unknown>
+  },
+  milliseconds: number,
+  signal: AbortSignal,
+) {
+  const deadline = Date.now() + milliseconds
+  let ax: unknown
+  let axError: string | undefined
+  try {
+    ax = await reads.ax(milliseconds, signal)
+  } catch (error) {
+    if (!startupAXPending(error)) {
+      throw error
+    }
+    axError = String(error)
+  }
+  const remaining = deadline - Date.now()
+  if (!(remaining > 0) || signal.aborted) {
+    throw new Error(
+      `Native Safari state deadline exceeded${axError ? `; preceding AX observation: ${axError}` : ''}`,
+    )
+  }
+  try {
+    const apps = await reads.apps(remaining, signal)
+    return { ax, apps, ...(axError ? { axError } : {}) }
+  } catch (error) {
+    // Retain both failures if the independent mapping fails after a pending AX observation.
+    if (axError) {
+      throw new Error(`${String(error)}; preceding AX observation: ${axError}`, { cause: error })
+    }
+    throw error
+  }
+}
 /** One launch and one URL action; only native readiness observations are polled. */
 export async function openSafariWhenReady(options: {
   launch: (milliseconds: number, signal: AbortSignal) => Promise<unknown>

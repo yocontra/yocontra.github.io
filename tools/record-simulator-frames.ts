@@ -21,6 +21,7 @@ import {
   bounded,
   command,
   openSafariWhenReady,
+  readSafariReadiness,
   requireFreePort,
   type SafariReadinessEvent,
   statusJSON,
@@ -66,7 +67,29 @@ function openPreflightPage(
 ) {
   return openSafariWhenReady({
     launch: (remaining, signal) => run(safariLaunchArguments(idb), false, remaining, signal),
-    read: (remaining, signal) => nativeState(run, idb, remaining, signal),
+    read: (remaining, signal) =>
+      readSafariReadiness(
+        {
+          ax: (budget, abort) =>
+            run(
+              idb('ui', 'describe-all', '--api', 'axbridge', '--format', 'complete'),
+              true,
+              budget,
+              abort,
+            ),
+          apps: async (budget, abort) =>
+            parseIDBApps(
+              (await run(
+                idb('list-apps', '--fetch-process-state'),
+                false,
+                budget,
+                abort,
+              )) as string,
+            ),
+        },
+        remaining,
+        signal,
+      ),
     open: (remaining, signal) => run(open, false, remaining, signal),
     observe,
   })

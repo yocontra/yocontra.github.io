@@ -38,6 +38,7 @@ import {
   bounded,
   command,
   openSafariWhenReady,
+  readSafariReadiness,
   requireFreePort,
   type SafariReadinessEvent,
   statusJSON,
@@ -110,13 +111,15 @@ async function captureNative(context: {
   const safariReadiness: SafariReadinessEvent[] = []
   await openSafariWhenReady({
     launch: (remaining) => native.call('launch-safari', {}, remaining),
-    read: async (remaining) => {
-      const [ax, apps] = await Promise.all([
-        native.call('ax', {}, remaining),
-        native.call('apps', {}, remaining),
-      ])
-      return { ax, apps }
-    },
+    read: (remaining, signal) =>
+      readSafariReadiness(
+        {
+          ax: (budget) => native.call('ax', {}, budget),
+          apps: (budget) => native.call('apps', {}, budget),
+        },
+        remaining,
+        signal,
+      ),
     open: (remaining, signal) => run(open, remaining, signal),
     observe: async (event) => {
       safariReadiness.push(event)
