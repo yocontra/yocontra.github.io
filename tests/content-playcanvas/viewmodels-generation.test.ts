@@ -22,7 +22,6 @@ import { NodeIO } from '@gltf-transform/core'
 import { ALL_EXTENSIONS } from '@gltf-transform/extensions'
 import { spawn } from 'bun'
 import { CATALOG } from '../../src/experiments/out-west/data/catalog.ts'
-import { hangTimeout } from '../timeout.ts'
 
 const project = fileURLToPath(new URL('../../', import.meta.url))
 const native = 'public/experiments/out-west/3d/native-v2'
@@ -32,8 +31,8 @@ const fits = CATALOG.filter((item) => item.slot === 'outfit').flatMap((item) => 
   `${item.id}.pair`,
 ])
 const hash = (bytes: Uint8Array) => createHash('sha256').update(bytes).digest('hex')
-// Three CLI runs rebuild 47 fits. Detailed extractor tests already cover its byte selection.
-const rebuildBudget = hangTimeout(120_000)
+// Two complete builds and two fits before a malformed input: 34 successful extractions.
+const rebuildBudget = 180_000
 
 function hashes(directory: string): Promise<string[]> {
   return Promise.all(fits.map(async (id) => hash(await readFile(join(directory, `${id}.glb`)))))
@@ -84,6 +83,58 @@ async function disposeFixture(root: string, realTextures: string): Promise<strin
   }
 }
 
+function fitAt(index: number): string {
+  const id = fits[index]
+  if (!id) {
+    throw new Error(`Missing fit at ${index}`)
+  }
+  return id
+}
+
+async function runFixture(root: string, deadline: number, phase: string) {
+  const child = spawn([process.execPath, 'tools/content/viewmodels.ts'], {
+    cwd: root,
+    detached: true,
+    stdout: 'pipe',
+    stderr: 'pipe',
+  })
+  const stop = () => {
+    try {
+      // The formatter inherits this owned process group and its output pipes.
+      process.kill(-child.pid, 'SIGKILL')
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'ESRCH') {
+        throw error
+      }
+    }
+  }
+  let timedOut = false
+  const watchdog = setTimeout(
+    () => {
+      timedOut = true
+      stop()
+    },
+    Math.max(1, deadline - performance.now()),
+  )
+  try {
+    const [code, stdout, stderr] = await Promise.all([
+      child.exited,
+      new Response(child.stdout).text(),
+      new Response(child.stderr).text(),
+    ])
+    if (timedOut) {
+      throw new Error(
+        `Viewmodel CLI exhausted the bounded rebuild budget during ${phase}\nstdout tail:\n${stdout.slice(-4096)}\nstderr tail:\n${stderr.slice(-4096)}`,
+      )
+    }
+    return { code, output: `${phase}\n${stdout}${stderr}` }
+  } finally {
+    clearTimeout(watchdog)
+    stop()
+    await child.exited
+  }
+}
+
 it(
   'the CLI rebuilds all missing fitted arms deterministically and preserves outputs on a late invalid input',
   async () => {
@@ -91,47 +142,7 @@ it(
     const realTextures = join(project, native, 'characters')
     const textureInputs = await textureHashes(realTextures)
     const root = await mkdtemp(join(tmpdir(), 'out-west-viewmodels-'))
-    const run = async () => {
-      const child = spawn([process.execPath, 'tools/content/viewmodels.ts'], {
-        cwd: root,
-        detached: true,
-        stdout: 'pipe',
-        stderr: 'pipe',
-      })
-      const stop = () => {
-        try {
-          // The formatter inherits this owned process group and its output pipes.
-          process.kill(-child.pid, 'SIGKILL')
-        } catch (error) {
-          if ((error as NodeJS.ErrnoException).code !== 'ESRCH') {
-            throw error
-          }
-        }
-      }
-      let timedOut = false
-      const watchdog = setTimeout(
-        () => {
-          timedOut = true
-          stop()
-        },
-        Math.max(1, deadline - performance.now()),
-      )
-      try {
-        const [code, stdout, stderr] = await Promise.all([
-          child.exited,
-          new Response(child.stdout).text(),
-          new Response(child.stderr).text(),
-        ])
-        if (timedOut) {
-          throw new Error('Viewmodel CLI exhausted the bounded rebuild budget')
-        }
-        return { code, output: stdout + stderr }
-      } finally {
-        clearTimeout(watchdog)
-        stop()
-        await child.exited
-      }
-    }
+
     try {
       await mkdir(join(root, 'tools/art'), { recursive: true })
       await mkdir(join(root, 'src/experiments/out-west/content'), { recursive: true })
@@ -164,7 +175,7 @@ it(
       ])
       const inputs = await hashes(join(project, native, 'equipment'))
       const helperHash = hash(await readFile(join(project, 'tools/content/first-person-arms.ts')))
-      const first = await run()
+      const first = await runFixture(root, deadline, 'initial all16 build')
       expect(first.code, first.output).toBe(0)
       expect(fits).toHaveLength(16)
       const bytes = await Promise.all(
@@ -225,22 +236,44 @@ it(
         })
       }
       const before = await readFile(join(root, descriptor))
-      const second = await run()
+      const second = await runFixture(root, deadline, 'deterministic all16 rebuild')
       expect(second.code, second.output).toBe(0)
       expect(await readFile(join(root, descriptor))).toEqual(before)
       expect(await hashes(join(root, native, 'viewmodels'))).toEqual(bytes.map(hash))
-      const last = fits.at(-1)
-      if (!last) {
-        throw new Error('Missing last fit')
-      }
+      const last = fitAt(fits.length - 1)
       await unlink(join(root, native, 'equipment', `${last}.glb`))
       const marker = Buffer.from('previous asset must survive a later invalid fit')
       const output = join(root, native, 'viewmodels', `${fits[0]}.glb`)
+      const secondOutput = join(root, native, 'viewmodels', `${fits[1]}.glb`)
       await writeFile(output, marker)
-      const failed = await run()
+      await writeFile(secondOutput, marker)
+      const failed = await runFixture(root, deadline, 'missing last world input')
       expect(failed.code).not.toBe(0)
       expect(failed.output).toContain(`${last}.glb`)
+      expect(failed.output).not.toContain('Staged viewmodel ')
       expect(await readFile(output)).toEqual(marker)
+      expect(await readFile(secondOutput)).toEqual(marker)
+      expect(await readFile(join(root, descriptor))).toEqual(before)
+      await symlink(
+        join(project, native, 'equipment', `${last}.glb`),
+        join(root, native, 'equipment', `${last}.glb`),
+      )
+      const third = fitAt(2)
+      const malformedInput = join(root, native, 'equipment', `${third}.glb`)
+      await unlink(malformedInput)
+      await writeFile(malformedInput, Buffer.from('malformed present native GLB'), { flag: 'wx' })
+      expect((await lstat(malformedInput)).isSymbolicLink()).toBe(false)
+      const malformed = await runFixture(
+        root,
+        deadline,
+        'malformed third world input after two staged fits',
+      )
+      expect(malformed.code).not.toBe(0)
+      expect(Array.from(malformed.output.match(/^Staged viewmodel .+$/gmu) ?? [])).toEqual(
+        fits.slice(0, 2).map((id) => `Staged viewmodel ${id}`),
+      )
+      expect(await readFile(output)).toEqual(marker)
+      expect(await readFile(secondOutput)).toEqual(marker)
       expect(await readFile(join(root, descriptor))).toEqual(before)
       expect(await hashes(join(project, native, 'equipment'))).toEqual(inputs)
       expect(await readFile(uncachedOutput)).toEqual(textureMarker)

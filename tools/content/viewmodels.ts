@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto'
-import { mkdir, readFile, writeFile } from 'node:fs/promises'
+import { constants } from 'node:fs'
+import { access, mkdir, readFile, writeFile } from 'node:fs/promises'
 import type { ContentAsset } from '../../src/experiments/out-west/content/types.ts'
 import { CATALOG } from '../../src/experiments/out-west/data/catalog.ts'
 import { extractFirstPersonArms } from './first-person-arms.ts'
@@ -30,31 +31,39 @@ function addInputPins(inputs: Map<string, string>, pins: { path: string; sha256:
 
 /** Rebuild every fitted arms asset; animation tracks stay shared at runtime. */
 export async function buildViewmodels(): Promise<Record<string, ContentAsset>> {
+  const fits = CATALOG.filter((item) => item.slot === 'outfit').flatMap((item) => [
+    item.id,
+    `${item.id}.pair`,
+  ])
+  // Reject missing world inputs before spending time rebuilding any fitted presentation.
+  await Promise.all(
+    fits.map((id) =>
+      access(`public/experiments/out-west/3d/native-v2/equipment/${id}.glb`, constants.R_OK),
+    ),
+  )
   const assets: Record<string, ContentAsset> = {}
   const outputs: { path: string; bytes: Uint8Array }[] = []
   const textures = new Map<string, Uint8Array>()
   const inputPins = new Map<string, string>()
-  for (const outfit of CATALOG.filter((item) => item.slot === 'outfit')) {
-    for (const suffix of ['', '.pair']) {
-      const id = `${outfit.id}${suffix}`
-      const path = `/experiments/out-west/3d/native-v2/viewmodels/${id}.glb`
-      const {
-        bytes,
-        report,
-        textures: maps,
-      } = await extractFirstPersonArms(id, { geometryOnly: true })
-      for (const texture of maps) {
-        const previous = textures.get(texture.path)
-        if (previous && !Buffer.from(previous).equals(texture.bytes)) {
-          throw new Error(`Conflicting native texture ${texture.path}`)
-        }
-        textures.set(texture.path, texture.bytes)
+  for (const id of fits) {
+    const path = `/experiments/out-west/3d/native-v2/viewmodels/${id}.glb`
+    const {
+      bytes,
+      report,
+      textures: maps,
+    } = await extractFirstPersonArms(id, { geometryOnly: true })
+    for (const texture of maps) {
+      const previous = textures.get(texture.path)
+      if (previous && !Buffer.from(previous).equals(texture.bytes)) {
+        throw new Error(`Conflicting native texture ${texture.path}`)
       }
-      addInputPins(inputPins, report.sourceInputs)
-      const hash = report.hash
-      outputs.push({ path: `public${path}`, bytes })
-      assets[id] = { url: `${path}?v=${hash.slice(0, 16)}`, hash, bytes: bytes.length }
+      textures.set(texture.path, texture.bytes)
     }
+    addInputPins(inputPins, report.sourceInputs)
+    const hash = report.hash
+    outputs.push({ path: `public${path}`, bytes })
+    assets[id] = { url: `${path}?v=${hash.slice(0, 16)}`, hash, bytes: bytes.length }
+    console.log(`Staged viewmodel ${id}`)
   }
   await validateInputs(inputPins)
   for (const [path, bytes] of textures) {
