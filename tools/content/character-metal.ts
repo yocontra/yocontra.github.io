@@ -43,9 +43,9 @@ export async function prepareSpurSurface(primitive: Primitive): Promise<void> {
     .setExtras({ nativePbr: await result })
 }
 
-let gunSurface: Promise<{ normal: string; wear: Pixels }> | undefined
+let gunSurface: Promise<{ normal: Pixels; wear: Pixels }> | undefined
 /** One shared, subtle authored steel texture; per-part material factors remain intact. */
-export function gunSurfaceDetail(): Promise<{ normal: string; wear: Pixels }> {
+export async function gunSurfaceDetail(): Promise<{ normal: string; wear: Pixels }> {
   gunSurface ??= Promise.all(
     ['normal', 'wear'].map((role) =>
       sharp(resolve('tools/art/characters/textures', `worn-metal-${role}.png`))
@@ -53,14 +53,24 @@ export function gunSurfaceDetail(): Promise<{ normal: string; wear: Pixels }> {
         .raw()
         .toBuffer({ resolveWithObject: true }),
     ),
-  ).then(async ([normal, wear]) => {
+  ).then(([normal, wear]) => {
     if (!(normal && wear)) {
       throw new Error('Run Blender tools/content/metal-authoring.py first')
     }
     return {
-      normal: await imageFile(normal.data, normal.info.width, normal.info.height, false),
+      normal: { data: normal.data, width: normal.info.width, height: normal.info.height },
       wear: { data: wear.data, width: wear.info.width, height: wear.info.height },
     }
   })
-  return gunSurface
+  // Cache decoded pixels, not a URL whose file belongs to an earlier scoped bake.
+  const decoded = await gunSurface
+  return {
+    normal: await imageFile(
+      decoded.normal.data,
+      decoded.normal.width,
+      decoded.normal.height,
+      false,
+    ),
+    wear: decoded.wear,
+  }
 }

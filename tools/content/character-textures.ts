@@ -95,9 +95,14 @@ export async function compressedCharacterTexture(
   return `/experiments/out-west/3d/native-v2/${scope === 'characters' ? 'characters' : 'environments/textures'}/${file}`
 }
 
-export async function compressCharacterAssets(): Promise<void> {
+export async function compressCharacterAssets(
+  options: { encodingPath?: string; ids?: readonly string[] } = {},
+): Promise<void> {
   const io = new NodeIO().registerExtensions(ALL_EXTENSIONS)
-  const root = resolve('public/experiments/out-west/3d/native-v2')
+  const root = contentOutput()
+  const requested =
+    options.ids ??
+    (process.env.OUT_WEST_CHARACTERS ? process.env.OUT_WEST_CHARACTERS.split(',') : undefined)
   const paths = (
     await Promise.all(
       ['equipment', 'baked', 'dynamic'].map(async (category) =>
@@ -107,8 +112,7 @@ export async function compressCharacterAssets(): Promise<void> {
           .filter(
             (file) =>
               file.endsWith('.glb') &&
-              (!process.env.OUT_WEST_CHARACTERS ||
-                process.env.OUT_WEST_CHARACTERS.split(',').includes(basename(file, '.glb'))) &&
+              (!requested || requested.includes(basename(file, '.glb'))) &&
               (category === 'equipment' ||
                 (category === 'baked' && BAKED.test(file)) ||
                 (category === 'dynamic' && DYNAMIC.test(file))),
@@ -117,7 +121,7 @@ export async function compressCharacterAssets(): Promise<void> {
       ),
     )
   ).flat()
-  const encodingPath = resolve('tools/art/characters/texture-encoding.json')
+  const encodingPath = resolve(options.encodingPath ?? 'tools/art/characters/texture-encoding.json')
   const previous = (await Bun.file(encodingPath).json()) as { images?: Record<string, string> }
   const documents = await Promise.all(
     paths.map(async (path) => ({ path, doc: await io.read(path) })),
@@ -138,7 +142,7 @@ export async function compressCharacterAssets(): Promise<void> {
   const entries = [...urls]
   const replacements = new Map<string, string>()
   let next = 0
-  await Promise.all(
+  const encodings = await Promise.allSettled(
     Array.from({ length: 4 }, async () => {
       while (next < entries.length) {
         const index = next++
@@ -146,16 +150,24 @@ export async function compressCharacterAssets(): Promise<void> {
         if (!url) {
           continue
         }
-        const bytes = await readFile(resolve('public', url.slice(1)))
+        const prefix = '/experiments/out-west/3d/native-v2/'
+        const path = url.startsWith(prefix)
+          ? resolve(root, url.slice(prefix.length))
+          : resolve('public', url.slice(1))
+        const bytes = await readFile(path)
         const result = await compressedCharacterTexture(bytes, url.includes('.color.'))
         replacements.set(url, result)
         console.log(`KTX2 ${index + 1}/${entries.length} ${basename(url)} -> ${basename(result)}`)
       }
     }),
   )
+  const failure = encodings.find((result) => result.status === 'rejected')
+  if (failure?.status === 'rejected') {
+    throw failure.reason
+  }
   if (process.env.KTX_ENCODE_ONLY) {
     await writeFile(
-      resolve('tools/art/characters/texture-encoding.json'),
+      encodingPath,
       `${JSON.stringify({ encoder: 'Khronos toktx 4.4.2', settings, images: { ...previous.images, ...Object.fromEntries(replacements) } }, null, 2)}\n`,
     )
     return
@@ -168,7 +180,7 @@ export async function compressCharacterAssets(): Promise<void> {
     await normalizeSkinnedAsset(path)
   }
   await writeFile(
-    resolve('tools/art/characters/texture-encoding.json'),
+    encodingPath,
     `${JSON.stringify({ encoder: 'Khronos toktx 4.4.2', settings, images: { ...previous.images, ...Object.fromEntries(replacements) } }, null, 2)}\n`,
   )
 }

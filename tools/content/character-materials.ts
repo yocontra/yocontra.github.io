@@ -34,10 +34,13 @@ const HUMAN = /^(?:outfit\.|outlaw-|player$)/u
 const WEAPON_BEARER = /^(?:gun\.|outlaw-|held-|player$)/u
 const source = resolve('tools/art/characters')
 const io = new NodeIO().registerExtensions(ALL_EXTENSIONS)
-export async function bakeCharacter(path: string): Promise<void> {
+export async function bakeCharacter(
+  path: string,
+  options: { firstPersonSleeves?: boolean } = {},
+): Promise<void> {
   const doc = await io.read(path)
   const id = basename(path, '.gltf')
-  await integrateGarmentParts(doc, id)
+  await integrateGarmentParts(doc, id, options)
   await fitWaistcoats(doc, id)
   await repairHeadNape(doc)
   const sockets = WEAPON_BEARER.test(id) ? captureWeaponSockets(doc) : []

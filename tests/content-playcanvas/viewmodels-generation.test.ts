@@ -1,8 +1,21 @@
 import { expect, test as it } from 'bun:test'
 import { createHash } from 'node:crypto'
-import { cp, mkdir, mkdtemp, readFile, rm, symlink, unlink, writeFile } from 'node:fs/promises'
+import { constants } from 'node:fs'
+import {
+  copyFile,
+  cp,
+  lstat,
+  mkdir,
+  mkdtemp,
+  readdir,
+  readFile,
+  rm,
+  symlink,
+  unlink,
+  writeFile,
+} from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { basename, join } from 'node:path'
 import process from 'node:process'
 import { fileURLToPath } from 'node:url'
 import { NodeIO } from '@gltf-transform/core'
@@ -26,10 +39,57 @@ function hashes(directory: string): Promise<string[]> {
   return Promise.all(fits.map(async (id) => hash(await readFile(join(directory, `${id}.glb`)))))
 }
 
+async function textureHashes(directory: string): Promise<string[]> {
+  const names = (await readdir(directory)).sort((a, b) => a.localeCompare(b))
+  const values: string[] = []
+  let next = 0
+  await Promise.all(
+    Array.from({ length: 4 }, async () => {
+      while (next < names.length) {
+        const index = next++
+        const name = names[index]
+        if (name) {
+          values[index] = `${name}:${hash(await readFile(join(directory, name)))}`
+        }
+      }
+    }),
+  )
+  return values
+}
+
+async function seedTextureCache(directory: string): Promise<void> {
+  const needed = new Set<string>()
+  for (const id of fits) {
+    const bytes = await readFile(join(project, native, 'viewmodels', `${id}.glb`))
+    const json = JSON.parse(bytes.subarray(20, 20 + bytes.readUInt32LE(12)).toString()) as {
+      extras?: { firstPersonArms?: { presentation?: { textures: { path: string }[] } } }
+    }
+    for (const texture of json.extras?.firstPersonArms?.presentation?.textures ?? []) {
+      needed.add(texture.path)
+    }
+  }
+  await mkdir(directory, { recursive: true })
+  await Promise.all(
+    [...needed].map((path) =>
+      copyFile(join(project, path), join(directory, basename(path)), constants.COPYFILE_FICLONE),
+    ),
+  )
+}
+
+async function disposeFixture(root: string, realTextures: string): Promise<string[]> {
+  try {
+    return await textureHashes(realTextures)
+  } finally {
+    await rm(root, { recursive: true, force: true })
+  }
+}
+
 it(
   'the CLI rebuilds all missing fitted arms deterministically and preserves outputs on a late invalid input',
   async () => {
     const deadline = performance.now() + rebuildBudget - 5000
+    const realTextures = join(project, native, 'characters')
+    const textureInputs = await textureHashes(realTextures)
     const root = await mkdtemp(join(tmpdir(), 'out-west-viewmodels-'))
     const run = async () => {
       const child = spawn([process.execPath, 'tools/content/viewmodels.ts'], {
@@ -77,6 +137,13 @@ it(
       await mkdir(join(root, 'src/experiments/out-west/content'), { recursive: true })
       await mkdir(join(root, native, 'equipment'), { recursive: true })
       await cp(join(project, 'tools/content'), join(root, 'tools/content'), { recursive: true })
+      const fixtureTextures = join(root, native, 'characters')
+      await seedTextureCache(fixtureTextures)
+      // Guard ownership before testing a new output path; a directory-link regression must not write to the project.
+      expect((await lstat(fixtureTextures)).isSymbolicLink()).toBe(false)
+      const uncachedOutput = join(fixtureTextures, 'fixture-owned-new-map.ktx2')
+      const textureMarker = Buffer.from('new output stays in the isolated texture directory')
+      await writeFile(uncachedOutput, textureMarker, { flag: 'wx' })
       await Promise.all([
         symlink(join(project, 'node_modules'), join(root, 'node_modules'), 'dir'),
         symlink(join(project, 'tools/art/characters'), join(root, 'tools/art/characters'), 'dir'),
@@ -85,7 +152,7 @@ it(
           join(root, 'src/experiments/out-west/data'),
           'dir',
         ),
-        ...['biome.json', '.gitignore'].map((path) =>
+        ...['biome.json', '.gitignore', 'bun.lock', 'patches'].map((path) =>
           symlink(join(project, path), join(root, path)),
         ),
         ...fits.map((id) =>
@@ -176,8 +243,9 @@ it(
       expect(await readFile(output)).toEqual(marker)
       expect(await readFile(join(root, descriptor))).toEqual(before)
       expect(await hashes(join(project, native, 'equipment'))).toEqual(inputs)
+      expect(await readFile(uncachedOutput)).toEqual(textureMarker)
     } finally {
-      await rm(root, { recursive: true, force: true })
+      expect(await disposeFixture(root, realTextures)).toEqual(textureInputs)
     }
   },
   rebuildBudget,

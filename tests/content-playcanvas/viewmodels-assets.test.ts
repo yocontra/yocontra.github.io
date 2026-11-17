@@ -7,6 +7,7 @@ import { VIEWMODELS } from '../../src/experiments/out-west/content/viewmodels.ts
 import { CATALOG } from '../../src/experiments/out-west/data/catalog.ts'
 import { validateAuthoringInputs } from '../../tools/content/authoring-inputs.ts'
 
+const digestPattern = /^[a-f0-9]{64}$/u
 const io = new NodeIO().registerExtensions(ALL_EXTENSIONS)
 const hash = (bytes: Uint8Array) => createHash('sha256').update(bytes).digest('hex')
 
@@ -33,6 +34,12 @@ it('every committed arms fit matches its descriptor and current canonical art in
     const doc = await io.readBinary(bytes)
     const provenance = doc.getRoot().getExtras().firstPersonArms as {
       sourceInputs?: { path: string; sha256: string }[]
+      presentation?: {
+        mode: string
+        nativeSHA256: string
+        nativeBytes: number
+        textures: { path: string; sha256: string }[]
+      }
     }
     const nativePath = `public/experiments/out-west/3d/native-v2/equipment/${id}.glb`
     const nativeHash = hash(await readFile(nativePath))
@@ -44,6 +51,7 @@ it('every committed arms fit matches its descriptor and current canonical art in
       helperSHA256: helper,
     })
     expect(provenance.sourceInputs).toContainEqual({ path: nativePath, sha256: nativeHash })
+    expect(Boolean(provenance.presentation)).toBe(id.startsWith('outfit.striped-poncho'))
     // Reuse the authoring validator for every recorded cloth, rig and helper dependency.
     doc.getRoot().setExtras({ sourceInputs: provenance.sourceInputs ?? [] })
     await validateAuthoringInputs(doc)
@@ -51,3 +59,39 @@ it('every committed arms fit matches its descriptor and current canonical art in
     expect(doc.getRoot().listTextures()).toHaveLength(0)
   }
 })
+
+for (const id of ['outfit.striped-poncho', 'outfit.striped-poncho.pair']) {
+  it(`${id} separates the immutable world input from its complete presentation source and maps`, async () => {
+    const bytes = await readFile(`public/experiments/out-west/3d/native-v2/viewmodels/${id}.glb`)
+    const doc = await io.readBinary(bytes)
+    const data = doc.getRoot().getExtras().firstPersonArms as {
+      nativeSHA256: string
+      presentation: {
+        mode: string
+        nativeSHA256: string
+        nativeBytes: number
+        textures: { path: string; sha256: string }[]
+      }
+      sourceInputs: { path: string; sha256: string }[]
+    }
+    expect(data.presentation.mode).toBe('complete-first-person-sleeves')
+    expect(data.presentation.nativeSHA256).not.toBe(data.nativeSHA256)
+    expect(data.presentation.nativeSHA256).toMatch(digestPattern)
+    expect(data.presentation.nativeBytes).toBeGreaterThan(bytes.length)
+    expect(data.presentation.textures.length).toBeGreaterThan(0)
+    await Promise.all(
+      data.presentation.textures.map(async (texture) => {
+        expect(
+          texture.path.startsWith('public/experiments/out-west/3d/native-v2/characters/'),
+        ).toBe(true)
+        expect(hash(await readFile(texture.path))).toBe(texture.sha256)
+      }),
+    )
+    expect(data.sourceInputs.some((pin) => pin.path.includes('first-person-sleeves/'))).toBe(true)
+    expect(
+      data.sourceInputs.some(
+        (pin) => pin.path.startsWith('/') || pin.path.includes('out-west-first-person-'),
+      ),
+    ).toBe(false)
+  })
+}
