@@ -24,7 +24,11 @@ interface Artifact {
   target: Primitive
 }
 const io = new NodeIO()
-async function artifacts(doc: Document, id: string): Promise<Artifact[]> {
+async function artifacts(
+  doc: Document,
+  id: string,
+  firstPersonSleeves: boolean,
+): Promise<Artifact[]> {
   const entries: Artifact[] = []
   const bytes = Buffer.from(
     await Bun.file(resolve('tools/art/characters', `${id}.gltf`)).arrayBuffer(),
@@ -49,6 +53,7 @@ async function artifacts(doc: Document, id: string): Promise<Artifact[]> {
     'facial-hair',
     'beards',
     'head-throats',
+    ...(firstPersonSleeves ? ['first-person-sleeves'] : []),
   ]) {
     const path = resolve('tools/art/characters', category, `${id}.glb`)
     if (!(await Bun.file(path).exists())) {
@@ -107,8 +112,12 @@ function trimOriginal(primitive: Primitive, entries: Artifact[]): void {
   }
   primitive.setIndices(indices.clone().setArray(Uint32Array.from(keep)))
 }
-export async function integrateGarmentParts(doc: Document, id: string): Promise<void> {
-  const entries = await artifacts(doc, id)
+export async function integrateGarmentParts(
+  doc: Document,
+  id: string,
+  options: { firstPersonSleeves?: boolean } = {},
+): Promise<void> {
+  const entries = await artifacts(doc, id, options.firstPersonSleeves ?? false)
   for (const target of new Set(entries.map((entry) => entry.target))) {
     const selected = entries.filter((entry) => entry.target === target)
     trimOriginal(target, selected)

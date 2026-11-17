@@ -1,4 +1,5 @@
 import {
+  type AnimTrack,
   type ContainerResource,
   Entity,
   type GraphNode,
@@ -22,7 +23,10 @@ interface EquipmentSource {
   url: string
   pair?: { url: string }
 }
+/** The local rider keeps per-instance pass masks; its arms load only the fit and drawn gun. */
 export interface ActorPresentation {
+  local?: boolean
+  viewmodel?: { url: string; parent?: Entity; tracks: readonly AnimTrack[] }
   carryDrawn?: boolean
 }
 function rigidBatch(
@@ -145,13 +149,25 @@ function bindSkin(model: Entity, actor: DuelActor, id: string): void {
   }
 }
 
-function mountRigid(model: Entity, actor: DuelActor, weapon?: 'rifle' | 'shotgun'): WeaponMount[] {
+function mountRigid(
+  model: Entity,
+  actor: DuelActor,
+  weapon?: 'rifle' | 'shotgun',
+  drawnOnly = false,
+): WeaponMount[] {
   const mounts = authoredMounts(model)
   if (mounts.length === 0) {
     throw new Error(`Missing authored equipment mounts on${model.name}`)
   }
   const weapons: WeaponMount[] = []
   for (const { node, point } of mounts) {
+    if (drawnOnly && point.mode === 'holstered') {
+      node.parent?.removeChild(node)
+      if (node instanceof Entity) {
+        node.destroy()
+      }
+      continue
+    }
     const bone = actor.model.findByName(point.bone)
     if (!bone) {
       throw new Error(`Missing authored bone${point.bone}`)
@@ -208,6 +224,13 @@ function fittedUrl(source: EquipmentSource, paired: boolean): string {
 }
 
 /** All fitting is authored offline; runtime uses native skins, explicit mounts and batching. */
+/** The selected outfit's own single or paired fit; first-person arms are derived per fit. */
+export function fitId(raw: Loadout): string {
+  const loadout = normalizeLoadout(raw)
+  const outfit = loadout.outfit in EQUIPMENT ? loadout.outfit : DEFAULT_LOADOUT.outfit
+  return `${outfit}${loadout.gun === 'gun.hardins-pair' ? '.pair' : ''}`
+}
+
 export async function equippedActor(
   game: GameApplication,
   raw: Loadout,
@@ -219,11 +242,25 @@ export async function equippedActor(
   const outfit: EquipmentSource =
     EQUIPMENT[loadout.outfit as keyof typeof EQUIPMENT] ??
     EQUIPMENT[DEFAULT_LOADOUT.outfit as keyof typeof EQUIPMENT]
-  const actor = await DuelActor.create(game, fittedUrl(outfit, paired), 'gunslinger')
+  const viewmodel = presentation.viewmodel
+  const actor = await DuelActor.create(
+    game,
+    viewmodel?.url ?? fittedUrl(outfit, paired),
+    viewmodel ? 'viewmodel' : 'gunslinger',
+    { enabled: false, ...(viewmodel ? { tracks: viewmodel.tracks, humanoid: true } : {}) },
+  )
   actor.paired = paired
+  actor.batchRigid = !(presentation.local || viewmodel)
+  actor.pairedDrawn = Boolean(viewmodel)
   actor.hold('revolver', presentation.carryDrawn ?? false)
   actor.root.enabled = false
   try {
+    if (viewmodel?.parent) {
+      if (!viewmodel.parent.parent) {
+        throw new DOMException('Viewmodel request was removed', 'AbortError')
+      }
+      actor.root.reparent(viewmodel.parent)
+    }
     await applyDye(game, actor.model, dyes[loadout.outfit])
     if (loadout.extra?.includes('bandana')) {
       for (const render of actor.model.findComponents('render')) {
@@ -234,9 +271,11 @@ export async function equippedActor(
         }
       }
     }
-    const ids = [loadout.hat, loadout.gun, loadout.spurs, loadout.holster, loadout.extra].filter(
-      (id): id is ItemId => Boolean(id),
-    )
+    const ids = (
+      viewmodel
+        ? [loadout.gun]
+        : [loadout.hat, loadout.gun, loadout.spurs, loadout.holster, loadout.extra]
+    ).filter((id): id is ItemId => Boolean(id))
     const loads = await Promise.allSettled(
       ids.map(async (id) => {
         const source: EquipmentSource | undefined = EQUIPMENT[id as keyof typeof EQUIPMENT]
@@ -262,13 +301,15 @@ export async function equippedActor(
           bindSkin(model, actor, id)
         } else {
           const renders = model.findComponents('render')
-          const mounts = mountRigid(model, actor)
+          const mounts = mountRigid(model, actor, undefined, Boolean(viewmodel))
           const gun = id.startsWith('gun.')
           if (gun) {
             animateRevolvers(mounts, resource)
           }
-          // Swapping guns can rebuild their batch without re-uploading hats or spurs.
-          rigidBatch(game, renders, gun ? 'Rider weapons' : 'Rider equipment')
+          if (actor.batchRigid) {
+            // Swapping guns can rebuild their batch without re-uploading hats or spurs.
+            rigidBatch(game, renders, gun ? 'Rider weapons' : 'Rider equipment')
+          }
         }
       }),
     )
@@ -281,7 +322,7 @@ export async function equippedActor(
     }
     actor.model.anim?.rebind()
     actor.play('Idle')
-    actor.root.enabled = true
+    actor.root.enabled = !viewmodel
     return actor
   } catch (error) {
     actor.destroy()
@@ -311,7 +352,9 @@ export async function attachHeldWeapon(
         animateWeaponMount(mount.node, resource, weapon)
       }
     }
-    rigidBatch(game, renders, 'Rider weapons')
+    if (actor.batchRigid) {
+      rigidBatch(game, renders, 'Rider weapons')
+    }
     actor.model.anim?.rebind()
     return model
   } catch (error) {
