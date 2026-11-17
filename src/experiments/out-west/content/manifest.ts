@@ -91,7 +91,7 @@ export const ENVIRONMENT = {
   hash: '206c67e3a1b992282821cf06662bdd69bbb4915c1c4444a66338a40d6a7d4e34',
   bytes: 1173154,
 } as const
-export const CONTENT_VERSION = '7628341e0166eddd650cbc9c372b8cde4b951178a0d7a110419356e5fe4e0283'
+export const CONTENT_VERSION = '3cce3249c16630988a899132d84bd442b118b5413b31991bd1a9cffeb71cdf5f'
 export const COLLISION_VERSION = '03b11033428780f67158b47e3fc2b37d761185acea4d5b323301449671b65def'
 export const ASSETS = {
   frontier: {
@@ -125,9 +125,9 @@ export const ASSETS = {
     bytes: 1587368,
   },
   moves: {
-    url: '/experiments/out-west/3d/native-v2/baked/moves.glb?v=c1b4acf2cbb2130b',
-    hash: 'c1b4acf2cbb2130bf63a4e05a096175a3c4e88d7c5dc3eeecd6966eccdd0bb74',
-    bytes: 4808728,
+    url: '/experiments/out-west/3d/native-v2/baked/moves.glb?v=805c109b7e572d87',
+    hash: '805c109b7e572d879b356f325f5f5ece3463da7160a04072e08b0039b0353881',
+    bytes: 4866540,
   },
   'outlaw-0': {
     url: '/experiments/out-west/3d/native-v2/baked/outlaw-0.glb?v=422ab9123f742425',
@@ -159,8 +159,8 @@ export const ASSETS = {
     hash: '4a5b0adf477e552ae9c89c67613ceadb8923028481abf10f59f50eee54063011',
     bytes: 2043208,
     pair: {
-      url: '/experiments/out-west/3d/native-v2/baked/outlaw-5.pair.glb?v=3d7ddfabbaff3b36',
-      hash: '3d7ddfabbaff3b3629bdf20cb735337aecc6a6c64aff6ed1031f6a69dc14a383',
+      url: '/experiments/out-west/3d/native-v2/baked/outlaw-5.pair.glb?v=0794c6252f43fef9',
+      hash: '0794c6252f43fef98f8595d8fd3411e1694aef6f46207de2eca07a77342a3ff0',
       bytes: 2227856,
     },
   },
@@ -219,8 +219,8 @@ export const ASSETS = {
     hash: 'd368517b5178f3c68d0bdbeb8b0541a1c877225e1db269bb11a7bb9d9f146711',
     bytes: 2066336,
     pair: {
-      url: '/experiments/out-west/3d/native-v2/baked/outlaw-16.pair.glb?v=f4bf21eb5d6a835d',
-      hash: 'f4bf21eb5d6a835ded5fde071dc6d36090399e6c8a83f7d53b87ed1ec9eae0ed',
+      url: '/experiments/out-west/3d/native-v2/baked/outlaw-16.pair.glb?v=dfe03230a2362261',
+      hash: 'dfe03230a2362261f34a506c21d0c607d7480dd51c2c38357c596f9c6f72f7b6',
       bytes: 2250984,
     },
   },

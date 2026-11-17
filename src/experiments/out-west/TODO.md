@@ -13,7 +13,7 @@ Verified deployment baseline: `3b6cc0ef` (2026-11-16; successful Worker/site dep
 - [ ] Repair the Handlebar Moustache on the face. Check upper-lip fit and curled tips on both head types, dressed variants and head motion, with matching equipment and thumbnail assets.
 - [ ] Give Frames and other non-character selections the correct preview: the actual wanted poster/frame, named sound playback, and the matching native bag model. Resolve all catalogue-to-drop-style mappings and keep preview separate from purchase/equip.
 - [ ] Make selected Perdition props destructible and loose objects respond to bullet impulses, including rolling tumbleweeds. Broken cover must cease blocking movement and bullets on authority, all clients and late joiners; include material sounds and bounded native debris cleanup.
-- [ ] Add a native dynamite throw animation for first-person and remote riders. Match the release to the existing authoritative throw event and preserve charge, fuse and damage timing; verify crouching, interruption, death and respawn.
+- [x] Add native standing/crouched dynamite throws for first-person and remote riders. An accepted throw starts the native upper-body action; the visible stick leaves the hand at 0.2 s and follows an arc to the authoritative endpoint. Fuse, inventory and blast rules stay unchanged. Native visual/controller checks cover gait/stance changes, fire interruption, death, respawn reset, player removal and weapon restoration; all 73 previous clips remain unchanged.
 
 ## Previous playtest feedback (2026-11-09)
 

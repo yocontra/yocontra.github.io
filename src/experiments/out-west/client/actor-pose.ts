@@ -6,9 +6,9 @@ import { maskedTrack } from '../scene/native-track-mask.ts'
 import type { GameApplication } from './application.ts'
 
 const WEAPON =
-  /^(?:Crouch_(?:Idle_Gun_Pointing|Gun_Shoot|Shoot_|Reload|Hold_)|Idle_Gun_Pointing|Gun_Shoot|Shoot_|Reload|Hold_)/u
+  /^(?:Crouch_(?:Idle_Gun_Pointing|Gun_Shoot|Shoot_|Reload|Hold_|Throw_)|Idle_Gun_Pointing|Gun_Shoot|Shoot_|Reload|Hold_|Throw_)/u
 const AIM = /^(?:Crouch_)?Aim_/u
-const ACTION = /Shoot|Reload/u
+const ACTION = /Shoot|Reload|Throw/u
 export interface RiderPose {
   readonly root: Entity
   readonly weapon: AnimComponentLayer
