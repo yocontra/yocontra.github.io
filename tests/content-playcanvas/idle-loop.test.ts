@@ -165,7 +165,7 @@ it('native idle loops close while other clips, times and geometry remain authore
   // Includes the five reauthored Pair poses; paired-assets.test.ts separately pins
   // all68 unchanged non-Pair clips and checks those five against their source curves.
   expect(retained(document)).toBe(
-    '6a5c5a6f3d9c2c81715ad12d690be209a06965b63ecec3ffd76ce419103707e5',
+    '98bd94737edd0a140bf0df05d7ba56cb7e5e2381bd9af33340cb8be87922283a',
   )
   expect(geometry(document)).toBe(
     '7c5107d243019cf1378ad72cd244a9bbe3917322a576cdb8555ae78ae257f498',
