@@ -4,6 +4,7 @@ import type { GameApplication } from './application.ts'
 
 export function viewmodelLayer(game: GameApplication): {
   assign: (root: Entity) => void
+  setVisible: (visible: boolean) => void
   dispose: () => void
 } {
   const layers = game.app.scene.layers
@@ -11,7 +12,7 @@ export function viewmodelLayer(game: GameApplication): {
   if (!world) {
     throw new Error('Missing native World layer')
   }
-  const layer = new Layer({ name: 'Viewmodel', clearDepthBuffer: true })
+  const layer = new Layer({ name: 'Viewmodel', enabled: false, clearDepthBuffer: true })
   const index = layers.getTransparentIndex(world)
   layers.insertOpaque(layer, index + 1)
   layers.insertTransparent(layer, index + 2)
@@ -66,6 +67,9 @@ export function viewmodelLayer(game: GameApplication): {
           mesh.material = material
         }
       }
+    },
+    setVisible(visible) {
+      layer.enabled = visible
     },
     dispose() {
       system?.off('add', include)

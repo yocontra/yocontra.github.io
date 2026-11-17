@@ -306,6 +306,7 @@ export class FirstPersonModel {
     }
   }
   private hide(): void {
+    this.layer.setVisible(false)
     if (this.current) {
       const actor = this.current.actor
       if (actor.root.enabled) {
@@ -417,6 +418,7 @@ export class FirstPersonModel {
     root.setLocalPosition(targetPosition)
     root.setLocalRotation(targetRotation)
     root.enabled = true
+    this.layer.setVisible(true)
   }
   /** Sight landmarks on the view axis; held through each shot so the authored kick reads. */
   private align(arms: Arms, held: HeldWeapon, sight: number, dt: number): void {
