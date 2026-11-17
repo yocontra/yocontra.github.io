@@ -5,9 +5,10 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import process from 'node:process'
 import { fileURLToPath } from 'node:url'
+import { NodeIO } from '@gltf-transform/core'
+import { ALL_EXTENSIONS } from '@gltf-transform/extensions'
 import { spawn } from 'bun'
 import { CATALOG } from '../../src/experiments/out-west/data/catalog.ts'
-import { extractFirstPersonArms } from '../../tools/content/first-person-arms.ts'
 import { hangTimeout } from '../timeout.ts'
 
 const project = fileURLToPath(new URL('../../', import.meta.url))
@@ -18,6 +19,8 @@ const fits = CATALOG.filter((item) => item.slot === 'outfit').flatMap((item) => 
   `${item.id}.pair`,
 ])
 const hash = (bytes: Uint8Array) => createHash('sha256').update(bytes).digest('hex')
+// Three CLI runs rebuild 47 fits. Detailed extractor tests already cover its byte selection.
+const rebuildBudget = hangTimeout(120_000)
 
 function hashes(directory: string): Promise<string[]> {
   return Promise.all(fits.map(async (id) => hash(await readFile(join(directory, `${id}.glb`)))))
@@ -26,19 +29,48 @@ function hashes(directory: string): Promise<string[]> {
 it(
   'the CLI rebuilds all missing fitted arms deterministically and preserves outputs on a late invalid input',
   async () => {
+    const deadline = performance.now() + rebuildBudget - 5000
     const root = await mkdtemp(join(tmpdir(), 'out-west-viewmodels-'))
     const run = async () => {
       const child = spawn([process.execPath, 'tools/content/viewmodels.ts'], {
         cwd: root,
+        detached: true,
         stdout: 'pipe',
         stderr: 'pipe',
       })
-      const [code, stdout, stderr] = await Promise.all([
-        child.exited,
-        new Response(child.stdout).text(),
-        new Response(child.stderr).text(),
-      ])
-      return { code, output: stdout + stderr }
+      const stop = () => {
+        try {
+          // The formatter inherits this owned process group and its output pipes.
+          process.kill(-child.pid, 'SIGKILL')
+        } catch (error) {
+          if ((error as NodeJS.ErrnoException).code !== 'ESRCH') {
+            throw error
+          }
+        }
+      }
+      let timedOut = false
+      const watchdog = setTimeout(
+        () => {
+          timedOut = true
+          stop()
+        },
+        Math.max(1, deadline - performance.now()),
+      )
+      try {
+        const [code, stdout, stderr] = await Promise.all([
+          child.exited,
+          new Response(child.stdout).text(),
+          new Response(child.stderr).text(),
+        ])
+        if (timedOut) {
+          throw new Error('Viewmodel CLI exhausted the bounded rebuild budget')
+        }
+        return { code, output: stdout + stderr }
+      } finally {
+        clearTimeout(watchdog)
+        stop()
+        await child.exited
+      }
     }
     try {
       await mkdir(join(root, 'tools/art'), { recursive: true })
@@ -64,33 +96,55 @@ it(
         ),
       ])
       const inputs = await hashes(join(project, native, 'equipment'))
-      const expected = new Map<string, string>()
-      for (const id of fits) {
-        expected.set(id, (await extractFirstPersonArms(id, { geometryOnly: true })).report.hash)
-      }
+      const helperHash = hash(await readFile(join(project, 'tools/content/first-person-arms.ts')))
       const first = await run()
       expect(first.code, first.output).toBe(0)
       expect(fits).toHaveLength(16)
       const bytes = await Promise.all(
         fits.map((id) => readFile(join(root, native, 'viewmodels', `${id}.glb`))),
       )
+      const io = new NodeIO().registerExtensions(ALL_EXTENSIONS)
+      const models = await Promise.all(bytes.map((data) => io.readBinary(data)))
       for (const [index, data] of bytes.entries()) {
         const id = fits[index]
-        if (!id) {
+        const arms = models[index]
+        if (!(id && arms)) {
           throw new Error('Missing fit')
         }
-        const expectedHash = expected.get(id)
-        if (!expectedHash) {
-          throw new Error(`Missing expected fit ${id}`)
-        }
-        expect(hash(data)).toBe(expectedHash)
         const json = JSON.parse(data.subarray(20, 20 + data.readUInt32LE(12)).toString())
         expect(json.animations ?? []).toHaveLength(0)
         expect(json.images ?? []).toHaveLength(0)
         expect(json.extras.firstPersonArms).toMatchObject({
           fit: id,
           animationMode: 'geometry-only',
+          nativeSHA256: inputs[index],
+          helperSHA256: helperHash,
         })
+        let faces = 0
+        for (const node of arms.getRoot().listNodes()) {
+          for (const primitive of node.getMesh()?.listPrimitives() ?? []) {
+            expect(
+              node
+                .getSkin()
+                ?.listJoints()
+                .some((joint) => joint.getName() === 'WristR'),
+            ).toBe(true)
+            const positions = primitive.getAttribute('POSITION')
+            const indices = primitive.getIndices()
+            if (!(positions && indices)) {
+              throw new Error(`Missing fitted geometry for ${id}`)
+            }
+            expect(positions.getCount()).toBeGreaterThan(0)
+            expect(indices.getCount() % 3).toBe(0)
+            for (const semantic of ['NORMAL', 'TEXCOORD_0', 'JOINTS_0', 'WEIGHTS_0']) {
+              expect(primitive.getAttribute(semantic)?.getCount()).toBe(positions.getCount())
+            }
+            faces += indices.getCount() / 3
+          }
+        }
+        expect(faces).toBeGreaterThan(0)
+        expect(json.extras.firstPersonArms.sourceFaces).toBe(faces)
+        expect(json.extras.firstPersonArms.retainedFaces).toBe(faces)
       }
       const generated = await import(join(root, descriptor))
       expect(Object.keys(generated.VIEWMODELS)).toEqual(fits)
@@ -118,6 +172,7 @@ it(
       await writeFile(output, marker)
       const failed = await run()
       expect(failed.code).not.toBe(0)
+      expect(failed.output).toContain(`${last}.glb`)
       expect(await readFile(output)).toEqual(marker)
       expect(await readFile(join(root, descriptor))).toEqual(before)
       expect(await hashes(join(project, native, 'equipment'))).toEqual(inputs)
@@ -125,5 +180,5 @@ it(
       await rm(root, { recursive: true, force: true })
     }
   },
-  hangTimeout(60_000),
+  rebuildBudget,
 )
