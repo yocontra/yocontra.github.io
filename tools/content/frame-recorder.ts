@@ -1,6 +1,9 @@
 /** Browser-only recording, reusable through addInitScript or the simulator's Web Inspector. */
 export interface QARecorderInput {
+  /** Time when the listener ran. The qualification gate uses this timestamp. */
   at: number
+  /** Browser event timestamp, for measuring delivery latency. */
+  eventAt: number
   type: string
   key?: string
   x?: number
@@ -222,11 +225,13 @@ export function installFrameRecorder(): void {
     if (!(running && event.isTrusted) || inputs.length >= 20_000) {
       return
     }
+    const at = performance.now()
+    const { timeStamp: eventAt, type } = event
     if (event instanceof KeyboardEvent && allowed.has(event.code)) {
-      inputs.push({ at: performance.now(), type: event.type, key: event.code })
+      inputs.push({ at, eventAt, type, key: event.code })
     } else if (event instanceof PointerEvent) {
       const { clientX: x, clientY: y, pointerId } = event
-      inputs.push({ at: performance.now(), type: event.type, x, y, pointerId })
+      inputs.push({ at, eventAt, type, x, y, pointerId })
     }
   }
   for (const name of ['keydown', 'keyup', 'pointerdown', 'pointerup', 'pointermove']) {
