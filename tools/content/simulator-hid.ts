@@ -330,7 +330,7 @@ export function cleanupComplete(cleanup: Record<string, unknown>) {
     | undefined
   return (
     cleanup.settingsRestored === true &&
-    cleanup.orientationRestored === true &&
+    cleanup.displayRestored === true &&
     cleanup.deviceShutdown === true &&
     cleanup.ownedPidsAbsent === true &&
     cleanup.nativePortFree === true &&

@@ -1,3 +1,4 @@
+import { type InitialDisplay, restoreDisplay } from './simulator-orientation.ts'
 /** Always attempt later owned cleanup after restore/RPC failure; no caller hosts are terminated. */
 import {
   bounded,
@@ -21,14 +22,15 @@ interface CleanupContext {
   options: { udid: string; port: number }
   stateURL: URL
   url: URL
-  initialOrientation: string | undefined
+  initialDisplay: InitialDisplay | undefined
+  qaPageAttempted: boolean
   budgets?: { restore: number; rpc: number; close: number; shutdown: number }
 }
 export async function cleanupGuest(context: CleanupContext) {
-  const { booted, native, companion, run, options, stateURL, url, initialOrientation } = context
+  const { booted, native, companion, run, options, stateURL, url, initialDisplay } = context
   const budget = context.budgets ?? { restore: 5000, rpc: 2000, close: 6000, shutdown: 30_000 }
   const cleanup: Record<string, unknown> = {}
-  if (booted) {
+  if (booted && context.qaPageAttempted) {
     try {
       // run() is the owned command() runner; await its bounded kill/drain completion too.
       await run(
@@ -46,24 +48,26 @@ export async function cleanupGuest(context: CleanupContext) {
       cleanup.settingsRestoreFailure = String(error)
     }
   }
+  if (!context.qaPageAttempted) {
+    cleanup.settingsRestoreSkipped = 'No QA URL was attempted; no game settings were touched'
+  }
   if (native) {
     try {
-      if (!initialOrientation) {
-        throw new Error('Initial native orientation was not captured')
+      if (initialDisplay?.commandAttempted) {
+        const restored = await bounded(
+          () =>
+            restoreDisplay(native, initialDisplay, {
+              milliseconds: budget.rpc * 2,
+              maxRpcMs: budget.rpc,
+            }),
+          budget.rpc * 2,
+        )
+        cleanup.orientationDisplay = restored
+        cleanup.displayRestored = restored.displayRestored
+        cleanup.rawOrientationRestored = restored.rawOrientationRestored
+      } else {
+        cleanup.orientationRestoreSkipped = 'No orientation command was attempted'
       }
-      const current = await bounded(
-        () => native.call('get-orientation', {}, budget.rpc),
-        budget.rpc,
-      )
-      const restored =
-        current === initialOrientation
-          ? current
-          : await bounded(
-              () => native.call('orientation', { value: initialOrientation }, budget.rpc),
-              budget.rpc,
-            )
-      cleanup.initialOrientation = initialOrientation
-      cleanup.orientationRestored = restored === initialOrientation
     } catch (error) {
       cleanup.orientationRestoreFailure = String(error)
     }

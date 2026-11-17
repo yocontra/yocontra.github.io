@@ -2,6 +2,7 @@ import { expect, test as it } from 'bun:test'
 import process from 'node:process'
 import { serve, spawn, which } from 'bun'
 import { cleanupGuest } from '../tools/content/simulator-cleanup.ts'
+import { initialDisplay } from '../tools/content/simulator-orientation.ts'
 import {
   bounded,
   type OwnedPipe,
@@ -9,6 +10,7 @@ import {
   stopOwned,
   until,
 } from '../tools/content/simulator-process.ts'
+import fixture from './fixtures/simulator-coordinate-v3.json' with { type: 'json' }
 
 async function dummy(
   message: string | null = 'READY',
@@ -132,6 +134,12 @@ it('still closes the owned process and attempts shutdown after stalled restore a
         pid: child.pid,
         call: (op, args) => {
           calls.push(op)
+          if (op === 'ax') {
+            return Promise.resolve(fixture.ax)
+          }
+          if (op === 'apps') {
+            return Promise.resolve(fixture.apps)
+          }
           return Promise.resolve(op === 'get-orientation' ? 'PORTRAIT' : args?.value)
         },
         close: () => {
@@ -156,12 +164,16 @@ it('still closes the owned process and attempts shutdown after stalled restore a
       options: { udid: '59616A95-4749-4F6F-8E1D-1FAEA0263EFC', port: 0 },
       stateURL: new URL('/stalled', server.url),
       url: new URL('/__qa/start?id=11111111-1111-4111-8111-111111111111', server.url),
-      initialOrientation: 'LANDSCAPE_LEFT',
-      budgets: { restore: 60, rpc: 60, close: 60, shutdown: 200 },
+      initialDisplay: {
+        ...initialDisplay('59616A95-4749-4F6F-8E1D-1FAEA0263EFC', fixture, 'UNKNOWN'),
+        commandAttempted: true,
+      },
+      qaPageAttempted: true,
+      budgets: { restore: 60, rpc: 300, close: 60, shutdown: 200 },
     })
     expect(cleanup.settingsRestoreFailure).toBeDefined()
     expect(cleanup.nativeClientFailure).toBeDefined()
-    expect(cleanup.orientationRestored).toBe(true)
+    expect(cleanup.displayRestored).toBe(true)
     expect(calls.indexOf('orientation')).toBeLessThan(calls.indexOf('close'))
     expect(calls.indexOf('close')).toBeLessThan(calls.indexOf('shutdown'))
     expect(cleanup.deviceShutdown).toBe(true)
@@ -188,4 +200,49 @@ it('executes the offline fake-clock native iterator regressions without idb or d
   await child.exited
   expect(child.exitCode).toBe(0)
   expect(error).toContain('Ran 4 tests')
+})
+
+it('retains a failed display restore and still closes its real owned process and shuts down', async () => {
+  const { child, pipe } = await dummy()
+  const commands: string[] = []
+  const stop = () => stopOwned(child, [pipe], { term: 30, kill: 500, drain: 500 })
+  try {
+    const cleanup = await cleanupGuest({
+      booted: true,
+      companion: undefined,
+      native: {
+        pid: child.pid,
+        call: () => Promise.reject(new Error('native orientation transport failed')),
+        close: stop,
+        terminate: stop,
+      },
+      run: (args) => {
+        commands.push(args[2] ?? '')
+        return Promise.resolve(
+          args[2] === 'list'
+            ? JSON.stringify({ devices: { iOS: [{ udid: 'owned-fixture', state: 'Shutdown' }] } })
+            : '',
+        )
+      },
+      options: { udid: 'owned-fixture', port: 0 },
+      stateURL: new URL('http://127.0.0.1:1/unused'),
+      url: new URL('http://127.0.0.1:1/unused'),
+      initialDisplay: {
+        ...initialDisplay('59616A95-4749-4F6F-8E1D-1FAEA0263EFC', fixture, 'UNKNOWN'),
+        commandAttempted: true,
+      },
+      qaPageAttempted: false,
+      budgets: { restore: 100, rpc: 100, close: 1000, shutdown: 100 },
+    })
+    expect(cleanup.orientationRestoreFailure).toContain('native orientation transport failed')
+    expect(cleanup.displayRestored).toBeUndefined()
+    expect(cleanup.rawOrientationRestored).toBeUndefined()
+    expect(cleanup.settingsRestored).toBeUndefined()
+    expect(cleanup.ownedPidsAbsent).toBe(true)
+    expect(cleanup.deviceShutdown).toBe(true)
+    expect(commands).toEqual(['shutdown', 'list'])
+    expect(() => process.kill(child.pid, 0)).toThrow()
+  } finally {
+    await stop()
+  }
 })

@@ -33,11 +33,10 @@ import {
   preflightURL,
   targetForPreflight,
 } from './simulator-native.ts'
+import { type InitialDisplay, openOrientedSafari } from './simulator-orientation.ts'
 import {
   bounded,
   command,
-  openSafariWhenReady,
-  readSafariReadiness,
   requireFreePort,
   type SafariReadinessEvent,
   statusJSON,
@@ -92,35 +91,42 @@ interface Capture {
   web: Frame
 }
 const developmentPath = /^\/(?:@vite|src|node_modules)\//u
-async function captureNative(context: {
-  native: Native
+export async function captureNative(context: {
+  native: Pick<Native, 'call'>
   run: Run
   open: string[]
   stateURL: URL
   selected: ReturnType<typeof recordingOptions>
   output: string
   checkpoint: (value: Record<string, unknown>) => Promise<void>
+  orientation: {
+    udid: string
+    capture: (initial: InitialDisplay) => Promise<void>
+    beforeOpen: () => Promise<void>
+  }
 }): Promise<Capture> {
   const { native, run, open, stateURL, selected, output, checkpoint } = context
   const expected = selected.orientation === 'portrait' ? 'PORTRAIT' : 'LANDSCAPE_LEFT'
-  const orientation = await native.call('orientation', { value: expected })
-  if (orientation !== expected) {
-    throw new Error('Native orientation RPC readback failed')
-  }
+  const orientationEvidence: Record<string, unknown>[] = []
   const safariReadiness: SafariReadinessEvent[] = []
-  await openSafariWhenReady({
-    launch: (remaining) => native.call('launch-safari', {}, remaining),
-    read: (remaining, signal) =>
-      readSafariReadiness(
-        {
-          ax: (budget) => native.call('ax', {}, budget),
-          apps: (budget) => native.call('apps', {}, budget),
-        },
-        remaining,
-        signal,
-      ),
+  await openOrientedSafari({
+    native,
+    udid: context.orientation.udid,
+    target: expected,
     open: (remaining, signal) => run(open, remaining, signal),
-    observe: async (event) => {
+    screenshot: (remaining) =>
+      native.call(
+        'screenshot',
+        { path: join(output, 'initial-display.png') },
+        Math.min(remaining, 15_000),
+      ),
+    capture: context.orientation.capture,
+    beforeOpen: context.orientation.beforeOpen,
+    observe: async (value) => {
+      orientationEvidence.push(value)
+      await checkpoint({ orientationEvidence })
+    },
+    safariObserve: async (event) => {
       safariReadiness.push(event)
       await checkpoint({ safariReadiness })
     },
@@ -173,7 +179,7 @@ async function captureNative(context: {
   })
   await checkpoint({
     recordingAcknowledgement: acknowledged,
-    orientation,
+    orientation: expected,
     geometry: { web, page: ready.page, buttons },
     tape,
   })
@@ -382,7 +388,8 @@ export async function runRecording(options: Options) {
   let booted = false
   let native: Native | undefined
   let companion: ReturnType<typeof Bun.spawn> | undefined
-  let initialOrientation: string | undefined
+  let initialOrientation: InitialDisplay | undefined
+  let qaPageAttempted = false
   let report: Record<string, unknown> = {
     classification: 'plain-headless-simulator-native-recording',
     qualification: 'incomplete',
@@ -425,15 +432,6 @@ export async function runRecording(options: Options) {
       60,
     )
     native = await simulatorClient(options.python, options.port, options.udid, options.output)
-    const original = await native.call('get-orientation')
-    if (
-      typeof original !== 'string' ||
-      !['PORTRAIT', 'PORTRAIT_UPSIDE_DOWN', 'LANDSCAPE_LEFT', 'LANDSCAPE_RIGHT'].includes(original)
-    ) {
-      throw new Error('Restorable initial native orientation unavailable')
-    }
-    initialOrientation = original
-    report.initialOrientation = initialOrientation
     const data = await captureNative({
       native,
       run,
@@ -442,6 +440,20 @@ export async function runRecording(options: Options) {
       selected,
       output: options.output,
       checkpoint,
+      orientation: {
+        udid: options.udid,
+        capture: async (initial) => {
+          initialOrientation = initial
+          await checkpoint({
+            initialNativeDisplay: initial,
+            initialDisplayScreenshot: join(options.output, 'initial-display.png'),
+          })
+        },
+        beforeOpen: async () => {
+          qaPageAttempted = true
+          await checkpoint({ qaPageAttempted: true })
+        },
+      },
     })
     await checkpoint(
       await qualifyNative({ data, native, build, source, selected, udid: options.udid }),
@@ -457,7 +469,8 @@ export async function runRecording(options: Options) {
       options,
       stateURL,
       url,
-      initialOrientation,
+      initialDisplay: initialOrientation,
+      qaPageAttempted,
     })
     report.cleanup = cleanup
     Object.assign(

@@ -92,8 +92,22 @@ Both populations support portrait and landscape. Use a new output directory for 
 The recorder uses one persistent public fb-idb client for absolute-time guest HID input and
 native Safari identity/orientation samples. Every planned input endpoint must arrive within
 35 ms; a missed native deadline stops the tape and retains the failure. It restores the exact
-browser settings and initial orientation, then closes its client/companion and shuts down the
+browser settings and initial native display, then closes its client/companion and shuts down the
 dedicated device. The caller owns the local HTTP/Worker hosts and must stop them separately.
+
+Before the game URL opens, the long recorder retains the initial native AX display,
+framebuffer PNG and raw orientation getter separately. One supported dedicated setter selects
+the requested named orientation. Only the exact native display-snapshot-change error can be
+pending after that command, within the existing bounded readiness period. Unknown errors are
+fatal. Per-second orientation and native foreground checks during recording remain strict.
+
+On the dedicated QA device, an initial raw `UNKNOWN` can use only the measured AX display
+mapping for restoration (portrait rotation 0 or landscape rotation 270). Other unmapped states
+fail before an orientation command. Cleanup requires the actual initial AX display signature,
+records `displayRestored` and reports `rawOrientationRestored` separately. It does not claim
+that `UNKNOWN` was restored. If no game URL was attempted, cleanup does not open a restore URL
+or claim a settings acknowledgement. These source contracts do not qualify a 60-second run;
+ordinary, landscape and stress acceptance still require actual complete evidence.
 
 The receipt distinguishes incomplete evidence from a completed run that misses the FPS target.
 Keep every slow or empty full-second bin and the partial tail. Simulator acceptance requires

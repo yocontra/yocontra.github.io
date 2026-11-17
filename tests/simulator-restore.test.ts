@@ -133,7 +133,8 @@ it('cleanupGuest uses the same waiter and still attempts shutdown after HTTP500'
       options: { udid: 'owned-fixture', port: 0 },
       stateURL: server.url,
       url: new URL('/__qa/start?id=11111111-1111-4111-8111-111111111111', server.url),
-      initialOrientation: undefined,
+      initialDisplay: undefined,
+      qaPageAttempted: true,
       budgets: { restore: 1000, rpc: 100, close: 100, shutdown: 100 },
     })
     expect(cleanup.settingsRestored).toBeUndefined()
@@ -143,4 +144,31 @@ it('cleanupGuest uses the same waiter and still attempts shutdown after HTTP500'
   } finally {
     await server.stop(true)
   }
+})
+
+it('skips settings navigation before any QA URL and still shuts down the owned device', async () => {
+  const commands: string[] = []
+  const cleanup = await cleanupGuest({
+    booted: true,
+    native: undefined,
+    companion: undefined,
+    run: (args) => {
+      commands.push(args[2] ?? '')
+      return Promise.resolve(
+        args[2] === 'list'
+          ? JSON.stringify({ devices: { iOS: [{ udid: 'owned-fixture', state: 'Shutdown' }] } })
+          : '',
+      )
+    },
+    options: { udid: 'owned-fixture', port: 0 },
+    stateURL: new URL('http://127.0.0.1:1/unused'),
+    url: new URL('http://127.0.0.1:1/unused'),
+    initialDisplay: undefined,
+    qaPageAttempted: false,
+    budgets: { restore: 100, rpc: 100, close: 100, shutdown: 100 },
+  })
+  expect(commands).toEqual(['shutdown', 'list'])
+  expect(cleanup.settingsRestored).toBeUndefined()
+  expect(cleanup.settingsRestoreSkipped).toContain('No QA URL')
+  expect(cleanup.deviceShutdown).toBe(true)
 })

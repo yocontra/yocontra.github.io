@@ -242,7 +242,8 @@ it('excludes a death/respawn teleport from walking while retaining every segment
 it('keeps failed FPS distinct from incomplete evidence and rejects every failed teardown gate', () => {
   const complete = {
     settingsRestored: true,
-    orientationRestored: true,
+    displayRestored: true,
+    rawOrientationRestored: false, // UNKNOWN is not writable; only actual display restoration qualifies.
     deviceShutdown: true,
     ownedPidsAbsent: true,
     nativePortFree: true,
@@ -257,7 +258,7 @@ it('keeps failed FPS distinct from incomplete evidence and rejects every failed 
   ).toBe('unqualified')
   for (const key of [
     'settingsRestored',
-    'orientationRestored',
+    'displayRestored',
     'deviceShutdown',
     'ownedPidsAbsent',
     'nativePortFree',
