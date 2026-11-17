@@ -92,7 +92,7 @@ function upperClip(
   if ((domain?.reloadTicks ?? 0) > 0) {
     return crouched ? 'Crouch_Reload' : rider.actor.animation('Reload')
   }
-  return crouched ? 'Crouch_Idle_Gun_Pointing' : rider.actor.animation('Idle_Gun_Pointing')
+  return rider.actor.animation(crouched ? 'Crouch_Idle_Gun_Pointing' : 'Idle_Gun_Pointing')
 }
 function aimClip(player: PlayerState, domain: Player | undefined): string {
   const stance = (player.crouched ?? domain?.crouched ?? false) ? 'Crouch_' : ''

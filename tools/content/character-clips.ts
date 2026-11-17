@@ -5,6 +5,7 @@ import { type Animation, type Document, NodeIO } from '@gltf-transform/core'
 import { ALL_EXTENSIONS } from '@gltf-transform/extensions'
 import { dedup, mergeDocuments, prune, resample, unpartition } from '@gltf-transform/functions'
 import { validateAuthoringInputs } from './authoring-inputs.ts'
+import { contentOutput } from './content-output.ts'
 import { appendCrouchClips } from './crouch-character-clips.ts'
 import { closeIdleSeams } from './idle-seams.ts'
 import { resampleNative } from './native-resample.ts'
@@ -61,7 +62,7 @@ export function appendClips(target: Document, source: Document, names?: Readonly
   }
 }
 export async function bakeCharacterClips(): Promise<void> {
-  const path = resolve('public/experiments/out-west/3d/native-v2/baked/moves.glb')
+  const path = contentOutput('baked', 'moves.glb')
   // Keep the original authored move clips as canonical input on the first conversion.
   const preserved = resolve(root, 'moves.gltf')
   const original = (await Bun.file(preserved).exists()) ? preserved : resolve(root, 'moves.glb')
@@ -114,6 +115,8 @@ export async function bakeCharacterClips(): Promise<void> {
   uprightPosture(grips)
   await grips.transform(resampleNative())
   appendClips(target, grips)
+  // Derive crouch only after the corrected paired seats/hand poses are final.
+  appendCrouchClips(target, ['Idle_Gun_Pointing_Pair', 'Gun_Shoot_Pair'])
   await target.transform(dedup(), prune({ keepLeaves: true }), unpartition())
   await io.write(path, target)
   await normalizeSkinnedAsset(path)

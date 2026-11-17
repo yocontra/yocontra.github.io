@@ -18,7 +18,22 @@ function rotation(clip: Animation, bone: string): Quat {
   return new Quat(values[0], values[1], values[2], values[3])
 }
 
-export function appendCrouchClips(doc: Document): void {
+const DEFAULT_WEAPON_POSES = [
+  'Idle_Gun_Pointing',
+  'Gun_Shoot',
+  'Reload',
+  'Hold_rifle',
+  'Hold_shotgun',
+  'Shoot_rifle',
+  'Shoot_shotgun',
+  'Aim_Up',
+  'Aim_Down',
+] as const
+
+export function appendCrouchClips(
+  doc: Document,
+  names: readonly string[] = DEFAULT_WEAPON_POSES,
+): void {
   const clips = new Map(
     doc
       .getRoot()
@@ -31,17 +46,7 @@ export function appendCrouchClips(doc: Document): void {
   }
   const parent = rotation(crouch, 'Hips').invert()
   const buffer = doc.getRoot().listBuffers()[0] ?? doc.createBuffer()
-  for (const name of [
-    'Idle_Gun_Pointing',
-    'Gun_Shoot',
-    'Reload',
-    'Hold_rifle',
-    'Hold_shotgun',
-    'Shoot_rifle',
-    'Shoot_shotgun',
-    'Aim_Up',
-    'Aim_Down',
-  ]) {
+  for (const name of names) {
     const source = clips.get(name)
     if (!source) {
       throw new Error(`Missing native weapon pose ${name}`)

@@ -280,7 +280,7 @@ export class DuelActor {
   }
   shotClip(crouched = false): string {
     if (this.held === 'revolver') {
-      return crouched ? 'Crouch_Gun_Shoot' : this.animation('Gun_Shoot')
+      return this.animation(crouched ? 'Crouch_Gun_Shoot' : 'Gun_Shoot')
     }
     const shot = `Shoot_${this.held}`
     if (crouched) {
