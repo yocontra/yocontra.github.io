@@ -16,7 +16,7 @@ import {
   preflightURL,
   targetForPreflight,
   webFrame,
-} from '../tools/record-simulator-frames.ts'
+} from '../tools/content/simulator-native.ts'
 
 const hostUI = /Simulator\.app|DeviceHub|osascript|focus|activate|cursor/u
 const device = '59616A95-4749-4F6F-8E1D-1FAEA0263EFC'

@@ -26,18 +26,6 @@ import {
   waitForRecording,
 } from './content/simulator-process.ts'
 
-// biome-ignore lint/performance/noBarrelFile: preserve the tested preflight CLI helper compatibility surface
-export {
-  commandPlan,
-  frameForAX,
-  hidTapArguments,
-  nativeSafari,
-  parseIDBApps,
-  preflightIssues,
-  preflightURL,
-  targetForPreflight,
-  webFrame,
-} from './content/simulator-native.ts'
 export async function runPreflight(options: {
   udid: string
   origin: string
