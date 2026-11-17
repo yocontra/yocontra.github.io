@@ -37,7 +37,9 @@ import {
 import {
   bounded,
   command,
+  openSafariWhenReady,
   requireFreePort,
+  type SafariReadinessEvent,
   statusJSON,
   until,
   waitForRecording,
@@ -75,7 +77,7 @@ interface Options {
   python: string
 }
 type Native = Awaited<ReturnType<typeof simulatorClient>>
-type Run = (args: string[], timeout?: number) => Promise<string>
+type Run = (args: string[], timeout?: number, signal?: AbortSignal) => Promise<string>
 interface Capture {
   beforeAX: unknown
   afterAX: unknown
@@ -105,7 +107,22 @@ async function captureNative(context: {
   if (orientation !== expected) {
     throw new Error('Native orientation RPC readback failed')
   }
-  await run(open)
+  const safariReadiness: SafariReadinessEvent[] = []
+  await openSafariWhenReady({
+    launch: (remaining) => native.call('launch-safari', {}, remaining),
+    read: async (remaining) => {
+      const [ax, apps] = await Promise.all([
+        native.call('ax', {}, remaining),
+        native.call('apps', {}, remaining),
+      ])
+      return { ax, apps }
+    },
+    open: (remaining, signal) => run(open, remaining, signal),
+    observe: async (event) => {
+      safariReadiness.push(event)
+      await checkpoint({ safariReadiness })
+    },
+  })
   const ready = await until(async (signal) => {
     const value = (await statusJSON(stateURL, signal)) as State
     if (value.stage === 'failed') {
@@ -352,9 +369,9 @@ export async function runRecording(options: Options) {
   const plan = commandPlan(options.udid, url.href, options.port)
   const stateURL = new URL(`/__qa/status/${id}`, url)
   const calls: unknown[] = []
-  const run: Run = async (args, timeout = 30_000) => {
+  const run: Run = async (args, timeout = 30_000, signal?: AbortSignal) => {
     try {
-      const result = await command(args, timeout)
+      const result = await command(args, timeout, signal)
       calls.push({ args, wall: Date.now(), result })
       return result
     } catch (error) {

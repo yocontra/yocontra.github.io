@@ -13,13 +13,16 @@ import {
   preflightIssues,
   preflightURL,
   QA_DEVICE,
+  safariLaunchArguments,
   targetForPreflight,
   webFrame,
 } from './content/simulator-native.ts'
 import {
   bounded,
   command,
+  openSafariWhenReady,
   requireFreePort,
+  type SafariReadinessEvent,
   statusJSON,
   stopOwned,
   until,
@@ -27,13 +30,46 @@ import {
   waitForSettingsRestore,
 } from './content/simulator-process.ts'
 
+type PreflightRun = (
+  args: string[],
+  json?: boolean,
+  timeoutMs?: number,
+  signal?: AbortSignal,
+) => Promise<unknown>
 async function nativeState(
-  run: (args: string[], json?: boolean) => Promise<unknown>,
+  run: PreflightRun,
   idb: (...args: string[]) => string[],
+  timeoutMs = 30_000,
+  signal?: AbortSignal,
 ) {
-  const ax = await run(idb('ui', 'describe-all', '--api', 'axbridge', '--format', 'complete'), true)
-  const apps = parseIDBApps((await run(idb('list-apps', '--fetch-process-state'))) as string)
+  const deadline = Date.now() + timeoutMs
+  const ax = await run(
+    idb('ui', 'describe-all', '--api', 'axbridge', '--format', 'complete'),
+    true,
+    timeoutMs,
+    signal,
+  )
+  const remaining = deadline - Date.now()
+  if (remaining <= 0) {
+    throw new Error('Native Safari state deadline exceeded')
+  }
+  const apps = parseIDBApps(
+    (await run(idb('list-apps', '--fetch-process-state'), false, remaining, signal)) as string,
+  )
   return { ax, apps }
+}
+function openPreflightPage(
+  run: PreflightRun,
+  idb: (...args: string[]) => string[],
+  open: string[],
+  observe: (event: SafariReadinessEvent) => void,
+) {
+  return openSafariWhenReady({
+    launch: (remaining, signal) => run(safariLaunchArguments(idb), false, remaining, signal),
+    read: (remaining, signal) => nativeState(run, idb, remaining, signal),
+    open: (remaining, signal) => run(open, false, remaining, signal),
+    observe,
+  })
 }
 export async function runPreflight(options: {
   udid: string
@@ -58,9 +94,14 @@ export async function runPreflight(options: {
   await requireFreePort(options.port)
   await mkdir(options.output) // Never overwrite a previous failure.
   const calls: { args: string[]; at: number; timeoutMs: number; result: unknown }[] = []
-  const run = async (args: string[], json = false, timeoutMs = 30_000) => {
+  const run: PreflightRun = async (
+    args,
+    json = false,
+    timeoutMs = 30_000,
+    signal?: AbortSignal,
+  ) => {
     try {
-      const stdout = await command(args, timeoutMs)
+      const stdout = await command(args, timeoutMs, signal)
       const result: unknown = json ? JSON.parse(stdout) : stdout
       calls.push({ args, at: Date.now(), timeoutMs, result })
       return result
@@ -82,12 +123,14 @@ export async function runPreflight(options: {
   ]
   let booted = false
   let companion: ReturnType<typeof Bun.spawn> | undefined
+  const safariReadiness: SafariReadinessEvent[] = []
   let report: Record<string, unknown> = {
     classification: 'diagnostic-headless-simulator-preflight',
     qualification: 'incomplete',
     build,
     target,
     calls,
+    safariReadiness,
   }
   try {
     await run(plan.boot)
@@ -103,7 +146,9 @@ export async function runPreflight(options: {
         () => undefined,
       ),
     )
-    await run(plan.open)
+    await openPreflightPage(run, idb, plan.open, (event) => {
+      safariReadiness.push(event)
+    })
     const stateURL = new URL(`/__qa/status/${id}`, url)
     const ready = await until(async (signal) => {
       const response = await fetch(stateURL, { signal })

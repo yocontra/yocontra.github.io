@@ -327,6 +327,10 @@ export function hidTapArguments(x: number, y: number) {
     '0.15',
   ]
 }
+/** LaunchCommand consumes everything after the app bundle as app arguments. */
+export function safariLaunchArguments(idb: (...args: string[]) => string[]) {
+  return [...idb('launch', '--foreground-if-running'), 'com.apple.mobilesafari']
+}
 export function commandPlan(udid: string, url: string, port: number) {
   if (!(deviceId.test(udid) && Number.isInteger(port)) || port < 1024 || port > 65_535) {
     throw new Error('Invalid simulator target/port')

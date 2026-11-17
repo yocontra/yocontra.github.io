@@ -1,6 +1,7 @@
 /** Owned bounded process/acknowledgement operations shared by simulator modes. */
 import { createServer } from 'node:net'
 import { recordingAcknowledged } from './simulator-host.ts'
+import { nativeSafari } from './simulator-native.ts'
 
 export async function bounded<T>(
   operation: (signal: AbortSignal) => Promise<T>,
@@ -142,6 +143,43 @@ export async function until<T>(
 }
 export async function statusJSON<T>(url: URL, signal: AbortSignal): Promise<T> {
   return (await (await fetch(url, { signal })).json()) as T
+}
+export interface SafariReadinessEvent {
+  phase: 'launch' | 'readiness' | 'open'
+  wall: number
+  result?: unknown
+  identity?: { bundle: string; pid: number } | null
+  error?: string
+}
+/** One launch and one URL action; only native readiness observations are polled. */
+export async function openSafariWhenReady(options: {
+  launch: (milliseconds: number, signal: AbortSignal) => Promise<unknown>
+  read: (milliseconds: number, signal: AbortSignal) => Promise<{ ax: unknown; apps: unknown }>
+  open: (milliseconds: number, signal: AbortSignal) => Promise<unknown>
+  observe: (event: SafariReadinessEvent) => void | Promise<void>
+  seconds?: number
+}) {
+  const seconds = options.seconds ?? 30
+  const milliseconds = seconds * 1000
+  let phase: SafariReadinessEvent['phase'] = 'launch'
+  try {
+    const launched = await bounded((signal) => options.launch(milliseconds, signal), milliseconds)
+    await options.observe({ phase, wall: Date.now(), result: launched })
+    phase = 'readiness'
+    const identity = await until(async (signal, remaining) => {
+      const result = await options.read(remaining, signal)
+      const ready = Array.isArray(result.apps) ? nativeSafari(result.ax, result.apps) : undefined
+      await options.observe({ phase, wall: Date.now(), result, identity: ready ?? null })
+      return ready
+    }, seconds)
+    phase = 'open'
+    const opened = await bounded((signal) => options.open(milliseconds, signal), milliseconds)
+    await options.observe({ phase, wall: Date.now(), result: opened })
+    return identity
+  } catch (error) {
+    await options.observe({ phase, wall: Date.now(), error: String(error) })
+    throw error
+  }
 }
 /** Restore navigation can finish before the page's separate ACK reaches the host. */
 export function waitForSettingsRestore(stateURL: URL, seconds: number) {

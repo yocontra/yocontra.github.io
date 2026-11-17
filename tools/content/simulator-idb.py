@@ -24,7 +24,7 @@ def api_metadata():
     paths = {inspect.getfile(Client), inspect.getfile(HIDPress)}
     return {"python": __import__("sys").version, "methods": {
         name: str(inspect.signature(getattr(Client, name)))
-        for name in ("build", "hid", "accessibility_info", "set_orientation", "get_orientation", "list_apps")
+        for name in ("build", "hid", "accessibility_info", "set_orientation", "get_orientation", "list_apps", "launch")
     }, "sources": {p: hashlib.sha256(Path(p).read_bytes()).hexdigest() for p in paths}}
 
 
@@ -121,6 +121,11 @@ async def run(args):
                     result = await ax(client)
                 elif name == "apps":
                     result = await native_apps(client)
+                elif name == "launch-safari":
+                    result = await client.launch(
+                        bundle_id="com.apple.mobilesafari", env={},
+                        foreground_if_running=True, wait_for_debugger=False, stop=None,
+                    )
                 elif name == "orientation":
                     selected = HIDOrientationType[command["value"]]
                     await client.set_orientation(selected)
