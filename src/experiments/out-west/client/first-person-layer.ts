@@ -1,8 +1,11 @@
 /** Depth-isolated native arms layer sharing current and subsequently created world lights. */
-import { type Entity, Layer, type LightComponent } from 'playcanvas'
+import { type Entity, Layer, type LightComponent, StandardMaterial } from 'playcanvas'
 import type { GameApplication } from './application.ts'
 
-export function viewmodelLayer(game: GameApplication): { layer: Layer; dispose: () => void } {
+export function viewmodelLayer(game: GameApplication): {
+  assign: (root: Entity) => void
+  dispose: () => void
+} {
   const layers = game.app.scene.layers
   const world = layers.getLayerByName('World')
   if (!world) {
@@ -31,7 +34,39 @@ export function viewmodelLayer(game: GameApplication): { layer: Layer; dispose: 
     include(light.entity, light)
   }
   return {
-    layer,
+    assign(root) {
+      const materials = new Map<StandardMaterial, StandardMaterial>()
+      root.once('destroy', () => {
+        for (const material of materials.values()) {
+          material.destroy()
+        }
+      })
+      for (const render of root.findComponents('render')) {
+        render.castShadows = false
+        render.layers = [layer.id]
+        if (!game.post) {
+          continue
+        }
+        for (const mesh of render.meshInstances) {
+          const source = mesh.material
+          if (!(source instanceof StandardMaterial)) {
+            continue
+          }
+          let material = materials.get(source)
+          if (!material) {
+            material = source.clone()
+            // The World's depth prepass doesn't contain arms. Sampling its SSAO would
+            // project world silhouettes onto the weapon and sleeves. Keep authored PBR AO.
+            material.onUpdateShader = (options) => {
+              options.litOptions.ssao = false
+              return options
+            }
+            materials.set(source, material)
+          }
+          mesh.material = material
+        }
+      }
+    },
     dispose() {
       system?.off('add', include)
       system?.off('beforeremove', forget)

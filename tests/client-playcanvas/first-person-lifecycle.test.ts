@@ -101,12 +101,15 @@ function fixture() {
   return { model, rig, world, instances, actor, request, current, camera }
 }
 
-it('missing or failed arms keep the physical body visible', () => {
+it('missing or failed arms keep the physical body out of the first-person camera', () => {
   const f = fixture()
   Reflect.set(f.model, 'current', undefined)
   f.model.update(f.request)
-  expect(f.instances[0]?.shaderPassMask).toBe(0b1011)
-  expect(f.model.stats().masked).toBe(0)
+  f.model.present(f.camera, 1 / 60)
+  expect(f.instances[0]?.shaderPassMask).toBe(
+    0b1011 & ~((1 << SHADER_FORWARD) | (1 << SHADER_PREPASS)),
+  )
+  expect(f.model.stats().masked).toBe(1)
   expect(f.model.ready).toBe(false)
 })
 
@@ -124,15 +127,33 @@ it('a replacement is hidden until its camera-relative transform is complete', ()
   expect(f.model.ready).toBe(true)
 })
 
-it('appearance replacement restores world color and suppresses stale muzzle presentation', () => {
+it('appearance replacement keeps masking the physical body and suppresses stale muzzle presentation', () => {
   const f = fixture()
   f.model.present(f.camera, 1 / 60)
   f.model.update({ ...f.request, appearance: { key: 'new', loadout: DEFAULT_LOADOUT, dyes: {} } })
   expect(f.actor.root.enabled).toBe(false)
-  expect(f.instances[0]?.shaderPassMask).toBe(0b1011)
+  expect(f.instances[0]?.shaderPassMask).toBe(
+    0b1011 & ~((1 << SHADER_FORWARD) | (1 << SHADER_PREPASS)),
+  )
   expect(f.model.muzzle('0')).toBeNull()
   f.model.present(f.camera, 1 / 60)
   expect(f.actor.root.enabled).toBe(false)
+})
+
+it('a replacement world actor stays masked while its arms load', () => {
+  const f = fixture()
+  f.model.present(f.camera, 1 / 60)
+  const replacement = new Entity('replacement world actor')
+  Reflect.set(replacement, '_guid', 'replacement-world-actor')
+  const instance = { shaderPassMask: 0b1011, cull: true }
+  Reflect.set(replacement, 'findComponents', () => [{ meshInstances: [instance] }])
+  f.model.update({ ...f.request, world: { root: replacement } as DuelActor })
+  f.model.present(f.camera, 1 / 60)
+  expect(f.actor.root.enabled).toBe(false)
+  expect(f.instances[0]?.shaderPassMask).toBe(0b1011)
+  expect(instance.shaderPassMask).toBe(0b1011 & ~((1 << SHADER_FORWARD) | (1 << SHADER_PREPASS)))
+  f.model.update(undefined)
+  expect(instance).toEqual({ shaderPassMask: 0b1011, cull: true })
 })
 
 it('late world attachments restore their exact masks on death and third-person transitions', () => {
@@ -149,13 +170,15 @@ it('late world attachments restore their exact masks on death and third-person t
   expect(f.model.stats().masked).toBe(0)
 })
 
-it('missing weapon readiness and disposal cannot leave hidden world geometry', () => {
+it('missing weapon readiness keeps the world body masked until disposal', () => {
   const f = fixture()
   f.model.present(f.camera, 1 / 60)
   Reflect.set(f.actor, 'muzzleSocket', () => null)
   f.model.present(f.camera, 1 / 60)
   expect(f.actor.root.enabled).toBe(false)
-  expect(f.instances[0]?.shaderPassMask).toBe(0b1011)
+  expect(f.instances[0]?.shaderPassMask).toBe(
+    0b1011 & ~((1 << SHADER_FORWARD) | (1 << SHADER_PREPASS)),
+  )
   f.model.destroy()
   f.model.present(f.camera, 1 / 60)
   expect(f.model.stats().arms).toBe(0)

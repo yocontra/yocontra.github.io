@@ -158,7 +158,7 @@ it('serializes replacements and prepares only the latest requested appearance', 
     }
     const old = f.model.prepare(f.appearance('old'))
     expect(f.model.ready).toBe(false)
-    expect(f.model.stats().masked).toBe(0)
+    expect(f.model.stats().masked).toBe(1)
     f.requests[3]?.finish()
     await flush()
     expect(f.actors()).toHaveLength(2)

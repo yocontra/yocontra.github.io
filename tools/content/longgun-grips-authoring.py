@@ -58,7 +58,7 @@ GRIPS = {
         "R": {
             "knuckle": (-0.05, -0.012, 0.035),
             "protract": 0,
-            "elbowDrop": -135,
+            "elbowDrop": -80,
             "hand": {"yaw": -15, "pitch": -35, "roll": -70},
             "sight": {"y": 0.06, "z": 0.02},
             "trigger": (0.025, -0.015, 0.0),

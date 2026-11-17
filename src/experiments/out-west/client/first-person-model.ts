@@ -150,14 +150,14 @@ export class FirstPersonModel {
       return
     }
     this.desired = request
-    if (
-      !request ||
-      request.player.hp <= 0 ||
-      (this.current && this.current.key !== armsKey(request))
-    ) {
+    const alive = request && request.player.hp > 0
+    if (!alive) {
+      this.restoreWorld()
+    }
+    if (!alive || (this.current && this.current.key !== armsKey(request))) {
       this.hide()
     }
-    if (!request || request.player.hp <= 0 || requestIdentity(request) !== this.pendingIdentity) {
+    if (!alive || requestIdentity(request) !== this.pendingIdentity) {
       this.pendingRoot?.destroy()
     }
   }
@@ -250,10 +250,7 @@ export class FirstPersonModel {
       }
       actor.root.tags.add(`viewmodel:${request.id}`)
       actor.root.reparent(this.rig)
-      for (const render of actor.root.findComponents('render')) {
-        render.castShadows = false
-        render.layers = [this.layer.layer.id]
-      }
+      this.layer.assign(actor.root)
       // Settle the candidate's native pose before it can replace working arms.
       actor.hold(heldWeapon(desired.domain), true)
       syncDynamiteThrow(arms, desired.player, desired.throwingUntil ?? 0)
@@ -266,7 +263,6 @@ export class FirstPersonModel {
       this.sighted = false
       // A resolved load can arrive between frames. Keep its root disabled until present()
       // has applied the current camera transform; otherwise replacement flashes at the origin.
-      this.restoreWorld()
       if (previous) {
         this.release(previous)
       }
@@ -309,7 +305,6 @@ export class FirstPersonModel {
     }
   }
   private hide(): void {
-    this.restoreWorld()
     if (this.current) {
       const actor = this.current.actor
       if (actor.root.enabled) {
@@ -331,7 +326,6 @@ export class FirstPersonModel {
   update(request: FirstPersonRequest | undefined): void {
     this.want(request)
     if (!request || request.player.hp <= 0) {
-      this.hide()
       return
     }
     void this.load(request)
@@ -370,14 +364,12 @@ export class FirstPersonModel {
     const sight = this.sight.amount
     const arms = this.current
     const request = this.desired
-    if (
-      this.closed ||
-      !arms ||
-      !request ||
-      request.player.hp <= 0 ||
-      arms.key !== armsKey(request) ||
-      !arms.actor.muzzleSocket(true)
-    ) {
+    if (this.closed || !request || request.player.hp <= 0) {
+      return
+    }
+    // The camera is already at the physical eye while new arms load.
+    this.maskWorld(request.world.root)
+    if (!arms || arms.key !== armsKey(request) || !arms.actor.muzzleSocket(true)) {
       this.hide()
       return
     }
@@ -424,7 +416,6 @@ export class FirstPersonModel {
     root.setLocalPosition(targetPosition)
     root.setLocalRotation(targetRotation)
     root.enabled = true
-    this.maskWorld(request.world.root)
   }
   /** Sight landmarks on the view axis; held through each shot so the authored kick reads. */
   private align(arms: Arms, held: HeldWeapon, sight: number, dt: number): void {

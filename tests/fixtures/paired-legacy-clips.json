@@ -61,8 +61,8 @@
     "Flinch": "efb1bf0bbed5679d800ccae34fb157840a65e44a245936a0e11344dcc911c486",
     "Hold_rifle": "6ea126942ca390719960d34358762de2af8681dab98460cdba04c15db0f96e3a",
     "Shoot_rifle": "7799a3c5c8bd3e5629671cd4a314ce898faaac9d0abe3b521ba7ef0fd151a7aa",
-    "Hold_shotgun": "53c2b35bff50811ca86a5ad0843a2318dc4aafeef6a47b9c2ea2a80f20dbfd7b",
-    "Shoot_shotgun": "f77f5412371f971eaf3ac7da8b7319459268b47b1b96b2511d4420b0080a940c",
+    "Hold_shotgun": "d9d403298f3cf87eef4f43bf34f3ce1a1b1865f2456b092dd89e14027600397b",
+    "Shoot_shotgun": "c96acc10fbf3ce6826833c35be3cd646180efe0f28eecbc4ba3bb904570b1546",
     "Idle_Gun_Pointing": "ae19a33778c0d0ab64b4647cfd86ff3784896aa1518875cb4cc7aa286d372daa",
     "Gun_Shoot": "09c1b727f94287688b67f609c4b904ec3427ea2db2afdc94bdf9646ff8250395",
     "TipHat": "0d18f5d076bd57062b7ee0eba1433fd2d5f641cabb7774a6c161c21df70bd4a1",
@@ -70,9 +70,9 @@
     "Crouch_Gun_Shoot": "d9a952f3bb9ed0bc096d7d52f55e5403ba03f072486927445f4a715604ee8090",
     "Crouch_Reload": "3992fc74ff939533e9937e79f5f487d4a32fbb9fb2b4dc3a6dd88a147241ed08",
     "Crouch_Hold_rifle": "14f61ad2a10d4baa1f9f581da0b42e9975ae25ec7c06209748e6dfa9aab5776c",
-    "Crouch_Hold_shotgun": "193ff46a3a3eb8528af3bac1f69fb589b6843d417740f5a2c55fd369ef7a5e19",
+    "Crouch_Hold_shotgun": "d8c88f83e346492eb7d38c48464f2b235c88c3a7889773a29c3aa716a894149b",
     "Crouch_Shoot_rifle": "685b9a36c03df1ccf50ca32e355ea6eea30d32fd8d13eea468688a85a7763997",
-    "Crouch_Shoot_shotgun": "cd035fe0ac4eb6a10c5bbaf4484688cc38e7e36a08ba005fd9af2b381d4ff992",
+    "Crouch_Shoot_shotgun": "763f158b88e87c1ac6cd863e270f51d1728ee16d5b4f5bc2587d5ce2b4f58547",
     "Crouch_Aim_Up": "6511c7444a56c7aa6b6f3b6f61f94c3711c50751b23671534a8fa5bf977d19de",
     "Crouch_Aim_Down": "e4e541ce9c0f06ef457f34d7b2beb0fba7edf169dc53d864fbc50ce42b8628a2"
   }
