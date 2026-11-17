@@ -67,10 +67,27 @@ async def record(client, request, udid):
 
     async def read_foreground():
         started = time.time() * 1000
-        return {"startedWall": started, "ax": foreground_ax(await ax(client)),
-                "apps": await native_apps(client), "companionUDID": udid,
-                "orientation": (await client.get_orientation()).name,
-                "wall": time.time() * 1000}
+        elapsed = {}
+
+        async def timed(name, read):
+            begin = loop.time()
+            try:
+                return await read()
+            finally:
+                elapsed[name] = (loop.time() - begin) * 1000
+
+        # Read only identity fields. The full AX tree is reserved for coordinate
+        # calibration, where we also need bounds and interaction metadata.
+        async with asyncio.TaskGroup() as reads:
+            identity = reads.create_task(timed("ax", lambda: ax(client, keys=[
+                "type", "pid", "bundleIdentifier",
+            ])))
+            apps = reads.create_task(timed("apps", lambda: native_apps(client)))
+            orientation = reads.create_task(timed("orientation", client.get_orientation))
+        return {"startedWall": started, "ax": foreground_ax(identity.result()),
+                "apps": apps.result(), "companionUDID": udid,
+                "orientation": orientation.result().name,
+                "rpcMilliseconds": elapsed, "wall": time.time() * 1000}
 
     async def observe():
         async for value in sample_events(read_foreground, start=loop.time(), stop=base + 60,
