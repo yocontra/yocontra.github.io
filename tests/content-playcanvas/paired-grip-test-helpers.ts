@@ -1,4 +1,5 @@
 /** Independent native-matrix reference for authored paired-grip regressions. */
+import { createHash } from 'node:crypto'
 import { type Animation, type Document, NodeIO } from '@gltf-transform/core'
 import { ALL_EXTENSIONS } from '@gltf-transform/extensions'
 import { Mat4, Quat, Vec3 } from 'playcanvas'
@@ -126,4 +127,52 @@ function sourceMount(
   return child.clone().mul(relative).mul(child.clone().invert())
 }
 
-export { channels, find, frame, io, local, root, type Spin, sample, sourceMount, times, world }
+function clipHash(clip: Animation): string {
+  const data = clip
+    .listChannels()
+    .map((channel) => {
+      const sampler = channel.getSampler()
+      if (!sampler) {
+        throw new Error('Missing native clip sampler')
+      }
+      const streams = [sampler.getInput(), sampler.getOutput()].map((accessor) => {
+        const values = accessor?.getArray()
+        if (!(accessor && values)) {
+          throw new Error('Missing native clip data')
+        }
+        return [
+          accessor.getType(),
+          accessor.getComponentType(),
+          accessor.getNormalized(),
+          createHash('sha256')
+            .update(new Uint8Array(values.buffer, values.byteOffset, values.byteLength))
+            .digest('hex'),
+        ]
+      })
+      return [
+        channel.getTargetNode()?.getName(),
+        channel.getTargetPath(),
+        sampler.getInterpolation(),
+        ...streams,
+      ]
+    })
+    .sort((a, b) => `${a[0]}.${a[1]}`.localeCompare(`${b[0]}.${b[1]}`))
+  return createHash('sha256')
+    .update(JSON.stringify({ extras: clip.getExtras(), data }))
+    .digest('hex')
+}
+
+export {
+  channels,
+  clipHash,
+  find,
+  frame,
+  io,
+  local,
+  root,
+  type Spin,
+  sample,
+  sourceMount,
+  times,
+  world,
+}

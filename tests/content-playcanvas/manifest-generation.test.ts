@@ -1,6 +1,15 @@
 import { expect, test as it } from 'bun:test'
 import { createHash } from 'node:crypto'
-import { mkdir, mkdtemp, readFile, rm, symlink, unlink, writeFile } from 'node:fs/promises'
+import {
+  copyFile,
+  mkdir,
+  mkdtemp,
+  readFile,
+  rm,
+  symlink,
+  unlink,
+  writeFile,
+} from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import process from 'node:process'
@@ -19,6 +28,12 @@ import type { ContentAsset } from '../../src/experiments/out-west/content/types.
 const project = fileURLToPath(new URL('../../', import.meta.url))
 const content = 'src/experiments/out-west/content'
 const sha256 = (bytes: Uint8Array) => createHash('sha256').update(bytes).digest('hex')
+const regenerated = new Set([
+  'public/experiments/out-west/3d/native-v2/baked/moves.glb',
+  'public/experiments/out-west/3d/native-v2/baked/outlaw-5.pair.glb',
+  'public/experiments/out-west/3d/native-v2/baked/outlaw-16.pair.glb',
+  'public/experiments/out-west/3d/native-v2/equipment/gun.hardins-pair.pair.glb',
+])
 const CONTENT_VERSION = /^export const CONTENT_VERSION = ['"](?<value>[a-f0-9]+)['"]/mu
 
 function version(source: string): string {
@@ -43,10 +58,20 @@ it('ambient byte changes refresh descriptors and content version without changin
   const inputs = [
     'biome.json',
     '.gitignore',
+    'bun.lock',
+    'tools/art/characters',
+    'tools/content',
     'tools/art/environments/frontier.json',
     ...['collision', 'depot', 'mission', 'bank'].map((id) => `${content}/${id}.json`),
     ...assets.map((asset) => `public${asset.url.split('?')[0]}`),
   ]
+  const originalHashes = new Map(
+    await Promise.all(
+      [...regenerated].map(
+        async (path) => [path, sha256(await readFile(join(project, path)))] as const,
+      ),
+    ),
+  )
   const generate = async () => {
     const child = spawn([process.execPath, join(project, 'tools/content/manifest.ts')], {
       cwd: fixture,
@@ -72,7 +97,11 @@ it('ambient byte changes refresh descriptors and content version without changin
       [...new Set(inputs)].map(async (path) => {
         const destination = join(fixture, path)
         await mkdir(dirname(destination), { recursive: true })
-        await symlink(join(project, path), destination)
+        if (regenerated.has(path)) {
+          await copyFile(join(project, path), destination)
+        } else {
+          await symlink(join(project, path), destination)
+        }
       }),
     )
     await writeFile(
@@ -99,6 +128,14 @@ it('ambient byte changes refresh descriptors and content version without changin
     expect(after.ambient).toContain(hash)
     expect(after.ambient).toContain(`${pathname}?v=${hash.slice(0, 16)}`)
     expect(await generate()).toEqual(after)
+    const checkoutHashes = new Map(
+      await Promise.all(
+        [...regenerated].map(
+          async (path) => [path, sha256(await readFile(join(project, path)))] as const,
+        ),
+      ),
+    )
+    expect(checkoutHashes).toEqual(originalHashes)
   } finally {
     await rm(fixture, { recursive: true, force: true })
   }

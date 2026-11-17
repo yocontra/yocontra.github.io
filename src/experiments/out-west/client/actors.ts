@@ -130,6 +130,7 @@ export class Actors {
     const [own, common] = await Promise.allSettled([
       equippedActor(game, appearance?.loadout ?? DEFAULT_LOADOUT, appearance?.dyes ?? {}, {
         local: true,
+        carryDrawn: true,
       }),
       commonCharacters(game),
     ])
@@ -314,6 +315,7 @@ export class Actors {
       const actor = appearance
         ? await equippedActor(this.game, appearance.loadout, appearance.dyes, {
             local: id === this.ownId,
+            carryDrawn: true,
           })
         : await DuelActor.create(
             this.game,

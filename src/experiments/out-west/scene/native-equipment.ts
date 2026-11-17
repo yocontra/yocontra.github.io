@@ -27,6 +27,7 @@ interface EquipmentSource {
 export interface ActorPresentation {
   local?: boolean
   viewmodel?: { url: string; parent?: Entity; tracks: readonly AnimTrack[] }
+  carryDrawn?: boolean
 }
 const batchGroups = new WeakMap<GameApplication, number>()
 function rigidBatch(game: GameApplication, components: RenderComponent[]): void {
@@ -244,6 +245,7 @@ export async function equippedActor(
   actor.paired = paired
   actor.batchRigid = !(presentation.local || viewmodel)
   actor.pairedDrawn = Boolean(viewmodel)
+  actor.hold('revolver', presentation.carryDrawn ?? false)
   actor.root.enabled = false
   try {
     if (viewmodel?.parent) {
@@ -275,7 +277,11 @@ export async function equippedActor(
         }
         const { model, resource } = await gearModel(
           game,
-          fittedUrl(source, paired && id.startsWith('holster.')),
+          fittedUrl(
+            source,
+            paired &&
+              (id.startsWith('holster.') || (id.startsWith('gun.') && !presentation.carryDrawn)),
+          ),
           id,
         )
         if (!actor.root.parent) {

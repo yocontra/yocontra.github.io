@@ -6,7 +6,7 @@ import { resetRun, save } from '../save.ts'
 import { attachHeldWeapon } from '../scene/native-equipment.ts'
 import { LocalDuelClock, type Verdict } from './clock.ts'
 import { offerLicensedMode } from './licence-road.ts'
-import { DuelActor } from './native-actor.ts'
+import { DuelActor, duelOpponentUrl } from './native-actor.ts'
 import { arenaForSlot } from './native-arenas.ts'
 import { resetAttempt, STEADY_MS } from './native-combat.ts'
 import type { NativeDirector } from './native-director.ts'
@@ -18,9 +18,8 @@ import { RankedDuelClock } from './ranked-clock.ts'
 export async function loadLevelActors(d: NativeDirector, epoch: number, pending: DuelActor[]) {
   const level = d.level
   const current = () => epoch === d.epoch && !d.lifecycle.signal.aborted
-  const asset = ASSETS[`outlaw-${level}` as keyof typeof ASSETS]
   const [enemy, arena] = await Promise.allSettled([
-    DuelActor.create(d.game, asset.url, 'outlaw', { enabled: false }).then((actor) => {
+    DuelActor.create(d.game, duelOpponentUrl(level), 'outlaw', { enabled: false }).then((actor) => {
       pending.push(actor)
       return actor
     }),

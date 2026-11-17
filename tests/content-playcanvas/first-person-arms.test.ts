@@ -65,7 +65,7 @@ for (const [id, faces, vertices] of [
     const inputs = first.report.sourceInputs
     const categories =
       id === 'outfit.trail-duds'
-        ? ['boot-bridges', 'waistcoats']
+        ? ['boot-bridges', 'neckerchiefs', 'waistcoats']
         : ['coat-sleeves', 'boot-bridges', 'coat-collars', 'shirt-fronts']
     const expectedInputs = [
       nativePath,
