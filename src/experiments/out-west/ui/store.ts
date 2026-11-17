@@ -156,6 +156,7 @@ export class Outfitter {
       this.shelf = new Shelf(me.accountId, this.items, me.level, this.owned)
     }
     this.show('hat')
+    this.tabs.get(this.tab)?.focus({ preventScroll: true })
     requestAnimationFrame(() => this.root.classList.add('on'))
     this.load().catch(() => undefined)
   }

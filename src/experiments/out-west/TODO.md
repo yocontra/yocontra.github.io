@@ -2,7 +2,20 @@
 
 Verified deployment baseline: `3b6cc0ef` (2026-11-16; successful Worker/site deployment, both live game pages, nine corrected neckerchief models, their 41 PBR textures and all 37 previews checked by exact bytes). It includes the sculpted yard cactus, weathered freight cases, regional detail batching, sign supports, darker iron, native Frontier lantern lighting, GGX rendering and restored duel presentation, alongside the earlier repairs below. Later completed tasks may still be deploying. This list tracks unfinished work; it is not a claim that final visual or performance QA is complete.
 
-## Current playtest feedback (2026-11-09)
+## Current playtest feedback (2026-11-16)
+
+- [x] Fix all three Quick Draw choices. The shared modal prevents the duel controller from capturing button presses; real-browser mouse, touch, Enter and Space checks deliver each selected choice once, including during fade-in, with no duel input. Close, Escape and Gauntlet map also pass.
+- [ ] Review remaining main-screen character idle repetition and return from the Outfitter; preserve natural idle motion. The title camera now establishes the street once and holds instead of repeating its crane. Native camera regressions verify the hold through 42 seconds and stationary reduced motion.
+- [ ] Move building signs off windows onto suitable fascia or dedicated supports. Review every affected building from player height, with legible signs and clear windows.
+- [ ] Add architectural depth and surface detail to flat buildings: recessed windows/doors, trim, siding, roof edges and weathering. Preserve valid layouts and collision; use native LOD/batching and measure the mobile/desktop frame budgets.
+- [ ] Rotate the Outfitter character with mouse and touch in the preview area. Preserve shelf scrolling, button input, yaw through dressing, and pointer cancellation/close cleanup.
+- [ ] Correct all gun thumbnail orientations. Review every actual generated card upright, with the grip down and barrel readable; regenerate previews through the standard producer.
+- [ ] Repair the Handlebar Moustache on the face. Check upper-lip fit and curled tips on both head types, dressed variants and head motion, with matching equipment and thumbnail assets.
+- [ ] Give Frames and other non-character selections the correct preview: the actual wanted poster/frame, named sound playback, and the matching native bag model. Resolve all catalogue-to-drop-style mappings and keep preview separate from purchase/equip.
+- [ ] Make selected Perdition props destructible and loose objects respond to bullet impulses, including rolling tumbleweeds. Broken cover must cease blocking movement and bullets on authority, all clients and late joiners; include material sounds and bounded native debris cleanup.
+- [ ] Add a native dynamite throw animation for first-person and remote riders. Match the release to the existing authoritative throw event and preserve charge, fuse and damage timing; verify crouching, interruption, death and respawn.
+
+## Previous playtest feedback (2026-11-09)
 
 Complete and push these in small working tasks, with native visual/audio evidence for each affected path.
 
