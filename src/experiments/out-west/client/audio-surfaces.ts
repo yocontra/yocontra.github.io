@@ -118,21 +118,22 @@ export function impactMaterial(
   grid?: Grid,
   layout: TownLayout = TOWN,
 ): ImpactMaterial | null {
+  const activeLayout = grid?.layout ?? layout
   const { x, y, z } = at
   if (nearGlass(grid, x, y, z)) {
     return 'glass'
   }
-  const cover = coverAt(layout, x, y, z)
+  const cover = coverAt(activeLayout, x, y, z)
   if (cover) {
     return coverMaterial(cover, y)
   }
   if (y < GROUND) {
-    return GROUND_HIT[stepSurface(x, y, z, layout)]
+    return GROUND_HIT[stepSurface(x, y, z, activeLayout)]
   }
   if (grid && (onSlab(grid.decks, x, y, z) || onSlab(grid.stairs, x, y, z))) {
     return 'wood'
   }
-  const building = buildingAt(layout, x, z, SKIN)
+  const building = buildingAt(activeLayout, x, z, SKIN)
   if (building) {
     if (y > building.height + 0.2) {
       // shingles and roof boards

@@ -1,5 +1,8 @@
 import { DurableObject } from 'cloudflare:workers'
 import { connectClientToRoom, createAuthContext } from '@colyseus/core'
+import type { GraphicsDevice } from 'playcanvas'
+import type { SimEvent } from '../../src/experiments/out-west/ffa/sim/types.ts'
+import type { createFrontierSimulation } from '../../src/experiments/out-west/runtime/frontier.ts'
 import { PROTOCOL_VERSION } from '../../src/experiments/out-west/runtime/protocol.ts'
 import { AdmissionLeases } from '../src/game/admission.ts'
 import { createNativeRoom, type NativeFrontierRoom, reserveNativeRoom } from '../src/game/room.ts'
@@ -14,6 +17,9 @@ interface TestEnv {
 }
 export class TestRoom extends DurableObject<TestEnv> {
   private room: NativeFrontierRoom | undefined
+  private core: LobbyCore | undefined
+  private environmentDevice: GraphicsDevice | undefined
+  private readonly environmentEvents: SimEvent[] = []
   private readonly clients = new Map<WebSocket, CloudflareClient>()
   override async fetch(request: Request) {
     const url = new URL(request.url)
@@ -58,10 +64,18 @@ export class TestRoom extends DurableObject<TestEnv> {
     if (!this.room) {
       const core = new LobbyCore(this.ctx.id.toString(), 7)
       core.ambientPopulation = 0
+      this.core = core
       this.room = await createNativeRoom({
         id: this.ctx.id.toString(),
         core,
-        onTick: () => undefined,
+        onTick: () => {
+          this.environmentEvents.push(
+            ...core.world.events.filter(
+              (event) => event.type === 'shot' || event.type === 'prop_break',
+            ),
+          )
+          this.environmentEvents.splice(0, Math.max(0, this.environmentEvents.length - 16))
+        },
         ...(url.searchParams.has('holdStart')
           ? {
               onStart: async () => {
@@ -77,6 +91,9 @@ export class TestRoom extends DurableObject<TestEnv> {
         },
       })
     }
+    if (url.pathname.startsWith('/environment/')) {
+      return this.environmentProbe(url.pathname, this.room)
+    }
     if (url.pathname === '/reserve') {
       return Response.json(
         await reserveNativeRoom(
@@ -91,7 +108,7 @@ export class TestRoom extends DurableObject<TestEnv> {
             tcpRtt: null,
             ledger: false,
           },
-          PROTOCOL_VERSION,
+          Number(url.searchParams.get('protocol') ?? PROTOCOL_VERSION),
         ),
       )
     }
@@ -114,6 +131,62 @@ export class TestRoom extends DurableObject<TestEnv> {
       ),
     )
     return new Response(null, { status: 101, webSocket: pair[0] })
+  }
+  private environmentProbe(path: string, room: NativeFrontierRoom) {
+    const world = this.core?.world
+    const simulation = Reflect.get(room, 'simulation') as
+      | ReturnType<typeof createFrontierSimulation>
+      | undefined
+    if (simulation) {
+      this.environmentDevice = simulation.physics.app.graphicsDevice
+    }
+    if (path === '/environment/setup') {
+      const players = world?.players.filter((player) => player && !player.bot) ?? []
+      if (players.length !== 2 || !world || !simulation) {
+        return new Response('Two joined players required', { status: 400 })
+      }
+      this.environmentDevice = simulation.physics.app.graphicsDevice
+      for (const [i, player] of players.entries()) {
+        if (player) {
+          Object.assign(player, {
+            x: i === 0 ? 26 : 29.8,
+            y: 0,
+            z: 66.25,
+            hp: 100,
+            protectUntil: 0,
+            spawnTick: -10_000,
+            fireCooldownMs: 0,
+            lastButtons: 0,
+          })
+        }
+      }
+    }
+    return Response.json({
+      props: world ? [...world.props] : null,
+      players: world?.players
+        .filter((p) => p && !p.bot)
+        .map(
+          (p) =>
+            p && {
+              id: p.id,
+              x: p.x,
+              y: p.y,
+              z: p.z,
+              aim: p.aim,
+              pitch: p.pitch,
+              ammo: p.ammo,
+              hp: p.hp,
+              seq: p.lastSeq,
+              crouched: p.crouched,
+              cooldown: p.fireCooldownMs,
+            },
+        ),
+      events: this.environmentEvents,
+      running: room.running,
+      physics: Boolean(simulation),
+      buffers: this.environmentDevice?.buffers.size ?? null,
+      textures: this.environmentDevice?.textures.size ?? null,
+    })
   }
   async joinBarrier(delay = 50) {
     await new Promise((resolve) => setTimeout(resolve, delay))

@@ -146,6 +146,8 @@ it('body-break state and reset survive real SDK encoding and native pane entity 
       showdowns: [],
       mostWanted: 255,
       glass: [...f.sim.world.glass],
+      props: [...f.sim.world.props],
+      seed: f.sim.world.seed,
     })
   state.game = data()
   const encoder = new Encoder(state)

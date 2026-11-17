@@ -11,9 +11,9 @@
  * - The town has its beds and its life (`frontier-ambience.ts`), and leans back for a showdown.
  */
 import { type Asset, Entity, type SoundComponent, type SoundInstance, Vec3 } from 'playcanvas'
-import type { Grid } from '../ffa/sim/layout.ts'
+import { type Grid, TOWN } from '../ffa/sim/layout.ts'
 import type { GameApplication } from './application.ts'
-import { type ImpactMaterial, impactMaterial } from './audio-surfaces.ts'
+import { type ImpactMaterial, impactMaterial, stepSurface } from './audio-surfaces.ts'
 import { FrontierAmbience } from './frontier-ambience.ts'
 import { FrontierFeet, type RiderPose } from './frontier-feet.ts'
 import {
@@ -376,6 +376,10 @@ export class FrontierAudio {
       pitch: 0.93 + Math.random() * 0.14,
       occlude: { hz: 1200, gain: 0.55 },
     })
+  }
+
+  surfaceAt(at: Point) {
+    return stepSurface(at.x, at.y, at.z, this.hooks.grid?.()?.layout ?? TOWN)
   }
 
   /** Strike whatever is at `at`; null (and silence) when the shot ended in the air. */

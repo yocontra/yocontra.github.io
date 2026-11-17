@@ -53,7 +53,9 @@ it('strips native frame diagnostics from ordinary browser bundles and retains th
           name: 'viewport-dependencies',
           setup(plugin) {
             plugin.onResolve({ filter: relativeImport }, ({ path }) =>
-              path.endsWith('/native-frame-stats.ts') ? undefined : { path, external: true },
+              path.endsWith('/native-frame-stats.ts') || path.endsWith('/viewport-debug.ts')
+                ? undefined
+                : { path, external: true },
             )
           },
         },

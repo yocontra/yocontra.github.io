@@ -102,7 +102,7 @@ export function flood(grid: Grid, targets: readonly BankWindow[]): Float64Array 
 }
 
 export class BankGuide {
-  private readonly grid: Grid
+  private grid: Grid
   private readonly windows: BankWindow[]
   private field: Float64Array | null = null
   private readonly marker: HTMLElement
@@ -139,6 +139,21 @@ export class BankGuide {
     this.marker.hidden = true
     this.chevron.hidden = true
     parent.append(layer)
+  }
+
+  /** The room replaced its derived cover grid; retire only this guide's cached route. */
+  setGrid(grid: Grid): void {
+    if (grid === this.grid) {
+      return
+    }
+    const prepared = this.field !== null
+    this.grid = grid
+    this.field = null
+    this.at.has = false
+    this.wpAge = 0
+    if (prepared) {
+      this.prepare()
+    }
   }
 
   /** Flood the field (about 5 ms on a desktop; run once after the town is up). */

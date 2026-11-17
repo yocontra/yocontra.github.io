@@ -261,6 +261,8 @@ export interface Surface {
 }
 
 export interface Grid {
+  /** Active authored surfaces for room-local sound and navigation queries. */
+  layout?: TownLayout
   /** Cells per side. */
   n: number
   cell: number
@@ -501,6 +503,7 @@ export function buildGrid(layout: TownLayout = TOWN): Grid {
   const n = Math.round(layout.size / layout.cell)
   const bank = layout.buildings.find((b) => b.kind === 'bank')
   const grid: Grid = {
+    layout,
     n,
     cell: layout.cell,
     size: layout.size,

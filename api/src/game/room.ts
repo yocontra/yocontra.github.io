@@ -309,6 +309,8 @@ export class NativeFrontierRoom extends Room<{ state: FrontierState; input: Move
       showdowns: [...world.showdowns],
       mostWanted: world.mostWanted,
       glass: [...world.glass],
+      props: [...world.props],
+      seed: world.seed,
     })
   }
   private currentSession(id: string): Session | undefined {

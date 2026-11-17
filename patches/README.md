@@ -1,4 +1,4 @@
-# PlayCanvas 2.23.3 batch material ownership
+# PlayCanvas 2.23.3 native resource ownership
 
 `bun install` applies the versioned patch through `patchedDependencies`.
 
@@ -13,3 +13,11 @@ consistent when updating the engine. Remove the patch only after the replacement
 passes `tests/runtime/playcanvas-batch-lifecycle.test.ts` and actual WebGL teardown with
 zero retained buffers. Native QA must verify the executing dependency code; an existing
 Vite optimizer cache can retain the unpatched engine after installation.
+
+Vertex and index buffer constructors account for their allocation before a backend upload.
+Their destruction now removes that allocation exactly once when the native device owns
+the buffer, including Null or never-uploaded buffers. The backend destroy call remains
+conditional on initialization; accounting subtracts the constructor allocation `numBytes`,
+not a potentially larger backing ArrayBuffer. The prior batch material fix is unchanged.
+Run `tests/runtime/playcanvas-buffer-lifecycle.test.ts` across all ESM/require variants
+and full collision simulation teardown when updating the dependency.

@@ -4,23 +4,69 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import process from 'node:process'
 import { spawn, write } from 'bun'
+import { PROTOCOL_VERSION } from '../../src/experiments/out-west/runtime/protocol.ts'
 import { hangTimeout } from '../timeout.ts'
 
 async function execute(args: string[], source?: string) {
+  const phase = source === undefined ? 'wrangler-dry-run' : 'native-room-scenarios'
   const child = spawn(args, {
     stdin: source === undefined ? 'ignore' : new Blob([source]),
     stdout: 'pipe',
     stderr: 'pipe',
+    detached: true,
   })
-  const [stdout, stderr, code] = await Promise.all([
-    new Response(child.stdout).text(),
-    new Response(child.stderr).text(),
-    child.exited,
-  ])
-  if (code !== 0) {
-    throw new Error(`${args.join(' ')}\n${stdout}\n${stderr}`)
+  process.stderr.write(`[fixture ${phase} pid=${child.pid}] started\n`)
+  const stop = () => {
+    if (child.exitCode !== null) {
+      return
+    }
+    try {
+      process.kill(-child.pid, 'SIGKILL')
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'ESRCH') {
+        throw error
+      }
+    }
   }
-  return stdout
+  const read = async (stream: ReadableStream<Uint8Array>) => {
+    const reader = stream.getReader()
+    const decoder = new TextDecoder()
+    let output = ''
+    try {
+      for (;;) {
+        const { value, done } = await reader.read()
+        if (done) {
+          return output
+        }
+        const text = decoder.decode(value, { stream: true })
+        output = (output + text).slice(-256_000)
+        process.stderr.write(text)
+      }
+    } finally {
+      reader.releaseLock()
+    }
+  }
+  const watchdog = setTimeout(() => {
+    process.stderr.write(`[fixture ${phase}]110s hang watchdog\n`)
+    stop()
+  }, hangTimeout(110_000))
+  try {
+    const [stdout, stderr, code] = await Promise.all([
+      read(child.stdout),
+      read(child.stderr),
+      child.exited,
+    ])
+    if (code !== 0) {
+      throw new Error(
+        `${phase}: ${args.join(' ')}\n${stdout.slice(-16_000)}\n${stderr.slice(-16_000)}`,
+      )
+    }
+    return stdout
+  } finally {
+    clearTimeout(watchdog)
+    stop()
+    await child.exited
+  }
 }
 
 it(
@@ -54,17 +100,40 @@ it(
       expect(moduleFiles).toHaveLength(2)
       const entry = await readFile(join(output, 'colyseus-worker.js'), 'utf8')
       // Module identities stay inside the configured root. No source transforms or runtime shims.
+      const protocolDeclaration = `var PROTOCOL_VERSION = ${PROTOCOL_VERSION};`
+      expect(entry.split(protocolDeclaration)).toHaveLength(2)
+      // The legacy-version fixture executes the same real onJoin comparator, before any game decoding.
+      const legacyEntry = entry.replace(
+        protocolDeclaration,
+        `var PROTOCOL_VERSION = ${PROTOCOL_VERSION - 1};`,
+      )
       const script = `
   import {Miniflare,convertV4MiniflareOptions} from ${JSON.stringify(join(root, 'node_modules/miniflare/dist/src/index.js'))};
   import {Client} from ${JSON.stringify(join(root, 'node_modules/@colyseus/sdk/build/index.mjs'))};
   import fs from 'node:fs';
-  const waitFor=async(read,done,label)=>{const start=Date.now();let value;do{value=await read();if(done(value))return value;await new Promise(resolve=>setTimeout(resolve,50))}while(Date.now()-start<60000);throw new Error('Timed out: '+label+' '+JSON.stringify(value))};
+  let diagnostic=async()=>null;
+  const waitFor=async(read,done,label)=>{const start=Date.now();let value;do{value=await read();if(done(value))return value;await new Promise(resolve=>setTimeout(resolve,50))}while(Date.now()-start<30000);throw new Error('Timed out: '+label+' '+JSON.stringify({value,diagnostic:await diagnostic().catch(e=>({error:String(e)}))}))};
   const modules=${JSON.stringify(moduleFiles)}.map(name=>({type:'CompiledWasm',path:${JSON.stringify(root)}+'/'+name,contents:fs.readFileSync(${JSON.stringify(output)}+'/'+name)}));
   modules.unshift({type:'ESModule',path:${JSON.stringify(join(root, 'worker.js'))},contents:${JSON.stringify(entry)}});
   const mf=new Miniflare(convertV4MiniflareOptions({modules,compatibilityDate:'2026-10-01',compatibilityFlags:['nodejs_compat'],durableObjects:{ROOMS:{className:'TestRoom',useSQLite:true}}}));
   const rooms=[];
   try{
    const base=(await mf.ready).origin;
+   diagnostic=async()=>await(await fetch(base+'/environment/inspect?room=first',{signal:AbortSignal.timeout(1000)})).json();
+   console.log('PHASE: versioned native handshakes');
+   const rejected=async(origin,protocol,tag)=>{
+    const seat=await(await fetch(origin+'/reserve?account=version-'+tag+'&room='+tag+'&protocol='+protocol)).json();
+    let failure;try{const unexpected=await new Client(origin+'?account=version-'+tag).consumeSeatReservation(seat);await unexpected.leave()}catch(e){failure=String(e)}
+    if(!failure?.includes('Refresh the game'))throw new Error('Mismatched native handshake accepted: '+JSON.stringify({tag,protocol,failure}));
+    const stopped=await(await fetch(origin+'/timing?room='+tag)).json();if(stopped.physics||stopped.running||stopped.timer)throw new Error('Rejected handshake started gameplay: '+JSON.stringify(stopped));
+    return {tag,protocol,failure,stopped};
+   };
+   const oldClient=await rejected(base,${PROTOCOL_VERSION - 1},'old-client-new-server');
+   const oldModules=modules.map(m=>m.type==='ESModule'?{...m,contents:${JSON.stringify(legacyEntry)}}:m);
+   const oldMf=new Miniflare(convertV4MiniflareOptions({modules:oldModules,compatibilityDate:'2026-10-01',compatibilityFlags:['nodejs_compat'],durableObjects:{ROOMS:{className:'TestRoom',useSQLite:true}}}));
+   let newClient;try{newClient=await rejected((await oldMf.ready).origin,${PROTOCOL_VERSION},'new-client-old-server')}finally{await oldMf.dispose()}
+   console.log('PROTOCOL:'+JSON.stringify({oldClient,newClient,current:${PROTOCOL_VERSION}}));
+   console.log('PHASE: autonomous rooms and first-join lifecycle');
    const seatsCheck=await(await fetch(base+'/seats?room=seat-probe')).json();
    if(!seatsCheck.accountBound||!seatsCheck.lobbyBound||!seatsCheck.oneUse||!seatsCheck.expired||!seatsCheck.replaced)throw new Error('Durable seat binding failed');
    const clock=await(await fetch(base+'/clock?room=clock-probe')).json();
@@ -109,7 +178,57 @@ it(
    const after=rooms.map(room=>({tick:room.state.tick,players:room.state.players.size,own:[...room.state.players.values()].some(player=>player.sessionId===room.sessionId)}));
    const currentInput=rooms[0].input({mode:'reliable'});Object.assign(currentInput.data,{seq:42,moveX:.5,moveZ:0,yaw:0,pitch:0,buttons:0,viewTime:0});currentInput.send();
    await waitFor(()=>[...rooms[0].state.players.values()].some(player=>player.sessionId===rooms[0].sessionId&&player.seq===42),Boolean,'Current SDK input stopped working');
+   // Real room/input/state transport: four-cell barrel covers, two peers and a later joining third.
+   console.log('PHASE: eight individual barrels');
+   const setup=await(await fetch(base+'/environment/setup?room=first')).json();
+   if(setup.props?.length!==8||setup.props.some(h=>h!==68))throw new Error('Barrel setup state invalid');
+   const health=room=>JSON.parse(room.state.game).props;
+   const own=room=>[...room.state.players.values()].find(p=>p.sessionId===room.sessionId);
+   let envSeq=42;
+   const sendEnv=async(buttons,moveX=0,moveZ=0)=>{
+    const seq=++envSeq;
+    Object.assign(currentInput.data,{seq,moveX,moveZ,yaw:-Math.PI/2,pitch:-10/127*Math.PI/2,buttons,viewTime:rooms[0].state.tick-1});currentInput.send();
+    await waitFor(()=>own(rooms[0])?.seq,n=>n===seq,'barrel command acknowledgement');
+   };
+   await sendEnv(1026);
+   for(const [slot,wanted]of [[0,34],[0,0],[2,34],[2,0]]){
+    console.log('PHASE: shoot barrel '+slot+' expected '+wanted);
+    await sendEnv(1026);await waitFor(()=>own(rooms[0])?.fireCooldownMs,n=>n<=0,'original fire cooldown');
+    await sendEnv(1027);
+    await waitFor(()=>rooms.slice(0,2).map(r=>health(r)[slot]),values=>values.every(h=>h===wanted),'two-peer barrel health');
+   }
+   console.log('PHASE: third SDK client late join');
+   const lateSeat=await(await fetch(base+'/reserve?account=late-barrel&room=first')).json();
+   const late=await new Client(base+'?account=late-barrel').consumeSeatReservation(lateSeat);rooms.push(late);
+   const lateBreaks=[];late.onMessage('events',m=>lateBreaks.push(...m.events.filter(e=>e.type==='prop_break')));late.onMessage('control',()=>{});late.onMessage('network-ping',m=>late.send('network-pong',{nonce:m.nonce}));
+   await waitFor(()=>late.state.game,Boolean,'late barrel snapshot');
+   if(JSON.stringify(health(late))!==JSON.stringify(health(rooms[0])))throw new Error('Late join restored intact barrels');
+   await sendEnv(1026);await waitFor(()=>own(rooms[0])?.fireCooldownMs,n=>n<=0,'next shot cooldown');await sendEnv(1027);
+   await waitFor(()=>own(rooms[1])?.hp,n=>n===66,'next shot through broken barrels');
+   const laterTick=late.state.tick;await waitFor(()=>late.state.tick,n=>n>laterTick+2,'late-join observation');
+   if(lateBreaks.length)throw new Error('Late join replayed historic barrel breaks');
+   const environment={health:health(late),shooterAmmo:own(rooms[0]).ammo,targetHp:own(rooms[1]).hp,lateBreaks:lateBreaks.length};
+   if(environment.shooterAmmo!==1)throw new Error('Barrel response changed six-round ammo');
+   await late.leave();
+   console.log('ENVIRONMENT:'+JSON.stringify(environment));
    await rooms[0].leave();await rooms[1].leave();
+   console.log('PHASE: zero-human disposal');
+   const emptyEnvironment=await waitFor(async()=>await(await fetch(base+'/environment/inspect?room=first')).json(),x=>!x.physics&&!x.running,'last-human barrel world disposal');
+   if(emptyEnvironment.buffers!==0||emptyEnvironment.textures!==0)throw new Error('Barrel room retained native resources: '+JSON.stringify(emptyEnvironment));
+
+   console.log('PHASE: independent room isolation');
+   const independentHealth=health(rooms[2]);if(independentHealth.length!==8||independentHealth.some(h=>h!==68))throw new Error('Barrel damage escaped its room: '+JSON.stringify(independentHealth));
+   console.log('PHASE: fresh actual native room after old room shutdown');
+   const freshSeat=await(await fetch(base+'/reserve?account=fresh-barrel&room=fresh-barrel-world')).json();
+   const fresh=await new Client(base+'?account=fresh-barrel').consumeSeatReservation(freshSeat);rooms.push(fresh);
+   const freshBreaks=[];fresh.onMessage('events',m=>freshBreaks.push(...m.events.filter(e=>e.type==='prop_break')));fresh.onMessage('control',()=>{});fresh.onMessage('network-ping',m=>fresh.send('network-pong',{nonce:m.nonce}));
+   await waitFor(()=>fresh.state.game,Boolean,'fresh-world snapshot');
+   const freshNative=await(await fetch(base+'/environment/inspect?room=fresh-barrel-world')).json();
+   if(health(fresh).length!==8||health(fresh).some(h=>h!==68)||!freshNative.physics||!freshNative.running||freshBreaks.length)throw new Error('Fresh world failed to restore barrel ownership: '+JSON.stringify({freshNative,freshBreaks}));
+   await fresh.leave();
+   const freshEmpty=await waitFor(async()=>await(await fetch(base+'/environment/inspect?room=fresh-barrel-world')).json(),x=>!x.physics&&!x.running,'fresh room zero-human disposal');
+   if(freshEmpty.buffers!==0||freshEmpty.textures!==0)throw new Error('Fresh native room retained resources: '+JSON.stringify(freshEmpty));
+   console.log('FRESH:'+JSON.stringify({health:freshNative.props,historicBreaks:freshBreaks.length,independentHealth,empty:{buffers:freshEmpty.buffers,textures:freshEmpty.textures,physics:freshEmpty.physics,running:freshEmpty.running}}));
    const otherContinued=await waitFor(()=>rooms[2].state.tick>after[2].tick,Boolean,'other room stopped after unrelated leaves');
    console.log('RESULT:'+JSON.stringify({before,after,otherContinued}));
    await rooms[2].leave();
@@ -124,7 +243,7 @@ it(
    const released=await lease('after-release',0,false,now+90000);
    const rollover=await lease('new-day',0,false,now+86400000);
    console.log('LEASES:'+JSON.stringify({accepted:granted.length,expired:expired.ok,released:released.ok,rollover:rollover.ok}));
-  }finally{await mf.dispose()}
+  }finally{const closing=Promise.allSettled(rooms.map(room=>room.leave()));await mf.dispose();await closing}
   `
       const stdout = await execute(['node', '--input-type=module'], script)
       const line = stdout.split('\n').find((value) => value.startsWith('RESULT:'))
@@ -154,5 +273,5 @@ it(
       await rm(directory, { recursive: true, force: true })
     }
   },
-  hangTimeout(60_000),
+  hangTimeout(120_000),
 )

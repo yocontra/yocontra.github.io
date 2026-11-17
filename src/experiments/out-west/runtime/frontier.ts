@@ -17,6 +17,9 @@ export function createFrontierSimulation(
   const windowEligible = new Set<string>()
   const releaseWindows = bindWindowContacts({ world, physics, eligible: windowEligible })
   world.castWorld = physics.castWorld
+  world.castWorldHit = physics.castWorldHit
+  world.propsChanged = (reset) =>
+    reset ? physics.resetProps(world.props) : physics.updateProps(world.props)
   world.movePlayers = (frames) => {
     windowEligible.clear()
     const inputs = new Map<string, PlayerInput>()

@@ -1,4 +1,5 @@
 import type { Node } from '@gltf-transform/core'
+import { ENVIRONMENT_PROPS } from '../../src/experiments/out-west/content/environment-props.ts'
 import {
   CANOPY_SEGMENTS,
   WAGON_BED,
@@ -48,7 +49,7 @@ const JOINERY: Partial<
   trough,
 }
 
-export function coverModel(g: FrontierGeometry, root: Node, c: Cover) {
+export function coverModel(g: FrontierGeometry, root: Node, c: Cover, index?: number) {
   const top = c.top ?? 1
   const area: Placement = { ...c, top }
   if (c.kind === 'hay') {
@@ -57,7 +58,19 @@ export function coverModel(g: FrontierGeometry, root: Node, c: Cover) {
   }
   const prefab = KIT_PROPS[c.kind]
   if (prefab) {
-    g.prefab(root, prefab[0], area, prefab[1])
+    const placement = g.prefab(root, prefab[0], area, prefab[1])
+    for (const prop of ENVIRONMENT_PROPS.filter((entry) => entry.cover === index)) {
+      const instance = placement.listChildren()[prop.cell]
+      if (
+        !instance ||
+        instance
+          .getTranslation()
+          .some((v, i) => Math.abs(v - (prop.binding.translation[i] ?? 0)) > 1e-9)
+      ) {
+        throw new Error('Changed canonical barrel placement')
+      }
+      instance.setName(prop.root).setExtras({ ...instance.getExtras(), environmentProp: prop.id })
+    }
     return
   }
   const joinery = JOINERY[c.kind]

@@ -67,6 +67,7 @@ export async function buildManifest(): Promise<void> {
     'horse',
     'held-rifle',
     'held-shotgun',
+    'barrel-fragments',
   ]) {
     const prefix = [
       'bag0',
@@ -82,6 +83,7 @@ export async function buildManifest(): Promise<void> {
       'horse',
       'held-rifle',
       'held-shotgun',
+      'barrel-fragments',
     ].includes(name)
       ? 'native-v2/'
       : ''

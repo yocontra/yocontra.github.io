@@ -136,3 +136,247 @@ index 03682516f69f636331785390c512e8fb0884d890..86d90db2595b78ab6ae5debcb000abd8
  					material.update();
  				}
  				const batchedMeshInstance = new MeshInstance(mesh, material, this.rootNode);
+diff --git a/build/playcanvas/src/platform/graphics/vertex-buffer.js b/build/playcanvas/src/platform/graphics/vertex-buffer.js
+--- a/build/playcanvas/src/platform/graphics/vertex-buffer.js
++++ b/build/playcanvas/src/platform/graphics/vertex-buffer.js
+@@ -27,11 +27,13 @@
+ 	}
+ 	destroy() {
+ 		const device = this.device;
+-		device.buffers.delete(this);
++		if (!device.buffers.delete(this)) {
++			return;
++		}
+ 		if (this.impl.initialized) {
+ 			this.impl.destroy(device);
+-			this.adjustVramSizeTracking(device._vram, -this.storage.byteLength);
+ 		}
++		this.adjustVramSizeTracking(device._vram, -this.numBytes);
+ 	}
+ 	adjustVramSizeTracking(vram, size) {
+ 		vram.vb += size;
+diff --git a/build/playcanvas/src/platform/graphics/index-buffer.js b/build/playcanvas/src/platform/graphics/index-buffer.js
+--- a/build/playcanvas/src/platform/graphics/index-buffer.js
++++ b/build/playcanvas/src/platform/graphics/index-buffer.js
+@@ -27,14 +27,16 @@
+ 	}
+ 	destroy() {
+ 		const device = this.device;
+-		device.buffers.delete(this);
++		if (!device.buffers.delete(this)) {
++			return;
++		}
+ 		if (this.device.indexBuffer === this) {
+ 			this.device.indexBuffer = null;
+ 		}
+ 		if (this.impl.initialized) {
+ 			this.impl.destroy(device);
+-			this.adjustVramSizeTracking(device._vram, -this.storage.byteLength);
+ 		}
++		this.adjustVramSizeTracking(device._vram, -this.numBytes);
+ 	}
+ 	adjustVramSizeTracking(vram, size) {
+ 		vram.ib += size;
+diff --git a/build/playcanvas.dbg/src/platform/graphics/vertex-buffer.js b/build/playcanvas.dbg/src/platform/graphics/vertex-buffer.js
+--- a/build/playcanvas.dbg/src/platform/graphics/vertex-buffer.js
++++ b/build/playcanvas.dbg/src/platform/graphics/vertex-buffer.js
+@@ -70,11 +70,13 @@
+    */
+   destroy() {
+     const device = this.device;
+-    device.buffers.delete(this);
++    if (!device.buffers.delete(this)) {
++      return;
++    }
+     if (this.impl.initialized) {
+       this.impl.destroy(device);
+-      this.adjustVramSizeTracking(device._vram, -this.storage.byteLength);
+     }
++    this.adjustVramSizeTracking(device._vram, -this.numBytes);
+   }
+   adjustVramSizeTracking(vram, size) {
+     Debug.trace(TRACEID_VRAM_VB, `${this.id} size: ${size} vram.vb: ${vram.vb} => ${vram.vb + size}`);
+diff --git a/build/playcanvas.dbg/src/platform/graphics/index-buffer.js b/build/playcanvas.dbg/src/platform/graphics/index-buffer.js
+--- a/build/playcanvas.dbg/src/platform/graphics/index-buffer.js
++++ b/build/playcanvas.dbg/src/platform/graphics/index-buffer.js
+@@ -65,14 +65,16 @@
+    */
+   destroy() {
+     const device = this.device;
+-    device.buffers.delete(this);
++    if (!device.buffers.delete(this)) {
++      return;
++    }
+     if (this.device.indexBuffer === this) {
+       this.device.indexBuffer = null;
+     }
+     if (this.impl.initialized) {
+       this.impl.destroy(device);
+-      this.adjustVramSizeTracking(device._vram, -this.storage.byteLength);
+-    }
++    }
++    this.adjustVramSizeTracking(device._vram, -this.numBytes);
+   }
+   adjustVramSizeTracking(vram, size) {
+     Debug.trace(TRACEID_VRAM_IB, `${this.id} size: ${size} vram.ib: ${vram.ib} => ${vram.ib + size}`);
+diff --git a/build/playcanvas.prf/src/platform/graphics/vertex-buffer.js b/build/playcanvas.prf/src/platform/graphics/vertex-buffer.js
+--- a/build/playcanvas.prf/src/platform/graphics/vertex-buffer.js
++++ b/build/playcanvas.prf/src/platform/graphics/vertex-buffer.js
+@@ -27,11 +27,13 @@
+ 	}
+ 	destroy() {
+ 		const device = this.device;
+-		device.buffers.delete(this);
++		if (!device.buffers.delete(this)) {
++			return;
++		}
+ 		if (this.impl.initialized) {
+ 			this.impl.destroy(device);
+-			this.adjustVramSizeTracking(device._vram, -this.storage.byteLength);
+ 		}
++		this.adjustVramSizeTracking(device._vram, -this.numBytes);
+ 	}
+ 	adjustVramSizeTracking(vram, size) {
+ 		vram.vb += size;
+diff --git a/build/playcanvas.prf/src/platform/graphics/index-buffer.js b/build/playcanvas.prf/src/platform/graphics/index-buffer.js
+--- a/build/playcanvas.prf/src/platform/graphics/index-buffer.js
++++ b/build/playcanvas.prf/src/platform/graphics/index-buffer.js
+@@ -27,14 +27,16 @@
+ 	}
+ 	destroy() {
+ 		const device = this.device;
+-		device.buffers.delete(this);
++		if (!device.buffers.delete(this)) {
++			return;
++		}
+ 		if (this.device.indexBuffer === this) {
+ 			this.device.indexBuffer = null;
+ 		}
+ 		if (this.impl.initialized) {
+ 			this.impl.destroy(device);
+-			this.adjustVramSizeTracking(device._vram, -this.storage.byteLength);
+ 		}
++		this.adjustVramSizeTracking(device._vram, -this.numBytes);
+ 	}
+ 	adjustVramSizeTracking(vram, size) {
+ 		vram.ib += size;
+diff --git a/build/playcanvas.js b/build/playcanvas.js
+--- a/build/playcanvas.js
++++ b/build/playcanvas.js
+@@ -7656,14 +7656,16 @@
+ 		}
+ 		destroy() {
+ 			const device = this.device;
+-			device.buffers.delete(this);
++			if (!device.buffers.delete(this)) {
++				return;
++			}
+ 			if (this.device.indexBuffer === this) {
+ 				this.device.indexBuffer = null;
+ 			}
+ 			if (this.impl.initialized) {
+ 				this.impl.destroy(device);
+-				this.adjustVramSizeTracking(device._vram, -this.storage.byteLength);
+-			}
++			}
++			this.adjustVramSizeTracking(device._vram, -this.numBytes);
+ 		}
+ 		adjustVramSizeTracking(vram, size) {
+ 			vram.ib += size;
+@@ -7837,11 +7839,13 @@
+ 		}
+ 		destroy() {
+ 			const device = this.device;
+-			device.buffers.delete(this);
++			if (!device.buffers.delete(this)) {
++				return;
++			}
+ 			if (this.impl.initialized) {
+ 				this.impl.destroy(device);
+-				this.adjustVramSizeTracking(device._vram, -this.storage.byteLength);
+-			}
++			}
++			this.adjustVramSizeTracking(device._vram, -this.numBytes);
+ 		}
+ 		adjustVramSizeTracking(vram, size) {
+ 			vram.vb += size;
+diff --git a/build/playcanvas.dbg.js b/build/playcanvas.dbg.js
+--- a/build/playcanvas.dbg.js
++++ b/build/playcanvas.dbg.js
+@@ -14429,14 +14429,16 @@
+      */
+     destroy() {
+       const device = this.device;
+-      device.buffers.delete(this);
++      if (!device.buffers.delete(this)) {
++        return;
++      }
+       if (this.device.indexBuffer === this) {
+         this.device.indexBuffer = null;
+       }
+       if (this.impl.initialized) {
+         this.impl.destroy(device);
+-        this.adjustVramSizeTracking(device._vram, -this.storage.byteLength);
+-      }
++      }
++      this.adjustVramSizeTracking(device._vram, -this.numBytes);
+     }
+     adjustVramSizeTracking(vram, size) {
+       Debug.trace(TRACEID_VRAM_IB, `${this.id} size: ${size} vram.ib: ${vram.ib} => ${vram.ib + size}`);
+@@ -14762,11 +14764,13 @@
+      */
+     destroy() {
+       const device = this.device;
+-      device.buffers.delete(this);
++      if (!device.buffers.delete(this)) {
++        return;
++      }
+       if (this.impl.initialized) {
+         this.impl.destroy(device);
+-        this.adjustVramSizeTracking(device._vram, -this.storage.byteLength);
+-      }
++      }
++      this.adjustVramSizeTracking(device._vram, -this.numBytes);
+     }
+     adjustVramSizeTracking(vram, size) {
+       Debug.trace(TRACEID_VRAM_VB, `${this.id} size: ${size} vram.vb: ${vram.vb} => ${vram.vb + size}`);
+diff --git a/build/playcanvas.prf.js b/build/playcanvas.prf.js
+--- a/build/playcanvas.prf.js
++++ b/build/playcanvas.prf.js
+@@ -7664,14 +7664,16 @@
+ 		}
+ 		destroy() {
+ 			const device = this.device;
+-			device.buffers.delete(this);
++			if (!device.buffers.delete(this)) {
++				return;
++			}
+ 			if (this.device.indexBuffer === this) {
+ 				this.device.indexBuffer = null;
+ 			}
+ 			if (this.impl.initialized) {
+ 				this.impl.destroy(device);
+-				this.adjustVramSizeTracking(device._vram, -this.storage.byteLength);
+-			}
++			}
++			this.adjustVramSizeTracking(device._vram, -this.numBytes);
+ 		}
+ 		adjustVramSizeTracking(vram, size) {
+ 			vram.ib += size;
+@@ -7845,11 +7847,13 @@
+ 		}
+ 		destroy() {
+ 			const device = this.device;
+-			device.buffers.delete(this);
++			if (!device.buffers.delete(this)) {
++				return;
++			}
+ 			if (this.impl.initialized) {
+ 				this.impl.destroy(device);
+-				this.adjustVramSizeTracking(device._vram, -this.storage.byteLength);
+-			}
++			}
++			this.adjustVramSizeTracking(device._vram, -this.numBytes);
+ 		}
+ 		adjustVramSizeTracking(vram, size) {
+ 			vram.vb += size;

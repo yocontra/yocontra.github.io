@@ -280,6 +280,14 @@ export type SimEvent =
   | { type: 'pickup_taken'; spot: number; player: number }
   | { type: 'pickup_ready'; spot: number }
   | { type: 'glass_break'; window: number }
+  | {
+      type: 'prop_break'
+      prop: number
+      tick: number
+      seed: number
+      point: Readonly<ShotPoint>
+      impulse: ShotPoint
+    }
   | { type: 'dynamite_thrown'; player: number; x: number; z: number; fuseTicks: number }
   | { type: 'explosion'; by: number; x: number; z: number }
 

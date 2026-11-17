@@ -1,5 +1,6 @@
 /** Nearby stationary/sliding riders must not consume the moving riders' audible footstep slots. */
 import { expect, test as it } from 'bun:test'
+import { stepSurface } from '../../src/experiments/out-west/client/audio-surfaces.ts'
 import type {
   Emitter,
   FrontierAudio,
@@ -14,6 +15,7 @@ it('stationary and sliding riders cannot hide an approaching enemy footstep cue'
   const removed: string[] = []
   const audio = {
     clock: 0,
+    surfaceAt: (at: { x: number; y: number; z: number }) => stepSurface(at.x, at.y, at.z),
     distance: (p: { x: number; y: number; z: number }) => Math.hypot(p.x, p.z),
     emitter: (name: string) => ({
       entity: { name, setPosition: () => undefined, destroy: () => removed.push(name) },
