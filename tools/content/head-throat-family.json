@@ -1,0 +1,73 @@
+{
+  "bodyIDs": [
+    "outfit.bandolier-rig",
+    "outfit.bandolier-rig.pair",
+    "outfit.gamblers-frock",
+    "outfit.gamblers-frock.pair",
+    "outfit.midnight-coat",
+    "outfit.midnight-coat.pair",
+    "outfit.shirt-vest",
+    "outfit.shirt-vest.pair",
+    "outfit.striped-poncho",
+    "outfit.striped-poncho.pair",
+    "outfit.trail-duds",
+    "outfit.trail-duds.pair",
+    "outfit.undertakers-black",
+    "outfit.undertakers-black.pair",
+    "outfit.wool-duster",
+    "outfit.wool-duster.pair",
+    "outlaw-0",
+    "outlaw-1",
+    "outlaw-10",
+    "outlaw-11",
+    "outlaw-12",
+    "outlaw-13",
+    "outlaw-14",
+    "outlaw-15",
+    "outlaw-16",
+    "outlaw-2",
+    "outlaw-3",
+    "outlaw-4",
+    "outlaw-5",
+    "outlaw-6",
+    "outlaw-7",
+    "outlaw-8",
+    "outlaw-9",
+    "player"
+  ],
+  "geometryControls": ["outlaw-10", "outlaw-7", "outlaw-8", "outlaw-9"],
+  "normalControls": ["outlaw-8", "outlaw-10"],
+  "splitFanIDs": ["outlaw-12", "outlaw-16"],
+  "acceptedProofIDs": ["player", "outlaw-16"],
+  "acceptedPatchBinarySHA256": {
+    "player": "38ac7cb0129599f029ce7736cf553c25bb5ad8cf8554a505082ec344d998bf1c",
+    "outlaw-16": "be11f06cd0f65d04127aa6f186a17502bcf01414ba4579823f8980458440e607"
+  },
+  "chinFanOverrides": {
+    "outlaw-0": {
+      "interior": [495, 503, 504, 506, 493],
+      "triangles": 20,
+      "boundary": 12,
+      "triangulation": "UV_BEAUTY"
+    },
+    "outlaw-5": {
+      "interior": [495, 503, 504, 506, 493],
+      "triangles": 20,
+      "boundary": 12,
+      "triangulation": "UV_BEAUTY"
+    },
+    "outlaw-15": {
+      "interior": [495, 503, 504, 506, 493],
+      "triangles": 20,
+      "boundary": 12,
+      "triangulation": "UV_BEAUTY"
+    }
+  },
+  "throatUVTriangulationIDs": ["outlaw-1"],
+  "positionHeadYEdits": {
+    "outlaw-15": {
+      "83": -0.0048,
+      "84": -0.0036
+    }
+  }
+}
