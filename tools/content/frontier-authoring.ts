@@ -32,6 +32,7 @@ import { surround } from './frontier-openings.ts'
 import { coverModel, desertPlants } from './frontier-props.ts'
 import { authorRoofMaterial } from './frontier-roof-material.ts'
 import { frontierSiding } from './frontier-siding.ts'
+import { weatheredTimber } from './frontier-weathering.ts'
 import { optimizeAsset } from './optimize.ts'
 
 export interface FrontierPlan {
@@ -148,12 +149,14 @@ async function authorBuildings(g: FrontierGeometry, plan: FrontierPlan, layout: 
       plan.style.buildingPaint[b.id] ??
       (role === 'stone' ? plan.style.stoneTint : plan.style.woodTint)
     const siding = paint.has(b.id)
+    const timber = role === 'wood' && !siding ? weatheredTimber(b, tint) : tint
     for (const wall of structuralWalls({ ...layout, buildings: [b] })) {
+      const finish = wall.id.includes(':partition:') ? tint : timber
       g.box(
         root,
         siding ? `siding:${b.id}` : role,
         { ...wall, top: wall.y1, grime: 0.32 },
-        siding ? undefined : tint,
+        siding ? undefined : finish,
       )
     }
     buildingDetails(g, plan, b, root)

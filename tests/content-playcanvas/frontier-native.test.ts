@@ -1,5 +1,7 @@
 import { beforeAll, expect, test as it } from 'bun:test'
 import { file } from 'bun'
+import { Vec3 } from 'playcanvas'
+import { ASSETS } from '../../src/experiments/out-west/content/manifest.ts'
 import { CHANNEL_BANK, CHANNEL_STRONGBOX } from '../../src/experiments/out-west/contract/town.ts'
 import type { TownLayout } from '../../src/experiments/out-west/ffa/sim/layout.ts'
 import { progressChannel, startChannel } from '../../src/experiments/out-west/ffa/sim/money.ts'
@@ -10,6 +12,7 @@ import { initializeAmmo } from '../../src/experiments/out-west/runtime/ammo.ts'
 import { createSimulation } from '../../src/experiments/out-west/runtime/world.ts'
 import plan from '../../tools/art/environments/frontier.plan.json' with { type: 'json' }
 import { compileFrontierCollision } from '../../tools/content/frontier-collision.ts'
+import { frontierIO } from '../../tools/content/frontier-geometry.ts'
 import { inspectFrontier } from '../../tools/content/frontier-layout-audit.ts'
 
 const layout = plan.layout as TownLayout
@@ -199,4 +202,49 @@ it('a hay-supported strongbox remains reachable from ground but not through an u
   progressChannel(world, p)
   expect(p.channel).toBeNull()
   expect(world.strongbox.openedBy).toBe(-1)
+})
+
+it('the native pitched gables have positive triangle area and a usable normal at each corner', async () => {
+  const doc = await frontierIO.read(`public${ASSETS.frontier.url.split('?')[0]}`)
+  const timber = doc
+    .getRoot()
+    .listMeshes()
+    .find((mesh) => mesh.getName() === 'ground-Perdition:wood')
+  const primitives = timber?.listPrimitives() ?? []
+  expect(primitives.length).toBeGreaterThan(0)
+  const a = new Vec3()
+  const b = new Vec3()
+  const c = new Vec3()
+  const normal = new Vec3()
+  let triangles = 0
+  let collapsed = 0
+  let missingNormals = 0
+  for (const primitive of primitives) {
+    const positions = primitive.getAttribute('POSITION')
+    const normals = primitive.getAttribute('NORMAL')
+    const order = primitive.getIndices()
+    if (!(positions && normals && order)) {
+      throw new Error('Missing native timber geometry')
+    }
+    for (let offset = 0; offset < order.getCount(); offset += 3) {
+      const corners = [0, 1, 2].map((corner) => order.getScalar(offset + corner))
+      const [first, second, third] = corners.map((corner) => {
+        const point: [number, number, number] = [0, 0, 0]
+        return positions.getElement(corner, point)
+      })
+      if (!(first && second && third)) {
+        throw new Error('Incomplete native timber triangle')
+      }
+      a.set(...first)
+      b.set(...second).sub(a)
+      c.set(...third).sub(a)
+      collapsed += Number(normal.cross(b, c).lengthSq() <= 1e-12)
+      missingNormals += corners.filter((corner) =>
+        normals.getElement(corner, []).every((value) => value === 0),
+      ).length
+      triangles++
+    }
+  }
+  expect(triangles).toBeGreaterThan(0)
+  expect({ collapsed, missingNormals }).toEqual({ collapsed: 0, missingNormals: 0 })
 })
