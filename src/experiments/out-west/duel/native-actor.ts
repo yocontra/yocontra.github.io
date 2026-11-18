@@ -14,7 +14,7 @@ import { prepareNativeMaterials } from '../scene/native-materials.ts'
 import { authoredMounts, type WeaponMount } from '../scene/native-mounts.ts'
 import { animateRevolvers, playWeaponMount } from '../scene/native-weapon-animation.ts'
 
-const ONE_SHOT = /Death|Shoot|Hit|Attack|React|Draw|Flinch|Spin|TipHat|Throw/u
+const ONE_SHOT = /Death|Shoot|Hit|Attack|React|Draw|Flinch|Spin|TipHat|Throw|^Turn_[LR]$/u
 const HUMANOID = /\/(?:baked\/(?:outlaw-|player)|equipment\/outfit\.)/u
 const GAIT = /^(?:Stride_|Walk$|Run$|Sprint$|Crouch_Walk$)/u
 const DRAWN = /Pointing|Shoot|Death|Hit|Draw|Spin|Flinch/u
@@ -54,6 +54,12 @@ async function actorTracks(
   return { tracks, indexed }
 }
 
+interface ClipMotionExtras {
+  speed?: number
+  turnRate?: number
+  turnPivot?: [number, number, number]
+  seatedContact?: { hipsAboveSeat?: number }
+}
 /** The engine owns skeletal playback; duel logic requests named authored clips. */
 export class DuelActor {
   private current = ''
@@ -77,6 +83,8 @@ export class DuelActor {
   paceLength = 0.7
   walkDuration = 1.24
   gaitSpeeds: Record<string, number> = {}
+  /** Authored turn-in-place clips: the root yaw rate (degrees/s) and model-space pivot that keep the hooves planted. */
+  turns: Record<string, { rate: number; pivot: readonly [number, number, number] }> = {}
   private playbackRate = 1
   readonly root: Entity
   readonly model: Entity
@@ -201,22 +209,7 @@ export class DuelActor {
             }
           ).data.gltf?.extras?.gaitSpeeds ?? {}
       }
-      const authoredSeat = (
-        resource as ContainerResource & {
-          data: {
-            gltf?: {
-              animations?: {
-                name?: string
-                extras?: { seatedContact?: { hipsAboveSeat?: number } }
-              }[]
-            }
-          }
-        }
-      ).data.gltf?.animations?.find((clip) => clip.name === 'Town_Sit')?.extras?.seatedContact
-        ?.hipsAboveSeat
-      if (authoredSeat !== undefined && Number.isFinite(authoredSeat) && authoredSeat > 0) {
-        actor.seatedHipOffset = authoredSeat
-      }
+      actor.readClipMetadata(resource)
       const metadata = (
         resource as ContainerResource & {
           data: { gltf?: { nodes?: { extras?: { paceLength?: number; walkDuration?: number } }[] } }
@@ -240,6 +233,34 @@ export class DuelActor {
       created?.destroy()
       releaseMaterials()
       throw error
+    }
+  }
+  private readClipMetadata(resource: ContainerResource): void {
+    const clips = (
+      resource as ContainerResource & {
+        data: { gltf?: { animations?: { name?: string; extras?: ClipMotionExtras }[] } }
+      }
+    ).data.gltf?.animations
+    for (const { name, extras } of clips ?? []) {
+      if (!(name && extras)) {
+        continue
+      }
+      const { speed, turnRate, turnPivot, seatedContact } = extras
+      if (
+        speed !== undefined &&
+        Number.isFinite(speed) &&
+        speed > 0 &&
+        !(name in this.gaitSpeeds)
+      ) {
+        this.gaitSpeeds = { ...this.gaitSpeeds, [name]: speed }
+      }
+      if (turnRate && Number.isFinite(turnRate) && turnPivot?.every(Number.isFinite)) {
+        this.turns[name] = { rate: turnRate, pivot: turnPivot }
+      }
+      const seat = seatedContact?.hipsAboveSeat
+      if (name === 'Town_Sit' && seat !== undefined && Number.isFinite(seat) && seat > 0) {
+        this.seatedHipOffset = seat
+      }
     }
   }
   play(requested: string, seconds = 0.12): void {

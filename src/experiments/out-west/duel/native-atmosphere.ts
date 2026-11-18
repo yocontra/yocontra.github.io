@@ -1,3 +1,4 @@
+import { Mat4, Vec3 } from 'playcanvas'
 import type { GameApplication } from '../client/application.ts'
 import { NativeWilds } from '../client/wilds.ts'
 import { AMBIENT_ASSETS } from '../content/ambient.ts'
@@ -9,7 +10,18 @@ import type { ArenaLife, Stand } from './native-arenas.ts'
 
 type CueProp = 'coin' | 'card' | 'crow' | 'tumbleweed' | 'door' | 'dog' | 'horse'
 /** Settled animals drift between their authored idles; plain Idle recurs so the swaps stay rare. */
-const IDLE_VARIANTS = ['Idle', 'Idle_2', 'Idle', 'Idle_Headlow', 'Idle', 'Eating', 'Idle_2_HeadLow']
+const IDLE_VARIANTS = [
+  'Idle',
+  'Idle_2',
+  'Idle',
+  'Idle_Headlow',
+  'Idle_Stamp',
+  'Idle',
+  'Eating',
+  'Idle_2_HeadLow',
+]
+/** A tied horse steps its forehand around every few idle spells, swinging back the other way next time. */
+const SHIFT_EVERY = 3
 const IDLE_SPELL = 9
 const HEN_RUN = [-1.6, 0.6] as const
 interface Spectator {
@@ -63,6 +75,9 @@ export class NativeAtmosphere {
   private readonly horses: DuelActor[] = []
   private readonly crows: DuelActor[] = []
   private readonly hens: DuelActor[] = []
+  private readonly shifts = new Map<DuelActor, { clip: string; left: number }>()
+  /** Tied horses' authored heading and how far their shifts have swung them off it, in degrees. */
+  private readonly tethers = new Map<DuelActor, { heading: number; sway: number }>()
   private readonly idlers = new Map<
     DuelActor,
     { variants: string[]; offset: number; turn: number }
@@ -158,9 +173,12 @@ export class NativeAtmosphere {
     for (const [index, horse] of this.horses.entries()) {
       const stand = life.horses[index]
       horse.root.enabled = Boolean(stand)
+      this.shifts.delete(horse)
+      this.tethers.delete(horse)
       if (stand) {
         horse.place(stand.x, stand.y, stand.z)
         horse.face((stand.yaw * 180) / Math.PI)
+        this.tethers.set(horse, { heading: (stand.yaw * 180) / Math.PI, sway: 0 })
         this.settle(horse, index * 4.3)
       }
     }
@@ -222,8 +240,52 @@ export class NativeAtmosphere {
       }
       idler.turn = turn
       actor.idle(idler.variants[turn % idler.variants.length] ?? 'Idle')
-      if (actor.root.enabled && !this.transients.has(actor)) {
-        actor.play('Idle', 0.6)
+      if (!actor.root.enabled || this.transients.has(actor)) {
+        continue
+      }
+      if (turn % SHIFT_EVERY === 0 && this.startShift(actor)) {
+        continue
+      }
+      actor.play('Idle', 0.6)
+    }
+  }
+  /** Turn in place toward the tether line: Turn_L/Turn_R with the root yawed at the clip's authored rate. */
+  private startShift(actor: DuelActor): boolean {
+    const tether = this.tethers.get(actor)
+    if (!tether || this.shifts.has(actor)) {
+      return false
+    }
+    const name = tether.sway > 0 ? 'Turn_R' : 'Turn_L'
+    const duration = actor.animationTrack(name)?.duration
+    if (!(actor.turns[name] && duration)) {
+      return false
+    }
+    this.shifts.set(actor, { clip: name, left: duration })
+    actor.play(name, 0.25)
+    return true
+  }
+  private stepShifts(step: number): void {
+    for (const [actor, shift] of this.shifts) {
+      const turn = actor.turns[shift.clip]
+      const tether = this.tethers.get(actor)
+      if (!(turn && tether) || !actor.root.enabled || this.transients.has(actor)) {
+        this.shifts.delete(actor)
+        continue
+      }
+      const dt = Math.min(step, shift.left)
+      shift.left -= dt
+      const degrees = turn.rate * dt
+      const pivot = PIVOT.set(...turn.pivot)
+      actor.root.getWorldTransform().transformPoint(pivot, pivot)
+      ROTATE.setFromAxisAngle(Vec3.UP, degrees)
+      const position = OFFSET.copy(actor.root.getPosition()).sub(pivot)
+      ROTATE.transformVector(position, position)
+      actor.root.setPosition(position.add(pivot))
+      tether.sway += degrees
+      actor.face(tether.heading + tether.sway)
+      if (shift.left <= 0) {
+        this.shifts.delete(actor)
+        actor.play('Idle', 0.35)
       }
     }
   }
@@ -321,6 +383,7 @@ export class NativeAtmosphere {
     this.changePhase(phase)
     const step = Math.max(0, Math.min(0.1, dt))
     this.moveBirds(step)
+    this.stepShifts(step)
     this.driftIdles(step)
     this.finishCues()
   }
@@ -385,5 +448,10 @@ export class NativeAtmosphere {
     this.crows.length = 0
     this.hens.length = 0
     this.idlers.clear()
+    this.shifts.clear()
+    this.tethers.clear()
   }
 }
+const PIVOT = new Vec3()
+const OFFSET = new Vec3()
+const ROTATE = new Mat4()

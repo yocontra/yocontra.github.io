@@ -134,9 +134,12 @@ class Body:
             self.posed.append(to_bl(m @ Vector(p)))
             normals.append(to_bl((m.to_3x3().inverted().transposed() @ Vector(n)).normalized()))
         triangles = [index[i : i + 3] for i in range(0, len(index), 3)]
-        regions = spec["regions"]
+        regions = spec.get("regions", {})
         self.region = []
         for t in triangles:
+            if "decode" in spec:
+                self.region.append(spec["decode"]([colors[v] for v in t]))
+                continue
             key = tuple(round(x, 3) for x in colors[t[0]][:3])
             if key not in regions:
                 raise ValueError(f"{ANIMAL}: unmapped body colour {key}")
@@ -152,8 +155,13 @@ class Body:
         me.from_pydata(self.posed, [], self.faces)
         me.shade_smooth()
         me.normals_split_custom_set_from_vertices(normals)
-        for name in spec.get("masks", ("muzzle", "eyering", "blaze")):
+        for channel, name in enumerate(spec.get("masks", ("muzzle", "eyering", "blaze"))):
             layer = me.attributes.new(name, "FLOAT", "POINT")
+            if "decode" in spec:
+                # Soft masks ride in the colour channels so their borders feather across the coat.
+                value = spec.get("mask_value", lambda c, i: c[i])
+                layer.data.foreach_set("value", [value(c, channel) for c in colors])
+                continue
             touched = {v for f, r in zip(self.faces, self.face_region) if r == name for v in f}
             for v in touched:
                 layer.data[v].value = 1.0
@@ -161,6 +169,35 @@ class Body:
             poly.material_index = spec["slots"].index(spec["surface"][region])
         self.mesh = me
         self.bvh = BVHTree.FromPolygons(self.posed, self.faces)
+
+    def joint(self, name):
+        """Rest position of a joint in Blender space."""
+        g = self.gltf.g
+        parent = {c: i for i, n in enumerate(g["nodes"]) for c in n.get("children", [])}
+        i = next(k for k, n in enumerate(g["nodes"]) if n.get("name") == name)
+        m = Matrix.Identity(4)
+        while i is not None:
+            m = self.gltf.local(i) @ m
+            i = parent.get(i)
+        return to_bl(m.translation)
+
+    def chain_weights(self, prefix, p):
+        """Weights along a joint chain (tail hair hung below the dock): blend the two nearest segments."""
+        names = [n for n in self.names if n.startswith(prefix) and n[len(prefix):].isdigit()]
+        names.sort(key=lambda n: int(n[len(prefix):]))
+        heads = [self.joint(n) for n in names]
+        tails = heads[1:] + [heads[-1] + (heads[-1] - heads[-2])]
+        best = []
+        for name, a, b in zip(names, heads, tails):
+            ab = b - a
+            t = max(0.0, min(1.0, (Vector(p) - a).dot(ab) / ab.length_squared))
+            best.append(((Vector(p) - (a + ab * t)).length, name))
+        best.sort()
+        (d0, n0), (d1, n1) = best[0], best[1]
+        w0 = d1 / (d0 + d1) if d0 + d1 > 0 else 1.0
+        w0 = 0.5 + (w0 - 0.5) * 1.6
+        w0 = max(0.0, min(1.0, w0))
+        return [self.names.index(n0), self.names.index(n1), 0, 0], [w0, 1 - w0, 0.0, 0.0]
 
     def dominant(self, face):
         score = {}
@@ -191,6 +228,8 @@ def weights_from(body, faces, tree, p):
     a, b, c = (body.posed[v] for v in faces[i])
     bary = barycentric_transform(loc, a, b, c, Vector((1, 0, 0)), Vector((0, 1, 0)), Vector((0, 0, 1)))
     score = {}
+    if not all(math.isfinite(k) for k in bary) or sum(max(0.0, k) for k in bary) <= 0:
+        bary = (1 / 3, 1 / 3, 1 / 3)
     for v, k in zip(faces[i], bary):
         for j, w in zip(body.joints[v], body.weights[v]):
             score[j] = score.get(j, 0) + w * max(0.0, k)
@@ -573,33 +612,37 @@ def ring_path(body, centre, axis, start, end, samples, offset):
     return path, normals
 
 
+# Head landmarks of the anatomical horse (horse-anatomy-authoring.py): poll, face axis, mouth corner.
+HEAD_AXIS = Vector((0, -0.637, -0.771))
+POLL = Vector((0, -1.11, 1.86))
+NOSEBAND = Vector((0, -1.36, 1.6))
+MOUTH = Vector((0, -1.465, 1.39))
+
+
 def horse_bridle(body, materials, objects):
-    head_axis = Vector((0, -0.74, -0.67))
     b = Builder()
-    path, normals = ring_path(body, Vector((0, -1.47, 1.765)), head_axis, -180, 180, 48, 0.006)
+    path, normals = ring_path(body, NOSEBAND, HEAD_AXIS, -180, 180, 48, 0.006)
     ribbon(path, normals, 0.03, 0.007, b)
-    crown, crown_n = ring_path(body, Vector((0, -1.17, 1.93)), Vector((0, -0.9, -0.42)), -15, 195, 40, 0.006)
+    crown, crown_n = ring_path(body, POLL, Vector((0, -0.9, -0.42)), -15, 195, 40, 0.006)
     ribbon(crown, crown_n, 0.028, 0.007, b)
-    brow, brow_n = ring_path(body, Vector((0, -1.27, 1.95)), head_axis, 15, 165, 24, 0.008)
+    brow, brow_n = ring_path(body, POLL + Vector((0, -0.07, 0.0)), HEAD_AXIS, 18, 162, 24, 0.008)
     ribbon(brow, brow_n, 0.022, 0.006, b)
-    throat, throat_n = ring_path(body, Vector((0, -1.17, 1.93)), Vector((0, -0.6, 0.8)), 195, 345, 24, 0.016)
+    throat, throat_n = ring_path(body, POLL, Vector((0, -0.6, 0.8)), 195, 345, 24, 0.016)
     ribbon(throat, throat_n, 0.02, 0.006, b)
     metal = Builder()
-    bits = []
     for side, end in ((-1, crown[-1]), (1, crown[0])):
-        hit, n = body.ray((side * 1, -1.545, 1.665), (-side, 0, 0))
+        hit, n = body.ray((side * 1, MOUTH.y, MOUTH.z), (-side, 0, 0))
         bit = hit + Vector((side * 0.018, 0, 0))
-        bits.append(bit)
         torus(metal, bit, (1, 0, 0), 0.027, 0.0045)
         cheek, cheek_n = surface_path(body, [end, end.lerp(bit, 0.5) + Vector((side * 0.01, 0, 0)), bit + Vector((0, 0.0, 0.03))], 16, 0.007)
         ribbon(cheek, cheek_n, 0.024, 0.007, b)
         rein = [
             bit + Vector((side * 0.012, 0.0, -0.024)),
-            Vector((side * 0.075, -1.36, 1.52)),
-            Vector((side * 0.17, -1.05, 1.58)),
-            Vector((side * 0.19, -0.8, 1.72)),
-            Vector((side * 0.08, -0.6, 1.86)),
-            Vector((0, -0.55, 1.88)),
+            Vector((side * 0.08, -1.34, 1.36)),
+            Vector((side * 0.13, -1.05, 1.5)),
+            Vector((side * 0.15, -0.8, 1.56)),
+            Vector((side * 0.09, -0.58, 1.66)),
+            Vector((0, -0.5, 1.68)),
         ]
         path, normals = surface_path(body, rein, 40, 0.012)
         normals = [(n if n.length else Vector((side, 0, 0))) for n in normals]
@@ -609,67 +652,66 @@ def horse_bridle(body, materials, objects):
 
 
 def horse_hair(body, barrel, material, objects, rows):
+    """Layered mane falling to the off side, a forelock between the ears, and a tail hung on the tail bones."""
     rng = random.Random(7)
     mane = Builder()
-    for layer, (count, spread, length, fluff) in enumerate(((30, 0.0, 0.3, 0.012), (24, 0.018, 0.24, 0.03))):
+    for layer, (count, spread, length, fluff) in enumerate(((34, 0.0, 0.3, 0.008), (28, 0.008, 0.26, 0.014), (22, 0.016, 0.2, 0.02))):
         for k in range(count):
             t = (k + rng.random() * 0.6) / count
-            y = -1.17 + t * 0.6
+            y = -1.09 + t * 0.6
             span = length * (0.75 + 0.35 * math.sin(math.pi * min(1, t * 1.3))) * (0.85 + 0.3 * rng.random())
             path, normals = [], []
             for s in range(9):
                 f = s / 8
-                angle = -(math.radians(8 + layer * 10) + f * span / 0.2)
-                c, d, r = barrel.point(y + 0.05 * f, angle, 0.012 + fluff * f + spread)
+                angle = -(math.radians(6 + layer * 9) + f * span / 0.2)
+                c, d, r = barrel.point(y + 0.05 * f, angle, 0.01 + fluff * f + spread)
                 path.append(c + d * r)
                 normals.append(d)
-            card(mane, path, normals, 0.055, rng.randrange(rows), rows)
-    for k in range(26):
-        y = -1.15 + 0.58 * rng.random()
-        span = 0.03 + 0.11 * rng.random() ** 1.5
-        lift = math.radians(rng.uniform(2, 14))
+            card(mane, path, normals, 0.065 + 0.012 * layer, rng.randrange(rows), rows)
+    for k in range(18):
+        y = -1.08 + 0.58 * rng.random()
+        span = 0.08 + 0.1 * rng.random()
+        lift = math.radians(rng.uniform(2, 8))
         path, normals = [], []
         for s_ in range(5):
             f = s_ / 4
             c, d, r = barrel.point(y + rng.uniform(0.01, 0.05) * f, lift + f * span / 0.2, 0.012 + 0.012 * f)
             path.append(c + d * r)
             normals.append(d)
-        card(mane, path, normals, rng.uniform(0.05, 0.1), rng.randrange(rows), rows)
-    for k in range(7):
-        x = (k - 3) * 0.014
-        top, _ = body.ray((x, -1.13 - 0.03 * rng.random(), 4), (0, 0, -1))
-        tip = 1.86 + 0.06 * rng.random()
-        points = [top + Vector((0, 0, 0.012)), Vector((x * 1.5, -1.3, 2.0)), Vector((x * 2, -1.37, tip))]
-        path, normals = surface_path(body, points, 8, 0.014)
-        card(mane, path, normals, 0.045, rng.randrange(rows), rows)
+        card(mane, path, normals, rng.uniform(0.035, 0.06), rng.randrange(rows), rows)
+    for k in range(9):
+        x = (k - 4) * 0.012
+        top, _ = body.ray((x, -1.12 - 0.03 * rng.random(), 4), (0, 0, -1))
+        tip = 1.8 + 0.05 * rng.random()
+        points = [top + Vector((0, 0, 0.012)), Vector((x * 1.5, -1.2, 1.95)), Vector((x * 2.2, -1.29, tip))]
+        path, normals = surface_path(body, points, 8, 0.012)
+        card(mane, path, normals, 0.04 + 0.01 * rng.random(), rng.randrange(rows), rows)
     objects.append(link("ManeCards", mane.mesh("ManeCards"), material, "mane"))
 
-    slab = [body.posed[v] for f, r in zip(body.skin_faces, body.skin_region) if r == "hair" for v in f if body.posed[v].y > 0.6]
-    zmin, zmax = min(p.z for p in slab), max(p.z for p in slab)
-    spine = []
-    for k in range(12):
-        z0 = zmax - (zmax - zmin) * k / 11
-        near = [p for p in slab if abs(p.z - z0) < 0.06]
-        spine.append(sum(near, Vector()) / len(near))
+    spine = [body.joint(f"Tail{k}") for k in range(1, 8)]
+    spine.append(spine[-1] + (spine[-1] - spine[-2]).normalized() * 0.16)
     tail = Builder()
-    direction = (spine[-1] - spine[-2]).normalized()
-    spine = spine + [spine[-1] + direction * 0.06, spine[-1] + direction * 0.12]
-    for k in range(34):
-        phi = 2 * math.pi * k / 34 + rng.random() * 0.4
-        start = 0.05 + 0.25 * rng.random()
-        flare = 0.03 + 0.07 * rng.random()
-        reach = len(spine) - 1 - rng.randrange(3)
+    for k in range(64):
+        phi = 2 * math.pi * k / 64 + rng.random() * 0.4
+        start = 0.2 + 1.4 * rng.random()
+        flare = 0.025 + 0.06 * rng.random()
+        reach = len(spine) - 1 - 0.9 * rng.random() ** 2
+        wave = rng.uniform(0, 2 * math.pi)
         path, normals = [], []
-        for s_ in range(9):
-            f = s_ / 8
+        for s_ in range(11):
+            f = s_ / 10
             t = start + (reach - start) * f
             i = min(int(t), len(spine) - 2)
             base = spine[i].lerp(spine[i + 1], t - i)
-            radial = Vector((math.cos(phi), math.sin(phi) * 0.7, 0)) * (0.015 + flare * f ** 0.8)
+            # Fullest at mid-length, gathering again toward the switch, with a loose wave in each lock.
+            swell = math.sin(math.pi * min(1.0, 0.25 + 0.9 * f))
+            radial = Vector((math.cos(phi), math.sin(phi) * 0.6, 0)) * (0.018 + flare * swell)
+            radial += Vector((0.012 * math.sin(wave + 5 * f), 0.008 * math.cos(wave + 4 * f), 0)) * f
             path.append(base + radial)
-            normals.append(radial.normalized() if k % 3 else Vector((math.cos(phi + 1.2), math.sin(phi + 1.2), 0)))
-        card(tail, path, normals, 0.07 + 0.04 * rng.random(), rng.randrange(rows), rows)
-    objects.append(link("TailCards", tail.mesh("TailCards"), material, "tail"))
+            # Two thirds of the locks lie on the tail's surface; the rest stand edge-on to fill the silhouette.
+            normals.append(radial.normalized() if k % 3 else Vector((-math.sin(phi), math.cos(phi) * 0.6, 0)).normalized())
+        card(tail, path, normals, 0.06 + 0.04 * rng.random(), rng.randrange(rows), rows)
+    objects.append(link("TailCards", tail.mesh("TailCards"), material, "chain:Tail"))
 
 
 # ---------------------------------------------------------------- procedural surfaces
@@ -813,6 +855,10 @@ def coat_graph(g, coat):
     base = g.mix(star, base, white)
     sock = coat_sock(g, p, jitter)
     base = g.mix(sock, base, white)
+    # Mane roots and the tail dock: the crest mask feathers the coat into dark hair along the strands.
+    strands = g.noise(g.stretch((110, 110, 5)), 1.0, 3.0, 0.6)
+    crest = g.smooth(0.25, 0.75, g.math("ADD", g.attr("crest"), g.math("MULTIPLY", g.math("SUBTRACT", strands, 0.5), 0.6)))
+    base = g.mix(crest, base, g.scale(coat["hair"], g.math("ADD", 0.65, g.math("MULTIPLY", 0.8, strands))))
     rough = g.math("ADD", 0.5, g.math("MULTIPLY", 0.12, streak))
     rough = g.math("ADD", rough, g.math("MULTIPLY", -0.08, muzzle))
     rough = g.math("ADD", rough, g.math("MULTIPLY", 0.06, points))
@@ -870,6 +916,14 @@ def surface_graph(material, kind, coat):
         color = g.mix(sock, coat["hoof"], (0.25, 0.19, 0.12))
         color = g.scale(color, g.math("ADD", 0.75, g.math("MULTIPLY", 0.5, rings)))
         g.finish(color, g.math("ADD", 0.42, g.math("MULTIPLY", 0.15, rings)), 0.0, rings, 0.4)
+    elif kind == "eye" and "star" in coat:
+        # Horse eye: the iris attribute is the cosine to the eye's axis; a dark brown iris with radial
+        # fibres around a black pupil, the rim fading to the brown-white of the sclera under the lids.
+        iris = g.attr("eyering")
+        fibres = g.noise(g.stretch((900, 900, 900)), 1.0, 2.0)
+        color = g.mix(g.smooth(0.55, 0.7, iris), (0.09, 0.06, 0.045), g.scale((0.05, 0.026, 0.012), g.math("ADD", 0.7, g.math("MULTIPLY", 0.6, fibres))))
+        color = g.mix(g.smooth(0.9, 0.95, iris), color, (0.004, 0.003, 0.003))
+        g.finish(color, 0.03, 0.0, 0.0, 0.0)
     elif kind == "eye":
         g.finish((0.018, 0.011, 0.007), 0.04, 0.0, 0.0, 0.0)
     elif kind in ("leather", "darkleather"):
@@ -998,7 +1052,8 @@ def bake(objects, graphs, size, samples, reach):
 
 
 def hair_texture(width, height, rows, coat, seed=11):
-    """Alpha strand clumps: one clump per row, roots opaque, tips feathered."""
+    """Alpha strand locks: one lock per row whose strands gather toward a feathered point, so a card
+    reads as a tapering lock of hair rather than a ribbon."""
     rng = np.random.default_rng(seed)
     color = np.zeros((height, width, 3), np.float32)
     alpha = np.zeros((height, width), np.float32)
@@ -1008,17 +1063,18 @@ def hair_texture(width, height, rows, coat, seed=11):
     xs = np.arange(width, dtype=np.float32)
     base = np.array(coat["hair"], np.float32)
     for r in range(rows):
-        for _ in range(46):
-            length = width * rng.uniform(0.35, 1.0)
-            y0 = r * row_h + row_h * rng.uniform(0.12, 0.88)
-            wave = rng.uniform(0.4, 1.6) * np.sin(xs / width * rng.uniform(2, 7) + rng.uniform(0, 6.3))
-            drift = (rng.uniform(-0.12, 0.12) * row_h) * (xs / width)
-            ys = y0 + wave + drift
+        centre = (r + 0.5) * row_h + rng.uniform(-0.08, 0.08) * row_h
+        for _ in range(30):
+            length = width * rng.uniform(0.3, 1.0) ** 0.7
+            y0 = r * row_h + row_h * rng.uniform(0.1, 0.9)
+            wave = rng.uniform(0.4, 1.6) * row_h / 32 * np.sin(xs / width * rng.uniform(2, 7) + rng.uniform(0, 6.3))
+            gather = rng.uniform(0.45, 0.85) * np.clip(xs / width, 0, 1) ** 0.8
+            ys = y0 + (centre - y0) * gather + wave
             ys = np.clip(ys, r * row_h + 1, (r + 1) * row_h - 2)
-            w = rng.uniform(1.4, 2.6) * (1 - 0.55 * xs / width)
+            w = rng.uniform(1.0, 2.4) * row_h / 32 * (1 - 0.6 * xs / width)
             a = np.clip((length - xs) / (0.28 * length), 0, 1) * (xs < length)
             tint = base * rng.uniform(0.6, 1.5) * (np.array((2.8, 2.2, 1.8), np.float32) if rng.random() < 0.12 else 1.0)
-            for dy in range(-3, 4):
+            for dy in range(-int(2 + row_h / 16), int(3 + row_h / 16)):
                 py = np.floor(ys).astype(int) + dy
                 cover = np.clip(w / 2 + 0.5 - np.abs(py + 0.5 - ys), 0, 1) * a
                 ok = (py >= 0) & (py < height) & (cover > 0)
@@ -1031,7 +1087,7 @@ def hair_texture(width, height, rows, coat, seed=11):
                 rough[prow, cols] = 0.64 + 0.14 * rng.random()
     root = np.clip(1 - xs / (0.04 * width), 0, 1)[None, :]
     for r in range(rows):
-        band = slice(int(r * row_h + row_h * 0.25), int((r + 1) * row_h - row_h * 0.25))
+        band = slice(int(r * row_h + row_h * 0.3), int((r + 1) * row_h - row_h * 0.3))
         alpha[band] = np.maximum(alpha[band], root)
         color[band] = np.where(alpha[band][..., None] > 0, color[band], base)
     color[alpha <= 0] = base
@@ -1085,6 +1141,8 @@ def export(body, groups, trees, path):
                         if skin == "orig":
                             joints, weights = list(body.joints[v]), list(body.weights[v])
                         else:
+                            if v not in cache and skin.startswith("chain:"):
+                                cache[v] = body.chain_weights(skin[6:], me.vertices[v].co)
                             if v not in cache:
                                 cache[v] = weights_from(body, *trees[skin], me.vertices[v].co)
                             joints, weights = cache[v]
@@ -1141,40 +1199,19 @@ def export(body, groups, trees, path):
 
 # ---------------------------------------------------------------- animals
 
-POLL_CUT = -1.12
-
-
-def horse_tail_cut(body, face, region):
-    """Below the dock the tail slab gives way to alpha cards; ahead of the poll the mane slab becomes coat under the forelock."""
-    if region != "hair":
-        return region
-    if not hasattr(body, "dock"):
-        tail = [body.posed[v] for f, r in zip(body.skin_faces, body.skin_region) if r == "hair" for v in f if body.posed[v].y > 0.6]
-        body.dock = max(p.z for p in tail) - 0.13
-    centre = sum((body.posed[v] for v in face), Vector()) / 3
-    if centre.y > 0.6 and centre.z < body.dock:
-        return None
-    return "coat" if centre.y < POLL_CUT else region
+def horse_regions(colors):
+    """COLOR_0.b carries the region code; a face takes its most common vertex code."""
+    codes = sorted(round(c[2] * 3) for c in colors)
+    return ("coat", "hair", "hoof", "eye")[codes[1]]
 
 
 SPECS = {
     "horse": {
-        "regions": {
-            (0.072, 0.025, 0.01): "coat",
-            (0.042, 0.018, 0.008): "remove",
-            (0.068, 0.019, 0.012): "remove",
-            (0.023, 0.01, 0.005): "remove",
-            (0.007, 0.004, 0.003): "hair",
-            (0.127, 0.051, 0.021): "eyering",
-            (0.016, 0.012, 0.009): "hoof",
-            (0.03, 0.012, 0.005): "blaze",
-            (0.018, 0.01, 0.007): "muzzle",
-            (0.007, 0.007, 0.007): "eye",
-            (0.392, 0.392, 0.392): "eye",
-        },
-        "surface": {"coat": "coat", "eyering": "coat", "blaze": "coat", "muzzle": "coat", "hair": "mane", "hoof": "hoof", "eye": "eye"},
-        "slots": ["coat", "mane", "hoof", "eye"],
-        "cut": horse_tail_cut,
+        "decode": horse_regions,
+        "masks": ("muzzle", "eyering", "crest"),
+        "mask_value": lambda c, i: c[i] if i < 2 else max(0.0, 1 - abs(3 * c[2] - 1)),
+        "surface": {"coat": "coat", "hair": "coat", "hoof": "hoof", "eye": "eye"},
+        "slots": ["coat", "hoof", "eye"],
         "coat": {
             "dark": (0.075, 0.022, 0.008),
             "light": (0.2, 0.068, 0.024),
@@ -1183,11 +1220,13 @@ SPECS = {
             "muzzle": (0.025, 0.018, 0.015),
             "hair": (0.02, 0.011, 0.006),
             "hoof": (0.035, 0.03, 0.026),
-            "star": (0.0, -1.43, 1.99),
+            "star": (0.0, -1.25, 1.91),
         },
         "size": 1024,
         "occlusion": 0.4,
-        "hair": (1024, 256, 8),
+        # Rows about eight times longer than tall keep the strands' mip close to the cards' own aspect,
+        # so the locks stay resolved instead of averaging into solid ribbons.
+        "hair": (512, 512, 8),
     },
     "dog": {
         "regions": {
@@ -1215,7 +1254,7 @@ SPECS = {
 
 
 def skin_trees(body):
-    torso = {"Body", "Back", "Torso", "Torso2", "Torso3"}
+    torso = {"Body", "Back", "Hips", "Torso", "Torso2", "Torso3"}
     return {
         "torso": body.group(lambda joint, region: joint in torso and region != "hair"),
         "head": body.group(lambda joint, region: joint in ("Head",) and region not in ("hair",)),
