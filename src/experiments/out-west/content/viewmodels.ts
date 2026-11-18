@@ -32,14 +32,14 @@ export const VIEWMODELS: Readonly<Record<string, ContentAsset>> = {
     bytes: 97596,
   },
   'outfit.striped-poncho': {
-    url: '/experiments/out-west/3d/native-v2/viewmodels/outfit.striped-poncho.glb?v=ea1015945453bf8b',
-    hash: 'ea1015945453bf8bb55b54ecfd481a0ac32f3aaa9f7b7be7c92c763a2ccd1d3c',
-    bytes: 96568,
+    url: '/experiments/out-west/3d/native-v2/viewmodels/outfit.striped-poncho.glb?v=ec2e29175d4f42da',
+    hash: 'ec2e29175d4f42da6e7c7e7615d45e8139cd2f52551d654da78e833b52b20ed4',
+    bytes: 96716,
   },
   'outfit.striped-poncho.pair': {
-    url: '/experiments/out-west/3d/native-v2/viewmodels/outfit.striped-poncho.pair.glb?v=2670a5fd73ea133d',
-    hash: '2670a5fd73ea133df72c3525c9eac8b269c7da38e5102c9b48b9c77cb95c7a77',
-    bytes: 97272,
+    url: '/experiments/out-west/3d/native-v2/viewmodels/outfit.striped-poncho.pair.glb?v=35ae0a95a7baed9c',
+    hash: '35ae0a95a7baed9c35fae1632249f0a16c7e657a529dc8fc705f47c84b04f4b7',
+    bytes: 97424,
   },
   'outfit.gamblers-frock': {
     url: '/experiments/out-west/3d/native-v2/viewmodels/outfit.gamblers-frock.glb?v=70b0b4a85147fc89',

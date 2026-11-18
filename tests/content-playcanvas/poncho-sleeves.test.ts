@@ -98,6 +98,32 @@ for (const [id, donorId, vertices, faces, worldFaces] of [
   ['outlaw-6', 'outfit.shirt-vest', 578, 1088, 51],
   ['outlaw-15', 'outlaw-2', 544, 1024, 43],
 ] as const) {
+  it(`${id} restores its inner neck and seats the woven rim on the torso`, async () => {
+    const artifact = await io.read(`tools/art/characters/coat-collars/${id}.glb`)
+    await validateAuthoringInputs(artifact)
+    const shell = artifact.getRoot().listMeshes()[0]?.listPrimitives()[0]
+    const pieces = shell?.getExtras().pieceRanges as Range[] | undefined
+    const [woven, neck] = pieces ?? []
+    const joints = shell?.getAttribute('_AUTHOR_JOINTS')
+    const weights = shell?.getAttribute('_AUTHOR_WEIGHTS')
+    if (!(shell && woven && neck && joints && weights)) {
+      throw new Error('Missing fitted poncho shell or recovered skin')
+    }
+    expect(woven).toMatchObject({ start: 0, count: 1120, swatch: 'hessian' })
+    expect(neck).toMatchObject({ start: 1120, slot: 'skin', name: 'RestoredPonchoNeck' })
+    expect(indices(shell, woven)).toHaveLength(2184 * 3)
+    expect(indices(shell, neck)).toHaveLength((id === 'outlaw-15' ? 44 : 42) * 3)
+    const names = artifact.getRoot().getExtras().jointNames as string[]
+    for (let vertex = 0; vertex < 28; vertex++) {
+      const weightsAt = weights.getElement(vertex, [])
+      expect(weightsAt.reduce((sum, weight) => sum + weight, 0)).toBeCloseTo(1, 6)
+      expect(
+        joints
+          .getElement(vertex, [])
+          .flatMap((joint, slot) => ((weightsAt[slot] ?? 0) > 0 ? [names[joint]] : [])),
+      ).toEqual(['Chest', 'Neck'])
+    }
+  })
   it(`${id} completes only the presentation sleeve with its own fitted attributes and the donor's full adjacency`, async () => {
     const world = await io.read(`tools/art/characters/${id}.gltf`)
     const presentation = await io.read(`tools/art/characters/${id}.gltf`)
@@ -116,7 +142,7 @@ for (const [id, donorId, vertices, faces, worldFaces] of [
     const after = body(presentation)
     const complete = indices(after.primitive, after.range)
     const incomplete = indices(before.primitive, before.range)
-    // The default producer is the old-code control: world occlusion is deliberate.
+    // The raw trim is the control. The production character baker selects complete sleeves.
     expect(incomplete).toHaveLength(worldFaces * 3)
     expect(complete).toHaveLength(faces * 3)
     expect(complete).toEqual(indices(donor.primitive, donor.range))
