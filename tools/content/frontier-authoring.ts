@@ -30,6 +30,7 @@ import {
 } from './frontier-mounts.ts'
 import { surround } from './frontier-openings.ts'
 import { coverModel, desertPlants } from './frontier-props.ts'
+import { authorRoofMaterial } from './frontier-roof-material.ts'
 import { frontierSiding } from './frontier-siding.ts'
 import { optimizeAsset } from './optimize.ts'
 
@@ -168,6 +169,7 @@ export async function authorFrontier(output: string): Promise<void> {
   const collision = compileFrontierCollision(layout)
   const g = await FrontierGeometry.create(layout.size)
   await authoredMaterials(g, layout)
+  await authorRoofMaterial(g)
   const ground = g.group('ground-Perdition')
   flatGround(g, ground, layout)
   for (const bank of frontierCutBanks(layout.size)) {

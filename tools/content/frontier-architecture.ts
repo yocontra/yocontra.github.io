@@ -11,6 +11,7 @@ import {
 import { ROOF_DECK_Y } from '../../src/experiments/out-west/ffa/sim/roofwalks.ts'
 import type { FrontierPlan } from './frontier-authoring.ts'
 import {
+  type CollisionMesh,
   type compileFrontierCollision,
   FALSE_FRONT_RISE,
   falseFrontSide,
@@ -21,6 +22,7 @@ import type { FrontierGeometry, Placement, Rgb } from './frontier-geometry.ts'
 import { LABELS, SHORT_LABELS, SIGN_ROWS } from './frontier-materials.ts'
 import { MOUNT_IRON_TINT } from './frontier-mounts.ts'
 import { buildingDoors } from './frontier-openings.ts'
+import { SHAKE_TILE } from './frontier-roof-material.ts'
 import {
   BANK_SIGN_SIZE,
   FACADE_SIGN_HEIGHT,
@@ -49,15 +51,50 @@ export function authorDecksAndRoofs(
   const roofs = new Map(layout.buildings.map((building) => [`roof:${building.id}`, building]))
   for (const mesh of collision.meshes) {
     const building = roofs.get(mesh.id)
-    if (building || mesh.id.startsWith('stair:')) {
-      g.surface(
-        ground,
-        'wood',
-        building ? (roofMesh(building, 'render') ?? mesh) : mesh,
-        building ? [0.37, 0.32, 0.27] : [0.75, 0.63, 0.45],
-      )
+    if (building?.roof) {
+      const visible = roofMesh(building, 'render')
+      if (visible) {
+        pitchedRoof(g, ground, visible, building.roof)
+      }
+    } else if (mesh.id.startsWith('stair:')) {
+      g.surface(ground, 'wood', mesh, [0.75, 0.63, 0.45])
     }
   }
+}
+
+function pitchedRoof(
+  g: FrontierGeometry,
+  ground: Node,
+  mesh: CollisionMesh,
+  roof: NonNullable<Building['roof']>,
+) {
+  const alongX = roof.axis === 'x'
+  // roofMesh writes the two triangles of each planar strip before the underside and edge faces.
+  const topTriangles = (roof.bays * 2 + 2) * 2
+  for (let offset = 0; offset < topTriangles * 3; offset += 6) {
+    const first = (offset / 6) * 2
+    const positions = mesh.positions.slice(first * 3, (first + 4) * 3)
+    const low = positions[1] ?? 0
+    const high = positions[7] ?? 0
+    const downslope = low <= high ? -1 : 1
+    const across = alongX ? 2 : 0
+    const run = (positions[6 + across] ?? 0) - (positions[across] ?? 0)
+    const slope = Math.hypot(run, high - low) / run
+    const uvs: number[] = []
+    for (let vertex = 0; vertex < positions.length; vertex += 3) {
+      const u = (positions[vertex + (alongX ? 0 : 2)] ?? 0) / SHAKE_TILE.along
+      const v = (downslope * (positions[vertex + across] ?? 0) * slope) / SHAKE_TILE.slope
+      uvs.push(u, v)
+    }
+    const indices = mesh.indices.slice(offset, offset + 6).map((index) => index - first)
+    g.surface(ground, 'cedar-shakes', { ...mesh, positions, indices, uvs }, [0.7, 0.65, 0.6])
+  }
+  g.surface(
+    ground,
+    'wood',
+    { ...mesh, indices: mesh.indices.slice(topTriangles * 3) },
+    [0.37, 0.32, 0.27],
+  )
 }
 
 export function buildingDetails(
