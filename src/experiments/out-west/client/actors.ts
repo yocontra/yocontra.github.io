@@ -247,6 +247,7 @@ export class Actors {
       actor.batchRigid = false
     }
     actor.root.tags.add(`rider:${id}`)
+    this.game.frontierShadows?.registerRider(actor.root, id)
     for (const track of this.tracks) {
       if (!actor.hasAnimation(track.name)) {
         actor.model.anim?.baseLayer?.assignAnimation(track.name, track)

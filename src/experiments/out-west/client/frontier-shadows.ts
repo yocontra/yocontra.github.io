@@ -17,7 +17,7 @@ type Simplify = typeof import('./crowd-shadow-mesh.ts').simplifyShadow
 /** Low-tier sun updates alternate under load. Only dense crowds use reduced shadow geometry. */
 export class FrontierShadows {
   private count = 0
-  private localRider = ''
+  private localRider: string | undefined
   private readonly game: GameApplication
   private clock = 0
   private readonly lastCamera = new Vec3()
@@ -28,6 +28,7 @@ export class FrontierShadows {
   private sun: { light: LightComponent; previous: number } | undefined
   private readonly geometry = new Map<Mesh, Mesh | undefined>()
   private readonly proxies = new Map<MeshInstance, MeshInstance>()
+  private readonly riderRoots = new WeakMap<GraphNode, string>()
   private readonly riders = new WeakMap<MeshInstance, string>()
   private readonly shadowOnly = new WeakSet<MeshInstance>()
   private readonly layer
@@ -40,7 +41,7 @@ export class FrontierShadows {
 
   crowd(count: number, ownId: string | undefined): void {
     this.count = count
-    this.localRider = ownId ? `rider-${ownId}` : ''
+    this.localRider = ownId
     if (count < CROWDED || this.pending || this.closed) {
       return
     }
@@ -57,19 +58,23 @@ export class FrontierShadows {
       })
   }
 
-  private rider(source: MeshInstance): string {
+  registerRider(root: Entity, id: string): void {
+    this.riderRoots.set(root, id)
+  }
+
+  private rider(source: MeshInstance): string | undefined {
     const known = this.riders.get(source)
     if (known !== undefined) {
       return known
     }
     for (let node: GraphNode | null = source.node; node; node = node.parent) {
-      if (node.name.startsWith('rider-')) {
-        this.riders.set(source, node.name)
-        return node.name
+      const id = this.riderRoots.get(node)
+      if (id !== undefined) {
+        this.riders.set(source, id)
+        return id
       }
     }
-    this.riders.set(source, '')
-    return ''
+    return undefined
   }
 
   private select(source: MeshInstance): boolean {
@@ -82,7 +87,7 @@ export class FrontierShadows {
       return false
     }
     const rider = this.rider(source)
-    return rider.length > 0 && rider !== this.localRider
+    return rider !== undefined && rider !== this.localRider
   }
 
   private remove(source: MeshInstance, proxy: MeshInstance): void {
