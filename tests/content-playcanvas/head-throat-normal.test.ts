@@ -9,15 +9,23 @@ import {
   patchHeadThroatNormalAtlas,
   withHeadThroatNormalSource,
 } from '../../tools/content/head-throat-normal.ts'
+import domain from '../../tools/content/head-throat-normal-domain.json' with { type: 'json' }
 import { THROAT_NORMAL_IDS } from '../../tools/content/head-throat-plan.ts'
 import { io } from './paired-grip-test-helpers.ts'
 
-it('rejects the actual old neck bake that caused the native V seam', async () => {
-  const { data } = await sharp('tools/art/characters/head-nape/neck-normal.png')
+it('the native nape bake leaves the lower-neck error texels to the source atlas', async () => {
+  const { data, info } = await sharp('tools/art/characters/head-nape/neck-normal.png')
     .ensureAlpha()
     .raw()
     .toBuffer({ resolveWithObject: true })
-  expect(assertOutwardNormalPixels.bind(null, data)).toThrow('inward')
+  expect(assertOutwardNormalPixels(data)).toBeGreaterThan(7000)
+  const { atlas } = JSON.parse(
+    await readFile('tools/art/characters/head-nape/lattice.json', 'utf8'),
+  )
+  const alpha = domain.lowerNeckExcludedPixels.map(
+    ([x = 0, y = 0]) => data[((y - atlas.normal.y) * info.width + x - atlas.normal.x) * 4 + 3],
+  )
+  expect(alpha).toEqual(domain.lowerNeckExcludedPixels.map(() => 0))
 })
 it('accepts outward unit normals and leaves transparent atlas space unowned', () => {
   expect(assertOutwardNormalPixels(new Uint8Array([128, 128, 255, 255, 0, 0, 0, 0]))).toBe(1)

@@ -368,6 +368,14 @@ def write(name, pixels, alpha, box):
     image.save()
 
 
+def outward_normal_mask(pixels):
+    """Keep the original atlas where the bake did not produce a valid tangent normal."""
+    encoded = np.rint(np.clip(pixels[..., :3], 0.0, 1.0) * 255.0)
+    vectors = encoded / 127.5 - 1.0
+    length = np.linalg.norm(vectors, axis=-1)
+    return (vectors[..., 2] > 0.0) & (length >= 0.98) & (length <= 1.02)
+
+
 def write_lattice(data):
     path = OUTPUT / "lattice.json"
     path.write_text(json.dumps(data, indent=2) + "\n")
@@ -427,7 +435,8 @@ def main():
     normal_alpha = (baked_normal[..., 3] > 0.5) & ~taken_half
     nbox = tuple(int(v) // 2 for v in box)
     nbox = (nbox[0], nbox[1], -(-box[2] // 2), -(-box[3] // 2))
-    write("neck-normal", baked_normal, normal_alpha.astype(np.float32), nbox)
+    valid_normals = normal_alpha & outward_normal_mask(baked_normal)
+    write("neck-normal", baked_normal, valid_normals.astype(np.float32), nbox)
     face = labels == np.bincount(labels).argmax()
     face_arm = np.median(sample(arm, uvs[np.unique(triangles[face])]), 0)
     arm_out = np.zeros((nh, nw, 4), np.float32)

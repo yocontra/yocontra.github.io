@@ -22,6 +22,7 @@ import { integrateGarmentParts } from './garment-parts.ts'
 import { repairHeadNape } from './head-nape.ts'
 import { withHeadThroatNormalSource } from './head-throat-normal.ts'
 import { labelActorHatGlb } from './label-actor-hats.ts'
+import { repairLowerNeckFans } from './lower-neck-fans.ts'
 import { completeCharacterClips } from './normalize-character-clips.ts'
 import { normalizeSkinnedAsset } from './normalize-skinned-nodes.ts'
 import { fitRearScalpHair } from './rear-scalp-fit.ts'
@@ -44,6 +45,7 @@ export async function bakeCharacter(
   const id = basename(path, '.gltf')
   await integrateGarmentParts(doc, id, options)
   await fitWaistcoats(doc, id)
+  repairLowerNeckFans(doc)
   await repairHeadNape(doc)
   if (HUMAN.test(id)) {
     fitRearScalpHair(doc)

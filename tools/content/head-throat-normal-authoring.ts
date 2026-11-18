@@ -15,11 +15,13 @@ import {
   type UVTriangle,
 } from './head-throat-normal-domain.ts'
 import { THROAT_GEOMETRY_IDS, THROAT_NORMAL_IDS } from './head-throat-plan.ts'
+import { repairLowerNeckFans } from './lower-neck-fans.ts'
 
 const directory = resolve('.out-west-qa/head-throat/normal-art')
 const canonical = 'tools/art/characters/player.gltf'
 const doc = await new NodeIO().read(canonical)
 await integrateGarmentParts(doc, 'player')
+repairLowerNeckFans(doc)
 await repairHeadNape(doc)
 const node = doc
   .getRoot()
@@ -144,6 +146,7 @@ const paths = [
   'tools/content/garment-geometry.ts',
   'tools/content/character-atlas.ts',
   'tools/content/character-materials.ts',
+  'tools/content/lower-neck-fans.ts',
   'tools/content/head-throat-normal-authoring.py',
   'tools/content/head-throat-normal-authoring.ts',
 ]
@@ -152,6 +155,7 @@ for (const id of THROAT_NORMAL_IDS) {
   const source = JSON.parse(await readFile(path, 'utf8')) as { buffers: { uri: string }[] }
   paths.push(path, ...source.buffers.map((buffer) => `tools/art/characters/${buffer.uri}`))
   const sourceDoc = await new NodeIO().read(path)
+  repairLowerNeckFans(sourceDoc)
   const sourceNode = sourceDoc
     .getRoot()
     .listNodes()

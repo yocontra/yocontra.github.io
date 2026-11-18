@@ -135,7 +135,7 @@
       },
       {
         "path": "tools/art/characters/head-nape/neck-normal.png",
-        "sha256": "edd72e4fe724b2e1e3888d21fcd948041073bc9cdad188fd71ad3bec7a17d4a0"
+        "sha256": "5040a1e024ee31775d1abffc8a84a2c3d1fd21a89223f8a81afbcf5f270ad61d"
       },
       {
         "path": "tools/content/head-nape.ts",
@@ -143,7 +143,7 @@
       },
       {
         "path": "tools/content/head-nape-authoring.py",
-        "sha256": "d95b226702723612f596fd7661f8fd51ea0d88ca567e6d6bfe9cac252e4a7243"
+        "sha256": "236bc3f03eadd6c24c54b728cf409273d6420b06b1c7113b71c72fc414b79f8c"
       },
       {
         "path": "tools/content/head-throat-normal.ts",
@@ -183,7 +183,11 @@
       },
       {
         "path": "tools/content/character-materials.ts",
-        "sha256": "fa3cfd59cd9ff4ee1340f4bbf7481d4fb9279deb621f0926c5bb93c94a97d09c"
+        "sha256": "7b109062c898505ee0b0a146403ec5ce9fffb5f8df6f4a2e5a807e20d02762ef"
+      },
+      {
+        "path": "tools/content/lower-neck-fans.ts",
+        "sha256": "63ec49159308a79aac524ade1ebc6e1b4eeafb5f9ace103aade3232a6db67c44"
       },
       {
         "path": "tools/content/head-throat-normal-authoring.py",
@@ -191,7 +195,7 @@
       },
       {
         "path": "tools/content/head-throat-normal-authoring.ts",
-        "sha256": "c5d35a90a4d5d4f78444b8473ccaa98f2f73ea36107cfbc1426b6da877b5d768"
+        "sha256": "4b22339f92006893d5a13c3a73a7e59ab5b48cce7a8fb8453bff25f9b6e96a0b"
       },
       {
         "path": "tools/art/characters/outfit.bandolier-rig.gltf",
@@ -744,7 +748,7 @@
         1.0000159740447998,
         1.0000272989273071
       ],
-      "inputGeometrySHA256": "5e26328da5e14f7770c6e2b3eb7e5874bd5849d4d5bbf4aa47e06f9dcfe116ff"
+      "inputGeometrySHA256": "faff4654877d5b3c4d584a7a598933afc35968be839db2acebf190daaf449bd8"
     }
   }
 }
