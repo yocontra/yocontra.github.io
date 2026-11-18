@@ -137,6 +137,13 @@ it(
      const statements=sql.split(/;\\s*$/mu).map(value=>value.trim()).filter(Boolean);
      await db.batch(statements.map(sql=>db.prepare(sql)));
     }
+    // Keep the eight real D1 batches inside workerd. The host binding proxy can lose
+    // in-flight native references when multiple JavaScript promises resolve concurrently.
+    phase('concurrent ledger replay');
+    const replayAccount=await json(base+'/__test/seed');
+    const replayResponse=await fetch(base+'/__test/concurrent-ledger',{method:'POST',body:JSON.stringify({accountId:replayAccount.accountId})});
+    const replay=await replayResponse.json();
+    if(!replayResponse.ok||replay.purse!==950)throw new Error('Concurrent ledger replay did not credit exactly once: '+JSON.stringify(replay));
     phase('stale budget generation guard');const staleBudget=await(await fetch(base+'/__test/stale-native-budget')).json();
     if(!staleBudget.replacementPreserved)throw new Error('Stale budget continuation crossed room generation');
     phase('first authenticated reservation');const account=await(await fetch(base+'/__test/seed')).json();

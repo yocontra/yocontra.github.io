@@ -8,7 +8,8 @@
 
 import { activePlayers } from '../../src/experiments/out-west/ffa/sim/state.ts'
 import { signAccessToken } from '../src/auth/token.ts'
-import { createProfileStatements } from '../src/economy/profile.ts'
+import { ledgerStatements } from '../src/economy/ledger.ts'
+import { createProfileStatements, getProfile } from '../src/economy/profile.ts'
 import type { Env } from '../src/env.ts'
 import type { NativeFrontierRoom } from '../src/game/room.ts'
 import worker from '../src/index.ts'
@@ -277,6 +278,21 @@ export default {
       await directory.leaseRoom(id, 0)
       await directory.leaseRoom(id, 1_200_000, true)
       return Response.json({ ok: true })
+    }
+    if (pathname === '/__test/concurrent-ledger' && request.method === 'POST') {
+      const { accountId } = (await request.json()) as { accountId?: string }
+      if (!accountId) {
+        return Response.json({ error: 'Expected a seeded fixture account.' }, { status: 400 })
+      }
+      const key = `race:${accountId}`
+      await Promise.all(
+        Array.from({ length: 8 }, () =>
+          env.DB.batch(
+            ledgerStatements(env, key, [{ accountId, kind: 'ffa_deposit', amount: 700 }]),
+          ),
+        ),
+      )
+      return Response.json({ purse: (await getProfile(env, accountId))?.purse })
     }
     if (pathname === '/__test/seed') {
       const id = crypto.randomUUID()

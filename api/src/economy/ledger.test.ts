@@ -191,13 +191,6 @@ describe('ledgerStatements', () => {
       apply(`np:${id}`, [{ accountId: id, kind: 'duel_win', amount: 5 }]),
     ).rejects.toThrow()
   })
-
-  it('concurrent replays of one key credit exactly once', async () => {
-    const id = await newPlayer()
-    const entries: LedgerEntry[] = [{ accountId: id, kind: 'ffa_deposit', amount: 700 }]
-    await Promise.all(Array.from({ length: 8 }, () => apply(`race:${id}`, entries)))
-    expect((await getProfile(t.env, id))?.purse).toBe(950)
-  })
 })
 
 describe('gauntletClearStatements', () => {
