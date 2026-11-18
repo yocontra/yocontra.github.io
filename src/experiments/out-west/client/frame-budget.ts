@@ -1,13 +1,14 @@
 /** Quality decisions use a complete rolling second, so short loading stalls cannot ratchet it. */
 export class FrameBudget {
-  readonly minimumPixelRatio = 1
+  readonly minimumPixelRatio: number
   private readonly samples: number[] = []
   private elapsed = 0
   private stableSeconds = 0
   pixelRatio: number
   fps = 0
   worstFps = Number.POSITIVE_INFINITY
-  constructor(maxPixelRatio = 1.5) {
+  constructor(maxPixelRatio = 1.5, minimumPixelRatio = 1) {
+    this.minimumPixelRatio = minimumPixelRatio
     this.pixelRatio = Math.max(this.minimumPixelRatio, Math.min(2, maxPixelRatio))
     this.maximumPixelRatio = this.pixelRatio
   }

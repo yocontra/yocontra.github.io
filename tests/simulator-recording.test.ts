@@ -118,8 +118,11 @@ it('joins every native down/up, durations and swipe shape without altering raw e
   expect(result.endpoints).toHaveLength(108)
   expect(result.toleranceMs).toBe(35)
   expect(JSON.stringify(events)).toBe(before)
-  const missed = events.map((e, i) => (i === 0 ? { ...e, at: e.at + 36 } : e))
-  expect(joinGestures(tape, missed, web, page).passed).toBe(false)
+  const missed = events.map((e, i) => (i === 0 ? { ...e, eventAt: e.at, at: e.at + 36 } : e))
+  const delayed = joinGestures(tape, missed, web, page)
+  expect(delayed.endpoints[0]?.nativeErrorMs).toBe(0)
+  expect(delayed.endpoints[0]?.dispatchDelayMs).toBe(36)
+  expect(delayed.passed).toBe(false)
   expect(joinGestures(tape, events.slice(1), web, page).endpoints[0]?.observed).toBeNull()
   expect(
     joinGestures(

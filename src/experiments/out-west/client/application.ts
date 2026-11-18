@@ -32,6 +32,7 @@ import { SKIES } from '../content/skies.ts'
 import { assetUrl } from '../platform/asset-url.ts'
 import { pickTier, type RenderTier } from '../platform/render-tier.ts'
 import { FrameBudget } from './frame-budget.ts'
+import { FrontierShadows } from './frontier-shadows.ts'
 import { NativePost } from './post.ts'
 
 export interface ApplicationOptions {
@@ -39,6 +40,7 @@ export interface ApplicationOptions {
   /** The DOM viewport can be a hub panel or the full screen. */
   viewport: HTMLElement
   pixelRatio?: number
+  frontier?: boolean
   /** Defaults to the device and settings rule (`#tier=` overrides). */
   tier?: RenderTier
 }
@@ -50,6 +52,7 @@ export class GameApplication {
   readonly camera: Entity
   readonly stage: Entity
   readonly quality: FrameBudget
+  readonly frontierShadows: FrontierShadows | undefined
   readonly tier: RenderTier
   /** High tier only: the native post stack the environment grades per lighting preset. */
   post: NativePost | undefined
@@ -68,7 +71,12 @@ export class GameApplication {
     this.stage = new Entity('stage', app)
     this.options = options
     this.tier = options.tier ?? pickTier()
-    this.quality = new FrameBudget(options.pixelRatio ?? Math.min(devicePixelRatio, 1.5))
+    const frontierLow = options.frontier && this.tier === 'low'
+    this.quality = new FrameBudget(
+      options.pixelRatio ?? Math.min(devicePixelRatio, 1.5),
+      frontierLow ? 0.875 : 1,
+    )
+    this.frontierShadows = frontierLow ? new FrontierShadows(this) : undefined
     app.scene.ambientLight = new Color(0.42, 0.37, 0.29)
     app.scene.exposure = 1.1
     app.root.addChild(this.stage)
@@ -363,6 +371,7 @@ export class GameApplication {
     if (this.controller.signal.aborted) {
       return
     }
+    this.frontierShadows?.destroy()
     this.controller.abort()
     this.resizeObserver.disconnect()
     this.app.off('update', this.update)

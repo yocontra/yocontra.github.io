@@ -372,7 +372,7 @@ export function mountGameViewport(root: HTMLElement, options: ViewportOptions): 
   const ready = (async () => {
     options.onStage?.('Preparing the trail…')
     try {
-      const created = await GameApplication.create({ canvas, viewport: root })
+      const created = await GameApplication.create({ canvas, viewport: root, frontier: true })
       application = ownAfterLoad(signal, created, (value) => value.destroy())
       options.onStage?.('Loading the streets…')
       const [loaded, appearanceToPrepare] = await Promise.all([

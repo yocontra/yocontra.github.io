@@ -149,6 +149,10 @@ A 32-rider Low-tier simulator diagnostic isolated the directional sun pass. At a
 
 A follow-up in the same simulator fixture reduced opaque rider shadow triangles by 70% and kept the visible models unchanged. With the bots moving, triangle reduction alone reached 23.7 FPS and alternating-frame reuse alone reached 26.1 FPS. Together they reached 29.3 FPS against 22.3 and 22.6 FPS in the stock runs. Five of the seven full seconds still fell below 30 FPS. No renderer change from this trial shipped.
 
+The native Layer prototype retained 96 separate shadow casters for dense rooms. In two 60-second simulator loopback windows, alternate-frame sun updates and the reduced casters averaged 31.3 FPS at the original resolution, with 13 seconds below 30 FPS. At a seven-eighths canvas scale they averaged 34.3 FPS and all 60 seconds reached 30 FPS. Frontier Low now uses the seven-eighths floor under sustained load and reduces opaque shadow geometry only when at least 16 riders are present. The local rider and all visible character meshes retain authored geometry. The latest immutable-build control and FPS runs are required before completing this target.
+
+The clean `36aa2939` build ran both desktop lobbies for 60 seconds in headless Chrome. Ordinary averaged 59.95 FPS and stress 59.92 FPS, with a 59 FPS minimum in each. The ordinary simulator averaged 38.26 FPS with a 26 FPS minimum and uninterrupted native guest foreground. All 108 native touch timestamps fell within 35 ms of the schedule. Safari delivered 22 to the JavaScript listener late, with a median dispatch delay of 25.5 ms and a maximum of 81 ms. Receipts now retain the native and listener timings separately. The existing acceptance limit applies to delivery to the listener.
+
 ## First-person models and aiming
 
 - [x] Recover the bounded offline arms extractor (`tools/content/first-person-arms.ts`). Trail-duds and wool-duster CPU checks preserve native triangles/typed streams, full PBR and external texture URLs, skeleton/TRS/IBMs and humanoid clips; provenance includes authored garments and shared helpers. Repeated staging outputs are byte-identical and remain temporary.

@@ -48,3 +48,15 @@ describe('mobile rendering budget', () => {
     expect(budget.worstFps).toBe(worst)
   })
 })
+
+it('allows a Frontier Low canvas to recover around its measured seven-eighths floor', () => {
+  const budget = new FrameBudget(1, 0.875)
+  for (let index = 0; index < 100; index++) {
+    budget.sample(1 / 30)
+  }
+  expect(budget.pixelRatio).toBe(0.875)
+  for (let index = 0; index < 720; index++) {
+    budget.sample(1 / 60)
+  }
+  expect(budget.pixelRatio).toBe(1)
+})

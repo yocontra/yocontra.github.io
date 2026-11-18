@@ -166,6 +166,7 @@ export class Actors {
     this.syncPlayers(players)
     const own = ownId ?? players.keys().next().value
     this.ownId = own
+    this.game.frontierShadows?.crowd(players.size, own)
     try {
       this.tracks = await loadCharacterTracks(this.game)
       if (!(own && players.has(own))) {
@@ -340,6 +341,7 @@ export class Actors {
   }
   update(players: ReadonlyMap<string, PlayerState>, _dt: number, firstPersonId?: string): void {
     this.syncPlayers(players)
+    this.game.frontierShadows?.crowd(players.size, this.ownId)
     for (const id of this.failures.keys()) {
       if (!players.has(id)) {
         this.failures.delete(id)

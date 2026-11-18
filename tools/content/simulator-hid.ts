@@ -106,11 +106,19 @@ export function gestureTape({
 }
 export interface TrustedInput {
   at: number
+  eventAt?: number
   type: string
   x?: number
   y?: number
   pointerId?: number
 }
+function deliveryTiming(input: TrustedInput | undefined, expected: number) {
+  if (input?.eventAt === undefined || !Number.isFinite(input.eventAt)) {
+    return { nativeErrorMs: null, dispatchDelayMs: null }
+  }
+  return { nativeErrorMs: input.eventAt - expected, dispatchDelayMs: input.at - input.eventAt }
+}
+
 /** Match every planned endpoint once, preserving all raw events and any missing/late endpoints. */
 export function joinGestures(
   tape: readonly Gesture[],
@@ -126,6 +134,8 @@ export function joinGestures(
     expected: number
     observed: number | null
     errorMs: number | null
+    nativeErrorMs: number | null
+    dispatchDelayMs: number | null
     index: number | null
   }[] = []
   for (const g of tape) {
@@ -166,6 +176,7 @@ export function joinGestures(
         expected,
         observed: found?.e.at ?? null,
         errorMs: found ? found.e.at - expected : null,
+        ...deliveryTiming(found?.e, expected),
         index: found?.index ?? null,
       })
     }
