@@ -73,6 +73,9 @@ function sampleInput(options: {
 }): PlayerInput {
   const { session, input, settings, camera, sequence, touch, dt } = options
   const intent = input.sample(sequence, dt)
+  if (!input.enabled) {
+    return intent
+  }
   const before = session.players.get(session.selfId)
   if (settings.view === 'top' && input.cursorAim && before && camera.camera) {
     camera.camera.screenToWorld(input.cursor.x, input.cursor.y, 30, target)
@@ -168,12 +171,13 @@ function updateGuide(
   }
 }
 
-async function loadTown(application: GameApplication, url: string) {
+async function loadTown(application: GameApplication, url: string, signal: AbortSignal) {
   const town = await application.instantiate(url, 'town')
   const environment = new NativeEnvironment(application, true)
   try {
     environment.attach(town, await application.loadContainer(url))
     await environment.ready
+    signal.throwIfAborted()
     return { town, environment }
   } catch (error) {
     environment.destroy()
@@ -285,6 +289,14 @@ function screenAim(view: FrontierSettings['view'], input: GameInput | undefined)
   }
 }
 
+function ownAfterLoad<T>(signal: AbortSignal, value: T, dispose: (value: T) => void): T {
+  if (signal.aborted) {
+    dispose(value)
+    signal.throwIfAborted()
+  }
+  return value
+}
+
 /** The viewport consumes either a Colyseus session or a local native-physics session. */
 export function mountGameViewport(root: HTMLElement, options: ViewportOptions): GameViewport {
   const canvas = createCanvas(root)
@@ -352,20 +364,17 @@ export function mountGameViewport(root: HTMLElement, options: ViewportOptions): 
   }
   const ready = (async () => {
     options.onStage?.('Preparing the trail…')
-    const created = await GameApplication.create({ canvas, viewport: root })
-    application = created
-    if (signal.aborted) {
-      created.destroy()
-      return
-    }
     try {
+      const created = ownAfterLoad(
+        signal,
+        await GameApplication.create({ canvas, viewport: root }),
+        (value) => value.destroy(),
+      )
+      application = created
       options.onStage?.('Loading the streets…')
-      const loaded = await loadTown(created, options.townUrl)
+      const loaded = await loadTown(created, options.townUrl, signal)
       environment = loaded.environment
       windows = new BreakableWindows(loaded.town)
-      if (signal.aborted) {
-        return
-      }
       const propOptions = { windows, collision: options.collision, signal }
       const scenery = await prepareProps(created, loaded.town, propOptions)
       if (!scenery) {
@@ -374,48 +383,46 @@ export function mountGameViewport(root: HTMLElement, options: ViewportOptions): 
       ragdolls = scenery.ragdolls
       props = scenery.props
       options.onStage?.('Getting your rider and gear ready…')
-      prepared = await Actors.prepare(created, await options.prepareAppearance?.())
+      const appearanceToPrepare = await options.prepareAppearance?.()
+      signal.throwIfAborted()
+      prepared = ownAfterLoad(signal, await Actors.prepare(created, appearanceToPrepare), (value) =>
+        value.dispose(),
+      )
       await GameEffects.preloadAudio(created)
-      items = await FrontierItems.create(created)
+      signal.throwIfAborted()
+      items = ownAfterLoad(signal, await FrontierItems.create(created), (value) => value.destroy())
       atmosphere = await prepareAtmosphere(created, signal)
       await warmFrontierCharacters(created, prepared, { atmosphere, signal, windows })
-      if (signal.aborted) {
-        return
-      }
+      signal.throwIfAborted()
       options.onStage?.('Finding your place in town…')
-      const createdSession = await options.createSession()
+      const createdSession = ownAfterLoad(signal, await options.createSession(), (value) =>
+        value.dispose(),
+      )
       session = createdSession
       props.update(createdSession.world)
-      if (signal.aborted) {
-        createdSession.dispose()
-        return
-      }
       const appearance = (id: string) => session?.appearance?.(id)
       actors = new Actors(created, ragdolls, appearance, () => session?.world)
       await actors.initialize(session.players, session.selfId, prepared)
       prepared = undefined
+      signal.throwIfAborted()
       input = createInput(canvas, root, settings, session.players.get(session.selfId))
       effects = createEffects(created, actors, createdSession, { windows, items, props })
       await effects.ready
-      if (session.world) {
-        guide = new BankGuide(root, session.world.grid)
-      } else {
-        items.destroy()
-        items = undefined
-      }
+      signal.throwIfAborted()
+      guide = new BankGuide(root, createdSession.world.grid)
       created.app.on('update', update)
       await firstFrame(created, signal)
-      if (signal.aborted) {
-        return
-      }
+      signal.throwIfAborted()
       created.quality.beginMeasurement()
       playing = true
       input.setEnabled(true)
       options.onReady?.()
     } catch (error) {
-      options.onError?.(error)
-      destroy()
-      throw error
+      if (!signal.aborted) {
+        options.onError?.(error)
+        destroy()
+        throw error
+      }
     }
   })()
   function destroy(): void {

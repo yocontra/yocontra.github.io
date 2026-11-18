@@ -139,6 +139,7 @@ export class BankGuide {
     this.marker.hidden = true
     this.chevron.hidden = true
     parent.append(layer)
+    this.prepare()
   }
 
   /** The room replaced its derived cover grid; retire only this guide's cached route. */
@@ -156,8 +157,8 @@ export class BankGuide {
     }
   }
 
-  /** Flood the field (about 5 ms on a desktop; run once after the town is up). */
-  prepare(): void {
+  /** Build the walking-distance field before the first HUD update. */
+  private prepare(): void {
     this.field ??= flood(this.grid, this.windows)
   }
 

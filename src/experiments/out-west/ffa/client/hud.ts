@@ -95,6 +95,8 @@ export class Hud {
   private readonly menuEl: HTMLElement
   /** The pause card (the settings panel mounts in `menuSettings`). */
   readonly menuSettings: HTMLElement
+  private readonly resumeButton: HTMLButtonElement
+  private focusBeforePause: HTMLElement | undefined
   private readonly opts: HudOptions
   private readonly ticks: HTMLElement
   private readonly rotateEl: HTMLElement
@@ -196,6 +198,7 @@ export class Hud {
     const shut = el('button', 'fr-menu-x fr-hit', head, '✕')
     shut.setAttribute('aria-label', 'Resume')
     const back = el('button', 'fr-menu-item fr-menu-resume fr-hit', card, 'Resume')
+    this.resumeButton = back
     const cols = el('div', 'fr-menu-cols', card)
     const left = el('div', 'fr-menu-col', cols)
     const right = el('div', 'fr-menu-col', cols)
@@ -300,6 +303,14 @@ export class Hud {
     this.menuEl.classList.toggle('on', open)
     this.root.classList.toggle('paused', open)
     this.opts.onMenu?.(open)
+    if (open) {
+      const active = document.activeElement
+      this.focusBeforePause = active instanceof HTMLElement ? active : undefined
+      this.resumeButton.focus({ preventScroll: true })
+    } else {
+      this.focusBeforePause?.focus({ preventScroll: true })
+      this.focusBeforePause = undefined
+    }
   }
 
   /** Desktop shooter view without the pointer lock: "Click to take aim". */

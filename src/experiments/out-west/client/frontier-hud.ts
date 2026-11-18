@@ -159,13 +159,31 @@ export class FrontierHud {
       'keydown',
       (raw) => {
         const event = raw as KeyboardEvent
-        if (this.rounds.key(event.code)) {
+        if (event.defaultPrevented || root.classList.contains('pc-loading')) {
+          return
+        }
+        const target = event.target
+        if (
+          target instanceof Element &&
+          target.closest('[role=dialog]') &&
+          !this.rounds.summaryOpen &&
+          !this.hud.menuOpen
+        ) {
+          return
+        }
+        const nativeActivation =
+          (event.code === 'Enter' || event.code === 'Space') &&
+          target instanceof Element &&
+          Boolean(target.closest('button, a, input, select, textarea'))
+        if (!nativeActivation && this.rounds.key(event.code)) {
+          event.preventDefault()
           return
         }
         if (event.code === 'Escape') {
+          this.scoreboard.show(false)
           this.hud.toggleMenu()
         }
-        if (event.code === 'Tab') {
+        if (event.code === 'Tab' && !this.hud.menuOpen && !this.rounds.summaryOpen) {
           event.preventDefault()
           this.scoreboard.show(true)
         }
