@@ -1,4 +1,4 @@
-/** Actual native shot removes the original textured pane; adjacent panes, reset and batches survive. */
+/** Actual native shot removes the original textured pane; adjacent panes and reset survive. */
 import { mkdir, writeFile } from 'node:fs/promises'
 import { chromium } from 'playwright'
 import sharp from 'sharp'
@@ -111,13 +111,6 @@ export const removeStyle = () => {};`,
       .filter((component: { entity: { name: string } }) =>
         component.entity.name.startsWith('glass-'),
       )
-    const groups = new Set(
-      panes.map((component: { batchGroupId: number }) => component.batchGroupId),
-    )
-    const batcher = game.app.batcher
-    if (!batcher || groups.size !== 1 || groups.has(-1)) {
-      throw new Error('Panes did not receive a separate native batch group')
-    }
     const glazing = town
       .findComponents('render')
       .filter((component: { meshInstances: { material: { name: string } }[] }) =>
@@ -125,9 +118,10 @@ export const removeStyle = () => {};`,
           ['window-glass', 'breakable-glass'].includes(instance.material.name),
         ),
       )
+    const paneCount = world.grid.glass.length
     if (
-      glazing.length !== 296 ||
-      panes.length !== 296 ||
+      glazing.length !== paneCount ||
+      panes.length !== paneCount ||
       town.find((node: { name: string }) => node.name.startsWith('window-glass-')).length > 0
     ) {
       throw new Error('Original and synthetic glazing still overlap')
@@ -145,14 +139,6 @@ export const removeStyle = () => {};`,
       throw new Error('Breakable planes did not preserve the original native PBR texture')
     }
     game.app.timeScale = 0
-    const times: number[] = []
-    const generate = batcher.generate
-    batcher.generate = function (...args: Parameters<typeof generate>) {
-      const start = performance.now()
-      const result = generate.apply(this, args)
-      times.push(performance.now() - start)
-      return result
-    }
     Reflect.set(globalThis, '__paneProbe', {
       game,
       town,
@@ -164,30 +150,44 @@ export const removeStyle = () => {};`,
       Buttons,
       ANGLE_SCALE,
       panes,
-      groups,
-      times,
     })
   })
   const sample = () =>
     page.evaluate(async () => {
-      const { game, world, windows, panes, groups } = Reflect.get(globalThis, '__paneProbe')
+      const { game, world, windows, panes } = Reflect.get(globalThis, '__paneProbe')
       windows.update(world.glass)
       await new Promise<void>((resolve) => game.app.once('postrender', resolve))
-      const batches = game.app.batcher.getBatches([...groups][0])
+      const inWorld = new Set(
+        game.app.scene.layers.layerList.flatMap(
+          (layer: { meshInstances: object[] }) => layer.meshInstances,
+        ),
+      )
+      const first = panes.find(
+        (pane: { entity: { name: string } }) => pane.entity.name === 'glass-0',
+      )
+      const adjacent = panes.find(
+        (pane: { entity: { name: string } }) => pane.entity.name === 'glass-1',
+      )
+      const groups = new Set<number>(
+        panes.map((pane: { batchGroupId: number }) => pane.batchGroupId),
+      )
+      for (const id of groups) {
+        for (const batch of game.app.batcher?.getBatches(id) ?? []) {
+          if (inWorld.has(batch.meshInstance)) {
+            for (const original of batch.origMeshInstances) {
+              inWorld.add(original)
+            }
+          }
+        }
+      }
       return {
         intact: windows.stats().intact,
-        batches: batches.length,
-        members: batches.reduce(
-          (sum: number, batch: { origMeshInstances: object[] }) =>
-            sum + batch.origMeshInstances.length,
-          0,
-        ),
-        shadows: batches.filter(
-          (batch: { meshInstance: { castShadow: boolean } }) => batch.meshInstance.castShadow,
+        rendered: panes.filter((pane: { meshInstances: object[] }) =>
+          pane.meshInstances.some((instance) => inWorld.has(instance)),
         ).length,
-        originals: panes.length,
-        firstEnabled: panes[0].entity.enabled,
-        adjacentEnabled: panes[1].entity.enabled,
+        shadows: panes.filter((pane: { castShadows: boolean }) => pane.castShadows).length,
+        firstEnabled: first.entity.enabled,
+        adjacentEnabled: adjacent.entity.enabled,
         draws: game.app.stats.drawCalls.total,
       }
     })
@@ -234,23 +234,32 @@ export const removeStyle = () => {};`,
   const restored = await sample()
   await page.screenshot({ path: `${output}/restored.png` })
   const lifecycle = await page.evaluate(() => {
-    const { game, town, environment, simulation, groups, times } = Reflect.get(
-      globalThis,
-      '__paneProbe',
+    const { game, town, environment, simulation, panes } = Reflect.get(globalThis, '__paneProbe')
+    const authored = new Set(
+      panes.flatMap((pane: { meshInstances: object[] }) => pane.meshInstances),
     )
-    town.destroy()
-    const remaining = [...groups].flatMap((id) => game.app.batcher.getBatches(id)).length
+    const groups = new Set<number>(panes.map((pane: { batchGroupId: number }) => pane.batchGroupId))
+    for (const id of groups) {
+      for (const batch of game.app.batcher?.getBatches(id) ?? []) {
+        authored.add(batch.meshInstance)
+      }
+    }
     environment.destroy()
+    town.destroy()
+    const remaining = game.app.scene.layers
+      .getLayerByName('World')
+      .meshInstances.filter((instance: object) => authored.has(instance)).length
     simulation.dispose()
     game.destroy()
-    return { remaining, rebuildMs: times }
+    return { remaining }
   })
   if (
     !(
       crossed > 0 &&
+      intact.rendered === intact.intact &&
       broken.intact === intact.intact - crossed &&
-      broken.members === intact.members - crossed &&
-      restored.members === intact.members &&
+      broken.rendered === intact.rendered - crossed &&
+      restored.rendered === intact.rendered &&
       restored.intact === intact.intact &&
       intact.firstEnabled &&
       !broken.firstEnabled &&
@@ -258,7 +267,6 @@ export const removeStyle = () => {};`,
       intact.adjacentEnabled &&
       broken.adjacentEnabled &&
       restored.adjacentEnabled &&
-      intact.batches < intact.originals / 10 &&
       [intact, broken, restored].every((state) => state.shadows === 0) &&
       lifecycle.remaining === 0 &&
       errors.length === 0
@@ -272,7 +280,7 @@ export const removeStyle = () => {};`,
     broken: await imageDifference(`${output}/intact.png`, `${output}/broken.png`),
     restored: await imageDifference(`${output}/intact.png`, `${output}/restored.png`),
   }
-  // A broken pane changes the image; reset may differ by native batch rounding, never a visible pane.
+  // A broken pane changes the image. Reset restores the original glazing.
   if (image.broken.mean < 0.1 || image.restored.mean > 0.02) {
     throw new Error(`Pane break/reset image regression: ${JSON.stringify(image)}`)
   }

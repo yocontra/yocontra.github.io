@@ -13,12 +13,7 @@ import { installBarrelParts } from './barrel-install.ts'
 import { compressEnvironmentTextures } from './environment-textures.ts'
 import { packFreight } from './freight-crates-contract.ts'
 import { installFreightCrates, readFreightPrefabs } from './freight-crates-install.ts'
-import {
-  authorDecksAndRoofs,
-  bankServiceSigns,
-  buildingDetails,
-  surround,
-} from './frontier-architecture.ts'
+import { authorDecksAndRoofs, bankServiceSigns, buildingDetails } from './frontier-architecture.ts'
 import { replaceCactusPrototype } from './frontier-cactus-candidate.ts'
 import { compileFrontierCollision, perimeterSpans, structuralWalls } from './frontier-collision.ts'
 import { frontierCutBanks } from './frontier-cut-banks.ts'
@@ -33,6 +28,7 @@ import {
   lampBracket,
   MOUNT_IRON_TINT,
 } from './frontier-mounts.ts'
+import { surround } from './frontier-openings.ts'
 import { coverModel, desertPlants } from './frontier-props.ts'
 import { frontierSiding } from './frontier-siding.ts'
 import { optimizeAsset } from './optimize.ts'
@@ -268,6 +264,7 @@ function authorPanes(
   groups: Map<string, import('@gltf-transform/core').Node>,
 ) {
   const panes = buildGrid(layout).glass
+  const windows = townWindows(layout)
   for (const pane of panes) {
     const along = (pane.a0 + pane.a1) / 2
     const cy = (pane.y0 + pane.y1) / 2
@@ -301,19 +298,18 @@ function authorPanes(
         ],
       },
     )
-    const building = townWindows(layout).find((entry) => entry.index === pane.index)?.b
-    const frame = building ? groups.get(building.id) : undefined
-    if (frame) {
-      surround(g, frame, {
-        side: pane.axis === 0 ? 'e' : 's',
-        tint: [0.76, 0.65, 0.47],
-        x: pane.axis === 0 ? pane.at : pane.a0,
-        z: pane.axis === 0 ? pane.a0 : pane.at,
-        width: pane.a1 - pane.a0,
-        y0: pane.y0,
-        y1: pane.y1,
-      })
+    const window = windows[pane.index]
+    const frame = window && groups.get(window.b.id)
+    if (!(window && frame)) {
+      throw new Error(`Missing building for window ${pane.index}`)
     }
+    surround(g, frame, window.b, {
+      side: window.w.side,
+      at: window.w.at,
+      width: window.w.width,
+      y0: window.w.sill,
+      y1: window.w.top,
+    })
   }
   return panes
 }

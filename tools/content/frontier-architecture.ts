@@ -20,40 +20,13 @@ import {
 import type { FrontierGeometry, Placement, Rgb } from './frontier-geometry.ts'
 import { LABELS, SHORT_LABELS, SIGN_ROWS } from './frontier-materials.ts'
 import { MOUNT_IRON_TINT } from './frontier-mounts.ts'
+import { buildingDoors } from './frontier-openings.ts'
 import {
   BANK_SIGN_SIZE,
   FACADE_SIGN_HEIGHT,
   facadeSignWidth,
   signUvRect,
 } from './frontier-sign-layout.ts'
-/** Add detail outside an opening; no opaque quads cross its line of fire. */
-export function surround(
-  g: FrontierGeometry,
-  root: Node,
-  opening: { side: Side; x: number; z: number; width: number; y0: number; y1: number; tint?: Rgb },
-) {
-  const { side, x, z, width, y0, y1, tint = [0.82, 0.72, 0.53] } = opening
-  const horizontal = side === 'n' || side === 's'
-  const box = (along: number, y: number, span: number, height: number) =>
-    g.box(
-      root,
-      'wood',
-      {
-        x: horizontal ? x + along : x - 0.08,
-        z: horizontal ? z - 0.08 : z + along,
-        w: horizontal ? span : 0.16,
-        d: horizontal ? 0.16 : span,
-        y0: y,
-        top: y + height,
-      },
-      tint,
-    )
-  box(-0.12, y0 - 0.1, width + 0.24, 0.1)
-  box(-0.12, y1, width + 0.24, 0.14)
-  box(-0.12, y0, 0.12, y1 - y0)
-  box(width, y0, 0.12, y1 - y0)
-}
-
 export function authorDecksAndRoofs(
   g: FrontierGeometry,
   ground: Node,
@@ -411,24 +384,6 @@ function porchSupports(
         paint,
       )
     }
-  }
-}
-
-function buildingDoors(g: FrontierGeometry, root: Node, building: Building) {
-  const { x, z, w, d } = building
-  const trim: Rgb = [0.82, 0.72, 0.53]
-  // Open upper balcony doorways share the same precise lintel/threshold geometry as physics.
-  for (const door of building.doors) {
-    const horizontal = door.side === 'n' || door.side === 's'
-    surround(g, root, {
-      side: door.side,
-      tint: trim,
-      x: horizontal ? x + door.at : { w: x - 0.02, e: x + w + 0.02, n: x, s: x }[door.side],
-      z: horizontal ? { n: z - 0.02, s: z + d + 0.02, e: z, w: z }[door.side] : z + door.at,
-      width: door.width,
-      y0: door.y0 ?? 0,
-      y1: door.y1 ?? 2.45,
-    })
   }
 }
 
