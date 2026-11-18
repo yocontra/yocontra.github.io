@@ -368,6 +368,30 @@ export class GlassShards {
     const entity = new Entity(`glass-burst-${index}`, this.game.app)
     return { index, entity, mesh, shards, positions, normals, seconds: 0 }
   }
+  /** Draw the shard vertex format and materials during the existing loading render. */
+  stageWarmup(sources: ReadonlySet<Material | undefined>): Entity | undefined {
+    if (sources.size === 0) {
+      return
+    }
+    const { app, camera } = this.game
+    const mesh = new Mesh(app.graphicsDevice)
+    mesh.setPositions([-0.03, -0.03, 0, 0.03, -0.03, 0, 0, 0.03, 0])
+    mesh.setNormals([0, 0, 1, 0, 0, 1, 0, 0, 1])
+    mesh.setUvs(0, [0, 0, 1, 0, 0.5, 1])
+    mesh.update()
+    const entity = new Entity('glass-shader-warmup', app)
+    entity.setPosition(camera.getPosition().clone().add(camera.forward))
+    entity.setRotation(camera.getRotation())
+    this.attachRender(
+      entity,
+      Array.from(sources, (source) => new MeshInstance(mesh, this.material(source))),
+    )
+    return entity
+  }
+  private attachRender(entity: Entity, meshInstances: MeshInstance[]): void {
+    entity.addComponent('render', { meshInstances, castShadows: false })
+    this.game.stage.addChild(entity)
+  }
   /** The pane's own authored glass, a little denser so thin slivers still catch the light. */
   private material(source: Material | undefined): StandardMaterial {
     const key = source ?? null
@@ -407,13 +431,9 @@ export class GlassShards {
       bake(burst)
       if (!burst.entity.render) {
         // The first bake uploads all vertex streams before the instance inspects the mesh format.
-        burst.entity.addComponent('render', {
-          meshInstances: [
-            new MeshInstance(burst.mesh, this.material(this.panes.material(burst.index))),
-          ],
-          castShadows: false,
-        })
-        this.game.stage.addChild(burst.entity)
+        this.attachRender(burst.entity, [
+          new MeshInstance(burst.mesh, this.material(this.panes.material(burst.index))),
+        ])
       }
     }
   }

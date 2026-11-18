@@ -126,7 +126,7 @@ function createInput(
 async function warmCharacter(
   application: GameApplication,
   prepared: PreparedCharacters,
-  signal: AbortSignal,
+  { signal, windows }: { signal: AbortSignal; windows: BreakableWindows },
 ): Promise<void> {
   const spawn = TOWN.spawns[0]
   if (!spawn) {
@@ -137,7 +137,12 @@ async function warmCharacter(
   application.camera.setPosition(spawn.x + 3, 2, spawn.z + 5)
   application.camera.lookAt(new Vec3(spawn.x, 1, spawn.z))
   // Render real PBR/skin/shot variants behind loading before reserving a live player.
-  await shotVisuals(application).warm({ x: spawn.x, y: 1.3, z: spawn.z })
+  const glass = windows.stageShardWarmup()
+  try {
+    await shotVisuals(application).warm({ x: spawn.x, y: 1.3, z: spawn.z })
+  } finally {
+    glass?.destroy()
+  }
   await firstFrame(application, signal)
   await firstFrame(application, signal)
 }
@@ -218,8 +223,11 @@ async function warmFrontierView(
 async function warmFrontierCharacters(
   application: GameApplication,
   prepared: PreparedCharacters,
-  atmosphere: NativeAtmosphere | undefined,
-  signal: AbortSignal,
+  {
+    atmosphere,
+    signal,
+    windows,
+  }: { atmosphere: NativeAtmosphere | undefined; signal: AbortSignal; windows: BreakableWindows },
 ): Promise<void> {
   // The arrival view leaves most of the perimeter outside the camera frustum.
   await warmFrontierView(application, signal, -1)
@@ -230,7 +238,7 @@ async function warmFrontierCharacters(
   const spawn = TOWN.spawns[0]
   const restore = spawn ? atmosphere?.warm(spawn.x, 0, spawn.z) : undefined
   try {
-    await warmCharacter(application, prepared, signal)
+    await warmCharacter(application, prepared, { signal, windows })
   } finally {
     restore?.()
   }
@@ -370,7 +378,7 @@ export function mountGameViewport(root: HTMLElement, options: ViewportOptions): 
       await GameEffects.preloadAudio(created)
       items = await FrontierItems.create(created)
       atmosphere = await prepareAtmosphere(created, signal)
-      await warmFrontierCharacters(created, prepared, atmosphere, signal)
+      await warmFrontierCharacters(created, prepared, { atmosphere, signal, windows })
       if (signal.aborted) {
         return
       }

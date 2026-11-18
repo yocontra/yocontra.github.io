@@ -43,6 +43,9 @@ export class BreakableWindows {
     this.shards?.destroy()
     this.shards = new GlassShards(game, ragdolls, this)
   }
+  stageShardWarmup(): Entity | undefined {
+    return this.shards?.stageWarmup(new Set(this.panes.map((_, index) => this.material(index))))
+  }
   event(event: SimEvent): void {
     this.shards?.event(event)
   }
