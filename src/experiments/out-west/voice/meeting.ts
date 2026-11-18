@@ -84,33 +84,23 @@ export async function prepareVoiceMeeting(
   return meeting
 }
 
-/** Adopt a disabled custom track after join so the SDK creates its native microphone producer. */
+/** Publish the caller's gated stream as a custom track after joining. */
 export async function publishVoiceMicrophone(
   meeting: Client,
-  microphone: MediaStreamTrack,
+  track: MediaStreamTrack,
   active: () => boolean,
-): Promise<MediaStreamTrack | null> {
+): Promise<boolean> {
   if (!active()) {
-    return null
+    return false
   }
-  const clone = microphone.clone()
-  clone.enabled = false
-  let adopted = false
-  try {
-    await meeting.self.enableAudio(clone)
-    if (meeting.self.audioTrack !== clone || clone.readyState === 'ended') {
-      throw new Error(microphoneFailure(meeting.self.mediaPermissions.audio))
-    }
-    if (!active()) {
-      return null
-    }
-    adopted = true
-    return clone
-  } finally {
-    if (!adopted) {
-      clone.stop()
-    }
+  await meeting.self.enableAudio(track)
+  if (!active()) {
+    return false
   }
+  if (meeting.self.audioTrack !== track || track.readyState === 'ended' || !track.enabled) {
+    throw new Error(microphoneFailure(meeting.self.mediaPermissions.audio))
+  }
+  return true
 }
 
 export async function releaseVoiceMeeting(meeting: Client): Promise<void> {

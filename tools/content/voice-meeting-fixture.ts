@@ -2,11 +2,15 @@
 
 import {
   gameId as nativeGameId,
+  microphoneFailure as nativeMicrophoneFailure,
+  publishVoiceMicrophone as nativePublishVoiceMicrophone,
   safeTrack as nativeSafeTrack,
 } from '../../src/experiments/out-west/voice/meeting.ts'
 
 export type { VoiceCredentials } from '../../src/experiments/out-west/voice/meeting.ts'
 export const gameId = nativeGameId
+export const microphoneFailure = nativeMicrophoneFailure
+export const publishVoiceMicrophone = nativePublishVoiceMicrophone
 export const safeTrack = nativeSafeTrack
 
 class Events {
@@ -38,7 +42,8 @@ let heldDisable = false
 let heldEnable = false
 let resolveDisable: (() => void) | undefined
 let resolveEnable: (() => void) | undefined
-const clones: MediaStreamTrack[] = []
+const outputs: MediaStreamTrack[] = []
+const initiallyEnabled: boolean[] = []
 
 type Speaker = Events & { id: string; customParticipantId: string; audioTrack: MediaStreamTrack }
 function createMeeting() {
@@ -67,7 +72,20 @@ function createMeeting() {
   }
   const self = Object.assign(new Events(), {
     audioTrack: undefined as MediaStreamTrack | undefined,
+    mediaPermissions: { audio: undefined },
     cleanUpTracks: () => self.audioTrack?.stop(),
+    enableAudio: async (track: MediaStreamTrack) => {
+      captures++
+      initiallyEnabled.push(track.enabled)
+      outputs.push(track)
+      if (heldEnable) {
+        await new Promise<void>((resolve) => {
+          resolveEnable = resolve
+        })
+      }
+      self.audioTrack = track
+      self.emit('audioUpdate', { audioTrack: track })
+    },
     disableAudio: async () => {
       disables++
       if (heldDisable) {
@@ -107,39 +125,6 @@ export function prepareVoiceMeeting(_credentials: unknown, active: () => boolean
   latest = createMeeting()
   return Promise.resolve(latest)
 }
-export async function publishVoiceMicrophone(
-  meeting: ReturnType<typeof createMeeting>,
-  original: MediaStreamTrack,
-  active: () => boolean,
-) {
-  if (!active()) {
-    return null
-  }
-  captures++
-  const clone = original.clone()
-  clone.enabled = false
-  clones.push(clone)
-  let adopted = false
-  try {
-    if (heldEnable) {
-      await new Promise<void>((resolve) => {
-        resolveEnable = resolve
-      })
-    }
-    meeting.self.audioTrack = clone
-    meeting.self.emit('audioUpdate', { audioTrack: clone })
-    if (!active()) {
-      return null
-    }
-    adopted = true
-    return clone
-  } finally {
-    if (!adopted) {
-      clone.stop()
-    }
-  }
-}
-
 export async function releaseVoiceMeeting(
   meeting: ReturnType<typeof createMeeting>,
 ): Promise<void> {
@@ -150,6 +135,7 @@ export async function releaseVoiceMeeting(
 export function fixtureState() {
   return {
     captures,
+    initiallyEnabled,
     leaves,
     leaving: pendingLeaves.length,
     joining: resolveJoin !== undefined,
@@ -158,7 +144,7 @@ export function fixtureState() {
     disables,
     disabling: resolveDisable !== undefined,
     enabling: resolveEnable !== undefined,
-    clones: clones.map((track) => ({
+    outputs: outputs.map((track) => ({
       state: track.readyState,
       deviceId: track.getSettings().deviceId,
     })),

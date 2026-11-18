@@ -5,6 +5,12 @@ export interface MicrophoneActivity {
   dispose: () => void
 }
 
+export interface VoiceMicrophone {
+  track: MediaStreamTrack
+  setSending: (on: boolean) => void
+  dispose: () => void
+}
+
 export interface VoiceAudio {
   attachVoiceChat: (id: number, track: MediaStreamTrack) => VoiceChatNode | null
   resume?: () => void
@@ -29,6 +35,38 @@ export class NativeVoiceAudio implements VoiceAudio {
 
   get running(): boolean {
     return this.context()?.state === 'running'
+  }
+
+  createMicrophone(track: MediaStreamTrack): VoiceMicrophone | null {
+    const context = this.context()
+    if (!context || context.state === 'closed') {
+      return null
+    }
+
+    // RealtimeKit signals the producer as paused if its track starts disabled.
+    // Keep the outbound track enabled and gate the microphone signal before it reaches WebRTC.
+    const destination = context.createMediaStreamDestination()
+    const [output] = destination.stream.getAudioTracks()
+    if (!output) {
+      return null
+    }
+    destination.channelCount = 1
+    const source = context.createMediaStreamSource(new MediaStream([track]))
+    const gain = context.createGain()
+    gain.gain.value = 0
+    source.connect(gain).connect(destination)
+    return {
+      track: output,
+      setSending: (on) => {
+        gain.gain.value = Number(on)
+      },
+      dispose: () => {
+        gain.gain.value = 0
+        source.disconnect()
+        gain.disconnect()
+        output.stop()
+      },
+    }
   }
 
   analyse(track: MediaStreamTrack, interrupted?: () => void): MicrophoneActivity | null {

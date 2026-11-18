@@ -84,17 +84,18 @@ try {
   await page.keyboard.down('t')
   await state('live')
   const live = await value()
-  if (!live.enabled || live.requests !== 1) {
+  if (!(live.enabled && live.originalEnabled) || live.requests !== 1) {
     throw new Error('Speech plus listener did not join/transmit')
   }
   await page.keyboard.up('t')
-  if ((await value()).enabled) {
+  const released = await value()
+  if (released.originalEnabled || released.commands.at(-1)?.talking !== false) {
     throw new Error('PTT release retained publication')
   }
   await state('standby')
   const silent = await value()
   if (silent.track !== 'ended' || silent.original !== 'live') {
-    throw new Error('Idle teardown stopped original or retained clone')
+    throw new Error('Idle teardown stopped original or retained its outbound track')
   }
   await page.screenshot({ path: `${output}/standby-nearby-listener.png` })
   await page.keyboard.down('t')
@@ -104,11 +105,7 @@ try {
     () => Reflect.get(globalThis, '__voiceProbe').voiceSnapshot().originalEnabled === false,
   )
   const interrupted = await value()
-  if (
-    interrupted.enabled ||
-    interrupted.originalEnabled ||
-    interrupted.commands.at(-1)?.talking !== false
-  ) {
+  if (interrupted.originalEnabled || interrupted.commands.at(-1)?.talking !== false) {
     throw new Error('Native context interruption retained intent')
   }
   await page.keyboard.up('t')

@@ -32,6 +32,7 @@ export class FrontierVoice {
     root.append(this.controls.root)
     this.chat = new VoiceChat({
       audio: audio ?? this.nativeAudio,
+      microphone: (track) => this.nativeAudio.createMicrophone(track),
       activity: (track, interrupted) => this.nativeAudio.analyse(track, interrupted),
       audioRunning: () => this.nativeAudio.running,
       settings: getSettings,

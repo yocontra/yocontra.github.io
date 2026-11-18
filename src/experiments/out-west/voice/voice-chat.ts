@@ -12,7 +12,7 @@ import {
   systemDefaultMoved,
 } from './input-device.ts'
 import { captureMicrophone } from './meeting.ts'
-import type { MicrophoneActivity, VoiceAudio } from './native-audio.ts'
+import type { MicrophoneActivity, VoiceAudio, VoiceMicrophone } from './native-audio.ts'
 import type { VoicePeer } from './rank.ts'
 import { VoiceTransport } from './transport.ts'
 
@@ -26,6 +26,7 @@ export interface VoiceSettings {
 }
 export interface VoiceChatOptions {
   audio: VoiceAudio | null
+  microphone: (track: MediaStreamTrack) => VoiceMicrophone | null
   activity: (track: MediaStreamTrack, interrupted: () => void) => MicrophoneActivity | null
   audioRunning: () => boolean
   send: (control: VoiceClientControl) => void
@@ -86,6 +87,7 @@ export class VoiceChat {
     this.o = options
     this.transport = new VoiceTransport({
       audio: options.audio,
+      microphone: options.microphone,
       muted: (id) => this.localMuted.has(id) || options.muted?.(id) === true,
       onState: (state, message) => {
         if (state === 'error') {

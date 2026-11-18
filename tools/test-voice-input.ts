@@ -6,6 +6,7 @@ import type { BrowserContext, Page } from 'playwright'
 import { chromium } from 'playwright'
 import type * as Probe from './content/voice-lifecycle.ts'
 import { receiveOnlyProof } from './content/voice-listening-proof.ts'
+import type { outboundVoiceProof } from './content/voice-rtp-proof.ts'
 
 function check(condition: unknown, message: string): asserts condition {
   if (!condition) {
@@ -21,9 +22,10 @@ const entry = join(temporary, 'fixture.ts')
 await writeFile(
   entry,
   `import * as probe from ${JSON.stringify(new URL('tools/content/voice-lifecycle.ts', root).pathname)};
+import { outboundVoiceProof } from ${JSON.stringify(new URL('tools/content/voice-rtp-proof.ts', root).pathname)};
 ${['tokens', 'controls', 'sheets', 'features'].map((name) => `import ${JSON.stringify(new URL(`src/experiments/out-west/ui/${name}.css`, root).pathname)};`).join('\n')}
 import ${JSON.stringify(new URL('src/experiments/out-west/ffa/client/shooter.css', root).pathname)};
-globalThis.__voiceProbe=probe;`,
+globalThis.__voiceProbe={...probe,outboundVoiceProof};`,
 )
 const build = await Bun.build({
   entrypoints: [entry],
@@ -144,7 +146,7 @@ async function setup(context: BrowserContext) {
       setting,
       origin: server.url.origin,
     })
-  const command = (method: keyof typeof Probe, ...values: unknown[]) =>
+  const command = (method: keyof typeof Probe | 'outboundVoiceProof', ...values: unknown[]) =>
     page.evaluate(
       ({ name, args }) => {
         const probe = Reflect.get(globalThis, '__voiceProbe')
@@ -173,6 +175,21 @@ try {
   try {
     const f = await setup(context)
     const { page } = f
+    const rtp = (await f.command('outboundVoiceProof')) as Awaited<
+      ReturnType<typeof outboundVoiceProof>
+    >
+    check(
+      rtp.initialEnabled &&
+        rtp.stillEnabled &&
+        rtp.packetsBeforeOpening > 10 &&
+        rtp.idle < 0.002 &&
+        rtp.live > 0.04 &&
+        rtp.muted < 0.002 &&
+        rtp.closedTrack === 'ended' &&
+        rtp.originalTrack === 'live',
+      `Native microphone gate leaked or blocked RTP: ${JSON.stringify(rtp)}`,
+    )
+    records.push({ outboundRtp: rtp })
     await f.permission('denied')
     await f.command('showInputSettings', false)
     const input = page.getByLabel('Microphone', { exact: true })
@@ -303,8 +320,8 @@ try {
       'Input switch replaced the meeting instead of its native producer',
     )
     check(
-      reused.clones.slice(0, -1).every((track) => track.state === 'ended'),
-      'Replaced SDK clone remained live',
+      reused.outputs.slice(0, -1).every((track) => track.state === 'ended'),
+      'Replaced SDK track remained live',
     )
     await page.evaluate(() =>
       Reflect.get(globalThis, '__voiceProbe').transport.holdMicrophone(true, false),
@@ -317,7 +334,7 @@ try {
     await page.evaluate(() => Reflect.get(globalThis, '__voiceProbe').transport.finishMicrophone())
     await selected(page, a, 'live')
     check(
-      (await f.snapshot()).clones.slice(0, -1).every((track) => track.state === 'ended'),
+      (await f.snapshot()).outputs.slice(0, -1).every((track) => track.state === 'ended'),
       'Stale disable ended the latest producer incorrectly',
     )
     await page.evaluate(() =>
@@ -332,8 +349,8 @@ try {
     await selected(page, a, 'live')
     const latest = await f.snapshot()
     check(
-      latest.clones.at(-1)?.state === 'live' &&
-        latest.clones.slice(0, -1).every((track) => track.state === 'ended'),
+      latest.outputs.at(-1)?.state === 'live' &&
+        latest.outputs.slice(0, -1).every((track) => track.state === 'ended'),
       'Stale enable cleanup stopped the current producer',
     )
     await page.evaluate(() =>
@@ -344,6 +361,10 @@ try {
       () => Reflect.get(globalThis, '__voiceProbe').voiceSnapshot().enabling,
     )
     await f.command('disposeVoice')
+    check(
+      (await f.snapshot()).outputs.every((track) => track.state === 'ended'),
+      'Closing during SDK publication left an outbound track live',
+    )
     await page.evaluate(() => Reflect.get(globalThis, '__voiceProbe').transport.finishMicrophone())
     await page.waitForFunction(() =>
       Reflect.get(globalThis, '__captureProof').tracks.every(
@@ -351,8 +372,8 @@ try {
       ),
     )
     check(
-      (await f.snapshot()).clones.every((track) => track.state === 'ended'),
-      'Close during SDK enable leaked a clone',
+      (await f.snapshot()).outputs.every((track) => track.state === 'ended'),
+      'Close during SDK enable leaked a track',
     )
     await page.evaluate(() => {
       Reflect.get(globalThis, '__captureProof').held = true
@@ -386,8 +407,12 @@ try {
     })
     const final = await f.snapshot()
     check(
-      final.clones.every((track) => track.state === 'ended') && final.requests === 1,
-      'Late capture caused a new allocation or leaked a clone',
+      final.initiallyEnabled.length > 0 && final.initiallyEnabled.every(Boolean),
+      'An initially paused microphone producer was sent to RealtimeKit',
+    )
+    check(
+      final.outputs.every((track) => track.state === 'ended') && final.requests === 1,
+      'Late capture caused a new allocation or leaked a track',
     )
     check(
       !(JSON.stringify(final.commands).includes(a) || JSON.stringify(final.commands).includes(b)),
@@ -399,7 +424,7 @@ try {
       devices: physical.map((device) => device.label),
       standbyAllocations: standby.requests,
       activeMeetingAllocations: final.requests,
-      sdkClones: final.clones.length,
+      sdkTracks: final.outputs.length,
       allTracksEnded: true,
       navigations: f.navigations.length,
     })
@@ -444,7 +469,7 @@ try {
     )
     const idle = await f.snapshot()
     check(
-      idle.original === 'live' && idle.clones.every((track) => track.state === 'ended'),
+      idle.original === 'live' && idle.outputs.every((track) => track.state === 'ended'),
       'Default idle teardown stopped the source or retained its producer',
     )
     await f.command('disposeVoice')

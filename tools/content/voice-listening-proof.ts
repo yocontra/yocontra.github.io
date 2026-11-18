@@ -136,8 +136,8 @@ export async function receiveOnlyProof(
     await f.command('disposeVoice')
     const final = await f.snapshot()
     check(
-      final.receiveNodes === 0 && final.clones.every((track) => track.state === 'ended'),
-      'Receive-only disposal leaked audio nodes or microphone clones',
+      final.receiveNodes === 0 && final.outputs.every((track) => track.state === 'ended'),
+      'Receive-only disposal leaked audio nodes or microphone outputs',
     )
     return {
       receiveOnly: 'passed',

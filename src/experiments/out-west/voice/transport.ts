@@ -4,18 +4,20 @@ import type { RTKParticipant } from '@cloudflare/realtimekit'
 import type { VoiceChatNode } from '../audio/audio.ts'
 import {
   gameId,
+  microphoneFailure,
   prepareVoiceMeeting,
   publishVoiceMicrophone,
   releaseVoiceMeeting,
   safeTrack,
   type VoiceCredentials,
 } from './meeting.ts'
-import type { VoiceAudio } from './native-audio.ts'
+import type { VoiceAudio, VoiceMicrophone } from './native-audio.ts'
 import { rankVoicePeers, type VoicePeer } from './rank.ts'
 import { RemotePlayout } from './remote-playout.ts'
 
 interface Options {
   audio: VoiceAudio | null
+  microphone: (track: MediaStreamTrack) => VoiceMicrophone | null
   muted: (id: number) => boolean
   onState: (state: 'live' | 'error', message?: string) => void
 }
@@ -41,7 +43,8 @@ export class VoiceTransport {
   private meeting: Client | null = null
   private joining: Client | null = null
   private unbindMeeting: (() => void) | undefined
-  private mic: MediaStreamTrack | null = null
+  private mic: VoiceMicrophone | null = null
+  private pendingMicrophone: VoiceMicrophone | null = null
   private microphoneSwitch: Promise<unknown> = Promise.resolve()
   private connection: Promise<void> = Promise.resolve()
   private sourceMicrophone: MediaStreamTrack | null = null
@@ -74,6 +77,7 @@ export class VoiceTransport {
       return
     }
     let candidate: Client | null = null
+    let channel: VoiceMicrophone | null = null
     try {
       candidate = await prepareVoiceMeeting(credentials, () => this.live.sequence === sequence)
       if (!candidate) {
@@ -89,15 +93,16 @@ export class VoiceTransport {
         return
       }
       if (microphone?.readyState === 'live') {
-        await publishVoiceMicrophone(candidate, microphone, () => this.live.sequence === sequence)
-        this.sourceMicrophone = microphone
+        channel = await this.publish(candidate, microphone, () => this.live.sequence === sequence)
       }
       if (sequence !== this.live.sequence) {
         return
       }
       this.meeting = candidate
       this.joining = null
-      this.mic = candidate.self.audioTrack ?? null
+      this.mic = channel
+      this.sourceMicrophone = channel ? microphone : null
+      channel = null
       this.bindMeeting(candidate)
       this.setSending(this.live.sending)
       this.reconcile(true)
@@ -111,6 +116,7 @@ export class VoiceTransport {
         )
       }
     } finally {
+      channel?.dispose()
       if (candidate) {
         if (this.joining === candidate) {
           this.joining = null
@@ -121,8 +127,29 @@ export class VoiceTransport {
   }
   setSending(on: boolean): void {
     this.live.sending = on
-    if (this.mic) {
-      this.mic.enabled = on
+    this.mic?.setSending(on)
+  }
+  private async publish(
+    meeting: Client,
+    microphone: MediaStreamTrack,
+    active: () => boolean,
+  ): Promise<VoiceMicrophone | null> {
+    const channel = this.o.microphone(microphone)
+    if (!channel) {
+      throw new Error(microphoneFailure(undefined))
+    }
+    this.pendingMicrophone = channel
+    let adopted = false
+    try {
+      adopted = await publishVoiceMicrophone(meeting, channel.track, active)
+      return adopted ? channel : null
+    } finally {
+      if (this.pendingMicrophone === channel) {
+        this.pendingMicrophone = null
+      }
+      if (!adopted) {
+        channel.dispose()
+      }
     }
   }
   /** Serialize native producer changes on the current meeting; never touch a replacement meeting. */
@@ -146,20 +173,18 @@ export class VoiceTransport {
       }
       if (
         microphone === this.sourceMicrophone &&
-        (!microphone || this.mic?.readyState === 'live')
+        (!microphone || this.mic?.track.readyState === 'live')
       ) {
         return true
       }
       const previous = this.mic
       this.mic = null
       this.sourceMicrophone = null
-      if (previous) {
-        previous.enabled = false
-      }
+      previous?.setSending(false)
       try {
         await meeting.self.disableAudio()
       } finally {
-        previous?.stop()
+        previous?.dispose()
       }
       if (!current()) {
         return false
@@ -167,11 +192,12 @@ export class VoiceTransport {
       if (microphone?.readyState !== 'live') {
         return true
       }
-      const clone = await publishVoiceMicrophone(meeting, microphone, current)
-      if (!(clone && current())) {
+      const channel = await this.publish(meeting, microphone, current)
+      if (!(channel && current())) {
+        channel?.dispose()
         return false
       }
-      this.mic = clone
+      this.mic = channel
       this.sourceMicrophone = microphone
       this.setSending(this.live.sending)
       return true
@@ -217,13 +243,6 @@ export class VoiceTransport {
     for (const p of joined.values()) {
       this.addParticipant(p)
     }
-    const audio = ({ audioTrack }: { audioTrack: MediaStreamTrack }) => {
-      if (this.meeting !== meeting) {
-        return
-      }
-      this.mic = audioTrack ?? null
-      this.setSending(this.live.sending)
-    }
     const left = () => {
       if (this.meeting === meeting) {
         const stopped = this.stop()
@@ -235,13 +254,11 @@ export class VoiceTransport {
         })
       }
     }
-    meeting.self.on('audioUpdate', audio)
     meeting.self.on('roomLeft', left)
     this.unbindMeeting = () => {
       joined.off('participantJoined', add)
       joined.off('participantLeft', drop)
       joined.off('participantsUpdate', reconcile)
-      meeting.self.off('audioUpdate', audio)
       meeting.self.off('roomLeft', left)
     }
   }
@@ -343,8 +360,10 @@ export class VoiceTransport {
     this.meeting = null
     this.joining = null
     this.live.sequence++
-    this.mic?.stop()
+    this.mic?.dispose()
     this.mic = null
+    this.pendingMicrophone?.dispose()
+    this.pendingMicrophone = null
     this.sourceMicrophone = null
     this.unbindMeeting?.()
     this.unbindMeeting = undefined

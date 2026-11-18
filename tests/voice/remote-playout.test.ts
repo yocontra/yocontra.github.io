@@ -191,6 +191,7 @@ it('frees old receive slots before delayed SDK unsubscribe and new audio events'
     },
   }
   const transport = new VoiceTransport({
+    microphone: () => null,
     audio: {
       attachVoiceChat: (id) => {
         nodes.add(id)

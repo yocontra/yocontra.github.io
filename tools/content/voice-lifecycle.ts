@@ -19,6 +19,7 @@ import {
   holdLeave,
   holdMicrophone,
 } from './voice-meeting-fixture.ts'
+
 export const transport = { disconnectVoice, finishJoin, holdJoin, holdMicrophone, finishMicrophone }
 
 let chat: VoiceChat | undefined
@@ -51,6 +52,7 @@ export function beginVoice() {
     () => 0.5,
   )
   chat = new VoiceChat({
+    microphone: (track) => audio.createMicrophone(track),
     audio: {
       resume: () => audio.resume(),
       attachVoiceChat: (id, track) => {
@@ -347,11 +349,17 @@ export async function deferredLeaveProof() {
     lateStates: string[]
     track: ReturnType<typeof fixtureState>['track']
   }[] = []
+  const localContext = new AudioContext()
+  const audio = new NativeVoiceAudio(
+    () => localContext,
+    () => 1,
+  )
   for (const mode of ['dispose', 'replace', 'current'] as const) {
     const states: string[] = []
     let ready = false
     const voice = new VoiceChat({
-      audio: null,
+      audio,
+      microphone: (track) => audio.createMicrophone(track),
       activity: () => null,
       audioRunning: () => true,
       listening: () => true,
@@ -419,6 +427,7 @@ export async function deferredLeaveProof() {
       await voice.dispose()
     }
   }
+  await localContext.close()
   return results
 }
 
