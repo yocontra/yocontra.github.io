@@ -289,6 +289,13 @@ function screenAim(view: FrontierSettings['view'], input: GameInput | undefined)
   }
 }
 
+function bankGuideFor(root: HTMLElement, world: GameSession['world'], items: FrontierItems) {
+  if (!world) {
+    items.destroy()
+  }
+  return world ? new BankGuide(root, world.grid) : undefined
+}
+
 function ownAfterLoad<T>(signal: AbortSignal, value: T, dispose: (value: T) => void): T {
   if (signal.aborted) {
     dispose(value)
@@ -365,12 +372,8 @@ export function mountGameViewport(root: HTMLElement, options: ViewportOptions): 
   const ready = (async () => {
     options.onStage?.('Preparing the trail…')
     try {
-      const created = ownAfterLoad(
-        signal,
-        await GameApplication.create({ canvas, viewport: root }),
-        (value) => value.destroy(),
-      )
-      application = created
+      const created = await GameApplication.create({ canvas, viewport: root })
+      application = ownAfterLoad(signal, created, (value) => value.destroy())
       options.onStage?.('Loading the streets…')
       const loaded = await loadTown(created, options.townUrl, signal)
       environment = loaded.environment
@@ -409,7 +412,8 @@ export function mountGameViewport(root: HTMLElement, options: ViewportOptions): 
       effects = createEffects(created, actors, createdSession, { windows, items, props })
       await effects.ready
       signal.throwIfAborted()
-      guide = new BankGuide(root, createdSession.world.grid)
+      guide = bankGuideFor(root, createdSession.world, items)
+      items = guide ? items : undefined
       created.app.on('update', update)
       await firstFrame(created, signal)
       signal.throwIfAborted()
