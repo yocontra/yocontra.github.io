@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import process from 'node:process'
 import { spawn, write } from 'bun'
-import { PROTOCOL_VERSION } from '../../src/experiments/out-west/runtime/protocol.ts'
+import { Buttons, PROTOCOL_VERSION } from '../../src/experiments/out-west/runtime/protocol.ts'
 import { hangTimeout } from '../timeout.ts'
 
 async function execute(args: string[], source?: string) {
@@ -203,7 +203,10 @@ it(
    const lateBreaks=[];late.onMessage('events',m=>lateBreaks.push(...m.events.filter(e=>e.type==='prop_break')));late.onMessage('control',()=>{});late.onMessage('network-ping',m=>late.send('network-pong',{nonce:m.nonce}));
    await waitFor(()=>late.state.game,Boolean,'late barrel snapshot');
    if(JSON.stringify(health(late))!==JSON.stringify(health(rooms[0])))throw new Error('Late join restored intact barrels');
-   await sendEnv(1026);await waitFor(()=>own(rooms[0])?.fireCooldownMs,n=>n<=0,'next shot cooldown');await sendEnv(1027);
+   // Release aim before the late-join shot so slow clients cannot charge Dead Eye.
+   await sendEnv(${Buttons.crouch});
+   await waitFor(()=>own(rooms[0])?.fireCooldownMs,n=>n<=0,'next shot cooldown');
+   await sendEnv(${Buttons.crouch | Buttons.fire});
    await waitFor(()=>own(rooms[1])?.hp,n=>n===66,'next shot through broken barrels');
    const laterTick=late.state.tick;await waitFor(()=>late.state.tick,n=>n>laterTick+2,'late-join observation');
    if(lateBreaks.length)throw new Error('Late join replayed historic barrel breaks');

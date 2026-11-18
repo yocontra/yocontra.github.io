@@ -23,6 +23,8 @@ import { ALL_EXTENSIONS } from '@gltf-transform/extensions'
 import { spawn } from 'bun'
 import { CATALOG } from '../../src/experiments/out-west/data/catalog.ts'
 
+import { hangTimeout } from '../timeout.ts'
+
 const project = fileURLToPath(new URL('../../', import.meta.url))
 const native = 'public/experiments/out-west/3d/native-v2'
 const descriptor = 'src/experiments/out-west/content/viewmodels.ts'
@@ -32,7 +34,7 @@ const fits = CATALOG.filter((item) => item.slot === 'outfit').flatMap((item) => 
 ])
 const hash = (bytes: Uint8Array) => createHash('sha256').update(bytes).digest('hex')
 // Two complete builds and two fits run alongside the Worker and type-check fixtures.
-const rebuildBudget = 300_000
+const rebuildBudget = hangTimeout(300_000)
 
 function hashes(directory: string): Promise<string[]> {
   return Promise.all(fits.map(async (id) => hash(await readFile(join(directory, `${id}.glb`)))))
