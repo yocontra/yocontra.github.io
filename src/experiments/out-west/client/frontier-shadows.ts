@@ -12,6 +12,7 @@ import type { GameApplication } from './application.ts'
 
 const CROWDED = 16
 const MAX_CACHED_MESHES = 128
+const SHADOW_TURN_COSINE = Math.cos(Math.PI / 9)
 type Simplify = typeof import('./crowd-shadow-mesh.ts').simplifyShadow
 
 /** Low-tier sun updates alternate under load. Only dense crowds use reduced shadow geometry. */
@@ -21,6 +22,7 @@ export class FrontierShadows {
   private readonly game: GameApplication
   private clock = 0
   private readonly lastCamera = new Vec3()
+  private readonly lastDirection = new Vec3()
   private pending = false
   private closed = false as boolean
   private reuse = false as boolean
@@ -114,13 +116,20 @@ export class FrontierShadows {
     const fps = this.game.quality.fps
     const crowded = this.count >= CROWDED
     const reuse = crowded || (fps > 0 && fps < (this.reuse ? 52 : 43))
-    const camera = this.game.camera.getPosition()
-    const jump = camera.distance(this.lastCamera) > 0.85
+    const camera = this.game.camera
+    const position = camera.getPosition()
+    const direction = camera.forward
+    const jumped =
+      position.distance(this.lastCamera) > 0.85 ||
+      direction.dot(this.lastDirection) < SHADOW_TURN_COSINE
     const phase = this.clock++
-    light.shadowUpdateMode =
-      reuse && this.reuse && !jump && phase % 2 !== 0 ? SHADOWUPDATE_NONE : SHADOWUPDATE_REALTIME
+    const reuseMap = reuse && this.reuse && !jumped && phase % 2 !== 0
+    light.shadowUpdateMode = reuseMap ? SHADOWUPDATE_NONE : SHADOWUPDATE_REALTIME
     this.reuse = reuse
-    this.lastCamera.copy(camera)
+    if (!reuseMap) {
+      this.lastCamera.copy(position)
+      this.lastDirection.copy(direction)
+    }
     this.updateCasters(crowded, phase)
   }
 

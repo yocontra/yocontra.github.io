@@ -166,6 +166,10 @@ The clean `17cce48c` build completed all four 60-second iPhone 13 mini simulator
 
 The 32-rider landscape window at a 710 × 231 render size still submitted over 500 draws in central street views. Further reducing resolution alone has low priority. The shadow pass at `3a3144f7` uses the assigned rider ID for custom outfits as well as bots. A native Chrome check with three identically named fitted actors verifies remote reduction, restoration when the remote becomes local, no proxy for an unregistered actor, and proxy removal when the crowd shrinks.
 
+- [x] Refresh the Low-tier sun map after a fast camera turn. The renderer uses the last sampled direction and position of the shadow map. A stationary test turns the camera 90 degrees on a reuse frame and requires an immediate refresh. Stable frames still reuse the map.
+
+A fixed-scene simulator diagnostic used the release landscape drawing buffer of 710 × 231 pixels. The ordinary shadow reuse case averaged 21.88 FPS. Removing rider casters reached 23.25 FPS, removing scenery casters reached 24.75 FPS, and disabling the sun shadow pass reached 27.88 FPS with a 25 FPS minimum. The repeated baseline averaged 22.25 FPS. In a second fixed scene, narrower vertical fields of view reached 20.63–22.50 FPS. The frame budget needs savings beyond the sun shadow pass.
+
 ## First-person models and aiming
 
 - [x] Recover the bounded offline arms extractor (`tools/content/first-person-arms.ts`). Trail-duds and wool-duster CPU checks preserve native triangles/typed streams, full PBR and external texture URLs, skeleton/TRS/IBMs and humanoid clips; provenance includes authored garments and shared helpers. Repeated staging outputs are byte-identical and remain temporary.
