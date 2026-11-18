@@ -245,11 +245,16 @@ it(
    await bucketPeer.leave();
    console.log('BUCKET:'+JSON.stringify(bucketEvents[0][0]));
    console.log('PHASE: authoritative tumbleweed and late join');
+   diagnostic=async()=>await(await fetch(base+'/environment/inspect?room=fresh-barrel-world',{signal:AbortSignal.timeout(1000)})).json();
+   // A fixed tick after setup must consume a released trigger, even if the next SDK input arrives late.
+   Object.assign(bucketInput.data,{seq:2,buttons:${Buttons.crouch}});bucketInput.send();
+   await waitFor(()=>own(fresh)?.seq,n=>n===2,'bucket trigger release acknowledgement');
    const weedAimResponse=await fetch(base+'/environment/setup-weed?room=fresh-barrel-world');
    if(!weedAimResponse.ok)throw new Error('Native weed setup failed '+await weedAimResponse.text());
    const weedAim=await weedAimResponse.json();
+   await waitFor(()=>fresh.state.tick,tick=>tick>weedAim.tick,'fixed tick after weed setup');
    const weedInput=fresh.input({mode:'reliable'});
-   Object.assign(weedInput.data,{seq:2,moveX:0,moveZ:0,yaw:-Math.PI/2,pitch:weedAim.pitch,buttons:${Buttons.crouch | Buttons.fire},viewTime:weedAim.tick});weedInput.send();
+   Object.assign(weedInput.data,{seq:3,moveX:0,moveZ:0,yaw:-Math.PI/2,pitch:weedAim.pitch,buttons:${Buttons.crouch | Buttons.fire},viewTime:weedAim.tick});weedInput.send();
    const weeds=room=>room.state.game?JSON.parse(room.state.game).tumbleweeds:undefined;
    const activeWeeds=await waitFor(()=>weeds(fresh),value=>value?.[0]?.vx>1,'native shot pushes weed');
    const weedSeat=await(await fetch(base+'/reserve?account=late-weed&room=fresh-barrel-world')).json();

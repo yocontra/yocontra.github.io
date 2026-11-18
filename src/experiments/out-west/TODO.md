@@ -226,5 +226,7 @@ A later 32-rider fixed-view test compared the existing 1024-pixel sun map with f
 
 ## Final delivery
 
+The deployed asset audit checked 187 complete responses against the local bytes and SHA-256 values. It covers every versioned model, all 37 shop previews and the changed published files. All 94 historical GLB blobs match the pre-recovery tree. Exact asset checks must be repeated after future content changes.
+
 - [ ] Review the finished source, then regenerate asset descriptors and native shop previews. Keep all 94 historical GLBs immutable and verify every new asset URL/hash.
 - [ ] Run `bun run check` and the relevant native visual/lifecycle probes. Push and verify the actual Worker and site deployment; distinguish simulator results from untested hardware behavior.
