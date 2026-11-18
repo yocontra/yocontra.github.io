@@ -49,28 +49,42 @@ export interface RemoteSessionOptions {
 /** Read cosmetic assets before reserving a live seat; downloads must not consume spawn protection. */
 export async function loadRemoteAppearance(
   options: RemoteSessionOptions = {},
+  signal?: AbortSignal,
 ): Promise<Appearance> {
   const token = await (options.getToken ?? getAccessToken)()
+  signal?.throwIfAborted()
   if (!token) {
     throw new Error('Sign in to play Frontier.')
   }
-  const response = await fetch(`${options.apiUrl ?? API_URL}/me`, {
-    headers: { authorization: `Bearer ${token}` },
-    signal: AbortSignal.timeout(15_000),
-  })
-  const profile: unknown = await response.json().catch(() => null)
-  if (!response.ok) {
-    throw new Error(
-      response.status === 401
-        ? 'Sign in to play Frontier.'
-        : 'Could not load your rider. Check your connection and try again.',
-    )
+  const request = new AbortController()
+  const cancel = () => request.abort(signal?.reason)
+  const timeout = setTimeout(
+    () => request.abort(new DOMException('Could not load your rider in time.', 'TimeoutError')),
+    15_000,
+  )
+  signal?.addEventListener('abort', cancel, { once: true })
+  try {
+    const response = await fetch(`${options.apiUrl ?? API_URL}/me`, {
+      headers: { authorization: `Bearer ${token}` },
+      signal: request.signal,
+    })
+    const profile: unknown = await response.json().catch(() => null)
+    if (!response.ok) {
+      throw new Error(
+        response.status === 401
+          ? 'Sign in to play Frontier.'
+          : 'Could not load your rider. Check your connection and try again.',
+      )
+    }
+    if (!(isRecord(profile) && isRecord(profile.loadout) && isRecord(profile.dyes))) {
+      throw new Error('Could not load your rider. Try again.')
+    }
+    const appearance = { loadout: normalizeLoadout(profile.loadout), dyes: profile.dyes as Dyes }
+    return { ...appearance, key: JSON.stringify(appearance) }
+  } finally {
+    clearTimeout(timeout)
+    signal?.removeEventListener('abort', cancel)
   }
-  if (!(isRecord(profile) && isRecord(profile.loadout) && isRecord(profile.dyes))) {
-    throw new Error('Could not load your rider. Try again.')
-  }
-  const appearance = { loadout: normalizeLoadout(profile.loadout), dyes: profile.dyes as Dyes }
-  return { ...appearance, key: JSON.stringify(appearance) }
 }
 
 async function reserve(options: RemoteSessionOptions): Promise<JoinResponse> {

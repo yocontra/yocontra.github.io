@@ -39,7 +39,7 @@ export interface ViewportOptions {
   townUrl: string
   playerUrl: string
   createSession: () => Promise<GameSession>
-  prepareAppearance?: () => Promise<Appearance | undefined>
+  prepareAppearance?: (signal: AbortSignal) => Promise<Appearance | undefined>
   firstPerson?: boolean
   onState?: (player: PlayerState, players: number) => void
   onReady?: () => void
@@ -375,8 +375,14 @@ export function mountGameViewport(root: HTMLElement, options: ViewportOptions): 
       const created = await GameApplication.create({ canvas, viewport: root })
       application = ownAfterLoad(signal, created, (value) => value.destroy())
       options.onStage?.('Loading the streets…')
-      const loaded = await loadTown(created, options.townUrl, signal)
-      environment = loaded.environment
+      const [loaded, appearanceToPrepare] = await Promise.all([
+        loadTown(created, options.townUrl, signal).then((result) => {
+          environment = ownAfterLoad(signal, result.environment, (value) => value.destroy())
+          return result
+        }),
+        options.prepareAppearance?.(signal),
+      ])
+      signal.throwIfAborted()
       windows = new BreakableWindows(loaded.town)
       const propOptions = { windows, collision: options.collision, signal }
       const scenery = await prepareProps(created, loaded.town, propOptions)
@@ -386,8 +392,6 @@ export function mountGameViewport(root: HTMLElement, options: ViewportOptions): 
       ragdolls = scenery.ragdolls
       props = scenery.props
       options.onStage?.('Getting your rider and gear ready…')
-      const appearanceToPrepare = await options.prepareAppearance?.()
-      signal.throwIfAborted()
       prepared = ownAfterLoad(signal, await Actors.prepare(created, appearanceToPrepare), (value) =>
         value.dispose(),
       )

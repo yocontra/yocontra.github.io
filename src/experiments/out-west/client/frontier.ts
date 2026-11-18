@@ -88,11 +88,14 @@ export function mountNativeFrontier(
     ...(options.server === 'loopback'
       ? {}
       : {
-          prepareAppearance: () =>
-            loadRemoteAppearance({
-              ...(options.apiUrl ? { apiUrl: options.apiUrl } : {}),
-              ...(options.getToken ? { getToken: options.getToken } : {}),
-            }),
+          prepareAppearance: (signal) =>
+            loadRemoteAppearance(
+              {
+                ...(options.apiUrl ? { apiUrl: options.apiUrl } : {}),
+                ...(options.getToken ? { getToken: options.getToken } : {}),
+              },
+              signal,
+            ),
         }),
     createSession: async () => {
       const session =

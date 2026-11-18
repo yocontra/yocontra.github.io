@@ -164,6 +164,8 @@ The next ordinary five-rider portrait run with the shadow and glass changes aver
 
 ## Loading and voice QA
 
+- [x] Fetch the live rider profile during the town load. Delay seat reservation until both loads and shader warmup finish. A local production-engine Chrome test with a 2 s profile delay measured 8.6 s to playable before the change and 6.5 s after it. A rejected profile reserves no seat, and a failed town load aborts the pending profile request.
+
 - [x] Verify existing native asset retries: PlayCanvas `AppBase.init` already enables five retries, so no override is needed. `bun tools/content/asset-retry.ts` verifies real WebGL/KTX2 recovery after five HTTP 503s, terminal failure after six attempts, failed-load eviction and re-acquisition, texture/application cleanup, and a disabled-retry control.
 - [x] Finish simulator Safari voice permission/retry, receive/deafen and background/resume checks. Simulator Safari: Cancel shows "Microphone blocked" with RETRY VOICE, retry re-prompts, Allow reaches standby; Home and back keeps the page and voice control without a reload; native receive builds the shared-context panner at the speaker's position with volume gain. Deafen (`listening: false`) allocates nothing in the coordinator tests. Desktop actual SDK/SFU two-way decoding and complete provider cleanup passed before voice enablement.
 - [x] Preserve nearby voice when microphone permission is denied or a microphone is missing/disconnected. Listening-only status and microphone retry preserve the active receive connection; the headless fake-device proof covers recovery without reconnect, ended/missing tracks, deafen, reconnect and cancellation. Standby and alone speech still allocate no provider session; live SFU receive-only validation remains open.
