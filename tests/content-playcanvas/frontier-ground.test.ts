@@ -54,17 +54,40 @@ it('outskirts and every preserved wind patch share one continuous uniform frame'
     }
   }
 })
-it('the cliff projection covers steep faces and joins the town dirt at the base', () => {
+it('mesa detail is confined to the two upper rock masses outside town', () => {
   const originals = frontierGround(TOWN.size)
-  const outward = [new Vec3(0, 0, -1), new Vec3(-1, 0, 0), new Vec3(1, 0, 0), new Vec3(0, 0, 1)]
-  for (const [index, bank] of frontierCutBanks(TOWN.size).entries()) {
+  const shaped = frontierCutBanks(TOWN.size)
+  let added = 0
+  for (const [index, bank] of shaped.entries()) {
     const original = originals[index]
-    const axis = outward[index]
-    if (!(original && axis)) {
+    if (!original) {
       throw new Error(`Missing canonical terrain bank ${index}`)
     }
-    expect(bank.positions).toEqual(original.positions)
-    expect(bank.indices).toEqual(original.indices)
+    const floor = [8.8, 5.2][index] ?? Number.POSITIVE_INFINITY
+    let moved = 0
+    for (let i = 0; i < original.positions.length; i += 3) {
+      const y = original.positions[i + 1] ?? 0
+      expect(bank.positions[i]).toBe(original.positions[i])
+      expect(bank.positions[i + 2]).toBe(original.positions[i + 2])
+      if (y === bank.positions[i + 1]) {
+        continue
+      }
+      expect(y).toBeGreaterThan(floor)
+      moved++
+    }
+    expect(moved > 0).toBe(index < 2)
+    added += (bank.indices.length - original.indices.length) / 3
+  }
+  expect(added).toBeGreaterThan(1000)
+  expect(added).toBeLessThan(2200)
+})
+it('the cliff projection covers steep faces and joins the town dirt at the base', () => {
+  const outward = [new Vec3(0, 0, -1), new Vec3(-1, 0, 0), new Vec3(1, 0, 0), new Vec3(0, 0, 1)]
+  for (const [index, bank] of frontierCutBanks(TOWN.size).entries()) {
+    const axis = outward[index]
+    if (!axis) {
+      throw new Error(`Missing canonical terrain bank ${index}`)
+    }
     for (let vertex = 0; vertex < bank.positions.length / 3; vertex++) {
       const [x = 0, y = 0, z = 0] = bank.positions.slice(vertex * 3, vertex * 3 + 3)
       if (y > 0) {

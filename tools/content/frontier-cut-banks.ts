@@ -1,6 +1,7 @@
 /** Surface projection and exposed sandstone tints for the authored frontier outskirts. */
 import { calculateNormals } from 'playcanvas'
 import { frontierGround } from './frontier-ground.ts'
+import { sculptFrontierMesa } from './frontier-mesas.ts'
 
 const SOIL = [0.92, 0.85, 0.7] as const
 // Mesh order in frontier-ground.json: north, west, east, south.
@@ -13,7 +14,8 @@ const OUTWARD_AXES = [
 const clamp = (value: number) => Math.max(0, Math.min(1, value))
 
 export function frontierCutBanks(size: number) {
-  return frontierGround(size).map((bank, index) => {
+  return frontierGround(size).map((source, index) => {
+    const bank = sculptFrontierMesa(source)
     const axis = OUTWARD_AXES[index]
     if (!axis) {
       throw new Error(`Missing terrain projection for ${bank.id}`)
