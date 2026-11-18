@@ -202,7 +202,7 @@ function wallBracket(owner: string, x: number, wall: number) {
   return result.members
 }
 
-function lampBracket(owner: string, x: number, wall: number) {
+export function lampBracket(owner: string, x: number, wall: number, direction = 1) {
   const result = makeMembers(owner, 'lantern')
   result.add(
     'lamp-wall-plate',
@@ -246,7 +246,19 @@ function lampBracket(owner: string, x: number, wall: number) {
   for (const [i, y] of [2.96, 3.16].entries()) {
     result.rivet(`lamp-rivet:${i}`, [x, y, wall + 0.012])
   }
-  return result.members
+  if (direction > 0) {
+    return result.members
+  }
+  return result.members.map((member) => ({
+    ...member,
+    positions: member.positions.map((value, i) =>
+      i % 3 === 2 ? Math.fround(2 * wall - value) : value,
+    ),
+    indices: member.indices.map((value, i) => {
+      const corner = i % 3
+      return corner === 0 ? value : (member.indices[i + 3 - 2 * corner] ?? value)
+    }),
+  }))
 }
 
 function boardPosition(building: Building, layout: TownLayout) {

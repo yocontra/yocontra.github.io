@@ -37,7 +37,8 @@ bun tools/content/manifest.ts
 ```
 
 `street-lamp.glb` is authored by `tools/content/street-lamp-authoring.py` in Blender 4.5; the
-bank build swaps its gallows lanterns and step-lamp heads for it.
+bank build swaps its gallows lanterns and step-lamp heads for it. Frontier authoring reuses its
+lantern body, glass and carrying bail with the town’s fitted wall brackets.
 
 `clockwork.glb` contains nine authored joints in two native skinned meshes, with
 campaign hour poses, the boss's 11:59 pose, and a damped bell-swing clip. Those

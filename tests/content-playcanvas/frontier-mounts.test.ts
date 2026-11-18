@@ -9,10 +9,12 @@ import { frontOf } from '../../src/experiments/out-west/ffa/sim/porches.ts'
 import { type Point, rayHit } from '../../tools/content/freight-crates-contract.ts'
 import { porchFasciaSignMount, porchSignMount } from '../../tools/content/frontier-architecture.ts'
 import { compileFrontierCollision } from '../../tools/content/frontier-collision.ts'
+import { hangingLampSites } from '../../tools/content/frontier-hanging-lamps.ts'
 import {
   type FrontierMount,
   frontierMounts,
   groupFrontierMounts,
+  lampBracket,
 } from '../../tools/content/frontier-mounts.ts'
 import { appendFrontierMounts, readMountGlb } from '../../tools/content/frontier-mounts-install.ts'
 import { FRONTIER_IRON } from '../../tools/content/frontier-surfaces.ts'
@@ -30,9 +32,9 @@ function faces(member: Pick<FrontierMount, 'positions' | 'indices'>): Point[][] 
     }),
   )
 }
-function sceneFaces(name: string): Point[][] {
+function sceneFaces(name: string, source = doc): Point[][] {
   const result: Point[][] = []
-  for (const node of doc
+  for (const node of source
     .getRoot()
     .listNodes()
     .filter((n) => n.getName() === name)) {
@@ -268,29 +270,54 @@ it('three triangular brackets are anchored in actual solid facade timber/masonry
   }
 })
 
-it('livery hook intersects the real handle arc and its bracket is wall connected', () => {
-  const lantern = sceneFaces('lantern_hanging').filter(
-    (t) => t.every((p) => p[0] < 5 && p[2] < 45) && t.some((p) => p[1] > 2.82),
-  )
-  const hook = part('mount:livery:lamp-hook')
-  let intersections = 0
-  for (const y of [2.8465, 2.847, 2.8475, 2.848, 2.8485, 2.849, 2.8495]) {
-    for (const z of [44.2265, 44.226_75, 44.227, 44.227_25, 44.2275, 44.227_75, 44.228]) {
-      const overlap = contactOverlap(hook, lantern, [4.545, y, z], [1, 0, 0])
-      if (overlap !== null && overlap > 0.001) {
-        intersections++
-      }
+it('all eleven iron brackets seat on the facade and their hooks hold the authored bails', async () => {
+  const native = await io.read('public/experiments/out-west/3d/native-v2/baked/frontier.glb')
+  const key = (triangle: Point[]) =>
+    triangle
+      .map((point) => point.join(','))
+      .sort((left, right) => left.localeCompare(right))
+      .join('|')
+  const bails = sceneFaces('lamp-bail')
+  const sites = hangingLampSites(TOWN)
+  expect(sites).toHaveLength(11)
+  for (const { x, face, direction, owner } of sites) {
+    const z = face + direction * 0.225
+    const support = lampBracket(owner, x, face, direction)
+    const hook = support.find(({ id }) => id.endsWith(':lamp-hook'))
+    const plate = support.find(({ id }) => id.endsWith(':lamp-wall-plate'))
+    if (!(hook && plate)) {
+      throw new Error(`Missing bracket member for ${owner}`)
     }
+    const group = owner === 'livery' ? 'Perdition structural iron' : 'Frontier lantern bracket'
+    for (const source of [doc, native]) {
+      const actual = new Set(sceneFaces(`${group}:${owner}:iron-mesh`, source).map(key))
+      expect(
+        [...faces(plate), ...faces(hook)].every((triangle) => actual.has(key(triangle))),
+        owner,
+      ).toBe(true)
+    }
+    const bail = bails.filter((triangle) =>
+      triangle.every(([px, , pz]) => Math.abs(px - x) < 0.03 && Math.abs(pz - z) < 0.007),
+    )
+    expect(bail, owner).toHaveLength(192)
+    expect(
+      patchContacts(faces(plate), facade(owner), [x, 3.16, face], [0, 0, direction]),
+      owner,
+    ).toBe(true)
+    const contactsAtRest = [-0.002, 0, 0.002].flatMap((dx) =>
+      [2.848, 2.849, 2.85, 2.851].map((y) =>
+        contactOverlap(faces(hook), bail, [x + dx, y, z], [0, 0, direction]),
+      ),
+    )
+    expect(
+      contactsAtRest.some((overlap) => overlap !== null && overlap >= -0.001),
+      owner,
+    ).toBe(true)
+    const displacedBail = displaced(bail, 0, 0.06)
+    expect(contacts(faces(hook), displacedBail, [x, 2.849, z], [0, 0, direction]), owner).toBe(
+      false,
+    )
   }
-  expect(intersections).toBeGreaterThan(8)
-  expect(
-    patchContacts(
-      part('mount:livery:lamp-wall-plate'),
-      facade('livery'),
-      [4.545, 3.04, 44],
-      [0, 0, 1],
-    ),
-  ).toBe(true)
 })
 
 it('bank end feet meet actual counter/grille triangles while preserving central service shots', () => {
@@ -316,7 +343,7 @@ function displaced(triangles: Point[][], axis: number, distance: number): Point[
   )
 }
 
-it('20mm displaced shoe, foot and hook controls expose a real local gap', () => {
+it('20mm displaced shoe and foot controls expose a real local gap', () => {
   const shoe = part('mount:saloon:hanger:0:board-shoe')
   const foot = part('mount:bank:grille:237:foot:0')
   const shoePoint: Point = [23.75, 2.95, 44.47]
@@ -329,27 +356,6 @@ it('20mm displaced shoe, foot and hook controls expose a real local gap', () => 
   expect(contactOverlap(displaced(foot, 1, 0.02), floor, footPoint, [0, 1, 0]) ?? 0).toBeLessThan(
     -0.019,
   )
-  const lantern = sceneFaces('lantern_hanging').filter(
-    (t) => t.every((p) => p[0] < 5 && p[2] < 45) && t.some((p) => p[1] > 2.82),
-  )
-  const hook = part('mount:livery:lamp-hook')
-  const probes: Point[] = [2.8465, 2.847, 2.8475, 2.848, 2.8485, 2.849, 2.8495].flatMap((y) =>
-    [44.2265, 44.226_75, 44.227, 44.227_25, 44.2275, 44.227_75, 44.228].map(
-      (z) => [4.545, y, z] as Point,
-    ),
-  )
-  const point = probes.find((p) => (contactOverlap(hook, lantern, p, [1, 0, 0]) ?? 0) > 0.001)
-  if (!point) {
-    throw new Error('Missing positive finite handle contact')
-  }
-  const moved = contactOverlap(displaced(hook, 0, 0.02), lantern, point, [1, 0, 0])
-  expect(moved).not.toBeNull()
-  expect(moved ?? 0).toBeLessThan(-0.001)
-  const hollow: Point = [4.545, 2.85, 44.175]
-  expect(contacts(hook, lantern, hollow, [1, 0, 0])).toBe(false)
-  expect(
-    contacts(displaced(hook, 2, 44.175 - 44.228_126_472_235_06), lantern, hollow, [1, 0, 0]),
-  ).toBe(false)
 })
 
 it('all new members remain outside actual door/window opening volumes', () => {

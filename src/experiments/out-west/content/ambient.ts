@@ -1,10 +1,5 @@
 // Authored native ambient assets, versioned by tools/content/manifest.ts.
 export const AMBIENT_ASSETS = {
-  'lantern-glow': {
-    url: '/experiments/out-west/3d/native-v2/ambient/lantern-glow.png?v=e5269758d12ab4a5',
-    bytes: 796,
-    hash: 'e5269758d12ab4a56cd9ba4f199982b0c9c46be0fc7829184d6d8fdb686873bc',
-  },
   crow: {
     url: '/experiments/out-west/3d/native-v2/ambient/crow.glb?v=23171ae60e5341ca',
     bytes: 380608,

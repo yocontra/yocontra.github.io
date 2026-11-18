@@ -25,8 +25,14 @@ import { frontierCutBanks } from './frontier-cut-banks.ts'
 import { FrontierGeometry, frontierIO, type Rgb } from './frontier-geometry.ts'
 import { frontierFlatGround, frontierGroundTransform } from './frontier-ground.ts'
 import { townGround } from './frontier-ground-detail.ts'
+import { hangingLampSites, installHangingLamps } from './frontier-hanging-lamps.ts'
 import { authoredMaterials } from './frontier-materials.ts'
-import { frontierMounts, groupFrontierMounts, MOUNT_IRON_TINT } from './frontier-mounts.ts'
+import {
+  frontierMounts,
+  groupFrontierMounts,
+  lampBracket,
+  MOUNT_IRON_TINT,
+} from './frontier-mounts.ts'
 import { coverModel, desertPlants } from './frontier-props.ts'
 import { frontierSiding } from './frontier-siding.ts'
 import { optimizeAsset } from './optimize.ts'
@@ -184,6 +190,14 @@ export async function authorFrontier(output: string): Promise<void> {
     const root = g.group(`Perdition structural iron:${mount.owner}`)
     g.surface(root, 'iron', mount, MOUNT_IRON_TINT)
   }
+  for (const { x, face, owner, direction } of hangingLampSites(layout)) {
+    if (owner !== 'livery') {
+      const root = g.group(`Frontier lantern bracket:${owner}`)
+      for (const support of lampBracket(owner, x, face, direction)) {
+        g.surface(root, 'iron', support, MOUNT_IRON_TINT)
+      }
+    }
+  }
   const panes = authorPanes(g, layout, groups)
   g.finish()
   await installBarrelParts(g.doc, await frontierIO.read(join(SOURCE, 'barrel-parts.glb')))
@@ -198,6 +212,7 @@ export async function authorFrontier(output: string): Promise<void> {
     await frontierIO.read(join(SOURCE, 'cactus-near/frontier-cactus-near.glb')),
     await frontierIO.read(join(SOURCE, 'frontier-cacti.glb')),
   )
+  await installHangingLamps(g.doc, await frontierIO.read(join(SOURCE, 'street-lamp.glb')), layout)
   await mkdir(output, { recursive: true })
   await authorTumbleweeds(plan, output)
   await frontierIO.write(join(output, 'frontier.glb'), g.doc)

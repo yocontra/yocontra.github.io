@@ -86,7 +86,6 @@ export class NativeEnvironment {
     this.frontierLamps = frontier ? new FrontierLamps(game) : undefined
     this.cloudMotion = frontier ? sharedCloudMotion(game.app.graphicsDevice) : undefined
     this.ready = Promise.all([
-      this.frontierLamps?.ready,
       this.setTime(frontier ? 0.3 : 0),
       game
         .loadTexture(AMBIENT_ASSETS['cloud-shadow'].url, { srgb: true, flipY: false })
@@ -201,7 +200,6 @@ export class NativeEnvironment {
     }
   }
   private applyLampGlass(flicker = 1): void {
-    this.frontierLamps?.glow(this.lanterns, flicker)
     for (const material of this.lampGlass) {
       material.emissiveIntensity = this.lanterns * LAMP_GLOW * flicker
       material.update()
@@ -278,7 +276,6 @@ export class NativeEnvironment {
       this.sky = sky.url
       this.ready = this.game.environment(sky.url, 0.7, sky.day >= 0.75 ? 1024 : 256)
     }
-    this.ready = this.frontierLamps?.readyWith(this.ready) ?? this.ready
     return this.ready
   }
   private updatePosterLights(): void {
@@ -353,7 +350,7 @@ export class NativeEnvironment {
     }
     let material = clones.get(original)
     if (!material) {
-      material = this.frontierLamps?.owns(original) ? original : original.clone()
+      material = original.clone()
       prepareFreightClouds(material, worldClouds)
       clones.set(original, material)
       this.materials.add(material)
@@ -372,11 +369,7 @@ export class NativeEnvironment {
     if (!this.frontier && node.name.startsWith('ground-')) {
       this.groundMaterials.add(material)
       this.applyGround(material)
-    } else if (
-      material.opacity === 1 &&
-      (!material.emissiveMap || this.frontierLamps?.owns(material)) &&
-      material.name !== 'WantedPaper'
-    ) {
+    } else if (material.opacity === 1 && !material.emissiveMap && material.name !== 'WantedPaper') {
       this.cloudMaterials.add(material)
       this.applyClouds(material)
     }
