@@ -13,7 +13,12 @@ import { installBarrelParts } from './barrel-install.ts'
 import { compressEnvironmentTextures } from './environment-textures.ts'
 import { packFreight } from './freight-crates-contract.ts'
 import { installFreightCrates, readFreightPrefabs } from './freight-crates-install.ts'
-import { bankServiceSigns, buildingDetails, surround } from './frontier-architecture.ts'
+import {
+  authorDecksAndRoofs,
+  bankServiceSigns,
+  buildingDetails,
+  surround,
+} from './frontier-architecture.ts'
 import { replaceCactusPrototype } from './frontier-cactus-candidate.ts'
 import { compileFrontierCollision, perimeterSpans, structuralWalls } from './frontier-collision.ts'
 import { FrontierGeometry, frontierIO, type Rgb } from './frontier-geometry.ts'
@@ -175,29 +180,7 @@ export async function authorFrontier(output: string): Promise<void> {
   }
   canyonBoundary(g, layout)
   const groups = await authorBuildings(g, plan, layout)
-  for (const box of collision.boxes) {
-    if (!box.id.startsWith('deck:')) {
-      continue
-    }
-    const [x, y, z] = box.center
-    const [w, h, d] = box.halfExtents
-    g.box(
-      ground,
-      'floor',
-      { x: x - w, z: z - d, w: w * 2, d: d * 2, y0: y - h, top: y + h },
-      [0.72, 0.61, 0.44],
-    )
-  }
-  for (const mesh of collision.meshes) {
-    if (mesh.id.startsWith('roof:') || mesh.id.startsWith('stair:')) {
-      g.surface(
-        ground,
-        'wood',
-        mesh,
-        mesh.id.startsWith('roof:') ? [0.37, 0.32, 0.27] : [0.75, 0.63, 0.45],
-      )
-    }
-  }
+  authorDecksAndRoofs(g, ground, layout, collision)
   const props = g.group('Perdition dressed interiors and purposeful cover')
   for (const [index, c] of layout.cover.entries()) {
     coverModel(g, props, c, index)

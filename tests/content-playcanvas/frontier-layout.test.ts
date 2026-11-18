@@ -4,6 +4,7 @@ import {
   buildingSideBoxes,
   type WallBox,
 } from '../../src/experiments/out-west/ffa/sim/layout.ts'
+import { type CollisionMesh, roofMesh } from '../../tools/content/frontier-collision.ts'
 
 const building: Building = {
   id: 'opening-regression',
@@ -73,4 +74,45 @@ describe('Frontier structural openings', () => {
       }
     }
   })
+})
+
+function endTriangles(mesh: CollisionMesh, coordinate: 0 | 2, at: number): number {
+  let count = 0
+  for (let offset = 0; offset < mesh.indices.length; offset += 3) {
+    if (
+      mesh.indices
+        .slice(offset, offset + 3)
+        .every((index) => mesh.positions[index * 3 + coordinate] === at)
+    ) {
+      count++
+    }
+  }
+  return count
+}
+
+it('renders only exposed roof closures and retains both ends in the collider', () => {
+  for (const [axis, front, coord, frontAt, backAt] of [
+    ['z', 'n', 2, building.z, building.z + building.d],
+    ['z', 's', 2, building.z + building.d, building.z],
+    ['x', 'w', 0, building.x, building.x + building.w],
+    ['x', 'e', 0, building.x + building.w, building.x],
+  ] as const) {
+    const config = { axis, front, bays: 2, rise: 1.45, overhang: 0.35 }
+    const town = { ...building, roof: config }
+    const collision = roofMesh(town)
+    const visible = roofMesh(town, 'render')
+    if (!(collision && visible)) {
+      throw new Error('Expected both roof meshes')
+    }
+    expect(endTriangles(collision, coord, frontAt)).toBeGreaterThan(0)
+    expect(endTriangles(visible, coord, frontAt)).toBe(0)
+    expect(endTriangles(visible, coord, backAt)).toBe(endTriangles(collision, coord, backAt))
+    expect(visible.indices.length).toBe(
+      collision.indices.length - 3 * endTriangles(collision, coord, frontAt),
+    )
+    const tall = { ...town, roof: { ...config, rise: 2 } }
+    expect(roofMesh(tall, 'render')).toEqual(roofMesh(tall))
+    const solid = { ...town, hollow: false }
+    expect(roofMesh(solid, 'render')).toEqual(roofMesh(solid))
+  }
 })

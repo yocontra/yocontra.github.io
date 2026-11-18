@@ -14,6 +14,7 @@ import {
   buildingSideBoxes,
   type Cover,
   type Rect,
+  type Side,
   type Surface,
   type TownLayout,
 } from '../../src/experiments/out-west/ffa/sim/layout.ts'
@@ -25,6 +26,7 @@ import { frontierMounts, groupFrontierMounts } from './frontier-mounts.ts'
 export type CollisionBox = CollisionData['boxes'][number] & { id: string }
 export type CollisionMesh = CollisionData['meshes'][number] & { id: string }
 export type Structure = Rect & { y0: number; y1: number; id: string }
+const FALSE_FRONT_RISE = 1.5
 
 /** Visible posts and rails are native collision too; bullets pass through the actual gaps. */
 export function fenceSpans(cover: Cover): Structure[] {
@@ -88,6 +90,12 @@ export function wagonCanopy(cover: Cover): CollisionMesh & { uvs: number[] } {
   return { id: 'canvas', positions, indices, uvs }
 }
 
+function falseFrontSide(building: Building): Side | undefined {
+  return building.hollow && building.kind !== 'water_tower'
+    ? (building.roof?.front ?? undefined)
+    : undefined
+}
+
 export function structuralWalls(layout: TownLayout): Structure[] {
   return layout.buildings.flatMap((building) => {
     if (building.kind === 'water_tower') {
@@ -109,6 +117,7 @@ export function structuralWalls(layout: TownLayout): Structure[] {
     if (!building.hollow) {
       return [{ ...building, id: `building:${building.id}`, y0: 0, y1: building.height }]
     }
+    const front = falseFrontSide(building)
     return [
       ...(['n', 's', 'e', 'w'] as const).flatMap((side) =>
         buildingSideBoxes(building, side).map((wall, index) => ({
@@ -122,18 +131,18 @@ export function structuralWalls(layout: TownLayout): Structure[] {
         y0: wall.y0 ?? 0,
         y1: wall.y1 ?? building.height,
       })),
-      ...(building.roof?.front
+      ...(front
         ? [
             {
               ...buildingSideRect(
                 building,
-                building.roof.front,
+                front,
                 0,
-                ['n', 's'].includes(building.roof.front) ? building.w : building.d,
+                ['n', 's'].includes(front) ? building.w : building.d,
               ),
               id: `${building.id}:false-front`,
               y0: building.height,
-              y1: building.height + 1.5,
+              y1: building.height + FALSE_FRONT_RISE,
             },
           ]
         : []),
@@ -150,7 +159,10 @@ function box(id: string, area: Rect, bottom: number, top: number): CollisionBox 
 }
 
 /** Exact planar strips at every gable ridge/eave, rather than a costly sampled roof grid. */
-export function roofMesh(building: Building): CollisionMesh | undefined {
+export function roofMesh(
+  building: Building,
+  surface: 'collision' | 'render' = 'collision',
+): CollisionMesh | undefined {
   const roof = building.roof
   if (!roof) {
     return undefined
@@ -182,9 +194,12 @@ export function roofMesh(building: Building): CollisionMesh | undefined {
         : [index, index + 1, index + 2, index + 1, index + 3, index + 2]),
     )
   }
+  const concealedEnd =
+    surface === 'render' && roof.rise <= FALSE_FRONT_RISE ? falseFrontSide(building) : undefined
   return closeRoofEnds(
     thickenRoof({ id: `roof:${building.id}`, positions, indices }, cuts.length),
     building,
+    concealedEnd,
   )
 }
 
@@ -362,7 +377,7 @@ function thickenRoof(mesh: CollisionMesh, rows: number): CollisionMesh {
   return { ...mesh, positions, indices }
 }
 
-function closeRoofEnds(mesh: CollisionMesh, b: Building): CollisionMesh {
+function closeRoofEnds(mesh: CollisionMesh, b: Building, concealedEnd?: Side): CollisionMesh {
   const roof = b.roof
   if (!roof) {
     return mesh
@@ -375,7 +390,12 @@ function closeRoofEnds(mesh: CollisionMesh, b: Building): CollisionMesh {
   const high = low + (alongX ? b.w : b.d)
   const positions = [...mesh.positions]
   const indices = [...mesh.indices]
+  const sides = alongX ? ['w', 'e'] : ['n', 's']
   for (const [end, along] of [low, high].entries()) {
+    // A full-height storefront already closes this gable on the same plane.
+    if (sides[end] === concealedEnd) {
+      continue
+    }
     for (let index = 0; index < cuts.length - 1; index++) {
       const a = cuts[index] ?? 0
       const c = cuts[index + 1] ?? 0

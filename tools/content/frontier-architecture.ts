@@ -1,5 +1,5 @@
 import type { Node } from '@gltf-transform/core'
-import type { Building, Side } from '../../src/experiments/out-west/ffa/sim/layout.ts'
+import type { Building, Side, TownLayout } from '../../src/experiments/out-west/ffa/sim/layout.ts'
 import {
   frontOf,
   PORCH_DEPTH,
@@ -7,6 +7,7 @@ import {
   sideStrip,
 } from '../../src/experiments/out-west/ffa/sim/porches.ts'
 import type { FrontierPlan } from './frontier-authoring.ts'
+import { type compileFrontierCollision, roofMesh } from './frontier-collision.ts'
 import type { FrontierGeometry, Rgb } from './frontier-geometry.ts'
 import { LABELS, SHORT_LABELS, SIGN_ROWS } from './frontier-materials.ts'
 import { signUvRect } from './frontier-sign-layout.ts'
@@ -36,6 +37,39 @@ export function surround(
   box(-0.12, y1, width + 0.24, 0.14)
   box(-0.12, y0, 0.12, y1 - y0)
   box(width, y0, 0.12, y1 - y0)
+}
+
+export function authorDecksAndRoofs(
+  g: FrontierGeometry,
+  ground: Node,
+  layout: TownLayout,
+  collision: ReturnType<typeof compileFrontierCollision>,
+) {
+  for (const box of collision.boxes) {
+    if (!box.id.startsWith('deck:')) {
+      continue
+    }
+    const [x, y, z] = box.center
+    const [w, h, d] = box.halfExtents
+    g.box(
+      ground,
+      'floor',
+      { x: x - w, z: z - d, w: w * 2, d: d * 2, y0: y - h, top: y + h },
+      [0.72, 0.61, 0.44],
+    )
+  }
+  const roofs = new Map(layout.buildings.map((building) => [`roof:${building.id}`, building]))
+  for (const mesh of collision.meshes) {
+    const building = roofs.get(mesh.id)
+    if (building || mesh.id.startsWith('stair:')) {
+      g.surface(
+        ground,
+        'wood',
+        building ? (roofMesh(building, 'render') ?? mesh) : mesh,
+        building ? [0.37, 0.32, 0.27] : [0.75, 0.63, 0.45],
+      )
+    }
+  }
 }
 
 export function buildingDetails(
