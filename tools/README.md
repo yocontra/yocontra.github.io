@@ -52,6 +52,26 @@ It rebuilds every visible catalogue item and hashes all source assets and studio
 freshness check rejects missing, replaced or stale cards. Browser previews and the real-page
 Duel lifecycle test save screenshots under `/tmp`.
 
+## Review first-person framing
+
+Start the dev server and run the headless review against its local URL.
+
+```sh
+OUT_WEST_URL=http://127.0.0.1:4389 OUT_WEST_OUTPUT=/tmp/out-west-framing \
+  bun tools/test-playcanvas-long-gun-framing.ts --parts
+```
+
+The review captures 48 views across two outfits, two long guns, standing and crouching,
+hip and iron sights, and three screen sizes. Use `--quick` for eight standing trail-duds
+views. `--parts` adds a color-coded mesh image and records how close each mesh's bounds come
+to the camera. The receipt checks the physical eye, authoritative shot ray, sight landmarks,
+world FOV, and the exact asset responses. Review the screenshots for clipping, grip contact
+and sleeve shape. The geometry mask measures screen coverage.
+
+Set `OUT_WEST_VIEWMODELS` to an absolute staging directory to test unpublished arms-fitting
+assets. Supply `outfit.trail-duds.glb` and `outfit.wool-duster.glb` (only trail duds in the
+quick run). The review fails if a requested staging file is missing.
+
 Other retained offline utilities cover source animation import (`build-moves.ts`), CC0 material
 fetching (`polyhaven.ts`), texture processing (`pbr-from-albedo.ts`, `seamless.ts`), title art,
 fonts, audio mastering, browser UI checks and performance measurements. `building-audit.ts`
