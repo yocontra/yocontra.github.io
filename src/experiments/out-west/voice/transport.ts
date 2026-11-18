@@ -234,8 +234,14 @@ export class VoiceTransport {
   }
   private bindMeeting(meeting: Client): void {
     const joined = meeting.participants.joined
-    const add = (p: RTKParticipant) => this.addParticipant(p)
-    const drop = (p: RTKParticipant) => this.dropParticipant(p)
+    const add = (p: RTKParticipant) => {
+      this.addParticipant(p)
+      this.reconcile(true)
+    }
+    const drop = (p: RTKParticipant) => {
+      this.dropParticipant(p)
+      this.reconcile(true)
+    }
     const reconcile = () => this.reconcile(true)
     joined.on('participantJoined', add)
     joined.on('participantLeft', drop)
@@ -268,9 +274,18 @@ export class VoiceTransport {
     if (id === null) {
       return
     }
+    const previous = this.participants.get(id)
+    if (previous === p) {
+      return
+    }
+    if (previous) {
+      this.removeParticipant(id, previous)
+    }
     this.participants.set(id, p)
     const onAudio = ({ audioTrack }: { audioTrack: MediaStreamTrack }) => {
-      this.attach(id, audioTrack)
+      if (this.participants.get(id) === p) {
+        this.attach(id, audioTrack)
+      }
     }
     this.audioListeners.set(id, onAudio)
     p.on('audioUpdate', onAudio)
@@ -279,9 +294,13 @@ export class VoiceTransport {
 
   private dropParticipant(p: RTKParticipant): void {
     const id = gameId(p.customParticipantId)
-    if (id === null) {
+    if (id === null || this.participants.get(id) !== p) {
       return
     }
+    this.removeParticipant(id, p)
+  }
+
+  private removeParticipant(id: number, p: RTKParticipant): void {
     const listener = this.audioListeners.get(id)
     if (listener) {
       p.off('audioUpdate', listener)
@@ -290,6 +309,7 @@ export class VoiceTransport {
     this.participants.delete(id)
     this.detach(id)
     this.wanted.delete(id)
+    this.keepUntil.delete(id)
   }
 
   private attach(id: number, track: MediaStreamTrack | null): void {
@@ -367,19 +387,9 @@ export class VoiceTransport {
     this.sourceMicrophone = null
     this.unbindMeeting?.()
     this.unbindMeeting = undefined
-    for (const id of [...this.nodes.keys()]) {
-      this.detach(id)
-    }
     for (const [id, participant] of this.participants) {
-      const listener = this.audioListeners.get(id)
-      if (listener) {
-        participant.off('audioUpdate', listener)
-      }
+      this.removeParticipant(id, participant)
     }
-    this.participants.clear()
-    this.audioListeners.clear()
-    this.wanted.clear()
-    this.keepUntil.clear()
     this.live.reconciling = false
     this.live.reconcileAgain = false
     this.live.lastReconcile = 0
@@ -442,46 +452,41 @@ export class VoiceTransport {
       }
     }
     this.applyGains()
-    const subscribed = new Set<number>()
-    for (const peerId of meeting.participants.audioSubscribed.keys()) {
-      const p = meeting.participants.joined.get(peerId)
-      const id = p ? gameId(p.customParticipantId) : null
-      if (id !== null) {
-        subscribed.add(id)
+    // RealtimeKit keys its subscriptions by the SDK peer identity. A game slot can be reused.
+    const subscribed = new Set(meeting.participants.audioSubscribed.keys())
+    const wanted = new Map<string, { id: number; participant: RTKParticipant }>()
+    for (const id of this.wanted) {
+      const participant = this.participants.get(id)
+      if (participant) {
+        wanted.set(participant.id, { id, participant })
       }
-    }
-    const peerIds = new Map<number, string>()
-    for (const [id, p] of this.participants) {
-      peerIds.set(id, p.id)
     }
     this.live.reconciling = true
     const sequence = this.live.sequence
-    const wanted = new Set(this.wanted)
     const current = () => this.meeting === meeting && sequence === this.live.sequence
     void (async () => {
       try {
-        for (const id of subscribed) {
-          const peerId = peerIds.get(id)
-          if (!wanted.has(id) && peerId) {
-            // RealtimeKit serializes subscription changes
-            await meeting.participants.unsubscribe([peerId], ['audio']).catch(() => undefined)
-            if (!current()) {
-              return
-            }
-            this.detach(id)
-          }
-        }
-        for (const id of wanted) {
-          const peerId = peerIds.get(id)
-          if (peerId && !subscribed.has(id)) {
-            // one subscription request per nearby peer
-            await meeting.participants.subscribe([peerId], ['audio']).catch(() => undefined)
-          }
+        // RealtimeKit serializes subscription changes.
+        for (const peerId of [...subscribed].filter((id) => !wanted.has(id))) {
+          await meeting.participants.unsubscribe([peerId], ['audio']).catch(() => undefined)
           if (!current()) {
             return
           }
-          const p = this.participants.get(id)
-          this.attach(id, p ? safeTrack(p) : null)
+        }
+        for (const [peerId, { id, participant }] of wanted) {
+          const stillWanted = () => this.participants.get(id) === participant && this.wanted.has(id)
+          if (!stillWanted()) {
+            continue
+          }
+          if (!subscribed.has(peerId)) {
+            await meeting.participants.subscribe([peerId], ['audio']).catch(() => undefined)
+            if (!current()) {
+              return
+            }
+          }
+          if (stillWanted()) {
+            this.attach(id, safeTrack(participant))
+          }
         }
       } finally {
         if (current()) {

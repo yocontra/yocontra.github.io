@@ -122,7 +122,7 @@ const flush = async () => {
   await Promise.resolve()
 }
 
-it('frees old receive slots before delayed SDK unsubscribe and new audio events', async () => {
+it('frees receive slots before subscribing and handles reused player slots', async () => {
   installStream()
   const elements: Element[] = []
   Reflect.set(globalThis, 'document', {
@@ -133,6 +133,7 @@ it('frees old receive slots before delayed SDK unsubscribe and new audio events'
     },
   })
   const nodes = new Set<number>()
+  const tracks = new Map<number, MediaStreamTrack>()
   const operations: string[] = []
   const peers = Array.from({ length: 8 }, (_, i) => ({
     id: i + 1,
@@ -193,13 +194,15 @@ it('frees old receive slots before delayed SDK unsubscribe and new audio events'
   const transport = new VoiceTransport({
     microphone: () => null,
     audio: {
-      attachVoiceChat: (id) => {
+      attachVoiceChat: (id, track) => {
         nodes.add(id)
+        tracks.set(id, track)
         return {
           setGain: () => undefined,
           setPose: () => undefined,
           dispose: () => {
             nodes.delete(id)
+            tracks.delete(id)
           },
         }
       },
@@ -245,6 +248,28 @@ it('frees old receive slots before delayed SDK unsubscribe and new audio events'
     'subscribe:8',
   ])
   expect([...nodes]).toEqual([5, 6, 7, 8])
+
+  // The SDK can deliver the old participant's leave and audio events after a game slot is reused.
+  const old = participants.get('5')
+  const staleAudio = listeners.get(5)
+  if (!(old && staleAudio)) {
+    throw new Error('Missing previous participant')
+  }
+  const replacement = { ...old, id: 'replacement-5', audioTrack: remoteTrack() }
+  participants.set(replacement.id, replacement)
+  Reflect.apply(Reflect.get(transport, 'addParticipant'), transport, [replacement])
+  Reflect.apply(Reflect.get(transport, 'addParticipant'), transport, [replacement])
+  participants.delete(old.id)
+  Reflect.apply(Reflect.get(transport, 'dropParticipant'), transport, [old])
+  staleAudio({ audioTrack: old.audioTrack })
+  transport.setSpeakers(peers.map((peer) => peer.id))
+  await new Promise((resolve) => setTimeout(resolve, 0))
+  expect(operations.slice(-2)).toEqual(['unsubscribe:5', 'subscribe:replacement-5'])
+  expect(subscribed.has(old.id)).toBe(false)
+  expect(subscribed.has(replacement.id)).toBe(true)
+  expect(tracks.get(5)).toBe(replacement.audioTrack)
+  expect(listeners.has(5)).toBe(true)
+  expect(nodes.size).toBe(4)
   await transport.stop()
   expect(nodes.size).toBe(0)
   expect(elements.every((element) => element.srcObject === null && element.removed)).toBe(true)
