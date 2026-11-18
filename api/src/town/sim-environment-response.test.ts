@@ -5,6 +5,7 @@ import {
   propAtHit,
 } from '../../../src/experiments/out-west/content/environment-props.ts'
 import {
+  ANGLE_SCALE,
   SHOT_HIT,
   WEAPON_RIFLE,
   WEAPON_SHOTGUN,
@@ -37,16 +38,16 @@ async function fixture() {
   const target = place(simulation.world, 29.8, 66.25)
   return { ...simulation, shooter, target }
 }
-function shoot(w: World, p: Player, weapon = 0) {
+function shoot(w: World, p: Player, weapon = 0, aim = 0) {
   p.fireCooldownMs = 0
   p.weapon = weapon
   p.weaponRounds = 4
   recordHistory(w, (player) => historyFlags(w, player))
   w.tick++
   if (weapon === 0) {
-    fire(w, p, 0, w.tick - 1)
+    fire(w, p, aim, w.tick - 1)
   } else {
-    firePickupWeapon(w, p, 0, w.tick - 1)
+    firePickupWeapon(w, p, aim, w.tick - 1)
   }
   const shot = w.events.findLast((event) => event.type === 'shot')
   if (shot?.type !== 'shot') {
@@ -192,4 +193,37 @@ describe('accepted native barrel contacts', () => {
         ?.collider.id,
     ).toBe('cover:16')
   })
+})
+
+it('one accepted native strike tips the correct metal bucket while its cover remains solid', async () => {
+  const cover = 250
+  const box = COLLISION.boxes.find((entry) => entry.id === `cover:${cover}`)
+  if (!box) {
+    throw new Error('Missing authored bucket collision')
+  }
+  const simulation = await nativeWorld(COLLISION)
+  const { world, physics } = simulation
+  const [x, y, z] = box.center
+  const initialGrid = world.grid
+  const initialHealth = world.props.slice()
+  const shooter = place(world, x + 1.9, z)
+  shooter.crouched = true
+  shooter.ads = true
+  shooter.pitch = -35
+  const probe = { ox: x + 1.9, oy: y, oz: z, dx: -1, dy: 0, dz: 0, maxT: 4 }
+  expect(physics.castWorldHit(probe)?.collider.id).toBe(`cover:${cover}`)
+  for (const weapon of [0, WEAPON_RIFLE, WEAPON_SHOTGUN]) {
+    world.events.length = 0
+    const shot = shoot(world, shooter, weapon, ANGLE_SCALE / 2)
+    expect(shot.flags & SHOT_HIT).toBe(0)
+    const hits = world.events.filter((event) => event.type === 'prop_rattle')
+    expect(hits).toHaveLength(1)
+    expect(hits[0]?.cover).toBe(cover)
+    expect(hits[0]?.dx).toBeLessThan(-0.5)
+    expect(hits[0]?.seed).toBe(world.seed)
+    expect(hits[0]?.tick).toBe(world.tick)
+    expect(physics.castWorldHit(probe)?.collider.id).toBe(`cover:${cover}`)
+  }
+  expect(world.grid).toBe(initialGrid)
+  expect(world.props).toEqual(initialHealth)
 })

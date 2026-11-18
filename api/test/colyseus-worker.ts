@@ -6,6 +6,7 @@ import {
   tumbleweedCenter,
 } from '../../src/experiments/out-west/contract/tumbleweed-motion.ts'
 import { eyeHeight } from '../../src/experiments/out-west/ffa/sim/combat.ts'
+import type { World } from '../../src/experiments/out-west/ffa/sim/state.ts'
 import type { SimEvent } from '../../src/experiments/out-west/ffa/sim/types.ts'
 import type { createFrontierSimulation } from '../../src/experiments/out-west/runtime/frontier.ts'
 import { PROTOCOL_VERSION } from '../../src/experiments/out-west/runtime/protocol.ts'
@@ -16,6 +17,27 @@ import { LobbyCore } from '../src/town/core.ts'
 import { bindingProbe } from './binding-probe.ts'
 import { clockProbe } from './clock-probe.ts'
 import { seatsProbe } from './seats-probe.ts'
+
+function setupBucket(world: World | undefined): Response {
+  const player = world?.players.find((candidate) => candidate && !candidate.bot)
+  const bucket = world?.layout.cover[250]
+  if (!(world && player && bucket?.kind === 'bucket')) {
+    return new Response('A joined player and native bucket are required', { status: 400 })
+  }
+  const z = bucket.z + bucket.d / 2
+  const pitch = ((-35 / 127) * Math.PI) / 2
+  Object.assign(player, {
+    x: bucket.x + bucket.w / 2 + 1.9,
+    y: 0,
+    z,
+    ammo: 6,
+    protectUntil: 0,
+    spawnTick: -10_000,
+    fireCooldownMs: 0,
+    lastButtons: 0,
+  })
+  return Response.json({ tick: world.tick, pitch, cover: 250 })
+}
 
 interface TestEnv {
   ROOMS: DurableObjectNamespace<TestRoom>
@@ -144,6 +166,9 @@ export class TestRoom extends DurableObject<TestEnv> {
       | undefined
     if (simulation) {
       this.environmentDevice = simulation.physics.app.graphicsDevice
+    }
+    if (path === '/environment/setup-bucket') {
+      return setupBucket(simulation ? world : undefined)
     }
     if (path === '/environment/setup-weed') {
       const player = world?.players.find((candidate) => candidate && !candidate.bot)

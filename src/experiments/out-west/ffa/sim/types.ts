@@ -281,6 +281,15 @@ export type SimEvent =
   | { type: 'pickup_ready'; spot: number }
   | { type: 'glass_break'; window: number }
   | {
+      type: 'prop_rattle'
+      cover: number
+      tick: number
+      seed: number
+      dx: number
+      dz: number
+      strength: number
+    }
+  | {
       type: 'prop_break'
       prop: number
       tick: number

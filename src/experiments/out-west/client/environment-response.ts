@@ -7,6 +7,7 @@ import type { SimEvent } from '../ffa/sim/types.ts'
 import type { CollisionData } from '../runtime/protocol.ts'
 import type { GameApplication } from './application.ts'
 import { BarrelDebris } from './barrel-debris.ts'
+import { BucketResponse } from './bucket-response.ts'
 import { NativeRagdolls } from './ragdolls.ts'
 import type { BreakableWindows } from './windows.ts'
 
@@ -24,6 +25,7 @@ export class BreakableProps {
   private readonly broken = new Set<number>()
   private readonly bursts = new Set<number>()
   private readonly debris: BarrelDebris
+  private readonly buckets: BucketResponse
   private world: Pick<World, 'props' | 'tick' | 'seed'> | undefined
   private seed: number | undefined
   private lastTick = -1
@@ -50,6 +52,7 @@ export class BreakableProps {
       }
       return material
     })
+    this.buckets = new BucketResponse(town)
     this.debris = new BarrelDebris(game, ragdolls, fragments)
     this.ready = this.debris.ready
   }
@@ -76,6 +79,7 @@ export class BreakableProps {
       return
     }
     this.lastTick = world.tick
+    this.buckets.update(world)
     const health = world.props
     for (const [index, root] of this.roots.entries()) {
       if (health[index] === 0) {
@@ -86,6 +90,9 @@ export class BreakableProps {
     this.debris.sync(new Uint8Array(ENVIRONMENT_PROPS.map((_, i) => (this.broken.has(i) ? 0 : 1))))
   }
   event(event: SimEvent): boolean {
+    if (event.type === 'prop_rattle') {
+      return this.buckets.event(event)
+    }
     if (
       this.closed ||
       event.type !== 'prop_break' ||
@@ -131,6 +138,7 @@ export class BreakableProps {
       return
     }
     this.closed = true
+    this.buckets.destroy()
     this.debris.destroy()
   }
 }

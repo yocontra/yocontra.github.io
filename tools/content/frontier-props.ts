@@ -1,5 +1,6 @@
 import type { Node } from '@gltf-transform/core'
 import { ENVIRONMENT_PROPS } from '../../src/experiments/out-west/content/environment-props.ts'
+import { BUCKET_NODE_PREFIX } from '../../src/experiments/out-west/content/metal-buckets.ts'
 import {
   CANOPY_SEGMENTS,
   WAGON_BED,
@@ -49,6 +50,28 @@ const JOINERY: Partial<
   trough,
 }
 
+function bindCoverPlacement(placement: Node, kind: Cover['kind'], index: number | undefined): void {
+  if (kind === 'bucket' && index !== undefined) {
+    const [bucket] = placement.listChildren()
+    if (!bucket || placement.listChildren().length !== 1) {
+      throw new Error(`Expected one metal bucket for cover ${index}`)
+    }
+    bucket.setName(`${BUCKET_NODE_PREFIX}${index}`)
+  }
+  for (const prop of ENVIRONMENT_PROPS.filter((entry) => entry.cover === index)) {
+    const instance = placement.listChildren()[prop.cell]
+    if (
+      !instance ||
+      instance
+        .getTranslation()
+        .some((v, i) => Math.abs(v - (prop.binding.translation[i] ?? 0)) > 1e-9)
+    ) {
+      throw new Error('Changed canonical barrel placement')
+    }
+    instance.setName(prop.root).setExtras({ ...instance.getExtras(), environmentProp: prop.id })
+  }
+}
+
 export function coverModel(g: FrontierGeometry, root: Node, c: Cover, index?: number) {
   const top = c.top ?? 1
   const area: Placement = { ...c, top }
@@ -59,18 +82,7 @@ export function coverModel(g: FrontierGeometry, root: Node, c: Cover, index?: nu
   const prefab = KIT_PROPS[c.kind]
   if (prefab) {
     const placement = g.prefab(root, prefab[0], area, prefab[1])
-    for (const prop of ENVIRONMENT_PROPS.filter((entry) => entry.cover === index)) {
-      const instance = placement.listChildren()[prop.cell]
-      if (
-        !instance ||
-        instance
-          .getTranslation()
-          .some((v, i) => Math.abs(v - (prop.binding.translation[i] ?? 0)) > 1e-9)
-      ) {
-        throw new Error('Changed canonical barrel placement')
-      }
-      instance.setName(prop.root).setExtras({ ...instance.getExtras(), environmentProp: prop.id })
-    }
+    bindCoverPlacement(placement, c.kind, index)
     return
   }
   const joinery = JOINERY[c.kind]

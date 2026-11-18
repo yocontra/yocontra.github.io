@@ -17,7 +17,7 @@ export function createEffects(
   return new GameEffects(application, {
     event: (event) => {
       windows.event(event)
-      if (event.type === 'prop_break') {
+      if (event.type === 'prop_break' || event.type === 'prop_rattle') {
         return props.event(event)
       }
       if (event.type === 'dynamite_thrown') {

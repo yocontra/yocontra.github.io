@@ -393,6 +393,8 @@ export class NativeEnvironment {
     const staticBatchSize = this.frontier && this.game.tier === 'low' ? 64 : 32
     const { batcher } = this.game.app
     const group = batcher?.addGroup('environment', false, staticBatchSize)
+    // A strike rebuilds the small bucket group and leaves the static town batches intact.
+    const buckets = this.frontier ? batcher?.addGroup('environment-buckets', false, 104) : undefined
     // Disabling an intact pane dirties only its street cell, including on Low quality.
     const panes = new Map<string, BatchGroup>()
     const details = new Map<string, BatchGroup>()
@@ -423,6 +425,7 @@ export class NativeEnvironment {
       }
       assignEnvironmentBatch(component, {
         ordinary: group,
+        buckets,
         owner: lod.owner(component),
         panes,
         regions: details,
@@ -430,10 +433,9 @@ export class NativeEnvironment {
       })
     }
     lod.update(this.game.camera.getPosition())
-    const ids = [...panes.values(), ...details.values()].map((entry) => entry.id)
-    if (group) {
-      ids.unshift(group.id)
-    }
+    const ids = [group, buckets, ...panes.values(), ...details.values()].flatMap((batch) =>
+      batch ? [batch.id] : [],
+    )
     this.groups.set(root, ids)
     const posterLight = root.findByName('poster-lantern-light')
     if (posterLight instanceof Entity) {

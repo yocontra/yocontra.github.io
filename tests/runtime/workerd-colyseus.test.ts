@@ -228,21 +228,38 @@ it(
    await waitFor(()=>fresh.state.game,Boolean,'fresh-world snapshot');
    const freshNative=await(await fetch(base+'/environment/inspect?room=fresh-barrel-world')).json();
    if(health(fresh).length!==8||health(fresh).some(h=>h!==68)||!freshNative.physics||!freshNative.running||freshBreaks.length)throw new Error('Fresh world failed to restore barrel ownership: '+JSON.stringify({freshNative,freshBreaks}));
+   console.log('PHASE: authoritative metal bucket events');
+   const bucketPeerSeat=await(await fetch(base+'/reserve?account=bucket-peer&room=fresh-barrel-world')).json();
+   const bucketPeer=await new Client(base+'?account=bucket-peer').consumeSeatReservation(bucketPeerSeat);rooms.push(bucketPeer);
+   const bucketEvents=[];
+   const watchBucket=room=>{const rings=[];bucketEvents.push(rings);room.onMessage('events',m=>rings.push(...m.events.filter(e=>e.type==='prop_rattle')));return rings};
+   watchBucket(fresh);watchBucket(bucketPeer);watchBucket(rooms[2]);
+   bucketPeer.onMessage('control',()=>{});bucketPeer.onMessage('network-ping',m=>bucketPeer.send('network-pong',{nonce:m.nonce}));
+   await waitFor(()=>bucketPeer.state.game,Boolean,'bucket peer snapshot');
+   const bucketSetup=await(await fetch(base+'/environment/setup-bucket?room=fresh-barrel-world')).json();
+   const bucketInput=fresh.input({mode:'reliable'});
+   Object.assign(bucketInput.data,{seq:1,moveX:0,moveZ:0,yaw:Math.PI/2,pitch:bucketSetup.pitch,buttons:${Buttons.crouch | Buttons.fire},viewTime:bucketSetup.tick});bucketInput.send();
+   await waitFor(()=>bucketEvents.slice(0,2),items=>items.every(events=>events.length===1),'confirmed bucket event on both peers');
+   if(JSON.stringify(bucketEvents[0])!==JSON.stringify(bucketEvents[1])||bucketEvents[0][0].cover!==bucketSetup.cover||bucketEvents[2].length)throw new Error('Bucket response crossed room or lost native contact '+JSON.stringify(bucketEvents));
+   if(health(fresh).some(h=>h!==68)||health(bucketPeer).some(h=>h!==68))throw new Error('Bucket response changed barrel health');
+   await bucketPeer.leave();
+   console.log('BUCKET:'+JSON.stringify(bucketEvents[0][0]));
    console.log('PHASE: authoritative tumbleweed and late join');
    const weedAimResponse=await fetch(base+'/environment/setup-weed?room=fresh-barrel-world');
    if(!weedAimResponse.ok)throw new Error('Native weed setup failed '+await weedAimResponse.text());
    const weedAim=await weedAimResponse.json();
    const weedInput=fresh.input({mode:'reliable'});
-   Object.assign(weedInput.data,{seq:1,moveX:0,moveZ:0,yaw:-Math.PI/2,pitch:weedAim.pitch,buttons:${Buttons.crouch | Buttons.fire},viewTime:weedAim.tick});weedInput.send();
+   Object.assign(weedInput.data,{seq:2,moveX:0,moveZ:0,yaw:-Math.PI/2,pitch:weedAim.pitch,buttons:${Buttons.crouch | Buttons.fire},viewTime:weedAim.tick});weedInput.send();
    const weeds=room=>room.state.game?JSON.parse(room.state.game).tumbleweeds:undefined;
    const activeWeeds=await waitFor(()=>weeds(fresh),value=>value?.[0]?.vx>1,'native shot pushes weed');
    const weedSeat=await(await fetch(base+'/reserve?account=late-weed&room=fresh-barrel-world')).json();
    const weedGuest=await new Client(base+'?account=late-weed').consumeSeatReservation(weedSeat);rooms.push(weedGuest);
-   weedGuest.onMessage('events',()=>{});weedGuest.onMessage('control',()=>{});weedGuest.onMessage('network-ping',m=>weedGuest.send('network-pong',{nonce:m.nonce}));
+   const lateBucket=watchBucket(weedGuest);weedGuest.onMessage('control',()=>{});weedGuest.onMessage('network-ping',m=>weedGuest.send('network-pong',{nonce:m.nonce}));
    await waitFor(()=>weedGuest.state.game,Boolean,'late weed state');
    if(JSON.stringify(weeds(weedGuest))!==JSON.stringify(activeWeeds))throw new Error('Late join did not receive the same weed motion '+JSON.stringify({guest:weeds(weedGuest),activeWeeds}));
    if(weeds(rooms[2]))throw new Error('Independent room inherited a weed impulse');
    await waitFor(()=>[weeds(fresh),weeds(weedGuest)],items=>items.every(value=>value===undefined),'shared tumbleweed expiry');
+   if(lateBucket.length)throw new Error('Late join replayed a bucket reaction');
    await weedGuest.leave();
    console.log('TUMBLEWEED:'+JSON.stringify({motion:activeWeeds,isolation:true,expired:true}));
    await fresh.leave();
@@ -281,6 +298,7 @@ it(
         result.after.every((value, index) => value.tick - (result.before[index] ?? 0) > 40),
       ).toBe(true)
       expect(result.otherContinued).toBe(true)
+      expect(stdout).toContain('BUCKET:')
       expect(stdout).toContain('TUMBLEWEED:')
       const leases = stdout.split('\n').find((value) => value.startsWith('LEASES:'))
       expect(leases).toBeDefined()

@@ -10,6 +10,7 @@ import {
 } from 'playcanvas'
 
 import { propOwner } from '../content/environment-props.ts'
+import { bucketOwner } from '../content/metal-buckets.ts'
 
 function canBatch(component: RenderComponent, detailed: boolean): boolean {
   if (detailed && !component.enabled) {
@@ -45,12 +46,14 @@ export function assignEnvironmentBatch(
   component: RenderComponent,
   {
     ordinary,
+    buckets,
     owner,
     panes,
     regions,
     batcher,
   }: {
     ordinary: BatchGroup | undefined
+    buckets: BatchGroup | undefined
     owner: Entity | undefined
     panes: Map<string, BatchGroup>
     regions: Map<string, BatchGroup>
@@ -64,7 +67,7 @@ export function assignEnvironmentBatch(
   if (propOwner(component.entity) || !(batcher && canBatch(component, owner !== undefined))) {
     return
   }
-  let target = ordinary
+  let target = buckets && bucketOwner(component.entity) ? buckets : ordinary
   if (pane) {
     const center = component.meshInstances[0]?.aabb.center
     if (center) {
