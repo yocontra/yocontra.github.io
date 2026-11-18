@@ -3,7 +3,7 @@ import { createHash } from 'node:crypto'
 import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
-import { installFrameRecorder, installQARecorderPrivacy } from './content/frame-recorder.ts'
+import { frameRecorderSource } from './content/frame-recorder.ts'
 import { localFixtureURL } from './content/production-fixture.ts'
 import { simulatorHost } from './content/simulator-host.ts'
 import { installSimulatorRecorder } from './content/simulator-recorder.ts'
@@ -88,7 +88,7 @@ await writeFile(join(directory, 'recording-build.json'), `${JSON.stringify(recei
 if (process.argv.includes('--build-only')) {
   process.exit(0)
 }
-const recorder = `(${installQARecorderPrivacy.toString()})();(${installFrameRecorder.toString()})()`
+const recorder = frameRecorderSource()
 const controller = `(${installSimulatorRecorder.toString()})()`
 const simulator = simulatorHost(api, directory, receipt)
 Bun.serve({

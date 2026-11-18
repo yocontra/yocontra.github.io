@@ -96,7 +96,29 @@ export function installQARecorderPrivacy(): void {
     restoreSettings,
   })
 }
-export function installFrameRecorder(): void {
+type WebGLContext = WebGLRenderingContext | WebGL2RenderingContext
+
+// GPU queries can block on queued draws. Keep them outside the measured frame interval.
+const readWebGL = (contexts: readonly WebGLContext[]) => ({
+  at: performance.now(),
+  contexts: contexts.map((gl) => {
+    if (gl.isContextLost()) {
+      return null
+    }
+    const extension = gl.getExtension('WEBGL_debug_renderer_info')
+    return {
+      samples: gl.getParameter(gl.SAMPLES),
+      renderer: gl.getParameter(extension?.UNMASKED_RENDERER_WEBGL ?? gl.RENDERER),
+      version: gl.getParameter(gl.VERSION),
+    }
+  }),
+})
+
+export function frameRecorderSource(): string {
+  return `(${installQARecorderPrivacy.toString()})();(${installFrameRecorder.toString()})(${readWebGL.toString()})`
+}
+
+function installFrameRecorder(captureWebGL: typeof readWebGL): void {
   if (Reflect.has(globalThis, '__owFrameRecorder')) {
     return
   }
@@ -105,7 +127,7 @@ export function installFrameRecorder(): void {
     throw new Error('Local QA privacy guard must run before recorder/game initialization')
   }
   performance.setResourceTimingBufferSize(10_000)
-  const contexts: (WebGLRenderingContext | WebGL2RenderingContext)[] = []
+  const contexts: WebGLContext[] = []
   const audio: AudioContext[] = []
   const allocations: Record<string, { created: number; deleted: number }> = {}
   const seen = new WeakSet<object>()
@@ -177,6 +199,7 @@ export function installFrameRecorder(): void {
   let timestamps: number[] = []
   let samples: unknown[] = []
   let result: unknown = null
+  let webglBefore: ReturnType<typeof readWebGL> | null = null
   const snapshot = () => ({
     at: performance.now(),
     wall: Date.now(),
@@ -194,15 +217,11 @@ export function installFrameRecorder(): void {
     contexts: contexts.map((gl) => {
       const canvas = gl.canvas
       const rect = canvas instanceof HTMLCanvasElement ? canvas.getBoundingClientRect() : null
-      const extension = gl.getExtension('WEBGL_debug_renderer_info')
       return {
         lost: gl.isContextLost(),
         css: rect ? { x: rect.x, y: rect.y, width: rect.width, height: rect.height } : null,
         buffer: { width: gl.drawingBufferWidth, height: gl.drawingBufferHeight },
         antialias: gl.getContextAttributes()?.antialias,
-        samples: gl.getParameter(gl.SAMPLES),
-        renderer: gl.getParameter(extension?.UNMASKED_RENDERER_WEBGL ?? gl.RENDERER),
-        version: gl.getParameter(gl.VERSION),
       }
     }),
     // Explicit creates/deletes only: browser GC can also retire resources.
@@ -233,6 +252,14 @@ export function installFrameRecorder(): void {
         duration: resource.duration,
       }
     })
+  const receipt = (completed: boolean) => ({
+    timestamps: [...timestamps],
+    samples: [...samples],
+    inputs: [...inputs],
+    resources: resources(),
+    webgl: { before: webglBefore, after: completed ? captureWebGL(contexts) : null },
+    completed,
+  })
   const tick = (now: number) => {
     if (!running) {
       return
@@ -248,7 +275,7 @@ export function installFrameRecorder(): void {
     if (now - start >= duration) {
       samples.push(snapshot())
       running = false
-      result = { timestamps, samples, inputs: [...inputs], resources: resources(), completed: true }
+      result = receipt(true)
     } else {
       requestAnimationFrame(tick)
     }
@@ -264,22 +291,17 @@ export function installFrameRecorder(): void {
       inputs.length = 0
       lastSample = -1000
       result = null
+      webglBefore = captureWebGL(contexts)
       running = true
       requestAnimationFrame(tick)
     },
     status: () => ({
       running,
       frames: timestamps.length,
-      seconds: timestamps.length > 0 ? ((timestamps.at(-1) ?? start) - start) / 1000 : 0,
+      seconds: ((timestamps.at(-1) ?? start) - start) / 1000,
     }),
     result: () => result,
     inspect: snapshot,
-    partial: () => ({
-      timestamps: [...timestamps],
-      samples: [...samples],
-      inputs: [...inputs],
-      resources: resources(),
-      completed: false,
-    }),
+    partial: () => receipt(false),
   })
 }

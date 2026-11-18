@@ -5,11 +5,7 @@ import { arch, cpus, platform, release, tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { chromium } from 'playwright'
 import { foregroundCoverage } from './content/foreground-coverage.ts'
-import {
-  installFrameRecorder,
-  installQARecorderPrivacy,
-  type QARecorderPrivacySample,
-} from './content/frame-recorder.ts'
+import { frameRecorderSource, type QARecorderPrivacySample } from './content/frame-recorder.ts'
 import { frameTarget } from './content/frame-target.ts'
 import { frameTiming } from './content/frame-timing.ts'
 import {
@@ -46,7 +42,7 @@ if (
 localFixtureURL(url)
 localFixtureURL(api)
 await mkdir(output, { recursive: true })
-const recorder = `(${installQARecorderPrivacy.toString()})();(${installFrameRecorder.toString()})()`
+const recorder = frameRecorderSource()
 await writeFile(join(output, 'simulator-recorder.js'), recorder)
 const revision = () => {
   const result = Bun.spawnSync(['git', 'rev-parse', 'HEAD'])

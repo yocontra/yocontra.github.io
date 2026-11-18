@@ -56,7 +56,10 @@ ADS input, so scripted interventions cannot be mistaken for natural combat cover
 
 Every frame interval is retained, including long stalls, empty one-second bins and the partial
 last bin. Receipts include percentiles, trusted input, once-per-second game/audio/WebGL state,
-DPR, drawing-buffer size, MSAA, renderer, exact scripts/build provenance and before/after images.
+DPR, drawing-buffer size, graphics context loss, native render settings, exact scripts/build
+provenance and before/after images. The recorder reads WebGL renderer, version and the currently
+bound framebuffer's sample count once before and once after the measured window. These queries
+can block on queued GPU work. The per-second samples still record live context and buffer state.
 Explicit graphics create/delete counters are not live VRAM or GC measurements. This observer's
 cost is part of the measurement. Mac foreground sampling is read-only and remains diagnostic
 in headless runs; no Mac foreground claim is manufactured from visible/focused page state.
