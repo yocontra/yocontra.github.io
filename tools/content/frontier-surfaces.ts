@@ -13,23 +13,26 @@ const scanRoot = 'tools/art/environments/textures'
 
 /**
  * CC0 Poly Haven scan as native PBR. Vertex tints carry each surface's authored colour, so the
- * albedo is rescaled to a neutral mean while keeping the scan's own hue and value variation.
+ * albedo defaults to a neutral mean while keeping the scan's hue and value variation.
  */
 export async function scanMaterial(
   doc: Document,
   role: string,
   id: string,
-  options: { metallic?: number; size?: number } = {},
+  options: { metallic?: number; size?: number; dataSize?: number; albedoMean?: number | null } = {},
 ) {
-  const { metallic = 0, size = 1024 } = options
+  const { metallic = 0, size = 1024, dataSize = size, albedoMean = 0.82 } = options
   const albedo = await readFile(`${scanRoot}/${id}_diff.webp`)
   const { channels } = await sharp(albedo).stats()
-  const gain = channels.slice(0, 3).map((channel) => 0.82 / Math.max(channel.mean / 255, 0.05))
+  const gain = channels
+    .slice(0, 3)
+    .map((channel) => (albedoMean ?? 1) / Math.max(channel.mean / 255, 0.05))
   const image = async (kind: string) => {
+    const resolution = kind === 'diff' ? size : dataSize
     let pipeline = sharp(await readFile(`${scanRoot}/${id}_${kind}.webp`))
       .removeAlpha()
-      .resize(size, size)
-    if (kind === 'diff') {
+      .resize(resolution, resolution)
+    if (kind === 'diff' && albedoMean !== null) {
       pipeline = pipeline.linear(gain, [0, 0, 0])
     }
     return doc

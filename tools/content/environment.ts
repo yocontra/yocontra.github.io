@@ -16,6 +16,7 @@ import { pruneNativeEnvironment } from './environment-prune.ts'
 import { compressEnvironmentTextures } from './environment-textures.ts'
 import { formatContent } from './format-content.ts'
 import { packFrontierVertices } from './frontier-vertex-packing.ts'
+import { dressMissionAdobe } from './mission-adobe.ts'
 import { optimizeAsset } from './optimize.ts'
 import { dressStreetLamps, lampLights } from './street-lamps.ts'
 
@@ -71,6 +72,11 @@ for (const name of names.filter((candidate) => !only || candidate === only)) {
     }
     await io.write(path, authored)
   }
+  if (name === 'mission') {
+    const authored = await io.read(path)
+    await dressMissionAdobe(authored)
+    await io.write(path, authored)
+  }
   if (name === 'bank') {
     const authored = await io.read(path)
     const placements = await dressStreetLamps(authored, join(source, 'street-lamp.glb'))
@@ -85,7 +91,7 @@ for (const name of names.filter((candidate) => !only || candidate === only)) {
   if ((await flatten.exited) !== 0) {
     throw new Error(`Could not flatten ${name} masonry`)
   }
-  if (name === 'frontier' || preserveTextures) {
+  if (name === 'frontier' || name === 'mission' || preserveTextures) {
     const geometry = await io.read(path)
     await geometry.transform(dedup(), weld(), prune(), dequantize())
     await io.write(path, geometry)
