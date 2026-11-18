@@ -2,6 +2,7 @@ import { beforeAll, expect, it } from 'bun:test'
 import { NodeIO } from '@gltf-transform/core'
 import { ALL_EXTENSIONS } from '@gltf-transform/extensions'
 import { file } from 'bun'
+import { Vec3 } from 'playcanvas'
 import { TOWN } from '../../src/experiments/out-west/ffa/sim/layout.ts'
 import { newMotion } from '../../src/experiments/out-west/runtime/abilities.ts'
 import { initializeAmmo } from '../../src/experiments/out-west/runtime/ammo.ts'
@@ -9,6 +10,7 @@ import { Buttons, neutralInput } from '../../src/experiments/out-west/runtime/pr
 import { createSimulation } from '../../src/experiments/out-west/runtime/world.ts'
 import ground from '../../tools/art/environments/frontier-ground.json' with { type: 'json' }
 import { compileFrontierCollision, perimeterSpans } from '../../tools/content/frontier-collision.ts'
+import { frontierCutBanks } from '../../tools/content/frontier-cut-banks.ts'
 import { frontierGround, frontierGroundTransform } from '../../tools/content/frontier-ground.ts'
 import { packFrontierVertices } from '../../tools/content/frontier-vertex-packing.ts'
 import { repairFrontierWinding } from '../../tools/content/frontier-winding.ts'
@@ -50,6 +52,46 @@ it('outskirts and every preserved wind patch share one continuous uniform frame'
           (frame.translation[component % 3] ?? Number.NaN),
       )
     }
+  }
+})
+it('the cliff projection covers steep faces and joins the town dirt at the base', () => {
+  const originals = frontierGround(TOWN.size)
+  const outward = [new Vec3(0, 0, -1), new Vec3(-1, 0, 0), new Vec3(1, 0, 0), new Vec3(0, 0, 1)]
+  for (const [index, bank] of frontierCutBanks(TOWN.size).entries()) {
+    const original = originals[index]
+    const axis = outward[index]
+    if (!(original && axis)) {
+      throw new Error(`Missing canonical terrain bank ${index}`)
+    }
+    expect(bank.positions).toEqual(original.positions)
+    expect(bank.indices).toEqual(original.indices)
+    for (let vertex = 0; vertex < bank.positions.length / 3; vertex++) {
+      const [x = 0, y = 0, z = 0] = bank.positions.slice(vertex * 3, vertex * 3 + 3)
+      if (y > 0) {
+        continue
+      }
+      expect(bank.uvs.slice(vertex * 2, vertex * 2 + 2)).toEqual([x / 1.8, z / 1.8])
+      expect(bank.colors.slice(vertex * 4, vertex * 4 + 4)).toEqual([0.92, 0.85, 0.7, 1])
+    }
+    let resolvedFaces = 0
+    for (let face = 0; face < bank.indices.length; face += 3) {
+      const ids = bank.indices.slice(face, face + 3)
+      const [a, b, c] = ids.map((id) => new Vec3(bank.positions.slice(id * 3, id * 3 + 3)))
+      if (!(a && b && c) || Math.min(a.y, b.y, c.y) <= 0.15) {
+        continue
+      }
+      const normal = new Vec3().cross(b.sub(a), c.sub(a)).normalize()
+      if (normal.y < 0.05 || normal.y > 0.4 || normal.dot(axis) > -0.4) {
+        continue
+      }
+      const [u0 = 0, u1 = 0, u2 = 0] = ids.map((id) => bank.uvs[id * 2])
+      const [v0 = 0, v1 = 0, v2 = 0] = ids.map((id) => bank.uvs[id * 2 + 1])
+      const projected = Math.abs((u1 - u0) * (v2 - v0) - (u2 - u0) * (v1 - v0)) * 1.8 ** 2
+      const flat = Math.abs(b.x * c.z - c.x * b.z)
+      expect(projected).toBeGreaterThan(flat * 1.75)
+      resolvedFaces++
+    }
+    expect(resolvedFaces).toBeGreaterThan(0)
   }
 })
 it('native packing preserves positions, UVs, wind, world transforms and timing at high normal precision', async () => {

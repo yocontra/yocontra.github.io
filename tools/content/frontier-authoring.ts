@@ -21,8 +21,9 @@ import {
 } from './frontier-architecture.ts'
 import { replaceCactusPrototype } from './frontier-cactus-candidate.ts'
 import { compileFrontierCollision, perimeterSpans, structuralWalls } from './frontier-collision.ts'
+import { frontierCutBanks } from './frontier-cut-banks.ts'
 import { FrontierGeometry, frontierIO, type Rgb } from './frontier-geometry.ts'
-import { frontierFlatGround, frontierGround, frontierGroundTransform } from './frontier-ground.ts'
+import { frontierFlatGround, frontierGroundTransform } from './frontier-ground.ts'
 import { townGround } from './frontier-ground-detail.ts'
 import { authoredMaterials } from './frontier-materials.ts'
 import { frontierMounts, groupFrontierMounts, MOUNT_IRON_TINT } from './frontier-mounts.ts'
@@ -167,16 +168,8 @@ export async function authorFrontier(output: string): Promise<void> {
   await authoredMaterials(g, layout)
   const ground = g.group('ground-Perdition')
   flatGround(g, ground, layout)
-  for (const mesh of frontierGround(layout.size)) {
-    g.surface(
-      ground,
-      'ground',
-      {
-        ...mesh,
-        uvs: mesh.positions.flatMap((value, index) => (index % 3 === 1 ? [] : [value / 1.8])),
-      },
-      [0.92, 0.85, 0.7],
-    )
+  for (const bank of frontierCutBanks(layout.size)) {
+    g.surface(ground, 'ground', bank)
   }
   canyonBoundary(g, layout)
   const groups = await authorBuildings(g, plan, layout)
