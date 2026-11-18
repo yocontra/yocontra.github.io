@@ -26,7 +26,7 @@ import { frontierMounts, groupFrontierMounts } from './frontier-mounts.ts'
 export type CollisionBox = CollisionData['boxes'][number] & { id: string }
 export type CollisionMesh = CollisionData['meshes'][number] & { id: string }
 export type Structure = Rect & { y0: number; y1: number; id: string }
-const FALSE_FRONT_RISE = 1.5
+export const FALSE_FRONT_RISE = 1.5
 
 /** Visible posts and rails are native collision too; bullets pass through the actual gaps. */
 export function fenceSpans(cover: Cover): Structure[] {
@@ -90,7 +90,7 @@ export function wagonCanopy(cover: Cover): CollisionMesh & { uvs: number[] } {
   return { id: 'canvas', positions, indices, uvs }
 }
 
-function falseFrontSide(building: Building): Side | undefined {
+export function falseFrontSide(building: Building): Side | undefined {
   return building.hollow && building.kind !== 'water_tower'
     ? (building.roof?.front ?? undefined)
     : undefined

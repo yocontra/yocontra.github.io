@@ -10,7 +10,13 @@ import {
 } from '../../src/experiments/out-west/ffa/sim/porches.ts'
 import { ROOF_DECK_Y } from '../../src/experiments/out-west/ffa/sim/roofwalks.ts'
 import type { FrontierPlan } from './frontier-authoring.ts'
-import { type compileFrontierCollision, fenceSpans, roofMesh } from './frontier-collision.ts'
+import {
+  type compileFrontierCollision,
+  FALSE_FRONT_RISE,
+  falseFrontSide,
+  fenceSpans,
+  roofMesh,
+} from './frontier-collision.ts'
 import type { FrontierGeometry, Placement, Rgb } from './frontier-geometry.ts'
 import { LABELS, SHORT_LABELS, SIGN_ROWS } from './frontier-materials.ts'
 import { MOUNT_IRON_TINT } from './frontier-mounts.ts'
@@ -105,6 +111,7 @@ export function buildingDetails(
     const strip = sideStrip(building, side, 0.13)
     g.box(root, 'wood', { ...strip, y0: height - 0.21, top: height + 0.04 }, trim)
   }
+  falseFrontJoinery(g, root, building, trim)
   const front = frontOf(building, plan.layout)
   porchSupports(g, root, building, { front, paint })
   buildingSign(g, root, { building, front, layout: plan.layout })
@@ -135,6 +142,52 @@ export function buildingDetails(
     }
   }
   buildingDoors(g, root, building)
+}
+
+function falseFrontJoinery(g: FrontierGeometry, root: Node, building: Building, trim: Rgb) {
+  const front = falseFrontSide(building)
+  if (!front) {
+    return
+  }
+  const alongX = front === 'n' || front === 's'
+  const span = alongX ? building.w : building.d
+  const top = building.height + FALSE_FRONT_RISE
+  const bandDepth = 0.13
+  const piece = (
+    [start, width]: [start: number, width: number],
+    [y0, y1]: [bottom: number, top: number],
+    depth: number,
+    tint: Rgb = trim,
+  ) => {
+    const footprint = alongX
+      ? { ...building, x: building.x + start, w: width }
+      : { ...building, z: building.z + start, d: width }
+    // Seat each molding 12 mm into the false front so the join stays closed at a shallow angle.
+    const seat = sideStrip(footprint, front, depth)
+    const inset = 0.012
+    if (alongX) {
+      seat.d += inset
+      seat.z -= front === 's' ? inset : 0
+    } else {
+      seat.w += inset
+      seat.x -= front === 'e' ? inset : 0
+    }
+    g.box(root, 'wood', { ...seat, y0, top: y1 }, tint)
+  }
+  // The lower band, projecting bed molding and drip cap read separately against the sky.
+  piece([0, span], [top - 0.29, top - 0.11], bandDepth)
+  piece([-0.055, span + 0.11], [top - 0.16, top - 0.055], 0.21)
+  piece([-0.1, span + 0.2], [top - 0.08, top], 0.27, [0.66, 0.54, 0.39])
+  for (const end of [0.14, span - 0.38]) {
+    piece([end, 0.24], [building.height + 0.035, top - 0.315], 0.084)
+    piece([end - 0.05, 0.34], [top - 0.4, top - 0.275], 0.16)
+  }
+  const bays = Math.ceil((span - 1.5) / 1.14)
+  for (let index = 0; index <= bays; index++) {
+    const at = 0.75 + ((span - 1.5) * index) / bays
+    piece([at - 0.065, 0.13], [top - 0.46, top - 0.27], 0.17)
+    piece([at - 0.088, 0.176], [top - 0.37, top - 0.245], 0.192)
+  }
 }
 
 function buildingSign(
