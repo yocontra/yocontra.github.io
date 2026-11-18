@@ -17,10 +17,15 @@ import { DEFAULT_LOADOUT } from '../data/catalog.ts'
 import type { DuelActor } from '../duel/native-actor.ts'
 import type { Player } from '../ffa/sim/types.ts'
 import type { PlayerInput, PlayerState } from '../runtime/protocol.ts'
-import { RECOIL_SECONDS } from '../scene/native-animation-timing.ts'
 import { attachHeldWeapon, equippedActor, fitId } from '../scene/native-equipment.ts'
 import { playWeaponMount } from '../scene/native-weapon-animation.ts'
-import { animateRider, heldWeapon, syncDynamiteThrow } from './actor-animation.ts'
+import {
+  animateRider,
+  beginRecoil,
+  displayedWeapon,
+  heldWeapon,
+  syncDynamiteThrow,
+} from './actor-animation.ts'
 import { createRiderPose, type RiderPose } from './actor-pose.ts'
 import type { Appearance } from './actors.ts'
 import type { GameApplication } from './application.ts'
@@ -53,6 +58,7 @@ interface Arms {
   aim: AnimComponentLayer
   weaponLayer: AnimComponentLayer
   firingUntil: number
+  firingWeapon?: HeldWeapon | undefined
   throwingUntil: number
   head: GraphNode | null
 }
@@ -343,17 +349,22 @@ export class FirstPersonModel {
       this.motion.reset()
       this.sighted = false
     }
-    arms.actor.hold(heldWeapon(request.domain), true)
+    arms.actor.hold(this.presentedWeapon(request), true)
     syncDynamiteThrow(arms, request.player, request.throwingUntil ?? 0)
     animateRider(arms, request.player, { first: true, domain: request.domain })
     if (!arms.actor.muzzleSocket(true)) {
       this.hide()
     }
   }
+  private presentedWeapon(request: FirstPersonRequest | undefined): HeldWeapon {
+    const domain = request?.domain
+    const crouched = request?.player.crouched ?? domain?.crouched ?? false
+    return this.current ? displayedWeapon(this.current, domain, crouched, true) : heldWeapon(domain)
+  }
   /** Steps the eased sight amount; zero until the arms show the held weapon's landmarks. */
   aim(intent: Pick<PlayerInput, 'buttons'>, active: boolean, dt: number): void {
     const domain = this.desired?.domain
-    const held = heldWeapon(domain)
+    const held = this.presentedWeapon(this.desired)
     const amount = advanceSights(
       this.sights,
       { active, ready: this.ready, intent, held, player: domain },
@@ -384,7 +395,7 @@ export class FirstPersonModel {
     }
     const step = Math.min(dt, 0.1)
     const { player, domain } = request
-    const held = heldWeapon(domain)
+    const held = this.presentedWeapon(request)
     const lens = camera.camera
     if (lens) {
       lens.fov = sightFov(lens.fov, this.sight)
@@ -474,21 +485,18 @@ export class FirstPersonModel {
       ? (this.current?.actor.model.findByName('WristR') ?? null)
       : null
   }
-  fire(id: string, crouched: boolean): void {
+  fire(id: string, crouched: boolean, weapon = heldWeapon(this.desired?.domain)): void {
     const arms = this.current
     if (!(arms && this.ready) || this.desired?.id !== id) {
       return
     }
-    arms.firingUntil = performance.now() + RECOIL_SECONDS * 1000
-    arms.throwingUntil = 0
-    arms.actor.weaponsVisible(true)
-    arms.actor.fireWeapon()
+    beginRecoil(arms, weapon)
     const clip = arms.actor.shotClip(crouched)
     if (arms.weaponLayer.states.includes(clip)) {
       arms.weaponLayer.transition(clip, 0)
       arms.pose.root.anim?.update(0)
     }
-    this.motion.kick(heldWeapon(this.desired.domain))
+    this.motion.kick(weapon)
   }
   stats(): { arms: number; pending: number; masked: number } {
     return {

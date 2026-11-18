@@ -12,6 +12,8 @@ import type { VoiceClientControl, VoiceServerControl } from './voice.ts'
 export const CONTRACT_VERSION = 10
 /** HTTP admission compatibility value (`TownJoinRequest.wire`). */
 export const TOWN_WIRE_VERSION = 10
+/** The account's rider was taken over by another connection. */
+export const TOWN_CLOSE_REPLACED = 4000
 
 // --- saddlebags ----------------------------------------------------------------------------------
 

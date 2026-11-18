@@ -108,3 +108,35 @@ it('returning after a canceled first-person view cannot resume a stale paused sh
     f.dispose()
   }
 })
+
+it.each([
+  ['rifle', false],
+  ['shotgun', true],
+] as const)('keeps the last %s visible through its native recoil', async (weapon, crouched) => {
+  const f = firstPersonFixture()
+  try {
+    const request = {
+      ...f.request,
+      player: { ...f.request.player, crouched },
+    }
+    const loading = f.model.prepare(request)
+    await f.finish()
+    await loading
+    f.model.update(request)
+    f.model.present(f.camera, 1 / 60)
+    // The authoritative pickup is already depleted. The incoming shot still names the long gun.
+    f.model.fire('self', crouched, weapon)
+    f.model.update(request)
+    const upper = f.actors()[0]?.findByName('upper-body-pose')
+    if (!(upper instanceof Entity && upper.anim)) {
+      throw new Error('Missing native upper-body controller')
+    }
+    expect(upper.anim.baseLayer.activeState).toBe(crouched ? 'Crouch_Shoot_shotgun' : 'Shoot_rifle')
+    const visibleLongGuns = f
+      .actors()[0]
+      ?.find((node) => node.name === 'mount.Chest.long' && node.enabled)
+    expect(visibleLongGuns).toHaveLength(1)
+  } finally {
+    f.dispose()
+  }
+})

@@ -32,7 +32,7 @@ export function createEffects(
       }
       return false
     },
-    fire: (id) => actors.fire(id),
+    fire: (id, weapon) => actors.fire(id, weapon),
     muzzle: (id) => actors.muzzle(id),
     trace: (from, to) => session.cameraTrace?.(from, to),
     riders: () => session.players,

@@ -28,7 +28,7 @@ import {
   snapshotPresentation,
 } from './player-pose.ts'
 import { playerLifetimeSync, REMOTE_POSE, REMOTE_YAW } from './prediction-lifecycle.ts'
-import { reconnectableSession } from './reconnect-session.ts'
+import { type ConnectionNotice, reconnectableSession } from './reconnect-session.ts'
 import { ShowdownInput } from './showdown-input.ts'
 import { applyFrontierState, environmentFromSnapshot } from './state.ts'
 
@@ -42,7 +42,7 @@ export interface RemoteSessionOptions {
   apiUrl?: string
   lobbyId?: string
   getToken?: () => Promise<string | null>
-  onState?: (state: 'open' | 'retrying' | 'closed', reason?: string) => void
+  onState?: ConnectionNotice
   onControl?: (control: ServerControl) => void
 }
 
@@ -277,9 +277,9 @@ function connectSession(
     }
   })
   room.onDrop(() => options.onState?.('retrying'))
-  room.onLeave((_code, reason) => {
+  room.onLeave((code, reason) => {
     if (!disposed) {
-      options.onState?.('closed', reason)
+      options.onState?.('closed', reason, code)
     }
   })
   options.onState?.('open')

@@ -8,6 +8,7 @@ import {
   CONTRACT_VERSION,
   type RosterEntry,
   type ServerControl,
+  TOWN_CLOSE_REPLACED,
 } from '../../../src/experiments/out-west/contract/town.ts'
 import {
   MAX_FRONTIER_BOTS,
@@ -226,7 +227,7 @@ export class LobbyCore {
   join(profile: JoinProfile, peer: Peer, now: number): Session | null {
     const existing = this.byAccount.get(profile.accountId)
     if (existing) {
-      existing.peer?.close(4000, 'Joined from somewhere else.')
+      existing.peer?.close(TOWN_CLOSE_REPLACED, 'Joined from somewhere else.')
       existing.peer = peer
       existing.tcpRtt = profile.tcpRtt
       const p = this.world.players[existing.playerId]

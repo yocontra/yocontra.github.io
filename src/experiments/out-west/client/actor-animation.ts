@@ -5,17 +5,19 @@ import type { DuelActor } from '../duel/native-actor.ts'
 import { CROUCH_SPEED, SPRINT_SPEED } from '../ffa/sim/constants.ts'
 import type { Player } from '../ffa/sim/types.ts'
 import type { PlayerState } from '../runtime/protocol.ts'
-import { DYNAMITE_THROW_SECONDS } from '../scene/native-animation-timing.ts'
+import { DYNAMITE_THROW_SECONDS, RECOIL_SECONDS } from '../scene/native-animation-timing.ts'
+import type { HeldWeapon } from './first-person-sights.ts'
 
-interface AnimatedRider {
+export interface AnimatedRider {
   actor: DuelActor
   clip: string
   aim: AnimComponentLayer | undefined
   weaponLayer: AnimComponentLayer | undefined
   firingUntil: number
+  firingWeapon?: HeldWeapon | undefined
   throwingUntil?: number
 }
-export function heldWeapon(domain: Player | undefined): 'rifle' | 'shotgun' | 'revolver' {
+export function heldWeapon(domain: Player | undefined): HeldWeapon {
   if (domain?.weapon === WEAPON_RIFLE) {
     return 'rifle'
   }
@@ -69,6 +71,28 @@ function directionClip(actor: DuelActor, player: PlayerState, name: string): str
   const stride = `Stride_${name}_${direction}`
   return actor.hasAnimation(stride) ? stride : name
 }
+function firing(rider: AnimatedRider, crouched: boolean, first: boolean): boolean {
+  const layer = rider.weaponLayer
+  // The wall deadline can lead the native clock by a fraction of a frame. Preserve the
+  // final authored pose before selecting Hold; a life reset clears firingUntil to cancel it.
+  const finishing =
+    first &&
+    rider.firingUntil > 0 &&
+    layer !== undefined &&
+    layer.activeState === rider.actor.shotClip(crouched) &&
+    layer.activeStateCurrentTime < layer.activeStateDuration
+  return performance.now() < rider.firingUntil || finishing
+}
+export function displayedWeapon(
+  rider: AnimatedRider,
+  domain: Player | undefined,
+  crouched: boolean,
+  first: boolean,
+): HeldWeapon {
+  return rider.firingWeapon && firing(rider, crouched, first)
+    ? rider.firingWeapon
+    : heldWeapon(domain)
+}
 function upperClip(
   rider: AnimatedRider,
   domain: Player | undefined,
@@ -78,17 +102,8 @@ function upperClip(
   if (performance.now() < (rider.throwingUntil ?? 0)) {
     return `${crouched ? 'Crouch_' : ''}Throw_Dynamite`
   }
-  const shot = rider.actor.shotClip(crouched)
-  const layer = rider.weaponLayer
-  // The wall deadline can lead the native clock by a fraction of a frame. Preserve the
-  // final authored pose before selecting Hold; a life reset clears firingUntil to cancel it.
-  const finishing =
-    first &&
-    rider.firingUntil > 0 &&
-    layer?.activeState === shot &&
-    layer.activeStateCurrentTime < layer.activeStateDuration
-  if (performance.now() < rider.firingUntil || finishing) {
-    return shot
+  if (firing(rider, crouched, first)) {
+    return rider.actor.shotClip(crouched)
   }
   const weapon = heldWeapon(domain)
   if (weapon !== 'revolver') {
@@ -161,6 +176,18 @@ export function animateRider(
   }
   const authored = actor.gaitSpeeds[locomotion] ?? GAIT_SPEED.get(locomotion) ?? actor.walkSpeed
   actor.speed(GAITS.has(locomotion) ? speed / authored : 1)
+}
+
+/** Retain the fired weapon through recoil if its last round emptied the pickup. */
+export function beginRecoil(rider: AnimatedRider, weapon?: HeldWeapon): void {
+  rider.throwingUntil = 0
+  rider.firingUntil = performance.now() + RECOIL_SECONDS * 1000
+  rider.firingWeapon = weapon
+  rider.actor.weaponsVisible(true)
+  if (weapon) {
+    rider.actor.hold(weapon, true)
+  }
+  rider.actor.fireWeapon()
 }
 
 /** Accepted events start one native toss; locomotion keeps its independent clock. */

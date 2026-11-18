@@ -34,7 +34,7 @@ import {
 
 interface EffectHooks {
   event?: (event: SimEvent) => undefined | boolean
-  fire?: (id: string) => void
+  fire?: (id: string, weapon: Report['sound']) => void
   muzzle?: (id: string) => { position: Vec3; direction: Vec3 } | null
   trace?: (from: Vec3, to: Vec3) => Vec3 | null | undefined
   /** The presented riders, the local rider's id, combat state and loadouts, for world audio. */
@@ -235,8 +235,9 @@ export class GameEffects {
       return
     }
     const pending = feedback.predicted
+    const report = reportForFlags(event.flags)
     if (!pending) {
-      this.hooks.fire?.(String(event.shooter))
+      this.hooks.fire?.(String(event.shooter), report.sound)
     }
     const muzzle = this.hooks.muzzle?.(String(event.shooter))
     const origin = muzzle?.position ?? event.origin
@@ -254,8 +255,8 @@ export class GameEffects {
       }
     }
     if (!pending) {
-      this.visuals.muzzle(origin, reportForFlags(event.flags).flash)
-      this.report(event.shooter, reportForFlags(event.flags).sound, origin)
+      this.visuals.muzzle(origin, report.flash)
+      this.report(event.shooter, report.sound, origin)
     }
     if (event.flags & (SHOT_HIT | SHOT_WALL)) {
       this.visuals.impact(event.end, Boolean(event.flags & SHOT_HIT))
@@ -271,7 +272,7 @@ export class GameEffects {
     }
     const report = WEAPON_REPORTS.get(player.weapon) ?? REVOLVER
     this.nextShot = performance.now() + report.interval
-    this.hooks.fire?.(String(player.id))
+    this.hooks.fire?.(String(player.id), report.sound)
     const pending: PendingShot = { trace: undefined }
     this.predicted.predict(
       { id: player.id, spawnTick: player.spawnTick, shots: player.stats.shots },

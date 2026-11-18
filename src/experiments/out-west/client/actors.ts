@@ -1,4 +1,4 @@
-import type { AnimComponentLayer, AnimTrack, Entity, GraphNode } from 'playcanvas'
+import type { AnimTrack, Entity, GraphNode } from 'playcanvas'
 import { Vec3 } from 'playcanvas'
 import { ASSETS, DYNAMIC_ASSETS } from '../content/manifest.ts'
 import { DEFAULT_LOADOUT, type Loadout } from '../data/catalog.ts'
@@ -6,13 +6,19 @@ import type { Dyes } from '../data/dye.ts'
 import { DuelActor } from '../duel/native-actor.ts'
 import type { World } from '../ffa/sim/state.ts'
 import type { PlayerInput, PlayerState } from '../runtime/protocol.ts'
-import { RECOIL_SECONDS } from '../scene/native-animation-timing.ts'
 import { attachHeldWeapon, equippedActor } from '../scene/native-equipment.ts'
-import { animateRider, beginDynamiteThrow, heldWeapon } from './actor-animation.ts'
+import {
+  type AnimatedRider,
+  animateRider,
+  beginDynamiteThrow,
+  beginRecoil,
+  displayedWeapon,
+} from './actor-animation.ts'
 import { commonCharacters, loadCharacterTracks } from './actor-assets.ts'
 import { createRiderPose, type RiderPose } from './actor-pose.ts'
 import type { GameApplication } from './application.ts'
 import { FirstPersonModel } from './first-person-model.ts'
+import type { HeldWeapon } from './first-person-sights.ts'
 import type { NativeRagdolls } from './ragdolls.ts'
 
 export interface Appearance {
@@ -41,15 +47,10 @@ export interface PreparedCharacters {
   dispose: () => void
   take: () => { actor: DuelActor; key: string; release: () => void }
 }
-interface Rider {
-  actor: DuelActor
+interface Rider extends AnimatedRider {
   key: string
-  clip: string
-  firingUntil: number
   throwingUntil: number
   dead: boolean
-  aim: AnimComponentLayer | undefined
-  weaponLayer: AnimComponentLayer | undefined
   pose: RiderPose
   held: Map<string, Entity>
   heldPending: Set<string>
@@ -368,7 +369,8 @@ export class Actors {
         this.ragdolls.release(id)
         rider.dead = false
       }
-      const weapon = heldWeapon(domain)
+      const crouched = player.crouched ?? domain?.crouched ?? false
+      const weapon = player.hp > 0 ? displayedWeapon(rider, domain, crouched, false) : 'revolver'
       if (weapon !== 'revolver') {
         this.ensureHeld(rider, weapon)
       }
@@ -438,15 +440,13 @@ export class Actors {
       }
     }
   }
-  fire(id: string): void {
+  fire(id: string, weapon?: HeldWeapon): void {
     const rider = this.actors.get(id)
-    if (rider) {
-      rider.throwingUntil = 0
-      rider.actor.weaponsVisible(true)
-      rider.firingUntil = performance.now() + RECOIL_SECONDS * 1000
-      rider.actor.fireWeapon()
-      this.firstPerson.fire(id, this.players.get(id)?.crouched ?? false)
-      const clip = rider.actor.shotClip(this.players.get(id)?.crouched ?? false)
+    if (rider && !rider.dead) {
+      beginRecoil(rider, weapon)
+      const crouched = this.players.get(id)?.crouched ?? false
+      this.firstPerson.fire(id, crouched, weapon)
+      const clip = rider.actor.shotClip(crouched)
       if (rider.weaponLayer?.states.includes(clip)) {
         rider.weaponLayer.transition(clip, 0)
         rider.pose.root.anim?.update(0)

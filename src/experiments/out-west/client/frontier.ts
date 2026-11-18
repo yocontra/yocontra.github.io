@@ -60,6 +60,7 @@ export function mountNativeFrontier(
   let voice: FrontierVoice | undefined
   let removePerformanceSnapshot: (() => void) | undefined
   let started = false
+  let disconnected = false
   const exit = (reason: 'left' | 'quit' | 'lost' | 'refused', detail?: string): void => {
     destroy()
     if (options.onExit) {
@@ -67,6 +68,18 @@ export function mountNativeFrontier(
     } else {
       location.href = '/experiments/out-west/?saloon'
     }
+  }
+  const leaveStatus = (reason: 'lost' | 'refused', detail: string): void => {
+    message.textContent = detail
+    const back = document.createElement('button')
+    back.type = 'button'
+    back.textContent = 'Back to saloon'
+    back.addEventListener('click', () => exit(reason, detail), { signal: lifecycle.signal })
+    status.hidden = false
+    root.classList.add('pc-loading')
+    status.append(back)
+    root.append(status)
+    back.focus()
   }
   const game = mountGameViewport(root, {
     collision: collisionData,
@@ -110,11 +123,10 @@ export function mountNativeFrontier(
                 }
                 if (state === 'closed') {
                   voice?.setLinked(false)
-                  message.textContent = detail ?? 'Connection lost.'
-                  status.hidden = false
-                  root.classList.add('pc-loading')
-                  root.append(status)
+                  disconnected = true
+                  title.textContent = 'Connection closed'
                   game.inputEnabled(false)
+                  leaveStatus('lost', detail ?? 'Connection lost.')
                 }
               },
             })
@@ -159,6 +171,10 @@ export function mountNativeFrontier(
       if (lifecycle.signal.aborted) {
         return
       }
+      if (disconnected) {
+        game.inputEnabled(false)
+        return
+      }
       started = true
       root.classList.remove('pc-loading')
       status.remove()
@@ -173,13 +189,7 @@ export function mountNativeFrontier(
       }
       presentation?.destroy()
       const detail = error instanceof Error ? error.message : 'Could not load Perdition.'
-      message.textContent = detail
-      const back = document.createElement('button')
-      back.type = 'button'
-      back.textContent = 'Back to saloon'
-      back.addEventListener('click', () => exit('refused', detail), { signal: lifecycle.signal })
-      status.append(back)
-      root.append(status)
+      leaveStatus('refused', detail)
     })
   function destroy(): void {
     if (lifecycle.signal.aborted) {

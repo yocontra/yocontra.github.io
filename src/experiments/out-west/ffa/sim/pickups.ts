@@ -124,9 +124,9 @@ function spend(w: World, p: Player, intervalMs: number): void {
 }
 
 function fireRifle(w: World, p: Player, aim: number, viewTime: number): void {
-  spend(w, p, RIFLE_FIRE_MS)
   const spread = spreadFor(p)
-  p.bloom = bloomAfterShot(p.weapon, p.bloom)
+  p.bloom = bloomAfterShot(WEAPON_RIFLE, p.bloom)
+  spend(w, p, RIFLE_FIRE_MS)
   const jitter = hashSigned(w.seed, p.id, w.tick, p.stats.shots)
   const ray = {
     ...shotRay(p, aim, jitter * spread * DEG, jitter * spread * DEG * 0.6),
@@ -151,13 +151,13 @@ function fireRifle(w: World, p: Player, aim: number, viewTime: number): void {
 }
 
 function fireShotgun(w: World, p: Player, aim: number, viewTime: number): void {
+  // Capture the current weapon's cone before spending the last shell switches it.
+  const cone = spreadFor(p)
   spend(w, p, SHOTGUN_FIRE_MS)
   const time = rewindTime(w, viewTime)
   const damage = new Map<number, number>()
   const propStrikes: PropStrike[] = []
   const traces: { ray: ShotRay; range: number; target: number; wall: boolean }[] = []
-  // the cone: tighter on the sights (spread.ts)
-  const cone = spreadFor(p)
   for (let i = 0; i < SHOTGUN_PELLETS; i++) {
     // An even fan with a little jitter, so the pattern is fair but not a fixed comb.
     const lane = (i / (SHOTGUN_PELLETS - 1) - 0.5) * cone
