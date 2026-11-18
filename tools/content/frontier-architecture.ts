@@ -6,10 +6,12 @@ import {
   PORCHED,
   sideStrip,
 } from '../../src/experiments/out-west/ffa/sim/porches.ts'
+import { ROOF_DECK_Y } from '../../src/experiments/out-west/ffa/sim/roofwalks.ts'
 import type { FrontierPlan } from './frontier-authoring.ts'
-import { type compileFrontierCollision, roofMesh } from './frontier-collision.ts'
+import { type compileFrontierCollision, fenceSpans, roofMesh } from './frontier-collision.ts'
 import type { FrontierGeometry, Rgb } from './frontier-geometry.ts'
 import { LABELS, SHORT_LABELS, SIGN_ROWS } from './frontier-materials.ts'
+import { MOUNT_IRON_TINT } from './frontier-mounts.ts'
 import { signUvRect } from './frontier-sign-layout.ts'
 /** Add detail outside an opening; no opaque quads cross its line of fire. */
 export function surround(
@@ -98,7 +100,7 @@ export function buildingDetails(
   }
   const front = frontOf(building, plan.layout)
   porchSupports(g, root, building, { front, paint })
-  buildingSign(g, root, building, front)
+  buildingSign(g, root, { building, front, layout: plan.layout })
   hangingSign(g, root, building, front)
   if (building.kind === 'church' || building.kind === 'tower') {
     const centerX = x + w / 2
@@ -128,13 +130,22 @@ export function buildingDetails(
   buildingDoors(g, root, building)
 }
 
-function buildingSign(g: FrontierGeometry, root: Node, building: Building, front: Side) {
+function buildingSign(
+  g: FrontierGeometry,
+  root: Node,
+  { building, front, layout }: { building: Building; front: Side; layout: TownLayout },
+) {
   const { x, z, w, d, height } = building
   if (!Object.hasOwn(LABELS, building.id)) {
     return
   }
   {
     const index = Object.keys(LABELS).indexOf(building.id)
+    const mount = porchSignMount(layout, building)
+    if (mount) {
+      mountPorchSign(g, root, index, mount)
+      return
+    }
     const alongX = front === 'n' || front === 's'
     const span =
       (front === 'n' || front === 'e' ? -1 : 1) *
@@ -168,6 +179,67 @@ function buildingSign(g: FrontierGeometry, root: Node, building: Building, front
         [0, v0],
       ],
     })
+  }
+}
+
+/** These two one-storey façades have a walkable porch and a street-facing rail. */
+export function porchSignMount(layout: TownLayout, building: Building) {
+  if (building.id !== 'general_store' && building.id !== 'jail') {
+    return
+  }
+  const rail = layout.cover.find(
+    (cover) =>
+      cover.kind === 'fence' &&
+      cover.y0 === ROOF_DECK_Y &&
+      cover.x >= building.x &&
+      cover.x + cover.w <= building.x + building.w &&
+      cover.z >= building.z - PORCH_DEPTH &&
+      cover.z + cover.d <= building.z &&
+      cover.w > building.w * 0.9,
+  )
+  const rails = rail && fenceSpans(rail).filter(({ id }) => id.startsWith('rail:'))
+  const lower = rails?.[0]
+  const upper = rails?.[1]
+  if (!(lower && upper)) {
+    throw new Error(`Missing street-facing porch rails for ${building.id}`)
+  }
+  const width = (LABELS[building.id]?.length ?? 5) * 0.43
+  const top = upper.y1 + 0.08
+  return {
+    x: building.x + (building.w - width) / 2,
+    z: lower.z - 0.06,
+    w: width,
+    d: 0.06,
+    y0: top - 0.85,
+    top,
+    fixingRows: [lower, upper].map(({ y0, y1 }) => (y0 + y1) / 2),
+  }
+}
+
+function mountPorchSign(
+  g: FrontierGeometry,
+  root: Node,
+  row: number,
+  mount: NonNullable<ReturnType<typeof porchSignMount>>,
+) {
+  const { x, z, w, y0, top, fixingRows } = mount
+  g.box(root, 'wood', mount, [0.51, 0.4, 0.28])
+  const face = z - 0.001
+  signQuad(g, root, row, [
+    [x + w, y0, face],
+    [x, y0, face],
+    [x, top, face],
+    [x + w, top, face],
+  ])
+  for (const y of fixingRows) {
+    for (const pin of [x + 0.1, x + w - 0.1]) {
+      g.box(
+        root,
+        'iron',
+        { x: pin - 0.016, z: face - 0.008, w: 0.032, d: 0.01, y0: y - 0.016, top: y + 0.016 },
+        MOUNT_IRON_TINT,
+      )
+    }
   }
 }
 

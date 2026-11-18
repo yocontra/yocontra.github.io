@@ -6,6 +6,7 @@ import published from '../../src/experiments/out-west/content/collision.json' wi
 import { buildingSideRect } from '../../src/experiments/out-west/ffa/sim/building-rules.ts'
 import { TOWN } from '../../src/experiments/out-west/ffa/sim/layout.ts'
 import { type Point, rayHit } from '../../tools/content/freight-crates-contract.ts'
+import { porchSignMount } from '../../tools/content/frontier-architecture.ts'
 import { compileFrontierCollision } from '../../tools/content/frontier-collision.ts'
 import {
   type FrontierMount,
@@ -441,4 +442,23 @@ it('raw appending preserves old packed streams/indices/metadata and adds only lo
   }
   restored.extras = before.json.extras
   expect(restored).toEqual(before.json)
+})
+
+it('the new Mercantile and Sheriff boards touch both actual rail tiers', () => {
+  for (const id of ['general_store', 'jail']) {
+    const building = TOWN.buildings.find((entry) => entry.id === id)
+    const mount = building && porchSignMount(TOWN, building)
+    if (!mount) {
+      throw new Error(`Missing porch sign mount for ${id}`)
+    }
+    const board = sceneFaces(`building-${id}:wood-mesh`)
+    const signFace = sceneFaces(`building-${id}:sign-mesh`).filter((triangle) =>
+      triangle.every(([, , z]) => Math.abs(z - (mount.z - 0.001)) < 0.000_02),
+    )
+    expect(signFace).toHaveLength(2)
+    for (const y of mount.fixingRows) {
+      const contact: Point = [mount.x + mount.w / 2, y, mount.z + mount.d]
+      expect(patchContacts(board, wood, contact, [0, 0, 1]), id).toBe(true)
+    }
+  }
 })
