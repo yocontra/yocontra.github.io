@@ -260,6 +260,7 @@ export class NativeFrontierRoom extends Room<{ state: FrontierState; input: Move
     if (!world) {
       return
     }
+    const sessionIds = this.activeSessionIds()
     const present = new Set<string>()
     for (const player of activePlayers(world)) {
       const id = String(player.id)
@@ -279,11 +280,7 @@ export class NativeFrontierRoom extends Room<{ state: FrontierState; input: Move
         }
       }
       const pose = this.simulation?.physics.players.get(id)
-      record.sessionId =
-        [...this.sessions].find(
-          ([sessionId, session]) =>
-            String(session.playerId) === id && this.currentSession(sessionId) === session,
-        )?.[0] ?? ''
+      record.sessionId = sessionIds.get(player.id) ?? ''
       record.id = id
       record.vx = pose?.vx ?? 0
       record.vz = pose?.vz ?? 0
@@ -312,6 +309,15 @@ export class NativeFrontierRoom extends Room<{ state: FrontierState; input: Move
       props: [...world.props],
       seed: world.seed,
     })
+  }
+  private activeSessionIds(): Map<number, string> {
+    const sessionIds = new Map<number, string>()
+    for (const [id, session] of this.sessions) {
+      if (!sessionIds.has(session.playerId) && this.currentSession(id) === session) {
+        sessionIds.set(session.playerId, id)
+      }
+    }
+    return sessionIds
   }
   private currentSession(id: string): Session | undefined {
     const session = this.sessions.get(id)

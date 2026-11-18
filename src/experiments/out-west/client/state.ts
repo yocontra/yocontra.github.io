@@ -86,8 +86,9 @@ export function applyFrontierState(
     if (!Number.isInteger(index) || index < 0 || index >= MAX_PLAYERS || next.players[index]) {
       throw new Error('Invalid rider slot')
     }
-    finiteJson(record.toJSON())
-    const player = newPlayer(Number(record.id), {
+    const decoded = record.toJSON()
+    finiteJson(decoded)
+    const player = newPlayer(index, {
       accountId: '',
       name: record.name,
       level: record.level,
@@ -95,8 +96,8 @@ export function applyFrontierState(
       bot: record.bot,
       saddlebag: record.saddlebag,
     })
-    Object.assign(player, record.toJSON(), record.motion.toJSON())
-    player.id = Number(record.id)
+    Object.assign(player, decoded, decoded.motion)
+    player.id = index
     const details = JSON.parse(record.details || '{}') as {
       stats?: PlayerStats
       channel?: Channel | null
