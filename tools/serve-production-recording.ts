@@ -6,7 +6,8 @@ import { join, resolve } from 'node:path'
 import { frameRecorderSource } from './content/frame-recorder.ts'
 import { localFixtureURL } from './content/production-fixture.ts'
 import { simulatorHost } from './content/simulator-host.ts'
-import { installSimulatorRecorder } from './content/simulator-recorder.ts'
+import { createSimulatorCoordinates } from './content/simulator-page-coordinates.ts'
+import { installSimulatorRecorder, simulatorScriptHashes } from './content/simulator-recorder.ts'
 
 const arg = (name: string, fallback: string) =>
   process.argv.find((value) => value.startsWith(`--${name}=`))?.slice(name.length + 3) ?? fallback
@@ -89,7 +90,7 @@ if (process.argv.includes('--build-only')) {
   process.exit(0)
 }
 const recorder = frameRecorderSource()
-const controller = `(${installSimulatorRecorder.toString()})()`
+const controller = `(${installSimulatorRecorder.toString()})((${createSimulatorCoordinates.toString()}),(${simulatorScriptHashes.toString()}))`
 const simulator = simulatorHost(api, directory, receipt)
 Bun.serve({
   port,

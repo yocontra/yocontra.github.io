@@ -84,12 +84,40 @@ other capability is an explicit diagnostic, even if browser timing succeeds. It 
 origin's settings with a guest acknowledgement, stops only its own companion and shuts down
 only the device it booted. Raw calls and failures are retained; earlier outputs are not replaced.
 
-This preflight never automatically starts a 60-second simulator qualification. After reviewing
-its native evidence, the same local server offers a 60-second Safari recorder at /__qa/start
-(or ?population=stress), with real guest gameplay touches required throughout. Its receipt
-remains incomplete until independently joined with matching native guest visibility/identity,
-UDID/runtime, source/content and input coverage. Mac foreground and physical-device acceptance
-are separate, unfinished qualifications.
+The preflight does not automatically start a long recording. After reviewing its native
+evidence, use the same clean local build for fixed 60-second Safari runs, one at a time:
+
+```sh
+bun tools/record-simulator-frames.ts --record --population=ordinary --orientation=portrait --url=http://127.0.0.1:4398 --out=/tmp/out-west-simulator-ordinary-portrait
+bun tools/record-simulator-frames.ts --record --population=stress --orientation=landscape --url=http://127.0.0.1:4398 --out=/tmp/out-west-simulator-stress-landscape
+```
+
+Both populations support portrait and landscape. Use a new output directory for each attempt.
+The recorder uses one persistent public fb-idb client for absolute-time guest HID input and
+native Safari identity/orientation samples. Every planned input endpoint must arrive within
+35 ms; a missed native deadline stops the tape and retains the failure. It restores the exact
+browser settings and initial native display, then closes its client/companion and shuts down the
+dedicated device. The caller owns the local HTTP/Worker hosts and must stop them separately.
+
+Before the game URL opens, the long recorder retains the initial native AX display,
+framebuffer PNG and raw orientation getter separately. One supported dedicated setter selects
+the requested named orientation. Only the exact native display-snapshot-change error can be
+pending after that command, within the existing bounded readiness period. Unknown errors are
+fatal. Per-second orientation and native foreground checks during recording remain strict.
+
+On the dedicated QA device, an initial raw `UNKNOWN` can use only the measured AX display
+mapping for restoration (portrait rotation 0 or landscape rotation 270). Other unmapped states
+fail before an orientation command. Cleanup requires the actual initial AX display signature,
+records `displayRestored` and reports `rawOrientationRestored` separately. It does not claim
+that `UNKNOWN` was restored. If no game URL was attempted, cleanup does not open a restore URL
+or claim a settings acknowledgement. These source contracts do not qualify a 60-second run;
+ordinary, landscape and stress acceptance still require actual complete evidence.
+
+The receipt distinguishes incomplete evidence from a completed run that misses the FPS target.
+Keep every slow or empty full-second bin and the partial tail. Simulator acceptance requires
+at least 60 complete bins, mean FPS at least 30 and every complete bin at least 30. Unsupported
+native identity/orientation or missed input timing remains unqualified. Mac foreground and
+physical-device acceptance are separate, unfinished qualifications.
 
 Historical November 8 simulator traces (ordinary median22.98FPS, packed15.37FPS; later minimal
 recorder15.94rAF/s) lacked verified presentation/foreground and preceded later asset changes.

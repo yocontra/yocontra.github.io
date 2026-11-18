@@ -16,7 +16,7 @@ import {
   preflightURL,
   targetForPreflight,
   webFrame,
-} from '../tools/record-simulator-frames.ts'
+} from '../tools/content/simulator-native.ts'
 
 const hostUI = /Simulator\.app|DeviceHub|osascript|focus|activate|cursor/u
 const device = '59616A95-4749-4F6F-8E1D-1FAEA0263EFC'
@@ -347,8 +347,10 @@ it('does not acknowledge Start/authority readiness as native recording readiness
       throw new Error('Missing local simulator bootstrap script')
     }
     let redirected = ''
+    const storage = new Map<string, string>()
     runInNewContext(script, {
-      sessionStorage: { setItem: () => undefined },
+      URL,
+      sessionStorage: { setItem: (key: string, value: string) => storage.set(key, value) },
       location: {
         hash: '#tier=high',
         replace: (value: string) => {
@@ -356,7 +358,10 @@ it('does not acknowledge Start/authority readiness as native recording readiness
         },
       },
     })
-    expect(redirected).toBe('/experiments/out-west/frontier/?server=remote#tier=high')
+    expect(redirected).toBe(
+      `http://localhost/experiments/out-west/frontier/?server=remote&qaRun=${id}#tier=high`,
+    )
+    expect(JSON.parse(storage.get('__owQaRecording') ?? '{}').expectedURL).toBe(redirected)
     await session({ action: 'ready', page: {} })
     expect(
       recordingAcknowledged(

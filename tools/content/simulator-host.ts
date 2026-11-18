@@ -7,6 +7,7 @@ import {
   localFixtureURL,
   requireLocalPerformanceFixture,
 } from './production-fixture.ts'
+import { coordinatePublication } from './simulator-document.ts'
 
 const recordingId = /^[0-9a-f-]{36}$/u
 function restorePage(id: string) {
@@ -44,6 +45,24 @@ export function recordingAcknowledged(value: unknown): value is {
       Number.isFinite(state.wall),
   )
 }
+function publishCoordinates(
+  status: Map<string, unknown>,
+  id: string,
+  request: Request,
+  page: unknown,
+) {
+  const current = status.get(id) as { stage?: string; coordinates?: { page?: unknown } } | undefined
+  if (
+    !coordinatePublication(id, request.headers.get('origin'), page, {
+      page: current?.coordinates?.page,
+      ...(current?.stage ? { stage: current.stage } : {}),
+    })
+  ) {
+    return new Response('Invalid or late coordinate publication', { status: 409 })
+  }
+  status.set(id, { ...(current ?? {}), coordinates: { page, receivedWall: Date.now() } })
+  return Response.json({ ok: true })
+}
 export function simulatorHost(api: string, directory: string, build: BuildReceipt) {
   localFixtureURL(api)
   const sessions = new Map<string, string>()
@@ -68,15 +87,36 @@ export function simulatorHost(api: string, directory: string, build: BuildReceip
     const account = (await response.json()) as { accountId: string; token: string }
     sessions.set(id, account.accountId)
     const credentials = JSON.stringify({ api, token: account.token }).replaceAll('<', '\\u003c')
+    const destination = new URL('/experiments/out-west/frontier/', url)
+    destination.searchParams.set('server', 'remote')
+    destination.searchParams.set('qaRun', id)
     const setup = JSON.stringify({
       id,
       stress: url.searchParams.get('population') === 'stress',
       preflight: url.searchParams.get('preflight') === '1',
     })
     return new Response(
-      `<html><head><script>sessionStorage.setItem('__owQaAccount',JSON.stringify(${credentials}));sessionStorage.setItem('__owQaRecording',JSON.stringify(${setup}));location.replace('/experiments/out-west/frontier/?server=remote'+location.hash)</script></head><body>Preparing local qualification scene…</body></html>`,
+      `<html><head><script>const destination=new URL(${JSON.stringify(destination.href)});destination.hash=location.hash;const setup=${setup};setup.expectedURL=destination.href;sessionStorage.setItem('__owQaAccount',JSON.stringify(${credentials}));sessionStorage.setItem('__owQaRecording',JSON.stringify(setup));location.replace(destination.href)</script></head><body>Preparing local qualification scene…</body></html>`,
       { headers: { 'content-type': 'text/html' } },
     )
+  }
+  const store = async (id: string, body: { recording: { timestamps: number[] } }) => {
+    const receipt = {
+      ...body,
+      build,
+      physicalDevice: false,
+      qualification: 'incomplete',
+      outstandingEvidence: [
+        'Guest native foreground/visibility and headless simulator identity require independent joining; no Mac foreground claim',
+      ],
+      timing: body.recording.timestamps.length >= 2 ? frameTiming(body.recording.timestamps) : null,
+    }
+    const path = join(directory, `simulator-${id}.json`)
+    await writeFile(path, `${JSON.stringify(receipt, null, 2)}\n`)
+    status.set(id, { ...((status.get(id) as object | undefined) ?? {}), stage: 'saved', receipt })
+    sessions.delete(id)
+    console.log(`Simulator recording saved: ${path}`)
+    return Response.json({ saved: true })
   }
   const session = async (request: Request, id: string, accountId: string) => {
     const body = (await request.json()) as {
@@ -84,19 +124,42 @@ export function simulatorHost(api: string, directory: string, build: BuildReceip
       error?: string
       lobbyId: string
       page?: unknown
-      recording?: unknown
+      recording?: { timestamps?: number[] }
       players?: unknown
     }
+    if (body.action === 'coordinates') {
+      return publishCoordinates(status, id, request, body.page)
+    }
     if (body.action === 'ready') {
-      status.set(id, { stage: 'ready', page: body.page })
+      status.set(id, {
+        ...((status.get(id) as object | undefined) ?? {}),
+        stage: 'ready',
+        page: body.page,
+      })
       return Response.json({ ok: true })
     }
     if (body.action === 'failed') {
-      status.set(id, { stage: 'failed', error: body.error, page: body.page })
+      if (Array.isArray(body.recording?.timestamps)) {
+        await store(id, {
+          ...body,
+          recording: { ...body.recording, timestamps: body.recording.timestamps },
+        })
+      }
+      status.set(id, {
+        ...((status.get(id) as object | undefined) ?? {}),
+        stage: 'failed',
+        error: body.error,
+        page: body.page,
+      })
       return Response.json({ ok: true })
     }
     if (body.action === 'recording') {
-      const value = { stage: 'recording', recording: body.recording, wall: Date.now() }
+      const value = {
+        ...((status.get(id) as object | undefined) ?? {}),
+        stage: 'recording',
+        recording: body.recording,
+        wall: Date.now(),
+      }
       if (!recordingAcknowledged(value)) {
         return new Response('Native recorder has not started', { status: 409 })
       }
@@ -124,25 +187,8 @@ export function simulatorHost(api: string, directory: string, build: BuildReceip
       headers: { 'content-type': 'application/json' },
     })
   }
-  const save = async (request: Request, id: string) => {
-    const body = (await request.json()) as { recording: { timestamps: number[] } }
-    const receipt = {
-      ...body,
-      build,
-      physicalDevice: false,
-      qualification: 'incomplete',
-      outstandingEvidence: [
-        'Guest native foreground/visibility and headless simulator identity require independent joining; no Mac foreground claim',
-      ],
-      timing: frameTiming(body.recording.timestamps),
-    }
-    const path = join(directory, `simulator-${id}.json`)
-    await writeFile(path, `${JSON.stringify(receipt, null, 2)}\n`)
-    status.set(id, { stage: 'saved', receipt })
-    sessions.delete(id)
-    console.log(`Simulator recording saved: ${path}`)
-    return Response.json({ saved: true })
-  }
+  const save = async (request: Request, id: string) =>
+    store(id, (await request.json()) as { recording: { timestamps: number[] } })
   const readStatus = (id: string) =>
     status.has(id) ? Response.json(status.get(id)) : new Response('Not ready', { status: 404 })
   return async (request: Request): Promise<Response | null> => {
