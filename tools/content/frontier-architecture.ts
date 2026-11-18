@@ -3,13 +3,15 @@ import type { Building, Side, TownLayout } from '../../src/experiments/out-west/
 import {
   frontOf,
   PORCH_DEPTH,
+  PORCH_ROOF,
+  PORCH_ROOF_T,
   PORCHED,
   sideStrip,
 } from '../../src/experiments/out-west/ffa/sim/porches.ts'
 import { ROOF_DECK_Y } from '../../src/experiments/out-west/ffa/sim/roofwalks.ts'
 import type { FrontierPlan } from './frontier-authoring.ts'
 import { type compileFrontierCollision, fenceSpans, roofMesh } from './frontier-collision.ts'
-import type { FrontierGeometry, Rgb } from './frontier-geometry.ts'
+import type { FrontierGeometry, Placement, Rgb } from './frontier-geometry.ts'
 import { LABELS, SHORT_LABELS, SIGN_ROWS } from './frontier-materials.ts'
 import { MOUNT_IRON_TINT } from './frontier-mounts.ts'
 import {
@@ -152,6 +154,12 @@ function buildingSign(
       mountPorchSign(g, root, index, mount)
       return
     }
+    const fascia = porchFasciaSignMount(building, front)
+    if (fascia) {
+      mountPorchSign(g, root, index, fascia)
+      braceFasciaSign(g, root, building, fascia)
+      return
+    }
     const alongX = front === 'n' || front === 's'
     const span = (front === 'n' || front === 'e' ? -1 : 1) * facadeSignWidth(building, front, label)
     const cx = x + w / 2
@@ -177,8 +185,14 @@ function buildingSign(
   }
 }
 
+type PorchSignMount = Required<Placement> & {
+  facing: -1 | 1
+  fixingRows: number[]
+  inset: number
+}
+
 /** These two one-storey façades have a walkable porch and a street-facing rail. */
-export function porchSignMount(layout: TownLayout, building: Building) {
+export function porchSignMount(layout: TownLayout, building: Building): PorchSignMount | undefined {
   if (building.id !== 'general_store' && building.id !== 'jail') {
     return
   }
@@ -207,31 +221,115 @@ export function porchSignMount(layout: TownLayout, building: Building) {
     d: 0.06,
     y0: top - FACADE_SIGN_HEIGHT,
     top,
+    facing: -1,
+    inset: 0.1,
     fixingRows: [lower, upper].map(({ y0, y1 }) => (y0 + y1) / 2),
   }
 }
 
-function mountPorchSign(
+const FASCIA_SIGN_IDS = new Set(['assay', 'smithy', 'stage_line', 'undertaker'])
+const FASCIA_DEPTH = 0.05
+
+export function porchFasciaSignMount(building: Building, front: Side): PorchSignMount | undefined {
+  if (!FASCIA_SIGN_IDS.has(building.id)) {
+    return
+  }
+  if (front !== 'n' && front !== 's') {
+    throw new Error(`Unsupported porch fascia for ${building.id}`)
+  }
+  const strip = sideStrip(building, front, PORCH_DEPTH)
+  const facing = front === 'n' ? -1 : 1
+  const edge = front === 'n' ? strip.z : strip.z + strip.d
+  const back = edge + facing * FASCIA_DEPTH
+  const w = facadeSignWidth(building, front, LABELS[building.id] ?? '')
+  const d = 0.06
+  const y0 = PORCH_ROOF - PORCH_ROOF_T / 2
+  return {
+    x: building.x + (building.w - w) / 2,
+    z: facing === -1 ? back - d : back,
+    w,
+    d,
+    y0,
+    top: y0 + FACADE_SIGN_HEIGHT,
+    facing,
+    inset: 0.42,
+    fixingRows: [PORCH_ROOF, PORCH_ROOF + 0.55],
+  }
+}
+
+function braceFasciaSign(
   g: FrontierGeometry,
   root: Node,
-  row: number,
-  mount: NonNullable<ReturnType<typeof porchSignMount>>,
+  building: Building,
+  mount: PorchSignMount,
 ) {
-  const { x, z, w, y0, top, fixingRows } = mount
+  const { x, z, w, d, y0, facing, inset } = mount
+  const back = facing === -1 ? z + d : z
+  // The fascia caps the plank ends. Its inner half overlaps the actual roof edge.
+  g.box(
+    root,
+    'wood',
+    {
+      x: building.x,
+      z: facing === -1 ? back : back - 2 * FASCIA_DEPTH,
+      w: building.w,
+      d: 2 * FASCIA_DEPTH,
+      y0: y0 - 0.02,
+      top: PORCH_ROOF + PORCH_ROOF_T / 2 + 0.012,
+    },
+    [0.52, 0.42, 0.31],
+  )
+  const base = PORCH_ROOF + PORCH_ROOF_T / 2
+  const towardWall = -facing
+  for (const center of [x + inset, x + w - inset]) {
+    const positions = [center - 0.04, center + 0.04].flatMap((edge) => [
+      edge,
+      base,
+      back,
+      edge,
+      base,
+      back + towardWall * 0.43,
+      edge,
+      PORCH_ROOF + 0.62,
+      back,
+    ])
+    const indices = [0, 1, 2, 3, 5, 4, 0, 3, 4, 0, 4, 1, 1, 4, 5, 1, 5, 2, 2, 5, 3, 2, 3, 0]
+    if (facing === 1) {
+      indices.reverse()
+    }
+    g.surface(
+      root,
+      'wood',
+      { id: `sign-brace:${building.id}`, positions, indices },
+      [0.49, 0.39, 0.27],
+    )
+  }
+}
+
+function mountPorchSign(g: FrontierGeometry, root: Node, row: number, mount: PorchSignMount) {
+  const { x, z, w, d, y0, top, facing, inset, fixingRows } = mount
   g.box(root, 'wood', mount, [0.51, 0.4, 0.28])
-  const face = z - 0.001
+  const face = facing === -1 ? z - 0.001 : z + d + 0.001
+  const [left, right] = facing === -1 ? [x + w, x] : [x, x + w]
   signQuad(g, root, row, [
-    [x + w, y0, face],
-    [x, y0, face],
-    [x, top, face],
-    [x + w, top, face],
+    [left, y0, face],
+    [right, y0, face],
+    [right, top, face],
+    [left, top, face],
   ])
   for (const y of fixingRows) {
-    for (const pin of [x + 0.1, x + w - 0.1]) {
+    for (const pin of [x + inset, x + w - inset]) {
       g.box(
         root,
         'iron',
-        { x: pin - 0.016, z: face - 0.008, w: 0.032, d: 0.01, y0: y - 0.016, top: y + 0.016 },
+        {
+          x: pin - 0.016,
+          z: facing === -1 ? face - 0.008 : face - 0.002,
+          w: 0.032,
+          d: 0.01,
+          y0: y - 0.016,
+          top: y + 0.016,
+        },
         MOUNT_IRON_TINT,
       )
     }
@@ -298,19 +396,61 @@ function hangingSign(g: FrontierGeometry, root: Node, b: Building, front: Side) 
   }
   const x = b.x + 0.75
   const z = front === 's' ? b.z + b.d + 0.22 : b.z - 1.72
-  const index = Object.keys(LABELS).length + Object.keys(SHORT_LABELS).indexOf(b.id)
-  signQuad(g, root, index, [
-    [x - 0.041, 2.25, z],
-    [x - 0.041, 2.25, z + 1.5],
-    [x - 0.041, 2.95, z + 1.5],
-    [x - 0.041, 2.95, z],
+  const row = Object.keys(LABELS).length + Object.keys(SHORT_LABELS).indexOf(b.id)
+  bladeSignFaces(g, root, row, { x, z, bottom: 2.25 })
+  if (b.id === 'undertaker') {
+    undertakerAlleyBlade(g, root, row, b)
+  }
+}
+
+function bladeSignFaces(
+  g: FrontierGeometry,
+  root: Node,
+  row: number,
+  { x, z, bottom }: { x: number; z: number; bottom: number },
+) {
+  const top = bottom + 0.7
+  signQuad(g, root, row, [
+    [x - 0.041, bottom, z],
+    [x - 0.041, bottom, z + 1.5],
+    [x - 0.041, top, z + 1.5],
+    [x - 0.041, top, z],
   ])
-  signQuad(g, root, index, [
-    [x + 0.041, 2.25, z + 1.5],
-    [x + 0.041, 2.25, z],
-    [x + 0.041, 2.95, z],
-    [x + 0.041, 2.95, z + 1.5],
+  signQuad(g, root, row, [
+    [x + 0.041, bottom, z + 1.5],
+    [x + 0.041, bottom, z],
+    [x + 0.041, top, z],
+    [x + 0.041, top, z + 1.5],
   ])
+}
+
+function undertakerAlleyBlade(g: FrontierGeometry, root: Node, row: number, b: Building) {
+  const x = b.x + b.w - 2.7
+  const edge = b.z - PORCH_DEPTH
+  const back = edge - FASCIA_DEPTH
+  const bottom = PORCH_ROOF + PORCH_ROOF_T / 2
+  // The perpendicular board sits above the alley. Both straps tie it to a roof post.
+  g.box(
+    root,
+    'wood',
+    { x: x - 0.04, z: back - 1.5, w: 0.08, d: 1.5, y0: bottom, top: bottom + 0.7 },
+    [0.51, 0.4, 0.28],
+  )
+  bladeSignFaces(g, root, row, { x, z: back - 1.5, bottom })
+  g.box(
+    root,
+    'wood',
+    { x: x - 0.055, z: edge + 0.14, w: 0.11, d: 0.11, y0: bottom, top: bottom + 0.72 },
+    [0.49, 0.39, 0.27],
+  )
+  for (const y of [bottom + 0.12, bottom + 0.58]) {
+    g.box(
+      root,
+      'iron',
+      { x: x - 0.023, z: back - 0.08, w: 0.046, d: 0.29, y0: y - 0.018, top: y + 0.018 },
+      MOUNT_IRON_TINT,
+    )
+  }
 }
 export function bankServiceSigns(g: FrontierGeometry, root: Node, layout: FrontierPlan['layout']) {
   const halfWidth = BANK_SIGN_SIZE.width / 2

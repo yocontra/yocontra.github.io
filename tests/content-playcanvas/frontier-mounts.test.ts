@@ -5,8 +5,9 @@ import { Vec3 } from 'playcanvas'
 import published from '../../src/experiments/out-west/content/collision.json' with { type: 'json' }
 import { buildingSideRect } from '../../src/experiments/out-west/ffa/sim/building-rules.ts'
 import { TOWN } from '../../src/experiments/out-west/ffa/sim/layout.ts'
+import { frontOf } from '../../src/experiments/out-west/ffa/sim/porches.ts'
 import { type Point, rayHit } from '../../tools/content/freight-crates-contract.ts'
-import { porchSignMount } from '../../tools/content/frontier-architecture.ts'
+import { porchFasciaSignMount, porchSignMount } from '../../tools/content/frontier-architecture.ts'
 import { compileFrontierCollision } from '../../tools/content/frontier-collision.ts'
 import {
   type FrontierMount,
@@ -460,5 +461,53 @@ it('the new Mercantile and Sheriff boards touch both actual rail tiers', () => {
       const contact: Point = [mount.x + mount.w / 2, y, mount.z + mount.d]
       expect(patchContacts(board, wood, contact, [0, 0, 1]), id).toBe(true)
     }
+  }
+})
+
+it('the four fascia boards clear their porch roofs from player eye height', () => {
+  const roofs = sceneFaces('ground-Perdition:wood-mesh')
+  for (const id of ['assay', 'smithy', 'stage_line', 'undertaker']) {
+    const building = TOWN.buildings.find((entry) => entry.id === id)
+    const mount = building && porchFasciaSignMount(building, frontOf(building, TOWN))
+    if (!mount) {
+      throw new Error(`Missing sign at the porch edge for ${id}`)
+    }
+    const { x, z, d, w, facing } = mount
+    const center = x + w / 2
+    const face = facing === -1 ? z - 0.001 : z + d + 0.001
+    const signFaces = sceneFaces(`building-${id}:sign-mesh`).filter((triangle) =>
+      triangle.every(([, , depth]) => Math.abs(depth - face) < 0.000_02),
+    )
+    expect(signFaces, id).toHaveLength(2)
+    const opaque = [...roofs, ...sceneFaces(`building-${id}:wood-mesh`)]
+    const distance = id === 'undertaker' ? 1.2 : 7
+    for (const offset of [-0.3, 0, 0.3]) {
+      for (const y of [3.22, 3.49, 3.72]) {
+        const eye: Point = [center + offset * w, 1.72, face + facing * distance]
+        const line: Point = [0, y - eye[1], face - eye[2]]
+        const firstWood = rayHit(opaque, eye, line)
+        expect(rayHit(signFaces, eye, line), id).toBeCloseTo(1, 4)
+        expect(firstWood, id).toBeGreaterThan(1)
+      }
+    }
+  }
+})
+
+it('the Undertaker blade exposes a painted face from each alley approach', () => {
+  const sign = sceneFaces('building-undertaker:sign-mesh')
+  const opaque = [
+    ...sceneFaces('building-undertaker:wood-mesh'),
+    ...sceneFaces('ground-Perdition:wood-mesh'),
+  ]
+  for (const [eyeX, face] of [
+    [34.3, 47.259],
+    [50.45, 47.341],
+  ] as const) {
+    const eye: Point = [eyeX, 1.72, 79]
+    const line: Point = [face - eye[0], 3.51 - eye[1], 79.2 - eye[2]]
+    const paint = sign.filter((triangle) => triangle.every(([x]) => Math.abs(x - face) < 0.000_02))
+    expect(paint).toHaveLength(2)
+    expect(rayHit(paint, eye, line)).toBeCloseTo(1, 4)
+    expect(rayHit(opaque, eye, line)).toBeGreaterThan(1)
   }
 })
