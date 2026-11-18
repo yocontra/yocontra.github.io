@@ -131,7 +131,9 @@ it.each([
     if (!(upper instanceof Entity && upper.anim)) {
       throw new Error('Missing native upper-body controller')
     }
-    expect(upper.anim.baseLayer.activeState).toBe(crouched ? 'Crouch_Shoot_shotgun' : 'Shoot_rifle')
+    expect(upper.anim.baseLayer?.activeState).toBe(
+      crouched ? 'Crouch_Shoot_shotgun' : 'Shoot_rifle',
+    )
     const visibleLongGuns = f
       .actors()[0]
       ?.find((node) => node.name === 'mount.Chest.long' && node.enabled)

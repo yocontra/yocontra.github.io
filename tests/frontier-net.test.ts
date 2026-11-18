@@ -85,7 +85,7 @@ it('a replacement with the same account does not cause the older tab to rejoin',
     return Promise.resolve({
       selfId: '0',
       selfSlot: 0,
-      world: createWorld(7),
+      world: createWorld({ seed: 7 }),
       banked: 0,
       practice: false,
       lobbyId: 'perdition',
@@ -118,7 +118,7 @@ it.each([WEAPON_RIFLE, WEAPON_SHOTGUN])(
   'pickup weapon %d keeps its spread, bloom and pellets on the last round',
   (weapon) => {
     function fire(rounds: number) {
-      const world = createWorld(7)
+      const world = createWorld({ seed: 7 })
       const id = addPlayer(world, {
         accountId: 'self',
         name: 'Rider',
