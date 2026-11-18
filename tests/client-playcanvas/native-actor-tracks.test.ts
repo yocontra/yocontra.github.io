@@ -150,7 +150,7 @@ it('real clip-free arms reuse physical merged tracks before native graph/index/m
     physical = await DuelActor.create(f.game, PHYSICAL, 'physical')
     const native = await f.game.loadContainer(PHYSICAL)
     const moves = await f.game.loadContainer(ASSETS.moves.url)
-    expect(physical.tracks).toHaveLength(87)
+    expect(physical.tracks).toHaveLength(88)
     expect(physical.animationTrack('Gun_Shoot')).toBe(track(native, 'Gun_Shoot'))
     expect(physical.animationTrack('Gun_Shoot')).not.toBe(track(moves, 'Gun_Shoot'))
     const before = keyframes(physical.tracks)
@@ -162,7 +162,7 @@ it('real clip-free arms reuse physical merged tracks before native graph/index/m
     expect(resource(await f.game.loadContainer(ARMS)).animations).toHaveLength(0)
     expect(arms.root.enabled).toBe(false)
     expect(arms.tracks).not.toBe(physical.tracks)
-    expect(arms.tracks).toHaveLength(87)
+    expect(arms.tracks).toHaveLength(88)
     for (const [index, entry] of arms.tracks.entries()) {
       expect(physical.tracks[index]).toBe(entry)
       expect(arms.animationTrack(entry.name)).toBe(entry)
@@ -227,7 +227,7 @@ it('an explicit humanoid builds native shared animation on an empty-clip geometr
       enabled: true,
       humanoid: true,
     })
-    expect(actor.tracks).toHaveLength(77)
+    expect(actor.tracks).toHaveLength(78)
     expect(actor.hasAnimation('Idle_Character')).toBe(true)
     expect(actor.hasAnimation('Gun_Shoot')).toBe(true)
     actor.play('Gun_Shoot', 0)

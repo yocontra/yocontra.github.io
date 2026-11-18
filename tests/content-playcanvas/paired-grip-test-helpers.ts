@@ -127,6 +127,13 @@ function sourceMount(
   return child.clone().mul(relative).mul(child.clone().invert())
 }
 
+const ADDED_NONPAIR_CLIPS = new Set(['Throw_Dynamite', 'Crouch_Throw_Dynamite', 'Mounted_Idle'])
+
+function isLegacyClip(clip: Animation): boolean {
+  const name = clip.getName()
+  return !(name.endsWith('_Pair') || ADDED_NONPAIR_CLIPS.has(name))
+}
+
 function clipHash(clip: Animation): string {
   const data = clip
     .listChannels()
@@ -168,6 +175,7 @@ export {
   find,
   frame,
   io,
+  isLegacyClip,
   local,
   root,
   type Spin,

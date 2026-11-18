@@ -23,7 +23,10 @@ function retained(document: Document) {
       .listAnimations()
       // Separately tested gestures are outside the retained idle repair.
       .filter(
-        (clip) => !['TipHat', 'Throw_Dynamite', 'Crouch_Throw_Dynamite'].includes(clip.getName()),
+        (clip) =>
+          !['TipHat', 'Throw_Dynamite', 'Crouch_Throw_Dynamite', 'Mounted_Idle'].includes(
+            clip.getName(),
+          ),
       )
       .flatMap((clip) =>
         clip.listChannels().flatMap((channel) => {
@@ -161,9 +164,9 @@ it('native idle loops close while other clips, times and geometry remain authore
   const document = await io.read(
     process.env.OW_IDLE_MOVES ?? 'public/experiments/out-west/3d/native-v2/baked/moves.glb',
   )
-  expect(document.getRoot().listAnimations()).toHaveLength(77)
+  expect(document.getRoot().listAnimations()).toHaveLength(78)
   // Includes the seven Pair poses; paired-assets and paired-crouch tests separately pin
-  // all68 unchanged legacy clips and verify the standing/crouched source curves.
+  // all 68 unchanged legacy clips and verify the standing/crouched source curves.
   expect(retained(document)).toBe(
     'f466aabf09b3a503a18c084a06b26aceae007155bfa5a90c0b6c20af8e7d1ae0',
   )

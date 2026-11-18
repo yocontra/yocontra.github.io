@@ -8,7 +8,7 @@ import { validateAuthoringInputs } from '../../tools/content/authoring-inputs.ts
 import { resampleNative } from '../../tools/content/native-resample.ts'
 import { completeCharacterClips } from '../../tools/content/normalize-character-clips.ts'
 import { uprightPosture } from '../../tools/content/upright-posture.ts'
-import { clipHash, io, root } from './paired-grip-test-helpers.ts'
+import { clipHash, io, isLegacyClip, root } from './paired-grip-test-helpers.ts'
 
 function stream(a: Accessor | null) {
   if (!a) {
@@ -135,7 +135,7 @@ it('all single-hand, gait, stance and gesture samples retain the released baseli
     doc
       .getRoot()
       .listAnimations()
-      .filter((c) => !(c.getName().endsWith('_Pair') || c.getName().endsWith('Throw_Dynamite')))
+      .filter(isLegacyClip)
       .map((c) => [c.getName(), clipHash(c)]),
   )
   expect(current).toEqual(baseline.clips)

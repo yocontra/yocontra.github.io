@@ -120,6 +120,9 @@ export async function bakeCharacterClips(): Promise<void> {
   appendClips(target, grips)
   // Derive crouch only after the corrected paired seats/hand poses are final.
   appendCrouchClips(target, ['Idle_Gun_Pointing_Pair', 'Gun_Shoot_Pair'])
+  const mounted = await io.read(resolve(root, 'gestures/mounted-idle.glb'))
+  await validateAuthoringInputs(mounted)
+  appendClips(target, mounted)
   await target.transform(dedup(), prune({ keepLeaves: true }), unpartition())
   await io.write(path, target)
   await normalizeSkinnedAsset(path)
