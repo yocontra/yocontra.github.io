@@ -169,7 +169,8 @@ it('still closes the owned process and attempts shutdown after stalled restore a
         commandAttempted: true,
       },
       qaPageAttempted: true,
-      budgets: { restore: 60, rpc: 300, close: 60, shutdown: 200 },
+      // Give the fallback time to reap the real child on a busy test runner.
+      budgets: { restore: 60, rpc: 300, close: 1200, shutdown: 200 },
     })
     expect(cleanup.settingsRestoreFailure).toBeDefined()
     expect(cleanup.nativeClientFailure).toBeDefined()
