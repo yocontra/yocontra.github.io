@@ -18,7 +18,8 @@ const quick = process.argv.includes('--quick')
 const identifyParts = process.argv.includes('--parts')
 const staging = process.env.OUT_WEST_VIEWMODELS
 const probe = '/tools/content/long-gun-framing-probe.ts'
-const VIEWMODEL_ASSET = /\/native-v2\/(?:viewmodels\/|dynamic\/held-).*\.glb/u
+const VIEWMODEL_ASSET =
+  /\/native-v2\/(?:viewmodels\/|dynamic\/(?:held-|viewmodel-arm-curves)).*\.glb/u
 const hash = (bytes: Uint8Array) => createHash('sha256').update(bytes).digest('hex')
 const staged = staging
   ? await Promise.all(
@@ -216,6 +217,15 @@ try {
               throw new Error(`${label} changed the world lens`)
             }
             if (aimed) {
+              const gun = result.geometry.filter(
+                ({ material, visible }) => visible && material === 'Gun',
+              )
+              if (
+                gun.length === 0 ||
+                gun.some(({ boundsDepth }) => boundsDepth.nearest <= boundsDepth.cameraNear)
+              ) {
+                throw new Error(`${label} placed the gun inside the camera near plane`)
+              }
               const arms = result.view.arms
               for (const landmark of [arms.front, arms.rear]) {
                 if (
@@ -281,6 +291,7 @@ await writeFile(
       files: await Promise.all(
         [
           'src/experiments/out-west/client/application.ts',
+          'src/experiments/out-west/client/first-person-curves.ts',
           'src/experiments/out-west/client/first-person-layer.ts',
           'src/experiments/out-west/client/first-person-model.ts',
           'src/experiments/out-west/client/first-person-sights.ts',

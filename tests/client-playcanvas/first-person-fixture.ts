@@ -65,6 +65,8 @@ const CLIPS = [
   'Crouch_Shoot_shotgun',
 ]
 
+const LONG_GUN_ACTION = /(?:Hold|Shoot)_(?:rifle|shotgun)$/u
+
 function clipSeconds(name: string): number {
   if (name.endsWith('Throw_Dynamite')) {
     return 0.7
@@ -87,14 +89,16 @@ function fixtureAsset(
   registry.materials.push(material)
   const materialAsset = new Asset('fixture material', 'material')
   materialAsset.resource = material
+  const character = body || url.includes('moves')
+  const arms = url.includes('viewmodel-arm-curves')
   const clips =
-    body || url.includes('moves')
-      ? CLIPS
+    character || arms
+      ? CLIPS.filter((name) => character || LONG_GUN_ACTION.test(name))
       : mechanisms.flatMap((hand) =>
           ['Idle', 'Shoot', 'Reload', 'Draw'].map((action) => `Weapon_${action}_${hand}`),
         )
-  const animations = clips.map((name) => {
-    const asset = new Asset(name, 'animation')
+  const animations = clips.map((name, index) => {
+    const asset = new Asset(`fixture/animation/${index}`, 'animation')
     asset.resource = new AnimTrack(name, clipSeconds(name), [], [], [])
     return asset
   })

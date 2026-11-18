@@ -26,7 +26,11 @@ interface EquipmentSource {
 /** The local rider keeps per-instance pass masks; its arms load only the fit and drawn gun. */
 export interface ActorPresentation {
   local?: boolean
-  viewmodel?: { url: string; parent?: Entity; tracks: readonly AnimTrack[] }
+  viewmodel?: {
+    url: string
+    parent?: Entity
+    tracks: readonly AnimTrack[] | Promise<readonly AnimTrack[]>
+  }
   carryDrawn?: boolean
 }
 function rigidBatch(

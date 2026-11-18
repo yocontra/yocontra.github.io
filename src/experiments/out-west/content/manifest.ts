@@ -85,6 +85,11 @@ export const DYNAMIC_ASSETS = {
     hash: 'd3436604772c8bb1855c8ce3709e4322c61ab0211d84bb5b40d7b10b146f2b5b',
     bytes: 289508,
   },
+  'viewmodel-arm-curves': {
+    url: '/experiments/out-west/3d/native-v2/dynamic/viewmodel-arm-curves.glb?v=08456cf32d1a07c8',
+    hash: '08456cf32d1a07c838f22d765284b3ed8967b9dd0bee82921b64b7f440243ba1',
+    bytes: 109800,
+  },
   'barrel-fragments': {
     url: '/experiments/out-west/3d/native-v2/dynamic/barrel-fragments.glb?v=b6ab4cfc7a4d5902',
     hash: 'b6ab4cfc7a4d59027fb7d800aa35c920ddf2e63bbf9f9b3e0ffbc035b5474473',
@@ -96,7 +101,7 @@ export const ENVIRONMENT = {
   hash: '206c67e3a1b992282821cf06662bdd69bbb4915c1c4444a66338a40d6a7d4e34',
   bytes: 1173154,
 } as const
-export const CONTENT_VERSION = '070d2fb25f838b54562fe61e842859a9c86eb2ef23e2c930473c0080536c6fe0'
+export const CONTENT_VERSION = 'ae51450b5fc9efdb265412c7739ddbeaf158fe47cc92e74f5160057eb6a57e63'
 export const COLLISION_VERSION = '03b11033428780f67158b47e3fc2b37d761185acea4d5b323301449671b65def'
 export const ASSETS = {
   frontier: {

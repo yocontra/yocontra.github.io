@@ -36,7 +36,7 @@ export const SIGHTS: ReadonlyMap<HeldWeapon, SightProfile> = new Map([
     {
       front: new Vec3(-0.015, 0.0268, 0),
       rear: new Vec3(-0.43, 0.0258, 0),
-      relief: 0.62,
+      relief: 0.79,
       zoom: 0.72,
       enter: 0.22,
       exit: 0.14,
@@ -47,7 +47,7 @@ export const SIGHTS: ReadonlyMap<HeldWeapon, SightProfile> = new Map([
     {
       front: new Vec3(-0.01, 0.0228, 0),
       rear: new Vec3(-0.67, 0.0292, 0),
-      relief: 0.52,
+      relief: 0.68,
       roll: -8,
       zoom: 0.84,
       enter: 0.2,
@@ -102,4 +102,22 @@ export function advanceSights(state: SightState, input: SightInput, dt: number):
 /** The world lens narrows while aimed; the default first-person lens is unchanged otherwise. */
 export function sightFov(fov: number, sight: Sight): number {
   return math.lerp(fov, fov * (SIGHTS.get(sight.held)?.zoom ?? 1), sight.amount)
+}
+
+// Project the arms on the shorter screen axis. Portrait needs more room for the sleeves.
+const HIP_FOV = { landscape: 58, portrait: 68 }
+const REVOLVER_FOV = { landscape: 50, portrait: 58 }
+const LONG_GUN_FOV = { landscape: 52, portrait: 61 }
+
+export function viewmodelScale(
+  worldFov: number,
+  aspect: number,
+  held: HeldWeapon,
+  sight: number,
+): number {
+  const shape = aspect < 1 ? 'portrait' : 'landscape'
+  const aimedFov = held === 'revolver' ? REVOLVER_FOV : LONG_GUN_FOV
+  const modelFov = math.lerp(HIP_FOV[shape], aimedFov[shape], sight)
+  const worldTan = Math.tan((worldFov * math.DEG_TO_RAD) / 2) * Math.min(1, aspect)
+  return worldTan / Math.tan((modelFov * math.DEG_TO_RAD) / 2)
 }

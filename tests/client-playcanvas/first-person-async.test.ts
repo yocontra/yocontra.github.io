@@ -472,8 +472,12 @@ for (const deferredBuild of [false, true]) {
       const installed = Reflect.get(f.model, 'current')?.actor as DuelActor | undefined
       expect(installed).toBeDefined()
       for (const [index, track] of tracks.entries()) {
-        expect(installed?.animationTrack(track.name)).toBe(track)
-        expect(installed?.animationTrack(track.name)).not.toBe(f.request.world.tracks[index])
+        const presentation = installed?.animationTrack(track.name)
+        expect(presentation).toBeDefined()
+        expect(presentation).not.toBe(f.request.world.tracks[index])
+        const hasArmCurves = track.name.endsWith('_rifle') || track.name.endsWith('_shotgun')
+        expect(presentation === track).toBe(!hasArmCurves)
+        expect(presentation?.duration).toBe(track.duration)
       }
       f.model.present(f.camera, 1 / 60)
       expect(f.model.ready).toBe(true)

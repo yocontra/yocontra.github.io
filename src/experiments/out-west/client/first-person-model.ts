@@ -5,7 +5,6 @@ import {
   type GraphNode,
   Mat4,
   type MeshInstance,
-  math,
   Quat,
   SHADER_FORWARD,
   SHADER_PREPASS,
@@ -29,6 +28,7 @@ import {
 import { createRiderPose, type RiderPose } from './actor-pose.ts'
 import type { Appearance } from './actors.ts'
 import type { GameApplication } from './application.ts'
+import { loadViewmodelTracks } from './first-person-curves.ts'
 import { viewmodelLayer } from './first-person-layer.ts'
 import { ViewmodelMotion } from './first-person-motion.ts'
 import {
@@ -39,6 +39,7 @@ import {
   type Sight,
   sightFov,
   sightState,
+  viewmodelScale,
 } from './first-person-sights.ts'
 
 export interface FirstPersonRequest {
@@ -62,10 +63,6 @@ interface Arms {
   throwingUntil: number
   head: GraphNode | null
 }
-// Viewmodel projection on the screen's shorter axis, independent of the player's world FOV.
-// Portrait screens reveal far more forearm below the gun, so their projection is wider.
-const VIEWMODEL_FOV = { landscape: 58, portrait: 68 }
-const SIGHTED_FOV = { landscape: 50, portrait: 58 }
 // Long guns sit forward so the shouldered stock frames the view without exposing cut sleeves.
 const HIP: Record<HeldWeapon, Vec3> = {
   revolver: new Vec3(0.02, -0.01, -0.06),
@@ -225,7 +222,13 @@ export class FirstPersonModel {
         this.game,
         request.appearance?.loadout ?? DEFAULT_LOADOUT,
         request.appearance?.dyes ?? {},
-        { viewmodel: { url, parent: staging, tracks: request.world.tracks } },
+        {
+          viewmodel: {
+            url,
+            parent: staging,
+            tracks: loadViewmodelTracks(this.game, request.world.tracks),
+          },
+        },
       )
       if (!staging.parent) {
         throw new DOMException('Viewmodel request was removed', 'AbortError')
@@ -402,12 +405,7 @@ export class FirstPersonModel {
     }
     const device = this.game.app.graphicsDevice
     const aspect = device.width / Math.max(1, device.height)
-    const minor = Math.min(1, aspect)
-    const worldTan = Math.tan(((lens?.fov ?? 70) * math.DEG_TO_RAD) / 2) * minor
-    const shape = aspect < 1 ? 'portrait' : 'landscape'
-    const modelFov = math.lerp(VIEWMODEL_FOV[shape], SIGHTED_FOV[shape], sight)
-    const modelTan = Math.tan((modelFov * math.DEG_TO_RAD) / 2)
-    const scale = worldTan / modelTan
+    const scale = viewmodelScale(lens?.fov ?? 70, aspect, held, sight)
     this.rig.setPosition(camera.getPosition())
     this.rig.setRotation(camera.getRotation())
     this.rig.setLocalScale(scale, scale, 1)

@@ -28,20 +28,20 @@ export function duelOpponentUrl(index: number): string {
 interface ActorOptions {
   enabled: boolean
   /** Complete merged tracks from the physical actor; no shared clip can override this set. */
-  tracks?: readonly AnimTrack[]
+  tracks?: readonly AnimTrack[] | Promise<readonly AnimTrack[]>
   humanoid?: boolean
 }
 async function actorTracks(
   game: GameApplication,
   resource: ContainerResource,
-  options: ActorOptions,
+  borrowed: readonly AnimTrack[] | undefined,
   humanoid: boolean,
 ) {
   const tracks = [
-    ...(options.tracks ?? resource.animations.map((clip) => clip.resource as AnimTrack)),
+    ...(borrowed ?? resource.animations.map((clip) => clip.resource as AnimTrack)),
   ].filter((track) => track && !track.name.startsWith('Weapon_'))
   const indexed = new Map(tracks.map((track) => [track.name, track]))
-  if (humanoid && options.tracks === undefined) {
+  if (humanoid && borrowed === undefined) {
     const moves = (await game.loadContainer(ASSETS.moves.url)).resource as ContainerResource
     for (const clip of moves.animations) {
       const track = clip.resource as AnimTrack
@@ -152,10 +152,10 @@ export class DuelActor {
     name: string,
     options: ActorOptions = { enabled: true },
   ): Promise<DuelActor> {
-    const asset = await game.loadContainer(url)
+    const [asset, borrowed] = await Promise.all([game.loadContainer(url), options.tracks])
     const resource = asset.resource as ContainerResource
     const humanoid = options.humanoid ?? HUMANOID.test(url)
-    const { tracks, indexed } = await actorTracks(game, resource, options, humanoid)
+    const { tracks, indexed } = await actorTracks(game, resource, borrowed, humanoid)
     const releaseMaterials = await prepareNativeMaterials(game, resource)
     if (!game.stage.parent) {
       releaseMaterials()

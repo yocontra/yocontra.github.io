@@ -26,7 +26,9 @@ it('every published asset matches its content-addressed manifest and uses native
         .some((extension) => extension.extensionName === 'EXT_meshopt_compression'),
     ).toBe(false)
     const character = name === 'player' || name.startsWith('outlaw-')
-    expect(doc.getRoot().listMeshes().length > 0).toBe(name !== 'moves')
+    expect(doc.getRoot().listMeshes().length > 0).toBe(
+      !['moves', 'viewmodel-arm-curves'].includes(name),
+    )
     expect(doc.getRoot().listSkins().length > 0).toBe(
       character || name === 'dog' || name === 'horse',
     )
