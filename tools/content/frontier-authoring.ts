@@ -164,7 +164,7 @@ export async function authorFrontier(output: string): Promise<void> {
   const layout = { ...plan.layout, ambient: plan.life } as TownLayout
   const collision = compileFrontierCollision(layout)
   const g = await FrontierGeometry.create(layout.size)
-  await authoredMaterials(g)
+  await authoredMaterials(g, layout)
   const ground = g.group('ground-Perdition')
   flatGround(g, ground, layout)
   for (const mesh of frontierGround(layout.size)) {

@@ -19,6 +19,7 @@ const WOOD_SCAN = new URL(
   import.meta.url,
 )
 const SHORT_LABEL = /^[A-Z]+$/u
+const LONG_LABEL = /^[A-Z]+(?: [A-Z&]+)*$/u
 const hash = (bytes: Uint8Array) => createHash('sha256').update(bytes).digest('hex')
 
 export async function signFont(): Promise<Font> {
@@ -26,11 +27,11 @@ export async function signFont(): Promise<Font> {
     new URL('../../public/experiments/out-west/fonts/ultra.woff2', import.meta.url),
   )
   if (hash(bytes) !== SIGN_FONT_SHA) {
-    throw new Error('Short-sign font bytes changed')
+    throw new Error('Sign font bytes changed')
   }
   const font = create(bytes)
   if (font.isCollection) {
-    throw new Error('Short-sign font must be one face')
+    throw new Error('Sign font must be one face')
   }
   return font
 }
@@ -39,6 +40,10 @@ export function shortSignOutline(font: Font, text: string) {
   if (!(text && SHORT_LABEL.test(text))) {
     throw new Error('Expected uppercase short-sign label')
   }
+  return signOutline(font, text, SIGN_LOGICAL_WIDTH)
+}
+
+function signOutline(font: Font, text: string, logicalWidth: number, sideMargin = 16) {
   let advance = 0
   let minX = Number.POSITIVE_INFINITY
   let maxX = Number.NEGATIVE_INFINITY
@@ -50,6 +55,10 @@ export function shortSignOutline(font: Font, text: string) {
       throw new Error(`Missing sign glyph ${character}`)
     }
     const glyph = font.glyphForCodePoint(code)
+    if (character === ' ') {
+      advance += glyph.advanceWidth
+      return ''
+    }
     minX = Math.min(minX, advance + glyph.bbox.minX)
     maxX = Math.max(maxX, advance + glyph.bbox.maxX)
     minY = Math.min(minY, glyph.bbox.minY)
@@ -60,17 +69,18 @@ export function shortSignOutline(font: Font, text: string) {
   })
   const width = maxX - minX
   const height = maxY - minY
-  // Equal world-space scale on both axes; at least 8cm side / 12cm top-bottom margins.
-  const scale = Math.min((SIGN_LOGICAL_WIDTH - 2 * 16) / width, 84 / height)
-  const svg = `<g fill="#2d211b" transform="translate(${SIGN_LOGICAL_WIDTH / 2} 64) scale(${scale} ${-scale}) translate(${-(minX + maxX) / 2} ${-(minY + maxY) / 2})">${paths.join('')}</g>`
+  // Equal world-space scale on both axes, with clearance from the painted border.
+  const scale = Math.min((logicalWidth - 2 * sideMargin) / width, 84 / height)
+  const svg = `<g fill="#2d211b" transform="translate(${logicalWidth / 2} 64) scale(${scale} ${-scale}) translate(${-(minX + maxX) / 2} ${-(minY + maxY) / 2})">${paths.join('')}</g>`
   return { svg, width, height, scale, logicalWidth: width * scale, logicalHeight: height * scale }
 }
 
-/** The explicit art input preserves rows not owned by the short-sign correction. */
-export async function shortSignAtlas(
+/** Keep the existing atlas slots and fit ink in physical board space. */
+export async function letteredSignAtlas(
   labels: readonly string[],
   shortLabels: readonly string[],
   directory: string,
+  longAspects: ReadonlyMap<number, number> = new Map(),
 ) {
   const baseline = await readFile(join(directory, 'baseline-atlas.png'))
   const recipe = JSON.parse(await readFile(join(directory, 'baseline.json'), 'utf8'))
@@ -121,10 +131,28 @@ export async function shortSignAtlas(
       return { input, left: rect.left - SIGN_GUTTER, top: rect.top - SIGN_GUTTER }
     }),
   )
+  const longOverlays = await Promise.all(
+    [...longAspects].map(async ([row, aspect]) => {
+      const label = labels[row]
+      if (!(label && LONG_LABEL.test(label) && (row < 12 || row >= 24))) {
+        throw new Error(`Invalid long-sign row ${row}`)
+      }
+      const rect = signRect(row)
+      const width = 128 * aspect
+      const { svg } = signOutline(font, label, width, width * 0.06)
+      const image = `<svg xmlns="http://www.w3.org/2000/svg" width="${rect.width}" height="${rect.height}" viewBox="0 0 ${width} 128" preserveAspectRatio="none"><rect width="${width}" height="128" fill="#36261b"/><rect x="4" y="4" width="${width - 8}" height="120" fill="#bd9b66" stroke="#25190f" stroke-width="3"/>${svg}</svg>`
+      return {
+        input: await sharp(Buffer.from(image)).png().toBuffer(),
+        left: rect.left,
+        top: rect.top,
+      }
+    }),
+  )
   return sharp(baseline)
     .composite([
       { input: clearedBand, left: SIGN_SHORT_BAND.left, top: SIGN_SHORT_BAND.top },
       ...overlays,
+      ...longOverlays,
     ])
     .png()
     .toBuffer()
@@ -135,8 +163,9 @@ export async function paintedSignAtlas(
   labels: readonly string[],
   shortLabels: readonly string[],
   directory: string,
+  longAspects: ReadonlyMap<number, number>,
 ) {
-  const lettering = await shortSignAtlas(labels, shortLabels, directory)
+  const lettering = await letteredSignAtlas(labels, shortLabels, directory, longAspects)
   const scan = await readFile(WOOD_SCAN)
   const overlays = await Promise.all(
     labels.map(async (_, row) => {

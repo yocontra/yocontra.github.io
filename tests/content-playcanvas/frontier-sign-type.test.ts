@@ -4,7 +4,8 @@ import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import sharp from 'sharp'
-import { SHORT_LABELS, SIGN_ROWS } from '../../tools/content/frontier-materials.ts'
+import { TOWN } from '../../src/experiments/out-west/ffa/sim/layout.ts'
+import { longSignAspects, SHORT_LABELS, SIGN_ROWS } from '../../tools/content/frontier-materials.ts'
 import {
   SIGN_ATLAS_HEIGHT,
   SIGN_ATLAS_WIDTH,
@@ -14,9 +15,9 @@ import {
   signUvRect,
 } from '../../tools/content/frontier-sign-layout.ts'
 import {
+  letteredSignAtlas,
   paintedSignAtlas,
   SIGN_LOGICAL_WIDTH,
-  shortSignAtlas,
   shortSignOutline,
   signFont,
 } from '../../tools/content/frontier-sign-type.ts'
@@ -78,7 +79,7 @@ it('compositing preserves every unowned row and rejects stale baseline bytes or 
     await writeFile(join(directory, 'baseline.json'), JSON.stringify(recipe))
     const before = await sharp(baseline).raw().toBuffer()
     const after = await sharp(
-      await shortSignAtlas(SIGN_ROWS, Object.values(SHORT_LABELS), directory),
+      await letteredSignAtlas(SIGN_ROWS, Object.values(SHORT_LABELS), directory),
     )
       .raw()
       .toBuffer()
@@ -117,21 +118,21 @@ it('compositing preserves every unowned row and rejects stale baseline bytes or 
       expect(Array.from({ length: 16 }, (_, y) => strokeAt(300, y)).filter(Boolean).length).toBe(6)
     }
     await expect(
-      shortSignAtlas([...SIGN_ROWS].reverse(), Object.values(SHORT_LABELS), directory),
+      letteredSignAtlas([...SIGN_ROWS].reverse(), Object.values(SHORT_LABELS), directory),
     ).rejects.toThrow('labels/order')
     await writeFile(
       join(directory, 'baseline.json'),
       JSON.stringify({ ...recipe, sha256: 'stale' }),
     )
-    await expect(shortSignAtlas(SIGN_ROWS, Object.values(SHORT_LABELS), directory)).rejects.toThrow(
-      'bytes',
-    )
+    await expect(
+      letteredSignAtlas(SIGN_ROWS, Object.values(SHORT_LABELS), directory),
+    ).rejects.toThrow('bytes')
   } finally {
     await rm(directory, { recursive: true, force: true })
   }
 })
 
-it('uses balanced physical UV rectangles with guarded gutters, preserving sixteen legacy rows exactly', () => {
+it('uses balanced hanging-sign UV rectangles with guarded gutters and preserves other UVs', () => {
   const legacyRows = [...Array.from({ length: 12 }, (_, i) => i), 24, 25, 26, 27]
   for (const row of legacyRows) {
     expect(signUvRect(row)).toEqual({ u0: 0, u1: 1, v0: row / 28, v1: (row + 1) / 28 })
@@ -171,12 +172,74 @@ it('uses balanced physical UV rectangles with guarded gutters, preserving sixtee
   expect(() => signRect(12.5)).toThrow('0..27')
 })
 
+it('painted storefront and counter lettering retains its native glyph proportions', async () => {
+  const aspects = longSignAspects(TOWN)
+  expect(aspects.size).toBe(16)
+  const font = await signFont()
+  const atlas = await letteredSignAtlas(
+    SIGN_ROWS,
+    Object.values(SHORT_LABELS),
+    'tools/art/environments/frontier-signs',
+    aspects,
+  )
+  for (const [row, aspect] of aspects) {
+    const label = SIGN_ROWS[row]
+    if (!label) {
+      throw new Error(`Missing label at row ${row}`)
+    }
+    const rect = signRect(row)
+    const trimX = Math.ceil((rect.width * 8) / (128 * aspect))
+    const width = rect.width - 2 * trimX
+    const height = rect.height - 16
+    const mask = await sharp(atlas)
+      .extract({ left: rect.left + trimX, top: rect.top + 8, width, height })
+      .extractChannel('red')
+      .threshold(100)
+      .raw()
+      .toBuffer()
+    let x0 = width
+    let x1 = 0
+    let y0 = height
+    let y1 = 0
+    for (let y = 0; y < height; y++) {
+      for (let x = 0; x < width; x++) {
+        if (mask[y * width + x] === 0) {
+          x0 = Math.min(x0, x)
+          x1 = Math.max(x1, x)
+          y0 = Math.min(y0, y)
+          y1 = Math.max(y1, y)
+        }
+      }
+    }
+    const measured = (((x1 - x0 + 1) / rect.width) * aspect) / ((y1 - y0 + 1) / rect.height)
+    const glyphs = font.glyphsForString(label)
+    let advance = 0
+    let left = Number.POSITIVE_INFINITY
+    let right = 0
+    let bottom = Number.POSITIVE_INFINITY
+    let top = 0
+    for (const [index, glyph] of glyphs.entries()) {
+      if (label[index] !== ' ') {
+        left = Math.min(left, advance + glyph.bbox.minX)
+        right = Math.max(right, advance + glyph.bbox.maxX)
+        bottom = Math.min(bottom, glyph.bbox.minY)
+        top = Math.max(top, glyph.bbox.maxY)
+      }
+      advance += glyph.advanceWidth
+    }
+    const expected = (right - left) / (top - bottom)
+    expect(measured / expected).toBeCloseTo(1, 1)
+    expect(y1 - y0).toBeGreaterThan(44)
+  }
+})
+
 it('weathering adds grain to every sign while keeping the pale paint distinct from ink', async () => {
   const directory = 'tools/art/environments/frontier-signs'
   const labels = Object.values(SHORT_LABELS)
+  const aspects = longSignAspects(TOWN)
   const [paint, weathered] = await Promise.all([
-    shortSignAtlas(SIGN_ROWS, labels, directory),
-    paintedSignAtlas(SIGN_ROWS, labels, directory),
+    letteredSignAtlas(SIGN_ROWS, labels, directory, aspects),
+    paintedSignAtlas(SIGN_ROWS, labels, directory, aspects),
   ])
   const before = await sharp(paint).ensureAlpha().raw().toBuffer()
   const after = await sharp(weathered).ensureAlpha().raw().toBuffer()

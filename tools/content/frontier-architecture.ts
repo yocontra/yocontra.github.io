@@ -12,7 +12,12 @@ import { type compileFrontierCollision, fenceSpans, roofMesh } from './frontier-
 import type { FrontierGeometry, Rgb } from './frontier-geometry.ts'
 import { LABELS, SHORT_LABELS, SIGN_ROWS } from './frontier-materials.ts'
 import { MOUNT_IRON_TINT } from './frontier-mounts.ts'
-import { signUvRect } from './frontier-sign-layout.ts'
+import {
+  BANK_SIGN_SIZE,
+  FACADE_SIGN_HEIGHT,
+  facadeSignWidth,
+  signUvRect,
+} from './frontier-sign-layout.ts'
 /** Add detail outside an opening; no opaque quads cross its line of fire. */
 export function surround(
   g: FrontierGeometry,
@@ -136,7 +141,8 @@ function buildingSign(
   { building, front, layout }: { building: Building; front: Side; layout: TownLayout },
 ) {
   const { x, z, w, d, height } = building
-  if (!Object.hasOwn(LABELS, building.id)) {
+  const label = LABELS[building.id]
+  if (!label) {
     return
   }
   {
@@ -147,9 +153,7 @@ function buildingSign(
       return
     }
     const alongX = front === 'n' || front === 's'
-    const span =
-      (front === 'n' || front === 'e' ? -1 : 1) *
-      Math.min((alongX ? w : d) - 1, Math.max(5, LABELS[building.id]?.length ?? 5) * 0.43)
+    const span = (front === 'n' || front === 'e' ? -1 : 1) * facadeSignWidth(building, front, label)
     const cx = x + w / 2
     const cz = z + d / 2
     const upperFascia = building.floors > 1
@@ -160,25 +164,16 @@ function buildingSign(
       ? [
           [cx - span / 2, bottom, at],
           [cx + span / 2, bottom, at],
-          [cx + span / 2, bottom + 0.85, at],
-          [cx - span / 2, bottom + 0.85, at],
+          [cx + span / 2, bottom + FACADE_SIGN_HEIGHT, at],
+          [cx - span / 2, bottom + FACADE_SIGN_HEIGHT, at],
         ]
       : [
           [at, bottom, cz - span / 2],
           [at, bottom, cz + span / 2],
-          [at, bottom + 0.85, cz + span / 2],
-          [at, bottom + 0.85, cz - span / 2],
+          [at, bottom + FACADE_SIGN_HEIGHT, cz + span / 2],
+          [at, bottom + FACADE_SIGN_HEIGHT, cz - span / 2],
         ]
-    const v0 = index / SIGN_ROWS.length
-    const v1 = (index + 1) / SIGN_ROWS.length
-    g.quad(root, 'sign', points, {
-      uvs: [
-        [0, v1],
-        [1, v1],
-        [1, v0],
-        [0, v0],
-      ],
-    })
+    signQuad(g, root, index, points)
   }
 }
 
@@ -203,14 +198,14 @@ export function porchSignMount(layout: TownLayout, building: Building) {
   if (!(lower && upper)) {
     throw new Error(`Missing street-facing porch rails for ${building.id}`)
   }
-  const width = (LABELS[building.id]?.length ?? 5) * 0.43
+  const width = facadeSignWidth(building, 'n', LABELS[building.id] ?? '')
   const top = upper.y1 + 0.08
   return {
     x: building.x + (building.w - width) / 2,
     z: lower.z - 0.06,
     w: width,
     d: 0.06,
-    y0: top - 0.85,
+    y0: top - FACADE_SIGN_HEIGHT,
     top,
     fixingRows: [lower, upper].map(({ y0, y1 }) => (y0 + y1) / 2),
   }
@@ -318,12 +313,14 @@ function hangingSign(g: FrontierGeometry, root: Node, b: Building, front: Side) 
   ])
 }
 export function bankServiceSigns(g: FrontierGeometry, root: Node, layout: FrontierPlan['layout']) {
+  const halfWidth = BANK_SIGN_SIZE.width / 2
+  const top = 2.7 + BANK_SIGN_SIZE.height
   for (const [index, zone] of layout.zones.filter((v) => v.kind === 'bank').entries()) {
     signQuad(g, root, SIGN_ROWS.length - 4 + index, [
-      [zone.x + 0.8, 2.7, zone.z + 0.94],
-      [zone.x - 0.8, 2.7, zone.z + 0.94],
-      [zone.x - 0.8, 3.12, zone.z + 0.94],
-      [zone.x + 0.8, 3.12, zone.z + 0.94],
+      [zone.x + halfWidth, 2.7, zone.z + 0.94],
+      [zone.x - halfWidth, 2.7, zone.z + 0.94],
+      [zone.x - halfWidth, top, zone.z + 0.94],
+      [zone.x + halfWidth, top, zone.z + 0.94],
     ])
   }
 }

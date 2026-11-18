@@ -1,4 +1,14 @@
-/** One offline raster/UV contract. All sixteen non-short rows keep their original rectangles. */
+/** Shared board dimensions and atlas rectangles for offline Frontier authoring. */
+import type { Building, Side } from '../../src/experiments/out-west/ffa/sim/layout.ts'
+
+export const FACADE_SIGN_HEIGHT = 0.85
+export const BANK_SIGN_SIZE = { width: 1.6, height: 0.42 } as const
+
+export function facadeSignWidth(building: Building, side: Side, label: string) {
+  const span = side === 'n' || side === 's' ? building.w : building.d
+  return Math.min(span - 1, Math.max(5, label.length) * 0.43)
+}
+
 export const SIGN_ATLAS_WIDTH = 2048
 export const SIGN_ATLAS_HEIGHT = 3584
 export const SIGN_GUTTER = 16
