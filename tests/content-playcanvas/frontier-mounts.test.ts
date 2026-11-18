@@ -243,6 +243,12 @@ it('hanger shoes touch actual board timber, porch soffits or connected wall brac
   }
 })
 
+function facade(building: string) {
+  return ['wood', 'stone', `siding:${building}`].flatMap((role) =>
+    sceneFaces(`building-${building}:${role}-mesh`),
+  )
+}
+
 it('three triangular brackets are anchored in actual solid facade timber/masonry', () => {
   for (const building of TOWN.buildings.filter((b) =>
     ['livery', 'church', 'depot'].includes(b.id),
@@ -251,9 +257,7 @@ it('three triangular brackets are anchored in actual solid facade timber/masonry
     expect(
       patchContacts(
         part(`mount:${building.id}:wall-plate`),
-        sceneFaces(`building-${building.id}:wood-mesh`).concat(
-          sceneFaces(`building-${building.id}:stone-mesh`),
-        ),
+        facade(building.id),
         [building.x + 0.75, 3.34, wall],
         [0, 0, 1],
       ),
@@ -280,7 +284,7 @@ it('livery hook intersects the real handle arc and its bracket is wall connected
   expect(
     patchContacts(
       part('mount:livery:lamp-wall-plate'),
-      sceneFaces('building-livery:wood-mesh'),
+      facade('livery'),
       [4.545, 3.04, 44],
       [0, 0, 1],
     ),

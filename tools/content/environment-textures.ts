@@ -6,6 +6,7 @@ import { ALL_EXTENSIONS, KHRTextureBasisu } from '@gltf-transform/extensions'
 import { dedup } from '@gltf-transform/functions'
 import { compressedCharacterTexture } from './character-textures.ts'
 import { contentOutput } from './content-output.ts'
+import { isSidingTexture } from './frontier-siding.ts'
 
 /** Share identical images while preserving each material's sampler, UVs and PBR settings. */
 export async function deduplicateEnvironmentImages(document: Document): Promise<void> {
@@ -28,7 +29,8 @@ export async function compressEnvironmentTextures(path: string): Promise<void> {
         (material) =>
           material.getBaseColorTexture() === texture || material.getEmissiveTexture() === texture,
       )
-      const encoding = texture.getName() === 'Perdition shop signs' ? 'etc1s' : 'uastc'
+      const name = texture.getName()
+      const encoding = name === 'Perdition shop signs' || isSidingTexture(name) ? 'etc1s' : 'uastc'
       const url = await compressedCharacterTexture(bytes, color, 'environments', encoding)
       texture
         .setImage(await readFile(contentOutput('environments', 'textures', basename(url))))

@@ -22,6 +22,7 @@ import { townGround } from './frontier-ground-detail.ts'
 import { authoredMaterials } from './frontier-materials.ts'
 import { frontierMounts, groupFrontierMounts, MOUNT_IRON_TINT } from './frontier-mounts.ts'
 import { coverModel, desertPlants } from './frontier-props.ts'
+import { frontierSiding } from './frontier-siding.ts'
 import { optimizeAsset } from './optimize.ts'
 
 export interface FrontierPlan {
@@ -117,6 +118,40 @@ function flatGround(g: FrontierGeometry, ground: Node, layout: TownLayout) {
   g.surface(ground, 'ground', townGround(layout))
 }
 
+async function authorBuildings(g: FrontierGeometry, plan: FrontierPlan, layout: TownLayout) {
+  const groups = new Map(layout.buildings.map((b) => [b.id, g.group(`building-${b.id}`)]))
+  const paint = new Map(
+    layout.buildings.flatMap((building) => {
+      const color = plan.style.buildingPaint[building.id]
+      return color && !['bank', 'jail', 'church', 'tower'].includes(building.kind)
+        ? [[building.id, color] as const]
+        : []
+    }),
+  )
+  await frontierSiding(g, paint)
+  for (const b of layout.buildings) {
+    const root = groups.get(b.id)
+    if (!root) {
+      throw new Error(`Missing ${b.id}`)
+    }
+    const role = ['bank', 'jail', 'church', 'tower'].includes(b.kind) ? 'stone' : 'wood'
+    const tint =
+      plan.style.buildingPaint[b.id] ??
+      (role === 'stone' ? plan.style.stoneTint : plan.style.woodTint)
+    const siding = paint.has(b.id)
+    for (const wall of structuralWalls({ ...layout, buildings: [b] })) {
+      g.box(
+        root,
+        siding ? `siding:${b.id}` : role,
+        { ...wall, top: wall.y1, grime: 0.32 },
+        siding ? undefined : tint,
+      )
+    }
+    buildingDetails(g, plan, b, root)
+  }
+  return groups
+}
+
 export async function authorFrontier(output: string): Promise<void> {
   const plan = JSON.parse(
     await readFile(join(SOURCE, 'frontier.plan.json'), 'utf8'),
@@ -139,21 +174,7 @@ export async function authorFrontier(output: string): Promise<void> {
     )
   }
   canyonBoundary(g, layout)
-  const groups = new Map(layout.buildings.map((b) => [b.id, g.group(`building-${b.id}`)]))
-  for (const b of layout.buildings) {
-    const root = groups.get(b.id)
-    if (!root) {
-      throw new Error(`Missing ${b.id}`)
-    }
-    const role = ['bank', 'jail', 'church', 'tower'].includes(b.kind) ? 'stone' : 'wood'
-    const tint =
-      plan.style.buildingPaint[b.id] ??
-      (role === 'stone' ? plan.style.stoneTint : plan.style.woodTint)
-    for (const wall of structuralWalls({ ...layout, buildings: [b] })) {
-      g.box(root, role, { ...wall, top: wall.y1, grime: 0.32 }, tint)
-    }
-    buildingDetails(g, plan, b, root)
-  }
+  const groups = await authorBuildings(g, plan, layout)
   for (const box of collision.boxes) {
     if (!box.id.startsWith('deck:')) {
       continue
