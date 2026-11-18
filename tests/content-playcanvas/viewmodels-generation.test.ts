@@ -31,8 +31,8 @@ const fits = CATALOG.filter((item) => item.slot === 'outfit').flatMap((item) => 
   `${item.id}.pair`,
 ])
 const hash = (bytes: Uint8Array) => createHash('sha256').update(bytes).digest('hex')
-// Two complete builds and two fits before a malformed input: 34 successful extractions.
-const rebuildBudget = 180_000
+// Two complete builds and two fits run alongside the Worker and type-check fixtures.
+const rebuildBudget = 300_000
 
 function hashes(directory: string): Promise<string[]> {
   return Promise.all(fits.map(async (id) => hash(await readFile(join(directory, `${id}.glb`)))))
