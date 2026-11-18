@@ -292,6 +292,12 @@ export class Actors {
     if (this.failures.get(id) === key) {
       return
     }
+    const current = () =>
+      !this.lifecycle.signal.aborted &&
+      this.present.has(id) &&
+      this.incarnations.get(id)?.serial === incarnation &&
+      this.key(id) === key &&
+      (this.players.get(id)?.hp ?? 0) > 0
     const promise = (async () => {
       if (!(initial || this.actors.has(id))) {
         const fallback = await DuelActor.create(
@@ -299,7 +305,7 @@ export class Actors {
           ASSETS['outlaw-0'].url,
           `rider-${id}-loading`,
         )
-        if (this.lifecycle.signal.aborted || !this.present.has(id)) {
+        if (!current()) {
           fallback.destroy()
           return
         }
@@ -315,13 +321,7 @@ export class Actors {
             ASSETS[`outlaw-${Math.abs(Number(id)) % 17}` as keyof typeof ASSETS].url,
             `rider-${id}`,
           )
-      if (
-        this.lifecycle.signal.aborted ||
-        !this.present.has(id) ||
-        this.key(id) !== key ||
-        this.incarnations.get(id)?.serial !== incarnation ||
-        (this.players.get(id)?.hp ?? 0) <= 0
-      ) {
+      if (!current()) {
         actor.destroy()
         return
       }
@@ -330,7 +330,7 @@ export class Actors {
       this.notice.hidden = this.healthy()
     })()
       .catch(() => {
-        if (this.lifecycle.signal.aborted || !this.present.has(id)) {
+        if (!current()) {
           return
         }
         this.failures.set(id, key)

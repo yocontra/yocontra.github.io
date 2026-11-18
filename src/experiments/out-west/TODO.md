@@ -36,6 +36,7 @@ Verified deployment baseline: `2e847e86` (2026-11-17; successful Worker/site dep
 - [x] Disable touch auto-fire while Frontier settings are open. Tab and Shift+Tab move focus through the settings. Headless Chrome checks cover eligible targets before and after the menu closes.
 - [x] Prepare walking distances for the bank guide before enabling the HUD. A prepared route tracks the current cover grid.
 - [x] Check viewport ownership after async loading. A late resource or session is released if the viewport has closed.
+- [x] Discard a delayed rider fallback when its lobby slot belongs to a new life. A late failure from the prior life leaves the new rider free to load. Both regression tests failed before the change.
 
 ## Previous playtest feedback (2026-11-09)
 
