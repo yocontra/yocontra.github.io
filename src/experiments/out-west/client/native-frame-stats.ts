@@ -5,7 +5,8 @@ export function nativeFrameStats(app: AppBase | undefined) {
   if (!app) {
     return null
   }
-  const stats = app.stats
+  const { stats, renderer, graphicsDevice } = app
+  const { width, height } = graphicsDevice.canvas
   return {
     source: 'PlayCanvas AppStats: render application only',
     frameId: app.frame,
@@ -24,6 +25,22 @@ export function nativeFrameStats(app: AppBase | undefined) {
       simulationDtSeconds: stats.frame.dt,
       updateStartMs: stats.frame.updateStart,
       renderStartMs: stats.frame.renderStart,
+    },
+    renderCounters: {
+      // These native renderer counters accumulate in release builds. Differences between
+      // snapshots describe the measured interval without enabling PlayCanvas profiling.
+      forward: renderer._forwardDrawCalls,
+      shadow: renderer._shadowDrawCalls,
+      skinned: renderer._skinDrawCalls,
+    },
+    resources: {
+      canvas: { width, height },
+      loadedModels: app.assets.filter((asset) => asset.type === 'container' && asset.loaded).length,
+      textures: graphicsDevice.textures.size,
+      buffers: graphicsDevice.buffers.size,
+      textureBytes: stats.vramTextureBytes,
+      vertexBytes: stats.vramVertexBufferBytes,
+      indexBytes: stats.vramIndexBufferBytes,
     },
     // Release engine does not publish detailed renderer phase timings.
     unavailable: ['skin', 'morph', 'cull', 'sort', 'shadow', 'renderTargetCreation'],

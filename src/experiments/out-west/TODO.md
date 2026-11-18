@@ -109,6 +109,8 @@ The release-engine build at `a7434df5` recorded 60 complete seconds in each head
 
 The ordinary portrait iPhone 13 mini simulator run averaged 44.26 FPS with a 31 FPS minimum. Native Safari foreground evidence and cleanup passed. Thirteen of 108 touch endpoints exceeded ±35 ms and two hold durations missed tolerance. The 32-rider landscape run averaged 18.99 FPS with a 13 FPS minimum and missed its native foreground and touch checks. The recorder restored the display and shut down the dedicated simulator after both runs.
 
+The next 32-rider landscape run at render scale 1 averaged 16.14 FPS. A private build with half the render pixels (scale 0.7071) averaged 15.46 FPS. All 60 complete seconds in each run fell below 30 FPS. The runs followed different paths and submitted different draw counts, so they do not isolate a resolution effect. The lower scale did not qualify and was kept out of the game. The new QA snapshot records cumulative native forward, shadow and skinned counters along with loaded model counts, GPU resources and canvas dimensions.
+
 - [x] Reuse authored animation buffers for native layer-specific tracks, omitting channels those layers already mask out. Exact pose/event/buffer-sharing tests cover the authored library; native 30/60/100 Hz gait clocks and complete 200 ms recoil remain correct. Full-game frame qualification remains open.
 
 - [x] Support authored near/far detail through native render-component visibility and a separate native batch group. Hysteresis, world/vertical distance, imported name suffixes, regeneration and teardown tests pass; existing scene captures stay byte-identical. This enables upcoming prop detail, and does not claim its FPS budget is qualified.

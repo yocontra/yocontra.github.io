@@ -21,6 +21,16 @@ it('samples live native frame counters without enabling profiling or retaining m
     expect(initial?.gpuMs).toBeNull()
     expect(initial?.cpuMs.physics).toBeNull()
     expect(initial?.unavailable).toContain('shadow')
+    expect(initial?.resources).toEqual({
+      canvas: { width: 1, height: 1 },
+      loadedModels: 0,
+      textures: 0,
+      buffers: device.buffers.size,
+      textureBytes: 0,
+      vertexBytes: app.stats.vramVertexBufferBytes,
+      indexBytes: app.stats.vramIndexBufferBytes,
+    })
+    expect(initial?.renderCounters).toEqual({ forward: 0, shadow: 0, skinned: 0 })
     app.update(1 / 60)
     app.render()
     const first = nativeFrameStats(app)
@@ -70,7 +80,14 @@ it('strips native frame diagnostics from ordinary browser bundles and retains th
   }
   const ordinary = await bundle(false)
   const qa = await bundle(true)
-  for (const marker of ['nativeAppStats', 'sampledAtMs', 'simulationDtSeconds', 'gpuMs']) {
+  for (const marker of [
+    'nativeAppStats',
+    'sampledAtMs',
+    'simulationDtSeconds',
+    'gpuMs',
+    'renderCounters',
+    'loadedModels',
+  ]) {
     expect(ordinary).not.toContain(marker)
     expect(qa).toContain(marker)
   }
