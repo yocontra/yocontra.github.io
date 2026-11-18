@@ -142,6 +142,8 @@ Simulator comparison for the shadow change: the ordinary five-rider portrait run
 
 The next ordinary five-rider portrait run with the shadow and glass changes averaged 37.80 FPS and held at least 30 FPS in all 60 full seconds. Foreground checks passed, walking distance was 29.37 m, and frame time was 26 ms median, 34 ms p95 and 205 ms maximum. Seven trusted input endpoints still exceeded ±35 ms. This run meets the frame-rate target for that window. Full input, landscape and stress qualification remain open.
 
+A 32-rider Low-tier simulator diagnostic isolated the directional sun pass. At a fixed town camera it averaged 23 FPS with shadows, 37 FPS with the sun shadow pass disabled, and 23 FPS after restoration. A shorter range peaked at 25 FPS with the scene fixed. Reusing the 44 m map on alternating frames reached 27 FPS with the bots moving, against 20 FPS either side of the trial. Combining compatible skinned casters saved 29% of shadow submissions in a separate trial and added 5.9 MB of vertex and index buffers, but still averaged 25 FPS with reuse. These short loopback runs retained guest visibility and used a portrait canvas. The game keeps its original shadows. The 60-second authoritative stress test and its 30 FPS floor remain open.
+
 ## First-person models and aiming
 
 - [x] Recover the bounded offline arms extractor (`tools/content/first-person-arms.ts`). Trail-duds and wool-duster CPU checks preserve native triangles/typed streams, full PBR and external texture URLs, skeleton/TRS/IBMs and humanoid clips; provenance includes authored garments and shared helpers. Repeated staging outputs are byte-identical and remain temporary.
