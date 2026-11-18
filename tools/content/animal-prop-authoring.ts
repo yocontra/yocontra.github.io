@@ -9,7 +9,7 @@ import { MeshoptDecoder } from 'meshoptimizer'
 import sharp from 'sharp'
 import { externalize, kitMaterial, projectedUv, surfaceMaterial } from './animal-prop-surfaces.ts'
 import { bakeCharacter } from './character-materials.ts'
-
+import { bakeFoldedCrow } from './crow-fold.ts'
 import { normalizeSkinnedAsset } from './normalize-skinned-nodes.ts'
 
 await MeshoptDecoder.ready
@@ -252,8 +252,20 @@ async function authoredBird(name: string): Promise<boolean> {
   )
   const output = `${native}/ambient/${name}.glb`
   await externalize(doc)
-  await io.write(output, doc)
-  await normalizeSkinnedAsset(output)
+  if (name === 'crow') {
+    const staging = await mkdtemp(join(tmpdir(), 'out-west-crow-base-'))
+    try {
+      const source = join(staging, 'crow.glb')
+      await io.write(source, doc)
+      await normalizeSkinnedAsset(source)
+      await bakeFoldedCrow(source, output)
+    } finally {
+      await rm(staging, { recursive: true, force: true })
+    }
+  } else {
+    await io.write(output, doc)
+    await normalizeSkinnedAsset(output)
+  }
   console.log(`authored ${output} from Blender parts`)
   return true
 }
@@ -394,6 +406,9 @@ async function crowCue() {
   await exportNative(doc, 'tools/art/props/crow-cue.glb', `${native}/dynamic/crow.glb`)
 }
 const only = process.argv[2]
+if (only === 'crow' && !(await authoredBird('crow'))) {
+  throw new Error('Missing crow Blender parts; run tools/content/animal-authoring.py')
+}
 if (!only || only === 'animals') {
   await coatAnimals()
   await ambientAnimals()

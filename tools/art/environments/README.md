@@ -65,3 +65,22 @@ Their visible native cubemaps
 use 1024px faces; daytime faces remain 256px. Lighting convolution stays at 128px
 with a 256px atlas. Source HDR textures are released after convolution, and only
 the current sky and lighting outputs remain allocated.
+
+## Articulated crow wings
+
+The ambient crow uses three joints per wing and a corrective shape for the fold.
+Curved coverts replace the plates, and a tapered layer under the feathers closes the
+wrist seam during the fold. The model keeps its native plumage maps and two-second
+Idle, Fly and Gun_Shoot clips. The campaign's separate crow cue still runs for three
+seconds.
+
+```sh
+bun tools/content/animal-prop-authoring.ts crow
+bun tools/content/manifest.ts
+OUT_WEST_URL=http://127.0.0.1:4389 bun tools/test-playcanvas-crow-fold.ts
+```
+
+Run the authoring command with Blender and the pinned KTX encoder on PATH.
+`bun tools/content/crow-fold.ts /tmp/crow.glb` also rebuilds the fold from the
+frozen native input `crow-articulated-base.glb`. Set `OUT_WEST_CROW=/tmp/crow.glb`
+to review the staged file in headless Chrome.

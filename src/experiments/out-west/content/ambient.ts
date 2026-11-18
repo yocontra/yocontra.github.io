@@ -1,9 +1,9 @@
 // Authored native ambient assets, versioned by tools/content/manifest.ts.
 export const AMBIENT_ASSETS = {
   crow: {
-    url: '/experiments/out-west/3d/native-v2/ambient/crow.glb?v=23171ae60e5341ca',
-    bytes: 380608,
-    hash: '23171ae60e5341ca4857ad779286ee7b51d0966835ea6740c6db56846f4d275c',
+    url: '/experiments/out-west/3d/native-v2/ambient/crow.glb?v=3d50b316d2185cf2',
+    bytes: 859152,
+    hash: '3d50b316d2185cf2ad282220e42791ff04cc73d318c285d259f236eb7c8b1930',
   },
   hen: {
     url: '/experiments/out-west/3d/native-v2/ambient/hen.glb?v=52d28743e1ff96f5',
