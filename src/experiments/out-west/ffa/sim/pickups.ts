@@ -50,6 +50,7 @@ import { aimRadians, inIframes, quantize, vaulting } from './move.ts'
 import { hashSigned } from './rng.ts'
 import { bloomAfterShot } from './spread.ts'
 import { activePlayers, dist2, isProtected, type World } from './state.ts'
+import { strikeTumbleweeds } from './tumbleweed-hits.ts'
 import type { Player } from './types.ts'
 import { shatterGlass } from './windows.ts'
 
@@ -144,7 +145,9 @@ function fireRifle(w: World, p: Player, aim: number, viewTime: number): void {
   } else if (wall < RIFLE_RANGE) {
     flags |= SHOT_WALL
   }
-  recordShot(w, p, ray, { range: hit ? hit.t : wall, target: hit ? hit.id : NONE, flags })
+  const range = hit?.t ?? wall
+  strikeTumbleweeds(w, [{ ray, range }], time)
+  recordShot(w, p, ray, { range, target: hit?.id ?? NONE, flags })
   if (!hit) {
     applyPropStrikes(w, [{ hit: scenery.hit, ray, damage: RIFLE_DAMAGE }])
   }
@@ -202,6 +205,7 @@ function fireShotgun(w: World, p: Player, aim: number, viewTime: number): void {
       pellets: traces.map((t) => rayEnd(t.ray, t.range)),
     })
   }
+  strikeTumbleweeds(w, traces, time)
   applyPropStrikes(w, propStrikes)
 }
 

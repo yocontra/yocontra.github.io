@@ -228,6 +228,23 @@ it(
    await waitFor(()=>fresh.state.game,Boolean,'fresh-world snapshot');
    const freshNative=await(await fetch(base+'/environment/inspect?room=fresh-barrel-world')).json();
    if(health(fresh).length!==8||health(fresh).some(h=>h!==68)||!freshNative.physics||!freshNative.running||freshBreaks.length)throw new Error('Fresh world failed to restore barrel ownership: '+JSON.stringify({freshNative,freshBreaks}));
+   console.log('PHASE: authoritative tumbleweed and late join');
+   const weedAimResponse=await fetch(base+'/environment/setup-weed?room=fresh-barrel-world');
+   if(!weedAimResponse.ok)throw new Error('Native weed setup failed '+await weedAimResponse.text());
+   const weedAim=await weedAimResponse.json();
+   const weedInput=fresh.input({mode:'reliable'});
+   Object.assign(weedInput.data,{seq:1,moveX:0,moveZ:0,yaw:-Math.PI/2,pitch:weedAim.pitch,buttons:${Buttons.crouch | Buttons.fire},viewTime:weedAim.tick});weedInput.send();
+   const weeds=room=>room.state.game?JSON.parse(room.state.game).tumbleweeds:undefined;
+   const activeWeeds=await waitFor(()=>weeds(fresh),value=>value?.[0]?.vx>1,'native shot pushes weed');
+   const weedSeat=await(await fetch(base+'/reserve?account=late-weed&room=fresh-barrel-world')).json();
+   const weedGuest=await new Client(base+'?account=late-weed').consumeSeatReservation(weedSeat);rooms.push(weedGuest);
+   weedGuest.onMessage('events',()=>{});weedGuest.onMessage('control',()=>{});weedGuest.onMessage('network-ping',m=>weedGuest.send('network-pong',{nonce:m.nonce}));
+   await waitFor(()=>weedGuest.state.game,Boolean,'late weed state');
+   if(JSON.stringify(weeds(weedGuest))!==JSON.stringify(activeWeeds))throw new Error('Late join did not receive the same weed motion '+JSON.stringify({guest:weeds(weedGuest),activeWeeds}));
+   if(weeds(rooms[2]))throw new Error('Independent room inherited a weed impulse');
+   await waitFor(()=>[weeds(fresh),weeds(weedGuest)],items=>items.every(value=>value===undefined),'shared tumbleweed expiry');
+   await weedGuest.leave();
+   console.log('TUMBLEWEED:'+JSON.stringify({motion:activeWeeds,isolation:true,expired:true}));
    await fresh.leave();
    const freshEmpty=await waitFor(async()=>await(await fetch(base+'/environment/inspect?room=fresh-barrel-world')).json(),x=>!x.physics&&!x.running,'fresh room zero-human disposal');
    if(freshEmpty.buffers!==0||freshEmpty.textures!==0)throw new Error('Fresh native room retained resources: '+JSON.stringify(freshEmpty));
@@ -264,6 +281,7 @@ it(
         result.after.every((value, index) => value.tick - (result.before[index] ?? 0) > 40),
       ).toBe(true)
       expect(result.otherContinued).toBe(true)
+      expect(stdout).toContain('TUMBLEWEED:')
       const leases = stdout.split('\n').find((value) => value.startsWith('LEASES:'))
       expect(leases).toBeDefined()
       expect(JSON.parse(leases?.slice(7) ?? '{}')).toEqual({

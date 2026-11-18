@@ -1,5 +1,6 @@
 import { decodePropHealth } from '../content/environment-props.ts'
 import { COLLISION_VERSION } from '../content/manifest.ts'
+import { readTumbleweedKicks } from '../contract/tumbleweed-motion.ts'
 import { refreshPropGrid } from '../ffa/sim/environment-response.ts'
 import { newPlayer, type World } from '../ffa/sim/state.ts'
 import type { Channel, PlayerStats } from '../ffa/sim/types.ts'
@@ -125,6 +126,7 @@ export function applyFrontierState(
       mostWanted: number
       glass: number[]
       props: number[]
+      tumbleweeds?: unknown
       seed: number
     }
     next.bags = game.bags
@@ -134,6 +136,7 @@ export function applyFrontierState(
     next.showdowns = new Map(game.showdowns)
     next.mostWanted = game.mostWanted
     next.glass = new Uint8Array(game.glass)
+    next.tumbleweeds = readTumbleweedKicks(game.tumbleweeds, next.tick)
     if (!adoptEnvironment(next, world, environmentState(game))) {
       return
     }

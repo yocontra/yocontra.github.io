@@ -307,6 +307,7 @@ export class NativeFrontierRoom extends Room<{ state: FrontierState; input: Move
       mostWanted: world.mostWanted,
       glass: [...world.glass],
       props: [...world.props],
+      tumbleweeds: world.tumbleweeds.some((kick) => kick !== null) ? world.tumbleweeds : undefined,
       seed: world.seed,
     })
   }

@@ -3,6 +3,12 @@ import { createHash } from 'node:crypto'
 import { NodeIO } from '@gltf-transform/core'
 import { ALL_EXTENSIONS } from '@gltf-transform/extensions'
 import { Quat, Vec3 } from 'playcanvas'
+import {
+  TUMBLEWEED_PERIOD,
+  TUMBLEWEED_ROUTES,
+  tumbleweedCenter,
+} from '../../src/experiments/out-west/contract/tumbleweed-motion.ts'
+import { TICK_HZ } from '../../src/experiments/out-west/ffa/sim/constants.ts'
 import { authorTumbleweedRolling } from '../../tools/content/frontier-authoring.ts'
 
 const source = 'tools/art/environments/frontier-tumbleweeds.glb'
@@ -113,4 +119,43 @@ it('rolls along both X and Z with bounded slip and a continuous native loop', as
   expect(zDominant).toBeGreaterThan(0)
   expect(minimumZRoll).toBeGreaterThan(0.92)
   expect(maximumSlip).toBeLessThan(0.075)
+})
+
+it('the authority path and clock match the native clip within 0.02 mm', async () => {
+  const doc = await io.read(
+    'public/experiments/out-west/3d/native-v2/ambient/frontier-tumbleweeds.glb',
+  )
+  const tracks = doc
+    .getRoot()
+    .listAnimations()
+    .flatMap((clip) =>
+      clip.listChannels().filter((channel) => channel.getTargetPath() === 'translation'),
+    )
+  expect(tracks).toHaveLength(TUMBLEWEED_ROUTES.length)
+  const visited = new Set<number>()
+  for (const channel of tracks) {
+    const slot = Number(channel.getTargetNode()?.getName().split('-').at(-1))
+    const route = TUMBLEWEED_ROUTES[slot]
+    const sampler = channel.getSampler()
+    const times = sampler?.getInput()
+    const positions = sampler?.getOutput()
+    if (!(route && times && positions)) {
+      throw new Error('Missing authored weed route')
+    }
+    expect(visited.has(slot)).toBe(false)
+    visited.add(slot)
+    expect(times.getScalar(times.getCount() - 1)).toBe(TUMBLEWEED_PERIOD)
+    let maximumError = 0
+    for (let i = 1; i < times.getCount(); i++) {
+      const time = (times.getScalar(i) + times.getScalar(i - 1)) / 2
+      const [ax = 0, ay = 0, az = 0] = positions.getElement(i - 1, [])
+      const [bx = 0, by = 0, bz = 0] = positions.getElement(i, [])
+      const { x, y, z } = tumbleweedCenter(route, time * TICK_HZ)
+      maximumError = Math.max(
+        maximumError,
+        Math.hypot(x - (ax + bx) / 2, y - (ay + by) / 2, z - (az + bz) / 2),
+      )
+    }
+    expect(maximumError).toBeLessThan(0.000_02)
+  }
 })

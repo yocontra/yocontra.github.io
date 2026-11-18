@@ -52,6 +52,7 @@ import {
   recordHistory,
   type World,
 } from './state.ts'
+import { clearSettledTumbleweeds } from './tumbleweed-hits.ts'
 import type { InputFrame, Player } from './types.ts'
 
 const IDLE_FRAME: InputFrame = { seq: 0, moveX: 0, moveZ: 0, aim: 0, buttons: 0, viewTime: 0 }
@@ -318,4 +319,5 @@ export function step(w: World, frames: readonly (InputFrame | null | undefined)[
   }
   recordHistory(w, (p) => historyFlags(w, p))
   w.tick++
+  clearSettledTumbleweeds(w)
 }

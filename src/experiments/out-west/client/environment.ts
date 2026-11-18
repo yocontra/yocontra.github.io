@@ -20,6 +20,7 @@ import { AMBIENT_ASSETS } from '../content/ambient.ts'
 import lighting from '../content/lighting.json' with { type: 'json' }
 import { SKIES } from '../content/skies.ts'
 import { OUTLAWS } from '../data/outlaws.ts'
+import type { World } from '../ffa/sim/state.ts'
 import { drawPoster } from '../ui/poster.ts'
 import type { GameApplication } from './application.ts'
 import { NativeClockwork } from './clockwork.ts'
@@ -133,6 +134,11 @@ export class NativeEnvironment {
     ]).then(() => undefined)
     game.app.once('destroy', () => this.destroy())
     game.app.on('update', this.updateClouds)
+  }
+  syncTumbleweeds(world: World | undefined, dt: number): void {
+    if (world) {
+      this.wilds?.sync(world, dt)
+    }
   }
   street(value: boolean): void {
     this.streetVisible = value

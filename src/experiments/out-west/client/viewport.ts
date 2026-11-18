@@ -340,9 +340,8 @@ export function mountGameViewport(root: HTMLElement, options: ViewportOptions): 
       touch,
       dt,
     })
-    const combat = session.world?.players[Number(session.selfId)]
     if (playing) {
-      effects?.predictShot(combat, intent)
+      effects?.predictShot(session.world?.players[Number(session.selfId)], intent)
       session.update(Math.min(dt, 0.1), intent)
     }
     actors?.update(session.players, dt, first ? session.selfId : undefined)
@@ -351,6 +350,7 @@ export function mountGameViewport(root: HTMLElement, options: ViewportOptions): 
     items?.update(session.world)
     windows?.update(session.world?.glass, session.world?.grid.glass)
     props?.update(session.world)
+    environment?.syncTumbleweeds(session.world, dt)
     const player = session.players.get(session.selfId)
     if (!player) {
       return

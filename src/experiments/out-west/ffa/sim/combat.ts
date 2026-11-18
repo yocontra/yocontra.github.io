@@ -45,6 +45,7 @@ import {
   poseAt,
   type World,
 } from './state.ts'
+import { strikeTumbleweeds } from './tumbleweed-hits.ts'
 import type { Player, ShotPoint } from './types.ts'
 import { shatterGlass } from './windows.ts'
 
@@ -259,6 +260,7 @@ export function fire(w: World, p: Player, aim: number, viewTime: number): ShotRe
   } else if (wall < MAX_RANGE) {
     flags |= SHOT_WALL
   }
+  strikeTumbleweeds(w, [{ ray, range }], time)
   recordShot(w, p, ray, { range, target: hit ? hit.id : NONE, flags })
   if (!hit) {
     applyPropStrikes(w, [{ hit: scenery.hit, ray, damage: damageAt(wall, deadEye) }])

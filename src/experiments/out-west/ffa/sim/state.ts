@@ -1,6 +1,7 @@
 /** The world record every sim module operates on, plus small shared helpers. */
 import { initialPropHealth } from '../../content/environment-props.ts'
 import { CHANNEL_NONE, NONE, WEAPON_REVOLVER } from '../../contract/town.ts'
+import { TUMBLEWEED_ROUTES, type TumbleweedKick } from '../../contract/tumbleweed-motion.ts'
 import { HISTORY_TICKS, MAX_PLAYERS, REVOLVER_ROUNDS } from './constants.ts'
 import { buildGrid, type Grid, TOWN, type TownLayout } from './layout.ts'
 import { Rng } from './rng.ts'
@@ -66,6 +67,7 @@ export interface World {
   /** One byte per window opening: 0 intact, 1 broken (`grid.glass` holds the geometry). */
   props: Uint8Array
   glass: Uint8Array
+  tumbleweeds: (TumbleweedKick | null)[]
   /** Economy audit, in dollars since the world started. */
   minted: number
   burned: number
@@ -112,6 +114,7 @@ export function createWorld(options: WorldOptions = {}): World {
     history: new Float64Array(HISTORY_TICKS * MAX_PLAYERS * HIST_STRIDE),
     props: initialPropHealth(layout),
     glass: new Uint8Array(grid.glass.length),
+    tumbleweeds: TUMBLEWEED_ROUTES.map(() => null),
     minted: 0,
     burned: 0,
     practice: options.practice === true,

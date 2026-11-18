@@ -1,6 +1,11 @@
 import { DurableObject } from 'cloudflare:workers'
 import { connectClientToRoom, createAuthContext } from '@colyseus/core'
 import type { GraphicsDevice } from 'playcanvas'
+import {
+  TUMBLEWEED_ROUTES,
+  tumbleweedCenter,
+} from '../../src/experiments/out-west/contract/tumbleweed-motion.ts'
+import { eyeHeight } from '../../src/experiments/out-west/ffa/sim/combat.ts'
 import type { SimEvent } from '../../src/experiments/out-west/ffa/sim/types.ts'
 import type { createFrontierSimulation } from '../../src/experiments/out-west/runtime/frontier.ts'
 import { PROTOCOL_VERSION } from '../../src/experiments/out-west/runtime/protocol.ts'
@@ -139,6 +144,26 @@ export class TestRoom extends DurableObject<TestEnv> {
       | undefined
     if (simulation) {
       this.environmentDevice = simulation.physics.app.graphicsDevice
+    }
+    if (path === '/environment/setup-weed') {
+      const player = world?.players.find((candidate) => candidate && !candidate.bot)
+      if (!(world && player && simulation)) {
+        return new Response('A joined player is required', { status: 400 })
+      }
+      const target = tumbleweedCenter(TUMBLEWEED_ROUTES[0], world.tick)
+      Object.assign(player, {
+        x: target.x - 3,
+        y: 0,
+        z: target.z,
+        protectUntil: 0,
+        spawnTick: -10_000,
+        fireCooldownMs: 0,
+        lastButtons: 0,
+      })
+      return Response.json({
+        tick: world.tick,
+        pitch: Math.atan2(target.y - eyeHeight({ crouched: true }), 3),
+      })
     }
     if (path === '/environment/setup') {
       const players = world?.players.filter((player) => player && !player.bot) ?? []

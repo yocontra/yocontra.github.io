@@ -9,6 +9,10 @@ import {
 } from '../../src/experiments/out-west/client/state.ts'
 import { ENVIRONMENT_PROPS } from '../../src/experiments/out-west/content/environment-props.ts'
 import { COLLISION_VERSION } from '../../src/experiments/out-west/content/manifest.ts'
+import {
+  KICK_LIFETIME,
+  tumbleweedOffset,
+} from '../../src/experiments/out-west/contract/tumbleweed-motion.ts'
 import { buildGrid, TOWN } from '../../src/experiments/out-west/ffa/sim/layout.ts'
 import { createWorld } from '../../src/experiments/out-west/ffa/sim/state.ts'
 import { initializeAmmo } from '../../src/experiments/out-west/runtime/ammo.ts'
@@ -39,7 +43,7 @@ function physics() {
     },
   })
 }
-function game(props: unknown, seed = 1) {
+function game(props: unknown, seed = 1, tumbleweeds?: unknown) {
   return JSON.stringify({
     bags: [],
     strongbox: null,
@@ -50,6 +54,7 @@ function game(props: unknown, seed = 1) {
     glass: [],
     props,
     seed,
+    tumbleweeds,
   })
 }
 function state() {
@@ -252,4 +257,48 @@ describe('persistent barrel state and native collision', () => {
       }
     },
   )
+})
+
+it('broadcast native weeds share motion with a late join and clear on expiry or town reset', () => {
+  const authority = state()
+  const intact = ENVIRONMENT_PROPS.map(() => 68)
+  const encoder = new Encoder(authority)
+  const peer = client(encoder.encodeAll())
+  encoder.discardChanges()
+  try {
+    expect(peer.world.tumbleweeds).toEqual([null, null, null])
+    const kick = { tick: 8, x: 0.15, z: 0.1, vx: 1, vz: 0.5 }
+    authority.tick = 12
+    authority.game = game(intact, 1, [null, kick, null])
+    peer.decoder.decode(encoder.encode())
+    peer.sync()
+    const late = client(encoder.encodeAll())
+    try {
+      expect(peer.world.tumbleweeds).toEqual([null, kick, null])
+      expect(late.world.tumbleweeds).toEqual(peer.world.tumbleweeds)
+      expect(tumbleweedOffset(late.world.tumbleweeds[1], late.world.tick)).toEqual(
+        tumbleweedOffset(peer.world.tumbleweeds[1], peer.world.tick),
+      )
+      authority.tick = kick.tick + KICK_LIFETIME
+      authority.game = game(intact)
+      peer.decoder.decode(encoder.encode())
+      peer.sync()
+      expect(peer.world.tumbleweeds).toEqual([null, null, null])
+      authority.tick = 2
+      authority.game = game(intact, 19)
+      late.decoder.decode(encoder.encode())
+      late.sync()
+      expect(late.world.seed).toBe(19)
+      expect(late.world.tumbleweeds).toEqual([null, null, null])
+    } finally {
+      late.destroy()
+    }
+    authority.tick = 80
+    authority.game = game(intact, 1, [{ ...kick, vx: 99 }, null, null])
+    peer.decoder.decode(encoder.encode())
+    expect(() => peer.sync()).toThrow('outside town bounds')
+    expect(peer.world.tumbleweeds).toEqual([null, null, null])
+  } finally {
+    peer.destroy()
+  }
 })
