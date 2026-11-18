@@ -183,7 +183,7 @@
       },
       {
         "path": "tools/content/character-materials.ts",
-        "sha256": "ac67c230f41f7ba72af34a7414a3be31e646bd8eef78844ffef5e56afe8c2af8"
+        "sha256": "fa3cfd59cd9ff4ee1340f4bbf7481d4fb9279deb621f0926c5bb93c94a97d09c"
       },
       {
         "path": "tools/content/head-throat-normal-authoring.py",
@@ -744,7 +744,7 @@
         1.0000159740447998,
         1.0000272989273071
       ],
-      "inputGeometrySHA256": "ac1bf6fe26674ecfae8cd37593761e0b832df602644426f3b5a751000685db1f"
+      "inputGeometrySHA256": "5e26328da5e14f7770c6e2b3eb7e5874bd5849d4d5bbf4aa47e06f9dcfe116ff"
     }
   }
 }

@@ -24,6 +24,7 @@ import { withHeadThroatNormalSource } from './head-throat-normal.ts'
 import { labelActorHatGlb } from './label-actor-hats.ts'
 import { completeCharacterClips } from './normalize-character-clips.ts'
 import { normalizeSkinnedAsset } from './normalize-skinned-nodes.ts'
+import { fitRearScalpHair } from './rear-scalp-fit.ts'
 import { consolidateRigidMaterials } from './rigid-materials.ts'
 import { uprightPosture } from './upright-posture.ts'
 import { fitWaistcoats } from './waistcoat-fit.ts'
@@ -44,6 +45,9 @@ export async function bakeCharacter(
   await integrateGarmentParts(doc, id, options)
   await fitWaistcoats(doc, id)
   await repairHeadNape(doc)
+  if (HUMAN.test(id)) {
+    fitRearScalpHair(doc)
+  }
   const sockets = WEAPON_BEARER.test(id) ? captureWeaponSockets(doc) : []
   for (const node of [...doc.getRoot().listNodes()]) {
     if (node.getName() === 'socket.muzzle') {
