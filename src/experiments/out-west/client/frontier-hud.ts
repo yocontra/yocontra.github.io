@@ -64,7 +64,6 @@ export class FrontierHud {
   private readonly abort = new AbortController()
   private killer: string | null = null
   private readonly viewport: GameViewport
-  private fov = 72
   private mapPaint: { at: number; x: number; z: number; aim: number; shooter: boolean } | undefined
   constructor(
     root: HTMLElement,
@@ -123,13 +122,11 @@ export class FrontierHud {
     )
     this.hud.mapSlot.append(this.minimap.el)
     let settings = loadSettings()
-    this.fov = settings.view === 'first' ? settings.fovFirst : settings.fovThird
     const panel = new SettingsPanel(
       {
         settings: () => settings,
         onChange: (value) => {
           settings = value
-          this.fov = value.view === 'first' ? value.fovFirst : value.fovThird
           saveSettings(value)
           viewport.configure(value)
         },
@@ -275,7 +272,9 @@ export class FrontierHud {
         : null,
       deadEyeReady(world, player),
     )
-    this.hud.setCrosshair(aim.shooter, this.spreadPixels(player), false)
+    const half = player.weapon === WEAPON_SHOTGUN ? 0.5 : 1
+    const spread = Math.tan((spreadFor(player) * half * Math.PI) / 180)
+    this.hud.setCrosshair(aim.shooter, Math.max(4, spread * aim.focalPixels), false)
     if (player.alive) {
       this.hud.alive()
     } else {
@@ -319,12 +318,6 @@ export class FrontierHud {
       },
       now / 1000,
     )
-  }
-  /** The ticks sit on the actual cone the next shot may stray within, converted through the lens. */
-  private spreadPixels(player: Player): number {
-    const half = player.weapon === WEAPON_SHOTGUN ? 0.5 : 1
-    const spread = Math.tan((spreadFor(player) * half * Math.PI) / 180)
-    return Math.max(4, (spread / Math.tan((this.fov * Math.PI) / 360)) * (innerHeight / 2))
   }
   private event(event: SimEvent): void {
     const { selfSlot, world } = this.session

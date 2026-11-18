@@ -57,7 +57,7 @@ export interface GameViewport {
   resetFeedback: () => void
   tap: (bit: number) => void
   event: (event: SimEvent) => void
-  aimPoint: () => { x: number; y: number; shooter: boolean }
+  aimPoint: () => { x: number; y: number; shooter: boolean; focalPixels: number }
   debug: () => ReturnType<typeof viewportDebug>
 }
 
@@ -280,12 +280,21 @@ function nativeAudioContext(
   return !signal.aborted && manager && !manager.suspended ? manager.context : null
 }
 
-function screenAim(view: FrontierSettings['view'], input: GameInput | undefined) {
+function screenAim(
+  settings: FrontierSettings,
+  input: GameInput | undefined,
+  application: GameApplication | undefined,
+) {
+  const { view } = settings
   const cursor = view === 'top' ? input?.cursor : undefined
+  const fov =
+    application?.camera.camera?.fov ?? (view === 'first' ? settings.fovFirst : settings.fovThird)
+  const height = application?.app.graphicsDevice.clientRect.height || innerHeight
   return {
     x: cursor?.x ?? innerWidth / 2,
     y: cursor?.y ?? innerHeight / 2,
     shooter: view !== 'top',
+    focalPixels: height / (2 * Math.tan((fov * Math.PI) / 360)),
   }
 }
 
@@ -471,7 +480,7 @@ export function mountGameViewport(root: HTMLElement, options: ViewportOptions): 
       first = value
       settings = { ...settings, view: value ? 'first' : 'third' }
     },
-    aimPoint: () => screenAim(settings.view, input),
+    aimPoint: () => screenAim(settings, input, application),
     debug: () => viewportDebug({ application, session, windows, actors, ragdolls, props }),
   }
 }
