@@ -1,5 +1,5 @@
 /** Native display ownership is separate from the raw orientation getter (which can be UNKNOWN). */
-import { nativeSafari, QA_DEVICE } from './simulator-native.ts'
+import { nativeSafari } from './simulator-native.ts'
 import {
   openSafariWhenReady,
   readSafariReadiness,
@@ -35,6 +35,7 @@ const names = new Set<Name>([
   'LANDSCAPE_RIGHT',
 ])
 const displayChanged = 'Simulator display changed during the operation'
+const deviceId = /^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/iu
 export function nativeDisplay(ax: unknown): NativeDisplay {
   const value = (ax as { screen?: NativeDisplay } | null)?.screen
   if (
@@ -79,11 +80,12 @@ export function initialDisplay(
   let restoreBasis: InitialDisplay['restoreBasis'] = 'native getter'
   if (typeof raw === 'string' && names.has(raw as Name)) {
     restoreName = raw as Name
-  } else if (raw === 'UNKNOWN' && udid === QA_DEVICE) {
-    // These two dedicated-setter mappings were independently observed with AX and native PNGs.
-    if (screen.display.rotation === 0 && screen.height > screen.width) {
+  } else if (raw === 'UNKNOWN' && deviceId.test(udid)) {
+    // The runner has already selected an owned iPhone 13 mini. Use only calibrated AX displays.
+    const { width, height, display } = screen
+    if (display.scale === 3 && display.rotation === 0 && width === 375 && height === 812) {
       restoreName = 'PORTRAIT'
-    } else if (screen.display.rotation === 270 && screen.width > screen.height) {
+    } else if (display.scale === 3 && display.rotation === 270 && width === 812 && height === 375) {
       restoreName = 'LANDSCAPE_LEFT'
     } else {
       throw new Error('No measured restoration mapping for initial UNKNOWN display')
@@ -238,6 +240,7 @@ export async function prepareOrientation(options: {
     return budget
   }
   const raw = await options.native.call('get-orientation', {}, Math.min(remaining(), 15_000))
+  await options.observe({ phase: 'initial-raw-orientation', raw })
   const initial = initialDisplay(options.udid, options.ready, raw)
   await options.observe({ phase: 'initial-native-display', ...initial, ...options.ready })
   await options.capture(initial)

@@ -90,7 +90,11 @@ it('keeps recorded native UNKNOWN separate from measured dedicated-device displa
   expect(initialDisplay(QA_DEVICE, landscape, 'UNKNOWN').restoreName).toBe('LANDSCAPE_LEFT')
   landscape.ax.screen.display.rotation = 90
   expect(() => initialDisplay(QA_DEVICE, landscape, 'UNKNOWN')).toThrow('No measured')
+  expect(initialDisplay(crypto.randomUUID(), fixture, 'UNKNOWN').restoreName).toBe('PORTRAIT')
   expect(() => initialDisplay('other-device', fixture, 'UNKNOWN')).toThrow('Restorable')
+  const uncalibrated = structuredClone(fixture)
+  uncalibrated.ax.screen.width = 390
+  expect(() => initialDisplay(QA_DEVICE, uncalibrated, 'UNKNOWN')).toThrow('No measured')
   expect(() => initial('FACE_UP')).toThrow('Restorable')
   expect(initial('LANDSCAPE_RIGHT').restoreBasis).toBe('native getter')
   expect(() => initialDisplay(QA_DEVICE, { ax: fixture.ax, apps: [] }, 'UNKNOWN')).toThrow(

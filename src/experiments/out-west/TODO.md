@@ -105,6 +105,10 @@ Complete and push these in small working tasks, with native visual/audio evidenc
 
 ## Performance
 
+The release-engine build at `a7434df5` recorded 60 complete seconds in each headless Chrome run. The five-rider lobby averaged 59.99 FPS with a 59 FPS minimum. The 32-rider lobby averaged 59.80 FPS with a 58 FPS minimum. Foreground Chrome qualification remains open.
+
+The ordinary portrait iPhone 13 mini simulator run averaged 44.26 FPS with a 31 FPS minimum. Native Safari foreground evidence and cleanup passed. Thirteen of 108 touch endpoints exceeded ±35 ms and two hold durations missed tolerance. The 32-rider landscape run averaged 18.99 FPS with a 13 FPS minimum and missed its native foreground and touch checks. The recorder restored the display and shut down the dedicated simulator after both runs.
+
 - [x] Reuse authored animation buffers for native layer-specific tracks, omitting channels those layers already mask out. Exact pose/event/buffer-sharing tests cover the authored library; native 30/60/100 Hz gait clocks and complete 200 ms recoil remain correct. Full-game frame qualification remains open.
 
 - [x] Support authored near/far detail through native render-component visibility and a separate native batch group. Hysteresis, world/vertical distance, imported name suffixes, regeneration and teardown tests pass; existing scene captures stay byte-identical. This enables upcoming prop detail, and does not claim its FPS budget is qualified.
@@ -148,7 +152,7 @@ The next ordinary five-rider portrait run with the shadow and glass changes aver
 - [ ] Finish long-gun framing. The rejected whole-body approach exposed torso/head geometry. Arms-only forward offset 0.15 m looked more promising; 0.30 m exposed shoulder cut ends. Review portrait and landscape before choosing final profiles.
 - [x] Correct shotgun right-index obstruction: actual Index2R/Index3R skin intersects the sight line ahead of the rear rib. Projected sight landmarks alone are not a visual pass. Do not hide fingers to conceal this. An index-only re-lay still crossed the breech (3.7 mm into the corridor), so the whole right hand was re-seated offline in `longgun-grips/shotgun.glb`: palm on the right of the stock wrist, fingers wrapped under, and index pad ≤1.07 mm from the front trigger; skinned R-hand flesh is 0 mm above the 60 mm/±20 mm sight corridor at 120 Hz through Hold/Shoot, with clear rib/bead in rib-eye and first-person renders.
 - [ ] Finish ADS enter/exit, paired-gun behavior and all action/lifecycle proofs. Preserve physical camera eye within 1e-6 m and the authoritative shot ray. Preserve full 200 ms firing animation; resume settled native layers before movement, jump, stance, firing, reload, weapon/life/view changes or loss of readiness.
-- [ ] Preserve Dead-Eye charge/readiness feedback. The gold reticle ring is an existing mechanic, not an ADS zoom indicator.
+- [x] Preserve Dead-Eye charge and readiness feedback. Portrait Chrome touch input charges the reticle ring, shows the ready state at full charge, and clears it when aim is released.
 
 ## Long-gun hand poses
 
