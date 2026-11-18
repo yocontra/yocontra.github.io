@@ -8,7 +8,6 @@ import { type BuildReceipt, nativeRendererCaptured } from './content/production-
 import { recordingAcknowledged } from './content/simulator-host.ts'
 
 const deviceId = /^[0-9A-F-]{36}$/iu
-const QA_DEVICE = '59616A95-4749-4F6F-8E1D-1FAEA0263EFC'
 interface Frame {
   x: number
   y: number
@@ -30,7 +29,7 @@ interface AXNode {
   type?: string
   [key: string]: unknown
 }
-export function targetForPreflight(list: unknown, udid: string) {
+export function targetForPreflight(list: unknown, udid?: string) {
   const devices = (
     list as {
       devices?: Record<
@@ -45,16 +44,19 @@ export function targetForPreflight(list: unknown, udid: string) {
       >
     }
   ).devices
-  const target = Object.values(devices ?? {})
+  const candidates = Object.values(devices ?? {})
     .flat()
-    .find((device) => device.udid === udid)
-  if (
-    !target ||
-    target.isAvailable === false ||
-    target.state !== 'Shutdown' ||
-    target.deviceTypeIdentifier !== 'com.apple.CoreSimulator.SimDeviceType.iPhone-13-mini' ||
-    !target.name.includes('Out West QA')
-  ) {
+    .filter(
+      (device) =>
+        device.isAvailable !== false &&
+        device.deviceTypeIdentifier === 'com.apple.CoreSimulator.SimDeviceType.iPhone-13-mini' &&
+        device.name.includes('Out West QA'),
+    )
+  if (!udid && candidates.length > 1) {
+    throw new Error('Multiple Out West QA iPhone 13 mini simulators found; select one with --udid')
+  }
+  const target = udid ? candidates.find((device) => device.udid === udid) : candidates[0]
+  if (target?.state !== 'Shutdown') {
     throw new Error(
       'Preflight requires an available shutdown Out West QA iPhone 13 mini; existing sessions are untouched',
     )
@@ -293,7 +295,6 @@ export async function runPreflight(options: {
 }) {
   const id = crypto.randomUUID()
   const url = preflightURL(options.origin, id)
-  const plan = commandPlan(options.udid, url, options.port)
   const build = (await (await fetch(new URL('/recording-build.json', url))).json()) as BuildReceipt
   if (!(build.qaFlag && build.releaseEngine) || build.dirty || build.source !== build.endSource) {
     throw new Error('Clean release-engine QA build required')
@@ -302,6 +303,7 @@ export async function runPreflight(options: {
     JSON.parse(await command(['xcrun', 'simctl', 'list', 'devices', 'available', '--json'])),
     options.udid,
   )
+  const plan = commandPlan(target.udid, url, options.port)
   await requireFreePort(options.port)
   await mkdir(options.output) // Never overwrite a previous failure.
   const calls: { args: string[]; at: number; timeoutMs: number; result: unknown }[] = []
@@ -322,7 +324,7 @@ export async function runPreflight(options: {
     `127.0.0.1:${options.port}`,
     ...args,
     '--udid',
-    options.udid,
+    target.udid,
     '--json',
     '--reason',
     'Out West owned headless simulator preflight',
@@ -430,7 +432,7 @@ export async function runPreflight(options: {
           'xcrun',
           'simctl',
           'openurl',
-          options.udid,
+          target.udid,
           new URL(`/__qa/restore?id=${id}`, url).href,
         ])
         for (let attempt = 0; attempt < 20; attempt++) {
@@ -471,7 +473,7 @@ if (import.meta.main) {
   }
   console.log(
     await runPreflight({
-      udid: arg('udid', QA_DEVICE),
+      udid: arg('udid', ''),
       origin: arg('url', 'http://127.0.0.1:4398'),
       output: resolve(arg('out', '/tmp/out-west-simulator-preflight')),
       port: Number(arg('companion-port', '10892')),

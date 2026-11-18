@@ -88,7 +88,13 @@ it('refuses existing or unrelated simulator sessions', () => {
     deviceTypeIdentifier: 'com.apple.CoreSimulator.SimDeviceType.iPhone-13-mini',
   }
   const list = (value: typeof target) => ({ devices: { iOS: [value] } })
-  expect(targetForPreflight(list(target), device)).toEqual(target)
+  const other = { ...target, udid: '30ECA787-F1B6-4540-9455-EF9F87BEC3F4' }
+  const mixed = { devices: { iOS: [target, { ...other, name: 'Personal phone' }] } }
+  const ambiguous = { devices: { iOS: [target, other] } }
+  expect(targetForPreflight(mixed)).toEqual(target)
+  expect(() => targetForPreflight(ambiguous)).toThrow('--udid')
+  expect(targetForPreflight(ambiguous, device)).toEqual(target)
+  expect(() => targetForPreflight(mixed, other.udid)).toThrow()
   for (const altered of [
     { ...target, state: 'Booted' },
     { ...target, name: 'Personal phone' },
@@ -97,6 +103,7 @@ it('refuses existing or unrelated simulator sessions', () => {
     { ...target, deviceTypeIdentifier: '' },
   ]) {
     expect(() => targetForPreflight(list(altered), device)).toThrow()
+    expect(() => targetForPreflight(list(altered))).toThrow()
   }
   expect(() => targetForPreflight({}, device)).toThrow()
 })

@@ -69,8 +69,9 @@ host simulator UI. The bounded orchestrator refuses existing or unrelated simula
 bun tools/record-simulator-frames.ts --preflight --url=http://127.0.0.1:4398 --out=/tmp/out-west-simulator-preflight
 ```
 
-It selects only the shutdown Out West QA device, boots via simctl, starts its own headless
-idb_companion on a free port, verifies the actual iPhone-13-mini device type, allows up to180s
+It reuses the existing Out West QA iPhone 13 mini. If more than one matches, pass
+`--udid=<id>` for the device you use for Out West QA. The tool checks that the device is shut
+down, boots it via simctl, starts its headless idb_companion on a free port, allows up to 180s
 for cold boot, opens the local URL in guest Safari and reads raw guest AX/process
 state. Touches use guest HID coordinates derived from native WebArea/button frames and the
 browser viewport; unsupported schemas stop without guessed coordinates. It saves two seconds
