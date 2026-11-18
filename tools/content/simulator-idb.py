@@ -19,8 +19,9 @@ from idb.common.types import (
 
 # Command corrections in milliseconds from trusted portrait and landscape Safari samples.
 # The intervals are native screen points. Other path lengths retain the default swipe.
+# For the 146-point portrait move, 44 ms centers the native release within the guest window.
 SWIPE_CALIBRATION = {
-    "move": ((144, 148, 64), (57, 61, 35)),
+    "move": ((144, 148, 44), (57, 61, 35)),
     "look": ((36, 40, 24), (79, 83, 42)),
 }
 
