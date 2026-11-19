@@ -29,6 +29,7 @@ import { appendCrouchClips } from '../../tools/content/crouch-character-clips.ts
 import { resampleNative } from '../../tools/content/native-resample.ts'
 import { completeCharacterClips } from '../../tools/content/normalize-character-clips.ts'
 import { uprightPosture } from '../../tools/content/upright-posture.ts'
+import { hangTimeout } from '../timeout.ts'
 import {
   channels,
   clipHash,
@@ -64,50 +65,58 @@ async function candidate(seed?: Document): Promise<Document> {
   return doc
 }
 
-it('the real isolated producer emits 78 unique clips with 68 golden legacy streams and final paired crouch curves', async () => {
-  const publicPath = 'public/experiments/out-west/3d/native-v2/baked/moves.glb'
-  const originalPublic = await readFile(publicPath)
-  const temporary = await mkdtemp(join(tmpdir(), 'out-west-crouch-'))
-  try {
-    await mkdir(join(temporary, 'baked'))
-    await withContentOutput(temporary, bakeCharacterClips)
-    const doc = await io.read(join(temporary, 'baked', 'moves.glb'))
-    const names = doc
-      .getRoot()
-      .listAnimations()
-      .map((clip) => clip.getName())
-    expect(names).toHaveLength(78)
-    expect(new Set(names).size).toBe(78)
-    const mounted = find(doc, 'Mounted_Idle')
-    expect(mounted.getExtras().mountClip).toBe('Idle')
-    expect(times(mounted).at(-1)).toBe(8)
-    const start = world(doc, mounted, 0, 'Hips').getTranslation()
-    const end = world(doc, mounted, 8, 'Hips').getTranslation()
-    expect(start.distance(end)).toBeLessThan(0.0001)
-    expect(start.distance(world(doc, mounted, 4.8, 'Hips').getTranslation())).toBeGreaterThan(0.01)
-    const golden = JSON.parse(
-      await readFile('tests/fixtures/paired-legacy-clips.json', 'utf8'),
-    ) as { clips: Record<string, string> }
-    const legacy = Object.fromEntries(
-      doc
+it(
+  'the real isolated producer emits 78 unique clips with 68 golden legacy streams and final paired crouch curves',
+  async () => {
+    const publicPath = 'public/experiments/out-west/3d/native-v2/baked/moves.glb'
+    const originalPublic = await readFile(publicPath)
+    const temporary = await mkdtemp(join(tmpdir(), 'out-west-crouch-'))
+    try {
+      await mkdir(join(temporary, 'baked'))
+      await withContentOutput(temporary, bakeCharacterClips)
+      const doc = await io.read(join(temporary, 'baked', 'moves.glb'))
+      const names = doc
         .getRoot()
         .listAnimations()
-        .filter(isLegacyClip)
-        .map((clip) => [clip.getName(), clipHash(clip)]),
-    )
-    expect(Object.keys(legacy)).toHaveLength(68)
-    expect(legacy).toEqual(golden.clips)
-    expect((await readFile(publicPath)).equals(originalPublic)).toBe(true)
-    // Rebuilding an already-generated 78-clip seed must replace these two names.
-    const expected = await candidate(await io.read(join(temporary, 'baked', 'moves.glb')))
-    expect(expected.getRoot().listAnimations()).toHaveLength(78)
-    for (const name of PAIRED) {
-      expect(clipHash(find(doc, `Crouch_${name}`))).toBe(clipHash(find(expected, `Crouch_${name}`)))
+        .map((clip) => clip.getName())
+      expect(names).toHaveLength(78)
+      expect(new Set(names).size).toBe(78)
+      const mounted = find(doc, 'Mounted_Idle')
+      expect(mounted.getExtras().mountClip).toBe('Idle')
+      expect(times(mounted).at(-1)).toBe(8)
+      const start = world(doc, mounted, 0, 'Hips').getTranslation()
+      const end = world(doc, mounted, 8, 'Hips').getTranslation()
+      expect(start.distance(end)).toBeLessThan(0.0001)
+      expect(start.distance(world(doc, mounted, 4.8, 'Hips').getTranslation())).toBeGreaterThan(
+        0.01,
+      )
+      const golden = JSON.parse(
+        await readFile('tests/fixtures/paired-legacy-clips.json', 'utf8'),
+      ) as { clips: Record<string, string> }
+      const legacy = Object.fromEntries(
+        doc
+          .getRoot()
+          .listAnimations()
+          .filter(isLegacyClip)
+          .map((clip) => [clip.getName(), clipHash(clip)]),
+      )
+      expect(Object.keys(legacy)).toHaveLength(68)
+      expect(legacy).toEqual(golden.clips)
+      expect((await readFile(publicPath)).equals(originalPublic)).toBe(true)
+      // Rebuilding an already-generated 78-clip seed must replace these two names.
+      const expected = await candidate(await io.read(join(temporary, 'baked', 'moves.glb')))
+      expect(expected.getRoot().listAnimations()).toHaveLength(78)
+      for (const name of PAIRED) {
+        expect(clipHash(find(doc, `Crouch_${name}`))).toBe(
+          clipHash(find(expected, `Crouch_${name}`)),
+        )
+      }
+    } finally {
+      await rm(temporary, { recursive: true, force: true })
     }
-  } finally {
-    await rm(temporary, { recursive: true, force: true })
-  }
-}, 30_000)
+  },
+  hangTimeout(30_000),
+)
 
 it('paired crouch preserves legacy streams, rig and every corrected arm/finger curve', async () => {
   const before = await io.read('public/experiments/out-west/3d/native-v2/baked/moves.glb')

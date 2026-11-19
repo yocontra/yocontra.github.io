@@ -190,11 +190,12 @@ it(
     Object.assign(currentInput.data,{seq,moveX,moveZ,yaw:-Math.PI/2,pitch:-10/127*Math.PI/2,buttons,viewTime:rooms[0].state.tick-1});currentInput.send();
     await waitFor(()=>own(rooms[0])?.seq,n=>n===seq,'barrel command acknowledgement');
    };
-   await sendEnv(1026);
    for(const [slot,wanted]of [[0,34],[0,0],[2,34],[2,0]]){
     console.log('PHASE: shoot barrel '+slot+' expected '+wanted);
-    await sendEnv(1026);await waitFor(()=>own(rooms[0])?.fireCooldownMs,n=>n<=0,'original fire cooldown');
-    await sendEnv(1027);
+    // Stay crouched but release aim while waiting. A delayed client must not charge Dead Eye.
+    await sendEnv(${Buttons.crouch});
+    await waitFor(()=>own(rooms[0])?.fireCooldownMs,n=>n<=0,'original fire cooldown');
+    await sendEnv(${Buttons.crouch | Buttons.aim | Buttons.fire});
     await waitFor(()=>rooms.slice(0,2).map(r=>health(r)[slot]),values=>values.every(h=>h===wanted),'two-peer barrel health');
    }
    console.log('PHASE: third SDK client late join');
