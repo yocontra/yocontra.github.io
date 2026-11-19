@@ -74,10 +74,8 @@ export class Actors {
   private readonly actors = new Map<string, Rider>()
   private readonly pending = new Map<string, Promise<void>>()
   private readonly failures = new Map<string, string>()
-  private present = new Set<string>()
   private players: ReadonlyMap<string, PlayerState> = new Map()
-  private generation = 0
-  private readonly incarnations = new Map<string, { serial: number; spawn: number | undefined }>()
+  private readonly incarnations = new Map<string, { spawn: number | undefined }>()
   private tracks: AnimTrack[] = []
   private releaseCommon: (() => void) | undefined
   private readonly lifecycle = new AbortController()
@@ -191,7 +189,7 @@ export class Actors {
               ASSETS['outlaw-0'].url,
               `rider-${id}-loading`,
             )
-            if (this.lifecycle.signal.aborted || !this.present.has(id)) {
+            if (this.lifecycle.signal.aborted || !this.incarnations.has(id)) {
               fallback.destroy()
               return
             }
@@ -215,12 +213,12 @@ export class Actors {
   }
   private syncPlayers(players: ReadonlyMap<string, PlayerState>): void {
     this.players = players
-    this.present = new Set(players.keys())
+    const domainPlayers = this.world()?.players
     for (const id of players.keys()) {
-      const spawn = this.world()?.players[Number(id)]?.spawnTick
+      const spawn = domainPlayers?.[Number(id)]?.spawnTick
       const previous = this.incarnations.get(id)
       if (!previous || previous.spawn !== spawn) {
-        this.incarnations.set(id, { serial: ++this.generation, spawn })
+        this.incarnations.set(id, { spawn })
       }
     }
     for (const id of this.incarnations.keys()) {
@@ -260,10 +258,10 @@ export class Actors {
     })
   }
   private ensure(id: string, initial = false): Promise<void> | undefined {
-    if ((this.players.get(id)?.hp ?? 0) <= 0) {
+    const incarnation = this.incarnations.get(id)
+    if (!incarnation || (this.players.get(id)?.hp ?? 0) <= 0) {
       return
     }
-    const incarnation = this.incarnations.get(id)?.serial
     const appearance = this.appearance(id)
     const key = appearance?.key ?? 'default'
     if (this.actors.get(id)?.key === key) {
@@ -279,8 +277,7 @@ export class Actors {
     }
     const current = () =>
       !this.lifecycle.signal.aborted &&
-      this.present.has(id) &&
-      this.incarnations.get(id)?.serial === incarnation &&
+      this.incarnations.get(id) === incarnation &&
       (this.appearance(id)?.key ?? 'default') === key &&
       (this.players.get(id)?.hp ?? 0) > 0
     const promise = (async () => {
@@ -351,6 +348,7 @@ export class Actors {
       }
     }
     this.showFailure(!this.healthy())
+    const domainPlayers = this.world()?.players
     for (const [id, player] of players) {
       void this.ensure(id)
       const rider = this.actors.get(id)
@@ -359,7 +357,7 @@ export class Actors {
       }
       const { actor } = rider
       rider.pose.enabled(player.hp > 0)
-      const domain = this.world()?.players[Number(id)] ?? undefined
+      const domain = domainPlayers?.[Number(id)] ?? undefined
       actor.root.enabled = id !== firstPersonId || player.hp > 0
       // The physical rider keeps its gameplay pose (and shadow) in every view; only the
       // separate local arms actor is placed relative to the first-person camera.
@@ -387,11 +385,12 @@ export class Actors {
     this.removeDeparted(players)
   }
   private healthy(): boolean {
-    return (
-      !this.firstPerson.failed &&
-      this.failures.size === 0 &&
-      ![...this.actors.values()].some((rider) => rider.heldFailures.size > 0)
-    )
+    for (const rider of this.actors.values()) {
+      if (rider.heldFailures.size > 0) {
+        return false
+      }
+    }
+    return !this.firstPerson.failed && this.failures.size === 0
   }
   private firstPersonRequest(id: string) {
     const rider = this.actors.get(id)
@@ -496,7 +495,6 @@ export class Actors {
   destroy(): void {
     this.lifecycle.abort()
     this.firstPerson.destroy()
-    this.present.clear()
     this.players = new Map()
     this.incarnations.clear()
     this.failures.clear()

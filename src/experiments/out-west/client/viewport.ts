@@ -1,5 +1,6 @@
 import { type Entity, Vec3 } from 'playcanvas'
 import { type FrontierSettings, loadSettings } from '../ffa/client/settings.ts'
+import { viewport as browserViewport } from '../ffa/client/viewport.ts'
 import { BankGuide } from '../ffa/client/wayfinding.ts'
 import { canFire } from '../ffa/sim/combat.ts'
 import { zoneAt } from '../ffa/sim/layout.ts'
@@ -165,10 +166,10 @@ function screenAim(
   const cursor = view === 'top' ? input?.cursor : undefined
   const fov =
     application?.camera.camera?.fov ?? (view === 'first' ? settings.fovFirst : settings.fovThird)
-  const height = application?.app.graphicsDevice.clientRect.height || innerHeight
+  const height = application?.app.graphicsDevice.clientRect.height || browserViewport.h
   return {
-    x: cursor?.x ?? innerWidth / 2,
-    y: cursor?.y ?? innerHeight / 2,
+    x: cursor?.x ?? browserViewport.w / 2,
+    y: cursor?.y ?? browserViewport.h / 2,
     shooter: view !== 'top',
     focalPixels: height / (2 * Math.tan((fov * Math.PI) / 360)),
   }
@@ -265,7 +266,9 @@ export function mountGameViewport(root: HTMLElement, options: ViewportOptions): 
       const notice = createRiderNotice(root, signal, () => presentation.actors?.retry())
       riderNotice = notice
       const scenery = await presentation.bind(createdSession, (visible) => {
-        notice.hidden = !visible
+        if (notice.hidden === visible) {
+          notice.hidden = !visible
+        }
       })
       input = createInput(canvas, root, settings, createdSession.players.get(createdSession.selfId))
       effects = createEffects(created, scenery.actors, createdSession, scenery)

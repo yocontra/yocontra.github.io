@@ -360,6 +360,20 @@ A private clustered-light trial reduced each update from 113,364 to 5,328 bytes 
 
 Headless Chrome at `948b01cc` averaged 59.72 FPS in the ordinary lobby and 59.89 FPS with 32 riders over 60 complete seconds each. The minimums were 58 and 59. A private phase trace on the same runtime completed all 60 native foreground samples in Safari with 32 riders in landscape. It averaged 24.88 FPS, with a 17 FPS minimum and 47 seconds below 30. All 108 touch endpoints were captured. Three native event and 62 Safari listener timestamps missed ±35 ms, and four gestures missed shape or duration limits. Of the 1,493 traced frame intervals, 73% of total time fell between the end of one app callback and the start of the next. The trace does not assign the gap to any one browser, graphics or host operation.
 
+The `d1319d81` runtime and assets shipped at `167e9adc`. The four simulator Safari runs each retained 60 full seconds, 60 foreground samples and all 108 touch endpoints. Each restored the display and game settings and shut down the simulator.
+
+| iPhone 13 mini simulator Safari | Mean FPS | Lowest full second | Seconds below 30 | Late Safari listener endpoints |
+| ------------------------------- | -------: | -----------------: | ---------------: | -----------------------------: |
+| Ordinary portrait               |    39.18 |                 27 |                2 |                             17 |
+| Ordinary landscape              |    40.36 |                 28 |                1 |                             20 |
+| 32 riders, portrait             |    26.14 |                 20 |               50 |                             33 |
+| 32 riders, landscape            |    19.26 |                 15 |               57 |                             57 |
+
+Headless Chrome completed both 60-second windows with a 59 FPS minimum. The ordinary lobby averaged 59.94 FPS and the 32-rider lobby averaged 59.84 FPS. Foreground Chrome, the simulator frame floor and trusted touch timing remain open.
+
+- [x] Update the rider loading notice only when its visibility changes. A browser test forces a load failure, retries successfully and discards a later response after exit. The notice records one change for failure and one for recovery.
+- [x] Read the reticle's window dimensions from the shared viewport cache. A browser test verifies its center through five window sizes. The resize event refreshes the cached center.
+
 ## First-person models and aiming
 
 - [x] Recover the bounded offline arms extractor (`tools/content/first-person-arms.ts`). Trail-duds and wool-duster CPU checks preserve native triangles/typed streams, full PBR and external texture URLs, skeleton/TRS/IBMs and humanoid clips; provenance includes authored garments and shared helpers. Repeated staging outputs are byte-identical and remain temporary.
