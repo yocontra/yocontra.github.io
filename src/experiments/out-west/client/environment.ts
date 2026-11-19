@@ -242,7 +242,7 @@ export class NativeEnvironment {
           Math.max(0.12, Math.sin(elevation)),
           Math.cos(azimuth) * Math.cos(elevation),
         ).normalize()
-    const sun = this.game.app.root.findByName('sun')
+    const sun = this.game.app.root.findByPath('sun')
     if (sun instanceof Entity && sun.light) {
       sun.setRotation(new Quat().setFromDirections(UP, direction))
       // The authored irradiance used a Lambert BRDF with 1/pi; native diffuse light is cosine-only.

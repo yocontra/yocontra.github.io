@@ -3,13 +3,17 @@ import { Entity, EventHandler, SHADOWUPDATE_NONE, SHADOWUPDATE_REALTIME } from '
 import type { GameApplication } from '../../src/experiments/out-west/client/application.ts'
 import { FrontierShadows } from '../../src/experiments/out-west/client/frontier-shadows.ts'
 
-it('the shadow map refreshes on a fast turn at the same location', () => {
+it('the town sun keeps its shadow cadence with a nested sun and refreshes on fast turns', () => {
   const app = Object.assign(new EventHandler(), {
     root: new Entity('root'),
     scene: { layers: { getLayerByName: () => null } },
   })
   const camera = new Entity('camera')
   app.root.addChild(camera)
+  const scenery = new Entity('scenery')
+  const scenerySun = new Entity('sun')
+  scenery.addChild(scenerySun)
+  app.root.addChild(scenery)
   const sun = new Entity('sun')
   const light: { shadowUpdateMode: number } = { shadowUpdateMode: SHADOWUPDATE_REALTIME }
   Reflect.set(sun, 'light', light)

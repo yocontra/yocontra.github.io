@@ -161,7 +161,7 @@ export class GameApplication {
         result.camera.camera.toneMapping = TONEMAP_ACES
         result.camera.camera.gammaCorrection = GAMMA_SRGB
         if (result.tier === 'high') {
-          const sun = app.root.findByName('sun')
+          const sun = app.root.findByPath('sun')
           result.post = new NativePost(
             app,
             result.camera.camera,

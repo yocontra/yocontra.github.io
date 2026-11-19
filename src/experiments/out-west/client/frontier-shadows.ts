@@ -107,7 +107,7 @@ export class FrontierShadows {
   }
 
   private readonly update = (): void => {
-    const sun = this.game.app.root.findByName('sun')
+    const sun = this.game.app.root.findByPath('sun')
     const light = sun instanceof Entity ? sun.light : undefined
     if (!light) {
       return
