@@ -46,10 +46,10 @@ export async function simulatorClient(python: string, port: number, udid: string
         } else if (row.id !== undefined) {
           const callback = pending.get(row.id)
           pending.delete(row.id)
-          if (row.error) {
-            callback?.reject(new Error(row.error))
-          } else {
+          if (row.error === undefined) {
             callback?.resolve(row.result)
+          } else {
+            callback?.reject(new Error(row.error || 'Owned native RPC failed without a message'))
           }
         }
       }

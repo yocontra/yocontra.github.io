@@ -191,7 +191,7 @@ async def run(args):
                     raise ValueError("Unknown owned native operation")
                 emit({"id": command["id"], "result": result})
             except Exception as error:
-                emit({"id": command["id"], "error": str(error)})
+                emit({"id": command["id"], "error": str(error) or type(error).__name__})
 
 
 if __name__ == "__main__":
