@@ -25,7 +25,10 @@ export function createEffects(
         const player = session.players.get(id)
         const hand = actors.throwDynamite(id)
         if (player) {
-          items.throwDynamite(event, new Vec3(player.x, player.y + 0.45, player.z), hand)
+          items.throwDynamite(event, new Vec3(player.x, player.y + 0.45, player.z), {
+            hand,
+            world: session.world,
+          })
         }
       } else if (event.type === 'respawn') {
         actors.cancelThrow(String(event.player))

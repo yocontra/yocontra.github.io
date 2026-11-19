@@ -1,17 +1,38 @@
 import { expect, test as it } from 'bun:test'
-import { type ContainerResource, NullGraphicsDevice, StandardMaterial, Texture } from 'playcanvas'
+import {
+  AppBase,
+  AppOptions,
+  type ContainerResource,
+  Entity,
+  NullGraphicsDevice,
+  RenderComponentSystem,
+  StandardMaterial,
+  Texture,
+  Vec3,
+} from 'playcanvas'
 import type { GameApplication } from '../../src/experiments/out-west/client/application.ts'
 import { FrontierItems } from '../../src/experiments/out-west/client/items.ts'
 import { DYNAMIC_ASSETS } from '../../src/experiments/out-west/content/manifest.ts'
+import { createWorld } from '../../src/experiments/out-west/ffa/sim/state.ts'
 
 function fixture(failTexture = false, closed = false) {
   const device = new NullGraphicsDevice()
+  const app = new AppBase(device.canvas)
+  const setup = new AppOptions()
+  setup.graphicsDevice = device
+  setup.componentSystems = [RenderComponentSystem]
+  app.init(setup)
+  const stage = new Entity('stage', app)
+  if (!closed) {
+    app.root.addChild(stage)
+  }
   const textures = new Map<string, Texture>()
   const materials: StandardMaterial[] = []
   const loaded: string[] = []
   const released: string[] = []
   const game = {
-    stage: { parent: closed ? null : {} },
+    app,
+    stage,
     loadContainer: (url: string) => {
       loaded.push(url)
       const material = new StandardMaterial()
@@ -21,6 +42,7 @@ function fixture(failTexture = false, closed = false) {
         source.albedo = 'failed-albedo'
       }
       const resource = {
+        instantiateRenderEntity: () => new Entity('item', app),
         materials: [{ resource: material }],
         data: { gltf: { materials: [{ extras: { nativePbr: source } }] } },
       } as unknown as ContainerResource
@@ -47,9 +69,9 @@ function fixture(failTexture = false, closed = false) {
     for (const material of materials) {
       material.destroy()
     }
-    device.destroy()
+    app.destroy()
   }
-  return { game, textures, loaded, released, dispose }
+  return { game, stage, textures, loaded, released, dispose }
 }
 
 it('pickups own one material lease per container and retire it exactly once', async () => {
@@ -85,4 +107,46 @@ it('a closed native stage cannot receive a late successful pickup loader', async
   expect(f.textures.size).toBe(0)
   expect(f.released.length).toBe(8)
   f.dispose()
+})
+
+it('replaces same-tick pickups and retires old throws when Frontier reconnects', async () => {
+  const { game, stage, dispose } = fixture()
+  const items = await FrontierItems.create(game)
+  const old = createWorld()
+  const next = createWorld()
+  const drop = {
+    id: 1,
+    x: 22,
+    z: 31,
+    amount: 5,
+    exclusiveFor: 0,
+    exclusiveUntil: 0,
+    expiresAt: 90,
+    style: 0,
+  }
+  old.bags.push(drop)
+  next.bags.push({ ...drop, x: 62, z: 18 })
+  try {
+    items.update(old)
+    const bag = stage.findByName('bag:1')
+    expect(bag?.getPosition().x).toBe(22)
+    items.update(next)
+    expect(bag?.parent).toBeNull()
+    expect(stage.findByName('bag:1')?.getPosition().x).toBe(62)
+
+    items.update(old)
+    const event = { type: 'dynamite_thrown', player: 0, x: 13, z: 16, fuseTicks: 50 } as const
+    items.throwDynamite(event, new Vec3(2, 3, 4), { hand: () => null, world: old })
+    const oldThrow = stage.findByName('item')
+    expect(oldThrow?.parent).toBe(stage)
+
+    items.throwDynamite(event, new Vec3(20, 30, 40), { hand: () => null, world: next })
+    items.update(next)
+    expect(oldThrow?.parent).toBeNull()
+    expect(stage.findByName('bag:1')?.getPosition().x).toBe(62)
+    expect(stage.findByName('item')?.getPosition().x).toBe(20)
+  } finally {
+    items.destroy()
+    dispose()
+  }
 })

@@ -32,6 +32,8 @@ export class FrontierItems {
   private readonly items = new Map<string, Entity>()
   private readonly flights = new Map<DynamiteFlight, Entity>()
   private readonly marker = new StandardMaterial()
+  private world: World | undefined
+  private seed: number | undefined
   private tick = -1
   private disposed = false as boolean
   private readonly materialReleases: (() => void)[] = []
@@ -84,6 +86,7 @@ export class FrontierItems {
     if (this.disposed || !world) {
       return
     }
+    this.useWorld(world)
     this.animateThrows()
     if (world.tick === this.tick) {
       return
@@ -142,12 +145,13 @@ export class FrontierItems {
   throwDynamite(
     event: Extract<SimEvent, { type: 'dynamite_thrown' }>,
     origin: Vec3,
-    hand: () => GraphNode | null,
+    { hand, world }: { hand: () => GraphNode | null; world: World | undefined },
   ): void {
     const resource = this.models.get('dynamite')
     if (this.disposed || !resource) {
       return
     }
+    this.useWorld(world)
     const flight = new DynamiteFlight({
       by: event.player,
       target: new Vec3(event.x, 0.05, event.z),
@@ -206,11 +210,16 @@ export class FrontierItems {
     item.addChild(marker)
     this.items.set(key, item)
   }
-  destroy(): void {
-    if (this.disposed) {
+  private useWorld(world: World | undefined): void {
+    if (world === this.world && world?.seed === this.seed) {
       return
     }
-    this.disposed = true
+    this.clearItems()
+    this.world = world
+    this.seed = world?.seed
+    this.tick = -1
+  }
+  private clearItems(): void {
     for (const item of this.flights.values()) {
       item.destroy()
     }
@@ -219,6 +228,14 @@ export class FrontierItems {
       item.destroy()
     }
     this.items.clear()
+  }
+  destroy(): void {
+    if (this.disposed) {
+      return
+    }
+    this.disposed = true
+    this.clearItems()
+    this.world = undefined
     for (const release of this.materialReleases) {
       release()
     }
