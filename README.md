@@ -6,7 +6,7 @@ Eric Schoffstall's site: a static Astro build for GitHub Pages, a Cloudflare Wor
 ## Quick start
 
 ```bash
-# Node >=22.23.4 (or Node26) and Bun1.3.14
+# Node >=22.23.4 (or Node 26) and Bun 1.4.4
 bun install
 bun dev                  # http://localhost:4321
 ```
