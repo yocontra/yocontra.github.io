@@ -194,20 +194,14 @@ export class Input {
 
 const CONTROL =
   'button, a[href], input, select, textarea, [contenteditable], [role="radio"], [role="tab"]'
-// biome-ignore lint/security/noSecrets: a CSS selector list, not a credential
-const UI = '[role="dialog"], [role="alertdialog"], .ow-title, .ow-hub, .ow-sheet, .ow-pause'
 
 /**
  * Let the browser activate a visible menu or HUD control without firing or taking its pointer.
  */
 function onUiControl(event: Event): boolean {
   const control = event.target instanceof Element ? event.target.closest(CONTROL) : null
-  return (
-    control !== null &&
-    control.closest(UI) !== null &&
-    // A displayed menu still owns its keys during the first frame of its fade-in.
-    control.checkVisibility({ visibilityProperty: true })
-  )
+  // A displayed menu still owns its keys during the first frame of its fade-in.
+  return control?.checkVisibility({ visibilityProperty: true }) ?? false
 }
 
 export function keyLabel(code: string): string {

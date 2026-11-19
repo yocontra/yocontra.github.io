@@ -6,6 +6,7 @@ Verified Frontier performance baseline is `19dddb2f`. Readback on that release v
 
 - [x] Fix all three Quick Draw choices. The shared modal prevents the duel controller from capturing button presses; real-browser mouse, touch, Enter and Space checks deliver each selected choice once, including during fade-in, with no duel input. Close, Escape and Gauntlet map also pass.
 - [x] Keep the Quick Draw Pause button and its icon inside native UI input. A public guest run on `19dddb2f` reproduced the button losing its click to duel pointer capture. A local release-engine build verified the cold start, deliberate loss, retry, Pause by mouse, touch, Space and Enter, Escape to resume, and Quit to the saloon. The street arena and first opponent matched their deployed asset hashes.
+- [x] Keep the results ledger controls out of duel input. The old build recorded Fire when the player clicked Legend mode. Trusted mouse, touch, Space and Enter checks now open or dismiss the confirmation and return to the saloon without a gameplay press.
 - [x] Preserve natural main-screen idle and return from the Outfitter. Unchanged appearance/profile refreshes reuse the actor; Store return retains the settled title camera. A 65 s native observation covers eight idle cycles with one actor and no state restart or arms-forward jump; the title camera holds after its initial crane. Reduced-motion and camera-return regressions also pass.
 - [x] Move the saloon, Grand Hotel and First Frontier Bank signs onto the fascia above the upper openings. The audit clears all 12 building signs of window and door trim. Nine matched street-level views verify the three moved signs and retain their draw counts. All 241 glass openings pass the native collision audit.
 - [x] Remove the overlapping visible gable faces on eight Frontier false fronts. Keep the eaves and the exposed roof ends. Chrome captures verify the siding and brick under the eaves.
@@ -315,11 +316,11 @@ A private shader trial combined three reads of one packed material texture. Four
 The clean `19dddb2f` build retained all 108 touch endpoints per run. The four windows below each retained all 60 foreground samples and restored game settings and display orientation. The first ordinary portrait attempt had a 36 FPS minimum and two late listener endpoints, with 56 foreground samples.
 
 | iPhone 13 mini simulator Safari | Mean FPS | Lowest full second | Seconds below 30 | Late Safari listener endpoints | Gesture shape or duration failures |
-| -------------------------------- | -------- | ------------------ | ---------------- | ------------------------------ | ---------------------------------- |
-| Ordinary portrait, repeat        | 46.23    | 36                 | 0                | 16                             | 0                                  |
-| Ordinary landscape               | 40.80    | 29                 | 1                | 11                             | 1                                  |
-| 32 riders, portrait              | 29.78    | 22                 | 33               | 30                             | 5                                  |
-| 32 riders, landscape             | 27.14    | 20                 | 39               | 33                             | 2                                  |
+| ------------------------------- | -------- | ------------------ | ---------------- | ------------------------------ | ---------------------------------- |
+| Ordinary portrait, repeat       | 46.23    | 36                 | 0                | 16                             | 0                                  |
+| Ordinary landscape              | 40.80    | 29                 | 1                | 11                             | 1                                  |
+| 32 riders, portrait             | 29.78    | 22                 | 33               | 30                             | 5                                  |
+| 32 riders, landscape            | 27.14    | 20                 | 39               | 33                             | 2                                  |
 
 On the same release, both headless Chrome windows had a 59 FPS minimum. Ordinary averaged 59.97 FPS and 32-rider stress averaged 59.94 FPS.
 

@@ -1,5 +1,5 @@
 /** Real page boot, timed keyboard play, equipped variants, boss phases, and Daily lifecycle. */
-import { chromium } from 'playwright'
+import { chromium, type Locator } from 'playwright'
 
 const base = process.argv.find((arg) => arg.startsWith('http')) ?? 'http://localhost:4389'
 const browser = await chromium.launch({ channel: 'chrome', headless: true })
@@ -18,32 +18,32 @@ try {
   const paused = page.getByRole('heading', { name: 'Paused', exact: true })
   const pauseInputs = ['mouse', 'touch', 'Space', 'Enter'] as const
   const cdp = await page.context().newCDPSession(page)
-  try {
-    for (const method of pauseInputs) {
-      if (method === 'mouse') {
-        await pauseIcon.click()
-      } else if (method === 'touch') {
-        const bounds = await pauseIcon.boundingBox()
-        if (!bounds) {
-          throw new Error('The duel Pause icon is missing')
-        }
-        await cdp.send('Input.dispatchTouchEvent', {
-          type: 'touchStart',
-          touchPoints: [{ x: bounds.x + bounds.width / 2, y: bounds.y + bounds.height / 2 }],
-        })
-        await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] })
-      } else {
-        await pause.press(method)
-      }
-      await paused.waitFor({ timeout: 3000 })
-      if (await page.evaluate(() => Reflect.get(globalThis, '__ow').director.c.input.pointerHeld)) {
-        throw new Error(`Pause passed ${method} input to the duel`)
-      }
-      await page.keyboard.press('Escape')
-      await paused.waitFor({ state: 'hidden' })
+  const tap = async (target: Locator) => {
+    await target.scrollIntoViewIfNeeded()
+    const bounds = await target.boundingBox()
+    if (!bounds) {
+      throw new Error(`Cannot tap ${target}`)
     }
-  } finally {
-    await cdp.detach()
+    await cdp.send('Input.dispatchTouchEvent', {
+      type: 'touchStart',
+      touchPoints: [{ x: bounds.x + bounds.width / 2, y: bounds.y + bounds.height / 2 }],
+    })
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] })
+  }
+  for (const method of pauseInputs) {
+    if (method === 'mouse') {
+      await pauseIcon.click()
+    } else if (method === 'touch') {
+      await tap(pauseIcon)
+    } else {
+      await pause.press(method)
+    }
+    await paused.waitFor({ timeout: 3000 })
+    if (await page.evaluate(() => Reflect.get(globalThis, '__ow').director.c.input.pointerHeld)) {
+      throw new Error(`Pause passed ${method} input to the duel`)
+    }
+    await page.keyboard.press('Escape')
+    await paused.waitFor({ state: 'hidden' })
   }
   await page.keyboard.down('w')
   await page.waitForFunction(() => Reflect.get(globalThis, '__ow').director.phase === 'wait')
@@ -122,6 +122,21 @@ try {
     return first
   })
   await page.screenshot({ path: '/tmp/out-west-native-equipment-live.png' })
+  await page.evaluate(() => Reflect.get(globalThis, '__ow').director.finishRun())
+  const ledger = page.locator('.ow-end.on')
+  const legend = ledger.getByRole('button', { name: 'Legend mode', exact: true })
+  const cancel = ledger.getByRole('button', { name: 'Cancel', exact: true })
+  await legend.click()
+  await cancel.waitFor({ timeout: 3000 })
+  await tap(cancel)
+  await cancel.waitFor({ state: 'hidden' })
+  await legend.press('Space')
+  await cancel.waitFor({ timeout: 3000 })
+  await cancel.press('Enter')
+  await cancel.waitFor({ state: 'hidden' })
+  await ledger.getByRole('button', { name: 'Back', exact: true }).click()
+  await ledger.waitFor({ state: 'hidden' })
+  await cdp.detach()
   const acts: string[] = []
   for (const [slot, stage, fakeout] of [
     [6, 'depot', 'crow'],
@@ -223,7 +238,9 @@ try {
   if (errors.length > 0) {
     throw new Error(errors.join('\n'))
   }
-  console.log(JSON.stringify({ pauseInputs, result, acts, lifecycle, errors }, null, 2))
+  console.log(
+    JSON.stringify({ pauseInputs, ledgerControls: true, result, acts, lifecycle, errors }, null, 2),
+  )
 } finally {
   await browser.close()
 }
