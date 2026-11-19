@@ -146,3 +146,48 @@ it.each([WEAPON_RIFLE, WEAPON_SHOTGUN])(
     expect(last.nextWeapon).toBe(WEAPON_REVOLVER)
   },
 )
+
+it('does not reserve again if the replacement connection closes before its snapshot', async () => {
+  let activeNotice: ConnectionNotice | undefined
+  let attempts = 0
+  const { promise, resolve } = Promise.withResolvers<string[]>()
+  const states: string[] = []
+  const initial = await reconnectableSession(
+    (notify) => {
+      attempts++
+      if (attempts === 1) {
+        activeNotice = notify
+        const noOp = () => undefined
+        return Promise.resolve({
+          selfId: '0',
+          selfSlot: 0,
+          world: createWorld(),
+          banked: 0,
+          practice: false,
+          lobbyId: 'perdition',
+          players: new Map(),
+          subscribe: () => noOp,
+          subscribeControl: () => noOp,
+          control: noOp,
+          update: noOp,
+          dispose: noOp,
+        })
+      }
+      notify('closed', 'Joined from somewhere else.', TOWN_CLOSE_REPLACED)
+      return Promise.reject(new Error('First-state wait aborted'))
+    },
+    (state, detail) => {
+      states.push(state)
+      if (state === 'closed') {
+        resolve([...states, detail ?? ''])
+      }
+    },
+  )
+  try {
+    activeNotice?.('closed', 'Transport dropped.')
+    expect(await promise).toEqual(['open', 'retrying', 'closed', 'Joined from somewhere else.'])
+    expect(attempts).toBe(2)
+  } finally {
+    initial.dispose()
+  }
+})

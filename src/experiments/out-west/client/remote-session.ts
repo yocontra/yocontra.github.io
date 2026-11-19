@@ -1,4 +1,4 @@
-import { Client, Predict, type Room, type SeatReservation } from '@colyseus/sdk'
+import { Predict, type Room, type SeatReservation } from '@colyseus/sdk'
 import { type Entity, Vec3 } from 'playcanvas'
 import { COLLISION_VERSION } from '../content/manifest.ts'
 import { type ServerControl, TOWN_WIRE_VERSION } from '../contract/town.ts'
@@ -20,6 +20,7 @@ import {
 import { FrontierState, MoveInput, type PlayerRecord } from '../runtime/schema.ts'
 import { createSimulation } from '../runtime/world.ts'
 import type { Appearance } from './actors.ts'
+import { FrontierRoomClient, waitForPlayer } from './frontier-room-client.ts'
 import type { FrontierSession } from './frontier-session.ts'
 import {
   authoritativePlayerState,
@@ -118,31 +119,6 @@ async function reserve(options: RemoteSessionOptions): Promise<JoinResponse> {
   return value
 }
 
-function ownPlayer(room: Room<unknown, FrontierState>): PlayerRecord | undefined {
-  return [...room.state.players.values()].find((player) => player.sessionId === room.sessionId)
-}
-function waitForPlayer(room: Room<unknown, FrontierState>): Promise<PlayerRecord> {
-  const ready = ownPlayer(room)
-  if (ready) {
-    return Promise.resolve(ready)
-  }
-  return new Promise((resolve, reject) => {
-    const timeout = setTimeout(() => {
-      room.onStateChange.remove(change)
-      reject(new Error('The town did not send your player.'))
-    }, 15_000)
-    const change = (): void => {
-      const player = ownPlayer(room)
-      if (player) {
-        clearTimeout(timeout)
-        room.onStateChange.remove(change)
-        resolve(player)
-      }
-    }
-    room.onStateChange(change)
-  })
-}
-
 function deliverEvents(
   events: readonly SimEvent[],
   listeners: Set<(event: SimEvent) => void>,
@@ -168,32 +144,31 @@ async function connectOnce(
   collision: CollisionData,
   options: RemoteSessionOptions,
 ): Promise<FrontierSession> {
+  // Load prediction physics before claiming a short-lived seat.
+  const ammo = await loadAmmo()
   const reservation = await reserve(options)
   const query = new URL(reservation.wsUrl).searchParams.toString()
-  const client = new Client(`${options.apiUrl ?? API_URL}/town/${reservation.lobbyId}?${query}`)
-  const room: Room<unknown, FrontierState> = await client.consumeSeatReservation(
-    reservation.reservation,
-    FrontierState,
+  const client = new FrontierRoomClient(
+    `${options.apiUrl ?? API_URL}/town/${reservation.lobbyId}?${query}`,
+    reservation.banked,
+    options.onState,
   )
-  room.onMessage<{ nonce: string }>('network-ping', (message) => {
-    if (typeof message.nonce === 'string' && message.nonce.length <= 128) {
-      room.send('network-pong', { nonce: message.nonce })
-    }
-  })
-  room.reconnection.enabled = false
+  const room = await client.consumeSeatReservation(reservation.reservation, FrontierState)
   let prediction: ReturnType<typeof createSimulation> | undefined
   try {
-    const self = await waitForPlayer(room)
+    const self = await waitForPlayer(room, client.signal)
+    client.signal.throwIfAborted()
     if (room.state.protocol !== PROTOCOL_VERSION || room.state.content !== COLLISION_VERSION) {
       throw new Error('The town was updated. Reload the page to play.')
     }
-    prediction = createSimulation({ ammo: await loadAmmo(), collision })
+    prediction = createSimulation({ ammo, collision })
     return connectSession(room, self, prediction, {
+      client,
       ...options,
       lobbyId: reservation.lobbyId,
-      initialBanked: reservation.banked,
     })
   } catch (error) {
+    client.release()
     prediction?.dispose()
     void room.leave()
     throw error
@@ -204,7 +179,7 @@ function connectSession(
   room: Room<unknown, FrontierState>,
   self: PlayerRecord,
   physics: ReturnType<typeof createSimulation>,
-  options: RemoteSessionOptions & { initialBanked: number; lobbyId: string },
+  options: RemoteSessionOptions & { client: FrontierRoomClient; lobbyId: string },
 ): FrontierSession {
   const world = createWorld()
   const selfId = self.id
@@ -214,7 +189,6 @@ function connectSession(
   const renderedVelocity = new RenderedVelocity()
   const listeners = new Set<(event: SimEvent) => void>()
   const controls = new Set<(control: ServerControl) => void>()
-  let banked = options.initialBanked
   let disposed = false
   const packets = batchInputs(room.connection)
   let lastButtons = 0
@@ -278,24 +252,15 @@ function connectSession(
   }
   room.onStateChange(sync)
   sync()
-  room.onMessage<{ tick: number; events: SimEvent[] }>('events', (message) => {
-    deliverEvents(message.events, listeners)
-  })
-  room.onMessage<ServerControl>('control', (control) => {
-    showdownInput.control(control)
-    if (control.type === 'deposit') {
-      banked = control.banked
-    }
-    options.onControl?.(control)
-    for (const listener of controls) {
-      listener(control)
-    }
-  })
-  room.onDrop(() => options.onState?.('retrying'))
-  room.onLeave((code, reason) => {
-    if (!disposed) {
-      options.onState?.('closed', reason, code)
-    }
+  options.client.attach({
+    events: (events) => deliverEvents(events, listeners),
+    control(control) {
+      showdownInput.control(control)
+      options.onControl?.(control)
+      for (const listener of controls) {
+        listener(control)
+      }
+    },
   })
   options.onState?.('open')
   function renderPlayer(
@@ -341,7 +306,7 @@ function connectSession(
     players: poses,
     appearance: (id) => appearances.get(id),
     get banked() {
-      return banked
+      return options.client.banked
     },
     subscribe(listener) {
       listeners.add(listener)
@@ -385,6 +350,7 @@ function connectSession(
     dispose() {
       if (!disposed) {
         disposed = true
+        options.client.release()
         listeners.clear()
         controls.clear()
         packets.dispose()

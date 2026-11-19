@@ -57,6 +57,8 @@ export async function reconnectableSession(
       } else if (state !== 'open') {
         early = new EarlyDisconnect(reason ?? 'Connection lost.', code)
       }
+    }).catch((error: unknown) => {
+      throw early ?? error
     })
     if (early) {
       session.dispose()
