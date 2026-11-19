@@ -12,8 +12,8 @@ export function removeInertFrontierWind(gltf: NativeFrontierGltf): void {
   for (const mesh of gltf.meshes ?? []) {
     for (const primitive of mesh.primitives) {
       if (primitive.extras?.outWestInertWind === 1) {
-        // biome-ignore lint/performance/noDelete: PlayCanvas checks whether the property exists.
-        delete primitive.targets
+        // PlayCanvas checks for the presence of this property before creating a morph.
+        Reflect.deleteProperty(primitive, 'targets')
       }
     }
   }
