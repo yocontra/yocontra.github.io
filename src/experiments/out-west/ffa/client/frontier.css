@@ -281,10 +281,6 @@
     0 0 18px rgb(0 0 0 / 0.5);
 }
 
-.fr-carried.bump {
-  animation: fr-bump 0.35s ease-out;
-}
-
 .fr-carried-label {
   font-size: var(--ow-fs-small);
   letter-spacing: var(--ow-track-kicker);
@@ -630,24 +626,6 @@
   mask: radial-gradient(circle, transparent 30%, #000 31%);
 }
 
-.fr-hitmark.on {
-  opacity: 1;
-  animation: fr-hit-pop 0.12s ease-out;
-}
-
-.fr-hitmark.on.kill {
-  animation: fr-hit-pop 0.2s ease-out;
-}
-
-@keyframes fr-hit-pop {
-  0% {
-    transform: scale(1.7);
-  }
-  100% {
-    transform: scale(1);
-  }
-}
-
 .fr-hitmark.kill {
   filter: drop-shadow(0 0 3px var(--ow-red-hi)) sepia(1) saturate(6) hue-rotate(-30deg);
 }
@@ -694,11 +672,6 @@
   100% {
     opacity: 0;
   }
-}
-
-.fr-hitmark.fade {
-  transition: opacity 0.35s ease-out;
-  opacity: 0;
 }
 
 .fr-banner {
@@ -1372,16 +1345,6 @@
 @keyframes fr-blink {
   50% {
     opacity: 0.35;
-  }
-}
-
-@keyframes fr-bump {
-  0% {
-    transform: scale(1.25);
-  }
-
-  100% {
-    transform: scale(1);
   }
 }
 

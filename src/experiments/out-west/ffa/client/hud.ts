@@ -8,6 +8,7 @@
  */
 import { icon } from '../../ui/icons.ts'
 import { REVOLVER_ROUNDS } from '../sim/constants.ts'
+import { HudFeedback } from './hud-feedback.ts'
 
 export interface HudState {
   /** Gun in hand: label and magazine size; and whether you hold dynamite. */
@@ -109,6 +110,7 @@ export class Hud {
   private rotateSaid = false
   private readonly dmg: HTMLElement[] = []
   private dmgNext = 0
+  private readonly feedback = new HudFeedback()
 
   constructor(parent: HTMLElement, opts: HudOptions) {
     this.opts = opts
@@ -369,9 +371,7 @@ export class Hud {
     }
     if (this.changed('carried', s.carried)) {
       this.carriedEl.textContent = money(s.carried)
-      this.carriedEl.classList.remove('bump')
-      this.carriedEl.getBoundingClientRect()
-      this.carriedEl.classList.add('bump')
+      this.feedback.carry(this.carriedEl)
     }
     if (this.changed('banked', s.banked)) {
       this.bankedEl.textContent = `${money(s.banked)} banked`
@@ -436,23 +436,12 @@ export class Hud {
   }
 
   hurt(amount: number): void {
-    // Flash in instantly, then fade out (inline styles, so the fade always wins over the flash).
-    const st = this.hurtEl.style
-    st.transition = 'none'
-    st.opacity = String(Math.min(0.9, 0.25 + amount / 70))
-    this.hurtEl.getBoundingClientRect()
-    st.transition = 'opacity 0.6s ease-out'
-    st.opacity = '0'
+    this.feedback.hurt(this.hurtEl, amount)
   }
 
   /** The hit marker: white for a hit, red for a kill, gold for a Dead-Eye (critical) hit. */
   hit(kill: boolean, crit = false): void {
-    // the pop restarts on every hit (a held class would play it once)
-    this.hitEl.style.animation = 'none'
-    this.hitEl.className = `fr-hitmark on${kill ? ' kill' : ''}${crit ? ' crit' : ''}`
-    this.hitEl.getBoundingClientRect()
-    this.hitEl.style.animation = ''
-    this.hitEl.classList.add('fade')
+    this.feedback.hit(this.hitEl, kill, crit)
   }
 
   /**
@@ -564,6 +553,7 @@ export class Hud {
   }
 
   dispose(): void {
+    this.feedback.dispose()
     if (this.toastTimer) {
       clearTimeout(this.toastTimer)
     }
