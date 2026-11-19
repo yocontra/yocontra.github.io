@@ -10,7 +10,7 @@ import {
   qualifyProductionFixture,
 } from './production-fixture.ts'
 import { cleanupGuest } from './simulator-cleanup.ts'
-import { simulatorClient } from './simulator-client.ts'
+import { finishNativeCapture, simulatorClient } from './simulator-client.ts'
 import { coordinateStatus, prepareCoordinates, startCoordinates } from './simulator-coordinates.ts'
 import { COORDINATE_KEYS, recordingDocument } from './simulator-document.ts'
 import {
@@ -215,9 +215,9 @@ export async function captureNative(context: {
   if (!saved.receipt) {
     throw new Error('Native page receipt missing')
   }
-  const afterAX = await native.call('ax')
-  const afterApps = await native.call('apps')
-  await native.call('screenshot', { path: join(output, 'after.png') })
+  await checkpoint({ ready, browserReceipt: saved.receipt, bridgeResult })
+  const { afterAX, afterApps, failures } = await finishNativeCapture(native, output)
+  nativeFailure = [nativeFailure, ...failures].filter(Boolean).join(' | ') || null
   return {
     beforeAX,
     afterAX,

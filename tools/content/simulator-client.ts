@@ -118,3 +118,26 @@ export async function simulatorClient(python: string, port: number, udid: string
     },
   }
 }
+
+export async function finishNativeCapture(
+  native: Pick<Awaited<ReturnType<typeof simulatorClient>>, 'call'>,
+  output: string,
+) {
+  const [ax, apps, screenshot] = await Promise.allSettled([
+    native.call('ax'),
+    native.call('apps'),
+    native.call('screenshot', { path: join(output, 'after.png') }),
+  ])
+  const reads = [
+    ['Final native accessibility read', ax],
+    ['Final native app list', apps],
+    ['Final native screenshot', screenshot],
+  ] as const
+  return {
+    afterAX: ax.status === 'fulfilled' ? ax.value : null,
+    afterApps: apps.status === 'fulfilled' ? apps.value : null,
+    failures: reads.flatMap(([name, result]) =>
+      result.status === 'rejected' ? [`${name}: ${String(result.reason)}`] : [],
+    ),
+  }
+}

@@ -7,7 +7,7 @@ import { captureNative } from '../tools/content/simulator-recording.ts'
 import recorded from './fixtures/simulator-coordinate-v3.json' with { type: 'json' }
 
 /** Real capture orchestration + local HTTP + retained native schema; no browser/native run. */
-function captureFixture() {
+function captureFixture(failFinalAX: boolean, beforeFinalAX: () => void) {
   const raw = structuredClone(recorded)
   const startText = 'Start 60s 5 rider recording'
   const run = recordingDocument(raw.run.run, raw.page.url, startText)
@@ -79,9 +79,19 @@ function captureFixture() {
     scriptHashes: [],
     preflight: false,
   }
+  const readAX = (): Promise<unknown> => {
+    if (delivered) {
+      beforeFinalAX()
+      if (failFinalAX) {
+        return Promise.reject(new Error('Native accessibility deadline exceeded'))
+      }
+    }
+    return Promise.resolve(ax)
+  }
   return {
     run,
     page,
+    ax,
     calls,
     receipt,
     clock,
@@ -97,7 +107,7 @@ function captureFixture() {
       call: (op: string, args?: Record<string, unknown>, timeout?: number): Promise<unknown> => {
         calls.push({ op, args, timeout })
         if (op === 'ax') {
-          return Promise.resolve(ax)
+          return readAX()
         }
         if (op === 'apps') {
           return Promise.resolve(raw.apps)
@@ -159,9 +169,15 @@ function captureFixture() {
   }
 }
 
-it('waits for the actual host readiness and sends all 54 gestures without a browser orientation global', async () => {
+it.each([
+  ['sends the complete tape after host readiness', false],
+  ['keeps the browser receipt when the final accessibility read times out', true],
+] as const)('%s', async (_scenario, failFinalAX) => {
   expect(Reflect.has(globalThis, 'orientation')).toBe(false)
-  const fixture = captureFixture()
+  const checkpoints: Record<string, unknown>[] = []
+  const fixture = captureFixture(failFinalAX, () => {
+    expect(checkpoints.at(-1)?.browserReceipt).toEqual(fixture.receipt)
+  })
   let statusReads = 0
   const server = serve({
     hostname: '127.0.0.1',
@@ -172,7 +188,6 @@ it('waits for the actual host readiness and sends all 54 gestures without a brow
         : Response.json(fixture.status()),
   })
   fixture.page.url = new URL('/experiments/out-west/frontier/', server.url).href
-  const checkpoints: Record<string, unknown>[] = []
   let opens = 0
   try {
     const result = await captureNative({
@@ -218,7 +233,13 @@ it('waits for the actual host readiness and sends all 54 gestures without a brow
       new Set(['move', 'look', 'FIRE', 'AIM', 'RELOAD']),
     )
     expect(result.receipt).toEqual(fixture.receipt)
-    expect(result.nativeFailure).toBeNull()
+    expect(result.afterAX).toEqual(failFinalAX ? null : fixture.ax)
+    expect(result.afterApps).toEqual(recorded.apps)
+    expect(result.nativeFailure).toBe(
+      failFinalAX
+        ? 'Final native accessibility read: Error: Native accessibility deadline exceeded'
+        : null,
+    )
     expect(fixture.calls.filter((call) => call.op === 'launch-safari')).toHaveLength(1)
   } finally {
     await server.stop(true)
