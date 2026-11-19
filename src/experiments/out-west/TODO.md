@@ -309,6 +309,8 @@ Headless Chrome on the same clean build averaged 59.52 FPS at a 57 FPS minimum i
 
 A private shader trial combined three reads of one packed material texture. Four matched Chrome views were byte-identical. Matched 32-rider Safari controls averaged 24.84 and 25.32 FPS across two orders. The corresponding candidate averages were 23.95 and 25.09 FPS. The trial stayed private.
 
+- [x] Share the remote rider pose texture in crowded Low-tier Frontier matches. Both matched 32-rider Safari comparisons at 710 × 231 used the same draws and changed 62 remote pose uploads per frame to one. The controls averaged 24.30 and 23.95 FPS. The production candidate averaged 26.77 and 26.39 FPS. All six matched day and night Chrome pairs were pixel-identical. Native WebGL tests cover local riders, ragdolls, skin changes, a rider that leaves the view while still casting a shadow, context loss and teardown. The active-gameplay stress floor and touch deadlines remain open.
+
 ## First-person models and aiming
 
 - [x] Recover the bounded offline arms extractor (`tools/content/first-person-arms.ts`). Trail-duds and wool-duster CPU checks preserve native triangles/typed streams, full PBR and external texture URLs, skeleton/TRS/IBMs and humanoid clips; provenance includes authored garments and shared helpers. Repeated staging outputs are byte-identical and remain temporary.

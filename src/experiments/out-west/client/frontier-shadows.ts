@@ -9,11 +9,17 @@ import {
   Vec3,
 } from 'playcanvas'
 import type { GameApplication } from './application.ts'
+import { installRiderPalette } from './frontier-rider-palette.ts'
 
 const CROWDED = 16
 const MAX_CACHED_MESHES = 128
 const SHADOW_TURN_COSINE = Math.cos(Math.PI / 9)
 type Simplify = typeof import('./crowd-shadow-mesh.ts').simplifyShadow
+interface RiderOwner {
+  id: string
+  root: Entity
+  ragdoll: boolean
+}
 
 /** Low-tier sun updates alternate under load. Only dense crowds use reduced shadow geometry. */
 export class FrontierShadows {
@@ -30,15 +36,21 @@ export class FrontierShadows {
   private sun: { light: LightComponent; previous: number } | undefined
   private readonly geometry = new Map<Mesh, Mesh | undefined>()
   private readonly proxies = new Map<MeshInstance, MeshInstance>()
-  private readonly riderRoots = new WeakMap<GraphNode, string>()
-  private readonly riders = new WeakMap<MeshInstance, string>()
+  private readonly riderRoots = new WeakMap<GraphNode, RiderOwner>()
+  private readonly riders = new WeakMap<MeshInstance, RiderOwner>()
   private readonly shadowOnly = new WeakSet<MeshInstance>()
   private readonly layer
+  private readonly disposePalette
 
   constructor(game: GameApplication) {
     this.game = game
     this.layer = game.app.scene.layers.getLayerByName('World')
     game.app.on('prerender', this.update)
+    this.disposePalette = installRiderPalette(
+      game.app,
+      () => this.count >= CROWDED && this.localRider !== undefined,
+      (draw) => this.remotePaletteOwner(draw),
+    )
   }
 
   crowd(count: number, ownId: string | undefined): void {
@@ -61,20 +73,45 @@ export class FrontierShadows {
   }
 
   registerRider(root: Entity, id: string): void {
-    this.riderRoots.set(root, id)
+    const owner = this.riderRoots.get(root)
+    if (owner) {
+      owner.id = id
+    } else {
+      this.riderRoots.set(root, { root, id, ragdoll: false })
+    }
   }
 
-  private rider(source: MeshInstance): string | undefined {
+  setRiderRagdoll(root: Entity, ragdoll: boolean): void {
+    const owner = this.riderRoots.get(root)
+    if (owner) {
+      owner.ragdoll = ragdoll
+    }
+  }
+
+  private rider(source: MeshInstance): RiderOwner | undefined {
     const known = this.riders.get(source)
-    if (known !== undefined) {
+    if (known && (source.node === known.root || source.node.isDescendantOf(known.root))) {
       return known
     }
     for (let node: GraphNode | null = source.node; node; node = node.parent) {
-      const id = this.riderRoots.get(node)
-      if (id !== undefined) {
-        this.riders.set(source, id)
-        return id
+      const owner = this.riderRoots.get(node)
+      if (owner) {
+        this.riders.set(source, owner)
+        return owner
       }
+    }
+    return undefined
+  }
+
+  private remotePaletteOwner(draw: MeshInstance): Entity | undefined {
+    const owner = this.rider(draw)
+    if (
+      owner &&
+      owner.id !== this.localRider &&
+      !owner.ragdoll &&
+      owner.root.root === this.game.app.root
+    ) {
+      return owner.root
     }
     return undefined
   }
@@ -89,7 +126,7 @@ export class FrontierShadows {
       return false
     }
     const rider = this.rider(source)
-    return rider !== undefined && rider !== this.localRider
+    return rider !== undefined && rider.id !== this.localRider
   }
 
   private remove(source: MeshInstance, proxy: MeshInstance): void {
@@ -138,7 +175,7 @@ export class FrontierShadows {
       if (
         !crowded ||
         source.node.root !== this.game.app.root ||
-        this.rider(source) === this.localRider
+        this.rider(source)?.id === this.localRider
       ) {
         this.remove(source, proxy)
       } else {
@@ -191,6 +228,7 @@ export class FrontierShadows {
   }
 
   destroy(): void {
+    this.disposePalette?.()
     this.closed = true
     this.game.app.off('prerender', this.update)
     if (this.sun) {

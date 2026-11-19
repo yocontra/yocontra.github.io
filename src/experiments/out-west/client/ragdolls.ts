@@ -156,6 +156,7 @@ export class NativeRagdolls {
       }
     }
     this.corpses.set(id, { actor, parts, joints, seconds: 0 })
+    this.game.frontierShadows?.setRiderRagdoll(actor.root, true)
   }
   release(id: string): void {
     const corpse = this.corpses.get(id)
@@ -170,8 +171,11 @@ export class NativeRagdolls {
       this.corpses.delete(id)
     }
     this.frozen.delete(id)
-    if (actor?.model.anim) {
-      actor.model.anim.enabled = true
+    if (actor) {
+      this.game.frontierShadows?.setRiderRagdoll(actor.root, false)
+      if (actor.model.anim) {
+        actor.model.anim.enabled = true
+      }
     }
   }
   private freeze(id: string): void {
