@@ -42,6 +42,7 @@ Verified Frontier performance baseline is `19dddb2f`. Readback on that release v
 - [x] Keep Frontier gameplay input blocked when the connection recovers behind an open menu. An authenticated test with a local room verifies that the socket and ticks resume, the menu stays open, and movement entered in the menu clears before play resumes.
 - [x] Prepare walking distances for the bank guide before enabling the HUD. A prepared route tracks the current cover grid.
 - [x] Use the same corner rules for the bank guide's distance field and waypoint search. Across 334,872 reachable cell centers, including eight changes to barrel cover, the next waypoint stays visible and the distance field keeps its original values.
+- [x] Repair the bank distance field when a barrel opens a path. The eight openings changed one to four distances each. The repair matches a full rebuild and preserves 297,668 tested waypoints. In matched workstation tests, the median update fell from 7.17 ms to 0.042 ms.
 - [x] Tell players how automatic deposits start. Practice browser checks verify a full touch deposit without the USE button, the updated pause help and a touch climb with USE at a boxcar ladder.
 - [x] Check viewport ownership after async loading. A late resource or session is released if the viewport has closed.
 - [x] Discard a delayed rider fallback when its lobby slot belongs to a new life. A late failure from the prior life leaves the new rider free to load. Both regression tests failed before the change.
@@ -353,6 +354,8 @@ Headless Chrome at `2f776f1b` averaged 59.50 FPS in the ordinary lobby and 59.89
 - [x] Size the Frontier drawing buffer on changes to canvas geometry, quality or pixel density. Eighteen matched Chrome captures retain the same pixels and canvas size after resize across both tiers. The game observes CSS changes before updating the buffer and can draw one frame at the previous size.
 
 An active 32-rider landscape Safari window at `d494b73c` used the same runtime as `686a3583`. All 60 seconds fell below 30 FPS, with a 20.67 FPS mean and a 12 FPS minimum. The recorder retained all 108 touch endpoints. It logged 51 late Safari listeners, six late native event timestamps, 13 gesture failures and 44 of 60 foreground samples. It restored the game settings and display, then shut down the simulator. The active Safari frame and input limits remain open.
+
+A private clustered-light trial reduced each update from 113,364 to 5,328 bytes and matched 15 Chrome images pixel for pixel. Two matched Safari comparisons with 32 riders and exact draw and pose work measured 19.77 and 19.16 FPS in the controls, and 19.57 and 19.78 FPS with the smaller light buffers. The production allocator stays in use.
 
 ## First-person models and aiming
 

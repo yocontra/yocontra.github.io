@@ -12,7 +12,7 @@
  */
 import type { CameraComponent } from 'playcanvas'
 import { MOST_WANTED_MIN } from '../sim/constants.ts'
-import { BANK_WINDOWS, BLOCK_MOVE, type Grid, rayGrid, type Zone } from '../sim/layout.ts'
+import { BANK_WINDOWS, BLOCK_MOVE, type Grid, rayGrid, TOWN, type Zone } from '../sim/layout.ts'
 import { MinHeap } from './min-heap.ts'
 import { type ScreenPoint, toScreen } from './screen.ts'
 
@@ -65,6 +65,34 @@ function canStep(grid: Grid, column: number, row: number, nextColumn: number, ne
   return (adjacent & BLOCK_MOVE) === 0
 }
 
+function relax(grid: Grid, dist: Float64Array, heap: MinHeap, i: number, d: number): void {
+  const n = grid.n
+  const c = i % n
+  const r = (i - c) / n
+  for (const [dc, dr, w] of NEIGHBOURS) {
+    const cc = c + dc
+    const rr = r + dr
+    if (cc < 0 || rr < 0 || cc >= n || rr >= n || !canStep(grid, c, r, cc, rr)) {
+      continue
+    }
+    const j = rr * n + cc
+    const nd = d + w * grid.cell
+    if (nd < (dist[j] ?? 0)) {
+      dist[j] = nd
+      heap.push(j, nd)
+    }
+  }
+}
+
+function propagate(grid: Grid, dist: Float64Array, heap: MinHeap): void {
+  while (heap.size > 0) {
+    const [i, d] = heap.pop()
+    if (d <= (dist[i] ?? 0)) {
+      relax(grid, dist, heap, i, d)
+    }
+  }
+}
+
 /** Walking distance (m) from every cell to the nearest window, Infinity where unreachable. */
 export function flood(grid: Grid, targets: readonly BankWindow[]): Float64Array {
   const n = grid.n
@@ -78,31 +106,69 @@ export function flood(grid: Grid, targets: readonly BankWindow[]): Float64Array 
       heap.push(r * n + c, 0)
     }
   }
-  while (heap.size > 0) {
-    const [i, d] = heap.pop()
-    if (d > (dist[i] ?? 0)) {
+  propagate(grid, dist, heap)
+  return dist
+}
+
+function authoredBankGrid(grid: Grid): boolean {
+  // Prop layout rebuilds replace cover but retain these authored sources.
+  const layout = grid.layout
+  return (
+    layout?.version === TOWN.version &&
+    layout.buildings === TOWN.buildings &&
+    layout.zones === TOWN.zones &&
+    layout.creek === TOWN.creek
+  )
+}
+
+function repairOpenings(previous: Grid, grid: Grid, dist: Float64Array): boolean {
+  const { n, cells } = grid
+  if (
+    previous.n !== n ||
+    previous.cell !== grid.cell ||
+    previous.size !== grid.size ||
+    cells.length !== n * n ||
+    previous.cells.length !== cells.length ||
+    dist.length !== cells.length ||
+    !authoredBankGrid(previous) ||
+    !authoredBankGrid(grid)
+  ) {
+    return false
+  }
+
+  const opened: number[] = []
+  for (let i = 0; i < cells.length; i++) {
+    const current = cells[i] ?? 0
+    const before = previous.cells[i] ?? 0
+    if (!((current ^ before) & BLOCK_MOVE)) {
       continue
     }
+    if (current & BLOCK_MOVE) {
+      return false
+    }
+    opened.push(i)
+  }
+  if (opened.length === 0) {
+    return true
+  }
+
+  const heap = new MinHeap()
+  for (const i of opened) {
     const c = i % n
     const r = (i - c) / n
-    for (const [dc, dr, w] of NEIGHBOURS) {
-      const cc = c + dc
-      const rr = r + dr
-      if (cc < 0 || rr < 0 || cc >= n || rr >= n) {
-        continue
-      }
-      if (!canStep(grid, c, r, cc, rr)) {
-        continue
-      }
-      const j = rr * n + cc
-      const nd = d + w * grid.cell
-      if (nd < (dist[j] ?? 0)) {
-        dist[j] = nd
-        heap.push(j, nd)
+    // New cardinal and diagonal edges all start in this 3×3 neighbourhood.
+    for (let row = Math.max(0, r - 1); row <= Math.min(n - 1, r + 1); row++) {
+      for (let column = Math.max(0, c - 1); column <= Math.min(n - 1, c + 1); column++) {
+        const source = row * n + column
+        const distance = dist[source] ?? Number.POSITIVE_INFINITY
+        if (Number.isFinite(distance)) {
+          relax(grid, dist, heap, source, distance)
+        }
       }
     }
   }
-  return dist
+  propagate(grid, dist, heap)
+  return true
 }
 
 export class BankGuide {
@@ -151,13 +217,12 @@ export class BankGuide {
     if (grid === this.grid) {
       return
     }
-    const prepared = this.field !== null
+    const previous = this.grid
     this.grid = grid
-    this.field = null
     this.at.has = false
     this.wpAge = 0
-    if (prepared) {
-      this.prepare()
+    if (this.field && !repairOpenings(previous, grid, this.field)) {
+      this.field = flood(grid, this.windows)
     }
   }
 
