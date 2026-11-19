@@ -146,9 +146,9 @@ export class VoiceTransport {
     } finally {
       if (this.pendingMicrophone === channel) {
         this.pendingMicrophone = null
-      }
-      if (!adopted) {
-        channel.dispose()
+        if (!adopted) {
+          channel.dispose()
+        }
       }
     }
   }
@@ -157,24 +157,19 @@ export class VoiceTransport {
     microphone: MediaStreamTrack | null,
     active: () => boolean,
   ): Promise<boolean> {
-    await this.connection
-    if (!active()) {
-      return false
-    }
-    const meeting = this.meeting
-    if (!meeting) {
-      return false
-    }
     const sequence = this.live.sequence
+    await this.connection
+    const meeting = this.meeting
+    if (!(active() && meeting && this.live.sequence === sequence)) {
+      return false
+    }
     const current = () => active() && this.meeting === meeting && this.live.sequence === sequence
     const change = this.microphoneSwitch.then(async () => {
       if (!current()) {
         return false
       }
-      if (
-        microphone === this.sourceMicrophone &&
-        (!microphone || this.mic?.track.readyState === 'live')
-      ) {
+      const sameSource = microphone === this.sourceMicrophone
+      if (sameSource && (!microphone || this.mic?.track.readyState === 'live')) {
         return true
       }
       const previous = this.mic
@@ -203,7 +198,12 @@ export class VoiceTransport {
       return true
     })
     this.microphoneSwitch = change.catch(() => undefined)
-    return change
+    return change.catch((error: unknown) => {
+      if (current()) {
+        throw error
+      }
+      return false
+    })
   }
   resumeReceive(): void {
     for (const playout of this.playouts.values()) {
@@ -380,6 +380,7 @@ export class VoiceTransport {
     this.meeting = null
     this.joining = null
     this.live.sequence++
+    this.microphoneSwitch = Promise.resolve()
     this.mic?.dispose()
     this.mic = null
     this.pendingMicrophone?.dispose()

@@ -96,19 +96,21 @@ export class VoiceChat {
           this.live.connected = true
           this.playbackMessage = message
           if (this.microphone) {
-            const sequence = this.live.sequence
+            const { sequence, generation } = this.live
+            const current = () =>
+              this.live.enabled &&
+              this.live.connected &&
+              sequence === this.live.sequence &&
+              generation === this.live.generation
             void this.transport
-              .replaceMicrophone(
-                this.microphone,
-                () => this.live.enabled && sequence === this.live.sequence,
-              )
+              .replaceMicrophone(this.microphone, current)
               .then(() => {
-                if (this.live.enabled && sequence === this.live.sequence && this.live.connected) {
+                if (current()) {
                   this.setState('live', message)
                 }
               })
               .catch((error: unknown) => {
-                if (this.live.enabled && sequence === this.live.sequence) {
+                if (current()) {
                   this.captureFailed(error)
                 }
               })

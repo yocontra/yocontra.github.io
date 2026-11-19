@@ -29,6 +29,7 @@ function harness() {
   let heldPath = ''
   let unblock: (() => void) | undefined
   let allocations = 0
+  let pauseSave: (() => Promise<void>) | undefined
   let budgetAllowed = true
   let budgetError = false
   const reservations: number[] = []
@@ -86,7 +87,7 @@ function harness() {
       },
       save: (value) => {
         state = structuredClone(value)
-        return Promise.resolve()
+        return pauseSave?.() ?? Promise.resolve()
       },
       reschedule: () => Promise.resolve(),
       waitUntil: (work) => {
@@ -111,6 +112,9 @@ function harness() {
     messages,
     live,
     state: () => state,
+    saveHook: (hook: () => Promise<void>) => {
+      pauseSave = hook
+    },
     advance: (ms: number) => {
       now += ms
       voice.update(true)
@@ -258,6 +262,34 @@ it('participant revocation failure survives a successful kick and retries only f
   await cold.retry()
   expect(h.live.size).toBe(0)
   expect(h.calls.filter((call) => call.path.endsWith('/kick-all'))).toHaveLength(kicks)
+})
+
+it('does not start provider allocation after the audience leaves during persistence', async () => {
+  const h = harness()
+  let start: () => void = () => undefined
+  let resume: () => void = () => undefined
+  const saving = new Promise<void>((resolve) => {
+    start = resolve
+  })
+  const pause = new Promise<void>((resolve) => {
+    resume = resolve
+  })
+  let saves = 0
+  h.saveHook(() => {
+    if (++saves === 2) {
+      start()
+      return pause
+    }
+    return Promise.resolve()
+  })
+  h.register()
+  h.speak()
+  await saving
+  h.voice.drop(1)
+  resume()
+  await h.drain()
+  expect(h.calls).toHaveLength(0)
+  expect(h.voice.resources.members).toBe(0)
 })
 
 it('a late provider allocation after close gets revoked and never delivers credentials', async () => {

@@ -376,6 +376,9 @@ export class VoiceCoordinator {
     }
     if (!generation.meetingId) {
       await this.persist()
+      if (this.active !== generation || this.desired.size < 2) {
+        return
+      }
       const meeting = await createVoiceMeeting(this.o.env, this.o.title())
       generation.meetingId = meeting
       if (this.active !== generation || this.desired.size < 2) {
