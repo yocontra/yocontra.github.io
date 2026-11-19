@@ -20,11 +20,6 @@
     "sha256": "3ebac25bef2242f7c7427416dd3f80e1d44cf0dc2e5a6f8dde05a92b8a276c46"
   },
   {
-    "name": "0822c407b63a71883454cbde.data.ktx2",
-    "bytes": 31111,
-    "sha256": "211d24684df47c4b1fab900d92b39fe89ce41dc6f97ac6592fc1f2be2abbf10e"
-  },
-  {
     "name": "0c506abd0c8f3d9990aaa537.data.ktx2",
     "bytes": 196298,
     "sha256": "2d5c9c443ee9fd7b827148c90693a8648f405bb48e7d2f0709ce8cacd4a0577c"
@@ -100,11 +95,6 @@
     "sha256": "31283db7bc34347f82b6167792be744fe22c297f8440db3d2b46ffd230f5b7ac"
   },
   {
-    "name": "330d8adc57812842a073576f.color.ktx2",
-    "bytes": 23658,
-    "sha256": "293008ffc6d0006edd7b127503680c60b97c92dca6e33645c6a060e6cafc621f"
-  },
-  {
     "name": "360cb0af14f0f8c06db7c119.color.ktx2",
     "bytes": 2538,
     "sha256": "8436722808663bb6eadc50c3c11dc372cd842926ae6d3c07946a0222a6902cce"
@@ -153,11 +143,6 @@
     "name": "54081ac5373912bcdb01dbf5.data.ktx2",
     "bytes": 731224,
     "sha256": "887a3ec595ef2886d556d2a396b61be91bd7d65536250443b0cc8a0f1e1f6ae8"
-  },
-  {
-    "name": "57384408540a853e5b824867.data.ktx2",
-    "bytes": 26428,
-    "sha256": "f6f6a909bf7be2251c61f5a1e5638c51a6734492cf3dceafe3f6852de363ebbd"
   },
   {
     "name": "57bab49e0d9395ce57b100de.color.ktx2",
