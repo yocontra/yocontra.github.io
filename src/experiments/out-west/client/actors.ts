@@ -76,45 +76,31 @@ export class Actors {
   private readonly incarnations = new Map<string, { serial: number; spawn: number | undefined }>()
   private tracks: AnimTrack[] = []
   private releaseCommon: (() => void) | undefined
-  private readonly notice = document.createElement('div')
   private readonly lifecycle = new AbortController()
+  private readonly showFailure: (visible: boolean) => void
   constructor(
     game: GameApplication,
     ragdolls: NativeRagdolls,
-    appearance: (id: string) => Appearance | undefined = () => undefined,
-    world: () => World | undefined = () => undefined,
+    options: {
+      appearance: (id: string) => Appearance | undefined
+      world: () => World | undefined
+      showFailure: (visible: boolean) => void
+    },
   ) {
     this.game = game
     this.firstPerson = new FirstPersonModel(game)
     this.ragdolls = ragdolls
-    this.appearance = appearance
-    this.world = world
-    this.notice.className = 'pc-game-status'
-    this.notice.setAttribute('role', 'status')
-    this.notice.style.cssText = 'top:auto;bottom:20px;left:50%;transform:translateX(-50%)'
-    this.notice.hidden = true
-    const message = document.createElement('span')
-    message.textContent = 'Some riders are still loading.'
-    const retry = document.createElement('button')
-    retry.type = 'button'
-    retry.textContent = 'Retry loading riders'
-    retry.addEventListener(
-      'click',
-      () => {
-        this.failures.clear()
-        this.firstPerson.retry()
-        for (const rider of this.actors.values()) {
-          rider.heldFailures.clear()
-        }
-        this.notice.hidden = true
-      },
-      { signal: this.lifecycle.signal },
-    )
-    this.notice.append(message, retry)
-    const canvas = game.app.graphicsDevice.canvas
-    if (canvas instanceof HTMLCanvasElement) {
-      canvas.parentElement?.append(this.notice)
+    this.appearance = options.appearance
+    this.world = options.world
+    this.showFailure = options.showFailure
+  }
+  retry(): void {
+    this.failures.clear()
+    this.firstPerson.retry()
+    for (const rider of this.actors.values()) {
+      rider.heldFailures.clear()
     }
+    this.showFailure(false)
   }
   static async prepare(
     game: GameApplication,
@@ -327,14 +313,14 @@ export class Actors {
       }
       this.assign(id, actor, key)
       this.failures.delete(id)
-      this.notice.hidden = this.healthy()
+      this.showFailure(!this.healthy())
     })()
       .catch(() => {
         if (!current()) {
           return
         }
         this.failures.set(id, key)
-        this.notice.hidden = initial
+        this.showFailure(!initial)
       })
       .finally(() => this.pending.delete(id))
     this.pending.set(id, promise)
@@ -348,7 +334,7 @@ export class Actors {
         this.failures.delete(id)
       }
     }
-    this.notice.hidden = this.healthy()
+    this.showFailure(!this.healthy())
     for (const [id, player] of players) {
       void this.ensure(id)
       const rider = this.actors.get(id)
@@ -429,7 +415,7 @@ export class Actors {
       .catch(() => {
         if (rider.actor.root.parent) {
           rider.heldFailures.add(weapon)
-          this.notice.hidden = false
+          this.showFailure(true)
         }
       })
       .finally(() => rider.heldPending.delete(weapon))
@@ -502,7 +488,6 @@ export class Actors {
     this.tracks = []
     this.releaseCommon?.()
     this.releaseCommon = undefined
-    this.notice.remove()
     for (const [id, rider] of this.actors) {
       this.ragdolls.release(id)
       rider.actor.destroy()

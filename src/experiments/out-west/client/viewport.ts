@@ -1,34 +1,23 @@
 import { type Entity, Vec3 } from 'playcanvas'
-import { NativeAtmosphere } from '../duel/native-atmosphere.ts'
 import { type FrontierSettings, loadSettings } from '../ffa/client/settings.ts'
 import { BankGuide } from '../ffa/client/wayfinding.ts'
 import { canFire } from '../ffa/sim/combat.ts'
-import { TOWN, zoneAt } from '../ffa/sim/layout.ts'
-import type { World } from '../ffa/sim/state.ts'
+import { zoneAt } from '../ffa/sim/layout.ts'
 import type { SimEvent } from '../ffa/sim/types.ts'
 import type { CollisionData, PlayerInput, PlayerState } from '../runtime/protocol.ts'
 import { Buttons } from '../runtime/protocol.ts'
-import { Actors, type Appearance, type PreparedCharacters } from './actors.ts'
+import type { Appearance } from './actors.ts'
 import { GameApplication } from './application.ts'
 import { GameEffects } from './effects.ts'
-import { NativeEnvironment } from './environment.ts'
-import { type BreakableProps, prepareProps } from './environment-response.ts'
+import { FrontierScene, type FrontierSceneState, firstFrame } from './frontier-scene.ts'
 import { GameInput } from './input.ts'
-import { FrontierItems } from './items.ts'
 import { placeCamera } from './player-camera.ts'
-import type { NativeRagdolls } from './ragdolls.ts'
-import { shotVisuals } from './shot-visuals.ts'
 import { aimedTarget } from './targeting.ts'
 import { touchActions } from './touch-actions.ts'
 import { viewportDebug } from './viewport-debug.ts'
 import { createEffects } from './viewport-effects.ts'
-import { BreakableWindows } from './windows.ts'
 
-export interface GameSession {
-  readonly world?: World
-  readonly selfId: string
-  readonly players: ReadonlyMap<string, PlayerState>
-  appearance?: (id: string) => Appearance | undefined
+export interface GameSession extends FrontierSceneState {
   update: (dt: number, input: PlayerInput) => void
   /** Raycasts the authoritative collision scene to keep the follow camera out of walls. */
   cameraTrace?: (from: Vec3, to: Vec3) => Vec3 | null
@@ -128,30 +117,6 @@ function createInput(
   return input
 }
 
-async function warmCharacter(
-  application: GameApplication,
-  prepared: PreparedCharacters,
-  { signal, windows }: { signal: AbortSignal; windows: BreakableWindows },
-): Promise<void> {
-  const spawn = TOWN.spawns[0]
-  if (!spawn) {
-    throw new Error('The town has no arrival point.')
-  }
-  prepared.root.enabled = true
-  prepared.root.setPosition(spawn.x, 0, spawn.z)
-  application.camera.setPosition(spawn.x + 3, 2, spawn.z + 5)
-  application.camera.lookAt(new Vec3(spawn.x, 1, spawn.z))
-  // Render real PBR/skin/shot variants behind loading before reserving a live player.
-  const glass = windows.stageShardWarmup()
-  try {
-    await shotVisuals(application).warm({ x: spawn.x, y: 1.3, z: spawn.z })
-  } finally {
-    glass?.destroy()
-  }
-  await firstFrame(application, signal)
-  await firstFrame(application, signal)
-}
-
 function updateGuide(
   guide: BankGuide | undefined,
   camera: Entity,
@@ -171,99 +136,6 @@ function updateGuide(
       dt,
     )
   }
-}
-
-async function loadTown(application: GameApplication, url: string, signal: AbortSignal) {
-  const town = await application.instantiate(url, 'town')
-  const environment = new NativeEnvironment(application, true)
-  try {
-    environment.attach(town, await application.loadContainer(url))
-    await environment.ready
-    signal.throwIfAborted()
-    return { town, environment }
-  } catch (error) {
-    environment.destroy()
-    throw error
-  }
-}
-
-async function prepareAtmosphere(
-  application: GameApplication,
-  signal: AbortSignal,
-): Promise<NativeAtmosphere | undefined> {
-  if (!TOWN.ambient || signal.aborted) {
-    return undefined
-  }
-  const atmosphere = new NativeAtmosphere(application)
-  const abort = () => atmosphere.destroy()
-  signal.addEventListener('abort', abort, { once: true })
-  try {
-    await atmosphere.load(TOWN.ambient)
-    if (signal.aborted) {
-      return undefined
-    }
-    atmosphere.arrange(TOWN.ambient)
-    return atmosphere
-  } catch (error) {
-    atmosphere.destroy()
-    throw error
-  } finally {
-    signal.removeEventListener('abort', abort)
-  }
-}
-async function warmFrontierView(
-  application: GameApplication,
-  signal: AbortSignal,
-  side: -1 | 1,
-): Promise<void> {
-  if (signal.aborted) {
-    return
-  }
-  const x = TOWN.size * (0.5 + side * 0.36)
-  const z = TOWN.size * (0.5 + side * 0.47)
-  application.camera.setPosition(x, 2.2, z)
-  application.camera.lookAt(x, 1.2, TOWN.size / 2)
-  await firstFrame(application, signal)
-}
-
-async function warmFrontierCharacters(
-  application: GameApplication,
-  prepared: PreparedCharacters,
-  {
-    atmosphere,
-    signal,
-    windows,
-  }: { atmosphere: NativeAtmosphere | undefined; signal: AbortSignal; windows: BreakableWindows },
-): Promise<void> {
-  // The arrival view leaves most of the perimeter outside the camera frustum.
-  await warmFrontierView(application, signal, -1)
-  await warmFrontierView(application, signal, 1)
-  if (signal.aborted) {
-    return
-  }
-  const spawn = TOWN.spawns[0]
-  const restore = spawn ? atmosphere?.warm(spawn.x, 0, spawn.z) : undefined
-  try {
-    await warmCharacter(application, prepared, { signal, windows })
-  } finally {
-    restore?.()
-  }
-}
-
-function firstFrame(application: GameApplication, signal: AbortSignal): Promise<void> {
-  return new Promise((resolve) => {
-    const done = () => {
-      application.app.off('postrender', done)
-      signal.removeEventListener('abort', done)
-      resolve()
-    }
-    application.app.once('postrender', done)
-    if (signal.aborted) {
-      done()
-    } else {
-      signal.addEventListener('abort', done, { once: true })
-    }
-  })
 }
 
 function createCanvas(root: HTMLElement): HTMLCanvasElement {
@@ -300,11 +172,21 @@ function screenAim(
   }
 }
 
-function bankGuideFor(root: HTMLElement, world: GameSession['world'], items: FrontierItems) {
-  if (!world) {
-    items.destroy()
-  }
-  return world ? new BankGuide(root, world.grid) : undefined
+function createRiderNotice(root: HTMLElement, signal: AbortSignal, retryRiders: () => void) {
+  const notice = document.createElement('div')
+  notice.className = 'pc-game-status'
+  notice.setAttribute('role', 'status')
+  notice.style.cssText = 'top:auto;bottom:20px;left:50%;transform:translateX(-50%)'
+  notice.hidden = true
+  const message = document.createElement('span')
+  message.textContent = 'Some riders are still loading.'
+  const retry = document.createElement('button')
+  retry.type = 'button'
+  retry.textContent = 'Retry loading riders'
+  retry.addEventListener('click', retryRiders, { signal })
+  notice.append(message, retry)
+  root.append(notice)
+  return notice
 }
 
 function ownAfterLoad<T>(signal: AbortSignal, value: T, dispose: (value: T) => void): T {
@@ -320,17 +202,11 @@ export function mountGameViewport(root: HTMLElement, options: ViewportOptions): 
   const canvas = createCanvas(root)
   let application: GameApplication | undefined
   let session: GameSession | undefined
-  let actors: Actors | undefined
+  let scene: FrontierScene | undefined
   let input: GameInput | undefined
   let effects: GameEffects | undefined
-  let ragdolls: NativeRagdolls | undefined
-  let items: FrontierItems | undefined
   let guide: BankGuide | undefined
-  let windows: BreakableWindows | undefined
-  let props: BreakableProps | undefined
-  let environment: NativeEnvironment | undefined
-  let atmosphere: NativeAtmosphere | undefined
-  let prepared: PreparedCharacters | undefined
+  let riderNotice: HTMLElement | undefined
   const lifecycle = new AbortController()
   const signal = lifecycle.signal
   let settings = loadSettings()
@@ -348,13 +224,7 @@ export function mountGameViewport(root: HTMLElement, options: ViewportOptions): 
       effects?.predictShot(session.world?.players[Number(session.selfId)], intent)
       session.update(Math.min(dt, 0.1), intent)
     }
-    actors?.update(session.players, dt, first ? session.selfId : undefined)
-    actors?.aim(intent, playing && first && input.enabled, dt)
-    atmosphere?.update(dt)
-    items?.update(session.world)
-    windows?.update(session.world?.glass, session.world?.grid.glass)
-    props?.update(session.world)
-    environment?.syncTumbleweeds(session.world, dt)
+    scene?.present(session, dt, { first, intent, aim: playing && first && input.enabled })
     const player = session.players.get(session.selfId)
     if (!player) {
       return
@@ -368,7 +238,7 @@ export function mountGameViewport(root: HTMLElement, options: ViewportOptions): 
       recoil: effects?.recoilPitch ?? 0,
       trace: session.cameraTrace,
     })
-    actors?.presentFirstPerson(application.camera, dt)
+    scene?.actors?.presentFirstPerson(application.camera, dt)
     effects?.flushShot(player)
     updateGuide(guide, application.camera, session, dt)
     options.onState?.(player, session.players.size)
@@ -378,50 +248,32 @@ export function mountGameViewport(root: HTMLElement, options: ViewportOptions): 
     try {
       const created = await GameApplication.create({ canvas, viewport: root, frontier: true })
       application = ownAfterLoad(signal, created, (value) => value.destroy())
-      options.onStage?.('Loading the streets…')
-      const [loaded, appearanceToPrepare] = await Promise.all([
-        loadTown(created, options.townUrl, signal).then((result) => {
-          environment = ownAfterLoad(signal, result.environment, (value) => value.destroy())
-          return result
-        }),
-        options.prepareAppearance?.(signal),
-      ])
-      signal.throwIfAborted()
-      windows = new BreakableWindows(loaded.town)
-      const propOptions = { windows, collision: options.collision, signal }
-      const scenery = await prepareProps(created, loaded.town, propOptions)
-      if (!scenery) {
-        return
-      }
-      ragdolls = scenery.ragdolls
-      props = scenery.props
-      options.onStage?.('Getting your rider and gear ready…')
-      prepared = ownAfterLoad(signal, await Actors.prepare(created, appearanceToPrepare), (value) =>
-        value.dispose(),
-      )
-      await GameEffects.preloadAudio(created)
-      signal.throwIfAborted()
-      items = ownAfterLoad(signal, await FrontierItems.create(created), (value) => value.destroy())
-      atmosphere = await prepareAtmosphere(created, signal)
-      await warmFrontierCharacters(created, prepared, { atmosphere, signal, windows })
+      const presentation = new FrontierScene(created, signal)
+      scene = presentation
+      await presentation.load({
+        ...options,
+        prepareAudio: () => GameEffects.preloadAudio(created),
+      })
       signal.throwIfAborted()
       options.onStage?.('Finding your place in town…')
       const createdSession = ownAfterLoad(signal, await options.createSession(), (value) =>
         value.dispose(),
       )
       session = createdSession
-      props.update(createdSession.world)
-      const appearance = (id: string) => session?.appearance?.(id)
-      actors = new Actors(created, ragdolls, appearance, () => session?.world)
-      await actors.initialize(session.players, session.selfId, prepared)
-      prepared = undefined
-      signal.throwIfAborted()
-      input = createInput(canvas, root, settings, session.players.get(session.selfId))
-      effects = createEffects(created, actors, createdSession, { windows, items, props })
+      const notice = createRiderNotice(root, signal, () => presentation.actors?.retry())
+      riderNotice = notice
+      const scenery = await presentation.bind(createdSession, (visible) => {
+        notice.hidden = !visible
+      })
+      input = createInput(canvas, root, settings, createdSession.players.get(createdSession.selfId))
+      effects = createEffects(created, scenery.actors, createdSession, scenery)
       await effects.ready
       signal.throwIfAborted()
-      guide = bankGuideFor(root, createdSession.world, items)
-      items = guide ? items : undefined
+      const world = createdSession.world
+      if (world) {
+        guide = new BankGuide(root, world.grid)
+      }
+      presentation.discardItemsWithoutWorld(world)
       created.app.on('update', update)
       await firstFrame(created, signal)
       signal.throwIfAborted()
@@ -442,16 +294,10 @@ export function mountGameViewport(root: HTMLElement, options: ViewportOptions): 
       lifecycle.abort()
       application?.app.off('update', update)
       input?.destroy()
-      items?.destroy()
-      props?.destroy()
-      environment?.destroy()
-      atmosphere?.destroy()
       guide?.destroy()
       effects?.destroy()
-      windows?.destroy()
-      actors?.destroy()
-      prepared?.dispose()
-      ragdolls?.destroy()
+      riderNotice?.remove()
+      scene?.destroy()
       session?.dispose()
       application?.destroy()
       canvas.remove()
@@ -479,6 +325,14 @@ export function mountGameViewport(root: HTMLElement, options: ViewportOptions): 
       settings = { ...settings, view: value ? 'first' : 'third' }
     },
     aimPoint: () => screenAim(settings, input, application),
-    debug: () => viewportDebug({ application, session, windows, actors, ragdolls, props }),
+    debug: () =>
+      viewportDebug({
+        application,
+        session,
+        windows: scene?.windows,
+        actors: scene?.actors,
+        ragdolls: scene?.ragdolls,
+        props: scene?.props,
+      }),
   }
 }
