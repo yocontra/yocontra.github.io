@@ -62,16 +62,18 @@ export interface GameViewport {
 }
 
 const target = new Vec3()
-function sampleInput(options: {
-  session: GameSession
-  input: GameInput
-  settings: FrontierSettings
-  camera: Entity
-  sequence: number
-  touch: boolean
-  dt: number
-}): PlayerInput {
-  const { session, input, settings, camera, sequence, touch, dt } = options
+function sampleInput(
+  options: {
+    session: GameSession
+    input: GameInput
+    settings: FrontierSettings
+    touch: boolean
+    dt: number
+  },
+  camera: Entity,
+  sequence: number,
+): PlayerInput {
+  const { session, input, settings, touch, dt } = options
   const intent = input.sample(sequence, dt)
   if (!input.enabled) {
     return intent
@@ -333,22 +335,15 @@ export function mountGameViewport(root: HTMLElement, options: ViewportOptions): 
   const signal = lifecycle.signal
   let settings = loadSettings()
   let first = options.firstPerson ?? settings.view === 'first'
-  let sequence = 0
+  let seq = 0
   const touch = matchMedia('(pointer: coarse)').matches
   let playing = false
+  let inputAllowed = true
   const update = (dt: number): void => {
     if (signal.aborted || !session || !input || !application || document.hidden) {
       return
     }
-    const intent = sampleInput({
-      session,
-      input,
-      settings,
-      camera: application.camera,
-      sequence: sequence++,
-      touch,
-      dt,
-    })
+    const intent = sampleInput({ session, input, settings, touch, dt }, application.camera, seq++)
     if (playing) {
       effects?.predictShot(session.world?.players[Number(session.selfId)], intent)
       session.update(Math.min(dt, 0.1), intent)
@@ -432,7 +427,7 @@ export function mountGameViewport(root: HTMLElement, options: ViewportOptions): 
       signal.throwIfAborted()
       created.quality.beginMeasurement()
       playing = true
-      input.setEnabled(true)
+      input.setEnabled(inputAllowed)
       options.onReady?.()
     } catch (error) {
       if (!signal.aborted) {
@@ -473,7 +468,10 @@ export function mountGameViewport(root: HTMLElement, options: ViewportOptions): 
       first = value.view === 'first'
       input?.configure(value)
     },
-    inputEnabled: (value) => input?.setEnabled(value),
+    inputEnabled(value) {
+      inputAllowed = value
+      input?.setEnabled(playing && value)
+    },
     resetFeedback: () => effects?.reset(),
     tap: (bit) => input?.tap(bit),
     firstPerson(value) {

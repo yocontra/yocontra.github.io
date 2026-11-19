@@ -4,6 +4,7 @@ import { chromium } from 'playwright'
 
 const origin = process.env.OW_ORIGIN ?? 'http://127.0.0.1:4390'
 const api = process.env.OW_API ?? 'http://127.0.0.1:8792'
+const duringLoad = process.argv.includes('--during-load')
 const seed = (await fetch(`${api}/__test/seed`).then((response) => response.json())) as {
   token: string
 }
@@ -24,7 +25,27 @@ try {
     }
     await route.continue()
   })
-  await page.addInitScript(() => {
+  await page.addInitScript((pauseAfterJoin) => {
+    if (pauseAfterJoin) {
+      const request = globalThis.requestAnimationFrame.bind(globalThis)
+      const held: FrameRequestCallback[] = []
+      let paused = true
+      globalThis.requestAnimationFrame = (callback) =>
+        request((timestamp) => {
+          if (paused && Reflect.get(globalThis, '__nativeFrontierSession')) {
+            held.push(callback)
+            Reflect.set(globalThis, '__reconnectFrameHeld', true)
+          } else {
+            callback(timestamp)
+          }
+        })
+      Reflect.set(globalThis, '__reconnectResumeFrames', () => {
+        paused = false
+        for (const callback of held.splice(0)) {
+          request(callback)
+        }
+      })
+    }
     class NativeSocket extends WebSocket {
       constructor(socketUrl: string | URL, protocols?: string | string[]) {
         super(socketUrl, protocols)
@@ -39,15 +60,17 @@ try {
       }
     }
     Reflect.set(globalThis, 'WebSocket', NativeSocket)
-  })
+  }, duringLoad)
   const url = new URL('/experiments/out-west/frontier/', origin)
   url.searchParams.set('server', 'remote')
   url.searchParams.set('api', api)
   url.searchParams.set('token', seed.token)
   await page.goto(url.href)
-  await page.waitForFunction(() => Boolean(Reflect.get(globalThis, '__playcanvasFrontier')), null, {
-    timeout: 90_000,
-  })
+  await page.waitForFunction(
+    (field) => Boolean(Reflect.get(globalThis, field)),
+    duringLoad ? '__reconnectFrameHeld' : '__playcanvasFrontier',
+    { timeout: 90_000, polling: 25 },
+  )
   const read = () =>
     page.evaluate(() => {
       const session = Reflect.get(globalThis, '__nativeFrontierSession')
@@ -60,20 +83,26 @@ try {
         name: self.name,
         shots: self.stats.shots,
         pose: { x: pose.x, z: pose.z, vx: pose.vx, vz: pose.vz },
-        debug: Reflect.get(globalThis, '__playcanvasFrontier').debug(),
+        debug: Reflect.get(globalThis, '__playcanvasFrontier')?.debug(),
       }
     })
-  await page.evaluate(() => Reflect.get(globalThis, '__playcanvasFrontier').tap(1))
-  await page.waitForFunction(() => {
-    const s = Reflect.get(globalThis, '__nativeFrontierSession')
-    return s.world.players[s.selfSlot].stats.shots > 0
-  })
+  if (duringLoad) {
+    if (await page.evaluate(() => Boolean(Reflect.get(globalThis, '__playcanvasFrontier')))) {
+      throw new Error('The view finished loading before the warmup disconnect')
+    }
+  } else {
+    await page.evaluate(() => Reflect.get(globalThis, '__playcanvasFrontier').tap(1))
+    await page.waitForFunction(() => {
+      const s = Reflect.get(globalThis, '__nativeFrontierSession')
+      return s.world.players[s.selfSlot].stats.shots > 0
+    })
+  }
   const before = await read()
   console.info('before-close', JSON.stringify(before))
   await page.evaluate(() =>
     Reflect.get(globalThis, '__reconnectSocket').close(1000, 'Local sole-human reconnect test'),
   )
-  await page.waitForFunction(() => document.querySelector('.pc-loading') !== null)
+  await page.getByText('Rejoining Perdition', { exact: true }).waitFor({ state: 'visible' })
   let empty: unknown
   const transitions: unknown[] = []
   const deadline = Date.now() + 10_000
@@ -103,6 +132,18 @@ try {
     throw new Error('Sole-human socket loss retained a native world, lease or running room')
   }
   console.info('empty-native', JSON.stringify(empty))
+  if (duringLoad) {
+    await page.evaluate(() => Reflect.get(globalThis, '__reconnectResumeFrames')())
+    await page.waitForFunction(() => Boolean(Reflect.get(globalThis, '__playcanvasFrontier')))
+    const pending = await page.evaluate(() => ({
+      loading: Boolean(document.querySelector('.pc-loading')),
+      title: document.querySelector('.pc-travel strong')?.textContent,
+      inert: document.querySelector<HTMLElement>('.pc-touch-controls')?.inert,
+    }))
+    if (pending.title !== 'Rejoining Perdition' || !pending.loading || !pending.inert) {
+      throw new Error(`Warmup overrode the active reconnect: ${JSON.stringify(pending)}`)
+    }
+  }
   release()
   await page.waitForFunction(() => document.querySelector('.pc-loading') === null)
   const after = await read()
@@ -131,12 +172,21 @@ try {
     return s.world.players[s.selfSlot].stats.shots === 1
   })
   const playable = await read()
+  if (
+    await page.locator('.pc-touch-controls').evaluate((element) => (element as HTMLElement).inert)
+  ) {
+    throw new Error('Controls stayed disabled after the replacement session opened')
+  }
   await page.evaluate(() => Reflect.get(globalThis, '__playcanvasFrontier').destroy())
   if (errors.length > 0) {
     throw new Error(errors.join('\n'))
   }
-  const result = { before, empty, after, playable, connections, reservations, errors }
-  await writeFile('/tmp/out-west-freshroom-reconnect.json', JSON.stringify(result, null, 2))
+  const result = { duringLoad, before, empty, after, playable, connections, reservations, errors }
+  const suffix = duringLoad ? '-during-load' : ''
+  await writeFile(
+    `/tmp/out-west-freshroom-reconnect${suffix}.json`,
+    JSON.stringify(result, null, 2),
+  )
   console.info(JSON.stringify(result))
 } finally {
   await browser.close()

@@ -60,7 +60,11 @@ export function mountNativeFrontier(
   let voice: FrontierVoice | undefined
   let removePerformanceSnapshot: (() => void) | undefined
   let started = false
-  let disconnected = false
+  let connection: 'open' | 'retrying' | 'closed' = 'open'
+  const finishTravel = (): void => {
+    status.remove()
+    root.classList.remove('pc-loading')
+  }
   const exit = (reason: 'left' | 'quit' | 'lost' | 'refused', detail?: string): void => {
     destroy()
     if (options.onExit) {
@@ -106,30 +110,24 @@ export function mountNativeFrontier(
               ...(options.lobbyId ? { lobbyId: options.lobbyId } : {}),
               ...(options.getToken ? { getToken: options.getToken } : {}),
               onState(state, detail) {
+                if (lifecycle.signal.aborted) {
+                  return
+                }
+                connection = state
+                voice?.setLinked(state === 'open')
+                game.inputEnabled(state === 'open')
                 if (state === 'retrying') {
-                  voice?.setLinked(false)
                   game.resetFeedback()
                   status.hidden = false
                   root.append(status)
                   title.textContent = 'Rejoining Perdition'
                   message.textContent = 'Finding your place in town…'
                   root.classList.add('pc-loading')
-                  game.inputEnabled(false)
-                }
-                if (state === 'open') {
-                  voice?.setLinked(true)
-                }
-                if (state === 'open' && started) {
-                  status.remove()
-                  root.classList.remove('pc-loading')
-                  game.inputEnabled(true)
-                }
-                if (state === 'closed') {
-                  voice?.setLinked(false)
-                  disconnected = true
+                } else if (state === 'closed') {
                   title.textContent = 'Connection closed'
-                  game.inputEnabled(false)
                   leaveStatus('lost', detail ?? 'Connection lost.')
+                } else if (started) {
+                  finishTravel()
                 }
               },
             })
@@ -141,6 +139,7 @@ export function mountNativeFrontier(
       presentation = new FrontierHud(root, session, game, () => exit('quit'))
       if (!session.practice) {
         voice = new FrontierVoice(root, session, options.audio ?? null, game.audioContext)
+        voice.setLinked(connection === 'open')
       }
       session.subscribe((event) => {
         if (event.type === 'left' && event.player === session.selfSlot) {
@@ -159,7 +158,7 @@ export function mountNativeFrontier(
       return session
     },
     onStage(text) {
-      if (!started) {
+      if (!started && connection === 'open') {
         message.textContent = text
       }
     },
@@ -171,16 +170,13 @@ export function mountNativeFrontier(
   root.append(status)
   const ready = game.ready
     .then(() => {
-      if (lifecycle.signal.aborted) {
-        return
-      }
-      if (disconnected) {
-        game.inputEnabled(false)
+      if (lifecycle.signal.aborted || connection === 'closed') {
         return
       }
       started = true
-      root.classList.remove('pc-loading')
-      status.remove()
+      if (connection === 'open') {
+        finishTravel()
+      }
       if (import.meta.env.DEV) {
         Reflect.set(globalThis, '__playcanvasFrontier', game)
         Reflect.set(globalThis, '__frontier', () => game.debug())
@@ -191,6 +187,9 @@ export function mountNativeFrontier(
         return
       }
       presentation?.destroy()
+      if (connection === 'closed') {
+        return
+      }
       const detail = error instanceof Error ? error.message : 'Could not load Perdition.'
       leaveStatus('refused', detail)
     })
