@@ -24,6 +24,7 @@ import { Hub } from './ui/hub.ts'
 import { hubMeta } from './ui/meta-hub.ts'
 import { loadPosterArt } from './ui/poster.ts'
 import { installUiSounds } from './ui/sfx.ts'
+import { swallow } from './ui/sheet.ts'
 import { installTitleInput } from './ui/title-input.ts'
 import { Toaster } from './ui/toast.ts'
 
@@ -113,9 +114,8 @@ function wireTitleLinks(root: HTMLElement, title: HTMLElement): void {
     board ??= new Board(root)
     board.open()
   })
-  for (const a of title.querySelectorAll('a, button, .ow-credits')) {
-    a.addEventListener('pointerdown', (e) => e.stopPropagation())
-  }
+  // The title's background also starts the game, including after native input is ready.
+  swallow(title)
 }
 
 /** The queue spends its own Turnstile tokens (one per search), apart from ranked runs'. */

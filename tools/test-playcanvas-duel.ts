@@ -11,7 +11,7 @@ try {
   await page.waitForFunction(() => Boolean(Reflect.get(globalThis, '__ow')), null, {
     timeout: 60_000,
   })
-  await page.locator('.ow-start').click()
+  await page.locator('.ow-title.ready .ow-logo').click()
   await page.waitForFunction(() => Reflect.get(globalThis, '__ow').director.phase === 'cock')
   const pause = page.getByRole('button', { name: 'Pause', exact: true })
   const pauseIcon = pause.locator('span').first()
