@@ -29,9 +29,7 @@ export function toScreen(
   inset: number,
   out: ScreenPoint,
 ): ScreenPoint {
-  const canvas = cam.system.app.graphicsDevice.canvas
-  const w = canvas.clientWidth
-  const h = canvas.clientHeight
+  const { width: w, height: h } = cam.system.app.graphicsDevice.clientRect
   world.set(wx, wy, wz)
   direction.sub2(world, cam.entity.getPosition())
   const behind = direction.dot(cam.entity.forward) < cam.nearClip

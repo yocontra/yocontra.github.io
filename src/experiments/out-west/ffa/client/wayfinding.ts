@@ -52,8 +52,20 @@ const NEIGHBOURS: readonly (readonly [number, number, number])[] = [
   [-1, -1, Math.SQRT2],
 ]
 
+function canStep(grid: Grid, column: number, row: number, nextColumn: number, nextRow: number) {
+  const { cells, n } = grid
+  if ((cells[nextRow * n + nextColumn] ?? 0) & BLOCK_MOVE) {
+    return false
+  }
+  if (column === nextColumn || row === nextRow) {
+    return true
+  }
+  // A diagonal needs both adjacent cells clear of walls.
+  const adjacent = (cells[row * n + nextColumn] ?? 0) | (cells[nextRow * n + column] ?? 0)
+  return (adjacent & BLOCK_MOVE) === 0
+}
+
 /** Walking distance (m) from every cell to the nearest window, Infinity where unreachable. */
-// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: one Dijkstra flood with its bounds and corner checks inline
 export function flood(grid: Grid, targets: readonly BankWindow[]): Float64Array {
   const n = grid.n
   const dist = new Float64Array(n * n).fill(Number.POSITIVE_INFINITY)
@@ -79,18 +91,10 @@ export function flood(grid: Grid, targets: readonly BankWindow[]): Float64Array 
       if (cc < 0 || rr < 0 || cc >= n || rr >= n) {
         continue
       }
+      if (!canStep(grid, c, r, cc, rr)) {
+        continue
+      }
       const j = rr * n + cc
-      if ((grid.cells[j] ?? 0) & BLOCK_MOVE) {
-        continue
-      }
-      // no cutting a wall's corner on a diagonal
-      if (
-        dc !== 0 &&
-        dr !== 0 &&
-        ((grid.cells[r * n + cc] ?? 0) & BLOCK_MOVE || (grid.cells[rr * n + c] ?? 0) & BLOCK_MOVE)
-      ) {
-        continue
-      }
       const nd = d + w * grid.cell
       if (nd < (dist[j] ?? 0)) {
         dist[j] = nd
@@ -219,7 +223,10 @@ export class BankGuide {
       for (const [dc, dr] of NEIGHBOURS) {
         const cc = c + dc
         const rr = r + dr
-        const d = cc >= 0 && rr >= 0 && cc < n && rr < n ? (f[rr * n + cc] ?? bd) : bd
+        if (cc < 0 || rr < 0 || cc >= n || rr >= n || !canStep(g, c, r, cc, rr)) {
+          continue
+        }
+        const d = f[rr * n + cc] ?? Number.POSITIVE_INFINITY
         if (d < bd) {
           bd = d
           bc = cc
