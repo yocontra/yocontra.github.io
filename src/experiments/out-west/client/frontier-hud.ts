@@ -237,8 +237,11 @@ export class FrontierHud {
     this.hud.banner(duel ? cue : null)
     const touch = this.hud.root.classList.contains('fr-touchui')
     let prompt: string | null = null
-    if (zone && player.carried > 0) {
-      prompt = touch ? 'Hold USE to bank your carry' : 'Hold E to bank or ship your carry'
+    if (zone && player.carried > 0 && !player.channel) {
+      prompt =
+        zone.kind === 'bank'
+          ? 'Stand still at the window to deposit your cash'
+          : 'Stand still at the counter to ship your cash'
     }
     if (challenger) {
       prompt = `${challenger.name} called you out · ${touch ? 'Tap CALL' : 'Q'} to accept`

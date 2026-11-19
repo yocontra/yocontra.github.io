@@ -6,6 +6,7 @@ import { chromium } from 'playwright'
 import type { FrontierSession } from '../src/experiments/out-west/client/frontier-session.ts'
 import type { GameViewport } from '../src/experiments/out-west/client/viewport.ts'
 import { DEFAULTS } from '../src/experiments/out-west/ffa/client/settings.ts'
+import { CLIMBS } from '../src/experiments/out-west/ffa/sim/roofwalks.ts'
 
 const origin = process.env.OW_ORIGIN ?? 'http://127.0.0.1:4390'
 const output = process.env.OW_EVIDENCE ?? '/tmp/out-west-client-evidence'
@@ -256,40 +257,81 @@ try {
       throw new Error(`Missing primary touch action: ${name}`)
     }
   }
-  await mobile.evaluate(() => {
+  const initialPurse = await mobile.evaluate(() => {
     const session = (globalThis as Probe).__nativeFrontierSession
     const self = session?.world.players[session.selfSlot]
     const bank = session?.world.layout.zones.find((zone) => zone.kind === 'bank')
-    const challenger = session?.world.players.find((rider) => rider?.alive && rider.id !== self?.id)
-    if (!(session && self && bank && challenger)) {
-      throw new Error('Missing contextual action fixture')
+    if (!(session && self && bank)) {
+      throw new Error('Missing bank fixture')
     }
-    challenger.carried = 100
-    challenger.lastDamageTick = -1_000_000
     Object.assign(self, {
       x: bank.x,
       z: bank.z,
+      y: bank.y ?? 0,
+      carried: 100,
+      protectUntil: session.world.tick + 200,
+    })
+    return session.banked
+  })
+  await mobile.getByText('Banking…', { exact: true }).waitFor()
+  const use = mobile.getByRole('button', { name: 'USE', exact: true })
+  if (await use.isVisible()) {
+    throw new Error('Automatic deposit showed a redundant USE action')
+  }
+  await mobile.waitForFunction((purse) => {
+    const session = (globalThis as Probe).__nativeFrontierSession
+    const self = session?.world.players[session.selfSlot]
+    return session && self?.carried === 0 && session.banked >= purse + 100
+  }, initialPurse)
+  const hud = mobile.locator('.fr-hud')
+  await hud.getByRole('button', { name: 'Menu', exact: true }).click()
+  await hud.getByRole('button', { name: 'How to play', exact: true }).click()
+  await hud
+    .getByText('Follow the $ marker. Stand still at a bank window to deposit your cash.')
+    .waitFor()
+  await hud.locator('.fr-menu-resume').click()
+  await mobile.evaluate((climb) => {
+    const session = (globalThis as Probe).__nativeFrontierSession
+    const self = session?.world.players[session.selfSlot]
+    const challenger = session?.world.players.find((rider) => rider?.alive && rider.id !== self?.id)
+    if (!(session && self && climb && challenger)) {
+      throw new Error('Missing contextual action fixture')
+    }
+    Object.assign(challenger, { carried: 100, lastDamageTick: -1_000_000, lingerUntil: -1 })
+    Object.assign(self, {
+      x: climb.bottomX,
+      z: climb.bottomZ,
+      y: climb.bottom,
       carried: 100,
       dynamite: 1,
       calledBy: challenger.id,
       lastDamageTick: -1_000_000,
       calledUntil: session.world.tick + 10_000,
     })
-  })
-  await mobile.getByRole('button', { name: 'USE', exact: true }).waitFor()
+  }, CLIMBS[0])
+  await use.waitFor()
   for (const name of ['USE', 'CALL', 'ROLL', 'THROW', 'JUMP', 'CROUCH', 'RELOAD', 'AIM', 'FIRE']) {
     if (!(await mobile.getByRole('button', { name, exact: true }).isVisible())) {
       throw new Error(`Missing touch action: ${name}`)
     }
   }
   await mobile.screenshot({ path: `${output}/native-touch-auto-fire.png` })
+  await use.tap()
+  await mobile.waitForFunction(
+    () => {
+      const session = (globalThis as Probe).__nativeFrontierSession
+      return (session?.world.players[session.selfSlot]?.y ?? 0) > 2
+    },
+    undefined,
+    { timeout: 5000 },
+  )
   await mobile.evaluate(() => (globalThis as Probe).__playcanvasFrontier?.destroy())
   await mobile.close()
   if (errors.length > 0) {
     throw new Error(errors.join('\n'))
   }
   console.log(
-    'Native touch auto fire and all nine gameplay actions passed (desktop mobile emulation).',
+    'Native touch auto fire, automatic bank deposit, and all nine gameplay actions passed (desktop mobile emulation).',
   )
   if (process.env.OW_API) {
     const api = process.env.OW_API

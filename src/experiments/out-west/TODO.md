@@ -41,6 +41,8 @@ Verified Frontier performance baseline is `19dddb2f`. Readback on that release v
 - [x] Disable touch auto-fire while Frontier settings are open. Tab and Shift+Tab move focus through the settings. Headless Chrome checks cover eligible targets before and after the menu closes.
 - [x] Keep Frontier gameplay input blocked when the connection recovers behind an open menu. An authenticated test with a local room verifies that the socket and ticks resume, the menu stays open, and movement entered in the menu clears before play resumes.
 - [x] Prepare walking distances for the bank guide before enabling the HUD. A prepared route tracks the current cover grid.
+- [x] Use the same corner rules for the bank guide's distance field and waypoint search. Across 334,872 reachable cell centers, including eight changes to barrel cover, the next waypoint stays visible and the distance field keeps its original values.
+- [x] Tell players how automatic deposits start. Practice browser checks verify a full touch deposit without the USE button, the updated pause help and a touch climb with USE at a boxcar ladder.
 - [x] Check viewport ownership after async loading. A late resource or session is released if the viewport has closed.
 - [x] Discard a delayed rider fallback when its lobby slot belongs to a new life. A late failure from the prior life leaves the new rider free to load. Both regression tests failed before the change.
 - [x] Clear movement and held actions when the browser releases touch pointer capture. A browser-generated touch test reproduced stuck movement and firing, then verified that both clear and the fire button returns to its idle state.
@@ -343,6 +345,14 @@ The clean `8a679629` build recorded six 60-second windows against the local Work
 | 32 riders, landscape            |    22.30 |                 13 |               55 |                    46 |                      4 |
 
 The Safari recorder logs the scheduled and actual native handoff for tap releases. Its receipt separates the browser event duration from the additional listener delay and keeps the existing ±35 ms limits. Headless Chrome collects page and frame evidence only. The native host foreground recorder runs for visible Chrome on macOS.
+
+Headless Chrome at `2f776f1b` averaged 59.50 FPS in the ordinary lobby and 59.89 FPS with 32 riders over 60 seconds each. The minimums were 58 and 59. Two 32-rider landscape runs on the same build in iPhone 13 mini simulator Safari averaged 22.53 and 23.11 FPS. Their minimums were 14 and 16.
+
+- [x] Paint the voice control only when its state changes. In Chrome, 300 stable frames with voice off produce zero control mutations, down from 1,500. Touch release, visibility changes and the held-talk display have regression coverage.
+- [x] Restart carry, hurt and hit feedback without forcing layout. All 50 matched Chrome captures retain the same pixels, including interruption, kill and reduced-motion paths.
+- [x] Size the Frontier drawing buffer on changes to canvas geometry, quality or pixel density. Eighteen matched Chrome captures retain the same pixels and canvas size after resize across both tiers. The game observes CSS changes before updating the buffer and can draw one frame at the previous size.
+
+An active 32-rider landscape Safari window at `d494b73c` used the same runtime as `686a3583`. All 60 seconds fell below 30 FPS, with a 20.67 FPS mean and a 12 FPS minimum. The recorder retained all 108 touch endpoints. It logged 51 late Safari listeners, six late native event timestamps, 13 gesture failures and 44 of 60 foreground samples. It restored the game settings and display, then shut down the simulator. The active Safari frame and input limits remain open.
 
 ## First-person models and aiming
 

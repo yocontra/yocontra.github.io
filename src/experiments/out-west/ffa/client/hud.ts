@@ -48,6 +48,7 @@ function el<K extends keyof HTMLElementTagNameMap>(
 }
 
 const money = (n: number): string => `$${Math.max(0, Math.round(n)).toLocaleString('en-US')}`
+const BANK_HELP = 'Follow the $ marker. Stand still at a bank window to deposit your cash.'
 
 export interface HudOptions {
   touch: boolean
@@ -224,7 +225,7 @@ export class Hud {
           ['Shoot', 'FIRE shoots. Hold AIM to line up a shot. RELOAD fills your gun.'],
           ['Take cover', 'JUMP clears low cover. CROUCH lowers your stance. ROLL dodges.'],
           ['Win the money', 'Defeated riders drop bags. Walk over a bag to collect it.'],
-          ['Bank it', 'Follow the $ marker. Hold USE at a bank window to save your carry.'],
+          ['Bank it', BANK_HELP],
           ['Call a duel', 'Aim at a rider and tap CALL. Wait for the bell before firing.'],
         ]
       : [
@@ -232,7 +233,7 @@ export class Hud {
           ['Shoot', 'Left click fires. Right click aims. R reloads.'],
           ['Take cover', 'Space jumps. C crouches. Alt rolls. G throws dynamite.'],
           ['Win the money', 'Defeated riders drop bags. Walk over a bag to collect it.'],
-          ['Bank it', 'Follow the $ marker. Hold E at a bank window to save your carry.'],
+          ['Bank it', BANK_HELP],
           ['Call a duel', 'Aim at a rider and press Q. Wait for the bell before firing.'],
         ]
     for (const [label, text] of instructions) {

@@ -226,8 +226,8 @@ export interface TownLayout {
 export const TOWN: TownLayout = townJson as TownLayout
 
 /**
- * The bank's deposit windows (inside the lobby, at the teller grilles): stand in one with money
- * and interact to bank it. For HUD arrows and onboarding.
+ * The deposit windows at the teller grilles. Stand still in one while carrying cash to bank it.
+ * For HUD arrows and onboarding.
  */
 export const BANK_WINDOWS: readonly Zone[] = TOWN.zones.filter((z) => z.kind === 'bank')
 

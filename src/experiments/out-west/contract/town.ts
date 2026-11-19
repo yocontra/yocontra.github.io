@@ -193,7 +193,7 @@ export const BTN_FIRE = 1
 export const BTN_AIM = 2
 export const BTN_ROLL = 4
 export const BTN_RELOAD = 8
-/** Contextual: bank, open a strongbox, accept a call-out. */
+/** Climb a ladder when in reach. */
 export const BTN_INTERACT = 16
 /** Call out the player nearest your aim within 12 m. */
 export const BTN_CALLOUT = 32
