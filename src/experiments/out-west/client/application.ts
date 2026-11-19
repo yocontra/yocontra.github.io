@@ -18,6 +18,7 @@ import {
   LightComponentSystem,
   ParticleSystemComponentSystem,
   RESOLUTION_AUTO,
+  RESOLUTION_FIXED,
   RenderComponentSystem,
   SHADOW_PCF5_32F,
   SoundComponentSystem,
@@ -62,6 +63,7 @@ export class GameApplication {
   private readonly resizeObserver: ResizeObserver
   private readonly loads = new Map<string, Promise<Asset>>()
   private previousTime = 0
+  private pixelDensity = devicePixelRatio
   private readonly environmentTextures: Texture[] = []
   private environmentEpoch = 0
   private environmentSource = '' as string
@@ -112,9 +114,20 @@ export class GameApplication {
     sun.setEulerAngles(48, -35, 0)
     app.root.addChild(sun)
     app.setCanvasFillMode(FILLMODE_FILL_WINDOW)
-    app.setCanvasResolution(RESOLUTION_AUTO)
-    this.resizeObserver = new ResizeObserver(() => this.resize())
+    if (!options.frontier) {
+      app.setCanvasResolution(RESOLUTION_AUTO)
+    }
+    this.resizeObserver = new ResizeObserver((entries) => {
+      if (entries.some((entry) => entry.target === options.viewport)) {
+        this.resize()
+      } else {
+        this.resizeBackbuffer()
+      }
+    })
     this.resizeObserver.observe(options.viewport)
+    if (options.frontier && options.canvas !== options.viewport) {
+      this.resizeObserver.observe(options.canvas)
+    }
     document.addEventListener(
       'visibilitychange',
       () => {
@@ -185,8 +198,13 @@ export class GameApplication {
     const now = performance.now()
     const elapsed = this.previousTime > 0 ? (now - this.previousTime) / 1000 : 0
     this.previousTime = now
-    if (!document.hidden && elapsed > 0 && this.quality.sample(elapsed)) {
+    if (document.hidden) {
+      return
+    }
+    if (elapsed > 0 && this.quality.sample(elapsed)) {
       this.resize()
+    } else if (this.options.frontier && this.pixelDensity !== devicePixelRatio) {
+      this.resizeBackbuffer()
     }
   }
   private resize(): void {
@@ -195,7 +213,22 @@ export class GameApplication {
     }
     const box = this.options.viewport.getBoundingClientRect()
     this.app.graphicsDevice.maxPixelRatio = this.quality.pixelRatio
-    this.app.resizeCanvas(Math.max(1, Math.round(box.width)), Math.max(1, Math.round(box.height)))
+    const size = this.app.resizeCanvas(
+      Math.max(1, Math.round(box.width)),
+      Math.max(1, Math.round(box.height)),
+    )
+    if (this.options.frontier && size) {
+      this.resizeBackbuffer()
+    }
+  }
+  private resizeBackbuffer(): void {
+    if (this.controller.signal.aborted || this.app.xr?.active) {
+      return
+    }
+    // Match the native AUTO bounds on actual resize events, including canvas-only CSS changes.
+    const { canvas } = this.options
+    this.app.setCanvasResolution(RESOLUTION_FIXED, canvas.clientWidth, canvas.clientHeight)
+    this.pixelDensity = devicePixelRatio
   }
   /** A failed load is evicted so a retry can recover without rebuilding the application. */
   loadContainer(url: string): Promise<Asset> {
