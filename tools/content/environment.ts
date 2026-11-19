@@ -17,6 +17,7 @@ import { compressEnvironmentTextures } from './environment-textures.ts'
 import { formatContent } from './format-content.ts'
 import { markFrontierInertWind } from './frontier-inert-wind.ts'
 import { packFrontierVertices } from './frontier-vertex-packing.ts'
+import { orderLowYardCactusIndices } from './frontier-yard-cactus.ts'
 import { dressMissionAdobe } from './mission-adobe.ts'
 import { optimizeAsset } from './optimize.ts'
 import { dressStreetLamps, lampLights } from './street-lamps.ts'
@@ -146,6 +147,7 @@ for (const name of names.filter((candidate) => !only || candidate === only)) {
   if (name === 'frontier') {
     const final = await io.read(path)
     await pruneNativeEnvironment(final)
+    await orderLowYardCactusIndices(final)
     console.log('Frontier inert wind primitives', markFrontierInertWind(final))
     await io.write(path, final)
   }

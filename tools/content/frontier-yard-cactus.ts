@@ -1,6 +1,8 @@
-import type { Accessor, Document } from '@gltf-transform/core'
+import { join } from 'node:path'
+import type { Accessor, Document, Material, NodeIO } from '@gltf-transform/core'
 import { KHRTextureTransform, type Transform } from '@gltf-transform/extensions'
 import { getBounds } from '@gltf-transform/functions'
+import { MeshoptEncoder } from 'meshoptimizer'
 import { CACTUS_MATERIAL, cactusRequired } from './frontier-cactus-candidate.ts'
 
 const LEGACY_MATERIAL = 'Perdition saguaro skin'
@@ -33,20 +35,27 @@ const SEMANTICS = ['POSITION', 'NORMAL', 'TEXCOORD_0', 'COLOR_0'] as const
 const MAX_ENVELOPE_DELTA = 0.001
 
 /** Dress the two one-arm and three two-arm yard specimens with their measured lofts. */
-export function installYardCacti(doc: Document, oneArm: Document, twoArm?: Document): void {
+export async function installYardCacti(
+  doc: Document,
+  io: NodeIO,
+  yard: string,
+  highYard: boolean,
+): Promise<void> {
+  const twoArm = await io.read(
+    join(yard, `frontier-yard-two-arm-${highYard ? 'loft' : 'legacy'}.glb`),
+  )
+  const oneArm = await io.read(join(yard, 'frontier-yard-loft.glb'))
   installLoft(doc, oneArm, NEAR_SAGUAROS[0])
-  if (twoArm) {
-    installLoft(doc, twoArm, NEAR_SAGUAROS[1])
-  }
+  installLoft(doc, twoArm, NEAR_SAGUAROS[1], !highYard)
 }
 
 function installLoft(
   doc: Document,
   source: Document,
   profile: (typeof NEAR_SAGUAROS)[number],
+  keepLegacyMaterial = false,
 ): void {
   const root = doc.getRoot()
-  const detailed = cactusRequired(root.listMaterials().find((m) => m.getName() === CACTUS_MATERIAL))
   const nodes = root.listNodes().filter((node) => {
     const mesh = node.getMesh()
     return (
@@ -88,25 +97,9 @@ function installLoft(
   ) {
     throw new Error('Unexpected measured yard cactus mesh')
   }
-  const donorMaterial = cactusRequired(donor.getMaterial())
-  const image = cactusRequired(donorMaterial.getBaseColorTexture())
-  const transform = cactusRequired(
-    donorMaterial.getBaseColorTextureInfo()?.getExtension<Transform>('KHR_texture_transform'),
-  )
-  const material = detailed
-    .clone()
-    .setName(profile.material)
-    .setBaseColorTexture(
-      doc
-        .createTexture(image.getName())
-        .setMimeType('image/png')
-        .setImage(cactusRequired(image.getImage())),
-    )
-  const extension = doc.createExtension(KHRTextureTransform)
-  cactusRequired(material.getBaseColorTextureInfo()).setExtension(
-    'KHR_texture_transform',
-    extension.createTransform().setScale(transform.getScale()).setOffset(transform.getOffset()),
-  )
+  const material = keepLegacyMaterial
+    ? undefined
+    : authorMaterial(doc, cactusRequired(donor.getMaterial()), profile.material)
 
   const buffer = cactusRequired(root.listBuffers()[0])
   const copy = (accessor: Accessor) =>
@@ -136,7 +129,10 @@ function installLoft(
     for (const [key, accessor] of attributes) {
       part.setAttribute(key, accessor)
     }
-    part.setIndices(indices).setMaterial(material)
+    part.setIndices(indices)
+    if (material) {
+      part.setMaterial(material)
+    }
   }
   for (const accessor of retired) {
     if (accessor.listParents().every((parent) => parent === root)) {
@@ -157,4 +153,73 @@ function installLoft(
       throw new Error('The measured yard cactus changed a world envelope')
     }
   }
+}
+
+function authorMaterial(doc: Document, donorMaterial: Material, name: string): Material {
+  const detailed = cactusRequired(
+    doc
+      .getRoot()
+      .listMaterials()
+      .find((m) => m.getName() === CACTUS_MATERIAL),
+  )
+  const image = cactusRequired(donorMaterial.getBaseColorTexture())
+  const transform = cactusRequired(
+    donorMaterial.getBaseColorTextureInfo()?.getExtension<Transform>('KHR_texture_transform'),
+  )
+  const material = detailed
+    .clone()
+    .setName(name)
+    .setBaseColorTexture(
+      doc
+        .createTexture(image.getName())
+        .setMimeType('image/png')
+        .setImage(cactusRequired(image.getImage())),
+    )
+  const extension = doc.createExtension(KHRTextureTransform)
+  cactusRequired(material.getBaseColorTextureInfo()).setExtension(
+    'KHR_texture_transform',
+    extension.createTransform().setScale(transform.getScale()).setOffset(transform.getOffset()),
+  )
+  return material
+}
+
+/** Order the final packed Low triangles for vertex reuse after welding has assigned vertex IDs. */
+export async function orderLowYardCactusIndices(doc: Document): Promise<void> {
+  const profile = NEAR_SAGUAROS[1]
+  const targets = doc
+    .getRoot()
+    .listNodes()
+    .flatMap((node) => {
+      if (node.getName() !== profile.node) {
+        return []
+      }
+      return (node.getMesh()?.listPrimitives() ?? []).filter(
+        (part) =>
+          part.getMaterial()?.getName() === LEGACY_MATERIAL &&
+          part.getAttribute('POSITION')?.getCount() === profile.vertices &&
+          part.getIndices()?.getCount() === profile.triangles * 3,
+      )
+    })
+  if (targets.length === 0) {
+    return
+  }
+  const indices = new Set(targets.map((part) => cactusRequired(part.getIndices())))
+  if (targets.length !== profile.places.length || indices.size !== 1) {
+    throw new Error('Expected one packed index stream for the three Low yard cacti')
+  }
+  await MeshoptEncoder.ready
+  const accessor = cactusRequired([...indices][0])
+  const source = cactusRequired(accessor.getArray())
+  if (!(source instanceof Uint16Array)) {
+    throw new Error('Expected unsigned 16-bit yard cactus indices')
+  }
+  const ordered = Uint32Array.from(source)
+  const [remap, used] = MeshoptEncoder.reorderMesh(ordered, true, false)
+  const original = new Uint16Array(used)
+  for (const [index, position] of remap.entries()) {
+    if (position < used) {
+      original[position] = index
+    }
+  }
+  accessor.setArray(Uint16Array.from(ordered, (index) => cactusRequired(original[index])))
 }

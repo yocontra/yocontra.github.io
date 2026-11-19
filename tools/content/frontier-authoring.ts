@@ -214,11 +214,7 @@ export async function authorFrontier(output: string, highYard = false): Promise<
     await frontierIO.read(join(SOURCE, 'cactus-near/frontier-cactus-near.glb')),
     await frontierIO.read(join(SOURCE, 'frontier-cacti.glb')),
   )
-  const yard = join(SOURCE, 'cactus-near')
-  const twoArm = highYard
-    ? await frontierIO.read(join(yard, 'frontier-yard-two-arm-loft.glb'))
-    : undefined
-  installYardCacti(g.doc, await frontierIO.read(join(yard, 'frontier-yard-loft.glb')), twoArm)
+  await installYardCacti(g.doc, frontierIO, join(SOURCE, 'cactus-near'), highYard)
   await installHangingLamps(g.doc, await frontierIO.read(join(SOURCE, 'street-lamp.glb')), layout)
   await mkdir(output, { recursive: true })
   await authorTumbleweeds(plan, output)
