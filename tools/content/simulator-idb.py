@@ -9,7 +9,10 @@ import math
 import time
 from pathlib import Path
 
-from simulator_schedule import foreground_schedule, tape_events, observe_foreground, release_held, send_native_tape
+from simulator_schedule import (
+    RECORDING_SECONDS, foreground_schedule, tape_events, observe_foreground, release_held,
+    send_native_tape,
+)
 from idb.grpc.client import Client
 from idb.common.types import (
     AccessibilityBackend, AccessibilityInfoOptions, AccessibilityOutputFormat, AccessibilityPoint,
@@ -139,7 +142,9 @@ async def record(client, request, udid):
             read_foreground, deadlines=foreground_deadlines, now=loop.time,
             sleep=asyncio.sleep, emit=emit, samples=foreground,
         )),
-        asyncio.create_task(send_native_tape(lambda: client.hid(events()), release)),
+        asyncio.create_task(send_native_tape(
+            lambda: client.hid(events()), release, deadline=base + RECORDING_SECONDS,
+        )),
     ]
     try:
         foreground_failure, input_failure = await asyncio.gather(*tasks)

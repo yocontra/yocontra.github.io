@@ -1,4 +1,8 @@
 """Pure absolute native schedules. Missed work fails; no catch-up or first-touch reset."""
+import asyncio
+
+
+RECORDING_SECONDS = 60
 
 
 class ScheduleMiss(RuntimeError):
@@ -54,7 +58,7 @@ def foreground_schedule(tape, guest_start):
     # scheduling estimates only; foreground and gesture acceptance stay independent.
     before_edge_ms, after_edge_ms = 165, 70
     edges = [gesture["at"] + offset for gesture in tape for offset in (0, gesture["duration"])]
-    for second in range(60):
+    for second in range(RECORDING_SECONDS):
         earliest = guest_start + second * 1000
         nominal = earliest + 200
         latest = earliest + 400
@@ -115,13 +119,21 @@ async def release_held(state, send, emit, wall_now):
         state["held"] = None
 
 
-async def send_native_tape(send, release):
-    """Report an input failure after releasing held input so foreground reads can finish."""
+async def send_native_tape(send, release, *, deadline):
+    """Bound the whole native input stream, including the final SDK acknowledgement."""
+    failures = []
+    timeout = asyncio.timeout_at(deadline)
     try:
-        try:
+        async with timeout:
             await send()
-        finally:
-            await release()
     except Exception as error:
-        return str(error)
-    return None
+        failures.append(
+            "Native HID stream did not complete by the recording deadline"
+            if timeout.expired() else str(error) or type(error).__name__
+        )
+    finally:
+        try:
+            await release()
+        except Exception as error:
+            failures.append(f"Native held input release failed: {str(error) or type(error).__name__}")
+    return " | ".join(failures) or None

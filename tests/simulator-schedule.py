@@ -162,13 +162,93 @@ class ScheduleTests(unittest.IsolatedAsyncioTestCase):
             return {"wall": clock.now()}
 
         input_failure, foreground_failure = await asyncio.gather(
-            send_native_tape(send, release),
+            send_native_tape(send, release, deadline=asyncio.get_running_loop().time() + 1),
             observe_foreground(read, deadlines=range(3), now=clock.now,
                                sleep=clock.sleep, emit=logs.append, samples=samples),
         )
         self.assertEqual(input_failure, "Native deadline missed; tape stopped")
         self.assertIsNone(foreground_failure)
         self.assertEqual(samples, [{"wall": time} for time in (0, 1, 2)])
+
+    async def test_stalled_final_reply_keeps_completed_tape_and_ongoing_foreground(self):
+        clock, logs, sent, samples, released = Clock(), [], [], [], []
+        state = {"held": None}
+        drained = asyncio.Event()
+        streams = 0
+
+        async def send():
+            nonlocal streams
+            streams += 1
+            async for event in self.sender(clock, logs, state):
+                sent.append(event["kind"])
+            drained.set()
+            await asyncio.Event().wait()  # Companion never acknowledges end of stream.
+
+        async def up(point):
+            released.append(point)
+
+        async def release():
+            await release_held(state, up, logs.append, clock.now)
+
+        async def read():
+            await drained.wait()
+            return {"wall": clock.now()}
+
+        # The fake tape clock advances without a real sleep. The timer fires once the
+        # simulated stream reaches its blocked await, even on a loaded host.
+        failure, foreground = await asyncio.gather(
+            send_native_tape(send, release, deadline=asyncio.get_running_loop().time()),
+            observe_foreground(read, deadlines=range(4, 6), now=clock.now,
+                               sleep=clock.sleep, emit=logs.append, samples=samples),
+        )
+        self.assertEqual(failure, "Native HID stream did not complete by the recording deadline")
+        self.assertEqual(streams, 1)
+        self.assertEqual(sent, ["down", "up"] * 3)
+        self.assertEqual(released, [])
+        self.assertIsNone(foreground)
+        self.assertEqual(samples, [{"wall": 4}, {"wall": 5}])
+        self.assertEqual([row["value"]["id"] for row in logs
+                          if row["event"] == "gesture-send"], [0, 1, 2])
+
+    async def test_stalled_swipe_attempts_one_cleanup_up_and_keeps_both_failures(self):
+        for release_fails in (False, True):
+            with self.subTest(release_fails=release_fails):
+                clock, logs, sent, released = Clock(), [], [], []
+                state = {"held": None}
+                tape = plan()
+                tape[0].update(kind="swipe", end={"x": 3, "y": 4})
+                events = tape_events(
+                    tape, base=0, clock={"at": 0, "wall": 1000}, now=clock.now,
+                    sleep=clock.sleep, emit=logs.append, state=state,
+                )
+
+                async def send():
+                    async for event in events:
+                        sent.append(event["kind"])
+                        await asyncio.Event().wait()  # Transport stalls after the first write.
+
+                async def up(point):
+                    released.append(point)
+                    if release_fails:
+                        raise TimeoutError()
+
+                async def release():
+                    await release_held(state, up, logs.append, clock.now)
+
+                try:
+                    failure = await send_native_tape(
+                        send, release, deadline=asyncio.get_running_loop().time(),
+                    )
+                finally:
+                    await events.aclose()
+                expected = "Native HID stream did not complete by the recording deadline"
+                if release_fails:
+                    expected += " | Native held input release failed: TimeoutError"
+                self.assertEqual(failure, expected)
+                self.assertEqual(sent, ["swipe"])
+                self.assertEqual(released, [{"x": 3, "y": 4}])
+                self.assertEqual([row["event"] for row in logs], ["gesture-send", "cleanup-release"])
+                self.assertEqual(logs[-1]["value"]["qualification"], "cleanup, not tape replay")
 
 
 if __name__ == "__main__":

@@ -7,7 +7,11 @@ import { captureNative } from '../tools/content/simulator-recording.ts'
 import recorded from './fixtures/simulator-coordinate-v3.json' with { type: 'json' }
 
 /** Real capture orchestration + local HTTP + retained native schema; no browser/native run. */
-function captureFixture(failFinalAX: boolean, beforeFinalAX: () => void) {
+function captureFixture(
+  failFinalAX: boolean,
+  inputFailure: string | null,
+  beforeFinalAX: () => void,
+) {
   const raw = structuredClone(recorded)
   const startText = 'Start 60s 5 rider recording'
   const run = recordingDocument(raw.run.run, raw.page.url, startText)
@@ -71,7 +75,9 @@ function captureFixture(failFinalAX: boolean, beforeFinalAX: () => void) {
   const receipt = {
     recording: {
       timestamps: [1000, 1016],
-      inputs: [],
+      inputs: inputFailure
+        ? [{ at: 1001, eventAt: 1000, type: 'pointerdown', pointerId: 1, x: 10, y: 20 }]
+        : [],
       samples: [],
       completed: false,
       resources: [],
@@ -124,7 +130,7 @@ function captureFixture(failFinalAX: boolean, beforeFinalAX: () => void) {
         }
         if (op === 'record') {
           delivered = true
-          return Promise.resolve({ tapeAccepted: true })
+          return Promise.resolve({ tapeAccepted: true, inputFailure })
         }
         const point = { x: Number(args?.x), y: Number(args?.y) }
         const anchor = title.children.find(
@@ -170,12 +176,17 @@ function captureFixture(failFinalAX: boolean, beforeFinalAX: () => void) {
 }
 
 it.each([
-  ['sends the complete tape after host readiness', false],
-  ['keeps the browser receipt when the final accessibility read times out', true],
-] as const)('%s', async (_scenario, failFinalAX) => {
+  ['sends the complete tape after host readiness', false, null],
+  ['keeps the browser receipt when the final accessibility read times out', true, null],
+  [
+    'keeps partial browser input and the native HID deadline failure',
+    false,
+    'Native HID stream did not complete by the recording deadline',
+  ],
+] as const)('%s', async (_scenario, failFinalAX, inputFailure) => {
   expect(Reflect.has(globalThis, 'orientation')).toBe(false)
   const checkpoints: Record<string, unknown>[] = []
-  const fixture = captureFixture(failFinalAX, () => {
+  const fixture = captureFixture(failFinalAX, inputFailure, () => {
     expect(checkpoints.at(-1)?.browserReceipt).toEqual(fixture.receipt)
   })
   let statusReads = 0
@@ -238,7 +249,10 @@ it.each([
     expect(result.nativeFailure).toBe(
       failFinalAX
         ? 'Final native accessibility read: Error: Native accessibility deadline exceeded'
-        : null,
+        : inputFailure,
+    )
+    expect(checkpoints.some((value) => value.nativeFailure === inputFailure)).toBe(
+      inputFailure !== null,
     )
     expect(fixture.calls.filter((call) => call.op === 'launch-safari')).toHaveLength(1)
   } finally {

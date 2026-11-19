@@ -204,7 +204,7 @@ it('executes the offline fake-clock native iterator regressions without idb or d
   const error = await new Response(child.stderr).text()
   await child.exited
   expect(child.exitCode).toBe(0)
-  expect(error).toContain('Ran 6 tests')
+  expect(error).toMatch(/\bRan [1-9]\d* tests?\b/u)
 })
 
 it('returns success only when an actual recorder command meets the frame target', async () => {
