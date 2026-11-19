@@ -200,7 +200,7 @@ it('executes the offline fake-clock native iterator regressions without idb or d
   const error = await new Response(child.stderr).text()
   await child.exited
   expect(child.exitCode).toBe(0)
-  expect(error).toContain('Ran 5 tests')
+  expect(error).toContain('Ran 6 tests')
 })
 
 it('retains a failed display restore and still closes its real owned process and shuts down', async () => {

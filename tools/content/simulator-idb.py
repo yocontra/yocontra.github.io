@@ -9,7 +9,7 @@ import math
 import time
 from pathlib import Path
 
-from simulator_schedule import tape_events, observe_foreground, release_held
+from simulator_schedule import tape_events, observe_foreground, release_held, send_native_tape
 from idb.grpc.client import Client
 from idb.common.types import (
     AccessibilityBackend, AccessibilityInfoOptions, AccessibilityOutputFormat, AccessibilityPoint,
@@ -122,26 +122,29 @@ async def record(client, request, udid):
                 yield HIDPress(action=HIDTouch(point=Point(**event["point"])),
                                direction=HIDDirection.DOWN if event["kind"] == "down" else HIDDirection.UP)
 
+    async def send_release(point):
+        await client.send_events([HIDPress(action=HIDTouch(point=Point(**point)),
+                                           direction=HIDDirection.UP)])
+
+    async def release():
+        await asyncio.wait_for(release_held(state, send_release, emit,
+                                           lambda: time.time() * 1000), 2)
+
     tasks = [
         asyncio.create_task(observe_foreground(
             read_foreground, start=loop.time(), stop=base + 60, now=loop.time,
             sleep=asyncio.sleep, emit=emit, samples=foreground,
         )),
-        asyncio.create_task(client.hid(events())),
+        asyncio.create_task(send_native_tape(lambda: client.hid(events()), release)),
     ]
     try:
-        foreground_failure, _ = await asyncio.gather(*tasks)
+        foreground_failure, input_failure = await asyncio.gather(*tasks)
         return {"foreground": foreground, "foregroundFailure": foreground_failure,
-                "onePersistentClient": True}
+                "inputFailure": input_failure, "onePersistentClient": True}
     finally:
         for task in tasks:
             task.cancel()
         await asyncio.gather(*tasks, return_exceptions=True)
-        async def send_release(point):
-            await client.send_events([HIDPress(action=HIDTouch(point=Point(**point)),
-                                               direction=HIDDirection.UP)])
-        await asyncio.wait_for(release_held(state, send_release, emit,
-                                           lambda: time.time() * 1000), 2)
 
 
 async def run(args):

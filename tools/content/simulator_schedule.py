@@ -83,3 +83,15 @@ async def release_held(state, send, emit, wall_now):
               "wall": wall_now(), "qualification": "cleanup, not tape replay"}})
         await send(state["held"])
         state["held"] = None
+
+
+async def send_native_tape(send, release):
+    """Report an input failure after releasing held input so foreground reads can finish."""
+    try:
+        try:
+            await send()
+        finally:
+            await release()
+    except Exception as error:
+        return str(error)
+    return None

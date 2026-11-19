@@ -195,10 +195,12 @@ export async function captureNative(context: {
   let nativeFailure: string | null = null
   try {
     bridgeResult = await native.call('record', { clock, tape }, 75_000)
-    const foregroundFailure = (bridgeResult as { foregroundFailure?: unknown } | null)
-      ?.foregroundFailure
-    if (typeof foregroundFailure === 'string') {
-      nativeFailure = foregroundFailure
+    const result = bridgeResult as { foregroundFailure?: unknown; inputFailure?: unknown } | null
+    const failures = [result?.inputFailure, result?.foregroundFailure].filter(
+      (failure) => typeof failure === 'string',
+    )
+    if (failures.length > 0) {
+      nativeFailure = failures.join(' | ')
       await checkpoint({ nativeFailure })
     }
   } catch (error) {

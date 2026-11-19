@@ -4,7 +4,7 @@ import sys
 import unittest
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "tools" / "content"))
-from simulator_schedule import ScheduleMiss, tape_events, observe_foreground, release_held
+from simulator_schedule import ScheduleMiss, tape_events, observe_foreground, release_held, send_native_tape
 
 
 class Clock:
@@ -103,6 +103,29 @@ class ScheduleTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(logs[0]["event"], "sample-timeout")
         self.assertEqual(samples, [{"wall": 1}, {"wall": 2}])
         self.assertEqual(gestures, ["down", "up"] * 3)
+
+    async def test_late_hid_releases_immediately_and_keeps_foreground(self):
+        clock, logs, samples = Clock(), [], []
+        released = asyncio.Event()
+
+        async def send():
+            raise ScheduleMiss("Native deadline missed; tape stopped")
+
+        async def release():
+            released.set()
+
+        async def read():
+            await released.wait()
+            return {"wall": clock.now()}
+
+        input_failure, foreground_failure = await asyncio.gather(
+            send_native_tape(send, release),
+            observe_foreground(read, start=0, stop=2, now=clock.now,
+                               sleep=clock.sleep, emit=logs.append, samples=samples),
+        )
+        self.assertEqual(input_failure, "Native deadline missed; tape stopped")
+        self.assertIsNone(foreground_failure)
+        self.assertEqual(samples, [{"wall": time} for time in (0, 1, 2)])
 
 
 if __name__ == "__main__":
