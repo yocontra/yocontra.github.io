@@ -39,7 +39,7 @@ function fixture(): Parameters<typeof qualifyProductionFixture>[0] {
     scene: {
       players: 5,
       actors: { loaded: 5, loading: 0, failed: 0, fallbacks: 0 },
-      renderer: { tier: 'low', nativePost: null },
+      renderer: { tier: 'low', backBufferSamples: 4, nativePost: null },
     },
   }
   const events = ['glass_break', 'kill', 'respawn'].map((type, index) => ({
@@ -107,14 +107,20 @@ it('requires matching release build, native readiness, authority and delivered l
   expect(qualifyProductionFixture(fixture())).toEqual([])
 })
 it('captures actual low/high renderer configuration and rejects missing or contradictory records', () => {
-  expect(nativeRendererCaptured({ tier: 'low', nativePost: null })).toBe(true)
+  expect(nativeRendererCaptured({ tier: 'low', backBufferSamples: 4, nativePost: null })).toBe(true)
   expect(
     nativeRendererCaptured({
       tier: 'high',
+      backBufferSamples: 4,
       nativePost: { enabled: true, msaaSamples: 2, ssaoType: 'none', ssaoSamples: 3 },
     }),
   ).toBe(true)
-  expect(nativeRendererCaptured({ tier: 'high', nativePost: null })).toBe(false)
+  expect(nativeRendererCaptured({ tier: 'high', backBufferSamples: 4, nativePost: null })).toBe(
+    false,
+  )
+  expect(nativeRendererCaptured({ tier: 'low', backBufferSamples: null, nativePost: null })).toBe(
+    false,
+  )
   const value = fixture()
   const first = required(value.samples[0])
   Reflect.deleteProperty(required(first.game).scene, 'renderer')

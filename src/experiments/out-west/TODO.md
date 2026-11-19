@@ -188,6 +188,8 @@ Two more 32-rider fixed-view diagnostics used the same 710 × 231 raster. Using 
 
 A later 32-rider fixed-view test compared the existing 1024-pixel sun map with five format, filter and cadence combinations. The best averaged 27.88 FPS and reached a 27 FPS minimum. The 710 × 231 controls averaged 26.38 and 24.38 FPS. A separate matched raster sweep found 26.5 and 27.0 FPS at 710 × 231, and 26.75 FPS at 356 × 116. Keep the current shadow filter and minimum render scale.
 
+The next fixed-view checks kept all 32 riders and the 710 × 231 raster. A flat-ground shadow proxy cut 33,286 submitted shadow triangles and averaged 27.50 FPS against controls of 26.63 and 27.38 FPS. Changing the PlayCanvas backbuffer from four samples to two or one gave 22.13 and 22.00 FPS against controls of 22.00 and 22.25 FPS. Keep the authored ground and four-sample buffer. WebKit reported context antialiasing off in every case because PlayCanvas uses its own multisampled target. The recorder now captures the target's sample count separately from the WebGL context and the post-processing target.
+
 ## First-person models and aiming
 
 - [x] Recover the bounded offline arms extractor (`tools/content/first-person-arms.ts`). Trail-duds and wool-duster CPU checks preserve native triangles/typed streams, full PBR and external texture URLs, skeleton/TRS/IBMs and humanoid clips; provenance includes authored garments and shared helpers. Repeated staging outputs are byte-identical and remain temporary.

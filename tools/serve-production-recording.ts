@@ -42,6 +42,9 @@ for await (const path of new Bun.Glob('**/*.{js,map}').scan({ cwd: directory }))
   if (path.endsWith('.js')) {
     scripts.push({ path: `/${path}`, sha256: digest(contents) })
     qaSurface ||= contents.includes('__owPerformanceSnapshot')
+    if (publicBuild && contents.includes('backBufferSamples')) {
+      throw new Error('Public bundle retained QA render-target diagnostics')
+    }
     if (
       [
         '__playcanvasFrontier',

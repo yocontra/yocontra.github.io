@@ -50,7 +50,9 @@ function evidence() {
                 tierOverrideRaw: null,
               },
             },
-            game: { scene: { renderer: { tier: 'low' as const, nativePost: null } } },
+            game: {
+              scene: { renderer: { tier: 'low' as const, backBufferSamples: 4, nativePost: null } },
+            },
             audio: [{ state: 'running' }],
             contexts: [{ lost: false, buffer: { width: 812, height: 375 } }],
           },

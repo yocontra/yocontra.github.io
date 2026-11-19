@@ -20,7 +20,12 @@ export interface NativeSample {
   events?: { type: string; tick: number; at: number; wall: number; self: boolean }[]
 }
 export function nativeRendererCaptured(renderer: NativeSample['scene']['renderer']): boolean {
-  if (!renderer) {
+  if (
+    !renderer ||
+    typeof renderer.backBufferSamples !== 'number' ||
+    !Number.isInteger(renderer.backBufferSamples) ||
+    renderer.backBufferSamples < 1
+  ) {
     return false
   }
   const post = renderer.nativePost

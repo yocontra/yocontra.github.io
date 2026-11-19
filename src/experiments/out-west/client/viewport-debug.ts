@@ -44,7 +44,11 @@ export function viewportDebug({
               }
             : null,
           renderer: application
-            ? { tier: application.tier, nativePost: application.post?.diagnostics() ?? null }
+            ? {
+                tier: application.tier,
+                backBufferSamples: application.app.graphicsDevice.backBuffer?.samples ?? null,
+                nativePost: application.post?.diagnostics() ?? null,
+              }
             : null,
         }
       : {}),
