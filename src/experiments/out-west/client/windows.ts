@@ -68,6 +68,13 @@ export class BreakableWindows {
       shards: this.shards?.stats().shards ?? 0,
     }
   }
+  /** Forget transient shatters and restore the last server pane state before reconnecting. */
+  reset(): void {
+    this.shards?.reset()
+    const glass = this.seen
+    this.seen = undefined
+    this.update(glass)
+  }
   destroy(): void {
     this.shards?.destroy()
     this.shards = undefined

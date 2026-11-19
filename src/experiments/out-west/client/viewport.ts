@@ -318,7 +318,10 @@ export function mountGameViewport(root: HTMLElement, options: ViewportOptions): 
       inputAllowed = value
       input?.setEnabled(playing && value)
     },
-    resetFeedback: () => effects?.reset(),
+    resetFeedback() {
+      effects?.reset()
+      scene?.windows?.reset()
+    },
     tap: (bit) => input?.tap(bit),
     firstPerson(value) {
       first = value

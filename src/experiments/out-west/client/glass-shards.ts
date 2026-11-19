@@ -449,6 +449,7 @@ export class GlassShards {
     burst.mesh.destroy()
   }
   reset(): void {
+    this.speaker.sound?.stop()
     while (this.bursts.length > 0) {
       this.retire(0)
     }
