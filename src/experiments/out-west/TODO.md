@@ -212,6 +212,10 @@ With moving bots and a scripted camera, a 42 m camera clip and a 230 ms sun-map 
 
 Two local release-engine builds ran the normal landscape input tape against the Worker with 32 riders. The stock policy averaged 25.34 FPS with an 18 FPS minimum. The scenery and shadow prototype averaged 32.85 FPS with a 23 FPS minimum. It spent 26 seconds below 30 FPS and missed 33 Safari listener deadlines. Median draws were 364 in the control and 214 in the prototype. The runs followed different combat paths. The control retained 55 server samples, including one before the browser window. Every sample confirmed the expected population. The server recorder now anchors its samples to elapsed seconds so one late tick cannot shift later samples.
 
+A depth-blit prototype reused the static part of the native sun map. Moving riders invalidated its depth projection on 117 of 122 shadow updates. An expanded, fixed depth range held the cache for all 130 measured updates at a stationary camera with moving riders. That run averaged 26.00 FPS against controls of 24.90 and 23.70 FPS. In a separate test, projecting each caster's bounds down to visible receiving surfaces cut mean draws from 298 to 218 on a street view. The crowded plaza showed little change. Combining moving rider casters by vertex layout also failed to sustain a frame-rate gain on the plaza. The renderer trials remain local.
+
+The simulator recorder preserves the evidence and the frame-rate verdict separately. Its command now returns success only when both pass. The command regression covers a passing target, a missed target with complete evidence, and incomplete evidence.
+
 ## First-person models and aiming
 
 - [x] Recover the bounded offline arms extractor (`tools/content/first-person-arms.ts`). Trail-duds and wool-duster CPU checks preserve native triangles/typed streams, full PBR and external texture URLs, skeleton/TRS/IBMs and humanoid clips; provenance includes authored garments and shared helpers. Repeated staging outputs are byte-identical and remain temporary.

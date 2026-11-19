@@ -324,7 +324,7 @@ if (import.meta.main) {
       python: arg('python', '/Library/Frameworks/Python.framework/Versions/3.13/bin/python3'),
     })
     console.log(report)
-    process.exit(report.qualification === 'complete' ? 0 : 1)
+    process.exit(report.qualification === 'complete' && report.performanceTarget === 'pass' ? 0 : 1)
   }
   console.log(
     await runPreflight({

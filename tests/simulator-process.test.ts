@@ -1,5 +1,9 @@
 import { expect, test as it } from 'bun:test'
+import { mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import process from 'node:process'
+import { fileURLToPath } from 'node:url'
 import { serve, spawn, which } from 'bun'
 import { cleanupGuest } from '../tools/content/simulator-cleanup.ts'
 import { initialDisplay } from '../tools/content/simulator-orientation.ts'
@@ -201,6 +205,52 @@ it('executes the offline fake-clock native iterator regressions without idb or d
   await child.exited
   expect(child.exitCode).toBe(0)
   expect(error).toContain('Ran 6 tests')
+})
+
+it('returns success only when an actual recorder command meets the frame target', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'out-west-recorder-exit-'))
+  const implementation = fileURLToPath(
+    new URL('../tools/content/simulator-recording.ts', import.meta.url),
+  )
+  const entry = fileURLToPath(new URL('../tools/record-simulator-frames.ts', import.meta.url))
+  const preload = join(directory, 'recording.ts')
+  try {
+    await writeFile(
+      preload,
+      `import { mock } from 'bun:test'
+mock.module(${JSON.stringify(implementation)}, () => ({
+  runRecording: async () => ({
+    qualification: process.env.OW_TEST_EVIDENCE,
+    performanceTarget: process.env.OW_TEST_FRAME_TARGET,
+  }),
+}))
+`,
+    )
+    for (const [evidence, target, status] of [
+      ['complete', 'pass', 0],
+      ['complete', 'fail', 1],
+      ['incomplete', 'unqualified', 1],
+    ] as const) {
+      const child = spawn(
+        [process.execPath, '--preload', preload, entry, '--record', '--url=http://127.0.0.1:1'],
+        {
+          env: { ...process.env, OW_TEST_EVIDENCE: evidence, OW_TEST_FRAME_TARGET: target },
+          stdout: 'pipe',
+          stderr: 'pipe',
+        },
+      )
+      const [output, error, exitCode] = await Promise.all([
+        new Response(child.stdout).text(),
+        new Response(child.stderr).text(),
+        child.exited,
+      ])
+      expect(error).toBe('')
+      expect(output).toContain(`performanceTarget: "${target}"`)
+      expect(exitCode).toBe(status)
+    }
+  } finally {
+    await rm(directory, { recursive: true, force: true })
+  }
 })
 
 it('retains a failed display restore and still closes its real owned process and shuts down', async () => {
