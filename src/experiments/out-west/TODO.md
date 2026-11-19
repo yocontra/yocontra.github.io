@@ -1,6 +1,6 @@
 # Out West remaining work
 
-Verified deployment baseline is `7a26e046` (2026-11-18). The Worker and both game pages are live. All 187 audited asset URLs match their expected SHA-256 hashes, including all 37 Outfitter previews. Active simulator performance, Safari input timing, foreground Chrome evidence and live voice validation remain open.
+Verified deployment baseline is `f4262ace` (2026-11-18). The Worker and both game pages are live. All 187 audited asset URLs match their expected SHA-256 hashes, including all 37 Outfitter previews. Active simulator performance, Safari input timing, foreground Chrome evidence and live voice validation remain open.
 
 ## Current playtest feedback (2026-11-16)
 
@@ -205,6 +205,10 @@ Two more 32-rider fixed-view diagnostics used the same 710 × 231 raster. Using 
 A later 32-rider fixed-view test compared the existing 1024-pixel sun map with five format, filter and cadence combinations. The best averaged 27.88 FPS and reached a 27 FPS minimum. The 710 × 231 controls averaged 26.38 and 24.38 FPS. A separate matched raster sweep found 26.5 and 27.0 FPS at 710 × 231, and 26.75 FPS at 356 × 116. Keep the current shadow filter and minimum render scale.
 
 The next fixed-view checks kept all 32 riders and the 710 × 231 raster. A flat-ground shadow proxy cut 33,286 submitted shadow triangles and averaged 27.50 FPS against controls of 26.63 and 27.38 FPS. Changing the PlayCanvas backbuffer from four samples to two or one gave 22.13 and 22.00 FPS against controls of 22.00 and 22.25 FPS. Keep the authored ground and four-sample buffer. WebKit reported context antialiasing off in every case because PlayCanvas uses its own multisampled target. The recorder now captures the target's sample count separately from the WebGL context and the post-processing target.
+
+The dedicated simulator's WebContent stack waited for synchronous WebGL display preparation. The GPU service sampled ANGLE draw setup and Metal argument buffer calls. Merging 42 opaque scenery shadow meshes into eight with the same 287,021 triangles reached 26.50 FPS. The controls averaged 26.08 and 24.67 FPS. A separate asynchronous bitmap trial presented 23.33 frames per second, with a 21 FPS minimum. These diagnostics measure the simulator path.
+
+With moving bots and a scripted camera, a 42 m camera clip and a 230 ms sun-map refresh interval held 30 FPS in two eight-second windows. That camera clip also removes distant riders. A follow-up kept the full camera range and culled only authored scenery batches whose entire bounds lay more than 42 m ahead. The 60-second loopback run averaged 31.83 FPS against 26.52 FPS in its control. Mean draws fell from 304 to 202. Four seconds stayed below 30 FPS and the minimum was 29 FPS. The full rider models remained eligible for rendering at all distances. Visual review of distant scenery and shadow lag, authoritative active-play coverage and the 30 FPS floor remain open.
 
 ## First-person models and aiming
 
