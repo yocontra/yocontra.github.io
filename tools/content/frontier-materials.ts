@@ -58,7 +58,7 @@ export function longSignAspects(layout: TownLayout) {
 }
 
 export async function authoredMaterials(g: FrontierGeometry, layout: TownLayout) {
-  const clothSvg = `<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128"><defs><pattern id="weave" width="4" height="4" patternUnits="userSpaceOnUse"><rect width="4" height="4" fill="#c7ac7b"/><path d="M0 0H4" stroke="#7b6548" stroke-opacity=".28"/><path d="M0 0V4" stroke="#f3ddae" stroke-opacity=".32"/></pattern></defs><rect width="128" height="128" fill="url(#weave)"/></svg>`
+  const clothSvg = `<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128"><defs><pattern id="weave" width="4" height="4" patternUnits="userSpaceOnUse"><rect width="4" height="4" fill="#c6ae84"/><path d="M0 0H4" stroke="#7b6548" stroke-opacity=".17"/><path d="M0 0V4" stroke="#f3ddae" stroke-opacity=".18"/></pattern></defs><rect width="128" height="128" fill="url(#weave)"/></svg>`
   const cloth = g.doc
     .createTexture('Weathered canvas weave')
     .setImage(await sharp(Buffer.from(clothSvg)).png().toBuffer())
@@ -68,6 +68,7 @@ export async function authoredMaterials(g: FrontierGeometry, layout: TownLayout)
     g.doc
       .createMaterial('Perdition canvas')
       .setBaseColorTexture(cloth)
+      .setMetallicFactor(0)
       .setRoughnessFactor(0.95)
       .setDoubleSided(true),
   )

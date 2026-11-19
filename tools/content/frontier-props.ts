@@ -3,6 +3,7 @@ import { ENVIRONMENT_PROPS } from '../../src/experiments/out-west/content/enviro
 import { BUCKET_NODE_PREFIX } from '../../src/experiments/out-west/content/metal-buckets.ts'
 import {
   CANOPY_SEGMENTS,
+  CANOPY_SPANS,
   WAGON_BED,
   WAGON_WHEEL,
 } from '../../src/experiments/out-west/ffa/sim/cover-shape.ts'
@@ -116,7 +117,7 @@ export function coverModel(g: FrontierGeometry, root: Node, c: Cover, index?: nu
   }
   if (c.kind === 'bed') {
     g.box(root, 'wood', { ...area, top: (c.y0 ?? 0) + 0.25 }, [0.44, 0.29, 0.18])
-    g.box(root, 'cloth', { ...area, y0: (c.y0 ?? 0) + 0.25, top }, [0.76, 0.66, 0.47])
+    g.box(root, 'cloth', { ...area, y0: (c.y0 ?? 0) + 0.25, top }, [0.76, 0.69, 0.56])
     return
   }
   // Shop fixtures have intentional broad collision faces.
@@ -188,7 +189,25 @@ function wagonModel(g: FrontierGeometry, root: Node, c: Cover) {
       wheelRadius: WAGON_WHEEL,
       wheelInset: 0.08,
     })
-    g.surface(root, 'cloth', wagonCanopy(c))
+    const canopy = wagonCanopy(c)
+    const colors: number[] = []
+    for (let row = 0; row <= CANOPY_SPANS; row++) {
+      const span = row / CANOPY_SPANS
+      for (let segment = 0; segment <= CANOPY_SEGMENTS; segment++) {
+        const cross = segment / CANOPY_SEGMENTS
+        // Road dust accumulates at the hems. Broad wear avoids a repeating stain on each UV tile.
+        const hem = Math.max(0, 1 - Math.min(cross, 1 - cross) / 0.21) ** 2
+        const dust = hem * (0.75 + 0.25 * Math.cos(Math.PI * (span + 0.1)))
+        const wear = 0.018 * Math.sin(2 * Math.PI * (span + 0.27 * cross))
+        colors.push(
+          0.74 + wear - 0.08 * dust,
+          0.77 + wear - 0.115 * dust,
+          0.78 + wear - 0.13 * dust,
+          1,
+        )
+      }
+    }
+    g.surface(root, 'cloth', { ...canopy, colors })
     for (let i = 1; i < 5; i++) {
       const a = 0.45 + (i / 5 - 0.5) * (f.length - 1.35)
       const bows = Array.from({ length: CANOPY_SEGMENTS + 1 }, (_, j) => j / CANOPY_SEGMENTS)
