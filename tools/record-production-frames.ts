@@ -58,8 +58,9 @@ const dirty = Bun.spawnSync([
   '--porcelain',
   '--untracked-files=all',
 ]).stdout.toString()
-const hostTool = join(output, 'foreground-recorder')
-if (platform() === 'darwin') {
+const hostTool =
+  visible && platform() === 'darwin' ? join(output, 'foreground-recorder') : undefined
+if (hostTool) {
   const build = Bun.spawnSync(['swiftc', 'tools/content/foreground.swift', '-o', hostTool])
   if (build.exitCode !== 0) {
     throw new Error(`Foreground sidecar failed: ${build.stderr.toString()}`)
@@ -189,7 +190,7 @@ try {
   const build: BuildReceipt | undefined = buildResponse?.ok
     ? ((await buildResponse.json()) as BuildReceipt)
     : undefined
-  if (platform() === 'darwin') {
+  if (hostTool) {
     sidecar = Bun.spawn([hostTool, String(seconds + 10)], {
       stdout: Bun.file(join(output, 'foreground.jsonl')),
       stderr: Bun.file(join(output, 'foreground-stderr.txt')),
@@ -245,14 +246,13 @@ try {
   await page.screenshot({ path: join(output, 'after.png') })
   sidecar?.kill()
   await sidecar?.exited
-  const host: HostSample[] =
-    platform() === 'darwin'
-      ? (await readFile(join(output, 'foreground.jsonl'), 'utf8'))
-          .trim()
-          .split('\n')
-          .filter(Boolean)
-          .map((line) => JSON.parse(line))
-      : []
+  const host: HostSample[] = sidecar
+    ? (await readFile(join(output, 'foreground.jsonl'), 'utf8'))
+        .trim()
+        .split('\n')
+        .filter(Boolean)
+        .map((line) => JSON.parse(line))
+    : []
   const first = data.samples[0]?.wall ?? started
   const last = data.samples.at(-1)?.wall ?? Date.now()
   const foreground = host.filter(
@@ -310,7 +310,7 @@ try {
   ) {
     problems.push('Native graphics context unavailable')
   }
-  if (!coverage.passed) {
+  if (visible && !coverage.passed) {
     problems.push('Host foreground evidence incomplete or Chrome was not frontmost')
   }
   if (
