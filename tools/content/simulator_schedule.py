@@ -5,12 +5,12 @@ class ScheduleMiss(RuntimeError):
     pass
 
 
-async def wait_deadline(deadline, *, now, sleep, emit, metadata, allowance=.035):
+async def wait_deadline(deadline, *, now, sleep, emit, metadata):
     remaining = deadline - now()
     if remaining > 0:
         await sleep(remaining)
     late = now() - deadline
-    if late > allowance:
+    if late > .035:
         emit({"event": "deadline-miss", "value": {
             **metadata, "plannedMonotonic": deadline, "actualMonotonic": now(),
             "lateMs": late * 1000,
@@ -47,31 +47,34 @@ async def tape_events(tape, *, base, clock, now, sleep, emit, state):
             state["held"] = None
 
 
-async def sample_events(read, *, start, stop, now, sleep, emit):
-    deadline = start
-    while deadline <= stop:
-        await wait_deadline(deadline, now=now, sleep=sleep, emit=emit,
-                            metadata={"role": "foreground"}, allowance=1)
-        yield await read()
-        deadline += 1
-        if deadline <= stop and now() >= deadline:
-            emit({"event": "sample-deadline-miss", "value": {
-                "plannedMonotonic": deadline, "actualMonotonic": now(),
-                "lateMs": (now() - deadline) * 1000,
-            }})
-            raise ScheduleMiss("Foreground deadline missed; no catch-up reads")
-
-
 async def observe_foreground(read, *, start, stop, now, sleep, emit, samples):
-    try:
-        async for value in sample_events(read, start=start, stop=stop, now=now,
-                                         sleep=sleep, emit=emit):
-            samples.append(value)
-            emit({"event": "foreground", "value": value})
-    except ScheduleMiss as error:
-        # A missed probe invalidates this evidence without canceling scheduled HID.
-        return str(error)
-    return None
+    deadline = start
+    previous_read_finished = float("-inf")
+    missed = False
+    while deadline <= stop:
+        remaining = deadline - now()
+        if remaining > 0:
+            await sleep(remaining)
+        actual = now()
+        if deadline <= previous_read_finished or actual - deadline > 1:
+            emit({"event": "sample-deadline-miss", "value": {
+                "plannedMonotonic": deadline, "actualMonotonic": actual,
+                "lateMs": (actual - deadline) * 1000,
+            }})
+            missed = True
+        else:
+            try:
+                value = await read()
+            except TimeoutError:
+                emit({"event": "sample-timeout", "value": {"plannedMonotonic": deadline}})
+                missed = True
+            else:
+                samples.append(value)
+                emit({"event": "foreground", "value": value})
+            previous_read_finished = now()
+        deadline += 1
+    # A gap still invalidates the run. Preserve any later evidence and never replay HID.
+    return "Foreground deadline missed; no catch-up reads" if missed else None
 
 
 async def release_held(state, send, emit, wall_now):

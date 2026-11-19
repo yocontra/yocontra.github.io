@@ -4,7 +4,7 @@ import sys
 import unittest
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "tools" / "content"))
-from simulator_schedule import ScheduleMiss, tape_events, sample_events, observe_foreground, release_held
+from simulator_schedule import ScheduleMiss, tape_events, observe_foreground, release_held
 
 
 class Clock:
@@ -66,26 +66,28 @@ class ScheduleTests(unittest.IsolatedAsyncioTestCase):
             await anext(late)
 
     async def test_sampler_does_not_burst_after_a_stalled_read(self):
-        clock, logs, reads = Clock(), [], []
+        clock, logs, reads, samples = Clock(), [], [], []
         async def read():
             reads.append(clock.now())
-            clock.value += 4
+            if len(reads) == 1:
+                clock.value += 4
             return {"wall": clock.now()}
-        samples = sample_events(read, start=0, stop=10, now=clock.now,
-                                sleep=clock.sleep, emit=logs.append)
-        self.assertEqual((await anext(samples))["wall"], 4)
-        with self.assertRaises(ScheduleMiss):
-            await anext(samples)
-        self.assertEqual(reads, [0])
-        self.assertEqual(logs[-1]["event"], "sample-deadline-miss")
+        failure = await observe_foreground(read, start=0, stop=7, now=clock.now,
+                                           sleep=clock.sleep, emit=logs.append, samples=samples)
+        self.assertIn("Foreground deadline missed", failure)
+        self.assertEqual(reads, [0, 5, 6, 7])
+        self.assertEqual(samples, [{"wall": time} for time in (4, 5, 6, 7)])
+        self.assertEqual([row["value"]["plannedMonotonic"] for row in logs
+                          if row["event"] == "sample-deadline-miss"], [1, 2, 3, 4])
 
     async def test_stalled_foreground_is_reported_without_canceling_input(self):
         clock, logs, samples = Clock(), [], []
         allow_touch = asyncio.Event()
 
         async def read():
-            clock.value = 1.2
-            allow_touch.set()
+            if clock.value == 0:
+                allow_touch.set()
+                raise TimeoutError()
             return {"wall": clock.now()}
 
         async def send():
@@ -93,12 +95,13 @@ class ScheduleTests(unittest.IsolatedAsyncioTestCase):
             return [event["kind"] async for event in self.sender(Clock(), [], {"held": None})]
 
         failure, gestures = await asyncio.gather(
-            observe_foreground(read, start=0, stop=10, now=clock.now,
+            observe_foreground(read, start=0, stop=2, now=clock.now,
                                sleep=clock.sleep, emit=logs.append, samples=samples),
             send(),
         )
         self.assertIn("Foreground deadline missed", failure)
-        self.assertEqual(samples, [{"wall": 1.2}])
+        self.assertEqual(logs[0]["event"], "sample-timeout")
+        self.assertEqual(samples, [{"wall": 1}, {"wall": 2}])
         self.assertEqual(gestures, ["down", "up"] * 3)
 
 

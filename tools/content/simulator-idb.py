@@ -88,7 +88,8 @@ async def record(client, request, udid):
 
         # Read only identity fields. The full AX tree is reserved for coordinate
         # calibration, where we also need bounds and interaction metadata.
-        async with asyncio.TaskGroup() as reads:
+        # Bound one probe so it cannot stop foreground sampling for the rest of the tape.
+        async with asyncio.timeout(1.0), asyncio.TaskGroup() as reads:
             identity = reads.create_task(timed("ax", lambda: ax(client, keys=[
                 "type", "pid", "bundleIdentifier",
             ])))

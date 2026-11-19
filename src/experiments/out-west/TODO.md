@@ -1,6 +1,6 @@
 # Out West remaining work
 
-Verified deployment baseline: `2e847e86` (2026-11-17; successful Worker/site deployment, both live game pages, exact released character/PBR assets and all 37 previews). This includes the neck and bandana repairs, native dynamite throws, Quick Draw input fix and prior scene/rendering work below. Later completed tasks may still be deploying. Final visual and performance qualification remains open.
+Verified deployment baseline is `7a26e046` (2026-11-18). The Worker and both game pages are live. All 187 audited asset URLs match their expected SHA-256 hashes, including all 37 Outfitter previews. Active simulator performance, Safari input timing, foreground Chrome evidence and live voice validation remain open.
 
 ## Current playtest feedback (2026-11-16)
 
@@ -38,6 +38,7 @@ Verified deployment baseline: `2e847e86` (2026-11-17; successful Worker/site dep
 - [x] Prepare walking distances for the bank guide before enabling the HUD. A prepared route tracks the current cover grid.
 - [x] Check viewport ownership after async loading. A late resource or session is released if the viewport has closed.
 - [x] Discard a delayed rider fallback when its lobby slot belongs to a new life. A late failure from the prior life leaves the new rider free to load. Both regression tests failed before the change.
+- [x] Clear movement and held actions when the browser releases touch pointer capture. A browser-generated touch test reproduced stuck movement and firing, then verified that both clear and the fire button returns to its idle state.
 
 ## Previous playtest feedback (2026-11-09)
 
@@ -131,7 +132,7 @@ The next 32-rider landscape run at render scale 1 averaged 16.14 FPS. A private 
 - [ ] Finish iPhone 13 mini **simulator** and Chrome frame qualification on the final immutable release. Dedicated headless Safari and Chrome diagnostics are captured; sustained active-gameplay targets are still open. A physical phone is not required.
 - [x] Make QA graphics selection explicit: temporarily use auto, record the original saved selection and valid/raw tier override, and capture the actual native tier plus post-processing/MSAA/SSAO configuration per sample. Preserve explicit tier fragments through both fixture entry paths and restore exact original settings. Public builds strip the QA fields.
 - [ ] Refresh the performance harness against the final immutable commit. Run at least 60 seconds of active movement, aiming, firing, glass hits, death and respawn with audio running. Cover normal portrait/landscape, an ordinary lobby and 32-player stress; target minimum 30 FPS in the simulator and approximately 60 FPS in Chrome.
-- [ ] Record every one-second FPS bin, frame-time percentiles/max, loaded model/resource counts and foreground evidence throughout. Exclude respawn teleports from walking-distance evidence, not slow frames from timing.
+- [x] Record every one-second FPS bin, frame-time percentiles and maximum, native renderer sample counts, loaded models and resources. The simulator retains all available native Safari foreground evidence and excludes respawn teleports from walking distances. The headless Chrome runs retain their diagnostic classification.
 - [ ] Finish native input timing validation for final simulator qualification. The four 60-second runs at `17cce48c` retained all 108 touch endpoints in each run. Ordinary portrait met the ±35 ms listener limit at every endpoint, with one swipe 46 ms short. Landscape and stress runs still missed endpoint or duration limits. Preserve every gesture, guest deadline and slow frame in final measurements. The portrait recorder now offsets the 146-point move command by 44 ms. In an active follow-up at `abd8d292`, all nine move shapes and all 108 native event times stayed within the existing tolerance. Three browser listener endpoints and one look duration still exceeded it. The test retained 60 complete seconds and the same guest deadlines.
 - [x] Prune unreferenced native Frontier resources through stock glTF-Transform, retaining leaves, attributes, indices and solid textures. Removing 244 unused meshes saves 1.91 MB of download and 9.98 MB of measured GPU buffers (488 fewer buffers). All 16 matched image pairs are pixel-identical, with unchanged draws, texture allocation, scene data, packed color/UV precision and Wind animation; four teardowns return to zero textures/buffers.
 - [x] Expose native AppStats frame IDs and measured CPU phase timings only in explicit QA snapshots. Label units and latest/non-atomic phases; unavailable detailed renderer, separate-world physics and disabled GPU timings stay null. Real native-counter and public-bundle stripping regressions pass; profiling stays disabled.
@@ -175,6 +176,21 @@ The clean `dee97e62` build completed six more 60-second windows with the real lo
 | Simulator, ordinary landscape  |    43.39 |                 33 |                0 | 34 / 41 / 56                    |                      21 |                        3 |
 | Simulator, 32 riders portrait  |    35.84 |                 23 |               13 | 45 / 57 / 88                    |                      12 |                        1 |
 | Simulator, 32 riders landscape |    22.62 |                 18 |               55 | 63 / 81 / 98                    |                      44 |                        9 |
+
+The clean `7a26e046` build completed six 60-second active windows against the local Worker and D1. Each window retained every full second and used a four-sample PlayCanvas render target. All four simulator runs verified device shutdown. Both portrait runs verified continuous native foreground. The landscape runs retained the full browser tape and all 108 native touch endpoints each, with gaps in native foreground evidence.
+
+| Active scene                   | Mean FPS | Lowest full second | Seconds below 30 | Frame time p95 / p99 / max (ms) | Late JavaScript touch endpoints | Failed gesture durations |
+| ------------------------------ | -------: | -----------------: | ---------------: | ------------------------------- | ------------------------------: | -----------------------: |
+| Headless Chrome, ordinary      |    59.54 |                 58 |                0 | 16.8 / 16.8 / 33.5              |                               — |                        — |
+| Headless Chrome, 32 riders     |    59.89 |                 59 |                0 | 16.7 / 16.8 / 33.3              |                               — |                        — |
+| Simulator, ordinary portrait   |    40.72 |                 29 |                3 | 36 / 42 / 78                    |                              16 |                        2 |
+| Simulator, ordinary landscape  |    39.93 |                 27 |                2 | 39 / 46 / 68                    |                               9 |                        1 |
+| Simulator, 32 riders portrait  |    22.64 |                 16 |               60 | 66 / 86 / 114                   |                              56 |                        4 |
+| Simulator, 32 riders landscape |    17.81 |                 15 |               58 | 79 / 94 / 118                   |                              66 |                        7 |
+
+432 of 432 native touch endpoints met the ±35 ms limit. The JavaScript listener and gesture duration use the same acceptance limits as previous runs. The touch capture fix addresses stuck controls. Safari event delivery and the simulator frame-rate floor still need work. The native foreground sampler now resumes at later scheduled checks after a miss, records the gap and keeps the window unqualified.
+
+A fixed 32-rider landscape diagnostic at the same raster averaged 28.67 FPS with rendering active and 59.96 FPS with rendering paused. Safari’s application process used less than one CPU second during the 24-second rendering window. The simulator did not expose the WebContent or GPU process in its launch service list, so the run does not identify the source of the render wait.
 
 The desktop runs met the frame-rate target in headless Chrome. Foreground desktop evidence is still open. Different round spawns and movement paths prevent a direct speed comparison with the previous runs.
 
@@ -232,5 +248,5 @@ The next fixed-view checks kept all 32 riders and the 710 × 231 raster. A flat-
 
 The deployed asset audit checked 187 complete responses against the local bytes and SHA-256 values. It covers every versioned model, all 37 shop previews and the changed published files. All 94 historical GLB blobs match the pre-recovery tree. Exact asset checks must be repeated after future content changes.
 
-- [ ] Review the finished source, then regenerate asset descriptors and native shop previews. Keep all 94 historical GLBs immutable and verify every new asset URL/hash.
-- [ ] Run `bun run check` and the relevant native visual/lifecycle probes. Push and verify the actual Worker and site deployment; distinguish simulator results from untested hardware behavior.
+- [x] Review the finished source and rebuild the native asset descriptors and shop previews. The live coat release passes all 187 asset hash checks. All 94 legacy GLB blobs match `2e847e86`.
+- [x] Run `bun run check` and the native visual and lifecycle probes. Verify the Worker and Pages deployment for `7a26e046` and both public game routes. The performance and touch timing limitations from the simulator are listed above.
