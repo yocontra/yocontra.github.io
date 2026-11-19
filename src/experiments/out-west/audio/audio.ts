@@ -196,6 +196,10 @@ interface Active {
   done: boolean
 }
 
+/** Rest a failed URL before a repeated caller can fetch or decode it again. */
+const AUDIO_RETRY_MS = 2000
+const NO_AUDIO = Promise.resolve(null)
+
 /** Max simultaneous one-shot voices. */
 const MAX_VOICES = 24
 /**
@@ -244,6 +248,7 @@ export class AudioEngine {
   private readonly raw = new Map<string, Promise<ArrayBuffer | null>>()
   private readonly buffers = new Map<string, AudioBuffer>()
   private readonly decoding = new Map<string, Promise<AudioBuffer | null>>()
+  private readonly retryAudioAt = new Map<string, number>()
   private readonly voices: Active[] = []
   private readonly streams = new Set<Stream>()
   private ticker: ReturnType<typeof setInterval> | null = null
@@ -339,16 +344,32 @@ export class AudioEngine {
     return Promise.all([headDone, tailDone]).then(() => undefined)
   }
 
+  private coolingDown(url: string): boolean {
+    const until = this.retryAudioAt.get(url)
+    return until !== undefined && performance.now() < until
+  }
+
   private fetchRaw(url: string): Promise<ArrayBuffer | null> {
     const have = this.raw.get(url)
     if (have) {
       return have
     }
-    const p = fetch(url)
+    if (this.buffers.has(url) || this.coolingDown(url)) {
+      return NO_AUDIO
+    }
+    this.retryAudioAt.delete(url)
+    const request = fetch(url)
       .then((r) => (r.ok ? r.arrayBuffer() : null))
       .catch(() => null)
-    this.raw.set(url, p)
-    return p
+      .then((data) => {
+        if (!data) {
+          this.raw.delete(url)
+          this.retryAudioAt.set(url, performance.now() + AUDIO_RETRY_MS)
+        }
+        return data
+      })
+    this.raw.set(url, request)
+    return request
   }
 
   private decode(url: string): Promise<AudioBuffer | null> {
@@ -357,25 +378,35 @@ export class AudioEngine {
       return have
     }
     const ctx = this.ctx
-    if (!ctx) {
-      return Promise.resolve(null)
+    if (!ctx || ctx.state === 'closed' || this.coolingDown(url)) {
+      return NO_AUDIO
     }
-    const p = this.fetchRaw(url).then(async (data) => {
-      // The compressed bytes are only needed until decoded.
-      this.raw.delete(url)
-      if (!data) {
-        return null
-      }
+    const active = () => this.ctx === ctx && ctx.state !== 'closed'
+    const raw = this.fetchRaw(url)
+    const request = raw.then(async (data) => {
       try {
-        const b = await ctx.decodeAudioData(data)
-        this.buffers.set(url, b)
-        return b
+        if (data && active()) {
+          const buffer = await ctx.decodeAudioData(data)
+          if (active()) {
+            this.buffers.set(url, buffer)
+            return buffer
+          }
+        }
       } catch {
-        return null
+        if (active()) {
+          this.retryAudioAt.set(url, performance.now() + AUDIO_RETRY_MS)
+        }
+      } finally {
+        // Keep the request shared through decode. Release the compressed data once consumed.
+        if (this.raw.get(url) === raw) {
+          this.raw.delete(url)
+        }
       }
+      this.decoding.delete(url)
+      return null
     })
-    this.decoding.set(url, p)
-    return p
+    this.decoding.set(url, request)
+    return request
   }
 
   get ready(): boolean {
