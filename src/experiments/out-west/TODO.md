@@ -1,6 +1,6 @@
 # Out West remaining work
 
-Verified deployment baseline is `f4262ace` (2026-11-18). The Worker and both game pages are live. All 187 audited asset URLs match their expected SHA-256 hashes, including all 37 Outfitter previews. Active simulator performance, Safari input timing, foreground Chrome evidence and live voice validation remain open.
+Verified deployment baseline is `82fd2014` (2026-11-18). The Worker and both game pages are live. All 187 audited asset URLs match their expected SHA-256 hashes, including all 37 Outfitter previews. Active simulator performance, Safari input timing, foreground Chrome evidence and live voice validation remain open.
 
 ## Current playtest feedback (2026-11-16)
 
@@ -216,6 +216,10 @@ A depth-blit prototype reused the static part of the native sun map. Moving ride
 
 A moving camera follow-up combined a padded shadow projection, receiver bounds, scenery culling and a 230 ms shadow refresh interval. Street and plaza controls averaged 20.00 and 15.00 FPS. The combined prototype averaged 26.60 and 17.00 FPS, with minimums of 24 and 16 FPS. It lowered mean plaza draws from 445 to 341. Each window was ten seconds with 32 loaded riders. The 30 FPS floor still requires more savings in the dense view.
 
+A local OffscreenCanvas diagnostic rendered the same native town and 32 copies of one dressed rider on the main thread and in a dedicated browser worker. Both 60-second windows captured all 108 trusted touch endpoints. Median dispatch after Safari's event timestamp fell from 21 ms to 11 ms. End-to-end timing still missed the ±35 ms limit at 30 and 31 endpoints, respectively. The worker window lost 16 foreground samples. The simulator companion logged slow accessibility calls and delivered a burst of queued input, and the fixture allowed Safari's selection overlay. This comparison isolates neither cause.
+
+With accessibility checks before and after each window and the order reversed, median dispatch fell from 21 ms to 10 ms. Late endpoints fell from 33 to 12 out of 108. The main-thread render averaged 33.57 FPS with a 31 FPS minimum. The worker render averaged 33.37 FPS with a 29 FPS minimum, and the main thread ran at least 59 callbacks per second. These fixed-camera trials omit multiplayer gameplay and continuous foreground checks. They do not qualify the release.
+
 The simulator and foreground Chrome commands return success only when evidence and frame rate both pass. Headless Chrome still writes a diagnostic receipt. The simulator command regression covers a passing target, a missed target with complete evidence, and incomplete evidence.
 
 ## First-person models and aiming
@@ -247,6 +251,7 @@ The simulator and foreground Chrome commands return success only when evidence a
 ## Loading and voice QA
 
 - [x] Fetch the live rider profile during the town load. Delay seat reservation until both loads and shader warmup finish. A local production-engine Chrome test with a 2 s profile delay measured 8.6 s to playable before the change and 6.5 s after it. A rejected profile reserves no seat, and a failed town load aborts the pending profile request.
+- [x] Keep the reconnect screen and disable input if the room closes during the final loading frame. Native Chrome tests close the real local socket both during warmup and in play. The first case keeps the reconnect screen and inert controls through the first rendered frame. Both cases join a clean world, retain account state and restore movement and firing.
 
 - [x] Verify existing native asset retries: PlayCanvas `AppBase.init` already enables five retries, so no override is needed. `bun tools/content/asset-retry.ts` verifies real WebGL/KTX2 recovery after five HTTP 503s, terminal failure after six attempts, failed-load eviction and re-acquisition, texture/application cleanup, and a disabled-retry control.
 - [x] Finish simulator Safari voice permission/retry, receive/deafen and background/resume checks. Simulator Safari: Cancel shows "Microphone blocked" with RETRY VOICE, retry re-prompts, Allow reaches standby; Home and back keeps the page and voice control without a reload; native receive builds the shared-context panner at the speaker's position with volume gain. Deafen (`listening: false`) allocates nothing in the coordinator tests. Desktop actual SDK/SFU two-way decoding and complete provider cleanup passed before voice enablement.
