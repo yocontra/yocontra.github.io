@@ -127,7 +127,7 @@ export class Input {
       return
     }
     const a = this.actionFor(e.code)
-    if (!a || (a !== 'pause' && onMenuControl(e))) {
+    if (!a || (a !== 'pause' && onUiControl(e))) {
       return
     }
     // Let Tab work for focus when a menu is open.
@@ -162,7 +162,7 @@ export class Input {
   }
 
   private readonly onPointerDown = (e: PointerEvent): void => {
-    if (!this.enabled) {
+    if (!this.enabled || onUiControl(e)) {
       return
     }
     if (e.button !== 0 && e.pointerType === 'mouse') {
@@ -195,22 +195,18 @@ export class Input {
 const CONTROL =
   'button, a[href], input, select, textarea, [contenteditable], [role="radio"], [role="tab"]'
 // biome-ignore lint/security/noSecrets: a CSS selector list, not a credential
-const MENU = '[role="dialog"], [role="alertdialog"], .ow-title, .ow-hub, .ow-sheet'
+const UI = '[role="dialog"], [role="alertdialog"], .ow-title, .ow-hub, .ow-sheet, .ow-pause'
 
 /**
- * Is this key press aimed at a visible menu control (a focused Buy button, a text field)? Then
- * Space and Enter belong to the browser (activate the button, type the space), never the duel:
- * swallowing them left a keyboard player unable to confirm a purchase.
+ * Let the browser activate a visible menu or HUD control without firing or taking its pointer.
  */
-function onMenuControl(e: KeyboardEvent): boolean {
-  const t = e.target
-  if (!(t instanceof HTMLElement) || t === document.body || !t.closest(CONTROL)) {
-    return false
-  }
+function onUiControl(event: Event): boolean {
+  const control = event.target instanceof Element ? event.target.closest(CONTROL) : null
   return (
-    t.closest(MENU) !== null &&
+    control !== null &&
+    control.closest(UI) !== null &&
     // A displayed menu still owns its keys during the first frame of its fade-in.
-    t.checkVisibility({ visibilityProperty: true })
+    control.checkVisibility({ visibilityProperty: true })
   )
 }
 

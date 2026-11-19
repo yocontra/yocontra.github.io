@@ -13,6 +13,37 @@ try {
   })
   await page.locator('.ow-start').click()
   await page.waitForFunction(() => Reflect.get(globalThis, '__ow').director.phase === 'cock')
+  const pause = page.getByRole('button', { name: 'Pause', exact: true })
+  const pauseIcon = pause.locator('span').first()
+  const paused = page.getByRole('heading', { name: 'Paused', exact: true })
+  const cdp = await page.context().newCDPSession(page)
+  try {
+    for (const method of ['mouse', 'touch', 'Space', 'Enter']) {
+      if (method === 'mouse') {
+        await pauseIcon.click()
+      } else if (method === 'touch') {
+        const bounds = await pauseIcon.boundingBox()
+        if (!bounds) {
+          throw new Error('The duel Pause icon is missing')
+        }
+        await cdp.send('Input.dispatchTouchEvent', {
+          type: 'touchStart',
+          touchPoints: [{ x: bounds.x + bounds.width / 2, y: bounds.y + bounds.height / 2 }],
+        })
+        await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] })
+      } else {
+        await pause.press(method)
+      }
+      await paused.waitFor({ timeout: 3000 })
+      if (await page.evaluate(() => Reflect.get(globalThis, '__ow').director.c.input.pointerHeld)) {
+        throw new Error(`Pause passed ${method} input to the duel`)
+      }
+      await page.keyboard.press('Escape')
+      await paused.waitFor({ state: 'hidden' })
+    }
+  } finally {
+    await cdp.detach()
+  }
   await page.keyboard.down('w')
   await page.waitForFunction(() => Reflect.get(globalThis, '__ow').director.phase === 'wait')
   await page.keyboard.up('w')
