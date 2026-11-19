@@ -385,7 +385,7 @@ export class NativeEnvironment {
     if (this.disposed || this.groups.has(root)) {
       return
     }
-    animateWind(root, asset)
+    animateWind(root, asset, this.frontier)
     this.frontierLamps?.attach(root)
     const lod = new NativeModelLods(root)
     this.lods.set(root, lod)
