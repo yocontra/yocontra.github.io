@@ -6,11 +6,11 @@ import {
   matchMaker,
   Room,
 } from '@colyseus/core'
-import physicsModule from '../../../public/experiments/out-west/physics/ammo.wasm.wasm'
+import { FixedRoomClock } from '../../../packages/durable-game-runtime/src/clock.ts'
+import { initializeWorkerAmmo } from '../../../packages/durable-game-runtime/src/worker-physics.ts'
 import { ANGLE_SCALE } from '../../../src/experiments/out-west/contract/town.ts'
 import { activePlayers } from '../../../src/experiments/out-west/ffa/sim/state.ts'
 import type { InputFrame } from '../../../src/experiments/out-west/ffa/sim/types.ts'
-import { initializeAmmo } from '../../../src/experiments/out-west/runtime/ammo.ts'
 import { COLLISION as collision } from '../../../src/experiments/out-west/runtime/collision.ts'
 import { createFrontierSimulation } from '../../../src/experiments/out-west/runtime/frontier.ts'
 import { PROTOCOL_VERSION } from '../../../src/experiments/out-west/runtime/protocol.ts'
@@ -21,8 +21,6 @@ import {
 } from '../../../src/experiments/out-west/runtime/schema.ts'
 import type { JoinBlocks } from '../town/callout-blocks.ts'
 import type { JoinProfile, LobbyCore, Session, TickOutput } from '../town/core.ts'
-import { FixedRoomClock } from './clock.ts'
-import callbackModule from './physics-callback.wasm'
 import { GameLinkSampler } from './rtt.ts'
 
 export interface NativeJoinProfile extends JoinProfile {
@@ -118,7 +116,7 @@ export class NativeFrontierRoom extends Room<{ state: FrontierState; input: Move
       if (this.closed || this.pendingJoins.size === 0 || !this.core) {
         throw new DOMException('Town was closed', 'AbortError')
       }
-      const ammo = await initializeAmmo(physicsModule, callbackModule)
+      const ammo = await initializeWorkerAmmo()
       if (this.closed || this.pendingJoins.size === 0 || !this.core) {
         throw new DOMException('Town was closed', 'AbortError')
       }

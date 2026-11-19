@@ -1,6 +1,7 @@
 import { DurableObject } from 'cloudflare:workers'
 import { connectClientToRoom, createAuthContext } from '@colyseus/core'
 import type { GraphicsDevice } from 'playcanvas'
+import { CloudflareClient } from '../../packages/durable-game-runtime/src/socket.ts'
 import {
   TUMBLEWEED_ROUTES,
   tumbleweedCenter,
@@ -12,7 +13,6 @@ import type { createFrontierSimulation } from '../../src/experiments/out-west/ru
 import { PROTOCOL_VERSION } from '../../src/experiments/out-west/runtime/protocol.ts'
 import { AdmissionLeases } from '../src/game/admission.ts'
 import { createNativeRoom, type NativeFrontierRoom, reserveNativeRoom } from '../src/game/room.ts'
-import { CloudflareClient } from '../src/game/socket.ts'
 import { LobbyCore } from '../src/town/core.ts'
 import { bindingProbe } from './binding-probe.ts'
 import { clockProbe } from './clock-probe.ts'

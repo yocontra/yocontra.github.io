@@ -11,6 +11,7 @@
 
 import { DurableObject } from 'cloudflare:workers'
 import { connectClientToRoom, createAuthContext } from '@colyseus/core'
+import { CloudflareClient } from '../../../packages/durable-game-runtime/src/socket.ts'
 import { bagStyleIndex } from '../../../src/experiments/out-west/contract/town.ts'
 import { budgetState, recordUsage } from '../budget.ts'
 import { getProfile } from '../economy/profile.ts'
@@ -19,7 +20,6 @@ import type { Env } from '../env.ts'
 import { NativeBudgetRefusal } from '../game/admission.ts'
 import { createNativeRoom, type NativeFrontierRoom, reserveNativeRoom } from '../game/room.ts'
 import { NativeSeats } from '../game/seats.ts'
-import { CloudflareClient } from '../game/socket.ts'
 import {
   accountFlags,
   blockAccounts,

@@ -4,9 +4,9 @@
  */
 import { argv, stdout } from 'node:process'
 import { Client, type Room } from '@colyseus/sdk'
+import { batchInputs } from '../../../packages/durable-game-runtime/src/packets.ts'
 import { COLLISION_VERSION } from '../../../src/experiments/out-west/content/manifest.ts'
 import { TOWN_WIRE_VERSION } from '../../../src/experiments/out-west/contract/town.ts'
-import { batchInputs } from '../../../src/experiments/out-west/runtime/packets.ts'
 import { PROTOCOL_VERSION } from '../../../src/experiments/out-west/runtime/protocol.ts'
 import { FrontierState, MoveInput } from '../../../src/experiments/out-west/runtime/schema.ts'
 

@@ -106,7 +106,7 @@ it(
       const entry = await readFile(join(output, 'production-worker.js'), 'utf8')
       const wasm = (await readdir(output)).filter((name) => name.endsWith('.wasm'))
       const packets = await build({
-        entrypoints: [join(root, 'src/experiments/out-west/runtime/packets.ts')],
+        entrypoints: [join(root, 'packages/durable-game-runtime/src/packets.ts')],
         target: 'node',
       })
       const packetModule = packets.outputs[0]

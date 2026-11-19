@@ -1,37 +1,14 @@
 # Generated Ammo integration
 
-`ammo-factory.ts` and the public `ammo.wasm.wasm` originate from
-[PlayCanvas engine v2.23.3](https://github.com/playcanvas/engine/tree/v2.23.3/examples/assets/wasm/ammo).
-Ammo is the Bullet port by the ammo.js contributors, distributed under the zlib license
-in `AMMO-LICENSE.txt`; `PLAYCANVAS-LICENSE.txt` retains the engine's MIT notice.
-The generated factory is altered source, not authored game code. It alone is excluded from
-Biome's authored-code rules. The maintained loader, motor, transport and generator are checked.
+The headless physics and Cloudflare transport live in
+[`packages/durable-game-runtime`](../../../../../packages/durable-game-runtime).
+The package keeps the generated Ammo factory, compiled modules, and upstream notices together.
+Out West serves the same Ammo binary at `/experiments/out-west/physics/ammo.wasm.wasm`.
 
-Reproduce the pinned assets from the repository root:
-
-```sh
-bun api/src/game/generate-physics.ts
-```
-
-The generator forces the web environment, converts the CommonJS footer to ESM, and lets
-`addFunction` instantiate a precompiled callback trampoline. Node and browsers can compile
-Ammo normally. Cloudflare Workers require Wrangler's compiled Wasm module imports; they cannot
-compile the tiny callback wrapper dynamically. `api/src/game/physics-callback.wasm` imports
-`e.f(i32,f32)->void` and exports `f`, matching the engine's internal tick callback.
-Every callback gets a separate instance; Ammo owns function-table allocation and removal.
-Worlds share the Ammo module, while each AppBase owns its AmmoPhysicsWorld. Destroying one
-world must never destroy a different room's callback or bodies.
-
-The native adapter uses the official Colyseus `Client`, `ClientPrivate`, `enqueueClientRaw`
-and message encoders. Community feasibility research consulted
-[c-py at b0f296e](https://github.com/c-py/colyseus-cloudflare-worker-transport/tree/b0f296e444867dc2edb47e351c28b7238e08289f).
-That repository declares `UNLICENSED`; its code is not vendored or incorporated. This project
-implements DO-owned sockets and timer-driven delivery independently, and does not use its
-recipient-input send queue or custom Presence/Driver.
+Run `bun api/src/game/generate-physics.ts` from the repository root to regenerate both copies.
 
 The SQLite LobbyDirectory owns global admission, assignment and room routing. Colyseus's
-LocalPresence/LocalDriver only index rooms inside their current isolate. A request resolves its
-DO owner before reserving or consuming a seat; an isolate registry is never queried as a global
-matchmaking database. A room/process restart invalidates its transient seats and state; clients
-obtain fresh authenticated tickets. Pending economic settlements are stored durably and retried
-idempotently. Live carry and physics state are intentionally memory-only, as before.
+LocalPresence and LocalDriver only index rooms inside their current isolate. A request resolves
+its Durable Object owner before it reserves or consumes a seat. A room restart invalidates
+transient seats and state. Clients obtain fresh authenticated tickets. Pending economic
+settlements persist and retry with the original idempotency keys.

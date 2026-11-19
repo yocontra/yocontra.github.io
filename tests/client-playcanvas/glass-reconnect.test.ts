@@ -9,11 +9,11 @@ import {
   SoundComponentSystem,
   type SoundInstance,
 } from 'playcanvas'
+import { initializeAmmo } from '../../packages/durable-game-runtime/src/ammo.ts'
 import type { GameApplication } from '../../src/experiments/out-west/client/application.ts'
 import { NativeRagdolls } from '../../src/experiments/out-west/client/ragdolls.ts'
 import { BreakableWindows } from '../../src/experiments/out-west/client/windows.ts'
 import type { GlassPlane } from '../../src/experiments/out-west/ffa/sim/building-rules.ts'
-import { initializeAmmo } from '../../src/experiments/out-west/runtime/ammo.ts'
 
 const priorDocument = Object.getOwnPropertyDescriptor(globalThis, 'document')
 beforeAll(async () => {

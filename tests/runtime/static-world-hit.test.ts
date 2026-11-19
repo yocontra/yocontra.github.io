@@ -1,8 +1,8 @@
 import { beforeAll, describe, expect, test as it } from 'bun:test'
 import { file } from 'bun'
 import { Entity, Vec3 } from 'playcanvas'
+import { initializeAmmo } from '../../packages/durable-game-runtime/src/ammo.ts'
 import type { ShotRay } from '../../src/experiments/out-west/ffa/sim/combat.ts'
-import { initializeAmmo } from '../../src/experiments/out-west/runtime/ammo.ts'
 import { COLLISION } from '../../src/experiments/out-west/runtime/collision.ts'
 import {
   Buttons,

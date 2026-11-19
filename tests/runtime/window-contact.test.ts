@@ -3,6 +3,7 @@ import { Encoder } from '@colyseus/schema'
 import { Room } from '@colyseus/sdk'
 import { file } from 'bun'
 import { Entity } from 'playcanvas'
+import { initializeAmmo } from '../../packages/durable-game-runtime/src/ammo.ts'
 import { applyFrontierState } from '../../src/experiments/out-west/client/state.ts'
 import { BreakableWindows } from '../../src/experiments/out-west/client/windows.ts'
 import { COLLISION_VERSION } from '../../src/experiments/out-west/content/manifest.ts'
@@ -11,7 +12,6 @@ import type { TownLayout } from '../../src/experiments/out-west/ffa/sim/layout.t
 import { createWorld } from '../../src/experiments/out-west/ffa/sim/state.ts'
 import { addPlayer } from '../../src/experiments/out-west/ffa/sim/world.ts'
 import { newMotion } from '../../src/experiments/out-west/runtime/abilities.ts'
-import { initializeAmmo } from '../../src/experiments/out-west/runtime/ammo.ts'
 import { createFrontierSimulation } from '../../src/experiments/out-west/runtime/frontier.ts'
 import {
   Buttons,

@@ -1,5 +1,6 @@
 import { Predict, type Room, type SeatReservation } from '@colyseus/sdk'
 import { type Entity, Vec3 } from 'playcanvas'
+import { batchInputs } from '../../../../packages/durable-game-runtime/src/packets.ts'
 import { COLLISION_VERSION } from '../content/manifest.ts'
 import { type ServerControl, TOWN_WIRE_VERSION } from '../contract/town.ts'
 import { isRecord } from '../contract/validate.ts'
@@ -10,7 +11,6 @@ import type { SimEvent } from '../ffa/sim/types.ts'
 import { API_URL, getAccessToken } from '../net/auth.ts'
 import { pageTurnstile } from '../net/turnstile.ts'
 import { loadAmmo } from '../runtime/ammo.ts'
-import { batchInputs } from '../runtime/packets.ts'
 import {
   Buttons,
   type CollisionData,

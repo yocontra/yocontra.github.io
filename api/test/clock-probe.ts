@@ -1,6 +1,6 @@
 /** Run the actual Colyseus fixed-step callback with controlled wall time inside workerd. */
 import { Room } from '@colyseus/core'
-import { FixedRoomClock } from '../src/game/clock.ts'
+import { FixedRoomClock } from '../../packages/durable-game-runtime/src/clock.ts'
 
 export async function clockProbe() {
   const room = new Room()

@@ -1,7 +1,18 @@
 import { expect, test as it } from 'bun:test'
 import { join } from 'node:path'
 import process from 'node:process'
-import { build, spawn } from 'bun'
+import { build, CryptoHasher, file, spawn } from 'bun'
+
+it('ships the same compiled Ammo asset for browser prediction and room physics', async () => {
+  const worker = file('packages/durable-game-runtime/src/vendor/ammo.wasm.wasm')
+  const browser = file('public/experiments/out-west/physics/ammo.wasm.wasm')
+  const [workerHash, browserHash] = await Promise.all(
+    [worker, browser].map(async (asset) =>
+      CryptoHasher.hash('sha256', await asset.arrayBuffer(), 'hex'),
+    ),
+  )
+  expect(workerHash).toBe(browserHash)
+})
 
 /** Run Miniflare under Node: its undici dispatch requires the Node runtime. */
 it('real workerd initializes native Ammo and steps independently owned worlds', async () => {
@@ -25,8 +36,8 @@ it('real workerd initializes native Ammo and steps independently owned worlds', 
   import fs from 'node:fs';
   const mf=new Miniflare(convertV4MiniflareOptions({modules:[
    {type:'ESModule',path:${JSON.stringify(join(root, 'api/test/physics-worker.js'))},contents:${JSON.stringify(contents)}},
-   {type:'CompiledWasm',path:${JSON.stringify(join(root, 'public/experiments/out-west/physics/ammo.wasm.wasm'))},contents:fs.readFileSync(${JSON.stringify(join(root, 'public/experiments/out-west/physics/ammo.wasm.wasm'))})},
-   {type:'CompiledWasm',path:${JSON.stringify(join(root, 'api/src/game/physics-callback.wasm'))},contents:fs.readFileSync(${JSON.stringify(join(root, 'api/src/game/physics-callback.wasm'))})}
+   {type:'CompiledWasm',path:${JSON.stringify(join(root, 'api/test/vendor/ammo.wasm.wasm'))},contents:fs.readFileSync(${JSON.stringify(join(root, 'packages/durable-game-runtime/src/vendor/ammo.wasm.wasm'))})},
+   {type:'CompiledWasm',path:${JSON.stringify(join(root, 'api/test/vendor/physics-callback.wasm'))},contents:fs.readFileSync(${JSON.stringify(join(root, 'packages/durable-game-runtime/src/vendor/physics-callback.wasm'))})}
   ],compatibilityDate:'2026-10-01',compatibilityFlags:['nodejs_compat']}));
   try{const r=await mf.dispatchFetch('http://localhost/');console.log('RESULT:'+JSON.stringify({status:r.status,body:await r.text()}))}finally{await mf.dispose()}
  `

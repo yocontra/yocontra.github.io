@@ -2,6 +2,7 @@ import { beforeAll, describe, expect, test as it } from 'bun:test'
 import { Decoder, Encoder } from '@colyseus/schema'
 import { file } from 'bun'
 import { buildNav } from '../../api/src/town/nav.ts'
+import { initializeAmmo } from '../../packages/durable-game-runtime/src/ammo.ts'
 import { impactMaterial } from '../../src/experiments/out-west/client/audio-surfaces.ts'
 import {
   applyFrontierState,
@@ -15,7 +16,6 @@ import {
 } from '../../src/experiments/out-west/contract/tumbleweed-motion.ts'
 import { buildGrid, TOWN } from '../../src/experiments/out-west/ffa/sim/layout.ts'
 import { createWorld } from '../../src/experiments/out-west/ffa/sim/state.ts'
-import { initializeAmmo } from '../../src/experiments/out-west/runtime/ammo.ts'
 import { COLLISION } from '../../src/experiments/out-west/runtime/collision.ts'
 import { neutralInput, PROTOCOL_VERSION } from '../../src/experiments/out-west/runtime/protocol.ts'
 import { FrontierState } from '../../src/experiments/out-west/runtime/schema.ts'

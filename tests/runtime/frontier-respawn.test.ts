@@ -1,9 +1,9 @@
 import { beforeAll, expect, test as it } from 'bun:test'
 import { file } from 'bun'
+import { initializeAmmo } from '../../packages/durable-game-runtime/src/ammo.ts'
 import { killPlayer } from '../../src/experiments/out-west/ffa/sim/death.ts'
 import { TOWN } from '../../src/experiments/out-west/ffa/sim/layout.ts'
 import { addPlayer } from '../../src/experiments/out-west/ffa/sim/world.ts'
-import { initializeAmmo } from '../../src/experiments/out-west/runtime/ammo.ts'
 import { createFrontierSimulation } from '../../src/experiments/out-west/runtime/frontier.ts'
 import { Buttons, type CollisionData } from '../../src/experiments/out-west/runtime/protocol.ts'
 

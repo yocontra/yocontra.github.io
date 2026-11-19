@@ -2,12 +2,12 @@ import { beforeAll, expect, test as it } from 'bun:test'
 import { Encoder } from '@colyseus/schema'
 import { Predict, Room } from '@colyseus/sdk'
 import { file } from 'bun'
+import { initializeAmmo } from '../../packages/durable-game-runtime/src/ammo.ts'
 import {
   playerLifetimeSync,
   REMOTE_POSE,
   REMOTE_YAW,
 } from '../../src/experiments/out-west/client/prediction-lifecycle.ts'
-import { initializeAmmo } from '../../src/experiments/out-west/runtime/ammo.ts'
 import { Buttons, neutralInput } from '../../src/experiments/out-west/runtime/protocol.ts'
 import {
   FrontierState,

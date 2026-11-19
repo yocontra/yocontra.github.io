@@ -12,6 +12,7 @@
  */
 import { argv, stdout } from 'node:process'
 import { file } from 'bun'
+import { initializeAmmo } from '../../../packages/durable-game-runtime/src/ammo.ts'
 import {
   BTN_AIM,
   BTN_FIRE,
@@ -30,7 +31,6 @@ import {
   type World,
 } from '../../../src/experiments/out-west/ffa/sim/state.ts'
 import type { Player } from '../../../src/experiments/out-west/ffa/sim/types.ts'
-import { initializeAmmo } from '../../../src/experiments/out-west/runtime/ammo.ts'
 import { COLLISION } from '../../../src/experiments/out-west/runtime/collision.ts'
 import { createFrontierSimulation } from '../../../src/experiments/out-west/runtime/frontier.ts'
 import { LobbyCore } from './core.ts'

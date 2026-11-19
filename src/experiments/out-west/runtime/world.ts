@@ -1,21 +1,19 @@
 import {
-  AmmoPhysicsWorld,
-  AppBase,
-  AppOptions,
+  type AppBase,
   BODYGROUP_TRIGGER,
   BODYMASK_ALL,
-  CollisionComponentSystem,
   Entity,
   GraphNode,
-  JointComponentSystem,
   Mesh,
   MeshInstance,
   Model,
-  NullGraphicsDevice,
-  RigidBodyComponentSystem,
   StandardMaterial,
   Vec3,
 } from 'playcanvas'
+import {
+  createPhysicsWorld,
+  type PhysicsWorldOptions,
+} from '../../../../packages/durable-game-runtime/src/physics.ts'
 import { BODY_HEIGHT, CROUCH_HEIGHT, FALL_GRAVITY_SCALE, GRAVITY } from '../ffa/sim/constants.ts'
 import { roofWalkAt } from '../ffa/sim/roofwalks.ts'
 import { motorFrame, newMotion } from './abilities.ts'
@@ -32,41 +30,11 @@ import {
   type StaticWorldHit,
 } from './protocol.ts'
 
-export interface SimulationOptions {
-  joints?: boolean
-  /** Downward acceleration in m/s²; player movement uses the shared jump gravity. */
-  gravity?: number
-
-  ammo: unknown
+export interface SimulationOptions extends PhysicsWorldOptions {
   collision: CollisionData
 }
-function createPhysics(options: SimulationOptions) {
-  const device = new NullGraphicsDevice({ width: 1, height: 1 })
-  const app = new AppBase(device.canvas)
-  const config = new AppOptions()
-  config.graphicsDevice = device
-  config.componentSystems = [RigidBodyComponentSystem, CollisionComponentSystem]
-  if (options.joints) {
-    config.componentSystems.push(JointComponentSystem)
-  }
-  config.physicsWorld = new AmmoPhysicsWorld()
-  app.init(config)
-  const physics = (() => {
-    const system = app.systems.rigidbody
-    if (!system) {
-      throw new Error('PlayCanvas physics system unavailable')
-    }
-    return system
-  })()
-  physics.timeScale = 0
-  // The shared runtime supplies exact 60 Hz substeps; disable Bullet's second accumulator.
-  physics.maxSubSteps = 0
-  physics.gravity.set(0, -(options.gravity ?? GRAVITY), 0)
-  return { app, physics }
-}
 export function createSimulation(options: SimulationOptions) {
-  Object.assign(globalThis, { Ammo: options.ammo })
-  const { app, physics } = createPhysics(options)
+  const { app, physics } = createPhysicsWorld({ ...options, gravity: options.gravity ?? GRAVITY })
   const players = new Map<string, PlayerState>()
   const entities = new Map<string, Entity>()
   let disposed = false

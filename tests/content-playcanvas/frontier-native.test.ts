@@ -1,6 +1,7 @@
 import { beforeAll, expect, test as it } from 'bun:test'
 import { file } from 'bun'
 import { Vec3 } from 'playcanvas'
+import { initializeAmmo } from '../../packages/durable-game-runtime/src/ammo.ts'
 import { ASSETS } from '../../src/experiments/out-west/content/manifest.ts'
 import { CHANNEL_BANK, CHANNEL_STRONGBOX } from '../../src/experiments/out-west/contract/town.ts'
 import type { TownLayout } from '../../src/experiments/out-west/ffa/sim/layout.ts'
@@ -8,7 +9,6 @@ import { progressChannel, startChannel } from '../../src/experiments/out-west/ff
 import { updatePickups } from '../../src/experiments/out-west/ffa/sim/pickups.ts'
 import { createWorld } from '../../src/experiments/out-west/ffa/sim/state.ts'
 import { addPlayer, chooseSpawn } from '../../src/experiments/out-west/ffa/sim/world.ts'
-import { initializeAmmo } from '../../src/experiments/out-west/runtime/ammo.ts'
 import { createSimulation } from '../../src/experiments/out-west/runtime/world.ts'
 import plan from '../../tools/art/environments/frontier.plan.json' with { type: 'json' }
 import { compileFrontierCollision } from '../../tools/content/frontier-collision.ts'

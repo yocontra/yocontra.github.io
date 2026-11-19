@@ -15,7 +15,7 @@
       "!node_modules",
       "!bun.lock",
       "!tools/art/environments/freight-crates/profiles.json",
-      "!src/experiments/out-west/runtime/vendor"
+      "!packages/durable-game-runtime/src/vendor"
     ]
   },
   "formatter": {

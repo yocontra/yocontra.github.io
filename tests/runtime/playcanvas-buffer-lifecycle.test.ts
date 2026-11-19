@@ -1,7 +1,7 @@
 import { beforeAll, expect, test as it } from 'bun:test'
 import { createRequire } from 'node:module'
 import { file } from 'bun'
-import { initializeAmmo } from '../../src/experiments/out-west/runtime/ammo.ts'
+import { initializeAmmo } from '../../packages/durable-game-runtime/src/ammo.ts'
 import { COLLISION } from '../../src/experiments/out-west/runtime/collision.ts'
 import { createSimulation } from '../../src/experiments/out-west/runtime/world.ts'
 

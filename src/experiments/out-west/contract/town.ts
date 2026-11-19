@@ -1,7 +1,7 @@
 /** Shared Frontier product controls, refusal types and gameplay constants.
  * HTTP joins validate the engine protocol and generated collision revision before reserving a
  * Colyseus seat. Native SDK schema/input packets travel over a signed, DO-owned WebSocket;
- * runtime/packets.ts batches two unmodified SDK inputs per outgoing WebSocket message.
+ * The Durable Game Runtime batches two unmodified SDK inputs per outgoing WebSocket message.
  * ClientControl/ServerControl remain game-specific messages inside Colyseus ROOM_DATA.
  */
 

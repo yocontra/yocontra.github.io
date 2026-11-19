@@ -62,7 +62,7 @@ export function unpackPackets(data: Uint8Array): readonly Uint8Array[] {
 export interface PacketConnection {
   send: (data: Uint8Array) => void
 }
-/** Two20Hz input packets travel in one10Hz WebSocket message. Handshakes/control bypass batching. */
+/** Two 20 Hz input packets travel in one 10 Hz WebSocket message. Handshakes/control bypass batching. */
 export function batchInputs(connection: PacketConnection) {
   const send = connection.send
   let queue: Uint8Array[] = []

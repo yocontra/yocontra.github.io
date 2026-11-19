@@ -1,10 +1,10 @@
 import { expect, test as it, setSystemTime } from 'bun:test'
-import { CloudflareClient } from '../../api/src/game/socket.ts'
 import {
   batchInputs,
   packPackets,
   unpackPackets,
-} from '../../src/experiments/out-west/runtime/packets.ts'
+} from '../../packages/durable-game-runtime/src/packets.ts'
+import { CloudflareClient } from '../../packages/durable-game-runtime/src/socket.ts'
 
 it('batches only native reliable input packets, rejects truncation and trailing data', () => {
   const first = new Uint8Array([19, 1, 2])

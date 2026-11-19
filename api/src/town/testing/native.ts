@@ -1,8 +1,8 @@
 /** Native simulation fixtures; tests never use the removed grid movement solver. */
 import { afterEach } from 'bun:test'
 import { file } from 'bun'
+import { initializeAmmo } from '../../../../packages/durable-game-runtime/src/ammo.ts'
 import type { WorldOptions } from '../../../../src/experiments/out-west/ffa/sim/state.ts'
-import { initializeAmmo } from '../../../../src/experiments/out-west/runtime/ammo.ts'
 import { COLLISION } from '../../../../src/experiments/out-west/runtime/collision.ts'
 import { createFrontierSimulation } from '../../../../src/experiments/out-west/runtime/frontier.ts'
 import type { CollisionData } from '../../../../src/experiments/out-west/runtime/protocol.ts'

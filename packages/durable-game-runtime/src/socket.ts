@@ -14,17 +14,20 @@ import {
   type ISendOptions,
   Protocol,
 } from '@colyseus/core'
-import { unpackPackets } from '../../../src/experiments/out-west/runtime/packets.ts'
+import { unpackPackets } from './packets.ts'
 
 /** Sustained frames per second, each carrying at most two SDK packets. */
 const FRAME_RATE = 20
 /** A stalled tab or radio delivers its queued frames at once; three seconds of backlog is play. */
 const FRAME_BURST = FRAME_RATE * 3
+
+type RoomSocket = Pick<WebSocket, 'readyState' | 'send' | 'close'>
+
 export class CloudflareClient extends EventEmitter implements Client, ClientPrivate {
   declare '~messages': Record<string | number, unknown>
   readonly ref = this
   readonly sessionId: string
-  readonly ws: WebSocket
+  readonly ws: RoomSocket
   state: ClientState = ClientState.JOINING
   reconnectionToken = ''
   _enqueuedMessages: Uint8Array[] = []
@@ -34,7 +37,7 @@ export class CloudflareClient extends EventEmitter implements Client, ClientPriv
   private readonly delivered: (bytes: number) => void
   constructor(
     sessionId: string,
-    ws: WebSocket,
+    ws: RoomSocket,
     delivered: (bytes: number) => void = () => undefined,
   ) {
     super()
