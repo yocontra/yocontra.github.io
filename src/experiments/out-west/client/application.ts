@@ -27,11 +27,13 @@ import {
   TextureHandler,
   TONEMAP_ACES,
 } from 'playcanvas'
+import { ASSETS } from '../content/manifest.ts'
 import { SKIES } from '../content/skies.ts'
 import { assetUrl } from '../platform/asset-url.ts'
 import { pickTier, type RenderTier } from '../platform/render-tier.ts'
 import { FrameBudget } from './frame-budget.ts'
 import { FrontierShadows } from './frontier-shadows.ts'
+import { removeInertFrontierWind } from './inert-frontier-wind.ts'
 import { NativeAudioHandler } from './native-audio-handler.ts'
 import { NativePost } from './post.ts'
 
@@ -309,9 +311,12 @@ export class GameApplication {
             },
           },
           global: {
-            preprocess: () => {
+            preprocess: (gltf: Parameters<typeof removeInertFrontierWind>[0]) => {
               if (this.controller.signal.aborted) {
                 throw new DOMException('Game was closed', 'AbortError')
+              }
+              if (this.options.frontier && url === ASSETS.frontier.url) {
+                removeInertFrontierWind(gltf)
               }
             },
           },

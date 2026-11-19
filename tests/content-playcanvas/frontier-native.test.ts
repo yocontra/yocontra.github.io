@@ -204,6 +204,48 @@ it('a hay-supported strongbox remains reachable from ground but not through an u
   expect(world.strongbox.openedBy).toBe(-1)
 })
 
+it('marks only inert native wind targets and retains moving targets on the same plants', async () => {
+  const doc = await frontierIO.read(`public${ASSETS.frontier.url.split('?')[0]}`)
+  let inert = 0
+  for (const mesh of doc.getRoot().listMeshes()) {
+    const primitives = mesh.listPrimitives()
+    const marked = primitives.filter((part) => part.getExtras().outWestInertWind === 1)
+    if (marked.length === 0) {
+      continue
+    }
+    expect(
+      primitives.some(
+        (part) =>
+          part.getExtras().outWestInertWind !== 1 &&
+          part.listTargets().some((target) =>
+            target.listSemantics().some((semantic) =>
+              target
+                .getAttribute(semantic)
+                ?.getArray()
+                ?.some((delta) => delta !== 0),
+            ),
+          ),
+      ),
+    ).toBe(true)
+    for (const part of marked) {
+      expect(part.listTargets().length).toBeGreaterThan(0)
+      for (const target of part.listTargets()) {
+        expect(target.listSemantics().length).toBeGreaterThan(0)
+        for (const semantic of target.listSemantics()) {
+          expect(
+            target
+              .getAttribute(semantic)
+              ?.getArray()
+              ?.every((delta) => delta === 0),
+          ).toBe(true)
+        }
+      }
+      inert++
+    }
+  }
+  expect(inert).toBeGreaterThan(0)
+})
+
 it('the native pitched gables have positive triangle area and a usable normal at each corner', async () => {
   const doc = await frontierIO.read(`public${ASSETS.frontier.url.split('?')[0]}`)
   const timber = doc
