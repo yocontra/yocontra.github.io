@@ -131,10 +131,13 @@ export class VoiceControls {
     }
     globalThis.addEventListener('keydown', key)
     globalThis.addEventListener('keyup', keyUp)
-    const blur = () => this.quiet()
+    const blur = () => {
+      this.quiet()
+      this.render()
+    }
     const visibility = () => {
       if (document.hidden) {
-        this.quiet()
+        blur()
       }
     }
     globalThis.addEventListener('blur', blur)
@@ -182,6 +185,9 @@ export class VoiceControls {
   }
 
   setSilenced(on: boolean): void {
+    if (this.silenced === on) {
+      return
+    }
     this.silenced = on
     if (on) {
       this.quiet()

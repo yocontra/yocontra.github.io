@@ -69,6 +69,9 @@ export class FrontierVoice {
     const silenced = Boolean(self && self.showdown >= 0)
     this.chat.setSilenced(silenced)
     this.controls.setSilenced(silenced)
+    if (!getSettings().voiceChat) {
+      return
+    }
     this.chat.update(
       world.players.flatMap((player) =>
         player && player.id !== selfSlot && player.alive ? [player] : [],
