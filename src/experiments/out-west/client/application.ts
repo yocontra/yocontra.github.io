@@ -315,7 +315,7 @@ export class GameApplication {
               if (this.controller.signal.aborted) {
                 throw new DOMException('Game was closed', 'AbortError')
               }
-              if (this.options.frontier && url === ASSETS.frontier.url) {
+              if (url === ASSETS.frontier.url && this.options.frontier) {
                 removeInertFrontierWind(gltf)
               }
             },

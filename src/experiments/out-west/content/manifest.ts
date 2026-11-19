@@ -101,7 +101,7 @@ export const ENVIRONMENT = {
   hash: '206c67e3a1b992282821cf06662bdd69bbb4915c1c4444a66338a40d6a7d4e34',
   bytes: 1173154,
 } as const
-export const CONTENT_VERSION = '8da2c76b2b4e06e7b836dbcb13d7ca01ac631b75e73bdf699df903a4043e7f9f'
+export const CONTENT_VERSION = '4f4eb6e0c8615d54ab94111c80f82e9bb2a8db3346e17238e5f17f20a875f6b0'
 export const COLLISION_VERSION = '03b11033428780f67158b47e3fc2b37d761185acea4d5b323301449671b65def'
 export const ASSETS = {
   frontier: {
