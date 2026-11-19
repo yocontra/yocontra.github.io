@@ -260,6 +260,8 @@ A private browser worker rendered the full Frontier scene with 32 actual riders 
 
 The private worker viewport completed a 60-second active landscape window with 32 riders on iPhone 13 mini simulator Safari. The host averaged 58.78 callbacks per second. Its dedicated Apple GPU WebGL 2 renderer averaged 18.70 FPS, with a 15 FPS minimum. The last 190 ms of renderer timestamps had yet to reach the host. All other full seconds also fell below 30 FPS. The tape retained all 108 endpoints. Five native and five Safari listener timestamps missed ±35 ms, and one gesture missed shape or duration. The renderer held its 710 × 231 target. The native foreground and main-canvas graphics receipt were incomplete. Settings, display and simulator shutdown passed. These measurements come from a private worker build.
 
+The zero-weight skin shader cut modeled bone palette reads by 58.7%. Six matched production Chrome views retained every draw and resource count. Four pixels differed by one color step. The candidate then averaged 25.02 renderer FPS against a 20.82 FPS control in two active Safari worker windows. The routes had no matched camera and workload samples, with median draws of 258 and 319. In matched Safari tape tests with exact draw counts and resources, stock rendered at 23.06 and 19.27 FPS in the first order, and the candidate at 23.30 and 19.76. In reverse order the candidate rendered at 20.86 and 21.69 FPS, and stock at 22.14 and 22.76. The change stayed private.
+
 The simulator and foreground Chrome commands return success only when evidence and frame rate both pass. Headless Chrome still writes a diagnostic receipt. The simulator command regression covers a passing target, a missed target with complete evidence, and incomplete evidence.
 
 ## First-person models and aiming
@@ -309,4 +311,6 @@ The simulator and foreground Chrome commands return success only when evidence a
 The deployed asset audit checked 187 complete responses against the local bytes and SHA-256 values. It covers every versioned model, all 37 shop previews and the changed published files. All 94 historical GLB blobs match the pre-recovery tree. Exact asset checks must be repeated after future content changes.
 
 - [x] Review the finished source and rebuild the native asset descriptors and shop previews. The live coat release passes all 187 asset hash checks. All 94 legacy GLB blobs match `2e847e86`.
+- [x] Verify the reconnect fixes on live `6a07c00a`. Pages and Worker served the exact revision. A headless Chrome visit to public Frontier practice fired a round, played game audio, resized from 1280 × 720 to 820 × 580 and reported zero page errors or microphone requests.
+
 - [x] Run `bun run check` and the native visual and lifecycle probes. Verify the Worker and Pages deployment for `7a26e046` and both public game routes. The performance and touch timing limitations from the simulator are listed above.
