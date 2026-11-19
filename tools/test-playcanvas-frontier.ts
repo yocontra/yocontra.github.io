@@ -260,15 +260,19 @@ try {
     const session = (globalThis as Probe).__nativeFrontierSession
     const self = session?.world.players[session.selfSlot]
     const bank = session?.world.layout.zones.find((zone) => zone.kind === 'bank')
-    if (!(session && self && bank)) {
+    const challenger = session?.world.players.find((rider) => rider?.alive && rider.id !== self?.id)
+    if (!(session && self && bank && challenger)) {
       throw new Error('Missing contextual action fixture')
     }
+    challenger.carried = 100
+    challenger.lastDamageTick = -1_000_000
     Object.assign(self, {
       x: bank.x,
       z: bank.z,
       carried: 100,
       dynamite: 1,
-      calledBy: 1,
+      calledBy: challenger.id,
+      lastDamageTick: -1_000_000,
       calledUntil: session.world.tick + 10_000,
     })
   })

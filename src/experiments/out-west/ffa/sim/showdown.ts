@@ -49,6 +49,23 @@ export function canDuel(w: World, p: Player): boolean {
   )
 }
 
+/** The rider whose invitation can still be accepted. */
+export function calloutChallenger(w: World, p: Player): Player | null {
+  const challenger = w.players[p.calledBy]
+  return challenger &&
+    w.tick <= p.calledUntil &&
+    !w.noDuel.has(pairKey(challenger.id, p.id)) &&
+    canDuel(w, challenger) &&
+    canDuel(w, p)
+    ? challenger
+    : null
+}
+
+/** Whether this rider can send a fresh invitation. */
+export function canIssueCallout(w: World, p: Player): boolean {
+  return w.tick >= p.calloutCooldownUntil && canDuel(w, p) && !p.channel
+}
+
 /** The eligible player nearest the challenger's aim, within range and the aim cone. */
 export function calloutTarget(w: World, p: Player): Player | null {
   const dir = aimDir(p.aim)
@@ -110,10 +127,9 @@ function startShowdown(w: World, a: Player, b: Player): void {
  */
 export function handleCallout(w: World, p: Player, buttons: number): boolean {
   if (pressed(buttons, p.lastButtons, BTN_CALLOUT) && p.calledBy !== NONE) {
-    const challenger = w.players[p.calledBy]
+    const challenger = calloutChallenger(w, p)
     p.calledBy = NONE
-    const allowed = challenger && !w.noDuel.has(pairKey(challenger.id, p.id))
-    if (allowed && w.tick <= p.calledUntil && canDuel(w, challenger) && canDuel(w, p)) {
+    if (challenger) {
       startShowdown(w, challenger, p)
       return true
     }
@@ -121,12 +137,7 @@ export function handleCallout(w: World, p: Player, buttons: number): boolean {
   if (p.calledBy !== NONE && w.tick > p.calledUntil) {
     p.calledBy = NONE
   }
-  if (
-    !pressed(buttons, p.lastButtons, BTN_CALLOUT) ||
-    w.tick < p.calloutCooldownUntil ||
-    !canDuel(w, p) ||
-    p.channel
-  ) {
+  if (!(pressed(buttons, p.lastButtons, BTN_CALLOUT) && canIssueCallout(w, p))) {
     return false
   }
   const target = calloutTarget(w, p)

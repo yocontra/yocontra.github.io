@@ -1,7 +1,7 @@
 import { STRONGBOX_RADIUS } from '../ffa/sim/constants.ts'
 import { zoneAt } from '../ffa/sim/layout.ts'
 import { ladderAt } from '../ffa/sim/roofwalks.ts'
-import { calloutTarget, canDuel } from '../ffa/sim/showdown.ts'
+import { calloutChallenger, calloutTarget, canIssueCallout } from '../ffa/sim/showdown.ts'
 import type { World } from '../ffa/sim/state.ts'
 import type { Player } from '../ffa/sim/types.ts'
 
@@ -23,7 +23,9 @@ export function touchActions(world: World, player: Player) {
         strongbox ||
         ladderAt(player.x, player.z, player.y, player.roof),
     ),
-    call: player.calledBy >= 0 || (canDuel(world, player) && calloutTarget(world, player) !== null),
+    call:
+      calloutChallenger(world, player) !== null ||
+      (canIssueCallout(world, player) && calloutTarget(world, player) !== null),
     throw: player.dynamite > 0,
   }
 }

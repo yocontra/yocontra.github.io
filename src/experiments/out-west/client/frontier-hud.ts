@@ -25,6 +25,7 @@ import {
   TICK_HZ,
 } from '../ffa/sim/constants.ts'
 import { zoneAt } from '../ffa/sim/layout.ts'
+import { calloutChallenger } from '../ffa/sim/showdown.ts'
 import type { Player, SimEvent } from '../ffa/sim/types.ts'
 import { Buttons } from '../runtime/protocol.ts'
 import type { FrontierSession } from './frontier-session.ts'
@@ -228,8 +229,7 @@ export class FrontierHud {
       return
     }
     const aim = this.viewport.aimPoint()
-    const challenger =
-      player.calledUntil > world.tick ? (world.players[player.calledBy] ?? null) : null
+    const challenger = calloutChallenger(world, player)
     this.paintMinimap(player, aim.shooter, challenger)
     const zone = zoneAt(world.layout, player.x, player.z, player.y)
     const duel = world.showdowns.get(player.showdown)
