@@ -1,17 +1,16 @@
 /**
- * Test harness: a fresh in-memory local D1 (workerd, via wrangler's `getPlatformProxy`) with every
- * migration in `api/migrations` applied in order. Test-only; never imported by the Worker.
+ * Test harness: a fresh in-memory local D1 (workerd) with every migration in
+ * `api/migrations` applied in order. Test-only; never imported by the Worker.
  *
  * Until stream A's `0003` lands, a minimal local-only `accounts (id, name)` table stands in for it
  * so the foreign keys in `0004` resolve. It's created here, never in a migration.
  */
 import { readdirSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { getPlatformProxy } from 'wrangler'
+import { convertV4MiniflareOptions, Miniflare } from 'miniflare'
 import type { Env } from '../../env.ts'
 
 const MIGRATIONS = join(import.meta.dir, '../../../migrations')
-const CONFIG = join(import.meta.dir, 'wrangler.test.jsonc')
 const STATEMENT_END = /;\s*$/mu
 const COMMENT_LINE = /^\s*--.*$/gmu
 
@@ -29,9 +28,43 @@ function statementsOf(sql: string): string[] {
     .filter((s) => s !== '')
 }
 
-export async function testDb(): Promise<TestDb> {
-  const proxy = await getPlatformProxy<{ DB: D1Database }>({ configPath: CONFIG, persist: false })
-  const db = proxy.env.DB
+async function openDatabase(retry = true): Promise<{ db: D1Database; runtime: Miniflare }> {
+  const runtime = new Miniflare(
+    convertV4MiniflareOptions({
+      modules: true,
+      script: 'export default { fetch: () => new Response(null, { status: 404 }) }',
+      compatibilityDate: '2026-10-01',
+      d1Databases: { DB: '00000000-0000-0000-0000-00000000000c' },
+      d1Persist: false,
+    }),
+  )
+  try {
+    const db = (await runtime.getD1Database('DB')) as unknown as D1Database
+    return { db, runtime }
+  } catch (error) {
+    try {
+      await runtime.dispose()
+    } catch (cleanupError) {
+      // Miniflare can rethrow the rejected startup promise after it finishes disposal.
+      if (cleanupError !== error) {
+        throw new AggregateError([error, cleanupError], 'Local D1 startup and disposal failed')
+      }
+    }
+    if (
+      retry &&
+      error instanceof Error &&
+      (error as NodeJS.ErrnoException).code === 'ERR_ASSERTION' &&
+      error.stack?.includes('at getServerPort') &&
+      error.stack.includes('miniflare')
+    ) {
+      // The loopback listener can report readiness before its address is available under Bun.
+      return openDatabase(false)
+    }
+    throw error
+  }
+}
+
+async function migrate(db: D1Database): Promise<void> {
   const files = readdirSync(MIGRATIONS)
     .filter((f) => f.endsWith('.sql'))
     .sort()
@@ -44,6 +77,20 @@ export async function testDb(): Promise<TestDb> {
     const statements = statementsOf(readFileSync(join(MIGRATIONS, file), 'utf8'))
     await db.batch(statements.map((s) => db.prepare(s)))
   }
+}
+
+export async function testDb(): Promise<TestDb> {
+  const { db, runtime } = await openDatabase()
+  try {
+    await migrate(db)
+  } catch (error) {
+    try {
+      await runtime.dispose()
+    } catch (cleanupError) {
+      throw new AggregateError([error, cleanupError], 'Local D1 migration and disposal failed')
+    }
+    throw error
+  }
   const env = {
     DB: db,
     ALLOWED_ORIGINS: 'http://localhost:4343',
@@ -52,7 +99,7 @@ export async function testDb(): Promise<TestDb> {
     RP_ID: 'localhost',
     RP_ORIGINS: 'http://localhost:4343',
   } as unknown as Env
-  return { db, env, dispose: () => proxy.dispose() }
+  return { db, env, dispose: () => runtime.dispose() }
 }
 
 interface ColumnInfo {
