@@ -39,6 +39,7 @@ Verified deployment baseline is `5101cb61` (2026-11-18). The Worker and both gam
 - [x] Check viewport ownership after async loading. A late resource or session is released if the viewport has closed.
 - [x] Discard a delayed rider fallback when its lobby slot belongs to a new life. A late failure from the prior life leaves the new rider free to load. Both regression tests failed before the change.
 - [x] Clear movement and held actions when the browser releases touch pointer capture. A browser-generated touch test reproduced stuck movement and firing, then verified that both clear and the fire button returns to its idle state.
+- [x] Keep one crow flight and hen scatter per duel attempt. Native actor checks cover the crow fake-out through the verdict, missing perches, the next map and both in-place retry paths. Each retry returns the birds to their authored positions.
 
 ## Previous playtest feedback (2026-11-09)
 

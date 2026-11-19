@@ -23,6 +23,8 @@ const IDLE_VARIANTS = [
 /** A tied horse steps its forehand around every few idle spells, swinging back the other way next time. */
 const SHIFT_EVERY = 3
 const IDLE_SPELL = 9
+const CROW_FLIGHT_SECONDS = 8
+const HEN_SCATTER_SECONDS = 2
 const HEN_RUN = [-1.6, 0.6] as const
 interface Spectator {
   actor: DuelActor
@@ -160,8 +162,6 @@ export class NativeAtmosphere {
     ])
   }
   arrange(life: ArenaLife): void {
-    this.flight = -1
-    this.scatter = -1
     for (const [index, spectator] of this.folk.entries()) {
       const home = life.folk[index]
       spectator.actor.root.enabled = Boolean(home)
@@ -182,26 +182,7 @@ export class NativeAtmosphere {
         this.settle(horse, index * 4.3)
       }
     }
-    for (const [index, crow] of this.crows.entries()) {
-      const offset = -1.5 + (index / 6) * 3
-      const perch = life.crowPerches?.[index]
-      crow.root.enabled = !life.crowPerches || Boolean(perch)
-      crow.place(
-        perch?.x ?? life.crows.x + (life.crows.along === 'x' ? offset : 0),
-        perch?.y ?? life.crows.y,
-        perch?.z ?? life.crows.z + (life.crows.along === 'x' ? 0 : offset),
-      )
-      crow.face((life.crows.face * 180) / Math.PI + index * 7)
-      clip(crow, 'Idle')
-    }
-    for (const [index, hen] of this.hens.entries()) {
-      hen.root.enabled = Boolean(life.hens)
-      if (life.hens) {
-        hen.place(life.hens.x + Math.sin(index * 2.4) * 0.45, 0, life.hens.z + index * 0.7)
-        hen.face(index * 120)
-        clip(hen, 'Idle')
-      }
-    }
+    this.resetBirds(life)
     const dog = this.props.get('dog')
     dog?.place(life.dog.x, life.dog.y, life.dog.z)
     dog?.face((life.dog.yaw * 180) / Math.PI)
@@ -221,6 +202,31 @@ export class NativeAtmosphere {
       const actor = this.props.get(name)
       if (actor) {
         actor.root.enabled = false
+      }
+    }
+  }
+  /** Return the flock to its perches before the next attempt, including in-place retries. */
+  resetBirds(life: ArenaLife): void {
+    this.flight = -1
+    this.scatter = -1
+    for (const [index, crow] of this.crows.entries()) {
+      const offset = -1.5 + (index / 6) * 3
+      const perch = life.crowPerches?.[index]
+      crow.root.enabled = !life.crowPerches || Boolean(perch)
+      crow.place(
+        perch?.x ?? life.crows.x + (life.crows.along === 'x' ? offset : 0),
+        perch?.y ?? life.crows.y,
+        perch?.z ?? life.crows.z + (life.crows.along === 'x' ? 0 : offset),
+      )
+      crow.face((life.crows.face * 180) / Math.PI + index * 7)
+      clip(crow, 'Idle')
+    }
+    for (const [index, hen] of this.hens.entries()) {
+      hen.root.enabled = Boolean(life.hens)
+      if (life.hens) {
+        hen.place(life.hens.x + Math.sin(index * 2.4) * 0.45, 0, life.hens.z + index * 0.7)
+        hen.face(index * 120)
+        clip(hen, 'Idle')
       }
     }
   }
@@ -268,7 +274,7 @@ export class NativeAtmosphere {
     for (const [actor, shift] of this.shifts) {
       const turn = actor.turns[shift.clip]
       const tether = this.tethers.get(actor)
-      if (!(turn && tether) || !actor.root.enabled || this.transients.has(actor)) {
+      if (!(turn && tether && actor.root.enabled) || this.transients.has(actor)) {
         this.shifts.delete(actor)
         continue
       }
@@ -290,14 +296,23 @@ export class NativeAtmosphere {
     }
   }
   private takeOff(): void {
+    if (this.flight >= 0) {
+      return
+    }
     this.flight = 0
     this.scatter = 0
     // Birds are modelled facing +Z; turn each one onto the path it is about to travel.
     for (const [index, crow] of this.crows.entries()) {
+      if (!crow.root.enabled) {
+        continue
+      }
       crow.face((Math.atan2(3.4, 0.4 + index * 0.12) * 180) / Math.PI)
       clip(crow, 'Fly')
     }
     for (const [index, hen] of this.hens.entries()) {
+      if (!hen.root.enabled) {
+        continue
+      }
       hen.face((Math.atan2(HEN_RUN[0], HEN_RUN[1]) * 180) / Math.PI + (index - 1) * 12)
       clip(hen, 'Scatter')
     }
@@ -348,20 +363,28 @@ export class NativeAtmosphere {
     }
   }
   private moveBirds(step: number): void {
-    if (this.flight >= 0) {
-      this.flight += step
+    if (this.flight >= 0 && this.flight < CROW_FLIGHT_SECONDS) {
+      const previous = this.flight
+      this.flight = Math.min(this.flight + step, CROW_FLIGHT_SECONDS)
       for (const [index, crow] of this.crows.entries()) {
-        if (this.flight > index * 0.06) {
-          crow.root.translate(step * 3.4, step * 1.7, step * (0.4 + index * 0.12))
+        if (!crow.root.enabled) {
+          continue
         }
-        crow.root.enabled = this.flight < 8
+        const airborne = this.flight - Math.max(previous, index * 0.06)
+        if (airborne > 0) {
+          crow.root.translate(airborne * 3.4, airborne * 1.7, airborne * (0.4 + index * 0.12))
+        }
+        if (this.flight >= CROW_FLIGHT_SECONDS) {
+          crow.root.enabled = false
+        }
       }
     }
-    if (this.scatter >= 0) {
-      this.scatter += step
+    if (this.scatter >= 0 && this.scatter < HEN_SCATTER_SECONDS) {
+      const travel = Math.min(step, HEN_SCATTER_SECONDS - this.scatter)
+      this.scatter += travel
       for (const hen of this.hens) {
-        if (hen.root.enabled && this.scatter < 2) {
-          hen.root.translate(step * HEN_RUN[0], 0, step * HEN_RUN[1])
+        if (hen.root.enabled) {
+          hen.root.translate(travel * HEN_RUN[0], 0, travel * HEN_RUN[1])
         }
       }
     }

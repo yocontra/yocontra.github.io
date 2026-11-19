@@ -149,6 +149,7 @@ function retryPhaseTwo(d: NativeDirector): void {
   d.enemyAlive = true
   d.c.save.attempts[d.level] = (d.c.save.attempts[d.level] ?? 0) + 1
   resetAttempt(d)
+  d.atmosphere.resetBirds(d.arenas.life)
   standBackUp(d)
   d.wait()
 }
@@ -167,6 +168,7 @@ function respawn(d: NativeDirector, enemy: DuelActor): void {
     d.rifleman.face(180)
     d.rifleman.play('Hold_rifle', 0)
   }
+  d.atmosphere.resetBirds(d.arenas.life)
   presentLevel(d, true)
 }
 
