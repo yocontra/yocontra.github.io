@@ -265,7 +265,7 @@
       }
     },
     {
-      "includes": ["api/**"],
+      "includes": ["api/**", "packages/durable-game-runtime/example/{physics-room,worker}.ts"],
       "javascript": {
         "globals": ["WebSocketPair"]
       },

@@ -4,6 +4,9 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
+  "engines": {
+    "node": ">=24"
+  },
   "files": [
     "dist",
     "THIRD_PARTY_NOTICES.md"
@@ -15,10 +18,12 @@
     "./client": "./dist/packets.js",
     "./transport": "./dist/socket.js",
     "./clock": "./dist/clock.js",
+    "./seats": "./dist/seats.js",
+    "./admission": "./dist/admission.js",
     "./ammo.wasm": "./dist/vendor/ammo.wasm.wasm"
   },
   "scripts": {
-    "build": "tsc && node build.ts",
+    "build": "node build.ts",
     "prepack": "npm run build",
     "generate:physics": "node generate-physics.ts"
   },

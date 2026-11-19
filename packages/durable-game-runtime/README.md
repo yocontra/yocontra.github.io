@@ -1,8 +1,7 @@
 # Durable Game Runtime
 
 Run a Colyseus room and authoritative Bullet physics inside a Cloudflare Durable Object.
-Out West uses the same transport and physics code in production and uses the same Ammo build
-for browser prediction.
+Out West uses the same transport and physics code in production. Browser prediction loads the same Ammo binary.
 
 - `durable-game-runtime/worker-physics` loads the compiled Ammo and callback modules in Wrangler.
 - `durable-game-runtime/physics` creates a headless PlayCanvas application and its Bullet world.
@@ -23,13 +22,56 @@ versions in `package.json`. Use Node 24 for package build scripts and `nodejs_co
 Run `npm pack` in this directory to build an installable tarball. Third-party attribution is in
 [THIRD_PARTY_NOTICES.md](./THIRD_PARTY_NOTICES.md).
 
-## Workers Free
-
-Use a SQLite-backed Durable Object class and a `new_sqlite_classes` migration. Allocate physics
-and start the timer when a player joins. Stop the timer and destroy the world when the room empties.
-A live timer keeps the object active, so occupied rooms consume duration allowance. Check both
-request and duration usage on the account. The quota is shared across applications.
-[Cloudflare Durable Objects pricing](https://developers.cloudflare.com/durable-objects/platform/pricing/)
-
 This is an extraction candidate. Package metadata keeps it private pending the project's
 license decision and publication.
+
+## Run the standalone example
+
+From the package source directory, build and install the tarball with Node 24 and npm.
+
+```sh
+npm install --ignore-scripts --no-package-lock
+npm pack --dry-run
+npm pack --pack-destination example
+cd example
+npm install --ignore-scripts --no-package-lock
+npm run check
+npm run bundle
+npm run dev
+```
+
+From a second terminal in `example/`, run `npm run smoke`. The smoke opens three Colyseus
+clients across two Durable Objects. Both players in the first room see the other box fall.
+One player sends a hop command and the other receives its new position. The second room
+keeps running after the first empties and releases its world. The reservation check verifies
+that the first seat allocates no physics.
+
+The example installs from the tarball and uses registry PlayCanvas without the Out West patches.
+It has no production bindings or accounts. The demo accepts local player names. Authenticate
+players and derive their identities on the server before exposing a public endpoint.
+
+## Admission and room lifetime
+
+Use SQLite-backed Durable Objects with a `new_sqlite_classes` migration on Workers Free.
+
+- `durable-game-runtime/seats` stores short-lived Colyseus seat metadata in a SQLite-backed
+  Durable Object. Seat consumption checks the authenticated account and room and deletes the
+  seat atomically. The caller schedules an alarm for `nextExpiry()` and calls `expire()` on wake.
+- `durable-game-runtime/admission` implements a shared daily allowance for active room time
+  and inbound frames. Store the ledger in a single SQLite-backed Durable Object, grant and renew
+  a lease independently for each live room, and release it with the final count. A vanished room's
+  reserved quota stays charged for the day. Close a room if its lease fails to renew.
+- Route requests to the owning Durable Object before using Colyseus's LocalDriver.
+  Each room owns its own Bullet world. Use an authenticated seat again after an isolate restart.
+  In-memory physics and pending sockets cannot restore a match on their own.
+
+Cloudflare's published Free allowance for Durable Objects is 100,000 billed requests and
+13,000 GB-s of duration per day. Incoming WebSocket messages count at 20:1 toward Durable
+Object request billing. That ratio does not apply to the separate Worker request limit.
+At the documented 0.125 GB-s per active object-second, the duration allowance equates to
+about 104,000 active room-seconds per day before other account usage. A room with a live timer uses
+duration even when its sockets are quiet. The package and local example exercise the runtime
+and room lifecycle. Production capacity depends on traffic, match duration, physics work, and
+other usage on your account.
+[Durable Objects pricing](https://developers.cloudflare.com/durable-objects/platform/pricing/)
+[Workers limits](https://developers.cloudflare.com/workers/platform/limits/)
