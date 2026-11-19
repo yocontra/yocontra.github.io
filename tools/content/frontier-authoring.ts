@@ -11,6 +11,7 @@ import { buildGrid, type TownLayout } from '../../src/experiments/out-west/ffa/s
 import { projectedUv, surfaceMaterial } from './animal-prop-surfaces.ts'
 import { installBarrelParts } from './barrel-install.ts'
 import { compressEnvironmentTextures } from './environment-textures.ts'
+import { formatContent } from './format-content.ts'
 import { packFreight } from './freight-crates-contract.ts'
 import { installFreightCrates, readFreightPrefabs } from './freight-crates-install.ts'
 import { authorDecksAndRoofs, bankServiceSigns, buildingDetails } from './frontier-architecture.ts'
@@ -508,6 +509,7 @@ export async function publishFrontier(directory: string): Promise<void> {
   for (const [, to] of files) {
     await rename(`${to}.frontier-next`, to)
   }
+  await formatContent([join(SOURCE, 'frontier.json')])
   console.log(
     'Published coherent Frontier map artifacts; regenerate shared content manifest before build/deploy.',
   )
