@@ -24,6 +24,35 @@ try {
     const pad = { connected: true, axes: [0, 0, 1, 0], buttons: [] }
     Object.defineProperty(navigator, 'getGamepads', { configurable: true, value: () => [pad] })
     const input = new GameInput(canvas, document.body)
+    const touchControls = document.querySelector('.pc-touch-controls')
+    const use = touchControls?.querySelector<HTMLButtonElement>('.pc-use')
+    if (!(touchControls && use)) {
+      throw new Error('Missing touch context controls')
+    }
+    const context = { use: false, call: false, throw: false }
+    input.setContext(context)
+    const attributes = new MutationObserver(() => undefined)
+    attributes.observe(touchControls, {
+      subtree: true,
+      attributes: true,
+      attributeFilter: ['hidden'],
+    })
+    for (let i = 0; i < 300; i++) {
+      input.setContext(context)
+    }
+    const unchangedWrites = attributes.takeRecords().length
+    input.setContext({ ...context, use: true })
+    if (use.hidden) {
+      throw new Error('USE did not appear when its context became available')
+    }
+    input.setContext(context)
+    const changedWrites = attributes.takeRecords().length
+    attributes.disconnect()
+    if (!use.hidden || unchangedWrites !== 0 || changedWrites !== 2) {
+      throw new Error(
+        `Touch context made ${unchangedWrites} redundant and ${changedWrites} real writes`,
+      )
+    }
     const samples = [30, 60, 120].map((hz) => {
       input.yaw = 0
       for (let i = 0; i < hz; i++) {
@@ -39,7 +68,7 @@ try {
     }
     pad.axes[2] = 0
     Reflect.set(globalThis, '__inputReview', { input, canvas })
-    return { samples, top }
+    return { samples, top, unchangedWrites, changedWrites }
   })
   for (const sample of turns.samples) {
     if (Math.abs(sample.yaw + 4.5) > 1e-9) {
@@ -114,6 +143,19 @@ try {
     const active = await page.evaluate(() =>
       Reflect.get(globalThis, '__inputReview').input.sample(4),
     )
+    if (expected === 'move') {
+      const stick = await page.locator('.pc-movement-hint').evaluate((element: HTMLElement) => ({
+        local: Number.parseFloat(element.style.getPropertyValue('--move-x')),
+        inheritedFromControls: element.parentElement?.style.getPropertyValue('--move-x') ?? '',
+      }))
+      if (
+        !Number.isFinite(stick.local) ||
+        Math.abs(stick.local - active.moveX * 22) > 1e-9 ||
+        stick.inheritedFromControls
+      ) {
+        throw new Error('Movement hint did not follow the same trusted stick input locally')
+      }
+    }
     if (expected === 'move' ? active.moveX <= 0.5 : active.buttons === 0) {
       throw new Error(`Touch ${expected} was not active before capture loss`)
     }

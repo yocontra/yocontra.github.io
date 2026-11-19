@@ -53,6 +53,7 @@ export class GameInput {
   private readonly held = new Map<number, number>()
   private readonly edges = new Map<number, number>()
   private readonly controls: HTMLElement
+  private readonly movementHint: HTMLElement
   private readonly buttons = new Map<number, HTMLButtonElement>()
   get enabled(): boolean {
     return !this.controls.inert
@@ -64,10 +65,10 @@ export class GameInput {
     this.mouse = new Mouse(canvas)
     this.controls = document.createElement('div')
     this.controls.className = 'pc-touch-controls'
-    const movement = document.createElement('div')
-    movement.className = 'pc-movement-hint'
-    movement.textContent = 'MOVE'
-    this.controls.append(movement)
+    this.movementHint = document.createElement('div')
+    this.movementHint.className = 'pc-movement-hint'
+    this.movementHint.textContent = 'MOVE'
+    this.controls.append(this.movementHint)
     for (const [name, bit] of [
       ['USE', Buttons.interact],
       ['CALL', Buttons.callout],
@@ -226,15 +227,10 @@ export class GameInput {
     event.preventDefault()
     this.lastTouchAt = performance.now()
     if (origin.kind === 'move') {
-      this.touchX = Math.max(
-        -1,
-        Math.min(1, (event.clientX - origin.x) / (60 * this.settings.joyScale)),
+      this.updateStick(
+        Math.max(-1, Math.min(1, (event.clientX - origin.x) / (60 * this.settings.joyScale))),
+        Math.max(-1, Math.min(1, (event.clientY - origin.y) / (60 * this.settings.joyScale))),
       )
-      this.touchZ = Math.max(
-        -1,
-        Math.min(1, (event.clientY - origin.y) / (60 * this.settings.joyScale)),
-      )
-      this.updateStick()
     } else {
       this.cursorAim = false
       if (this.settings.view === 'top') {
@@ -265,9 +261,7 @@ export class GameInput {
       this.lastTouchAt = performance.now()
     }
     if (this.pointers.get(event.pointerId)?.kind === 'move') {
-      this.touchX = 0
-      this.touchZ = 0
-      this.updateStick()
+      this.updateStick(0, 0)
     }
     this.pointers.delete(event.pointerId)
   }
@@ -278,14 +272,22 @@ export class GameInput {
       [Buttons.throw, context.throw],
     ] as const) {
       const button = this.buttons.get(bit)
-      if (button) {
-        button.hidden = !visible
+      const hidden = !visible
+      if (button && button.hidden !== hidden) {
+        button.hidden = hidden
       }
     }
   }
-  private updateStick(): void {
-    this.controls.style.setProperty('--move-x', `${this.touchX * 22}px`)
-    this.controls.style.setProperty('--move-z', `${this.touchZ * 22}px`)
+  private updateStick(x: number, z: number): void {
+    // Only the movement hint reads these two inherited CSS values.
+    if (x !== this.touchX) {
+      this.touchX = x
+      this.movementHint.style.setProperty('--move-x', `${x * 22}px`)
+    }
+    if (z !== this.touchZ) {
+      this.touchZ = z
+      this.movementHint.style.setProperty('--move-z', `${z * 22}px`)
+    }
   }
   setEnabled(enabled: boolean): void {
     this.controls.inert = !enabled
@@ -299,9 +301,7 @@ export class GameInput {
     this.pointers.clear()
     this.held.clear()
     this.edges.clear()
-    this.touchX = 0
-    this.touchZ = 0
-    this.updateStick()
+    this.updateStick(0, 0)
     this.keyboard.detach()
     this.keyboard.attach(document.body)
     for (const control of this.controls.children) {
