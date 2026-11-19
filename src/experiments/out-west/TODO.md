@@ -264,6 +264,10 @@ The zero-weight skin shader cut modeled bone palette reads by 58.7%. Six matched
 
 A uniform-buffer skinning trial matched six Chrome views pixel for pixel. In the fixed 32-rider Safari tape at 710 × 231, the stock renderer averaged 23.20 and 22.63 FPS around candidate runs of 14.25 and 13.96 FPS. All four runs submitted the same geometry and passes. The texture palette stays in use.
 
+A private opaque rider index reorder preserved all eight matched Chrome images and the original shadow indices. A fixed 32-rider Safari tape submitted the same geometry and passes in all four runs. Stock averaged 24.32 and 21.77 FPS around candidate runs of 24.79 and 23.28 FPS. The stock runs varied more than the measured difference between the averages. Keep the original index order.
+
+The private Safari recorder now grades worker postrender timestamps in the original 60-second window. In an active 32-rider landscape run, the worker confirmed all frame batches 28 ms after the window ended. The host averaged 58.52 callbacks per second. The renderer averaged 20.12 FPS with a 17 FPS minimum, and all 60 seconds fell below 30 FPS. All 60 native foreground samples passed. All 108 native input timestamps met the ±35 ms limit. Five Safari listener timestamps and one gesture missed their limits. Game settings were restored. The original companion timed out during display restoration. A fresh owned session confirmed portrait orientation at the original screenshot dimensions before shutdown.
+
 The simulator and foreground Chrome commands return success only when evidence and frame rate both pass. Headless Chrome still writes a diagnostic receipt. The simulator command regression covers a passing target, a missed target with complete evidence, and incomplete evidence.
 
 ## First-person models and aiming
@@ -315,5 +319,7 @@ The deployed asset audit checked 187 complete responses against the local bytes 
 
 - [x] Review the finished source and rebuild the native asset descriptors and shop previews. The live coat release passes all 187 asset hash checks. All 94 legacy GLB blobs match `2e847e86`.
 - [x] Verify the reconnect fixes on live `6a07c00a`. Pages and Worker served the exact revision. A headless Chrome visit to public Frontier practice fired a round, played game audio, resized from 1280 × 720 to 820 × 580 and reported zero page errors or microphone requests.
+
+- [x] Verify audio teardown on live `24b8674f`. Pages served the exact revision and the Worker check passed. All 37 Outfitter cards matched the release hashes. In public Frontier practice, the player fired a round with Web Audio running, resized the view and quit. The canvas detached, all audio contexts closed, and there were zero page errors or microphone requests.
 
 - [x] Run `bun run check` and the native visual and lifecycle probes. Verify the Worker and Pages deployment for `7a26e046` and both public game routes. The performance and touch timing limitations from the simulator are listed above.
