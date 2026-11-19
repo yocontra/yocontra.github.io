@@ -6,6 +6,7 @@
  */
 import {
   CONTRACT_VERSION,
+  NONE,
   type RosterEntry,
   type ServerControl,
   TOWN_CLOSE_REPLACED,
@@ -93,7 +94,7 @@ export interface Session {
   ledger: boolean
   /** Badlands: payouts frozen. */
   frozen: boolean
-  blocked: ReadonlySet<string>
+  blocked: Set<string>
   msgsIn: number
 }
 
@@ -216,6 +217,44 @@ export class LobbyCore {
     return false
   }
 
+  /** Apply current symmetric D1 truth to the account pair, resolving their live slots here. */
+  setCalloutBlocked(accountA: string, accountB: string, blocked: boolean): void {
+    const a = this.byAccount.get(accountA)
+    const b = this.byAccount.get(accountB)
+    updateBlocked(a, accountB, blocked)
+    updateBlocked(b, accountA, blocked)
+    if (!(a && b)) {
+      return
+    }
+    const key = pairKey(a.playerId, b.playerId)
+    if (blocked) {
+      this.world.noDuel.add(key)
+      const from = this.world.players[a.playerId]
+      const to = this.world.players[b.playerId]
+      if (from?.calledBy === b.playerId) {
+        from.calledBy = NONE
+      }
+      if (to?.calledBy === a.playerId) {
+        to.calledBy = NONE
+      }
+    } else {
+      this.world.noDuel.delete(key)
+    }
+  }
+
+  private adoptCalloutBlocks(session: Session, blocked: readonly string[]): void {
+    session.blocked = new Set(blocked)
+    for (const other of this.sessions.values()) {
+      if (other !== session) {
+        this.setCalloutBlocked(
+          session.accountId,
+          other.accountId,
+          session.blocked.has(other.accountId),
+        )
+      }
+    }
+  }
+
   private occupied(): number {
     return [...activePlayers(this.world)].length
   }
@@ -224,7 +263,12 @@ export class LobbyCore {
    * A human joins (or rejoins: a lingering avatar is reclaimed with its carry). Returns the
    * session, or null if the lobby is full of humans.
    */
-  join(profile: JoinProfile, peer: Peer, now: number): Session | null {
+  join(
+    profile: JoinProfile,
+    peer: Peer,
+    now: number,
+    currentBlocks?: readonly string[],
+  ): Session | null {
     const existing = this.byAccount.get(profile.accountId)
     if (existing) {
       existing.peer?.close(TOWN_CLOSE_REPLACED, 'Joined from somewhere else.')
@@ -233,6 +277,9 @@ export class LobbyCore {
       const p = this.world.players[existing.playerId]
       if (p) {
         reconnectPlayer(p)
+      }
+      if (currentBlocks) {
+        this.adoptCalloutBlocks(existing, currentBlocks)
       }
       this.welcome(existing)
       return existing
@@ -277,9 +324,13 @@ export class LobbyCore {
     }
     this.sessions.set(id, s)
     this.byAccount.set(profile.accountId, s)
-    for (const other of this.sessions.values()) {
-      if (other !== s && (s.blocked.has(other.accountId) || other.blocked.has(s.accountId))) {
-        this.world.noDuel.add(pairKey(s.playerId, other.playerId))
+    if (currentBlocks) {
+      this.adoptCalloutBlocks(s, currentBlocks)
+    } else {
+      for (const other of this.sessions.values()) {
+        if (other !== s && (s.blocked.has(other.accountId) || other.blocked.has(s.accountId))) {
+          this.world.noDuel.add(pairKey(s.playerId, other.playerId))
+        }
       }
     }
     this.welcome(s)
@@ -495,4 +546,12 @@ export class LobbyCore {
 
 function rosterOf(p: Player, loadout: readonly string[]): RosterEntry {
   return { id: p.id, name: p.name, level: p.level, prestige: p.prestige, bot: p.bot, loadout }
+}
+
+function updateBlocked(session: Session | undefined, accountId: string, blocked: boolean): void {
+  if (blocked) {
+    session?.blocked.add(accountId)
+  } else {
+    session?.blocked.delete(accountId)
+  }
 }

@@ -6,7 +6,7 @@
  * The tracked browser harnesses use OW_API=http://127.0.0.1:8792 and a client on4390.
  */
 
-import { activePlayers } from '../../src/experiments/out-west/ffa/sim/state.ts'
+import { activePlayers, pairKey } from '../../src/experiments/out-west/ffa/sim/state.ts'
 import { signAccessToken } from '../src/auth/token.ts'
 import { ledgerStatements } from '../src/economy/ledger.ts'
 import { createProfileStatements, getProfile } from '../src/economy/profile.ts'
@@ -54,6 +54,19 @@ export class Lobby extends ProductionLobby {
   }
   override webSocketClose(socket: WebSocket, code: number, reason: string) {
     return observeTimers(this.ctx.id.toString(), () => super.webSocketClose(socket, code, reason))
+  }
+  testCalloutPair(accountA: string, accountB: string) {
+    const core = Reflect.get(this, 'core') as LobbyCore | undefined
+    const sessions = [...(core?.sessions.values() ?? [])]
+    const a = sessions.find((session) => session.accountId === accountA)
+    const b = sessions.find((session) => session.accountId === accountB)
+    return a && b && core
+      ? {
+          blocked: core.world.noDuel.has(pairKey(a.playerId, b.playerId)),
+          players: [a.playerId, b.playerId],
+          connected: [Boolean(a.peer), Boolean(b.peer)],
+        }
+      : null
   }
   testStaleBudget() {
     return staleBudgetProbe(this, this.env, this.ctx)
@@ -257,6 +270,16 @@ export default {
       const lobby = env.LOBBIES.get(env.LOBBIES.idFromName(id))
       await Reflect.apply(Reflect.get(lobby, 'testRestart'), lobby, [])
       return Response.json({ restarted: true })
+    }
+    if (pathname === '/__test/callout-pair') {
+      const params = new URL(request.url).searchParams
+      const lobby = env.LOBBIES.get(env.LOBBIES.idFromName(params.get('lobbyId') ?? ''))
+      return Response.json(
+        await Reflect.apply(Reflect.get(lobby, 'testCalloutPair'), lobby, [
+          params.get('a') ?? '',
+          params.get('b') ?? '',
+        ]),
+      )
     }
     if (pathname === '/__test/native-timing') {
       const id = new URL(request.url).searchParams.get('lobbyId') ?? ''

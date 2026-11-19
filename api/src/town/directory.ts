@@ -102,6 +102,11 @@ export class LobbyDirectory extends DurableObject<Env> {
     await this.save(reg)
   }
 
+  /** Internal block notification fanout includes assigned and shadow lobbies. */
+  async calloutBlockRooms(): Promise<string[]> {
+    return Object.keys((await this.load()).lobbies)
+  }
+
   async view(): Promise<TownDirectoryView> {
     const reg = await this.load()
     collect(reg, Date.now())

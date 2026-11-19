@@ -20,8 +20,16 @@ import { NativeBudgetRefusal } from '../game/admission.ts'
 import { createNativeRoom, type NativeFrontierRoom, reserveNativeRoom } from '../game/room.ts'
 import { NativeSeats } from '../game/seats.ts'
 import { CloudflareClient } from '../game/socket.ts'
-import { FLAG_BADLANDS, flagStatements, isShadowed, standing } from '../moderation/flags.ts'
+import {
+  accountFlags,
+  blockAccounts,
+  FLAG_BADLANDS,
+  flagStatements,
+  isShadowed,
+} from '../moderation/flags.ts'
+import { eitherBlocks } from '../moderation/reports.ts'
 import { VoiceCoordinator, type VoiceStorage } from '../voice/coordinator.ts'
+import { CalloutBlocks } from './callout-blocks.ts'
 import {
   type Departure,
   FLAG_AIMBOT,
@@ -72,6 +80,16 @@ export interface LobbyStats {
 
 export class Lobby extends DurableObject<Env> {
   private readonly seats: NativeSeats
+  private readonly calloutBlocks = new CalloutBlocks({
+    core: () => this.core,
+    readAccount: (id) => blockAccounts(this.env, id),
+    readPair: (a, b) => eitherBlocks(this.env, a, b),
+  })
+
+  /** Internal social Worker RPC. Account IDs come from the authenticated write route. */
+  refreshCalloutBlock(accountA: string, accountB: string): Promise<void> {
+    return this.calloutBlocks.refresh(accountA, accountB)
+  }
   private nativeLeaseId = ''
   private nativeLeaseTimer: ReturnType<typeof setTimeout> | undefined
   private nativeLeaseWatchdog: ReturnType<typeof setTimeout> | undefined
@@ -91,9 +109,9 @@ export class Lobby extends DurableObject<Env> {
     if (!(this.native?.running || (await this.directory().canLeaseRoom()).ok)) {
       return { refused: 'over_budget' as const }
     }
-    const [profile, status, dyes] = await Promise.all([
+    const [profile, flags, dyes] = await Promise.all([
       getProfile(this.env, accountId),
-      standing(this.env, accountId),
+      accountFlags(this.env, accountId),
       dyesOf(this.env, accountId),
     ])
     if (!profile) {
@@ -112,8 +130,7 @@ export class Lobby extends DurableObject<Env> {
         tcpRtt: null,
         ledger: true,
         saddlebag: bagStyleIndex(profile.loadout.saddlebag),
-        frozen: isShadowed(status.flags),
-        blocked: status.blocked,
+        frozen: isShadowed(flags),
         appearance: { loadout: profile.loadout, dyes },
       },
     })
@@ -133,6 +150,7 @@ export class Lobby extends DurableObject<Env> {
         this.afterNativeStep(core)
       },
       onStart: () => this.startNative(core),
+      readJoinBlocks: (id) => this.calloutBlocks.readJoin(id),
       onJoin: (session) => this.onNativeJoin(core, session),
       onLeave: (session) => this.onDisconnect(core, session.playerId),
       onEmpty: () => this.stop(core, Date.now()),

@@ -78,13 +78,22 @@ export interface Standing {
   blocked: string[]
 }
 
+function blockAccountsQuery(env: Env, accountId: string): D1PreparedStatement {
+  return env.DB.prepare(
+    `SELECT blocked_id AS other FROM blocks WHERE blocker_id = ?1
+     UNION SELECT blocker_id FROM blocks WHERE blocked_id = ?1`,
+  ).bind(accountId)
+}
+
+export async function blockAccounts(env: Env, accountId: string): Promise<string[]> {
+  const { results } = await blockAccountsQuery(env, accountId).all<{ other: string }>()
+  return results.map((row) => row.other)
+}
+
 export async function standing(env: Env, accountId: string): Promise<Standing> {
   const [flags, blocks] = await env.DB.batch([
     env.DB.prepare('SELECT flags FROM accounts WHERE id = ?').bind(accountId),
-    env.DB.prepare(
-      `SELECT blocked_id AS other FROM blocks WHERE blocker_id = ?1
-       UNION SELECT blocker_id FROM blocks WHERE blocked_id = ?1`,
-    ).bind(accountId),
+    blockAccountsQuery(env, accountId),
   ])
   const row = (flags?.results as { flags: number }[] | undefined)?.[0]
   const others = (blocks?.results as { other: string }[] | undefined) ?? []

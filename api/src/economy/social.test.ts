@@ -27,7 +27,9 @@ import {
 } from '../../../src/experiments/out-west/data/sinks.ts'
 import { isNameOwned } from '../auth/accounts.ts'
 import { signAccessToken } from '../auth/token.ts'
+import type { Env } from '../env.ts'
 import { FLAG_BADLANDS, FLAG_REPORTED } from '../moderation/flags.ts'
+import { eitherBlocks } from '../moderation/reports.ts'
 import { nameKey } from '../names.ts'
 import { meRoutes } from '../routes/me.ts'
 import { socialRoutes } from '../routes/social.ts'
@@ -39,14 +41,37 @@ import { createProfile } from './profile.ts'
 import { freshId, type TestDb, testDb } from './testing/d1.ts'
 
 let t: TestDb
+let failedBlockRefreshes = 0
+let heldBlockRefresh: Promise<void> | undefined
+const backgroundBlockRefreshes: Promise<unknown>[] = []
+const receivedBlockRefreshes: string[][] = []
 beforeAll(async () => {
   t = await testDb()
+  t.env.LOBBY_DIR = {
+    idFromName: (name: string) => name,
+    get: () => ({ calloutBlockRooms: () => Promise.resolve(['lobby:0']) }),
+  } as unknown as Env['LOBBY_DIR']
+  t.env.LOBBIES = {
+    idFromName: (name: string) => name,
+    get: () => ({
+      refreshCalloutBlock: (a: string, b: string) => {
+        receivedBlockRefreshes.push([a, b])
+        if (failedBlockRefreshes > 0) {
+          failedBlockRefreshes--
+          return Promise.reject(new Error('Injected RPC transport failure'))
+        }
+        return heldBlockRefresh ?? Promise.resolve()
+      },
+    }),
+  } as unknown as Env['LOBBIES']
 })
 afterAll(async () => {
   await t.dispose()
 })
 
-const ctx = {} as ExecutionContext
+const ctx = {
+  waitUntil: (task: Promise<unknown>) => backgroundBlockRefreshes.push(task),
+} as unknown as ExecutionContext
 let seq = 0
 
 async function call(
@@ -405,6 +430,30 @@ describe('posters, reports and blocks', () => {
     expect((await call('POST', '/blocks', { as: a.id, body: { name: a.name } })).status).toBe(400)
     const removed = await call('DELETE', `/blocks/${encodeURIComponent(b.name)}`, { as: a.id })
     expect((removed.body as BlocksResponse).blocked).toEqual([])
+  })
+
+  it('acknowledges the D1 block and retries a lost room RPC in the background', async () => {
+    const a = await player()
+    const b = await player()
+    const start = receivedBlockRefreshes.length
+    const retry = Promise.withResolvers<void>()
+    failedBlockRefreshes = 1
+    heldBlockRefresh = retry.promise
+    try {
+      const result = await call('POST', '/blocks', { as: a.id, body: { name: b.name } })
+      expect(result.status).toBe(200)
+      expect((result.body as BlocksResponse).blocked).toEqual([b.name])
+      expect(backgroundBlockRefreshes).toHaveLength(1)
+      expect(await eitherBlocks(t.env, a.id, b.id)).toBe(true)
+      expect(receivedBlockRefreshes.slice(start)).toEqual([
+        [a.id, b.id],
+        [a.id, b.id],
+      ])
+    } finally {
+      heldBlockRefresh = undefined
+      retry.resolve()
+      await Promise.all(backgroundBlockRefreshes.splice(0))
+    }
   })
 
   it('reports from licensed players mark, then send a cheat to the Badlands', async () => {

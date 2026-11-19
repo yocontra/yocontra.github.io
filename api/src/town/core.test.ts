@@ -1,13 +1,18 @@
 import { describe, expect, test as it } from 'bun:test'
-import { BTN_CALLOUT, type ServerControl } from '../../../src/experiments/out-west/contract/town.ts'
+import {
+  BTN_CALLOUT,
+  NONE,
+  type ServerControl,
+} from '../../../src/experiments/out-west/contract/town.ts'
 import {
   MAX_FRONTIER_BOTS,
   MAX_PLAYERS,
   SOFT_CAP,
 } from '../../../src/experiments/out-west/ffa/sim/constants.ts'
-import { calloutTarget } from '../../../src/experiments/out-west/ffa/sim/showdown.ts'
+import { calloutTarget, handleCallout } from '../../../src/experiments/out-west/ffa/sim/showdown.ts'
 import { pairKey } from '../../../src/experiments/out-west/ffa/sim/state.ts'
 import type { InputFrame } from '../../../src/experiments/out-west/ffa/sim/types.ts'
+import { CalloutBlocks } from './callout-blocks.ts'
 import {
   DEFAULT_TOWN_POPULATION,
   type JoinProfile,
@@ -381,5 +386,94 @@ describe('LobbyCore sessions and money', () => {
     // The human drew in 150 ms; bots draw in 190–340 ms.
     expect(bot.alive).toBe(false)
     expect(me.alive).toBe(true)
+  })
+})
+
+describe('LobbyCore live call-out blocks', () => {
+  it('applies live block truth to both riders without cancelling an active showdown', () => {
+    const core = new LobbyCore('lobby:0', 1)
+    const a = core.join(profile('a'), new FakePeer(), 0)
+    const b = core.join(profile('b'), new FakePeer(), 0)
+    const pa = core.world.players[a?.playerId ?? -1]
+    const pb = core.world.players[b?.playerId ?? -1]
+    if (!(a && b && pa && pb)) {
+      throw new Error('no players')
+    }
+    core.world.tick = 1000
+    Object.assign(pa, { x: 60, z: 60, aim: 0, carried: 100, protectUntil: 0 })
+    Object.assign(pb, { x: 65, z: 60, aim: Math.PI, carried: 100, protectUntil: 0 })
+    const pair = pairKey(pa.id, pb.id)
+
+    handleCallout(core.world, pa, BTN_CALLOUT)
+    expect(pb.calledBy).toBe(pa.id)
+    core.setCalloutBlocked('b', 'a', true)
+    expect(pb.calledBy).toBe(NONE)
+    expect(core.world.noDuel.has(pair)).toBe(true)
+    expect(calloutTarget(core.world, pa)).toBeNull()
+    expect(calloutTarget(core.world, pb)).toBeNull()
+    handleCallout(core.world, pb, BTN_CALLOUT)
+    expect(core.world.showdowns.size).toBe(0)
+
+    core.join(profile('a'), new FakePeer(), 50, [])
+    expect(core.world.noDuel.has(pair)).toBe(false)
+    expect(b.blocked.has('a')).toBe(false)
+    expect(calloutTarget(core.world, pa)?.id).toBe(pb.id)
+    pa.calloutCooldownUntil = 0
+    handleCallout(core.world, pa, BTN_CALLOUT)
+    handleCallout(core.world, pb, BTN_CALLOUT)
+    expect(core.world.showdowns.size).toBe(1)
+    core.setCalloutBlocked('a', 'b', true)
+    expect(core.world.showdowns.size).toBe(1)
+  })
+
+  it('fences a pending join and applies delayed updates to account IDs after slot reuse', async () => {
+    const core = new LobbyCore('lobby:0', 1, 0)
+    const a = core.join(profile('a'), new FakePeer(), 0)
+    if (!a) {
+      throw new Error('a did not join')
+    }
+    const oldRead = Promise.withResolvers<readonly string[]>()
+    const delayedPair = Promise.withResolvers<boolean>()
+    const readingPair = Promise.withResolvers<void>()
+    let accountReads = 0
+    let pairReads = 0
+    const blocks = new CalloutBlocks({
+      core: () => core,
+      readAccount: () => (++accountReads === 1 ? oldRead.promise : Promise.resolve(['a'])),
+      readPair: () => {
+        if (++pairReads === 1) {
+          return Promise.resolve(true)
+        }
+        readingPair.resolve()
+        return delayedPair.promise
+      },
+    })
+    const pendingJoin = blocks.readJoin('b')
+    await blocks.refresh('a', 'b')
+    oldRead.resolve([])
+    expect((await pendingJoin).current()).toBe(false)
+    const current = await blocks.readJoin('b')
+    expect(current.current()).toBe(true)
+    const peer = new FakePeer()
+    const b = core.join(profile('b'), peer, 0, current.accounts)
+    if (!b) {
+      throw new Error('b did not join')
+    }
+    const pair = pairKey(a.playerId, b.playerId)
+    expect(core.world.noDuel.has(pair)).toBe(true)
+
+    const delayed = blocks.refresh('a', 'b')
+    await readingPair.promise
+    core.disconnect(b.playerId, peer)
+    for (let t = 0; t < 220; t++) {
+      advance(core, t * 50)
+    }
+    const c = core.join(profile('c'), new FakePeer(), 11_000, [])
+    expect(c?.playerId).toBe(b.playerId)
+    expect(core.world.noDuel.has(pair)).toBe(false)
+    delayedPair.resolve(true)
+    await delayed
+    expect(core.world.noDuel.has(pair)).toBe(false)
+    expect(c?.blocked.size).toBe(0)
   })
 })

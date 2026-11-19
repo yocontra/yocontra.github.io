@@ -35,6 +35,7 @@ import { BODY_SMALL, BODY_TINY, error, json, type RouteHandler, readObject } fro
 import { block, blockedNames, fileReport, unblock } from '../moderation/reports.ts'
 import { accountByName } from '../social/lookup.ts'
 import { playerPoster } from '../social/players.ts'
+import { notifyCalloutBlock } from '../town/notify-callout-block.ts'
 
 const PLAYER_PATH = /^\/players\/(?<name>[^/]{1,96})$/u
 const BLOCK_PATH = /^\/blocks\/(?<name>[^/]{1,96})$/u
@@ -93,7 +94,12 @@ async function round(request: Request, env: Env, player: Player): Promise<Respon
   return json(request, env, out)
 }
 
-async function report(request: Request, env: Env, player: Player): Promise<Response> {
+async function report(
+  request: Request,
+  env: Env,
+  player: Player,
+  ctx: ExecutionContext,
+): Promise<Response> {
   const body = await readObject(request, BODY_SMALL)
   const reason = body.reason
   if (!(REPORT_REASONS as readonly unknown[]).includes(reason)) {
@@ -118,6 +124,9 @@ async function report(request: Request, env: Env, player: Player): Promise<Respo
     body.block === true
       ? await block(env, { blockerId: player.accountId, targetId: target.id })
       : false
+  if (blocked) {
+    await notifyCalloutBlock(env, ctx, player.accountId, target.id)
+  }
   const out: ReportResponse = { ok: true, blocked }
   return json(request, env, out)
 }
@@ -125,8 +134,8 @@ async function report(request: Request, env: Env, player: Player): Promise<Respo
 async function blocks(
   request: Request,
   env: Env,
-  player: Player,
-  rawName: string | null,
+  ctx: ExecutionContext,
+  { player, rawName }: { player: Player; rawName: string | null },
 ): Promise<Response> {
   if (request.method !== 'GET') {
     const body = await readObject(request, BODY_TINY)
@@ -142,6 +151,7 @@ async function blocks(
     } else if (!(await block(env, { blockerId: player.accountId, targetId: target.id }))) {
       return error(request, env, 409, 'Your block list is full.')
     }
+    await notifyCalloutBlock(env, ctx, player.accountId, target.id)
   }
   const out: BlocksResponse = { ok: true, blocked: await blockedNames(env, player.accountId) }
   return json(request, env, out)
@@ -156,7 +166,7 @@ async function signedIn(
   return player ? then(player) : error(request, env, 401, SIGN_IN)
 }
 
-export const socialRoutes: RouteHandler = async (request, env, url) => {
+export const socialRoutes: RouteHandler = async (request, env, url, ctx) => {
   const path = url.pathname
   const method = request.method
   if (path === '/board/most-wanted' && method === 'GET') {
@@ -170,7 +180,7 @@ export const socialRoutes: RouteHandler = async (request, env, url) => {
     return signedIn(request, env, (p) => round(request, env, p))
   }
   if (path === '/reports' && method === 'POST') {
-    return signedIn(request, env, (p) => report(request, env, p))
+    return signedIn(request, env, (p) => report(request, env, p, ctx))
   }
   const blockName = BLOCK_PATH.exec(path)?.groups?.name
   if (path === '/blocks' || (blockName && method === 'DELETE')) {
@@ -178,7 +188,7 @@ export const socialRoutes: RouteHandler = async (request, env, url) => {
       return null
     }
     return signedIn(request, env, (p) =>
-      blocks(request, env, p, blockName ? decode(blockName) : null),
+      blocks(request, env, ctx, { player: p, rawName: blockName ? decode(blockName) : null }),
     )
   }
   const playerName = PLAYER_PATH.exec(path)?.groups?.name

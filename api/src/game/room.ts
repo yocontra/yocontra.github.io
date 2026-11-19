@@ -19,6 +19,7 @@ import {
   MoveInput,
   PlayerRecord,
 } from '../../../src/experiments/out-west/runtime/schema.ts'
+import type { JoinBlocks } from '../town/callout-blocks.ts'
 import type { JoinProfile, LobbyCore, Session, TickOutput } from '../town/core.ts'
 import { FixedRoomClock } from './clock.ts'
 import callbackModule from './physics-callback.wasm'
@@ -32,6 +33,7 @@ interface CreationOptions {
   core: LobbyCore
   onTick: (output: TickOutput) => void
   onStart?: () => Promise<void>
+  readJoinBlocks?: (accountId: string) => Promise<JoinBlocks>
   onJoin?: (session: Session) => Promise<void>
   onLeave?: (session: Session) => void
   onEmpty?: () => void
@@ -166,6 +168,14 @@ export class NativeFrontierRoom extends Room<{ state: FrontierState; input: Move
       if (!this.simulation) {
         await this.prepareGame()
       }
+      const readJoinBlocks = this.creation?.readJoinBlocks
+      let blocks: JoinBlocks | undefined
+      if (readJoinBlocks) {
+        do {
+          // biome-ignore lint/performance/noAwaitInLoops: a live block change invalidated the previous read
+          blocks = await readJoinBlocks(options.profile.accountId)
+        } while (!blocks.current() && this.pendingJoins.has(client.sessionId))
+      }
       if (
         this.closed ||
         !this.pendingJoins.has(client.sessionId) ||
@@ -181,7 +191,7 @@ export class NativeFrontierRoom extends Room<{ state: FrontierState; input: Move
         },
         close: (code: number, reason: string) => client.leave(code, reason),
       }
-      const session = this.core.join(options.profile, peer, Date.now())
+      const session = this.core.join(options.profile, peer, Date.now(), blocks?.accounts)
       if (!session) {
         throw new Error('Room full')
       }
