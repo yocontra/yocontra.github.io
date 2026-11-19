@@ -213,10 +213,6 @@
   font-size: var(--ow-fs-lead);
   line-height: 1.15;
 }
-.ow-item.locked .ow-item-name,
-.ow-item.locked .ow-icon {
-  opacity: 0.55;
-}
 .ow-item-tag {
   margin-top: auto;
   padding-top: 6px;
@@ -227,7 +223,7 @@
   letter-spacing: 0.03em;
   color: var(--ow-brass-hi);
 }
-.ow-item.locked .ow-item-tag {
+.ow-item:is(.locked, .unaffordable) .ow-item-tag {
   color: var(--ow-bone-2);
 }
 /* the picked piece: scrolls on its own when its dye job and buttons don't fit the case */
@@ -318,7 +314,7 @@
   margin: -12px -12px 8px -14px;
   overflow: hidden;
   /* the thumbnails' own backdrop, so a contained square runs edge to edge */
-  background: #3e3329;
+  background: #50463c;
   border-bottom: 1px solid rgb(239 228 204 / 0.12);
 }
 .ow-item-art img {
@@ -332,8 +328,8 @@
   height: 34px;
   opacity: 0.55;
 }
-.ow-item.locked .ow-item-art {
-  filter: grayscale(0.7) brightness(0.7);
+.ow-item:is(.locked, .unaffordable) .ow-item-art {
+  filter: saturate(0.78) brightness(0.94);
 }
 .ow-item-badges {
   position: absolute;
@@ -475,20 +471,6 @@
   }
 }
 
-/* the shelf's "can't afford it yet" state: dimmed, but still tappable to try on */
-.ow-item.unaffordable {
-  opacity: 0.52;
-}
-.ow-item.unaffordable .ow-item-art {
-  filter: grayscale(0.75) brightness(0.72);
-}
-.ow-item.unaffordable .ow-item-name,
-.ow-item.unaffordable .ow-item-tag {
-  color: var(--ow-bone-2);
-}
-.ow-item.unaffordable:hover {
-  opacity: 0.82;
-}
 .ow-store-detail .ow-btn:disabled {
   opacity: 0.45;
   filter: grayscale(0.6);

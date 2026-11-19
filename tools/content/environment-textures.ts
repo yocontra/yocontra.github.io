@@ -32,6 +32,7 @@ export async function compressEnvironmentTextures(path: string): Promise<void> {
       const name = texture.getName()
       const encoding =
         name === 'Perdition shop signs' ||
+        name.startsWith('Frontier sandstone course ') ||
         name === 'Cactus loft local areoles' ||
         name === 'Cactus two-arm local areoles' ||
         isSidingTexture(name)

@@ -4,6 +4,10 @@ import type { Document, Material, Mesh, Node, Primitive } from '@gltf-transform/
 export function authorEnvironmentCloudUvs(document: Document, name: string): void {
   // A second native UV channel keeps moving cloud shade continuous across separate buildings.
   for (const node of document.getRoot().listNodes()) {
+    if (name === 'duel' && node.getName() === 'poster-lantern-kit') {
+      // Keep the separately authored lantern's published UV layout on a stage rebake.
+      continue
+    }
     const original = node.getMesh()
     if (original && name === 'frontier') {
       if (preserveFreightUvs(original)) {

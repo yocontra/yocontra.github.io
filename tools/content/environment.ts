@@ -7,6 +7,7 @@ import { ALL_EXTENSIONS } from '@gltf-transform/extensions'
 import { dedup, dequantize, prune, weld } from '@gltf-transform/functions'
 import { compressedCharacterTexture } from './character-textures.ts'
 import { withContentOutput } from './content-output.ts'
+import { dressDuelBluffs } from './duel-bluffs.ts'
 import {
   authorEnvironmentCloudUvs,
   restoreFreightUv1Usage,
@@ -16,6 +17,7 @@ import { pruneNativeEnvironment } from './environment-prune.ts'
 import { compressEnvironmentTextures } from './environment-textures.ts'
 import { formatContent } from './format-content.ts'
 import { markFrontierInertWind } from './frontier-inert-wind.ts'
+import { installFrontierSandstone } from './frontier-sandstone.ts'
 import { packFrontierVertices } from './frontier-vertex-packing.ts'
 import { orderLowYardCactusIndices } from './frontier-yard-cactus.ts'
 import { dressMissionAdobe } from './mission-adobe.ts'
@@ -59,6 +61,7 @@ for (const name of names.filter((candidate) => !only || candidate === only)) {
   }
   if (name === 'duel') {
     const authored = await io.read(path)
+    await dressDuelBluffs(authored)
     const image = authored
       .createTexture('Wanted poster')
       .setImage(await readFile(join(source, 'wanted-default.png')))
@@ -139,6 +142,7 @@ for (const name of names.filter((candidate) => !only || candidate === only)) {
   if (name === 'frontier') {
     const packed = await io.read(path)
     console.log('Frontier vertex packing', await packFrontierVertices(packed))
+    await installFrontierSandstone(packed)
     await io.write(path, packed)
   }
   await withContentOutput(publishing ? resolve(output, '..') : resolve(output, 'resources'), () =>

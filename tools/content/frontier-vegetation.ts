@@ -40,7 +40,7 @@ export interface FloraFrame {
 }
 
 /** Connected components by shared vertices; plants are authored as separate islands. */
-function islandRoots(primitive: Primitive): Int32Array {
+export function islandRoots(primitive: Primitive): Int32Array {
   const count = primitive.getAttribute('POSITION')?.getCount() ?? 0
   const parent = new Int32Array(count).map((_, i) => i)
   const find = (a: number): number => {
