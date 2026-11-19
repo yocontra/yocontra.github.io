@@ -231,6 +231,8 @@ That window averaged 18â€“19 FPS in two crowded street sections with about 211â€
 
 The foreground recorder now schedules one native sample per second from the guest clock and places the calls between scheduled touch endpoints when possible. In offline replay of the `5101cb61` input plan, modeled overlaps fell from 29 to zero. The original gesture deadlines and foreground acceptance limits still apply.
 
+An active `8de66845` window kept all 60 browser seconds and 61 Worker samples after the native companion stalled. It averaged 23.98 FPS with a 16 FPS minimum and 46 seconds below 30. Safari and the native HID stream recorded 42 of 108 planned endpoints before the stall. The recorder kept the raw tape and marked the run incomplete. A fresh owned session restored the exact QA settings and portrait orientation before dedicated-device shutdown.
+
 The simulator and foreground Chrome commands return success only when evidence and frame rate both pass. Headless Chrome still writes a diagnostic receipt. The simulator command regression covers a passing target, a missed target with complete evidence, and incomplete evidence.
 
 ## First-person models and aiming
