@@ -88,7 +88,7 @@ class ScheduleTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_sampler_does_not_burst_after_a_stalled_read(self):
         clock, logs, reads, samples = Clock(), [], [], []
-        async def read():
+        async def read(_expires, _rpc):
             reads.append(clock.now())
             if len(reads) == 1:
                 clock.value += 4
@@ -97,15 +97,56 @@ class ScheduleTests(unittest.IsolatedAsyncioTestCase):
                                            sleep=clock.sleep, emit=logs.append, samples=samples)
         self.assertIn("Foreground deadline missed", failure)
         self.assertEqual(reads, [0, 5, 6, 7])
-        self.assertEqual(samples, [{"wall": time} for time in (4, 5, 6, 7)])
+        self.assertEqual(samples, [{"wall": time} for time in (5, 6, 7)])
         self.assertEqual([row["value"]["plannedMonotonic"] for row in logs
                           if row["event"] == "sample-deadline-miss"], [1, 2, 3, 4])
+        self.assertEqual(logs[0]["event"], "sample-timeout")
+        self.assertEqual(logs[0]["value"]["finishedMonotonic"], 4)
+
+    async def test_foreground_timeout_does_not_skip_the_next_934ms_release(self):
+        clock, logs, reads, samples = Clock(), [], [], []
+        touch_logs, expected_touch_logs = [], []
+
+        async def read(expires, rpc):
+            reads.append(clock.now())
+            if len(reads) == 1:
+                clock.value = expires
+                rpc.update({
+                    "ax": {"status": "completed", "elapsedMs": 50},
+                    "apps": {"status": "cancelled", "elapsedMs": 909},
+                    "orientation": {"status": "completed", "elapsedMs": 2},
+                })
+                raise TimeoutError()
+            return {"wall": clock.now()}
+
+        async def input_edges(log):
+            return [edge async for edge in self.sender(Clock(), log, {"held": None})]
+
+        reference = await input_edges(expected_touch_logs)
+        failure, edges = await asyncio.gather(
+            observe_foreground(read, deadlines=[0, .934, 2], now=clock.now,
+                               sleep=clock.sleep, emit=logs.append, samples=samples),
+            input_edges(touch_logs),
+        )
+        self.assertIn("Foreground deadline missed", failure)
+        self.assertEqual(reads, [0, .934, 2])
+        self.assertEqual(samples, [{"wall": .934}, {"wall": 2}])
+        self.assertEqual([row["event"] for row in logs], [
+            "sample-timeout", "foreground", "foreground",
+        ])
+        timed_out = logs[0]["value"]
+        self.assertEqual(timed_out["plannedMonotonic"], 0)
+        self.assertAlmostEqual(timed_out["deadlineMonotonic"], .909)
+        self.assertAlmostEqual(timed_out["finishedMonotonic"], .909)
+        self.assertEqual(timed_out["rpc"]["apps"], {"status": "cancelled", "elapsedMs": 909})
+        self.assertEqual(edges, reference)
+        self.assertEqual(touch_logs, expected_touch_logs)
 
     async def test_stalled_foreground_is_reported_without_canceling_input(self):
         clock, logs, samples = Clock(), [], []
         allow_touch = asyncio.Event()
 
-        async def read():
+        async def read(_expires, _rpc):
             if clock.value == 0:
                 allow_touch.set()
                 raise TimeoutError()
@@ -128,7 +169,7 @@ class ScheduleTests(unittest.IsolatedAsyncioTestCase):
     async def test_native_probe_error_is_evidence_and_does_not_cancel_input(self):
         clock, logs, samples = Clock(), [], []
 
-        async def read():
+        async def read(_expires, _rpc):
             if clock.now() == 0:
                 raise ExceptionGroup("native probe", [RuntimeError("Native RPC unavailable")])
             return {"wall": clock.now()}
@@ -157,7 +198,7 @@ class ScheduleTests(unittest.IsolatedAsyncioTestCase):
         async def release():
             released.set()
 
-        async def read():
+        async def read(_expires, _rpc):
             await released.wait()
             return {"wall": clock.now()}
 
@@ -190,7 +231,7 @@ class ScheduleTests(unittest.IsolatedAsyncioTestCase):
         async def release():
             await release_held(state, up, logs.append, clock.now)
 
-        async def read():
+        async def read(_expires, _rpc):
             await drained.wait()
             return {"wall": clock.now()}
 

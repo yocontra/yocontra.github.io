@@ -3,6 +3,9 @@ import asyncio
 
 
 RECORDING_SECONDS = 60
+FOREGROUND_RPC_LIMIT_SECONDS = 1.0
+# The release's Python cancellation handoff took at most 6.8 ms in 19 timeouts.
+FOREGROUND_HANDOFF_SECONDS = .025
 
 
 class ScheduleMiss(RuntimeError):
@@ -79,7 +82,7 @@ async def observe_foreground(read, *, deadlines, now, sleep, emit, samples):
     previous_read_finished = float("-inf")
     missed = False
     failed = False
-    for deadline in deadlines:
+    for index, deadline in enumerate(deadlines):
         remaining = deadline - now()
         if remaining > 0:
             await sleep(remaining)
@@ -91,10 +94,20 @@ async def observe_foreground(read, *, deadlines, now, sleep, emit, samples):
             }})
             missed = True
             continue
+        expires = actual + FOREGROUND_RPC_LIMIT_SECONDS
+        if index + 1 < len(deadlines):
+            expires = min(expires, deadlines[index + 1] - FOREGROUND_HANDOFF_SECONDS)
+        rpc = {}
         try:
-            value = await read()
+            if actual >= expires:
+                raise TimeoutError()
+            value = await read(expires, rpc)
+            if now() >= expires:
+                raise TimeoutError()
         except TimeoutError:
-            emit({"event": "sample-timeout", "value": metadata})
+            emit({"event": "sample-timeout", "value": {
+                **metadata, "deadlineMonotonic": expires, "finishedMonotonic": now(), "rpc": rpc,
+            }})
             missed = True
         except Exception as error:
             # TaskGroup wraps native RPC errors. Keep that history without canceling HID.

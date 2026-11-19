@@ -82,21 +82,27 @@ async def record(client, request, udid):
     emit({"event": "foreground-plan", "value": {"guestAt": foreground_plan,
                                                  "monotonic": foreground_deadlines}})
 
-    async def read_foreground():
+    async def read_foreground(expires, rpc):
         started = time.time() * 1000
-        elapsed = {}
 
         async def timed(name, read):
             begin = loop.time()
+            status = "completed"
             try:
                 return await read()
+            except asyncio.CancelledError:
+                status = "cancelled"
+                raise
+            except Exception:
+                status = "failed"
+                raise
             finally:
-                elapsed[name] = (loop.time() - begin) * 1000
+                rpc[name] = {"status": status, "elapsedMs": (loop.time() - begin) * 1000}
 
         # Read only identity fields. The full AX tree is reserved for coordinate
         # calibration, where we also need bounds and interaction metadata.
-        # Bound one probe so it cannot stop foreground sampling for the rest of the tape.
-        async with asyncio.timeout(1.0), asyncio.TaskGroup() as reads:
+        rpc.update({name: {"status": "pending"} for name in ("ax", "apps", "orientation")})
+        async with asyncio.timeout_at(expires), asyncio.TaskGroup() as reads:
             identity = reads.create_task(timed("ax", lambda: ax(client, keys=[
                 "type", "pid", "bundleIdentifier",
             ])))
@@ -105,7 +111,8 @@ async def record(client, request, udid):
         return {"startedWall": started, "ax": foreground_ax(identity.result()),
                 "apps": apps.result(), "companionUDID": udid,
                 "orientation": orientation.result().name,
-                "rpcMilliseconds": elapsed, "wall": time.time() * 1000}
+                "rpcMilliseconds": {name: result["elapsedMs"] for name, result in rpc.items()},
+                "wall": time.time() * 1000}
 
     async def events():
         async for event in tape_events(tape, base=base, clock=clock, now=loop.time,
