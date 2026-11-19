@@ -66,6 +66,24 @@ class ScheduleTests(unittest.IsolatedAsyncioTestCase):
         with self.assertRaises(ScheduleMiss):
             await anext(late)
 
+    async def test_logs_tap_release_handoff_but_not_the_companion_swipe_release(self):
+        clock, logs, state = Clock(.005), [], {"held": None}
+        tape = plan()
+        tape[1].update(kind="swipe")
+        result = [event["kind"] async for event in tape_events(
+            tape, base=0, clock={"at": 0, "wall": 1000}, now=clock.now,
+            sleep=clock.sleep, emit=logs.append, state=state)]
+        self.assertEqual(result, ["down", "up", "swipe", "down", "up"])
+        release = [row["value"] for row in logs if row["event"] == "gesture-release-send"]
+        self.assertEqual([row["id"] for row in release], [0, 2])
+        self.assertEqual(release[0]["edge"], "up")
+        self.assertEqual(release[0]["plannedGuestAt"], 1100)
+        self.assertEqual(release[0]["plannedHostWall"], 2100)
+        self.assertAlmostEqual(release[0]["lateMs"], 5)
+        self.assertAlmostEqual(release[0]["plannedMonotonic"], 1.1)
+        self.assertAlmostEqual(release[0]["actualMonotonic"], 1.105)
+        self.assertIsNone(state["held"])
+
     def test_probes_are_phased_around_every_landscape_gesture_endpoint(self):
         guest_start = 22588
         tape = [{"at": guest_start + 1500 + cycle * 6000 + offset, "duration": duration}

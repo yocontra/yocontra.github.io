@@ -113,7 +113,12 @@ export interface TrustedInput {
   pointerId?: number
 }
 function deliveryTiming(input: TrustedInput | undefined, expected: number) {
-  if (input?.eventAt === undefined || !Number.isFinite(input.eventAt)) {
+  if (
+    input?.eventAt === undefined ||
+    !Number.isFinite(input.eventAt) ||
+    input.eventAt < 0 ||
+    input.eventAt > input.at
+  ) {
     return { nativeErrorMs: null, dispatchDelayMs: null }
   }
   return { nativeErrorMs: input.eventAt - expected, dispatchDelayMs: input.at - input.eventAt }
@@ -224,11 +229,21 @@ export function joinGestures(
       ),
     )
     const durationErrorMs = first && last ? last.at - first.at - g.duration : null
+    const nativeDurationErrorMs =
+      typeof a?.nativeErrorMs === 'number' && typeof b?.nativeErrorMs === 'number'
+        ? b.nativeErrorMs - a.nativeErrorMs
+        : null
+    const dispatchDurationErrorMs =
+      typeof a?.dispatchDelayMs === 'number' && typeof b?.dispatchDelayMs === 'number'
+        ? b.dispatchDelayMs - a.dispatchDelayMs
+        : null
     return {
       id: g.id,
       moves: moves.length,
       maxCrossTrack,
       durationErrorMs,
+      nativeDurationErrorMs,
+      dispatchDurationErrorMs,
       passed:
         durationErrorMs !== null &&
         Math.abs(durationErrorMs) <= 35 &&

@@ -16,14 +16,14 @@ async def wait_deadline(deadline, *, now, sleep, emit, metadata):
     remaining = deadline - now()
     if remaining > 0:
         await sleep(remaining)
-    late = now() - deadline
+    actual = now()
+    late = actual - deadline
+    witness = {**metadata, "plannedMonotonic": deadline, "actualMonotonic": actual,
+               "lateMs": late * 1000}
     if late > .035:
-        emit({"event": "deadline-miss", "value": {
-            **metadata, "plannedMonotonic": deadline, "actualMonotonic": now(),
-            "lateMs": late * 1000,
-        }})
+        emit({"event": "deadline-miss", "value": witness})
         raise ScheduleMiss("Native deadline missed; tape stopped")
-    return late * 1000
+    return witness
 
 
 async def tape_events(tape, *, base, clock, now, sleep, emit, state):
@@ -32,26 +32,25 @@ async def tape_events(tape, *, base, clock, now, sleep, emit, state):
         metadata = {"id": gesture["id"], "edge": "down",
                     "plannedGuestAt": gesture["at"],
                     "plannedHostWall": clock["wall"] + gesture["at"] - clock["at"]}
-        late = await wait_deadline(deadline, now=now, sleep=sleep, emit=emit, metadata=metadata)
-        emit({"event": "gesture-send", "value": {**metadata, "lateMs": late,
-              "plannedMonotonic": deadline, "actualMonotonic": now()}})
-        if gesture["kind"] == "swipe":
+        down = await wait_deadline(deadline, now=now, sleep=sleep, emit=emit, metadata=metadata)
+        emit({"event": "gesture-send", "value": down})
+        swipe = gesture["kind"] == "swipe"
+        if swipe:
             state["held"] = gesture["end"]
             yield {"kind": "swipe", "gesture": gesture}
-            await wait_deadline(deadline + gesture["duration"] / 1000, now=now, sleep=sleep,
-                                emit=emit, metadata={**metadata, "edge": "up",
-                                "plannedGuestAt": gesture["at"] + gesture["duration"],
-                                "plannedHostWall": metadata["plannedHostWall"] + gesture["duration"]})
-            state["held"] = None
         else:
             state["held"] = gesture["start"]
             yield {"kind": "down", "point": gesture["start"]}
-            await wait_deadline(deadline + gesture["duration"] / 1000, now=now, sleep=sleep,
-                                emit=emit, metadata={**metadata, "edge": "up",
-                                "plannedGuestAt": gesture["at"] + gesture["duration"],
-                                "plannedHostWall": metadata["plannedHostWall"] + gesture["duration"]})
+        duration = gesture["duration"]
+        up = await wait_deadline(deadline + duration / 1000, now=now, sleep=sleep, emit=emit,
+                                 metadata={**metadata, "edge": "up",
+                                 "plannedGuestAt": metadata["plannedGuestAt"] + duration,
+                                 "plannedHostWall": metadata["plannedHostWall"] + duration})
+        if not swipe:
+            # This is host scheduler handoff. The SDK emits a swipe's release internally.
+            emit({"event": "gesture-release-send", "value": up})
             yield {"kind": "up", "point": gesture["end"]}
-            state["held"] = None
+        state["held"] = None
 
 
 def foreground_schedule(tape, guest_start):

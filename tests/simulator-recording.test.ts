@@ -137,6 +137,30 @@ it('joins every native down/up, durations and swipe shape without altering raw e
   const overshoot = events.map((e, i) => (i === 1 ? { ...e, y: -100 } : e))
   expect(joinGestures(tape, overshoot, web, page).shapes[0]?.passed).toBe(false)
 })
+it('attributes hold error to browser event timing and listener dispatch without changing qualification', () => {
+  const withDelay = events.map((event, index) => ({
+    ...event,
+    at: event.at + (index === 2 ? 54 : 0),
+    eventAt: event.at + (index === 2 ? 9 : 0),
+  }))
+  const result = joinGestures(tape, withDelay, web, page)
+  expect(result.shapes[0]).toMatchObject({
+    durationErrorMs: 54,
+    nativeDurationErrorMs: 9,
+    dispatchDurationErrorMs: 45,
+    passed: false,
+  })
+  expect(result.passed).toBe(false)
+  const epoch = withDelay.map((event, index) =>
+    index === 2 ? { ...event, eventAt: 1.79e12 } : event,
+  )
+  expect(joinGestures(tape, epoch, web, page).shapes[0]).toMatchObject({
+    durationErrorMs: 54,
+    nativeDurationErrorMs: null,
+    dispatchDurationErrorMs: null,
+    passed: false,
+  })
+})
 it('keeps every partial input and endpoint even when the native transport stops midway', () => {
   const result = joinGestures(tape, events.slice(0, 7), web, page)
   expect(result.passed).toBe(false)
