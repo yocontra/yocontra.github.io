@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, describe, expect, it } from 'bun:test'
+import { afterAll, beforeAll, describe, expect, it, setSystemTime } from 'bun:test'
 import { DEFAULT_LOADOUT, STARTER_ITEMS } from '../../../src/experiments/out-west/data/catalog.ts'
 import {
   levelRewards,
@@ -195,25 +195,34 @@ describe('ledgerStatements', () => {
 
 describe('gauntletClearStatements', () => {
   it('pays a first clear once per account, then repeat XP (10 + 2·level) capped at 600 a day', async () => {
-    const id = await newPlayer()
-    await t.db.batch(await gauntletClearStatements(t.env, id, 2, 'run1'))
-    let p = await getProfile(t.env, id)
-    expect(p?.xp).toBe(70)
-    expect(p?.purse).toBe(260)
-    // Same outlaw on another run: repeat XP only.
-    await t.db.batch(await gauntletClearStatements(t.env, id, 2, 'run2'))
-    p = await getProfile(t.env, id)
-    expect(p?.xp).toBe(84)
-    expect(p?.purse).toBe(260)
-    for (let i = 3; i < 60; i++) {
-      // biome-ignore lint/performance/noAwaitInLoops: sequential runs
-      const s = await gauntletClearStatements(t.env, id, 2, `run${i}`)
-      if (s.length > 0) {
-        await t.db.batch(s)
+    setSystemTime(new Date('2026-10-06T12:00:00Z'))
+    try {
+      const id = await newPlayer()
+      await t.db.batch(await gauntletClearStatements(t.env, id, 2, 'run1'))
+      let p = await getProfile(t.env, id)
+      expect(p?.xp).toBe(70)
+      expect(p?.purse).toBe(260)
+      // Same outlaw on another run: repeat XP only.
+      await t.db.batch(await gauntletClearStatements(t.env, id, 2, 'run2'))
+      p = await getProfile(t.env, id)
+      expect(p?.xp).toBe(84)
+      expect(p?.purse).toBe(260)
+      for (let i = 3; i < 60; i++) {
+        // biome-ignore lint/performance/noAwaitInLoops: sequential runs
+        const s = await gauntletClearStatements(t.env, id, 2, `run${i}`)
+        if (s.length > 0) {
+          await t.db.batch(s)
+        }
       }
+      // 14 XP a repeat on outlaw 3: 42 of them fit under 600
+      expect((await getProfile(t.env, id))?.xp).toBe(70 + 42 * 14)
+
+      setSystemTime(new Date('2026-10-07T00:00:00Z'))
+      await t.db.batch(await gauntletClearStatements(t.env, id, 2, 'next-day'))
+      expect((await getProfile(t.env, id))?.xp).toBe(70 + 43 * 14)
+    } finally {
+      setSystemTime()
     }
-    // 14 XP a repeat on outlaw 3: 42 of them fit under 600
-    expect((await getProfile(t.env, id))?.xp).toBe(70 + 42 * 14)
   })
 
   it('the full gauntlet grants every first clear and Hardin’s Pair', async () => {
