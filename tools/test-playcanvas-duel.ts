@@ -16,9 +16,10 @@ try {
   const pause = page.getByRole('button', { name: 'Pause', exact: true })
   const pauseIcon = pause.locator('span').first()
   const paused = page.getByRole('heading', { name: 'Paused', exact: true })
+  const pauseInputs = ['mouse', 'touch', 'Space', 'Enter'] as const
   const cdp = await page.context().newCDPSession(page)
   try {
-    for (const method of ['mouse', 'touch', 'Space', 'Enter']) {
+    for (const method of pauseInputs) {
       if (method === 'mouse') {
         await pauseIcon.click()
       } else if (method === 'touch') {
@@ -175,7 +176,7 @@ try {
     await d.startLevel(0)
     d.enter('call')
     d.callTime = performance.now() - 180
-    d.plan = null
+    d.plan = { callT: d.callTime, shots: [], e: 0 }
     const point = d.enemy.model.findByName('Head').getPosition().clone()
     point.y += 0.12
     const screen = d.game.camera.camera.worldToScreen(point)
@@ -188,8 +189,8 @@ try {
       x: rect.left + (screen.x * rect.width) / canvas.width,
       y: rect.top + (screen.y * rect.height) / canvas.height,
     })
-    if (!d.hatShot) {
-      throw new Error('Native pointer trick shot did not preserve hat-shot metadata')
+    if (!d.hatShot || d.phase !== 'win') {
+      throw new Error('Native pointer trick shot did not win with hat-shot metadata')
     }
     d.saloon()
     let exited = false
@@ -222,7 +223,7 @@ try {
   if (errors.length > 0) {
     throw new Error(errors.join('\n'))
   }
-  console.log(JSON.stringify({ result, acts, lifecycle, errors }, null, 2))
+  console.log(JSON.stringify({ pauseInputs, result, acts, lifecycle, errors }, null, 2))
 } finally {
   await browser.close()
 }

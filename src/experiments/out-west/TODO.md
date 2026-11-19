@@ -1,6 +1,6 @@
 # Out West remaining work
 
-Verified gameplay deployment is `19dddb2f`. The Worker and both game pages are live. Readback verified both Frontier map assets, the rebuilt ponchos and all 37 Outfitter previews. High and Low Frontier practice verified firing, audio, resize and exit. Active simulator performance, Safari input timing, foreground Chrome evidence and live voice validation remain open.
+Verified Frontier performance baseline is `19dddb2f`. Readback on that release verified the Worker, both game pages, both Frontier map assets, the rebuilt ponchos and all 37 Outfitter previews. High and Low Frontier practice verified firing, audio, resize and exit. Active simulator performance, Safari input timing, foreground Chrome evidence and live voice validation remain open.
 
 ## Current playtest feedback (2026-11-16)
 
