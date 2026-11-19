@@ -1,4 +1,5 @@
-import { Vec3 } from 'playcanvas'
+import { type Asset, type ContainerResource, type Entity, MeshInstance, Vec3 } from 'playcanvas'
+import { ASSETS } from '../content/manifest.ts'
 import { NativeAtmosphere } from '../duel/native-atmosphere.ts'
 import { TOWN } from '../ffa/sim/layout.ts'
 import type { World } from '../ffa/sim/state.ts'
@@ -163,16 +164,86 @@ async function warmCharacter(
 }
 
 async function loadTown(application: GameApplication, url: string, signal: AbortSignal) {
-  const town = await application.instantiate(url, 'town')
-  const environment = new NativeEnvironment(application, true)
+  const yardUrl =
+    application.tier === 'high' && url === ASSETS.frontier.url
+      ? ASSETS['frontier-yard-high'].url
+      : undefined
+  let detail: Asset | undefined
+  if (yardUrl) {
+    void application.loadContainer(yardUrl).then(
+      (asset) => {
+        detail = asset
+      },
+      () => {
+        // The required map can open with its original plants.
+      },
+    )
+  }
+  let environment: NativeEnvironment | undefined
   try {
+    const town = await application.instantiate(url, 'town')
+    signal.throwIfAborted()
+    if (yardUrl && !detail) {
+      application.releaseContainer(yardUrl)
+    }
+    environment = new NativeEnvironment(application, true)
+    if (detail) {
+      installHighYardDetail(application, town, detail)
+    }
     environment.attach(town, await application.loadContainer(url))
     await environment.ready
     signal.throwIfAborted()
     return { town, environment }
   } catch (error) {
-    environment.destroy()
+    environment?.destroy()
+    if (yardUrl) {
+      application.releaseContainer(yardUrl)
+    }
     throw error
+  }
+}
+
+/** Apply High's native mesh overlay before the environment owns materials or builds batches. */
+function installHighYardDetail(application: GameApplication, town: Entity, asset: Asset): void {
+  const url = ASSETS['frontier-yard-high'].url
+  const resource = asset.resource as ContainerResource | undefined
+  const detail = resource?.instantiateRenderEntity()
+  if (!detail) {
+    application.releaseContainer(url)
+    return
+  }
+  let installed = false
+  try {
+    const authored = detail.findComponents('render')
+    const legacy = town
+      .findComponents('render')
+      .filter((render) => render.entity.name === 'prefab.saguaro_two_arm')
+    const replacements = legacy.flatMap((render) => {
+      const position = render.entity.getPosition()
+      const source = authored.find(
+        (candidate) => candidate.entity.getPosition().distance(position) < 0.001,
+      )
+      const instance = source?.meshInstances[0]
+      return source?.meshInstances.length === 1 && instance?.mesh && instance.material
+        ? [{ render, source, mesh: instance.mesh, material: instance.material }]
+        : []
+    })
+    if (
+      legacy.length !== 3 ||
+      authored.length !== 3 ||
+      new Set(replacements.map(({ source }) => source)).size !== 3
+    ) {
+      return
+    }
+    for (const { render, mesh, material } of replacements) {
+      render.meshInstances = [new MeshInstance(mesh, material, render.entity)]
+    }
+    installed = true
+  } finally {
+    detail.destroy()
+    if (!installed) {
+      application.releaseContainer(url)
+    }
   }
 }
 

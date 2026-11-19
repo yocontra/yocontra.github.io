@@ -33,6 +33,7 @@ export async function compressEnvironmentTextures(path: string): Promise<void> {
       const encoding =
         name === 'Perdition shop signs' ||
         name === 'Cactus loft local areoles' ||
+        name === 'Cactus two-arm local areoles' ||
         isSidingTexture(name)
           ? 'etc1s'
           : 'uastc'

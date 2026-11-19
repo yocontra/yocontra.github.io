@@ -1,36 +1,68 @@
 import type { Accessor, Document } from '@gltf-transform/core'
 import { KHRTextureTransform, type Transform } from '@gltf-transform/extensions'
 import { getBounds } from '@gltf-transform/functions'
-import { CACTUS_MATERIAL, CACTUS_MESH, cactusRequired } from './frontier-cactus-candidate.ts'
+import { CACTUS_MATERIAL, cactusRequired } from './frontier-cactus-candidate.ts'
 
 const LEGACY_MATERIAL = 'Perdition saguaro skin'
-const TARGETS = [
-  [29.120_980_09, 11.473_106_93],
-  [86.082_602_5, 94.677_108_75],
+const NEAR_SAGUAROS = [
+  {
+    mesh: 'cactus.saguaro_one_arm',
+    node: 'prefab.saguaro_one_arm',
+    material: 'Cactus yard loft authored color',
+    places: [
+      [29.120_980_09, 11.473_106_93],
+      [86.082_602_5, 94.677_108_75],
+    ],
+    vertices: 1094,
+    triangles: 2010,
+  },
+  {
+    mesh: 'cactus.saguaro_two_arm',
+    node: 'prefab.saguaro_two_arm',
+    material: 'Cactus yard two-arm authored color',
+    places: [
+      [5.562_165_03, 11.597_883_13],
+      [61.558_285_2, 11.516_730_96],
+      [88.070_056_59, 22.519_996_72],
+    ],
+    vertices: 1616,
+    triangles: 2880,
+  },
 ] as const
 const SEMANTICS = ['POSITION', 'NORMAL', 'TEXCOORD_0', 'COLOR_0'] as const
 const MAX_ENVELOPE_DELTA = 0.001
 
-/** Dress only the two retained yard saguaros. The other one-arm specimen has its own high-detail mesh. */
-export function installYardCacti(doc: Document, source: Document): void {
+/** Dress the two one-arm and three two-arm yard specimens with their measured lofts. */
+export function installYardCacti(doc: Document, oneArm: Document, twoArm?: Document): void {
+  installLoft(doc, oneArm, NEAR_SAGUAROS[0])
+  if (twoArm) {
+    installLoft(doc, twoArm, NEAR_SAGUAROS[1])
+  }
+}
+
+function installLoft(
+  doc: Document,
+  source: Document,
+  profile: (typeof NEAR_SAGUAROS)[number],
+): void {
   const root = doc.getRoot()
   const detailed = cactusRequired(root.listMaterials().find((m) => m.getName() === CACTUS_MATERIAL))
   const nodes = root.listNodes().filter((node) => {
     const mesh = node.getMesh()
     return (
-      node.getName() === 'prefab.saguaro_one_arm' &&
-      mesh?.getName() === CACTUS_MESH &&
+      node.getName() === profile.node &&
+      mesh?.getName() === profile.mesh &&
       mesh.listPrimitives().every((part) => part.getMaterial()?.getName() === LEGACY_MATERIAL)
     )
   })
   const positions = nodes.map((node) => node.getWorldTranslation())
   if (
-    nodes.length !== TARGETS.length ||
-    TARGETS.some(
+    nodes.length !== profile.places.length ||
+    profile.places.some(
       ([x, z]) => positions.filter((p) => Math.hypot(p[0] - x, p[2] - z) < 0.0001).length !== 1,
     )
   ) {
-    throw new Error('Expected the two retained Frontier yard cactus placements')
+    throw new Error(`Unexpected Frontier yard cactus placements for ${profile.node}`)
   }
   const meshes = new Set(nodes.map((node) => cactusRequired(node.getMesh())))
   if (
@@ -42,11 +74,17 @@ export function installYardCacti(doc: Document, source: Document): void {
     throw new Error('The yard cactus geometry is shared by another prefab')
   }
 
-  const donor = cactusRequired(source.getRoot().listMeshes()[0]?.listPrimitives()[0])
+  const donor = cactusRequired(
+    source
+      .getRoot()
+      .listMeshes()
+      .find((mesh) => mesh.getName() === profile.mesh)
+      ?.listPrimitives()[0],
+  )
   const donorIndices = cactusRequired(donor.getIndices())
   if (
-    donorIndices.getCount() !== 6030 ||
-    SEMANTICS.some((semantic) => donor.getAttribute(semantic)?.getCount() !== 1094)
+    donorIndices.getCount() !== profile.triangles * 3 ||
+    SEMANTICS.some((semantic) => donor.getAttribute(semantic)?.getCount() !== profile.vertices)
   ) {
     throw new Error('Unexpected measured yard cactus mesh')
   }
@@ -57,7 +95,7 @@ export function installYardCacti(doc: Document, source: Document): void {
   )
   const material = detailed
     .clone()
-    .setName('Cactus yard loft authored color')
+    .setName(profile.material)
     .setBaseColorTexture(
       doc
         .createTexture(image.getName())

@@ -25,6 +25,7 @@ export async function buildManifest(): Promise<void> {
   const assets: Record<string, ContentAsset & { pair?: ContentAsset }> = {}
   const names = [
     'frontier',
+    'frontier-yard-high',
     'duel',
     'depot',
     'mission',

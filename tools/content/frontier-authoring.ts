@@ -165,7 +165,7 @@ async function authorBuildings(g: FrontierGeometry, plan: FrontierPlan, layout: 
   return groups
 }
 
-export async function authorFrontier(output: string): Promise<void> {
+export async function authorFrontier(output: string, highYard = false): Promise<void> {
   const plan = JSON.parse(
     await readFile(join(SOURCE, 'frontier.plan.json'), 'utf8'),
   ) as FrontierPlan
@@ -214,7 +214,11 @@ export async function authorFrontier(output: string): Promise<void> {
     await frontierIO.read(join(SOURCE, 'cactus-near/frontier-cactus-near.glb')),
     await frontierIO.read(join(SOURCE, 'frontier-cacti.glb')),
   )
-  installYardCacti(g.doc, await frontierIO.read(join(SOURCE, 'cactus-near/frontier-yard-loft.glb')))
+  const yard = join(SOURCE, 'cactus-near')
+  const twoArm = highYard
+    ? await frontierIO.read(join(yard, 'frontier-yard-two-arm-loft.glb'))
+    : undefined
+  installYardCacti(g.doc, await frontierIO.read(join(yard, 'frontier-yard-loft.glb')), twoArm)
   await installHangingLamps(g.doc, await frontierIO.read(join(SOURCE, 'street-lamp.glb')), layout)
   await mkdir(output, { recursive: true })
   await authorTumbleweeds(plan, output)
@@ -229,6 +233,7 @@ export async function authorFrontier(output: string): Promise<void> {
     `${JSON.stringify(
       {
         schema: plan.schema,
+        ...(highYard ? { highYard: true } : {}),
         sourceHash: hash,
         collisionVersion: collision.version,
         arrival: plan.arrival,
@@ -260,6 +265,8 @@ export async function authorFrontier(output: string): Promise<void> {
 if (import.meta.main) {
   if (process.argv[2] === '--publish') {
     await publishFrontier(process.argv[3] ?? '/tmp/out-west-frontier-staged')
+  } else if (process.argv[2] === '--stage-high-yard') {
+    await authorFrontier(process.argv[3] ?? '/tmp/out-west-frontier-high-yard-staged', true)
   } else {
     await authorFrontier(process.argv[2] ?? '/tmp/out-west-frontier-staged')
   }
@@ -459,6 +466,9 @@ export async function publishFrontier(directory: string): Promise<void> {
       JSON.parse(await readFile(index === 3 ? name : join(directory, name), 'utf8')),
     ),
   )
+  if (metadata.highYard === true) {
+    throw new Error('Export High yard staging as a separate scene asset')
+  }
   if (audit.issues.length > 0 || audit.collisionVersion !== metadata.collisionVersion) {
     throw new Error('Native map audit is missing or stale')
   }
