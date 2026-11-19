@@ -6,7 +6,7 @@ import { join } from 'node:path'
 import { chromium } from 'playwright'
 import { foregroundCoverage } from './content/foreground-coverage.ts'
 import { frameRecorderSource, type QARecorderPrivacySample } from './content/frame-recorder.ts'
-import { frameTarget } from './content/frame-target.ts'
+import { frameRecordingExitCode, frameTarget } from './content/frame-target.ts'
 import { frameTiming } from './content/frame-timing.ts'
 import {
   type BuildReceipt,
@@ -381,12 +381,16 @@ try {
         recordingClass: report.recordingClass,
         fps: timing?.fps,
         frameMs: timing?.frameMs,
+        performanceTarget: report.performanceTarget,
         problems,
       },
       null,
       2,
     ),
   )
+  if (visible) {
+    process.exitCode = frameRecordingExitCode(report.qualification, report.performanceTarget)
+  }
 } finally {
   sidecar?.kill()
   for (const context of browser.contexts()) {

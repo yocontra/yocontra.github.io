@@ -1,5 +1,9 @@
 import type { frameTiming } from './frame-timing.ts'
 
+export function frameRecordingExitCode(qualification: unknown, performanceTarget: unknown): 0 | 1 {
+  return qualification === 'complete' && performanceTarget === 'pass' ? 0 : 1
+}
+
 /** Desktop aims near 60 Hz; the simulator floor is a separate 30 Hz acceptance target. */
 export function frameTarget(
   timing: ReturnType<typeof frameTiming>,

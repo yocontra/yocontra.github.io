@@ -3,6 +3,7 @@ import { COORDINATE_KEYS, recordingDocument } from './content/simulator-document
 
 import { mkdir, writeFile } from 'node:fs/promises'
 import { join, resolve } from 'node:path'
+import { frameRecordingExitCode } from './content/frame-target.ts'
 import type { BuildReceipt } from './content/production-fixture.ts'
 import {
   coordinateStatus,
@@ -324,7 +325,7 @@ if (import.meta.main) {
       python: arg('python', '/Library/Frameworks/Python.framework/Versions/3.13/bin/python3'),
     })
     console.log(report)
-    process.exit(report.qualification === 'complete' && report.performanceTarget === 'pass' ? 0 : 1)
+    process.exit(frameRecordingExitCode(report.qualification, report.performanceTarget))
   }
   console.log(
     await runPreflight({

@@ -214,7 +214,9 @@ Two local release-engine builds ran the normal landscape input tape against the 
 
 A depth-blit prototype reused the static part of the native sun map. Moving riders invalidated its depth projection on 117 of 122 shadow updates. An expanded, fixed depth range held the cache for all 130 measured updates at a stationary camera with moving riders. That run averaged 26.00 FPS against controls of 24.90 and 23.70 FPS. In a separate test, projecting each caster's bounds down to visible receiving surfaces cut mean draws from 298 to 218 on a street view. The crowded plaza showed little change. Combining moving rider casters by vertex layout also failed to sustain a frame-rate gain on the plaza. The renderer trials remain local.
 
-The simulator recorder preserves the evidence and the frame-rate verdict separately. Its command now returns success only when both pass. The command regression covers a passing target, a missed target with complete evidence, and incomplete evidence.
+A moving camera follow-up combined a padded shadow projection, receiver bounds, scenery culling and a 230 ms shadow refresh interval. Street and plaza controls averaged 20.00 and 15.00 FPS. The combined prototype averaged 26.60 and 17.00 FPS, with minimums of 24 and 16 FPS. It lowered mean plaza draws from 445 to 341. Each window was ten seconds with 32 loaded riders. The 30 FPS floor still requires more savings in the dense view.
+
+The simulator and foreground Chrome commands return success only when evidence and frame rate both pass. Headless Chrome still writes a diagnostic receipt. The simulator command regression covers a passing target, a missed target with complete evidence, and incomplete evidence.
 
 ## First-person models and aiming
 
