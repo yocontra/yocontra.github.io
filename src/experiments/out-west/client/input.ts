@@ -102,12 +102,18 @@ export class GameInput {
       )
       const release = (event: PointerEvent): void => {
         this.held.delete(event.pointerId)
-        if (!(bit === Buttons.aim && this.settings.adsMode === 'toggle')) {
+        if (
+          !(
+            (bit === Buttons.aim && this.settings.adsMode === 'toggle') ||
+            [...this.held.values()].includes(bit)
+          )
+        ) {
           button.classList.remove('held')
         }
       }
       button.addEventListener('pointerup', release, { signal: this.abort.signal })
       button.addEventListener('pointercancel', release, { signal: this.abort.signal })
+      button.addEventListener('lostpointercapture', release, { signal: this.abort.signal })
       this.controls.append(button)
       this.buttons.set(bit, button)
     }
@@ -119,6 +125,7 @@ export class GameInput {
     canvas.addEventListener('pointermove', this.move, { signal: this.abort.signal })
     canvas.addEventListener('pointerup', this.up, { signal: this.abort.signal })
     canvas.addEventListener('pointercancel', this.up, { signal: this.abort.signal })
+    canvas.addEventListener('lostpointercapture', this.up, { signal: this.abort.signal })
     canvas.addEventListener('contextmenu', (event) => event.preventDefault(), {
       signal: this.abort.signal,
     })

@@ -80,14 +80,82 @@ try {
     const probe = Reflect.get(globalThis, '__inputReview')
     probe.input.sample(3, 1 / 60)
     const cursorAim = probe.input.cursorAim
-    probe.input.destroy()
-    probe.canvas.remove()
     return cursorAim
   })
   if (!mouse) {
     throw new Error('Neutral connected controller stole active mouse aim')
   }
-  console.log(JSON.stringify({ turns, touch, compatibilityMouse, mouse }))
+  await page.evaluate(() => {
+    const probe = Reflect.get(globalThis, '__inputReview')
+    const fire = document.querySelector<HTMLButtonElement>('.pc-fire')
+    if (!fire) {
+      throw new Error('Missing touch fire button')
+    }
+    fire.style.cssText =
+      'position:fixed;inset:20px auto auto 900px;width:100px;height:100px;display:block;z-index:100000;touch-action:none'
+    for (const element of [probe.canvas, fire] as HTMLElement[]) {
+      element.addEventListener('pointerdown', (event) => {
+        element.dataset.reviewPointer = String(event.pointerId)
+      })
+    }
+  })
+  const lostCapture: {
+    expected: 'move' | 'fire'
+    moveX: number
+    moveZ: number
+    buttons: number
+  }[] = []
+  for (const [selector, start, move, expected] of [
+    ['canvas[data-review-pointer]', { x: 100, y: 200 }, { x: 150, y: 200 }, 'move'],
+    ['.pc-fire[data-review-pointer]', { x: 940, y: 60 }, { x: 950, y: 70 }, 'fire'],
+  ] as const) {
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [start] })
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [move] })
+    const active = await page.evaluate(() =>
+      Reflect.get(globalThis, '__inputReview').input.sample(4),
+    )
+    if (expected === 'move' ? active.moveX <= 0.5 : active.buttons === 0) {
+      throw new Error(`Touch ${expected} was not active before capture loss`)
+    }
+    await page.locator(selector).evaluate((element: HTMLElement) => {
+      const pointerId = Number(element.dataset.reviewPointer)
+      if (!element.hasPointerCapture(pointerId)) {
+        throw new Error('The browser did not capture the probe touch')
+      }
+      element.addEventListener(
+        'lostpointercapture',
+        () => {
+          element.dataset.reviewLost = 'yes'
+        },
+        { once: true },
+      )
+      element.releasePointerCapture(pointerId)
+    })
+    await cdp.send('Input.dispatchTouchEvent', {
+      type: 'touchMove',
+      touchPoints: [{ x: 650, y: 400 }],
+    })
+    await page.locator(`${selector}[data-review-lost]`).waitFor({ state: 'attached' })
+    const after = await page.evaluate(async () => {
+      const probe = Reflect.get(globalThis, '__inputReview')
+      await new Promise((resolve) => setTimeout(resolve, 125))
+      return probe.input.sample(5)
+    })
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] })
+    lostCapture.push({ expected, moveX: after.moveX, moveZ: after.moveZ, buttons: after.buttons })
+    if (expected === 'fire' && (await page.locator('.pc-fire.held').count())) {
+      throw new Error('Fire button stayed lit after capture loss')
+    }
+  }
+  if (lostCapture.some((state) => state.moveX || state.moveZ || state.buttons)) {
+    throw new Error(`Touch input stayed active after capture loss: ${JSON.stringify(lostCapture)}`)
+  }
+  await page.evaluate(() => {
+    const probe = Reflect.get(globalThis, '__inputReview')
+    probe.input.destroy()
+    probe.canvas.remove()
+  })
+  console.log(JSON.stringify({ turns, touch, compatibilityMouse, mouse, lostCapture }))
 } finally {
   await browser.close()
 }
