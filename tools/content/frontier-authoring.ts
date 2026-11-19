@@ -33,6 +33,7 @@ import { coverModel, desertPlants } from './frontier-props.ts'
 import { authorRoofMaterial } from './frontier-roof-material.ts'
 import { frontierSiding } from './frontier-siding.ts'
 import { weatheredTimber } from './frontier-weathering.ts'
+import { installYardCacti } from './frontier-yard-cactus.ts'
 import { optimizeAsset } from './optimize.ts'
 
 export interface FrontierPlan {
@@ -213,6 +214,7 @@ export async function authorFrontier(output: string): Promise<void> {
     await frontierIO.read(join(SOURCE, 'cactus-near/frontier-cactus-near.glb')),
     await frontierIO.read(join(SOURCE, 'frontier-cacti.glb')),
   )
+  installYardCacti(g.doc, await frontierIO.read(join(SOURCE, 'cactus-near/frontier-yard-loft.glb')))
   await installHangingLamps(g.doc, await frontierIO.read(join(SOURCE, 'street-lamp.glb')), layout)
   await mkdir(output, { recursive: true })
   await authorTumbleweeds(plan, output)
