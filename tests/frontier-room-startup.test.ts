@@ -1,85 +1,64 @@
-import { expect, test as it, spyOn } from 'bun:test'
-import { getMessageBytes, Protocol } from '@colyseus/core'
-import { Encoder } from '@colyseus/schema'
+import { afterAll, beforeAll, expect, test as it, spyOn } from 'bun:test'
+import process from 'node:process'
+import { fileURLToPath } from 'node:url'
 import type { SeatReservation } from '@colyseus/sdk'
-import { type ServerWebSocket, serve } from 'bun'
+import { spawn } from 'bun'
 import {
   FrontierRoomClient,
   waitForPlayer,
 } from '../src/experiments/out-west/client/frontier-room-client.ts'
 import type { ConnectionNotice } from '../src/experiments/out-west/client/reconnect-session.ts'
-import { CONTRACT_VERSION, TOWN_CLOSE_REPLACED } from '../src/experiments/out-west/contract/town.ts'
-import { FrontierState, PlayerRecord } from '../src/experiments/out-west/runtime/schema.ts'
+import { TOWN_CLOSE_REPLACED } from '../src/experiments/out-west/contract/town.ts'
+import { FrontierState } from '../src/experiments/out-west/runtime/schema.ts'
+import { nextDeposit, roomEvent, sessionId } from './fixtures/frontier-room-server.ts'
 
-const seat: SeatReservation = {
-  name: 'frontier',
-  roomId: 'room',
-  processId: 'local',
-  sessionId: 'rider',
-}
-const roomData = getMessageBytes.raw
-const welcome = {
-  type: 'welcome',
-  contractVersion: CONTRACT_VERSION,
-  lobbyId: 'perdition',
-  you: 4,
-  tick: 22,
-  tickHz: 20,
-  roster: [],
-  banked: 125,
-}
-const earlyDeposit = {
-  type: 'deposit',
-  seq: 5,
-  amount: 70,
-  commission: 5,
-  banked: 200,
-  ok: true,
-}
-const event = { type: 'glass_break', window: 1 } as const
+let fixture: ReturnType<typeof startServer> | undefined
+let endpoint: string
 
-function socketRoom(start: (socket: ServerWebSocket<undefined>) => void) {
-  const { promise: peer, resolve } = Promise.withResolvers<ServerWebSocket<undefined>>()
-  const server = serve<undefined>({
-    hostname: '127.0.0.1',
-    port: 0,
-    fetch(req, listener) {
-      if (listener.upgrade(req)) {
-        return
-      }
-      return new Response('Expected WebSocket upgrade', { status: 426 })
+// Bun 1.3 test workers can hang starting or stopping their own listeners.
+function startServer() {
+  return spawn(
+    [
+      process.execPath,
+      fileURLToPath(new URL('./fixtures/frontier-room-server.ts', import.meta.url)),
+    ],
+    {
+      stdout: 'pipe',
+      stderr: 'inherit',
     },
-    websocket: {
-      open(socket) {
-        socket.send(getMessageBytes[Protocol.JOIN_ROOM]('resume-token', 'schema'))
-        start(socket)
-        resolve(socket)
-      },
-      message: () => undefined,
-    },
-  })
-  return { server, peer, endpoint: server.url.toString() }
+  )
+}
+
+beforeAll(async () => {
+  fixture = startServer()
+  const reader = fixture.stdout.getReader()
+  try {
+    const { value } = await reader.read()
+    if (!value) {
+      throw new Error('Frontier room fixture closed before reporting its endpoint')
+    }
+    endpoint = new TextDecoder().decode(value).trim()
+  } finally {
+    reader.releaseLock()
+  }
+})
+
+afterAll(async () => {
+  fixture?.kill()
+  await fixture?.exited
+})
+
+function seat(roomId: string): SeatReservation {
+  return { name: 'frontier', roomId, processId: 'local', sessionId }
 }
 
 it('keeps the latest startup wallet in the real SDK without replaying old room effects', async () => {
-  const state = new FrontierState()
-  const player = new PlayerRecord()
-  player.id = '4'
-  player.sessionId = seat.sessionId
-  state.players.set(player.id, player)
-  const initialState = Uint8Array.of(Protocol.ROOM_STATE, ...new Encoder(state).encodeAll())
-  const fixture = socketRoom((socket) => {
-    socket.send(roomData(Protocol.ROOM_DATA, 'control', welcome))
-    socket.send(roomData(Protocol.ROOM_DATA, 'control', earlyDeposit))
-    socket.send(roomData(Protocol.ROOM_DATA, 'events', { tick: 22, events: [event] }))
-    socket.send(initialState)
-  })
   const warn = spyOn(console, 'warn').mockImplementation(() => undefined)
-  const client = new FrontierRoomClient(fixture.endpoint, 100)
+  const client = new FrontierRoomClient(endpoint, 100)
   const { promise, resolve } = Promise.withResolvers<void>()
   const delivered: unknown[] = []
   try {
-    const room = await client.consumeSeatReservation(seat, FrontierState)
+    const room = await client.consumeSeatReservation(seat('wallet'), FrontierState)
     expect((await waitForPlayer(room, client.signal)).id).toBe('4')
     expect(client.banked).toBe(200)
     client.attach({
@@ -92,37 +71,33 @@ it('keeps the latest startup wallet in the real SDK without replaying old room e
       },
     })
     expect(delivered).toEqual([])
-    const socket = await fixture.peer
-    const nextDeposit = { ...earlyDeposit, seq: 6, banked: 275 }
-    socket.send(roomData(Protocol.ROOM_DATA, 'events', { tick: 30, events: [event] }))
-    socket.send(roomData(Protocol.ROOM_DATA, 'control', nextDeposit))
+    room.send('fixture-next')
     await promise
     expect(client.banked).toBe(275)
-    expect(delivered).toEqual([event, nextDeposit])
+    expect(delivered).toEqual([roomEvent, nextDeposit])
     expect(warn).not.toHaveBeenCalled()
+    await room.leave()
   } finally {
     warn.mockRestore()
     client.release()
-    await fixture.server.stop(true)
   }
 })
 
 it('rejects the first-state wait with the real SDK close reason and code', async () => {
-  const fixture = socketRoom(() => undefined)
   const notices: Parameters<ConnectionNotice>[] = []
-  const client = new FrontierRoomClient(fixture.endpoint, 100, (...args) => notices.push(args))
+  const client = new FrontierRoomClient(endpoint, 100, (...args) => notices.push(args))
   try {
-    const room = await client.consumeSeatReservation(seat, FrontierState)
-    const pending = waitForPlayer(room, client.signal)
-    const socket = await fixture.peer
-    socket.close(TOWN_CLOSE_REPLACED, 'Joined from somewhere else.')
-    await expect(pending).rejects.toThrow('Joined from somewhere else.')
+    const room = await client.consumeSeatReservation(seat('replacement'), FrontierState)
+    const pending = waitForPlayer(room, client.signal).catch((reason: unknown) => reason)
+    room.send('fixture-close')
+    const error = await pending
+    expect(error).toBeInstanceOf(Error)
+    expect(error).toMatchObject({ message: 'Joined from somewhere else.' })
     expect(notices).toEqual([['closed', 'Joined from somewhere else.', TOWN_CLOSE_REPLACED]])
     expect(() => client.attach({ control: () => undefined, events: () => undefined })).toThrow(
       'Joined from somewhere else.',
     )
   } finally {
     client.release()
-    await fixture.server.stop(true)
   }
 })
