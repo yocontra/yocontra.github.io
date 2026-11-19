@@ -313,7 +313,7 @@ export class VoiceTransport {
   }
 
   private attach(id: number, track: MediaStreamTrack | null): void {
-    if (!(this.wanted.has(id) && track) || track.readyState === 'ended') {
+    if (!(this.wanted.has(id) && track) || track.readyState === 'ended' || this.o.muted(id)) {
       this.detach(id)
       return
     }

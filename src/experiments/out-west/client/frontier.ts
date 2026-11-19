@@ -136,9 +136,21 @@ export function mountNativeFrontier(
         throw new DOMException('Game was closed', 'AbortError')
       }
       session.subscribe((event) => game.event(event))
-      presentation = new FrontierHud(root, session, game, () => exit('quit'))
+      const hud = new FrontierHud(root, session, game, {
+        exit: () => exit('quit'),
+        blocksChanged: () => {
+          if (!lifecycle.signal.aborted) {
+            voice?.update()
+          }
+        },
+      })
+      presentation = hud
       if (!session.practice) {
-        voice = new FrontierVoice(root, session, options.audio ?? null, game.audioContext)
+        voice = new FrontierVoice(root, session, {
+          audio: options.audio ?? null,
+          context: game.audioContext,
+          blocksName: (name) => hud.blocksName(name),
+        })
         voice.setLinked(connection === 'open')
       }
       session.subscribe((event) => {

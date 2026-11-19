@@ -1,5 +1,4 @@
 import type { AudioEngine } from '../audio/audio.ts'
-import { blockedNames } from '../net/social.ts'
 import { getSettings, onSettings } from '../settings.ts'
 import { NativeVoiceAudio } from '../voice/native-audio.ts'
 import { VoiceChat } from '../voice/voice-chat.ts'
@@ -14,15 +13,17 @@ export class FrontierVoice {
   private readonly unsubscribe: () => void
   private readonly unsubscribeSettings: () => void
   private readonly nativeAudio: NativeVoiceAudio
-  private blocked = new Set<string>()
   constructor(
     root: HTMLElement,
     session: FrontierSession,
-    audio: AudioEngine | null,
-    context: () => AudioContext | null,
+    options: {
+      audio: AudioEngine | null
+      context: () => AudioContext | null
+      blocksName: (name: string | undefined) => boolean
+    },
   ) {
     this.session = session
-    this.nativeAudio = new NativeVoiceAudio(context, () => getSettings().voiceChatVolume)
+    this.nativeAudio = new NativeVoiceAudio(options.context, () => getSettings().voiceChatVolume)
     this.controls = new VoiceControls({
       connect: () => this.chat.retry(),
       settings: getSettings,
@@ -31,14 +32,14 @@ export class FrontierVoice {
     })
     root.append(this.controls.root)
     this.chat = new VoiceChat({
-      audio: audio ?? this.nativeAudio,
+      audio: options.audio ?? this.nativeAudio,
       microphone: (track) => this.nativeAudio.createMicrophone(track),
       activity: (track, interrupted) => this.nativeAudio.analyse(track, interrupted),
       audioRunning: () => this.nativeAudio.running,
       settings: getSettings,
       listening: () => getSettings().voiceChatVolume > 0,
       send: (control) => session.control(JSON.stringify(control)),
-      muted: (id) => this.blocked.has(session.world.players[id]?.name.toLowerCase() ?? ''),
+      muted: (id) => options.blocksName(session.world.players[id]?.name),
       onState: (state, message) => this.controls.setState(state, message),
     })
     this.unsubscribe = session.subscribeControl((message) => {
@@ -59,11 +60,6 @@ export class FrontierVoice {
   }
   private configure(): void {
     const enabled = getSettings().voiceChat && !this.session.practice
-    if (enabled) {
-      void blockedNames().then((names) => {
-        this.blocked = names
-      })
-    }
     this.chat.setEnabled(enabled)
     this.controls.refresh()
   }

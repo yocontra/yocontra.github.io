@@ -69,14 +69,14 @@ export class FrontierHud {
     root: HTMLElement,
     session: FrontierSession,
     viewport: GameViewport,
-    onExit: () => void,
+    actions: { exit: () => void; blocksChanged: () => void },
   ) {
     this.session = session
     this.viewport = viewport
     this.hud = new Hud(root, {
       touch: matchMedia('(pointer: coarse)').matches,
       onLeave: () => viewport.tap(Buttons.leave),
-      onExit,
+      onExit: actions.exit,
       onRiders: () => this.riders.open(),
       onKiller: () => {
         if (this.killer) {
@@ -115,6 +115,7 @@ export class FrontierHud {
       roster: () => this.roster(),
       you: () => session.selfSlot,
       lobbyId: () => session.lobbyId,
+      onBlocksChanged: actions.blocksChanged,
     })
     this.minimap = new Minimap(
       session.world.layout,
@@ -318,6 +319,9 @@ export class FrontierHud {
       },
       now / 1000,
     )
+  }
+  blocksName(name: string | undefined): boolean {
+    return this.riders.blocksName(name)
   }
   private event(event: SimEvent): void {
     const { selfSlot, world } = this.session

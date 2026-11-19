@@ -1,9 +1,8 @@
 /**
  * Who's in town, and the poster behind every name (spec §11.4: Report and Block on every poster).
  * The HUD's head count opens the riders list; the death card opens your killer's poster. Your
- * block list is read once at the start: a blocked player's call-out is never shown to you (the
- * server refuses to pair you anyway). The practice town (loopback) has no accounts behind its
- * names, so none of this applies there.
+ * block list is loaded once, then updated from confirmed changes in the player's poster. The
+ * practice town has no accounts behind its names.
  */
 import '../../ui/tokens.css'
 import '../../ui/controls.css'
@@ -15,6 +14,7 @@ import { currentPlayer } from '../../net/auth.ts'
 import { blockedNames } from '../../net/social.ts'
 import { openProfile } from '../../ui/profile.ts'
 import { button, el, panelSheet } from '../../ui/sheet.ts'
+import { RiderBlocks } from './rider-blocks.ts'
 
 export interface RidersDeps {
   /** Where the sheets mount (the HUD root). */
@@ -22,15 +22,19 @@ export interface RidersDeps {
   roster: () => ReadonlyMap<number, RosterEntry>
   you: () => number
   lobbyId: () => string
+  onBlocksChanged: () => void
 }
 
 export class Riders {
   private readonly deps: RidersDeps
-  private blocked: ReadonlySet<string> = new Set()
+  private readonly blocked: RiderBlocks
 
   constructor(deps: RidersDeps) {
     this.deps = deps
-    this.reload()
+    this.blocked = new RiderBlocks(
+      this.live ? blockedNames() : Promise.resolve(new Set<string>()),
+      deps.onBlocksChanged,
+    )
   }
 
   /** Accounts stand behind the names (not the practice town), and you're signed in. */
@@ -38,21 +42,8 @@ export class Riders {
     return this.deps.lobbyId() !== 'loopback' && currentPlayer() !== null
   }
 
-  private reload(): void {
-    if (currentPlayer() === null) {
-      return
-    }
-    blockedNames()
-      .then((b) => {
-        this.blocked = b
-      })
-      .catch(() => undefined)
-  }
-
-  /** True when the player behind entity `id` is on your block list. */
-  isBlocked(id: number): boolean {
-    const name = this.deps.roster().get(id)?.name
-    return name !== undefined && this.blocked.has(name.toLowerCase())
+  blocksName(name: string | undefined): boolean {
+    return this.blocked.has(name)
   }
 
   /** The person (not a bot, not you) behind entity `id`, if any. */
@@ -65,7 +56,7 @@ export class Riders {
   poster(name: string): void {
     openProfile(this.deps.root, name, {
       context: this.deps.lobbyId(),
-      onBlockChange: () => this.reload(),
+      onBlockChange: (confirmedName, blocked) => this.blocked.apply(confirmedName, blocked),
     })
   }
 
@@ -89,7 +80,7 @@ export class Riders {
       const li = el('li', '', list)
       const name = el('button', 'ow-feat-name', li)
       name.type = 'button'
-      const hidden = this.blocked.has(r.name.toLowerCase())
+      const hidden = this.blocked.has(r.name)
       name.textContent = hidden ? `${r.name} (blocked)` : r.name
       el('b', '', li, `Lv ${r.level}${r.prestige > 0 ? ` ${'★'.repeat(r.prestige)}` : ''}`)
       if (this.live) {
