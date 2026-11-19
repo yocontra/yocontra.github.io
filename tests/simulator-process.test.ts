@@ -15,6 +15,9 @@ import {
   until,
 } from '../tools/content/simulator-process.ts'
 import fixture from './fixtures/simulator-coordinate-v3.json' with { type: 'json' }
+import { hangTimeout } from './timeout.ts'
+
+const pythonTestSummary = /\bRan [1-9]\d* tests?\b/u
 
 async function dummy(
   message: string | null = 'READY',
@@ -84,12 +87,19 @@ it('aborts a real stalled HTTP response at the remaining poll budget', async () 
   const server = serve({
     hostname: '127.0.0.1',
     port: 0,
-    fetch: () => {
+    fetch: (request) => {
+      if (new URL(request.url).pathname === '/ready') {
+        return Response.json({ ready: true })
+      }
       received = true
       return new Promise<Response>(() => undefined)
     },
   })
   try {
+    const ready = await fetch(new URL('/ready', server.url), {
+      signal: AbortSignal.timeout(hangTimeout(400)),
+    })
+    expect(await ready.json()).toEqual({ ready: true })
     await expect(
       until(async (signal) => {
         signal.addEventListener('abort', () => {
@@ -97,7 +107,7 @@ it('aborts a real stalled HTTP response at the remaining poll budget', async () 
         })
         await fetch(server.url, { signal })
         return true
-      }, 0.08),
+      }, hangTimeout(400) / 1000),
     ).rejects.toThrow('deadline')
     expect(received).toBe(true)
     expect(aborted).toBe(true)
@@ -204,7 +214,7 @@ it('executes the offline fake-clock native iterator regressions without idb or d
   const error = await new Response(child.stderr).text()
   await child.exited
   expect(child.exitCode).toBe(0)
-  expect(error).toMatch(/\bRan [1-9]\d* tests?\b/u)
+  expect(error).toMatch(pythonTestSummary)
 })
 
 it('returns success only when an actual recorder command meets the frame target', async () => {
