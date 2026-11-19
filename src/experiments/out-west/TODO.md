@@ -1,6 +1,6 @@
 # Out West remaining work
 
-Verified deployment baseline is `8cbb89a9` (2026-11-18). The Worker and both game pages are live. All 187 audited asset URLs match their expected SHA-256 hashes, including all 37 Outfitter previews. Active simulator performance, Safari input timing, foreground Chrome evidence and live voice validation remain open.
+Verified deployment baseline is `5101cb61` (2026-11-18). The Worker and both game pages are live. The 187-asset audit includes all 37 Outfitter previews. The later packed-normal fix rebuilt two poncho assets, and both deployed files match their new SHA-256 hashes. Active simulator performance, Safari input timing, foreground Chrome evidence and live voice validation remain open.
 
 ## Current playtest feedback (2026-11-16)
 
@@ -223,6 +223,12 @@ A moving camera follow-up combined a padded shadow projection, receiver bounds, 
 A local OffscreenCanvas diagnostic rendered the same native town and 32 copies of one dressed rider on the main thread and in a dedicated browser worker. Both 60-second windows captured all 108 trusted touch endpoints. Median dispatch after Safari's event timestamp fell from 21 ms to 11 ms. End-to-end timing still missed the ±35 ms limit at 30 and 31 endpoints, respectively. The worker window lost 16 foreground samples. The simulator companion logged slow accessibility calls and delivered a burst of queued input, and the fixture allowed Safari's selection overlay. This comparison isolates neither cause.
 
 With accessibility checks before and after each window and the order reversed, median dispatch fell from 21 ms to 10 ms. Late endpoints fell from 33 to 12 out of 108. The main-thread render averaged 33.57 FPS with a 31 FPS minimum. The worker render averaged 33.37 FPS with a 29 FPS minimum, and the main thread ran at least 59 callbacks per second. These fixed-camera trials omit multiplayer gameplay and continuous foreground checks. They do not qualify the release.
+
+The clean `5101cb61` build retained a full 60-second 32-rider landscape window against the local Worker and D1. It averaged 24.17 FPS, with a 17 FPS minimum and 41 complete seconds below 30. All 32 riders loaded in every browser sample. Of the 108 planned touch endpoints, two native and 46 Safari listener timestamps missed their deadline. Four gestures missed the shape or duration limits. Native foreground retained 50 samples with a 9.1-second maximum gap. The run restored game settings and portrait orientation and shut down the dedicated simulator.
+
+That window averaged 18–19 FPS in two crowded street sections with about 211–219 forward draws per frame. A quieter section averaged 35 FPS with 44 forward draws. Shadow submissions stayed near 135–140 per frame across those sections. A private test at the same 60 camera poses culled only meshes fully behind opaque walls. It saved eight forward draws on average and five of 222 in the heaviest view. It has no active-gameplay result and is not in the game.
+
+The foreground recorder now schedules one native sample per second from the guest clock and places the calls between scheduled touch endpoints when possible. In offline replay of the `5101cb61` input plan, modeled overlaps fell from 29 to zero. The original gesture deadlines and foreground acceptance limits still apply.
 
 The simulator and foreground Chrome commands return success only when evidence and frame rate both pass. Headless Chrome still writes a diagnostic receipt. The simulator command regression covers a passing target, a missed target with complete evidence, and incomplete evidence.
 
