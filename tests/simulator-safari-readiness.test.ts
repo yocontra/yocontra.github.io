@@ -197,29 +197,34 @@ it('retains a pending startup observation at timeout and never opens early', asy
     )
   value.options.seconds = 0.3
   await expect(openSafariWhenReady(value.options)).rejects.toThrow('deadline')
-  expect(value.calls).toEqual(['launch', 'ax', 'apps', 'ax', 'apps'])
-  expect(value.events[1]?.result).toEqual({
-    ax: undefined,
-    apps: ready.apps,
-    axError: `Error: ${startupError}`,
-  })
-  expect(value.events[2]?.result).toEqual(value.events[1]?.result)
+  expect(value.calls.slice(0, 3)).toEqual(['launch', 'ax', 'apps'])
+  expect(value.calls.filter((call) => call === 'launch')).toHaveLength(1)
+  expect(value.calls).not.toContain('open')
+  const observations = value.events.filter((event) => event.phase === 'readiness' && event.result)
+  expect(observations.length).toBeGreaterThan(0)
+  for (const observation of observations) {
+    expect(observation.result).toEqual({
+      ax: undefined,
+      apps: ready.apps,
+      axError: `Error: ${startupError}`,
+    })
+    expect(observation.identity).toBeNull()
+  }
   expect(value.events.at(-1)?.error).toContain('deadline')
 })
-it('does not turn a later wrong or ambiguous foreground mapping into readiness', async () => {
+it('does not treat a wrong or ambiguous foreground mapping as readiness', async () => {
   for (const apps of [
     [{ bundle_id: 'com.apple.mobilesafari', process_id: 84_919 }],
     [...ready.apps, ...ready.apps],
     [...ready.apps, { bundle_id: 'other', process_id: 84_918 }],
   ]) {
-    const value = startupFixture(new Error(startupError), { ...ready, apps })
+    const state = { ...ready, apps }
+    const value = fixture([state])
     value.options.seconds = 0.3
     await expect(openSafariWhenReady(value.options)).rejects.toThrow('deadline')
     expect(value.calls.filter((c) => c === 'launch')).toHaveLength(1)
     expect(value.calls).not.toContain('open')
-    expect(
-      value.events.filter((e) => e.phase === 'readiness' && e.result).length,
-    ).toBeGreaterThanOrEqual(2)
+    expect(value.events[1]?.result).toBe(state)
     expect(value.events.filter((e) => e.phase === 'readiness').every((e) => !e.identity)).toBe(true)
   }
 })

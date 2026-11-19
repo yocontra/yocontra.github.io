@@ -9,7 +9,7 @@ import math
 import time
 from pathlib import Path
 
-from simulator_schedule import tape_events, observe_foreground, release_held, send_native_tape
+from simulator_schedule import foreground_schedule, tape_events, observe_foreground, release_held, send_native_tape
 from idb.grpc.client import Client
 from idb.common.types import (
     AccessibilityBackend, AccessibilityInfoOptions, AccessibilityOutputFormat, AccessibilityPoint,
@@ -74,6 +74,10 @@ async def record(client, request, udid):
     loop = asyncio.get_running_loop()
     base = loop.time() + (clock["wall"] - time.time() * 1000) / 1000
     foreground, state = [], {"held": None}
+    foreground_plan = list(foreground_schedule(tape, clock["at"]))
+    foreground_deadlines = [base + (at - clock["at"]) / 1000 for at in foreground_plan]
+    emit({"event": "foreground-plan", "value": {"guestAt": foreground_plan,
+                                                 "monotonic": foreground_deadlines}})
 
     async def read_foreground():
         started = time.time() * 1000
@@ -132,7 +136,7 @@ async def record(client, request, udid):
 
     tasks = [
         asyncio.create_task(observe_foreground(
-            read_foreground, start=loop.time(), stop=base + 60, now=loop.time,
+            read_foreground, deadlines=foreground_deadlines, now=loop.time,
             sleep=asyncio.sleep, emit=emit, samples=foreground,
         )),
         asyncio.create_task(send_native_tape(lambda: client.hid(events()), release)),
