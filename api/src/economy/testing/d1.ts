@@ -13,6 +13,8 @@ import type { Env } from '../../env.ts'
 const MIGRATIONS = join(import.meta.dir, '../../../migrations')
 const STATEMENT_END = /;\s*$/mu
 const COMMENT_LINE = /^\s*--.*$/gmu
+const WORKERD_CONFIG_WRITE =
+  /^\s*at (?:Runtime\.)?updateConfig \([^\n]+[/\\]miniflare[/\\]dist[/\\]src[/\\]index\.js:/mu
 
 export interface TestDb {
   db: D1Database
@@ -28,8 +30,13 @@ function statementsOf(sql: string): string[] {
     .filter((s) => s !== '')
 }
 
-async function openDatabase(retry = true): Promise<{ db: D1Database; runtime: Miniflare }> {
-  const runtime = new Miniflare(
+interface D1Runtime {
+  getD1Database: (name: string) => Promise<unknown>
+  dispose: () => Promise<void>
+}
+
+function localD1Runtime(): Miniflare {
+  return new Miniflare(
     convertV4MiniflareOptions({
       modules: true,
       script: 'export default { fetch: () => new Response(null, { status: 404 }) }',
@@ -38,8 +45,28 @@ async function openDatabase(retry = true): Promise<{ db: D1Database; runtime: Mi
       d1Persist: false,
     }),
   )
+}
+
+function retryableStartup(error: unknown): boolean {
+  if (!(error instanceof Error && error.stack)) {
+    return false
+  }
+  const { code, syscall } = error as NodeJS.ErrnoException
+  // Bun may report loopback readiness before the address is available.
+  if (code === 'ERR_ASSERTION' && error.stack.includes('at getServerPort')) {
+    return error.stack.includes('miniflare')
+  }
+  // Bun may lose the workerd stdin descriptor while Miniflare sends its startup config.
+  return code === 'EBADF' && syscall === 'send' && WORKERD_CONFIG_WRITE.test(error.stack)
+}
+
+export async function openDatabase(
+  createRuntime: () => D1Runtime = localD1Runtime,
+  retry = true,
+): Promise<{ db: D1Database; runtime: D1Runtime }> {
+  const runtime = createRuntime()
   try {
-    const db = (await runtime.getD1Database('DB')) as unknown as D1Database
+    const db = (await runtime.getD1Database('DB')) as D1Database
     return { db, runtime }
   } catch (error) {
     try {
@@ -50,15 +77,8 @@ async function openDatabase(retry = true): Promise<{ db: D1Database; runtime: Mi
         throw new AggregateError([error, cleanupError], 'Local D1 startup and disposal failed')
       }
     }
-    if (
-      retry &&
-      error instanceof Error &&
-      (error as NodeJS.ErrnoException).code === 'ERR_ASSERTION' &&
-      error.stack?.includes('at getServerPort') &&
-      error.stack.includes('miniflare')
-    ) {
-      // The loopback listener can report readiness before its address is available under Bun.
-      return openDatabase(false)
+    if (retry && retryableStartup(error)) {
+      return openDatabase(createRuntime, false)
     }
     throw error
   }

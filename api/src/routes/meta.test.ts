@@ -37,6 +37,7 @@ import { progressRoutes, sanitizeClaim } from './progress.ts'
 import { storeRoutes } from './store.ts'
 
 let t: TestDb
+let teardown: TestDb['dispose'] | undefined
 let env: Env
 let turnstileOk = true
 const daily = makeDailyRoutes(() => Promise.resolve(turnstileOk))
@@ -44,6 +45,7 @@ let sessionSeq = 0
 
 beforeAll(async () => {
   t = await testDb()
+  teardown = t.dispose
   env = {
     ...t.env,
     DAILY_SESSIONS: {
@@ -52,7 +54,7 @@ beforeAll(async () => {
   } as unknown as Env
 })
 afterAll(async () => {
-  await t.dispose()
+  await teardown?.()
 })
 
 const ctx = {} as ExecutionContext
