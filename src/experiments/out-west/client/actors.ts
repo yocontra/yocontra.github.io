@@ -6,7 +6,11 @@ import type { Dyes } from '../data/dye.ts'
 import { DuelActor } from '../duel/native-actor.ts'
 import type { World } from '../ffa/sim/state.ts'
 import type { PlayerInput, PlayerState } from '../runtime/protocol.ts'
-import { attachHeldWeapon, equippedActor } from '../scene/native-equipment.ts'
+import {
+  attachHeldWeapon,
+  equippedActor,
+  setRigidEquipmentBatching,
+} from '../scene/native-equipment.ts'
 import {
   type AnimatedRider,
   animateRider,
@@ -199,7 +203,7 @@ export class Actors {
             void this.ensure(id)
           }),
       )
-      this.update(players, 0)
+      this.update(players, own, false)
       const request = this.firstPersonRequest(own)
       if (request) {
         await this.firstPerson.prepare(request)
@@ -225,13 +229,8 @@ export class Actors {
       }
     }
   }
-  private key(id: string): string {
-    return this.appearance(id)?.key ?? 'default'
-  }
   private assign(id: string, actor: DuelActor, key: string): void {
-    if (id === this.ownId) {
-      actor.batchRigid = false
-    }
+    setRigidEquipmentBatching(this.game, actor, id !== this.ownId)
     actor.root.tags.add(`rider:${id}`)
     this.game.frontierShadows?.registerRider(actor.root, id)
     for (const track of this.tracks) {
@@ -266,7 +265,7 @@ export class Actors {
     }
     const incarnation = this.incarnations.get(id)?.serial
     const appearance = this.appearance(id)
-    const key = this.key(id)
+    const key = appearance?.key ?? 'default'
     if (this.actors.get(id)?.key === key) {
       return
     }
@@ -282,7 +281,7 @@ export class Actors {
       !this.lifecycle.signal.aborted &&
       this.present.has(id) &&
       this.incarnations.get(id)?.serial === incarnation &&
-      this.key(id) === key &&
+      (this.appearance(id)?.key ?? 'default') === key &&
       (this.players.get(id)?.hp ?? 0) > 0
     const promise = (async () => {
       if (!(initial || this.actors.has(id))) {
@@ -326,9 +325,26 @@ export class Actors {
     this.pending.set(id, promise)
     return promise
   }
-  update(players: ReadonlyMap<string, PlayerState>, _dt: number, firstPersonId?: string): void {
+  private setOwnRider(ownId: string | undefined): void {
+    if (ownId === this.ownId) {
+      return
+    }
+    for (const [id, rider] of this.actors) {
+      if (id === ownId || id === this.ownId) {
+        setRigidEquipmentBatching(this.game, rider.actor, id !== ownId)
+      }
+    }
+    this.ownId = ownId
+  }
+  update(
+    players: ReadonlyMap<string, PlayerState>,
+    ownId: string | undefined,
+    first: boolean,
+  ): void {
     this.syncPlayers(players)
-    this.game.frontierShadows?.crowd(players.size, this.ownId)
+    this.setOwnRider(ownId)
+    const firstPersonId = first ? ownId : undefined
+    this.game.frontierShadows?.crowd(players.size, ownId)
     for (const id of this.failures.keys()) {
       if (!players.has(id)) {
         this.failures.delete(id)

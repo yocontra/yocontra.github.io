@@ -33,23 +33,48 @@ export interface ActorPresentation {
   }
   carryDrawn?: boolean
 }
-function rigidBatch(
-  game: GameApplication,
-  components: RenderComponent[],
-  name: 'Rider equipment' | 'Rider weapons',
-): void {
-  const batcher = game.app.batcher
-  if (!batcher) {
-    return
-  }
-  let group = batcher.getGroupByName(name)
-  if (!group) {
-    const created = batcher.addGroup(name, true, 24)
-    game.stage.once('destroy', () => batcher.removeGroup(created.id))
-    group = created
+type RigidBatchName = 'Rider equipment' | 'Rider weapons'
+interface RigidEquipment {
+  components: readonly RenderComponent[]
+  name: RigidBatchName
+}
+const rigidEquipment = new WeakMap<DuelActor, RigidEquipment[]>()
+
+function rigidBatch(game: GameApplication, { components, name }: RigidEquipment, enabled: boolean) {
+  let id = -1
+  const batcher = enabled ? game.app.batcher : undefined
+  if (batcher) {
+    let group = batcher.getGroupByName(name)
+    if (!group) {
+      const created = batcher.addGroup(name, true, 24)
+      game.stage.once('destroy', () => batcher.removeGroup(created.id))
+      group = created
+    }
+    id = group.id
   }
   for (const component of components) {
-    component.batchGroupId = group.id
+    component.batchGroupId = id
+  }
+}
+
+function trackRigidEquipment(game: GameApplication, actor: DuelActor, item: RigidEquipment): void {
+  const equipment = rigidEquipment.get(actor) ?? []
+  equipment.push(item)
+  rigidEquipment.set(actor, equipment)
+  rigidBatch(game, item, actor.batchRigid)
+}
+
+/** Local pass masks require individual mesh instances, including gear loaded before a room change. */
+export function setRigidEquipmentBatching(
+  game: GameApplication,
+  actor: DuelActor,
+  enabled: boolean,
+): void {
+  if (actor.batchRigid !== enabled) {
+    actor.batchRigid = enabled
+    for (const item of rigidEquipment.get(actor) ?? []) {
+      rigidBatch(game, item, enabled)
+    }
   }
 }
 
@@ -310,9 +335,12 @@ export async function equippedActor(
           if (gun) {
             animateRevolvers(mounts, resource)
           }
-          if (actor.batchRigid) {
+          if (!viewmodel) {
             // Swapping guns can rebuild their batch without re-uploading hats or spurs.
-            rigidBatch(game, renders, gun ? 'Rider weapons' : 'Rider equipment')
+            trackRigidEquipment(game, actor, {
+              components: renders,
+              name: gun ? 'Rider weapons' : 'Rider equipment',
+            })
           }
         }
       }),
@@ -356,9 +384,7 @@ export async function attachHeldWeapon(
         animateWeaponMount(mount.node, resource, weapon)
       }
     }
-    if (actor.batchRigid) {
-      rigidBatch(game, renders, 'Rider weapons')
-    }
+    trackRigidEquipment(game, actor, { components: renders, name: 'Rider weapons' })
     actor.model.anim?.rebind()
     return model
   } catch (error) {

@@ -110,7 +110,7 @@ export class FrontierScene {
     dt: number,
     { first, intent, aim }: { first: boolean; intent: PlayerInput; aim: boolean },
   ) {
-    this.actors?.update(state.players, dt, first ? state.selfId : undefined)
+    this.actors?.update(state.players, state.selfId, first)
     this.actors?.aim(intent, aim, dt)
     this.atmosphere?.update(dt)
     this.items?.update(state.world)

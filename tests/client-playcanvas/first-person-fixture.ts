@@ -5,6 +5,7 @@ import {
   AppBase,
   AppOptions,
   Asset,
+  BatchManager,
   CameraComponentSystem,
   type ContainerResource,
   Entity,
@@ -79,7 +80,7 @@ function fixtureAsset(
   url: string,
   registry: { materials: StandardMaterial[]; created: Entity[] },
 ): Asset {
-  const body = url.includes('/viewmodels/')
+  const body = url.includes('/viewmodels/') || url.includes('/equipment/outfit.')
   const long = ['rifle', 'shotgun'].find((weapon) => url.includes(`held-${weapon}`))
   const hands = url.includes('hardins') ? ['R', 'L'] : ['R']
   const mechanisms = long ? [long] : hands
@@ -145,7 +146,7 @@ function fixtureAsset(
   return asset
 }
 
-export function firstPersonFixture() {
+export function firstPersonFixture(batches = false) {
   const device = new NullGraphicsDevice({ width: 1280, height: 720 })
   const app = new AppBase(device.canvas)
   const options = new AppOptions()
@@ -156,6 +157,9 @@ export function firstPersonFixture() {
     LightComponentSystem,
     RenderComponentSystem,
   ]
+  if (batches) {
+    options.batchManager = BatchManager
+  }
   app.init(options)
   const stage = new Entity('stage', app)
   app.root.addChild(stage)
