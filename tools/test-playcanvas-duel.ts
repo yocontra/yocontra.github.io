@@ -45,6 +45,71 @@ try {
     await page.keyboard.press('Escape')
     await paused.waitFor({ state: 'hidden' })
   }
+  await pause.click()
+  await paused.waitFor()
+  const remap = (action: string) =>
+    page.locator('.ow-key-row').filter({ hasText: action }).getByRole('button')
+  const walkKey = remap('Walk')
+  const retryKey = remap('Retry')
+  const originalWalk = await walkKey.textContent()
+  const originalRetry = await retryKey.textContent()
+  await walkKey.click()
+  await retryKey.click()
+  if ((await walkKey.textContent()) !== originalWalk) {
+    throw new Error('Switching remap rows left the prior prompt active')
+  }
+  for (const [key, label] of [
+    ['Escape', 'Esc'],
+    ['p', 'P'],
+    ['r', originalRetry],
+  ] as const) {
+    await page.keyboard.press(key)
+    if ((await retryKey.textContent()) !== label || !(await paused.isVisible())) {
+      throw new Error(`Active remap did not retain ${key}`)
+    }
+    if (key !== 'r') {
+      await retryKey.click()
+    }
+  }
+
+  await walkKey.click()
+  await page.evaluate(() => {
+    Object.defineProperty(document, 'hidden', { configurable: true, value: true })
+    try {
+      document.dispatchEvent(new Event('visibilitychange'))
+    } finally {
+      Reflect.deleteProperty(document, 'hidden')
+      document.dispatchEvent(new Event('visibilitychange'))
+    }
+  })
+  if ((await walkKey.textContent()) !== originalWalk) {
+    throw new Error('Hiding the page left a remap pending')
+  }
+
+  await walkKey.click()
+  await page.locator('.ow-menu').getByRole('button', { name: 'Settings', exact: true }).click()
+  const settings = page.getByRole('dialog', { name: 'Settings', exact: true })
+  const music = settings.getByRole('slider', { name: 'Music', exact: true })
+  const beforeVolume = await music.inputValue()
+  await music.press(beforeVolume === '0' ? 'ArrowRight' : 'ArrowLeft')
+  if (
+    (await music.inputValue()) === beforeVolume ||
+    (await walkKey.textContent()) !== originalWalk
+  ) {
+    throw new Error('Pending remap captured a key from the Settings sheet')
+  }
+  await settings.getByRole('button', { name: 'Close', exact: true }).click()
+  await walkKey.click()
+  await page.getByRole('button', { name: 'Resume', exact: true }).click()
+  await paused.waitFor({ state: 'hidden' })
+  await page.keyboard.press('w')
+  await pause.click()
+  if ((await walkKey.textContent()) !== originalWalk) {
+    throw new Error('Resuming left a detached remap waiting for gameplay input')
+  }
+  await page.keyboard.press('Escape')
+  await paused.waitFor({ state: 'hidden' })
+
   await page.keyboard.down('w')
   await page.waitForFunction(() => Reflect.get(globalThis, '__ow').director.phase === 'wait')
   await page.keyboard.up('w')
@@ -155,6 +220,7 @@ try {
         }
         d.remotePace(6)
         d.wait()
+        d.clock.cancel() // Capture the manual cue without allowing an unattended duel to resolve.
         d.cue(cue)
         await new Promise<void>((resolve) =>
           requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
@@ -239,7 +305,11 @@ try {
     throw new Error(errors.join('\n'))
   }
   console.log(
-    JSON.stringify({ pauseInputs, ledgerControls: true, result, acts, lifecycle, errors }, null, 2),
+    JSON.stringify(
+      { pauseInputs, remapLifecycle: true, ledgerControls: true, result, acts, lifecycle, errors },
+      null,
+      2,
+    ),
   )
 } finally {
   await browser.close()

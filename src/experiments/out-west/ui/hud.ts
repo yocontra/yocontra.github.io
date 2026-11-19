@@ -98,6 +98,7 @@ export class Hud {
   private callTimer = 0
   captions = true as boolean
   private readonly mode: HTMLElement
+  private cancelRemap: (() => void) | undefined
 
   constructor(root: HTMLElement) {
     this.root = root
@@ -382,9 +383,9 @@ export class Hud {
       restart: () => void
       /** Back to the hub, keeping the run's save (absent where there's no hub). */
       saloon?: () => void
-      remap: (a: Action, done: (code: string) => void) => void
     },
   ): void {
+    this.cancelRemap?.()
     const m = this.menu
     m.innerHTML = ''
     m.classList.add('on')
@@ -395,7 +396,10 @@ export class Hud {
     resume.addEventListener('click', handlers.resume)
     const settings = el('button', 'ow-btn', btns, 'Settings')
     settings.type = 'button'
-    settings.addEventListener('click', () => openSettings(this.root, () => handlers.change(s)))
+    settings.addEventListener('click', () => {
+      this.cancelRemap?.()
+      openSettings(this.root, () => handlers.change(s))
+    })
     const restart = el('button', 'ow-btn', btns, 'Restart')
     restart.type = 'button'
     restart.addEventListener('click', handlers.restart)
@@ -431,16 +435,51 @@ export class Hud {
       el('span', '', r, label)
       const b = el('button', 'ow-key', r, s.keys[a].map(keyLabel).join(' / '))
       b.type = 'button'
-      b.addEventListener('click', () => {
-        b.textContent = 'press a key…'
-        handlers.remap(a, (code) => {
-          s.keys[a] = [code]
-          b.textContent = keyLabel(code)
-          handlers.change(s)
-        })
-      })
+      b.addEventListener('click', () => this.captureKey(b, a, s, handlers.change))
     }
     resume.focus()
+  }
+
+  private captureKey(
+    button: HTMLButtonElement,
+    action: Action,
+    settings: Settings,
+    change: (settings: Settings) => void,
+  ): void {
+    this.cancelRemap?.()
+    const controller = new AbortController()
+    const options = { signal: controller.signal }
+    const cancel = () => {
+      controller.abort()
+      this.cancelRemap = undefined
+      button.textContent = settings.keys[action].map(keyLabel).join(' / ')
+    }
+    this.cancelRemap = cancel
+    button.textContent = 'press a key…'
+    button.focus()
+    button.addEventListener('blur', cancel, options)
+    button.addEventListener(
+      'keydown',
+      (event) => {
+        event.preventDefault()
+        event.stopPropagation()
+        if (!event.repeat) {
+          settings.keys[action] = [event.code]
+          cancel()
+          change(settings)
+        }
+      },
+      options,
+    )
+    document.addEventListener(
+      'visibilitychange',
+      () => {
+        if (document.hidden) {
+          cancel()
+        }
+      },
+      options,
+    )
   }
 
   /**
@@ -448,10 +487,12 @@ export class Hud {
    * optional third button (e.g. bank the run first).
    */
   menuConfirm(spec: ConfirmSpec): void {
+    this.cancelRemap?.()
     renderConfirm(this.menu, spec)
   }
 
   closeMenu(): void {
+    this.cancelRemap?.()
     this.menu.classList.remove('on')
     this.menu.innerHTML = ''
   }

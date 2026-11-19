@@ -39,8 +39,6 @@ export class Input {
   private readonly target: HTMLElement
   /** When false, pointer presses are ignored (menus are open). */
   enabled = true
-  /** Called with every keydown so a remap UI can capture it. */
-  capture: ((code: string) => void) | null = null
   /**
    * The last press came from a touch screen (or a pen). Before any press: a coarse primary
    * pointer. The duel slows the outlaw by its touch allowance while this holds.
@@ -73,7 +71,6 @@ export class Input {
     this.listeners.clear()
     this.onBlur()
     this.enabled = false
-    this.capture = null
   }
 
   on(cb: (p: Press) => void): () => void {
@@ -121,11 +118,6 @@ export class Input {
   }
 
   private readonly onKeyDown = (e: KeyboardEvent): void => {
-    if (this.capture) {
-      e.preventDefault()
-      this.capture(e.code)
-      return
-    }
     const a = this.actionFor(e.code)
     if (!a || (a !== 'pause' && onUiControl(e))) {
       return

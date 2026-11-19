@@ -209,6 +209,7 @@ export class NativeDirector {
     this.remote?.close()
     this.clock.dispose()
     this.c.input.dispose()
+    this.c.hud.closeMenu()
     this.board.close()
     clearMoments(this)
     this.debris.destroy()

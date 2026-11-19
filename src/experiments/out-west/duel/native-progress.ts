@@ -246,12 +246,6 @@ export function togglePause(d: NativeDirector): void {
       d.restartRun(d.c.save.legend)
     },
     saloon: () => d.saloon(),
-    remap: (_action, done) => {
-      d.c.input.capture = (code) => {
-        d.c.input.capture = null
-        done(code)
-      }
-    },
   })
 }
 
