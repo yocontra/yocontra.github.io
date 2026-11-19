@@ -8,6 +8,10 @@ try {
   const page = await browser.newPage({ viewport: { width: 1280, height: 800 } })
   page.on('pageerror', (error) => errors.push(error.message))
   await page.goto(`${base}/experiments/out-west/#debug&level=1`)
+  const gazette = page.getByRole('dialog', { name: 'The Perdition Gazette' })
+  await page.addLocatorHandler(gazette, async (overlay) => {
+    await overlay.locator('.ow-gz-hint.on').click()
+  })
   await page.waitForFunction(() => Boolean(Reflect.get(globalThis, '__ow')), null, {
     timeout: 60_000,
   })
