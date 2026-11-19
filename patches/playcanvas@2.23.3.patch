@@ -1,8 +1,49 @@
 diff --git a/build/playcanvas/src/scene/batching/batch-manager.js b/build/playcanvas/src/scene/batching/batch-manager.js
-index 221d0ad38cd5a878087c9507f5ffc8c783933fd8..2dac87e14286d83eba4b0630b917d181f7cda28a 100644
+index 221d0ad38cd5a878087c9507f5ffc8c783933fd8..a68dbba4e3d99d7da6b956c0394fbf8ddc21ed09 100644
 --- a/build/playcanvas/src/scene/batching/batch-manager.js
 +++ b/build/playcanvas/src/scene/batching/batch-manager.js
-@@ -567,6 +567,7 @@ class BatchManager {
+@@ -259,7 +259,7 @@ class BatchManager {
+ 	generate(groupIds) {
+ 		const groupMeshInstances = {};
+ 		if (!groupIds) {
+-			groupIds = Object.keys(this._batchGroups);
++			groupIds = Object.keys(this._batchGroups).map(Number);
+ 		}
+ 		const newBatchList = [];
+ 		for (let i = 0; i < this._batchList.length; i++) {
+@@ -511,14 +511,28 @@ class BatchManager {
+ 							} else if (semantic === SEMANTIC_NORMAL || semantic === SEMANTIC_TANGENT) {
+ 								mat3.invertMat4(transform).transpose();
+ 								const [m0, m1, m2, m3, m4, m5, m6, m7, m8] = mat3.data;
++								// Keep components in range before writing a signed normalized direction.
++								const packedLimit = !stream.normalize ? 0 : stream.typeArrayType === Int8Array ? 127 : stream.typeArrayType === Int16Array ? 32767 : 0;
+ 								let x, y, z;
+ 								for (let j = 0; j < totalComponents; j += stream.numComponents) {
+ 									x = subarray[j];
+ 									y = subarray[j + 1];
+ 									z = subarray[j + 2];
+-									subarray[j] = x * m0 + y * m3 + z * m6;
+-									subarray[j + 1] = x * m1 + y * m4 + z * m7;
+-									subarray[j + 2] = x * m2 + y * m5 + z * m8;
++									let nx = x * m0 + y * m3 + z * m6;
++									let ny = x * m1 + y * m4 + z * m7;
++									let nz = x * m2 + y * m5 + z * m8;
++									if (packedLimit) {
++										const peak = Math.max(Math.abs(nx), Math.abs(ny), Math.abs(nz));
++										if (peak > packedLimit) {
++											const scale = packedLimit / peak;
++											nx = Math.round(nx * scale);
++											ny = Math.round(ny * scale);
++											nz = Math.round(nz * scale);
++										}
++									}
++									subarray[j] = nx;
++									subarray[j + 1] = ny;
++									subarray[j + 2] = nz;
+ 								}
+ 							}
+ 						}
+@@ -567,6 +581,7 @@ class BatchManager {
  			mesh.update(PRIMITIVE_TRIANGLES, false);
  			if (dynamic) {
  				material = material.clone();
@@ -24,10 +65,51 @@ index 259ed5d37674fa31d9a4692e46ee06af882020a3..2fb07aa1291dfeb674ab039d72422624
  	addToLayers(scene, layers) {
  		for (let i = 0; i < layers.length; i++) {
 diff --git a/build/playcanvas.dbg/src/scene/batching/batch-manager.js b/build/playcanvas.dbg/src/scene/batching/batch-manager.js
-index 1ccada644f87ed5e6115b096815d79ad9ace207b..5365dc8f8617025389f3e710b445a9c9ef1fed66 100644
+index 1ccada644f87ed5e6115b096815d79ad9ace207b..d5d8f0f908cae36be0e553a640ad457f9331e1f9 100644
 --- a/build/playcanvas.dbg/src/scene/batching/batch-manager.js
 +++ b/build/playcanvas.dbg/src/scene/batching/batch-manager.js
-@@ -687,6 +687,7 @@ class BatchManager {
+@@ -339,7 +339,7 @@ class BatchManager {
+   generate(groupIds) {
+     const groupMeshInstances = {};
+     if (!groupIds) {
+-      groupIds = Object.keys(this._batchGroups);
++      groupIds = Object.keys(this._batchGroups).map(Number);
+     }
+     const newBatchList = [];
+     for (let i = 0; i < this._batchList.length; i++) {
+@@ -631,14 +631,28 @@ class BatchManager {
+               } else if (semantic === SEMANTIC_NORMAL || semantic === SEMANTIC_TANGENT) {
+                 mat3.invertMat4(transform).transpose();
+                 const [m0, m1, m2, m3, m4, m5, m6, m7, m8] = mat3.data;
++                // Keep components in range before writing a signed normalized direction.
++                const packedLimit = !stream.normalize ? 0 : stream.typeArrayType === Int8Array ? 127 : stream.typeArrayType === Int16Array ? 32767 : 0;
+                 let x, y, z;
+                 for (let j = 0; j < totalComponents; j += stream.numComponents) {
+                   x = subarray[j];
+                   y = subarray[j + 1];
+                   z = subarray[j + 2];
+-                  subarray[j] = x * m0 + y * m3 + z * m6;
+-                  subarray[j + 1] = x * m1 + y * m4 + z * m7;
+-                  subarray[j + 2] = x * m2 + y * m5 + z * m8;
++                  let nx = x * m0 + y * m3 + z * m6;
++                  let ny = x * m1 + y * m4 + z * m7;
++                  let nz = x * m2 + y * m5 + z * m8;
++                  if (packedLimit) {
++                    const peak = Math.max(Math.abs(nx), Math.abs(ny), Math.abs(nz));
++                    if (peak > packedLimit) {
++                      const scale = packedLimit / peak;
++                      nx = Math.round(nx * scale);
++                      ny = Math.round(ny * scale);
++                      nz = Math.round(nz * scale);
++                    }
++                  }
++                  subarray[j] = nx;
++                  subarray[j + 1] = ny;
++                  subarray[j + 2] = nz;
+                 }
+               }
+             }
+@@ -687,6 +701,7 @@ class BatchManager {
        mesh.update(PRIMITIVE_TRIANGLES, false);
        if (dynamic) {
          material = material.clone();
@@ -49,10 +131,45 @@ index 2d576ac0b2f4e5dbc78241041863e75e89ec9fe1..b1ccd9af3164afba90d0743f768a4006
    addToLayers(scene, layers) {
      for (let i = 0; i < layers.length; i++) {
 diff --git a/build/playcanvas.dbg.js b/build/playcanvas.dbg.js
-index 508456179514004bbae6691d118bfe743f877344..68dbf9678d39914e1c4a61e11e2fd22485f5d3bf 100644
+index 508456179514004bbae6691d118bfe743f877344..da5526dba8004b08027b19b15460604208330c56 100644
 --- a/build/playcanvas.dbg.js
 +++ b/build/playcanvas.dbg.js
-@@ -40151,6 +40151,8 @@ ${code} while rendering ${DebugGraphics.toString()}`;
+@@ -14429,14 +14429,16 @@ var pc = (() => {
+      */
+     destroy() {
+       const device = this.device;
+-      device.buffers.delete(this);
++      if (!device.buffers.delete(this)) {
++        return;
++      }
+       if (this.device.indexBuffer === this) {
+         this.device.indexBuffer = null;
+       }
+       if (this.impl.initialized) {
+         this.impl.destroy(device);
+-        this.adjustVramSizeTracking(device._vram, -this.storage.byteLength);
+       }
++      this.adjustVramSizeTracking(device._vram, -this.numBytes);
+     }
+     adjustVramSizeTracking(vram, size) {
+       Debug.trace(TRACEID_VRAM_IB, `${this.id} size: ${size} vram.ib: ${vram.ib} => ${vram.ib + size}`);
+@@ -14762,11 +14764,13 @@ var pc = (() => {
+      */
+     destroy() {
+       const device = this.device;
+-      device.buffers.delete(this);
++      if (!device.buffers.delete(this)) {
++        return;
++      }
+       if (this.impl.initialized) {
+         this.impl.destroy(device);
+-        this.adjustVramSizeTracking(device._vram, -this.storage.byteLength);
+       }
++      this.adjustVramSizeTracking(device._vram, -this.numBytes);
+     }
+     adjustVramSizeTracking(vram, size) {
+       Debug.trace(TRACEID_VRAM_VB, `${this.id} size: ${size} vram.vb: ${vram.vb} => ${vram.vb + size}`);
+@@ -40151,6 +40155,8 @@ ${code} while rendering ${DebugGraphics.toString()}`;
          this.meshInstance.destroy();
          this.meshInstance = null;
        }
@@ -61,7 +178,48 @@ index 508456179514004bbae6691d118bfe743f877344..68dbf9678d39914e1c4a61e11e2fd224
      }
      addToLayers(scene, layers) {
        for (let i2 = 0; i2 < layers.length; i2++) {
-@@ -45184,6 +45186,7 @@ ${code} while rendering ${DebugGraphics.toString()}`;
+@@ -44836,7 +44842,7 @@ ${code} while rendering ${DebugGraphics.toString()}`;
+     generate(groupIds) {
+       const groupMeshInstances = {};
+       if (!groupIds) {
+-        groupIds = Object.keys(this._batchGroups);
++        groupIds = Object.keys(this._batchGroups).map(Number);
+       }
+       const newBatchList = [];
+       for (let i2 = 0; i2 < this._batchList.length; i2++) {
+@@ -45128,14 +45134,28 @@ ${code} while rendering ${DebugGraphics.toString()}`;
+                 } else if (semantic === SEMANTIC_NORMAL || semantic === SEMANTIC_TANGENT) {
+                   mat3.invertMat4(transform).transpose();
+                   const [m0, m12, m22, m3, m4, m5, m6, m7, m8] = mat3.data;
++                  // Keep components in range before writing a signed normalized direction.
++                  const packedLimit = !stream.normalize ? 0 : stream.typeArrayType === Int8Array ? 127 : stream.typeArrayType === Int16Array ? 32767 : 0;
+                   let x3, y2, z2;
+                   for (let j = 0; j < totalComponents; j += stream.numComponents) {
+                     x3 = subarray[j];
+                     y2 = subarray[j + 1];
+                     z2 = subarray[j + 2];
+-                    subarray[j] = x3 * m0 + y2 * m3 + z2 * m6;
+-                    subarray[j + 1] = x3 * m12 + y2 * m4 + z2 * m7;
+-                    subarray[j + 2] = x3 * m22 + y2 * m5 + z2 * m8;
++                    let nx = x3 * m0 + y2 * m3 + z2 * m6;
++                    let ny = x3 * m12 + y2 * m4 + z2 * m7;
++                    let nz = x3 * m22 + y2 * m5 + z2 * m8;
++                    if (packedLimit) {
++                      const peak = Math.max(Math.abs(nx), Math.abs(ny), Math.abs(nz));
++                      if (peak > packedLimit) {
++                        const scale = packedLimit / peak;
++                        nx = Math.round(nx * scale);
++                        ny = Math.round(ny * scale);
++                        nz = Math.round(nz * scale);
++                      }
++                    }
++                    subarray[j] = nx;
++                    subarray[j + 1] = ny;
++                    subarray[j + 2] = nz;
+                   }
+                 }
+               }
+@@ -45184,6 +45204,7 @@ ${code} while rendering ${DebugGraphics.toString()}`;
          mesh.update(PRIMITIVE_TRIANGLES, false);
          if (dynamic) {
            material = material.clone();
@@ -70,10 +228,45 @@ index 508456179514004bbae6691d118bfe743f877344..68dbf9678d39914e1c4a61e11e2fd224
          }
          const batchedMeshInstance = new MeshInstance(mesh, material, this.rootNode);
 diff --git a/build/playcanvas.js b/build/playcanvas.js
-index 761571de5a8d001563ae44ac32b333187a443faa..82ec33d38490dabe18bbb3fcc26b6b2f232c0d6a 100644
+index 761571de5a8d001563ae44ac32b333187a443faa..d1e19e70b5e44a85cefa246d1cbc65fe12a2cfdf 100644
 --- a/build/playcanvas.js
 +++ b/build/playcanvas.js
-@@ -24107,6 +24107,8 @@ ${code} while rendering ${void 0}`;
+@@ -7656,14 +7656,16 @@ var pc = (() => {
+ 		}
+ 		destroy() {
+ 			const device = this.device;
+-			device.buffers.delete(this);
++			if (!device.buffers.delete(this)) {
++				return;
++			}
+ 			if (this.device.indexBuffer === this) {
+ 				this.device.indexBuffer = null;
+ 			}
+ 			if (this.impl.initialized) {
+ 				this.impl.destroy(device);
+-				this.adjustVramSizeTracking(device._vram, -this.storage.byteLength);
+ 			}
++			this.adjustVramSizeTracking(device._vram, -this.numBytes);
+ 		}
+ 		adjustVramSizeTracking(vram, size) {
+ 			vram.ib += size;
+@@ -7837,11 +7839,13 @@ var pc = (() => {
+ 		}
+ 		destroy() {
+ 			const device = this.device;
+-			device.buffers.delete(this);
++			if (!device.buffers.delete(this)) {
++				return;
++			}
+ 			if (this.impl.initialized) {
+ 				this.impl.destroy(device);
+-				this.adjustVramSizeTracking(device._vram, -this.storage.byteLength);
+ 			}
++			this.adjustVramSizeTracking(device._vram, -this.numBytes);
+ 		}
+ 		adjustVramSizeTracking(vram, size) {
+ 			vram.vb += size;
+@@ -24107,6 +24111,8 @@ ${code} while rendering ${void 0}`;
  				this.meshInstance.destroy();
  				this.meshInstance = null;
  			}
@@ -82,7 +275,48 @@ index 761571de5a8d001563ae44ac32b333187a443faa..82ec33d38490dabe18bbb3fcc26b6b2f
  		}
  		addToLayers(scene, layers) {
  			for (let i2 = 0; i2 < layers.length; i2++) {
-@@ -26904,6 +26906,7 @@ ${code} while rendering ${void 0}`;
+@@ -26596,7 +26602,7 @@ ${code} while rendering ${void 0}`;
+ 		generate(groupIds) {
+ 			const groupMeshInstances = {};
+ 			if (!groupIds) {
+-				groupIds = Object.keys(this._batchGroups);
++				groupIds = Object.keys(this._batchGroups).map(Number);
+ 			}
+ 			const newBatchList = [];
+ 			for (let i2 = 0; i2 < this._batchList.length; i2++) {
+@@ -26848,14 +26854,28 @@ ${code} while rendering ${void 0}`;
+ 								} else if (semantic === SEMANTIC_NORMAL || semantic === SEMANTIC_TANGENT) {
+ 									mat3.invertMat4(transform).transpose();
+ 									const [m0, m12, m22, m3, m4, m5, m6, m7, m8] = mat3.data;
++									// Keep components in range before writing a signed normalized direction.
++									const packedLimit = !stream.normalize ? 0 : stream.typeArrayType === Int8Array ? 127 : stream.typeArrayType === Int16Array ? 32767 : 0;
+ 									let x3, y2, z2;
+ 									for (let j = 0; j < totalComponents; j += stream.numComponents) {
+ 										x3 = subarray[j];
+ 										y2 = subarray[j + 1];
+ 										z2 = subarray[j + 2];
+-										subarray[j] = x3 * m0 + y2 * m3 + z2 * m6;
+-										subarray[j + 1] = x3 * m12 + y2 * m4 + z2 * m7;
+-										subarray[j + 2] = x3 * m22 + y2 * m5 + z2 * m8;
++										let nx = x3 * m0 + y2 * m3 + z2 * m6;
++										let ny = x3 * m12 + y2 * m4 + z2 * m7;
++										let nz = x3 * m22 + y2 * m5 + z2 * m8;
++										if (packedLimit) {
++											const peak = Math.max(Math.abs(nx), Math.abs(ny), Math.abs(nz));
++											if (peak > packedLimit) {
++												const scale = packedLimit / peak;
++												nx = Math.round(nx * scale);
++												ny = Math.round(ny * scale);
++												nz = Math.round(nz * scale);
++											}
++										}
++										subarray[j] = nx;
++										subarray[j + 1] = ny;
++										subarray[j + 2] = nz;
+ 									}
+ 								}
+ 							}
+@@ -26904,6 +26924,7 @@ ${code} while rendering ${void 0}`;
  				mesh.update(PRIMITIVE_TRIANGLES, false);
  				if (dynamic) {
  					material = material.clone();
@@ -91,10 +325,51 @@ index 761571de5a8d001563ae44ac32b333187a443faa..82ec33d38490dabe18bbb3fcc26b6b2f
  				}
  				const batchedMeshInstance = new MeshInstance(mesh, material, this.rootNode);
 diff --git a/build/playcanvas.prf/src/scene/batching/batch-manager.js b/build/playcanvas.prf/src/scene/batching/batch-manager.js
-index 1d52ee1bd0458b59a496e8c94f305bc7129d78c6..1d3ba959b804df4e21f70b54f5d3f056033699a0 100644
+index 1d52ee1bd0458b59a496e8c94f305bc7129d78c6..cc89787310e00d34e02adef7f636701973f3ead8 100644
 --- a/build/playcanvas.prf/src/scene/batching/batch-manager.js
 +++ b/build/playcanvas.prf/src/scene/batching/batch-manager.js
-@@ -572,6 +572,7 @@ class BatchManager {
+@@ -263,7 +263,7 @@ class BatchManager {
+ 	generate(groupIds) {
+ 		const groupMeshInstances = {};
+ 		if (!groupIds) {
+-			groupIds = Object.keys(this._batchGroups);
++			groupIds = Object.keys(this._batchGroups).map(Number);
+ 		}
+ 		const newBatchList = [];
+ 		for (let i = 0; i < this._batchList.length; i++) {
+@@ -516,14 +516,28 @@ class BatchManager {
+ 							} else if (semantic === SEMANTIC_NORMAL || semantic === SEMANTIC_TANGENT) {
+ 								mat3.invertMat4(transform).transpose();
+ 								const [m0, m1, m2, m3, m4, m5, m6, m7, m8] = mat3.data;
++								// Keep components in range before writing a signed normalized direction.
++								const packedLimit = !stream.normalize ? 0 : stream.typeArrayType === Int8Array ? 127 : stream.typeArrayType === Int16Array ? 32767 : 0;
+ 								let x, y, z;
+ 								for (let j = 0; j < totalComponents; j += stream.numComponents) {
+ 									x = subarray[j];
+ 									y = subarray[j + 1];
+ 									z = subarray[j + 2];
+-									subarray[j] = x * m0 + y * m3 + z * m6;
+-									subarray[j + 1] = x * m1 + y * m4 + z * m7;
+-									subarray[j + 2] = x * m2 + y * m5 + z * m8;
++									let nx = x * m0 + y * m3 + z * m6;
++									let ny = x * m1 + y * m4 + z * m7;
++									let nz = x * m2 + y * m5 + z * m8;
++									if (packedLimit) {
++										const peak = Math.max(Math.abs(nx), Math.abs(ny), Math.abs(nz));
++										if (peak > packedLimit) {
++											const scale = packedLimit / peak;
++											nx = Math.round(nx * scale);
++											ny = Math.round(ny * scale);
++											nz = Math.round(nz * scale);
++										}
++									}
++									subarray[j] = nx;
++									subarray[j + 1] = ny;
++									subarray[j + 2] = nz;
+ 								}
+ 							}
+ 						}
+@@ -572,6 +586,7 @@ class BatchManager {
  			mesh.update(PRIMITIVE_TRIANGLES, false);
  			if (dynamic) {
  				material = material.clone();
@@ -116,10 +391,45 @@ index 259ed5d37674fa31d9a4692e46ee06af882020a3..2fb07aa1291dfeb674ab039d72422624
  	addToLayers(scene, layers) {
  		for (let i = 0; i < layers.length; i++) {
 diff --git a/build/playcanvas.prf.js b/build/playcanvas.prf.js
-index 03682516f69f636331785390c512e8fb0884d890..86d90db2595b78ab6ae5debcb000abd824772a2c 100644
+index 03682516f69f636331785390c512e8fb0884d890..c9fffe4a2636a2524a50f37cc1c2c4de093f37bf 100644
 --- a/build/playcanvas.prf.js
 +++ b/build/playcanvas.prf.js
-@@ -24224,6 +24224,8 @@ ${code} while rendering ${void 0}`;
+@@ -7664,14 +7664,16 @@ var pc = (() => {
+ 		}
+ 		destroy() {
+ 			const device = this.device;
+-			device.buffers.delete(this);
++			if (!device.buffers.delete(this)) {
++				return;
++			}
+ 			if (this.device.indexBuffer === this) {
+ 				this.device.indexBuffer = null;
+ 			}
+ 			if (this.impl.initialized) {
+ 				this.impl.destroy(device);
+-				this.adjustVramSizeTracking(device._vram, -this.storage.byteLength);
+ 			}
++			this.adjustVramSizeTracking(device._vram, -this.numBytes);
+ 		}
+ 		adjustVramSizeTracking(vram, size) {
+ 			vram.ib += size;
+@@ -7845,11 +7847,13 @@ var pc = (() => {
+ 		}
+ 		destroy() {
+ 			const device = this.device;
+-			device.buffers.delete(this);
++			if (!device.buffers.delete(this)) {
++				return;
++			}
+ 			if (this.impl.initialized) {
+ 				this.impl.destroy(device);
+-				this.adjustVramSizeTracking(device._vram, -this.storage.byteLength);
+ 			}
++			this.adjustVramSizeTracking(device._vram, -this.numBytes);
+ 		}
+ 		adjustVramSizeTracking(vram, size) {
+ 			vram.vb += size;
+@@ -24224,6 +24228,8 @@ ${code} while rendering ${void 0}`;
  				this.meshInstance.destroy();
  				this.meshInstance = null;
  			}
@@ -128,7 +438,48 @@ index 03682516f69f636331785390c512e8fb0884d890..86d90db2595b78ab6ae5debcb000abd8
  		}
  		addToLayers(scene, layers) {
  			for (let i2 = 0; i2 < layers.length; i2++) {
-@@ -27026,6 +27028,7 @@ ${code} while rendering ${void 0}`;
+@@ -26717,7 +26723,7 @@ ${code} while rendering ${void 0}`;
+ 		generate(groupIds) {
+ 			const groupMeshInstances = {};
+ 			if (!groupIds) {
+-				groupIds = Object.keys(this._batchGroups);
++				groupIds = Object.keys(this._batchGroups).map(Number);
+ 			}
+ 			const newBatchList = [];
+ 			for (let i2 = 0; i2 < this._batchList.length; i2++) {
+@@ -26970,14 +26976,28 @@ ${code} while rendering ${void 0}`;
+ 								} else if (semantic === SEMANTIC_NORMAL || semantic === SEMANTIC_TANGENT) {
+ 									mat3.invertMat4(transform).transpose();
+ 									const [m0, m12, m22, m3, m4, m5, m6, m7, m8] = mat3.data;
++									// Keep components in range before writing a signed normalized direction.
++									const packedLimit = !stream.normalize ? 0 : stream.typeArrayType === Int8Array ? 127 : stream.typeArrayType === Int16Array ? 32767 : 0;
+ 									let x3, y2, z2;
+ 									for (let j = 0; j < totalComponents; j += stream.numComponents) {
+ 										x3 = subarray[j];
+ 										y2 = subarray[j + 1];
+ 										z2 = subarray[j + 2];
+-										subarray[j] = x3 * m0 + y2 * m3 + z2 * m6;
+-										subarray[j + 1] = x3 * m12 + y2 * m4 + z2 * m7;
+-										subarray[j + 2] = x3 * m22 + y2 * m5 + z2 * m8;
++										let nx = x3 * m0 + y2 * m3 + z2 * m6;
++										let ny = x3 * m12 + y2 * m4 + z2 * m7;
++										let nz = x3 * m22 + y2 * m5 + z2 * m8;
++										if (packedLimit) {
++											const peak = Math.max(Math.abs(nx), Math.abs(ny), Math.abs(nz));
++											if (peak > packedLimit) {
++												const scale = packedLimit / peak;
++												nx = Math.round(nx * scale);
++												ny = Math.round(ny * scale);
++												nz = Math.round(nz * scale);
++											}
++										}
++										subarray[j] = nx;
++										subarray[j + 1] = ny;
++										subarray[j + 2] = nz;
+ 									}
+ 								}
+ 							}
+@@ -27026,6 +27046,7 @@ ${code} while rendering ${void 0}`;
  				mesh.update(PRIMITIVE_TRIANGLES, false);
  				if (dynamic) {
  					material = material.clone();
@@ -260,123 +611,3 @@ diff --git a/build/playcanvas.prf/src/platform/graphics/index-buffer.js b/build/
  	}
  	adjustVramSizeTracking(vram, size) {
  		vram.ib += size;
-diff --git a/build/playcanvas.js b/build/playcanvas.js
---- a/build/playcanvas.js
-+++ b/build/playcanvas.js
-@@ -7656,14 +7656,16 @@
- 		}
- 		destroy() {
- 			const device = this.device;
--			device.buffers.delete(this);
-+			if (!device.buffers.delete(this)) {
-+				return;
-+			}
- 			if (this.device.indexBuffer === this) {
- 				this.device.indexBuffer = null;
- 			}
- 			if (this.impl.initialized) {
- 				this.impl.destroy(device);
--				this.adjustVramSizeTracking(device._vram, -this.storage.byteLength);
--			}
-+			}
-+			this.adjustVramSizeTracking(device._vram, -this.numBytes);
- 		}
- 		adjustVramSizeTracking(vram, size) {
- 			vram.ib += size;
-@@ -7837,11 +7839,13 @@
- 		}
- 		destroy() {
- 			const device = this.device;
--			device.buffers.delete(this);
-+			if (!device.buffers.delete(this)) {
-+				return;
-+			}
- 			if (this.impl.initialized) {
- 				this.impl.destroy(device);
--				this.adjustVramSizeTracking(device._vram, -this.storage.byteLength);
--			}
-+			}
-+			this.adjustVramSizeTracking(device._vram, -this.numBytes);
- 		}
- 		adjustVramSizeTracking(vram, size) {
- 			vram.vb += size;
-diff --git a/build/playcanvas.dbg.js b/build/playcanvas.dbg.js
---- a/build/playcanvas.dbg.js
-+++ b/build/playcanvas.dbg.js
-@@ -14429,14 +14429,16 @@
-      */
-     destroy() {
-       const device = this.device;
--      device.buffers.delete(this);
-+      if (!device.buffers.delete(this)) {
-+        return;
-+      }
-       if (this.device.indexBuffer === this) {
-         this.device.indexBuffer = null;
-       }
-       if (this.impl.initialized) {
-         this.impl.destroy(device);
--        this.adjustVramSizeTracking(device._vram, -this.storage.byteLength);
--      }
-+      }
-+      this.adjustVramSizeTracking(device._vram, -this.numBytes);
-     }
-     adjustVramSizeTracking(vram, size) {
-       Debug.trace(TRACEID_VRAM_IB, `${this.id} size: ${size} vram.ib: ${vram.ib} => ${vram.ib + size}`);
-@@ -14762,11 +14764,13 @@
-      */
-     destroy() {
-       const device = this.device;
--      device.buffers.delete(this);
-+      if (!device.buffers.delete(this)) {
-+        return;
-+      }
-       if (this.impl.initialized) {
-         this.impl.destroy(device);
--        this.adjustVramSizeTracking(device._vram, -this.storage.byteLength);
--      }
-+      }
-+      this.adjustVramSizeTracking(device._vram, -this.numBytes);
-     }
-     adjustVramSizeTracking(vram, size) {
-       Debug.trace(TRACEID_VRAM_VB, `${this.id} size: ${size} vram.vb: ${vram.vb} => ${vram.vb + size}`);
-diff --git a/build/playcanvas.prf.js b/build/playcanvas.prf.js
---- a/build/playcanvas.prf.js
-+++ b/build/playcanvas.prf.js
-@@ -7664,14 +7664,16 @@
- 		}
- 		destroy() {
- 			const device = this.device;
--			device.buffers.delete(this);
-+			if (!device.buffers.delete(this)) {
-+				return;
-+			}
- 			if (this.device.indexBuffer === this) {
- 				this.device.indexBuffer = null;
- 			}
- 			if (this.impl.initialized) {
- 				this.impl.destroy(device);
--				this.adjustVramSizeTracking(device._vram, -this.storage.byteLength);
--			}
-+			}
-+			this.adjustVramSizeTracking(device._vram, -this.numBytes);
- 		}
- 		adjustVramSizeTracking(vram, size) {
- 			vram.ib += size;
-@@ -7845,11 +7847,13 @@
- 		}
- 		destroy() {
- 			const device = this.device;
--			device.buffers.delete(this);
-+			if (!device.buffers.delete(this)) {
-+				return;
-+			}
- 			if (this.impl.initialized) {
- 				this.impl.destroy(device);
--				this.adjustVramSizeTracking(device._vram, -this.storage.byteLength);
--			}
-+			}
-+			this.adjustVramSizeTracking(device._vram, -this.numBytes);
- 		}
- 		adjustVramSizeTracking(vram, size) {
- 			vram.vb += size;

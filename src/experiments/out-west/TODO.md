@@ -1,6 +1,6 @@
 # Out West remaining work
 
-Verified deployment baseline is `82fd2014` (2026-11-18). The Worker and both game pages are live. All 187 audited asset URLs match their expected SHA-256 hashes, including all 37 Outfitter previews. Active simulator performance, Safari input timing, foreground Chrome evidence and live voice validation remain open.
+Verified deployment baseline is `8cbb89a9` (2026-11-18). The Worker and both game pages are live. All 187 audited asset URLs match their expected SHA-256 hashes, including all 37 Outfitter previews. Active simulator performance, Safari input timing, foreground Chrome evidence and live voice validation remain open.
 
 ## Current playtest feedback (2026-11-16)
 
@@ -128,6 +128,9 @@ The next 32-rider landscape run at render scale 1 averaged 16.14 FPS. A private 
 - [x] Share identical embedded texture images in the four duel scenes through the native glTF asset pipeline. This removes 14.8 MB of duplicate downloads; all 132 matched headless frames remain byte-identical, draw/buffer counts stay unchanged, and depot/mission/bank captures use about 6.2 MB less texture memory each. All 94 historical GLBs are untouched.
 
 - [x] Release engine-owned material clones when dynamic equipment batches retire. Production/debug/profiler lifecycle tests cover repeated regeneration and shared-source preservation; actual scene teardown reaches zero textures and buffers.
+- [x] Replace the batches that exist before the first PlayCanvas render. Its default rebuild used string group IDs while existing batches used numbers. The iPhone 13 mini simulator fixture now keeps 60 town batches and 56 batch shadow casters through the first frame. The stock fixture grew to 120 and 112. The fixed scene matches the image from a clean manual rebuild. Production, debug and profiler tests also verify that the old buffers are freed.
+- [x] Preserve packed normal and tangent directions when static batching scales meshes. Signed 16-bit components could wrap and reverse the lighting on scaled Frontier coffins. Twelve headless Chrome comparisons cover six authored lids at two angles. Three pairs show corrected highlights and nine are pixel-identical. Geometry, layer counts and collision stay the same. Production, debug and profiler tests cover the transformed directions and tangent signs.
+- [x] Regenerate all 16 fitted viewmodels against the patched engine. Only the two striped poncho files receive updated provenance and asset hashes. Their geometry and every other art input remain exact.
 
 - [ ] Finish iPhone 13 mini **simulator** and Chrome frame qualification on the final immutable release. Dedicated headless Safari and Chrome diagnostics are captured; sustained active-gameplay targets are still open. A physical phone is not required.
 - [x] Make QA graphics selection explicit: temporarily use auto, record the original saved selection and valid/raw tier override, and capture the actual native tier plus post-processing/MSAA/SSAO configuration per sample. Preserve explicit tier fragments through both fixture entry paths and restore exact original settings. Public builds strip the QA fields.

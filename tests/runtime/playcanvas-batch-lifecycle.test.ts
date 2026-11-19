@@ -8,6 +8,60 @@ const [production, debug, profiler] = await Promise.all([
 
 const builds = { production, debug, profiler }
 
+function sceneWithEarlyBatch(pc: typeof production, packedDirections = false) {
+  const device = new pc.NullGraphicsDevice()
+  const app = new pc.AppBase(device.canvas)
+  const options = new pc.AppOptions()
+  options.graphicsDevice = device
+  options.componentSystems = [pc.RenderComponentSystem]
+  options.resourceHandlers = []
+  options.batchManager = pc.BatchManager
+  options.devtools = false
+  app.init(options)
+  const group = app.batcher.addGroup('Town before first render', false, 24)
+  const node = new pc.Entity('Town mesh', app)
+  app.root.addChild(node)
+  const mesh = new pc.Mesh(device)
+  mesh.setPositions([0, 0, 0, 1, 0, 0, 0, 1, 0])
+  if (packedDirections) {
+    node.setLocalScale(0.5, 0.5, 0.75)
+    mesh.setVertexStream(
+      pc.SEMANTIC_NORMAL,
+      new Int16Array([32_767, 0, 0, 23_170, 23_170, 0, -32_767, 0, 0]),
+      3,
+      undefined,
+      pc.TYPE_INT16,
+      true,
+    )
+    mesh.setVertexStream(
+      pc.SEMANTIC_TANGENT,
+      new Int16Array([0, 32_767, 0, 32_767, 0, 23_170, 23_170, -32_767, 0, -32_767, 0, -32_767]),
+      4,
+      undefined,
+      pc.TYPE_INT16,
+      true,
+    )
+  }
+  mesh.setIndices([0, 1, 2])
+  mesh.update()
+  const material = new pc.StandardMaterial()
+  node.addComponent('render', { meshInstances: [new pc.MeshInstance(mesh, material, node)] })
+  if (!node.render) {
+    throw new Error('Expected a native render component')
+  }
+  node.render.batchGroupId = group.id
+  app.batcher.generate([group.id])
+  return {
+    app,
+    device,
+    close() {
+      app.batcher.removeGroup(group.id)
+      material.destroy()
+      app.destroy()
+    },
+  }
+}
+
 function fixture(pc: typeof production, dynamic: boolean) {
   const device = new pc.NullGraphicsDevice()
   const app = new pc.AppBase(device.canvas)
@@ -51,6 +105,50 @@ function fixture(pc: typeof production, dynamic: boolean) {
 }
 
 for (const [build, pc] of Object.entries(builds)) {
+  it(`${build}: the first render replaces already generated town batches`, () => {
+    const { app, device, close } = sceneWithEarlyBatch(pc)
+    try {
+      const world = app.scene.layers.getLayerByName('World')
+      const first = world?.meshInstances[0]?.mesh?.vertexBuffer
+      if (!(world && first)) {
+        throw new Error('Expected the early batch in the world layer')
+      }
+      expect(device.buffers.has(first)).toBe(true)
+      expect(world.meshInstances).toHaveLength(1)
+      expect(world.shadowCasters).toHaveLength(1)
+      const buffers = device.buffers.size
+
+      app.fire('prerender')
+
+      expect(world.meshInstances).toHaveLength(1)
+      expect(world.shadowCasters).toHaveLength(1)
+      expect(device.buffers.has(first)).toBe(false)
+      expect(device.buffers.size).toBe(buffers)
+    } finally {
+      close()
+    }
+  })
+
+  it(`${build}: static batching preserves packed directions under nonuniform scale`, () => {
+    const { app, close } = sceneWithEarlyBatch(pc, true)
+    try {
+      const batch = app.scene.layers.getLayerByName('World')?.meshInstances[0]?.mesh
+      if (!batch) {
+        throw new Error('Expected a static batch mesh')
+      }
+      const normals: number[] = []
+      const tangents: number[] = []
+      batch.getVertexStream(pc.SEMANTIC_NORMAL, normals)
+      batch.getVertexStream(pc.SEMANTIC_TANGENT, tangents)
+      expect(normals).toEqual([32_767, 0, 0, 32_767, 32_767, 0, -32_767, 0, 0])
+      expect(tangents).toEqual([
+        0, 32_767, 0, 32_767, 0, 32_767, 21_845, -32_767, 0, -32_767, 0, -32_767,
+      ])
+    } finally {
+      close()
+    }
+  })
+
   it(`${build}: retiring a dynamic batch releases its clone and preserves the source`, () => {
     const f = fixture(pc, true)
     try {
