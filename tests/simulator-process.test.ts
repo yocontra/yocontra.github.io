@@ -18,11 +18,12 @@ import fixture from './fixtures/simulator-coordinate-v3.json' with { type: 'json
 import { hangTimeout } from './timeout.ts'
 
 const pythonTestSummary = /\bRan [1-9]\d* tests?\b/u
+const childReadyTimeout = hangTimeout(1000)
 
 async function dummy(
   message: string | null = 'READY',
   onOwned?: (child: OwnedProcess, pipe: OwnedPipe) => void,
-  timeout = 1000,
+  timeout = childReadyTimeout,
 ) {
   const announcement = message === null ? '' : `console.log(${JSON.stringify(message)});`
   const child = spawn(
@@ -64,7 +65,7 @@ it('cleans up owned children and pending pipe reads on missing or invalid startu
           (child, pipe) => {
             owned = { child, pipe }
           },
-          message === null ? 100 : 1000,
+          message === null ? 100 : childReadyTimeout,
         ),
       ).rejects.toThrow(message === null ? 'deadline' : 'TERM handler')
       if (!owned) {
