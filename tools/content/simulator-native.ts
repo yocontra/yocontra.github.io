@@ -26,7 +26,7 @@ interface AXNode {
   type?: string
   [key: string]: unknown
 }
-export function targetForPreflight(list: unknown, udid?: string) {
+function dedicatedDevices(list: unknown) {
   const devices = (
     list as {
       devices?: Record<
@@ -41,7 +41,7 @@ export function targetForPreflight(list: unknown, udid?: string) {
       >
     }
   ).devices
-  const candidates = Object.values(devices ?? {})
+  return Object.values(devices ?? {})
     .flat()
     .filter(
       (device) =>
@@ -49,6 +49,9 @@ export function targetForPreflight(list: unknown, udid?: string) {
         device.deviceTypeIdentifier === 'com.apple.CoreSimulator.SimDeviceType.iPhone-13-mini' &&
         device.name.includes('Out West QA'),
     )
+}
+export function targetForPreflight(list: unknown, udid?: string) {
+  const candidates = dedicatedDevices(list)
   if (!udid && candidates.length > 1) {
     throw new Error('Multiple Out West QA iPhone 13 mini simulators found; select one with --udid')
   }
@@ -59,6 +62,12 @@ export function targetForPreflight(list: unknown, udid?: string) {
     )
   }
   return target
+}
+export function requireBootedRecoveryDevice(list: unknown, udid: string) {
+  const matches = dedicatedDevices(list).filter((device) => device.udid === udid)
+  if (matches.length !== 1 || matches[0]?.state !== 'Booted') {
+    throw new Error('The same owned Out West QA device is not still booted')
+  }
 }
 /** Installed idb list-apps prints one JSON object per line, unlike describe-all. */
 export function parseIDBApps(stdout: string): unknown[] {

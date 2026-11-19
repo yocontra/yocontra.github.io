@@ -270,6 +270,8 @@ The private Safari recorder now grades worker postrender timestamps in the origi
 
 The simulator and foreground Chrome commands return success only when evidence and frame rate both pass. Headless Chrome still writes a diagnostic receipt. The simulator command regression covers a passing target, a missed target with complete evidence, and incomplete evidence.
 
+- [x] Recover the simulator display once after an owned companion times out. An injected timeout on the dedicated iPhone 13 mini simulator let a fresh companion restore the original portrait display with the same Safari process. Both companions and both native clients exited. The port was free, the device shut down, and the original timeout stayed in the receipt.
+
 ## First-person models and aiming
 
 - [x] Recover the bounded offline arms extractor (`tools/content/first-person-arms.ts`). Trail-duds and wool-duster CPU checks preserve native triangles/typed streams, full PBR and external texture URLs, skeleton/TRS/IBMs and humanoid clips; provenance includes authored garments and shared helpers. Repeated staging outputs are byte-identical and remain temporary.

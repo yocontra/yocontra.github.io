@@ -1,3 +1,8 @@
+import {
+  isOrientationTimeout,
+  pidAbsent,
+  recoverOwnedOrientation,
+} from './simulator-display-recovery.ts'
 import { type InitialDisplay, restoreDisplay } from './simulator-orientation.ts'
 /** Always attempt later owned cleanup after restore/RPC failure; no caller hosts are terminated. */
 import {
@@ -19,13 +24,58 @@ interface CleanupContext {
   native: Client | undefined
   companion: OwnedProcess | undefined
   run: (args: string[], timeout?: number) => Promise<string>
-  options: { udid: string; port: number }
+  options: { udid: string; port: number; python?: string; output?: string }
   stateURL: URL
   url: URL
   initialDisplay: InitialDisplay | undefined
   qaPageAttempted: boolean
   budgets?: { restore: number; rpc: number; close: number; shutdown: number }
+  recoverOrientation?: typeof recoverOwnedOrientation
 }
+async function recoverDisplayIfNeeded(
+  context: CleanupContext,
+  cleanup: Record<string, unknown>,
+  ownedPids: number[],
+) {
+  const { booted, native, companion, options, initialDisplay, run } = context
+  if (
+    !(
+      booted &&
+      native &&
+      companion &&
+      initialDisplay?.commandAttempted &&
+      options.python &&
+      options.output
+    ) ||
+    typeof cleanup.orientationRestoreFailure !== 'string' ||
+    !isOrientationTimeout(cleanup.orientationRestoreFailure)
+  ) {
+    return
+  }
+  if (!ownedPids.every(pidAbsent)) {
+    cleanup.orientationRecoverySkipped = 'The original owned processes have not exited'
+    return
+  }
+  try {
+    const recover = context.recoverOrientation ?? recoverOwnedOrientation
+    const result = await recover({
+      ...options,
+      python: options.python,
+      output: options.output,
+      initial: initialDisplay,
+      run,
+    })
+    cleanup.orientationRecovery = result
+    ownedPids.push(...result.ownedPids)
+    if (result.displayRestored === true) {
+      cleanup.displayRestored = true
+      cleanup.rawOrientationRestored = result.rawOrientationRestored
+    }
+  } catch (error) {
+    cleanup.orientationRecoveryFailure = String(error)
+  }
+}
+
 export async function cleanupGuest(context: CleanupContext) {
   const { booted, native, companion, run, options, stateURL, url, initialDisplay } = context
   const budget = context.budgets ?? { restore: 5000, rpc: 2000, close: 6000, shutdown: 30_000 }
@@ -89,6 +139,8 @@ export async function cleanupGuest(context: CleanupContext) {
   } catch (error) {
     cleanup.companionCleanupFailure = String(error)
   }
+  const ownedPids = [companion?.pid, native?.pid].filter((pid): pid is number => pid !== undefined)
+  await recoverDisplayIfNeeded(context, cleanup, ownedPids)
   // This remains last even if either preceding cleanup failed or timed out.
   if (booted) {
     try {
@@ -105,16 +157,8 @@ export async function cleanupGuest(context: CleanupContext) {
       cleanup.shutdownFailure = String(error)
     }
   }
-  const ownedPids = [companion?.pid, native?.pid].filter((pid): pid is number => pid !== undefined)
   cleanup.ownedPids = ownedPids
-  cleanup.ownedPidsAbsent = ownedPids.every((pid) => {
-    try {
-      process.kill(pid, 0)
-      return false
-    } catch {
-      return true
-    }
-  })
+  cleanup.ownedPidsAbsent = ownedPids.every(pidAbsent)
   try {
     await requireFreePort(options.port)
     cleanup.nativePortFree = true

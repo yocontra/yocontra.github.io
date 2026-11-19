@@ -348,6 +348,7 @@ export function cleanupComplete(cleanup: Record<string, unknown>) {
     client?.exitCode === 0 &&
     client.pipeDrainComplete === true &&
     !client.closeFailure &&
+    !cleanup.orientationRestoreFailure &&
     !cleanup.nativeClientFailure &&
     !cleanup.companionCleanupFailure &&
     !cleanup.nativeTerminationFailure
