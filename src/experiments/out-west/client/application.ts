@@ -3,7 +3,6 @@ import {
   AppBase,
   AppOptions,
   Asset,
-  AudioHandler,
   AudioListenerComponentSystem,
   BatchManager,
   basisInitialize,
@@ -33,6 +32,7 @@ import { assetUrl } from '../platform/asset-url.ts'
 import { pickTier, type RenderTier } from '../platform/render-tier.ts'
 import { FrameBudget } from './frame-budget.ts'
 import { FrontierShadows } from './frontier-shadows.ts'
+import { NativeAudioHandler } from './native-audio-handler.ts'
 import { NativePost } from './post.ts'
 
 export interface ApplicationOptions {
@@ -152,7 +152,7 @@ export class GameApplication {
         SoundComponentSystem,
         AudioListenerComponentSystem,
       ]
-      setup.resourceHandlers = [ContainerHandler, TextureHandler, AudioHandler]
+      setup.resourceHandlers = [ContainerHandler, TextureHandler, NativeAudioHandler]
       app.init(setup)
       result = new GameApplication(app, options)
       if (result.camera.camera) {
