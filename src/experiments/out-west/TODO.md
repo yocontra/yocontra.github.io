@@ -1,6 +1,6 @@
 # Out West remaining work
 
-Verified deployment baseline is `4829f64a` (2026-11-18). The Worker and both game pages are live. The 187-asset audit includes all 37 Outfitter previews. The later packed-normal fix rebuilt two poncho assets, and both deployed files match their new SHA-256 hashes. Active simulator performance, Safari input timing, foreground Chrome evidence and live voice validation remain open.
+Verified gameplay deployment is `19dddb2f`. The Worker and both game pages are live. Readback verified both Frontier map assets, the rebuilt ponchos and all 37 Outfitter previews. High and Low Frontier practice verified firing, audio, resize and exit. Active simulator performance, Safari input timing, foreground Chrome evidence and live voice validation remain open.
 
 ## Current playtest feedback (2026-11-16)
 
@@ -310,6 +310,19 @@ Headless Chrome on the same clean build averaged 59.52 FPS at a 57 FPS minimum i
 A private shader trial combined three reads of one packed material texture. Four matched Chrome views were byte-identical. Matched 32-rider Safari controls averaged 24.84 and 25.32 FPS across two orders. The corresponding candidate averages were 23.95 and 25.09 FPS. The trial stayed private.
 
 - [x] Share the remote rider pose texture in crowded Low-tier Frontier matches. Both matched 32-rider Safari comparisons at 710 × 231 used the same draws and changed 62 remote pose uploads per frame to one. The controls averaged 24.30 and 23.95 FPS. The production candidate averaged 26.77 and 26.39 FPS. All six matched day and night Chrome pairs were pixel-identical. Native WebGL tests cover local riders, ragdolls, skin changes, a rider that leaves the view while still casting a shadow, context loss and teardown. The active-gameplay stress floor and touch deadlines remain open.
+
+The clean `19dddb2f` build retained all 108 touch endpoints per run. The four windows below each retained all 60 foreground samples and restored game settings and display orientation. The first ordinary portrait attempt had a 36 FPS minimum and two late listener endpoints, with 56 foreground samples.
+
+| iPhone 13 mini simulator Safari | Mean FPS | Lowest full second | Seconds below 30 | Late Safari listener endpoints | Gesture shape or duration failures |
+| -------------------------------- | -------- | ------------------ | ---------------- | ------------------------------ | ---------------------------------- |
+| Ordinary portrait, repeat        | 46.23    | 36                 | 0                | 16                             | 0                                  |
+| Ordinary landscape               | 40.80    | 29                 | 1                | 11                             | 1                                  |
+| 32 riders, portrait              | 29.78    | 22                 | 33               | 30                             | 5                                  |
+| 32 riders, landscape             | 27.14    | 20                 | 39               | 33                             | 2                                  |
+
+On the same release, both headless Chrome windows had a 59 FPS minimum. Ordinary averaged 59.97 FPS and 32-rider stress averaged 59.94 FPS.
+
+A private instancing trial grouped adjacent draws with the same rider mesh and material. Chrome matched all 24 pairs pixel for pixel across two outfit sets. The default 32-rider Safari tape saved 43 forward and 43 sun-shadow draws per frame and submitted the same indexed geometry and poses. The renderer averaged 17.12 and 17.28 FPS in the two test orders. The controls averaged 17.25 and 17.45 FPS. The trial stayed private.
 
 ## First-person models and aiming
 
