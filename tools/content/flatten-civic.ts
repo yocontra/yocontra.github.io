@@ -5,7 +5,9 @@ import { dequantize, prune } from '@gltf-transform/functions'
 import sharp from 'sharp'
 
 const io = new NodeIO().registerExtensions(ALL_EXTENSIONS)
-for (const path of process.argv.slice(2)) {
+const args = process.argv.slice(2)
+const keepLeaves = args.includes('--keep-leaves')
+for (const path of args.filter((arg) => arg !== '--keep-leaves')) {
   const doc = await io.read(path)
   await doc.transform(dequantize())
   const cache = new Map<string, ReturnType<typeof doc.createTexture>>()
@@ -99,6 +101,6 @@ for (const path of process.argv.slice(2)) {
       primitive.dispose()
     }
   }
-  await doc.transform(prune())
+  await doc.transform(prune({ keepLeaves }))
   await io.write(path, doc)
 }

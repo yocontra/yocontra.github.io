@@ -88,20 +88,22 @@ for (const name of names.filter((candidate) => !only || candidate === only)) {
     await io.write(path, authored)
     console.log('bank lamp lights', JSON.stringify(lampLights(placements)))
   }
+  // Quick Draw positions its runtime poster lantern from a named, empty node.
+  const keepLeaves = name === 'duel'
   // Atlas selection was an old shader concern. Native materials carry ordinary tiled UVs.
-  const flatten = Bun.spawn(['bun', 'tools/content/flatten-civic.ts', path], {
-    stdout: 'inherit',
-    stderr: 'inherit',
-  })
+  const flatten = Bun.spawn(
+    ['bun', 'tools/content/flatten-civic.ts', path, ...(keepLeaves ? ['--keep-leaves'] : [])],
+    { stdout: 'inherit', stderr: 'inherit' },
+  )
   if ((await flatten.exited) !== 0) {
     throw new Error(`Could not flatten ${name} masonry`)
   }
   if (name === 'frontier' || name === 'mission' || preserveTextures) {
     const geometry = await io.read(path)
-    await geometry.transform(dedup(), weld(), prune(), dequantize())
+    await geometry.transform(dedup(), weld(), prune({ keepLeaves }), dequantize())
     await io.write(path, geometry)
   } else {
-    await optimizeAsset(path)
+    await optimizeAsset(path, { keepLeaves })
   }
   const document = await io.read(path)
   // Native static batching transforms vertex data on the CPU: author float position/normal streams.

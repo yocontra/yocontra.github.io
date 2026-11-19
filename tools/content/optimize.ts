@@ -5,7 +5,10 @@ import { MeshoptDecoder } from 'meshoptimizer'
 import sharp from 'sharp'
 
 /** Standard glTF output: PlayCanvas does not decode the old Three meshopt extension. */
-export async function optimizeAsset(path: string): Promise<void> {
+export async function optimizeAsset(
+  path: string,
+  options: { keepLeaves?: boolean } = {},
+): Promise<void> {
   await MeshoptDecoder.ready
   const io = new NodeIO()
     .registerExtensions(ALL_EXTENSIONS)
@@ -28,7 +31,7 @@ export async function optimizeAsset(path: string): Promise<void> {
   await doc.transform(
     dedup(),
     weld(),
-    prune(),
+    prune(options),
     quantize(),
     textureCompress({ encoder: sharp, targetFormat: 'webp', resize: [1024, 1024], quality: 80 }),
   )
