@@ -13,6 +13,34 @@ const BARRELS = new Map([
   ['flora-434', 5],
 ])
 
+/** Authored local centers of the other nine shrubs visible from the town fence. */
+const VISIBLE_BARRELS = new Map<string, readonly (readonly [number, number])[]>([
+  [
+    'flora-416',
+    [
+      [108.919_387_817_382_81, -0.866_620_518_267_154_7],
+      [108.863_544_464_111_33, -1.168_290_495_872_497_6],
+    ],
+  ],
+  [
+    'flora-425',
+    [
+      [57.962_043_762_207_03, -0.726_881_526_410_579_7],
+      [55.372_180_938_720_7, -0.327_566_228_806_972_5],
+      [55.436_109_542_846_68, -0.535_169_009_119_272_2],
+    ],
+  ],
+  [
+    'flora-430',
+    [
+      [-1.045_683_320_611_715_3, 100.298_316_955_566_4],
+      [-0.567_290_827_631_950_4, 99.916_015_625],
+      [-1.126_150_012_016_296_4, 99.410_095_214_843_75],
+    ],
+  ],
+  ['flora-432', [[49.228_693_008_422_85, 0.250_661_537_051_200_87]]],
+])
+
 function islands(primitive: Primitive) {
   const groups = new Map<number, number[]>()
   for (const [vertex, root] of islandRoots(primitive).entries()) {
@@ -76,8 +104,14 @@ function removeNeedles(primitive: Primitive, stemAnchors: Map<string, number>, s
   if (counts.some((n) => n < 2 || n > 18 || n % 2) || [...anchors.values()].some((n) => n !== 2)) {
     throw new Error('Legacy barrel needle pairs changed')
   }
+  retireLegacyFaces(primitive, removed, 'needle')
+  return removed.size / 3
+}
+
+/** Keep the original indexed triangle order and vertex streams for neighboring islands. */
+function retireLegacyFaces(primitive: Primitive, removed: ReadonlySet<number>, label: string) {
   const indices = primitive.getIndices()
-  assert(indices, 'Missing legacy needle indices')
+  assert(indices, `Missing legacy ${label} indices`)
   const kept: number[] = []
   for (let i = 0; i < indices.getCount(); i += 3) {
     const face = [indices.getScalar(i), indices.getScalar(i + 1), indices.getScalar(i + 2)]
@@ -85,20 +119,23 @@ function removeNeedles(primitive: Primitive, stemAnchors: Map<string, number>, s
     if (count === 0) {
       kept.push(...face)
     } else if (count !== 3) {
-      throw new Error('Barrel needle shares vertices with a neighboring shrub')
+      throw new Error(`Barrel ${label} shares an unselected triangle`)
     }
   }
   if (kept.length === 0) {
-    throw new Error('Removing barrel needles unexpectedly emptied a foliage draw')
+    throw new Error(`Removing barrel ${label} emptied a foliage draw`)
   }
   primitive.setIndices(indices.clone().setArray(new Uint16Array(kept)))
-  return removed.size / 3
 }
 
-function replaceStems(stem: Primitive, material: Material, owner: string, count: number) {
-  const plants = islands(stem)
-  if (plants.length !== count || plants.some((plant) => plant.length !== 18)) {
-    throw new Error(`Legacy barrel placement changed in ${owner}`)
+function replaceStems(
+  stem: Primitive,
+  destination: Primitive,
+  plants: readonly number[][],
+  material: Material,
+) {
+  if (plants.some((plant) => plant.length !== 18)) {
+    throw new Error('Legacy barrel placement changed')
   }
   const { point, color } = readers(stem)
   const anchors = new Map<string, number>()
@@ -114,17 +151,21 @@ function replaceStems(stem: Primitive, material: Material, owner: string, count:
       base.length < 4 ||
       Math.min(...base.map((p) => p[1])) !== Math.min(...reference.map((p) => p[1]))
     ) {
-      throw new Error(`Missing reference ground ring in ${owner}`)
+      throw new Error(`Missing reference ground ring in ${stem.getMaterial()?.getName()}`)
     }
     for (const p of reference) {
       const key = p.join()
       if (anchors.has(key)) {
-        throw new Error(`Shared barrel needle anchor in ${owner}`)
+        throw new Error(`Shared barrel needle anchor in ${stem.getMaterial()?.getName()}`)
       }
       anchors.set(key, plantIndex)
     }
     const offset = positions.length / 3
-    const shape = fitBarrel(reference, base, (0.13 + plantIndex * 0.379) % 1.4)
+    const shape = fitBarrel(
+      reference,
+      base,
+      (0.13 + (stem === destination ? plantIndex : (plant[0] ?? 0)) * 0.379) % 1.4,
+    )
     for (const face of shape.faces) {
       indices.push(...face.map((vertex) => vertex + offset))
     }
@@ -139,8 +180,8 @@ function replaceStems(stem: Primitive, material: Material, owner: string, count:
     ['COLOR_0', new Uint8Array(colors)],
   ] as const) {
     const original = stem.getAttribute(name)
-    assert(original, `Missing barrel attribute ${name} in ${owner}`)
-    stem.setAttribute(
+    assert(original, `Missing barrel attribute ${name} in ${stem.getMaterial()?.getName()}`)
+    destination.setAttribute(
       name,
       original
         .clone()
@@ -149,14 +190,50 @@ function replaceStems(stem: Primitive, material: Material, owner: string, count:
     )
   }
   const oldIndices = stem.getIndices()
-  assert(oldIndices, `Missing stem indices in ${owner}`)
-  stem.setIndices(oldIndices.clone().setArray(new Uint16Array(indices))).setMaterial(material)
-  for (const target of stem.listTargets()) {
+  assert(oldIndices, `Missing stem indices in ${stem.getMaterial()?.getName()}`)
+  destination
+    .setIndices(oldIndices.clone().setArray(new Uint16Array(indices)))
+    .setMaterial(material)
+  for (const target of destination.listTargets()) {
     const wind = target.getAttribute('POSITION')
-    assert(wind, `Missing stem wind morph in ${owner}`)
+    assert(wind, `Missing stem wind morph in ${stem.getMaterial()?.getName()}`)
     target.setAttribute('POSITION', wind.clone().setArray(new Float32Array(positions.length)))
   }
   return anchors
+}
+
+function readFloraParts(document: Document, owner: string) {
+  const mesh = document
+    .getRoot()
+    .listNodes()
+    .find((node) => node.getName() === owner)
+    ?.getMesh()
+  const primitives = mesh?.listPrimitives()
+  const stem = primitives?.find((part) => part.getMaterial()?.getName() === 'Desert cactus skin')
+  const shrubs = primitives?.find((part) => part.getMaterial()?.getName() === 'Desert shrub leaves')
+  assert(mesh && stem && shrubs, `Missing original barrel or shrub geometry in ${owner}`)
+  return { mesh, stem, shrubs }
+}
+
+/** Select by original local center, not vertex order or proximity to another plant. */
+function selectVisibleBarrels(stem: Primitive, centers: readonly (readonly [number, number])[]) {
+  const { point } = readers(stem)
+  const original = islands(stem)
+  const sameCenter = (plant: number[], axis: 0 | 2, center: number) => {
+    const coordinate = plant.map((vertex) => point(vertex)[axis])
+    return (Math.min(...coordinate) + Math.max(...coordinate)) / 2 === center
+  }
+  return centers.map(([x, z]) => {
+    const eligible = original.filter(
+      (candidate) => sameCenter(candidate, 0, x) && sameCenter(candidate, 2, z),
+    )
+    const [plant] = eligible
+    assert(
+      plant && eligible.length === 1 && plant.length === 18,
+      `Unexpected barrel center ${x}, ${z}`,
+    )
+    return plant
+  })
 }
 
 export async function authorBarrelCacti(document: Document) {
@@ -167,22 +244,25 @@ export async function authorBarrelCacti(document: Document) {
     .setRoughnessFactor(0.86)
   const results: { owner: string; plants: number; retiredNeedles: number }[] = []
   for (const [owner, count] of BARRELS) {
-    const mesh = document
-      .getRoot()
-      .listNodes()
-      .find((node) => node.getName() === owner)
-      ?.getMesh()
-    const primitives = mesh?.listPrimitives()
-    const stem = primitives?.find((part) => part.getMaterial()?.getName() === 'Desert cactus skin')
-    const shrubs = primitives?.find(
-      (part) => part.getMaterial()?.getName() === 'Desert shrub leaves',
-    )
-    if (!(stem && shrubs)) {
-      throw new Error(`Missing original barrel or shrub geometry in ${owner}`)
-    }
-    const anchors = replaceStems(stem, material, owner, count)
+    const { stem, shrubs } = readFloraParts(document, owner)
+    const plants = islands(stem)
+    assert(plants.length === count, `Unexpected number of barrels in ${owner}`)
+    const anchors = replaceStems(stem, stem, plants, material)
     const retiredNeedles = removeNeedles(shrubs, anchors, count)
     results.push({ owner, plants: count, retiredNeedles })
+  }
+  for (const [owner, centers] of VISIBLE_BARRELS) {
+    const { mesh, stem, shrubs } = readFloraParts(document, owner)
+    const plants = selectVisibleBarrels(stem, centers)
+    const replacement = stem.clone()
+    for (const target of replacement.listTargets()) {
+      replacement.removeTarget(target).addTarget(target.clone())
+    }
+    const anchors = replaceStems(stem, replacement, plants, material)
+    retireLegacyFaces(stem, new Set(plants.flat()), 'stem')
+    const retiredNeedles = removeNeedles(shrubs, anchors, plants.length)
+    mesh.addPrimitive(replacement)
+    results.push({ owner, plants: plants.length, retiredNeedles })
   }
   console.log('Frontier barrel cacti', results)
   await document.transform(
