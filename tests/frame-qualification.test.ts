@@ -1,8 +1,10 @@
 import { expect, test as it, spyOn } from 'bun:test'
 import type { Page } from 'playwright'
+import { LobbyCore } from '../api/src/town/core.ts'
 import {
   fixturePopulation,
   OUTDOOR_FIXTURE_CENTER,
+  PerformanceProbe,
   packedFixturePositions,
 } from '../api/test/performance-probe.ts'
 import { PLAYER_RADIUS } from '../src/experiments/out-west/ffa/sim/constants.ts'
@@ -105,6 +107,25 @@ function fixture(): Parameters<typeof qualifyProductionFixture>[0] {
 }
 it('requires matching release build, native readiness, authority and delivered lifecycle evidence', () => {
   expect(qualifyProductionFixture(fixture())).toEqual([])
+})
+it('samples the first authoritative tick in each elapsed second without filling missed seconds', () => {
+  const room = new LobbyCore('performance-sampler', 7, 0)
+  const start = 100_000
+  let wall = start
+  const clock = spyOn(Date, 'now').mockImplementation(() => wall)
+  const probe = new PerformanceProbe(room, 0)
+  try {
+    for (const elapsed of [0, 1180, 2060, 2540, 3020, 5180, 5720, 6030]) {
+      wall = start + elapsed
+      room.tick(wall)
+    }
+    expect(probe.snapshot().samples.map((sample) => sample.wall - start)).toEqual([
+      0, 1180, 2060, 3020, 5180, 6030,
+    ])
+  } finally {
+    probe.stop()
+    clock.mockRestore()
+  }
 })
 it('captures actual low/high renderer configuration and rejects missing or contradictory records', () => {
   expect(nativeRendererCaptured({ tier: 'low', backBufferSamples: 4, nativePost: null })).toBe(true)

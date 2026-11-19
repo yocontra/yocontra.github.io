@@ -65,6 +65,7 @@ export class PerformanceProbe {
   private readonly start = Date.now()
   private readonly events: { type: string; tick: number; wall: number; self: boolean }[] = []
   private readonly samples: ReturnType<PerformanceProbe['sample']>[] = []
+  private sampledSecond = -1
   private readonly interventions: { type: string; tick: number; wall: number }[] = []
   private window = -1
   private readonly completed = new Set<string>()
@@ -100,11 +101,16 @@ export class PerformanceProbe {
           })
         }
       }
-      if (Date.now() - (this.samples.at(-1)?.wall ?? 0) >= 1000) {
-        this.samples.push(this.sample())
+      const wall = Date.now()
+      const elapsed = wall - this.start
+      // Late ticks do not move future sample boundaries or fill missed seconds.
+      const second = Math.floor(elapsed / 1000)
+      if (second > this.sampledSecond) {
+        this.sampledSecond = second
+        this.samples.push(this.sample(wall))
       }
       // Keep fixture observation bounded even if the browser disappears.
-      if (Date.now() - this.start >= 120_000) {
+      if (elapsed >= 120_000) {
         core.tick = tick
       }
       return output
@@ -151,11 +157,11 @@ export class PerformanceProbe {
       this.interventions.push({ type: 'glass-reset', tick: world.tick, wall: Date.now() })
     }
   }
-  private sample() {
+  private sample(wall = Date.now()) {
     const players = [...activePlayers(this.core.world)]
     const self = this.core.world.players[this.self]
     return {
-      wall: Date.now(),
+      wall,
       tick: this.core.world.tick,
       players: players.length,
       bots: players.filter((player) => player.bot).length,
