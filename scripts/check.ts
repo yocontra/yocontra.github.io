@@ -59,4 +59,4 @@ const failed = results.filter((ok) => !ok).length
 process.stdout.write(
   `\n${failed ? `${failed} check stage(s) failed` : 'All checks passed'} in ${seconds(started)}\n`,
 )
-process.exit(failed ? 1 : 0)
+process.exitCode = failed ? 1 : 0
