@@ -35,6 +35,8 @@ export interface ViewportOptions {
   onStage?: (stage: string) => void
   onError?: (error: unknown) => void
 }
+type InputBlock = 'connection' | 'menu' | 'summary'
+
 export interface GameViewport {
   /** The engine owns the context and camera listener, including manual suspension. */
   audioContext: () => AudioContext | null
@@ -42,7 +44,7 @@ export interface GameViewport {
   destroy: () => void
   firstPerson: (value: boolean) => void
   configure: (settings: FrontierSettings) => void
-  inputEnabled: (value: boolean) => void
+  blockInput: (reason: InputBlock, blocked: boolean) => void
   resetFeedback: () => void
   tap: (bit: number) => void
   event: (event: SimEvent) => void
@@ -214,7 +216,7 @@ export function mountGameViewport(root: HTMLElement, options: ViewportOptions): 
   let seq = 0
   const touch = matchMedia('(pointer: coarse)').matches
   let playing = false
-  let inputAllowed = true
+  const inputBlocks = new Set<InputBlock>()
   const update = (dt: number): void => {
     if (signal.aborted || !session || !input || !application || document.hidden) {
       return
@@ -279,7 +281,7 @@ export function mountGameViewport(root: HTMLElement, options: ViewportOptions): 
       signal.throwIfAborted()
       created.quality.beginMeasurement()
       playing = true
-      input.setEnabled(inputAllowed)
+      input.setEnabled(inputBlocks.size === 0)
       options.onReady?.()
     } catch (error) {
       if (!signal.aborted) {
@@ -314,9 +316,13 @@ export function mountGameViewport(root: HTMLElement, options: ViewportOptions): 
       first = value.view === 'first'
       input?.configure(value)
     },
-    inputEnabled(value) {
-      inputAllowed = value
-      input?.setEnabled(playing && value)
+    blockInput(reason, blocked) {
+      if (blocked) {
+        inputBlocks.add(reason)
+      } else {
+        inputBlocks.delete(reason)
+      }
+      input?.setEnabled(playing && inputBlocks.size === 0)
     },
     resetFeedback() {
       effects?.reset()

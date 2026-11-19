@@ -83,7 +83,7 @@ export class FrontierHud {
           this.riders.poster(this.killer)
         }
       },
-      onMenu: (open) => viewport.inputEnabled(!open),
+      onMenu: (open) => viewport.blockInput('menu', open),
     })
     this.scoreboard = new Scoreboard(root, {
       roster: () =>
@@ -146,7 +146,7 @@ export class FrontierHud {
       isBot: (id) => session.world.players[id]?.bot ?? false,
       send: (text) => session.control(text),
       feed: (text) => this.hud.feed(escaped(text), 'info'),
-      onOpen: (open) => viewport.inputEnabled(!open),
+      onOpen: (open) => viewport.blockInput('summary', open),
       leave: () => viewport.tap(Buttons.leave),
       blocked: () => this.hud.menuOpen || root.classList.contains('pc-loading'),
     })

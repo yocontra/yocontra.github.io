@@ -115,7 +115,7 @@ export function mountNativeFrontier(
                 }
                 connection = state
                 voice?.setLinked(state === 'open')
-                game.inputEnabled(state === 'open')
+                game.blockInput('connection', state !== 'open')
                 if (state === 'retrying') {
                   game.resetFeedback()
                   status.hidden = false

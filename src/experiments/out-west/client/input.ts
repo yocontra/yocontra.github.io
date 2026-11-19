@@ -290,11 +290,13 @@ export class GameInput {
     }
   }
   setEnabled(enabled: boolean): void {
+    if (this.enabled === enabled) {
+      return
+    }
     this.controls.inert = !enabled
     this.controls.hidden = !enabled
-    if (!enabled) {
-      this.release()
-    }
+    // Discard keys pressed while a menu or connection gate owned input.
+    this.release()
   }
   private release(): void {
     this.adsLatched = false

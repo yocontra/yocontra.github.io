@@ -20,6 +20,7 @@ page.on('pageerror', (error) => errors.push(error.message.split('?')[0] ?? 'Page
 interface Probe {
   __playcanvasFrontier?: GameViewport
   __nativeFrontierSession?: FrontierSession
+  __frontierMoves?: number[]
 }
 await page.routeWebSocket(`ws://${new URL(origin).host}/**`, (socket) => socket.close())
 const read = () =>
@@ -327,6 +328,11 @@ try {
     if (!fired.self || fired.self.stats.shots <= authoritative.self.stats.shots) {
       throw new Error('Remote trigger did not produce authoritative combat')
     }
+    await page.getByRole('button', { name: 'Menu', exact: true }).click()
+    const controls = page.locator('.pc-touch-controls')
+    if (!(await controls.evaluate((node) => (node as HTMLElement).inert))) {
+      throw new Error('Opening the menu did not block gameplay input')
+    }
     const previousConnections = connections
     disconnect?.()
     await page.waitForTimeout(2500)
@@ -338,6 +344,42 @@ try {
     const advancing = await read()
     if (!(resumed.tick && advancing.tick) || advancing.tick <= resumed.tick) {
       throw new Error('Fresh connection did not resume state updates')
+    }
+    if (!(await page.locator('.fr-menu').isVisible())) {
+      throw new Error('Reconnect closed the settings menu')
+    }
+    if (!(await controls.evaluate((node) => (node as HTMLElement).inert))) {
+      throw new Error('Reconnect restored gameplay input behind the menu')
+    }
+    await page.evaluate(() => {
+      const probe = globalThis as Probe
+      const session = probe.__nativeFrontierSession
+      if (!session) {
+        throw new Error('Missing session for gameplay input check')
+      }
+      const update = session.update.bind(session)
+      const moves: number[] = []
+      probe.__frontierMoves = moves
+      session.update = (dt, input) => {
+        if (!document.querySelector<HTMLElement>('.pc-touch-controls')?.inert && moves.length < 5) {
+          moves.push(Math.hypot(input.moveX, input.moveZ))
+        }
+        update(dt, input)
+      }
+    })
+    await page.keyboard.down('KeyW')
+    try {
+      await page.locator('.fr-menu-resume').click()
+      await page.waitForFunction(() => (globalThis as Probe).__frontierMoves?.length === 5)
+    } finally {
+      await page.keyboard.up('KeyW')
+    }
+    if (
+      !(await page.evaluate(() =>
+        (globalThis as Probe).__frontierMoves?.every((move) => move === 0),
+      ))
+    ) {
+      throw new Error('A key held in the menu reached play after reconnect')
     }
     await page.screenshot({ path: `${output}/native-authenticated-remote.png` })
     await page.evaluate(() => (globalThis as Probe).__playcanvasFrontier?.destroy())

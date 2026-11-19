@@ -39,6 +39,7 @@ Verified Frontier performance baseline is `19dddb2f`. Readback on that release v
 - [x] Stop automatic rejoin after a second connection takes over the account. Keep the backoff for connection loss and give displaced players a way back to the saloon.
 - [x] Use the fired weapon's spread and recoil through the last rifle round or shotgun shell. The authoritative inventory still switches to the revolver immediately. Tests compare shot paths and check the native animation after the switch.
 - [x] Disable touch auto-fire while Frontier settings are open. Tab and Shift+Tab move focus through the settings. Headless Chrome checks cover eligible targets before and after the menu closes.
+- [x] Keep Frontier gameplay input blocked when the connection recovers behind an open menu. An authenticated test with a local room verifies that the socket and ticks resume, the menu stays open, and movement entered in the menu clears before play resumes.
 - [x] Prepare walking distances for the bank guide before enabling the HUD. A prepared route tracks the current cover grid.
 - [x] Check viewport ownership after async loading. A late resource or session is released if the viewport has closed.
 - [x] Discard a delayed rider fallback when its lobby slot belongs to a new life. A late failure from the prior life leaves the new rider free to load. Both regression tests failed before the change.
