@@ -48,6 +48,20 @@ function environmentState(game: Record<string, unknown>) {
 export function environmentFromSnapshot(value: string) {
   return environmentState(gameData(value))
 }
+/** Share validated collision data only within one connection. Presentation decodes its own state. */
+export function createEnvironmentSnapshotReader(): typeof environmentFromSnapshot {
+  let snapshot:
+    | { wire: string; environment: ReturnType<typeof environmentFromSnapshot> }
+    | undefined
+  return (wire) => {
+    if (snapshot?.wire !== wire) {
+      snapshot = { wire, environment: environmentFromSnapshot(wire) }
+    }
+    const { seed, health } = snapshot.environment
+    return { seed, health: health.slice() }
+  }
+}
+
 export function propsFromSnapshot(value: string): Uint8Array {
   return environmentFromSnapshot(value).health
 }

@@ -30,7 +30,7 @@ import {
 import { playerLifetimeSync, REMOTE_POSE, REMOTE_YAW } from './prediction-lifecycle.ts'
 import { type ConnectionNotice, reconnectableSession } from './reconnect-session.ts'
 import { ShowdownInput } from './showdown-input.ts'
-import { applyFrontierState, environmentFromSnapshot } from './state.ts'
+import { applyFrontierState, createEnvironmentSnapshotReader } from './state.ts'
 
 interface JoinResponse {
   reservation: SeatReservation
@@ -230,8 +230,9 @@ function connectSession(
   })
   let propSeed: number | undefined
   let propTick = -1
+  const readEnvironment = createEnvironmentSnapshotReader()
   const syncPropCollision = () => {
-    const { seed, health } = environmentFromSnapshot(room.state.game)
+    const { seed, health } = readEnvironment(room.state.game)
     if (seed === propSeed && room.state.tick < propTick) {
       return
     }

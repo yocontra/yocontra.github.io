@@ -1,6 +1,9 @@
-import { describe, expect, it } from 'bun:test'
+import { describe, expect, it, spyOn } from 'bun:test'
 import { Decoder, Encoder } from '@colyseus/schema'
-import { applyFrontierState } from '../src/experiments/out-west/client/state.ts'
+import {
+  applyFrontierState,
+  createEnvironmentSnapshotReader,
+} from '../src/experiments/out-west/client/state.ts'
 import { COLLISION_VERSION } from '../src/experiments/out-west/content/manifest.ts'
 import { createWorld } from '../src/experiments/out-west/ffa/sim/state.ts'
 import { type PlayerState, PROTOCOL_VERSION } from '../src/experiments/out-west/runtime/protocol.ts'
@@ -33,6 +36,40 @@ function decode(source: FrontierState): FrontierState {
 }
 
 describe('Frontier native persistent state', () => {
+  it('validates a shared collision snapshot once and retains an independent health value', () => {
+    const source = state()
+    const initial = game()
+    const wire = JSON.stringify(initial)
+    source.game = wire
+    const read = createEnvironmentSnapshotReader()
+    const parse = spyOn(JSON, 'parse')
+    try {
+      const first = read(wire)
+      first.health[0] = 0
+      expect(read(wire).health[0]).toBe(68)
+      expect(parse.mock.calls.filter(([value]) => value === wire)).toHaveLength(1)
+
+      const world = createWorld()
+      applyFrontierState(source, world, new Map(), new Map())
+      world.props[0] = 0
+      expect(read(wire).health[0]).toBe(68)
+      expect(parse.mock.calls.filter(([value]) => value === wire)).toHaveLength(2)
+
+      const invalid = wire.replace('"bags":[]', '"bags":[1e400]')
+      expect(() => read(invalid)).toThrow('Invalid town number')
+      expect(read(wire).seed).toBe(1)
+      expect(parse.mock.calls.filter(([value]) => value === wire)).toHaveLength(2)
+
+      const props = [0, ...initial.props.slice(1)]
+      const epoch = JSON.stringify({ ...initial, seed: 17, props })
+      expect(read(epoch)).toEqual({ seed: 17, health: new Uint8Array(props) })
+      expect(createEnvironmentSnapshotReader()(wire).seed).toBe(1)
+      expect(parse.mock.calls.filter(([value]) => value === wire)).toHaveLength(3)
+    } finally {
+      parse.mockRestore()
+    }
+  })
+
   it('restores complete join state beyond the old event cap without replaying effects', () => {
     const source = state()
     source.game = JSON.stringify({
