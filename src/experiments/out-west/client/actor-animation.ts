@@ -141,10 +141,12 @@ export function animateRider(
   player: PlayerState,
   options: { first: boolean; domain: Player | undefined },
 ): void {
-  if (player.hp <= 0) {
+  const alive = player.hp > 0
+  if (!alive) {
     rider.firingUntil = 0
     rider.throwingUntil = 0
   }
+  const throwing = performance.now() < (rider.throwingUntil ?? 0)
   const { actor } = rider
   const speed = Math.hypot(player.vx, player.vz)
   if (rider.aim) {
@@ -153,9 +155,7 @@ export function animateRider(
       rider.aim.play(pose)
     }
     const weight =
-      !options.first && player.hp > 0 && performance.now() >= (rider.throwingUntil ?? 0)
-        ? Math.min(1, Math.abs(player.pitch) / 1.45)
-        : 0
+      !options.first && alive && !throwing ? Math.min(1, Math.abs(player.pitch) / 1.45) : 0
     if (rider.aim.weight !== weight) {
       rider.aim.weight = weight
     }
@@ -164,11 +164,12 @@ export function animateRider(
   // First-person movement comes from the viewmodel springs. Driving its authored
   // hips with world strides as well pulls the arms away from the camera on turns.
   const idle = crouched ? 'Crouch_Idle' : 'Idle'
-  const locomotion = options.first && player.hp > 0 ? idle : gait(player, options.domain, speed)
+  const locomotion =
+    options.first && alive && !throwing ? idle : gait(player, options.domain, speed)
   const clip = directionClip(actor, player, locomotion)
   if (rider.weaponLayer) {
     const upper = upperClip(rider, options.domain, crouched, options.first)
-    const weight = player.hp > 0 ? 1 : 0
+    const weight = alive ? 1 : 0
     if (rider.weaponLayer.weight !== weight) {
       rider.weaponLayer.weight = weight
     }

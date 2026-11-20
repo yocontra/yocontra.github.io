@@ -4,9 +4,9 @@ import type { Player } from '../ffa/sim/types.ts'
 import { Buttons, type PlayerInput } from '../runtime/protocol.ts'
 
 export type HeldWeapon = 'revolver' | 'rifle' | 'shotgun'
-// The rifle and shotgun share the original outward wrist heading. Bring the bore inward.
-const REVOLVER_HIP = new Quat().setFromEulerAngles(0, 180, 0)
-const LONG_GUN_HIP = new Quat().setFromEulerAngles(2, 185.5, 0)
+// Bring the authored hip poses in toward the view axis and lift the revolver's low bore.
+const REVOLVER_HIP = new Quat().setFromEulerAngles(-8, 184, 0)
+const LONG_GUN_HIP = new Quat().setFromEulerAngles(-1.5, 185.5, 0)
 export function hipRotationFor(held: HeldWeapon): Quat {
   return held === 'revolver' ? REVOLVER_HIP : LONG_GUN_HIP
 }
