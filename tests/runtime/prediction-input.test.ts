@@ -1,6 +1,6 @@
 import { beforeAll, expect, test as it } from 'bun:test'
 import { file } from 'bun'
-import { initializeAmmo } from '../../packages/durable-game-runtime/src/ammo.ts'
+import { initializeAmmo } from 'colyseus-cloudflare/ammo'
 import { predictionInput } from '../../src/experiments/out-west/client/player-pose.ts'
 import { Buttons, neutralInput } from '../../src/experiments/out-west/runtime/protocol.ts'
 import { createSimulation } from '../../src/experiments/out-west/runtime/world.ts'

@@ -4,7 +4,7 @@
  */
 import { argv, stdout } from 'node:process'
 import { Client, type Room } from '@colyseus/sdk'
-import { batchInputs } from '../../../packages/durable-game-runtime/src/packets.ts'
+import { batchInputs } from 'colyseus-cloudflare/client'
 import { COLLISION_VERSION } from '../../../src/experiments/out-west/content/manifest.ts'
 import { TOWN_WIRE_VERSION } from '../../../src/experiments/out-west/contract/town.ts'
 import { PROTOCOL_VERSION } from '../../../src/experiments/out-west/runtime/protocol.ts'

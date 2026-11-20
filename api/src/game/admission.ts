@@ -1,4 +1,4 @@
-import { AdmissionLeases as DurableRoomAdmission } from '../../../packages/durable-game-runtime/src/admission.ts'
+import { AdmissionLeases as DurableRoomAdmission } from 'colyseus-cloudflare/admission'
 import { CEILINGS } from '../budget.ts'
 
 export class NativeBudgetRefusal extends Error {}

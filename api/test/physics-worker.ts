@@ -1,4 +1,4 @@
-import { initializeWorkerAmmo } from '../../packages/durable-game-runtime/src/worker-physics.ts'
+import { initializeWorkerAmmo } from 'colyseus-cloudflare/worker-physics'
 import { createSimulation } from '../../src/experiments/out-west/runtime/world.ts'
 export default {
   async fetch() {

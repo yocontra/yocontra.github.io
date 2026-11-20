@@ -1,8 +1,7 @@
-/** Reproduce the shared Ammo assets and update the browser-served copy. */
+/** Copy the installed runtime's Ammo binary to the browser asset path. */
 import { copyFile } from 'node:fs/promises'
-import '../../../packages/durable-game-runtime/generate-physics.ts'
 
 await copyFile(
-  'packages/durable-game-runtime/src/vendor/ammo.wasm.wasm',
+  new URL(import.meta.resolve('colyseus-cloudflare/ammo.wasm')),
   'public/experiments/out-west/physics/ammo.wasm.wasm',
 )

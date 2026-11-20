@@ -1,7 +1,7 @@
 import { beforeAll, expect, test as it } from 'bun:test'
 import { file } from 'bun'
+import { initializeAmmo } from 'colyseus-cloudflare/ammo'
 import { Vec3 } from 'playcanvas'
-import { initializeAmmo } from '../../packages/durable-game-runtime/src/ammo.ts'
 import { ASSETS } from '../../src/experiments/out-west/content/manifest.ts'
 import { CHANNEL_BANK, CHANNEL_STRONGBOX } from '../../src/experiments/out-west/contract/town.ts'
 import type { TownLayout } from '../../src/experiments/out-west/ffa/sim/layout.ts'

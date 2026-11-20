@@ -1,6 +1,6 @@
 import { Predict, type Room, type SeatReservation } from '@colyseus/sdk'
+import { batchInputs } from 'colyseus-cloudflare/client'
 import { type Entity, Vec3 } from 'playcanvas'
-import { batchInputs } from '../../../../packages/durable-game-runtime/src/packets.ts'
 import { COLLISION_VERSION } from '../content/manifest.ts'
 import { type ServerControl, TOWN_WIRE_VERSION } from '../contract/town.ts'
 import { isRecord } from '../contract/validate.ts'

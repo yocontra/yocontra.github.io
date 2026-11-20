@@ -1,8 +1,8 @@
 import { beforeAll, describe, expect, test as it } from 'bun:test'
 import { Decoder, Encoder } from '@colyseus/schema'
 import { file } from 'bun'
+import { initializeAmmo } from 'colyseus-cloudflare/ammo'
 import { buildNav } from '../../api/src/town/nav.ts'
-import { initializeAmmo } from '../../packages/durable-game-runtime/src/ammo.ts'
 import { impactMaterial } from '../../src/experiments/out-west/client/audio-surfaces.ts'
 import {
   applyFrontierState,

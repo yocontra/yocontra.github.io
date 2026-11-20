@@ -1,7 +1,7 @@
 import { beforeAll, expect, it, spyOn } from 'bun:test'
 import { file } from 'bun'
+import { initializeAmmo } from 'colyseus-cloudflare/ammo'
 import { Entity } from 'playcanvas'
-import { initializeAmmo } from '../../packages/durable-game-runtime/src/ammo.ts'
 import { predictionInput } from '../../src/experiments/out-west/client/player-pose.ts'
 import { ANGLE_SCALE, SHOT_WALL } from '../../src/experiments/out-west/contract/town.ts'
 import { eyeHeight } from '../../src/experiments/out-west/ffa/sim/combat.ts'

@@ -1,10 +1,14 @@
 import { expect, test as it } from 'bun:test'
 import { join } from 'node:path'
 import process from 'node:process'
+import { fileURLToPath } from 'node:url'
 import { build, CryptoHasher, file, spawn } from 'bun'
 
+const ammoPath = fileURLToPath(import.meta.resolve('colyseus-cloudflare/ammo.wasm'))
+const callbackPath = fileURLToPath(import.meta.resolve('colyseus-cloudflare/physics-callback.wasm'))
+
 it('ships the same compiled Ammo asset for browser prediction and room physics', async () => {
-  const worker = file('packages/durable-game-runtime/src/vendor/ammo.wasm.wasm')
+  const worker = file(ammoPath)
   const browser = file('public/experiments/out-west/physics/ammo.wasm.wasm')
   const [workerHash, browserHash] = await Promise.all(
     [worker, browser].map(async (asset) =>
@@ -36,8 +40,8 @@ it('real workerd initializes native Ammo and steps independently owned worlds', 
   import fs from 'node:fs';
   const mf=new Miniflare(convertV4MiniflareOptions({modules:[
    {type:'ESModule',path:${JSON.stringify(join(root, 'api/test/physics-worker.js'))},contents:${JSON.stringify(contents)}},
-   {type:'CompiledWasm',path:${JSON.stringify(join(root, 'api/test/vendor/ammo.wasm.wasm'))},contents:fs.readFileSync(${JSON.stringify(join(root, 'packages/durable-game-runtime/src/vendor/ammo.wasm.wasm'))})},
-   {type:'CompiledWasm',path:${JSON.stringify(join(root, 'api/test/vendor/physics-callback.wasm'))},contents:fs.readFileSync(${JSON.stringify(join(root, 'packages/durable-game-runtime/src/vendor/physics-callback.wasm'))})}
+   {type:'CompiledWasm',path:${JSON.stringify(join(root, 'api/test/vendor/ammo.wasm.wasm'))},contents:fs.readFileSync(${JSON.stringify(ammoPath)})},
+   {type:'CompiledWasm',path:${JSON.stringify(join(root, 'api/test/vendor/physics-callback.wasm'))},contents:fs.readFileSync(${JSON.stringify(callbackPath)})}
   ],compatibilityDate:'2026-10-01',compatibilityFlags:['nodejs_compat']}));
   try{const r=await mf.dispatchFetch('http://localhost/');console.log('RESULT:'+JSON.stringify({status:r.status,body:await r.text()}))}finally{await mf.dispose()}
  `

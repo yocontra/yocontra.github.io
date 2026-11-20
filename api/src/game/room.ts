@@ -6,8 +6,8 @@ import {
   matchMaker,
   Room,
 } from '@colyseus/core'
-import { FixedRoomClock } from '../../../packages/durable-game-runtime/src/clock.ts'
-import { initializeWorkerAmmo } from '../../../packages/durable-game-runtime/src/worker-physics.ts'
+import { FixedRoomClock } from 'colyseus-cloudflare/clock'
+import { initializeWorkerAmmo } from 'colyseus-cloudflare/worker-physics'
 import { ANGLE_SCALE } from '../../../src/experiments/out-west/contract/town.ts'
 import { activePlayers } from '../../../src/experiments/out-west/ffa/sim/state.ts'
 import type { InputFrame } from '../../../src/experiments/out-west/ffa/sim/types.ts'

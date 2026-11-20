@@ -4,6 +4,7 @@ import { mkdtemp, readdir, readFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import process from 'node:process'
+import { fileURLToPath } from 'node:url'
 import { build, spawn, write } from 'bun'
 import { PENDING_MS } from '../../api/src/town/registry.ts'
 import { COLLISION_VERSION } from '../../src/experiments/out-west/content/manifest.ts'
@@ -106,7 +107,7 @@ it(
       const entry = await readFile(join(output, 'production-worker.js'), 'utf8')
       const wasm = (await readdir(output)).filter((name) => name.endsWith('.wasm'))
       const packets = await build({
-        entrypoints: [join(root, 'packages/durable-game-runtime/src/packets.ts')],
+        entrypoints: [fileURLToPath(import.meta.resolve('colyseus-cloudflare/client'))],
         target: 'node',
       })
       const packetModule = packets.outputs[0]

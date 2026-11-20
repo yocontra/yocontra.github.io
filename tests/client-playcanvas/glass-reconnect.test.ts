@@ -1,5 +1,6 @@
 import { afterAll, beforeAll, expect, test as it } from 'bun:test'
 import { file } from 'bun'
+import { initializeAmmo } from 'colyseus-cloudflare/ammo'
 import {
   AppBase,
   AppOptions,
@@ -9,7 +10,6 @@ import {
   SoundComponentSystem,
   type SoundInstance,
 } from 'playcanvas'
-import { initializeAmmo } from '../../packages/durable-game-runtime/src/ammo.ts'
 import type { GameApplication } from '../../src/experiments/out-west/client/application.ts'
 import { NativeRagdolls } from '../../src/experiments/out-west/client/ragdolls.ts'
 import { BreakableWindows } from '../../src/experiments/out-west/client/windows.ts'

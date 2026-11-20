@@ -1,6 +1,6 @@
 import { beforeAll, expect, test as it } from 'bun:test'
 import { file } from 'bun'
-import { initializeAmmo } from '../../packages/durable-game-runtime/src/ammo.ts'
+import { initializeAmmo } from 'colyseus-cloudflare/ammo'
 import { ENVIRONMENT_PROPS } from '../../src/experiments/out-west/content/environment-props.ts'
 import { COLLISION } from '../../src/experiments/out-west/runtime/collision.ts'
 import {

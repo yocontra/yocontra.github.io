@@ -1,6 +1,6 @@
 /** Exercise production room methods with the delayed-close state that Colyseus can retain. */
 import { ClientState, getMessageBytes, Protocol } from '@colyseus/core'
-import { CloudflareClient } from '../../packages/durable-game-runtime/src/socket.ts'
+import { CloudflareClient } from 'colyseus-cloudflare/transport'
 import { PROTOCOL_VERSION } from '../../src/experiments/out-west/runtime/protocol.ts'
 import { createNativeRoom } from '../src/game/room.ts'
 import { LobbyCore, type Peer, type Session } from '../src/town/core.ts'

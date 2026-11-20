@@ -1,4 +1,4 @@
-import { DurableSeats } from '../../../packages/durable-game-runtime/src/seats.ts'
+import { DurableSeats } from 'colyseus-cloudflare/seats'
 import type { NativeJoinProfile } from './room.ts'
 
 export interface NativeSeat {

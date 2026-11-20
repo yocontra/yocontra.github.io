@@ -1,6 +1,6 @@
 import { beforeAll, expect, test as it } from 'bun:test'
 import { file } from 'bun'
-import { initializeAmmo } from '../../packages/durable-game-runtime/src/ammo.ts'
+import { initializeAmmo } from 'colyseus-cloudflare/ammo'
 import { killPlayer } from '../../src/experiments/out-west/ffa/sim/death.ts'
 import { TOWN } from '../../src/experiments/out-west/ffa/sim/layout.ts'
 import { addPlayer } from '../../src/experiments/out-west/ffa/sim/world.ts'

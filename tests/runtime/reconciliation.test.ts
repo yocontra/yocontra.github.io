@@ -2,7 +2,7 @@ import { beforeAll, expect, test as it } from 'bun:test'
 import { Encoder } from '@colyseus/schema'
 import { Predict, Room } from '@colyseus/sdk'
 import { file } from 'bun'
-import { initializeAmmo } from '../../packages/durable-game-runtime/src/ammo.ts'
+import { initializeAmmo } from 'colyseus-cloudflare/ammo'
 import {
   playerLifetimeSync,
   REMOTE_POSE,

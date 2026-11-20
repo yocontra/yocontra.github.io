@@ -1,10 +1,6 @@
 import { expect, test as it, setSystemTime } from 'bun:test'
-import {
-  batchInputs,
-  packPackets,
-  unpackPackets,
-} from '../../packages/durable-game-runtime/src/packets.ts'
-import { CloudflareClient } from '../../packages/durable-game-runtime/src/socket.ts'
+import { batchInputs, packPackets, unpackPackets } from 'colyseus-cloudflare/client'
+import { CloudflareClient } from 'colyseus-cloudflare/transport'
 
 it('batches only native reliable input packets, rejects truncation and trailing data', () => {
   const first = new Uint8Array([19, 1, 2])
@@ -16,7 +12,7 @@ it('batches only native reliable input packets, rejects truncation and trailing 
   ])
   expect(() => unpackPackets(packed.subarray(0, -1))).toThrow()
   expect(() => unpackPackets(new Uint8Array([...packed, 0]))).toThrow()
-  expect(() => unpackPackets(packPackets([new Uint8Array([13, 0])]))).toThrow('Only input')
+  expect(() => packPackets([new Uint8Array([13, 0])])).toThrow('Only input')
   expect(() => packPackets([])).toThrow()
   expect(() => unpackPackets(new Uint8Array(5000))).toThrow()
 })

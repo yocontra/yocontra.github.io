@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, expect, test as it } from 'bun:test'
 import { file } from 'bun'
+import { initializeAmmo } from 'colyseus-cloudflare/ammo'
 import { BODYGROUP_STATIC, type Entity } from 'playcanvas'
-import { initializeAmmo } from '../../packages/durable-game-runtime/src/ammo.ts'
 import { GameEffects } from '../../src/experiments/out-west/client/effects.ts'
 import { createWorld } from '../../src/experiments/out-west/ffa/sim/state.ts'
 import type { SimEvent } from '../../src/experiments/out-west/ffa/sim/types.ts'

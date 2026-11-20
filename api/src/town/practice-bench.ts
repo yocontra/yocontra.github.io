@@ -12,7 +12,7 @@
  */
 import { argv, stdout } from 'node:process'
 import { file } from 'bun'
-import { initializeAmmo } from '../../../packages/durable-game-runtime/src/ammo.ts'
+import { initializeAmmo } from 'colyseus-cloudflare/ammo'
 import {
   BTN_AIM,
   BTN_FIRE,

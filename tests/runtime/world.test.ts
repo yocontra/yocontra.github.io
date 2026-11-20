@@ -1,6 +1,6 @@
 import { beforeAll, describe, expect, test as it } from 'bun:test'
 import { file } from 'bun'
-import { initializeAmmo } from '../../packages/durable-game-runtime/src/ammo.ts'
+import { initializeAmmo } from 'colyseus-cloudflare/ammo'
 import {
   Buttons,
   type CollisionData,

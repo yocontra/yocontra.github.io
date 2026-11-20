@@ -1,3 +1,4 @@
+import { createPhysicsWorld, type PhysicsWorldOptions } from 'colyseus-cloudflare/physics'
 import {
   type AppBase,
   BODYGROUP_TRIGGER,
@@ -10,10 +11,6 @@ import {
   StandardMaterial,
   Vec3,
 } from 'playcanvas'
-import {
-  createPhysicsWorld,
-  type PhysicsWorldOptions,
-} from '../../../../packages/durable-game-runtime/src/physics.ts'
 import { BODY_HEIGHT, CROUCH_HEIGHT, FALL_GRAVITY_SCALE, GRAVITY } from '../ffa/sim/constants.ts'
 import { roofWalkAt } from '../ffa/sim/roofwalks.ts'
 import { motorFrame, newMotion } from './abilities.ts'

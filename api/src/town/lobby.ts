@@ -11,7 +11,7 @@
 
 import { DurableObject } from 'cloudflare:workers'
 import { connectClientToRoom, createAuthContext } from '@colyseus/core'
-import { CloudflareClient } from '../../../packages/durable-game-runtime/src/socket.ts'
+import { CloudflareClient } from 'colyseus-cloudflare/transport'
 import { bagStyleIndex } from '../../../src/experiments/out-west/contract/town.ts'
 import { budgetState, recordUsage } from '../budget.ts'
 import { getProfile } from '../economy/profile.ts'

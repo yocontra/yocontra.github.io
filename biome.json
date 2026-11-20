@@ -14,8 +14,7 @@
       "!public",
       "!node_modules",
       "!bun.lock",
-      "!tools/art/environments/freight-crates/profiles.json",
-      "!packages/durable-game-runtime/src/vendor"
+      "!tools/art/environments/freight-crates/profiles.json"
     ]
   },
   "formatter": {
@@ -265,7 +264,7 @@
       }
     },
     {
-      "includes": ["api/**", "packages/durable-game-runtime/example/{physics-room,worker}.ts"],
+      "includes": ["api/**"],
       "javascript": {
         "globals": ["WebSocketPair"]
       },

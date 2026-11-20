@@ -1,6 +1,6 @@
 /** Actual PlayCanvas/Ammo clearance and traversal audit of the staged authoritative town. */
 import { readFile, writeFile } from 'node:fs/promises'
-import { initializeAmmo } from '../../packages/durable-game-runtime/src/ammo.ts'
+import { initializeAmmo } from 'colyseus-cloudflare/ammo'
 import { townWindows, windowPane } from '../../src/experiments/out-west/ffa/sim/building-rules.ts'
 import type { TownLayout } from '../../src/experiments/out-west/ffa/sim/layout.ts'
 import { newMotion } from '../../src/experiments/out-west/runtime/abilities.ts'

@@ -1,7 +1,7 @@
 import { DurableObject } from 'cloudflare:workers'
 import { connectClientToRoom, createAuthContext } from '@colyseus/core'
+import { CloudflareClient } from 'colyseus-cloudflare/transport'
 import type { GraphicsDevice } from 'playcanvas'
-import { CloudflareClient } from '../../packages/durable-game-runtime/src/socket.ts'
 import {
   TUMBLEWEED_ROUTES,
   tumbleweedCenter,
