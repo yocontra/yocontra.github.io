@@ -91,8 +91,8 @@ export const DYNAMIC_ASSETS = {
     bytes: 109800,
   },
   'barrel-fragments': {
-    url: '/experiments/out-west/3d/native-v2/dynamic/barrel-fragments.glb?v=7ccc59442ef2925f',
-    hash: '7ccc59442ef2925f17efa6f6345127e360048eb0751bc5bb9213c0646ed5984c',
+    url: '/experiments/out-west/3d/native-v2/dynamic/barrel-fragments.glb?v=f1ed9b798d238905',
+    hash: 'f1ed9b798d238905014f5874dd0bc1badc85f3ac3d595e343f77886f32f5cedb',
     bytes: 776524,
   },
 } as const
@@ -101,7 +101,7 @@ export const ENVIRONMENT = {
   hash: '206c67e3a1b992282821cf06662bdd69bbb4915c1c4444a66338a40d6a7d4e34',
   bytes: 1173154,
 } as const
-export const CONTENT_VERSION = '4c702c6858e14200eb02fb6eb98baa6f8c6e0f9d9ec8e0f011c26b1314167743'
+export const CONTENT_VERSION = '8f6644ff5f984efc6ea1656a5c99506ab036c8c99cb0f36557454d4c5c1a61f4'
 export const COLLISION_VERSION = '03b11033428780f67158b47e3fc2b37d761185acea4d5b323301449671b65def'
 export const ASSETS = {
   frontier: {
@@ -174,8 +174,8 @@ export const ASSETS = {
     hash: 'f8975339f4931967b23a317cd827cb1c3b56544f73e70457d822eba5594018e6',
     bytes: 2157448,
     pair: {
-      url: '/experiments/out-west/3d/native-v2/baked/outlaw-5.pair.glb?v=a32a22ffe87dbdda',
-      hash: 'a32a22ffe87dbddae777bab00815b1f9a8c9d404157f4ef77fad64aec0a739b1',
+      url: '/experiments/out-west/3d/native-v2/baked/outlaw-5.pair.glb?v=1cb9689036c0b96d',
+      hash: '1cb9689036c0b96d6ef0b08a7fbb170fe047d43abfd2664418a10e486eeb521a',
       bytes: 2342100,
     },
   },
@@ -234,8 +234,8 @@ export const ASSETS = {
     hash: '0d668aa8afae4371b5391f804d957c978e6c122c6d5e2a413554e75a2261fe25',
     bytes: 2508128,
     pair: {
-      url: '/experiments/out-west/3d/native-v2/baked/outlaw-16.pair.glb?v=a1d307a99facebf7',
-      hash: 'a1d307a99facebf7a0b67dd2ee70e065eca6f73bca65eb49c6611f4b6cba22f0',
+      url: '/experiments/out-west/3d/native-v2/baked/outlaw-16.pair.glb?v=8c553c77ecf771b3',
+      hash: '8c553c77ecf771b3175deb36c6d430f154bcf4be42575fe4e1d3566a7fdc8f4a',
       bytes: 2692776,
     },
   },
