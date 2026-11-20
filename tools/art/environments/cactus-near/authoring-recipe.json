@@ -4,7 +4,7 @@
   "inputs": [
     {
       "path": "tools/art/environments/frontier-cacti.glb",
-      "sha256": "d16c9fb4c4f1417feb0795278d8b4603f82a932af60e704fb47e31e01575cc8a"
+      "sha256": "d7411d13bb9730670cccd395424aded5444374b58cf1c0bca7c00ebf3df6c7e7"
     },
     {
       "path": "tools/art/environments/cactus-near/near-albedo.png",
