@@ -121,8 +121,10 @@ export class Hud {
     this.glintMark.setAttribute('aria-hidden', 'true')
     this.callCap = el('div', 'ow-cap-call', root)
     this.callCap.setAttribute('role', 'status')
-    this.fakeCap = el('div', 'ow-cap-fake', root)
-    this.lineCap = el('div', 'ow-cap-line', root)
+    const captions = el('div', 'ow-caption-stack', root)
+    this.lineCap = el('div', 'ow-cap-line', captions)
+    this.fakeCap = el('div', 'ow-cap-fake', captions)
+    this.fakeCap.setAttribute('role', 'status')
     this.card = el('div', 'ow-card', root)
     this.cardTitle = el('div', 'ow-card-title', this.card)
     this.cardBig = el('div', 'ow-card-big', this.card)
@@ -198,9 +200,12 @@ export class Hud {
   }
 
   fake(text: string, ms = 1800): void {
-    if (!this.captions) {
-      return
+    if (this.captions) {
+      this.hint(text, ms)
     }
+  }
+
+  hint(text: string, ms: number): void {
     this.fakeCap.textContent = text
     this.fakeCap.classList.add('on')
     this.fakeTimer = ms

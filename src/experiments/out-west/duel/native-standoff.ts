@@ -2,6 +2,7 @@ import { actSong, winStreak } from '../audio/catalog.ts'
 import { shotVisuals } from '../client/shot-visuals.ts'
 import { FEEL } from '../data/feel.ts'
 import { RIFLEMAN } from '../data/outlaws.ts'
+import { keyLabel } from '../engine/input.ts'
 import { haptic } from '../platform/haptics.ts'
 import { say, TALKER_GAP } from './chatter.ts'
 import type { DuelActor } from './native-actor.ts'
@@ -169,12 +170,15 @@ export function enterCock(d: NativeDirector): void {
     backToBackShot(d)
   }
   if (d.level === 0 && (d.c.save.attempts[0] ?? 0) <= 1) {
-    d.c.hud.fake(
-      d.c.input.touch
-        ? '[hold to walk · tap only after the bell]'
-        : '[hold W to walk · fire only after the bell]',
-      3200,
-    )
+    const { input } = d.c
+    const binding = input.keys.walk[0]
+    const key = !input.touch && binding ? ` ${keyLabel(binding)}` : ''
+    const start = input.touch || !binding ? 'Tap' : 'Press'
+    const walk = d.c.save.settings.toggleWalk
+      ? `${start}${key} to start walking`
+      : `Hold${key} to walk`
+    const fire = input.touch ? 'Tap after the bell' : 'Fire after the bell'
+    d.c.hud.hint(`${walk}. ${fire}.`, 3200)
   }
 }
 
