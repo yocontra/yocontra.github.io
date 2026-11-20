@@ -33,9 +33,9 @@ function spring(stiffness: number, damping: number): Spring {
 }
 
 const KICK: Record<HeldWeapon, { back: number; pitch: number; roll: number }> = {
-  revolver: { back: 0.045, pitch: 7, roll: 2 },
-  rifle: { back: 0.06, pitch: 4, roll: 1.5 },
-  shotgun: { back: 0.09, pitch: 7.5, roll: 3 },
+  revolver: { back: 0.035, pitch: 5, roll: 1 },
+  rifle: { back: 0.045, pitch: 3, roll: 0.6 },
+  shotgun: { back: 0.07, pitch: 5.5, roll: 1.2 },
 }
 const PIVOT = new Vec3(0.05, -0.12, -0.35)
 const motion = new Quat()
@@ -89,7 +89,7 @@ export class ViewmodelMotion {
     const kick = KICK[held]
     this.kickBack.velocity += kick.back * 22
     this.kickPitch.velocity += kick.pitch * 22
-    this.kickRoll.velocity += kick.roll * (Math.random() < 0.5 ? -22 : 22)
+    this.kickRoll.velocity += kick.roll * -22
   }
   /** Offsets a camera-space arms placement; aiming steadies sway, bob and part of the kick. */
   apply(frame: MotionFrame, position: Vec3, rotation: Quat): void {
@@ -123,9 +123,9 @@ export class ViewmodelMotion {
     motion.setFromEulerAngles(
       (swayPitch + Math.cos(this.bobPhase) * 0.012 * bob) * math.RAD_TO_DEG +
         kickPitch * recoil -
-        sprint * 16,
-      swayYaw * math.RAD_TO_DEG + sprint * 12,
-      kickRoll * recoil + Math.sin(this.bobPhase * 0.5) * 1.2 * bob + sprint * 14,
+        sprint * 12,
+      swayYaw * math.RAD_TO_DEG + sprint * 7,
+      kickRoll * recoil + Math.sin(this.bobPhase * 0.5) * 1.2 * bob + sprint * 9,
     )
     pivoted.sub2(position, PIVOT)
     motion.transformVector(pivoted, pivoted)

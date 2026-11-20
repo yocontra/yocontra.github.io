@@ -34,6 +34,7 @@ import { ViewmodelMotion } from './first-person-motion.ts'
 import {
   advanceSights,
   type HeldWeapon,
+  hipRotationFor,
   RESTING_SIGHT,
   SIGHTS,
   type Sight,
@@ -69,7 +70,6 @@ const HIP: Record<HeldWeapon, Vec3> = {
   rifle: new Vec3(0.03, -0.015, -0.15),
   shotgun: new Vec3(0.03, -0.015, -0.15),
 }
-const facing = new Quat().setFromEulerAngles(0, 180, 0)
 const inverseRoot = new Mat4()
 const local = new Mat4()
 const basis = new Mat4()
@@ -80,7 +80,6 @@ const along = new Vec3()
 const up = new Vec3()
 const side = new Vec3()
 const hipPosition = new Vec3()
-const hipRotation = new Quat()
 const targetPosition = new Vec3()
 const targetRotation = new Quat()
 const sightRoll = new Quat()
@@ -418,7 +417,7 @@ export class FirstPersonModel {
     } else {
       eye.set(0, 1.62, 0)
     }
-    hipRotation.copy(facing)
+    const hipRotation = hipRotationFor(held)
     hipRotation.transformVector(eye, hipPosition).mulScalar(-1).add(HIP[held])
     this.align(arms, held, sight, step)
     targetRotation.slerp(hipRotation, this.sightRotation, sight)

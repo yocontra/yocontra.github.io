@@ -9,6 +9,8 @@ The current Out West pass covers visual quality and fidelity. Inspect source ass
 - [x] Replace the canvas weave on the nine distant Quick Draw bluffs with a height-mapped sandstone surface. Compare the same saloon and Outfitter viewpoints in Chrome. The geometry and other meshes match the previous bake.
 - [x] Keep Outfitter names, prices and previews readable on unaffordable and level-locked pieces. Match the shelf background to all 37 thumbnail edges, and verify that guests can still try on an item.
 
+- [x] Refine Frontier's first-person weapons. A viewmodel-only fill and more visible surface relief bring out the existing steel and wood maps. Rifle and shotgun hip poses point inward, and aim frames expose more of the scene. Walking uses the viewmodel springs without double motion from the world stride. Recoil keeps its starting stance through crouch changes. Headless Chrome passed 72 standing and crouched hip/aim checks for three weapons across desktop, phone landscape and portrait, plus look limits, weapon swaps, firing and reload. The native eye and authoritative shot ray match before and after presentation.
+
 ## Current playtest feedback (2026-11-16)
 
 - [x] Replace the wagon's metallic-looking canvas and the five amber mattresses with matte fabric. The wagon has a softer flax weave and dusty hems. The beds use lighter linen. High and Low Chrome views cover sun, shade and dusk. The native map adds 20 bytes, keeps the same draw and resource counts, and preserves collision, layout and the High sidecar. In a matched 32-rider Safari comparison, the mean frame interval changed by 0.38 ms with matte and by 0.44 ms between identical stock controls. Full active-play qualification remains open.

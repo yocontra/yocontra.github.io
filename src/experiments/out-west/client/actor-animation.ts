@@ -71,17 +71,21 @@ function directionClip(actor: DuelActor, player: PlayerState, name: string): str
   const stride = `Stride_${name}_${direction}`
   return actor.hasAnimation(stride) ? stride : name
 }
-function firing(rider: AnimatedRider, crouched: boolean, first: boolean): boolean {
+const SHOT_CLIP = /(?:^|_)Shoot(?:_|$)/u
+function firingClip(rider: AnimatedRider, crouched: boolean, first: boolean): string | undefined {
   const layer = rider.weaponLayer
-  // The wall deadline can lead the native clock by a fraction of a frame. Preserve the
-  // final authored pose before selecting Hold; a life reset clears firingUntil to cancel it.
-  const finishing =
+  // A first-person shot owns its starting pose through crouch changes. The
+  // native clock can run slightly behind the wall deadline.
+  if (
     first &&
     rider.firingUntil > 0 &&
-    layer !== undefined &&
-    layer.activeState === rider.actor.shotClip(crouched) &&
+    layer &&
+    SHOT_CLIP.test(layer.activeState) &&
     layer.activeStateCurrentTime < layer.activeStateDuration
-  return performance.now() < rider.firingUntil || finishing
+  ) {
+    return layer.activeState
+  }
+  return performance.now() < rider.firingUntil ? rider.actor.shotClip(crouched) : undefined
 }
 export function displayedWeapon(
   rider: AnimatedRider,
@@ -89,7 +93,7 @@ export function displayedWeapon(
   crouched: boolean,
   first: boolean,
 ): HeldWeapon {
-  return rider.firingWeapon && firing(rider, crouched, first)
+  return rider.firingWeapon && firingClip(rider, crouched, first)
     ? rider.firingWeapon
     : heldWeapon(domain)
 }
@@ -102,8 +106,9 @@ function upperClip(
   if (performance.now() < (rider.throwingUntil ?? 0)) {
     return `${crouched ? 'Crouch_' : ''}Throw_Dynamite`
   }
-  if (firing(rider, crouched, first)) {
-    return rider.actor.shotClip(crouched)
+  const shot = firingClip(rider, crouched, first)
+  if (shot) {
+    return shot
   }
   const weapon = heldWeapon(domain)
   if (weapon !== 'revolver') {
@@ -155,15 +160,14 @@ export function animateRider(
       rider.aim.weight = weight
     }
   }
-  const locomotion = gait(player, options.domain, speed)
+  const crouched = player.crouched ?? options.domain?.crouched ?? false
+  // First-person movement comes from the viewmodel springs. Driving its authored
+  // hips with world strides as well pulls the arms away from the camera on turns.
+  const idle = crouched ? 'Crouch_Idle' : 'Idle'
+  const locomotion = options.first && player.hp > 0 ? idle : gait(player, options.domain, speed)
   const clip = directionClip(actor, player, locomotion)
   if (rider.weaponLayer) {
-    const upper = upperClip(
-      rider,
-      options.domain,
-      player.crouched ?? options.domain?.crouched ?? false,
-      options.first,
-    )
+    const upper = upperClip(rider, options.domain, crouched, options.first)
     const weight = player.hp > 0 ? 1 : 0
     if (rider.weaponLayer.weight !== weight) {
       rider.weaponLayer.weight = weight

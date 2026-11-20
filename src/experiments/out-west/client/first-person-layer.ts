@@ -1,6 +1,22 @@
 /** Depth-isolated native arms layer sharing current and subsequently created world lights. */
-import { type Entity, Layer, type LightComponent, StandardMaterial } from 'playcanvas'
+import { Color, Entity, Layer, type LightComponent, StandardMaterial } from 'playcanvas'
 import type { GameApplication } from './application.ts'
+
+function viewmodelMaterial(source: StandardMaterial, post: boolean): StandardMaterial {
+  const material = source.clone()
+  if (source.name === 'Gun' && source.normalMap) {
+    material.bumpiness = source.bumpiness * 1.25
+  }
+  if (post) {
+    // World SSAO would project scenery silhouettes onto the arms.
+    material.onUpdateShader = (options) => {
+      options.litOptions.ssao = false
+      return options
+    }
+  }
+  material.update()
+  return material
+}
 
 export function viewmodelLayer(game: GameApplication): {
   assign: (root: Entity) => void
@@ -20,6 +36,18 @@ export function viewmodelLayer(game: GameApplication): {
   if (camera) {
     camera.layers = [...camera.layers, layer.id]
   }
+  // Keep walnut grain and blued steel readable when the world key is behind the rider.
+  const fill = new Entity('viewmodel fill', game.app)
+  fill.enabled = false
+  fill.setLocalEulerAngles(65, -24, 12)
+  fill.addComponent('light', {
+    type: 'directional',
+    color: new Color(0.85, 0.91, 1),
+    intensity: 0.65,
+    castShadows: false,
+    layers: [layer.id],
+  })
+  game.camera.addChild(fill)
   const lights = new Set<LightComponent>()
   const include = (_entity: Entity, light: LightComponent) => {
     if (light.layers.includes(world.id) && !lights.has(light)) {
@@ -45,23 +73,14 @@ export function viewmodelLayer(game: GameApplication): {
       for (const render of root.findComponents('render')) {
         render.castShadows = false
         render.layers = [layer.id]
-        if (!game.post) {
-          continue
-        }
         for (const mesh of render.meshInstances) {
           const source = mesh.material
-          if (!(source instanceof StandardMaterial)) {
+          if (!(source instanceof StandardMaterial && (game.post || source.name === 'Gun'))) {
             continue
           }
           let material = materials.get(source)
           if (!material) {
-            material = source.clone()
-            // The World's depth prepass doesn't contain arms. Sampling its SSAO would
-            // project world silhouettes onto the weapon and sleeves. Keep authored PBR AO.
-            material.onUpdateShader = (options) => {
-              options.litOptions.ssao = false
-              return options
-            }
+            material = viewmodelMaterial(source, Boolean(game.post))
             materials.set(source, material)
           }
           mesh.material = material
@@ -70,8 +89,10 @@ export function viewmodelLayer(game: GameApplication): {
     },
     setVisible(visible) {
       layer.enabled = visible
+      fill.enabled = visible
     },
     dispose() {
+      fill.destroy()
       system?.off('add', include)
       system?.off('beforeremove', forget)
       for (const light of lights) {

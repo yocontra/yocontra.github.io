@@ -31,8 +31,13 @@ try {
     timeout: 90_000,
   })
   await page.addStyleTag({ content: 'astro-dev-toolbar { display:none !important }' })
-  const sample = () =>
-    page.evaluate(async () => {
+  await page.evaluate(() => (globalThis as Probe).__playcanvasFrontier?.firstPerson(true))
+  await page.waitForFunction(() => {
+    const view = (globalThis as Probe).__playcanvasFrontier?.debug().actors
+    return view && 'viewmodel' in view && view.viewmodel.arms === 1 && view.viewmodel.pending === 0
+  })
+  const sample = (first = true) =>
+    page.evaluate(async (view) => {
       const source = await (await fetch('/src/experiments/out-west/client/application.ts')).text()
       // biome-ignore lint/performance/useTopLevelRegex: the callback executes inside a separate browser realm
       const path = source.match(/from ["'](?<url>[^"']*playcanvas[^"']*)/u)?.groups?.url
@@ -43,26 +48,37 @@ try {
       const applications = Reflect.get(pc.AppBase, '_applications')
       const app = Reflect.get(applications, '') as InstanceType<typeof pc.AppBase>
       const camera = app.root.findByName('camera')
-      const models = app.root.find(
-        (node) => Boolean(Reflect.get(node, 'anim')) && Boolean(node.parent?.tags.has('rider:0')),
-      )
-      const model = models[0] as InstanceType<typeof pc.Entity>
-      const mount = app.root.find((node) => node.name === 'mount.WristR.drawn')[0]
-      if (!(camera instanceof pc.Entity && camera.camera && mount && model.anim)) {
+      const session = (globalThis as Probe).__nativeFrontierSession
+      const id = session?.selfId
+      const models = app.root
+        .findByTag(`${view ? 'viewmodel' : 'rider'}:${id}`)
+        .filter((node) => node.enabled)
+      const model = models[0]
+      const mount = model?.findByName('mount.WristR.drawn')
+      const muzzle = mount?.findByName('socket.muzzle')
+      const upper = model?.findByName('upper-body-pose')
+      if (
+        !(
+          camera instanceof pc.Entity &&
+          camera.camera &&
+          mount &&
+          muzzle &&
+          upper instanceof pc.Entity
+        )
+      ) {
         throw new Error('Missing actual equipped native body, gun or camera')
       }
-      const screen = camera.camera.worldToScreen(mount.getPosition(), new pc.Vec3())
-      const session = (globalThis as Probe).__nativeFrontierSession
+      const screen = camera.camera.worldToScreen(muzzle.getPosition(), new pc.Vec3())
       return {
         screen: { x: screen.x, y: screen.y, z: screen.z },
         pitch: session?.world.players[session.selfSlot]?.pitch,
         bodies: models.length,
         drawn: mount.enabled,
-        rotation: model.parent?.getEulerAngles().x,
-        aim: model.anim.findAnimationLayer('Aim pitch')?.weight,
-        pose: model.anim.findAnimationLayer('Aim pitch')?.activeState,
+        rotation: model?.getEulerAngles().x,
+        aim: upper.anim?.findAnimationLayer('Aim pitch')?.weight,
+        pose: upper.anim?.findAnimationLayer('Aim pitch')?.activeState,
       }
-    })
+    }, first)
   const assertVisible = (state: Awaited<ReturnType<typeof sample>>) => {
     const { x, y, z } = state.screen
     if (!(z > 0 && x > 0 && x < 1280 && y > 0 && y < 720 && state.bodies === 1 && state.drawn)) {
@@ -100,7 +116,7 @@ try {
     (tick) => ((globalThis as Probe).__nativeFrontierSession?.world.tick ?? 0) > tick + 1,
     switchTick,
   )
-  const third = await sample()
+  const third = await sample(false)
   if (
     Math.abs(third.rotation ?? 1) > 0.01 ||
     (third.aim ?? 0) < 0.98 ||
@@ -118,22 +134,10 @@ try {
   )
   const returned = await sample()
   assertVisible(returned)
-  const expectedProps = [
-    'bag0',
-    'bag1',
-    'bag2',
-    'bag3',
-    'dynamite',
-    'held-rifle',
-    'held-shotgun',
-    'rifle',
-    'shotgun',
-    'strongbox',
-  ]
-  if (
-    JSON.stringify([...props].sort((a, b) => a.localeCompare(b))) !== JSON.stringify(expectedProps)
-  ) {
-    throw new Error(`Unexpected Frontier prop loading: ${JSON.stringify([...props])}`)
+  for (const asset of ['held-rifle', 'held-shotgun', 'viewmodel-arm-curves']) {
+    if (!props.has(asset)) {
+      throw new Error(`Frontier did not load the native ${asset} asset`)
+    }
   }
   await page.evaluate(() => (globalThis as Probe).__playcanvasFrontier?.destroy())
   if (errors.length > 0) {

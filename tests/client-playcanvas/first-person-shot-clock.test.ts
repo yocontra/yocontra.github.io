@@ -126,7 +126,9 @@ it.each([
     f.model.present(f.camera, 1 / 60)
     // The authoritative pickup is already depleted. The incoming shot still names the long gun.
     f.model.fire('self', crouched, weapon)
-    f.model.update(request)
+    // Changing stance mid-shot must not restart it on another recoil clip.
+    f.app.systems.fire('animationUpdate', 0.06)
+    f.model.update({ ...request, player: { ...request.player, crouched: !crouched } })
     const upper = f.actors()[0]?.findByName('upper-body-pose')
     if (!(upper instanceof Entity && upper.anim)) {
       throw new Error('Missing native upper-body controller')
@@ -134,6 +136,7 @@ it.each([
     expect(upper.anim.baseLayer?.activeState).toBe(
       crouched ? 'Crouch_Shoot_shotgun' : 'Shoot_rifle',
     )
+    expect(upper.anim.baseLayer?.activeStateCurrentTime).toBeGreaterThan(0)
     const visibleLongGuns = f
       .actors()[0]
       ?.find((node) => node.name === 'mount.Chest.long' && node.enabled)

@@ -143,6 +143,7 @@ try {
         { timeout: 120_000 },
       )
       for (const [weapon, kind] of [
+        ['revolver', 0],
         ['rifle', 2],
         ['shotgun', 1],
       ] as const) {
@@ -278,8 +279,8 @@ try {
   await Promise.all(assetReads)
   await browser.close()
 }
-if (results.length !== (quick ? 8 : 48)) {
-  errors.push(`Expected ${quick ? 8 : 48} native framing cases; captured ${results.length}`)
+if (results.length !== (quick ? 12 : 72)) {
+  errors.push(`Expected ${quick ? 12 : 72} native framing cases; captured ${results.length}`)
 }
 await writeFile(
   `${output}/receipt.json`,

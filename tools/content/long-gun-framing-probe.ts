@@ -1,5 +1,5 @@
 /** Unshipped native composition observations; no pointer or browser focus control. */
-import { AppBase, Color, Entity, StandardMaterial, type Vec3 } from 'playcanvas'
+import { AppBase, Color, Entity, type MeshInstance, StandardMaterial, type Vec3 } from 'playcanvas'
 import { FirstPersonModel } from '../../src/experiments/out-west/client/first-person-model.ts'
 import {
   type HeldWeapon,
@@ -51,6 +51,24 @@ export function observeFraming(): void {
   }
 }
 
+function assertFinishMaps(instances: MeshInstance[], weapon: HeldWeapon): void {
+  const heldMesh = instances.find(
+    (instance) =>
+      instance.node.enabled && !instance.skinInstance && instance.material?.name === 'Gun',
+  )
+  const finish = heldMesh?.material
+  if (
+    !(
+      finish instanceof StandardMaterial &&
+      finish.diffuseMap &&
+      finish.normalMap &&
+      finish.glossMap
+    )
+  ) {
+    throw new Error(`Missing native ${weapon} finish maps`)
+  }
+}
+
 export function captureFraming(weapon: HeldWeapon, identifyParts = false) {
   if (
     observation.samples === 0 ||
@@ -97,6 +115,7 @@ export function captureFraming(weapon: HeldWeapon, identifyParts = false) {
   ) {
     throw new Error('Expected one loaded native arms actor on the Viewmodel layer')
   }
+  assertFinishMaps(instances, weapon)
   const project = (landmark: Vec3) =>
     lens.worldToScreen(socket.getWorldTransform().transformPoint(landmark))
   const view = {

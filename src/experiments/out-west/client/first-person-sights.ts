@@ -1,9 +1,15 @@
 /** First-person sight presentation: one eased amount per life/weapon; the shot ray never moves. */
-import { math, Vec3 } from 'playcanvas'
+import { math, Quat, Vec3 } from 'playcanvas'
 import type { Player } from '../ffa/sim/types.ts'
 import { Buttons, type PlayerInput } from '../runtime/protocol.ts'
 
 export type HeldWeapon = 'revolver' | 'rifle' | 'shotgun'
+// The rifle and shotgun share the original outward wrist heading. Bring the bore inward.
+const REVOLVER_HIP = new Quat().setFromEulerAngles(0, 180, 0)
+const LONG_GUN_HIP = new Quat().setFromEulerAngles(2, 185.5, 0)
+export function hipRotationFor(held: HeldWeapon): Quat {
+  return held === 'revolver' ? REVOLVER_HIP : LONG_GUN_HIP
+}
 export interface SightProfile {
   /** Front blade/bead and rear notch/rib in `socket.muzzle` space (+X along the bore, +Y up). */
   readonly front: Vec3
@@ -36,7 +42,7 @@ export const SIGHTS: ReadonlyMap<HeldWeapon, SightProfile> = new Map([
     {
       front: new Vec3(-0.015, 0.0268, 0),
       rear: new Vec3(-0.43, 0.0258, 0),
-      relief: 0.79,
+      relief: 0.83,
       zoom: 0.72,
       enter: 0.22,
       exit: 0.14,
@@ -47,8 +53,8 @@ export const SIGHTS: ReadonlyMap<HeldWeapon, SightProfile> = new Map([
     {
       front: new Vec3(-0.01, 0.0228, 0),
       rear: new Vec3(-0.67, 0.0292, 0),
-      relief: 0.68,
-      roll: -8,
+      relief: 0.86,
+      roll: -2,
       zoom: 0.84,
       enter: 0.2,
       exit: 0.13,
@@ -65,7 +71,7 @@ export const RESTING_SIGHT: Sight = { held: 'revolver', amount: 0 }
 export interface SightState {
   progress: number
   life: number | undefined
-  weapon: number | undefined
+  weapon: HeldWeapon | undefined
 }
 export const sightState = (): SightState => ({ progress: 0, life: undefined, weapon: undefined })
 interface SightInput {
@@ -75,18 +81,15 @@ interface SightInput {
   ready: boolean
   intent: Pick<PlayerInput, 'buttons'>
   held: HeldWeapon
-  player:
-    | Pick<Player, 'alive' | 'spawnTick' | 'weapon' | 'reloadTicks' | 'sprinting'>
-    | null
-    | undefined
+  player: Pick<Player, 'alive' | 'spawnTick' | 'reloadTicks' | 'sprinting'> | null | undefined
 }
 
 /** Steps the eased sight amount from the viewport's existing engine update. */
 export function advanceSights(state: SightState, input: SightInput, dt: number): number {
   const { player } = input
-  const changed = state.life !== player?.spawnTick || state.weapon !== player?.weapon
+  const changed = state.life !== player?.spawnTick || state.weapon !== input.held
   state.life = player?.spawnTick
-  state.weapon = player?.weapon
+  state.weapon = input.held
   const profile = SIGHTS.get(input.held)
   if (!(input.active && input.ready && player?.alive && profile) || changed) {
     state.progress = 0
@@ -107,7 +110,7 @@ export function sightFov(fov: number, sight: Sight): number {
 // Project the arms on the shorter screen axis. Portrait needs more room for the sleeves.
 const HIP_FOV = { landscape: 58, portrait: 68 }
 const REVOLVER_FOV = { landscape: 50, portrait: 58 }
-const LONG_GUN_FOV = { landscape: 52, portrait: 61 }
+const LONG_GUN_FOV = { landscape: 56, portrait: 64 }
 
 export function viewmodelScale(
   worldFov: number,
