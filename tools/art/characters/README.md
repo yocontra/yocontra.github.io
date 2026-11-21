@@ -57,6 +57,16 @@ bun tools/content/starter-head-atlas.ts "$head_source/starter-head.blender.glb" 
 OUT_WEST_CHARACTERS=player,outfit.trail-duds,outfit.trail-duds.pair bun tools/content/human-assets.ts
 ```
 
+The held rifle and shotgun use Blender fore-ends with the original grip surfaces,
+muzzle mounts, and authored clips. Bake the canonical held assets first.
+
+```sh
+blender --background --factory-startup --python tools/content/held-longgun-authoring.py -- tools/art/characters/held-surfaces
+OUT_WEST_CHARACTERS=held-rifle,held-shotgun bun tools/content/character-materials.ts
+OUT_WEST_CHARACTERS=held-rifle,held-shotgun bun tools/content/character-textures.ts
+bun tools/content/held-longgun-art.ts
+```
+
 The victory `TipHat` clip is authored offline from the canonical player idle, with
 planted feet and a 1.5-second reach/nod/return. Rebuild its portable source before
 the shared clips if its source fingerprint changes:

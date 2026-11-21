@@ -76,14 +76,14 @@ export const DYNAMIC_ASSETS = {
     bytes: 1347820,
   },
   'held-rifle': {
-    url: '/experiments/out-west/3d/native-v2/dynamic/held-rifle.glb?v=958569269de00bbb',
-    hash: '958569269de00bbb8063e8b51fd0412c0c8f7b6204adc1be03eae883a69838b3',
-    bytes: 316816,
+    url: '/experiments/out-west/3d/native-v2/dynamic/held-rifle.glb?v=df5cf81961739da7',
+    hash: 'df5cf81961739da7feb1af5991633233c5519541afd8d04ea6098c83e84c270d',
+    bytes: 141664,
   },
   'held-shotgun': {
-    url: '/experiments/out-west/3d/native-v2/dynamic/held-shotgun.glb?v=d3436604772c8bb1',
-    hash: 'd3436604772c8bb1855c8ce3709e4322c61ab0211d84bb5b40d7b10b146f2b5b',
-    bytes: 289508,
+    url: '/experiments/out-west/3d/native-v2/dynamic/held-shotgun.glb?v=43350703c053ab3e',
+    hash: '43350703c053ab3e5c88355b10639c22af64b756c2fdd242d71a68b857fd9e3c',
+    bytes: 122936,
   },
   'viewmodel-arm-curves': {
     url: '/experiments/out-west/3d/native-v2/dynamic/viewmodel-arm-curves.glb?v=08456cf32d1a07c8',
@@ -101,7 +101,7 @@ export const ENVIRONMENT = {
   hash: '206c67e3a1b992282821cf06662bdd69bbb4915c1c4444a66338a40d6a7d4e34',
   bytes: 1173154,
 } as const
-export const CONTENT_VERSION = '2d2d4358ff31ef78cf6788a5fea747b660022cf6abfd36ce2e3a09d9729e3c86'
+export const CONTENT_VERSION = 'beca5d27f8bf27572d6439257120e35dba5cc376a7826f77b720c8710f44d5e4'
 export const COLLISION_VERSION = '03b11033428780f67158b47e3fc2b37d761185acea4d5b323301449671b65def'
 export const ASSETS = {
   frontier: {
