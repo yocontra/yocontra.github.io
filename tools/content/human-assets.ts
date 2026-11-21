@@ -5,6 +5,7 @@ import { bakeCharacter } from './character-materials.ts'
 import { compressCharacterAssets } from './character-textures.ts'
 import { contentOutput } from './content-output.ts'
 import { fitAuthoredHat } from './fitted-hat.ts'
+import { fitHolsterPockets } from './fitted-holster-pockets.ts'
 import { fitStarterHead } from './fitted-starter-head.ts'
 import { fitForgedSpurs } from './forged-spurs.ts'
 import { fitOutlawHat } from './outlaw-hats.ts'
@@ -48,6 +49,14 @@ for (const id of ids.filter((asset) => asset.startsWith('outlaw-'))) {
 for (const id of ids.filter((asset) => asset.startsWith('spurs.'))) {
   await fitForgedSpurs(
     resolve(source, 'spurs', `${id.slice(6)}.glb`),
+    resolve(source, `${id}.gltf`),
+    contentOutput('equipment', `${id}.glb`),
+  )
+}
+for (const id of ids.filter((asset) => asset.startsWith('holster.'))) {
+  const style = id.slice(8).replace('.pair', '')
+  await fitHolsterPockets(
+    resolve(source, 'holster-pockets', `${style}.glb`),
     resolve(source, `${id}.gltf`),
     contentOutput('equipment', `${id}.glb`),
   )

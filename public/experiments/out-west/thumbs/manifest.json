@@ -1,5 +1,5 @@
 {
-  "fingerprint": "838faa6351714e23526e3eda7fb8a76073500750163165240d19a95d3b0cfda2",
+  "fingerprint": "5f60ee3c7e2fa68698a59eae1a105a0b59859ad8b00dda1366b915cc171a9b47",
   "images": {
     "gun.rusty-six": "0e23b486309889db2169bbc76d03733a8abc5a2a8e77bb0606c1c91d39b48e5f",
     "gun.blued-six": "e292484c6a30cc2d69e04b5895deba9dd5001c82770e2a6c536cc46c3a5470fe",
@@ -30,10 +30,10 @@
     "spurs.silver-jinglebobs": "7ae8e8a1480a5fc589ade58b7ed4279c3d3c782d36c784863cdc1c3138fb97a7",
     "spurs.star-rowels": "761128d8cf56f74d5b153324af2dc77889d2323ff10850119644c78c6fb6a4eb",
     "spurs.legend-rowels": "ff2ae351a5ce9a115c302e1b5c2645dfd1f90408f0ffafaadb400206bd93fbab",
-    "holster.plain-leather": "2d861192be7fe4a6ff511386bab4d56a888e094b36dbc48bbb096bdf2069d587",
-    "holster.tooled-floral": "8777c4f1e8b2e3c831c42cb849bd37a74a35249df10780c4965b994fa37c7a88",
-    "holster.buscadero": "5d39bc91115d35d5758851959cdeb1737b13ed2e7b94b2830aa1e12830fae57d",
-    "holster.silver-conchos": "26e7933d406eacfa070a92cfa5d59a5cc395d66cfc6e7e3a6696d5be9fb62dd9",
+    "holster.plain-leather": "148eb1de4d98b7d846dd66efc285afef592cfb49ec68a63c5f91cdd93a72520a",
+    "holster.tooled-floral": "0c8c3de8692c0b08cdd08d27448abcf3b0d8e2b855c25aa9388421c16b6fac7a",
+    "holster.buscadero": "48981de345cdd623ce2c6fa44a37b7af1a05d629b77ae60b45f7e17cbe648642",
+    "holster.silver-conchos": "61664eed06bf2e6e1bb59782d2d79d70e3fe9bee30346133882887bf6009e641",
     "extra.handlebar": "0c8e34da1bfbae923b99a0bbe9c5ea88ff338b4631ce575c062f334cfc51f4f3",
     "extra.red-bandana": "46c269dd420a26c65ff5ead61dc34261d305fc16e81fdd5e0268a058b3b84dd8",
     "extra.tin-star": "1b3448e157d2c7d30cc138cfd5684c834187f19838ae9695ae2019455c917e72",

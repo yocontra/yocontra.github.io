@@ -74,6 +74,14 @@ blender --background --factory-startup --python tools/content/forged-spurs-autho
 OUT_WEST_CHARACTERS=spurs.plain-rowels,spurs.silver-jinglebobs,spurs.star-rowels,spurs.legend-rowels bun tools/content/human-assets.ts
 ```
 
+Rebuild the fitted leather pockets before the native holster bake. One source
+holds both sides so the single and paired fits share each accessory's finish.
+
+```sh
+blender --background --factory-startup --python tools/content/holster-pocket-authoring.py -- tools/art/characters/holster-pockets
+OUT_WEST_CHARACTERS=holster.plain-leather,holster.plain-leather.pair,holster.tooled-floral,holster.tooled-floral.pair,holster.silver-conchos,holster.silver-conchos.pair,holster.buscadero,holster.buscadero.pair bun tools/content/human-assets.ts
+```
+
 The victory `TipHat` clip is authored offline from the canonical player idle, with
 planted feet and a 1.5-second reach/nod/return. Rebuild its portable source before
 the shared clips if its source fingerprint changes:
