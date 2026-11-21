@@ -1,10 +1,15 @@
 """Build the starter hat with a pinched crown, stitched edge and separate leather band."""
 
 import math
+import runpy
 import sys
 from pathlib import Path
 
 import bpy
+
+mesh = runpy.run_path(str(Path(__file__).with_name("hat-mesh.py")))
+material = mesh["material"]
+surface = mesh["surface"]
 
 out = Path(sys.argv[sys.argv.index("--") + 1])
 bpy.ops.object.select_all(action="SELECT")
@@ -12,58 +17,11 @@ bpy.ops.object.delete(use_global=False)
 segments = 64
 
 
-def material(name, color, roughness, metal=0):
-    mat = bpy.data.materials.new(name)
-    mat.use_nodes = True
-    shader = mat.node_tree.nodes["Principled BSDF"]
-    shader.inputs["Base Color"].default_value = (*color, 1)
-    shader.inputs["Roughness"].default_value = roughness
-    shader.inputs["Metallic"].default_value = metal
-    return mat
-
-
 felt = material("Brim felt", (0.61, 0.52, 0.43), 0.85)
 edge = material("Brim binding", (0.29, 0.20, 0.135), 0.87)
 leather = material("Band leather", (0.125, 0.063, 0.034), 0.69)
 thread = material("Band thread", (0.33, 0.255, 0.17), 0.83)
 buckle = material("Band buckle", (0.42, 0.30, 0.15), 0.46, 0.68)
-
-
-def surface(name, rings, steps, mat, invert=False, seal=False):
-    verts = [ring(i * math.tau / steps) for ring in rings for i in range(steps)]
-    faces = []
-    for j in range(len(rings) - 1):
-        for i in range(steps):
-            a = j * steps + i
-            b = j * steps + (i + 1) % steps
-            face = (a, b, b + steps, a + steps)
-            faces.append(face[::-1] if invert else face)
-    if seal:
-        faces.append(tuple(range(len(verts) - steps, len(verts))))
-    data = bpy.data.meshes.new(name)
-    data.from_pydata(verts, [], faces)
-    data.update()
-    data.materials.append(mat)
-    obj = bpy.data.objects.new(name, data)
-    bpy.context.collection.objects.link(obj)
-    uv = data.uv_layers.new(name="Felt")
-    for face in data.polygons:
-        face.use_smooth = len(face.vertices) == 4
-        base = min(data.loops[i].vertex_index % steps for i in face.loop_indices)
-        for j in face.loop_indices:
-            index = data.loops[j].vertex_index
-            t = index % steps
-            if (
-                base == 0
-                and t == 0
-                and any(
-                    data.loops[i].vertex_index % steps == steps - 1
-                    for i in face.loop_indices
-                )
-            ):
-                t = steps
-            uv.data[j].uv = (t / steps, (index // steps) / (len(rings) - 1))
-    return obj
 
 
 def brim(t, radius, offset=0):

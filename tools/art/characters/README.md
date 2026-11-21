@@ -26,12 +26,12 @@ UVs, sockets and clips stay in the canonical source files.
 blender --background --factory-startup --python tools/content/starter-surface-authoring.py -- "$PWD"
 ```
 
-The Battered Brim has separate felt, edge binding, a leather band and brass
-hardware. The bake fits the new shell to the original head mount and reuses
-the starter hat's existing dye maps.
+The Outfitter hats have separate felt, edge binding, bands and hardware. The
+bake fits each shell to its original head mount and reuses the item's dye maps.
 
 ```sh
 blender --background --factory-startup --python tools/content/battered-brim-authoring.py -- tools/art/characters/hats/battered-brim.glb
+blender --background --factory-startup --python tools/content/frontier-hats-authoring.py -- tools/art/characters/hats
 ```
 
 The victory `TipHat` clip is authored offline from the canonical player idle, with

@@ -1,10 +1,10 @@
 /** Rebuild only HUMAN fitted assets; animal/ambient exports keep independent ownership. */
 import { readdir } from 'node:fs/promises'
 import { resolve } from 'node:path'
-import { fitBatteredBrim } from './battered-brim.ts'
 import { bakeCharacter } from './character-materials.ts'
 import { compressCharacterAssets } from './character-textures.ts'
 import { contentOutput } from './content-output.ts'
+import { fitAuthoredHat } from './fitted-hat.ts'
 
 const source = resolve('tools/art/characters')
 const excluded = new Set(['dog', 'horse', 'moves', 'character-actions', 'character-strides'])
@@ -24,10 +24,10 @@ for (const id of ids) {
   await bakeCharacter(resolve(source, `${id}.gltf`))
 }
 await compressCharacterAssets()
-if (ids.includes('hat.battered-brim')) {
-  await fitBatteredBrim(
-    resolve(source, 'hats/battered-brim.glb'),
-    contentOutput('equipment', 'hat.battered-brim.glb'),
-  )
+for (const id of ids.filter((asset) => asset.startsWith('hat.'))) {
+  const replacement = resolve(source, 'hats', `${id.slice(4)}.glb`)
+  if (await Bun.file(replacement).exists()) {
+    await fitAuthoredHat(replacement, contentOutput('equipment', `${id}.glb`))
+  }
 }
 console.log(`Rebuilt ${ids.length} HUMAN fitted assets`)

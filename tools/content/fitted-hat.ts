@@ -1,5 +1,6 @@
 /** Replace the felt mesh and keep the existing native hat mount and dye palette. */
-import { Material, NodeIO } from '@gltf-transform/core'
+import { basename } from 'node:path'
+import { Material, NodeIO, type Primitive } from '@gltf-transform/core'
 import { ALL_EXTENSIONS } from '@gltf-transform/extensions'
 import {
   copyToDocument,
@@ -13,7 +14,7 @@ import {
 
 const io = new NodeIO().registerExtensions(ALL_EXTENSIONS)
 
-export async function fitBatteredBrim(source: string, target: string): Promise<void> {
+export async function fitAuthoredHat(source: string, target: string): Promise<void> {
   const [authored, outfit] = await Promise.all([io.read(source), io.read(target)])
   const mount = outfit
     .getRoot()
@@ -24,7 +25,7 @@ export async function fitBatteredBrim(source: string, target: string): Promise<v
   const felt = former?.listPrimitives()[0]?.getMaterial()
   const scene = authored.getRoot().getDefaultScene()
   if (!(mount && shell && former && felt?.getName() === 'Dyeable' && scene)) {
-    throw new Error('Missing the fitted Battered Brim and its native dye material')
+    throw new Error('Missing the fitted hat and its native dye material')
   }
 
   const parts = scene.listChildren()
@@ -43,8 +44,11 @@ export async function fitBatteredBrim(source: string, target: string): Promise<v
   if (!(sourceFelt instanceof Material)) {
     throw new Error('Missing the replacement felt material')
   }
+  const name = basename(source, '.glb')
+  // Bronze Band packs its metal and felt strips side by side.
+  const [feltLeft, feltWidth] = name === 'bronze-band' ? [0.105, 0.137] : [0.505, 0.224]
   shell
-    .setName('Battered Brim')
+    .setName(name === 'battered-brim' ? 'Battered Brim' : name)
     .setExtras({})
     .setTranslation([0, 0, 0])
     .setScale([1, 1, 1])
@@ -58,16 +62,7 @@ export async function fitBatteredBrim(source: string, target: string): Promise<v
     }
     for (const primitive of mesh.listPrimitives()) {
       if (primitive.getMaterial() === sourceFelt) {
-        const uv = primitive.getAttribute('TEXCOORD_0')
-        if (!uv) {
-          throw new Error('Missing felt UVs')
-        }
-        for (let index = 0; index < uv.getCount(); index++) {
-          const [u = 0, v = 0] = uv.getElement(index, [])
-          // Use the occupied felt strip of the original trimmed dye atlas.
-          uv.setElement(index, [0.505 + 0.224 * u, 0.025 + 0.945 * v])
-        }
-        primitive.setMaterial(felt)
+        fitFelt(primitive, felt, feltLeft, feltWidth)
       }
     }
     shell.addChild(node)
@@ -89,4 +84,16 @@ export async function fitBatteredBrim(source: string, target: string): Promise<v
     throw new Error('Hat optimizer lost the head mount')
   }
   await io.write(target, outfit)
+}
+
+function fitFelt(primitive: Primitive, felt: Material, left: number, width: number): void {
+  const uv = primitive.getAttribute('TEXCOORD_0')
+  if (!uv) {
+    throw new Error('Missing felt UVs')
+  }
+  for (let index = 0; index < uv.getCount(); index++) {
+    const [u = 0, v = 0] = uv.getElement(index, [])
+    uv.setElement(index, [left + width * u, 0.025 + 0.945 * v])
+  }
+  primitive.setMaterial(felt)
 }
