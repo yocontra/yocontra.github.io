@@ -32,10 +32,16 @@ async function headSurface(url: string) {
     throw new Error(`Missing skinned head geometry on ${pathname}`)
   }
   const pbr = face.getMaterial()?.getExtras().nativePbr as
-    | { albedo?: string; normal?: string }
+    | { albedo?: string; normal?: string; surface?: string }
     | undefined
-  if (!(pbr?.albedo?.endsWith('.color.ktx2') && pbr.normal?.endsWith('.data.ktx2'))) {
-    throw new Error(`Missing face texture or normal map on ${pathname}`)
+  if (
+    !(
+      pbr?.surface === 'skin' &&
+      pbr.albedo?.endsWith('.color.ktx2') &&
+      pbr.normal?.endsWith('.data.ktx2')
+    )
+  ) {
+    throw new Error(`Missing tagged skin, color texture or normal map on ${pathname}`)
   }
   return { indexCount: indices.length, vertexCount: position.getCount(), albedo: pbr.albedo }
 }

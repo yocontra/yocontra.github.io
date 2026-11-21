@@ -81,14 +81,6 @@ function bindOcclusion(
   owned.add(material)
 }
 
-function isSkin(material: StandardMaterial, source: Surface): boolean {
-  return (
-    source.surface === 'skin' ||
-    material.name === 'Field-worn skin' ||
-    material.name === 'field-hands'
-  )
-}
-
 function finishSkin(material: StandardMaterial): void {
   material.metalness = 0
   material.metalnessMap = null
@@ -107,7 +99,8 @@ function applyMaps(
   [albedo, normal, arm]: [Texture, Texture | null, Texture | null],
   occlusion: Set<StandardMaterial>,
 ): void {
-  const skin = isSkin(material, source)
+  // Legacy arm and actor assets share the named hand atlas. New surfaces carry the flag.
+  const skin = source.surface === 'skin' || material.name === 'field-hands'
   // glTF roughness is authored for GGX; the native default is Blinn-Phong.
   material.enableGGXSpecular = true
   material.diffuseMap = albedo

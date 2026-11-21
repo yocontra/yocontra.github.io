@@ -179,11 +179,17 @@ it('skin has a restrained dielectric reflection while hands keep their authored 
   const hands = new StandardMaterial()
   head.name = 'Field-worn skin'
   head.gloss = 0.66
+  hands.name = 'field-hands'
   hands.gloss = 1
   hands.metalness = 1
   const releaseHead = await prepareNativeMaterials(
     f.game,
-    f.container(head, { albedo: 'head-color', normal: 'head-normal', normalScale: 0.53 }),
+    f.container(head, {
+      albedo: 'head-color',
+      normal: 'head-normal',
+      normalScale: 0.53,
+      surface: 'skin',
+    }),
   )
   const releaseHands = await prepareNativeMaterials(
     f.game,
@@ -191,7 +197,6 @@ it('skin has a restrained dielectric reflection while hands keep their authored 
       albedo: 'hands-color',
       normal: 'hands-normal',
       arm: 'hands-arm',
-      surface: 'skin',
       ao: true,
     }),
   )
