@@ -197,3 +197,31 @@ it('validates both texture copies and their encoded successor before pruning', a
   expect(await file(f.characterBuilt).exists()).toBe(true)
   expect(await file(f.built).exists()).toBe(true)
 })
+
+it('retires a superseded character encoding and its WebP only from Pages', async () => {
+  const f = await characterFixture()
+  for (const where of ['public', 'dist']) {
+    await writeFile(join(f.root, where, 'actor.glb'), model())
+  }
+  const result = await preparePagesArtifact(f.options)
+  expect(result).toMatchObject({ characterIntermediates: 0, retiredCharacterTextures: 2 })
+  expect(await file(f.characterBuilt).exists()).toBe(false)
+  expect(await file(f.runtimeFile).exists()).toBe(false)
+  expect(await file(f.characterSource).exists()).toBe(true)
+  expect(await file(f.runtimeFile.replace('/dist/', '/public/')).exists()).toBe(true)
+})
+
+it('retains a character encoding with an offline consumer', async () => {
+  const f = await characterFixture()
+  for (const where of ['public', 'dist']) {
+    await writeFile(join(f.root, where, 'actor.glb'), model())
+  }
+  await writeFile(
+    join(f.root, 'tools/consumer.ts'),
+    JSON.stringify(Object.values(f.options.characterEncodings)),
+  )
+  const result = await preparePagesArtifact(f.options)
+  expect(result).toMatchObject({ characterIntermediates: 0, retiredCharacterTextures: 0 })
+  expect(await file(f.characterBuilt).exists()).toBe(true)
+  expect(await file(f.runtimeFile).exists()).toBe(true)
+})

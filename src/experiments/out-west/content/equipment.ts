@@ -111,13 +111,13 @@ export const EQUIPMENT = {
     },
   },
   'outfit.wool-duster': {
-    url: '/experiments/out-west/3d/native-v2/equipment/outfit.wool-duster.glb?v=c1ee3c5f65bde451',
-    hash: 'c1ee3c5f65bde45142776b90f5c8f04346674c5647667a436207d0b75377640d',
-    bytes: 1157920,
+    url: '/experiments/out-west/3d/native-v2/equipment/outfit.wool-duster.glb?v=0b1c8f6f4a426e36',
+    hash: '0b1c8f6f4a426e36144dfea7a7cf6a98cb0e970c3d0d139f30abfc62e737d23c',
+    bytes: 1165460,
     pair: {
-      url: '/experiments/out-west/3d/native-v2/equipment/outfit.wool-duster.pair.glb?v=c28bf1bb9692d336',
-      hash: 'c28bf1bb9692d33636f3b0f788d4df02067bdfcd85d191c248bf571ce151e9f7',
-      bytes: 1158396,
+      url: '/experiments/out-west/3d/native-v2/equipment/outfit.wool-duster.pair.glb?v=d6d7c1e8bd32880d',
+      hash: 'd6d7c1e8bd32880d7f4171adaf18ba9a38e83ad69267d6939417ed9c4eb1f893',
+      bytes: 1165936,
     },
   },
   'outfit.striped-poncho': {

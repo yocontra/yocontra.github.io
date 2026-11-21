@@ -48,6 +48,7 @@ async function artifacts(
     'coat-sleeves',
     'boot-bridges',
     'coat-collars',
+    'coat-tails',
     'shirt-fronts',
     'neckerchiefs',
     'facial-hair',

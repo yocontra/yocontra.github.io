@@ -1,4 +1,4 @@
-/** Keep referenced game textures and omit verified encoder intermediates from Pages. */
+/** Keep referenced textures and omit unused encoder artifacts from Pages. */
 import { createHash } from 'node:crypto'
 import { readdir, readFile, realpath, stat, unlink } from 'node:fs/promises'
 import { dirname, isAbsolute, join, relative, resolve } from 'node:path'
@@ -136,14 +136,22 @@ async function inspectSources(root: string, names: Set<string>): Promise<Set<str
   return textures
 }
 
-async function omitCharacterInputs(
+async function omitUnusedCharacterTextures(
   encodings: Readonly<Record<string, string>>,
   roots: { public: string; artifact: string },
   bakedReferences: Set<string>,
   allReferences: Set<string>,
-): Promise<{ paths: string[]; bytes: number }> {
-  const paths: string[] = []
+): Promise<{ inputs: number; retired: number; paths: Set<string>; bytes: number }> {
+  const paths = new Set<string>()
   let bytes = 0
+  let inputs = 0
+  let retired = 0
+  function omit(path: string, length: number): void {
+    if (!paths.has(path)) {
+      paths.add(path)
+      bytes += length
+    }
+  }
   for (const [source, derivative] of Object.entries(encodings)) {
     if (
       !(
@@ -155,17 +163,15 @@ async function omitCharacterInputs(
     }
     const name = characterInput.exec(source.slice(characterDirectory.length + 2))?.groups?.name
     const encoded = derivative.slice(characterDirectory.length + 2)
-    if (
-      !(
-        name &&
-        omissionName.test(encoded) &&
-        bakedReferences.has(encoded) &&
-        !allReferences.has(`${name}.webp`)
-      )
-    ) {
+    if (!(name && omissionName.test(encoded) && !allReferences.has(`${name}.webp`))) {
+      continue
+    }
+    const unusedEncoding = !allReferences.has(encoded)
+    if (!(unusedEncoding || bakedReferences.has(encoded))) {
       continue
     }
     const built = join(roots.artifact, source.slice(1))
+    const builtEncoding = join(roots.artifact, derivative.slice(1))
     const original = join(roots.public, source.slice(1))
     if (!((await Bun.file(original).exists()) && (await Bun.file(built).exists()))) {
       continue
@@ -173,7 +179,7 @@ async function omitCharacterInputs(
     const [a, b, runtime, originalRuntime] = await Promise.all([
       readFile(original),
       readFile(built),
-      readFile(join(roots.artifact, derivative.slice(1))),
+      readFile(builtEncoding),
       readFile(join(roots.public, derivative.slice(1))),
     ])
     if (
@@ -183,10 +189,15 @@ async function omitCharacterInputs(
     ) {
       throw new Error(`Character encoder inputs changed: ${source}`)
     }
-    paths.push(built)
-    bytes += b.length
+    if (unusedEncoding) {
+      retired += Number(!paths.has(builtEncoding)) + Number(!paths.has(built))
+      omit(builtEncoding, runtime.length)
+    } else {
+      inputs++
+    }
+    omit(built, b.length)
   }
-  return { paths, bytes }
+  return { paths, bytes, inputs, retired }
 }
 
 export async function preparePagesArtifact(
@@ -248,7 +259,7 @@ export async function preparePagesArtifact(
     omittedBytes += entry.bytes
     removals.push(join(directory, path))
   }
-  const characters = await omitCharacterInputs(
+  const characters = await omitUnusedCharacterTextures(
     options.characterEncodings ?? characterEncoding.images,
     { public: publicRoot, artifact: directory },
     embedded.artifact.textures,
@@ -268,7 +279,8 @@ export async function preparePagesArtifact(
   }
   return {
     checked: selected.length,
-    characterIntermediates: characters.paths.length,
+    characterIntermediates: characters.inputs,
+    retiredCharacterTextures: characters.retired,
     omittedBytes,
     beforeBytes,
     afterBytes,

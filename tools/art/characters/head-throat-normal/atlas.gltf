@@ -171,7 +171,7 @@
       },
       {
         "path": "tools/content/garment-parts.ts",
-        "sha256": "f33e2b6ccb30a3b25f4a7be9a767f97c1b5aa12077ffebbe8242a6310367423c"
+        "sha256": "23c6c9288a45d380e3ddcd0f5dbea46653dc490cfe9234ae0e7613771c892d7c"
       },
       {
         "path": "tools/content/garment-geometry.ts",
@@ -748,7 +748,7 @@
         1.0000159740447998,
         1.0000272989273071
       ],
-      "inputGeometrySHA256": "937a19a2c86da7e6e8773d0af50823292280ab7efb17f129a8382a0afb8760cd"
+      "inputGeometrySHA256": "edc366f9ebd32365beaa9de7638553ec05b2edc3e765454767ed5b950dd71c8c"
     }
   }
 }
