@@ -7,6 +7,7 @@ import {
   type Primitive,
   type Skin,
   type vec3,
+  type vec4,
 } from '@gltf-transform/core'
 import { ALL_EXTENSIONS } from '@gltf-transform/extensions'
 import { compactPrimitive, copyToDocument, prune, unpartition } from '@gltf-transform/functions'
@@ -24,6 +25,8 @@ interface HeadFit {
   eyeScale: number
   eyeForward: number
   keepBrows: boolean
+  keepBeard?: boolean
+  tint?: vec4
 }
 
 const starterFit: HeadFit = {
@@ -153,6 +156,11 @@ function trimFormerHead(
   const eyes = piece('Eye')
   const brows = piece('Brows')
   const hair = piece('Hair')
+  const details = fit.keepBeard
+    ? piece('Beard').filter(
+        ([x, y, z]) => y >= 1.495 && y <= 1.547 && z > 0.063 && Math.abs(x - templeCenter) < 0.054,
+      )
+    : []
   const locate = frontSurface(head)
   const toNative = toGame.clone().invert()
   const keep = Array.from({ length: position.getCount() }, (_, index) => {
@@ -170,6 +178,14 @@ function trimFormerHead(
       const height = y + 0.003
       const forehead = locate(across, height) ?? z
       position.setElement(index, point(toNative, [across, height, forehead + 0.0009]))
+      return true
+    }
+    if (isNear(local, details)) {
+      const [x, y, z] = local
+      const skinDepth = locate(x, y)
+      if (skinDepth !== null) {
+        position.setElement(index, point(toNative, [x, y, Math.max(z, skinDepth + 0.0016)]))
+      }
       return true
     }
     return local[1] < fit.cutoff || isNear(local, hair)
@@ -290,7 +306,11 @@ async function installHead(
     if (!skin) {
       throw new Error('Missing authored face surface material')
     }
-    head.setMaterial(copyToDocument(art, paletteDocument, [skin]).get(skin) as Material)
+    const material = copyToDocument(art, paletteDocument, [skin]).get(skin) as Material
+    if (fit.tint) {
+      material.setBaseColorFactor(fit.tint)
+    }
+    head.setMaterial(material)
   }
   const replacement = copyToDocument(native, art, [head]).get(head) as Primitive
   attachSkin(native, replacement, nativeSkin, { toNative, fit })
@@ -309,4 +329,34 @@ export function fitGreenhornHead(
   palette: string,
 ): Promise<void> {
   return installHead(paths, greenhornFit, palette)
+}
+
+const earlyCastFits: Partial<Record<number, HeadFit>> = {
+  1: {
+    ...greenhornFit,
+    lift: 0.1174,
+    eyeScale: 0.87,
+    eyeForward: 0.1095,
+    keepBrows: true,
+    keepBeard: true,
+    tint: [0.96, 0.82, 0.74, 1],
+  },
+  3: {
+    ...greenhornFit,
+    lift: 0.1217,
+    eyeScale: 0.88,
+    eyeForward: 0.1092,
+    keepBrows: true,
+    tint: [0.98, 0.85, 0.78, 1],
+  },
+}
+export function fitEarlyCastHead(
+  paths: { source: string; authoring: string; target: string },
+  opts: { id: number; palette: string },
+): Promise<void> {
+  const fit = earlyCastFits[opts.id]
+  if (!fit) {
+    throw new Error(`Missing authored cast fit ${opts.id}`)
+  }
+  return installHead(paths, fit, opts.palette)
 }

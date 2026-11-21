@@ -101,7 +101,7 @@ export const ENVIRONMENT = {
   hash: '206c67e3a1b992282821cf06662bdd69bbb4915c1c4444a66338a40d6a7d4e34',
   bytes: 1173154,
 } as const
-export const CONTENT_VERSION = 'aa5491dda0b6e6179515b116cb07495d0807374f357d2048bd633dea856f22a4'
+export const CONTENT_VERSION = '14fb2806395afabf93cad9eb0afb762f74e6ba48898ecdea25d76af59c38dd36'
 export const COLLISION_VERSION = '03b11033428780f67158b47e3fc2b37d761185acea4d5b323301449671b65def'
 export const ASSETS = {
   frontier: {
@@ -150,9 +150,9 @@ export const ASSETS = {
     bytes: 2095656,
   },
   'outlaw-1': {
-    url: '/experiments/out-west/3d/native-v2/baked/outlaw-1.glb?v=944063cd4feca4f2',
-    hash: '944063cd4feca4f2f1e021cb38486b8656bcf86347186bbd93ed03ab09504bc0',
-    bytes: 2029036,
+    url: '/experiments/out-west/3d/native-v2/baked/outlaw-1.glb?v=e9a4051eac25318c',
+    hash: 'e9a4051eac25318c0e86ead13edf78007b77cc976af1e0770ebbc27ec4ad1829',
+    bytes: 2169308,
   },
   'outlaw-2': {
     url: '/experiments/out-west/3d/native-v2/baked/outlaw-2.glb?v=40239d8cdab25124',
@@ -160,9 +160,9 @@ export const ASSETS = {
     bytes: 1985900,
   },
   'outlaw-3': {
-    url: '/experiments/out-west/3d/native-v2/baked/outlaw-3.glb?v=fc9b76e5dc0ae583',
-    hash: 'fc9b76e5dc0ae583b9bb3ca2c0511061f783b13691c16c827ae7c76a3a931bbc',
-    bytes: 2070808,
+    url: '/experiments/out-west/3d/native-v2/baked/outlaw-3.glb?v=ba641cfef0d29a64',
+    hash: 'ba641cfef0d29a64e18bd202f3c038aa7b0d6f4cdc09a515637da8485844ea3e',
+    bytes: 2214956,
   },
   'outlaw-4': {
     url: '/experiments/out-west/3d/native-v2/baked/outlaw-4.glb?v=318cc378512f04c4',
