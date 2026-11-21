@@ -54,7 +54,7 @@ function clips(doc: Document): string {
 }
 for (const [id, faces, vertices] of [
   ['outfit.trail-duds', 10_520, 5956],
-  ['outfit.wool-duster', 2654, 1724],
+  ['outfit.wool-duster', 7328, 4315],
 ] as const) {
   it(`${id} retains only complete fitted arm faces with exact native streams, skin, PBR and clocks`, async () => {
     const nativePath = `public/experiments/out-west/3d/native-v2/equipment/${id}.glb`
@@ -129,7 +129,9 @@ for (const [id, faces, vertices] of [
     ).toBe(false)
     expect(output.getRoot().listMaterials()).toHaveLength(2)
     const expectedHands =
-      id === 'outfit.trail-duds' ? [{ name: 'field-hands', triangles: 6168, vertices: 3535 }] : []
+      id === 'outfit.trail-duds'
+        ? [{ name: 'field-hands', triangles: 6168, vertices: 3535 }]
+        : [{ name: 'field-hands', triangles: 6104, vertices: 3490 }]
     expect(first.report.surfaces.filter((surface) => surface.name === 'field-hands')).toEqual(
       expectedHands,
     )
