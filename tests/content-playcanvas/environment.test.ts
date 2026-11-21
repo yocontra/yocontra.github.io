@@ -121,7 +121,23 @@ it('ambient native clips and textures match their generated content hashes', asy
     .map((animation) => animation.getName())
   expect(clips).toContain('Clock_11_59')
   expect(clips).toContain('Toll')
-  expect(document.getRoot().listMeshes()).toHaveLength(2)
+  const nodes = document.getRoot().listNodes()
+  expect(nodes.find((node) => node.getName() === 'clock-hands')?.getMesh()).toBeDefined()
+  const bell = nodes.find((node) => node.getName() === 'clock-bell')
+  const bellParts = bell?.listChildren() ?? []
+  expect(bellParts).toHaveLength(2)
+  expect(
+    bellParts.flatMap(
+      (part) =>
+        part
+          .getMesh()
+          ?.listPrimitives()
+          .map((primitive) => primitive.getMaterial()?.getName()) ?? [],
+    ),
+  ).toEqual(['clockwork Iron', 'Railway cast bronze'])
+  expect(
+    bellParts.every((part) => part.getSkin()?.listJoints().at(-1)?.getName() === 'clock-3-8'),
+  ).toBe(true)
   expect(document.getRoot().listSkins().length).toBeGreaterThan(0)
   expect(
     document

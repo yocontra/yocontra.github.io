@@ -458,8 +458,8 @@ const only = process.argv[2]
 if ((only === 'dog' || only === 'horse') && !(await authoredAnimal(only))) {
   throw new Error(`Missing ${only} Blender parts; run tools/content/animal-authoring.py`)
 }
-if (only === 'crow' && !(await authoredBird('crow'))) {
-  throw new Error('Missing crow Blender parts; run tools/content/animal-authoring.py')
+if ((only === 'crow' || only === 'hen') && !(await authoredBird(only))) {
+  throw new Error(`Missing ${only} Blender parts; run tools/content/animal-authoring.py`)
 }
 if (!only || only === 'animals') {
   await coatAnimals()

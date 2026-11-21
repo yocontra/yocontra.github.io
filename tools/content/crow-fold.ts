@@ -21,6 +21,8 @@ export async function bakeFoldedCrow(source: string, output: string): Promise<vo
         blender,
         '--background',
         '--factory-startup',
+        '--python-exit-code',
+        '1',
         '--python',
         'tools/content/crow-fold-authoring.py',
         '--',

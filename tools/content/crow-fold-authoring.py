@@ -131,21 +131,22 @@ def feather_coverts(asset, primitive, side):
         a, b, c = triangle
         return abs((b[0] - a[0]) * (c[1] - a[1]) - (b[1] - a[1]) * (c[0] - a[0]))
     atlas = max(triangles, key=area)
-    for row in range(4):
+    for row in range(5):
         for column in range(6):
             start = len(positions)
             span = 0.045 + column * 0.024 + row * 0.003
-            front = 0.034 - row * 0.012
-            length = 0.042 + 0.004 * row
+            front = 0.038 - row * 0.011
+            length = 0.039 + 0.004 * row + 0.003 * math.sin(column * 2.17 + row * 1.21)
             width = 0.016 - 0.001 * column
             for underside in (False, True):
                 for i in range(7):
                     u = i / 6
-                    radius = width * max(0.06, math.sin(math.pi * u) ** 0.65)
+                    radius = width * max(0.04, math.sin(math.pi * u) ** 0.62)
                     for j in range(5):
                         across = (j / 4) * 2 - 1
-                        x = side * (span + across * radius + 0.006 * u)
+                        x = side * (span + across * radius + 0.006 * u + 0.002 * u * u)
                         y = 0.123 + row * 0.0012 + 0.002 * math.sin(math.pi * u) * (1 - across * across)
+                        y += 0.0022 * u * u
                         y -= 0.0012 if underside else 0
                         positions.append((x, y, front - length * u))
                         closed[len(positions) - 1] = Vector((

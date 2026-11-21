@@ -18,6 +18,7 @@ import type { Verdict } from '../duel/clock.ts'
 import { currentPlayer } from '../net/auth.ts'
 import { fetchDaily, fetchDailyBoard, issueDaily, isVerifyRefusal } from '../net/meta.ts'
 import { RankedSession } from '../net/ranked.ts'
+import { assetUrl } from '../platform/asset-url.ts'
 import { icon } from './icons.ts'
 import { button, el, facts, panelSheet, statusLine } from './sheet.ts'
 
@@ -190,9 +191,19 @@ export class DailyTile {
     const t = today.value
     const spec = t.spec
     const o = OUTLAWS[spec.outlaw]
-    el('div', 'ow-results-kicker', s.body, spec.title)
-    el('h3', 'ow-daily-big', s.body, o ? o.name : 'Daily Outlaw')
-    modifiers(s.body, spec)
+    const lead = el('div', 'ow-daily-lead', s.body)
+    if (o) {
+      const portrait = el('img', 'ow-daily-portrait', lead)
+      portrait.src = assetUrl(`/experiments/out-west/ui/portraits/outlaw-${spec.outlaw}.webp`)
+      portrait.alt = ''
+      portrait.width = 288
+      portrait.height = 243
+      portrait.addEventListener('error', () => portrait.remove(), { once: true })
+    }
+    const caseNotes = el('div', 'ow-daily-case', lead)
+    el('div', 'ow-results-kicker', caseNotes, spec.title)
+    el('h3', 'ow-daily-big', caseNotes, o ? o.name : 'Daily Outlaw')
+    modifiers(caseNotes, spec)
     const left = Math.max(0, t.maxTries - t.tries)
     let pay = `${reward(DAILY_PAY.cash)} (first win today)`
     if (!currentPlayer()) {

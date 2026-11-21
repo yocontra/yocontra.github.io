@@ -1514,17 +1514,30 @@ def hen_build(m):
         "body",
     )
     objects.append(body)
-    for s in (-1, 1):
-        objects.append(
-            organic(
-                f"HenWing{s}",
-                [((s * 0.064, 0.035, 0.226), (0.018, 0.1, 0.056), -14), ((s * 0.058, 0.11, 0.252), (0.014, 0.05, 0.03), -30)],
-                0.004,
-                300,
-                m["wing"],
-                "body",
-            )
+    for side in (-1, 1):
+        wing = organic(
+            f"HenWing{side}",
+            [((side * 0.064, 0.035, 0.226), (0.018, 0.1, 0.056), -14),
+             ((side * 0.058, 0.11, 0.252), (0.014, 0.05, 0.03), -30)],
+            0.004, 300, m["wing"], "body",
         )
+        objects.append(wing)
+        feathers = Builder()
+        for row, height in enumerate((0.199, 0.233, 0.256)):
+            for column in range(6):
+                y = -0.021 + column * 0.018 + 0.004 * (row % 2)
+                hit, normal = surface_ray(wing, (side * 0.18, y, height), (-side, 0, 0))
+                if hit is None:
+                    continue
+                along = Vector((0, 1, -0.12 + row * 0.11))
+                along = (along - normal * along.dot(normal)).normalized()
+                across = normal.cross(along).normalized()
+                blade(
+                    feathers, hit + normal * 0.0025, along, across,
+                    0.034 + 0.008 * (2 - row), 0.017 + 0.002 * (column % 2),
+                    0.0022, 0.0065 - row * 0.0015, samples=4,
+                )
+        objects.append(part(f"HenCovertFeathers{side}", feathers, m["wing"], "body"))
     tail = Builder()
     for k in range(14):
         side = 1 if k % 2 else -1
@@ -1839,7 +1852,7 @@ BIRDS = {
         "kinds": ("plumage", "wing", "tail", "skin", "horn", "eye"),
         "parents": {"hen": "body", "hinge-1": "head"},
         "density": {"eye": 4.0, "tail": 0.55, "horn": 0.5, "skin": 0.8},
-        "size": 512,
+        "size": 1024,
         "occlusion": 0.05,
         "palette": {
             "cells": (1.0, 0.55, 0.8),

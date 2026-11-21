@@ -403,6 +403,26 @@
 }
 
 /* ---------------------------------------------------------- the daily sheet */
+.ow-daily-lead {
+  display: grid;
+  align-items: center;
+  gap: clamp(var(--ow-s2), 3vw, var(--ow-s5));
+  margin-block: var(--ow-s2) var(--ow-s4);
+  padding-block: var(--ow-s2) var(--ow-s4);
+  border-bottom: 3px double var(--ow-rule-ink);
+}
+.ow-daily-lead:has(.ow-daily-portrait) {
+  grid-template-columns: clamp(5.25rem, 24vw, 9rem) minmax(0, 1fr);
+}
+.ow-daily-portrait {
+  display: block;
+  width: 100%;
+  height: auto;
+  padding: 3px;
+  border: 1px solid var(--ow-rule-ink);
+  filter: grayscale(1) sepia(0.45);
+  mix-blend-mode: multiply;
+}
 .ow-daily-mods {
   display: flex;
   flex-wrap: wrap;
@@ -440,4 +460,14 @@
   text-align: center;
   text-transform: uppercase;
   color: var(--ow-ink);
+}
+.ow-daily-case .ow-daily-mods {
+  justify-content: flex-start;
+}
+.ow-daily-case :is(.ow-results-kicker, .ow-daily-big, .ow-daily-rule) {
+  text-align: start;
+}
+.ow-daily-case .ow-daily-big {
+  margin-block: var(--ow-s1);
+  overflow-wrap: anywhere;
 }

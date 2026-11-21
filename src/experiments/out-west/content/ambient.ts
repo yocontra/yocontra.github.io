@@ -1,14 +1,14 @@
 // Authored native ambient assets, versioned by tools/content/manifest.ts.
 export const AMBIENT_ASSETS = {
   crow: {
-    url: '/experiments/out-west/3d/native-v2/ambient/crow.glb?v=3d50b316d2185cf2',
-    bytes: 859152,
-    hash: '3d50b316d2185cf2ad282220e42791ff04cc73d318c285d259f236eb7c8b1930',
+    url: '/experiments/out-west/3d/native-v2/ambient/crow.glb?v=e7e54188bd903a63',
+    bytes: 946704,
+    hash: 'e7e54188bd903a63e40a25cdb2663d360be2749d6efc0b6fcf7ac66412c62fed',
   },
   hen: {
-    url: '/experiments/out-west/3d/native-v2/ambient/hen.glb?v=52d28743e1ff96f5',
-    bytes: 416552,
-    hash: '52d28743e1ff96f5d975f8d5bef191927595db92431d78cd3ff49c4048d0da48',
+    url: '/experiments/out-west/3d/native-v2/ambient/hen.glb?v=a71932b7d1dbf56e',
+    bytes: 574680,
+    hash: 'a71932b7d1dbf56e2b1716aa37a43564c602c1d96e7d237c5e98f1b4fe5df9c3',
   },
   shingles: {
     url: '/experiments/out-west/3d/ambient/shingles.glb?v=3df81c62a3f71e7d',
@@ -16,19 +16,19 @@ export const AMBIENT_ASSETS = {
     hash: '3df81c62a3f71e7d2afa95a6bb8c6ddc6061766978c5061eeee872b849423b34',
   },
   clockwork: {
-    url: '/experiments/out-west/3d/native-v2/ambient/clockwork.glb?v=5255cc9da376aad1',
-    bytes: 129324,
-    hash: '5255cc9da376aad18fc1ef6d8ef6fbe6b63ddc80333b24fb86094e99f91a5ac9',
+    url: '/experiments/out-west/3d/native-v2/ambient/clockwork.glb?v=4b6ffbde10f32330',
+    bytes: 251476,
+    hash: '4b6ffbde10f3233015ffc20825088568b482f0acfcd30e78c5970912fc79ecc8',
   },
   'frontier-tumbleweeds': {
-    url: '/experiments/out-west/3d/native-v2/ambient/frontier-tumbleweeds.glb?v=a699e97a99165438',
-    bytes: 335544,
-    hash: 'a699e97a99165438a14d6df4e6a0108232ffdd97588ece8f605426f7b05c3537',
+    url: '/experiments/out-west/3d/native-v2/ambient/frontier-tumbleweeds.glb?v=571f2365aec10296',
+    bytes: 498696,
+    hash: '571f2365aec10296ab74057785219a71f95e03c0001ce0764e2025a134cb884c',
   },
   'duel-tumbleweeds': {
-    url: '/experiments/out-west/3d/native-v2/ambient/duel-tumbleweeds.glb?v=06afcd6221000f86',
-    bytes: 137824,
-    hash: '06afcd6221000f8625c9c9f6aa12497dc3748cef63d604423ba1f2604b20ea0d',
+    url: '/experiments/out-west/3d/native-v2/ambient/duel-tumbleweeds.glb?v=b3bb452366e28965',
+    bytes: 352316,
+    hash: 'b3bb452366e28965cce7224a8da4e927dcea262c50c7a0004d57c13669b0db4f',
   },
   dust: {
     url: '/experiments/out-west/3d/ambient/dust.png?v=5c7d241168f90599',
