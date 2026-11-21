@@ -46,9 +46,9 @@ export const EQUIPMENT = {
     bytes: 308928,
   },
   'hat.battered-brim': {
-    url: '/experiments/out-west/3d/native-v2/equipment/hat.battered-brim.glb?v=3137308991f9aec3',
-    hash: '3137308991f9aec3374884217b3d83b05b09b3ec70f6f5a53af674433b74ced6',
-    bytes: 108244,
+    url: '/experiments/out-west/3d/native-v2/equipment/hat.battered-brim.glb?v=423260974765c15a',
+    hash: '423260974765c15a7d4b0cd4b04ed1146a5bd54eb0752bbeecb61ea1b1609641',
+    bytes: 98752,
   },
   'hat.plainsman': {
     url: '/experiments/out-west/3d/native-v2/equipment/hat.plainsman.glb?v=4c6067b24243ac11',
