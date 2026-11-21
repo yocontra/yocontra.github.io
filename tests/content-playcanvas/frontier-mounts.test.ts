@@ -123,7 +123,7 @@ const part = (id: string) => {
 }
 const wood = sceneFaces(`${propPrefix}wood-mesh`)
 const iron = sceneFaces(`${propPrefix}iron-mesh`)
-const floor = sceneFaces(`${propPrefix}floor-mesh`)
+const bankTop = sceneFaces('Frontier furniture rubbed walnut')
 
 it('shares all new collision triangles and retains every original collider unchanged', () => {
   const collision = compileFrontierCollision(TOWN)
@@ -324,7 +324,7 @@ it('bank end feet meet actual counter/grille triangles while preserving central 
   for (const member of members.filter((m) => m.family === 'bank')) {
     const xs = member.positions.filter((_v, i) => i % 3 === 0)
     const x = (Math.min(...xs) + Math.max(...xs)) / 2
-    expect(patchContacts(faces(member), floor, [x, 1.1, 68.84], [0, 1, 0]), member.id).toBe(true)
+    expect(patchContacts(faces(member), bankTop, [x, 1.1, 68.84], [0, 1, 0]), member.id).toBe(true)
     expect(patchContacts(faces(member), iron, [x, 1.305, 68.84], [0, 0, 1]), member.id).toBe(true)
   }
   const feet = members.filter((m) => m.family === 'bank').flatMap(faces)
@@ -352,8 +352,8 @@ it('20mm displaced shoe and foot controls expose a real local gap', () => {
   expect(contactOverlap(displaced(shoe, 1, 0.02), wood, shoePoint, [0, 1, 0]) ?? 0).toBeLessThan(
     -0.015,
   )
-  expect(patchContacts(foot, floor, footPoint, [0, 1, 0])).toBe(true)
-  expect(contactOverlap(displaced(foot, 1, 0.02), floor, footPoint, [0, 1, 0]) ?? 0).toBeLessThan(
+  expect(patchContacts(foot, bankTop, footPoint, [0, 1, 0])).toBe(true)
+  expect(contactOverlap(displaced(foot, 1, 0.02), bankTop, footPoint, [0, 1, 0]) ?? 0).toBeLessThan(
     -0.019,
   )
 })

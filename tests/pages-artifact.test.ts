@@ -143,3 +143,57 @@ it('an oversized artifact fails before removing any copy', async () => {
   expect(await file(f.built).exists()).toBe(true)
   expect(await readFile(f.source)).toEqual(image)
 })
+
+async function characterFixture() {
+  const f = await fixture()
+  const relative = 'experiments/out-west/3d/native-v2/characters'
+  const intermediate = `${relative}/${'b'.repeat(24)}.color.webp`
+  const ktx = `${relative}/${'c'.repeat(24)}.color.ktx2`
+  const runtimeTexture = Buffer.alloc(80)
+  runtimeTexture.writeUInt32LE(0x58_54_4b_ab)
+  await Promise.all(
+    ['public', 'dist'].map(async (where) => {
+      const root = join(f.root, where)
+      await mkdir(join(root, relative), { recursive: true })
+      await Promise.all([
+        writeFile(join(root, intermediate), 'encoder source'),
+        writeFile(join(root, ktx), runtimeTexture),
+        writeFile(join(root, 'actor.glb'), model({ nativePbr: { albedo: `/${ktx}` } })),
+      ])
+    }),
+  )
+  return {
+    ...f,
+    characterSource: join(f.root, 'public', intermediate),
+    characterBuilt: join(f.root, 'dist', intermediate),
+    runtimeFile: join(f.root, 'dist', ktx),
+    intermediate,
+    options: { ...f.options, characterEncodings: { [`/${intermediate}`]: `/${ktx}` } },
+  }
+}
+
+it('keeps referenced character KTX2 textures and retires only their unused WebP inputs', async () => {
+  const f = await characterFixture()
+  expect(await preparePagesArtifact(f.options)).toMatchObject({ characterIntermediates: 1 })
+  expect(await file(f.characterBuilt).exists()).toBe(false)
+  expect(await file(f.runtimeFile).exists()).toBe(true)
+  expect(await readFile(f.characterSource, 'utf8')).toBe('encoder source')
+})
+
+it('retains a character WebP if a built asset still references it', async () => {
+  const f = await characterFixture()
+  await writeFile(
+    join(f.root, 'dist', 'consumer.js'),
+    `"/${f.intermediate.replace('bbbb', '%62bbb')}"`,
+  )
+  expect(await preparePagesArtifact(f.options)).toMatchObject({ characterIntermediates: 0 })
+  expect(await file(f.characterBuilt).exists()).toBe(true)
+})
+
+it('validates both texture copies and their encoded successor before pruning', async () => {
+  const f = await characterFixture()
+  await writeFile(f.runtimeFile, 'incomplete derivative')
+  await expect(preparePagesArtifact(f.options)).rejects.toThrow('Character encoder inputs changed')
+  expect(await file(f.characterBuilt).exists()).toBe(true)
+  expect(await file(f.built).exists()).toBe(true)
+})

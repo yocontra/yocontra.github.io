@@ -1,4 +1,4 @@
-"""Author three period furniture silhouettes. Exports use metres and a floor origin."""
+"""Author period furniture silhouettes. Exports use metres and a floor origin."""
 
 import math
 import sys
@@ -9,6 +9,12 @@ import bpy
 output = Path(sys.argv[sys.argv.index("--") + 1])
 bpy.ops.object.select_all(action="SELECT")
 bpy.ops.object.delete(use_global=False)
+for data in list(bpy.data.meshes):
+    if not data.users:
+        bpy.data.meshes.remove(data)
+for mat in list(bpy.data.materials):
+    if not mat.users:
+        bpy.data.materials.remove(mat)
 
 
 def finish(name, rgb, roughness, metal=0):
@@ -331,6 +337,139 @@ for x in (-0.074, -0.051, -0.028, -0.005, 0.018):
     box("Vent opening", x, -0.441, 0.425, (0.011, 0.005, 0.026), black, 0.001)
 box("Door latch", 0.105, -0.442, 0.504, (0.115, 0.039, 0.024), iron, 0.009, spin=0.13)
 lathe("Latch finial", 0.153, -0.452, [(0.49, 0.017), (0.521, 0.018)], brass, 12)
+pack()
+
+# A lined oak cashier counter and iron safes, with their bases on the cover plane.
+begin("first-frontier-counter")
+mahogany = finish("Frontier furniture oil-darkened walnut", (0.22, 0.095, 0.043), 0.66)
+worn = finish("Frontier furniture rubbed walnut", (0.34, 0.15, 0.064), 0.52)
+box("Recessed plinth", 0, 0, 0, (1.70, 0.53, 0.12), mahogany, 0.009)
+box("Molded plinth edge", 0, 0, 0.092, (1.77, 0.55, 0.05), oak, 0.01)
+box("Oak carcass", 0, 0, 0.14, (1.69, 0.51, 0.85), mahogany, 0.012)
+for toward in (-1, 1):
+    front = toward * 0.26
+    for x in (-0.81, -0.28, 0.28, 0.81):
+        box(
+            "Milled panel stile",
+            x,
+            front,
+            0.145,
+            (0.067, 0.043, 0.78),
+            oak,
+            0.007,
+            grain_axis=2,
+        )
+    for x in (-0.55, 0, 0.55):
+        box(
+            "Inset raised panel",
+            x,
+            front,
+            0.235,
+            (0.42, 0.030, 0.54),
+            worn,
+            0.027,
+            grain_axis=2,
+        )
+        box(
+            "Carved inner panel bead",
+            x,
+            front + 0.013 * toward,
+            0.266,
+            (0.35, 0.015, 0.48),
+            mahogany,
+            0.013,
+            grain_axis=2,
+        )
+    for h in (0.174, 0.875):
+        box("Molded panel rail", 0, front, h, (1.65, 0.04, 0.054), oak, 0.009)
+box("Countertop apron", 0, 0, 0.934, (1.76, 0.57, 0.079), oak, 0.012)
+box("Worn counter top", 0, 0, 1.013, (1.80, 0.60, 0.087), worn, 0.016)
+pack()
+
+
+def front_round(name, x, y, z, radius, thickness, mat, segments=18):
+    points = [
+        (
+            x + math.cos(i * math.tau / segments) * radius,
+            z + math.sin(i * math.tau / segments) * radius,
+        )
+        for i in range(segments)
+    ]
+    vertices = [
+        (a, y + d, b) for d in (-thickness / 2, thickness / 2) for a, b in points
+    ]
+    faces = [tuple(range(segments)), tuple(reversed(range(segments, segments * 2)))]
+    faces.extend(
+        (i, i + segments, (i + 1) % segments + segments, (i + 1) % segments)
+        for i in range(segments)
+    )
+    mesh(name, vertices, faces, mat, smooth=True)
+
+
+begin("riveted-cash-safe")
+dark_green = finish("Frontier safe blackened iron", (0.091, 0.111, 0.098), 0.57, 0.38)
+edge_iron = finish("Frontier safe worn iron edges", (0.17, 0.178, 0.156), 0.54, 0.44)
+paint = finish("Frontier safe faded pinstripe", (0.45, 0.31, 0.1), 0.67, 0.2)
+hardware = finish("Frontier safe aged brass", (0.44, 0.28, 0.113), 0.42, 0.71)
+for x in (-0.57, 0.57):
+    for y in (-0.35, 0.35):
+        box("Flared foundry foot", x, y, 0, (0.30, 0.22, 0.157), edge_iron, 0.035)
+box("Rolled iron cabinet", 0, -0.037, 0.12, (1.5, 0.87, 1.32), dark_green, 0.041)
+box("Crown cap", 0, -0.03, 1.425, (1.5, 0.94, 0.075), edge_iron, 0.017)
+box("Door recess", 0, 0.405, 0.202, (1.35, 0.072, 1.14), black, 0.032)
+box("Inset safe door", 0.01, 0.438, 0.228, (1.236, 0.067, 1.08), dark_green, 0.038)
+for x in (-0.515, 0.534):
+    box("Vertical pinstripe", x, 0.470, 0.306, (0.009, 0.004, 0.916), paint, 0.001)
+for h in (0.306, 1.212):
+    box("Horizontal pinstripe", 0.009, 0.470, h, (1.056, 0.004, 0.009), paint, 0.001)
+for z in (0.40, 1.13):
+    lathe(
+        "Barrel hinge",
+        -0.604,
+        0.445,
+        [(z - 0.08, 0.040), (z - 0.07, 0.046), (z + 0.071, 0.046), (z + 0.08, 0.034)],
+        edge_iron,
+        14,
+    )
+    lathe(
+        "Hinge cap",
+        -0.604,
+        0.445,
+        [(z + 0.08, 0.025), (z + 0.096, 0.019)],
+        hardware,
+        12,
+    )
+for x in (-0.44, -0.22, 0, 0.22, 0.44):
+    for z in (0.347, 1.175):
+        front_round("Door rivet", x, 0.474, z, 0.012, 0.012, edge_iron, 8)
+front_round("Combination dial surround", 0.25, 0.474, 0.743, 0.118, 0.010, hardware, 28)
+front_round("Dark dial face", 0.25, 0.484, 0.743, 0.090, 0.013, black, 24)
+for i in range(16):
+    t = i * math.tau / 16
+    front_round(
+        "Graduation",
+        0.25 + math.cos(t) * 0.072,
+        0.492,
+        0.743 + math.sin(t) * 0.072,
+        0.0036,
+        0.003,
+        hardware,
+        6,
+    )
+front_round("Knurled dial knob", 0.25, 0.493, 0.743, 0.049, 0.014, edge_iron, 20)
+front_round("Handle mounting rose", 0.27, 0.475, 0.53, 0.067, 0.016, hardware, 18)
+box(
+    "Cast crescent handle",
+    0.342,
+    0.490,
+    0.513,
+    (0.187, 0.024, 0.033),
+    edge_iron,
+    0.009,
+    spin=0.04,
+)
+box("Name plate", 0, 0.471, 1.031, (0.414, 0.012, 0.10), edge_iron, 0.010)
+box("Name plate inset", 0, 0.479, 1.043, (0.361, 0.006, 0.070), hardware, 0.006)
 pack()
 
 output.parent.mkdir(parents=True, exist_ok=True)

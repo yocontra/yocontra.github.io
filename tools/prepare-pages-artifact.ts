@@ -1,10 +1,14 @@
-/** Omit proven embedded-only encoder intermediates from Pages, retaining every public original. */
+/** Keep referenced game textures and omit verified encoder intermediates from Pages. */
 import { createHash } from 'node:crypto'
 import { readdir, readFile, realpath, stat, unlink } from 'node:fs/promises'
 import { dirname, isAbsolute, join, relative, resolve } from 'node:path'
+import characterEncoding from './art/characters/texture-encoding.json' with { type: 'json' }
 import omissions from './content/pages-artifact-omissions.json' with { type: 'json' }
 
 const textureDirectory = 'experiments/out-west/3d/native-v2/environments/textures'
+const characterDirectory = 'experiments/out-west/3d/native-v2/characters'
+const characterTexture = /[a-f0-9]{24}\.(?:color|data)\.(?:webp|ktx2)/gu
+const characterInput = /^(?<name>[a-f0-9]{24}\.(?:color|data))\.webp$/u
 const textExtensions = /\.(?:ts|js|json|jsonc|gltf|md|html|ya?ml|toml|css|svg|txt|map)$/u
 const omissionName = /^[0-9a-f]{24}\.(?:color|data)\.ktx2$/u
 const hash = (bytes: Uint8Array) => createHash('sha256').update(bytes).digest('hex')
@@ -70,11 +74,14 @@ function glb(bytes: Buffer, path: string): { json: unknown; images: string[] } {
 }
 
 /** Scan all strings, including custom extras and percent-encoded external URIs. */
-function references(value: unknown, names: Set<string>, path: string): void {
+function references(value: unknown, names: Set<string>, path: string, textures: Set<string>): void {
   if (typeof value === 'string') {
     const decoded = value.replace(/%(?<hex>[0-9a-f]{2})/giu, (_match, hex: string) =>
       String.fromCharCode(Number.parseInt(hex, 16)),
     )
+    for (const match of decoded.matchAll(characterTexture)) {
+      textures.add(match[0])
+    }
     for (const name of names) {
       if (value.includes(name) || decoded.includes(name)) {
         throw new Error(`Omission is referenced: ${name} in ${path}`)
@@ -82,32 +89,34 @@ function references(value: unknown, names: Set<string>, path: string): void {
     }
   } else if (Array.isArray(value)) {
     for (const child of value) {
-      references(child, names, path)
+      references(child, names, path, textures)
     }
   } else if (value && typeof value === 'object') {
     for (const child of Object.values(value)) {
-      references(child, names, path)
+      references(child, names, path, textures)
     }
   }
 }
 
-async function inspectFiles(paths: string[], names: Set<string>): Promise<Set<string>> {
+async function inspectFiles(paths: string[], names: Set<string>) {
+  const textures = new Set<string>()
   const images = new Set<string>()
   for (const path of paths) {
     if (path.endsWith('.glb')) {
       const parsed = glb(await readFile(path), path)
-      references(parsed.json, names, path)
+      references(parsed.json, names, path, textures)
       for (const digest of parsed.images) {
         images.add(digest)
       }
     } else if (textExtensions.test(path)) {
-      references(await readFile(path, 'utf8'), names, path)
+      references(await readFile(path, 'utf8'), names, path, textures)
     }
   }
-  return images
+  return { images, textures }
 }
 
-async function inspectSources(root: string, names: Set<string>): Promise<void> {
+async function inspectSources(root: string, names: Set<string>): Promise<Set<string>> {
+  const textures = new Set<string>()
   // Offline tools/tests keep reading public originals. Reject new named consumers conservatively.
   const manifest = resolve(
     dirname(new URL(import.meta.url).pathname),
@@ -115,11 +124,69 @@ async function inspectSources(root: string, names: Set<string>): Promise<void> {
   )
   for (const category of ['src', 'tools', 'tests', 'scripts', 'api', '.github']) {
     for (const path of await files(join(root, category))) {
-      if (path !== manifest && textExtensions.test(path)) {
-        references(await readFile(path, 'utf8'), names, path)
+      if (
+        path !== manifest &&
+        path !== join(root, 'tools/art/characters/texture-encoding.json') &&
+        textExtensions.test(path)
+      ) {
+        references(await readFile(path, 'utf8'), names, path, textures)
       }
     }
   }
+  return textures
+}
+
+async function omitCharacterInputs(
+  encodings: Readonly<Record<string, string>>,
+  roots: { public: string; artifact: string },
+  bakedReferences: Set<string>,
+  allReferences: Set<string>,
+): Promise<{ paths: string[]; bytes: number }> {
+  const paths: string[] = []
+  let bytes = 0
+  for (const [source, derivative] of Object.entries(encodings)) {
+    if (
+      !(
+        source.startsWith(`/${characterDirectory}/`) &&
+        derivative.startsWith(`/${characterDirectory}/`)
+      )
+    ) {
+      continue
+    }
+    const name = characterInput.exec(source.slice(characterDirectory.length + 2))?.groups?.name
+    const encoded = derivative.slice(characterDirectory.length + 2)
+    if (
+      !(
+        name &&
+        omissionName.test(encoded) &&
+        bakedReferences.has(encoded) &&
+        !allReferences.has(`${name}.webp`)
+      )
+    ) {
+      continue
+    }
+    const built = join(roots.artifact, source.slice(1))
+    const original = join(roots.public, source.slice(1))
+    if (!((await Bun.file(original).exists()) && (await Bun.file(built).exists()))) {
+      continue
+    }
+    const [a, b, runtime, originalRuntime] = await Promise.all([
+      readFile(original),
+      readFile(built),
+      readFile(join(roots.artifact, derivative.slice(1))),
+      readFile(join(roots.public, derivative.slice(1))),
+    ])
+    if (
+      !(a.equals(b) && runtime.equals(originalRuntime)) ||
+      runtime.length < 80 ||
+      runtime.readUInt32LE() !== 0x58_54_4b_ab
+    ) {
+      throw new Error(`Character encoder inputs changed: ${source}`)
+    }
+    paths.push(built)
+    bytes += b.length
+  }
+  return { paths, bytes }
 }
 
 export async function preparePagesArtifact(
@@ -128,6 +195,7 @@ export async function preparePagesArtifact(
     directory?: string
     check?: boolean
     omissions?: readonly Omission[]
+    characterEncodings?: Readonly<Record<string, string>>
   } = {},
 ) {
   const root = await realpath(options.root ?? process.cwd())
@@ -159,7 +227,7 @@ export async function preparePagesArtifact(
     public: await inspectFiles(await files(publicRoot), names),
     artifact: await inspectFiles(artifactFiles, names),
   }
-  await inspectSources(root, names)
+  const sourceReferences = await inspectSources(root, names)
   const removals: string[] = []
   let omittedBytes = 0
   for (const entry of selected) {
@@ -174,12 +242,20 @@ export async function preparePagesArtifact(
     ) {
       throw new Error(`Omission bytes changed: ${entry.name}`)
     }
-    if (!(embedded.public.has(entry.sha256) && embedded.artifact.has(entry.sha256))) {
+    if (!(embedded.public.images.has(entry.sha256) && embedded.artifact.images.has(entry.sha256))) {
       throw new Error(`Omission lacks identical embedded KTX2: ${entry.name}`)
     }
     omittedBytes += entry.bytes
     removals.push(join(directory, path))
   }
+  const characters = await omitCharacterInputs(
+    options.characterEncodings ?? characterEncoding.images,
+    { public: publicRoot, artifact: directory },
+    embedded.artifact.textures,
+    new Set([...embedded.public.textures, ...embedded.artifact.textures, ...sourceReferences]),
+  )
+  removals.push(...characters.paths)
+  omittedBytes += characters.bytes
   const afterBytes = beforeBytes - omittedBytes
   if (afterBytes > 1_000_000_000) {
     throw new Error(`Pages artifact exceeds 1,000,000,000-byte budget: ${afterBytes}`)
@@ -192,6 +268,7 @@ export async function preparePagesArtifact(
   }
   return {
     checked: selected.length,
+    characterIntermediates: characters.paths.length,
     omittedBytes,
     beforeBytes,
     afterBytes,

@@ -52,56 +52,6 @@ export function anvil(g: FrontierGeometry, root: Node, c: Placement) {
   g.prefab(root, 'k_anvil', { ...c, y0: stump }, {})
 }
 
-/** Banker's iron safe on feet, with door, hinges, dial and handle on both long faces. */
-export function safe(g: FrontierGeometry, root: Node, c: Placement) {
-  const f = frame(c)
-  const height = c.top - f.base
-  const half = f.length / 2
-  const depth = f.width / 2
-  const body: Rgb = [0.17, 0.21, 0.18]
-  for (const a of [-half, half - 0.14]) {
-    for (const b of [-depth, depth - 0.14]) {
-      g.box(root, 'iron', f.block([a, a + 0.14], [b, b + 0.14], [0, 0.08]), IRON)
-    }
-  }
-  g.box(root, 'iron', f.block([-half, half], [-depth + 0.03, depth - 0.03], [0.08, height]), body)
-  for (const side of [-1, 1]) {
-    const face = side * (depth - 0.03)
-    /** Across-axis interval from the body face out to `proud` metres. */
-    const proud = (distance: number): [number, number] =>
-      side < 0 ? [face - distance, face] : [face, face + distance]
-    g.box(
-      root,
-      'iron',
-      f.block([-half + 0.12, half - 0.12], proud(0.03), [0.2, height - 0.12]),
-      [0.14, 0.18, 0.15],
-    )
-    g.box(
-      root,
-      'iron',
-      f.block([-half + 0.16, half - 0.16], proud(0.035), [height - 0.24, height - 0.21]),
-      [0.63, 0.5, 0.24],
-    )
-    for (const y of [0.35, height - 0.4]) {
-      g.box(root, 'iron', f.block([-half + 0.06, -half + 0.14], proud(0.045), [y, y + 0.14]), IRON)
-    }
-    tube(g, root, {
-      role: 'iron',
-      tint: [0.62, 0.52, 0.3],
-      from: f.point(0.1, face, height * 0.62),
-      to: f.point(0.1, face + side * 0.08, height * 0.62),
-      radius: 0.07,
-      segments: 14,
-    })
-    g.box(
-      root,
-      'iron',
-      f.block([0.08, 0.12], proud(0.09), [height * 0.42, height * 0.52]),
-      [0.6, 0.5, 0.28],
-    )
-  }
-}
-
 /** Grave marker: a dressed stone tablet on a plinth, with a stepped crown. */
 export function headstone(g: FrontierGeometry, root: Node, c: Placement) {
   const f = frame(c)

@@ -19,7 +19,6 @@ import {
   headstone,
   IRON,
   lumber,
-  safe,
   trough,
 } from './frontier-furniture.ts'
 import type { FrontierGeometry, Placement, Rgb } from './frontier-geometry.ts'
@@ -43,7 +42,6 @@ const JOINERY: Partial<
   boxcar,
   headstone,
   lumber,
-  safe,
   trough,
 }
 

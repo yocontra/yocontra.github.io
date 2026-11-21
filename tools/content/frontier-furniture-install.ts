@@ -8,11 +8,31 @@ const dimensions = {
   'saloon-card-table': [1.5, 0.8, 1.5],
   'scrubbed-work-table': [2, 0.8, 1],
   'potbelly-stove': [1, 1.1, 1],
+  'riveted-cash-safe': [1.5, 1.5, 1],
+  'first-frontier-counter': [1.8, 1.1, 0.6],
 } as const
 
-function furnitureName(cover: Cover): keyof typeof dimensions | undefined {
+function roomAt(x: number, z: number, buildings: TownLayout['buildings']) {
+  return buildings.find(
+    ({ x: left, z: top, w, d }) => x > left && x < left + w && z > top && z < top + d,
+  )
+}
+
+function furnitureName(
+  cover: Cover,
+  buildings: TownLayout['buildings'],
+): keyof typeof dimensions | undefined {
   if (cover.kind === 'stove') {
     return 'potbelly-stove'
+  }
+  if (cover.kind === 'safe') {
+    return 'riveted-cash-safe'
+  }
+  if (
+    cover.kind === 'counter' &&
+    roomAt(cover.x + cover.w / 2, cover.z + cover.d / 2, buildings)?.kind === 'bank'
+  ) {
+    return 'first-frontier-counter'
   }
   if (cover.kind === 'table') {
     const inSaloon = cover.x >= 23 && cover.x < 42 && cover.z >= 32 && cover.z < 44
@@ -21,8 +41,8 @@ function furnitureName(cover: Cover): keyof typeof dimensions | undefined {
   return undefined
 }
 
-export function hasFittedFurniture(cover: Cover): boolean {
-  return furnitureName(cover) !== undefined
+export function hasFittedFurniture(cover: Cover, buildings: TownLayout['buildings']): boolean {
+  return furnitureName(cover, buildings) !== undefined
 }
 
 function scannedMaterial(name: string): string | undefined {
@@ -36,9 +56,7 @@ function scannedMaterial(name: string): string | undefined {
 }
 
 function stoveFacing(x: number, z: number, buildings: TownLayout['buildings']): number {
-  const room = buildings.find(
-    ({ x: left, z: top, w, d }) => x > left && x < left + w && z > top && z < top + d,
-  )
+  const room = roomAt(x, z, buildings)
   if (!room) {
     return 0
   }
@@ -48,6 +66,19 @@ function stoveFacing(x: number, z: number, buildings: TownLayout['buildings']): 
     return (Math.sign(dx) * Math.PI) / 2
   }
   return dz < 0 ? Math.PI : 0
+}
+
+function furnitureFacing(
+  name: keyof typeof dimensions,
+  x: number,
+  z: number,
+  buildings: TownLayout['buildings'],
+): number {
+  if (name === 'potbelly-stove') {
+    return stoveFacing(x, z, buildings)
+  }
+  const room = roomAt(x, z, buildings)
+  return name === 'riveted-cash-safe' && room && room.z + room.d / 2 > z ? Math.PI : 0
 }
 
 export async function installFrontierFurniture(
@@ -80,7 +111,7 @@ export async function installFrontierFurniture(
 
   const root = geometry.group('Perdition fitted period furniture')
   for (const [index, fixture] of layout.cover.entries()) {
-    const name = furnitureName(fixture)
+    const name = furnitureName(fixture, layout.buildings)
     if (!name) {
       continue
     }
@@ -92,7 +123,7 @@ export async function installFrontierFurniture(
     const bottom = fixture.y0 ?? 0
     const x = fixture.x + fixture.w / 2
     const z = fixture.z + fixture.d / 2
-    const orientation = name === 'potbelly-stove' ? stoveFacing(x, z, layout.buildings) : 0
+    const orientation = furnitureFacing(name, x, z, layout.buildings)
     const placement = geometry.doc
       .createNode(`frontier-furniture:${name}:${index}`)
       .setTranslation([x, bottom, z])

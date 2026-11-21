@@ -186,7 +186,7 @@ export async function authorFrontier(output: string, highYard = false): Promise<
   const groups = await authorBuildings(g, plan, layout)
   authorDecksAndRoofs(g, ground, layout, collision)
   const props = g.group('Perdition dressed interiors and purposeful cover')
-  authorCover(g, props, layout.cover)
+  authorCover(g, props, layout)
   bankServiceSigns(g, props, layout)
   desertPlants(g, plan.vegetation, layout.size)
   for (const mount of groupFrontierMounts(frontierMounts(layout))) {

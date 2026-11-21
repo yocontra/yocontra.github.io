@@ -14,13 +14,14 @@ function isSaloonBar(cover: Cover): boolean {
   )
 }
 
-export function authorCover(geometry: FrontierGeometry, root: Node, cover: readonly Cover[]): void {
+export function authorCover(geometry: FrontierGeometry, root: Node, layout: TownLayout): void {
+  const { cover, buildings } = layout
   const saloonFixtures = cover.filter(isSaloonBar)
   if (saloonFixtures.length !== 2) {
     throw new Error('The saloon bar no longer matches its cover locations')
   }
   for (const [index, placement] of cover.entries()) {
-    if (!(isSaloonBar(placement) || hasFittedFurniture(placement))) {
+    if (!(isSaloonBar(placement) || hasFittedFurniture(placement, buildings))) {
       coverModel(geometry, root, placement, index)
     }
   }
