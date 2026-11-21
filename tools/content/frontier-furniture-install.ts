@@ -1,6 +1,7 @@
 /** Fit Blender furniture to Frontier cover sites and reuse the existing town scans. */
 import { type Document, Material, Node } from '@gltf-transform/core'
 import { copyToDocument, mergeDocuments } from '@gltf-transform/functions'
+import { ENVIRONMENT_PROPS } from '../../src/experiments/out-west/content/environment-props.ts'
 import type { Cover, TownLayout } from '../../src/experiments/out-west/ffa/sim/layout.ts'
 import { type FrontierGeometry, frontierIO } from './frontier-geometry.ts'
 
@@ -32,6 +33,7 @@ const dimensions = {
   'beveled-grave-marker': [0.65, 1.2, 0.4],
   'stone-yard-cross': [0.65, 1.2, 0.4],
   'fitted-tapered-coffin': [2.5, 0.9, 1],
+  'upright-coopered-barrel': [0.68, 0.95, 0.68],
   'coopered-barrel-rack': [2, 1.3, 1],
   'two-tier-cooperage-rack': [2.5, 2.3, 2],
   'twine-bound-straw-bale': [1.05, 0.5, 0.8],
@@ -64,10 +66,16 @@ function roomAt(x: number, z: number, buildings: TownLayout['buildings']) {
 function furnitureName(
   cover: Cover,
   buildings: TownLayout['buildings'],
+  index: number,
 ): keyof typeof dimensions | undefined {
   const fitted = fittedByKind[cover.kind]
   if (fitted) {
     return fitted
+  }
+  if (cover.kind === 'barrels') {
+    return ENVIRONMENT_PROPS.some((prop) => prop.cover === index)
+      ? undefined
+      : 'upright-coopered-barrel'
   }
   if (cover.kind === 'barrel_rack') {
     return (cover.top ?? 0) >= 2 ? 'two-tier-cooperage-rack' : 'coopered-barrel-rack'
@@ -107,8 +115,12 @@ function furnitureName(
   return undefined
 }
 
-export function hasFittedFurniture(cover: Cover, buildings: TownLayout['buildings']): boolean {
-  return furnitureName(cover, buildings) !== undefined
+export function hasFittedFurniture(
+  cover: Cover,
+  buildings: TownLayout['buildings'],
+  index: number,
+): boolean {
+  return furnitureName(cover, buildings, index) !== undefined
 }
 
 function scannedMaterial(name: string): string | undefined {
@@ -213,12 +225,12 @@ function furniturePlacement(
     .setScale([siteWidth / width, ((fixture.top ?? 1) - bottom) / height, siteDepth / depth])
 }
 
-function furnitureCells(site: Cover) {
-  if (site.kind !== 'hay') {
+function furnitureCells(site: Cover, name: keyof typeof dimensions) {
+  if (name !== 'twine-bound-straw-bale' && name !== 'upright-coopered-barrel') {
     return [site]
   }
   const bottom = site.y0 ?? 0
-  const [width, height, depth] = dimensions['twine-bound-straw-bale']
+  const [width, height, depth] = dimensions[name]
   const columns = Math.max(1, Math.round(site.w / width))
   const rows = Math.max(1, Math.round(site.d / depth))
   const rise = (site.top ?? 1) - bottom
@@ -287,7 +299,7 @@ export async function installFrontierFurniture(
 
   const root = geometry.group('Perdition fitted period furniture')
   for (const [index, fixture] of layout.cover.entries()) {
-    const name = furnitureName(fixture, layout.buildings)
+    const name = furnitureName(fixture, layout.buildings, index)
     if (!name) {
       continue
     }
@@ -295,12 +307,12 @@ export async function installFrontierFurniture(
     if (!template?.listChildren().length) {
       throw new Error(`Missing authored Frontier furniture ${name}`)
     }
-    for (const [cell, placementSite] of furnitureCells(fixture).entries()) {
+    for (const [cell, placementSite] of furnitureCells(fixture, name).entries()) {
       const placement = furniturePlacement(geometry.doc, placementSite, layout.buildings, {
         name,
         index,
       })
-      if (fixture.kind === 'hay') {
+      if (fixture.kind === 'hay' || fixture.kind === 'barrels') {
         placement.setName(`${placement.getName()}:${cell}`)
       }
       for (const part of template.listChildren()) {

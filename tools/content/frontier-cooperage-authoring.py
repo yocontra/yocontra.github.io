@@ -104,5 +104,14 @@ for y in (-.476,.476):
                 obj.location.y += y
 pack()
 
+begin("upright-coopered-barrel")
+barrel(0,0,.337,.95)
+# Lay the cylinder's axis on Z. Recess the heads within the rolled chimes.
+from mathutils import Matrix
+rotation=Matrix.Translation((0,0,.475)) @ Matrix.Rotation(math.pi/2,4,'X')
+for obj in lib["active"].children:
+    obj.matrix_local=rotation @ obj.matrix_local
+pack()
+
 output.parent.mkdir(parents=True,exist_ok=True)
 bpy.ops.export_scene.gltf(filepath=str(output),export_format="GLB",export_yup=True)

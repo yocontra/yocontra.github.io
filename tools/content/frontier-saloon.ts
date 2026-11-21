@@ -26,7 +26,7 @@ export function authorCover(geometry: FrontierGeometry, root: Node, layout: Town
       !(
         isSaloonBar(placement) ||
         hasFittedFence(placement) ||
-        hasFittedFurniture(placement, buildings)
+        hasFittedFurniture(placement, buildings, index)
       )
     ) {
       coverModel(geometry, root, placement, index)
