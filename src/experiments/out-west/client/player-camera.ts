@@ -5,51 +5,126 @@ import type { PlayerState } from '../runtime/protocol.ts'
 import type { GameInput } from './input.ts'
 import { poseEye } from './player-pose.ts'
 
-const head = new Vec3()
-const eye = new Vec3()
-const target = new Vec3()
-export function placeCamera(options: {
+const FOLLOW_DISTANCE = 4.5
+const WALL_CLEARANCE = 0.18
+const RELEASE_RATE = 9
+const CORNERS = [
+  [-1, -1],
+  [-1, 1],
+  [1, -1],
+  [1, 1],
+] as const
+type Trace = (from: Vec3, to: Vec3) => Vec3 | null
+
+interface CameraOptions {
   camera: Entity
   player: PlayerState
-  input: GameInput
+  input: Pick<GameInput, 'pitch' | 'yaw'>
   settings: FrontierSettings
   first: boolean
   recoil: number
-  trace: ((from: Vec3, to: Vec3) => Vec3 | null) | undefined
-}): void {
-  const { camera, player, input, settings, first, trace } = options
-  const point = poseEye(player)
-  head.set(point.x, point.y, point.z)
-  const pitch = input.pitch + options.recoil
-  const cp = Math.cos(pitch)
-  target.set(
-    head.x - Math.sin(input.yaw) * cp * 20,
-    head.y + Math.sin(pitch) * 20,
-    head.z - Math.cos(input.yaw) * cp * 20,
-  )
-  if (first) {
-    eye.copy(head)
-  } else {
-    eye.set(
-      head.x + Math.sin(input.yaw) * cp * 4.5 + Math.cos(input.yaw) * settings.shoulder * 0.6,
-      head.y - Math.sin(pitch) * 4.5 + 0.5,
-      head.z + Math.cos(input.yaw) * cp * 4.5 - Math.sin(input.yaw) * settings.shoulder * 0.6,
-    )
-    const hit = trace?.(head, eye)
-    if (hit) {
-      eye.lerp(head, hit, 0.9)
+  trace: Trace | undefined
+  dt: number
+  reducedMotion: boolean
+}
+
+export class FollowCamera {
+  private readonly head = new Vec3()
+  private readonly eye = new Vec3()
+  private readonly target = new Vec3()
+  private readonly lastHead = new Vec3()
+  private readonly right = new Vec3()
+  private readonly up = new Vec3()
+  private readonly offset = new Vec3()
+  private readonly start = new Vec3()
+  private readonly end = new Vec3()
+  private previousPlayer: string | undefined
+  private extension = 1
+
+  reset(): void {
+    this.previousPlayer = undefined
+    this.extension = 1
+  }
+
+  place(options: CameraOptions): void {
+    const { camera, player, input, settings, first } = options
+    const { x, y, z } = poseEye(player)
+    this.head.set(x, y, z)
+    const pitch = input.pitch + options.recoil
+    const sin = Math.sin(pitch)
+    const cos = Math.cos(pitch)
+    const sy = Math.sin(input.yaw)
+    const cy = Math.cos(input.yaw)
+    this.target.set(x - sy * cos * 20, y + sin * 20, z - cy * cos * 20)
+
+    const top = settings.view === 'top'
+    if (top) {
+      this.reset()
+      this.eye.set(x, y + 30, z + 0.01)
+      this.target.copy(this.head)
+    } else if (first) {
+      this.reset()
+      this.eye.copy(this.head)
+    } else {
+      const shoulder = settings.shoulder * 0.6
+      this.eye.set(
+        x + sy * cos * FOLLOW_DISTANCE + cy * shoulder,
+        y - sin * FOLLOW_DISTANCE + 0.5,
+        z + cy * cos * FOLLOW_DISTANCE - sy * shoulder,
+      )
+      this.right.set(cy, 0, -sy)
+      this.up.set(sy * sin, cos, cy * sin)
+      this.follow(options)
+    }
+
+    camera.setPosition(this.eye)
+    camera.lookAt(this.target)
+    const lens = camera.camera
+    if (lens) {
+      lens.projection = top ? PROJECTION_ORTHOGRAPHIC : PROJECTION_PERSPECTIVE
+      lens.orthoHeight = 18
+      lens.fov = first ? settings.fovFirst : settings.fovThird
     }
   }
-  camera.setPosition(eye)
-  camera.lookAt(target)
-  if (settings.view === 'top') {
-    camera.setPosition(head.x, head.y + 30, head.z + 0.01)
-    camera.lookAt(head)
+
+  private follow({ camera, player, trace, settings, dt, reducedMotion }: CameraOptions): void {
+    const allowed = trace ? this.clearance(trace, camera, settings.fovThird) : 1
+    const fresh = this.previousPlayer !== player.id || this.lastHead.distance(this.head) > 2
+    // Pull in immediately for solid cover. Ease the return so a door jamb cannot pop the frame.
+    if (fresh || reducedMotion || allowed <= this.extension) {
+      this.extension = allowed
+    } else {
+      const step = 1 - Math.exp(-Math.min(dt, 0.05) * RELEASE_RATE)
+      this.extension += (allowed - this.extension) * step
+      if (allowed - this.extension < 0.002) {
+        this.extension = allowed
+      }
+    }
+    this.lastHead.copy(this.head)
+    this.previousPlayer = player.id
+    this.eye.lerp(this.head, this.eye, this.extension)
   }
-  const lens = camera.camera
-  if (lens) {
-    lens.projection = settings.view === 'top' ? PROJECTION_ORTHOGRAPHIC : PROJECTION_PERSPECTIVE
-    lens.orthoHeight = 18
-    lens.fov = first ? settings.fovFirst : settings.fovThird
+
+  private clearance(trace: Trace, camera: Entity, fov: number): number {
+    const lens = camera.camera
+    // Cover the near-plane corners even when the over-shoulder camera looks slightly inward.
+    const halfHeight = (lens?.nearClip ?? 0.1) * Math.tan((fov * Math.PI) / 360) * 1.35
+    const halfWidth = halfHeight * (lens?.aspectRatio ?? 1)
+    let limit = rayLimit(trace, this.head, this.eye)
+    for (const [side, height] of CORNERS) {
+      this.offset
+        .copy(this.right)
+        .mulScalar(side * halfWidth)
+        .addScaled(this.up, height * halfHeight)
+      this.end.add2(this.eye, this.offset)
+      this.start.copy(this.head).add(this.offset)
+      limit = Math.min(limit, rayLimit(trace, this.start, this.end))
+    }
+    return limit
   }
+}
+
+function rayLimit(trace: Trace, from: Vec3, to: Vec3): number {
+  const hit = trace(from, to)
+  return hit ? Math.max(0, (from.distance(hit) - WALL_CLEARANCE) / from.distance(to)) : 1
 }

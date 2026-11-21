@@ -2,6 +2,10 @@
 
 The current Out West pass covers visual quality and fidelity. Inspect source assets in Blender and compare the shipped renderer in a Chrome tab from reachable player viewpoints. Review lighting, silhouettes, material detail and contact with the scene before publishing art.
 
+## Frontier follow camera (2026-11-20)
+
+- [x] Keep the third-person camera clear of door jambs and walls. Check the near-plane corners, pull in immediately when blocked, and ease back after the obstacle clears. Matched desktop and phone landscape Chrome checks cut sampled near-plane contacts from 72 to zero at the bank, livery, saloon and depot. The largest outward step in those doorway routes fell from 4.4 m to 0.63 m. First-person alignment and firing pass for all three weapons while standing and crouched.
+
 ## Frontier interior lighting (2026-11-20)
 
 - [x] Add soft daylight bounce to the 14 windowed buildings in Perdition, including the upper floors of the saloon, hotel and bank. Keep the light falloff inside the building footprint and fade it down with the daylight. Matched Low and High Chrome views cover rooms, the street and roofs. The map bake and collision data are unchanged.

@@ -7,12 +7,13 @@ import { zoneAt } from '../ffa/sim/layout.ts'
 import type { SimEvent } from '../ffa/sim/types.ts'
 import type { CollisionData, PlayerInput, PlayerState } from '../runtime/protocol.ts'
 import { Buttons } from '../runtime/protocol.ts'
+import { reducedMotion } from '../settings.ts'
 import type { Appearance } from './actors.ts'
 import { GameApplication } from './application.ts'
 import { GameEffects } from './effects.ts'
 import { FrontierScene, type FrontierSceneState, firstFrame } from './frontier-scene.ts'
 import { GameInput } from './input.ts'
-import { placeCamera } from './player-camera.ts'
+import { FollowCamera } from './player-camera.ts'
 import { aimedTarget } from './targeting.ts'
 import { touchActions } from './touch-actions.ts'
 import { viewportDebug } from './viewport-debug.ts'
@@ -213,6 +214,7 @@ export function mountGameViewport(root: HTMLElement, options: ViewportOptions): 
   const lifecycle = new AbortController()
   const signal = lifecycle.signal
   let settings = loadSettings()
+  const cameraRig = new FollowCamera()
   let first = options.firstPerson ?? settings.view === 'first'
   let seq = 0
   const touch = matchMedia('(pointer: coarse)').matches
@@ -232,7 +234,7 @@ export function mountGameViewport(root: HTMLElement, options: ViewportOptions): 
     if (!player) {
       return
     }
-    placeCamera({
+    cameraRig.place({
       camera: application.camera,
       player,
       input,
@@ -240,6 +242,8 @@ export function mountGameViewport(root: HTMLElement, options: ViewportOptions): 
       first,
       recoil: effects?.recoilPitch ?? 0,
       trace: session.cameraTrace,
+      dt,
+      reducedMotion: reducedMotion(),
     })
     scene?.actors?.presentFirstPerson(application.camera, dt)
     effects?.flushShot(player)
@@ -328,6 +332,7 @@ export function mountGameViewport(root: HTMLElement, options: ViewportOptions): 
       input?.setEnabled(playing && inputBlocks.size === 0)
     },
     resetFeedback() {
+      cameraRig.reset()
       effects?.reset()
       scene?.windows?.reset()
     },
