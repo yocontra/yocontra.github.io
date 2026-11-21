@@ -13,11 +13,12 @@ import { ALL_EXTENSIONS } from '@gltf-transform/extensions'
 import { compactPrimitive, copyToDocument, prune, unpartition } from '@gltf-transform/functions'
 import { Mat4, Vec3 } from 'playcanvas'
 import { normalizeSkinnedAsset } from './normalize-skinned-nodes.ts'
+import { OUTLAW_HEAD_FITS } from './outlaw-head-fits.ts'
 
 const io = new NodeIO().registerExtensions(ALL_EXTENSIONS)
 const templeCenter = -0.027
 
-interface HeadFit {
+export interface HeadFit {
   lift: number
   cutoff: number
   neckStart: number
@@ -374,138 +375,13 @@ export function fitGreenhornHead(
   return installHead(paths, greenhornFit, palette)
 }
 
-const outlawFits: Partial<Record<number, HeadFit>> = {
-  2: {
-    ...greenhornFit,
-    lift: -0.1285,
-    eyeScale: 0.903,
-    eyeForward: 0.1058,
-    measuredEyes: true,
-    keepBrows: true,
-    keepBeard: false,
-    tint: [0.89, 0.76, 0.62, 1],
-  },
-  6: {
-    ...greenhornFit,
-    lift: 0.0417,
-    eyeScale: 0.88,
-    eyeForward: 0.1058,
-    measuredEyes: true,
-    keepBrows: true,
-    keepBeard: false,
-    tint: [0.69, 0.54, 0.42, 1],
-  },
-  15: {
-    ...greenhornFit,
-    lift: -0.1136,
-    eyeScale: 0.97,
-    eyeForward: 0.1058,
-    measuredEyes: true,
-    keepBrows: true,
-    keepBeard: false,
-    tint: [0.82, 0.69, 0.55, 1],
-  },
-  7: {
-    ...greenhornFit,
-    lift: -0.1911,
-    eyeScale: 0.95,
-    eyeForward: 0.1058,
-    measuredEyes: true,
-    keepBrows: true,
-    keepBeard: false,
-    tint: [0.86, 0.76, 0.63, 1],
-  },
-  11: {
-    ...greenhornFit,
-    lift: 0.1955,
-    eyeScale: 0.822,
-    eyeForward: 0.1058,
-    measuredEyes: true,
-    keepBrows: true,
-    keepBeard: true,
-    tint: [0.95, 0.86, 0.77, 1],
-  },
-  12: {
-    ...greenhornFit,
-    lift: -0.2134,
-    eyeScale: 0.97,
-    eyeForward: 0.1058,
-    measuredEyes: true,
-    keepBrows: true,
-    keepBeard: true,
-    tint: [0.95, 0.78, 0.68, 1],
-  },
-  14: {
-    ...greenhornFit,
-    lift: -0.1417,
-    eyeScale: 0.956,
-    eyeForward: 0.1058,
-    measuredEyes: true,
-    keepBrows: true,
-    keepBeard: true,
-    tint: [0.97, 0.85, 0.79, 1],
-  },
-  8: {
-    ...greenhornFit,
-    lift: 0.0434,
-    eyeScale: 0.9,
-    eyeForward: 0.1101,
-    keepBrows: true,
-    tint: [0.99, 0.89, 0.85, 1],
-  },
-  10: {
-    ...greenhornFit,
-    lift: 0.0914,
-    eyeScale: 0.88,
-    eyeForward: 0.108,
-    keepBrows: true,
-    tint: [0.97, 0.8, 0.69, 1],
-  },
-  4: {
-    ...greenhornFit,
-    lift: -0.0008,
-    eyeScale: 0.892,
-    eyeForward: 0.1058,
-    measuredEyes: true,
-    keepBrows: true,
-    keepBeard: true,
-    tint: [1, 0.92, 0.89, 1],
-  },
-  13: {
-    ...greenhornFit,
-    lift: -0.0136,
-    eyeScale: 0.885,
-    eyeForward: 0.1058,
-    measuredEyes: true,
-    keepBrows: true,
-    keepBeard: false,
-    tint: [0.89, 0.79, 0.64, 1],
-  },
-  1: {
-    ...greenhornFit,
-    lift: 0.1174,
-    eyeScale: 0.87,
-    eyeForward: 0.1095,
-    keepBrows: true,
-    keepBeard: true,
-    tint: [0.96, 0.82, 0.74, 1],
-  },
-  3: {
-    ...greenhornFit,
-    lift: 0.1217,
-    eyeScale: 0.88,
-    eyeForward: 0.1092,
-    keepBrows: true,
-    tint: [0.98, 0.85, 0.78, 1],
-  },
-}
 export function fitOutlawHead(
   paths: { source: string; authoring: string; target: string },
   opts: { id: number; palette: string },
 ): Promise<void> {
-  const fit = outlawFits[opts.id]
+  const fit = OUTLAW_HEAD_FITS[opts.id]
   if (!fit) {
     throw new Error(`Missing authored cast fit ${opts.id}`)
   }
-  return installHead(paths, fit, opts.palette)
+  return installHead(paths, { ...greenhornFit, ...fit }, opts.palette)
 }

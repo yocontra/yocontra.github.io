@@ -11,6 +11,7 @@ import { fitRevolver } from './fitted-revolver.ts'
 import { fitGreenhornHead, fitOutlawHead, fitStarterHead } from './fitted-starter-head.ts'
 import { fitForgedSpurs } from './forged-spurs.ts'
 import { fitOutlawHat } from './outlaw-hats.ts'
+import { OUTLAW_HEAD_FITS } from './outlaw-head-fits.ts'
 
 const source = resolve('tools/art/characters')
 const excluded = new Set(['dog', 'horse', 'moves', 'character-actions', 'character-strides'])
@@ -58,7 +59,7 @@ if (ids.includes('outlaw-0')) {
     resolve(source, 'starter-head.glb'),
   )
 }
-for (const index of [1, 2, 3, 4, 6, 7, 8, 10, 11, 12, 13, 14, 15]) {
+for (const index of Object.keys(OUTLAW_HEAD_FITS).map(Number)) {
   const id = `outlaw-${index}`
   if (ids.includes(id)) {
     await fitOutlawHead(
