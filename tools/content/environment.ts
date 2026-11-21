@@ -5,6 +5,7 @@ import { join, resolve } from 'node:path'
 import { NodeIO } from '@gltf-transform/core'
 import { ALL_EXTENSIONS } from '@gltf-transform/extensions'
 import { dedup, dequantize, prune, weld } from '@gltf-transform/functions'
+import { fitArenaProps } from './arena-props.ts'
 import { fitArenaWagons } from './arena-wagons.ts'
 import { compressedCharacterTexture } from './character-textures.ts'
 import { withContentOutput } from './content-output.ts'
@@ -93,6 +94,11 @@ for (const name of names.filter((candidate) => !only || candidate === only)) {
   if (name === 'depot' || name === 'mission' || name === 'bank') {
     const authored = await io.read(path)
     await fitArenaWagons(authored, join(source, 'arena-wagon.glb'))
+    await io.write(path, authored)
+  }
+  if (name !== 'frontier') {
+    const authored = await io.read(path)
+    await fitArenaProps(authored, join(source, 'arena-props.glb'))
     await io.write(path, authored)
   }
   // Quick Draw positions its runtime poster lantern from a named, empty node.

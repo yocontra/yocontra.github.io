@@ -64,12 +64,20 @@ async function inspect(bytes: Uint8Array) {
   const wagonMeshes = new Set(
     wagons.flatMap((node) => node.listChildren().map((part) => part.getMesh())),
   )
+  const dressing = document
+    .getRoot()
+    .listNodes()
+    .filter((node) => node.getName().startsWith('fitted.ambiance.'))
+  const dressingMeshes = new Set<ReturnType<(typeof dressing)[number]['getMesh']>>()
+  for (const prop of dressing) {
+    prop.traverse((node) => dressingMeshes.add(node.getMesh()))
+  }
   const untouched = createHash('sha256')
   const retained = createHash('sha256')
   const textures = createHash('sha256')
   const faces: ({ panel: string } & ReturnType<typeof orientation>)[] = []
   for (const [meshIndex, mesh] of document.getRoot().listMeshes().entries()) {
-    if (wagonMeshes.has(mesh)) {
+    if (wagonMeshes.has(mesh) || dressingMeshes.has(mesh)) {
       continue
     }
     for (const [primitiveIndex, primitive] of mesh.listPrimitives().entries()) {
@@ -121,7 +129,7 @@ async function inspect(bytes: Uint8Array) {
     }
   }
   for (const texture of document.getRoot().listTextures()) {
-    if (texture.getName() !== 'Wagon oak grain') {
+    if (!['Wagon oak grain', 'Arena oak'].includes(texture.getName())) {
       textures.update(texture.getImage() ?? new Uint8Array())
     }
   }
@@ -133,6 +141,7 @@ async function inspect(bytes: Uint8Array) {
     textures: textures.digest('hex'),
     faces,
     wagons: wagons.length,
+    dressing: dressing.length,
     animations: document.getRoot().listAnimations().length,
   }
 }
@@ -152,8 +161,8 @@ for (const [label, path, expected] of [
     'native',
     'public/experiments/out-west/3d/native-v2/baked/depot.glb',
     {
-      // Fitted wagon nodes extend the metadata. Existing geometry and texture digests stay fixed.
-      metadata: '2759cdb6a1d007d0fa70403bc4fe48787611dbf8e3215bb7cddbf1b77436ca25',
+      // Fitted dressing extends metadata. Existing geometry and texture digests stay fixed.
+      metadata: '7c5c3f912d6f135b270e0913d8126246ef606bc3bc0e84497109eb86259deb43',
       untouched: '61a1c7005d46511542976cb4cfc38822afd8b7b59e8c856ac2502fbc0438b1cd',
       retained: '5f51d9da519fde2a7ada2f9892b9189f7a23829e8d1fb0775a85a6009f621b39',
       textures: '005bd4e9c834475ff565234aaf9a8bc968212d4ca00ba740166d51b82d24e4be',
@@ -164,6 +173,7 @@ for (const [label, path, expected] of [
     const actual = await inspect(await readFile(path))
     expect(actual.faces).toHaveLength(8)
     expect(actual.wagons).toBe(label === 'native' ? 2 : 0)
+    expect(actual.dressing).toBe(label === 'native' ? 6 : 0)
     for (const panel of ['near-roof', 'far-roof', 'canopy', 'soffit']) {
       const selected = actual.faces.filter((face) => face.panel === panel)
       expect(selected).toHaveLength(2)
