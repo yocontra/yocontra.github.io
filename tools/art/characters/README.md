@@ -67,6 +67,13 @@ OUT_WEST_CHARACTERS=held-rifle,held-shotgun bun tools/content/character-textures
 bun tools/content/held-longgun-art.ts
 ```
 
+The four forged spur models share their native heel mounts and surface maps.
+
+```sh
+blender --background --factory-startup --python tools/content/forged-spurs-authoring.py -- tools/art/characters/spurs
+OUT_WEST_CHARACTERS=spurs.plain-rowels,spurs.silver-jinglebobs,spurs.star-rowels,spurs.legend-rowels bun tools/content/human-assets.ts
+```
+
 The victory `TipHat` clip is authored offline from the canonical player idle, with
 planted feet and a 1.5-second reach/nod/return. Rebuild its portable source before
 the shared clips if its source fingerprint changes:

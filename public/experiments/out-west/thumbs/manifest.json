@@ -1,5 +1,5 @@
 {
-  "fingerprint": "670f5ac05f8a8e6c15a727f5fe0b9ca1fe8c5404f6d908255f04ce7d4a362a3e",
+  "fingerprint": "838faa6351714e23526e3eda7fb8a76073500750163165240d19a95d3b0cfda2",
   "images": {
     "gun.rusty-six": "0e23b486309889db2169bbc76d03733a8abc5a2a8e77bb0606c1c91d39b48e5f",
     "gun.blued-six": "e292484c6a30cc2d69e04b5895deba9dd5001c82770e2a6c536cc46c3a5470fe",
@@ -26,10 +26,10 @@
     "outfit.bandolier-rig": "5ebfcbd71ad67e228e75ff0a976ff1022f0809a1ef209484646393b45832f8e6",
     "outfit.undertakers-black": "586cce46b1a27c389310f12a9809db8b57bad88ab717e0c7f49531fd2eeb0ff1",
     "outfit.midnight-coat": "0e963d4255db991ade5a5314f7a4a7dace049d81747569b1a3e78892e5cd7cba",
-    "spurs.plain-rowels": "77b1039f0a6940de1f11da76c207b82ba5ed299e3f978dc77b152114fa50f748",
-    "spurs.silver-jinglebobs": "4768f2a8df4aa016a4c457b93138628d6c5f6ab863b9e2a4a24f785251e47dc3",
-    "spurs.star-rowels": "f0aa6fbc4cd509da5420ba4ea5409b0617869266bcbcf37fb8446ff6cc7ceb10",
-    "spurs.legend-rowels": "995938344a399925ab885b9d3f0f2ecfc7becf18d6f67125a66288b82aa3c6ef",
+    "spurs.plain-rowels": "5e0e5f20c8fa8b11db838dbe8abc9d372995376725774675ce249279c45cdcdb",
+    "spurs.silver-jinglebobs": "7ae8e8a1480a5fc589ade58b7ed4279c3d3c782d36c784863cdc1c3138fb97a7",
+    "spurs.star-rowels": "761128d8cf56f74d5b153324af2dc77889d2323ff10850119644c78c6fb6a4eb",
+    "spurs.legend-rowels": "ff2ae351a5ce9a115c302e1b5c2645dfd1f90408f0ffafaadb400206bd93fbab",
     "holster.plain-leather": "2d861192be7fe4a6ff511386bab4d56a888e094b36dbc48bbb096bdf2069d587",
     "holster.tooled-floral": "8777c4f1e8b2e3c831c42cb849bd37a74a35249df10780c4965b994fa37c7a88",
     "holster.buscadero": "5d39bc91115d35d5758851959cdeb1737b13ed2e7b94b2830aa1e12830fae57d",

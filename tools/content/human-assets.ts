@@ -6,6 +6,7 @@ import { compressCharacterAssets } from './character-textures.ts'
 import { contentOutput } from './content-output.ts'
 import { fitAuthoredHat } from './fitted-hat.ts'
 import { fitStarterHead } from './fitted-starter-head.ts'
+import { fitForgedSpurs } from './forged-spurs.ts'
 import { fitOutlawHat } from './outlaw-hats.ts'
 
 const source = resolve('tools/art/characters')
@@ -43,5 +44,12 @@ for (const id of ids.filter((asset) =>
 }
 for (const id of ids.filter((asset) => asset.startsWith('outlaw-'))) {
   await fitOutlawHat(id)
+}
+for (const id of ids.filter((asset) => asset.startsWith('spurs.'))) {
+  await fitForgedSpurs(
+    resolve(source, 'spurs', `${id.slice(6)}.glb`),
+    resolve(source, `${id}.gltf`),
+    contentOutput('equipment', `${id}.glb`),
+  )
 }
 console.log(`Rebuilt ${ids.length} HUMAN fitted assets`)
