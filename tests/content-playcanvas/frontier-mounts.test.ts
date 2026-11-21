@@ -122,7 +122,8 @@ const part = (id: string) => {
   return faces(member)
 }
 const wood = sceneFaces(`${propPrefix}wood-mesh`)
-const iron = sceneFaces(`${propPrefix}iron-mesh`)
+const rails = sceneFaces('Frontier fences split oak.001')
+const iron = sceneFaces('Frontier fences cold-forged iron')
 const bankTop = sceneFaces('Frontier furniture rubbed walnut')
 
 it('shares all new collision triangles and retains every original collider unchanged', () => {
@@ -465,7 +466,7 @@ it('the new Mercantile and Sheriff boards touch both actual rail tiers', () => {
     expect(signFace).toHaveLength(2)
     for (const y of mount.fixingRows) {
       const contact: Point = [mount.x + mount.w / 2, y, mount.z + mount.d]
-      expect(patchContacts(board, wood, contact, [0, 0, 1]), id).toBe(true)
+      expect(patchContacts(board, rails, contact, [0, 0, 1]), id).toBe(true)
     }
   }
 })

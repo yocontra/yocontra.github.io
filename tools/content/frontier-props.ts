@@ -9,7 +9,7 @@ import {
 } from '../../src/experiments/out-west/ffa/sim/cover-shape.ts'
 import type { Cover } from '../../src/experiments/out-west/ffa/sim/layout.ts'
 import { frame, tube, wagonGear } from './frontier-carpentry.ts'
-import { fenceSpans, wagonCanopy } from './frontier-collision.ts'
+import { wagonCanopy } from './frontier-collision.ts'
 import type { PrefabFit } from './frontier-fit.ts'
 import { anvil, DARK_WOOD, headstone, IRON, lumber } from './frontier-furniture.ts'
 import type { FrontierGeometry, Placement, Rgb } from './frontier-geometry.ts'
@@ -83,10 +83,6 @@ export function coverModel(g: FrontierGeometry, root: Node, c: Cover, index?: nu
   }
   if (['wagon', 'freight_wagon', 'covered_wagon', 'stagecoach', 'wreck'].includes(c.kind)) {
     wagonModel(g, root, c)
-    return
-  }
-  if (c.kind === 'fence' || c.kind === 'bars') {
-    fenceModel(g, root, c)
     return
   }
   if (c.kind === 'shelves') {
@@ -262,17 +258,6 @@ function wagonModel(g: FrontierGeometry, root: Node, c: Cover) {
       'floor',
       f.block([a0 - 0.8, a0 - 0.2], [-half + 0.1, half - 0.1], [bedTop + 0.5, bedTop + 0.58]),
       [0.3, 0.2, 0.13],
-    )
-  }
-}
-
-function fenceModel(g: FrontierGeometry, root: Node, c: Cover) {
-  for (const span of fenceSpans(c)) {
-    g.box(
-      root,
-      c.kind === 'bars' ? 'iron' : 'wood',
-      { ...span, top: span.y1 },
-      c.kind === 'bars' ? [0.45, 0.48, 0.49] : [0.62, 0.51, 0.36],
     )
   }
 }

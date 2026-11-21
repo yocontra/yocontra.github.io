@@ -3,6 +3,7 @@ import { join } from 'node:path'
 import { Material, Node } from '@gltf-transform/core'
 import { copyToDocument } from '@gltf-transform/functions'
 import type { Building, Cover, TownLayout } from '../../src/experiments/out-west/ffa/sim/layout.ts'
+import { hasFittedFence, installFrontierFences } from './frontier-fences.ts'
 import { hasFittedFurniture, installFrontierFurniture } from './frontier-furniture-install.ts'
 import { type FrontierGeometry, frontierIO, type Rgb } from './frontier-geometry.ts'
 import { coverModel } from './frontier-props.ts'
@@ -21,7 +22,13 @@ export function authorCover(geometry: FrontierGeometry, root: Node, layout: Town
     throw new Error('The saloon bar no longer matches its cover locations')
   }
   for (const [index, placement] of cover.entries()) {
-    if (!(isSaloonBar(placement) || hasFittedFurniture(placement, buildings))) {
+    if (
+      !(
+        isSaloonBar(placement) ||
+        hasFittedFence(placement) ||
+        hasFittedFurniture(placement, buildings)
+      )
+    ) {
       coverModel(geometry, root, placement, index)
     }
   }
@@ -33,6 +40,7 @@ export async function installPeriodFixtures(
   directory: string,
 ): Promise<void> {
   await installSaloonBar(geometry, join(directory, 'frontier-saloon.glb'))
+  await installFrontierFences(geometry, layout, join(directory, 'frontier-fences.glb'))
   await installFrontierFurniture(geometry, layout, [
     join(directory, 'frontier-furniture.glb'),
     join(directory, 'frontier-freight.glb'),
