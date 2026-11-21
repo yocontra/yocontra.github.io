@@ -2,14 +2,14 @@
 import type { ContentAsset } from './types.ts'
 export const VIEWMODELS: Readonly<Record<string, ContentAsset>> = {
   'outfit.trail-duds': {
-    url: '/experiments/out-west/3d/native-v2/viewmodels/outfit.trail-duds.glb?v=17a107bd6b3bb11f',
-    hash: '17a107bd6b3bb11f6707de0b064a7b1dc706aeb0ddbd3c02d579974f0c74ba0a',
-    bytes: 167268,
+    url: '/experiments/out-west/3d/native-v2/viewmodels/outfit.trail-duds.glb?v=8b1c01429469a32c',
+    hash: '8b1c01429469a32ca107df958fc2cd015075e237628dbf1a6d502e3281260e54',
+    bytes: 280084,
   },
   'outfit.trail-duds.pair': {
-    url: '/experiments/out-west/3d/native-v2/viewmodels/outfit.trail-duds.pair.glb?v=7246e42a348f3048',
-    hash: '7246e42a348f30484c4d2fe0d3d26bd894573c70d04a32f50dcbec8f81731d96',
-    bytes: 167792,
+    url: '/experiments/out-west/3d/native-v2/viewmodels/outfit.trail-duds.pair.glb?v=1f298b947253ae88',
+    hash: '1f298b947253ae8873a2799f98c99ee1e66051ade95f70591b6c31d7d76f9f43',
+    bytes: 280612,
   },
   'outfit.shirt-vest': {
     url: '/experiments/out-west/3d/native-v2/viewmodels/outfit.shirt-vest.glb?v=3f3b7153c4a77b8b',
@@ -32,14 +32,14 @@ export const VIEWMODELS: Readonly<Record<string, ContentAsset>> = {
     bytes: 97596,
   },
   'outfit.striped-poncho': {
-    url: '/experiments/out-west/3d/native-v2/viewmodels/outfit.striped-poncho.glb?v=c07f94d27017f86a',
-    hash: 'c07f94d27017f86a01d16a3978cc7f24e50dcee2d8f5905a6e172c81ccc5f738',
-    bytes: 96836,
+    url: '/experiments/out-west/3d/native-v2/viewmodels/outfit.striped-poncho.glb?v=89bf95d6e94693a6',
+    hash: '89bf95d6e94693a6199578a13f7a6b7004c96515d3206f873e30e01e70773f6e',
+    bytes: 97260,
   },
   'outfit.striped-poncho.pair': {
-    url: '/experiments/out-west/3d/native-v2/viewmodels/outfit.striped-poncho.pair.glb?v=1f83ef1abcf87afb',
-    hash: '1f83ef1abcf87afb750523f1df906e8f90d77c38ddcdfeafe41eea4b51c746ea',
-    bytes: 97544,
+    url: '/experiments/out-west/3d/native-v2/viewmodels/outfit.striped-poncho.pair.glb?v=d7b2f997d70f5792',
+    hash: 'd7b2f997d70f5792cb4a23bd66dfcee163f32d004dec1fe52ca247b89c352a48',
+    bytes: 97972,
   },
   'outfit.gamblers-frock': {
     url: '/experiments/out-west/3d/native-v2/viewmodels/outfit.gamblers-frock.glb?v=399c97c0d749ae1e',

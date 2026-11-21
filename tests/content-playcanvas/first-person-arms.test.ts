@@ -53,7 +53,7 @@ function clips(doc: Document): string {
   )
 }
 for (const [id, faces, vertices] of [
-  ['outfit.trail-duds', 5782, 3320],
+  ['outfit.trail-duds', 10_520, 5956],
   ['outfit.wool-duster', 2654, 1724],
 ] as const) {
   it(`${id} retains only complete fitted arm faces with exact native streams, skin, PBR and clocks`, async () => {
@@ -128,6 +128,11 @@ for (const [id, faces, vertices] of [
         .some((node) => ATTACHMENT.test(node.getName())),
     ).toBe(false)
     expect(output.getRoot().listMaterials()).toHaveLength(2)
+    const expectedHands =
+      id === 'outfit.trail-duds' ? [{ name: 'field-hands', triangles: 6168, vertices: 3535 }] : []
+    expect(first.report.surfaces.filter((surface) => surface.name === 'field-hands')).toEqual(
+      expectedHands,
+    )
     const inputNodes = input.getRoot().listNodes()
     const originalTriangles = new Map<string, Set<string>>()
     for (const mesh of input.getRoot().listMeshes()) {
