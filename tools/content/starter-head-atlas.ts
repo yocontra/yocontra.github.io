@@ -41,5 +41,14 @@ skin
   .setExtras({
     nativePbr: { albedo, normal, surface: 'skin', normalScale: 0.53, width: 768, height: 768 },
   })
+const hair = art
+  .getRoot()
+  .listMaterials()
+  .find((material) => material.getName() === 'Tobacco brown hair')
+const strands = hair?.getBaseColorTexture()?.getImage()
+if (hair && strands) {
+  const texture = await compressedCharacterTexture(strands, true)
+  hair.setBaseColorTexture(null).setExtras({ nativePbr: { albedo: texture } })
+}
 await art.transform(prune({ keepAttributes: true }))
 await io.write(output, art)
