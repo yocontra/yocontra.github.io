@@ -5,6 +5,7 @@ import { join, resolve } from 'node:path'
 import { NodeIO } from '@gltf-transform/core'
 import { ALL_EXTENSIONS } from '@gltf-transform/extensions'
 import { dedup, dequantize, prune, weld } from '@gltf-transform/functions'
+import { fitArenaWagons } from './arena-wagons.ts'
 import { compressedCharacterTexture } from './character-textures.ts'
 import { withContentOutput } from './content-output.ts'
 import { dressDuelBluffs } from './duel-bluffs.ts'
@@ -88,6 +89,11 @@ for (const name of names.filter((candidate) => !only || candidate === only)) {
     const placements = await dressStreetLamps(authored, join(source, 'street-lamp.glb'))
     await io.write(path, authored)
     console.log('bank lamp lights', JSON.stringify(lampLights(placements)))
+  }
+  if (name === 'depot' || name === 'mission' || name === 'bank') {
+    const authored = await io.read(path)
+    await fitArenaWagons(authored, join(source, 'arena-wagon.glb'))
+    await io.write(path, authored)
   }
   // Quick Draw positions its runtime poster lantern from a named, empty node.
   const keepLeaves = name === 'duel'

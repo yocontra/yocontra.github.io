@@ -101,7 +101,7 @@ export const ENVIRONMENT = {
   hash: '206c67e3a1b992282821cf06662bdd69bbb4915c1c4444a66338a40d6a7d4e34',
   bytes: 1173154,
 } as const
-export const CONTENT_VERSION = '616d78ec6eac275c332ff3403c040f9ddf9e4bdeabb30bad6f26d45a18076f5c'
+export const CONTENT_VERSION = '5c9214f5446b0b4fdfc4f1a5d9b6558f7d667623f1b3428e2f4ca9e6dbe45a8b'
 export const COLLISION_VERSION = '03b11033428780f67158b47e3fc2b37d761185acea4d5b323301449671b65def'
 export const ASSETS = {
   frontier: {
@@ -120,19 +120,19 @@ export const ASSETS = {
     bytes: 29191252,
   },
   depot: {
-    url: '/experiments/out-west/3d/native-v2/baked/depot.glb?v=8d11af9991c7092b',
-    hash: '8d11af9991c7092bc31d85c3f4d642b2d0038136a46bc3c4ec4d9b6240f3d6ea',
-    bytes: 19427456,
+    url: '/experiments/out-west/3d/native-v2/baked/depot.glb?v=61dec740543acaf4',
+    hash: '61dec740543acaf4a5bf7766abd1136d108db7a1f2a99912b48f646f8d26eec0',
+    bytes: 20934000,
   },
   mission: {
-    url: '/experiments/out-west/3d/native-v2/baked/mission.glb?v=18c836bbac139dda',
-    hash: '18c836bbac139ddad2aff7a43dd0ffff4030796aba0fec2e83228fcaf921954e',
-    bytes: 14463612,
+    url: '/experiments/out-west/3d/native-v2/baked/mission.glb?v=5209722a7b881e7b',
+    hash: '5209722a7b881e7b302633e443c66bb2355605903dc8e7a91468ce009d8884c0',
+    bytes: 15969620,
   },
   bank: {
-    url: '/experiments/out-west/3d/native-v2/baked/bank.glb?v=5c34bdc4740879fa',
-    hash: '5c34bdc4740879faedfa0438f7f72d7d492395cc14a7a8722be3c8331b88d5eb',
-    bytes: 18508708,
+    url: '/experiments/out-west/3d/native-v2/baked/bank.glb?v=819d33b0f95eaab2',
+    hash: '819d33b0f95eaab23fdaf4aca26b6146c64ca96a274ecd5f302edf1b649eea75',
+    bytes: 20014716,
   },
   player: {
     url: '/experiments/out-west/3d/native-v2/baked/player.glb?v=0c12811fd5253b95',
