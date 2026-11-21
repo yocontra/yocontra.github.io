@@ -16,29 +16,29 @@ export const DYNAMIC_ASSETS = {
     bytes: 30836,
   },
   strongbox: {
-    url: '/experiments/out-west/3d/native-v2/dynamic/strongbox.glb?v=7209ba187a284f0a',
-    hash: '7209ba187a284f0a70f107c1be89d0b1f35d5c6d67250ede9ee230e8ca0bf065',
-    bytes: 97980,
+    url: '/experiments/out-west/3d/native-v2/dynamic/strongbox.glb?v=fc6070c6115598c9',
+    hash: 'fc6070c6115598c96b1c32f2cb3732c924a9e8bfd6624f122c7c6dcc30b2191f',
+    bytes: 533804,
   },
   bag0: {
-    url: '/experiments/out-west/3d/native-v2/dynamic/bag0.glb?v=74b032273e3eb621',
-    hash: '74b032273e3eb621a70d5b5bab08d2716ea2354c62bb5b903730681b3fb6d95c',
-    bytes: 20920,
+    url: '/experiments/out-west/3d/native-v2/dynamic/bag0.glb?v=51c4200b15bfc651',
+    hash: '51c4200b15bfc651978536a59fa23acf0fbc368c68567fdccaadeb3f8c8e4af7',
+    bytes: 80940,
   },
   bag1: {
-    url: '/experiments/out-west/3d/native-v2/dynamic/bag1.glb?v=5ea0dd79b259fd54',
-    hash: '5ea0dd79b259fd5410cde1f9bd81888327cd4f468ba4511547ae27b9831a9d91',
-    bytes: 15644,
+    url: '/experiments/out-west/3d/native-v2/dynamic/bag1.glb?v=5efe2cf5933d99b7',
+    hash: '5efe2cf5933d99b75a5bcef234e81b41be7e0cf2395e87292b43e55ca211deae',
+    bytes: 129544,
   },
   bag2: {
-    url: '/experiments/out-west/3d/native-v2/dynamic/bag2.glb?v=f126f0883480ff1d',
-    hash: 'f126f0883480ff1dddf2f251959786204fa16d906efe893e04156ec74e9df31d',
-    bytes: 15676,
+    url: '/experiments/out-west/3d/native-v2/dynamic/bag2.glb?v=5ad5bc03890897ef',
+    hash: '5ad5bc03890897efe9a5c3f991b7a5cbb4d2ddc793f9cce668480015e4a21c23',
+    bytes: 80952,
   },
   bag3: {
-    url: '/experiments/out-west/3d/native-v2/dynamic/bag3.glb?v=4648cb3f6f9f4433',
-    hash: '4648cb3f6f9f4433a646824b2d8e9fb2bbf9a1cd73dfce6bbf757b72f620a24e',
-    bytes: 15680,
+    url: '/experiments/out-west/3d/native-v2/dynamic/bag3.glb?v=384a12c378dfb97c',
+    hash: '384a12c378dfb97c9f812da4a3f8a9cb0d215098d6bad44c58c7021f1779cfe9',
+    bytes: 129544,
   },
   coin: {
     url: '/experiments/out-west/3d/native-v2/dynamic/coin.glb?v=581aff472ce46e54',
@@ -101,7 +101,7 @@ export const ENVIRONMENT = {
   hash: '206c67e3a1b992282821cf06662bdd69bbb4915c1c4444a66338a40d6a7d4e34',
   bytes: 1173154,
 } as const
-export const CONTENT_VERSION = '5c9214f5446b0b4fdfc4f1a5d9b6558f7d667623f1b3428e2f4ca9e6dbe45a8b'
+export const CONTENT_VERSION = '6b2f0b2c11404f9831d2fe7956bd9401146ce91ac1cd241c26277f61ca072f2f'
 export const COLLISION_VERSION = '03b11033428780f67158b47e3fc2b37d761185acea4d5b323301449671b65def'
 export const ASSETS = {
   frontier: {

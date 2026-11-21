@@ -280,6 +280,77 @@ async function ambientAnimals() {
   textureUnmapped(doc, 'clockwork', await surfaceMaterial(doc, 'iron', 'clockwork surface detail'))
   await exportNative(doc, source, `${native}/ambient/clockwork.glb`)
 }
+const cashBounds = {
+  strongbox: [1.1, 0.617, 0.652],
+  bag0: [0.4945, 0.349, 0.2616],
+  bag1: [0.3771, 0.46, 0.3134],
+  bag2: [0.3771, 0.46, 0.3134],
+  bag3: [0.3771, 0.46, 0.3134],
+} as const
+
+async function cashProp(name: keyof typeof cashBounds) {
+  const doc = await io.read(`tools/art/props/cash/${name}.glb`)
+  const scene = doc.getRoot().getDefaultScene()
+  if (!scene) {
+    throw new Error(`Missing authored ${name} scene`)
+  }
+  const oak =
+    name === 'strongbox'
+      ? await Promise.all(
+          ['diff', 'nor', 'arm'].map(async (kind) =>
+            doc
+              .createTexture(`Strongbox oak ${kind}`)
+              .setImage(await readFile(`public/experiments/out-west/3d/tex/planks_${kind}.webp`))
+              .setMimeType('image/webp'),
+          ),
+        )
+      : []
+  for (const material of doc.getRoot().listMaterials()) {
+    const label = material.getName()
+    if (label.includes('oak')) {
+      const [albedo, normal, arm] = oak
+      if (!(albedo && normal && arm)) {
+        throw new Error('Missing strongbox oak material')
+      }
+      material
+        .setBaseColorTexture(albedo)
+        .setNormalTexture(normal)
+        .setMetallicRoughnessTexture(arm)
+        .setOcclusionTexture(arm)
+        .setNormalScale(0.55)
+      continue
+    }
+    const kind = label.includes('iron') || label.includes('brass') ? 'iron' : 'canvas'
+    const roughness = material.getRoughnessFactor()
+    const metalness = material.getMetallicFactor()
+    await surfaceMaterial(doc, kind, label)
+    material.setRoughnessFactor(roughness).setMetallicFactor(metalness)
+  }
+  const [width, height, depth] = cashBounds[name]
+  const { min, max } = getBounds(scene)
+  const scale = Math.min(
+    width / (max[0] - min[0]),
+    height / (max[1] - min[1]),
+    depth / (max[2] - min[2]),
+  )
+  if (!Number.isFinite(scale) || scale <= 0) {
+    throw new Error(`Invalid authored ${name} bounds`)
+  }
+  const wrapper = doc
+    .createNode(`detail.${name}`)
+    .setScale([scale, scale, scale])
+    .setTranslation([
+      -((max[0] + min[0]) / 2) * scale,
+      -min[1] * scale,
+      -((max[2] + min[2]) / 2) * scale,
+    ])
+  for (const part of scene.listChildren()) {
+    scene.removeChild(part)
+    wrapper.addChild(part)
+  }
+  scene.addChild(wrapper)
+  await exportNative(doc, `tools/art/props/${name}.glb`, `${native}/dynamic/${name}.glb`)
+}
 async function kitProp(name: string, template: string) {
   const doc = await io.read('public/experiments/out-west/3d/models/props.glb')
   decode(doc)
@@ -301,12 +372,6 @@ async function kitProp(name: string, template: string) {
   doc.getRoot().setDefaultScene(scene)
   await doc.transform(prune({ keepAttributes: true }), dequantize())
   const map = await kitMaterial(doc)
-  if (name === 'bag2') {
-    map.setBaseColorFactor([0.82, 0.9, 0.7, 1])
-  }
-  if (name === 'bag3') {
-    map.setBaseColorFactor([0.76, 0.63, 0.46, 1])
-  }
   for (const mesh of doc.getRoot().listMeshes()) {
     for (const p of mesh.listPrimitives()) {
       p.setMaterial(map)
@@ -413,17 +478,13 @@ if (!only || only === 'animals') {
   await coatAnimals()
   await ambientAnimals()
 }
-if (!only || only === 'props') {
-  for (const [name, template] of [
-    ['strongbox', 'k_chest_kit'],
-    ['bag0', 'k_pouch_kit'],
-    ['bag1', 'k_sack_kit'],
-    ['bag2', 'k_sack_kit'],
-    ['bag3', 'k_sack_kit'],
-    ['dynamite', 'dynamite_kit'],
-  ] as const) {
-    await kitProp(name, template)
+if (!only || only === 'props' || only === 'cash') {
+  for (const name of ['strongbox', 'bag0', 'bag1', 'bag2', 'bag3'] as const) {
+    await cashProp(name)
   }
+}
+if (!only || only === 'props') {
+  await kitProp('dynamite', 'dynamite_kit')
   await coin()
   await tumbleweed()
   await crowCue()
