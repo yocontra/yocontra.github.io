@@ -21,6 +21,10 @@ const dimensions = {
   'chapel-communion-table': [1.8, 1.1, 1],
   'mortised-shop-workbench': [2, 0.95, 1],
   'square-cut-smithy-hearth': [2.5, 1, 2.5],
+  'wall-stock-shelves': [4, 2.3, 0.5],
+  'island-shop-shelves': [2.5, 2.3, 2],
+  'walnut-upright-piano': [1.5, 1.35, 1],
+  'faced-smithy-anvil': [1, 0.8, 0.5],
 } as const
 
 function roomAt(x: number, z: number, buildings: TownLayout['buildings']) {
@@ -56,6 +60,20 @@ function furnitureName(
   }
   if (cover.kind === 'forge') {
     return 'square-cut-smithy-hearth'
+  }
+  if (cover.kind === 'piano') {
+    return 'walnut-upright-piano'
+  }
+  if (cover.kind === 'anvil') {
+    return 'faced-smithy-anvil'
+  }
+  if (cover.kind === 'shelves') {
+    const room = roomAt(cover.x + cover.w / 2, cover.z + cover.d / 2, buildings)
+    // The tall rack behind the saloon bar is part of its fitted bar assembly.
+    if (room?.kind === 'saloon') {
+      return undefined
+    }
+    return Math.min(cover.w, cover.d) > 1 ? 'island-shop-shelves' : 'wall-stock-shelves'
   }
   if (cover.kind === 'counter') {
     const kind = roomAt(cover.x + cover.w / 2, cover.z + cover.d / 2, buildings)?.kind
@@ -133,6 +151,21 @@ function furnitureFacing(
     : 0
 }
 
+function wallFacing(
+  site: Cover,
+  room: TownLayout['buildings'][number] | undefined,
+  turned: boolean,
+): number {
+  if (!room) {
+    return turned ? Math.PI / 2 : 0
+  }
+  if (turned) {
+    const inward = room.x + room.w / 2 >= site.x + site.w / 2 ? 1 : -1
+    return (inward * Math.PI) / 2
+  }
+  return room.z + room.d / 2 >= site.z + site.d / 2 ? 0 : Math.PI
+}
+
 function furniturePlacement(
   doc: Document,
   fixture: Cover,
@@ -143,13 +176,20 @@ function furniturePlacement(
   const bottom = fixture.y0 ?? 0
   const x = fixture.x + fixture.w / 2
   const z = fixture.z + fixture.d / 2
+  const byWall = name === 'wall-stock-shelves' || name === 'walnut-upright-piano'
   const turned =
+    (byWall && fixture.d > fixture.w) ||
     (name === 'linen-hotel-bed' && fixture.w > fixture.d) ||
     (['mortised-plank-bench', 'stave-horse-trough', 'board-and-batten-freight-car'].includes(
       name,
     ) &&
       fixture.d > fixture.w)
-  const orientation = turned ? Math.PI / 2 : furnitureFacing(name, x, z, buildings)
+  let orientation = furnitureFacing(name, x, z, buildings)
+  if (byWall) {
+    orientation = wallFacing(fixture, roomAt(x, z, buildings), turned)
+  } else if (turned) {
+    orientation = Math.PI / 2
+  }
   const [siteWidth, siteDepth] = turned ? [fixture.d, fixture.w] : [fixture.w, fixture.d]
   return doc
     .createNode(`frontier-furniture:${name}:${index}`)

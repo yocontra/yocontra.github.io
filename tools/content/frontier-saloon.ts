@@ -37,6 +37,7 @@ export async function installPeriodFixtures(
     join(directory, 'frontier-furniture.glb'),
     join(directory, 'frontier-freight.glb'),
     join(directory, 'frontier-shop-fixtures.glb'),
+    join(directory, 'frontier-room-fittings.glb'),
   ])
 }
 
