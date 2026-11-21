@@ -4,6 +4,7 @@ import { resolve } from 'node:path'
 import { bakeCharacter } from './character-materials.ts'
 import { compressCharacterAssets } from './character-textures.ts'
 import { contentOutput } from './content-output.ts'
+import { fitAccessory } from './fitted-accessory.ts'
 import { fitAuthoredHat } from './fitted-hat.ts'
 import { fitHolsterPockets } from './fitted-holster-pockets.ts'
 import { fitStarterHead } from './fitted-starter-head.ts'
@@ -60,5 +61,20 @@ for (const id of ids.filter((asset) => asset.startsWith('holster.'))) {
     resolve(source, `${id}.gltf`),
     contentOutput('equipment', `${id}.glb`),
   )
+}
+for (const [id, artwork, binding] of [
+  ['extra.tin-star', 'tin-star', 'badge'],
+  ['extra.red-bandana', 'bandana', 'bandana'],
+  ['extra.black-bandana', 'bandana', 'bandana'],
+  ['extra.handlebar', 'handlebar', 'hair'],
+] as const) {
+  if (ids.includes(id)) {
+    await fitAccessory(
+      resolve(source, 'accessories', `${artwork}.glb`),
+      resolve(source, `${id}.gltf`),
+      contentOutput('equipment', `${id}.glb`),
+      binding,
+    )
+  }
 }
 console.log(`Rebuilt ${ids.length} HUMAN fitted assets`)

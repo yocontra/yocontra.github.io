@@ -1,5 +1,5 @@
 {
-  "fingerprint": "5f60ee3c7e2fa68698a59eae1a105a0b59859ad8b00dda1366b915cc171a9b47",
+  "fingerprint": "4f0ba71dff371cddec7759ee6b18cb06547f44e86da17ed80b016b03c347c343",
   "images": {
     "gun.rusty-six": "0e23b486309889db2169bbc76d03733a8abc5a2a8e77bb0606c1c91d39b48e5f",
     "gun.blued-six": "e292484c6a30cc2d69e04b5895deba9dd5001c82770e2a6c536cc46c3a5470fe",
@@ -34,9 +34,9 @@
     "holster.tooled-floral": "0c8c3de8692c0b08cdd08d27448abcf3b0d8e2b855c25aa9388421c16b6fac7a",
     "holster.buscadero": "48981de345cdd623ce2c6fa44a37b7af1a05d629b77ae60b45f7e17cbe648642",
     "holster.silver-conchos": "61664eed06bf2e6e1bb59782d2d79d70e3fe9bee30346133882887bf6009e641",
-    "extra.handlebar": "0c8e34da1bfbae923b99a0bbe9c5ea88ff338b4631ce575c062f334cfc51f4f3",
-    "extra.red-bandana": "46c269dd420a26c65ff5ead61dc34261d305fc16e81fdd5e0268a058b3b84dd8",
-    "extra.tin-star": "1b3448e157d2c7d30cc138cfd5684c834187f19838ae9695ae2019455c917e72",
-    "extra.black-bandana": "11e578d2c2535437a8ab447bfd5894891afa8d351df39434d668a3bd359301c9"
+    "extra.handlebar": "80ccfb5c14694b5e9d45e967a7b17d8ecc8a1f49d023e1b4a738d33fda99061f",
+    "extra.red-bandana": "98efebc147f4dd4cc196116ba58610281ddd4c6a3ce57099cb4c0a7d6fa82747",
+    "extra.tin-star": "80c71ba6cefd816479cdd73c4089729caa12c1adb4b6bdbfb40a926ff411ecd3",
+    "extra.black-bandana": "f671111939160c2f81156e529389bfef1b27aa130035c6a63756a5be4dde2664"
   }
 }

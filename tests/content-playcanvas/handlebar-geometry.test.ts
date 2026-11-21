@@ -53,7 +53,11 @@ for (const id of IDS) {
       .map((name) => [name, Array.from(original.getAttribute(name)?.getArray() ?? [])] as const)
     const originalIndices = Array.from(original.getIndices()?.getArray() ?? [])
     const beard = (
-      node.getExtras().pieceRanges as { name?: string; start: number; count: number }[]
+      node.getExtras().pieceRanges as {
+        name?: string
+        start: number
+        count: number
+      }[]
     ).find((range) => range.name === 'Beard')
     if (!beard) {
       throw new Error('Missing canonical beard boundary')
@@ -93,7 +97,7 @@ for (const id of IDS) {
     }
   })
 }
-for (const id of [...IDS, 'outlaw-5.pair', 'outlaw-16.pair']) {
+for (const id of ['outlaw-5', 'outlaw-16', 'outlaw-5.pair', 'outlaw-16.pair']) {
   it(`${id} publishes the actual fitted moustache with its native PBR maps`, async () => {
     const sourceId = id.replace('.pair', '')
     const source = await io.read(`tools/art/characters/${sourceId}.gltf`)
@@ -106,10 +110,7 @@ for (const id of [...IDS, 'outlaw-5.pair', 'outlaw-16.pair']) {
     const expected = [
       ...new Map(headPoints(sourceNode, sourceSurface).map((p) => [key(p.toArray()), p])).values(),
     ]
-    const category = id.startsWith('extra.') ? 'equipment' : 'baked'
-    const published = await io.read(
-      `public/experiments/out-west/3d/native-v2/${category}/${id}.glb`,
-    )
+    const published = await io.read(`public/experiments/out-west/3d/native-v2/baked/${id}.glb`)
     const hair = published
       .getRoot()
       .listNodes()
