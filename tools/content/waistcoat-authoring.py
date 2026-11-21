@@ -3,6 +3,7 @@
 import bpy
 import bmesh
 import json
+import math
 import sys
 from pathlib import Path
 from mathutils import Vector
@@ -125,8 +126,20 @@ for tri in faces:
                         triangle = (start, start + 2, start + 1)
                     triangles.append(triangle)
 mesh = bpy.data.meshes.new("Tailored waistcoat")
+
+
+# The inset seams remain flush. Short bias folds live inside the cloth panels.
+def tailoring_relief(vertex):
+    u, v = vertex["uv"]
+    seam = max(0, min(1, field(vertex) / 0.045))
+    bias = math.sin(31 * v + 18 * u) * math.cos(12 * u)
+    gathers = 0.84 * math.exp(-(((v - 0.35) / 0.18) ** 2)) + 0.16
+    return seam * gathers * bias * 0.0022
+
+
 offset = [
-    Vector(v["p"]) + Vector(v["n"]).normalized() * settings["clearance"]
+    Vector(v["p"])
+    + Vector(v["n"]).normalized() * (settings["clearance"] + tailoring_relief(v))
     for v in vertices
 ]
 mesh.from_pydata([(v.x, -v.z, v.y) for v in offset], [], triangles)
@@ -224,9 +237,14 @@ def surface_at(u, v):
     raise ValueError(f"No shirt surface at {u},{v}")
 
 
-def detail(u, v, size, sphere, tint, roughness, name):
+def detail(u, v, size, sphere, tint, roughness, name, pad=0.003):
     anchor = surface_at(u, v)
-    center = Vector((anchor["p"][0], -anchor["p"][2] - settings["clearance"] - 0.003, anchor["p"][1]))
+    point = Vector(anchor["p"])
+    direction = Vector(anchor["n"]).normalized()
+    fitted = point + direction * (
+        settings["clearance"] + tailoring_relief(anchor) + pad
+    )
+    center = Vector((fitted.x, -fitted.z, fitted.y))
     shape = bmesh.new()
     if sphere:
         bmesh.ops.create_uvsphere(shape, u_segments=10, v_segments=6, radius=1)
@@ -271,14 +289,95 @@ def detail(u, v, size, sphere, tint, roughness, name):
     shape.free()
 
 
-for v in [0.17, 0.25, 0.33, 0.41]:
+for v in (0.17, 0.25, 0.33, 0.41):
     detail(
-        0, v, (0.0036, 0.0018, 0.0036), True, [0.23, 0.2, 0.16], 0.72, "WaistcoatButton"
+        0,
+        v,
+        (0.0049, 0.0022, 0.0049),
+        True,
+        [0.32, 0.25, 0.17],
+        0.66,
+        "HornWaistcoatButton",
     )
-for u in [0.075, 0.925]:
     detail(
-        u, 0.285, (0.028, 0.0015, 0.004), False, [0.65, 0.63, 0.6], 1, "WaistcoatPocket"
+        0,
+        v,
+        (0.0028, 0.0008, 0.0028),
+        True,
+        [0.52, 0.42, 0.29],
+        0.58,
+        "BurnishedButtonCentre",
+        0.005,
     )
+
+
+def sewn_panel(u, v, du, dv, tint, name, pad):
+    """Follow the fitted surface between each pair of stitch positions."""
+    width, height = 12, 3
+    points, normals = [], []
+    start = len(result["positions"])
+    anchors = [
+        surface_at(
+            u + (2 * i / width - 1) * du,
+            v + (2 * j / height - 1) * dv,
+        )
+        for j in range(height + 1)
+        for i in range(width + 1)
+    ]
+    if min(field(anchor) for anchor in anchors) < 0.009:
+        return
+    for index, anchor in enumerate(anchors):
+        normal = Vector(anchor["n"]).normalized()
+        t = (index % (width + 1)) / width
+        f = (index // (width + 1)) / height
+        roll = math.sin(math.pi * t) * math.sin(math.pi * f) * 0.0016
+        depth = settings["clearance"] + tailoring_relief(anchor) + pad + roll
+        point = Vector(anchor["p"]) + normal * depth
+        inf = sorted(anchor["weights"].items(), key=lambda item: -item[1])[:4]
+        total = sum(value for _, value in inf)
+        points.append(point)
+        normals.append(normal)
+        result["positions"].append(list(point))
+        result["normals"].append(list(normal))
+        result["uvs"].append([anchor["uv"][0], anchor["uv"][1]])
+        result["joints"].append([inf[k][0] if k < len(inf) else 0 for k in range(4)])
+        result["weights"].append(
+            [inf[k][1] / total if k < len(inf) else 0 for k in range(4)]
+        )
+    for j in range(height):
+        for i in range(width):
+            a = j * (width + 1) + i
+            b, c, d = a + 1, a + width + 2, a + width + 1
+            for face in ((a, b, c), (a, c, d)):
+                va, vb, vc = [points[k] for k in face]
+                outward = sum((normals[k] for k in face), Vector())
+                ordered = (
+                    face if (vb - va).cross(vc - va).dot(outward) > 0 else face[::-1]
+                )
+                result["triangles"].append([start + k for k in ordered])
+    result["pieces"].append(
+        {
+            "start": start,
+            "count": len(points),
+            "name": name,
+            "tint": tint,
+            "roughness": 0.94,
+        }
+    )
+
+
+for u in (0.077, 0.923):
+    for v in (0.245, 0.459):
+        sewn_panel(u, v, 0.025, 0.021, [0.78, 0.72, 0.64], "LayeredPocketWelt", 0.0012)
+        sewn_panel(
+            u, v + 0.014, 0.024, 0.004, [0.49, 0.44, 0.40], "RecessedPocketLip", 0.0028
+        )
+        sewn_panel(
+            u, v - 0.016, 0.023, 0.002, [0.93, 0.87, 0.77], "PocketBackstitch", 0.0022
+        )
+
+sewn_panel(0.5, 0.245, 0.079, 0.009, [0.66, 0.61, 0.54], "DrawnBackCinch", 0.0018)
+sewn_panel(0.5, 0.245, 0.007, 0.013, [0.69, 0.51, 0.36], "CinchBrace", 0.0032)
 
 json.dump(result, open(output_path, "w"))
 print("GARMENT", len(mesh.vertices), len(mesh.loop_triangles))

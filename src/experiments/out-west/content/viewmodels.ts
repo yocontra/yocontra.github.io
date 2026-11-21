@@ -2,24 +2,24 @@
 import type { ContentAsset } from './types.ts'
 export const VIEWMODELS: Readonly<Record<string, ContentAsset>> = {
   'outfit.trail-duds': {
-    url: '/experiments/out-west/3d/native-v2/viewmodels/outfit.trail-duds.glb?v=f23c581da045c7ba',
-    hash: 'f23c581da045c7baabbdb822ac2bffb4d64babd3ce0005d7cb1e86aed7c790a8',
-    bytes: 88552,
+    url: '/experiments/out-west/3d/native-v2/viewmodels/outfit.trail-duds.glb?v=a12ebbcf8d802a73',
+    hash: 'a12ebbcf8d802a735d174bbcea0189b8b0a3476ff8b945ed2546dbfe8ccda818',
+    bytes: 167268,
   },
   'outfit.trail-duds.pair': {
-    url: '/experiments/out-west/3d/native-v2/viewmodels/outfit.trail-duds.pair.glb?v=409ebeff38050533',
-    hash: '409ebeff38050533bbd580202d3f44bd9d6a70d3a3117c6a6ab177fbf43db3df',
-    bytes: 89076,
+    url: '/experiments/out-west/3d/native-v2/viewmodels/outfit.trail-duds.pair.glb?v=65178c1c3f839767',
+    hash: '65178c1c3f839767ab76143a58a2b78de4404c11b066311cc80c74d92de3d920',
+    bytes: 167792,
   },
   'outfit.shirt-vest': {
-    url: '/experiments/out-west/3d/native-v2/viewmodels/outfit.shirt-vest.glb?v=e3bd15c427adba04',
-    hash: 'e3bd15c427adba04a7761ef11d51b937a72a8d67f499b09ac702be2d9067d224',
-    bytes: 87888,
+    url: '/experiments/out-west/3d/native-v2/viewmodels/outfit.shirt-vest.glb?v=1ed92dbebac4eda5',
+    hash: '1ed92dbebac4eda51a339413d0084a2e287c46e467dd616485b567aad05ee70c',
+    bytes: 166600,
   },
   'outfit.shirt-vest.pair': {
-    url: '/experiments/out-west/3d/native-v2/viewmodels/outfit.shirt-vest.pair.glb?v=6c1476b1eeeea422',
-    hash: '6c1476b1eeeea4223afb4e86c40e8fc497949bb9155a85fb45d296ce7a831820',
-    bytes: 88396,
+    url: '/experiments/out-west/3d/native-v2/viewmodels/outfit.shirt-vest.pair.glb?v=de9e82b42e62c653',
+    hash: 'de9e82b42e62c6537cadeabfe908586610e9fcd0e3331511154007f77b158bcf',
+    bytes: 167116,
   },
   'outfit.wool-duster': {
     url: '/experiments/out-west/3d/native-v2/viewmodels/outfit.wool-duster.glb?v=9de662d60edebf72',

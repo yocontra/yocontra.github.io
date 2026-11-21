@@ -53,7 +53,7 @@ function clips(doc: Document): string {
   )
 }
 for (const [id, faces, vertices] of [
-  ['outfit.trail-duds', 2518, 1477],
+  ['outfit.trail-duds', 5782, 3320],
   ['outfit.wool-duster', 2654, 1724],
 ] as const) {
   it(`${id} retains only complete fitted arm faces with exact native streams, skin, PBR and clocks`, async () => {
@@ -65,7 +65,7 @@ for (const [id, faces, vertices] of [
     const inputs = first.report.sourceInputs
     const categories =
       id === 'outfit.trail-duds'
-        ? ['boot-bridges', 'neckerchiefs', 'waistcoats']
+        ? ['boot-bridges', 'coat-sleeves', 'neckerchiefs', 'waistcoats']
         : ['coat-sleeves', 'boot-bridges', 'coat-collars', 'shirt-fronts']
     const expectedInputs = [
       nativePath,
