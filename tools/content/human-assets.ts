@@ -7,6 +7,7 @@ import { contentOutput } from './content-output.ts'
 import { fitAccessory } from './fitted-accessory.ts'
 import { fitAuthoredHat } from './fitted-hat.ts'
 import { fitHolsterPockets } from './fitted-holster-pockets.ts'
+import { fitRevolver } from './fitted-revolver.ts'
 import { fitStarterHead } from './fitted-starter-head.ts'
 import { fitForgedSpurs } from './forged-spurs.ts'
 import { fitOutlawHat } from './outlaw-hats.ts'
@@ -76,5 +77,11 @@ for (const [id, artwork, binding] of [
       binding,
     )
   }
+}
+for (const id of ids.filter((asset) => asset.startsWith('gun.'))) {
+  await fitRevolver(
+    resolve(source, 'revolver-exteriors', id === 'gun.buntline' ? 'long.glb' : 'standard.glb'),
+    contentOutput('equipment', `${id}.glb`),
+  )
 }
 console.log(`Rebuilt ${ids.length} HUMAN fitted assets`)
