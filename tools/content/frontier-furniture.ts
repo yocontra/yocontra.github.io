@@ -35,31 +35,6 @@ export function bench(g: FrontierGeometry, root: Node, c: Placement) {
   )
 }
 
-/** Plank top over an apron and four turned-square legs. */
-export function table(g: FrontierGeometry, root: Node, c: Placement) {
-  const f = frame(c)
-  const height = c.top - f.base
-  const half = f.length / 2
-  const depth = f.width / 2
-  g.box(
-    root,
-    'floor',
-    f.block([-half, half], [-depth, depth], [height - 0.05, height]),
-    [0.64, 0.49, 0.32],
-  )
-  g.box(
-    root,
-    'wood',
-    f.block([-half + 0.1, half - 0.1], [-depth + 0.1, depth - 0.1], [height - 0.17, height - 0.05]),
-    DARK_WOOD,
-  )
-  for (const a of [-half + 0.1, half - 0.18]) {
-    for (const b of [-depth + 0.1, depth - 0.18]) {
-      g.box(root, 'wood', f.block([a, a + 0.08], [b, b + 0.08], [0, height - 0.05]), DARK_WOOD)
-    }
-  }
-}
-
 /** Blacksmith's anvil on a sawn stump; the library anvil is authored at true height. */
 export function anvil(g: FrontierGeometry, root: Node, c: Placement) {
   const f = frame(c)
@@ -148,39 +123,6 @@ export function headstone(g: FrontierGeometry, root: Node, c: Placement) {
     stone,
   )
   g.box(root, 'masonry', f.block([-0.1, 0.1], [-0.11, 0.11], [height - 0.06, height]), stone)
-}
-
-/** Cast-iron box stove on legs with an ash lip and a stovepipe to the top of its volume. */
-export function stove(g: FrontierGeometry, root: Node, c: Placement) {
-  const f = frame(c)
-  const height = c.top - f.base
-  const half = Math.min(f.length, f.width) / 2 - 0.05
-  for (const a of [-half + 0.05, half - 0.13]) {
-    for (const b of [-half + 0.05, half - 0.13]) {
-      g.box(root, 'iron', f.block([a, a + 0.08], [b, b + 0.08], [0, 0.16]), IRON)
-    }
-  }
-  g.box(root, 'iron', f.block([-half, half], [-half, half], [0.16, 0.72]), [0.16, 0.15, 0.14])
-  g.box(
-    root,
-    'iron',
-    f.block([-half - 0.04, half + 0.04], [-half - 0.04, half + 0.04], [0.72, 0.77]),
-    [0.12, 0.11, 0.1],
-  )
-  g.box(
-    root,
-    'iron',
-    f.block([-half + 0.15, half - 0.15], [-half - 0.02, -half], [0.28, 0.58]),
-    [0.24, 0.2, 0.17],
-  )
-  tube(g, root, {
-    role: 'iron',
-    tint: [0.13, 0.12, 0.11],
-    from: f.point(half * 0.4, 0, 0.77),
-    to: f.point(half * 0.4, 0, height),
-    radius: 0.075,
-    segments: 12,
-  })
 }
 
 /** Horse trough: plank walls around murky water, so the open top reads as a container. */

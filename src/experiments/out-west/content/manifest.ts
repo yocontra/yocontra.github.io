@@ -101,13 +101,13 @@ export const ENVIRONMENT = {
   hash: '206c67e3a1b992282821cf06662bdd69bbb4915c1c4444a66338a40d6a7d4e34',
   bytes: 1173154,
 } as const
-export const CONTENT_VERSION = 'bd03ed4425029d5c12821a988449936cc415e147fe2eb5e609f5217b551ac37b'
+export const CONTENT_VERSION = '6b7d0bf37cf3374fac8d954e79c422fd2c59fb7a332eb99ba1dddcafa3b08eaf'
 export const COLLISION_VERSION = '03b11033428780f67158b47e3fc2b37d761185acea4d5b323301449671b65def'
 export const ASSETS = {
   frontier: {
-    url: '/experiments/out-west/3d/native-v2/baked/frontier.glb?v=5abf82c6c9658a53',
-    hash: '5abf82c6c9658a53480784e695aa4ba714868de6f7d7b1c1707b9188e182165f',
-    bytes: 61865520,
+    url: '/experiments/out-west/3d/native-v2/baked/frontier.glb?v=21815f3653c2fffa',
+    hash: '21815f3653c2fffa64f10211dc89e051b8bd45559f3607141c97c5758e217e89',
+    bytes: 62442248,
   },
   'frontier-yard-high': {
     url: '/experiments/out-west/3d/native-v2/baked/frontier-yard-high.glb?v=94b3a908a21850b0',

@@ -1,7 +1,9 @@
 /** Install the Blender-authored bar and lamps using the town's existing wood scans. */
+import { join } from 'node:path'
 import { Material, Node } from '@gltf-transform/core'
 import { copyToDocument } from '@gltf-transform/functions'
-import type { Building, Cover } from '../../src/experiments/out-west/ffa/sim/layout.ts'
+import type { Building, Cover, TownLayout } from '../../src/experiments/out-west/ffa/sim/layout.ts'
+import { hasFittedFurniture, installFrontierFurniture } from './frontier-furniture-install.ts'
 import { type FrontierGeometry, frontierIO, type Rgb } from './frontier-geometry.ts'
 import { coverModel } from './frontier-props.ts'
 
@@ -18,13 +20,22 @@ export function authorCover(geometry: FrontierGeometry, root: Node, cover: reado
     throw new Error('The saloon bar no longer matches its cover locations')
   }
   for (const [index, placement] of cover.entries()) {
-    if (!isSaloonBar(placement)) {
+    if (!(isSaloonBar(placement) || hasFittedFurniture(placement))) {
       coverModel(geometry, root, placement, index)
     }
   }
 }
 
-export async function installSaloonBar(geometry: FrontierGeometry, source: string): Promise<void> {
+export async function installPeriodFixtures(
+  geometry: FrontierGeometry,
+  layout: TownLayout,
+  directory: string,
+): Promise<void> {
+  await installSaloonBar(geometry, join(directory, 'frontier-saloon.glb'))
+  await installFrontierFurniture(geometry, layout, join(directory, 'frontier-furniture.glb'))
+}
+
+async function installSaloonBar(geometry: FrontierGeometry, source: string): Promise<void> {
   const art = await frontierIO.read(source)
   const fixtures = art.getRoot().getDefaultScene()?.listChildren()
   if (!fixtures?.length) {

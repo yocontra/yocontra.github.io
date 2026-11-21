@@ -20,8 +20,6 @@ import {
   IRON,
   lumber,
   safe,
-  stove,
-  table,
   trough,
 } from './frontier-furniture.ts'
 import type { FrontierGeometry, Placement, Rgb } from './frontier-geometry.ts'
@@ -46,8 +44,6 @@ const JOINERY: Partial<
   headstone,
   lumber,
   safe,
-  stove,
-  table,
   trough,
 }
 

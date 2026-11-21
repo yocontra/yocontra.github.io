@@ -78,6 +78,14 @@ lamp origins. The cover volumes and floor height come from the Frontier plan.
 blender --background --factory-startup --python tools/content/frontier-saloon-authoring.py
 ```
 
+The turned-leg card table, oak worktable and potbelly stove live in
+`frontier-furniture.glb`. Authoring fits them to the existing table and stove
+cover sites and shares the town's timber, iron and cloth maps.
+
+```sh
+blender --background --factory-startup --python tools/content/frontier-furniture-authoring.py -- tools/art/environments/frontier-furniture.glb
+```
+
 ## Articulated crow wings
 
 The ambient crow uses three joints per wing and a corrective shape for the fold.
