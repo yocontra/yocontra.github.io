@@ -11,9 +11,9 @@ export const DYNAMIC_ASSETS = {
     bytes: 77732,
   },
   dynamite: {
-    url: '/experiments/out-west/3d/native-v2/dynamic/dynamite.glb?v=32979c29d7d06020',
-    hash: '32979c29d7d0602059b953ad71e40368380d74a8f71850d9e664b18b038e0824',
-    bytes: 30836,
+    url: '/experiments/out-west/3d/native-v2/dynamic/dynamite.glb?v=e50e57842e8c38b3',
+    hash: 'e50e57842e8c38b349920735fe33ea2cf098817d787d01feb8527f9a88b07556',
+    bytes: 133484,
   },
   strongbox: {
     url: '/experiments/out-west/3d/native-v2/dynamic/strongbox.glb?v=fc6070c6115598c9',
@@ -41,9 +41,9 @@ export const DYNAMIC_ASSETS = {
     bytes: 129544,
   },
   coin: {
-    url: '/experiments/out-west/3d/native-v2/dynamic/coin.glb?v=581aff472ce46e54',
-    hash: '581aff472ce46e54aa5c1f0d8641c359485f5414b8a35cb91c6c132ffc8bf68f',
-    bytes: 5008,
+    url: '/experiments/out-west/3d/native-v2/dynamic/coin.glb?v=44fe0ddd9f4f98a0',
+    hash: '44fe0ddd9f4f98a048fda93a558e454eadf09c78300590993a93751d76ab2dba',
+    bytes: 176344,
   },
   card: {
     url: '/experiments/out-west/3d/dynamic/card.glb?v=27ab7e5c038a1e65',
@@ -101,7 +101,7 @@ export const ENVIRONMENT = {
   hash: '206c67e3a1b992282821cf06662bdd69bbb4915c1c4444a66338a40d6a7d4e34',
   bytes: 1173154,
 } as const
-export const CONTENT_VERSION = 'da61dcfec86cb8c125e6936a090e8c262089336d8f796e08c0bfbf27fa4d05be'
+export const CONTENT_VERSION = 'c9514fe5426258bf72804abcfbffa8d065ded685b07daac9bdaedd62bfbc046a'
 export const COLLISION_VERSION = '03b11033428780f67158b47e3fc2b37d761185acea4d5b323301449671b65def'
 export const ASSETS = {
   frontier: {

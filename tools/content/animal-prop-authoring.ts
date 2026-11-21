@@ -2,12 +2,19 @@
 import { copyFile, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { type Document, getBounds, NodeIO } from '@gltf-transform/core'
+import { type Document, getBounds, NodeIO, type Primitive } from '@gltf-transform/core'
 import { ALL_EXTENSIONS } from '@gltf-transform/extensions'
-import { dedup, dequantize, prune, unpartition, weld } from '@gltf-transform/functions'
+import {
+  copyToDocument,
+  dedup,
+  dequantize,
+  prune,
+  unpartition,
+  weld,
+} from '@gltf-transform/functions'
 import { MeshoptDecoder } from 'meshoptimizer'
 import sharp from 'sharp'
-import { externalize, kitMaterial, projectedUv, surfaceMaterial } from './animal-prop-surfaces.ts'
+import { externalize, projectedUv, surfaceMaterial } from './animal-prop-surfaces.ts'
 import { bakeCharacter } from './character-materials.ts'
 import { bakeFoldedCrow } from './crow-fold.ts'
 import { normalizeSkinnedAsset } from './normalize-skinned-nodes.ts'
@@ -22,13 +29,6 @@ await Promise.all(
     mkdir(p, { recursive: true }),
   ),
 )
-function decode(doc: Document) {
-  doc
-    .getRoot()
-    .listExtensionsUsed()
-    .find((e) => e.extensionName === 'EXT_meshopt_compression')
-    ?.dispose()
-}
 async function exportNative(doc: Document, source: string, output: string) {
   await doc.transform(
     dedup(),
@@ -280,7 +280,8 @@ async function ambientAnimals() {
   textureUnmapped(doc, 'clockwork', await surfaceMaterial(doc, 'iron', 'clockwork surface detail'))
   await exportNative(doc, source, `${native}/ambient/clockwork.glb`)
 }
-const cashBounds = {
+const fittedPropBounds = {
+  dynamite: [0.2, 0.4, 0.2],
   strongbox: [1.1, 0.617, 0.652],
   bag0: [0.4945, 0.349, 0.2616],
   bag1: [0.3771, 0.46, 0.3134],
@@ -288,8 +289,9 @@ const cashBounds = {
   bag3: [0.3771, 0.46, 0.3134],
 } as const
 
-async function cashProp(name: keyof typeof cashBounds) {
-  const doc = await io.read(`tools/art/props/cash/${name}.glb`)
+async function fittedProp(name: keyof typeof fittedPropBounds) {
+  const family = name === 'dynamite' ? 'pickups' : 'cash'
+  const doc = await io.read(`tools/art/props/${family}/${name}.glb`)
   const scene = doc.getRoot().getDefaultScene()
   if (!scene) {
     throw new Error(`Missing authored ${name} scene`)
@@ -325,8 +327,11 @@ async function cashProp(name: keyof typeof cashBounds) {
     const metalness = material.getMetallicFactor()
     await surfaceMaterial(doc, kind, label)
     material.setRoughnessFactor(roughness).setMetallicFactor(metalness)
+    if (name === 'dynamite' && label.includes('paper')) {
+      material.setNormalScale(0.18)
+    }
   }
-  const [width, height, depth] = cashBounds[name]
+  const [width, height, depth] = fittedPropBounds[name]
   const { min, max } = getBounds(scene)
   const scale = Math.min(
     width / (max[0] - min[0]),
@@ -351,62 +356,41 @@ async function cashProp(name: keyof typeof cashBounds) {
   scene.addChild(wrapper)
   await exportNative(doc, `tools/art/props/${name}.glb`, `${native}/dynamic/${name}.glb`)
 }
-async function kitProp(name: string, template: string) {
-  const doc = await io.read('public/experiments/out-west/3d/models/props.glb')
-  decode(doc)
-  const selected = doc
-    .getRoot()
-    .listNodes()
-    .find((n) => n.getName() === template)
-  if (!selected) {
-    throw new Error(`Missing Kit ${template}`)
+async function fitCoinSurface(doc: Document): Promise<void> {
+  const art = await io.read('tools/art/props/pickups/coin.glb')
+  const mesh = doc.getRoot().listMeshes()[0]
+  const original = mesh?.listPrimitives()[0]
+  const position = original?.getAttribute('POSITION')
+  const part = art.getRoot().listMeshes()[0]?.listPrimitives()[0]
+  if (!(mesh && original && position && part)) {
+    throw new Error('Missing animated coin surface')
   }
-  const scene = doc.createScene(`Western ${name}`)
-  scene.addChild(selected)
-  for (const other of doc
-    .getRoot()
-    .listScenes()
-    .filter((s) => s !== scene)) {
-    other.dispose()
+  const replacement = copyToDocument(doc, art, [part]).get(part) as Primitive
+  const points = replacement.getAttribute('POSITION')
+  if (!points) {
+    throw new Error('Missing milled coin geometry')
   }
-  doc.getRoot().setDefaultScene(scene)
-  await doc.transform(prune({ keepAttributes: true }), dequantize())
-  const map = await kitMaterial(doc)
-  for (const mesh of doc.getRoot().listMeshes()) {
-    for (const p of mesh.listPrimitives()) {
-      p.setMaterial(map)
-    }
-  }
-  const old = await io.read(`public/experiments/out-west/3d/dynamic/${name}.glb`)
-  const oldScene = old.getRoot().listScenes()[0]
-  if (!oldScene) {
-    throw new Error('Missing legacy prop bounds')
-  }
-  const oldBounds = getBounds(oldScene)
-  const bounds = getBounds(scene)
-  const span = bounds.max.map((v, i) => v - (bounds.min[i] ?? 0))
-  const target = oldBounds.max.map((v, i) => v - (oldBounds.min[i] ?? 0))
-  const k = Math.min(...span.map((v, i) => (target[i] ?? 1) / Math.max(v, 0.0001)))
-  const scale = [k, k, k]
-  const wrapper = doc
-    .createNode(`detail.${name}`)
-    .setScale(scale as [number, number, number])
-    .setTranslation(
-      bounds.min.map((v, i) =>
-        i === 1
-          ? (oldBounds.min[i] ?? 0) - v * k
-          : ((oldBounds.min[i] ?? 0) + (oldBounds.max[i] ?? 0)) / 2 -
-            (((bounds.min[i] ?? 0) + (bounds.max[i] ?? 0)) / 2) * k,
-      ) as [number, number, number],
+  const from = { min: points.getMin([]), max: points.getMax([]) }
+  const to = { min: position.getMin([]), max: position.getMax([]) }
+  for (let i = 0; i < points.getCount(); i++) {
+    points.setElement(
+      i,
+      points.getElement(i, []).map((value, axis) => {
+        const lower = from.min[axis] ?? 0
+        const sourceSpan = (from.max[axis] ?? 0) - lower
+        const targetMin = to.min[axis] ?? 0
+        const targetSpan = (to.max[axis] ?? 0) - targetMin
+        return targetMin + ((value - lower) * targetSpan) / sourceSpan
+      }),
     )
-  scene.removeChild(selected)
-  wrapper.addChild(selected)
-  scene.addChild(wrapper)
-  await exportNative(doc, `tools/art/props/${name}.glb`, `${native}/dynamic/${name}.glb`)
+  }
+  mesh.addPrimitive(replacement)
+  original.dispose()
 }
 async function coin() {
   const doc = await io.read('public/experiments/out-west/3d/dynamic/coin.glb')
   await doc.transform(dequantize())
+  await fitCoinSurface(doc)
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512"><rect width="512" height="512" fill="#9d7132"/><circle cx="256" cy="256" r="241" fill="#d3a756" stroke="#624524" stroke-width="9"/><circle cx="256" cy="256" r="220" fill="none" stroke="#efd39a" stroke-width="6"/><circle cx="256" cy="256" r="191" fill="none" stroke="#8f632d" stroke-width="3"/><text x="256" y="139" text-anchor="middle" font-family="Georgia" font-size="48" font-weight="bold" fill="#584020">OUT WEST</text><text x="256" y="300" text-anchor="middle" font-family="Georgia" font-size="160" font-weight="bold" fill="#efcf89" stroke="#735023" stroke-width="4">20</text><text x="256" y="370" text-anchor="middle" font-family="Georgia" font-size="32" fill="#63451e">FRONTIER BANK</text><text x="256" y="414" text-anchor="middle" font-family="Georgia" font-size="25" fill="#f4d798">★ 1886 ★</text>${Array.from({ length: 64 }, (_, i) => `<circle cx="${256 + 229 * Math.cos((i * Math.PI) / 32)}" cy="${256 + 229 * Math.sin((i * Math.PI) / 32)}" r="3" fill="#513c22"/>`).join('')}</svg>`
   const image = await sharp(Buffer.from(svg)).png().toBuffer()
   await writeFile('tools/art/props/textures/minted-coin.png', image)
@@ -480,12 +464,14 @@ if (!only || only === 'animals') {
 }
 if (!only || only === 'props' || only === 'cash') {
   for (const name of ['strongbox', 'bag0', 'bag1', 'bag2', 'bag3'] as const) {
-    await cashProp(name)
+    await fittedProp(name)
   }
 }
-if (!only || only === 'props') {
-  await kitProp('dynamite', 'dynamite_kit')
+if (!only || only === 'props' || only === 'pickups') {
+  await fittedProp('dynamite')
   await coin()
+}
+if (!only || only === 'props') {
   await tumbleweed()
   await crowCue()
 }
