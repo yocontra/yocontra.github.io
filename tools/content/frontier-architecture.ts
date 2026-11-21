@@ -5,7 +5,6 @@ import {
   PORCH_DEPTH,
   PORCH_ROOF,
   PORCH_ROOF_T,
-  PORCHED,
   sideStrip,
 } from '../../src/experiments/out-west/ffa/sim/porches.ts'
 import { ROOF_DECK_Y } from '../../src/experiments/out-west/ffa/sim/roofwalks.ts'
@@ -16,12 +15,14 @@ import {
   FALSE_FRONT_RISE,
   falseFrontSide,
   fenceSpans,
+  perimeterSpans,
   roofMesh,
 } from './frontier-collision.ts'
 import type { FrontierGeometry, Placement, Rgb } from './frontier-geometry.ts'
 import { LABELS, SHORT_LABELS, SIGN_ROWS } from './frontier-materials.ts'
 import { MOUNT_IRON_TINT } from './frontier-mounts.ts'
 import { buildingDoors } from './frontier-openings.ts'
+import { porchPosts, type readPorchPosts } from './frontier-porch-posts.ts'
 import { pitchedRoof } from './frontier-roofs.ts'
 import { saloonFloor } from './frontier-saloon.ts'
 import {
@@ -31,6 +32,34 @@ import {
   signUvRect,
 } from './frontier-sign-layout.ts'
 import { weatheredEave } from './frontier-weathering.ts'
+export function canyonBoundary(g: FrontierGeometry, layout: TownLayout) {
+  const root = g.group('Perdition creek fence / rail line / canyon boundaries')
+  const size = layout.size
+  for (const span of perimeterSpans(size)) {
+    g.box(root, 'wood', { ...span, top: span.y1 }, [0.48, 0.42, 0.31])
+  }
+  for (let x = 0; x < size; x += 4) {
+    g.box(root, 'wood', { x, z: 0, w: 0.2, d: 0.7, y0: 0, top: 2.9 }, [0.38, 0.31, 0.22])
+  }
+  for (let x = 0; x < size; x += 13) {
+    g.box(root, 'wood', { x, z: size - 0.5, w: 13, d: 3.2, y0: 0, top: 5.6 }, [0.37, 0.29, 0.23])
+    for (const y of [0.45, 3.6, 5.3]) {
+      g.box(
+        root,
+        'wood',
+        { x, z: size - 0.56, w: 13, d: 0.12, y0: y, top: y + 0.13 },
+        [0.24, 0.21, 0.18],
+      )
+    }
+    g.box(
+      root,
+      'wood',
+      { x: x + 4, z: size - 0.58, w: 4.8, d: 0.1, y0: 0.65, top: 5.2 },
+      [0.32, 0.27, 0.21],
+    )
+  }
+}
+
 export function authorDecksAndRoofs(
   g: FrontierGeometry,
   ground: Node,
@@ -66,9 +95,9 @@ export function authorDecksAndRoofs(
 
 export function buildingDetails(
   g: FrontierGeometry,
-  plan: FrontierPlan,
-  building: Building,
   root: Node,
+  building: Building,
+  { plan, posts }: { plan: FrontierPlan; posts: Awaited<ReturnType<typeof readPorchPosts>> },
 ) {
   const { x, z, w, d, height } = building
   const paint = plan.style.buildingPaint[building.id] ?? plan.style.woodTint
@@ -99,7 +128,7 @@ export function buildingDetails(
   }
   falseFrontJoinery(g, root, building, trim)
   const front = frontOf(building, plan.layout)
-  porchSupports(g, root, building, { front, paint })
+  porchPosts(g, root, building, { front, paint, posts })
   buildingSign(g, root, { building, front, layout: plan.layout })
   hangingSign(g, root, building, front)
   if (building.kind === 'church' || building.kind === 'tower') {
@@ -371,31 +400,6 @@ function mountPorchSign(g: FrontierGeometry, root: Node, row: number, mount: Por
           top: y + 0.016,
         },
         MOUNT_IRON_TINT,
-      )
-    }
-  }
-}
-
-function porchSupports(
-  g: FrontierGeometry,
-  root: Node,
-  building: Building,
-  options: { front: Side; paint: Rgb },
-) {
-  const { x, z, w, d } = building
-  const { front, paint } = options
-  if (PORCHED.has(building.kind)) {
-    const strip = sideStrip(building, front, PORCH_DEPTH)
-    const horizontal = front === 'n' || front === 's'
-    const length = horizontal ? w : d
-    for (let along = 0.25; along < length; along += 4.5) {
-      const px = horizontal ? x + along : strip.x + (front === 'e' ? 1.7 : 0.3)
-      const pz = horizontal ? strip.z + (front === 's' ? 1.7 : 0.3) : z + along
-      g.box(
-        root,
-        'wood',
-        { x: px - 0.08, z: pz - 0.08, w: 0.16, d: 0.16, y0: 0.06, top: 3.1 },
-        paint,
       )
     }
   }

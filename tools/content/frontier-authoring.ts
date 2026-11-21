@@ -14,10 +14,15 @@ import { compressEnvironmentTextures } from './environment-textures.ts'
 import { formatContent } from './format-content.ts'
 import { packFreight } from './freight-crates-contract.ts'
 import { installFreightCrates, readFreightPrefabs } from './freight-crates-install.ts'
-import { authorDecksAndRoofs, bankServiceSigns, buildingDetails } from './frontier-architecture.ts'
+import {
+  authorDecksAndRoofs,
+  bankServiceSigns,
+  buildingDetails,
+  canyonBoundary,
+} from './frontier-architecture.ts'
 import { authorBarrelCacti } from './frontier-barrel-cactus.ts'
 import { replaceCactusPrototype } from './frontier-cactus-candidate.ts'
-import { compileFrontierCollision, perimeterSpans, structuralWalls } from './frontier-collision.ts'
+import { compileFrontierCollision, structuralWalls } from './frontier-collision.ts'
 import { frontierCutBanks } from './frontier-cut-banks.ts'
 import { FrontierGeometry, frontierIO, type Rgb } from './frontier-geometry.ts'
 import { frontierFlatGround, frontierGroundTransform } from './frontier-ground.ts'
@@ -31,6 +36,7 @@ import {
   MOUNT_IRON_TINT,
 } from './frontier-mounts.ts'
 import { surround } from './frontier-openings.ts'
+import { readPorchPosts } from './frontier-porch-posts.ts'
 import { desertPlants } from './frontier-props.ts'
 import { authorRoofMaterial } from './frontier-roof-material.ts'
 import { authorCover, installPeriodFixtures } from './frontier-saloon.ts'
@@ -50,36 +56,6 @@ export interface FrontierPlan {
   tumbleweedPaths: { center: [number, number]; radius: [number, number] }[]
 }
 const SOURCE = 'tools/art/environments'
-function canyonBoundary(g: FrontierGeometry, layout: TownLayout) {
-  const root = g.group('Perdition creek fence / rail line / canyon boundaries')
-  const size = layout.size
-  // North: a cattle fence along the creek. South: a stationary freight consist.
-  for (const span of perimeterSpans(size)) {
-    g.box(root, 'wood', { ...span, top: span.y1 }, [0.48, 0.42, 0.31])
-  }
-  for (let x = 0; x < size; x += 4) {
-    g.box(root, 'wood', { x, z: 0, w: 0.2, d: 0.7, y0: 0, top: 2.9 }, [0.38, 0.31, 0.22])
-  }
-  for (let x = 0; x < size; x += 13) {
-    g.box(root, 'wood', { x, z: size - 0.5, w: 13, d: 3.2, y0: 0, top: 5.6 }, [0.37, 0.29, 0.23])
-    for (const y of [0.45, 3.6, 5.3]) {
-      g.box(
-        root,
-        'wood',
-        { x, z: size - 0.56, w: 13, d: 0.12, y0: y, top: y + 0.13 },
-        [0.24, 0.21, 0.18],
-      )
-    }
-    g.box(
-      root,
-      'wood',
-      { x: x + 4, z: size - 0.58, w: 4.8, d: 0.1, y0: 0.65, top: 5.2 },
-      [0.32, 0.27, 0.21],
-    )
-  }
-}
-
-/** The flat slab: rutted, tinted town dirt framed by a plain apron and its edge skirt. */
 function flatGround(g: FrontierGeometry, ground: Node, layout: TownLayout) {
   const soil: Rgb = [0.92, 0.85, 0.7]
   const slab = frontierFlatGround(layout.size)
@@ -142,6 +118,7 @@ async function authorBuildings(g: FrontierGeometry, plan: FrontierPlan, layout: 
         : []
     }),
   )
+  const posts = await readPorchPosts(join(SOURCE, 'frontier-porch-posts.glb'))
   await frontierSiding(g, paint)
   for (const b of layout.buildings) {
     const root = groups.get(b.id)
@@ -163,7 +140,7 @@ async function authorBuildings(g: FrontierGeometry, plan: FrontierPlan, layout: 
         siding ? undefined : finish,
       )
     }
-    buildingDetails(g, plan, b, root)
+    buildingDetails(g, root, b, { plan, posts })
   }
   return groups
 }
