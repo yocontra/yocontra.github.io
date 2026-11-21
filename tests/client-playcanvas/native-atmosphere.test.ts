@@ -106,7 +106,12 @@ it('in-place duel retries restore the actual flock before it can take off again'
         Object.assign(sim.d, {
           atmosphere,
           loadFailed: false,
-          arenas: { life, stampPoster: () => undefined, clockFace: () => null },
+          arenas: {
+            life,
+            stampPoster: () => undefined,
+            clockFace: () => null,
+            seatStanceFill: () => undefined,
+          },
         })
         atmosphere.cue('crow', null)
         atmosphere.update(0.1, 'lose')

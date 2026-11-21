@@ -66,11 +66,22 @@ export class NativeArenas {
   private lightingEpoch = 0
   private readonly game: GameApplication
   private readonly environment: NativeEnvironment
+  private readonly stanceFill: Entity
   id: ArenaId = 'street'
   life: ArenaLife = STREET
   constructor(game: GameApplication) {
     this.game = game
     this.environment = new NativeEnvironment(game)
+    this.stanceFill = new Entity('Duel lantern reflection', game.app)
+    this.stanceFill.addComponent('light', {
+      type: 'omni',
+      color: new Color(1, 0.86, 0.71),
+      range: 8,
+      intensity: 0,
+      castShadows: false,
+      enabled: false,
+    })
+    game.stage.addChild(this.stanceFill)
     game.app.on('update', this.flicker)
   }
   /** Kerosene flames breathe independently; daylight lamps are disabled, not merely dark. */
@@ -110,6 +121,7 @@ export class NativeArenas {
       this.game.releaseContainer(previousUrl)
     }
     this.id = id
+    this.stanceFill.enabled = false
     this.environment.street(id === 'street')
     const streetRoot = this.game.stage.findByName('duel-street')
     for (const name of ['street', 'ambiance.dressing']) {
@@ -168,8 +180,24 @@ export class NativeArenas {
   night(day: number): void {
     const preset =
       lightingPresets[Math.max(0, Math.min(lightingPresets.length - 1, Math.round(day * 20)))]
-    this.lampIntensity = (preset?.lanterns ?? 0) * LAMP_INTENSITY
+    const glow = preset?.lanterns ?? 0
+    this.lampIntensity = glow * LAMP_INTENSITY
+    if (this.stanceFill.light) {
+      const amount = Math.max(0, Math.min(1, (glow - 0.74) / 0.26))
+      this.stanceFill.light.intensity = 0.42 * amount * amount * (3 - 2 * amount)
+      this.stanceFill.light.enabled = amount > 0 && !this.dailyDenseFog
+    }
     this.applyLamps()
+  }
+  /** Warm reflected light opens the face under a hat brim through the night stand-off. */
+  seatStanceFill(actor: Entity | undefined, boss: boolean): void {
+    if (!actor || this.dailyDenseFog) {
+      this.stanceFill.enabled = false
+      return
+    }
+    const head = actor.findByName('Head')?.getPosition() ?? actor.getPosition()
+    this.stanceFill.setPosition(head.x - 1.1, head.y + 0.48, head.z + (boss ? -2.8 : 2.8))
+    this.stanceFill.enabled = true
   }
   private applyLamps(): void {
     for (const [index, light] of this.lights.entries()) {
@@ -219,6 +247,7 @@ export class NativeArenas {
     this.lightingEpoch++
     this.epoch++
     this.environment.destroy()
+    this.stanceFill.destroy()
     this.current?.destroy()
     if (this.currentUrl) {
       this.game.releaseContainer(this.currentUrl)

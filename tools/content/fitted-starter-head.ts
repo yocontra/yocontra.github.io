@@ -320,7 +320,15 @@ async function installHead(
   const nativeSkin = body?.getSkin()
   const mesh = body?.getMesh()
   const former = mesh?.listPrimitives()[0]
-  const head = art.getRoot().listMeshes()[0]?.listPrimitives()[0]
+  const donorParts = art
+    .getRoot()
+    .listMeshes()
+    .flatMap((part) => part.listPrimitives())
+  const head =
+    donorParts.length === 1
+      ? donorParts[0]
+      : donorParts.find((part) => part.getMaterial()?.getName().startsWith('Field-worn skin'))
+
   if (!(originalSkin && originalPart && nativeSkin && mesh && former && head)) {
     throw new Error(`Cannot fit starter head for ${target}`)
   }
@@ -341,9 +349,15 @@ async function installHead(
     }
     head.setMaterial(material)
   }
-  const replacement = copyToDocument(native, art, [head]).get(head) as Primitive
-  attachSkin(native, replacement, nativeSkin, { toNative, fit })
-  mesh.addPrimitive(replacement)
+  const fitted = copyToDocument(native, art, donorParts)
+  for (const donor of donorParts) {
+    const replacement = fitted.get(donor)
+    if (!replacement) {
+      throw new Error('Missing a copied head surface')
+    }
+    attachSkin(native, replacement as Primitive, nativeSkin, { toNative, fit })
+    mesh.addPrimitive(replacement as Primitive)
+  }
   await native.transform(prune({ keepAttributes: true, keepLeaves: true }), unpartition())
   await io.write(target, native)
   await normalizeSkinnedAsset(target)
@@ -361,6 +375,36 @@ export function fitGreenhornHead(
 }
 
 const outlawFits: Partial<Record<number, HeadFit>> = {
+  2: {
+    ...greenhornFit,
+    lift: -0.1285,
+    eyeScale: 0.903,
+    eyeForward: 0.1058,
+    measuredEyes: true,
+    keepBrows: true,
+    keepBeard: false,
+    tint: [0.89, 0.76, 0.62, 1],
+  },
+  6: {
+    ...greenhornFit,
+    lift: 0.0417,
+    eyeScale: 0.88,
+    eyeForward: 0.1058,
+    measuredEyes: true,
+    keepBrows: true,
+    keepBeard: false,
+    tint: [0.69, 0.54, 0.42, 1],
+  },
+  15: {
+    ...greenhornFit,
+    lift: -0.1136,
+    eyeScale: 0.97,
+    eyeForward: 0.1058,
+    measuredEyes: true,
+    keepBrows: true,
+    keepBeard: false,
+    tint: [0.82, 0.69, 0.55, 1],
+  },
   7: {
     ...greenhornFit,
     lift: -0.1911,

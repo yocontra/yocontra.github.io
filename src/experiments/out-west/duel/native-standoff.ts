@@ -104,6 +104,7 @@ function restage(d: NativeDirector): void {
     d.enemy?.place(0, 0, BACK_TO_BACK_Z)
     d.enemy?.face(0)
   }
+  d.arenas.seatStanceFill(d.enemy?.root, boss(d))
 }
 
 /** The boss's second phase again after a loss: both men back on their feet where they stand. */
