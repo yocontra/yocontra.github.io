@@ -210,21 +210,22 @@
 }
 
 .fr-summary-card {
-  width: min(460px, 100%);
+  width: min(490px, 100%);
   max-height: 100%;
   overflow: auto;
-  padding: 16px 20px;
+  padding: clamp(14px, 3vh, 24px) clamp(16px, 5vw, 30px);
   border-radius: var(--ow-radius);
-  color: var(--ow-bone);
-  background-color: var(--ow-night);
+  color: var(--ow-ink);
+  background-color: var(--ow-paper);
   background-image:
-    radial-gradient(120% 100% at 30% 0%, rgb(90 52 26 / 0.32), transparent 60%), var(--ow-tex-smoke);
+    radial-gradient(110% 75% at 50% 32%, rgb(255 249 230 / 0.45), transparent), var(--ow-tex-paper);
   background-size:
     100% 100%,
-    384px 384px;
-  border: 1px solid #000;
+    320px 320px;
+  border: 1px solid var(--ow-ink);
   box-shadow:
-    inset 0 0 0 1px rgb(210 173 92 / 0.35),
+    inset 0 0 0 5px var(--ow-paper),
+    inset 0 0 0 6px var(--ow-rule-ink),
     var(--ow-shadow-2);
   display: grid;
   gap: 8px;
@@ -237,7 +238,7 @@
   font-variant-caps: all-small-caps;
   letter-spacing: var(--ow-track-kicker);
   font-size: var(--ow-fs-small);
-  color: var(--ow-bone-2);
+  color: var(--ow-ink-2);
 }
 
 .fr-summary-title {
@@ -248,7 +249,7 @@
   line-height: 1;
   letter-spacing: var(--ow-track-display);
   text-transform: uppercase;
-  color: var(--ow-brass-hi);
+  color: var(--ow-red);
 }
 
 .fr-summary-hero {
@@ -256,6 +257,8 @@
   align-items: baseline;
   justify-content: center;
   gap: 8px;
+  padding-block: 3px;
+  border-block: 3px double var(--ow-rule-ink);
 }
 
 .fr-summary-fig {
@@ -264,14 +267,14 @@
   font-size: 44px;
   line-height: 1.1;
   font-variant-numeric: var(--ow-figs-hud);
-  color: var(--ow-brass-hi);
+  color: var(--ow-red);
 }
 
 .fr-summary-label {
   font-size: var(--ow-fs-small);
   letter-spacing: var(--ow-track-kicker);
   text-transform: uppercase;
-  color: var(--ow-bone-2);
+  color: var(--ow-ink-2);
 }
 
 .fr-summary-grid {
@@ -285,8 +288,7 @@
   display: flex;
   flex-direction: column-reverse;
   padding: 6px 2px;
-  border-radius: var(--ow-radius);
-  box-shadow: inset 0 0 0 1px var(--fr-hair);
+  border-block-end: 1px solid var(--ow-rule-ink);
 }
 
 .fr-summary-cell dd {
@@ -294,12 +296,12 @@
   font-family: var(--ow-font-num);
   font-size: 24px;
   font-variant-numeric: var(--ow-figs-hud);
-  color: var(--ow-bone);
+  color: var(--ow-ink);
 }
 
 .fr-summary-cell dt {
   font-size: var(--ow-fs-small);
-  color: var(--ow-bone-2);
+  color: var(--ow-ink-2);
 }
 
 .fr-summary-note {
@@ -310,13 +312,31 @@
 }
 
 .fr-summary-note.quiet {
-  color: var(--ow-bone-2);
+  color: var(--ow-ink-2);
 }
 
 .fr-summary-row {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 12px;
+}
+
+.fr-summary-row .fr-menu-item {
+  color: var(--ow-paper);
+  background: var(--ow-red);
+  border-color: var(--ow-red);
+  box-shadow: none;
+  min-height: 44px;
+}
+.fr-summary-row .fr-menu-item.fr-menu-quiet {
+  color: var(--ow-ink);
+  background: transparent;
+  border-color: var(--ow-rule-ink);
+}
+.fr-summary-row .fr-menu-item:is(:hover, :focus-visible) {
+  color: var(--ow-paper);
+  background: var(--ow-ink);
+  border-color: var(--ow-ink);
 }
 
 /* short landscape phones: tighter, so both buttons stay on screen */

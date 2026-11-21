@@ -338,9 +338,9 @@
   border-radius: 2px;
   box-shadow:
     0 0 0 1px rgb(0 0 0 / 0.8),
-    0 0 0 3px rgb(176 133 58 / 0.85),
-    0 0 0 4px rgb(0 0 0 / 0.6),
-    0 6px 18px rgb(0 0 0 / 0.5);
+    0 0 0 2px rgb(224 197 154 / 0.88),
+    0 0 0 3px rgb(30 20 13 / 0.82),
+    0 4px 12px rgb(0 0 0 / 0.38);
 }
 
 .fr-feed {
@@ -556,7 +556,7 @@
   position: absolute;
   inset: 0;
   opacity: 0;
-  background: radial-gradient(ellipse at center, transparent 45%, rgb(150 12 4 / 0.8) 100%);
+  background: radial-gradient(ellipse at center, transparent 63%, rgb(145 16 11 / 0.72) 100%);
 }
 
 .fr-reticle {
@@ -618,12 +618,12 @@
 
 .fr-hitmark {
   position: absolute;
-  inset: 4px;
+  inset: 7px;
   opacity: 0;
   background:
-    linear-gradient(45deg, transparent 45%, #fff6e6 45%, #fff6e6 55%, transparent 55%),
-    linear-gradient(-45deg, transparent 45%, #fff6e6 45%, #fff6e6 55%, transparent 55%);
-  mask: radial-gradient(circle, transparent 30%, #000 31%);
+    linear-gradient(45deg, transparent 47%, #fff6e6 47%, #fff6e6 53%, transparent 53%),
+    linear-gradient(-45deg, transparent 47%, #fff6e6 47%, #fff6e6 53%, transparent 53%);
+  mask: radial-gradient(circle, transparent 41%, #000 42%);
 }
 
 .fr-hitmark.kill {

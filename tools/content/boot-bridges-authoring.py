@@ -202,7 +202,66 @@ def tucked(placement, world):
     return placement.leg_point(q), rim, y, unit
 
 
-def tuck_trousers(body, placements, output):
+def fold_trouser(point, placement, hip):
+    """A smooth tapered cut with knee and side-seam relief above the boot."""
+    knee = placement.knee
+    axis = hip - knee
+    length = float(np.linalg.norm(axis))
+    axis /= length
+    p = np.array(point)
+    from_knee = p - knee
+    distance = float(from_knee @ axis)
+    if not -0.085 < distance < min(0.32, length - 0.052):
+        return point
+    radial = from_knee - axis * distance
+    radius = float(np.linalg.norm(radial))
+    if radius < 1e-6:
+        return point
+    radial /= radius
+    angular = math.atan2(float(radial @ placement.x), float(radial @ placement.z))
+    front = max(0, math.cos(angular))
+    phase = 0.6 if placement.side == "R" else 1.7
+    rise = float(model.smoothstep(-0.085, 0.074, distance))
+    top = float(model.smoothstep(min(0.32, length - 0.052), min(0.235, length - 0.12), distance))
+    taper = 0.24 * radius * math.exp(-((distance - 0.108) / 0.142) ** 2)
+    knee_fold = 0.0065 * math.exp(-((distance - 0.08) / 0.075) ** 2)
+    knee_fold *= math.cos(distance * 69 + math.sin(angular) * 1.34 + phase) * (0.4 + 0.6 * front)
+    welt = 0.006 * abs(math.sin(angular)) ** 20
+    press = 0.005 * front ** 20
+    return list(p + radial * (knee_fold + welt + press - taper) * rise * top)
+
+
+def refine_trousers(positions, faces, uvs, joints, weights, placements, hips):
+    """Subdivide every source face, sharing edge vertices and blending joint influence by ID."""
+    edges = {}
+    for a, b, c in faces:
+        for i, j in ((a, b), (b, c), (c, a)):
+            edge = tuple(sorted((i, j)))
+            if edge in edges:
+                continue
+            edges[edge] = len(positions)
+            positions.append([(x + y) * 0.5 for x, y in zip(positions[i], positions[j])])
+            uvs.append([(x + y) * 0.5 for x, y in zip(uvs[i], uvs[j])])
+            influence = {}
+            for k in edge:
+                for joint, weight in zip(joints[k], weights[k]):
+                    if weight > 0:
+                        influence[joint] = influence.get(joint, 0) + 0.5 * weight
+            order = sorted(influence, key=lambda j: (-influence[j], j))[:4]
+            total = sum(influence[j] for j in order)
+            joints.append((order + [0] * 4)[:4])
+            weights.append(([influence[j] / total for j in order] + [0] * 4)[:4])
+    refined = []
+    for a, b, c in faces:
+        ab, bc, ca = (edges[tuple(sorted(edge))] for edge in ((a, b), (b, c), (c, a)))
+        refined.extend(((a, ab, ca), (ab, b, bc), (bc, c, ca), (ab, bc, ca)))
+    for index, point in enumerate(positions):
+        side = min(placements, key=lambda p: abs(point[0] - p.knee[0]))
+        positions[index] = fold_trouser(point, side, hips[side.side])
+    return refined
+
+
+def tuck_trousers(body, placements, output, inverse):
     attrs, names, indices = body["attrs"], body["jointNames"], body["indices"]
     removed, changed = [], []
     for pants in [r for r in body["ranges"] if r.get("slot") == "pants"]:
@@ -234,9 +293,10 @@ def tuck_trousers(body, placements, output):
                 edited[i] = placement
         if not edited:
             continue
-        touched = [k for k, (_, face) in enumerate(source_faces) if any(i in edited for i in face)]
-        faces = [[i - start for i in source_faces[k][1]] for k in touched]
+        faces = [[i - start for i in face] for _, face in source_faces]
         uvs = [attrs["TEXCOORD_0"][i][:] for i in range(start, end)]
+        hips = {p.side: np.array(inverse[names.index("UpperLeg" + p.side)].inverted().translation) for p in placements}
+        faces = refine_trousers(positions, faces, uvs, joints, weights, placements, hips)
         # Continue each hem a few centimetres down inside its boot.
         for placement in placements:
             loops = [loop for loop in boundaries(body, pants) if sum(1 for i in loop if edited.get(i) is placement) > 0.8 * len(loop)]
@@ -275,7 +335,7 @@ def tuck_trousers(body, placements, output):
         bm.to_mesh(obj.data)
         bm.free()
         common.extract(obj, output, {"name": "TuckedTrousers", "slot": "pants", "swatch": pants["swatch"], "sourceStyleIndex": start})
-        removed.extend(source_faces[k][0] for k in touched)
+        removed.extend(index for index, _ in source_faces)
         changed.extend(sorted(edited))
     return removed, changed
 
@@ -329,7 +389,7 @@ def boots(source, body):
     output = common.output_arrays()
     for placement, piece in zip(placements, sorted(old, key=lambda r: int(attrs["JOINTS_0"][r["start"]][0]) != placements[0].foot)):
         author_boot(placement, output, source.path.stem, piece["start"])
-    removed, changed = tuck_trousers(body, placements, output)
+    removed, changed = tuck_trousers(body, placements, output, inverse)
     name = variant(source.path.stem)
     inputs = [source.path, *(source.path.parent / entry["uri"] for entry in source.doc["buffers"]),
               HERE.with_name("cowboy-boot-model.py"), *texture_paths(name).values()]

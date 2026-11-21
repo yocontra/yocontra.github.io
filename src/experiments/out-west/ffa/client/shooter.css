@@ -39,13 +39,13 @@
 .fr-tick-t,
 .fr-tick-b {
   width: 2px;
-  height: 8px;
+  height: 5px;
   margin-left: -1px;
 }
 
 .fr-tick-l,
 .fr-tick-r {
-  width: 8px;
+  width: 5px;
   height: 2px;
   margin-top: -1px;
 }
@@ -84,12 +84,12 @@
   position: absolute;
   left: 0;
   top: 0;
-  width: 96px;
-  margin: -54px 0 0 -48px;
+  width: 78px;
+  margin: -38px 0 0 -39px;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 2px;
+  gap: 1px;
   color: var(--ow-brass-hi);
 }
 
@@ -101,8 +101,8 @@
 .fr-guide-pin {
   display: grid;
   place-items: center;
-  width: 26px;
-  height: 26px;
+  width: 19px;
+  height: 19px;
   border-radius: 50%;
   background: radial-gradient(
     circle at 35% 30%,
@@ -114,12 +114,12 @@
   color: var(--ow-ink);
   font-family: var(--ow-font-num);
   font-weight: 600;
-  font-size: 17px;
+  font-size: 13px;
   line-height: 1;
   text-shadow: none;
   box-shadow:
     0 0 0 2px rgb(0 0 0 / 0.6),
-    0 0 12px rgb(240 200 120 / 0.55);
+    0 0 5px rgb(240 200 120 / 0.4);
 }
 
 .fr-guide-label {
@@ -127,7 +127,7 @@
   font-weight: 600;
   font-variant-caps: all-small-caps;
   letter-spacing: var(--ow-track-caps);
-  font-size: var(--ow-fs-body);
+  font-size: var(--ow-fs-small);
   line-height: 1;
 }
 
@@ -146,13 +146,13 @@
 
 .fr-guide-chevron {
   position: absolute;
-  left: -17px;
-  top: -15px;
+  left: -12px;
+  top: -10px;
   width: 0;
   height: 0;
-  border-top: 15px solid transparent;
-  border-bottom: 15px solid transparent;
-  border-left: 34px solid var(--ow-brass-hi);
+  border-top: 10px solid transparent;
+  border-bottom: 10px solid transparent;
+  border-left: 24px solid var(--ow-brass-hi);
   filter: drop-shadow(0 0 6px var(--ow-brass)) drop-shadow(0 1px 2px rgb(0 0 0 / 0.8));
 }
 
@@ -609,7 +609,10 @@
   width: var(--fr-fire);
   height: var(--fr-fire);
   font-size: var(--ow-fs-body);
-  background: radial-gradient(circle at 35% 25%, rgb(168 36 27 / 0.82), rgb(80 14 10 / 0.82));
+  background: radial-gradient(circle at 40% 22%, rgb(143 33 26 / 0.74), rgb(58 13 10 / 0.74));
+  box-shadow:
+    inset 0 0 0 1px rgb(255 191 151 / 0.52),
+    0 2px 6px rgb(0 0 0 / 0.55);
 }
 
 .fr-btn-ads {
@@ -618,6 +621,10 @@
   bottom: calc(var(--fr-bottom) + 34px);
   width: var(--fr-ads);
   height: var(--fr-ads);
+  background: rgb(24 16 10 / 0.55);
+  box-shadow:
+    inset 0 0 0 1px rgb(253 229 187 / 0.55),
+    0 2px 5px rgb(0 0 0 / 0.5);
 }
 
 /* JUMP and CROUCH sit above FIRE; RELOAD and THROW to their left; the contextual button above */

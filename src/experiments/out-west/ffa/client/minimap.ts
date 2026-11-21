@@ -32,7 +32,7 @@ export interface MapFrame {
 const ZOOM_SPAN = 64
 
 const PAD = 4
-const BUILDING_FILL: Record<string, string> = { bank: '#e8c060', stage_line: '#9ac0a0' }
+const BUILDING_FILL: Record<string, string> = { bank: '#edc46a', stage_line: '#87a995' }
 
 export class Minimap {
   readonly el: HTMLCanvasElement
@@ -66,31 +66,31 @@ export class Minimap {
       return c
     }
     const k = this.scale
-    ctx.fillStyle = 'rgba(52, 38, 26, 0.82)'
+    ctx.fillStyle = 'rgba(35, 29, 23, 0.88)'
     ctx.beginPath()
     ctx.roundRect(0, 0, this.px, this.px, this.px * 0.08)
     ctx.fill()
     ctx.save()
     ctx.translate(PAD, PAD)
     ctx.scale(k, k)
-    ctx.fillStyle = '#c8a878'
+    ctx.fillStyle = '#cbb188'
     ctx.fillRect(
       0,
       layout.creek.z + layout.creek.d,
       layout.size,
       layout.size - layout.creek.z - layout.creek.d,
     )
-    ctx.fillStyle = '#4a7480'
+    ctx.fillStyle = '#486a77'
     ctx.fillRect(layout.creek.x, layout.creek.z + 1.4, layout.creek.w, layout.creek.d - 2.6)
     ctx.fillStyle = '#9a7a54'
     const br = layout.creek.bridge
     ctx.fillRect(br.x, br.z, br.w, br.d)
-    ctx.fillStyle = '#b08e62'
+    ctx.fillStyle = '#b69a76'
     for (const s of layout.streets) {
       ctx.fillRect(s.x, s.z, s.w, s.d)
     }
     for (const b of layout.buildings) {
-      ctx.fillStyle = BUILDING_FILL[b.kind] ?? '#5a4434'
+      ctx.fillStyle = BUILDING_FILL[b.kind] ?? '#4b3c30'
       ctx.fillRect(b.x, b.z, b.w, b.d)
     }
     // the railroad between its buffer stops
@@ -151,7 +151,7 @@ export class Minimap {
       ctx.save()
       ctx.beginPath()
       ctx.roundRect(0, 0, this.px, this.px, this.px * 0.08)
-      ctx.fillStyle = 'rgba(52, 38, 26, 0.82)'
+      ctx.fillStyle = 'rgba(35, 29, 23, 0.88)'
       ctx.fill()
       ctx.clip()
       ctx.translate(this.px / 2, this.px / 2)
