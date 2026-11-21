@@ -10,6 +10,7 @@ import {
 } from '../../src/experiments/out-west/ffa/sim/porches.ts'
 import { ROOF_DECK_Y } from '../../src/experiments/out-west/ffa/sim/roofwalks.ts'
 import type { FrontierPlan } from './frontier-authoring.ts'
+import { civicFacade } from './frontier-civic-facades.ts'
 import {
   type compileFrontierCollision,
   FALSE_FRONT_RISE,
@@ -126,6 +127,7 @@ export function buildingDetails(
       )
     }
   }
+  civicFacade(g, root, building)
   buildingDoors(g, root, building)
 }
 
