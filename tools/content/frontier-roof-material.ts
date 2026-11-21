@@ -1,9 +1,9 @@
 import sharp from 'sharp'
 import type { FrontierGeometry } from './frontier-geometry.ts'
 
-export const SHAKE_TILE = { along: 2.2, slope: 1.76 }
+export const SHAKE_TILE = { along: 2.2, slope: 1.76, courses: 8 }
 const SIZE = 512
-const COURSES = 8
+const COURSES = SHAKE_TILE.courses
 const PER_COURSE = 9
 const WOOD = 'public/experiments/out-west/3d/tex/vplanks_diff.webp'
 
