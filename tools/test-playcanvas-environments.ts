@@ -236,19 +236,34 @@ try {
   requireScene(clock.state === 'Toll', 'Bell clip did not play')
   const dailyFog = await page.evaluate(async () => {
     const { game, arenas } = Reflect.get(globalThis, '__environmentProbe')
+    const sample = () => {
+      const fog = game.app.scene.fog
+      return {
+        type: fog.type,
+        density: fog.density,
+        color: fog.color.toString(),
+        near: fog.start,
+        far: fog.end,
+      }
+    }
+    await arenas.lighting(1, 16)
+    const authored = sample()
     arenas.dailyFog(true)
     await arenas.lighting(0.6, 0)
-    const first = { type: game.app.scene.fog.type, density: game.app.scene.fog.density }
+    const first = sample()
     await arenas.lighting(1, 16)
-    const boss = { type: game.app.scene.fog.type, density: game.app.scene.fog.density }
+    const boss = sample()
     arenas.dailyFog(false)
-    return { first, boss, restored: game.app.scene.fog.type }
+    return { authored, first, boss, restored: sample() }
   })
   requireScene(
     [dailyFog.first, dailyFog.boss].every((fog) => fog.type === 'exp2' && fog.density === 0.07),
     'Daily fog was lost when the arena or boss lighting changed',
   )
-  requireScene(dailyFog.restored === 'linear', 'Leaving Daily did not restore authored fog')
+  requireScene(
+    JSON.stringify(dailyFog.restored) === JSON.stringify(dailyFog.authored),
+    'Leaving Daily did not restore authored fog',
+  )
   const first = results[0]
   const returned = await page.evaluate(async () => {
     const { game, arenas, allocation } = Reflect.get(globalThis, '__environmentProbe')

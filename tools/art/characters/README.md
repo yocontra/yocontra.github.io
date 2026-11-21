@@ -34,6 +34,15 @@ blender --background --factory-startup --python tools/content/battered-brim-auth
 blender --background --factory-startup --python tools/content/frontier-hats-authoring.py -- tools/art/characters/hats
 ```
 
+The campaign uses its own fitted headwear profiles and each character's native felt
+maps. Rebuild them after the base actors and before composing the paired opponents.
+
+```sh
+blender --background --factory-startup --python tools/content/frontier-hats-authoring.py -- tools/art/characters/outlaw-hats --cast
+bun tools/content/outlaw-hats.ts
+bun tools/content/paired-grip-assets.ts
+```
+
 The starter head keeps the player rig and native eye and hair attachments.
 The Blender source starts from MakeHuman revision
 `a8bc2d54ff0ac92e78ff71431b1023eda42bf482`. Put `base.obj` and

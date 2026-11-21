@@ -157,6 +157,88 @@ hats = {
 }
 
 
+bowler_crown = (
+    (1, 0),
+    (1.005, 0.26),
+    (0.94, 0.56),
+    (0.75, 0.82),
+    (0.49, 0.95),
+    (0.24, 0.994),
+    (0.006, 1),
+)
+cap_crown = (
+    (1, 0),
+    (1.19, 0.20),
+    (1.21, 0.43),
+    (1.04, 0.72),
+    (0.79, 0.92),
+    (0.42, 1),
+    (0.006, 0.986),
+)
+cast_hats = {
+    "greenhorn": Hat(
+        0.173,
+        0.184,
+        0.107,
+        0.029,
+        0.015,
+        0.014,
+        creased,
+        0.021,
+        (0.076, 0.039, 0.018),
+        "buckle",
+    ),
+    "range-hat": Hat(
+        0.188,
+        0.202,
+        0.110,
+        0.043,
+        0.016,
+        0.024,
+        creased,
+        0.016,
+        (0.14, 0.073, 0.034),
+        "braid",
+    ),
+    "tall-cattleman": Hat(
+        0.184,
+        0.195,
+        0.148,
+        0.049,
+        0.018,
+        0.029,
+        creased,
+        0.025,
+        (0.17, 0.090, 0.039),
+        "buckle",
+    ),
+    "derby": Hat(
+        0.129,
+        0.149,
+        0.119,
+        0.022,
+        0.005,
+        0,
+        bowler_crown,
+        0.029,
+        (0.044, 0.034, 0.025),
+        "bow",
+    ),
+    "flat-cap": Hat(
+        0.107,
+        0.150,
+        0.054,
+        -0.005,
+        0.012,
+        0,
+        cap_crown,
+        0.010,
+        (0.056, 0.038, 0.025),
+        "seam",
+    ),
+}
+
+
 def build(name, hat, destination):
     bpy.ops.object.select_all(action="SELECT")
     bpy.ops.object.delete(use_global=False)
@@ -175,6 +257,8 @@ def build(name, hat, destination):
     def brim(t, fraction, depth=0):
         x, y = math.cos(t), math.sin(t)
         r = fraction
+        if name == "flat-cap":
+            r *= 0.13 + 0.87 * max(0, -y) ** 3
         side_curve = abs(x) ** (6 if name == "sombrero" else 4)
         height = 0.013 + r * r * (hat.side_roll * side_curve + hat.front_drop * y)
         height += 0.0025 * r * math.sin(3 * t + 0.4)
@@ -344,5 +428,5 @@ def build(name, hat, destination):
 
 destination = Path(sys.argv[sys.argv.index("--") + 1]).resolve()
 destination.mkdir(parents=True, exist_ok=True)
-for name, hat in hats.items():
+for name, hat in (cast_hats if "--cast" in sys.argv else hats).items():
     build(name, hat, destination)

@@ -14,21 +14,36 @@ import {
 
 const io = new NodeIO().registerExtensions(ALL_EXTENSIONS)
 
-export async function fitAuthoredHat(source: string, target: string): Promise<void> {
+export async function fitAuthoredHat(
+  source: string,
+  target: string,
+  owner: 'outfitter' | 'actor' = 'outfitter',
+): Promise<void> {
   const [authored, outfit] = await Promise.all([io.read(source), io.read(target)])
+  const actor = owner === 'actor'
+  const feltName = actor ? 'Fabric' : 'Dyeable'
+  if (actor) {
+    await authored.transform(join({ keepNamed: false, cleanup: false }), dedup(), weld())
+  }
   const mount = outfit
     .getRoot()
     .listNodes()
     .find((node) => node.getName() === 'mount.Head.accessory')
   const shell = mount?.listChildren()[0]?.listChildren()[0]?.listChildren()[0]
   const former = shell?.getMesh()
-  const felt = former?.listPrimitives()[0]?.getMaterial()
+  const felt =
+    former?.listPrimitives()[0]?.getMaterial() ??
+    shell
+      ?.listChildren()
+      .flatMap((node) => node.getMesh()?.listPrimitives() ?? [])
+      .map((primitive) => primitive.getMaterial())
+      .find((material) => material?.getName() === feltName)
   const scene = authored.getRoot().getDefaultScene()
-  if (!(mount && shell && former && felt?.getName() === 'Dyeable' && scene)) {
-    throw new Error('Missing the fitted hat and its native dye material')
+  if (!(mount && shell && felt?.getName() === feltName && scene)) {
+    throw new Error('Missing the fitted hat and its native felt material')
   }
 
-  const parts = scene.listChildren()
+  const parts = scene.listChildren().filter((part) => !actor || part.getMesh())
   if (
     parts.length === 0 ||
     parts.some((part) => !part.getMesh() || part.listChildren().length > 0)
@@ -53,7 +68,10 @@ export async function fitAuthoredHat(source: string, target: string): Promise<vo
     .setTranslation([0, 0, 0])
     .setScale([1, 1, 1])
     .setMesh(null)
-  former.dispose()
+  former?.dispose()
+  for (const previous of shell.listChildren()) {
+    previous.dispose()
+  }
   for (const part of parts) {
     const node = mapped.get(part) as (typeof parts)[number] | undefined
     const mesh = node?.getMesh()
@@ -67,14 +85,15 @@ export async function fitAuthoredHat(source: string, target: string): Promise<vo
     }
     shell.addChild(node)
   }
-  await outfit.transform(
-    join({ keepNamed: false, cleanup: false }),
-    dedup(),
-    weld(),
-    quantize({ cleanup: false, quantizePosition: 16 }),
-    prune({ keepAttributes: true, keepLeaves: true }),
-    unpartition(),
-  )
+  if (!actor) {
+    await outfit.transform(
+      join({ keepNamed: false, cleanup: false }),
+      dedup(),
+      weld(),
+      quantize({ cleanup: false, quantizePosition: 16 }),
+    )
+  }
+  await outfit.transform(prune({ keepAttributes: true, keepLeaves: true }), unpartition())
   // The fitted head mount must survive optimization.
   const result = outfit
     .getRoot()
