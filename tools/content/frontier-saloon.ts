@@ -36,6 +36,7 @@ export async function installPeriodFixtures(
   await installFrontierFurniture(geometry, layout, [
     join(directory, 'frontier-furniture.glb'),
     join(directory, 'frontier-freight.glb'),
+    join(directory, 'frontier-shop-fixtures.glb'),
   ])
 }
 

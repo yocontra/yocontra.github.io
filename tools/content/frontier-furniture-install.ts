@@ -16,6 +16,11 @@ const dimensions = {
   'mortised-plank-bench': [2.5, 0.5, 0.5],
   'stave-horse-trough': [2.5, 0.7, 1],
   'board-and-batten-freight-car': [12, 3.8, 3],
+  'mercantile-display-counter': [3, 1.1, 0.6],
+  'frontier-transaction-desk': [2.4, 1.1, 0.6],
+  'chapel-communion-table': [1.8, 1.1, 1],
+  'mortised-shop-workbench': [2, 0.95, 1],
+  'square-cut-smithy-hearth': [2.5, 1, 2.5],
 } as const
 
 function roomAt(x: number, z: number, buildings: TownLayout['buildings']) {
@@ -46,11 +51,27 @@ function furnitureName(
   if (cover.kind === 'safe') {
     return 'riveted-cash-safe'
   }
-  if (
-    cover.kind === 'counter' &&
-    roomAt(cover.x + cover.w / 2, cover.z + cover.d / 2, buildings)?.kind === 'bank'
-  ) {
-    return 'first-frontier-counter'
+  if (cover.kind === 'workbench') {
+    return 'mortised-shop-workbench'
+  }
+  if (cover.kind === 'forge') {
+    return 'square-cut-smithy-hearth'
+  }
+  if (cover.kind === 'counter') {
+    const kind = roomAt(cover.x + cover.w / 2, cover.z + cover.d / 2, buildings)?.kind
+    switch (kind) {
+      case 'bank':
+        return 'first-frontier-counter'
+      case 'church':
+        return 'chapel-communion-table'
+      case 'general_store':
+        return 'mercantile-display-counter'
+      case 'saloon':
+      case undefined:
+        return undefined
+      default:
+        return 'frontier-transaction-desk'
+    }
   }
   if (cover.kind === 'table') {
     const inSaloon = cover.x >= 23 && cover.x < 42 && cover.z >= 32 && cover.z < 44
@@ -64,6 +85,9 @@ export function hasFittedFurniture(cover: Cover, buildings: TownLayout['building
 }
 
 function scannedMaterial(name: string): string | undefined {
+  if (name.includes('sandstone')) {
+    return 'masonry'
+  }
   if (name.includes('walnut') || name.includes('oak')) {
     return 'floor'
   }
@@ -96,7 +120,17 @@ function furnitureFacing(
     return stoveFacing(x, z, buildings)
   }
   const room = roomAt(x, z, buildings)
-  return name === 'riveted-cash-safe' && room && room.z + room.d / 2 > z ? Math.PI : 0
+  if (!room) {
+    return 0
+  }
+  const centerZ = room.z + room.d / 2
+  const north = centerZ < z
+  if (name === 'riveted-cash-safe') {
+    return centerZ > z ? Math.PI : 0
+  }
+  return (name === 'frontier-transaction-desk' || name === 'mortised-shop-workbench') && north
+    ? Math.PI
+    : 0
 }
 
 function furniturePlacement(
@@ -127,13 +161,15 @@ function furniturePlacement(
 export async function installFrontierFurniture(
   geometry: FrontierGeometry,
   layout: TownLayout,
-  paths: [furniture: string, freight: string],
+  paths: readonly string[],
 ): Promise<void> {
-  const [art, freight] = await Promise.all(paths.map((path) => frontierIO.read(path)))
-  if (!(art && freight)) {
+  const [art, ...additions] = await Promise.all(paths.map((path) => frontierIO.read(path)))
+  if (!art) {
     throw new Error('Missing canonical Frontier furniture source')
   }
-  mergeDocuments(art, freight)
+  for (const addition of additions) {
+    mergeDocuments(art, addition)
+  }
   const models = art
     .getRoot()
     .listScenes()
