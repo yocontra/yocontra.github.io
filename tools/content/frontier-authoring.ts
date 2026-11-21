@@ -31,8 +31,9 @@ import {
   MOUNT_IRON_TINT,
 } from './frontier-mounts.ts'
 import { surround } from './frontier-openings.ts'
-import { coverModel, desertPlants } from './frontier-props.ts'
+import { desertPlants } from './frontier-props.ts'
 import { authorRoofMaterial } from './frontier-roof-material.ts'
+import { authorCover, installSaloonBar } from './frontier-saloon.ts'
 import { frontierSiding } from './frontier-siding.ts'
 import { weatheredTimber } from './frontier-weathering.ts'
 import { installYardCacti } from './frontier-yard-cactus.ts'
@@ -185,9 +186,7 @@ export async function authorFrontier(output: string, highYard = false): Promise<
   const groups = await authorBuildings(g, plan, layout)
   authorDecksAndRoofs(g, ground, layout, collision)
   const props = g.group('Perdition dressed interiors and purposeful cover')
-  for (const [index, c] of layout.cover.entries()) {
-    coverModel(g, props, c, index)
-  }
+  authorCover(g, props, layout.cover)
   bankServiceSigns(g, props, layout)
   desertPlants(g, plan.vegetation, layout.size)
   for (const mount of groupFrontierMounts(frontierMounts(layout))) {
@@ -204,6 +203,7 @@ export async function authorFrontier(output: string, highYard = false): Promise<
   }
   const panes = authorPanes(g, layout, groups)
   g.finish()
+  await installSaloonBar(g, join(SOURCE, 'frontier-saloon.glb'))
   await installBarrelParts(g.doc, await frontierIO.read(join(SOURCE, 'barrel-parts.glb')))
   await g.doc.transform(dedup(), weld(), prune(), unpartition())
   await authorBarrelCacti(g.doc)

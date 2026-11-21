@@ -72,6 +72,11 @@ function fixture() {
     node.addComponent('render', { type: 'box', material: glass })
     return node
   })
+  const saloonGlass = new Entity('frontier-saloon-lamp-glass-1', app)
+  root.addChild(saloonGlass)
+  saloonGlass.setLocalPosition(27.18, 2.29, 36.12)
+  const saloonGlassMaterial = glass.clone()
+  saloonGlass.addComponent('render', { type: 'box', material: saloonGlassMaterial })
   const coffin = new Entity('coffin', app)
   root.addChild(coffin)
   coffin.addComponent('render', { type: 'box', material: source })
@@ -119,6 +124,7 @@ function fixture() {
     source,
     lanterns,
     coffin,
+    saloonGlass,
     cloud,
     glass,
     glow,
@@ -129,6 +135,7 @@ function fixture() {
     cleanup() {
       environment.destroy()
       root.destroy()
+      saloonGlassMaterial.destroy()
       glass.destroy()
       source.destroy()
       glow.destroy()
@@ -289,6 +296,39 @@ it('keeps daylight bounce inside every windowed room and fades it out at night',
     expect(bounces.every((bounce) => bounce.enabled)).toBe(true)
     f.environment.destroy()
     expect(f.root.findComponents('light')).toHaveLength(0)
+  } finally {
+    expect(f.cleanup()).toEqual({ textures: 0, buffers: 0 })
+  }
+})
+
+it('lights the saloon from the street windows by day and from the mounted lamps at night', async () => {
+  const f = fixture()
+  try {
+    await f.environment.ready
+    const windows = f.root
+      .findComponents('light')
+      .filter(({ entity }) => entity.name.startsWith('frontier-saloon-window-light:'))
+    expect(windows).toHaveLength(2)
+    for (const window of windows) {
+      expect(window.entity.up.y).toBeGreaterThan(0.5)
+      expect(window.entity.up.z).toBeGreaterThan(0.5)
+      expect(window.enabled).toBe(true)
+    }
+    const lamp = f.saloonGlass.children[0]
+    if (!(lamp instanceof Entity && lamp.light)) {
+      throw new Error('Missing attached saloon lamp')
+    }
+    expect(lamp.light.intensity).toBeLessThan(0.15)
+    await f.environment.setTime(0.75)
+    expect(windows.every((window) => !window.enabled)).toBe(true)
+    expect(lamp.light.enabled).toBe(true)
+    expect(lamp.light.intensity).toBeGreaterThan(1)
+    expect(lamp.getPosition().toArray()).toEqual(f.saloonGlass.getPosition().toArray())
+    f.root.remove()
+    expect(lamp.light.enabled).toBe(false)
+    f.app.root.addChild(f.root)
+    expect(lamp.light.enabled).toBe(true)
+    expect(f.saloonGlass.children[0]).toBe(lamp)
   } finally {
     expect(f.cleanup()).toEqual({ textures: 0, buffers: 0 })
   }

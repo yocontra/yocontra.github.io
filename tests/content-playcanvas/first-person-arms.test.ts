@@ -69,6 +69,12 @@ for (const [id, faces, vertices] of [
         : ['coat-sleeves', 'boot-bridges', 'coat-collars', 'shirt-fronts']
     const expectedInputs = [
       nativePath,
+      ...(id === 'outfit.trail-duds'
+        ? [
+            `tools/art/characters/starter-surfaces/${id}.json.gz`,
+            'tools/content/starter-surfaces.ts',
+          ]
+        : []),
       `tools/art/characters/${id}.gltf`,
       `tools/art/characters/${id}.bin`,
       ...categories.map((category) => `tools/art/characters/${category}/${id}.glb`),

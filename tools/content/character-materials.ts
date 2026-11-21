@@ -27,6 +27,7 @@ import { completeCharacterClips } from './normalize-character-clips.ts'
 import { normalizeSkinnedAsset } from './normalize-skinned-nodes.ts'
 import { fitRearScalpHair } from './rear-scalp-fit.ts'
 import { consolidateRigidMaterials } from './rigid-materials.ts'
+import { fitStarterSurfaces } from './starter-surfaces.ts'
 import { uprightPosture } from './upright-posture.ts'
 import { fitWaistcoats } from './waistcoat-fit.ts'
 import { captureWeaponSockets, restoreWeaponSockets } from './weapon-sockets.ts'
@@ -43,6 +44,7 @@ export async function bakeCharacter(
 ): Promise<void> {
   const doc = await io.read(path)
   const id = basename(path, '.gltf')
+  await fitStarterSurfaces(doc, id)
   // World riders need the continuous linen too when their arms leave the poncho in aim.
   await integrateGarmentParts(doc, id, { firstPersonSleeves: options.firstPersonSleeves ?? true })
   await fitWaistcoats(doc, id)

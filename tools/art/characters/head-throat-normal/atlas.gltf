@@ -183,7 +183,7 @@
       },
       {
         "path": "tools/content/character-materials.ts",
-        "sha256": "7e8dc47ce23a688b92ef422feb129678cf98f8d481236734e1d59aa008489873"
+        "sha256": "56b91b46b21898a0834d2a4983c78a2b7e91769b681a6f03aa8752d6a5bd9861"
       },
       {
         "path": "tools/content/lower-neck-fans.ts",
@@ -748,7 +748,7 @@
         1.0000159740447998,
         1.0000272989273071
       ],
-      "inputGeometrySHA256": "c1058044446da4531f029290503cfe707604e82571ee0a07f90502607d4cd560"
+      "inputGeometrySHA256": "937a19a2c86da7e6e8773d0af50823292280ab7efb17f129a8382a0afb8760cd"
     }
   }
 }

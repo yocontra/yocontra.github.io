@@ -66,6 +66,18 @@ use 1024px faces; daytime faces remain 256px. Lighting convolution stays at 128p
 with a 256px atlas. Source HDR textures are released after convolution, and only
 the current sky and lighting outputs remain allocated.
 
+## Perdition saloon
+
+`frontier-saloon.glb` contains the open back bar, bottles, stoneware and two
+hanging lamps in town coordinates. Regenerate it before running the regular
+Frontier author and environment bake. The bar reuses the town's floorboard
+maps. The native room lights use the street-facing windows and the two named
+lamp origins. The cover volumes and floor height come from the Frontier plan.
+
+```sh
+blender --background --factory-startup --python tools/content/frontier-saloon-authoring.py
+```
+
 ## Articulated crow wings
 
 The ambient crow uses three joints per wing and a corrective shape for the fold.

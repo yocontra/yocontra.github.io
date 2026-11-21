@@ -6,7 +6,10 @@ import {
   restoreFreightUv1Usage,
   retainFreightUv1,
 } from '../../tools/content/environment-cloud-uvs.ts'
-import { packFrontierVertices } from '../../tools/content/frontier-vertex-packing.ts'
+import {
+  packFrontierCloudUvs,
+  packFrontierVertices,
+} from '../../tools/content/frontier-vertex-packing.ts'
 
 function fixture(names: string[]) {
   const doc = new Document()
@@ -123,4 +126,32 @@ it('stock native optimizers retain shared freight UV1 and final map usage return
   expect(material.getOcclusionTextureInfo()?.getTexCoord()).toBe(0)
   expect(material.getBaseColorTextureInfo()?.getTexCoord()).toBe(0)
   expect(material.getExtras()).toEqual({ freightWorldUv1: true, retained: 42 })
+})
+
+it('packs cloud UVs within the world projection tolerance and leaves freight UVs exact', () => {
+  const { doc, mesh, uv, a } = fixture(['Freight scanned atlas'])
+  a.setTranslation([-10, 0, 20])
+  const wood = doc
+    .createPrimitive()
+    .setAttribute('POSITION', mesh.listPrimitives()[0]?.getAttribute('POSITION') ?? null)
+    .setAttribute('TEXCOORD_0', uv)
+  const below = doc
+    .createNode('cloud fixture')
+    .setTranslation([-10, 0, 20])
+    .setMesh(doc.createMesh().addPrimitive(wood))
+  doc.getRoot().listScenes()[0]?.addChild(below)
+  authorEnvironmentCloudUvs(doc, 'frontier')
+  const primitive = below.getMesh()?.listPrimitives()[0]
+  const projected = primitive?.getAttribute('TEXCOORD_1')
+  if (!projected) {
+    throw new Error('Missing authored cloud UV projection')
+  }
+  const sample = projected.getElement(0, [])
+  expect(packFrontierCloudUvs(doc)).toBe(12)
+  expect(projected.getArray()).toBeInstanceOf(Int16Array)
+  expect(projected.getNormalized()).toBe(true)
+  expect(Math.abs((projected.getElement(0, [])[0] ?? 0) - (sample[0] ?? 0))).toBeLessThan(0.000_016)
+  expect(primitive?.getAttribute('TEXCOORD_0')).toBe(uv)
+  expect(uv.getArray()).toBeInstanceOf(Float32Array)
+  expect(mesh.listPrimitives()[0]?.getAttribute('TEXCOORD_1')).toBe(uv)
 })

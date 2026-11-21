@@ -31,7 +31,7 @@ import {
   worldCloudMaterials,
 } from './environment-assets.ts'
 import { assignEnvironmentBatch } from './environment-detail-batches.ts'
-import { FrontierLamps } from './frontier-lamps.ts'
+import { FrontierLamps, ownLampGlass } from './frontier-lamps.ts'
 import { NativeModelLods } from './model-lod.ts'
 import { NativeWilds } from './wilds.ts'
 
@@ -366,8 +366,7 @@ export class NativeEnvironment {
     }
     if (material.name === 'LampGlass') {
       this.lampGlass.add(material)
-      material.emissiveIntensity = this.lanterns * LAMP_GLOW
-      material.update()
+      ownLampGlass(material, node, this.lanterns * LAMP_GLOW)
     }
     if (node.name.startsWith('windows-') || material.name === 'Dial') {
       this.windows.add(material)

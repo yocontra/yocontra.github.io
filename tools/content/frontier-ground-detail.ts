@@ -68,11 +68,15 @@ function soilTint(x: number, z: number, { size, streets, tracks }: Town) {
       rut = Math.max(rut, Math.exp(-(((z - track.z) / 0.16) ** 2)))
     }
   }
+  // Boots turn across Main Street here, between the wagon lane and the saloon threshold.
+  const treadCenter = 30 + (z - 46) * 0.36
+  const saloonTread = Math.exp(-(((x - treadCenter) / 1.9) ** 2 + ((z - 47.6) / 3.2) ** 2))
+  const wornSoil = 0.1 * saloonTread * (0.7 + 0.6 * valueNoise(x / 0.9, z / 0.9))
   // Ruts are compacted, darker and slightly redder where wheels turned the crust.
   return [
-    SOIL[0] * shade * (1 - 0.24 * rut),
-    SOIL[1] * shade * (1 - 0.3 * rut),
-    SOIL[2] * shade * (1 - 0.34 * rut),
+    SOIL[0] * shade * (1 - 0.24 * rut - wornSoil),
+    SOIL[1] * shade * (1 - 0.3 * rut - wornSoil * 0.55),
+    SOIL[2] * shade * (1 - 0.34 * rut + wornSoil * 0.2),
   ]
 }
 

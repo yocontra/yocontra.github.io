@@ -19,7 +19,7 @@ import { formatContent } from './format-content.ts'
 import { markFrontierInertWind } from './frontier-inert-wind.ts'
 import { poolFrontierInertWindViews } from './frontier-inert-wind-pool.ts'
 import { installFrontierSandstone } from './frontier-sandstone.ts'
-import { packFrontierVertices } from './frontier-vertex-packing.ts'
+import { packFrontierCloudUvs, packFrontierVertices } from './frontier-vertex-packing.ts'
 import { orderLowYardCactusIndices } from './frontier-yard-cactus.ts'
 import { dressMissionAdobe } from './mission-adobe.ts'
 import { optimizeAsset } from './optimize.ts'
@@ -154,6 +154,7 @@ for (const name of names.filter((candidate) => !only || candidate === only)) {
   if (name === 'frontier') {
     const final = await io.read(path)
     await pruneNativeEnvironment(final)
+    console.log('Frontier cloud UV bytes saved', packFrontierCloudUvs(final))
     await orderLowYardCactusIndices(final)
     console.log('Frontier inert wind primitives', markFrontierInertWind(final))
     await io.write(path, final)

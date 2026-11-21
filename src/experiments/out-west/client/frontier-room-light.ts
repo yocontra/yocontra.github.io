@@ -48,3 +48,31 @@ function buildingLights(root: Entity, app: AppBase, b: Building): Entity[] {
     }),
   )
 }
+
+/** Places a soft patch of daylight below each street-facing downstairs saloon window. */
+export function saloonWindowLights(root: Entity, app: AppBase): Entity[] {
+  const saloon = TOWN.buildings.find((building) => building.id === 'saloon')
+  if (!saloon) {
+    return []
+  }
+  return (saloon.windows ?? [])
+    .filter((window) => window.side === 's' && window.floor === 0)
+    .map((window) => {
+      const light = new Entity(`frontier-saloon-window-light:${window.id}`, app)
+      root.addChild(light)
+      light.setPosition(saloon.x + window.at, window.top - 0.3, saloon.z + saloon.d - 0.36)
+      light.setEulerAngles(42, 0, 0)
+      light.addComponent('light', {
+        type: 'spot',
+        color: new Color(1, 0.91, 0.77),
+        falloffMode: LIGHTFALLOFF_LINEAR,
+        range: 5.4,
+        innerConeAngle: 22,
+        outerConeAngle: 37,
+        intensity: 0,
+        castShadows: false,
+        enabled: false,
+      })
+      return light
+    })
+}

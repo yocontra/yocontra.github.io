@@ -17,6 +17,7 @@ import type { Range } from './character-atlas.ts'
 import { FIRST_PERSON_SLEEVE_DONORS } from './first-person-sleeves.ts'
 import { firstPersonNativeSource, type PresentationTexture } from './first-person-source.ts'
 import { integrateGarmentParts } from './garment-parts.ts'
+import { fitStarterSurfaces } from './starter-surfaces.ts'
 import { fitWaistcoats } from './waistcoat-fit.ts'
 
 const io = new NodeIO().registerExtensions(ALL_EXTENSIONS)
@@ -326,6 +327,10 @@ export async function extractFirstPersonArms(id: string, options: { geometryOnly
       .some((mesh) => mesh.listPrimitives().some((primitive) => primitive.getExtras().waistcoatFit))
   ) {
     authoredPaths.push(resolve('tools/art/characters/waistcoats', `${id}.glb`))
+  }
+  const starterSurface = await fitStarterSurfaces(source, id)
+  if (starterSurface) {
+    authoredPaths.push(resolve(starterSurface), resolve('tools/content/starter-surfaces.ts'))
   }
   const authoredInputs: string[] = []
   for (const path of authoredPaths) {

@@ -17,6 +17,15 @@ KTX_ENCODER=/path/to/KTX-Software-4.4.2/bin/toktx bun tools/content/human-assets
 bun tools/content/character-clips.ts
 ```
 
+The starter surface pass rounds the Trail Duds sleeves and hands, smooths the
+trouser shading, and refines the Rusty Six grip and steel finish. Regenerate its portable
+vertex edits in Blender before the native bake. The authored indices, weights,
+UVs, sockets and clips stay in the canonical source files.
+
+```sh
+blender --background --factory-startup --python tools/content/starter-surface-authoring.py -- "$PWD"
+```
+
 The victory `TipHat` clip is authored offline from the canonical player idle, with
 planted feet and a 1.5-second reach/nod/return. Rebuild its portable source before
 the shared clips if its source fingerprint changes:

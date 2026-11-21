@@ -22,6 +22,7 @@ import { LABELS, SHORT_LABELS, SIGN_ROWS } from './frontier-materials.ts'
 import { MOUNT_IRON_TINT } from './frontier-mounts.ts'
 import { buildingDoors } from './frontier-openings.ts'
 import { pitchedRoof } from './frontier-roofs.ts'
+import { saloonFloor } from './frontier-saloon.ts'
 import {
   BANK_SIGN_SIZE,
   FACADE_SIGN_HEIGHT,
@@ -73,7 +74,11 @@ export function buildingDetails(
   const trim: Rgb = [0.82, 0.72, 0.53]
   if (building.hollow) {
     // A real 3 cm floor, with matching native support, and a ceiling below the roof.
-    g.box(root, 'floor', { x, z, w, d, y0: 0, top: 0.03 }, [0.83, 0.72, 0.55])
+    if (building.id === 'saloon') {
+      saloonFloor(g, root, building, plan.layout.cover)
+    } else {
+      g.box(root, 'floor', { x, z, w, d, y0: 0, top: 0.03 }, [0.83, 0.72, 0.55])
+    }
     g.box(root, 'wood', { x, z, w, d, y0: height - 0.14, top: height }, [0.6, 0.49, 0.35])
   }
   // The corner timbers, foundation and eaves define scale without extra materials.

@@ -88,3 +88,34 @@ export async function packFrontierVertices(doc: Document) {
   }
   return { geometry, maximumNormalAngle, maximumTangentAngle }
 }
+
+/** Store the world-space cloud UVs to within 16 mm in the 1,024 m projection. */
+export function packFrontierCloudUvs(doc: Document): number {
+  const eligible = new Set<Accessor>()
+  const preserve = new Set<Accessor>()
+  for (const mesh of doc.getRoot().listMeshes()) {
+    for (const primitive of mesh.listPrimitives()) {
+      const uv = primitive.getAttribute('TEXCOORD_1')
+      if (uv) {
+        const set = primitive.getMaterial()?.getExtras().freightWorldUv1 ? preserve : eligible
+        set.add(uv)
+      }
+    }
+  }
+  let packedBytes = 0
+  for (const accessor of eligible) {
+    const values = accessor.getArray()
+    if (
+      preserve.has(accessor) ||
+      !(values instanceof Float32Array) ||
+      values.some((value) => !Number.isFinite(value) || Math.abs(value) > 1)
+    ) {
+      continue
+    }
+    // This is the cloud projector's shared world grid. Keep UV0 and the freight UVs exact.
+    accessor.setArray(Int16Array.from(values, (value) => Math.round(value * 32_767)))
+    accessor.setNormalized(true)
+    packedBytes += values.byteLength / 2
+  }
+  return packedBytes
+}
