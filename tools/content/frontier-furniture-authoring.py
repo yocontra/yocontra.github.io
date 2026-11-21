@@ -472,6 +472,145 @@ box("Name plate", 0, 0.471, 1.031, (0.414, 0.012, 0.10), edge_iron, 0.010)
 box("Name plate inset", 0, 0.479, 1.043, (0.361, 0.006, 0.070), hardware, 0.006)
 pack()
 
+
+begin("linen-hotel-bed")
+linen = finish("Frontier mattress ticking linen", (0.65, 0.56, 0.39), 0.91)
+wool = finish("Frontier madder wool", (0.36, 0.105, 0.074), 0.87)
+pillow = finish("Frontier pillow linen", (0.76, 0.69, 0.53), 0.94)
+bed_frame = finish("Frontier dark-stained oak bed", (0.36, 0.21, 0.101), 0.67)
+
+for x in (-0.899, 0.899):
+    for y in (-0.893, 0.893):
+        box(
+            "Mortised bed post",
+            x,
+            y,
+            0,
+            (0.121, 0.124, 0.54),
+            bed_frame,
+            0.012,
+            grain_axis=2,
+        )
+        lathe(
+            "Turned post cap",
+            x,
+            y,
+            [(0.524, 0.052), (0.540, 0.057), (0.562, 0.046), (0.58, 0.027)],
+            bed_frame,
+            12,
+        )
+    box(
+        "Side rail and tenon",
+        x,
+        0,
+        0.135,
+        (0.089, 1.82, 0.17),
+        bed_frame,
+        0.012,
+        grain_axis=1,
+    )
+for y, rise in ((0.905, 0.32), (-0.905, 0.23)):
+    box("Beveled end rail", 0, y, 0.17, (1.8, 0.092, rise), bed_frame, 0.014)
+    box(
+        "Molded end panel",
+        0,
+        y,
+        0.40 if y > 0 else 0.34,
+        (1.80, 0.12, 0.062),
+        oak,
+        0.011,
+    )
+box(
+    "Bound horsehair mattress",
+    0,
+    0,
+    0.264,
+    (1.72, 1.66, 0.216),
+    linen,
+    0.048,
+    grain_axis=1,
+)
+box(
+    "Mattress sewn piping",
+    0,
+    0,
+    0.452,
+    (1.73, 1.66, 0.019),
+    pillow,
+    0.008,
+    grain_axis=1,
+)
+
+# This edge drops at the sides while the center wrinkles across the mattress.
+points = []
+faces = []
+columns, rows = 16, 14
+for row in range(rows):
+    v = row / (rows - 1)
+    for column in range(columns):
+        u = 2 * column / (columns - 1) - 1
+        x = 0.92 * u
+        y = -0.792 + v * 1.34 + math.sin(u * 4 + 1.5) * 0.023
+        edge = max(0, (abs(u) - 0.80) / 0.20)
+        wrinkle = math.sin(16 * u + 3 * v) * 0.011 * (0.27 + 0.73 * v)
+        height = 0.49 - 0.144 * edge**2 + wrinkle + 0.016 * v**5
+        points.append((x, y, height))
+        if row and column:
+            j = row * columns + column
+            faces.append((j - columns - 1, j - columns, j, j - 1))
+cover = mesh("Draped wool coverlet", points, faces, wool, smooth=True, grain_axis=1)
+solidify = cover.modifiers.new("Woven thickness", "SOLIDIFY")
+solidify.thickness = 0.008
+bpy.context.view_layer.objects.active = cover
+bpy.ops.object.modifier_apply(modifier=solidify.name)
+box("Folded wool hem", 0, 0.55, 0.48, (1.61, 0.097, 0.042), wool, 0.018)
+for x, rotation in ((-0.444, -0.058), (0.451, 0.033)):
+    box(
+        "Compressed wool pillow",
+        x,
+        0.638,
+        0.486,
+        (0.665, 0.347, 0.108),
+        pillow,
+        0.048,
+        spin=rotation,
+    )
+pack()
+
+begin("mortised-plank-bench")
+bench_wood = finish("Frontier weathered oak bench", (0.43, 0.29, 0.156), 0.79)
+bench_wear = finish("Frontier polished oak seat", (0.57, 0.42, 0.25), 0.69)
+for x in (-0.872, 0.872):
+    for y in (-0.149, 0.149):
+        box(
+            "Splayed stump foot",
+            x,
+            y,
+            0,
+            (0.126, 0.138, 0.40),
+            bench_wood,
+            0.016,
+            spin=y * 0.14,
+            grain_axis=2,
+        )
+        box("Peg cap", x, y, 0.475, (0.032, 0.032, 0.025), bench_wood, 0.005)
+    box(
+        "Mortised crossbrace",
+        x,
+        0,
+        0.162,
+        (0.111, 0.43, 0.078),
+        bench_wood,
+        0.009,
+        grain_axis=1,
+    )
+box("Long lower stretcher", 0, 0, 0.175, (1.84, 0.092, 0.061), bench_wood, 0.009)
+for y in (-0.183, 0.183):
+    box("Seat apron", 0, y, 0.324, (2.32, 0.063, 0.134), bench_wood, 0.012)
+for y, width in ((-0.166, 0.154), (0.002, 0.166), (0.169, 0.154)):
+    box("Hand-smoothed seat plank", 0, y, 0.43, (2.50, width, 0.07), bench_wear, 0.016)
+pack()
+
 output.parent.mkdir(parents=True, exist_ok=True)
 bpy.ops.export_scene.gltf(
     filepath=str(output.resolve()),

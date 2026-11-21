@@ -1,8 +1,10 @@
 /** Fit Blender furniture to Frontier cover sites and reuse the existing town scans. */
-import { Material, Node } from '@gltf-transform/core'
+import { type Document, Material, Node } from '@gltf-transform/core'
 import { copyToDocument } from '@gltf-transform/functions'
 import type { Cover, TownLayout } from '../../src/experiments/out-west/ffa/sim/layout.ts'
 import { type FrontierGeometry, frontierIO } from './frontier-geometry.ts'
+
+const fabric = /baize|linen|wool/u
 
 const dimensions = {
   'saloon-card-table': [1.5, 0.8, 1.5],
@@ -10,6 +12,8 @@ const dimensions = {
   'potbelly-stove': [1, 1.1, 1],
   'riveted-cash-safe': [1.5, 1.5, 1],
   'first-frontier-counter': [1.8, 1.1, 0.6],
+  'linen-hotel-bed': [2, 0.6, 2],
+  'mortised-plank-bench': [2.5, 0.5, 0.5],
 } as const
 
 function roomAt(x: number, z: number, buildings: TownLayout['buildings']) {
@@ -22,6 +26,12 @@ function furnitureName(
   cover: Cover,
   buildings: TownLayout['buildings'],
 ): keyof typeof dimensions | undefined {
+  if (cover.kind === 'bed') {
+    return 'linen-hotel-bed'
+  }
+  if (cover.kind === 'bench') {
+    return 'mortised-plank-bench'
+  }
   if (cover.kind === 'stove') {
     return 'potbelly-stove'
   }
@@ -52,7 +62,7 @@ function scannedMaterial(name: string): string | undefined {
   if (name.includes('iron')) {
     return 'iron'
   }
-  return name.endsWith('baize') ? 'cloth' : undefined
+  return fabric.test(name) ? 'cloth' : undefined
 }
 
 function stoveFacing(x: number, z: number, buildings: TownLayout['buildings']): number {
@@ -79,6 +89,28 @@ function furnitureFacing(
   }
   const room = roomAt(x, z, buildings)
   return name === 'riveted-cash-safe' && room && room.z + room.d / 2 > z ? Math.PI : 0
+}
+
+function furniturePlacement(
+  doc: Document,
+  fixture: Cover,
+  buildings: TownLayout['buildings'],
+  { name, index }: { name: keyof typeof dimensions; index: number },
+): Node {
+  const [width, height, depth] = dimensions[name]
+  const bottom = fixture.y0 ?? 0
+  const x = fixture.x + fixture.w / 2
+  const z = fixture.z + fixture.d / 2
+  const turned =
+    (name === 'linen-hotel-bed' && fixture.w > fixture.d) ||
+    (name === 'mortised-plank-bench' && fixture.d > fixture.w)
+  const orientation = turned ? Math.PI / 2 : furnitureFacing(name, x, z, buildings)
+  const [siteWidth, siteDepth] = turned ? [fixture.d, fixture.w] : [fixture.w, fixture.d]
+  return doc
+    .createNode(`frontier-furniture:${name}:${index}`)
+    .setTranslation([x, bottom, z])
+    .setRotation([0, Math.sin(orientation / 2), 0, Math.cos(orientation / 2)])
+    .setScale([siteWidth / width, ((fixture.top ?? 1) - bottom) / height, siteDepth / depth])
 }
 
 export async function installFrontierFurniture(
@@ -119,16 +151,7 @@ export async function installFrontierFurniture(
     if (!template?.listChildren().length) {
       throw new Error(`Missing authored Frontier furniture ${name}`)
     }
-    const [width, height, depth] = dimensions[name]
-    const bottom = fixture.y0 ?? 0
-    const x = fixture.x + fixture.w / 2
-    const z = fixture.z + fixture.d / 2
-    const orientation = furnitureFacing(name, x, z, layout.buildings)
-    const placement = geometry.doc
-      .createNode(`frontier-furniture:${name}:${index}`)
-      .setTranslation([x, bottom, z])
-      .setRotation([0, Math.sin(orientation / 2), 0, Math.cos(orientation / 2)])
-      .setScale([fixture.w / width, ((fixture.top ?? 1) - bottom) / height, fixture.d / depth])
+    const placement = furniturePlacement(geometry.doc, fixture, layout.buildings, { name, index })
     for (const part of template.listChildren()) {
       const packed = copied.get(part)
       if (!(packed instanceof Node && packed.getMesh() && packed.listChildren().length === 0)) {

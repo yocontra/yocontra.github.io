@@ -11,16 +11,7 @@ import type { Cover } from '../../src/experiments/out-west/ffa/sim/layout.ts'
 import { frame, tube, wagonGear } from './frontier-carpentry.ts'
 import { fenceSpans, wagonCanopy } from './frontier-collision.ts'
 import type { PrefabFit } from './frontier-fit.ts'
-import {
-  anvil,
-  bench,
-  boxcar,
-  DARK_WOOD,
-  headstone,
-  IRON,
-  lumber,
-  trough,
-} from './frontier-furniture.ts'
+import { anvil, boxcar, DARK_WOOD, headstone, IRON, lumber, trough } from './frontier-furniture.ts'
 import type { FrontierGeometry, Placement, Rgb } from './frontier-geometry.ts'
 import { frontierTerrainHeight } from './frontier-ground.ts'
 
@@ -38,7 +29,6 @@ const JOINERY: Partial<
   Record<Cover['kind'], (g: FrontierGeometry, root: Node, c: Placement) => void>
 > = {
   anvil,
-  bench,
   boxcar,
   headstone,
   lumber,
@@ -107,11 +97,6 @@ export function coverModel(g: FrontierGeometry, root: Node, c: Cover, index?: nu
   }
   if (c.kind === 'piano') {
     piano(g, root, area)
-    return
-  }
-  if (c.kind === 'bed') {
-    g.box(root, 'wood', { ...area, top: (c.y0 ?? 0) + 0.25 }, [0.44, 0.29, 0.18])
-    g.box(root, 'cloth', { ...area, y0: (c.y0 ?? 0) + 0.25, top }, [0.76, 0.69, 0.56])
     return
   }
   // Shop fixtures have intentional broad collision faces.

@@ -6,35 +6,6 @@ import type { FrontierGeometry, Placement, Rgb } from './frontier-geometry.ts'
 export const DARK_WOOD: Rgb = [0.42, 0.3, 0.19]
 export const IRON: Rgb = [0.2, 0.2, 0.19]
 
-/** Plank seat on two (or three) trestle legs with a stretcher. */
-export function bench(g: FrontierGeometry, root: Node, c: Placement) {
-  const f = frame(c)
-  const height = c.top - f.base
-  const half = f.length / 2
-  const depth = f.width / 2 - 0.03
-  g.box(
-    root,
-    'floor',
-    f.block([-half, half], [-depth, depth], [height - 0.06, height]),
-    [0.66, 0.52, 0.35],
-  )
-  const legs = f.length > 2.6 ? [-half + 0.2, 0, half - 0.26] : [-half + 0.2, half - 0.26]
-  for (const a of legs) {
-    g.box(
-      root,
-      'wood',
-      f.block([a, a + 0.06], [-depth + 0.04, depth - 0.04], [0, height - 0.06]),
-      DARK_WOOD,
-    )
-  }
-  g.box(
-    root,
-    'wood',
-    f.block([-half + 0.2, half - 0.2], [-0.04, 0.04], [height * 0.35, height * 0.35 + 0.08]),
-    DARK_WOOD,
-  )
-}
-
 /** Blacksmith's anvil on a sawn stump; the library anvil is authored at true height. */
 export function anvil(g: FrontierGeometry, root: Node, c: Placement) {
   const f = frame(c)
