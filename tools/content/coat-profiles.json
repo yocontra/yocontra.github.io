@@ -1,0 +1,100 @@
+{
+  "outfit.wool-duster": {
+    "hemLift": 0.144,
+    "skirtWidth": 0.145,
+    "rearEase": 0.04,
+    "foldDepth": 1,
+    "weltTilt": 0.0038,
+    "cuffTurn": 0.18
+  },
+  "outfit.gamblers-frock": {
+    "hemLift": 0.244,
+    "skirtWidth": 0.13,
+    "rearEase": 0.052,
+    "foldDepth": 0.7,
+    "weltTilt": 0.0011,
+    "cuffTurn": 0.25,
+    "tailFit": 0.57
+  },
+  "outfit.undertakers-black": {
+    "hemLift": 0.26,
+    "skirtWidth": 0.13,
+    "rearEase": 0.03,
+    "foldDepth": 0.54,
+    "weltTilt": 0.0024,
+    "cuffTurn": 0.16,
+    "tailFit": 0.61
+  },
+  "outfit.midnight-coat": {
+    "hemLift": 0.125,
+    "skirtWidth": 0.168,
+    "rearEase": 0.052,
+    "foldDepth": 1.18,
+    "weltTilt": 0.005,
+    "cuffTurn": 0.23,
+    "tailFit": 0.7
+  },
+  "outlaw-7": {
+    "hemLift": 0.1416,
+    "skirtWidth": 0.1326,
+    "rearEase": 0.052,
+    "foldDepth": 1.12,
+    "weltTilt": 0.0038,
+    "cuffTurn": 0.17,
+    "tailFit": 0.47
+  },
+  "outlaw-8": {
+    "hemLift": 0.1592,
+    "skirtWidth": 0.1054,
+    "rearEase": 0.042,
+    "foldDepth": 0.91,
+    "weltTilt": 0.0028,
+    "cuffTurn": 0.22,
+    "tailFit": 0.47
+  },
+  "outlaw-9": {
+    "hemLift": 0.17520000000000002,
+    "skirtWidth": 0.12069999999999999,
+    "rearEase": 0.044,
+    "foldDepth": 0.66,
+    "weltTilt": 0.0021,
+    "cuffTurn": 0.18,
+    "tailFit": 0.47
+  },
+  "outlaw-11": {
+    "hemLift": 0.16720000000000002,
+    "skirtWidth": 0.1173,
+    "rearEase": 0.046,
+    "foldDepth": 0.86,
+    "weltTilt": 0.0029,
+    "cuffTurn": 0.23,
+    "tailFit": 0.47
+  },
+  "outlaw-12": {
+    "hemLift": 0.1312,
+    "skirtWidth": 0.14450000000000002,
+    "rearEase": 0.06,
+    "foldDepth": 1.12,
+    "weltTilt": 0.0045,
+    "cuffTurn": 0.19,
+    "tailFit": 0.47
+  },
+  "outlaw-14": {
+    "hemLift": 0.10800000000000001,
+    "skirtWidth": 0.13515,
+    "rearEase": 0.05,
+    "foldDepth": 1.04,
+    "weltTilt": 0.0039,
+    "cuffTurn": 0.2,
+    "tailFit": 0.47
+  },
+  "outlaw-16": {
+    "hemLift": 0.1656,
+    "skirtWidth": 0.12069999999999999,
+    "rearEase": 0.044,
+    "foldDepth": 0.73,
+    "weltTilt": 0.0026,
+    "cuffTurn": 0.22,
+    "tailFit": 0.47
+  }
+}

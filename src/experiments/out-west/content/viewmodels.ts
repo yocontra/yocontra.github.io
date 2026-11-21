@@ -22,13 +22,13 @@ export const VIEWMODELS: Readonly<Record<string, ContentAsset>> = {
     bytes: 167116,
   },
   'outfit.wool-duster': {
-    url: '/experiments/out-west/3d/native-v2/viewmodels/outfit.wool-duster.glb?v=d0e3b1ddfcf37c92',
-    hash: 'd0e3b1ddfcf37c92386008b37eb900ef59cb16fef1c173b3e1d408276686b02f',
+    url: '/experiments/out-west/3d/native-v2/viewmodels/outfit.wool-duster.glb?v=66e187064a8421d7',
+    hash: '66e187064a8421d779538ce42829e511c3bdbb17fde0b15c8dc03169aed6ae41',
     bytes: 97076,
   },
   'outfit.wool-duster.pair': {
-    url: '/experiments/out-west/3d/native-v2/viewmodels/outfit.wool-duster.pair.glb?v=67b6fc6776f13dc0',
-    hash: '67b6fc6776f13dc0b2c3558713a8baa38e7b5019b36e6f188ff889d7bddde369',
+    url: '/experiments/out-west/3d/native-v2/viewmodels/outfit.wool-duster.pair.glb?v=7d931d02b0b867d6',
+    hash: '7d931d02b0b867d63bc3e84b3d93921a1a2005d088b3776018f628813f2e7feb',
     bytes: 97596,
   },
   'outfit.striped-poncho': {
@@ -42,13 +42,13 @@ export const VIEWMODELS: Readonly<Record<string, ContentAsset>> = {
     bytes: 97972,
   },
   'outfit.gamblers-frock': {
-    url: '/experiments/out-west/3d/native-v2/viewmodels/outfit.gamblers-frock.glb?v=399c97c0d749ae1e',
-    hash: '399c97c0d749ae1e061426986ebe6335681d610ebc0c1f38b6cc7d73b88d5bd2',
+    url: '/experiments/out-west/3d/native-v2/viewmodels/outfit.gamblers-frock.glb?v=6410123c66b8e9cc',
+    hash: '6410123c66b8e9cc742c2214850b022acee9684990e65ceb6d3403b6a37d8664',
     bytes: 97120,
   },
   'outfit.gamblers-frock.pair': {
-    url: '/experiments/out-west/3d/native-v2/viewmodels/outfit.gamblers-frock.pair.glb?v=25592619ab7a359a',
-    hash: '25592619ab7a359a50810024134a452b813badcd4543576f36d308b31562693d',
+    url: '/experiments/out-west/3d/native-v2/viewmodels/outfit.gamblers-frock.pair.glb?v=6bdb157c301a75db',
+    hash: '6bdb157c301a75dbb98b7719ed2d9fe26c52a1eee2b2e197293eabbc2cec1dd9',
     bytes: 97640,
   },
   'outfit.bandolier-rig': {
@@ -62,23 +62,23 @@ export const VIEWMODELS: Readonly<Record<string, ContentAsset>> = {
     bytes: 88904,
   },
   'outfit.undertakers-black': {
-    url: '/experiments/out-west/3d/native-v2/viewmodels/outfit.undertakers-black.glb?v=99cd8014f7718d4d',
-    hash: '99cd8014f7718d4d9e9cc55cd1c8f44668ff3d71bea587b6b8ec2aca8d9d0287',
+    url: '/experiments/out-west/3d/native-v2/viewmodels/outfit.undertakers-black.glb?v=3df238add6757637',
+    hash: '3df238add6757637db7916d459466f85ce60c82a2b8760ffd5f52eb6caa0c89a',
     bytes: 97148,
   },
   'outfit.undertakers-black.pair': {
-    url: '/experiments/out-west/3d/native-v2/viewmodels/outfit.undertakers-black.pair.glb?v=a7325fe18e79561a',
-    hash: 'a7325fe18e79561afd68c8e8140e82d5126e66e4f57a34bfced1c6fa8607a6c8',
+    url: '/experiments/out-west/3d/native-v2/viewmodels/outfit.undertakers-black.pair.glb?v=4140953b9c1e12ba',
+    hash: '4140953b9c1e12ba008a7132fc59341f8f283dd584a4a5f623001bd0b662d4da',
     bytes: 97668,
   },
   'outfit.midnight-coat': {
-    url: '/experiments/out-west/3d/native-v2/viewmodels/outfit.midnight-coat.glb?v=0599767986205421',
-    hash: '0599767986205421bfa55752c41f6e0b4bb2c59814a4696c13bb1598a03c97a8',
+    url: '/experiments/out-west/3d/native-v2/viewmodels/outfit.midnight-coat.glb?v=3c9097394303b301',
+    hash: '3c9097394303b301149e8d26b217598187eeb4690ee4c10ae7c0bfc4a168444a',
     bytes: 97116,
   },
   'outfit.midnight-coat.pair': {
-    url: '/experiments/out-west/3d/native-v2/viewmodels/outfit.midnight-coat.pair.glb?v=64ee1c805d4f7b1b',
-    hash: '64ee1c805d4f7b1bc446726f9d89a84345d26d32fd24a4e62b1981cb1da70ced',
+    url: '/experiments/out-west/3d/native-v2/viewmodels/outfit.midnight-coat.pair.glb?v=41e4c9f2115d3b9d',
+    hash: '41e4c9f2115d3b9d7850a77f40ff3f80324f272430c1e8b1cc766d94041a0c1b',
     bytes: 97636,
   },
 }

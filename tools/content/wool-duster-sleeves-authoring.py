@@ -1,19 +1,23 @@
 """Fit the elbow pleats and wool turnbacks of the riding duster."""
 import hashlib
 import importlib.util
+import json
 import math
+import os
 import sys
 from pathlib import Path
 
 from mathutils import Matrix, Vector
 
 sys.dont_write_bytecode = True
+profile_path = Path(__file__).with_name("coat-profiles.json")
+profiles = json.loads(profile_path.read_text())
 root = Path(__file__).resolve().parents[2]
 library = root / "tools/content/coat-collars-authoring.py"
 spec = importlib.util.spec_from_file_location("wool_sleeve_writer", library)
 portable = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(portable)
-source_code = root / "tools/content/wool-duster-sleeves-authoring.py"
+source_code = Path(__file__).resolve()
 common = portable.common
 style_streams = ("COLOR_0", "_DYE", "_STYLE_LUMINANCE", "_STYLE_MATERIAL")
 
@@ -32,7 +36,8 @@ def pivot(source, body, joint_name):
 
 
 def fit(source, body):
-    if source.path.stem not in {"outfit.wool-duster", "outfit.wool-duster.pair"}:
+    profile = profiles.get(source.path.stem.removesuffix(".pair"))
+    if profile is None:
         return None
     output, extras = common.sleeves(source, body)
     attrs = body["attrs"]
@@ -65,7 +70,7 @@ def fit(source, body):
             elbow_pleat = math.exp(-((length-.042)/.075)**2)
             depth = elbow_pleat*(.0058*math.cos(length*96 + 1.35*math.sin(angle)) + .0032*math.cos(length*161-angle*.6))
             depth += .005*turnback + .004*math.exp(-((hem-.003)/.004)**2)
-            p += radial.normalized()*depth-radial*(.18*cuff)
+            p += radial.normalized()*depth-radial*(profile["cuffTurn"]*cuff)
             output["POSITION"][i]=list(p)
             fold_shadow = max(0, -depth) / .009
             for name in style_streams:
@@ -100,10 +105,10 @@ def fit(source, body):
                 output["NORMAL"][i] = list(normal.lerp(averaged, .72).normalized())
 
     extras["sourceInputs"] = [{"path":str(path.relative_to(common.ROOT)), "sha256":hashlib.sha256(path.read_bytes()).hexdigest()}
-                              for path in (source_code, library, library.with_name("coat-sleeves-authoring.py"))]
+                              for path in (source_code, profile_path, library, library.with_name("coat-sleeves-authoring.py"))]
     extras["woolSleeve"] = {"profile":"formed elbow pleats and sewn turnbacks","retainedNativeSkin":True}
     return output, extras
 
 
 if __name__ == "__main__":
-    common.run(fit, "coat-sleeves")
+    common.run(fit, os.environ.get("OUT_WEST_GARMENT_OUTPUT", "coat-sleeves"))

@@ -5,18 +5,18 @@
     {
       "id": "outlaw-16",
       "path": "public/experiments/out-west/3d/native-v2/baked/outlaw-16.glb",
-      "assetSHA256": "ee951c2e35e9f2eafad09440235f80ddea1b0f195dca949dff18bd95e178be13",
+      "assetSHA256": "5d323472d8bed09da0305e15b04a122834ff47410d54792af9d6e492b972b71e",
       "moustacheTriangles": 3952,
       "headLocalMinimumOwnedY": 0.026,
-      "rawTriangleCornerSHA256": "9c6147d38c709c44a6cf7e144d534c1ea4df0214990b00c9a2235d33dc16dc59"
+      "rawTriangleCornerSHA256": "72fee2eed86ae51bde87c6273dbd000709559a1db6180eb6517a21f58ea16d99"
     },
     {
       "id": "outlaw-16.pair",
       "path": "public/experiments/out-west/3d/native-v2/baked/outlaw-16.pair.glb",
-      "assetSHA256": "4b39d965590dbef8d61ea8d83549be225cbd4065b37306bf54109546fe3a1885",
+      "assetSHA256": "69190e2c65d9060193f9415cc1b2ab710def4431311e8ddc3627b02821650fdd",
       "moustacheTriangles": 3952,
       "headLocalMinimumOwnedY": 0.026,
-      "rawTriangleCornerSHA256": "9c6147d38c709c44a6cf7e144d534c1ea4df0214990b00c9a2235d33dc16dc59"
+      "rawTriangleCornerSHA256": "72fee2eed86ae51bde87c6273dbd000709559a1db6180eb6517a21f58ea16d99"
     }
   ],
   "materialExtras": {
@@ -26,5 +26,10 @@
       "arm": "/experiments/out-west/3d/native-v2/characters/40de6121fab264849e47e660.data.ktx2",
       "ao": true
     }
+  },
+  "nativeRepack": {
+    "reason": "Tailoring the coat shifted the horizontal center of the body mesh quantization bounds.",
+    "originalRawTriangleCornerSHA256": "9c6147d38c709c44a6cf7e144d534c1ea4df0214990b00c9a2235d33dc16dc59",
+    "maximumHeadSpaceDisplacementMetres": 9.2e-5
   }
 }

@@ -1,6 +1,7 @@
 """Rebuild the duster's lower panels and add folded seams and inset welt pockets."""
 import hashlib
 import importlib.util
+import json
 import math
 import os
 import sys
@@ -10,6 +11,8 @@ from mathutils import Matrix, Vector
 from mathutils.bvhtree import BVHTree
 
 sys.dont_write_bytecode = True
+profile_path = Path(__file__).with_name("coat-profiles.json")
+profiles = json.loads(profile_path.read_text())
 root = Path(__file__).resolve().parents[2]
 library = root / "tools/content/poncho-collars-authoring.py"
 spec = importlib.util.spec_from_file_location("wear", library)
@@ -25,7 +28,8 @@ def smooth(value):
 
 
 def fit(source, body):
-    if source.path.stem not in {"outfit.wool-duster", "outfit.wool-duster.pair"}:
+    profile = profiles.get(source.path.stem.removesuffix(".pair"))
+    if profile is None:
         return None
     attrs = body["attrs"]
     parts = [piece for piece in body["ranges"] if piece.get("swatch") == "wool"]
@@ -107,10 +111,10 @@ def fit(source, body):
         hip = joint_point("UpperLeg" + side)
         knee = joint_point("LowerLeg" + side)
         column = {}
+        waist = sorted(rings[layer_keys[0]], key=lambda v: attrs["TEXCOORD_0"][v][0])
+        reverse = local[waist[0]].z > local[waist[-1]].z
         for key in layer_keys:
-            ordered = sorted(rings[key], key=lambda v: attrs["TEXCOORD_0"][v][0])
-            if (local[ordered[0]].z > local[ordered[-1]].z):
-                ordered.reverse()
+            ordered = sorted(rings[key], key=lambda v: attrs["TEXCOORD_0"][v][0], reverse=reverse)
             for index, vertex in enumerate(ordered):
                 column[vertex] = index / max(1, len(ordered) - 1)
 
@@ -125,16 +129,16 @@ def fit(source, body):
                              + .009 * math.sin(16 * angle - 2.1 * height) + .012)
             # Shape each half around its own thigh. The open front falls away
             # from the knees as the two sides pass one another in a stride.
-            drape = smooth((height - .12) / .88)
+            drape = smooth((height - .12) / .88) * profile.get("tailFit", 1)
             axis = hip.lerp(knee, min(1.24, height * 1.24))
             arc = column[v] * math.pi * .84
             tail = Vector((
-                axis.x + direction * (.018 + .145 * math.sin(arc)),
-                p.y + .144 * height ** 2,
-                axis.z - .172 * math.cos(arc) - .04,
+                axis.x + direction * (.018 + profile["skirtWidth"] * math.sin(arc)),
+                p.y + profile["hemLift"] * height ** 2,
+                axis.z - .172 * math.cos(arc) - profile["rearEase"],
             ))
             p = p.lerp(tail, drape)
-            p += normal * cloth
+            p += normal * cloth * profile["foldDepth"]
             p.y += amount * (.012 * math.cos(4 * angle + .71) + .008 * math.sin(9 * angle))
             deformed[v] = p
             normals[v] = normal
@@ -168,15 +172,19 @@ def fit(source, body):
 
     def project(x, y):
         point, normal, face, _ = bvh.ray_cast(Vector((x,y,.62)), Vector((0,0,-1)), .75)
-        if point is None or normal is None:
-            raise ValueError(f"Pocket outside the fitted coat near {x:g}, {y:g}")
+        if point is None or normal is None or point.z < .025:
+            return None
         if normal.z < 0:
             normal = -normal
         v = min((ua+i for i in upper_faces[face]), key=lambda i: (point-local[i]).length_squared)
         return v, point, normal
 
     for side in (-1, 1):
-        line = [project(side * (.091 + .0063 * i), -.39 - .0038 * i) for i in range(10)]
+        probes = [project(side * (.091 + .0063 * i), -.39 - profile["weltTilt"] * i) for i in range(10)]
+        line = [point for point in probes if point is not None]
+        if len(line)<5:
+            raise ValueError(f"{source.path.stem}: missing front coat surface near its pocket")
+
         band("Pocket welt shadow", upper, line, .009, .004, (.47,.39,.29))
         band("Turned wool pocket welt", upper, [(v,p+Vector((0,.007,0)),n) for v,p,n in line],
              .0045,.006,(.83,.79,.72))
@@ -185,11 +193,11 @@ def fit(source, body):
             band("Welt stitches", upper, [a,b], .0011,.006,(.94,.87,.72))
 
     input_root = common.ROOT
-    copy_of_author = root / "tools/content/wool-duster-authoring.py"
+    copy_of_author = Path(__file__).resolve()
     return output, {
         "replaceRanges": tails, "removeTriangles": changed_faces,
         "sourceInputs": [{"path":str(path.relative_to(input_root)), "sha256":hashlib.sha256(path.read_bytes()).hexdigest()}
-                         for path in (copy_of_author, library, library.with_name("coat-collars-authoring.py"), library.with_name("coat-sleeves-authoring.py"))],
+                         for path in (copy_of_author, profile_path, library, library.with_name("coat-collars-authoring.py"), library.with_name("coat-sleeves-authoring.py"))],
         "woolDuster": {"panels":len(tails), "retainedCollar":True, "weltPockets":2},
     }
 
