@@ -366,10 +366,14 @@ export function boot(root: HTMLElement): void {
       }
       // The scene is warm; decode the rest of the sounds while the player is in the hub.
       void audio.loadPacks()
+      title.inert = true
       title.classList.add('wipe')
-      setTimeout(() => title.remove(), 1100)
+      setTimeout(() => title.remove(), 420)
       if (hub) {
         hub.show()
+        hub.root
+          .querySelector<HTMLButtonElement>('.ow-tile-gauntlet')
+          ?.focus({ preventScroll: true })
       } else {
         g.begin(jump)
       }
@@ -394,7 +398,7 @@ export function boot(root: HTMLElement): void {
     }
     audio.playSong(data.level >= 15 ? 'boss' : 'intro')
     title.classList.add('pressed')
-    if (startText) {
+    if (!game) {
       startText.textContent = 'Loading…'
       startText.setAttribute('aria-busy', 'true')
     }

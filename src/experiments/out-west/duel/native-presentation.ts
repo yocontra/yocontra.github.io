@@ -96,28 +96,38 @@ function frameHub(d: NativeDirector): void {
   const portrait = bounds.height > bounds.width
   const panel = root?.querySelector(view.shot === 'store' ? '.ow-store' : '.ow-hub-side')
   const rect = panel?.getBoundingClientRect()
-  const strip = root?.querySelector('.ow-hub-top')?.getBoundingClientRect()
+  if (!(rect?.width && rect.height)) {
+    return
+  }
+  const header = root?.querySelector('.ow-hub-top')?.getBoundingClientRect()
   let top = 16
   let bottom = bounds.height - 16
   let right = bounds.width - 20
   const left = 20
-  if (rect) {
-    if (portrait) {
-      bottom = rect.top - bounds.top - 16
-      if (view.shot !== 'store' && strip) {
-        top = strip.bottom - bounds.top + 16
-      }
-    } else {
-      right = rect.left - bounds.left - 20
-      if (view.shot !== 'store' && strip) {
-        top = strip.bottom - bounds.top + 12
-      }
-    }
+  if (portrait) {
+    bottom = rect.top - bounds.top - 16
+  } else {
+    right = rect.left - bounds.left - 20
+  }
+  // In landscape the desktop profile stays above the mode board. Only the compact header
+  // sits over the rider, so only that header reduces the available height.
+  if (view.shot === 'hub' && header && (portrait || header.right <= rect.left)) {
+    top = header.bottom - bounds.top + 16
   }
   const focus = hubFocus(d, view.shot, root)
   const width = Math.max(100, right - left)
   const height = Math.max(90, bottom - top)
-  const layout = [bounds.width, bounds.height, left, top, width, height, Number(focus.guns)]
+  const subjectHeight = view.shot === 'hub' ? Math.min(height, bounds.height * 0.62) : height
+  const layout = [
+    bounds.width,
+    bounds.height,
+    left,
+    top,
+    width,
+    subjectHeight,
+    height,
+    Number(focus.guns),
+  ]
     .map(Math.round)
     .join(',')
   if (layout === view.layout && !focus.guns) {
@@ -126,7 +136,8 @@ function frameHub(d: NativeDirector): void {
   view.layout = layout
   lens.fov = view.shot === 'store' ? 35 : 42
   const scale = bounds.height / (2 * Math.tan((lens.fov * Math.PI) / 360))
-  const distance = Math.max((focus.height * scale) / height, (focus.width * scale) / width) * 1.08
+  const distance =
+    Math.max((focus.height * scale) / subjectHeight, (focus.width * scale) / width) * 1.08
   const centerX = left + width / 2
   const centerY = top + height / 2
   lens.projectionOffset = new Vec2(
@@ -142,9 +153,7 @@ function frameHub(d: NativeDirector): void {
 }
 
 export function hubShot(d: NativeDirector, shot: string): void {
-  const previous = hubViews.get(d)
-  const preserveCamera = previous !== undefined && d.rig.owner === 'hub'
-  clearMoments(d, preserveCamera)
+  clearMoments(d)
   d.debris.reset()
   d.game.app.scene.exposure = 1.1
   void d.arenas.show('street').then(() => d.atmosphere.arrange(d.arenas.life))
@@ -155,16 +164,14 @@ export function hubShot(d: NativeDirector, shot: string): void {
   d.player?.face(shot === 'store' ? 25 : -20)
   d.player?.play('Idle')
   hubViews.set(d, { shot, layout: '' })
-  if (shot === 'store') {
-    frameHub(d)
-  } else {
+  if (shot === 'title') {
     if (d.game.camera.camera) {
       d.game.camera.camera.projectionOffset = Vec2.ZERO
     }
-    if (!preserveCamera) {
-      titleShot(d)
-    }
+    titleShot(d)
     d.rig.update(0)
+  } else {
+    frameHub(d)
   }
 }
 
@@ -255,7 +262,8 @@ export function update(d: NativeDirector, frameDt: number): void {
   d.rig.reduced = d.c.save.settings.reducedMotion
   tickMoments(d, realDt, frameDt)
   if (d.phase === 'title') {
-    if (hubViews.get(d)?.shot === 'store') {
+    const view = hubViews.get(d)
+    if (view && view.shot !== 'title') {
       frameHub(d)
     } else {
       d.rig.update(realDt)

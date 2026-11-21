@@ -20,7 +20,7 @@ export interface HubMetaUi {
 }
 
 export interface HubMeta {
-  /** Puts the Daily Outlaw banner over the hub's mode tiles; the hub places the links itself. */
+  /** Adds the Daily Outlaw banner below the hub's mode tiles; the hub places the links itself. */
   mount: (side: HTMLElement) => HubMetaUi
   /** The strip's line for a guest ("Guest · purse $120 · 340 XP"), or null to keep the default. */
   guestLine: () => string | null
@@ -30,8 +30,6 @@ export function hubMeta(root: HTMLElement, meta: Meta, daily: DailyDeps): HubMet
   return {
     mount: (side) => {
       const tile = new DailyTile(root, side, daily)
-      // the day's banner sits over the four mode tiles
-      side.prepend(tile.button)
       const achievements = (): void => openAchievements(root, meta)
       const map = (): void =>
         openGauntletMap(root, meta, {

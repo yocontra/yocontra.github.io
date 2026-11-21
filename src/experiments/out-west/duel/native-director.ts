@@ -243,7 +243,7 @@ export class NativeDirector {
     ])
     this.player = player
     this.player.root.enabled = false
-    this.hubShot('hub')
+    this.hubShot('title')
     await prepareDuelShotVisuals(this)
     this.game.app.on('frameupdate', this.frameBegan)
     this.game.app.on('update', this.tick)

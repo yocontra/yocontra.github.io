@@ -270,6 +270,8 @@
 }
 .ow-tile-gauntlet {
   --tile-accent: var(--ow-brass);
+  background-image:
+    linear-gradient(140deg, rgb(110 67 27 / 0.68), rgb(43 24 11 / 0.88)), var(--ow-tex-wood);
 }
 .ow-tile-frontier {
   --tile-accent: #b8692a;
@@ -297,10 +299,10 @@
 }
 .ow-tile-title {
   padding-right: 32px;
-  overflow-wrap: anywhere;
+  overflow-wrap: normal;
   font-family: var(--ow-font-display);
   /* one long wood-type word ("Outfitter") must fit its tile: shrink with it, never split it */
-  font-size: min(clamp(1.25rem, 2vw, 1.5rem), 10.5cqi);
+  font-size: min(clamp(1.125rem, 2vw, 1.375rem), 9cqi);
   line-height: var(--ow-lead-display);
   letter-spacing: 0.03em;
   text-transform: uppercase;
@@ -420,4 +422,25 @@
   .ow-tile.waiting .ow-tile-sub {
     animation: none;
   }
+}
+
+/* Give the rider more room while keeping the sign-in action in the profile strip. */
+.ow-hub-strip:has(> .ow-hub-signin) {
+  align-items: center;
+  gap: 6px 12px;
+  width: min(14rem, 100%);
+  padding: 8px 10px 8px 14px;
+}
+.ow-hub-strip:has(> .ow-hub-signin) > .ow-hub-name {
+  font-size: var(--ow-fs-body);
+}
+.ow-hub-strip > .ow-hub-signin {
+  flex: 0 0 auto;
+  min-height: var(--ow-tap);
+  padding: 8px 14px;
+  font-size: var(--ow-fs-small);
+}
+.ow-hub-strip:has(> .ow-hub-signin) > .ow-hub-meta {
+  flex: 1 0 100%;
+  order: 1;
 }

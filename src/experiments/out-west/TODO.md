@@ -2,6 +2,11 @@
 
 The current Out West pass covers visual quality and fidelity. Inspect source assets in Blender and compare the shipped renderer in a Chrome tab from reachable player viewpoints. Review lighting, silhouettes, material detail and contact with the scene before publishing art.
 
+## First-play presentation (2026-11-20)
+
+- [x] Give the saloon its own rider shot. Fit the player between the account strip and the mode cards in portrait, and beside the cards in landscape. The title keeps its opening crane, and returning from the Outfitter restores the saloon shot.
+- [x] Keep the title print on short landscape screens. Fade into the saloon, hand keyboard focus to Quick Draw, lead with Quick Draw and Frontier, and put the guest's practice town ahead of sign-in.
+
 ## Visual fidelity follow-up (2026-11-19)
 
 - [x] Replace the 46 short cacti with clear sampled rider-height sightlines with rounded barrels, curved ribs and short clustered spines. Matched Low and High Chrome views cover daylight and dusk. The plants keep their existing ground contact. Of the other 92 short plants, 35 had blocked sampled sightlines within 23 m and 57 were farther away.

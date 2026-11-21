@@ -71,36 +71,27 @@ it('a shot completes only its shooter turn before hitstop', () => {
   }
 })
 
-it('returning from Outfitter retains the settled native title shot instead of replaying the crane', () => {
+it('hands the title crane off to the saloon and Outfitter without replaying it', () => {
   const sim = simulate({ level: 0, random: 0.5 })
   const camera = new Entity('camera')
   const rig = new CameraRig(camera)
   Object.assign(sim.d, {
     rig,
-    game: { app: { scene: {} }, camera },
+    game: { app: { scene: {}, graphicsDevice: { canvas: null } }, camera },
     arenas: { show: () => Promise.resolve(), life: {} },
     atmosphere: { arrange: () => undefined },
   })
   try {
-    hubShot(sim.d, 'hub')
+    hubShot(sim.d, 'title')
     expect(rig.owner).toBe('hub')
     rig.update(20)
-    const time = rig.shotTime
-    const settled = rig.pose()
-    // The source camera can return without a DOM or a store-side projection lens.
+    expect(rig.pose().pos.y).toBe(2)
+
+    hubShot(sim.d, 'hub')
+    expect(rig.active).toBe(false)
     hubShot(sim.d, 'store')
     hubShot(sim.d, 'hub')
-    expect(rig.shotTime).toBe(time)
-    expect(rig.pose().pos.equals(settled.pos)).toBe(true)
-    expect(rig.pose().look.equals(settled.look)).toBe(true)
-    // A duel cut can reuse a display label; ownership, rather than that label, controls reuse.
-    rig.cut('title', () => settled)
-    expect(rig.owner).toBe('duel')
-    hubShot(sim.d, 'hub')
-    expect(rig.owner).toBe('hub')
-    expect(rig.shotTime).toBe(0)
-    rig.release()
-    expect(rig.owner).toBeNull()
+    expect(rig.active).toBe(false)
   } finally {
     camera.destroy()
     sim.restore()

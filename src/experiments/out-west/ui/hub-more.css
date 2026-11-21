@@ -47,7 +47,7 @@
 .ow-hub-side .ow-tile {
   min-height: 6.5rem;
 }
-/* the Daily Outlaw: a slim banner over the tiles, the day's twist above its name, status right */
+/* the Daily Outlaw: a slim banner below the modes, the day's twist above its name, status right */
 .ow-hub-side .ow-tile.ow-tile-daily {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
@@ -68,9 +68,10 @@
   display: inline-block;
   white-space: nowrap;
 }
-/* the day's modifiers ("2 fake-outs, Fog"): always their own line under "Daily Outlaw" */
+/* Keep the modifier list together when it wraps below the label. */
 .ow-kick-mods {
-  display: block;
+  display: inline-block;
+  margin-inline-start: 0.65em;
   font-variant-caps: normal;
   letter-spacing: normal;
   font-style: italic;
@@ -81,7 +82,7 @@
   padding-right: 0;
   overflow-wrap: normal;
   hyphens: none;
-  font-size: min(clamp(1.125rem, 1.8vw, 1.375rem), 7.5cqi);
+  font-size: min(clamp(1rem, 1.6vw, 1.25rem), 6.8cqi);
 }
 .ow-hub-side .ow-tile-daily .ow-tile-sub {
   grid-column: 2;
@@ -130,9 +131,16 @@
   .ow-hub-side .ow-tile {
     min-height: 4.75rem;
   }
+  .ow-hub-tools {
+    flex-direction: row;
+  }
 }
 /* short landscape phones: the column runs the full height, so the tiles stay compact */
 @media (max-height: 480px) and (min-aspect-ratio: 1 / 1) {
+  .ow-hub-side .ow-tile-daily .ow-tile-kicker {
+    display: block;
+    font-size: var(--ow-fs-small);
+  }
   .ow-hub-side .ow-tile {
     min-height: 4.5rem;
   }
@@ -174,6 +182,18 @@
     white-space: normal;
   }
   .ow-tile .ow-tile-title {
-    font-size: 10cqi;
+    padding-right: 0;
+    font-size: 9.75cqi;
+  }
+}
+
+@media (max-width: 360px) {
+  .ow-hub-top,
+  .ow-hub-tools {
+    gap: 6px;
+  }
+  .ow-hub-tool {
+    width: var(--ow-tap);
+    height: var(--ow-tap);
   }
 }

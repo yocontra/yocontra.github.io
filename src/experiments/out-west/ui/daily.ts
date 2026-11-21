@@ -146,8 +146,7 @@ export class DailyTile {
     if (title) {
       title.textContent = spec.title
     }
-    // the day's modifiers on a line of their own under "Daily Outlaw" (a "· 2 fake-outs" that
-    // wrapped alone read as an orphan)
+    // Keep the modifier list together if the label needs to wrap.
     this.kicker.replaceChildren()
     el('span', 'ow-kick-part', this.kicker, 'Daily Outlaw')
     if (spec.modifiers.length > 0) {

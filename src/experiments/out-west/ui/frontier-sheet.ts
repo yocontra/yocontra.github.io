@@ -16,23 +16,35 @@ export function frontierSheet(parent: HTMLElement, signedIn: boolean, live: () =
     'Free-for-all in Perdition. Shoot riders, collect their money, and bank it before you die.',
   )
   const row = el('div', 'ow-hub-row', s.body)
+  const practice = () =>
+    button(
+      row,
+      'Practice town',
+      () => {
+        s.close()
+        location.assign(PRACTICE_TOWN_URL)
+      },
+      !signedIn,
+    )
+  if (!signedIn) {
+    practice()
+  }
   button(
     row,
-    signedIn ? 'Live town' : 'Live town: sign in',
+    signedIn ? 'Live town' : 'Sign in for live town',
     () => {
       s.close()
       live()
     },
-    true,
+    signedIn,
   )
-  button(row, 'Practice town', () => {
-    s.close()
-    location.assign(PRACTICE_TOWN_URL)
-  })
+  if (signedIn) {
+    practice()
+  }
   el(
     'p',
     'ow-hub-note',
     s.body,
-    'Practice: up to four bots, free, and the money stays on this device. Live: real riders and real money (needs a licence).',
+    'Practice against up to four bots. Live play requires a licence and uses your online purse.',
   )
 }

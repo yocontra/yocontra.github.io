@@ -31,17 +31,17 @@ try {
     const d = Reflect.get(globalThis, '__ow').director
     d.enter('title')
     d.paused = true
-    d.hubShot('hub')
+    d.hubShot('title')
     const high = d.rig.pose().pos.toArray()
-    d.rig.update(6.5)
+    d.rig.update(14)
     const low = d.rig.pose().pos.toArray()
     d.rig.update(7.5)
-    const loop = d.rig.pose().pos.toArray()
-    if (high[1] !== 19 || low[1] !== 2 || loop[1] !== 19) {
-      throw new Error('Title crane lost its original high/low/loop framing')
+    const hold = d.rig.pose().pos.toArray()
+    if (high[1] !== 19 || low[1] !== 2 || hold[1] !== low[1]) {
+      throw new Error('Title crane did not settle into the grounded view')
     }
     d.rig.update(6.5)
-    return { high, low, loop }
+    return { high, low, hold }
   })
   await page.screenshot({ path: `${output}/title.png` })
   const cues = await page.evaluate(async () => {

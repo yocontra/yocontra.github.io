@@ -20,11 +20,11 @@
     320px 320px;
   cursor: pointer;
   outline: none;
-  transition: transform 0.9s var(--ow-ease-in-out);
-  will-change: transform;
+  transition: opacity 0.36s var(--ow-ease-out);
 }
 .ow-title.wipe {
-  transform: translateY(-104%);
+  opacity: 0;
+  pointer-events: none;
 }
 /* printer's corners */
 .ow-title::before,
@@ -308,15 +308,40 @@
   }
 }
 @media (max-height: 520px) and (min-aspect-ratio: 1 / 1) {
-  .ow-title-art,
-  .ow-title-kicker {
-    display: none;
+  .ow-title-sheet {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    column-gap: clamp(1rem, 5vw, 3rem);
+    row-gap: 8px;
+    width: min(51rem, 92%);
+    justify-items: center;
+  }
+  .ow-title-art {
+    grid-column: 1;
+    grid-row: 1 / span 6;
+    width: 100%;
+    aspect-ratio: 4 / 3;
+    max-height: 64dvh;
+  }
+  .ow-title-sheet > :not(.ow-title-art) {
+    grid-column: 2;
+  }
+  .ow-logo {
+    font-size: clamp(2.25rem, min(6vw, 15dvh), 5rem);
+  }
+  .ow-start {
+    padding-inline: 16px;
+    font-size: clamp(1.125rem, 3.3vw, 1.5rem);
+  }
+  .ow-title-kicker,
+  .ow-howto {
+    font-size: var(--ow-fs-body);
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
   .ow-title {
-    transition-duration: 0.3s;
+    transition: none;
   }
   .ow-logo,
   .ow-title-art,

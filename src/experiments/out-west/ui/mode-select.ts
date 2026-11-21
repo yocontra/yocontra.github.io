@@ -1,7 +1,7 @@
 /**
  * The hub's mode tiles: Quick Draw (the single-player gauntlet), Bounty Hunt (PvP), Frontier
  * (free-for-all) and the Outfitter. Signed out, single player works fully and the online tiles
- * ask for a sign-in instead. A 2×2 grid in portrait, one row in landscape.
+ * ask for a sign-in instead. Quick Draw and Frontier lead the grid.
  */
 import { type IconName, icon } from './icons.ts'
 import { el, panelSheet } from './sheet.ts'
@@ -46,14 +46,6 @@ const TILES: readonly TileDef[] = [
     online: false,
   },
   {
-    mode: 'bounty',
-    icon: 'bounty',
-    title: 'Bounty Hunt',
-    kicker: 'Live duels',
-    sub: signInFirst,
-    online: true,
-  },
-  {
     mode: 'frontier',
     icon: 'dynamite',
     title: 'Frontier',
@@ -61,6 +53,14 @@ const TILES: readonly TileDef[] = [
     // the practice town is open to everyone; the live town asks for a sign-in on the sheet
     sub: (s) => (s.signedIn ? '' : 'Practice town open'),
     online: false,
+  },
+  {
+    mode: 'bounty',
+    icon: 'bounty',
+    title: 'Bounty Hunt',
+    kicker: 'Live duels',
+    sub: signInFirst,
+    online: true,
   },
   {
     mode: 'store',
