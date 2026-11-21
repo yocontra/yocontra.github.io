@@ -101,10 +101,13 @@ export class ResultsPanel {
     this.root.setAttribute('aria-label', v.title)
     swallow(this.root)
     const panel = el('div', 'ow-hub-panel ow-paper-doc ow-results-panel', this.root)
-    el('div', 'ow-results-kicker', panel, 'Results')
-    el('h2', 'ow-results-title', panel, v.title)
-    el('p', 'ow-hub-note ow-results-sub', panel, v.sub)
-    const draws = el('div', 'ow-results-draws', panel)
+    const details = el('section', 'ow-results-details', panel)
+    details.setAttribute('aria-label', 'Duel result details')
+    details.tabIndex = 0
+    el('div', 'ow-results-kicker', details, 'Results')
+    el('h2', 'ow-results-title', details, v.title)
+    el('p', 'ow-hub-note ow-results-sub', details, v.sub)
+    const draws = el('div', 'ow-results-draws', details)
     const cell = (who: string, t: number | null): void => {
       const c = el('div', 'ow-results-draw', draws)
       el('span', 'ow-results-who', c, who)
@@ -112,19 +115,20 @@ export class ResultsPanel {
     }
     cell('You', v.you)
     cell('Him', v.them)
-    settlementLines(panel, v.settlement, v.pending ?? 'Adding up…')
-    this.levelBox = el('div', 'ow-results-level', panel)
+    settlementLines(details, v.settlement, v.pending ?? 'Adding up…')
+    this.levelBox = el('div', 'ow-results-level', details)
     this.levelBox.setAttribute('role', 'status')
-    const track = el('div', 'ow-xp', panel)
+    const track = el('div', 'ow-xp', details)
     this.bar = el('div', 'ow-xp-fill', track)
-    this.barLabel = el('div', 'ow-xp-label', panel)
+    this.barLabel = el('div', 'ow-xp-label', details)
     // the server's own before/after (from the committed ledger) wins over what the client captured
     this.booked = settlementLevels(v.settlement)
     this.setXp(v.xpBefore, v.xpAfter)
-    this.record = el('div', 'ow-xp-label', panel)
-    this.vote = el('div', 'ow-results-vote', panel)
+    this.record = el('div', 'ow-xp-label', details)
+    const actions = el('footer', 'ow-results-actions', panel)
+    this.vote = el('div', 'ow-results-vote', actions)
     this.vote.setAttribute('aria-live', 'polite')
-    const row = el('div', 'ow-hub-row', panel)
+    const row = el('div', 'ow-hub-row', actions)
     button(row, 'Menu', h.saloon)
     this.nextBtn = button(row, 'Next duel', h.next)
     this.rematchBtn = button(
@@ -143,7 +147,7 @@ export class ResultsPanel {
       this.closeRematch()
     }
     if (opponent) {
-      const who = el('div', 'ow-hub-row ow-feat-opponent', panel)
+      const who = el('div', 'ow-hub-row ow-feat-opponent', actions)
       const label = opponent.kind === 'ghost' ? 'His owner’s poster' : 'His poster'
       button(who, label, () => openProfile(this.root, opponent.name, { context: opponent.context }))
       button(who, 'Report', () =>

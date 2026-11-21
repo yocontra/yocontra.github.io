@@ -7,6 +7,13 @@ const origin = process.env.OW_ORIGIN ?? 'http://127.0.0.1:4390'
 const hmrSocketPattern = `${origin.replace(/^http/u, 'ws')}/**`
 const api = process.env.OW_API ?? 'http://127.0.0.1:8792'
 const evidence = process.env.OW_EVIDENCE ?? '/tmp/out-west-duel-pvp-evidence'
+const phoneViewports = new Map([
+  ['landscape', { width: 844, height: 390 }],
+  ['portrait', { width: 390, height: 844 }],
+])
+const phone = phoneViewports.get(process.env.OW_SIZE ?? '')
+const viewport = phone ?? { width: 1280, height: 800 }
+const touch = phone !== undefined
 await mkdir(evidence, { recursive: true })
 const browser = await chromium.launch({ channel: 'chrome', headless: true })
 const errors: string[] = []
@@ -14,7 +21,7 @@ const livePages: import('playwright').Page[] = []
 try {
   const pages = await Promise.all(
     [0, 1].map(async () => {
-      const context = await browser.newContext({ viewport: { width: 1280, height: 800 } })
+      const context = await browser.newContext({ viewport, hasTouch: touch, isMobile: touch })
       const page = await context.newPage()
       livePages.push(page)
       page.on('pageerror', (error) => errors.push(error.message))
@@ -168,6 +175,26 @@ try {
           title?.getAnimations().every((animation) => animation.playState === 'finished')
         )
       })
+      const actionsStayVisible = await page.locator('.ow-results-panel').evaluate((panel) => {
+        const details = panel.querySelector<HTMLElement>('.ow-results-details')
+        const actions = panel.querySelector('.ow-results-actions')
+        if (!(details && actions)) {
+          return false
+        }
+        const panelBox = panel.getBoundingClientRect()
+        const actionsBox = actions.getBoundingClientRect()
+        const visible =
+          actionsBox.height > 0 &&
+          actionsBox.top >= panelBox.top &&
+          actionsBox.bottom <= Math.min(panelBox.bottom, innerHeight)
+        details.scrollTop = details.scrollHeight
+        const stayedInPlace = actions.getBoundingClientRect().top === actionsBox.top
+        details.scrollTop = 0
+        return visible && stayedInPlace
+      })
+      if (!actionsStayVisible) {
+        throw new Error(`Result actions leave the visible receipt on client ${index}`)
+      }
       await page.screenshot({ path: `${evidence}/player-${index}-result.png` })
     }),
   )
