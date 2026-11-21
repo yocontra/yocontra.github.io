@@ -28,6 +28,7 @@ import { FrontierGeometry, frontierIO, type Rgb } from './frontier-geometry.ts'
 import { frontierFlatGround, frontierGroundTransform } from './frontier-ground.ts'
 import { townGround } from './frontier-ground-detail.ts'
 import { hangingLampSites, installHangingLamps } from './frontier-hanging-lamps.ts'
+import { installFrontierLandmarks } from './frontier-landmarks.ts'
 import { authoredMaterials } from './frontier-materials.ts'
 import {
   frontierMounts,
@@ -159,6 +160,7 @@ export async function authorFrontier(output: string, highYard = false): Promise<
   for (const bank of frontierCutBanks(layout.size)) {
     g.surface(ground, 'ground', bank)
   }
+  await installFrontierLandmarks(g, layout.size, join(SOURCE, 'frontier-landmarks.glb'))
   canyonBoundary(g, layout)
   const groups = await authorBuildings(g, plan, layout)
   authorDecksAndRoofs(g, ground, layout, collision)
