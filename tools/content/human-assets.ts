@@ -8,7 +8,7 @@ import { fitAccessory } from './fitted-accessory.ts'
 import { fitAuthoredHat } from './fitted-hat.ts'
 import { fitHolsterPockets } from './fitted-holster-pockets.ts'
 import { fitRevolver } from './fitted-revolver.ts'
-import { fitStarterHead } from './fitted-starter-head.ts'
+import { fitGreenhornHead, fitStarterHead } from './fitted-starter-head.ts'
 import { fitForgedSpurs } from './forged-spurs.ts'
 import { fitOutlawHat } from './outlaw-hats.ts'
 
@@ -47,6 +47,16 @@ for (const id of ids.filter((asset) =>
 }
 for (const id of ids.filter((asset) => asset.startsWith('outlaw-'))) {
   await fitOutlawHat(id)
+}
+if (ids.includes('outlaw-0')) {
+  await fitGreenhornHead(
+    {
+      source: resolve(source, 'outlaw-0.gltf'),
+      authoring: resolve(source, 'outlaw-faces/outlaw-0.glb'),
+      target: contentOutput('baked', 'outlaw-0.glb'),
+    },
+    resolve(source, 'starter-head.glb'),
+  )
 }
 for (const id of ids.filter((asset) => asset.startsWith('spurs.'))) {
   await fitForgedSpurs(

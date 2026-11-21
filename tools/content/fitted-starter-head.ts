@@ -2,6 +2,7 @@
 import {
   type Accessor,
   type Document,
+  type Material,
   NodeIO,
   type Primitive,
   type Skin,
@@ -14,6 +15,36 @@ import { normalizeSkinnedAsset } from './normalize-skinned-nodes.ts'
 
 const io = new NodeIO().registerExtensions(ALL_EXTENSIONS)
 const templeCenter = -0.027
+
+interface HeadFit {
+  lift: number
+  cutoff: number
+  neckStart: number
+  neckRange: number
+  eyeScale: number
+  eyeForward: number
+  keepBrows: boolean
+}
+
+const starterFit: HeadFit = {
+  lift: 0,
+  cutoff: 1.435,
+  neckStart: 1.425,
+  neckRange: 0.09,
+  eyeScale: 0.9,
+  eyeForward: 0.1095,
+  keepBrows: true,
+}
+
+const greenhornFit: HeadFit = {
+  lift: 0.087,
+  cutoff: 1.42,
+  neckStart: 1.39,
+  neckRange: 0.125,
+  eyeScale: 0.83,
+  eyeForward: 0.1081,
+  keepBrows: false,
+}
 
 interface PieceRange {
   name: string
@@ -83,15 +114,25 @@ function isNear([x, y, z]: vec3, points: readonly vec3[]): boolean {
   )
 }
 
-function eyeFit([x, y, z]: vec3): vec3 {
+function eyeFit([x, y, z]: vec3, { eyeScale: scale, eyeForward }: HeadFit): vec3 {
   const left = x < templeCenter
   const [centerX, centerY, centerZ]: vec3 = left
     ? [-0.0595, 1.583, 0.1136]
     : [0.0055, 1.5865, 0.1166]
-  return [centerX + (x - centerX) * 0.9, 1.584 + (y - centerY) * 0.9, 0.1095 + (z - centerZ) * 0.9]
+  return [
+    centerX + (x - centerX) * scale,
+    1.584 + (y - centerY) * scale,
+    eyeForward + (z - centerZ) * scale,
+  ]
 }
 
-function trimFormerHead(former: Primitive, source: Primitive, toGame: Mat4, head: Primitive): void {
+function trimFormerHead(
+  former: Primitive,
+  source: Primitive,
+  toGame: Mat4,
+  options: { head: Primitive; fit: HeadFit },
+): void {
+  const { head, fit } = options
   const position = former.getAttribute('POSITION')
   const canonical = source.getAttribute('POSITION')
   const indices = former.getIndices()
@@ -104,7 +145,10 @@ function trimFormerHead(former: Primitive, source: Primitive, toGame: Mat4, head
     ranges
       .filter((range) => range.name === name)
       .flatMap(({ start, count }) =>
-        Array.from({ length: count }, (_, i) => canonical.getElement<vec3>(start + i, [0, 0, 0])),
+        Array.from({ length: count }, (_, i): vec3 => {
+          const [x, y, z] = canonical.getElement<vec3>(start + i, [0, 0, 0])
+          return [x, y + fit.lift, z]
+        }),
       )
   const eyes = piece('Eye')
   const brows = piece('Brows')
@@ -114,10 +158,13 @@ function trimFormerHead(former: Primitive, source: Primitive, toGame: Mat4, head
   const keep = Array.from({ length: position.getCount() }, (_, index) => {
     const local = point(toGame, position.getElement(index, [0, 0, 0]))
     if (isNear(local, eyes)) {
-      position.setElement(index, point(toNative, eyeFit(local)))
+      position.setElement(index, point(toNative, eyeFit(local, fit)))
       return true
     }
     if (isNear(local, brows)) {
+      if (!fit.keepBrows) {
+        return false
+      }
       const [x, y, z] = local
       const across = templeCenter + (x - templeCenter) * 0.9
       const height = y + 0.003
@@ -125,7 +172,7 @@ function trimFormerHead(former: Primitive, source: Primitive, toGame: Mat4, head
       position.setElement(index, point(toNative, [across, height, forehead + 0.0009]))
       return true
     }
-    return local[1] < 1.435 || isNear(local, hair)
+    return local[1] < fit.cutoff || isNear(local, hair)
   })
   const preserved: number[] = []
   for (let i = 0; i < faces.length; i += 3) {
@@ -157,7 +204,12 @@ function packAttribute(accessor: Accessor, unsigned: boolean): void {
   accessor.setNormalized(true)
 }
 
-function attachSkin(doc: Document, head: Primitive, skin: Skin, toNative: Mat4): void {
+function attachSkin(
+  doc: Document,
+  head: Primitive,
+  skin: Skin,
+  { toNative, fit }: { toNative: Mat4; fit: HeadFit },
+): void {
   const position = head.getAttribute('POSITION')
   const normal = head.getAttribute('NORMAL')
   const uv = head.getAttribute('TEXCOORD_0')
@@ -173,7 +225,9 @@ function attachSkin(doc: Document, head: Primitive, skin: Skin, toNative: Mat4):
   const weights = new Uint8Array(count * 4)
   for (let i = 0; i < count; i++) {
     const game = position.getElement<vec3>(i, [0, 0, 0])
-    const weight = Math.round(255 * Math.max(0, Math.min(1, (game[1] - 1.425) / 0.09)))
+    const weight = Math.round(
+      255 * Math.max(0, Math.min(1, (game[1] - fit.neckStart) / fit.neckRange)),
+    )
     position.setElement(i, point(toNative, game))
     joints.set([headIndex, neckIndex, 0, 0], i * 4)
     weights.set([weight, 255 - weight, 0, 0], i * 4)
@@ -191,10 +245,10 @@ function attachSkin(doc: Document, head: Primitive, skin: Skin, toNative: Mat4):
   packAttribute(uv, true)
 }
 
-export async function fitStarterHead(
-  source: string,
-  authoring: string,
-  target: string,
+async function installHead(
+  { source, authoring, target }: { source: string; authoring: string; target: string },
+  fit: HeadFit,
+  palette?: string,
 ): Promise<void> {
   const [raw, art, native] = await Promise.all([
     io.read(source),
@@ -227,12 +281,32 @@ export async function fitStarterHead(
   }
   // Quantization moves the skin bind space. Measure its transform from the retained Head joint.
   const toGame = new Mat4().mul2(bind(originalSkin, 'Head').invert(), bind(nativeSkin, 'Head'))
+  toGame.data[13] = (toGame.data[13] ?? 0) + fit.lift
   const toNative = toGame.clone().invert()
-  trimFormerHead(former, originalPart, toGame, head)
+  trimFormerHead(former, originalPart, toGame, { head, fit })
+  if (palette) {
+    const paletteDocument = await io.read(palette)
+    const skin = paletteDocument.getRoot().listMaterials()[0]
+    if (!skin) {
+      throw new Error('Missing authored face surface material')
+    }
+    head.setMaterial(copyToDocument(art, paletteDocument, [skin]).get(skin) as Material)
+  }
   const replacement = copyToDocument(native, art, [head]).get(head) as Primitive
-  attachSkin(native, replacement, nativeSkin, toNative)
+  attachSkin(native, replacement, nativeSkin, { toNative, fit })
   mesh.addPrimitive(replacement)
   await native.transform(prune({ keepAttributes: true, keepLeaves: true }), unpartition())
   await io.write(target, native)
   await normalizeSkinnedAsset(target)
+}
+
+export function fitStarterHead(source: string, authoring: string, target: string): Promise<void> {
+  return installHead({ source, authoring, target }, starterFit)
+}
+
+export function fitGreenhornHead(
+  paths: { source: string; authoring: string; target: string },
+  palette: string,
+): Promise<void> {
+  return installHead(paths, greenhornFit, palette)
 }
