@@ -1,23 +1,17 @@
 import { expect, test as it } from 'bun:test'
-import { createHash } from 'node:crypto'
 import { NodeIO } from '@gltf-transform/core'
 import { ALL_EXTENSIONS } from '@gltf-transform/extensions'
+import { getBounds } from '@gltf-transform/functions'
+import town from '../../src/experiments/out-west/ffa/town.layout.json' with { type: 'json' }
 
+const BLENDER_SUFFIX = /\.\d+$/u
 const io = new NodeIO().registerExtensions(ALL_EXTENSIONS)
 const assets = [
-  {
-    path: 'tools/art/environments/frontier.glb',
-    // biome-ignore lint/security/noSecrets: SHA-256 of the public source coffin atlas.
-    atlas: '468a60ee8105316da0dd9744411e32f49b7101dab31b350b0c76b79b3ea7216c',
-  },
-  {
-    path: 'public/experiments/out-west/3d/native-v2/baked/frontier.glb',
-    // biome-ignore lint/security/noSecrets: SHA-256 of the public native coffin atlas.
-    atlas: '466d67a9fc0a354efe35e42398028bb1d80700c7e4ac121b753f32953b289197',
-  },
+  'tools/art/environments/frontier.glb',
+  'public/experiments/out-west/3d/native-v2/baked/frontier.glb',
 ]
-for (const { path, atlas } of assets) {
-  it(`retains every coffin and gives all eleven fixtures independent PBR glass: ${path}`, async () => {
+for (const path of assets) {
+  it(`retains all coffin placements and gives each hanging lamp independent PBR glass: ${path}`, async () => {
     const root = (await io.read(path)).getRoot()
     const nodes = root.listNodes()
     expect(nodes.filter((node) => node.getName() === 'lantern_hanging')).toHaveLength(0)
@@ -51,21 +45,43 @@ for (const { path, atlas } of assets) {
       }
     }
     expect(sources.size).toBe(2)
-    const coffinAtlas = root
-      .listMaterials()
-      .find((material) => material.getName() === 'HalloweenBits')
-    const coffinBytes = coffinAtlas?.getBaseColorTexture()?.getImage()
-    if (!coffinBytes) {
-      throw new Error('Missing coffin atlas')
+    const coffinSites = town.cover.flatMap((site, index) =>
+      site.kind === 'coffins' ? [{ site, index }] : [],
+    )
+    const coffins = nodes.filter((node) =>
+      node.getName().startsWith('frontier-furniture:fitted-tapered-coffin:'),
+    )
+    expect(coffins).toHaveLength(6)
+    expect(coffins.map((node) => Number(node.getName().split(':').at(-1)))).toEqual(
+      coffinSites.map(({ index }) => index),
+    )
+    for (const { site, index } of coffinSites) {
+      const coffin = coffins.find((node) => node.getName().endsWith(`:${index}`))
+      if (!coffin) {
+        throw new Error('Missing fitted undertaker coffin')
+      }
+      const { min, max } = getBounds(coffin)
+      expect(min[0]).toBeGreaterThanOrEqual(site.x - 0.025)
+      expect(min[2]).toBeGreaterThanOrEqual(site.z - 0.025)
+      expect(max[0]).toBeLessThanOrEqual(site.x + site.w + 0.025)
+      expect(max[2]).toBeLessThanOrEqual(site.z + site.d + 0.025)
+      expect(max[1]).toBeCloseTo(site.top ?? 0.9, 4)
+      const surfaces = coffin.listChildren().flatMap(
+        (part) =>
+          part
+            .getMesh()
+            ?.listPrimitives()
+            .map((primitive) => primitive.getMaterial()) ?? [],
+      )
+      expect(
+        surfaces.map((material) => material?.getName().replace(BLENDER_SUFFIX, '')).sort(),
+      ).toEqual([
+        'Blackened walnut lid',
+        'Pegged white oak cut edge',
+        'Silvery weathered iron hardware',
+        'Smoked walnut cabinet',
+      ])
+      expect(surfaces.every((material) => material?.getNormalTexture())).toBe(true)
     }
-    expect(createHash('sha256').update(coffinBytes).digest('hex')).toBe(atlas)
-    expect(
-      nodes.filter((node) =>
-        node
-          .getMesh()
-          ?.listPrimitives()
-          .some((primitive) => primitive.getMaterial() === coffinAtlas),
-      ),
-    ).toHaveLength(12)
   })
 }
