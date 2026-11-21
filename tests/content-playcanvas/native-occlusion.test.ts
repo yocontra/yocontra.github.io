@@ -172,3 +172,45 @@ it('an explicit glTF AO map retains its channel, UV, strength and container owne
   explicit.destroy()
   f.device.destroy()
 })
+
+it('skin has a restrained dielectric reflection while hands keep their authored roughness and AO', async () => {
+  const f = fixture()
+  const head = new StandardMaterial()
+  const hands = new StandardMaterial()
+  head.name = 'Field-worn skin'
+  head.gloss = 0.66
+  hands.gloss = 1
+  hands.metalness = 1
+  const releaseHead = await prepareNativeMaterials(
+    f.game,
+    f.container(head, { albedo: 'head-color', normal: 'head-normal', normalScale: 0.53 }),
+  )
+  const releaseHands = await prepareNativeMaterials(
+    f.game,
+    f.container(hands, {
+      albedo: 'hands-color',
+      normal: 'hands-normal',
+      arm: 'hands-arm',
+      surface: 'skin',
+      ao: true,
+    }),
+  )
+  for (const material of [head, hands]) {
+    expect(material.enableGGXSpecular).toBe(true)
+    expect(material.useMetalnessSpecularColor).toBe(true)
+    expect(material.specularityFactor).toBe(0.48)
+    expect(material.metalness).toBe(0)
+    expect(material.metalnessMap).toBeNull()
+    expect(material.glossInvert).toBe(true)
+    expect(material.specularVertexColor).toBe(false)
+  }
+  expect([head.gloss, head.bumpiness, hands.gloss, hands.bumpiness]).toEqual([0.82, 0.53, 1, 0.6])
+  expect(hands.glossMap).toBe(f.maps.get('hands-arm') ?? null)
+  expect(hands.aoMap).toBe(hands.glossMap)
+  releaseHead()
+  releaseHands()
+  expect(f.maps.size).toBe(0)
+  head.destroy()
+  hands.destroy()
+  f.device.destroy()
+})

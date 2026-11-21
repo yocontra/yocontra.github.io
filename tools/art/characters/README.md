@@ -26,6 +26,25 @@ UVs, sockets and clips stay in the canonical source files.
 blender --background --factory-startup --python tools/content/starter-surface-authoring.py -- "$PWD"
 ```
 
+## Player face and collar review
+
+Capture the last shipped revision and the candidate with the same inspection tool.
+Start an Astro dev server for each revision. Use the same copy of
+`tools/content/player-model-review.ts` on both servers.
+
+```sh
+bun tools/review-out-west-player-models.ts http://127.0.0.1:4473 /tmp/player-before
+bun tools/review-out-west-player-models.ts http://127.0.0.1:4393 /tmp/player-after /tmp/player-before
+```
+
+Open `/tmp/player-after/index.html`. The report shows all eight outfits with single
+and paired sidearms, plus the baked starter. It uses the native actor loader and
+fixed frames on Low and High. Look at each fit from the front, side, and back
+without the hat. Reject a cut-off scalp, detached brows, a seam at the jaw or
+neck, or skin visible through the collar. Check the collar in the crouch and aim
+frames. Use the raking light frame to check for broad white skin highlights.
+Keep the captures outside the published site.
+
 The Outfitter hats have separate felt, edge binding, bands and hardware. The
 bake fits each shell to its original head mount and reuses the item's dye maps.
 

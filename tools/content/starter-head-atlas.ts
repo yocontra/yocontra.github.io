@@ -25,7 +25,7 @@ if (!(skin && color && bump)) {
 const paint = await sharp(color)
   .removeAlpha()
   .resize(768, 768)
-  .modulate({ brightness: 0.82, saturation: 0.96 })
+  .modulate({ brightness: 0.74, saturation: 0.92 })
   .png()
   .toBuffer()
 const detail = await sharp(bump).removeAlpha().resize(512, 512).png().toBuffer()
@@ -37,7 +37,9 @@ skin
   .setName('Field-worn skin')
   .setBaseColorTexture(null)
   .setNormalTexture(null)
-  .setRoughnessFactor(0.66)
-  .setExtras({ nativePbr: { albedo, normal, normalScale: 0.53, width: 768, height: 768 } })
+  .setRoughnessFactor(0.82)
+  .setExtras({
+    nativePbr: { albedo, normal, surface: 'skin', normalScale: 0.53, width: 768, height: 768 },
+  })
 await art.transform(prune({ keepAttributes: true }))
 await io.write(output, art)

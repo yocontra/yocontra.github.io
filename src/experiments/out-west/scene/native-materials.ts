@@ -6,6 +6,8 @@ import type { DyeId } from '../data/dye.ts'
 interface Surface {
   albedo: string
   normal?: string
+  /** Human skin uses a restrained dielectric reflection. */
+  surface?: 'skin'
   /** Explicit authoring strength; absent on historical external texture descriptors. */
   normalScale?: number
   arm?: string
@@ -79,6 +81,68 @@ function bindOcclusion(
   owned.add(material)
 }
 
+function isSkin(material: StandardMaterial, source: Surface): boolean {
+  return (
+    source.surface === 'skin' ||
+    material.name === 'Field-worn skin' ||
+    material.name === 'field-hands'
+  )
+}
+
+function finishSkin(material: StandardMaterial): void {
+  material.metalness = 0
+  material.metalnessMap = null
+  material.glossInvert = true
+  material.useMetalnessSpecularColor = true
+  material.specularVertexColor = false
+  material.specularityFactor = 0.48
+  if (!material.glossMap) {
+    material.gloss = Math.max(material.gloss, 0.82)
+  }
+}
+
+function applyMaps(
+  material: StandardMaterial,
+  source: Surface,
+  [albedo, normal, arm]: [Texture, Texture | null, Texture | null],
+  occlusion: Set<StandardMaterial>,
+): void {
+  const skin = isSkin(material, source)
+  // glTF roughness is authored for GGX; the native default is Blinn-Phong.
+  material.enableGGXSpecular = true
+  material.diffuseMap = albedo
+  if (source.alphaTest !== undefined) {
+    material.opacityMap = albedo
+    material.opacityMapChannel = 'a'
+    material.alphaTest = source.alphaTest
+  }
+  if (normal) {
+    material.normalMap = normal
+    material.bumpiness = source.normalScale ?? (skin ? 0.6 : 1.4)
+  }
+  if (arm) {
+    material.metalnessMap = arm
+    material.metalnessMapChannel = 'b'
+    material.glossMap = arm
+    material.glossMapChannel = 'g'
+    material.glossInvert = true
+    material.glossMapUv = source.armUv ?? 0
+    material.metalnessMapUv = source.armUv ?? 0
+    bindOcclusion(material, source, arm, occlusion)
+  }
+  if (source.roughnessVertexScale) {
+    material.glossVertexColor = true
+    material.glossVertexColorChannel = 'a'
+    material.gloss = source.roughnessVertexScale
+  }
+  if (skin) {
+    finishSkin(material)
+  }
+  material.diffuseVertexColor = true
+  material.update()
+  dyes.set(material, source.dyes)
+}
+
 /** Each instantiated model owns one lease; the underlying engine Texture is shared by URL. */
 export async function prepareNativeMaterials(
   game: GameApplication,
@@ -107,36 +171,7 @@ export async function prepareNativeMaterials(
           source.normal ? load(source.normal, false) : null,
           source.arm ? load(source.arm, false) : null,
         ])
-        // glTF roughness is authored for GGX; the native default is Blinn-Phong.
-        material.enableGGXSpecular = true
-        material.diffuseMap = albedo
-        if (source.alphaTest !== undefined) {
-          material.opacityMap = albedo
-          material.opacityMapChannel = 'a'
-          material.alphaTest = source.alphaTest
-        }
-        if (normal) {
-          material.normalMap = normal
-          material.bumpiness = source.normalScale ?? 1.4
-        }
-        if (arm) {
-          material.metalnessMap = arm
-          material.metalnessMapChannel = 'b'
-          material.glossMap = arm
-          material.glossMapChannel = 'g'
-          material.glossInvert = true
-          material.glossMapUv = source.armUv ?? 0
-          material.metalnessMapUv = source.armUv ?? 0
-          bindOcclusion(material, source, arm, occlusion)
-        }
-        if (source.roughnessVertexScale) {
-          material.glossVertexColor = true
-          material.glossVertexColorChannel = 'a'
-          material.gloss = source.roughnessVertexScale
-        }
-        material.diffuseVertexColor = true
-        material.update()
-        dyes.set(material, source.dyes)
+        applyMaps(material, source, [albedo, normal, arm], occlusion)
       }),
     ).then((results) => {
       const failed = results.find((result) => result.status === 'rejected')

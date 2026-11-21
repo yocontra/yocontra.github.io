@@ -278,6 +278,7 @@ async function addSurfaced(
       .setMetallicFactor(1)
       .setExtras({
         nativePbr: {
+          ...(surface === 'field-hands' ? { surface: 'skin' } : {}),
           albedo: await surfaceFile(`${key}.albedo.png`, true),
           normal: await surfaceFile(`${surface}.normal.png`, false),
           arm: await surfaceFile(`${surface}.arm.png`, false),

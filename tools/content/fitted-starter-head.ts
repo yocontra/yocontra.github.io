@@ -17,6 +17,7 @@ import { OUTLAW_HEAD_FITS } from './outlaw-head-fits.ts'
 
 const io = new NodeIO().registerExtensions(ALL_EXTENSIONS)
 const templeCenter = -0.027
+const previousEye = { eyeScale: 0.9, eyeForward: 0.1095 }
 
 export interface HeadFit {
   lift: number
@@ -26,6 +27,7 @@ export interface HeadFit {
   eyeScale: number
   eyeForward: number
   keepBrows: boolean
+  fittedGroom?: boolean
   keepBeard?: boolean
   measuredEyes?: boolean
   tint?: vec4
@@ -33,12 +35,13 @@ export interface HeadFit {
 
 const starterFit: HeadFit = {
   lift: 0,
-  cutoff: 1.435,
+  cutoff: 1.407,
   neckStart: 1.425,
-  neckRange: 0.09,
-  eyeScale: 0.9,
-  eyeForward: 0.1095,
-  keepBrows: true,
+  neckRange: 0.107,
+  eyeScale: 0.88,
+  eyeForward: 0.108,
+  keepBrows: false,
+  fittedGroom: true,
 }
 
 const greenhornFit: HeadFit = {
@@ -112,14 +115,18 @@ function frontSurface(primitive: Primitive): (x: number, y: number) => number | 
   }
 }
 
-function isNear([x, y, z]: vec3, points: readonly vec3[]): boolean {
-  return points.some(
-    ([a, b, c]) =>
-      Math.abs(a - x) < 0.000_28 && Math.abs(b - y) < 0.000_28 && Math.abs(c - z) < 0.000_28,
-  )
+function samePoint([x, y, z]: vec3, [a, b, c]: vec3): boolean {
+  return Math.abs(a - x) < 0.000_28 && Math.abs(b - y) < 0.000_28 && Math.abs(c - z) < 0.000_28
 }
 
-function eyeFit([x, y, z]: vec3, { eyeScale: scale, eyeForward }: HeadFit): vec3 {
+function isNear(sample: vec3, points: readonly vec3[]): boolean {
+  return points.some((other) => samePoint(sample, other))
+}
+
+function eyeFit(
+  [x, y, z]: vec3,
+  { eyeScale: scale, eyeForward }: Pick<HeadFit, 'eyeScale' | 'eyeForward'>,
+): vec3 {
   const left = x < templeCenter
   const [centerX, centerY, centerZ]: vec3 = left
     ? [-0.0595, 1.583, 0.1136]
@@ -160,14 +167,13 @@ function trimFormerHead(
   former: Primitive,
   source: Primitive,
   toGame: Mat4,
-  options: { head: Primitive; fit: HeadFit },
+  options: { head: Primitive; fit: HeadFit; refit: boolean; ranges: PieceRange[] },
 ): void {
-  const { head, fit } = options
+  const { head, fit, refit, ranges } = options
   const position = former.getAttribute('POSITION')
   const canonical = source.getAttribute('POSITION')
   const indices = former.getIndices()
   const faces = indices?.getArray()
-  const ranges = source.getExtras().pieceRanges as PieceRange[] | undefined
   if (!(position && canonical && indices && faces && ranges)) {
     throw new Error('Missing original starter head fittings')
   }
@@ -184,6 +190,9 @@ function trimFormerHead(
   const relocateEye = fit.measuredEyes
     ? fitMeasuredEyes(eyes, fit)
     : (eye: vec3) => eyeFit(eye, fit)
+  const fittedEyes = refit ? eyes.map((eye) => eyeFit(eye, previousEye)) : []
+  const currentEyes = refit ? eyes.map(relocateEye) : []
+  const color = former.getAttribute('COLOR_0')
   const brows = piece('Brows')
   const hair = piece('Hair')
   const details = fit.keepBeard
@@ -195,8 +204,18 @@ function trimFormerHead(
   const toNative = toGame.clone().invert()
   const keep = Array.from({ length: position.getCount() }, (_, index) => {
     const local = point(toGame, position.getElement(index, [0, 0, 0]))
-    if (isNear(local, eyes)) {
-      position.setElement(index, point(toNative, relocateEye(local)))
+    const newIndex = currentEyes.findIndex((eye) => samePoint(local, eye))
+    const fittedIndex =
+      newIndex < 0 ? fittedEyes.findIndex((eye) => samePoint(local, eye)) : newIndex
+    const fittedSource = fittedIndex < 0 ? undefined : eyes[fittedIndex]
+    if (fittedSource || isNear(local, eyes)) {
+      position.setElement(index, point(toNative, relocateEye(fittedSource ?? local)))
+      if (fit.fittedGroom && newIndex < 0 && color) {
+        const texel = color.getElement<vec4>(index, [1, 1, 1, 1])
+        // Keep the iris definition while toning down the old bright sclera and highlights.
+        const toned = texel.slice(0, 3).map((channel) => channel * 0.7)
+        color.setElement(index, [...toned, 1].slice(0, color.getElementSize()))
+      }
       return true
     }
     if (isNear(local, brows)) {
@@ -218,7 +237,7 @@ function trimFormerHead(
       }
       return true
     }
-    return local[1] < fit.cutoff || isNear(local, hair)
+    return local[1] < fit.cutoff || (!fit.fittedGroom && isNear(local, hair))
   })
   const preserved: number[] = []
   for (let i = 0; i < faces.length; i += 3) {
@@ -226,6 +245,9 @@ function trimFormerHead(
     if (triangle.every((index) => keep[index])) {
       preserved.push(...triangle)
     }
+  }
+  if (refit && preserved.length === faces.length) {
+    return
   }
   if (preserved.length === 0 || preserved.length === faces.length) {
     throw new Error('The former starter head did not separate from the body')
@@ -250,6 +272,11 @@ function packAttribute(accessor: Accessor, unsigned: boolean): void {
   accessor.setNormalized(true)
 }
 
+function smoothWeight(start: number, end: number, value: number): number {
+  const t = Math.max(0, Math.min(1, (value - start) / (end - start)))
+  return t * t * (3 - 2 * t)
+}
+
 function attachSkin(
   doc: Document,
   head: Primitive,
@@ -262,8 +289,14 @@ function attachSkin(
   const buffer = position?.getBuffer()
   const bones = skin.listJoints()
   const neckIndex = bones.findIndex((bone) => bone.getName() === 'Neck')
+  const chestIndex = bones.findIndex((bone) => bone.getName() === 'Chest')
   const headIndex = bones.findIndex((bone) => bone.getName() === 'Head')
-  if (!(position && normal && uv && buffer) || neckIndex < 0 || headIndex < 0) {
+  if (
+    !(position && normal && uv && buffer) ||
+    neckIndex < 0 ||
+    headIndex < 0 ||
+    (fit.fittedGroom && chestIndex < 0)
+  ) {
     throw new Error('Missing the starter head mesh or its skin')
   }
   const count = position.getCount()
@@ -271,12 +304,20 @@ function attachSkin(
   const weights = new Uint8Array(count * 4)
   for (let i = 0; i < count; i++) {
     const game = position.getElement<vec3>(i, [0, 0, 0])
-    const weight = Math.round(
-      255 * Math.max(0, Math.min(1, (game[1] - fit.neckStart) / fit.neckRange)),
-    )
+    const rear = fit.fittedGroom ? 1 - smoothWeight(0.006, 0.053, game[2]) : 0
+    const start = fit.neckStart + 0.025 * rear
+    const end = start + fit.neckRange
+    const headWeight = fit.fittedGroom
+      ? smoothWeight(start, end, game[1])
+      : Math.max(0, Math.min(1, (game[1] - start) / (end - start)))
+    const collar = fit.fittedGroom
+      ? (1 - smoothWeight(1.405, 1.467, game[1])) * (0.16 + 0.12 * rear)
+      : 0
+    const weight = Math.round(255 * headWeight)
+    const chest = Math.round((255 - weight) * collar)
     position.setElement(i, point(toNative, game))
-    joints.set([headIndex, neckIndex, 0, 0], i * 4)
-    weights.set([weight, 255 - weight, 0, 0], i * 4)
+    joints.set([headIndex, neckIndex, fit.fittedGroom ? chestIndex : 0, 0], i * 4)
+    weights.set([weight, 255 - weight - chest, chest, 0], i * 4)
   }
   head.setAttribute(
     'JOINTS_0',
@@ -289,6 +330,34 @@ function attachSkin(
   packAttribute(position, false)
   packAttribute(normal, false)
   packAttribute(uv, true)
+}
+
+/** Replacing a previously published fit leaves its retained rig and eye sockets in place. */
+function removeFittedHead(doc: Document): boolean {
+  let removed = false
+  for (const node of doc.getRoot().listNodes()) {
+    const mesh = node.getMesh()
+    if (!(node.getSkin() && mesh)) {
+      continue
+    }
+    for (const primitive of mesh.listPrimitives()) {
+      const material = primitive.getMaterial()?.getName()
+      if (
+        material &&
+        ['Field-worn skin', 'Tobacco brown hair', 'Tobacco brown eyebrows'].includes(material)
+      ) {
+        primitive.dispose()
+        removed = true
+      }
+    }
+    if (mesh.listPrimitives().length === 0) {
+      node.setMesh(null).setSkin(null)
+      if (node.getName().startsWith('native.skin-part.') && node.listChildren().length === 0) {
+        node.dispose()
+      }
+    }
+  }
+  return removed
 }
 
 async function installHead(
@@ -307,6 +376,9 @@ async function installHead(
     .find((node) => node.getName() === 'Character' && node.getSkin() && node.getMesh())
   const originalSkin = original?.getSkin()
   const originalPart = original?.getMesh()?.listPrimitives()[0]
+  const ranges = (original?.getExtras().pieceRanges ?? originalPart?.getExtras().pieceRanges) as
+    | PieceRange[]
+    | undefined
   const body = native
     .getRoot()
     .listNodes()
@@ -330,17 +402,21 @@ async function installHead(
       ? donorParts[0]
       : donorParts.find((part) => part.getMaterial()?.getName().startsWith('Field-worn skin'))
 
-  if (!(originalSkin && originalPart && nativeSkin && mesh && former && head)) {
+  if (!(originalSkin && originalPart && ranges && nativeSkin && mesh && former && head)) {
     throw new Error(`Cannot fit starter head for ${target}`)
   }
   // Quantization moves the skin bind space. Measure its transform from the retained Head joint.
   const toGame = new Mat4().mul2(bind(originalSkin, 'Head').invert(), bind(nativeSkin, 'Head'))
   toGame.data[13] = (toGame.data[13] ?? 0) + fit.lift
   const toNative = toGame.clone().invert()
-  trimFormerHead(former, originalPart, toGame, { head, fit })
+  const refit = fit.fittedGroom ? removeFittedHead(native) : false
+  trimFormerHead(former, originalPart, toGame, { head, fit, refit, ranges })
   if (palette) {
     const paletteDocument = await io.read(palette)
-    const skin = paletteDocument.getRoot().listMaterials()[0]
+    const skin = paletteDocument
+      .getRoot()
+      .listMaterials()
+      .find((surface) => surface.getName() === 'Field-worn skin')
     if (!skin) {
       throw new Error('Missing authored face surface material')
     }

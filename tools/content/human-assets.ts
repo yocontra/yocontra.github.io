@@ -37,9 +37,7 @@ for (const id of ids.filter((asset) => asset.startsWith('hat.'))) {
     await fitAuthoredHat(replacement, contentOutput('equipment', `${id}.glb`))
   }
 }
-for (const id of ids.filter((asset) =>
-  ['player', 'outfit.trail-duds', 'outfit.trail-duds.pair'].includes(asset),
-)) {
+for (const id of ids.filter((asset) => asset === 'player' || asset.startsWith('outfit.'))) {
   await fitStarterHead(
     resolve(source, `${id}.gltf`),
     resolve(source, 'starter-head.glb'),
