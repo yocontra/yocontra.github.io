@@ -131,7 +131,11 @@ class Body:
         self.posed, normals = [], []
         for p, n, j, w in zip(self.bind, self.bind_normals, self.joints, self.weights):
             m = blend(self.mats, j, w)
-            self.posed.append(to_bl(m @ Vector(p)))
+            point = to_bl(m @ Vector(p))
+            if ANIMAL == "dog":
+                point = dog_volume(point)
+                self.bind[len(self.posed)] = m.inverted() @ to_gl(point)
+            self.posed.append(point)
             normals.append(to_bl((m.to_3x3().inverted().transposed() @ Vector(n)).normalized()))
         triangles = [index[i : i + 3] for i in range(0, len(index), 3)]
         regions = spec.get("regions", {})
@@ -596,6 +600,44 @@ def horse_tack(body, barrel, materials, objects):
     for x in (-0.19, 0.19):
         cylinder(b, centre + Vector((x - 0.016, 0, 0)), centre + Vector((x + 0.016, 0, 0)), 0.074, segments=20)
     objects.append(link("Straps", b.mesh("Straps"), materials["darkleather"], torso))
+
+    # The rear seat carries a pair of saddle bags. Each outer wall is fitted to
+    # the flank behind the rider's leg, with a separate lid, belt and buckle.
+    bags, flaps, seams, buckles = (Builder() for _ in range(4))
+    for side in (-1, 1):
+        angles = sorted((side * 0.80, side * 1.69))
+        outer, inner, params = barrel.sheet(
+            0.025, 0.353, *angles, 14, 12, 0.093, 0.060,
+            shape=lambda u, v: rounded(u, v, 1.0, 1.0, 0.38),
+            lift=lambda v, u: 0.012 * math.sin(math.pi * u) * math.sin(math.pi * v),
+        )
+        bags.slab(outer, inner, params)
+        cover = sorted((side * 0.78, side * 1.28))
+        outer, inner, params = barrel.sheet(
+            0.008, 0.370, *cover, 14, 9, 0.106, 0.012,
+            shape=lambda u, v: rounded(u, v, 1.0, 1.0, 0.40),
+        )
+        flaps.slab(outer, inner, params)
+        for y in (0.086, 0.288):
+            strap = []
+            normals = []
+            for k in range(10):
+                t = k / 9
+                angle = side * (0.75 + 0.84 * t)
+                c, n, r = barrel.point(y, angle, 0.121 - 0.013 * t)
+                strap.append(c + n * r)
+                normals.append(n)
+            ribbon(strap, normals, 0.031, 0.007, seams)
+            c, n, r = barrel.point(y, side * 1.44, 0.123)
+            torus(buckles, c + n * r, n, 0.022, 0.0042, segments=12)
+            disc(buckles, c + n * (r + 0.005), n, 0.007, 0.003)
+    for name, builder, surface in (
+        ("Saddle bags", bags, "darkleather"),
+        ("Saddle bag lid", flaps, "leather"),
+        ("Latigo belts", seams, "leather"),
+        ("Bag buckles", buckles, "brass"),
+    ):
+        objects.append(link(name, builder.mesh(name), materials[surface], torso))
 
 
 def ring_path(body, centre, axis, start, end, samples, offset):
@@ -1199,6 +1241,41 @@ def export(body, groups, trees, path):
 
 # ---------------------------------------------------------------- animals
 
+def dog_volume(point):
+    """Shape the muzzle, ears and shoulder while retaining the original skin weights."""
+    x, y, z = point
+    muzzle = smoothstep(0.426, 0.501, -y)
+    shoulder = math.exp(-((y + 0.19) / 0.108) ** 2 - ((z - 0.341) / 0.104) ** 2)
+    ear = smoothstep(0.55, 0.62, z)
+    return Vector((
+        x * (1 + 0.14 * muzzle + 0.16 * shoulder + 0.13 * ear),
+        y + 0.009 * muzzle,
+        z + 0.008 * muzzle - 0.006 * ear,
+    ))
+
+
+def dog_collar(body, materials, objects):
+    """Seat the saddle-leather collar on the neck and bind it to the chain through head turns."""
+    axis = Vector((0, -0.61, 0.79))
+    center = Vector((0, -0.306, 0.466))
+    points, normals = ring_path(body, center, axis, -180, 180, 48, 0.001)
+    band = Builder()
+    ribbon(points, normals, 0.026, 0.006, band)
+    objects.append(link("Dog collar", band.mesh("Dog collar"), materials["leather"], "neck"))
+
+    hardware = Builder()
+    buckle = points[28] + normals[28] * 0.009
+    torus(hardware, buckle, normals[28], 0.010, 0.0023, segments=12, sides=6)
+    cylinder(hardware, buckle - axis * 0.010, buckle + axis * 0.010, 0.0017, segments=8)
+
+    throat = min(points, key=lambda point: point.z)
+    hoop = throat + Vector((0, -0.006, -0.006))
+    torus(hardware, hoop, (0, -1, 0), 0.008, 0.0015, segments=12, sides=6)
+    stem = hoop + Vector((0, -0.004, -0.014))
+    cylinder(hardware, stem, stem + Vector((0, -0.002, 0)), 0.011, segments=12)
+    objects.append(link("Dog collar brass", hardware.mesh("Dog collar brass"), materials["brass"], "neck"))
+
+
 def horse_regions(colors):
     """COLOR_0.b carries the region code; a face takes its most common vertex code."""
     codes = sorted(round(c[2] * 3) for c in colors)
@@ -1260,6 +1337,7 @@ def skin_trees(body):
         "head": body.group(lambda joint, region: joint in ("Head",) and region not in ("hair",)),
         "mane": body.group(lambda joint, region: region == "hair" and (joint.startswith("Neck") or joint == "Head")),
         "tail": body.group(lambda joint, region: region == "hair" and joint.startswith("Tail")),
+        **({"neck": body.group(lambda joint, _region: joint.startswith("Neck"))} if ANIMAL == "dog" else {}),
     }
 
 
@@ -1280,6 +1358,8 @@ def build(spec):
         horse_tack(body, barrel, materials, objects)
         horse_bridle(body, materials, objects)
         horse_hair(body, barrel, materials["hair"], cards, spec["hair"][2])
+    elif ANIMAL == "dog":
+        dog_collar(body, materials, objects)
     return body, materials, objects, cards
 
 
