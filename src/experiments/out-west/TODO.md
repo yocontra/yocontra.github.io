@@ -2,6 +2,10 @@
 
 The current Out West pass covers visual quality and fidelity. Inspect source assets in Blender and compare the shipped renderer in a Chrome tab from reachable player viewpoints. Review lighting, silhouettes, material detail and contact with the scene before publishing art.
 
+## Frontier interior lighting (2026-11-20)
+
+- [x] Add soft daylight bounce to the 14 windowed buildings in Perdition, including the upper floors of the saloon, hotel and bank. Keep the light falloff inside the building footprint and fade it down with the daylight. Matched Low and High Chrome views cover rooms, the street and roofs. The map bake and collision data are unchanged.
+
 ## First-play presentation (2026-11-20)
 
 - [x] Give the saloon its own rider shot. Fit the player between the account strip and the mode cards in portrait, and beside the cards in landscape. The title keeps its opening crane, and returning from the Outfitter restores the saloon shot.

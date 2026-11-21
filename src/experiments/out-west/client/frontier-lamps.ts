@@ -1,15 +1,18 @@
 import { Color, Entity, LIGHTFALLOFF_INVERSESQUARED } from 'playcanvas'
 import type { GameApplication } from './application.ts'
+import { roomLights } from './frontier-room-light.ts'
 
 const FULL_NIGHT_INTENSITY = 0.5
+const ROOM_DAYLIGHT_INTENSITY = 1.6
 const HIERARCHY_EVENTS = ['remove', 'removehierarchy', 'insert', 'inserthierarchy'] as const
 
 interface Fixtures {
-  lights: Entity[]
+  lamps: Entity[]
+  rooms: Entity[]
   visibility: () => void
 }
 
-/** Native shadowless lights centred on the authored Frontier lenses. */
+/** Owns the town’s lanterns and indirect daylight. */
 export class FrontierLamps {
   private readonly roots = new Map<Entity, Fixtures>()
   private disposed = false as boolean
@@ -42,22 +45,33 @@ export class FrontierLamps {
       })
       lights.push(light)
     }
-    if (lights.length === 0) {
+    const rooms = root.name === 'town' ? roomLights(root, this.game.app) : []
+    if (lights.length === 0 && rooms.length === 0) {
       return
     }
-    const visibility = () => {
-      const attached = root === this.game.app.root || root.isDescendantOf(this.game.app.root)
-      for (const fixture of lights) {
+    const fixtures = { lamps: lights, rooms, visibility: () => this.apply(root, fixtures) }
+    this.roots.set(root, fixtures)
+    for (const event of HIERARCHY_EVENTS) {
+      root.on(event, fixtures.visibility)
+    }
+    fixtures.visibility()
+  }
+
+  private apply(root: Entity, { lamps, rooms }: Fixtures): void {
+    const attached = root === this.game.app.root || root.isDescendantOf(this.game.app.root)
+    const lampIntensity = this.lanterns * FULL_NIGHT_INTENSITY
+    const daylight = (1 - this.lanterns) * ROOM_DAYLIGHT_INTENSITY
+    for (const [group, intensity] of [
+      [lamps, lampIntensity],
+      [rooms, daylight],
+    ] as const) {
+      for (const fixture of group) {
         if (fixture.light) {
-          fixture.light.enabled = attached && this.lanterns > 0
+          fixture.light.intensity = intensity
+          fixture.light.enabled = attached && intensity > 0
         }
       }
     }
-    this.roots.set(root, { lights, visibility })
-    for (const event of HIERARCHY_EVENTS) {
-      root.on(event, visibility)
-    }
-    visibility()
   }
 
   time(value: number): void {
@@ -66,11 +80,6 @@ export class FrontierLamps {
     }
     this.lanterns = value
     for (const fixtures of this.roots.values()) {
-      for (const fixture of fixtures.lights) {
-        if (fixture.light) {
-          fixture.light.intensity = value * FULL_NIGHT_INTENSITY
-        }
-      }
       fixtures.visibility()
     }
   }
@@ -83,7 +92,7 @@ export class FrontierLamps {
     for (const event of HIERARCHY_EVENTS) {
       root.off(event, fixtures.visibility)
     }
-    for (const light of fixtures.lights) {
+    for (const light of [...fixtures.lamps, ...fixtures.rooms]) {
       light.destroy()
     }
     this.roots.delete(root)

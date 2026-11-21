@@ -24,6 +24,8 @@ import { NativeEnvironment } from '../../src/experiments/out-west/client/environ
 import { NativeWilds } from '../../src/experiments/out-west/client/wilds.ts'
 import lighting from '../../src/experiments/out-west/content/lighting.json' with { type: 'json' }
 
+import { TOWN } from '../../src/experiments/out-west/ffa/sim/layout.ts'
+
 function fixture() {
   const device = new NullGraphicsDevice({ width: 1, height: 1 })
   const app = new AppBase(device.canvas)
@@ -237,6 +239,56 @@ it('remove/readd keeps original owned lamps and removes their native layer contr
     expect(f.fixtures()).toEqual(lights)
     expect(f.material()).toBe(material)
     expect(nativeLights.filter((light) => layer.hasLight(light))).toHaveLength(11)
+  } finally {
+    expect(f.cleanup()).toEqual({ textures: 0, buffers: 0 })
+  }
+})
+
+it('keeps daylight bounce inside every windowed room and fades it out at night', async () => {
+  const f = fixture()
+  try {
+    await f.environment.ready
+    const rooms = TOWN.buildings.filter((building) => building.hollow && building.windows?.length)
+    const bounces = f.root
+      .findComponents('light')
+      .filter(({ entity }) => entity.name.startsWith('frontier-room-bounce:'))
+    const ids = new Set(bounces.map(({ entity }) => entity.name.split(':')[1]))
+    expect(ids).toEqual(new Set(rooms.map(({ id }) => id)))
+    for (const bounce of bounces) {
+      const b = rooms.find(({ id }) => bounce.entity.name === `frontier-room-bounce:${id}`)
+      if (!b) {
+        throw new Error('Room light has no building')
+      }
+      const { x, y, z } = bounce.entity.getPosition()
+      expect(y).toBeLessThan(b.height)
+      expect(bounce.range).toBeLessThan(Math.min(x - b.x, b.x + b.w - x, z - b.z, b.z + b.d - z))
+      expect(bounce.entity.up.y).toBeCloseTo(1)
+      expect(bounce.type).toBe('spot')
+      expect(bounce.castShadows).toBe(false)
+    }
+    for (const building of rooms.filter(({ floors }) => floors > 1)) {
+      const roomsOnFloors = bounces.filter(
+        ({ entity }) => entity.name === `frontier-room-bounce:${building.id}`,
+      )
+      const upper = building.upperFloor?.[0]?.y ?? building.height
+      expect(roomsOnFloors.some(({ entity }) => entity.getPosition().y > upper)).toBe(true)
+      expect(roomsOnFloors.some(({ entity }) => entity.getPosition().y < upper)).toBe(true)
+    }
+    const sunlit = bounces[0]?.intensity ?? 0
+    expect(sunlit).toBeGreaterThan(0)
+    await f.environment.setTime(0.6)
+    expect(bounces[0]?.intensity).toBeGreaterThan(0)
+    expect(bounces[0]?.intensity).toBeLessThan(sunlit)
+    await f.environment.setTime(0.75)
+    expect(bounces.every((bounce) => !bounce.enabled)).toBe(true)
+    await f.environment.setTime(0.3)
+    expect(bounces.every((bounce) => bounce.enabled)).toBe(true)
+    f.root.remove()
+    expect(bounces.every((bounce) => !bounce.enabled)).toBe(true)
+    f.app.root.addChild(f.root)
+    expect(bounces.every((bounce) => bounce.enabled)).toBe(true)
+    f.environment.destroy()
+    expect(f.root.findComponents('light')).toHaveLength(0)
   } finally {
     expect(f.cleanup()).toEqual({ textures: 0, buffers: 0 })
   }
