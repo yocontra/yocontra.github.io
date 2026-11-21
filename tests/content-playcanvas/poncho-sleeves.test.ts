@@ -103,16 +103,18 @@ for (const [id, donorId, vertices, faces, worldFaces] of [
     await validateAuthoringInputs(artifact)
     const shell = artifact.getRoot().listMeshes()[0]?.listPrimitives()[0]
     const pieces = shell?.getExtras().pieceRanges as Range[] | undefined
-    const [woven, neck] = pieces ?? []
+    const [woven, neck, hem] = pieces ?? []
     const joints = shell?.getAttribute('_AUTHOR_JOINTS')
     const weights = shell?.getAttribute('_AUTHOR_WEIGHTS')
-    if (!(shell && woven && neck && joints && weights)) {
-      throw new Error('Missing fitted poncho shell or recovered skin')
+    if (!(shell && woven && neck && hem && joints && weights)) {
+      throw new Error('Missing fitted poncho shell, fringe or recovered skin')
     }
     expect(woven).toMatchObject({ start: 0, count: 1120, swatch: 'hessian' })
     expect(neck).toMatchObject({ start: 1120, slot: 'skin', name: 'RestoredPonchoNeck' })
     expect(indices(shell, woven)).toHaveLength(2184 * 3)
     expect(indices(shell, neck)).toHaveLength((id === 'outlaw-15' ? 44 : 42) * 3)
+    expect(hem).toMatchObject({ name: 'Rolled woven hem and knotted fringe', swatch: 'hessian' })
+    expect(indices(shell, hem)).toHaveLength(504 * 3)
     const names = artifact.getRoot().getExtras().jointNames as string[]
     for (let vertex = 0; vertex < 28; vertex++) {
       const weightsAt = weights.getElement(vertex, [])

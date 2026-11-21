@@ -121,13 +121,13 @@ export const EQUIPMENT = {
     },
   },
   'outfit.striped-poncho': {
-    url: '/experiments/out-west/3d/native-v2/equipment/outfit.striped-poncho.glb?v=26b99c912be697d7',
-    hash: '26b99c912be697d7adda19c93ad5bae230afcc5f9cfd24ba816f643fa94b9407',
-    bytes: 1120300,
+    url: '/experiments/out-west/3d/native-v2/equipment/outfit.striped-poncho.glb?v=31f1879c66a2fec9',
+    hash: '31f1879c66a2fec9b7c8ab5e0ee2cef240a338763cf0c2ce84de330e915eb6b0',
+    bytes: 1151900,
     pair: {
-      url: '/experiments/out-west/3d/native-v2/equipment/outfit.striped-poncho.pair.glb?v=44383d3f14dad6b6',
-      hash: '44383d3f14dad6b6cbb9fcc6548c0f87d8c3b404851f1003a8264654871ce4c3',
-      bytes: 1121788,
+      url: '/experiments/out-west/3d/native-v2/equipment/outfit.striped-poncho.pair.glb?v=326a57962dada596',
+      hash: '326a57962dada59639a3a1b2a1346a16056667ef48b7d0b787ced5c97047a20e',
+      bytes: 1153356,
     },
   },
   'outfit.gamblers-frock': {

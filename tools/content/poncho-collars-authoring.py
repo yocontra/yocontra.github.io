@@ -91,6 +91,85 @@ def reweight_opening(attrs, selected, rows, joint_names):
     return joints, weights
 
 
+def drape_woven_panels(positions, rows, bind, scale):
+    to_source = bind.inverted()
+    last = max(rows)
+    for i, row in enumerate(rows):
+        if row < len(RIM_BLEND):
+            continue
+        point = (bind @ Vector(positions[i])) / scale
+        angle = math.atan2(point.z + .024, point.x)
+        span = (row - len(RIM_BLEND)) / (last - len(RIM_BLEND))
+        ease = span * span * (3 - 2 * span)
+        ribs = math.sin(5 * angle + span * 1.7) + .42 * math.cos(11 * angle - .7 * span)
+        surface = ease * (0.031 * ribs + .014 * math.sin(21 * angle) * span)
+        front = max(0.0, math.sin(angle))
+        surface += ease * (.011 + .021 * front)
+        point.x += surface * math.cos(angle)
+        point.z += surface * math.sin(angle)
+        rear = max(0.0, -math.sin(angle))
+        # Keep loose cloth outside the leather carrier in crouch and stride.
+        point.z -= .076 * rear ** 4 * math.exp(-((span - .79) / .34) ** 2)
+        point.y -= ease * (.037 + .036 * math.sin(angle - .18) ** 2)
+        point.y += ease * .030 * math.cos(3 * angle + .52)
+        positions[i] = list(to_source @ (point * scale))
+
+
+def append_rolled_hem(output, target, attrs, faces, rows, start):
+    counts = {}
+    for a, b, c in faces:
+        for edge in ((a, b), (b, c), (c, a)):
+            key = tuple(sorted(edge))
+            counts[key] = counts.get(key, 0) + 1
+    hem = [edge for edge, count in counts.items() if count == 1 and min(rows[i] for i in edge) >= max(rows) - 2]
+    if not hem:
+        raise ValueError("Missing woven hem edges")
+    first = len(output["POSITION"])
+
+    def add_vertex(vertex, point, tint):
+        output["POSITION"].append(list(point))
+        for name in ("NORMAL", "TEXCOORD_0", "_AUTHOR_JOINTS", "_AUTHOR_WEIGHTS"):
+            output[name].append(output[name][vertex][:])
+        for attribute in STYLE:
+            field = "_AUTHOR_" + attribute.lstrip("_")
+            if field in output:
+                sample = attrs[attribute][vertex + start][:]
+                if attribute == "COLOR_0":
+                    sample = [value * (tint[i] if i < 3 else 1) for i, value in enumerate(sample)]
+                output[field].append(sample)
+
+    for strand, (a, b) in enumerate(hem):
+        base = len(output["POSITION"])
+        for vertex, inset in ((a, False), (b, False), (b, True), (a, True)):
+            normal = Vector(output["NORMAL"][vertex]).normalized()
+            point = Vector(output["POSITION"][vertex])
+            point += normal * (.0025 if not inset else -.0014)
+            if inset:
+                point.y -= .0064
+            add_vertex(vertex, point, (.90, .85, .76))
+        output["indices"].extend([base, base + 1, base + 2, base, base + 2, base + 3])
+
+        # Two irregular yarn ends per hem segment, weighted to the actual cloth edge.
+        p, q = (Vector(output["POSITION"][vertex]) for vertex in (a, b))
+        tangent = (q - p).normalized()
+        normal = Vector(output["NORMAL"][a]).normalized()
+        for offset in (.29, .73):
+            root = p.lerp(q, offset) + normal * .0031
+            phase = 13.7 * strand + 2.1 * offset
+            tip = root + Vector((.005 * math.sin(phase), -.027 - .013 * math.cos(phase), 0))
+            tip += normal * (.005 + .003 * math.sin(phase))
+            for width in (tangent * .0017, normal * .0013):
+                base = len(output["POSITION"])
+                for point in (root - width, root + width, tip + width * .62, tip - width * .62):
+                    add_vertex(a if offset < .5 else b, point, (.89, .81, .64))
+                output["indices"].extend([base, base + 1, base + 2, base, base + 2, base + 3,
+                                          base, base + 2, base + 1, base, base + 3, base + 2])
+    output["pieces"].append({
+        **target, "name": "Rolled woven hem and knotted fringe", "start": first,
+        "count": len(output["POSITION"]) - first, "sourceStyleIndex": start,
+    })
+
+
 def recover_neck_faces(source, body, reference, bind):
     """The old garment cut away faces from a shared head topology, with the vertex streams intact."""
     original = triangles_inside(body, 0, HEAD_VERTICES)
@@ -143,6 +222,7 @@ def fit(source, body):
     bind = head_inverse_bind(source, body)
     scale = max((bind @ Vector(point)).y for point in attrs["POSITION"][:HEAD_VERTICES]) / REFERENCE_CROWN
     positions, rows = fit_opening(attrs, selected, bind, scale)
+    drape_woven_panels(positions, rows, bind, scale)
     joints, weights = reweight_opening(attrs, selected, rows, body["jointNames"])
     faces = [[vertex - start for vertex in face] for face in triangles_inside(body, start, end)]
     if len(faces) != 2184:
@@ -151,14 +231,12 @@ def fit(source, body):
     native = common.author_mesh("Fitted woven poncho", positions, faces, uvs, joints, weights)
     normals = [attrs["NORMAL"][vertex][:] for vertex in selected]
     for index, row in enumerate(rows):
-        if row >= len(RIM_BLEND):
-            continue
         normal = native.data.vertices[index].normal
         original = Vector(normals[index])
         authored = Vector((normal.x, normal.z, -normal.y))
         if original.dot(authored) < 0:
             authored = -authored
-        normals[index] = list(original.lerp(authored, min(1, 2 * RIM_BLEND[row])).normalized())
+        normals[index] = list(original.lerp(authored, min(1, 2 * RIM_BLEND[row]) if row < len(RIM_BLEND) else .62).normalized())
     output = common.output_arrays()
     output.update({
         "POSITION": positions, "NORMAL": normals, "TEXCOORD_0": uvs,
@@ -174,6 +252,7 @@ def fit(source, body):
     reference = common.Source(common.SOURCES / "player.gltf")
     restored = recover_neck_faces(source, body, next(reference.bodies()), bind)
     append_skin(output, attrs, restored)
+    append_rolled_hem(output, target, attrs, faces, rows, start)
     inputs = [Path(__file__).resolve(), writer_path.resolve(), writer_path.with_name("coat-sleeves-authoring.py").resolve(),
               reference.path, *(reference.path.parent / entry["uri"] for entry in reference.doc["buffers"])]
     return output, {
@@ -182,7 +261,7 @@ def fit(source, body):
             {"path": str(path.relative_to(common.ROOT)), "sha256": hashlib.sha256(path.read_bytes()).hexdigest()}
             for path in inputs
         ],
-        "ponchoFit": {"changedRows": list(range(len(RIM_BLEND))), "rimWidthsM": [0.174, 0.184],
+        "ponchoFit": {"changedRows": list(range(max(rows) + 1)), "rimWidthsM": [0.174, 0.184],
                      "originalTriangles": len(faces), "restoredSkinTriangles": len(restored)},
     }
 
