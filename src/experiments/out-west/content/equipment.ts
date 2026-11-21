@@ -141,13 +141,13 @@ export const EQUIPMENT = {
     },
   },
   'outfit.bandolier-rig': {
-    url: '/experiments/out-west/3d/native-v2/equipment/outfit.bandolier-rig.glb?v=c8175833e29b1fd5',
-    hash: 'c8175833e29b1fd5b0e36a8739b7fb99401b904e1a052f8a1435aff3be7bad08',
-    bytes: 1159576,
+    url: '/experiments/out-west/3d/native-v2/equipment/outfit.bandolier-rig.glb?v=946f1484a7a7a83c',
+    hash: '946f1484a7a7a83cd333aaf0f549f916c737e291e20dc92ee421e6f41c65c8df',
+    bytes: 1219084,
     pair: {
-      url: '/experiments/out-west/3d/native-v2/equipment/outfit.bandolier-rig.pair.glb?v=f1bea832464f011d',
-      hash: 'f1bea832464f011de08f07fb02337d99ea576c51411a1b71190ce9810bd8e653',
-      bytes: 1160052,
+      url: '/experiments/out-west/3d/native-v2/equipment/outfit.bandolier-rig.pair.glb?v=0e862d2e670f935a',
+      hash: '0e862d2e670f935a345aa64a7ec7969f708298a2565672ea18b800f9e99f350a',
+      bytes: 1219560,
     },
   },
   'outfit.undertakers-black': {

@@ -52,14 +52,14 @@ export const VIEWMODELS: Readonly<Record<string, ContentAsset>> = {
     bytes: 97640,
   },
   'outfit.bandolier-rig': {
-    url: '/experiments/out-west/3d/native-v2/viewmodels/outfit.bandolier-rig.glb?v=ac3eed559afc7555',
-    hash: 'ac3eed559afc75552ee430ff0261f86571a4fb89619312130399bdc3fcf143ef',
-    bytes: 88248,
+    url: '/experiments/out-west/3d/native-v2/viewmodels/outfit.bandolier-rig.glb?v=ee360af7daa62b0f',
+    hash: 'ee360af7daa62b0f73d0cc74276a401912301f7680b5a06472206b0e2c0eaaad',
+    bytes: 88392,
   },
   'outfit.bandolier-rig.pair': {
-    url: '/experiments/out-west/3d/native-v2/viewmodels/outfit.bandolier-rig.pair.glb?v=9a6d256fe66a90bf',
-    hash: '9a6d256fe66a90bf82b288aa198bab7d16b0ab0e93eaa86447be2701b85991ce',
-    bytes: 88752,
+    url: '/experiments/out-west/3d/native-v2/viewmodels/outfit.bandolier-rig.pair.glb?v=837daebe7b252232',
+    hash: '837daebe7b2522328fd92764ac09ac5d25f62d16e746f9f959c56cc2da9a7a21',
+    bytes: 88904,
   },
   'outfit.undertakers-black': {
     url: '/experiments/out-west/3d/native-v2/viewmodels/outfit.undertakers-black.glb?v=99cd8014f7718d4d',
