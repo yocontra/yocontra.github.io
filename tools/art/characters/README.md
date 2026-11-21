@@ -34,6 +34,20 @@ blender --background --factory-startup --python tools/content/battered-brim-auth
 blender --background --factory-startup --python tools/content/frontier-hats-authoring.py -- tools/art/characters/hats
 ```
 
+The starter head keeps the player rig and native eye and hair attachments.
+The Blender source starts from MakeHuman revision
+`a8bc2d54ff0ac92e78ff71431b1023eda42bf482`. Put `base.obj` and
+`male-young.target` in the authoring directory. Take
+`young_lightskinned_male_diffuse_Freckles.png` and `Aksel_Skin_NRM.png`
+from the CC0 Skins 02 pack and save them as `face-freckles.png` and
+`face-normal.png` in that directory.
+
+```sh
+blender --background --factory-startup --python tools/content/starter-head-authoring.py -- "$head_source"
+bun tools/content/starter-head-atlas.ts "$head_source/starter-head.blender.glb" tools/art/characters/starter-head.glb
+OUT_WEST_CHARACTERS=player,outfit.trail-duds,outfit.trail-duds.pair bun tools/content/human-assets.ts
+```
+
 The victory `TipHat` clip is authored offline from the canonical player idle, with
 planted feet and a 1.5-second reach/nod/return. Rebuild its portable source before
 the shared clips if its source fingerprint changes:

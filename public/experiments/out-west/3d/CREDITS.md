@@ -37,6 +37,10 @@ came from a mirror of the unmodified pack: https://raw.githubusercontent.com/Dyi
 
 Quaternius: https://quaternius.com
 
+The starter head uses [MakeHuman's CC0 base mesh and morphs](https://static.makehumancommunity.org/about/license.html).
+The fitted head uses the Freckles color map by Toigo and the Aksel normal map
+by Mindfront from the [CC0 Skins 02 pack](https://static.makehumancommunity.org/assets/assetpacks/skins02.html).
+
 ## Props and building kit (`models/props.glb`, `tex/kit_*.webp`)
 
 Built by `tools/build-props.ts`: every kit piece below is re-UV'd into one trim atlas

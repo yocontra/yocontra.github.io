@@ -2,14 +2,14 @@
 import type { ContentAsset } from './types.ts'
 export const VIEWMODELS: Readonly<Record<string, ContentAsset>> = {
   'outfit.trail-duds': {
-    url: '/experiments/out-west/3d/native-v2/viewmodels/outfit.trail-duds.glb?v=792c84c9a9ed5f91',
-    hash: '792c84c9a9ed5f9153e4b1b61096eda38ecbab5be3070f612914515876964ced',
-    bytes: 88452,
+    url: '/experiments/out-west/3d/native-v2/viewmodels/outfit.trail-duds.glb?v=f23c581da045c7ba',
+    hash: 'f23c581da045c7baabbdb822ac2bffb4d64babd3ce0005d7cb1e86aed7c790a8',
+    bytes: 88552,
   },
   'outfit.trail-duds.pair': {
-    url: '/experiments/out-west/3d/native-v2/viewmodels/outfit.trail-duds.pair.glb?v=39ae398272aa2686',
-    hash: '39ae398272aa268627587a1e5336decaedf4bc9bc0e4a7546ac1238790af6aac',
-    bytes: 88972,
+    url: '/experiments/out-west/3d/native-v2/viewmodels/outfit.trail-duds.pair.glb?v=409ebeff38050533',
+    hash: '409ebeff38050533bbd580202d3f44bd9d6a70d3a3117c6a6ab177fbf43db3df',
+    bytes: 89076,
   },
   'outfit.shirt-vest': {
     url: '/experiments/out-west/3d/native-v2/viewmodels/outfit.shirt-vest.glb?v=e3bd15c427adba04',

@@ -91,13 +91,13 @@ export const EQUIPMENT = {
     bytes: 62228,
   },
   'outfit.trail-duds': {
-    url: '/experiments/out-west/3d/native-v2/equipment/outfit.trail-duds.glb?v=5dc8d10d5948fc61',
-    hash: '5dc8d10d5948fc61b369ad064ec4a50f0922290834d8f0f7e8eff925a30262ae',
-    bytes: 1160928,
+    url: '/experiments/out-west/3d/native-v2/equipment/outfit.trail-duds.glb?v=97d97791b2de04fe',
+    hash: '97d97791b2de04fec1cf006b57e3b758e39c4d9a817eff43722d22a6196c7fb9',
+    bytes: 1269888,
     pair: {
-      url: '/experiments/out-west/3d/native-v2/equipment/outfit.trail-duds.pair.glb?v=8452083b19c0c8b5',
-      hash: '8452083b19c0c8b52ae2f381d20141731bcdf19c3b5c70372a07aac026db226e',
-      bytes: 1161404,
+      url: '/experiments/out-west/3d/native-v2/equipment/outfit.trail-duds.pair.glb?v=f5c133b4c62c0e7a',
+      hash: 'f5c133b4c62c0e7a367e8edab515fab0d0a2112306142d5cf941fdfc44bb4b2c',
+      bytes: 1270364,
     },
   },
   'outfit.shirt-vest': {

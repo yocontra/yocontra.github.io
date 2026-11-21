@@ -5,6 +5,7 @@ import { bakeCharacter } from './character-materials.ts'
 import { compressCharacterAssets } from './character-textures.ts'
 import { contentOutput } from './content-output.ts'
 import { fitAuthoredHat } from './fitted-hat.ts'
+import { fitStarterHead } from './fitted-starter-head.ts'
 
 const source = resolve('tools/art/characters')
 const excluded = new Set(['dog', 'horse', 'moves', 'character-actions', 'character-strides'])
@@ -29,5 +30,14 @@ for (const id of ids.filter((asset) => asset.startsWith('hat.'))) {
   if (await Bun.file(replacement).exists()) {
     await fitAuthoredHat(replacement, contentOutput('equipment', `${id}.glb`))
   }
+}
+for (const id of ids.filter((asset) =>
+  ['player', 'outfit.trail-duds', 'outfit.trail-duds.pair'].includes(asset),
+)) {
+  await fitStarterHead(
+    resolve(source, `${id}.gltf`),
+    resolve(source, 'starter-head.glb'),
+    contentOutput(id === 'player' ? 'baked' : 'equipment', `${id}.glb`),
+  )
 }
 console.log(`Rebuilt ${ids.length} HUMAN fitted assets`)
