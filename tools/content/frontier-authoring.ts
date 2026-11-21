@@ -22,6 +22,7 @@ import {
 } from './frontier-architecture.ts'
 import { authorBarrelCacti } from './frontier-barrel-cactus.ts'
 import { replaceCactusPrototype } from './frontier-cactus-candidate.ts'
+import { dressSiding, readClapboards } from './frontier-clapboards.ts'
 import { compileFrontierCollision, structuralWalls } from './frontier-collision.ts'
 import { frontierCutBanks } from './frontier-cut-banks.ts'
 import { FrontierGeometry, frontierIO, type Rgb } from './frontier-geometry.ts'
@@ -120,6 +121,7 @@ async function authorBuildings(g: FrontierGeometry, plan: FrontierPlan, layout: 
     }),
   )
   const posts = await readPorchPosts(join(SOURCE, 'frontier-porch-posts.glb'))
+  const boards = await readClapboards(join(SOURCE, 'frontier-clapboards.glb'))
   await frontierSiding(g, paint)
   for (const b of layout.buildings) {
     const root = groups.get(b.id)
@@ -132,14 +134,19 @@ async function authorBuildings(g: FrontierGeometry, plan: FrontierPlan, layout: 
       (role === 'stone' ? plan.style.stoneTint : plan.style.woodTint)
     const siding = paint.has(b.id)
     const timber = role === 'wood' && !siding ? weatheredTimber(b, tint) : tint
+    const finishRole = siding ? `siding:${b.id}` : role
     for (const wall of structuralWalls({ ...layout, buildings: [b] })) {
       const finish = wall.id.includes(':partition:') ? tint : timber
-      g.box(
-        root,
-        siding ? `siding:${b.id}` : role,
-        { ...wall, top: wall.y1, grime: 0.32 },
-        siding ? undefined : finish,
-      )
+      const color = siding ? undefined : finish
+      g.box(root, finishRole, { ...wall, top: wall.y1, grime: 0.32 }, color)
+      dressSiding(g, root, {
+        building: b,
+        wall,
+        layout,
+        boards,
+        role: finishRole,
+        color: color ?? [1, 1, 1],
+      })
     }
     buildingDetails(g, root, b, { plan, posts })
   }
