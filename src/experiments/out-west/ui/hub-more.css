@@ -147,6 +147,31 @@
   .ow-hub-tools {
     flex-direction: row;
   }
+  .ow-hub-strip:has(.ow-xp) {
+    gap: 4px 8px;
+    padding: 8px 10px;
+  }
+  .ow-hub-strip:has(.ow-xp) .ow-hub-meta {
+    font-size: var(--ow-fs-small);
+    letter-spacing: 0.06em;
+  }
+  .ow-hub-nums {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    font-size: var(--ow-fs-body);
+  }
+  .ow-hub-nums > span {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0;
+  }
+  .ow-hub-nums small {
+    font-size: var(--ow-fs-small);
+  }
+  .ow-hub-nums .ow-icon {
+    display: none;
+  }
 }
 /* tablets and the open Duo in landscape: a full-height right column with weightier tiles */
 @media (pointer: coarse) and (min-aspect-ratio: 1 / 1) and (min-width: 900px) and (
