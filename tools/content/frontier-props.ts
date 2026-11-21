@@ -11,7 +11,7 @@ import type { Cover } from '../../src/experiments/out-west/ffa/sim/layout.ts'
 import { frame, tube, wagonGear } from './frontier-carpentry.ts'
 import { fenceSpans, wagonCanopy } from './frontier-collision.ts'
 import type { PrefabFit } from './frontier-fit.ts'
-import { anvil, boxcar, DARK_WOOD, headstone, IRON, lumber, trough } from './frontier-furniture.ts'
+import { anvil, DARK_WOOD, headstone, IRON, lumber } from './frontier-furniture.ts'
 import type { FrontierGeometry, Placement, Rgb } from './frontier-geometry.ts'
 import { frontierTerrainHeight } from './frontier-ground.ts'
 
@@ -29,10 +29,8 @@ const JOINERY: Partial<
   Record<Cover['kind'], (g: FrontierGeometry, root: Node, c: Placement) => void>
 > = {
   anvil,
-  boxcar,
   headstone,
   lumber,
-  trough,
 }
 
 function bindCoverPlacement(placement: Node, kind: Cover['kind'], index: number | undefined): void {

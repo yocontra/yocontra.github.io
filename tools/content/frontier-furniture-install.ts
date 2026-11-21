@@ -1,6 +1,6 @@
 /** Fit Blender furniture to Frontier cover sites and reuse the existing town scans. */
 import { type Document, Material, Node } from '@gltf-transform/core'
-import { copyToDocument } from '@gltf-transform/functions'
+import { copyToDocument, mergeDocuments } from '@gltf-transform/functions'
 import type { Cover, TownLayout } from '../../src/experiments/out-west/ffa/sim/layout.ts'
 import { type FrontierGeometry, frontierIO } from './frontier-geometry.ts'
 
@@ -14,6 +14,8 @@ const dimensions = {
   'first-frontier-counter': [1.8, 1.1, 0.6],
   'linen-hotel-bed': [2, 0.6, 2],
   'mortised-plank-bench': [2.5, 0.5, 0.5],
+  'stave-horse-trough': [2.5, 0.7, 1],
+  'board-and-batten-freight-car': [12, 3.8, 3],
 } as const
 
 function roomAt(x: number, z: number, buildings: TownLayout['buildings']) {
@@ -26,6 +28,12 @@ function furnitureName(
   cover: Cover,
   buildings: TownLayout['buildings'],
 ): keyof typeof dimensions | undefined {
+  if (cover.kind === 'trough') {
+    return 'stave-horse-trough'
+  }
+  if (cover.kind === 'boxcar') {
+    return 'board-and-batten-freight-car'
+  }
   if (cover.kind === 'bed') {
     return 'linen-hotel-bed'
   }
@@ -103,7 +111,10 @@ function furniturePlacement(
   const z = fixture.z + fixture.d / 2
   const turned =
     (name === 'linen-hotel-bed' && fixture.w > fixture.d) ||
-    (name === 'mortised-plank-bench' && fixture.d > fixture.w)
+    (['mortised-plank-bench', 'stave-horse-trough', 'board-and-batten-freight-car'].includes(
+      name,
+    ) &&
+      fixture.d > fixture.w)
   const orientation = turned ? Math.PI / 2 : furnitureFacing(name, x, z, buildings)
   const [siteWidth, siteDepth] = turned ? [fixture.d, fixture.w] : [fixture.w, fixture.d]
   return doc
@@ -116,10 +127,17 @@ function furniturePlacement(
 export async function installFrontierFurniture(
   geometry: FrontierGeometry,
   layout: TownLayout,
-  path: string,
+  paths: [furniture: string, freight: string],
 ): Promise<void> {
-  const art = await frontierIO.read(path)
-  const models = art.getRoot().getDefaultScene()?.listChildren() ?? []
+  const [art, freight] = await Promise.all(paths.map((path) => frontierIO.read(path)))
+  if (!(art && freight)) {
+    throw new Error('Missing canonical Frontier furniture source')
+  }
+  mergeDocuments(art, freight)
+  const models = art
+    .getRoot()
+    .listScenes()
+    .flatMap((scene) => scene.listChildren())
   const parts = models.flatMap((model) => model.listChildren())
   const copied = copyToDocument(geometry.doc, art, parts)
   for (const material of art.getRoot().listMaterials()) {

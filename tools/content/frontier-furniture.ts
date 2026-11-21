@@ -1,6 +1,6 @@
-/** Furniture, fittings and rolling stock built to their cover volumes from proportioned joinery. */
+/** Fittings built to their cover volumes from proportioned joinery. */
 import type { Node } from '@gltf-transform/core'
-import { frame, tube, wheel } from './frontier-carpentry.ts'
+import { frame, tube } from './frontier-carpentry.ts'
 import type { FrontierGeometry, Placement, Rgb } from './frontier-geometry.ts'
 
 export const DARK_WOOD: Rgb = [0.42, 0.3, 0.19]
@@ -46,41 +46,6 @@ export function headstone(g: FrontierGeometry, root: Node, c: Placement) {
   g.box(root, 'masonry', f.block([-0.1, 0.1], [-0.11, 0.11], [height - 0.06, height]), stone)
 }
 
-/** Horse trough: plank walls around murky water, so the open top reads as a container. */
-export function trough(g: FrontierGeometry, root: Node, c: Placement) {
-  const f = frame(c)
-  const height = c.top - f.base
-  const half = f.length / 2
-  const depth = f.width / 2
-  const plank: Rgb = [0.5, 0.39, 0.27]
-  g.box(root, 'wood', f.block([-half, half], [-depth, depth], [0, 0.12]), plank)
-  for (const b of [-depth, depth - 0.07]) {
-    g.box(root, 'wood', f.block([-half, half], [b, b + 0.07], [0.12, height]), plank)
-  }
-  for (const a of [-half, half - 0.07]) {
-    g.box(
-      root,
-      'wood',
-      f.block([a, a + 0.07], [-depth + 0.07, depth - 0.07], [0.12, height]),
-      plank,
-    )
-  }
-  g.box(
-    root,
-    'iron',
-    f.block([-half + 0.07, half - 0.07], [-depth + 0.07, depth - 0.07], [0.12, height - 0.14]),
-    [0.1, 0.12, 0.1],
-  )
-  for (const a of [-half + 0.3, half - 0.36]) {
-    g.box(
-      root,
-      'iron',
-      f.block([a, a + 0.06], [-depth - 0.01, depth + 0.01], [height - 0.18, height - 0.1]),
-      IRON,
-    )
-  }
-}
-
 /** Sawn beams stacked on spacer sticks to the authored pile height. */
 export function lumber(g: FrontierGeometry, root: Node, c: Placement) {
   const f = frame(c)
@@ -113,87 +78,6 @@ export function lumber(g: FrontierGeometry, root: Node, c: Placement) {
         ),
         [0.74, 0.6, 0.42],
       )
-    }
-  }
-}
-
-/** Plank-sided freight boxcar on two four-wheel trucks, with door, roofwalk and ladders. */
-export function boxcar(g: FrontierGeometry, root: Node, c: Placement) {
-  const f = frame(c)
-  const height = c.top - f.base
-  const half = f.length / 2
-  const depth = f.width / 2
-  const deck = 1.05
-  g.box(
-    root,
-    'wood',
-    f.block([-half, half], [-depth + 0.1, depth - 0.1], [deck - 0.2, deck]),
-    [0.22, 0.19, 0.16],
-  )
-  g.box(
-    root,
-    'wood',
-    f.block([-half + 0.1, half - 0.1], [-depth, depth], [deck, height - 0.18]),
-    [0.47, 0.25, 0.17],
-  )
-  g.box(
-    root,
-    'wood',
-    f.block([-half, half], [-depth - 0.02, depth + 0.02], [height - 0.18, height - 0.1]),
-    [0.3, 0.2, 0.15],
-  )
-  g.box(
-    root,
-    'floor',
-    f.block([-half + 0.2, half - 0.2], [-0.3, 0.3], [height - 0.1, height]),
-    [0.4, 0.31, 0.22],
-  )
-  for (const side of [-1, 1]) {
-    const face = side * depth
-    const [b0, b1] = side < 0 ? [face - 0.05, face] : [face, face + 0.05]
-    g.box(
-      root,
-      'wood',
-      f.block([-0.95, 0.95], [b0, b1], [deck + 0.05, height - 0.35]),
-      [0.42, 0.22, 0.15],
-    )
-    for (const a of [-0.95, -0.05, 0.85]) {
-      g.box(
-        root,
-        'iron',
-        f.block([a, a + 0.1], [b0 - side * 0.01, b1 + side * 0.01], [deck + 0.05, height - 0.35]),
-        IRON,
-      )
-    }
-    for (let a = -half + 0.6; a < half - 0.4; a += 1.6) {
-      if (Math.abs(a) > 1.1) {
-        g.box(
-          root,
-          'iron',
-          f.block([a, a + 0.07], [b0, b1], [deck, height - 0.18]),
-          [0.28, 0.2, 0.16],
-        )
-      }
-    }
-  }
-  for (const end of [-half + 1.5, half - 1.5]) {
-    g.box(
-      root,
-      'iron',
-      f.block([end - 1.0, end + 1.0], [-depth + 0.25, depth - 0.25], [0.42, 0.62]),
-      IRON,
-    )
-    for (const a of [end - 0.7, end + 0.7]) {
-      tube(g, root, {
-        role: 'iron',
-        tint: IRON,
-        from: f.point(a, -depth + 0.2, 0.42),
-        to: f.point(a, depth - 0.2, 0.42),
-        radius: 0.06,
-      })
-      for (const b of [-depth + 0.3, depth - 0.3]) {
-        wheel(g, root, { center: f.point(a, b, 0.42), axis: f.acrossAxis, radius: 0.42, spokes: 8 })
-      }
     }
   }
 }

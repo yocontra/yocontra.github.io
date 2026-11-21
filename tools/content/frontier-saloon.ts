@@ -33,7 +33,10 @@ export async function installPeriodFixtures(
   directory: string,
 ): Promise<void> {
   await installSaloonBar(geometry, join(directory, 'frontier-saloon.glb'))
-  await installFrontierFurniture(geometry, layout, join(directory, 'frontier-furniture.glb'))
+  await installFrontierFurniture(geometry, layout, [
+    join(directory, 'frontier-furniture.glb'),
+    join(directory, 'frontier-freight.glb'),
+  ])
 }
 
 async function installSaloonBar(geometry: FrontierGeometry, source: string): Promise<void> {
