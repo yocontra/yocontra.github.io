@@ -25,7 +25,26 @@ const dimensions = {
   'island-shop-shelves': [2.5, 2.3, 2],
   'walnut-upright-piano': [1.5, 1.35, 1],
   'faced-smithy-anvil': [1, 0.8, 0.5],
+  'boarded-work-wagon': [5, 1.1, 2],
+  'sewn-canvas-wagon': [5.5, 3, 2.5],
+  'painted-stagecoach': [5, 2.6, 2],
 } as const
+
+const fittedByKind: Partial<Record<Cover['kind'], keyof typeof dimensions>> = {
+  trough: 'stave-horse-trough',
+  boxcar: 'board-and-batten-freight-car',
+  bed: 'linen-hotel-bed',
+  bench: 'mortised-plank-bench',
+  stove: 'potbelly-stove',
+  safe: 'riveted-cash-safe',
+  workbench: 'mortised-shop-workbench',
+  forge: 'square-cut-smithy-hearth',
+  wagon: 'boarded-work-wagon',
+  covered_wagon: 'sewn-canvas-wagon',
+  stagecoach: 'painted-stagecoach',
+  piano: 'walnut-upright-piano',
+  anvil: 'faced-smithy-anvil',
+}
 
 function roomAt(x: number, z: number, buildings: TownLayout['buildings']) {
   return buildings.find(
@@ -37,35 +56,9 @@ function furnitureName(
   cover: Cover,
   buildings: TownLayout['buildings'],
 ): keyof typeof dimensions | undefined {
-  if (cover.kind === 'trough') {
-    return 'stave-horse-trough'
-  }
-  if (cover.kind === 'boxcar') {
-    return 'board-and-batten-freight-car'
-  }
-  if (cover.kind === 'bed') {
-    return 'linen-hotel-bed'
-  }
-  if (cover.kind === 'bench') {
-    return 'mortised-plank-bench'
-  }
-  if (cover.kind === 'stove') {
-    return 'potbelly-stove'
-  }
-  if (cover.kind === 'safe') {
-    return 'riveted-cash-safe'
-  }
-  if (cover.kind === 'workbench') {
-    return 'mortised-shop-workbench'
-  }
-  if (cover.kind === 'forge') {
-    return 'square-cut-smithy-hearth'
-  }
-  if (cover.kind === 'piano') {
-    return 'walnut-upright-piano'
-  }
-  if (cover.kind === 'anvil') {
-    return 'faced-smithy-anvil'
+  const fitted = fittedByKind[cover.kind]
+  if (fitted) {
+    return fitted
   }
   if (cover.kind === 'shelves') {
     const room = roomAt(cover.x + cover.w / 2, cover.z + cover.d / 2, buildings)
