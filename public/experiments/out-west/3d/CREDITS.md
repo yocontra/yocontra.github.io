@@ -37,7 +37,7 @@ came from a mirror of the unmodified pack: https://raw.githubusercontent.com/Dyi
 
 Quaternius: https://quaternius.com
 
-The starter head and hand reference use [MakeHuman's CC0 base mesh and morphs](https://static.makehumancommunity.org/about/license.html).
+The fitted player and outlaw heads and the hand reference use [MakeHuman's CC0 base mesh and morphs](https://static.makehumancommunity.org/about/license.html).
 The fitted head and hands use the Freckles color map by Toigo. The head uses
 the Aksel normal map by Mindfront from the [CC0 Skins 02 pack](https://static.makehumancommunity.org/assets/assetpacks/skins02.html).
 

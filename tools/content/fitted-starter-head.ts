@@ -26,6 +26,7 @@ interface HeadFit {
   eyeForward: number
   keepBrows: boolean
   keepBeard?: boolean
+  measuredEyes?: boolean
   tint?: vec4
 }
 
@@ -129,6 +130,31 @@ function eyeFit([x, y, z]: vec3, { eyeScale: scale, eyeForward }: HeadFit): vec3
   ]
 }
 
+function fitMeasuredEyes(eyes: readonly vec3[], fit: HeadFit): (eye: vec3) => vec3 {
+  const left = eyes.filter((eye) => eye[0] < templeCenter)
+  const right = eyes.filter((eye) => eye[0] >= templeCenter)
+  const center = (group: readonly vec3[]): vec3 => {
+    const result: vec3 = [0, 0, 0]
+    for (const [x, y, z] of group) {
+      result[0] += x / group.length
+      result[1] += y / group.length
+      result[2] += z / group.length
+    }
+    return result
+  }
+  const a = center(left)
+  const b = center(right)
+  return ([x, y, z]) => {
+    const t = x < templeCenter
+    const [ox, oy, oz] = t ? a : b
+    return [
+      (t ? -0.06 : 0.006) + (x - ox) * fit.eyeScale,
+      1.584 + (y - oy) * fit.eyeScale,
+      fit.eyeForward + (z - oz) * fit.eyeScale,
+    ]
+  }
+}
+
 function trimFormerHead(
   former: Primitive,
   source: Primitive,
@@ -154,6 +180,9 @@ function trimFormerHead(
         }),
       )
   const eyes = piece('Eye')
+  const relocateEye = fit.measuredEyes
+    ? fitMeasuredEyes(eyes, fit)
+    : (eye: vec3) => eyeFit(eye, fit)
   const brows = piece('Brows')
   const hair = piece('Hair')
   const details = fit.keepBeard
@@ -166,7 +195,7 @@ function trimFormerHead(
   const keep = Array.from({ length: position.getCount() }, (_, index) => {
     const local = point(toGame, position.getElement(index, [0, 0, 0]))
     if (isNear(local, eyes)) {
-      position.setElement(index, point(toNative, eyeFit(local, fit)))
+      position.setElement(index, point(toNative, relocateEye(local)))
       return true
     }
     if (isNear(local, brows)) {
@@ -331,7 +360,43 @@ export function fitGreenhornHead(
   return installHead(paths, greenhornFit, palette)
 }
 
-const earlyCastFits: Partial<Record<number, HeadFit>> = {
+const outlawFits: Partial<Record<number, HeadFit>> = {
+  8: {
+    ...greenhornFit,
+    lift: 0.0434,
+    eyeScale: 0.9,
+    eyeForward: 0.1101,
+    keepBrows: true,
+    tint: [0.99, 0.89, 0.85, 1],
+  },
+  10: {
+    ...greenhornFit,
+    lift: 0.0914,
+    eyeScale: 0.88,
+    eyeForward: 0.108,
+    keepBrows: true,
+    tint: [0.97, 0.8, 0.69, 1],
+  },
+  4: {
+    ...greenhornFit,
+    lift: -0.0008,
+    eyeScale: 0.892,
+    eyeForward: 0.1058,
+    measuredEyes: true,
+    keepBrows: true,
+    keepBeard: true,
+    tint: [1, 0.92, 0.89, 1],
+  },
+  13: {
+    ...greenhornFit,
+    lift: -0.0136,
+    eyeScale: 0.885,
+    eyeForward: 0.1058,
+    measuredEyes: true,
+    keepBrows: true,
+    keepBeard: false,
+    tint: [0.89, 0.79, 0.64, 1],
+  },
   1: {
     ...greenhornFit,
     lift: 0.1174,
@@ -350,11 +415,11 @@ const earlyCastFits: Partial<Record<number, HeadFit>> = {
     tint: [0.98, 0.85, 0.78, 1],
   },
 }
-export function fitEarlyCastHead(
+export function fitOutlawHead(
   paths: { source: string; authoring: string; target: string },
   opts: { id: number; palette: string },
 ): Promise<void> {
-  const fit = earlyCastFits[opts.id]
+  const fit = outlawFits[opts.id]
   if (!fit) {
     throw new Error(`Missing authored cast fit ${opts.id}`)
   }

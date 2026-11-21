@@ -8,7 +8,7 @@ import { fitAccessory } from './fitted-accessory.ts'
 import { fitAuthoredHat } from './fitted-hat.ts'
 import { fitHolsterPockets } from './fitted-holster-pockets.ts'
 import { fitRevolver } from './fitted-revolver.ts'
-import { fitEarlyCastHead, fitGreenhornHead, fitStarterHead } from './fitted-starter-head.ts'
+import { fitGreenhornHead, fitOutlawHead, fitStarterHead } from './fitted-starter-head.ts'
 import { fitForgedSpurs } from './forged-spurs.ts'
 import { fitOutlawHat } from './outlaw-hats.ts'
 
@@ -58,10 +58,10 @@ if (ids.includes('outlaw-0')) {
     resolve(source, 'starter-head.glb'),
   )
 }
-for (const index of [1, 3]) {
+for (const index of [1, 3, 4, 8, 10, 13]) {
   const id = `outlaw-${index}`
   if (ids.includes(id)) {
-    await fitEarlyCastHead(
+    await fitOutlawHead(
       {
         source: resolve(source, `${id}.gltf`),
         authoring: resolve(source, `outlaw-faces/${id}.glb`),
