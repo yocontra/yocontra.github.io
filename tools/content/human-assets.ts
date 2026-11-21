@@ -58,7 +58,7 @@ if (ids.includes('outlaw-0')) {
     resolve(source, 'starter-head.glb'),
   )
 }
-for (const index of [1, 3, 4, 8, 10, 13]) {
+for (const index of [1, 3, 4, 7, 8, 10, 11, 12, 13, 14]) {
   const id = `outlaw-${index}`
   if (ids.includes(id)) {
     await fitOutlawHead(

@@ -361,6 +361,46 @@ export function fitGreenhornHead(
 }
 
 const outlawFits: Partial<Record<number, HeadFit>> = {
+  7: {
+    ...greenhornFit,
+    lift: -0.1911,
+    eyeScale: 0.95,
+    eyeForward: 0.1058,
+    measuredEyes: true,
+    keepBrows: true,
+    keepBeard: false,
+    tint: [0.86, 0.76, 0.63, 1],
+  },
+  11: {
+    ...greenhornFit,
+    lift: 0.1955,
+    eyeScale: 0.822,
+    eyeForward: 0.1058,
+    measuredEyes: true,
+    keepBrows: true,
+    keepBeard: true,
+    tint: [0.95, 0.86, 0.77, 1],
+  },
+  12: {
+    ...greenhornFit,
+    lift: -0.2134,
+    eyeScale: 0.97,
+    eyeForward: 0.1058,
+    measuredEyes: true,
+    keepBrows: true,
+    keepBeard: true,
+    tint: [0.95, 0.78, 0.68, 1],
+  },
+  14: {
+    ...greenhornFit,
+    lift: -0.1417,
+    eyeScale: 0.956,
+    eyeForward: 0.1058,
+    measuredEyes: true,
+    keepBrows: true,
+    keepBeard: true,
+    tint: [0.97, 0.85, 0.79, 1],
+  },
   8: {
     ...greenhornFit,
     lift: 0.0434,

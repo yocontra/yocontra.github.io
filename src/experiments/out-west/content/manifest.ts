@@ -101,7 +101,7 @@ export const ENVIRONMENT = {
   hash: '206c67e3a1b992282821cf06662bdd69bbb4915c1c4444a66338a40d6a7d4e34',
   bytes: 1173154,
 } as const
-export const CONTENT_VERSION = '964e5360420eec7548012c397eb9ba6d247c8d904f96ba3f7a0c56cfd32da41d'
+export const CONTENT_VERSION = 'af3d036fd0c8c8c66ca554cf667042a0754d726f7e92361c0ea43a56370dee09'
 export const COLLISION_VERSION = '03b11033428780f67158b47e3fc2b37d761185acea4d5b323301449671b65def'
 export const ASSETS = {
   frontier: {
@@ -185,9 +185,9 @@ export const ASSETS = {
     bytes: 2024072,
   },
   'outlaw-7': {
-    url: '/experiments/out-west/3d/native-v2/baked/outlaw-7.glb?v=c2e1046686cf05ad',
-    hash: 'c2e1046686cf05ad78850843a71692a13291cc7cdd288e56763462c543ff39ad',
-    bytes: 2038760,
+    url: '/experiments/out-west/3d/native-v2/baked/outlaw-7.glb?v=a0fac476b7677ef5',
+    hash: 'a0fac476b7677ef50a75b32fb259b6cb45b4fef2662e636197653f239fbcb311',
+    bytes: 2184588,
   },
   'outlaw-8': {
     url: '/experiments/out-west/3d/native-v2/baked/outlaw-8.glb?v=bc70a8c0732570cc',
@@ -205,14 +205,14 @@ export const ASSETS = {
     bytes: 2179492,
   },
   'outlaw-11': {
-    url: '/experiments/out-west/3d/native-v2/baked/outlaw-11.glb?v=e01df744a45c9415',
-    hash: 'e01df744a45c94150fe931cbe16ceea573c28342eeebd83aecff756a8e0774e8',
-    bytes: 2046340,
+    url: '/experiments/out-west/3d/native-v2/baked/outlaw-11.glb?v=a6f2e77443e303a2',
+    hash: 'a6f2e77443e303a2b9da68ef30f536749defaf893af079c30212fa70c868681f',
+    bytes: 2191420,
   },
   'outlaw-12': {
-    url: '/experiments/out-west/3d/native-v2/baked/outlaw-12.glb?v=c568ef885aef3657',
-    hash: 'c568ef885aef36570b3e48dc540a8f158108a2fc16ba376ea8873713a4807eb0',
-    bytes: 2038480,
+    url: '/experiments/out-west/3d/native-v2/baked/outlaw-12.glb?v=e652365821122cbc',
+    hash: 'e652365821122cbc7feec90e91fa77999b348b0a41c364d58c68248d09e5d4b9',
+    bytes: 2183420,
   },
   'outlaw-13': {
     url: '/experiments/out-west/3d/native-v2/baked/outlaw-13.glb?v=88f9bf355e15820d',
@@ -220,9 +220,9 @@ export const ASSETS = {
     bytes: 2204256,
   },
   'outlaw-14': {
-    url: '/experiments/out-west/3d/native-v2/baked/outlaw-14.glb?v=55ce1eb66706c01b',
-    hash: '55ce1eb66706c01b42f561b5cd26c1fec1bdab3cdf9c33d107a0977535846877',
-    bytes: 2065628,
+    url: '/experiments/out-west/3d/native-v2/baked/outlaw-14.glb?v=5ac10c815f7037d0',
+    hash: '5ac10c815f7037d0f7f2eb355936ea31ea3368f29d22bc96d2a66ecb619c93b4',
+    bytes: 2209812,
   },
   'outlaw-15': {
     url: '/experiments/out-west/3d/native-v2/baked/outlaw-15.glb?v=53f5245c168b5a91',
