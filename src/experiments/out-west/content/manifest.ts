@@ -56,9 +56,9 @@ export const DYNAMIC_ASSETS = {
     bytes: 13228,
   },
   tumbleweed: {
-    url: '/experiments/out-west/3d/native-v2/dynamic/tumbleweed.glb?v=62e8c5779478a119',
-    hash: '62e8c5779478a119785975dfdeb521093d5a3867b134489771915f2d0350b775',
-    bytes: 53216,
+    url: '/experiments/out-west/3d/native-v2/dynamic/tumbleweed.glb?v=a2bd324dea9e4313',
+    hash: 'a2bd324dea9e4313cbfa8582c3ed2c4d24ecba7c13f24a2b17ffabb84d8704ff',
+    bytes: 293980,
   },
   door: {
     url: '/experiments/out-west/3d/dynamic/door.glb?v=ea7fa10f3336b3ee',
@@ -91,9 +91,9 @@ export const DYNAMIC_ASSETS = {
     bytes: 109800,
   },
   'barrel-fragments': {
-    url: '/experiments/out-west/3d/native-v2/dynamic/barrel-fragments.glb?v=f1ed9b798d238905',
-    hash: 'f1ed9b798d238905014f5874dd0bc1badc85f3ac3d595e343f77886f32f5cedb',
-    bytes: 776524,
+    url: '/experiments/out-west/3d/native-v2/dynamic/barrel-fragments.glb?v=d36214667075a00d',
+    hash: 'd36214667075a00d076e4ad5d6096a89f5dd23e2cbe4cb6b7622ababedd326fe',
+    bytes: 776648,
   },
 } as const
 export const ENVIRONMENT = {
@@ -101,18 +101,18 @@ export const ENVIRONMENT = {
   hash: '206c67e3a1b992282821cf06662bdd69bbb4915c1c4444a66338a40d6a7d4e34',
   bytes: 1173154,
 } as const
-export const CONTENT_VERSION = '636b6889dc56b386d9cb5c9a0709b7d7accabba2ca5ec4f1167019a0c5e8923e'
+export const CONTENT_VERSION = '1ae0ceabcd1f955c166b1ed1be22a39458d0c131c2447cbac02e97aba5894780'
 export const COLLISION_VERSION = '03b11033428780f67158b47e3fc2b37d761185acea4d5b323301449671b65def'
 export const ASSETS = {
   frontier: {
-    url: '/experiments/out-west/3d/native-v2/baked/frontier.glb?v=f856538c49b9b7ae',
-    hash: 'f856538c49b9b7ae1dabaadaa5e3ba81e92becd9fb8372f6e9c25d4a34d2d44c',
-    bytes: 89298800,
+    url: '/experiments/out-west/3d/native-v2/baked/frontier.glb?v=ace2fce5f50a32e4',
+    hash: 'ace2fce5f50a32e45bfa49e122dc36a3dc406d9a08a3a54354d9ca34b5d6eddd',
+    bytes: 91382268,
   },
   'frontier-yard-high': {
-    url: '/experiments/out-west/3d/native-v2/baked/frontier-yard-high.glb?v=94b3a908a21850b0',
-    hash: '94b3a908a21850b0b954c21c498d47bc41e9288dabc172130b23cd40ba3a6f53',
-    bytes: 391220,
+    url: '/experiments/out-west/3d/native-v2/baked/frontier-yard-high.glb?v=2168360c0d5832a9',
+    hash: '2168360c0d5832a9c9e04a9448aaeef6a872fc7cd1391d3f4abbb45135225b21',
+    bytes: 371880,
   },
   duel: {
     url: '/experiments/out-west/3d/native-v2/baked/duel.glb?v=c7208710a4ac4127',

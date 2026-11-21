@@ -429,17 +429,9 @@ async function coin() {
   await exportNative(doc, 'tools/art/props/coin.glb', `${native}/dynamic/coin.glb`)
 }
 async function tumbleweed() {
-  const doc = await io.read('public/experiments/out-west/3d/dynamic/tumbleweed.glb')
-  await doc.transform(dequantize())
-  const surface = await surfaceMaterial(doc, 'straw')
-  for (const mesh of doc.getRoot().listMeshes()) {
-    for (const primitive of mesh.listPrimitives()) {
-      const color = primitive.getMaterial()?.getBaseColorFactor() ?? [1, 1, 1, 1]
-      primitive.setMaterial(surface.clone().setBaseColorFactor(color))
-      projectedUv(doc, primitive, 6)
-    }
-  }
-  await exportNative(doc, 'tools/art/props/tumbleweed.glb', `${native}/dynamic/tumbleweed.glb`)
+  const source = 'tools/art/props/tumbleweed.glb'
+  const doc = await io.read(source)
+  await exportNative(doc, source, `${native}/dynamic/tumbleweed.glb`)
 }
 async function crowCue() {
   const doc = await io.read('public/experiments/out-west/3d/dynamic/crow.glb')

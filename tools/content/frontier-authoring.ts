@@ -43,6 +43,7 @@ import { desertPlants } from './frontier-props.ts'
 import { authorRoofMaterial } from './frontier-roof-material.ts'
 import { authorCover, installPeriodFixtures } from './frontier-saloon.ts'
 import { frontierSiding } from './frontier-siding.ts'
+import { dressWaterTower } from './frontier-water-tower.ts'
 import { weatheredTimber } from './frontier-weathering.ts'
 import { installYardCacti } from './frontier-yard-cactus.ts'
 import { optimizeAsset } from './optimize.ts'
@@ -127,6 +128,10 @@ async function authorBuildings(g: FrontierGeometry, plan: FrontierPlan, layout: 
     const root = groups.get(b.id)
     if (!root) {
       throw new Error(`Missing ${b.id}`)
+    }
+    if (b.kind === 'water_tower') {
+      await dressWaterTower(g, root, b, join(SOURCE, 'frontier-water-tower.glb'))
+      continue
     }
     const role = ['bank', 'jail', 'church', 'tower'].includes(b.kind) ? 'stone' : 'wood'
     const tint =

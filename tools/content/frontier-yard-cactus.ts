@@ -113,6 +113,7 @@ function installLoft(
   const attributes = SEMANTICS.map(
     (key) => [key, copy(cactusRequired(donor.getAttribute(key)))] as const,
   )
+  tintYardStems(cactusRequired(attributes[0])[1], cactusRequired(attributes[3])[1])
   const oldBounds = nodes.map((node) => getBounds(node))
   const retired = new Set<Accessor>()
   for (const mesh of meshes) {
@@ -152,6 +153,30 @@ function installLoft(
     ) {
       throw new Error('The measured yard cactus changed a world envelope')
     }
+  }
+}
+
+/** Dry cork near the soil and faint sun exposure over each older rib. */
+function tintYardStems(position: Accessor, color: Accessor): void {
+  const floor = position.getMin([])[1] ?? 0
+  const height = (position.getMax([])[1] ?? 0) - floor
+  const cooler = [0.97, 0.74, 0.47]
+  for (let index = 0; index < position.getCount(); index++) {
+    const [x = 0, y = 0, z = 0] = position.getElement(index, [] as number[])
+    const radius = Math.hypot(x, z)
+    const angle = Math.atan2(z, x)
+    const heightRatio = (y - floor) / height
+    const edge =
+      0.19 + 0.06 * Math.sin(angle * 3 + radius * 13) + 0.025 * Math.sin(angle * 13 + y * 23)
+    const t = Math.max(0, Math.min(1, (edge - heightRatio) / 0.17))
+    const cork = t * t * (3 - 2 * t)
+    const sun = 0.95 + 0.038 * Math.cos(angle + 1.1) + 0.012 * Math.sin(angle * 9 + y * 7)
+    const values = color.getElement(index, [] as number[])
+    for (let channel = 0; channel < 3; channel++) {
+      const value = values[channel] ?? 1
+      values[channel] = value * sun * (1 - cork * (1 - (cooler[channel] ?? 1)))
+    }
+    color.setElement(index, values)
   }
 }
 

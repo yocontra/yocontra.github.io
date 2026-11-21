@@ -12,6 +12,7 @@ import { optimizeAsset } from './optimize.ts'
 const variants = {
   'frontier-tumbleweeds': 'Perdition dry tumbleweed',
   'duel-tumbleweeds': 'Duel dry tumbleweed',
+  tumbleweed: 'Duel dry tumbleweed',
 } as const
 const source = 'tools/art/environments'
 const output = process.argv[2]
@@ -20,9 +21,13 @@ if (!output) {
   throw new Error('Supply an output directory for the authored tumbleweeds')
 }
 const art = await frontierIO.read(library)
-await mkdir(join(output, 'ambient'), { recursive: true })
+await Promise.all(
+  ['ambient', 'dynamic'].map((folder) => mkdir(join(output, folder), { recursive: true })),
+)
 for (const [name, sculpt] of Object.entries(variants)) {
-  const doc = await frontierIO.read(join(source, `${name}.glb`))
+  const category = name === 'tumbleweed' ? 'dynamic' : 'ambient'
+  const working = category === 'dynamic' ? 'tools/art/props' : source
+  const doc = await frontierIO.read(join(working, `${name}.glb`))
   const mesh = doc.getRoot().listMeshes()[0]
   const original = mesh?.listPrimitives()[0]
   const bounds = original?.getAttribute('POSITION')
@@ -94,7 +99,7 @@ for (const [name, sculpt] of Object.entries(variants)) {
   await doc.transform(dedup(), prune({ keepAttributes: true, keepLeaves: true }), unpartition())
   const edited = join(output, `${name}.glb`)
   await frontierIO.write(edited, doc)
-  const published = join(output, 'ambient', `${name}.glb`)
+  const published = join(output, category, `${name}.glb`)
   if (name === 'frontier-tumbleweeds') {
     await copyFile(edited, published)
     await optimizeAsset(published)

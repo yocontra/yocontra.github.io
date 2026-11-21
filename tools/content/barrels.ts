@@ -18,6 +18,7 @@ const sources = [
   'src/experiments/out-west/content/environment-props.ts',
   'tools/content/barrel-parts.ts',
   'tools/content/barrel-topology.ts',
+  'tools/content/barrel-weathering.ts',
   'tools/content/barrel-install.ts',
   'tools/content/barrels.ts',
   'tools/content/frontier-geometry.ts',
@@ -78,26 +79,7 @@ export async function stageBarrels(options: {
   if (readMountGlb(native).json.extras?.frontierSourceHash !== canonicalHash) {
     throw new Error('Stale native input')
   }
-  const inputs = await Promise.all(
-    sources.map(async (path) => ({ path, sha256: hash(await readFile(path)) })),
-  )
-  const library = await frontierIO.read(donor)
-  const node = library
-    .getRoot()
-    .listNodes()
-    .find((entry) => entry.getName() === 'barrel_kit')
-  const primitive = node?.getMesh()?.listPrimitives()[0]
-  if (!primitive) {
-    throw new Error('Missing actual barrel donor')
-  }
-  const parts = buildBarrelParts(primitive)
-  for (const doc of [parts.library, parts.fragments]) {
-    doc.getRoot().setExtras({
-      sourceInputs: inputs,
-      bindingCanonicalSha256: canonicalHash,
-      recipe: 'donor-timber-lengthening-and-closed-fragments-v1',
-    })
-  }
+  const { inputs, parts } = await authorParts()
   const libraryBytes = await frontierIO.writeBinary(parts.library)
   const fragmentBytes = await frontierIO.writeBinary(parts.fragments)
   const sourceBytes = appendBarrelVariants(canonical, libraryBytes)
@@ -139,6 +121,42 @@ export async function stageBarrels(options: {
   })
   return receipt
 }
+async function authorParts() {
+  const inputs = await Promise.all(
+    sources.map(async (path) => ({ path, sha256: hash(await readFile(path)) })),
+  )
+  const library = await frontierIO.read(donor)
+  const node = library
+    .getRoot()
+    .listNodes()
+    .find((entry) => entry.getName() === 'barrel_kit')
+  const primitive = node?.getMesh()?.listPrimitives()[0]
+  if (!primitive) {
+    throw new Error('Missing actual barrel donor')
+  }
+  const parts = buildBarrelParts(primitive)
+  for (const doc of [parts.library, parts.fragments]) {
+    doc.getRoot().setExtras({
+      sourceInputs: inputs,
+      bindingCanonicalSha256: recipe.sourceCanonicalSha256,
+      recipe: 'donor-timber-lengthening-and-closed-fragments-v2',
+    })
+  }
+  return { inputs, parts }
+}
+
+async function stageParts(output: string) {
+  if (!isAbsolute(output) || resolve(output).startsWith(`${resolve('.')}${sep}`)) {
+    throw new Error('Use a new absolute staging directory outside the checkout')
+  }
+  const { parts } = await authorParts()
+  await mkdir(output)
+  await Promise.all([
+    frontierIO.write(join(output, 'barrel-parts.glb'), parts.library),
+    frontierIO.write(join(output, 'barrel-fragments.glb'), parts.fragments),
+  ])
+}
+
 if (import.meta.main) {
   const { values } = parseArgs({
     options: {
@@ -146,20 +164,24 @@ if (import.meta.main) {
       native: { type: 'string' },
       metadata: { type: 'string' },
       output: { type: 'string' },
+      'parts-only': { type: 'boolean' },
     },
     strict: true,
   })
-  if (!(values.canonical && values.native && values.output)) {
+  if (values['parts-only'] && values.output) {
+    await stageParts(values.output)
+  } else if (values.canonical && values.native && values.output) {
+    console.log(
+      JSON.stringify(
+        await stageBarrels({
+          canonical: values.canonical,
+          native: values.native,
+          ...(values.metadata ? { metadata: values.metadata } : {}),
+          output: values.output,
+        }),
+      ),
+    )
+  } else {
     throw new Error('Required: --canonical PATH --native PATH --output ABSOLUTE_NEW_DIRECTORY')
   }
-  console.log(
-    JSON.stringify(
-      await stageBarrels({
-        canonical: values.canonical,
-        native: values.native,
-        ...(values.metadata ? { metadata: values.metadata } : {}),
-        output: values.output,
-      }),
-    ),
-  )
 }

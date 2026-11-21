@@ -15,6 +15,8 @@ import {
   type BarrelVertex as Vertex,
 } from './barrel-topology.ts'
 
+import { weatherBarrel } from './barrel-weathering.ts'
+
 export type { BarrelTriangle } from './barrel-topology.ts'
 
 const LOW_U = 0.004_654_377_698_898_315
@@ -443,6 +445,7 @@ export function buildBarrelParts(primitive: Primitive): {
   fragments: Document
 } {
   const components = tallBarrel(barrelComponents(primitive))
+  weatherBarrel(components, bounds(required(components[0]), 1))
   const fragments = barrelFragments(components)
   const documents = [new Document(), new Document()]
   for (const doc of documents) {
