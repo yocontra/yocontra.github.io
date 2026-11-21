@@ -49,6 +49,7 @@ export async function installPeriodFixtures(
     join(directory, 'frontier-transport.glb'),
     join(directory, 'frontier-graveyard.glb'),
     join(directory, 'frontier-hay.glb'),
+    join(directory, 'frontier-cooperage.glb'),
   ])
 }
 

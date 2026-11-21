@@ -32,6 +32,8 @@ const dimensions = {
   'beveled-grave-marker': [0.65, 1.2, 0.4],
   'stone-yard-cross': [0.65, 1.2, 0.4],
   'fitted-tapered-coffin': [2.5, 0.9, 1],
+  'coopered-barrel-rack': [2, 1.3, 1],
+  'two-tier-cooperage-rack': [2.5, 2.3, 2],
   'twine-bound-straw-bale': [1.05, 0.5, 0.8],
 } as const
 
@@ -66,6 +68,9 @@ function furnitureName(
   const fitted = fittedByKind[cover.kind]
   if (fitted) {
     return fitted
+  }
+  if (cover.kind === 'barrel_rack') {
+    return (cover.top ?? 0) >= 2 ? 'two-tier-cooperage-rack' : 'coopered-barrel-rack'
   }
   if (cover.kind === 'headstone') {
     const rows = ['rounded-grave-marker', 'beveled-grave-marker', 'stone-yard-cross'] as const

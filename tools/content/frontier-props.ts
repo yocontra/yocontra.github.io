@@ -17,7 +17,6 @@ import { frontierTerrainHeight } from './frontier-ground.ts'
 
 /** Library props whose authored proportions can fill their cover volume by repetition. */
 const KIT_PROPS: Partial<Record<Cover['kind'], [string, PrefabFit]>> = {
-  barrel_rack: ['k_barrel_rack', { tile: true, copyCost: 0.12 }],
   barrels: ['barrel', { tile: true, jitter: Math.PI }],
   bucket: ['k_bucket', { jitter: 0.6 }],
   lantern: ['lantern', {}],
