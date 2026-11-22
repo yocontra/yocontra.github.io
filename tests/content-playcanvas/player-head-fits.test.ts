@@ -9,11 +9,13 @@ const io = new NodeIO().registerExtensions(ALL_EXTENSIONS)
 async function headSurface(url: string) {
   const { pathname } = new URL(url, 'https://out-west.invalid')
   const doc = await io.read(`public${pathname}`)
-  const skin = doc
+  const surfaces = doc
     .getRoot()
     .listMeshes()
     .flatMap((mesh) => mesh.listPrimitives())
-    .filter((primitive) => primitive.getMaterial()?.getName() === 'Field-worn skin')
+  const skin = surfaces.filter(
+    (primitive) => primitive.getMaterial()?.getName() === 'Field-worn skin',
+  )
   if (skin.length !== 1) {
     throw new Error(`Expected one isolated skin material on ${pathname}, found ${skin.length}`)
   }
@@ -43,7 +45,32 @@ async function headSurface(url: string) {
   ) {
     throw new Error(`Missing tagged skin, color texture or normal map on ${pathname}`)
   }
-  return { indexCount: indices.length, vertexCount: position.getCount(), albedo: pbr.albedo }
+  const styledHair = surfaces.filter(
+    (primitive) => primitive.getMaterial()?.getName() === 'Tobacco brown hair',
+  )
+  const hair = styledHair[0]
+  const hairMaterial = hair?.getMaterial()
+  const combedScalp = hairMaterial?.getExtras().nativePbr as
+    | { albedo?: string; normal?: string; alphaTest?: number }
+    | undefined
+  if (
+    styledHair.length !== 1 ||
+    (hair?.getAttribute('POSITION')?.getCount() ?? 0) < 1000 ||
+    !hair?.getAttribute('JOINTS_0') ||
+    !hair.getAttribute('WEIGHTS_0') ||
+    hairMaterial?.getAlphaMode() !== 'MASK' ||
+    combedScalp?.alphaTest !== 0.5 ||
+    !combedScalp.albedo?.endsWith('.color.ktx2') ||
+    !combedScalp.normal?.endsWith('.data.ktx2')
+  ) {
+    throw new Error(`Missing the skinned groom, coverage or strand maps on ${pathname}`)
+  }
+  return {
+    indexCount: indices.length,
+    vertexCount: position.getCount(),
+    albedo: pbr.albedo,
+    groom: combedScalp.albedo,
+  }
 }
 
 const starter = headSurface(ASSETS.player.url)

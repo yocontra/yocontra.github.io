@@ -23,7 +23,7 @@ PONCHOS = {"outfit.striped-poncho", "outfit.striped-poncho.pair", "outlaw-6", "o
 RIM_POINTS = 28
 HEAD_VERTICES = 1555
 REFERENCE_CROWN = 0.1997265059272746
-RIM_BLEND = (1.0, 0.50, 0.24, 0.11, 0.03)
+RIM_BLEND = (1.0, 0.58, 0.33, 0.16, 0.06)
 NECK_WEIGHT = (1.0, 0.72, 0.42, 0.18, 0.04)
 STYLE = ("COLOR_0", "_DYE", "_STYLE_LUMINANCE", "_STYLE_MATERIAL")
 STREAMS = {
@@ -64,7 +64,7 @@ def fit_opening(attrs, selected, bind, scale):
         radial = math.hypot(rim_point.x / 0.087, depth / 0.092)
         limit = 1 / max(1, radial)
         collar = Vector((rim_point.x * limit,
-                         -0.073 + 0.044 * max(0, depth * limit / 0.092),
+                         -0.096 + 0.022 * max(0, depth * limit / 0.092),
                          depth * limit - 0.017))
         # Taper the new neckline into the intact woven rows.
         positions[index] = list(to_source @ ((point + (collar - rim_point) * RIM_BLEND[row]) * scale))
@@ -72,25 +72,37 @@ def fit_opening(attrs, selected, bind, scale):
 
 
 def reweight_woven_panel(attrs, selected, positions, rows, joint_names, bind, scale):
-    neck, chest = (joint_names.index(name) for name in ("Neck", "Chest"))
+    neck, chest, torso, abdomen, hips = (
+        joint_names.index(name) for name in ("Neck", "Chest", "Torso", "Abdomen", "Hips")
+    )
     arms = {side: joint_names.index("UpperArm" + side) for side in ("L", "R")}
     joints = []
     weights = []
     for vertex, position, row in zip(selected, positions, rows):
         point = (bind @ Vector(position)) / scale
         angle = math.atan2(point.z + .024, point.x)
+        rear = max(0, -math.sin(angle))
+        side = abs(math.cos(angle))
         collar = NECK_WEIGHT[row] if row < len(NECK_WEIGHT) else 0
-        # The outside seam follows the arm on reach. The front and back panels
-        # retain their torso weights so they continue to hang from the shoulders.
-        arm = .36 * abs(math.cos(angle)) ** 5 * smoothstep(.18, .34, abs(point.x))
-        arm *= smoothstep(4, 10, row) * (1 - .36 * smoothstep(16, 23, row))
-        if collar + arm == 0:
-            joints.append(attrs["JOINTS_0"][vertex][:])
-            weights.append(attrs["WEIGHTS_0"][vertex][:])
-            continue
-        influences = {neck: .30 * collar, chest: .70 * collar, arms["L" if point.x > 0 else "R"]: arm}
+
+        # Let the back hang from the torso. Only the shoulder sides follow reach,
+        # with a small amount of the original leg movement left at the low tips.
+        upper = smoothstep(.16, .37, -point.y)
+        middle = smoothstep(.31, .56, -point.y)
+        lower = smoothstep(.54, .83, -point.y)
+        drape = (1 - collar) * smoothstep(.12, .76, rear) * (.94 - .14 * lower)
+        arm = .25 * side ** 5 * smoothstep(.15, .29, abs(point.x))
+        arm *= (1 - collar) * (1 - smoothstep(.39, .65, -point.y))
+        influences = {
+            neck: .23 * collar,
+            chest: .77 * collar + drape * (1 - upper),
+            torso: drape * upper * (1 - middle),
+            abdomen: drape * upper * middle * (1 - lower),
+            hips: drape * upper * middle * lower,
+            arms["L" if point.x > 0 else "R"]: arm,
+        }
         for joint, weight in zip(attrs["JOINTS_0"][vertex], attrs["WEIGHTS_0"][vertex]):
-            influences[joint] = influences.get(joint, 0) + weight * (1 - collar - arm)
+            influences[joint] = influences.get(joint, 0) + weight * (1 - collar - drape - arm)
         strongest = sorted(influences.items(), key=lambda entry: (-entry[1], entry[0]))[:4]
         total = sum(weight for _, weight in strongest)
         joints.append([joint for joint, _ in strongest] + [0] * (4 - len(strongest)))
@@ -115,33 +127,33 @@ def drape_woven_panels(positions, rows, bind, scale):
         rear = max(0.0, -math.sin(angle))
         front = max(0.0, math.sin(angle))
         neckline = smoothstep(0, 4, row)
-        sleeve = smoothstep(.10, .25, abs(point.x))
-        # Seat the back panel on the ribcage and taper it through the waist.
-        # The sleeve side stays looser than the cloth over the spine.
-        high_back = smoothstep(-.62, -.40, point.y)
-        inner_back = .042 + .057 * high_back
-        point.z += neckline * rear ** 1.35 * inner_back * (1.0 - .46 * sleeve)
-        # Take out the front surplus without pinning the cloth to the shirt.
-        waist = math.exp(-((point.y + .55) / .15) ** 2)
-        point.z += neckline * front ** 1.35 * (.073 * waist - .031 - .025 * high_back)
-        belt_clearance = math.exp(-((point.y + .56) / .13) ** 2)
-        belt_clearance *= 1 - smoothstep(-.54, -.40, point.y)
-        point.z -= neckline * rear ** 1.25 * .067 * belt_clearance
-        point.x *= 1.0 - neckline * (.095 + .018 * high_back)
-        point.y -= neckline * .027 * side ** 1.3 * smoothstep(-.55, -.18, point.y)
-        # The sides hang above the end of the sleeves, with the front and back
-        # panels retaining their length. Keep a small gap over each upper arm.
-        sleeve_edge = neckline * side ** 5
-        point.y += max(0.0, -.112 - point.y) * .29 * sleeve_edge
-        point.x += math.copysign((.045 + .019 * high_back) * sleeve_edge, point.x)
-        point.y += .022 * sleeve_edge * smoothstep(-.42, -.18, point.y)
-        # Broad woven folds fan out toward the unpinned edges under gravity.
-        fall = smoothstep(4, last, row)
-        ribs = math.sin(5 * angle + fall * .9) + .34 * math.cos(11 * angle - fall * .5)
-        depth = fall * (.013 * ribs + .003 * math.sin(21 * angle))
+        drop = -point.y
+
+        # Shape one shoulder-to-hem curve. A separate belt clearance bulge
+        # creates a shelf midway down the back when the actor turns sideways.
+        back_depth = -.109 - .059 * smoothstep(.09, .29, drop)
+        back_depth += .017 * smoothstep(.40, .76, drop)
+        back_blend = rear ** 1.55 * smoothstep(0, 2, row)
+        point.z += (back_depth - point.z) * back_blend
+
+        # Let the front fall over the chest and belt instead of pitching away
+        # from the wearer. Keep the opening curved around the upper sleeves.
+        front_depth = .104 + .102 * smoothstep(.13, .53, drop)
+        front_blend = .40 * front ** 1.7 * neckline * smoothstep(.23, .55, drop)
+        point.z += (front_depth - point.z) * front_blend
+        outer_shoulder = smoothstep(.19, .37, abs(point.x))
+        point.x *= 1 - neckline * (.08 + .13 * outer_shoulder)
+        sleeve_edge = neckline * side ** 4
+        point.y += max(0, -.11 - point.y) * .13 * sleeve_edge
+        point.y -= .018 * sleeve_edge * smoothstep(-.47, -.13, point.y)
+
+        # Low folds soften the tip without adding angular spikes along the back.
+        fall = smoothstep(9, last, row)
+        folds = math.sin(5 * angle + .8 * fall) + .28 * math.cos(9 * angle)
+        depth = .008 * fall * folds
         point.x += depth * math.cos(angle)
         point.z += depth * math.sin(angle)
-        point.y += fall * (.012 * math.cos(3 * angle + .52) - .023)
+        point.y += fall * (.010 * math.cos(3 * angle + .52) - .014 + .046 * front ** 1.6)
         positions[i] = list(to_source @ (point * scale))
 
 
@@ -285,6 +297,8 @@ def tuck_linen(output, bind, scale):
             rear = 1 - smoothstep(-.045, .007, point.z)
             front = smoothstep(.030, .096, point.z)
             point.z += tuck * (.092 * rear - .052 * front)
+            # The folded shirt edge stays below the lower woven opening.
+            point.y -= .062 * smoothstep(-.17, -.045, point.y)
         else:
             # Narrow the upper sleeve inside the shoulder wrap while preserving its cuff.
             tuck = smoothstep(-.58, -.31, point.y) * smoothstep(.15, .30, abs(point.x))

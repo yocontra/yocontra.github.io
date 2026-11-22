@@ -81,7 +81,8 @@ bun tools/content/paired-grip-assets.ts
 ```
 
 The rider head uses the player rig and native eye attachments. The Blender source
-authors the hair, brows, complexion and stubble. The outlaw faces use
+authors the combed scalp, brows, complexion and stubble. It also fits the
+optional handlebar moustache to the upper lip. The outlaw faces use
 `starter-head.glb` for their skin palette.
 The Blender source starts from MakeHuman revision
 `a8bc2d54ff0ac92e78ff71431b1023eda42bf482`. Put `base.obj` and
@@ -93,7 +94,9 @@ from the CC0 Skins 02 pack and save them as `face-freckles.png` and
 ```sh
 blender --background --factory-startup --python tools/content/starter-head-authoring.py -- "$head_source"
 bun tools/content/starter-head-atlas.ts "$head_source/starter-head.blender.glb" tools/art/characters/rider-head.glb
-OUT_WEST_CHARACTERS=player,outfit.trail-duds,outfit.trail-duds.pair bun tools/content/human-assets.ts
+cp "$head_source/handlebar.blender.glb" tools/art/characters/accessories/handlebar.glb
+player_outfits=$(cd tools/art/characters && printf '%s\n' outfit.*.gltf | sed 's/\.gltf$//' | paste -sd , -)
+OUT_WEST_CHARACTERS="player,extra.handlebar,$player_outfits" bun tools/content/human-assets.ts
 ```
 
 The held rifle and shotgun use Blender fore-ends with the original grip surfaces,

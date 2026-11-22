@@ -12,10 +12,12 @@ import { nativeActionSpeed } from '../scene/native-animation-timing.ts'
 import { type DetachedAttachment, detachAttachment } from '../scene/native-attachments.ts'
 import { prepareNativeMaterials } from '../scene/native-materials.ts'
 import { authoredMounts, type WeaponMount } from '../scene/native-mounts.ts'
+import { visibleRiderPosture } from '../scene/native-rider-posture.ts'
 import { animateRevolvers, playWeaponMount } from '../scene/native-weapon-animation.ts'
 
 const ONE_SHOT = /Death|Shoot|Hit|Attack|React|Draw|Flinch|Spin|TipHat|Throw|^Turn_[LR]$/u
 const HUMANOID = /\/(?:baked\/(?:outlaw-|player)|equipment\/outfit\.)/u
+const PLAYER = /\/(?:baked\/player\.glb|equipment\/outfit\.)/u
 const GAIT = /^(?:Stride_|Walk$|Run$|Sprint$|Crouch_Walk$)/u
 const DRAWN = /Pointing|Shoot|Death|Hit|Draw|Spin|Flinch/u
 
@@ -156,6 +158,7 @@ export class DuelActor {
     const resource = asset.resource as ContainerResource
     const humanoid = options.humanoid ?? HUMANOID.test(url)
     const { tracks, indexed } = await actorTracks(game, resource, borrowed, humanoid)
+    const settleVisibleHead = borrowed === undefined && PLAYER.test(url)
     const releaseMaterials = await prepareNativeMaterials(game, resource)
     if (!game.stage.parent) {
       releaseMaterials()
@@ -191,7 +194,10 @@ export class DuelActor {
           parameters: {},
         })
         for (const track of tracks) {
-          model.anim?.baseLayer?.assignAnimation(track.name, track)
+          model.anim?.baseLayer?.assignAnimation(
+            track.name,
+            settleVisibleHead ? visibleRiderPosture(track) : track,
+          )
         }
         model.anim?.baseLayer?.play(initial)
         if (model.anim) {

@@ -327,7 +327,11 @@ function attachSkin(
     'WEIGHTS_0',
     doc.createAccessor().setType('VEC4').setArray(weights).setNormalized(true).setBuffer(buffer),
   )
-  packAttribute(position, false)
+  // The groom can extend beyond the body mesh's normalized bind interval at
+  // the crown. Keep those positions floating point in the same skin space.
+  if (head.getMaterial()?.getName() !== 'Tobacco brown hair') {
+    packAttribute(position, false)
+  }
   packAttribute(normal, false)
   packAttribute(uv, true)
 }

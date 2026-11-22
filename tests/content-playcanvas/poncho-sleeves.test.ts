@@ -133,15 +133,17 @@ for (const [id, donorId, vertices, faces, worldFaces, shirtFaces] of [
       ).toEqual(['Chest', 'Neck'])
     }
   })
-  it(`${id} keeps the center back panel against the ribcage`, async () => {
+  it(`${id} drapes across the shoulder and falls past the belt without a shelf`, async () => {
     const canonical = body(await io.read(`tools/art/characters/${id}.gltf`))
     const skin = canonical.node.getSkin()
     const head = skin?.listJoints().findIndex((joint) => joint.getName() === 'Head') ?? -1
     const inverse = skin?.getInverseBindMatrices()
     const source = canonical.primitive.getAttribute('POSITION')
     const artifact = await io.read(`tools/art/characters/coat-collars/${id}.glb`)
-    const cloth = artifact.getRoot().listMeshes()[0]?.listPrimitives()[0]?.getAttribute('POSITION')
-    if (!(inverse && source && cloth) || head < 0) {
+    const panel = artifact.getRoot().listMeshes()[0]?.listPrimitives()[0]
+    const cloth = panel?.getAttribute('POSITION')
+    const uv = panel?.getAttribute('TEXCOORD_0')
+    if (!(inverse && source && cloth && uv) || head < 0) {
       throw new Error('Missing poncho fit positions or head bind transform')
     }
     const headLocal = new Mat4().set(inverse.getElement(head, []))
@@ -152,17 +154,25 @@ for (const [id, donorId, vertices, faces, worldFaces, shirtFaces] of [
       sample.set(...source.getElement<[number, number, number]>(vertex, [0, 0, 0]))
       crown = Math.max(crown, headLocal.transformPoint(sample, point).y)
     }
-    let back = 0
-    // The original woven panel is the first 1120 vertices. The skin and fringe follow it.
+    const bands = new Map<number, number>()
+    let halfWidth = 0
     for (let vertex = 0; vertex < 1120; vertex++) {
       sample.set(...cloth.getElement<[number, number, number]>(vertex, [0, 0, 0]))
       headLocal.transformPoint(sample, point)
-      if (Math.abs(point.x) < 0.5 * crown && point.y < -0.65 * crown && point.y > -2 * crown) {
-        back = Math.max(back, -point.z / crown)
+      const band = Math.round((uv.getElement(vertex, [0, 0])[1] ?? 0) * 1e5)
+      if (Math.abs(point.x) < 0.5 * crown) {
+        bands.set(band, Math.max(bands.get(band) ?? 0, -point.z / crown))
       }
+      halfWidth = Math.max(halfWidth, Math.abs(point.x) / crown)
     }
-    expect(back).toBeGreaterThan(0.67)
-    expect(back).toBeLessThan(0.84)
+    const back = [...bands].sort(([a], [b]) => a - b).map(([, depth]) => depth)
+    expect(back).toHaveLength(24)
+    expect(halfWidth).toBeLessThan(1.55)
+    expect(Math.max(...back.slice(5, 19))).toBeLessThan(0.94)
+    // Bands twelve and thirteen straddle the visible flare over the player's belt.
+    for (let row = 9; row < 16; row++) {
+      expect((back[row + 1] ?? 0) - (back[row] ?? 0)).toBeLessThan(0.11)
+    }
   })
   it(
     `${id} uses complete sleeves with a separate fit for world and first-person arms`,

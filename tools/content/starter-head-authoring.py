@@ -107,6 +107,15 @@ def position(src):
     bridge *= smooth(1.548, 1.559, up) * (1 - smooth(1.574, 1.596, up))
     across -= 0.00165 * bridge
     front += 0.0031 * bridge
+    # Round the upper lip into the muzzle and soften the step into the chin.
+    # The sculpt is confined to the mouth, leaving the eyes and neck bind alone.
+    mouth = (1 - smooth(0.022, 0.039, lateral)) * smooth(0.108, 0.125, front)
+    upper_lip = math.exp(-((up - 1.522) / 0.007) ** 2)
+    lower_lip = math.exp(-((up - 1.512) / 0.0046) ** 2)
+    chin_fold = math.exp(-((up - 1.496) / 0.0075) ** 2)
+    front += mouth * (-0.0055 * upper_lip + 0.0010 * lower_lip + 0.0024 * chin_fold)
+    corner = math.exp(-((lateral - 0.028) / 0.009) ** 2 - ((up - 1.518) / 0.0055) ** 2)
+    up += (0.00135 if across < -0.027 else 0.00085) * corner * smooth(0.095, 0.113, front)
     return across, -front, up
 
 
@@ -161,34 +170,39 @@ def png_chunk(tag, data):
     return struct.pack(">I", len(data)) + tag + data + struct.pack(">I", zlib.crc32(tag + data))
 
 
-def write_rgb_png(path, pixels):
-    height, width, _channels = pixels.shape
+def write_png(path, pixels):
+    height, width, channels = pixels.shape
     rows = b"".join(b"\0" + row.tobytes() for row in pixels)
     path.write_bytes(
         b"\x89PNG\r\n\x1a\n"
-        + png_chunk(b"IHDR", struct.pack(">2I5B", width, height, 8, 2, 0, 0, 0))
+        + png_chunk(b"IHDR", struct.pack(">2I5B", width, height, 8, 6 if channels == 4 else 2, 0, 0, 0))
         + png_chunk(b"IDAT", zlib.compress(rows, 9))
         + png_chunk(b"IEND", b"")
     )
 
 
+def smooth_array(start, end, value):
+    t = np.clip((value - start) / (end - start), 0, 1)
+    return t * t * (3 - 2 * t)
+
+
 def hairline(point):
     x, depth, height = point
     lateral = x + 0.027
-    angle = math.atan2(lateral, -depth - 0.034)
-    face = math.cos(angle)
+    angle = np.arctan2(lateral, -depth - 0.034)
+    face = np.cos(angle)
     front = -depth
-    temple = smooth(0.010, 0.055, abs(lateral)) * smooth(0.26, 0.83, face)
-    brow = smooth(-0.38, 0.93, face)
-    part = math.exp(-((lateral + 0.020) / 0.028) ** 2)
-    sweep = math.exp(-((lateral - 0.010) / 0.034) ** 2)
+    temple = smooth_array(0.010, 0.055, abs(lateral)) * smooth_array(0.26, 0.83, face)
+    brow = smooth_array(-0.38, 0.93, face)
+    part = np.exp(-((lateral + 0.020) / 0.028) ** 2)
+    sweep = np.exp(-((lateral - 0.010) / 0.034) ** 2)
     base = 1.547 + 0.092 * brow + 0.013 * temple
     base += brow * (0.004 * part - 0.0045 * sweep)
-    base += 0.007 * temple * smooth(-0.037, 0.037, lateral)
-    side = smooth(0.052, 0.082, abs(lateral))
-    ear = smooth(-0.008, 0.024, front) * (1 - smooth(0.075, 0.104, front))
+    base += 0.007 * temple * smooth_array(-0.037, 0.037, lateral)
+    side = smooth_array(0.052, 0.082, abs(lateral))
+    ear = smooth_array(-0.008, 0.024, front) * (1 - smooth_array(0.075, 0.104, front))
     base += 0.033 * side * ear
-    scattered = 0.0011 * math.sin(angle * 13 + 0.9) + 0.0007 * math.sin(angle * 23 - 0.8)
+    scattered = 0.0011 * np.sin(angle * 13 + 0.9) + 0.0007 * np.sin(angle * 23 - 0.8)
     return height - base + scattered
 
 
@@ -209,9 +223,9 @@ def complexion_masks(x, front, y):
     groove = (1 - smooth(0.001, 0.0042, abs(y - groove_center)))
     groove *= smooth(0.015, 0.023, lateral) * (1 - smooth(0.045, 0.065, lateral))
     groove *= smooth(0.075, 0.105, front) * smooth(1.511, 1.527, y)
-    edge = hairline((x, -front, y))
-    scalp = max(smooth(-0.011, 0.014, edge), smooth(1.644, 1.67, y))
-    return max(beard, 0.93 * mustache), blush, max(0.78 * lid, groove), scalp
+    lips = (1 - smooth(0.025, 0.035, lateral)) * smooth(0.107, 0.119, front)
+    lips *= smooth(1.505, 1.512, y) * (1 - smooth(1.522, 1.528, y))
+    return max(beard, 0.58 * mustache), blush, max(0.78 * lid, groove), lips
 
 
 def pad_uv_seams(pigment, painted):
@@ -238,6 +252,8 @@ def face_albedo():
     original.pixels.foreach_get(base)
     base = base.reshape((size, size, 4))
     masks = np.zeros((size, size, 4), dtype=np.float32)
+    scalp = np.zeros((size, size), dtype=np.float32)
+    points_by_vertex = np.array([v.co for v in mesh.vertices], dtype=np.float32)
     painted = np.zeros((size, size), dtype=np.bool_)
     mask_by_point = np.array(
         [complexion_masks(v.co.x, -v.co.y, v.co.z) for v in mesh.vertices],
@@ -257,9 +273,15 @@ def face_albedo():
         v = ((c[1] - a[1]) * (x - c[0]) + (a[0] - c[0]) * (y - c[1])) / denominator
         w = 1 - u - v
         covered = (u > -0.008) & (v > -0.008) & (w > -0.008)
-        blended = np.stack([u[covered], v[covered], w[covered]], axis=-1) @ mask_by_point[list(tri.vertices)]
-        masks[y[covered], x[covered]] = np.clip(blended, 0, 1)
-        painted[y[covered], x[covered]] = True
+        weights = np.stack([u[covered], v[covered], w[covered]], axis=-1)
+        indices = list(tri.vertices)
+        rows, columns = y[covered], x[covered]
+        masks[rows, columns] = np.clip(weights @ mask_by_point[indices], 0, 1)
+        # Sample the hairline per texel so coarse skin triangles don't drag
+        # a dark band beyond the tapered hair geometry along the nape.
+        edge = hairline((weights @ points_by_vertex[indices]).T)
+        scalp[rows, columns] = smooth_array(-0.0045, 0.0035, edge)
+        painted[rows, columns] = True
 
     rng = np.random.default_rng(173)
     whisker = rng.random((size, size))
@@ -271,15 +293,18 @@ def face_albedo():
     pigment = base[:, :, :3] * (1 - follicles[:, :, None]) + shadow * follicles[:, :, None]
     pigment += masks[:, :, 1, None] * np.array([0.013, -0.025, -0.040])
     pigment -= masks[:, :, 2, None] * np.array([0.059, 0.052, 0.039])
-    root_tone = np.array([0.164, 0.130, 0.108], dtype=np.float32)
+    root_tone = np.array([0.226, 0.172, 0.140], dtype=np.float32)
     short_grain = tips + 0.55 * np.roll(tips, 2, axis=0)
     shade = root_tone + short_grain[:, :, None] * np.array([0.074, 0.063, 0.051])
-    fade = np.clip(masks[:, :, 3, None] * (1 + 0.10 * tips[:, :, None]), 0, 1)
+    fade = np.clip(scalp[:, :, None] * (1 + 0.10 * tips[:, :, None]), 0, 1)
     pigment = pigment * (1 - fade) + shade * fade
+    # Keep the scanned contours while reducing the pink band on the lower lip.
+    vermilion = masks[:, :, 3, None]
+    pigment *= 1 + vermilion * np.array([-0.078, -0.020, 0.012], dtype=np.float32)
     pad_uv_seams(pigment, painted)
     encoded = np.rint(np.clip(pigment, 0, 1)[::-1] * 255).astype(np.uint8)
     path = root / "face-trail.png"
-    write_rgb_png(path, encoded)
+    write_png(path, encoded)
     return bpy.data.images.load(str(path))
 
 
@@ -329,34 +354,155 @@ def surface_object(name, points, polygons, material):
     return geometry
 
 
+surface = BVHTree.FromPolygons([v.co for v in mesh.vertices], [tuple(p.vertices) for p in mesh.polygons])
+
+
 def eyebrows():
-    surface = BVHTree.FromPolygons([v.co for v in mesh.vertices], [tuple(p.vertices) for p in mesh.polygons])
-    points = []
-    polygons = []
+    points, polygons = [], []
+
+    def place(x, height):
+        point, normal, _face, _distance = surface.ray_cast(
+            Vector((x, -0.23, height)), Vector((0, 1, 0))
+        )
+        if point is None:
+            raise ValueError("Eyebrow crossed the fitted forehead")
+        return point + normal * 0.00044
+
     for side in (-1, 1):
-        start = len(points)
-        for n in range(19):
-            t = n / 18
-            x = -0.027 + side * (0.017 + 0.043 * t)
-            y = (1.595 + 0.0028 * math.sin(t * math.pi * 0.96) + 0.0016 * t
-                 + 0.0012 * side * math.sin(math.pi * t))
-            fullness = smooth(0, 0.15, t) * (1 - smooth(0.38, 1, t))
-            thickness = 0.00036 + (0.0042 + 0.00034 * math.sin(n * 1.44 + side)) * fullness
-            for edge in (-0.44, 0.63):
-                height = y + thickness * edge
-                point, normal, _face, _distance = surface.ray_cast(Vector((x, -0.23, height)), Vector((0, 1, 0)))
-                if point is None:
-                    raise ValueError("Eyebrow crossed the fitted forehead")
-                points.append(point + normal * 0.00065)
-        for n in range(18):
-            corner = start + 2 * n
-            row = (corner, corner + 1, corner + 3, corner + 2)
-            polygons.append(row[::-1] if side > 0 else row)
-    surface_object("Tapered eyebrow profiles", points, polygons,
-                   brown_material("Tobacco brown eyebrows", (0.041, 0.028, 0.020)))
+        for strand in range(126):
+            t = (strand % 42 + 0.24 * (strand // 42)) / 42
+            spread = (strand // 42 - 1) * 0.00105
+            x = -0.027 + side * (0.016 + 0.045 * t)
+            height = 1.594 + 0.0048 * math.sin(t * math.pi * 0.92) + 0.0012 * side * t
+            height += spread + 0.00075 * math.sin(strand * 1.83 + side)
+            reach = (0.0018 + 0.0021 * smooth(0.02, 0.67, t)) * (1 - 0.52 * smooth(0.77, 1, t))
+            lift = 0.0028 * (1 - smooth(0.15, 0.84, t)) - 0.00075
+            width = 0.00017 + 0.00012 * (1 + math.sin(strand * 2.11))
+            index = len(points)
+            for offset in (-width, width):
+                points.append(place(x, height + offset))
+            points.append(place(x + side * reach, height + lift))
+            face = (index, index + 1, index + 2)
+            polygons.append(face if side < 0 else face[::-1])
+    surface_object("Swept eyebrow strands", points, polygons,
+                   brown_material("Tobacco brown eyebrows", (0.043, 0.031, 0.023)))
+
+
+def scalp_point(origin, angle, elevation):
+    horizontal = math.cos(elevation)
+    direction = Vector((horizontal * math.sin(angle), -horizontal * math.cos(angle), math.sin(elevation)))
+    point, _normal, _face, _distance = surface.ray_cast(origin + direction * 0.35, -direction)
+    if point is None:
+        raise ValueError("Hair guide could not find the scalp")
+    return point, direction
+
+
+def scalp_edge(origin, angle):
+    low, high = -0.50, 1.30
+    for _ in range(17):
+        middle = (low + high) / 2
+        point, _direction = scalp_point(origin, angle, middle)
+        if hairline(point) > -0.0018:
+            high = middle
+        else:
+            low = middle
+    return high
+
+
+def combed_crop_material():
+    material = brown_material("Tobacco brown hair", (1.0, 1.0, 1.0))
+    nodes, links = material.node_tree.nodes, material.node_tree.links
+    shader = nodes["Principled BSDF"]
+    # Build continuous swept strands in scalp UVs. The separate albedo and normal
+    # fields retain the direction of the crop as the texture mips down.
+    u = np.linspace(0, 1, 1024, endpoint=False)[None, :]
+    v = np.linspace(0, 1, 512, endpoint=True)[:, None]
+    angle = 2 * np.pi * u
+    rake = 0.12 * v + 0.027 * np.sin(2 * angle + 1.2) * v * v
+    wave = angle + 2 * np.pi * rake
+    lock = 0.5 + 0.5 * np.sin(wave * 52 + 0.35 * np.sin(wave * 19 - v * 41))
+    filament = 0.5 + 0.5 * np.sin(wave * 191 + 0.91 * np.sin(9 * angle + v * 23))
+    irregularity = 0.5 + 0.5 * np.sin(wave * 123 - v * 76 + np.sin(wave * 14 + v * 19))
+    broken = 0.6 + 0.4 * np.sin(wave * 273 - v * 138 + np.sin(wave * 24))
+    fade = np.clip(v * 14, 0, 1)
+    grain = (0.11 * lock + 0.17 * filament ** 2 * broken + 0.09 * irregularity) * fade
+    root_fade = np.clip(v * 7, 0, 1)[:, :, None]
+    shade = np.array([34, 24, 20]) + root_fade * np.array([9, 7, 5])
+    shade = shade + grain[:, :, None] * np.array([53, 46, 36])
+    # Break the edge into sub-millimetre wisps with a wider taper at the nape.
+    back = 0.5 - 0.5 * np.cos(angle)
+    tips = 0.008 + 0.015 * back + 0.006 * np.sin(angle * 149) + 0.0045 * np.sin(angle * 83 + 1.2)
+    opacity = np.clip((v - tips) * 170 + 0.5, 0, 1)
+    rgba = np.concatenate((shade, opacity[:, :, None] * 255), axis=-1)
+    pixels = np.rint(rgba[::-1]).astype(np.uint8)
+    albedo_file = root / "cropped-hair-color.png"
+    write_png(albedo_file, pixels)
+    albedo = nodes.new("ShaderNodeTexImage")
+    albedo.image = bpy.data.images.load(str(albedo_file))
+    links.new(albedo.outputs["Color"], shader.inputs["Base Color"])
+    links.new(albedo.outputs["Alpha"], shader.inputs["Alpha"])
+    material.alpha_threshold = 0.5
+
+    relief = (0.20 * lock + 0.22 * filament * broken + 0.13 * irregularity) * fade
+    dx = 0.54 * (np.roll(relief, 1, axis=1) - np.roll(relief, -1, axis=1))
+    dy = 0.54 * (np.roll(relief, 1, axis=0) - np.roll(relief, -1, axis=0))
+    dy[[0, -1]] = 0
+    tangent_normal = np.stack((dx, dy, np.ones_like(dx)), axis=-1)
+    tangent_normal /= np.linalg.norm(tangent_normal, axis=-1, keepdims=True)
+    bump_file = root / "cropped-hair-normal.png"
+    write_png(bump_file, np.rint((0.5 + 0.5 * tangent_normal[::-1]) * 255).astype(np.uint8))
+    bump = nodes.new("ShaderNodeTexImage")
+    bump.image = bpy.data.images.load(str(bump_file))
+    bump.image.colorspace_settings.name = "Non-Color"
+    normal_map = nodes.new("ShaderNodeNormalMap")
+    normal_map.inputs["Strength"].default_value = 0.66
+    links.new(bump.outputs["Color"], normal_map.inputs["Color"])
+    links.new(normal_map.outputs["Normal"], shader.inputs["Normal"])
+    return material
+
+
+def combed_crop():
+    origin = Vector((-0.027, -0.032, 1.603))
+    sides, rings = 144, 29
+    points, faces = [], []
+    hair_angles = [2 * math.pi * side / sides for side in range(sides)]
+    lowest = [scalp_edge(origin, angle) for angle in hair_angles]
+    for row in range(rings):
+        t = row / rings
+        for angle, edge in zip(hair_angles, lowest):
+            angle += 0.11 * math.sin(t * math.pi) + 0.03 * t * math.sin(angle * 2)
+            elevation = edge + (math.pi * 0.5 - edge) * t
+            point, ray = scalp_point(origin, angle, elevation)
+            north = smooth(0.15, 1.42, elevation)
+            fade = smooth(0, 0.28, t)
+            scoop = 0.5 + 0.5 * math.sin(angle * 33 + 4 * t)
+            crest = smooth(0.08, 0.48, t) * (1 - smooth(0.78, 0.99, t))
+            depth = 0.0006 + fade * (0.0017 + 0.0038 * north + 0.0010 * scoop * crest)
+            points.append(point + ray * depth)
+    crown, ray = scalp_point(origin, 0, math.pi * 0.5)
+    points.append(crown + ray * 0.0061)
+    for row in range(rings):
+        for side in range(sides):
+            a = row * sides + side
+            b = row * sides + (side + 1) % sides
+            if row < rings - 1:
+                faces.append((a, b, b + sides, a + sides))
+            else:
+                faces.append((a, b, len(points) - 1))
+    geometry = surface_object("Close-combed scalp", points, faces, combed_crop_material())
+    uv = geometry.uv_layers.active
+    for face in geometry.polygons:
+        row, side = divmod(face.index, sides)
+        u0, u1 = side / sides, (side + 1) / sides
+        v0, v1 = row / rings, (row + 1) / rings
+        coords = [(u0, v0), (u1, v0)]
+        coords += [(u1, v1), (u0, v1)] if row < rings - 1 else [((u0 + u1) * 0.5, v1)]
+        for corner, coord in zip(face.loop_indices, coords):
+            uv.data[corner].uv = coord
 
 
 eyebrows()
+combed_crop()
 
 
 bpy.ops.export_scene.gltf(
@@ -365,3 +511,54 @@ bpy.ops.export_scene.gltf(
     export_yup=True,
 )
 print("Starter head:", len(mesh.vertices), "vertices,", len(mesh.polygons), "faces")
+
+
+def fitted_handlebar():
+    # Trace the reconstructed upper lip directly so the roots remain on the
+    # skin and the fine curled ends cannot mask the mouth in profile.
+    points, faces = [], []
+    sections, circumference = 40, 24
+    for side in (-1, 1):
+        base = len(points)
+        for step in range(sections + 1):
+            t = step / sections
+            x = -0.027 + side * (0.0025 + 0.038 * t)
+            center = 1.5295 - 0.0046 * smooth(0.18, 0.70, t)
+            center += (0.0096 + 0.0007 * side) * smooth(0.68, 1.0, t)
+            fullness = smooth(0, 0.13, t) * (1 - smooth(0.55, 1, t))
+            width = 0.00022 + 0.00325 * fullness
+            depth = 0.00025 + 0.0018 * fullness
+            for k in range(circumference):
+                angle = 2 * math.pi * k / circumference
+                height = center + width * math.cos(angle)
+                hit, _normal, _face, _distance = surface.ray_cast(
+                    Vector((x, -0.23, height)), Vector((0, 1, 0))
+                )
+                if hit is None:
+                    raise ValueError("Moustache guide left the cheek")
+                strand = 0.00019 * fullness * math.sin(11 * angle + t * 7)
+                hit.y -= 0.0003 + depth * math.sin(angle) + strand
+                points.append(hit)
+        for step in range(sections):
+            for k in range(circumference):
+                a = base + step * circumference + k
+                b = base + step * circumference + (k + 1) % circumference
+                face = (a, b, b + circumference, a + circumference)
+                faces.append(face if side > 0 else face[::-1])
+        start_ring = tuple(range(base, base + circumference))
+        end_ring = tuple(range(base + sections * circumference, len(points)))
+        faces.extend((start_ring[::-1], end_ring) if side > 0 else (start_ring, end_ring[::-1]))
+    geometry = surface_object("Swept cheek-fitted moustache", points, faces,
+                              brown_material("Moustache bundles", (1, 1, 1)))
+    obj = next(obj for obj in bpy.context.collection.objects if obj.data == geometry)
+    bpy.ops.object.select_all(action="DESELECT")
+    obj.select_set(True)
+    bpy.ops.export_scene.gltf(
+        filepath=str((root / "handlebar.blender.glb").resolve()),
+        export_format="GLB",
+        export_yup=True,
+        use_selection=True,
+    )
+
+
+fitted_handlebar()

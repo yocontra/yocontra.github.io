@@ -33,10 +33,8 @@ const hair = art
   .getRoot()
   .listMaterials()
   .find((material) => material.getName() === 'Tobacco brown hair')
-// The cropped scalp shares the skin atlas. Keep its follicles above the color quantization floor.
-const encoding = hair ? 'etc1s' : 'uastc'
 const [albedo, normal] = await Promise.all([
-  compressedCharacterTexture(paint, true, 'characters', encoding),
+  compressedCharacterTexture(paint, true),
   compressedCharacterTexture(detail, false),
 ])
 skin
@@ -48,9 +46,20 @@ skin
     nativePbr: { albedo, normal, surface: 'skin', normalScale: 0.53, width: 768, height: 768 },
   })
 const strands = hair?.getBaseColorTexture()?.getImage()
-if (hair && strands) {
-  const texture = await compressedCharacterTexture(strands, true)
-  hair.setBaseColorTexture(null).setExtras({ nativePbr: { albedo: texture } })
+const strandDetail = hair?.getNormalTexture()?.getImage()
+if (hair && strands && strandDetail) {
+  const [hairAlbedo, hairNormal] = await Promise.all([
+    compressedCharacterTexture(strands, true),
+    compressedCharacterTexture(strandDetail, false),
+  ])
+  hair
+    .setBaseColorTexture(null)
+    .setNormalTexture(null)
+    .setAlphaMode('MASK')
+    .setAlphaCutoff(0.5)
+    .setExtras({
+      nativePbr: { albedo: hairAlbedo, normal: hairNormal, normalScale: 0.66, alphaTest: 0.5 },
+    })
 }
 await art.transform(prune({ keepAttributes: true }))
 await io.write(output, art)

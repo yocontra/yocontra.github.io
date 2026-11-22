@@ -84,6 +84,8 @@ export async function createPlayerModelReview(tier: RenderTier) {
     pixelRatio: 1,
     tier,
   })
+  // Draw only the requested frames so the renderer stays idle between captures.
+  game.app.autoRender = false
   const camera = game.camera.camera
   const sun = game.app.root.findByName('sun')
   if (!(camera && sun instanceof Entity && sun.light)) {
@@ -207,6 +209,7 @@ export async function createPlayerModelReview(tier: RenderTier) {
       game.camera.lookAt(p.x, p.y + 0.035, p.z)
     }
     for (let frame = 0; frame < 3; frame++) {
+      game.app.renderNextFrame = true
       await new Promise<void>((resolve) => game.app.once('postrender', () => resolve()))
     }
     const cameraPosition = game.camera.getPosition()
