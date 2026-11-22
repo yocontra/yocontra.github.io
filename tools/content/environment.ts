@@ -5,6 +5,7 @@ import { join, resolve } from 'node:path'
 import { NodeIO } from '@gltf-transform/core'
 import { ALL_EXTENSIONS } from '@gltf-transform/extensions'
 import { dedup, dequantize, prune, weld } from '@gltf-transform/functions'
+import { TOWN_BOUNDS } from '../../src/experiments/out-west/content/manifest.ts'
 import { fitArenaProps } from './arena-props.ts'
 import { fitArenaWagons } from './arena-wagons.ts'
 import { compressedCharacterTexture } from './character-textures.ts'
@@ -26,6 +27,7 @@ import { orderLowYardCactusIndices } from './frontier-yard-cactus.ts'
 import { dressMissionAdobe } from './mission-adobe.ts'
 import { optimizeAsset } from './optimize.ts'
 import { dressStreetLamps, lampLights } from './street-lamps.ts'
+import { installTerrainVariation, weatherPerditionSoil } from './terrain-variation.ts'
 
 const argument = (name: string, fallback: string) =>
   process.argv[process.argv.indexOf(name) + 1] ?? fallback
@@ -123,6 +125,9 @@ for (const name of names.filter((candidate) => !only || candidate === only)) {
   await document.transform(dequantize())
   if (name === 'frontier') {
     restoreFreightUv1Usage(document)
+    await installTerrainVariation(document, 'Perdition ground')
+    weatherPerditionSoil(document, TOWN_BOUNDS.maxX)
+    await document.transform(prune({ keepAttributes: true, keepLeaves: true }))
   }
   authorEnvironmentCloudUvs(document, name)
   await io.write(path, document)
