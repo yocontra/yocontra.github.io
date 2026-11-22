@@ -101,7 +101,7 @@ export const ENVIRONMENT = {
   hash: '206c67e3a1b992282821cf06662bdd69bbb4915c1c4444a66338a40d6a7d4e34',
   bytes: 1173154,
 } as const
-export const CONTENT_VERSION = '7f4023c0e2bcb66d60b7967364c4d3f2a8d0dce90a17417bdda34832e7028141'
+export const CONTENT_VERSION = 'e163231d3f98c08bcdab301c589f4c714a083dc929b1e709a3d7cf31864a29f1'
 export const COLLISION_VERSION = '03b11033428780f67158b47e3fc2b37d761185acea4d5b323301449671b65def'
 export const ASSETS = {
   frontier: {
@@ -115,24 +115,24 @@ export const ASSETS = {
     bytes: 371880,
   },
   duel: {
-    url: '/experiments/out-west/3d/native-v2/baked/duel.glb?v=c7208710a4ac4127',
-    hash: 'c7208710a4ac4127068640b420831504c8d60ea1f16b24710a8be993c141d509',
-    bytes: 30922456,
+    url: '/experiments/out-west/3d/native-v2/baked/duel.glb?v=73a1e3cf00a2d9ba',
+    hash: '73a1e3cf00a2d9ba8ae170975f80d0c4984d4f118182849261b06e262d78e288',
+    bytes: 34709920,
   },
   depot: {
-    url: '/experiments/out-west/3d/native-v2/baked/depot.glb?v=db58288b8683312a',
-    hash: 'db58288b8683312ad6b3acb8e3d7d39b458a1617aa25e028a7b270a1f967b785',
-    bytes: 21920852,
+    url: '/experiments/out-west/3d/native-v2/baked/depot.glb?v=841eeb903f2dc550',
+    hash: '841eeb903f2dc5500d36e1b10f862ea2a74d35809ac70b2f204591fcdef02921',
+    bytes: 22637640,
   },
   mission: {
-    url: '/experiments/out-west/3d/native-v2/baked/mission.glb?v=ba3982528f034aae',
-    hash: 'ba3982528f034aae9f10bda22a522a99c912fea4310411a7b4b535783224574f',
-    bytes: 16667936,
+    url: '/experiments/out-west/3d/native-v2/baked/mission.glb?v=4ca14c76f9964b39',
+    hash: '4ca14c76f9964b39423b85e3f6cfc85c64f7a9e83fc4715beffe95c8543b3fcd',
+    bytes: 17374020,
   },
   bank: {
-    url: '/experiments/out-west/3d/native-v2/baked/bank.glb?v=bc4e45a97b18f239',
-    hash: 'bc4e45a97b18f23941df071987a445b77c4c8ff167457404c092c0f18e93d87e',
-    bytes: 20913900,
+    url: '/experiments/out-west/3d/native-v2/baked/bank.glb?v=52a8a71342695e1c',
+    hash: '52a8a71342695e1c5f20019525156c50196f0d425b2a3a9bc7a6a6ce8e1a4380',
+    bytes: 22502504,
   },
   player: {
     url: '/experiments/out-west/3d/native-v2/baked/player.glb?v=c096750811257910',

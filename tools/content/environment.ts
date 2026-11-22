@@ -6,6 +6,7 @@ import { NodeIO } from '@gltf-transform/core'
 import { ALL_EXTENSIONS } from '@gltf-transform/extensions'
 import { dedup, dequantize, prune, weld } from '@gltf-transform/functions'
 import { TOWN_BOUNDS } from '../../src/experiments/out-west/content/manifest.ts'
+import { applyArenaFacadeWear } from './arena-facade-wear.ts'
 import { fitArenaProps } from './arena-props.ts'
 import { fitArenaWagons } from './arena-wagons.ts'
 import { compressedCharacterTexture } from './character-textures.ts'
@@ -128,6 +129,23 @@ for (const name of names.filter((candidate) => !only || candidate === only)) {
     await installTerrainVariation(document, 'Perdition ground')
     weatherPerditionSoil(document, TOWN_BOUNDS.maxX)
     await document.transform(prune({ keepAttributes: true, keepLeaves: true }))
+  }
+  if (name !== 'frontier') {
+    await applyArenaFacadeWear(document, name)
+  }
+  if (name === 'duel') {
+    const ground = document
+      .getRoot()
+      .listNodes()
+      .find((node) => node.getName() === 'ground-18')
+    const part = ground?.getMesh()?.listPrimitives()[0]
+    const raw = part?.getMaterial()
+    if (!(part && raw?.getBaseColorTexture() && part.getAttribute('TEXCOORD_0'))) {
+      throw new Error('Missing the regular arena dirt material or UVs')
+    }
+    const material = raw.clone().setName('Regular arena dirt')
+    part.setMaterial(material)
+    await installTerrainVariation(document, material.getName())
   }
   authorEnvironmentCloudUvs(document, name)
   await io.write(path, document)

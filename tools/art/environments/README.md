@@ -104,3 +104,25 @@ Run the authoring command with Blender and the pinned KTX encoder on PATH.
 `bun tools/content/crow-fold.ts /tmp/crow.glb` also rebuilds the fold from the
 frozen native input `crow-articulated-base.glb`. Set `OUT_WEST_CROW=/tmp/crow.glb`
 to review the staged file in headless Chrome.
+
+## Quick Draw surface finishes
+
+Use staging directories to preserve the fitted props and native geometry in the
+released arenas. The texture overlay checks that the scene graph, mesh positions,
+faces and unowned texture data match its input after the write.
+
+1. Export `duel.glb`, `depot.glb`, `mission.glb` and `bank.glb` from the native
+   asset directory at revision `6f90a19d` into a baseline directory.
+2. Run `bun tools/content/environment.ts --only duel --output "$regular"` and
+   repeat for `depot`. Use the pinned KTX encoder.
+3. Copy the Mission and Bank authoring GLBs into the stone staging directory as
+   `mission-input.glb` and `bank-input.glb`. Run:
+
+   ```sh
+   bun tools/content/flatten-civic.ts "$stone/mission-input.glb" "$stone/bank-input.glb"
+   KTX_ENCODER=/path/to/toktx bun tools/content/arena-stone-materials.ts "$stone"
+   bun tools/content/arena-finish-overlay.ts "$baseline" "$regular" "$stone" "$staged"
+   ```
+
+4. Verify the staged maps in the native arena test above and regenerate the
+   asset manifest after copying the accepted GLBs into the native asset directory.
