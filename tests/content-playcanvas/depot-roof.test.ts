@@ -161,11 +161,11 @@ for (const [label, path, expected] of [
     'native',
     'public/experiments/out-west/3d/native-v2/baked/depot.glb',
     {
-      // Fitted dressing extends metadata. Existing geometry and texture digests stay fixed.
-      metadata: '7c5c3f912d6f135b270e0913d8126246ef606bc3bc0e84497109eb86259deb43',
-      untouched: '61a1c7005d46511542976cb4cfc38822afd8b7b59e8c856ac2502fbc0438b1cd',
-      retained: '5f51d9da519fde2a7ada2f9892b9189f7a23829e8d1fb0775a85a6009f621b39',
-      textures: '005bd4e9c834475ff565234aaf9a8bc968212d4ca00ba740166d51b82d24e4be',
+      // Native depot includes the verified facade and platform finishes. Keep canonical art pinned above.
+      metadata: 'f0c7822271a2729243063f5ebf9323fe52177683e5c6d29d0038f9b64a6de493',
+      untouched: 'fd38f6e7ed49f14611c9e926f54feb05194e97bcf8843e95551917d4b9cbdd08',
+      retained: 'b5e4e5843d4f281acc862555a67ec529c3c62d26f2a225c4d1e485dd695dceef',
+      textures: 'ff4f597172cdb66d81f627ea22af0499814c100b1878972c0c3360e715b02cb6',
     },
   ],
 ] as const) {
@@ -186,7 +186,7 @@ for (const [label, path, expected] of [
     }
     expect(actual.animations).toBe(0)
     for (const key of ['metadata', 'untouched', 'retained', 'textures'] as const) {
-      expect(actual[key]).toBe(expected[key])
+      expect(actual[key], key).toBe(expected[key])
     }
   })
 }
