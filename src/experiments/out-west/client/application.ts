@@ -63,7 +63,6 @@ export class GameApplication {
   private readonly resizeObserver: ResizeObserver
   private readonly loads = new Map<string, Promise<Asset>>()
   private previousTime = 0
-  private animationFrameTime = 0
   private pixelDensity = devicePixelRatio
   private readonly environmentTextures: Texture[] = []
   private environmentEpoch = 0
@@ -72,15 +71,6 @@ export class GameApplication {
   private readonly options: ApplicationOptions
   private constructor(app: AppBase, options: ApplicationOptions) {
     this.app = app
-    if (options.frontier) {
-      // Pass the engine's RAF timestamp to the SDK. Sampling inside the update
-      // adds JS scheduling jitter to predicted motion, even at a steady display rate.
-      const tick = app.tick
-      app.tick = (time, xrFrame) => {
-        this.animationFrameTime = time || performance.now()
-        tick(time, xrFrame)
-      }
-    }
     this.camera = new Entity('camera', app)
     this.stage = new Entity('stage', app)
     this.options = options
@@ -203,9 +193,6 @@ export class GameApplication {
       }
       throw error
     }
-  }
-  get frameTime(): number {
-    return this.animationFrameTime
   }
   private readonly update = (): void => {
     const now = performance.now()

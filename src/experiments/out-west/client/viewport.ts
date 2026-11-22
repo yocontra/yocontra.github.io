@@ -225,6 +225,7 @@ export function mountGameViewport(root: HTMLElement, options: ViewportOptions): 
   const cameraRig = new FollowCamera()
   let first = options.firstPerson ?? settings.view === 'first'
   let seq = 0
+  let frameTime: number | undefined
   const touch = matchMedia('(pointer: coarse)').matches
   let playing = false
   const inputBlocks = new Set<InputBlock>()
@@ -235,7 +236,7 @@ export function mountGameViewport(root: HTMLElement, options: ViewportOptions): 
     const intent = sampleInput({ session, input, settings, touch, dt }, application.camera, seq++)
     if (playing) {
       effects?.predictShot(session.world?.players[Number(session.selfId)], intent)
-      session.update(Math.min(dt, 0.1), intent, application.frameTime)
+      session.update(Math.min(dt, 0.1), intent, frameTime)
     }
     scene?.present(session, dt, { first, intent, aim: playing && first && input.enabled })
     const player = session.players.get(session.selfId)
@@ -263,6 +264,13 @@ export function mountGameViewport(root: HTMLElement, options: ViewportOptions): 
     try {
       const created = await GameApplication.create({ canvas, viewport: root, frontier: true })
       application = ownAfterLoad(signal, created, (value) => value.destroy())
+      // The SDK needs the browser's vsync-aligned time rather than a reading
+      // taken after other JavaScript work in the update callback.
+      const tick = created.app.tick
+      created.app.tick = (time, xrFrame) => {
+        frameTime = time
+        tick(time, xrFrame)
+      }
       const presentation = new FrontierScene(created, signal)
       scene = presentation
       await presentation.load({
