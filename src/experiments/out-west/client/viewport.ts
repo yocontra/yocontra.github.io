@@ -20,7 +20,7 @@ import { viewportDebug } from './viewport-debug.ts'
 import { createEffects } from './viewport-effects.ts'
 
 export interface GameSession extends FrontierSceneState {
-  update: (dt: number, input: PlayerInput) => void
+  update: (dt: number, input: PlayerInput, frameTime?: number) => void
   /** Raycasts the authoritative collision scene to keep the follow camera out of walls. */
   cameraTrace?: (from: Vec3, to: Vec3) => Vec3 | null
   dispose: () => void
@@ -235,7 +235,7 @@ export function mountGameViewport(root: HTMLElement, options: ViewportOptions): 
     const intent = sampleInput({ session, input, settings, touch, dt }, application.camera, seq++)
     if (playing) {
       effects?.predictShot(session.world?.players[Number(session.selfId)], intent)
-      session.update(Math.min(dt, 0.1), intent)
+      session.update(Math.min(dt, 0.1), intent, application.frameTime)
     }
     scene?.present(session, dt, { first, intent, aim: playing && first && input.enabled })
     const player = session.players.get(session.selfId)

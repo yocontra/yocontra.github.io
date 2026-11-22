@@ -312,12 +312,12 @@ function connectSession(
       listeners.add(listener)
       return () => listeners.delete(listener)
     },
-    update(_dt, intent) {
+    update(_dt, intent, frameTime = performance.now()) {
       if (disposed) {
         return
       }
       showdownInput.sample(intent)
-      const due = Math.min(4, predict.tick(performance.now()))
+      const due = Math.min(4, predict.tick(frameTime))
       for (let i = 0; i < due; i++) {
         Object.assign(input.data, intent, { viewTime: world.tick - 2 })
         input.send()

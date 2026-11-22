@@ -148,9 +148,9 @@ export async function reconnectableSession(
         active.control(text)
       }
     },
-    update(dt, input) {
+    update(dt, input, frameTime) {
       if (!(retrying || lifecycle.signal.aborted)) {
-        active.update(dt, input)
+        active.update(dt, input, frameTime)
       }
     },
     cameraTrace(from, to) {
