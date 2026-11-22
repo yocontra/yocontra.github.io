@@ -15,6 +15,7 @@ import { compressedCharacterTexture } from './character-textures.ts'
 import { withContentOutput } from './content-output.ts'
 import { installDepotRoofTimber } from './depot-roof-timber.ts'
 import { dressDuelBluffs } from './duel-bluffs.ts'
+import { installDuelShopfronts } from './duel-shopfronts.ts'
 import {
   authorEnvironmentCloudUvs,
   restoreFreightUv1Usage,
@@ -154,6 +155,7 @@ for (const name of names.filter((candidate) => !only || candidate === only)) {
     const material = raw.clone().setName('Regular arena dirt')
     part.setMaterial(material)
     await installTerrainVariation(document, material.getName())
+    installDuelShopfronts(document)
   }
   if (name === 'depot') {
     installDepotRoofTimber(document)

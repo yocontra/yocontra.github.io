@@ -1653,8 +1653,14 @@
       "d": 6,
       "height": 14,
       "floors": 3,
-      "hollow": false,
-      "doors": [],
+      "hollow": true,
+      "doors": [
+        {
+          "side": "s",
+          "at": 0.85,
+          "width": 1.72
+        }
+      ],
       "roof": {
         "axis": "x",
         "rise": 1.92,
@@ -1662,7 +1668,131 @@
         "overhang": 0.5,
         "front": null
       },
-      "windows": []
+      "windows": [
+        {
+          "id": "church_tower:s:belfry",
+          "side": "s",
+          "at": 1.62,
+          "width": 2.76,
+          "sill": 11.34,
+          "top": 13.48,
+          "floor": 4,
+          "scale": 1,
+          "shop": false,
+          "unglazed": true
+        },
+        {
+          "id": "church_tower:n:belfry",
+          "side": "n",
+          "at": 1.62,
+          "width": 2.76,
+          "sill": 11.34,
+          "top": 13.48,
+          "floor": 4,
+          "scale": 1,
+          "shop": false,
+          "unglazed": true
+        },
+        {
+          "id": "church_tower:e:belfry",
+          "side": "e",
+          "at": 1.62,
+          "width": 2.76,
+          "sill": 11.34,
+          "top": 13.48,
+          "floor": 4,
+          "scale": 1,
+          "shop": false,
+          "unglazed": true
+        },
+        {
+          "id": "church_tower:w:belfry",
+          "side": "w",
+          "at": 1.62,
+          "width": 2.76,
+          "sill": 11.34,
+          "top": 13.48,
+          "floor": 4,
+          "scale": 1,
+          "shop": false,
+          "unglazed": true
+        }
+      ],
+      "upperFloor": [
+        {
+          "x": 79.5,
+          "z": 22.5,
+          "w": 5,
+          "d": 0.79,
+          "y": 2.65
+        },
+        {
+          "x": 79.5,
+          "z": 26.71,
+          "w": 5,
+          "d": 0.79,
+          "y": 5.3
+        },
+        {
+          "x": 79.5,
+          "z": 22.5,
+          "w": 5,
+          "d": 0.79,
+          "y": 7.95
+        },
+        {
+          "x": 79.5,
+          "z": 26.71,
+          "w": 5,
+          "d": 0.79,
+          "y": 10.6
+        },
+        {
+          "x": 79.5,
+          "z": 22.5,
+          "w": 2.7,
+          "d": 4.21,
+          "y": 10.6
+        }
+      ],
+      "stairs": [
+        {
+          "x": 79.55,
+          "z": 23.29,
+          "w": 2.05,
+          "d": 3.42,
+          "fromY": 0,
+          "toY": 2.65,
+          "dir": "n"
+        },
+        {
+          "x": 82.4,
+          "z": 23.29,
+          "w": 2.05,
+          "d": 3.42,
+          "fromY": 2.65,
+          "toY": 5.3,
+          "dir": "s"
+        },
+        {
+          "x": 79.55,
+          "z": 23.29,
+          "w": 2.05,
+          "d": 3.42,
+          "fromY": 5.3,
+          "toY": 7.95,
+          "dir": "n"
+        },
+        {
+          "x": 82.4,
+          "z": 23.29,
+          "w": 2.05,
+          "d": 3.42,
+          "fromY": 7.95,
+          "toY": 10.6,
+          "dir": "s"
+        }
+      ]
     },
     {
       "id": "outhouse_saloon",
@@ -7139,9 +7269,9 @@
     {
       "id": "rifle_tower",
       "kind": "rifle",
-      "x": 82,
-      "z": 30.5,
-      "y": 0
+      "x": 81.6,
+      "z": 27.17,
+      "y": 10.6
     },
     {
       "id": "rifle_balcony",

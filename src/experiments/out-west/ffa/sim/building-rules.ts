@@ -97,6 +97,8 @@ export interface WindowOpening {
   /** Kit scale used for shutters and the pane proportions. */
   scale: number
   shop: boolean
+  /** Open stone arch or lookout with no breakable pane. */
+  unglazed?: boolean
 }
 
 /** Where a window's glass sits: one axis-aligned plane shared by the scene and the sim. */
@@ -164,14 +166,16 @@ export function windowPane(b: Building, w: WindowOpening): PanePlacement {
   }
 }
 
-/** Every opening in town, in one stable order the scene and the sim both index by. */
+/** Every breakable pane in town, in one stable order shared by the scene and simulation. */
 export function townWindows(
   layout: TownLayout,
 ): { b: Building; w: WindowOpening; index: number }[] {
   const out: { b: Building; w: WindowOpening; index: number }[] = []
   for (const b of layout.buildings) {
     for (const w of b.windows ?? []) {
-      out.push({ b, w, index: out.length })
+      if (!w.unglazed) {
+        out.push({ b, w, index: out.length })
+      }
     }
   }
   return out

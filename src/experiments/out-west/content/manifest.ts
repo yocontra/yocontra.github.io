@@ -101,13 +101,13 @@ export const ENVIRONMENT = {
   hash: '206c67e3a1b992282821cf06662bdd69bbb4915c1c4444a66338a40d6a7d4e34',
   bytes: 1173154,
 } as const
-export const CONTENT_VERSION = '4671c05e386f1e15b93c3be2a64379bec2eaf383b4092094cd410b92b5f1b8bc'
-export const COLLISION_VERSION = '03b11033428780f67158b47e3fc2b37d761185acea4d5b323301449671b65def'
+export const CONTENT_VERSION = '21125617e76b0ce128b8a7b82c6a8fad67feb7eee9806c15f76dd8ca30cdec15'
+export const COLLISION_VERSION = 'ec23f5df752c3a9a800a98a95151a01da4ce5b805a2185d19db1a6ca5198ad9d'
 export const ASSETS = {
   frontier: {
-    url: '/experiments/out-west/3d/native-v2/baked/frontier.glb?v=510e4c41d0ec542b',
-    hash: '510e4c41d0ec542bdc8554ab436a259ba3b6a3aa207a32b51b0d18967585dfab',
-    bytes: 101332676,
+    url: '/experiments/out-west/3d/native-v2/baked/frontier.glb?v=0e3ac0a9579a2f62',
+    hash: '0e3ac0a9579a2f62b9ebd7627d6d7aec2687ba538b543cd73f73ed5da5d8c430',
+    bytes: 101350172,
   },
   'frontier-yard-high': {
     url: '/experiments/out-west/3d/native-v2/baked/frontier-yard-high.glb?v=2168360c0d5832a9',
@@ -115,9 +115,9 @@ export const ASSETS = {
     bytes: 371880,
   },
   duel: {
-    url: '/experiments/out-west/3d/native-v2/baked/duel.glb?v=73a1e3cf00a2d9ba',
-    hash: '73a1e3cf00a2d9ba8ae170975f80d0c4984d4f118182849261b06e262d78e288',
-    bytes: 34709920,
+    url: '/experiments/out-west/3d/native-v2/baked/duel.glb?v=21280df125bafcae',
+    hash: '21280df125bafcae78e240544cce376a594ccd71b74410ccbe4e2d2c7804f580',
+    bytes: 35179808,
   },
   depot: {
     url: '/experiments/out-west/3d/native-v2/baked/depot.glb?v=6339c233b7eef579',

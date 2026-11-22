@@ -21,7 +21,7 @@ import {
 import type { FrontierGeometry, Placement, Rgb } from './frontier-geometry.ts'
 import { LABELS, SHORT_LABELS, SIGN_ROWS } from './frontier-materials.ts'
 import { MOUNT_IRON_TINT } from './frontier-mounts.ts'
-import { buildingDoors } from './frontier-openings.ts'
+import { buildingDoors, surround } from './frontier-openings.ts'
 import { porchPosts, type readPorchPosts } from './frontier-porch-posts.ts'
 import { pitchedRoof } from './frontier-roofs.ts'
 import { saloonFloor } from './frontier-saloon.ts'
@@ -111,53 +111,108 @@ export function buildingDetails(
     }
     g.box(root, 'wood', { x, z, w, d, y0: height - 0.14, top: height }, [0.6, 0.49, 0.35])
   }
-  // The corner timbers, foundation and eaves define scale without extra materials.
-  for (const dx of [0, w - 0.15]) {
-    for (const dz of [0, d - 0.15]) {
-      g.box(root, 'wood', { x: x + dx, z: z + dz, w: 0.15, d: 0.15, y0: 0, top: height }, trim)
+  // The stone walls already own their boundary surfaces. Timber laid flush
+  // on those planes flickers at the chapel and tower edges.
+  if (building.kind !== 'church' && building.kind !== 'tower') {
+    for (const dx of [0, w - 0.15]) {
+      for (const dz of [0, d - 0.15]) {
+        g.box(root, 'wood', { x: x + dx, z: z + dz, w: 0.15, d: 0.15, y0: 0, top: height }, trim)
+      }
     }
-  }
-  for (const side of ['n', 's', 'e', 'w'] as const) {
-    const strip = sideStrip(building, side, 0.13)
-    g.box(
-      root,
-      'wood',
-      { ...strip, y0: height - 0.21, top: height + 0.04 },
-      weatheredEave(building, side, trim),
-    )
+    for (const side of ['n', 's', 'e', 'w'] as const) {
+      const strip = sideStrip(building, side, 0.13)
+      g.box(
+        root,
+        'wood',
+        { ...strip, y0: height - 0.21, top: height + 0.04 },
+        weatheredEave(building, side, trim),
+      )
+    }
   }
   falseFrontJoinery(g, root, building, trim)
   const front = frontOf(building, plan.layout)
   porchPosts(g, root, building, { front, paint, posts })
   buildingSign(g, root, { building, front, layout: plan.layout })
   hangingSign(g, root, building, front)
-  if (building.kind === 'church' || building.kind === 'tower') {
+  if (building.kind === 'tower') {
     const centerX = x + w / 2
     const centerZ = z + d / 2
-    if (building.kind === 'tower') {
-      g.box(
-        root,
-        'wood',
-        { x: centerX - 0.1, z: centerZ - 0.1, w: 0.2, d: 0.2, y0: height, top: height + 2.1 },
-        trim,
-      )
-      g.box(
-        root,
-        'wood',
-        {
-          x: centerX - 0.65,
-          z: centerZ - 0.1,
-          w: 1.3,
-          d: 0.2,
-          y0: height + 1.15,
-          top: height + 1.35,
-        },
-        trim,
-      )
+    g.box(
+      root,
+      'wood',
+      { x: centerX - 0.1, z: centerZ - 0.1, w: 0.2, d: 0.2, y0: height, top: height + 2.1 },
+      trim,
+    )
+    g.box(
+      root,
+      'wood',
+      {
+        x: centerX - 0.65,
+        z: centerZ - 0.1,
+        w: 1.3,
+        d: 0.2,
+        y0: height + 1.15,
+        top: height + 1.35,
+      },
+      trim,
+    )
+    authorBell(g, root, building)
+  }
+  for (const window of building.windows ?? []) {
+    if (window.unglazed) {
+      const { side, at, width, sill, top } = window
+      surround(g, root, building, { side, at, width, y0: sill, y1: top })
     }
   }
   civicFacade(g, root, building)
   buildingDoors(g, root, building)
+}
+
+function authorBell(g: FrontierGeometry, root: Node, building: Building) {
+  const x = building.x + building.w / 2
+  const z = building.z + building.d / 2
+  const beam = building.height - 0.12
+  g.box(
+    root,
+    'wood',
+    { x: building.x + 0.45, z: z - 0.14, w: building.w - 0.9, d: 0.28, y0: beam - 0.24, top: beam },
+    [0.37, 0.26, 0.16],
+  )
+  const profile = [
+    [0.16, 0.29],
+    [0.39, 0.4],
+    [0.52, 0.56],
+    [0.64, 0.92],
+    [0.77, 1.08],
+    [0.79, 1.17],
+    [0.67, 1.19],
+    [0.58, 0.97],
+    [0.48, 0.63],
+  ]
+  const steps = 28
+  const point = (radius: number, drop: number, i: number): [number, number, number] => {
+    const angle = (i * Math.PI * 2) / steps
+    return [x + radius * Math.cos(angle), beam - drop, z + radius * Math.sin(angle)]
+  }
+  for (let i = 1; i < profile.length; i++) {
+    const [r0 = 0, d0 = 0] = profile[i - 1] ?? []
+    const [r1 = 0, d1 = 0] = profile[i] ?? []
+    const tint: Rgb = i === 5 || i === 6 ? [0.69, 0.45, 0.23] : [0.52, 0.35, 0.19]
+    for (let j = 0; j < steps; j++) {
+      g.quad(
+        root,
+        'iron',
+        [point(r0, d0, j), point(r0, d0, j + 1), point(r1, d1, j + 1), point(r1, d1, j)],
+        { tint },
+      )
+    }
+  }
+  g.box(
+    root,
+    'iron',
+    { x: x - 0.065, z: z - 0.065, w: 0.13, d: 0.13, y0: beam - 1.34, top: beam - 0.5 },
+    [0.31, 0.24, 0.17],
+  )
 }
 
 function falseFrontJoinery(g: FrontierGeometry, root: Node, building: Building, trim: Rgb) {
