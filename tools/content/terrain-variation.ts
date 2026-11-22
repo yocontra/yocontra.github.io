@@ -155,13 +155,13 @@ function soilNoise(x: number, z: number) {
   const iz = Math.floor(z)
   const u = smooth(x - ix)
   const v = smooth(z - iz)
-  const sample = (dx: number, dz: number) => {
+  const noiseAt = (dx: number, dz: number) => {
     let hash = Math.imul(ix + dx + 531, 0x4_5d_9f_3b) ^ Math.imul(iz + dz, 0x11_9d_e1_f3)
     hash = Math.imul(hash ^ (hash >>> 16), 0x4_5d_9f_3b)
     return ((hash ^ (hash >>> 16)) >>> 0) / 0xff_ff_ff_ff
   }
-  const top = sample(0, 0) * (1 - u) + sample(1, 0) * u
-  const bottom = sample(0, 1) * (1 - u) + sample(1, 1) * u
+  const top = noiseAt(0, 0) * (1 - u) + noiseAt(1, 0) * u
+  const bottom = noiseAt(0, 1) * (1 - u) + noiseAt(1, 1) * u
   return top * (1 - v) + bottom * v
 }
 
