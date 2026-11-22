@@ -3,13 +3,7 @@ import { createHash } from 'node:crypto'
 import { mkdir } from 'node:fs/promises'
 import { join, resolve } from 'node:path'
 import { isDeepStrictEqual } from 'node:util'
-import {
-  type Accessor,
-  type Document,
-  Material,
-  NodeIO,
-  type Texture,
-} from '@gltf-transform/core'
+import { type Accessor, type Document, Material, NodeIO, type Texture } from '@gltf-transform/core'
 import { ALL_EXTENSIONS } from '@gltf-transform/extensions'
 import { copyToDocument } from '@gltf-transform/functions'
 import { applyArenaFacadeWear } from './arena-facade-wear.ts'

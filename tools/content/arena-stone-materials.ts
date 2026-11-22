@@ -23,7 +23,7 @@ await Promise.all(
     for (const node of input.getRoot().listNodes()) {
       for (const primitive of node.getMesh()?.listPrimitives() ?? []) {
         const material = primitive.getMaterial()
-        if (!(material && material.getBaseColorTexture()?.getName().startsWith('Arena '))) {
+        if (!material?.getBaseColorTexture()?.getName().startsWith('Arena ')) {
           continue
         }
         copyToDocument(maps, input, [material])
