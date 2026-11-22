@@ -1,21 +1,27 @@
 import { Vec3 } from 'playcanvas'
 import { shotRay, traceTargets } from '../ffa/sim/combat.ts'
-import { isProtected, recordHistory } from '../ffa/sim/state.ts'
+import { isProtected, recordHistory, type World } from '../ffa/sim/state.ts'
 import { historyFlags } from '../ffa/sim/world.ts'
 import type { PlayerInput } from '../runtime/protocol.ts'
 import { domainInput } from './frontier-session.ts'
+import type { GameSession } from './viewport.ts'
 
 const from = new Vec3()
 const to = new Vec3()
+const CONTROLLER_ADS_SCALE = 0.78
+interface TargetingSession {
+  world: World
+  selfSlot: number
+  cameraTrace: GameSession['cameraTrace']
+}
+
+/** Apply mild stick resistance while the current shot ray crosses a visible opponent. */
+export function controllerAimScale(session: TargetingSession, input: PlayerInput): number {
+  return session.cameraTrace && aimedTarget(session, input) !== null ? CONTROLLER_ADS_SCALE : 1
+}
+
 /** Touch auto fire uses the actual domain capsules and native Ammo occlusion, without a second hit model. */
-export function aimedTarget(
-  session: {
-    world: import('../ffa/sim/state.ts').World
-    selfSlot: number
-    cameraTrace: import('./viewport.ts').GameSession['cameraTrace']
-  },
-  input: PlayerInput,
-): number | null {
+export function aimedTarget(session: TargetingSession, input: PlayerInput): number | null {
   const { world, selfSlot } = session
   const self = world.players[selfSlot]
   if (!self?.alive || self.showdown >= 0) {

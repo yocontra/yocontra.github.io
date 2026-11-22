@@ -14,7 +14,7 @@ import { GameEffects } from './effects.ts'
 import { FrontierScene, type FrontierSceneState, firstFrame } from './frontier-scene.ts'
 import { GameInput } from './input.ts'
 import { FollowCamera } from './player-camera.ts'
-import { aimedTarget } from './targeting.ts'
+import { aimedTarget, controllerAimScale } from './targeting.ts'
 import { touchActions } from './touch-actions.ts'
 import { viewportDebug } from './viewport-debug.ts'
 import { createEffects } from './viewport-effects.ts'
@@ -67,7 +67,15 @@ function sampleInput(
   sequence: number,
 ): PlayerInput {
   const { session, input, settings, touch, dt } = options
-  const intent = input.sample(sequence, dt)
+  const intent = input.sample(sequence, dt, () => {
+    const { world, cameraTrace } = session
+    return world
+      ? controllerAimScale(
+          { world, selfSlot: Number(session.selfId), cameraTrace },
+          { seq: sequence, yaw: input.yaw, pitch: input.pitch, moveX: 0, moveZ: 0, buttons: 0 },
+        )
+      : 1
+  })
   if (!input.enabled) {
     return intent
   }

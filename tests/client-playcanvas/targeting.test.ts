@@ -1,6 +1,6 @@
 import { expect, test as it } from 'bun:test'
 import { Vec3 } from 'playcanvas'
-import { aimedTarget } from '../../src/experiments/out-west/client/targeting.ts'
+import { aimedTarget, controllerAimScale } from '../../src/experiments/out-west/client/targeting.ts'
 import { createWorld, newPlayer } from '../../src/experiments/out-west/ffa/sim/state.ts'
 
 function fixture() {
@@ -42,4 +42,24 @@ it('touch targeting respects aim pitch and dead riders', () => {
     target.alive = false
   }
   expect(aimedTarget(session, session.input)).toBeNull()
+})
+
+it('controller resistance applies only to an eligible visible rider', () => {
+  const session = fixture()
+  expect(controllerAimScale(session, session.input)).toBe(0.78)
+  expect(controllerAimScale(session, { ...session.input, yaw: 0 })).toBe(1)
+  expect(controllerAimScale({ ...session, cameraTrace: undefined }, session.input)).toBe(1)
+  expect(
+    controllerAimScale({ ...session, cameraTrace: () => new Vec3(12, 1.5, 10) }, session.input),
+  ).toBe(1)
+  const shooter = session.world.players[0]
+  const target = session.world.players[1]
+  if (!(shooter && target)) {
+    throw new Error('Missing practice riders')
+  }
+  target.protectUntil = 100
+  expect(controllerAimScale(session, session.input)).toBe(1)
+  target.protectUntil = 0
+  shooter.showdown = 1
+  expect(controllerAimScale(session, session.input)).toBe(1)
 })

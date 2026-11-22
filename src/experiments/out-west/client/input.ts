@@ -363,7 +363,20 @@ export class GameInput {
     }
     return buttons
   }
-  sample(seq: number, seconds = 1 / 60): PlayerInput {
+  private steerGamepad(rx: number, ry: number, seconds: number, lookScale?: () => number): void {
+    if (!(rx || ry)) {
+      return
+    }
+    this.cursorAim = false
+    if (this.settings.view === 'top') {
+      this.yaw = Math.atan2(-rx, -ry)
+      return
+    }
+    const dt = Math.min(0.1, Math.max(0, seconds)) * (lookScale?.() ?? 1)
+    this.yaw -= rx * 4.5 * dt
+    this.pitch = clampPitch(this.pitch - ry * 3 * dt * (this.settings.invertY ? -1 : 1))
+  }
+  sample(seq: number, seconds = 1 / 60, gamepadLookScale?: () => number): PlayerInput {
     const key = (...keys: number[]): boolean => keys.some((code) => this.keyboard.isPressed(code))
     if (!this.enabled) {
       return { seq, moveX: 0, moveZ: 0, yaw: this.yaw, pitch: this.pitch, buttons: 0 }
@@ -379,22 +392,12 @@ export class GameInput {
       }
       x += axis(0)
       z += axis(1)
-      const rx = axis(2)
-      const ry = axis(3)
-      if (rx || ry) {
-        this.cursorAim = false
-        if (this.settings.view === 'top') {
-          this.yaw = Math.atan2(-rx, -ry)
-        } else {
-          const dt = Math.min(0.1, Math.max(0, seconds))
-          this.yaw -= rx * 4.5 * dt
-          this.pitch = clampPitch(this.pitch - ry * 3 * dt * (this.settings.invertY ? -1 : 1))
-        }
-      }
+      const ads = gamepad.buttons[6]?.pressed
+      this.steerGamepad(axis(2), axis(3), seconds, ads ? gamepadLookScale : undefined)
       if (gamepad.buttons[0]?.pressed) {
         buttons |= Buttons.jump
       }
-      if (gamepad.buttons[6]?.pressed) {
+      if (ads) {
         buttons |= Buttons.aim
       }
       if (gamepad.buttons[7]?.pressed) {
