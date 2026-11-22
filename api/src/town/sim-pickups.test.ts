@@ -28,7 +28,7 @@ const spot = (w: World, kind: string) => {
   if (!s) {
     throw new Error(`no ${kind} spot`)
   }
-  return { i, x: s.x, z: s.z }
+  return { i, x: s.x, y: s.y ?? 0, z: s.z }
 }
 
 /** Shooter standing on main street with a pickup weapon in hand. */
@@ -45,11 +45,15 @@ describe('map pickups', () => {
     const w = testWorld()
     const s = spot(w, 'rifle')
     const p = place(w, s.x, s.z)
+    p.y = s.y
+    p.support = s.y
     run(w, 1)
     expect(p.weapon).toBe(WEAPON_RIFLE)
     expect(p.weaponRounds).toBe(RIFLE_ROUNDS)
     expect(w.pickups[s.i]?.availableAt).toBeGreaterThan(w.tick)
     const other = place(w, s.x, s.z)
+    other.y = s.y
+    other.support = s.y
     run(w, 1)
     expect(other.weapon).toBe(WEAPON_REVOLVER)
     p.x = 30

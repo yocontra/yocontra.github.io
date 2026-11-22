@@ -31,7 +31,7 @@ it('native capsule traverses every authored doorway/stair and every spawn/openin
     expect(report.issues).toEqual([])
     expect(report.spawns).toHaveLength(layout.spawns.length)
     expect(report.doors.length).toBeGreaterThan(30)
-    expect(report.stairs).toHaveLength(4)
+    expect(report.stairs).toHaveLength(8)
     expect(report.blockedPanes).toBe(0)
     expect(report.maxSpawnLos).toBeLessThan(45)
   } finally {

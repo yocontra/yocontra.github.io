@@ -51,14 +51,21 @@ describe('roof walks', () => {
     for (const building of TOWN.buildings) {
       for (const stair of building.stairs ?? []) {
         const world = await nativeTestWorld()
-        const player = place(world, stair.x + stair.w / 2, stair.z + stair.d + 0.5)
+        const [x, z] = ({ n: [0, -1], e: [1, 0], s: [0, 1], w: [-1, 0] } as const)[stair.dir]
+        const player = place(
+          world,
+          stair.x + stair.w / 2 - x * (stair.w / 2 + 0.5),
+          stair.z + stair.d / 2 - z * (stair.d / 2 + 0.5),
+        )
+        player.y = stair.fromY
+        player.support = stair.fromY
         for (let tick = 0; tick < 60 && player.y < stair.toY - 0.1; tick++) {
-          run(world, 1, { [player.id]: () => ({ moveZ: -127 }) })
+          run(world, 1, { [player.id]: () => ({ moveX: x * 127, moveZ: z * 127 }) })
         }
         expect(player.y).toBeGreaterThan(stair.toY - 0.1)
         expect(player.climbTicks).toBe(0)
         for (let tick = 0; tick < 60 && player.y > stair.fromY + 0.1; tick++) {
-          run(world, 1, { [player.id]: () => ({ moveZ: 127 }) })
+          run(world, 1, { [player.id]: () => ({ moveX: -x * 127, moveZ: -z * 127 }) })
         }
         expect(player.y).toBeLessThan(stair.fromY + 0.1)
       }
