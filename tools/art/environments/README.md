@@ -126,3 +126,26 @@ faces and unowned texture data match its input after the write.
 
 4. Verify the staged maps in the native arena test above and regenerate the
    asset manifest after copying the accepted GLBs into the native asset directory.
+
+After the Bank texture overlay, remove the duplicate road-facing curb strips
+from the staged native Bank model. The normal authoring bake applies the same
+fix before the facade pass.
+
+```sh
+bun tools/content/bank-curb.ts "$staged/bank.glb" "$fixed/bank.glb"
+```
+
+## Perdition room, roof and freight finishes
+
+The Frontier bake applies the room finishes after vertex packing. It splits
+interior faces by wall orientation and assigns each room its finish. The last
+pass extends the cedar roof repeat and varies the tall hotel freight panels,
+including both model detail levels. Both passes preserve the collision source.
+
+To update the roof and freight on a native Frontier GLB that already has the
+room finishes, use a separate output path and encoder cache.
+
+```sh
+KTX_ENCODER=/path/to/toktx bun tools/content/frontier-roof-freight-variation.ts \
+  "$room_map" "$staged/frontier.glb" "$texture_cache"
+```

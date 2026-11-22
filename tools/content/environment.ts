@@ -6,9 +6,11 @@ import { NodeIO } from '@gltf-transform/core'
 import { ALL_EXTENSIONS } from '@gltf-transform/extensions'
 import { dedup, dequantize, prune, weld } from '@gltf-transform/functions'
 import { TOWN_BOUNDS } from '../../src/experiments/out-west/content/manifest.ts'
+import type { TownLayout } from '../../src/experiments/out-west/ffa/sim/layout.ts'
 import { applyArenaFacadeWear } from './arena-facade-wear.ts'
 import { fitArenaProps } from './arena-props.ts'
 import { fitArenaWagons } from './arena-wagons.ts'
+import { removeHiddenBankCurbFaces } from './bank-curb.ts'
 import { compressedCharacterTexture } from './character-textures.ts'
 import { withContentOutput } from './content-output.ts'
 import { dressDuelBluffs } from './duel-bluffs.ts'
@@ -22,6 +24,8 @@ import { compressEnvironmentTextures } from './environment-textures.ts'
 import { formatContent } from './format-content.ts'
 import { markFrontierInertWind } from './frontier-inert-wind.ts'
 import { poolFrontierInertWindViews } from './frontier-inert-wind-pool.ts'
+import { varyPerditionRoofsAndFreight } from './frontier-roof-freight-variation.ts'
+import { finishPerditionRooms } from './frontier-room-finishes.ts'
 import { installFrontierSandstone } from './frontier-sandstone.ts'
 import { packFrontierCloudUvs, packFrontierVertices } from './frontier-vertex-packing.ts'
 import { orderLowYardCactusIndices } from './frontier-yard-cactus.ts'
@@ -130,6 +134,9 @@ for (const name of names.filter((candidate) => !only || candidate === only)) {
     weatherPerditionSoil(document, TOWN_BOUNDS.maxX)
     await document.transform(prune({ keepAttributes: true, keepLeaves: true }))
   }
+  if (name === 'bank') {
+    removeHiddenBankCurbFaces(document)
+  }
   if (name !== 'frontier') {
     await applyArenaFacadeWear(document, name)
   }
@@ -181,6 +188,10 @@ for (const name of names.filter((candidate) => !only || candidate === only)) {
     const packed = await io.read(path)
     console.log('Frontier vertex packing', await packFrontierVertices(packed))
     await installFrontierSandstone(packed)
+    const plan = JSON.parse(await readFile(join(source, 'frontier.plan.json'), 'utf8')) as {
+      layout: Pick<TownLayout, 'buildings'>
+    }
+    await finishPerditionRooms(packed, plan.layout)
     await io.write(path, packed)
   }
   await withContentOutput(publishing ? resolve(output, '..') : resolve(output, 'resources'), () =>
@@ -192,6 +203,9 @@ for (const name of names.filter((candidate) => !only || candidate === only)) {
     console.log('Frontier cloud UV bytes saved', packFrontierCloudUvs(final))
     await orderLowYardCactusIndices(final)
     console.log('Frontier inert wind primitives', markFrontierInertWind(final))
+    await withContentOutput(publishing ? resolve(output, '..') : resolve(output, 'resources'), () =>
+      varyPerditionRoofsAndFreight(final),
+    )
     await io.write(path, final)
     console.log('Frontier inert wind storage', await poolFrontierInertWindViews(path))
   }
