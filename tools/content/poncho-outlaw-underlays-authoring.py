@@ -19,8 +19,8 @@ smoothstep = poncho.smoothstep
 OUTLAWS = {"outlaw-6", "outlaw-15"}
 
 
-def fit_layers(source, body, output, metadata, name):
-    piece = next(part for part in output["pieces"] if part.get("name") == name)
+def fit_shirt(source, body, output, metadata):
+    piece = next(part for part in output["pieces"] if part.get("name") == "WesternShirt")
     bind = poncho.head_inverse_bind(source, body)
     to_source = bind.inverted()
     scale = max((bind @ Vector(point)).y for point in body["attrs"]["POSITION"][:poncho.HEAD_VERTICES])
@@ -30,9 +30,7 @@ def fit_layers(source, body, output, metadata, name):
         point = (bind @ Vector(output["POSITION"][index])) / scale
         rear = 1 - smoothstep(-.052, .017, point.z)
         upper = smoothstep(-.52, -.32, point.y) * (1 - smoothstep(-.15, -.067, point.y))
-        point.z += rear * upper * (.045 if name == "WesternSleeves" else .048)
-        if name == "WesternSleeves":
-            point.x *= 1 - .16 * rear * upper
+        point.z += rear * upper * .048
         output["POSITION"][index] = list(to_source @ (point * scale))
     pin = Path(__file__).resolve()
     metadata["sourceInputs"] += [pin_entry(pin)]
@@ -102,19 +100,10 @@ def torso(source, body):
     if source.path.stem not in OUTLAWS:
         return None
     output, metadata = poncho.fit(source, body)
-    bind, scale = fit_layers(source, body, output, metadata, "WesternShirt")
+    bind, scale = fit_shirt(source, body, output, metadata)
     fit_bands(output, metadata, body, bind, scale, source.path.stem == "outlaw-15")
-    return output, metadata
-
-
-def sleeves(source, body):
-    if source.path.stem not in OUTLAWS:
-        return None
-    output, metadata = poncho.fit_sleeves(source, body)
-    fit_layers(source, body, output, metadata, "WesternSleeves")
     return output, metadata
 
 
 if __name__ == "__main__":
     common.run(torso, "coat-collars")
-    common.run(sleeves, "poncho-sleeves")

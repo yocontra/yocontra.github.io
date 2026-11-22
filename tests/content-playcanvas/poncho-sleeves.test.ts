@@ -94,6 +94,61 @@ function edges(values: number[]): Map<string, number> {
   }
   return result
 }
+function measureSleeveFit(original: ReturnType<typeof body>, fitted: ReturnType<typeof body>) {
+  const skin = original.node.getSkin()
+  const inverse = skin?.getInverseBindMatrices()
+  const before = original.primitive.getAttribute('POSITION')
+  const after = fitted.primitive.getAttribute('POSITION')
+  if (!(skin && inverse && before && after)) {
+    throw new Error('Missing sleeve positions or arm bind transforms')
+  }
+  const joints = skin.listJoints()
+  const bind = (name: string) => {
+    const index = joints.findIndex((joint) => joint.getName() === name)
+    if (index < 0) {
+      throw new Error(`Missing bind transform for ${name}`)
+    }
+    return new Mat4().set(inverse.getElement(index, []))
+  }
+  const head = bind('Head')
+  return ['L', 'R'].map((side) => {
+    const pivot = (bone: string) =>
+      head.transformPoint(
+        bind(bone + side)
+          .invert()
+          .getTranslation(),
+      )
+    const shoulder = pivot('UpperArm')
+    const elbow = pivot('LowerArm')
+    const wrist = pivot('Wrist')
+    const upper = elbow.clone().sub(shoulder)
+    const lower = wrist.clone().sub(elbow)
+    const relative = new Vec3()
+    let originalRadius = 0
+    let fittedRadius = 0
+    const cuff: { along: number; drift: number }[] = []
+    for (let i = 0; i < original.range.count; i++) {
+      const p = head.transformPoint(new Vec3(before.getElement(original.range.start + i, [])))
+      if (p.x > 0 !== (side === 'L')) {
+        continue
+      }
+      const q = head.transformPoint(new Vec3(after.getElement(fitted.range.start + i, [])))
+      const upperT = relative.sub2(p, shoulder).dot(upper) / upper.lengthSq()
+      if (upperT > 0.2 && upperT < 0.57) {
+        const radius = (point: Vec3) =>
+          new Vec3().cross(relative.sub2(point, shoulder), upper).length()
+        originalRadius += radius(p)
+        fittedRadius += radius(q)
+      }
+      const foreT = relative.sub2(p, elbow).dot(lower) / lower.lengthSq()
+      cuff.push({ along: foreT, drift: q.distance(p) })
+    }
+    // The distal vertices define the cuff even when the sleeve ends short of the joint.
+    const cuffEdge = cuff.sort((a, b) => b.along - a.along).slice(0, 12)
+    return { originalRadius, fittedRadius, cuffEdge }
+  })
+}
+
 for (const [id, donorId, vertices, faces, worldFaces, shirtFaces] of [
   ['outfit.striped-poncho', 'outfit.shirt-vest', 578, 1088, 51, 892],
   ['outfit.striped-poncho.pair', 'outfit.shirt-vest', 578, 1088, 72, 862],
@@ -240,6 +295,12 @@ for (const [id, donorId, vertices, faces, worldFaces, shirtFaces] of [
             attribute?.getElement(after.range.start + v, []),
           ),
         ).toEqual(values)
+      }
+      for (const { originalRadius, fittedRadius, cuffEdge } of measureSleeveFit(original, before)) {
+        expect(originalRadius).toBeGreaterThan(0)
+        expect(fittedRadius / originalRadius).toBeLessThan(0.72)
+        expect(cuffEdge).toHaveLength(12)
+        expect(Math.max(...cuffEdge.map(({ drift }) => drift))).toBeLessThan(0.008)
       }
       expect(rigAndClips(presentation)).toBe(rig)
       const worn = await io.read(`tools/art/characters/poncho-sleeves/${id}.glb`)

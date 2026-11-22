@@ -33,13 +33,17 @@ STREAMS = {
 }
 
 
-def head_inverse_bind(source, body):
+def joint_inverse_bind(source, body, name):
     node = source.doc["nodes"][body["sourcePrimitive"]["nodeIndex"]]
     skin = source.doc["skins"][node["skin"]]
-    joint = body["jointNames"].index("Head")
+    joint = body["jointNames"].index(name)
     inverse = source.accessor(skin["inverseBindMatrices"])[joint]
     return Matrix([[inverse[column * 4 + row] for column in range(4)] for row in range(4)])
 
+
+
+def head_inverse_bind(source, body):
+    return joint_inverse_bind(source, body, "Head")
 
 def triangles_inside(body, start, end):
     indices = body["indices"]
@@ -91,8 +95,8 @@ def reweight_woven_panel(attrs, selected, positions, rows, joint_names, bind, sc
         middle = smoothstep(.31, .56, -point.y)
         lower = smoothstep(.54, .83, -point.y)
         drape = (1 - collar) * smoothstep(.12, .76, rear) * (.94 - .14 * lower)
-        arm = .25 * side ** 5 * smoothstep(.15, .29, abs(point.x))
-        arm *= (1 - collar) * (1 - smoothstep(.39, .65, -point.y))
+        arm = .58 * side ** 3 * smoothstep(.14, .28, abs(point.x))
+        arm *= (1 - collar - drape) * (1 - smoothstep(.35, .60, -point.y))
         influences = {
             neck: .23 * collar,
             chest: .77 * collar + drape * (1 - upper),
@@ -143,6 +147,11 @@ def drape_woven_panels(positions, rows, bind, scale):
         point.z += (front_depth - point.z) * front_blend
         outer_shoulder = smoothstep(.19, .37, abs(point.x))
         point.x *= 1 - neckline * (.08 + .13 * outer_shoulder)
+        # Leave a narrow overhang above the sleeve opening so the weave has room
+        # to follow the upper arm when the rider brings it forward.
+        lip = .017 * neckline * side ** 5 * smoothstep(.16, .23, abs(point.x))
+        lip *= 1 - smoothstep(.28, .46, drop)
+        point.x += math.copysign(lip, point.x)
         sleeve_edge = neckline * side ** 4
         point.y += max(0, -.11 - point.y) * .13 * sleeve_edge
         point.y -= .018 * sleeve_edge * smoothstep(-.47, -.13, point.y)
@@ -286,24 +295,44 @@ def restore_linen(output, body, donor_body, name):
 def tuck_linen(output, bind, scale):
     to_source = bind.inverted()
     piece = output["pieces"][-1]
-    is_shirt = piece["name"] == "WesternShirt"
     start, end = piece["start"], piece["start"] + piece["count"]
     for index in range(start, end):
         point = (bind @ Vector(output["POSITION"][index])) / scale
-        if is_shirt:
-            # Seat the torso under the drape and leave its waistband and neckline in place.
-            tuck = smoothstep(-.63, -.46, point.y) * (1 - smoothstep(-.12, -.048, point.y))
-            point.x *= 1 - .06 * tuck
-            rear = 1 - smoothstep(-.045, .007, point.z)
-            front = smoothstep(.030, .096, point.z)
-            point.z += tuck * (.092 * rear - .052 * front)
-            # The folded shirt edge stays below the lower woven opening.
-            point.y -= .062 * smoothstep(-.17, -.045, point.y)
-        else:
-            # Narrow the upper sleeve inside the shoulder wrap while preserving its cuff.
-            tuck = smoothstep(-.58, -.31, point.y) * smoothstep(.15, .30, abs(point.x))
-            point.x *= 1 - .21 * tuck
-            point.z = .036 + (point.z - .036) * (1 - .31 * tuck)
+        # Seat the shirt under the drape and keep its folded edge below the opening.
+        tuck = smoothstep(-.63, -.46, point.y) * (1 - smoothstep(-.12, -.048, point.y))
+        point.x *= 1 - .06 * tuck
+        rear = 1 - smoothstep(-.045, .007, point.z)
+        front = smoothstep(.030, .096, point.z)
+        point.z += tuck * (.092 * rear - .052 * front)
+        point.y -= .062 * smoothstep(-.17, -.045, point.y)
+        output["POSITION"][index] = list(to_source @ (point * scale))
+
+
+def fit_sleeve_volume(source, body, output, bind, scale):
+    to_source = bind.inverted()
+    axes = {}
+    for side in ("L", "R"):
+        shoulder, elbow, wrist = (
+            (bind @ joint_inverse_bind(source, body, bone + side).inverted().translation) / scale
+            for bone in ("UpperArm", "LowerArm", "Wrist")
+        )
+        upper = elbow - shoulder
+        forearm = wrist - elbow
+        axes[side] = shoulder, elbow, upper, forearm, (upper.normalized() + forearm.normalized()).normalized()
+
+    for index, position in enumerate(output["POSITION"]):
+        point = (bind @ Vector(position)) / scale
+        shoulder, elbow, upper, forearm, transition = axes["L" if point.x > 0 else "R"]
+        # Blend across the elbow so its change in axis does not create a ridge.
+        blend = smoothstep(-.026, .026, (point - elbow).dot(transition))
+        upper_t = (point - shoulder).dot(upper) / upper.length_squared
+        fore_t = (point - elbow).dot(forearm) / forearm.length_squared
+        upper_radial = point - (shoulder + upper_t * upper)
+        fore_radial = point - (elbow + fore_t * forearm)
+        upper_tuck = .42 + .15 * (1 - smoothstep(.22, .89, upper_t))
+        # Fade to the original sleeve before the last cuff ring.
+        fore_tuck = .42 * (1 - smoothstep(.58, .93, fore_t))
+        point -= (upper_radial * upper_tuck).lerp(fore_radial * fore_tuck, blend)
         output["POSITION"][index] = list(to_source @ (point * scale))
 
 
@@ -330,7 +359,7 @@ def fit_sleeves(source, body):
     sleeve, _, installed_faces = restore_linen(output, body, next(donor.bodies()), "WesternSleeves")
     bind = head_inverse_bind(source, body)
     scale = max((bind @ Vector(point)).y for point in body["attrs"]["POSITION"][:HEAD_VERTICES]) / REFERENCE_CROWN
-    tuck_linen(output, bind, scale)
+    fit_sleeve_volume(source, body, output, bind, scale)
     return output, {
         "replaceRanges": [sleeve], "removeTriangles": [], "preserveRangeOrder": True,
         "sourceInputs": source_pins(source, donor), "restoredSleeveTriangles": installed_faces,
