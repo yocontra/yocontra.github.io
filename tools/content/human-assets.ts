@@ -10,8 +10,10 @@ import { fitHolsterPockets } from './fitted-holster-pockets.ts'
 import { fitRevolver } from './fitted-revolver.ts'
 import { fitGreenhornHead, fitOutlawHead, fitStarterHead } from './fitted-starter-head.ts'
 import { fitForgedSpurs } from './forged-spurs.ts'
+import { fitNativeRiderGarments } from './native-rider-garments.ts'
 import { fitOutlawHat } from './outlaw-hats.ts'
 import { OUTLAW_HEAD_FITS } from './outlaw-head-fits.ts'
+import { fitShirtVestArmhole } from './shirt-vest-armhole.ts'
 
 const source = resolve('tools/art/characters')
 const excluded = new Set(['dog', 'horse', 'moves', 'character-actions', 'character-strides'])
@@ -38,11 +40,10 @@ for (const id of ids.filter((asset) => asset.startsWith('hat.'))) {
   }
 }
 for (const id of ids.filter((asset) => asset === 'player' || asset.startsWith('outfit.'))) {
-  await fitStarterHead(
-    resolve(source, `${id}.gltf`),
-    resolve(source, 'starter-head.glb'),
-    contentOutput(id === 'player' ? 'baked' : 'equipment', `${id}.glb`),
-  )
+  const target = contentOutput(id === 'player' ? 'baked' : 'equipment', `${id}.glb`)
+  await fitStarterHead(resolve(source, `${id}.gltf`), resolve(source, 'rider-head.glb'), target)
+  await fitNativeRiderGarments(id, target)
+  await fitShirtVestArmhole(id, target)
 }
 for (const id of ids.filter((asset) => asset.startsWith('outlaw-'))) {
   await fitOutlawHat(id)
@@ -79,11 +80,13 @@ for (const id of ids.filter((asset) => asset.startsWith('spurs.'))) {
 }
 for (const id of ids.filter((asset) => asset.startsWith('holster.'))) {
   const style = id.slice(8).replace('.pair', '')
+  const target = contentOutput('equipment', `${id}.glb`)
   await fitHolsterPockets(
     resolve(source, 'holster-pockets', `${style}.glb`),
     resolve(source, `${id}.gltf`),
-    contentOutput('equipment', `${id}.glb`),
+    target,
   )
+  await fitNativeRiderGarments(id, target)
 }
 for (const [id, artwork, binding] of [
   ['extra.tin-star', 'tin-star', 'badge'],

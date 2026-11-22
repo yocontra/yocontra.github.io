@@ -171,7 +171,7 @@
       },
       {
         "path": "tools/content/garment-parts.ts",
-        "sha256": "23c6c9288a45d380e3ddcd0f5dbea46653dc490cfe9234ae0e7613771c892d7c"
+        "sha256": "665802472dfeb0d4b5f0c7d39aa643cc2be6f787070fb335578f078b6950edc7"
       },
       {
         "path": "tools/content/garment-geometry.ts",
@@ -183,7 +183,7 @@
       },
       {
         "path": "tools/content/character-materials.ts",
-        "sha256": "56b91b46b21898a0834d2a4983c78a2b7e91769b681a6f03aa8752d6a5bd9861"
+        "sha256": "359fcde899aaa4b4b4e1dfc62e4730766023cfc8478886ff7cc7963a11acaeda"
       },
       {
         "path": "tools/content/lower-neck-fans.ts",
@@ -748,7 +748,7 @@
         1.0000159740447998,
         1.0000272989273071
       ],
-      "inputGeometrySHA256": "edc366f9ebd32365beaa9de7638553ec05b2edc3e765454767ed5b950dd71c8c"
+      "inputGeometrySHA256": "cf733ae6a085218b3c818bf5b5d04f429eab3e0d48822e6aaf65307fcfc83995"
     }
   }
 }

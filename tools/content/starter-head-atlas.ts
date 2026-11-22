@@ -29,8 +29,14 @@ const paint = await sharp(color)
   .png()
   .toBuffer()
 const detail = await sharp(bump).removeAlpha().resize(512, 512).png().toBuffer()
+const hair = art
+  .getRoot()
+  .listMaterials()
+  .find((material) => material.getName() === 'Tobacco brown hair')
+// The cropped scalp shares the skin atlas. Keep its follicles above the color quantization floor.
+const encoding = hair ? 'etc1s' : 'uastc'
 const [albedo, normal] = await Promise.all([
-  compressedCharacterTexture(paint, true, 'characters', 'etc1s'),
+  compressedCharacterTexture(paint, true, 'characters', encoding),
   compressedCharacterTexture(detail, false),
 ])
 skin
@@ -41,10 +47,6 @@ skin
   .setExtras({
     nativePbr: { albedo, normal, surface: 'skin', normalScale: 0.53, width: 768, height: 768 },
   })
-const hair = art
-  .getRoot()
-  .listMaterials()
-  .find((material) => material.getName() === 'Tobacco brown hair')
 const strands = hair?.getBaseColorTexture()?.getImage()
 if (hair && strands) {
   const texture = await compressedCharacterTexture(strands, true)

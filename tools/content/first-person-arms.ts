@@ -14,6 +14,7 @@ import { ALL_EXTENSIONS } from '@gltf-transform/extensions'
 import { compactPrimitive, prune } from '@gltf-transform/functions'
 import { Mat4, Vec3 } from 'playcanvas'
 import type { Range } from './character-atlas.ts'
+import { type FittedPositions, garmentMatchFrames } from './first-person-garment-match.ts'
 import { FIRST_PERSON_SLEEVE_DONORS } from './first-person-sleeves.ts'
 import { firstPersonNativeSource, type PresentationTexture } from './first-person-source.ts'
 import { integrateGarmentParts } from './garment-parts.ts'
@@ -153,23 +154,31 @@ function weightError(a: Map<string, number>, b: Map<string, number>): number {
 }
 function matches(
   selection: Selection,
-  position: number[],
-  normal: number[],
-  influence: Map<string, number>,
+  {
+    position,
+    normal,
+    influence,
+  }: {
+    position: number[]
+    normal: number[]
+    influence: Map<string, number>
+  },
+  frame: FittedPositions | undefined,
 ): number[] {
   const cell = position.map((v) => Math.floor(v / CELL))
   const result: number[] = []
   for (let x = -1; x <= 1; x++) {
     for (let y = -1; y <= 1; y++) {
       for (let z = -1; z <= 1; z++) {
-        for (const id of selection.buckets.get(
+        for (const id of (frame?.buckets ?? selection.buckets).get(
           `${(cell[0] ?? 0) + x}/${(cell[1] ?? 0) + y}/${(cell[2] ?? 0) + z}`,
         ) ?? []) {
           const candidate = selection.vertices[id]
           if (
             candidate &&
-            Math.hypot(...position.map((v, c) => v - (candidate.position[c] ?? 0))) <=
-              POSITION_ERROR &&
+            Math.hypot(
+              ...position.map((v, c) => v - ((frame?.positions[id] ?? candidate.position)[c] ?? 0)),
+            ) <= POSITION_ERROR &&
             Math.hypot(...normal.map((v, c) => v - (candidate.normal[c] ?? 0))) < 0.004 &&
             weightError(influence, candidate.weights) <= 4 / 255
           ) {
@@ -187,7 +196,12 @@ function matrix(accessor: Accessor | null, index: number): Mat4 {
   }
   return new Mat4().set(accessor.getElement(index, []))
 }
-function selectNative(primitive: Primitive, skin: Skin, selection: Selection) {
+function selectNative(
+  primitive: Primitive,
+  skin: Skin,
+  selection: Selection,
+  frame: FittedPositions | undefined,
+) {
   const original = selection.skin
     .listJoints()
     .findIndex((j) => j.getName() === skin.listJoints()[0]?.getName())
@@ -208,9 +222,12 @@ function selectNative(primitive: Primitive, skin: Skin, selection: Selection) {
     const position = decode.transformPoint(new Vec3(...positions.getElement(v, []))).toArray()
     const source = matches(
       selection,
-      position,
-      normals.getElement(v, []),
-      weights(primitive, skin, v),
+      {
+        position,
+        normal: normals.getElement(v, []),
+        influence: weights(primitive, skin, v),
+      },
+      frame,
     )
     candidates.set(v, new Set(source))
   }
@@ -242,7 +259,11 @@ function selectNative(primitive: Primitive, skin: Skin, selection: Selection) {
   }
   return { keep, provenance }
 }
-function filterNative(doc: Document, selection: Selection) {
+function filterNative(
+  doc: Document,
+  selection: Selection,
+  frames?: ReadonlyMap<string, FittedPositions>,
+) {
   const retained = new Set<number>()
   const surfaces: { name: string; triangles: number; vertices: number }[] = []
   for (const node of doc.getRoot().listNodes()) {
@@ -256,7 +277,12 @@ function filterNative(doc: Document, selection: Selection) {
       continue
     }
     for (const primitive of [...mesh.listPrimitives()]) {
-      const { keep, provenance } = selectNative(primitive, skin, selection)
+      const { keep, provenance } = selectNative(
+        primitive,
+        skin,
+        selection,
+        frames?.get(primitive.getMaterial()?.getName() ?? ''),
+      )
       if (keep.length === 0) {
         mesh.removePrimitive(primitive)
         continue
@@ -316,6 +342,7 @@ export async function extractFirstPersonArms(id: string, options: { geometryOnly
     'coat-sleeves',
     'boot-bridges',
     'coat-collars',
+    'coat-tails',
     'shirt-fronts',
     'neckerchiefs',
     ...(id in FIRST_PERSON_SLEEVE_DONORS ? ['first-person-sleeves'] : []),
@@ -339,23 +366,28 @@ export async function extractFirstPersonArms(id: string, options: { geometryOnly
     }
   }
   const completeSleeves = id in FIRST_PERSON_SLEEVE_DONORS
-  await integrateGarmentParts(source, id, { firstPersonSleeves: completeSleeves })
-  await fitWaistcoats(source, id)
-  const selection = collectSource(source)
   const nativePath = resolve(
     'public/experiments/out-west/3d/native-v2',
     id.startsWith('outfit.') ? 'equipment' : 'baked',
     `${id}.glb`,
   )
   const worldBytes = await readFile(nativePath)
+  const world = completeSleeves ? undefined : await io.readBinary(worldBytes)
+  const garment = world ? await garmentMatchFrames(world, source, id) : undefined
+  await integrateGarmentParts(source, id, { firstPersonSleeves: completeSleeves })
+  await fitWaistcoats(source, id)
+  const selection = collectSource(source)
   const presentation = completeSleeves
     ? await firstPersonNativeSource(id, (fitted) => {
         filterNative(fitted, selection)
       })
     : undefined
-  const nativeBytes = presentation?.bytes ?? worldBytes
-  const doc = await io.readBinary(nativeBytes)
-  const { retained, surfaces } = filterNative(doc, selection)
+  const doc = world ?? (await io.readBinary(presentation?.bytes ?? worldBytes))
+  const { retained, surfaces } = filterNative(
+    doc,
+    selection,
+    garment?.resolvePositions(selection.vertices, key),
+  )
   const wanted = selection.faces.flatMap((face, index) => (face.selected ? [index] : []))
   const missing = wanted.filter((face) => !retained.has(face))
   if (missing.length > 0) {
@@ -389,6 +421,8 @@ export async function extractFirstPersonArms(id: string, options: { geometryOnly
           'waistcoat-fit.ts',
           'waistcoat-pattern.json',
           'authoring-inputs.ts',
+          'first-person-garment-match.ts',
+          ...(garment?.helperPins ?? []),
         ].map((helper) => resolve(import.meta.dir, helper)),
       ]),
     ]

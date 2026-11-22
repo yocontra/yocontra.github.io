@@ -45,8 +45,7 @@ export async function bakeCharacter(
   const doc = await io.read(path)
   const id = basename(path, '.gltf')
   await fitStarterSurfaces(doc, id)
-  // World riders need the continuous linen too when their arms leave the poncho in aim.
-  await integrateGarmentParts(doc, id, { firstPersonSleeves: options.firstPersonSleeves ?? true })
+  await integrateGarmentParts(doc, id, options)
   await fitWaistcoats(doc, id)
   repairLowerNeckFans(doc)
   await repairHeadNape(doc)

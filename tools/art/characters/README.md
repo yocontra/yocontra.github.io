@@ -26,7 +26,7 @@ UVs, sockets and clips stay in the canonical source files.
 blender --background --factory-startup --python tools/content/starter-surface-authoring.py -- "$PWD"
 ```
 
-## Player face and collar review
+## Rider silhouette and material review
 
 Capture the last shipped revision and the candidate with the same inspection tool.
 Start an Astro dev server for each revision. Use the same copy of
@@ -37,13 +37,31 @@ bun tools/review-out-west-player-models.ts http://127.0.0.1:4473 /tmp/player-bef
 bun tools/review-out-west-player-models.ts http://127.0.0.1:4393 /tmp/player-after /tmp/player-before
 ```
 
-Open `/tmp/player-after/index.html`. The report shows all eight outfits with single
-and paired sidearms, plus the baked starter. It uses the native actor loader and
-fixed frames on Low and High. Look at each fit from the front, side, and back
-without the hat. Reject a cut-off scalp, detached brows, a seam at the jaw or
-neck, or skin visible through the collar. Check the collar in the crouch and aim
-frames. Use the raking light frame to check for broad white skin highlights.
-Keep the captures outside the published site.
+Open `/tmp/player-after/index.html`. The report covers all eight outfits with single and paired sidearms, the baked
+starter, and the campaign character fits. It uses the native actor loader and
+fixed frames on Low and High. Inspect the full outline from both sides and the
+rear before opening the close-ups. Look at the shoulder-to-waist line on the
+ponchos, the straps and collar in crouch and aim, and the hems and boots at both
+walk frames. Inspect the character without a hat for holes at the scalp and
+neck or floating brows. Use the raking light frame to check for broad white
+skin highlights.
+
+The receipt records the native body URL and file hash for every fit, plus all matched frames. The comparison checks the camera and head position after it sets a fixed pose. Treat the receipt as capture coverage. Record a finding or a clean observation for each outfit after viewing
+the frames. Use the normal game route to check the changed equipment in motion.
+Use `OW_REVIEW_FITS=outfit.striped-poncho,outfit.striped-poncho.pair` for a targeted
+rerun against the full baseline. Keep the captures outside the published site.
+
+The world ponchos use complete sleeves and fitted underlayers. Regenerate the
+cape and sleeve shapes first, then fit the lining and bandoliers for the two
+outlaws. The first-person views still use the portable first-person sleeve fits.
+
+```sh
+blender -b -t 2 --python tools/content/poncho-collars-authoring.py -- outfit.striped-poncho outfit.striped-poncho.pair outlaw-6 outlaw-15
+blender -b -t 2 --python tools/content/poncho-outlaw-underlays-authoring.py -- outlaw-6 outlaw-15
+```
+
+If the poncho authoring producer changes, regenerate the coat-tail sources with
+`tools/content/wool-duster-authoring.py` to refresh their producer hashes.
 
 The Outfitter hats have separate felt, edge binding, bands and hardware. The
 bake fits each shell to its original head mount and reuses the item's dye maps.
@@ -62,7 +80,9 @@ bun tools/content/outlaw-hats.ts
 bun tools/content/paired-grip-assets.ts
 ```
 
-The starter head keeps the player rig and native eye and hair attachments.
+The rider head uses the player rig and native eye attachments. The Blender source
+authors the hair, brows, complexion and stubble. The outlaw faces use
+`starter-head.glb` for their skin palette.
 The Blender source starts from MakeHuman revision
 `a8bc2d54ff0ac92e78ff71431b1023eda42bf482`. Put `base.obj` and
 `male-young.target` in the authoring directory. Take
@@ -72,7 +92,7 @@ from the CC0 Skins 02 pack and save them as `face-freckles.png` and
 
 ```sh
 blender --background --factory-startup --python tools/content/starter-head-authoring.py -- "$head_source"
-bun tools/content/starter-head-atlas.ts "$head_source/starter-head.blender.glb" tools/art/characters/starter-head.glb
+bun tools/content/starter-head-atlas.ts "$head_source/starter-head.blender.glb" tools/art/characters/rider-head.glb
 OUT_WEST_CHARACTERS=player,outfit.trail-duds,outfit.trail-duds.pair bun tools/content/human-assets.ts
 ```
 

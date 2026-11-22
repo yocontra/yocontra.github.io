@@ -54,7 +54,7 @@ async function artifacts(
     'facial-hair',
     'beards',
     'head-throats',
-    ...(firstPersonSleeves ? ['first-person-sleeves'] : []),
+    firstPersonSleeves ? 'first-person-sleeves' : 'poncho-sleeves',
   ]) {
     const path = resolve('tools/art/characters', category, `${id}.glb`)
     if (!(await Bun.file(path).exists())) {

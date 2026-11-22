@@ -1,9 +1,11 @@
 import { expect, test as it } from 'bun:test'
 import { type Document, NodeIO, type Primitive } from '@gltf-transform/core'
+import { Mat4, Vec3 } from 'playcanvas'
 import { validateAuthoringInputs } from '../../tools/content/authoring-inputs.ts'
 import type { Range } from '../../tools/content/character-atlas.ts'
 import { authorFirstPersonSleeves } from '../../tools/content/first-person-sleeves.ts'
 import { integrateGarmentParts } from '../../tools/content/garment-parts.ts'
+import { hangTimeout } from '../timeout.ts'
 
 const io = new NodeIO()
 function body(doc: Document) {
@@ -92,22 +94,22 @@ function edges(values: number[]): Map<string, number> {
   }
   return result
 }
-for (const [id, donorId, vertices, faces, worldFaces] of [
-  ['outfit.striped-poncho', 'outfit.shirt-vest', 578, 1088, 51],
-  ['outfit.striped-poncho.pair', 'outfit.shirt-vest', 578, 1088, 72],
-  ['outlaw-6', 'outfit.shirt-vest', 578, 1088, 51],
-  ['outlaw-15', 'outlaw-2', 544, 1024, 43],
+for (const [id, donorId, vertices, faces, worldFaces, shirtFaces] of [
+  ['outfit.striped-poncho', 'outfit.shirt-vest', 578, 1088, 51, 892],
+  ['outfit.striped-poncho.pair', 'outfit.shirt-vest', 578, 1088, 72, 862],
+  ['outlaw-6', 'outfit.shirt-vest', 578, 1088, 51, 895],
+  ['outlaw-15', 'outlaw-2', 544, 1024, 43, 907],
 ] as const) {
-  it(`${id} restores its inner neck and seats the woven rim on the torso`, async () => {
+  it(`${id} restores the shirt and neck under the woven poncho`, async () => {
     const artifact = await io.read(`tools/art/characters/coat-collars/${id}.glb`)
     await validateAuthoringInputs(artifact)
     const shell = artifact.getRoot().listMeshes()[0]?.listPrimitives()[0]
     const pieces = shell?.getExtras().pieceRanges as Range[] | undefined
-    const [woven, neck, hem] = pieces ?? []
+    const [woven, neck, hem, shirt] = pieces ?? []
     const joints = shell?.getAttribute('_AUTHOR_JOINTS')
     const weights = shell?.getAttribute('_AUTHOR_WEIGHTS')
-    if (!(shell && woven && neck && hem && joints && weights)) {
-      throw new Error('Missing fitted poncho shell, fringe or recovered skin')
+    if (!(shell && woven && neck && hem && shirt && joints && weights)) {
+      throw new Error('Missing fitted poncho shell, fringe or restored layers')
     }
     expect(woven).toMatchObject({ start: 0, count: 1120, swatch: 'hessian' })
     expect(neck).toMatchObject({ start: 1120, slot: 'skin', name: 'RestoredPonchoNeck' })
@@ -115,6 +117,11 @@ for (const [id, donorId, vertices, faces, worldFaces] of [
     expect(indices(shell, neck)).toHaveLength((id === 'outlaw-15' ? 44 : 42) * 3)
     expect(hem).toMatchObject({ name: 'Rolled woven hem and knotted fringe', swatch: 'hessian' })
     expect(indices(shell, hem)).toHaveLength(504 * 3)
+    expect(shirt).toMatchObject({ name: 'WesternShirt', slot: 'shirt' })
+    expect(indices(shell, shirt)).toHaveLength((id === 'outlaw-15' ? 960 : 952) * 3)
+    expect(artifact.getRoot().getExtras().ponchoFit).toMatchObject({
+      restoredLinenTriangles: shirtFaces,
+    })
     const names = artifact.getRoot().getExtras().jointNames as string[]
     for (let vertex = 0; vertex < 28; vertex++) {
       const weightsAt = weights.getElement(vertex, [])
@@ -126,70 +133,116 @@ for (const [id, donorId, vertices, faces, worldFaces] of [
       ).toEqual(['Chest', 'Neck'])
     }
   })
-  it(`${id} completes only the presentation sleeve with its own fitted attributes and the donor's full adjacency`, async () => {
-    const world = await io.read(`tools/art/characters/${id}.gltf`)
-    const presentation = await io.read(`tools/art/characters/${id}.gltf`)
-    const original = body(presentation)
-    const rig = rigAndClips(presentation)
-    const ownAttributes = original.primitive.listSemantics().map((semantic) => ({
-      semantic,
-      values: Array.from({ length: vertices }, (_, v) =>
-        original.primitive.getAttribute(semantic)?.getElement(original.range.start + v, []),
-      ),
-    }))
-    const donor = body(await io.read(`tools/art/characters/${donorId}.gltf`))
-    await integrateGarmentParts(world, id)
-    await integrateGarmentParts(presentation, id, { firstPersonSleeves: true })
-    const before = body(world)
-    const after = body(presentation)
-    const complete = indices(after.primitive, after.range)
-    const incomplete = indices(before.primitive, before.range)
-    // The raw trim is the control. The production character baker selects complete sleeves.
-    expect(incomplete).toHaveLength(worldFaces * 3)
-    expect(complete).toHaveLength(faces * 3)
-    expect(complete).toEqual(indices(donor.primitive, donor.range))
-    expect(after.range).toMatchObject({
-      count: vertices,
-      slot: 'sleeves',
-      swatch: 'linen',
-      name: 'WesternSleeves',
-    })
-    expect(
-      new Set(Array.from({ length: faces }, (_, f) => complete.slice(f * 3, f * 3 + 3).join('/')))
-        .size,
-    ).toBe(faces)
-    const fullEdges = edges(complete)
-    expect(
-      [...edges(incomplete)].filter(([edge, count]) => count === 1 && fullEdges.get(edge) === 2)
-        .length,
-    ).toBeGreaterThan(10)
-    // No world surface, cape, original attribute, rig or clip is altered.
-    expect(outside(after.primitive, after.range)).toEqual(outside(before.primitive, before.range))
-    for (const semantic of before.primitive.listSemantics()) {
-      const a = before.primitive.getAttribute(semantic)
-      const b = after.primitive.getAttribute(semantic)
-      if (!(a && b)) {
-        throw new Error('Lost world stream')
+  it(`${id} keeps the center back panel against the ribcage`, async () => {
+    const canonical = body(await io.read(`tools/art/characters/${id}.gltf`))
+    const skin = canonical.node.getSkin()
+    const head = skin?.listJoints().findIndex((joint) => joint.getName() === 'Head') ?? -1
+    const inverse = skin?.getInverseBindMatrices()
+    const source = canonical.primitive.getAttribute('POSITION')
+    const artifact = await io.read(`tools/art/characters/coat-collars/${id}.glb`)
+    const cloth = artifact.getRoot().listMeshes()[0]?.listPrimitives()[0]?.getAttribute('POSITION')
+    if (!(inverse && source && cloth) || head < 0) {
+      throw new Error('Missing poncho fit positions or head bind transform')
+    }
+    const headLocal = new Mat4().set(inverse.getElement(head, []))
+    const sample = new Vec3()
+    const point = new Vec3()
+    let crown = 0
+    for (let vertex = 0; vertex < 1555; vertex++) {
+      sample.set(...source.getElement<[number, number, number]>(vertex, [0, 0, 0]))
+      crown = Math.max(crown, headLocal.transformPoint(sample, point).y)
+    }
+    let back = 0
+    // The original woven panel is the first 1120 vertices. The skin and fringe follow it.
+    for (let vertex = 0; vertex < 1120; vertex++) {
+      sample.set(...cloth.getElement<[number, number, number]>(vertex, [0, 0, 0]))
+      headLocal.transformPoint(sample, point)
+      if (Math.abs(point.x) < 0.5 * crown && point.y < -0.65 * crown && point.y > -2 * crown) {
+        back = Math.max(back, -point.z / crown)
       }
-      expect(Array.from(b.getArray()?.slice(0, a.getArray()?.length) ?? [])).toEqual(
-        Array.from(a.getArray() ?? []),
-      )
     }
-    for (const { semantic, values } of ownAttributes) {
-      const attribute = after.primitive.getAttribute(semantic)
-      expect(
-        Array.from({ length: vertices }, (_, v) =>
-          attribute?.getElement(after.range.start + v, []),
-        ),
-      ).toEqual(values)
-    }
-    expect(rigAndClips(presentation)).toBe(rig)
-    const portable = await io.read(`tools/art/characters/first-person-sleeves/${id}.glb`)
-    await validateAuthoringInputs(portable)
-    expect(await io.writeBinary(await authorFirstPersonSleeves(id))).toEqual(
-      await io.writeBinary(portable),
-    )
-    expect(portable.getRoot().getExtras().replaceRanges).toEqual([original.range])
-    expect(portable.getRoot().getExtras().removeTriangles).toEqual([])
+    expect(back).toBeGreaterThan(0.67)
+    expect(back).toBeLessThan(0.84)
   })
+  it(
+    `${id} uses complete sleeves with a separate fit for world and first-person arms`,
+    async () => {
+      const world = await io.read(`tools/art/characters/${id}.gltf`)
+      const presentation = await io.read(`tools/art/characters/${id}.gltf`)
+      const original = body(presentation)
+      const incomplete = indices(original.primitive, original.range)
+      const rig = rigAndClips(presentation)
+      const ownAttributes = original.primitive.listSemantics().map((semantic) => ({
+        semantic,
+        values: Array.from({ length: vertices }, (_, v) =>
+          original.primitive.getAttribute(semantic)?.getElement(original.range.start + v, []),
+        ),
+      }))
+      const donor = body(await io.read(`tools/art/characters/${donorId}.gltf`))
+      await integrateGarmentParts(world, id)
+      await integrateGarmentParts(presentation, id, { firstPersonSleeves: true })
+      const before = body(world)
+      const after = body(presentation)
+      const complete = indices(after.primitive, after.range)
+      // Both fits recover the original sleeve topology. Only the world fit changes its positions.
+      expect(incomplete).toHaveLength(worldFaces * 3)
+      expect(complete).toHaveLength(faces * 3)
+      expect(indices(before.primitive, before.range)).toEqual(complete)
+      expect(complete).toEqual(indices(donor.primitive, donor.range))
+      expect(after.range).toMatchObject({
+        count: vertices,
+        slot: 'sleeves',
+        swatch: 'linen',
+        name: 'WesternSleeves',
+      })
+      expect(
+        new Set(Array.from({ length: faces }, (_, f) => complete.slice(f * 3, f * 3 + 3).join('/')))
+          .size,
+      ).toBe(faces)
+      const fullEdges = edges(complete)
+      expect(
+        [...edges(incomplete)].filter(([edge, count]) => count === 1 && fullEdges.get(edge) === 2)
+          .length,
+      ).toBeGreaterThan(10)
+      // Both paths preserve the surfaces outside the sleeves, the rig, and the clips.
+      expect(outside(after.primitive, after.range)).toEqual(outside(before.primitive, before.range))
+      for (const semantic of before.primitive.listSemantics()) {
+        const a = before.primitive.getAttribute(semantic)
+        const b = after.primitive.getAttribute(semantic)
+        if (!(a && b)) {
+          throw new Error('Lost world stream')
+        }
+        const first = Array.from(a.getArray() ?? [])
+        const second = Array.from(b.getArray() ?? [])
+        const position = semantic === 'POSITION'
+        const start = position ? before.range.start * a.getElementSize() : first.length
+        const end = position ? start + before.range.count * a.getElementSize() : start
+        expect(first.slice(0, start)).toEqual(second.slice(0, start))
+        expect(first.slice(end)).toEqual(second.slice(end))
+        expect(
+          JSON.stringify(first.slice(start, end)) !== JSON.stringify(second.slice(start, end)),
+        ).toBe(position)
+      }
+      for (const { semantic, values } of ownAttributes) {
+        const attribute = after.primitive.getAttribute(semantic)
+        expect(
+          Array.from({ length: vertices }, (_, v) =>
+            attribute?.getElement(after.range.start + v, []),
+          ),
+        ).toEqual(values)
+      }
+      expect(rigAndClips(presentation)).toBe(rig)
+      const worn = await io.read(`tools/art/characters/poncho-sleeves/${id}.glb`)
+      await validateAuthoringInputs(worn)
+      expect(worn.getRoot().getExtras().restoredSleeveTriangles).toBe(faces - worldFaces)
+      const portable = await io.read(`tools/art/characters/first-person-sleeves/${id}.glb`)
+      await validateAuthoringInputs(portable)
+      expect(await io.writeBinary(await authorFirstPersonSleeves(id))).toEqual(
+        await io.writeBinary(portable),
+      )
+      expect(portable.getRoot().getExtras().replaceRanges).toEqual([original.range])
+      expect(portable.getRoot().getExtras().removeTriangles).toEqual([])
+    },
+    hangTimeout(10_000),
+  )
 }

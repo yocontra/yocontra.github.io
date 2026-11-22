@@ -1,6 +1,7 @@
-/** Close-up fixture that runs in the development browser using the shipped native actor loader. */
+/** Visual inspection fixture that runs in the development browser using the shipped native actor loader. */
 import { Color, Entity } from 'playcanvas'
 import { GameApplication } from '../../src/experiments/out-west/client/application.ts'
+import { EQUIPMENT } from '../../src/experiments/out-west/content/equipment.ts'
 import { ASSETS } from '../../src/experiments/out-west/content/manifest.ts'
 import {
   CATALOG,
@@ -11,7 +12,17 @@ import { DuelActor } from '../../src/experiments/out-west/duel/native-actor.ts'
 import type { RenderTier } from '../../src/experiments/out-west/platform/render-tier.ts'
 import { equippedActor } from '../../src/experiments/out-west/scene/native-equipment.ts'
 
-const poses = [
+interface ReviewPose {
+  name: string
+  pose: string
+  yaw: number
+  hat: boolean
+  rake?: boolean
+  framing?: 'torso' | 'body'
+  time?: number
+}
+
+const poses: readonly ReviewPose[] = [
   { name: 'front-bare', pose: 'Idle', yaw: 0, hat: false, rake: false },
   { name: 'profile-bare', pose: 'Idle', yaw: 90, hat: false, rake: false },
   { name: 'rear-bare', pose: 'Idle', yaw: 155, hat: false, rake: false },
@@ -19,7 +30,48 @@ const poses = [
   { name: 'crouch-collar', pose: 'Crouch_Idle', yaw: 34, hat: true, rake: false },
   { name: 'aim-profile', pose: 'Idle_Gun_Pointing', yaw: 72, hat: true, rake: false },
   { name: 'raking-light', pose: 'Idle', yaw: -32, hat: false, rake: true },
-] as const
+  { name: 'idle-body-front', pose: 'Idle', yaw: 0, hat: true, framing: 'body' },
+  { name: 'idle-body-right', pose: 'Idle', yaw: 90, hat: true, framing: 'body' },
+  { name: 'idle-body-left', pose: 'Idle', yaw: -90, hat: true, framing: 'body' },
+  { name: 'idle-body-back', pose: 'Idle', yaw: 180, hat: true, framing: 'body' },
+  { name: 'idle-back-torso', pose: 'Idle', yaw: 142, hat: true, framing: 'torso', rake: true },
+  {
+    name: 'walk-side-early',
+    pose: 'Stride_Walk_0',
+    yaw: 90,
+    hat: true,
+    framing: 'body',
+    time: 0.15,
+  },
+  {
+    name: 'walk-side-late',
+    pose: 'Stride_Walk_0',
+    yaw: 90,
+    hat: true,
+    framing: 'body',
+    time: 0.55,
+  },
+  {
+    name: 'walk-rear-early',
+    pose: 'Stride_Walk_0',
+    yaw: 150,
+    hat: true,
+    framing: 'body',
+    time: 0.15,
+  },
+  {
+    name: 'walk-rear-late',
+    pose: 'Stride_Walk_0',
+    yaw: 150,
+    hat: true,
+    framing: 'body',
+    time: 0.55,
+  },
+  { name: 'crouch-body-side', pose: 'Crouch_Idle', yaw: 90, hat: true, framing: 'body' },
+  { name: 'crouch-body-back', pose: 'Crouch_Idle', yaw: 160, hat: true, framing: 'body' },
+  { name: 'aim-body-side', pose: 'Idle_Gun_Pointing', yaw: -90, hat: true, framing: 'body' },
+  { name: 'aim-body-back', pose: 'Idle_Gun_Pointing', yaw: 145, hat: true, framing: 'body' },
+]
 
 export async function createPlayerModelReview(tier: RenderTier) {
   document.body.replaceChildren()
@@ -69,13 +121,26 @@ export async function createPlayerModelReview(tier: RenderTier) {
 
   let actor: DuelActor | undefined
   const outfits = CATALOG.filter((item) => item.slot === 'outfit').map((item) => item.id)
-  const fits = [
-    { id: 'baked-player', outfit: undefined, paired: false },
+  const fits: {
+    id: string
+    outfit: Loadout['outfit'] | undefined
+    paired: boolean
+    url: string | undefined
+  }[] = [
+    { id: 'baked-player', outfit: undefined, paired: false, url: ASSETS.player.url },
     ...outfits.flatMap((outfit) => [
-      { id: outfit, outfit, paired: false },
-      { id: `${outfit}.pair`, outfit, paired: true },
+      { id: outfit, outfit, paired: false, url: undefined },
+      { id: `${outfit}.pair`, outfit, paired: true, url: undefined },
     ]),
   ]
+  for (const [id, asset] of Object.entries(ASSETS)) {
+    if (id.startsWith('outlaw-')) {
+      fits.push({ id, outfit: undefined, paired: false, url: asset.url })
+      if ('pair' in asset) {
+        fits.push({ id: `${id}.pair`, outfit: undefined, paired: true, url: asset.pair.url })
+      }
+    }
+  }
 
   async function load(id: string) {
     const fit = fits.find((candidate) => candidate.id === id)
@@ -88,10 +153,20 @@ export async function createPlayerModelReview(tier: RenderTier) {
       if (fit.paired) {
         loadout.gun = 'gun.hardins-pair'
       }
+      const outfit: { url: string; pair?: { url: string } } | undefined =
+        EQUIPMENT[fit.outfit as keyof typeof EQUIPMENT]
+      const url = fit.paired ? outfit?.pair?.url : outfit?.url
+      if (!url) {
+        throw new Error(`Missing exact fitted body asset for ${id}`)
+      }
       actor = await equippedActor(game, loadout, {}, { local: true })
-    } else {
-      actor = await DuelActor.create(game, ASSETS.player.url, 'baked-player')
+      return url
     }
+    if (!fit.url) {
+      throw new Error(`Missing baked body asset for ${id}`)
+    }
+    actor = await DuelActor.create(game, fit.url, fit.id)
+    return fit.url
   }
 
   async function render(name: string) {
@@ -105,9 +180,6 @@ export async function createPlayerModelReview(tier: RenderTier) {
       throw new Error(`Missing head joint or rig on ${actor.root.name}`)
     }
     const hats = actor.root.find((child) => child.name === 'mount.Head.accessory')
-    if (hats.length === 0) {
-      throw new Error(`Missing hat attachment on ${actor.root.name}`)
-    }
     for (const hat of hats) {
       hat.enabled = pose.hat
     }
@@ -118,16 +190,40 @@ export async function createPlayerModelReview(tier: RenderTier) {
     if (!layer) {
       throw new Error(`Missing animation layer on ${actor.root.name}`)
     }
-    layer.activeStateCurrentTime = 0.24
+    layer.transition(layer.activeState, 0)
+    layer.activeStateCurrentTime = pose.time ?? 0.24
     anim.update(0)
     anim.playing = false
     keyLight.setEulerAngles(pose.rake ? 12 : 38, pose.rake ? -72 : -18, 0)
-    const p = head.getPosition()
-    game.camera.setPosition(p.x, p.y + 0.1, p.z + 1.04)
-    game.camera.lookAt(p.x, p.y + 0.035, p.z)
+    if (pose.framing) {
+      const p = actor.root.getPosition()
+      const target = pose.framing === 'torso' ? 1.42 : 0.96
+      const distance = pose.framing === 'torso' ? 2.4 : 4.4
+      game.camera.setPosition(p.x, p.y + target + 0.08, p.z + distance)
+      game.camera.lookAt(p.x, p.y + target, p.z)
+    } else {
+      const p = head.getPosition()
+      game.camera.setPosition(p.x, p.y + 0.1, p.z + 1.04)
+      game.camera.lookAt(p.x, p.y + 0.035, p.z)
+    }
     for (let frame = 0; frame < 3; frame++) {
       await new Promise<void>((resolve) => game.app.once('postrender', () => resolve()))
     }
+    const cameraPosition = game.camera.getPosition()
+    const rotation = game.camera.getRotation()
+    const crown = head.getPosition()
+    return [
+      cameraPosition.x,
+      cameraPosition.y,
+      cameraPosition.z,
+      rotation.x,
+      rotation.y,
+      rotation.z,
+      rotation.w,
+      crown.x,
+      crown.y,
+      crown.z,
+    ]
   }
 
   return {

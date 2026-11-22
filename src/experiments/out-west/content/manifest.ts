@@ -101,7 +101,7 @@ export const ENVIRONMENT = {
   hash: '206c67e3a1b992282821cf06662bdd69bbb4915c1c4444a66338a40d6a7d4e34',
   bytes: 1173154,
 } as const
-export const CONTENT_VERSION = '1f31ada8e840e8845b86000c7beb034dbd2c9554b9c8370dbfef67cdd86c4228'
+export const CONTENT_VERSION = '925b99ba374ae74474dc8fbe30ed44884a32fdd19f59606337eca49737274e02'
 export const COLLISION_VERSION = '03b11033428780f67158b47e3fc2b37d761185acea4d5b323301449671b65def'
 export const ASSETS = {
   frontier: {
@@ -135,9 +135,9 @@ export const ASSETS = {
     bytes: 22502384,
   },
   player: {
-    url: '/experiments/out-west/3d/native-v2/baked/player.glb?v=c096750811257910',
-    hash: 'c096750811257910e8b4ac81701458e6e172654b3cfa6d672228cbffd0ff7733',
-    bytes: 1959832,
+    url: '/experiments/out-west/3d/native-v2/baked/player.glb?v=077f44683a0f466d',
+    hash: '077f44683a0f466ddb1ef8b3ca8b9b3fe1e6ac939dd804828d0e398ee1cc8164',
+    bytes: 1938568,
   },
   moves: {
     url: '/experiments/out-west/3d/native-v2/baked/moves.glb?v=cd532e463be4c07c',
@@ -180,9 +180,9 @@ export const ASSETS = {
     },
   },
   'outlaw-6': {
-    url: '/experiments/out-west/3d/native-v2/baked/outlaw-6.glb?v=66e78209bf5527d6',
-    hash: '66e78209bf5527d67d1e8e64d9eb17dea1a3408cd91eb0692d40c0c1c8ce861d',
-    bytes: 3163556,
+    url: '/experiments/out-west/3d/native-v2/baked/outlaw-6.glb?v=acc4cf84cc3adaee',
+    hash: 'acc4cf84cc3adaee73ad11a9e1606db87bb505d20be5be8ea4e63810c293430a',
+    bytes: 3184748,
   },
   'outlaw-7': {
     url: '/experiments/out-west/3d/native-v2/baked/outlaw-7.glb?v=2c263f7c3537ddcb',
@@ -225,9 +225,9 @@ export const ASSETS = {
     bytes: 2288456,
   },
   'outlaw-15': {
-    url: '/experiments/out-west/3d/native-v2/baked/outlaw-15.glb?v=d97c592c9dfd281e',
-    hash: 'd97c592c9dfd281ef96d1aca9f0519f805f0ad40de60995419c6200df1edf217',
-    bytes: 3954764,
+    url: '/experiments/out-west/3d/native-v2/baked/outlaw-15.glb?v=b8de784ad9f7eb17',
+    hash: 'b8de784ad9f7eb17d9539b21db638a60fe5959846cebb0ede9a35670bfdbd661',
+    bytes: 3976204,
   },
   'outlaw-16': {
     url: '/experiments/out-west/3d/native-v2/baked/outlaw-16.glb?v=5e42c15a9e3f9bc9',

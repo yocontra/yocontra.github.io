@@ -116,7 +116,7 @@ faces and unowned texture data match its input after the write.
 2. Run `bun tools/content/environment.ts --only duel --output "$regular"` and
    repeat for `depot`. Use the pinned KTX encoder.
 3. Copy the Mission and Bank authoring GLBs into the stone staging directory as
-   `mission-input.glb` and `bank-input.glb`. Run:
+   `mission-input.glb` and `bank-input.glb`. Use these commands.
 
    ```sh
    bun tools/content/flatten-civic.ts "$stone/mission-input.glb" "$stone/bank-input.glb"
