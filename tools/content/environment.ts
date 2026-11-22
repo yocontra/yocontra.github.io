@@ -13,6 +13,7 @@ import { fitArenaWagons } from './arena-wagons.ts'
 import { removeHiddenBankCurbFaces } from './bank-curb.ts'
 import { compressedCharacterTexture } from './character-textures.ts'
 import { withContentOutput } from './content-output.ts'
+import { installDepotRoofTimber } from './depot-roof-timber.ts'
 import { dressDuelBluffs } from './duel-bluffs.ts'
 import {
   authorEnvironmentCloudUvs,
@@ -153,6 +154,9 @@ for (const name of names.filter((candidate) => !only || candidate === only)) {
     const material = raw.clone().setName('Regular arena dirt')
     part.setMaterial(material)
     await installTerrainVariation(document, material.getName())
+  }
+  if (name === 'depot') {
+    installDepotRoofTimber(document)
   }
   authorEnvironmentCloudUvs(document, name)
   await io.write(path, document)

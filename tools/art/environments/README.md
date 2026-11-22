@@ -149,3 +149,13 @@ room finishes, use a separate output path and encoder cache.
 KTX_ENCODER=/path/to/toktx bun tools/content/frontier-roof-freight-variation.ts \
   "$room_map" "$staged/frontier.glb" "$texture_cache"
 ```
+
+## Depot roof timber
+
+The Depot bake adds the passenger gable lining and the Express frieze after
+the timber finish. The standalone tool can apply the same repair to a staged
+native map that already has the surface finishes.
+
+```sh
+bun tools/content/depot-roof-timber.ts "$staged/depot.glb" "$fixed/depot.glb"
+```
