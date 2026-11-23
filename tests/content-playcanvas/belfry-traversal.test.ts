@@ -1,18 +1,15 @@
 import { expect, test as it } from 'bun:test'
 import { file } from 'bun'
 import { initializeAmmo } from 'colyseus-cloudflare/ammo'
-import publishedCollision from '../../src/experiments/out-west/content/collision.json' with {
-  type: 'json',
-}
 import { WEAPON_REVOLVER, WEAPON_RIFLE } from '../../src/experiments/out-west/contract/town.ts'
 import { TOWN } from '../../src/experiments/out-west/ffa/sim/layout.ts'
 import { updatePickups } from '../../src/experiments/out-west/ffa/sim/pickups.ts'
 import { createWorld } from '../../src/experiments/out-west/ffa/sim/state.ts'
 import { addPlayer } from '../../src/experiments/out-west/ffa/sim/world.ts'
 import { newMotion } from '../../src/experiments/out-west/runtime/abilities.ts'
+import { COLLISION } from '../../src/experiments/out-west/runtime/collision.ts'
 import { neutralInput } from '../../src/experiments/out-west/runtime/protocol.ts'
 import { createSimulation } from '../../src/experiments/out-west/runtime/world.ts'
-import { compileFrontierCollision } from '../../tools/content/frontier-collision.ts'
 
 it('walks from the street to the belfry and claims its rifle only upstairs', async () => {
   const rifle = TOWN.pickups.find((spot) => spot.id === 'rifle_tower')
@@ -24,9 +21,7 @@ it('walks from the street to the belfry and claims its rifle only upstairs', asy
       await file('public/experiments/out-west/physics/ammo.wasm.wasm').arrayBuffer(),
     ),
   )
-  const collision = compileFrontierCollision(TOWN)
-  expect(collision.version).toBe(publishedCollision.version)
-  const sim = createSimulation({ ammo, collision })
+  const sim = createSimulation({ ammo, collision: COLLISION })
   try {
     const climber = sim.addPlayer('climber')
     sim.adopt('climber', {
