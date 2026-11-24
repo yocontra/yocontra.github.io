@@ -217,3 +217,16 @@ Gun styles keep their authored albedo UVs and part-specific metallic factors.
 A padded UV1 atlas adds spatial roughness/wear and one shared fine normal map;
 all gun styles still combine into the same rigid material draw. Prop palettes
 retain their original conversion path.
+
+The saloon reference cast uses the fitted rider and Greenhorn meshes. Blender
+bakes cheek and lid contours, beard pigment and regional skin roughness into
+the existing face UVs. All eight rider outfits and their paired fits share this
+head and hand pigment. The fitted hand maps use the Trail Duds finger joints.
+Set `KTX_TOOL` to the KTX-Software 4.4.2 `ktx` executable if it is outside PATH.
+
+```sh
+blender --background --factory-startup --python-exit-code 1 --python tools/content/saloon-cast-authoring.py
+KTX_ENCODER=/path/to/bin/toktx bun tools/content/saloon-cast.ts
+bun tools/content/viewmodels.ts
+bun tools/content/manifest.ts
+```

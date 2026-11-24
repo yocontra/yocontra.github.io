@@ -8,7 +8,7 @@ import { compressedCharacterTexture } from './character-textures.ts'
 import { contentOutput, withContentOutput } from './content-output.ts'
 import type { FreightPiece } from './freight-crates-geometry.ts'
 import type { FreightPrefabManifest } from './freight-crates-install.ts'
-import { poolFrontierInertWindViews } from './frontier-inert-wind-pool.ts'
+import { packFrontierMap } from './frontier-inert-wind-pool.ts'
 import { SHAKE_TILE } from './frontier-roof-material.ts'
 
 const VERSION = 'perditionCedarAndFreight'
@@ -309,7 +309,7 @@ if (import.meta.main) {
   const doc = await io.read(base)
   console.log(await withContentOutput(resources, () => varyPerditionRoofsAndFreight(doc)))
   await io.write(output, doc)
-  console.log(await poolFrontierInertWindViews(output))
+  console.log(await packFrontierMap(output, resources))
   const size = (await stat(output)).size
   if (size >= 100 * 1024 * 1024) {
     throw new Error(`Perdition map exceeds 100 MiB: ${size} bytes`)

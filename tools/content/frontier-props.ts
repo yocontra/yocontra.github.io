@@ -337,12 +337,43 @@ function counterModel(g: FrontierGeometry, root: Node, c: Placement) {
   }
 }
 
+/** Grow columnar cacti taller than they thicken and keep the original planting site. */
+function placeSaguaro(
+  g: FrontierGeometry,
+  root: Node,
+  name: string,
+  site: { x: number; z: number; base: number; height: number },
+): void {
+  const { x, z, base, height } = site
+  const rotateQuarterTurn = name === 'saguaro_one_arm'
+  const [width, naturalHeight, depth] = g.naturalSize(name)
+  const girth = Math.sqrt(height / naturalHeight)
+  const w = (rotateQuarterTurn ? depth : width) * girth
+  const d = (rotateQuarterTurn ? width : depth) * girth
+  g.prefab(
+    root,
+    name,
+    { x: x - w / 2, z: z - d / 2, w, d, y0: base, top: base + height },
+    { anisotropy: Number.POSITIVE_INFINITY, jitter: Math.PI },
+  )
+}
+
 /** Yard cactus beds and outskirts saguaros, every base seated on the rendered ground. */
 export function desertPlants(g: FrontierGeometry, beds: readonly Placement[], size: number) {
   const yards = g.group('Perdition creek and yard cactus beds')
   for (const [index, plant] of beds.entries()) {
-    const saguaro = index % 2 === 0 ? 'saguaro_two_arm' : 'saguaro_one_arm'
-    g.prefab(yards, plant.top <= 1.3 ? 'prickly_pear' : saguaro, plant, { jitter: Math.PI })
+    if (plant.top <= 1.3) {
+      g.prefab(yards, 'prickly_pear', plant, { jitter: Math.PI })
+      continue
+    }
+    const name = index % 2 === 0 ? 'saguaro_two_arm' : 'saguaro_one_arm'
+    const base = plant.y0 ?? 0
+    placeSaguaro(g, yards, name, {
+      x: plant.x + plant.w / 2,
+      z: plant.z + plant.d / 2,
+      base,
+      height: plant.top - base,
+    })
   }
   const ground = frontierTerrainHeight(size)
   const outskirts = g.group('Perdition outskirts saguaros')
@@ -360,14 +391,9 @@ export function desertPlants(g: FrontierGeometry, beds: readonly Placement[], si
       ) - 0.05
     const height = top - base
     const name = spread > height * 0.3 ? 'saguaro_far_two_arm' : 'saguaro_far_one_arm'
-    const [w, h, d] = g.naturalSize(name)
-    // Saguaros grow taller far faster than they thicken.
-    const girth = Math.sqrt(height / h)
-    g.prefab(
-      outskirts,
-      name,
-      { x: x - (w * girth) / 2, z: z - (d * girth) / 2, w: w * girth, d: d * girth, y0: base, top },
-      { anisotropy: Number.POSITIVE_INFINITY, jitter: Math.PI },
-    )
+    // Broad two-arm silhouettes in the old scatter had often been scaled to a juvenile's height.
+    const matureHeight =
+      name === 'saguaro_far_two_arm' ? Math.max(height, 4.2 + height * 0.7) : height
+    placeSaguaro(g, outskirts, name, { x, z, base, height: matureHeight })
   }
 }

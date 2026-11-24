@@ -2,7 +2,7 @@
 import type { AnimComponentLayer } from 'playcanvas'
 import { WEAPON_RIFLE, WEAPON_SHOTGUN } from '../contract/town.ts'
 import type { DuelActor } from '../duel/native-actor.ts'
-import { CROUCH_SPEED, SPRINT_SPEED } from '../ffa/sim/constants.ts'
+import { CROUCH_SPEED, RELOAD_TICKS, SPRINT_SPEED } from '../ffa/sim/constants.ts'
 import type { Player } from '../ffa/sim/types.ts'
 import type { PlayerState } from '../runtime/protocol.ts'
 import { DYNAMITE_THROW_SECONDS, RECOIL_SECONDS } from '../scene/native-animation-timing.ts'
@@ -16,6 +16,7 @@ export interface AnimatedRider {
   firingUntil: number
   firingWeapon?: HeldWeapon | undefined
   throwingUntil?: number
+  reloadTicks?: number
 }
 export function heldWeapon(domain: Player | undefined): HeldWeapon {
   if (domain?.weapon === WEAPON_RIFLE) {
@@ -71,14 +72,15 @@ function directionClip(actor: DuelActor, player: PlayerState, name: string): str
   const stride = `Stride_${name}_${direction}`
   return actor.hasAnimation(stride) ? stride : name
 }
+const PICKUP_CLIP = /(?:Hold|Shoot)_(?:rifle|shotgun)$/u
 const SHOT_CLIP = /(?:^|_)Shoot(?:_|$)/u
 function firingClip(rider: AnimatedRider, crouched: boolean, first: boolean): string | undefined {
   const layer = rider.weaponLayer
-  // A first-person shot owns its starting pose through crouch changes. The
-  // native clock can run slightly behind the wall deadline.
+  // Each shot keeps the stance in which it started. The local arms can finish
+  // their native clip if the animation clock trails the event deadline.
   if (
-    first &&
     rider.firingUntil > 0 &&
+    (first || performance.now() < rider.firingUntil) &&
     layer &&
     SHOT_CLIP.test(layer.activeState) &&
     layer.activeStateCurrentTime < layer.activeStateDuration
@@ -117,24 +119,86 @@ function upperClip(
   if ((domain?.reloadTicks ?? 0) > 0) {
     return crouched ? 'Crouch_Reload' : rider.actor.animation('Reload')
   }
+  const layer = rider.weaponLayer
+  if (domain?.alive && layer) {
+    // Finish the last pickup recoil before drawing the sidearm. Another
+    // accepted shot can interrupt the draw immediately.
+    if (
+      layer.activeState.startsWith('Draw') &&
+      layer.activeStateCurrentTime < layer.activeStateDuration
+    ) {
+      return layer.activeState
+    }
+    if (PICKUP_CLIP.test(layer.activeState)) {
+      const draw = rider.actor.animation('Draw')
+      if (layer.states.includes(draw)) {
+        return draw
+      }
+    }
+  }
   return rider.actor.animation(crouched ? 'Crouch_Idle_Gun_Pointing' : 'Idle_Gun_Pointing')
 }
 function aimClip(player: PlayerState, domain: Player | undefined): string {
   const stance = (player.crouched ?? domain?.crouched ?? false) ? 'Crouch_' : ''
   return `${stance}${player.pitch >= 0 ? 'Aim_Up' : 'Aim_Down'}`
 }
-function transitionUpper(layer: AnimComponentLayer, upper: string): void {
-  if (layer.activeState === upper || !layer.states.includes(upper)) {
+function transitionUpper(
+  rider: AnimatedRider,
+  layer: AnimComponentLayer,
+  upper: string,
+  reloadTicks: number,
+): void {
+  const changed = layer.activeState !== upper
+  if (changed) {
+    if (!layer.states.includes(upper)) {
+      return
+    }
+    const throwTime =
+      upper.endsWith('Throw_Dynamite') && layer.activeState.endsWith('Throw_Dynamite')
+        ? layer.activeStateCurrentTime
+        : undefined
+    if (upper.startsWith('Draw')) {
+      rider.actor.drawWeapon()
+    }
+    layer.transition(upper, 0.05)
+    if (throwTime !== undefined) {
+      layer.activeStateCurrentTime = throwTime
+    }
+  }
+  if (upper.includes('Reload') && (changed || reloadTicks !== rider.reloadTicks)) {
+    // Catch up after a late snapshot, appearance load, or stance change.
+    // Between snapshots the native clip runs freely at the simulation rate.
+    const tick = layer.activeStateDuration / RELOAD_TICKS
+    const elapsed = (RELOAD_TICKS - Math.min(RELOAD_TICKS, reloadTicks)) * tick
+    if (changed || Math.abs(elapsed - layer.activeStateCurrentTime) > 2 * tick) {
+      layer.activeStateCurrentTime = elapsed
+    }
+  }
+  rider.reloadTicks = reloadTicks
+}
+function transitionGait(
+  rider: AnimatedRider,
+  locomotion: string,
+  clip: string,
+  speed: number,
+): void {
+  const { actor } = rider
+  if (clip === rider.clip) {
     return
   }
-  const throwTime =
-    upper.endsWith('Throw_Dynamite') && layer.activeState.endsWith('Throw_Dynamite')
-      ? layer.activeStateCurrentTime
+  // The eight directions of each stride share their contact phases. Starting a
+  // fresh cycle on each direction change makes a circling rider step twice.
+  const redirect = clip.startsWith('Stride_') && rider.clip.startsWith(`Stride_${locomotion}_`)
+  const lower = redirect ? actor.model.anim?.baseLayer : undefined
+  const phase =
+    lower?.activeState === rider.clip && lower.activeStateDuration > 0
+      ? (lower.activeStateCurrentTime / lower.activeStateDuration) % 1
       : undefined
-  layer.transition(upper, 0.05)
-  if (throwTime !== undefined) {
-    layer.activeStateCurrentTime = throwTime
+  actor.play(clip, speed < 0.1 ? 0.04 : 0.1)
+  if (phase !== undefined && lower) {
+    lower.activeStateCurrentTime = phase * lower.activeStateDuration
   }
+  rider.clip = clip
 }
 export function animateRider(
   rider: AnimatedRider,
@@ -173,12 +237,9 @@ export function animateRider(
     if (rider.weaponLayer.weight !== weight) {
       rider.weaponLayer.weight = weight
     }
-    transitionUpper(rider.weaponLayer, upper)
+    transitionUpper(rider, rider.weaponLayer, upper, options.domain?.reloadTicks ?? 0)
   }
-  if (clip !== rider.clip) {
-    actor.play(clip, speed < 0.1 ? 0.04 : 0.1)
-    rider.clip = clip
-  }
+  transitionGait(rider, locomotion, clip, speed)
   const authored = actor.gaitSpeeds[locomotion] ?? GAIT_SPEED.get(locomotion) ?? actor.walkSpeed
   actor.speed(GAITS.has(locomotion) ? speed / authored : 1)
 }

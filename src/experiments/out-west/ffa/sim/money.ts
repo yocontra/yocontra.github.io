@@ -73,9 +73,13 @@ function strongboxInReach(w: World, p: Player): boolean {
   return w.strongbox !== null && w.strongbox.openedBy < 0 && strongboxDistance(w, p)
 }
 
+export function canStartChannel(p: Player): boolean {
+  return p.alive && !p.channel && p.showdown < 0 && p.lingerUntil < 0
+}
+
 /** Start a channel from a fresh press. Accepting a call-out is handled before this, by the showdown. */
 export function startChannel(w: World, p: Player, buttons: number): void {
-  if (p.channel || !p.alive || p.showdown >= 0 || p.lingerUntil >= 0) {
+  if (!canStartChannel(p)) {
     return
   }
   if (pressed(buttons, p.lastButtons, BTN_LEAVE)) {

@@ -7,7 +7,8 @@ import { poseEye } from './player-pose.ts'
 
 const FOLLOW_DISTANCE = 4.5
 const WALL_CLEARANCE = 0.18
-const RELEASE_RATE = 9
+const RELEASE_RATE = 12
+const TERRAIN_RATE = 10
 const CORNERS = [
   [-1, -1],
   [-1, 1],
@@ -40,10 +41,14 @@ export class FollowCamera {
   private readonly end = new Vec3()
   private previousPlayer: string | undefined
   private extension = 1
+  private releaseSpeed = 0
+  private followHeight = 0
+  private previousCrouch = false
 
   reset(): void {
     this.previousPlayer = undefined
     this.extension = 1
+    this.releaseSpeed = 0
   }
 
   place(options: CameraOptions): void {
@@ -88,16 +93,39 @@ export class FollowCamera {
   }
 
   private follow({ camera, player, trace, settings, dt, reducedMotion }: CameraOptions): void {
-    const allowed = trace ? this.clearance(trace, camera, settings.fovThird) : 1
     const fresh = this.previousPlayer !== player.id || this.lastHead.distance(this.head) > 2
+    const crouched = player.crouched ?? false
+    const step = Math.max(0, Math.min(dt, 0.1))
+    // Follow short changes of footing without moving the lens on each stair edge.
+    // Keep horizontal travel, aim, stance changes and airborne movement responsive.
+    if (
+      fresh ||
+      crouched !== this.previousCrouch ||
+      (player.motion?.jumpTicks ?? 0) > 0 ||
+      (player.motion?.climbTicks ?? 0) > 0
+    ) {
+      this.followHeight = this.head.y
+    } else {
+      const lag = Math.max(-0.22, Math.min(0.22, this.followHeight - this.head.y))
+      this.followHeight = this.head.y + lag * Math.exp(-TERRAIN_RATE * step)
+    }
+    this.previousCrouch = crouched
+    this.eye.y += this.followHeight - this.head.y
+    const allowed = trace ? this.clearance(trace, camera, settings.fovThird) : 1
     // Pull in immediately for solid cover. Ease the return so a door jamb cannot pop the frame.
     if (fresh || reducedMotion || allowed <= this.extension) {
       this.extension = allowed
+      this.releaseSpeed = 0
     } else {
-      const step = 1 - Math.exp(-Math.min(dt, 0.05) * RELEASE_RATE)
-      this.extension += (allowed - this.extension) * step
+      // A critically damped release starts at rest when a gap opens between posts.
+      const gap = this.extension - allowed
+      const velocity = this.releaseSpeed + RELEASE_RATE * gap
+      const decay = Math.exp(-RELEASE_RATE * step)
+      this.extension = Math.min(allowed, allowed + (gap + velocity * step) * decay)
+      this.releaseSpeed = (this.releaseSpeed - RELEASE_RATE * velocity * step) * decay
       if (allowed - this.extension < 0.002) {
         this.extension = allowed
+        this.releaseSpeed = 0
       }
     }
     this.lastHead.copy(this.head)

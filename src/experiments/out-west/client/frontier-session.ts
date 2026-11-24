@@ -1,4 +1,3 @@
-import { type Entity, Vec3 } from 'playcanvas'
 import { BotDirector, freshBotName } from '../../../../api/src/town/bots.ts'
 import { applyPractice, stakeRespawns } from '../../../../api/src/town/practice.ts'
 import { ANGLE_SCALE, type ServerControl } from '../contract/town.ts'
@@ -291,12 +290,7 @@ export async function createLocalFrontierSession(
       }
       presentation.present(elapsed * SIMULATION_HZ, input)
     },
-    cameraTrace(from, to) {
-      const hit = simulation.physics.app.systems.rigidbody?.raycastFirst(from, to, {
-        filterCallback: (entity: Entity) => !simulation.physics.players.has(entity.name),
-      })
-      return hit ? new Vec3(hit.point.x, hit.point.y, hit.point.z) : null
-    },
+    cameraTrace: simulation.physics.cameraTrace,
     dispose() {
       if (!disposed) {
         disposed = true

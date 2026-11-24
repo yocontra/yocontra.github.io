@@ -79,9 +79,14 @@ describe('Frontier footsteps', () => {
 describe('Frontier acoustic spaces', () => {
   it('tell an interior, a street and the open desert apart', () => {
     const saloon = kind('saloon')
-    expect(spaceAt({ x: saloon.x + saloon.w / 2, y: 0, z: saloon.z + saloon.d / 2 }).kind).toBe(
-      'interior',
-    )
+    for (const building of [saloon, kind('bank')]) {
+      const centre = { x: building.x + building.w / 2, z: building.z + building.d / 2 }
+      expect(spaceAt({ ...centre, y: 1.5 })).toMatchObject({
+        kind: 'interior',
+        building: building.id,
+      })
+      expect(spaceAt({ ...centre, y: building.height + 1 }).building).toBeUndefined()
+    }
     expect(spaceAt({ x: -40, y: 0, z: -40 }).kind).toBe('open')
     const street = TOWN.buildings.some(
       (b) => spaceAt({ x: b.x + b.w / 2, y: 0, z: b.z + b.d + 4 }).kind === 'street',

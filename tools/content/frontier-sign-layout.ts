@@ -9,25 +9,33 @@ export function facadeSignWidth(building: Building, side: Side, label: string) {
   return Math.min(span - 1, Math.max(5, label.length) * 0.43)
 }
 
-export const SIGN_ATLAS_WIDTH = 2048
-export const SIGN_ATLAS_HEIGHT = 3584
+// All origins, including the edge padding, align to compression blocks.
+export const SIGN_ATLAS_WIDTH = 4096
+export const SIGN_ATLAS_HEIGHT = 3072
 export const SIGN_GUTTER = 16
-export const SIGN_SHORT_BAND = { left: 0, top: 1536, width: 2048, height: 1536 } as const
 
 export function signRect(row: number) {
   if (!Number.isInteger(row) || row < 0 || row >= 28) {
     throw new Error('Expected sign row 0..27')
   }
-  if (row < 12 || row >= 24) {
-    return { left: 0, top: row * 128, width: 2048, height: 128 }
+  if (row < 12) {
+    return {
+      left: 16 + (row % 2) * 2048,
+      top: 16 + Math.floor(row / 2) * 336,
+      width: 2016,
+      height: 304,
+    }
   }
-  const index = row - 12
-  return {
-    left: 92 + (index % 3) * 632,
-    top: 1696 + Math.floor(index / 3) * 312,
-    width: 600,
-    height: 280,
+  if (row < 24) {
+    const index = row - 12
+    return {
+      left: 16 + (index % 6) * 680,
+      top: 2032 + Math.floor(index / 6) * 336,
+      width: 648,
+      height: 304,
+    }
   }
+  return { left: 16 + (row - 24) * 1024, top: 2704, width: 992, height: 264 }
 }
 
 export function signUvRect(row: number) {

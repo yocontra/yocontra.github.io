@@ -13,6 +13,7 @@ import { fitForgedSpurs } from './forged-spurs.ts'
 import { fitNativeRiderGarments } from './native-rider-garments.ts'
 import { fitOutlawHat } from './outlaw-hats.ts'
 import { OUTLAW_HEAD_FITS } from './outlaw-head-fits.ts'
+import { installSaloonCast } from './saloon-cast.ts'
 import { fitShirtVestArmhole } from './shirt-vest-armhole.ts'
 
 const source = resolve('tools/art/characters')
@@ -108,5 +109,8 @@ for (const id of ids.filter((asset) => asset.startsWith('gun.'))) {
     resolve(source, 'revolver-exteriors', id === 'gun.buntline' ? 'long.glb' : 'standard.glb'),
     contentOutput('equipment', `${id}.glb`),
   )
+}
+for (const id of ids) {
+  await installSaloonCast(id)
 }
 console.log(`Rebuilt ${ids.length} HUMAN fitted assets`)

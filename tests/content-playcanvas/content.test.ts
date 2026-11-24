@@ -18,7 +18,8 @@ it('every published asset matches its content-addressed manifest and uses native
     const bytes = new Uint8Array(await file(path).arrayBuffer())
     expect(bytes.byteLength).toBe(asset.bytes)
     expect(createHash('sha256').update(bytes).digest('hex')).toBe(asset.hash)
-    const doc = await io.readBinary(bytes)
+    // Frontier shares its content-addressed freight atlas with the texture cache.
+    const doc = name === 'frontier' ? await io.read(path) : await io.readBinary(bytes)
     expect(
       doc
         .getRoot()
@@ -41,6 +42,33 @@ it('every published asset matches its content-addressed manifest and uses native
     )
     expect(clips.includes('Death')).toBe(character)
   }
+})
+
+const FREIGHT_ATLAS = /^\.\.\/environments\/textures\/[\da-f]{24}\.color\.ktx2$/u
+it('the shipped map resolves its freight atlas locally and fits in one repository file', async () => {
+  const path = `public${ASSETS.frontier.url.split('?')[0]}`
+  const doc = await new NodeIO().registerExtensions(ALL_EXTENSIONS).read(path)
+  const atlas = doc
+    .getRoot()
+    .listTextures()
+    .find((texture) => texture.getName() === 'Freight albedo')
+  expect(atlas?.getURI()).toMatch(FREIGHT_ATLAS)
+  expect(atlas?.getImage()?.length).toBeGreaterThan(0)
+  const signs = doc
+    .getRoot()
+    .listMaterials()
+    .find((material) => material.getName() === 'Perdition painted signs')
+  const image = signs?.getBaseColorTexture()?.getImage()
+  if (!image) {
+    throw new Error('Missing native sign atlas')
+  }
+  const ktx = Buffer.from(image)
+  expect(ktx.toString('ascii', 1, 7)).toBe('KTX 20')
+  expect([ktx.readUInt32LE(20), ktx.readUInt32LE(24), ktx.readUInt32LE(40)]).toEqual([
+    4096, 3072, 13,
+  ])
+  expect(signs?.getMetallicFactor()).toBe(0)
+  expect(file(path).size).toBeLessThan(100 * 1024 * 1024)
 })
 
 it('static collision version covers complete finite geometry with upward surface winding', () => {

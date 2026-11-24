@@ -1,6 +1,40 @@
-/** Share verified, dedicated zero-only morph storage without changing any glTF accessor. */
-import { mkdtemp, readFile, rename, rm, writeFile } from 'node:fs/promises'
-import { dirname, join } from 'node:path'
+/** Pack the native map with shared wind buffers and its existing external freight texture. */
+import { mkdir, mkdtemp, readFile, rename, rm, writeFile } from 'node:fs/promises'
+import { basename, dirname, join, resolve } from 'node:path'
+import type { Document } from '@gltf-transform/core'
+import { compressedCharacterTexture } from './character-textures.ts'
+import { withContentOutput } from './content-output.ts'
+
+const FREIGHT_URI = /^\.\.\/environments\/textures\/[a-f0-9]{24}\.color\.ktx2$/u
+
+/** Match the standalone atlas used by the renderer to the source that produced it. */
+export async function packFrontierMap(path: string, cache: string) {
+  const albedo = await readFile('tools/art/environments/freight-crates/freight-albedo.png')
+  const atlas = await withContentOutput(cache, () =>
+    compressedCharacterTexture(albedo, true, 'environments'),
+  )
+  return poolFrontierInertWindViews(path, join(cache, 'environments', 'textures', basename(atlas)))
+}
+
+export function freightAtlasFiles(native: Document, directory: string) {
+  const atlas = native
+    .getRoot()
+    .listTextures()
+    .find((texture) => texture.getName() === 'Freight albedo')
+  const uri = atlas?.getURI()
+  if (!uri) {
+    return []
+  }
+  if (!FREIGHT_URI.test(uri)) {
+    throw new Error('Unexpected external freight atlas path')
+  }
+  return [
+    [
+      join(directory, 'baked', uri),
+      join('public/experiments/out-west/3d/native-v2/baked', uri),
+    ] as const,
+  ]
+}
 
 interface BufferView {
   buffer: number
@@ -20,6 +54,7 @@ interface FrontierGlb {
   }[]
   buffers: { byteLength: number; uri?: string }[]
   bufferViews: BufferView[]
+  images?: { name?: string; bufferView?: number | undefined; uri?: string }[]
   meshes: {
     primitives: {
       extras?: { outWestInertWind?: number }
@@ -33,17 +68,17 @@ const JSON_CHUNK = 0x4e_4f_53_4a
 const BIN_CHUNK = 0x00_4e_49_42
 const pad = (bytes: number) => (4 - (bytes % 4)) % 4
 
-function countViewUses(value: unknown, uses: Map<number, number>) {
+function visitViews(value: unknown, visit: (index: number, owner: object) => void) {
   if (Array.isArray(value)) {
     for (const entry of value) {
-      countViewUses(entry, uses)
+      visitViews(entry, visit)
     }
   } else if (value && typeof value === 'object') {
     for (const [key, entry] of Object.entries(value)) {
       if (key === 'bufferView' && typeof entry === 'number') {
-        uses.set(entry, (uses.get(entry) ?? 0) + 1)
+        visit(entry, value)
       } else if (key !== 'bufferViews') {
-        countViewUses(entry, uses)
+        visitViews(entry, visit)
       }
     }
   }
@@ -51,7 +86,9 @@ function countViewUses(value: unknown, uses: Map<number, number>) {
 
 function eligibleViews(document: FrontierGlb) {
   const uses = new Map<number, number>()
-  countViewUses(document, uses)
+  visitViews(document, (index) => {
+    uses.set(index, (uses.get(index) ?? 0) + 1)
+  })
   const pooled = new Set<number>()
   for (const { primitives } of document.meshes) {
     for (const primitive of primitives) {
@@ -81,8 +118,42 @@ function eligibleViews(document: FrontierGlb) {
   return pooled
 }
 
+async function linkFreightTexture(
+  document: FrontierGlb,
+  payloads: Buffer[],
+  path: string,
+  freightTexture?: string,
+) {
+  // The freight atlas already ships as an immutable KTX2. Reference those same
+  // bytes from the native material, keeping the map below the single-file limit.
+  const image = document.images?.find((entry) => entry.name === 'Freight albedo')
+  const external = freightTexture ? image?.bufferView : undefined
+  if (freightTexture && image && external !== undefined) {
+    const data = payloads[external]
+    if (!data?.equals(await readFile(freightTexture))) {
+      throw new Error('Freight KTX2 does not match the embedded atlas')
+    }
+    image.uri = `../environments/textures/${basename(freightTexture)}`
+    const target = join(dirname(path), image.uri)
+    await mkdir(dirname(target), { recursive: true })
+    if (resolve(target) !== resolve(freightTexture)) {
+      await writeFile(target, data)
+    }
+    image.bufferView = undefined
+    visitViews(document, (index, owner) => {
+      if (index === external) {
+        throw new Error('Freight atlas bufferView has another owner')
+      }
+      if (index > external) {
+        Object.assign(owner, { bufferView: index - 1 })
+      }
+    })
+  }
+  return external
+}
+
 /** Final native-only repack. Keep each zero bufferView length and accessor count for older loaders. */
-export async function poolFrontierInertWindViews(path: string) {
+export async function poolFrontierInertWindViews(path: string, freightTexture?: string) {
   const source = await readFile(path)
   if (
     source.length < 28 ||
@@ -111,7 +182,7 @@ export async function poolFrontierInertWindViews(path: string) {
     throw new Error('Cannot repack Frontier views with extension-owned binary offsets')
   }
   const views = eligibleViews(document)
-  if (views.size < 2) {
+  if (views.size < 2 && !freightTexture) {
     return { views: 0, bytesSaved: 0 }
   }
 
@@ -130,9 +201,13 @@ export async function poolFrontierInertWindViews(path: string) {
     }
     zeroBytes = Math.max(zeroBytes, data.length)
   }
+  const external = await linkFreightTexture(document, payloads, path, freightTexture)
   const chunks = [Buffer.alloc(zeroBytes)]
   let cursor = zeroBytes
   for (const [i, v] of document.bufferViews.entries()) {
+    if (i === external) {
+      continue
+    }
     if (views.has(i)) {
       v.byteOffset = 0
       continue
@@ -147,6 +222,9 @@ export async function poolFrontierInertWindViews(path: string) {
     cursor += data.length + padding
   }
 
+  if (external !== undefined) {
+    document.bufferViews.splice(external, 1)
+  }
   buffer.byteLength = cursor
   const json = Buffer.from(JSON.stringify(document))
   const jsonPadding = Buffer.alloc(pad(json.length), 0x20)

@@ -1,208 +1,151 @@
-/** Offline lettering: pinned outlines and balanced physical texel density in one atlas. */
-import { createHash } from 'node:crypto'
+/** Offline sign painting. Rasterize the bundled font outlines directly in each board's UV slot. */
 import { readFile } from 'node:fs/promises'
-import { join } from 'node:path'
 import { create, type Font } from 'fontkitten'
 import sharp from 'sharp'
 import {
   SIGN_ATLAS_HEIGHT,
   SIGN_ATLAS_WIDTH,
   SIGN_GUTTER,
-  SIGN_SHORT_BAND,
   signRect,
 } from './frontier-sign-layout.ts'
+import { boardDecoration, signPaint } from './frontier-sign-paint.ts'
 
-export const SIGN_FONT_SHA = 'e0d7f0dfde5f713d46ea9e184ec60eb9e161455ce25d1710fe94f651261165d1'
-export const SIGN_LOGICAL_WIDTH = (128 * 1.5) / 0.7
-const WOOD_SCAN = new URL(
-  '../../public/experiments/out-west/3d/tex/planks_diff.webp',
-  import.meta.url,
-)
-const SHORT_LABEL = /^[A-Z]+$/u
-const LONG_LABEL = /^[A-Z]+(?: [A-Z&]+)*$/u
-const hash = (bytes: Uint8Array) => createHash('sha256').update(bytes).digest('hex')
+export interface SignBoard {
+  owner: string
+  label: string
+  aspect: number
+  kind: 'facade' | 'blade' | 'counter'
+}
 
-export async function signFont(): Promise<Font> {
+const wood = new URL('../../public/experiments/out-west/3d/tex/planks_diff.webp', import.meta.url)
+type Face = ReturnType<typeof signPaint>['face']
+async function readFace(face: Face) {
   const bytes = await readFile(
-    new URL('../../public/experiments/out-west/fonts/ultra.woff2', import.meta.url),
+    new URL(`../../public/experiments/out-west/fonts/${face}.woff2`, import.meta.url),
   )
-  if (hash(bytes) !== SIGN_FONT_SHA) {
-    throw new Error('Sign font bytes changed')
-  }
   const font = create(bytes)
   if (font.isCollection) {
-    throw new Error('Sign font must be one face')
+    throw new Error(`Expected one face for ${face}`)
   }
   return font
 }
 
-export function shortSignOutline(font: Font, text: string) {
-  if (!(text && SHORT_LABEL.test(text))) {
-    throw new Error('Expected uppercase short-sign label')
-  }
-  return signOutline(font, text, SIGN_LOGICAL_WIDTH)
-}
-
-function signOutline(font: Font, text: string, logicalWidth: number, sideMargin = 16) {
-  let advance = 0
-  let minX = Number.POSITIVE_INFINITY
-  let maxX = Number.NEGATIVE_INFINITY
-  let minY = Number.POSITIVE_INFINITY
-  let maxY = Number.NEGATIVE_INFINITY
-  const paths = [...text].map((character) => {
-    const code = character.charCodeAt(0)
-    if (!font.hasGlyphForCodePoint(code)) {
-      throw new Error(`Missing sign glyph ${character}`)
+export function boardLettering(board: SignBoard, font: Font) {
+  const { label, aspect, kind } = board
+  const paint = signPaint(board.owner)
+  const text =
+    paint.mixedCase && kind !== 'counter'
+      ? label.toLowerCase().replace(/\b[a-z]/gu, (c) => c.toUpperCase())
+      : label
+  let x = 0
+  let left = Number.POSITIVE_INFINITY
+  let right = Number.NEGATIVE_INFINITY
+  let bottom = Number.POSITIVE_INFINITY
+  let top = Number.NEGATIVE_INFINITY
+  const paths: string[] = []
+  for (const character of text) {
+    const cp = character.codePointAt(0)
+    if (cp === undefined || !font.hasGlyphForCodePoint(cp)) {
+      throw new Error(`Missing painted glyph: ${character}`)
     }
-    const glyph = font.glyphForCodePoint(code)
-    if (character === ' ') {
-      advance += glyph.advanceWidth
-      return ''
+    const glyph = font.glyphForCodePoint(cp)
+    if (character !== ' ') {
+      left = Math.min(left, x + glyph.bbox.minX)
+      right = Math.max(right, x + glyph.bbox.maxX)
+      bottom = Math.min(bottom, glyph.bbox.minY)
+      top = Math.max(top, glyph.bbox.maxY)
+      paths.push(`<path transform="translate(${x} 0)" d="${glyph.path.toSVG()}"/>`)
     }
-    minX = Math.min(minX, advance + glyph.bbox.minX)
-    maxX = Math.max(maxX, advance + glyph.bbox.maxX)
-    minY = Math.min(minY, glyph.bbox.minY)
-    maxY = Math.max(maxY, glyph.bbox.maxY)
-    const path = `<path transform="translate(${advance} 0)" d="${glyph.path.toSVG()}"/>`
-    advance += glyph.advanceWidth
-    return path
-  })
-  const width = maxX - minX
-  const height = maxY - minY
-  // Equal world-space scale on both axes, with clearance from the painted border.
-  const scale = Math.min((logicalWidth - 2 * sideMargin) / width, 84 / height)
-  const svg = `<g fill="#2d211b" transform="translate(${logicalWidth / 2} 64) scale(${scale} ${-scale}) translate(${-(minX + maxX) / 2} ${-(minY + maxY) / 2})">${paths.join('')}</g>`
-  return { svg, width, height, scale, logicalWidth: width * scale, logicalHeight: height * scale }
+    x += glyph.advanceWidth + paint.spacing * font.unitsPerEm
+  }
+  const width = aspect * 128
+  const mark = kind === 'facade' && paint.mark !== 'none' && width >= 440
+  const margin = mark ? 88 : 18
+  // Uniform scaling in metres keeps the same letterforms on a blade and a fascia.
+  const scale = Math.min((width - 2 * margin) / (right - left), 88 / (top - bottom))
+  // A slightly wider painted stroke keeps fine serifs visible as the map selects lower mips.
+  const stroke = paint.face.startsWith('eb-garamond')
+    ? 'stroke="currentColor" stroke-width="13" stroke-linejoin="round"'
+    : ''
+  const shape = `<g ${stroke} transform="translate(${width / 2} 64) scale(${scale} ${-scale}) translate(${-(left + right) / 2} ${-(bottom + top) / 2})">${paths.join('')}</g>`
+  const shade = paint.shade
+    ? `<g fill="${paint.shade}" color="${paint.shade}" transform="translate(1.8 2.8)">${shape}</g>`
+    : ''
+  const svg = `<rect width="${width}" height="128" fill="${paint.ground}"/>${boardDecoration(paint, width, mark)}${shade}<g fill="${paint.ink}" color="${paint.ink}">${shape}</g>`
+  return { svg, width, scale, inkWidth: (right - left) * scale, inkHeight: (top - bottom) * scale }
 }
 
-/** Keep the existing atlas slots and fit ink in physical board space. */
-export async function letteredSignAtlas(
-  labels: readonly string[],
-  shortLabels: readonly string[],
-  directory: string,
-  longAspects: ReadonlyMap<number, number> = new Map(),
-) {
-  const baseline = await readFile(join(directory, 'baseline-atlas.png'))
-  const recipe = JSON.parse(await readFile(join(directory, 'baseline.json'), 'utf8'))
-  if (
-    recipe.sha256 !== hash(baseline) ||
-    JSON.stringify(recipe.labels) !== JSON.stringify(labels)
-  ) {
-    throw new Error('Sign baseline bytes or row labels/order changed')
+export async function paintedSignAtlas(boards: SignBoard[]) {
+  if (boards.length !== 28) {
+    throw new Error('Expected all 28 Perdition sign boards')
   }
-  const metadata = await sharp(baseline).metadata()
-  if (metadata.width !== SIGN_ATLAS_WIDTH || metadata.height !== SIGN_ATLAS_HEIGHT) {
-    throw new Error('Unexpected sign atlas dimensions')
+  const faces = new Map<Face, Font>()
+  for (const { owner } of boards) {
+    const { face } = signPaint(owner)
+    if (!faces.has(face)) {
+      faces.set(face, await readFace(face))
+    }
   }
-  if (shortLabels.length !== 12 || labels.length !== 28) {
-    throw new Error('Expected 12 short / 28 total rows')
-  }
-  const font = await signFont()
-  const clearedBand = await sharp({
-    create: {
-      width: SIGN_SHORT_BAND.width,
-      height: SIGN_SHORT_BAND.height,
-      channels: 4,
-      background: '#36261b',
-    },
-  })
-    .png()
-    .toBuffer()
-  const overlays = await Promise.all(
-    shortLabels.map(async (text, index) => {
-      const row = 12 + index
-      if (labels[row] !== text) {
-        throw new Error('Short-sign row contract changed')
-      }
-      const { svg } = shortSignOutline(font, text)
-      const rect = signRect(row)
-      // Six-pixel paint stroke has the same 15mm physical width on both axes.
-      const image = `<svg xmlns="http://www.w3.org/2000/svg" width="${rect.width}" height="${rect.height}"><rect width="${rect.width}" height="${rect.height}" fill="#36261b"/><rect x="8" y="8" width="${rect.width - 16}" height="${rect.height - 16}" fill="#bd9b66" stroke="#25190f" stroke-width="6"/><g transform="scale(${rect.width / SIGN_LOGICAL_WIDTH})">${svg}</g></svg>`
-      const input = await sharp(Buffer.from(image))
-        .extend({
-          top: SIGN_GUTTER,
-          bottom: SIGN_GUTTER,
-          left: SIGN_GUTTER,
-          right: SIGN_GUTTER,
-          extendWith: 'copy',
-        })
-        .png()
-        .toBuffer()
-      return { input, left: rect.left - SIGN_GUTTER, top: rect.top - SIGN_GUTTER }
-    }),
-  )
-  const longOverlays = await Promise.all(
-    [...longAspects].map(async ([row, aspect]) => {
-      const label = labels[row]
-      if (!(label && LONG_LABEL.test(label) && (row < 12 || row >= 24))) {
-        throw new Error(`Invalid long-sign row ${row}`)
-      }
-      const rect = signRect(row)
-      const width = 128 * aspect
-      const { svg } = signOutline(font, label, width, width * 0.06)
-      const image = `<svg xmlns="http://www.w3.org/2000/svg" width="${rect.width}" height="${rect.height}" viewBox="0 0 ${width} 128" preserveAspectRatio="none"><rect width="${width}" height="128" fill="#36261b"/><rect x="4" y="4" width="${width - 8}" height="120" fill="#bd9b66" stroke="#25190f" stroke-width="3"/>${svg}</svg>`
-      return {
-        input: await sharp(Buffer.from(image)).png().toBuffer(),
-        left: rect.left,
-        top: rect.top,
-      }
-    }),
-  )
-  return sharp(baseline)
-    .composite([
-      { input: clearedBand, left: SIGN_SHORT_BAND.left, top: SIGN_SHORT_BAND.top },
-      ...overlays,
-      ...longOverlays,
-    ])
-    .png()
-    .toBuffer()
-}
-
-/** Let scanned wood grain show through the original paint and lettering. */
-export async function paintedSignAtlas(
-  labels: readonly string[],
-  shortLabels: readonly string[],
-  directory: string,
-  longAspects: ReadonlyMap<number, number>,
-) {
-  const lettering = await letteredSignAtlas(labels, shortLabels, directory, longAspects)
-  const scan = await readFile(WOOD_SCAN)
-  const overlays = await Promise.all(
-    labels.map(async (_, row) => {
-      const rect = signRect(row)
-      const short = row >= 12 && row < 24
-      const { width, height } = rect
-      const grain = await sharp(scan)
-        .extract({ left: 0, width: 1024, top: (row * 137) % 879, height: short ? 144 : 68 })
-        .resize(width, height, { fit: 'fill' })
-        .greyscale()
-        .raw()
-        .toBuffer()
-      const mean = grain.reduce((sum, sample) => sum + sample, 0) / grain.length
-      const paint = await sharp(lettering).extract(rect).ensureAlpha().raw().toBuffer()
-      for (let y = 0; y < height; y++) {
-        const edgeWear = Math.max(0, 1 - Math.min(y, height - 1 - y) / (height * 0.22))
-        for (let x = 0; x < width; x++) {
-          const pixel = y * width + x
-          const offset = pixel * 4
-          const tone = (grain[pixel] ?? mean) - mean
-          const red = paint[offset] ?? 0
-          // Dark letterforms retain their shape while edges and pale paint show more grain.
-          const contrast = red < 80 ? 0.36 : 0.95
-          const weather = Math.max(-42, Math.min(32, tone * contrast)) - edgeWear * 8
-          for (let channel = 0; channel < 3; channel++) {
-            const index = offset + channel
-            paint[index] = Math.min(255, Math.max(0, Math.round((paint[index] ?? 0) + weather)))
-          }
+  const scan = await readFile(wood)
+  const overlays: { input: Buffer; left: number; top: number }[] = []
+  for (const [row, board] of boards.entries()) {
+    const rect = signRect(row)
+    const font = faces.get(signPaint(board.owner).face)
+    if (!font) {
+      throw new Error(`Missing sign font for ${board.owner}`)
+    }
+    const art = boardLettering(board, font)
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${rect.width}" height="${rect.height}" viewBox="0 0 ${art.width} 128" preserveAspectRatio="none">${art.svg}</svg>`
+    const paint = await sharp(Buffer.from(svg)).removeAlpha().raw().toBuffer()
+    const grain = await sharp(scan)
+      .extract({
+        left: 0,
+        width: 1024,
+        top: (137 * row) % 768,
+        height: Math.min(256, Math.round(1024 / board.aspect)),
+      })
+      .resize(rect.width, rect.height, { fit: 'fill' })
+      .greyscale()
+      .raw()
+      .toBuffer()
+    const mean = grain.reduce((sum, sample) => sum + sample, 0) / grain.length
+    for (let y = 0; y < rect.height; y++) {
+      const edge = Math.max(0, 1 - Math.min(y, rect.height - 1 - y) / (rect.height * 0.07))
+      for (let x = 0; x < rect.width; x++) {
+        const i = y * rect.width + x
+        const weather = Math.round(
+          Math.max(-16, Math.min(14, ((grain[i] ?? mean) - mean) * 0.32)) - edge * 5,
+        )
+        for (let c = 0; c < 3; c++) {
+          const k = i * 3 + c
+          paint[k] = Math.min(255, Math.max(0, (paint[k] ?? 0) + weather))
         }
       }
-      const gutter = short ? SIGN_GUTTER : 0
-      const input = await sharp(paint, { raw: { width, height, channels: 4 } })
-        .extend({ top: gutter, bottom: gutter, left: gutter, right: gutter, extendWith: 'copy' })
-        .png()
-        .toBuffer()
-      return { input, left: rect.left - gutter, top: rect.top - gutter }
-    }),
-  )
-  return sharp(lettering).composite(overlays).png().toBuffer()
+    }
+    const input = await sharp(paint, {
+      raw: { width: rect.width, height: rect.height, channels: 3 },
+    })
+      .extend({
+        top: SIGN_GUTTER,
+        bottom: SIGN_GUTTER,
+        left: SIGN_GUTTER,
+        right: SIGN_GUTTER,
+        extendWith: 'copy',
+      })
+      .png()
+      .toBuffer()
+    overlays.push({ input, left: rect.left - SIGN_GUTTER, top: rect.top - SIGN_GUTTER })
+  }
+  return sharp({
+    create: {
+      width: SIGN_ATLAS_WIDTH,
+      height: SIGN_ATLAS_HEIGHT,
+      channels: 3,
+      background: '#45392e',
+    },
+  })
+    .composite(overlays)
+    .removeAlpha()
+    .png({ palette: true, colours: 256, dither: 0 })
+    .toBuffer()
 }

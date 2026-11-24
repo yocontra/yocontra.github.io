@@ -229,7 +229,7 @@ export function strike(
 export function fire(w: World, p: Player, aim: number, viewTime: number): ShotResult {
   const deadEye = deadEyeReady(w, p)
   p.ammo--
-  // Keep up to one tick of leftover credit so fanning the trigger averages 280 ms, not 300.
+  // Carry fractional cooldown credit across ticks to maintain the authored fire interval.
   p.fireCooldownMs = (p.fireCooldownMs > -TICK_MS ? p.fireCooldownMs : 0) + REVOLVER_FIRE_MS
   p.lastFireTick = w.tick
   p.deadEyeStart = -1

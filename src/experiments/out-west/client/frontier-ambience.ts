@@ -35,25 +35,34 @@ export class FrontierAmbience {
   private readonly audio: FrontierAudio
   private readonly beds = new Map<BedName, Bed>()
   private readonly events: Event[] = []
+  private readonly saloonBuilding = TOWN.buildings.find((building) => building.kind === 'saloon')
+  private shelter = 0
+  private wind: number = WIND.street
   private readonly saloon: Point | null
   private readonly yard: Point | null
 
   constructor(audio: FrontierAudio) {
     this.audio = audio
-    const saloon = TOWN.buildings.find((b) => b.kind === 'saloon')
+    const saloon = this.saloonBuilding
     const car = TOWN.cover.find((c) => c.kind === 'boxcar')
     this.saloon = saloon ? centre(saloon, 1.4) : null
     this.yard = car ? centre(car, 1.5) : null
   }
 
-  update(): void {
+  update(dt: number): void {
     const duck = this.audio.duck
-    this.bed('wind', null, WIND[this.audio.space.kind] * duck)
+    const { kind, building } = this.audio.space
+    // Crossing a doorway changes the direct sound over several footsteps.
+    const blend = 1 - Math.exp(-dt / 0.35)
+    this.wind += (WIND[kind] - this.wind) * blend
+    const behindWalls = kind === 'interior' && building !== this.saloonBuilding?.id ? 1 : 0
+    this.shelter += (behindWalls - this.shelter) * blend
+    this.bed('wind', null, this.wind * duck)
     if (this.saloon) {
-      this.bed('murmur', this.saloon, 0.9 * duck)
+      this.bed('murmur', this.saloon, 0.9 * (1 - 0.72 * this.shelter) * duck)
     }
     if (this.yard) {
-      this.bed('loco', this.yard, 0.8 * duck)
+      this.bed('loco', this.yard, 0.8 * Math.min(1, this.wind / WIND.street) * duck)
     }
     if (this.events.length === 0) {
       this.schedule()
@@ -71,7 +80,7 @@ export class FrontierAmbience {
     const level = wanted * slider(name)
     const have = this.beds.get(name)
     if (have) {
-      if (Math.abs(have.level - level) > 0.01) {
+      if (Math.abs(have.level - level) > 0.01 || (level === 0 && have.level !== 0)) {
         have.level = level
         for (const instance of have.emitter.sound.slot(name)?.instances ?? []) {
           instance.volume = clamp01(level * db(SOUNDS[name].trim))
@@ -116,6 +125,29 @@ export class FrontierAmbience {
   private schedule(): void {
     const life = TOWN.ambient
     const audio = this.audio
+    const saloon = this.saloonBuilding
+    const counter =
+      saloon &&
+      TOWN.cover.find(
+        (item) =>
+          item.kind === 'counter' &&
+          item.x >= saloon.x &&
+          item.z >= saloon.z &&
+          item.x + item.w <= saloon.x + saloon.w &&
+          item.z + item.d <= saloon.z + saloon.d,
+      )
+    if (counter?.top !== undefined) {
+      const top = centre(counter, counter.top)
+      this.every(10, 23, () =>
+        audio.play('crockery', top, {
+          pitch: 0.93 + Math.random() * 0.14,
+          volume: audio.duck,
+          range: 'foley',
+          occlude: { hz: 1300, gain: 0.3 },
+          space: 0.12,
+        }),
+      )
+    }
     const perches = life?.crowPerches ?? []
     this.every(8, 20, () => {
       const p = pick(perches)

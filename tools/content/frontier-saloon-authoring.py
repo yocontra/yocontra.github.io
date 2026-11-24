@@ -5,6 +5,7 @@ import sys
 from pathlib import Path
 
 import bpy
+import numpy as np
 
 OUTPUT = Path("tools/art/environments/frontier-saloon.glb")
 if "--" in sys.argv:
@@ -34,6 +35,59 @@ paper = material("Saloon paper and cork", (0.67, 0.52, 0.31), 0.72)
 ceramic = material("Saloon stoneware", (0.60, 0.49, 0.32), 0.34)
 glass = material("LampGlass", (0.84, 0.57, 0.26), 0.27)
 
+brass = material("Saloon aged brass", (0.47, 0.275, 0.095), 0.33, 0.82)
+
+
+def walnut_surface():
+    # Long open pores follow the growth rings. Periodic distortion keeps board ends tileable.
+    size = 512
+    v, u = np.mgrid[:size, :size] * (math.tau / size)
+    arc = 2.1 * np.sin(u) + 0.72 * np.sin(2 * u - v) + 0.22 * np.cos(3 * u + 2 * v)
+    phase = 16 * v + arc + 2.4 * np.sin(v + 0.42 * np.cos(u))
+    latewood = np.maximum(0, np.cos(phase)) ** 7
+    pores = np.maximum(0, np.sin(79 * v + 3 * arc + np.cos(9 * u))) ** 10
+    pores *= np.maximum(0, np.cos(11 * u - 5 * v)) ** 2
+    grain = 0.94 - 0.16 * latewood - 0.12 * pores + 0.07 * np.cos(phase / 2 + arc / 2)
+    # Last low-frequency variation also repeats exactly at the tile boundary.
+    height = 0.55 * latewood + pores
+    du = (np.roll(height, -1, 1) - np.roll(height, 1, 1)) * 0.08
+    dv = (np.roll(height, -1, 0) - np.roll(height, 1, 0)) * 0.16
+    norm = np.sqrt(1 + du * du + dv * dv)
+
+    def image(name, rgb, data):
+        result = bpy.data.images.new(
+            name, width=size, height=size, alpha=False, is_data=data
+        )
+        pixels = np.ones((size, size, 4), dtype=np.float32)
+        pixels[:, :, :3] = rgb
+        result.pixels.foreach_set(pixels.ravel())
+        result.pack()
+        return result
+
+    color = image(
+        "Oiled walnut grain", grain[:, :, None] * np.array([0.66, 0.46, 0.31]), False
+    )
+    relief = image(
+        "Oiled walnut pores",
+        np.stack((du / norm, dv / norm, 1 / norm), axis=-1) * 0.5 + 0.5,
+        True,
+    )
+    for surface in (walnut, endgrain):
+        nodes = surface.node_tree.nodes
+        links = surface.node_tree.links
+        shader = nodes.get("Principled BSDF")
+        paint = nodes.new("ShaderNodeTexImage")
+        paint.image = color
+        links.new(paint.outputs["Color"], shader.inputs["Base Color"])
+        detail = nodes.new("ShaderNodeTexImage")
+        detail.image = relief
+        normal = nodes.new("ShaderNodeNormalMap")
+        normal.inputs["Strength"].default_value = 0.45
+        links.new(detail.outputs["Color"], normal.inputs["Color"])
+        links.new(normal.outputs["Normal"], shader.inputs["Normal"])
+
+
+walnut_surface()
 groups = {}
 
 
@@ -63,16 +117,17 @@ def block(x, y, z, width, height, depth, surface, edge=0.008):
     finish(obj, surface, edge)
     if surface in (walnut, endgrain):
         # Keep the grain on the long axis and use the same scale on adjoining pieces.
-        long_z = depth > width
+        dimensions = (width, depth, height)
         grain = obj.data.uv_layers.active.data
         for face in obj.data.polygons:
+            normal_axis = max(range(3), key=lambda axis: abs(face.normal[axis]))
+            plane = [axis for axis in range(3) if axis != normal_axis]
+            along, across = sorted(
+                plane, key=lambda axis: dimensions[axis], reverse=True
+            )
             for li in face.loop_indices:
-                vx, vy, vz = obj.data.vertices[obj.data.loops[li].vertex_index].co
-                along, across = (vy, vx) if long_z else (vx, vy)
-                grain[li].uv = (
-                    (along if abs(face.normal.z) > 0.7 else vz) / 1.5,
-                    (across if abs(face.normal.z) > 0.7 else along + across) / 0.8,
-                )
+                co = obj.data.vertices[obj.data.loops[li].vertex_index].co
+                grain[li].uv = (co[along] / 1.5 + z / 3.1, co[across] / 0.8 + x / 2.7)
 
 
 def turned(x, z, base, rings, surface, sides=16, group=None):
@@ -116,7 +171,10 @@ def bottle(x, z, base, scale, surface, ticket):
         (0.284, 0.020),
         (0.288, 0.016),
     ]
-    turned(x, z, base, [(y * scale, r * scale) for y, r in profile], surface, 12)
+    # Green quart bottles have broad shoulders and a shorter neck.
+    if surface == green:
+        profile[2:5] = [(0.160, 0.041), (0.173, 0.039), (0.208, 0.017)]
+    turned(x, z, base, [(y * scale, r * scale) for y, r in profile], surface, 20)
     turned(
         x,
         z,
@@ -130,9 +188,12 @@ def bottle(x, z, base, scale, surface, ticket):
             x,
             z,
             base + 0.056 * scale,
-            [(0, 0.0366 * scale), (0.065 * scale, 0.0366 * scale)],
+            [
+                (0, (0.0385 if surface == green else 0.0366) * scale),
+                (0.065 * scale, (0.0408 if surface == green else 0.0366) * scale),
+            ],
             paper,
-            12,
+            20,
         )
 
 
@@ -146,6 +207,62 @@ for i in range(8):
     block(26.669, 0.53, z, 0.056, 0.82, 0.087, endgrain)
     if i < 7:
         block(26.673, 0.54, z + 0.43, 0.024, 0.54, 0.60, walnut, 0.014)
+
+# Raised panels have a recessed field, a molded lip and a top/bottom rail.
+for bay in range(7):
+    z = 34.61 + bay * 0.86
+    for y in (0.238, 0.842):
+        block(26.68, y, z, 0.040, 0.055, 0.74, endgrain, 0.011)
+    for side in (-0.35, 0.35):
+        block(26.68, 0.54, z + side, 0.039, 0.55, 0.045, endgrain, 0.009)
+    block(26.688, 0.53, z, 0.015, 0.43, 0.50, walnut, 0.007)
+
+# Rolled brass protects the drink ledge. Leave the original cover bounds intact.
+block(26.681, 1.021, 37.25, 0.036, 0.028, 6.46, brass, 0.012)
+
+# A pressed serving tray and a footed stoneware jug occupy the middle of the bar.
+turned(
+    26.43,
+    37.28,
+    1.10,
+    [(0, 0.125), (0.007, 0.147), (0.018, 0.151), (0.020, 0.146), (0.007, 0.125)],
+    brass,
+    40,
+)
+turned(
+    26.43,
+    37.28,
+    1.107,
+    [
+        (0, 0.045),
+        (0.015, 0.053),
+        (0.045, 0.060),
+        (0.105, 0.075),
+        (0.16, 0.069),
+        (0.19, 0.046),
+        (0.207, 0.039),
+        (0.215, 0.047),
+        (0.225, 0.046),
+        (0.225, 0.040),
+        (0.194, 0.035),
+    ],
+    ceramic,
+    32,
+)
+bpy.ops.mesh.primitive_torus_add(
+    location=town(26.43, 1.245, 37.354),
+    rotation=(0, math.pi / 2, 0),
+    major_segments=28,
+    minor_segments=8,
+    major_radius=0.046,
+    minor_radius=0.008,
+)
+handle = bpy.context.object
+handle.scale.y = 0.80
+handle.scale.x = 1.20
+for face in handle.data.polygons:
+    face.use_smooth = True
+finish(handle, ceramic)
 
 # Open-backed shelving retains the view through the original west windows.
 for y in (0.18, 0.8, 1.38, 2.28):
@@ -190,6 +307,26 @@ for z in (35.35, 39.70):
             ceramic,
             12,
         )
+
+# Plinths and inset panels stand outside the four-metre saloon passage.
+for x in (29.78, 34.22):
+    block(x, 0.26, 44.045, 0.35, 0.52, 0.105, walnut, 0.014)
+    block(x, 0.53, 44.052, 0.38, 0.06, 0.12, endgrain, 0.012)
+    block(x, 1.44, 44.039, 0.24, 1.82, 0.09, walnut)
+    block(x, 1.44, 44.091, 0.16, 1.55, 0.025, endgrain, 0.012)
+    block(x, 2.38, 44.053, 0.36, 0.11, 0.12, endgrain, 0.012)
+
+# The smith has strapped the opposite gateposts with iron and rounded rivet heads.
+for x in (22.88, 31.12):
+    for y in (0.26, 0.75, 1.92):
+        block(x, y, 59.928, 0.21, 0.12, 0.033, iron, 0.007)
+        for dx in (-0.069, 0.069):
+            bpy.ops.mesh.primitive_uv_sphere_add(
+                segments=12, ring_count=6, radius=1, location=town(x + dx, y, 59.911)
+            )
+            rivet = bpy.context.object
+            rivet.scale = (0.018, 0.009, 0.018)
+            finish(rivet, iron)
 
 # Lamps hang from the ground-floor joists and stay clear of the doorway and stairs.
 for index, (x, z) in enumerate(((27.18, 36.12), (30.45, 40.14))):

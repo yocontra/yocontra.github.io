@@ -1,14 +1,16 @@
 /** Disjoint native controllers give gait rate and upper-body action timing separate clocks. */
 import { type AnimComponentLayer, Entity } from 'playcanvas'
 import type { DuelActor } from '../duel/native-actor.ts'
+import { RELOAD_TICKS, TICK_MS } from '../ffa/sim/constants.ts'
 import { nativeActionSpeed } from '../scene/native-animation-timing.ts'
 import { maskedTrack } from '../scene/native-track-mask.ts'
 import type { GameApplication } from './application.ts'
 
 const WEAPON =
-  /^(?:Crouch_(?:Idle_Gun_Pointing|Gun_Shoot|Shoot_|Reload|Hold_|Throw_)|Idle_Gun_Pointing|Gun_Shoot|Shoot_|Reload|Hold_|Throw_)/u
+  /^(?:Crouch_(?:Idle_Gun_Pointing|Gun_Shoot|Shoot_|Reload|Hold_|Throw_)|Draw(?:_Pair)?$|Idle_Gun_Pointing|Gun_Shoot|Shoot_|Reload|Hold_|Throw_)/u
 const AIM = /^(?:Crouch_)?Aim_/u
-const ACTION = /Shoot|Reload|Throw/u
+const ACTION = /Draw|Shoot|Reload|Throw/u
+const RELOAD_SECONDS = (RELOAD_TICKS * TICK_MS) / 1000
 export interface RiderPose {
   readonly root: Entity
   readonly weapon: AnimComponentLayer
@@ -33,7 +35,9 @@ export function createRiderPose(game: GameApplication, actor: DuelActor): RiderP
           { name: 'START' },
           ...tracks.map((track) => ({
             name: track.name,
-            speed: nativeActionSpeed(track),
+            speed: track.name.includes('Reload')
+              ? track.duration / RELOAD_SECONDS
+              : nativeActionSpeed(track),
             loop: !ACTION.test(track.name),
           })),
         ],
@@ -49,7 +53,7 @@ export function createRiderPose(game: GameApplication, actor: DuelActor): RiderP
   const upper = actor.upperBodyMask()
   weapon.mask = upper
   for (const track of tracks) {
-    weapon.assignAnimation(track.name, maskedTrack(track, upper))
+    weapon.assignAnimation(track.name, maskedTrack(actor.displayTrack(track), upper))
   }
   weapon.play(initial)
   const aim = anim.addLayer('Aim pitch', 0)

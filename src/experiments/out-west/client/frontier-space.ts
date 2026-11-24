@@ -11,6 +11,7 @@ import { type Building, TOWN } from '../ffa/sim/layout.ts'
 export type SpaceKind = 'interior' | 'street' | 'open'
 export interface Space {
   kind: SpaceKind
+  building?: Building['id']
   /** Slapback delay, s. */
   slap: number
 }
@@ -60,7 +61,7 @@ export function spaceAt(p: { x: number; y: number; z: number }, buildings = TOWN
       p.y < b.height + 0.5,
   )
   if (inside) {
-    return { kind: 'interior', slap: 0.03 }
+    return { kind: 'interior', building: inside.id, slap: 0.03 }
   }
   const near: Near = { e: 99, w: 99, n: 99, s: 99 }
   for (const b of buildings) {

@@ -29,6 +29,7 @@ import { FrontierGeometry, frontierIO, type Rgb } from './frontier-geometry.ts'
 import { frontierFlatGround, frontierGroundTransform } from './frontier-ground.ts'
 import { townGround } from './frontier-ground-detail.ts'
 import { hangingLampSites, installHangingLamps } from './frontier-hanging-lamps.ts'
+import { freightAtlasFiles } from './frontier-inert-wind-pool.ts'
 import { installFrontierLandmarks } from './frontier-landmarks.ts'
 import { authoredMaterials } from './frontier-materials.ts'
 import {
@@ -482,6 +483,7 @@ export async function publishFrontier(directory: string): Promise<void> {
   await optimizeAsset(ambient)
   await compressEnvironmentTextures(ambient)
   const files = [
+    ...freightAtlasFiles(native, directory),
     [join(directory, 'frontier.glb'), join(SOURCE, 'frontier.glb')],
     [join(directory, 'frontier.json'), join(SOURCE, 'frontier.json')],
     [join(directory, 'frontier-tumbleweeds.glb'), join(SOURCE, 'frontier-tumbleweeds.glb')],

@@ -14,7 +14,8 @@
       "!public",
       "!node_modules",
       "!bun.lock",
-      "!tools/art/environments/freight-crates/profiles.json"
+      "!tools/art/environments/freight-crates/profiles.json",
+      "!tools/art/characters/saloon-cast/*-sculpt.json"
     ]
   },
   "formatter": {

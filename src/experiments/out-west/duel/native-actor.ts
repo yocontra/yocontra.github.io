@@ -90,13 +90,20 @@ export class DuelActor {
   private playbackRate = 1
   readonly root: Entity
   readonly model: Entity
-  private constructor(root: Entity, model: Entity, animations: ReadonlyMap<string, AnimTrack>) {
+  private readonly fitPosture: boolean
+  private constructor(
+    root: Entity,
+    model: Entity,
+    animations: ReadonlyMap<string, AnimTrack>,
+    fitPosture: boolean,
+  ) {
     root.once('destroy', () => {
       this.clearDetached()
       this.hiddenWeaponComponents.clear()
     })
     this.root = root
     this.model = model
+    this.fitPosture = fitPosture
     this.animations = animations
     this.tracks = [...animations.values()]
     for (const track of this.tracks) {
@@ -141,6 +148,10 @@ export class DuelActor {
       }
     }
   }
+  /** The viewmodel borrows raw tracks. Every world animation layer uses this fitted version. */
+  displayTrack(track: AnimTrack): AnimTrack {
+    return this.fitPosture ? visibleRiderPosture(track) : track
+  }
   hasAnimation(name: string): boolean {
     return this.animations.has(name)
   }
@@ -173,6 +184,7 @@ export class DuelActor {
       root.addChild(model)
       root.once('destroy', releaseMaterials)
       game.stage.addChild(root)
+      const actor = new DuelActor(root, model, indexed, settleVisibleHead)
       const initial = indexed.get('Idle')?.name ?? tracks[0]?.name
       if (initial) {
         model.addComponent('anim', { activate: false })
@@ -194,10 +206,7 @@ export class DuelActor {
           parameters: {},
         })
         for (const track of tracks) {
-          model.anim?.baseLayer?.assignAnimation(
-            track.name,
-            settleVisibleHead ? visibleRiderPosture(track) : track,
-          )
+          model.anim?.baseLayer?.assignAnimation(track.name, actor.displayTrack(track))
         }
         model.anim?.baseLayer?.play(initial)
         if (model.anim) {
@@ -205,7 +214,6 @@ export class DuelActor {
           model.anim.playing = true
         }
       }
-      const actor = new DuelActor(root, model, indexed)
       if (humanoid) {
         const moves = (await game.loadContainer(ASSETS.moves.url)).resource as ContainerResource
         actor.gaitSpeeds =
@@ -326,6 +334,9 @@ export class DuelActor {
         playWeaponMount(mount.node, action, mount.hand ?? 'R')
       }
     }
+  }
+  drawWeapon(): void {
+    this.animateGuns('Draw')
   }
   fireWeapon(): void {
     if (this.held === 'revolver') {

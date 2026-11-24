@@ -593,12 +593,47 @@ def horse_tack(body, barrel, materials, objects):
     # Bedroll behind the cantle with two latigo straps.
     top, _ = body.ray((0, 0.12, 4), (0, 0, -1))
     centre = Vector((0, 0.12, top.z + 0.03 + 0.07))
+    # The blanket winds around its long axis. Both exposed ends show the rolled layers.
+    # Compress those layers at the two ties and let the free edge curl away from the roll.
+    wool = Builder()
+    sections = (-0.30, -0.27, -0.222, -0.207, -0.193, -0.178, -0.162,
+                -0.10, 0.0, 0.10, 0.162, 0.178, 0.193, 0.207, 0.222, 0.27, 0.30)
+    outer, inner, params = [], [], []
+    for x in sections:
+        outside, inside, coordinates = [], [], []
+        pinch = math.exp(-((abs(x) - 0.193) / 0.025) ** 2)
+        for i in range(97):
+            t = i / 96
+            a = t * 2 * math.pi * 3.25 + 0.38 + 0.05 * math.sin(x * 13)
+            normal = Vector((0, math.cos(a), math.sin(a)))
+            radius = (0.017 + 0.058 * t) * (1 - 0.12 * pinch)
+            radius += 0.0015 * math.cos(3 * a + 9 * x) * t
+            edge = 0.0018 * math.sin(4 * a + 8 * t) * (abs(x) / 0.3) ** 6
+            origin = centre + Vector((x + edge, 0, 0))
+            outside.append(origin + normal * radius)
+            inside.append(origin + normal * (radius - 0.014))
+            coordinates.append((x + 0.3, t * 0.91, min(t, 1 - t) * 0.91))
+        outer.append(outside)
+        inner.append(inside)
+        params.append(coordinates)
+    wool.slab(outer, inner, params)
+    objects.append(link("Bedroll", wool.mesh("Bedroll"), materials["bedroll"], torso))
     b = Builder()
-    cylinder(b, centre - Vector((0.3, 0, 0)), centre + Vector((0.3, 0, 0)), 0.07, segments=20)
-    objects.append(link("Bedroll", b.mesh("Bedroll"), materials["bedroll"], torso))
-    b = Builder()
-    for x in (-0.19, 0.19):
-        cylinder(b, centre + Vector((x - 0.016, 0, 0)), centre + Vector((x + 0.016, 0, 0)), 0.074, segments=20)
+    for x in (-0.193, 0.193):
+        # Follow the outermost turn rather than a constant cylinder radius. The belts
+        # remain in contact with the compressed fabric throughout their circumference.
+        path = []
+        facing = []
+        for i in range(33):
+            t = 1 - (1 - i / 32) / 3.25
+            a = t * 2 * math.pi * 3.25 + 0.38 + 0.05 * math.sin(x * 13)
+            n = Vector((0, math.cos(a), math.sin(a)))
+            radius = (0.017 + 0.058 * t) * 0.88 + 0.0015 * math.cos(3 * a + 9 * x) * t
+            # Bridge the blanket's free edge smoothly.
+            radius += 0.016 * (1 - smoothstep(0, 0.21, i / 32))
+            path.append(centre + Vector((x, 0, 0)) + n * (radius + 0.002))
+            facing.append(n)
+        ribbon(path, facing, 0.027, 0.0045, b)
     objects.append(link("Straps", b.mesh("Straps"), materials["darkleather"], torso))
 
     # The rear seat carries a pair of saddle bags. Each outer wall is fitted to
@@ -606,31 +641,46 @@ def horse_tack(body, barrel, materials, objects):
     bags, flaps, seams, buckles = (Builder() for _ in range(4))
     for side in (-1, 1):
         angles = sorted((side * 0.80, side * 1.69))
+        # Give the gusset a back panel against the horse and a shallow bulge on its outside.
         outer, inner, params = barrel.sheet(
-            0.025, 0.353, *angles, 14, 12, 0.093, 0.060,
+            0.025, 0.353, *angles, 16, 16, 0.016, 0.106,
             shape=lambda u, v: rounded(u, v, 1.0, 1.0, 0.38),
-            lift=lambda v, u: 0.012 * math.sin(math.pi * u) * math.sin(math.pi * v),
         )
+        normals = [[(p - q).normalized() for p, q in zip(front, back)] for front, back in zip(outer, inner)]
+        for i, row in enumerate(outer):
+            for j, point in enumerate(row):
+                fullness = math.sin(math.pi * i / 16) * math.sin(math.pi * j / 16)
+                point += normals[i][j] * (0.026 * fullness)
         bags.slab(outer, inner, params)
-        cover = sorted((side * 0.78, side * 1.28))
-        outer, inner, params = barrel.sheet(
-            0.008, 0.370, *cover, 14, 9, 0.106, 0.012,
-            shape=lambda u, v: rounded(u, v, 1.0, 1.0, 0.40),
-        )
-        flaps.slab(outer, inner, params)
-        for y in (0.086, 0.288):
-            strap = []
-            normals = []
-            for k in range(10):
-                t = k / 9
-                angle = side * (0.75 + 0.84 * t)
-                c, n, r = barrel.point(y, angle, 0.121 - 0.013 * t)
-                strap.append(c + n * r)
-                normals.append(n)
-            ribbon(strap, normals, 0.031, 0.007, seams)
-            c, n, r = barrel.point(y, side * 1.44, 0.123)
-            torus(buckles, c + n * r, n, 0.022, 0.0042, segments=12)
-            disc(buckles, c + n * (r + 0.005), n, 0.007, 0.003)
+
+        # Cut the flap directly from the curved outer wall. The two keepers follow this same
+        # surface over the flap edge, so the strap cannot disappear into the bag at the buckle.
+        columns = list(range(0, 10) if side > 0 else range(7, 17))
+        flap_outer, flap_inner, flap_params = [], [], []
+        for i, row in enumerate(outer):
+            flap_outer.append([row[j] + normals[i][j] * 0.008 for j in columns])
+            flap_inner.append([row[j] + normals[i][j] * 0.001 for j in columns])
+            flap_params.append([
+                (i * 0.021, k * 0.018, min(i * 0.021, (16 - i) * 0.021, k * 0.018, (9 - k) * 0.018))
+                for k in range(len(columns))
+            ])
+        flaps.slab(flap_outer, flap_inner, flap_params, underside=False)
+
+        for i in (3, 13):
+            path, facing = [], []
+            for k in range(1, 16):
+                j = k if side > 0 else 16 - k
+                n = normals[i][j]
+                # Ease down the eight millimetre lid edge, then lie flat on the pouch.
+                clearance = 0.009 if k <= 9 else (0.004 if k == 10 else 0.001)
+                path.append(outer[i][j] + n * clearance)
+                facing.append(n)
+            ribbon(path, facing, 0.028, 0.005, seams)
+            n = facing[11]
+            buckle = path[11] + n * 0.008
+            torus(buckles, buckle, n, 0.020, 0.0035, segments=16)
+            tongue = (path[12] - path[10]).normalized()
+            cylinder(buckles, buckle - tongue * 0.018, buckle + tongue * 0.008, 0.0026, segments=6)
     for name, builder, surface in (
         ("Saddle bags", bags, "darkleather"),
         ("Saddle bag lid", flaps, "leather"),

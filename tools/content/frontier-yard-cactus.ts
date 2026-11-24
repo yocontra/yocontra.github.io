@@ -4,6 +4,7 @@ import { KHRTextureTransform, type Transform } from '@gltf-transform/extensions'
 import { getBounds } from '@gltf-transform/functions'
 import { MeshoptEncoder } from 'meshoptimizer'
 import { CACTUS_MATERIAL, cactusRequired } from './frontier-cactus-candidate.ts'
+import { cactusEnvelopeError } from './frontier-cactus-envelope.ts'
 
 const LEGACY_MATERIAL = 'Perdition saguaro skin'
 const NEAR_SAGUAROS = [
@@ -12,8 +13,8 @@ const NEAR_SAGUAROS = [
     node: 'prefab.saguaro_one_arm',
     material: 'Cactus yard loft authored color',
     places: [
-      [29.120_980_09, 11.473_106_93],
-      [86.082_602_5, 94.677_108_75],
+      [29, 11.5],
+      [86.05, 94.55],
     ],
     vertices: 1094,
     triangles: 2010,
@@ -23,9 +24,9 @@ const NEAR_SAGUAROS = [
     node: 'prefab.saguaro_two_arm',
     material: 'Cactus yard two-arm authored color',
     places: [
-      [5.562_165_03, 11.597_883_13],
-      [61.558_285_2, 11.516_730_96],
-      [88.070_056_59, 22.519_996_72],
+      [5.6, 11.6],
+      [61.55, 11.55],
+      [88.05, 22.55],
     ],
     vertices: 1616,
     triangles: 2880,
@@ -64,7 +65,14 @@ function installLoft(
       mesh.listPrimitives().every((part) => part.getMaterial()?.getName() === LEGACY_MATERIAL)
     )
   })
-  const positions = nodes.map((node) => node.getWorldTranslation())
+  // The instance is centered on its planted bed. The mesh pivot varies with arm girth and yaw.
+  const positions = nodes.map((node) => {
+    const instance = node.getParentNode()?.getParentNode()
+    if (instance?.getName() !== `${profile.node.slice('prefab.'.length)}-instance`) {
+      throw new Error(`Missing planted instance for ${profile.node}`)
+    }
+    return instance.getWorldTranslation()
+  })
   if (
     nodes.length !== profile.places.length ||
     profile.places.some(
@@ -114,7 +122,11 @@ function installLoft(
     (key) => [key, copy(cactusRequired(donor.getAttribute(key)))] as const,
   )
   tintYardStems(cactusRequired(attributes[0])[1], cactusRequired(attributes[3])[1])
-  const oldBounds = nodes.map((node) => getBounds(node))
+  // Compare in the donor frame. Rotating a fuller rib or a rounded crown can move a
+  // world AABB corner even when the source envelope and planting matrix are identical.
+  const probe = doc.createNode()
+  const oldBounds = new Map([...meshes].map((mesh) => [mesh, getBounds(probe.setMesh(mesh))]))
+  const oldMatrices = nodes.map((node) => node.getWorldMatrix())
   const retired = new Set<Accessor>()
   for (const mesh of meshes) {
     const primitives = mesh.listPrimitives()
@@ -140,19 +152,15 @@ function installLoft(
       accessor.dispose()
     }
   }
-  for (const [index, node] of nodes.entries()) {
-    const before = cactusRequired(oldBounds[index])
-    const bounds = getBounds(node)
-    if (
-      bounds.min.some(
-        (low, axis) => Math.abs(low - cactusRequired(before.min[axis])) > MAX_ENVELOPE_DELTA,
-      ) ||
-      bounds.max.some(
-        (high, axis) => Math.abs(high - cactusRequired(before.max[axis])) > MAX_ENVELOPE_DELTA,
-      )
-    ) {
-      throw new Error('The measured yard cactus changed a world envelope')
+  for (const [mesh, before] of oldBounds) {
+    const bounds = getBounds(probe.setMesh(mesh))
+    if (cactusEnvelopeError(before, bounds) > MAX_ENVELOPE_DELTA) {
+      throw new Error('The measured yard cactus changed its donor envelope')
     }
+  }
+  probe.dispose()
+  if (nodes.some((node, i) => node.getWorldMatrix().some((v, j) => v !== oldMatrices[i]?.[j]))) {
+    throw new Error('The measured yard cactus moved from its planting matrix')
   }
 }
 

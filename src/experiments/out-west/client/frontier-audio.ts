@@ -462,13 +462,17 @@ export class FrontierAudio {
     if (this.clock >= this.spaceDue) {
       this.spaceDue = this.clock + 0.25
       const next = spaceAt(this.listener)
-      if (next.kind !== this.space.kind || Math.abs(next.slap - this.space.slap) > 0.01) {
+      if (
+        next.kind !== this.space.kind ||
+        next.building !== this.space.building ||
+        Math.abs(next.slap - this.space.slap) > 0.01
+      ) {
         this.space = next
         this.returns?.apply(next)
       }
     }
     this.duck += (this.duckTarget - this.duck) * Math.min(1, dt * 3)
-    this.ambience.update()
+    this.ambience.update(dt)
     if (this.clock >= this.heartDue) {
       this.play('heart', null, { volume: 0.8 })
       setTimeout(() => this.play('heart', null, { volume: 0.5, pitch: 0.92 }), 170)

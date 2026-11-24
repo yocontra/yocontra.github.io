@@ -4,11 +4,16 @@ import { type AnimTrack, type Asset, type ContainerResource, Entity } from 'play
 import {
   animateRider,
   beginDynamiteThrow,
+  beginRecoil,
 } from '../../src/experiments/out-west/client/actor-animation.ts'
 import { createRiderPose } from '../../src/experiments/out-west/client/actor-pose.ts'
 import { AMBIENT_ASSETS } from '../../src/experiments/out-west/content/ambient.ts'
+import { EQUIPMENT } from '../../src/experiments/out-west/content/equipment.ts'
 import { ASSETS } from '../../src/experiments/out-west/content/manifest.ts'
+import { WEAPON_REVOLVER, WEAPON_RIFLE } from '../../src/experiments/out-west/contract/town.ts'
 import { DuelActor } from '../../src/experiments/out-west/duel/native-actor.ts'
+import { RELOAD_TICKS, TICK_MS } from '../../src/experiments/out-west/ffa/sim/constants.ts'
+import { newPlayer } from '../../src/experiments/out-west/ffa/sim/state.ts'
 import type { PlayerState } from '../../src/experiments/out-west/runtime/protocol.ts'
 import { extractFirstPersonArms } from '../../tools/content/first-person-arms.ts'
 import { nativeActorFixture } from './native-actor-fixture.ts'
@@ -338,5 +343,139 @@ it('native dynamite upper-body timing survives gait and stance changes and clear
   } finally {
     actor?.destroy()
     expect(await f.destroy()).toEqual({ textures: 0, buffers: 0 })
+  }
+})
+
+it('native world and arms layers draw after a pickup and enter reload at the remaining ammo time', async () => {
+  const f = fixture()
+  const actor = await DuelActor.create(f.game, PHYSICAL, 'handling test')
+  try {
+    const pose = createRiderPose(f.game, actor)
+    const rider = { actor, clip: '', aim: pose.aim, weaponLayer: pose.weapon, firingUntil: 0 }
+    const domain = newPlayer(0, { accountId: '', name: '', prestige: 0, level: 1, bot: false })
+    domain.alive = true
+    const body: PlayerState = {
+      id: '0',
+      x: 0,
+      y: 0.9,
+      z: 0,
+      vx: 0,
+      vy: 0,
+      vz: 0,
+      yaw: 0,
+      pitch: 0,
+      grounded: true,
+      hp: 100,
+      ammo: 6,
+      seq: 0,
+    }
+    body.vz = -0.94
+    animateRider(rider, body, { first: false, domain })
+    const lower = anim(actor).baseLayer
+    if (!lower) {
+      throw new Error('Missing locomotion layer')
+    }
+    expect(lower.activeState).toBe('Stride_Walk_0')
+    lower.activeStateCurrentTime = lower.activeStateDuration * 1.65
+    body.vz = 0
+    body.vx = 0.94
+    animateRider(rider, body, { first: false, domain })
+    expect(lower.activeState).toBe('Stride_Walk_6')
+    expect(lower.activeStateCurrentTime / lower.activeStateDuration).toBeCloseTo(0.65)
+    body.vx = 0
+    for (const first of [true, false]) {
+      domain.weapon = WEAPON_RIFLE
+      body.crouched = false
+      animateRider(rider, body, { first, domain })
+      expect(pose.weapon.activeState).toBe('Hold_rifle')
+      domain.weapon = WEAPON_REVOLVER
+      animateRider(rider, body, { first, domain })
+      expect(pose.weapon.activeState).toBe('Draw')
+      pose.root.anim?.update(0.1)
+      animateRider(rider, body, { first, domain })
+      expect(pose.weapon.activeState).toBe('Draw')
+      pose.root.anim?.update(0.3)
+      animateRider(rider, body, { first, domain })
+      expect(pose.weapon.activeState).toBe('Idle_Gun_Pointing')
+
+      domain.weapon = WEAPON_RIFLE
+      animateRider(rider, body, { first, domain })
+      domain.weapon = WEAPON_REVOLVER
+      animateRider(rider, body, { first, domain })
+      beginRecoil(rider, 'revolver')
+      animateRider(rider, body, { first, domain })
+      expect(pose.weapon.activeState).toBe('Gun_Shoot')
+      pose.root.anim?.update(0.04)
+      const recoilTime = pose.weapon.activeStateCurrentTime
+      body.crouched = true
+      animateRider(rider, body, { first, domain })
+      expect(pose.weapon.activeState).toBe('Gun_Shoot')
+      expect(pose.weapon.activeStateCurrentTime).toBe(recoilTime)
+      rider.firingUntil = 0
+      body.crouched = false
+      domain.reloadTicks = 15
+      animateRider(rider, body, { first, domain })
+      expect(pose.weapon.activeState).toBe('Reload')
+      expect(pose.weapon.activeStateCurrentTime / pose.weapon.activeStateDuration).toBeCloseTo(
+        1 - 15 / RELOAD_TICKS,
+      )
+      pose.root.anim?.update((4 * TICK_MS) / 1000)
+      expect(pose.weapon.activeStateCurrentTime / pose.weapon.activeStateDuration).toBeCloseTo(
+        1 - 11 / RELOAD_TICKS,
+      )
+      domain.reloadTicks = 4
+      animateRider(rider, body, { first, domain })
+      expect(pose.weapon.activeStateCurrentTime / pose.weapon.activeStateDuration).toBeCloseTo(
+        1 - 4 / RELOAD_TICKS,
+      )
+      domain.reloadTicks = 11
+      body.crouched = true
+      animateRider(rider, body, { first, domain })
+      expect(pose.weapon.activeState).toBe('Crouch_Reload')
+      expect(pose.weapon.activeStateCurrentTime / pose.weapon.activeStateDuration).toBeCloseTo(
+        1 - 11 / RELOAD_TICKS,
+      )
+      pose.root.anim?.update((11 * TICK_MS) / 1000)
+      expect(pose.weapon.activeStateCurrentTime / pose.weapon.activeStateDuration).toBeCloseTo(1)
+      domain.reloadTicks = 0
+      animateRider(rider, body, { first, domain })
+      expect(pose.weapon.activeState).toBe('Crouch_Idle_Gun_Pointing')
+    }
+  } finally {
+    actor.destroy()
+    expect(await f.destroy()).toEqual({ textures: 0, buffers: 0 })
+  }
+})
+
+it('each equipped Frontier weapon layer keeps the standing head near the shoulder line', async () => {
+  for (const entry of Object.values(EQUIPMENT)) {
+    if (!('pair' in entry && entry.url.includes('/outfit.'))) {
+      continue
+    }
+    for (const url of [entry.url, entry.pair.url]) {
+      const f = nativeActorFixture()
+      try {
+        const actor = await DuelActor.create(f.game, url, 'rider')
+        const pose = createRiderPose(f.game, actor)
+        actor.play('Stride_Run_0', 0)
+        pose.weapon.play(actor.animation('Idle_Gun_Pointing'))
+        for (let frame = 0; frame < 12; frame++) {
+          anim(actor).update(1 / 60)
+          pose.root.anim?.update(1 / 60)
+        }
+        const at = (name: string) => {
+          const bone = actor.model.findByName(name)
+          if (!bone) {
+            throw new Error(`Missing ${name} in ${url}`)
+          }
+          return bone.getPosition()
+        }
+        const forward = at('Head').z - (at('UpperArmL').z + at('UpperArmR').z) / 2
+        expect(forward, url).toBeLessThan(0.06)
+        expect(forward, url).toBeGreaterThan(-0.02)
+      } finally {
+        await f.destroy()
+      }
+    }
   }
 })

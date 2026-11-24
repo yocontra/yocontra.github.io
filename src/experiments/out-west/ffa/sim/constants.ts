@@ -113,10 +113,10 @@ export const SPAWN_BANK_CLEARANCE = 30
 
 export const REVOLVER_ROUNDS = 6
 export const REVOLVER_DAMAGE = 34
-export const REVOLVER_FIRE_MS = 280
-export const RELOAD_TICKS = s(1.6)
+export const REVOLVER_FIRE_MS = 320
+export const RELOAD_TICKS = s(1.75)
 export const FALLOFF_RANGE = 14
-export const FALLOFF_FACTOR = 0.6
+export const FALLOFF_FACTOR = 0.56
 export const MAX_RANGE = 22
 export const SPREAD_STANDING_DEG = 1.5
 export const SPREAD_MOVING_DEG = 4
@@ -152,11 +152,11 @@ export const SHOTGUN_PELLET_DAMAGE = 12
 export const SHOTGUN_RANGE = 9
 /** Full cone width of the pellet pattern. */
 export const SHOTGUN_CONE_DEG = 12
-export const SHOTGUN_FIRE_MS = 700
+export const SHOTGUN_FIRE_MS = 950
 export const RIFLE_ROUNDS = 5
 export const RIFLE_DAMAGE = 60
 export const RIFLE_RANGE = 35
-export const RIFLE_FIRE_MS = 900
+export const RIFLE_FIRE_MS = 850
 export const RIFLE_SPREAD_STANDING_DEG = 0.4
 export const RIFLE_SPREAD_MOVING_DEG = 3
 export const DYNAMITE_FUSE_TICKS = s(2)

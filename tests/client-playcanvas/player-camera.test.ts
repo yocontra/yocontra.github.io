@@ -88,3 +88,29 @@ it('respawn, reduced motion and switching views discard the previous follow dist
   rig.place(options)
   expect(camera.getPosition().z).toBe(4.5)
 })
+
+it('a boardwalk edge changes lens height gradually while horizontal travel follows each frame', () => {
+  const { camera, rig, options } = fixture()
+  rig.place(options)
+  const initial = camera.getPosition().y
+  for (let frame = 1; frame <= 6; frame++) {
+    rig.place({ ...options, player: { ...player, x: frame * 0.06, y: player.y + 0.18 } })
+    expect(camera.getPosition().x).toBeCloseTo(frame * 0.06 + options.settings.shoulder * 0.6)
+    const height = camera.getPosition().y - initial
+    expect(height).toBeGreaterThan(0)
+    expect(height).toBeLessThan(0.18)
+  }
+  rig.place({ ...options, player: { ...player, x: 10, y: player.y + 0.5 } })
+  expect(camera.getPosition().y).toBeCloseTo(initial + 0.5)
+})
+
+it('a narrow gap between posts cannot kick the lens out for a single frame', () => {
+  const { camera, rig, options } = fixture()
+  const trace = (from: Vec3, to: Vec3) => new Vec3().lerp(from, to, 0.25)
+  rig.place({ ...options, trace })
+  const atPost = camera.getPosition().z
+  rig.place(options)
+  expect(camera.getPosition().z - atPost).toBeLessThan(0.07)
+  rig.place({ ...options, trace })
+  expect(camera.getPosition().z).toBeCloseTo(atPost)
+})

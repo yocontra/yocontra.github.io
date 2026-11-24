@@ -3,7 +3,7 @@ import { Encoder } from '@colyseus/schema'
 import { Room } from '@colyseus/sdk'
 import { file } from 'bun'
 import { initializeAmmo } from 'colyseus-cloudflare/ammo'
-import { Entity } from 'playcanvas'
+import { Entity, Vec3 } from 'playcanvas'
 import { applyFrontierState } from '../../src/experiments/out-west/client/state.ts'
 import { BreakableWindows } from '../../src/experiments/out-west/client/windows.ts'
 import { COLLISION_VERSION } from '../../src/experiments/out-west/content/manifest.ts'
@@ -283,5 +283,25 @@ it('waist-height pane sensors cannot supply a vault obstacle or landing', () => 
     f.release()
     f.baseline.dispose()
     f.sensor.dispose()
+  }
+})
+
+it('camera rays pass through a window contact trigger and stop at the solid sill', () => {
+  const f = fixture()
+  try {
+    const pane = f.sim.world.grid.glass[0]
+    if (!pane) {
+      throw new Error('Expected the first Perdition window')
+    }
+    const along = (pane.a0 + pane.a1) / 2
+    const ray = (y: number) => {
+      const point = (delta: number) =>
+        pane.axis === 0 ? new Vec3(pane.at + delta, y, along) : new Vec3(along, y, pane.at + delta)
+      return f.sim.physics.cameraTrace(point(-0.6), point(0.6))
+    }
+    expect(ray((pane.y0 + pane.y1) / 2)).toBeNull()
+    expect(ray(pane.y0 - 0.14)).not.toBeNull()
+  } finally {
+    f.sim.dispose()
   }
 })

@@ -502,6 +502,20 @@ export const RECIPES: Record<string, Recipe> = {
     credit: 'remaster',
     make: () => load(OLD3D('bodyfall.m4a'), 1),
   },
+  saloon_crockery: {
+    out: 'sfx/saloon_crockery.m4a',
+    lufs: -25,
+    credit: 'first-party (synthesised ceramic on wood)',
+    make: () => {
+      const ring = mixInto(
+        thump(1340, 1340, 0.062, 0.45),
+        gain(thump(3110, 3110, 0.024, 0.18), -8),
+        0,
+      )
+      const contact = mixInto(gain(ring, -3), thump(305, 142, 0.018, 0.12), 0)
+      return mixInto(contact, gain(ring, -12), 0.092)
+    },
+  },
   bottle: {
     out: 'sfx/bottle.m4a',
     lufs: -16,

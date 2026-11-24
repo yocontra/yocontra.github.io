@@ -142,7 +142,7 @@ export interface Player extends MoveState {
   protectUntil: number
   ammo: number
   reloadTicks: number
-  /** Remaining fire cooldown in ms (carried across ticks so the rate averages 280 ms). */
+  /** Remaining fire cooldown in ms, including timing credit carried over from the previous tick. */
   fireCooldownMs: number
   lastFireTick: number
   /** Tick the Dead-Eye reticle started closing, or −1. */

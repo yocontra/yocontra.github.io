@@ -57,7 +57,7 @@ export class ViewmodelMotion {
   private lastYaw: number | undefined
   private lastPitch = 0
   private bobPhase = 0
-  private grounded = true
+  private fallSpeed = 0
   private readonly bob = spring(60, 15)
   private readonly sprint = spring(90, 19)
   private readonly swayYaw = spring(140, 20)
@@ -71,7 +71,7 @@ export class ViewmodelMotion {
     this.lastYaw = undefined
     this.lastPitch = 0
     this.bobPhase = 0
-    this.grounded = true
+    this.fallSpeed = 0
     for (const settled of [
       this.bob,
       this.sprint,
@@ -108,10 +108,13 @@ export class ViewmodelMotion {
     this.bobPhase = (this.bobPhase + dt * (5 + speed * 1.15)) % (Math.PI * 4)
     const bob = this.bob.step(moving, dt) * (1 - 0.85 * sight)
     const sprint = this.sprint.step(domain?.sprinting && sight === 0 ? 1 : 0, dt)
-    if (player.grounded && !this.grounded) {
-      this.lift.velocity -= math.clamp(Math.abs(player.vy) * 0.05, 0.1, 0.5)
+    if (player.grounded) {
+      // Physics clears vertical velocity on contact. Use the preceding airborne sample.
+      this.lift.velocity -= Math.min(this.fallSpeed * 0.045, 0.5)
+      this.fallSpeed = 0
+    } else {
+      this.fallSpeed = Math.max(0, -player.vy)
     }
-    this.grounded = player.grounded
     const lift = this.lift.step(
       player.grounded ? 0 : math.clamp(-player.vy * 0.004, -0.025, 0.025),
       dt,

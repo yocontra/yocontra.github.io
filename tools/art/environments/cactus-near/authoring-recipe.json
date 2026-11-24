@@ -30,7 +30,11 @@
     },
     {
       "path": "tools/content/frontier-cactus-candidate.ts",
-      "sha256": "e453e631953bae026b295e99c4707890dd8aab066ab4173bdb9ed4acac1e4e2c"
+      "sha256": "18b4612c3f3216ee985db4c49f287c4bb62c43bef79ab4a329c1a5f19340604d"
+    },
+    {
+      "path": "tools/content/frontier-cactus-envelope.ts",
+      "sha256": "adafdd10d8ff20b6bec4c7d213a4a7732a29cc8b1aba0b3c28ce063fda39f260"
     },
     {
       "path": "tools/test-playcanvas-frontier-cactus.ts",
@@ -46,11 +50,11 @@
     },
     {
       "path": "tools/content/environment-textures.ts",
-      "sha256": "c3c60638383d66fb993b0f4a290ce1b41968756db931399f99014c7653e479cc"
+      "sha256": "133ac4e35a529b61684f08119599ef63df1f334d091b8bd56dc0cfa2a8378a27"
     },
     {
       "path": "tools/content/character-textures.ts",
-      "sha256": "d7d2cc34fd8960198e349dc8cccd268f06a5bbc1ddf065ac3dfc9b796f960d91"
+      "sha256": "92f2055fd88b330d865ddc8545a7fc2adb7ac590296fbec0d9f5a85a38c2df86"
     }
   ],
   "reusedMaps": [

@@ -26,7 +26,7 @@ import type { GameApplication } from './application.ts'
 import { NativeClockwork } from './clockwork.ts'
 import {
   animateWind,
-  prepareFreightClouds,
+  prepareEnvironmentMaterial,
   sharedCloudMotion,
   worldCloudMaterials,
 } from './environment-assets.ts'
@@ -357,7 +357,7 @@ export class NativeEnvironment {
     let material = clones.get(original)
     if (!material) {
       material = original.clone()
-      prepareFreightClouds(material, worldClouds)
+      prepareEnvironmentMaterial(material, worldClouds)
       clones.set(original, material)
       this.materials.add(material)
     }

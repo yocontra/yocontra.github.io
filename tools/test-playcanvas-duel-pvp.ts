@@ -13,31 +13,93 @@ const phoneViewports = new Map([
 ])
 const phone = phoneViewports.get(process.env.OW_SIZE ?? '')
 const viewport = phone ?? { width: 1280, height: 800 }
+const startupTimeout = Number(process.env.OW_STARTUP_TIMEOUT_MS ?? 90_000)
+if (!Number.isFinite(startupTimeout) || startupTimeout <= 0) {
+  throw new Error('OW_STARTUP_TIMEOUT_MS must be a positive timeout')
+}
+const captureInterval = Number(process.env.OW_CAPTURE_TICKS_PER_FRAME ?? 0)
+if (!Number.isInteger(captureInterval) || captureInterval < 0) {
+  throw new Error('OW_CAPTURE_TICKS_PER_FRAME must be a nonnegative integer')
+}
 const touch = phone !== undefined
 await mkdir(evidence, { recursive: true })
-const browser = await chromium.launch({ channel: 'chrome', headless: true })
+const browser = process.env.OW_BROWSER_WS
+  ? await chromium.connect(process.env.OW_BROWSER_WS)
+  : await chromium.launch({ channel: 'chrome', headless: true })
 const errors: string[] = []
 const livePages: import('playwright').Page[] = []
-try {
-  const pages = await Promise.all(
-    [0, 1].map(async () => {
-      const context = await browser.newContext({ viewport, hasTouch: touch, isMobile: touch })
-      const page = await context.newPage()
-      livePages.push(page)
-      page.on('pageerror', (error) => errors.push(error.message))
-      // Freeze only Vite's HMR channel; game WebSockets still connect to the real API.
-      await page.routeWebSocket(hmrSocketPattern, () => undefined)
-      await page.goto(`${origin}/experiments/out-west/#debug&level=1`, {
-        waitUntil: 'domcontentloaded',
-      })
-      await page.waitForFunction(() => Boolean(Reflect.get(globalThis, '__ow')), null, {
-        timeout: 90_000,
-      })
-      await page.locator('.ow-start').click()
-      await page.waitForFunction(() => Reflect.get(globalThis, '__ow').director.phase === 'cock')
-      return page
-    }),
+async function loadPlayer() {
+  const context = await browser.newContext({ viewport, hasTouch: touch, isMobile: touch })
+  const page = await context.newPage()
+  livePages.push(page)
+  page.on('pageerror', (error) => errors.push(error.message))
+  // Freeze only Vite's HMR channel; game WebSockets still connect to the real API.
+  await page.routeWebSocket(hmrSocketPattern, () => undefined)
+  const tier = phone ? '&tier=low' : ''
+  await page.goto(`${origin}/experiments/out-west/#debug&level=1${tier}`, {
+    waitUntil: 'domcontentloaded',
+  })
+  if (captureInterval > 0) {
+    await page.waitForFunction(
+      async (interval) => {
+        const engine = performance
+          .getEntriesByType('resource')
+          .find(
+            (entry) =>
+              entry.name.includes('/.vite/') &&
+              new URL(entry.name).pathname.endsWith('/playcanvas.js'),
+          )
+        if (!engine) {
+          return false
+        }
+        const { AppBase } = (await import(engine.name)) as typeof import('playcanvas')
+        const app = AppBase.getApplication()
+        if (!app) {
+          return false
+        }
+        // Keep the real input, simulation and networking clocks running between captured frames.
+        app.autoRender = false
+        let updates = 0
+        app.on('update', () => {
+          updates += 1
+          if (updates % interval === 0) {
+            app.renderNextFrame = true
+          }
+        })
+        return true
+      },
+      captureInterval,
+      { timeout: startupTimeout, polling: 100 },
+    )
+  }
+  await page.waitForFunction(() => Boolean(Reflect.get(globalThis, '__ow')), null, {
+    timeout: startupTimeout,
+  })
+  await page.locator('.ow-start').click({ timeout: startupTimeout })
+  await page.waitForFunction(
+    () => Reflect.get(globalThis, '__ow').director.phase === 'cock',
+    null,
+    { timeout: startupTimeout },
   )
+  return page
+}
+
+try {
+  const pages: import('playwright').Page[] = []
+  if (process.env.OW_SERIAL_CLIENT_LOAD === '1') {
+    const first = await loadPlayer()
+    console.log('First player loaded')
+    // Before matchmaking, an idle scene can yield its renderer to the second loader.
+    await first.evaluate(() => {
+      Reflect.get(globalThis, '__ow').director.game.app.autoRender = false
+    })
+    pages.push(first, await loadPlayer())
+    await first.evaluate((enabled) => {
+      Reflect.get(globalThis, '__ow').director.game.app.autoRender = enabled
+    }, captureInterval === 0)
+  } else {
+    pages.push(...(await Promise.all([loadPlayer(), loadPlayer()])))
+  }
   console.log('Pages ready')
   const seeds = await Promise.all(
     pages.map(async () => {
@@ -194,6 +256,14 @@ try {
       })
       if (!actionsStayVisible) {
         throw new Error(`Result actions leave the visible receipt on client ${index}`)
+      }
+      if (captureInterval > 0) {
+        await page.evaluate(async () => {
+          const app = Reflect.get(globalThis, '__ow').director.game.app
+          const frame = new Promise<void>((resolve) => app.once('postrender', resolve))
+          app.renderNextFrame = true
+          await frame
+        })
       }
       await page.screenshot({ path: `${evidence}/player-${index}-result.png` })
     }),
@@ -365,6 +435,7 @@ try {
     ),
   )
 } catch (error) {
+  console.error(error)
   for (const [index, page] of livePages.entries()) {
     console.error('PAGE', index, await page.locator('body').textContent())
     console.error(
@@ -373,7 +444,9 @@ try {
         return { phase: d?.phase, remote: d?.remote?.beat, closed: d?.remote?.closed, errors: [] }
       }),
     )
-    await page.screenshot({ path: `${evidence}/failure-${index}.png` })
+    await page
+      .screenshot({ path: `${evidence}/failure-${index}.png` })
+      .catch((reason: unknown) => console.error(reason))
   }
   throw error
 } finally {

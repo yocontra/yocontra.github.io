@@ -52,25 +52,28 @@ describe('revolver', () => {
     expect(a.stats.kills).toBe(1)
   })
 
-  it('six rounds, then a 1.6 s reload; fire rate averages 280 ms', () => {
+  it('fires six rounds at a 320 ms cadence and refills after 1.75 seconds', () => {
     const w = testWorld()
     const a = place(w, 20, 64)
     const shots = runCollect(w, 100, { [a.id]: spam(0) }, 'shot') as Shot[]
-    // 100 ticks = 5 s: 6 shots over ~1.5 s, a 1.6 s reload, then more.
+    // 100 ticks = 5 s: 6 shots over 1.6 s, a 1.75 s reload, then more.
     expect(a.stats.shots).toBeGreaterThan(6)
     expect(shots.length).toBe(a.stats.shots)
     const w2 = testWorld()
     const p = place(w2, 20, 64)
     const ticks: number[] = []
     for (let i = 0; i < 40; i++) {
-      run(w2, 1, { [p.id]: (t) => ({ buttons: t % 2 === 0 ? BTN_FIRE : 0 }) })
+      run(w2, 1, { [p.id]: () => ({ buttons: p.fireCooldownMs <= 50 ? BTN_FIRE : 0 }) })
       if (w2.events.some((e) => e.type === 'shot')) {
         ticks.push(w2.tick - 1)
       }
     }
     expect(ticks.length).toBe(6)
     const gaps = ticks.slice(1).map((t, i) => (t - (ticks[i] ?? 0)) * 50)
-    expect(Math.min(...gaps)).toBeGreaterThanOrEqual(250)
+    expect(Math.min(...gaps)).toBe(300)
+    expect(Math.max(...gaps)).toBe(350)
+    expect(gaps.reduce((total, gap) => total + gap, 0) / gaps.length).toBe(320)
+    expect(RELOAD_TICKS).toBe(35)
     expect(p.ammo).toBe(0)
     expect(p.reloadTicks).toBeGreaterThan(0)
     run(w2, RELOAD_TICKS + 1)
@@ -94,9 +97,9 @@ describe('revolver', () => {
     expect(a.ammo).toBe(6)
   })
 
-  it('damage falls to 60% beyond 14 m, nothing past 22 m', () => {
+  it('damage falls to 56% beyond 14 m, nothing past 22 m', () => {
     expect(damageAt(10, false)).toBe(34)
-    expect(damageAt(15, false)).toBeCloseTo(20.4)
+    expect(damageAt(15, false)).toBeCloseTo(19.04)
     const w = testWorld()
     const a = place(w, 10, 64)
     const b = place(w, 33, 64)

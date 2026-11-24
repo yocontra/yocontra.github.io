@@ -12,7 +12,9 @@ mkdirSync(outDir, { recursive: true })
 const fingerprint = itemArtFingerprint()
 const errors: string[] = []
 const baked: string[] = []
-const browser = await chromium.launch({ channel: 'chrome', headless: true })
+const browser = process.env.OW_BROWSER_WS
+  ? await chromium.connect(process.env.OW_BROWSER_WS)
+  : await chromium.launch({ channel: 'chrome', headless: true })
 try {
   const page = await browser.newPage({
     viewport: { width: 256, height: 256 },

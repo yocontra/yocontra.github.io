@@ -1,6 +1,5 @@
 import { Predict, type Room, type SeatReservation } from '@colyseus/sdk'
 import { batchInputs } from 'colyseus-cloudflare/client'
-import { type Entity, Vec3 } from 'playcanvas'
 import { COLLISION_VERSION } from '../content/manifest.ts'
 import { type ServerControl, TOWN_WIRE_VERSION } from '../contract/town.ts'
 import { isRecord } from '../contract/validate.ts'
@@ -341,12 +340,7 @@ function connectSession(
       }
       renderedVelocity.retain(poses)
     },
-    cameraTrace(from, to) {
-      const hit = physics.app.systems.rigidbody?.raycastFirst(from, to, {
-        filterCallback: (entity: Entity) => entity.name !== selfId,
-      })
-      return hit ? new Vec3(hit.point.x, hit.point.y, hit.point.z) : null
-    },
+    cameraTrace: physics.cameraTrace,
     dispose() {
       if (!disposed) {
         disposed = true

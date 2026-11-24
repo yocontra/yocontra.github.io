@@ -25,6 +25,7 @@ import {
   TICK_HZ,
 } from '../ffa/sim/constants.ts'
 import { zoneAt } from '../ffa/sim/layout.ts'
+import { canStartChannel } from '../ffa/sim/money.ts'
 import { calloutChallenger } from '../ffa/sim/showdown.ts'
 import type { Player, SimEvent } from '../ffa/sim/types.ts'
 import { Buttons } from '../runtime/protocol.ts'
@@ -150,6 +151,10 @@ export class FrontierHud {
       feed: (text) => this.hud.feed(escaped(text), 'info'),
       onOpen: (open) => viewport.blockInput('summary', open),
       leave: () => viewport.tap(Buttons.leave),
+      canLeave: () => {
+        const rider = session.world.players[session.selfSlot]
+        return Boolean(rider && canStartChannel(rider))
+      },
       blocked: () => this.hud.menuOpen || root.classList.contains('pc-loading'),
     })
     this.unsubscribeControl = session.subscribeControl((control) => this.rounds.control(control))

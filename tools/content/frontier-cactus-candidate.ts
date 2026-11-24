@@ -7,6 +7,7 @@ import { getBounds, mergeDocuments } from '@gltf-transform/functions'
 import sharp from 'sharp'
 import { withContentOutput } from './content-output.ts'
 import { compressEnvironmentTextures } from './environment-textures.ts'
+import { cactusEnvelopeError, verifyPlantedCactusEnvelope } from './frontier-cactus-envelope.ts'
 
 const io = new NodeIO().registerExtensions(ALL_EXTENSIONS)
 export const CACTUS_MESH = 'cactus.saguaro_one_arm'
@@ -36,6 +37,7 @@ export interface CactusJob {
 const scripts = [
   'tools/content/frontier-cactus-authoring.py',
   'tools/content/frontier-cactus-candidate.ts',
+  'tools/content/frontier-cactus-envelope.ts',
   'tools/test-playcanvas-frontier-cactus.ts',
   'tests/content-playcanvas/frontier-cactus-candidate.test.ts',
   'tools/content/content-output.ts',
@@ -192,10 +194,6 @@ export function cactusRemainder(doc: Document): string {
     }),
   )
 }
-const boundsError = (a: ReturnType<typeof getBounds>, b: ReturnType<typeof getBounds>) =>
-  Math.max(
-    ...[...a.min, ...a.max].map((v, i) => Math.abs(v - cactusRequired([...b.min, ...b.max][i]))),
-  )
 function requireParts(parts: Document, donor: Document) {
   const source = donor
     .getRoot()
@@ -216,7 +214,7 @@ function requireParts(parts: Document, donor: Document) {
   const triangles = geometry
     .listPrimitives()
     .reduce((sum, p) => sum + (p.getIndices()?.getCount() ?? 0) / 3, 0)
-  const shapeError = boundsError(getBounds(part), getBounds(source))
+  const shapeError = cactusEnvelopeError(getBounds(part), getBounds(source))
   if (!(triangles > 0 && triangles <= 20_000 && shapeError <= 0.04)) {
     throw new Error('Cactus triangle budget or donor envelope changed')
   }
@@ -292,11 +290,6 @@ export function replaceCactusPrototype(doc: Document, parts: Document, donor: Do
       doc.createAccessor().setType('VEC2').setArray(values).setBuffer(buffer),
     )
   }
-  const worldBounds = getBounds(target)
-  const worldEnvelopeMaxErrorM = boundsError(bounds, worldBounds)
-  if (worldEnvelopeMaxErrorM > 0.04) {
-    throw new Error('Cactus world bounds changed')
-  }
   if (
     meshes.some(([mesh, hash]) => cactusMeshSignature(mesh) !== hash) ||
     nodes.some(
@@ -316,8 +309,7 @@ export function replaceCactusPrototype(doc: Document, parts: Document, donor: Do
     replaced: 1,
     densityRatio,
     bounds,
-    worldEnvelopeMaxErrorM,
-    worldEnvelopeArtLimitM: 0.04,
+    ...verifyPlantedCactusEnvelope(target, bounds),
     untouchedMeshes: meshes.length,
     untouchedTextures: textures.length,
   }

@@ -11,6 +11,10 @@ import {
   WEAPON_SHOTGUN,
 } from '../../../src/experiments/out-west/contract/town.ts'
 import { fire } from '../../../src/experiments/out-west/ffa/sim/combat.ts'
+import {
+  REVOLVER_FIRE_MS,
+  RIFLE_FIRE_MS,
+} from '../../../src/experiments/out-west/ffa/sim/constants.ts'
 import { applyPropStrikes } from '../../../src/experiments/out-west/ffa/sim/environment-response.ts'
 import { firePickupWeapon } from '../../../src/experiments/out-west/ffa/sim/pickups.ts'
 import { recordHistory, type World } from '../../../src/experiments/out-west/ffa/sim/state.ts'
@@ -93,7 +97,7 @@ describe('accepted native barrel contacts', () => {
     expect(shooter.ammo).toBe(1)
     expect(shooter.stats.shots).toBe(5)
     expect(shooter.stats.hits).toBe(1)
-    expect(shooter.fireCooldownMs).toBe(280)
+    expect(shooter.fireCooldownMs).toBe(REVOLVER_FIRE_MS)
     expect(world.events.filter((event) => event.type === 'prop_break')).toHaveLength(2)
   })
 
@@ -111,7 +115,7 @@ describe('accepted native barrel contacts', () => {
     expect(world.props[0]).toBe(0)
     expect(target.hp).toBe(40)
     expect(shooter.weaponRounds).toBe(3)
-    expect(shooter.fireCooldownMs).toBe(900)
+    expect(shooter.fireCooldownMs).toBe(RIFLE_FIRE_MS)
   })
 
   it('resolves all eight shotgun pellets against the pre-shell collider before breaking it', async () => {

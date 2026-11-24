@@ -1,6 +1,7 @@
 import { createPhysicsWorld, type PhysicsWorldOptions } from 'colyseus-cloudflare/physics'
 import {
   type AppBase,
+  BODYGROUP_STATIC,
   BODYGROUP_TRIGGER,
   BODYMASK_ALL,
   Entity,
@@ -195,6 +196,13 @@ export function createSimulation(options: SimulationOptions) {
     step,
     adopt,
     ...queries,
+    // The view is obstructed by town geometry and intact cover. Window contact
+    // triggers and rider capsules must not shorten the camera boom.
+    cameraTrace(from: Vec3, to: Vec3): Vec3 | null {
+      return (
+        physics.raycastFirst(from, to, { filterCollisionMask: BODYGROUP_STATIC })?.point ?? null
+      )
+    },
     updateProps: props.update,
     resetProps: props.reset,
     dispose,

@@ -71,9 +71,9 @@ export const DYNAMIC_ASSETS = {
     bytes: 236892,
   },
   horse: {
-    url: '/experiments/out-west/3d/native-v2/dynamic/horse.glb?v=e4a143668110901a',
-    hash: 'e4a143668110901a32d2eabb0ba34d63f5e8574e0ec1669a03002136b09e5c10',
-    bytes: 1499964,
+    url: '/experiments/out-west/3d/native-v2/dynamic/horse.glb?v=69749452f5b41f87',
+    hash: '69749452f5b41f8755a606cd54075c01c90f9d80ee3b389496a86f4f14819cf9',
+    bytes: 1741548,
   },
   'held-rifle': {
     url: '/experiments/out-west/3d/native-v2/dynamic/held-rifle.glb?v=df5cf81961739da7',
@@ -101,17 +101,17 @@ export const ENVIRONMENT = {
   hash: '206c67e3a1b992282821cf06662bdd69bbb4915c1c4444a66338a40d6a7d4e34',
   bytes: 1173154,
 } as const
-export const CONTENT_VERSION = 'b3c3265b34735a9962e777f75786d4eee1a502c6469095884117f1b3e17e28ba'
-export const COLLISION_VERSION = 'ec23f5df752c3a9a800a98a95151a01da4ce5b805a2185d19db1a6ca5198ad9d'
+export const CONTENT_VERSION = 'dc6e7a8c7c666995e043cb209d6a7bb4c1f7e4767ff6b9da5e60334d3f84d586'
+export const COLLISION_VERSION = '006b49996dcfbf469389ac1ee2ce9c5b26981416082e651348936c1a45ae33c9'
 export const ASSETS = {
   frontier: {
-    url: '/experiments/out-west/3d/native-v2/baked/frontier.glb?v=0e3ac0a9579a2f62',
-    hash: '0e3ac0a9579a2f62b9ebd7627d6d7aec2687ba538b543cd73f73ed5da5d8c430',
-    bytes: 101350172,
+    url: '/experiments/out-west/3d/native-v2/baked/frontier.glb?v=737c3cc533292faa',
+    hash: '737c3cc533292faa8c174373f45b7eb5afcbe8919b4ef2c45a7fae2247b234e9',
+    bytes: 102275996,
   },
   'frontier-yard-high': {
-    url: '/experiments/out-west/3d/native-v2/baked/frontier-yard-high.glb?v=2168360c0d5832a9',
-    hash: '2168360c0d5832a9c9e04a9448aaeef6a872fc7cd1391d3f4abbb45135225b21',
+    url: '/experiments/out-west/3d/native-v2/baked/frontier-yard-high.glb?v=083b080440adae3b',
+    hash: '083b080440adae3b3ef652ed9b6289f1db3824672a43d41e13bbcc5af341a077',
     bytes: 371880,
   },
   duel: {
@@ -135,9 +135,9 @@ export const ASSETS = {
     bytes: 22502384,
   },
   player: {
-    url: '/experiments/out-west/3d/native-v2/baked/player.glb?v=67759d1660a43133',
-    hash: '67759d1660a431339592b89796ae3609ddb7e6bb149426070bd99f572af2dea9',
-    bytes: 2148696,
+    url: '/experiments/out-west/3d/native-v2/baked/player.glb?v=52c3a2c7e69f2734',
+    hash: '52c3a2c7e69f2734fe72fb07f7f7b1dc8594a976d342626a35493d106c9bf875',
+    bytes: 2148784,
   },
   moves: {
     url: '/experiments/out-west/3d/native-v2/baked/moves.glb?v=cd532e463be4c07c',
@@ -145,9 +145,9 @@ export const ASSETS = {
     bytes: 4977128,
   },
   'outlaw-0': {
-    url: '/experiments/out-west/3d/native-v2/baked/outlaw-0.glb?v=cc6de0e796aa978f',
-    hash: 'cc6de0e796aa978f0dbaf28ad6fbb635b23afaa842cf262128dd26c2d588433e',
-    bytes: 2174108,
+    url: '/experiments/out-west/3d/native-v2/fitted/baked/outlaw-0.glb?v=5601dda0374df5ae',
+    hash: '5601dda0374df5aef56fe802fbbd515faea0e2336b36ae37033a7360796e5fb6',
+    bytes: 10364436,
   },
   'outlaw-1': {
     url: '/experiments/out-west/3d/native-v2/baked/outlaw-1.glb?v=a3c30d0c9c71e462',

@@ -14,7 +14,13 @@
  * Also hosts the first-bank objective chain and the bank moment (`objectives.ts`).
  */
 import type { AudioEngine } from '../../audio/audio.ts'
-import { KILL_DEAD_EYE, KILL_FARMED, KILL_PARDON, type ServerControl } from '../../contract/town.ts'
+import {
+  CHANNEL_LEAVE,
+  KILL_DEAD_EYE,
+  KILL_FARMED,
+  KILL_PARDON,
+  type ServerControl,
+} from '../../contract/town.ts'
 import { FFA_XP, ffaBankXp } from '../../data/progression.ts'
 import { PRACTICE_BOT_KILL_XP } from '../sim/constants.ts'
 import { BOT_KILL_XP } from '../sim/death.ts'
@@ -54,6 +60,8 @@ export interface RoundHost {
   onOpen: (open: boolean) => void
   /** "Leave town" from the summary. */
   leave: () => void
+  /** A living rider can start the leave channel after an ongoing interaction or duel ends. */
+  canLeave: () => boolean
   /** True while something else owns the screen (How to play): the first round waits. */
   blocked: () => boolean
 }
@@ -98,12 +106,11 @@ export class Rounds {
   readonly objectives: Objectives
   private stats = fresh()
   private round = 1
-  /** performance.now() when this round's clock started, or −1 before the first one starts. */
-  private startAt = -1
+  private startAt: number | null = null
   private lastCall = false as boolean
   /** Live: the bell has rung and the card waits for a pause. */
   private pending = false as boolean
-  private open = false as boolean
+  private phase: 'playing' | 'summary' | 'waitingToLeave' | 'leaving' | 'disposed' = 'playing'
   private readonly poll: ReturnType<typeof setInterval>
   private lastText = ''
 
@@ -127,7 +134,7 @@ export class Rounds {
 
   /** The summary card is up. */
   get summaryOpen(): boolean {
-    return this.open
+    return this.phase === 'summary'
   }
 
   /** Dev and tests: the round's state. */
@@ -140,25 +147,29 @@ export class Rounds {
     return {
       round: this.round,
       left: this.left(),
-      open: this.open,
+      open: this.summaryOpen,
       objective: this.objectives.current,
       ...this.stats,
     }
   }
 
   private left(): number {
-    return this.startAt < 0
+    return this.startAt === null
       ? ROUND_SECONDS
       : ROUND_SECONDS - (performance.now() - this.startAt) / 1000
   }
 
   private update(): void {
     const h = this.host
-    this.objectives.poll(h.alive(), h.carried())
-    if (this.open) {
+    if (this.phase === 'waitingToLeave') {
+      this.tryLeave()
       return
     }
-    if (this.startAt < 0) {
+    this.objectives.poll(h.alive(), h.carried())
+    if (this.phase !== 'playing') {
+      return
+    }
+    if (this.startAt === null) {
       if (!h.blocked() && h.alive()) {
         this.startAt = performance.now()
       } else {
@@ -192,13 +203,24 @@ export class Rounds {
   /** Server events: your kills, deaths, deposits and strongboxes count toward the round. */
   event(ev: SimEvent): void {
     const you = this.host.you()
+    if (this.phase !== 'playing') {
+      if (
+        this.phase === 'leaving' &&
+        ev.type === 'channel_cancel' &&
+        ev.player === you &&
+        ev.kind === CHANNEL_LEAVE
+      ) {
+        this.openSummary()
+      }
+      return
+    }
     if (ev.type === 'kill') {
       if (ev.victim === you) {
         this.stats.deaths++
         this.stats.streak = 0
         if (this.pending) {
           // let the death land before the card
-          setTimeout(() => this.end(), 1200)
+          this.endAfter(1200)
         }
       } else if (ev.killer === you) {
         this.objectives.killed()
@@ -219,7 +241,7 @@ export class Rounds {
         this.host.practice ? Math.min(PRACTICE_PURSE_CAP, purse) : purse,
       )
       if (this.pending) {
-        setTimeout(() => this.end(), 1600)
+        this.endAfter(1600)
       }
     } else if (ev.type === 'strongbox_open' && ev.by === you) {
       this.stats.xp += FFA_XP.strongbox
@@ -240,8 +262,17 @@ export class Rounds {
     }
   }
 
+  private endAfter(delay: number): void {
+    const round = this.round
+    setTimeout(() => {
+      if (this.pending && this.round === round) {
+        this.end()
+      }
+    }, delay)
+  }
+
   private end(): void {
-    if (this.open) {
+    if (this.phase !== 'playing') {
       return
     }
     this.pending = false
@@ -255,7 +286,6 @@ export class Rounds {
       patch.rounds = before.rounds + 1
       patch.kills = before.kills + s.kills
       patch.deaths = before.deaths + s.deaths
-      this.host.send(JSON.stringify({ type: 'practice_pause', on: true }))
     }
     const after = patchRecord(patch)
     this.show(before, after)
@@ -312,23 +342,37 @@ export class Rounds {
     leave.type = 'button'
     leave.addEventListener('click', (e) => {
       e.stopPropagation()
-      this.close()
-      this.host.leave()
+      if (!this.summaryOpen) {
+        return
+      }
+      this.close('waitingToLeave')
+      this.tryLeave()
     })
-    c.hidden = false
-    this.open = true
+    this.openSummary()
+  }
+
+  private openSummary(): void {
+    this.phase = 'summary'
+    this.card.hidden = false
+    if (this.host.practice) {
+      this.host.send(JSON.stringify({ type: 'practice_pause', on: true }))
+    }
     this.timerEl.classList.remove('on')
     this.host.onOpen(true)
     this.host.audio?.play('uiStamp', { gain: 0.6, priority: true })
-    again.focus({ preventScroll: true })
+    this.card.querySelector('button')?.focus({ preventScroll: true })
   }
 
-  private close(): void {
-    if (!this.open) {
-      return
+  private tryLeave(): void {
+    if (this.host.canLeave()) {
+      this.phase = 'leaving'
+      this.host.leave()
     }
+  }
+
+  private close(phase: 'playing' | 'waitingToLeave'): void {
+    this.phase = phase
     this.card.hidden = true
-    this.open = false
     if (this.host.practice) {
       this.host.send(JSON.stringify({ type: 'practice_pause', on: false }))
     }
@@ -337,10 +381,13 @@ export class Rounds {
 
   /** "Ride again": the next round, in place. The practice bots read the updated record. */
   next(): void {
+    if (!this.summaryOpen) {
+      return
+    }
     if (this.host.practice) {
       this.host.send(JSON.stringify({ type: 'practice_record', ...practiceOptions() }))
     }
-    this.close()
+    this.close('playing')
     this.stats = fresh()
     this.round++
     this.startAt = performance.now()
@@ -350,7 +397,7 @@ export class Rounds {
 
   /** Enter / Escape while the card is up. Returns true when it used the key. */
   key(code: string): boolean {
-    if (!this.open) {
+    if (!this.summaryOpen) {
       return false
     }
     if (code === 'Enter' || code === 'Space' || code === 'Escape') {
@@ -367,6 +414,7 @@ export class Rounds {
   }
 
   dispose(): void {
+    this.phase = 'disposed'
     clearInterval(this.poll)
     this.objectives.dispose()
     this.timerEl.remove()

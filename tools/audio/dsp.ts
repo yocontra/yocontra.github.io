@@ -426,7 +426,7 @@ export function encode(ch: Ch, out: string, kbps: number): void {
       '-i',
       'pipe:0',
       '-c:a',
-      'aac_at',
+      process.env.OW_AAC_ENCODER === 'aac' ? 'aac' : 'aac_at',
       '-b:a',
       `${kbps}k`,
       '-movflags',

@@ -67,6 +67,7 @@ export const SOUNDS = {
   dog: { file: 'dog', trim: -9 },
   horse: { file: 'horse', trim: -9 },
   hawk: { file: 'hawk', trim: -12 },
+  crockery: { file: 'saloon_crockery', trim: -9 },
   creak: { file: 'sign_creak', trim: -6, grid: g(5, 2, 1.9) },
   whistle: { file: 'whistle', trim: -8 },
   loco: { file: 'amb_loco', trim: -6, loop: LOOP_POINTS.amb_loco },

@@ -25,7 +25,7 @@ import { pruneNativeEnvironment } from './environment-prune.ts'
 import { compressEnvironmentTextures } from './environment-textures.ts'
 import { formatContent } from './format-content.ts'
 import { markFrontierInertWind } from './frontier-inert-wind.ts'
-import { poolFrontierInertWindViews } from './frontier-inert-wind-pool.ts'
+import { packFrontierMap } from './frontier-inert-wind-pool.ts'
 import { varyPerditionRoofsAndFreight } from './frontier-roof-freight-variation.ts'
 import { finishPerditionRooms } from './frontier-room-finishes.ts'
 import { installFrontierSandstone } from './frontier-sandstone.ts'
@@ -213,7 +213,8 @@ for (const name of names.filter((candidate) => !only || candidate === only)) {
       varyPerditionRoofsAndFreight(final),
     )
     await io.write(path, final)
-    console.log('Frontier inert wind storage', await poolFrontierInertWindViews(path))
+    const cache = publishing ? resolve(output, '..') : resolve(output, 'resources')
+    console.log('Frontier packed storage', await packFrontierMap(path, cache))
   }
 }
 if (only || !publishing) {

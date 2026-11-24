@@ -4,7 +4,7 @@ import type { TownLayout } from '../../src/experiments/out-west/ffa/sim/layout.t
 import { frontOf } from '../../src/experiments/out-west/ffa/sim/porches.ts'
 import type { FrontierGeometry } from './frontier-geometry.ts'
 import { BANK_SIGN_SIZE, FACADE_SIGN_HEIGHT, facadeSignWidth } from './frontier-sign-layout.ts'
-import { paintedSignAtlas } from './frontier-sign-type.ts'
+import { paintedSignAtlas, type SignBoard } from './frontier-sign-type.ts'
 export const LABELS: Record<string, string> = {
   saloon: 'PERDITION SALOON',
   hotel: 'GRAND HOTEL',
@@ -41,20 +41,30 @@ export const SIGN_ROWS = [
   'EXCHANGE',
   'SAVINGS',
 ]
-export function longSignAspects(layout: TownLayout) {
-  const aspects = new Map<number, number>()
-  for (const [row, [id, label]] of Object.entries(LABELS).entries()) {
-    const building = layout.buildings.find((entry) => entry.id === id)
-    if (!building) {
-      throw new Error(`Missing Frontier sign owner ${id}`)
+export function townSignBoards(layout: TownLayout): SignBoard[] {
+  const owners = [...Object.keys(LABELS), ...Object.keys(SHORT_LABELS)]
+  return SIGN_ROWS.map((label, row) => {
+    const owner = row >= 24 ? 'bank' : owners[row]
+    if (!owner) {
+      throw new Error(`Missing Frontier sign owner at row ${row}`)
     }
-    const width = facadeSignWidth(building, frontOf(building, layout), label)
-    aspects.set(row, width / FACADE_SIGN_HEIGHT)
-  }
-  for (let row = 24; row < SIGN_ROWS.length; row++) {
-    aspects.set(row, BANK_SIGN_SIZE.width / BANK_SIGN_SIZE.height)
-  }
-  return aspects
+    if (row >= 24) {
+      return { owner, label, kind: 'counter', aspect: BANK_SIGN_SIZE.width / BANK_SIGN_SIZE.height }
+    }
+    if (row >= 12) {
+      return { owner, label, kind: 'blade', aspect: 1.5 / 0.7 }
+    }
+    const building = layout.buildings.find((entry) => entry.id === owner)
+    if (!building) {
+      throw new Error(`Missing Frontier building ${owner}`)
+    }
+    return {
+      owner,
+      label,
+      kind: 'facade',
+      aspect: facadeSignWidth(building, frontOf(building, layout), label) / FACADE_SIGN_HEIGHT,
+    }
+  })
 }
 
 export async function authoredMaterials(g: FrontierGeometry, layout: TownLayout) {
@@ -89,20 +99,14 @@ export async function authoredMaterials(g: FrontierGeometry, layout: TownLayout)
   )
   const sign = g.doc
     .createTexture('Perdition shop signs')
-    .setImage(
-      await paintedSignAtlas(
-        SIGN_ROWS,
-        Object.values(SHORT_LABELS),
-        'tools/art/environments/frontier-signs',
-        longSignAspects(layout),
-      ),
-    )
+    .setImage(await paintedSignAtlas(townSignBoards(layout)))
     .setMimeType('image/png')
   g.materials.set(
     'sign',
     g.doc
       .createMaterial('Perdition painted signs')
       .setBaseColorTexture(sign)
+      .setMetallicFactor(0)
       .setRoughnessFactor(0.9),
   )
 }

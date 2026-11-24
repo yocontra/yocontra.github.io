@@ -33,8 +33,11 @@ export function worldCloudMaterials(resource: ContainerResource): Set<StandardMa
   )
 }
 
-/** Shared freight UV1 stays local; native world coordinates follow instances and static batches. */
-export function prepareFreightClouds(material: StandardMaterial, worldClouds: boolean): void {
+/** Set grazing-angle sign filtering and world-space cloud coordinates before batching. */
+export function prepareEnvironmentMaterial(material: StandardMaterial, worldClouds: boolean): void {
+  if (material.name === 'Perdition painted signs' && material.diffuseMap) {
+    material.diffuseMap.anisotropy = Math.min(8, material.diffuseMap.device.maxAnisotropy)
+  }
   if (!worldClouds) {
     return
   }

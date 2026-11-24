@@ -1,4 +1,6 @@
 /** Replace the visible steel ahead of the preserved hand and holster contact surfaces. */
+import { readFile } from 'node:fs/promises'
+import { basename, resolve } from 'node:path'
 import { type Accessor, type Document, NodeIO, type Primitive } from '@gltf-transform/core'
 import { ALL_EXTENSIONS } from '@gltf-transform/extensions'
 import {
@@ -9,6 +11,8 @@ import {
   unpartition,
   weld,
 } from '@gltf-transform/functions'
+
+import { compressedCharacterTexture } from './character-textures.ts'
 
 const io = new NodeIO().registerExtensions(ALL_EXTENSIONS)
 const tubeNames = /tube|seam/iu
@@ -186,6 +190,27 @@ export async function fitRevolver(source: string, target: string): Promise<void>
   mesh.addPrimitive(joinPrimitives(fitted))
   for (const part of fitted) {
     part.dispose()
+  }
+  if (basename(target) === 'gun.rusty-six.glb') {
+    const finish = old.getMaterial()
+    const surface = async (channel: 'albedo' | 'arm' | 'normal') =>
+      compressedCharacterTexture(
+        await readFile(
+          resolve('tools/art/characters/revolver-exteriors', `rusty-six-${channel}.png`),
+        ),
+        channel === 'albedo',
+      )
+    if (!finish) {
+      throw new Error('Missing fitted starter revolver finish')
+    }
+    const [albedo, normal, arm] = await Promise.all([
+      surface('albedo'),
+      surface('normal'),
+      surface('arm'),
+    ])
+    // All three maps share the original five-band finish UVs. Scratches must interrupt
+    // the roughness and tilt the normal at the same texel as their exposed metal.
+    finish.setExtras({ ...finish.getExtras(), nativePbr: { albedo, normal, arm, armUv: 0 } })
   }
   await doc.transform(weld(), prune({ keepAttributes: true, keepLeaves: true }), unpartition())
   await io.write(target, doc)

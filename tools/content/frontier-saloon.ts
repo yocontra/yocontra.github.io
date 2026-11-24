@@ -1,12 +1,15 @@
-/** Install the Blender-authored bar and lamps using the town's existing wood scans. */
+/** Install the Blender-authored bar and lamps with their authored materials. */
 import { join } from 'node:path'
-import { Material, Node } from '@gltf-transform/core'
+import { Node } from '@gltf-transform/core'
 import { copyToDocument } from '@gltf-transform/functions'
 import type { Building, Cover, TownLayout } from '../../src/experiments/out-west/ffa/sim/layout.ts'
 import { hasFittedFence, installFrontierFences } from './frontier-fences.ts'
 import { hasFittedFurniture, installFrontierFurniture } from './frontier-furniture-install.ts'
 import { type FrontierGeometry, frontierIO, type Rgb } from './frontier-geometry.ts'
 import { coverModel } from './frontier-props.ts'
+
+import { installStreetTrades } from './frontier-street-trades.ts'
+import { installUpperRoomDetails } from './frontier-upper-rooms.ts'
 
 function isSaloonBar(cover: Cover): boolean {
   return (
@@ -51,6 +54,8 @@ export async function installPeriodFixtures(
     join(directory, 'frontier-hay.glb'),
     join(directory, 'frontier-cooperage.glb'),
   ])
+  await installUpperRoomDetails(geometry, directory)
+  await installStreetTrades(geometry.doc, layout, join(directory, 'frontier-street-trades.glb'))
 }
 
 async function installSaloonBar(geometry: FrontierGeometry, source: string): Promise<void> {
@@ -67,25 +72,6 @@ async function installSaloonBar(geometry: FrontierGeometry, source: string): Pro
       throw new Error(`Could not copy saloon fixture ${original.getName()}`)
     }
     root.addChild(node)
-  }
-
-  const boards = geometry.materials.get('floor')
-  if (!(boards?.getBaseColorTexture() && boards.getNormalTexture())) {
-    throw new Error('Missing the shared floorboard scan for the saloon bar')
-  }
-  for (const material of art.getRoot().listMaterials()) {
-    if (!(material.getName().startsWith('Saloon ') && material.getName().includes('walnut'))) {
-      continue
-    }
-    const surface = copied.get(material)
-    if (!(surface instanceof Material)) {
-      throw new Error(`Could not copy saloon surface ${material.getName()}`)
-    }
-    surface
-      .setBaseColorTexture(boards.getBaseColorTexture())
-      .setNormalTexture(boards.getNormalTexture())
-      .setNormalScale(0.42)
-      .setOcclusionTexture(boards.getOcclusionTexture())
   }
 }
 
