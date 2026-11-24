@@ -49,7 +49,7 @@ type Kind = 'rider' | 'bret' | 'belt' | 'hat' | 'arms'
 
 function selected(name: string, kind: Kind) {
   if (kind === 'arms') {
-    return name === 'Rider denim jacket'
+    return name === 'Rider ranch jacket'
   }
   if (kind === 'belt') {
     return belt.has(name) || name === 'holster.plain-leather Dyeable'
@@ -64,10 +64,11 @@ function selected(name: string, kind: Kind) {
     ? name.startsWith('Rider riding boot ') ||
         name.startsWith('Rider tailoring ') ||
         [
-          'Rider check workshirt',
+          'Rider striped workshirt',
           'Rider work trousers',
           'Tied silk kerchief',
-          'Rider denim jacket',
+          'Rider wool waistcoat',
+          'Rider ranch jacket',
           'Rider scanned face',
           'Rider fitted nape',
         ].includes(name)

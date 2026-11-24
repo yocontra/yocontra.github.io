@@ -55,7 +55,7 @@ it('fits the sculpted garments, accessories and both faces to the native game ri
           .getRoot()
           .listMaterials()
           .filter((m) => m.getName() === 'Dyeable')
-        expect(fabric).toHaveLength(3)
+        expect(fabric).toHaveLength(4)
         const sizes = await Promise.all(
           fabric.map(async (cloth) => {
             const surface = cloth.getExtras().nativePbr as {
@@ -85,11 +85,11 @@ it('fits the sculpted garments, accessories and both faces to the native game ri
             return dimensions[0]
           }),
         )
-        expect(sizes.sort()).toEqual(['1536x1536', '2048x2048', '3072x1536'])
+        expect(sizes.sort()).toEqual(['1536x1536', '1536x1536', '2048x2048', '2048x2048'])
         expect(materials).toContain('Neckerchief')
         expect(materials).toContain('Rider beard and skin')
         expect(materials).toContain('Scanned nape and hairline')
-        expect(materials).toContain('Oiled riding boot')
+        expect(materials).toContain('Scanned boot leather')
         expect(materials).toContain('Oxidized copper hardware')
         const arms = (await io.read(join(root, 'viewmodels', file))).getRoot()
         expect(
@@ -98,6 +98,10 @@ it('fits the sculpted garments, accessories and both faces to the native game ri
             .map((m) => m.getName())
             .sort((a, b) => a.localeCompare(b)),
         ).toEqual(['Dyeable', 'field-hands'])
+        const sleeve = arms.listMaterials().find((material) => material.getName() === 'Dyeable')
+        expect(fabric.map((cloth) => cloth.getExtras().nativePbr)).toContainEqual(
+          sleeve?.getExtras().nativePbr,
+        )
         expect(
           arms
             .listSkins()[0]

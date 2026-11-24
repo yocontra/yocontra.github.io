@@ -3,7 +3,7 @@ import { cloneDocument, compactPrimitive } from '@gltf-transform/functions'
 
 const ARM = /^(?:UpperArm|LowerArm|Wrist|Shoulder)[LR]$/u
 
-/** Keep the camera outside the shirt body while using the actual sculpted sleeves and cuffs. */
+/** Keep the camera outside the jacket body while using the actual sculpted sleeves and cuffs. */
 function sleeveTriangles(part: Primitive, skin: Skin) {
   const indices = part.getIndices()
   const joints = part.getAttribute('JOINTS_0')
@@ -39,7 +39,7 @@ export function cameraSleeves(dressed: Document): Document {
       continue
     }
     for (const part of mesh.listPrimitives()) {
-      if (part.getMaterial()?.getName() !== 'Broken-in indigo denim') {
+      if (part.getMaterial()?.getName() !== 'Travel-worn jacket leather') {
         mesh.removePrimitive(part)
         continue
       }

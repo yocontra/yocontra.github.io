@@ -7,8 +7,9 @@ import sharp from 'sharp'
 import { DYES } from '../../src/experiments/out-west/data/dye.ts'
 
 const clothUptake = new Map([
-  ['Broken-in indigo denim', 0.7],
-  ['Yarn-dyed work flannel', 0.24],
+  ['Travel-worn jacket leather', 0.64],
+  ['Weathered wool waistcoat', 0.7],
+  ['Yarn-dyed workshirt', 0.24],
   ['Saddle-brown cotton duck', 0.35],
 ])
 

@@ -3184,10 +3184,11 @@ The rider uses the following works under [CC BY 4.0](https://creativecommons.org
 | --- | --- | --- |
 | [Regis head scan 3d](https://sketchfab.com/3d-models/6d8050f46e004c52921b74b74f4781e2) | ARmediaLab | Joined the face scan to a modeled scalp, jaw and neck, and blended the skin weights into the chest. |
 | [Old Cowboy Hat](https://sketchfab.com/3d-models/be57a7084f9d49b2a700fe3b2b4aff4e) | Novamonk | Reduced and reshaped the photographed hat to fit the rider and head socket. |
-| [Jeans Jacket](https://sketchfab.com/3d-models/4348be24475c45dd9a5bdf6e62ba7ebc) | Sircher | Reprojected the scanned panels onto new fitted geometry, rebuilt the sleeves and collar, and replaced the photographed buttons with hardware. |
-| [Men's casual Shirt](https://sketchfab.com/3d-models/996c8d78905f433183ac368086580f82) | DineshThennarasan | Tucked and skinned the shirt, adjusted the check scale and color, and added yarn relief. |
+| [Brown Leather Jacket](https://sketchfab.com/3d-models/357d2f25e3a34d16beea1ac295b33091) | GlenR52 | Opened the fronts, posed the sleeves around the elbows and wrists, and darkened the hide. |
+| [Thomas Chapman waistcoat, H1998.29](https://sketchfab.com/3d-models/988d633830eb4f4a9ebf2d6f012771d3) | Western Australian Museum | Reduced the scan, refitted the armholes, skinned the shoulder seams, and dyed the photographed fabric. |
+| [Men's casual Shirt](https://sketchfab.com/3d-models/996c8d78905f433183ac368086580f82) | DineshThennarasan | Fitted the collar and button stand under the waistcoat and added a striped woven surface. |
 | [Levi's 501 Denim Pants](https://sketchfab.com/3d-models/0ad985ca4f584b42bd2bfe4c009d4a46) | sivayuce | Fitted the pattern to the rider, shaped folds around each knee and boot, and made a cotton duck finish. |
-| [Cowboy boots](https://sketchfab.com/3d-models/0bf75a6aaa9c42b1bb565cb12679cc6d) | Joe Roechow | Fitted a pair to the rider's feet and weighted the shafts to the lower legs. |
+| [boots and cowboy hat](https://sketchfab.com/3d-models/f2eb6879afd34893bdf8f7c0cfbabe8d) | hcwiley | Isolated one boot, baked its scanned color onto a UV map, and fitted a mirrored pair to the rider. |
 
 Bret's head adapts **Infinite, 3D Head Scan by Lee Perry-Smith** of Infinite-Realities, based on work at Triplegangers. [CC BY 3.0](https://creativecommons.org/licenses/by/3.0/) · [Source mesh and maps](https://github.com/mrdoob/three.js/tree/r180/examples/models/gltf/LeePerrySmith) · [Original notice](LICENSE-head.txt)
 
