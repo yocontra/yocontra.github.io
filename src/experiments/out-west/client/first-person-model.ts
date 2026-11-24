@@ -11,7 +11,7 @@ import {
   Vec3,
 } from 'playcanvas'
 import { DYNAMIC_ASSETS } from '../content/manifest.ts'
-import { VIEWMODELS } from '../content/viewmodels.ts'
+import { outfitArms } from '../content/outfit-arms.ts'
 import { DEFAULT_LOADOUT } from '../data/catalog.ts'
 import type { DuelActor } from '../duel/native-actor.ts'
 import type { Player } from '../ffa/sim/types.ts'
@@ -190,7 +190,7 @@ export class FirstPersonModel {
     if (this.pending) {
       return this.pending
     }
-    const asset = VIEWMODELS[fitId(request.appearance?.loadout ?? DEFAULT_LOADOUT)]
+    const asset = outfitArms[fitId(request.appearance?.loadout ?? DEFAULT_LOADOUT)]
     if (!asset) {
       this.failure = key
       return undefined

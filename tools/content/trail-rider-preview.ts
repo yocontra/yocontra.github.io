@@ -31,6 +31,8 @@ if (equipment === join(base, 'equipment')) {
   throw new Error('Use a separate review directory.')
 }
 const output = dirname(equipment)
+const textures =
+  output === join(base, 'fitted') ? join(base, 'characters') : join(output, 'characters')
 const io = new NodeIO().registerExtensions(ALL_EXTENSIONS)
 const art = 'tools/art/characters'
 const face =
@@ -154,7 +156,7 @@ async function prep(doc: Document, kind: Kind, donor: Document, nodes: Node[]) {
       (kind === 'hat' && name === 'Travel-worn felt') ||
       (kind === 'belt' && name === 'oiled hide')
     ) {
-      await fabricDyes(m, join(output, 'characters'))
+      await fabricDyes(m, textures)
     }
     if (name === 'Printed madder cotton') {
       m.setName('Neckerchief')

@@ -18,6 +18,28 @@ import { bakePairedGripAssets } from './paired-grip-assets.ts'
 export async function buildManifest(): Promise<void> {
   await bakeCharacterClips()
   await bakePairedGripAssets()
+  await writeManifest()
+}
+
+const fittedEquipment = new Set(['outfit.trail-duds', 'holster.plain-leather', 'hat.battered-brim'])
+
+async function writeFittedSleeves() {
+  const sleeves: Record<string, ContentAsset> = {}
+  for (const id of ['outfit.trail-duds', 'outfit.trail-duds.pair']) {
+    const path = `/experiments/out-west/3d/native-v2/fitted/viewmodels/${id}.glb`
+    const bytes = await readFile(`public${path}`)
+    const hash = createHash('sha256').update(bytes).digest('hex')
+    sleeves[id] = { url: `${path}?v=${hash.slice(0, 16)}`, hash, bytes: bytes.length }
+  }
+  await writeFile(
+    'src/experiments/out-west/content/fitted-sleeves.json',
+    JSON.stringify(sleeves, null, 2),
+  )
+  return sleeves
+}
+
+/** Publish the rigged Blender characters and keep the native base rigs available for rebakes. */
+export async function writeManifest(): Promise<void> {
   const published = JSON.parse(await readFile('tools/art/environments/frontier.json', 'utf8')) as {
     arrival?: readonly number[]
   }
@@ -35,7 +57,8 @@ export async function buildManifest(): Promise<void> {
     ...Array.from({ length: 17 }, (_, i) => `outlaw-${i}`),
   ]
   for (const name of names) {
-    const url = `/experiments/out-west/3d/native-v2/baked/${name}.glb`
+    const folder = name === 'outlaw-0' ? 'fitted/baked' : 'baked'
+    const url = `/experiments/out-west/3d/native-v2/${folder}/${name}.glb`
     const bytes = await readFile(`public${url}`)
     const hash = createHash('sha256').update(bytes).digest('hex')
     assets[name] = { url: `${url}?v=${hash.slice(0, 16)}`, hash, bytes: bytes.byteLength }
@@ -100,7 +123,8 @@ export async function buildManifest(): Promise<void> {
   for (const item of CATALOG.filter((candidate) =>
     ['outfit', 'hat', 'gun', 'spurs', 'extra', 'holster'].includes(candidate.slot),
   )) {
-    const url = `/experiments/out-west/3d/native-v2/equipment/${item.id}.glb`
+    const folder = fittedEquipment.has(item.id) ? 'fitted/equipment' : 'equipment'
+    const url = `/experiments/out-west/3d/native-v2/${folder}/${item.id}.glb`
     const bytes = await readFile(`public${url}`)
     const hash = createHash('sha256').update(bytes).digest('hex')
     const entry: ContentAsset & { pair?: ContentAsset } = {
@@ -110,7 +134,7 @@ export async function buildManifest(): Promise<void> {
     }
     equipment[item.id] = entry
     if (item.slot === 'outfit' || item.slot === 'holster' || item.id === 'gun.hardins-pair') {
-      const pairUrl = `/experiments/out-west/3d/native-v2/equipment/${item.id}.pair.glb`
+      const pairUrl = `/experiments/out-west/3d/native-v2/${folder}/${item.id}.pair.glb`
       const pairBytes = await readFile(`public${pairUrl}`)
       const pairHash = createHash('sha256').update(pairBytes).digest('hex')
       entry.pair = {
@@ -154,13 +178,14 @@ export async function buildManifest(): Promise<void> {
     'src/experiments/out-west/content/ambient.ts',
     `// Authored native ambient assets, versioned by tools/content/manifest.ts.\nexport const AMBIENT_ASSETS = ${JSON.stringify(ambient, null, 2)} as const\n`,
   )
+  const sleeves = await writeFittedSleeves()
   const atmosphere = [ambient, SKIES, lighting, streetLife, TOWN.ambient]
   const version = createHash('sha256')
     .update(JSON.stringify(assets))
     .update(JSON.stringify(dynamic))
     .update(JSON.stringify(arenaConfigs))
     .update(JSON.stringify(equipment))
-    .update(JSON.stringify(VIEWMODELS))
+    .update(JSON.stringify({ ...VIEWMODELS, ...sleeves }))
     .update(JSON.stringify(environment))
     .update(JSON.stringify(atmosphere))
     .update(JSON.stringify(TOWN))
@@ -172,6 +197,7 @@ export async function buildManifest(): Promise<void> {
   )
   await formatContent([
     'src/experiments/out-west/content/ambient.ts',
+    'src/experiments/out-west/content/fitted-sleeves.json',
     'src/experiments/out-west/content/equipment.ts',
     'src/experiments/out-west/content/manifest.ts',
   ])

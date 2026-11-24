@@ -1,0 +1,12 @@
+{
+  "outfit.trail-duds": {
+    "url": "/experiments/out-west/3d/native-v2/fitted/viewmodels/outfit.trail-duds.glb?v=b42ba480f06958db",
+    "hash": "b42ba480f06958db0c52352c51b7726359b936f166d6a44def227d3a247f5ec5",
+    "bytes": 513888
+  },
+  "outfit.trail-duds.pair": {
+    "url": "/experiments/out-west/3d/native-v2/fitted/viewmodels/outfit.trail-duds.pair.glb?v=aaf4a47ecf16e1ca",
+    "hash": "aaf4a47ecf16e1ca99c586dcef6a96bafac84648dbf9c63414d958c173dd1e4b",
+    "bytes": 514416
+  }
+}

@@ -6,8 +6,8 @@ import { basename, dirname, join } from 'node:path'
 import { AMBIENT_ASSETS } from '../../src/experiments/out-west/content/ambient.ts'
 import { EQUIPMENT } from '../../src/experiments/out-west/content/equipment.ts'
 import { ASSETS, DYNAMIC_ASSETS } from '../../src/experiments/out-west/content/manifest.ts'
+import { outfitArms } from '../../src/experiments/out-west/content/outfit-arms.ts'
 import type { ContentAsset } from '../../src/experiments/out-west/content/types.ts'
-import { VIEWMODELS } from '../../src/experiments/out-west/content/viewmodels.ts'
 
 const inventory = new Map<string, { asset: ContentAsset; bindings: string[] }>()
 
@@ -42,6 +42,13 @@ interface Model {
 // Paired actors, extracted arms and scene kits each have a second authoring input.
 function modelSources(path: string, stem: string): string[] {
   const source = 'tools/art'
+  if (path.includes('/fitted/')) {
+    const artist = stem === 'outlaw-0' ? 'greenhorn' : 'trail-rider'
+    return [
+      `${source}/characters/${artist}/${artist}.blend`,
+      'tools/content/trail-rider-preview.ts',
+    ]
+  }
   if (path.includes('/3d/dynamic/')) {
     return [join('public', path)]
   }
@@ -147,7 +154,7 @@ async function readModel(path: string, asset: ContentAsset, bindings: string[]) 
   }
 }
 
-collect({ ASSETS, AMBIENT_ASSETS, DYNAMIC_ASSETS, EQUIPMENT, VIEWMODELS }, 'content')
+collect({ ASSETS, AMBIENT_ASSETS, DYNAMIC_ASSETS, EQUIPMENT, VIEWMODELS: outfitArms }, 'content')
 const rows: Awaited<ReturnType<typeof readModel>>[] = []
 for (const [path, entry] of [...inventory].sort(([a], [b]) => a.localeCompare(b))) {
   rows.push(await readModel(path, entry.asset, entry.bindings))

@@ -53,7 +53,7 @@ it('outfits carry a standardized animated rig and distinct dyeable cloth materia
         .getRoot()
         .listMaterials()
         .map((material) => material.getName()),
-    ).toContain('Character')
+    ).toContain(item.id === 'outfit.trail-duds' ? 'Rider beard and skin' : 'Character')
   }
 })
 

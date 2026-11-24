@@ -75,7 +75,7 @@ async function headSurface(url: string) {
 
 const starter = headSurface(ASSETS.player.url)
 for (const { id, slot } of CATALOG) {
-  if (slot === 'outfit') {
+  if (slot === 'outfit' && id !== 'outfit.trail-duds') {
     it(`${id} uses the fitted player head in both weapon configurations`, async () => {
       const fit = EQUIPMENT[id as keyof typeof EQUIPMENT]
       if (!('pair' in fit)) {
@@ -91,3 +91,22 @@ for (const { id, slot } of CATALOG) {
     })
   }
 }
+
+it('fits the scanned Trail Duds face to both gameplay rigs', async () => {
+  const fit = EQUIPMENT['outfit.trail-duds']
+  const faces = await Promise.all(
+    [fit, fit.pair].map(async ({ url }) => {
+      const doc = await io.read(`public${new URL(url, 'https://out-west.invalid').pathname}`)
+      const surfaces = doc
+        .getRoot()
+        .listMeshes()
+        .flatMap((mesh) => mesh.listPrimitives())
+      const face = surfaces.find((part) => part.getMaterial()?.getName() === 'Rider beard and skin')
+      expect(face?.getAttribute('JOINTS_0')).toBeDefined()
+      expect(face?.getAttribute('WEIGHTS_0')).toBeDefined()
+      expect(face?.getMaterial()?.getBaseColorTexture()?.getImage()?.length).toBeGreaterThan(1000)
+      return face?.getAttribute('POSITION')?.getArray()
+    }),
+  )
+  expect(faces[0]).toEqual(faces[1])
+})
