@@ -16,7 +16,7 @@ import {
   dyedNativeMaterial,
   prepareNativeMaterials,
 } from './native-materials.ts'
-import { authoredMounts, type WeaponMount } from './native-mounts.ts'
+import { authoredMounts, fitHatToOutfit, type WeaponMount } from './native-mounts.ts'
 import { animateRevolvers, animateWeaponMount } from './native-weapon-animation.ts'
 
 interface EquipmentSource {
@@ -330,6 +330,9 @@ export async function equippedActor(
           bindSkin(model, actor, id)
         } else {
           const renders = model.findComponents('render')
+          if (id === loadout.hat) {
+            fitHatToOutfit(model, id, loadout.outfit)
+          }
           const mounts = mountRigid(model, actor, undefined, Boolean(viewmodel))
           const gun = id.startsWith('gun.')
           if (gun) {

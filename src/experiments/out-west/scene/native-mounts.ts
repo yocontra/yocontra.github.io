@@ -1,5 +1,6 @@
 /** Explicit authored attachment seats; these identifiers are part of the baked glTF contract. */
-import type { GraphNode } from 'playcanvas'
+import { type GraphNode, Mat4, Quat, Vec3 } from 'playcanvas'
+import type { ItemId } from '../data/catalog.ts'
 export type GunHand = 'L' | 'R'
 export interface WeaponMount {
   node: GraphNode
@@ -29,4 +30,35 @@ export function authoredMounts(model: GraphNode): { node: GraphNode; point: Moun
       const point = points.get(node.name)
       return point ? [{ node, point }] : []
     })
+}
+
+// Band seats measured on each head in the local Head joint coordinates (meters).
+const riderToStandard = new Mat4().setTRS(
+  new Vec3(-0.002, 0.04, 0.048),
+  new Quat().setFromEulerAngles(2, 0, -2),
+  new Vec3(1.17, 1.17, 1.17),
+)
+const standardToRider = new Mat4().setTRS(
+  new Vec3(0.00307, -0.03439, -0.03215),
+  new Quat().setFromEulerAngles(-2, 0.07, 2),
+  new Vec3(0.95238, 0.95238, 0.95238),
+)
+
+export function fitHatToOutfit(model: GraphNode, hat: ItemId, outfit: ItemId): void {
+  const riderHat = hat === 'hat.battered-brim'
+  const riderHead = outfit === 'outfit.trail-duds'
+  if (riderHat === riderHead) {
+    return
+  }
+  const mount = model.findByName('mount.Head.accessory')
+  if (!mount) {
+    throw new Error(`Missing head mount on ${hat}`)
+  }
+  const fit = new Mat4().mul2(
+    riderHat ? riderToStandard : standardToRider,
+    mount.getLocalTransform(),
+  )
+  mount.setLocalPosition(fit.getTranslation())
+  mount.setLocalRotation(new Quat().setFromMat4(fit))
+  mount.setLocalScale(fit.getScale())
 }

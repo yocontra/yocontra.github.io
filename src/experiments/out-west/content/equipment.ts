@@ -46,9 +46,9 @@ export const EQUIPMENT = {
     bytes: 396116,
   },
   'hat.battered-brim': {
-    url: '/experiments/out-west/3d/native-v2/fitted/equipment/hat.battered-brim.glb?v=b75d9615a75c761f',
-    hash: 'b75d9615a75c761fe3d0fe9aba185ed336b744f08a5d44f14e6deef4095fd8fa',
-    bytes: 345804,
+    url: '/experiments/out-west/3d/native-v2/fitted/equipment/hat.battered-brim.glb?v=6a620dfdc11bbd19',
+    hash: '6a620dfdc11bbd19c2dd9f5c907baf762673e34d126a73a5384b62d686915141',
+    bytes: 699496,
   },
   'hat.plainsman': {
     url: '/experiments/out-west/3d/native-v2/equipment/hat.plainsman.glb?v=10a2859151989382',
@@ -91,13 +91,13 @@ export const EQUIPMENT = {
     bytes: 62228,
   },
   'outfit.trail-duds': {
-    url: '/experiments/out-west/3d/native-v2/fitted/equipment/outfit.trail-duds.glb?v=fb062e85c006c852',
-    hash: 'fb062e85c006c8528ba599b55de6909b9c1e1db6c89f19a016d33c8cd52650cd',
-    bytes: 9012284,
+    url: '/experiments/out-west/3d/native-v2/fitted/equipment/outfit.trail-duds.glb?v=871661bbdc17fd15',
+    hash: '871661bbdc17fd159215c6ca017865f4df9f4b2eb868758281db54fcfe134c98',
+    bytes: 7668028,
     pair: {
-      url: '/experiments/out-west/3d/native-v2/fitted/equipment/outfit.trail-duds.pair.glb?v=72be23986e8f674a',
-      hash: '72be23986e8f674af800be4812b6ccf2317610b0d8e2d86931d40b4468f40dcf',
-      bytes: 9012760,
+      url: '/experiments/out-west/3d/native-v2/fitted/equipment/outfit.trail-duds.pair.glb?v=d98724157b1e0411',
+      hash: 'd98724157b1e0411201183c2f9aaafaa65a81349b258acc39319dab2f273012a',
+      bytes: 7668504,
     },
   },
   'outfit.shirt-vest': {
@@ -191,13 +191,13 @@ export const EQUIPMENT = {
     bytes: 46048,
   },
   'holster.plain-leather': {
-    url: '/experiments/out-west/3d/native-v2/fitted/equipment/holster.plain-leather.glb?v=4d585818c3d3d62d',
-    hash: '4d585818c3d3d62d157842649bc4ed6f70c92772b1a432725220769354b32c23',
-    bytes: 831344,
+    url: '/experiments/out-west/3d/native-v2/fitted/equipment/holster.plain-leather.glb?v=6d62ef5bacb3acdd',
+    hash: '6d62ef5bacb3acdd01c8d213105304aa141f8ea2090f213b7c5cbd628a877fe9',
+    bytes: 831292,
     pair: {
-      url: '/experiments/out-west/3d/native-v2/fitted/equipment/holster.plain-leather.pair.glb?v=ac80663275080d64',
-      hash: 'ac80663275080d6479757fbbba2f76e871d53105412cd4b3e5ac6b3573a6da84',
-      bytes: 887296,
+      url: '/experiments/out-west/3d/native-v2/fitted/equipment/holster.plain-leather.pair.glb?v=069eaf44d5e35206',
+      hash: '069eaf44d5e35206a780713fad95d912b301b7427387daf05c01ae51e260a803',
+      bytes: 887248,
     },
   },
   'holster.tooled-floral': {

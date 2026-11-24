@@ -1,6 +1,7 @@
 import { expect, test as it } from 'bun:test'
-import { NodeIO } from '@gltf-transform/core'
+import { NodeIO, type Primitive } from '@gltf-transform/core'
 import { ALL_EXTENSIONS } from '@gltf-transform/extensions'
+import { Ray, Tri, Vec3 } from 'playcanvas'
 import { EQUIPMENT } from '../../src/experiments/out-west/content/equipment.ts'
 import { ASSETS } from '../../src/experiments/out-west/content/manifest.ts'
 import { CATALOG } from '../../src/experiments/out-west/data/catalog.ts'
@@ -92,6 +93,26 @@ for (const { id, slot } of CATALOG) {
   }
 }
 
+function weightedVertices(surface: Primitive) {
+  const positions = surface.getAttribute('POSITION')
+  const joints = surface.getAttribute('JOINTS_0')
+  const weights = surface.getAttribute('WEIGHTS_0')
+  if (!(positions && joints && weights)) {
+    throw new Error('Missing skinned vertex data on the rider')
+  }
+  const vertices = new Map<string, string>()
+  for (let i = 0; i < positions.getCount(); i++) {
+    const position = positions.getElement(i, []).join(',')
+    const influences = weights.getElement(i, [])
+    const binding = joints.getElement(i, []).flatMap((joint, index) => {
+      const weight = influences[index]
+      return weight ? [`${joint}/${weight}`] : []
+    })
+    vertices.set(position, binding.sort().join(','))
+  }
+  return vertices
+}
+
 it('fits the scanned Trail Duds face to both gameplay rigs', async () => {
   const fit = EQUIPMENT['outfit.trail-duds']
   const faces = await Promise.all(
@@ -102,11 +123,71 @@ it('fits the scanned Trail Duds face to both gameplay rigs', async () => {
         .listMeshes()
         .flatMap((mesh) => mesh.listPrimitives())
       const face = surfaces.find((part) => part.getMaterial()?.getName() === 'Rider beard and skin')
-      expect(face?.getAttribute('JOINTS_0')).toBeDefined()
-      expect(face?.getAttribute('WEIGHTS_0')).toBeDefined()
+      const neck = surfaces.find(
+        (part) => part.getMaterial()?.getName() === 'Scanned nape and hairline',
+      )
+      if (!(face && neck)) {
+        throw new Error('Missing face or neck on Trail Duds')
+      }
+      expect(surfaces.some((part) => part.getMaterial()?.getName() === 'Scanned skin')).toBe(false)
+      const faceVertices = weightedVertices(face)
+      const shared = [...weightedVertices(neck)].filter(([position]) => faceVertices.has(position))
+      // Each point along the scanned jaw and scalp must stay joined when the head turns.
+      expect(shared.length).toBeGreaterThanOrEqual(525)
+      expect(shared.every(([position, binding]) => faceVertices.get(position) === binding)).toBe(
+        true,
+      )
       expect(face?.getMaterial()?.getBaseColorTexture()?.getImage()?.length).toBeGreaterThan(1000)
       return face?.getAttribute('POSITION')?.getArray()
     }),
   )
   expect(faces[0]).toEqual(faces[1])
+})
+
+function surfaceHeights(parts: Primitive[], rays: Ray[]): number[] {
+  const heights = rays.map(() => -Infinity)
+  const tri = new Tri()
+  const hit = new Vec3()
+  for (const part of parts) {
+    const positions = part.getAttribute('POSITION')
+    const indices = part.getIndices()
+    if (!(positions && indices)) {
+      throw new Error('Expected indexed triangles in the packed Blender model')
+    }
+    // Use millimeters so the ray test can resolve the scan’s smallest triangles.
+    for (let i = 0; i < indices.getCount(); i += 3) {
+      tri.v0.fromArray(positions.getElement(indices.getScalar(i), [])).mulScalar(1000)
+      tri.v1.fromArray(positions.getElement(indices.getScalar(i + 1), [])).mulScalar(1000)
+      tri.v2.fromArray(positions.getElement(indices.getScalar(i + 2), [])).mulScalar(1000)
+      for (const [index, ray] of rays.entries()) {
+        if (tri.intersectsRay(ray, hit)) {
+          heights[index] = Math.max(heights[index] ?? -Infinity, hit.y)
+        }
+      }
+    }
+  }
+  return heights
+}
+
+it('keeps the crown above the scanned scalp at the temples and across the top of the head', async () => {
+  const doc = await io.read('tools/art/characters/trail-rider/trail-rider.glb')
+  const parts = doc
+    .getRoot()
+    .listMeshes()
+    .flatMap((mesh) => mesh.listPrimitives())
+  const byMaterial = (...names: string[]) =>
+    parts.filter((p) => names.includes(p.getMaterial()?.getName() ?? ''))
+  // Vertical probes in Blender export coordinates, including the former left-temple penetration.
+  const rays = [-0.085, -0.05, -0.019, 0.015, 0.04].flatMap((x) =>
+    [-0.034, -0.008, 0.025].map((z) => new Ray(new Vec3(x, 1.82, z).mulScalar(1000), Vec3.DOWN)),
+  )
+  const scalp = surfaceHeights(
+    byMaterial('Rider beard and skin', 'Scanned nape and hairline'),
+    rays,
+  )
+  const crown = surfaceHeights(byMaterial('Travel-worn felt'), rays)
+  for (const [i, height] of scalp.entries()) {
+    expect(height).toBeGreaterThan(1500)
+    expect(crown[i]).toBeGreaterThan(height)
+  }
 })
