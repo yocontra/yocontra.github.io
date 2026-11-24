@@ -39,9 +39,9 @@ const riderToStandard = new Mat4().setTRS(
   new Vec3(1.17, 1.17, 1.17),
 )
 const standardToRider = new Mat4().setTRS(
-  new Vec3(0.00307, -0.03439, -0.03215),
+  new Vec3(0.0031114, -0.0349555, -0.0345499),
   new Quat().setFromEulerAngles(-2, 0.07, 2),
-  new Vec3(0.95238, 0.95238, 0.95238),
+  new Vec3(0.966184, 0.966184, 0.966184),
 )
 
 export function fitHatToOutfit(model: GraphNode, hat: ItemId, outfit: ItemId): void {
