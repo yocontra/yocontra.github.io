@@ -123,7 +123,7 @@ it('only paired duel opponents select the paired body variant', () => {
     const expected = paired && 'pair' in asset ? asset.pair : asset
     expect(url).toBe(expected.url)
     expect(url.split('?')[0]).toBe(
-      `/experiments/out-west/3d/native-v2/baked/outlaw-${i}${paired ? '.pair' : ''}.glb`,
+      `/experiments/out-west/3d/native-v2/${i === 0 ? 'fitted/baked' : 'baked'}/outlaw-${i}${paired ? '.pair' : ''}.glb`,
     )
   }
 })

@@ -34,6 +34,20 @@ export function nativeActorFixture(readModel: (url: string) => Promise<Uint8Arra
       url,
       contents: new Uint8Array(contents).buffer,
     })
+    // The headless animation fixture has no image decoder. Give embedded materials a GPU handle.
+    asset.options = {
+      image: {
+        processAsync: (image: { name?: string }, complete: (error: null, value: Asset) => void) => {
+          const embedded = new Asset(image.name ?? 'Embedded image', 'texture')
+          embedded.resource = new Texture(device, {
+            width: 1,
+            height: 1,
+            format: PIXELFORMAT_RGBA8,
+          })
+          complete(null, embedded)
+        },
+      },
+    }
     app.assets.add(asset)
     await new Promise<void>((resolve, reject) => {
       asset.once('load', () => resolve())
