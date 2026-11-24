@@ -18,6 +18,9 @@ import { spawn } from 'bun'
 import sharp from 'sharp'
 import { AMBIENT_ASSETS } from '../../src/experiments/out-west/content/ambient.ts'
 import { EQUIPMENT } from '../../src/experiments/out-west/content/equipment.ts'
+import fittedSleeves from '../../src/experiments/out-west/content/fitted-sleeves.json' with {
+  type: 'json',
+}
 import {
   ASSETS,
   DYNAMIC_ASSETS,
@@ -51,6 +54,7 @@ it(
     const fixture = await mkdtemp(join(tmpdir(), 'out-west-manifest-'))
     const assets = [
       ...Object.values(ASSETS),
+      ...Object.values(fittedSleeves),
       ...Object.values(DYNAMIC_ASSETS),
       ...Object.values(AMBIENT_ASSETS),
       ...Object.values(EQUIPMENT).flatMap<ContentAsset>((asset) =>

@@ -1,5 +1,5 @@
 {
-  "fingerprint": "e9b15a1128bb455ad3948cda54ac7984ad5e731d99f6a8adb2e3a424a25d0909",
+  "fingerprint": "477173b9f1ab790bf868ac812f24499428baa13e390263c2ce257af453f06ba8",
   "images": {
     "gun.rusty-six": "83b845884238fb2d99154342d8876bf6d50c1f5eb414bad68874970511ce9d25",
     "gun.blued-six": "eb76dc263366454dbe811b464531964eba2dd7799bd638339959a5b14ca9d115",
@@ -9,7 +9,7 @@
     "gun.gilded-sovereign": "b783d0b066e380373cbfcab2f69ffc554875c8b9f456a9081ee936447327cc3e",
     "gun.hardins-pair": "568271f0ad4e60bb63335fe6e10ff8ee6cadaabb6295c0a24cdf2f40c7f61cbd",
     "gun.gold-medal": "74878aaf1fdd522e512217a71408243fe33ade8522fa0ac2610e464260382cef",
-    "hat.battered-brim": "061d9021255b9eb20c68461c0cd8c99b3e861c8487ef68caffcdc89e1d596bac",
+    "hat.battered-brim": "b8765713488295bc3552517d37a624bdef0484466a2651c0ac999a0b4b11b326",
     "hat.plainsman": "7994e368a059929725946cbdc50f4d8a10433573114b758f5eb41d69f294ad24",
     "hat.sombrero": "a96b7140d5a5455effa5e3856d2cca2342064a7da268437dec87150c6aacade4",
     "hat.stovepipe": "61cff439f38131eccc959c3193bcd71016c94322b15bdade73a40d44aa9c9021",
@@ -18,7 +18,7 @@
     "hat.yellow": "c74449246ae6567f2f2776a5d6638c9b54a7c5e0d636bcb8c5e3cfdf069d9eda",
     "hat.bronze-band": "43d6e0aa51cbb598c9343d3f58d1e62d5c4ae3118becfa4b08cf53b39b014006",
     "hat.holed-stetson": "a3e3c1a0c1f6962e3e02c2addbc2ea2f601325415dfbabad7d6c30ded44d2dc4",
-    "outfit.trail-duds": "f71298191069a7476438844d45d1a79a30d6d995fcb3cf7fb1e1ecb1cfdd63c8",
+    "outfit.trail-duds": "e0d1218be103134c39e75d344e81a18c3022e3bf2268977f2dc119665fbbc5ab",
     "outfit.shirt-vest": "4f29d3d37fc4e7940e2ffc84184a9734b41f35e933d196e8060a1b11eb025a21",
     "outfit.wool-duster": "e6417a87f28494d55ad2291dc48c3c8067d5ed1669f8d4da9b5dc6f80c5c6480",
     "outfit.striped-poncho": "baab8088d5eb978e0f167fd465fba62f2843ecbcb67beaaf85ab630e7bc8da9b",
@@ -30,7 +30,7 @@
     "spurs.silver-jinglebobs": "e41183b299b29d43db5912a35fc8c0feea99eb5fb94f75915d2f09e1eb7c4324",
     "spurs.star-rowels": "8d4e1104deff0067782e132dc2312d4f2989e4ac4e0b68cb7a0d5e2b965eea91",
     "spurs.legend-rowels": "75a0e0072d3ed2e563df229b4a14a1ed2d16649a8a74dec34b2af49c90c4749f",
-    "holster.plain-leather": "062a1ed8734599b81c33159c90df6ca595ab1c141cbd1e87ee897bfa00d8de8c",
+    "holster.plain-leather": "0d2f3deff013d9905be26a065cdfb7270a84c4f8469919cc1872c5f133c25496",
     "holster.tooled-floral": "1cb3cdede5976c68c058f4749a2ff8213aa77b5c1ec2189573e64a60f53dbbb7",
     "holster.buscadero": "841ca1c0073bc3671d2bbbd0c5adaa6a1b1e2492ccd7d97dd5cb7dc4fd02779b",
     "holster.silver-conchos": "f443e1b2fb31a2b809866549a46403a956b3386270ba0bcc002e877e974ce693",
