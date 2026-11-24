@@ -22,18 +22,18 @@ function eligible(primitive: Primitive): boolean {
   const material = primitive.getMaterial()
   return Boolean(
     material &&
-      surface(material)?.albedo &&
-      !surface(material)?.arm &&
-      !material.getMetallicRoughnessTexture() &&
-      !material.getOcclusionTexture() &&
-      material.getAlphaMode() === 'OPAQUE' &&
-      primitive.getMode() === 4 &&
-      primitive.getIndices() &&
-      primitive.getAttribute('POSITION') &&
-      !primitive.getAttribute('JOINTS_0') &&
-      !primitive.getAttribute('TEXCOORD_1') &&
-      primitive.listTargets().length === 0 &&
-      primitive.listExtensions().length === 0,
+    surface(material)?.albedo &&
+    !surface(material)?.arm &&
+    !material.getMetallicRoughnessTexture() &&
+    !material.getOcclusionTexture() &&
+    material.getAlphaMode() === 'OPAQUE' &&
+    primitive.getMode() === 4 &&
+    primitive.getIndices() &&
+    primitive.getAttribute('POSITION') &&
+    !primitive.getAttribute('JOINTS_0') &&
+    !primitive.getAttribute('TEXCOORD_1') &&
+    primitive.listTargets().length === 0 &&
+    primitive.listExtensions().length === 0,
   )
 }
 function role(material: Material): string {

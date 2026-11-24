@@ -10,6 +10,7 @@
  */
 import { existsSync, mkdirSync, writeFileSync } from 'node:fs'
 import { resolve } from 'node:path'
+import { formatContent } from '../content/format-content.ts'
 import {
   type Ch,
   concat,
@@ -200,7 +201,7 @@ function build(c: Cast): {
 const q = (s: string) => `'${s.replaceAll('\\', '\\\\').replaceAll("'", "\\'")}'`
 const n = (v: number) => Number(v.toFixed(3))
 
-function main(): void {
+async function main(): Promise<void> {
   const only = process.argv.slice(2)
   mkdirSync(PUB, { recursive: true })
   const casts = [...CAST, PLAYER].filter((c) => only.length === 0 || only.includes(c.id))
@@ -273,14 +274,10 @@ export const PLAYER_VOICE: {
 }
 `,
   )
-  // the generated file is checked like any other: leave it as Biome would write it
-  Bun.spawnSync(['bunx', 'biome', 'format', '--write', OUT_TS], {
-    stdout: 'ignore',
-    stderr: 'ignore',
-  })
+  await formatContent([OUT_TS])
   console.log(`voices: ${(total / 1024).toFixed(0)} KB in ${built.size} files`)
 }
 
 if (import.meta.main) {
-  main()
+  await main()
 }

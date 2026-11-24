@@ -120,9 +120,7 @@ export async function compressCharacterAssets(
   const paths = (
     await Promise.all(
       ['equipment', 'baked', 'dynamic'].map(async (category) =>
-        (
-          await readdir(resolve(root, category))
-        )
+        (await readdir(resolve(root, category)))
           .filter(
             (file) =>
               file.endsWith('.glb') &&

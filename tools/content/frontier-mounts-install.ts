@@ -32,7 +32,7 @@ export function readMountGlb(source: Uint8Array): { json: MountGlb; bin: Buffer 
   }
   let json: MountGlb | undefined
   let bin: Buffer | undefined
-  for (let offset = 12; offset < bytes.length; ) {
+  for (let offset = 12; offset < bytes.length;) {
     const length = bytes.readUInt32LE(offset)
     const type = bytes.readUInt32LE(offset + 4)
     const chunk = bytes.subarray(offset + 8, offset + 8 + length)

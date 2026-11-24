@@ -166,6 +166,10 @@
   },
   "overrides": [
     {
+      "includes": ["**/*.ts"],
+      "formatter": { "enabled": false }
+    },
+    {
       "includes": ["src/experiments/out-west/content/collision.json"],
       "formatter": {
         "enabled": false

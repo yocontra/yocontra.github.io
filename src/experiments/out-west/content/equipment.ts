@@ -35,8 +35,8 @@ export const EQUIPMENT = {
     hash: 'ced8a7af689bc604ec736a0d2b5267fcf16593967e96311c38f629a86e0f71e3',
     bytes: 404412,
     pair: {
-      url: '/experiments/out-west/3d/native-v2/equipment/gun.hardins-pair.pair.glb?v=6bcd0e7f91083500',
-      hash: '6bcd0e7f91083500a829194b9b107762a053eb1510a5caaa7bc36e5c6f654fc9',
+      url: '/experiments/out-west/3d/native-v2/equipment/gun.hardins-pair.pair.glb?v=b7ab6b6212e8a098',
+      hash: 'b7ab6b6212e8a098ea3c2caa43556fa4c5a38a780655c8e8395befc9132f914d',
       bytes: 589068,
     },
   },

@@ -18,9 +18,7 @@ import { spawn } from 'bun'
 import sharp from 'sharp'
 import { AMBIENT_ASSETS } from '../../src/experiments/out-west/content/ambient.ts'
 import { EQUIPMENT } from '../../src/experiments/out-west/content/equipment.ts'
-import fittedSleeves from '../../src/experiments/out-west/content/fitted-sleeves.json' with {
-  type: 'json',
-}
+import fittedSleeves from '../../src/experiments/out-west/content/fitted-sleeves.json' with { type: 'json' }
 import {
   ASSETS,
   DYNAMIC_ASSETS,
@@ -63,6 +61,7 @@ it(
       ENVIRONMENT,
     ]
     const inputs = [
+      '.oxfmtrc.json',
       'biome.json',
       '.gitignore',
       'bun.lock',

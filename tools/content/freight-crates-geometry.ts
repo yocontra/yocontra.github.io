@@ -232,14 +232,12 @@ function boundaryJoints(
           (endpoint) =>
             endpoint > (placement.min[along] ?? 0) && endpoint < (placement.max[along] ?? 0),
         )
-        .map(
-          (endpoint): FreightJoint => [
-            face.axis,
-            face.side,
-            along,
-            endpoint - cellOrigin(cell, along),
-          ],
-        ),
+        .map((endpoint): FreightJoint => [
+          face.axis,
+          face.side,
+          along,
+          endpoint - cellOrigin(cell, along),
+        ]),
     )
 }
 function jointRays(cell: FreightCell, plane: number, joint: FreightJoint) {

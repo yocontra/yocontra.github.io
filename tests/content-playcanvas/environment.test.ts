@@ -6,9 +6,7 @@ import { ALL_EXTENSIONS } from '@gltf-transform/extensions'
 import { getBounds } from '@gltf-transform/functions'
 import { AMBIENT_ASSETS } from '../../src/experiments/out-west/content/ambient.ts'
 import { ASSETS } from '../../src/experiments/out-west/content/manifest.ts'
-import streetLife from '../../src/experiments/out-west/content/street-life.json' with {
-  type: 'json',
-}
+import streetLife from '../../src/experiments/out-west/content/street-life.json' with { type: 'json' }
 
 const io = new NodeIO().registerExtensions(ALL_EXTENSIONS)
 

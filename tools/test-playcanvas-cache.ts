@@ -178,7 +178,9 @@ try {
   )
   const remaining = await offline.evaluate(async () => ({
     keys: await caches.keys(),
-    other: await (await caches.open('unrelated-app'))
+    other: await (
+      await caches.open('unrelated-app')
+    )
       .match('/unrelated-sentinel')
       .then((response) => response?.text()),
   }))

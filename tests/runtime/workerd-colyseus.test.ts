@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import process from 'node:process'
 import { spawn, write } from 'bun'
+import { buildWorker } from '../../scripts/build-worker.ts'
 import { Buttons, PROTOCOL_VERSION } from '../../src/experiments/out-west/runtime/protocol.ts'
 import { hangTimeout } from '../timeout.ts'
 
@@ -76,12 +77,15 @@ it(
     const directory = await mkdtemp(join(tmpdir(), 'out-west-colyseus-'))
     try {
       const config = join(directory, 'wrangler.jsonc')
+      const compiled = join(directory, 'compiled')
+      await buildWorker('api/test/colyseus-worker.ts', compiled)
       const output = join(directory, 'bundle')
       await write(
         config,
         JSON.stringify({
           name: 'out-west-runtime-test',
-          main: join(root, 'api/test/colyseus-worker.ts'),
+          main: join(compiled, 'colyseus-worker.js'),
+          no_bundle: true,
           compatibility_date: '2026-10-01',
           compatibility_flags: ['nodejs_compat'],
         }),
@@ -99,14 +103,26 @@ it(
       const moduleFiles = (await readdir(output)).filter((name) => name.endsWith('.wasm'))
       expect(moduleFiles).toHaveLength(2)
       const entry = await readFile(join(output, 'colyseus-worker.js'), 'utf8')
-      // Module identities stay inside the configured root. No source transforms or runtime shims.
-      const protocolDeclaration = `var PROTOCOL_VERSION = ${PROTOCOL_VERSION};`
-      expect(entry.split(protocolDeclaration)).toHaveLength(2)
-      // The legacy-version fixture executes the same real onJoin comparator, before any game decoding.
-      const legacyEntry = entry.replace(
-        protocolDeclaration,
-        `var PROTOCOL_VERSION = ${PROTOCOL_VERSION - 1};`,
-      )
+      // Compile the historical version so both servers execute the real admission logic.
+      const legacy = join(directory, 'legacy')
+      const protocol = join(root, 'src/experiments/out-west/runtime/protocol.ts')
+      await buildWorker('api/test/colyseus-worker.ts', legacy, [
+        {
+          name: 'legacy-protocol',
+          transform(source, id) {
+            if (id !== protocol) {
+              return null
+            }
+            const declaration = `export const PROTOCOL_VERSION = ${PROTOCOL_VERSION}`
+            expect(source.split(declaration)).toHaveLength(2)
+            return source.replace(
+              declaration,
+              `export const PROTOCOL_VERSION = ${PROTOCOL_VERSION - 1}`,
+            )
+          },
+        },
+      ])
+      const legacyEntry = await readFile(join(legacy, 'colyseus-worker.js'), 'utf8')
       const script = `
   import {Miniflare,convertV4MiniflareOptions} from ${JSON.stringify(join(root, 'node_modules/miniflare/dist/src/index.js'))};
   import {Client} from ${JSON.stringify(join(root, 'node_modules/@colyseus/sdk/build/index.mjs'))};

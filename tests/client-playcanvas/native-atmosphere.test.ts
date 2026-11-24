@@ -1,9 +1,7 @@
 import { expect, test as it } from 'bun:test'
 import type { Entity } from 'playcanvas'
 import depot from '../../src/experiments/out-west/content/depot.json' with { type: 'json' }
-import streetLife from '../../src/experiments/out-west/content/street-life.json' with {
-  type: 'json',
-}
+import streetLife from '../../src/experiments/out-west/content/street-life.json' with { type: 'json' }
 import { OUTLAWS } from '../../src/experiments/out-west/data/outlaws.ts'
 import { NativeAtmosphere } from '../../src/experiments/out-west/duel/native-atmosphere.ts'
 import { retry } from '../../src/experiments/out-west/duel/native-progress.ts'

@@ -163,9 +163,8 @@ describe('Out West abilities use native body collision', () => {
 })
 
 it('mantles a tall ledge and climbs authored ladders using native kinematic bodies', async () => {
-  const { CLIMBS, CLIMB_TICKS } = await import(
-    '../../src/experiments/out-west/ffa/sim/roofwalks.ts'
-  )
+  const { CLIMBS, CLIMB_TICKS } =
+    await import('../../src/experiments/out-west/ffa/sim/roofwalks.ts')
   const simulation = createSimulation({
     ammo,
     collision: {

@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import process from 'node:process'
 import { spawn, write } from 'bun'
+import { buildWorker } from '../../scripts/build-worker.ts'
 import { COLLISION_VERSION } from '../../src/experiments/out-west/content/manifest.ts'
 import {
   VOICE_HEARTBEAT_MS,
@@ -37,12 +38,15 @@ it(
     const directory = await mkdtemp(join(tmpdir(), 'out-west-voice-workerd-'))
     try {
       const config = join(directory, 'wrangler.jsonc')
+      const compiled = join(directory, 'compiled')
+      await buildWorker('api/test/voice-worker.ts', compiled)
       const output = join(directory, 'bundle')
       await write(
         config,
         JSON.stringify({
           name: 'voice-runtime-test',
-          main: join(root, 'api/test/voice-worker.ts'),
+          main: join(compiled, 'voice-worker.js'),
+          no_bundle: true,
           compatibility_date: '2026-10-01',
           compatibility_flags: ['nodejs_compat'],
         }),

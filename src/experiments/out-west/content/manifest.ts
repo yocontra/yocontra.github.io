@@ -91,8 +91,8 @@ export const DYNAMIC_ASSETS = {
     bytes: 109800,
   },
   'barrel-fragments': {
-    url: '/experiments/out-west/3d/native-v2/dynamic/barrel-fragments.glb?v=d36214667075a00d',
-    hash: 'd36214667075a00d076e4ad5d6096a89f5dd23e2cbe4cb6b7622ababedd326fe',
+    url: '/experiments/out-west/3d/native-v2/dynamic/barrel-fragments.glb?v=18678a81953d9121',
+    hash: '18678a81953d912105aba98b31c65ad9e6916f5f398cc1d750714de3d377dc01',
     bytes: 776648,
   },
 } as const
@@ -101,7 +101,7 @@ export const ENVIRONMENT = {
   hash: '206c67e3a1b992282821cf06662bdd69bbb4915c1c4444a66338a40d6a7d4e34',
   bytes: 1173154,
 } as const
-export const CONTENT_VERSION = 'dc6e7a8c7c666995e043cb209d6a7bb4c1f7e4767ff6b9da5e60334d3f84d586'
+export const CONTENT_VERSION = 'b0a774545c2a5cb5c58423e011217862d3804b157c6cb17c4d51d037015248a7'
 export const COLLISION_VERSION = '006b49996dcfbf469389ac1ee2ce9c5b26981416082e651348936c1a45ae33c9'
 export const ASSETS = {
   frontier: {
@@ -174,8 +174,8 @@ export const ASSETS = {
     hash: '486a0a9f2cd05a8292bd5b699f499863a7f043550c1613214201a0d6e2057d5f',
     bytes: 2361864,
     pair: {
-      url: '/experiments/out-west/3d/native-v2/baked/outlaw-5.pair.glb?v=1649fde21931ffbc',
-      hash: '1649fde21931ffbcf41c2d5f0d991ff4aa893f6241e16c888ea57f6abe1931e9',
+      url: '/experiments/out-west/3d/native-v2/baked/outlaw-5.pair.glb?v=013a3826bb5633ed',
+      hash: '013a3826bb5633ed9d5410f2801cec32a5420c1e4b19ce50290219a9fb4fc1ce',
       bytes: 2542512,
     },
   },
@@ -234,8 +234,8 @@ export const ASSETS = {
     hash: '5e42c15a9e3f9bc9e02ff6ae0e14ea76f5b39d00067044b05b681aa0813c0e23',
     bytes: 2720520,
     pair: {
-      url: '/experiments/out-west/3d/native-v2/baked/outlaw-16.pair.glb?v=e637d97e6654d32d',
-      hash: 'e637d97e6654d32da6b247c5f7224cab4bdd4cfce33ab331f122c9a8a8e72e1b',
+      url: '/experiments/out-west/3d/native-v2/baked/outlaw-16.pair.glb?v=f36d4fbfbfeb5091',
+      hash: 'f36d4fbfbfeb5091e4e0479e78796f740a29748588b894bb0080f966236dfa02',
       bytes: 2901172,
     },
   },

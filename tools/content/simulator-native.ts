@@ -110,9 +110,9 @@ function validFrame(value: unknown): value is Frame {
   const frame = value as Frame | undefined
   return Boolean(
     frame &&
-      [frame.x, frame.y, frame.width, frame.height].every(Number.isFinite) &&
-      frame.width > 0 &&
-      frame.height > 0,
+    [frame.x, frame.y, frame.width, frame.height].every(Number.isFinite) &&
+    frame.width > 0 &&
+    frame.height > 0,
   )
 }
 export function webFrame(value: unknown, page?: PageState): Frame | undefined {

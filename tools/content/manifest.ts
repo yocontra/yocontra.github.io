@@ -4,9 +4,7 @@ import { AMBIENT_ASSETS } from '../../src/experiments/out-west/content/ambient.t
 import lighting from '../../src/experiments/out-west/content/lighting.json' with { type: 'json' }
 import { FRONTIER_SPAWN as previousArrival } from '../../src/experiments/out-west/content/manifest.ts'
 import { SKIES } from '../../src/experiments/out-west/content/skies.ts'
-import streetLife from '../../src/experiments/out-west/content/street-life.json' with {
-  type: 'json',
-}
+import streetLife from '../../src/experiments/out-west/content/street-life.json' with { type: 'json' }
 import type { ContentAsset } from '../../src/experiments/out-west/content/types.ts'
 import { VIEWMODELS } from '../../src/experiments/out-west/content/viewmodels.ts'
 import { CATALOG } from '../../src/experiments/out-west/data/catalog.ts'

@@ -185,12 +185,7 @@ export class Lobby extends ProductionLobby {
 }
 
 // biome-ignore lint/performance/noBarrelFile: Wrangler requires Durable Object class exports from its entrypoint
-export {
-  DailySession,
-  DuelRoom,
-  DuelSession,
-  Matchmaker,
-} from '../src/index.ts'
+export { DailySession, DuelRoom, DuelSession, Matchmaker } from '../src/index.ts'
 export { LobbyDirectory } from './directory-probe.ts'
 export { SettlementProbe } from './settlement-worker.ts'
 

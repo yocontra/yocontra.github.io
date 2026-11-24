@@ -3,9 +3,7 @@ import { createHash } from 'node:crypto'
 import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { dirname, isAbsolute, join, resolve, sep } from 'node:path'
 import { parseArgs } from 'node:util'
-import recipe from '../../src/experiments/out-west/content/environment-props.json' with {
-  type: 'json',
-}
+import recipe from '../../src/experiments/out-west/content/environment-props.json' with { type: 'json' }
 import { appendBarrelVariants } from './barrel-install.ts'
 import { buildBarrelParts } from './barrel-parts.ts'
 import { frontierIO } from './frontier-geometry.ts'

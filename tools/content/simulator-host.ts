@@ -39,10 +39,10 @@ export function recordingAcknowledged(value: unknown): value is {
   } | null
   return Boolean(
     state?.stage === 'recording' &&
-      state.recording?.running === true &&
-      Number.isSafeInteger(state.recording.frames) &&
-      (state.recording.frames ?? 0) > 0 &&
-      Number.isFinite(state.wall),
+    state.recording?.running === true &&
+    Number.isSafeInteger(state.recording.frames) &&
+    (state.recording.frames ?? 0) > 0 &&
+    Number.isFinite(state.wall),
   )
 }
 function publishCoordinates(

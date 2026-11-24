@@ -1,7 +1,12 @@
 {
   "$schema": "../node_modules/wrangler/config-schema.json",
   "name": "contra-leaderboard",
-  "main": "src/index.ts",
+  "main": ".wrangler/worker/index.js",
+  "no_bundle": true,
+  "build": {
+    "command": "bun run build:worker",
+    "watch_dir": ["src", "../src/experiments/out-west", "../scripts/build-worker.ts"]
+  },
   "compatibility_date": "2026-10-01",
   "compatibility_flags": ["nodejs_compat"],
   "observability": { "enabled": true },

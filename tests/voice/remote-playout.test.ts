@@ -294,7 +294,12 @@ describe('silent remote decoding activation', () => {
 
   it('refuses stream assignment if element muting cannot be enforced', () => {
     const element = new Element()
-    Object.defineProperty(element, 'muted', { get: () => false, set: () => undefined })
+    Object.defineProperty(element, 'muted', {
+      get: () => false,
+      set: () => {
+        /* Mimic an element that silently rejects muting. */
+      },
+    })
     expect(() => fixture(element)).toThrow('Silent voice playback is unavailable')
     expect(element.srcObject).toBeNull()
     expect(element.calls).toBe(0)

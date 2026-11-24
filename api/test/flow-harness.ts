@@ -96,7 +96,7 @@ export function inPage<T>(p: Page, path: string, body: string): Promise<T> {
     async ({ url, code }) => {
       const m: unknown = await import(url)
       // biome-ignore lint/security/noGlobalEval: the harness runs its own snippets in the page under test
-      const run = globalThis.eval as (src: string) => (mod: unknown) => Promise<T>
+      const run = globalThis.eval as (src: string) => (mod: unknown) => Promise<T> // oxlint-disable-line no-eval -- evaluates the harness script in the test page
       return await run(`(async (m) => { ${code} })`)(m)
     },
     { url: `${OW}/${path}`, code: body },

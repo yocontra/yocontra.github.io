@@ -36,10 +36,10 @@ const iso = (ms: number): string => new Date(ms).toISOString()
 export const voiceConfigured = (env: Env): boolean =>
   Boolean(
     env.DISABLE_VOICE !== 'true' &&
-      env.CLOUDFLARE_ACCOUNT_ID &&
-      env.REALTIMEKIT_APP_ID &&
-      env.REALTIMEKIT_API_TOKEN &&
-      env.REALTIMEKIT_PRESET,
+    env.CLOUDFLARE_ACCOUNT_ID &&
+    env.REALTIMEKIT_APP_ID &&
+    env.REALTIMEKIT_API_TOKEN &&
+    env.REALTIMEKIT_PRESET,
   )
 
 async function call<T>(env: Env, path: string, init: RequestInit = {}): Promise<T> {

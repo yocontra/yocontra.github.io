@@ -105,10 +105,10 @@ function stripCoveredShirt(primitive: Primitive, ranges: Range[], obsolete: Rang
     }
     const result = Boolean(
       nearest &&
-        distance < 0.0009 &&
-        patternDistance(
-          nearest.uv.map((v, c) => (v - (lo[c] ?? 0)) / ((hi[c] ?? 1) - (lo[c] ?? 0))),
-        ) > 0.035,
+      distance < 0.0009 &&
+      patternDistance(
+        nearest.uv.map((v, c) => (v - (lo[c] ?? 0)) / ((hi[c] ?? 1) - (lo[c] ?? 0))),
+      ) > 0.035,
     )
     covered.set(index, result)
     return result

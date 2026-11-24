@@ -1,7 +1,12 @@
 {
   "$schema": "../../node_modules/wrangler/config-schema.json",
   "name": "out-west-native-test",
-  "main": "production-worker.ts",
+  "main": "../.wrangler/native-test/production-worker.js",
+  "no_bundle": true,
+  "build": {
+    "command": "bun run build:worker api/test/production-worker.ts api/.wrangler/native-test",
+    "watch_dir": [".", "../src", "../../src/experiments/out-west", "../../scripts/build-worker.ts"]
+  },
   "compatibility_date": "2026-10-01",
   "compatibility_flags": ["nodejs_compat"],
   "d1_databases": [

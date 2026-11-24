@@ -22,7 +22,6 @@ bun tools/content/character-clips.ts
 bun tools/content/character-textures.ts
 bun tools/content/environment.ts
 bun tools/content/manifest.ts
-bunx biome format --write src/experiments/out-west/content
 bun test tests/content-playcanvas tests/duel-playcanvas
 bun tools/preview-playcanvas-content.ts http://localhost:4389
 bun tools/test-playcanvas-duel.ts http://localhost:4389

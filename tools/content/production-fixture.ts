@@ -33,14 +33,14 @@ export function nativeRendererCaptured(renderer: NativeSample['scene']['renderer
     ? renderer.tier === 'low'
     : Boolean(
         post &&
-          renderer.tier === 'high' &&
-          typeof post.enabled === 'boolean' &&
-          Number.isInteger(post.msaaSamples) &&
-          post.msaaSamples > 0 &&
-          typeof post.ssaoType === 'string' &&
-          post.ssaoType.length > 0 &&
-          Number.isInteger(post.ssaoSamples) &&
-          post.ssaoSamples > 0,
+        renderer.tier === 'high' &&
+        typeof post.enabled === 'boolean' &&
+        Number.isInteger(post.msaaSamples) &&
+        post.msaaSamples > 0 &&
+        typeof post.ssaoType === 'string' &&
+        post.ssaoType.length > 0 &&
+        Number.isInteger(post.ssaoSamples) &&
+        post.ssaoSamples > 0,
       )
 }
 export interface BuildReceipt {

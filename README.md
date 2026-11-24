@@ -19,15 +19,21 @@ bun run api:dev          # http://localhost:8787
 bun run api:migrate:local
 ```
 
+If Node reports `EMFILE` from the file watcher, run `CHOKIDAR_USEPOLLING=true bun run api:dev`.
+
 ## Checks
 
 ```bash
-bun run check            # biome + typecheck + tests + debt ratchets + no-js
+bun run check            # lint, format, type checks, tests, debt and asset checks
 bun run test             # API and client tests
-bun run typecheck        # astro check + every tsconfig project
-bun run fix              # biome check --write
+bun run typecheck        # Astro component checks and tsrs for every TypeScript project
+bun run fix              # apply lint fixes and format source
 bun run build            # static build into dist/
 ```
+
+Oxlint checks TypeScript and Oxfmt formats it. Biome also enforces the project’s stricter lint
+rules and checks Astro, CSS and JSON. Astro uses Vite with Rolldown. Wrangler uploads the
+Rolldown Worker bundle and its WebAssembly modules. Wrangler ships esbuild as a dependency.
 
 `bun run check` is the gate CI runs. A pre-push hook runs it too; enable once per clone:
 

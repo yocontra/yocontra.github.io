@@ -156,9 +156,11 @@ export function fitBarrel(reference: Point[], base: Point[], phase: number) {
   })
   const low = Math.min(...fitted.map((p) => p[1]))
   const high = Math.max(...fitted.map((p) => p[1]))
-  const positions = fitted.map(
-    ([x, y, z]): Point => [x, y0 + ((y1 - y0) * (y - low)) / (high - low), z],
-  )
+  const positions = fitted.map(([x, y, z]): Point => [
+    x,
+    y0 + ((y1 - y0) * (y - low)) / (high - low),
+    z,
+  ])
   return {
     ...template,
     positions,

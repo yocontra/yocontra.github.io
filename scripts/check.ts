@@ -3,18 +3,20 @@
 
 import { spawn } from 'bun'
 
-/** Each inner list runs in order; `tsc --noEmit` reads the `.astro/types.d.ts` that `astro check` writes. */
+/** Each inner list runs in order; `tsrs --noEmit` reads the `.astro/types.d.ts` that `astro check` writes. */
 const STAGES: string[][][] = [
   [['bun', 'run', 'test']],
+  [['oxlint', '--deny-warnings']],
+  [['bun', 'run', 'format:check']],
   [['biome', 'ci', '--error-on-warnings', '.']],
   [
     ['bun', '--bun', 'astro', 'check'],
-    ['tsc', '--noEmit'],
+    ['tsrs', '--noEmit'],
   ],
-  [['tsc', '-p', 'api']],
-  [['tsc', '-p', 'scripts']],
-  [['tsc', '-p', 'tests']],
-  [['tsc', '-p', 'tools']],
+  [['tsrs', '-p', 'api']],
+  [['tsrs', '-p', 'scripts']],
+  [['tsrs', '-p', 'tests']],
+  [['tsrs', '-p', 'tools']],
   [['bun', 'run', 'debt']],
   [['bun', 'scripts/no-js.ts']],
   [['bun', 'tools/check-item-thumbs.ts']],

@@ -128,9 +128,9 @@ export class FirstPersonModel {
     const arms = this.current
     return Boolean(
       arms?.actor.root.enabled &&
-        this.desired &&
-        armsKey(this.desired) === arms.key &&
-        arms.actor.muzzleSocket(),
+      this.desired &&
+      armsKey(this.desired) === arms.key &&
+      arms.actor.muzzleSocket(),
     )
   }
   retry(): void {

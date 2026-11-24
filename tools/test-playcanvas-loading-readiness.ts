@@ -161,8 +161,8 @@ try {
       inputReadyAt: Number(Reflect.get(globalThis, '__inputReadyAt')),
       controlsVisible: Boolean(
         document.querySelector<HTMLElement>('.pc-touch-controls') &&
-          !document.querySelector<HTMLElement>('.pc-touch-controls')?.hidden &&
-          !document.querySelector<HTMLElement>('.pc-touch-controls')?.inert,
+        !document.querySelector<HTMLElement>('.pc-touch-controls')?.hidden &&
+        !document.querySelector<HTMLElement>('.pc-touch-controls')?.inert,
       ),
       hp: own.hp,
       protectionRemaining: own.protectUntil - session.world.tick,

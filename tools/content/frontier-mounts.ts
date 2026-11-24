@@ -59,13 +59,11 @@ function sweep(
       sub(!closed && i === path.length - 1 ? p : next, !closed && i === 0 ? p : previous),
     )
     const v = unit(cross(tangent, normal))
-    return section.map(
-      ([x, y]): Point => [
-        Math.fround(p[0] + normal[0] * x + v[0] * y),
-        Math.fround(p[1] + normal[1] * x + v[1] * y),
-        Math.fround(p[2] + normal[2] * x + v[2] * y),
-      ],
-    )
+    return section.map(([x, y]): Point => [
+      Math.fround(p[0] + normal[0] * x + v[0] * y),
+      Math.fround(p[1] + normal[1] * x + v[1] * y),
+      Math.fround(p[2] + normal[2] * x + v[2] * y),
+    ])
   })
   const face = (points: Point[]) => {
     const start = positions.length / 3

@@ -102,13 +102,16 @@ it('aborts a real stalled HTTP response at the remaining poll budget', async () 
     })
     expect(await ready.json()).toEqual({ ready: true })
     await expect(
-      until(async (signal) => {
-        signal.addEventListener('abort', () => {
-          aborted = true
-        })
-        await fetch(server.url, { signal })
-        return true
-      }, hangTimeout(400) / 1000),
+      until(
+        async (signal) => {
+          signal.addEventListener('abort', () => {
+            aborted = true
+          })
+          await fetch(server.url, { signal })
+          return true
+        },
+        hangTimeout(400) / 1000,
+      ),
     ).rejects.toThrow('deadline')
     expect(received).toBe(true)
     expect(aborted).toBe(true)

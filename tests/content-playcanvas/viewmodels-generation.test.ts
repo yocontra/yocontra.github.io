@@ -165,7 +165,7 @@ it(
           join(root, 'src/experiments/out-west/data'),
           'dir',
         ),
-        ...['biome.json', '.gitignore', 'bun.lock', 'patches'].map((path) =>
+        ...['.oxfmtrc.json', 'biome.json', '.gitignore', 'bun.lock', 'patches'].map((path) =>
           symlink(join(project, path), join(root, path)),
         ),
         ...fits.map((id) =>
